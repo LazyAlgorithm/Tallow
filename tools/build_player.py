@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a player (Linux, Windows with --platform windows, the web with --platform web, or macOS on a Mac) with no TesseraEditor
+"""Build a player (Linux, Windows with --platform windows, the web with --platform web, or macOS on a Mac) with no TallowEditor
 dependency and stage its runtime assets.
 
 A Windows player is built here on Linux: the Windows Beef compiler runs under Wine and links against the native
@@ -140,12 +140,12 @@ def main():
         parser.error('Start scene must exist inside the project src folder. Save it in the editor first.')
     proj = tomllib.loads((project / 'BeefProj.toml').read_text())
     space = tomllib.loads((project / 'BeefSpace.toml').read_text())
-    dependencies = {key: value for key, value in proj['Dependencies'].items() if key != 'TesseraEditor'}
+    dependencies = {key: value for key, value in proj['Dependencies'].items() if key not in ('TesseraEditor', 'TallowEditor')}
     program = (project / 'src' / 'Program.bf').read_text()
     # Keep the entry point's namespace imports: copied/renamed projects can
     # register scripts from a namespace that differs from the project name.
     imports = [match.group(0) for match in re.finditer(r'^\s*using\s+([A-Za-z_][A-Za-z0-9_.]*)\s*;', program, re.MULTILINE)
-               if match.group(1) not in ('System', 'Tessera') and not match.group(1).startswith('Tessera.Editor')]
+               if match.group(1) not in ('System', 'Tessera', 'Tallow') and not match.group(1).startswith(('Tessera.Editor', 'Tallow.Editor'))]
     bootstrap = args.bootstrap
     registration = re.search(r'\b((?:[A-Za-z_][A-Za-z0-9_]*\.)*GameSetup\.Register)\(\)', program)
     if bootstrap is None and registration:
@@ -159,18 +159,18 @@ def main():
         for file in (project / 'src').rglob('*.bf'):
             if file == project / 'src' / 'Program.bf':
                 continue
-            if re.search(r'\bTessera\.Editor\b', file.read_text()):
+            if re.search(r'\b(?:Tessera|Tallow)\.Editor\b', file.read_text()):
                 parser.error(f'Runtime script references the editor: {file}')
             target = source / file.relative_to(project / 'src')
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(file, target)
-        (source / 'Program.bf').write_text('using System;\nusing Tessera;\n' + '\n'.join(imports) + '\nnamespace ' + name + ';\nclass Program { public static int Main(String[] args) {\n' + (f'{bootstrap}();\n' if bootstrap else '') + 'return GameMain.Run(args);\n} }\n')
+        (source / 'Program.bf').write_text('using System;\nusing Tallow;\n' + '\n'.join(imports) + '\nnamespace ' + name + ';\nclass Program { public static int Main(String[] args) {\n' + (f'{bootstrap}();\n' if bootstrap else '') + 'return GameMain.Run(args);\n} }\n')
         q = json.dumps
         # Beef under Wine is given forward-slash Z: paths for projects and backslash ones on the link line.
         located = (lambda path: wine_path(path, '/')) if cross else (lambda path: str(path).replace('\\', '/'))
-        project_entries = [f'{name} = {{Path = "."}}', f'Tessera = {{Path = {q(located(engine / "Engine"))}}}']
+        project_entries = [f'{name} = {{Path = "."}}', f'Tallow = {{Path = {q(located(engine / "Engine"))}}}']
         for dependency in dependencies:
-            if dependency in ('corlib', 'Tessera'):
+            if dependency in ('corlib', 'Tallow', 'Tessera'):
                 continue
             location = (project / space['Projects'][dependency]['Path']).resolve()
             project_entries.append(f'{dependency} = {{Path = {q(located(location))}}}')
