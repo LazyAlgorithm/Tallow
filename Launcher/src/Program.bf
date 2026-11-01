@@ -25,6 +25,8 @@ class LauncherApp : Application
 	/// Tools Tallow needs that were not found, when the launcher started.
 	List<String> mMissingTools = new .() ~ DeleteContainerAndItems!(_);
 	bool mMessageIsError;
+	bool mSetupPending;
+	bool mSetupFailed;
 	int32 mOpenCountdown;
 	int32 mSelected = -1;
 
@@ -161,8 +163,8 @@ class LauncherApp : Application
 		ImGui.Spacing();
 		if (mMissingTools.Count > 0)
 		{
-			ImGui.TextColored(.(1.0f, 0.55f, 0.4f, 1), MissingMessage(.. scope .()));
-			ImGui.Spacing();
+			ImGui.OpenPopup("Development tools required");
+			ImGui.BeginDisabled(true);
 		}
 
 		let busy = mOpenCountdown > 0;
@@ -180,14 +182,77 @@ class LauncherApp : Application
 		ImGui.Spacing();
 		DrawProjectButtons();
 		ImGui.EndDisabled();
+		if (mMissingTools.Count > 0)
+			ImGui.EndDisabled();
 		if (!mMessage.IsEmpty)
 			DrawLauncherMessage();
 		ImGui.End();
+		if (mMissingTools.Count > 0)
+			DrawSetupDialog();
 		ImGui.tn_imgui_render(250);
+		if (mSetupPending)
+		{
+			mSetupPending = false;
+			InstallMissingTools();
+		}
 
 		// The build blocks, so start it a few frames after the "Compiling" message is on screen.
 		if (mOpenCountdown > 0 && --mOpenCountdown == 0)
 			OpenPendingProject();
+	}
+
+	/// The standalone launcher owns first-run setup: Manager is never required.
+	void DrawSetupDialog()
+	{
+		if (!ImGui.BeginPopupModal("Development tools required", null, ImGui.WindowFlags.AlwaysAutoResize))
+			return;
+		ImGui.TextWrapped("Tallow needs the following tools to create, open and build projects:");
+		for (let tool in mMissingTools)
+			ImGui.BulletText(tool.CStr());
+		if (mSetupFailed)
+			ImGui.TextWrapped("Setup did not complete. Retry or exit Tallow.");
+		if (ImGui.Button(mSetupFailed ? "Retry installation" : "Install dependencies", .(190, 36)))
+		{
+			mSetupFailed = false;
+			mSetupPending = true;
+		}
+		ImGui.SameLine();
+		if (ImGui.Button("Exit Tallow", .(140, 36)))
+			Running = false;
+		ImGui.EndPopup();
+	}
+
+	void InstallMissingTools()
+	{
+#if BF_PLATFORM_WINDOWS
+		let script = scope $"{mEngineRoot}/tools/setup_dependencies.ps1";
+		if (!File.Exists(script))
+		{
+			SetMessage("The development-tool installer is missing from this Tallow package.", true);
+			mSetupFailed = true;
+			return;
+		}
+		let command = scope String("powershell.exe -NoProfile -ExecutionPolicy Bypass -File ");
+		Terminal.Quote(script, command);
+		let code = Terminal.Run(command);
+		if (code != 0)
+		{
+			SetMessage(scope $"Development-tool installation failed (exit {code}).", true);
+			mSetupFailed = true;
+			return;
+		}
+		Toolchain.Apply();
+		ClearAndDeleteItems!(mMissingTools);
+		Toolchain.FindMissing(mMissingTools);
+		if (!mMissingTools.IsEmpty)
+		{
+			SetMessage("Setup finished, but some required tools are still missing.", true);
+			mSetupFailed = true;
+		}
+#else
+		SetMessage("Automatic toolchain setup is not yet implemented for this operating system.", true);
+		mSetupFailed = true;
+#endif
 	}
 
 	/// What the window is cleared to behind the interface (RGBA).
@@ -318,7 +383,7 @@ class LauncherApp : Application
 				text.Append(", ");
 			text.Append(mMissingTools[i]);
 		}
-		text.Append(". Install the required development tools through Tallow Manager, then restart the launcher.");
+		text.Append(". Use Install dependencies to set up the development tools.");
 	}
 
 	void CreateFromForm()
