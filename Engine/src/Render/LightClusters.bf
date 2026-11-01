@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// One shadow tile of the local shadow atlas: a spot light's view, or one face of a point light's cube.
 struct ShadowTile

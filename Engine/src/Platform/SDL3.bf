@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Minimal SDL3 bindings: just what the engine uses for windows, events, input and timing.
 static class SDL

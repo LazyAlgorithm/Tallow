@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// One kind of plant, many times over: grass, flowers, bushes, rocks, trees. Every plant of a Foliage component is the
 /// same model, drawn together by the graphics card (instanced), so tens of thousands cost little; each gets its own

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Steamworks, loaded at run time from libsteam_api so the engine and games run without Steam installed.
 ///

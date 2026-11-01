@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What the engine needs from the browser when it is built for the web (WebAssembly through Emscripten).
 /// On every other platform the members do nothing and IsWeb is false, so game code can call them freely.

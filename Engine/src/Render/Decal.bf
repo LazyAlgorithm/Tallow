@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Projects a picture onto whatever lies inside its box: posters, signs, cracks, stains, scorch marks. The picture
 /// is pressed along the object's forward (blue) axis onto the surfaces in the box, lit like them, and fades out on

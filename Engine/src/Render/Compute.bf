@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A texture a compute shader draws into, step after step. It keeps two images: the one being written, and the one
 /// from the step before, which the shader reads as "previous". Show it on a mesh with

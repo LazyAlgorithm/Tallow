@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A Steam Workshop item: something a player made and shared.
 class WorkshopItem

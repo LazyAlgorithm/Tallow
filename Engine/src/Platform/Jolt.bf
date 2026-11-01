@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Jolt Physics through the JoltC C API (subset).
 static class Jolt

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Levels of detail: far away, an object is drawn with fewer triangles, and when it is only a speck it is not drawn at
 /// all. The level is picked for each camera from how much of the screen's height the object covers. See docs/lod.md.

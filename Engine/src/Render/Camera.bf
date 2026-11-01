@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Renders the scene from its Transform. The first enabled camera drives the Game view.
 ///
