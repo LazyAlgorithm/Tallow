@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Voice chat between the players of a network session. It is off until the game turns it on (here, or with the
 /// Voice Chat box in Project Settings); after that nothing else is needed: the microphone is opened, speech is

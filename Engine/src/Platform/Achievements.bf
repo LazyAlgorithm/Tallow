@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// One achievement as listed in the project's Achievements.tach file.
 class AchievementInfo
@@ -129,7 +129,7 @@ static class Achievements
 
 	static void StatePath(String path)
 	{
-		let folder = SDL.SDL_GetPrefPath("Tessera", SaveName.CStr());
+		let folder = SDL.SDL_GetPrefPath("Tallow", SaveName.CStr());
 		if (folder != null)
 			path.Append(folder);
 		path.Append("achievements.sav");

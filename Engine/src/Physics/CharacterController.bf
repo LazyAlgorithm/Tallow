@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 [Reflect(.All)]
 enum CharacterShape : int32

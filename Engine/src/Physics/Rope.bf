@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A rope (docs/soft-bodies.md "Ropes"): from the object in Start Attached To (this object if none) to the one in
 /// End Attached To, or hanging free. Tow or lift with it from code: `Rope.Attach(truck, trailer)`.

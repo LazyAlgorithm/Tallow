@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Makes the object a simulated body. Needs a Collider on the same GameObject.
 [Component]

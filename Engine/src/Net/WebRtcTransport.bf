@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Browser to browser through WebRTC, for games built for the web (tools/web/shell/tessera-net.js does the work).
 /// Hosting opens a room with a short code; joining takes that code as the address. The port is not used.

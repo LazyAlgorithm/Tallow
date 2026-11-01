@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Downloads over HTTP and HTTPS, for launchers, updaters and games that fetch content. Nothing extra is needed:
 /// Windows' own WinHTTP, and elsewhere the system's libcurl, are loaded the first time a download starts.
@@ -17,7 +17,7 @@ static class Http
 	[CLink] static extern char8* tn_inflate(void* data, int32 length, int32 expectedSize, int32 zlibHeader, out int32 outLength);
 
 	/// Sent with every request (GitHub's API asks for one).
-	public static String UserAgent = new .("Tessera") ~ delete _;
+	public static String UserAgent = new .("Tallow") ~ delete _;
 
 	/// Fetches a page or API answer as text. error says what went wrong on failure.
 	public static bool GetText(StringView url, String text, String error = null)

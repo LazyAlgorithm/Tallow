@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Full dynamic state of a body; what the network layer sends and rewinds to.
 [CRepr]
@@ -424,7 +424,7 @@ class PhysicsWorld
 			for (int i < triangleCount)
 			{
 				// Keep the mesh's own index order: Jolt takes (v2 - v1) x (v3 - v1) as the front of a
-				// triangle, which is the side Tessera's meshes face. Reversing it makes every
+				// triangle, which is the side Tallow's meshes face. Reversing it makes every
 				// triangle a back face, and Jolt lets bodies pass through back faces.
 				triangles[i].i1 = mesh.Indices[i * 3];
 				triangles[i].i2 = mesh.Indices[i * 3 + 1];

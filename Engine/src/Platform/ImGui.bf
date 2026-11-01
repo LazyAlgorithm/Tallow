@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Dear ImGui (docking branch) through cimgui. Only the subset the engine and editor use is declared;
 /// add more externs here as needed, the names match cimgui.h.

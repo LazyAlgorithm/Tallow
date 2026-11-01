@@ -1,14 +1,14 @@
 using System;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Where a game keeps the player's own files: settings, saves, maps they made. One folder per game per player, in
 /// the place each system expects:
 ///
-///   Windows   %APPDATA%\Tessera\<Game>\
-///   Linux     ~/.local/share/Tessera/<Game>/      (or $XDG_DATA_HOME)
-///   macOS     ~/Library/Application Support/Tessera/<Game>/
+///   Windows   %APPDATA%\Tallow\<Game>\
+///   Linux     ~/.local/share/Tallow/<Game>/      (or $XDG_DATA_HOME)
+///   macOS     ~/Library/Application Support/Tallow/<Game>/
 ///   Web       the browser's storage for the page (kept between visits)
 ///
 ///   let path = scope $"{GamePaths.PlayerData}notes.txt";
@@ -19,7 +19,7 @@ static class GamePaths
 	static String sPlayerData ~ delete _;
 
 	/// The publisher's part of the path. Changing it moves where everything is kept, so set it once, early.
-	public static String Company = new .("Tessera") ~ delete _;
+	public static String Company = new .("Tallow") ~ delete _;
 	/// The game's part of the path: its name, from the build's manifest.
 	public static String Game = new .("Game") ~ delete _;
 

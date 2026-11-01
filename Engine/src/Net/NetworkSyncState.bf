@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Switches, settings and effects shared without code (docs/networking.md): objects switched on and off
 /// (`SetActive`), components enabled and disabled, Lights' settings changed while playing, a Particle System's

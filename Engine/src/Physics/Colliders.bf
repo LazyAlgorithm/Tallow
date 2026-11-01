@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Collision shape for a GameObject. Without a Rigidbody the object is static scenery.
 [Component]

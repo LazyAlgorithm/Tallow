@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Holds two rigid bodies together at a point, so that they can turn about it but not come apart: a link in a
 /// chain, a door on a post, a limb on a body. Put it on one object and name the other in Connected To.

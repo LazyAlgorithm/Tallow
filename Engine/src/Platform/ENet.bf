@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// ENet: reliable and unreliable channels over UDP.
 static class ENet
