@@ -88,7 +88,7 @@ def main():
         for name in ('BeefSpace.toml', 'icon.png', 'LICENSE', 'THIRD_PARTY_LICENSES.txt'):
             shutil.copy2(root / name, stage / name)
         (stage / 'tools').mkdir()
-        for name in ('build_player.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'toolchain.txt'):
+        for name in ('build_player.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'toolchain.txt', 'setup_dependencies.ps1'):
             shutil.copy2(root / 'tools' / name, stage / 'tools' / name)
         for relative in [*archives, shaderc, texturec, modelsettings, modelconv]:
             destination = stage / relative
