@@ -2,6 +2,6 @@ FileVersion = 1
 Dependencies = {corlib = "*"}
 
 [Project]
-Name = "Tessera"
+Name = "Tallow"
 TargetType = "BeefLib"
-DefaultNamespace = "Tessera"
+DefaultNamespace = "Tallow"

@@ -1,8 +1,8 @@
 FileVersion = 1
-Projects = {Tessera = {Path = "Engine"}, TesseraEditor = {Path = "Editor"}, TesseraLauncher = {Path = "Launcher"}}
+Projects = {Tallow = {Path = "Engine"}, TallowEditor = {Path = "Editor"}, TallowLauncher = {Path = "Launcher"}}
 
 [Workspace]
-StartupProject = "TesseraLauncher"
+StartupProject = "TallowLauncher"
 
 [Configs.Debug.Win64]
 Toolset = "LLVM"

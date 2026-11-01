@@ -1,7 +1,7 @@
 FileVersion = 1
-Dependencies = {corlib = "*", Tessera = "*"}
+Dependencies = {corlib = "*", Tallow = "*"}
 
 [Project]
-Name = "TesseraEditor"
+Name = "TallowEditor"
 TargetType = "BeefLib"
-DefaultNamespace = "Tessera.Editor"
+DefaultNamespace = "Tallow.Editor"
