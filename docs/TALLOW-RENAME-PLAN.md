@@ -5,7 +5,7 @@ Status: preparation; no rename merged to main.
 ## Scope
 - Public brand: Tallow Engine, Tallow Editor, Tallow Manager.
 - Rename Tessera-owned Beef namespaces, symbols, project/build target names, binaries, UI labels, release assets, GitHub workflows, docs, site and bot branding.
-- Preserve existing project file extensions and serialized file formats. Existing projects are developer-owned and can be updated directly; no Tessera compatibility aliases required.
+- Breaking rename is approved: migrate all four developer-owned projects, project filenames, serialized formats, namespaces, scripts and tooling to Tallow. No backward-compatibility aliases or readers are required.
 - Avoid renaming third-party dependencies, historical attribution, and unrelated references.
 
 ## Execution
@@ -18,7 +18,7 @@ Status: preparation; no rename merged to main.
 7. Merge only after explicit approval; do not change main during development.
 
 ## Review gates
-- No references to Tessera remain except intentionally preserved format identifiers and historical text.
-- Project extensions unchanged.
+- No Tessera branding, source identifiers, or engine-owned filenames remain. Preserve only external GitHub URLs until the repository rename, third-party attributions, and required native-library names until their build definitions are updated.
+- New projects and migrated projects use Tallow-named file extensions and metadata; older formats need not load.
 - Windows/Linux builds and installation/update paths validated.
 - No direct commits to main.
