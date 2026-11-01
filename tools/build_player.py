@@ -140,12 +140,13 @@ def main():
         parser.error('Start scene must exist inside the project src folder. Save it in the editor first.')
     proj = tomllib.loads((project / 'BeefProj.toml').read_text())
     space = tomllib.loads((project / 'BeefSpace.toml').read_text())
-    # Generated players link the renamed runtime, even when the source project was\n    # created with an older Tessera workspace. Keep other game dependencies intact.\n    dependencies = {('Tallow' if key == 'Tessera' else key): value\n                    for key, value in proj['Dependencies'].items()\n                    if key not in ('TesseraEditor', 'TallowEditor')}\n    dependencies.setdefault('Tallow', '*')
+    dependencies = {key: value for key, value in proj['Dependencies'].items() if key != 'TallowEditor'}
+    dependencies.setdefault('Tallow', '*')
     program = (project / 'src' / 'Program.bf').read_text()
     # Keep the entry point's namespace imports: copied/renamed projects can
     # register scripts from a namespace that differs from the project name.
     imports = [match.group(0) for match in re.finditer(r'^\s*using\s+([A-Za-z_][A-Za-z0-9_.]*)\s*;', program, re.MULTILINE)
-               if match.group(1) not in ('System', 'Tessera', 'Tallow') and not match.group(1).startswith(('Tessera.Editor', 'Tallow.Editor'))]
+               if match.group(1) not in ('System', 'Tallow') and not match.group(1).startswith(('Tallow.Editor',))]
     bootstrap = args.bootstrap
     registration = re.search(r'\b((?:[A-Za-z_][A-Za-z0-9_]*\.)*GameSetup\.Register)\(\)', program)
     if bootstrap is None and registration:
@@ -159,7 +160,7 @@ def main():
         for file in (project / 'src').rglob('*.bf'):
             if file == project / 'src' / 'Program.bf':
                 continue
-            if re.search(r'\b(?:Tessera|Tallow)\.Editor\b', file.read_text()):
+            if re.search(r'\bTallow\.Editor\b', file.read_text()):
                 parser.error(f'Runtime script references the editor: {file}')
             target = source / file.relative_to(project / 'src')
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -170,7 +171,7 @@ def main():
         located = (lambda path: wine_path(path, '/')) if cross else (lambda path: str(path).replace('\\', '/'))
         project_entries = [f'{name} = {{Path = "."}}', f'Tallow = {{Path = {q(located(engine / "Engine"))}}}']
         for dependency in dependencies:
-            if dependency in ('corlib', 'Tallow', 'Tessera'):
+            if dependency in ('corlib', 'Tallow'):
                 continue
             location = (project / space['Projects'][dependency]['Path']).resolve()
             project_entries.append(f'{dependency} = {{Path = {q(located(location))}}}')
