@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Reflection;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Shows a UI document (.tui) over the game and connects it to code.
 ///

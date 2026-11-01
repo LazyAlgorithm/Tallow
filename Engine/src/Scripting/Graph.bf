@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Marks a public static method as a node for the visual scripting graph editor.
 /// Parameters become inputs and the return value becomes the output. Supported types are

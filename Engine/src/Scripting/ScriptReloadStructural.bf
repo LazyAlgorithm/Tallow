@@ -3,7 +3,7 @@ using System.Collections;
 using System.Reflection;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 extension ScriptReload
 {

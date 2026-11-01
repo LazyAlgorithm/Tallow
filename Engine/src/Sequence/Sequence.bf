@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What a sequence track does to its object.
 enum SequenceTrackKind

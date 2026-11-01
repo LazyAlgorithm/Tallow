@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Reads and writes scenes as line-based text (.tscene), which diffs and merges cleanly.
 ///
@@ -10,7 +10,7 @@ namespace Tessera;
 ///   env skyZenith 0.16 0.36 0.72 1
 ///   object 3 parent 0 active 1 name "Crate"
 ///   transform 0 1 0  0 0 0 1  1 1 1
-///   component Tessera.MeshRenderer enabled 1
+///   component Tallow.MeshRenderer enabled 1
 ///   field mesh "builtin:cube"
 static class SceneSerializer
 {

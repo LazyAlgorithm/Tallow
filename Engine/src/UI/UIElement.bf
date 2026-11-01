@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Reflection;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Ordered name/value list used for attributes and style properties.
 class UIProps

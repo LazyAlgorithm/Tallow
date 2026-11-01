@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Reflection;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Replaces game components at a frame boundary without rebuilding scene objects,
 /// renderers or physics bodies. Names and supported field types identify saved values.

@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Reflection;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A parsed UI document: the element tree plus its stylesheet, with layout and drawing.
 ///

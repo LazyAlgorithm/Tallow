@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A place where players or other objects may appear. Put as many in the scene as you like and ask SpawnPoints for
 /// one; the object's position is where to appear and its rotation is which way to face.

@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Reflection;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Development code reload (Linux and Windows, 64-bit debug builds). Compatible method edits preserve the live
 /// scene and fields. Retain loaded generations: old delegates may still reference their code.

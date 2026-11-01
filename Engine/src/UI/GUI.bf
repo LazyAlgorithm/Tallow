@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Immediate-mode interface for games. Call from Component.OnGUI. Coordinates are pixels from
 /// the top-left of the game view; use GUI.Width / GUI.Height to anchor to the other edges.

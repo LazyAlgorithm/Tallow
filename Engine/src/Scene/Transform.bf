@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Position, rotation and scale of a GameObject, arranged in a parent/child hierarchy.
 class Transform

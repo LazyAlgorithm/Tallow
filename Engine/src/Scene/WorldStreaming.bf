@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What a streamed world loads round (docs/world-streaming.md): put one on the player (on a server every player's
 /// object has one, so the world is loaded round each of them), a vehicle or a camera. With none in the scene, the

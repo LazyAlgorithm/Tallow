@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Where a Sequence Player is.
 enum SequenceState
@@ -324,7 +324,7 @@ class SequencePlayer : Component
 	{
 		var time = syncTime;
 		if ((SequenceState)syncState == .Playing && Scene.Network != null)
-			time += (float)((Scene.Network.ServerTick - syncTick) / Tessera.Time.TickRate) * speed;
+			time += (float)((Scene.Network.ServerTick - syncTick) / Tallow.Time.TickRate) * speed;
 		return time;
 	}
 
@@ -383,7 +383,7 @@ class SequencePlayer : Component
 			{
 				// Kept on the server's clock: moved on by frame, and nudged towards where the server says it is.
 				let previous = mTime;
-				var next = mTime + Tessera.Time.DeltaTime * speed;
+				var next = mTime + Tallow.Time.DeltaTime * speed;
 				let target = ServerTime();
 				if (Math.Abs(target - next) > 0.25f)
 					next = target;
@@ -405,7 +405,7 @@ class SequencePlayer : Component
 			return;
 		}
 		let previous = mTime;
-		mTime += Tessera.Time.DeltaTime * speed;
+		mTime += Tallow.Time.DeltaTime * speed;
 		let end = Length;
 		if (mTime >= end)
 		{

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 // Script reload on Windows. A Windows program does not share its symbols with a library the way a Linux one
 // does, so the script library is not loaded by Windows at all: tools/reload_scripts.py links it at an exact
