@@ -27,11 +27,14 @@ def tracked_files():
     except (OSError, subprocess.CalledProcessError):
         return [p for p in ROOT.rglob("*") if p.is_file() and not (set(p.relative_to(ROOT).parts) & SKIP)]
 
-def classify(line):
-    if HISTORICAL.search(line): return "repository URL (until repo rename)"
-    if FORMATS.search(line): return "unclassified branding/code"
-    if NATIVE.search(line): return "native ABI/tool name (migration required)"
-    if ENV.search(line): return "environment/toolchain compatibility"
+def classify(line, match):
+    """Classify a single occurrence, never the entire line."""
+    start, end = match.span()
+    for pattern, label in ((HISTORICAL, "repository URL (until repo rename)"),
+                           (NATIVE, "native ABI/tool name (migration required)"),
+                           (ENV, "environment/toolchain compatibility")):
+        if any(m.start() <= start and end <= m.end() for m in pattern.finditer(line)):
+            return label
     return "unclassified branding/code"
 
 def main():
@@ -49,13 +52,12 @@ def main():
         try: content = file.read_text("utf-8")
         except (UnicodeError, OSError): continue
         for number, line in enumerate(content.splitlines(), 1):
-            if not TOKEN.search(line): continue
-            # Avoid treating audit rules themselves as product references.
             if file.name == "audit_tallow_rename.py": continue
-            category = classify(line)
-            count += 1
-            unclassified += category == "unclassified branding/code"
-            print(f"{file.relative_to(ROOT)}:{number}: [{category}] {line.strip()[:180]}")
+            for match in TOKEN.finditer(line):
+                category = classify(line, match)
+                count += 1
+                unclassified += category == "unclassified branding/code"
+                print(f"{file.relative_to(ROOT)}:{number}:{match.start() + 1}: [{category}] {line.strip()[:180]}")
     for path in legacy_paths:
         print(f"{path}: [legacy filename/path] rename or explicitly preserve this path")
     print(f"Legacy-name lines: {count}; unclassified: {unclassified}; legacy paths: {len(legacy_paths)}")
