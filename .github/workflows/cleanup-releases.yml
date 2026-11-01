@@ -27,15 +27,13 @@ jobs:
           set -euo pipefail
           echo "Repository: $REPOSITORY"
           echo "Mode: $([[ "$DELETE_RELEASES" == 'true' ]] && echo DELETE || echo PREVIEW)"
-          echo "Keeping 0.1.0 releases (including beta variants) and showcase releases."
+          echo "Keeping ONLY v0.1.0-beta and showcase-20261031-local-9b9b910."
           count=0
           kept=0
           while IFS=$'\t' read -r id tag; do
             [[ -n "$id" && -n "$tag" ]] || continue
             lower="${tag,,}"
-            if [[ "$lower" == "v0.1.0" || "$lower" == "0.1.0" ||
-                  "$lower" == v0.1.0-* || "$lower" == 0.1.0-* ||
-                  "$lower" == *showcase* ]]; then
+            if [[ "$lower" == "v0.1.0-beta" || "$lower" == "showcase-20261031-local-9b9b910" ]]; then
               echo "KEEP:   $tag (release $id)"
               kept=$((kept + 1))
             else
