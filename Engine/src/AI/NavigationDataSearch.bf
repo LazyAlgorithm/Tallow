@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Finding paths on a NavigationData: A* over the cells (or the nodes, NavigationNodes.bf), many at once on the job
 /// threads, with each search's scratch and the routes it remembers.

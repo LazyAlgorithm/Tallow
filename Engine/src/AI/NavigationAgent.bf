@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Moves its object along paths found on a Navigation Surface: call SetDestination, then watch HasArrived or
 /// PathFailed. It walks through the object's Character Controller or Rigidbody when it has one. See

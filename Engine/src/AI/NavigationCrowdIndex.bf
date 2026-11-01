@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Where a scene's Navigation Agents stand, in square cells on the ground, so an agent steering round others
 /// (NavigationAgent.Avoid) looks only at the ones near it rather than at every agent. Agents join and leave as they

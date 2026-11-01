@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Loaded tree files, shared by every runner that uses them: a hundred guards running one tree read it once.
 static class BehaviorTreeAssets

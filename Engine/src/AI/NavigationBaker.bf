@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Bakes a Navigation Surface's grid from the scene's static geometry, in a physics world of its own so that
 /// nothing in the game runs while it does.

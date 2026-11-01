@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Straight lines over a NavigationData: whether an agent can go directly from one point to another, and straightening
 /// a path where it can.

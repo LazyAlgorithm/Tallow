@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Baked walking navigation (grid or polygon mesh), or a free-space volume grid for Flying agents.
 /// Uses static geometry inside a box. The object's position is the box's minimum corner. See docs/navigation.md.

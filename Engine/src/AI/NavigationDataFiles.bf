@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// NavigationData's .tnav assets: the binary grid (version 2), the old text grid (version 1), or a NavMesh.
 extension NavigationData

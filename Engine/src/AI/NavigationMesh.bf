@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// How a Navigation Surface lets agents walk: over a polygon mesh, or over a grid of cells. Flying always uses a grid.
 [Reflect(.All)]

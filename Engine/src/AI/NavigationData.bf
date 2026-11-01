@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A Navigation Surface's baked data: a walking grid (one floor height per cell), a volume grid for flying agents, or a
 /// walking polygon mesh (Mesh, when the surface's backend is NavMesh). Positions are agent feet for walking, and centres

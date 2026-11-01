@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The nodes paths are found over: blocks of cells an agent can cross in a straight line. A walking chunk is split
 /// like a quadtree, but at the first place its cells change (a wall, a ledge, a costly area) rather than at its middle,
