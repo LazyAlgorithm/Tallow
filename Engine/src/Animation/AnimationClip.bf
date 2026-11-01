@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A keyframed animation for a skeleton of named bones (.tanim file).
 ///

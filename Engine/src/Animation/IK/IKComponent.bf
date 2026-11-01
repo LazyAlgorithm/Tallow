@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What the IK components share. Each one is a layer over the pose: it remembers how the bones it turns were posed
 /// before it (by a clip, by hand, by a script), works from that every frame, and gives it back when its weight is 0,

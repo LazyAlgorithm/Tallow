@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The arithmetic of inverse kinematics, on Transforms in world space. The IK components (Limb IK, Look At IK,
 /// Foot Placement, Hand Pose) are built from these; call them yourself from LateUpdate for anything they do not cover.

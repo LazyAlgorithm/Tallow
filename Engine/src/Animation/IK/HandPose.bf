@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The ready-made hand shapes of a Hand Pose.
 [Reflect(.All)]

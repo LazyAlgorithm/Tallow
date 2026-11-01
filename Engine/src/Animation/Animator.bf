@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Plays animation clips on the bones (child objects) below this object, blending smoothly when the clip changes.
 /// A bone is any descendant GameObject; clips refer to bones by name.

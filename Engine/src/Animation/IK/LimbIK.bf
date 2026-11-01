@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Holds the end of an arm or a leg on a target: a hand on a weapon's grip, a hand on a door handle, a foot on a
 /// pedal. One component is one limb, so a character holding a rifle has two (one for each hand), and each can let go

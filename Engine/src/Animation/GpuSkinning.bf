@@ -1,7 +1,7 @@
 using System;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// GPU skinning (docs/gpu-skinning.md): a compute shader bends skinned models' vertices on the graphics card, straight
 /// into the vertex buffers every pass draws from. The CPU only works out each joint's matrix and the model's bounds.
@@ -158,7 +158,7 @@ extension SkinnedMeshRenderer
 	}
 
 	/// The box round the bent mesh worked out from its joints alone, as GPU skinning does (no vertex is bent): each
-	/// joint's resting box, moved with the joint. It holds the bent mesh, a little loosely. In Tessera's space.
+	/// joint's resting box, moved with the joint. It holds the bent mesh, a little loosely. In Tallow's space.
 	public Bounds BoundsFromJoints()
 	{
 		if (mModel == null || mSkin == null)

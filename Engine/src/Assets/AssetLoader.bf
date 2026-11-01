@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Loads models and textures in the background, so that a level or a new weapon can be got ready while the game
 /// keeps running. Reading and decoding files is done on loading threads; what must happen on the main thread (sending

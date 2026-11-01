@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The bones every humanoid skeleton shares, whatever its file calls them. A clip made for one humanoid plays on
 /// another through them (see BoneMap and SkinnedModel.ImportClips).

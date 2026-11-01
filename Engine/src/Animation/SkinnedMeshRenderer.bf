@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Draws a rigged model and plays its animation clips, bending the mesh with its skeleton.
 /// Export from Blender as glTF 2.0 (.glb) with the armature, mesh and animations included.
@@ -124,7 +124,7 @@ class SkinnedMeshRenderer : Component
 		return true;
 	}
 
-	// The model's space is right-handed and Tessera's is not: a pose crosses over by mirroring Z.
+	// The model's space is right-handed and Tallow's is not: a pose crosses over by mirroring Z.
 	static Vector3 Mirror(Vector3 v) => .(v.x, v.y, -v.z);
 	static Quaternion Mirror(Quaternion q) => .(-q.x, -q.y, q.z, q.w);
 
@@ -832,7 +832,7 @@ class SkinnedMeshRenderer : Component
 			}
 			let length = Math.Sqrt(nx * nx + ny * ny + nz * nz);
 			let inverse = length < 1.0e-12f ? 0.0f : 1.0f / length;
-			// Into Tessera's left-handed space.
+			// Into Tallow's left-handed space.
 			vertices[v].position = .(px, py, -pz);
 			vertices[v].normal = .(nx * inverse, ny * inverse, -nz * inverse);
 			if (px < bounds.min.x)

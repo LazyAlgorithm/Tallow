@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A rigged model loaded from glTF / GLB: bind-pose vertices with bone weights, the skeleton,
 /// and its animation clips (sampled at 30 frames per second on import).

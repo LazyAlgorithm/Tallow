@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Asset packs: a built game's assets in one file (`game.tpak`) instead of loose files that anyone can open and
 /// change. File > Build... makes the pack; a packed game mounts it by itself when it starts.

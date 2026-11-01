@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Turns a head towards a target, with the neck and spine sharing the turn when Bones is more than 1: a character
 /// who watches the player, or whose upper body follows where the camera aims.

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Keeps a character's feet on the ground: on stairs, slopes and rubble each foot is set down on what is under it,
 /// the hips drop so that the lower foot can reach, and the feet tilt with the slope. Put it on the character's root

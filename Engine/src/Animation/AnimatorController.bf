@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 enum AnimatorParameterType : int32 { Float, Int, Bool, Trigger }
 
