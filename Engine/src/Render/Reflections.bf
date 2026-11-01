@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Captures what can be seen from a point into a cube, for the shiny surfaces inside its box to mirror: floors,
 /// metal, glass, water, wet streets (docs/reflections.md). Without one, surfaces mirror the sky, which looks wrong

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Shaders, uniforms and the shadow atlas shared by every RenderView.
 static class RenderResources

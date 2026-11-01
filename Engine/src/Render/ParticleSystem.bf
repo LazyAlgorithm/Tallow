@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Emits small meshes (cubes by default, which suits low-poly art) that move, shrink and fade.
 /// A whole system is drawn as one instanced call. It previews in the editor without pressing Play.

@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The graphics quality presets (docs/quality.md).
 enum QualityLevel

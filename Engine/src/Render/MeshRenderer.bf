@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Draws a mesh with an inline material. Identical mesh/material pairs are batched into instanced draws.
 [Component]
@@ -63,19 +63,19 @@ class MeshRenderer : Component
 	/// textures included, when no Material or Texture is set here. Off: the whole model takes the fields above.
 	public bool useModelMaterials = true;
 
-	Tessera.Material mSharedMaterial;
-	Tessera.Material mMaterialInstance ~ delete _;
+	Tallow.Material mSharedMaterial;
+	Tallow.Material mMaterialInstance ~ delete _;
 	String mResolvedMaterial = new .() ~ delete _;
 
 	/// The material from the Material field, shared with every other renderer that names it. Null with none set.
-	public Tessera.Material SharedMaterial
+	public Tallow.Material SharedMaterial
 	{
 		get
 		{
 			if (mResolvedMaterial != material)
 			{
 				mResolvedMaterial.Set(material);
-				mSharedMaterial = Tessera.Material.Load(material);
+				mSharedMaterial = Tallow.Material.Load(material);
 				// A copy made for this object was a copy of the old material.
 				DeleteAndNullify!(mMaterialInstance);
 			}
@@ -85,7 +85,7 @@ class MeshRenderer : Component
 
 	/// This object's own copy of its material, made the first time it is asked for. Change it to change this
 	/// object without changing the others that share the material. Null with no material set.
-	public Tessera.Material Material
+	public Tallow.Material Material
 	{
 		get
 		{
@@ -99,7 +99,7 @@ class MeshRenderer : Component
 	}
 
 	/// What the renderer draws with: this object's own copy if it has one, otherwise the shared material.
-	public Tessera.Material ActiveMaterial
+	public Tallow.Material ActiveMaterial
 	{
 		get
 		{
@@ -228,7 +228,7 @@ class MeshRenderer : Component
 	public class Part
 	{
 		public Mesh mesh;
-		public Tessera.Material material;
+		public Tallow.Material material;
 		/// Multiplies the part's colour (a character's coat dyed red).
 		public Color tint = .White;
 		/// Not drawn at all, and casts no shadow.

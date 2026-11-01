@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Built-in primitive meshes, all centred on the origin with unit size.
 static class Primitives

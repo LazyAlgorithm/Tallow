@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A grid of baked light probes (docs/baked-lighting.md): at each point, the light arriving from every direction (the
 /// sky and what it bounced off), kept as a constant plus a direction for each of red, green and blue (spherical

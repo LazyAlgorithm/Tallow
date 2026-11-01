@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// How a material's alpha is used.
 enum MaterialBlend : int32

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Whether a renderer hides what is behind it from occlusion culling (docs/occlusion-culling.md).
 enum OccluderMode

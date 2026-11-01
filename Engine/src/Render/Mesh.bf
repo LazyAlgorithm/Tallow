@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Triangle mesh with CPU-side data and a GPU copy. Front faces wind clockwise (left-handed).
 class Mesh
@@ -144,7 +144,7 @@ class Mesh
 			Bounds = .(.Zero, .Zero);
 			return;
 		}
-		var bounds = Tessera.Bounds.Empty;
+		var bounds = Tallow.Bounds.Empty;
 		for (let v in Vertices)
 			bounds.Encapsulate(v.position);
 		Bounds = bounds;

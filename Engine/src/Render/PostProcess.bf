@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The player's choices about the screen effects, for a game's settings menu. The scene decides how much ambient
 /// occlusion, depth of field and motion blur it has (SceneEnvironment); these let a player turn each off, or tone

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The screen effects (ambient occlusion, depth of field, motion blur), bloom and the tonemap, after the scene is drawn.
 extension RenderView

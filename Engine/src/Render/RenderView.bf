@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// How a view draws its surfaces (the editor's views; the game draws Rendered).
 public enum ViewShading

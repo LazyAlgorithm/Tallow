@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Second texture coordinates (MeshVertex.uv2) for baked lighting (docs/baked-lighting.md): every triangle a place of
 /// its own in a square, none overlapping, so a lightmap can hold a colour for each point of the surface.
@@ -320,7 +320,7 @@ static class LightmapUV
 		let a = mesh.Vertices[mesh.Indices[t * 3]].position * scale;
 		let b = mesh.Vertices[mesh.Indices[t * 3 + 1]].position * scale;
 		let c = mesh.Vertices[mesh.Indices[t * 3 + 2]].position * scale;
-		// Clockwise front faces: (b - a) x (c - a) points out of the front in Tessera's left-handed space.
+		// Clockwise front faces: (b - a) x (c - a) points out of the front in Tallow's left-handed space.
 		let cross = Vector3.Cross(b - a, c - a);
 		let length = Math.Sqrt(Vector3.Dot(cross, cross));
 		area = length * 0.5f;
