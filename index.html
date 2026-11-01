@@ -244,6 +244,8 @@ tr:last-child td { border-bottom: 0; }
 .mini-slices li::before { content: counter(s) ". "; font-family: var(--mono); color: var(--muted); }
 .mini-slices li.net { color: var(--cobalt); font-weight: 700; }
 
+.sponsor-nav { color:var(--jade) !important; font-weight:700; white-space:nowrap; }
+.sponsor-nav:hover,.sponsor-nav:focus-visible { text-decoration:underline; }
 footer { border-top: 1px solid var(--line); padding: 28px 20px 40px; }
 footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 0.92rem; }
 
@@ -286,6 +288,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
       <a href="#manual" data-nav="manual">Manual</a>
       <a href="#api" data-nav="api">API Reference</a>
       <a href="#download" data-nav="download">Download</a>
+      <a href="https://github.com/sponsors/LazyAlgorithm" target="_blank" rel="noopener noreferrer" class="sponsor-nav">♥ Sponsor</a>
     </nav>
     <button class="theme-btn search-open" id="searchOpen" type="button" aria-haspopup="dialog" aria-controls="siteSearch">Search <kbd>/</kbd></button>
     <button class="theme-btn" id="themeBtn" type="button" aria-label="Switch light or dark">Theme</button>
@@ -1271,7 +1274,7 @@ Quality.Save();                    // applied by itself at the next start</code>
 <footer>
   <div class="inner">
     <span>Tessera · a game engine written in Beef · <a href="#manual">Documentation</a> · <a href="https://lazyalgorithm.github.io/ringfall-web/" target="_blank" rel="noopener noreferrer">Live game demo ↗</a></span>
-    <span><a href="#start">Get started</a> · <a href="#shooter">Shooter tutorial</a> · <a href="#manual">Manual</a> · <a href="#api">API Reference</a></span>
+    <span><a href="#start">Get started</a> · <a href="#shooter">Shooter tutorial</a> · <a href="#manual">Manual</a> · <a href="#api">API Reference</a> · <a href="https://github.com/sponsors/LazyAlgorithm" target="_blank" rel="noopener noreferrer">♥ Sponsor development</a></span>
   </div>
 </footer>
 
