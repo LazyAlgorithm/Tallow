@@ -1,0 +1,53 @@
+name: Clean up old releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      delete_releases:
+        description: "Delete releases instead of previewing? This is irreversible."
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Preview or delete obsolete GitHub releases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Review releases and optionally delete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          DELETE_RELEASES: ${{ inputs.delete_releases }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Repository: $REPOSITORY"
+          echo "Mode: $([[ "$DELETE_RELEASES" == 'true' ]] && echo DELETE || echo PREVIEW)"
+          echo "Keeping 0.1.0 releases (including beta variants) and showcase releases."
+          count=0
+          kept=0
+          while IFS=$'\t' read -r id tag; do
+            [[ -n "$id" && -n "$tag" ]] || continue
+            lower="${tag,,}"
+            if [[ "$lower" == "v0.1.0" || "$lower" == "0.1.0" ||
+                  "$lower" == v0.1.0-* || "$lower" == 0.1.0-* ||
+                  "$lower" == *showcase* ]]; then
+              echo "KEEP:   $tag (release $id)"
+              kept=$((kept + 1))
+            else
+              echo "REMOVE: $tag (release $id)"
+              count=$((count + 1))
+              if [[ "$DELETE_RELEASES" == "true" ]]; then
+                gh api --method DELETE "/repos/$REPOSITORY/releases/$id"
+              fi
+            fi
+          done < <(gh api --paginate "/repos/$REPOSITORY/releases?per_page=100" --jq '.[] | [.id, .tag_name] | @tsv')
+          echo "Kept: $kept; selected for deletion: $count."
+          if [[ "$DELETE_RELEASES" != "true" ]]; then
+            echo "PREVIEW ONLY: Nothing was deleted. Re-run with delete_releases=true to apply."
+          fi
+          echo "Git tags are left untouched; only GitHub release records and attached assets are deleted."
