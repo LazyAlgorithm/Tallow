@@ -39,6 +39,8 @@ Team and distance are decided by the **server**: speech is simply not sent to pl
 ## Volume, muting and who is talking
 
 ```beef
+VoiceChat.AutoLevel = true;             // default: even out quiet and loud microphones
+VoiceChat.SetPlayerVolume(clientId, 2); // boost one player locally (0 to 4; 1 is normal)
 VoiceChat.Volume = 0.8f;                 // other players' voices
 VoiceChat.MicrophoneVolume = 1.5f;       // your microphone, before it is sent
 VoiceChat.Muted = true;                  // stop sending without turning voice chat off
@@ -50,6 +52,8 @@ if (VoiceChat.IsSpeaking(clientId)) { /* draw a speaker icon over their head */ 
 if (VoiceChat.IsTransmitting) { /* draw a microphone icon for yourself */ }
 VoiceChat.OnSpeakingChanged.Add(new (clientId, speaking) => { /* update a player list */ });
 ```
+
+Received voices are automatically leveled independently toward a common speech volume, with up to 8× boost and a peak ceiling before the mixer. Silence does not increase the gain. Leveling happens before proximity attenuation, so distance still makes voices quieter. `VoiceChat.AutoLevel = false` disables leveling; the peak ceiling remains. Individual volumes last for the session; games can expose these controls in their options or player list. Manual volume boosts and the combined mixer can still exceed the peak ceiling. Very faint speech below the open microphone activation threshold needs a lower `Activation` or higher `MicrophoneVolume` to be transmitted.
 
 A player's client id is `ownerId` on their Network Identity; the host's own player is 0.
 

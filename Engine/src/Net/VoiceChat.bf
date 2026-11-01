@@ -56,6 +56,8 @@ static class VoiceChat
 	public static float MicrophoneVolume = 1;
 	/// Loudness of other players' voices. The Voice mixer group (Audio.SetGroupVolume(.Voice, ...)) applies as well.
 	public static float Volume = 1;
+	/// Levels each received voice before distance attenuation. Disable to hear the original microphone levels.
+	public static bool AutoLevel = true;
 	/// Stops your microphone being sent without turning voice chat off: you still hear the others. The microphone
 	/// is not even opened while muted, so a browser does not ask for permission to use it.
 	public static bool Muted;
@@ -108,6 +110,42 @@ static class VoiceChat
 	/// Stops or resumes playing one player's voice on this machine only.
 	public static void Mute(int32 clientId, bool muted) => Session?.Mute(clientId, muted);
 	public static bool IsMuted(int32 clientId) => Session?.IsMuted(clientId) ?? false;
+	/// Local volume for a player (1 = normal, 2 = twice the amplitude). Lasts for this session.
+	public static void SetPlayerVolume(int32 clientId, float volume) => Current?.SetPlayerVolume(clientId, volume);
+	public static float GetPlayerVolume(int32 clientId) => Current?.GetPlayerVolume(clientId) ?? 1;
+
+	/// Stateful level control for one decoded voice. Never share this between speakers.
+	public class VoiceLeveler
+	{
+		float mGain = 1;
+		public void Process(Span<float> samples)
+		{
+			if (samples.Length == 0)
+				return;
+			double sum = 0;
+			float peak = 0;
+			for (let sample in samples)
+			{
+				sum += sample * sample;
+				peak = Math.Max(peak, Math.Abs(sample));
+			}
+			let rms = (float)Math.Sqrt(sum / samples.Length);
+			// Hold gain during silence: do not chase the noise floor between words.
+			float target = AutoLevel && rms >= 0.003f ? Math.Clamp(0.12f / rms, 0.25f, 8.0f) : mGain;
+			if (!AutoLevel)
+				target = 1;
+			let previous = mGain;
+			// Reduce loud voices quickly; bring quiet ones up over about 200 ms.
+			mGain += (target - mGain) * (target < mGain ? 0.6f : 0.1f);
+			// Limit the whole frame, including its gain ramp, before sending to the mixer.
+			let ceiling = peak > 0 ? 0.95f / peak : 8.0f;
+			for (int i < samples.Length)
+			{
+				let gain = previous + (mGain - previous) * (float)(i + 1) / samples.Length;
+				samples[i] *= Math.Min(gain, ceiling);
+			}
+		}
+	}
 	/// True while the push-to-talk key, or Talk, is held.
 	public static bool TalkHeld => Talk || (PushToTalkKey != .None && Input.GetKey(PushToTalkKey)) || (!PushToTalkAction.IsEmpty && InputActions.Held(PushToTalkAction));
 
@@ -195,6 +233,7 @@ static class VoiceChat
 	{
 		class Speaker
 		{
+			public VoiceLeveler leveler = new .() ~ delete _;
 			public void* decoder;
 			public void* stream;
 			public bool positioned;
@@ -212,6 +251,7 @@ static class VoiceChat
 		List<float> mPending = new .() ~ delete _;
 		Dictionary<int32, Speaker> mSpeakers = new .() ~ delete _;
 		HashSet<int32> mMuted = new .() ~ delete _;
+		Dictionary<int32, float> mVolumes = new .() ~ delete _;
 		// Server: packets seen from each client in the current second, to turn away floods.
 		Dictionary<int32, int32> mRate = new .() ~ delete _;
 		float mRateWindow;
@@ -273,6 +313,13 @@ static class VoiceChat
 		}
 
 		public bool IsMuted(int32 clientId) => mMuted.Contains(clientId);
+		public float GetPlayerVolume(int32 clientId) => mVolumes.TryGetValue(clientId, let volume) ? volume : 1;
+		public void SetPlayerVolume(int32 clientId, float volume)
+		{
+			mVolumes[clientId] = Math.Clamp(volume, 0, 4);
+			if (mSpeakers.TryGetValue(clientId, let speaker) && speaker.stream != null)
+				Place(clientId, speaker);
+		}
 
 		/// Takes microphone samples (mono, 48 kHz, -1 to 1). The engine calls this with what the microphone
 		/// records; a game can call it too, to send sound of its own as this player's voice.
@@ -442,7 +489,10 @@ static class VoiceChat
 						else
 							got = tn_voice_decode(speaker.decoder, null, 0, &fill, 0);
 						if (got > 0)
+						{
+							speaker.leveler.Process(.(&fill, got));
 							tn_audio_stream_push(speaker.stream, &fill, got);
+						}
 					}
 				}
 			}
@@ -474,6 +524,7 @@ static class VoiceChat
 			let got = tn_voice_decode(speaker.decoder, data.Ptr, (int32)data.Length, &samples, 0);
 			if (got <= 0)
 				return;
+			speaker.leveler.Process(.(&samples, got));
 			tn_audio_stream_push(speaker.stream, &samples, got);
 			speaker.frames++;
 			speaker.silence = 0;
@@ -482,7 +533,7 @@ static class VoiceChat
 		void Place(int32 id, Speaker speaker)
 		{
 			var parameters = Audio.Defaults();
-			parameters.volume = Math.Max(Volume, 0);
+			parameters.volume = Math.Max(Volume, 0) * GetPlayerVolume(id);
 			parameters.spatial = speaker.positioned ? 1 : 0;
 			parameters.doppler = 0;
 			if (speaker.positioned)
