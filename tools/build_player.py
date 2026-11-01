@@ -200,6 +200,8 @@ def main():
         lines = ['FileVersion = 1', 'Dependencies = {' + ', '.join(f'{key} = {q(value)}' for key, value in dependencies.items()) + '}', '[Project]', f'Name = {q(name)}', f'TargetType = {q(target_type)}', f'StartupObject = {q(name + ".Program")}', f'[Configs.{args.config}.{beef_platform}]']
         for key, value in config.items():
             if not windows and not web and not macos and isinstance(value, str):
+                if recorded_engine and not Path(recorded_engine).is_absolute():
+                    value = value.replace('$(WorkspaceDir)/' + recorded_engine, str(engine))
                 value = value.replace('$(WorkspaceDir)', str(project))
                 if recorded_engine and Path(recorded_engine).is_absolute() and str(engine) != recorded_engine:
                     value = value.replace(recorded_engine, str(engine))
