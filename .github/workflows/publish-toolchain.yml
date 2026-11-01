@@ -19,6 +19,13 @@ jobs:
           mkdir -p beef
           7z x -y BeefSetup.exe -obeef >/dev/null
           test -s beef/bin/BeefBuild.exe
+          if [ ! -s beef/BeefLibs/corlib/BeefProj.toml ]; then
+            echo "Beef installer has no standard libraries; including them from pinned upstream Beef source."
+            git clone --filter=blob:none --no-checkout https://github.com/beefytech/Beef.git beef-source
+            git -C beef-source checkout b62833e327d6b08f3566b31102c57646de6916b0 -- BeefLibs
+            cp -R beef-source/BeefLibs beef/BeefLibs
+            rm -rf beef-source
+          fi
           test -s beef/BeefLibs/corlib/BeefProj.toml || { echo "Beef package is missing corlib; refusing to publish incomplete toolchain." >&2; exit 1; }
           7z a -tzip -mx=9 beef-windows-x64.zip beef >/dev/null
       - name: Download Python 3.12 embeddable
