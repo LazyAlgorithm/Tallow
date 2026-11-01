@@ -92,8 +92,11 @@ def main():
             parser.error('Output already exists; choose a new folder to preserve the existing build, or pass --replace.')
         if not output.is_dir() or (any(output.iterdir()) and not (output / 'game.tallow').is_file() and not (output / 'game.tpak').is_file()):
             parser.error(f'{output} exists and is not an earlier build of a game, so it is left alone. Choose another folder.')
+    manifest = project / 'project.tallow'
+    if not manifest.is_file():
+        parser.error(f'Missing {manifest}. Tallow projects require project.tallow; regenerate or update the project before building.')
     settings = {}
-    for line in (project / 'project.tallow').read_text().splitlines():
+    for line in manifest.read_text().splitlines():
         if '=' in line:
             key, value = line.split('=', 1)
             settings[key.strip()] = value.strip()
