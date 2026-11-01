@@ -1,4 +1,4 @@
-# Building Tessera from source
+# Building Tallow from source
 
 The repository contains the engine, editor, templates and vendored dependencies. Build output goes under `build/`; do not copy someone else's CMake cache into a checkout. The checkout may live anywhere, including a path with spaces. Use an x64 compiler/toolchain. The first CMake configure fetches the pinned Jolt Physics source, so it needs Git and an internet connection.
 
@@ -13,7 +13,7 @@ sudo apt-get install build-essential cmake ninja-build python3 git libx11-dev li
 
 Ubuntu 22.04 also works, but its default Python is 3.10: install Python 3.11+ separately and set `PYTHON` to that executable. Other distributions need equivalent packages. Install the Linux Beef toolchain from [Beef](https://www.beeflang.org/) or build the compiler revision in `tools/toolchain.txt`; its shared-library dependencies must also be installed. Put `BeefBuild` on `PATH`, or set `BEEFBUILD` to the compiler executable/wrapper. LLVM 22 tools enable LLVM/ThinLTO; Beef can fall back to GNU linking when they are absent.
 
-For a prebuilt Linux compiler, Tessera's toolchain release provides the same compiler bundle used by Hub. This installs it in your user folder:
+For a prebuilt Linux compiler, The project's toolchain release provides the same compiler bundle used by Hub. This installs it in your user folder:
 
 ```sh
 mkdir -p "$HOME/.local/share/TesseraBuildTools"
@@ -25,6 +25,7 @@ export BEEFBUILD="$HOME/.local/share/TesseraBuildTools/beef/IDE/dist/BeefBuild.s
 ```sh
 git clone https://github.com/LazyAlgorithm/Tessera.git
 cd Tessera
+# Repository URL and directory retain their original names until the GitHub repository is renamed.
 ./build.sh --config Debug --jobs 8
 ./build/Debug_Linux64/TallowLauncher/TallowLauncher
 ```
