@@ -239,7 +239,7 @@ class LauncherApp : Application
 		if (mSetupRunning)
 		{
 			ImGui.TextWrapped("Installing development tools in the background. This may take several minutes.");
-			ImGui.TextWrapped("Installation log: %LOCALAPPDATA%/Tallow/toolchain/install.log");
+			ImGui.TextWrapped("Installation log: Tallow/toolchain/install.log (under your Local AppData folder)");
 		}
 		else
 		{
