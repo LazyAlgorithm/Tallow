@@ -107,7 +107,7 @@ def main():
         prerequisites = ('Beef toolchain, Microsoft C++ Build Tools, and Python 3.11+ on PATH.' if windows
                          else 'BeefBuild (built for macOS) and Python 3.11+ on PATH, and the Xcode command line tools.' if macos
                          else 'BeefBuild and Python 3.11+ on PATH, plus system graphics/audio drivers and X11 libraries.')
-        (stage / 'tessera-package.txt').write_text(
+        (stage / 'tallow-package.txt').write_text(
             f'Tallow early beta for {args.platform} ({"Apple silicon" if macos else "x64"}), {args.config}.\n'
             f'Start {"Tallow.exe" if windows else "./Tallow"}.\n'
             f'For editing/building projects: {prerequisites}\n'
