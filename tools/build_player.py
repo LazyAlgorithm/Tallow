@@ -152,7 +152,7 @@ def main():
         bootstrap = registration.group(1)
     if bootstrap and not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.]*', bootstrap):
         parser.error('Invalid bootstrap method name.')
-    with tempfile.TemporaryDirectory(prefix='tessera-player-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='tallow-player-') as temporary:
         workspace = Path(temporary)
         source = workspace / 'src'
         source.mkdir()
