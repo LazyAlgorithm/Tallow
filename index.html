@@ -49,19 +49,26 @@ body:has([id^="gs-"]:target) #v-home { display:none !important; }
 
 .bench-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px}.bench-tabs button{font:inherit;font-weight:650;padding:11px 17px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;cursor:pointer}.bench-tabs button[aria-selected="true"]{background:#3568dc;color:#fff;border-color:#3568dc}.bench-solo-value{font-variant-numeric:tabular-nums}
 </style>
-<title>Tessera Engine — 3D Game Engine in Beef</title>
-<meta name="description" content="Tessera is a 3D game engine and editor built in Beef for low-poly games, voxel worlds and server-authoritative multiplayer. Explore tutorials and documentation.">
+<title>Tallow Engine — 3D Game Engine in Beef</title>
+<meta name="description" content="Tallow is a 3D game engine and editor built in Beef for low-poly games, voxel worlds and server-authoritative multiplayer. Explore tutorials and documentation.">
 <meta name="robots" content="index,follow">
-<meta name="theme-color" content="#2747c4">
+<meta name="theme-color" content="#0c1626">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Tessera Engine — Build Worlds Together">
+<meta property="og:title" content="Tallow Engine — Build Worlds Together">
 <meta property="og:description" content="A 3D game engine in Beef with voxel terrain, multiplayer and a visual editor. Tutorials and docs included.">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Tessera Engine">
-<meta name="twitter:description" content="Build low-poly worlds with Tessera, a 3D engine written in Beef.">
+<meta name="twitter:title" content="Tallow Engine">
+<meta name="twitter:description" content="Build low-poly worlds with Tallow, a 3D engine written in Beef.">
 <style>
 .api-shell{max-width:1120px;margin:auto;padding:24px 20px 70px}.api-search{width:100%;max-width:700px;padding:13px 16px;font:inherit;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}.api-results{display:grid;gap:10px;margin-top:18px}.api-entry{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--surface);overflow-wrap:anywhere}.api-entry code{white-space:pre-wrap;overflow-wrap:anywhere}.api-entry small{display:block;margin-top:7px;opacity:.75}.api-entry a{color:var(--jade)}.api-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}.api-controls button{padding:9px 14px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer}.api-controls button:disabled{opacity:.45;cursor:default}
-</style></head><body>
+</style><style>
+/* Tallow brand accents: aligned with the editor's blue/teal default theme. */
+:root { --cobalt:#176bb9; --cobalt-soft:#d7f4ff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --cobalt:#5bc9ff; --cobalt-soft:#102d46; } }
+:root[data-theme="dark"] { --cobalt:#5bc9ff; --cobalt-soft:#102d46; }
+.brand svg { width:32px; height:32px; flex-shrink:0; filter:drop-shadow(0 0 5px rgba(38,205,255,.16)); }
+:where(a, button, input, select):focus-visible { outline:2px solid var(--cobalt); outline-offset:3px; }
+</style><link rel="icon" type="image/svg+xml" href="icon.svg"></head><body>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -287,9 +294,9 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
 
 <header class="bar">
   <div class="bar-inner">
-    <a class="brand" href="#home" aria-label="Tessera home">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="13" height="13" rx="2" fill="var(--cobalt)"/><rect x="17" y="2" width="13" height="13" rx="2" fill="var(--saffron)"/><rect x="2" y="17" width="13" height="13" rx="2" fill="var(--jade)"/><rect x="17" y="17" width="13" height="13" rx="2" fill="var(--ink)" opacity=".85"/></svg>
-      TESSERA
+    <a class="brand" href="#home" aria-label="Tallow home">
+      <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="tallowCyan" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7cecff"/><stop offset=".5" stop-color="#25cfff"/><stop offset="1" stop-color="#297eff"/></linearGradient></defs><path d="M32 5 56 18.5v27L32 59 8 45.5v-27Z" fill="#0d2037" stroke="url(#tallowCyan)" stroke-width="4" stroke-linejoin="round"/><path d="M17 23h30v8H36v21h-8V31H17Z" fill="url(#tallowCyan)"/></svg>
+      TALLOW
     </a>
     <nav class="nav" aria-label="Main">
       <a href="#home" data-nav="home">Home</a>
@@ -307,7 +314,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
   </div>
 </header>
 
-<div id="siteSearch" class="search-overlay" hidden role="dialog" aria-modal="true" aria-label="Search Tessera documentation">
+<div id="siteSearch" class="search-overlay" hidden role="dialog" aria-modal="true" aria-label="Search Tallow documentation">
   <div class="search-dialog">
     <div class="search-top"><label for="searchInput">Search documentation</label><button type="button" id="searchClose" class="theme-btn" aria-label="Close search">Close <kbd>Esc</kbd></button></div>
     <input id="searchInput" type="search" placeholder="Search tutorials, API concepts, installation…" autocomplete="off" aria-controls="searchResults" aria-describedby="searchHelp">
@@ -323,7 +330,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
     <div>
       <p class="eyebrow">3D engine and editor · written in Beef · Linux, Windows, Web</p>
       <h1 style="margin-top:14px">Low-poly worlds,<br>built to be played <span class="tile">together</span>.</h1>
-      <p class="hero-lede">Tessera is a game engine and editor for low-poly games with voxel worlds and multiplayer built in. Write a player once. The engine sends the controls, predicts, corrects, and keeps every machine in step.</p>
+      <p class="hero-lede">Tallow is a game engine and editor for low-poly games with voxel worlds and multiplayer built in. Write a player once. The engine sends the controls, predicts, corrects, and keeps every machine in step.</p>
       <div class="hero-cta">
         <a class="btn btn-primary" href="#start">Get started</a>
         <a class="btn btn-ghost" href="#shooter">Build a shooter</a>
@@ -416,7 +423,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
       <p class="lede">Install the editor, make a project, write a component, and build an executable you can send to someone.</p>
 
       <h2 id="gs-install">Install</h2>
-      <p>Tessera compiles your scripts together with the engine, so the machine you edit on needs the Beef compiler and Python as well as the editor.</p>
+      <p>Tallow compiles your scripts together with the engine, so the machine you edit on needs the Beef compiler and Python as well as the editor.</p>
       <div class="tbl-wrap"><table>
         <thead><tr><th>You need</th><th>Linux</th><th>Windows</th></tr></thead>
         <tbody>
@@ -431,7 +438,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
 
       <h2 id="gs-project">Create a project</h2>
       <ol class="steps">
-        <li><div><p>Start <code>Tessera</code> (<code>Tessera.exe</code> on Windows). The launcher lists recent projects.</p></div></li>
+        <li><div><p>Start <code>Tallow</code> (<code>Tallow.exe</code> on Windows). The launcher lists recent projects.</p></div></li>
         <li><div><p>Choose to create a project, give it a name and a location. The name becomes the namespace of your scripts.</p><p>Tick <strong>Include sample</strong> for a voxel world and a networked player to look at.</p></div></li>
         <li><div><p>Press <strong>Create Project</strong>. The scripts compile and the editor opens.</p></div></li>
       </ol>
@@ -525,7 +532,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
         <div class="slices" id="sliceGrid"></div>
         <h2>Before you start</h2>
         <ul>
-          <li>Tessera installed, and a project created from the launcher with no sample. Call it <code>Arena</code>; the code below uses that namespace.</li>
+          <li>Tallow installed, and a project created from the launcher with no sample. Call it <code>Arena</code>; the code below uses that namespace.</li>
           <li>Two short sound files for slice 5, a shot and a reload, in WAV, OGG, MP3 or FLAC.</li>
         </ul>
         <div class="note"><div><strong>Why slices</strong>Each slice is small enough to finish in a sitting and leaves the game working. If something breaks, the last slice is the place to look.</div></div>
@@ -796,7 +803,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
     <article class="prose">
       <select class="side-select" id="manualSelect" aria-label="Jump to a section"></select>
       <p class="eyebrow">Manual</p>
-      <h1>How Tessera works</h1>
+      <h1>How Tallow works</h1>
       <p class="lede">The parts you will use most, with the calls that drive them.</p>
 
       <h2 id="manual-components">Components and scenes</h2>
@@ -966,7 +973,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
       <p><a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/rigging.md">Read the full rigging and weight painting guide →</a></p>
 
       <h2 id="manual-themes">Editor themes</h2>
-      <p>Open <strong>Edit &gt; Preferences</strong> to choose Tessera Blue, Dark, Light, High Contrast, Forest, Ember or Plum, or make a custom theme. Colours update live, code editor colours can be chosen independently, and <code>.ttheme</code> files can be imported and exported.</p>
+      <p>Open <strong>Edit &gt; Preferences</strong> to choose Tallow Blue, Dark, Light, High Contrast, Forest, Ember or Plum, or make a custom theme. Colours update live, code editor colours can be chosen independently, and <code>.ttheme</code> files can be imported and exported.</p>
       <p><a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/themes.md">Read the full editor themes guide →</a></p>
 
       <h2 id="manual-decals">Decals</h2>
@@ -1039,7 +1046,7 @@ Quality.Save();                    // applied by itself at the next start</code>
       <p><code>Quality.Recommended</code> suggests a preset for the machine (Low on phones, Medium on built-in graphics and in a browser). <code>--quality low</code> tries a preset for one run. In the editor, <strong>Window &gt; Graphics Quality</strong> previews each preset in the Scene and Game views. See <code>docs/quality.md</code>.</p>
 
       <h2 id="manual-macos">macOS</h2>
-      <p>Tessera builds and runs on Macs with Apple silicon (M1 and later, macOS 12 or newer) and draws with Metal. The macOS workflow can be run manually to build the compiler, native libraries, tests and editor package. Automatic builds are paused until the result can be validated on a real Mac; published release packages currently cover Linux and Windows.</p>
+      <p>Tallow builds and runs on Macs with Apple silicon (M1 and later, macOS 12 or newer) and draws with Metal. The macOS workflow can be run manually to build the compiler, native libraries, tests and editor package. Automatic builds are paused until the result can be validated on a real Mac; published release packages currently cover Linux and Windows.</p>
       <ul>
         <li>Set up once: the Xcode command line tools, <code>brew install cmake ninja llvm@22</code>, the Beef compiler built from source, and the native libraries with CMake (the steps are in <code>docs/macos.md</code>).</li>
         <li>On a Mac, <strong>File &gt; Build</strong> builds macOS and web games, and the editor itself; or <code>tools/build_player.py --platform macos</code>.</li>
@@ -1166,7 +1173,7 @@ Quality.Save();                    // applied by itself at the next start</code>
 
       <h2 id="manual-maps">Maps</h2>
       <p>A map is a level saved as one <code>.tmap</code> file that a game plays without being built again, so players can make levels and hand them to each other. Maps are made in the game, by a map editor the game provides, which saves with <code>MapFiles.Export(Scene, level, "Maps/Harbour.tmap", mapId, "Harbour", author, description, problems)</code>: the level's objects, its terrain sculpting, and any model the player brought in. Models, prefabs, materials and scripts otherwise come from the game, so a map uses what the game has and never carries code. Pass the map's Id when saving it again, so players get the new version instead of a second map.</p>
-      <p><strong>What a map needs.</strong> A game's <code>src/MapRules.txt</code> lists rules, one a line: <code>need 4 Tessera.SpawnPoint "spawn points"</code>, a field test such as <code>need 3 MyGame.Ring raceOrder &gt;= 0 "race gates"</code>, or a limit, <code>most 500 Tessera.Rigidbody "physics items"</code>. Saving a scene in the editor that breaks a rule opens a <strong>Map Warning</strong> saying what is missing (with <strong>This scene is not a map</strong> for scenes that are not). A game's map editor can show the same with <code>MapRules.Check</code>, and <code>MapFiles.Find</code> refuses a map that breaks one.</p>
+      <p><strong>What a map needs.</strong> A game's <code>src/MapRules.txt</code> lists rules, one a line: <code>need 4 Tallow.SpawnPoint "spawn points"</code>, a field test such as <code>need 3 MyGame.Ring raceOrder &gt;= 0 "race gates"</code>, or a limit, <code>most 500 Tallow.Rigidbody "physics items"</code>. Saving a scene in the editor that breaks a rule opens a <strong>Map Warning</strong> saying what is missing (with <strong>This scene is not a map</strong> for scenes that are not). A game's map editor can show the same with <code>MapRules.Check</code>, and <code>MapFiles.Find</code> refuses a map that breaks one.</p>
       <p>A game finds maps in the <code>Maps</code> folder beside it (the project's, in the editor), checks them, and plays one by mounting it and loading its scene:</p>
       <div data-code="maps" data-file="Scripts/MapMenu.bf"></div>
       <p><code>Find</code> returns every map, broken ones too, with <code>Problems</code> saying why one cannot be played: the file is not whole (every file inside has a checksum), it was made for another game or a newer engine, it uses a component or names a file the game does not have, or it is the same map (the same <code>Id</code>) as another. A game adds its own checks with <code>AddProblem</code>, and counts what is in a map with <code>CountComponents</code>. Tumble Toys: Aviation lists the maps from its folder after its own rooms.</p>
@@ -1215,24 +1222,24 @@ Quality.Save();                    // applied by itself at the next start</code>
   <div class="section" aria-labelledby="benchmark-title">
     <div class="section-head">
       <h2 id="benchmark-title">Engine benchmarks</h2>
-      <p>Explore standalone Tessera performance and historical comparisons against saved Unity baselines.</p>
+      <p>Explore standalone Tallow performance and historical comparisons against saved Unity baselines.</p>
     </div>
-    <div class="bench-tabs" role="tablist" aria-label="Benchmark views"><button type="button" id="bench-tab-solo" role="tab" aria-selected="true" aria-controls="bench-solo">Tessera performance</button><button type="button" id="bench-tab-compare" role="tab" aria-selected="false" aria-controls="bench-compare">Tessera vs Unity</button></div>
+    <div class="bench-tabs" role="tablist" aria-label="Benchmark views"><button type="button" id="bench-tab-solo" role="tab" aria-selected="true" aria-controls="bench-solo">Tallow performance</button><button type="button" id="bench-tab-compare" role="tab" aria-selected="false" aria-controls="bench-compare">Tallow vs Unity</button></div>
     <div id="bench-solo" role="tabpanel" aria-labelledby="bench-tab-solo">
-      <p class="bench-notes">Standalone Tessera workloads. Measurements are from recorded Release benchmark runs, not live telemetry or whole-game FPS. The voxel suite was verified against commit <code>62f33b0</code> (October 29, 2026); rope and soft-body results are from a separate historical October 29 snapshot.</p>
+      <p class="bench-notes">Standalone Tallow workloads. Measurements are from recorded Release benchmark runs, not live telemetry or whole-game FPS. The voxel suite was verified against commit <code>62f33b0</code> (October 29, 2026); rope and soft-body results are from a separate historical October 29 snapshot.</p>
       <div class="bench-toolbar"><label for="bench-solo-category">Workload</label><select id="bench-solo-category"><option value="Voxel">Voxel rendering</option><option value="Destruction">Destruction</option><option value="Soft bodies">Soft bodies &amp; ropes</option><option value="Navigation">Navigation batching</option></select></div>
       <div class="bench-legend">Bars compare results within the selected workload only. Measurements have different units and test setups across categories.</div>
-      <div id="bench-solo-chart" class="bench-chart" role="group" aria-label="Standalone Tessera performance graphs"></div>
+      <div id="bench-solo-chart" class="bench-chart" role="group" aria-label="Standalone Tallow performance graphs"></div>
       <p class="bench-notes" id="bench-solo-notes"></p>
       <p class="bench-notes"><strong>Test system:</strong> Ryzen 9 7900X, RTX 3070 8 GB, Linux/Vulkan. These results are embedded on this page and do not depend on temporary benchmark branches. Known failures, including unstable dense cloth configurations and invalid nondefault-resolution voxel fragments, are not shown as successful capacity measurements.</p>
     </div>
     <div id="bench-compare" role="tabpanel" aria-labelledby="bench-tab-compare" hidden>
     <div class="bench-panel">
       <div class="bench-toolbar"><label for="bench-category">Workload group</label><select id="bench-category"><option value="All">All categories</option><option>Physics</option><option>Rendering</option><option>Animation</option><option>Navigation</option><option>Audio</option><option>Assets</option></select></div>
-      <div class="bench-legend"><span><i class="bench-key tessera"></i> Tessera</span><span><i class="bench-key unity"></i> Saved Unity baseline</span><span>Lower is better · milliseconds per workload</span></div>
+      <div class="bench-legend"><span><i class="bench-key tallow"></i> Tallow</span><span><i class="bench-key unity"></i> Saved Unity baseline</span><span>Lower is better · milliseconds per workload</span></div>
       <div id="bench-chart" class="bench-chart" role="group" aria-label="Benchmark comparison charts"></div>
       <p class="bench-notes"><strong>Important context:</strong> These are historical workload-specific measurements, not whole-game FPS or an overall engine ranking. Unity was <strong>not rerun</strong> for this comparison; its timings were saved baselines. Results reflect the recorded hardware, settings and engine snapshot, not necessarily the latest build. Rendering and physics cases use different populations and workloads; do not compare timings across rows as if they were equivalent.</p>
-      <p class="bench-notes">Source: Historical Tessera benchmark measurements (October 28, 2026). The original reports are retained separately during development; this page summarizes selected results and their limitations.</p>
+      <p class="bench-notes">Source: Historical Tallow benchmark measurements (October 28, 2026). The original reports are retained separately during development; this page summarizes selected results and their limitations.</p>
     </div>
     </div>
   </div>
@@ -1242,26 +1249,26 @@ Quality.Save();                    // applied by itself at the next start</code>
 <!-- =============================== DOWNLOAD =============================== -->
 <section class="view" id="v-download" data-view="download" hidden><span id="download" class="route-anchor" aria-hidden="true"></span>
   <div class="section-head" style="margin-bottom:28px">
-    <div><p class="eyebrow">Download · early beta</p><h1 style="margin-top:8px;font-size:clamp(1.9rem,4vw,2.6rem)">Get Tessera</h1></div>
+    <div><p class="eyebrow">Download · early beta</p><h1 style="margin-top:8px;font-size:clamp(1.9rem,4vw,2.6rem)">Get Tallow</h1></div>
     <p>Early beta packages for Linux and Windows, available from the public GitHub releases page.</p>
   </div>
   <div class="made">
     <a class="card" href="https://github.com/LazyAlgorithm/Tessera/releases" target="_blank" rel="noopener">
-      <span class="meta">Linux x64 · Tessera-Linux.zip</span>
+      <span class="meta">Linux x64 · Tallow-Linux.zip</span>
       <h3>Linux</h3>
-      <p>Run <code>./Tessera</code>. Needs BeefBuild and Python 3.11+ on <code>PATH</code>, X11 libraries and a Vulkan driver.</p>
+      <p>Run <code>./Tallow</code>. Needs BeefBuild and Python 3.11+ on <code>PATH</code>, X11 libraries and a Vulkan driver.</p>
       <span style="color:var(--cobalt);font-weight:700">Releases on GitHub →</span>
     </a>
     <a class="card" href="https://github.com/LazyAlgorithm/Tessera/releases" target="_blank" rel="noopener">
-      <span class="meta">Windows x64 · Tessera-Windows.zip</span>
+      <span class="meta">Windows x64 · Tallow-Windows.zip</span>
       <h3>Windows</h3>
-      <p>Run <code>Tessera.exe</code>. Needs the Beef toolchain, Microsoft C++ Build Tools, Python 3.11+ and a Vulkan driver.</p>
+      <p>Run <code>Tallow.exe</code>. Needs the Beef toolchain, Microsoft C++ Build Tools, Python 3.11+ and a Vulkan driver.</p>
       <span style="color:var(--cobalt);font-weight:700">Releases on GitHub →</span>
     </a>
     <div class="card">
       <span class="meta">Source · build.sh</span>
       <h3>From source</h3>
-      <p>Clone the repository and run <code>./build.sh</code>, then <code>./tessera</code>. Windows packages build on Windows in CI; cross-compiling from Linux uses <code>tools/windows/setup.sh</code>.</p>
+      <p>Clone the repository and run <code>./build.sh</code>, then <code>./tallow</code>. Windows packages build on Windows in CI; cross-compiling from Linux uses <code>tools/windows/setup.sh</code>.</p>
     </div>
   </div>
   <div class="section" style="margin-top:48px">
@@ -1277,7 +1284,7 @@ Quality.Save();                    // applied by itself at the next start</code>
       </div>
       <div>
         <h2>Licences</h2>
-        <p style="margin-top:14px;color:var(--muted)">Tessera bundles bgfx, SDL3, Jolt, ENet, Dear ImGui, ImGuizmo, cgltf, stb, miniaudio, Opus and the MIT KEMAR HRTF measurements. Every package and every built game carries <code>THIRD_PARTY_LICENSES.txt</code> with each library's licence.</p>
+        <p style="margin-top:14px;color:var(--muted)">Tallow bundles bgfx, SDL3, Jolt, ENet, Dear ImGui, ImGuizmo, cgltf, stb, miniaudio, Opus and the MIT KEMAR HRTF measurements. Every package and every built game carries <code>THIRD_PARTY_LICENSES.txt</code> with each library's licence.</p>
       </div>
     </div>
   </div>
@@ -1287,7 +1294,7 @@ Quality.Save();                    // applied by itself at the next start</code>
 <section class="view" id="v-api" data-view="api" hidden><span id="api" class="route-anchor" aria-hidden="true"></span>
 <div class="api-shell">
 <p class="eyebrow">Developer documentation</p><h1>API Reference</h1>
-<p>Search engine declarations and open the corresponding Beef source code. Generated automatically from the Tessera engine source.</p>
+<p>Search engine declarations and open the corresponding Beef source code. Generated automatically from the Tallow engine source.</p>
 <label for="apiQuery">Search declarations</label><div style="margin:10px 0"><input class="api-search" id="apiQuery" type="search" placeholder="Search class, struct, method or source path…" autocomplete="off"></div>
 <p id="apiStatus" role="status" aria-live="polite">API index will load when you open this section.</p>
 <div class="api-results" id="apiResults"></div>
@@ -1298,7 +1305,7 @@ Quality.Save();                    // applied by itself at the next start</code>
 
 <footer>
   <div class="inner">
-    <span>Tessera · a game engine written in Beef · <a href="#manual">Documentation</a></span>
+    <span>Tallow · a game engine written in Beef · <a href="#manual">Documentation</a></span>
     <span><a href="#start">Get started</a> · <a href="#shooter">Shooter tutorial</a> · <a href="#manual">Manual</a> · <a href="#api">API Reference</a> · <a href="https://discord.gg/pCsF5apHh" target="_blank" rel="noopener noreferrer">Join Discord</a> · <a href="https://github.com/sponsors/LazyAlgorithm" target="_blank" rel="noopener noreferrer">♥ Sponsor development</a></span>
   </div>
 </footer>
@@ -1306,16 +1313,16 @@ Quality.Save();                    // applied by itself at the next start</code>
 <script>
 /* Recorded October 2026 benchmark medians; do not silently substitute live values. */
 
-const tesseraSoloSeries=[{"group":"Voxel","title":"Intact voxel pieces · 16³","unit":"Rendered frame p95 (ms)","rows":[["100 pieces",0.387],["500 pieces",0.98],["1,000 pieces",1.942]],"note":"720p, simple lighting, unique voxel meshes with mesh colliders. Worst-process p95. These figures do not represent whole-game FPS."},{"group":"Destruction","title":"Bullet carving by voxel resolution","unit":"Rendered event-frame p95 (ms)","rows":[["16³",0.949],["24³",2.098],["32³",3.978],["48³",11.409]],"note":"0.32 m carve radius; includes measured event-frame overhead. The 8³ bullet case failed validation and is excluded."},{"group":"Destruction","title":"Explosion fan-out · 24³","unit":"Rendered event-frame p95 (ms)","rows":[["1 object",2.443],["4 objects",9.422],["16 objects",38.12]],"note":"Synthetic fan-out, not a single spatial explosion. No detached fragments."},{"group":"Soft bodies","title":"Rendered capacity within 4 ms · selected densities","unit":"Object count (higher is better)","rows":[["Cloth 8×8",137],["Cloth 16×16",43],["Jelly 4",100],["Jelly 8",37],["Shell impacts 8",50],["Rope 16 segments",250],["Rope 32 segments",137],["Rope 64 segments",75]],"note":"Largest tested count under 4 ms worst-process rendered p95, from historical Oct 29 soft-body run. These are conservative tested points, not exact maxima. Unstable dense configurations excluded."},{"group":"Navigation","title":"NavMesh path batching · Tessera only","unit":"Batch elapsed time (ms)","rows":[["Serial 100",0.182538],["CPU batch 100",0.029646],["Serial 1,000",1.823196],["CPU batch 1,000",0.197727]],"note":"Fresh path requests in historical Oct 28 snapshot. CPU batching and serial use different scheduling modes; no equivalent Unity batch baseline."}];
+const tallowSoloSeries=[{"group":"Voxel","title":"Intact voxel pieces · 16³","unit":"Rendered frame p95 (ms)","rows":[["100 pieces",0.387],["500 pieces",0.98],["1,000 pieces",1.942]],"note":"720p, simple lighting, unique voxel meshes with mesh colliders. Worst-process p95. These figures do not represent whole-game FPS."},{"group":"Destruction","title":"Bullet carving by voxel resolution","unit":"Rendered event-frame p95 (ms)","rows":[["16³",0.949],["24³",2.098],["32³",3.978],["48³",11.409]],"note":"0.32 m carve radius; includes measured event-frame overhead. The 8³ bullet case failed validation and is excluded."},{"group":"Destruction","title":"Explosion fan-out · 24³","unit":"Rendered event-frame p95 (ms)","rows":[["1 object",2.443],["4 objects",9.422],["16 objects",38.12]],"note":"Synthetic fan-out, not a single spatial explosion. No detached fragments."},{"group":"Soft bodies","title":"Rendered capacity within 4 ms · selected densities","unit":"Object count (higher is better)","rows":[["Cloth 8×8",137],["Cloth 16×16",43],["Jelly 4",100],["Jelly 8",37],["Shell impacts 8",50],["Rope 16 segments",250],["Rope 32 segments",137],["Rope 64 segments",75]],"note":"Largest tested count under 4 ms worst-process rendered p95, from historical Oct 29 soft-body run. These are conservative tested points, not exact maxima. Unstable dense configurations excluded."},{"group":"Navigation","title":"NavMesh path batching · Tallow only","unit":"Batch elapsed time (ms)","rows":[["Serial 100",0.182538],["CPU batch 100",0.029646],["Serial 1,000",1.823196],["CPU batch 1,000",0.197727]],"note":"Fresh path requests in historical Oct 28 snapshot. CPU batching and serial use different scheduling modes; no equivalent Unity batch baseline."}];
 function renderSoloBenchmarks(){
  const category=document.getElementById('bench-solo-category')?.value;
  const chart=document.getElementById('bench-solo-chart');const notes=document.getElementById('bench-solo-notes');if(!chart)return;
  chart.replaceChildren();let messages=[];
- for(const series of tesseraSoloSeries.filter(s=>s.group===category)){
+ for(const series of tallowSoloSeries.filter(s=>s.group===category)){
   const card=document.createElement('article');card.className='bench-item';const title=document.createElement('h3');title.textContent=series.title;card.append(title);
   const sub=document.createElement('small');sub.textContent=series.unit;card.append(sub);
   const max=Math.max(...series.rows.map(r=>r[1]));
-  for(const [name,value] of series.rows){const line=document.createElement('div');line.className='bench-row';const label=document.createElement('span');label.textContent=name;const track=document.createElement('div');track.className='bench-track';const bar=document.createElement('div');bar.className='bench-bar tessera';bar.style.width=(value/max*100)+'%';track.append(bar);const number=document.createElement('span');number.className='bench-number bench-solo-value';number.textContent=Number.isInteger(value)?String(value):value.toFixed(3);line.append(label,track,number);card.append(line);}chart.append(card);messages.push(series.note);
+  for(const [name,value] of series.rows){const line=document.createElement('div');line.className='bench-row';const label=document.createElement('span');label.textContent=name;const track=document.createElement('div');track.className='bench-track';const bar=document.createElement('div');bar.className='bench-bar tallow';bar.style.width=(value/max*100)+'%';track.append(bar);const number=document.createElement('span');number.className='bench-number bench-solo-value';number.textContent=Number.isInteger(value)?String(value):value.toFixed(3);line.append(label,track,number);card.append(line);}chart.append(card);messages.push(series.note);
  }
  if(notes)notes.textContent=messages.join(' ');
 }
@@ -1325,7 +1332,7 @@ for(const [id,panel,other,otherPanel] of [['bench-tab-solo','bench-solo','bench-
 }
 renderSoloBenchmarks();
 
-const benchmarkRows=[{"category":"Physics","label":"Rigid bodies (1,000)","id":"physics-pile","tessera":0.4198,"unity":0.5208},{"category":"Physics","label":"Raycasts (1,000)","id":"physics-raycast","tessera":0.2985,"unity":0.3535},{"category":"Physics","label":"Sphere overlaps (1,000)","id":"physics-overlap-sphere","tessera":1.1111,"unity":0.4195},{"category":"Rendering","label":"Shared meshes (1,000)","id":"render-shared","tessera":0.2477,"unity":0.5211},{"category":"Rendering","label":"Materials (1,000)","id":"render-materials","tessera":0.2386,"unity":0.7544},{"category":"Rendering","label":"Culling (10,000)","id":"render-culling","tessera":0.9266,"unity":0.5362},{"category":"Rendering","label":"CPU skinning (100)","id":"render-skinning-cpu","tessera":4.2719,"unity":0.9944},{"category":"Rendering","label":"GPU skinning (100)","id":"render-skinning-gpu","tessera":0.9008,"unity":0.6225},{"category":"Animation","label":"Animation clips (1,000)","id":"animator-clips","tessera":2.88,"unity":10.4848},{"category":"Animation","label":"Layered animation (1,000)","id":"animator-layered","tessera":14.7666,"unity":16.3369},{"category":"Navigation","label":"Serial NavMesh paths (100)","id":"navmesh","tessera":0.1825,"unity":0.1075},{"category":"Audio","label":"Audio mix (100)","id":"audio-mix","tessera":0.4463,"unity":0.1588},{"category":"Assets","label":"Image decoding (100)","id":"asset-image-decode","tessera":107.2191,"unity":90.9627}];
+const benchmarkRows=[{"category":"Physics","label":"Rigid bodies (1,000)","id":"physics-pile","tallow":0.4198,"unity":0.5208},{"category":"Physics","label":"Raycasts (1,000)","id":"physics-raycast","tallow":0.2985,"unity":0.3535},{"category":"Physics","label":"Sphere overlaps (1,000)","id":"physics-overlap-sphere","tallow":1.1111,"unity":0.4195},{"category":"Rendering","label":"Shared meshes (1,000)","id":"render-shared","tallow":0.2477,"unity":0.5211},{"category":"Rendering","label":"Materials (1,000)","id":"render-materials","tallow":0.2386,"unity":0.7544},{"category":"Rendering","label":"Culling (10,000)","id":"render-culling","tallow":0.9266,"unity":0.5362},{"category":"Rendering","label":"CPU skinning (100)","id":"render-skinning-cpu","tallow":4.2719,"unity":0.9944},{"category":"Rendering","label":"GPU skinning (100)","id":"render-skinning-gpu","tallow":0.9008,"unity":0.6225},{"category":"Animation","label":"Animation clips (1,000)","id":"animator-clips","tallow":2.88,"unity":10.4848},{"category":"Animation","label":"Layered animation (1,000)","id":"animator-layered","tallow":14.7666,"unity":16.3369},{"category":"Navigation","label":"Serial NavMesh paths (100)","id":"navmesh","tallow":0.1825,"unity":0.1075},{"category":"Audio","label":"Audio mix (100)","id":"audio-mix","tallow":0.4463,"unity":0.1588},{"category":"Assets","label":"Image decoding (100)","id":"asset-image-decode","tallow":107.2191,"unity":90.9627}];
 function renderBenchmarks(){
   const container=document.getElementById('bench-chart');
   const selector=document.getElementById('bench-category');
@@ -1338,7 +1345,7 @@ function renderBenchmarks(){
     const heading=document.createElement('h3');heading.textContent=row.label;card.append(heading);
     const category=document.createElement('small');category.textContent=row.category;card.append(category);
     const maximum=Math.max(row.tessera,row.unity);
-    for(const [name,value,key] of [['Tessera',row.tessera,'tessera'],['Unity',row.unity,'unity']]){
+    for(const [name,value,key] of [['Tallow',row.tessera,'tallow'],['Unity',row.unity,'unity']]){
       const line=document.createElement('div');line.className='bench-row';
       const title=document.createElement('span');title.textContent=name;
       const track=document.createElement('div');track.className='bench-track';
@@ -1347,7 +1354,7 @@ function renderBenchmarks(){
       line.append(title,track,number);card.append(line);
     }
     const result=document.createElement('div');result.className='bench-result';
-    result.textContent=row.tessera<row.unity?'Tessera faster in this workload':row.tessera>row.unity?'Unity baseline faster in this workload':'Equal measured timings';card.append(result);
+    result.textContent=row.tessera<row.unity?'Tallow faster in this workload':row.tessera>row.unity?'Unity baseline faster in this workload':'Equal measured timings';card.append(result);
     container.append(card);
   }
 }
@@ -1372,8 +1379,8 @@ class Hover : NetworkScript
 	}
 }`,
 build: String.raw`./build.sh     # native libraries, shaders and the launcher (first time, or after changing native/)
-./tessera      # the project launcher`,
-spinner: String.raw`using Tessera;
+./tallow      # the project launcher`,
+spinner: String.raw`using Tallow;
 namespace Arena;
 
 [Component]                      // required on every component class
@@ -1390,7 +1397,7 @@ buildplayer: String.raw`python3 tools/build_player.py ~/Games/Arena --platform l
 python3 tools/build_player.py ~/Games/Arena --platform windows --output ~/Builds/Arena-Windows
 python3 tools/build_player.py ~/Games/Arena --platform web     --output ~/Builds/Arena-Web`,
 p2: String.raw`using System;
-using Tessera;
+using Tallow;
 
 namespace Arena;
 
@@ -1442,7 +1449,7 @@ class Player : NetworkScript
 	}
 }`,
 health: String.raw`using System;
-using Tessera;
+using Tallow;
 
 namespace Arena;
 
@@ -1580,7 +1587,7 @@ p5: String.raw`+	public int32 magazineSize = 24;
 		...`,
 p5hud: String.raw`		GUI.Label(GUI.Width - 180, GUI.Height - 56, reloading ? "RELOADING" : scope $"{ammo} / {magazineSize}");`,
 setup: String.raw`using System;
-using Tessera;
+using Tallow;
 
 namespace Arena;
 
@@ -1673,7 +1680,7 @@ input { font-size: 26 }
 button { height: 56; font-size: 24; background-color: #2747c4; color: #ffffff; border-radius: 6 }
 .quiet { background-color: #1b2333 }`,
 menucs: String.raw`using System;
-using Tessera;
+using Tallow;
 
 namespace Arena;
 
@@ -1700,7 +1707,7 @@ class MainMenu : Component
 	}
 }`,
 digger: String.raw`using System;
-using Tessera;
+using Tallow;
 
 namespace Arena;
 
@@ -1764,7 +1771,7 @@ controller.Move(velocity, deltaTime);`
 
 /* ------------------------------------------------------------------ highlighting ------------------------------------------------------------------ */
 const KEYWORDS = new Set("using namespace class struct enum public private protected internal static override virtual abstract let var if else for while do return new delete scope in out ref this base true false null default switch case break continue const readonly extension".split(" "));
-const TYPES = new Set("float double int int32 int64 uint8 uint32 bool void char8 String Vector2 Vector3 Quaternion Color Component NetworkScript TickInput CharacterController Camera Scene GameObject Transform RaycastHit Health Player Input InputActions GUI Time Math SpawnPoints NetworkManager AudioSource VoxelTerrain Log Application Tessera System".split(" "));
+const TYPES = new Set("float double int int32 int64 uint8 uint32 bool void char8 String Vector2 Vector3 Quaternion Color Component NetworkScript TickInput CharacterController Camera Scene GameObject Transform RaycastHit Health Player Input InputActions GUI Time Math SpawnPoints NetworkManager AudioSource VoxelTerrain Log Application Tallow System".split(" "));
 function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 function highlightBeef(line) {
   const re = /(\/\/.*$)|(\$?"(?:[^"\\]|\\.)*")|(\[[A-Z][A-Za-z]*(?:\([^\]]*\))?\])|(\b\d+(?:\.\d+)?f?\b)|([A-Za-z_][A-Za-z0-9_]*)/g;
@@ -1875,7 +1882,7 @@ function route() {
     if (a.dataset.nav === NAV_OF[view]) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
   const target = section && document.getElementById(section);
-  document.title = ({home:"Home",start:"Get started",tutorials:"Tutorials",shooter:"Multiplayer shooter tutorial",menu:"UI tutorial",voxels:"Voxel tutorial",web:"Web builds",manual:"Manual",download:"Download",benchmarks:"Benchmarks"}[view] || "Tessera") + " | Tessera Engine";
+  document.title = ({home:"Home",start:"Get started",tutorials:"Tutorials",shooter:"Multiplayer shooter tutorial",menu:"UI tutorial",voxels:"Voxel tutorial",web:"Web builds",manual:"Manual",download:"Download",benchmarks:"Benchmarks"}[view] || "Tallow") + " | Tallow Engine";
   if (target) target.scrollIntoView({ block: "start" }); else window.scrollTo(0, 0);
   if (view === "home") startHero(); else stopHero();
   if (location.hash && !target) { const heading = document.querySelector(`#v-${view} h1`); if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus({preventScroll:true}); } }
@@ -1913,7 +1920,7 @@ document.querySelectorAll(".prose h2[id], .prose h3[id]").forEach(h => spy.obser
 (function theme() {
   const btn = document.getElementById("themeBtn");
   let saved = null;
-  try { saved = localStorage.getItem("tessera-theme"); } catch (e) {}
+  try { saved = localStorage.getItem("tallow-theme"); } catch (e) {}
   if (saved) document.documentElement.setAttribute("data-theme", saved);
   const isDark = () => {
     const t = document.documentElement.getAttribute("data-theme");
@@ -1924,7 +1931,7 @@ document.querySelectorAll(".prose h2[id], .prose h3[id]").forEach(h => spy.obser
   btn.addEventListener("click", () => {
     const next = isDark() ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
-    try { localStorage.setItem("tessera-theme", next); } catch (e) {}
+    try { localStorage.setItem("tallow-theme", next); } catch (e) {}
     label();
   });
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", label);
