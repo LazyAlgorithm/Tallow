@@ -30,9 +30,6 @@ def classify(line, match, path=""):
     if path == "LICENSE" and line == "Copyright (c) 2026 Tessera contributors":
         return "historical copyright attribution"
     start, end = match.span()
-    for pattern, label in ((HISTORICAL, "repository URL (until repo rename)"),):
-        if any(m.start() <= start and end <= m.end() for m in pattern.finditer(line)):
-            return label
     return "unclassified branding/code"
 
 def main():

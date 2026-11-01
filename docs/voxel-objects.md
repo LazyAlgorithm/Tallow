@@ -74,5 +74,3 @@ everyone. Pieces are the same objects everywhere.
   and painted colours, smeared where a texture has fine detail or where two parts of it meet.
 - A model with several materials is drawn with one outside material.
 - The whole grid is re-made on every carve; at Resolution 48 that is the slowest it gets.
-
-Tests: `BeefBuild -workspace=Tests/VoxelObject -config=Debug -run`.

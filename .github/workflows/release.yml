@@ -16,7 +16,7 @@ name: Engine release
 on:
   push:
     tags: ['v*']
-    branches: [dev, main, release, rename/tallow]
+    branches: [dev, main]
   workflow_dispatch:
     inputs:
       publish:
@@ -121,7 +121,7 @@ jobs:
           export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
           cd tallow
           python3 tools/package_engine.py --platform linux --folder ../out/Tallow-Linux
-          python3 tools/test_showcase_template.py --package ../out/Tallow-Linux --work ../showcase-test
+          python3 tools/validate_showcase.py --package ../out/Tallow-Linux --work ../showcase-test
           cd ../out && zip -qr9 Tallow-Linux.zip Tallow-Linux
 
       - name: Keep the zip
@@ -217,8 +217,8 @@ jobs:
           export BEEFBUILD="$(cygpath -w "$PWD/beef-win/bin/BeefBuild.exe")"
           cd tallow
           python tools/package_engine.py --platform windows --folder ../out/Tallow-Windows
-          python tools/test_windows_project_open.py --package ../out/Tallow-Windows --beef "$BEEFBUILD" --work ../project-open-test
-          python tools/test_showcase_template.py --package ../out/Tallow-Windows --work ../showcase-test
+          python tools/validate_windows_project.py --package ../out/Tallow-Windows --beef "$BEEFBUILD" --work ../project-open-test
+          python tools/validate_showcase.py --package ../out/Tallow-Windows --work ../showcase-test
           cd ../out && 7z a -tzip -mx=9 Tallow-Windows.zip Tallow-Windows > /dev/null
 
       - name: Keep the zip

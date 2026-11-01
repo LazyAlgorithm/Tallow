@@ -117,13 +117,3 @@ Waves too short for a grid's spacing fade out of the drawing. On endless water, 
 - Objects do not make waves or ripples yet (water physics, on the roadmap).
 
 ## Tests
-
-- `Tests/Water` (CPU, in `tools/run_tests.py`) checks:
-  - the surface's height against the waves' sums written out again, waves staying within their height, crests never folding over, and seeds;
-  - the clock a day into a session, still water, the rectangle turned and scaled, endless water, `Contains`, `DepthOf` and `At`;
-  - a crate floating about 1 / Buoyancy under and settling, a cork with a Floater floating higher, a stone sinking, a disabled Floater, a crate beside the water, and Float Rigidbodies off;
-  - the current carrying a floating crate, and waves rocking it;
-  - a jelly floating about 1 / Buoyancy under, a heavy jelly (Floater 0.5) sinking, cloth lying on the surface, a fine 1,089-point cloth riding waves without coming apart, a rope floating, a shell floating on its Rigidbody, the current carrying cloth and jelly, waves lifting cloth, what floating costs for a 1,089-point cloth and the rest, and Float Rigidbodies off;
-  - a character swimming with its head out, one wading in shallow water, jumping up, swimming speed, the current carrying a swimmer, diving with `Swim` and floating back up, and Can Swim off;
-  - in a network session: the water's identity, the client's waves matching the server's, a crate floating in the same place on both, the server's settings and level reaching the client (and winning over the client's), and a late joiner.
-- The Sandbox's `Scenes/Water.tscene` has both looks side by side, with crates, rocks, a pillar, a beach and a sinking stone ball. `Scenes/Ocean.tscene` has the sea with an island and floating barrels.

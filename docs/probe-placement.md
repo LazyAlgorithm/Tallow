@@ -75,13 +75,3 @@ The light baker (`LightBaker`) bakes a grid for each Light Probe Volume beside t
 - How fast light changes is judged from the sky and the point and spot lights before baking, not from bounced light.
 
 ## Tests
-
-- `Tests/ProbePlacement` (CPU, in `tools/run_tests.py`) builds a yard: a house of two rooms with a doorway between them and a door to the yard, a polished floor in one room only, a porch roof on posts, a shiny car and a puddle in the open, and a lamp by the house. It checks:
-  - the room with the shiny floor gets a probe boxed to its walls with box projection, seeing from inside at eye height, and the plain room gets none;
-  - each doorway gets a small probe, the car's open ground one, and the puddle one of its own;
-  - each room and the porch get a volume, with more by the lamp and none over the whole yard, within the budget;
-  - placing is the same every time, everything can be turned off, an empty scene places nothing, and a room covered by the user's own probe and volume is left to them;
-  - placing again replaces only placed probes (the user's own and one with its tag taken off stay), and Remove takes them away;
-  - the baker bakes a grid for each volume, and a thing in the room is lit by the room's volume, darker than the open yard.
-- `Tests/Baking` checks a probe file with a volume: it reads back, a thing in the box is lit by the volume, and its light fades in over the blend distance. Older files with one grid still read.
-- `python3 Tests/ProbePlacement/run.py` (a graphics card) places and bakes a copy of the Sandbox's `Scenes/ProbePlacement.tscene` in the editor and draws it. The polished floor, which mirrors the blue sky without a probe, mirrors the room (and its red wall), and the loose ball is lit by the room's volume, not the coarse grid.

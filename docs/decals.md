@@ -59,5 +59,3 @@ Limits:
 - Every decal is one draw. A few hundred on screen are fine; `RenderView.VisibleDecals` says how many the last frame drew.
 
 ## Tests
-
-`Tests/Decals` checks the component's box and saving, the spawned decals (placement, lifetime and fading, the size of the pool, clearing) and the view set aside for decals. The drawing needs a graphics card and is checked by eye in the Sandbox sample's Main scene (the **Decals** folder: a target on the ground, a scorch mark and a sign on a crate).

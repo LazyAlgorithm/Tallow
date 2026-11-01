@@ -39,5 +39,3 @@ Nothing to send: each machine culls for its own cameras. A dedicated server draw
 - Orthographic cameras do not cull.
 
 ## Tests
-
-`Tests/Culling` checks the depth picture: a box behind a wall is hidden, one farther behind off centre too; boxes in front, beside, peeking past the edge by less than a pixel, behind or round the camera are not; the wall does not hide itself; a wall reaching behind the camera hides nothing; and picking occluders (Auto leaves out small, see-through, Never and moving renderers and those behind the camera, Always takes them, the budget stops after the biggest). The Sandbox sample's `Scenes/Culling.tscene` has a town wall hiding thirty houses.

@@ -103,5 +103,3 @@ Objects a shared sequence moves should not also be moved by the network (a netwo
 - An Animation track starts states; it does not scrub the animation itself in the editor's preview.
 
 ## Tests
-
-`Tests/Sequencer` checks reading and writing files and the mistakes reported, the eases, finding objects by name and path, and the Sequence Player: moving objects, camera shots and blends, the game's own camera coming back, showing and hiding, subtitles, events, fades, pausing, skipping, seeking, looping, Restore When Done and saving; and a shared sequence between a host and a client over loopback (in time with the server, pausing and skipping from the client, events on the server only, Only Owner Controls). The Sandbox sample has an **Intro Cutscene** object playing `Sequences/intro.tsequence` (tick its Play On Start to see it); the editor opens it with `--sequence Sequences/intro.tsequence` and `--sequence-time <seconds>` previews a time.

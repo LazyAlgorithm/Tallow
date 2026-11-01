@@ -191,5 +191,3 @@ IK is worked out on each machine from what that machine has; no bones are sent.
 - Hand Pose does not wrap fingers round a shape by itself: choose a shape, or set the curls.
 - A rigged model with Expose Bones is skinned on the processor from its bone objects, as rigged models already are.
 - Turning Expose Bones off does not delete the bone objects: delete them yourself.
-
-Tests: `BeefBuild -workspace=Tests/IK -config=Debug -run`.

@@ -96,16 +96,3 @@ Light is kept in the units of the shader's ambient term. The sky sends `ground +
 - Probes are grids: a thin wall between two rooms can let one room's light into the other's probes, so keep the probes (the scene's Probe Spacing, or a Light Probe Volume's Spacing) closer than the walls are apart.
 
 ## Tests
-
-- `Tests/Baking` (CPU, in `tools/run_tests.py`):
-  - Lightmap coordinates: no overlaps, the same every time, stretched copies, model parts together.
-  - The baker's light against the shader's sums: the sky on an open floor, a Baked Only light and its shadow, a box's darkening, red bounced off a wall, a live light left out but its bounce kept.
-  - Probes: open air, beside a coloured wall, inside a solid box.
-  - RGBM and half floats, the probe file (with a volume, and an older one-grid file), writing a bake into a project, clearing it, and that a bake is the same every time.
-- `Tests/ProbePlacement` bakes placed Light Probe Volumes (docs/probe-placement.md).
-- `python3 Tests/Baking/run.py` (a graphics card) bakes the Sandbox's `Scenes/BakedLighting.tscene` in the editor and checks the pictures:
-  - the roof's underside lit by the floor;
-  - the floor tinted by the red and blue walls;
-  - the Baked Only lamp neither lost nor counted twice;
-  - a smooth wall;
-  - the loose ball lit by the probes.

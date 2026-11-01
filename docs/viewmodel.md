@@ -62,5 +62,3 @@ Nothing to share: the viewmodel is drawn, and its pose worked out, only on each 
 - A component of your own can show an integer as a choice of the project's layers with `[Layer]`, as the Camera does for Viewmodel Layer.
 
 ## Tests
-
-`BeefBuild -workspace=Tests/Viewmodel -config=Debug -run` checks the camera's settings and projection, which objects go into the pass, the Inspector's layer choice, and saving. The pass itself needs a graphics card; check it by eye in the Game view.

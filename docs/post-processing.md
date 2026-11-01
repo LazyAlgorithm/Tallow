@@ -158,8 +158,6 @@ Each RenderView can leave effects out with `ShowAmbientOcclusion`, `ShowDepthOfF
 
 ## Tests
 
-`BeefBuild -workspace=Tests/PostProcessing -config=Debug -run` checks:
-
 - the settings and their defaults;
 - saving, and that old scenes load as they were;
 - the depth of field's blur amounts;

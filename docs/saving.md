@@ -127,5 +127,3 @@ settings.Save();                                // keeps this player's [Saved] f
 Data assets are kept apart from `SaveSystem` saves on purpose: loading an old save does not undo a player's settings.
 
 ## Tests
-
-`BeefBuild -workspace=Tests/Saving -config=Debug -run`: every supported type through bytes and through text, a damaged save refused, missing values keeping defaults, a scene saved and loaded (destroyed objects, respawned objects with their fields and references, position and velocity), loading at start before `Awake`, slots by typed names in files, and data assets (file values, sharing, the player's copy, revert).

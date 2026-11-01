@@ -90,8 +90,6 @@ Engine CI starts on pushes to `dev` and `main`: both build platform packages and
 
 `PhysicsWorld.LengthScale` now conditions body inertia calculations as well as contact tolerances. For small scales, body creation computes inertia with a larger temporary calculation mass, then restores the assigned physical mass and rescales inverse inertia before simulation. This avoids Jolt's near-zero inertia fallback to a one-metre sphere; contacts on toy aircraft can produce the expected rotation without artificial angular impulses. `Rigidbody.Sleep()` keeps authored resting props dynamic and wakes them through normal contacts or forces.
 
-The `Tests/ShapeQueries` regression checks a 1 cm, 12 g cube against its analytical torque response and linear acceleration, plus sleep/wake behavior.
-
 ### Large collision meshes
 
 Physics mesh conversion allocates its vertex buffer on the heap and frees it after Jolt builds the shape. Imported bedroom meshes exceeded the default 1 MB Windows stack; the previous stack allocation failed in `_chkstk` while loading the room. The ShapeQueries integration test now builds a 100,000-vertex mesh and checks its collision response; Linux and Windows under Wine pass with the normal stack reserve.

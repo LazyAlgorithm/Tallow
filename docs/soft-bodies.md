@@ -166,8 +166,6 @@ The pull acts along the straight line between the two ends, unless **Wraps Aroun
 
 ## Stiffness and fine meshes
 
-Stiffness, Bend Stiffness and Mass hold however finely the mesh is cut: each constraint is kept no stiffer than one solver pass can settle for vertices as light as its own, so a 1 kg cloth of a thousand vertices (a gram each) drapes, folds and crumples as calmly as a coarse one rather than throwing its vertices about. Cloth bends by distance (an edge across each pair of faces), which stays steady when it folds sharply; jelly bends by the angle between faces, which keeps a sphere's poles from shivering. `Tests/SoftBodies` drapes cloths of 16, 32 and 48 squares across over a ball.
-
 ## In water
 
 Jelly, cloth and ropes float in Water vertex by vertex: each point under the surface is pushed up by the water's Buoyancy and slowed and carried by its drag and Flow, so a jelly bobs and squashes on the waves, cloth lies on the surface and drifts, and a rope floats along it. A **Floater** on the object sets its own Buoyancy and drag (0.5 sinks it) or, disabled, stops it floating. A shell floats on its object's Rigidbody, like any Rigidbody. The surface is sampled on a small grid over each body (at most 8 by 8), so the cost hardly grows with the vertex count: well under a millisecond a step for a scene of several floating soft bodies in a Debug build. See [Water](water.md).

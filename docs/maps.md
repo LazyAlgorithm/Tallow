@@ -134,8 +134,6 @@ read it. `PackFile` reads and writes one such pack from Beef.
 - Mounting reads the whole map into memory. Maps are small (a sculpted terrain tile is about 70 KB), but a map is not
   streamed.
 
-CPU tests (`Tests/Maps`) cover:
-
 - exporting a sculpted level, finding it, reading its details, counting its components;
 - mounting it, loading it into a running scene with its sculpting, and unmounting it;
 - refusing eight kinds of bad map: junk, damaged, another game's, a missing file, an unknown component, a newer

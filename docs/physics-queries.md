@@ -29,11 +29,6 @@ Query shapes and overlap buffers are reused, avoiding native shape allocation fo
 
 The wrappers use JoltC's shape collectors through `native/tallow_physics.cpp`. This changes the native static library; rebuild it and rebuild/reload project executables before calling the new API:
 
-```sh
-cmake --build build/native --target tallow_native -j 4
-BeefBuild -workspace=Tests/ShapeQueries -config=Debug -run
-```
-
 Tests cover closest contacts, direction normalization, maximum distance, ignored bodies, capsule orientation (any axis) and degeneracy, aligned capsules touching each face from outside, candidate skipping checked against exact geometry, rotated boxes, starting overlap, invalid inputs, empty worlds, overlap mappings, and buffer growth beyond 64 contacts.
 
 Overlap contacts use analytic sphere–box flat-face/interior calculations and capsule–box calculations for a capsule along one of the box's axes (its middle inside the box, or reaching a face from outside, measured from the point of its segment nearest the box) where supported. Clearly separated sphere–box pairs are rejected by a distance bound. Tangent, edge/corner, oblique capsule and unsupported configurations retain Jolt's registered solver. These paths affect overlap queries; simulation and casts continue through their existing solvers. Filters, body IDs and compound subshape IDs are retained. `PhysicsWorld.useAnalyticOverlapContacts = false` selects the generic solver for diagnostics.

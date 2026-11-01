@@ -69,5 +69,3 @@ the scene is in.
 - Sounds are not preloaded (they are read when first played).
 - Changing scene with `LoadAsync` swaps the whole scene in one frame once everything is loaded, as `Load` does;
   the swap itself is not spread over frames.
-
-Tests: `BeefBuild -workspace=Tests/AsyncLoading -config=Debug -run`.

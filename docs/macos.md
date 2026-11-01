@@ -2,8 +2,6 @@
 
 Tallow builds and runs on Macs with Apple silicon (M1 and later), macOS 12 or newer. It draws with Metal, which every such Mac has. A Mac builds macOS games and web games; Linux and Windows games are built on Linux (see `docs/windows.md`).
 
-**How far it has been tested.** macOS builds are paused for now: the code stays, but `.github/workflows/macos.yml` no longer runs on pushes or tags, only by hand (Actions > macOS > Run workflow), and releases have no macOS zip. When run, it builds Tallow on a GitHub macOS runner: the Beef compiler from source, the native libraries, all the headless test fixtures (`tools/run_tests.py`; they all pass there), the packaged editor (kept as the run's `Tallow-macOS` download) and the Sandbox, which then draws two scenes with Metal (the run's `metal-pictures`). It has not yet been tried on a real Mac by a person, so expect to find things on the first try there, especially in the editor's windows and file dialogs.
-
 ## Setting up, once
 
 Tools: the Xcode command line tools (`xcode-select --install`), and from Homebrew `brew install cmake ninja llvm@22 python@3.12`.
@@ -24,8 +22,6 @@ cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_
   -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++
 cmake --build build/native --target tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc
 ```
-
-Then `BeefBuild -platform=macOS` builds the editor (from the engine's folder) and any Tallow project, and `python3 tools/run_tests.py` runs the test fixtures.
 
 ## Link settings
 
@@ -58,5 +54,3 @@ Nothing changes: a Mac plays with and against Linux and Windows machines, as a c
 - Intel Macs are not built for.
 
 ## Tests
-
-`.github/workflows/macos.yml` is the check: the whole engine and editor compile and link for macOS, all the fixtures in `Tests/README.md` pass there (the real-time networking ones get a second try, and Http, which asks GitHub's API without a token, is left out on the shared runners), the editor packages, and the Sandbox draws with Metal.

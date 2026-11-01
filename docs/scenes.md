@@ -36,5 +36,3 @@ Scene files are not sent over the network. Every machine has the game's files, s
 
 - Loading is not spread over frames: a large scene causes a pause while it loads.
 - Objects in an added scene are not saved with the scene they were added to.
-
-CPU tests (`Tests/Scenes`) cover adding a scene with its hierarchy, waking components, taking or leaving the environment, adding the same scene twice, unloading, a missing file, and changing scene while playing.

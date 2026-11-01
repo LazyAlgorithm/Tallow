@@ -58,5 +58,3 @@ Game views show, in edit mode and while playing. Hidden objects cannot be clicke
 Scenes and prefabs keep each object's layer (`layer 3`), tags (`tags "Enemy" "Cover"`) and world states (`worlds FFFFFFFD`) only when they are set, so older scenes read exactly as before.
 
 ## Tests
-
-`BeefBuild -workspace=Tests/Layers -config=Debug -run`: collision between layers and changing a layer while playing, masks on rays, shape casts and overlaps, finding by tag, saving, and switching world states (including a parent leaving its children out), and a navigation surface for each state.

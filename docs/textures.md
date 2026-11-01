@@ -66,5 +66,3 @@ Projects, scenes and materials are unchanged. Distant textures look smoother tha
 - A colour texture whose kind cannot be told (a mask with an ordinary name) is averaged as colour; `Textures.Hint` says otherwise.
 
 ## Tests
-
-`Tests/Textures` checks the mip levels (sizes, odd sizes, leaving the largest out, colour in linear light, data as stored, alpha, normals kept unit length), what a texture holds (names, hints, a material's maps), and the quality settings. `python3 run.py` there also compresses a small project (BC1, BC3, plain rather than sRGB, all levels; normal maps, excluded folders and data maps), checks that mip levels stop the Textures scene's far floor shimmering as the camera moves, and that the compressed copies are used and look the same as the pictures.

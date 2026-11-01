@@ -123,5 +123,3 @@ Subtitles from sound files follow the sound, so they reach every player who hear
 - A conversation moves on one line at a time; two Dialogue Runners can play at once, and their lines share the subtitle area.
 
 ## Tests
-
-`Tests/Dialogue` checks reading and writing files and the problems reported, lines, answers, conditions, variables, events, jumps and the guard against endless loops, subtitle files and the subtitle list, the Dialogue Runner (playing, events, saving and loading, moving on by itself), and a shared conversation between a host and a client over loopback (a client moving it on, answering, late requests, Only Owner Chooses). The Sandbox sample's **Guide** object plays `Dialogue/welcome.tdialogue` when the scene starts; the editor opens a dialogue with `--dialogue Dialogue/welcome.tdialogue`.

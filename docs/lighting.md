@@ -71,6 +71,3 @@ Custom surface shaders (`.tshader`) get all of this from the engine's shader: th
 - See-through objects do not cast shadows (as with the sun).
 
 ## Tests
-
-- `Tests/Lighting` (CPU, in `tools/run_tests.py`): which lights a view keeps and in what order, the cap, every point of the view listed in the cluster of every light that reaches it, depth slices, shadow tiles (one for a spot light, six for a point light, the grid, the nearest first), each face of a point light's cube, and that a point is looked up in the atlas where it was drawn, with both Vulkan/Direct3D/Metal and OpenGL conventions.
-- `python3 Tests/Lighting/run.py` (a graphics card): draws the Sandbox's `Scenes/Lighting.tscene` and checks that all 64 lights of a grid show, that a pillar casts a point light's shadow and a box a spot light's, that both are gone with `--shadowed-lights 0`, and that no false shadows show across the faces of a point light's cube.

@@ -14,12 +14,8 @@ With GPU skinning the bent vertices exist only on the graphics card; `Mesh.Verti
 
 ## Bounds
 
-Without bent vertices on the CPU, the model's box (for culling, shadows and LOD) is made from its joints: each joint's box round the vertices it moves, at rest, moved with the joint. It always holds the model, a little loosely (`Tests/GpuSkinning` measures at most about one and a half times the exact box's volume for the sample).
-
 ## Networking
 
 Nothing changes: clips and states are sent, not bones or vertices, and each machine bends its own models. A dedicated server bends nothing.
 
 ## Tests
-
-`Tests/GpuSkinning` checks, without a graphics card, that the box from the joints holds the model as the CPU bends it at every moment of its clip without being much too big, and that GPU skinning is on by default but not used where it is not available. `python3 run.py` in that folder also draws the Sandbox sample's `Scenes/Skinning.tscene` (three models holding a pose) with GPU and with CPU skinning and checks that the GPU did the bending and that the two pictures are the same.

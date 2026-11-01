@@ -97,8 +97,6 @@ To reproduce a problem for someone else, record the moment it happens, then **Ex
 
 ## Test switches
 
-`Tests/Profiler` checks nesting, self and total time, calls, counters, categories, job-thread samples, samples cut at frame ends, per-component markers, the 300-frame history, saving and loading, reports, memory snapshots, and an editor attaching over ENet.
-
 In the editor: `--profiler` opens the window recording, `--profiler-tab <0-4>` picks a tab (4 also takes a memory snapshot), `--profiler-attach <host:port>` attaches to a build, and `--profiler-test` records 30 frames and logs `PROFILER-TEST PASS` (`--profiler-report <file>` also writes a report then).
 
 ## Navigation and overlap queries

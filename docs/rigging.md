@@ -91,7 +91,3 @@ rig.Save("Models/Wolf.trig");
 `WeightPainter` paints (`Dab`, `SmoothAll`, `MirrorWeights`), `WeightTools` normalises and limits weights, and `Rig.Posed` skins the model in a pose. The heat solve runs in the native library (`native/tallow_rig.cpp`), on every core.
 
 ## Checks
-
-- `Tests/Rigging` (`BeefBuild -config=Debug -run` there) builds a person and a dog from tubes (and reads the Sandbox's real person, for its hands) and checks the guesses, the skeletons, the weights (smooth across joints, no tearing at seams, the same every run), posing, painting, mirroring, the `.trig` file, and that the exported model loads as a rigged model with the right bones (the person as a humanoid).
-- The editor's `--rigger-test` rigs the Sandbox's **Rig Test Person**, **Rig Test Dog** and **Rig Test Pug** (free CC0 models by Quaternius, in `Samples/Sandbox/src/Models/Rigging`, see the LICENSE.txt there) from start to finish and prints `RIG TEST PASSED`.
-- `--rigger "<object>"` starts rigging an object, `--rigger-step markers|bones|weights|pose` opens a step and `--rigger-look "<marker>"` brings the camera to a marker (with `--screenshot`, to look at it). `--reset-layout` does what Window > Reset Layout does.

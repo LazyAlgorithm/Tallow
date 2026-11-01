@@ -75,6 +75,3 @@ ImGui.DrawText(pos, EditorTheme.Text, label.CStr());
 `EditorTheme.Text` and `TextDim` are the interface's text colours, for text drawn by hand on a panel. Text drawn over the 3D view or on dark node bodies keeps fixed colours, since what is behind it does not change with the theme.
 
 ## Tests
-
-- `Tests/Themes` (CPU, in `tools/run_tests.py`): all seven built-in themes are there with Tallow Blue first; text in every built-in theme is readable on every surface it is drawn on (contrast at least 4.5, and 7 for High Contrast), as are quiet text, warnings, errors and canvas text. Each theme's code reads on its code background and current line (4.5, 7 for High Contrast), as do comments (3) and line numbers. Every theme's code colours are its own. Dark's and Light's code are Visual Studio's sets. Code colours read back from files, and older files with `code dark`/`light` still read. Also checks that Dark matches the editor's old look, that files read back as written, that mistakes are reported by line while the rest still reads, that values are clamped, and that file names are safe.
-- `--theme-test` in the editor (above).

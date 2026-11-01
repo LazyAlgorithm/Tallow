@@ -127,12 +127,3 @@ state, not bones. Bone maps are files in the game, the same everywhere.
 - Copied and baked clips hold a key on every frame, which is accurate but dense to edit by hand.
 
 ## Tests
-
-`BeefBuild -workspace=Tests/Retargeting -config=Debug -run` (25 checks): name matching for Mixamo, Synty, Rigify,
-Biped and `jnt_` rigs, spines and finger segments in order, helper joints skipped, a kick retargeted between
-differently named, rolled, half-size rigs facing opposite ways, an A-posed library on a T-posed character, hips
-movement scaled by leg length, bone lengths kept, `.bonemap` reading and writing, clips made again when a map changes,
-and same-skeleton libraries. `Tests/IK` checks merged POLYGON fingers. In the editor, `--select <Animator object>
---rig-test` copies a library clip, sets up an IK rig, moves a hand by its target, bakes IK, keys a fist and clicks a
-bone, and logs `RIG-TEST PASS`. Switches for screenshots: `--ik-rig`, `--hand-shape Fist`, `--hand-posing`,
-`--bone-map`.

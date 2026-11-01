@@ -62,5 +62,3 @@ Scenes, materials and shaders are unchanged and load as before. Shiny and metal 
 - Skinned characters, particles and the viewmodel are in captures as they were at that moment.
 
 ## Tests
-
-`Tests/Reflections` checks which probe lights what (boxes, blend distance, importance, the smaller box, things reaching in), how much a point gets, when a probe captures again (moved, resized, a new cube size, asked to), the cubes' sizes and levels, the quality settings, and the scene's settings and probes in its file. `python3 run.py` there draws the Sandbox's `Scenes/Reflections.tscene` and checks that the sky and the probe were captured, the smooth sphere mirrors the sky, a rougher one a blur, the room's sphere shows its red wall on the left and green on the right, its polished floor mirrors its walls, `--no-reflections` draws the old look, and Ambient From Surroundings lights the room's ceiling with the room's light. The macOS workflow draws the same scene with Metal.

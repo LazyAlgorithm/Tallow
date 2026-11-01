@@ -127,5 +127,3 @@ with one more **Ctrl+Z**, which undoes the change to the plants themselves.
 
 - Plants do not collide and cannot be walked into; put colliders on trees that must block the player.
 - Custom shaders made before this version bend only after they are compiled again.
-
-Tests: `BeefBuild -workspace=Tests/Foliage -config=Debug -run`.

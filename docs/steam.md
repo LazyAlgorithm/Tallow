@@ -176,7 +176,3 @@ What to know:
 Download the Steamworks runtime from Valve's SDK: <https://partner.steamgames.com/doc/sdk>. Linux x86_64 uses `sdk/redistributable_bin/linux64/libsteam_api.so`; Windows x64 uses `sdk/redistributable_bin/win64/steam_api64.dll`. Installing the Steam client alone does not place this library inside a Tallow project.
 
 Put the platform library in `<project>/Libraries/` (or the project root). The editor searches that location, and game packaging copies the library beside the executable. Restart the editor after adding a previously missing library. Live achievements also require a running Steam client, the correct App ID and achievements configured/published in Steamworks. Local achievements can be edited without a connected Steam session.
-
-Regression: build `Tests/Achievements`, then run `python3 tools/test_steam_library_lookup.py <AchievementTests executable>`. It uses a fake local runtime and does not connect to Steam or change account achievements.
-
-`Steam.FriendAppId(friendId)` uses `ISteamFriends::GetFriendGamePlayed` to identify a friend's current game independently of rich presence. It returns 0 when unavailable, when the friend is not playing, or when an older runtime lacks the query. Filter with `Steam.FriendOnline` before presenting invitations. API layout and fallback tests use an in-process fake backend in `Tests/Achievements`; no Steam account is contacted.

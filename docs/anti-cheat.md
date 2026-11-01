@@ -106,5 +106,3 @@ Be clear about this before relying on it.
 What it does do is make the common tools fail or announce themselves: speed tools, memory editors, packet edits, swapped asset packs, preloaded hooks. For a game played among friends that is the realistic threat. For ranked competitive play, plan on a commercial kernel-level service as well; they exist for Linux and Windows and can sit beside this.
 
 ## Testing it
-
-`python3 Tests/AntiCheat/run.py` runs an honest player and then one cheat at a time against a real loopback session. `AntiCheat.TestFlags`, `TestSilent` and `TestFingerprint` make a player's machine misbehave on purpose.

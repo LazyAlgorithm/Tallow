@@ -17,5 +17,3 @@ Changes also quote native archives for paths with spaces, give test fixtures Win
 | Configuration/path audit | Passed; personal checkout paths removed, native archive paths quoted and repository-relative |
 
 No GitHub Actions used for this validation. Native Windows hardware, SDK installation on a fresh Windows machine, audio/device integrations and every test fixture were not exercised. These checks establish build/relocation behavior with the documented prerequisites, not a guarantee for every toolchain or graphics driver. Third-party source is vendored except for the pinned Jolt source fetched by CMake.
-
-See [Building from source](building-from-source.md) for prerequisites and commands. Repeat the static audit with `python tools/audit_portability.py`. Representative CPU checks use `python tools/run_tests.py Quality Water ShapeQueries`; script reload uses `python Tests/ScriptReload/run.py` (`--windows` when cross-testing through Wine).

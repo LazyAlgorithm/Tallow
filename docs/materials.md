@@ -223,8 +223,6 @@ All of it has nodes, generated from the engine source: **Engine > Render > Mesh 
 
 ## Tests
 
-`BeefBuild -workspace=Tests/Material -config=Debug -run`: a shader graph turned into a shader file and compiled; a node read in several places worked out once; Normal, Occlusion, custom code and split outputs; a subgraph read as a node and written in place twice; every shader graph node in one preview shader, compiled; a compute graph written as a `.tcompute` and compiled for every backend, nodes refused in the wrong kind of graph, and every node a compute graph can use in one compute preview, compiled; saving and loading materials and their PBR maps, shared and per-object materials, reading shader files and reporting mistakes by line, the generated shader source, and real compiles of a surface shader for all four backends and a compute shader, including a broken one. The Network fixture checks materials across machines and for a late joiner. Drawing itself was checked by eye in the editor: a PBR material with a normal map, a custom surface shader, a compute effect, a shader graph's node and surface previews, and a compute graph's running preview (OpenGL and Vulkan).
-
 ## Glowing in a model's own colours
 
 A Mesh Renderer's **Emissive** colour and **Emissive Intensity** make the whole object glow in one colour. Tick **Emissive From Color** and the glow is multiplied by the surface's own colour instead (its vertex colours and texture): the bright parts of a model glow in their own colour and the dark parts stay dark. Set Emissive to white to keep the colours as they are. A model with a lit blade and a steel handle, say, needs no second mesh and no emissive map:

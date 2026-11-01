@@ -63,7 +63,3 @@ applied on the next frame. On a Mesh Renderer, `MeshRenderer.Part` has the same 
 The model's vertices are skinned once a frame into one buffer; each part is a mesh with indices of its own that draws those vertices (`Mesh.VertexSource`), so several materials cost no extra skinning or upload. `MeshRenderer.RuntimeParts` is the general form: any component can hand a renderer a list of meshes, each with a material, to draw in place of its one mesh.
 
 ## Tests
-
-Hiding, dyeing and shadow-only parts, and that a scene keeps them, are checked in `Tests/SkinnedMaterials` too.
-
-`python3 Tests/SkinnedMaterials/make_models.py` makes small rigged models whose textures arrive the three ways glTF allows; `BeefBuild -workspace=Tests/SkinnedMaterials -config=Debug -run` checks the parts, the materials and textures read from each, the parts' own materials, and saving.

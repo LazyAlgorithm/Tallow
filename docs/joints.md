@@ -65,5 +65,3 @@ Turn **Debris** on in a Rigidbody for things that should lie about without getti
 - Only the ball joint is a component and is saved in scenes; hinges and suspensions are made from code each time, and only the hinge has a motor.
 - A swing limit is held by the solver, not exactly: a hard knock can carry a limb a little past it before it is pulled back.
 - Because nothing can query debris, picking it up or shooting it has to be done by distance from its object, not by ray.
-
-CPU tests (`Tests/Joints`) cover a weight swinging on a joint, a joint going when one of its bodies is destroyed, a swing limit under a shove, and debris resting on a floor while a body, a character, a ray, a shape cast and an overlap all pass through it.

@@ -335,18 +335,6 @@ booleans, `MeshUV` the unwrapping, pins, stitching and palette cells, `TexturePa
 
 ## Tests
 
-`Tests/Modeling` checks every shape is closed and faces outwards, the text format, extrude, inset, bevel, loop cuts,
-subdivision, mirror, array, bridge and fill, welding, booleans (volumes), unwrapping (no overlap, little stretch), the
-`.glb` and `.tmesh` files, triangulating and back, poke, solidify, smoothing, collapsing, making a face and the knife
-(across a face, round a corner and through a point inside a face), round bevels, edge and vertex sliding, pins
-(in the text and when unwrapping), stitching, palette cells, painting and filling a picture, palette pictures and
-decimation (closed, about the share asked for). The editor switch `--model-test` draws, edits, undoes, cuts and exports models in
-the Scene view, runs the pointer tools with typed amounts (grab, cancel, extrude, inset, rotate, scale, mirrored and
-proportional moves), the shortcut commands and hiding, round bevels, sliding, the knife inside a face, UV picking,
-texture painting (written to the file and drawn) and levels of detail, and logs `MODEL-TEST PASS` or `FAIL`; with it,
-`--model-help` shows the shortcut sheet, `--model-menu` opens the right-click menu and `--model-round` adds a box
-bevelled round for the screenshot. `--model-window` opens the Model window and `--uv-editor` the UV Editor.
-
 ## Networking
 
 Models are scene data: a Model Mesh's faces are saved in the scene, so every machine that loads the scene has the

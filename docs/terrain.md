@@ -109,5 +109,3 @@ Chunks further than **Lod Distance** chunks from the camera are drawn with half 
 - Tile Size and Voxel Size are best chosen before sculpting.
 
 ## Tests
-
-`BeefBuild -workspace=Tests/Terrain -config=Debug -run` (62 checks): a new terrain is one flat tile; tiles added on every side line up and the ground runs across them; raising, smoothing, painting, flattening and digging across tile edges leave both copies of every shared sample equal and the meshes meeting vertex for vertex; undo and redo of strokes; moving and removing tiles (holes) and undoing that; a file per tile, saved and loaded; generators by class, by function and applied to one tile; streaming tiles around several viewers; level of detail with full-detail collision; contoured ground (level when flat, no holes across chunk faces, edges and corners, no quad made twice, fewer triangles far away); the bytes API; Endless mode; and scenes from before tiles and before modes.

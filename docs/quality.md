@@ -57,5 +57,3 @@ Nothing to send: quality is each player's own, and it changes only how things ar
 Projects and scenes are unchanged; with no `graphics.cfg` every setting is what it was before.
 
 ## Tests
-
-`Tests/Quality` checks that High is the engine's defaults, that the presets rise from Low to Ultra, telling which preset settings are (and Custom), that applying reaches every engine setting and High puts all back, writing and reading settings (unknown lines skipped, values held in range), saving and loading the player's choice, the suggestion for phones, built-in graphics and browsers, and the `--quality` names.

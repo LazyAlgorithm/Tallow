@@ -24,5 +24,3 @@ ZipFile.Extract("/path/file.zip", "/path/folder", error);
 - `Http.Inflate` unpacks deflate data on its own.
 
 ## Tests
-
-`BeefBuild -workspace=Tests/Http -config=Debug -run` (needs the internet): GitHub's API, a release download through its redirect with progress, stopping a download, and zips (compressed, stored, permissions, names outside the folder, not a zip).

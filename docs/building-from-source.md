@@ -17,13 +17,13 @@ For a prebuilt Linux compiler, The project's toolchain release provides the same
 
 ```sh
 mkdir -p "$HOME/.local/share/TallowBuildTools"
-curl -fL https://github.com/LazyAlgorithm/Tessera/releases/download/toolchain-2/beef-linux-x64.tar.gz -o /tmp/tallow-beef.tar.gz
+curl -fL https://github.com/LazyAlgorithm/Tallow/releases/download/toolchain-2/beef-linux-x64.tar.gz -o /tmp/tallow-beef.tar.gz
 tar -xzf /tmp/tallow-beef.tar.gz -C "$HOME/.local/share/TallowBuildTools"
 export BEEFBUILD="$HOME/.local/share/TallowBuildTools/beef/IDE/dist/BeefBuild.sh"
 ```
 
 ```sh
-git clone --branch rename/tallow https://github.com/LazyAlgorithm/Tessera.git Tallow
+git clone --branch main https://github.com/LazyAlgorithm/Tallow.git Tallow
 cd Tallow
 # The repository URL retains its original name until the GitHub repository is renamed.
 ./build.sh --config Debug --jobs 8
@@ -44,7 +44,7 @@ Install:
 Open an **x64 Native Tools Command Prompt for VS 2022** so the MSVC/SDK include and library environment is set, then:
 
 ```bat
-git clone --branch rename/tallow https://github.com/LazyAlgorithm/Tessera.git Tallow
+git clone --branch main https://github.com/LazyAlgorithm/Tallow.git Tallow
 cd Tallow
 python tools/build.py --config Debug --jobs 8
 build\Debug_Win64\TallowLauncher\TallowLauncher.exe
@@ -76,11 +76,6 @@ python tools/package_engine.py --platform windows --folder dist/Tallow-Windows
 On Linux select `--platform linux`, and use `python3` if that is your Python 3.11+ command. Packaging rebuilds the launcher and includes source, templates, shaderc and native archives. Building a game uses `tools/build_player.py PROJECT --output OUTPUT`; first open/build that project in the launcher to generate its Beef build files.
 
 ## Tests and repeated builds
-
-```text
-python tools/run_tests.py Quality Water ShapeQueries
-python tools/audit_portability.py
-```
 
 Fixtures resolve native archives from their own workspace relative to the repository root. Linux/macOS archive paths and Windows archive paths are quoted for spaces; Windows fixture workspaces select LLVM. Some tests need graphics, audio devices, a network connection or platform-specific integrations; building the engine is not a claim that every integration has been exercised on all hardware.
 

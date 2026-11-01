@@ -46,5 +46,3 @@ let level = group.LevelFor(camera.GetCameraData(aspect));   // 0 full detail, -1
 - Generated levels come from vertex merging, not edge collapsing: fine at a distance, rough up close.
 
 ## Tests
-
-`Tests/Culling` checks `_LOD` names, the levels a group finds (and finds again when its children change, and a group inside a group), picking a level from the screen height, culling, the bias, forcing a level, removing the group, and simplified meshes (the share of triangles kept, faces turned apart not merged, the same size, made once). The Sandbox sample's `Scenes/Culling.tscene` has rows of Generated spheres and a tower whose levels are coloured children.

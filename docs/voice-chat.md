@@ -83,5 +83,3 @@ The server relays speech and never decodes it, so a dedicated server spends almo
 - With Steam, this uses Tallow's own voice path, not Steam's voice API, so Steam's voice settings do not apply.
 
 ## Tests
-
-`BeefBuild -workspace=Tests/Voice -config=Debug -run` runs a host and two clients in one process with no microphone or sound card: speech is handed in as samples and what would be played is counted and measured. It covers: off by default, speech reaching host and client but not the speaker, the compressed size, the played-back tone matching what was spoken, the activation level, push to talk, muting yourself and others, team only, proximity, 20% packet loss, a flooding client, malformed packets, deafen, switching off mid-game and the microphone test.

@@ -142,6 +142,4 @@ Everything above is in the graph editor's node list as it is in code: search for
 
 ## Testing without the hardware
 
-`Gamepad.Simulate()` makes a pretend controller, and `SimulateButton`, `SimulateStick` and `SimulateAxis` say what it is doing; `Input.SimulateKey`, `SimulateMouseButton` and `SimulateMouseDelta` do the same for keyboard and mouse. In a running game set `Input.SimulateOnly = true` first, so that whoever is at the machine does not disturb the run. With no application running (a test), wrap each pretend frame in `Input.SimulateStep()` and `Input.SimulateEnd()`. `Tests/InputActions` is written this way.
-
 Controllers have been checked this way and through SDL's own mapping; say so if a particular pad misbehaves.
