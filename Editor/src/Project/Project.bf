@@ -24,6 +24,9 @@ class Project
 	/// sits inside, as the bundled samples do. The project file is updated so that builds use the right engine.
 	void RelocateEngine()
 	{
+		// A pinned project must never silently move to a different engine.
+		if (File.Exists(scope $"{Path}/tessera-engine.lock.json"))
+			return;
 		if (!EngineRoot.IsEmpty && Directory.Exists(scope $"{EngineRoot}/Engine/src"))
 			return;
 		let found = scope String();
