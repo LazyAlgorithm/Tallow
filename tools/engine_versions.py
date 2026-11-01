@@ -56,6 +56,27 @@ def pin(project, manifest):
     return lock
 
 
+
+def verify(project, engine):
+    """Check that the selected engine exactly matches the project's lock."""
+    lock = Path(project) / LOCK
+    if not lock.exists():
+        return False  # Legacy projects are not silently pinned.
+    expected = identity(lock)
+    actual = identity(Path(engine) / MANIFEST)
+    if expected != actual:
+        raise ValueError('Project requires a different engine build; migration is explicit')
+    return True
+
+
+def pin_new(project, engine):
+    """Pin a newly created project; never overwrite an existing pin."""
+    lock = Path(project) / LOCK
+    if lock.exists():
+        return verify(project, engine)
+    return pin(project, Path(engine) / MANIFEST)
+
+
 def registry(root):
     path = Path(root) / 'versions.json'
     if not path.exists():
@@ -116,16 +137,20 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     for command, names in (('pin', ('project', 'manifest')),
                            ('install', ('package', 'root')),
-                           ('resolve', ('project', 'root'))):
+                           ('resolve', ('project', 'root')),
+                           ('verify', ('project', 'engine')),
+                           ('pin-new', ('project', 'engine'))):
         action = sub.add_parser(command)
         for name in names:
             action.add_argument(name, type=Path)
     args = parser.parse_args()
     try:
-        result = {'pin': pin, 'install': install, 'resolve': resolve}[args.command](
+        result = {'pin': pin, 'install': install, 'resolve': resolve, 'verify': verify,
+                  'pin-new': pin_new}[args.command](
             *[getattr(args, name) for name in
               {'pin': ('project', 'manifest'), 'install': ('package', 'root'),
-               'resolve': ('project', 'root')}[args.command]])
+               'resolve': ('project', 'root'), 'verify': ('project', 'engine'),
+               'pin-new': ('project', 'engine')}[args.command]])
     except (ValueError, OSError, KeyError) as error:
         parser.exit(1, f'Error: {error}\n')
     print(result)
