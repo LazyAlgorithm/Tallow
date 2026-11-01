@@ -28,7 +28,6 @@ permissions:
   contents: write
 
 env:
-  TALLOW_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v0.0.1-beta.{0}', github.run_number) }}
   # Beef's compiler for Linux, built from source. Windows uses Beef's own Windows release.
   BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
   LLVM_VERSION: '22'
@@ -47,6 +46,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: tallow
+          fetch-depth: 0
+
+      - name: Determine beta version
+        run: echo "TALLOW_VERSION=$(tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
 
       # The build scripts need Python 3.11 or later (tomllib); Ubuntu 22.04 has 3.10.
       - name: Python
@@ -149,6 +152,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: tallow
+          fetch-depth: 0
+
+      - name: Determine beta version
+        run: echo "TALLOW_VERSION=$(tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
 
       - name: Python
         uses: actions/setup-python@v5
@@ -232,6 +239,15 @@ jobs:
     if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release' || startsWith(github.ref, 'refs/tags/'))) || inputs.publish
     runs-on: ubuntu-22.04
     steps:
+      - name: Get Tallow version history
+        uses: actions/checkout@v4
+        with:
+          path: tallow
+          fetch-depth: 0
+
+      - name: Determine beta version
+        run: echo "TALLOW_VERSION=$(tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
+
       - name: Get the zips
         uses: actions/download-artifact@v4
         with:
