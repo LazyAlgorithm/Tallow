@@ -1,5 +1,5 @@
 using System;
-using Tessera;
+using Tallow;
 
 namespace ReflectionsTests;
 
@@ -118,7 +118,7 @@ class Program
 		let plainText = scope String();
 		SceneSerializer.Save(plain, plainText);
 		Check(!plainText.Contains("reflectionIntensity"), "a scene left at 1 does not write it (older scenes read as 1)");
-		Check(saved.Contains("component Tessera.ReflectionProbe") && loaded.ComponentsOfType(typeof(ReflectionProbe)).Count == 3, "probes are saved and loaded with the scene");
+		Check(saved.Contains("component Tallow.ReflectionProbe") && loaded.ComponentsOfType(typeof(ReflectionProbe)).Count == 3, "probes are saved and loaded with the scene");
 
 		Console.WriteLine(scope $"\n{sFailures} failure(s)");
 		return sFailures == 0 ? 0 : 1;

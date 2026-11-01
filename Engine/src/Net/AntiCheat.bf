@@ -94,9 +94,9 @@ static class AntiCheat
 	public static bool Harden()
 	{
 		ProcessChecks = true;
-		// A way out for looking into a built game with a debugger: TESSERA_HARDEN=off in its environment.
+		// A way out for looking into a built game with a debugger: TALLOW_HARDEN=off in its environment.
 		let choice = scope String();
-		Environment.GetEnvironmentVariable("TESSERA_HARDEN", choice).IgnoreError();
+		Environment.GetEnvironmentVariable("TALLOW_HARDEN", choice).IgnoreError();
 		if (choice == "off")
 			return false;
 		sHardened = tn_guard_harden() != 0;

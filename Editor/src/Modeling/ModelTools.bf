@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The modeller's tools that follow the pointer (docs/modeling.md): grab, rotate and scale (G, R, S), extrude (E),
 /// inset (I), bevel (Ctrl+B), loop cut and slide (Ctrl+R) and the knife (K). Each starts from the model as it was

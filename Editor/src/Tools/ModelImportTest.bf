@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Test switch --model-import-test [--model-import-fbx <rigged .fbx>]: writes an OBJ, an STL and a DAE (and a .blend
 /// when Blender is installed) into the project, converts them, and checks the settings (scale, Z up, clips,

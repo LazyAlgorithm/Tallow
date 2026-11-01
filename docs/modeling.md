@@ -1,6 +1,6 @@
 # Modelling
 
-Tessera has a modeller built into the editor, for low-poly props and for blocking out maps. Shapes are drawn straight
+Tallow has a modeller built into the editor, for low-poly props and for blocking out maps. Shapes are drawn straight
 into the Scene view, then pushed, cut and bevelled in an edit mode, given materials, colours and texture coordinates,
 and saved with the scene. Nothing has to leave the engine, but a model can be exported as `.glb` for Blender or other
 tools.

@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// World streaming in the editor (docs/world-streaming.md): the scene settings, the Always Loaded box, and the World
 /// Map window that shows the grid of cells and loads or takes out the ones picked. Only the cells round the view are

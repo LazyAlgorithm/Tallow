@@ -1,5 +1,5 @@
-#ifndef TESSERA_SHADERGRAPH_SH
-#define TESSERA_SHADERGRAPH_SH
+#ifndef TALLOW_SHADERGRAPH_SH
+#define TALLOW_SHADERGRAPH_SH
 
 // Functions the shader graph's nodes call (Editor/src/Graph/NodeLibrary.bf). Included by the mesh shaders, so a
 // hand-written .tshader can use them too; the ones a shader does not call cost nothing. Needs u_surface (time in
@@ -111,4 +111,4 @@ vec3 tsg_heightNormal(float height, vec2 uv, float strength)
 }
 #endif
 
-#endif // TESSERA_SHADERGRAPH_SH
+#endif // TALLOW_SHADERGRAPH_SH

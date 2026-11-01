@@ -1,19 +1,19 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
-/// Finds the tools Tessera compiles projects with: Beef's compiler and Python 3.11 or later, and on Windows
-/// Microsoft's C runtime and Windows SDK libraries. Tessera Hub installs missing ones into a folder of the user's
+/// Finds the tools Tallow compiles projects with: Beef's compiler and Python 3.11 or later, and on Windows
+/// Microsoft's C runtime and Windows SDK libraries. Tallow Hub installs missing ones into a folder of the user's
 /// (Folder); Apply points the editor and the build scripts at what it installed there. Tools the user installed
 /// themselves are found on PATH as before.
 static class Toolchain
 {
 	static String sFolder = new .() ~ delete _;
 
-	/// Where Tessera Hub keeps the tools it installs.
+	/// Where Tallow Hub keeps the tools it installs.
 	public static String Folder
 	{
 		get
@@ -33,7 +33,7 @@ static class Toolchain
 				}
 #endif
 				sFolder.Append(home);
-				sFolder.Append("/Tessera/toolchain");
+				sFolder.Append("/Tallow/toolchain");
 			}
 			return sFolder;
 		}
@@ -106,7 +106,7 @@ static class Toolchain
 		return false;
 	}
 
-	/// Points this program, and the compilers and scripts it starts, at the tools Tessera Hub installed. Call once at
+	/// Points this program, and the compilers and scripts it starts, at the tools Tallow Hub installed. Call once at
 	/// start; a BeefBuild or Python the user installed themselves is used as before.
 	public static void Apply()
 	{
@@ -145,7 +145,7 @@ static class Toolchain
 			SetEnv("BEEFBUILD", beef);
 	}
 
-	/// Names of required tools that cannot be found, for a message pointing at Tessera Hub. Quick enough to run as
+	/// Names of required tools that cannot be found, for a message pointing at Tallow Hub. Quick enough to run as
 	/// the launcher starts.
 	public static void FindMissing(List<String> missing)
 	{

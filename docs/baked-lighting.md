@@ -76,7 +76,7 @@ baker.Apply(scene, LightBaker.FolderFor(scene, .. scope .()), report);
 
 ## How it works
 
-`LightBaker` (`Engine/src/Lighting/LightBaker.bf`) copies the baked renderers' triangles into the world, with their colours, and builds a bounding volume hierarchy over them in the native library (`native/tessera_bake.cpp`), which traces the rays. Each object gets a square of the lightmap sized for Texels per Metre, and each texel a point and a normal on the surface. Then:
+`LightBaker` (`Engine/src/Lighting/LightBaker.bf`) copies the baked renderers' triangles into the world, with their colours, and builds a bounding volume hierarchy over them in the native library (`native/tallow_bake.cpp`), which traces the rays. Each object gets a square of the lightmap sized for Texels per Metre, and each texel a point and a normal on the surface. Then:
 
 1. **Direct light** at each texel from every light, with a shadow ray to each.
 2. **Gathering.** Each texel sends Rays per Texel rays over its hemisphere (stratified and cosine-weighted). A ray that leaves the scene brings the sky's light. One that hits something remembers which texel it hit. One that hits the back of a face marks the texel as inside something (under a wall standing on the floor); such texels are filled in from their neighbours later.

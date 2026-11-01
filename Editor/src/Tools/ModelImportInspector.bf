@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Inspector for an FBX, OBJ, DAE, STL, PLY, 3DS or .blend file clicked in the Project panel: its import settings
 /// (docs/model-import.md). Apply writes them beside the file and converts it again.

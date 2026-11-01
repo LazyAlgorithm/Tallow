@@ -14,7 +14,7 @@ env shadowDistance 60
 env lightProbes "Scenes/BakedLighting_Baked/Probes.tprobes"
 object 101 parent 0 active 1 name "Main Camera"
 transform 0 3.2 -11.5 0.104528 0 0 0.994522 1 1 1
-component Tessera.Camera enabled 1
+component Tallow.Camera enabled 1
 field fieldOfView 60
 field nearClip 0.1
 field farClip 1000
@@ -27,7 +27,7 @@ field viewmodelCastsShadows 0
 field occlusionCulling 0
 object 102 parent 0 active 1 name "Sun"
 transform 0 10 0 0.387912 -0.274708 0.122308 0.871264 1 1 1
-component Tessera.Light enabled 1
+component Tallow.Light enabled 1
 field type Directional
 field color 1 0.95 0.85 1
 field intensity 2.2
@@ -41,7 +41,7 @@ field castShadows 1
 field shadowStrength 1
 object 103 parent 0 active 1 name "Ground"
 transform 0 -0.25 0 0 0 0 1 30 0.5 30
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.55 0.55 0.52 1
 field metallic 0
@@ -65,7 +65,7 @@ field material ""
 field occluder 0
 object 104 parent 0 active 1 name "Floor"
 transform 0 0.05 0 0 0 0 1 10 0.1 10
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.85 0.85 0.82 1
 field metallic 0
@@ -89,7 +89,7 @@ field material ""
 field occluder 0
 object 105 parent 0 active 1 name "Back Wall"
 transform 0 2 5 0 0 0 1 10.6 4 0.3
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.85 0.85 0.82 1
 field metallic 0
@@ -113,7 +113,7 @@ field material ""
 field occluder 0
 object 106 parent 0 active 1 name "Red Wall"
 transform -5.15 2 0 0 0 0 1 0.3 4 10
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.85 0.18 0.15 1
 field metallic 0
@@ -137,7 +137,7 @@ field material ""
 field occluder 0
 object 107 parent 0 active 1 name "Blue Wall"
 transform 5.15 2 0 0 0 0 1 0.3 4 10
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.15 0.3 0.85 1
 field metallic 0
@@ -161,7 +161,7 @@ field material ""
 field occluder 0
 object 108 parent 0 active 1 name "Roof Left"
 transform -3.3 4.15 0 0 0 0 1 4 0.3 10.6
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.85 0.85 0.82 1
 field metallic 0
@@ -185,7 +185,7 @@ field material ""
 field occluder 0
 object 109 parent 0 active 1 name "Roof Right"
 transform 3.3 4.15 0 0 0 0 1 4 0.3 10.6
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.85 0.85 0.82 1
 field metallic 0
@@ -209,7 +209,7 @@ field material ""
 field occluder 0
 object 110 parent 0 active 1 name "Roof Back"
 transform 0 4.15 3.4 0 0 0 1 2.6 0.3 3.8
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.85 0.85 0.82 1
 field metallic 0
@@ -233,7 +233,7 @@ field material ""
 field occluder 0
 object 111 parent 0 active 1 name "Pillar"
 transform -1.5 1.5 1.5 0 0 0 1 0.8 3 0.8
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.85 0.85 0.82 1
 field metallic 0
@@ -257,7 +257,7 @@ field material ""
 field occluder 0
 object 112 parent 0 active 1 name "Crate"
 transform 2.2 0.6 2.6 0 0 0 1 1.1 1.1 1.1
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.75 0.55 0.32 1
 field metallic 0
@@ -281,7 +281,7 @@ field material ""
 field occluder 0
 object 113 parent 0 active 1 name "Step"
 transform 1.8 0.25 -1.5 0 0 0 1 2 0.4 1.2
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.85 0.85 0.82 1
 field metallic 0
@@ -305,7 +305,7 @@ field material ""
 field occluder 0
 object 114 parent 0 active 1 name "Loose Ball"
 transform -2.6 0.7 -1.6 0 0 0 1 1.2 1.2 1.2
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere"
 field color 0.9 0.9 0.9 1
 field metallic 0
@@ -329,7 +329,7 @@ field material ""
 field occluder 0
 object 115 parent 0 active 1 name "Loose Cube"
 transform 0.2 0.45 -2.5 0 0 0 1 0.7 0.7 0.7
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.9 0.9 0.9 1
 field metallic 0
@@ -353,7 +353,7 @@ field material ""
 field occluder 0
 object 116 parent 0 active 1 name "Lamp"
 transform -4.2 3.2 4.2 0 0 0 1 1 1 1
-component Tessera.Light enabled 1
+component Tallow.Light enabled 1
 field type Point
 field color 1 0.7 0.4 1
 field intensity 3

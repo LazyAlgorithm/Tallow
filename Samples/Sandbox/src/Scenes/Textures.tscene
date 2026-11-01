@@ -11,11 +11,11 @@ env exposure 1
 env shadowDistance 80
 object 2 parent 0 active 1 name "Main Camera"
 transform 0 1.6 -40 0.0348995 0 0 0.9993908 1 1 1
-component Tessera.Camera enabled 1
+component Tallow.Camera enabled 1
 field fieldOfView 60
 object 900 parent 0 active 1 name "Directional Light"
 transform 0 6 0 0.4082179 -0.23456971 0.10938165 0.87542605 1 1 1
-component Tessera.Light enabled 1
+component Tallow.Light enabled 1
 field type Directional
 field color 1 0.96 0.88 1
 field intensity 1.4
@@ -23,11 +23,11 @@ field castShadows 1
 field shadowStrength 1
 object 3 parent 0 active 1 name "Checker Floor"
 transform 0 -0.5 0 0 0 0 1 100 1 100
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field material "Materials/checker.tmat"
 object 4 parent 0 active 1 name "Brass Block"
 transform -3 0.75 -34 0 0.38268343 0 0.9238795 1.5 1.5 1.5
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field material "Materials/brass.tmat"

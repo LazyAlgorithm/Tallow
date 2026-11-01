@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using Tessera;
+using Tallow;
 
 namespace {NAMESPACE};
 
@@ -24,7 +24,7 @@ class CampusAuthor : Application
 		if (!GetArg("--project", project)) return false;
 		Assets.ProjectPath.Set(scope $"{project}/src");
 		Scene.Active = scene;
-		scene.Name.Set("Tessera Exhibition Campus");
+		scene.Name.Set("Tallow Exhibition Campus");
 		exhibition = scene.CreateGameObject("Exhibition Director").AddComponent<Exhibition>();
 		exhibition.BuildForEditing();
 		return true;

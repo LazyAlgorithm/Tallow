@@ -44,7 +44,7 @@ void main()
 	{
 		bent = bent * inversesqrt(length2);
 	}
-	// Into Tessera's left-handed space, as the CPU path does.
+	// Into Tallow's left-handed space, as the CPU path does.
 	int o = v * 11;
 	b_vertices[o] = skinned.x;
 	b_vertices[o + 1] = skinned.y;

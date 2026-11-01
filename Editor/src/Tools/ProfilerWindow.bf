@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Window > Profiler (docs/profiler.md): a timeline of recorded frames with a chart for each module (CPU by category,
 /// GPU by pass, rendering, memory, physics, animation, audio, networking, AI, UI, particles, assets, scripts, jobs), and

@@ -57,7 +57,7 @@ A moving thing (or anything without a lightmap) whose middle is in a volume's bo
 
 ## How it works
 
-`ProbePlacer` (`Engine/src/Lighting/ProbePlacer.bf`) copies the triangles of the scene's still, solid objects (Mesh Renderers that are not see-through and have no moving Rigidbody on them or above them) and traces rays in the light baker's BVH (`native/tessera_bake.cpp`).
+`ProbePlacer` (`Engine/src/Lighting/ProbePlacer.bf`) copies the triangles of the scene's still, solid objects (Mesh Renderers that are not see-through and have no moving Rigidbody on them or above them) and traces rays in the light baker's BVH (`native/tallow_bake.cpp`).
 
 1. **Cells.** The scene's box is cut into cells of half a metre (larger for big scenes, to keep under 400,000). Cells a triangle passes through are surfaces, and remember whether the surface is shiny and faces up.
 2. **Looking round.** Each other cell sends 42 rays. If most hit the backs of faces, the cell is inside something solid. Otherwise it records how much sky it sees, how much of the way round it is walled in within 40 m, how far up and down the nearest surfaces are, and how much light reaches it: the sky's share plus each point and spot light in range that it can see. A cell with a surface within 6 m below it is somewhere things can be; one with a surface above it is covered.

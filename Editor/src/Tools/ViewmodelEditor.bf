@@ -1,7 +1,7 @@
 using System;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Inspector tools for a Viewmodel Pose: take the object's current place as the hip or the aim pose.
 extension EditorApp

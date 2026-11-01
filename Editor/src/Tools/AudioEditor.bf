@@ -1,7 +1,7 @@
 using System;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 extension EditorApp
 {

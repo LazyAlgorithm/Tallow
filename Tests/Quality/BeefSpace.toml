@@ -1,5 +1,5 @@
 FileVersion = 1
-Projects = {QualityTests = {Path = "."}, Tessera = {Path = "../../Engine"}, TesseraEditor = {Path = "../../Editor"}}
+Projects = {QualityTests = {Path = "."}, Tallow = {Path = "../../Engine"}, TallowEditor = {Path = "../../Editor"}}
 [Workspace]
 StartupProject = "QualityTests"
 

@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Test switch --drag-test: drives the editor with a queued mouse (as a person would, frame by frame) through the
 /// drags of docs/drag-and-drop.md: a Hierarchy row and an object in the Scene view dragged into an Inspector

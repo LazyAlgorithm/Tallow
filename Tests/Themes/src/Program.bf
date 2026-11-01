@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
-using Tessera;
-using Tessera.Editor;
+using Tallow;
+using Tallow.Editor;
 
 namespace ThemeTests;
 
@@ -42,10 +42,10 @@ class Program
 	{
 		EditorTheme.AddBuiltIns();
 		var allThere = EditorTheme.Themes.Count == 7;
-		for (let name in StringView[?]("Tessera Blue", "dark", "Light", "High Contrast", "Forest", "Ember", "Plum"))
+		for (let name in StringView[?]("Tallow Blue", "dark", "Light", "High Contrast", "Forest", "Ember", "Plum"))
 			allThere &= EditorTheme.Find(name) != null;
-		Check(allThere, "seven built-in themes: Tessera Blue, Dark, Light, High Contrast, Forest, Ember and Plum");
-		Check(EditorTheme.Themes[0].name == EditorTheme.DefaultTheme && EditorTheme.DefaultTheme == "Tessera Blue", "Tessera Blue is the default, first in the list");
+		Check(allThere, "seven built-in themes: Tallow Blue, Dark, Light, High Contrast, Forest, Ember and Plum");
+		Check(EditorTheme.Themes[0].name == EditorTheme.DefaultTheme && EditorTheme.DefaultTheme == "Tallow Blue", "Tallow Blue is the default, first in the list");
 		StringView[?] surfaces = .("WindowBg", "PopupBg", "FrameBg", "Button", "Header", "HeaderHovered", "HeaderActive", "TitleBg", "MenuBarBg", "Tab", "TabSelected");
 		for (let theme in EditorTheme.Themes)
 		{
@@ -112,13 +112,13 @@ class Program
 
 	static void Files()
 	{
-		let blue = EditorTheme.Find("Tessera Blue");
+		let blue = EditorTheme.Find("Tallow Blue");
 		let text = scope String();
 		EditorTheme.Write(blue, text);
 		let read = scope Theme();
 		let problems = scope String();
 		Check(EditorTheme.Parse(text, read, problems) && problems.IsEmpty, "a written theme reads back without problems");
-		Check(read.name == "Tessera Blue" && read.light == blue.light && read.SameColors(blue), "and with the same name, base and colours");
+		Check(read.name == "Tallow Blue" && read.light == blue.light && read.SameColors(blue), "and with the same name, base and colours");
 		Check(!read.builtIn, "a theme read from a file is not built in");
 
 		let light = EditorTheme.Find("Light");

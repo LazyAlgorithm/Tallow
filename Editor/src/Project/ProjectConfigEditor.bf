@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Project Settings for ProjectConfig (physics layers and which collide, tags, world states), and the matching row at
 /// the top of the Inspector for a selected object.

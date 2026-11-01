@@ -23,8 +23,8 @@ Status: design specification on rename/tallow; main remains untouched.
 Use amber for focus, active navigation, primary actions and charts' highlighted series, not every paragraph or background. Test contrast, focus visibility and color-blind-safe chart distinctions.
 
 ## Findings from source inspection
-- Root icon.svg was a blue Tessera tile mark; replaced on this branch with a simplified amber Tallow SVG.
-- Root icon.png remains to be regenerated from approved icon art.
+- Root icon.svg was a blue Tallow tile mark; replaced on this branch with a simplified amber Tallow SVG.
+- Root icon.png is now exported from the current icon.svg master; the current SVG remains the source of truth.
 - tools/web/shell/index.html is the exported **game runtime shell**, not necessarily the main public marketing website. It currently uses blue-charcoal background tokens (#0E1A24) with gold signal (#F2B33D). Do not blindly restyle game-export pages; distinguish runtime shell from website.
 - Locate public website source and deployment settings before changing its theme. Avoid unverified claims about live-site appearance.
 

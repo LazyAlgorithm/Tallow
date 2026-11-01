@@ -1,4 +1,4 @@
-// Tessera's multiplayer in a browser: WebRTC data channels between the host's browser and each player's, so no
+// Tallow's multiplayer in a browser: WebRTC data channels between the host's browser and each player's, so no
 // server of yours carries the game and nobody forwards a port.
 //
 // Finding each other: a browser cannot accept connections, so the two sides swap connection details through public
@@ -8,9 +8,9 @@
 //
 // Reaching each other: STUN servers tell each browser its public address, which is enough on most home and phone
 // networks. Strict networks (some offices, campuses and mobile carriers) also need a TURN relay; add one to
-// TesseraNet.iceServers (for example from Cloudflare's TURN service) to reach those players too.
+// TallowNet.iceServers (for example from Cloudflare's TURN service) to reach those players too.
 //
-// The engine side is native/tessera_web.c (tn_rtc_*) and Engine/src/Net/WebRtcTransport.bf.
+// The engine side is native/tallow_web.c (tn_rtc_*) and Engine/src/Net/WebRtcTransport.bf.
 (() => {
 	const TRACKERS = [
 		"wss://tracker.webtorrent.dev",
@@ -246,7 +246,7 @@
 	}
 
 	async function startSignaling(app) {
-		infoHash = await sha1Binary("tessera:" + app + ":" + net.code);
+		infoHash = await sha1Binary("tallow:" + app + ":" + net.code);
 		peerId = (net.role === "host" ? "H" : "C") + random(19, "abcdefghijklmnopqrstuvwxyz0123456789");
 		let reached = 0, failed = 0;
 		for (const url of net.trackers) {
@@ -301,5 +301,5 @@
 	};
 
 	addEventListener("pagehide", () => net.close());
-	window.TesseraNet = net;
+	window.TallowNet = net;
 })();

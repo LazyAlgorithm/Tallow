@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
-using Tessera.Editor;
+using Tallow;
+using Tallow.Editor;
 
 namespace GraphApiTests;
 
@@ -48,7 +48,7 @@ class Program
 		if (args.Count > 0)
 		{
 			let all = scope String();
-			all.Append("using System;\nusing Tessera;\nnamespace GraphProbe;\nclass AllNodes : Component\n{\n");
+			all.Append("using System;\nusing Tallow;\nnamespace GraphProbe;\nclass AllNodes : Component\n{\n");
 			int index = 0;
 			for (let def in defs)
 			{

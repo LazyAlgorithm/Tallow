@@ -1,10 +1,10 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 using Bgfx;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Inspector panel.
 extension EditorApp
@@ -591,7 +591,7 @@ extension EditorApp
 
 	static StringView ComponentCategory(StringView fullName, StringView name)
 	{
-		if (!fullName.StartsWith("Tessera.")) return "Scripts";
+		if (!fullName.StartsWith("Tallow.")) return "Scripts";
 		if (name == "Camera" || name == "Light" || name == "MeshRenderer" || name == "Decal" || name == "LODGroup" || name == "ReflectionProbe" || name == "LightProbeVolume") return "Rendering";
 		if (name == "Rigidbody" || name == "SoftBody" || name == "Rope" || name.EndsWith("Collider") || name == "CharacterController") return "Physics";
 		if (name == "SkinnedMeshRenderer" || name == "Animator" || name == "SequencePlayer") return "Animation";

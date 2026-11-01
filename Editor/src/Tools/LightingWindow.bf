@@ -1,8 +1,8 @@
 using System;
 using System.Threading;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Window > Lighting: bakes the scene's lighting (docs/baked-lighting.md) on the machine's spare cores while the editor
 /// keeps running, then points the scene at the lightmaps and light probes it made (save the scene to keep them).

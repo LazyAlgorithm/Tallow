@@ -6,7 +6,7 @@ namespace Tallow;
 /// Makes a rig's weights from its bones (docs/rigging.md): "bone heat", as Mixamo and Blender's automatic weights do.
 /// Each bone warms the vertices it is the nearest bone to and can see (no part of the model between), and the warmth
 /// spreads over the surface, so that weights fall off smoothly across joints and an arm does not move the side it
-/// hangs beside. The spreading is solved in the native library (native/tessera_rig.cpp).
+/// hangs beside. The spreading is solved in the native library (native/tallow_rig.cpp).
 ///
 /// Vertices in the same place (a seam where a model's texture is cut) are solved as one, so seams never tear. Each
 /// vertex keeps its four strongest bones (what a rigged file holds), adding up to 1.

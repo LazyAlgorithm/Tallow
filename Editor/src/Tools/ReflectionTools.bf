@@ -1,7 +1,7 @@
 using System;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Inspector tools for reflection probes (docs/reflections.md): capturing again, and what the probe has.
 extension EditorApp

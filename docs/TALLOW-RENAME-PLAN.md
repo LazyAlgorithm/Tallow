@@ -1,31 +1,26 @@
 # Tallow rename plan (branch-only)
 
-Status: preparation; no rename merged to main.
+Status: implementation and Linux validation in progress on `rename/tallow`; no rename merged to main.
 
 ## Scope
-- Public brand: Tallow Engine, Tallow Editor, Tallow Manager.
-- Rename Tessera-owned Beef namespaces, symbols, project/build target names, binaries, UI labels, release assets, GitHub workflows, docs, site and bot branding.
-- Breaking rename is approved: migrate all four developer-owned projects, project filenames, serialized formats, namespaces, scripts and tooling to Tallow. No backward-compatibility aliases or readers are required.
-- Avoid renaming third-party dependencies, historical attribution, and unrelated references.
+- Tallow Engine, Tallow Editor, and Tallow Manager.
+- Clean break across namespaces, serialized component names, manifests, native targets, binaries, tools, workflows, templates, tests, and documentation. No compatibility aliases or old-format readers.
+- Keep existing GitHub repository URLs until the coordinated repository rename; preserve historical copyright attribution and third-party identities.
+- Keep development on the rename branches. Repository renames and merges remain separate review steps.
 
-## Execution
-1. Inventory Tessera references and classify brand vs code vs format.
-2. Rename engine source and build configuration on rename/tallow.
-3. Update manager dependency, catalog, release lookup and UI on rename/tallow.
-4. Update CI/release workflows, docs, site, and Discord bot references.
-5. Build and smoke-test engine/editor/manager on supported platforms and test owned projects.
-6. Rename GitHub repositories only after review; update all cross-repo URLs and GitHub Pages.
-7. Merge only after explicit approval; do not change main during development.
+## Implemented
+- Native source files, CMake targets, static archives, helper tools, and all linker consumers use the Tallow names together.
+- Project and runtime manifests are `project.tallow` and `game.tallow`. Templates, saved scenes, generated workspaces, samples, and tests use Tallow names.
+- Port the immutable engine identity work from dev: `tallow-version.json`, `tallow-engine.lock.json`, exact-build validation, and automatic pinning of newly created packaged projects.
+- Publish matching immutable version IDs and package names; rename-branch CI builds packages without publishing a release.
+- Export root PNG from the current SVG master.
 
-## Review gates
-- No Tessera branding, source identifiers, or engine-owned filenames remain. Preserve only external GitHub URLs until the repository rename, third-party attributions, and required native-library names until their build definitions are updated.
-- New projects and migrated projects use Tallow-named file extensions and metadata; older formats need not load.
-- Windows/Linux builds and installation/update paths validated.
-- No direct commits to main.
+## Validation
+- Fresh Linux CMake/native and Debug engine/editor/launcher builds pass.
+- Strict rename audit and source portability audit pass. Only existing repository URLs and the original copyright notice retain the former name.
+- Six immutable version tests pass. Voice, Saving, Scenes, ScriptCatalog, UIDocuments, and asset pack fixtures pass.
+- Packaged Showcase creation and compilation pass, including Tallow scripts/components, terrain sidecars, binary assets, immutable project pins, and source-project relocation.
+- Windows CI and web runtime validation remain required before merge. Game repository migrations are tracked separately.
 
-## Clean-break file format migration gate
-The old project and game manifests are now called `project.tallow` and `game.tallow` in the launcher entry point and player packager. Before merging, inspect and change **every** reader, writer, template, test, example, asset pack index, editor, and CI script using the previous filenames. The renamed branch is not build-verified at this stage.
-
-Do not rename binary/native ABI artifacts independently of their CMake producers and consumers. Rebuild all four developer-owned projects after their generated Beef workspaces, imports, assets, and manifests have been converted.
-
-Validation required: repository-wide `python3 tools/audit_tallow_rename.py --strict`, Linux/Windows build, new-project creation, existing-project open, game packaging, web player startup, and the website links.
+## Before cutover
+Validate Windows/Linux installation and project packaging, web startup, website links, and each migrated owned game. Coordinate engine and Manager releases, repository URLs, Pages deployment, and public download links. Merge only after explicit approval.

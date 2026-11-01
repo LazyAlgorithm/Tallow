@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
 namespace NetworkTests;
 
@@ -70,7 +70,7 @@ class Program
 		return pass;
 	}
 
-	const String cFolder = "/tmp/tessera-network-test";
+	const String cFolder = "/tmp/tallow-network-test";
 
 	/// The same scene on every machine, as if loaded from one file.
 	static void Build(Scene scene)

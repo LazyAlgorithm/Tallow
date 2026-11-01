@@ -100,7 +100,7 @@ static class SDL
 	[CLink] public static extern void SDL_ShowOpenFolderDialog(function void(void* userData, char8** files, int32 filter) callback, void* userData, void* window, char8* startFolder, bool allowMany);
 }
 
-/// Device creation and small helpers implemented in native/tessera_native.cpp.
+/// Device creation and small helpers implemented in native/tallow_native.cpp.
 static class Native
 {
 	public function void LogFn(char8* text);
@@ -136,7 +136,7 @@ static class Native
 		public char8[64] name;
 		public uint16* joints;
 		public float* weights;
-		// The primitive's whole material (native/tessera_assets.c).
+		// The primitive's whole material (native/tallow_assets.c).
 		public int32 material;
 		public char8[64] materialName;
 		public int32 baseColorImage;

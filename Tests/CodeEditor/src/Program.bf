@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
-using Tessera.Editor;
+using Tallow;
+using Tallow.Editor;
 
 namespace CodeEditorTests;
 
@@ -96,10 +96,10 @@ class Program
 		bool ok = true;
 		let root = scope String();
 		EngineRoot(root);
-		let project = "/tmp/tessera-code-editor-test";
+		let project = "/tmp/tallow-code-editor-test";
 		Directory.CreateDirectory(scope $"{project}/src/Scripts").IgnoreError();
 		File.WriteAllText(scope $"{project}/src/Scripts/Turret.bf" , """
-            using Tessera;
+            using Tallow;
             namespace Game;
             /// A gun. { braces in comments } and "strings with { braces" are not code.
             [Component]
@@ -146,7 +146,7 @@ class Program
 
 		// ---- code written later ----
 		ok &= Check(ApiIndex.Find("Laser") == null && !Offers("Las", "Laser"), "a type that does not exist yet is unknown");
-		File.WriteAllText(scope $"{project}/src/Scripts/Laser.bf" , "using Tessera;\nnamespace Game;\n[Component]\nclass Laser : Turret\n{\n\tpublic float heat;\n\tpublic void Overcharge(float amount)\n\t{\n\t}\n}\n").IgnoreError();
+		File.WriteAllText(scope $"{project}/src/Scripts/Laser.bf" , "using Tallow;\nnamespace Game;\n[Component]\nclass Laser : Turret\n{\n\tpublic float heat;\n\tpublic void Overcharge(float amount)\n\t{\n\t}\n}\n").IgnoreError();
 		let before = ApiIndex.Revision;
 		ApiIndex.RefreshProject();
 		ok &= Check(Has("Laser", "heat", "Overcharge") && Offers("Las", "Laser") && Offers("Laser beam;\nbeam.", "Overcharge", "heat", "range", "Fire", "Transform") && ApiIndex.Revision > before, "a script added afterwards is picked up, with what it inherits, and open scripts are told to recolour");
@@ -156,7 +156,7 @@ class Program
 		{
 			// An engine feature that does not exist: the same reader finds it from its source alone.
 			let future = scope Dictionary<String, ApiIndex.TypeEntry>();
-			ApiIndex.ScanText("namespace Tessera;\n[Component]\nclass WeatherSystem : Component\n{\n\tpublic float rain;\n\tpublic static void Storm(float seconds) { }\n\tpublic enum Kind { Clear, Fog }\n}\n", future, true);
+			ApiIndex.ScanText("namespace Tallow;\n[Component]\nclass WeatherSystem : Component\n{\n\tpublic float rain;\n\tpublic static void Storm(float seconds) { }\n\tpublic enum Kind { Clear, Fog }\n}\n", future, true);
 			ok &= Check(future.ContainsKeyAlt<StringView>("WeatherSystem") && future["WeatherSystem"].Has("rain") && future["WeatherSystem"].Has("Storm") && future.ContainsKeyAlt<StringView>("Kind") && future["Kind"].Has("Fog"), "a future engine class is understood from its source with no editor change");
 			for (let entry in future.Values)
 				delete entry;

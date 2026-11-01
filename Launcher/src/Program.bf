@@ -105,6 +105,23 @@ class LauncherApp : Application
 			error.Set(scope $"{path} is not a Tallow project (no project.tallow).");
 			return false;
 		}
+		// Exact-version validation runs before any generated build files are changed.
+		let lockPath = scope $"{project.Path}/tallow-engine.lock.json";
+		if (File.Exists(lockPath))
+		{
+			let command = scope String();
+			command.AppendF("{} ", Terminal.Python);
+			Terminal.Quote(scope $"{project.EngineRoot}/tools/engine_versions.py", command);
+			command.Append(" verify ");
+			Terminal.Quote(project.Path, command);
+			command.Append(" ");
+			Terminal.Quote(project.EngineRoot, command);
+			if (Terminal.Run(command) != 0)
+			{
+				error.Set("This project requires its pinned Tallow engine build. Open it with that version or install the missing version in Engine Manager.");
+				return false;
+			}
+		}
 		if (!project.Build(false))
 		{
 			error.Set("The project did not compile:\n");
@@ -308,7 +325,7 @@ class LauncherApp : Application
 	{
 		if (mEngineRoot.IsEmpty)
 		{
-			SetMessage("The engine folder was not found. Set TESSERA_ROOT.", true);
+			SetMessage("The engine folder was not found. Set TALLOW_ROOT.", true);
 			return;
 		}
 		let folder = scope $"{mLocation}/{mName}";
@@ -389,7 +406,7 @@ class Program
 		Gfx.LocateEngineAssets();
 		if (!ProjectGenerator.FindEngineRoot(root))
 		{
-			Console.WriteLine("Engine folder not found. Set TESSERA_ROOT.");
+			Console.WriteLine("Engine folder not found. Set TALLOW_ROOT.");
 			return 1;
 		}
 		let error = scope String();

@@ -1,5 +1,5 @@
 FileVersion = 1
-Projects = {LayerTests = {Path = "."}, Tessera = {Path = "../../Engine"}, TesseraEditor = {Path = "../../Editor"}}
+Projects = {LayerTests = {Path = "."}, Tallow = {Path = "../../Engine"}, TallowEditor = {Path = "../../Editor"}}
 [Workspace]
 StartupProject = "LayerTests"
 

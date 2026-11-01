@@ -85,7 +85,7 @@ extension EditorApp
 			Check(moved, "posing a bone moves the model");
 			mRig.ResetPose();
 			// Written to a scratch folder.
-			let scratch = Path.InternalCombine(.. scope .(), Path.GetTempPath(.. scope .()), "tessera-rig-test");
+			let scratch = Path.InternalCombine(.. scope .(), Path.GetTempPath(.. scope .()), "tallow-rig-test");
 			Directory.CreateDirectory(scratch).IgnoreError();
 			let rigged = Path.InternalCombine(.. scope .(), scratch, scope $"{name}_Rigged.glb");
 			mRiggedPath.Set(rigged);

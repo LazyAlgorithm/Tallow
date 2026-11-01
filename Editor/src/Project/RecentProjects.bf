@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Remembers recently opened projects in the user's config folder.
 static class RecentProjects
@@ -12,7 +12,7 @@ static class RecentProjects
 
 	static void GetFile(String outPath)
 	{
-		let pref = SDL.SDL_GetPrefPath("Tessera", "Editor");
+		let pref = SDL.SDL_GetPrefPath("Tallow", "Editor");
 		if (pref != null)
 			outPath.Append(pref);
 		outPath.Append("recent_projects.txt");
@@ -20,7 +20,7 @@ static class RecentProjects
 
 	public static void GetConfigFolder(String outPath)
 	{
-		let pref = SDL.SDL_GetPrefPath("Tessera", "Editor");
+		let pref = SDL.SDL_GetPrefPath("Tallow", "Editor");
 		if (pref != null)
 			outPath.Append(pref);
 	}
@@ -34,7 +34,7 @@ static class RecentProjects
 		for (var line in text.Split('\n'))
 		{
 			line.Trim();
-			if (!line.IsEmpty && File.Exists(scope $"{line}/project.tessera"))
+			if (!line.IsEmpty && File.Exists(scope $"{line}/project.tallow"))
 				Paths.Add(new String(line));
 		}
 	}

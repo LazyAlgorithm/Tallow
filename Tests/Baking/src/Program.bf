@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
 namespace BakingTests;
 
@@ -404,7 +404,7 @@ class Program
 
 	static void Writing()
 	{
-		let folder = scope $"{Path.GetTempPath(.. scope .())}/tessera-bake-test";
+		let folder = scope $"{Path.GetTempPath(.. scope .())}/tallow-bake-test";
 		if (Directory.Exists(folder))
 			Directory.DelTree(folder).IgnoreError();
 		Directory.CreateDirectory(folder).IgnoreError();

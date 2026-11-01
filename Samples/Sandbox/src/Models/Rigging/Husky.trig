@@ -1,4 +1,4 @@
-# Tessera rig (docs/rigging.md)
+# Tallow rig (docs/rigging.md)
 source "Models/Rigging/Husky.glb"
 template Quadruped
 facing 0 0 -1

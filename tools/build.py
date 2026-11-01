@@ -11,8 +11,8 @@ import shutil
 import subprocess
 import sys
 
-NATIVE_TARGETS = ['tessera_native', 'bgfx', 'bimg', 'bimg_decode', 'bx', 'SDL3-static', 'joltc', 'Jolt', 'enet',
-                  'shaderc', 'texturec', 'tessera_modelsettings', 'tessera_modelconv']
+NATIVE_TARGETS = ['tallow_native', 'bgfx', 'bimg', 'bimg_decode', 'bx', 'SDL3-static', 'joltc', 'Jolt', 'enet',
+                  'shaderc', 'texturec', 'tallow_modelsettings', 'tallow_modelconv']
 
 
 def main():

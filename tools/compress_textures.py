@@ -19,7 +19,7 @@ import sys
 
 PICTURES = ('.png', '.jpg', '.jpeg', '.tga', '.bmp')
 DEFAULT_EXCLUDE = 'UI/*;Fonts/*'
-# texturec marks colour pictures as sRGB. Tessera's shaders decode sRGB themselves, so the graphics card must not as
+# texturec marks colour pictures as sRGB. Tallow's shaders decode sRGB themselves, so the graphics card must not as
 # well: the KTX header's internal format is set to the plain one (the mip levels stay made in linear light).
 PLAIN_FORMAT = {0x8C4C: 0x83F0, 0x8C4D: 0x83F1, 0x8C4E: 0x83F2, 0x8C4F: 0x83F3}
 

@@ -1,7 +1,7 @@
 using System;
 using System.IO;
-using Tessera;
-using Tessera.Editor;
+using Tallow;
+using Tallow.Editor;
 
 namespace GraphVariableTests;
 
@@ -15,7 +15,7 @@ class Program
 
 	public static int Main(String[] args)
 	{
-		let root = "/tmp/tessera-graph-variable-test";
+		let root = "/tmp/tallow-graph-variable-test";
 		Directory.CreateDirectory(root);
 		let path = scope $"{root}/Mover.tgraph";
 		let subPath = scope $"{root}/Boost.tgraph";
@@ -62,7 +62,7 @@ class Program
 		let setHome = graph.AddVariableNode(home, true, .Zero);
 		let position = graph.AddNode(NodeLibrary.Find("transform.position"), .Zero);
 		let boost = graph.AddNode(NodeLibrary.Find("sub:Boost.tgraph"), .Zero);
-		let print = graph.AddNode(NodeLibrary.Find("call:Tessera.GraphNodes.PrintNumber"), .Zero);
+		let print = graph.AddNode(NodeLibrary.Find("call:Tallow.GraphNodes.PrintNumber"), .Zero);
 		ok &= Check(boost != null && print != null, "fixture nodes exist");
 		if (!ok) return 1;
 		graph.Connect(getSpeed.id, 0, add.id, 0);

@@ -1,6 +1,6 @@
 # Responsive mobile UI — test checklist
 
-Ringfall's `dev` branch builds against Tessera `dev` and deploys to the `/dev/` preview (`https://lazyalgorithm.github.io/ringfall-web/dev/`); production tracks the `main` branches. Add `?arg=--ui-debug` to the address for the size and scale readout. The design and its implementation status are in `responsive-ui-design.md`.
+Ringfall's `dev` branch builds against Tallow `dev` and deploys to the `/dev/` preview (`https://lazyalgorithm.github.io/ringfall-web/dev/`); production tracks the `main` branches. Add `?arg=--ui-debug` to the address for the size and scale readout. The design and its implementation status are in `responsive-ui-design.md`.
 
 ## Engine behavior
 - UI coordinates use SDL logical window points; physical framebuffer pixels remain for the 3D renderer.
@@ -11,7 +11,7 @@ Ringfall's `dev` branch builds against Tessera `dev` and deploys to the `/dev/` 
 - RenderView already renders 3D at independently configurable resolution before drawing UI; this branch does not alter it.
 
 ## Test before merge
-1. Build Tessera with this branch and launch Ringfall using the existing phone variant.
+1. Build Tallow with this branch and launch Ringfall using the existing phone variant.
 2. Test iOS Safari and Android Chrome in portrait and landscape, including rotating during an active menu.
 3. Check menu buttons, text, touch hit areas, scroll/clipping, notches, home indicators and text entry.
 4. Compare a high-DPI phone, tablet and desktop; ensure UI dimensions are based on logical points.

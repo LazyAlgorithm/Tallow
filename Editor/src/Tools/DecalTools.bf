@@ -1,7 +1,7 @@
 using System;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Inspector tools for decals: sticking one flat onto the surface it points at.
 extension EditorApp

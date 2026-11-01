@@ -27,7 +27,7 @@ extension EditorApp
 		DrawToolbar();
 
 		let viewport = ImGui.GetMainViewport();
-		let dockId = ImGui.GetID("TesseraDock");
+		let dockId = ImGui.GetID("TallowDock");
 		if (!mLayoutBuilt || mResetLayout)
 		{
 			BuildDefaultLayout(dockId, viewport.workSize);

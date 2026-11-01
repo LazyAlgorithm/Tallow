@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Scene view tools: snapping, standing things on surfaces, Quick Add (Space), the project's prefabs and models listed
 /// for the GameObject menu and Quick Add, and the guides drawn for them.

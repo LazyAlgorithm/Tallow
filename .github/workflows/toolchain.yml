@@ -1,4 +1,4 @@
-# Builds the tools the Tessera launcher installs for people who do not have them (Editor/src/Project/Toolchain.bf)
+# Builds the tools the Tallow launcher installs for people who do not have them (Editor/src/Project/Toolchain.bf)
 # and puts them on the release named in tools/toolchain.txt:
 #   beef-linux-x64.tar.gz      Beef's compiler for Linux, built from source, with the shared libraries it needs
 #   beef-windows-x64.zip       Beef's Windows release
@@ -170,4 +170,4 @@ jobs:
           release="${{ needs.versions.outputs.release }}"
           gh release create "$release" out/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "Build tools ($release)" \
-            --notes "What the Tessera launcher installs when they are missing: Beef ${{ needs.versions.outputs.beef }}, Python ${{ needs.versions.outputs.python }}, xwin ${{ needs.versions.outputs.xwin }}. Not for downloading by hand."
+            --notes "What the Tallow launcher installs when they are missing: Beef ${{ needs.versions.outputs.beef }}, Python ${{ needs.versions.outputs.python }}, xwin ${{ needs.versions.outputs.xwin }}. Not for downloading by hand."

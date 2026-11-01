@@ -3,7 +3,7 @@ using System.IO;
 
 namespace Tallow;
 
-/// Editor-free packaged game entry point. Distribution layout: game.tessera, Assets/, Engine/assets/.
+/// Editor-free packaged game entry point. Distribution layout: game.tallow, Assets/, Engine/assets/.
 static class GameMain
 {
 	/// Runs once in a built game after its files and manifest are found, before its window opens: the place to load
@@ -18,9 +18,9 @@ static class GameMain
 		// each scene's own files in a pack of their own when the build split them.
 		AssetPack.MountGame(root);
 		let manifest = scope String();
-		if (AssetPack.ReadAllText(scope $"{root}/game.tessera" , manifest) case .Err)
+		if (AssetPack.ReadAllText(scope $"{root}/game.tallow" , manifest) case .Err)
 		{
-			Console.WriteLine("Missing game.tessera (or game.tpak). Use --game <package folder>.");
+			Console.WriteLine("Missing game.tallow (or game.tpak). Use --game <package folder>.");
 			return 1;
 		}
 #if BF_PLATFORM_WASM
@@ -37,7 +37,7 @@ static class GameMain
 		GamePaths.SetGameFolder(root);
 		// Physics layers, tags and world states.
 		ProjectConfig.Load();
-		Environment.SetEnvironmentVariable("TESSERA_ROOT", root);
+		Environment.SetEnvironmentVariable("TALLOW_ROOT", root);
 		if (!ReadCommandLine(args, app))
 			return 1;
 		BeforeWindow();
@@ -71,11 +71,11 @@ static class GameMain
 			return;
 		logPath.Clear();
 		System.IO.Path.GetTempPath(logPath);
-		logPath.Append("/tessera-game-log.txt");
+		logPath.Append("/tallow-game-log.txt");
 		Log.OpenFile(logPath);
 	}
 
-	/// The settings the editor's Build window wrote into game.tessera, one "key = value" a line.
+	/// The settings the editor's Build window wrote into game.tallow, one "key = value" a line.
 	static void ReadManifest(StringView manifest, GameApp app)
 	{
 		for (let line in manifest.Split('\n'))

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
 namespace MapTests;
 
@@ -88,7 +88,7 @@ class Program
 	{
 		let folder = scope String();
 		Path.GetTempPath(folder);
-		folder.Append("/tessera-map-test");
+		folder.Append("/tallow-map-test");
 		let maps = scope $"{folder}/Maps";
 		Directory.CreateDirectory(scope $"{folder}/Textures").IgnoreError();
 		Directory.CreateDirectory(maps).IgnoreError();
@@ -146,7 +146,7 @@ class Program
 			Check(playable == 1 && map != null && map.Ok, "Find lists the map, with no problems");
 			Check(map != null && map.Name == "Harbour Hill" && map.Author == "A tester" && map.Description == "A hill by the sea." && map.Game == "Map Test",
 				"with the name, author, description and game it was exported with");
-			Check(map != null && map.CountComponents("Tessera.SpawnPoint") == 1 && map.CountComponents("Tessera.VoxelTerrain") == 1,
+			Check(map != null && map.CountComponents("Tallow.SpawnPoint") == 1 && map.CountComponents("Tallow.VoxelTerrain") == 1,
 				"a game can count what is in it (one spawn point, one terrain)");
 			Check(MapFiles.Find(scope $"{folder}/NoSuchFolder" , found) == 0, "a missing Maps folder finds nothing");
 
@@ -232,7 +232,7 @@ class Program
 		// ---- a game's MapRules.txt: what a map needs ----
 		{
 			let rulesFile = scope $"{folder}/{MapRules.FileName}";
-			File.WriteAllText(rulesFile, "# test rules\nneed 3 Tessera.SpawnPoint \"spawn points\"\nneed 2 Tessera.SpawnPoint team = 1 \"blue spawn points\"\nneed 3 Tessera.SpawnPoint clearRadius >= 1 \"roomy spawn points\"\nignore Scenes/Menu.tscene\n").IgnoreError();
+			File.WriteAllText(rulesFile, "# test rules\nneed 3 Tallow.SpawnPoint \"spawn points\"\nneed 2 Tallow.SpawnPoint team = 1 \"blue spawn points\"\nneed 3 Tallow.SpawnPoint clearRadius >= 1 \"roomy spawn points\"\nignore Scenes/Menu.tscene\n").IgnoreError();
 			let rules = scope List<MapRule>();
 			let ignored = scope List<String>();
 			defer
@@ -242,7 +242,7 @@ class Program
 			}
 			MapRules.Load(rules, ignored);
 			Check(MapRules.Exists && rules.Count == 3 && ignored.Count == 1 && rules[1].Field == "team" && rules[1].What == "blue spawn points", "MapRules.txt is read: three rules and a scene that is not a map");
-			let text = "object 1 parent 0 active 1 name \"A\"\ncomponent Tessera.SpawnPoint enabled 1\nfield team 1\nfield clearRadius 0.5\nobject 2 parent 0 active 1 name \"B\"\ncomponent Tessera.SpawnPoint enabled 1\ncomponent Tessera.MeshRenderer enabled 1\nfield team 1\nobject 3 parent 0 active 1 name \"C\"\ncomponent Tessera.SpawnPoint enabled 1\nfield team 1\n";
+			let text = "object 1 parent 0 active 1 name \"A\"\ncomponent Tallow.SpawnPoint enabled 1\nfield team 1\nfield clearRadius 0.5\nobject 2 parent 0 active 1 name \"B\"\ncomponent Tallow.SpawnPoint enabled 1\ncomponent Tallow.MeshRenderer enabled 1\nfield team 1\nobject 3 parent 0 active 1 name \"C\"\ncomponent Tallow.SpawnPoint enabled 1\nfield team 1\n";
 			Check(MapRules.Count(text, rules[0]) == 3, "a rule counts the components of its type");
 			Check(MapRules.Count(text, rules[1]) == 2, "a field test counts only components that pass it, not another component's field");
 			Check(MapRules.Count(text, rules[2]) == 2, "a component that leaves a field out has the field's default (clearRadius 1)");
@@ -284,8 +284,8 @@ class Program
 			Check(damaged != null && damaged.Hash != level.Hash, "a changed copy has another hash");
 
 			let rulesFile = scope $"{folder}/{MapRules.FileName}";
-			File.WriteAllText(rulesFile, "most 2 Tessera.Rigidbody \"physics items\"\n").IgnoreError();
-			let three = "object 1 parent 0 active 1 name \"A\"\ncomponent Tessera.Rigidbody enabled 1\nobject 2 parent 0 active 1 name \"B\"\ncomponent Tessera.Rigidbody enabled 1\nobject 3 parent 0 active 1 name \"C\"\ncomponent Tessera.Rigidbody enabled 1\n";
+			File.WriteAllText(rulesFile, "most 2 Tallow.Rigidbody \"physics items\"\n").IgnoreError();
+			let three = "object 1 parent 0 active 1 name \"A\"\ncomponent Tallow.Rigidbody enabled 1\nobject 2 parent 0 active 1 name \"B\"\ncomponent Tallow.Rigidbody enabled 1\nobject 3 parent 0 active 1 name \"C\"\ncomponent Tallow.Rigidbody enabled 1\n";
 			let problems = scope List<String>();
 			defer
 			{
@@ -332,7 +332,7 @@ class Program
 			ClearAndDeleteItems!(found);
 			MapFiles.Find(maps, found);
 			let built = Named(found, "/Built.tmap");
-			Check(built != null && built.Ok && built.Id == "built-keep" && built.CountComponents("Tessera.SpawnPoint") == 2, "it keeps the Id it was saved with, and is playable");
+			Check(built != null && built.Ok && built.Id == "built-keep" && built.CountComponents("Tallow.SpawnPoint") == 2, "it keeps the Id it was saved with, and is playable");
 			let path = ".maps/built-keep/models/plain.glb";
 			ownModel.Set(path);
 			Check(built != null && MapFiles.Mount(built) && Assets.FileExists(path), "mounted, its model can be read");

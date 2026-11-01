@@ -1,5 +1,5 @@
 FileVersion = 1
-Projects = {RetargetingTests = {Path = "."}, Tessera = {Path = "../../Engine"}, TesseraEditor = {Path = "../../Editor"}}
+Projects = {RetargetingTests = {Path = "."}, Tallow = {Path = "../../Engine"}, TallowEditor = {Path = "../../Editor"}}
 [Workspace]
 StartupProject = "RetargetingTests"
 

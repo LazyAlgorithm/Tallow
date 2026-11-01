@@ -1,5 +1,5 @@
 FileVersion = 1
-Projects = {GpuSkinningTests = {Path = "."}, Tessera = {Path = "../../Engine"}, TesseraEditor = {Path = "../../Editor"}}
+Projects = {GpuSkinningTests = {Path = "."}, Tallow = {Path = "../../Engine"}, TallowEditor = {Path = "../../Editor"}}
 [Workspace]
 StartupProject = "GpuSkinningTests"
 

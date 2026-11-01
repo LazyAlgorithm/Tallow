@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using Tessera;
+using Tallow;
 
 namespace AchievementTests;
 
@@ -122,11 +122,11 @@ class Program
 			let loaded = !initialized && Steam.Library != null && Steam.Error.Contains("library lookup fixture");
 			return Check(loaded, "Steam loads the project Libraries runtime from the editor asset path") ? 0 : 1;
 		}
-		let folder = "/tmp/tessera-achievement-test";
+		let folder = "/tmp/tallow-achievement-test";
 		Directory.CreateDirectory(folder).IgnoreError();
 		Assets.ProjectPath.Set(folder);
 		File.Delete(scope $"{folder}/{Achievements.FileName}").IgnoreError(); // left behind if an earlier run was interrupted
-		Achievements.SaveName.Set("TesseraAchievementTest");
+		Achievements.SaveName.Set("TallowAchievementTest");
 		Steam.AppId = 0;
 		bool ok = TestFriendGame();
 		ok &= Check(!Achievements.OnSteam && !Steam.IsReady, "with no App ID, Steam is never started");
@@ -177,7 +177,7 @@ class Program
 		ok &= Check(!Achievements.IsUnlocked("SECRET") && Achievements.GetStat("kills") == 0, "everything can be cleared");
 
 		// Mods and Workshop items: a mounted folder's files are found by their path inside it, ahead of the project's.
-		let mod = "/tmp/tessera-achievement-test-mod";
+		let mod = "/tmp/tallow-achievement-test-mod";
 		Directory.CreateDirectory(scope $"{mod}/Scenes").IgnoreError();
 		Directory.CreateDirectory(scope $"{folder}/Scenes").IgnoreError();
 		File.WriteAllText(scope $"{folder}/Scenes/Main.tscene" , "project").IgnoreError();

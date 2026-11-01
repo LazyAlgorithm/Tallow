@@ -1,8 +1,8 @@
 using System;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Edit > Preferences: the editor's own settings, kept for this user on this machine (not in the project). Its
 /// Theme page picks a theme, changes any colour live, and saves, imports and exports themes (docs/themes.md); its

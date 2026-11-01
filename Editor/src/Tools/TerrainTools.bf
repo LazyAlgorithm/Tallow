@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Sculpting and painting brushes for VoxelTerrain, and carving for VoxelObject, used from the Scene view.
 extension EditorApp

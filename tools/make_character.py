@@ -28,14 +28,14 @@ class Prefab:
 
     def box(self, parent, center, size, color):
         self.obj('mesh', parent, center, size)
-        self.component('Tessera.MeshRenderer', [('mesh', '"builtin:cube"'),
+        self.component('Tallow.MeshRenderer', [('mesh', '"builtin:cube"'),
             ('color', '%g %g %g 1' % tuple(round(c / 255, 4) for c in color)), ('roughness', '0.9'), ('flatShading', '1')])
 
 def build_prefab(path):
     p = Prefab()
     root = p.obj('Character', 0, (0, 0, 0))
     clips = ';'.join('Animations/%s.tanim' % n for n in ('idle', 'walk', 'run', 'jump'))
-    p.component('Tessera.Animator', [('clips', '"%s"' % clips), ('defaultClip', '"Idle"'), ('speed', '1')])
+    p.component('Tallow.Animator', [('clips', '"%s"' % clips), ('defaultClip', '"Idle"'), ('speed', '1')])
     hips = p.obj('Hips', root, (0, 0.95, 0))
     p.box(hips, (0, 0.05, 0), (0.34, 0.2, 0.2), PANTS)
     chest = p.obj('Chest', hips, (0, 0.18, 0))

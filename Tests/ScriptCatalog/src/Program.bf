@@ -1,7 +1,7 @@
 using System;
 using System.IO;
-using Tessera;
-using Tessera.Editor;
+using Tallow;
+using Tallow.Editor;
 
 namespace ScriptCatalogTests;
 
@@ -17,7 +17,7 @@ class Program
 
 	public static int Main(String[] args)
 	{
-		let root = "/tmp/tessera-script-catalog-test";
+		let root = "/tmp/tallow-script-catalog-test";
 		Directory.CreateDirectory(root);
 		let path = scope $"{root}/Example.bf";
 		defer
@@ -45,7 +45,7 @@ class Program
 		let fresh = scope ScriptComponentCatalog();
 		fresh.Refresh(root, "ScriptCatalogTests");
 		ok &= Check(!fresh.IsVisible(deleted), "deletion before editor startup is hidden");
-		ok &= Check(fresh.IsVisible(ComponentRegistry.Find("Tessera.Camera")), "built-in components remain available");
+		ok &= Check(fresh.IsVisible(ComponentRegistry.Find("Tallow.Camera")), "built-in components remain available");
 		return ok ? 0 : 1;
 	}
 }

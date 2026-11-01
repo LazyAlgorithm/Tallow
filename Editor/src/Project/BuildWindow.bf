@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// What File > Build makes a game for.
 enum BuildTarget
@@ -25,7 +25,7 @@ extension EditorApp
 	BuildTarget mBuildTarget;
 	/// The local web server started by Play in Browser, so a second press does not start another.
 	bool mWebServerStarted;
-	/// Build the editor itself (a copy of Tessera for another machine) instead of the game.
+	/// Build the editor itself (a copy of Tallow for another machine) instead of the game.
 	bool mBuildEditor;
 	bool mBuildSucceeded;
 	String mBuildFolder = new .() ~ delete _;
@@ -78,13 +78,13 @@ extension EditorApp
 		outPath.Append(mBuildFolder);
 		while (outPath.Length > 1 && (outPath.EndsWith('/') || outPath.EndsWith('\\')))
 			outPath.RemoveFromEnd(1);
-		outPath.AppendF("/{}-{}", mBuildEditor ? "Tessera" : Project.Current.Name, mBuildTarget);
+		outPath.AppendF("/{}-{}", mBuildEditor ? "Tallow" : Project.Current.Name, mBuildTarget);
 	}
 
 	/// Whether this machine can build web games (tools/web/setup.sh has been run).
 	bool WebBuildReady()
 	{
-		return File.Exists(scope $"{Project.Current.EngineRoot}/build/native-web/libtessera_native.a") && Directory.Exists(scope $"{Project.Current.EngineRoot}/Engine/assets/shaders/webgl");
+		return File.Exists(scope $"{Project.Current.EngineRoot}/build/native-web/libtallow_native.a") && Directory.Exists(scope $"{Project.Current.EngineRoot}/Engine/assets/shaders/webgl");
 	}
 
 	/// Whether this machine can build Windows games (tools/windows/setup.sh has been run).
@@ -94,12 +94,12 @@ extension EditorApp
 		return true;
 #else
 		let toolchain = scope String();
-		if (!(Environment.GetEnvironmentVariable("TESSERA_WIN", toolchain) case .Ok) || toolchain.IsEmpty)
+		if (!(Environment.GetEnvironmentVariable("TALLOW_WIN", toolchain) case .Ok) || toolchain.IsEmpty)
 		{
 			Environment.GetEnvironmentVariable("HOME", toolchain).IgnoreError();
-			toolchain.Append("/.local/share/tessera-win");
+			toolchain.Append("/.local/share/tallow-win");
 		}
-		return File.Exists(scope $"{toolchain}/beef/bin/BeefBuild.exe") && File.Exists(scope $"{Project.Current.EngineRoot}/build/native-win/tessera_native.lib");
+		return File.Exists(scope $"{toolchain}/beef/bin/BeefBuild.exe") && File.Exists(scope $"{Project.Current.EngineRoot}/build/native-win/tallow_native.lib");
 #endif
 	}
 
@@ -171,7 +171,7 @@ extension EditorApp
 		if (mBuildEditor)
 		{
 			ImGui.SameLine();
-			ImGui.TextDisabled("Tessera itself, to use on another machine");
+			ImGui.TextDisabled("Tallow itself, to use on another machine");
 		}
 		ImGui.SeparatorText("For");
 	#if BF_PLATFORM_MACOS
@@ -283,7 +283,7 @@ extension EditorApp
 		BuildOutputFolder(output);
 		ImGui.PushTextWrapPos(0);
 		if (mBuildEditor)
-			ImGui.TextDisabled(scope $"The editor is put in {output}. That folder holds the launcher, the editor and the engine, and nothing else: move it anywhere, or copy it to another machine. That machine needs the Beef compiler; the folder's tessera-package.txt says what else. An earlier copy there is replaced.");
+			ImGui.TextDisabled(scope $"The editor is put in {output}. That folder holds the launcher, the editor and the engine, and nothing else: move it anywhere, or copy it to another machine. That machine needs the Beef compiler; the folder's tallow-package.txt says what else. An earlier copy there is replaced.");
 		else if (mBuildTarget == .Web)
 			ImGui.TextDisabled(scope $"The game is put in {output}: a web page (index.html) with the game and its assets. Put that folder on any web server, such as GitHub Pages or itch.io, and share the address. Play in Browser tries it on this machine. An earlier build of the game there is replaced.");
 		else

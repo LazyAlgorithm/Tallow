@@ -1,7 +1,7 @@
 using System;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Inspector list of a skinned model's parts (one per material in the file), each with the .tmat it is drawn with
 /// instead of the file's own material.

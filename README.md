@@ -306,7 +306,7 @@ Each type has its own file, or shares one with the small types that only it uses
 
 ### Website
 
-`website/` is a small PHP site with a MariaDB database. `sudo website/setup.sh` copies it to XAMPP's `htdocs/tessera` (legacy local deployment path), creates the `tessera_site` (legacy database name) database and loads the content; it is then at `http://localhost/tessera/`. Documentation pages are imported from this README and `docs/`, tutorials from `website/content/tutorials/*.md`, and the page list is `website/content/manifest.php`. After editing any of them, `website/update.sh` reloads the content without sudo; changes to the site's own PHP, styles or images need `website/setup.sh` again (no sudo after the first run, which hands the installed folder to your user).
+`website/` is a small PHP site with a MariaDB database. `sudo website/setup.sh` copies it to XAMPP's `htdocs/tallow` (legacy local deployment path), creates the `tallow_site` (legacy database name) database and loads the content; it is then at `http://localhost/tallow/`. Documentation pages are imported from this README and `docs/`, tutorials from `website/content/tutorials/*.md`, and the page list is `website/content/manifest.php`. After editing any of them, `website/update.sh` reloads the content without sudo; changes to the site's own PHP, styles or images need `website/setup.sh` again (no sudo after the first run, which hands the installed folder to your user).
 
 ## Platforms
 

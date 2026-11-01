@@ -51,7 +51,7 @@ class BakeSettings
 ///
 /// Make one on the main thread (it copies what it needs from the scene), call Run on any thread (the work, spread over
 /// the machine's cores; Cancel stops it), then Apply on the main thread to write the pictures and point the scene at
-/// them. Rays are traced in the native library's BVH (native/tessera_bake.cpp).
+/// them. Rays are traced in the native library's BVH (native/tallow_bake.cpp).
 ///
 /// Light is kept in the units the shader's ambient term uses: a surface of albedo a lit by ambient A shows a * A. A
 /// light's direct share is its colour times its falloff times n.l, as in lighting.sh; the sky sends

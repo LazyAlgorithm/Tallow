@@ -9,8 +9,8 @@ Status: **Implemented** (approved; see [Terrain](terrain.md)). Choices made: one
 - Adjacent sections snap together automatically, share compatible dimensions/resolution, and render with seamless edges.
 - Sculpting and painting brushes operate continuously across section boundaries without cracks, discontinuities, or material seams.
 - Terrain sections can be added, selected, moved where appropriate, and removed through an editor workflow. Support save/load, undo/redo, and reliable recovery of edits.
-- Keep Tessera's voxel capabilities (including caves, overhangs, and destruction) rather than restricting terrain to heightmaps.
-- World generation is game-specific: each game supplies its own procedural terrain implementation. Tessera supplies terrain storage, editing, meshing, streaming, and generator interfaces, but does not impose one world shape.
+- Keep Tallow's voxel capabilities (including caves, overhangs, and destruction) rather than restricting terrain to heightmaps.
+- World generation is game-specific: each game supplies its own procedural terrain implementation. Tallow supplies terrain storage, editing, meshing, streaming, and generator interfaces, but does not impose one world shape.
 - Endless generation remains available as an explicitly configured opt-in system, not the default.
 
 ## Proposed architecture

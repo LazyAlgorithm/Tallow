@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Starts the Tessera project launcher (building it first if needed).
+# Starts the Tallow project launcher (building it first if needed).
 set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-launcher="$root/build/Debug_Linux64/TesseraLauncher/TesseraLauncher"
+launcher="$root/build/Debug_Linux64/TallowLauncher/TallowLauncher"
 if [[ ! -x "$launcher" ]]; then
 	"$root/build.sh"
 fi
-export TESSERA_ROOT="$root"
+export TALLOW_ROOT="$root"
 exec "$launcher" "$@"

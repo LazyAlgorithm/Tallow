@@ -87,7 +87,7 @@ for j in range(JOINTS):
     if j + 1 < JOINTS: node["children"] = [2 + j]
     nodes.append(node)
 doc = {
-    "asset": {"version": "2.0", "generator": "Tessera make_rigged_sample"},
+    "asset": {"version": "2.0", "generator": "Tallow make_rigged_sample"},
     "scene": 0, "scenes": [{"nodes": [0, 1]}], "nodes": nodes,
     "skins": [{"joints": list(range(1, 1 + JOINTS)), "inverseBindMatrices": a_ibm, "skeleton": 1}],
     "materials": [{"pbrMetallicRoughness": {"baseColorFactor": [1, 1, 1, 1], "metallicFactor": 0, "roughnessFactor": 0.8}}],

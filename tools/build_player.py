@@ -28,7 +28,7 @@ import pack_assets
 WINDOWS_SYSTEM_LIBS = ('user32', 'gdi32', 'shell32', 'winmm', 'imm32', 'ole32', 'oleaut32', 'version', 'setupapi', 'advapi32',
                        'ws2_32', 'psapi', 'uuid', 'cfgmgr32')
 # The same libraries built for the web (tools/web/build_native.sh).
-WEB_NATIVE_LIBS = ('libtessera_native.a', 'bgfx/cmake/bgfx/libbgfx.a', 'bgfx/cmake/bimg/libbimg.a', 'bgfx/cmake/bimg/libbimg_decode.a',
+WEB_NATIVE_LIBS = ('libtallow_native.a', 'bgfx/cmake/bgfx/libbgfx.a', 'bgfx/cmake/bimg/libbimg.a', 'bgfx/cmake/bimg/libbimg_decode.a',
                    'bgfx/cmake/bx/libbx.a', 'SDL/libSDL3.a', 'joltc/libjoltc.a', '_deps/joltphysics-build/libJolt.a', 'enet/libenet.a')
 # How Emscripten links the web player. WebGL 2 only; memory grows as the game needs it; a large stack, as Beef code
 # keeps a lot on it; the browser's storage (IDBFS) for saved files; the page (tools/web/shell) drives start-up.
@@ -36,9 +36,9 @@ WEB_LINK_FLAGS = ('-sUSE_WEBGL2=1', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSIO
                   '-sINITIAL_MEMORY=268435456', '-sSTACK_SIZE=8388608', '-sFORCE_FILESYSTEM=1', '-lidbfs.js', '-sENVIRONMENT=web',
                   # miniaudio's Web Audio code reads the memory as Module.HEAPF32.
                   '-sEXPORTED_RUNTIME_METHODS=FS,addRunDependency,removeRunDependency,wasmTable,HEAPF32', '-sEXIT_RUNTIME=0', '-sMINIFY_HTML=0',
-                  # The browser glue (native/tessera_web.c) is JavaScript the linker only takes from the archive when asked.
+                  # The browser glue (native/tallow_web.c) is JavaScript the linker only takes from the archive when asked.
                   '-Wl,-u,tn_web_free')
-WINDOWS_NATIVE_LIBS = ('tessera_native.lib', 'bgfx/cmake/bgfx/bgfx.lib', 'bgfx/cmake/bimg/bimg.lib', 'bgfx/cmake/bimg/bimg_decode.lib',
+WINDOWS_NATIVE_LIBS = ('tallow_native.lib', 'bgfx/cmake/bgfx/bgfx.lib', 'bgfx/cmake/bimg/bimg.lib', 'bgfx/cmake/bimg/bimg_decode.lib',
                        'bgfx/cmake/bx/bx.lib', 'SDL/SDL3-static.lib', 'joltc/joltc.lib', '_deps/joltphysics-build/Jolt.lib', 'enet/enet.lib')
 
 
@@ -58,7 +58,7 @@ def write_web_page(engine, project, name, staging):
         text = (shell / file).read_text().replace('{{NAME}}', name).replace('{{SCRIPT}}', name + '.js').replace('{{PACK}}', pack).replace('{{LATER_PACKS}}', later_list)
         (staging / file).write_text(text)
     # Multiplayer between browsers (WebRTC); see the file for how players find each other.
-    shutil.copy2(shell / 'tessera-net.js', staging / 'tessera-net.js')
+    shutil.copy2(shell / 'tallow-net.js', staging / 'tallow-net.js')
     for icon in (project / 'icon.png', project / 'src' / 'icon.png', engine / 'icon.png'):
         if icon.is_file():
             shutil.copy2(icon, staging / 'icon.png')
@@ -111,27 +111,30 @@ def main():
     cross = windows and os.name != 'nt'
     if os.name == 'nt' and not windows:
         parser.error(f'A {"web" if web else "Linux"} player is built on Linux.')
-    engine = Path(settings['engine']).resolve()
-    recorded_engine = settings['engine']
+    recorded_engine = settings.get('engine', '')
+    engine = Path(recorded_engine) if recorded_engine else Path(__file__).resolve().parent.parent
+    if not engine.is_absolute():
+        engine = project / engine
+    engine = engine.resolve()
     # A project copied from another machine names an engine folder that is not here: use the engine this tool
     # belongs to, and point the project's link settings at it.
     if not (engine / 'Engine' / 'src').is_dir():
         engine = Path(__file__).resolve().parent.parent
     name = settings['name']
     if windows:
-        toolchain = Path(os.environ.get('TESSERA_WIN', Path.home() / '.local/share/tessera-win'))
+        toolchain = Path(os.environ.get('TALLOW_WIN', Path.home() / '.local/share/tallow-win'))
         natives = engine / 'build' / 'native-win'
         if args.config != 'Release':
             parser.error('Windows players are built in the Release configuration only.')
         if cross and not shutil.which('wine'):
             parser.error('Building for Windows needs Wine (it runs the Windows Beef compiler).')
-        if cross and (not (toolchain / 'beef/bin/BeefBuild.exe').is_file() or not (natives / 'tessera_native.lib').is_file()):
+        if cross and (not (toolchain / 'beef/bin/BeefBuild.exe').is_file() or not (natives / 'tallow_native.lib').is_file()):
             parser.error(f'The Windows toolchain is not set up. Run {engine / "tools/windows/setup.sh"} once.')
-        if not cross and not (natives / 'tessera_native.lib').is_file():
+        if not cross and not (natives / 'tallow_native.lib').is_file():
             parser.error(f'The native libraries for Windows are missing from {natives}.')
     if web:
         natives = engine / 'build' / 'native-web'
-        if not (natives / 'libtessera_native.a').is_file():
+        if not (natives / 'libtallow_native.a').is_file():
             parser.error(f'The native libraries for the web are missing from {natives}. Run {engine / "tools/web/setup.sh"} once.')
         if args.loose:
             parser.error('A web player always packs its assets: a browser loads one file far faster than thousands.')
@@ -196,8 +199,10 @@ def main():
         beef_platform = 'Win64' if windows else 'wasm32' if web else 'macOS' if macos else 'Linux64'
         lines = ['FileVersion = 1', 'Dependencies = {' + ', '.join(f'{key} = {q(value)}' for key, value in dependencies.items()) + '}', '[Project]', f'Name = {q(name)}', f'TargetType = {q(target_type)}', f'StartupObject = {q(name + ".Program")}', f'[Configs.{args.config}.{beef_platform}]']
         for key, value in config.items():
-            if not windows and not web and not macos and isinstance(value, str) and recorded_engine and str(engine) != recorded_engine:
-                value = value.replace(recorded_engine, str(engine))
+            if not windows and not web and not macos and isinstance(value, str):
+                value = value.replace('$(WorkspaceDir)', str(project))
+                if recorded_engine and Path(recorded_engine).is_absolute() and str(engine) != recorded_engine:
+                    value = value.replace(recorded_engine, str(engine))
             lines.append(f'{key} = {q(value)}')
         (workspace / 'BeefProj.toml').write_text('\n'.join(lines) + '\n')
         if cross:

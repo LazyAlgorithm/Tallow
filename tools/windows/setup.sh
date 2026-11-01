@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Sets this Linux machine up to build Windows games (and the Windows editor) with Tessera. Run once; safe to run again.
+# Sets this Linux machine up to build Windows games (and the Windows editor) with Tallow. Run once; safe to run again.
 #
 #   tools/windows/setup.sh --accept-license
 #
-# It downloads, into ~/.local/share/tessera-win (or $TESSERA_WIN), about 3 GB:
+# It downloads, into ~/.local/share/tallow-win (or $TALLOW_WIN), about 3 GB:
 #   - Microsoft's C runtime and Windows SDK libraries, with the `xwin` tool. They are Microsoft's, under the
 #     Microsoft Visual Studio Build Tools licence, which --accept-license says you accept.
 #   - the Windows release of the Beef compiler, which is then run under Wine;
@@ -12,7 +12,7 @@
 # Needs: wine, clang (with clang-cl), llvm, cmake, ninja, curl, 7z, and rpm2cpio + dnf if lld is not installed.
 set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
-win="${TESSERA_WIN:-$HOME/.local/share/tessera-win}"
+win="${TALLOW_WIN:-$HOME/.local/share/tallow-win}"
 [ "${1:-}" = "--accept-license" ] || { sed -n 2,13p "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 1; }
 for tool in wine clang-cl llvm-lib llvm-rc llvm-mt cmake ninja curl 7z; do
 	command -v "$tool" > /dev/null || { echo "Missing: $tool. Install it and run this again." >&2; exit 1; }

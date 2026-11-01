@@ -27,7 +27,7 @@ def wav(seconds, rate=8000):
     return b'RIFF' + struct.pack('<I', 36 + len(samples)) + b'WAVEfmt ' + struct.pack('<IHHIIHH', 16, 1, 1, rate, rate * 2, 2, 16) + b'data' + struct.pack('<I', len(samples)) + samples
 
 
-with tempfile.TemporaryDirectory(prefix='tessera-pack-test-') as temporary:
+with tempfile.TemporaryDirectory(prefix='tallow-pack-test-') as temporary:
     work = Path(temporary)
     source = work / 'source' / 'Assets'
     (source / 'Sub').mkdir(parents=True)
@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix='tessera-pack-test-') as temporary:
     (source / 'dot.png').write_bytes(png(4, 2, (255, 128, 0, 255)))
     (source / 'beep.wav').write_bytes(wav(0.25))
     (source / 'block.glb').write_bytes((engine / 'Editor/templates/common/Models/rigged_sample.glb').read_bytes())
-    (work / 'source' / 'game.tessera').write_text('name = Test\n')
+    (work / 'source' / 'game.tallow').write_text('name = Test\n')
     files = [(file.relative_to(work / 'source').as_posix(), str(file)) for file in (work / 'source').rglob('*') if file.is_file()]
     pack = work / 'game.tpak'
     pack_assets.write_pack(pack, files)

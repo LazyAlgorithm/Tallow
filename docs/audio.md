@@ -1,6 +1,6 @@
 # Audio
 
-Sound works the way it does in Unity: each thing that makes sound has an **Audio Source**, and one **Audio Listener** is the player's ears. The engine is miniaudio, compiled into Tessera, so nothing needs installing; it finds PipeWire, PulseAudio or ALSA by itself when the first sound plays. A game that plays no sound never opens the sound card.
+Sound works the way it does in Unity: each thing that makes sound has an **Audio Source**, and one **Audio Listener** is the player's ears. The engine is miniaudio, compiled into Tallow, so nothing needs installing; it finds PipeWire, PulseAudio or ALSA by itself when the first sound plays. A game that plays no sound never opens the sound card.
 
 Sound files are WAV, OGG, MP3 or FLAC, kept anywhere in the project. Double-click one in the Project panel to hear it.
 

@@ -198,7 +198,7 @@ int32_t Trace(const Bvh& bvh, Vec3 o, Vec3 d, float tMax, bool anyHit, float& tO
 				tOut = t;
 				uOut = u;
 				vOut = v;
-				// Tessera's front faces wind clockwise: seen from the front, the corners' cross product points away.
+				// Tallow's front faces wind clockwise: seen from the front, the corners' cross product points away.
 				backOut = det < 0;
 				if (anyHit)
 					return best;

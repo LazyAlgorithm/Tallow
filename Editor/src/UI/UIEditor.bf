@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The UI tab: a visual editor for UI documents (.tui).
 /// Left: the element tree. Middle: a live preview you can click to select elements.

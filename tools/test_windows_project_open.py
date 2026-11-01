@@ -28,9 +28,9 @@ def main():
     parser.add_argument('--wine', action='store_true')
     parser.add_argument('--work', type=Path, help='Keep all test files and logs in this new directory')
     args = parser.parse_args()
-    work = args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix='tessera-project-test-'))
+    work = args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix='tallow-project-test-'))
     work.mkdir(parents=True, exist_ok=True)
-    package = work / 'Tessera Hub' / 'Engine' / 'tessera' / 'Tessera-Windows'
+    package = work / 'Tallow Hub' / 'Engine' / 'tallow' / 'Tallow-Windows'
     compiler = work / 'Compiler Tools' / 'beef'
     shutil.copytree(args.package.resolve(), package, copy_function=link_or_copy)
     shutil.copytree(args.beef.resolve().parent.parent, compiler, copy_function=link_or_copy)
@@ -43,8 +43,8 @@ def main():
 
     environment['BEEFBUILD'] = target(beef)
     # Exercise engine discovery from the installed launcher, without a developer override.
-    environment.pop('TESSERA_ROOT', None)
-    launcher = (['wine'] if args.wine else []) + [str(package / 'Tessera.exe')]
+    environment.pop('TALLOW_ROOT', None)
+    launcher = (['wine'] if args.wine else []) + [str(package / 'Tallow.exe')]
 
     def assert_gui(executable):
         data = executable.read_bytes()
@@ -52,7 +52,7 @@ def main():
         pe = struct.unpack_from('<I', data, 0x3C)[0]
         assert struct.unpack_from('<H', data, pe + 24 + 68)[0] == 2, f'External console subsystem: {executable}'
 
-    assert_gui(package / 'Tessera.exe')
+    assert_gui(package / 'Tallow.exe')
 
     def run(arguments, name, success=True):
         result = subprocess.run(launcher + arguments, env=environment, text=True, capture_output=True, timeout=600)
@@ -64,14 +64,16 @@ def main():
 
     run(['--create', target(project)], 'create')
     # A moved project remembers an engine from another computer. Opening must relocate it.
-    settings = project / 'project.tessera'
+    # Source-project relocation is separate from immutable package pins.
+    (project / 'tallow-engine.lock.json').unlink(missing_ok=True)
+    settings = project / 'project.tallow'
     settings.write_text('\n'.join('engine = Z:/missing-engine' if line.startswith('engine =') else line
                                   for line in settings.read_text().splitlines()) + '\n')
     run(['--build-project', target(project)], 'compile')
     executable = project / 'build/Debug_Win64/OpenProjectSmoke/OpenProjectSmoke.exe'
     assert_gui(executable)
     flags = tomllib.loads((project / 'BeefProj.toml').read_text())['Configs']['Debug']['Win64']['OtherLinkFlags']
-    assert '"' in flags and 'Tessera Hub' in flags, flags
+    assert '"' in flags and 'Tallow Hub' in flags, flags
     assert 'missing-engine' not in settings.read_text(), 'Moved project did not relocate its engine'
     # The existing executable is moved aside during rebuild. Verify the second build succeeds too.
     run(['--build-project', target(project)], 'rebuild')

@@ -26,8 +26,8 @@ class ShaderGraphPreview
 	const double CheckSeconds = 0.2;
 	const double RedrawSeconds = 1.0 / 15;
 	/// The preview shader's name: what its materials' Shader names, and what its compiled files are called.
-	const String ShaderName = "tessera_graph_preview";
-	const String ComputeName = "tessera_graph_compute_preview";
+	const String ShaderName = "tallow_graph_preview";
+	const String ComputeName = "tallow_graph_compute_preview";
 	/// The width and height of the texture a compute graph's preview runs on.
 	const int32 ComputeSize = 256;
 
@@ -176,7 +176,7 @@ class ShaderGraphPreview
 		if (mFolder.IsEmpty)
 		{
 			Path.GetTempPath(mFolder);
-			mFolder.AppendF("/tessera-graph-preview-{}", (int)Platform.BfpProcess_GetCurrentId());
+			mFolder.AppendF("/tallow-graph-preview-{}", (int)Platform.BfpProcess_GetCurrentId());
 		}
 		mLog.Clear();
 		mFinished = false;

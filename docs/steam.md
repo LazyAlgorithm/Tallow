@@ -173,7 +173,7 @@ What to know:
 
 ## Editor runtime location
 
-Download the Steamworks runtime from Valve's SDK: <https://partner.steamgames.com/doc/sdk>. Linux x86_64 uses `sdk/redistributable_bin/linux64/libsteam_api.so`; Windows x64 uses `sdk/redistributable_bin/win64/steam_api64.dll`. Installing the Steam client alone does not place this library inside a Tessera project.
+Download the Steamworks runtime from Valve's SDK: <https://partner.steamgames.com/doc/sdk>. Linux x86_64 uses `sdk/redistributable_bin/linux64/libsteam_api.so`; Windows x64 uses `sdk/redistributable_bin/win64/steam_api64.dll`. Installing the Steam client alone does not place this library inside a Tallow project.
 
 Put the platform library in `<project>/Libraries/` (or the project root). The editor searches that location, and game packaging copies the library beside the executable. Restart the editor after adding a previously missing library. Live achievements also require a running Steam client, the correct App ID and achievements configured/published in Steamworks. Local achievements can be edited without a connected Steam session.
 

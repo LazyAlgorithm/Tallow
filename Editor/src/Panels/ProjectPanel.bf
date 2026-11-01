@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Diagnostics;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Project window: a folder tree on the left and an icon grid on the right.
 /// Assets can be dragged onto the Scene, Hierarchy and Inspector, moved between folders by
@@ -502,7 +502,7 @@ extension EditorApp
 		.(".tshader", .(0.40f, 0.62f, 0.30f, 1), "SHADER"),
 		.(".tcompute", .(0.30f, 0.62f, 0.50f, 1), "COMPUTE"),
 		.(".toml", .(0.36f, 0.36f, 0.38f, 1), "CFG"),
-		.(".tessera", .(0.36f, 0.36f, 0.38f, 1), "CFG"));
+		.(".tallow", .(0.36f, 0.36f, 0.38f, 1), "CFG"));
 
 	/// A file's badge, by its extension (models and sounds by their many formats); grey "FILE" for anything else.
 	static void FileBadgeOf(StringView name, out Color color, out char8* tag)

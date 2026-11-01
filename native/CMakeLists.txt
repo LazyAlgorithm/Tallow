@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
-project(tessera_native C CXX)
+project(tallow_native C CXX)
 
-# Builds every native dependency of the Tessera engine as static libraries.
+# Builds every native dependency of the Tallow engine as static libraries.
 # The Beef projects link the resulting archives (see Engine/BeefProj.toml).
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -81,53 +81,53 @@ add_subdirectory(${TP}/joltc joltc)
 
 # Focused diagnostic instrumentation: only the convex dispatch translation unit is rebuilt with Jolt's
 # external profiler. Production builds leave it off. Callbacks are thread-local and set only during queries.
-option(TESSERA_PROFILE_CONVEX_QUERIES "Expose Jolt convex and EPA scopes to the engine profiler" OFF)
-if(TESSERA_PROFILE_CONVEX_QUERIES)
-	get_target_property(_tessera_jolt_sources Jolt SOURCES)
-	foreach(_tessera_jolt_source IN LISTS _tessera_jolt_sources)
-		if(_tessera_jolt_source MATCHES "/ConvexShape\\.cpp$")
-			set_source_files_properties(${_tessera_jolt_source}
+option(TALLOW_PROFILE_CONVEX_QUERIES "Expose Jolt convex and EPA scopes to the engine profiler" OFF)
+if(TALLOW_PROFILE_CONVEX_QUERIES)
+	get_target_property(_tallow_jolt_sources Jolt SOURCES)
+	foreach(_tallow_jolt_source IN LISTS _tallow_jolt_sources)
+		if(_tallow_jolt_source MATCHES "/ConvexShape\\.cpp$")
+			set_source_files_properties(${_tallow_jolt_source}
 				TARGET_DIRECTORY Jolt PROPERTIES COMPILE_DEFINITIONS JPH_EXTERNAL_PROFILE SKIP_PRECOMPILE_HEADERS ON)
 		endif()
 	endforeach()
 endif()
 # Preserve Jolt's registered fallback when installing query-only shape specializations. The upstream header
 # exposes registration but no lookup; add a read-only inline accessor to the fetched dependency.
-get_target_property(_tessera_jolt_sources Jolt SOURCES)
-foreach(_tessera_jolt_source IN LISTS _tessera_jolt_sources)
-	if(_tessera_jolt_source MATCHES "/CollisionDispatch\\.cpp$")
-		get_filename_component(_tessera_collision_dir ${_tessera_jolt_source} DIRECTORY)
-		set(_tessera_dispatch_header "${_tessera_collision_dir}/CollisionDispatch.h")
-		file(READ ${_tessera_dispatch_header} _tessera_dispatch_text)
-		if(NOT _tessera_dispatch_text MATCHES "sGetCollideShape")
-			string(REPLACE "\nprivate:" "\n\t// Tessera: preserve the original dispatcher for query-only specializations.\n\tstatic CollideShape sGetCollideShape(EShapeSubType a, EShapeSubType b) { return sCollideShape[(int)a][(int)b]; }\nprivate:" _tessera_dispatch_text "${_tessera_dispatch_text}")
-			file(WRITE ${_tessera_dispatch_header} "${_tessera_dispatch_text}")
+get_target_property(_tallow_jolt_sources Jolt SOURCES)
+foreach(_tallow_jolt_source IN LISTS _tallow_jolt_sources)
+	if(_tallow_jolt_source MATCHES "/CollisionDispatch\\.cpp$")
+		get_filename_component(_tallow_collision_dir ${_tallow_jolt_source} DIRECTORY)
+		set(_tallow_dispatch_header "${_tallow_collision_dir}/CollisionDispatch.h")
+		file(READ ${_tallow_dispatch_header} _tallow_dispatch_text)
+		if(NOT _tallow_dispatch_text MATCHES "sGetCollideShape")
+			string(REPLACE "\nprivate:" "\n\t// Tallow: preserve the original dispatcher for query-only specializations.\n\tstatic CollideShape sGetCollideShape(EShapeSubType a, EShapeSubType b) { return sCollideShape[(int)a][(int)b]; }\nprivate:" _tallow_dispatch_text "${_tallow_dispatch_text}")
+			file(WRITE ${_tallow_dispatch_header} "${_tallow_dispatch_text}")
 		endif()
 	endif()
 endforeach()
 
 # Recast/Detour v1.6.0, vendored at 6dc1667f580357e8a2154c28b7867bea7e8ad3a7.
 # Include the objects in our existing archive so all desktop/web consumers keep the same link interface.
-file(GLOB TESSERA_RECAST_SOURCES CONFIGURE_DEPENDS ${TP}/recastnavigation/Recast/Source/*.cpp ${TP}/recastnavigation/Detour/Source/*.cpp)
-add_library(tessera_navigation OBJECT tessera_navigation.cpp ${TESSERA_RECAST_SOURCES})
-target_compile_features(tessera_navigation PRIVATE cxx_std_17)
-target_include_directories(tessera_navigation PRIVATE ${TP}/recastnavigation/Recast/Include ${TP}/recastnavigation/Detour/Include ${TP}/joltc/include)
-target_link_libraries(tessera_navigation PRIVATE Jolt)
+file(GLOB TALLOW_RECAST_SOURCES CONFIGURE_DEPENDS ${TP}/recastnavigation/Recast/Source/*.cpp ${TP}/recastnavigation/Detour/Source/*.cpp)
+add_library(tallow_navigation OBJECT tallow_navigation.cpp ${TALLOW_RECAST_SOURCES})
+target_compile_features(tallow_navigation PRIVATE cxx_std_17)
+target_include_directories(tallow_navigation PRIVATE ${TP}/recastnavigation/Recast/Include ${TP}/recastnavigation/Detour/Include ${TP}/joltc/include)
+target_link_libraries(tallow_navigation PRIVATE Jolt)
 
-add_library(tessera_collision_support OBJECT tessera_collision_profile.cpp tessera_overlap_contacts.cpp)
-target_compile_features(tessera_collision_support PRIVATE cxx_std_17)
-target_link_libraries(tessera_collision_support PRIVATE Jolt)
+add_library(tallow_collision_support OBJECT tallow_collision_profile.cpp tallow_overlap_contacts.cpp)
+target_compile_features(tallow_collision_support PRIVATE cxx_std_17)
+target_link_libraries(tallow_collision_support PRIVATE Jolt)
 
 # Soft bodies (cloth, jelly) reach Jolt's C++ soft body settings, which joltc does not cover.
-add_library(tessera_softbody OBJECT tessera_softbody.cpp)
-target_compile_features(tessera_softbody PRIVATE cxx_std_17)
-target_include_directories(tessera_softbody PRIVATE ${TP}/joltc/include)
-target_link_libraries(tessera_softbody PRIVATE Jolt)
+add_library(tallow_softbody OBJECT tallow_softbody.cpp)
+target_compile_features(tallow_softbody PRIVATE cxx_std_17)
+target_include_directories(tallow_softbody PRIVATE ${TP}/joltc/include)
+target_link_libraries(tallow_softbody PRIVATE Jolt)
 # Jolt is built without RTTI; classes derived from its own (GroupFilter) must be too.
 if(MSVC)
-	target_compile_options(tessera_softbody PRIVATE /GR-)
+	target_compile_options(tallow_softbody PRIVATE /GR-)
 else()
-	target_compile_options(tessera_softbody PRIVATE -fno-rtti)
+	target_compile_options(tallow_softbody PRIVATE -fno-rtti)
 endif()
 
 # ---- Opus (voice chat codec), compiled into the shim so there is no extra archive to link ----
@@ -145,8 +145,8 @@ if(MSVC AND CMAKE_C_COMPILER_ID MATCHES "Clang")
 endif()
 add_subdirectory(${TP}/opus opus EXCLUDE_FROM_ALL)
 
-# ---- Tessera shim: Dear ImGui (docking) + ImGuizmo + stb_image + cgltf ----
-add_library(tessera_native STATIC
+# ---- Tallow shim: Dear ImGui (docking) + ImGuizmo + stb_image + cgltf ----
+add_library(tallow_native STATIC
 	${TP}/cimgui/cimgui.cpp
 	${TP}/cimgui/imgui/imgui.cpp
 	${TP}/cimgui/imgui/imgui_draw.cpp
@@ -157,27 +157,27 @@ add_library(tessera_native STATIC
 	${TP}/ImGuizmo/src/ImGuizmo.cpp
 	${TP}/TextEdit/TextEditor.cpp
 	${TP}/TextEdit/extras/TrieAutoComplete.cpp
-	tessera_native.cpp
-	tessera_code.cpp
-	tessera_bake.cpp
-	tessera_rig.cpp
-	tessera_assets.c
-	tessera_modelimport.c
-	tessera_pack.c
-	tessera_guard.c
-	tessera_physics.cpp
-	$<TARGET_OBJECTS:tessera_navigation>
-	$<TARGET_OBJECTS:tessera_collision_support>
-	$<TARGET_OBJECTS:tessera_softbody>
-	tessera_audio.c
-	tessera_web.c
-	tessera_http.c
-	tessera_network.c
+	tallow_native.cpp
+	tallow_code.cpp
+	tallow_bake.cpp
+	tallow_rig.cpp
+	tallow_assets.c
+	tallow_modelimport.c
+	tallow_pack.c
+	tallow_guard.c
+	tallow_physics.cpp
+	$<TARGET_OBJECTS:tallow_navigation>
+	$<TARGET_OBJECTS:tallow_collision_support>
+	$<TARGET_OBJECTS:tallow_softbody>
+	tallow_audio.c
+	tallow_web.c
+	tallow_http.c
+	tallow_network.c
 	$<TARGET_OBJECTS:opus>
 )
-add_dependencies(tessera_native Jolt)
-target_compile_features(tessera_native PRIVATE cxx_std_20)
-target_include_directories(tessera_native PRIVATE
+add_dependencies(tallow_native Jolt)
+target_compile_features(tallow_native PRIVATE cxx_std_20)
+target_include_directories(tallow_native PRIVATE
 	${TP}/enet/include
 	${TP}/cimgui
 	${TP}/cimgui/imgui
@@ -191,24 +191,24 @@ target_include_directories(tessera_native PRIVATE
 	${TP}/joltc/include
 	${TP}/bgfx.cmake/bgfx/examples/common/imgui
 )
-target_compile_definitions(tessera_native PRIVATE
+target_compile_definitions(tallow_native PRIVATE
 	IMGUI_DISABLE_OBSOLETE_FUNCTIONS=1
 	"IMGUI_IMPL_API=extern \"C\""
 )
-target_link_libraries(tessera_native PRIVATE bgfx bx SDL3::SDL3-static)
+target_link_libraries(tallow_native PRIVATE bgfx bx SDL3::SDL3-static)
 
 
 # ---- Model import settings step (docs/model-import.md), for tools/build_player.py ----
 if(NOT EMSCRIPTEN)
-	add_executable(tessera_modelsettings tessera_modelsettings.c tessera_modelimport.c)
-	target_include_directories(tessera_modelsettings PRIVATE ${TP}/cgltf)
+	add_executable(tallow_modelsettings tallow_modelsettings.c tallow_modelimport.c)
+	target_include_directories(tallow_modelsettings PRIVATE ${TP}/cgltf)
 	if(NOT MSVC)
-		target_link_libraries(tessera_modelsettings PRIVATE m)
+		target_link_libraries(tallow_modelsettings PRIVATE m)
 	endif()
 endif()
 
 # ---- Model converter (editor tool): FBX, OBJ, DAE, STL, PLY and 3DS to .glb, through Assimp ----
-# The editor and tools/convert_models.py run tessera_modelconv as a program of its own (docs/model-import.md); games
+# The editor and tools/convert_models.py run tallow_modelconv as a program of its own (docs/model-import.md); games
 # never link Assimp.
 if(NOT EMSCRIPTEN)
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
@@ -230,7 +230,7 @@ if(NOT EMSCRIPTEN)
 	endforeach()
 	set(ASSIMP_BUILD_GLTF_EXPORTER ON CACHE BOOL "" FORCE)
 	add_subdirectory(${TP}/assimp assimp EXCLUDE_FROM_ALL)
-	add_executable(tessera_modelconv tessera_modelconv.cpp)
-	target_compile_features(tessera_modelconv PRIVATE cxx_std_17)
-	target_link_libraries(tessera_modelconv PRIVATE assimp)
+	add_executable(tallow_modelconv tallow_modelconv.cpp)
+	target_compile_features(tallow_modelconv PRIVATE cxx_std_17)
+	target_link_libraries(tallow_modelconv PRIVATE assimp)
 endif()

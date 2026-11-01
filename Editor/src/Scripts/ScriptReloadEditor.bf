@@ -2,9 +2,9 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 extension EditorApp
 {
@@ -23,11 +23,11 @@ extension EditorApp
 	{
 #if (BF_PLATFORM_LINUX || BF_PLATFORM_WINDOWS) && BF_64_BIT
 		let project = Project.Current;
-		let session = scope $"{project.Path}/.tessera-reload/session-{DateTime.UtcNow.Ticks}";
+		let session = scope $"{project.Path}/.tallow-reload/session-{DateTime.UtcNow.Ticks}";
 		mReloadBaseline.Set(scope $"{session}.json");
 		mReloadManifest.Set(scope $"{session}.manifest");
 		// On Windows the script library is linked for an exact place beside this program: say where that is.
-		Directory.CreateDirectory(scope $"{project.Path}/.tessera-reload").IgnoreError();
+		Directory.CreateDirectory(scope $"{project.Path}/.tallow-reload").IgnoreError();
 		if (!ScriptReload.WriteHostInfo(scope $"{session}.host"))
 		{
 			Log.Warning("No address space near the program for script libraries. Full rebuild remains available.");

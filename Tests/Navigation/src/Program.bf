@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
 namespace NavigationTests;
 
@@ -692,7 +692,7 @@ class Program
 				around = true;
 		}
 		ok &= Check(around, "route avoids blocked wall cells");
-		surface.bakedData.Set("/tmp/tessera-navigation-test.tnav");
+		surface.bakedData.Set("/tmp/tallow-navigation-test.tnav");
 		defer
 		{
 			File.Delete(surface.bakedData);
@@ -775,7 +775,7 @@ class Program
 		open.useNodes = false;
 		ok &= Check(open.FindPath(.(0.5f, 0.5f, 0.5f), .(63.5f, 63.5f, 63.5f), path, 2, 500) && path.Count == 64 && !open.BudgetExceeded, "cell by cell, the same flight is a point per cell within 500 visits");
 		ok &= Check(!open.FindPath(.(0.5f, 0.5f, 0.5f), .(63.5f, 63.5f, 63.5f), path, 2, 10) && open.BudgetExceeded, "and its exhausted budget is reported too");
-		let flightFile = "/tmp/tessera-navigation-flight.tnav";
+		let flightFile = "/tmp/tallow-navigation-flight.tnav";
 		defer
 		{
 			File.Delete(flightFile);
@@ -786,7 +786,7 @@ class Program
 		for (int i < reloaded.cells.Count)
 			same &= reloaded.cells[i].walkable == flying.cells[i].walkable && reloaded.cells[i].links == flying.cells[i].links && (reloaded.cells[i].position - flying.cells[i].position).Length < 0.0001f;
 		ok &= Check(same, "binary flight data matches what was baked");
-		let walkFile = "/tmp/tessera-navigation-walk.tnav";
+		let walkFile = "/tmp/tallow-navigation-walk.tnav";
 		defer
 		{
 			File.Delete(walkFile);

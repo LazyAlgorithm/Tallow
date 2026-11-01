@@ -8,7 +8,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 PERSONAL_PATH = re.compile(r'/home/(?!runner/|deck/)[^/\s"\x27`]+/|/Users/[^/\s"\x27`]+/|[A-Za-z]:[/\\]Users[/\\][^/\\\s"\x27`]+[/\\]')
-EXCLUDED = {'third_party', '.git', 'build', 'dist', '__pycache__', '.tessera-reload'}
+EXCLUDED = {'third_party', '.git', 'build', 'dist', '__pycache__', '.tallow-reload'}
 
 
 def files():

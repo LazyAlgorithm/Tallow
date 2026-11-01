@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Paint Pins and Paint Stiffness for a Soft Body (docs/soft-bodies.md): brushes in the Scene view that write its
 /// pins and stiffness map, shown on its vertices while painting.

@@ -11,7 +11,7 @@ enum NavigationBackend
 	NavMesh
 }
 
-/// A walking navigation mesh built with Recast and searched with Detour (native/tessera_navigation.cpp). Cut into
+/// A walking navigation mesh built with Recast and searched with Detour (native/tallow_navigation.cpp). Cut into
 /// tiles: carving, cost areas, links and geometry changes rebuild only the tiles they touch. NavigationData uses it
 /// when its surface's backend is NavMesh; see docs/navigation.md.
 class NavigationMesh

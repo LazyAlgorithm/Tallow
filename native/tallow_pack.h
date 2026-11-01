@@ -1,6 +1,6 @@
 // Asset packs: one file holding a game's assets, read instead of loose files once it is mounted.
-#ifndef TESSERA_PACK_H
-#define TESSERA_PACK_H
+#ifndef TALLOW_PACK_H
+#define TALLOW_PACK_H
 #include <stddef.h>
 #ifdef __cplusplus
 extern "C" {

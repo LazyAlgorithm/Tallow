@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Dialogue tab: edits a `.tdialogue` file. Nodes and speakers on the left, the selected node's steps in the
 /// middle (each a line, an answer, a variable change, an event, a jump or an end, with an optional condition), and a

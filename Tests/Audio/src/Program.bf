@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
 namespace AudioTests;
 
@@ -14,7 +14,7 @@ class Program
 		return pass;
 	}
 
-	const String cFolder = "/tmp/tessera-audio-test";
+	const String cFolder = "/tmp/tallow-audio-test";
 
 	/// Writes a mono 16-bit WAV: a tone, or noise when frequency is 0.
 	static void WriteWav(StringView name, float seconds, float frequency)

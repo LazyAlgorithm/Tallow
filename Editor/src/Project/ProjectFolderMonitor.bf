@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Portable metadata scan. Order-independent snapshots detect additions, removals, renames and writes.
 class ProjectFolderMonitor

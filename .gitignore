@@ -6,7 +6,7 @@ __pycache__/
 *.pyc
 recovery/
 imgui.ini
-.tessera-reload/
+.tallow-reload/
 website/
 
 # Kate editor swap files

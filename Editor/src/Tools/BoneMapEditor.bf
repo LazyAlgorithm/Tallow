@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Bone Map window: which joint of a rigged model is each humanoid bone, as matched by name, with a choice of
 /// joint for each that saves to a .bonemap file beside the model. Clips retargeted onto the model (or from it) are

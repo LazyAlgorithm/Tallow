@@ -11,11 +11,11 @@ env exposure 1
 env shadowDistance 160
 object 2 parent 0 active 1 name "Main Camera"
 transform 0 1.6 -4.5 0.104528 0 0 0.994522 1 1 1
-component Tessera.Camera enabled 1
+component Tallow.Camera enabled 1
 field fieldOfView 50
 object 900 parent 0 active 1 name "Directional Light"
 transform 0 6 0 0.4082179 -0.23456971 0.10938165 0.87542605 1 1 1
-component Tessera.Light enabled 1
+component Tallow.Light enabled 1
 field type Directional
 field color 1 0.96 0.88 1
 field intensity 1.5
@@ -25,17 +25,17 @@ field castShadows 1
 field shadowStrength 1
 object 3 parent 0 active 1 name "Floor"
 transform 0 -0.5 0 0 0 0 1 20 1 20
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.6 0.62 0.66 1
 object 4 parent 0 active 1 name "Held Pose 1"
 transform -1.6 0 0 0 -0.21644 0 0.976296 1 1 1
-component Tessera.SkinnedMeshRenderer enabled 1
+component Tallow.SkinnedMeshRenderer enabled 1
 field model "Models/rigged_sample.glb"
 field clip "Wave"
 field speed 0
 field loop 1
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 1 1 1 1
 field metallic 0
@@ -48,12 +48,12 @@ field castShadows 1
 field texture ""
 object 5 parent 0 active 1 name "Held Pose 2"
 transform 0 0 0 0 1 0 6.12323e-17 1 1 1
-component Tessera.SkinnedMeshRenderer enabled 1
+component Tallow.SkinnedMeshRenderer enabled 1
 field model "Models/rigged_sample.glb"
 field clip "Wave"
 field speed 0
 field loop 1
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 1 1 1 1
 field metallic 0
@@ -66,12 +66,12 @@ field castShadows 1
 field texture ""
 object 6 parent 0 active 1 name "Held Pose 3"
 transform 1.6 0 0 0 0.21644 0 0.976296 1 1 1
-component Tessera.SkinnedMeshRenderer enabled 1
+component Tallow.SkinnedMeshRenderer enabled 1
 field model "Models/rigged_sample.glb"
 field clip "Wave"
 field speed 0
 field loop 1
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 1 1 1 1
 field metallic 0

@@ -2,11 +2,11 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
 namespace HttpTests;
 
-/// Downloads over HTTPS and zip files. Needs the internet: it reads Tessera's own GitHub releases.
+/// Downloads over HTTPS and zip files. Needs the internet: it reads Tallow's own GitHub releases.
 class Program
 {
 	[CLink] static extern int32 system(char8* command);
@@ -21,7 +21,7 @@ class Program
 
 	public static int Main(String[] args)
 	{
-		let folder = "/tmp/tessera-http-test";
+		let folder = "/tmp/tallow-http-test";
 		if (Directory.Exists(folder))
 			Directory.DelTree(folder).IgnoreError();
 		Directory.CreateDirectory(folder).IgnoreError();
@@ -66,7 +66,7 @@ scope $"a release file downloads through GitHub's redirect, reporting progress (
 		File.WriteAllText(scope $"{folder}/src/sub/run.sh" , "#!/bin/sh\necho ran\n").IgnoreError();
 		let repeated = scope String();
 		for (int i < 2000)
-			repeated.Append("Tessera ");
+			repeated.Append("Tallow ");
 		File.WriteAllText(scope $"{folder}/src/text.txt" , repeated).IgnoreError();
 		let zipped = scope $"{folder}/made.zip";
 		let made = scope $"cd {folder}/src && chmod +x sub/run.sh && python3 -c \"import zipfile,os; z=zipfile.ZipFile('{zipped}','w',zipfile.ZIP_DEFLATED); [z.write(p) for p in ('sub/run.sh','text.txt')]; z.writestr('stored.txt','plain', compress_type=zipfile.ZIP_STORED); z.close()\"";

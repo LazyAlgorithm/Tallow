@@ -2,8 +2,8 @@
 // point, spot and extra directional lights by cluster with point and spot shadows (docs/lighting.md), hemisphere
 // ambient or baked light probes (docs/baked-lighting.md), reflections of the sky and of reflection probes (docs/reflections.md), and distance fog. Include after
 // bgfx_shader.sh.
-#ifndef TESSERA_LIGHTING_SH
-#define TESSERA_LIGHTING_SH
+#ifndef TALLOW_LIGHTING_SH
+#define TALLOW_LIGHTING_SH
 
 #define PI 3.14159265
 
@@ -392,4 +392,4 @@ vec3 applyFog(vec3 color, vec3 wpos)
 	return mix(color, u_fogColor.rgb, clamp(fog, 0.0, 1.0));
 }
 
-#endif // TESSERA_LIGHTING_SH
+#endif // TALLOW_LIGHTING_SH

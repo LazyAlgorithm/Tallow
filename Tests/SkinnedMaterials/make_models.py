@@ -63,7 +63,7 @@ def build(name, image_style):
             images.append({"uri": file})
 
     gltf = {
-        "asset": {"version": "2.0", "generator": "Tessera test"},
+        "asset": {"version": "2.0", "generator": "Tallow test"},
         "scene": 0, "scenes": [{"nodes": [0, 2]}],
         "nodes": [{"name": "Root", "children": [1]}, {"name": "Upper", "translation": [0, 1, 0]},
                   {"name": "Mesh", "mesh": 0, "skin": 0}],

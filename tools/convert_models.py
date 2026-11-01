@@ -34,12 +34,12 @@ def native_folder(engine):
 
 
 def own_tool(engine):
-    tool = native_folder(engine) / ('tessera_modelconv.exe' if os.name == 'nt' else 'tessera_modelconv')
+    tool = native_folder(engine) / ('tallow_modelconv.exe' if os.name == 'nt' else 'tallow_modelconv')
     return str(tool) if tool.is_file() else None
 
 
 def find_blender():
-    env = os.environ.get('TESSERA_BLENDER', '')
+    env = os.environ.get('TALLOW_BLENDER', '')
     if env and Path(env).is_file():
         return env
     found = shutil.which('blender')
@@ -74,11 +74,11 @@ def run_converter(source, out, engine, blender, assimp):
     elif kind != '.blend' and assimp and not (kind == '.fbx' and blender):
         command = [assimp, 'export', str(source), str(out), '-fglb2', '-tri', '-jiv', '-gsn', '-lbw', '-embtex']
     elif blender and kind not in ('.dae', '.3ds'):
-        script = out.parent / 'tessera_blender_import.py'
+        script = out.parent / 'tallow_blender_import.py'
         script.write_text(BLENDER_SCRIPT)
         command = [blender, '-b'] + ([str(source)] if kind == '.blend' else ['--factory-startup']) + ['--python', str(script), '--', str(source), str(out)]
     else:
-        return 'Blender is needed for .blend files and was not found' if kind == '.blend' else 'no model converter was found (tessera_modelconv, assimp or Blender)'
+        return 'Blender is needed for .blend files and was not found' if kind == '.blend' else 'no model converter was found (tallow_modelconv, assimp or Blender)'
     result = subprocess.run(command, capture_output=True, text=True, errors='replace')
     if result.returncode != 0 or not out.is_file():
         lines = (result.stdout + result.stderr).strip().splitlines()
@@ -109,7 +109,7 @@ def convert(project, relative, engine, blender, assimp):
         os.replace(made, raw)
         raw_from.write_text(stamp)
     settings = read_settings(source)
-    tool = native_folder(engine) / ('tessera_modelsettings.exe' if os.name == 'nt' else 'tessera_modelsettings')
+    tool = native_folder(engine) / ('tallow_modelsettings.exe' if os.name == 'nt' else 'tallow_modelsettings')
     part = Path(str(converted) + '.part')
     if not tool.is_file():
         return None, f'{tool.name} was not found (build the engine native libraries)'

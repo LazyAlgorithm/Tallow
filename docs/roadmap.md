@@ -2,7 +2,7 @@
 
 Status on 2026-10-13, and the work agreed and queued, in order.
 
-**How to use this page.** Work happens on `dev` (Tessera and the games), and reaches `main` only once it is checked.
+**How to use this page.** Work happens on `dev` (Tallow and the games), and reaches `main` only once it is checked.
 Each queued item is a checkbox: `[x]` done (with the date and the commit), `[~]` in progress (with notes on what is
 built and what is left, so anyone can pick it up), `[ ]` not started. Tick an item in the same commit that finishes
 it. Every engine feature is only done when it has:
@@ -24,7 +24,7 @@ search picks it up). A feature on `dev` but not yet in `main` says so in its sec
 - Layers, tags and world states. World states now cover collision, drawing, shadows, lights, particles, sound and
   navigation, with a world state menu in the editor toolbar
 - HTTPS downloads and zip extraction in the engine (`docs/http.md`)
-- Built games: `windowWidth`, `windowHeight` and `escapeQuits` in `project.tessera`; engine releases carry
+- Built games: `windowWidth`, `windowHeight` and `escapeQuits` in `project.tallow`; engine releases carry
   `SHA256SUMS.txt`
 - **Responsive UI and mobile controls** (2026-10-13, `dev` and `main`): the web canvas sized correctly (it was a
   1600×900 window on phones), SDL following resizes in fullscreen (a phone turned after play started was
@@ -33,7 +33,7 @@ search picks it up). A feature on `dev` but not yet in `main` says so in its sec
   short side. Ringfall: portrait and landscape layouts for every phone screen and the HUD, buttons-only touch
   controls around FIRE, mantling per input type. Docs: `responsive-ui-design.md`, `input.md` (touch), Ringfall's
   `mobile-controls-v2.md`. Website: Manual > Touch screens, Phones and tablets.
-- **Tessera Hub** (github.com/LazyAlgorithm/tessera-hub): installs, updates and starts Ringfall and the engine,
+- **Tallow Hub** (github.com/LazyAlgorithm/tallow-hub): installs, updates and starts Ringfall and the engine,
   checks for and installs the tools they need after asking, beta badges and a beta-builds setting, and updates
   itself. Linux and Windows builds are on its Releases page. Tested on Linux: browsing, the tools dialog, installing
   the engine, starting it, settings. Windows built but not yet tried on a real Windows machine.
@@ -44,8 +44,8 @@ search picks it up). A feature on `dev` but not yet in `main` says so in its sec
    a fine-grained personal access token with *Contents: Read and write* on `LazyAlgorithm/ringfall-releases`. Until
    it is there, Ringfall builds skip the public release (the run shows a notice), so the Hub shows "No release yet"
    for Ringfall. After adding it, push Ringfall to its `release` branch (or run its workflow) once.
-2. Try the Hub on Windows: unzip TesseraHub-Windows.zip from the tessera-hub Releases page and run TesseraHub.exe.
-3. Optional: try Tessera on a real Mac (E18, `docs/macos.md`); the Hub has no macOS build yet. macOS CI builds are paused
+2. Try the Hub on Windows: unzip TallowHub-Windows.zip from the tallow-hub Releases page and run TallowHub.exe.
+3. Optional: try Tallow on a real Mac (E18, `docs/macos.md`); the Hub has no macOS build yet. macOS CI builds are paused
    (2026-10-27, `macos.yml` runs only by hand) until a Mac is available to check them.
 
 ## Queued
@@ -163,7 +163,7 @@ Work agreed and queued, in order (see *How to use this page* above for what "don
   skinning and vsync at once; Custom when changed one by one; the player's choice saved in `graphics.cfg` and applied
   at start; `Quality.Recommended` for the machine; `--quality`; editor Window > Graphics Quality. `docs/quality.md`,
   `Tests/Quality`.
-- [x] E18 macOS (2026-10-25, `dev` 82d4c91): Tessera builds, tests and runs on Apple silicon with Metal: a macOS CI job builds Beef
+- [x] E18 macOS (2026-10-25, `dev` 82d4c91): Tallow builds, tests and runs on Apple silicon with Metal: a macOS CI job builds Beef
   from source, the native libraries, every headless fixture (all pass; `tools/run_tests.py`), the packaged editor
   and the Sandbox drawing with Metal (GPU skinning included); `tools/macos_link.py` link settings for every project;
   `build_player.py` / `package_engine.py --platform macos` and a macOS target in File > Build on a Mac; macOS
@@ -192,7 +192,7 @@ Work agreed and queued, in order (see *How to use this page* above for what "don
    the engine's shader files are newer. `docs/lighting.md`, `Tests/Lighting` (with `run.py`), Sandbox
    `Scenes/Lighting.tscene`. Still to do: push to `dev` and a Manual section on the website, when the user says.
 4. [x] Baked lighting and global illumination (2026-10-27, `dev` and `main` 5b88666): `LightBaker` (CPU, rays traced in a
-   native BVH, `native/tessera_bake.cpp`): lightmaps for Mesh Renderers with Baked Lighting ticked (sky, Baked Only
+   native BVH, `native/tallow_bake.cpp`): lightmaps for Mesh Renderers with Baked Lighting ticked (sky, Baked Only
    lights with shadows, bounced light and glow, remembered hits so each bounce is lookups, an edge-aware smoothing
    pass, RGBM PNGs) and a light probe grid (first-band spherical harmonics in a 3D texture, blended per pixel) for
    everything else; lightmap coordinates made by the engine the same way every time (`LightmapUV`, with copies for
@@ -243,16 +243,16 @@ Work agreed and queued, in order (see *How to use this page* above for what "don
     editor (move, scale, rotate, pin, stitch, pack, checker preview), atlas/palette texturing in the Synty style,
     texture painting on the model, and vertex colours.
   - Saved as `.tmesh` source plus an exported `.glb`, with LODs and colliders from the existing tools; docs, tests.
-- [x] Themes: theme files, built-in themes (dark, light, high contrast, Tessera blue), a Theme page in Preferences
+- [x] Themes: theme files, built-in themes (dark, light, high contrast, Tallow blue), a Theme page in Preferences
   with live colour pickers, import and export. Done 2026-10-27 (`dev` and `main` 5b88666): `Editor/src/App/EditorTheme.bf`,
   Edit > Preferences (`Editor/src/Tools/PreferencesWindow.bf`), `.ttheme` files, light code editor colours,
-  `docs/themes.md`, `Tests/Themes`, `--theme`, `--preferences`, `--theme-test`. Later the same day: Tessera Blue
+  `docs/themes.md`, `Tests/Themes`, `--theme`, `--preferences`, `--theme-test`. Later the same day: Tallow Blue
   made the default; Forest, Ember and Plum added.
 
 - [x] Rigging and weight painting, Mixamo-style, for people and four-legged animals (requested 2026-10-27, before the
   shader graph). Done 2026-10-27 (`dev` and `main` 5b88666): Window > Rigging (`Editor/src/Animation/RigEditor.bf`), markers
   for Humanoid (Mixamo bone names, 25/41/65 bones) and Quadruped (spine, neck, tail, ears, jaw), Custom rigs, bone
-  editing with symmetry, bone-heat automatic weights (`native/tessera_rig.cpp`), a weight painting brush (add,
+  editing with symmetry, bone-heat automatic weights (`native/tallow_rig.cpp`), a weight painting brush (add,
   subtract, smooth, set, mirror), posing, `.trig` rig files and `_Rigged.glb` export (`Engine/src/Rigging/`),
   `docs/rigging.md`, `Tests/Rigging`, `--rigger`, `--rigger-step`, `--rigger-test`.
 
@@ -281,7 +281,7 @@ Work agreed and queued, in order (see *How to use this page* above for what "don
   walking: much faster on open ground with many agents) or Grid (kept for flying and 3D navigation, which a NavMesh
   does not cover). The mesh is cut into tiles, so carving, cost areas, links and moved geometry rebuild only the
   tiles they touch; a failed rebuild keeps the last good mesh. Avoidance finds neighbours through a 4 m crowd grid.
-  `Engine/src/AI/NavigationMesh.bf`, `native/tessera_navigation.cpp`, `Tests/NavigationMesh` (with an ASan/UBSan run
+  `Engine/src/AI/NavigationMesh.bf`, `native/tallow_navigation.cpp`, `Tests/NavigationMesh` (with an ASan/UBSan run
   of the native code). Polystrike bots and ZombieTag's house use it.
 - [x] Hierarchy visibility and locks (requested 2026-10-27; 2026-10-28, `dev` and `main` 53d44d1; docs/scene-visibility.md): an eye beside each object in the Hierarchy hides it in
   the Scene view only (not disabled, still in the game and the Game view), as Unity's; holding the button down and
@@ -293,7 +293,7 @@ Work agreed and queued, in order (see *How to use this page* above for what "don
   `RenderView.hiddenHere`), kept in `scene_visibility_<project>.txt` per scene. Switches `--visibility-test` (logs
   VISIBILITY-TEST PASS), `--scene-hide <name>`, `--scene-lock <name>`.
 - [x] Model format conversion (requested 2026-10-27; 2026-10-28, `dev` and `main` 53d44d1; docs/model-import.md;
-  Assimp 6.0.2 bundled in third_party/assimp for tessera_modelconv): FBX, OBJ, DAE, STL, PLY, 3DS... and `.blend` files used
+  Assimp 6.0.2 bundled in third_party/assimp for tallow_modelconv): FBX, OBJ, DAE, STL, PLY, 3DS... and `.blend` files used
   directly in the project, as Unity does. Each is converted behind the scenes to a cached `.glb` on import and again
   when the source changes (ufbx or assimp in the editor; Blender run in the background for `.blend`, so it must be
   installed). Everything that reads models (skinning, materials, retargeting, LODs, rigging) keeps one path, and
@@ -336,7 +336,7 @@ Work agreed and queued, in order (see *How to use this page* above for what "don
   wrote its first graph's local name into the node kind, breaking it in later graphs; compute textures were
   destroyed after shutdown at exit.
 - [x] Soft bodies (2026-10-29; docs/soft-bodies.md): the Soft Body component simulates a Mesh Renderer's mesh as
-  cloth or jelly with Jolt soft bodies on the job threads (`native/tessera_softbody.cpp`), seams welded; pins that
+  cloth or jelly with Jolt soft bodies on the job threads (`native/tallow_softbody.cpp`), seams welded; pins that
   follow the object, Wind Zones on cloth, a stiffness map; collision with colliders and rigidbodies both ways (a
   contact listener reports what it touched); characters walk through cloth and push it with their inner body;
   Paint Pins and Paint Stiffness brushes in the Scene view; free soft bodies on networked objects follow the

@@ -140,7 +140,7 @@ class PhysicsWorld
 
 	static ProfilerMarker sOverlapProfile = .("Physics.Overlap", .Physics);
 	static ProfilerMarker sOverlapNativeProfile = .("Physics.Overlap.NativeContacts", .Physics);
-	// Shown only with native built with TESSERA_PROFILE_CONVEX_QUERIES (docs/profiler.md).
+	// Shown only with native built with TALLOW_PROFILE_CONVEX_QUERIES (docs/profiler.md).
 	static ProfilerMarker sConvexProfile = .("Physics.Overlap.ConvexPair", .Physics);
 	static ProfilerMarker sEPAProfile = .("Physics.Overlap.EPA", .Physics);
 

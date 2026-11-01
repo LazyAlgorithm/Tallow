@@ -13,89 +13,89 @@ env bloomThreshold 1.2
 env shadowDistance 120
 object 101 parent 0 active 1 name "Main Camera"
 transform 0 5 -20 0.0697565 0 0 0.997564 1 1 1
-component Tessera.Camera enabled 1
+component Tallow.Camera enabled 1
 field fieldOfView 65
 field nearClip 0.05
 field farClip 6000
 object 102 parent 0 active 1 name "Sun"
 transform 0 10 0 0.0885213 0.907673 -0.24321 0.330366 1 1 1
-component Tessera.Light enabled 1
+component Tallow.Light enabled 1
 field type Directional
 field color 1 0.93 0.82 1
 field intensity 2.6
 field castShadows 1
 object 103 parent 0 active 1 name "Island"
 transform 8 -6 30 0 0 0 1 40 14 30
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere"
 field color 0.78 0.71 0.52 1
 field metallic 0
 field roughness 0.95
-component Tessera.SphereCollider enabled 1
+component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
 object 104 parent 0 active 1 name "Hill"
 transform 12 0 34 0 0 0 1 18 10 14
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere"
 field color 0.4 0.55 0.3 1
 field metallic 0
 field roughness 0.95
 object 105 parent 0 active 1 name "Barrel 1"
 transform -6 2 0 0 0.173648 0 0.984808 1.2 1.2 1.2
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.6 0.35 0.2 1
 field metallic 0
 field roughness 0.8
-component Tessera.BoxCollider enabled 1
+component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-component Tessera.Rigidbody enabled 1
+component Tallow.Rigidbody enabled 1
 field mass 60
 field useGravity 1
 object 106 parent 0 active 1 name "Barrel 2"
 transform -2 2 6 0 0.573576 0 0.819152 1.2 1.2 1.2
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.6 0.35 0.2 1
 field metallic 0
 field roughness 0.8
-component Tessera.BoxCollider enabled 1
+component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-component Tessera.Rigidbody enabled 1
+component Tallow.Rigidbody enabled 1
 field mass 60
 field useGravity 1
 object 107 parent 0 active 1 name "Barrel 3"
 transform -12 2 10 0 0.866025 0 0.5 1.2 1.2 1.2
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.6 0.35 0.2 1
 field metallic 0
 field roughness 0.8
-component Tessera.BoxCollider enabled 1
+component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-component Tessera.Rigidbody enabled 1
+component Tallow.Rigidbody enabled 1
 field mass 60
 field useGravity 1
 object 108 parent 0 active 1 name "Barrel 4"
 transform 4 2 -4 0 0.984808 0 0.173648 1.2 1.2 1.2
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.6 0.35 0.2 1
 field metallic 0
 field roughness 0.8
-component Tessera.BoxCollider enabled 1
+component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-component Tessera.Rigidbody enabled 1
+component Tallow.Rigidbody enabled 1
 field mass 60
 field useGravity 1
 object 109 parent 0 active 1 name "Ocean"
 transform 0 0 0 0 0 0 1 1 1 1
-component Tessera.Water enabled 1
+component Tallow.Water enabled 1
 field endless 1
 field depth 40
 field waveHeight 1.2

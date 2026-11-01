@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build and package the Tallow editor for Linux, Windows or macOS, without build caches."""
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -39,10 +40,10 @@ def main():
     shaderc = Path(f'build/{native}/bgfx/cmake/bgfx/shaderc' + ('.exe' if windows else ''))
     # texturec compresses a game's pictures when File > Build makes it.
     texturec = Path(f'build/{native}/bgfx/cmake/bimg/texturec' + ('.exe' if windows else ''))
-    # tessera_modelsettings applies the import settings of converted models (docs/model-import.md) in a build.
-    modelsettings = Path(f'build/{native}/tessera_modelsettings' + ('.exe' if windows else ''))
-    # tessera_modelconv converts FBX, OBJ, DAE, STL, PLY and 3DS files for the editor and builds (Assimp).
-    modelconv = Path(f'build/{native}/tessera_modelconv' + ('.exe' if windows else ''))
+    # tallow_modelsettings applies the import settings of converted models (docs/model-import.md) in a build.
+    modelsettings = Path(f'build/{native}/tallow_modelsettings' + ('.exe' if windows else ''))
+    # tallow_modelconv converts FBX, OBJ, DAE, STL, PLY and 3DS files for the editor and builds (Assimp).
+    modelconv = Path(f'build/{native}/tallow_modelconv' + ('.exe' if windows else ''))
     for relative in [*archives, shaderc, texturec, modelsettings, modelconv]:
         if not (root / relative).is_file():
             parser.error(f'Missing {relative}; build native dependencies first.')
@@ -50,9 +51,9 @@ def main():
         # Source checkouts rebuild native changes; distributed packages already
         # contain the archives and do not need CMake or third-party source.
         if (root / 'build' / native / 'CMakeCache.txt').is_file():
-            subprocess.run(['cmake', '--build', str(root / 'build' / native), '--target', 'tessera_native', 'shaderc', 'texturec', 'tessera_modelsettings', 'tessera_modelconv', '-j', '4'], check=True)
+            subprocess.run(['cmake', '--build', str(root / 'build' / native), '--target', 'tallow_native', 'shaderc', 'texturec', 'tallow_modelsettings', 'tallow_modelconv', '-j', '4'], check=True)
         if windows and os.name != 'nt':
-            toolchain = Path(os.environ.get('TESSERA_WIN', Path.home() / '.local/share/tessera-win'))
+            toolchain = Path(os.environ.get('TALLOW_WIN', Path.home() / '.local/share/tallow-win'))
             command = ['wine', str(toolchain / 'beef/bin/BeefBuild.exe'), '-workspace=.', f'-config={args.config}', '-platform=Win64', '-verbosity=minimal']
             environment = dict(os.environ, WINEPREFIX=str(toolchain / 'wine'), WINEDEBUG='-all', WINEDLLOVERRIDES='mscoree,mshtml=')
         else:
@@ -87,7 +88,7 @@ def main():
         for name in ('BeefSpace.toml', 'icon.png', 'LICENSE', 'THIRD_PARTY_LICENSES.txt'):
             shutil.copy2(root / name, stage / name)
         (stage / 'tools').mkdir()
-        for name in ('build_player.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'toolchain.txt'):
+        for name in ('build_player.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'toolchain.txt'):
             shutil.copy2(root / 'tools' / name, stage / 'tools' / name)
         for relative in [*archives, shaderc, texturec, modelsettings, modelconv]:
             destination = stage / relative
@@ -107,6 +108,20 @@ def main():
         prerequisites = ('Beef toolchain, Microsoft C++ Build Tools, and Python 3.11+ on PATH.' if windows
                          else 'BeefBuild (built for macOS) and Python 3.11+ on PATH, and the Xcode command line tools.' if macos
                          else 'BeefBuild and Python 3.11+ on PATH, plus system graphics/audio drivers and X11 libraries.')
+        # Pin packaged builds to a specific source revision.
+        commit = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'], cwd=root, capture_output=True,
+            text=True, check=True).stdout.strip()
+        version = os.environ.get('TALLOW_VERSION', '').strip()
+        if not re.fullmatch(r'[0-9a-f]{40}', commit):
+            parser.error('Cannot determine source commit SHA.')
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.+-]*', version):
+            parser.error('Set TALLOW_VERSION to the desired version.')
+        (stage / 'tallow-version.json').write_text(json.dumps({
+            'engine': 'Tallow', 'version': version, 'build': commit,
+            'project_format': 1, 'platform': args.platform,
+            'architecture': 'arm64' if macos else 'x64',
+        }, indent=2) + '\n')
         (stage / 'tallow-package.txt').write_text(
             f'Tallow early beta for {args.platform} ({"Apple silicon" if macos else "x64"}), {args.config}.\n'
             f'Start {"Tallow.exe" if windows else "./Tallow"}.\n'

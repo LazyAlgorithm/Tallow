@@ -1,4 +1,4 @@
-# Builds the Tessera editor for Linux and Windows with tools/package_engine.py (the same packages the editor's
+# Builds the Tallow editor for Linux and Windows with tools/package_engine.py (the same packages the editor's
 # File > Build makes with Build: Editor), zips each, and puts them on a GitHub release.
 #
 # When it runs:
@@ -16,7 +16,7 @@ name: Engine release
 on:
   push:
     tags: ['v*']
-    branches: [dev, main, release]
+    branches: [dev, main, release, rename/tallow]
   workflow_dispatch:
     inputs:
       publish:
@@ -28,10 +28,11 @@ permissions:
   contents: write
 
 env:
+  TALLOW_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('build-{0}', github.sha) }}
   # Beef's compiler for Linux, built from source. Windows uses Beef's own Windows release.
   BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
   LLVM_VERSION: '22'
-  NATIVE_TARGETS: tessera_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tessera_modelsettings tessera_modelconv
+  NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
 
 jobs:
   linux:
@@ -40,12 +41,12 @@ jobs:
     defaults:
       run:
         # A failing step repeats the end of its output on the run's page (.github/scripts/step.sh).
-        shell: bash tessera/.github/scripts/step.sh {0}
+        shell: bash tallow/.github/scripts/step.sh {0}
     steps:
-      - name: Get Tessera
+      - name: Get Tallow
         uses: actions/checkout@v4
         with:
-          path: tessera
+          path: tallow
 
       # The build scripts need Python 3.11 or later (tomllib); Ubuntu 22.04 has 3.10.
       - name: Python
@@ -91,19 +92,19 @@ jobs:
 
       - name: Native library cache key
         id: native-key
-        run: echo "key=$(tessera/.github/scripts/native-deps.sh key linux)" >> "$GITHUB_OUTPUT"
+        run: echo "key=$(tallow/.github/scripts/native-deps.sh key linux)" >> "$GITHUB_OUTPUT"
 
       - name: Cache the native libraries
         id: native-cache
         uses: actions/cache/restore@v4
         with:
-          path: tessera/build/native
+          path: tallow/build/native
           key: ${{ steps.native-key.outputs.key }}
 
       - name: Native libraries
         run: |
-          [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ] && tessera/.github/scripts/native-deps.sh settle
-          cd tessera
+          [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ] && tallow/.github/scripts/native-deps.sh settle
+          cd tallow
           python3 tools/patch_textedit.py
           [ -f build/native/CMakeCache.txt ] || cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build/native -j "$(nproc)" --target $NATIVE_TARGETS
@@ -112,22 +113,22 @@ jobs:
         if: steps.native-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: tessera/build/native
+          path: tallow/build/native
           key: ${{ steps.native-key.outputs.key }}
 
       - name: Build and package
         run: |
           export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
-          cd tessera
-          python3 tools/package_engine.py --platform linux --folder ../out/Tessera-Linux
-          python3 tools/test_showcase_template.py --package ../out/Tessera-Linux --work ../showcase-test
-          cd ../out && zip -qr9 Tessera-Linux.zip Tessera-Linux
+          cd tallow
+          python3 tools/package_engine.py --platform linux --folder ../out/Tallow-Linux
+          python3 tools/test_showcase_template.py --package ../out/Tallow-Linux --work ../showcase-test
+          cd ../out && zip -qr9 Tallow-Linux.zip Tallow-Linux
 
       - name: Keep the zip
         uses: actions/upload-artifact@v4
         with:
-          name: Tessera-Linux
-          path: out/Tessera-Linux.zip
+          name: Tallow-Linux
+          path: out/Tallow-Linux.zip
 
   windows:
     runs-on: windows-2022
@@ -137,17 +138,17 @@ jobs:
       PYTHONUTF8: '1'
     defaults:
       run:
-        shell: bash tessera/.github/scripts/step.sh {0}
+        shell: bash tallow/.github/scripts/step.sh {0}
     steps:
       # Scripts are run by bash: keep their line endings as they are in the repository.
       - name: Line endings
         shell: pwsh
         run: git config --global core.autocrlf false
 
-      - name: Get Tessera
+      - name: Get Tallow
         uses: actions/checkout@v4
         with:
-          path: tessera
+          path: tallow
 
       - name: Python
         uses: actions/setup-python@v5
@@ -182,19 +183,19 @@ jobs:
 
       - name: Native library cache key
         id: native-key
-        run: echo "key=$(tessera/.github/scripts/native-deps.sh key windows)" >> "$GITHUB_OUTPUT"
+        run: echo "key=$(tallow/.github/scripts/native-deps.sh key windows)" >> "$GITHUB_OUTPUT"
 
       - name: Cache the native libraries
         id: native-cache
         uses: actions/cache/restore@v4
         with:
-          path: tessera/build/native-win
+          path: tallow/build/native-win
           key: ${{ steps.native-key.outputs.key }}
 
       - name: Native libraries
         run: |
-          [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ] && tessera/.github/scripts/native-deps.sh settle
-          cd tessera
+          [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ] && tallow/.github/scripts/native-deps.sh settle
+          cd tallow
           python tools/patch_textedit.py
           # Beef links Windows programs against the static C runtime; so must everything linked into them.
           [ -f build/native-win/CMakeCache.txt ] || cmake -S native -B build/native-win -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -206,7 +207,7 @@ jobs:
         if: steps.native-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: tessera/build/native-win
+          path: tallow/build/native-win
           key: ${{ steps.native-key.outputs.key }}
 
       - name: Build and package
@@ -214,21 +215,21 @@ jobs:
           # Beef finds its libraries beside itself.
           printf 'Version = 1\nUnversionedLibDirs = ["../BeefLibs"]\n' > beef-win/bin/BeefConfig.toml
           export BEEFBUILD="$(cygpath -w "$PWD/beef-win/bin/BeefBuild.exe")"
-          cd tessera
-          python tools/package_engine.py --platform windows --folder ../out/Tessera-Windows
-          python tools/test_windows_project_open.py --package ../out/Tessera-Windows --beef "$BEEFBUILD" --work ../project-open-test
-          python tools/test_showcase_template.py --package ../out/Tessera-Windows --work ../showcase-test
-          cd ../out && 7z a -tzip -mx=9 Tessera-Windows.zip Tessera-Windows > /dev/null
+          cd tallow
+          python tools/package_engine.py --platform windows --folder ../out/Tallow-Windows
+          python tools/test_windows_project_open.py --package ../out/Tallow-Windows --beef "$BEEFBUILD" --work ../project-open-test
+          python tools/test_showcase_template.py --package ../out/Tallow-Windows --work ../showcase-test
+          cd ../out && 7z a -tzip -mx=9 Tallow-Windows.zip Tallow-Windows > /dev/null
 
       - name: Keep the zip
         uses: actions/upload-artifact@v4
         with:
-          name: Tessera-Windows
-          path: out/Tessera-Windows.zip
+          name: Tallow-Windows
+          path: out/Tallow-Windows.zip
 
   release:
     needs: [linux, windows]
-    if: (github.event_name == 'push' && github.ref != 'refs/heads/dev') || inputs.publish
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release' || startsWith(github.ref, 'refs/tags/'))) || inputs.publish
     runs-on: ubuntu-22.04
     steps:
       - name: Get the zips
@@ -244,16 +245,16 @@ jobs:
           ls -la out
           short="${GITHUB_SHA:0:7}"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            tag="${GITHUB_REF_NAME}"; title="Tessera ${GITHUB_REF_NAME}"; pre=""
+            tag="${GITHUB_REF_NAME}"; title="Tallow ${GITHUB_REF_NAME}"; pre=""
           else
-            tag="build-$(date -u +%Y%m%d)-$short"; title="Tessera build $(date -u +%Y-%m-%d) ($short)"; pre="--prerelease"
+            tag="$TALLOW_VERSION"; title="Tallow build $(date -u +%Y-%m-%d) ($short)"; pre="--prerelease"
           fi
-          notes="Built from Tessera $short ($GITHUB_REF_NAME).
+          notes="Built from Tallow $short ($GITHUB_REF_NAME).
 
-          - **Tessera-Windows.zip**: unzip and run Tessera.exe. Building projects needs the Beef toolchain, the Microsoft C++ Build Tools and Python 3.11+.
-          - **Tessera-Linux.zip**: unzip and run ./Tessera. Building projects needs BeefBuild and Python 3.11+ on the PATH.
+          - **Tallow-Windows.zip**: unzip and run Tallow.exe. Building projects needs the Beef toolchain, the Microsoft C++ Build Tools and Python 3.11+.
+          - **Tallow-Linux.zip**: unzip and run ./Tallow. Building projects needs BeefBuild and Python 3.11+ on the PATH.
 
-          See tessera-package.txt in each for details."
-          # Checksums, which Tessera Hub checks downloads against.
+          See tallow-package.txt in each for details."
+          # Checksums, which Tallow Hub checks downloads against.
           (cd out && sha256sum *.zip > SHA256SUMS.txt)
           gh release create "$tag" out/*.zip out/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" $pre

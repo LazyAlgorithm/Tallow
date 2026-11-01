@@ -1,7 +1,7 @@
-// Audio for Tessera on miniaudio: positioned sounds, one listener, mixer groups, a low-pass per source (used for
+// Audio for Tallow on miniaudio: positioned sounds, one listener, mixer groups, a low-pass per source (used for
 // occlusion) and a shared reverb bus. Everything Beef needs is behind flat functions.
 //
-// Tessera is left-handed (+Z forward) and miniaudio right-handed (-Z forward), so Z is mirrored on the way in;
+// Tallow is left-handed (+Z forward) and miniaudio right-handed (-Z forward), so Z is mirrored on the way in;
 // without that, left and right would be swapped.
 #define STB_VORBIS_HEADER_ONLY
 #include "extras/stb_vorbis.c"
@@ -13,7 +13,7 @@
 
 #include <string.h>
 #include <math.h>
-#include "tessera_hrtf_data.h"
+#include "tallow_hrtf_data.h"
 #include <opus.h>
 
 // ---- HRTF ----
@@ -271,7 +271,7 @@ void tn_voice_capture_stop(void);
 // ---- Files ----
 // miniaudio opens sound files through this: a file inside an asset pack is read into memory and served from there
 // (also when it is streamed), anything else goes to the ordinary file system.
-#include "tessera_pack.h"
+#include "tallow_pack.h"
 
 typedef struct {
     ma_vfs_callbacks callbacks;

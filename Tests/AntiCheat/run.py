@@ -10,7 +10,7 @@ engine = root.parents[1]
 sys.path.insert(0, str(engine / 'tools'))
 import pack_assets
 
-with tempfile.TemporaryDirectory(prefix='tessera-anticheat-test-') as temporary:
+with tempfile.TemporaryDirectory(prefix='tallow-anticheat-test-') as temporary:
     work = Path(temporary)
     for name, extra_engine_file, level in (('game', False, b'level one\n'), ('repacked', True, b'level one\n'), ('changed', False, b'level 0ne\n')):
         source = work / name
@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix='tessera-anticheat-test-') as temporary:
         (source / 'Engine' / 'shader.bin').write_bytes(b'\x01\x02\x03' if not extra_engine_file else b'\x09\x09')
         if extra_engine_file:
             (source / 'Engine' / 'other-system.bin').write_bytes(b'only on the other system')
-        (source / 'game.tessera').write_text('name = Test\n' + ('fullscreen = 1\n' if extra_engine_file else ''))
+        (source / 'game.tallow').write_text('name = Test\n' + ('fullscreen = 1\n' if extra_engine_file else ''))
         files = [(file.relative_to(source).as_posix(), str(file)) for file in source.rglob('*') if file.is_file()]
         pack_assets.write_pack(work / f'{name}.tpak', files)
     # A library that does not belong to the system or the game, to load into the fixture as an injector would:

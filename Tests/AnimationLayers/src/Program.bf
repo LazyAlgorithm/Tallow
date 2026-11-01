@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
 namespace AnimationLayersTests;
 
@@ -13,7 +13,7 @@ class Program
 		return pass;
 	}
 
-	const String cFolder = "/tmp/tessera-layers-test";
+	const String cFolder = "/tmp/tallow-layers-test";
 	static Scene sScene;
 	static void Step(float seconds)
 	{

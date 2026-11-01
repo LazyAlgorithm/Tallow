@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
 namespace SceneTests;
 
@@ -33,7 +33,7 @@ class Program
 		bool ok = true;
 		let folder = scope String();
 		Path.GetTempPath(folder);
-		folder.Append("/tessera-scene-test");
+		folder.Append("/tallow-scene-test");
 		Directory.CreateDirectory(folder).IgnoreError();
 		Assets.ProjectPath.Set(folder);
 		// A level: two top-level objects, one with a child and a component, under its own sky.

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
-using Tessera;
-using Tessera.Editor;
+using Tallow;
+using Tallow.Editor;
 
 namespace InspectorTypeTests;
 

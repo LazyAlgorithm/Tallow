@@ -54,7 +54,7 @@ static class EditorMain
 		if (!project.Load(projectPath))
 		{
 			delete project;
-			Console.WriteLine("No project.tessera found. Pass --project <folder>.");
+			Console.WriteLine("No project.tallow found. Pass --project <folder>.");
 			return 1;
 		}
 		Project.Current = project;
@@ -64,7 +64,7 @@ static class EditorMain
 		// exported before Play was ever pressed says which game it is for.
 		GamePaths.Game.Set(project.Name);
 		if (!project.EngineRoot.IsEmpty)
-			Environment.SetEnvironmentVariable("TESSERA_ROOT", project.EngineRoot);
+			Environment.SetEnvironmentVariable("TALLOW_ROOT", project.EngineRoot);
 
 		Steam.AppId = (uint32)project.SteamAppId;
 		Audio.Hrtf = project.AudioHrtf;
@@ -83,7 +83,7 @@ static class EditorMain
 		return app.Run(args);
 	}
 
-	/// Walks up from the executable looking for project.tessera (it lives in <project>/build/<config>/<name>/).
+	/// Walks up from the executable looking for project.tallow (it lives in <project>/build/<config>/<name>/).
 	static void FindProjectFromExecutable(String outPath)
 	{
 		let basePath = SDL.SDL_GetBasePath();
@@ -92,7 +92,7 @@ static class EditorMain
 		let dir = scope String(basePath);
 		for (int i < 6)
 		{
-			if (File.Exists(scope $"{dir}project.tessera"))
+			if (File.Exists(scope $"{dir}project.tallow"))
 			{
 				let full = scope String();
 				ProjectGenerator.Normalize(dir, full);

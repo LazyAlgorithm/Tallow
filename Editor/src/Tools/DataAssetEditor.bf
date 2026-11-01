@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Inspector for a data asset (.tdata) clicked in the Project panel: its fields, written to the file as they change.
 extension EditorApp

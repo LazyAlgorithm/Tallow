@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
 namespace AsyncLoadingTests;
 
@@ -28,7 +28,7 @@ class Program
 		Console.WriteLine("Loading in the background (models, rigged models, textures, scenes; drawing needs a graphics card)");
 		bool ok = true;
 		// A small project: two models, a picture, a material naming the picture, a prefab, and scenes naming them.
-		let root = "/tmp/tessera-async-test";
+		let root = "/tmp/tallow-async-test";
 		for (let dir in StringView[?]("", "/Models", "/Textures", "/Materials", "/Prefabs", "/Scenes"))
 			Directory.CreateDirectory(scope $"{root}{dir}").IgnoreError();
 		let engine = scope String();
@@ -43,21 +43,21 @@ class Program
 		File.Copy(scope $"{sample}/Textures/hammered_normal.png" , scope $"{root}/Textures/bumps.png" , true).IgnoreError();
 		File.Copy(scope $"{checkout}/icon.png" , scope $"{root}/Textures/logo.png" , true).IgnoreError();
 		File.WriteAllText(scope $"{root}/Materials/stone.tmat" , "material 1\ncolor 1 1 1 1\nnormalMap \"Textures/bumps.png\"\n").IgnoreError();
-		File.WriteAllText(scope $"{root}/Prefabs/crate.tprefab" , "object 1 parent 0 active 1 name \"Crate\"\ntransform 0 0 0 0 0 0 1 1 1 1\ncomponent Tessera.MeshRenderer enabled 1\nfield mesh \"Models/statue.glb\"\nfield texture \"Textures/logo.png\"\n").IgnoreError();
+		File.WriteAllText(scope $"{root}/Prefabs/crate.tprefab" , "object 1 parent 0 active 1 name \"Crate\"\ntransform 0 0 0 0 0 0 1 1 1 1\ncomponent Tallow.MeshRenderer enabled 1\nfield mesh \"Models/statue.glb\"\nfield texture \"Textures/logo.png\"\n").IgnoreError();
 		let level = """
 			scene "Level"
 			object 1 parent 0 active 1 name "Statue"
 			transform 0 0 0 0 0 0 1 1 1 1
-			component Tessera.MeshRenderer enabled 1
+			component Tallow.MeshRenderer enabled 1
 			field mesh "Models/statue.glb"
 			field material "Materials/stone.tmat"
 			object 2 parent 0 active 1 name "Creature"
 			transform 3 0 0 0 0 0 1 1 1 1
-			component Tessera.SkinnedMeshRenderer enabled 1
+			component Tallow.SkinnedMeshRenderer enabled 1
 			field model "Models/tentacle.glb"
 			object 3 parent 0 active 1 name "Spawner"
 			transform 0 0 0 0 0 0 1 1 1 1
-			component Tessera.SceneLoader enabled 0
+			component Tallow.SceneLoader enabled 0
 			field scene "Prefabs/crate.tprefab"
 
 			""";

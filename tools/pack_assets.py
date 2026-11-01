@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Writes and checks Tessera asset packs (.tpak): a game's assets in one file. build_player.py uses this.
+"""Writes and checks Tallow asset packs (.tpak): a game's assets in one file. build_player.py uses this.
 
   pack_assets.py --list game.tpak          the files in a pack, with sizes
   pack_assets.py --verify game.tpak        reads every file back and checks it; exit status 1 if any is damaged
 
-The format is described at the top of native/tessera_pack.c, which reads it. Files are deflated when that makes
+The format is described at the top of native/tallow_pack.c, which reads it. Files are deflated when that makes
 them smaller and then scrambled, so they cannot be opened or edited with ordinary tools, and each carries a checksum
 so that a changed file is refused. It is not encryption."""
 import argparse
@@ -49,7 +49,7 @@ def write_pack(path, files, compress=True, name=None):
     compress=False stores every file at its full size (still scrambled and checksummed).
     name (the game's name) fixes the scrambling, so that a file that has not changed comes out the same in every
     build: a store such as Steam then sends players only what did change. Without it each build is scrambled anew."""
-    seed = zlib.crc32(('tessera-pack:' + name).encode('utf-8')) if name else int.from_bytes(os.urandom(4), 'little')
+    seed = zlib.crc32(('tallow-pack:' + name).encode('utf-8')) if name else int.from_bytes(os.urandom(4), 'little')
     index = bytearray()
     with open(path, 'wb') as out:
         out.write(b'\0' * 32)
@@ -74,7 +74,7 @@ def write_pack(path, files, compress=True, name=None):
 
 # Text formats whose contents may name other assets.
 _TEXT = {'.tscene', '.tcell', '.tprefab', '.tmat', '.tui', '.tcss', '.tcontroller', '.tanim', '.tshader', '.tcompute', '.tinput',
-         '.tbt', '.gltf', '.json', '.txt', '.tessera'}
+         '.tbt', '.gltf', '.json', '.txt', '.tallow'}
 _PATHLIKE = re.compile(r'[A-Za-z0-9_./\\-]+\.[A-Za-z0-9]+')
 # A scene's own pack is only worth its own file above this size; smaller ones stay in the shared pack.
 SPLIT_MINIMUM = 64 * 1024
@@ -166,7 +166,7 @@ def plan_split(assets, code_texts, start_scene, shared_patterns=()):
 def read_index(handle):
     header = handle.read(32)
     if len(header) != 32 or header[:8] != MAGIC:
-        raise ValueError('not a Tessera asset pack')
+        raise ValueError('not a Tallow asset pack')
     version, count, index_offset, index_size, seed = struct.unpack('<IIQII', header[8:])
     if version != 1:
         raise ValueError(f'pack version {version} is not supported')

@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Window > Graphics Quality: the presets and each setting, applied at once to the Scene and Game views, to see what a
 /// player's Low or Ultra looks like (docs/quality.md). The editor's own choice is not saved as the player's.

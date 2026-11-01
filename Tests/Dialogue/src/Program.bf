@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
 namespace DialogueTests;
 
@@ -21,7 +21,7 @@ class Program
 		return pass;
 	}
 
-	const String cFolder = "/tmp/tessera-dialogue-test";
+	const String cFolder = "/tmp/tallow-dialogue-test";
 
 	const String cGuard = """
 		# The guard at the gate.

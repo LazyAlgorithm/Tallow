@@ -8,7 +8,7 @@
 // Scrambling is an XOR with a repeating 4096-byte block made from the pack's seed and the file's checksum. It keeps
 // the assets from being opened or edited with ordinary tools, and the checksum catches a file that was changed
 // anyway. It is not encryption: the key is in every game.
-#include "tessera_pack.h"
+#include "tallow_pack.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -18,7 +18,7 @@
 #include <windows.h>
 #endif
 
-// stb_image's inflate, compiled in tessera_assets.c.
+// stb_image's inflate, compiled in tallow_assets.c.
 extern char* stbi_zlib_decode_malloc_guesssize_headerflag(const char* buffer, int len, int initial_size, int* outlen, int parse_header);
 
 #define TN_PACK_KEY 0x7E55E2A5u

@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// How a converted model is brought in (docs/model-import.md), kept beside it as "<file>.import".
 class ModelImportSettings
@@ -298,7 +298,7 @@ static class ModelImport
 	static String sTool ~ delete _;
 	static String sBlender ~ delete _;
 
-	/// Tessera's own converter, built with the engine's native libraries, or else Assimp's command line tool when it is
+	/// Tallow's own converter, built with the engine's native libraries, or else Assimp's command line tool when it is
 	/// installed. "" when there is neither.
 	static StringView Tool
 	{
@@ -309,9 +309,9 @@ static class ModelImport
 			sTool = new .();
 			let root = scope String(Project.Current?.EngineRoot ?? "");
 #if BF_PLATFORM_WINDOWS
-			let own = scope $"{root}/build/native-win/tessera_modelconv.exe";
+			let own = scope $"{root}/build/native-win/tallow_modelconv.exe";
 #else
-			let own = scope $"{root}/build/native/tessera_modelconv";
+			let own = scope $"{root}/build/native/tallow_modelconv";
 #endif
 			if (!root.IsEmpty && File.Exists(own))
 				sTool.Set(own);
@@ -330,7 +330,7 @@ static class ModelImport
 				return sBlender;
 			sBlender = new .();
 			let env = scope String();
-			Environment.GetEnvironmentVariable("TESSERA_BLENDER", env).IgnoreError();
+			Environment.GetEnvironmentVariable("TALLOW_BLENDER", env).IgnoreError();
 			if (!env.IsEmpty && File.Exists(env))
 				sBlender.Set(env);
 			else if (Terminal.Run(scope $"blender --version > {Terminal.Null} 2>&1") == 0)
@@ -378,7 +378,7 @@ static class ModelImport
 		let blend = source.EndsWith(".blend", .OrdinalIgnoreCase);
 		let assimpOnly = source.EndsWith(".dae", .OrdinalIgnoreCase) || source.EndsWith(".3ds", .OrdinalIgnoreCase);
 		// Assimp's command line tool cannot be told to bring FBX units to metres, and Blender reads FBX rigs best, so an
-		// FBX goes to Blender unless Tessera's own converter is there.
+		// FBX goes to Blender unless Tallow's own converter is there.
 		let fbxToBlender = source.EndsWith(".fbx", .OrdinalIgnoreCase) && Tool == "assimp" && !Blender.IsEmpty;
 		if (!blend && !fbxToBlender && !Tool.IsEmpty)
 		{
@@ -401,7 +401,7 @@ static class ModelImport
 		}
 		else if (!Blender.IsEmpty && !assimpOnly)
 		{
-			let script = scope $"{Path.GetDirectoryPath(output, .. scope .())}/tessera_blender_import.py";
+			let script = scope $"{Path.GetDirectoryPath(output, .. scope .())}/tallow_blender_import.py";
 			File.WriteAllText(script, BlenderScript).IgnoreError();
 			Terminal.Quote(Blender, command);
 			command.Append(" -b ");
@@ -418,7 +418,7 @@ static class ModelImport
 		}
 		else
 		{
-			error.Set(blend ? "Blender is needed for .blend files and was not found (install it, or set TESSERA_BLENDER to blender's path)" : "no model converter was found (Tessera's tessera_modelconv, Assimp's assimp tool, or Blender)");
+			error.Set(blend ? "Blender is needed for .blend files and was not found (install it, or set TALLOW_BLENDER to blender's path)" : "no model converter was found (Tallow's tallow_modelconv, Assimp's assimp tool, or Blender)");
 			return false;
 		}
 		command.AppendF(" > {} 2>&1", log);

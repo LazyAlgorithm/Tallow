@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Painting a model's texture in the Scene view (docs/modeling.md): the brush paints the picture where it lies on
 /// the model, through the faces' texture coordinates. Shift+click fills the face under the pointer, Alt+click picks

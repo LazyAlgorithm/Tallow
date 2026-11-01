@@ -26,7 +26,7 @@ Until a theme is picked, the editor uses Tallow Blue (`EditorTheme.DefaultTheme`
 - **Import** reads a `.ttheme` file from any path, copies it into the themes folder and uses it. **Export** writes the theme in use to any path (the project folder by default), so it can be shared.
 - **Open Folder** opens the themes folder.
 
-Themes belong to the person using the editor, not to the project. They live in the editor's config folder (`~/.local/share/Tallow/Editor` on Linux, `%APPDATA%\Tessera\Editor` on Windows, `~/Library/Application Support/Tallow/Editor` on macOS): saved themes in `themes/`, and the theme in use, with any changes, in `theme.ttheme`.
+Themes belong to the person using the editor, not to the project. They live in the editor's config folder (`~/.local/share/Tallow/Editor` on Linux, `%APPDATA%\Tallow\Editor` on Windows, `~/Library/Application Support/Tallow/Editor` on macOS): saved themes in `themes/`, and the theme in use, with any changes, in `theme.ttheme`.
 
 ## Theme files
 

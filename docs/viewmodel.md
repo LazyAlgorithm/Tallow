@@ -1,6 +1,6 @@
 # First-person viewmodel
 
-In a first-person game the player's own arms and weapon (the **viewmodel**) hang just in front of the camera. Drawn with the rest of the world they cause two problems: walk up to a wall and the gun pokes through it, and change the field of view (a setting, or zooming) and the arms stretch or shrink with it. Tessera draws them in a pass of their own instead: after the world, over it, with their own field of view and a near clip right at the eye.
+In a first-person game the player's own arms and weapon (the **viewmodel**) hang just in front of the camera. Drawn with the rest of the world they cause two problems: walk up to a wall and the gun pokes through it, and change the field of view (a setting, or zooming) and the arms stretch or shrink with it. Tallow draws them in a pass of their own instead: after the world, over it, with their own field of view and a near clip right at the eye.
 
 ## Setting it up
 

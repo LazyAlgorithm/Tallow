@@ -1,5 +1,5 @@
 FileVersion = 1
-Projects = {ProbePlacementTests = {Path = "."}, Tessera = {Path = "../../Engine"}}
+Projects = {ProbePlacementTests = {Path = "."}, Tallow = {Path = "../../Engine"}}
 [Workspace]
 StartupProject = "ProbePlacementTests"
 

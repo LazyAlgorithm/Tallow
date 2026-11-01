@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gathers the licence of every library compiled into Tessera into THIRD_PARTY_LICENSES.txt.
+"""Gathers the licence of every library compiled into Tallow into THIRD_PARTY_LICENSES.txt.
 
 Most of these licences ask that their text accompany anything built with the library, which includes the games
 made with the engine: tools/build_player.py copies the file into every packaged game. Run this again after adding
@@ -32,8 +32,8 @@ libraries = [
     ('Assimp', 'Editor model converter (FBX, OBJ, DAE, STL, PLY, 3DS)', tp / 'assimp/LICENSE'),
     ('stb', 'Image and font loading', tp / 'stb/LICENSE'),
 ]
-out = ['Third-party software in Tessera', '=' * 31, '',
-       'Tessera, and every game built with it, includes the libraries below. Their licences follow in full.', '']
+out = ['Third-party software in Tallow', '=' * 31, '',
+       'Tallow, and every game built with it, includes the libraries below. Their licences follow in full.', '']
 for name, purpose, _ in libraries:
     out.append(f'  {name:<20} {purpose}')
 out += ['  KEMAR HRTF data      Headphone 3D audio', '']

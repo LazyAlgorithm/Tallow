@@ -1,4 +1,4 @@
-// Tessera asset decoding: images through stb_image, models through cgltf.
+// Tallow asset decoding: images through stb_image, models through cgltf.
 // The glTF loader flattens a file into world-space-ready primitives so the engine side
 // only deals with plain vertex/index arrays.
 
@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tessera_pack.h"
+#include "tallow_pack.h"
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

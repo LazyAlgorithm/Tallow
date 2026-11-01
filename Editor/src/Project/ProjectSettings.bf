@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// File > Project Settings: start scene, Beef libraries and extra linker flags.
 /// The Beef workspace files are regenerated from these settings on every build.

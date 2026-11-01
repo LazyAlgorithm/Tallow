@@ -5,15 +5,15 @@
 - Template assets and namespace-aware scene copying included in Linux and Windows engine packages; packaged creation and compilation checked in release CI.
 - Fixes buoyancy during rollback and editor shading of foliage proxy renderers.
 
-# Tessera v0.1.0-beta.1
+# Tallow v0.1.0-beta.1
 
-Early beta of the Tessera engine, project launcher, and editor for Linux x64 and Windows x64.
+Early beta of the Tallow engine, project launcher, and editor for Linux x64 and Windows x64.
 
 - Portable folders with a launcher at the top level, engine assets, project templates, shader compiler, and the source/native libraries required to compile game scripts.
 - Cross-platform Python packaging, also available through the editor's Build window.
 - Windows process hardening preserves the original process access list and restores it during shutdown. Ringfall/Steam compatibility still needs testing with hardening enabled.
 
-Start `Tessera` on Linux or `Tessera.exe` on Windows. BeefBuild and Python 3.11+ are required to edit/build projects. Windows also needs Microsoft C++ Build Tools. Graphics drivers and normal operating-system libraries are prerequisites.
+Start `Tallow` on Linux or `Tallow.exe` on Windows. BeefBuild and Python 3.11+ are required to edit/build projects. Windows also needs Microsoft C++ Build Tools. Graphics drivers and normal operating-system libraries are prerequisites.
 
 Since v0.1.0-beta.1: scripts reload while the editor runs on Windows as they do on Linux (tested under Wine; not yet on a Windows machine).
 
@@ -27,7 +27,7 @@ Also since v0.1.0-beta.1:
 - Hinge joints with a motor and spring suspensions (`Scene.Physics.CreateHinge`, `CreateSuspension`), and cylinder and convex hull parts in a Compound Collider (`docs/joints.md`).
 - Map Builder: built-in Primitives, Walls and Floors folders in every project (walls, doorways, windows, pillars, floors, ramps, stairs and platforms with colliders), and a model a prefab already places is listed once, as the prefab.
 - Maps: `MapFiles.Export` writes a scene and its terrain sculpting as one `.tmap` file (a game's own map editor saves with it); `MapFiles` finds, checks (whole, made for this game, made with this format or older, no missing components or files, no duplicates) and mounts them, so a game can list them in its menu and play them without a new build (`docs/maps.md`). `PackFile` reads and writes a single pack from Beef; `GamePaths.GameFolder` is the game's own folder; `AssetPack` can serve files from memory.
-- Map requirements: a game's `src/MapRules.txt` says what a map needs ("need 4 Tessera.SpawnPoint", optionally with a field test such as `raceOrder >= 0`). Saving a scene that breaks a rule opens a Map Warning window listing what is missing, with a button to mark a scene as not a map; `MapFiles.Find` refuses such a map. A `most` rule sets a limit ("most 500 Tessera.Rigidbody").
+- Map requirements: a game's `src/MapRules.txt` says what a map needs ("need 4 Tallow.SpawnPoint", optionally with a field test such as `raceOrder >= 0`). Saving a scene that breaks a rule opens a Map Warning window listing what is missing, with a button to mark a scene as not a map; `MapFiles.Find` refuses such a map. A `most` rule sets a limit ("most 500 Tallow.Rigidbody").
 - Maps made in a game: `MapFiles.Export(scene, group, file, keepId, ...)` saves only a loaded level (`SceneSerializer.SaveGroup`) and keeps its Id when it is saved again; files the scene names under `.maps/<Id>/` (models a player brought in, kept with `AssetPack.AddMemoryFile`) go inside the map, and load from it, models included, once it is mounted. Each map has its file's `Hash`. `Mount(map, true)` opens an unfinished map for editing. `MapPieces` (the built-in walls, floors and primitives) moved from the editor into the engine, so games can use them. A texture named `model.glb#image0` is read from inside that model.
 - Map downloads: `MapSharing` sends the host's map to a player who lacks it or has another version, in acknowledged 16 KB pieces, checks the hash, and writes it into the Maps folder (replacing the old version).
 - Character customizers: a Skinned Mesh Renderer's parts can be hidden (`hiddenParts`, `SetPartHidden`), dyed (`partColors`, `SetPartColor`) or drawn only into shadows (`shadowOnlyParts`, a first-person player's own head); `MeshRenderer.Part` has `hidden`, `tint` and `shadowOnly` (`docs/skinned-materials.md`).

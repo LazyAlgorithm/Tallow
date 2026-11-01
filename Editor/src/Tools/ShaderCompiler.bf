@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Turns .tshader and .tcompute files into programs the graphics card runs. A shader file only says what a surface
 /// looks like (or what a compute step does); this puts that code into the engine's own shader, which adds
@@ -210,7 +210,7 @@ static class ShaderCompiler
 		ShaderAsset.CompiledName(shaderPath, name);
 		let work = scope String();
 		Path.GetTempPath(work);
-		work.AppendF("/tessera-shaders-{}", (int)Platform.BfpProcess_GetCurrentId());
+		work.AppendF("/tallow-shaders-{}", (int)Platform.BfpProcess_GetCurrentId());
 		Directory.CreateDirectory(work).IgnoreError();
 		// Compiled files live beside the project's other shaders, wherever the shader itself is.
 		let outputRoot = scope String();

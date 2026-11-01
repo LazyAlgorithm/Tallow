@@ -1,8 +1,8 @@
 using System;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Test switch --theme-test: themes applied to the real interface (docs/themes.md). Picks each built-in theme, checks
 /// the colours the code editor is given (each theme's own, or one picked for code alone), changes colours live, starts the themes again as a restart would, saves, exports, imports and deletes a theme, all in a
@@ -28,11 +28,11 @@ extension EditorApp
 		Directory.CreateDirectory(folder).IgnoreError();
 		EditorTheme.ConfigOverride.Set(folder);
 		EditorTheme.Init();
-		Expect(EditorTheme.Current.name == "Tessera Blue" && Near(ImGui.GetStyleColor(ImGui.Col.WindowBg), EditorTheme.Find("Tessera Blue").Get("WindowBg")), "with no theme chosen yet, Tessera Blue is used");
+		Expect(EditorTheme.Current.name == "Tallow Blue" && Near(ImGui.GetStyleColor(ImGui.Col.WindowBg), EditorTheme.Find("Tallow Blue").Get("WindowBg")), "with no theme chosen yet, Tallow Blue is used");
 
 		// Each built-in theme, applied: the interface takes its colours, and it does not count as changed.
 		var allApplied = true, noneChanged = true;
-		for (let name in StringView[?]("Tessera Blue", "Dark", "Light", "High Contrast", "Forest", "Ember", "Plum"))
+		for (let name in StringView[?]("Tallow Blue", "Dark", "Light", "High Contrast", "Forest", "Ember", "Plum"))
 		{
 			let theme = EditorTheme.Find(name);
 			EditorTheme.Select(theme);

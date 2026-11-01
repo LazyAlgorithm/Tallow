@@ -1,9 +1,9 @@
-# Builds Tessera on macOS (Apple silicon) with its own Beef compiler, built from source like Linux's, and the native
+# Builds Tallow on macOS (Apple silicon) with its own Beef compiler, built from source like Linux's, and the native
 # libraries for Metal; runs the engine's headless test fixtures there and packages the editor (docs/macos.md).
 #
 # Paused: macOS builds cannot be checked on a real Mac yet, so it no longer runs on pushes or tags, only by hand
 # (Actions > macOS > Run workflow). The macOS support stays in the engine; put the push trigger back to resume:
-#   push: {tags: ['v*'], branches: [dev, main, release]}
+#   push: {tags: ['v*'], branches: [dev, main, release, rename/tallow]}
 # The macOS zip is attached to the run; release.yml puts the Linux and Windows zips on releases.
 name: macOS
 
@@ -11,9 +11,10 @@ on:
   workflow_dispatch:
 
 env:
+  TALLOW_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('build-{0}', github.sha) }}
   BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
   LLVM_VERSION: '22'
-  NATIVE_TARGETS: tessera_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tessera_modelsettings tessera_modelconv
+  NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
 
 jobs:
   macos:
@@ -21,12 +22,12 @@ jobs:
     timeout-minutes: 120
     defaults:
       run:
-        shell: bash tessera/.github/scripts/step.sh {0}
+        shell: bash tallow/.github/scripts/step.sh {0}
     steps:
-      - name: Get Tessera
+      - name: Get Tallow
         uses: actions/checkout@v4
         with:
-          path: tessera
+          path: tallow
 
       - name: Install build tools
         run: |
@@ -58,19 +59,19 @@ jobs:
 
       - name: Native library cache key
         id: native-key
-        run: echo "key=$(tessera/.github/scripts/native-deps.sh key macos)" >> "$GITHUB_OUTPUT"
+        run: echo "key=$(tallow/.github/scripts/native-deps.sh key macos)" >> "$GITHUB_OUTPUT"
 
       - name: Cache the native libraries
         id: native-cache
         uses: actions/cache/restore@v4
         with:
-          path: tessera/build/native
+          path: tallow/build/native
           key: ${{ steps.native-key.outputs.key }}
 
       - name: Native libraries
         run: |
-          [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ] && tessera/.github/scripts/native-deps.sh settle
-          cd tessera
+          [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ] && tallow/.github/scripts/native-deps.sh settle
+          cd tallow
           python3 tools/patch_textedit.py
           [ -f build/native/CMakeCache.txt ] || cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++
           cmake --build build/native -j "$(sysctl -n hw.ncpu)" --target $NATIVE_TARGETS
@@ -79,38 +80,38 @@ jobs:
         if: steps.native-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: tessera/build/native
+          path: tallow/build/native
           key: ${{ steps.native-key.outputs.key }}
 
       - name: Test fixtures
         run: |
           export PATH="$HOME/beef/IDE/dist:$PATH"
-          cd tessera
+          cd tallow
           # Http asks GitHub's API without a token, which the runners' shared addresses often have used up (403).
           python3 tools/run_tests.py --platform macos --retries 1 --skip Http
 
       - name: Build and package
         run: |
           export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
-          cd tessera
-          python3 tools/package_engine.py --platform macos --folder ../out/Tessera-macOS
-          cd ../out && zip -qry9 Tessera-macOS.zip Tessera-macOS
+          cd tallow
+          python3 tools/package_engine.py --platform macos --folder ../out/Tallow-macOS
+          cd ../out && zip -qry9 Tallow-macOS.zip Tallow-macOS
 
       - name: Keep the zip
         uses: actions/upload-artifact@v4
         with:
-          name: Tessera-macOS
-          path: out/Tessera-macOS.zip
+          name: Tallow-macOS
+          path: out/Tallow-macOS.zip
 
       # The runners' graphics are virtual; a picture shows that Metal starts and draws. Not required to pass.
       - name: Draw with Metal
         continue-on-error: true
         run: |
           export PATH="$HOME/beef/IDE/dist:$PATH"
-          cd tessera/Samples/Sandbox
+          cd tallow/Samples/Sandbox
           # The sample's workspace names this machine's engine folder, so it is not in git.
-          printf 'FileVersion = 1\nProjects = {Sandbox = {Path = "."}, Tessera = {Path = "../../Engine"}, TesseraEditor = {Path = "../../Editor"}}\n[Workspace]\nStartupProject = "Sandbox"\n' > BeefSpace.toml
-          printf 'FileVersion = 1\nDependencies = {corlib = "*", Tessera = "*", TesseraEditor = "*"}\n[Project]\nName = "Sandbox"\nTargetType = "BeefConsoleApplication"\nStartupObject = "Sandbox.Program"\n' > BeefProj.toml
+          printf 'FileVersion = 1\nProjects = {Sandbox = {Path = "."}, Tallow = {Path = "../../Engine"}, TallowEditor = {Path = "../../Editor"}}\n[Workspace]\nStartupProject = "Sandbox"\n' > BeefSpace.toml
+          printf 'FileVersion = 1\nDependencies = {corlib = "*", Tallow = "*", TallowEditor = "*"}\n[Project]\nName = "Sandbox"\nTargetType = "BeefConsoleApplication"\nStartupObject = "Sandbox.Program"\n' > BeefProj.toml
           python3 ../../tools/macos_link.py --write BeefProj.toml
           BeefBuild -config=Debug -platform=macOS
           ./build/Debug_macOS/Sandbox/Sandbox --scene Scenes/Culling.tscene --frames 120 --screenshot ../../../out/metal-culling.png

@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Sequencer tab: edits a `.tsequence` file on a timeline. Tracks on the left, their keys as diamonds along the
 /// time ruler, and the selected key's settings underneath. Scrubbing or playing the preview puts the scene's objects

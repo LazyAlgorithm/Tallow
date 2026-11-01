@@ -1,4 +1,4 @@
-name: Publish Tessera API reference
+name: Publish Tallow API reference
 on:
   workflow_dispatch:
   push:

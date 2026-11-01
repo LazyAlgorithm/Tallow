@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The macOS link line for Beef projects that use Tessera (docs/macos.md), and a way to add it to their BeefProj.toml.
+"""The macOS link line for Beef projects that use Tallow (docs/macos.md), and a way to add it to their BeefProj.toml.
 
     python3 tools/macos_link.py --write <BeefProj.toml>...   add or refresh [Configs.Debug.macOS] / [Configs.Release.macOS]
 
@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 
 NATIVE_LIBS = (
-    'libtessera_native.a', 'bgfx/cmake/bgfx/libbgfx.a', 'bgfx/cmake/bimg/libbimg.a', 'bgfx/cmake/bimg/libbimg_decode.a',
+    'libtallow_native.a', 'bgfx/cmake/bgfx/libbgfx.a', 'bgfx/cmake/bimg/libbimg.a', 'bgfx/cmake/bimg/libbimg_decode.a',
     'bgfx/cmake/bx/libbx.a', 'SDL/libSDL3.a', 'joltc/libjoltc.a', '_deps/joltphysics-build/libJolt.a', 'enet/libenet.a',
 )
 # What SDL3 (windows, input, game controllers, audio, file dialogs) and bgfx (Metal) use from the system.

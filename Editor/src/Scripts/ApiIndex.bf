@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// What the script editor knows about code: every type and its members, read straight from the engine's source
 /// files and the project's scripts. Nothing here is a hand-kept list, so a new engine feature or a script the

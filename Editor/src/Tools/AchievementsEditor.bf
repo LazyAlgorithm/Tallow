@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Window > Achievements: the project's list of achievements, saved as Achievements.tach in the asset folder.
 /// Each row can be unlocked and locked from here to try the game's reaction, on Steam when the editor is

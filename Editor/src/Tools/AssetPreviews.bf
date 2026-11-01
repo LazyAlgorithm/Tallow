@@ -1,10 +1,10 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 using Bgfx;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Small rendered pictures of assets for the Project panel: a material or a shader on a ball, a model as it looks,
 /// a prefab with everything in it. Each is drawn once in a little scene of its own, kept, and drawn again when the
@@ -107,7 +107,7 @@ static class AssetPreviews
 		for (let line in prefabText.Split('\n'))
 		{
 			if (line.StartsWith("component "))
-				keep = line.StartsWith("component Tessera.MeshRenderer ") || line.StartsWith("component Tessera.SkinnedMeshRenderer ") || line.StartsWith("component Tessera.Light ");
+				keep = line.StartsWith("component Tallow.MeshRenderer ") || line.StartsWith("component Tallow.SkinnedMeshRenderer ") || line.StartsWith("component Tallow.Light ");
 			else if (!line.StartsWith("field "))
 				keep = true;
 			if (keep)

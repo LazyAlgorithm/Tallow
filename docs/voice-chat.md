@@ -80,7 +80,7 @@ The server relays speech and never decodes it, so a dedicated server spends almo
 - **Through the server only.** There are no private channels, and no talking to players in a lobby before a session exists.
 - **The default microphone** of the system is used; there is no device picker.
 - **The microphone stays open** while voice chat is on and you are in a session, even with push to talk, so that the first word is not clipped. Nothing leaves the machine until you transmit.
-- With Steam, this uses Tessera's own voice path, not Steam's voice API, so Steam's voice settings do not apply.
+- With Steam, this uses Tallow's own voice path, not Steam's voice API, so Steam's voice settings do not apply.
 
 ## Tests
 

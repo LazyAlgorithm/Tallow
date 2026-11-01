@@ -1,7 +1,7 @@
 using System;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Inspector tools under an LOD Group: its levels, what the Scene view's camera sees, and previewing one level.
 extension EditorApp

@@ -1,5 +1,5 @@
 FileVersion = 1
-Projects = {NetworkBandwidthTests = {Path = "."}, Tessera = {Path = "../../Engine"}, TesseraEditor = {Path = "../../Editor"}}
+Projects = {NetworkBandwidthTests = {Path = "."}, Tallow = {Path = "../../Engine"}, TallowEditor = {Path = "../../Editor"}}
 [Workspace]
 StartupProject = "NetworkBandwidthTests"
 

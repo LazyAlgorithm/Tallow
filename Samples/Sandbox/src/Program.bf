@@ -1,5 +1,5 @@
 using System;
-using Tessera.Editor;
+using Tallow.Editor;
 
 namespace Sandbox;
 

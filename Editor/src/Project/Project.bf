@@ -1,14 +1,14 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// A game project on disk: a Beef workspace that links the engine, plus scenes and assets.
 ///
-///   MyGame/project.tessera     name, start scene, engine location
-///   MyGame/BeefSpace.toml      workspace referencing the Tessera engine projects
+///   MyGame/project.tallow     name, start scene, engine location
+///   MyGame/BeefSpace.toml      workspace referencing the Tallow engine projects
 ///   MyGame/src/                game code (Program.bf, Scripts/)
 ///   MyGame/scenes/             .tscene files
 ///   MyGame/assets/             models and textures
@@ -31,6 +31,9 @@ class Project
 			ProjectGenerator.Normalize(scope $"{Path}/{EngineRoot}" , resolved);
 			EngineRoot.Set(resolved);
 		}
+		// Resolve relative paths above, but never relocate a pinned project.
+		if (File.Exists(scope $"{Path}/tallow-engine.lock.json"))
+			return;
 		if (!EngineRoot.IsEmpty && Directory.Exists(scope $"{EngineRoot}/Engine/src"))
 			return;
 		let found = scope String();
@@ -58,12 +61,12 @@ class Project
 	/// Hands the voice settings to the engine.
 	public void ApplyVoice()
 	{
-		Tessera.AntiCheat.Enabled = AntiCheat;
-		Tessera.VoiceChat.Enabled = VoiceChat;
-		Tessera.VoiceChat.PushToTalk = VoicePushToTalk;
-		Tessera.VoiceChat.PushToTalkKey = VoiceKey;
-		Tessera.VoiceChat.Proximity = VoiceProximity;
-		Tessera.VoiceChat.TeamOnly = VoiceTeamOnly;
+		Tallow.AntiCheat.Enabled = AntiCheat;
+		Tallow.VoiceChat.Enabled = VoiceChat;
+		Tallow.VoiceChat.PushToTalk = VoicePushToTalk;
+		Tallow.VoiceChat.PushToTalkKey = VoiceKey;
+		Tallow.VoiceChat.Proximity = VoiceProximity;
+		Tallow.VoiceChat.TeamOnly = VoiceTeamOnly;
 	}
 
 	/// Start with headphone 3D audio (HRTF) on. Games can change Audio.Hrtf at run time.
@@ -114,7 +117,7 @@ class Project
 		while (Path.EndsWith('/') && Path.Length > 1)
 			Path.RemoveFromEnd(1);
 		let text = scope String();
-		if (File.ReadAllText(scope $"{Path}/project.tessera" , text) case .Err)
+		if (File.ReadAllText(scope $"{Path}/project.tallow" , text) case .Err)
 			return false;
 		for (let line in text.Split('\n'))
 		{
@@ -205,7 +208,7 @@ class Project
 			text.AppendF("library = {}\n", library);
 		if (!LinkFlags.IsEmpty)
 			text.AppendF("link = {}\n", LinkFlags);
-		File.WriteAllText(scope $"{Path}/project.tessera" , text).IgnoreError();
+		File.WriteAllText(scope $"{Path}/project.tallow" , text).IgnoreError();
 	}
 
 	/// Path of the executable BeefBuild produces for this project.
@@ -249,7 +252,7 @@ class Project
 		void Add(StringView folder)
 		{
 			let name = new String();
-			if (!ReadLibraryName(folder, name) || name == "Tessera" || name == "TesseraEditor" || name == Name)
+			if (!ReadLibraryName(folder, name) || name == "Tallow" || name == "TallowEditor" || name == Name)
 			{
 				delete name;
 				return;
@@ -278,7 +281,7 @@ class Project
 			Add(library);
 	}
 
-	/// Regenerates BeefSpace.toml and BeefProj.toml from project.tessera. They are build output:
+	/// Regenerates BeefSpace.toml and BeefProj.toml from project.tallow. They are build output:
 	/// libraries and link flags are managed in the editor (File > Project Settings), never by hand.
 	public void WriteBuildFiles()
 	{
@@ -294,7 +297,7 @@ class Project
 		CollectLibraries(libraries);
 
 		let space = scope String();
-		space.AppendF("FileVersion = 1\nProjects = {{{0} = {{Path = \".\"}}, Tessera = {{Path = \"{1}/Engine\"}}, TesseraEditor = {{Path = \"{1}/Editor\"}}", Name, EngineRoot);
+		space.AppendF("FileVersion = 1\nProjects = {{{0} = {{Path = \".\"}}, Tallow = {{Path = \"{1}/Engine\"}}, TallowEditor = {{Path = \"{1}/Editor\"}}", Name, EngineRoot);
 		for (let library in libraries)
 			space.AppendF(", {} = {{Path = \"{}\"}}", library.name, library.path);
 		space.AppendF("}}\n\n[Workspace]\nStartupProject = \"{}\"\n", Name);
@@ -304,11 +307,11 @@ class Project
 
 		let native = scope $"{EngineRoot}/build/native";
 		let link = scope String("-Wl,--start-group ");
-		for (let archive in StringView[?]("libtessera_native.a", "bgfx/cmake/bgfx/libbgfx.a", "bgfx/cmake/bimg/libbimg.a", "bgfx/cmake/bimg/libbimg_decode.a", "bgfx/cmake/bx/libbx.a", "SDL/libSDL3.a", "joltc/libjoltc.a", "_deps/joltphysics-build/libJolt.a", "enet/libenet.a"))
+		for (let archive in StringView[?]("libtallow_native.a", "bgfx/cmake/bgfx/libbgfx.a", "bgfx/cmake/bimg/libbimg.a", "bgfx/cmake/bimg/libbimg_decode.a", "bgfx/cmake/bx/libbx.a", "SDL/libSDL3.a", "joltc/libjoltc.a", "_deps/joltphysics-build/libJolt.a", "enet/libenet.a"))
 			link.AppendF("\\\"{}/{}\\\" ", native, archive);
 		link.AppendF("-Wl,--end-group -lstdc++ -lm -ldl -lpthread -lGL -lX11 {}", LinkFlags);
 		let proj = scope String();
-		proj.Append("FileVersion = 1\nDependencies = {corlib = \"*\", Tessera = \"*\", TesseraEditor = \"*\"");
+		proj.Append("FileVersion = 1\nDependencies = {corlib = \"*\", Tallow = \"*\", TallowEditor = \"*\"");
 		for (let library in libraries)
 			proj.AppendF(", {} = \"*\"", library.name);
 #if BF_PLATFORM_WINDOWS
@@ -323,7 +326,7 @@ class Project
 		// for Linux's linker and are left out.
 		let nativeWin = scope $"{EngineRoot}/build/native-win";
 		let linkWin = scope String();
-		for (let archive in StringView[?]("tessera_native.lib", "bgfx/cmake/bgfx/bgfx.lib", "bgfx/cmake/bimg/bimg.lib", "bgfx/cmake/bimg/bimg_decode.lib", "bgfx/cmake/bx/bx.lib", "SDL/SDL3-static.lib", "joltc/joltc.lib", "_deps/joltphysics-build/Jolt.lib", "enet/enet.lib"))
+		for (let archive in StringView[?]("tallow_native.lib", "bgfx/cmake/bgfx/bgfx.lib", "bgfx/cmake/bimg/bimg.lib", "bgfx/cmake/bimg/bimg_decode.lib", "bgfx/cmake/bx/bx.lib", "SDL/SDL3-static.lib", "joltc/joltc.lib", "_deps/joltphysics-build/Jolt.lib", "enet/enet.lib"))
 		{
 			// These quotes survive TOML parsing and keep Hub/user folders with spaces intact for lld-link.
 			linkWin.AppendF("\\\"{}/{}\\\" ", nativeWin, archive);
@@ -334,7 +337,7 @@ class Project
 		File.WriteAllText(scope $"{Path}/BeefProj.toml" , proj).IgnoreError();
 	}
 
-	/// Stages a shipping executable built against Tessera only, plus its runtime assets.
+	/// Stages a shipping executable built against Tallow only, plus its runtime assets.
 	/// outputPath is the game's own folder; an earlier build of a game found there is replaced.
 	public bool BuildPlayer(StringView outputPath, BuildTarget target)
 	{
@@ -352,7 +355,7 @@ class Project
 		return Terminal.Run(command) == 0;
 	}
 
-	/// Puts a copy of Tessera itself (launcher, editor, engine) for Linux, Windows or macOS in outputPath.
+	/// Puts a copy of Tallow itself (launcher, editor, engine) for Linux, Windows or macOS in outputPath.
 	public bool PackageEngine(StringView outputPath, BuildTarget target)
 	{
 		Directory.CreateDirectory(scope $"{Path}/build").IgnoreError();

@@ -1,6 +1,6 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
 namespace ModelingTests;
 
@@ -727,7 +727,7 @@ class Program
 		paint.Fill(painted, .(&topFace, 1), .(0, 0, 1, 1));
 		Check(paint.Sample(painted.faces[topFace].uvs[0] * 0.98f + middleUV * 0.02f).b > 0.99f, "a fill colours the whole face");
 		let palette = scope Color[3](.(1, 0, 0, 1), .(0, 1, 0, 1), .(0, 0, 1, 1));
-		let file = scope $"{System.IO.Path.GetTempPath(.. scope .())}tessera_palette_test.png";
+		let file = scope $"{System.IO.Path.GetTempPath(.. scope .())}tallow_palette_test.png";
 		Check(TexturePaint.WritePalette(file, palette, 2, 2, 8) && paint.Load(file) && paint.width == 16 && paint.GetPixel(12, 3).g > 0.99f && paint.GetPixel(12, 12).r > 0.99f && paint.GetPixel(12, 12).g > 0.99f && paint.GetPixel(3, 12).b > 0.99f, "a palette picture is written and read back cell by cell");
 		System.IO.File.Delete(file).IgnoreError();
 

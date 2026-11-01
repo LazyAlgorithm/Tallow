@@ -1,4 +1,4 @@
-// Tessera native shim.
+// Tallow native shim.
 // Owns the pieces that are far simpler to express against the C++ headers than through
 // hand-maintained struct bindings: bgfx device creation, the Dear ImGui platform/renderer
 // backends, and ImGuizmo. Everything the engine does per-frame goes through Beef.
@@ -139,8 +139,8 @@ TN_API void tn_set_log(TnLogFn fn, bool trace)
 // window may be null for a headless device (dedicated servers do not call this at all).
 TN_API bool tn_gfx_init(SDL_Window* window, int width, int height, int renderer, uint32_t resetFlags)
 {
-	// Set TESSERA_GFX_TRACE=1 to print bgfx's own diagnostics while debugging a backend.
-	if (getenv("TESSERA_GFX_TRACE") != nullptr) s_traceEnabled = true;
+	// Set TALLOW_GFX_TRACE=1 to print bgfx's own diagnostics while debugging a backend.
+	if (getenv("TALLOW_GFX_TRACE") != nullptr) s_traceEnabled = true;
 
 #if defined(SDL_PLATFORM_LINUX)
 	// bgfx's OpenGL backends call eglGetDisplay with our X11 display. On a Wayland desktop some
@@ -269,7 +269,7 @@ namespace
 	// (render targets, whose alpha channel is not meaningful).
 	const ImTextureID kOpaqueBit = ImTextureID(1) << 32;
 
-	void ApplyTesseraStyle()
+	void ApplyTallowStyle()
 	{
 		ImGui::StyleColorsDark();
 		ImGuiStyle& style = ImGui::GetStyle();
@@ -364,10 +364,10 @@ TN_API bool tn_imgui_init(SDL_Window* window, const char* iniPath, float uiScale
 	// dragged. (Double-click and Ctrl+click do the same.)
 	io.ConfigDragClickToInputText = true;
 	io.IniFilename = iniPath; // caller keeps the string alive
-	io.BackendRendererName = "tessera_bgfx";
+	io.BackendRendererName = "tallow_bgfx";
 	io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset | ImGuiBackendFlags_RendererHasTextures;
 
-	ApplyTesseraStyle();
+	ApplyTallowStyle();
 	if (uiScale > 0.0f && uiScale != 1.0f) ImGui::GetStyle().ScaleAllSizes(uiScale);
 	const float scale = uiScale > 0.0f ? uiScale : 1.0f;
 

@@ -82,7 +82,7 @@ endif()
 
 # DXIL compiler will be dynamically loaded at runtime - no need
 # to link, just install the needed binaries alongside shaderc.exe
-# Tessera: the prebuilt DirectX compiler is not vendored; copy it only when present.
+# Tallow: the prebuilt DirectX compiler is not vendored; copy it only when present.
 if(DXCOMPILER_RUNTIME AND EXISTS ${DXCOMPILER_RUNTIME})
 	add_custom_command(
 		TARGET shaderc POST_BUILD

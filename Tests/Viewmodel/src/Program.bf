@@ -1,6 +1,6 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
 namespace ViewmodelTests;
 
@@ -107,7 +107,7 @@ class Program
 		SceneSerializer.Load(old, """
 			object 1 parent 0 active 1 name "Old"
 			transform 0 0 0 0 0 0 1 1 1 1
-			component Tessera.Camera enabled 1
+			component Tallow.Camera enabled 1
 			field fieldOfView 60
 			""");
 		Check(old.Find("Old").GetComponent<Camera>().viewmodelLayer == -1, "a camera from an older scene has no viewmodel");

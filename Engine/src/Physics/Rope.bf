@@ -79,7 +79,7 @@ class Rope : Component
 	[CLink] static extern void tn_soft_ignore(void* world, uint32 bodyId, uint32 ignoredBody);
 	[CLink] static extern void tn_soft_forget(void* world, uint32 bodyId);
 
-	/// native/tessera_softbody.cpp's RopeConfig, in the same order.
+	/// native/tallow_softbody.cpp's RopeConfig, in the same order.
 	[CRepr]
 	struct NativeConfig
 	{

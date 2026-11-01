@@ -1,7 +1,7 @@
 // Water (docs/water.md): the waves and patterns shared by vs_water.sc, fs_water.sc and fs_underwater.sc. The waves
 // are Water.bf's Gerstner waves, with the same sums, so what is drawn is where things float.
-#ifndef TESSERA_WATER_SH
-#define TESSERA_WATER_SH
+#ifndef TALLOW_WATER_SH
+#define TALLOW_WATER_SH
 
 uniform vec4 u_waveA[4];     // xy: direction along the water (x, z), z: wavenumber k, w: amplitude
 uniform vec4 u_waveB[4];     // x: steepness, y: phase now, z: share kept by the grid (short waves fade on a coarse one),
@@ -89,4 +89,4 @@ float waterCaustics(vec2 p, float time)
 	return pow(clamp(1.0 - abs(a) * 0.55, 0.0, 1.0), 5.0) * 0.7 + pow(clamp(1.0 - abs(b) * 0.6, 0.0, 1.0), 6.0) * 0.5;
 }
 
-#endif // TESSERA_WATER_SH
+#endif // TALLOW_WATER_SH

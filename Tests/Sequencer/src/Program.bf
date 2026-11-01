@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
 namespace SequencerTests;
 
@@ -21,7 +21,7 @@ class Program
 		return pass;
 	}
 
-	const String cFolder = "/tmp/tessera-sequencer-test";
+	const String cFolder = "/tmp/tallow-sequencer-test";
 
 	const String cIntro = """
 		# The gate opens.

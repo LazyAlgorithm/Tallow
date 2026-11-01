@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Foliage brush: painting and erasing plants in the Scene view, from a Foliage component's Inspector.
 extension EditorApp

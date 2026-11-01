@@ -114,7 +114,7 @@ class SoftBody : Component
 	[CLink] static extern void tn_soft_damp_wobble(void* world, uint32 bodyId, float rate, float step);
 	[CLink] static extern void tn_soft_proxies(void* world, uint32* bodies, int32* closed, float* reach, uint32 count);
 
-	/// native/tessera_softbody.cpp's Config, in the same order.
+	/// native/tallow_softbody.cpp's Config, in the same order.
 	[CRepr]
 	struct NativeConfig
 	{

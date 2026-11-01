@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Scene visibility and picking, as Unity's: an eye beside each object in the Hierarchy hides it from the Scene view
 /// alone (it is not disabled: the game and the Game view still have it), and a lock makes it unclickable in the

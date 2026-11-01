@@ -58,7 +58,7 @@ def project_path(project, text):
 
 def snapshot(project):
     config = tomllib.loads((project / 'BeefSpace.toml').read_text())
-    engine = project_path(project, config['Projects']['Tessera']['Path']).parent
+    engine = project_path(project, config['Projects']['Tallow']['Path']).parent
     sources = {str(p.relative_to(project / 'src')): schema(p.read_text()) for p in sorted((project / 'src').rglob('*.bf'))}
     digest = hashlib.sha256()
     files = list((engine / 'Engine' / 'src').rglob('*.bf')) + list((engine / 'Editor' / 'src').rglob('*.bf'))
@@ -66,7 +66,7 @@ def snapshot(project):
     files += [project / 'BeefSpace.toml', project / 'BeefProj.toml']
     # Extra libraries currently remain resident; changes to them need a full rebuild.
     for name, entry in config['Projects'].items():
-        if name not in ('Tessera', 'TesseraEditor', tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']):
+        if name not in ('Tallow', 'TallowEditor', tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']):
             folder = project_path(project, entry['Path'])
             files += list(folder.rglob('*.bf')) + [folder / 'BeefProj.toml']
     for file in sorted(set(files)):
@@ -169,7 +169,7 @@ def cross():
 
 
 def toolchain():
-    return Path(os.environ.get('TESSERA_WIN', Path.home() / '.local/share/tessera-win'))
+    return Path(os.environ.get('TALLOW_WIN', Path.home() / '.local/share/tallow-win'))
 
 
 def windows_path(path):
@@ -377,7 +377,7 @@ def host_info(path):
 
 def windows_build(project, name, args, baseline, current):
     info = host_info(args.host_info or args.baseline.with_suffix('.host'))
-    workspace = project / '.tessera-reload' / (args.baseline.stem + '-workspace')
+    workspace = project / '.tallow-reload' / (args.baseline.stem + '-workspace')
     workspace.mkdir(parents=True, exist_ok=True)
     source = workspace / 'src'
     if cross():
@@ -474,7 +474,7 @@ def windows_build(project, name, args, baseline, current):
                 symbols[symbol] = address - low
         write_stand_in(work / 'host.obj', pad + baseline['host_size'], symbols)
 
-    module = project / '.tessera-reload' / f'scripts-{time.time_ns()}.dll'
+    module = project / '.tallow-reload' / f'scripts-{time.time_ns()}.dll'
     link_map = work / 'module.map'
 
     def link(base):
@@ -616,7 +616,7 @@ def main():
     if args.manifest is None:
         parser.error('--manifest is required for builds')
     name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
-    workspace = project / '.tessera-reload' / (args.baseline.stem + '-workspace')
+    workspace = project / '.tallow-reload' / (args.baseline.stem + '-workspace')
     workspace.mkdir(parents=True, exist_ok=True)
     source = workspace / 'src'
     if not source.exists():
@@ -655,7 +655,7 @@ def main():
     if not classes:
         print('ERROR: No reloadable class metadata found.', flush=True)
         return 5
-    module = project / '.tessera-reload' / f'scripts-{time.time_ns()}.so'
+    module = project / '.tallow-reload' / f'scripts-{time.time_ns()}.so'
     resident = baseline['exports']
     shared = {symbol: size for symbol, size in state.items() if symbol in resident and size > 0 and not symbol.startswith('FORCELINKMOD_')}
     for symbol, size in shared.items():

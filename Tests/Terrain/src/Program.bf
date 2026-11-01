@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
 namespace TerrainTests;
 
@@ -100,7 +100,7 @@ class Program
 
 	public static int Main(String[] args)
 	{
-		let folder = "/tmp/tessera-terrain-test";
+		let folder = "/tmp/tallow-terrain-test";
 		Directory.CreateDirectory(folder).IgnoreError();
 		let edits = scope $"{folder}/Level.terrain";
 		for (let entry in Directory.EnumerateFiles(edits))

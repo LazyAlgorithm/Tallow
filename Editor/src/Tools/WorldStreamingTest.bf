@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Test switch --world-streaming-test: builds a 5 x 5 cell world, saves it as cells, opens it again with only the
 /// cells round a point, takes one out and saves, moves an object into a cell that is not loaded, then plays it with

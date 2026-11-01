@@ -1,4 +1,4 @@
-// Script editor widget for the Tessera editor: a thin C interface over ImGuiColorTextEdit
+// Script editor widget for the Tallow editor: a thin C interface over ImGuiColorTextEdit
 // (syntax colouring, bracket matching, line folding, find/replace, multi-cursor, undo/redo,
 // identifier completion) styled after Visual Studio's dark theme.
 

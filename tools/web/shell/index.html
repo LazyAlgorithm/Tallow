@@ -75,7 +75,7 @@ html, body {
 </style>
 </head>
 <body>
-<script src="tessera-net.js"></script>
+<script src="tallow-net.js"></script>
 <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
 <div id="gate" role="button" tabindex="0" aria-live="polite">
 	<div class="plate">
@@ -162,23 +162,23 @@ html, body {
 		print: (text) => console.log(text),
 		printErr: (text) => console.warn(text),
 		preRun: [() => {
-			addRunDependency("tessera-files");
+			addRunDependency("tallow-files");
 			FS.mkdir(SAVE_FOLDER);
 			FS.mount(IDBFS, {}, SAVE_FOLDER);
 			const restored = new Promise((resolve) => FS.syncfs(true, () => resolve()));
 			Promise.all([pack, restored]).then(([data]) => {
 				if (data) FS.writeFile("/" + PACK, new Uint8Array(data));
 				show("Starting", 0.97);
-				removeRunDependency("tessera-files");
+				removeRunDependency("tallow-files");
 				fetchLater();
 			}).catch((error) => fail(error.message));
 		}],
-		tesseraPersist: persist,
-		tesseraRequestPack: (name) => {
+		tallowPersist: persist,
+		tallowRequestPack: (name) => {
 			const at = laterQueue.indexOf(name);
 			if (at > 0) { laterQueue.splice(at, 1); laterQueue.unshift(name); }
 		},
-		tesseraReady: () => {
+		tallowReady: () => {
 			show("Tap to play", 1);
 			gate.classList.add("ready");
 			if (iPhone && !standalone) document.getElementById("hint").classList.add("show");

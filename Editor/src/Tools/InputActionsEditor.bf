@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Window > Input Actions: the project's controls. Maps on the left (groups switched on and off together), the
 /// actions of the chosen map in the middle, and on the right the keys, mouse buttons and controller buttons that

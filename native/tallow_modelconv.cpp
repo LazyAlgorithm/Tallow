@@ -1,7 +1,7 @@
-// tessera_modelconv: turns a model file Assimp reads (FBX, OBJ, DAE, STL, PLY, 3DS) into a binary glTF (.glb) the
+// tallow_modelconv: turns a model file Assimp reads (FBX, OBJ, DAE, STL, PLY, 3DS) into a binary glTF (.glb) the
 // engine loads. The editor and tools/build_player.py run it; see docs/model-import.md.
 //
-//   tessera_modelconv <source> <out.glb> [--scale s] [--up auto|y|z] [--no-animations] [--clips a,b,...]
+//   tallow_modelconv <source> <out.glb> [--scale s] [--up auto|y|z] [--no-animations] [--clips a,b,...]
 //                     [--no-materials]
 //
 // Exit code 0 on success; on failure the reason is printed on stderr.
@@ -47,7 +47,7 @@ int main(int argc, char** argv)
 {
 	if (argc < 3)
 	{
-		fprintf(stderr, "usage: tessera_modelconv <source> <out.glb> [--scale s] [--up auto|y|z] [--no-animations] [--clips a,b] [--no-materials]\n");
+		fprintf(stderr, "usage: tallow_modelconv <source> <out.glb> [--scale s] [--up auto|y|z] [--no-animations] [--clips a,b] [--no-materials]\n");
 		return 2;
 	}
 	const char* source = argv[1];

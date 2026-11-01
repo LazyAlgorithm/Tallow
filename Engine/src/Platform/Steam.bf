@@ -9,7 +9,7 @@ namespace Tallow;
 ///   if (Steam.Init(480))                       // your App ID; 480 is Valve's public test app
 ///       Log.Info(scope $"Hello {Steam.UserName}");
 ///
-/// The library is looked for in TESSERA_STEAM_LIB, beside the executable, in the project folder or its Libraries folder, and in a local
+/// The library is looked for in TALLOW_STEAM_LIB, beside the executable, in the project folder or its Libraries folder, and in a local
 /// Steam installation. Ship the libsteam_api file from the Steamworks SDK beside your game. The Steam client must
 /// be running and the user must own the app (everyone owns 480).
 ///
@@ -330,7 +330,7 @@ static class Steam
 		return null;
 	}
 
-	/// Opens the first Steam client library found: where TESSERA_STEAM_LIB says, beside the program, in the project
+	/// Opens the first Steam client library found: where TALLOW_STEAM_LIB says, beside the program, in the project
 	/// (or its Libraries folder), or in the Steam runtime. Null if there is none.
 	static void* FindLibrary(StringView fileName)
 	{
@@ -341,7 +341,7 @@ static class Steam
 				delete c;
 		}
 		let fromEnvironment = scope String();
-		if (Environment.GetEnvironmentVariable("TESSERA_STEAM_LIB", fromEnvironment) case .Ok && !fromEnvironment.IsEmpty)
+		if (Environment.GetEnvironmentVariable("TALLOW_STEAM_LIB", fromEnvironment) case .Ok && !fromEnvironment.IsEmpty)
 			candidates.Add(new String(fromEnvironment));
 		let basePath = SDL.SDL_GetBasePath();
 		if (basePath != null)

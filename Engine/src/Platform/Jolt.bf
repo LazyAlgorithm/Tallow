@@ -41,7 +41,7 @@ static class Jolt
 		public float penetrationDepth;
 	}
 
-	/// Mirrors TnCharacterState in native/tessera_physics.cpp.
+	/// Mirrors TnCharacterState in native/tallow_physics.cpp.
 	[CRepr] public struct CharacterState
 	{
 		public Vector3 position;

@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Inspector tools for the IK components: making targets, lining a hand up, and the ready-made hand shapes.
 extension EditorApp

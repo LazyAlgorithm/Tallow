@@ -1,8 +1,8 @@
 using System;
 using System.Threading;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Window > Lighting's Place Probes (docs/probe-placement.md): looks at the scene on a background thread, shows the
 /// probes it would place in the Scene view, and places them (one undo step) or throws the preview away.

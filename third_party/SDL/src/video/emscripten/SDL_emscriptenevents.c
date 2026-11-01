@@ -623,7 +623,7 @@ static EM_BOOL Emscripten_HandleResize(int eventType, const EmscriptenUiEvent *u
         }
     }
 
-    /* Tessera: a canvas sized by the page's CSS follows it in fullscreen too. Any element going fullscreen (the page
+    /* Tallow: a canvas sized by the page's CSS follows it in fullscreen too. Any element going fullscreen (the page
        asking for it on a phone, say) marks the window fullscreen, and without this a phone turned sideways after that
        kept the window's old size, stretched to the new shape. */
     if (!(window_data->window->flags & SDL_WINDOW_FULLSCREEN) || window_data->external_size) {

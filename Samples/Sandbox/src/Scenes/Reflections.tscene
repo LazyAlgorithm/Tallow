@@ -11,11 +11,11 @@ env exposure 1
 env shadowDistance 60
 object 11 parent 0 active 1 name "Main Camera"
 transform 0 2.2 -9 0.0697564737441253 0.0 -0.0 0.9975640502598242 1 1 1
-component Tessera.Camera enabled 1
+component Tallow.Camera enabled 1
 field fieldOfView 60
 object 900 parent 0 active 1 name "Directional Light"
 transform 0 6 0 0.4082179 -0.23456971 0.10938165 0.87542605 1 1 1
-component Tessera.Light enabled 1
+component Tallow.Light enabled 1
 field type Directional
 field color 1 0.96 0.88 1
 field intensity 1.4
@@ -23,14 +23,14 @@ field castShadows 1
 field shadowStrength 1
 object 12 parent 0 active 1 name "Ground"
 transform 0 -0.5 0 0 0 0 1 80 1 80
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.35 0.36 0.38 1
 field metallic 0
 field roughness 0.35
 object 13 parent 0 active 1 name "Sphere 0.0"
 transform -6 0.8 -3 0 0 0 1 1.6 1.6 1.6
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere"
 field flatShading 0
 field color 0.95 0.95 0.95 1
@@ -38,7 +38,7 @@ field metallic 1
 field roughness 0.0
 object 14 parent 0 active 1 name "Sphere 0.25"
 transform -3 0.8 -3 0 0 0 1 1.6 1.6 1.6
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere"
 field flatShading 0
 field color 0.95 0.95 0.95 1
@@ -46,7 +46,7 @@ field metallic 1
 field roughness 0.25
 object 15 parent 0 active 1 name "Sphere 0.5"
 transform 0 0.8 -3 0 0 0 1 1.6 1.6 1.6
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere"
 field flatShading 0
 field color 0.95 0.95 0.95 1
@@ -54,7 +54,7 @@ field metallic 1
 field roughness 0.5
 object 16 parent 0 active 1 name "Sphere 0.75"
 transform 3 0.8 -3 0 0 0 1 1.6 1.6 1.6
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere"
 field flatShading 0
 field color 0.95 0.95 0.95 1
@@ -62,7 +62,7 @@ field metallic 1
 field roughness 0.75
 object 17 parent 0 active 1 name "Sphere 1.0"
 transform 6 0.8 -3 0 0 0 1 1.6 1.6 1.6
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere"
 field flatShading 0
 field color 0.95 0.95 0.95 1
@@ -70,42 +70,42 @@ field metallic 1
 field roughness 1.0
 object 18 parent 0 active 1 name "Room Floor"
 transform 0 0.02 6 0 0 0 1 8 0.04 8
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.2 0.2 0.22 1
 field metallic 0
 field roughness 0.12
 object 19 parent 0 active 1 name "Room Left"
 transform -4 2 6 0 0 0 1 0.2 4 8
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.85 0.12 0.1 1
 field metallic 0
 field roughness 0.9
 object 20 parent 0 active 1 name "Room Right"
 transform 4 2 6 0 0 0 1 0.2 4 8
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.1 0.7 0.15 1
 field metallic 0
 field roughness 0.9
 object 21 parent 0 active 1 name "Room Back"
 transform 0 2 10 0 0 0 1 8 4 0.2
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.1 0.25 0.85 1
 field metallic 0
 field roughness 0.9
 object 22 parent 0 active 1 name "Room Ceiling"
 transform 0 4 6 0 0 0 1 8 0.2 8
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.9 0.9 0.9 1
 field metallic 0
 field roughness 0.9
 object 23 parent 0 active 1 name "Room Sphere"
 transform 0 1 6 0 0 0 1 1.8 1.8 1.8
-component Tessera.MeshRenderer enabled 1
+component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere"
 field flatShading 0
 field color 0.95 0.95 0.95 1
@@ -113,14 +113,14 @@ field metallic 1
 field roughness 0.05
 object 24 parent 0 active 1 name "Room Light"
 transform 0 3.3 6 0 0 0 1 1 1 1
-component Tessera.Light enabled 1
+component Tallow.Light enabled 1
 field type Point
 field color 1 0.9 0.75 1
 field intensity 3
 field range 8
 object 25 parent 0 active 1 name "Room Probe"
 transform 0 2 6 0 0 0 1 1 1 1
-component Tessera.ReflectionProbe enabled 1
+component Tallow.ReflectionProbe enabled 1
 field size 8 4 8
 field captureOffset 0 0.6 0
 field blendDistance 0.5

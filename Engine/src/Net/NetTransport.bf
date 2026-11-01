@@ -70,10 +70,10 @@ class ENetTransport : NetTransport
 {
 	static bool sReady;
 	public bool LosslessCompression;
-	[CLink] static extern uint32 tessera_net_sent(void* host);
-	[CLink] static extern uint32 tessera_net_received(void* host);
-	public override uint32 WireSent => tessera_net_sent(mHost);
-	public override uint32 WireReceived => tessera_net_received(mHost);
+	[CLink] static extern uint32 tallow_net_sent(void* host);
+	[CLink] static extern uint32 tallow_net_received(void* host);
+	public override uint32 WireSent => tallow_net_sent(mHost);
+	public override uint32 WireReceived => tallow_net_received(mHost);
 	bool ConfigureCompression() => !LosslessCompression || ENet.enet_host_compress_with_range_coder(mHost) == 0;
 	void* mHost;
 	ENet.Packet* mHeld;

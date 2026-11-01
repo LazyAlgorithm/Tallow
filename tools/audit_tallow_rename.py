@@ -3,8 +3,8 @@
 
 Run: python3 tools/audit_tallow_rename.py
 Use --strict to fail CI on every unclassified reference.
-Historical GitHub URLs and native ABI references are reported separately;
-old serialized formats and project identifiers are considered rename work.
+Existing GitHub URLs and the original copyright notice are reported separately;
+old native names, formats and project identifiers are considered rename work.
 """
 from __future__ import annotations
 import argparse
@@ -17,8 +17,6 @@ TOKEN = re.compile(r"tessera", re.IGNORECASE)
 SKIP = {".git", ".venv", "node_modules", "build", "dist", "__pycache__", ".cache"}
 HISTORICAL = re.compile(r"github.com/LazyAlgorithm/Tessera|api.github.com/repos/LazyAlgorithm/Tessera|raw.githubusercontent.com/LazyAlgorithm/Tessera", re.I)
 FORMATS = re.compile(r"project\.tessera|game\.tessera|\.tessera\b", re.I)
-NATIVE = re.compile(r"tessera_native|tessera_model|tessera_web|tessera-net|tn_", re.I)
-ENV = re.compile(r"TESSERA_ROOT|TESSERA_WIN|TesseraBuildTools|tessera-win", re.I)
 
 def tracked_files():
     try:
@@ -27,12 +25,12 @@ def tracked_files():
     except (OSError, subprocess.CalledProcessError):
         return [p for p in ROOT.rglob("*") if p.is_file() and not (set(p.relative_to(ROOT).parts) & SKIP)]
 
-def classify(line, match):
+def classify(line, match, path=""):
     """Classify a single occurrence, never the entire line."""
+    if path == "LICENSE" and line == "Copyright (c) 2026 Tessera contributors":
+        return "historical copyright attribution"
     start, end = match.span()
-    for pattern, label in ((HISTORICAL, "repository URL (until repo rename)"),
-                           (NATIVE, "native ABI/tool name (migration required)"),
-                           (ENV, "environment/toolchain compatibility")):
+    for pattern, label in ((HISTORICAL, "repository URL (until repo rename)"),):
         if any(m.start() <= start and end <= m.end() for m in pattern.finditer(line)):
             return label
     return "unclassified branding/code"
@@ -54,7 +52,7 @@ def main():
         for number, line in enumerate(content.splitlines(), 1):
             if file.name == "audit_tallow_rename.py": continue
             for match in TOKEN.finditer(line):
-                category = classify(line, match)
+                category = classify(line, match, str(file.relative_to(ROOT)))
                 count += 1
                 unclassified += category == "unclassified branding/code"
                 print(f"{file.relative_to(ROOT)}:{number}:{match.start() + 1}: [{category}] {line.strip()[:180]}")

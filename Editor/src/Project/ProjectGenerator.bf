@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 enum ProjectTemplate
 {
@@ -29,7 +29,7 @@ static class ProjectGenerator
 	public static bool FindEngineRoot(String outRoot)
 	{
 		let env = scope String();
-		if (Environment.GetEnvironmentVariable("TESSERA_ROOT", env) case .Ok && !env.IsEmpty && Directory.Exists(scope $"{env}/Engine/src"))
+		if (Environment.GetEnvironmentVariable("TALLOW_ROOT", env) case .Ok && !env.IsEmpty && Directory.Exists(scope $"{env}/Engine/src"))
 		{
 			// Forward slashes throughout, also on Windows: the path is written into build files where a backslash
 			// would start an escape.
@@ -114,7 +114,7 @@ static class ProjectGenerator
 	{
 		Write(scope $"{folder}/src/Program.bf" , scope String()..AppendF("""
 			using System;
-			using Tessera.Editor;
+			using Tallow.Editor;
 
 			namespace {0};
 
@@ -132,7 +132,7 @@ static class ProjectGenerator
 
 		Write(scope $"{folder}/src/Scripts/GameSetup.bf" , scope String()..AppendF("""
 			using System;
-			using Tessera;
+			using Tallow;
 
 			namespace {0};
 
@@ -178,7 +178,7 @@ static class ProjectGenerator
 
 		Write(scope $"{folder}/src/Scripts/Spinner.bf" , scope String()..AppendF("""
 			using System;
-			using Tessera;
+			using Tallow;
 
 			namespace {0};
 
@@ -198,7 +198,7 @@ static class ProjectGenerator
 
 		Write(scope $"{folder}/src/Scripts/FollowCamera.bf" , scope String()..AppendF("""
 			using System;
-			using Tessera;
+			using Tallow;
 
 			namespace {0};
 
@@ -231,7 +231,7 @@ static class ProjectGenerator
 
 		Write(scope $"{folder}/src/Scripts/Digger.bf" , scope String()..AppendF("""
 			using System;
-			using Tessera;
+			using Tallow;
 
 			namespace {0};
 
@@ -272,7 +272,7 @@ static class ProjectGenerator
 
 		Write(scope $"{folder}/src/Scripts/Hud.bf" , scope String()..AppendF("""
 			using System;
-			using Tessera;
+			using Tallow;
 
 			namespace {0};
 
@@ -358,7 +358,7 @@ static class ProjectGenerator
 			error.Set("Project names use letters, digits and underscores, and start with a letter.");
 			return false;
 		}
-		if (Directory.Exists(folder) && File.Exists(scope $"{folder}/project.tessera"))
+		if (Directory.Exists(folder) && File.Exists(scope $"{folder}/project.tallow"))
 		{
 			error.Set("A project already exists in that folder.");
 			return false;
@@ -383,6 +383,24 @@ static class ProjectGenerator
 			project.EscapeQuits = false;
 		}
 		project.Save();
+
+		// Packaged engines carry immutable identity. New projects are pinned
+		// before the first build; source checkouts without a manifest stay legacy.
+		if (File.Exists(scope $"{engineRoot}/tallow-version.json"))
+		{
+			let command = scope String();
+			command.AppendF("{} ", Terminal.Python);
+			Terminal.Quote(scope $"{engineRoot}/tools/engine_versions.py", command);
+			command.Append(" pin-new ");
+			Terminal.Quote(folder, command);
+			command.Append(" ");
+			Terminal.Quote(engineRoot, command);
+			if (Terminal.Run(command) != 0)
+			{
+				error.Set("Could not pin the new project to this Tallow engine build.");
+				return false;
+			}
+		}
 
 		project.WriteBuildFiles();
 

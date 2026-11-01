@@ -1,7 +1,7 @@
 // The procedural sky (fs_sky.sc draws it; fs_env_sky.sc puts it into the sky's reflection cube): a gradient from
 // the horizon up to the zenith and down to the ground, and the sun. Include after bgfx_shader.sh.
-#ifndef TESSERA_SKY_SH
-#define TESSERA_SKY_SH
+#ifndef TALLOW_SKY_SH
+#define TALLOW_SKY_SH
 
 uniform vec4 u_sunDir;
 uniform vec4 u_sunColor;

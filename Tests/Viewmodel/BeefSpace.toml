@@ -1,5 +1,5 @@
 FileVersion = 1
-Projects = {ViewmodelTests = {Path = "."}, Tessera = {Path = "../../Engine"}, TesseraEditor = {Path = "../../Editor"}}
+Projects = {ViewmodelTests = {Path = "."}, Tallow = {Path = "../../Engine"}, TallowEditor = {Path = "../../Editor"}}
 [Workspace]
 StartupProject = "ViewmodelTests"
 

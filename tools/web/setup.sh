@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# One-time setup for building games for the web (WebAssembly). Run it again after updating Beef or Tessera's native/.
+# One-time setup for building games for the web (WebAssembly). Run it again after updating Beef or Tallow's native/.
 #
-#   1. Emscripten (the compiler that targets browsers), into ~/.local/share/tessera-web/emsdk unless EMSDK is set
+#   1. Emscripten (the compiler that targets browsers), into ~/.local/share/tallow-web/emsdk unless EMSDK is set
 #   2. Beef's WebAssembly runtime library, built from the Beef source next to your BeefBuild
 #   3. Beef's setting that says where Emscripten is ([Wasm] EmscriptenPath in BeefSettings.toml)
 #   4. the engine's native libraries for the web, into build/native-web
@@ -13,7 +13,7 @@ set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Emscripten 4.0.23 uses the same LLVM major version (22) as Beef's compiler, so their object files link together.
 EMSCRIPTEN_VERSION="${EMSCRIPTEN_VERSION:-4.0.23}"
-EMSDK="${EMSDK:-$HOME/.local/share/tessera-web/emsdk}"
+EMSDK="${EMSDK:-$HOME/.local/share/tallow-web/emsdk}"
 
 # ---- 1. Emscripten ----
 if [ ! -x "$EMSDK/upstream/emscripten/emcc" ]; then

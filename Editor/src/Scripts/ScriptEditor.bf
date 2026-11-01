@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Scripts tab: a code editor in the style of Visual Studio's dark theme with syntax
 /// colouring, bracket matching, foldable blocks, find/replace, completion and undo/redo.

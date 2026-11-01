@@ -1,6 +1,6 @@
 speaker guide "Campus guide" color 0.2 0.85 1
 node start
- say guide "Welcome to Tessera. Every exhibit uses the engine itself." time 3
+ say guide "Welcome to Tallow. Every exhibit uses the engine itself." time 3
  choice "Tell me about the water." water
  choice "What can I interact with?" play
  choice "End conversation." goodbye

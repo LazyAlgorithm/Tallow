@@ -1,4 +1,4 @@
-# The build tools Tessera sets up for itself when they are missing (the launcher's Set Up Tools).
+# The build tools Tallow sets up for itself when they are missing (the launcher's Set Up Tools).
 # .github/workflows/toolchain.yml builds and publishes them on the GitHub release named by `release`; change
 # `release` whenever anything here changes, so old engines keep finding what they were made with.
 release = toolchain-2

@@ -1,8 +1,8 @@
 using System;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Scene Settings: the screen effects (ambient occlusion, depth of field, motion blur) and colour grading. See
 /// docs/post-processing.md. Everything here is saved with the scene; the Game view shows it as it is changed.

@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Views for modelling (docs/modeling.md):
 /// - The view selector in the Scene view's top right corner, as Unity's: click an axis to look along it (front,

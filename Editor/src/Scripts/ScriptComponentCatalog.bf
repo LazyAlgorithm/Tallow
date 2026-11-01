@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Filters compiled project components against declarations that still exist on disk.
 /// Cached type identities survive registry rebuilds; external-library components remain available.

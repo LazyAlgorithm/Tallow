@@ -18,14 +18,14 @@ def main():
     parser.add_argument('--work', type=Path)
     args = parser.parse_args()
     package = args.package.resolve()
-    work = args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix='tessera-showcase-test-'))
+    work = args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix='tallow-showcase-test-'))
     work.mkdir(parents=True, exist_ok=True)
     project = work / 'Projects With Spaces' / 'RenamedCampus'
     windows = args.wine or os.name == 'nt'
-    launcher = package / ('Tessera.exe' if windows else 'Tessera')
+    launcher = package / ('Tallow.exe' if windows else 'Tallow')
     prefix = ['wine'] if args.wine else []
     env = dict(os.environ)
-    env.pop('TESSERA_ROOT', None)
+    env.pop('TALLOW_ROOT', None)
 
     def path(value):
         return 'Z:' + str(value).replace('/', '\\') if args.wine else str(value)
@@ -43,21 +43,27 @@ def main():
     scene = (source / 'Scenes/Campus.tscene').read_text()
     assert 'component RenamedCampus.Exhibition enabled 1' in scene
     assert scene.count('component RenamedCampus.ExhibitStation enabled 1') == 24
-    assert 'TesseraShowcase.' not in scene and '{NAMESPACE}' not in scene
-    assert 'startScene = Scenes/Campus.tscene' in (project / 'project.tessera').read_text()
+    assert 'TallowShowcase.' not in scene and '{NAMESPACE}' not in scene
+    assert 'startScene = Scenes/Campus.tscene' in (project / 'project.tallow').read_text()
     assert list((source / 'Scenes').rglob('*.voxels')), 'Terrain sidecar was not copied'
     for name in ['cloth16.glb', 'cloth8.glb', 'soft_box.glb', 'Person_Rigged.glb']:
         assert (source / 'Models' / name).is_file(), name
     for file in source.rglob('*.bf'):
         text = file.read_text()
-        assert '{NAMESPACE}' not in text and 'namespace TesseraShowcase;' not in text, file
+        assert '{NAMESPACE}' not in text and 'namespace TallowShowcase;' not in text, file
     # Confirm binary assets were copied without text conversion.
     template = package / 'Editor/templates/showcase/src'
     for file in template.rglob('*'):
         if file.is_file() and file.suffix not in {'.bf', '.tscene', '.tprefab'}:
             assert file.read_bytes() == (source / file.relative_to(template)).read_bytes(), file
+    # Packaged projects must pin the package's exact immutable identity.
+    lock = project / 'tallow-engine.lock.json'
+    assert lock.is_file(), 'New packaged project was not pinned'
+    run([launcher, '--build-project', path(project)], 'compile-pinned')
+    # Exercise source-project relocation separately; pinned projects never relocate.
+    lock.unlink()
     # Relocation writes project settings again: window size and Escape menu must survive.
-    settings = project / 'project.tessera'
+    settings = project / 'project.tallow'
     settings.write_text('\n'.join('engine = /missing-showcase-engine' if line.startswith('engine =') else line
                                   for line in settings.read_text().splitlines()) + '\n')
     run([launcher, '--build-project', path(project)], 'compile')

@@ -212,7 +212,7 @@ static class Gfx
 		Initialized = false;
 	}
 
-	/// Locates Engine/assets: TESSERA_ROOT, then next to the executable, then up the directory tree.
+	/// Locates Engine/assets: TALLOW_ROOT, then next to the executable, then up the directory tree.
 	public static bool LocateEngineAssets(StringView hint = default)
 	{
 		List<String> candidates = scope .();
@@ -224,7 +224,7 @@ static class Gfx
 		if (!hint.IsEmpty)
 			candidates.Add(new String(hint)..Append("/Engine/assets"));
 		let env = scope String();
-		if (Environment.GetEnvironmentVariable("TESSERA_ROOT", env) case .Ok && !env.IsEmpty)
+		if (Environment.GetEnvironmentVariable("TALLOW_ROOT", env) case .Ok && !env.IsEmpty)
 			candidates.Add(new String(env)..Append("/Engine/assets"));
 		let exeDir = scope String();
 		let basePath = SDL.SDL_GetBasePath();
@@ -248,7 +248,7 @@ static class Gfx
 				return true;
 			}
 		}
-		Log.Error("Engine assets were not found. Set TESSERA_ROOT to the engine folder.");
+		Log.Error("Engine assets were not found. Set TALLOW_ROOT to the engine folder.");
 		return false;
 	}
 

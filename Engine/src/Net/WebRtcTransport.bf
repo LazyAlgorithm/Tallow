@@ -2,13 +2,13 @@ using System;
 
 namespace Tallow;
 
-/// Browser to browser through WebRTC, for games built for the web (tools/web/shell/tessera-net.js does the work).
+/// Browser to browser through WebRTC, for games built for the web (tools/web/shell/tallow-net.js does the work).
 /// Hosting opens a room with a short code; joining takes that code as the address. The port is not used.
 static class WebRtc
 {
 	/// Names the game, so rooms of different games never meet even with the same code. GameMain sets it from the
 	/// game's name.
-	public static String AppName = new .("tessera") ~ delete _;
+	public static String AppName = new .("tallow") ~ delete _;
 	/// The code of the room this game is in (hosting or joined), or empty.
 	public static String RoomCode = new .() ~ delete _;
 
@@ -42,7 +42,7 @@ static class WebRtc
 }
 
 #if BF_PLATFORM_WASM
-/// The NetTransport behind WebRtc: peer-to-peer data channels, run by tools/web/shell/tessera-net.js and reached
+/// The NetTransport behind WebRtc: peer-to-peer data channels, run by tools/web/shell/tallow-net.js and reached
 /// through the tn_rtc_* calls.
 class WebRtcTransport : NetTransport
 {
@@ -67,7 +67,7 @@ class WebRtcTransport : NetTransport
 		let code = tn_rtc_host(WebRtc.AppName.CStr(), "");
 		if (code == null)
 		{
-			Log.Error("This page cannot host: tessera-net.js is missing from it.");
+			Log.Error("This page cannot host: tallow-net.js is missing from it.");
 			return false;
 		}
 		WebRtc.RoomCode.Set(StringView(code));

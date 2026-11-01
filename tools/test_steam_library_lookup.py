@@ -11,7 +11,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('achievement_tests', type=Path)
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix='tessera-steam-lookup-') as folder:
+    with tempfile.TemporaryDirectory(prefix='tallow-steam-lookup-') as folder:
         project = Path(folder) / 'Project With Spaces'
         (project / 'Libraries').mkdir(parents=True)
         (project / 'src').mkdir()
@@ -22,7 +22,7 @@ void SteamAPI_RunCallbacks(void) {}
 '''
         subprocess.run(['cc', '-shared', '-fPIC', '-x', 'c', '-', '-o', str(library)], input=source, text=True, check=True)
         environment = dict(os.environ)
-        environment.pop('TESSERA_STEAM_LIB', None)
+        environment.pop('TALLOW_STEAM_LIB', None)
         for assets in (project / 'src', project):
             subprocess.run([str(args.achievement_tests.resolve()), '--steam-library-check', str(assets)],
                            env=environment, check=True)

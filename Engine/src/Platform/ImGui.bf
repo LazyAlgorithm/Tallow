@@ -283,7 +283,7 @@ static class ImGui
 	public const int32 ChildBorders = 1 << 0;
 	public const int32 SliderAlwaysClamp = 1536;
 
-	// ---- backend (native/tessera_native.cpp) ----
+	// ---- backend (native/tallow_native.cpp) ----
 	[CLink] public static extern bool tn_imgui_init(void* window, char8* iniPath, float uiScale);
 	[CLink] public static extern void tn_imgui_shutdown();
 	[CLink] public static extern bool tn_imgui_event(void* event);

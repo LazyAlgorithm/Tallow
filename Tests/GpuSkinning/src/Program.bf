@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using Tessera;
+using Tallow;
 
 namespace GpuSkinningTests;
 

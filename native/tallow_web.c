@@ -69,11 +69,11 @@ EM_JS(void, tn_web_set_url_param, (const char* name, const char* value), {
 });
 
 EM_JS(void, tn_web_persist, (void), {
-	if (typeof Module.tesseraPersist === "function") Module.tesseraPersist();
+	if (typeof Module.tallowPersist === "function") Module.tallowPersist();
 });
 
 EM_JS(void, tn_web_loading_done, (void), {
-	if (typeof Module.tesseraReady === "function") Module.tesseraReady();
+	if (typeof Module.tallowReady === "function") Module.tallowReady();
 });
 
 // A box for typing, from the browser: a phone shows its own keyboard for it (and offers Paste), which it does not
@@ -85,7 +85,7 @@ EM_JS(char*, tn_web_prompt, (const char* title, const char* current), {
 
 // A scene pack the game needs now: the page downloads it before the others still waiting (index.html).
 EM_JS(void, tn_web_request_pack, (const char* name), {
-	if (Module.tesseraRequestPack) Module.tesseraRequestPack(UTF8ToString(name));
+	if (Module.tallowRequestPack) Module.tallowRequestPack(UTF8ToString(name));
 });
 
 void tn_web_free(void* ptr)
@@ -93,48 +93,48 @@ void tn_web_free(void* ptr)
 	free(ptr);
 }
 
-// ---- multiplayer: WebRTC through tools/web/shell/tessera-net.js (window.TesseraNet) ----
+// ---- multiplayer: WebRTC through tools/web/shell/tallow-net.js (window.TallowNet) ----
 
-// Opens a room and returns its code (free with tn_web_free), or null when the page has no TesseraNet.
+// Opens a room and returns its code (free with tn_web_free), or null when the page has no TallowNet.
 EM_JS(char*, tn_rtc_host, (const char* app, const char* code), {
-	if (!window.TesseraNet) return 0;
-	return stringToNewUTF8(TesseraNet.host(UTF8ToString(app), UTF8ToString(code)));
+	if (!window.TallowNet) return 0;
+	return stringToNewUTF8(TallowNet.host(UTF8ToString(app), UTF8ToString(code)));
 });
 
 EM_JS(int, tn_rtc_connect, (const char* app, const char* code), {
-	if (!window.TesseraNet) return 0;
-	return TesseraNet.connect(UTF8ToString(app), UTF8ToString(code)) ? 1 : 0;
+	if (!window.TallowNet) return 0;
+	return TallowNet.connect(UTF8ToString(app), UTF8ToString(code)) ? 1 : 0;
 });
 
 EM_JS(char*, tn_rtc_status, (void), {
-	return stringToNewUTF8(window.TesseraNet ? TesseraNet.status : "");
+	return stringToNewUTF8(window.TallowNet ? TallowNet.status : "");
 });
 
 // Size of the next event's data, or -1 when there is no event.
 EM_JS(int, tn_rtc_next_size, (void), {
-	if (!window.TesseraNet || !TesseraNet.events.length) return -1;
-	const data = TesseraNet.events[0][2];
+	if (!window.TallowNet || !TallowNet.events.length) return -1;
+	const data = TallowNet.events[0][2];
 	return data ? data.length : 0;
 });
 
 // Takes the next event, copying its data to buffer (which holds tn_rtc_next_size() bytes).
 EM_JS(void, tn_rtc_take, (int* kind, int* peer, unsigned char* buffer), {
-	const event = TesseraNet.events.shift();
+	const event = TallowNet.events.shift();
 	HEAP32[kind >> 2] = event[0];
 	HEAP32[peer >> 2] = event[1];
 	if (event[2]) HEAPU8.set(event[2], buffer);
 });
 
 EM_JS(void, tn_rtc_send, (int peer, const unsigned char* data, int length, int reliable), {
-	if (window.TesseraNet) TesseraNet.send(peer, HEAPU8.slice(data, data + length), reliable !== 0);
+	if (window.TallowNet) TallowNet.send(peer, HEAPU8.slice(data, data + length), reliable !== 0);
 });
 
 EM_JS(void, tn_rtc_disconnect, (int peer), {
-	if (window.TesseraNet) TesseraNet.disconnect(peer);
+	if (window.TallowNet) TallowNet.disconnect(peer);
 });
 
 EM_JS(void, tn_rtc_close, (void), {
-	if (window.TesseraNet) TesseraNet.close();
+	if (window.TallowNet) TallowNet.close();
 });
 
 static unsigned char* s_rtcBuffer;

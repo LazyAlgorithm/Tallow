@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
-using Tessera.Editor;
+using Tallow;
+using Tallow.Editor;
 
 namespace MaterialTests;
 
@@ -16,7 +16,7 @@ class Program
 		return pass;
 	}
 
-	const String cFolder = "/tmp/tessera-material-test";
+	const String cFolder = "/tmp/tallow-material-test";
 
 	static void EngineRoot(String output, String file = Compiler.CallerFilePath)
 	{
@@ -474,8 +474,8 @@ class Program
 		// ---- previews ----
 		{
 			let visual = scope String();
-			AssetPreviews.VisualOnly("object 1 parent 0 active 1 name \"Car\"\ntransform 0 0 0 0 0 0 1 1 1 1\ncomponent Tessera.Rigidbody enabled 1\nfield mass 5\ncomponent Tessera.MeshRenderer enabled 1\nfield mesh \"builtin:cube\"\ncomponent Game.Engine enabled 1\nfield power 3\nobject 2 parent 1 active 1 name \"Wheel\"\ntransform 1 0 0 0 0 0 1 1 1 1\ncomponent Tessera.NetworkIdentity enabled 1\n", visual);
-			ok &= Check(visual.Contains("name \"Car\"") && visual.Contains("name \"Wheel\"") && visual.Contains("Tessera.MeshRenderer") && visual.Contains("field mesh") && !visual.Contains("Rigidbody") && !visual.Contains("field mass") && !visual.Contains("Game.Engine") && !visual.Contains("power") && !visual.Contains("NetworkIdentity")
+			AssetPreviews.VisualOnly("object 1 parent 0 active 1 name \"Car\"\ntransform 0 0 0 0 0 0 1 1 1 1\ncomponent Tallow.Rigidbody enabled 1\nfield mass 5\ncomponent Tallow.MeshRenderer enabled 1\nfield mesh \"builtin:cube\"\ncomponent Game.Engine enabled 1\nfield power 3\nobject 2 parent 1 active 1 name \"Wheel\"\ntransform 1 0 0 0 0 0 1 1 1 1\ncomponent Tallow.NetworkIdentity enabled 1\n", visual);
+			ok &= Check(visual.Contains("name \"Car\"") && visual.Contains("name \"Wheel\"") && visual.Contains("Tallow.MeshRenderer") && visual.Contains("field mesh") && !visual.Contains("Rigidbody") && !visual.Contains("field mass") && !visual.Contains("Game.Engine") && !visual.Contains("power") && !visual.Contains("NetworkIdentity")
 				&& AssetPreviews.Wants("a.tmat") && AssetPreviews.Wants("b.tprefab") && AssetPreviews.Wants("c.glb") && AssetPreviews.Wants("d.tsgraph") && !AssetPreviews.Wants("e.bf"), "a prefab's preview keeps what can be seen and leaves its scripts, physics and networking out");
 		}
 

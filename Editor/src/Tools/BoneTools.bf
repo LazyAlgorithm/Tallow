@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The skeleton of a rigged model, drawn in the Scene view while the model, its Animator's object or one of its
 /// bones is selected: a shape for each bone, seen through the mesh, that selects the bone when clicked, and handles

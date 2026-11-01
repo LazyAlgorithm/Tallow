@@ -1,6 +1,6 @@
 // Cube map faces for the reflection passes (docs/reflections.md). Include after bgfx_shader.sh.
-#ifndef TESSERA_CUBE_SH
-#define TESSERA_CUBE_SH
+#ifndef TALLOW_CUBE_SH
+#define TALLOW_CUBE_SH
 
 // The direction a cube face's texel looks along: face 0 to 5 is +X, -X, +Y, -Y, +Z, -Z, and uv the texel's place in
 // the face as stored (a fullscreen pass's v_texcoord0). The inverse of how the graphics card picks a texel for a

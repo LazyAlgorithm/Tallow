@@ -11,15 +11,15 @@ change. The converted copy is kept in `<project>/.cache/models/<path>.glb`, and 
 
 | Format | Converted by |
 | --- | --- |
-| `.fbx`, `.obj`, `.dae`, `.stl`, `.ply`, `.3ds` | `tessera_modelconv`, Tessera's converter (built on the Assimp library, with the native libraries) |
+| `.fbx`, `.obj`, `.dae`, `.stl`, `.ply`, `.3ds` | `tallow_modelconv`, Tallow's converter (built on the Assimp library, with the native libraries) |
 | `.blend` | Blender, run in the background, so it must be installed |
 
-`tessera_modelconv` brings FBX units to metres, keeps rigs (bones, skin weights, up to four bones a vertex), clips,
+`tallow_modelconv` brings FBX units to metres, keeps rigs (bones, skin weights, up to four bones a vertex), clips,
 materials and the pictures they use (put into the `.glb`). A rigged model read as a plain mesh (a Mesh Renderer)
 stands where its bones put it at rest, so it is the same size as on a Skinned Mesh Renderer.
 
 Blender is found on the `PATH`, in its usual install folder (Windows and macOS), or at the path in the
-`TESSERA_BLENDER` environment variable. A source checkout of the engine whose native libraries were built before the
+`TALLOW_BLENDER` environment variable. A source checkout of the engine whose native libraries were built before the
 converter was added falls back to Blender, or to Assimp's `assimp` tool if it is installed (OBJ, STL, PLY, DAE, 3DS).
 
 ## Import settings
@@ -37,7 +37,7 @@ Click the model in the Project panel. The Inspector shows:
 setting re-runs only that step, not the whole conversion. **Reimport** converts from scratch. A file that fails
 says why in the Inspector and in the Console.
 
-The settings step is the same whichever converter ran: `tn_model_import_settings` (`native/tessera_modelimport.c`)
+The settings step is the same whichever converter ran: `tn_model_import_settings` (`native/tallow_modelimport.c`)
 rewrites the converted `.glb`.
 
 ## Materials on Mesh Renderers
@@ -50,7 +50,7 @@ on the renderer. The renderer's Color still tints every part.
 ## Builds
 
 `tools/build_player.py` converts what is out of date (`tools/convert_models.py`, with the same converters, cache and
-settings, using `tessera_modelconv` and `tessera_modelsettings` from the native build; engine packages include both). It puts each model in the game as `<file>.glb`, and
+settings, using `tallow_modelconv` and `tallow_modelsettings` from the native build; engine packages include both). It puts each model in the game as `<file>.glb`, and
 leaves the source file and its `.import` out. The engine looks for that name when a scene names the source file.
 A build on a machine without a needed converter (Blender for a `.blend`) stops and names the file.
 

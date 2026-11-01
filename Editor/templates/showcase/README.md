@@ -1,6 +1,6 @@
 # Exhibition Campus sample
 
-Create **Exhibition Campus** in Tessera's new-project window, or run `Tessera --create /path/to/MyCampus --showcase`.
+Create **Exhibition Campus** in Tallow's new-project window, or run `Tallow --create /path/to/MyCampus --showcase`.
 
 Open `src/Scenes/Campus.tscene` in the editor: the complete 24-exhibit campus is saved and editable before Play. Move grouped objects, change components, then save. The Director binds the existing scene without regenerating it. Move the Visitor spawn object to change the entrance. Keep ExhibitStation markers and referenced components when rearranging exhibits. Soft-body meshes, sculpted terrain and rope previews are included.
 
@@ -12,4 +12,4 @@ For multiplayer, run the project with `--host --port 27960`, then another instan
 
 Build standalone players using File > Build, or `python3 ENGINE/tools/build_player.py PROJECT --output OUTPUT`. Development validation flags: `--self-test --frames 1500`, `--walk-test --frames 2000`; optional `--tour-test` integration checks require a host, an interacting client, and a later `--observer` client. The developer-only `--author-scene` command replaces the scene with its original generated layout; normal startup never calls it.
 
-The rigged character is derived from Quaternius's CC0 asset; see `src/Models/LICENSE.txt`. Other assets are generated for the sample or reused from Tessera's common sample content.
+The rigged character is derived from Quaternius's CC0 asset; see `src/Models/LICENSE.txt`. Other assets are generated for the sample or reused from Tallow's common sample content.

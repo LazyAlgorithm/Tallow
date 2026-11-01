@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turns the MIT KEMAR compact HRTF set (third_party/kemar/compact.zip) into native/tessera_hrtf_data.h.
+"""Turns the MIT KEMAR compact HRTF set (third_party/kemar/compact.zip) into native/tallow_hrtf_data.h.
 
 Each measurement is a pair of 128-sample impulse responses at 44.1 kHz, left ear then right ear, for a source at an
 elevation (-40 to 90 degrees) and an azimuth from 0 (ahead) to 180 (behind) on the listener's right. Directions on
@@ -30,5 +30,5 @@ lines += ['};', '// Left-ear response then right-ear response, 128 samples each.
 for _, _, left, right in entries:
     lines.append('    {' + ','.join(str(v) for v in left + right) + '},')
 lines.append('};')
-(root / 'native' / 'tessera_hrtf_data.h').write_text('\n'.join(lines) + '\n')
+(root / 'native' / 'tallow_hrtf_data.h').write_text('\n'.join(lines) + '\n')
 print(f'wrote {len(entries)} responses')

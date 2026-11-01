@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Materials in the editor: creating them, compiling shaders, and the material's settings as the Inspector shows
 /// them. Click a .tmat file in the Project panel, or select an object whose Mesh Renderer has a material.

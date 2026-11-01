@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using System.Threading;
-using Tessera;
+using Tallow;
 
 namespace ProfilerTests;
 
@@ -197,7 +197,7 @@ class Program
 		Profiler.Set(counter, 42);
 		Profiler.End();
 		Profiler.EndFrame(99);
-		let path = "/tmp/tessera-profiler-test.tprofile";
+		let path = "/tmp/tallow-profiler-test.tprofile";
 		defer
 		{
 			System.IO.File.Delete(path);

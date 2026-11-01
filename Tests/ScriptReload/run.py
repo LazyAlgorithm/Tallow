@@ -17,7 +17,7 @@ builder = engine / 'tools' / 'reload_scripts.py'
 # --windows: the same test against a Windows host. On Linux that host and its compiler run under Wine.
 windows = '--windows' in sys.argv or os.name == 'nt'
 wine = windows and os.name != 'nt'
-toolchain = Path(os.environ.get('TESSERA_WIN', Path.home() / '.local/share/tessera-win'))
+toolchain = Path(os.environ.get('TALLOW_WIN', Path.home() / '.local/share/tallow-win'))
 wine_environment = dict(os.environ, WINEPREFIX=str(toolchain / 'wine'), WINEDEBUG='-all', WINEDLLOVERRIDES='mscoree,mshtml=')
 platform = ['--platform', 'windows'] if windows else []
 
@@ -55,7 +55,7 @@ def wait_for(path, process):
         time.sleep(.02)
 
 
-with (contextlib.nullcontext(tempfile.mkdtemp(prefix='tessera-live-reload-test-')) if '--keep' in sys.argv else tempfile.TemporaryDirectory(prefix='tessera-live-reload-test-')) as temporary:
+with (contextlib.nullcontext(tempfile.mkdtemp(prefix='tallow-live-reload-test-')) if '--keep' in sys.argv else tempfile.TemporaryDirectory(prefix='tallow-live-reload-test-')) as temporary:
     if '--keep' in sys.argv: print('Test workspace: ' + temporary, flush=True)
     project = Path(temporary)
     shutil.copytree(root / 'src', project / 'src')
@@ -84,7 +84,7 @@ with (contextlib.nullcontext(tempfile.mkdtemp(prefix='tessera-live-reload-test-'
                 latest = latest.replace('float mTotal;', '[ShowInInspector, Range(0,100)] private float mVisiblePrivate=7;\n    [HideInInspector] public int32 addedField=42;\n    float mTotal;')
             if generation == 4:
                 latest = latest.replace("public float amount = 1;", "[HideInInspector] public float amount = 1;")
-                (project / 'src/Added.bf').write_text('using Tessera; namespace ReloadTests; [Component] class Added : Component { public int32 ticks; public override void Update() { ticks++; } }')
+                (project / 'src/Added.bf').write_text('using Tallow; namespace ReloadTests; [Component] class Added : Component { public int32 ticks; public override void Update() { ticks++; } }')
             if generation == 5:
                 latest = latest.replace('public float amount = 1;', 'public int32 amount = 1;').replace('[HideInInspector] public int32 amount = 1;', 'public int32 amount = 1;')
             if generation == 6:

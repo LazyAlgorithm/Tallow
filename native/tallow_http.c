@@ -241,9 +241,9 @@ int tn_http_get(const char* url, const char* userAgent, const char* path, char**
         if (sink.file == NULL) { setError(error, errorSize, "Could not create the file to download into"); return 0; }
     }
 #ifdef _WIN32
-    int ok = requestWin(url, userAgent ? userAgent : "Tessera", &sink, status, error, errorSize);
+    int ok = requestWin(url, userAgent ? userAgent : "Tallow", &sink, status, error, errorSize);
 #else
-    int ok = requestCurl(url, userAgent ? userAgent : "Tessera", &sink, status, error, errorSize);
+    int ok = requestCurl(url, userAgent ? userAgent : "Tallow", &sink, status, error, errorSize);
 #endif
     if (ok && (*status < 200 || *status >= 300)) {
         char text[64];

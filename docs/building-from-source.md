@@ -16,16 +16,16 @@ Ubuntu 22.04 also works, but its default Python is 3.10: install Python 3.11+ se
 For a prebuilt Linux compiler, The project's toolchain release provides the same compiler bundle used by Hub. This installs it in your user folder:
 
 ```sh
-mkdir -p "$HOME/.local/share/TesseraBuildTools"
-curl -fL https://github.com/LazyAlgorithm/Tessera/releases/download/toolchain-2/beef-linux-x64.tar.gz -o /tmp/tessera-beef.tar.gz
-tar -xzf /tmp/tessera-beef.tar.gz -C "$HOME/.local/share/TesseraBuildTools"
-export BEEFBUILD="$HOME/.local/share/TesseraBuildTools/beef/IDE/dist/BeefBuild.sh"
+mkdir -p "$HOME/.local/share/TallowBuildTools"
+curl -fL https://github.com/LazyAlgorithm/Tessera/releases/download/toolchain-2/beef-linux-x64.tar.gz -o /tmp/tallow-beef.tar.gz
+tar -xzf /tmp/tallow-beef.tar.gz -C "$HOME/.local/share/TallowBuildTools"
+export BEEFBUILD="$HOME/.local/share/TallowBuildTools/beef/IDE/dist/BeefBuild.sh"
 ```
 
 ```sh
-git clone https://github.com/LazyAlgorithm/Tessera.git
-cd Tessera
-# Repository URL and directory retain their original names until the GitHub repository is renamed.
+git clone --branch rename/tallow https://github.com/LazyAlgorithm/Tessera.git Tallow
+cd Tallow
+# The repository URL retains its original name until the GitHub repository is renamed.
 ./build.sh --config Debug --jobs 8
 ./build/Debug_Linux64/TallowLauncher/TallowLauncher
 ```
@@ -44,8 +44,8 @@ Install:
 Open an **x64 Native Tools Command Prompt for VS 2022** so the MSVC/SDK include and library environment is set, then:
 
 ```bat
-git clone https://github.com/LazyAlgorithm/Tessera.git
-cd Tessera
+git clone --branch rename/tallow https://github.com/LazyAlgorithm/Tessera.git Tallow
+cd Tallow
 python tools/build.py --config Debug --jobs 8
 build\Debug_Win64\TallowLauncher\TallowLauncher.exe
 ```

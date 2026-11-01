@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
 namespace NavigationMeshTests;
 
@@ -94,7 +94,7 @@ class Program
 		delete saved;
 		let file = scope String();
 		Path.GetTempPath(file);
-		file.Append("tessera-navmesh-regression.tnav");
+		file.Append("tallow-navmesh-regression.tnav");
 		let loaded = scope NavigationData();
 		let error = scope String();
 		ok &= Check(data.Save(file, error) && loaded.Load(file, error) && loaded.IsNavMesh && loaded.FindPath(.(2, 0, 2), .(14, 0, 2), path) && Clear(loaded, path), "NavigationData saves and loads polygon assets through the existing API");

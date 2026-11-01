@@ -1,7 +1,7 @@
-// tessera_modelsettings: the import settings step of docs/model-import.md as a program, for tools/build_player.py
+// tallow_modelsettings: the import settings step of docs/model-import.md as a program, for tools/build_player.py
 // (the editor calls tn_model_import_settings directly).
 //
-//   tessera_modelsettings <in.glb> <out.glb> <scale> <zUp 0|1> <animations 0|1> <clips or ""> <materials 0|1>
+//   tallow_modelsettings <in.glb> <out.glb> <scale> <zUp 0|1> <animations 0|1> <clips or ""> <materials 0|1>
 
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
@@ -17,7 +17,7 @@ int main(int argc, char** argv)
 {
 	if (argc < 8)
 	{
-		fprintf(stderr, "usage: tessera_modelsettings <in.glb> <out.glb> <scale> <zUp> <animations> <clips> <materials>\n");
+		fprintf(stderr, "usage: tallow_modelsettings <in.glb> <out.glb> <scale> <zUp> <animations> <clips> <materials>\n");
 		return 2;
 	}
 	if (!tn_model_import_settings(argv[1], argv[2], (float)atof(argv[3]), atoi(argv[4]), atoi(argv[5]), argv[6], atoi(argv[7])))

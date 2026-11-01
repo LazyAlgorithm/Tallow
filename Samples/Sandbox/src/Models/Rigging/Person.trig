@@ -1,4 +1,4 @@
-# Tessera rig (docs/rigging.md)
+# Tallow rig (docs/rigging.md)
 source "Models/Rigging/Person.glb"
 template Humanoid
 facing 0 0 -1

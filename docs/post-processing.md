@@ -1,6 +1,6 @@
 # Screen effects and colour grading
 
-After the scene is drawn, Tessera can run a few effects over the whole picture before it is tonemapped for the screen:
+After the scene is drawn, Tallow can run a few effects over the whole picture before it is tonemapped for the screen:
 
 - **ambient occlusion**: darkens creases, corners and the ground right under things;
 - **depth of field**: blurs what is nearer or further than the focus;

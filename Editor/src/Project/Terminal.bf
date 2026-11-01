@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Running other programs through the system's command interpreter: sh on Linux and macOS, cmd on Windows.
 static class Terminal

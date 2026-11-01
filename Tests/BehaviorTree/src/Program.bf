@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
 namespace BehaviorTreeTests;
 
@@ -70,7 +70,7 @@ class Program
 		return pass;
 	}
 
-	static String sFolder = new .("/tmp/tessera-behavior-tree-test") ~ delete _;
+	static String sFolder = new .("/tmp/tallow-behavior-tree-test") ~ delete _;
 	static int sFile;
 
 	/// Small builder: Node("key", parent, x, values...) returns the new node's id.

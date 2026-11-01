@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Resolve only actual component declarations in a source asset, not classes mentioned in comments/strings.
 static class ScriptAssetResolver

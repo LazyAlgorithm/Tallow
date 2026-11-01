@@ -10,5 +10,5 @@ provided the authors are cited when it is used in any research or commercial app
 > Gardner, W. G., and Martin, K. D. (1995). HRTF measurements of a KEMAR. Journal of the
 > Acoustical Society of America, 97(6), 3907-3908.
 
-Tessera's HRTF audio is built from this data: `tools/make_hrtf.py` turns it into
-`native/tessera_hrtf_data.h`, which is compiled into the engine.
+Tallow's HRTF audio is built from this data: `tools/make_hrtf.py` turns it into
+`native/tallow_hrtf_data.h`, which is compiled into the engine.
