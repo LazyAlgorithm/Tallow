@@ -318,7 +318,7 @@ class LauncherApp : Application
 				text.Append(", ");
 			text.Append(mMissingTools[i]);
 		}
-		text.Append(". Install them with Tallow Hub (or yourself), then start the launcher again.");
+		text.Append(". Install the required development tools through Tallow Manager, then restart the launcher.");
 	}
 
 	void CreateFromForm()
