@@ -7,8 +7,9 @@ $root = Join-Path $env:LOCALAPPDATA 'Tallow\toolchain'
 $release = 'https://github.com/LazyAlgorithm/Tallow/releases/download/v0.1.0-beta'
 New-Item -ItemType Directory -Force -Path $root | Out-Null
 
-function Install-Archive([string]$asset, [string]$marker) {
-    if (Test-Path (Join-Path $root $marker)) { return }
+function Install-Archive([string]$asset, [string]$marker, [string]$extraMarker = '') {
+    if ((Test-Path (Join-Path $root $marker)) -and
+        (-not $extraMarker -or (Test-Path (Join-Path $root $extraMarker)))) { return }
     $archive = Join-Path $env:TEMP $asset
     try {
         Write-Host "Downloading $asset"
@@ -17,12 +18,13 @@ function Install-Archive([string]$asset, [string]$marker) {
         Write-Host "Extracting $asset"
         Expand-Archive -LiteralPath $archive -DestinationPath $root -Force
         if (-not (Test-Path (Join-Path $root $marker))) { throw "$asset did not contain $marker" }
+        if ($extraMarker -and -not (Test-Path (Join-Path $root $extraMarker))) { throw "$asset did not contain $extraMarker" }
     } finally {
         Remove-Item $archive -Force -ErrorAction SilentlyContinue
     }
 }
 
-Install-Archive 'beef-windows-x64.zip' 'beef\bin\BeefBuild.exe'
+Install-Archive 'beef-windows-x64.zip' 'beef\bin\BeefBuild.exe' 'beef\BeefLibs\corlib\BeefProj.toml'
 $corlib = Join-Path $root 'beef\BeefLibs\corlib\BeefProj.toml'
 if (-not (Test-Path -LiteralPath $corlib)) { throw 'Beef standard library (corlib) is missing. The published toolchain archive is incomplete.' }
 $config = Join-Path $root 'beef\bin\BeefConfig.toml'
