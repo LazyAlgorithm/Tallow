@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from engine_versions import LOCK, MANIFEST, install, pin, resolve
+from engine_versions import LOCK, MANIFEST, install, pin, pin_new, resolve, verify
 
 
 class EngineVersionsTest(unittest.TestCase):
@@ -46,6 +46,17 @@ class EngineVersionsTest(unittest.TestCase):
         pin(self.project, self.package / MANIFEST)
         with self.assertRaises(FileNotFoundError):
             resolve(self.project, self.installed)
+
+    def test_verify_selected_engine(self):
+        self.assertFalse(verify(self.project, self.package))
+        pin_new(self.project, self.package)
+        self.assertTrue(verify(self.project, self.package))
+        self.data['build'] = 'b' * 40
+        self.save_manifest()
+        with self.assertRaises(ValueError):
+            verify(self.project, self.package)
+        with self.assertRaises(ValueError):
+            pin_new(self.project, self.package)
 
     def test_reject_path_traversal(self):
         self.data['version'] = '../escape'
