@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Lets an editor watch this program's Profiler over the network (docs/profiler.md): `--profile-listen [port]` on a
 /// game or a dedicated server, then Window > Profiler > Attach in the editor. While an editor is connected the

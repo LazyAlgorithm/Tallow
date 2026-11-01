@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Frame and simulation timing. The simulation runs on a fixed tick so physics and
 /// networking stay deterministic; rendering interpolates between ticks.

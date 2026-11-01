@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Notices when the game stops moving and writes down what it was doing, so that a freeze on a player's machine
 /// can be traced from the log file. Started by built games; costs a few assignments a frame.

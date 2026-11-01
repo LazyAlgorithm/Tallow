@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// One timed piece of a subtitle file: shown from start to end seconds into its sound.
 struct SubtitleCue

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Lists the whole project shares, needed while the game runs: the named physics layers and which of them collide,
 /// the tags objects can carry, and the world states. Kept in ProjectConfig.tconfig at the root of the project's

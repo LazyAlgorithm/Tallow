@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What an action gives: a button (down or not), an axis (-1 to 1) or a direction (two axes).
 enum InputActionKind : int32

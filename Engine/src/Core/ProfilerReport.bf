@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A plain-text report of a capture (docs/profiler.md), to read or to give someone (or an AI assistant) debugging a
 /// slow game: frame-time spread, the slowest frames with their call trees, the markers that cost most on average,
@@ -25,7 +25,7 @@ extension ProfilerCapture
 	/// The report, `slowest` frames shown in full.
 	public void WriteReport(String text, int slowest = 5)
 	{
-		text.Append("# Tessera Profiler report\n\n");
+		text.Append("# Tallow Profiler report\n\n");
 		if (frames.IsEmpty)
 		{
 			text.Append("No frames were recorded.\n");

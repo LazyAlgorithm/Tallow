@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What automatic probe placement places (docs/probe-placement.md).
 class ProbePlacementSettings

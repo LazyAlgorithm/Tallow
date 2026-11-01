@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What one step of a dialogue does (see DialogueAsset for the file format).
 enum DialogueStepKind : int32

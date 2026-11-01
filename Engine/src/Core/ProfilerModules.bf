@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The Profiler's modules (docs/profiler.md): counters for each part of the engine, set at the end of every recorded
 /// frame from what the systems already know, and the GPU's times read from bgfx.

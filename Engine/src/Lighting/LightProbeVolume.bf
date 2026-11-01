@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A box of closer-together light probes for the light baker (docs/baked-lighting.md): where light changes over a
 /// short way (a room, a doorway, under a roof, round a lamp) the scene's grid of probes is too coarse. Things whose

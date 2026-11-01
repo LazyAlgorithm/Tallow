@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// How the light baker works (docs/baked-lighting.md).
 class BakeSettings
