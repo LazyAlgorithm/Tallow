@@ -11,8 +11,9 @@ function Install-Archive([string]$asset, [string]$marker) {
     $archive = Join-Path $env:TEMP $asset
     try {
         Write-Host "Downloading $asset"
-        Invoke-WebRequest -Uri "$release/$asset" -OutFile $archive
+        Invoke-WebRequest -Uri "$release/$asset" -OutFile $archive -TimeoutSec 180
         if ((Get-Item $archive).Length -lt 1000) { throw "Downloaded archive is unexpectedly small." }
+        Write-Host "Extracting $asset"
         Expand-Archive -LiteralPath $archive -DestinationPath $root -Force
         if (-not (Test-Path (Join-Path $root $marker))) { throw "$asset did not contain $marker" }
     } finally {
