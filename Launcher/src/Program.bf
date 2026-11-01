@@ -162,10 +162,7 @@ class LauncherApp : Application
 		ImGui.Separator();
 		ImGui.Spacing();
 		if (mMissingTools.Count > 0)
-		{
-			ImGui.OpenPopup("Development tools required");
 			ImGui.BeginDisabled(true);
-		}
 
 		let busy = mOpenCountdown > 0;
 		ImGui.BeginDisabled(busy);
@@ -187,8 +184,12 @@ class LauncherApp : Application
 		if (!mMessage.IsEmpty)
 			DrawLauncherMessage();
 		ImGui.End();
+		// Open and render the modal from the same ImGui popup ID scope.
 		if (mMissingTools.Count > 0)
+		{
+			ImGui.OpenPopup("Development tools required");
 			DrawSetupDialog();
+		}
 		ImGui.tn_imgui_render(250);
 		if (mSetupPending)
 		{
