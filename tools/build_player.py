@@ -313,7 +313,7 @@ def main():
         except BaseException:
             shutil.rmtree(staging)
             raise
-    print(f'{args.platform.capitalize()} player packaged at {output}; TesseraEditor excluded.')
+    print(f'{args.platform.capitalize()} player packaged at {output}; TallowEditor excluded.')
 
 
 if __name__ == '__main__':
