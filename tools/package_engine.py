@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build and package the Tessera editor for Linux, Windows or macOS, without build caches."""
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -107,6 +108,20 @@ def main():
         prerequisites = ('Beef toolchain, Microsoft C++ Build Tools, and Python 3.11+ on PATH.' if windows
                          else 'BeefBuild (built for macOS) and Python 3.11+ on PATH, and the Xcode command line tools.' if macos
                          else 'BeefBuild and Python 3.11+ on PATH, plus system graphics/audio drivers and X11 libraries.')
+        # Pin packaged builds to a specific source revision.
+        commit = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'], cwd=root, capture_output=True,
+            text=True, check=True).stdout.strip()
+        version = os.environ.get('TESSERA_VERSION', '').strip()
+        if not re.fullmatch(r'[0-9a-f]{40}', commit):
+            parser.error('Cannot determine source commit SHA.')
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.+-]*', version):
+            parser.error('Set TESSERA_VERSION to the desired version.')
+        (stage / 'tessera-version.json').write_text(json.dumps({
+            'engine': 'Tessera', 'version': version, 'build': commit,
+            'project_format': 1, 'platform': args.platform,
+            'architecture': 'arm64' if macos else 'x64',
+        }, indent=2) + '\n')
         (stage / 'tessera-package.txt').write_text(
             f'Tessera early beta for {args.platform} ({"Apple silicon" if macos else "x64"}), {args.config}.\n'
             f'Start {"Tessera.exe" if windows else "./Tessera"}.\n'
