@@ -28,7 +28,7 @@ permissions:
   contents: write
 
 env:
-  TALLOW_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('build-{0}', github.sha) }}
+  TALLOW_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v0.0.1-beta.{0}', github.run_number) }}
   # Beef's compiler for Linux, built from source. Windows uses Beef's own Windows release.
   BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
   LLVM_VERSION: '22'
