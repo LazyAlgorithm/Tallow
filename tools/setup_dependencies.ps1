@@ -1,5 +1,6 @@
-# Standalone Tallow development-tool setup (Windows).
-# Runs only after the user chooses Install in the launcher.
+# Shared Tallow Windows development-tool installer.
+# This is the single source for the standalone launcher and packaged Tallow Manager.
+# Both launch it off the UI thread and install into the same user-level toolchain folder.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $root = Join-Path $env:LOCALAPPDATA 'Tallow\toolchain'
@@ -22,6 +23,10 @@ function Install-Archive([string]$asset, [string]$marker) {
 }
 
 Install-Archive 'beef-windows-x64.zip' 'beef\bin\BeefBuild.exe'
+$corlib = Join-Path $root 'beef\BeefLibs\corlib\BeefProj.toml'
+if (-not (Test-Path -LiteralPath $corlib)) { throw 'Beef standard library (corlib) is missing. The published toolchain archive is incomplete.' }
+$config = Join-Path $root 'beef\bin\BeefConfig.toml'
+Set-Content -LiteralPath $config -Value "Version = 1`nUnversionedLibDirs = [`"../BeefLibs`"]`n" -Encoding ASCII
 $existingPython = Get-Command python -ErrorAction SilentlyContinue
 $validPython = $false
 if ($existingPython) {
