@@ -27,15 +27,9 @@ $corlib = Join-Path $root 'beef\BeefLibs\corlib\BeefProj.toml'
 if (-not (Test-Path -LiteralPath $corlib)) { throw 'Beef standard library (corlib) is missing. The published toolchain archive is incomplete.' }
 $config = Join-Path $root 'beef\bin\BeefConfig.toml'
 Set-Content -LiteralPath $config -Value "Version = 1`nUnversionedLibDirs = [`"../BeefLibs`"]`n" -Encoding ASCII
-$existingPython = Get-Command python -ErrorAction SilentlyContinue
-$validPython = $false
-if ($existingPython) {
-    & $existingPython.Source -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)' 2>$null
-    $validPython = ($LASTEXITCODE -eq 0)
-}
-if (-not $validPython) {
-    Install-Archive 'python-windows-x64.zip' 'python\\python.exe'
-}
+# Use our managed Python directly. Do not invoke WindowsApps' Python Store alias:
+# it is not a working interpreter and can stall unattended setup.
+Install-Archive 'python-windows-x64.zip' 'python\python.exe'
 # The embeddable Python distribution needs its stdlib zip, included in the official archive.
 $python = Join-Path $root 'python\python.exe'
 if (Test-Path $python) {
