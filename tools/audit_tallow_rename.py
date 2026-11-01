@@ -40,9 +40,12 @@ def main():
     args = parser.parse_args()
     count = 0
     unclassified = 0
+    legacy_paths = []
     for file in sorted(tracked_files()):
         if not file.is_file() or set(file.relative_to(ROOT).parts) & SKIP:
             continue
+        if TOKEN.search(str(file.relative_to(ROOT))):
+            legacy_paths.append(str(file.relative_to(ROOT)))
         try: content = file.read_text("utf-8")
         except (UnicodeError, OSError): continue
         for number, line in enumerate(content.splitlines(), 1):
@@ -53,8 +56,10 @@ def main():
             count += 1
             unclassified += category == "unclassified branding/code"
             print(f"{file.relative_to(ROOT)}:{number}: [{category}] {line.strip()[:180]}")
-    print(f"Legacy-name lines: {count}; unclassified: {unclassified}")
-    if args.strict and unclassified: return 1
+    for path in legacy_paths:
+        print(f"{path}: [legacy filename/path] rename or explicitly preserve this path")
+    print(f"Legacy-name lines: {count}; unclassified: {unclassified}; legacy paths: {len(legacy_paths)}")
+    if args.strict and (unclassified or legacy_paths): return 1
     return 0
 
 if __name__ == "__main__":
