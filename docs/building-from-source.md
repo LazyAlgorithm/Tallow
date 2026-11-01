@@ -26,7 +26,7 @@ export BEEFBUILD="$HOME/.local/share/TesseraBuildTools/beef/IDE/dist/BeefBuild.s
 git clone https://github.com/LazyAlgorithm/Tessera.git
 cd Tessera
 ./build.sh --config Debug --jobs 8
-./tessera
+./build/Debug_Linux64/TallowLauncher/TallowLauncher
 ```
 
 `build.sh` uses Python 3 by default; `PYTHON=/path/to/python3.12 ./build.sh` selects another interpreter. You can call `python3 tools/build.py` directly. The build patches the vendored text editor, compiles the native libraries/tools, compiles the shipped shader backends, collects licenses and builds the launcher. A Vulkan-capable graphics driver is required to run the editor; headless project creation/compilation does not need a display.
@@ -46,7 +46,7 @@ Open an **x64 Native Tools Command Prompt for VS 2022** so the MSVC/SDK include 
 git clone https://github.com/LazyAlgorithm/Tessera.git
 cd Tessera
 python tools/build.py --config Debug --jobs 8
-build\Debug_Win64\TesseraLauncher\TesseraLauncher.exe
+build\Debug_Win64\TallowLauncher\TallowLauncher.exe
 ```
 
 From a Visual Studio developer PowerShell you can instead run `./build.ps1 --config Debug --jobs 8`. No Bash, Wine, Linux checkout or developer-specific folders are needed on Windows. The native C runtime is static (`MultiThreaded`) to match Beef. Windows uses Vulkan; Direct3D is not a supported default backend.
@@ -69,7 +69,7 @@ To make Release engine packages:
 
 ```text
 python tools/build.py --config Release
-python tools/package_engine.py --platform windows --folder dist/Tessera-Windows
+python tools/package_engine.py --platform windows --folder dist/Tallow-Windows
 ```
 
 On Linux select `--platform linux`, and use `python3` if that is your Python 3.11+ command. Packaging rebuilds the launcher and includes source, templates, shaderc and native archives. Building a game uses `tools/build_player.py PROJECT --output OUTPUT`; first open/build that project in the launcher to generate its Beef build files.
