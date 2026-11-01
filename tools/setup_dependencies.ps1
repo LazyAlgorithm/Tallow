@@ -47,7 +47,7 @@ if (-not $vsPath) {
     try {
         Write-Host 'Installing Microsoft C++ Build Tools and Windows SDK (administrator approval required)'
         Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vs_BuildTools.exe' -OutFile $installer
-        $process = Start-Process -FilePath $installer -ArgumentList '--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended' -Verb RunAs -Wait -PassThru
+        $process = Start-Process -FilePath $installer -ArgumentList '--passive --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended' -Verb RunAs -Wait -PassThru
         if ($process.ExitCode -notin @(0,3010)) { throw "Build Tools installer exited with code $($process.ExitCode)." }
     } finally {
         Remove-Item $installer -Force -ErrorAction SilentlyContinue
