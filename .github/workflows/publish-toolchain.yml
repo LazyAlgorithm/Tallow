@@ -19,6 +19,7 @@ jobs:
           mkdir -p beef
           7z x -y BeefSetup.exe -obeef >/dev/null
           test -s beef/bin/BeefBuild.exe
+          test -s beef/BeefLibs/corlib/BeefProj.toml || { echo "Beef package is missing corlib; refusing to publish incomplete toolchain." >&2; exit 1; }
           7z a -tzip -mx=9 beef-windows-x64.zip beef >/dev/null
       - name: Download Python 3.12 embeddable
         shell: bash
