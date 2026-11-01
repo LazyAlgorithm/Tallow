@@ -413,7 +413,7 @@ class Spinner : Component
           <tr><td>Graphics</td><td>A Vulkan driver</td><td>A Vulkan driver</td></tr>
         </tbody>
       </table></div>
-      <p>Then take an editor package from the <a href="#download">download page</a> and unzip it anywhere. The folder can be moved. Or build from source:</p>
+      <p>Choose <a href="https://github.com/LazyAlgorithm/Tallow-Manager/releases/latest">Tallow Engine Manager</a> for managed engine versions, or download the <a href="https://github.com/LazyAlgorithm/Tallow/releases/latest">standalone engine</a> and extract it anywhere. Windows standalone builds can offer first-launch dependency setup when tools are missing. On Linux, install the required development dependencies separately. To build from source:</p>
       <div data-code="build" data-file="Terminal" data-lang="sh"></div>
 
       <h2 id="gs-project">Create a project</h2>
@@ -1200,27 +1200,34 @@ Quality.Save();                    // applied by itself at the next start</code>
 <section class="view" id="v-download" data-view="download" hidden><span id="download" class="route-anchor" aria-hidden="true"></span>
   <div class="section-head" style="margin-bottom:28px">
     <div><p class="eyebrow">Download · early beta</p><h1 style="margin-top:8px;font-size:clamp(1.9rem,4vw,2.6rem)">Get Tallow</h1></div>
-    <p>Early beta packages for Linux and Windows, available from the public GitHub releases page.</p>
+    <p>Choose the optional Engine Manager or download Tallow Engine directly. Both support standalone installation.</p>
   </div>
   <div class="made">
-    <a class="card" href="https://github.com/LazyAlgorithm/Tallow/releases" target="_blank" rel="noopener">
-      <span class="meta">Linux x64 · Tallow-Linux.zip</span>
-      <h3>Linux</h3>
-      <p>Run <code>./Tallow</code>. Needs BeefBuild and Python 3.11+ on <code>PATH</code>, X11 libraries and a Vulkan driver.</p>
-      <span style="color:var(--cobalt);font-weight:700">Releases on GitHub →</span>
+    <a class="card" href="https://github.com/LazyAlgorithm/Tallow-Manager/releases/latest" target="_blank" rel="noopener">
+      <span class="meta">Recommended · Windows and Linux</span>
+      <h3>Tallow Engine Manager</h3>
+      <p>Download <code>TallowManager-Windows.zip</code> or <code>TallowManager-Linux.zip</code>, extract, and launch the manager. Choose an engine version to install, launch, or uninstall. The manager also helps install required development tools and offers optional self-updates.</p>
+      <span style="color:var(--cobalt);font-weight:700">Download Engine Manager →</span>
     </a>
-    <a class="card" href="https://github.com/LazyAlgorithm/Tallow/releases" target="_blank" rel="noopener">
-      <span class="meta">Windows x64 · Tallow-Windows.zip</span>
-      <h3>Windows</h3>
-      <p>Run <code>Tallow.exe</code>. Needs the Beef toolchain, Microsoft C++ Build Tools, Python 3.11+ and a Vulkan driver.</p>
-      <span style="color:var(--cobalt);font-weight:700">Releases on GitHub →</span>
+    <a class="card" href="https://github.com/LazyAlgorithm/Tallow/releases/latest" target="_blank" rel="noopener">
+      <span class="meta">Direct download · Windows x64</span>
+      <h3>Tallow Engine for Windows</h3>
+      <p>Download <code>Tallow-Windows.zip</code>, extract, and run <code>Tallow.exe</code>. When development tools are missing, newer builds prompt to install Beef, Python, and Microsoft C++ Build Tools on first launch. Approve the Windows administrator prompt if requested.</p>
+      <span style="color:var(--cobalt);font-weight:700">Download Windows Engine →</span>
+    </a>
+    <a class="card" href="https://github.com/LazyAlgorithm/Tallow/releases/latest" target="_blank" rel="noopener">
+      <span class="meta">Direct download · Linux x64</span>
+      <h3>Tallow Engine for Linux</h3>
+      <p>Download <code>Tallow-Linux.zip</code>, extract, make <code>Tallow</code> executable, and launch it. Project compilation requires BeefBuild, Python 3.11+, platform development libraries and graphics drivers. Automatic standalone dependency installation on Linux is not yet available.</p>
+      <span style="color:var(--cobalt);font-weight:700">Download Linux Engine →</span>
     </a>
     <div class="card">
-      <span class="meta">Source · build.sh</span>
-      <h3>From source</h3>
-      <p>Clone the repository and run <code>./build.sh</code>, then <code>./tallow</code>. Windows packages build on Windows in CI; cross-compiling from Linux uses <code>tools/windows/setup.sh</code>.</p>
+      <span class="meta">Optional · source builds</span>
+      <h3>Build from source</h3>
+      <p>Get the source and platform-specific toolchain instructions from <a href="https://github.com/LazyAlgorithm/Tallow" target="_blank" rel="noopener">the engine repository</a>. The Manager is not required for standalone engine use.</p>
     </div>
   </div>
+  <p><strong>Both installation paths lead to the same editor.</strong> Tallow Engine Manager is optional. A packaged game or the manager can run without development tools; opening or compiling an engine project requires them. Keep your downloaded archive together with its version and check the release notes before upgrading.</p>
   <div class="section" style="margin-top:48px">
     <div class="split">
       <div>
