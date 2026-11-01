@@ -150,9 +150,13 @@ static class Toolchain
 	public static void FindMissing(List<String> missing)
 	{
 		let beef = scope String();
-		let hasBeef = (Environment.GetEnvironmentVariable("BEEFBUILD", beef) case .Ok) && !beef.IsEmpty && File.Exists(beef);
+		var hasBeef = (Environment.GetEnvironmentVariable("BEEFBUILD", beef) case .Ok) && !beef.IsEmpty && File.Exists(beef);
+		let managed = scope String();
+		OwnBeef(managed);
+		if (hasBeef && beef == managed && !File.Exists(scope $"{Folder}/beef/BeefLibs/corlib/BeefProj.toml"))
+			hasBeef = false;
 		if (!hasBeef && !FindOnPath("BeefBuild", beef))
-			missing.Add(new .("the Beef compiler"));
+			missing.Add(new .("the Beef compiler and its standard libraries"));
 		let python = scope String();
 		if (!FindOnPath(Terminal.Python, python))
 			missing.Add(new .("Python 3.11 or later"));
