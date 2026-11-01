@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// How a Water surface is drawn (docs/water.md).
 [Reflect(.All)]

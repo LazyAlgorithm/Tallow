@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Undo and redo of sculpting in the editor, and handing edits over between terrains.
 extension VoxelTerrain

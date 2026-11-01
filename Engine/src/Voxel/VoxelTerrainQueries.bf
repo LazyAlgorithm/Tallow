@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Looking at the ground from outside: chunk meshes for tests and tools, and rays and heights against the surface.
 extension VoxelTerrain

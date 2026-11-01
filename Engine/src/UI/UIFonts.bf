@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Fonts for game interfaces: a UI document's `font-family: Fonts/Title.ttf` (inherited like font-size), or from
 /// code in a Component's OnGUI:

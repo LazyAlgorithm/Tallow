@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Turning a terrain chunk's samples into meshes, on worker threads.
 extension VoxelTerrain
@@ -360,7 +360,7 @@ extension VoxelTerrain
 						edgeVertex[e] = (uint32)vertexIndex;
 					}
 
-					// The table winds the other way from Tessera's front faces.
+					// The table winds the other way from Tallow's front faces.
 					let row = config * 16;
 					for (int i = 0; MarchingTables.Triangles[row + i] != -1; i += 3)
 					{

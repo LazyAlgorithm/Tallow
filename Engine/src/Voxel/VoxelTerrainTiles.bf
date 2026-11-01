@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The terrain's tiles (Fixed mode): which squares of the world it covers, and reading and writing their list.
 extension VoxelTerrain

@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Sculpting kept per tile: the chunks changed by hand, held in memory and written to the tile files.
 extension VoxelTerrain

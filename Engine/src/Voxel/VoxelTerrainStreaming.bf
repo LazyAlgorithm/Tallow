@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Streaming, on the main thread: which chunks are wanted around the viewers, queuing them and uploading what the workers finish.
 extension VoxelTerrain

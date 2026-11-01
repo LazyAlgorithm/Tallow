@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Making the ground: samples from the generator, painting, and the colours of the surface.
 extension VoxelTerrain

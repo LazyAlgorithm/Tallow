@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 [Reflect(.All)]
 enum VoxelShape : int32
@@ -557,7 +557,7 @@ class VoxelObject : Component
 						}
 						mMesh.Vertices.Add(.(local, normal, vertexColor, uv));
 					}
-					// The table winds the other way from Tessera's front faces.
+					// The table winds the other way from Tallow's front faces.
 					let row = config * 16;
 					for (int i = 0; MarchingTables.Triangles[row + i] != -1; i += 3)
 					{

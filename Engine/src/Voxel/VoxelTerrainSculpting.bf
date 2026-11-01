@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Sculpting and painting the ground, and sharing brush strokes with other players.
 extension VoxelTerrain

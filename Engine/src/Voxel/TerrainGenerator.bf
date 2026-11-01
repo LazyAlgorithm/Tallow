@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Gradient noise used for terrain generation. Deterministic for a given seed on every platform.
 static class Noise
@@ -80,7 +80,7 @@ struct TerrainGeneratorAttribute : Attribute
 {
 }
 
-/// The shape of a game's ground. Tessera stores, edits, meshes and streams terrain; what the ground looks like before
+/// The shape of a game's ground. Tallow stores, edits, meshes and streams terrain; what the ground looks like before
 /// anyone sculpts it is the game's to say, with a class like this:
 ///
 ///   [TerrainGenerator]
