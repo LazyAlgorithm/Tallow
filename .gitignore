@@ -11,3 +11,6 @@ website/
 
 # Kate editor swap files
 *.kate-swp
+
+# Generated identity for a local source build
+tallow-version.json
