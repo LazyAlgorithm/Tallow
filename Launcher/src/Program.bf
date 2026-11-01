@@ -1,11 +1,11 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
-using Tessera.Editor;
+using Tallow;
+using Tallow.Editor;
 using Bgfx;
 
-namespace Tessera.Launcher;
+namespace Tallow.Launcher;
 
 /// The project hub: pick a recent project, add an existing one, or create a new one.
 /// Opening a project compiles its scripts and starts its editor.
@@ -22,7 +22,7 @@ class LauncherApp : Application
 	String mPendingOpen = new .() ~ delete _;
 	String mEngineRoot = new .() ~ delete _;
 	ProjectTemplate mTemplate = .Sample;
-	/// Tools Tessera needs that were not found, when the launcher started.
+	/// Tools Tallow needs that were not found, when the launcher started.
 	List<String> mMissingTools = new .() ~ DeleteContainerAndItems!(_);
 	bool mMessageIsError;
 	int32 mOpenCountdown;
@@ -32,7 +32,7 @@ class LauncherApp : Application
 	{
 		Width = 980;
 		Height = 620;
-		Title.Set("Tessera");
+		Title.Set("Tallow");
 	}
 
 	protected override bool OnInit()
@@ -57,9 +57,9 @@ class LauncherApp : Application
 		Environment.GetEnvironmentVariable("HOME", home).IgnoreError();
 #endif
 		if (!home.IsEmpty)
-			mLocation.AppendF("{}/TesseraProjects", home);
+			mLocation.AppendF("{}/TallowProjects", home);
 		else
-			mLocation.Set("TesseraProjects");
+			mLocation.Set("TallowProjects");
 		return true;
 	}
 
@@ -102,7 +102,7 @@ class LauncherApp : Application
 		let project = scope Project();
 		if (!project.Load(path))
 		{
-			error.Set(scope $"{path} is not a Tessera project (no project.tessera).");
+			error.Set(scope $"{path} is not a Tallow project (no project.tessera).");
 			return false;
 		}
 		if (!project.Build(false))
@@ -137,7 +137,7 @@ class LauncherApp : Application
 		ImGui.Begin("Launcher", null, ImGui.WindowFlags.NoDecoration | ImGui.WindowFlags.NoMove | ImGui.WindowFlags.NoSavedSettings);
 		ImGui.PopStyleVar();
 
-		ImGui.Text("TESSERA");
+		ImGui.Text("TALLOW");
 		ImGui.SameLine();
 		ImGui.TextDisabled("Projects");
 		ImGui.Separator();
@@ -301,7 +301,7 @@ class LauncherApp : Application
 				text.Append(", ");
 			text.Append(mMissingTools[i]);
 		}
-		text.Append(". Install them with Tessera Hub (or yourself), then start the launcher again.");
+		text.Append(". Install them with Tallow Hub (or yourself), then start the launcher again.");
 	}
 
 	void CreateFromForm()
