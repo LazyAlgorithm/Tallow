@@ -1,7 +1,7 @@
-Third-party software in Tessera
+Third-party software in Tallow
 ===============================
 
-Tessera, and every game built with it, includes the libraries below. Their licences follow in full.
+Tallow, and every game built with it, includes the libraries below. Their licences follow in full.
 
   bgfx                 Rendering
   bx                   Base library used by bgfx

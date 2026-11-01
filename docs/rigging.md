@@ -88,7 +88,7 @@ RigExport.Write(rig, "Models/Wolf_Rigged.glb", problem);
 rig.Save("Models/Wolf.trig");
 ```
 
-`WeightPainter` paints (`Dab`, `SmoothAll`, `MirrorWeights`), `WeightTools` normalises and limits weights, and `Rig.Posed` skins the model in a pose. The heat solve runs in the native library (`native/tessera_rig.cpp`), on every core.
+`WeightPainter` paints (`Dab`, `SmoothAll`, `MirrorWeights`), `WeightTools` normalises and limits weights, and `Rig.Posed` skins the model in a pose. The heat solve runs in the native library (`native/tallow_rig.cpp`), on every core.
 
 ## Checks
 

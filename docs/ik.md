@@ -1,7 +1,7 @@
 # Inverse kinematics
 
 Inverse kinematics (IK) poses a limb from where its end should be: you say where the hand goes and the arm works
-out the elbow. Tessera has four IK components, a set of solver functions under them, and tools for them in the
+out the elbow. Tallow has four IK components, a set of solver functions under them, and tools for them in the
 Inspector and the Animation window.
 
 | Component | What it does |

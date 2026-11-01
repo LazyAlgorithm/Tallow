@@ -1,6 +1,6 @@
 # Building for Windows
 
-Tessera is developed on Linux, and builds Windows games, and a Windows copy of the editor, from there. No Windows machine is needed to build.
+Tallow is developed on Linux, and builds Windows games, and a Windows copy of the editor, from there. No Windows machine is needed to build.
 
 **How far it has been tested.** The Windows builds are made on Linux and run there under Wine: a packaged game starts, draws with Vulkan, plays a match and joins a server running the Linux build; the launcher and editor start, open a project, show its interface documents and play it. A built game has also been run on a Windows machine. The launcher and editor have not been run on one yet, so expect to find things on the first try there.
 
@@ -10,7 +10,7 @@ Tessera is developed on Linux, and builds Windows games, and a Windows copy of t
 tools/windows/setup.sh --accept-license
 ```
 
-This downloads about 3 GB into `~/.local/share/tessera-win` (or `$TESSERA_WIN`) and builds the engine's native libraries for Windows into `build/native-win`:
+This downloads about 3 GB into `~/.local/share/tallow-win` (or `$TALLOW_WIN`) and builds the engine's native libraries for Windows into `build/native-win`:
 
 - Microsoft's C runtime and Windows SDK libraries, fetched with the `xwin` tool. They are Microsoft's, under the Microsoft Visual Studio Build Tools licence; `--accept-license` says you accept it. They are linked into what you build and are never copied into a package.
 - The Windows release of the Beef compiler, which is run under Wine.
@@ -35,10 +35,10 @@ A Windows and a Linux build of the same game play together: the physics library 
 **File > Build...**, **Editor**, **Windows**, or:
 
 ```sh
-python3 tools/package_engine.py --platform windows --folder /path/to/Tessera-Windows
+python3 tools/package_engine.py --platform windows --folder /path/to/Tallow-Windows
 ```
 
-The folder holds the launcher, the engine and editor source, the Windows native libraries and the tools. On the Windows machine start `Tessera.exe`. Every project compiles its own scripts together with the engine, so that machine needs:
+The folder holds the launcher, the engine and editor source, the Windows native libraries and the tools. On the Windows machine start `Tallow.exe`. Every project compiles its own scripts together with the engine, so that machine needs:
 
 - the Beef toolchain from beeflang.org, with `BeefBuild` on the PATH;
 - Microsoft C++ Build Tools (Beef's installer says where to get them; they are free);
@@ -63,21 +63,21 @@ Differences from the Linux editor:
 
 ## Not done
 
-- **Direct3D.** Only Vulkan shaders are shipped. Direct3D bytecode needs Microsoft's shader compiler; compile with bgfx's `shaderc` on Windows into `Engine/assets/shaders/dx11` and remove the Vulkan default in `native/tessera_native.cpp` to use it.
+- **Direct3D.** Only Vulkan shaders are shipped. Direct3D bytecode needs Microsoft's shader compiler; compile with bgfx's `shaderc` on Windows into `Engine/assets/shaders/dx11` and remove the Vulkan default in `native/tallow_native.cpp` to use it.
 - **The test fixtures** have Linux link settings only.
 - **A real Windows machine.** File dialogs, audio output and the microphone, gamepads, high-DPI scaling and Steam there are untried.
 
 ## Opening projects from a Hub installation
 
-Windows editor builds now quote both the Beef compiler executable and every native archive in generated project link flags. This is required for the Hub's `Tessera Hub` installation folder and Windows user/tool folders containing spaces. Earlier packages can fail with `lld-link: could not open .../Tessera` or a command-not-found error before compilation starts. Update the engine package through the Hub; reopening a project regenerates its Beef build files.
+Windows editor builds now quote both the Beef compiler executable and every native archive in generated project link flags. This is required for the Hub's `Tallow Hub` installation folder and Windows user/tool folders containing spaces. Earlier packages can fail with `lld-link: could not open .../Tallow` or a command-not-found error before compilation starts. Update the engine package through the Hub; reopening a project regenerates its Beef build files.
 
-The launcher also supports `Tessera.exe --build-project <folder>` to compile a project without opening a graphics window. This applies the Hub toolchain and locates the installed engine, including when the project remembers an engine from another machine.
+The launcher also supports `Tallow.exe --build-project <folder>` to compile a project without opening a graphics window. This applies the Hub toolchain and locates the installed engine, including when the project remembers an engine from another machine.
 
-`tools/test_windows_project_open.py --package <Tessera-Windows> --beef <BeefBuild.exe>` copies the engine and compiler beneath folders with spaces, creates a project in another such folder, and checks engine relocation, a full debug build, and rebuilding. CI runs this against the packaged Windows editor before releasing it. On Linux add `--wine` and use the Windows compiler. These checks establish project compilation, not rendered editor behavior on Windows hardware.
+`tools/test_windows_project_open.py --package <Tallow-Windows> --beef <BeefBuild.exe>` copies the engine and compiler beneath folders with spaces, creates a project in another such folder, and checks engine relocation, a full debug build, and rebuilding. CI runs this against the packaged Windows editor before releasing it. On Linux add `--wine` and use the Windows compiler. These checks establish project compilation, not rendered editor behavior on Windows hardware.
 
 Windows launchers and generated editor executables use the GUI subsystem, so starting the editor does not create an external command-prompt window. Compiler/build shells use `CreateNoWindow`; their output stays in the project build log and the editor's built-in Console remains available. Command-line launcher checks preserve redirected diagnostics and may attach to an existing caller console.
 
-Engine CI starts on pushes to `dev` and `main`: both build platform packages and run the native Windows project-open regression. `main` publishes Windows/Linux ZIPs and checksums as a `build-` release in `LazyAlgorithm/Tessera`, which is the repository/tag prefix Tessera Hub checks for engine updates. `dev` retains packages as Actions artifacts. No Hub application release is needed for an engine-only update.
+Engine CI starts on pushes to `dev` and `main`: both build platform packages and run the native Windows project-open regression. `main` publishes Windows/Linux ZIPs and checksums as a `build-` release in `LazyAlgorithm/Tallow`, which is the repository/tag prefix Tallow Hub checks for engine updates. `dev` retains packages as Actions artifacts. No Hub application release is needed for an engine-only update.
 
 ## Miniature dynamic worlds
 

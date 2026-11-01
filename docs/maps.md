@@ -40,10 +40,10 @@ A game says what a scene must have to be played as one of its maps in `src/MapRu
 # need <count> <component> ["what they are"]
 # need <count> <component> <field> <compare> <number> ["what they are"]
 # most <count> <component> ... (a limit instead of a need)
-need 4 Tessera.SpawnPoint "Spawn Points (one for each player)"
+need 4 Tallow.SpawnPoint "Spawn Points (one for each player)"
 need 24 MyGame.Ring "rings"
 need 3 MyGame.Ring raceOrder >= 0 "race gates (rings with a Race Order)"
-most 500 Tessera.Rigidbody "physics items"
+most 500 Tallow.Rigidbody "physics items"
 ignore Scenes/MainMenu.tscene
 ```
 
@@ -93,7 +93,7 @@ them sorted by name, broken ones included, each with `Problems` saying why it ca
 - it is the same map (the same `Id`) as one listed already, such as a renamed copy.
 
 A game adds its own checks with `map.AddProblem`, and can count what is in the map with
-`map.CountComponents("Tessera.SpawnPoint")`. `Mount` reads the map's files into memory, where they are found before
+`map.CountComponents("Tallow.SpawnPoint")`. `Mount` reads the map's files into memory, where they are found before
 the game's own files. `Unmount` frees them and forgets the models and textures loaded from them; unload the map's scene first.
 `Mount(map, true)` mounts a map that breaks a rule, for a map editor opening a map that is not finished.
 
@@ -122,7 +122,7 @@ before it is played.
 
 ## The file
 
-A `.tmap` file is an asset pack in the format the engine's own packs use (`native/tessera_pack.c`). It holds
+A `.tmap` file is an asset pack in the format the engine's own packs use (`native/tallow_pack.c`). It holds
 `map.txt` (the name, author, description, game and `Id`), `map.tscene`, and the terrain sculpting folders. While it
 is mounted its files appear in the project's `.maps/<Id>/` folder. `tools/pack_assets.py --list` and `--verify`
 read it. `PackFile` reads and writes one such pack from Beef.

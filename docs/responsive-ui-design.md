@@ -1,6 +1,6 @@
-# Responsive UI design — Tessera and Ringfall
+# Responsive UI design — Tallow and Ringfall
 
-Status: **design specification**, not an implementation request. Record decisions here before changing the UI again. Target: Tessera engine; Ringfall is the reference game. Work on `dev`; production `main` changes require explicit approval.
+Status: **design specification**, not an implementation request. Record decisions here before changing the UI again. Target: Tallow engine; Ringfall is the reference game. Work on `dev`; production `main` changes require explicit approval.
 
 ## The bug we diagnosed
 
@@ -17,18 +17,18 @@ The earlier mobile workarounds (Ringfall phone references 900/1080, percentage w
 3. **Responsive layouts, not global shrinking:** Screens rearrange or scroll when narrow rather than scaling entire interfaces down until text is unreadable.
 4. **Consistent visual language:** Reuse the same UI elements, themes, callbacks and data bindings across device variants; override only layout/interaction where needed.
 5. **Touch-first where appropriate:** Finger-sized targets, appropriate spacing and safe-area padding, with no loss of desktop mouse/keyboard/controller behavior.
-6. **Per-game control:** Tessera supplies generic layout and scaling primitives; each game chooses its own visual style and layout variants.
+6. **Per-game control:** Tallow supplies generic layout and scaling primitives; each game chooses its own visual style and layout variants.
 
 ## Web canvas and renderer
 
 - Size the canvas explicitly to the viewport's available CSS dimensions. Respect the safe-area inset and ensure the inset is applied **once**, not both by the shell and UI.
-- On every resize/orientation change, propagate the new logical size to SDL and Tessera before laying out UI.
+- On every resize/orientation change, propagate the new logical size to SDL and Tallow before laying out UI.
 - Keep **three distinct concepts**: CSS viewport size, SDL/UI logical size, and physical rendering-buffer resolution.
 - High-DPI scaling may increase drawing-buffer resolution for clarity; it must not multiply the UI's layout coordinates.
 - 3D aspect ratio follows the current viewport. Internal 3D resolution and anti-aliasing settings remain independently configurable; do not use UI scaling to repair 3D rendering.
 - Avoid hardcoded 1600×900 or other desktop-sized fallback values during normal mobile operation. A fallback is acceptable only when a valid viewport genuinely cannot be measured, and should be logged.
 
-## Tessera UI layout contract
+## Tallow UI layout contract
 
 - `UIDocument.referenceWidth` and `referenceHeight` provide **optional design references**, not substitutes for correct viewport measurement.
 - When both are specified, scale uniformly to fit, never stretch X and Y independently. Height-only legacy documents retain compatible behavior.

@@ -90,16 +90,16 @@ Tick **Load Save At Start** in Project Settings (and choose the slot), or set `S
 
 | Platform | Folder |
 |---|---|
-| Windows | `%APPDATA%\Tessera\<Game>\` |
-| Linux | `~/.local/share/Tessera/<Game>/` |
-| macOS | `~/Library/Application Support/Tessera/<Game>/` |
+| Windows | `%APPDATA%\Tallow\<Game>\` |
+| Linux | `~/.local/share/Tallow/<Game>/` |
+| macOS | `~/Library/Application Support/Tallow/<Game>/` |
 | Web | the browser's storage for the page, kept between visits |
 
 ```beef
 let path = scope $"{GamePaths.PlayerData}notes.txt";
 ```
 
-`<Game>` is the project's name; `company = ...` in the build's manifest replaces "Tessera". The game's own folder is for reading only.
+`<Game>` is the project's name; `company = ...` in the build's manifest replaces "Tallow". The game's own folder is for reading only.
 
 ## Data assets
 

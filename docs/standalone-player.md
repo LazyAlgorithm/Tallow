@@ -1,12 +1,12 @@
 # Standalone players
 
-The Tessera engine library contains `GameMain` and `GameApp`: command-line game startup, manifest loading, scene loading, fixed ticks, camera rendering, component GUI and shutdown. They reference no TesseraEditor types. EditorMain's development player derives from GameApp and retains editor-only first-run scene templates. Engine and editor share the runtime implementation through the existing Tessera library; the shipping player statically links it. There is no shared runtime DLL or reloadable script module yet.
+The Tallow engine library contains `GameMain` and `GameApp`: command-line game startup, manifest loading, scene loading, fixed ticks, camera rendering, component GUI and shutdown. They reference no TallowEditor types. EditorMain's development player derives from GameApp and retains editor-only first-run scene templates. Engine and editor share the runtime implementation through the existing Tallow library; the shipping player statically links it. There is no shared runtime DLL or reloadable script module yet.
 
 ## Building
 
 **File > Build...** opens the Build window:
 
-- **Build**: the **Game**, or the **Editor** (a copy of Tessera itself for another machine; see `README.md` and `docs/windows.md`).
+- **Build**: the **Game**, or the **Editor** (a copy of Tallow itself for another machine; see `README.md` and `docs/windows.md`).
 - **For**: **Linux** or **Windows**. Windows needs a one-time setup, which the window describes; see `docs/windows.md`.
 - **Window**: **Start in fullscreen** makes the built game fill the screen when it starts; unticked, it starts in a window. Kept in the project.
 - **Assets**: **Pack assets into one file** (on unless you turn it off) puts everything the game reads into `game.tpak`; see Asset packs below. Kept in the project.
@@ -23,7 +23,7 @@ python3 tools/build_player.py /path/to/project --platform windows --output /path
 
 `--output` is the game's own folder and must not exist, unless `--replace` is given and it is an earlier build. `--fullscreen` and `--windowed` override the project's Start in fullscreen setting, and `--loose` leaves the assets as loose files. `--console` (Windows) keeps a console window.
 
-The tool builds a temporary Beef workspace with TesseraEditor removed from dependencies, replaces Program.bf with a GameMain entry point, copies all other runtime scripts, and rejects scripts that reference Tessera.Editor. Graph-generated Beef scripts are included; graph source assets are not shipped. On Linux, additional libraries and native link settings come from the project's existing build files. Existing GameSetup.Register calls are detected; projects with other custom registration should pass --bootstrap Namespace.Type.Method. Custom Program startup logic must be moved into runtime bootstrap code before export.
+The tool builds a temporary Beef workspace with TallowEditor removed from dependencies, replaces Program.bf with a GameMain entry point, copies all other runtime scripts, and rejects scripts that reference Tallow.Editor. Graph-generated Beef scripts are included; graph source assets are not shipped. On Linux, additional libraries and native link settings come from the project's existing build files. Existing GameSetup.Register calls are detected; projects with other custom registration should pass --bootstrap Namespace.Type.Method. Custom Program startup logic must be moved into runtime bootstrap code before export.
 
 What is in the folder:
 - the executable (`<Name>`, or `<Name>.exe`)
@@ -31,11 +31,11 @@ What is in the folder:
 - THIRD_PARTY_LICENSES.txt: the licences of the libraries in the executable, which ask to be distributed with it
 - with a Steam App ID in Project Settings: `steam_appid.txt` and the Steamworks library (`libsteam_api.so` or `steam_api64.dll`), taken from the project folder if it has one, else from a Steam installation on this machine
 
-With **Pack assets into one file** unticked (or `--loose`), the pack is replaced by what would have been in it: `game.tessera`, `Assets/` and `Engine/assets/shaders/`.
+With **Pack assets into one file** unticked (or `--loose`), the pack is replaced by what would have been in it: `game.tallow`, `Assets/` and `Engine/assets/shaders/`.
 
-Three more project settings shape a built game's window, set in `project.tessera` (they have no editor field yet, as few games need them): `windowWidth` and `windowHeight` give the window's size in points when it starts in a window (otherwise 1600 by 900), and `escapeQuits = 0` stops Escape from closing the game, for a game or tool with its own way out. A game's own way out calls `Application.Quit()` (or sets `Application.Instance.Running = false`): it closes a built game, and only stops Play in the editor. Tessera Hub, itself a Tessera project, uses all three.
+Three more project settings shape a built game's window, set in `project.tallow` (they have no editor field yet, as few games need them): `windowWidth` and `windowHeight` give the window's size in points when it starts in a window (otherwise 1600 by 900), and `escapeQuits = 0` stops Escape from closing the game, for a game or tool with its own way out. A game's own way out calls `Application.Quit()` (or sets `Application.Instance.Running = false`): it closes a built game, and only stops Play in the editor. Tallow Hub, itself a Tallow project, uses all three.
 
-The player finds this package beside its executable, independent of working directory. --game overrides the package folder. --scene overrides the start scene. Application's renderer/headless/frame-limit options and network startup options remain available. --editor is rejected. A Linux build needs the system's graphics and X11 libraries, which every desktop has; a Windows build needs a Vulkan graphics driver and nothing else. ImGui remains a runtime dependency for component GUI; TesseraEditor panels/tools are excluded.
+The player finds this package beside its executable, independent of working directory. --game overrides the package folder. --scene overrides the start scene. Application's renderer/headless/frame-limit options and network startup options remain available. --editor is rejected. A Linux build needs the system's graphics and X11 libraries, which every desktop has; a Windows build needs a Vulkan graphics driver and nothing else. ImGui remains a runtime dependency for component GUI; TallowEditor panels/tools are excluded.
 
 Checked with a full game (Ringfall): both builds were moved to another folder and started from a different working directory; the Windows build was run under Wine.
 
@@ -62,13 +62,13 @@ Turning compression off keeps the scrambling and the checksums; it only saves th
 
 ### A pack for each scene
 
-**A pack for each scene** in the Build window (on unless you turn it off; `--single-pack` from a terminal, or `packSplit = 0` in `project.tessera`) gives each scene the files that only it uses in a pack of its own beside `game.tpak`: `scene-foundry.tpak` for `Scenes/Foundry.tscene`, say. Everything else, including whatever two scenes share, the start scene and what it uses, the engine's shaders and the manifest, stays in `game.tpak`.
+**A pack for each scene** in the Build window (on unless you turn it off; `--single-pack` from a terminal, or `packSplit = 0` in `project.tallow`) gives each scene the files that only it uses in a pack of its own beside `game.tpak`: `scene-foundry.tpak` for `Scenes/Foundry.tscene`, say. Everything else, including whatever two scenes share, the start scene and what it uses, the engine's shaders and the manifest, stays in `game.tpak`.
 
 - **Updates.** Packs come out byte for byte the same from the same files, so changing one map rewrites that map's pack and nothing else. A store that patches by file, or by changed parts of a file (Steam does both), sends players only that.
 - **Loading.** The game mounts every pack at start. Only each pack's list of files is read, a few kilobytes, so starting takes no longer than with one pack; files are read from whichever pack holds them, as before.
 - **In a browser** the page downloads `game.tpak`, starts the game, and fetches the scene packs in the background, smallest first. `SceneManager.Load` waits for a scene's pack by itself. Code that adds a scene with `LoadAdditive` checks `AssetPack.SceneReady(path)` first and calls `AssetPack.Request(path)` to have that pack fetched next; `AssetPack.Waiting` is how many packs have not arrived.
 
-What a scene uses is found by reading it: the prefabs, models, materials, sounds and documents it names, what those name in turn, and files beside the scene with its name (a terrain's `.voxels`). Paths written in scripts as text (`"Audio/ui_click.wav"`) are found too, and go into `game.tpak`. A path a script puts together while running (`$"Models/prop_{kind}.glb"`) cannot be found by reading, so list those files under **Always shared** in the Build window (`packShared = Models/prop_*.glb; Audio/*` in `project.tessera`, wildcards separated by semicolons). A scene's pack is only made when its own files come to 64 KB or more; smaller ones stay in `game.tpak`.
+What a scene uses is found by reading it: the prefabs, models, materials, sounds and documents it names, what those name in turn, and files beside the scene with its name (a terrain's `.voxels`). Paths written in scripts as text (`"Audio/ui_click.wav"`) are found too, and go into `game.tpak`. A path a script puts together while running (`$"Models/prop_{kind}.glb"`) cannot be found by reading, so list those files under **Always shared** in the Build window (`packShared = Models/prop_*.glb; Audio/*` in `project.tallow`, wildcards separated by semicolons). A scene's pack is only made when its own files come to 64 KB or more; smaller ones stay in `game.tpak`.
 
 Game code that reads its own data files should go through the engine, so that it works packed and loose:
 
@@ -91,7 +91,7 @@ if (Assets.FileExists("Data/extra.txt")) { /* ... */ }
 
 Reading a file directly with `File.ReadAllText` only finds loose files. Files the game *writes* (saves, settings) belong in the player's own folder, not among the assets. Folders added with `Assets.AddSearchPath` (mods, Workshop items) stay loose and are still found first.
 
-`tools/pack_assets.py --list game.tpak` shows what a pack holds, and `--verify` checks every file in it. The format is described at the top of `native/tessera_pack.c`.
+`tools/pack_assets.py --list game.tpak` shows what a pack holds, and `--verify` checks every file in it. The format is described at the top of `native/tallow_pack.c`.
 
 ## Fullscreen
 
@@ -126,4 +126,4 @@ ProjectFolderMonitor checks recursive folder metadata once per second, independe
 
 ## Script reload
 
-Shipping games exclude TesseraEditor and use static game scripts. Linux x86-64 Debug editors separately support automatic script-library reload, including supported field changes and new components; see script-hot-reload.md. Baked navigation runs in the engine without editor dependencies.
+Shipping games exclude TallowEditor and use static game scripts. Linux x86-64 Debug editors separately support automatic script-library reload, including supported field changes and new components; see script-hot-reload.md. Baked navigation runs in the engine without editor dependencies.

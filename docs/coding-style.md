@@ -28,7 +28,7 @@ its formatter (`tools/format/BfFmt`) is built the first time.
   other body goes on the next line.
 - A body that is itself an `if`, `for` or `while` gets braces.
 - A blank line between methods, properties and nested types.
-- `using` lines, a blank line, the file-scoped namespace (`namespace Tessera;`), a blank line, then the types.
+- `using` lines, a blank line, the file-scoped namespace (`namespace Tallow;`), a blank line, then the types.
 
 ## Names
 

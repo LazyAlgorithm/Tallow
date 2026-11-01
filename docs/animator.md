@@ -1,6 +1,6 @@
 # Animator and Animation windows
 
-Animation in Tessera has three parts, arranged as in Unity:
+Animation in Tallow has three parts, arranged as in Unity:
 
 - an **Animation Clip** (`.tanim`) is keyframes: how the children of an object move over time;
 - an **Animator Controller** (`.tcontroller`) is a state machine: which clip plays, and when to change;

@@ -4,7 +4,7 @@ The editor's colours come from a **theme**. Seven are built in, and any of them 
 
 | Theme | What it looks like | Its code |
 |---|---|---|
-| **Tessera Blue** | Deep blue-greys with a brighter blue accent. The default. | Blue keywords, teal types, warm strings on deep blue. |
+| **Tallow Blue** | Deep blue-greys with a brighter blue accent. The default. | Blue keywords, teal types, warm strings on deep blue. |
 | **Dark** | The editor's original look: neutral charcoal greys with a blue accent. | Visual Studio's dark colours (the code editor's original look). |
 | **Light** | Pale greys and white fields with dark text, for bright rooms. | Visual Studio's light colours on white. |
 | **High Contrast** | White text on black, bright edges and yellow highlights. All text reaches a contrast of at least 7:1 (WCAG AAA). | Bright colours on black, all at least 7:1. |
@@ -12,7 +12,7 @@ The editor's colours come from a **theme**. Seven are built in, and any of them 
 | **Ember** | Warm browns with an orange accent. | Orange keywords, gold types, olive strings. |
 | **Plum** | Dusky purples with a violet accent. | Violet keywords, pink types, mint strings. |
 
-Until a theme is picked, the editor uses Tessera Blue (`EditorTheme.DefaultTheme`).
+Until a theme is picked, the editor uses Tallow Blue (`EditorTheme.DefaultTheme`).
 
 ## Preferences
 
@@ -26,14 +26,14 @@ Until a theme is picked, the editor uses Tessera Blue (`EditorTheme.DefaultTheme
 - **Import** reads a `.ttheme` file from any path, copies it into the themes folder and uses it. **Export** writes the theme in use to any path (the project folder by default), so it can be shared.
 - **Open Folder** opens the themes folder.
 
-Themes belong to the person using the editor, not to the project. They live in the editor's config folder (`~/.local/share/Tessera/Editor` on Linux, `%APPDATA%\Tessera\Editor` on Windows, `~/Library/Application Support/Tessera/Editor` on macOS): saved themes in `themes/`, and the theme in use, with any changes, in `theme.ttheme`.
+Themes belong to the person using the editor, not to the project. They live in the editor's config folder (`~/.local/share/Tallow/Editor` on Linux, `%APPDATA%\Tallow\Editor` on Windows, `~/Library/Application Support/Tallow/Editor` on macOS): saved themes in `themes/`, and the theme in use, with any changes, in `theme.ttheme`.
 
 ## Theme files
 
 A `.ttheme` file is plain text, one setting per line:
 
 ```
-# Tessera editor theme (docs/themes.md)
+# Tallow editor theme (docs/themes.md)
 name "Sunset"
 base dark
 editor Accent 0.9 0.4 0.1 1
@@ -76,5 +76,5 @@ ImGui.DrawText(pos, EditorTheme.Text, label.CStr());
 
 ## Tests
 
-- `Tests/Themes` (CPU, in `tools/run_tests.py`): all seven built-in themes are there with Tessera Blue first; text in every built-in theme is readable on every surface it is drawn on (contrast at least 4.5, and 7 for High Contrast), as are quiet text, warnings, errors and canvas text. Each theme's code reads on its code background and current line (4.5, 7 for High Contrast), as do comments (3) and line numbers. Every theme's code colours are its own. Dark's and Light's code are Visual Studio's sets. Code colours read back from files, and older files with `code dark`/`light` still read. Also checks that Dark matches the editor's old look, that files read back as written, that mistakes are reported by line while the rest still reads, that values are clamped, and that file names are safe.
+- `Tests/Themes` (CPU, in `tools/run_tests.py`): all seven built-in themes are there with Tallow Blue first; text in every built-in theme is readable on every surface it is drawn on (contrast at least 4.5, and 7 for High Contrast), as are quiet text, warnings, errors and canvas text. Each theme's code reads on its code background and current line (4.5, 7 for High Contrast), as do comments (3) and line numbers. Every theme's code colours are its own. Dark's and Light's code are Visual Studio's sets. Code colours read back from files, and older files with `code dark`/`light` still read. Also checks that Dark matches the editor's old look, that files read back as written, that mistakes are reported by line while the rest still reads, that values are clamped, and that file names are safe.
 - `--theme-test` in the editor (above).

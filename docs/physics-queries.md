@@ -1,6 +1,6 @@
 # Shape casts and overlaps
 
-Tessera now exposes Jolt's swept sphere, capsule and box queries through `Scene.Physics`. Queries run on the scene thread. Distances are world units; direction is normalized internally.
+Tallow now exposes Jolt's swept sphere, capsule and box queries through `Scene.Physics`. Queries run on the scene thread. Distances are world units; direction is normalized internally.
 
 ```beef
 ShapeCastHit hit;
@@ -23,12 +23,12 @@ Scene.Physics.BoxCast(Transform.Position, .(1, 2, 1), Quaternion.Euler(0, 45, 0)
 
 `OverlapSphere(origin, radius, hits)`, `OverlapCapsule(point1, point2, radius, hits)` and `OverlapBox(origin, size, orientation, hits)` accept `List<ShapeCastHit>`, clear it and return the number of contacts. They also accept optional `ignoreBody`. A mesh or compound may report multiple contacts for one object. These contacts are not guaranteed to be sorted or unique by body.
 
-Query shapes and overlap buffers are reused, avoiding native shape allocation for each repeated query with the same dimensions. Changing dimensions replaces that kind's cached query shape. The query tree is optimized once after bodies are added, including for queries before the first simulation tick. Existing transforms still follow Tessera's normal physics synchronization behavior: stepping flushes transform edits into Jolt; shape queries do not scan all transforms on each call.
+Query shapes and overlap buffers are reused, avoiding native shape allocation for each repeated query with the same dimensions. Changing dimensions replaces that kind's cached query shape. The query tree is optimized once after bodies are added, including for queries before the first simulation tick. Existing transforms still follow Tallow's normal physics synchronization behavior: stepping flushes transform edits into Jolt; shape queries do not scan all transforms on each call.
 
-The wrappers use JoltC's shape collectors through `native/tessera_physics.cpp`. This changes the native static library; rebuild it and rebuild/reload project executables before calling the new API:
+The wrappers use JoltC's shape collectors through `native/tallow_physics.cpp`. This changes the native static library; rebuild it and rebuild/reload project executables before calling the new API:
 
 ```sh
-cmake --build build/native --target tessera_native -j 4
+cmake --build build/native --target tallow_native -j 4
 BeefBuild -workspace=Tests/ShapeQueries -config=Debug -run
 ```
 

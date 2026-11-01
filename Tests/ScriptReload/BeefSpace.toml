@@ -1,4 +1,0 @@
-FileVersion = 1
-Projects = {ReloadTests = {Path = "."}, Tessera = {Path = "/home/zerker24/BeefProjects/Tessera/Engine"}}
-[Workspace]
-StartupProject = "ReloadTests"

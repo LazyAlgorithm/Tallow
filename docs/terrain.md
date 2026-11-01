@@ -66,7 +66,7 @@ The editor has no generation settings: there a terrain is its tiles, flat until 
 
 Coordinates are metres in the terrain's own space. `Density` and `Paint` run on worker threads, several at once: read only data that does not change while the terrain is generating, and copy what you need in `Begin(terrain)`, which runs on the main thread first. `terrain.SetGenerator((x, y, z) => ...)` does the same with a function from code, and `terrain.ApplyGenerator(generator, tileId)` is the bake.
 
-Tessera's own noise is the sample `NoiseTerrainGenerator`; nothing uses it unless you choose it, except an Endless terrain with no generator of its own.
+Tallow's own noise is the sample `NoiseTerrainGenerator`; nothing uses it unless you choose it, except an Endless terrain with no generator of its own.
 
 ## Endless terrain
 

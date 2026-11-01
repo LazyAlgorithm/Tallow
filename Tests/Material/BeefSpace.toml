@@ -1,4 +1,0 @@
-FileVersion = 1
-Projects = {MaterialTests = {Path = "."}, Tessera = {Path = "../../Engine"}, TesseraEditor = {Path = "../../Editor"}}
-[Workspace]
-StartupProject = "MaterialTests"

@@ -1,4 +1,0 @@
-FileVersion = 1
-Projects = {ShapeQueryTests = {Path = "."}, Tessera = {Path = "../../Engine"}}
-[Workspace]
-StartupProject = "ShapeQueryTests"

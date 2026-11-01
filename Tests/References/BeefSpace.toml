@@ -1,4 +1,0 @@
-FileVersion = 1
-Projects = {ReferenceTests = {Path = "."}, Tessera = {Path = "../../Engine"}}
-[Workspace]
-StartupProject = "ReferenceTests"

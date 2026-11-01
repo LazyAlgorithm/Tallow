@@ -6,5 +6,5 @@ __pycache__/
 *.pyc
 recovery/
 imgui.ini
-.tessera-reload/
+.tallow-reload/
 website/

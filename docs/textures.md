@@ -25,7 +25,7 @@ Mip levels are made when a texture is loaded, from what it holds:
 Left alone:
 
 - normal maps (these formats store colours as 5-6-5 bits, which bands directions badly);
-- pictures under `UI/` and `Fonts/` (the project setting `textureCompressExclude = UI/*;Fonts/*` in `project.tessera`, `;`-separated patterns);
+- pictures under `UI/` and `Fonts/` (the project setting `textureCompressExclude = UI/*;Fonts/*` in `project.tallow`, `;`-separated patterns);
 - images inside glTF / GLB models;
 - web builds (browsers do not all read the same compressed formats).
 
