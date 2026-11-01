@@ -486,7 +486,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
 <section class="view" id="v-tutorials" data-view="tutorials" hidden><span id="tutorials" class="route-anchor" aria-hidden="true"></span>
   <div class="section-head" style="margin-bottom:28px">
     <div><p class="eyebrow">Tutorials</p><h1 style="margin-top:8px;font-size:clamp(1.9rem,4vw,2.6rem)">Learn by building</h1></div>
-    <p>Each tutorial ends with something running. The shooter is split into slices, and every slice is playable.</p>
+    <p>Build real projects step by step. Tutorials are being reviewed against the current engine; check the linked reference documentation for API and editor changes.</p>
   </div>
   <div class="tut-grid">
     <a class="card feature-tut" href="#shooter">
@@ -503,7 +503,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
     </a>
     <a class="card" href="#start-component"><span class="meta">Beginner · 10 min</span><h3>Your first component</h3><p>A script, a field in the Inspector, and a cube that turns.</p></a>
     <a class="card" href="#menu"><span class="meta">Interface · 20 min</span><h3>A main menu</h3><p>A <code>.tui</code> document with a stylesheet, buttons that call your code, and a name box.</p></a>
-    <a class="card" href="#voxels"><span class="meta">World · 15 min</span><h3>Dig and build terrain</h3><p>Voxel terrain, a ray from the camera, and holes that are shared with every player.</p></a>
+    <a class="card" href="#voxels"><span class="meta">World · 15 min</span><h3>Dig and build terrain</h3><p>Flat terrain tiles, sculpting and painting, camera-based digging, and replicated terrain edits.</p></a>
     <a class="card" href="#manual-net-test"><span class="meta">Networking · 5 min</span><h3>Test multiplayer on one machine</h3><p>Two copies of one build, with a bad connection simulated.</p></a>
     <a class="card" href="#web"><span class="meta">Shipping · 15 min</span><h3>Put your game in a browser</h3><p>A web build, a free host, and room codes for joining without port forwarding.</p></a>
     <a class="card" href="#manual-input"><span class="meta">Controls · 10 min</span><h3>Controls for every device</h3><p>Input actions for keyboard, controllers and touch screens.</p></a>
@@ -704,7 +704,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
     <h1>Dig and build terrain</h1>
     <p class="lede">Voxel terrain that the player carves with the left mouse button and builds up with the middle one.</p>
     <ol class="steps">
-      <li><div><p>Choose <strong>GameObject &gt; Voxel Terrain</strong>. It is 128 metres square by default. Select it and sculpt with Raise, Lower, Smooth, Flatten and Paint in the Inspector, or set Mode to Endless for generated ground without an edge.</p></div></li>
+      <li><div><p>Choose <strong>GameObject &gt; Voxel Terrain</strong>. It is 128 metres square by default. Select it, open Terrain Tools, and use Tiles to add adjacent flat terrain sections. Sculpt with Raise, Lower, Smooth, Flatten and Paint across tile boundaries. Endless generation is not the default workflow.</p></div></li>
       <li><div><p>Add this component to any object in the scene:</p><div data-code="digger" data-file="Scripts/Digger.bf"></div></div></li>
     </ol>
     <p>The ray comes from the camera, and <code>ModifySphere</code> adds or removes ground in a ball around the point it hits. A negative amount digs.</p>
