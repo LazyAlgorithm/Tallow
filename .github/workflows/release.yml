@@ -263,7 +263,7 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             tag="${GITHUB_REF_NAME}"; title="Tallow ${GITHUB_REF_NAME}"; pre=""
           else
-            tag="$TALLOW_VERSION"; title="Tallow build $(date -u +%Y-%m-%d) ($short)"; pre="--prerelease"
+            tag="$TALLOW_VERSION"; title="Tallow Engine $TALLOW_VERSION"; pre="--prerelease"
           fi
           notes="Built from Tallow $short ($GITHUB_REF_NAME).
 
