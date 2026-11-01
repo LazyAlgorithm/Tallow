@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Threading;
 using Tallow;
 using Tallow.Editor;
 using Bgfx;
@@ -27,6 +28,10 @@ class LauncherApp : Application
 	bool mMessageIsError;
 	bool mSetupPending;
 	bool mSetupFailed;
+	bool mSetupRunning;
+	bool mSetupFinished;
+	int32 mSetupExitCode;
+	Thread mSetupThread ~ { if (_ != null) { _.Join(); delete _; } };
 	int32 mOpenCountdown;
 	int32 mSelected = -1;
 
@@ -196,6 +201,30 @@ class LauncherApp : Application
 			mSetupPending = false;
 			InstallMissingTools();
 		}
+		if (mSetupFinished)
+		{
+			mSetupThread.Join();
+			delete mSetupThread;
+			mSetupThread = null;
+			mSetupFinished = false;
+			mSetupRunning = false;
+			if (mSetupExitCode != 0)
+			{
+				SetMessage(scope $"Dependency setup failed (exit {mSetupExitCode}). Check toolchain/install.log for details.", true);
+				mSetupFailed = true;
+			}
+			else
+			{
+				Toolchain.Apply();
+				ClearAndDeleteItems!(mMissingTools);
+				Toolchain.FindMissing(mMissingTools);
+				if (!mMissingTools.IsEmpty)
+				{
+					SetMessage("The installer finished, but required tools are still missing. Check toolchain/install.log.", true);
+					mSetupFailed = true;
+				}
+			}
+		}
 
 		// The build blocks, so start it a few frames after the "Compiling" message is on screen.
 		if (mOpenCountdown > 0 && --mOpenCountdown == 0)
@@ -207,19 +236,30 @@ class LauncherApp : Application
 	{
 		if (!ImGui.BeginPopupModal("Development tools required", null, ImGui.WindowFlags.AlwaysAutoResize))
 			return;
-		ImGui.TextWrapped("Tallow needs the following tools to create, open and build projects:");
-		for (let tool in mMissingTools)
-			ImGui.BulletText(tool.CStr());
-		if (mSetupFailed)
-			ImGui.TextWrapped("Setup did not complete. Retry or exit Tallow.");
-		if (ImGui.Button(mSetupFailed ? "Retry installation" : "Install dependencies", .(190, 36)))
+		if (mSetupRunning)
 		{
-			mSetupFailed = false;
-			mSetupPending = true;
+			ImGui.TextWrapped("Installing development tools in the background. This may take several minutes.");
+			ImGui.TextWrapped("Installation log: %LOCALAPPDATA%/Tallow/toolchain/install.log");
 		}
-		ImGui.SameLine();
-		if (ImGui.Button("Exit Tallow", .(140, 36)))
-			Running = false;
+		else
+		{
+			ImGui.TextWrapped("Tallow needs the following tools to create, open and build projects:");
+			for (let tool in mMissingTools)
+				ImGui.BulletText(tool.CStr());
+			if (mSetupFailed)
+			{
+				ImGui.TextWrapped("Setup did not complete. You can retry installation.");
+				ImGui.TextWrapped(mMessage.CStr());
+			}
+			if (ImGui.Button(mSetupFailed ? "Retry installation" : "Install dependencies", .(190, 36)))
+			{
+				mSetupFailed = false;
+				mSetupPending = true;
+			}
+			ImGui.SameLine();
+			if (ImGui.Button("Exit Tallow", .(140, 36)))
+				Running = false;
+		}
 		ImGui.EndPopup();
 	}
 
@@ -229,31 +269,37 @@ class LauncherApp : Application
 		let script = scope $"{mEngineRoot}/tools/setup_dependencies.ps1";
 		if (!File.Exists(script))
 		{
-			SetMessage("The development-tool installer is missing from this Tallow package.", true);
+			SetMessage("The shared development-tool installer is missing from this Tallow package.", true);
 			mSetupFailed = true;
 			return;
 		}
-		let command = scope String("powershell.exe -NoProfile -ExecutionPolicy Bypass -File ");
-		Terminal.Quote(script, command);
-		let code = Terminal.Run(command);
-		if (code != 0)
-		{
-			SetMessage(scope $"Development-tool installation failed (exit {code}).", true);
-			mSetupFailed = true;
-			return;
-		}
-		Toolchain.Apply();
-		ClearAndDeleteItems!(mMissingTools);
-		Toolchain.FindMissing(mMissingTools);
-		if (!mMissingTools.IsEmpty)
-		{
-			SetMessage("Setup finished, but some required tools are still missing.", true);
-			mSetupFailed = true;
-		}
+		mSetupRunning = true;
+		mSetupFinished = false;
+		mSetupExitCode = -1;
+		mSetupThread = new Thread(new => SetupWorker);
+		mSetupThread.Start(false);
 #else
 		SetMessage("Automatic toolchain setup is not yet implemented for this operating system.", true);
 		mSetupFailed = true;
 #endif
+	}
+
+	/// Runs the same packaged Windows installer used by Manager without blocking rendering.
+	void SetupWorker()
+	{
+#if BF_PLATFORM_WINDOWS
+		let script = scope $"{mEngineRoot}/tools/setup_dependencies.ps1";
+		let folder = scope String(Toolchain.Folder);
+		Directory.CreateDirectory(folder).IgnoreError();
+		let log = scope $"{folder}/install.log";
+		let command = scope String("powershell.exe -NoProfile -ExecutionPolicy Bypass -File ");
+		Terminal.Quote(script, command);
+		command.Append(" > ");
+		Terminal.Quote(log, command);
+		command.Append(" 2>&1");
+		mSetupExitCode = Terminal.Run(command);
+#endif
+		mSetupFinished = true;
 	}
 
 	/// What the window is cleared to behind the interface (RGBA).
