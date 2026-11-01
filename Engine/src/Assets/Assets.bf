@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Mesh and texture cache keyed by path. "builtin:cube" style names give primitives,
 /// anything else is a file relative to the project folder ("models/tree.glb", optionally "#2" for a sub-mesh).
@@ -394,13 +394,13 @@ static class Assets
 		return mesh;
 	}
 
-	/// Adds a glTF primitive's vertices and triangles to a mesh, in Tessera's space.
+	/// Adds a glTF primitive's vertices and triangles to a mesh, in Tallow's space.
 	static void AddGltfPrimitive(Mesh mesh, Native.GltfPrim* prim)
 	{
 		Matrix4 world = default;
 		for (int i < 16)
 			world.m[i] = prim.world[i];
-		// glTF is right-handed with +Z towards the viewer; flip Z into Tessera's left-handed space.
+		// glTF is right-handed with +Z towards the viewer; flip Z into Tallow's left-handed space.
 		let flip = Matrix4.Scale(.(1, 1, -1));
 		world = flip * world;
 		let baseColor = Color(prim.baseColor[0], prim.baseColor[1], prim.baseColor[2], prim.baseColor[3]);
@@ -423,7 +423,7 @@ static class Assets
 			color = .(Math.Pow(color.r, 1.0f / 2.2f), Math.Pow(color.g, 1.0f / 2.2f), Math.Pow(color.b, 1.0f / 2.2f), color.a);
 			Vector2 uv = default;
 			if (prim.uvs != null)
-				uv = .(prim.uvs[v * 2], prim.uvs[v * 2 + 1]); // glTF and Tessera both put V = 0 at the top of the image
+				uv = .(prim.uvs[v * 2], prim.uvs[v * 2 + 1]); // glTF and Tallow both put V = 0 at the top of the image
 			mesh.AddVertex(world.TransformPoint(position), world.TransformDirection(normal).Normalized, color, uv);
 			if (prim.uv2s != null)
 				mesh.Vertices.Back.uv2 = .(prim.uv2s[v * 2], prim.uv2s[v * 2 + 1]);

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Owns the window, the graphics device and the main loop. The editor and built players both derive from it.
 ///
@@ -14,7 +14,7 @@ namespace Tessera;
 class Application
 {
 	/// The window's title.
-	public String Title = new .("Tessera") ~ delete _;
+	public String Title = new .("Tallow") ~ delete _;
 	/// The SDL window.
 	public void* Window;
 	/// The window's width, in pixels.

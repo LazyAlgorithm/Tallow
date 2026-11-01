@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Reads and writes one pack file (.tpak, the format described at the top of native/tessera_pack.c) from Beef, for
 /// small packs that are opened on their own instead of mounted with the game: exported maps (MapFiles). Files are

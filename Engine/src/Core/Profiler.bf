@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What a marker or counter belongs to: it colours the marker's time in the Profiler window and picks the module a
 /// counter is shown in.

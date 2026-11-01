@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Editor-free packaged game entry point. Distribution layout: game.tessera, Assets/, Engine/assets/.
 static class GameMain

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Key identifiers. Values are SDL scancodes (USB HID usage ids), so they are layout independent.
 enum KeyCode : int32

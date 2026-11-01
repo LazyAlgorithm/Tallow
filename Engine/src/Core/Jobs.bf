@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Worker threads for spreading a frame's work over the machine's cores (docs/jobs.md). `Jobs.For(count, body)`
 /// runs body(i) for every i below count, on the workers and the calling thread together, and returns when all are
@@ -61,7 +61,7 @@ public static class Jobs
 			let index = (int32)i + 1;
 			let thread = new Thread(new () => Work(wake, index));
 			thread.IsBackground = true;
-			thread.SetName(scope $"Tessera Job {i}");
+			thread.SetName(scope $"Tallow Job {i}");
 			thread.Start(false);
 			sThreads.Add(thread);
 		}

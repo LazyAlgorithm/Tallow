@@ -1,12 +1,12 @@
 using System;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Runs a project as a game: the start scene in play mode, rendered straight to the window.
 class GameApp : Application
 {
-	public String GameName = new .("Tessera") ~ delete _;
+	public String GameName = new .("Tallow") ~ delete _;
 	public String StartScene = new .("Scenes/Main.tscene") ~ delete _;
 	Scene mScene ~ delete _;
 	RenderView mView ~ delete _;

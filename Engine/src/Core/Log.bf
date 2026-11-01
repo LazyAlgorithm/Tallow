@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// How serious a log message is.
 enum LogLevel

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The Profiler's markers for components (docs/profiler.md): one per type and method, "Animator.Update()",
 /// "PlayerController.FixedUpdate()", so the Profiler shows each script's time with its call count. A component keeps
@@ -51,7 +51,7 @@ static class ProfilerComponents
 	{
 		let full = scope String();
 		type.GetFullName(full);
-		if (!full.StartsWith("Tessera.") || full.StartsWith("Tessera.Editor."))
+		if (!full.StartsWith("Tallow.") || full.StartsWith("Tallow.Editor."))
 			return .Scripts;
 		bool Has(StringView part) => name.Contains(part);
 		if (Has("Animat") || Has("Skinned") || Has("IK") || Has("Bone") || Has("Viewmodel"))

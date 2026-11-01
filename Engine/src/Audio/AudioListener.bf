@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The ears. Put one on the camera, or on the player's head; positioned sounds are heard from here, facing the way
 /// the object faces. With none in the scene the first Camera is used, so a simple game needs nothing.

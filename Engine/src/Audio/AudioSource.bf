@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Something that makes sound. Each object that should be heard gets its own: a radio, an engine, footsteps.
 ///
@@ -223,9 +223,9 @@ class AudioSource : Component
 		let position = Transform.Position;
 		Audio.Params parameters = Audio.Defaults();
 		parameters.position = position;
-		if (mHasLast && Tessera.Time.UnscaledDeltaTime > 0.0001f)
+		if (mHasLast && Tallow.Time.UnscaledDeltaTime > 0.0001f)
 		{
-			parameters.velocity = (position - mLastPosition) / Tessera.Time.UnscaledDeltaTime;
+			parameters.velocity = (position - mLastPosition) / Tallow.Time.UnscaledDeltaTime;
 			if (parameters.velocity.LengthSquared > 100 * 100)
 				parameters.velocity = .Zero;
 		}
@@ -293,13 +293,13 @@ class AudioSource : Component
 		if (occlusion && spatial)
 		{
 			// A ray ten times a second is plenty; in between, the muffling eases toward the latest answer.
-			mOcclusionTimer -= Tessera.Time.UnscaledDeltaTime;
+			mOcclusionTimer -= Tallow.Time.UnscaledDeltaTime;
 			if (mOcclusionTimer <= 0)
 			{
 				mOcclusionTimer = 0.1f;
 				mOcclusionTarget = ProbeOcclusion();
 			}
-			let step = Tessera.Time.UnscaledDeltaTime * 6;
+			let step = Tallow.Time.UnscaledDeltaTime * 6;
 			mOcclusion = mOcclusion < mOcclusionTarget ? Math.Min(mOcclusion + step, mOcclusionTarget) : Math.Max(mOcclusion - step, mOcclusionTarget);
 		}
 		else

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A controller's buttons, named by where they sit so that the same code works for every make: South is A on an
 /// Xbox pad, Cross on a PlayStation pad and B on a Nintendo one.
