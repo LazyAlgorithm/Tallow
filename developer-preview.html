@@ -334,8 +334,6 @@ class Spinner : Component
       <figcaption>VoxelTerrain · 32-cell chunks</figcaption>
     </figure>
   </div>
-
-  <div class="note" style="margin-top:12px"><div>Explore an actual game made with Tallow: <a href="https://lazyalgorithm.github.io/ringfall-web/" target="_blank" rel="noopener noreferrer">Play Ringfall in your browser ↗</a>. The animated island above is an illustration, not an engine screenshot.</div></div>
   <div class="numbers" aria-label="Engine figures">
     <div><b>60 Hz</b><span>fixed simulation tick</span></div>
     <div><b>20 / s</b><span>snapshots, only what changed</span></div>
@@ -377,26 +375,6 @@ class Spinner : Component
       <p style="margin-top:22px"><a href="#shooter-6">See it in the shooter tutorial →</a></p>
     </div>
     <div data-code="hover" data-file="Scripts/Hover.bf"></div>
-  </div>
-
-  <div class="section">
-    <div class="section-head">
-      <h2>Made with Tallow</h2>
-      <p>A sample comes with the engine. Ringfall is a full game built on it, and runs in a phone's browser.</p>
-    </div>
-    <div class="made two">
-      <a class="card" href="https://lazyalgorithm.github.io/ringfall-web/" target="_blank" rel="noopener">
-        <span class="meta">Game · Linux, Windows, Web</span>
-        <h3>Ringfall</h3>
-        <p>An arena shooter with Slayer, teams, prop hunt and a level editor, playable in a browser with a room code.</p>
-        <span style="color:var(--cobalt);font-weight:600">Play in your browser →</span>
-      </a>
-      <div class="card">
-        <span class="meta">Sample · Samples/Sandbox</span>
-        <h3>Sandbox</h3>
-        <p>A voxel world with a destructible boulder, pushable crates and a networked player. Start with this one.</p>
-      </div>
-    </div>
   </div>
 
   <div class="section">
@@ -856,7 +834,7 @@ class Spinner : Component
           <tr><td><code>AddSwipe(name, source, direction)</code></td><td>A quick flick across another control, down for one frame as the finger lifts. A slow drag is never a flick, and the view is held still while a stroke could still become one.</td></tr>
         </tbody>
       </table></div>
-      <p>Places are an anchor on the screen plus an offset in <em>screen units</em>, the screen's short side, so one layout keeps its shape on any phone and either way up; move controls for portrait by changing <code>offset</code>. Each control has <code>visible</code>, <code>dimmed</code> (faded but in place, so a layout never shifts under the thumb), <code>lit</code> (a switch that is on) and <code>label</code>. <code>TouchControls.Scale</code> sizes everything and <code>EdgeMargin</code> keeps it in from the edges. Ringfall's controls are a worked example: a hidden-until-used stick on the left, and every action in an arc around FIRE on the right.</p>
+      <p>Places are an anchor on the screen plus an offset in <em>screen units</em>, the screen's short side, so one layout keeps its shape on any phone and either way up; move controls for portrait by changing <code>offset</code>. Each control has <code>visible</code>, <code>dimmed</code> (faded but in place, so a layout never shifts under the thumb), <code>lit</code> (a switch that is on) and <code>label</code>. <code>TouchControls.Scale</code> sizes everything and <code>EdgeMargin</code> keeps it in from the edges. A touch-control layout can place a movement stick on the left and context actions near the right thumb.</p>
 
       <h2 id="manual-character">Character controller</h2>
       <p><code>CharacterController</code> sweeps a capsule or rounded box through the world. It walks up steps, stands on slopes up to a limit, rides moving platforms and pushes dynamic bodies. Call it once per tick:</p>
@@ -1168,7 +1146,7 @@ Quality.Save();                    // applied by itself at the next start</code>
         <li><strong>@media rules.</strong> A stylesheet can rearrange a document for its shape: <code>@media (orientation: portrait) { #left { right: 24; width: auto } }</code>, also <code>min-/max-width</code>, <code>min-/max-height</code> and <code>min-/max-aspect-ratio</code>, in the document's own units, tested on every layout so a turned phone rearranges at once. Give the parts that move an id or class: a <code>style=""</code> attribute wins over the stylesheet.</li>
         <li><strong>Web builds</strong> size the game to the browser's viewport inside the screen's safe areas, follow it when the phone turns (in fullscreen too), and draw the 3D scene at a resolution phones can keep up with while the interface stays sharp.</li>
       </ul>
-      <p>Add <code>?arg=--ui-debug</code> to a Ringfall web address to see the size, pixel ratio, orientation and scale the game is working with.</p>
+      <p>Add <code>?arg=--ui-debug</code> to a web game address to see the size, pixel ratio, orientation and scale the game is working with.</p>
 
       <h2 id="manual-shipping">Shipping</h2>
       <div class="tbl-wrap"><table>
@@ -1274,7 +1252,7 @@ Quality.Save();                    // applied by itself at the next start</code>
 
 <footer>
   <div class="inner">
-    <span>Tallow · a game engine written in Beef · <a href="#manual">Documentation</a> · <a href="https://lazyalgorithm.github.io/ringfall-web/" target="_blank" rel="noopener noreferrer">Live game demo ↗</a></span>
+    <span>Tallow · a game engine written in Beef · <a href="#manual">Documentation</a></span>
     <span><a href="#start">Get started</a> · <a href="#shooter">Shooter tutorial</a> · <a href="#manual">Manual</a> · <a href="#developers">Developer guide</a> · <a href="api.html">Full API</a></span>
   </div>
 </footer>
