@@ -3,8 +3,8 @@
 
 Run: python3 tools/audit_tallow_rename.py
 Use --strict to fail CI on every unclassified reference.
-Historical GitHub URLs, binary compatibility, serialized formats and native ABI
-are reported separately, not silently renamed.
+Historical GitHub URLs and native ABI references are reported separately;
+old serialized formats and project identifiers are considered rename work.
 """
 from __future__ import annotations
 import argparse
@@ -29,7 +29,7 @@ def tracked_files():
 
 def classify(line):
     if HISTORICAL.search(line): return "repository URL (until repo rename)"
-    if FORMATS.search(line): return "serialized format (compatibility)"
+    if FORMATS.search(line): return "unclassified branding/code"
     if NATIVE.search(line): return "native ABI/tool name (migration required)"
     if ENV.search(line): return "environment/toolchain compatibility"
     return "unclassified branding/code"
