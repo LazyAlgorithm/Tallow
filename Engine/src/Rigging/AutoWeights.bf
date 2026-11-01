@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Makes a rig's weights from its bones (docs/rigging.md): "bone heat", as Mixamo and Blender's automatic weights do.
 /// Each bone warms the vertices it is the nearest bone to and can see (no part of the model between), and the warmth

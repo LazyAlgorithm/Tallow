@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The rigger's templates (docs/rigging.md): the markers each puts on a model, a first guess at where they go from
 /// the model's shape, and the skeleton built from them.

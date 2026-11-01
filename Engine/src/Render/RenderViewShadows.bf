@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The sun's shadows (four cascades fitted round the camera's view, drawn into the shadow atlas) and the point and
 /// spot lights' (tiles of a second atlas, docs/lighting.md).

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Writes a rig as a rigged binary glTF (.glb), the model as its file had it (parts, materials, pictures, texture
 /// coordinates and vertex colours) with a skeleton and each vertex's four strongest bones. Skinned Mesh Renderers
@@ -301,7 +301,7 @@ static class RigExport
 		while (bin.Count % 4 != 0)
 			bin.Add(0);
 		let json = scope String();
-		json.AppendF("{{\"asset\":{{\"version\":\"2.0\",\"generator\":\"Tessera rigger\"}},\"scene\":0,\"scenes\":[{{\"nodes\":[{}]}}],\"nodes\":[{}],", roots, nodes);
+		json.AppendF("{{\"asset\":{{\"version\":\"2.0\",\"generator\":\"Tallow rigger\"}},\"scene\":0,\"scenes\":[{{\"nodes\":[{}]}}],\"nodes\":[{}],", roots, nodes);
 		json.AppendF("\"skins\":[{{\"inverseBindMatrices\":{},\"skeleton\":{},\"joints\":[{}]}}],", bind, skeletonRoot, jointList);
 		json.AppendF("\"meshes\":[{{\"name\":\"{}\",\"primitives\":[{}]}}],\"materials\":[{}],", Escape(modelName, .. scope .()), primitives, materialsJson);
 		if (!imagesJson.IsEmpty)

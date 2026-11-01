@@ -3,7 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What SaveSystem.Save and Load return: a number standing for that save or load, to ask about later. It stays
 /// good however long it is kept.

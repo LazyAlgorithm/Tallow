@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Required on every data asset class, as [Component] is on components: it keeps the class's fields visible to the
 /// Inspector and the asset loader.

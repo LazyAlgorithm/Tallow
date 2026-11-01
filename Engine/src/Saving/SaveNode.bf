@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// One value in saved data: a number, text, a list, or an object of named values. A save is a tree of these, kept
 /// apart from the engine's memory layout, so that a save written by an older version of a game still loads: a field

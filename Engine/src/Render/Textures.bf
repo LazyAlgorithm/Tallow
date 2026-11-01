@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Bgfx;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What a texture holds, which decides how its smaller mip levels are made (docs/textures.md).
 enum TextureKind

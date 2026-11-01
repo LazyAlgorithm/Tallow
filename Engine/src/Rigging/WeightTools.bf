@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Changing a rig's weights (docs/rigging.md): the weight brush (add, subtract, smooth, set), smoothing everything,
 /// keeping each vertex to a few bones, and mirroring from one side of the model to the other.

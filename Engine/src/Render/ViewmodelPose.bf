@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Moves a first-person viewmodel: put it on the object that holds the arms and weapon (a child of the camera, on the
 /// Camera's Viewmodel Layer). It carries the weapon from a hip pose to an aim pose (aiming down the sights: in the

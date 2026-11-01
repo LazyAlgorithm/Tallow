@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Something whose [Saved] fields can be written and read. The engine adds this, and the code behind it, to every
 /// class and struct that has a field marked [Saved]; nothing has to be written by hand.

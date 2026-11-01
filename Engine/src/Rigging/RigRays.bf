@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Rays against a rig's model (the light baker's native ray tracer): what a ray hits first, and where a line goes in
 /// and out of the model, for putting markers and joints in the middle of a limb.

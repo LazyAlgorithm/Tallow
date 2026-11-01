@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// What kind of skeleton a rig starts from (docs/rigging.md).
 enum RigTemplate
@@ -565,7 +565,7 @@ class Rig
 	/// vertex's weights to four places, as bone:weight pairs).
 	public void Write(String output)
 	{
-		output.Append("# Tessera rig (docs/rigging.md)\n");
+		output.Append("# Tallow rig (docs/rigging.md)\n");
 		output.AppendF("source \"{}\"\n", source);
 		output.AppendF("template {}\n", template);
 		output.AppendF("facing {} {} {}\n", facing.x, facing.y, facing.z);
