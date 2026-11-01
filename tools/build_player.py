@@ -140,7 +140,7 @@ def main():
         parser.error('Start scene must exist inside the project src folder. Save it in the editor first.')
     proj = tomllib.loads((project / 'BeefProj.toml').read_text())
     space = tomllib.loads((project / 'BeefSpace.toml').read_text())
-    dependencies = {key: value for key, value in proj['Dependencies'].items() if key not in ('TesseraEditor', 'TallowEditor')}
+    # Generated players link the renamed runtime, even when the source project was\n    # created with an older Tessera workspace. Keep other game dependencies intact.\n    dependencies = {('Tallow' if key == 'Tessera' else key): value\n                    for key, value in proj['Dependencies'].items()\n                    if key not in ('TesseraEditor', 'TallowEditor')}\n    dependencies.setdefault('Tallow', '*')
     program = (project / 'src' / 'Program.bf').read_text()
     # Keep the entry point's namespace imports: copied/renamed projects can
     # register scripts from a namespace that differs from the project name.
