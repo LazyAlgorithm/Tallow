@@ -3,7 +3,7 @@
 
 Run: python3 tools/audit_tallow_rename.py
 Use --strict to fail CI on every unclassified reference.
-Existing GitHub URLs and the original copyright notice are reported separately;
+The original copyright notice is reported separately;
 old native names, formats and project identifiers are considered rename work.
 """
 from __future__ import annotations
@@ -15,7 +15,6 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 TOKEN = re.compile(r"tessera", re.IGNORECASE)
 SKIP = {".git", ".venv", "node_modules", "build", "dist", "__pycache__", ".cache"}
-HISTORICAL = re.compile(r"github.com/LazyAlgorithm/Tessera|api.github.com/repos/LazyAlgorithm/Tessera|raw.githubusercontent.com/LazyAlgorithm/Tessera", re.I)
 FORMATS = re.compile(r"project\.tessera|game\.tessera|\.tessera\b", re.I)
 
 def tracked_files():
