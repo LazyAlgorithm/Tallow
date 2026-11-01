@@ -306,7 +306,7 @@ Each type has its own file, or shares one with the small types that only it uses
 
 ### Website
 
-`website/` is a small PHP site with a MariaDB database. `sudo website/setup.sh` copies it to XAMPP's `htdocs/tessera`, creates the `tessera_site` database and loads the content; it is then at `http://localhost/tessera/`. Documentation pages are imported from this README and `docs/`, tutorials from `website/content/tutorials/*.md`, and the page list is `website/content/manifest.php`. After editing any of them, `website/update.sh` reloads the content without sudo; changes to the site's own PHP, styles or images need `website/setup.sh` again (no sudo after the first run, which hands the installed folder to your user).
+`website/` is a small PHP site with a MariaDB database. `sudo website/setup.sh` copies it to XAMPP's `htdocs/tessera` (legacy local deployment path), creates the `tessera_site` (legacy database name) database and loads the content; it is then at `http://localhost/tessera/`. Documentation pages are imported from this README and `docs/`, tutorials from `website/content/tutorials/*.md`, and the page list is `website/content/manifest.php`. After editing any of them, `website/update.sh` reloads the content without sudo; changes to the site's own PHP, styles or images need `website/setup.sh` again (no sudo after the first run, which hands the installed folder to your user).
 
 ## Platforms
 
@@ -330,4 +330,4 @@ Developed and tested on Linux x64 with Vulkan. Windows x64 builds (games and the
 
 ### Exhibition Campus sample
 
-Choose **Exhibition Campus (24 interactive exhibits)** when creating a project, or use `Tessera --create /path/to/MyCampus --showcase`. The entire walkable scene is saved and editable before Play, including soft-body mesh assets, sculpted terrain and loaded ropes. It demonstrates the engine’s main runtime systems and supports a cooperative host/join tour with animated visitor models. See [the sample guide](Editor/templates/showcase/README.md) for controls and networking. The template is included in distributed engine packages, including Tessera Hub downloads.
+Choose **Exhibition Campus (24 interactive exhibits)** when creating a project, or use `Tallow --create /path/to/MyCampus --showcase`. The entire walkable scene is saved and editable before Play, including soft-body mesh assets, sculpted terrain and loaded ropes. It demonstrates the engine’s main runtime systems and supports a cooperative host/join tour with animated visitor models. See [the sample guide](Editor/templates/showcase/README.md) for controls and networking. The template is included in distributed engine packages, including Tallow Manager downloads.
