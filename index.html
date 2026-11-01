@@ -38,6 +38,12 @@ body:has([id^="gs-"]:target) #v-start { display:block !important; }
 body:has([id^="gs-"]:target) #v-home { display:none !important; }
 
 /* A plain-file viewer with scripts disabled still offers working page links. */
+
+/* Benchmark comparisons: widths are normalized within each workload pair. */
+.bench-panel{border:1px solid var(--line);border-radius:12px;padding:clamp(16px,3vw,28px);background:var(--surface)}
+.bench-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}.bench-toolbar label{font-weight:700}.bench-toolbar select{background:var(--bg);color:var(--ink);border:1px solid var(--line);padding:9px;border-radius:6px;font:inherit}
+.bench-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.86rem;color:var(--muted);margin-bottom:20px}.bench-legend span{display:inline-flex;align-items:center;gap:6px}.bench-key{width:12px;height:12px;display:inline-block;border-radius:2px}.bench-key.tessera{background:#3568dc}.bench-key.unity{background:#e5a83b}
+.bench-chart{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}.bench-item{border:1px solid var(--line);border-radius:9px;padding:15px;min-width:0}.bench-item h3{font-size:1rem;margin:0 0 4px}.bench-item small{color:var(--muted);display:block;margin-bottom:12px}.bench-row{display:grid;grid-template-columns:58px minmax(0,1fr) 75px;gap:8px;align-items:center;margin:8px 0;font-size:.83rem}.bench-track{height:13px;background:var(--sunk);border-radius:4px;overflow:hidden}.bench-bar{height:100%;border-radius:4px}.bench-bar.tessera{background:#3568dc}.bench-bar.unity{background:#e5a83b}.bench-number{text-align:right;font-variant-numeric:tabular-nums}.bench-result{font-size:.83rem;color:var(--muted);margin-top:10px}.bench-notes{font-size:.85rem;color:var(--muted);line-height:1.6;margin-top:16px}
 </style>
 <title>Tessera Engine — 3D Game Engine in Beef</title>
 <meta name="description" content="Tessera is a 3D game engine and editor built in Beef for low-poly games, voxel worlds and server-authoritative multiplayer. Explore tutorials and documentation.">
@@ -330,6 +336,21 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
     <div><b>20 / s</b><span>snapshots, only what changed</span></div>
     <div><b>1–9 B</b><span>per tick of player controls</span></div>
     <div><b>0.4 s</b><span>lag compensation window</span></div>
+  </div>
+
+
+  <div class="section" id="benchmarks" aria-labelledby="benchmark-title">
+    <div class="section-head">
+      <h2 id="benchmark-title">Engine benchmarks</h2>
+      <p>Measured workload timings from October 28, 2026. Compare Tessera with saved Unity baselines, including cases where Tessera is slower.</p>
+    </div>
+    <div class="bench-panel">
+      <div class="bench-toolbar"><label for="bench-category">Workload group</label><select id="bench-category"><option value="All">All categories</option><option>Physics</option><option>Rendering</option><option>Animation</option><option>Navigation</option><option>Audio</option><option>Assets</option></select></div>
+      <div class="bench-legend"><span><i class="bench-key tessera"></i> Tessera</span><span><i class="bench-key unity"></i> Saved Unity baseline</span><span>Lower is better · milliseconds per workload</span></div>
+      <div id="bench-chart" class="bench-chart" role="group" aria-label="Benchmark comparison charts"></div>
+      <p class="bench-notes"><strong>Important context:</strong> These are historical workload-specific measurements, not whole-game FPS or an overall engine ranking. Unity was <strong>not rerun</strong> for this comparison; its timings were saved baselines. Results reflect the recorded hardware, settings and engine snapshot, not necessarily the latest build. Rendering and physics cases use different populations and workloads; do not compare timings across rows as if they were equivalent.</p>
+      <p class="bench-notes">Source: <a href="https://github.com/LazyAlgorithm/Tessera/blob/benchmarks/all-results-20261030/Benchmarks/history/full-engine/final-comparison-20261028-202825/REPORT.md" target="_blank" rel="noopener noreferrer">Full comparison report and methodology ↗</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/benchmarks/all-results-20261030/Benchmarks/history/README.md" target="_blank" rel="noopener noreferrer">Benchmark archive and raw results ↗</a></p>
+    </div>
   </div>
 
   <div class="section">
@@ -1261,6 +1282,36 @@ Quality.Save();                    // applied by itself at the next start</code>
 </footer>
 
 <script>
+/* Recorded October 2026 benchmark medians; do not silently substitute live values. */
+const benchmarkRows=[{"category":"Physics","label":"Rigid bodies (1,000)","id":"physics-pile","tessera":0.4198,"unity":0.5208},{"category":"Physics","label":"Raycasts (1,000)","id":"physics-raycast","tessera":0.2985,"unity":0.3535},{"category":"Physics","label":"Sphere overlaps (1,000)","id":"physics-overlap-sphere","tessera":1.1111,"unity":0.4195},{"category":"Rendering","label":"Shared meshes (1,000)","id":"render-shared","tessera":0.2477,"unity":0.5211},{"category":"Rendering","label":"Materials (1,000)","id":"render-materials","tessera":0.2386,"unity":0.7544},{"category":"Rendering","label":"Culling (10,000)","id":"render-culling","tessera":0.9266,"unity":0.5362},{"category":"Rendering","label":"CPU skinning (100)","id":"render-skinning-cpu","tessera":4.2719,"unity":0.9944},{"category":"Rendering","label":"GPU skinning (100)","id":"render-skinning-gpu","tessera":0.9008,"unity":0.6225},{"category":"Animation","label":"Animation clips (1,000)","id":"animator-clips","tessera":2.88,"unity":10.4848},{"category":"Animation","label":"Layered animation (1,000)","id":"animator-layered","tessera":14.7666,"unity":16.3369},{"category":"Navigation","label":"Serial NavMesh paths (100)","id":"navmesh","tessera":0.1825,"unity":0.1075},{"category":"Audio","label":"Audio mix (100)","id":"audio-mix","tessera":0.4463,"unity":0.1588},{"category":"Assets","label":"Image decoding (100)","id":"asset-image-decode","tessera":107.2191,"unity":90.9627}];
+function renderBenchmarks(){
+  const container=document.getElementById('bench-chart');
+  const selector=document.getElementById('bench-category');
+  if(!container||!selector)return;
+  container.replaceChildren();
+  const selected=selector.value;
+  for(const row of benchmarkRows){
+    if(selected!=='All'&&row.category!==selected)continue;
+    const card=document.createElement('article');card.className='bench-item';
+    const heading=document.createElement('h3');heading.textContent=row.label;card.append(heading);
+    const category=document.createElement('small');category.textContent=row.category;card.append(category);
+    const maximum=Math.max(row.tessera,row.unity);
+    for(const [name,value,key] of [['Tessera',row.tessera,'tessera'],['Unity',row.unity,'unity']]){
+      const line=document.createElement('div');line.className='bench-row';
+      const title=document.createElement('span');title.textContent=name;
+      const track=document.createElement('div');track.className='bench-track';
+      const bar=document.createElement('div');bar.className='bench-bar '+key;bar.style.width=(100*value/maximum)+'%';track.append(bar);
+      const number=document.createElement('span');number.className='bench-number';number.textContent=value.toFixed(4)+' ms';
+      line.append(title,track,number);card.append(line);
+    }
+    const result=document.createElement('div');result.className='bench-result';
+    result.textContent=row.tessera<row.unity?'Tessera faster in this workload':row.tessera>row.unity?'Unity baseline faster in this workload':'Equal measured timings';card.append(result);
+    container.append(card);
+  }
+}
+document.getElementById('bench-category')?.addEventListener('change',renderBenchmarks);
+renderBenchmarks();
+
 /* ------------------------------------------------------------------ code samples ------------------------------------------------------------------ */
 const CODE = {
 hover: String.raw`[Component]
