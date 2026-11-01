@@ -1,6 +1,6 @@
-# Tessera
+# Tallow
 
-<img src="icon.png" width="96" alt="Tessera icon">
+<img src="icon.png" width="96" alt="Tallow icon">
 
 A 3D game engine and editor written in [Beef](https://www.beeflang.org), aimed at low-poly games with voxel worlds and server-authoritative multiplayer.
 
@@ -8,7 +8,7 @@ A 3D game engine and editor written in [Beef](https://www.beeflang.org), aimed a
 
 ```bash
 ./build.sh     # native libraries, shaders, launcher (first time, or after changing native/ or shaders)
-./tessera      # project launcher: open a recent project, add one, or create one
+./build/Debug_Linux64/TallowLauncher/TallowLauncher      # project launcher: open a recent project, add one, or create one
 ```
 
 Opening a project compiles its scripts and starts its editor. `Samples/Sandbox` is a ready-made project with a voxel world, a destructible boulder, pushable crates and a networked player.
@@ -20,15 +20,15 @@ Requirements on Linux: BeefBuild on `PATH` (or `BEEFBUILD` set), CMake, Ninja, a
 After building the native dependencies, create a clean editor folder with:
 
 ```bash
-python3 tools/package_engine.py --platform linux --folder dist/Tessera-Linux
-python3 tools/package_engine.py --platform windows --folder dist/Tessera-Windows
+python3 tools/package_engine.py --platform linux --folder dist/Tallow-Linux
+python3 tools/package_engine.py --platform windows --folder dist/Tallow-Windows
 ```
 
 Windows builds from Linux use the toolchain prepared by `tools/windows/setup.sh`.
 On Windows, use `python` instead of `python3` and build the Windows native libraries first.
 The editor's Build window also uses this packager when **Build: Editor** is selected.
 
-Start `Tessera` on Linux or `Tessera.exe` on Windows directly from the package folder.
+Start `Tallow` on Linux or `Tallow.exe` on Windows directly from the package folder.
 The folder can be moved: it includes assets, templates, shaderc, and the engine/editor
 source and native archives needed to compile project scripts. It excludes native
 dependency source, tests, samples, website files, object files, and debug symbols.
@@ -52,7 +52,7 @@ normal packages build a fresh Release launcher and stop if the compiler fails.
 | UI | Visual editor for `.tui` interface documents: element tree, live preview, properties and stylesheet. |
 | Console | Engine and script log. |
 
-Edit > Preferences picks the editor's theme (Tessera Blue by default, Dark, Light, High Contrast, Forest, Ember, Plum or your own), with a live picker for every colour and `.ttheme` import and export; see `docs/themes.md`.
+Edit > Preferences picks the editor's theme (Tallow Blue by default, Dark, Light, High Contrast, Forest, Ember, Plum or your own), with a live picker for every colour and `.ttheme` import and export; see `docs/themes.md`.
 
 Play, Pause and Step are in the toolbar. Play mode never changes the saved scene. Ctrl+Z / Ctrl+Y undo and redo scene edits.
 Script edits reload automatically while the editor runs (see the script reload page). `File > Reload Scripts` (Ctrl+R) forces a reload, `File > Full Rebuild & Restart` is needed after engine or project-settings changes, and `File > Build Game (Release)` makes a release executable.
@@ -64,7 +64,7 @@ GameObject > Voxel Terrain adds one flat 128 m tile. Pick **Tiles** under Terrai
 ## Writing components
 
 ```beef
-using Tessera;
+using Tallow;
 namespace MyGame;
 
 [Component]                      // required on every component class
