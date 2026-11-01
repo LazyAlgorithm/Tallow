@@ -22,8 +22,13 @@ function Install-Archive([string]$asset, [string]$marker) {
 
 Install-Archive 'beef-windows-x64.zip' 'beef\bin\BeefBuild.exe'
 $existingPython = Get-Command python -ErrorAction SilentlyContinue
-if (-not $existingPython -or -not (& $existingPython.Source -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)' 2>$null; $LASTEXITCODE -eq 0)) {
-    Install-Archive 'python-windows-x64.zip' 'python\python.exe'
+$validPython = $false
+if ($existingPython) {
+    & $existingPython.Source -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)' 2>$null
+    $validPython = ($LASTEXITCODE -eq 0)
+}
+if (-not $validPython) {
+    Install-Archive 'python-windows-x64.zip' 'python\\python.exe'
 }
 # The embeddable Python distribution needs its stdlib zip, included in the official archive.
 $python = Join-Path $root 'python\python.exe'
@@ -70,7 +75,14 @@ $beefSettings = Join-Path $root 'beef\bin\BeefSettings.toml'
 $crtPath = (Join-Path $crt.FullName 'lib\x64').Replace('\','/')
 $umPath = (Join-Path $sdk.FullName 'um\x64').Replace('\','/')
 $ucrtPath = (Join-Path $sdk.FullName 'ucrt\x64').Replace('\','/')
-$settingsContent = "[VisualStudio]`nManuallySet = true`nBin32Path = \"\"`nBin64Path = \"\"`nLib32Paths = []`nLib64Paths = [`"$crtPath`", `"$umPath`", `"$ucrtPath`"]`n"
+$settingsContent = @"
+[VisualStudio]
+ManuallySet = true
+Bin32Path = ""
+Bin64Path = ""
+Lib32Paths = []
+Lib64Paths = ["$crtPath", "$umPath", "$ucrtPath"]
+"@
 Set-Content -LiteralPath $beefSettings -Value $settingsContent -Encoding UTF8
 if (-not (Test-Path (Join-Path $root 'beef\bin\BeefBuild.exe'))) { throw 'Beef compiler is missing.' }
 Write-Host 'Tallow development dependencies are ready.'
