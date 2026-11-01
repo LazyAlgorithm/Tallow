@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Editing a prefab by itself. Double-clicking a .tprefab in the Project panel puts the scene aside and opens the
 /// prefab alone in the Scene view, with the Hierarchy and Inspector working on it as they do on a scene. A bar at

@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// --rigger-test: the rigger in the editor, from start to a rigged object (docs/rigging.md). Rigs the Sandbox's
 /// "Rig Test Person", "Rig Test Dog" and "Rig Test Pug" (CC0 models by Quaternius), checks the bones, weights, painting, undo and posing, writes the rigged

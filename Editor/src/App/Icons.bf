@@ -1,6 +1,6 @@
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Font Awesome 4 glyphs (merged into the editor font by the native ImGui setup).
 static class Icons

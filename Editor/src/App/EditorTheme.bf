@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The editor's own colours, beside the interface's: what a theme sets for the things the editor draws itself.
 enum ThemeColor

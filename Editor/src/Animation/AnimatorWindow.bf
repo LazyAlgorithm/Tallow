@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Animator window: the state machine of an Animator Controller (.tcontroller), laid out the way Unity's is.
 ///   Parameters are on the left. States are boxes on the canvas: the orange one is the default, entered from Entry;

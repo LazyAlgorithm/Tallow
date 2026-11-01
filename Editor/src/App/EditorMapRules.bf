@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Map Warning window: when the game has a MapRules.txt (what a scene needs to be one of its maps), saving a
 /// scene that lacks something opens it, listing what. Maps themselves are made in the game (its map editor writes

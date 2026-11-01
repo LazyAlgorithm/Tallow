@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Animation window: a timeline for making and editing animation clips (.tanim) on the selected object, laid
 /// out like Unity's.

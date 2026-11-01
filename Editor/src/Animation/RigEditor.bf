@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Window > Rigging (docs/rigging.md): rigs a still model the way Mixamo does, for people, cats, dogs and anything
 /// else. Pick a template, drag its markers onto the model in the Scene view (chin, wrists, elbows, knees and groin

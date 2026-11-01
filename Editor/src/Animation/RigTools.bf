@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Animation window's helpers for rigged characters: its Rig menu (showing the bones, an IK rig in one press,
 /// IK targets snapped to the bones, IK baked into keys, a model's own clip copied into the open one to edit) and

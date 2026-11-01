@@ -1,16 +1,16 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Entry point shared by every project executable: the editor with --editor, otherwise the game.
 static class EditorMain
 {
 	public static int Run(String[] args)
 	{
-		// The compiler and Python that Tessera installed for itself, if it did (Toolchain).
+		// The compiler and Python that Tallow installed for itself, if it did (Toolchain).
 		Toolchain.Apply();
 		bool editor = false;
 		bool server = false;

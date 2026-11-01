@@ -1,10 +1,10 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 using Bgfx;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Building: script rebuilds, restarts and game builds.
 extension EditorApp
@@ -111,7 +111,7 @@ extension EditorApp
 		let text = scope String();
 		text.AppendF("""
 			using System;
-			using Tessera;
+			using Tallow;
 
 			namespace {0};
 

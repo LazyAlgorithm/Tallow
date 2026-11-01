@@ -1,10 +1,10 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 using Bgfx;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Scene operations: new/open/save, selection, creating and deleting objects, play mode.
 extension EditorApp

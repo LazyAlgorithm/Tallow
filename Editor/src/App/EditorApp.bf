@@ -1,12 +1,12 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 using Bgfx;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
-/// The Tessera editor: Hierarchy, Scene, Game, Inspector, Project and Console panels around
+/// The Tallow editor: Hierarchy, Scene, Game, Inspector, Project and Console panels around
 /// a dockable workspace, with Play / Pause / Stop running the scene in place.
 class EditorApp : Application
 {
@@ -86,7 +86,7 @@ class EditorApp : Application
 		// The window is the editor's; a game played in it cannot take the whole screen.
 		GameWindow.Allowed = false;
 		StartMaximized = true;
-		Title.Set("Tessera");
+		Title.Set("Tallow");
 	}
 
 	GameObject Selected => mSelectedId != 0 ? mScene.FindById(mSelectedId) : null;
@@ -96,7 +96,7 @@ class EditorApp : Application
 	protected override bool OnInit()
 	{
 		let project = Project.Current;
-		Title.Set(scope $"Tessera - {project.Name}");
+		Title.Set(scope $"Tallow - {project.Name}");
 		SDL.SDL_SetWindowTitle(Window, Title.CStr());
 		if (!project.EngineRoot.IsEmpty)
 			SetWindowIcon(scope $"{project.EngineRoot}/icon.png");
