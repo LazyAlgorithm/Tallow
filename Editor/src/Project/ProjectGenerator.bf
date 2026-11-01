@@ -321,6 +321,23 @@ static class ProjectGenerator
 		project.EngineRoot.Set(engineRoot);
 		project.Save();
 
+		// Packaged engines carry immutable identity. New projects are pinned
+		// before the first build; source checkouts without a manifest stay legacy.
+		if (File.Exists(scope $"{engineRoot}/tessera-version.json"))
+		{
+			let command = scope String("python3 ");
+			Terminal.Quote(scope $"{engineRoot}/tools/engine_versions.py", command);
+			command.Append(" pin-new ");
+			Terminal.Quote(folder, command);
+			command.Append(" ");
+			Terminal.Quote(engineRoot, command);
+			if (Terminal.Run(command) != 0)
+			{
+				error.Set("Could not pin the new project to this Tessera engine build.");
+				return false;
+			}
+		}
+
 		project.WriteBuildFiles();
 
 		Write(scope $"{folder}/.gitignore" , "build/\nrecovery/\n.cache/\nBeefSpace.toml\nBeefProj.toml\n");
