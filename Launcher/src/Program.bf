@@ -102,7 +102,7 @@ class LauncherApp : Application
 		let project = scope Project();
 		if (!project.Load(path))
 		{
-			error.Set(scope $"{path} is not a Tallow project (no project.tessera).");
+			error.Set(scope $"{path} is not a Tallow project (no project.tallow).");
 			return false;
 		}
 		if (!project.Build(false))
@@ -234,10 +234,10 @@ class LauncherApp : Application
 		ImGui.InputText("##existing", mExisting);
 		if (ImGui.Button("Add and Open", .(-1, 28)))
 		{
-			if (File.Exists(scope $"{mExisting}/project.tessera"))
+			if (File.Exists(scope $"{mExisting}/project.tallow"))
 				RequestOpen(mExisting);
 			else
-				SetMessage("That folder does not contain a project.tessera file.", true);
+				SetMessage("That folder does not contain a project.tallow file.", true);
 		}
 	}
 
