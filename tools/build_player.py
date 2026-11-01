@@ -74,7 +74,7 @@ def main():
     parser.add_argument('--scene', help='Asset-relative start scene')
     parser.add_argument('--config', choices=('Debug', 'Release'), default='Release')
     parser.add_argument('--platform', choices=('linux', 'windows', 'web', 'macos'), default='windows' if os.name == 'nt' else 'macos' if sys.platform == 'darwin' else 'linux')
-    parser.add_argument('--replace', action='store_true', help='Replace the output folder if it holds an earlier build (it must contain game.tessera)')
+    parser.add_argument('--replace', action='store_true', help='Replace the output folder if it holds an earlier build (it must contain game.tallow)')
     parser.add_argument('--fullscreen', action='store_true', help='The game starts fullscreen, whatever the project says')
     parser.add_argument('--windowed', action='store_true', help='The game starts in a window, whatever the project says')
     parser.add_argument('--no-compress', action='store_true', help='Pack the assets without compressing them')
@@ -87,13 +87,13 @@ def main():
     project = args.project.resolve()
     output = args.output.resolve()
     if output.exists():
-        # Only ever delete a folder this tool made: an earlier build, recognised by its game.tessera or game.tpak.
+        # Only ever delete a folder this tool made: an earlier build, recognised by its game.tallow or game.tpak.
         if not args.replace:
             parser.error('Output already exists; choose a new folder to preserve the existing build, or pass --replace.')
-        if not output.is_dir() or (any(output.iterdir()) and not (output / 'game.tessera').is_file() and not (output / 'game.tpak').is_file()):
+        if not output.is_dir() or (any(output.iterdir()) and not (output / 'game.tallow').is_file() and not (output / 'game.tpak').is_file()):
             parser.error(f'{output} exists and is not an earlier build of a game, so it is left alone. Choose another folder.')
     settings = {}
-    for line in (project / 'project.tessera').read_text().splitlines():
+    for line in (project / 'project.tallow').read_text().splitlines():
         if '=' in line:
             key, value = line.split('=', 1)
             settings[key.strip()] = value.strip()
@@ -273,14 +273,14 @@ def main():
             # How the game starts out: the project's Build setting, unless this run says otherwise.
             # In a browser the page fills the window, and the player chooses full screen.
             fullscreen = (settings.get('fullscreen', '') == '1' or args.fullscreen) and not args.windowed and not web
-            (staging / 'game.tessera').write_text(f'name = {name}\nstartScene = {scene}\n' + (f'steamAppId = {steam}\n' if steam else '') + (f'audioHrtf = {hrtf}\n' if hrtf else '') + ('fullscreen = 1\n' if fullscreen else '') + ''.join(f'{k} = {settings[k]}\n' for k in ('antiCheat', 'voiceChat', 'voicePushToTalk', 'voiceProximity', 'voiceTeamOnly', 'voiceKey', 'loadSaveAtStart', 'saveSlot', 'windowWidth', 'windowHeight', 'escapeQuits') if settings.get(k)))
+            (staging / 'game.tallow').write_text(f'name = {name}\nstartScene = {scene}\n' + (f'steamAppId = {steam}\n' if steam else '') + (f'audioHrtf = {hrtf}\n' if hrtf else '') + ('fullscreen = 1\n' if fullscreen else '') + ''.join(f'{k} = {settings[k]}\n' for k in ('antiCheat', 'voiceChat', 'voicePushToTalk', 'voiceProximity', 'voiceTeamOnly', 'voiceKey', 'loadSaveAtStart', 'saveSlot', 'windowWidth', 'windowHeight', 'escapeQuits') if settings.get(k)))
             if output.exists():
                 shutil.rmtree(output)
             # Everything the game reads goes into one pack, unless the project (or --loose) says to leave it loose.
             # A web build's pack is downloaded by every player every time, so it is always compressed.
             if not args.loose and settings.get('packAssets', '1') != '0':
                 packed = [(file.relative_to(staging).as_posix(), str(file)) for folder in ('Assets', 'Engine') for file in (staging / folder).rglob('*') if file.is_file()]
-                packed.append(('game.tessera', str(staging / 'game.tessera')))
+                packed.append(('game.tallow', str(staging / 'game.tallow')))
                 compress = not args.no_compress and (web or settings.get('packCompress', '1') != '0')
                 # A scene's own files (what only that scene uses) go into a pack of its own, so that changing one
                 # map rewrites one small file, and a browser can start before every map has arrived. packs.txt in
@@ -307,7 +307,7 @@ def main():
                     print(f'Packs: game.tpak and {len(extra)} for scenes (' + ', '.join(entry[0] for entry in extra) + ')')
                 shutil.rmtree(staging / 'Assets')
                 shutil.rmtree(staging / 'Engine')
-                (staging / 'game.tessera').unlink()
+                (staging / 'game.tallow').unlink()
             if web:
                 write_web_page(engine, project, name, staging)
             staging.rename(output)
