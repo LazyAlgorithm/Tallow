@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build Tessera from a source checkout on Linux or native Windows (Python 3.11+).
+"""Build Tallow from a source checkout on Linux or native Windows (Python 3.11+).
 
 On Windows run from an x64 Visual Studio developer shell with clang-cl installed.
 Cross-building Windows from Linux is handled by tools/windows/setup.sh instead.
@@ -53,7 +53,7 @@ def main():
         run([sys.executable, root / 'tools/compile_shaders.py'])
     run([sys.executable, root / 'tools/make_licenses.py'])
     platform = 'Win64' if windows else 'Linux64'
-    executable = root / f'build/{args.config}_{platform}/TesseraLauncher' / ('TesseraLauncher.exe' if windows else 'TesseraLauncher')
+    executable = root / f'build/{args.config}_{platform}/TallowLauncher' / ('TallowLauncher.exe' if windows else 'TallowLauncher')
     # Beef does not track native archive changes. Restore the last executable if the relink fails.
     previous = executable.with_name(executable.name + '.build-backup')
     if previous.exists():
