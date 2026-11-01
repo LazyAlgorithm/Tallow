@@ -44,8 +44,8 @@ body:has([id^="gs-"]:target) #v-home { display:none !important; }
 /* Benchmark comparisons: widths are normalized within each workload pair. */
 .bench-panel{border:1px solid var(--line);border-radius:12px;padding:clamp(16px,3vw,28px);background:var(--surface)}
 .bench-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}.bench-toolbar label{font-weight:700}.bench-toolbar select{background:var(--bg);color:var(--ink);border:1px solid var(--line);padding:9px;border-radius:6px;font:inherit}
-.bench-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.86rem;color:var(--muted);margin-bottom:20px}.bench-legend span{display:inline-flex;align-items:center;gap:6px}.bench-key{width:12px;height:12px;display:inline-block;border-radius:2px}.bench-key.tessera{background:#3568dc}.bench-key.unity{background:#e5a83b}
-.bench-chart{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}.bench-item{border:1px solid var(--line);border-radius:9px;padding:15px;min-width:0}.bench-item h3{font-size:1rem;margin:0 0 4px}.bench-item small{color:var(--muted);display:block;margin-bottom:12px}.bench-row{display:grid;grid-template-columns:58px minmax(0,1fr) 75px;gap:8px;align-items:center;margin:8px 0;font-size:.83rem}.bench-track{height:13px;background:var(--sunk);border-radius:4px;overflow:hidden}.bench-bar{height:100%;border-radius:4px}.bench-bar.tessera{background:#3568dc}.bench-bar.unity{background:#e5a83b}.bench-number{text-align:right;font-variant-numeric:tabular-nums}.bench-result{font-size:.83rem;color:var(--muted);margin-top:10px}.bench-notes{font-size:.85rem;color:var(--muted);line-height:1.6;margin-top:16px}
+.bench-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.86rem;color:var(--muted);margin-bottom:20px}.bench-legend span{display:inline-flex;align-items:center;gap:6px}.bench-key{width:12px;height:12px;display:inline-block;border-radius:2px}.bench-key.tallow{background:#3568dc}.bench-key.unity{background:#e5a83b}
+.bench-chart{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}.bench-item{border:1px solid var(--line);border-radius:9px;padding:15px;min-width:0}.bench-item h3{font-size:1rem;margin:0 0 4px}.bench-item small{color:var(--muted);display:block;margin-bottom:12px}.bench-row{display:grid;grid-template-columns:58px minmax(0,1fr) 75px;gap:8px;align-items:center;margin:8px 0;font-size:.83rem}.bench-track{height:13px;background:var(--sunk);border-radius:4px;overflow:hidden}.bench-bar{height:100%;border-radius:4px}.bench-bar.tallow{background:#3568dc}.bench-bar.unity{background:#e5a83b}.bench-number{text-align:right;font-variant-numeric:tabular-nums}.bench-result{font-size:.83rem;color:var(--muted);margin-top:10px}.bench-notes{font-size:.85rem;color:var(--muted);line-height:1.6;margin-top:16px}
 
 .bench-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px}.bench-tabs button{font:inherit;font-weight:650;padding:11px 17px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;cursor:pointer}.bench-tabs button[aria-selected="true"]{background:#3568dc;color:#fff;border-color:#3568dc}.bench-solo-value{font-variant-numeric:tabular-nums}
 </style>
@@ -1254,13 +1254,13 @@ Quality.Save();                    // applied by itself at the next start</code>
   </div>
   <div class="made">
     <a class="card" href="https://github.com/LazyAlgorithm/Tessera/releases" target="_blank" rel="noopener">
-      <span class="meta">Linux x64 · Tallow-Linux.zip</span>
+      <span class="meta">Linux x64 · Tessera-Linux.zip</span>
       <h3>Linux</h3>
       <p>Run <code>./Tallow</code>. Needs BeefBuild and Python 3.11+ on <code>PATH</code>, X11 libraries and a Vulkan driver.</p>
       <span style="color:var(--cobalt);font-weight:700">Releases on GitHub →</span>
     </a>
     <a class="card" href="https://github.com/LazyAlgorithm/Tessera/releases" target="_blank" rel="noopener">
-      <span class="meta">Windows x64 · Tallow-Windows.zip</span>
+      <span class="meta">Windows x64 · Tessera-Windows.zip</span>
       <h3>Windows</h3>
       <p>Run <code>Tallow.exe</code>. Needs the Beef toolchain, Microsoft C++ Build Tools, Python 3.11+ and a Vulkan driver.</p>
       <span style="color:var(--cobalt);font-weight:700">Releases on GitHub →</span>
