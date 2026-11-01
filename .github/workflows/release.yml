@@ -49,7 +49,7 @@ jobs:
           fetch-depth: 0
 
       - name: Determine beta version
-        run: echo "TALLOW_VERSION=$(tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
+        run: echo "TALLOW_VERSION=$(bash tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
 
       # The build scripts need Python 3.11 or later (tomllib); Ubuntu 22.04 has 3.10.
       - name: Python
@@ -155,7 +155,7 @@ jobs:
           fetch-depth: 0
 
       - name: Determine beta version
-        run: echo "TALLOW_VERSION=$(tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
+        run: echo "TALLOW_VERSION=$(bash tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
 
       - name: Python
         uses: actions/setup-python@v5
@@ -246,7 +246,7 @@ jobs:
           fetch-depth: 0
 
       - name: Determine beta version
-        run: echo "TALLOW_VERSION=$(tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
+        run: echo "TALLOW_VERSION=$(bash tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
 
       - name: Get the zips
         uses: actions/download-artifact@v4
