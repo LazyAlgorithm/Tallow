@@ -1,8 +1,8 @@
-# Tessera
+# Tallow
 
-<img src="icon.png" width="96" alt="Tessera icon">
+<img src="icon.png" width="96" alt="Tallow icon">
 
-A 3D game engine and editor written in [Beef](https://www.beeflang.org), aimed at low-poly games with voxel worlds and server-authoritative multiplayer.
+A 3D game engine and editor written in [Beef](https://www.beeflang.org), supporting a broad range of 3D game styles, from stylized worlds to realistic environments, with voxel terrain and server-authoritative multiplayer.
 
 ## Build and run
 
@@ -12,14 +12,14 @@ Linux:
 
 ```sh
 ./build.sh --config Debug
-./tessera
+./build/Debug_Linux64/TallowLauncher/TallowLauncher
 ```
 
 Windows, from an x64 Visual Studio developer shell:
 
 ```bat
 python tools/build.py --config Debug
-build\Debug_Win64\TesseraLauncher\TesseraLauncher.exe
+build\Debug_Win64\TallowLauncher\TallowLauncher.exe
 ```
 
 Opening a project compiles its scripts and starts its editor. `Samples/Sandbox` is a ready-made voxel playground. Choose **Exhibition Campus** to create the complete editable showcase. The repository and generated projects support paths containing spaces.
@@ -29,15 +29,15 @@ Opening a project compiles its scripts and starts its editor. `Samples/Sandbox` 
 After building the native dependencies, create a clean editor folder with:
 
 ```bash
-python3 tools/package_engine.py --platform linux --folder dist/Tessera-Linux
-python3 tools/package_engine.py --platform windows --folder dist/Tessera-Windows
+python3 tools/package_engine.py --platform linux --folder dist/Tallow-Linux
+python3 tools/package_engine.py --platform windows --folder dist/Tallow-Windows
 ```
 
 Windows builds from Linux use the toolchain prepared by `tools/windows/setup.sh`.
 On Windows, use `python` instead of `python3` and build the Windows native libraries first.
 The editor's Build window also uses this packager when **Build: Editor** is selected.
 
-Start `Tessera` on Linux or `Tessera.exe` on Windows directly from the package folder.
+Start `Tallow` on Linux or `Tallow.exe` on Windows directly from the package folder.
 The folder can be moved: it includes assets, templates, shaderc, and the engine/editor
 source and native archives needed to compile project scripts. It excludes native
 dependency source, tests, samples, website files, object files, and debug symbols.
@@ -61,7 +61,7 @@ normal packages build a fresh Release launcher and stop if the compiler fails.
 | UI | Visual editor for `.tui` interface documents: element tree, live preview, properties and stylesheet. |
 | Console | Engine and script log. |
 
-Edit > Preferences picks the editor's theme (Tessera Blue by default, Dark, Light, High Contrast, Forest, Ember, Plum or your own), with a live picker for every colour and `.ttheme` import and export; see `docs/themes.md`.
+Edit > Preferences picks the editor's theme (Tallow Blue by default, Dark, Light, High Contrast, Forest, Ember, Plum or your own), with a live picker for every colour and `.ttheme` import and export; see `docs/themes.md`.
 
 In the Hierarchy, the eye beside an object hides it from the Scene view alone, and the lock keeps clicks in the Scene view from selecting it (drag down the column to set many at once); see `docs/scene-visibility.md`.
 
@@ -79,7 +79,7 @@ GameObject > Voxel Terrain adds one flat 128 m tile. Pick **Tiles** under Terrai
 ## Writing components
 
 ```beef
-using Tessera;
+using Tallow;
 namespace MyGame;
 
 [Component]                      // required on every component class
