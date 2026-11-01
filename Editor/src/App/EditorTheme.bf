@@ -165,7 +165,7 @@ struct ThemePalette
 	public Color[EditorTheme.CodeCount] code;
 }
 
-/// The editor's colours (docs/themes.md): the built-in themes (Dark, Light, High Contrast, Tessera Blue), the
+/// The editor's colours (docs/themes.md): the built-in themes (Dark, Light, High Contrast, Tallow Blue), the
 /// user's own (`.ttheme` files in the editor's config folder, `themes/`), the one in use, saved between runs in
 /// `theme.ttheme`, and the editor's own colours (ThemeColor) for code that draws things itself.
 static class EditorTheme
@@ -326,8 +326,8 @@ static class EditorTheme
 		return p;
 	}
 
-	/// Deep blue-greys with a brighter blue accent: Tessera's own colours.
-	public static ThemePalette TesseraBlue()
+	/// Deep blue-greys with a brighter blue accent: Tallow's own colours.
+	public static ThemePalette TallowBlue()
 	{
 		ThemePalette p = default;
 		p.text = .(0.86f, 0.89f, 0.94f, 1);
@@ -540,8 +540,8 @@ static class EditorTheme
 
 	public static void AddBuiltIns()
 	{
-		// Tessera Blue first: the default.
-		Themes.Add(Build("Tessera Blue", TesseraBlue()));
+		// Tallow Blue first: the default.
+		Themes.Add(Build("Tallow Blue", TallowBlue()));
 		Themes.Add(Build("Dark", Dark()));
 		Themes.Add(Build("Light", Light()));
 		Themes.Add(Build("High Contrast", HighContrast()));
@@ -551,7 +551,7 @@ static class EditorTheme
 	}
 
 	/// The theme the editor starts with until another is picked.
-	public const String DefaultTheme = "Tessera Blue";
+	public const String DefaultTheme = "Tallow Blue";
 
 	public static Theme Find(StringView name)
 	{
@@ -568,7 +568,7 @@ static class EditorTheme
 	/// Writes a theme as a `.ttheme` file's text.
 	public static void Write(Theme theme, String output)
 	{
-		output.Append("# Tessera editor theme (docs/themes.md)\n");
+		output.Append("# Tallow editor theme (docs/themes.md)\n");
 		output.AppendF("name \"{}\"\n", theme.name);
 		output.AppendF("base {}\n", theme.light ? "light" : "dark");
 		for (int i < ExtraCount)
