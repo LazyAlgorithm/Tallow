@@ -105,6 +105,24 @@ class LauncherApp : Application
 			error.Set(scope $"{path} is not a Tessera project (no project.tessera).");
 			return false;
 		}
+		// Exact-version validation runs before any generated build files are changed.
+		let lockPath = scope $"{project.Path}/tessera-engine.lock.json";
+		if (File.Exists(lockPath))
+		{
+			let script = scope String();
+			ProjectGenerator.FindEngineRoot(script);
+			let command = scope String("python3 ");
+			Terminal.Quote(scope $"{project.EngineRoot}/tools/engine_versions.py", command);
+			command.Append(" verify ");
+			Terminal.Quote(project.Path, command);
+			command.Append(" ");
+			Terminal.Quote(project.EngineRoot, command);
+			if (Terminal.Run(command) != 0)
+			{
+				error.Set("This project requires its pinned Tessera engine build. Open it with that version or install the missing version in Engine Manager.");
+				return false;
+			}
+		}
 		if (!project.Build(false))
 		{
 			error.Set("The project did not compile:\n");
