@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Independent lossless message frames for transports without built-in packet compression (Steam/WebRTC).
 /// A frame is used only if smaller than the original message; decoding is bounded to 2MiB.

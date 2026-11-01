@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The controls for one tick, as the engine gathered them on the machine of the player who controls the object.
 /// Everything a NetworkScript does must come from here, never from Input directly.

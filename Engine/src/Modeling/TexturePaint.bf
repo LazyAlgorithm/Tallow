@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Painting a model's texture (docs/modeling.md): a picture kept in memory, painted with a round brush where it lies
 /// on the model (found through each face's texture coordinates, so a stroke runs on across seams), shown at once

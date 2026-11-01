@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The server's side: clients joining and leaving, reading their inputs, running the tick and sending snapshots.
 extension NetworkManager

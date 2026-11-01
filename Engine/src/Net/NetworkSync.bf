@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Marks a field of a component as shared: on an object with a Network Identity, the value the server has is
 /// copied to every client whenever it changes. Change it on the server; a client's own changes are overwritten.

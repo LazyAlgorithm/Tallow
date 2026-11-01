@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Ready-made networked character: WASD to move, Shift to sprint, mouse to turn, Space to jump.
 /// Put it on an object with a CharacterController and a NetworkIdentity. The controller decides how the shape moves

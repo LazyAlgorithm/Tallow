@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The client's side: sending inputs, and reading the welcome, spawns, despawns and snapshots the server sends.
 extension NetworkManager

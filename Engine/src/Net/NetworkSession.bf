@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Drop this on an object to make the scene multiplayer. On play it starts a host, a client or a
 /// dedicated server; the command line can override the mode: --server, --host, --connect <address>, --port <n>.

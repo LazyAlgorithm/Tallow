@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 [Reflect(.All)]
 enum RemoteSnapshotFormat : int32

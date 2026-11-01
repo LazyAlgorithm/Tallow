@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Looking back in time: lag compensation for the server's hit checks, smoothing other players' objects between snapshots, and correcting this machine's own predictions.
 extension NetworkManager
