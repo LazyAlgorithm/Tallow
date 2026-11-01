@@ -939,11 +939,11 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
 
       <h2 id="manual-lighting">Lights and shadows</h2>
       <p>A view keeps up to 256 visible point and spot lights in clusters. Add lights with <strong>GameObject &gt; Light</strong>, set their range and enable <strong>Cast Shadows</strong> where needed. The sun keeps four cascades; the nearest point and spot lights share a shadow atlas. Quality presets choose how many receive shadows.</p>
-      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/rename/tallow/docs/lighting.md">Read the full lights and shadows guide →</a></p>
+      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/main/docs/lighting.md">Read the full lights and shadows guide →</a></p>
 
       <h2 id="manual-baked-lighting">Baked lighting</h2>
       <p>Mark static Mesh Renderers with <strong>Baked Lighting</strong>, open <strong>Window &gt; Lighting</strong> and press <strong>Bake</strong>. Lightmaps store bounced light on static surfaces; light probes light moving objects. Baking runs in the background with progress and cancellation. Save the scene after baking, and bake again after moving static objects or changing lights.</p>
-      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/rename/tallow/docs/baked-lighting.md">Read the full baked lighting guide →</a></p>
+      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/main/docs/baked-lighting.md">Read the full baked lighting guide →</a></p>
 
       <h2 id="manual-probe-placement">Placing light and reflection probes</h2>
       <p>Under <strong>Place Probes</strong> in <strong>Window &gt; Lighting</strong>, press <strong>Preview Placement</strong>. The editor looks at the scene in the background and draws what it would place in the Scene view: reflection probes as blue boxes, light probe volumes as amber ones. Press <strong>Place</strong> (one undo step), then <strong>Bake</strong>.</p>
@@ -952,19 +952,19 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
         <li><strong>Light Probe Volumes</strong>: boxes of closer baked light probes over rooms and covered places and wherever light changes over a short way (by walls, shadow edges, lamps). Open space keeps the scene's Probe Spacing. Add your own with <strong>GameObject &gt; Light Probe Volume</strong>.</li>
       </ul>
       <p>Placed probes are ordinary objects under <strong>Placed Probes</strong>, tagged <strong>Placed Probe</strong>: placing again replaces only those, and places your own probes already cover are left alone. Take the tag off one to keep it. <code>--place-probes</code> does the same from the command line (with <code>--bake-lighting</code> and <code>--save-scene</code> to bake and save). The Sandbox's <code>Scenes/ProbePlacement.tscene</code> is a room to try it on.</p>
-      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/rename/tallow/docs/probe-placement.md">Read the full probe placement guide →</a></p>
+      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/main/docs/probe-placement.md">Read the full probe placement guide →</a></p>
 
       <h2 id="manual-modeling">Modelling</h2>
       <p>Open <strong>Window &gt; Model</strong> to draw shapes into the Scene view. Press <strong>Tab</strong> to edit vertices, edges and faces; extrude, bevel, cut, bridge or use booleans. The UV Editor unwraps and packs islands; vertex and texture painting finish the surface. <strong>Window &gt; Model Views</strong> provides four views. Models save with the scene, as <code>.tmesh</code>, or export as <code>.glb</code>.</p>
-      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/rename/tallow/docs/modeling.md">Read the full modelling guide →</a></p>
+      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/main/docs/modeling.md">Read the full modelling guide →</a></p>
 
       <h2 id="manual-rigging">Rigging and weight painting</h2>
       <p>Select a model and open <strong>Window &gt; Rigging</strong>. Choose Humanoid, Quadruped or Custom; place markers, adjust bones, build automatic weights, then paint and preview the pose. Humanoid rigs use Mixamo bone names. <strong>Export and Use on This Object</strong> writes a rigged GLB and adds the renderer and Animator; a <code>.trig</code> file keeps the editable rig.</p>
-      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/rename/tallow/docs/rigging.md">Read the full rigging and weight painting guide →</a></p>
+      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/main/docs/rigging.md">Read the full rigging and weight painting guide →</a></p>
 
       <h2 id="manual-themes">Editor themes</h2>
       <p>Open <strong>Edit &gt; Preferences</strong> to choose Tallow Blue, Dark, Light, High Contrast, Forest, Ember or Plum, or make a custom theme. Colours update live, code editor colours can be chosen independently, and <code>.ttheme</code> files can be imported and exported.</p>
-      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/rename/tallow/docs/themes.md">Read the full editor themes guide →</a></p>
+      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/main/docs/themes.md">Read the full editor themes guide →</a></p>
 
       <h2 id="manual-decals">Decals</h2>
       <p>A <strong>Decal</strong> presses a picture onto whatever solid surfaces lie inside its box (posters, signs, road markings, cracks, scorch marks), following their shape and lit and shadowed like them, with no change to their models or UVs.</p>
@@ -1098,7 +1098,7 @@ Quality.Save();                    // applied by itself at the next start</code>
         <li>Drag Hierarchy rows, objects in the Scene view and Project tiles into Inspector fields: pressing on them no longer selects them until the click is let go. The <strong>lock</strong> beside an object's name keeps the Inspector on it while you select other things.</li>
         <li>Maps that players make belong in the game's own map editor, which can use the engine's built-in pieces (<code>MapPieces</code>).</li>
       </ul>
-      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/rename/tallow/docs/drag-and-drop.md">Read the full dragging guide →</a></p>
+      <p><a href="https://github.com/LazyAlgorithm/Tallow/blob/main/docs/drag-and-drop.md">Read the full dragging guide →</a></p>
 
       <h2 id="manual-terrain">Terrain</h2>
       <p>A Voxel Terrain is a grid of tiles, flat until sculpted with Raise, Lower, Smooth, Flatten and Paint. While a brush is picked the Scene view shows a <strong>preview</strong> under the mouse: the brush's edge lying on the ground, and a see-through mesh of the shape it is about to make. Generating ground is the game's own business, done from code with a <code>[TerrainGenerator]</code> class; the editor has no generation settings.</p>

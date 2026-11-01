@@ -1,0 +1,2026 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}
+/* Search is local and requires no analytics, network request or framework. */
+.search-overlay:not([hidden]) { position:fixed; inset:0; z-index:100; display:flex; justify-content:center; align-items:flex-start; padding: min(12vh,100px) 16px 24px; background:rgba(10,14,24,.7); }
+.search-dialog { background:var(--surface); color:var(--ink); width:min(720px,100%); max-height:80vh; overflow:auto; border:1px solid var(--line); border-radius:12px; padding:20px; box-shadow:0 20px 80px rgba(0,0,0,.3); }
+.search-top { display:flex; align-items:center; justify-content:space-between; gap:12px; font-weight:700; }
+#searchInput { display:block; width:100%; padding:13px 15px; margin-top:14px; font:inherit; border:2px solid var(--line); background:var(--bg); color:var(--ink); border-radius:8px; }
+#searchInput:focus { outline:2px solid var(--cobalt); outline-offset:1px; }
+.search-hint { font-size:.83rem; color:var(--muted); margin:8px 0 14px; }
+.search-results { display:grid; gap:6px; }
+.search-result { display:grid; gap:3px; padding:12px; border:1px solid var(--line); border-radius:7px; text-decoration:none; background:var(--surface); color:var(--ink); }
+.search-result:hover,.search-result:focus-visible { border-color:var(--cobalt); background:var(--sunk); }
+.search-result small { color:var(--muted); }
+.search-empty { color:var(--muted); padding:16px; }
+@media(max-width:620px){.search-open { margin-left:auto; }.search-dialog { padding:14px; }.search-overlay:not([hidden]) { padding-top:20px; }}
+
+/* Static navigation fallback: iOS file previews may block JavaScript entirely. */
+.route-anchor { position: absolute; pointer-events: none; }
+body:has(#developers:target) #v-developers,body:has(#api:target) #v-api,body:has(#waterguide:target) #v-waterguide,body:has(#netguide:target) #v-netguide,body:has(#lightguide:target) #v-lightguide{display:block!important}body:has(#developers:target) #v-home,body:has(#api:target) #v-home,body:has(#waterguide:target) #v-home,body:has(#netguide:target) #v-home,body:has(#lightguide:target) #v-home{display:none!important}body:has(#home:target) #v-home { display: block !important; }
+body:has(#start:target) #v-start { display: block !important; }
+body:has(#start:target) #v-home { display: none !important; }
+body:has(#tutorials:target) #v-tutorials { display: block !important; }
+body:has(#tutorials:target) #v-home { display: none !important; }
+body:has(#shooter:target) #v-shooter { display: block !important; }
+body:has(#shooter:target) #v-home { display: none !important; }
+body:has(#menu:target) #v-menu { display: block !important; }
+body:has(#menu:target) #v-home { display: none !important; }
+body:has(#voxels:target) #v-voxels { display: block !important; }
+body:has(#voxels:target) #v-home { display: none !important; }
+body:has(#web:target) #v-web { display: block !important; }
+body:has(#web:target) #v-home { display: none !important; }
+body:has(#manual:target) #v-manual { display: block !important; }
+body:has(#manual:target) #v-home { display: none !important; }
+body:has(#download:target) #v-download { display: block !important; }
+body:has(#download:target) #v-home { display: none !important; }
+body:has([id^="manual-"]:target) #v-manual { display:block !important; }
+body:has([id^="manual-"]:target) #v-home { display:none !important; }
+body:has([id^="gs-"]:target) #v-start { display:block !important; }
+body:has([id^="gs-"]:target) #v-home { display:none !important; }
+
+/* A plain-file viewer with scripts disabled still offers working page links. */
+</style>
+<title>Tallow Engine — 3D Game Engine in Beef</title>
+<meta name="description" content="Tallow is an open-source 3D game engine written in Beef, with an integrated editor, rendering, physics, animation and server-authoritative multiplayer.">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#0c1626">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Tallow Engine — Build Worlds. Connect Players.">
+<meta property="og:description" content="A 3D game engine in Beef with voxel terrain, multiplayer and a visual editor. Tutorials and docs included.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Tallow Engine">
+<meta name="twitter:description" content="Build 3D worlds and connect players with Tallow, an open-source engine written in Beef.">
+<style>
+/* Tallow brand accents: aligned with the editor's blue/teal default theme. */
+:root { --cobalt:#176bb9; --cobalt-soft:#d7f4ff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --cobalt:#5bc9ff; --cobalt-soft:#102d46; } }
+:root[data-theme="dark"] { --cobalt:#5bc9ff; --cobalt-soft:#102d46; }
+.brand svg { width:32px; height:32px; flex-shrink:0; filter:drop-shadow(0 0 5px rgba(38,205,255,.16)); }
+:where(a, button, input, select):focus-visible { outline:2px solid var(--cobalt); outline-offset:3px; }
+</style><link rel="icon" type="image/svg+xml" href="icon.svg"></head><body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a sticky tile bar over routed views; reading pages use a sidebar + 68ch column, home uses a wide grid. */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --sunk: #e3e8ef;
+  --ink: #131820;
+  --muted: #566173;
+  --line: #d3dae4;
+  --cobalt: #2747c4;
+  --cobalt-soft: #dfe5fb;
+  --saffron: #c98a12;
+  --saffron-soft: #f7ead0;
+  --jade: #0f8565;
+  --jade-soft: #d6efe7;
+  --brick: #b5452c;
+  --code-bg: #0f1420;
+  --code-ink: #dde3ee;
+  --code-dim: #7b879a;
+  --code-key: #8fa6ff;
+  --code-type: #5fd0ad;
+  --code-str: #f0c060;
+  --code-num: #ff9e7d;
+  --code-attr: #c7a6ff;
+  --shadow: 0 1px 2px rgba(19,24,32,.06), 0 8px 24px rgba(19,24,32,.06);
+  --display: "Unbounded", "Arial Black", system-ui, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0f15; --surface: #141922; --sunk: #1b2230; --ink: #e7ebf2; --muted: #9aa5b6; --line: #262f3e;
+    --cobalt: #8aa2ff; --cobalt-soft: #1c2546; --saffron: #f1b947; --saffron-soft: #3a2c10; --jade: #46c9a1; --jade-soft: #11312a;
+    --brick: #ec7a5f; --code-bg: #090c12; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0f15; --surface: #141922; --sunk: #1b2230; --ink: #e7ebf2; --muted: #9aa5b6; --line: #262f3e;
+  --cobalt: #8aa2ff; --cobalt-soft: #1c2546; --saffron: #f1b947; --saffron-soft: #3a2c10; --jade: #46c9a1; --jade-soft: #11312a;
+  --brick: #ec7a5f; --code-bg: #090c12; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 76px; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+a { color: var(--cobalt); text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 3px solid var(--saffron); outline-offset: 2px; border-radius: 3px; }
+h1, h2, h3, h4 { font-family: var(--display); line-height: 1.15; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.1rem, 5vw, 3.6rem); font-weight: 700; }
+h2 { font-size: clamp(1.45rem, 3vw, 2rem); font-weight: 600; }
+h3 { font-size: 1.15rem; font-weight: 600; }
+h4 { font-size: 0.95rem; font-weight: 600; }
+p { margin: 0; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--sunk); padding: 0.1em 0.35em; border-radius: 4px; overflow-wrap: anywhere; }
+kbd { font-family: var(--mono); font-size: 0.8em; border: 1px solid var(--line); border-bottom-width: 2px; padding: 0.05em 0.4em; border-radius: 4px; background: var(--surface); }
+.eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+/* ---- top bar ---- */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.bar-inner { max-width: 1200px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font-family: var(--display); font-weight: 700; font-size: 1.05rem; letter-spacing: 0.02em; }
+.brand svg { width: 28px; height: 28px; }
+.nav { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+.nav a { text-decoration: none; color: var(--muted); font-weight: 600; font-size: 0.95rem; padding: 6px 10px; border-radius: var(--radius); }
+.nav a:hover { color: var(--ink); background: var(--sunk); }
+.nav a[aria-current="page"] { color: var(--ink); background: var(--surface); box-shadow: inset 0 -2px 0 var(--cobalt); }
+.theme-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--radius); padding: 5px 9px; cursor: pointer; font: 600 0.85rem var(--body); }
+
+main { padding-inline: 20px; }
+.view { max-width: 1200px; margin: 0 auto; padding-block: 40px 80px; }
+.view[hidden] { display: none !important; }
+
+/* ---- buttons ---- */
+.btn { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1rem; text-decoration: none; padding: 11px 18px; border-radius: var(--radius); border: 1px solid transparent; cursor: pointer; }
+.btn-primary { background: var(--cobalt); color: var(--surface); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-ghost { border-color: var(--line); color: var(--ink); background: var(--surface); }
+.btn-ghost:hover { border-color: var(--cobalt); }
+
+/* ---- home ---- */
+.hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 40px; align-items: center; padding-block: 20px 36px; }
+.hero h1 .tile { color: var(--cobalt); }
+.hero-lede { font-size: 1.2rem; color: var(--muted); max-width: 34em; margin-top: 18px; }
+.hero-cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+.hero-art { position: relative; aspect-ratio: 1 / 0.86; max-width: 100%; border-radius: 10px; background: linear-gradient(180deg, var(--sunk), var(--bg)); border: 1px solid var(--line); overflow: hidden; }
+.hero-art canvas { width: 100%; height: 100%; display: block; position: relative; z-index: 1; }
+.hero-art { background-image: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--jade) 25%, transparent), transparent 55%), linear-gradient(145deg, var(--sunk), var(--bg)); }
+.hero-art::before { content: "◈  ◈  ◈\\A    ◈  ◈  ◈\\A  ◈  ◈  ◈"; white-space: pre; position: absolute; inset: 0; display: grid; place-content: center; color: var(--jade); font: 700 clamp(24px, 5vw, 54px)/1.6 var(--mono); letter-spacing: 0.18em; opacity: .55; transform: skewY(-12deg); }
+
+.hero-art figcaption { position: absolute; left: 12px; bottom: 10px; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+.numbers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 10px; background: var(--surface); margin-top: 8px; }
+.numbers div { padding: 18px 20px; border-left: 1px solid var(--line); min-width: 0; }
+.numbers div:first-child { border-left: 0; }
+.numbers b { display: block; font-family: var(--display); font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.numbers span { color: var(--muted); font-size: 0.92rem; }
+.section { margin-top: 72px; }
+.section-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.section-head p { color: var(--muted); max-width: 40em; }
+.features { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.feature { background: var(--surface); padding: 22px 20px 24px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.feature .chip { width: 22px; height: 22px; border-radius: 3px; }
+.feature p { color: var(--muted); font-size: 0.95rem; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; align-items: start; }
+.ticks { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 14px; }
+.ticks li { display: grid; grid-template-columns: 14px minmax(0,1fr); gap: 12px; }
+.ticks li::before { content: ""; width: 10px; height: 10px; margin-top: 8px; background: var(--jade); transform: rotate(45deg); }
+.made { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.made.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.card p { color: var(--muted); }
+.card .meta { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+a.card { text-decoration: none; color: var(--ink); transition: border-color .15s, transform .15s; }
+a.card:hover { border-color: var(--cobalt); transform: translateY(-2px); }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--sunk); }
+tr:last-child td { border-bottom: 0; }
+.state { display: inline-block; font-family: var(--mono); font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.state.ok { background: var(--jade-soft); color: var(--jade); }
+.state.new { background: var(--cobalt-soft); color: var(--cobalt); }
+.state.part { background: var(--saffron-soft); color: var(--saffron); }
+.state.no { background: var(--sunk); color: var(--muted); }
+
+/* ---- code ---- */
+.code { position: relative; background: var(--code-bg); color: var(--code-ink); border-radius: 8px; margin: 18px 0; border: 1px solid var(--line); min-width: 0; }
+.code .file { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px 8px 16px; border-bottom: 1px solid rgba(255,255,255,.07); font-family: var(--mono); font-size: 0.75rem; color: var(--code-dim); }
+.code pre { margin: 0; padding: 14px 16px 16px; overflow-x: auto; font-family: var(--mono); font-size: 0.82rem; line-height: 1.6; tab-size: 4; }
+.code pre code { background: none; padding: 0; font-size: inherit; color: inherit; overflow-wrap: normal; }
+.copy { background: transparent; border: 1px solid rgba(255,255,255,.15); color: var(--code-ink); font: 600 0.72rem var(--mono); padding: 3px 9px; border-radius: 4px; cursor: pointer; }
+.copy:hover { border-color: rgba(255,255,255,.4); }
+.tk-k { color: var(--code-key); } .tk-t { color: var(--code-type); } .tk-s { color: var(--code-str); } .tk-n { color: var(--code-num); } .tk-c { color: var(--code-dim); font-style: italic; } .tk-a { color: var(--code-attr); }
+.tk-add { background: rgba(70, 201, 161, .14); display: inline-block; width: 100%; }
+
+/* ---- reading pages ---- */
+.doc { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 48px; }
+.side { position: sticky; top: 84px; align-self: start; max-height: calc(100vh - 100px); overflow-y: auto; display: grid; gap: 4px; padding-right: 6px; }
+.side h4 { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; font-weight: 600; }
+.side a { text-decoration: none; color: var(--ink); font-size: 0.95rem; padding: 5px 10px; border-radius: 5px; border-left: 2px solid transparent; }
+.side a:hover { background: var(--sunk); }
+.side a.on { border-left-color: var(--cobalt); background: var(--surface); font-weight: 600; }
+.side .num { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); margin-right: 6px; }
+.prose { max-width: 70ch; min-width: 0; }
+.prose > * + * { margin-top: 16px; }
+.prose h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); }
+.prose h2 { margin-top: 48px; padding-top: 6px; }
+.prose h3 { margin-top: 30px; }
+.prose ul, .prose ol { padding-left: 1.3em; }
+.prose li + li { margin-top: 6px; }
+.prose .lede { font-size: 1.15rem; color: var(--muted); }
+.prose .tbl-wrap, .prose .code { margin-top: 18px; }
+.note { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 14px 16px; display: grid; grid-template-columns: 6px minmax(0,1fr); gap: 14px; }
+.note::before { content: ""; border-radius: 3px; background: var(--saffron); }
+.note.net::before { background: var(--cobalt); }
+.note.check::before { background: var(--jade); }
+.note strong { display: block; margin-bottom: 2px; }
+.steps { list-style: none; padding: 0 !important; counter-reset: step; display: grid; gap: 22px; }
+.steps > li { counter-increment: step; display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 14px; margin: 0 !important; }
+.steps > li::before { content: counter(step); font-family: var(--display); font-weight: 600; font-size: 0.95rem; width: 32px; height: 32px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; }
+.steps > li > div > * + * { margin-top: 10px; }
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 56px !important; }
+.pager a { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; text-decoration: none; background: var(--surface); color: var(--ink); display: grid; gap: 2px; }
+.pager a:hover { border-color: var(--cobalt); }
+.pager a.next { text-align: right; grid-column: 2; }
+.pager span { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.side-select { display: none; width: 100%; padding: 10px; font: 600 1rem var(--body); border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+
+/* ---- shooter slices ---- */
+.slices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px !important; }
+.slice-pill { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); text-decoration: none; color: var(--ink); display: grid; gap: 2px; min-width: 0; }
+.slice-pill span { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); letter-spacing: .06em; }
+.slice-pill b { font-size: 0.95rem; }
+.slice-pill.net { border-color: var(--cobalt); box-shadow: inset 3px 0 0 var(--cobalt); }
+.slice-pill:hover { border-color: var(--cobalt); }
+.goal { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.tag { font-family: var(--mono); font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; padding: 3px 8px; border-radius: 4px; background: var(--sunk); color: var(--muted); }
+.tag.net { background: var(--cobalt-soft); color: var(--cobalt); }
+
+.tut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.feature-tut { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 28px; align-items: center; padding: 28px; }
+.mini-slices { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px 18px; font-size: 0.95rem; counter-reset: s; list-style: none; padding: 0; margin: 0; }
+.mini-slices li { counter-increment: s; color: var(--ink); }
+.mini-slices li::before { content: counter(s) ". "; font-family: var(--mono); color: var(--muted); }
+.mini-slices li.net { color: var(--cobalt); font-weight: 700; }
+
+footer { border-top: 1px solid var(--line); padding: 28px 20px 40px; }
+footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 0.92rem; }
+
+@media (max-width: 980px) {
+  .hero, .split, .feature-tut { grid-template-columns: minmax(0, 1fr); }
+  .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .made, .tut-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .doc { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .side { display: none; }
+  .side-select { display: block; }
+  .slices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  .numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .numbers div:nth-child(3) { border-left: 0; }
+  .numbers div:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .features, .made, .made.two, .tut-grid, .mini-slices { grid-template-columns: minmax(0, 1fr); }
+  .nav { margin-left: 0; width: 100%; overflow-x: auto; flex-wrap: nowrap; gap: 2px; }
+  .nav a { white-space: nowrap; flex: 0 0 auto; font-size: .86rem; padding: 7px 9px; }
+  .bar-inner { gap: 8px 12px; padding: 10px 14px; }
+  .hero-art { min-height: 220px; }
+  .pager { grid-template-columns: minmax(0, 1fr); }
+  .pager a.next { grid-column: 1; }
+  .view { padding-block: 24px 60px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+
+<header class="bar">
+  <div class="bar-inner">
+    <a class="brand" href="#home" aria-label="Tallow home">
+      <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="tallowCyan" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7cecff"/><stop offset=".5" stop-color="#25cfff"/><stop offset="1" stop-color="#297eff"/></linearGradient></defs><path d="M32 5 56 18.5v27L32 59 8 45.5v-27Z" fill="#0d2037" stroke="url(#tallowCyan)" stroke-width="4" stroke-linejoin="round"/><path d="M17 23h30v8H36v21h-8V31H17Z" fill="url(#tallowCyan)"/></svg>
+      TALLOW
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#home" data-nav="home">Home</a>
+      <a href="#start" data-nav="start">Get started</a>
+      <a href="#tutorials" data-nav="tutorials">Tutorials</a>
+      <a href="#manual" data-nav="manual">Manual</a>
+      <a href="#developers" data-nav="developers">Developer guide</a><a href="api.html">Full API</a><a href="licenses.html">Licenses</a><a href="#download" data-nav="download">Download</a>
+    </nav>
+    <button class="theme-btn search-open" id="searchOpen" type="button" aria-haspopup="dialog" aria-controls="siteSearch">Search <kbd>/</kbd></button>
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Switch light or dark">Theme</button>
+  </div>
+</header>
+
+<div id="siteSearch" class="search-overlay" hidden role="dialog" aria-modal="true" aria-label="Search Tallow documentation">
+  <div class="search-dialog">
+    <div class="search-top"><label for="searchInput">Search documentation</label><button type="button" id="searchClose" class="theme-btn" aria-label="Close search">Close <kbd>Esc</kbd></button></div>
+    <input id="searchInput" type="search" placeholder="Search tutorials, API concepts, installation…" autocomplete="off" aria-controls="searchResults" aria-describedby="searchHelp">
+    <p id="searchHelp" class="search-hint">Press / to search · Enter to open the first result · Esc to close</p>
+    <div id="searchResults" class="search-results" aria-live="polite"></div>
+  </div>
+</div>
+<main id="mainContent" tabindex="-1"><section class="view" id="v-developers" data-view="developers" hidden><span id="developers" class="route-anchor" aria-hidden="true"></span><article class="prose" style="margin:0 auto"><p class="eyebrow">Developer handbook · early beta</p><h1>Build and ship with Tallow</h1><p class="lede">A practical map of the editor, scripting, assets, testing and publishing. This is a documentation preview; the original website remains unchanged.</p><h2>Choose your starting point</h2><ol class="steps"><li><div><strong>Install and launch.</strong> Start with <a href="#start">Get started</a>, and use <a href="https://github.com/LazyAlgorithm/Tessera/releases">release packages</a>. Editing requires BeefBuild and Python 3.11+; Windows requires C++ Build Tools, Linux requires native development libraries and graphics drivers. For macOS consult <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/macos.md">the macOS instructions</a> and current CI status.</div></li><li><div><strong>Build your first playable project.</strong> Follow <a href="#start">first component</a> and the <a href="#shooter">arena shooter</a>. The editor includes Hierarchy, Scene, Inspector, Project, Scripts, UI, Behavior and Graph panels.</div></li><li><div><strong>Learn the runtime.</strong> A scene contains GameObjects and Components. Script in Beef or use visual scripting. Use the <a href="#manual">manual</a> and <a href="#api">API reference</a> while building.</div></li><li><div><strong>Test and optimize.</strong> Run the project in the editor, use <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/profiler.md">the profiler</a>, check quality presets, and profile on your target hardware. Treat benchmark micro-scenes as workload data, not guaranteed game frame rates.</div></li><li><div><strong>Export and distribute.</strong> Use File &gt; Build for your platform; test the packaged game on a clean machine. See <a href="#web">web builds</a>, <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/quality.md">quality presets</a>, and <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/RELEASE_NOTES.md">release notes</a>.</div></li></ol><h2>Feature documentation</h2><p><a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/water.md">Water and buoyancy</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/networking.md">Server-authoritative networking</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/soft-bodies.md">Soft bodies and ropes</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/reflections.md">Reflections</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/probe-placement.md">Probe placement</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/retargeting.md">Animation retargeting</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/occlusion-culling.md">Occlusion culling</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/gpu-skinning.md">GPU skinning</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/maps.md">Custom maps</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/dialogue.md">Dialogue</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/sequencer.md">Sequencer</a>.</p><h2>Before releasing a game</h2><p>Verify target-platform packaging, dependencies, input methods, save paths, performance, and multiplayer under network loss. Review repository and dependency license terms before commercial distribution; this page does not grant a license. The engine is early beta, so pin the engine revision used to build your game.</p><h2>When something goes wrong</h2><p><strong>Compiler error:</strong> verify BeefBuild is available and inspect the editor Console. <strong>Black screen:</strong> check graphics drivers, backend and camera. <strong>Missing assets:</strong> verify paths, import and package contents. <strong>Network divergence:</strong> read the prediction rules and use <code>--netstats</code>. <strong>Frame spikes:</strong> capture p95/p99 and component timings with the profiler. Include your OS, GPU, engine commit and reproduction steps in <a href="https://github.com/LazyAlgorithm/Tessera/issues">an issue</a>.</p></article></section><section class="view" id="v-waterguide" data-view="waterguide" hidden><span id="waterguide" class="route-anchor" aria-hidden="true"></span><article class="prose" style="margin:0 auto"><p class="eyebrow">Tutorial · Environment · 20 minutes</p><h1>Build a lake with floating objects</h1><p class="lede">Create a water scene, add a rigidbody, and test realistic versus low-poly rendering.</p><ol class="steps"><li><div>Create or open a project and save a new scene. Add a ground surface and a Camera so you can see the water.</div></li><li><div>From <strong>GameObject &gt; Water</strong>, choose <strong>Water</strong> for a 40 × 40 m pond. Use <strong>Water (Low Poly)</strong> to compare styles; <strong>Ocean</strong> creates endless water.</div></li><li><div>Select the Water object. Adjust <strong>Size</strong>, <strong>Depth</strong>, <strong>Wave Height</strong>, <strong>Wave Length</strong> and <strong>Flow</strong>. For a calm lake reduce wave height; for a river increase Flow.</div></li><li><div>Create a box above the surface and add a <strong>Rigidbody</strong> with a collider. Ensure <strong>Float Rigidbodies</strong> is enabled on Water, then press Play and observe buoyancy.</div></li><li><div>Switch the water <strong>Look</strong> between Realistic and Low Poly. Inspect reflections, refraction, foam and underwater appearance. Lower screen effects using the graphics quality presets if performance matters.</div></li><li><div>Save the scene and test a built game. For exact settings and limitations, read <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/water.md">Water documentation</a>.</div></li></ol><p><strong>Next:</strong> <a href="#netguide">Make the scene multiplayer</a>.</p></article></section>
+<section class="view" id="v-netguide" data-view="netguide" hidden><span id="netguide" class="route-anchor" aria-hidden="true"></span><article class="prose" style="margin:0 auto"><p class="eyebrow">Tutorial · Multiplayer · 25 minutes</p><h1>Host a shared physics scene</h1><p class="lede">Use Tallow's server-authoritative networking without writing a custom replication layer.</p><ol class="steps"><li><div>Start with the completed water scene or another scene containing a camera, a few dynamic rigidbodies and a playable character.</div></li><li><div>Add a <strong>Network Session</strong> component to an object in the scene. Assign the <strong>Player Prefab</strong> and place Spawn Points. Auto Replicate shares supported moving scene objects by default.</div></li><li><div>For player-controlled behavior, derive from <code>NetworkScript</code>. Use <code>OnTick(TickInput input, float deltaTime)</code> and read controls from <code>TickInput</code>, not frame input. Gate irreversible effects with <code>IsServer</code> or <code>!IsReplaying</code>.</div></li><li><div>Launch a host with <code>--host</code>, and a second game instance with <code>--connect &lt;address&gt;</code>. Move the character and observe shared rigidbodies and water.</div></li><li><div>Check <code>--netstats</code> for bandwidth, prediction and rollback behavior. For many moving bodies, budget bandwidth and consider reduced replication cadence where appropriate.</div></li><li><div>Review <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/networking.md">networking documentation</a> before deploying an internet server, particularly ownership, authority, security and late joins.</div></li></ol></article></section>
+<section class="view" id="v-lightguide" data-view="lightguide" hidden><span id="lightguide" class="route-anchor" aria-hidden="true"></span><article class="prose" style="margin:0 auto"><p class="eyebrow">Tutorial · Rendering · 20 minutes</p><h1>Light a realistic interior</h1><p class="lede">Use Tallow's PBR materials, reflection probes and baked light to make a small room feel convincing.</p><ol class="steps"><li><div>Make a simple room with walls, floor, a Camera and a few objects with different roughness and metallic values.</div></li><li><div>Assign PBR materials and imported normal maps where appropriate. Use one key light and adjust shadows before adding more lights.</div></li><li><div>Open <strong>Window &gt; Lighting</strong> and use <strong>Place Probes</strong> to preview suggested reflection probes and light-probe volumes. Confirm the placement and adjust probe bounds around rooms and doorways.</div></li><li><div>Inspect the result on glossy and rough surfaces, and check how lighting changes when the camera moves between rooms. Bake lighting if the scene calls for it.</div></li><li><div>Compare quality presets and profile the scene on target hardware. Reflections and shadow settings can have substantial performance impact.</div></li></ol><p>Reference: <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/reflections.md">Reflections</a>, <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/probe-placement.md">Probe placement</a> and <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/quality.md">Quality presets</a>.</p></article></section><section class="view" id="v-api" data-view="api" hidden><span id="api" class="route-anchor" aria-hidden="true"></span><article class="prose" style="margin:0 auto"><p class="eyebrow">API reference · source index</p><h1>Tallow scripting API</h1><p><strong>Mobile-friendly full reference:</strong> <a href="api.html">Open the dedicated searchable API page</a>. The static index will be refreshed automatically after the release documentation workflow is merged into main.</p><p class="lede">Browse the public Beef API directly from the engine source on GitHub. The index scans every readable <code>.bf</code> source file under <code>Engine/</code> and exposes public declarations, their source file and line, with filtering and signature text. It refreshes from the selected branch when you open it; source is authoritative for exact behavior.</p><p><label for="apiBranch">Engine branch</label> <select id="apiBranch"><option value="main">main</option><option value="dev">dev</option><option value="release">release</option></select> <button id="apiLoad" class="theme-btn" type="button">Load full source API</button></p><p><label for="apiFilter">Search symbols, signatures or files</label><input id="apiFilter" type="search" placeholder="NetworkManager, Physics, CreateHinge…" style="width:100%;padding:12px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:7px"></p><p id="apiStatus" role="status" aria-live="polite">Select Load full source API to scan the current engine branch.</p><div id="apiResults"></div><p><small>This is a source-generated symbol browser, not yet a compiler-verified semantic API reference. It may include declarations in internal files, and cannot infer all inherited members, overload resolution, or behavioral contracts. Each entry links to the exact source line. The GitHub API may rate-limit repeated scans; retry later if that occurs.</small></p><h2>Core scene and scripting</h2><p><strong><code>Component</code></strong> — lifecycle and component scripts; <strong><code>GameObject</code></strong> — scene objects and components; <strong><code>Scene</code></strong> — world management; <strong><code>Transform</code></strong> — position, rotation and scale. <a href="https://github.com/LazyAlgorithm/Tessera/tree/main/Engine/src/Scene">Browse Scene source</a>.</p><h2>Physics and characters</h2><p><strong><code>Rigidbody</code></strong>, <strong><code>CharacterController</code></strong>, <strong><code>PhysicsWorld</code></strong>, <strong><code>SoftBody</code></strong> and <strong><code>Rope</code></strong>. <a href="https://github.com/LazyAlgorithm/Tessera/tree/main/Engine/src/Physics">Browse Physics source</a> · <a href="#manual-physics">Physics manual</a>.</p><h2>Networking</h2><p><strong><code>NetworkScript.OnTick(TickInput, float)</code></strong> — predicted simulation; <strong><code>NetworkIdentity</code></strong> — replication and ownership; <strong><code>NetworkManager</code></strong> — sessions; <strong><code>[Sync]</code></strong> — replicated fields; <strong><code>IsServer</code></strong> and <strong><code>IsReplaying</code></strong> — authoritative and replay-safe logic. <a href="https://github.com/LazyAlgorithm/Tessera/tree/main/Engine/src/Net">Browse Net source</a> · <a href="#manual-net">Networking manual</a>.</p><h2>Rendering and world</h2><p><strong><code>Camera</code></strong>, <strong><code>Light</code></strong>, <strong><code>Decals.Spawn</code></strong>, <strong><code>Quality.Set</code></strong>, <strong><code>Water.UseLook</code></strong> and <strong><code>Water</code></strong>. <a href="https://github.com/LazyAlgorithm/Tessera/tree/main/Engine/src/Render">Browse Render source</a> · <a href="https://github.com/LazyAlgorithm/Tessera/tree/main/Engine/src/Water">Water source</a>.</p><h2>Audio, maps and content</h2><p><strong><code>Audio.PlayOneShot</code></strong>, <strong><code>MapFiles.Export</code></strong>, <strong><code>MapFiles.Find</code></strong>, <strong><code>MapSharing</code></strong> and <strong><code>Prefab.Instantiate</code></strong>. See <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/maps.md">maps</a> and <a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/networking.md">networked prefab rules</a>.</p><h2>Minimal component</h2><pre><code>using Tallow;
+[Component]
+class Spinner : Component
+{
+    public float degreesPerSecond = 45;
+    public override void Update()
+    {
+        Transform.Rotate(.(0, degreesPerSecond * Time.DeltaTime, 0));
+    }
+}</code></pre><p>Illustrative example: confirm the time and transform API signatures in the version you have installed. For a tested, copy-ready example use <a href="#start-component">Your first component</a>.</p></article></section>
+
+<!-- =============================== HOME =============================== -->
+<section class="view" id="v-home" data-view="home"><span id="home" class="route-anchor" aria-hidden="true"></span>
+  <div class="hero">
+    <div>
+      <p class="eyebrow">3D engine and editor · written in Beef · Linux, Windows, Web</p>
+      <h1 style="margin-top:14px">Build worlds.<br><span class="tile">Connect players.</span></h1>
+      <p class="hero-lede">Tallow is an open-source 3D game engine built with Beef, featuring an integrated editor, flexible rendering, physics, animation, and server-authoritative networking.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#start">Get started</a>
+        <a class="btn btn-ghost" href="#shooter">Build a shooter</a>
+      </div>
+    </div>
+    <figure class="hero-art" style="margin:0">
+      <canvas id="heroCanvas" role="img" aria-label="Illustration of an isometric voxel island with green terrain and blue water; water gently moves unless reduced motion is enabled.">An illustrated voxel island showing terrain tiles surrounded by water.</canvas>
+      <figcaption>VoxelTerrain · 32-cell chunks</figcaption>
+    </figure>
+  </div><div class="section">
+    <div class="section-head">
+      <h2>Everything a small team needs</h2>
+      <p>One editor, one language for engine and game code, and the systems a multiplayer 3D game needs, already working together.</p>
+    </div>
+    <div class="features">
+      <div class="feature"><span class="chip" style="background:var(--cobalt)"></span><h3>Rendering</h3><p>Forward HDR, clustered point and spot lights with shadows, baked lightmaps and probes, reflections, bloom and colour grading.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--saffron)"></span><h3>Voxels</h3><p>Smooth, contoured terrain you can dig and build at run time, with painted grass and trees that bend in the wind, and objects that break into physics pieces.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--jade)"></span><h3>Physics</h3><p>Jolt rigid bodies, colliders, ray and shape casts, joints, and a character controller that climbs steps.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--brick)"></span><h3>Networking</h3><p>Server-authoritative sessions with prediction, interpolation and lag compensation. Mark a field <code>[Sync]</code> and it is shared.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--jade)"></span><h3>Input actions</h3><p>Ask for “Jump”, not Space. Keyboard, mouse, Xbox, PlayStation, Switch pads and touch screens, from one file.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--cobalt)"></span><h3>Visual scripting</h3><p>Graphs compile to ordinary Beef components, with about 1,550 engine nodes read straight from the source.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--saffron)"></span><h3>Interfaces</h3><p>HTML-like <code>.tui</code> documents with stylesheets, a live UI editor, and immediate-mode <code>GUI</code> for HUDs.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--brick)"></span><h3>Shipping</h3><p>One executable and one packed asset file for Linux and Windows, or a web page with join codes for the browser.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--cobalt)"></span><h3>Modelling</h3><p>Draw shapes in the scene, edit vertices, edges and faces, unwrap UVs, paint textures and export GLB models.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--jade)"></span><h3>Rigging</h3><p>Humanoid, quadruped and custom skeletons, automatic weights, weight painting and pose previews, in the editor.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--saffron)"></span><h3>Lighting</h3><p>Bake bounced light into lightmaps and probes while you work. Moving objects take their ambient light from nearby probes, and one button places light and reflection probes where the scene needs them.</p></div>
+      <div class="feature"><span class="chip" style="background:var(--brick)"></span><h3>Editor themes</h3><p>Seven built-in themes, live colour editing, separate code colours, and theme import and export.</p></div>
+    </div>
+  </div>
+
+  <div class="section split">
+    <div>
+      <p class="eyebrow">Multiplayer</p>
+      <h2 style="margin-top:8px">Write one tick. Play it on every machine.</h2>
+      <ul class="ticks">
+        <li><span>Your player is a <code>NetworkScript</code>. Fill in <code>OnTick</code> with what happens in one sixtieth of a second, reading controls only from its <code>TickInput</code>.</span></li>
+        <li><span>The engine runs it on the server and, at once, on the player's own machine. When the two disagree, it rewinds and replays the missed ticks, then eases the difference away.</span></li>
+        <li><span>Everyone else is drawn a moment in the past, gliding between snapshots. Shots are judged against what the shooter saw.</span></li>
+        <li><span>With no session in the scene, the same script simply runs offline.</span></li>
+      </ul>
+      <p style="margin-top:22px"><a href="#shooter-6">See it in the shooter tutorial →</a></p>
+    </div>
+    <div data-code="hover" data-file="Scripts/Hover.bf"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><h2>Platforms</h2><p>Linux and Windows editor packages are built in CI. Web games run on WebGL 2; Apple silicon support is experimental.</p></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Platform</th><th>Editor</th><th>Games</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Linux x64</td><td><span class="state ok">Supported</span></td><td><span class="state ok">Supported</span></td><td>Vulkan. Where everything is developed and tested.</td></tr>
+        <tr><td>Windows x64</td><td><span class="state part">Beta</span></td><td><span class="state ok">Supported</span></td><td>Native Windows CI builds and checks opening a project. Vulkan; an early beta editor package is available in releases.</td></tr>
+        <tr><td>Web (WebGL 2)</td><td><span class="state no">—</span></td><td><span class="state new">New</span></td><td>File &gt; Build &gt; Web. Peer-to-peer multiplayer with room codes, touch controls.</td></tr>
+        <tr><td>macOS (Apple silicon)</td><td><span class="state part">Experimental</span></td><td><span class="state part">Experimental</span></td><td>Metal, macOS 12+. Build from source; CI is manual while real-Mac validation is pending.</td></tr>
+        <tr><td>Android, iOS (native)</td><td><span class="state no">Not yet</span></td><td><span class="state no">Not yet</span></td><td>Use a web build for phone browsers.</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- =============================== GET STARTED =============================== -->
+<section class="view" id="v-start" data-view="start" hidden><span id="start" class="route-anchor" aria-hidden="true"></span>
+  <div class="doc">
+    <nav class="side" aria-label="On this page">
+      <h4>Get started</h4>
+      <a href="#start" data-sec="gs-install">Install</a>
+      <a href="#start" data-sec="gs-project">Create a project</a>
+      <a href="#start" data-sec="gs-editor">The editor</a>
+      <a href="#start" data-sec="gs-component">Your first component</a>
+      <a href="#start" data-sec="gs-play">Play and change it</a>
+      <a href="#start" data-sec="gs-build">Build the game</a>
+      <a href="#start" data-sec="gs-next">Where next</a>
+    </nav>
+    <article class="prose">
+      <p class="eyebrow">Get started · about 20 minutes</p>
+      <h1>From nothing to a running game</h1>
+      <p class="lede">Install the editor, make a project, write a component, and build an executable you can send to someone.</p>
+
+      <h2 id="gs-install">Install</h2>
+      <p>Tallow compiles your scripts together with the engine, so the machine you edit on needs the Beef compiler and Python as well as the editor.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>You need</th><th>Linux</th><th>Windows</th></tr></thead>
+        <tbody>
+          <tr><td>Beef compiler</td><td><code>BeefBuild</code> on <code>PATH</code>, or <code>BEEFBUILD</code> set</td><td>Beef toolchain</td></tr>
+          <tr><td>Python</td><td>3.11 or later</td><td>3.11 or later</td></tr>
+          <tr><td>C++ tools</td><td>Only to build from source: CMake, Ninja, a C++20 compiler, X11 headers</td><td>Microsoft C++ Build Tools</td></tr>
+          <tr><td>Graphics</td><td>A Vulkan driver</td><td>A Vulkan driver</td></tr>
+        </tbody>
+      </table></div>
+      <p>Then take an editor package from the <a href="#download">download page</a> and unzip it anywhere. The folder can be moved. Or build from source:</p>
+      <div data-code="build" data-file="Terminal" data-lang="sh"></div>
+
+      <h2 id="gs-project">Create a project</h2>
+      <ol class="steps">
+        <li><div><p>Start <code>Tallow</code> (<code>Tallow.exe</code> on Windows). The launcher lists recent projects.</p></div></li>
+        <li><div><p>Choose to create a project, give it a name and a location. The name becomes the namespace of your scripts.</p><p>Tick <strong>Include sample</strong> for a voxel world and a networked player to look at.</p></div></li>
+        <li><div><p>Press <strong>Create Project</strong>. The scripts compile and the editor opens.</p></div></li>
+      </ol>
+      <p>The Project window shows the project's <code>Assets</code> folder, which is <code>src/</code> on disk. Every script anywhere in it is compiled. <code>Scripts/GameSetup.bf</code> runs once at start-up, before any scene loads.</p>
+
+      <h2 id="gs-editor">The editor</h2>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Panel</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>Hierarchy</td><td>The object tree. Drag to re-parent; right-click to create, duplicate or delete.</td></tr>
+          <tr><td>Scene</td><td>Right-drag to fly with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>, <kbd>F</kbd> frames the selection, <kbd>W</kbd>/<kbd>E</kbd>/<kbd>R</kbd> move, rotate and scale. Hold <kbd>Ctrl</kbd> to snap.</td></tr>
+          <tr><td>Game</td><td>What the first camera sees. Click it while playing to send it input; <kbd>Esc</kbd> frees the mouse.</td></tr>
+          <tr><td>Inspector</td><td>Components and their public fields. Drag a number to change it, or click it without dragging to type one; double-click a slider to type. With nothing selected: the scene's lighting, sky and fog.</td></tr>
+          <tr><td>Project</td><td>Assets. Drag models into the scene, images onto texture fields, files from your desktop into the window.</td></tr>
+          <tr><td>Scripts</td><td>A code editor that knows the engine. Saving compiles in the background and marks errors on their lines.</td></tr>
+          <tr><td>Graph, Behavior, UI</td><td>Visual scripting, behaviour trees for AI, and the interface document editor.</td></tr>
+          <tr><td>Console</td><td>Engine and script log.</td></tr>
+        </tbody>
+      </table></div>
+      <p>Play, Pause and Step are in the toolbar. Playing never changes the saved scene, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes scene edits.</p>
+
+      <h2 id="gs-component">Your first component</h2>
+      <p>Everything in a scene is a GameObject with components. A component is a Beef class marked <code>[Component]</code>. Its public fields are saved with the scene and shown in the Inspector.</p>
+      <ol class="steps">
+        <li><div><p>In the Hierarchy, choose <strong>GameObject &gt; Cube</strong>.</p></div></li>
+        <li><div><p>In the Project window, create a script called <code>Spinner</code> in <code>Scripts</code> and replace its contents:</p>
+          <div data-code="spinner" data-file="Scripts/Spinner.bf"></div></div></li>
+        <li><div><p>Save. Once it compiles, select the cube and add the <strong>Spinner</strong> component in the Inspector.</p></div></li>
+      </ol>
+      <p>Components receive <code>Awake</code>, <code>OnEnable</code>, <code>Start</code>, <code>FixedUpdate</code> (60 times a second), <code>Update</code>, <code>LateUpdate</code>, <code>OnGUI</code>, <code>OnDisable</code> and <code>OnDestroy</code>. Fields can be <code>float</code>, <code>int32</code>, <code>bool</code>, vectors, <code>Quaternion</code>, <code>Color</code>, <code>String</code> and enums marked <code>[Reflect(.All)]</code>. <code>[Range(min, max)]</code> gives a slider; <code>[HideInInspector]</code> hides one.</p>
+
+      <h2 id="gs-play">Play and change it</h2>
+      <p>Press Play. The cube turns 45 degrees a second. While it plays, change <code>degreesPerSecond</code> in the Inspector, or edit the script and save: scripts reload while the editor runs, without stopping. <strong>File &gt; Reload Scripts</strong> (<kbd>Ctrl</kbd>+<kbd>R</kbd>) forces a reload. Changes to the engine itself need <strong>File &gt; Full Rebuild &amp; Restart</strong>.</p>
+
+      <h2 id="gs-build">Build the game</h2>
+      <p>Choose <strong>File &gt; Build...</strong>, pick Linux, Windows or Web and a folder, and build. A desktop build is one executable, one asset pack (<code>game.tpak</code>, compressed and checksummed) and a licence file, so the folder can be zipped and sent. The same is available from a terminal:</p>
+      <div data-code="buildplayer" data-file="Terminal" data-lang="sh"></div>
+      <p>A built game takes <code>--host</code>, <code>--server</code> and <code>--connect &lt;address&gt;</code> for multiplayer. More in the <a href="#manual-shipping">shipping section</a> of the manual.</p>
+
+      <h2 id="gs-next">Where next</h2>
+      <ul>
+        <li><a href="#shooter">Build a multiplayer shooter</a>, one playable slice at a time.</li>
+        <li>Read about <a href="#manual-input">input actions</a> before writing controls.</li>
+        <li>Open <code>Samples/Sandbox</code> to see a voxel world and a networked player working.</li>
+      </ul>
+      <div class="pager"><a class="next" href="#tutorials"><span>Next</span>Tutorials</a></div>
+    </article>
+  </div>
+</section>
+
+<!-- =============================== TUTORIALS =============================== -->
+<section class="view" id="v-tutorials" data-view="tutorials" hidden><span id="tutorials" class="route-anchor" aria-hidden="true"></span>
+  <div class="section-head" style="margin-bottom:28px">
+    <div><p class="eyebrow">Tutorials</p><h1 style="margin-top:8px;font-size:clamp(1.9rem,4vw,2.6rem)">Learn by building</h1></div>
+    <p>Each tutorial ends with something running. The shooter is split into slices, and every slice is playable.</p>
+  </div>
+  <div class="tut-grid"><a class="card" href="#waterguide"><span class="meta">Environment · 20 min</span><h3>Build a lake with floating objects</h3><p>Realistic water, waves and buoyancy.</p></a><a class="card" href="#netguide"><span class="meta">Multiplayer · 25 min</span><h3>Host a shared physics scene</h3><p>Server-authoritative play and predicted physics.</p></a><a class="card" href="#lightguide"><span class="meta">Rendering · 20 min</span><h3>Light a realistic interior</h3><p>PBR, reflection probes and baked light.</p></a>
+    <a class="card feature-tut" href="#shooter">
+      <div style="display:grid;gap:12px">
+        <span class="meta">Series · 8 slices · about 2 hours</span>
+        <h2>Build a multiplayer arena shooter</h2>
+        <p>Start with an empty project and finish with a first-person shooter you can host and join over the internet or in a browser. The player is written for the network from the first slice, so going online is one short step.</p>
+        <span style="color:var(--cobalt);font-weight:700">Start the series →</span>
+      </div>
+      <ol class="mini-slices">
+        <li>The arena</li><li>A player that walks</li><li>Shooting</li><li>A HUD</li>
+        <li>Ammo, reload and sound</li><li class="net">Going online</li><li>Score and respawn</li><li>Ship it</li>
+      </ol>
+    </a>
+    <a class="card" href="#start-component"><span class="meta">Beginner · 10 min</span><h3>Your first component</h3><p>A script, a field in the Inspector, and a cube that turns.</p></a>
+    <a class="card" href="#menu"><span class="meta">Interface · 20 min</span><h3>A main menu</h3><p>A <code>.tui</code> document with a stylesheet, buttons that call your code, and a name box.</p></a>
+    <a class="card" href="#voxels"><span class="meta">World · 15 min</span><h3>Dig and build terrain</h3><p>Voxel terrain, a ray from the camera, and holes that are shared with every player.</p></a>
+    <a class="card" href="#manual-net-test"><span class="meta">Networking · 5 min</span><h3>Test multiplayer on one machine</h3><p>Two copies of one build, with a bad connection simulated.</p></a>
+    <a class="card" href="#web"><span class="meta">Shipping · 15 min</span><h3>Put your game in a browser</h3><p>A web build, a free host, and room codes for joining without port forwarding.</p></a>
+    <a class="card" href="#manual-input"><span class="meta">Controls · 10 min</span><h3>Controls for every device</h3><p>Input actions for keyboard, controllers and touch screens.</p></a>
+  </div>
+</section>
+
+<!-- =============================== SHOOTER =============================== -->
+<section class="view" id="v-shooter" data-view="shooter" hidden><span id="shooter" class="route-anchor" aria-hidden="true"></span>
+  <div class="doc">
+    <nav class="side" aria-label="Slices" id="shooterSide"></nav>
+    <article class="prose" id="shooterBody">
+      <select class="side-select" id="shooterSelect" aria-label="Choose a slice"></select>
+
+      <div data-slice="0">
+        <p class="eyebrow">Tutorial series · Arena shooter</p>
+        <h1>Build a multiplayer arena shooter</h1>
+        <p class="lede">A first-person shooter for two to eight players, built in eight slices. Each slice adds one thing and ends with a game you can play.</p>
+        <p>You will write two components. <code>Player</code> walks, looks, shoots and draws its own HUD; <code>Health</code> goes on anything that can be shot. The player derives from <code>NetworkScript</code> from the start, which costs nothing offline and means that going online in slice 6 is a matter of adding a session and saving a prefab.</p>
+        <div class="slices" id="sliceGrid"></div>
+        <h2>Before you start</h2>
+        <ul>
+          <li>Tallow installed, and a project created from the launcher with no sample. Call it <code>Arena</code>; the code below uses that namespace.</li>
+          <li>Two short sound files for slice 5, a shot and a reload, in WAV, OGG, MP3 or FLAC.</li>
+        </ul>
+        <div class="note"><div><strong>Why slices</strong>Each slice is small enough to finish in a sitting and leaves the game working. If something breaks, the last slice is the place to look.</div></div>
+      </div>
+
+      <div data-slice="1" hidden>
+        <p class="eyebrow">Slice 1 of 8</p>
+        <h1>The arena</h1>
+        <p class="goal"><span class="tag">Goal</span> A walled floor, some cover, light, and places for players to appear.</p>
+        <ol class="steps">
+          <li><div><p>Choose <strong>GameObject &gt; Plane</strong> for the floor. Scale it to about 4 × 1 × 4 so it is 40 metres across.</p></div></li>
+          <li><div><p>Add <strong>GameObject &gt; Cube</strong> four times for the walls: scale each to 40 × 4 × 1 and move them to the edges. Add a few more cubes as cover, 2 to 3 metres tall. Check that each has a <strong>Box Collider</strong> in the Inspector, and add one from Add Component &gt; Physics if not.</p></div></li>
+          <li><div><p>Make sure the scene has a <strong>Directional Light</strong> (GameObject &gt; Directional Light) and a <strong>Camera</strong>. Turn on fog and bloom with nothing selected in the Inspector if you like the look.</p></div></li>
+          <li><div><p>Add four <strong>GameObject &gt; Spawn Point</strong> objects, one in each corner, facing the middle. Each draws a ring, a post the height of a person and an arrow.</p></div></li>
+          <li><div><p>Save the scene as <code>Scenes/Arena.tscene</code>.</p></div></li>
+        </ol>
+        <div class="note check"><div><strong>Check it</strong>Press Play and fly the Scene view around. Nothing moves yet, but the walls cast shadows and the spawn points face inward.</div></div>
+      </div>
+
+      <div data-slice="2" hidden>
+        <p class="eyebrow">Slice 2 of 8</p>
+        <h1>A player that walks</h1>
+        <p class="goal"><span class="tag">Goal</span> Walk with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>, look with the mouse, jump with <kbd>Space</kbd>, from the player's eyes.</p>
+        <ol class="steps">
+          <li><div><p>Choose <strong>GameObject &gt; Capsule</strong> and name it <code>Player</code>. Put it near a spawn point, standing on the floor.</p></div></li>
+          <li><div><p>Remove its collider, then add <strong>Character Controller</strong> from Add Component &gt; Physics. Set Radius to 0.4 and Height to 1.8. A character controller needs no Rigidbody and no collider; it sweeps its own shape through the world, walks up steps and stays on slopes.</p></div></li>
+          <li><div><p>Create <code>Scripts/Player.bf</code>:</p>
+            <div data-code="p2" data-file="Scripts/Player.bf"></div></div></li>
+          <li><div><p>Add the <strong>Player</strong> component to the capsule.</p></div></li>
+        </ol>
+        <p>Three things in this script matter later:</p>
+        <ul>
+          <li><code>OnTick</code> reads controls only from <code>input</code>, never from <code>Input</code>. Online, the server runs it with each player's controls, and the player's own machine runs it again after a correction.</li>
+          <li>Movement goes through the <code>CharacterController</code>. That is the state the engine corrects when the server disagrees.</li>
+          <li><code>IsMine</code> is true on the machine whose player this is. Offline that is always true; online only one machine looks through each player's eyes.</li>
+        </ul>
+        <div class="note check"><div><strong>Check it</strong>Press Play and click the Game view. You walk, jump onto low cover, and look around. <kbd>Esc</kbd> frees the mouse; click to take it again.</div></div>
+      </div>
+
+      <div data-slice="3" hidden>
+        <p class="eyebrow">Slice 3 of 8</p>
+        <h1>Shooting</h1>
+        <p class="goal"><span class="tag">Goal</span> Hold the left mouse button to fire. Targets lose health and break.</p>
+        <p>Hits are decided with a ray from the eyes. Damage goes to a separate <code>Health</code> component, so the same code hurts targets now and players later.</p>
+        <div data-code="health" data-file="Scripts/Health.bf"></div>
+        <p>Then add firing to the player. The highlighted lines are new:</p>
+        <div data-code="p3" data-file="Scripts/Player.bf"></div>
+        <ol class="steps">
+          <li><div><p>Add a few cubes in the arena as targets and give each a <strong>Health</strong> component.</p></div></li>
+          <li><div><p>Give the player a <strong>Health</strong> too, with <strong>Respawns</strong> ticked. You will need it in slice 4.</p></div></li>
+        </ol>
+        <p>Firing happens inside <code>if (IsServer)</code>. With no session this machine counts as the server, so it works now. Online, only the server decides what a shot hit, which is what stops a player from claiming hits that did not happen. The ray starts just in front of the eyes so it does not hit the shooter's own capsule.</p>
+        <div class="note check"><div><strong>Check it</strong>Play and hold fire on a target. After four hits it disappears.</div></div>
+      </div>
+
+      <div data-slice="4" hidden>
+        <p class="eyebrow">Slice 4 of 8</p>
+        <h1>A HUD</h1>
+        <p class="goal"><span class="tag">Goal</span> A crosshair and a health bar.</p>
+        <p>A quick HUD uses the immediate-mode <code>GUI</code> class from <code>OnGUI</code>, which runs every frame. Add this method to <code>Player</code>:</p>
+        <div data-code="p4" data-file="Scripts/Player.bf"></div>
+        <p>The <code>IsMine</code> check matters online: every player's object runs <code>OnGUI</code> on every machine, and you only want to draw your own.</p>
+        <div class="note"><div><strong>Larger interfaces</strong>Menus and scoreboards with layout are easier as <code>.tui</code> documents with a stylesheet. See <a href="#menu">A main menu</a>.</div></div>
+        <div class="note check"><div><strong>Check it</strong>A crosshair sits in the middle of the Game view and a green bar at the bottom left.</div></div>
+      </div>
+
+      <div data-slice="5" hidden>
+        <p class="eyebrow">Slice 5 of 8</p>
+        <h1>Ammo, reload and sound</h1>
+        <p class="goal"><span class="tag">Goal</span> A magazine that empties, a reload on <kbd>R</kbd>, and sounds everyone hears.</p>
+        <ol class="steps">
+          <li><div><p>Drag your two sound files into a new <code>Audio</code> folder in the Project window: <code>Audio/shot.wav</code> and <code>Audio/reload.wav</code>.</p></div></li>
+          <li><div><p>Add an <strong>Audio Source</strong> component to the player.</p></div></li>
+          <li><div><p>Extend <code>Player</code>:</p><div data-code="p5" data-file="Scripts/Player.bf"></div></div></li>
+          <li><div><p>Add the ammo count to <code>OnGUI</code>:</p><div data-code="p5hud" data-file="Scripts/Player.bf"></div></div></li>
+        </ol>
+        <p><code>ammo</code> and <code>reloading</code> are marked <code>[Sync]</code> and changed only on the server. Online, the server's values are copied to every client when they change, so the HUD shows the truth. <code>mReloadLeft</code> and <code>mCooldown</code> are not synced because only the server reads them.</p>
+        <p><code>PlayOneShot</code> on an <code>AudioSource</code> started by the server is heard on every machine, with nothing else to write.</p>
+        <div class="note check"><div><strong>Check it</strong>Fire 24 shots, hear the reload, and watch the count refill.</div></div>
+      </div>
+
+      <div data-slice="6" hidden>
+        <p class="eyebrow">Slice 6 of 8</p>
+        <h1>Going online</h1>
+        <p class="goal"><span class="tag net">Networked</span> One player hosts, others join, and everyone sees and shoots everyone else.</p>
+        <p>Nothing in <code>Player</code> or <code>Health</code> has to be rewritten. The player is already a <code>NetworkScript</code>, hits are already decided on the server, and the values clients need are already <code>[Sync]</code>. What is left is to let the session create a player for each person who joins.</p>
+        <ol class="steps">
+          <li><div><p><strong>Make the player a prefab.</strong> Right-click <code>Player</code> in the Hierarchy and choose <strong>Save as Prefab</strong>. Save it as <code>Prefabs/Player.tprefab</code>, then delete the player from the scene.</p></div></li>
+          <li><div><p><strong>Register it.</strong> Prefabs that are spawned over the network must be registered the same way on the server and every client. Replace the body of <code>Scripts/GameSetup.bf</code>:</p>
+            <div data-code="setup" data-file="Scripts/GameSetup.bf"></div></div></li>
+          <li><div><p><strong>Add a session.</strong> Choose <strong>GameObject &gt; Network Session</strong>. In the Inspector, leave Mode on Host, Transport on Direct, Port 7777, and set Player Prefab to <code>Player</code>.</p></div></li>
+          <li><div><p><strong>Judge shots fairly.</strong> A player aims at what they see, and they see everyone else a little in the past. Wrap the ray cast in <code>Shoot</code> so the server checks it against that moment:</p>
+            <div data-code="p6" data-file="Scripts/Player.bf"></div></div></li>
+        </ol>
+        <p>The session places each new player at a spawn point and gives them a Network Identity. From then on:</p>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>What</th><th>How it is shared</th></tr></thead>
+          <tbody>
+            <tr><td>Your own movement</td><td>Predicted on your machine the tick you press a key, corrected if the server disagrees.</td></tr>
+            <tr><td>Other players</td><td>Drawn about two snapshots behind, gliding between them.</td></tr>
+            <tr><td><code>health</code>, <code>ammo</code>, <code>reloading</code></td><td><code>[Sync]</code>: the server's value, sent when it changes.</td></tr>
+            <tr><td>Targets breaking</td><td><code>Scene.Destroy</code> on the server removes them everywhere.</td></tr>
+            <tr><td>Shot and reload sounds</td><td>Started by the server, heard by everyone.</td></tr>
+          </tbody>
+        </table></div>
+        <h2 id="shooter-test">Test it on one machine</h2>
+        <p>Build once with <strong>File &gt; Build...</strong>, then start the same executable twice:</p>
+        <div data-code="hostjoin" data-file="Terminal" data-lang="sh"></div>
+        <p>Add <code>--lag 60 --loss 3</code> to both to feel a real connection: about 120 ms round trip with 3% of packets lost each way. Your own movement still responds at once. <code>--netstats</code> prints the traffic every second.</p>
+        <div class="note net"><div><strong>Over the internet</strong>Direct transport needs the host's port 7777 reachable. The Steam transport goes through Steam's relays with no port forwarding, and web builds join with a six-letter room code (slice 8).</div></div>
+        <div class="note check"><div><strong>Check it</strong>In two windows, walk in front of each other and shoot. Health drops in both windows and the other player's movement is smooth.</div></div>
+      </div>
+
+      <div data-slice="7" hidden>
+        <p class="eyebrow">Slice 7 of 8</p>
+        <h1>Score and respawn</h1>
+        <p class="goal"><span class="tag net">Networked</span> Count kills and deaths, and show a scoreboard on <kbd>Tab</kbd>.</p>
+        <p><code>Health.Hurt</code> already returns true for the hit that killed, and a player with Respawns ticked goes back to a spawn point at full health. Count it in <code>Shoot</code>, on the server:</p>
+        <div data-code="p7" data-file="Scripts/Player.bf"></div>
+        <p>Then draw the scoreboard in <code>OnGUI</code>. Every machine has every player's object, and <code>[Sync]</code> keeps their scores current, so any machine can list them:</p>
+        <div data-code="p7hud" data-file="Scripts/Player.bf"></div>
+        <p>Reading the keyboard with <code>Input.GetKey</code> is fine here: a scoreboard is drawn locally and does not change the game. Inside <code>OnTick</code> it would not be.</p>
+        <div class="note check"><div><strong>Check it</strong>Host and join, trade kills, and hold <kbd>Tab</kbd> in either window. Both show the same numbers.</div></div>
+      </div>
+
+      <div data-slice="8" hidden>
+        <p class="eyebrow">Slice 8 of 8</p>
+        <h1>Ship it</h1>
+        <p class="goal"><span class="tag">Goal</span> Zipped builds for Linux and Windows, and a link anyone can open on a phone.</p>
+        <h2>Desktop</h2>
+        <p><strong>File &gt; Build...</strong>, choose Linux, then again for Windows. Each folder holds the executable, <code>game.tpak</code> and the licence file. Zip the folder and share it. Players host with <code>--host</code> or join with <code>--connect &lt;address&gt;</code>; a menu can do the same from code later.</p>
+        <h2>Web</h2>
+        <p>Choose <strong>Web</strong> in the Build window. The first time, it shows a set-up command to run once. The result is a folder with <code>index.html</code> that any static host can serve, such as GitHub Pages. In a browser:</p>
+        <ul>
+          <li>The session uses WebRTC. A host gets a six-letter room code and a join link, and players connect directly, with no server or port forwarding.</li>
+          <li>Touch screens get on-screen controls bound to the same input actions.</li>
+          <li>Settings and saves are kept in the browser's storage.</li>
+        </ul>
+        <p>See <a href="#web">Put your game in a browser</a> for the details.</p>
+        <h2>Where to take it next</h2>
+        <ul>
+          <li>Bots: a Navigation Agent walks the arena and a behaviour tree decides when to chase. See the Behavior tab.</li>
+          <li>Teams: set Team Count on the session and give spawn points a team.</li>
+          <li>Weapons that differ: move <code>damage</code>, <code>fireInterval</code> and <code>magazineSize</code> into a small class per weapon.</li>
+          <li>A real menu with host and join buttons, built as a <code>.tui</code> document.</li>
+        </ul>
+        <div class="note check"><div><strong>Done</strong>You have a networked shooter with prediction, lag-compensated hits, synced health and ammo, respawns and a scoreboard, in two scripts.</div></div>
+      </div>
+
+      <div class="pager" id="shooterPager"></div>
+    </article>
+  </div>
+</section>
+
+<!-- =============================== SHORT TUTORIALS =============================== -->
+<section class="view" id="v-menu" data-view="menu" hidden><span id="menu" class="route-anchor" aria-hidden="true"></span>
+  <article class="prose" style="margin:0 auto">
+    <p class="eyebrow">Tutorial · Interface · 20 minutes</p>
+    <h1>A main menu</h1>
+    <p class="lede">A menu written as a <code>.tui</code> document, styled with a stylesheet, calling methods on your component.</p>
+    <ol class="steps">
+      <li><div><p>In the Project window, create <code>UI/main_menu.tui</code> and open it in the UI tab:</p><div data-code="tui" data-file="UI/main_menu.tui" data-lang="html"></div></div></li>
+      <li><div><p>Press <strong>Open CSS</strong> in the UI tab to make <code>UI/main_menu.tcss</code> beside it:</p><div data-code="tcss" data-file="UI/main_menu.tcss" data-lang="css"></div></div></li>
+      <li><div><p>Write the component that answers it:</p><div data-code="menucs" data-file="Scripts/MainMenu.bf"></div></div></li>
+      <li><div><p>Create an empty object, add a <strong>UI Document</strong> pointing at the file and a <strong>Main Menu</strong> component. Set the document's Reference Height to 1080 so the menu scales with the window.</p></div></li>
+    </ol>
+    <p><code>onclick</code> names a method on the component; <code>bind</code> names a public field that the input reads and writes. Tags available: panel, text, button, image, input, bar, slider, toggle and canvas. <code>repeat="8"</code> copies an element eight times with <code>{i}</code> replaced by each copy's number, for lists.</p>
+    <p>A document can have variants for small screens: put a second layout in a subfolder and switch with <code>UIDocument.SetVariant("phone", 600)</code>. Text styled <code>white-space: normal</code> wraps to its width.</p>
+    <div class="pager"><a href="#tutorials"><span>Back</span>All tutorials</a></div>
+  </article>
+</section>
+
+<section class="view" id="v-voxels" data-view="voxels" hidden><span id="voxels" class="route-anchor" aria-hidden="true"></span>
+  <article class="prose" style="margin:0 auto">
+    <p class="eyebrow">Tutorial · World · 15 minutes</p>
+    <h1>Dig and build terrain</h1>
+    <p class="lede">Voxel terrain that the player carves with the left mouse button and builds up with the middle one.</p>
+    <ol class="steps">
+      <li><div><p>Choose <strong>GameObject &gt; Voxel Terrain</strong>. It is 128 metres square by default. Select it and sculpt with Raise, Lower, Smooth, Flatten and Paint in the Inspector, or set Mode to Endless for generated ground without an edge.</p></div></li>
+      <li><div><p>Add this component to any object in the scene:</p><div data-code="digger" data-file="Scripts/Digger.bf"></div></div></li>
+    </ol>
+    <p>The ray comes from the camera, and <code>ModifySphere</code> adds or removes ground in a ball around the point it hits. A negative amount digs.</p>
+    <p>A <strong>Destructible Voxel Object</strong> (from the GameObject menu) is carved with <code>Carve</code>, and pieces that come loose fall away as physics bodies.</p>
+    <div class="note net"><div><strong>In multiplayer</strong>Terrain strokes and carving are applied on every machine in the server's order, and a player who joins late gets every edit so far. On a client the call goes to the server and takes effect a round trip later.</div></div>
+    <div class="pager"><a href="#tutorials"><span>Back</span>All tutorials</a></div>
+  </article>
+</section>
+
+<section class="view" id="v-web" data-view="web" hidden><span id="web" class="route-anchor" aria-hidden="true"></span>
+  <article class="prose" style="margin:0 auto">
+    <p class="eyebrow">Tutorial · Shipping · 15 minutes</p>
+    <h1>Put your game in a browser</h1>
+    <p class="lede">A web build runs on WebGL 2 in desktop and phone browsers. Players join each other with a room code, peer to peer.</p>
+    <ol class="steps">
+      <li><div><p><strong>Set up once.</strong> Web builds compile with Emscripten. In the engine folder, run the set-up script; the Build window shows the same command if it is missing.</p><div data-code="websetup" data-file="Terminal" data-lang="sh"></div></div></li>
+      <li><div><p><strong>Build.</strong> <strong>File &gt; Build...</strong>, choose <strong>Web</strong> and a folder. <strong>Play in Browser</strong> serves the folder locally and opens it.</p></div></li>
+      <li><div><p><strong>Publish.</strong> Upload the folder to any static host. On GitHub Pages: push the folder's contents to a repository and turn on Pages for its main branch.</p></div></li>
+    </ol>
+    <h2>What changes in a browser</h2>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Area</th><th>On the web</th></tr></thead>
+      <tbody>
+        <tr><td>Multiplayer</td><td>The session uses WebRTC data channels. Hosting gives a room code and a join link (<code>#join=CODE</code>); peers find each other through public signalling and then talk directly.</td></tr>
+        <tr><td>Touch</td><td><code>TouchControls.AddStick</code>, <code>AddLook</code> and <code>AddButton</code> put controls on screen, and <code>bind touch Fire</code> in <code>Input.tinput</code> ties them to actions.</td></tr>
+        <tr><td>Text boxes</td><td>On a phone, tapping an input opens the browser's own text box, so the keyboard and Paste work.</td></tr>
+        <tr><td>Saves</td><td>Files written to the user folder are kept in the browser's storage.</td></tr>
+        <tr><td>Phones</td><td>A lighter quality preset is used, and <code>WebPlatform.IsMobile</code> tells your code.</td></tr>
+        <tr><td>Not available</td><td>Steam, dedicated servers, and anything that needs threads.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="pager"><a href="#tutorials"><span>Back</span>All tutorials</a></div>
+  </article>
+</section>
+
+<!-- =============================== MANUAL =============================== -->
+<section class="view" id="v-manual" data-view="manual" hidden><span id="manual" class="route-anchor" aria-hidden="true"></span>
+  <div class="doc">
+    <nav class="side" aria-label="Manual">
+      <h4>Basics</h4>
+      <a href="#manual" data-sec="manual-components">Components and scenes</a>
+      <a href="#manual" data-sec="manual-input">Input actions</a>
+      <a href="#manual" data-sec="manual-touch">Touch screens</a>
+      <a href="#manual" data-sec="manual-character">Character controller</a>
+      <a href="#manual" data-sec="manual-physics">Physics and joints</a>
+      <a href="#manual" data-sec="manual-water">Water</a>
+      <h4>Multiplayer</h4>
+      <a href="#manual" data-sec="manual-net">Networking</a>
+      <a href="#manual" data-sec="manual-net-test">Testing on one machine</a>
+      <h4>World</h4>
+      <a href="#manual" data-sec="manual-render">Rendering and materials</a>
+      <a href="#manual" data-sec="manual-lighting">Lights and shadows</a>
+      <a href="#manual" data-sec="manual-baked-lighting">Baked lighting</a>
+      <a href="#manual" data-sec="manual-probe-placement">Placing probes</a>
+      <a href="#manual" data-sec="manual-modeling">Modelling</a>
+      <a href="#manual" data-sec="manual-rigging">Rigging and weight painting</a>
+      <a href="#manual" data-sec="manual-themes">Editor themes</a>
+      <a href="#manual" data-sec="manual-viewmodel">First-person viewmodel</a>
+      <a href="#manual" data-sec="manual-decals">Decals</a>
+      <a href="#manual" data-sec="manual-dialogue">Dialogue and subtitles</a>
+      <a href="#manual" data-sec="manual-sequencer">Sequencer (cutscenes)</a>
+      <a href="#manual" data-sec="manual-navigation">Navigation</a>
+      <a href="#manual" data-sec="manual-behavior">Behaviour trees</a>
+      <a href="#manual" data-sec="manual-drawing-less">LOD, occlusion, GPU skinning</a>
+      <a href="#manual" data-sec="manual-quality">Quality presets</a>
+      <a href="#manual" data-sec="manual-macos">macOS</a>
+      <a href="#manual" data-sec="manual-textures">Textures</a>
+      <a href="#manual" data-sec="manual-reflections">Reflections</a>
+      <a href="#manual" data-sec="manual-skinned-materials">Materials on skinned meshes</a>
+      <a href="#manual" data-sec="manual-anim-layers">Animation layers and blend trees</a>
+      <a href="#manual" data-sec="manual-ik">Inverse kinematics</a>
+      <a href="#manual" data-sec="manual-retarget">Retargeting and posing</a>
+      <a href="#manual" data-sec="manual-mapbuilder">Building maps</a>
+      <a href="#manual" data-sec="manual-terrain">Terrain</a>
+      <a href="#manual" data-sec="manual-foliage">Foliage and wind</a>
+      <a href="#manual" data-sec="manual-destructible">Destructible objects</a>
+      <a href="#manual" data-sec="manual-loading">Loading in the background</a>
+      <a href="#manual" data-sec="manual-audio">Audio and voice</a>
+      <a href="#manual" data-sec="manual-ui">Interfaces</a>
+      <a href="#manual" data-sec="manual-responsive">Phones and tablets</a>
+      <h4>Release</h4>
+      <a href="#manual" data-sec="manual-shipping">Shipping</a>
+      <a href="#manual" data-sec="manual-maps">Maps</a>
+      <a href="#manual" data-sec="manual-cli">Command line</a>
+      <a href="#manual" data-sec="manual-limits">Known limits</a>
+      <h4>Engine</h4>
+      <a href="#manual" data-sec="manual-source">Working on the engine</a>
+    </nav>
+    <article class="prose">
+      <select class="side-select" id="manualSelect" aria-label="Jump to a section"></select>
+      <p class="eyebrow">Manual</p>
+      <h1>How Tallow works</h1>
+      <p class="lede">The parts you will use most, with the calls that drive them.</p>
+
+      <h2 id="manual-components">Components and scenes</h2>
+      <p>A scene is a tree of GameObjects; each has a Transform and any number of components. Components are Beef classes marked <code>[Component]</code>. Public fields are saved and shown in the Inspector.</p>
+      <ul>
+        <li><code>GetComponent&lt;T&gt;()</code> and <code>AddComponent&lt;T&gt;()</code> on an object; <code>Scene.FindComponent&lt;T&gt;()</code> for the first in the scene.</li>
+        <li><code>Prefab.Instantiate(scene, "Prefabs/Crate.tprefab", position, rotation)</code> places a prefab; <code>Scene.Destroy(obj)</code> removes an object.</li>
+        <li><code>SceneManager.Load</code> changes scene; <code>LoadAdditive</code> and <code>Unload</code> add and remove levels kept in their own scene files.</li>
+        <li><code>SpawnPoints.Next</code>, <code>Random</code> and <code>Place</code> choose among the scene's spawn points, by team.</li>
+        <li><code>Application.Quit()</code> quits: a built game closes, and in the editor Play stops and the editor stays open, so a menu's Quit button needs no special case. Setting <code>Application.Instance.Running = false</code> does the same. <code>Application.Instance.Close()</code> always ends the program.</li>
+        <li><code>Scene.DestroyImmediate(obj)</code> takes the whole tree down at once: every component in it gets <code>OnUnregister</code> before any object is freed, so a component can still look at its children as it goes.</li>
+      </ul>
+
+      <h2 id="manual-input">Input actions</h2>
+      <p>Build on <code>InputActions</code>. The game asks for what the player means, and <code>Input.tinput</code> (Window &gt; Input Actions) says which keys, buttons and touch controls mean it.</p>
+      <div data-code="actions" data-file="Scripts/Example.bf"></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Action</th><th>Keyboard and mouse</th><th>Controller</th></tr></thead>
+        <tbody>
+          <tr><td>Move</td><td>W A S D, arrows</td><td>Left stick</td></tr>
+          <tr><td>Look</td><td>Mouse</td><td>Right stick</td></tr>
+          <tr><td>Jump</td><td>Space</td><td>South (A / Cross)</td></tr>
+          <tr><td>Sprint</td><td>Left Shift</td><td>Left stick click</td></tr>
+          <tr><td>Crouch</td><td>Left Ctrl</td><td>East (B / Circle)</td></tr>
+          <tr><td>Fire</td><td>Left mouse</td><td>Right trigger</td></tr>
+          <tr><td>Use</td><td>E</td><td>North (Y / Triangle)</td></tr>
+          <tr><td>Reload</td><td>R</td><td>West (X / Square)</td></tr>
+        </tbody>
+      </table></div>
+      <p>These standard actions exist in every project, and <code>NetworkScript</code> reads them, so a networked player works with a controller with no code. <code>InputActions.Describe("Use", text)</code> gives the right prompt for the device in the player's hands.</p>
+
+      <h2 id="manual-touch">Touch screens</h2>
+      <p>On a phone or tablet the game draws its own on-screen controls, made once with <code>TouchControls</code> and bound in <code>Input.tinput</code> like any other control (<code>bind touch Fire</code>), so the game reads them as it reads keys or a controller. A touch control can be bound to any action, buttons and directions alike, so a stick can drive <code>Move</code> directly.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Call</th><th>Makes</th></tr></thead>
+        <tbody>
+          <tr><td><code>AddStick(name, area, anchor, offset, radius)</code></td><td>A thumbstick that appears where the thumb lands in <code>area</code>. Set <code>hideWhenIdle</code> and it is drawn only while used.</td></tr>
+          <tr><td><code>AddLook(name, area)</code></td><td>An area to drag across to turn the view, like the mouse.</td></tr>
+          <tr><td><code>AddButton(name, label, anchor, offset, radius, dragLooks)</code></td><td>A round button; with <code>dragLooks</code>, dragging on it also turns the view, so one thumb fires and aims.</td></tr>
+          <tr><td><code>AddSwipe(name, source, direction)</code></td><td>A quick flick across another control, down for one frame as the finger lifts. A slow drag is never a flick, and the view is held still while a stroke could still become one.</td></tr>
+        </tbody>
+      </table></div>
+      <p>Places are an anchor on the screen plus an offset in <em>screen units</em>, the screen's short side, so one layout keeps its shape on any phone and either way up; move controls for portrait by changing <code>offset</code>. Each control has <code>visible</code>, <code>dimmed</code> (faded but in place, so a layout never shifts under the thumb), <code>lit</code> (a switch that is on) and <code>label</code>. <code>TouchControls.Scale</code> sizes everything and <code>EdgeMargin</code> keeps it in from the edges. A touch-control layout can place a movement stick on the left and context actions near the right thumb.</p>
+
+      <h2 id="manual-character">Character controller</h2>
+      <p><code>CharacterController</code> sweeps a capsule or rounded box through the world. It walks up steps, stands on slopes up to a limit, rides moving platforms and pushes dynamic bodies. Call it once per tick:</p>
+      <div data-code="cc" data-file="Scripts/Example.bf"></div>
+      <p>Afterwards <code>IsGrounded</code>, <code>CanJump</code>, <code>Velocity</code> and <code>GroundNormal</code> describe the result. <code>SetCapsule</code> and <code>SetBox</code> change the shape and return false when it would not fit, which is how crouching works. <code>CharacterMotor</code> is a ready-made networked walker built on it.</p>
+
+      <h2 id="manual-physics">Physics and joints</h2>
+      <p>A <strong>Rigidbody</strong> with a collider (Box, Sphere, Capsule, Mesh, Convex Hull or Compound) is simulated by Jolt. <code>Scene.Physics</code> answers <code>Raycast</code>, <code>SphereCast</code> and <code>OverlapSphere</code>. A <strong>Compound Collider</strong> is built from parts in the object's own space: <code>AddBox(center, size)</code>, <code>AddCylinder(center, radius, halfHeight, rotation)</code> and <code>AddHull(center, points, rotation)</code> (the convex hull round four or more points); call <code>Rigidbody.RebuildBody</code> afterwards.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Joint</th><th>Made with</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td>Ball</td><td>The <strong>Joint</strong> component, or <code>Joint.Connect(a, b, anchor, axis, swingLimit)</code></td><td>Chains, lamps, ragdoll limbs; a swing limit in degrees makes a shoulder or a hip.</td></tr>
+          <tr><td>Hinge</td><td><code>Scene.Physics.CreateHinge(bodyA, bodyB, anchor, axis, childAxis, childNormal)</code></td><td>Doors, wheels, arms. <code>SetHingeMotor</code> spins it (mode 1, radians a second) or turns it to an angle (mode 2); <code>HingeAngle</code> reads it.</td></tr>
+          <tr><td>Suspension</td><td><code>Scene.Physics.CreateSuspension(bodyA, bodyB, anchor, childAnchor, axis, childAxis, childNormal, travel)</code></td><td>A slider with <code>travel</code> metres either way. <code>SetSuspensionSpring(joint, stiffness, damping)</code> (newtons a metre, newton-seconds a metre); <code>SuspensionPosition</code> reads it.</td></tr>
+        </tbody>
+      </table></div>
+      <p>Hinges and suspensions take body ids (<code>rigidbody.BodyId</code>), with the anchor and axes in world space, and return a handle; <code>DestroyJoint</code> removes one, and destroying either body removes it too. Bodies joined by a hinge or a suspension do not collide with each other, so a wheel can sit inside its arch.</p>
+      <div data-code="hinge" data-file="Scripts/Example.bf"></div>
+      <p>Turn on <strong>Debris</strong> on a Rigidbody for things that should lie about without getting in the way: characters, other bodies, rays and casts all pass through it. Joints are local to each machine, so in multiplayer create the same ones everywhere; Joint components saved in a scene or prefab already are.</p>
+
+      <h2 id="manual-water">Water</h2>
+      <p><strong>GameObject &gt; Water</strong> makes a pond or an endless <strong>Ocean</strong>, each in a <strong>Realistic</strong> look (refraction, clarity, screen and probe reflections, caustics, shore and crest foam) or a <strong>Low Poly</strong> one (flat facets, colour bands, sparkles). The surface is at the object&#39;s height; it fills <strong>Size</strong> and reaches <strong>Depth</strong> below. Wave Height, Wave Length, Direction, Spread, Choppiness, Speed and Seed shape the waves; <strong>Flow</strong> is the current.</p>
+      <ul>
+        <li><strong>Floating:</strong> every Rigidbody in the water floats with Jolt&#39;s buoyancy (1.6 by default, about 62% under) and is carried by the current. A <strong>Floater</strong> gives one object its own buoyancy and drag; disable it to sink.</li>
+        <li><strong>Soft bodies and ropes:</strong> jelly, cloth and ropes float point by point, bob on the waves and drift with the current; shells float on their Rigidbody. Don&#39;t add a Rigidbody to a jelly or cloth to float it.</li>
+        <li><strong>Swimming:</strong> a Character Controller in water deeper than <strong>Swim Depth</strong> swims with its head out; jump swims up, <code>controller.Swim(velocity, dt)</code> dives, <code>IsSwimming</code> drives animations.</li>
+        <li><strong>Under the water:</strong> a camera in the water sees through the water&#39;s Underwater Color, with caustics, cut exactly at the waterline when it is half in.</li>
+        <li><strong>Code:</strong> <code>Water.At(scene, point)</code>, <code>SurfaceAt</code>, <code>HeightAt</code>, <code>Contains</code>, <code>DepthOf</code>.</li>
+        <li><strong>Multiplayer:</strong> no code; the waves run on the session clock and the water&#39;s settings and level are the server&#39;s.</li>
+      </ul>
+      <p>See <code>docs/water.md</code>. The Sandbox&#39;s Water and Ocean scenes show both looks.</p>
+
+      <h2 id="manual-net">Networking</h2>
+      <p>Add a <strong>Network Session</strong> and the scene is multiplayer; without one nothing changes. The server runs the game from each player's controls and sends the result.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Shared with no code</th><th>Rule</th></tr></thead>
+        <tbody>
+          <tr><td>Physics bodies, characters, AI</td><td>Motion is shared; AI thinks on the server.</td></tr>
+          <tr><td>Voxel terrain and objects</td><td>Edits applied everywhere in the server's order; late joiners catch up.</td></tr>
+          <tr><td>Switches and lights</td><td>Objects switched on and off, components enabled and lights changed by the server are the same everywhere; late joiners get them as they are now. A client may change only how the objects it owns look (a torch on its player).</td></tr>
+          <tr><td>Particles, decals, one-shot sounds</td><td>Started on the server, seen and heard everywhere. A game that already shares its shots and impacts gets each once, not twice.</td></tr>
+          <tr><td>Water</td><td>Nothing sent for the waves: they run on the session&#39;s tick, so every machine sees and floats things on the same water. Settings and level are the server&#39;s; late joiners catch up.</td></tr>
+          <tr><td>Soft bodies and ropes</td><td>Free soft bodies move as the server has them; dents, ropes tied, let go and snapped are the server's, on every machine; late joiners catch up.</td></tr>
+          <tr><td>Animation, sound, materials</td><td>Started by the server or the object's owner, seen and heard everywhere.</td></tr>
+          <tr><td>Prefabs with a Network Identity</td><td>Instantiated on the server, they appear on every machine.</td></tr>
+          <tr><td><code>[Sync]</code> fields</td><td>The server's value, sent reliably when it changes.</td></tr>
+          <tr><td>Network events</td><td><code>SendNetworkEvent("name", value)</code> runs <code>OnNetworkEvent</code> on every machine.</td></tr>
+        </tbody>
+      </table></div>
+      <p>For a player, derive from <code>NetworkScript</code> and fill in <code>OnTick</code>. Three rules keep prediction working:</p>
+      <ol>
+        <li>Take controls only from the <code>TickInput</code>, never from <code>Input</code>.</li>
+        <li>Move the object through its Transform, Rigidbody or Character Controller; that is the state that gets corrected.</li>
+        <li><code>OnTick</code> can run more than once for one tick on the player's machine. Do one-off things inside <code>if (IsServer)</code> or <code>if (!IsReplaying)</code>.</li>
+      </ol>
+      <p>A shot is judged against what the shooter saw by wrapping its ray cast in <code>BeginLagCompensation()</code> and <code>EndLagCompensation()</code>, up to 24 ticks back. <code>NetworkManager.RegisterMessage</code> with <code>SendToServer</code>, <code>SendToAll</code> and <code>SendToClient</code> carries any other game event. <code>Scene.Network.Kick(clientId)</code> removes a player.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Traffic</th><th>Size</th></tr></thead>
+        <tbody>
+          <tr><td>Controls, client to server</td><td>9 bytes a tick, 1 byte when unchanged; about 1–2 kB/s</td></tr>
+          <tr><td>Snapshots, server to client</td><td>20 a second, 12–15 bytes per changed object</td></tr>
+          <tr><td>A still scene</td><td>About 0.3 kB/s per client</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3 id="manual-net-test">Testing on one machine</h3>
+      <p>Start the same build twice. No second build is needed.</p>
+      <div data-code="hostjoin" data-file="Terminal" data-lang="sh"></div>
+      <p><code>--lag &lt;ms&gt;</code>, <code>--jitter &lt;ms&gt;</code> and <code>--loss &lt;percent&gt;</code> simulate a poor connection; use the same values on both. <code>--netstats</code> prints bytes, corrections and buffered ticks every second.</p>
+
+      <h2 id="manual-render">Rendering and materials</h2>
+      <p>A forward HDR pipeline on bgfx: four shadow cascades from the sun, up to 256 visible point and spot lights sorted into clusters, with real-time shadows from the nearest shadow-casting lights, metallic/roughness shading, per-triangle flat shading, fog, bloom and tonemapping. Identical mesh and material pairs are instanced automatically.</p>
+      <ul>
+        <li>Materials (<code>.tmat</code>) are shared between objects and edited live in the Inspector.</li>
+        <li>Shader graphs make shaders without code; <code>.tshader</code> surface shaders keep the engine's lighting, shadows and fog.</li>
+        <li>Compute shaders (<code>.tcompute</code>) run per pixel, usable with no script through the Compute Effect component.</li>
+        <li>Models: glTF and GLB, with skinned characters and Animator Controllers (<code>.tcontroller</code>) for state machines.</li>
+      </ul>
+
+      <h2 id="manual-viewmodel">First-person viewmodel</h2>
+      <p>A first-person player's arms and weapon are drawn in a pass of their own, after the world and over it, with their own field of view and a near clip at the eye: a gun never pokes into a wall it is held against, and keeps its shape however wide the world's field of view.</p>
+      <ol>
+        <li>In <strong>Project Settings</strong>, name a layer <code>Viewmodel</code> and untick it against every layer in the collision table.</li>
+        <li>Make the arms and weapon children of the camera's object and put each part on that layer (the Layer menu at the top of the Inspector).</li>
+        <li>On the <strong>Camera</strong>, pick <strong>Viewmodel Layer</strong>, and set <strong>Viewmodel Field Of View</strong>, <strong>Viewmodel Near Clip</strong> and, if you want the gun's shadow on the world, <strong>Viewmodel Casts Shadows</strong>.</li>
+      </ol>
+      <p>With the camera selected the Scene view shows the viewmodel's view in amber, next to the camera's own; place the arms and weapon inside it. The viewmodel is lit, fogged and shadowed like the world. It needs no networking: only each player's own camera draws it, and everyone else sees that player's full body as usual. From code: <code>camera.viewmodelLayer = ProjectConfig.LayerNamed("Viewmodel")</code>. Any component can show an integer as a choice of layers with <code>[Layer]</code>.</p>
+      <p>A <strong>Viewmodel Pose</strong> on the arms-and-weapon object moves it: from a hip pose to an aim pose in the middle of the screen while <code>aiming</code> is set, a walk bob and a sway when the view turns (both worked out from the camera's movement, and steadier while aiming), and recoil with <code>Kick()</code>. In the Inspector, <strong>Preview</strong> blends hip to aim while editing, and <strong>Use current place as Hip</strong> / <strong>Aim</strong> take the object's place as a pose.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Field</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td>Hip / Aim Position and Rotation</td><td>The two poses, under the camera</td></tr>
+          <tr><td>Aim Speed</td><td>Raised in 1 / Aim Speed seconds; <code>AimBlend</code> follows it</td></tr>
+          <tr><td>Bob, Bob Full Speed, Bob Stride</td><td>Walk bob from the camera's speed over the ground</td></tr>
+          <tr><td>Sway, Sway Limit</td><td>Lag behind the view when it turns</td></tr>
+          <tr><td>Aim Steadiness</td><td>How much bob and sway aiming takes away</td></tr>
+          <tr><td>Recoil Back, Pitch, Recovery</td><td>What <code>Kick(amount)</code> does</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2 id="manual-lighting">Lights and shadows</h2>
+      <p>A view keeps up to 256 visible point and spot lights in clusters. Add lights with <strong>GameObject &gt; Light</strong>, set their range and enable <strong>Cast Shadows</strong> where needed. The sun keeps four cascades; the nearest point and spot lights share a shadow atlas. Quality presets choose how many receive shadows.</p>
+      <p><a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/lighting.md">Read the full lights and shadows guide →</a></p>
+
+      <h2 id="manual-baked-lighting">Baked lighting</h2>
+      <p>Mark static Mesh Renderers with <strong>Baked Lighting</strong>, open <strong>Window &gt; Lighting</strong> and press <strong>Bake</strong>. Lightmaps store bounced light on static surfaces; light probes light moving objects. Baking runs in the background with progress and cancellation. Save the scene after baking, and bake again after moving static objects or changing lights.</p>
+      <p><a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/baked-lighting.md">Read the full baked lighting guide →</a></p>
+
+      <h2 id="manual-probe-placement">Placing light and reflection probes</h2>
+      <p>Under <strong>Place Probes</strong> in <strong>Window &gt; Lighting</strong>, press <strong>Preview Placement</strong>. The editor looks at the scene in the background and draws what it would place in the Scene view: reflection probes as blue boxes, light probe volumes as amber ones. Press <strong>Place</strong> (one undo step), then <strong>Bake</strong>.</p>
+      <ul>
+        <li><strong>Reflection probes</strong>: one per room, boxed to its walls with box projection; one under each open-sided roof; small ones across doorways; one over a shiny floor in the open; one per square of open ground with something standing on it. Places with nothing shiny get none.</li>
+        <li><strong>Light Probe Volumes</strong>: boxes of closer baked light probes over rooms and covered places and wherever light changes over a short way (by walls, shadow edges, lamps). Open space keeps the scene's Probe Spacing. Add your own with <strong>GameObject &gt; Light Probe Volume</strong>.</li>
+      </ul>
+      <p>Placed probes are ordinary objects under <strong>Placed Probes</strong>, tagged <strong>Placed Probe</strong>: placing again replaces only those, and places your own probes already cover are left alone. Take the tag off one to keep it. <code>--place-probes</code> does the same from the command line (with <code>--bake-lighting</code> and <code>--save-scene</code> to bake and save). The Sandbox's <code>Scenes/ProbePlacement.tscene</code> is a room to try it on.</p>
+      <p><a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/probe-placement.md">Read the full probe placement guide →</a></p>
+
+      <h2 id="manual-modeling">Modelling</h2>
+      <p>Open <strong>Window &gt; Model</strong> to draw shapes into the Scene view. Press <strong>Tab</strong> to edit vertices, edges and faces; extrude, bevel, cut, bridge or use booleans. The UV Editor unwraps and packs islands; vertex and texture painting finish the surface. <strong>Window &gt; Model Views</strong> provides four views. Models save with the scene, as <code>.tmesh</code>, or export as <code>.glb</code>.</p>
+      <p><a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/modeling.md">Read the full modelling guide →</a></p>
+
+      <h2 id="manual-rigging">Rigging and weight painting</h2>
+      <p>Select a model and open <strong>Window &gt; Rigging</strong>. Choose Humanoid, Quadruped or Custom; place markers, adjust bones, build automatic weights, then paint and preview the pose. Humanoid rigs use Mixamo bone names. <strong>Export and Use on This Object</strong> writes a rigged GLB and adds the renderer and Animator; a <code>.trig</code> file keeps the editable rig.</p>
+      <p><a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/rigging.md">Read the full rigging and weight painting guide →</a></p>
+
+      <h2 id="manual-themes">Editor themes</h2>
+      <p>Open <strong>Edit &gt; Preferences</strong> to choose Tallow Blue, Dark, Light, High Contrast, Forest, Ember or Plum, or make a custom theme. Colours update live, code editor colours can be chosen independently, and <code>.ttheme</code> files can be imported and exported.</p>
+      <p><a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/themes.md">Read the full editor themes guide →</a></p>
+
+      <h2 id="manual-decals">Decals</h2>
+      <p>A <strong>Decal</strong> presses a picture onto whatever solid surfaces lie inside its box (posters, signs, road markings, cracks, scorch marks), following their shape and lit and shadowed like them, with no change to their models or UVs.</p>
+      <ul>
+        <li><strong>GameObject &gt; Decal</strong> makes one stuck to the surface in the middle of the Scene view. The picture is pressed along the object's blue (forward) axis; the Scene view draws the box, and clicking inside it selects the decal.</li>
+        <li><strong>Stick to Surface</strong>, under the component, moves it onto the surface it points at (or the one below) and lays it flat, keeping the picture the same way up.</li>
+        <li>Set <strong>Texture</strong> (a PNG whose alpha decides where it shows), <strong>Color</strong>, <strong>Size</strong> (width, height and depth in metres), <strong>Opacity</strong>, <strong>Metallic</strong> and <strong>Roughness</strong>, <strong>Angle Limit</strong> (surfaces turned further away do not get it, so a floor decal does not run down the sides of boxes), <strong>Unlit</strong> and <strong>Order</strong> (higher draws over lower).</li>
+      </ul>
+      <p>For marks that come and go in numbers, <code>Decals.Spawn(Scene, point, normal, "Textures/hole.png", 0.12f, 20)</code> makes one 12 cm across that fades out after 20 seconds. They are kept in a pool (<code>Decals.MaxSpawned</code>, 256 by default) that recycles the oldest, and <code>Decals.Clear(Scene)</code> removes them. A Decal component is part of its object like any other component; spawned decals are not sent over the network, so make them on every machine from code that runs on each, such as where a hit is announced. See <code>docs/decals.md</code>.</p>
+
+      <h2 id="manual-dialogue">Dialogue and subtitles</h2>
+      <p>Branching conversations live in <code>.tdialogue</code> files: speakers, and nodes of steps that run from the top. A step is a line someone says (with an optional voice recording), an answer the player can pick, a variable set or added to, an event for the game, a jump to another node, or the end, and any step can have a condition such as <code>gold &gt;= 10</code>.</p>
+      <ul>
+        <li><strong>Project &gt; + &gt; Dialogue</strong> makes one and opens the <strong>Dialogue</strong> tab: nodes and speakers on the left, the selected node's steps in the middle, and a preview on the right that plays any branch with its answers, events and variables, without starting the game. The file is plain text, so it can also be written by hand.</li>
+        <li>Add a <strong>Dialogue Runner</strong> to the character who talks and pick the file. Each line shows as a subtitle with the speaker's name in their colour and plays its recording from the speaker's object; answers appear as buttons, picked with the mouse, number keys, arrows or a controller. <strong>Play On Start</strong> or <code>Play()</code> starts it; <code>OnEvent</code> tells your code when to open the gate or hand over the item.</li>
+        <li>Variables belong to the game and are kept in saves, with where the conversation was.</li>
+        <li><strong>Shared</strong> makes one conversation for everyone in a co-op session: the server runs it, any player (or only the owner) can move it on or answer, and late joiners see where it is.</li>
+      </ul>
+      <p><strong>Subtitles</strong> also follow any sound an Audio Source plays that has an <code>.srt</code> file beside it, with <code>[captions]</code> for sounds shown when the player turns captions on. <code>Subtitles.Show</code> puts up a line from code, and the player's settings (on, captions, names, size, background) are there for an options menu. See <code>docs/dialogue.md</code>.</p>
+
+      <h2 id="manual-sequencer">Sequencer (cutscenes)</h2>
+      <p>A <strong>sequence</strong> is a timeline for cutscenes, level intros, lifts and doors that open in stages: tracks that move objects, cut or blend between camera shots, play animations and sounds, show and hide things, fade the screen, show subtitles and fire events for the game. It lives in a <code>.tsequence</code> text file.</p>
+      <ul>
+        <li><strong>Project &gt; + &gt; Sequence</strong> opens the <strong>Sequencer</strong> tab. <strong>+ Track</strong> adds a track (on the selected object where it needs one); double-click a row to add a key, drag keys along the ruler, and edit the selected key underneath.</li>
+        <li>Dragging the playhead puts the scene where the sequence has it, and <strong>Look Through Shots</strong> moves the Scene view's camera onto the camera shot. Move an object with the gizmo and press <strong>K</strong> to key it at the playhead. <strong>Stop Preview</strong> (or starting the game, or saving) puts everything back.</li>
+        <li>A <strong>Sequence Player</strong> plays it: <strong>Play On Start</strong> or <code>Play()</code>, <code>Pause</code>, <code>Skip</code> (events skipped over still happen) and <code>Seek</code>, with <strong>Loop</strong>, <strong>Skippable</strong> and <strong>Restore When Done</strong>. While a shot is on, the game is seen through it, then through its own camera again. Saves keep where it was.</li>
+        <li><strong>Shared</strong> plays one sequence for everyone in a session on the server's clock; any player (or only the owner) can pause or skip it, and events happen on the server.</li>
+      </ul>
+      <p>See <code>docs/sequencer.md</code>.</p>
+
+      <h2 id="manual-navigation">Navigation</h2>
+      <p>A <strong>Navigation Surface</strong> bakes the walkable ground inside its box (or, with <strong>Flying</strong>, the open air) into a grid of cells, from the scene's static colliders and meshes; <strong>Bake &amp; Save Navigation</strong> in the Inspector writes it to a <code>.tnav</code> file. A <strong>Navigation Agent</strong> finds paths across it: call <code>SetDestination(point, speed, stoppingDistance)</code> and watch <code>HasArrived</code> or <code>PathFailed</code>. It walks through the object's Character Controller or Rigidbody when it has one. In multiplayer the server moves agents.</p>
+      <ul>
+        <li><strong>Straight paths</strong>: agents go straight at any angle where they can, keeping the grid's clearance from walls.</li>
+        <li><strong>Navigation Link</strong>: a jump, ladder, drop or teleporter between two places the grid does not join, one-way or both, with a cost. Agents cross it when it is shorter and the game hears <code>OnLinkStarted</code> / <code>OnLinkFinished</code> to animate them.</li>
+        <li><strong>Navigation Obstacle</strong>: something that moves (a crate, a car). Standing still it carves its shape out of the grid; moving, agents steer round it.</li>
+        <li><strong>Navigation Area</strong>: ground that costs more to cross (mud, water) or that agents never enter.</li>
+        <li><strong>Avoidance</strong>: agents steer round each other, with a radius and a priority.</li>
+        <li>Queries: <code>SamplePosition</code>, <code>RandomPoint</code> (for wandering), <code>Raycast</code>, <code>RemainingDistance</code>. The selected surface shows carved and costly cells, links are drawn as arcs, and agents draw their paths.</li>
+      </ul>
+      <p>See <code>docs/navigation.md</code>; the Sandbox sample's <code>Scenes/Navigation.tscene</code> shows all of it.</p>
+
+      <h2 id="manual-behavior">Behaviour trees</h2>
+      <p>A behaviour tree decides what an AI character does. Draw one in the <strong>Behavior</strong> tab (Project &gt; + &gt; Behavior Tree), give the character a <strong>Behavior Tree Runner</strong> and a Navigation Agent, and press Play: the tab shows the selected character's tree live, running nodes amber, successes green, failures red. Saving while playing reloads it on every character using it.</p>
+      <ul>
+        <li><strong>Run Subtree</strong>: one tree file runs another in its place, with the same memory. Open it from the node, see it live, and share one Wander tree between guards, animals and villagers. Files are read once for every character.</li>
+        <li><strong>Events</strong>: the game tells the tree something with <code>SendEvent("Hit")</code> and the tree's <strong>Event Received</strong> reacts; <strong>Send Event</strong> tells the game back (<code>OnTreeEvent</code>).</li>
+        <li><strong>Hearing</strong>: <code>AINoise.Make(scene, position, radius)</code> for gunshots and footsteps, picked up by <strong>Heard Noise</strong>.</li>
+        <li><code>#Tag</code> instead of a name to find targets; Can See can look for a target's head and feet behind low cover.</li>
+        <li>Numbers on the blackboard (Set Number, Compare Number), per-character <strong>Start Values</strong>, Remember Position, Chance, Random Selector, Run Once, and Ctrl+D to duplicate nodes.</li>
+      </ul>
+      <p>In multiplayer, trees think on the server. See <code>docs/behavior-trees.md</code>; the Sandbox's Navigation scene has a guard that wanders and goes to look when it hears the crate.</p>
+
+      <h2 id="manual-drawing-less">LOD, occlusion culling and GPU skinning</h2>
+      <p>Three ways to draw big scenes and crowds faster, none of which needs baking.</p>
+      <ul>
+        <li><strong>LOD Group</strong> (Add Component &gt; Rendering): far away, an object is drawn with fewer triangles, and as a speck not at all. The levels are its children named <code>_LOD0</code>, <code>_LOD1</code> ... (as asset packs name them), or simplified meshes the engine makes when the scene loads. Each camera picks the level from how much of the screen the object covers; <code>LODGroup.Bias</code> is the quality setting. Select the group to see its levels and preview one.</li>
+        <li><strong>Occlusion culling</strong> (a Camera setting): what is wholly hidden behind big solid things (walls, buildings, hills) is not drawn. The biggest occluders are drawn into a small depth picture on the CPU each frame and everything is checked against it, erring on the side of drawing. Each Mesh Renderer is an <strong>Occluder</strong> Auto, Always or Never. Window &gt; Occlusion Picture shows the picture in the Scene view.</li>
+        <li><strong>GPU skinning</strong> (on by default): rigged characters are bent by a compute shader on the graphics card, straight into the vertex buffers every pass uses, so shadows, depth effects and custom materials see the bent model. Where compute is missing (the web build) the CPU does it as before.</li>
+      </ul>
+      <p>See <code>docs/lod.md</code>, <code>docs/occlusion-culling.md</code> and <code>docs/gpu-skinning.md</code>; the Sandbox has <code>Scenes/Culling.tscene</code> and <code>Scenes/Skinning.tscene</code>.</p>
+
+      <h2 id="manual-quality">Graphics quality presets</h2>
+      <p><strong>Quality</strong> gathers every graphics setting that trades looks for speed into four presets: <strong>Low</strong>, <strong>Medium</strong>, <strong>High</strong> and <strong>Ultra</strong>. Each sets render scale, antialiasing, shadows (map size, distance and shadowed lights), reflection probes, texture detail and filtering, ambient occlusion, depth of field, motion blur, LOD detail distance, foliage distance, GPU skinning and vsync together. High is what the engine always did, so existing projects look the same.</p>
+      <pre><code>Quality.Set(.Low);                 // a preset
+Quality.Current.motionBlur = false; // or one setting (the level becomes Custom)
+Quality.Apply();
+Quality.Save();                    // applied by itself at the next start</code></pre>
+      <p><code>Quality.Recommended</code> suggests a preset for the machine (Low on phones, Medium on built-in graphics and in a browser). <code>--quality low</code> tries a preset for one run. In the editor, <strong>Window &gt; Graphics Quality</strong> previews each preset in the Scene and Game views. See <code>docs/quality.md</code>.</p>
+
+      <h2 id="manual-macos">macOS</h2>
+      <p>Tallow builds and runs on Macs with Apple silicon (M1 and later, macOS 12 or newer) and draws with Metal. The macOS workflow can be run manually to build the compiler, native libraries, tests and editor package. Automatic builds are paused until the result can be validated on a real Mac; published release packages currently cover Linux and Windows.</p>
+      <ul>
+        <li>Set up once: the Xcode command line tools, <code>brew install cmake ninja llvm@22</code>, the Beef compiler built from source, and the native libraries with CMake (the steps are in <code>docs/macos.md</code>).</li>
+        <li>On a Mac, <strong>File &gt; Build</strong> builds macOS and web games, and the editor itself; or <code>tools/build_player.py --platform macos</code>.</li>
+        <li><code>tools/macos_link.py --write BeefProj.toml</code> gives a project its macOS link settings.</li>
+        <li>Macs play with and against Linux and Windows machines over the same protocol, and physics prediction works the same.</li>
+      </ul>
+      <p>Limits: games are unsigned plain folders (open once with right-click &gt; Open), script reload while playing is Linux and Windows only, and it has not yet been tried on a real Mac by a person.</p>
+
+      <h2 id="manual-textures">Textures: mipmaps and compression</h2>
+      <p>Every texture gets <strong>mip levels</strong> (smaller copies down to 1 by 1) and <strong>anisotropic filtering</strong>, so far-away and slanted surfaces stay even instead of shimmering as the camera moves. Colour is averaged in linear light, and normal maps as directions, kept unit length.</p>
+      <p>A built game also gets <strong>compressed copies</strong> of its pictures: BC1 for opaque ones and BC3 for see-through ones, as <code>.ktx</code> files with all their mip levels. They take a quarter to an eighth of the video memory and load without decoding. Normal maps, <code>UI/</code> pictures and web builds stay as they are. <strong>Compress textures</strong> in File &gt; Build turns it off for a project.</p>
+      <p>The quality presets add <strong>Texture Detail</strong> (Low uses half-size textures) and <strong>Anisotropic Filtering</strong>. See <code>docs/textures.md</code>; the Sandbox's <code>Scenes/Textures.tscene</code> is a checker floor to compare with <code>--no-mipmaps</code>.</p>
+
+      <h2 id="manual-reflections">Reflections and image-based lighting</h2>
+      <p>Shiny surfaces mirror what is around them: a smooth metal shows a sharp picture, a rough one a soft blur, and a polished floor the walls beside it. Outdoors they mirror the <strong>sky</strong>, from a cube the engine makes from the scene's sky colours and sun.</p>
+      <p>Indoors, add a <strong>Reflection Probe</strong> to each room (GameObject &gt; Reflection Probe) and size its box to the walls. It captures what it sees into a cube a few frames after the scene starts, and surfaces in the box mirror the room instead of the sky. Box Projection lines the reflections up with the walls, and Blend Distance fades them out past the box. <strong>Capture Now</strong> in its inspector captures it again after the room changes.</p>
+      <p><strong>Ambient From Surroundings</strong> in the scene's Lighting settings takes ambient light from the same cubes (image-based lighting): the sky's light outdoors, and the room's own light inside a probe's box. <strong>Place Probes</strong> in Window &gt; Lighting places them for you (see <strong>Placing light and reflection probes</strong> above). The quality presets add <strong>Reflection Probes</strong> (off at Low) and <strong>Reflection Size</strong>. See <code>docs/reflections.md</code>; the Sandbox's <code>Scenes/Reflections.tscene</code> shows them all.</p>
+
+      <h2 id="manual-skinned-materials">Materials on skinned meshes</h2>
+      <p>A rigged model with several materials (skin, cloth, armour) or any textures is drawn in parts, one per material in the file, each with the material saved there: base colour, normal, metallic-roughness, occlusion and emissive textures (inside a <code>.glb</code>, as <code>data:</code> addresses or as files beside the model), metallic, roughness, alpha mode and double sides. A model with one plain material is drawn as before, with its Mesh Renderer's settings.</p>
+      <p>The Inspector lists the parts under the <strong>Skinned Mesh Renderer</strong> by the file's material names; type a <code>.tmat</code> beside one to use it instead. A Material on the Mesh Renderer covers every part without one of its own, and the renderer's Color tints them all. From code, <code>skinned.SetPartMaterial(index, "Materials/armour.tmat")</code>, which is sent to every machine in a network session; <code>PartCount</code> and <code>PartName(i)</code> list the parts. The textures are named after the model (<code>Models/hero.glb#image2</code>), so your own materials can use them too.</p>
+      <p><strong>Character customizers.</strong> When every outfit choice is a part of one model, parts can be hidden (<strong>Hidden Parts</strong>, <code>SetPartHidden("Hat_Tricorn", true)</code>), dyed (<strong>Part Colors</strong>, <code>SetPartColor("Coat", .(0.5f, 0.1f, 0.1f))</code>), or drawn only into shadows (<strong>Shadow Only Parts</strong>, for a first-person player's own head). All three are saved with the scene.</p>
+      <p><strong>Clips from another file.</strong> <strong>Clip Library</strong> names other rigged files whose clips the model plays too, so characters can share one file of animations. See <a href="#manual-retarget">Retargeting and posing</a>.</p>
+
+      <h2 id="manual-anim-layers">Animation layers and blend trees</h2>
+      <p><strong>Layers.</strong> An Animator Controller starts with a <strong>Base Layer</strong> for the whole body. More layers, added with <strong>+</strong> under <strong>Layers</strong> in the Animator window, are each a state machine of their own laid over the ones below: the upper body aiming or reloading while the legs run, or a recoil added on top of whatever plays. Each has a <strong>Weight</strong> (from code, <code>animator.SetLayerWeight("Upper Body", 1)</code>), <strong>Blending</strong> (<em>Override</em> replaces the pose of the bones its clips move; <em>Additive</em> adds what its clips do) and a <strong>Mask</strong>: the bones it may move, each named bone and everything below it (<code>spine_02</code> for the upper body).</p>
+      <p><strong>Blend trees.</strong> Select a state and choose <strong>Blend Tree</strong> instead of <strong>Clip</strong> to mix several clips by parameters: <em>1D</em> along one (walk at 1, run at 3, by speed) or <em>2D</em> over two (forward, left, right and back by the direction of movement). Clips play in step so feet stay together, and a picture shows each clip's share and where the parameters are, live while the game plays.</p>
+      <p>Both work with <code>.tanim</code> clips, and with a rigged model's clips when its Skinned Mesh Renderer has <strong>Expose Bones</strong>. In multiplayer, parameters and layer weights set by the object's owner reach every machine, and the owner's machine decides every layer's transitions.</p>
+
+      <h2 id="manual-ik">Inverse kinematics</h2>
+      <p>Inverse kinematics (IK) poses a limb from where its end should be: you say where the hand goes and the arm works out the elbow. It is a layer over the animation: clips play first, then scripts, then IK, so a walk cycle carries on underneath while the hands stay on a rifle that sways and recoils. Each component has a <strong>Weight</strong> from the animation (0) to the IK (1), gives the pose back untouched when disabled, and runs in the editor as well as the game.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Component</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td>Limb IK</td><td>Holds a hand or foot on a target: hands on a weapon, a hand on a handle</td></tr>
+          <tr><td>Look At IK</td><td>Turns a head, or a head with the neck and spine, towards a target, within a limit</td></tr>
+          <tr><td>Foot Placement</td><td>Keeps both feet on uneven ground and lowers the hips to suit</td></tr>
+          <tr><td>Hand Pose</td><td>A curl slider for each finger, spread, trigger, and shapes: Open, Fist, Grip, Trigger, Point, Pinch</td></tr>
+        </tbody>
+      </table></div>
+      <p><strong>Hands on a weapon.</strong> Put two empty objects on the weapon where the hands belong. Add a <strong>Limb IK</strong> to the character for each arm: with <strong>Tip</strong> empty the Inspector lists the hands it finds, and the grip goes in <strong>Target</strong>. An object in <strong>Pole</strong> is where the elbow points. To turn the hand on the grip, set Weight to 0, rotate the hand, press <strong>Keep Hand's Rotation</strong>, and bring Weight back.</p>
+      <p>Each arm is its own component, so each lets go by itself: <code>leftArm.LetGo(0.15f)</code> sends that arm back to its animation to throw a grenade while the other stays on the grip, and <code>leftArm.Grab(0.2f)</code> brings it back. <code>SetTarget(other, seconds)</code> moves a hand to another grip without a jump.</p>
+      <p><strong>Rigged models</strong> take part when <strong>Expose Bones</strong> is ticked on the Skinned Mesh Renderer: every bone becomes an object, which IK can turn, an Animator can play clips on, and a weapon can be parented to.</p>
+      <p><strong>Animating with it.</strong> A target that is a child of the Animator's object is keyed like any other child. <strong>Key IK</strong> in the Animation window writes the pose IK is making into the clip, on every bone it moves. Recording keys a bone only when you move it by hand, not because IK is bending it.</p>
+      <p>From code, <code>IKSolver.TwoBone</code>, <code>Chain</code> and <code>LookAt</code> are the solvers themselves. In multiplayer IK is worked out on each machine; <code>LetGo</code>, <code>Grab</code>, <code>FadeWeight</code> and <code>SetShape</code> are followed everywhere when the object's owner calls them, and a target moves on other machines if it is shared like any other object.</p>
+
+      <h2 id="manual-retarget">Retargeting and posing characters</h2>
+      <p>Clips made for one humanoid play on another: a Mixamo run on a Synty character, a Basic Motions walk on your own rig. Put the other file in the Skinned Mesh Renderer's <strong>Clip Library</strong>; its clips are listed with the model's own, marked <em>(library)</em>, and play like any other. A library made for the same skeleton is matched by bone name. Any other humanoid is <strong>retargeted</strong>: each bone is swung to point the way its counterpart points at rest, so an A-posed clip fits a T-posed character, then turns as its counterpart turns in the model's space, so bone names, rolls, lengths and facings may all differ. The hips' movement is scaled by leg length, so a smaller character takes a smaller stride.</p>
+      <p><strong>Bone maps.</strong> Every rigged model knows which of its joints is each humanoid bone (hips, spine, neck, head, arms, legs, three segments of each finger), matched by name for Mixamo, Synty POLYGON, Unreal, Rigify and other naming styles. Twist bones, IK helpers and end points are skipped. <strong>Bone Map...</strong> under the Skinned Mesh Renderer opens a window with a drop-down of joints for each bone. Clips update as you change it, and <strong>Save</strong> writes <code>Models/hero.bonemap</code> beside the model, which goes into builds with it. From code: <code>model.HumanMap[.LeftHand]</code>.</p>
+      <p><strong>Posing bones.</strong> With <strong>Expose Bones</strong> on, a selected character's bones are drawn in the Scene view through the mesh: blue on the left, red on the right. Click one to select it; the handle switches to Rotate. With Record or Auto Key on, turning a bone keys it. The toolbar's <strong>Bones</strong> button hides them. They are editor-only.</p>
+      <p><strong>Animating with IK.</strong> The Animation window's <strong>Rig</strong> menu has <strong>Set Up IK Rig</strong>: a target box for each hand and foot (each with a Limb IK), a pole for each elbow and knee and a look target for the head, placed where the character is so nothing moves until they do. Record, move the marker, drag a box, and the limb follows and the box is keyed. <strong>Snap IK Targets to Bones</strong> moves the targets to where the clip puts the hands and feet. <strong>Bake IK Into Keys</strong> writes the IK pose into the bones on every frame. <strong>Copy Model Clip Into This Clip</strong> turns one of the model's own clips, retargeted ones included, into keys you can edit.</p>
+      <p><strong>Hands and fingers.</strong> The footer's <strong>Hands</strong> button opens <strong>Hand Posing</strong>: shapes (Open, Relaxed, Fist, Grip, Trigger, Point, Pinch, Thumbs Up), a curl slider for each finger and Spread, <strong>Key Fingers</strong>, and <strong>Copy to Other Hand</strong>. While recording, a finished change is keyed by itself. POLYGON hands, whose last three fingers are one chain, curl it with Middle.</p>
+      <p>Nothing extra is sent in multiplayer: retargeting happens on each machine as models load, and the Animator sends clip and state. Full details in <code>docs/retargeting.md</code>.</p>
+
+      <h2 id="manual-mapbuilder">Building maps</h2>
+      <p>Drag a prefab or model from the Project panel over the Scene view: it is shown there, standing on whatever is under the mouse, and stays where you let go (one undo step). Drag it back out and it is gone. <strong>Space</strong> over the Scene view searches everything that can be added (built-in objects, prefabs, models, components, and grey block-out pieces: walls, doorways, floors, ramps, stairs), placed on the surface under the mouse.</p>
+      <ul>
+        <li><strong>Snap</strong> in the toolbar moves, turns and scales in steps (set with <strong>v</strong>); Ctrl does the opposite while dragging. <strong>End</strong> drops the selection onto the surface below it; <strong>[</strong> and <strong>]</strong> turn it.</li>
+        <li>Drag Hierarchy rows, objects in the Scene view and Project tiles into Inspector fields: pressing on them no longer selects them until the click is let go. The <strong>lock</strong> beside an object's name keeps the Inspector on it while you select other things.</li>
+        <li>Maps that players make belong in the game's own map editor, which can use the engine's built-in pieces (<code>MapPieces</code>).</li>
+      </ul>
+      <p><a href="https://github.com/LazyAlgorithm/Tessera/blob/main/docs/drag-and-drop.md">Read the full dragging guide →</a></p>
+
+      <h2 id="manual-terrain">Terrain</h2>
+      <p>A Voxel Terrain is a grid of tiles, flat until sculpted with Raise, Lower, Smooth, Flatten and Paint. While a brush is picked the Scene view shows a <strong>preview</strong> under the mouse: the brush's edge lying on the ground, and a see-through mesh of the shape it is about to make. Generating ground is the game's own business, done from code with a <code>[TerrainGenerator]</code> class; the editor has no generation settings.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Style</th><th>Surface</th></tr></thead>
+        <tbody>
+          <tr><td>Contoured</td><td>Dual contouring: one point in each cell joined into a regular grid of quads. Rounder and more even. The default.</td></tr>
+          <tr><td>Smooth</td><td>Marching cubes. Choose it to go without dual contouring.</td></tr>
+          <tr><td>Blocky</td><td>One cube for each solid cell.</td></tr>
+        </tbody>
+      </table></div>
+      <p><strong>Contour Sharpness</strong> runs from the softest ground (0) to ridges and ledges kept crisp (1). <strong>Flat Shading</strong> shades every triangle flat for a faceted, low-poly look; off, the ground is shaded smoothly. A new terrain has a <strong>Voxel Size</strong> of half a metre, which with contouring and smooth shading passes for ordinary rolling terrain; 1 is coarser and lighter. Switching style moves nothing: sculpting, collision and networking work from the same samples.</p>
+
+      <h2 id="manual-foliage">Foliage and wind</h2>
+      <p>A <strong>Foliage</strong> component is one kind of plant, many times over, drawn together by the graphics card so that tens of thousands cost little. On a terrain, press <strong>Foliage</strong> in the Terrain Tools, then <strong>+ Grass</strong>, <strong>+ Bush</strong>, <strong>+ Tree</strong> or <strong>+ Pine</strong>, and drag over the ground in the Scene view; Shift erases and Ctrl+Z undoes a stroke. Each kind of plant is a Foliage component on the terrain, where its <strong>Mesh</strong> (a built-in plant, or a model whose foot is at its origin) and the rest are set. On anything else, add a Foliage component and press <strong>Paint</strong> in it. Each plant gets its own turn, size and shade. <strong>Density</strong> is plants to the square metre, <strong>Max Slope</strong> leaves steep ground bare, and <strong>View Distance</strong> is how far they are drawn (they thin out towards it). From code: <code>Paint</code>, <code>Erase</code>, <code>Add</code>, <code>Clear</code>.</p>
+      <p>A <strong>Wind Zone</strong> blows the way its object faces: <strong>Global</strong> over the whole scene, or <strong>Sphere</strong> inside a radius, fading to the edge. Zones add up. Foliage bends by its <strong>Sway</strong>, and so does any Mesh Renderer with <strong>Wind Sway</strong> above 0 (a flag, a tree placed by hand). The bending is done on the graphics card, and shadows bend with what casts them. Grass also parts round anything walking through it: every object with a <strong>Character Controller</strong> pushes plants aside with nothing to set up, and a <strong>Foliage Bender</strong> (Radius, Strength) does the same for a creature, a vehicle or a boulder. Other players part the grass on your screen too, with nothing sent over the network. <code>Wind.At(scene, position)</code> reads the wind from code. Plants are scenery: no colliders, saved with the scene, the same on every machine.</p>
+      <p>Plants on a terrain follow its ground when it is sculpted: they ride it up and down, and are removed when buried or left with nothing under them, so none is left where nobody can reach it. Each is judged from where it stands, so grass on a cave floor stays put when the hill above is reshaped.</p>
+
+      <h2 id="manual-destructible">Destructible objects</h2>
+      <p>A <strong>Voxel Object</strong> can be carved: <code>voxels.Carve(point, radius)</code> removes material where something hits it, and parts that are cut loose break off and fall as physics objects that can be carved in turn. In multiplayer a carve happens on every machine.</p>
+      <p><strong>Any model can be one.</strong> Select an object drawn with a model, add a Voxel Object and press <strong>Make This Model Destructible</strong>: Shape becomes <strong>Mesh</strong>, and the model is filled in as solid material, keeping its size, colours and texture coordinates. The model must be closed, like a real object, with no open sides. It is re-made from a grid of <strong>Resolution</strong> cells (8 to 48) along its longest side, so parts thinner than a cell are lost and sharp edges soften a little. Sphere, Box and Cylinder are built in.</p>
+      <p><strong>Materials.</strong> The outside is drawn with the object's Mesh Renderer material. The surfaces carving exposes are drawn with <strong>Interior Material</strong> when you name one (the wood inside a painted crate); otherwise with an inside made from the outside's material, the same textures carried through the solid, tinted by <strong>Interior Color</strong> and a little rougher; otherwise with plain Interior Color. <strong>Interior Tiling</strong> is how often the inside's texture repeats. Pieces that break off are made of the same stuff.</p>
+      <p><strong>Anchored</strong> keeps an object in place (a wall, a cliff) so that only cut-off pieces fall; otherwise it becomes a physics body the first time it is carved.</p>
+
+      <h2 id="manual-loading">Loading in the background</h2>
+      <p>Scenes, models and textures can be loaded while the game keeps running: behind a loading screen, or a part of the world brought in as the player nears it. Files are read and decoded on loading threads; sending them to the graphics card is done a little each frame (<code>AssetLoader.UploadBudget</code>, 4 ms), so the frame rate holds.</p>
+      <p><strong>Without code:</strong> add a <strong>Scene Loader</strong>, pick its <strong>Scene</strong>, and choose <strong>Additive</strong> (add it to the running scene) or not (change to it once loaded). Its <code>progress</code> field goes from 0 to 1, so a UI Document <code>&lt;bar bind="progress" /&gt;</code> on the same object is a loading bar. With <strong>Activate When Ready</strong> off it waits at 0.9 until <code>Activate()</code>, for "press any key to continue".</p>
+      <p><strong>From code:</strong> <code>SceneManager.LoadAsync(path)</code> and <code>LoadAdditiveAsync(scene, path)</code> return a <code>SceneLoad</code> with <code>Progress</code>, <code>CurrentStage</code>, <code>allowActivation</code> and, for an additive load, <code>Group</code>. Every model and texture a scene names, through its prefabs and materials too, is loaded before it appears. <code>AssetLoader.Preload("Models/launcher.glb", "Textures/launcher.png")</code> gets anything else ready ahead of time. Every machine loads scenes for itself; nothing about loading is sent over the network.</p>
+
+      <h2 id="manual-audio">Audio and voice</h2>
+      <p>miniaudio is built in. Put an <code>AudioSource</code> on anything that makes sound and an <code>AudioListener</code> on the ears. Stereo panning or HRTF for headphones, distance rolloff, Doppler, occlusion behind colliders, reverb zones and six mixer groups. WAV, OGG, MP3 and FLAC.</p>
+      <p>Voice chat uses Opus and is off until you turn it on with <code>VoiceChat.Enabled</code>. The server decides who hears whom, for team-only or proximity voice. Push to talk works from any input action.</p>
+
+      <h2 id="manual-ui">Interfaces</h2>
+      <p>Two ways to draw an interface:</p>
+      <ul>
+        <li><strong>GUI</strong> from <code>OnGUI</code>: <code>GUI.Label</code>, <code>Button</code>, <code>Bar</code>, <code>Box</code>, <code>Toggle</code>, <code>Slider</code>. Quick, for HUDs and debugging.</li>
+        <li><strong>UI documents</strong>: <code>.tui</code> markup with a <code>.tcss</code> stylesheet, laid out with flexbox and absolute positioning, edited in the UI tab, worked with a mouse, a controller's d-pad or a touch screen. See <a href="#menu">A main menu</a>.</li>
+      </ul>
+      <p>The UI tab lays a document out for the screen size chosen in its toolbar and draws the whole of it scaled to fit the panel. A <code>canvas</code>, which the game draws into, shows there as a named box: <code>preview="Motion tracker"</code> names it and <code>preview-src="UI/tracker.png"</code> shows a picture instead, both ignored while the game runs.</p>
+      <p><strong>Fonts.</strong> <code>font-family: Fonts/Title.ttf</code> in a stylesheet sets the type of an element and what is inside it, from any <code>.ttf</code> or <code>.otf</code> in the project. From code, <code>UIFonts.Push("Fonts/Title.ttf", 48)</code> then <code>ImGui.PopFont()</code> draws a component's own interface in it, and <code>ImGui.DrawImage</code> takes a tint to fade or colour a picture.</p>
+
+      <h2 id="manual-responsive">Phones and tablets</h2>
+      <p>One interface can serve a desktop, a phone held sideways and a phone held upright:</p>
+      <ul>
+        <li><strong>Design sizes.</strong> A UI Document's Reference Height (and Width) give the size it is designed for; it is scaled to fit whichever of the two is tighter, never stretched. <code>UIDocument.SetVariant("phone", height, width)</code> reads every document from a <code>phone/</code> folder beside it where one exists, designed for that size; a game can give different sizes for portrait and landscape.</li>
+        <li><strong>@media rules.</strong> A stylesheet can rearrange a document for its shape: <code>@media (orientation: portrait) { #left { right: 24; width: auto } }</code>, also <code>min-/max-width</code>, <code>min-/max-height</code> and <code>min-/max-aspect-ratio</code>, in the document's own units, tested on every layout so a turned phone rearranges at once. Give the parts that move an id or class: a <code>style=""</code> attribute wins over the stylesheet.</li>
+        <li><strong>Web builds</strong> size the game to the browser's viewport inside the screen's safe areas, follow it when the phone turns (in fullscreen too), and draw the 3D scene at a resolution phones can keep up with while the interface stays sharp.</li>
+      </ul>
+      <p>Add <code>?arg=--ui-debug</code> to a web game address to see the size, pixel ratio, orientation and scale the game is working with.</p>
+
+      <h2 id="manual-shipping">Shipping</h2>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Target</th><th>How</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Linux, Windows</td><td>File &gt; Build..., or <code>tools/build_player.py</code></td><td>An executable, <code>game.tpak</code>, and <code>THIRD_PARTY_LICENSES.txt</code></td></tr>
+          <tr><td>Web</td><td>File &gt; Build... &gt; Web, after <code>tools/web/setup.sh</code></td><td><code>index.html</code>, the game in WebAssembly, and its pack</td></tr>
+          <tr><td>The editor</td><td>File &gt; Build... with Build set to Editor, or <code>tools/package_engine.py</code></td><td>A movable editor folder for another machine</td></tr>
+        </tbody>
+      </table></div>
+      <p>Asset packs are written the same way every time from the same files, so store updates only download what changed.</p>
+
+      <h2 id="manual-maps">Maps</h2>
+      <p>A map is a level saved as one <code>.tmap</code> file that a game plays without being built again, so players can make levels and hand them to each other. Maps are made in the game, by a map editor the game provides, which saves with <code>MapFiles.Export(Scene, level, "Maps/Harbour.tmap", mapId, "Harbour", author, description, problems)</code>: the level's objects, its terrain sculpting, and any model the player brought in. Models, prefabs, materials and scripts otherwise come from the game, so a map uses what the game has and never carries code. Pass the map's Id when saving it again, so players get the new version instead of a second map.</p>
+      <p><strong>What a map needs.</strong> A game's <code>src/MapRules.txt</code> lists rules, one a line: <code>need 4 Tallow.SpawnPoint "spawn points"</code>, a field test such as <code>need 3 MyGame.Ring raceOrder &gt;= 0 "race gates"</code>, or a limit, <code>most 500 Tallow.Rigidbody "physics items"</code>. Saving a scene in the editor that breaks a rule opens a <strong>Map Warning</strong> saying what is missing (with <strong>This scene is not a map</strong> for scenes that are not). A game's map editor can show the same with <code>MapRules.Check</code>, and <code>MapFiles.Find</code> refuses a map that breaks one.</p>
+      <p>A game finds maps in the <code>Maps</code> folder beside it (the project's, in the editor), checks them, and plays one by mounting it and loading its scene:</p>
+      <div data-code="maps" data-file="Scripts/MapMenu.bf"></div>
+      <p><code>Find</code> returns every map, broken ones too, with <code>Problems</code> saying why one cannot be played: the file is not whole (every file inside has a checksum), it was made for another game or a newer engine, it uses a component or names a file the game does not have, or it is the same map (the same <code>Id</code>) as another. A game adds its own checks with <code>AddProblem</code>, and counts what is in a map with <code>CountComponents</code>. Tumble Toys: Aviation lists the maps from its folder after its own rooms.</p>
+      <p><strong>Maps in multiplayer.</strong> Every player needs the same map. The host calls <code>MapSharing.Offer(map)</code>. A player who lacks it, or has another version (checked by hash), calls <code>MapSharing.Request(Scene.Network, id, hash)</code>: the map comes over in acknowledged pieces, is checked, and is written into the player's Maps folder, replacing an older version. <code>MapSharing.State</code> and <code>Progress</code> drive a download screen.</p>
+
+      <h2 id="manual-cli">Command line</h2>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Option</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>--host</code></td><td>Server and player in one.</td></tr>
+          <tr><td><code>--server</code></td><td>Dedicated server with no window.</td></tr>
+          <tr><td><code>--connect &lt;address&gt;</code></td><td>Join an IP address, or a Steam ID with the Steam transport.</td></tr>
+          <tr><td><code>--port &lt;n&gt;</code></td><td>A different port for the Direct transport.</td></tr>
+          <tr><td><code>--lag</code>, <code>--jitter</code>, <code>--loss</code></td><td>Simulate a poor connection.</td></tr>
+          <tr><td><code>--netstats</code></td><td>Print network figures every second.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2 id="manual-limits">Known limits</h2>
+      <ul>
+        <li>The Windows editor has been run under Wine only (built games run on Windows), and Windows uses Vulkan only.</li>
+        <li>A client does not predict physics objects it does not own; a pushed crate moves when the server says so.</li>
+        <li>Skinned models are deformed on the CPU; no morph targets. A model no camera drew last frame is deformed only every eighth frame, and not at all in a headless server, so hidden crowds cost little.</li>
+        <li>Voxel terrain level of detail is for the Smooth and Contoured styles only; collision always uses full detail.</li>
+        <li>Only the ball joint is a component; hinges and suspensions are made from code, and only the hinge has a motor.</li>
+        <li>Objects placed from a prefab are copies; editing the prefab affects new placements only.</li>
+      </ul>
+
+      <h2 id="manual-source">Working on the engine</h2>
+      <p>The engine, editor and launcher are Beef, built with <code>BeefBuild -workspace=. -config=Debug</code> from the repository root. All of it follows one style, written down in <code>docs/coding-style.md</code>, and most of that is applied by a tool:</p>
+      <div data-code="format" data-file="Terminal" data-lang="sh"></div>
+      <ul>
+        <li>Tabs, braces on their own lines, one statement per line; a body goes on its own line, except a guard that only returns, continues or breaks.</li>
+        <li>Types, methods and constants are PascalCase; Inspector fields are camelCase; private fields start with <code>m</code>, static ones with <code>s</code>.</li>
+        <li>A method reads as a list of named steps, and is split once it passes about 80 lines; a large type is split by area into <code>extension</code> files (<code>RenderViewShadows.bf</code>, <code>VoxelTerrainStreaming.bf</code>, <code>NetworkManagerClient.bf</code>).</li>
+        <li>Public members get a <code>///</code> comment saying what they do, which shows in code completion and on visual-scripting nodes.</li>
+      </ul>
+      <p>Every test suite is a workspace under <code>Tests/</code>; run one with <code>BeefBuild -workspace=Tests/&lt;Name&gt; -config=Debug -run</code>.</p>
+    </article>
+  </div>
+</section>
+
+<!-- =============================== DOWNLOAD =============================== -->
+<section class="view" id="v-download" data-view="download" hidden><span id="download" class="route-anchor" aria-hidden="true"></span>
+  <div class="section-head" style="margin-bottom:28px">
+    <div><p class="eyebrow">Download · early beta</p><h1 style="margin-top:8px;font-size:clamp(1.9rem,4vw,2.6rem)">Get Tallow</h1></div>
+    <p>Early beta packages for Linux and Windows, available from the public GitHub releases page.</p>
+  </div>
+  <div class="made">
+    <a class="card" href="https://github.com/LazyAlgorithm/Tessera/releases" target="_blank" rel="noopener">
+      <span class="meta">Linux x64 · Tessera-Linux.zip</span>
+      <h3>Linux</h3>
+      <p>Run <code>./Tallow</code>. Needs BeefBuild and Python 3.11+ on <code>PATH</code>, X11 libraries and a Vulkan driver.</p>
+      <span style="color:var(--cobalt);font-weight:700">Releases on GitHub →</span>
+    </a>
+    <a class="card" href="https://github.com/LazyAlgorithm/Tessera/releases" target="_blank" rel="noopener">
+      <span class="meta">Windows x64 · Tessera-Windows.zip</span>
+      <h3>Windows</h3>
+      <p>Run <code>Tallow.exe</code>. Needs the Beef toolchain, Microsoft C++ Build Tools, Python 3.11+ and a Vulkan driver.</p>
+      <span style="color:var(--cobalt);font-weight:700">Releases on GitHub →</span>
+    </a>
+    <div class="card">
+      <span class="meta">Source · build.sh</span>
+      <h3>From source</h3>
+      <p>Clone the repository and run <code>./build.sh</code>, then <code>./tallow</code>. Windows packages build on Windows in CI; cross-compiling from Linux uses <code>tools/windows/setup.sh</code>.</p>
+    </div>
+  </div>
+  <div class="section" style="margin-top:48px">
+    <div class="split">
+      <div>
+        <h2>What is in a package</h2>
+        <ul class="ticks">
+          <li><span>The launcher and editor, ready to run.</span></li>
+          <li><span>The engine and editor source and their native libraries, because every project compiles its scripts together with the engine.</span></li>
+          <li><span>The shader compiler, project templates and the build tools behind File &gt; Build.</span></li>
+          <li><span>Shaders for Vulkan, plus WebGL for web builds.</span></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Licences</h2>
+        <p style="margin-top:14px;color:var(--muted)">Tallow bundles bgfx, SDL3, Jolt, ENet, Dear ImGui, ImGuizmo, cgltf, stb, miniaudio, Opus and the MIT KEMAR HRTF measurements. Every package and every built game carries <code>THIRD_PARTY_LICENSES.txt</code> with each library's licence.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="inner">
+    <span>Tallow · a game engine written in Beef · <a href="#manual">Documentation</a></span>
+    <span><a href="#start">Get started</a> · <a href="#shooter">Shooter tutorial</a> · <a href="#manual">Manual</a> · <a href="#developers">Developer guide</a> · <a href="api.html">Full API</a></span>
+  </div>
+</footer>
+
+<script>
+/* ------------------------------------------------------------------ code samples ------------------------------------------------------------------ */
+const CODE = {
+hover: String.raw`[Component]
+class Hover : NetworkScript
+{
+	public float speed = 5;
+	[Sync] public int32 score;
+
+	public override void OnTick(TickInput input, float deltaTime)
+	{
+		Transform.Position += input.MoveDirection * speed * deltaTime;
+		if (input.Pressed(.Jump))
+			Transform.Position += .(0, 1, 0);
+		if (IsServer && input.Pressed(.Use))
+			score++;
+	}
+}`,
+build: String.raw`./build.sh     # native libraries, shaders and the launcher (first time, or after changing native/)
+./tallow      # the project launcher`,
+spinner: String.raw`using Tallow;
+namespace Arena;
+
+[Component]                      // required on every component class
+class Spinner : Component
+{
+	public Vector3 degreesPerSecond = .(0, 45, 0);   // saved, and shown in the Inspector
+
+	public override void Update()
+	{
+		Transform.Rotate(degreesPerSecond * Time.DeltaTime);
+	}
+}`,
+buildplayer: String.raw`python3 tools/build_player.py ~/Games/Arena --platform linux   --output ~/Builds/Arena-Linux
+python3 tools/build_player.py ~/Games/Arena --platform windows --output ~/Builds/Arena-Windows
+python3 tools/build_player.py ~/Games/Arena --platform web     --output ~/Builds/Arena-Web`,
+p2: String.raw`using System;
+using Tallow;
+
+namespace Arena;
+
+/// The player: walks, jumps and looks with the mouse. It is a NetworkScript from the start,
+/// so going online later means adding a session, not rewriting this.
+[Component]
+class Player : NetworkScript
+{
+	public float walkSpeed = 6;
+	public float jumpSpeed = 6.5f;
+	/// Eyes, above the middle of the capsule.
+	public float eyeHeight = 0.7f;
+
+	bool mCursorTaken;
+
+	public override void Start()
+	{
+		holdRightMouseToLook = false;   // a shooter always looks with the mouse
+		mouseSensitivity = 0.12f;
+	}
+
+	/// One tick, 60 times a second. Controls come only from input.
+	public override void OnTick(TickInput input, float deltaTime)
+	{
+		let controller = GetComponent<CharacterController>();
+		controller.SimpleMove(input.MoveDirection * walkSpeed, deltaTime, input.Pressed(.Jump) ? jumpSpeed : 0);
+	}
+
+	/// True on the machine whose player this is. Always true with no session.
+	public bool IsMine => Scene.Network == null || Scene.Network.Mode == .Offline || IsOwner;
+
+	public Vector3 Eye => Transform.Position + Vector3(0, eyeHeight, 0);
+
+	public override void LateUpdate()
+	{
+		if (!IsMine)
+			return;
+		// Take the mouse once, and again on a click after Esc let it go.
+		if (!mCursorTaken || Input.GetMouseButtonDown(0))
+		{
+			Input.LockCursor = true;
+			mCursorTaken = true;
+		}
+		let camera = Scene.FindComponent<Camera>();
+		if (camera == null)
+			return;
+		camera.Transform.Position = Eye;
+		camera.Transform.Rotation = Quaternion.Euler(Pitch, Yaw, 0);
+	}
+}`,
+health: String.raw`using System;
+using Tallow;
+
+namespace Arena;
+
+/// Anything that can be shot: a target or a player.
+[Component]
+class Health : Component
+{
+	public float maxHealth = 100;
+	/// Players go back to a spawn point at full health; targets break.
+	public bool respawns = false;
+	[Sync] public float health = 100;
+
+	public bool Dead => health <= 0;
+
+	/// Server only. Returns true for the hit that took the last of it.
+	public bool Hurt(float amount)
+	{
+		if (Dead)
+			return false;
+		health = Math.Max(health - amount, 0);
+		if (!Dead)
+			return false;
+		if (respawns)
+		{
+			SpawnPoints.Place(GameObject);
+			health = maxHealth;
+		}
+		else
+			Scene.Destroy(GameObject);
+		return true;
+	}
+}`,
+p3: String.raw`	public float walkSpeed = 6;
+	public float jumpSpeed = 6.5f;
+	public float eyeHeight = 0.7f;
++	public float damage = 25;
++	public float range = 120;
++	/// Seconds between shots while Fire is held.
++	public float fireInterval = 0.15f;
+
+	bool mCursorTaken;
++	float mCooldown;
+
+	public override void OnTick(TickInput input, float deltaTime)
+	{
+		let controller = GetComponent<CharacterController>();
+		controller.SimpleMove(input.MoveDirection * walkSpeed, deltaTime, input.Pressed(.Jump) ? jumpSpeed : 0);
++
++		// What a shot hits is the server's to decide. With no session, this machine is the server.
++		if (IsServer)
++		{
++			mCooldown -= deltaTime;
++			if (input.Held(.Fire) && mCooldown <= 0)
++			{
++				mCooldown = fireInterval;
++				Shoot(input);
++			}
++		}
+	}
++
++	void Shoot(TickInput input)
++	{
++		let direction = input.LookRotation * Vector3.Forward;
++		// Start just in front of the eyes, outside our own capsule.
++		let origin = Eye + direction * 0.6f;
++		RaycastHit hit;
++		if (Scene.Physics.Raycast(origin, direction, range, out hit) && hit.gameObject != null)
++			hit.gameObject.GetComponent<Health>()?.Hurt(damage);
++	}`,
+p4: String.raw`	public override void OnGUI()
+	{
+		if (!IsMine)
+			return;
+		// Crosshair: four short bars around the middle of the screen.
+		let cx = GUI.Width / 2;
+		let cy = GUI.Height / 2;
+		GUI.Box(cx - 12, cy - 1, 8, 2, .White);
+		GUI.Box(cx + 4, cy - 1, 8, 2, .White);
+		GUI.Box(cx - 1, cy - 12, 2, 8, .White);
+		GUI.Box(cx - 1, cy + 4, 2, 8, .White);
+
+		let health = GetComponent<Health>();
+		if (health != null)
+		{
+			GUI.Label(24, GUI.Height - 64, "HEALTH");
+			GUI.Bar(24, GUI.Height - 40, 240, 14, health.health / health.maxHealth, .(0.3f, 0.85f, 0.5f, 1));
+		}
+	}`,
+p5: String.raw`+	public int32 magazineSize = 24;
++	public float reloadSeconds = 1.6f;
++	[Sync] public int32 ammo = 24;
++	[Sync] public bool reloading;
++	float mReloadLeft;
+
+	public override void OnTick(TickInput input, float deltaTime)
+	{
+		let controller = GetComponent<CharacterController>();
+		controller.SimpleMove(input.MoveDirection * walkSpeed, deltaTime, input.Pressed(.Jump) ? jumpSpeed : 0);
+
+		if (IsServer)
+		{
+			mCooldown -= deltaTime;
++			if (reloading)
++			{
++				mReloadLeft -= deltaTime;
++				if (mReloadLeft <= 0)
++				{
++					ammo = magazineSize;
++					reloading = false;
++				}
++			}
++			else if ((input.Pressed(.Reload) && ammo < magazineSize) || ammo == 0)
++				StartReload();
+-			if (input.Held(.Fire) && mCooldown <= 0)
++			else if (input.Held(.Fire) && mCooldown <= 0)
+			{
+				mCooldown = fireInterval;
++				ammo--;
+				Shoot(input);
+			}
+		}
+	}
++
++	void StartReload()
++	{
++		reloading = true;
++		mReloadLeft = reloadSeconds;
++		GetComponent<AudioSource>()?.PlayOneShot("Audio/reload.wav");
++	}
+
+	void Shoot(TickInput input)
+	{
++		GetComponent<AudioSource>()?.PlayOneShot("Audio/shot.wav");
+		let direction = input.LookRotation * Vector3.Forward;
+		...`,
+p5hud: String.raw`		GUI.Label(GUI.Width - 180, GUI.Height - 56, reloading ? "RELOADING" : scope $"{ammo} / {magazineSize}");`,
+setup: String.raw`using System;
+using Tallow;
+
+namespace Arena;
+
+/// Runs once when the game or editor starts, before any scene loads.
+static class GameSetup
+{
+	public static void Register()
+	{
+		// The session spawns this for every player who joins, at a spawn point.
+		NetworkManager.RegisterPrefabFile("Player", "Prefabs/Player.tprefab");
+	}
+}`,
+p6: String.raw`	void Shoot(TickInput input)
+	{
+		GetComponent<AudioSource>()?.PlayOneShot("Audio/shot.wav");
+		let direction = input.LookRotation * Vector3.Forward;
+		let origin = Eye + direction * 0.6f;
++		// On the server, put everyone else back where this player saw them.
++		let rewound = BeginLagCompensation();
+		RaycastHit hit;
+-		if (Scene.Physics.Raycast(origin, direction, range, out hit) && hit.gameObject != null)
+-			hit.gameObject.GetComponent<Health>()?.Hurt(damage);
++		let struck = Scene.Physics.Raycast(origin, direction, range, out hit);
++		if (rewound)
++			EndLagCompensation();
++		// Deal damage after ending, when everything is back in its place.
++		if (struck && hit.gameObject != null)
++			hit.gameObject.GetComponent<Health>()?.Hurt(damage);
+	}`,
+hostjoin: String.raw`./Arena --host                  # window 1: server and player
+./Arena --connect 127.0.0.1     # window 2: joins it
+
+./Arena --host --lag 60 --loss 3 --netstats
+./Arena --connect 127.0.0.1 --lag 60 --loss 3`,
+p7: String.raw`+	[Sync] public int32 kills;
++	[Sync] public int32 deaths;
+
+	void Shoot(TickInput input)
+	{
+		...
+		if (struck && hit.gameObject != null)
+-			hit.gameObject.GetComponent<Health>()?.Hurt(damage);
++		{
++			let target = hit.gameObject.GetComponent<Health>();
++			if (target != null && target.Hurt(damage))
++			{
++				let victim = hit.gameObject.GetComponent<Player>();
++				if (victim != null)
++				{
++					victim.deaths++;
++					kills++;
++				}
++			}
++		}
+	}`,
+p7hud: String.raw`		// Hold Tab for the scoreboard.
+		if (Input.GetKey(.Tab))
+		{
+			var y = 120.0f;
+			GUI.Box(GUI.Width / 2 - 200, y - 16, 400, 260, .(0, 0, 0, 0.6f));
+			GUI.Label(GUI.Width / 2 - 180, y, "PLAYER");
+			GUI.Label(GUI.Width / 2 + 80, y, "K");
+			GUI.Label(GUI.Width / 2 + 130, y, "D");
+			for (let obj in Scene.Objects)
+			{
+				let player = obj.GetComponent<Player>();
+				if (player == null)
+					continue;
+				y += 28;
+				let id = player.Identity != null ? player.Identity.ownerId : 0;
+				let colour = player == this ? Color(1, 0.8f, 0.3f, 1) : Color.White;
+				GUI.Label(GUI.Width / 2 - 180, y, scope $"Player {id}", colour);
+				GUI.Label(GUI.Width / 2 + 80, y, scope $"{player.kills}", colour);
+				GUI.Label(GUI.Width / 2 + 130, y, scope $"{player.deaths}", colour);
+			}
+		}`,
+tui: String.raw`<panel class="menu">
+	<text class="title">ARENA</text>
+	<text class="label">Your name</text>
+	<input bind="playerName" />
+	<button onclick="OnHost">Host a game</button>
+	<button onclick="OnJoin">Join 127.0.0.1</button>
+	<button class="quiet" onclick="OnQuit">Quit</button>
+</panel>`,
+tcss: String.raw`/* Lengths are in reference pixels: with Reference Height 1080 they scale with the window. */
+.menu { position: absolute; left: 120; top: 240; width: 420; gap: 14; padding: 32; background-color: #0d1420e6; border-radius: 8 }
+.title { font-size: 56; color: #ffffff }
+.label { font-size: 20; color: #9fb2cc }
+input { font-size: 26 }
+button { height: 56; font-size: 24; background-color: #2747c4; color: #ffffff; border-radius: 6 }
+.quiet { background-color: #1b2333 }`,
+menucs: String.raw`using System;
+using Tallow;
+
+namespace Arena;
+
+[Component]
+class MainMenu : Component
+{
+	/// Read and written by the input box (bind="playerName").
+	public String playerName = new .("Spartan") ~ delete _;
+
+	public void OnHost()
+	{
+		Log.Info(scope $"{playerName} hosts");
+		// Load the arena scene with a Network Session set to Host.
+	}
+
+	public void OnJoin()
+	{
+		Log.Info(scope $"{playerName} joins");
+	}
+
+	public void OnQuit()
+	{
+		Application.Quit();
+	}
+}`,
+digger: String.raw`using System;
+using Tallow;
+
+namespace Arena;
+
+/// Left mouse digs, middle mouse builds, where the camera looks.
+[Component]
+class Digger : Component
+{
+	public float radius = 3.0f;
+	public float strength = 1.5f;
+
+	public override void Update()
+	{
+		let dig = Input.GetMouseButton(0);
+		let build = Input.GetMouseButton(2);
+		if (!dig && !build)
+			return;
+		let camera = Scene.FindComponent<Camera>();
+		let terrain = Scene.FindComponent<VoxelTerrain>();
+		if (camera == null || terrain == null)
+			return;
+		RaycastHit hit;
+		if (!Scene.Physics.Raycast(camera.Transform.Position, camera.Transform.Forward, 200, out hit))
+			return;
+		terrain.ModifySphere(hit.point, radius, (dig ? -strength : strength) * Time.DeltaTime * 4);
+	}
+}`,
+websetup: String.raw`tools/web/setup.sh     # Emscripten, the Beef WebAssembly runtime and the web shaders, once`,
+actions: String.raw`if (InputActions.Pressed("Jump"))
+	Jump();
+let move = InputActions.Vector("Move");   // x right, y forward, no longer than 1
+let look = InputActions.Delta("Look");    // how far to turn this frame
+yaw += look.x * sensitivity;
+pitch -= look.y * sensitivity;`,
+hinge: String.raw`// A wheel on an axle along Z, spun at 3 radians a second.
+let hinge = Scene.Physics.CreateHinge(car.BodyId, wheel.BodyId, wheel.Transform.Position, .(0, 0, 1), .(0, 0, 1), .(1, 0, 0));
+Scene.Physics.SetHingeMotor(hinge, 3, 100);`,
+format: String.raw`python3 tools/format/format_code.py            # format every source file
+python3 tools/format/format_code.py --check    # list files that are not formatted (changes nothing)`,
+maps: String.raw`let maps = scope List<MapFileInfo>();
+defer { ClearAndDeleteItems!(maps); }
+MapFiles.Find(MapFiles.Folder(.. scope .()), maps);
+for (let map in maps)
+{
+    if (map.Ok)
+        menu.Add(map.Name);
+    else
+        Log.Warning(scope $"{map.File}: {map.Problems[0]}");
+}
+
+// Playing one:
+if (MapFiles.Mount(map))
+    SceneManager.LoadAdditive(Scene, map.ScenePath(.. scope .()), true);`,
+cc: String.raw`let controller = GetComponent<CharacterController>();
+
+// Walking: you give the horizontal velocity; gravity, falling and jumping are handled.
+controller.SimpleMove(direction * speed, deltaTime, jumpPressed ? 6.5f : 0);
+
+// Full control: exactly this velocity, no gravity (flying, swimming, ladders).
+controller.Move(velocity, deltaTime);`
+};
+
+/* ------------------------------------------------------------------ highlighting ------------------------------------------------------------------ */
+const KEYWORDS = new Set("using namespace class struct enum public private protected internal static override virtual abstract let var if else for while do return new delete scope in out ref this base true false null default switch case break continue const readonly extension".split(" "));
+const TYPES = new Set("float double int int32 int64 uint8 uint32 bool void char8 String Vector2 Vector3 Quaternion Color Component NetworkScript TickInput CharacterController Camera Scene GameObject Transform RaycastHit Health Player Input InputActions GUI Time Math SpawnPoints NetworkManager AudioSource VoxelTerrain Log Application Tallow System".split(" "));
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function highlightBeef(line) {
+  const re = /(\/\/.*$)|(\$?"(?:[^"\\]|\\.)*")|(\[[A-Z][A-Za-z]*(?:\([^\]]*\))?\])|(\b\d+(?:\.\d+)?f?\b)|([A-Za-z_][A-Za-z0-9_]*)/g;
+  let out = "", last = 0, m;
+  while ((m = re.exec(line))) {
+    out += esc(line.slice(last, m.index));
+    const t = m[0];
+    if (m[1]) out += '<span class="tk-c">' + esc(t) + "</span>";
+    else if (m[2]) out += '<span class="tk-s">' + esc(t) + "</span>";
+    else if (m[3]) out += '<span class="tk-a">' + esc(t) + "</span>";
+    else if (m[4]) out += '<span class="tk-n">' + esc(t) + "</span>";
+    else if (KEYWORDS.has(t)) out += '<span class="tk-k">' + t + "</span>";
+    else if (TYPES.has(t)) out += '<span class="tk-t">' + t + "</span>";
+    else out += esc(t);
+    last = re.lastIndex;
+  }
+  return out + esc(line.slice(last));
+}
+function highlightSh(line) {
+  const i = line.indexOf("#");
+  if (i < 0) return esc(line);
+  return esc(line.slice(0, i)) + '<span class="tk-c">' + esc(line.slice(i)) + "</span>";
+}
+function highlightMarkup(line, lang) {
+  if (lang === "css") {
+    return esc(line).replace(/(\/\*.*?\*\/)/g, '<span class="tk-c">$1</span>').replace(/([.#]?[a-z-]+)(\s*\{)/g, '<span class="tk-k">$1</span>$2').replace(/(#[0-9a-f]{6,8})/gi, '<span class="tk-s">$1</span>');
+  }
+  return esc(line).replace(/(&lt;\/?)([a-z]+)/g, '$1<span class="tk-k">$2</span>').replace(/([a-z-]+)=(&quot;|")([^"]*)"/g, '<span class="tk-t">$1</span>=<span class="tk-s">"$3"</span>');
+}
+function renderCode(el) {
+  const key = el.dataset.code, src = CODE[key];
+  if (!src) return;
+  const lang = el.dataset.lang || "beef";
+  const lines = src.split("\n");
+  const plain = [];
+  const html = lines.map(raw => {
+    let mark = "";
+    let line = raw;
+    if (lang === "beef" && /^[+-]/.test(raw)) { mark = raw[0]; line = raw.slice(1); }
+    if (mark !== "-") plain.push(line);
+    const body = lang === "beef" ? highlightBeef(line) : lang === "sh" ? highlightSh(line) : highlightMarkup(line, lang);
+    if (mark === "+") return '<span class="tk-add">' + (body || " ") + "</span>";
+    if (mark === "-") return '<span class="tk-c" style="text-decoration:line-through;opacity:.7">' + body + "</span>";
+    return body;
+  }).join("\n");
+  el.classList.add("code");
+  el.innerHTML = '<div class="file"><span>' + esc(el.dataset.file || "") + '</span><button class="copy" type="button">Copy</button></div><pre><code></code></pre>';
+  el.querySelector("code").innerHTML = html;
+  const btn = el.querySelector(".copy");
+  btn.addEventListener("click", () => {
+    const text = plain.join("\n");
+    const done = () => { btn.textContent = "Copied"; setTimeout(() => (btn.textContent = "Copy"), 1400); };
+    const failed = () => { selectCode(el); btn.textContent = "Select + copy"; setTimeout(() => (btn.textContent = "Copy"), 2500); };
+    try {
+      navigator.clipboard.writeText(text).then(done, failed);
+    } catch (e) { failed(); }
+  });
+}
+function selectCode(el) {
+  const range = document.createRange();
+  range.selectNodeContents(el.querySelector("code"));
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+}
+document.querySelectorAll("[data-code]").forEach(renderCode);
+
+/* ------------------------------------------------------------------ shooter slices ------------------------------------------------------------------ */
+const SLICES = ["Overview", "The arena", "A player that walks", "Shooting", "A HUD", "Ammo, reload and sound", "Going online", "Score and respawn", "Ship it"];
+const NETWORKED = new Set([6, 7]);
+(function buildSliceNav() {
+  const side = document.getElementById("shooterSide");
+  const select = document.getElementById("shooterSelect");
+  const grid = document.getElementById("sliceGrid");
+  side.innerHTML = "<h4>Arena shooter</h4>" + SLICES.map((t, i) =>
+    '<a href="#shooter-' + i + '" data-slice-link="' + i + '">' + (i ? '<span class="num">' + i + "</span>" : "") + t + (NETWORKED.has(i) ? ' <span class="tag net" style="font-size:.6rem;padding:1px 5px">net</span>' : "") + "</a>").join("");
+  select.innerHTML = SLICES.map((t, i) => '<option value="' + i + '">' + (i ? i + ". " : "") + t + "</option>").join("");
+  select.addEventListener("change", () => { location.hash = "shooter-" + select.value; });
+  grid.innerHTML = SLICES.slice(1).map((t, j) => {
+    const i = j + 1;
+    return '<a class="slice-pill' + (NETWORKED.has(i) ? " net" : "") + '" href="#shooter-' + i + '"><span>SLICE ' + i + (i === 6 ? " · NETWORKED" : "") + "</span><b>" + t + "</b></a>";
+  }).join("");
+})();
+function showSlice(n) {
+  n = Math.max(0, Math.min(SLICES.length - 1, n | 0));
+  document.querySelectorAll("[data-slice]").forEach(el => { el.hidden = Number(el.dataset.slice) !== n; });
+  document.querySelectorAll("[data-slice-link]").forEach(a => a.classList.toggle("on", Number(a.dataset.sliceLink) === n));
+  document.getElementById("shooterSelect").value = String(n);
+  const pager = document.getElementById("shooterPager");
+  let html = "";
+  if (n > 0) html += '<a href="#shooter-' + (n - 1) + '"><span>Previous</span>' + (n - 1 ? (n - 1) + ". " : "") + SLICES[n - 1] + "</a>";
+  if (n < SLICES.length - 1) html += '<a class="next" href="#shooter-' + (n + 1) + '"><span>Next slice</span>' + (n + 1) + ". " + SLICES[n + 1] + "</a>";
+  pager.innerHTML = html;
+}
+
+/* ------------------------------------------------------------------ routing ------------------------------------------------------------------ */
+const VIEWS = ["home", "start", "tutorials", "shooter", "menu", "voxels", "web", "manual", "download", "developers", "api", "waterguide", "netguide", "lightguide"];
+const NAV_OF = { home: "home", start: "start", tutorials: "tutorials", shooter: "tutorials", menu: "tutorials", voxels: "tutorials", web: "tutorials", manual: "manual", download: "download", developers:"developers", api:"api", waterguide:"tutorials", netguide:"tutorials", lightguide:"tutorials" };
+function route() {
+  let hash = (location.hash || "#home").slice(1);
+  let view = hash, section = null;
+  const m = /^shooter-(\d+)$/.exec(hash);
+  if (m) { view = "shooter"; showSlice(Number(m[1])); }
+  else if (hash === "shooter") showSlice(0);
+  else if (hash.startsWith("manual-")) { view = "manual"; section = hash; }
+  else if (hash.startsWith("start-")) { view = "start"; section = "gs-" + hash.slice(6); }
+  if (!VIEWS.includes(view)) view = "home";
+  document.querySelectorAll("[data-view]").forEach(v => { v.hidden = v.dataset.view !== view; });
+  document.querySelectorAll("[data-nav]").forEach(a => {
+    if (a.dataset.nav === NAV_OF[view]) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  });
+  const target = section && document.getElementById(section);
+  document.title = ({home:"Home",start:"Get started",tutorials:"Tutorials",shooter:"Multiplayer shooter tutorial",menu:"UI tutorial",voxels:"Voxel tutorial",web:"Web builds",manual:"Manual",download:"Download",developers:"Developer guide",api:"API reference",waterguide:"Water tutorial",netguide:"Networking tutorial",lightguide:"Lighting tutorial"}[view] || "Tallow") + " | Tallow Engine";
+  if (target) target.scrollIntoView({ block: "start" }); else window.scrollTo(0, 0);
+  if (view === "home") startHero(); else stopHero();
+  if (location.hash && !target) { const heading = document.querySelector(`#v-${view} h1`); if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus({preventScroll:true}); } }
+}
+window.addEventListener("hashchange", route);
+
+/* Sidebar links for in-page sections scroll without changing the route. */
+document.querySelectorAll(".side a[data-sec]").forEach(a => {
+  a.addEventListener("click", e => {
+    const el = document.getElementById(a.dataset.sec);
+    if (!el) return;
+    e.preventDefault();
+    location.hash = (el.id.startsWith("gs-") ? "start-" + el.id.slice(3) : el.id);
+  });
+});
+(function manualSelect() {
+  const select = document.getElementById("manualSelect");
+  const links = document.querySelectorAll('#v-manual .side a[data-sec]');
+  select.innerHTML = Array.from(links).map(a => '<option value="' + a.dataset.sec + '">' + a.textContent + "</option>").join("");
+  select.addEventListener("change", () => { location.hash = select.value; });
+})();
+/* Highlight the section in view in each sidebar. */
+const spy = new IntersectionObserver(entries => {
+  entries.forEach(en => {
+    if (!en.isIntersecting) return;
+    document.querySelectorAll('.side a[data-sec="' + en.target.id + '"]').forEach(a => {
+      a.parentElement.querySelectorAll("a[data-sec]").forEach(o => o.classList.remove("on"));
+      a.classList.add("on");
+    });
+  });
+}, { rootMargin: "-80px 0px -70% 0px" });
+document.querySelectorAll(".prose h2[id], .prose h3[id]").forEach(h => spy.observe(h));
+
+/* ------------------------------------------------------------------ theme ------------------------------------------------------------------ */
+(function theme() {
+  const btn = document.getElementById("themeBtn");
+  let saved = null;
+  try { saved = localStorage.getItem("tallow-theme"); } catch (e) {}
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  const isDark = () => {
+    const t = document.documentElement.getAttribute("data-theme");
+    return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  };
+  const label = () => { btn.textContent = isDark() ? "Light" : "Dark"; };
+  label();
+  btn.addEventListener("click", () => {
+    const next = isDark() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("tallow-theme", next); } catch (e) {}
+    label();
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", label);
+})();
+
+/* ------------------------------------------------------------------ hero: an isometric voxel island ------------------------------------------------------------------ */
+let heroRaf = 0, heroRunning = false;
+const canvas = document.getElementById("heroCanvas");
+const ctx = canvas.getContext("2d");
+const N = 14;
+function heightAt(x, z, t) {
+  const cx = x - N / 2 + 0.5, cz = z - N / 2 + 0.5;
+  const d = Math.sqrt(cx * cx + cz * cz);
+  const island = Math.max(0, 1 - d / (N * 0.52));
+  const hill = Math.sin(x * 0.7) * Math.cos(z * 0.6) * 0.8 + Math.sin((x + z) * 0.35) * 0.6;
+  return Math.round(Math.max(0, island * 5.2 + hill * island * 1.6));
+}
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function shade(hex, f) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex); if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => Math.max(0, Math.min(255, Math.round(v * f))));
+  return "rgb(" + c.join(",") + ")";
+}
+function drawHero(time) {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (canvas.width !== Math.round(rect.width * dpr) || canvas.height !== Math.round(rect.height * dpr)) {
+    canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+  }
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const tile = Math.min(w / (N * 2.1), h / (N * 1.55));
+  const ox = w / 2, oy = h * 0.2;
+  const t = time / 1000;
+  const cols = { grass: css("--jade"), sand: css("--saffron"), rock: css("--muted"), water: css("--cobalt"), top: css("--surface") };
+  for (let s = 0; s < N * 2; s++) {
+    for (let x = 0; x < N; x++) {
+      const z = s - x;
+      if (z < 0 || z >= N) continue;
+      const hgt = heightAt(x, z, t);
+      const wave = Math.sin(t * 1.6 + x * 0.6 + z * 0.4) * 0.12;
+      const levels = hgt === 0 ? 0 : hgt;
+      const px = ox + (x - z) * tile;
+      const baseY = oy + (x + z) * tile * 0.5;
+      if (levels === 0) {
+        const y = baseY + wave * tile;
+        drawTop(px, y + tile * 0.6, tile, shade(cols.water, 0.9 + wave), 0.75);
+        continue;
+      }
+      for (let k = 0; k < levels; k++) {
+        const y = baseY - k * tile * 0.62 + tile * 0.6;
+        const top = k === levels - 1;
+        const base = k >= 4 ? cols.rock : (levels <= 1 ? cols.sand : cols.grass);
+        drawCube(px, y, tile, base, top);
+      }
+    }
+  }
+}
+function drawTop(px, y, s, fill, alpha) {
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = fill;
+  ctx.beginPath(); ctx.moveTo(px, y - s * 0.5); ctx.lineTo(px + s, y); ctx.lineTo(px, y + s * 0.5); ctx.lineTo(px - s, y); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+function drawCube(px, y, s, color, top) {
+  const hgt = s * 0.62;
+  ctx.fillStyle = shade(color, 0.72);
+  ctx.beginPath(); ctx.moveTo(px - s, y); ctx.lineTo(px, y + s * 0.5); ctx.lineTo(px, y + s * 0.5 + hgt); ctx.lineTo(px - s, y + hgt); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = shade(color, 0.55);
+  ctx.beginPath(); ctx.moveTo(px + s, y); ctx.lineTo(px, y + s * 0.5); ctx.lineTo(px, y + s * 0.5 + hgt); ctx.lineTo(px + s, y + hgt); ctx.closePath(); ctx.fill();
+  if (top) {
+    ctx.fillStyle = shade(color, 1.05);
+    ctx.beginPath(); ctx.moveTo(px, y - s * 0.5); ctx.lineTo(px + s, y); ctx.lineTo(px, y + s * 0.5); ctx.lineTo(px - s, y); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.08)"; ctx.lineWidth = 1; ctx.stroke();
+  }
+}
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+function loop(time) { drawHero(time); if (heroRunning) heroRaf = requestAnimationFrame(loop); }
+function startHero() {
+  if (reduceMotion.matches) { drawHero(0); return; }
+  if (heroRunning) return;
+  heroRunning = true; heroRaf = requestAnimationFrame(loop);
+}
+function stopHero() { heroRunning = false; cancelAnimationFrame(heroRaf); }
+window.addEventListener("resize", () => { if (document.querySelector("#v-home:not([hidden])")) drawHero(performance.now()); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) stopHero(); else if (!document.getElementById("v-home").hidden) startHero(); });
+reduceMotion.addEventListener?.("change", () => { stopHero(); if (!document.getElementById("v-home").hidden) startHero(); });
+
+
+/* Search index is generated from this document, so newly added docs become searchable automatically. */
+(function setupSearch(){
+  const overlay=document.getElementById("siteSearch"), input=document.getElementById("searchInput"), results=document.getElementById("searchResults");
+  const openBtn=document.getElementById("searchOpen"), closeBtn=document.getElementById("searchClose");
+  let previousFocus=null;
+  const sections=[];
+  document.querySelectorAll("[data-view]").forEach(view=>{
+    const name=view.dataset.view;
+    const heading=view.querySelector("h1");
+    if(heading) sections.push({title:heading.textContent.trim(),category:name,url:"#"+name,text:view.textContent.replace(/\s+/g," ").slice(0,600)});
+    view.querySelectorAll("h2[id],h3[id]").forEach(h=>{
+      const content=[]; let next=h.nextElementSibling;
+      while(next && !/^H[123]$/.test(next.tagName) && content.join(" ").length<850){content.push(next.textContent);next=next.nextElementSibling;}
+      const id=h.id, url=id.startsWith("gs-")?"#start-"+id.slice(3):"#"+id;
+      sections.push({title:h.textContent.trim(),category:name,url,text:content.join(" ").replace(/\s+/g," ").slice(0,850)});
+    });
+  });
+  function show(){
+    const q=input.value.trim().toLocaleLowerCase(); results.replaceChildren();
+    if(!q){results.innerHTML='<p class="search-empty">Try “multiplayer”, “voxel”, “build”, or “component”.</p>';return;}
+    const terms=q.split(/\s+/).filter(Boolean);
+    const matches=sections.map(item=>{
+      const title=item.title.toLowerCase(), body=item.text.toLowerCase();
+      return {...item,score:terms.every(t=>title.includes(t)||body.includes(t))?terms.reduce((sum,t)=>sum+(title.includes(t)?8:0)+(body.includes(t)?1:0),0):0};
+    }).filter(item=>item.score).sort((a,b)=>b.score-a.score).slice(0,12);
+    if(!matches.length){results.innerHTML='<p class="search-empty">No matching documentation found.</p>';return;}
+    matches.forEach(item=>{const a=document.createElement("a");a.className="search-result";a.href=item.url;
+      const strong=document.createElement("strong");strong.textContent=item.title;
+      const small=document.createElement("small");small.textContent=item.category.toUpperCase()+" · "+item.text.slice(0,155)+(item.text.length>155?"…":"");
+      a.append(strong,small);a.addEventListener("click",close);results.append(a);});
+  }
+  function open(){previousFocus=document.activeElement;overlay.hidden=false;document.body.style.overflow="hidden";input.value="";show();input.focus();}
+  function close(){overlay.hidden=true;document.body.style.overflow="";(previousFocus||openBtn).focus();}
+  openBtn.addEventListener("click",open);closeBtn.addEventListener("click",close);input.addEventListener("input",show);
+  overlay.addEventListener("click",e=>{if(e.target===overlay)close();});
+  document.addEventListener("keydown",e=>{
+    if(e.key==="Escape"&&!overlay.hidden){e.preventDefault();close();return;}
+    if((e.key==="/"||(e.ctrlKey&&e.key.toLowerCase()==="k"))&&!e.altKey&&!e.metaKey&&overlay.hidden&&!/INPUT|TEXTAREA/.test(document.activeElement?.tagName||"")){e.preventDefault();open();return;}
+    if(overlay.hidden)return;
+    if(e.key==="Enter"&&document.activeElement===input){const first=results.querySelector("a");if(first){e.preventDefault();first.click();location.hash=first.getAttribute("href");}}
+    if(e.key==="Tab"){
+      const controls=[closeBtn,input,...results.querySelectorAll("a")];const i=controls.indexOf(document.activeElement);
+      if(e.shiftKey&&i===0){e.preventDefault();controls[controls.length-1].focus();}
+      else if(!e.shiftKey&&i===controls.length-1){e.preventDefault();controls[0].focus();}
+    }
+  });
+})();
+
+
+// Source-derived API index. Fetches a recursive Git tree and scans Beef declarations.
+(() => {
+ const load=document.getElementById('apiLoad'), branch=document.getElementById('apiBranch'), filter=document.getElementById('apiFilter'), status=document.getElementById('apiStatus'), out=document.getElementById('apiResults');
+ if(!load||!branch||!filter||!status||!out)return;
+ let symbols=[],files=0,scanned=0,errors=0,working=false;
+ const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ function render(){
+   const q=filter.value.trim().toLowerCase();
+   const matches=q?symbols.filter(x=>(x.signature+' '+x.path).toLowerCase().includes(q)):symbols;
+   const shown=matches.slice(0,250);
+   out.innerHTML='<p>'+matches.length.toLocaleString()+' declarations matched'+(matches.length>250?' (showing first 250; refine your search)':'')+'</p>'+shown.map(x=>'<div class="card" style="margin:8px 0;padding:12px"><code>'+esc(x.signature)+'</code><div class="meta"><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.path)+':'+x.line+'</a></div></div>').join('');
+ }
+ filter.addEventListener('input',render);
+ const patterns=[
+  /^\s*(?:(?:public|protected|internal|private|static|virtual|override|abstract|sealed|partial|extern|readonly|const|mut|new|comptime|mixin)\s+)*(?:(?:class|struct|interface|enum|namespace|extension|delegate|function)\s+[\w.<>]+.*)/,
+  /^\s*(?:public|protected)\s+(?:(?:static|virtual|override|abstract|sealed|extern|readonly|const|mut|new|mixin)\s+)*[\w.<>,\[\]?*]+\s+(?:\w+|this|operator\s*\S+)\s*(?:\(|[=;{])/,
+  /^\s*(?:public|protected)\s+(?:(?:static|readonly|const|mut)\s+)*[\w.<>,\[\]?*]+\s+\w+\s*(?:;|=|=>|\{)/
+ ];
+ function extract(content,path,ref){
+  const lines=content.split(/\r?\n/),found=[];let inBlock=false;
+  for(let i=0;i<lines.length;i++){
+   let line=lines[i];const t=line.trim();
+   if(inBlock){if(t.includes('*/'))inBlock=false;continue}
+   if(t.startsWith('/*')){if(!t.includes('*/'))inBlock=true;continue}
+   if(!t||t.startsWith('//')||t.startsWith('*')||t.startsWith('#')||t.startsWith('['))continue;
+   if(patterns.some(p=>p.test(line))){let sig=t.replace(/\s*\/\/.*$/,'').slice(0,300);found.push({signature:sig,path,line:i+1,url:'https://github.com/LazyAlgorithm/Tessera/blob/'+encodeURIComponent(ref)+'/'+path.split('/').map(encodeURIComponent).join('/')+'#L'+(i+1)})}
+  }
+  return found;
+ }
+ async function getJSON(url){const r=await fetch(url,{headers:{Accept:'application/vnd.github+json'}});if(!r.ok)throw Error('GitHub API HTTP '+r.status);return r.json()}
+ async function scan(){
+  if(working)return;working=true;load.disabled=true;symbols=[];files=0;scanned=0;errors=0;out.innerHTML='';
+  const ref=branch.value;status.textContent='Fetching source tree for '+ref+'…';
+  try{
+   const tree=await getJSON('https://api.github.com/repos/LazyAlgorithm/Tessera/git/trees/'+encodeURIComponent(ref)+'?recursive=1');
+   if(tree.truncated)throw Error('GitHub truncated the source tree; full coverage is unavailable.');
+   const paths=tree.tree.filter(x=>x.type==='blob'&&x.path.startsWith('Engine/')&&x.path.endsWith('.bf')&&x.size<750000).map(x=>x.path);
+   files=paths.length;status.textContent='Scanning '+files+' Beef source files…';
+   let cursor=0;const concurrency=6;
+   await Promise.all(Array.from({length:concurrency},async()=>{
+    while(cursor<paths.length){
+     const path=paths[cursor++];
+     try{
+      const url='https://raw.githubusercontent.com/LazyAlgorithm/Tessera/'+encodeURIComponent(ref)+'/'+path.split('/').map(encodeURIComponent).join('/');
+      const response=await fetch(url);if(!response.ok)throw Error(response.status);
+      symbols.push(...extract(await response.text(),path,ref));
+     }catch(e){errors++}
+     scanned++;
+     if(scanned%25===0||scanned===files)status.textContent='Scanned '+scanned+'/'+files+' files · '+symbols.length+' declarations · '+errors+' fetch errors';
+    }
+   }));
+   symbols.sort((a,b)=>a.signature.localeCompare(b.signature)||a.path.localeCompare(b.path));
+   status.textContent='Indexed '+symbols.length.toLocaleString()+' declarations across '+scanned+' files'+(errors?' ('+errors+' files could not be read; index incomplete)':'')+'. Branch: '+ref+'.';
+   render();
+  }catch(e){status.textContent='Could not load source index: '+e.message+'. Try again later.'}
+  finally{working=false;load.disabled=false}
+ }
+ load.addEventListener('click',scan);
+})();
+
+route();
+</script>
+
+</body></html>
