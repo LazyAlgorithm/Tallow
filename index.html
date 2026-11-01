@@ -31,6 +31,8 @@ body:has(#web:target) #v-home { display: none !important; }
 body:has(#manual:target) #v-manual { display: block !important; }
 body:has(#manual:target) #v-home { display: none !important; }
 body:has(#download:target) #v-download { display: block !important; }
+body:has(#benchmarks:target) #v-benchmarks { display: block !important; }
+body:has(#benchmarks:target) #v-home { display: none !important; }
 body:has(#download:target) #v-home { display: none !important; }
 body:has([id^="manual-"]:target) #v-manual { display:block !important; }
 body:has([id^="manual-"]:target) #v-home { display:none !important; }
@@ -294,6 +296,7 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
       <a href="#manual" data-nav="manual">Manual</a>
       <a href="#api" data-nav="api">API Reference</a>
       <a href="#download" data-nav="download">Download</a>
+      <a href="#benchmarks" data-nav="benchmarks">Benchmarks</a>
       <a href="https://discord.gg/pCsF5apHh" target="_blank" rel="noopener noreferrer">Discord</a>
       <a href="https://github.com/sponsors/LazyAlgorithm" target="_blank" rel="noopener noreferrer" class="sponsor-nav">♥ Sponsor</a>
     </nav>
@@ -339,19 +342,6 @@ footer .inner { max-width: 1200px; margin: 0 auto; display: flex; justify-conten
   </div>
 
 
-  <div class="section" id="benchmarks" aria-labelledby="benchmark-title">
-    <div class="section-head">
-      <h2 id="benchmark-title">Engine benchmarks</h2>
-      <p>Measured workload timings from October 28, 2026. Compare Tessera with saved Unity baselines, including cases where Tessera is slower.</p>
-    </div>
-    <div class="bench-panel">
-      <div class="bench-toolbar"><label for="bench-category">Workload group</label><select id="bench-category"><option value="All">All categories</option><option>Physics</option><option>Rendering</option><option>Animation</option><option>Navigation</option><option>Audio</option><option>Assets</option></select></div>
-      <div class="bench-legend"><span><i class="bench-key tessera"></i> Tessera</span><span><i class="bench-key unity"></i> Saved Unity baseline</span><span>Lower is better · milliseconds per workload</span></div>
-      <div id="bench-chart" class="bench-chart" role="group" aria-label="Benchmark comparison charts"></div>
-      <p class="bench-notes"><strong>Important context:</strong> These are historical workload-specific measurements, not whole-game FPS or an overall engine ranking. Unity was <strong>not rerun</strong> for this comparison; its timings were saved baselines. Results reflect the recorded hardware, settings and engine snapshot, not necessarily the latest build. Rendering and physics cases use different populations and workloads; do not compare timings across rows as if they were equivalent.</p>
-      <p class="bench-notes">Source: <a href="https://github.com/LazyAlgorithm/Tessera/blob/benchmarks/all-results-20261030/Benchmarks/history/full-engine/final-comparison-20261028-202825/REPORT.md" target="_blank" rel="noopener noreferrer">Full comparison report and methodology ↗</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/benchmarks/all-results-20261030/Benchmarks/history/README.md" target="_blank" rel="noopener noreferrer">Benchmark archive and raw results ↗</a></p>
-    </div>
-  </div>
 
   <div class="section">
     <div class="section-head">
@@ -1217,6 +1207,25 @@ Quality.Save();                    // applied by itself at the next start</code>
   </div>
 </section>
 
+
+<!-- =============================== BENCHMARKS =============================== -->
+<section class="view" id="v-benchmarks" data-view="benchmarks" hidden><span id="benchmarks" class="route-anchor" aria-hidden="true"></span>
+  <div class="section" aria-labelledby="benchmark-title">
+    <div class="section-head">
+      <h2 id="benchmark-title">Engine benchmarks</h2>
+      <p>Measured workload timings from October 28, 2026. Compare Tessera with saved Unity baselines, including cases where Tessera is slower.</p>
+    </div>
+    <div class="bench-panel">
+      <div class="bench-toolbar"><label for="bench-category">Workload group</label><select id="bench-category"><option value="All">All categories</option><option>Physics</option><option>Rendering</option><option>Animation</option><option>Navigation</option><option>Audio</option><option>Assets</option></select></div>
+      <div class="bench-legend"><span><i class="bench-key tessera"></i> Tessera</span><span><i class="bench-key unity"></i> Saved Unity baseline</span><span>Lower is better · milliseconds per workload</span></div>
+      <div id="bench-chart" class="bench-chart" role="group" aria-label="Benchmark comparison charts"></div>
+      <p class="bench-notes"><strong>Important context:</strong> These are historical workload-specific measurements, not whole-game FPS or an overall engine ranking. Unity was <strong>not rerun</strong> for this comparison; its timings were saved baselines. Results reflect the recorded hardware, settings and engine snapshot, not necessarily the latest build. Rendering and physics cases use different populations and workloads; do not compare timings across rows as if they were equivalent.</p>
+      <p class="bench-notes">Source: <a href="https://github.com/LazyAlgorithm/Tessera/blob/benchmarks/all-results-20261030/Benchmarks/history/full-engine/final-comparison-20261028-202825/REPORT.md" target="_blank" rel="noopener noreferrer">Full comparison report and methodology ↗</a> · <a href="https://github.com/LazyAlgorithm/Tessera/blob/benchmarks/all-results-20261030/Benchmarks/history/README.md" target="_blank" rel="noopener noreferrer">Benchmark archive and raw results ↗</a></p>
+    </div>
+  </div>
+
+</section>
+
 <!-- =============================== DOWNLOAD =============================== -->
 <section class="view" id="v-download" data-view="download" hidden><span id="download" class="route-anchor" aria-hidden="true"></span>
   <div class="section-head" style="margin-bottom:28px">
@@ -1817,8 +1826,8 @@ function showSlice(n) {
 }
 
 /* ------------------------------------------------------------------ routing ------------------------------------------------------------------ */
-const VIEWS = ["home", "start", "tutorials", "shooter", "menu", "voxels", "web", "manual", "api", "download"];
-const NAV_OF = { home: "home", start: "start", tutorials: "tutorials", shooter: "tutorials", menu: "tutorials", voxels: "tutorials", web: "tutorials", manual: "manual", api: "api", download: "download" };
+const VIEWS = ["home", "start", "tutorials", "shooter", "menu", "voxels", "web", "manual", "api", "download", "benchmarks"];
+const NAV_OF = { home: "home", start: "start", tutorials: "tutorials", shooter: "tutorials", menu: "tutorials", voxels: "tutorials", web: "tutorials", manual: "manual", api: "api", download: "download", benchmarks: "benchmarks" };
 function route() {
   let hash = (location.hash || "#home").slice(1);
   let view = hash, section = null;
@@ -1833,7 +1842,7 @@ function route() {
     if (a.dataset.nav === NAV_OF[view]) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
   const target = section && document.getElementById(section);
-  document.title = ({home:"Home",start:"Get started",tutorials:"Tutorials",shooter:"Multiplayer shooter tutorial",menu:"UI tutorial",voxels:"Voxel tutorial",web:"Web builds",manual:"Manual",download:"Download"}[view] || "Tessera") + " | Tessera Engine";
+  document.title = ({home:"Home",start:"Get started",tutorials:"Tutorials",shooter:"Multiplayer shooter tutorial",menu:"UI tutorial",voxels:"Voxel tutorial",web:"Web builds",manual:"Manual",download:"Download",benchmarks:"Benchmarks"}[view] || "Tessera") + " | Tessera Engine";
   if (target) target.scrollIntoView({ block: "start" }); else window.scrollTo(0, 0);
   if (view === "home") startHero(); else stopHero();
   if (location.hash && !target) { const heading = document.querySelector(`#v-${view} h1`); if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus({preventScroll:true}); } }
