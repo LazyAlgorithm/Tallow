@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and package the Tessera editor for Linux, Windows or macOS, without build caches."""
+"""Build and package the Tallow editor for Linux, Windows or macOS, without build caches."""
 import argparse
 import os
 from pathlib import Path
@@ -22,8 +22,8 @@ def main():
     output = args.folder.resolve()
     if output == root or output in root.parents or output.is_relative_to(root / 'Engine') or output.is_relative_to(root / 'Editor'):
         parser.error('Choose a separate output folder.')
-    if output.exists() and (not output.is_dir() or (any(output.iterdir()) and not (output / 'tessera-package.txt').is_file())):
-        parser.error('Output is not an earlier Tessera package; choose another folder.')
+    if output.exists() and (not output.is_dir() or (any(output.iterdir()) and not (output / 'tallow-package.txt').is_file())):
+        parser.error('Output is not an earlier Tallow package; choose another folder.')
     windows = args.platform == 'windows'
     macos = args.platform == 'macos'
     if os.name == 'nt' and not windows:
@@ -35,7 +35,7 @@ def main():
     config = tomllib.loads((root / 'Launcher/BeefProj.toml').read_text())['Configs'][args.config][target]
     extension = 'lib' if windows else 'a'
     archives = sorted(set(re.findall(r'build/' + native + r'/[A-Za-z0-9_./-]+\.' + extension, config['OtherLinkFlags'])))
-    launcher = root / f'build/{args.config}_{target}/TesseraLauncher' / ('TesseraLauncher.exe' if windows else 'TesseraLauncher')
+    launcher = root / f'build/{args.config}_{target}/TallowLauncher' / ('TallowLauncher.exe' if windows else 'TallowLauncher')
     shaderc = Path(f'build/{native}/bgfx/cmake/bgfx/shaderc' + ('.exe' if windows else ''))
     # texturec compresses a game's pictures when File > Build makes it.
     texturec = Path(f'build/{native}/bgfx/cmake/bimg/texturec' + ('.exe' if windows else ''))
@@ -79,7 +79,7 @@ def main():
     if not launcher.is_file():
         parser.error(f'Launcher is not built: {launcher}')
     output.parent.mkdir(parents=True, exist_ok=True)
-    stage = Path(tempfile.mkdtemp(prefix='.tessera-package-', dir=output.parent))
+    stage = Path(tempfile.mkdtemp(prefix='.tallow-package-', dir=output.parent))
     try:
         ignore = shutil.ignore_patterns('build', '__pycache__', '*.pyc', 'recovery', '.reload', 'imgui.ini')
         for name in ('Engine', 'Editor', 'Launcher'):
@@ -93,7 +93,7 @@ def main():
             destination = stage / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(root / relative, destination)
-        shutil.copy2(launcher, stage / ('Tessera.exe' if windows else 'Tessera'))
+        shutil.copy2(launcher, stage / ('Tallow.exe' if windows else 'Tallow'))
         # Debug builds depend on Beef runtime DLLs. Release builds normally do
         # not, but copy any runtime DLLs the compiler actually staged.
         if windows:
@@ -108,8 +108,8 @@ def main():
                          else 'BeefBuild (built for macOS) and Python 3.11+ on PATH, and the Xcode command line tools.' if macos
                          else 'BeefBuild and Python 3.11+ on PATH, plus system graphics/audio drivers and X11 libraries.')
         (stage / 'tessera-package.txt').write_text(
-            f'Tessera early beta for {args.platform} ({"Apple silicon" if macos else "x64"}), {args.config}.\n'
-            f'Start {"Tessera.exe" if windows else "./Tessera"}.\n'
+            f'Tallow early beta for {args.platform} ({"Apple silicon" if macos else "x64"}), {args.config}.\n'
+            f'Start {"Tallow.exe" if windows else "./Tallow"}.\n'
             f'For editing/building projects: {prerequisites}\n'
             'Engine/editor source and native archives are required to compile project scripts.\n'
             + ('Packaged from an existing executable; no rebuild was performed.\n' if args.skip_build else ''))
@@ -120,7 +120,7 @@ def main():
     finally:
         if stage.exists():
             shutil.rmtree(stage)
-    print(f'Tessera {args.platform} packaged at {output}')
+    print(f'Tallow {args.platform} packaged at {output}')
 
 
 if __name__ == '__main__':
