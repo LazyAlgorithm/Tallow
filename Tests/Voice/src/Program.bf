@@ -56,11 +56,53 @@ class Program
 		Pump(6);
 	}
 
+	static bool TestLeveling()
+	{
+		bool ok = true;
+		let quiet = scope VoiceChat.VoiceLeveler();
+		let loud = scope VoiceChat.VoiceLeveler();
+		float[VoiceChat.FrameSize] a = ?, b = ?;
+		for (int f < 100)
+		{
+			for (int i < VoiceChat.FrameSize)
+			{
+				let wave = Math.Sin((float)i * 0.1f);
+				a[i] = wave * 0.025f;
+				b[i] = wave * 0.6f;
+			}
+			quiet.Process(a);
+			loud.Process(b);
+		}
+		double energyA = 0, energyB = 0;
+		for (int i < VoiceChat.FrameSize)
+		{
+			energyA += a[i] * a[i];
+			energyB += b[i] * b[i];
+		}
+		ok &= Check(energyA > 10 && Math.Abs(energyA - energyB) < 0.1, "quiet and loud microphones converge to the same audible level");
+		for (int i < VoiceChat.FrameSize)
+			a[i] = i == 100 ? 1 : 0;
+		quiet.Process(a);
+		ok &= Check(a[100] <= 0.951f, "a sudden peak after quiet speech stays below the ceiling");
+		for (int i < VoiceChat.FrameSize)
+			a[i] = 0;
+		quiet.Process(a);
+		ok &= Check(a[100] == 0, "silence stays silent");
+		VoiceChat.AutoLevel = false;
+		let raw = scope VoiceChat.VoiceLeveler();
+		for (int i < VoiceChat.FrameSize)
+			a[i] = 0.04f;
+		raw.Process(a);
+		ok &= Check(Math.Abs(a[100] - 0.04f) < 0.00001f, "automatic leveling can be disabled");
+		VoiceChat.AutoLevel = true;
+		return ok;
+	}
+
 	public static int Main(String[] args)
 	{
 		Time.DeltaTime = Time.FixedDeltaTime;
 		Audio.NoDevice = true;
-		bool ok = true;
+		bool ok = TestLeveling();
 		NetworkManager.RegisterPrefab("VoicePlayer", new => CreatePlayer);
 		let port = (uint16)(48000 + (DateTime.Now.Ticks / 10000) % 900);
 		let host = scope Scene();
@@ -84,6 +126,9 @@ class Program
 		Pump(60);
 		let idA = a.Network.LocalClientId, idB = b.Network.LocalClientId;
 		let voiceHost = host.Network.Voice, voiceA = a.Network.Voice, voiceB = b.Network.Voice;
+		voiceB.SetPlayerVolume(idA, 2);
+		ok &= Check(voiceB.GetPlayerVolume(idA) == 2 && voiceHost.GetPlayerVolume(idA) == 1, "individual volume belongs to the listening session");
+		voiceB.SetPlayerVolume(idA, 1);
 		ok &= Check(idA > 0 && idB > 0 && idA != idB && host.Network.PlayerObject(idA) != null && b.Network.PlayerObject(idA) != null && host.Network.PlayerObject(0) != null, "three machines are in the session, each with a character");
 
 		Speak(a, 25);
