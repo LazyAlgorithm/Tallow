@@ -35,6 +35,7 @@ static class Terminal
 		let process = scope SpawnedProcess();
 		if (process.Start(start) case .Err)
 			return -1;
+		process.WaitFor();
 		return (int32)process.ExitCode;
 #else
 		return system(scope String(command).CStr());
