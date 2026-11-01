@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Writes meshes to a binary glTF (.glb) file, for taking a model made in the editor into other tools (Blender) or
 /// other engines. One primitive per mesh given, each with a plain material of the name given. Positions, normals,
@@ -54,7 +54,7 @@ static class GlbWriter
 			for (int i < n)
 			{
 				let v = mesh.Vertices[i];
-				// Tessera is left-handed; glTF is right-handed with Z the other way.
+				// Tallow is left-handed; glTF is right-handed with Z the other way.
 				let p = Vector3(v.position.x, v.position.y, -v.position.z);
 				min = Vector3.Min(min, p);
 				max = Vector3.Max(max, p);
@@ -105,7 +105,7 @@ static class GlbWriter
 		}
 		while (bin.Count % 4 != 0)
 			bin.Add(0);
-		json.AppendF("{{\"asset\":{{\"version\":\"2.0\",\"generator\":\"Tessera\"}},\"scene\":0,\"scenes\":[{{\"nodes\":[0]}}],\"nodes\":[{{\"mesh\":0,\"name\":\"Model\"}}],");
+		json.AppendF("{{\"asset\":{{\"version\":\"2.0\",\"generator\":\"Tallow\"}},\"scene\":0,\"scenes\":[{{\"nodes\":[0]}}],\"nodes\":[{{\"mesh\":0,\"name\":\"Model\"}}],");
 		json.AppendF("\"meshes\":[{{\"primitives\":[{}]}}],\"materials\":[{}],\"buffers\":[{{\"byteLength\":{}}}],", primitives, materialsJson, bin.Count);
 		json.AppendF("\"bufferViews\":[{}],\"accessors\":[{}]}}", views, accessors);
 		while (json.Length % 4 != 0)

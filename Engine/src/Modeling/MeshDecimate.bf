@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Fewer faces for levels of detail (docs/modeling.md): short edges across flat parts of a model are collapsed
 /// first, edges at sharp corners last, and the model's open borders are left where they are.

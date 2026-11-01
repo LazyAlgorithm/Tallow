@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// 4x4 matrix, column-major storage with column vectors (clip = Projection * View * Model * v).
 /// Element (row, column) lives at m[column * 4 + row]; translation is m[12..14].

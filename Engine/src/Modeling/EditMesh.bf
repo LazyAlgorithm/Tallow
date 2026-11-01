@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// How a face gets its texture coordinates.
 enum FaceUV : uint8
@@ -276,7 +276,7 @@ class EditMesh
 	{
 		get
 		{
-			var bounds = Tessera.Bounds.Empty;
+			var bounds = Tallow.Bounds.Empty;
 			for (let p in positions)
 				bounds.Encapsulate(p);
 			return positions.IsEmpty ? .(.Zero, .Zero) : bounds;

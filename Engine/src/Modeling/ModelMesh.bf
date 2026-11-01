@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A model built in the editor (docs/modeling.md): its faces are kept in the scene, inline, and drawn through the
 /// object's Mesh Renderer. Objects with the same model share one mesh, so copies of a whitebox piece are drawn

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The modelling operations on an EditMesh: extrude, inset, bevel, cut, join, delete, subdivide, mirror and the
 /// selection helpers the editor uses. Faces are passed by index, edges by EditMesh.EdgeKey, vertices by index.

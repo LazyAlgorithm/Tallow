@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The shapes a model starts from, and the blocks maps are roughed out with. Each stands on its base at the origin,
 /// centred across it, with its faces pointing outwards and Auto texture coordinates.

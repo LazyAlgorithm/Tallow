@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// More modelling operations (docs/modeling.md): cutting faces into triangles or a fan, joining triangles into
 /// quads, giving a surface thickness, smoothing, collapsing, making a face from corners and the knife.

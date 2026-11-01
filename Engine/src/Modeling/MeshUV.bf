@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Texture coordinates for an EditMesh: projections, unwrapping along seams, a smart unwrap that finds its own
 /// pieces, and packing pieces into the picture. Everything here sets faces to Manual coordinates.

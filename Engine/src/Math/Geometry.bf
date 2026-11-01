@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A box lined up with the axes, from min to max.
 struct Bounds

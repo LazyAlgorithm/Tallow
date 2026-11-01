@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Rotation quaternion. Euler angles follow Unity: degrees, applied Z (roll), then X (pitch), then Y (yaw).
 [CRepr]

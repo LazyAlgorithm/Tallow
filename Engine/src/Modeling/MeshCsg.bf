@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Boolean operations between two solids: join them, cut one out of the other (a doorway out of a wall), or keep
 /// only where they overlap. Built on BSP trees (as in Evan Wallace's csg.js). Both meshes should be closed; the

@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Two numbers: a point or direction on a plane, a screen position, a size.
 [CRepr]
@@ -48,7 +48,7 @@ struct Vector2
 	public static Vector2 operator /(Vector2 a, float s) => .(a.x / s, a.y / s);
 }
 
-/// A point, direction or size in 3D. Tessera is left-handed: +X right, +Y up, +Z forward.
+/// A point, direction or size in 3D. Tallow is left-handed: +X right, +Y up, +Z forward.
 [CRepr]
 struct Vector3
 {

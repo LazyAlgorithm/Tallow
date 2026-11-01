@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Number helpers for floats, named as in Unity.
 static class Mathf

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Where one vertex of an edge slide may go: along the edges leaving it on each side of the picked edges.
 public struct SlideRail
