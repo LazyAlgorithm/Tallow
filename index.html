@@ -46,6 +46,8 @@ body:has([id^="gs-"]:target) #v-home { display:none !important; }
 .bench-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}.bench-toolbar label{font-weight:700}.bench-toolbar select{background:var(--bg);color:var(--ink);border:1px solid var(--line);padding:9px;border-radius:6px;font:inherit}
 .bench-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.86rem;color:var(--muted);margin-bottom:20px}.bench-legend span{display:inline-flex;align-items:center;gap:6px}.bench-key{width:12px;height:12px;display:inline-block;border-radius:2px}.bench-key.tessera{background:#3568dc}.bench-key.unity{background:#e5a83b}
 .bench-chart{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}.bench-item{border:1px solid var(--line);border-radius:9px;padding:15px;min-width:0}.bench-item h3{font-size:1rem;margin:0 0 4px}.bench-item small{color:var(--muted);display:block;margin-bottom:12px}.bench-row{display:grid;grid-template-columns:58px minmax(0,1fr) 75px;gap:8px;align-items:center;margin:8px 0;font-size:.83rem}.bench-track{height:13px;background:var(--sunk);border-radius:4px;overflow:hidden}.bench-bar{height:100%;border-radius:4px}.bench-bar.tessera{background:#3568dc}.bench-bar.unity{background:#e5a83b}.bench-number{text-align:right;font-variant-numeric:tabular-nums}.bench-result{font-size:.83rem;color:var(--muted);margin-top:10px}.bench-notes{font-size:.85rem;color:var(--muted);line-height:1.6;margin-top:16px}
+
+.bench-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px}.bench-tabs button{font:inherit;font-weight:650;padding:11px 17px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;cursor:pointer}.bench-tabs button[aria-selected="true"]{background:#3568dc;color:#fff;border-color:#3568dc}.bench-solo-value{font-variant-numeric:tabular-nums}
 </style>
 <title>Tessera Engine — 3D Game Engine in Beef</title>
 <meta name="description" content="Tessera is a 3D game engine and editor built in Beef for low-poly games, voxel worlds and server-authoritative multiplayer. Explore tutorials and documentation.">
@@ -1213,14 +1215,25 @@ Quality.Save();                    // applied by itself at the next start</code>
   <div class="section" aria-labelledby="benchmark-title">
     <div class="section-head">
       <h2 id="benchmark-title">Engine benchmarks</h2>
-      <p>Measured workload timings from October 28, 2026. Compare Tessera with saved Unity baselines, including cases where Tessera is slower.</p>
+      <p>Explore standalone Tessera performance and historical comparisons against saved Unity baselines.</p>
     </div>
+    <div class="bench-tabs" role="tablist" aria-label="Benchmark views"><button type="button" id="bench-tab-solo" role="tab" aria-selected="true" aria-controls="bench-solo">Tessera performance</button><button type="button" id="bench-tab-compare" role="tab" aria-selected="false" aria-controls="bench-compare">Tessera vs Unity</button></div>
+    <div id="bench-solo" role="tabpanel" aria-labelledby="bench-tab-solo">
+      <p class="bench-notes">Standalone Tessera workloads. Measurements are from recorded Release benchmark runs, not live telemetry or whole-game FPS. The voxel suite was verified against commit <code>62f33b0</code> (October 29, 2026); rope and soft-body results are from a separate historical October 29 snapshot.</p>
+      <div class="bench-toolbar"><label for="bench-solo-category">Workload</label><select id="bench-solo-category"><option value="Voxel">Voxel rendering</option><option value="Destruction">Destruction</option><option value="Soft bodies">Soft bodies &amp; ropes</option><option value="Navigation">Navigation batching</option></select></div>
+      <div class="bench-legend">Bars compare results within the selected workload only. Measurements have different units and test setups across categories.</div>
+      <div id="bench-solo-chart" class="bench-chart" role="group" aria-label="Standalone Tessera performance graphs"></div>
+      <p class="bench-notes" id="bench-solo-notes"></p>
+      <p class="bench-notes"><strong>Test system:</strong> Ryzen 9 7900X, RTX 3070 8 GB, Linux/Vulkan. These results are embedded on this page and do not depend on temporary benchmark branches. Known failures, including unstable dense cloth configurations and invalid nondefault-resolution voxel fragments, are not shown as successful capacity measurements.</p>
+    </div>
+    <div id="bench-compare" role="tabpanel" aria-labelledby="bench-tab-compare" hidden>
     <div class="bench-panel">
       <div class="bench-toolbar"><label for="bench-category">Workload group</label><select id="bench-category"><option value="All">All categories</option><option>Physics</option><option>Rendering</option><option>Animation</option><option>Navigation</option><option>Audio</option><option>Assets</option></select></div>
       <div class="bench-legend"><span><i class="bench-key tessera"></i> Tessera</span><span><i class="bench-key unity"></i> Saved Unity baseline</span><span>Lower is better · milliseconds per workload</span></div>
       <div id="bench-chart" class="bench-chart" role="group" aria-label="Benchmark comparison charts"></div>
       <p class="bench-notes"><strong>Important context:</strong> These are historical workload-specific measurements, not whole-game FPS or an overall engine ranking. Unity was <strong>not rerun</strong> for this comparison; its timings were saved baselines. Results reflect the recorded hardware, settings and engine snapshot, not necessarily the latest build. Rendering and physics cases use different populations and workloads; do not compare timings across rows as if they were equivalent.</p>
       <p class="bench-notes">Source: Historical Tessera benchmark measurements (October 28, 2026). The original reports are retained separately during development; this page summarizes selected results and their limitations.</p>
+    </div>
     </div>
   </div>
 
@@ -1292,6 +1305,26 @@ Quality.Save();                    // applied by itself at the next start</code>
 
 <script>
 /* Recorded October 2026 benchmark medians; do not silently substitute live values. */
+
+const tesseraSoloSeries=[{"group":"Voxel","title":"Intact voxel pieces · 16³","unit":"Rendered frame p95 (ms)","rows":[["100 pieces",0.387],["500 pieces",0.98],["1,000 pieces",1.942]],"note":"720p, simple lighting, unique voxel meshes with mesh colliders. Worst-process p95. These figures do not represent whole-game FPS."},{"group":"Destruction","title":"Bullet carving by voxel resolution","unit":"Rendered event-frame p95 (ms)","rows":[["16³",0.949],["24³",2.098],["32³",3.978],["48³",11.409]],"note":"0.32 m carve radius; includes measured event-frame overhead. The 8³ bullet case failed validation and is excluded."},{"group":"Destruction","title":"Explosion fan-out · 24³","unit":"Rendered event-frame p95 (ms)","rows":[["1 object",2.443],["4 objects",9.422],["16 objects",38.12]],"note":"Synthetic fan-out, not a single spatial explosion. No detached fragments."},{"group":"Soft bodies","title":"Rendered capacity within 4 ms · selected densities","unit":"Object count (higher is better)","rows":[["Cloth 8×8",137],["Cloth 16×16",43],["Jelly 4",100],["Jelly 8",37],["Shell impacts 8",50],["Rope 16 segments",250],["Rope 32 segments",137],["Rope 64 segments",75]],"note":"Largest tested count under 4 ms worst-process rendered p95, from historical Oct 29 soft-body run. These are conservative tested points, not exact maxima. Unstable dense configurations excluded."},{"group":"Navigation","title":"NavMesh path batching · Tessera only","unit":"Batch elapsed time (ms)","rows":[["Serial 100",0.182538],["CPU batch 100",0.029646],["Serial 1,000",1.823196],["CPU batch 1,000",0.197727]],"note":"Fresh path requests in historical Oct 28 snapshot. CPU batching and serial use different scheduling modes; no equivalent Unity batch baseline."}];
+function renderSoloBenchmarks(){
+ const category=document.getElementById('bench-solo-category')?.value;
+ const chart=document.getElementById('bench-solo-chart');const notes=document.getElementById('bench-solo-notes');if(!chart)return;
+ chart.replaceChildren();let messages=[];
+ for(const series of tesseraSoloSeries.filter(s=>s.group===category)){
+  const card=document.createElement('article');card.className='bench-item';const title=document.createElement('h3');title.textContent=series.title;card.append(title);
+  const sub=document.createElement('small');sub.textContent=series.unit;card.append(sub);
+  const max=Math.max(...series.rows.map(r=>r[1]));
+  for(const [name,value] of series.rows){const line=document.createElement('div');line.className='bench-row';const label=document.createElement('span');label.textContent=name;const track=document.createElement('div');track.className='bench-track';const bar=document.createElement('div');bar.className='bench-bar tessera';bar.style.width=(value/max*100)+'%';track.append(bar);const number=document.createElement('span');number.className='bench-number bench-solo-value';number.textContent=Number.isInteger(value)?String(value):value.toFixed(3);line.append(label,track,number);card.append(line);}chart.append(card);messages.push(series.note);
+ }
+ if(notes)notes.textContent=messages.join(' ');
+}
+document.getElementById('bench-solo-category')?.addEventListener('change',renderSoloBenchmarks);
+for(const [id,panel,other,otherPanel] of [['bench-tab-solo','bench-solo','bench-tab-compare','bench-compare'],['bench-tab-compare','bench-compare','bench-tab-solo','bench-solo']]){
+ document.getElementById(id)?.addEventListener('click',()=>{document.getElementById(panel).hidden=false;document.getElementById(otherPanel).hidden=true;document.getElementById(id).setAttribute('aria-selected','true');document.getElementById(other).setAttribute('aria-selected','false');});
+}
+renderSoloBenchmarks();
+
 const benchmarkRows=[{"category":"Physics","label":"Rigid bodies (1,000)","id":"physics-pile","tessera":0.4198,"unity":0.5208},{"category":"Physics","label":"Raycasts (1,000)","id":"physics-raycast","tessera":0.2985,"unity":0.3535},{"category":"Physics","label":"Sphere overlaps (1,000)","id":"physics-overlap-sphere","tessera":1.1111,"unity":0.4195},{"category":"Rendering","label":"Shared meshes (1,000)","id":"render-shared","tessera":0.2477,"unity":0.5211},{"category":"Rendering","label":"Materials (1,000)","id":"render-materials","tessera":0.2386,"unity":0.7544},{"category":"Rendering","label":"Culling (10,000)","id":"render-culling","tessera":0.9266,"unity":0.5362},{"category":"Rendering","label":"CPU skinning (100)","id":"render-skinning-cpu","tessera":4.2719,"unity":0.9944},{"category":"Rendering","label":"GPU skinning (100)","id":"render-skinning-gpu","tessera":0.9008,"unity":0.6225},{"category":"Animation","label":"Animation clips (1,000)","id":"animator-clips","tessera":2.88,"unity":10.4848},{"category":"Animation","label":"Layered animation (1,000)","id":"animator-layered","tessera":14.7666,"unity":16.3369},{"category":"Navigation","label":"Serial NavMesh paths (100)","id":"navmesh","tessera":0.1825,"unity":0.1075},{"category":"Audio","label":"Audio mix (100)","id":"audio-mix","tessera":0.4463,"unity":0.1588},{"category":"Assets","label":"Image decoding (100)","id":"asset-image-decode","tessera":107.2191,"unity":90.9627}];
 function renderBenchmarks(){
   const container=document.getElementById('bench-chart');
