@@ -107,7 +107,7 @@ static class AutoWeights
 		for (let part in rig.parts)
 		{
 			for (let index in part.indices)
-				triangles.Add(placeOf[index]);
+				triangles.Add(placeOf[(int)index]);
 		}
 		let allIndices = scope List<uint32>();
 		rig.Triangles(allIndices);

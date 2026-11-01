@@ -141,8 +141,13 @@ static class Textures
 		levels = count;
 		if (mips == null)
 			return null;
-		let result = new uint8[size];
-		Internal.MemCpy(result.Ptr, mips, size);
+		if ((uint64)size > (uint64)int.MaxValue)
+		{
+			tn_image_mips_free(mips);
+			return null;
+		}
+		let result = new uint8[(int)size];
+		Internal.MemCpy(result.Ptr, mips, (int)size);
 		tn_image_mips_free(mips);
 		return result;
 	}

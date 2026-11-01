@@ -124,7 +124,7 @@ class WeightPainter
 		{
 			for (int i = 0; i + 2 < part.indices.Count; i += 3)
 			{
-				let a = placeOf[part.indices[i]], b = placeOf[part.indices[i + 1]], c = placeOf[part.indices[i + 2]];
+				let a = placeOf[(int)part.indices[i]], b = placeOf[(int)part.indices[i + 1]], c = placeOf[(int)part.indices[i + 2]];
 				Join(a, b);
 				Join(b, c);
 				Join(c, a);

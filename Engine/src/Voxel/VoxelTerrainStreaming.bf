@@ -77,7 +77,7 @@ extension VoxelTerrain
 		key.Add((int32)mTiles.Count);
 		key.Add((int32)mChunks.Count);
 		key.Add((int32)(int)Internal.UnsafeCastToPtr(snap));
-		key.Add((int32)((int)Internal.UnsafeCastToPtr(snap) >> 32));
+		key.Add((int32)((uint64)(uint)Internal.UnsafeCastToPtr(snap) >> 32));
 	}
 
 	/// Whether the chunks wanted could be different from when UpdateWantedChunks last ran.

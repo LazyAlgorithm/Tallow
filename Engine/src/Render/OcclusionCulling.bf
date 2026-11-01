@@ -72,9 +72,9 @@ class OcclusionBuffer
 		Occluders++;
 		for (int t = 0; t + 2 < indices.Count; t += 3)
 		{
-			let a = Clip(m, vertices[indices[t]].position);
-			let b = Clip(m, vertices[indices[t + 1]].position);
-			let c = Clip(m, vertices[indices[t + 2]].position);
+			let a = Clip(m, vertices[(int)indices[t]].position);
+			let b = Clip(m, vertices[(int)indices[t + 1]].position);
+			let c = Clip(m, vertices[(int)indices[t + 2]].position);
 			if (a.w < mNear || b.w < mNear || c.w < mNear)
 				continue;
 			OccluderTriangles++;

@@ -61,9 +61,12 @@ class PackFile
 			return .Err;
 		let count = U32(&header[12]);
 		let indexOffset = U64(&header[16]);
-		let indexSize = U32(&header[24]);
+		let rawIndexSize = U32(&header[24]);
+		if ((uint64)rawIndexSize > (uint64)int.MaxValue)
+			return .Err;
+		let indexSize = (int)rawIndexSize;
 		mSeed = U32(&header[28]);
-		if (indexOffset + indexSize > (uint64)stream.Length)
+		if (indexOffset > (uint64)stream.Length || (uint64)indexSize > (uint64)stream.Length - indexOffset)
 			return .Err;
 		let index = scope uint8[indexSize];
 		stream.Position = (int64)indexOffset;
@@ -123,11 +126,14 @@ class PackFile
 			return .Err;
 		if (entry.offset + entry.stored > (uint64)stream.Length)
 			return .Err;
-		let stored = scope uint8[Math.Max(entry.stored, 1)];
-		stream.Position = (int64)entry.offset;
-		if (entry.stored > 0 && (stream.TryRead(.(stored.Ptr, entry.stored)) case .Ok(let got)) && got != entry.stored)
+		if (entry.stored > int32.MaxValue || entry.size > int32.MaxValue - 16)
 			return .Err;
-		Scramble(.(stored.Ptr, entry.stored), mSeed, entry.crc);
+		let storedSize = (int)entry.stored;
+		let stored = scope uint8[Math.Max(storedSize, 1)];
+		stream.Position = (int64)entry.offset;
+		if (entry.stored > 0 && (stream.TryRead(.(stored.Ptr, storedSize)) case .Ok(let got)) && got != storedSize)
+			return .Err;
+		Scramble(.(stored.Ptr, storedSize), mSeed, entry.crc);
 		let start = data.Count;
 		if ((entry.flags & Deflated) != 0)
 		{
@@ -141,7 +147,7 @@ class PackFile
 			data.AddRange(Span<uint8>((uint8*)plain, length));
 		}
 		else
-			data.AddRange(Span<uint8>(stored.Ptr, entry.stored));
+			data.AddRange(Span<uint8>(stored.Ptr, storedSize));
 		if (Crc32(.(data.Ptr + start, data.Count - start)) != entry.crc)
 		{
 			data.Count = start;

@@ -121,7 +121,7 @@ static class GlbWriter
 		}
 		U32(0x46546C67); // "glTF"
 		U32(2);
-		U32((uint32)(12 + 8 + json.Length + 8 + bin.Count));
+		U32((uint32)(12UL + 8 + (uint64)json.Length + 8 + (uint64)bin.Count));
 		U32((uint32)json.Length);
 		U32(0x4E4F534A); // "JSON"
 		file.AddRange(.((uint8*)json.Ptr, json.Length));

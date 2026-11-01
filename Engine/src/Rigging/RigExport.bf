@@ -137,28 +137,28 @@ static class RigExport
 			{
 				let v = used[i];
 				// The engine's space has glTF's Z turned round.
-				let p = Vector3(rig.positions[v].x, rig.positions[v].y, -rig.positions[v].z);
+				let p = Vector3(rig.positions[(int)v].x, rig.positions[(int)v].y, -rig.positions[(int)v].z);
 				min = Vector3.Min(min, p);
 				max = Vector3.Max(max, p);
 				positions[i * 3] = p.x;
 				positions[i * 3 + 1] = p.y;
 				positions[i * 3 + 2] = p.z;
-				normals[i * 3] = rig.normals[v].x;
-				normals[i * 3 + 1] = rig.normals[v].y;
-				normals[i * 3 + 2] = -rig.normals[v].z;
-				uvs[i * 2] = rig.uvs[v].x;
-				uvs[i * 2 + 1] = rig.uvs[v].y;
-				uv2s[i * 2] = rig.uv2s[v].x;
-				uv2s[i * 2 + 1] = rig.uv2s[v].y;
-				let c = EditMesh.ColorFromABGR(rig.colors[v]);
+				normals[i * 3] = rig.normals[(int)v].x;
+				normals[i * 3 + 1] = rig.normals[(int)v].y;
+				normals[i * 3 + 2] = -rig.normals[(int)v].z;
+				uvs[i * 2] = rig.uvs[(int)v].x;
+				uvs[i * 2 + 1] = rig.uvs[(int)v].y;
+				uv2s[i * 2] = rig.uv2s[(int)v].x;
+				uv2s[i * 2 + 1] = rig.uv2s[(int)v].y;
+				let c = EditMesh.ColorFromABGR(rig.colors[(int)v]);
 				colors[i * 4] = c.r;
 				colors[i * 4 + 1] = c.g;
 				colors[i * 4 + 2] = c.b;
 				colors[i * 4 + 3] = c.a;
 				for (int s < 4)
 				{
-					partJoints[i * 4 + s] = joints[v * 4 + s];
-					partWeights[i * 4 + s] = jointWeights[v * 4 + s];
+					partJoints[i * 4 + s] = joints[(int)v * 4 + s];
+					partWeights[i * 4 + s] = jointWeights[(int)v * 4 + s];
 				}
 			}
 			let position = Accessor(.((uint8*)positions.Ptr, positions.Count * 4), n, "VEC3", 5126, 34962, min, max);
@@ -320,7 +320,7 @@ static class RigExport
 		}
 		U32(0x46546C67); // "glTF"
 		U32(2);
-		U32((uint32)(12 + 8 + json.Length + 8 + bin.Count));
+		U32((uint32)(12UL + 8 + (uint64)json.Length + 8 + (uint64)bin.Count));
 		U32((uint32)json.Length);
 		U32(0x4E4F534A); // "JSON"
 		file.AddRange(.((uint8*)json.Ptr, json.Length));

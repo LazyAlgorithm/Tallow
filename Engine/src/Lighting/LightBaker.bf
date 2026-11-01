@@ -277,7 +277,7 @@ class LightBaker
 				// A mirrored object's triangles wind the other way round in the world: turn them back.
 				if (mirrored)
 					Swap!(ib, ic);
-				let va = mesh.Vertices[ia], vb = mesh.Vertices[ib], vc = mesh.Vertices[ic];
+				let va = mesh.Vertices[(int)ia], vb = mesh.Vertices[(int)ib], vc = mesh.Vertices[(int)ic];
 				Tri tri = default;
 				tri.object = objectIndex;
 				let pa = world.TransformPoint(va.position), pb = world.TransformPoint(vb.position), pc = world.TransformPoint(vc.position);
@@ -459,7 +459,7 @@ class LightBaker
 		while (side > 2 && (int64)texels * side * side > 48'000'000)
 			side--;
 		mSamples = side * side;
-		mHits = new .[(int64)texels * mSamples];
+		mHits = new .[(int)((int64)texels * mSamples)];
 
 		CurrentStage = .Direct;
 		ParallelFor(texels, scope => DirectTexel);
@@ -809,15 +809,15 @@ class LightBaker
 			if (triangle < 0)
 			{
 				sky = sky + Sky(.(rays[s * 7 + 3], rays[s * 7 + 4], rays[s * 7 + 5]));
-				mHits[start + s] = -1;
+				mHits[(int)(start + s)] = -1;
 			}
 			else if (hits[s * 4 + 3] > 0.5f)
 			{
 				backs++;
-				mHits[start + s] = -2;
+				mHits[(int)(start + s)] = -2;
 			}
 			else
-				mHits[start + s] = TexelAt(triangle, hits[s * 4 + 1], hits[s * 4 + 2]);
+				mHits[(int)(start + s)] = TexelAt(triangle, hits[s * 4 + 1], hits[s * 4 + 2]);
 		}
 		mSkyGather[i] = sky;
 		// Mostly seeing back faces: inside something (under a wall standing on it). Filled from its neighbours.
@@ -837,7 +837,7 @@ class LightBaker
 		let start = (int64)i * mSamples;
 		for (int s < mSamples)
 		{
-			let hit = mHits[start + s];
+			let hit = mHits[(int)(start + s)];
 			if (hit >= 0)
 				sum = sum + mRadiance[hit];
 		}

@@ -272,7 +272,7 @@ class SoftBody : Component
 		mPinned.Clear();
 		ParsePins(pins, mRest.Count, mPinned);
 		for (let index in mPinned)
-			pinned[index] = 1;
+			pinned[(int)index] = 1;
 		let stiffnesses = scope List<float>();
 		stiffnesses.Resize(mRest.Count);
 		for (int i < mRest.Count)
@@ -343,9 +343,9 @@ class SoftBody : Component
 		float sixVolume = 0;
 		for (int t = 0; t + 2 < triangles.Count; t += 3)
 		{
-			let a = Vector3(positions[triangles[t] * 3], positions[triangles[t] * 3 + 1], positions[triangles[t] * 3 + 2]);
-			let b = Vector3(positions[triangles[t + 1] * 3], positions[triangles[t + 1] * 3 + 1], positions[triangles[t + 1] * 3 + 2]);
-			let c = Vector3(positions[triangles[t + 2] * 3], positions[triangles[t + 2] * 3 + 1], positions[triangles[t + 2] * 3 + 2]);
+			let a = Vector3(positions[(int)triangles[t] * 3], positions[(int)triangles[t] * 3 + 1], positions[(int)triangles[t] * 3 + 2]);
+			let b = Vector3(positions[(int)triangles[t + 1] * 3], positions[(int)triangles[t + 1] * 3 + 1], positions[(int)triangles[t + 1] * 3 + 2]);
+			let c = Vector3(positions[(int)triangles[t + 2] * 3], positions[(int)triangles[t + 2] * 3 + 1], positions[(int)triangles[t + 2] * 3 + 2]);
 			sixVolume += Vector3.Dot(a, Vector3.Cross(b, c));
 		}
 		return Math.Abs(sixVolume) / 6;
@@ -478,7 +478,7 @@ class SoftBody : Component
 			mTargets.Clear();
 			for (let index in mPinned)
 			{
-				let p = toWorld.TransformPoint(mRest[index]);
+				let p = toWorld.TransformPoint(mRest[(int)index]);
 				mTargets.Add(p.x);
 				mTargets.Add(p.y);
 				mTargets.Add(p.z);
@@ -599,10 +599,10 @@ class SoftBody : Component
 		for (int t = 0; t + 2 < mTriangles.Count; t += 3)
 		{
 			let a = mTriangles[t], b = mTriangles[t + 1], c = mTriangles[t + 2];
-			let normal = Vector3.Cross(mPositions[b] - mPositions[a], mPositions[c] - mPositions[a]);
-			mNormals[a] = mNormals[a] + normal;
-			mNormals[b] = mNormals[b] + normal;
-			mNormals[c] = mNormals[c] + normal;
+			let normal = Vector3.Cross(mPositions[(int)b] - mPositions[(int)a], mPositions[(int)c] - mPositions[(int)a]);
+			mNormals[(int)a] = mNormals[(int)a] + normal;
+			mNormals[(int)b] = mNormals[(int)b] + normal;
+			mNormals[(int)c] = mNormals[(int)c] + normal;
 		}
 		// A free body carries its object (where the server says it is, on a client).
 		if (Free && !FollowsServer)
@@ -629,7 +629,7 @@ class SoftBody : Component
 			return;
 		uint32[64] found = ?;
 		let count = tn_soft_touching(mWorld.[Friend]mSystem, mBody, &found, 64);
-		for (int i < count)
+		for (uint32 i < count)
 			output.Add(found[i]);
 	}
 
@@ -642,7 +642,7 @@ class SoftBody : Component
 			return;
 		output.Resize(mRest.Count);
 		let count = tn_soft_dents(mWorld.[Friend]mSystem, mBody, (float*)output.Ptr, (uint32)output.Count);
-		output.Resize(count);
+		output.Resize((int)count);
 	}
 
 	/// Dents a shell as GetDents gave them (one for each simulated vertex). In a session the server's dents are
@@ -757,6 +757,6 @@ class SoftBody : Component
 		if (!selected || mPinned.IsEmpty || mPositions.Count != mRest.Count)
 			return;
 		for (let index in mPinned)
-			DebugDraw.Sphere(mPositions[index], 0.03f, .(1, 0.55f, 0.1f, 1));
+			DebugDraw.Sphere(mPositions[(int)index], 0.03f, .(1, 0.55f, 0.1f, 1));
 	}
 }

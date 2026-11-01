@@ -141,9 +141,9 @@ static class LightmapUV
 		var surface = 0.0f, flat = 0.0f;
 		for (int t < mesh.Indices.Count / 3)
 		{
-			let a = mesh.Vertices[mesh.Indices[t * 3]];
-			let b = mesh.Vertices[mesh.Indices[t * 3 + 1]];
-			let c = mesh.Vertices[mesh.Indices[t * 3 + 2]];
+			let a = mesh.Vertices[(int)mesh.Indices[t * 3]];
+			let b = mesh.Vertices[(int)mesh.Indices[t * 3 + 1]];
+			let c = mesh.Vertices[(int)mesh.Indices[t * 3 + 2]];
 			let cross = Vector3.Cross(b.position - a.position, c.position - a.position);
 			surface += Math.Sqrt(Vector3.Dot(cross, cross)) * 0.5f;
 			let du = b.uv2 - a.uv2, dv = c.uv2 - a.uv2;
@@ -209,7 +209,7 @@ static class LightmapUV
 			let corner = scope List<int32>(mesh.Indices.Count);
 			for (let index in mesh.Indices)
 			{
-				let p = PositionKey(mesh.Vertices[index].position);
+				let p = PositionKey(mesh.Vertices[(int)index].position);
 				if (!weld.TryGetValue(p, var id))
 				{
 					id = (int32)weld.Count;
@@ -300,7 +300,7 @@ static class LightmapUV
 				if (!made.TryGetValue(key, var index))
 				{
 					let chart = charts[chartIndex];
-					var vertex = oldVertices[old];
+					var vertex = oldVertices[(int)old];
 					let u = Vector3.Dot(vertex.position * scale, chart.axisU) - chart.minU;
 					let v = Vector3.Dot(vertex.position * scale, chart.axisV) - chart.minV;
 					vertex.uv2 = .((chart.x + u) * toSquare, (chart.y + v) * toSquare);
@@ -317,9 +317,9 @@ static class LightmapUV
 
 	static Vector3 TriangleNormal(Mesh mesh, int32 t, Vector3 scale, out float area)
 	{
-		let a = mesh.Vertices[mesh.Indices[t * 3]].position * scale;
-		let b = mesh.Vertices[mesh.Indices[t * 3 + 1]].position * scale;
-		let c = mesh.Vertices[mesh.Indices[t * 3 + 2]].position * scale;
+		let a = mesh.Vertices[(int)mesh.Indices[t * 3]].position * scale;
+		let b = mesh.Vertices[(int)mesh.Indices[t * 3 + 1]].position * scale;
+		let c = mesh.Vertices[(int)mesh.Indices[t * 3 + 2]].position * scale;
 		// Clockwise front faces: (b - a) x (c - a) points out of the front in Tallow's left-handed space.
 		let cross = Vector3.Cross(b - a, c - a);
 		let length = Math.Sqrt(Vector3.Dot(cross, cross));
@@ -334,8 +334,8 @@ static class LightmapUV
 		var bestArea = float.MaxValue;
 		for (int k < 3)
 		{
-			let p = mesh.Vertices[mesh.Indices[seed * 3 + k]].position * scale;
-			let q = mesh.Vertices[mesh.Indices[seed * 3 + (k + 1) % 3]].position * scale;
+			let p = mesh.Vertices[(int)mesh.Indices[seed * 3 + k]].position * scale;
+			let q = mesh.Vertices[(int)mesh.Indices[seed * 3 + (k + 1) % 3]].position * scale;
 			let edge = q - p;
 			var u = edge - normal * Vector3.Dot(edge, normal);
 			var lengthSq = Vector3.Dot(u, u);
@@ -355,7 +355,7 @@ static class LightmapUV
 				let t = triangles[i];
 				for (int c < 3)
 				{
-					let point = mesh.Vertices[mesh.Indices[t * 3 + c]].position * scale;
+					let point = mesh.Vertices[(int)mesh.Indices[t * 3 + c]].position * scale;
 					let pu = Vector3.Dot(point, u);
 					let pv = Vector3.Dot(point, v);
 					minU = Math.Min(minU, pu);

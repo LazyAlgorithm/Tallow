@@ -288,11 +288,11 @@ class ProbePlacer
 				for (int t < mesh.Indices.Count / 3)
 				{
 					let ia = mesh.Indices[t * 3], ib = mesh.Indices[t * 3 + 1], ic = mesh.Indices[t * 3 + 2];
-					if (ia >= vertices.Count || ib >= vertices.Count || ic >= vertices.Count)
+					if (ia >= (uint32)vertices.Count || ib >= (uint32)vertices.Count || ic >= (uint32)vertices.Count)
 						continue;
 					for (let index in uint32[?](ia, ib, ic))
 					{
-						let point = world.TransformPoint(vertices[index].position);
+						let point = world.TransformPoint(vertices[(int)index].position);
 						mPositions.Add(point.x);
 						mPositions.Add(point.y);
 						mPositions.Add(point.z);

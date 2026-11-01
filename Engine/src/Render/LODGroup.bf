@@ -312,7 +312,7 @@ static class MeshSimplifier
 		let wanted = Math.Max((int)(triangles * Math.Clamp(share, 0.01f, 1)), 4);
 		var bounds = Bounds.Empty;
 		for (let index in indices)
-			bounds.Encapsulate(vertices[index].position);
+			bounds.Encapsulate(vertices[(int)index].position);
 		let size = bounds.IsValid ? Math.Max(Math.Max(bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y), bounds.max.z - bounds.min.z) : 1;
 		let result = new Mesh();
 		result.Name.Set(source.Name);
@@ -320,7 +320,7 @@ static class MeshSimplifier
 		if (triangles <= wanted || size <= 0)
 		{
 			for (let index in indices)
-				result.Vertices.Add(vertices[index]);
+				result.Vertices.Add(vertices[(int)index]);
 			for (int i < result.Vertices.Count)
 				result.Indices.Add((uint32)i);
 			result.RecalculateBounds();
@@ -368,9 +368,9 @@ static class MeshSimplifier
 		let inverse = 1 / cell;
 		for (let index in indices)
 		{
-			if (remap[index] >= 0)
+			if (remap[(int)index] >= 0)
 				continue;
-			let vertex = vertices[index];
+			let vertex = vertices[(int)index];
 			let p = (vertex.position - origin) * inverse;
 			let key = ((int64)Math.Floor(p.x) & 0xFFFFF) | (((int64)Math.Floor(p.y) & 0xFFFFF) << 20) | (((int64)Math.Floor(p.z) & 0xFFFFF) << 40) | ((int64)Direction(vertex.normal) << 58);
 			if (!clusters.TryGetValue(key, var cluster))
@@ -382,7 +382,7 @@ static class MeshSimplifier
 				normals.Add(.Zero);
 				counts.Add(0);
 			}
-			remap[index] = cluster;
+			remap[(int)index] = cluster;
 			sums[cluster] += vertex.position;
 			normals[cluster] += vertex.normal;
 			counts[cluster]++;
@@ -398,9 +398,9 @@ static class MeshSimplifier
 		HashSet<int64> seen = scope .();
 		for (int t = 0; t + 2 < indices.Count; t += 3)
 		{
-			let a = remap[indices[t]];
-			let b = remap[indices[t + 1]];
-			let c = remap[indices[t + 2]];
+			let a = remap[(int)indices[t]];
+			let b = remap[(int)indices[t + 1]];
+			let c = remap[(int)indices[t + 2]];
 			if (a == b || b == c || a == c)
 				continue;
 			// The same triangle twice (in any rotation) is drawn once.
