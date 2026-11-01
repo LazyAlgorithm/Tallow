@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Reflection;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// What travels along a link. Object is any reference or engine value type (a GameObject, a component, a
 /// RaycastHit); its pin names the exact type. Enum names its enum the same way.

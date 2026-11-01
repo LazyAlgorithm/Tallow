@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The modeller (docs/modeling.md): shapes drawn straight into the Scene view, and an edit mode (Tab on a selected
 /// model) where vertices, edges and faces are picked and moved with the gizmo and changed with the Model window's

@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The modeller's keyboard shortcuts. Every modelling tool, the selection modes, edit mode, search, the quick menu and
 /// Show Only This Model can have keys (several each, "X, Delete"), changed in Edit > Preferences > Modelling and kept

@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Reflection;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Every node kind: the built-in ones plus one per [GraphNode] method found in the program.
 static class NodeLibrary
@@ -600,7 +600,7 @@ static class NodeLibrary
 		void Owner(bool isStatic, String owner)
 		{
 			if (isStatic)
-				owner.AppendF("{}{}", mType.fromProject ? "" : "Tessera.", mType.name);
+				owner.AppendF("{}{}", mType.fromProject ? "" : "Tallow.", mType.name);
 			else
 				owner.Set("{0}");
 		}

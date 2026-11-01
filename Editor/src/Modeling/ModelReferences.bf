@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Reference images to model from (docs/modeling.md): pictures of the thing being made, from the front, side or top,
 /// stood in the scene behind the model, square to that view, so the model can be traced over them in the matching

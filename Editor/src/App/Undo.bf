@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// One step of undo history: the scene as text on the other side of the step, or terrain sculpting before and after.
 class UndoStep

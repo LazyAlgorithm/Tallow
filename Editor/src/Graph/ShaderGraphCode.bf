@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Writes the .tshader file a shader graph stands for, or the .tcompute file of a compute graph (one ending in a
 /// Compute Output node). Each node is worked out once, into a local of its own ("vec3 n12 = ...;"), before the nodes
@@ -133,7 +133,7 @@ class ShaderGraphCode
 			return false;
 		}
 		isCompute = (output != null) ? (output.def.key == "shader.compute.output") : IsComputeGraph(graph);
-		text.Append("// Generated from a shader graph by the Tessera editor.\n// Edit the graph and save it again; changes made here are overwritten.\n");
+		text.Append("// Generated from a shader graph by the Tallow editor.\n// Edit the graph and save it again; changes made here are overwritten.\n");
 		WriteProperties(graph, text);
 		if (isCompute)
 		{

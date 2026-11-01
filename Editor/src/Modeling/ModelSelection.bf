@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Picking in the modeller's edit mode (docs/modeling.md): what is under the pointer, loops (Alt+click), paths
 /// (Ctrl+click), growing, shrinking, inverting and hiding, and how the selection is drawn in the Scene view.

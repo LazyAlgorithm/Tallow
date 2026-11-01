@@ -1,7 +1,7 @@
 using System;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// A pannable, zoomable canvas filling the rest of a window (the graph, animator and behaviour tree editors): where
 /// it is on screen this frame and how its space maps onto the screen.

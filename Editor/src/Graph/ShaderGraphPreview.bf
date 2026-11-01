@@ -2,10 +2,10 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading;
-using Tessera;
+using Tallow;
 using Bgfx;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Graph tab's pictures of a shader graph: the whole surface lit on a ball, and each node's value on a ball of its
 /// own, unlit. The graph's preview shader (ShaderGraphCode with previews) is compiled on another thread, for the

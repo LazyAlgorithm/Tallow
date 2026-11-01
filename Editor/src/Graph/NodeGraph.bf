@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Reflection;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// A visual script: nodes, the links between their pins, and the compiler that turns it into a Beef component.
 class NodeGraph
@@ -762,10 +762,10 @@ class NodeGraph
 	/// Generates a Beef component class from the graph. Each event node becomes a method.
 	public void Compile(StringView namespaceName, StringView className, StringView sourceFile, String code)
 	{
-		code.AppendF("// Generated from {} by the Tessera graph compiler.\n// Edit the graph and compile it again; changes made here are overwritten.\n", sourceFile);
+		code.AppendF("// Generated from {} by the Tallow graph compiler.\n// Edit the graph and compile it again; changes made here are overwritten.\n", sourceFile);
 		let baseClass = scope String();
 		BaseClass(baseClass);
-		code.AppendF("using System;\nusing Tessera;\n\nnamespace {};\n\n[Component]\nclass {} : {}\n{{\n", namespaceName, className, baseClass);
+		code.AppendF("using System;\nusing Tallow;\n\nnamespace {};\n\n[Component]\nclass {} : {}\n{{\n", namespaceName, className, baseClass);
 		List<String> fields = scope .();
 		defer
 		{

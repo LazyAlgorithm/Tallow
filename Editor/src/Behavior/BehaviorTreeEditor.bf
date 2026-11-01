@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Behavior tab: a canvas for behaviour trees (.tbt files), drawn with the same nodes, links and controls as
 /// the Graph tab. Flow runs downward: a node's parent connects to its top, its children to its bottom, and

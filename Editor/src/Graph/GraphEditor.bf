@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.IO;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// The Graph tab: a zoomable node canvas for visual scripts (.tgraph files).
 ///   Right-click the canvas to add a node (type to search), drag from a pin to another pin to connect them,

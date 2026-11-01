@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using Bgfx;
-using Tessera;
+using Tallow;
 
-namespace Tessera.Editor;
+namespace Tallow.Editor;
 
 /// Test switch --model-test: builds models the way the Model window does, checks the results, undo and redo and
 /// picking in the Scene view, then logs MODEL-TEST PASS or FAIL and leaves a model in edit mode for a screenshot.
