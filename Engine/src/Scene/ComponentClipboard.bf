@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// A value snapshot: no ownership of the copied component or its objects.
 class ComponentClipboard

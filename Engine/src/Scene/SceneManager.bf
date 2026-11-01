@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Scenes while the game runs: bring another scene's contents into the one that is playing, take them out again,
 /// or change to a different scene altogether.

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Saves and loads the game. Mark the fields to keep with [Saved], then:
 ///

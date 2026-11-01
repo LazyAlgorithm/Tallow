@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Reflection;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Put [Component] on every component class. It keeps the type, its constructor and its fields
 /// in the reflection data so the class can be created by name when a scene loads, listed in

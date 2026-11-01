@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Keeps this object's place in saves: its position (each axis can be left out), rotation and scale, relative to its
 /// parent, and with a Rigidbody or Character Controller on the object, how it is moving, so that something falling

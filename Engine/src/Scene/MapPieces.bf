@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Tessera;
+using Tallow;
 
-namespace Tessera;
+namespace Tallow;
 
 /// The built-in pieces of the editor's Map Builder and of a game's own map editor, in every project: the primitives,
 /// and walls and floors for blocking out a level.

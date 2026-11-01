@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Environment settings saved with a scene: ambient light, sky and fog.
 class SceneEnvironment

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Prefabs are saved object trees (.tprefab files) that can be stamped into any scene.
 static class Prefab

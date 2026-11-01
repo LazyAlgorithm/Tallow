@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Reflection;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Marks a field to be kept in saves:
 ///
@@ -115,11 +115,11 @@ static class SaveCodegen
 		}
 		let code = scope String();
 		if (isComponent || isAsset || baseSaved)
-			code.Append("public override void SaveFields(Tessera.SaveIO io)\n{\n\tbase.SaveFields(io);\n");
+			code.Append("public override void SaveFields(Tallow.SaveIO io)\n{\n\tbase.SaveFields(io);\n");
 		else if (isStruct)
-			code.Append("public void SaveFields(Tessera.SaveIO io) mut\n{\n");
+			code.Append("public void SaveFields(Tallow.SaveIO io) mut\n{\n");
 		else
-			code.Append("public virtual void SaveFields(Tessera.SaveIO io)\n{\n");
+			code.Append("public virtual void SaveFields(Tallow.SaveIO io)\n{\n");
 		for (let field in owner.GetFields(OwnFields))
 		{
 			if (!(field.GetCustomAttribute<SavedAttribute>() case .Ok(let saved)))

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Tessera;
+namespace Tallow;
 
 /// An entity in a scene: a named Transform with a list of components.
 class GameObject

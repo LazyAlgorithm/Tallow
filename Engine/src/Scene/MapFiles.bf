@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// One map file found by MapFiles: what it says about itself, and anything wrong with it.
 class MapFileInfo
@@ -33,7 +33,7 @@ class MapFileInfo
 	/// Where the map's scene is while it is mounted, as a project path for SceneManager.Load or LoadAdditive.
 	public void ScenePath(String path) => path.AppendF("{}/{}/{}", MapFiles.MountFolder, Id, MapFiles.SceneName);
 
-	/// How many components of a type (its full name, "Tessera.SpawnPoint") the map's scene has.
+	/// How many components of a type (its full name, "Tallow.SpawnPoint") the map's scene has.
 	public int CountComponents(StringView typeName)
 	{
 		int count = 0;

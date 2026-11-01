@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Width-aware numeric access shared by inspector widgets and scene/reload serialization.
 static class FieldNumbers

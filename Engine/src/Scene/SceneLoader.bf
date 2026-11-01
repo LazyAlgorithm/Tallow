@@ -1,6 +1,6 @@
 using System;
 
-namespace Tessera;
+namespace Tallow;
 
 /// Loads a scene in the background without a line of code: for a loading screen, a level streamed in as the player
 /// nears it, or the next level got ready while this one is played.

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 
-namespace Tessera;
+namespace Tallow;
 
 /// One line of a game's MapRules.txt: a map needs at least Count components of a type (or, for a "most" rule, may
 /// have no more than Count), or only those whose field passes a test ("raceOrder >= 0").
@@ -11,7 +11,7 @@ class MapRule
 	public int32 Count;
 	/// A limit ("most") rather than a need.
 	public bool AtMost;
-	/// The component's full name, "Tessera.SpawnPoint".
+	/// The component's full name, "Tallow.SpawnPoint".
 	public String Component = new .() ~ delete _;
 	/// Empty when every component of the type counts.
 	public String Field = new .() ~ delete _;
@@ -39,9 +39,9 @@ class MapRule
 /// project). MapFiles.Find refuses a map that breaks a rule, and the editor warns when such a scene is saved or
 /// exported. One rule a line:
 ///
-///   need 4 Tessera.SpawnPoint "spawn points"
+///   need 4 Tallow.SpawnPoint "spawn points"
 ///   need 2 MyGame.Checkpoint order >= 0 "checkpoints with an order"
-///   most 500 Tessera.Rigidbody "physics items"
+///   most 500 Tallow.Rigidbody "physics items"
 ///   ignore Scenes/MainMenu.tscene
 ///
 /// A field test compares the field's number (a bool is 1 or 0); a component that leaves the field out of the scene

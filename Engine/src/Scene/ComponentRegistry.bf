@@ -3,7 +3,7 @@ using System.Collections;
 using System.Reflection;
 using System.Threading;
 
-namespace Tessera;
+namespace Tallow;
 
 enum FieldKind
 {
