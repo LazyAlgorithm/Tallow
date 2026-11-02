@@ -107,7 +107,7 @@ scope $"its bones are objects under it ({(skinned != null ? skinned.BoneCount : 
 				let tipBone = skinned?.Bone("LeftHandIndex4");
 				if (animator != null && hand != null && tipBone != null)
 				{
-					let before = tipBone.Position;
+					let tipBefore = tipBone.Position;
 					let middleJoint = skinned.Bone("LeftHandIndex3");
 					let middleBefore = middleJoint.Position;
 					let pose = HandPoseOn(animator, hand, true);
@@ -120,9 +120,9 @@ scope $"its bones are objects under it ({(skinned != null ? skinned.BoneCount : 
 						pose.OnValidate();
 						for (int i < 3)
 							IKSystem.Solve(mScene);
-						let moved = (tipBone.Position - before).Length;
-						let handSize = (before - hand.Position).Length;
-						Check(moved > 0.3f * handSize, scope $"a fist curls the first finger ({moved:0.000} of a {handSize:0.000} hand)");
+						let tipMoved = (tipBone.Position - tipBefore).Length;
+						let handSize = (tipBefore - hand.Position).Length;
+						Check(tipMoved > 0.3f * handSize, scope $"a fist curls the first finger ({tipMoved:0.000} of a {handSize:0.000} hand)");
 						// It curls towards the palm (down, for a hand held out palm down).
 						Check(middleJoint.Position.y < middleBefore.y - 0.15f * handSize, scope $"towards the palm ({middleJoint.Position.y - middleBefore.y:0.000})");
 					}

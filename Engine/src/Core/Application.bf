@@ -394,6 +394,7 @@ class Application
 	/// Frees everything the application started (audio, loaders, graphics, the window).
 	public void Shutdown()
 	{
+		Watchdog.EndWithin(8000);
 		if (!mProfileSavePath.IsEmpty && !Profiler.Local.Save(mProfileSavePath))
 			Log.Error(scope $"Could not write the profile {mProfileSavePath}");
 		if (!mProfileReportPath.IsEmpty && !Profiler.Local.SaveReport(mProfileReportPath))

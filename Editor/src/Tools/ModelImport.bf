@@ -35,7 +35,10 @@ class ModelImportSettings
 			value.Trim();
 			switch (key)
 			{
-			case "scale": scale = Math.Max(float.Parse(value) case .Ok(let parsed) ? parsed : 1, 0.0001f);
+			case "scale":
+				scale = 1;
+				if (float.Parse(value) case .Ok(let parsed))
+					scale = Math.Max(parsed, 0.0001f);
 			case "zUp": zUp = value == "1";
 			case "animations": animations = value != "0";
 			case "clips": clips.Set(value);

@@ -12,6 +12,7 @@ namespace Tallow.Launcher;
 /// Opening a project compiles its scripts and starts its editor.
 ///
 /// Command line: --create <folder> [--sample | --showcase]   create a project without the window
+///               --open <folder> [--upgrade]               open a project, moving an older one to this engine
 ///               --open <folder>                build and open a project's editor directly
 ///               --build-project <folder>       compile without opening a window
 class LauncherApp : Application
@@ -21,6 +22,9 @@ class LauncherApp : Application
 	String mExisting = new .() ~ delete _;
 	String mMessage = new .() ~ delete _;
 	String mPendingOpen = new .() ~ delete _;
+	String mUpgradeFrom = new .() ~ delete _;
+	String mUpgradeTo = new .() ~ delete _;
+	bool mUpgradePrompt;
 	String mEngineRoot = new .() ~ delete _;
 	ProjectTemplate mTemplate = .Sample;
 	/// Tools Tallow needs that were not found, when the launcher started.
@@ -100,6 +104,75 @@ class LauncherApp : Application
 		mPendingOpen.Set(path);
 		mOpenCountdown = 3;
 		SetMessage(scope $"Compiling {path} ..." , false);
+	}
+
+	/// Asks the engine's version tool about a project: "same", or "upgrade"/"newer" with the two versions after it.
+	static void CheckProjectVersion(StringView path, String verdict, String from, String to)
+	{
+		verdict.Set("same");
+		let root = scope String();
+		if (!ProjectGenerator.FindEngineRoot(root))
+			return;
+		Directory.CreateDirectory(scope $"{path}/.tallow-reload").IgnoreError();
+		let output = scope $"{path}/.tallow-reload/version-check.txt";
+		if (RunVersionTool("check", path, root, output) != 0)
+			return;
+		let text = scope String();
+		if (File.ReadAllText(output, text) case .Err)
+			return;
+		text.Trim();
+		int part = 0;
+		for (let word in text.Split('\t'))
+		{
+			(part == 0 ? verdict : (part == 1 ? from : to)).Set(word);
+			part++;
+		}
+	}
+
+	static int RunVersionTool(StringView action, StringView path, StringView root, StringView output)
+	{
+		let command = scope String();
+		command.AppendF("{} ", Terminal.Python);
+		Terminal.Quote(scope $"{root}/tools/engine_versions.py", command);
+		command.AppendF(" {} ", action);
+		Terminal.Quote(path, command);
+		command.Append(" ");
+		Terminal.Quote(root, command);
+		command.Append(" > ");
+		Terminal.Quote(output, command);
+		return Terminal.Run(command);
+	}
+
+	/// The command-line version of the upgrade warning: --upgrade says yes to it.
+	public static bool PrepareProject(StringView path, bool upgrade, String error)
+	{
+		Toolchain.Apply();
+		let verdict = scope String();
+		let from = scope String();
+		let to = scope String();
+		CheckProjectVersion(path, verdict, from, to);
+		if (verdict == "same")
+			return true;
+		if (verdict == "upgrade" && upgrade)
+			return UpgradeProject(path, error);
+		if (verdict == "upgrade")
+			error.Set(scope $"This project uses {from}, which is not installed. Add --upgrade to move it to {to}.");
+		else
+			error.Set(scope $"This project needs a newer engine ({from}) than this one ({to}).");
+		return false;
+	}
+
+	/// Moves a project to the engine this launcher belongs to.
+	public static bool UpgradeProject(StringView path, String error)
+	{
+		Toolchain.Apply();
+		let root = scope String();
+		if (!ProjectGenerator.FindEngineRoot(root) || RunVersionTool("upgrade", path, root, scope $"{path}/.tallow-reload/version-check.txt") != 0)
+		{
+			error.Set(scope $"{path} could not be upgraded to this Tallow engine.");
+			return false;
+		}
+		return true;
 	}
 
 	/// Builds the project and starts its editor. Returns false with the compiler output on failure.
@@ -194,6 +267,11 @@ class LauncherApp : Application
 		{
 			ImGui.OpenPopup("Development tools required");
 			DrawSetupDialog();
+		}
+		if (mUpgradePrompt)
+		{
+			ImGui.OpenPopup("Project from another version");
+			DrawUpgradeDialog();
 		}
 		ImGui.tn_imgui_render(250);
 		if (mSetupPending)
@@ -363,7 +441,7 @@ class LauncherApp : Application
 		ImGui.InputText("##existing", mExisting);
 		if (ImGui.Button("Add and Open", .(-1, 28)))
 		{
-			if (File.Exists(scope $"{mExisting}/project.tallow"))
+			if (File.Exists(scope $"{mExisting}/project.tallow") || File.Exists(scope $"{mExisting}/project.tessera"))
 				RequestOpen(mExisting);
 			else
 				SetMessage("That folder does not contain a project.tallow file.", true);
@@ -414,11 +492,59 @@ class LauncherApp : Application
 
 	void OpenPendingProject()
 	{
+		let verdict = scope String();
+		Toolchain.Apply();
+		CheckProjectVersion(mPendingOpen, verdict, mUpgradeFrom, mUpgradeTo);
+		if (verdict == "upgrade")
+		{
+			mUpgradePrompt = true;
+			return;
+		}
+		if (verdict == "newer")
+		{
+			SetMessage(scope $"This project needs a newer engine ({mUpgradeFrom}) than this one ({mUpgradeTo}). Install it in Engine Manager.", true);
+			return;
+		}
+		FinishOpen();
+	}
+
+	void FinishOpen()
+	{
 		let error = scope String();
 		if (OpenProject(mPendingOpen, error))
 			Running = false;
 		else
 			SetMessage(error, true);
+	}
+
+	/// The warning shown before a project from another engine version is moved to this one.
+	void DrawUpgradeDialog()
+	{
+		if (!ImGui.BeginPopupModal("Project from another version", null, ImGui.WindowFlags.AlwaysAutoResize))
+			return;
+		ImGui.Text(scope $"This project was last used with {mUpgradeFrom}, which is not installed.");
+		ImGui.Text(scope $"It can be opened by upgrading it to {mUpgradeTo}.");
+		ImGui.Spacing();
+		ImGui.Text("Scripts may need changes after upgrading, and older engines may not open it again.");
+		ImGui.Text("Files that change are copied to .tallow-upgrade-backup in the project folder.");
+		ImGui.Spacing();
+		if (ImGui.Button("Upgrade and Open", .(190, 36)))
+		{
+			mUpgradePrompt = false;
+			ImGui.CloseCurrentPopup();
+			let error = scope String();
+			if (UpgradeProject(mPendingOpen, error))
+				mOpenCountdown = 3;
+			else
+				SetMessage(error, true);
+		}
+		ImGui.SameLine();
+		if (ImGui.Button("Cancel", .(140, 36)))
+		{
+			mUpgradePrompt = false;
+			ImGui.CloseCurrentPopup();
+		}
+		ImGui.EndPopup();
 	}
 
 	void MissingMessage(String text)
@@ -486,7 +612,8 @@ class Program
 #endif
 				Gfx.LocateEngineAssets();
 				let error = scope String();
-				if (!LauncherApp.OpenProject(args[i + 1], error, args[i] == "--build-project"))
+				if (!LauncherApp.PrepareProject(args[i + 1], args.Contains("--upgrade"), error) ||
+					!LauncherApp.OpenProject(args[i + 1], error, args[i] == "--build-project"))
 				{
 					Console.WriteLine(error);
 					return 1;

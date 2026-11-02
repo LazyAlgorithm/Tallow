@@ -127,7 +127,6 @@ extension EditorApp
 		int reloaded = 0;
 		if (mScene != null && mPlay != .Edit)
 		{
-			let resolved = scope String();
 			for (let component in mScene.Components)
 			{
 				let runner = component as BehaviorTreeRunner;

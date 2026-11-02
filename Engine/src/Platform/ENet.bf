@@ -12,6 +12,18 @@ static class ENet
 		public uint16 port;
 	}
 
+	/// The start of ENet's peer: as far as its address.
+	[CRepr] public struct PeerStart
+	{
+		public void*[3] links;
+		public uint16 outgoingPeerId;
+		public uint16 incomingPeerId;
+		public uint32 connectId;
+		public uint8 outgoingSessionId;
+		public uint8 incomingSessionId;
+		public Address address;
+	}
+
 	[CRepr] public struct Packet
 	{
 		public uint referenceCount;

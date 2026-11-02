@@ -151,7 +151,11 @@ class ScriptStateMigration
 			{
 				if (field.name == reference.field && field.kind == .ObjectReference)
 				{
-					ComponentRegistry.AssignReference(field, target.GameObject, target.GameObject.Components.IndexOf(target));
+					// An engine proxy (Foliage's renderer) belongs to no object, so it cannot be looked up on one.
+					if (target.GameObject == null)
+						*(Object*)field.ptr = target;
+					else
+						ComponentRegistry.AssignReference(field, target.GameObject, target.GameObject.Components.IndexOf(target));
 					break;
 				}
 			}

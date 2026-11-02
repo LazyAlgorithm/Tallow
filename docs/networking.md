@@ -185,3 +185,15 @@ The session's **Transport** chooses how machines reach each other: **Direct** (U
 ## Deciding who may play
 
 The server can send a client away: `Scene.Network.Kick(clientId)`. Their objects go as if they had left, and on their machine the session reports that it is no longer connected. Use it for private matches (check who joined in `OnClientJoined`, or when they send their name) and for removing a player. To tell them why, send your own message a moment before: what is sent in the same instant may not arrive.
+
+## Host migration
+
+Set `HostMigration = true` on the `NetworkManager` (on every machine, before starting) and a session survives its host leaving. The server keeps every client up to date with a roster. When the host goes, every machine reads the same roster: the first player on it who can be reached becomes the host and keeps the scene, and the others reconnect and take back their client ids and objects. The departed host's own player object is removed; bots and the rest of the world stay.
+
+It is off by default because a game has to rebuild whatever only its server held:
+
+- `OnBecameHost` runs on the machine that took over. Recreate server-only state there: timers, callbacks such as `OnClientJoined`, AI that only ran on the server.
+- `OnHostChanged(address)` runs on every remaining machine, with the new host's Steam ID or address (empty on the new host).
+- `IsMigrating` is true from losing the host until play resumes. `IsConnected` stays true meanwhile; if nobody can take over it goes false, so handle that as a lost connection.
+
+Over Steam this needs nothing further. Over Direct, the new host opens the same port, so players other than the new host can only return if that port is reachable: on a LAN, or forwarded. Each candidate gets six seconds before the next is tried. States a late joiner would normally be sent (`NetworkSync` replays) are not carried over to the new host.

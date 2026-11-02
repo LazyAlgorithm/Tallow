@@ -635,7 +635,7 @@ class Exhibition : NetworkBehaviour
 		talk.onlyOwnerChooses = false;
 		a = exhibits[17].at;
 		o = Orb("Timeline sculpture", a + Vector3(0, 2, 0), 1.2f, .(1, 0.65f, 0.2f));
-		let pedestal = Box("Timeline pedestal", a + Vector3(0, 0.5f, 0), .(4, 1, 4), Ink);
+		Box("Timeline pedestal", a + Vector3(0, 0.5f, 0), .(4, 1, 4), Ink);
 		sequence = Scene.CreateGameObject("Sequence player").AddComponent<SequencePlayer>();
 		sequence.sequence.Set("Sequences/sculpture.tsequence");
 		sequence.useCameraShots = false;

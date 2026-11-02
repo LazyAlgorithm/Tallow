@@ -590,6 +590,8 @@ class SteamTransport : NetTransport
 		Close();
 	}
 
+	public override void LocalAddress(String address) => address.AppendF("{}", Steam.UserId);
+
 	bool Open()
 	{
 		if (mOpen)

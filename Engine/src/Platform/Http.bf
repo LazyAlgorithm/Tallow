@@ -202,7 +202,9 @@ static class ZipFile
 			let nameLength = (int)U16(data, at + 28);
 			let extraLength = (int)U16(data, at + 30);
 			let commentLength = (int)U16(data, at + 32);
+#if !BF_PLATFORM_WINDOWS
 			let external = U32(data, at + 38);
+#endif
 			let local = (int)U32(data, at + 42);
 			let name = scope String((char8*)data.Ptr + at + ZipEntrySize, nameLength);
 			name.Replace('\\', '/');

@@ -12,6 +12,8 @@ extension NetworkManager
 		client.id = mNextClientId++;
 		client.peer = peer;
 		mClients.Add(client);
+		PeerAddressOf(client);
+		mRosterIn = 0;
 		mWriter.Clear();
 		mWriter.Write(MsgWelcome);
 		mWriter.Write(client.id);
@@ -231,6 +233,8 @@ extension NetworkManager
 		if (IsServer)
 		{
 			mTick++;
+			ShareRoster();
+			CloseOpenPlaces();
 			if (mTick % (uint32)Math.Max(SnapshotInterval, 1) == 0)
 			{
 				SendSnapshots();

@@ -45,6 +45,24 @@ static class Watchdog
 #endif
 	}
 
+	/// From the moment a program starts closing: a shutdown that stalls (a driver, an audio device, Steam) must not
+	/// leave an invisible process holding the game's memory, so after some seconds it ends at once.
+	public static void EndWithin(int milliseconds)
+	{
+#if !BF_PLATFORM_WASM
+		let thread = new Thread(new () =>
+			{
+				Thread.Sleep((int32)milliseconds);
+				Log.Warning("Closing took too long; ending the process.");
+				_exit(0);
+			});
+		thread.IsBackground = true;
+		thread.Start();
+#endif
+	}
+
+	[CLink] static extern void _exit(int32 code);
+
 	public static void Stop()
 	{
 		sStop = true;

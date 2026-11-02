@@ -332,6 +332,8 @@ class NetworkManager
 	{
 		public int32 id;
 		public void* peer;
+		/// How other machines would reach this one, for the roster.
+		public String address = new .() ~ delete _;
 		public List<(uint32 tick, NetInput input, double view)> queue = new .() ~ delete _;
 		/// The server tick this player's machine was showing them when they gave the controls now in use.
 		public double view;
@@ -566,6 +568,7 @@ class NetworkManager
 	public bool StartServer(uint16 port, bool hostAlsoPlays)
 	{
 		Stop();
+		ForgetRoster();
 		mTransport = NetTransport.Create(Transport);
 		if (let direct = mTransport as ENetTransport)
 			direct.LosslessCompression = LosslessCompression;
@@ -576,6 +579,7 @@ class NetworkManager
 		}
 		mMode = hostAlsoPlays ? .Host : .Server;
 		mConnected = true;
+		mSessionPort = port;
 		LocalClientId = hostAlsoPlays ? 0 : -1;
 		NetworkSync.Prepare(this);
 		RegisterSceneIdentities();
@@ -589,6 +593,7 @@ class NetworkManager
 	public bool StartClient(StringView address, uint16 port)
 	{
 		Stop();
+		ForgetRoster();
 		mTransport = NetTransport.Create(Transport);
 		if (let direct = mTransport as ENetTransport)
 			direct.LosslessCompression = LosslessCompression;
@@ -598,6 +603,7 @@ class NetworkManager
 			return false;
 		}
 		mMode = .Client;
+		mSessionPort = port;
 		LocalClientId = -1;
 		NetworkSync.Prepare(this);
 		RegisterSceneIdentities();
@@ -625,6 +631,8 @@ class NetworkManager
 			Time.TickScale = 1;
 		mMode = .Offline;
 		mConnected = false;
+		mMigrating = false;
+		mHostGone = false;
 	}
 
 	void RegisterSceneIdentities()
@@ -806,6 +814,9 @@ class NetworkManager
 
 	void Send(void* peer, bool reliable)
 	{
+		// Nothing to send to between hosts.
+		if (peer == null || mTransport == null)
+			return;
 		mStatSent += (int32)mWriter.Data.Count;
 		mStatPacketsSent++;
 		Span<uint8> payload = mWriter.Data;
@@ -883,6 +894,8 @@ class NetworkManager
 
 	void Poll()
 	{
+		if (mMigrating)
+			UpdateMigration();
 		if (mTransport == null)
 			return;
 		ReleaseDelayed();
@@ -892,16 +905,37 @@ class NetworkManager
 		{
 			Dispatching = null;
 		}
-		while (mTransport != null && mTransport.Poll(out event))
+		while (mTransport != null && !mHostGone && mTransport.Poll(out event))
 		{
 			switch (event.kind)
 			{
 			case .Connected:
 				if (IsServer)
-					OnClientConnected(event.peer);
+				{
+					if (!HoldForReclaim(event.peer))
+						OnClientConnected(event.peer);
+				}
+				else if (mMigrating)
+				{
+					mWriter.Clear();
+					mWriter.Write(MsgReclaim);
+					mWriter.Write(LocalClientId);
+					Send(mServerPeer, true);
+					mReclaimSent = true;
+				}
 			case .Disconnected:
 				if (IsServer)
+				{
+					mWaitingPeers.Remove(event.peer);
 					OnClientDisconnected(event.peer);
+				}
+				else if (mMigrating)
+				{
+					mServerPeer = null;
+					mReclaimSent = false;
+				}
+				else if (HostMigration && mConnected && mRoster.Count > 0)
+					mHostGone = true;
 				else
 				{
 					Log.Warning("Disconnected from server.");
@@ -922,7 +956,14 @@ class NetworkManager
 				if (IsServer)
 				{
 					let client = FindClient(event.peer);
-					if (client != null && type == MsgInput)
+					if (type == MsgReclaim)
+						ReadReclaim(event.peer, ref reader);
+					else if (client != null && type == MsgAddress)
+					{
+						client.address.Clear();
+						reader.ReadString(client.address);
+					}
+					else if (client != null && type == MsgInput)
 						ReadInputs(client, ref reader);
 					else if (client != null && type == MsgCustom)
 					{
@@ -936,6 +977,8 @@ class NetworkManager
 					switch (type)
 					{
 					case MsgWelcome: ReadWelcome(ref reader);
+					case MsgRoster: ReadRoster(ref reader);
+					case MsgResume: ReadResume();
 					case MsgSpawn: ReadSpawn(ref reader);
 					case MsgDespawn: ReadDespawn(ref reader);
 					case MsgSnapshot: ReadSnapshot(ref reader);
@@ -954,5 +997,7 @@ class NetworkManager
 				}
 			}
 		}
+		if (mHostGone)
+			BeginMigration();
 	}
 }

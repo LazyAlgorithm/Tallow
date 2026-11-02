@@ -34,10 +34,10 @@ extension EditorApp
 			changed |= ImGui.SliderFloat("Render Scale", ref v.renderScale, 0.25f, 1, "%.2f");
 			changed |= ImGui.Checkbox("Antialias", ref v.antialias);
 			changed |= ImGui.Checkbox("Shadows", ref v.shadows);
-			var sizeIndex = (float)Math.Round(Math.Log(v.shadowMapSize / 512.0) / Math.Log(2));
-			if (ImGui.SliderFloat(scope String()..AppendF("Shadow Map ({})###shadowmap", v.shadowMapSize).CStr(), ref sizeIndex, 0, 4, ""))
+			var shadowSlider = (float)Math.Round(Math.Log(v.shadowMapSize / 512.0) / Math.Log(2));
+			if (ImGui.SliderFloat(scope String()..AppendF("Shadow Map ({})###shadowmap", v.shadowMapSize).CStr(), ref shadowSlider, 0, 4, ""))
 			{
-				v.shadowMapSize = (int32)(512 << (int32)Math.Round(sizeIndex));
+				v.shadowMapSize = (int32)(512 << (int32)Math.Round(shadowSlider));
 				changed = true;
 			}
 			changed |= ImGui.SliderFloat("Shadow Distance", ref v.shadowDistance, 0.25f, 3, "x%.2f");

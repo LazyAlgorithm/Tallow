@@ -695,7 +695,7 @@ class SoftBody : Component
 		{
 			let dash = word.IndexOf('-');
 			let first = int.Parse(dash < 0 ? word : word.Substring(0, dash)) case .Ok(let value) ? value : -1;
-			let last = dash < 0 ? first : (int.Parse(word.Substring(dash + 1)) case .Ok(let value) ? value : -1);
+			let last = dash < 0 ? first : (int.Parse(word.Substring(dash + 1)) case .Ok(let lastValue) ? lastValue : -1);
 			for (int i = Math.Max(first, 0); i <= last && i < count; i++)
 			{
 				if (!output.Contains((uint32)i))

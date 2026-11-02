@@ -314,6 +314,7 @@ extension ScriptReload
 		ids.Count = count;
 		List<TypeUpdate> updates = scope .();
 		List<Type> added = scope .();
+		HashSet<int> claimed = scope .();
 		for (int i < count)
 		{
 			if (i == 0)
@@ -322,7 +323,7 @@ extension ScriptReload
 				continue;
 			}
 			let type = table[i];
-			int found = type != null ? residentNames.IndexOf(names[i]) : -1;
+			int found = type != null ? FindResident(names[i], kinds[i], type, residentNames, claimed) : -1;
 			if (found < 0)
 			{
 				found = sCanonicalTypes.Count + added.Count;
@@ -395,6 +396,25 @@ extension ScriptReload
 			var raw = type;
 			name.AppendF("|{}", (*(UnspecializedGenericType*)&raw).[Friend]mGenericParamCount);
 		}
+	}
+
+	/// The resident type a candidate type stands for, or -1 when it is new. A generic argument without reflection data
+	/// prints as "???", so specializations that differ only in that argument (each lambda given to Sort makes its own
+	/// Sorter) share a key: those are told apart by size, and each resident type is used once.
+	static int FindResident(StringView name, StringView kind, Type type, List<String> residentNames, HashSet<int> claimed)
+	{
+		if (!name.Contains("???"))
+			return residentNames.IndexOf(scope String(name));
+		for (int i < residentNames.Count)
+		{
+			if (residentNames[i] != name || claimed.Contains(i))
+				continue;
+			if (InstanceKind(kind) && sCanonicalTypes[i].InstanceSize != RawInstance(type).[Friend]mInstSize)
+				continue;
+			claimed.Add(i);
+			return i;
+		}
+		return -1;
 	}
 
 	/// The key of every type in the running program, by type id (empty where there is none).

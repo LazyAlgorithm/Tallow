@@ -45,6 +45,10 @@ abstract class NetTransport
 	/// Pushes queued packets out now.
 	public abstract void Flush();
 	public abstract void Close();
+	/// How another machine would reach this peer, for host migration. Empty when the peer has to say itself.
+	public virtual void PeerAddress(void* peer, String address) {}
+	/// How another machine would reach this one, when the transport can name it.
+	public virtual void LocalAddress(String address) {}
 
 	public static NetTransport Create(NetworkTransportKind kind)
 	{
@@ -77,6 +81,12 @@ class ENetTransport : NetTransport
 	bool ConfigureCompression() => !LosslessCompression || ENet.enet_host_compress_with_range_coder(mHost) == 0;
 	void* mHost;
 	ENet.Packet* mHeld;
+
+	public override void PeerAddress(void* peer, String address)
+	{
+		let host = ((ENet.PeerStart*)peer).address.host;
+		address.AppendF("{}.{}.{}.{}", host & 0xFF, (host >> 8) & 0xFF, (host >> 16) & 0xFF, (host >> 24) & 0xFF);
+	}
 
 	public this()
 	{

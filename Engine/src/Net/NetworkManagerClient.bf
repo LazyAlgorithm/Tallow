@@ -40,6 +40,7 @@ extension NetworkManager
 		mTargetDepth = CalmDepth;
 		for (let identity in mIdentities)
 			identity.Predicted = false;
+		SendAddress();
 		Log.Info(scope $"Connected as client {LocalClientId}.");
 	}
 
