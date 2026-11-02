@@ -92,6 +92,11 @@ class ReflectionProbe : Component
 	/// shaders work it out for each pixel).
 	public float Weight(Vector3 point) => 1 - Math.Clamp(Outside(point) / Math.Max(blendDistance, 0.001f), 0, 1);
 
+	public override void OnUnregister()
+	{
+		Reflections.Forget(this);
+	}
+
 	public override void OnDrawGizmos(bool selected)
 	{
 		let tint = selected ? Color(0.4f, 0.85f, 1.0f, 1) : Color(0.3f, 0.7f, 0.9f, 0.5f);
@@ -242,6 +247,17 @@ static class Reflections
 
 	/// The probes in the scene being drawn that are ready, for RenderView to choose from.
 	public static List<ReflectionProbe> Ready = new .() ~ delete _;
+
+	/// A probe is going away: the capture under way, and the list of ready probes, must not keep it.
+	public static void Forget(ReflectionProbe probe)
+	{
+		Ready.Remove(probe);
+		if (sJobProbe == probe)
+		{
+			sJobProbe = null;
+			sJobRunning = false;
+		}
+	}
 
 	static void EnsureCreated()
 	{

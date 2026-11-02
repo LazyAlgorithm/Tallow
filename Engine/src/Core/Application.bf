@@ -384,6 +384,7 @@ class Application
 			SDL.SDL_DelayNS(1000000);
 			Profiler.End();
 		}
+		Material.FreeUnused();
 		// The GPU's times (bgfx's latest finished frame) and every module's counters go in with the frame.
 		Profiler.EndFrame(Headless ? 0 : ProfilerModules.ReadGpu());
 

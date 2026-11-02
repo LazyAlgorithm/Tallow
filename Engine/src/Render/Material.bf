@@ -456,6 +456,17 @@ class Material
 	int32 mTextureVersion = -1;
 
 	static Dictionary<String, Material> sCache = new .() ~ DeleteDictionaryAndKeysAndValues!(_);
+	/// Made with Create, and how many of those there are: only these are ever freed.
+	bool mMadeInCode;
+	float mLastAsked;
+	static int sMadeInCode;
+	/// Sweep once this many exist. Doubles past whatever is still in use, so a sweep stays rare.
+	static int sSweepAt = MinimumSweep;
+	const int MinimumSweep = 256;
+	/// How long a material nothing draws with is kept after Create last gave it out.
+	const float SweepGrace = 60;
+	/// Off in the editor, whose windows hold previews no scene knows about.
+	public static bool FreeUnusedMaterials = true;
 
 	/// The custom shader this material uses, or null for the standard one (or when the file is missing).
 	public ShaderAsset Shader
@@ -741,13 +752,67 @@ class Material
 	}
 
 	/// Registers a material made in code under a project path, as if it had been loaded from there.
+	///
+	/// A game that makes unbounded names (one per spawned object) does not fill memory: past 256 of them, those no
+	/// renderer in the scene uses and that Create has not returned for a minute are freed. So give a material to a
+	/// renderer by name, or call Create again for it, rather than keeping only the pointer.
 	public static Material Create(StringView materialPath)
 	{
 		if (sCache.TryGetValueAlt(materialPath, let cached))
+		{
+			cached.mLastAsked = Time.RealTime;
 			return cached;
+		}
 		let material = new Material();
 		material.path.Set(materialPath);
+		material.mMadeInCode = true;
+		material.mLastAsked = Time.RealTime;
 		sCache[new String(materialPath)] = material;
+		sMadeInCode++;
 		return material;
+	}
+
+	/// How many materials are held, for tests and the profiler.
+	public static int CachedCount => sCache.Count;
+
+	/// Frees what Create made and nothing uses any more. Runs between frames, when no draw list holds a material.
+	public static void FreeUnused()
+	{
+		if (sMadeInCode < sSweepAt || !FreeUnusedMaterials || Scene.Active == null)
+			return;
+		let used = scope HashSet<Material>();
+		for (let component in Scene.Active.ComponentsOfType(typeof(MeshRenderer)))
+		{
+			let renderer = (MeshRenderer)component;
+			if (renderer.SharedMaterial != null)
+				used.Add(renderer.SharedMaterial);
+			if (renderer.RuntimeParts != null)
+			{
+				for (let part in renderer.RuntimeParts)
+				{
+					if (part.material != null)
+						used.Add(part.material);
+				}
+			}
+		}
+		for (let component in Scene.Active.ComponentsOfType(typeof(Foliage)))
+			used.Add(((Foliage)component).ActiveMaterial);
+		// A Skinned Mesh Renderer names its materials, and may not have looked them up yet.
+		let names = scope String();
+		for (let component in Scene.Active.ComponentsOfType(typeof(SkinnedMeshRenderer)))
+			names.Append(((SkinnedMeshRenderer)component).materials, ";");
+		for (var entry in sCache)
+		{
+			let material = entry.value;
+			if (!material.mMadeInCode || used.Contains(material) || Time.RealTime - material.mLastAsked < SweepGrace)
+				continue;
+			if (names.Contains(entry.key))
+				continue;
+			delete entry.key;
+			delete material;
+			@entry.Remove();
+			sMadeInCode--;
+		}
+		sSweepAt = Math.Max(MinimumSweep, sMadeInCode * 2);
 	}
 }

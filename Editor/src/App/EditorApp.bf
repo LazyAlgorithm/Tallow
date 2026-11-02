@@ -83,6 +83,7 @@ class EditorApp : Application
 
 	public this()
 	{
+		Material.FreeUnusedMaterials = false;
 		// The window is the editor's; a game played in it cannot take the whole screen.
 		GameWindow.Allowed = false;
 		StartMaximized = true;

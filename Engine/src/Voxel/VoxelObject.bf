@@ -118,7 +118,8 @@ class VoxelObject : Component
 
 	public override void OnRegister()
 	{
-		if (!mCustom)
+		// A piece that is breaking off is given its grid by SpawnPiece.
+		if (!mCustom && !sMakingPiece)
 			Fill();
 		Rebuild();
 	}
@@ -143,6 +144,7 @@ class VoxelObject : Component
 
 	int32 mShapeHash;
 	bool mAttachPending;
+	static bool sMakingPiece;
 	/// Ids of the pieces that broke off this object, so a reset can clean them up.
 	List<uint32> mPieces = new .() ~ delete _;
 
@@ -760,16 +762,16 @@ class VoxelObject : Component
 			if (label == largest)
 				continue;
 			if (sizes[label] >= minimumPieceSize)
-				SpawnPiece(labels, label);
-			for (int i < count)
-			{
-				if (labels[i] == label)
-					mDensity[i] = -127;
-			}
+				SpawnPiece(labels, label, sizes[label]);
+		}
+		for (int i < count)
+		{
+			if (labels[i] != 0 && labels[i] != largest)
+				mDensity[i] = -127;
 		}
 	}
 
-	void SpawnPiece(int32[] labels, int32 label)
+	void SpawnPiece(int32[] labels, int32 label, int32 solid)
 	{
 		let piece = Scene.CreateGameObject("Fragment");
 		piece.Transient = true;
@@ -778,8 +780,20 @@ class VoxelObject : Component
 		piece.Transform.LocalScale = Transform.LocalScale;
 		let source = GetComponent<MeshRenderer>();
 		// Renderer first, so the piece's mesh is attached (and its collider can be built) immediately.
-		piece.AddComponent<MeshRenderer>();
+		let renderer = piece.AddComponent<MeshRenderer>();
+		if (source != null)
+		{
+			renderer.roughness = source.roughness;
+			renderer.metallic = source.metallic;
+			renderer.color = source.color;
+			renderer.flatShading = source.flatShading;
+			renderer.texture.Set(source.texture);
+			// The piece is made of the same stuff: same material outside, and so the same inside.
+			renderer.material.Set(source.material);
+		}
+		sMakingPiece = true;
 		let voxels = piece.AddComponent<VoxelObject>();
+		sMakingPiece = false;
 		voxels.shape = shape;
 		voxels.mesh.Set(mesh);
 		voxels.resolution = resolution;
@@ -802,41 +816,21 @@ class VoxelObject : Component
 			mSurface.users++;
 		}
 		let count = mSamples * mSamples * mSamples;
+		voxels.mSamples = mSamples;
+		voxels.mDensity = new int8[count];
+		voxels.mCarved = new bool[count];
 		for (int i < count)
 		{
 			// Neighbours of the piece keep their (negative) density so its surface stays where it was.
 			voxels.mDensity[i] = labels[i] == label ? mDensity[i] : (mDensity[i] > 0 ? (int8) - 127 : mDensity[i]);
 			voxels.mCarved[i] = mCarved[i];
 		}
+		voxels.Rebuild();
 		piece.AddComponent<ConvexCollider>();
 		let body = piece.AddComponent<Rigidbody>();
-		body.mass = Math.Max(0.2f, CountLabel(labels, label) * 0.02f);
+		body.mass = Math.Max(0.2f, solid * 0.02f);
 		// In multiplayer every machine breaks this piece off at the same moment; from here its motion is shared and
 		// it can be carved in turn.
 		NetworkSync.ShareFragment(piece);
-		voxels.Rebuild();
-		let renderer = piece.GetComponent<MeshRenderer>();
-		if (renderer != null && source != null)
-		{
-			renderer.roughness = source.roughness;
-			renderer.metallic = source.metallic;
-			renderer.color = source.color;
-			renderer.flatShading = source.flatShading;
-			renderer.texture.Set(source.texture);
-			// The piece is made of the same stuff: same material outside, and so the same inside.
-			renderer.material.Set(source.material);
-			voxels.Rebuild();
-		}
-	}
-
-	static float CountLabel(int32[] labels, int32 label)
-	{
-		int32 n = 0;
-		for (let l in labels)
-		{
-			if (l == label)
-				n++;
-		}
-		return n;
 	}
 }
