@@ -1,15 +1,15 @@
-# Exhibition Campus sample
+# Tallow Gallery
 
-Create **Exhibition Campus** in Tallow's new-project window, or run `Tallow --create /path/to/MyCampus --showcase`.
+Create **Tallow Gallery** in Tallow's new-project window, or run `Tallow --create /path/to/MyGallery --showcase`.
 
-Open `src/Scenes/Campus.tscene` in the editor: the complete 24-exhibit campus is saved and editable before Play. Move grouped objects, change components, then save. The Director binds the existing scene without regenerating it. Move the Visitor spawn object to change the entrance. Keep ExhibitStation markers and referenced components when rearranging exhibits. Soft-body meshes, sculpted terrain and rope previews are included.
+Open `src/Scenes/Gallery.tscene` in the editor: every room is a set of ordinary objects you can move, retune or delete. Press Play to walk round it. WASD walks, the mouse looks, Shift hurries, Space jumps, E shoves what you are looking at, Escape frees the mouse.
 
-WASD walks, hold right mouse to look, Shift sprints, Space jumps/swims, E operates an exhibit, R resets it, left mouse pushes/carves, M/Escape opens the directory, Tab toggles overview, and F3 shows diagnostics.
+- **Courtyard**: sun and shadows, a cloth flag in the wind, fire particles, a decal on the paving.
+- **Hall of Reflections**: a polished metal floor and spheres from mirror to brushed steel. Its reflection probe's box is exactly the room, which is what lines reflections up with the walls. See `docs/reflections.md`.
+- **Room of Lights**: orbiting point lights with shadows, a spot light, and emissive tubes through bloom.
+- **Physics Yard**: a crate stack, dominoes and a wrecking ball on a rope.
+- **Pool Garden**: built-in water, grass and bushes that sway, and a walking skinned character.
 
-The directory links to 24 live demonstrations: character movement; materials; lights; decals; rigid bodies; joints/platforms; cloth, jelly and dentable shells; loaded ropes; tiled walking navmesh; flying navigation; voxel destruction; finite/endless water and buoyancy; wind/foliage; animation/skinning; particles; spatial sound; dialogue; sequences; networking; UI/save-load; sculpted terrain; IK; probes/LOD; custom shaders.
+`src/Scripts/Gallery.bf` holds what moves while playing, and the code that first built the scene: empty the scene down to the Gallery object and run with `--author-scene` to build and save it again.
 
-For multiplayer, run the project with `--host --port 27960`, then another instance with `--connect HOST_IP --port 27960`. Visitors can request exhibit actions through the host and see animated character models for other players. New visitors receive shared state and spawned impactors. Use the same build and scene on every machine; static editor assets are not transferred over the network. UDP 27960 must be reachable. Voice is off until explicitly enabled at the multiplayer station. This sample is not a player-capacity or security benchmark.
-
-Build standalone players using File > Build, or `python3 ENGINE/tools/build_player.py PROJECT --output OUTPUT`. Development validation flags: `--self-test --frames 1500`, `--walk-test --frames 2000`; optional `--tour-test` integration checks require a host, an interacting client, and a later `--observer` client. The developer-only `--author-scene` command replaces the scene with its original generated layout; normal startup never calls it.
-
-The rigged character is derived from Quaternius's CC0 asset; see `src/Models/LICENSE.txt`. Other assets are generated for the sample or reused from Tallow's common sample content.
+The rigged character is derived from Quaternius's CC0 asset; see `src/Models/LICENSE.txt`. Other assets are generated for this sample.

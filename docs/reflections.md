@@ -51,6 +51,8 @@ Nothing to send: each machine captures its own probes from its own view of the s
 
 ## Compatibility
 
+A probe captures twice the first time: on the second pass, shiny things in its own view mirror the room rather than the sky.
+
 Scenes, materials and shaders are unchanged and load as before. Shiny and metal surfaces now mirror the sky (a little more light on smooth metals and glossy floors at a grazing angle); rough surfaces look the same. Indoor scenes with metals or polished floors want a probe per room. Custom shaders get reflections through the shared lighting with nothing to change.
 
 ## Limits

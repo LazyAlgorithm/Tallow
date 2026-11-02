@@ -365,7 +365,7 @@ static class ProjectGenerator
 		}
 		if (template == .Showcase && !File.Exists(scope $"{engineRoot}/Editor/templates/showcase/src/Scenes/Campus.tscene"))
 		{
-			error.Set("The Exhibition Campus template is missing from this engine installation.");
+			error.Set("The Tallow Gallery template is missing from this engine installation.");
 			return false;
 		}
 		if (!CreateFolders(folder, error))
@@ -377,7 +377,7 @@ static class ProjectGenerator
 		project.EngineRoot.Set(engineRoot);
 		if (template == .Showcase)
 		{
-			project.StartScene.Set("Scenes/Campus.tscene");
+			project.StartScene.Set("Scenes/Gallery.tscene");
 			project.WindowWidth = 1600;
 			project.WindowHeight = 900;
 			project.EscapeQuits = false;

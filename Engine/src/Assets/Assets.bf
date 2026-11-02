@@ -17,7 +17,7 @@ static class Assets
 	static Dictionary<String, int64> sMissingMeshes = new .() ~ DeleteDictionaryAndKeys!(_);
 	const int64 MissingRetryMicroseconds = 2000000;
 
-	public static readonly StringView[?] BuiltinMeshes = .("builtin:cube", "builtin:sphere", "builtin:capsule", "builtin:cylinder", "builtin:cone", "builtin:plane", "builtin:quad", "builtin:grass", "builtin:bush", "builtin:tree", "builtin:pine");
+	public static readonly StringView[?] BuiltinMeshes = .("builtin:cube", "builtin:sphere", "builtin:sphere_smooth", "builtin:capsule", "builtin:cylinder", "builtin:cone", "builtin:plane", "builtin:quad", "builtin:grass", "builtin:bush", "builtin:tree", "builtin:pine");
 
 	public static void Clear()
 	{
@@ -261,6 +261,7 @@ static class Assets
 			{
 			case "builtin:cube": mesh = Primitives.CreateCube();
 			case "builtin:sphere": mesh = Primitives.CreateSphere();
+			case "builtin:sphere_smooth": mesh = Primitives.CreateSphere(64, 40);
 			case "builtin:capsule": mesh = Primitives.CreateCapsule();
 			case "builtin:cylinder": mesh = Primitives.CreateCylinder();
 			case "builtin:cone": mesh = Primitives.CreateCylinder(16, 0);

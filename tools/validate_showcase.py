@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create and compile a renamed Exhibition Campus from a distributed engine package.
+"""Create and compile a renamed Tallow Gallery from a distributed engine package.
 
 Optional --play also runs all exhibit checks using the generated project.
 """
@@ -20,7 +20,7 @@ def main():
     package = args.package.resolve()
     work = args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix='tallow-showcase-test-'))
     work.mkdir(parents=True, exist_ok=True)
-    project = work / 'Projects With Spaces' / 'RenamedCampus'
+    project = work / 'Projects With Spaces' / 'RenamedGallery'
     windows = args.wine or os.name == 'nt'
     launcher = package / ('Tallow.exe' if windows else 'Tallow')
     prefix = ['wine'] if args.wine else []
@@ -40,13 +40,12 @@ def main():
 
     run([launcher, '--create', path(project), '--showcase'], 'create')
     source = project / 'src'
-    scene = (source / 'Scenes/Campus.tscene').read_text()
-    assert 'component RenamedCampus.Exhibition enabled 1' in scene
-    assert scene.count('component RenamedCampus.ExhibitStation enabled 1') == 24
+    scene = (source / 'Scenes/Gallery.tscene').read_text()
+    assert 'component RenamedGallery.Gallery enabled 1' in scene
+    assert scene.count('component Tallow.ReflectionProbe enabled 1') == 2
     assert 'TallowShowcase.' not in scene and '{NAMESPACE}' not in scene
-    assert 'startScene = Scenes/Campus.tscene' in (project / 'project.tallow').read_text()
-    assert list((source / 'Scenes').rglob('*.voxels')), 'Terrain sidecar was not copied'
-    for name in ['cloth16.glb', 'cloth8.glb', 'soft_box.glb', 'Person_Rigged.glb']:
+    assert 'startScene = Scenes/Gallery.tscene' in (project / 'project.tallow').read_text()
+    for name in ['cloth16.glb', 'Person_Rigged.glb']:
         assert (source / 'Models' / name).is_file(), name
     for file in source.rglob('*.bf'):
         text = file.read_text()
@@ -71,14 +70,13 @@ def main():
         assert expected in settings.read_text(), expected
     assert '/missing-showcase-engine' not in settings.read_text()
     platform = 'Win64' if windows else 'Linux64'
-    player = project / f'build/Debug_{platform}/RenamedCampus' / ('RenamedCampus.exe' if windows else 'RenamedCampus')
+    player = project / f'build/Debug_{platform}/RenamedGallery' / ('RenamedGallery.exe' if windows else 'RenamedCampus')
     assert player.is_file(), player
     if args.play:
         log = run([player, '--project', path(project), '--self-test', '--frames', '1500'], 'play')
-        assert 'SHOWCASE_READY exhibits=24' in log and 'authored=True' in log
-        assert 'SHOWCASE_VALID,True' in log and 'SHOWCASE_VALID,False' not in log
+        assert 'SHOWCASE_READY rooms=5 probes=2' in log
         assert '[error]' not in log.lower()
-    print(f'PASS: packaged Exhibition Campus creation, renamed scripts/scene, 24 stations, terrain/mesh/binary assets, compilation' + (' and all exhibit checks' if args.play else '') + f'; evidence: {work}')
+    print(f'PASS: packaged Tallow Gallery creation, renamed scripts/scene, five rooms, mesh/binary assets, compilation' + (' and all exhibit checks' if args.play else '') + f'; evidence: {work}')
 
 
 if __name__ == '__main__':

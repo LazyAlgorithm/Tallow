@@ -1,3 +1,0 @@
-1
-00:00:00,000 --> 00:00:04,800
-A spatial synthesizer: walk around the speaker and behind the wall.

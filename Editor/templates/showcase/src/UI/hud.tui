@@ -1,0 +1,7 @@
+<panel id="screen">
+ <panel id="plate">
+  <text id="room">Courtyard</text>
+  <text id="about">Walk through the door ahead.</text>
+ </panel>
+ <text id="keys">WASD walk   Mouse look   Shift hurry   Space jump   E shove   Esc free the mouse</text>
+</panel>

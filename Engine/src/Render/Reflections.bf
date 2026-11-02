@@ -45,6 +45,7 @@ class ReflectionProbe : Component
 	bool mCaptured;
 	int32 mLastLevel;
 	bool mWanted = true;
+	bool mSecondPass;
 	float mCapturedAt;
 	// What it looked like when captured: a change to where it is or how it is set captures it again in the editor.
 	int64 mCapturedState;
@@ -148,6 +149,12 @@ class ReflectionProbe : Component
 	{
 		mCaptured = true;
 		mLastLevel = lastLevel;
+		// The first time, shiny things in view could only mirror the sky. Once more, and they mirror this cube.
+		if (!mSecondPass)
+		{
+			mSecondPass = true;
+			mWanted = true;
+		}
 	}
 
 	void ReleaseCube()
@@ -156,6 +163,7 @@ class ReflectionProbe : Component
 			bgfx.destroy_texture(mCube);
 		mCube.idx = uint16.MaxValue;
 		mCaptured = false;
+		mSecondPass = false;
 	}
 }
 

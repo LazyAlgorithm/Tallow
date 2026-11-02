@@ -1,4 +1,0 @@
-tree "Exhibition patrol"
-node 1 root 0 0
-node 2 nav.patrol 0 100 "Patrol route" "2.5" "0.4"
-link 1 2

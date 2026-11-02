@@ -425,7 +425,7 @@ class LauncherApp : Application
 			mTemplate = .Empty;
 		if (ImGui.RadioButton("Voxel sandbox", mTemplate == .Sample))
 			mTemplate = .Sample;
-		if (ImGui.RadioButton("Exhibition Campus (24 interactive exhibits)", mTemplate == .Showcase))
+		if (ImGui.RadioButton("Tallow Gallery (showcase of five rooms)", mTemplate == .Showcase))
 			mTemplate = .Showcase;
 		ImGui.Spacing();
 		if (ImGui.Button("Create Project", .(-1, 32)))
