@@ -4,7 +4,7 @@ using Tallow;
 
 namespace {NAMESPACE};
 
-/// The Tallow Gallery: a courtyard, a hall of reflections, a room of lights and a yard of things to knock over.
+/// The Tallow Gallery: a courtyard, a hall of reflections, a room of lights, a yard of things to knock over and a soft body lab.
 /// The first run of an empty scene builds it; --author-scene then saves it as Scenes/Gallery.tscene, so all of it is
 /// ordinary objects that can be moved in the editor. What is left here is what moves while playing.
 [Component]
@@ -18,22 +18,28 @@ class Gallery : Component
 		public Vector3 min, max;
 	}
 
-	static Room[5] sRooms = .(
+	static Room[6] sRooms = .(
 		.() { name = "Hall of Reflections", about = "Each probe box matches its room, so the walls line up in the floor and in every sphere.", min = .(-14, 0, 1), max = .(14, 9, 19) },
 		.() { name = "Room of Lights", about = "Clustered point lights with shadows, a spot light, and emissive tubes through bloom.", min = .(14, 0, 3), max = .(28, 7, 17) },
 		.() { name = "Physics Yard", about = "Walk into the stack, or press E to shove what you are looking at. The ball hangs on a rope.", min = .(16, 0, -34), max = .(44, 12, -4) },
 		.() { name = "Pool Garden", about = "Built-in water, grass and bushes that sway in the wind, and a character skinned on the GPU.", min = .(-44, 0, -34), max = .(-8, 12, -4) },
-		.() { name = "Courtyard", about = "Sun, shadows, wind in the flag. The Hall of Reflections is straight ahead.", min = .(-8, 0, -34), max = .(16, 12, 1) }
+		.() { name = "Soft Body Lab", about = "Left click to fire balls. Steel shells dent and stay dented, jelly wobbles, cloth folds, and robots path round it all.", min = .(-8, 0, -60), max = .(16, 12, -34) },
+		.() { name = "Courtyard", about = "Sun, shadows, wind in the flag. The Hall of Reflections is ahead, the Soft Body Lab behind you.", min = .(-8, 0, -34), max = .(16, 12, 1) }
 	);
 
 	Transform mWalker;
 	Transform[3] mOrbiters;
 	Light[2] mBraziers;
+	List<NavigationAgent> mRobots = new .() ~ delete _;
+	List<Rigidbody> mBalls = new .() ~ delete _;
+	Rigidbody mFired;
+	Vector3 mFiredVelocity;
 	Visitor mVisitor;
 	UIDocument mHud;
 	int mRoom = -1;
 	float mWalkAngle;
 	uint32 mSeed;
+	int mTestShots;
 
 	// Materials the rooms share.
 	static readonly Color Stone = .(0.62f, 0.6f, 0.56f);
@@ -64,6 +70,8 @@ class Gallery : Component
 			mOrbiters[i] = Scene.Find(scope $"Orbiting light {i}").Transform;
 		for (int i < mBraziers.Count)
 			mBraziers[i] = Scene.Find(scope $"Brazier light {i}").GetComponent<Light>();
+		for (int i < 2)
+			mRobots.Add(Scene.Find(scope $"Patrol robot {i}").GetComponent<NavigationAgent>());
 		let camera = Scene.FindComponent<Camera>();
 		let person = Scene.CreateGameObject("Visitor");
 		person.Transform.Position = .(4, 1.1f, -28);
@@ -79,6 +87,8 @@ class Gallery : Component
 		String value = scope .();
 		if (app.GetArg("--view", value))
 			Stand(SceneSerializer.ParseInt(value));
+		if (app.GetArg("--fire-test", value))
+			mTestShots = SceneSerializer.ParseInt(value);
 		if (app.HasArg("--self-test"))
 			Console.WriteLine(scope $"SHOWCASE_READY rooms={sRooms.Count} probes={Scene.FindComponents<ReflectionProbe>(.. scope .()).Count} objects={Scene.Objects.Count}");
 	}
@@ -88,7 +98,7 @@ class Gallery : Component
 	{
 		(Vector3 at, float yaw, float pitch)[?] places = .(
 			(.(4, 1.1f, -28), 0, 0), (.(0, 1.1f, 3), 0, 6), (.(-12, 1.1f, 3), 50, 6), (.(15, 1.6f, 6), 62, 6),
-			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4));
+			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12));
 		let place = places[Math.Clamp(view, 0, places.Count - 1)];
 		mVisitor.GetComponent<CharacterController>().Teleport(place.at);
 		mVisitor.yaw = place.yaw;
@@ -116,6 +126,18 @@ class Gallery : Component
 		}
 		if (Input.GetKeyDown(.E))
 			Shove();
+		if ((Input.LockCursor && Input.GetMouseButtonDown(0)) || (mTestShots > 0 && Time.FrameCount % 12 == 0 && mTestShots-- > 0))
+			Fire();
+		if (mFired != null && mFired.HasBody)
+		{
+			mFired.Velocity = mFiredVelocity;
+			mFired = null;
+		}
+		for (let robot in mRobots)
+		{
+			if (!robot.PathPending && (robot.HasArrived || robot.PathFailed))
+				robot.SetDestination(.(-6 + Scatter() * 20, 0, -57 + Scatter() * 19), 2.2f, 0.4f);
+		}
 		ShowRoom();
 	}
 
@@ -127,10 +149,38 @@ class Gallery : Component
 			hit.gameObject.GetComponent<Rigidbody>()?.AddImpulse(view.Forward * 60);
 	}
 
+	/// A heavy ball from the eye, fast enough to dent a shell. The oldest goes once there are too many.
+	void Fire()
+	{
+		const int MaxBalls = 24;
+		let view = mVisitor.view.Transform;
+		let ball = Scene.CreateGameObject("Launched ball");
+		ball.Transient = true;
+		ball.Transform.Position = view.Position + view.Forward * 0.9f;
+		ball.Transform.LocalScale = Vector3(0.5f);
+		let look = ball.AddComponent<MeshRenderer>();
+		look.mesh.Set("builtin:sphere_smooth");
+		look.flatShading = false;
+		look.color = .(0.95f, 0.75f, 0.2f);
+		look.metallic = 1;
+		look.roughness = 0.3f;
+		ball.AddComponent<SphereCollider>();
+		let body = ball.AddComponent<Rigidbody>();
+		body.mass = 55;
+		mFired = body;
+		mFiredVelocity = view.Forward * 30;
+		mBalls.Add(body);
+		if (mBalls.Count > MaxBalls)
+		{
+			Scene.Destroy(mBalls[0].GameObject);
+			mBalls.RemoveAt(0);
+		}
+	}
+
 	void ShowRoom()
 	{
 		let at = mVisitor.Transform.Position;
-		int room = 4;
+		int room = 5;
 		for (int i < sRooms.Count)
 		{
 			let r = sRooms[i];
@@ -231,6 +281,7 @@ class Gallery : Component
 		BuildYard();
 		BuildGarden();
 		BuildCourtyard();
+		BuildLab();
 	}
 
 	void BuildHall()
@@ -404,12 +455,97 @@ class Gallery : Component
 		}
 	}
 
+	/// A body that keeps its shape and dents where it is hit, on a Rigidbody the balls can shove.
+	void Shell(StringView name, Vector3 at, float yaw, Color color)
+	{
+		let o = Scene.CreateGameObject(name);
+		o.Transform.Position = at;
+		o.Transform.Rotation = Quaternion.Euler(0, yaw, 0);
+		let look = o.AddComponent<MeshRenderer>();
+		look.mesh.Set("Models/van_shell.glb");
+		look.color = color;
+		look.metallic = 0.8f;
+		look.roughness = 0.35f;
+		look.flatShading = false;
+		o.AddComponent<ConvexCollider>();
+		o.AddComponent<Rigidbody>().mass = 500;
+		let soft = o.AddComponent<SoftBody>();
+		soft.kind = .Shell;
+		soft.dentSpeed = 4;
+		soft.dentDepth = 0.32f;
+	}
+
+	void Jelly(StringView name, Vector3 at, float scale, Color color)
+	{
+		let o = Scene.CreateGameObject(name);
+		o.Transform.Position = at;
+		o.Transform.LocalScale = Vector3(scale);
+		let look = o.AddComponent<MeshRenderer>();
+		look.mesh.Set("Models/soft_box.glb");
+		look.color = color;
+		look.roughness = 0.3f;
+		look.flatShading = false;
+		let soft = o.AddComponent<SoftBody>();
+		soft.kind = .Jelly;
+		soft.mass = 8 * scale;
+		soft.wobbleDamping = 1;
+		// The wind blows on faces: left on, it carries a light jelly off across the map.
+		soft.windDrag = 0;
+	}
+
+	void BuildLab()
+	{
+		Box("Lab floor", .(4, 0.01f, -47), .(24, 0.02f, 26), .(0.5f, 0.52f, 0.55f), 0.55f, 0, false);
+		Shell("Blue shell", .(-2, 0.78f, -50), 20, .(0.12f, 0.3f, 0.75f));
+		Shell("Red shell", .(9, 0.78f, -52), -35, .(0.75f, 0.12f, 0.1f));
+		Box("Jelly plinth", .(10, 0.2f, -42), .(5, 0.4f, 5), Marble, 0.4f);
+		Jelly("Green jelly", .(8.8f, 1.5f, -42), 1, .(0.2f, 0.85f, 0.45f));
+		Jelly("Pink jelly", .(11.2f, 1.9f, -42.4f), 1.5f, .(0.95f, 0.3f, 0.6f));
+		Box("Curtain rail", .(-4, 4.1f, -37.5f), .(3.9f, 0.14f, 0.14f), .(0.2f, 0.2f, 0.22f), 0.4f, 1);
+		for (int side = -1; side <= 1; side += 2)
+			Box("Curtain post", .(-4 + side * 1.9f, 2.05f, -37.5f), .(0.14f, 4.1f, 0.14f), .(0.2f, 0.2f, 0.22f), 0.4f, 1);
+		let curtain = Scene.CreateGameObject("Curtain");
+		curtain.Transform.Position = .(-4, 4, -39);
+		let cloth = curtain.AddComponent<MeshRenderer>();
+		cloth.mesh.Set("Models/cloth16.glb");
+		cloth.color = .(0.9f, 0.7f, 0.2f);
+		cloth.backFaceCulling = false;
+		cloth.emissive = cloth.color;
+		cloth.emissiveIntensity = 0.3f;
+		curtain.AddComponent<SoftBody>().pins.Set("272-288");
+		let area = Scene.CreateGameObject("Lab navigation");
+		area.Transform.Position = .(-8, -0.5f, -60);
+		let surface = area.AddComponent<NavigationSurface>();
+		surface.size = .(24, 5, 26);
+		surface.cellSize = 0.4f;
+		surface.agentRadius = 0.4f;
+		surface.includeRenderMeshes = false;
+		surface.rebuildOnStart = true;
+		surface.drawNavigation = false;
+		for (int i < 2)
+		{
+			let robot = Scene.CreateGameObject(scope $"Patrol robot {i}");
+			robot.Transform.Position = .(i * 8 - 4.0f, 0.8f, -57);
+			let look = robot.AddComponent<MeshRenderer>();
+			look.mesh.Set("builtin:capsule");
+			look.flatShading = false;
+			look.color = .(0.85f, 0.85f, 0.8f);
+			look.emissive = .(0.2f, 0.8f, 1);
+			look.emissiveIntensity = 0.5f;
+			let agent = robot.AddComponent<NavigationAgent>();
+			agent.surface = surface;
+			agent.baseOffset = .(0, -0.8f, 0);
+			agent.radius = 0.32f;
+		}
+	}
+
 	void BuildCourtyard()
 	{
 		Box("Flag pole", .(-3, 4, -14), .(0.16f, 8, 0.16f), .(0.75f, 0.75f, 0.78f), 0.3f, 1);
 		let flag = Scene.CreateGameObject("Flag");
-		flag.Transform.Position = .(-3, 6.5f, -14);
-		flag.Transform.Rotation = Quaternion.Euler(0, 90, 0);
+		// The sheet's pinned edge is 1.5 along its local Z: stood on end, with that edge on the pole.
+		flag.Transform.Position = .(-1.5f, 6.5f, -14);
+		flag.Transform.Rotation = Quaternion.LookRotation(.(-1, 0, 0), .(0, 0, -1));
 		let cloth = flag.AddComponent<MeshRenderer>();
 		cloth.mesh.Set("Models/cloth16.glb");
 		cloth.color = .(0.85f, 0.2f, 0.12f);
@@ -420,7 +556,9 @@ class Gallery : Component
 		soft.pins.Set("272-288");
 		let wind = Scene.CreateGameObject("Wind");
 		wind.Transform.Rotation = Quaternion.Euler(0, 80, 0);
-		wind.AddComponent<WindZone>().strength = 2.5f;
+		let breeze = wind.AddComponent<WindZone>();
+		breeze.strength = 0.5f;
+		breeze.gusts = 0.3f;
 		for (int i < 2)
 		{
 			let x = i == 0 ? -3.2f : 3.2f;

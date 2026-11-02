@@ -45,7 +45,7 @@ def main():
     assert scene.count('component Tallow.ReflectionProbe enabled 1') == 2
     assert 'TallowShowcase.' not in scene and '{NAMESPACE}' not in scene
     assert 'startScene = Scenes/Gallery.tscene' in (project / 'project.tallow').read_text()
-    for name in ['cloth16.glb', 'Person_Rigged.glb']:
+    for name in ['cloth16.glb', 'soft_box.glb', 'van_shell.glb', 'Person_Rigged.glb']:
         assert (source / 'Models' / name).is_file(), name
     for file in source.rglob('*.bf'):
         text = file.read_text()
@@ -74,9 +74,9 @@ def main():
     assert player.is_file(), player
     if args.play:
         log = run([player, '--project', path(project), '--self-test', '--frames', '1500'], 'play')
-        assert 'SHOWCASE_READY rooms=5 probes=2' in log
+        assert 'SHOWCASE_READY rooms=6 probes=2' in log
         assert '[error]' not in log.lower()
-    print(f'PASS: packaged Tallow Gallery creation, renamed scripts/scene, five rooms, mesh/binary assets, compilation' + (' and all exhibit checks' if args.play else '') + f'; evidence: {work}')
+    print(f'PASS: packaged Tallow Gallery creation, renamed scripts/scene, six rooms, mesh/binary assets, compilation' + (' and all exhibit checks' if args.play else '') + f'; evidence: {work}')
 
 
 if __name__ == '__main__':

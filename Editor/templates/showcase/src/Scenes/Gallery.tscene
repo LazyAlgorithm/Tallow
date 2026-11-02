@@ -8819,7 +8819,7 @@ component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
 object 329 parent 0 active 1 name "Flag"
-transform -3 6.5 -14 0 0.70710677 0 0.70710677 1 1 1
+transform -1.5 6.5 -14 -0.5 -0.5 0.5 0.5 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "Models/cloth16.glb"
 field color 0.85 0.2 0.12 1
@@ -8868,8 +8868,8 @@ object 330 parent 0 active 1 name "Wind"
 transform 0 0 0 0 0.6427876 0 0.76604444 1 1 1
 component Tallow.WindZone enabled 1
 field shape Global
-field strength 2.5
-field gusts 0.5
+field strength 0.5
+field gusts 0.3
 field radius 10
 object 331 parent 0 active 1 name "Brazier 0"
 transform -3.2 0.6 -1.2 0 0 0 1 1 1.2 1
@@ -9011,3 +9011,499 @@ field roughness 0.8
 field angleLimit 70
 field unlit 0
 field order 0
+object 338 parent 0 active 1 name "Lab floor"
+transform 4 0.01 -47 0 0 0 1 24 0.02 26
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.5 0.52 0.55 1
+field metallic 0
+field roughness 0.55
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 339 parent 0 active 1 name "Blue shell"
+transform -2 0.78 -50 0 0.17364818 0 0.9848077 1 1 1
+component Tallow.MeshRenderer enabled 1
+field mesh "Models/van_shell.glb"
+field color 0.12 0.3 0.75 1
+field metallic 0.8
+field roughness 0.35
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 0
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.ConvexCollider enabled 1
+field center 0 0 0
+field includeChildren 0
+component Tallow.Rigidbody enabled 1
+field mass 500
+field useGravity 1
+field gravityScale 1
+field isKinematic 0
+field friction 0.5
+field bounciness 0
+field linearDamping 0.05
+field angularDamping 0.05
+field freezeRotation 0
+field continuousCollision 0
+field allowSleeping 1
+field debris 0
+component Tallow.SoftBody enabled 1
+field kind Shell
+field mass 1
+field stiffness 0.9
+field bendStiffness 0.2
+field pressure 10
+field damping 0.1
+field wobbleDamping 3
+field friction 0.4
+field bounciness 0
+field gravityScale 1
+field thickness 0.02
+field windDrag 1
+field iterations 5
+field dentMode FromImpacts
+field dentDepth 0.32
+field springBack 0.03
+field dentSpeed 4
+field pins ""
+field stiffnessMap ""
+object 340 parent 0 active 1 name "Red shell"
+transform 9 0.78 -52 0 -0.3007058 0 0.95371693 1 1 1
+component Tallow.MeshRenderer enabled 1
+field mesh "Models/van_shell.glb"
+field color 0.75 0.12 0.1 1
+field metallic 0.8
+field roughness 0.35
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 0
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.ConvexCollider enabled 1
+field center 0 0 0
+field includeChildren 0
+component Tallow.Rigidbody enabled 1
+field mass 500
+field useGravity 1
+field gravityScale 1
+field isKinematic 0
+field friction 0.5
+field bounciness 0
+field linearDamping 0.05
+field angularDamping 0.05
+field freezeRotation 0
+field continuousCollision 0
+field allowSleeping 1
+field debris 0
+component Tallow.SoftBody enabled 1
+field kind Shell
+field mass 1
+field stiffness 0.9
+field bendStiffness 0.2
+field pressure 10
+field damping 0.1
+field wobbleDamping 3
+field friction 0.4
+field bounciness 0
+field gravityScale 1
+field thickness 0.02
+field windDrag 1
+field iterations 5
+field dentMode FromImpacts
+field dentDepth 0.32
+field springBack 0.03
+field dentSpeed 4
+field pins ""
+field stiffnessMap ""
+object 341 parent 0 active 1 name "Jelly plinth"
+transform 10 0.2 -42 0 0 0 1 5 0.4 5
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.13 0.14 0.17 1
+field metallic 0
+field roughness 0.4
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 342 parent 0 active 1 name "Green jelly"
+transform 8.8 1.5 -42 0 0 0 1 1 1 1
+component Tallow.MeshRenderer enabled 1
+field mesh "Models/soft_box.glb"
+field color 0.2 0.85 0.45 1
+field metallic 0
+field roughness 0.3
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 0
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.SoftBody enabled 1
+field kind Jelly
+field mass 8
+field stiffness 0.9
+field bendStiffness 0.2
+field pressure 10
+field damping 0.1
+field wobbleDamping 1
+field friction 0.4
+field bounciness 0
+field gravityScale 1
+field thickness 0.02
+field windDrag 0
+field iterations 5
+field dentMode FromImpacts
+field dentDepth 0.15
+field springBack 0.03
+field dentSpeed 3
+field pins ""
+field stiffnessMap ""
+object 343 parent 0 active 1 name "Pink jelly"
+transform 11.2 1.9 -42.4 0 0 0 1 1.5 1.5 1.5
+component Tallow.MeshRenderer enabled 1
+field mesh "Models/soft_box.glb"
+field color 0.95 0.3 0.6 1
+field metallic 0
+field roughness 0.3
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 0
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.SoftBody enabled 1
+field kind Jelly
+field mass 12
+field stiffness 0.9
+field bendStiffness 0.2
+field pressure 10
+field damping 0.1
+field wobbleDamping 1
+field friction 0.4
+field bounciness 0
+field gravityScale 1
+field thickness 0.02
+field windDrag 0
+field iterations 5
+field dentMode FromImpacts
+field dentDepth 0.15
+field springBack 0.03
+field dentSpeed 3
+field pins ""
+field stiffnessMap ""
+object 344 parent 0 active 1 name "Curtain rail"
+transform -4 4.1 -37.5 0 0 0 1 3.9 0.14 0.14
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.2 0.2 0.22 1
+field metallic 1
+field roughness 0.4
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 345 parent 0 active 1 name "Curtain post"
+transform -5.9 2.05 -37.5 0 0 0 1 0.14 4.1 0.14
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.2 0.2 0.22 1
+field metallic 1
+field roughness 0.4
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 346 parent 0 active 1 name "Curtain post"
+transform -2.1 2.05 -37.5 0 0 0 1 0.14 4.1 0.14
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.2 0.2 0.22 1
+field metallic 1
+field roughness 0.4
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 347 parent 0 active 1 name "Curtain"
+transform -4 4 -39 0 0 0 1 1 1 1
+component Tallow.MeshRenderer enabled 1
+field mesh "Models/cloth16.glb"
+field color 0.9 0.7 0.2 1
+field metallic 0
+field roughness 0.85
+field emissive 0.9 0.7 0.2 1
+field emissiveIntensity 0.3
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 0
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.SoftBody enabled 1
+field kind Cloth
+field mass 1
+field stiffness 0.9
+field bendStiffness 0.2
+field pressure 10
+field damping 0.1
+field wobbleDamping 3
+field friction 0.4
+field bounciness 0
+field gravityScale 1
+field thickness 0.02
+field windDrag 1
+field iterations 5
+field dentMode FromImpacts
+field dentDepth 0.15
+field springBack 0.03
+field dentSpeed 3
+field pins "272-288"
+field stiffnessMap ""
+object 348 parent 0 active 1 name "Lab navigation"
+transform -8 -0.5 -60 0 0 0 1 1 1 1
+component Tallow.NavigationSurface enabled 1
+field bakedData ""
+field size 24 5 26
+field cellSize 0.4
+field agentRadius 0.4
+field agentHeight 1.8
+field maxStep 0.5
+field maxSlope 45
+field chunkSize 16
+field flying 0
+field backend NavMesh
+field includeRenderMeshes 0
+field rebuildOnStart 1
+field drawNavigation 0
+object 349 parent 0 active 1 name "Patrol robot 0"
+transform -4 0.8 -57 0 0 0 1 1 1 1
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:capsule"
+field color 0.85 0.85 0.8 1
+field metallic 0
+field roughness 0.85
+field emissive 0.2 0.8 1 1
+field emissiveIntensity 0.5
+field emissiveFromColor 0
+field flatShading 0
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.NavigationAgent enabled 1
+field surface 348 0
+field snapDistance 2
+field baseOffset 0 -0.8 0
+field repathInterval 0.3
+field faceMovement 1
+field turnSpeed 720
+field smoothPath 1
+field avoidOthers 1
+field radius 0.32
+field avoidancePriority 50
+field useLinks 1
+object 350 parent 0 active 1 name "Patrol robot 1"
+transform 4 0.8 -57 0 0 0 1 1 1 1
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:capsule"
+field color 0.85 0.85 0.8 1
+field metallic 0
+field roughness 0.85
+field emissive 0.2 0.8 1 1
+field emissiveIntensity 0.5
+field emissiveFromColor 0
+field flatShading 0
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.NavigationAgent enabled 1
+field surface 348 0
+field snapDistance 2
+field baseOffset 0 -0.8 0
+field repathInterval 0.3
+field faceMovement 1
+field turnSpeed 720
+field smoothPath 1
+field avoidOthers 1
+field radius 0.32
+field avoidancePriority 50
+field useLinks 1

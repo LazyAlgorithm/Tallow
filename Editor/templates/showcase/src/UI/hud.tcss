@@ -2,4 +2,4 @@
 #plate { position: absolute; left: 40; top: 34; width: 620; padding: 16 22; gap: 4; background-color: #0d1218c8; border-radius: 6 }
 #room { height: 38; font-size: 30; color: #f4f1e8 }
 #about { height: 52; font-size: 18; color: #b9c4cc; white-space: normal }
-#keys { position: absolute; left: 40; bottom: 26; width: 900; height: 24; font-size: 16; color: #dfe6ebb0 }
+#keys { position: absolute; left: 40; bottom: 26; width: 1000; height: 24; font-size: 16; color: #dfe6ebb0 }
