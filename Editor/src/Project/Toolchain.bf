@@ -106,6 +106,40 @@ static class Toolchain
 		return false;
 	}
 
+	/// Resolve a user-installed Linux Beef compiler before relying on the managed copy.
+	/// A valid compiler location must also contain Beef's standard libraries.
+	static bool FindUserBeef(String output)
+	{
+		if (FindOnPath("BeefBuild", output) || FindOnPath("BeefBuild.sh", output))
+			return true;
+#if BF_PLATFORM_LINUX
+		let home = scope String();
+		Environment.GetEnvironmentVariable("HOME", home).IgnoreError();
+		if (!home.IsEmpty)
+		{
+			for (let relative in StringView[4]("Beef", "beef", "dev/Beef", "dev/beef"))
+			{
+				let candidate = scope $"{home}/{relative}/IDE/dist/BeefBuild.sh";
+				if (File.Exists(candidate) && File.Exists(scope $"{home}/{relative}/BeefLibs/corlib/BeefProj.toml"))
+				{
+					output.Set(candidate);
+					return true;
+				}
+			}
+		}
+		for (let root in StringView[2]("/opt/beef", "/opt/Beef"))
+		{
+			let candidate = scope $"{root}/IDE/dist/BeefBuild.sh";
+			if (File.Exists(candidate) && File.Exists(scope $"{root}/BeefLibs/corlib/BeefProj.toml"))
+			{
+				output.Set(candidate);
+				return true;
+			}
+		}
+#endif
+		return false;
+	}
+
 	/// Points this program, and the compilers and scripts it starts, at the tools Tallow Hub installed. Call once at
 	/// start; a BeefBuild or Python the user installed themselves is used as before.
 	public static void Apply()
@@ -134,7 +168,7 @@ static class Toolchain
 		OwnBeef(beef);
 		let current = scope String();
 		let userBeef = (Environment.GetEnvironmentVariable("BEEFBUILD", current) case .Ok) && !current.IsEmpty && File.Exists(current);
-		var useOwn = File.Exists(beef) && !userBeef && !FindOnPath("BeefBuild", scope .());
+		var useOwn = File.Exists(beef) && !userBeef && !FindUserBeef(scope .());
 #if BF_PLATFORM_WINDOWS
 		// Microsoft's libraries that the Hub fetched are set up for its own copy of Beef.
 		let crt = scope String(Folder);
@@ -143,6 +177,12 @@ static class Toolchain
 #endif
 		if (useOwn)
 			SetEnv("BEEFBUILD", beef);
+		else if (!userBeef && !File.Exists(beef))
+		{
+			let discovered = scope String();
+			if (FindUserBeef(discovered))
+				SetEnv("BEEFBUILD", discovered);
+		}
 	}
 
 	/// Names of required tools that cannot be found, for a message pointing at Tallow Hub. Quick enough to run as
@@ -155,7 +195,7 @@ static class Toolchain
 		OwnBeef(managed);
 		if (hasBeef && beef == managed && !File.Exists(scope $"{Folder}/beef/BeefLibs/corlib/BeefProj.toml"))
 			hasBeef = false;
-		if (!hasBeef && !FindOnPath("BeefBuild", beef))
+		if (!hasBeef && !FindUserBeef(beef))
 			missing.Add(new .("the Beef compiler and its standard libraries"));
 		let python = scope String();
 		if (!FindOnPath(Terminal.Python, python))
