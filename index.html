@@ -1243,23 +1243,23 @@ Quality.Save();                    // applied by itself at the next start</code>
     <p>Choose the optional Engine Manager or download Tallow Engine directly. Both support standalone installation.</p>
   </div>
   <div class="made">
-    <a class="card" href="https://github.com/LazyAlgorithm/Tallow-Manager/releases" target="_blank" rel="noopener">
+    <a class="card" data-latest-repo="LazyAlgorithm/Tallow-Manager" href="https://github.com/LazyAlgorithm/Tallow-Manager/releases" target="_blank" rel="noopener">
       <span class="meta">Recommended · Windows and Linux</span>
       <h3>Tallow Engine Manager</h3>
       <p>Download <code>TallowManager-Windows.zip</code> or <code>TallowManager-Linux.zip</code>, extract, and launch the manager. Choose an engine version to install, launch, or uninstall. The manager also helps install required development tools and offers optional self-updates.</p>
-      <span style="color:var(--cobalt);font-weight:700">Download Engine Manager →</span>
+      <span style="color:var(--cobalt);font-weight:700">Download Engine Manager <span data-latest-version="LazyAlgorithm/Tallow-Manager"></span> →</span>
     </a>
-    <a class="card" href="https://github.com/LazyAlgorithm/Tallow/releases" target="_blank" rel="noopener">
+    <a class="card" data-latest-repo="LazyAlgorithm/Tallow" data-latest-asset="Tallow-Windows.zip" href="https://github.com/LazyAlgorithm/Tallow/releases" target="_blank" rel="noopener">
       <span class="meta">Direct download · Windows x64</span>
       <h3>Tallow Engine for Windows</h3>
       <p>Download <code>Tallow-Windows.zip</code>, extract, and run <code>Tallow.exe</code>. When development tools are missing, newer builds prompt to install Beef, Python, and Microsoft C++ Build Tools on first launch. Approve the Windows administrator prompt if requested.</p>
-      <span style="color:var(--cobalt);font-weight:700">Download Windows Engine →</span>
+      <span style="color:var(--cobalt);font-weight:700">Download Windows Engine <span data-latest-version="LazyAlgorithm/Tallow"></span> →</span>
     </a>
-    <a class="card" href="https://github.com/LazyAlgorithm/Tallow/releases" target="_blank" rel="noopener">
+    <a class="card" data-latest-repo="LazyAlgorithm/Tallow" data-latest-asset="Tallow-Linux.zip" href="https://github.com/LazyAlgorithm/Tallow/releases" target="_blank" rel="noopener">
       <span class="meta">Direct download · Linux x64</span>
       <h3>Tallow Engine for Linux</h3>
       <p>Download <code>Tallow-Linux.zip</code>, extract, make <code>Tallow</code> executable, and launch it. Project compilation requires BeefBuild, Python 3.11+, platform development libraries and graphics drivers. Automatic standalone dependency installation on Linux is not yet available.</p>
-      <span style="color:var(--cobalt);font-weight:700">Download Linux Engine →</span>
+      <span style="color:var(--cobalt);font-weight:700">Download Linux Engine <span data-latest-version="LazyAlgorithm/Tallow"></span> →</span>
     </a>
     <div class="card">
       <span class="meta">Optional · source builds</span>
@@ -2104,4 +2104,18 @@ reduceMotion.addEventListener?.("change", () => { stopHero(); if (!document.getE
 route();
 </script>
 
+<script>
+// Point the download cards at the newest release, betas included. Without this they open the releases list.
+["LazyAlgorithm/Tallow","LazyAlgorithm/Tallow-Manager"].forEach(function(repo){
+  fetch("https://api.github.com/repos/"+repo+"/releases?per_page=10").then(function(r){return r.ok?r.json():[];}).then(function(list){
+    var release=list.filter(function(x){return !x.draft;})[0];
+    if(!release)return;
+    document.querySelectorAll('[data-latest-repo="'+repo+'"]').forEach(function(link){
+      var name=link.getAttribute("data-latest-asset"),asset=release.assets.filter(function(x){return x.name===name;})[0];
+      link.href=asset?asset.browser_download_url:release.html_url;
+    });
+    document.querySelectorAll('[data-latest-version="'+repo+'"]').forEach(function(tag){tag.textContent=release.tag_name;});
+  }).catch(function(){});
+});
+</script>
 </body></html>
