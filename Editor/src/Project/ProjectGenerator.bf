@@ -363,7 +363,7 @@ static class ProjectGenerator
 			error.Set("A project already exists in that folder.");
 			return false;
 		}
-		if (template == .Showcase && !File.Exists(scope $"{engineRoot}/Editor/templates/showcase/src/Scenes/Campus.tscene"))
+		if (template == .Showcase && !File.Exists(scope $"{engineRoot}/Editor/templates/showcase/src/Scenes/Gallery.tscene"))
 		{
 			error.Set("The Tallow Gallery template is missing from this engine installation.");
 			return false;
