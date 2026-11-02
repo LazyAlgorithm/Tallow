@@ -70,7 +70,7 @@ def main():
         assert expected in settings.read_text(), expected
     assert '/missing-showcase-engine' not in settings.read_text()
     platform = 'Win64' if windows else 'Linux64'
-    player = project / f'build/Debug_{platform}/RenamedGallery' / ('RenamedGallery.exe' if windows else 'RenamedCampus')
+    player = project / f'build/Debug_{platform}/RenamedGallery' / ('RenamedGallery.exe' if windows else 'RenamedGallery')
     assert player.is_file(), player
     if args.play:
         log = run([player, '--project', path(project), '--self-test', '--frames', '1500'], 'play')
