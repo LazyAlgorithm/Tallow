@@ -18,11 +18,13 @@ class Gallery : Component
 		public Vector3 min, max;
 	}
 
-	static Room[6] sRooms = .(
+	static Room[8] sRooms = .(
 		.() { name = "Hall of Reflections", about = "Each probe box matches its room, so the walls line up in the floor and in every sphere.", min = .(-14, 0, 1), max = .(14, 9, 19) },
 		.() { name = "Room of Lights", about = "Clustered point lights with shadows, a spot light, and emissive tubes through bloom.", min = .(14, 0, 3), max = .(28, 7, 17) },
 		.() { name = "Physics Yard", about = "Walk into the stack, or press E to shove what you are looking at. The ball hangs on a rope.", min = .(16, 0, -34), max = .(44, 12, -4) },
 		.() { name = "Pool Garden", about = "Built-in water, grass and bushes that sway in the wind, and a character skinned on the GPU.", min = .(-44, 0, -34), max = .(-8, 12, -4) },
+		.() { name = "Voxel Quarry", about = "Fire balls to blast chunks out of anything here, or hold right click to cut through it, a van included.", min = .(16, 0, -62), max = .(46, 12, -34) },
+		.() { name = "Terrain Field", about = "The ground is voxels. Hold right click to dig, Q to raise it. Caves and overhangs work, and collision follows.", min = .(-46, 0, -62), max = .(-8, 12, -34) },
 		.() { name = "Soft Body Lab", about = "Left click to fire balls. Steel shells dent and stay dented, jelly wobbles, cloth folds, and robots path round it all.", min = .(-8, 0, -60), max = .(16, 12, -34) },
 		.() { name = "Courtyard", about = "Sun, shadows, wind in the flag. The Hall of Reflections is ahead, the Soft Body Lab behind you.", min = .(-8, 0, -34), max = .(16, 12, 1) }
 	);
@@ -32,6 +34,10 @@ class Gallery : Component
 	Light[2] mBraziers;
 	List<NavigationAgent> mRobots = new .() ~ delete _;
 	List<Rigidbody> mBalls = new .() ~ delete _;
+	VoxelTerrain mTerrain;
+	bool mSculpted;
+	float mNextCut;
+	int mTestCuts;
 	Rigidbody mFired;
 	Vector3 mFiredVelocity;
 	Visitor mVisitor;
@@ -70,6 +76,7 @@ class Gallery : Component
 			mOrbiters[i] = Scene.Find(scope $"Orbiting light {i}").Transform;
 		for (int i < mBraziers.Count)
 			mBraziers[i] = Scene.Find(scope $"Brazier light {i}").GetComponent<Light>();
+		mTerrain = Scene.FindComponent<VoxelTerrain>();
 		for (int i < 2)
 			mRobots.Add(Scene.Find(scope $"Patrol robot {i}").GetComponent<NavigationAgent>());
 		let camera = Scene.FindComponent<Camera>();
@@ -89,6 +96,8 @@ class Gallery : Component
 			Stand(SceneSerializer.ParseInt(value));
 		if (app.GetArg("--fire-test", value))
 			mTestShots = SceneSerializer.ParseInt(value);
+		if (app.GetArg("--cut-test", value))
+			mTestCuts = SceneSerializer.ParseInt(value);
 		if (app.HasArg("--self-test"))
 			Console.WriteLine(scope $"SHOWCASE_READY rooms={sRooms.Count} probes={Scene.FindComponents<ReflectionProbe>(.. scope .()).Count} objects={Scene.Objects.Count}");
 	}
@@ -98,7 +107,7 @@ class Gallery : Component
 	{
 		(Vector3 at, float yaw, float pitch)[?] places = .(
 			(.(4, 1.1f, -28), 0, 0), (.(0, 1.1f, 3), 0, 6), (.(-12, 1.1f, 3), 50, 6), (.(15, 1.6f, 6), 62, 6),
-			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12));
+			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12), (.(31, 1.6f, -40), 180, 0), (.(-14, 1.1f, -44), 270, 12));
 		let place = places[Math.Clamp(view, 0, places.Count - 1)];
 		mVisitor.GetComponent<CharacterController>().Teleport(place.at);
 		mVisitor.yaw = place.yaw;
@@ -126,13 +135,27 @@ class Gallery : Component
 		}
 		if (Input.GetKeyDown(.E))
 			Shove();
-		if ((Input.LockCursor && Input.GetMouseButtonDown(0)) || (mTestShots > 0 && Time.FrameCount % 12 == 0 && mTestShots-- > 0))
+		if ((Input.LockCursor && Input.GetMouseButtonDown(0)) || (mTestShots > 0 && Time.FrameCount > 60 && Time.FrameCount % 12 == 0 && mTestShots-- > 0))
 			Fire();
 		if (mFired != null && mFired.HasBody)
 		{
 			mFired.Velocity = mFiredVelocity;
 			mFired = null;
 		}
+		mNextCut -= Time.DeltaTime;
+		if (mNextCut <= 0)
+		{
+			if (Input.LockCursor && Input.GetMouseButton(1))
+				Cut(-1);
+			else if (Input.LockCursor && Input.GetKey(.Q))
+				Cut(1);
+		}
+		if (mTestCuts > 0 && Time.FrameCount > 60 && Time.FrameCount % 4 == 0 && --mTestCuts >= 0)
+		{
+			Cut(-1);
+		}
+		ShapeTheField();
+		BlastVoxels();
 		for (let robot in mRobots)
 		{
 			if (!robot.PathPending && (robot.HasArrived || robot.PathFailed))
@@ -145,8 +168,58 @@ class Gallery : Component
 	void Shove()
 	{
 		let view = mVisitor.view.Transform;
-		if (Scene.Physics.Raycast(view.Position, view.Forward, 14, let hit) && hit.gameObject != null)
+		// Starts past the visitor's own capsule, which the ray would otherwise hit first.
+		if (Scene.Physics.Raycast(view.Position + view.Forward * 0.7f, view.Forward, 14, let hit) && hit.gameObject != null)
 			hit.gameObject.GetComponent<Rigidbody>()?.AddImpulse(view.Forward * 60);
+	}
+
+	/// Where the eye points: a thin cut through a voxel object, or a dig (-1) or mound (1) in the ground.
+	void Cut(int direction)
+	{
+		mNextCut = 0.07f;
+		let view = mVisitor.view.Transform;
+		if (!Scene.Physics.Raycast(view.Position + view.Forward * 0.7f, view.Forward, 30, let hit) || hit.gameObject == null)
+			return;
+		let voxels = hit.gameObject.GetComponent<VoxelObject>();
+		if (voxels != null)
+		{
+			if (direction < 0)
+				voxels.Carve(hit.point, 0.45f);
+		}
+		else if (hit.gameObject.GetComponent<VoxelTerrain>() != null)
+		{
+			mNextCut = 0.12f;
+			mTerrain.ModifySphere(hit.point, 2.2f, direction * 2);
+		}
+	}
+
+	/// Hills and a hollow, once the ground exists. The terrain tile itself stays flat and editable.
+	void ShapeTheField()
+	{
+		if (mSculpted || mTerrain == null || mTerrain.ChunkCount == 0 || mTerrain.PendingChunks > 0)
+			return;
+		mSculpted = true;
+		for (int i < 7)
+			mTerrain.ModifySphere(.(-36 + i * 0.8f, 0, -54 + i * 0.5f), 6 - i * 0.4f, 3);
+		mTerrain.ModifySphere(.(-20, 0.5f, -50), 5, -3);
+		mTerrain.ModifySphere(.(-16, 0.5f, -44), 3.5f, 3);
+	}
+
+	/// A ball about to reach a voxel object blows a hole in it where it lands.
+	void BlastVoxels()
+	{
+		for (let ball in mBalls)
+		{
+			if (!ball.HasBody)
+				continue;
+			let velocity = ball.Velocity;
+			let speed = velocity.Length;
+			if (speed < 6)
+				continue;
+			let step = speed * Time.DeltaTime + 0.3f;
+			if (Scene.Physics.Raycast(ball.Transform.Position, velocity / speed, step, let hit) && hit.gameObject != null)
+				hit.gameObject.GetComponent<VoxelObject>()?.Carve(hit.point, 0.9f);
+		}
 	}
 
 	/// A heavy ball from the eye, fast enough to dent a shell. The oldest goes once there are too many.
@@ -180,7 +253,7 @@ class Gallery : Component
 	void ShowRoom()
 	{
 		let at = mVisitor.Transform.Position;
-		int room = 5;
+		int room = 7;
 		for (int i < sRooms.Count)
 		{
 			let r = sRooms[i];
@@ -274,7 +347,13 @@ class Gallery : Component
 		lens.fieldOfView = 74;
 		lens.nearClip = 0.08f;
 		lens.farClip = 1200;
-		Box("Ground", .(0, -0.5f, 0), .(180, 1, 180), .(0.36f, 0.45f, 0.26f), 0.95f);
+		// Four strips round the Terrain Field, so digging there has no floor to stop at.
+		Color grass = .(0.36f, 0.45f, 0.26f);
+		Box("Ground", .(-65, -0.5f, 0), .(50, 1, 180), grass, 0.95f);
+		Box("Ground", .(37, -0.5f, 0), .(106, 1, 180), grass, 0.95f);
+		Box("Ground", .(-28, -0.5f, 63), .(24, 1, 126), grass, 0.95f);
+		Box("Ground", .(-28, -0.5f, -75), .(24, 1, 30), grass, 0.95f);
+		Box("Bedrock", .(-28, -13, -48), .(26, 2, 26), .(0.25f, 0.23f, 0.22f), 0.95f);
 		Box("Courtyard paving", .(4, 0.01f, -16), .(24, 0.02f, 34), Stone, 0.7f, 0, false);
 		BuildHall();
 		BuildLightRoom();
@@ -282,6 +361,8 @@ class Gallery : Component
 		BuildGarden();
 		BuildCourtyard();
 		BuildLab();
+		BuildQuarry();
+		BuildField();
 	}
 
 	void BuildHall()
@@ -537,6 +618,61 @@ class Gallery : Component
 			agent.baseOffset = .(0, -0.8f, 0);
 			agent.radius = 0.32f;
 		}
+	}
+
+	VoxelObject Carvable(StringView name, Vector3 at, VoxelShape shape, float size, Color color, Color inside, bool anchored = true)
+	{
+		let o = Scene.CreateGameObject(name);
+		o.Transform.Position = at;
+		o.AddComponent<MeshRenderer>();
+		o.AddComponent<MeshCollider>();
+		let voxels = o.AddComponent<VoxelObject>();
+		voxels.shape = shape;
+		voxels.size = size;
+		voxels.resolution = 28;
+		voxels.anchored = anchored;
+		voxels.color = color;
+		voxels.interiorColor = inside;
+		voxels.OnValidate();
+		return voxels;
+	}
+
+	void BuildQuarry()
+	{
+		Color rock = .(0.62f, 0.55f, 0.46f);
+		Color core = .(0.3f, 0.2f, 0.16f);
+		Box("Quarry floor", .(31, 0.01f, -48), .(30, 0.02f, 28), .(0.46f, 0.4f, 0.33f), 0.9f, 0, false);
+		Carvable("Quarry face", .(24.5f, 3, -46), .Box, 6, rock, core).resolution = 40;
+		Carvable("Pillar", .(31, 1.5f, -46), .Cylinder, 3, .(0.72f, 0.4f, 0.32f), core);
+		Carvable("Boulder", .(36, 1.5f, -46), .Sphere, 3, .(0.4f, 0.58f, 0.72f), .(0.85f, 0.75f, 0.3f));
+		Lamp("Quarry lamp", .(26, 6, -38), .(1, 0.95f, 0.85f), 30, 26);
+		Lamp("Quarry lamp", .(38, 6, -38), .(1, 0.95f, 0.85f), 30, 26);
+		let van = Carvable("Cuttable van", .(41, 0.78f, -48), .Mesh, 4, .White, .(0.25f, 0.25f, 0.28f), false);
+		van.mesh.Set("Models/van_shell.glb");
+		van.resolution = 40;
+		let look = van.GameObject.GetComponent<MeshRenderer>();
+		look.color = .(0.85f, 0.75f, 0.15f);
+		look.metallic = 0.6f;
+		look.roughness = 0.4f;
+		van.OnValidate();
+	}
+
+	void BuildField()
+	{
+		let o = Scene.CreateGameObject("Editable terrain");
+		o.Transform.Position = .(-40, 0, -60);
+		let ground = o.AddComponent<VoxelTerrain>();
+		ground.mode = .Fixed;
+		ground.sizeX = 1;
+		ground.sizeZ = 1;
+		ground.tileSize = 1;
+		ground.voxelSize = 0.75f;
+		ground.viewDistance = 1;
+		ground.minChunkY = -1;
+		ground.maxChunkY = 0;
+		ground.flatHeight = 0;
+		ground.AddTile(0, 0);
+		ground.OnValidate();
 	}
 
 	void BuildCourtyard()

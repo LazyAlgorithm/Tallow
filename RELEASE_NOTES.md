@@ -1,8 +1,9 @@
-## Exhibition Campus sample
+## Tallow Gallery sample
 
-- New-project template with 24 working exhibits, saved editable geometry, terrain, soft bodies, loaded ropes, water, navigation, animation, audio, UI and more.
-- Cooperative tour: animated visitor models, host-validated exhibit interactions, shared settings and late-join state.
-- Template assets and namespace-aware scene copying included in Linux and Windows engine packages; packaged creation and compilation checked in release CI.
+- New-project template with eight areas of ordinary saved objects: reflections and probes, lights and shadows, physics, ropes, water, a walking skinned character, cloth, jelly, dentable shells, destructible voxel objects, editable terrain and NavMesh robots.
+- Left click fires balls that dent shells and blast voxel objects; right click cuts them and digs the terrain, Q raises it.
+- Template assets and namespace-aware scene copying included in Linux and Windows engine packages.
+- Playable without the engine: [Tallow Gallery release](https://github.com/LazyAlgorithm/Tallow/releases/tag/gallery-20261102).
 - Fixes buoyancy during rollback and editor shading of foliage proxy renderers.
 
 # Tallow v0.1.0-beta.1

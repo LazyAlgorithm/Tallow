@@ -43,7 +43,7 @@ field viewmodelNearClip 0.01
 field viewmodelCastsShadows 0
 field occlusionCulling 0
 object 4 parent 0 active 1 name "Ground"
-transform 0 -0.5 0 0 0 0 1 180 1 180
+transform -65 -0.5 0 0 0 0 1 50 1 180
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.36 0.45 0.26 1
@@ -71,7 +71,123 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 5 parent 0 active 1 name "Courtyard paving"
+object 5 parent 0 active 1 name "Ground"
+transform 37 -0.5 0 0 0 0 1 106 1 180
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.36 0.45 0.26 1
+field metallic 0
+field roughness 0.95
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 6 parent 0 active 1 name "Ground"
+transform -28 -0.5 63 0 0 0 1 24 1 126
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.36 0.45 0.26 1
+field metallic 0
+field roughness 0.95
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 7 parent 0 active 1 name "Ground"
+transform -28 -0.5 -75 0 0 0 1 24 1 30
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.36 0.45 0.26 1
+field metallic 0
+field roughness 0.95
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 8 parent 0 active 1 name "Bedrock"
+transform -28 -13 -48 0 0 0 1 26 2 26
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.25 0.23 0.22 1
+field metallic 0
+field roughness 0.95
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 9 parent 0 active 1 name "Courtyard paving"
 transform 4 0.01 -16 0 0 0 1 24 0.02 34
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -97,7 +213,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 6 parent 0 active 1 name "Hall floor"
+object 10 parent 0 active 1 name "Hall floor"
 transform 0 0.02 10 0 0 0 1 28 0.04 18
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -123,7 +239,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 7 parent 0 active 1 name "Hall roof"
+object 11 parent 0 active 1 name "Hall roof"
 transform 0 9.25 10 0 0 0 1 29 0.5 19
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -152,7 +268,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 8 parent 0 active 1 name "Hall north wall"
+object 12 parent 0 active 1 name "Hall north wall"
 transform 0 4.5 19.25 0 0 0 1 29 9 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -181,7 +297,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 9 parent 0 active 1 name "Hall west wall"
+object 13 parent 0 active 1 name "Hall west wall"
 transform -14.25 4.5 10 0 0 0 1 0.5 9 19
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -210,7 +326,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 10 parent 0 active 1 name "Hall south wall left"
+object 14 parent 0 active 1 name "Hall south wall left"
 transform -8.25 4.5 0.75 0 0 0 1 12.5 9 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -239,7 +355,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 11 parent 0 active 1 name "Hall south wall right"
+object 15 parent 0 active 1 name "Hall south wall right"
 transform 8.25 4.5 0.75 0 0 0 1 12.5 9 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -268,7 +384,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 12 parent 0 active 1 name "Hall south lintel"
+object 16 parent 0 active 1 name "Hall south lintel"
 transform 0 6.75 0.75 0 0 0 1 4 4.5 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -297,7 +413,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 13 parent 0 active 1 name "Hall east wall south"
+object 17 parent 0 active 1 name "Hall east wall south"
 transform 14.25 4.5 4.5 0 0 0 1 0.5 9 8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -326,7 +442,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 14 parent 0 active 1 name "Hall east wall north"
+object 18 parent 0 active 1 name "Hall east wall north"
 transform 14.25 4.5 15.5 0 0 0 1 0.5 9 8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -355,7 +471,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 15 parent 0 active 1 name "Hall east lintel"
+object 19 parent 0 active 1 name "Hall east lintel"
 transform 14.25 6.75 10 0 0 0 1 0.5 4.5 3
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -384,7 +500,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 16 parent 0 active 1 name "Hall reflection probe"
+object 20 parent 0 active 1 name "Hall reflection probe"
 transform 0 4.5 10 0 0 0 1 1 1 1
 component Tallow.ReflectionProbe enabled 1
 field size 28 9 18
@@ -395,7 +511,7 @@ field intensity 1
 field importance 0
 field resolution 512
 field refreshInterval 0
-object 17 parent 0 active 1 name "Ceiling strip 0"
+object 21 parent 0 active 1 name "Ceiling strip 0"
 transform 0 8.9 5 0 0 0 1 22 0.08 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -421,7 +537,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 18 parent 0 active 1 name "Ceiling lamp 0"
+object 22 parent 0 active 1 name "Ceiling lamp 0"
 transform -7 8 5 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -435,7 +551,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 0
 field shadowStrength 1
-object 19 parent 0 active 1 name "Ceiling lamp 0 east"
+object 23 parent 0 active 1 name "Ceiling lamp 0 east"
 transform 7 8 5 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -449,7 +565,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 0
 field shadowStrength 1
-object 20 parent 0 active 1 name "Ceiling strip 1"
+object 24 parent 0 active 1 name "Ceiling strip 1"
 transform 0 8.9 10 0 0 0 1 22 0.08 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -475,7 +591,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 21 parent 0 active 1 name "Ceiling lamp 1"
+object 25 parent 0 active 1 name "Ceiling lamp 1"
 transform -7 8 10 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -489,7 +605,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 0
 field shadowStrength 1
-object 22 parent 0 active 1 name "Ceiling lamp 1 east"
+object 26 parent 0 active 1 name "Ceiling lamp 1 east"
 transform 7 8 10 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -503,7 +619,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 0
 field shadowStrength 1
-object 23 parent 0 active 1 name "Ceiling strip 2"
+object 27 parent 0 active 1 name "Ceiling strip 2"
 transform 0 8.9 15 0 0 0 1 22 0.08 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -529,7 +645,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 24 parent 0 active 1 name "Ceiling lamp 2"
+object 28 parent 0 active 1 name "Ceiling lamp 2"
 transform -7 8 15 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -543,7 +659,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 0
 field shadowStrength 1
-object 25 parent 0 active 1 name "Ceiling lamp 2 east"
+object 29 parent 0 active 1 name "Ceiling lamp 2 east"
 transform 7 8 15 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -557,7 +673,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 0
 field shadowStrength 1
-object 26 parent 0 active 1 name "West band"
+object 30 parent 0 active 1 name "West band"
 transform -13.9 3 10 0 0 0 1 0.1 0.5 16
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -583,7 +699,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 27 parent 0 active 1 name "North band"
+object 31 parent 0 active 1 name "North band"
 transform 0 3 18.9 0 0 0 1 26 0.5 0.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -609,7 +725,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 28 parent 0 active 1 name "Red plinth"
+object 32 parent 0 active 1 name "Red plinth"
 transform -9 1.5 15 0 0 0 1 2 3 2
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -638,7 +754,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 29 parent 0 active 1 name "Blue plinth"
+object 33 parent 0 active 1 name "Blue plinth"
 transform 9 1.5 15 0 0 0 1 2 3 2
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -667,7 +783,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 30 parent 0 active 1 name "Sphere stand 0"
+object 34 parent 0 active 1 name "Sphere stand 0"
 transform -8 0.45 8 0 0 0 1 1.1 0.9 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -696,7 +812,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 31 parent 0 active 1 name "Steel sphere, roughness 0.0"
+object 35 parent 0 active 1 name "Steel sphere, roughness 0.0"
 transform -8 1.9 8 0 0 0 1 2 2 2
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -725,7 +841,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 32 parent 0 active 1 name "Sphere stand 1"
+object 36 parent 0 active 1 name "Sphere stand 1"
 transform -4 0.45 8 0 0 0 1 1.1 0.9 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -754,7 +870,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 33 parent 0 active 1 name "Steel sphere, roughness 0.2"
+object 37 parent 0 active 1 name "Steel sphere, roughness 0.2"
 transform -4 1.9 8 0 0 0 1 2 2 2
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -783,7 +899,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 34 parent 0 active 1 name "Sphere stand 2"
+object 38 parent 0 active 1 name "Sphere stand 2"
 transform 0 0.45 8 0 0 0 1 1.1 0.9 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -812,7 +928,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 35 parent 0 active 1 name "Steel sphere, roughness 0.4"
+object 39 parent 0 active 1 name "Steel sphere, roughness 0.4"
 transform 0 1.9 8 0 0 0 1 2 2 2
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -841,7 +957,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 36 parent 0 active 1 name "Sphere stand 3"
+object 40 parent 0 active 1 name "Sphere stand 3"
 transform 4 0.45 8 0 0 0 1 1.1 0.9 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -870,7 +986,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 37 parent 0 active 1 name "Steel sphere, roughness 0.6"
+object 41 parent 0 active 1 name "Steel sphere, roughness 0.6"
 transform 4 1.9 8 0 0 0 1 2 2 2
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -899,7 +1015,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 38 parent 0 active 1 name "Sphere stand 4"
+object 42 parent 0 active 1 name "Sphere stand 4"
 transform 8 0.45 8 0 0 0 1 1.1 0.9 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -928,7 +1044,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 39 parent 0 active 1 name "Steel sphere, roughness 0.8"
+object 43 parent 0 active 1 name "Steel sphere, roughness 0.8"
 transform 8 1.9 8 0 0 0 1 2 2 2
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -957,7 +1073,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 40 parent 0 active 1 name "Gold sphere"
+object 44 parent 0 active 1 name "Gold sphere"
 transform -9 3.9 15 0 0 0 1 1.8 1.8 1.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -986,7 +1102,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 41 parent 0 active 1 name "Copper sphere"
+object 45 parent 0 active 1 name "Copper sphere"
 transform 9 3.9 15 0 0 0 1 1.8 1.8 1.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -1015,7 +1131,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 42 parent 0 active 1 name "Great mirror"
+object 46 parent 0 active 1 name "Great mirror"
 transform 0 2.6 14.5 0 0 0 1 4.8 4.8 4.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -1044,7 +1160,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 43 parent 0 active 1 name "Glazed ceramic"
+object 47 parent 0 active 1 name "Glazed ceramic"
 transform -5 0.8 4 0 0 0 1 1.6 1.6 1.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -1073,7 +1189,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 44 parent 0 active 1 name "Red lacquer"
+object 48 parent 0 active 1 name "Red lacquer"
 transform 5 0.8 4 0 0 0 1 1.6 1.6 1.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -1102,7 +1218,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 45 parent 0 active 1 name "Light room floor"
+object 49 parent 0 active 1 name "Light room floor"
 transform 21 0.02 10 0 0 0 1 14 0.04 14
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1128,7 +1244,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 46 parent 0 active 1 name "Light room roof"
+object 50 parent 0 active 1 name "Light room roof"
 transform 21 7.25 10 0 0 0 1 15 0.5 15
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1157,7 +1273,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 47 parent 0 active 1 name "Light room north wall"
+object 51 parent 0 active 1 name "Light room north wall"
 transform 21 3.5 17.25 0 0 0 1 15 7 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1186,7 +1302,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 48 parent 0 active 1 name "Light room south wall"
+object 52 parent 0 active 1 name "Light room south wall"
 transform 21 3.5 2.75 0 0 0 1 15 7 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1215,7 +1331,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 49 parent 0 active 1 name "Light room east wall"
+object 53 parent 0 active 1 name "Light room east wall"
 transform 28.25 3.5 10 0 0 0 1 0.5 7 15
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1244,7 +1360,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 50 parent 0 active 1 name "Light room reflection probe"
+object 54 parent 0 active 1 name "Light room reflection probe"
 transform 21 3.5 10 0 0 0 1 1 1 1
 component Tallow.ReflectionProbe enabled 1
 field size 14 7 14
@@ -1255,7 +1371,7 @@ field intensity 1
 field importance 0
 field resolution 128
 field refreshInterval 0
-object 51 parent 0 active 1 name "Orbiting light 0"
+object 55 parent 0 active 1 name "Orbiting light 0"
 transform 21 2.4 10 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -1269,7 +1385,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 1
 field shadowStrength 1
-object 52 parent 51 active 1 name "Bulb 0"
+object 56 parent 55 active 1 name "Bulb 0"
 transform 0 0 0 0 0 0 1 0.22 0.22 0.22
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -1295,7 +1411,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 53 parent 0 active 1 name "Orbiting light 1"
+object 57 parent 0 active 1 name "Orbiting light 1"
 transform 21 2.4 10 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -1309,7 +1425,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 1
 field shadowStrength 1
-object 54 parent 53 active 1 name "Bulb 1"
+object 58 parent 57 active 1 name "Bulb 1"
 transform 0 0 0 0 0 0 1 0.22 0.22 0.22
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -1335,7 +1451,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 55 parent 0 active 1 name "Orbiting light 2"
+object 59 parent 0 active 1 name "Orbiting light 2"
 transform 21 2.4 10 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -1349,7 +1465,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 1
 field shadowStrength 1
-object 56 parent 55 active 1 name "Bulb 2"
+object 60 parent 59 active 1 name "Bulb 2"
 transform 0 0 0 0 0 0 1 0.22 0.22 0.22
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -1375,7 +1491,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 57 parent 0 active 1 name "Spot light"
+object 61 parent 0 active 1 name "Spot light"
 transform 21 6.8 10 0.70710677 0 0 0.70710677 1 1 1
 component Tallow.Light enabled 1
 field type Spot
@@ -1389,7 +1505,7 @@ field innerSpotAngle -1
 field spotAngle 38
 field castShadows 1
 field shadowStrength 1
-object 58 parent 0 active 1 name "Lit sphere"
+object 62 parent 0 active 1 name "Lit sphere"
 transform 21 1.3 10 0 0 0 1 2.6 2.6 2.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -1418,7 +1534,7 @@ field occluder 0
 component Tallow.SphereCollider enabled 1
 field center 0 0 0
 field radius 0.5
-object 59 parent 0 active 1 name "Shadow pillar 0"
+object 63 parent 0 active 1 name "Shadow pillar 0"
 transform 23.8 1.2 10 0 0 0 1 0.5 2.4 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1447,7 +1563,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 60 parent 0 active 1 name "Shadow pillar 1"
+object 64 parent 0 active 1 name "Shadow pillar 1"
 transform 22.979898 1.2 11.979898 0 0 0 1 0.5 2.4 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1476,7 +1592,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 61 parent 0 active 1 name "Shadow pillar 2"
+object 65 parent 0 active 1 name "Shadow pillar 2"
 transform 21 1.2 12.8 0 0 0 1 0.5 2.4 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1505,7 +1621,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 62 parent 0 active 1 name "Shadow pillar 3"
+object 66 parent 0 active 1 name "Shadow pillar 3"
 transform 19.020102 1.2 11.979898 0 0 0 1 0.5 2.4 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1534,7 +1650,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 63 parent 0 active 1 name "Shadow pillar 4"
+object 67 parent 0 active 1 name "Shadow pillar 4"
 transform 18.2 1.2 10 0 0 0 1 0.5 2.4 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1563,7 +1679,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 64 parent 0 active 1 name "Shadow pillar 5"
+object 68 parent 0 active 1 name "Shadow pillar 5"
 transform 19.020102 1.2 8.020101 0 0 0 1 0.5 2.4 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1592,7 +1708,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 65 parent 0 active 1 name "Shadow pillar 6"
+object 69 parent 0 active 1 name "Shadow pillar 6"
 transform 21 1.2 7.2 0 0 0 1 0.5 2.4 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1621,7 +1737,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 66 parent 0 active 1 name "Shadow pillar 7"
+object 70 parent 0 active 1 name "Shadow pillar 7"
 transform 22.9799 1.2 8.020102 0 0 0 1 0.5 2.4 0.5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1650,7 +1766,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 67 parent 0 active 1 name "Neon tube 0"
+object 71 parent 0 active 1 name "Neon tube 0"
 transform 16 5.6 16.85 0 0 0 1 2.4 0.1 0.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1676,7 +1792,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 68 parent 0 active 1 name "Neon tube 1"
+object 72 parent 0 active 1 name "Neon tube 1"
 transform 19.4 5.6 16.85 0 0 0 1 2.4 0.1 0.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1702,7 +1818,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 69 parent 0 active 1 name "Neon tube 2"
+object 73 parent 0 active 1 name "Neon tube 2"
 transform 22.8 5.6 16.85 0 0 0 1 2.4 0.1 0.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1728,7 +1844,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 70 parent 0 active 1 name "Neon tube 3"
+object 74 parent 0 active 1 name "Neon tube 3"
 transform 26.2 5.6 16.85 0 0 0 1 2.4 0.1 0.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1754,7 +1870,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 71 parent 0 active 1 name "Crate"
+object 75 parent 0 active 1 name "Crate"
 transform 27.4 0.5 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1796,7 +1912,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 72 parent 0 active 1 name "Crate"
+object 76 parent 0 active 1 name "Crate"
 transform 28.44 0.5 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1838,7 +1954,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 73 parent 0 active 1 name "Crate"
+object 77 parent 0 active 1 name "Crate"
 transform 29.48 0.5 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1880,7 +1996,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 74 parent 0 active 1 name "Crate"
+object 78 parent 0 active 1 name "Crate"
 transform 30.52 0.5 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1922,7 +2038,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 75 parent 0 active 1 name "Crate"
+object 79 parent 0 active 1 name "Crate"
 transform 31.56 0.5 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -1964,7 +2080,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 76 parent 0 active 1 name "Crate"
+object 80 parent 0 active 1 name "Crate"
 transform 32.6 0.5 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2006,7 +2122,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 77 parent 0 active 1 name "Crate"
+object 81 parent 0 active 1 name "Crate"
 transform 27.92 1.51 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2048,7 +2164,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 78 parent 0 active 1 name "Crate"
+object 82 parent 0 active 1 name "Crate"
 transform 28.96 1.51 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2090,7 +2206,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 79 parent 0 active 1 name "Crate"
+object 83 parent 0 active 1 name "Crate"
 transform 30 1.51 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2132,7 +2248,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 80 parent 0 active 1 name "Crate"
+object 84 parent 0 active 1 name "Crate"
 transform 31.04 1.51 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2174,7 +2290,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 81 parent 0 active 1 name "Crate"
+object 85 parent 0 active 1 name "Crate"
 transform 32.08 1.51 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2216,7 +2332,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 82 parent 0 active 1 name "Crate"
+object 86 parent 0 active 1 name "Crate"
 transform 28.44 2.52 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2258,7 +2374,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 83 parent 0 active 1 name "Crate"
+object 87 parent 0 active 1 name "Crate"
 transform 29.48 2.52 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2300,7 +2416,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 84 parent 0 active 1 name "Crate"
+object 88 parent 0 active 1 name "Crate"
 transform 30.52 2.52 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2342,7 +2458,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 85 parent 0 active 1 name "Crate"
+object 89 parent 0 active 1 name "Crate"
 transform 31.56 2.52 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2384,7 +2500,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 86 parent 0 active 1 name "Crate"
+object 90 parent 0 active 1 name "Crate"
 transform 28.96 3.53 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2426,7 +2542,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 87 parent 0 active 1 name "Crate"
+object 91 parent 0 active 1 name "Crate"
 transform 30 3.53 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2468,7 +2584,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 88 parent 0 active 1 name "Crate"
+object 92 parent 0 active 1 name "Crate"
 transform 31.04 3.53 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2510,7 +2626,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 89 parent 0 active 1 name "Crate"
+object 93 parent 0 active 1 name "Crate"
 transform 29.48 4.54 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2552,7 +2668,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 90 parent 0 active 1 name "Crate"
+object 94 parent 0 active 1 name "Crate"
 transform 30.52 4.54 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2594,7 +2710,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 91 parent 0 active 1 name "Crate"
+object 95 parent 0 active 1 name "Crate"
 transform 30 5.55 -24 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2636,7 +2752,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 92 parent 0 active 1 name "Domino 0"
+object 96 parent 0 active 1 name "Domino 0"
 transform 20 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2678,7 +2794,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 93 parent 0 active 1 name "Domino 1"
+object 97 parent 0 active 1 name "Domino 1"
 transform 20.95 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2720,7 +2836,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 94 parent 0 active 1 name "Domino 2"
+object 98 parent 0 active 1 name "Domino 2"
 transform 21.9 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2762,7 +2878,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 95 parent 0 active 1 name "Domino 3"
+object 99 parent 0 active 1 name "Domino 3"
 transform 22.85 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2804,7 +2920,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 96 parent 0 active 1 name "Domino 4"
+object 100 parent 0 active 1 name "Domino 4"
 transform 23.8 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2846,7 +2962,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 97 parent 0 active 1 name "Domino 5"
+object 101 parent 0 active 1 name "Domino 5"
 transform 24.75 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2888,7 +3004,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 98 parent 0 active 1 name "Domino 6"
+object 102 parent 0 active 1 name "Domino 6"
 transform 25.7 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2930,7 +3046,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 99 parent 0 active 1 name "Domino 7"
+object 103 parent 0 active 1 name "Domino 7"
 transform 26.65 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -2972,7 +3088,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 100 parent 0 active 1 name "Domino 8"
+object 104 parent 0 active 1 name "Domino 8"
 transform 27.6 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3014,7 +3130,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 101 parent 0 active 1 name "Domino 9"
+object 105 parent 0 active 1 name "Domino 9"
 transform 28.55 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3056,7 +3172,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 102 parent 0 active 1 name "Domino 10"
+object 106 parent 0 active 1 name "Domino 10"
 transform 29.5 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3098,7 +3214,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 103 parent 0 active 1 name "Domino 11"
+object 107 parent 0 active 1 name "Domino 11"
 transform 30.45 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3140,7 +3256,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 104 parent 0 active 1 name "Domino 12"
+object 108 parent 0 active 1 name "Domino 12"
 transform 31.4 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3182,7 +3298,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 105 parent 0 active 1 name "Domino 13"
+object 109 parent 0 active 1 name "Domino 13"
 transform 32.35 0.8 -12 0 0 0 1 0.22 1.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3224,7 +3340,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 106 parent 0 active 1 name "Rope gantry post"
+object 110 parent 0 active 1 name "Rope gantry post"
 transform 38 3.5 -18 0 0 0 1 0.3 7 0.3
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3253,7 +3369,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 107 parent 0 active 1 name "Rope gantry post 2"
+object 111 parent 0 active 1 name "Rope gantry post 2"
 transform 38 3.5 -6 0 0 0 1 0.3 7 0.3
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3282,7 +3398,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 108 parent 0 active 1 name "Rope gantry beam"
+object 112 parent 0 active 1 name "Rope gantry beam"
 transform 38 7.1 -12 0 0 0 1 0.3 0.3 12.3
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3311,7 +3427,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 109 parent 0 active 1 name "Wrecking ball"
+object 113 parent 0 active 1 name "Wrecking ball"
 transform 38 1.8 -12 0 0 0 1 1.6 1.6 1.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:sphere_smooth"
@@ -3353,7 +3469,7 @@ field freezeRotation 0
 field continuousCollision 0
 field allowSleeping 1
 field debris 0
-object 110 parent 0 active 1 name "Wrecking ball rope"
+object 114 parent 0 active 1 name "Wrecking ball rope"
 transform 38 6.9 -12 0 0 0 1 1 1 1
 component Tallow.Rope enabled 1
 field length 4.3
@@ -3366,7 +3482,7 @@ field friction 0.6
 field startAttachedTo 0 -1
 field holdStart 1
 field startOffset 0 0 0
-field endAttachedTo 109 -1
+field endAttachedTo 113 -1
 field endOffset 0 0.5 0
 field knotStiffness 0.5
 field windDrag 1
@@ -3397,7 +3513,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 111 parent 0 active 1 name "Pool rim 0"
+object 115 parent 0 active 1 name "Pool rim 0"
 transform -26 0.3 -29.4 0 0 0 1 23.4 0.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3426,7 +3542,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 112 parent 0 active 1 name "Pool rim 1"
+object 116 parent 0 active 1 name "Pool rim 1"
 transform -26 0.3 -14.6 0 0 0 1 23.4 0.6 0.8
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3455,7 +3571,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 113 parent 0 active 1 name "Pool rim 2"
+object 117 parent 0 active 1 name "Pool rim 2"
 transform -37.4 0.3 -22 0 0 0 1 0.8 0.6 15.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3484,7 +3600,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 114 parent 0 active 1 name "Pool rim 3"
+object 118 parent 0 active 1 name "Pool rim 3"
 transform -14.6 0.3 -22 0 0 0 1 0.8 0.6 15.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3513,7 +3629,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 115 parent 0 active 1 name "Pool water"
+object 119 parent 0 active 1 name "Pool water"
 transform -26 0.42 -22 0 0 0 1 1 1 1
 component Tallow.Water enabled 1
 field look Realistic
@@ -3545,7 +3661,7 @@ field floatRigidbodies 1
 field buoyancy 1.6
 field waterDrag 1
 field waterAngularDrag 1
-object 116 parent 0 active 1 name "Tree trunk 0"
+object 120 parent 0 active 1 name "Tree trunk 0"
 transform -41 1.4 -2 0 0 0 1 0.42 2.8 0.42
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3574,7 +3690,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 117 parent 0 active 1 name "Tree leaves 0.0"
+object 121 parent 0 active 1 name "Tree leaves 0.0"
 transform -41 3 -2 0 0 0 1 3.6 2.3 3.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3600,7 +3716,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 118 parent 0 active 1 name "Tree leaves 0.1"
+object 122 parent 0 active 1 name "Tree leaves 0.1"
 transform -41 4.25 -2 0 0 0 1 2.6499999 2.3 2.6499999
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3626,7 +3742,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 119 parent 0 active 1 name "Tree leaves 0.2"
+object 123 parent 0 active 1 name "Tree leaves 0.2"
 transform -41 5.5 -2 0 0 0 1 1.6999999 2.3 1.6999999
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3652,7 +3768,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 120 parent 0 active 1 name "Tree trunk 1"
+object 124 parent 0 active 1 name "Tree trunk 1"
 transform -34.5 1.4 -4.5 0 0 0 1 0.42 2.8 0.42
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3681,7 +3797,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 121 parent 0 active 1 name "Tree leaves 1.0"
+object 125 parent 0 active 1 name "Tree leaves 1.0"
 transform -34.5 3 -4.5 0 0 0 1 3.6 2.3 3.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3707,7 +3823,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 122 parent 0 active 1 name "Tree leaves 1.1"
+object 126 parent 0 active 1 name "Tree leaves 1.1"
 transform -34.5 4.25 -4.5 0 0 0 1 2.6499999 2.3 2.6499999
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3733,7 +3849,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 123 parent 0 active 1 name "Tree leaves 1.2"
+object 127 parent 0 active 1 name "Tree leaves 1.2"
 transform -34.5 5.5 -4.5 0 0 0 1 1.6999999 2.3 1.6999999
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3759,7 +3875,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 124 parent 0 active 1 name "Tree trunk 2"
+object 128 parent 0 active 1 name "Tree trunk 2"
 transform -28 1.4 -2 0 0 0 1 0.42 2.8 0.42
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3788,7 +3904,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 125 parent 0 active 1 name "Tree leaves 2.0"
+object 129 parent 0 active 1 name "Tree leaves 2.0"
 transform -28 3 -2 0 0 0 1 3.6 2.3 3.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3814,7 +3930,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 126 parent 0 active 1 name "Tree leaves 2.1"
+object 130 parent 0 active 1 name "Tree leaves 2.1"
 transform -28 4.25 -2 0 0 0 1 2.6499999 2.3 2.6499999
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3840,7 +3956,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 127 parent 0 active 1 name "Tree leaves 2.2"
+object 131 parent 0 active 1 name "Tree leaves 2.2"
 transform -28 5.5 -2 0 0 0 1 1.6999999 2.3 1.6999999
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3866,7 +3982,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 128 parent 0 active 1 name "Tree trunk 3"
+object 132 parent 0 active 1 name "Tree trunk 3"
 transform -21.5 1.4 -4.5 0 0 0 1 0.42 2.8 0.42
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -3895,7 +4011,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 129 parent 0 active 1 name "Tree leaves 3.0"
+object 133 parent 0 active 1 name "Tree leaves 3.0"
 transform -21.5 3 -4.5 0 0 0 1 3.6 2.3 3.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3921,7 +4037,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 130 parent 0 active 1 name "Tree leaves 3.1"
+object 134 parent 0 active 1 name "Tree leaves 3.1"
 transform -21.5 4.25 -4.5 0 0 0 1 2.6499999 2.3 2.6499999
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3947,7 +4063,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 131 parent 0 active 1 name "Tree leaves 3.2"
+object 135 parent 0 active 1 name "Tree leaves 3.2"
 transform -21.5 5.5 -4.5 0 0 0 1 1.6999999 2.3 1.6999999
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -3973,7 +4089,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 132 parent 0 active 1 name "Tree trunk 4"
+object 136 parent 0 active 1 name "Tree trunk 4"
 transform -15 1.4 -2 0 0 0 1 0.42 2.8 0.42
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -4002,7 +4118,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 133 parent 0 active 1 name "Tree leaves 4.0"
+object 137 parent 0 active 1 name "Tree leaves 4.0"
 transform -15 3 -2 0 0 0 1 3.6 2.3 3.6
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -4028,7 +4144,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 134 parent 0 active 1 name "Tree leaves 4.1"
+object 138 parent 0 active 1 name "Tree leaves 4.1"
 transform -15 4.25 -2 0 0 0 1 2.6499999 2.3 2.6499999
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -4054,7 +4170,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 135 parent 0 active 1 name "Tree leaves 4.2"
+object 139 parent 0 active 1 name "Tree leaves 4.2"
 transform -15 5.5 -2 0 0 0 1 1.6999999 2.3 1.6999999
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cone"
@@ -4080,7 +4196,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 136 parent 0 active 1 name "Bush"
+object 140 parent 0 active 1 name "Bush"
 transform -35.881714 0 -3.1141205 0 0.93819445 0 -0.34610862 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -4106,7 +4222,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 137 parent 0 active 1 name "Grass"
+object 141 parent 0 active 1 name "Grass"
 transform -42.322697 0 -5.1916695 0 0.90613717 0 0.42298394 1.0531014 1.0531014 1.0531014
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4132,7 +4248,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 138 parent 0 active 1 name "Grass"
+object 142 parent 0 active 1 name "Grass"
 transform -10.545784 0 -0.9788971 0 0.9951822 0 -0.098042496 1.4518502 1.4518502 1.4518502
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4158,7 +4274,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 139 parent 0 active 1 name "Grass"
+object 143 parent 0 active 1 name "Grass"
 transform -23.428793 0 -8.0130005 0 0.6378781 0 -0.7701373 1.418082 1.418082 1.418082
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4184,7 +4300,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 140 parent 0 active 1 name "Grass"
+object 144 parent 0 active 1 name "Grass"
 transform -27.628534 0 -32.69032 0 0.7090109 0 -0.7051975 1.8342108 1.8342108 1.8342108
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4210,7 +4326,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 141 parent 0 active 1 name "Grass"
+object 145 parent 0 active 1 name "Grass"
 transform -37.919067 0 -0.65644455 0 0.37412506 0 0.92737824 1.4547799 1.4547799 1.4547799
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4236,7 +4352,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 142 parent 0 active 1 name "Grass"
+object 146 parent 0 active 1 name "Grass"
 transform -40.327885 0 -31.895445 0 0.9279243 0 -0.37276876 1.772839 1.772839 1.772839
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4262,7 +4378,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 143 parent 0 active 1 name "Grass"
+object 147 parent 0 active 1 name "Grass"
 transform -23.410635 0 -2.651043 0 0.74115276 0 0.6713364 1.5905089 1.5905089 1.5905089
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4288,7 +4404,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 144 parent 0 active 1 name "Grass"
+object 148 parent 0 active 1 name "Grass"
 transform -38.62153 0 -4.5308304 0 0.9231878 0 -0.3843491 1.3793087 1.3793087 1.3793087
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4314,7 +4430,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 145 parent 0 active 1 name "Grass"
+object 149 parent 0 active 1 name "Grass"
 transform -35.37432 0 -2.855938 0 0.9620353 0 -0.27292517 1.4927748 1.4927748 1.4927748
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4340,7 +4456,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 146 parent 0 active 1 name "Grass"
+object 150 parent 0 active 1 name "Grass"
 transform -43.93048 0 -11.100756 0 0.68446314 0 -0.7290475 1.144686 1.144686 1.144686
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4366,7 +4482,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 147 parent 0 active 1 name "Grass"
+object 151 parent 0 active 1 name "Grass"
 transform -18.775616 0 -4.2182655 0 0.9194228 0 0.39327055 1.4066529 1.4066529 1.4066529
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4392,7 +4508,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 148 parent 0 active 1 name "Bush"
+object 152 parent 0 active 1 name "Bush"
 transform -27.618158 0 -7.7141685 0 0.1340603 0 -0.9909732 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -4418,7 +4534,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 149 parent 0 active 1 name "Grass"
+object 153 parent 0 active 1 name "Grass"
 transform -34.572243 0 -1.8111229 0 0.78068584 0 -0.62492365 1.2087892 1.2087892 1.2087892
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4444,7 +4560,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 150 parent 0 active 1 name "Grass"
+object 154 parent 0 active 1 name "Grass"
 transform -34.00934 0 -6.2645016 0 0.6845332 0 -0.7289817 1.2106355 1.2106355 1.2106355
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4470,7 +4586,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 151 parent 0 active 1 name "Grass"
+object 155 parent 0 active 1 name "Grass"
 transform -37.01219 0 -4.6505833 0 0.59909016 0 0.8006816 1.6788586 1.6788586 1.6788586
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4496,7 +4612,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 152 parent 0 active 1 name "Bush"
+object 156 parent 0 active 1 name "Bush"
 transform -40.583138 0 -22.105927 0 0.9942685 0 0.10691193 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -4522,7 +4638,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 153 parent 0 active 1 name "Grass"
+object 157 parent 0 active 1 name "Grass"
 transform -14.710245 0 -8.14319 0 0.6650773 0 0.7467745 1.6855726 1.6855726 1.6855726
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4548,7 +4664,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 154 parent 0 active 1 name "Grass"
+object 158 parent 0 active 1 name "Grass"
 transform -41.411156 0 -9.272053 0 0.52846867 0 -0.84895283 1.5628138 1.5628138 1.5628138
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4574,7 +4690,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 155 parent 0 active 1 name "Grass"
+object 159 parent 0 active 1 name "Grass"
 transform -42.066406 0 -9.109453 0 0.97966063 0 0.20066151 1.9951019 1.9951019 1.9951019
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4600,7 +4716,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 156 parent 0 active 1 name "Grass"
+object 160 parent 0 active 1 name "Grass"
 transform -15.1776905 0 -6.7715263 0 0.04739264 0 -0.99887633 1.9522088 1.9522088 1.9522088
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4626,7 +4742,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 157 parent 0 active 1 name "Grass"
+object 161 parent 0 active 1 name "Grass"
 transform -10.659924 0 -27.32671 0 0.23525696 0 -0.9719332 1.8340887 1.8340887 1.8340887
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4652,7 +4768,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 158 parent 0 active 1 name "Bush"
+object 162 parent 0 active 1 name "Bush"
 transform -37.676785 0 -35.03154 0 0.03067527 0 0.9995294 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -4678,7 +4794,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 159 parent 0 active 1 name "Grass"
+object 163 parent 0 active 1 name "Grass"
 transform -18.009857 0 -32.847973 0 0.9132039 0 0.40750292 1.49131 1.49131 1.49131
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4704,7 +4820,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 160 parent 0 active 1 name "Grass"
+object 164 parent 0 active 1 name "Grass"
 transform -25.700647 0 -33.900482 0 0.8494213 0 -0.5277153 1.234638 1.234638 1.234638
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4730,7 +4846,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 161 parent 0 active 1 name "Grass"
+object 165 parent 0 active 1 name "Grass"
 transform -37.87964 0 -9.089678 0 0.7104292 0 -0.7037687 1.4315099 1.4315099 1.4315099
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4756,7 +4872,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 162 parent 0 active 1 name "Grass"
+object 166 parent 0 active 1 name "Grass"
 transform -12.988327 0 -32.946854 0 0.9630619 0 -0.26927996 1.1524835 1.1524835 1.1524835
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4782,7 +4898,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 163 parent 0 active 1 name "Grass"
+object 167 parent 0 active 1 name "Grass"
 transform -31.309986 0 -12.980545 0 0.99303496 0 0.11781998 1.2691691 1.2691691 1.2691691
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4808,7 +4924,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 164 parent 0 active 1 name "Bush"
+object 168 parent 0 active 1 name "Bush"
 transform -43.537224 0 -7.6493473 0 0.9810318 0 -0.19384709 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -4834,7 +4950,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 165 parent 0 active 1 name "Grass"
+object 169 parent 0 active 1 name "Grass"
 transform -11.550194 0 -7.5015793 0 0.088234164 0 0.99609977 1.3252766 1.3252766 1.3252766
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4860,7 +4976,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 166 parent 0 active 1 name "Grass"
+object 170 parent 0 active 1 name "Grass"
 transform -41.997406 0 -17.127398 0 0.27930638 0 -0.96020204 1.4272832 1.4272832 1.4272832
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4886,7 +5002,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 167 parent 0 active 1 name "Grass"
+object 171 parent 0 active 1 name "Grass"
 transform -43.741634 0 -0.3872757 0 0.69632316 0 0.7177284 1.4306706 1.4306706 1.4306706
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4912,7 +5028,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 168 parent 0 active 1 name "Grass"
+object 172 parent 0 active 1 name "Grass"
 transform -35.6166 0 -31.106615 0 0.17308944 0 -0.98490614 1.1373618 1.1373618 1.1373618
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4938,7 +5054,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 169 parent 0 active 1 name "Grass"
+object 173 parent 0 active 1 name "Grass"
 transform -42.869003 0 -16.503365 0 0.5360575 0 0.8441815 1.6817122 1.6817122 1.6817122
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4964,7 +5080,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 170 parent 0 active 1 name "Grass"
+object 174 parent 0 active 1 name "Grass"
 transform -29.155382 0 -33.876312 0 0.3947905 0 -0.91877115 1.4535592 1.4535592 1.4535592
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -4990,7 +5106,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 171 parent 0 active 1 name "Bush"
+object 175 parent 0 active 1 name "Bush"
 transform -26.507912 0 -9.211628 0 0.788856 0 0.614578 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -5016,7 +5132,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 172 parent 0 active 1 name "Grass"
+object 176 parent 0 active 1 name "Grass"
 transform -24.648508 0 -4.98567 0 0.07896672 0 -0.99687725 1.6224003 1.6224003 1.6224003
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5042,7 +5158,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 173 parent 0 active 1 name "Grass"
+object 177 parent 0 active 1 name "Grass"
 transform -43.623344 0 -28.887892 0 0.18798877 0 -0.9821712 1.5824673 1.5824673 1.5824673
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5068,7 +5184,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 174 parent 0 active 1 name "Grass"
+object 178 parent 0 active 1 name "Grass"
 transform -20.466408 0 -9.609886 0 0.48088807 0 0.876782 1.6570992 1.6570992 1.6570992
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5094,7 +5210,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 175 parent 0 active 1 name "Grass"
+object 179 parent 0 active 1 name "Grass"
 transform -42.1572 0 -3.3503342 0 0.98503447 0 -0.1723576 1.3679408 1.3679408 1.3679408
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5120,7 +5236,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 176 parent 0 active 1 name "Grass"
+object 180 parent 0 active 1 name "Grass"
 transform -43.863033 0 -21.272053 0 0.5040835 0 -0.8636549 1.911406 1.911406 1.911406
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5146,7 +5262,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 177 parent 0 active 1 name "Grass"
+object 181 parent 0 active 1 name "Grass"
 transform -34.257328 0 -0.91132736 0 0.0023968793 0 0.99999714 1.9788969 1.9788969 1.9788969
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5172,7 +5288,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 178 parent 0 active 1 name "Grass"
+object 182 parent 0 active 1 name "Grass"
 transform -26.044619 0 -4.5659866 0 0.9640239 0 0.2658157 1.6439612 1.6439612 1.6439612
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5198,7 +5314,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 179 parent 0 active 1 name "Grass"
+object 183 parent 0 active 1 name "Grass"
 transform -19.698574 0 -5.741543 0 0.9590356 0 0.28328556 1.1201648 1.1201648 1.1201648
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5224,7 +5340,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 180 parent 0 active 1 name "Grass"
+object 184 parent 0 active 1 name "Grass"
 transform -29.83969 0 -12.234013 0 0.5748749 0 -0.81824136 1.1745784 1.1745784 1.1745784
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5250,7 +5366,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 181 parent 0 active 1 name "Grass"
+object 185 parent 0 active 1 name "Grass"
 transform -40.728405 0 -24.838818 0 0.9858172 0 0.16782261 1.2290684 1.2290684 1.2290684
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5276,7 +5392,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 182 parent 0 active 1 name "Grass"
+object 186 parent 0 active 1 name "Grass"
 transform -41.667965 0 -5.8365765 0 0.07872786 0 -0.99689615 1.7070725 1.7070725 1.7070725
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5302,7 +5418,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 183 parent 0 active 1 name "Bush"
+object 187 parent 0 active 1 name "Bush"
 transform -23.324512 0 -4.801647 0 0.52418864 0 0.8516022 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -5328,7 +5444,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 184 parent 0 active 1 name "Grass"
+object 188 parent 0 active 1 name "Grass"
 transform -38.832165 0 -7.01268 0 0.91027 0 0.41401517 1.0155337 1.0155337 1.0155337
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5354,7 +5470,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 185 parent 0 active 1 name "Grass"
+object 189 parent 0 active 1 name "Grass"
 transform -20.0441 0 -33.197895 0 0.9824629 0 -0.18645827 1.4755932 1.4755932 1.4755932
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5380,7 +5496,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 186 parent 0 active 1 name "Grass"
+object 190 parent 0 active 1 name "Grass"
 transform -29.03865 0 -3.341545 0 0.40401983 0 -0.9147502 1.2909437 1.2909437 1.2909437
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5406,7 +5522,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 187 parent 0 active 1 name "Bush"
+object 191 parent 0 active 1 name "Bush"
 transform -20.790142 0 -5.376791 0 0.44219455 0 -0.89691913 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -5432,7 +5548,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 188 parent 0 active 1 name "Grass"
+object 192 parent 0 active 1 name "Grass"
 transform -11.162128 0 -30.974228 0 0.8334699 0 -0.55256486 1.714992 1.714992 1.714992
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5458,7 +5574,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 189 parent 0 active 1 name "Grass"
+object 193 parent 0 active 1 name "Grass"
 transform -37.100388 0 -9.709316 0 0.20195305 0 -0.9793952 1.1746242 1.1746242 1.1746242
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5484,7 +5600,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 190 parent 0 active 1 name "Grass"
+object 194 parent 0 active 1 name "Grass"
 transform -42.47782 0 -24.369696 0 0.71734434 0 0.6967188 1.9609827 1.9609827 1.9609827
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5510,7 +5626,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 191 parent 0 active 1 name "Grass"
+object 195 parent 0 active 1 name "Grass"
 transform -34.010895 0 -8.104738 0 0.99697304 0 0.07774827 1.3881285 1.3881285 1.3881285
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5536,7 +5652,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 192 parent 0 active 1 name "Grass"
+object 196 parent 0 active 1 name "Grass"
 transform -22.690533 0 -9.844999 0 0.99777603 0 -0.066655695 1.0314488 1.0314488 1.0314488
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5562,7 +5678,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 193 parent 0 active 1 name "Grass"
+object 197 parent 0 active 1 name "Grass"
 transform -12.313877 0 -9.693386 0 0.39787146 0 0.9174412 1.4169832 1.4169832 1.4169832
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5588,7 +5704,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 194 parent 0 active 1 name "Bush"
+object 198 parent 0 active 1 name "Bush"
 transform -15.296497 0 -5.9843445 0 0.05782844 0 0.99832654 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -5614,7 +5730,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 195 parent 0 active 1 name "Grass"
+object 199 parent 0 active 1 name "Grass"
 transform -34.23035 0 -1.8792381 0 0.7306368 0 0.6827664 1.3135576 1.3135576 1.3135576
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5640,7 +5756,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 196 parent 0 active 1 name "Grass"
+object 200 parent 0 active 1 name "Grass"
 transform -42.600258 0 -13.827602 0 0.90869564 0 -0.4174593 1.4714732 1.4714732 1.4714732
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5666,7 +5782,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 197 parent 0 active 1 name "Grass"
+object 201 parent 0 active 1 name "Grass"
 transform -28.96965 0 -35.004074 0 0.41852644 0 -0.9082046 1.8669261 1.8669261 1.8669261
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5692,7 +5808,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 198 parent 0 active 1 name "Grass"
+object 202 parent 0 active 1 name "Grass"
 transform -11.448509 0 -4.8296623 0 0.72699344 0 0.68664443 1.4888532 1.4888532 1.4888532
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5718,7 +5834,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 199 parent 0 active 1 name "Bush"
+object 203 parent 0 active 1 name "Bush"
 transform -10.13541 0 -27.629389 0 0.65209144 0 0.7581403 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -5744,7 +5860,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 200 parent 0 active 1 name "Grass"
+object 204 parent 0 active 1 name "Grass"
 transform -12.510506 0 -29.268024 0 0.8605577 0 -0.50935304 1.4867628 1.4867628 1.4867628
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5770,7 +5886,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 201 parent 0 active 1 name "Grass"
+object 205 parent 0 active 1 name "Grass"
 transform -27.733852 0 -6.054657 0 0.8830788 0 0.46922466 1.1994355 1.1994355 1.1994355
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5796,7 +5912,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 202 parent 0 active 1 name "Grass"
+object 206 parent 0 active 1 name "Grass"
 transform -39.716732 0 -13.505699 0 0.22592786 0 -0.97414404 1.1826199 1.1826199 1.1826199
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5822,7 +5938,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 203 parent 0 active 1 name "Grass"
+object 207 parent 0 active 1 name "Grass"
 transform -26.163425 0 -12.632822 0 0.37692407 0 0.92624414 1.1985198 1.1985198 1.1985198
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5848,7 +5964,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 204 parent 0 active 1 name "Bush"
+object 208 parent 0 active 1 name "Bush"
 transform -11.468224 0 -19.993774 0 0.33892506 0 0.94081336 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -5874,7 +5990,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 205 parent 0 active 1 name "Grass"
+object 209 parent 0 active 1 name "Grass"
 transform -29.560051 0 -10.664043 0 0.7112385 0 0.7029508 1.4829938 1.4829938 1.4829938
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5900,7 +6016,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 206 parent 0 active 1 name "Grass"
+object 210 parent 0 active 1 name "Grass"
 transform -33.192738 0 -11.645685 0 0.8524929 0 -0.52273875 1.1110094 1.1110094 1.1110094
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5926,7 +6042,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 207 parent 0 active 1 name "Grass"
+object 211 parent 0 active 1 name "Grass"
 transform -41.036057 0 -30.561134 0 0.97640526 0 0.21594627 1.0578469 1.0578469 1.0578469
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5952,7 +6068,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 208 parent 0 active 1 name "Grass"
+object 212 parent 0 active 1 name "Grass"
 transform -39.828793 0 -32.585945 0 0.3412243 0 -0.9399819 1.7388875 1.7388875 1.7388875
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -5978,7 +6094,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 209 parent 0 active 1 name "Grass"
+object 213 parent 0 active 1 name "Grass"
 transform -24.218937 0 -2.318699 0 0.57188994 0 0.8203304 1.1920501 1.1920501 1.1920501
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6004,7 +6120,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 210 parent 0 active 1 name "Grass"
+object 214 parent 0 active 1 name "Grass"
 transform -39.963684 0 -32.356876 0 0.17672375 0 -0.9842605 1.619791 1.619791 1.619791
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6030,7 +6146,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 211 parent 0 active 1 name "Grass"
+object 215 parent 0 active 1 name "Grass"
 transform -10.199223 0 -23.52758 0 0.34149456 0 -0.93988377 1.8146486 1.8146486 1.8146486
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6056,7 +6172,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 212 parent 0 active 1 name "Bush"
+object 216 parent 0 active 1 name "Bush"
 transform -21.053177 0 -5.8623943 0 0.0032118822 0 -0.9999948 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -6082,7 +6198,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 213 parent 0 active 1 name "Grass"
+object 217 parent 0 active 1 name "Grass"
 transform -40.131256 0 -34.613503 0 0.40713078 0 0.9133699 1.9210651 1.9210651 1.9210651
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6108,7 +6224,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 214 parent 0 active 1 name "Grass"
+object 218 parent 0 active 1 name "Grass"
 transform -13.49572 0 -15.492058 0 0.9544773 0 0.29828355 1.1151751 1.1151751 1.1151751
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6134,7 +6250,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 215 parent 0 active 1 name "Grass"
+object 219 parent 0 active 1 name "Grass"
 transform -40.01349 0 -6.6221104 0 0.61833364 0 -0.78591573 1.9448234 1.9448234 1.9448234
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6160,7 +6276,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 216 parent 0 active 1 name "Grass"
+object 220 parent 0 active 1 name "Grass"
 transform -11.486382 0 -17.272419 0 0.9560369 0 0.29324636 1.5036392 1.5036392 1.5036392
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6186,7 +6302,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 217 parent 0 active 1 name "Grass"
+object 221 parent 0 active 1 name "Grass"
 transform -40.540077 0 -14.57139 0 0.8240549 0 0.5665099 1.8760204 1.8760204 1.8760204
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6212,7 +6328,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 218 parent 0 active 1 name "Grass"
+object 222 parent 0 active 1 name "Grass"
 transform -20.064852 0 -6.2260475 0 0.83679235 0 0.5475204 1.0712138 1.0712138 1.0712138
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6238,7 +6354,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 219 parent 0 active 1 name "Bush"
+object 223 parent 0 active 1 name "Bush"
 transform -10.127628 0 -10.447607 0 0.8541176 0 -0.5200799 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -6264,7 +6380,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 220 parent 0 active 1 name "Grass"
+object 224 parent 0 active 1 name "Grass"
 transform -39.100388 0 -19.496086 0 0.7945956 0 0.60713905 1.1317617 1.1317617 1.1317617
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6290,7 +6406,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 221 parent 0 active 1 name "Grass"
+object 225 parent 0 active 1 name "Grass"
 transform -30.457588 0 -12.212589 0 0.049212057 0 0.99878836 1.528481 1.528481 1.528481
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6316,7 +6432,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 222 parent 0 active 1 name "Grass"
+object 226 parent 0 active 1 name "Grass"
 transform -13.193256 0 -7.9141216 0 0.9628292 0 0.27011096 1.3209583 1.3209583 1.3209583
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6342,7 +6458,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 223 parent 0 active 1 name "Grass"
+object 227 parent 0 active 1 name "Grass"
 transform -16.13437 0 -0.674572 0 0.91821194 0 0.39608946 1.8108034 1.8108034 1.8108034
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6368,7 +6484,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 224 parent 0 active 1 name "Grass"
+object 228 parent 0 active 1 name "Grass"
 transform -18.492348 0 -10.981003 0 0.74362576 0 -0.6685961 1.2829938 1.2829938 1.2829938
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6394,7 +6510,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 225 parent 0 active 1 name "Bush"
+object 229 parent 0 active 1 name "Bush"
 transform -24.118288 0 -33.44674 0 0.30575547 0 -0.95211005 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -6420,7 +6536,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 226 parent 0 active 1 name "Grass"
+object 230 parent 0 active 1 name "Grass"
 transform -29.1476 0 -5.3636074 0 0.993125 0 -0.11705838 1.0015259 1.0015259 1.0015259
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6446,7 +6562,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 227 parent 0 active 1 name "Grass"
+object 231 parent 0 active 1 name "Grass"
 transform -42.2952 0 -15.383841 0 0.09630124 0 -0.9953522 1.925597 1.925597 1.925597
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6472,7 +6588,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 228 parent 0 active 1 name "Grass"
+object 232 parent 0 active 1 name "Grass"
 transform -12.300907 0 -31.56475 0 0.18634056 0 0.98248523 1.8615396 1.8615396 1.8615396
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6498,7 +6614,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 229 parent 0 active 1 name "Grass"
+object 233 parent 0 active 1 name "Grass"
 transform -29.609856 0 -12.884415 0 0.73021126 0 -0.68322146 1.6328527 1.6328527 1.6328527
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6524,7 +6640,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 230 parent 0 active 1 name "Grass"
+object 234 parent 0 active 1 name "Grass"
 transform -43.06407 0 -17.022476 0 0.9127932 0 0.40842205 1.6497139 1.6497139 1.6497139
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6550,7 +6666,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 231 parent 0 active 1 name "Grass"
+object 235 parent 0 active 1 name "Grass"
 transform -26.388067 0 -9.035294 0 0.28964671 0 0.95713365 1.1153277 1.1153277 1.1153277
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6576,7 +6692,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 232 parent 0 active 1 name "Grass"
+object 236 parent 0 active 1 name "Grass"
 transform -10.555641 0 -27.04985 0 0.9776112 0 -0.21041957 1.2317083 1.2317083 1.2317083
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6602,7 +6718,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 233 parent 0 active 1 name "Bush"
+object 237 parent 0 active 1 name "Bush"
 transform -42.476265 0 -3.6348839 0 0.920194 0 -0.39146274 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -6628,7 +6744,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 234 parent 0 active 1 name "Grass"
+object 238 parent 0 active 1 name "Grass"
 transform -39.181843 0 -3.8985596 0 0.99399364 0 0.10943773 1.1177996 1.1177996 1.1177996
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6654,7 +6770,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 235 parent 0 active 1 name "Grass"
+object 239 parent 0 active 1 name "Grass"
 transform -43.641506 0 -6.242527 0 0.5600338 0 0.82846975 1.8713818 1.8713818 1.8713818
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6680,7 +6796,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 236 parent 0 active 1 name "Grass"
+object 240 parent 0 active 1 name "Grass"
 transform -22.483528 0 -0.32245255 0 0.98542845 0 -0.1700906 1.9288472 1.9288472 1.9288472
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6706,7 +6822,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 237 parent 0 active 1 name "Grass"
+object 241 parent 0 active 1 name "Grass"
 transform -41.168354 0 -30.145296 0 0.84876287 0 -0.52877367 1.8438544 1.8438544 1.8438544
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6732,7 +6848,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 238 parent 0 active 1 name "Grass"
+object 242 parent 0 active 1 name "Grass"
 transform -42.981583 0 -21.665918 0 0.34689555 0 0.93790376 1.2698557 1.2698557 1.2698557
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6758,7 +6874,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 239 parent 0 active 1 name "Bush"
+object 243 parent 0 active 1 name "Bush"
 transform -34.024384 0 -5.7860374 0 0.5821477 0 0.81308305 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -6784,7 +6900,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 240 parent 0 active 1 name "Grass"
+object 244 parent 0 active 1 name "Grass"
 transform -11.035019 0 -18.628153 0 0.92922306 0 0.36951935 1.9527886 1.9527886 1.9527886
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6810,7 +6926,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 241 parent 0 active 1 name "Grass"
+object 245 parent 0 active 1 name "Grass"
 transform -19.80493 0 -12.489998 0 0.89800805 0 0.43997902 1.647715 1.647715 1.647715
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6836,7 +6952,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 242 parent 0 active 1 name "Grass"
+object 246 parent 0 active 1 name "Grass"
 transform -10.97847 0 -18.678143 0 0.5408241 0 0.84113574 1.9199665 1.9199665 1.9199665
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6862,7 +6978,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 243 parent 0 active 1 name "Grass"
+object 247 parent 0 active 1 name "Grass"
 transform -42.181065 0 -27.59588 0 0.97172415 0 -0.2361189 1.1907225 1.1907225 1.1907225
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6888,7 +7004,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 244 parent 0 active 1 name "Grass"
+object 248 parent 0 active 1 name "Grass"
 transform -12.661478 0 -32.435432 0 0.91647524 0 -0.40009144 1.3809415 1.3809415 1.3809415
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6914,7 +7030,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 245 parent 0 active 1 name "Grass"
+object 249 parent 0 active 1 name "Grass"
 transform -40.12918 0 -28.590158 0 0.630242 0 -0.7763987 1.0301213 1.0301213 1.0301213
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6940,7 +7056,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 246 parent 0 active 1 name "Bush"
+object 250 parent 0 active 1 name "Bush"
 transform -35.792477 0 -30.586954 0 0.89855576 0 -0.43885943 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -6966,7 +7082,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 247 parent 0 active 1 name "Grass"
+object 251 parent 0 active 1 name "Grass"
 transform -38.85551 0 -31.860838 0 0.9996234 0 -0.027440842 1.2542305 1.2542305 1.2542305
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -6992,7 +7108,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 248 parent 0 active 1 name "Grass"
+object 252 parent 0 active 1 name "Grass"
 transform -32.002075 0 -5.2526436 0 0.95981956 0 -0.2806179 1.099733 1.099733 1.099733
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7018,7 +7134,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 249 parent 0 active 1 name "Grass"
+object 253 parent 0 active 1 name "Grass"
 transform -42.78599 0 -28.568186 0 0.7104967 0 0.7037005 1.8205234 1.8205234 1.8205234
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7044,7 +7160,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 250 parent 0 active 1 name "Grass"
+object 254 parent 0 active 1 name "Grass"
 transform -15.029831 0 -33.434654 0 0.58747494 0 0.80924237 1.6162356 1.6162356 1.6162356
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7070,7 +7186,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 251 parent 0 active 1 name "Grass"
+object 255 parent 0 active 1 name "Grass"
 transform -40.059143 0 -31.163744 0 0.1787523 0 0.9838941 1.4079499 1.4079499 1.4079499
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7096,7 +7212,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 252 parent 0 active 1 name "Grass"
+object 256 parent 0 active 1 name "Grass"
 transform -24.40415 0 -34.370155 0 0.15691975 0 -0.98761135 1.9991455 1.9991455 1.9991455
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7122,7 +7238,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 253 parent 0 active 1 name "Grass"
+object 257 parent 0 active 1 name "Grass"
 transform -38.962387 0 -13.048113 0 0.5440861 0 0.8390294 1.7105974 1.7105974 1.7105974
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7148,7 +7264,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 254 parent 0 active 1 name "Grass"
+object 258 parent 0 active 1 name "Grass"
 transform -20.022827 0 -34.44651 0 0.5930087 0 -0.80519605 1.7577325 1.7577325 1.7577325
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7174,7 +7290,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 255 parent 0 active 1 name "Grass"
+object 259 parent 0 active 1 name "Grass"
 transform -31.188587 0 -1.0667877 0 0.98604155 0 -0.1664994 1.5210192 1.5210192 1.5210192
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7200,7 +7316,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 256 parent 0 active 1 name "Grass"
+object 260 parent 0 active 1 name "Grass"
 transform -40.454475 0 -11.300709 0 0.58607763 0 -0.81025493 1.8596323 1.8596323 1.8596323
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7226,7 +7342,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 257 parent 0 active 1 name "Grass"
+object 261 parent 0 active 1 name "Grass"
 transform -38.35227 0 -11.299061 0 0.11327261 0 -0.99356395 1.204242 1.204242 1.204242
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7252,7 +7368,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 258 parent 0 active 1 name "Grass"
+object 262 parent 0 active 1 name "Grass"
 transform -19.215563 0 -11.9296875 0 0.4776484 0 0.87855107 1.743862 1.743862 1.743862
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7278,7 +7394,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 259 parent 0 active 1 name "Grass"
+object 263 parent 0 active 1 name "Grass"
 transform -10.576912 0 -29.351522 0 0.9920237 0 0.12605146 1.4551003 1.4551003 1.4551003
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7304,7 +7420,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 260 parent 0 active 1 name "Grass"
+object 264 parent 0 active 1 name "Grass"
 transform -42.731518 0 -13.339254 0 0.9986514 0 0.051917046 1.3187762 1.3187762 1.3187762
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7330,7 +7446,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 261 parent 0 active 1 name "Grass"
+object 265 parent 0 active 1 name "Grass"
 transform -41.83813 0 -13.90341 0 0.40064037 0 0.9162354 1.583154 1.583154 1.583154
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7356,7 +7472,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 262 parent 0 active 1 name "Grass"
+object 266 parent 0 active 1 name "Grass"
 transform -16.736706 0 -2.2374 0 0.43491387 0 0.90047204 1.4546578 1.4546578 1.4546578
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7382,7 +7498,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 263 parent 0 active 1 name "Grass"
+object 267 parent 0 active 1 name "Grass"
 transform -12.594553 0 -24.754223 0 0.93169945 0 0.36323008 1.283009 1.283009 1.283009
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7408,7 +7524,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 264 parent 0 active 1 name "Grass"
+object 268 parent 0 active 1 name "Grass"
 transform -24.22153 0 -2.7488213 0 0.2846416 0 -0.958634 1.3399711 1.3399711 1.3399711
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7434,7 +7550,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 265 parent 0 active 1 name "Grass"
+object 269 parent 0 active 1 name "Grass"
 transform -32.20389 0 -35.1881 0 0.21540792 0 0.9765242 1.4506905 1.4506905 1.4506905
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7460,7 +7576,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 266 parent 0 active 1 name "Grass"
+object 270 parent 0 active 1 name "Grass"
 transform -38.658886 0 -18.265049 0 0.34554642 0 -0.93840164 1.0231632 1.0231632 1.0231632
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7486,7 +7602,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 267 parent 0 active 1 name "Bush"
+object 271 parent 0 active 1 name "Bush"
 transform -19.401815 0 -4.6736546 0 0.9918047 0 -0.12776303 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -7512,7 +7628,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 268 parent 0 active 1 name "Grass"
+object 272 parent 0 active 1 name "Grass"
 transform -18.82957 0 -3.855709 0 0.02161819 0 0.9997663 1.0344701 1.0344701 1.0344701
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7538,7 +7654,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 269 parent 0 active 1 name "Grass"
+object 273 parent 0 active 1 name "Grass"
 transform -16.503242 0 -9.77084 0 0.7762023 0 -0.6304839 1.8913252 1.8913252 1.8913252
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7564,7 +7680,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 270 parent 0 active 1 name "Grass"
+object 274 parent 0 active 1 name "Grass"
 transform -14.681192 0 -2.6136894 0 0.16978362 0 -0.9854814 1.1377432 1.1377432 1.1377432
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7590,7 +7706,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 271 parent 0 active 1 name "Grass"
+object 275 parent 0 active 1 name "Grass"
 transform -33.746304 0 -3.1772957 0 0.34581625 0 -0.9383023 1.6755474 1.6755474 1.6755474
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7616,7 +7732,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 272 parent 0 active 1 name "Grass"
+object 276 parent 0 active 1 name "Grass"
 transform -25.90506 0 -12.142824 0 0.8475439 0 0.53072524 1.2052491 1.2052491 1.2052491
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7642,7 +7758,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 273 parent 0 active 1 name "Grass"
+object 277 parent 0 active 1 name "Grass"
 transform -13.567316 0 -7.0582733 0 0.6490335 0 -0.76075983 1.5470817 1.5470817 1.5470817
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7668,7 +7784,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 274 parent 0 active 1 name "Bush"
+object 278 parent 0 active 1 name "Bush"
 transform -42.155643 0 -8.917189 0 0.8699295 0 -0.4931761 1.1 1.1 1.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:bush"
@@ -7694,7 +7810,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 275 parent 0 active 1 name "Grass"
+object 279 parent 0 active 1 name "Grass"
 transform -16.422827 0 -12.6103 0 0.74993825 0 0.66150784 1.9962006 1.9962006 1.9962006
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7720,7 +7836,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 276 parent 0 active 1 name "Grass"
+object 280 parent 0 active 1 name "Grass"
 transform -37.66537 0 -13.2206 0 0.20505053 0 0.97875136 1.0349736 1.0349736 1.0349736
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7746,7 +7862,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 277 parent 0 active 1 name "Grass"
+object 281 parent 0 active 1 name "Grass"
 transform -20.682749 0 -35.901123 0 0.33020633 0 0.94390875 1.3148851 1.3148851 1.3148851
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7772,7 +7888,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 278 parent 0 active 1 name "Grass"
+object 282 parent 0 active 1 name "Grass"
 transform -38.955643 0 -25.572168 0 0.26422095 0 0.96446216 1.8386817 1.8386817 1.8386817
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7798,7 +7914,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 279 parent 0 active 1 name "Grass"
+object 283 parent 0 active 1 name "Grass"
 transform -12.939558 0 -35.124924 0 0.15009841 0 -0.98867106 1.154223 1.154223 1.154223
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7824,7 +7940,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 280 parent 0 active 1 name "Grass"
+object 284 parent 0 active 1 name "Grass"
 transform -11.135151 0 -32.61286 0 0.3564093 0 -0.9343299 1.3844663 1.3844663 1.3844663
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7850,7 +7966,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 281 parent 0 active 1 name "Grass"
+object 285 parent 0 active 1 name "Grass"
 transform -29.067703 0 -9.482443 0 0.42834094 0 -0.9036172 1.5816128 1.5816128 1.5816128
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7876,7 +7992,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 282 parent 0 active 1 name "Grass"
+object 286 parent 0 active 1 name "Grass"
 transform -43.141376 0 -11.484184 0 0.8774152 0 0.4797318 1.0084382 1.0084382 1.0084382
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7902,7 +8018,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 283 parent 0 active 1 name "Grass"
+object 287 parent 0 active 1 name "Grass"
 transform -39.528404 0 -32.092102 0 0.89876604 0 0.43842858 1.7977874 1.7977874 1.7977874
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7928,7 +8044,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 284 parent 0 active 1 name "Grass"
+object 288 parent 0 active 1 name "Grass"
 transform -39.832424 0 -14.127533 0 0.75035036 0 0.66104037 1.3440604 1.3440604 1.3440604
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7954,7 +8070,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 285 parent 0 active 1 name "Grass"
+object 289 parent 0 active 1 name "Grass"
 transform -25.409597 0 -10.952988 0 0.27470025 0 0.9615299 1.94551 1.94551 1.94551
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -7980,7 +8096,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 286 parent 0 active 1 name "Grass"
+object 290 parent 0 active 1 name "Grass"
 transform -36.689495 0 -8.861158 0 0.8114754 0 -0.58438665 1.17673 1.17673 1.17673
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8006,7 +8122,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 287 parent 0 active 1 name "Grass"
+object 291 parent 0 active 1 name "Grass"
 transform -39.1751 0 -29.126299 0 0.77728933 0 -0.62914336 1.311162 1.311162 1.311162
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8032,7 +8148,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 288 parent 0 active 1 name "Grass"
+object 292 parent 0 active 1 name "Grass"
 transform -43.988586 0 -35.726986 0 0.8526683 0 0.52245265 1.1961242 1.1961242 1.1961242
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8058,7 +8174,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 289 parent 0 active 1 name "Grass"
+object 293 parent 0 active 1 name "Grass"
 transform -42.311802 0 -35.578667 0 0.16288212 0 -0.9866455 1.8217441 1.8217441 1.8217441
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8084,7 +8200,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 290 parent 0 active 1 name "Grass"
+object 294 parent 0 active 1 name "Grass"
 transform -30.576912 0 -1.015152 0 0.40116742 0 0.9160048 1.2282292 1.2282292 1.2282292
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8110,7 +8226,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 291 parent 0 active 1 name "Grass"
+object 295 parent 0 active 1 name "Grass"
 transform -26.39585 0 -7.4851 0 0.87415254 0 0.4856515 1.188571 1.188571 1.188571
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8136,7 +8252,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 292 parent 0 active 1 name "Grass"
+object 296 parent 0 active 1 name "Grass"
 transform -10.184696 0 -35.476494 0 0.3196431 0 -0.947538 1.1812619 1.1812619 1.1812619
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8162,7 +8278,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 293 parent 0 active 1 name "Grass"
+object 297 parent 0 active 1 name "Grass"
 transform -10.516731 0 -29.9794 0 0.9387077 0 -0.34471413 1.306157 1.306157 1.306157
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8188,7 +8304,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 294 parent 0 active 1 name "Grass"
+object 298 parent 0 active 1 name "Grass"
 transform -10.537483 0 -9.7444725 0 0.3829104 0 0.9237855 1.0419775 1.0419775 1.0419775
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8214,7 +8330,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 295 parent 0 active 1 name "Grass"
+object 299 parent 0 active 1 name "Grass"
 transform -23.4428 0 -9.866972 0 0.99728507 0 -0.07363734 1.8790569 1.8790569 1.8790569
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8240,7 +8356,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 296 parent 0 active 1 name "Grass"
+object 300 parent 0 active 1 name "Grass"
 transform -41.262257 0 -14.6971855 0 0.13838197 0 -0.9903789 1.7189593 1.7189593 1.7189593
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8266,7 +8382,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 297 parent 0 active 1 name "Grass"
+object 301 parent 0 active 1 name "Grass"
 transform -32.529182 0 -3.109726 0 0.66793627 0 0.74421847 1.0709544 1.0709544 1.0709544
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8292,7 +8408,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 298 parent 0 active 1 name "Grass"
+object 302 parent 0 active 1 name "Grass"
 transform -41.593773 0 -23.765987 0 0.46169367 0 -0.8870394 1.9927062 1.9927062 1.9927062
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:grass"
@@ -8318,16 +8434,16 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 299 parent 0 active 1 name "Walking figure"
+object 303 parent 0 active 1 name "Walking figure"
 transform -30 0 -8 0 0 0 1 1 1 1
 component Tallow.Animator enabled 1
 field clips "Animations/idle.tanim;Animations/walk.tanim;Animations/run.tanim;Animations/jump.tanim"
 field defaultClip "Walk"
 field speed 1
 field controller ""
-object 300 parent 299 active 1 name "Hips"
+object 304 parent 303 active 1 name "Hips"
 transform 0 0.95 0 0 0 0 1 1 1 1
-object 301 parent 300 active 1 name "mesh"
+object 305 parent 304 active 1 name "mesh"
 transform 0 0.05 0 0 0 0 1 0.34 0.2 0.2
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8353,9 +8469,9 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 302 parent 300 active 1 name "Chest"
+object 306 parent 304 active 1 name "Chest"
 transform 0 0.18 0 0 0 0 1 1 1 1
-object 303 parent 302 active 1 name "mesh"
+object 307 parent 306 active 1 name "mesh"
 transform 0 0.21 0 0 0 0 1 0.42 0.42 0.24
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8381,9 +8497,9 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 304 parent 302 active 1 name "Head"
+object 308 parent 306 active 1 name "Head"
 transform 0 0.46 0 0 0 0 1 1 1 1
-object 305 parent 304 active 1 name "mesh"
+object 309 parent 308 active 1 name "mesh"
 transform 0 0.16 0 0 0 0 1 0.26 0.28 0.26
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8409,7 +8525,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 306 parent 304 active 1 name "mesh"
+object 310 parent 308 active 1 name "mesh"
 transform 0 0.31 -0.02 0 0 0 1 0.28 0.08 0.3
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8435,7 +8551,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 307 parent 304 active 1 name "mesh"
+object 311 parent 308 active 1 name "mesh"
 transform 0 0.2 -0.13 0 0 0 1 0.28 0.2 0.06
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8461,9 +8577,9 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 308 parent 302 active 1 name "UpperArm.L"
+object 312 parent 306 active 1 name "UpperArm.L"
 transform -0.27 0.38 0 0 0 0 1 1 1 1
-object 309 parent 308 active 1 name "mesh"
+object 313 parent 312 active 1 name "mesh"
 transform 0 -0.15 0 0 0 0 1 0.12 0.3 0.12
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8489,9 +8605,9 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 310 parent 308 active 1 name "LowerArm.L"
+object 314 parent 312 active 1 name "LowerArm.L"
 transform 0 -0.3 0 0 0 0 1 1 1 1
-object 311 parent 310 active 1 name "mesh"
+object 315 parent 314 active 1 name "mesh"
 transform 0 -0.13 0 0 0 0 1 0.1 0.26 0.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8517,7 +8633,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 312 parent 310 active 1 name "mesh"
+object 316 parent 314 active 1 name "mesh"
 transform 0 -0.3 0 0 0 0 1 0.11 0.1 0.11
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8543,9 +8659,9 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 318 parent 302 active 1 name "UpperArm.R"
+object 322 parent 306 active 1 name "UpperArm.R"
 transform 0.27 0.38 0 0 0 0 1 1 1 1
-object 319 parent 318 active 1 name "mesh"
+object 323 parent 322 active 1 name "mesh"
 transform 0 -0.15 0 0 0 0 1 0.12 0.3 0.12
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8571,9 +8687,9 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 320 parent 318 active 1 name "LowerArm.R"
+object 324 parent 322 active 1 name "LowerArm.R"
 transform 0 -0.3 0 0 0 0 1 1 1 1
-object 321 parent 320 active 1 name "mesh"
+object 325 parent 324 active 1 name "mesh"
 transform 0 -0.13 0 0 0 0 1 0.1 0.26 0.1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8599,7 +8715,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 322 parent 320 active 1 name "mesh"
+object 326 parent 324 active 1 name "mesh"
 transform 0 -0.3 0 0 0 0 1 0.11 0.1 0.11
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8625,9 +8741,9 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 313 parent 300 active 1 name "UpperLeg.L"
+object 317 parent 304 active 1 name "UpperLeg.L"
 transform -0.1 -0.03 0 0 0 0 1 1 1 1
-object 314 parent 313 active 1 name "mesh"
+object 318 parent 317 active 1 name "mesh"
 transform 0 -0.22 0 0 0 0 1 0.15 0.44 0.15
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8653,9 +8769,9 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 315 parent 313 active 1 name "LowerLeg.L"
+object 319 parent 317 active 1 name "LowerLeg.L"
 transform 0 -0.44 0 0 0 0 1 1 1 1
-object 316 parent 315 active 1 name "mesh"
+object 320 parent 319 active 1 name "mesh"
 transform 0 -0.2 0 0 0 0 1 0.13 0.4 0.13
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8681,7 +8797,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 317 parent 315 active 1 name "mesh"
+object 321 parent 319 active 1 name "mesh"
 transform 0 -0.42 0.05 0 0 0 1 0.14 0.08 0.25
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8707,9 +8823,9 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 323 parent 300 active 1 name "UpperLeg.R"
+object 327 parent 304 active 1 name "UpperLeg.R"
 transform 0.1 -0.03 0 0 0 0 1 1 1 1
-object 324 parent 323 active 1 name "mesh"
+object 328 parent 327 active 1 name "mesh"
 transform 0 -0.22 0 0 0 0 1 0.15 0.44 0.15
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8735,9 +8851,9 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 325 parent 323 active 1 name "LowerLeg.R"
+object 329 parent 327 active 1 name "LowerLeg.R"
 transform 0 -0.44 0 0 0 0 1 1 1 1
-object 326 parent 325 active 1 name "mesh"
+object 330 parent 329 active 1 name "mesh"
 transform 0 -0.2 0 0 0 0 1 0.13 0.4 0.13
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8763,7 +8879,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 327 parent 325 active 1 name "mesh"
+object 331 parent 329 active 1 name "mesh"
 transform 0 -0.42 0.05 0 0 0 1 0.14 0.08 0.25
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8789,7 +8905,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 328 parent 0 active 1 name "Flag pole"
+object 332 parent 0 active 1 name "Flag pole"
 transform -3 4 -14 0 0 0 1 0.16 8 0.16
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8818,7 +8934,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 329 parent 0 active 1 name "Flag"
+object 333 parent 0 active 1 name "Flag"
 transform -1.5 6.5 -14 -0.5 -0.5 0.5 0.5 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "Models/cloth16.glb"
@@ -8864,14 +8980,14 @@ field springBack 0.03
 field dentSpeed 3
 field pins "272-288"
 field stiffnessMap ""
-object 330 parent 0 active 1 name "Wind"
+object 334 parent 0 active 1 name "Wind"
 transform 0 0 0 0 0.6427876 0 0.76604444 1 1 1
 component Tallow.WindZone enabled 1
 field shape Global
 field strength 0.5
 field gusts 0.3
 field radius 10
-object 331 parent 0 active 1 name "Brazier 0"
+object 335 parent 0 active 1 name "Brazier 0"
 transform -3.2 0.6 -1.2 0 0 0 1 1 1.2 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8900,7 +9016,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 332 parent 0 active 1 name "Brazier flame 0"
+object 336 parent 0 active 1 name "Brazier flame 0"
 transform -3.2 1.3 -1.2 -0.70710677 0 0 0.70710677 1 1 1
 component Tallow.ParticleSystem enabled 1
 field mesh "builtin:cube"
@@ -8921,7 +9037,7 @@ field startColor 1 0.75 0.3 1
 field endColor 0.8 0.15 0.05 1
 field unlit 1
 field worldSpace 1
-object 333 parent 0 active 1 name "Brazier light 0"
+object 337 parent 0 active 1 name "Brazier light 0"
 transform -3.2 2 -1.2 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -8935,7 +9051,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 0
 field shadowStrength 1
-object 334 parent 0 active 1 name "Brazier 1"
+object 338 parent 0 active 1 name "Brazier 1"
 transform 3.2 0.6 -1.2 0 0 0 1 1 1.2 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -8964,7 +9080,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 335 parent 0 active 1 name "Brazier flame 1"
+object 339 parent 0 active 1 name "Brazier flame 1"
 transform 3.2 1.3 -1.2 -0.70710677 0 0 0.70710677 1 1 1
 component Tallow.ParticleSystem enabled 1
 field mesh "builtin:cube"
@@ -8985,7 +9101,7 @@ field startColor 1 0.75 0.3 1
 field endColor 0.8 0.15 0.05 1
 field unlit 1
 field worldSpace 1
-object 336 parent 0 active 1 name "Brazier light 1"
+object 340 parent 0 active 1 name "Brazier light 1"
 transform 3.2 2 -1.2 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
@@ -8999,7 +9115,7 @@ field innerSpotAngle -1
 field spotAngle 45
 field castShadows 0
 field shadowStrength 1
-object 337 parent 0 active 1 name "Paving seal"
+object 341 parent 0 active 1 name "Paving seal"
 transform 4 0.05 -16 0.70710677 0 0 0.70710677 1 1 1
 component Tallow.Decal enabled 1
 field texture "Textures/ring.png"
@@ -9011,7 +9127,7 @@ field roughness 0.8
 field angleLimit 70
 field unlit 0
 field order 0
-object 338 parent 0 active 1 name "Lab floor"
+object 342 parent 0 active 1 name "Lab floor"
 transform 4 0.01 -47 0 0 0 1 24 0.02 26
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -9037,7 +9153,7 @@ field texture ""
 field material ""
 field useModelMaterials 1
 field occluder 0
-object 339 parent 0 active 1 name "Blue shell"
+object 343 parent 0 active 1 name "Blue shell"
 transform -2 0.78 -50 0 0.17364818 0 0.9848077 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "Models/van_shell.glb"
@@ -9099,7 +9215,7 @@ field springBack 0.03
 field dentSpeed 4
 field pins ""
 field stiffnessMap ""
-object 340 parent 0 active 1 name "Red shell"
+object 344 parent 0 active 1 name "Red shell"
 transform 9 0.78 -52 0 -0.3007058 0 0.95371693 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "Models/van_shell.glb"
@@ -9161,7 +9277,7 @@ field springBack 0.03
 field dentSpeed 4
 field pins ""
 field stiffnessMap ""
-object 341 parent 0 active 1 name "Jelly plinth"
+object 345 parent 0 active 1 name "Jelly plinth"
 transform 10 0.2 -42 0 0 0 1 5 0.4 5
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -9190,7 +9306,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 342 parent 0 active 1 name "Green jelly"
+object 346 parent 0 active 1 name "Green jelly"
 transform 8.8 1.5 -42 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "Models/soft_box.glb"
@@ -9236,7 +9352,7 @@ field springBack 0.03
 field dentSpeed 3
 field pins ""
 field stiffnessMap ""
-object 343 parent 0 active 1 name "Pink jelly"
+object 347 parent 0 active 1 name "Pink jelly"
 transform 11.2 1.9 -42.4 0 0 0 1 1.5 1.5 1.5
 component Tallow.MeshRenderer enabled 1
 field mesh "Models/soft_box.glb"
@@ -9282,7 +9398,7 @@ field springBack 0.03
 field dentSpeed 3
 field pins ""
 field stiffnessMap ""
-object 344 parent 0 active 1 name "Curtain rail"
+object 348 parent 0 active 1 name "Curtain rail"
 transform -4 4.1 -37.5 0 0 0 1 3.9 0.14 0.14
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -9311,7 +9427,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 345 parent 0 active 1 name "Curtain post"
+object 349 parent 0 active 1 name "Curtain post"
 transform -5.9 2.05 -37.5 0 0 0 1 0.14 4.1 0.14
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -9340,7 +9456,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 346 parent 0 active 1 name "Curtain post"
+object 350 parent 0 active 1 name "Curtain post"
 transform -2.1 2.05 -37.5 0 0 0 1 0.14 4.1 0.14
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
@@ -9369,7 +9485,7 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
-object 347 parent 0 active 1 name "Curtain"
+object 351 parent 0 active 1 name "Curtain"
 transform -4 4 -39 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "Models/cloth16.glb"
@@ -9415,7 +9531,7 @@ field springBack 0.03
 field dentSpeed 3
 field pins "272-288"
 field stiffnessMap ""
-object 348 parent 0 active 1 name "Lab navigation"
+object 352 parent 0 active 1 name "Lab navigation"
 transform -8 -0.5 -60 0 0 0 1 1 1 1
 component Tallow.NavigationSurface enabled 1
 field bakedData ""
@@ -9431,7 +9547,7 @@ field backend NavMesh
 field includeRenderMeshes 0
 field rebuildOnStart 1
 field drawNavigation 0
-object 349 parent 0 active 1 name "Patrol robot 0"
+object 353 parent 0 active 1 name "Patrol robot 0"
 transform -4 0.8 -57 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:capsule"
@@ -9458,7 +9574,7 @@ field material ""
 field useModelMaterials 1
 field occluder 0
 component Tallow.NavigationAgent enabled 1
-field surface 348 0
+field surface 352 0
 field snapDistance 2
 field baseOffset 0 -0.8 0
 field repathInterval 0.3
@@ -9469,7 +9585,7 @@ field avoidOthers 1
 field radius 0.32
 field avoidancePriority 50
 field useLinks 1
-object 350 parent 0 active 1 name "Patrol robot 1"
+object 354 parent 0 active 1 name "Patrol robot 1"
 transform 4 0.8 -57 0 0 0 1 1 1 1
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:capsule"
@@ -9496,7 +9612,7 @@ field material ""
 field useModelMaterials 1
 field occluder 0
 component Tallow.NavigationAgent enabled 1
-field surface 348 0
+field surface 352 0
 field snapDistance 2
 field baseOffset 0 -0.8 0
 field repathInterval 0.3
@@ -9507,3 +9623,251 @@ field avoidOthers 1
 field radius 0.32
 field avoidancePriority 50
 field useLinks 1
+object 355 parent 0 active 1 name "Quarry floor"
+transform 31 0.01 -48 0 0 0 1 30 0.02 28
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.46 0.4 0.33 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 356 parent 0 active 1 name "Quarry face"
+transform 24.5 3 -46 0 0 0 1 1 1 1
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 1 1 1 1
+field metallic 0
+field roughness 0.85
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.MeshCollider enabled 1
+field center 0 0 0
+component Tallow.VoxelObject enabled 1
+field shape Box
+field mesh ""
+field resolution 40
+field size 6
+field color 0.62 0.55 0.46 1
+field interiorColor 0.3 0.2 0.16 1
+field interiorMaterial ""
+field interiorTiling 1
+field breakOffPieces 1
+field minimumPieceSize 6
+field anchored 1
+object 357 parent 0 active 1 name "Pillar"
+transform 31 1.5 -46 0 0 0 1 1 1 1
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 1 1 1 1
+field metallic 0
+field roughness 0.85
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.MeshCollider enabled 1
+field center 0 0 0
+component Tallow.VoxelObject enabled 1
+field shape Cylinder
+field mesh ""
+field resolution 28
+field size 3
+field color 0.72 0.4 0.32 1
+field interiorColor 0.3 0.2 0.16 1
+field interiorMaterial ""
+field interiorTiling 1
+field breakOffPieces 1
+field minimumPieceSize 6
+field anchored 1
+object 358 parent 0 active 1 name "Boulder"
+transform 36 1.5 -46 0 0 0 1 1 1 1
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 1 1 1 1
+field metallic 0
+field roughness 0.85
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.MeshCollider enabled 1
+field center 0 0 0
+component Tallow.VoxelObject enabled 1
+field shape Sphere
+field mesh ""
+field resolution 28
+field size 3
+field color 0.4 0.58 0.72 1
+field interiorColor 0.85 0.75 0.3 1
+field interiorMaterial ""
+field interiorTiling 1
+field breakOffPieces 1
+field minimumPieceSize 6
+field anchored 1
+object 359 parent 0 active 1 name "Quarry lamp"
+transform 26 6 -38 0 0 0 1 1 1 1
+component Tallow.Light enabled 1
+field type Point
+field color 1 0.95 0.85 1
+field intensity 30
+field range 26
+field inverseSquare 0
+field bakedOnly 0
+field shadowMaskChannel -1
+field innerSpotAngle -1
+field spotAngle 45
+field castShadows 0
+field shadowStrength 1
+object 360 parent 0 active 1 name "Quarry lamp"
+transform 38 6 -38 0 0 0 1 1 1 1
+component Tallow.Light enabled 1
+field type Point
+field color 1 0.95 0.85 1
+field intensity 30
+field range 26
+field inverseSquare 0
+field bakedOnly 0
+field shadowMaskChannel -1
+field innerSpotAngle -1
+field spotAngle 45
+field castShadows 0
+field shadowStrength 1
+object 361 parent 0 active 1 name "Cuttable van"
+transform 41 0.78 -48 0 0 0 1 1 1 1
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.85 0.75 0.15 1
+field metallic 0.6
+field roughness 0.4
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.MeshCollider enabled 1
+field center 0 0 0
+component Tallow.VoxelObject enabled 1
+field shape Mesh
+field mesh "Models/van_shell.glb"
+field resolution 40
+field size 4
+field color 1 1 1 1
+field interiorColor 0.25 0.25 0.28 1
+field interiorMaterial ""
+field interiorTiling 1
+field breakOffPieces 1
+field minimumPieceSize 6
+field anchored 0
+object 362 parent 0 active 1 name "Editable terrain"
+transform -40 0 -60 0 0 0 1 1 1 1
+component Tallow.VoxelTerrain enabled 1
+field mode Fixed
+field tileSize 1
+field flatHeight 0
+field streamTiles 0
+field generator ""
+field style Contoured
+field contourSharpness 0.35
+field flatShading 0
+field voxelSize 0.75
+field viewDistance 1
+field minChunkY -1
+field maxChunkY 0
+field lodDistance 4
+field seed 1337
+field terrainHeight 28
+field terrainScale 0.012
+field caveAmount 0.35
+field seaLevel 0
+field grassColor 0.40784314 0.62352943 0.2901961 1
+field rockColor 0.5019608 0.47843137 0.45490196 1
+field sandColor 0.8392157 0.76862746 0.5568628 1
+field snowColor 0.9254902 0.9411765 0.9607843 1
+field dirtColor 0.4862745 0.36078432 0.24313726 1
+field generateColliders 1
+field uploadsPerFrame 4
+field tiles "1 0 0"
+field nextTileId 2
+field sizeX 1
+field sizeZ 1
+field editsFolder ""
+field editsFile ""

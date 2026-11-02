@@ -59,12 +59,12 @@ For Windows cross-builds **on Linux**, the separate `tools/windows/setup.sh --ac
 Run the launcher to create a project, or use its display-free commands. Replace `LAUNCHER` with the path printed by the build:
 
 ```text
-LAUNCHER --create /path/to/MyCampus --showcase
-LAUNCHER --build-project /path/to/MyCampus
-LAUNCHER --open /path/to/MyCampus
+LAUNCHER --create /path/to/MyGallery --showcase
+LAUNCHER --build-project /path/to/MyGallery
+LAUNCHER --open /path/to/MyGallery
 ```
 
-Use quoted Windows paths such as `"C:\Projects With Spaces\MyCampus"`. The bundled Sandbox is also available via `LAUNCHER --open Samples/Sandbox`; its engine reference is resolved relative to the sample folder.
+Use quoted Windows paths such as `"C:\Projects With Spaces\MyGallery"`. The bundled Sandbox is also available via `LAUNCHER --open Samples/Sandbox`; its engine reference is resolved relative to the sample folder.
 
 To make Release engine packages:
 

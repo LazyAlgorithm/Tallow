@@ -22,7 +22,7 @@ python tools/build.py --config Debug
 build\Debug_Win64\TallowLauncher\TallowLauncher.exe
 ```
 
-Opening a project compiles its scripts and starts its editor. `Samples/Sandbox` is a ready-made voxel playground. Choose **Exhibition Campus** to create the complete editable showcase. The repository and generated projects support paths containing spaces.
+Opening a project compiles its scripts and starts its editor. `Samples/Sandbox` is a ready-made voxel playground. Choose **Tallow Gallery (showcase of eight areas)** to create the complete editable showcase. The repository and generated projects support paths containing spaces.
 
 ## Portable editor packages (early beta)
 
@@ -328,6 +328,6 @@ Developed and tested on Linux x64 with Vulkan. Windows x64 builds (games and the
 - Script completion works out a variable's type from its declaration or assignment on one line; it does not follow chains (`a.b.`) or infer from method return types.
 - Built games still link the editor code.
 
-### Exhibition Campus sample
+### Tallow Gallery sample
 
-Choose **Exhibition Campus (24 interactive exhibits)** when creating a project, or use `Tallow --create /path/to/MyCampus --showcase`. The entire walkable scene is saved and editable before Play, including soft-body mesh assets, sculpted terrain and loaded ropes. It demonstrates the engine’s main runtime systems and supports a cooperative host/join tour with animated visitor models. See [the sample guide](Editor/templates/showcase/README.md) for controls and networking. The template is included in distributed engine packages, including Tallow Manager downloads.
+Choose **Tallow Gallery (showcase of eight areas)** when creating a project, or use `Tallow --create /path/to/MyGallery --showcase`. Everything you walk through is an ordinary object in a saved scene, so you can open and change it before pressing Play: reflections and probes, lights and shadows, physics, ropes, water, a walking skinned character, cloth, jelly, dentable shells, destructible voxel objects, editable terrain and robots on a NavMesh. See [the sample guide](Editor/templates/showcase/README.md) for controls. The template is included in distributed engine packages, including Tallow Manager downloads.

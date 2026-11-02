@@ -74,9 +74,9 @@ def main():
     assert player.is_file(), player
     if args.play:
         log = run([player, '--project', path(project), '--self-test', '--frames', '1500'], 'play')
-        assert 'SHOWCASE_READY rooms=6 probes=2' in log
+        assert 'SHOWCASE_READY rooms=8 probes=2' in log
         assert '[error]' not in log.lower()
-    print(f'PASS: packaged Tallow Gallery creation, renamed scripts/scene, six rooms, mesh/binary assets, compilation' + (' and all exhibit checks' if args.play else '') + f'; evidence: {work}')
+    print(f'PASS: packaged Tallow Gallery creation, renamed scripts/scene, eight rooms, mesh/binary assets, compilation' + (' and all exhibit checks' if args.play else '') + f'; evidence: {work}')
 
 
 if __name__ == '__main__':
