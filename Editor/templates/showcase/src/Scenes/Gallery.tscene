@@ -9871,3 +9871,119 @@ field sizeX 1
 field sizeZ 1
 field editsFolder ""
 field editsFile ""
+object 363 parent 0 active 1 name "Field kerb 0"
+transform -28 -0.15 -60 0 0 0 1 25.4 0.5 1.4
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.62 0.6 0.56 1
+field metallic 0
+field roughness 0.7
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 364 parent 0 active 1 name "Field kerb 1"
+transform -28 -0.15 -36 0 0 0 1 25.4 0.5 1.4
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.62 0.6 0.56 1
+field metallic 0
+field roughness 0.7
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 365 parent 0 active 1 name "Field kerb 2"
+transform -40 -0.15 -48 0 0 0 1 1.4 0.5 22.6
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.62 0.6 0.56 1
+field metallic 0
+field roughness 0.7
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+object 366 parent 0 active 1 name "Field kerb 3"
+transform -16 -0.15 -48 0 0 0 1 1.4 0.5 22.6
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.62 0.6 0.56 1
+field metallic 0
+field roughness 0.7
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1

@@ -107,7 +107,7 @@ class Gallery : Component
 	{
 		(Vector3 at, float yaw, float pitch)[?] places = .(
 			(.(4, 1.1f, -28), 0, 0), (.(0, 1.1f, 3), 0, 6), (.(-12, 1.1f, 3), 50, 6), (.(15, 1.6f, 6), 62, 6),
-			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12), (.(30.6f, 1.6f, -40), 180, 0), (.(-14, 1.1f, -44), 270, 12), (.(-28, 1.1f, -22), 180, 10));
+			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12), (.(30.6f, 1.6f, -40), 180, 0), (.(-14, 1.1f, -44), 270, 12), (.(-28, 1.1f, -22), 180, 10), (.(-14.5f, 1.6f, -58), -15, 20));
 		let place = places[Math.Clamp(view, 0, places.Count - 1)];
 		mVisitor.GetComponent<CharacterController>().Teleport(place.at);
 		mVisitor.yaw = place.yaw;
@@ -199,10 +199,11 @@ class Gallery : Component
 		if (mSculpted || mTerrain == null || mTerrain.ChunkCount == 0 || mTerrain.PendingChunks > 0)
 			return;
 		mSculpted = true;
+		// All of it stays clear of the tile's edges (x -40..-16, z -60..-36), which would slice it into cliffs.
 		for (int i < 7)
-			mTerrain.ModifySphere(.(-36 + i * 0.8f, 0, -54 + i * 0.5f), 6 - i * 0.4f, 3);
-		mTerrain.ModifySphere(.(-20, 0.5f, -50), 5, -3);
-		mTerrain.ModifySphere(.(-16, 0.5f, -44), 3.5f, 3);
+			mTerrain.ModifySphere(.(-33 + i * 0.8f, 0, -45 + i * 0.5f), 6 - i * 0.4f, 3);
+		mTerrain.ModifySphere(.(-22, 0.5f, -53), 5, -3);
+		mTerrain.ModifySphere(.(-20, 0.5f, -41), 3.5f, 3);
 	}
 
 	/// A ball about to reach a voxel object blows a hole in it where it lands.
@@ -673,6 +674,14 @@ class Gallery : Component
 		ground.flatHeight = 0;
 		ground.AddTile(0, 0);
 		ground.OnValidate();
+		// The voxel ground stops half a voxel inside its tile and drops away there, so a low kerb covers the seam
+		// with the grass all the way round. Its top is well under a step.
+		for (int i < 4)
+		{
+			let alongX = i < 2;
+			Box(scope $"Field kerb {i}", alongX ? Vector3(-28, -0.15f, i == 0 ? -60 : -36) : Vector3(i == 2 ? -40 : -16, -0.15f, -48),
+				alongX ? Vector3(25.4f, 0.5f, 1.4f) : Vector3(1.4f, 0.5f, 22.6f), Stone, 0.7f);
+		}
 	}
 
 	void BuildCourtyard()
