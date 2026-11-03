@@ -378,7 +378,7 @@ class Gallery : Component
 		// The walls stand just outside the probe's box, so its box is the room.
 		// Polished steel, light enough to mirror the room straight down as well as at a glance; Screen Reflections
 		// put the spheres and plinths in it where they stand.
-		let floor = Box("Hall floor", .(0, 0.02f, 10), .(28, 0.04f, 18), .(0.5f, 0.51f, 0.55f), 0.07f, 1, false);
+		let floor = Box("Hall floor", .(0, 0.02f, 10), .(28, 0.04f, 18), .(0.5f, 0.51f, 0.55f), 0.02f, 1, false);
 		let polished = floor.GetComponent<MeshRenderer>();
 		polished.flatShading = false;
 		polished.screenReflections = true;
@@ -710,6 +710,8 @@ class Gallery : Component
 		cloth.backFaceCulling = false;
 		cloth.emissive = cloth.color;
 		cloth.emissiveIntensity = 0.35f;
+		// It waves, and a probe's capture would hold it still: left out, it shows only in screen reflections.
+		cloth.inReflectionProbes = false;
 		let soft = flag.AddComponent<SoftBody>();
 		soft.pins.Set("272-288");
 		let wind = Scene.CreateGameObject("Wind");

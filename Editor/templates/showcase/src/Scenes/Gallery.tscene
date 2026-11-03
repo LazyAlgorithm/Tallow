@@ -231,7 +231,7 @@ component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.5 0.51 0.55 1
 field metallic 1
-field roughness 0.07
+field roughness 0.02
 field emissive 0 0 0 1
 field emissiveIntensity 0
 field emissiveFromColor 0
@@ -9565,7 +9565,7 @@ field windSway 0
 field shadowOnly 0
 field bakedLighting 0
 field screenReflections 0
-field inReflectionProbes 1
+field inReflectionProbes 0
 field texture ""
 field material ""
 field useModelMaterials 1
