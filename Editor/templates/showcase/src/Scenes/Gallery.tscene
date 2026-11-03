@@ -101,7 +101,7 @@ component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
 object 6 parent 0 active 1 name "Ground"
-transform -28 -0.5 63 0 0 0 1 24 1 126
+transform -28 -0.5 27 0 0 0 1 24 1 126
 component Tallow.MeshRenderer enabled 1
 field mesh "builtin:cube"
 field color 0.36 0.45 0.26 1
