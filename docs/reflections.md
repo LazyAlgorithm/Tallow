@@ -34,6 +34,16 @@ A probe sees its room from one point, so box projection lines up its walls but f
 
 Pair it with **In Reflection Probes** (`inReflectionProbes`, on by default) turned off on the things standing in the room: furniture, statues, balls. Left in, the probe flattens them onto its walls, and wherever a screen ray misses they show there as ghosts (a ball mirrored on the wall beside its real reflection). Left out, the probe holds the room alone; they still cast their shadows, show in Screen Reflections where they are on the screen, and are missing only from rough or curved surfaces' reflections. The Gallery's Hall of Reflections does this for its spheres, stands and plinths.
 
+## Planar reflections
+
+For one flat mirror-like surface (a polished floor, a still pond), **Planar Reflection** on its Mesh Renderer (`planarReflection`) is exact: the scene is drawn a second time from the camera mirrored under the surface's top face, with the near plane tilted onto that face so nothing below it shows, and the surface reads that picture at each of its pixels (in the same pass as Screen Reflections, which it replaces there). Everything is in it: what is off the screen or hidden, what moves (a flag in the wind), and each thing as seen from below, the undersides of balls and their own reflections from there.
+
+- One surface a view at a time, the nearest visible one; others fall back to Screen Reflections (keep that on too).
+- It costs about as much as drawing the scene again, its shadows included, at the view's size. Only while such a surface is in view.
+- Things standing in the room show in it even with In Reflection Probes off.
+- The game's view and the editor's Scene and Game views draw it, using bgfx views 80 to 101 (`RenderView.PlanarViewBase`), put in the order before their own each frame. Other views (asset previews, capture views) fall back.
+- Rough surfaces fade it out as Screen Reflections do (roughness 0.15 to 0.4); it follows the Reflection Probes quality setting.
+
 ## The sky cube
 
 Made again when the sky's colours or the sun change, from the same gradient as the sky itself, without the sun's disc (the sun's highlight comes from the sun as a light). It is 64 by 64; a frame to draw and one per level to filter.

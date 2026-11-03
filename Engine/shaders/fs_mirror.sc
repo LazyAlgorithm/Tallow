@@ -15,11 +15,13 @@ SAMPLER2D(s_color, 2);
 SAMPLER2D(s_depth, 3);
 SAMPLER2D(s_normalMap, 4);
 SAMPLER2D(s_metalRoughMap, 5);
+SAMPLER2D(s_planar, 6);
 
 uniform vec4 u_material;      // x metallic, y roughness, z flat shading, w 1 unlit, 2 the editor's preview light
 uniform vec4 u_uvTransform;   // xy tiling, zw offset
 uniform vec4 u_surface;       // x alpha cutoff (0: no cutout)
 uniform vec4 u_pbr;           // x normal map strength (0: none), y 1 with a metallic-roughness map
+uniform vec4 u_mirrorParams;  // x: 1 to read the planar reflection's picture (s_planar) instead of tracing the screen
 
 #define STEPS 64
 #define REFINE 5
@@ -140,8 +142,22 @@ void main()
 
 	vec3 r = reflect(-v, n);
 	float hit;
-	// Starts a little off the surface, so that the ray does not find the surface itself.
-	vec3 scene = traceScreen(v_wpos + n * 0.02, r, gl_FragCoord.xy, hit);
+	vec3 scene;
+	if (u_mirrorParams.x > 0.5)
+	{
+		// Planar Reflection: the scene drawn from the mirrored camera, at this same pixel. A normal map's bumps
+		// shift where it is read, a little.
+		vec2 screen = gl_FragCoord.xy * u_viewTexel.xy;
+		vec3 faceNormal = normalize(v_normal);
+		screen += (n.xz - faceNormal.xz) * 0.05;
+		scene = texture2DLod(s_planar, screen, 0.0).rgb;
+		hit = 1.0;
+	}
+	else
+	{
+		// Starts a little off the surface, so that the ray does not find the surface itself.
+		scene = traceScreen(v_wpos + n * 0.02, r, gl_FragCoord.xy, hit);
+	}
 	hit *= sharp;
 	if (hit <= 0.0)
 	{

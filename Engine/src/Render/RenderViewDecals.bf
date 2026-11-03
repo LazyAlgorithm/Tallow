@@ -97,7 +97,7 @@ extension RenderView
 			bgfx.set_index_buffer(mesh.IndexBuffer, 0, (uint32)mesh.IndexCount);
 			// The box's far side, where it is behind the scene: the camera may stand inside the box, and only the
 			// pixels whose surface could be in the box are shaded.
-			let cull = Mirrored(volume) ? Gfx.StateCullCcw : Gfx.StateCullCw;
+			let cull = FacingCull(Mirrored(volume) ? Gfx.StateCullCcw : Gfx.StateCullCw);
 			bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateDepthGequal | cull | Gfx.StateBlendAlpha, 0);
 			bgfx.submit(view, RenderResources.DecalProgram, 0, 0xff);
 			DrawCalls++;

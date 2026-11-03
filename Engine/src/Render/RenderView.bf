@@ -256,6 +256,7 @@ class RenderView
 	public this(uint16 viewBase)
 	{
 		ViewBase = viewBase;
+		PlanarViewBase = PlanarBaseFor(viewBase);
 	}
 
 	public ~this()
@@ -400,6 +401,7 @@ class RenderView
 		Profiler.End();
 		using (sSortMarker.Sample())
 			SortItems();
+		DrawPlanarReflection(scene, camera);
 
 		sShadowMarker.Begin();
 		if (castShadows)
@@ -556,7 +558,7 @@ class RenderView
 				if (mesh == null || !mesh.HasGpuData || (hasParts && parts[partIndex].hidden))
 					continue;
 				// A reflection capture leaves out what is kept out of the probes, but not its shadow.
-				let shadowOnly = renderer.shadowOnly || (hasParts && parts[partIndex].shadowOnly) || (Capture && !renderer.inReflectionProbes);
+				let shadowOnly = renderer.shadowOnly || (hasParts && parts[partIndex].shadowOnly) || (Capture && !PlanarPass && !renderer.inReflectionProbes);
 				RenderItem item;
 				item.tint = hasParts ? parts[partIndex].tint : .White;
 				item.mesh = mesh;
@@ -585,7 +587,7 @@ class RenderView
 					else
 					{
 						(transparent ? mTransparentItems : mItems).Add(item);
-						if (!transparent && renderer.screenReflections)
+						if (!transparent && (renderer.screenReflections || renderer.planarReflection))
 							mMirrorItems.Add(item);
 					}
 					renderer.LastDrawnFrame = Time.FrameCount;
@@ -931,6 +933,7 @@ class RenderView
 		if (first.lightGrid > 0)
 			LightProbes.Bind(mProbeGrid, first.lightGrid);
 		var surface = ResolveSurface(renderer, first.material, first.world);
+		surface.cull = FacingCull(surface.cull);
 		if (shaded)
 			ApplyShading(ref surface);
 		SetLightmapUniforms(renderer, first.mesh);
@@ -939,6 +942,10 @@ class RenderView
 		{
 			bgfx.set_texture(2, RenderResources.sColor, mWaterCopy, uint32.MaxValue);
 			bgfx.set_texture(3, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
+			let planar = mPlanarDrawn && renderer == mPlanarRenderer;
+			bgfx.set_texture(6, RenderResources.sPlanar, planar ? mPlanarView.SceneColor : mWaterCopy, uint32.MaxValue);
+			Vector4 mirrorParams = .(planar ? 1 : 0, 0, 0, 0);
+			bgfx.set_uniform(RenderResources.uMirrorParams, &mirrorParams, 1);
 			SetPostUniforms();
 			// Added to what is there, on exactly the pixels the surface already drew: the difference between the
 			// screen's reflection and the probe's, which the first drawing put in.
@@ -1143,7 +1150,7 @@ class RenderView
 				bgfx.set_texture(stage, stage == 4 ? RenderResources.sNormalMap : (stage == 5 ? RenderResources.sMetalRoughMap : (stage == 6 ? RenderResources.sOcclusionMap : RenderResources.sEmissiveMap)), Gfx.WhiteTexture, uint32.MaxValue);
 			bgfx.set_texture(0, RenderResources.sAlbedo, Gfx.WhiteTexture, uint32.MaxValue);
 			bgfx.set_texture(1, RenderResources.sShadowMap, RenderResources.ShadowMap, uint32.MaxValue);
-			bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | Gfx.StateCullCcw | Gfx.StateMsaa, 0);
+			bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | FacingCull(Gfx.StateCullCcw) | Gfx.StateMsaa, 0);
 			bgfx.submit(view, RenderResources.MeshProgram, 0, 0xff);
 			DrawCalls++;
 			Instances += count;

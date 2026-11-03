@@ -107,7 +107,7 @@ class Gallery : Component
 	{
 		(Vector3 at, float yaw, float pitch)[?] places = .(
 			(.(4, 1.1f, -28), 0, 0), (.(0, 1.1f, 3), 0, 6), (.(-12, 1.1f, 3), 50, 6), (.(15, 1.6f, 6), 62, 6),
-			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12), (.(30.6f, 1.6f, -40), 180, 0), (.(-14, 1.1f, -44), 270, 12), (.(-28, 1.1f, -22), 180, 10), (.(-14.5f, 1.6f, -58), -15, 20), (.(7, 1.1f, 10), 90, 8), (.(6, 1.1f, 13), 180, 10), (.(12.5f, 1.1f, 9), 80, 22), (.(17, 1.1f, 11), 260, 14));
+			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12), (.(30.6f, 1.6f, -40), 180, 0), (.(-14, 1.1f, -44), 270, 12), (.(-28, 1.1f, -22), 180, 10), (.(-14.5f, 1.6f, -58), -15, 20), (.(7, 1.1f, 10), 90, 8), (.(6, 1.1f, 13), 180, 10), (.(12.5f, 1.1f, 9), 80, 22), (.(17, 1.1f, 11), 260, 14), (.(1, 1.1f, 9), 180, 12));
 		let place = places[Math.Clamp(view, 0, places.Count - 1)];
 		mVisitor.GetComponent<CharacterController>().Teleport(place.at);
 		mVisitor.yaw = place.yaw;
@@ -376,12 +376,14 @@ class Gallery : Component
 	void BuildHall()
 	{
 		// The walls stand just outside the probe's box, so its box is the room.
-		// Polished steel, light enough to mirror the room straight down as well as at a glance; Screen Reflections
-		// put the spheres and plinths in it where they stand.
+		// Polished steel, light enough to mirror the room straight down as well as at a glance. Planar Reflection
+		// draws the scene again from under it, so the spheres, the flag outside and the undersides of things all show
+		// where a mirror would put them; Screen Reflections stand in when another floor is nearer.
 		let floor = Box("Hall floor", .(0, 0.02f, 10), .(28, 0.04f, 18), .(0.5f, 0.51f, 0.55f), 0.02f, 1, false);
 		let polished = floor.GetComponent<MeshRenderer>();
 		polished.flatShading = false;
 		polished.screenReflections = true;
+		polished.planarReflection = true;
 		Box("Hall roof", .(0, 9.25f, 10), .(29, 0.5f, 19), Marble);
 		Box("Hall north wall", .(0, 4.5f, 19.25f), .(29, 9, 0.5f), Marble, 0.4f);
 		Box("Hall west wall", .(-14.25f, 4.5f, 10), .(0.5f, 9, 19), Marble, 0.4f);

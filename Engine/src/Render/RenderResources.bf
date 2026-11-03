@@ -33,6 +33,8 @@ static class RenderResources
 	public static bgfx.ProgramHandle WaterProgram, UnderwaterProgram, CopyProgram;
 	/// Shiny surfaces with Screen Reflections, drawn again over themselves: what the screen shows mirrored in them.
 	public static bgfx.ProgramHandle MirrorProgram;
+	/// The mirror pass's own: its planar reflection's picture, and x 1 when it reads that (else it traces the screen).
+	public static bgfx.UniformHandle sPlanar, uMirrorParams;
 	public static bgfx.UniformHandle uWaveA, uWaveB, uWaterLevel, uWaterModel, uWaterParams, uWaterShallow, uWaterDeep, uWaterFoam, uWaterOptions, uWaterUnder;
 	public static bgfx.UniformHandle uWaterInverse, uWaterUnderParams;
 
@@ -117,6 +119,8 @@ static class RenderResources
 		sLocalShadowMap = bgfx.create_uniform("s_localShadowMap", .Sampler, 1);
 		uShadowViewProj = bgfx.create_uniform("u_shadowViewProj", .Mat4, 1);
 		sColor = bgfx.create_uniform("s_color", .Sampler, 1);
+		sPlanar = bgfx.create_uniform("s_planar", .Sampler, 1);
+		uMirrorParams = bgfx.create_uniform("u_mirrorParams", .Vec4, 1);
 		uCamPos = bgfx.create_uniform("u_camPos", .Vec4, 1);
 		uSunDir = bgfx.create_uniform("u_sunDir", .Vec4, 1);
 		uSunColor = bgfx.create_uniform("u_sunColor", .Vec4, 1);

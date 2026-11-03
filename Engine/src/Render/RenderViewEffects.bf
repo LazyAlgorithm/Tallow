@@ -281,7 +281,7 @@ extension RenderView
 		SetWindUniforms(first.renderer.windSway);
 		bgfx.set_uniform(RenderResources.uDepthViewProj, &matrix, 1);
 		bgfx.set_uniform(RenderResources.uDepthParams, &depthParams, 1);
-		uint64 cull = Mirrored(first.world) ? Gfx.StateCullCw : Gfx.StateCullCcw;
+		uint64 cull = FacingCull(Mirrored(first.world) ? Gfx.StateCullCw : Gfx.StateCullCcw);
 		if ((first.material != null && first.material.doubleSided) || !first.renderer.backFaceCulling)
 			cull = 0;
 		// The viewmodel is over everything, so it is not depth tested.

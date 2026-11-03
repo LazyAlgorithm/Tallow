@@ -64,6 +64,13 @@ class MeshRenderer : Component
 	/// wrong place in every reflection. Turn it off for them: the probe then holds the room alone, and shiny
 	/// surfaces with Screen Reflections still mirror them where they are on the screen. Their shadows stay.
 	public bool inReflectionProbes = true;
+	/// Mirrors the scene exactly, as a flat mirror would: the scene is drawn a second time, from the camera mirrored
+	/// under the surface's top face, and the surface shows that picture. Unlike Screen Reflections it has everything,
+	/// off the screen or hidden too, and each thing as seen from below (the underside of a ball, its own reflections
+	/// from there). For one flat, shiny floor or water-like surface in view: it costs about as much as drawing the
+	/// scene again. One surface a view has it at a time (the nearest); others fall back to Screen Reflections. The
+	/// game's view and the editor's Scene and Game views only.
+	public bool planarReflection = false;
 	/// Optional albedo texture path relative to the project.
 	public String texture = new .() ~ delete _;
 	/// A material (.tmat) made in the editor. With one set, it decides how the surface looks and the fields above
