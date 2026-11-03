@@ -614,7 +614,29 @@ class Scene
 	/// Destroys an object right now. Prefer Destroy from gameplay code.
 	public void DestroyImmediate(GameObject gameObject)
 	{
-		DestroyTogether(scope List<GameObject>() { gameObject });
+		if (mGoing == null && CountUpTo(gameObject, SweepFrom) < SweepFrom)
+		{
+			UnregisterTree(gameObject, false);
+			DestroyTree(gameObject);
+		}
+		else
+			DestroyTogether(scope List<GameObject>() { gameObject });
+	}
+
+	/// From this many objects going at once, one sweep of the scene's lists beats taking each out of them.
+	const int SweepFrom = 5;
+
+	/// How many objects a tree holds, not counting further than `limit`.
+	static int CountUpTo(GameObject gameObject, int limit)
+	{
+		int count = 1;
+		for (let child in gameObject.Transform.Children)
+		{
+			count += CountUpTo(child.GameObject, limit - count);
+			if (count >= limit)
+				break;
+		}
+		return count;
 	}
 
 	/// Destroys several objects right now, in far less time than one by one.
@@ -635,7 +657,7 @@ class Scene
 			{
 				if (!gameObject.[Friend]mGoing)
 				{
-					UnregisterTree(gameObject);
+					UnregisterTree(gameObject, true);
 					mGoing.Add(gameObject);
 				}
 			}
@@ -649,7 +671,7 @@ class Scene
 			// Under something else in the batch: it goes with that.
 			if (!gameObject.[Friend]mGoing)
 			{
-				UnregisterTree(gameObject);
+				UnregisterTree(gameObject, true);
 				going.Add(gameObject);
 			}
 		}
@@ -662,19 +684,19 @@ class Scene
 		}
 	}
 
-	void UnregisterTree(GameObject gameObject)
+	void UnregisterTree(GameObject gameObject, bool together)
 	{
-		gameObject.[Friend]mGoing = true;
+		gameObject.[Friend]mGoing = together;
 		let children = gameObject.Transform.Children;
 		for (int i = children.Count - 1; i >= 0; i--)
 		{
 			if (i < children.Count)
-				UnregisterTree(children[i].GameObject);
+				UnregisterTree(children[i].GameObject, together);
 		}
 		for (int i = gameObject.Components.Count - 1; i >= 0; i--)
 		{
 			if (i < gameObject.Components.Count)
-				UnregisterComponent(gameObject.Components[i], true);
+				UnregisterComponent(gameObject.Components[i], together);
 		}
 	}
 
@@ -1102,6 +1124,11 @@ class Scene
 		sDestroyMarker.Begin();
 		while (mDestroyQueue.Count > 0)
 		{
+			if (mDestroyQueue.Count < SweepFrom)
+			{
+				DestroyImmediate(mDestroyQueue.PopBack());
+				continue;
+			}
 			let queued = scope List<GameObject>()..AddRange(mDestroyQueue);
 			mDestroyQueue.Clear();
 			DestroyTogether(queued);
