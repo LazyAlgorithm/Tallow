@@ -7,6 +7,9 @@ A boulder, a wall, a statue, a crate, a pillar.
 ## Making an object destructible
 
 **A built-in shape.** Add a Voxel Object and choose **Shape**: Sphere, Box or Cylinder, of edge length **Size**.
+A Box can instead have its own **Box Size** (width, height, depth): a wall 6 m long, 3.5 m high and 1 m thick
+carves as one, without a model. Resolution then counts along its longest side, so the thin side has fewer cells.
+Keep the object's scale at 1: carving takes the scale as the same on every axis.
 
 **Any model.** Select an object that is drawn with a model, add a Voxel Object, and press **Make This Model
 Destructible** in its Carving tools. That sets Shape to **Mesh** and **Mesh** to the model. The model keeps its own
@@ -43,6 +46,7 @@ Pieces that break off are made of the same stuff: the same model, the same mater
 | Shape, Mesh | Sphere, Box, Cylinder, or Mesh with a model |
 | Resolution | Grid cells along each side, 8 to 48. Higher is finer and slower to re-make after each carve. |
 | Size | Edge length of the grid for the built-in shapes. A model keeps its own size. |
+| Box Size | Shape Box: width, height and depth. Zero is a cube of Size. |
 | Color | The built-in shapes' colour. A model uses its own colours. |
 | Interior Color | The inside's colour, or its tint when the inside is made from the outside's material |
 | Interior Material, Interior Tiling | A material for the inside, and how often its texture repeats |
@@ -67,7 +71,9 @@ move triangle meshes, so pieces that break off, and an object that is not Anchor
 a convex hull wrapped round them.
 
 In multiplayer a carve happens on every machine: called on a client it goes to the server first and comes back to
-everyone. Pieces are the same objects everywhere.
+everyone. Pieces are the same objects everywhere. Players who join later get every carve made so far. A game that
+carves only from hits its server has checked sets `NetworkSync.ClientCarves = false`, and the server then ignores
+carves that clients ask for.
 They take the object's world states and physics layer.
 
 ## Limits

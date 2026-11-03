@@ -38,6 +38,9 @@ class VoxelObject : Component
 	public int32 resolution = 24;
 	/// Edge length of the grid in local units.
 	public float size = 4.0f;
+	/// Shape Box: its width, height and depth (a wall, a slab, a block), in local units. Zero: a cube of Size. The
+	/// grid then covers the longest side, so a thin side gets fewer cells: Resolution counts along the longest.
+	public Vector3 boxSize;
 	public Color color = .FromBytes(150, 146, 140);
 	/// Color of surfaces exposed by carving. With an inside made from the outside's material, its tint.
 	public Color interiorColor = .FromBytes(96, 82, 70);
@@ -65,6 +68,13 @@ class VoxelObject : Component
 	public float pieceLifetime = 0;
 	/// When this piece is removed (Time.Time), or 0.
 	float mRemoveAt;
+	/// When this piece that broke off is due to be removed (Time.Time), or 0 if it stays. Set it to now to remove it
+	/// sooner (by the server in multiplayer), for instance to keep the number of pieces down.
+	public float RemoveAt
+	{
+		get => mRemoveAt;
+		set => mRemoveAt = value;
+	}
 
 	/// What a model's surface looks like near each sample of the grid (its colour and texture coordinates), read
 	/// from the model once and shared with the pieces that break off.
@@ -94,7 +104,22 @@ class VoxelObject : Component
 	public bool IsEmpty => mMesh == null || mMesh.Indices.Count == 0;
 	int Index(int x, int y, int z) => x + y * mSamples + z * mSamples * mSamples;
 	/// The grid's edge length: Size, or for a model whatever holds it.
-	public float GridSize => (shape == .Mesh && mMeshSize > 0) ? mMeshSize : size;
+	public float GridSize
+	{
+		get
+		{
+			if (shape == .Mesh && mMeshSize > 0)
+				return mMeshSize;
+			if (HasBoxSize)
+			{
+				// The longest side spans the grid less the empty margin a built-in shape keeps (1.5 cells a side).
+				let cells = (float)Math.Max(8, Math.Min(resolution, 48));
+				return Math.Max(boxSize.x, Math.Max(boxSize.y, boxSize.z)) * cells / (cells - 3);
+			}
+			return size;
+		}
+	}
+	bool HasBoxSize => shape == .Box && boxSize.x > 0 && boxSize.y > 0 && boxSize.z > 0;
 	float CellSize => GridSize / (mSamples - 1);
 
 	static void ReleaseSurface(Surface surface)
@@ -108,6 +133,8 @@ class VoxelObject : Component
 		get
 		{
 			var hash = (int32)shape ^ resolution * 31 ^ (int32)(size * 1000) * 7;
+			if (HasBoxSize)
+				hash = hash * 16777619 ^ (int32)(boxSize.x * 1000) ^ (int32)(boxSize.y * 1000) * 3 ^ (int32)(boxSize.z * 1000) * 5;
 			if (shape == .Mesh)
 			{
 				for (let c in mesh.RawChars)
@@ -230,6 +257,8 @@ class VoxelObject : Component
 		let half = (mSamples - 1) * 0.5f;
 		// Leave a one-cell empty margin so the surface is closed on every side.
 		let radius = half - 1.5f;
+		// A box of its own size: its half sides in cells (the longest is exactly the radius).
+		let boxCells = HasBoxSize ? boxSize * 0.5f / CellSize : Vector3(radius);
 		for (int z < mSamples)
 		{
 			for (int y < mSamples)
@@ -240,7 +269,7 @@ class VoxelObject : Component
 					float d;
 					switch (shape)
 					{
-					case .Box: d = radius - Math.Max(Mathf.Abs(p.x), Math.Max(Mathf.Abs(p.y), Mathf.Abs(p.z)));
+					case .Box: d = Math.Min(boxCells.x - Mathf.Abs(p.x), Math.Min(boxCells.y - Mathf.Abs(p.y), boxCells.z - Mathf.Abs(p.z)));
 					case .Cylinder: d = Math.Min(radius - Math.Sqrt(p.x * p.x + p.z * p.z), radius - Mathf.Abs(p.y));
 					default: d = radius - p.Length;
 					}
@@ -857,6 +886,7 @@ class VoxelObject : Component
 		voxels.mesh.Set(mesh);
 		voxels.resolution = resolution;
 		voxels.size = size;
+		voxels.boxSize = boxSize;
 		voxels.color = color;
 		voxels.interiorColor = interiorColor;
 		voxels.paletteEntry = paletteEntry;

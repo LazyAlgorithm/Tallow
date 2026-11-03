@@ -316,6 +316,10 @@ static class NetworkSync
 		sApplying = wasApplying;
 	}
 
+	/// Server: whether a carve asked for by a client is made. Off, only carves the server makes itself count: for a
+	/// game that carves from hits it has checked, so a changed client cannot cut walls away by sending requests.
+	public static bool ClientCarves = true;
+
 	/// As RouteBrush, for VoxelObject.Carve.
 	public static bool RouteCarve(VoxelObject voxels, Vector3 point, float radius)
 	{
@@ -346,6 +350,8 @@ static class NetworkSync
 		let radius = reader.Read<float>();
 		let voxels = target?.GetComponent<VoxelObject>();
 		if (!reader.Ok || voxels == null || !Finite(point) || !radius.IsFinite)
+			return;
+		if (network.IsServer && !ClientCarves)
 			return;
 		// On the server this is a client's request: carving here sends it on to everyone. A client applies the
 		// point exactly as it came, in the object's own space, so that it does not depend on where the object is.
