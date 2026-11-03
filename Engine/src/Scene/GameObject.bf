@@ -160,7 +160,7 @@ class GameObject
 	}
 
 	/// The scene the object is in.
-	public Scene Scene => mScene;
+	public Scene Scene { [Inline] get => mScene; }
 	/// Whether this object itself is switched on, whatever its parents are (see ActiveInHierarchy).
 	public bool ActiveSelf => mActive;
 	/// True once Scene.Destroy has been called on the object; it is freed at the end of the frame.

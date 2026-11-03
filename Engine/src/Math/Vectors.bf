@@ -9,23 +9,25 @@ struct Vector2
 	public float x;
 	public float y;
 
+	[Inline]
 	public this()
 	{
 		x = 0;
 		y = 0;
 	}
 
+	[Inline]
 	public this(float x, float y)
 	{
 		this.x = x;
 		this.y = y;
 	}
 
-	public static Vector2 Zero => .(0, 0);
-	public static Vector2 One => .(1, 1);
+	public static Vector2 Zero { [Inline] get => .(0, 0); }
+	public static Vector2 One { [Inline] get => .(1, 1); }
 
-	public float Length => Math.Sqrt(x * x + y * y);
-	public float LengthSquared => x * x + y * y;
+	public float Length { [Inline] get => Math.Sqrt(x * x + y * y); }
+	public float LengthSquared { [Inline] get => x * x + y * y; }
 	/// The same direction one unit long (zero stays zero).
 	public Vector2 Normalized
 	{
@@ -37,15 +39,15 @@ struct Vector2
 	}
 
 	/// The dot product: how much two directions point the same way, times their lengths.
-	public static float Dot(Vector2 a, Vector2 b) => a.x * b.x + a.y * b.y;
-	public static Vector2 Lerp(Vector2 a, Vector2 b, float t) => .(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
-	public static bool operator ==(Vector2 a, Vector2 b) => a.x == b.x && a.y == b.y;
-	public static bool operator !=(Vector2 a, Vector2 b) => a.x != b.x || a.y != b.y;
+	[Inline] public static float Dot(Vector2 a, Vector2 b) => a.x * b.x + a.y * b.y;
+	[Inline] public static Vector2 Lerp(Vector2 a, Vector2 b, float t) => .(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+	[Inline] public static bool operator ==(Vector2 a, Vector2 b) => a.x == b.x && a.y == b.y;
+	[Inline] public static bool operator !=(Vector2 a, Vector2 b) => a.x != b.x || a.y != b.y;
 
-	public static Vector2 operator +(Vector2 a, Vector2 b) => .(a.x + b.x, a.y + b.y);
-	public static Vector2 operator -(Vector2 a, Vector2 b) => .(a.x - b.x, a.y - b.y);
-	public static Vector2 operator *(Vector2 a, float s) => .(a.x * s, a.y * s);
-	public static Vector2 operator /(Vector2 a, float s) => .(a.x / s, a.y / s);
+	[Inline] public static Vector2 operator +(Vector2 a, Vector2 b) => .(a.x + b.x, a.y + b.y);
+	[Inline] public static Vector2 operator -(Vector2 a, Vector2 b) => .(a.x - b.x, a.y - b.y);
+	[Inline] public static Vector2 operator *(Vector2 a, float s) => .(a.x * s, a.y * s);
+	[Inline] public static Vector2 operator /(Vector2 a, float s) => .(a.x / s, a.y / s);
 }
 
 /// A point, direction or size in 3D. Tallow is left-handed: +X right, +Y up, +Z forward.
@@ -56,6 +58,7 @@ struct Vector3
 	public float y;
 	public float z;
 
+	[Inline]
 	public this()
 	{
 		x = 0;
@@ -63,6 +66,7 @@ struct Vector3
 		z = 0;
 	}
 
+	[Inline]
 	public this(float x, float y, float z)
 	{
 		this.x = x;
@@ -71,6 +75,7 @@ struct Vector3
 	}
 
 	/// The same number on all three axes.
+	[Inline]
 	public this(float v)
 	{
 		x = v;
@@ -78,17 +83,17 @@ struct Vector3
 		z = v;
 	}
 
-	public static Vector3 Zero => .(0, 0, 0);
-	public static Vector3 One => .(1, 1, 1);
-	public static Vector3 Up => .(0, 1, 0);
-	public static Vector3 Down => .(0, -1, 0);
-	public static Vector3 Right => .(1, 0, 0);
-	public static Vector3 Left => .(-1, 0, 0);
-	public static Vector3 Forward => .(0, 0, 1);
-	public static Vector3 Back => .(0, 0, -1);
+	public static Vector3 Zero { [Inline] get => .(0, 0, 0); }
+	public static Vector3 One { [Inline] get => .(1, 1, 1); }
+	public static Vector3 Up { [Inline] get => .(0, 1, 0); }
+	public static Vector3 Down { [Inline] get => .(0, -1, 0); }
+	public static Vector3 Right { [Inline] get => .(1, 0, 0); }
+	public static Vector3 Left { [Inline] get => .(-1, 0, 0); }
+	public static Vector3 Forward { [Inline] get => .(0, 0, 1); }
+	public static Vector3 Back { [Inline] get => .(0, 0, -1); }
 
-	public float LengthSquared => x * x + y * y + z * z;
-	public float Length => Math.Sqrt(x * x + y * y + z * z);
+	public float LengthSquared { [Inline] get => x * x + y * y + z * z; }
+	public float Length { [Inline] get => Math.Sqrt(x * x + y * y + z * z); }
 
 	/// The same direction one unit long (zero stays zero).
 	public Vector3 Normalized
@@ -118,18 +123,18 @@ struct Vector3
 		}
 	}
 
-	public static Vector3 operator +(Vector3 a, Vector3 b) => .(a.x + b.x, a.y + b.y, a.z + b.z);
-	public static Vector3 operator -(Vector3 a, Vector3 b) => .(a.x - b.x, a.y - b.y, a.z - b.z);
-	public static Vector3 operator -(Vector3 a) => .(-a.x, -a.y, -a.z);
+	[Inline] public static Vector3 operator +(Vector3 a, Vector3 b) => .(a.x + b.x, a.y + b.y, a.z + b.z);
+	[Inline] public static Vector3 operator -(Vector3 a, Vector3 b) => .(a.x - b.x, a.y - b.y, a.z - b.z);
+	[Inline] public static Vector3 operator -(Vector3 a) => .(-a.x, -a.y, -a.z);
 	/// Multiplies axis by axis (to scale by different amounts on each).
-	public static Vector3 operator *(Vector3 a, Vector3 b) => .(a.x * b.x, a.y * b.y, a.z * b.z);
+	[Inline] public static Vector3 operator *(Vector3 a, Vector3 b) => .(a.x * b.x, a.y * b.y, a.z * b.z);
 	/// Divides axis by axis.
-	public static Vector3 operator /(Vector3 a, Vector3 b) => .(a.x / b.x, a.y / b.y, a.z / b.z);
-	public static Vector3 operator *(Vector3 a, float s) => .(a.x * s, a.y * s, a.z * s);
-	public static Vector3 operator *(float s, Vector3 a) => .(a.x * s, a.y * s, a.z * s);
-	public static Vector3 operator /(Vector3 a, float s) => .(a.x / s, a.y / s, a.z / s);
-	public static bool operator ==(Vector3 a, Vector3 b) => a.x == b.x && a.y == b.y && a.z == b.z;
-	public static bool operator !=(Vector3 a, Vector3 b) => a.x != b.x || a.y != b.y || a.z != b.z;
+	[Inline] public static Vector3 operator /(Vector3 a, Vector3 b) => .(a.x / b.x, a.y / b.y, a.z / b.z);
+	[Inline] public static Vector3 operator *(Vector3 a, float s) => .(a.x * s, a.y * s, a.z * s);
+	[Inline] public static Vector3 operator *(float s, Vector3 a) => .(a.x * s, a.y * s, a.z * s);
+	[Inline] public static Vector3 operator /(Vector3 a, float s) => .(a.x / s, a.y / s, a.z / s);
+	[Inline] public static bool operator ==(Vector3 a, Vector3 b) => a.x == b.x && a.y == b.y && a.z == b.z;
+	[Inline] public static bool operator !=(Vector3 a, Vector3 b) => a.x != b.x || a.y != b.y || a.z != b.z;
 
 	/// The dot product: how much two directions point the same way, times their lengths.
 	[Inline] public static float Dot(Vector3 a, Vector3 b) => a.x * b.x + a.y * b.y + a.z * b.z;
@@ -139,15 +144,15 @@ struct Vector3
 		.(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 
 	/// How far apart two points are.
-	public static float Distance(Vector3 a, Vector3 b) => (a - b).Length;
+	[Inline] public static float Distance(Vector3 a, Vector3 b) => (a - b).Length;
 	/// The point a fraction t of the way from a to b (t is not clamped).
-	public static Vector3 Lerp(Vector3 a, Vector3 b, float t) => a + (b - a) * t;
+	[Inline] public static Vector3 Lerp(Vector3 a, Vector3 b, float t) => a + (b - a) * t;
 	/// The smaller of the two on each axis.
-	public static Vector3 Min(Vector3 a, Vector3 b) => .(Mathf.Min(a.x, b.x), Mathf.Min(a.y, b.y), Mathf.Min(a.z, b.z));
+	[Inline] public static Vector3 Min(Vector3 a, Vector3 b) => .(Mathf.Min(a.x, b.x), Mathf.Min(a.y, b.y), Mathf.Min(a.z, b.z));
 	/// The larger of the two on each axis.
-	public static Vector3 Max(Vector3 a, Vector3 b) => .(Mathf.Max(a.x, b.x), Mathf.Max(a.y, b.y), Mathf.Max(a.z, b.z));
+	[Inline] public static Vector3 Max(Vector3 a, Vector3 b) => .(Mathf.Max(a.x, b.x), Mathf.Max(a.y, b.y), Mathf.Max(a.z, b.z));
 	/// Each axis made positive.
-	public static Vector3 Abs(Vector3 a) => .(Mathf.Abs(a.x), Mathf.Abs(a.y), Mathf.Abs(a.z));
+	[Inline] public static Vector3 Abs(Vector3 a) => .(Mathf.Abs(a.x), Mathf.Abs(a.y), Mathf.Abs(a.z));
 
 	/// Moves from current towards target by at most maxDelta, stopping there.
 	public static Vector3 MoveTowards(Vector3 current, Vector3 target, float maxDelta)
@@ -174,6 +179,7 @@ struct Vector4
 	public float z;
 	public float w;
 
+	[Inline]
 	public this()
 	{
 		x = 0;
@@ -182,6 +188,7 @@ struct Vector4
 		w = 0;
 	}
 
+	[Inline]
 	public this(float x, float y, float z, float w)
 	{
 		this.x = x;
@@ -191,6 +198,7 @@ struct Vector4
 	}
 
 	/// A Vector3 with a w.
+	[Inline]
 	public this(Vector3 v, float w)
 	{
 		x = v.x;
@@ -199,11 +207,11 @@ struct Vector4
 		this.w = w;
 	}
 
-	public static bool operator ==(Vector4 a, Vector4 b) => a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
-	public static bool operator !=(Vector4 a, Vector4 b) => a.x != b.x || a.y != b.y || a.z != b.z || a.w != b.w;
+	[Inline] public static bool operator ==(Vector4 a, Vector4 b) => a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
+	[Inline] public static bool operator !=(Vector4 a, Vector4 b) => a.x != b.x || a.y != b.y || a.z != b.z || a.w != b.w;
 
 	/// The first three numbers.
-	public Vector3 XYZ => .(x, y, z);
+	public Vector3 XYZ { [Inline] get => .(x, y, z); }
 }
 
 /// Integer lattice coordinate, used for voxel chunks and cells.
@@ -213,6 +221,7 @@ struct Int3 : IHashable
 	public int32 y;
 	public int32 z;
 
+	[Inline]
 	public this(int32 x, int32 y, int32 z)
 	{
 		this.x = x;
@@ -220,10 +229,10 @@ struct Int3 : IHashable
 		this.z = z;
 	}
 
-	public static Int3 operator +(Int3 a, Int3 b) => .(a.x + b.x, a.y + b.y, a.z + b.z);
-	public static Int3 operator -(Int3 a, Int3 b) => .(a.x - b.x, a.y - b.y, a.z - b.z);
-	public static bool operator ==(Int3 a, Int3 b) => a.x == b.x && a.y == b.y && a.z == b.z;
-	public static bool operator !=(Int3 a, Int3 b) => a.x != b.x || a.y != b.y || a.z != b.z;
+	[Inline] public static Int3 operator +(Int3 a, Int3 b) => .(a.x + b.x, a.y + b.y, a.z + b.z);
+	[Inline] public static Int3 operator -(Int3 a, Int3 b) => .(a.x - b.x, a.y - b.y, a.z - b.z);
+	[Inline] public static bool operator ==(Int3 a, Int3 b) => a.x == b.x && a.y == b.y && a.z == b.z;
+	[Inline] public static bool operator !=(Int3 a, Int3 b) => a.x != b.x || a.y != b.y || a.z != b.z;
 
 	public int GetHashCode()
 	{

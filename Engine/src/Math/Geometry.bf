@@ -8,6 +8,7 @@ struct Bounds
 	public Vector3 min;
 	public Vector3 max;
 
+	[Inline]
 	public this(Vector3 min, Vector3 max)
 	{
 		this.min = min;
@@ -15,16 +16,16 @@ struct Bounds
 	}
 
 	/// A box that holds nothing, ready to Encapsulate points into.
-	public static Bounds Empty => .(.(float.MaxValue), .(-float.MaxValue));
+	public static Bounds Empty { [Inline] get => .(.(float.MaxValue), .(-float.MaxValue)); }
 
 	/// The middle of the box.
-	public Vector3 Center => (min + max) * 0.5f;
+	public Vector3 Center { [Inline] get => (min + max) * 0.5f; }
 	/// Half the box's size on each axis.
-	public Vector3 Extents => (max - min) * 0.5f;
+	public Vector3 Extents { [Inline] get => (max - min) * 0.5f; }
 	/// The box's size on each axis.
-	public Vector3 Size => max - min;
+	public Vector3 Size { [Inline] get => max - min; }
 	/// Whether the box holds anything (an Empty one does not).
-	public bool IsValid => max.x >= min.x && max.y >= min.y && max.z >= min.z;
+	public bool IsValid { [Inline] get => max.x >= min.x && max.y >= min.y && max.z >= min.z; }
 
 	/// Grows the box to take in a point.
 	public void Encapsulate(Vector3 p) mut
@@ -92,6 +93,7 @@ struct Ray
 	public Vector3 origin;
 	public Vector3 direction;
 
+	[Inline]
 	public this(Vector3 origin, Vector3 direction)
 	{
 		this.origin = origin;
@@ -99,7 +101,7 @@ struct Ray
 	}
 
 	/// The point some distance along the ray.
-	public Vector3 GetPoint(float distance) => origin + direction * distance;
+	[Inline] public Vector3 GetPoint(float distance) => origin + direction * distance;
 }
 
 /// Six inward-facing planes extracted from a view-projection matrix.
@@ -109,6 +111,7 @@ struct Frustum
 	public Vector4[6] planes;
 
 	/// The view of a view-projection matrix.
+	[Inline]
 	public this(Matrix4 viewProj, bool homogeneousDepth)
 	{
 		planes = default;

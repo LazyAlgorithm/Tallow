@@ -26,13 +26,13 @@ struct Matrix4
 	}
 
 	/// The move the matrix makes.
-	public Vector3 Translation => .(m[12], m[13], m[14]);
+	public Vector3 Translation { [Inline] get => .(m[12], m[13], m[14]); }
 	/// Where the matrix puts +X (its first column).
-	public Vector3 Right => .(m[0], m[1], m[2]);
+	public Vector3 Right { [Inline] get => .(m[0], m[1], m[2]); }
 	/// Where the matrix puts +Y.
-	public Vector3 Up => .(m[4], m[5], m[6]);
+	public Vector3 Up { [Inline] get => .(m[4], m[5], m[6]); }
 	/// Where the matrix puts +Z.
-	public Vector3 Forward => .(m[8], m[9], m[10]);
+	public Vector3 Forward { [Inline] get => .(m[8], m[9], m[10]); }
 
 	/// b, then a.
 	public static Matrix4 operator *(Matrix4 a, Matrix4 b)
@@ -137,6 +137,7 @@ struct Matrix4
 	}
 
 	/// A point moved by the matrix.
+	[Inline]
 	public Vector3 TransformPoint(Vector3 p)
 	{
 		return .(
@@ -146,6 +147,7 @@ struct Matrix4
 	}
 
 	/// A direction turned and scaled by the matrix (without its move).
+	[Inline]
 	public Vector3 TransformDirection(Vector3 d)
 	{
 		return .(

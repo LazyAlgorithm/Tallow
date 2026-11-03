@@ -28,9 +28,9 @@ class Transform
 	}
 
 	/// The object this transform belongs to.
-	public GameObject GameObject => mGameObject;
+	public GameObject GameObject { [Inline] get => mGameObject; }
 	/// The transform this one is under, or null at the top of the scene.
-	public Transform Parent => mParent;
+	public Transform Parent { [Inline] get => mParent; }
 
 	/// The position relative to the parent (in the world, for an object with no parent).
 	public Vector3 LocalPosition
@@ -115,11 +115,9 @@ class Transform
 	{
 		get
 		{
-			if (mParent == null)
-				return mLocalRotation;
 			if (mRotationDirty)
 			{
-				mWorldRotation = (mParent.Rotation * mLocalRotation).Normalized;
+				mWorldRotation = mParent != null ? (mParent.Rotation * mLocalRotation).Normalized : mLocalRotation;
 				mRotationDirty = false;
 			}
 			return mWorldRotation;
@@ -249,16 +247,14 @@ class Transform
 	void MarkDirty()
 	{
 		Version++;
-		mRotationDirty = true;
-		if (mDirty)
-		{
-			// Children may still hold a clean matrix when only the version changed.
-			for (let child in Children)
-				child.MarkDirty();
+		// A child's world pose is only ever worked out from its parent's, which leaves the parent clean: so with this
+		// one dirty, everything below it is too, and need not be told again. Whatever keeps a child's Version also reads
+		// the child's world pose, so that the next move here comes through to it.
+		if (mDirty && mRotationDirty)
 			return;
-		}
 		mDirty = true;
-		for (let child in Children)
-			child.MarkDirty();
+		mRotationDirty = true;
+		for (int i < Children.Count)
+			Children[i].MarkDirty();
 	}
 }

@@ -534,7 +534,7 @@ class RenderView
 			let hasParts = parts != null && parts.Count > 0;
 			let partCount = hasParts ? parts.Count : 1;
 			// Baked lighting: the meshes with lightmap coordinates, made the first time (LightmapUV).
-			let lightmapped = !renderer.lightmap.IsEmpty && UseBakedLighting && LightmapUV.MeshesFor(renderer, mLightmapMeshes) && mLightmapMeshes.Count == partCount;
+			let lightmapped = renderer.HasLightmap && UseBakedLighting && LightmapUV.MeshesFor(renderer, mLightmapMeshes) && mLightmapMeshes.Count == partCount;
 			// Levels of detail (docs/lod.md): the group picks one level for this camera, and too small is not drawn.
 			let lodGroup = renderer.LodGroup;
 			let lodLevel = lodGroup != null ? lodGroup.LevelFor(camera) : 0;
@@ -813,7 +813,7 @@ class RenderView
 	static uint64 MakeKey(MeshRenderer renderer, Mesh mesh, Material material)
 	{
 		uint64 key = (uint64)(int)Internal.UnsafeCastToPtr(mesh);
-		if (!renderer.lightmap.IsEmpty)
+		if (renderer.HasLightmap)
 			key = key * 1099511628211 ^ (uint64)(int)Internal.UnsafeCastToPtr(renderer);
 		// With a material, the material is what draws differ by.
 		let shared = material;

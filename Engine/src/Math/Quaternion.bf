@@ -11,6 +11,7 @@ struct Quaternion
 	public float z;
 	public float w;
 
+	[Inline]
 	public this()
 	{
 		x = 0;
@@ -19,6 +20,7 @@ struct Quaternion
 		w = 1;
 	}
 
+	[Inline]
 	public this(float x, float y, float z, float w)
 	{
 		this.x = x;
@@ -28,7 +30,7 @@ struct Quaternion
 	}
 
 	/// No rotation.
-	public static Quaternion Identity => .(0, 0, 0, 1);
+	public static Quaternion Identity { [Inline] get => .(0, 0, 0, 1); }
 
 	/// A turn of some degrees about an axis.
 	public static Quaternion AngleAxis(float degrees, Vector3 axis)
@@ -40,7 +42,7 @@ struct Quaternion
 	}
 
 	/// A rotation from angles in degrees about X, Y and Z.
-	public static Quaternion Euler(Vector3 degrees) => Euler(degrees.x, degrees.y, degrees.z);
+	[Inline] public static Quaternion Euler(Vector3 degrees) => Euler(degrees.x, degrees.y, degrees.z);
 
 	/// A rotation from angles in degrees: Z (roll) first, then X (pitch), then Y (yaw).
 	public static Quaternion Euler(float xDeg, float yDeg, float zDeg)
@@ -90,7 +92,7 @@ struct Quaternion
 	}
 
 	/// The opposite rotation (for a normalized quaternion).
-	public Quaternion Conjugate => .(-x, -y, -z, w);
+	public Quaternion Conjugate { [Inline] get => .(-x, -y, -z, w); }
 
 	/// Rotation b, then a.
 	public static Quaternion operator *(Quaternion a, Quaternion b)
@@ -111,7 +113,7 @@ struct Quaternion
 	}
 
 	/// How alike two rotations are: 1 or -1 when the same.
-	public static float Dot(Quaternion a, Quaternion b) => a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+	[Inline] public static float Dot(Quaternion a, Quaternion b) => a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 
 	/// The rotation a fraction t of the way from a to b, turning evenly, the short way round.
 	public static Quaternion Slerp(Quaternion a, Quaternion bIn, float t)

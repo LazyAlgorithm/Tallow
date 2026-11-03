@@ -11,6 +11,7 @@ struct Color
 	public float b;
 	public float a;
 
+	[Inline]
 	public this()
 	{
 		r = 1;
@@ -19,6 +20,7 @@ struct Color
 		a = 1;
 	}
 
+	[Inline]
 	public this(float r, float g, float b, float a = 1.0f)
 	{
 		this.r = r;
@@ -27,15 +29,15 @@ struct Color
 		this.a = a;
 	}
 
-	public static Color White => .(1, 1, 1, 1);
-	public static Color Black => .(0, 0, 0, 1);
-	public static Color Red => .(1, 0, 0, 1);
-	public static Color Green => .(0, 1, 0, 1);
-	public static Color Blue => .(0, 0, 1, 1);
-	public static Color Yellow => .(1, 0.92f, 0.016f, 1);
-	public static Color Gray => .(0.5f, 0.5f, 0.5f, 1);
+	public static Color White { [Inline] get => .(1, 1, 1, 1); }
+	public static Color Black { [Inline] get => .(0, 0, 0, 1); }
+	public static Color Red { [Inline] get => .(1, 0, 0, 1); }
+	public static Color Green { [Inline] get => .(0, 1, 0, 1); }
+	public static Color Blue { [Inline] get => .(0, 0, 1, 1); }
+	public static Color Yellow { [Inline] get => .(1, 0.92f, 0.016f, 1); }
+	public static Color Gray { [Inline] get => .(0.5f, 0.5f, 0.5f, 1); }
 	/// Fully see-through black.
-	public static Color Clear => .(0, 0, 0, 0);
+	public static Color Clear { [Inline] get => .(0, 0, 0, 0); }
 
 	/// A colour from hue (0 to 1 round the colour wheel, red first), saturation and value (brightness), each 0 to 1.
 	public static Color FromHSV(float hue, float saturation, float value, float alpha = 1)
@@ -57,7 +59,7 @@ struct Color
 	}
 
 	/// The colour's red, green and blue times a number (alpha is kept).
-	public static Color operator *(Color c, float s) => .(c.r * s, c.g * s, c.b * s, c.a);
+	[Inline] public static Color operator *(Color c, float s) => .(c.r * s, c.g * s, c.b * s, c.a);
 	/// The colour a fraction t of the way from a to b.
 	public static Color Lerp(Color a, Color b, float t) =>
 		.(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t);

@@ -63,6 +63,15 @@ class MeshRenderer : Component
 	/// textures included, when no Material or Texture is set here. Off: the whole model takes the fields above.
 	public bool useModelMaterials = true;
 
+	// These run for every renderer in every view, and those fields are mostly empty or the same as last time.
+	[Inline]
+	static bool HasText(String text) => text.[Friend]mLength != 0;
+	[Inline]
+	static bool Differs(String a, String b) => a.[Friend]mLength != b.[Friend]mLength || (a.[Friend]mLength != 0 && a != b);
+
+	/// Whether it has a baked lightmap.
+	public bool HasLightmap { [Inline] get => HasText(lightmap); }
+
 	Tallow.Material mSharedMaterial;
 	Tallow.Material mMaterialInstance ~ delete _;
 	String mResolvedMaterial = new .() ~ delete _;
@@ -72,7 +81,7 @@ class MeshRenderer : Component
 	{
 		get
 		{
-			if (mResolvedMaterial != material)
+			if (Differs(mResolvedMaterial, material))
 			{
 				mResolvedMaterial.Set(material);
 				mSharedMaterial = Tallow.Material.Load(material);
@@ -254,12 +263,12 @@ class MeshRenderer : Component
 		{
 			if (RuntimeParts != null && RuntimeParts.Count > 0)
 				return RuntimeParts;
-			if (!useModelMaterials || mRuntimeMesh != null || !material.IsEmpty || !texture.IsEmpty || mesh.StartsWith("builtin:"))
+			if (!useModelMaterials || mRuntimeMesh != null || HasText(material) || HasText(texture))
 				return null;
-			if (mModelPartsVersion != Assets.MeshVersion || mModelPartsPath != mesh)
+			if (mModelPartsVersion != Assets.MeshVersion || Differs(mModelPartsPath, mesh))
 			{
 				mModelPartsPath.Set(mesh);
-				mModelParts = Assets.GetModelParts(mesh);
+				mModelParts = mesh.StartsWith("builtin:") ? null : Assets.GetModelParts(mesh);
 				mModelPartsVersion = Assets.MeshVersion;
 			}
 			return mModelParts;
@@ -273,7 +282,7 @@ class MeshRenderer : Component
 		{
 			if (mRuntimeMesh != null)
 				return mRuntimeMesh;
-			if (!mResolved || mResolvedPath != mesh || mMeshVersion != Assets.MeshVersion)
+			if (!mResolved || mMeshVersion != Assets.MeshVersion || Differs(mResolvedPath, mesh))
 			{
 				mResolvedPath.Set(mesh);
 				mResolvedMesh = Assets.GetMesh(mesh);
@@ -289,7 +298,7 @@ class MeshRenderer : Component
 	{
 		get
 		{
-			if (!mTexture.Valid || mResolvedTexture != texture || mTextureVersion != Assets.TextureVersion)
+			if (!mTexture.Valid || mTextureVersion != Assets.TextureVersion || Differs(mResolvedTexture, texture))
 			{
 				mResolvedTexture.Set(texture);
 				mTextureVersion = Assets.TextureVersion;

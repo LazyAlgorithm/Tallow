@@ -74,11 +74,11 @@ abstract class Component
 	int32 mProfileSlot = -1;
 
 	/// The object this component is on.
-	public GameObject GameObject => mGameObject;
+	public GameObject GameObject { [Inline] get => mGameObject; }
 	/// The transform of the object this component is on.
-	public Transform Transform => mGameObject.Transform;
+	public Transform Transform { [Inline] get => mGameObject.Transform; }
 	/// The scene the component's object is in.
-	public Scene Scene => mGameObject.Scene;
+	public Scene Scene { [Inline] get => mGameObject.Scene; }
 	/// Whether Awake has run (it runs when play starts, or when the component is added while playing).
 	public bool IsAwake => mAwake;
 
