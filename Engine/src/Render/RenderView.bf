@@ -559,7 +559,10 @@ class RenderView
 					continue;
 				// A reflection capture leaves out what is kept out of the probes, but not its shadow.
 				let shadowOnly = renderer.shadowOnly || (hasParts && parts[partIndex].shadowOnly) || (Capture && !PlanarPass && !renderer.inReflectionProbes);
-				let partMaterial = (hasParts && parts[partIndex].material != null) ? parts[partIndex].material : renderer.ActiveMaterial;
+				var partMaterial = (hasParts && parts[partIndex].material != null) ? parts[partIndex].material : renderer.ActiveMaterial;
+				// A material can name another to draw with in the world state this machine shows (State Materials).
+				if (partMaterial != null && partMaterial.stateMaterials.Count > 0)
+					partMaterial = partMaterial.ForState(renderer.Scene != null ? renderer.Scene.WorldState : 0);
 				// Palette mode: faces flagged double sided or see-through are drawn apart (Mesh.PaletteSection), each
 				// kind with its own culling and blending.
 				let sectioned = partMaterial != null && partMaterial.IsPalette && mesh.HasPaletteSections;

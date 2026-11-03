@@ -445,6 +445,10 @@ class Material
 	/// A palette for each world state, by number (Project Settings): what the same faces look like in that state, so
 	/// two realities share one mesh. An empty one uses Palette.
 	public List<String> statePalettes = new .() ~ DeleteContainerAndItems!(_);
+	/// Another material to draw with in a world state, by number (Project Settings): an object shared by every state
+	/// keeps one mesh and changes its whole look there. An empty one keeps this material. Not followed further (a
+	/// state's material's own state materials are not used).
+	public List<String> stateMaterials = new .() ~ DeleteContainerAndItems!(_);
 	/// How bright a face's glow is at full green (its emission byte at 255).
 	public float paletteEmission = 4;
 	/// Dissolve flagged faces: 0 whole, 1 gone (animate it for a shift or a death).
@@ -514,6 +518,14 @@ class Material
 
 	/// True in palette mode (Palette set).
 	public bool IsPalette => !palette.IsEmpty;
+
+	/// The material drawn in a world state: that state's own (State Materials), or this one.
+	public Material ForState(int32 worldState)
+	{
+		if (worldState < 0 || worldState >= stateMaterials.Count || stateMaterials[worldState].IsEmpty || stateMaterials[worldState] == path)
+			return this;
+		return Load(stateMaterials[worldState]) ?? this;
+	}
 
 	/// The palette used in a world state: that state's own, or Palette.
 	public StringView PaletteFor(int32 worldState)
@@ -662,6 +674,8 @@ class Material
 		copy.palette.Set(palette);
 		for (let state in statePalettes)
 			copy.statePalettes.Add(new .(state));
+		for (let state in stateMaterials)
+			copy.stateMaterials.Add(new .(state));
 		copy.paletteEmission = paletteEmission;
 		copy.dissolve = dissolve;
 		for (let (name, value) in mValues)
@@ -706,6 +720,14 @@ class Material
 				continue;
 			text.AppendF("statePalette {} ", i);
 			SceneSerializer.Quote(statePalettes[i], text);
+			text.Append('\n');
+		}
+		for (int i < stateMaterials.Count)
+		{
+			if (stateMaterials[i].IsEmpty)
+				continue;
+			text.AppendF("stateMaterial {} ", i);
+			SceneSerializer.Quote(stateMaterials[i], text);
 			text.Append('\n');
 		}
 		// In name order, so that saving the same material twice writes the same file.
@@ -789,6 +811,14 @@ class Material
 					while (statePalettes.Count <= index)
 						statePalettes.Add(new .());
 					statePalettes[index].Set(tokens[2]);
+				}
+			case "stateMaterial":
+				let index = (int)F(1);
+				if (tokens.Count >= 3 && index >= 0 && index < ProjectConfig.MaxWorldStates)
+				{
+					while (stateMaterials.Count <= index)
+						stateMaterials.Add(new .());
+					stateMaterials[index].Set(tokens[2]);
 				}
 			case "value":
 				if (tokens.Count >= 6)

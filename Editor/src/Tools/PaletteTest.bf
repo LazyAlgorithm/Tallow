@@ -88,6 +88,15 @@ extension EditorApp
 		material.statePalettes[1].Set("PaletteTest/second.png");
 		material.dissolve = 0;
 		Expect(material.Save(scope $"{Assets.ProjectPath}/PaletteTest/box.tmat"), "the material is written");
+		// A plain material that draws as the palette box in the second state (State Materials).
+		let swap = scope Material();
+		swap.color = .(0, 1, 0, 1);
+		swap.stateMaterials.Add(new .());
+		swap.stateMaterials.Add(new .("PaletteTest/box.tmat"));
+		let swapBack = scope Material();
+		swapBack.Read(swap.Write(.. scope .()));
+		Expect(swapBack.stateMaterials.Count == 2 && swapBack.stateMaterials[1] == "PaletteTest/box.tmat" && swapBack.ForState(0) == swapBack && swapBack.ForState(1)?.IsPalette == true && swapBack.ForState(5) == swapBack, "a material names another for a world state");
+		Expect(swap.Save(scope $"{Assets.ProjectPath}/PaletteTest/swap.tmat"), "the state-swapping material is written");
 		SceneSerializer.Load(mScene, "scene \"Palette\"\n");
 		let camera = mScene.CreateGameObject("Camera");
 		camera.Transform.Position = .(0, 0, -4);
@@ -104,6 +113,17 @@ extension EditorApp
 				c = opaque;
 		}
 		model.Set(solid);
+		// Above the box: a plain green strip that is the palette material (red, then blue) in the second state.
+		let strip = mScene.CreateGameObject("Strip");
+		strip.AddComponent<MeshRenderer>().material.Set("PaletteTest/swap.tmat");
+		let stripMesh = scope EditMesh();
+		MeshShapes.AddBox(stripMesh, .(-2, 1.4f, -1), .(2, 1.9f, 1));
+		for (let face in stripMesh.faces)
+		{
+			for (var c in ref face.colors)
+				c = opaque;
+		}
+		strip.AddComponent<ModelMesh>().Set(stripMesh);
 		// A thin pane in front of the left half: green, half see-through, so the box shows through it.
 		let pane = mScene.CreateGameObject("Pane");
 		pane.AddComponent<MeshRenderer>().material.Set("PaletteTest/box.tmat");

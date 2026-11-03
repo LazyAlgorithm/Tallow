@@ -33,6 +33,13 @@ Without a material, a Mesh Renderer's own **Back Face Culling** (on by default) 
 
 The renderer's own **Color** still tints the object on top of its material, so a hundred crates can share one material and differ in tint.
 
+### In each world state
+
+With more than one world state (Project Settings), **In Each World State** picks another material for each state.
+Everything using this material then draws with that one while the state is shown, so geometry shared by every state is
+stored once and only its look changes. Leave a state on **(this material)** to keep it. The chosen material's own
+state materials are not followed.
+
 ### Palette mode (optional)
 
 For a low-poly look coloured from one shared set of colours, give a material a **Palette**: a 256-colour image, 16 x

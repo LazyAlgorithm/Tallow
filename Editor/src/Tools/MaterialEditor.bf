@@ -17,6 +17,7 @@ extension EditorApp
 	uint32 mInspectedObject;
 	List<String> mImageChoices = new .() ~ DeleteContainerAndItems!(_);
 	List<String> mShaderChoices = new .() ~ DeleteContainerAndItems!(_);
+	List<String> mMaterialFileChoices = new .() ~ DeleteContainerAndItems!(_);
 	int mMaterialChoicesFrame = -1000;
 
 	/// Shows a material in the Inspector. The path is a file on disk.
@@ -152,6 +153,7 @@ extension EditorApp
 		mMaterialChoicesFrame = Time.FrameCount;
 		ClearAndDeleteItems!(mImageChoices);
 		ClearAndDeleteItems!(mShaderChoices);
+		ClearAndDeleteItems!(mMaterialFileChoices);
 		void Scan(StringView folder, int depth)
 		{
 			if (depth > 8 || !Directory.Exists(folder))
@@ -161,11 +163,12 @@ extension EditorApp
 				let name = scope String();
 				entry.GetFileName(name);
 				let isImage = IsImageFile(name);
-				if (!isImage && !name.EndsWith(".tshader"))
+				let isMaterial = name.EndsWith(".tmat");
+				if (!isImage && !isMaterial && !name.EndsWith(".tshader"))
 					continue;
 				let relative = new String();
 				Assets.MakeRelative(scope $"{folder}/{name}" , relative);
-				(isImage ? mImageChoices : mShaderChoices).Add(relative);
+				(isImage ? mImageChoices : (isMaterial ? mMaterialFileChoices : mShaderChoices)).Add(relative);
 			}
 			for (let entry in Directory.EnumerateDirectories(folder))
 			{
@@ -235,6 +238,7 @@ extension EditorApp
 		changed |= DrawMaterialPalette(material);
 		changed |= DrawMaterialSurface(material);
 		changed |= DrawMaterialPlacement(material);
+		changed |= DrawStateMaterials(material);
 		// The custom shader's own properties (they mark the material changed themselves).
 		if (custom != null && custom.properties.Count > 0)
 			DrawShaderProperties(material, custom);
@@ -245,6 +249,48 @@ extension EditorApp
 		mMaterialDirty |= changed || material.Revision != mMaterialSavedRevision;
 		if (mMaterialDirty && !ImGui.IsMouseDown(0))
 			SaveMaterial();
+	}
+
+	/// With more than one world state: another material to draw with in each, so objects shared by every state keep
+	/// one mesh and change their look there.
+	bool DrawStateMaterials(Material material)
+	{
+		let states = ProjectConfig.WorldStates;
+		if (states.Count < 2)
+			return false;
+		bool changed = false;
+		ImGui.SeparatorText("In Each World State");
+		while (material.stateMaterials.Count < states.Count)
+			material.stateMaterials.Add(new .());
+		for (int i < states.Count)
+		{
+			let current = material.stateMaterials[i];
+			ImGui.PushID((int32)(200 + i));
+			ImGui.SetNextItemWidth(-130);
+			if (ImGui.BeginCombo(scope String()..AppendF("In {}", states[i]).CStr(), current.IsEmpty ? (char8*)"(this material)" : current.CStr()))
+			{
+				RefreshMaterialChoices();
+				if (ImGui.Selectable("(this material)", current.IsEmpty))
+				{
+					current.Clear();
+					changed = true;
+				}
+				for (let choice in mMaterialFileChoices)
+				{
+					if (choice == material.path)
+						continue;
+					if (ImGui.Selectable(choice.CStr(), choice == current))
+					{
+						current.Set(choice);
+						changed = true;
+					}
+				}
+				ImGui.EndCombo();
+			}
+			ImGui.PopID();
+		}
+		ImGui.TextDisabled("Everything using this material draws with the one chosen for the world state shown.");
+		return changed;
 	}
 
 	/// Which shader the material uses: Standard, or one of the project's.
