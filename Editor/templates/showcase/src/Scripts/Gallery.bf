@@ -186,7 +186,7 @@ class Gallery : Component
 			if (direction < 0)
 				voxels.Carve(hit.point, 0.45f);
 		}
-		else if (hit.gameObject.GetComponent<VoxelTerrain>() != null)
+		else if (mTerrain != null && hit.gameObject.Transform.Parent == mTerrain.Transform)
 		{
 			mNextCut = 0.12f;
 			mTerrain.ModifySphere(hit.point, 2.2f, direction * 2);

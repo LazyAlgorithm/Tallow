@@ -50,7 +50,8 @@ class VoxelObject : Component
 	public bool breakOffPieces = true;
 	/// Loose pieces with fewer solid samples than this simply vanish.
 	public int32 minimumPieceSize = 6;
-	/// Anchored objects stay fixed in place (cliffs, walls) and only cut-off pieces fall.
+	/// Anchored objects stay fixed in place (cliffs, walls) and only cut-off pieces fall: the part still on the
+	/// object's base stays, whatever its size, so nothing is left hanging in the air.
 	/// Otherwise the whole object becomes a physics body the first time it is carved.
 	public bool anchored = false;
 
@@ -700,7 +701,8 @@ class VoxelObject : Component
 		NetworkSync.EnsureShared(GameObject);
 	}
 
-	/// Flood-fills the solid samples; everything not connected to the largest group becomes a new falling object.
+	/// Flood-fills the solid samples; everything not connected to the part that stays becomes a new falling object.
+	/// That part is the largest group or, for an anchored object, the largest group resting on its base.
 	void SplitLoosePieces()
 	{
 		let count = mSamples * mSamples * mSamples;
@@ -708,6 +710,9 @@ class VoxelObject : Component
 		defer delete labels;
 		List<int32> sizes = scope .();
 		sizes.Add(0);
+		List<float> lowest = scope .();
+		lowest.Add(0);
+		let up = Transform.Rotation.Conjugate * Vector3.Up;
 		List<int32> stack = scope .();
 		let stepY = mSamples;
 		let stepZ = mSamples * mSamples;
@@ -717,6 +722,7 @@ class VoxelObject : Component
 				continue;
 			let label = (int32)sizes.Count;
 			int32 members = 0;
+			float low = float.MaxValue;
 			labels[start] = label;
 			stack.Add(start);
 			while (stack.Count > 0)
@@ -726,6 +732,7 @@ class VoxelObject : Component
 				let x = index % mSamples;
 				let y = (index / mSamples) % mSamples;
 				let z = index / stepZ;
+				low = Math.Min(low, Vector3.Dot(Vector3(x, y, z), up));
 				void Visit(int32 neighbor)
 				{
 					if (mDensity[neighbor] > 0 && labels[neighbor] == 0)
@@ -748,13 +755,19 @@ class VoxelObject : Component
 					Visit(index + (int32)stepZ);
 			}
 			sizes.Add(members);
+			lowest.Add(low);
 		}
 		if (sizes.Count <= 2)
 			return;
-		int32 largest = 1;
-		for (int32 i = 2; i < (int32)sizes.Count; i++)
+		float floor = float.MaxValue;
+		for (int32 i = 1; i < (int32)lowest.Count; i++)
+			floor = Math.Min(floor, lowest[i]);
+		int32 largest = 0;
+		for (int32 i = 1; i < (int32)sizes.Count; i++)
 		{
-			if (sizes[i] > sizes[largest])
+			if (anchored && lowest[i] > floor + 1.5f)
+				continue;
+			if (largest == 0 || sizes[i] > sizes[largest])
 				largest = i;
 		}
 		for (int32 label = 1; label < (int32)sizes.Count; label++)
