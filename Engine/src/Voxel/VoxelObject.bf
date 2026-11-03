@@ -54,6 +54,13 @@ class VoxelObject : Component
 	/// object's base stays, whatever its size, so nothing is left hanging in the air.
 	/// Otherwise the whole object becomes a physics body the first time it is carved.
 	public bool anchored = false;
+	/// Pieces that break off are debris: they rest on the ground, but characters walk through them and rays (shots)
+	/// pass through them. Off, they block like any other body.
+	public bool debrisPieces = false;
+	/// Seconds before a piece that broke off is removed (by the server in multiplayer). 0 keeps pieces for good.
+	public float pieceLifetime = 0;
+	/// When this piece is removed (Time.Time), or 0.
+	float mRemoveAt;
 
 	/// What a model's surface looks like near each sample of the grid (its colour and texture coordinates), read
 	/// from the model once and shared with the pieces that break off.
@@ -172,6 +179,13 @@ class VoxelObject : Component
 
 	public override void OnFrame()
 	{
+		if (mRemoveAt > 0 && Time.Time >= mRemoveAt && !NetworkSync.IsClientOf(Scene))
+		{
+			mRemoveAt = 0;
+			DestroyPieces();
+			Scene.Destroy(GameObject);
+			return;
+		}
 		if (!mAttachPending)
 			return;
 		mAttachPending = false;
@@ -791,6 +805,9 @@ class VoxelObject : Component
 		mPieces.Add(piece.Id);
 		piece.Transform.SetPositionAndRotation(Transform.Position, Transform.Rotation);
 		piece.Transform.LocalScale = Transform.LocalScale;
+		// A piece is in the same world states (its own and those of every object above it) and on the same layer.
+		piece.WorldStates = GameObject.EffectiveWorldStates;
+		piece.Layer = GameObject.Layer;
 		let source = GetComponent<MeshRenderer>();
 		// Renderer first, so the piece's mesh is attached (and its collider can be built) immediately.
 		let renderer = piece.AddComponent<MeshRenderer>();
@@ -817,6 +834,10 @@ class VoxelObject : Component
 		voxels.interiorTiling = interiorTiling;
 		voxels.minimumPieceSize = minimumPieceSize;
 		voxels.anchored = false;
+		voxels.debrisPieces = debrisPieces;
+		voxels.pieceLifetime = pieceLifetime;
+		if (pieceLifetime > 0)
+			voxels.mRemoveAt = Time.Time + pieceLifetime;
 		voxels.mCustom = true;
 		// A piece is the same grid with everything else taken out: the same place in the model, the same surface.
 		voxels.mMeshSize = mMeshSize;
@@ -842,6 +863,7 @@ class VoxelObject : Component
 		piece.AddComponent<ConvexCollider>();
 		let body = piece.AddComponent<Rigidbody>();
 		body.mass = Math.Max(0.2f, solid * 0.02f);
+		body.debris = debrisPieces;
 		// In multiplayer every machine breaks this piece off at the same moment; from here its motion is shared and
 		// it can be carved in turn.
 		NetworkSync.ShareFragment(piece);

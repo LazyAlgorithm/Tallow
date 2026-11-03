@@ -202,6 +202,7 @@ class Transform
 			return;
 		let world = LocalToWorld;
 		let wasInWorld = mGameObject.InActiveWorld;
+		let wasStates = mGameObject.EffectiveWorldStates;
 		if (mParent != null)
 			mParent.Children.Remove(this);
 		else
@@ -223,8 +224,9 @@ class Transform
 			local.Decompose(out mLocalPosition, out mLocalRotation, out mLocalScale);
 		}
 		MarkDirty();
-		// A new parent can take the object into or out of the active world state.
-		if (mGameObject.InActiveWorld != wasInWorld)
+		// A new parent can take the object into or out of the active world state (or, with world states set apart,
+		// change the states it collides in).
+		if (mGameObject.InActiveWorld != wasInWorld || (mGameObject.Scene != null && mGameObject.Scene.Physics.SeparatesWorldStates && mGameObject.EffectiveWorldStates != wasStates))
 			mGameObject.Scene?.Physics.ApplyWorldState(mGameObject);
 	}
 

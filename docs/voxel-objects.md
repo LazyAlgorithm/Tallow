@@ -48,6 +48,8 @@ Pieces that break off are made of the same stuff: the same model, the same mater
 | Interior Material, Interior Tiling | A material for the inside, and how often its texture repeats |
 | Break Off Pieces, Minimum Piece Size | Whether cut-off parts fall as their own objects, and how small a part just vanishes |
 | Anchored | On: the object stays put (a wall, a cliff) and only cut-off pieces fall. Off: it becomes a physics body the first time it is carved. |
+| Debris Pieces | Pieces that break off rest on the ground, but characters walk through them and rays and shots pass through them. |
+| Piece Lifetime | Seconds before a piece that broke off is removed (by the server in multiplayer); 0 keeps them. |
 
 ## Carving
 
@@ -65,6 +67,7 @@ a convex hull wrapped round them.
 
 In multiplayer a carve happens on every machine: called on a client it goes to the server first and comes back to
 everyone. Pieces are the same objects everywhere.
+They take the object's world states and physics layer.
 
 ## Limits
 

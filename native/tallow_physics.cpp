@@ -16,11 +16,20 @@ extern "C" void tn_physics_set_debris(uint32_t bodyId, bool debris) {
     if (debris) gDebris.insert(bodyId); else gDebris.erase(bodyId);
 }
 
-// Ray and shape queries see only the physics layers in a mask. A Jolt object layer is the engine's motion class
-// times 32 plus the project's layer (0-31), so the low five bits are the layer. Queries run on one thread at a time.
+// Ray and shape queries see only the physics layers in a mask. A Jolt object layer is the world group times 96,
+// plus the engine's motion class times 32, plus the project's layer (0-31), so the low five bits are the layer. The
+// world group is 0 for an object in every world state, else the mask of the (first four) states it is in; a query
+// with world states set sees group 0 and the groups that share a state with it. Queries run on one thread at a time.
 static uint32_t gQueryMask = 0xFFFFFFFFu;
+static uint32_t gQueryWorlds = 0xFFFFFFFFu;
 static bool JPH_API_CALL queryLayerAllowed(void*, JPH_ObjectLayer layer) {
-    return ((gQueryMask >> (layer & 31u)) & 1u) != 0;
+    const uint32_t group = (uint32_t)layer / 96u;
+    return ((gQueryMask >> (layer & 31u)) & 1u) != 0 && (group == 0 || (group & gQueryWorlds) != 0);
+}
+
+// The world states the next queries see (all by default); see PhysicsWorld.QueryWorldStates.
+extern "C" void tn_physics_set_query_worlds(uint32_t worlds) {
+    gQueryWorlds = worlds;
 }
 
 // The filter for a query with that mask; null (no filtering) for every layer.
@@ -32,7 +41,7 @@ extern "C" const JPH_ObjectLayerFilter* tn_physics_layer_filter(uint32_t mask) {
         filter = JPH_ObjectLayerFilter_Create(nullptr);
     }
     gQueryMask = mask;
-    return mask == 0xFFFFFFFFu ? nullptr : filter;
+    return mask == 0xFFFFFFFFu && gQueryWorlds == 0xFFFFFFFFu ? nullptr : filter;
 }
 
 struct TnShapeHit {

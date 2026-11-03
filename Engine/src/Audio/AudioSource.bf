@@ -54,6 +54,14 @@ class AudioSource : Component
 	/// Shows the clip's subtitle file while it plays, when it has one: the same name ending .srt
 	/// (`Voice/intro.ogg` and `Voice/intro.srt`). See docs/dialogue.md.
 	public bool subtitles = true;
+	/// Cuts everything above this frequency, in Hz, all the time (a radio, a voice through a door). 22000 leaves the
+	/// sound as recorded.
+	[Range(200, 22000)] public float lowpass = 22000;
+	/// How loud the sound is to a listener in another world state, 0 to 1 of its volume: a faint echo from the other
+	/// reality. 0 (the default): not heard there at all.
+	[Range(0, 1)] public float otherWorldVolume = 0;
+	/// Heard from another world state, everything above this frequency (Hz) is cut, so it comes through muffled.
+	[Range(200, 22000)] public float otherWorldLowpass = 800;
 
 	void* mSource;
 	String mLoaded = new .() ~ delete _;
@@ -259,10 +267,14 @@ class AudioSource : Component
 		}
 		else
 			parameters.reverbSend = Mathf.Clamp01(reverbSend);
-		parameters.lowpassHz = cutoff;
-		// Outside the scene's world state it keeps its place but is not heard.
+		cutoff = Math.Min(cutoff, Math.Max(lowpass, 20));
+		// Outside the scene's world state it keeps its place, and is heard only as the echo it is given, if any.
 		if (!GameObject.InActiveWorld)
-			level = 0;
+		{
+			level *= Mathf.Clamp01(otherWorldVolume);
+			cutoff = Math.Min(cutoff, Math.Max(otherWorldLowpass, 20));
+		}
+		parameters.lowpassHz = cutoff;
 		parameters.volume = Math.Max(level, 0);
 		Audio.tn_audio_source_set(mSource, &parameters);
 		if (mLoadedSpatial)

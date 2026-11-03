@@ -22,6 +22,9 @@ Add one with **GameObject > Audio Source**, or Add Component > Audio. Pick an **
 | Occlusion | Muffle and quieten the sound when something with a collider is between it and the listener. |
 | Air Absorption | Dull distant sounds slightly. |
 | Reverb Send | Reverb the source always has, on top of any reverb zone. |
+| Lowpass | Cuts everything above this frequency (Hz) all the time: a radio, a voice through a door. 22000 leaves it as recorded. |
+| Other World Volume | How loud it is to a listener in another world state (0 to 1 of Volume). 0: not heard there. |
+| Other World Lowpass | Heard from another world state, everything above this frequency is cut, so it comes through muffled. |
 | Cone Angle, Cone Outer Volume | Make it directional: full volume inside the cone in front of the object, the outer volume behind. 360 is all directions. |
 
 With the source selected, the Scene view shows its minimum and maximum distance as spheres.

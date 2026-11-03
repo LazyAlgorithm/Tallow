@@ -173,6 +173,17 @@ class PhysicsWorld
 	/// world made to bake navigation for a chosen state turns it off and picks its objects itself.
 	public bool FollowsWorldStates = true;
 
+	/// World states set apart in this world (ProjectConfig.SeparateWorldStates), read when the world is made: 0 when
+	/// they are not. With them apart, no body leaves the simulation when the scene's state changes; each collides
+	/// only with bodies sharing one of its world states.
+	int32 mSeparateWorlds;
+	public bool SeparatesWorldStates => mSeparateWorlds > 0;
+
+	/// The world states ray, shape and overlap queries see, one bit per state (all of them by default). With
+	/// ProjectConfig.SeparateWorldStates on, set it to a player's own states around that player's queries, then back
+	/// to uint32.MaxValue. Objects in every state are always seen. Without separation it has no effect.
+	public uint32 QueryWorldStates = uint32.MaxValue;
+
 	class Entry
 	{
 		public uint32 bodyId;
@@ -197,9 +208,25 @@ class PhysicsWorld
 	/// Debris rests on scenery but passes through everything that moves, characters included.
 	const uint32 LayerDebris = 2;
 	const uint32 LayersPerClass = (uint32)ProjectConfig.MaxLayers;
+	/// Object layers in each world group: three motion classes of 32 layers. With world states set apart, the object
+	/// layer is also offset by its world group times this (group 0: every state; else the mask of the states it is in).
+	const uint32 LayersPerGroup = 3 * LayersPerClass;
 
-	static uint32 ObjectLayer(uint32 motionClass, int32 layer) => motionClass * LayersPerClass + (uint32)Math.Clamp(layer, 0, ProjectConfig.MaxLayers - 1);
-	static uint32 ObjectLayer(uint32 motionClass, Transform transform) => ObjectLayer(motionClass, transform != null ? transform.GameObject.Layer : 0);
+	static uint32 ObjectLayer(uint32 motionClass, int32 layer, uint32 group = 0) => group * LayersPerGroup + motionClass * LayersPerClass + (uint32)Math.Clamp(layer, 0, ProjectConfig.MaxLayers - 1);
+	uint32 ObjectLayer(uint32 motionClass, Transform transform) => transform == null ? ObjectLayer(motionClass, 0) : ObjectLayer(motionClass, transform.GameObject.Layer, WorldGroup(transform.GameObject));
+
+	/// The world group of an object: 0 when world states are not set apart or it is in all of the separated ones.
+	uint32 WorldGroup(GameObject gameObject)
+	{
+		if (mSeparateWorlds == 0)
+			return 0;
+		let full = (uint32)(((uint32)1 << mSeparateWorlds) - 1);
+		let mask = gameObject.EffectiveWorldStates & full;
+		return (mask == full || mask == 0) ? (uint32)0 : mask;
+	}
+
+	/// The world group mask a query sees (uint32.MaxValue: all).
+	uint32 QueryWorldGroups => (mSeparateWorlds == 0 || QueryWorldStates == uint32.MaxValue) ? uint32.MaxValue : QueryWorldStates & (uint32)(((uint32)1 << mSeparateWorlds) - 1);
 
 	static bool sJoltInitialized;
 	static void* sJobSystem;
@@ -279,26 +306,40 @@ class PhysicsWorld
 			sJoltInitialized = true;
 		}
 		ProjectConfig.EnsureLoaded();
-		let layerCount = 3 * LayersPerClass;
+		// A world made only for baking picks its objects itself and keeps every state together.
+		mSeparateWorlds = FollowsWorldStates ? ProjectConfig.SeparatedWorldStateCount : 0;
+		let groups = (uint32)1 << mSeparateWorlds;
+		let layerCount = groups * LayersPerGroup;
 		let broadPhase = Jolt.JPH_BroadPhaseLayerInterfaceTable_Create(layerCount, 2);
-		for (int32 layer < ProjectConfig.MaxLayers)
+		for (uint32 group < groups)
 		{
-			Jolt.JPH_BroadPhaseLayerInterfaceTable_MapObjectToBroadPhaseLayer(broadPhase, ObjectLayer(LayerStatic, layer), 0);
-			Jolt.JPH_BroadPhaseLayerInterfaceTable_MapObjectToBroadPhaseLayer(broadPhase, ObjectLayer(LayerMoving, layer), 1);
-			Jolt.JPH_BroadPhaseLayerInterfaceTable_MapObjectToBroadPhaseLayer(broadPhase, ObjectLayer(LayerDebris, layer), 1);
+			for (int32 layer < ProjectConfig.MaxLayers)
+			{
+				Jolt.JPH_BroadPhaseLayerInterfaceTable_MapObjectToBroadPhaseLayer(broadPhase, ObjectLayer(LayerStatic, layer, group), 0);
+				Jolt.JPH_BroadPhaseLayerInterfaceTable_MapObjectToBroadPhaseLayer(broadPhase, ObjectLayer(LayerMoving, layer, group), 1);
+				Jolt.JPH_BroadPhaseLayerInterfaceTable_MapObjectToBroadPhaseLayer(broadPhase, ObjectLayer(LayerDebris, layer, group), 1);
+			}
 		}
 		let pairFilter = Jolt.JPH_ObjectLayerPairFilterTable_Create(layerCount);
 		// What moves against what (static-moving, moving-moving, static-debris), for each pair of the project's
-		// layers that collide.
+		// layers that collide, in each pair of world groups that share a world state (group 0 shares every one).
 		uint32[3][2] classes = .(.(LayerStatic, LayerMoving), .(LayerMoving, LayerMoving), .(LayerStatic, LayerDebris));
-		for (int32 a < ProjectConfig.MaxLayers)
+		for (uint32 groupA < groups)
 		{
-			for (int32 b < ProjectConfig.MaxLayers)
+			for (uint32 groupB < groups)
 			{
-				if (!ProjectConfig.LayersCollide(a, b))
+				if (groupA != 0 && groupB != 0 && (groupA & groupB) == 0)
 					continue;
-				for (let pair in classes)
-					Jolt.JPH_ObjectLayerPairFilterTable_EnableCollision(pairFilter, ObjectLayer(pair[0], a), ObjectLayer(pair[1], b));
+				for (int32 a < ProjectConfig.MaxLayers)
+				{
+					for (int32 b < ProjectConfig.MaxLayers)
+					{
+						if (!ProjectConfig.LayersCollide(a, b))
+							continue;
+						for (let pair in classes)
+							Jolt.JPH_ObjectLayerPairFilterTable_EnableCollision(pairFilter, ObjectLayer(pair[0], a, groupA), ObjectLayer(pair[1], b, groupB));
+					}
+				}
 			}
 		}
 		let objectVsBroadPhase = Jolt.JPH_ObjectVsBroadPhaseLayerFilterTable_Create(broadPhase, 2, pairFilter, layerCount);
@@ -526,7 +567,7 @@ class PhysicsWorld
 			Jolt.tn_physics_set_debris(bodyId, true);
 		}
 		// An object outside the active world state is kept out of the simulation until that state is active.
-		if (FollowsWorldStates && !transform.GameObject.InActiveWorld)
+		if (FollowsWorldStates && mSeparateWorlds == 0 && !transform.GameObject.InActiveWorld)
 		{
 			Jolt.JPH_BodyInterface_RemoveBody(mBodyInterface, bodyId);
 			entry.outOfWorld = true;
@@ -751,16 +792,41 @@ class PhysicsWorld
 			if (entry.transform.GameObject != gameObject)
 				continue;
 			let current = Jolt.JPH_BodyInterface_GetObjectLayer(mBodyInterface, entry.bodyId);
-			Jolt.JPH_BodyInterface_SetObjectLayer(mBodyInterface, entry.bodyId, ObjectLayer(current / LayersPerClass, gameObject.Layer));
+			Jolt.JPH_BodyInterface_SetObjectLayer(mBodyInterface, entry.bodyId, ObjectLayer((current % LayersPerGroup) / LayersPerClass, gameObject.Layer, WorldGroup(gameObject)));
 		}
 		mBroadPhaseDirty = true;
+	}
+
+	/// With world states set apart: moves the bodies of an object and everything under it to the world group of
+	/// their states (GameObject.WorldStates and reparenting call this through ApplyWorldState).
+	void RefreshWorldGroups(GameObject root)
+	{
+		if (mBodyInterface == null)
+			return;
+		let rootTransform = root.Transform;
+		for (let entry in mEntries)
+		{
+			var transform = entry.transform;
+			while (transform != null && transform != rootTransform)
+				transform = transform.Parent;
+			if (transform == null)
+				continue;
+			let gameObject = entry.transform.GameObject;
+			let current = Jolt.JPH_BodyInterface_GetObjectLayer(mBodyInterface, entry.bodyId);
+			let next = ObjectLayer((current % LayersPerGroup) / LayersPerClass, gameObject.Layer, WorldGroup(gameObject));
+			if (next != current)
+			{
+				Jolt.JPH_BodyInterface_SetObjectLayer(mBodyInterface, entry.bodyId, next);
+				mBroadPhaseDirty = true;
+			}
+		}
 	}
 
 	/// Takes bodies of objects outside the scene's active world state out of the simulation and puts back those
 	/// inside it (Scene.WorldState calls this). A character's own body stays: the character decides where it goes.
 	public void ApplyWorldState(Scene scene)
 	{
-		if (!FollowsWorldStates)
+		if (!FollowsWorldStates || mSeparateWorlds > 0)
 			return;
 		if (mBodyInterface == null)
 			return;
@@ -788,7 +854,25 @@ class PhysicsWorld
 	}
 
 	/// The same after one object's world states changed (its children's bodies may change with it).
-	public void ApplyWorldState(GameObject gameObject) => ApplyWorldState(gameObject.Scene);
+	public void ApplyWorldState(GameObject gameObject)
+	{
+		if (mSeparateWorlds > 0)
+			RefreshWorldGroups(gameObject);
+		else
+			ApplyWorldState(gameObject.Scene);
+	}
+
+	/// True when two objects can meet: always without world states set apart, else when they share a world state
+	/// (an object in every state meets everything). For engine code that pairs objects itself (character pushes,
+	/// water), as the physics does for bodies.
+	public bool ShareWorld(GameObject a, GameObject b)
+	{
+		if (mSeparateWorlds == 0 || a == null || b == null)
+			return true;
+		let groupA = WorldGroup(a);
+		let groupB = WorldGroup(b);
+		return groupA == 0 || groupB == 0 || (groupA & groupB) != 0;
+	}
 
 	/// True when the body is taking part in the simulation (false while its object is outside the active world state).
 	public bool IsInWorld(uint32 bodyId) => mByBody.TryGetValue(bodyId, let entry) && !entry.outOfWorld;
@@ -1161,6 +1245,8 @@ class PhysicsWorld
 			mBroadPhaseDirty = false;
 			mNextOptimize = Time.FrameCount + OptimizeInterval;
 		}
+		// The native filter is shared by every world, so each query names its own world states.
+		Jolt.tn_physics_set_query_worlds(QueryWorldGroups);
 		return Jolt.JPH_PhysicsSystem_GetNarrowPhaseQuery(mSystem);
 	}
 

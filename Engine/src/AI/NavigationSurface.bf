@@ -98,7 +98,7 @@ class NavigationSurface : Component
 		{
 			let obstacle = (NavigationObstacle)component;
 			// In the editor an obstacle is shown carved where it stands.
-			let carving = obstacle.IsActiveAndEnabled && obstacle.GameObject.InActiveWorld && obstacle.carve && (obstacle.Carving || !playing);
+			let carving = obstacle.IsActiveAndEnabled && OnThisSurface(obstacle.GameObject) && obstacle.carve && (obstacle.Carving || !playing);
 			if (!carving)
 				continue;
 			Mix(ref hash, playing ? obstacle.CarvedPosition : obstacle.Transform.Position + obstacle.Transform.Rotation * obstacle.center);
@@ -109,7 +109,7 @@ class NavigationSurface : Component
 		for (let component in areas)
 		{
 			let area = (NavigationArea)component;
-			if (!area.IsActiveAndEnabled || !area.GameObject.InActiveWorld)
+			if (!area.IsActiveAndEnabled || !OnThisSurface(area.GameObject))
 				continue;
 			Mix(ref hash, area.Transform.Position);
 			Mix(ref hash, area.Transform.Rotation);
@@ -119,7 +119,7 @@ class NavigationSurface : Component
 		for (let component in links)
 		{
 			let link = (NavigationLink)component;
-			if (!link.IsActiveAndEnabled || !link.GameObject.InActiveWorld)
+			if (!link.IsActiveAndEnabled || !OnThisSurface(link.GameObject))
 				continue;
 			Mix(ref hash, link.StartPoint);
 			Mix(ref hash, link.EndPoint);
@@ -137,7 +137,7 @@ class NavigationSurface : Component
 		for (let component in areas)
 		{
 			let area = (NavigationArea)component;
-			if (!area.IsActiveAndEnabled || !area.GameObject.InActiveWorld)
+			if (!area.IsActiveAndEnabled || !OnThisSurface(area.GameObject))
 				continue;
 			if (area.blocked)
 				data.Block(area.Transform.Position, area.Transform.Rotation, area.size * 0.5f, false, false);
@@ -147,7 +147,7 @@ class NavigationSurface : Component
 		for (let component in obstacles)
 		{
 			let obstacle = (NavigationObstacle)component;
-			if (!obstacle.IsActiveAndEnabled || !obstacle.GameObject.InActiveWorld || !obstacle.carve || !(obstacle.Carving || !playing))
+			if (!obstacle.IsActiveAndEnabled || !OnThisSurface(obstacle.GameObject) || !obstacle.carve || !(obstacle.Carving || !playing))
 				continue;
 			let position = playing ? obstacle.CarvedPosition : obstacle.Transform.Position + obstacle.Transform.Rotation * obstacle.center;
 			let rotation = playing ? obstacle.CarvedRotation : obstacle.Transform.Rotation;
@@ -158,7 +158,7 @@ class NavigationSurface : Component
 		for (let component in links)
 		{
 			let link = (NavigationLink)component;
-			if (!link.IsActiveAndEnabled || !link.GameObject.InActiveWorld)
+			if (!link.IsActiveAndEnabled || !OnThisSurface(link.GameObject))
 				continue;
 			if (data.Mesh != null)
 			{
@@ -206,6 +206,15 @@ class NavigationSurface : Component
 		delete mData;
 		mData = candidate;
 		return true;
+	}
+
+	/// Whether an obstacle, area or link changes this surface: in the scene's active state, or with world states set
+	/// apart, in the world state this surface is baked for.
+	bool OnThisSurface(GameObject gameObject)
+	{
+		if (Scene != null && Scene.Physics.SeparatesWorldStates)
+			return (gameObject.EffectiveWorldStates & BakeWorlds) != 0;
+		return gameObject.InActiveWorld;
 	}
 
 	/// The world state this surface is for: the one its object is in when that is only one (give each world state a

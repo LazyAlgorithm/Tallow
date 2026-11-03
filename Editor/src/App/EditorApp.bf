@@ -271,6 +271,8 @@ class EditorApp : Application
 			RunModelImportTest();
 		if (HasArg("--world-streaming-test"))
 			RunWorldStreamingTest();
+		if (HasArg("--separate-worlds-test"))
+			RunSeparateWorldsTest();
 		// --scene-hide <name> / --scene-lock <name>: as pressing that object's eye or lock in the Hierarchy.
 		let visibilityName = scope String();
 		if (GetArg("--scene-hide", visibilityName) && mScene.Find(visibilityName) != null)

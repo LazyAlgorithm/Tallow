@@ -58,6 +58,8 @@ Kinematic bodies, characters and objects outside the rectangle are left alone. B
 
 **Soft bodies and ropes** float too. Jelly, cloth and ropes float vertex by vertex: every point under the surface is pushed up by Buoyancy and slowed and carried by Water Drag and Flow, so a jelly bobs and squashes on the waves, cloth lies on the surface and drifts, and a rope floats along it. A Floater sets their own Buoyancy and drag in the same way (its Angular Drag is only for Rigidbodies). A shell floats on its object's Rigidbody. The surface is sampled on a grid of at most 8 x 8 points over each body and the vertices are worked out natively, so a 1,000-point cloth costs little more than a small one. `water.IsFloating(softBody)` and `water.IsFloating(rope)` tell whether any of it was in the water. Do not add a Rigidbody to a jelly or cloth to float it: the two would fight over the object.
 
+With **Each object in its own world states** on (docs/layers-and-tags.md), water floats and lets swim only things that share one of its world states, whatever state the scene shows.
+
 ## Swimming
 
 A **Character Controller** swims in water deeper than its **Swim Depth** (1.2 m over the feet by default). `SimpleMove` then floats it with its head out of the water, moves it at **Swim Speed** (0.6 of the speed it is given), and lets the current carry it. A jump swims up, and out at an edge. In shallower water it wades on the bottom.

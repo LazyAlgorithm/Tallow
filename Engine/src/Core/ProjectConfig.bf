@@ -15,6 +15,7 @@ namespace Tallow;
 ///   tag "Enemy"
 ///   worldstate "Material"
 ///   worldstate "Echo"
+///   separateworldstates 1     (each object in its own states: see SeparateWorldStates)
 static class ProjectConfig
 {
 	public const String FileName = "ProjectConfig.tconfig";
@@ -26,6 +27,7 @@ static class ProjectConfig
 	static List<String> sTags = new .() ~ DeleteContainerAndItems!(_);
 	static List<String> sWorldStates = new .() ~ DeleteContainerAndItems!(_);
 	static bool sReady;
+	static bool sSeparateWorldStates;
 
 	/// Goes up whenever anything here changes, for code that caches what it read.
 	public static int32 Version { get; private set; }
@@ -55,8 +57,29 @@ static class ProjectConfig
 		ClearAndDeleteItems!(sTags);
 		ClearAndDeleteItems!(sWorldStates);
 		sWorldStates.Add(new .("Default"));
+		sSeparateWorldStates = false;
 		Version++;
 	}
+
+	/// Per-object world states: every object lives in its own world states, as players in different realities of
+	/// one map. Objects collide, and are found by queries given PhysicsWorld.QueryWorldStates, only where their world
+	/// states overlap, whatever the scene's active state is; the active state then only picks what this machine
+	/// draws and hears. Off (the default), Scene.WorldState switches what collides for everything at once.
+	/// Separation covers the first four world states; objects in all of them (the default) meet everything.
+	public static bool SeparateWorldStates
+	{
+		get => sSeparateWorldStates;
+		set
+		{
+			if (value == sSeparateWorldStates)
+				return;
+			sSeparateWorldStates = value;
+			Version++;
+		}
+	}
+
+	/// How many world states are kept apart in physics (0 when they are not).
+	public static int32 SeparatedWorldStateCount => sSeparateWorldStates && sWorldStates.Count > 1 ? Math.Min((int32)sWorldStates.Count, 4) : 0;
 
 	// ---- layers ----
 
@@ -263,6 +286,8 @@ static class ProjectConfig
 			case "tag":
 				if (!HasTag(tokens[1]))
 					sTags.Add(new .(tokens[1]));
+			case "separateworldstates":
+				sSeparateWorldStates = tokens[1] != "0";
 			case "worldstate":
 				if (firstState)
 				{
@@ -305,6 +330,8 @@ static class ProjectConfig
 			text.AppendF("tag {}\n", SceneSerializer.Quote(tag, .. scope .()));
 		for (let state in sWorldStates)
 			text.AppendF("worldstate {}\n", SceneSerializer.Quote(state, .. scope .()));
+		if (sSeparateWorldStates)
+			text.Append("separateworldstates 1\n");
 	}
 
 	/// Writes the settings to a file (the editor writes to the project's src/ folder).

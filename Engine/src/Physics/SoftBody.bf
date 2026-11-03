@@ -313,7 +313,7 @@ class SoftBody : Component
 		// shiver. Cloth bends by distance: by angle, a cloth folded sharply (draped over something) gains speed at
 		// the folds and flails.
 		config.dihedral = cloth ? 0 : 1;
-		config.layer = PhysicsWorld.[Friend]ObjectLayer(PhysicsWorld.[Friend]LayerMoving, Transform);
+		config.layer = Scene.Physics.[Friend]ObjectLayer(PhysicsWorld.[Friend]LayerMoving, Transform);
 		config.userData = (uint64)GameObject.Id;
 		var objectMatrix = toWorld;
 		mBody = tn_soft_create(system, &config, positions.Ptr, (uint32)mRest.Count, mTriangles.Ptr, (uint32)(mTriangles.Count / 3), pinned.Ptr, stiffnesses.Ptr, (float*)&center, &objectMatrix.m[0]);

@@ -196,6 +196,13 @@ extension EditorApp
 				ProjectConfig.RemoveLastWorldState();
 				changed = true;
 			}
+			var separate = ProjectConfig.SeparateWorldStates;
+			if (ImGui.Checkbox("Each object in its own world states", ref separate))
+			{
+				ProjectConfig.SeparateWorldStates = separate;
+				changed = true;
+			}
+			ImGui.TextWrapped("On: objects collide, swim and are found by queries only where their world states overlap, whatever state the scene shows, so players can be in different states of one map at once (set a player's World States). Scene.WorldState then only picks what this machine draws and hears; Audio Sources can still be heard faintly from other states (Other World Volume). Covers the first four states. Takes effect on the next Play.");
 		}
 		return changed;
 	}

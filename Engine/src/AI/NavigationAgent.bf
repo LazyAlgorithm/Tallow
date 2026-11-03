@@ -155,19 +155,31 @@ class NavigationAgent : AIMovementDriver
 		return (ap - ab * t).Length;
 	}
 
+	bool SurfaceFits(NavigationSurface candidate)
+	{
+		if (Scene.Physics.SeparatesWorldStates)
+		{
+			// A surface bakes one state: it fits an agent that is in that state.
+			let states = GameObject.EffectiveWorldStates & candidate.BakeWorlds;
+			return states != 0;
+		}
+		return candidate.GameObject.InActiveWorld;
+	}
+
 	public override void SetDestination(Vector3 point, float speed, float stoppingDistance)
 	{
 		if (NetworkSync.IsClientOf(Scene)) return;
 		mSpeed = Math.Max(speed, 0);
 		mStop = Math.Max(stoppingDistance, 0.05f);
-		// With no surface set, the one in the scene's world state (looked for again when the world state changes).
-		if (surface == null || (mFoundSurface && !surface.GameObject.InActiveWorld))
+		// With no surface set, the one in the scene's world state (looked for again when the world state changes);
+		// with world states set apart, one sharing the agent's own world states.
+		if (surface == null || (mFoundSurface && !SurfaceFits(surface)))
 		{
 			for (let component in Scene.ComponentsOfType(typeof(NavigationSurface)))
 			{
 				if (let candidate = component as NavigationSurface)
 				{
-					if (candidate.IsActiveAndEnabled && candidate.GameObject.InActiveWorld)
+					if (candidate.IsActiveAndEnabled && SurfaceFits(candidate))
 					{
 						if (candidate != surface)
 							mDirty = true;

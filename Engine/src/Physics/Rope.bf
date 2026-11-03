@@ -469,7 +469,7 @@ class Rope : Component
 		config.gravityFactor = 1;
 		config.radius = Math.Max(thickness * 0.5f, 0.001f);
 		config.iterations = Math.Clamp(iterations, 1, 32);
-		config.layer = PhysicsWorld.[Friend]ObjectLayer(PhysicsWorld.[Friend]LayerMoving, Transform);
+		config.layer = Scene.Physics.[Friend]ObjectLayer(PhysicsWorld.[Friend]LayerMoving, Transform);
 		config.userData = (uint64)GameObject.Id;
 		mBody = tn_rope_create(system, &config, positions.Ptr, (uint32)count, pinned.Ptr, (float*)&center);
 		if (mBody == uint32.MaxValue)

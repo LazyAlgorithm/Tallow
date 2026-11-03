@@ -327,8 +327,10 @@ class Water : Component
 
 	/// The water over a point that a thing there would be in: over it, with the point above its bottom and no more
 	/// than reach above its still level (things above the surface can still have their lower parts in it). Of
-	/// several, the one with the highest level.
-	public static Water At(Scene scene, Vector3 point, float reach = 0)
+	/// several, the one with the highest level. forObject: the thing asking; with world states set apart
+	/// (ProjectConfig.SeparateWorldStates) only water sharing one of its world states counts, whatever the scene's
+	/// active state. Without it, water outside the scene's active state does not count.
+	public static Water At(Scene scene, Vector3 point, float reach = 0, GameObject forObject = null)
 	{
 		if (scene == null)
 			return null;
@@ -336,7 +338,7 @@ class Water : Component
 		for (let component in scene.ComponentsOfType(typeof(Water)))
 		{
 			let water = (Water)component;
-			if (!water.IsActiveAndEnabled || !water.GameObject.InActiveWorld)
+			if (!water.IsActiveAndEnabled || !Meets(scene, water.GameObject, forObject))
 				continue;
 			let level = water.Level;
 			let top = level + Math.Max(water.waveHeight, 0) + reach;
@@ -346,6 +348,15 @@ class Water : Component
 				best = water;
 		}
 		return best;
+	}
+
+	/// Whether the water's object and a thing in it take part together: sharing a world state when world states are
+	/// set apart, else both in the scene's active state.
+	static bool Meets(Scene scene, GameObject water, GameObject thing)
+	{
+		if (scene.Physics.SeparatesWorldStates)
+			return thing == null || scene.Physics.ShareWorld(water, thing);
+		return water.InActiveWorld && (thing == null || thing.InActiveWorld);
 	}
 
 	/// Sets the colours, grid and waves that suit a look, and the look.
@@ -398,14 +409,14 @@ class Water : Component
 		for (let component in scene.ComponentsOfType(typeof(Rigidbody)))
 		{
 			let body = (Rigidbody)component;
-			if (!body.IsActiveAndEnabled || body.isKinematic || !body.HasBody || !body.GameObject.InActiveWorld)
+			if (!body.IsActiveAndEnabled || body.isKinematic || !body.HasBody || (!scene.Physics.SeparatesWorldStates && !body.GameObject.InActiveWorld))
 				continue;
 			let floater = body.GameObject.GetComponent<Floater>();
 			if (floater != null && !floater.IsActiveAndEnabled)
 				continue;
 			let position = body.Transform.Position;
 			// Things as tall as a few metres can reach the water from above its surface.
-			let water = At(scene, position, 4);
+			let water = At(scene, position, 4, body.GameObject);
 			if (water == null || (floater == null && !water.floatRigidbodies))
 				continue;
 			if (!water.SurfaceAt(position, time, let height, let normal, let velocity))
@@ -422,13 +433,13 @@ class Water : Component
 		for (let component in scene.ComponentsOfType(typeof(SoftBody)))
 		{
 			let soft = (SoftBody)component;
-			if (soft.kind != .Shell && soft.IsActiveAndEnabled && soft.GameObject.InActiveWorld)
+			if (soft.kind != .Shell && soft.IsActiveAndEnabled && (scene.Physics.SeparatesWorldStates || soft.GameObject.InActiveWorld))
 				FloatSoft(scene, soft.GameObject, soft.BodyId, soft.gravityScale, time, deltaTime);
 		}
 		for (let component in scene.ComponentsOfType(typeof(Rope)))
 		{
 			let rope = (Rope)component;
-			if (rope.IsActiveAndEnabled && rope.GameObject.InActiveWorld)
+			if (rope.IsActiveAndEnabled && (scene.Physics.SeparatesWorldStates || rope.GameObject.InActiveWorld))
 				FloatSoft(scene, rope.GameObject, rope.BodyId, 1, time, deltaTime);
 		}
 	}
@@ -457,7 +468,7 @@ class Water : Component
 		if (!tn_soft_bounds(system, bodyId, &min, &max))
 			return;
 		let center = (min + max) * 0.5f;
-		let water = At(scene, center, (max.y - min.y) * 0.5f + 1);
+		let water = At(scene, center, (max.y - min.y) * 0.5f + 1, owner);
 		if (water == null || (floater == null && !water.floatRigidbodies) || min.y > water.Level + water.waveHeight + SoftBand || max.y < water.Bottom)
 			return;
 		let nx = Math.Clamp((int)Math.Ceiling((max.x - min.x) / SoftSampleSpacing) + 1, 2, SoftSamples);

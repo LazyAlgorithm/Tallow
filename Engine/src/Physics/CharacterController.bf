@@ -105,7 +105,7 @@ class CharacterController : Component
 			return false;
 		let middle = Transform.Position + center;
 		let half = shape == .Capsule ? height * 0.5f : boxSize.y * 0.5f;
-		let water = Water.At(Scene, middle, half);
+		let water = Water.At(Scene, middle, half, GameObject);
 		if (water == null)
 			return false;
 		float surface;
@@ -237,7 +237,7 @@ class CharacterController : Component
 		let mine = Transform.Position + mShapeCenter;
 		for (let other in Scene.Physics.Controllers)
 		{
-			if (other == this || !other.mSoft || !other.HasCharacter)
+			if (other == this || !other.mSoft || !other.HasCharacter || !Scene.Physics.ShareWorld(GameObject, other.GameObject))
 				continue;
 			let theirs = other.Transform.Position + other.mShapeCenter;
 			if (Math.Abs(mine.y - theirs.y) >= mHalfHeight + other.mHalfHeight)
@@ -327,7 +327,7 @@ class CharacterController : Component
 			return false;
 		let middle = Transform.Position + center;
 		let half = shape == .Capsule ? height * 0.5f : boxSize.y * 0.5f;
-		let water = Water.At(Scene, middle, half);
+		let water = Water.At(Scene, middle, half, GameObject);
 		if (water == null)
 			return false;
 		float surface;

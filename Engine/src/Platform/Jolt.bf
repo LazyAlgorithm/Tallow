@@ -77,6 +77,7 @@ static class Jolt
 	[CLink] public static extern int32 tn_physics_overlap_shape(void* query, void* shape, Vector3* origin, Quaternion* rotation, uint32 ignoreBody, ShapeHit* hits, int32 capacity, uint32 layerMask, bool analyticContacts);
 	/// The object layer filter for a query that sees only the layers in the mask (null for all of them).
 	[CLink] public static extern void* tn_physics_layer_filter(uint32 mask);
+	[CLink] public static extern void tn_physics_set_query_worlds(uint32 worlds);
 	[CLink] public static extern uint32 JPH_BodyInterface_GetObjectLayer(void* bodyInterface, uint32 bodyId);
 	[CLink] public static extern void JPH_BodyInterface_SetObjectLayer(void* bodyInterface, uint32 bodyId, uint32 layer);
 	[CLink] public static extern void JPH_BodyInterface_AddBody(void* bodyInterface, uint32 bodyId, int32 activation);
