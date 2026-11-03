@@ -5,6 +5,7 @@ $input v_wpos, v_normal, v_color0, v_texcoord0, v_depth, v_texcoord1, v_surface
 // distance fog). Output is linear HDR.
 #include <bgfx_shader.sh>
 #include "lighting.sh"
+#include "palette.sh"
 
 SAMPLER2D(s_albedo, 0);
 SAMPLER2D(s_texture1, 2);
@@ -55,6 +56,15 @@ void main()
 	vec3 emissive = u_emissive.rgb * mix(vec3_splat(1.0), albedo, u_surface.z);
 	float occlusion = 1.0;
 	vec3 surfaceNormal = vec3(0.0, 0.0, 1.0);
+	float paletteUnlit = 0.0;
+	if (u_palette.x > 0.5)
+	{
+		vec4 bytes = paletteBytes(v_color0);
+		if (paletteSurface(bytes, texture2D(s_albedo, paletteCoord(bytes)), worldPosition, time, albedo, alpha, metallic, roughness, emissive, paletteUnlit) > 0.5)
+		{
+			discard;
+		}
+	}
 //@SURFACE
 //@UNDEFINE
 	// The PBR maps, in the glTF layout: roughness in green and metallic in blue of one texture, occlusion in red.
@@ -77,7 +87,7 @@ void main()
 		discard;
 	}
 
-	if (u_material.w > 0.5 && u_material.w < 1.5)
+	if ((u_material.w > 0.5 && u_material.w < 1.5) || paletteUnlit > 0.5)
 	{
 		gl_FragColor = vec4(albedo + emissive, alpha);
 		return;

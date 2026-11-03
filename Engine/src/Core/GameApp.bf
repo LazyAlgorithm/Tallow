@@ -27,6 +27,13 @@ class GameApp : Application
 		let sceneArg = scope String();
 		GetArg("--scene", sceneArg);
 		if (!LoadScene(mScene, sceneArg)) return false;
+		// --world-state <name or number>: start in that world state (for checks and screenshots).
+		let stateArg = scope String();
+		if (GetArg("--world-state", stateArg))
+		{
+			if (!mScene.SetWorldState(stateArg) && (int32.Parse(stateArg) case .Ok(let number)))
+				mScene.WorldState = number;
+		}
 		if (!Headless)
 		{
 			mView = new RenderView(10);

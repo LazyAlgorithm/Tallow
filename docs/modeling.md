@@ -240,6 +240,14 @@ Faces have vertex colours, which multiply the material's colour and texture. **C
 faces. **Paint vertex colours** turns the pointer into a brush: drag over the model to paint (Radius and Strength set
 the brush); Shift paints whole faces flat.
 
+### Palette faces
+
+When the object's material is in palette mode (docs/materials.md), **Palette faces** shows the palette: click a colour,
+set **Glow**, **Roughness** and **Metallic** (or **Opacity** for a see-through face) and the flags (Unlit,
+Transparent, Double Sided, Cutout, Hologram, Pulse, Dissolve), then **Paint Faces** paints the picked faces. **Copy
+From Face** takes the settings from the first picked face. Each face keeps its own vertices, so neighbouring faces
+never blend their settings.
+
 ## Texture coordinates
 
 New faces have **Auto** coordinates: the texture is laid on from the side each face looks at most, once a metre in
@@ -334,6 +342,11 @@ booleans, `MeshUV` the unwrapping, pins, stitching and palette cells, `TexturePa
 `GlbWriter` the export. Faces wind clockwise seen from the front (as everywhere in the engine).
 
 ## Tests
+
+`--palette-test` (editor) writes two palettes and reads them back exactly, saves a palette material with a second
+state's palette, splits a box's faces into sections by their flags, and saves `PaletteTest/Palette.tscene` for
+screenshots (`--scene PaletteTest/Palette.tscene --world-state 1 --frames 30 --screenshot out.png`): the box is red in
+the first state, blue in the second, and yellow-ish where the half see-through green pane covers it.
 
 ## Networking
 

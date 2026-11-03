@@ -744,6 +744,8 @@ extension EditorApp
 		Smooth,
 		Flat,
 		Color,
+		/// Palette mode: the packed palette colour (ModelPaletteFaces).
+		Palette,
 		NewObject,
 		Poke,
 		Triangulate,
@@ -804,6 +806,13 @@ extension EditorApp
 			{
 				for (var c in ref mesh.faces[f].colors)
 					c = mModelColor;
+			}
+		case .Palette:
+			let packed = PaletteFaceColor;
+			for (let f in faces)
+			{
+				for (var c in ref mesh.faces[f].colors)
+					c = packed;
 			}
 		case .NewObject:
 			// The faces become an object of their own, in the same place.
@@ -1438,6 +1447,7 @@ extension EditorApp
 		ImGui.SameLine();
 		if (ImGui.Button("Colour Faces", .(-1, 0)))
 			ModelFaceAction(model, mesh, .Color);
+		DrawPaletteFaces(model, mesh);
 		DrawFaceUVSettings(model, mesh);
 	}
 

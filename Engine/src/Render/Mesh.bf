@@ -51,6 +51,7 @@ class Mesh
 	public void UploadIndices()
 	{
 		ReleaseEdges();
+		ReleasePaletteSections();
 		if (mIndexBuffer.Valid && Gfx.Initialized)
 			bgfx.destroy_index_buffer(mIndexBuffer);
 		mIndexBuffer.idx = uint16.MaxValue;
@@ -68,6 +69,7 @@ class Mesh
 	public void UploadDynamic(bool computeWritable = false)
 	{
 		ReleaseGpu();
+		ReleasePaletteSections();
 		RecalculateBounds();
 		if (Vertices.Count == 0 || Indices.Count == 0 || !Gfx.Initialized)
 			return;
@@ -89,6 +91,98 @@ class Mesh
 	public ~this()
 	{
 		ReleaseGpu();
+		ReleasePaletteSections();
+	}
+
+	// ---- palette sections ----
+
+	/// Kinds of face in a palette mesh (Material.palette), by their flags: one-sided, double sided, see-through,
+	/// and see-through double sided. A draw has one culling and blending, so each kind is drawn on its own.
+	public const int PaletteSectionCount = 4;
+	/// Palette face flags (the alpha byte of the vertex colour).
+	public const uint8 PaletteUnlit = 1, PaletteTransparent = 2, PaletteDoubleSided = 4, PaletteCutout = 8, PaletteHologram = 16,
+		PaletteAnimatedGlow = 32, PaletteDissolve = 64;
+
+	Mesh[PaletteSectionCount] mPaletteSections;
+	bool mPaletteSectionsMade;
+
+	/// The section of one kind (bit 0 double sided, bit 1 see-through): a mesh drawing this one's vertices with just
+	/// those faces, or null when it has none. All null when every face is opaque and one-sided, and for a mesh whose
+	/// triangles are not kept on the CPU; it is then drawn whole. Made the first time it is asked for after an upload.
+	public Mesh PaletteSection(int section)
+	{
+		if (!mPaletteSectionsMade)
+			MakePaletteSections();
+		return section >= 0 && section < PaletteSectionCount ? mPaletteSections[section] : null;
+	}
+
+	/// True when the mesh has faces flagged see-through or double sided (see PaletteSection).
+	public bool HasPaletteSections
+	{
+		get
+		{
+			if (!mPaletteSectionsMade)
+				MakePaletteSections();
+			for (let section in mPaletteSections)
+			{
+				if (section != null)
+					return true;
+			}
+			return false;
+		}
+	}
+
+	void MakePaletteSections()
+	{
+		ReleasePaletteSections();
+		mPaletteSectionsMade = true;
+		let source = VertexSource ?? this;
+		if (Indices.Count < 3 || source.Vertices.Count == 0 || !HasGpuData)
+			return;
+		List<uint32>[PaletteSectionCount] lists = default;
+		defer
+		{
+			for (let list in lists)
+				delete list;
+		}
+		bool split = false;
+		for (int i = 0; i + 2 < Indices.Count; i += 3)
+		{
+			let first = Indices[i];
+			if (first >= (uint32)source.Vertices.Count)
+				return;
+			let color = source.Vertices[(int)first].color;
+			// Plain white is a face never painted: no flags (as include/palette.sh reads it).
+			let flags = color == uint32.MaxValue ? 0 : (uint8)(color >> 24);
+			let section = ((flags & PaletteDoubleSided) != 0 ? 1 : 0) | ((flags & PaletteTransparent) != 0 ? 2 : 0);
+			split |= section != 0;
+			if (lists[section] == null)
+				lists[section] = new .();
+			lists[section].Add(Indices[i]);
+			lists[section].Add(Indices[i + 1]);
+			lists[section].Add(Indices[i + 2]);
+		}
+		if (!split)
+			return;
+		for (int section < PaletteSectionCount)
+		{
+			if (lists[section] == null)
+				continue;
+			let part = new Mesh();
+			part.Name.Set(Name);
+			part.VertexSource = source;
+			part.Indices.AddRange(lists[section]);
+			part.UploadIndices();
+			part.Bounds = Bounds;
+			mPaletteSections[section] = part;
+		}
+	}
+
+	void ReleasePaletteSections()
+	{
+		for (var section in ref mPaletteSections)
+			DeleteAndNullify!(section);
+		mPaletteSectionsMade = false;
 	}
 
 	/// Whether the mesh is on the graphics card and can be drawn.
@@ -171,6 +265,7 @@ class Mesh
 	public void Upload(bool keepCpuData = true)
 	{
 		ReleaseGpu();
+		ReleasePaletteSections();
 		RecalculateBounds();
 		if (Vertices.Count == 0 || Indices.Count == 0 || !Gfx.Initialized)
 			return;

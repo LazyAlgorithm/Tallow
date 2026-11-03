@@ -232,6 +232,7 @@ extension EditorApp
 		let custom = material.Shader;
 		if (custom != null && !custom.problems.IsEmpty)
 			ImGui.TextDisabled("This shader has mistakes; see the Console.");
+		changed |= DrawMaterialPalette(material);
 		changed |= DrawMaterialSurface(material);
 		changed |= DrawMaterialPlacement(material);
 		// The custom shader's own properties (they mark the material changed themselves).
@@ -271,6 +272,127 @@ extension EditorApp
 			ImGui.EndCombo();
 		}
 		return changed;
+	}
+
+	/// The palette entry being edited in the Material Inspector (-1: none), and the colours being edited, written to
+	/// the image when the mouse is let go.
+	int32 mPaletteEntry = -1;
+	String mPaletteEditPath = new .() ~ delete _;
+	Color[Palettes.Size] mPaletteEdit;
+	bool mPaletteEditDirty;
+
+	/// A new palette image for a material, beside the project's textures: a copy of `from`, or the starter colours.
+	String NewPaletteFile(Material material, StringView suffix, StringView from)
+	{
+		let name = scope String();
+		System.IO.Path.GetFileNameWithoutExtension(material.path.IsEmpty ? "Material" : material.path, name);
+		let path = new String()..AppendF("Textures/{}_{}.png", name, suffix);
+		Color[Palettes.Size] colors = default;
+		if (from.IsEmpty || !Palettes.Colors(from, ref colors))
+			Palettes.Starter(ref colors);
+		if (!Palettes.Save(path, colors))
+			Log.Error(scope $"Could not write {path}");
+		return path;
+	}
+
+	/// Palette mode, optional: a palette image (made and edited here), one per world state, and how faces glow and
+	/// dissolve.
+	bool DrawMaterialPalette(Material material)
+	{
+		bool changed = false;
+		ImGui.SeparatorText("Palette (optional)");
+		changed |= ImageRow("Palette", material.palette);
+		if (!material.IsPalette)
+		{
+			if (ImGui.Button("New Palette", .(-1, 0)))
+			{
+				let path = NewPaletteFile(material, "palette", "");
+				material.palette.Set(path);
+				delete path;
+				changed = true;
+			}
+			ImGui.TextDisabled("Optional: colour faces from a 256-colour palette painted in the modeller (a low-poly look).");
+			return changed;
+		}
+		ImGui.TextDisabled("Each face's colour, glow, roughness, metallic and flags come from its painted vertex colour; Color, Texture and the maps below are not used.");
+		changed |= ImGui.SliderFloat("Glow Strength", ref material.paletteEmission, 0, 20);
+		changed |= ImGui.SliderFloat("Dissolve", ref material.dissolve, 0, 1);
+		let states = ProjectConfig.WorldStates;
+		if (states.Count > 1)
+		{
+			while (material.statePalettes.Count < states.Count)
+				material.statePalettes.Add(new .());
+			for (int i < states.Count)
+			{
+				ImGui.PushID((int32)i);
+				changed |= ImageRow(scope String()..AppendF("In {}", states[i]).CStr(), material.statePalettes[i]);
+				if (material.statePalettes[i].IsEmpty && ImGui.Button(scope String()..AppendF("New palette for {}", states[i]).CStr(), .(-1, 0)))
+				{
+					let path = NewPaletteFile(material, states[i], material.palette);
+					material.statePalettes[i].Set(path);
+					delete path;
+					changed = true;
+				}
+				ImGui.PopID();
+			}
+			ImGui.TextDisabled("A world state's palette recolours the same faces there; empty uses Palette.");
+		}
+		DrawPaletteEditor(material.palette);
+		for (int i < Math.Min(states.Count, material.statePalettes.Count))
+		{
+			if (!material.statePalettes[i].IsEmpty)
+			{
+				ImGui.PushID((int32)(100 + i));
+				ImGui.TextDisabled(scope String()..AppendF("{}:", states[i]).CStr());
+				DrawPaletteEditor(material.statePalettes[i]);
+				ImGui.PopID();
+			}
+		}
+		return changed;
+	}
+
+	/// A palette's 256 colours in its 16 x 16 layout: click one to change it. The image is written when the mouse is
+	/// let go, and everything using it changes at once.
+	void DrawPaletteEditor(String path)
+	{
+		if (mPaletteEditPath != path)
+		{
+			if (mPaletteEditDirty)
+				Palettes.Save(mPaletteEditPath, mPaletteEdit);
+			mPaletteEditDirty = false;
+			mPaletteEntry = -1;
+			mPaletteEditPath.Set(path);
+			Palettes.Colors(path, ref mPaletteEdit);
+		}
+		let origin = ImGui.GetCursorScreenPos();
+		let cell = Math.Clamp((ImGui.GetContentRegionAvail().x - 4) / Palettes.Side, 8, 18);
+		ImGui.InvisibleButton("##palette", .(cell * Palettes.Side, cell * Palettes.Side));
+		let clicked = ImGui.IsItemHovered() && ImGui.IsMouseClicked(0);
+		let mouse = ImGui.GetMousePos();
+		for (int32 i < Palettes.Size)
+		{
+			let x = origin.x + (i % Palettes.Side) * cell;
+			let y = origin.y + (i / Palettes.Side) * cell;
+			ImGui.DrawRectFilled(.(x, y), .(x + cell - 1, y + cell - 1), mPaletteEdit[i]);
+			if (i == mPaletteEntry)
+				ImGui.DrawRect(.(x - 1, y - 1), .(x + cell, y + cell), .White, 0, 2);
+			if (clicked && mouse.x >= x && mouse.x < x + cell && mouse.y >= y && mouse.y < y + cell)
+				mPaletteEntry = i;
+		}
+		if (mPaletteEntry >= 0)
+		{
+			ImGui.SetNextItemWidth(-130);
+			if (ImGui.ColorEdit4(scope String()..AppendF("Entry {}", mPaletteEntry).CStr(), ref mPaletteEdit[mPaletteEntry]))
+				mPaletteEditDirty = true;
+		}
+		else
+			ImGui.TextDisabled("Click a colour to change it.");
+		if (mPaletteEditDirty && !ImGui.IsMouseDown(0))
+		{
+			if (!Palettes.Save(path, mPaletteEdit))
+				Log.Error(scope $"Could not write {path}");
+			mPaletteEditDirty = false;
+		}
 	}
 
 	/// Colour, the PBR settings and maps.

@@ -437,6 +437,18 @@ class Material
 	public float cutoff = 0.5f;
 	/// Draw both faces of each triangle: for leaves, cloth and anything seen from behind.
 	public bool doubleSided = false;
+	/// Palette mode: a palette image (256 colours, usually 16 x 16). Each face then takes everything from its
+	/// vertex colour bytes, painted in the modeller: red picks the palette colour, green how strongly it glows,
+	/// blue its roughness (top five bits) and metallic (low three), or its opacity on a see-through face, and alpha
+	/// its flags (PaletteFlags). Color, Texture and the maps are not used. Empty: an ordinary material.
+	public String palette = new .() ~ delete _;
+	/// A palette for each world state, by number (Project Settings): what the same faces look like in that state, so
+	/// two realities share one mesh. An empty one uses Palette.
+	public List<String> statePalettes = new .() ~ DeleteContainerAndItems!(_);
+	/// How bright a face's glow is at full green (its emission byte at 255).
+	public float paletteEmission = 4;
+	/// Dissolve flagged faces: 0 whole, 1 gone (animate it for a shift or a death).
+	public float dissolve = 0;
 	/// For the editor's shader graph previews: which node of a preview shader the surface shows (0 is the surface
 	/// itself). Not saved.
 	public int32 previewOutput;
@@ -499,6 +511,46 @@ class Material
 
 	/// True when the material is drawn blended over what is behind it.
 	public bool IsTransparent => blend == .Transparent;
+
+	/// True in palette mode (Palette set).
+	public bool IsPalette => !palette.IsEmpty;
+
+	/// The palette used in a world state: that state's own, or Palette.
+	public StringView PaletteFor(int32 worldState)
+	{
+		if (worldState >= 0 && worldState < statePalettes.Count && !statePalettes[worldState].IsEmpty)
+			return statePalettes[worldState];
+		return palette;
+	}
+
+	Material[4] mVariants;
+	int32[4] mVariantRevisions = .(-1, -1, -1, -1);
+
+	/// Palette mode: the material for one kind of face (PaletteSection): the same material made double sided,
+	/// see-through, or both. Kept in step with this one. Section 0 is this material.
+	public Material PaletteVariant(int section)
+	{
+		if (section <= 0 || section >= 4)
+			return this;
+		if (mVariants[section] == null || mVariantRevisions[section] != Revision)
+		{
+			delete mVariants[section];
+			let variant = Clone();
+			variant.path.Set(path);
+			variant.doubleSided = (section & 1) != 0 || doubleSided;
+			if ((section & 2) != 0)
+				variant.blend = .Transparent;
+			mVariants[section] = variant;
+			mVariantRevisions[section] = Revision;
+		}
+		return mVariants[section];
+	}
+
+	public ~this()
+	{
+		for (let variant in mVariants)
+			delete variant;
+	}
 
 	// ---- the custom shader's properties ----
 
@@ -607,6 +659,11 @@ class Material
 		copy.blend = blend;
 		copy.cutoff = cutoff;
 		copy.doubleSided = doubleSided;
+		copy.palette.Set(palette);
+		for (let state in statePalettes)
+			copy.statePalettes.Add(new .(state));
+		copy.paletteEmission = paletteEmission;
+		copy.dissolve = dissolve;
 		for (let (name, value) in mValues)
 			copy.mValues[new String(name)] = value;
 		for (let (name, texturePath) in mTextures)
@@ -634,6 +691,23 @@ class Material
 		Map("emissiveMap", emissiveMap);
 		text.AppendF("\nnormalStrength {}\nocclusionStrength {}", normalStrength, occlusionStrength);
 		text.AppendF("\ntiling {} {}\noffset {} {}\nblend {}\ncutoff {}\ndoubleSided {}\n", tiling.x, tiling.y, offset.x, offset.y, (int32)blend, cutoff, doubleSided ? 1 : 0);
+		// Palette mode only when used, so other materials' files stay as they were.
+		if (!palette.IsEmpty)
+		{
+			text.Append("palette ");
+			SceneSerializer.Quote(palette, text);
+			text.AppendF("\npaletteEmission {}\n", paletteEmission);
+			if (dissolve != 0)
+				text.AppendF("dissolve {}\n", dissolve);
+		}
+		for (int i < statePalettes.Count)
+		{
+			if (statePalettes[i].IsEmpty)
+				continue;
+			text.AppendF("statePalette {} ", i);
+			SceneSerializer.Quote(statePalettes[i], text);
+			text.Append('\n');
+		}
 		// In name order, so that saving the same material twice writes the same file.
 		List<String> names = scope .();
 		for (let name in mValues.Keys)
@@ -705,6 +779,17 @@ class Material
 			case "blend": blend = (MaterialBlend)Math.Clamp((int32)F(1), 0, 2);
 			case "cutoff": cutoff = Mathf.Clamp01(F(1));
 			case "doubleSided": doubleSided = tokens[1] == "1";
+			case "palette": palette.Set(tokens[1]);
+			case "paletteEmission": paletteEmission = Math.Max(F(1), 0);
+			case "dissolve": dissolve = Mathf.Clamp01(F(1));
+			case "statePalette":
+				let index = (int)F(1);
+				if (tokens.Count >= 3 && index >= 0 && index < ProjectConfig.MaxWorldStates)
+				{
+					while (statePalettes.Count <= index)
+						statePalettes.Add(new .());
+					statePalettes[index].Set(tokens[2]);
+				}
 			case "value":
 				if (tokens.Count >= 6)
 					SetVector(tokens[1], .(F(2), F(3), F(4), F(5)));

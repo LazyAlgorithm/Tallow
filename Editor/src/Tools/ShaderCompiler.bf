@@ -299,7 +299,7 @@ static class ShaderCompiler
 	static DateTime NewestTemplate(StringView engineRoot)
 	{
 		var newest = DateTime.MinValue;
-		for (let name in StringView[?]("fs_mesh.sc", "vs_mesh.sc", "cs_template.sc", "include/lighting.sh", "include/wind.sh", "include/shadergraph.sh", "include/bgfx_shader.sh"))
+		for (let name in StringView[?]("fs_mesh.sc", "vs_mesh.sc", "cs_template.sc", "include/lighting.sh", "include/wind.sh", "include/shadergraph.sh", "include/palette.sh", "include/bgfx_shader.sh"))
 		{
 			if (File.GetLastWriteTimeUtc(scope $"{engineRoot}/Engine/shaders/{name}") case .Ok(let time) && time > newest)
 				newest = time;

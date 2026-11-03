@@ -33,6 +33,34 @@ Without a material, a Mesh Renderer's own **Back Face Culling** (on by default) 
 
 The renderer's own **Color** still tints the object on top of its material, so a hundred crates can share one material and differ in tint.
 
+### Palette mode (optional)
+
+For a low-poly look coloured from one shared set of colours, give a material a **Palette**: a 256-colour image, 16 x
+16. **New Palette** in the material's Inspector makes one in `Textures/` with starting colours; click any colour in the
+grid to change it, and the image is written when you let go, so nothing outside the editor is needed. Any other
+16 x 16 (or 256 x 1) picture works too. Materials without a palette draw exactly as before.
+
+In palette mode each face takes everything from its vertex colour, painted with **Palette faces** in the modeller
+(docs/modeling.md):
+
+| Byte | Meaning |
+|---|---|
+| Red | The palette entry, 0 to 255. |
+| Green | Glow, 0 to 255, times the material's **Glow Strength**. It shows with bloom; it does not light other things. |
+| Blue | Roughness (top five bits, 0 to 31) and metallic (low three, 0 to 7); on a see-through face, its opacity. |
+| Alpha | Flags: 1 unlit, 2 see-through, 4 double sided, 8 cutout (holes where the palette colour's alpha is below half), 16 hologram, 32 pulsing glow, 64 dissolve. |
+
+A face never painted (plain white) is entry 255 with no glow or flags. Colour, Texture and the maps are not used.
+
+- **A palette for each world state.** With more than one world state, the Inspector has a palette for each (**New
+  palette for ...** copies the main one to change): the same faces are coloured from that state's palette, so two
+  realities of one place share one mesh.
+- **See-through and double-sided faces** are drawn apart from the rest of the mesh automatically, each kind with its
+  own blending and culling, so one model can mix glass, signs and solid walls.
+- **Dissolve** (0 to 1) eats away faces flagged Dissolve: animate it from a script for a shift or a death.
+- The palette is drawn with no mip levels, compression or filtering, so neighbouring colours never bleed, at any
+  texture quality.
+
 ### PBR maps
 
 The standard shader is a metallic-roughness PBR shader. Four optional maps add detail:

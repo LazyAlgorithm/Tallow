@@ -9,6 +9,7 @@ $output v_wpos, v_normal, v_color0, v_texcoord0, v_depth, v_texcoord1, v_surface
 
 uniform vec4 u_surface;       // y: time in seconds
 uniform vec4 u_params[8];     // a custom shader's own properties
+uniform vec4 u_palette;       // x 1 in palette mode (the vertex colour is data: no tint)
 #include "wind.sh"
 #include "shadergraph.sh"
 //@PROPERTIES
@@ -34,7 +35,8 @@ void main()
     vec3 co2 = cross(i_data0.xyz, i_data1.xyz);
     float orientation = dot(i_data0.xyz, co0) < 0.0 ? -1.0 : 1.0;
     v_normal = (co0 * normal.x + co1 * normal.y + co2 * normal.z) * orientation;
-	v_color0 = a_color0 * i_data4;
+	// In palette mode the colour's bytes are a face's palette index, glow, surface and flags: kept exact.
+	v_color0 = u_palette.x > 0.5 ? a_color0 : a_color0 * i_data4;
 	v_texcoord0 = uv;
 	v_texcoord1 = a_texcoord1;
 	v_depth = gl_Position.w;

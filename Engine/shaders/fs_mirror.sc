@@ -8,6 +8,7 @@ $input v_wpos, v_normal, v_color0, v_texcoord0, v_depth, v_texcoord1, v_surface
 // or meets nothing, the probe's reflection stays as it was.
 #include <bgfx_shader.sh>
 #include "lighting.sh"
+#include "palette.sh"
 #include "post.sh"
 
 SAMPLER2D(s_albedo, 0);
@@ -98,6 +99,23 @@ void main()
 		vec4 metalRough = texture2D(s_metalRoughMap, uv);
 		roughness *= metalRough.g;
 		metallic *= metalRough.b;
+	}
+	if (u_palette.x > 0.5)
+	{
+		// The same face as fs_mesh drew (include/palette.sh): its palette colour, metallic and roughness.
+		vec4 bytes = paletteBytes(v_color0);
+		float alpha = 1.0;
+		vec3 glow = vec3_splat(0.0);
+		float unlit = 0.0;
+		if (paletteSurface(bytes, texture2D(s_albedo, paletteCoord(bytes)), v_wpos, u_surface.y, albedo, alpha, metallic, roughness, glow, unlit) > 0.5)
+		{
+			discard;
+		}
+		if (unlit > 0.5)
+		{
+			gl_FragColor = vec4_splat(0.0);
+			return;
+		}
 	}
 	metallic = clamp(metallic, 0.0, 1.0);
 	roughness = clamp(roughness, 0.045, 1.0);

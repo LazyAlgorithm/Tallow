@@ -559,43 +559,53 @@ class RenderView
 					continue;
 				// A reflection capture leaves out what is kept out of the probes, but not its shadow.
 				let shadowOnly = renderer.shadowOnly || (hasParts && parts[partIndex].shadowOnly) || (Capture && !PlanarPass && !renderer.inReflectionProbes);
-				RenderItem item;
-				item.tint = hasParts ? parts[partIndex].tint : .White;
-				item.mesh = mesh;
-				item.renderer = renderer;
-				item.material = (hasParts && parts[partIndex].material != null) ? parts[partIndex].material : renderer.ActiveMaterial;
-				item.world = renderer.RenderMatrix;
-				let bounds = mesh.Bounds.Transformed(item.world);
-				item.center = bounds.Center;
-				item.radius = bounds.Extents.Length;
-				let transparent = IsTransparent(renderer, item.material);
-				// The viewmodel: drawn in a pass of its own after the world (no culling: it is a few things at the eye).
-				let viewmodel = DrawsAsViewmodel(camera, renderer.GameObject);
-				let drawn = !shadowOnly && (viewmodel || (frustum.Intersects(bounds) && (!mOcclusionOn || mOcclusion.IsVisible(bounds))));
-				let shadowAllowed = !viewmodel || camera.viewmodelCastsShadows;
-				let shadow = !transparent && castShadows && renderer.castShadows && shadowAllowed && (item.center - camera.position).Length - item.radius < shadowRange;
-				// Out of view and casting no shadow here: nothing more to work out.
-				if (!drawn && !shadow)
-					continue;
-				item.probe = Reflections.Pick(item.center, item.radius);
-				item.lightGrid = LightGridAt(item.center);
-				item.key = ProbeKey(MakeKey(renderer, mesh, item.material), item.probe, item.lightGrid) * 2 + (Mirrored(item.world) ? 1u : 0u);
-				if (drawn)
+				let partMaterial = (hasParts && parts[partIndex].material != null) ? parts[partIndex].material : renderer.ActiveMaterial;
+				// Palette mode: faces flagged double sided or see-through are drawn apart (Mesh.PaletteSection), each
+				// kind with its own culling and blending.
+				let sectioned = partMaterial != null && partMaterial.IsPalette && mesh.HasPaletteSections;
+				for (int section < (sectioned ? Mesh.PaletteSectionCount : 1))
 				{
-					if (viewmodel)
-						(transparent ? mViewmodelTransparent : mViewmodelItems).Add(item);
-					else
+					let sectionMesh = sectioned ? mesh.PaletteSection(section) : mesh;
+					if (sectionMesh == null)
+						continue;
+					RenderItem item;
+					item.tint = hasParts ? parts[partIndex].tint : .White;
+					item.mesh = sectionMesh;
+					item.renderer = renderer;
+					item.material = sectioned ? partMaterial.PaletteVariant(section) : partMaterial;
+					item.world = renderer.RenderMatrix;
+					let bounds = mesh.Bounds.Transformed(item.world);
+					item.center = bounds.Center;
+					item.radius = bounds.Extents.Length;
+					let transparent = IsTransparent(renderer, item.material);
+					// The viewmodel: drawn in a pass of its own after the world (no culling: it is a few things at the eye).
+					let viewmodel = DrawsAsViewmodel(camera, renderer.GameObject);
+					let drawn = !shadowOnly && (viewmodel || (frustum.Intersects(bounds) && (!mOcclusionOn || mOcclusion.IsVisible(bounds))));
+					let shadowAllowed = !viewmodel || camera.viewmodelCastsShadows;
+					let shadow = !transparent && castShadows && renderer.castShadows && shadowAllowed && (item.center - camera.position).Length - item.radius < shadowRange;
+					// Out of view and casting no shadow here: nothing more to work out.
+					if (!drawn && !shadow)
+						continue;
+					item.probe = Reflections.Pick(item.center, item.radius);
+					item.lightGrid = LightGridAt(item.center);
+					item.key = ProbeKey(MakeKey(renderer, item.mesh, item.material), item.probe, item.lightGrid) * 2 + (Mirrored(item.world) ? 1u : 0u);
+					if (drawn)
 					{
-						(transparent ? mTransparentItems : mItems).Add(item);
-						if (!transparent && (renderer.screenReflections || renderer.planarReflection))
-							mMirrorItems.Add(item);
+						if (viewmodel)
+							(transparent ? mViewmodelTransparent : mViewmodelItems).Add(item);
+						else
+						{
+							(transparent ? mTransparentItems : mItems).Add(item);
+							if (!transparent && (renderer.screenReflections || renderer.planarReflection))
+								mMirrorItems.Add(item);
+						}
+						renderer.LastDrawnFrame = Time.FrameCount;
 					}
-					renderer.LastDrawnFrame = Time.FrameCount;
-				}
-				if (shadow)
-				{
-					mShadowItems.Add(item);
-					renderer.LastDrawnFrame = Time.FrameCount;
+					if (shadow)
+					{
+						mShadowItems.Add(item);
+						renderer.LastDrawnFrame = Time.FrameCount;
+					}
 				}
 			}
 		}
@@ -872,6 +882,8 @@ class RenderView
 		public Vector4 uvTransform;
 		public Vector4 surface;
 		public Vector4 pbr;
+		/// x 1 in palette mode, y glow at full green, z dissolve.
+		public Vector4 palette;
 		public Vector4[ShaderAsset.MaxValues] values;
 		public StringView[ShaderAsset.MaxTextures] textures;
 		public StringView normalMap, metalRoughMap, occlusionMap, emissiveMap;
@@ -1052,6 +1064,13 @@ class RenderView
 			if (shared.doubleSided)
 				surface.cull = 0;
 			surface.texture = shared.MainTexture;
+			if (shared.IsPalette)
+			{
+				// Palette mode: the main texture is the palette of the world state this machine shows.
+				let state = renderer.Scene != null ? renderer.Scene.WorldState : 0;
+				surface.texture = Palettes.Texture(shared.PaletteFor(state));
+				surface.palette = .(1, Math.Max(shared.paletteEmission, 0), Mathf.Clamp01(shared.dissolve), 0);
+			}
 			surface.normalMap = shared.normalMap;
 			surface.metalRoughMap = shared.metallicRoughnessMap;
 			surface.occlusionMap = shared.occlusionMap;
@@ -1097,6 +1116,7 @@ class RenderView
 		bgfx.set_texture(2, RenderResources.sTexture1, Assets.GetTexture(surface.textures[0]), uint32.MaxValue);
 		bgfx.set_texture(3, RenderResources.sTexture2, Assets.GetTexture(surface.textures[1]), uint32.MaxValue);
 		bgfx.set_uniform(RenderResources.uPbr, &surface.pbr, 1);
+		bgfx.set_uniform(RenderResources.uPalette, &surface.palette, 1);
 		bgfx.set_texture(4, RenderResources.sNormalMap, Assets.GetTexture(surface.normalMap, .Normal), uint32.MaxValue);
 		bgfx.set_texture(5, RenderResources.sMetalRoughMap, Assets.GetTexture(surface.metalRoughMap, .Data), uint32.MaxValue);
 		bgfx.set_texture(6, RenderResources.sOcclusionMap, Assets.GetTexture(surface.occlusionMap, .Data), uint32.MaxValue);
@@ -1148,6 +1168,8 @@ class RenderView
 			bgfx.set_texture(3, RenderResources.sTexture2, Gfx.WhiteTexture, uint32.MaxValue);
 			Vector4 pbr = .(0, 0, 0, 0);
 			bgfx.set_uniform(RenderResources.uPbr, &pbr, 1);
+			Vector4 palette = .(0, 0, 0, 0);
+			bgfx.set_uniform(RenderResources.uPalette, &palette, 1);
 			for (uint8 stage = 4; stage < 8; stage++)
 				bgfx.set_texture(stage, stage == 4 ? RenderResources.sNormalMap : (stage == 5 ? RenderResources.sMetalRoughMap : (stage == 6 ? RenderResources.sOcclusionMap : RenderResources.sEmissiveMap)), Gfx.WhiteTexture, uint32.MaxValue);
 			bgfx.set_texture(0, RenderResources.sAlbedo, Gfx.WhiteTexture, uint32.MaxValue);
