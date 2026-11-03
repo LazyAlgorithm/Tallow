@@ -266,11 +266,13 @@ static class Audio
 		tn_audio_listener(&position, &forward, &up, &velocity);
 	}
 
-	/// Plays a sound once at a place in the world and forgets about it. For impacts, shots, pickups.
-	public static void PlayOneShot(StringView clip, Vector3 position, float volume = 1, AudioGroup group = .Effects, float minDistance = 1, float maxDistance = 40)
+	/// Plays a sound once at a place in the world and forgets about it. For impacts, shots, pickups. lowpassHz below
+	/// 22000 muffles it (a sound through a wall, or from another reality): such a sound is for this listener alone, so
+	/// it is played here only and not sent to the other machines of a session.
+	public static void PlayOneShot(StringView clip, Vector3 position, float volume = 1, AudioGroup group = .Effects, float minDistance = 1, float maxDistance = 40, float lowpassHz = 22000)
 	{
 		// In a session the server's are heard on every machine (docs/networking.md).
-		if (NetworkSync.SoundPlayed(clip, position, volume, group, minDistance, maxDistance))
+		if (lowpassHz >= 22000 && NetworkSync.SoundPlayed(clip, position, volume, group, minDistance, maxDistance))
 			return;
 		Params parameters = Defaults();
 		parameters.position = position;
@@ -279,6 +281,7 @@ static class Audio
 		parameters.maxDistance = maxDistance;
 		parameters.spatial = 1;
 		parameters.reverbSend = sReverbLevel;
+		parameters.lowpassHz = Math.Clamp(lowpassHz, 20, 22000);
 		OneShot(clip, group, parameters);
 	}
 
