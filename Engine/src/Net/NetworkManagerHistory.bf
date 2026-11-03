@@ -12,6 +12,12 @@ extension NetworkManager
 	int32 mSimulatingClient = -1;
 	double mSimulatingView;
 	bool mRewound;
+	double mRewoundTick = -1;
+
+	/// While lag compensation is in effect (between BeginLagCompensation and EndLagCompensation), the server tick
+	/// everything was put back to; -1 otherwise. For game state the engine does not keep a history of (a player's
+	/// team, dimension or cover), to be looked up for the same moment.
+	public double LagCompensationTick => mRewound ? mRewoundTick : -1;
 	List<(NetworkIdentity identity, BodyState state)> mRewoundStates = new .() ~ delete _;
 	// Client: the server tick everything else is being shown at this tick.
 	double mViewTick;
@@ -50,6 +56,7 @@ extension NetworkManager
 			identity.ApplyState(moved);
 		}
 		mRewound = true;
+		mRewoundTick = view;
 		return true;
 	}
 
