@@ -369,8 +369,12 @@ class Gallery : Component
 	void BuildHall()
 	{
 		// The walls stand just outside the probe's box, so its box is the room.
-		let floor = Box("Hall floor", .(0, 0.02f, 10), .(28, 0.04f, 18), .(0.1f, 0.1f, 0.12f), 0.07f, 1, false);
-		floor.GetComponent<MeshRenderer>().flatShading = false;
+		// Polished steel, light enough to mirror the room straight down as well as at a glance; Screen Reflections
+		// put the spheres and plinths in it where they stand.
+		let floor = Box("Hall floor", .(0, 0.02f, 10), .(28, 0.04f, 18), .(0.5f, 0.51f, 0.55f), 0.07f, 1, false);
+		let polished = floor.GetComponent<MeshRenderer>();
+		polished.flatShading = false;
+		polished.screenReflections = true;
 		Box("Hall roof", .(0, 9.25f, 10), .(29, 0.5f, 19), Marble);
 		Box("Hall north wall", .(0, 4.5f, 19.25f), .(29, 9, 0.5f), Marble, 0.4f);
 		Box("Hall west wall", .(-14.25f, 4.5f, 10), .(0.5f, 9, 19), Marble, 0.4f);

@@ -21,6 +21,17 @@ Nothing needs setting up: outdoors, the sky is mirrored as it is. Indoors, add a
 
 A probe captures when it is first drawn, a few frames after the scene starts: six frames drawing its faces (one each, at its size) and one a level filtering them. In the editor it captures again by itself when it is moved or changed; **Capture Now** in its inspector (or `probe.Capture()` from code) captures it again after the room changed. Each draw uses one probe whose box it reaches (by its bounds), preferring one whose light reaches its middle, faded in for each pixel.
 
+## Screen reflections
+
+A probe sees its room from one point, so box projection lines up its walls but flattens what stands inside it onto them: in a polished floor, a sphere shows as a smear on the far wall instead of under the sphere. **Screen Reflections** on a Mesh Renderer (`screenReflections`, off by default) fixes that for flat, shiny surfaces. After everything solid is drawn, the surface is drawn again over itself (`fs_mirror`): a ray mirrored off each pixel steps across the depth pass, and where it meets something on the screen, that is what the surface mirrors there, in place of the probe's view. Where the ray leaves the screen, or the thing it would meet is hidden behind something else, the probe's reflection stays.
+
+- For smooth surfaces: it fades out between roughness 0.15 and 0.4, which keep the probe's blurred reflection.
+- It shares the water's copy of the picture, so shiny floors mirror the scene without water, and water mirrors them without their screen reflections.
+- A material with a custom shader keeps its own reflections.
+- The edges of what is mirrored are slightly grainy (each pixel's steps start a little apart, so they do not show as teeth).
+- It follows the **Reflection Probes** quality setting (`ScreenEffects.SurfaceReflections`).
+- Cost: up to 64 depth reads a pixel of the surface, only for renderers that have it on.
+
 ## The sky cube
 
 Made again when the sky's colours or the sun change, from the same gradient as the sky itself, without the sun's disc (the sun's highlight comes from the sun as a light). It is 64 by 64; a frame to draw and one per level to filter.
@@ -60,7 +71,7 @@ Scenes, materials and shaders are unchanged and load as before. Shiny and metal 
 - Boxes are lined up with the world (not turned with the object).
 - One probe per draw: a long object across two rooms gets the probe of the room its middle is in (fading to the sky outside it), not both.
 - Probes are captured while the game runs, not baked into files; a scene with many probes takes a few frames per probe at the start (about ten at 128).
-- What a probe captures stays as it was until it is captured again: things that move through a room are not in its reflections.
+- What a probe captures stays as it was until it is captured again: things that move through a room are not in its reflections (except, on the screen, in surfaces with Screen Reflections).
 - Skinned characters, particles and the viewmodel are in captures as they were at that moment.
 
 ## Tests

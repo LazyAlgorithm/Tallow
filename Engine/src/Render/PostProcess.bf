@@ -18,6 +18,9 @@ static class ScreenEffects
 	/// The scene mirrored in water (Water.screenReflections), found on the screen: a few dozen depth reads a pixel of
 	/// water. Off, water mirrors the sky and reflection probes only. Follows the Reflection Probes quality setting.
 	public static bool WaterReflections = true;
+	/// The scene on the screen mirrored in shiny surfaces (MeshRenderer.screenReflections). Off, they mirror the sky
+	/// and reflection probes only. Follows the Reflection Probes quality setting.
+	public static bool SurfaceReflections = true;
 	/// Scales the scene's motion blur: 0 none, 1 as the scene has it, up to 2.
 	public static float MotionBlurAmount = 1;
 	/// Multiplies the scene's exposure: the usual "brightness" setting. 0.25 to 4; 1 leaves it alone.

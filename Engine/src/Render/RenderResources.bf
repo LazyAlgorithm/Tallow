@@ -31,6 +31,8 @@ static class RenderResources
 	public static bgfx.UniformHandle uDecalBox, uDecalInverse, uDecalColor, uDecalAxis, uDecalParams;
 	// Water (docs/water.md).
 	public static bgfx.ProgramHandle WaterProgram, UnderwaterProgram, CopyProgram;
+	/// Shiny surfaces with Screen Reflections, drawn again over themselves: what the screen shows mirrored in them.
+	public static bgfx.ProgramHandle MirrorProgram;
 	public static bgfx.UniformHandle uWaveA, uWaveB, uWaterLevel, uWaterModel, uWaterParams, uWaterShallow, uWaterDeep, uWaterFoam, uWaterOptions, uWaterUnder;
 	public static bgfx.UniformHandle uWaterInverse, uWaterUnderParams;
 
@@ -94,6 +96,7 @@ static class RenderResources
 		uDecalAxis = bgfx.create_uniform("u_decalAxis", .Vec4, 1);
 		uDecalParams = bgfx.create_uniform("u_decalParams", .Vec4, 1);
 		WaterProgram = Gfx.LoadProgram("vs_water", "fs_water");
+		MirrorProgram = Gfx.LoadProgram("vs_mesh", "fs_mirror");
 		UnderwaterProgram = Gfx.LoadProgram("vs_fullscreen", "fs_underwater");
 		CopyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_copy");
 		uWaveA = bgfx.create_uniform("u_waveA", .Vec4, Water.WaveCount);
@@ -227,6 +230,7 @@ static class RenderResources
 		bgfx.destroy_program(LineProgram);
 		bgfx.destroy_program(DecalProgram);
 		bgfx.destroy_program(WaterProgram);
+		bgfx.destroy_program(MirrorProgram);
 		bgfx.destroy_program(UnderwaterProgram);
 		bgfx.destroy_program(CopyProgram);
 		bgfx.destroy_uniform(uDecalBox);

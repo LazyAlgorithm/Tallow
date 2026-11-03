@@ -52,6 +52,8 @@ static class Gfx
 	public const uint64 StateLines = 0x0002000000000000;
 	public const uint64 StateMsaa = 0x0100000000000000;
 	public const uint64 StateBlendAlpha = 0x0000000006565000;
+	/// Source plus destination (BGFX_STATE_BLEND_ADD).
+	public const uint64 StateBlendAdd = 0x0000000002222000;
 
 	public const uint32 ResetVsync = 0x00000080;
 	// Texture and sampler flags (BGFX_TEXTURE_* and BGFX_SAMPLER_*).

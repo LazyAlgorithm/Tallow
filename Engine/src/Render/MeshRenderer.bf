@@ -54,6 +54,11 @@ class MeshRenderer : Component
 	/// Takes part in baked lighting (docs/baked-lighting.md): the Lighting window gives it a lightmap, and it blocks and
 	/// bounces light for the others. For things that never move: walls, floors, rocks, buildings.
 	public bool bakedLighting = false;
+	/// Mirrors what is on the screen as well as the reflection probe: objects in the room show in the surface where
+	/// they really are, not flattened onto the probe's walls. For flat, shiny surfaces (a polished floor, a mirror
+	/// wall): it costs a few dozen depth reads a pixel of the surface. Smooth surfaces only (roughness under 0.4);
+	/// a material with a custom shader keeps its own reflections. Off with the Reflection Probes quality setting.
+	public bool screenReflections = false;
 	/// Optional albedo texture path relative to the project.
 	public String texture = new .() ~ delete _;
 	/// A material (.tmat) made in the editor. With one set, it decides how the surface looks and the fields above

@@ -148,6 +148,7 @@ static class Quality
 		RenderResources.SetShadowAtlasSize(Current.shadowMapSize);
 		ScreenEffects.AmbientOcclusion = Current.ambientOcclusion;
 		ScreenEffects.WaterReflections = Current.reflectionProbes;
+		ScreenEffects.SurfaceReflections = Current.reflectionProbes;
 		ScreenEffects.DepthOfField = Current.depthOfField;
 		ScreenEffects.MotionBlur = Current.motionBlur;
 		LODGroup.Bias = Math.Max(Current.lodBias, 0.05f);

@@ -84,7 +84,10 @@ extension RenderView
 				continue;
 			mWaterItems.Add(water);
 		}
-		if (mWaterItems.IsEmpty)
+		// Shiny surfaces with Screen Reflections share the water's copy of the picture and its view: bgfx's view ids
+		// are all spoken for. They mirror the scene without the water, and the water mirrors them without theirs.
+		let mirrors = ScreenEffects.SurfaceReflections && shading == .Rendered && !Capture && !mMirrorItems.IsEmpty && Reflections.Enabled;
+		if (mWaterItems.IsEmpty && !mirrors)
 			return;
 		EnsureDepthPass(camera);
 		SetPostCamera(camera);
@@ -95,9 +98,25 @@ extension RenderView
 		var projMatrix = camera.projection;
 		SetUpView(view, "Water", mSceneFb, 0, 0, mWidth, mHeight);
 		bgfx.set_view_transform(view, &viewMatrix, &projMatrix);
+		if (mirrors)
+			SubmitMirrors(view);
 		let time = Water.ViewTime(scene);
 		for (let water in mWaterItems)
 			SubmitWater(view, water, camera, time);
+	}
+
+	/// The surfaces with Screen Reflections, a batch at a time (they were sorted with the other solid items).
+	void SubmitMirrors(uint16 view)
+	{
+		int start = 0;
+		while (start < mMirrorItems.Count)
+		{
+			int end = start + 1;
+			while (end < mMirrorItems.Count && mMirrorItems[end].key == mMirrorItems[start].key)
+				end++;
+			SubmitBatch(view, mMirrorItems, start, end - start, false, true);
+			start = end;
+		}
 	}
 
 	/// Where a water's grid goes and which grid: a lake's covers its rectangle, endless water's follows the camera

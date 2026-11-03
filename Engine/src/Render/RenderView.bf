@@ -219,6 +219,8 @@ class RenderView
 	List<RenderItem> mTransparentItems = new .() ~ delete _;
 	/// Foliage, in runs of one kind of plant: drawn like mItems, but already in order and far too many to sort.
 	List<RenderItem> mFoliageItems = new .() ~ delete _;
+	/// Solid items drawn this frame whose renderer has Screen Reflections: drawn again with the water (DrawWater).
+	List<RenderItem> mMirrorItems = new .() ~ delete _;
 	List<int32> mFoliageVisible = new .() ~ delete _;
 	Vector4 mWind;
 	Vector4[4] mWindZone, mWindPush;
@@ -515,6 +517,7 @@ class RenderView
 		mViewmodelItems.Clear();
 		mViewmodelTransparent.Clear();
 		mFoliageItems.Clear();
+		mMirrorItems.Clear();
 	}
 
 	/// Sorts every renderer's meshes into the lists drawn this frame: solid, see-through, viewmodel and shadows.
@@ -579,7 +582,11 @@ class RenderView
 					if (viewmodel)
 						(transparent ? mViewmodelTransparent : mViewmodelItems).Add(item);
 					else
+					{
 						(transparent ? mTransparentItems : mItems).Add(item);
+						if (!transparent && renderer.screenReflections)
+							mMirrorItems.Add(item);
+					}
 					renderer.LastDrawnFrame = Time.FrameCount;
 				}
 				if (shadow)
@@ -653,6 +660,8 @@ class RenderView
 	{
 		SortByKey(ref mItems, false);
 		SortByKey(ref mViewmodelItems, false);
+		if (mMirrorItems.Count > 0)
+			SortByKey(ref mMirrorItems, false);
 		// Shadows only care about the mesh and how it sways, so they are sorted by those alone: sorted by the full key,
 		// draws of one mesh with different materials end up apart and cannot be drawn together.
 		SortByKey(ref mShadowItems, true);
@@ -868,8 +877,17 @@ class RenderView
 
 	/// Draws `count` items from `start` that share a mesh and material, as one instanced draw (as many as the frame's
 	/// instance memory has room for).
-	void SubmitBatch(uint16 view, List<RenderItem> items, int start, int count, bool transparent = false)
+	/// mirror: drawn again over itself with what the screen shows mirrored in it (Screen Reflections), added to the
+	/// picture; scene and depth are the picture so far and the depth pass.
+	void SubmitBatch(uint16 view, List<RenderItem> items, int start, int count, bool transparent = false, bool mirror = false)
 	{
+		// A material's custom shader makes its own surface, which the mirror pass cannot repeat.
+		if (mirror)
+		{
+			let custom = items[start].material?.Shader?.Program;
+			if (custom != null && custom.Value.idx != uint16.MaxValue)
+				return;
+		}
 		let stride = (uint16)sizeof(InstanceData);
 		let available = (int)bgfx.get_avail_instance_data_buffer((uint32)count, stride);
 		let drawCount = Math.Min(count, available);
@@ -916,6 +934,20 @@ class RenderView
 			ApplyShading(ref surface);
 		SetLightmapUniforms(renderer, first.mesh);
 		SetSurfaceUniforms(renderer, ref surface);
+		if (mirror)
+		{
+			bgfx.set_texture(2, RenderResources.sColor, mWaterCopy, uint32.MaxValue);
+			bgfx.set_texture(3, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
+			SetPostUniforms();
+			// Added to what is there, on exactly the pixels the surface already drew: the difference between the
+			// screen's reflection and the probe's, which the first drawing put in.
+			bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateDepthLequal | surface.cull | Gfx.StateMsaa | Gfx.StateBlendAdd, 0);
+			bgfx.submit(view, RenderResources.MirrorProgram, 0, 0xff);
+			DrawCalls++;
+			Instances += (int32)drawCount;
+			Triangles += (int32)drawCount * mesh.IndexCount / 3;
+			return;
+		}
 		if (lines)
 			bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | Gfx.StateLines | Gfx.StateMsaa, 0);
 		else if (transparent)
