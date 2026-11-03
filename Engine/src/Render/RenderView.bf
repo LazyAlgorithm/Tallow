@@ -555,7 +555,8 @@ class RenderView
 					mesh = lodGroup.MeshAt(renderer, mesh, lodLevel);
 				if (mesh == null || !mesh.HasGpuData || (hasParts && parts[partIndex].hidden))
 					continue;
-				let shadowOnly = renderer.shadowOnly || (hasParts && parts[partIndex].shadowOnly);
+				// A reflection capture leaves out what is kept out of the probes, but not its shadow.
+				let shadowOnly = renderer.shadowOnly || (hasParts && parts[partIndex].shadowOnly) || (Capture && !renderer.inReflectionProbes);
 				RenderItem item;
 				item.tint = hasParts ? parts[partIndex].tint : .White;
 				item.mesh = mesh;

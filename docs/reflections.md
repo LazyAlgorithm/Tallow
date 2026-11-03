@@ -32,6 +32,8 @@ A probe sees its room from one point, so box projection lines up its walls but f
 - It follows the **Reflection Probes** quality setting (`ScreenEffects.SurfaceReflections`).
 - Cost: up to 64 depth reads a pixel of the surface, only for renderers that have it on.
 
+Pair it with **In Reflection Probes** (`inReflectionProbes`, on by default) turned off on the things standing in the room: furniture, statues, balls. Left in, the probe flattens them onto its walls, and wherever a screen ray misses they show there as ghosts (a ball mirrored on the wall beside its real reflection). Left out, the probe holds the room alone; they still cast their shadows, show in Screen Reflections where they are on the screen, and are missing only from rough or curved surfaces' reflections. The Gallery's Hall of Reflections does this for its spheres, stands and plinths.
+
 ## The sky cube
 
 Made again when the sky's colours or the sun change, from the same gradient as the sky itself, without the sun's disc (the sun's highlight comes from the sun as a light). It is 64 by 64; a frame to draw and one per level to filter.
@@ -72,6 +74,7 @@ Scenes, materials and shaders are unchanged and load as before. Shiny and metal 
 - One probe per draw: a long object across two rooms gets the probe of the room its middle is in (fading to the sky outside it), not both.
 - Probes are captured while the game runs, not baked into files; a scene with many probes takes a few frames per probe at the start (about ten at 128).
 - What a probe captures stays as it was until it is captured again: things that move through a room are not in its reflections (except, on the screen, in surfaces with Screen Reflections).
+- Objects inside a probe's box are flattened onto its walls in its reflections; turn off In Reflection Probes for them (see Screen reflections).
 - Skinned characters, particles and the viewmodel are in captures as they were at that moment.
 
 ## Tests

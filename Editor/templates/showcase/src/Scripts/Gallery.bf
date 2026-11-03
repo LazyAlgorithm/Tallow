@@ -107,7 +107,7 @@ class Gallery : Component
 	{
 		(Vector3 at, float yaw, float pitch)[?] places = .(
 			(.(4, 1.1f, -28), 0, 0), (.(0, 1.1f, 3), 0, 6), (.(-12, 1.1f, 3), 50, 6), (.(15, 1.6f, 6), 62, 6),
-			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12), (.(30.6f, 1.6f, -40), 180, 0), (.(-14, 1.1f, -44), 270, 12), (.(-28, 1.1f, -22), 180, 10), (.(-14.5f, 1.6f, -58), -15, 20));
+			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12), (.(30.6f, 1.6f, -40), 180, 0), (.(-14, 1.1f, -44), 270, 12), (.(-28, 1.1f, -22), 180, 10), (.(-14.5f, 1.6f, -58), -15, 20), (.(7, 1.1f, 10), 90, 8), (.(6, 1.1f, 13), 180, 10), (.(12.5f, 1.1f, 9), 80, 22), (.(17, 1.1f, 11), 260, 14));
 		let place = places[Math.Clamp(view, 0, places.Count - 1)];
 		mVisitor.GetComponent<CharacterController>().Teleport(place.at);
 		mVisitor.yaw = place.yaw;
@@ -293,8 +293,15 @@ class Gallery : Component
 		let r = o.GetComponent<MeshRenderer>();
 		r.mesh.Set("builtin:sphere_smooth");
 		r.flatShading = false;
+		r.inReflectionProbes = false;
 		o.AddComponent<SphereCollider>();
 		return o;
+	}
+
+	/// Something standing in a room, left out of the room's reflection probe (MeshRenderer.inReflectionProbes).
+	static void InRoom(GameObject o)
+	{
+		o.GetComponent<MeshRenderer>().inReflectionProbes = false;
 	}
 
 	GameObject Glow(StringView name, Vector3 at, Vector3 size, Color color, float strength)
@@ -396,13 +403,15 @@ class Gallery : Component
 		// Colour on every wall, so that where a reflection comes from can be read.
 		Glow("West band", .(-13.9f, 3, 10), .(0.1f, 0.5f, 16), .(0.15f, 0.4f, 1), 2.5f);
 		Glow("North band", .(0, 3, 18.9f), .(26, 0.5f, 0.1f), .(1, 0.28f, 0.18f), 2.5f);
-		Box("Red plinth", .(-9, 1.5f, 15), .(2, 3, 2), .(0.72f, 0.09f, 0.08f), 0.45f);
-		Box("Blue plinth", .(9, 1.5f, 15), .(2, 3, 2), .(0.08f, 0.2f, 0.7f), 0.45f);
+		// What stands in the room is left out of the probe, which would flatten it onto the walls: the floor's
+		// Screen Reflections show it where it stands, and the spheres mirror the room around it.
+		InRoom(Box("Red plinth", .(-9, 1.5f, 15), .(2, 3, 2), .(0.72f, 0.09f, 0.08f), 0.45f));
+		InRoom(Box("Blue plinth", .(9, 1.5f, 15), .(2, 3, 2), .(0.08f, 0.2f, 0.7f), 0.45f));
 		// Five spheres from a mirror to brushed steel: roughness down the mips of the probe's cube.
 		for (int i < 5)
 		{
 			let x = -8 + i * 4.0f;
-			Box(scope $"Sphere stand {i}", .(x, 0.45f, 8), .(1.1f, 0.9f, 1.1f), Marble, 0.3f);
+			InRoom(Box(scope $"Sphere stand {i}", .(x, 0.45f, 8), .(1.1f, 0.9f, 1.1f), Marble, 0.3f));
 			Ball(scope $"Steel sphere, roughness {i * 0.2f:0.0}", .(x, 1.9f, 8), 1, .(0.92f, 0.92f, 0.94f), Math.Max(i * 0.2f, 0.02f), 1);
 		}
 		Ball("Gold sphere", .(-9, 3.9f, 15), 0.9f, .(1, 0.76f, 0.34f), 0.15f, 1);
@@ -443,7 +452,7 @@ class Gallery : Component
 		for (int i < 8)
 		{
 			let angle = i * Math.PI_f / 4;
-			Box(scope $"Shadow pillar {i}", .(21 + Math.Cos(angle) * 2.8f, 1.2f, 10 + Math.Sin(angle) * 2.8f), .(0.5f, 2.4f, 0.5f), .(0.72f, 0.72f, 0.72f), 0.6f);
+			InRoom(Box(scope $"Shadow pillar {i}", .(21 + Math.Cos(angle) * 2.8f, 1.2f, 10 + Math.Sin(angle) * 2.8f), .(0.5f, 2.4f, 0.5f), .(0.72f, 0.72f, 0.72f), 0.6f));
 		}
 		for (int i < 4)
 			Glow(scope $"Neon tube {i}", .(16 + i * 3.4f, 5.6f, 16.85f), .(2.4f, 0.1f, 0.1f), (i % 2 == 0) ? Color(1, 0.2f, 0.65f) : Color(0.2f, 0.85f, 1), 7);

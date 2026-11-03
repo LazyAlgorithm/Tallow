@@ -59,6 +59,11 @@ class MeshRenderer : Component
 	/// wall): it costs a few dozen depth reads a pixel of the surface. Smooth surfaces only (roughness under 0.4);
 	/// a material with a custom shader keeps its own reflections. Off with the Reflection Probes quality setting.
 	public bool screenReflections = false;
+	/// Drawn in reflection probes' captures. A probe sees its room from one point and spreads what it saw over its
+	/// box, so things standing in the room (furniture, statues, a ball) come out flattened onto its walls, in the
+	/// wrong place in every reflection. Turn it off for them: the probe then holds the room alone, and shiny
+	/// surfaces with Screen Reflections still mirror them where they are on the screen. Their shadows stay.
+	public bool inReflectionProbes = true;
 	/// Optional albedo texture path relative to the project.
 	public String texture = new .() ~ delete _;
 	/// A material (.tmat) made in the editor. With one set, it decides how the surface looks and the fields above
