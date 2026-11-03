@@ -212,7 +212,7 @@ class MeshRenderer : Component
 	public int8 LodLevel = -1;
 
 	public override void OnRegister() => Scene.Renderers.Add(this);
-	public override void OnUnregister() => Scene.Renderers.Remove(this);
+	public override void OnUnregister() => Scene.[Friend]RendererLeft(this);
 
 	/// Assign a procedurally built mesh. The renderer does not take ownership.
 	public Mesh RuntimeMesh

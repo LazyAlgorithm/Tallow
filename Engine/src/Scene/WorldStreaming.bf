@@ -427,8 +427,7 @@ class WorldStreamer
 			mHeld[key] = text;
 			mCells.Add(key);
 		}
-		for (let unit in units)
-			scene.DestroyImmediate(unit);
+		scene.DestroyImmediate(units);
 		mLoaded.Remove(key);
 		CellsRemoved++;
 	}

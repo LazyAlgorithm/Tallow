@@ -185,6 +185,9 @@ class PhysicsWorld
 		public bool external;
 		/// Taken out of the simulation because its object is not in the active world state.
 		public bool outOfWorld;
+		/// Where it is in mEntries and in mMoving (-1: not there).
+		public int32 index;
+		public int32 movingIndex = -1;
 	}
 
 	// Jolt's object layer for a body is its motion class times 32 plus its GameObject's layer (ProjectConfig): the
@@ -205,11 +208,16 @@ class PhysicsWorld
 	void* mSystem;
 	void* mBodyInterface;
 	List<Entry> mEntries = new .() ~ DeleteContainerAndItems!(_);
+	/// The dynamic and kinematic entries: a big level is mostly static bodies, and Step need not touch those.
+	List<Entry> mMoving = new .() ~ delete _;
 	List<void*> mCharacters = new .() ~ delete _;
 	/// Every live character controller in this world, for the soft push between characters.
 	public List<CharacterController> Controllers = new .() ~ delete _;
 	Dictionary<uint32, Entry> mByBody = new .() ~ delete _;
 	bool mBroadPhaseDirty;
+	int64 mNextOptimize;
+	/// Frames between rebuilds of the broad phase while bodies keep coming.
+	const int64 OptimizeInterval = 300;
 	void* mSphereQueryShape;
 	void* mCapsuleQueryShape;
 	void* mBoxQueryShape;
@@ -327,6 +335,7 @@ class PhysicsWorld
 			Jolt.JPH_Shape_Destroy(entry.shape);
 		}
 		ClearAndDeleteItems!(mEntries);
+		mMoving.Clear();
 		mByBody.Clear();
 		for (let (bodyId, soft) in mSoftBodies)
 		{
@@ -508,7 +517,7 @@ class PhysicsWorld
 		entry.kinematic = motion == Jolt.MotionKinematic;
 		entry.lastVersion = transform.Version;
 		entry.shape = shape;
-		mEntries.Add(entry);
+		Track(entry);
 		mByBody[bodyId] = entry;
 		mBroadPhaseDirty = true;
 		if (debris)
@@ -687,8 +696,32 @@ class PhysicsWorld
 		Jolt.JPH_BodyInterface_RemoveAndDestroyBody(mBodyInterface, bodyId);
 		Jolt.JPH_Shape_Destroy(entry.shape);
 		mByBody.Remove(bodyId);
-		mEntries.Remove(entry);
+		Untrack(entry);
 		delete entry;
+	}
+
+	void Track(Entry entry)
+	{
+		entry.index = (int32)mEntries.Count;
+		mEntries.Add(entry);
+		if (entry.dynamic || entry.kinematic)
+		{
+			entry.movingIndex = (int32)mMoving.Count;
+			mMoving.Add(entry);
+		}
+	}
+
+	void Untrack(Entry entry)
+	{
+		mEntries.RemoveAtFast(entry.index);
+		if (entry.index < mEntries.Count)
+			mEntries[entry.index].index = entry.index;
+		if (entry.movingIndex >= 0)
+		{
+			mMoving.RemoveAtFast(entry.movingIndex);
+			if (entry.movingIndex < mMoving.Count)
+				mMoving[entry.movingIndex].movingIndex = entry.movingIndex;
+		}
 	}
 
 	// ---- layers and world states ----
@@ -706,6 +739,12 @@ class PhysicsWorld
 	public void RefreshLayer(GameObject gameObject)
 	{
 		if (mBodyInterface == null)
+			return;
+		// Most objects have no body: setting their layer must not look through every one.
+		bool hasBody = false;
+		for (let component in gameObject.Components)
+			hasBody |= component is Collider || component is Rigidbody || component is CharacterController;
+		if (!hasBody)
 			return;
 		for (let entry in mEntries)
 		{
@@ -766,7 +805,7 @@ class PhysicsWorld
 		entry.transform = transform;
 		entry.lastVersion = transform.Version;
 		entry.external = true;
-		mEntries.Add(entry);
+		Track(entry);
 		mByBody[bodyId] = entry;
 	}
 
@@ -775,7 +814,7 @@ class PhysicsWorld
 		if (!mByBody.TryGetValue(Jolt.tn_character_inner_body(character), let entry))
 			return;
 		mByBody.Remove(entry.bodyId);
-		mEntries.Remove(entry);
+		Untrack(entry);
 		delete entry;
 	}
 
@@ -883,7 +922,10 @@ class PhysicsWorld
 		// Transforms moved by gameplay or the network since the last step win over the simulation.
 		for (let entry in mEntries)
 		{
-			if (entry.external || entry.outOfWorld || entry.transform.Version == entry.lastVersion)
+			if (entry.transform.Version == entry.lastVersion)
+				continue;
+			entry.lastVersion = entry.transform.Version;
+			if (entry.external || entry.outOfWorld)
 				continue;
 			var position = entry.transform.Position;
 			var rotation = entry.transform.Rotation;
@@ -906,9 +948,9 @@ class PhysicsWorld
 			mReportedStepErrors |= LastStepError;
 		}
 
-		for (let entry in mEntries)
+		for (let entry in mMoving)
 		{
-			if ((entry.dynamic || entry.kinematic) && !entry.outOfWorld)
+			if (!entry.outOfWorld)
 			{
 				Vector3 position = default;
 				Quaternion rotation = default;
@@ -1111,10 +1153,13 @@ class PhysicsWorld
 	void* PrepareQuery()
 	{
 		if (mSystem == null) return null;
-		if (mBroadPhaseDirty)
+		// This only speeds queries up: new bodies are found without it, and it rebuilds the whole tree. So after a
+		// level's bodies arrive, but not for each thing spawned while the game runs.
+		if (mBroadPhaseDirty && Time.FrameCount >= mNextOptimize)
 		{
 			Jolt.JPH_PhysicsSystem_OptimizeBroadPhase(mSystem);
 			mBroadPhaseDirty = false;
+			mNextOptimize = Time.FrameCount + OptimizeInterval;
 		}
 		return Jolt.JPH_PhysicsSystem_GetNarrowPhaseQuery(mSystem);
 	}

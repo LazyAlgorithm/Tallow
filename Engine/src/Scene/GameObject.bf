@@ -31,6 +31,8 @@ class GameObject
 	Scene mScene;
 	bool mActive = true;
 	bool mDestroyed;
+	/// Being taken out of the scene (Scene.DestroyTogether).
+	bool mGoing;
 	int32 mLayer;
 	List<String> mTags ~ DeleteContainerAndItems!(_);
 	uint32 mWorldStates = uint32.MaxValue;

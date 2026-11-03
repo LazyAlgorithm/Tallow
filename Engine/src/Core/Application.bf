@@ -63,6 +63,7 @@ class Application
 	static ProfilerMarker sSleepMarker = .("Sleep (no vsync)", .Waiting);
 	String mEngineRootHint = new .() ~ delete _;
 	double mAccumulator;
+	double mRealTime;
 	uint64 mLastTicks;
 
 	/// The application that is running.
@@ -333,8 +334,11 @@ class Application
 		if (delta > 0.25)
 			delta = 0.25;
 		Time.UnscaledDeltaTime = (float)delta;
-		Time.RealTime += (float)delta;
+		// Added up in a double: a float stops gaining short frames after a day or so.
+		mRealTime += delta;
+		Time.RealTime = (float)mRealTime;
 		Time.DeltaTime = (float)delta * Time.TimeScale;
+		Time.Advance(Time.DeltaTime);
 		Time.FrameCount++;
 		if (delta > 0)
 			Time.SmoothedFps = Mathf.Lerp(Time.SmoothedFps, (float)(1.0 / delta), Time.SmoothedFps <= 0 ? 1.0f : 0.05f);
@@ -371,11 +375,6 @@ class Application
 			sPresentMarker.Begin();
 			bgfx.frame(0);
 			Profiler.End();
-			DebugDraw.Lines.Clear();
-			Gizmos.Lines.Clear();
-			Gizmos.Triangles.Clear();
-			Gizmos.OnTopLines.Clear();
-			Gizmos.OnTopTriangles.Clear();
 		}
 		else
 		{
@@ -384,6 +383,12 @@ class Application
 			SDL.SDL_DelayNS(1000000);
 			Profiler.End();
 		}
+		// A dedicated server draws nothing, but a script's debug lines must not pile up there.
+		DebugDraw.Lines.Clear();
+		Gizmos.Lines.Clear();
+		Gizmos.Triangles.Clear();
+		Gizmos.OnTopLines.Clear();
+		Gizmos.OnTopTriangles.Clear();
 		Material.FreeUnused();
 		// The GPU's times (bgfx's latest finished frame) and every module's counters go in with the frame.
 		Profiler.EndFrame(Headless ? 0 : ProfilerModules.ReadGpu());

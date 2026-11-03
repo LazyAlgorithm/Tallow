@@ -651,15 +651,73 @@ class RenderView
 	/// Puts draws that can share a batch next to each other.
 	void SortItems()
 	{
-		mItems.Sort(scope (a, b) => a.key <=> b.key);
-		mViewmodelItems.Sort(scope (a, b) => a.key <=> b.key);
+		SortByKey(ref mItems, false);
+		SortByKey(ref mViewmodelItems, false);
 		// Shadows only care about the mesh and how it sways, so they are sorted by those alone: sorted by the full key,
 		// draws of one mesh with different materials end up apart and cannot be drawn together.
-		mShadowItems.Sort(scope (a, b) =>
+		SortByKey(ref mShadowItems, true);
+	}
+
+	struct SortEntry
+	{
+		public uint32 key;
+		public int32 index;
+	}
+
+	List<SortEntry> mSortEntries = new .() ~ delete _;
+	List<SortEntry> mSortEntriesNext = new .() ~ delete _;
+	List<RenderItem> mSorted = new .() ~ delete _;
+	const int SortRadixBits = 11;
+	const int SortBuckets = 1 << SortRadixBits;
+
+	/// Puts items with the same key next to each other. What matters is that they end up together, not the order of
+	/// the keys, so a radix sort of 32 bits of each key will do (two keys sharing those only make a batch more). The
+	/// items are big: they are moved once, at the end.
+	void SortByKey(ref List<RenderItem> items, bool shadows)
+	{
+		let count = items.Count;
+		if (count < 2)
+			return;
+		mSortEntries.Count = count;
+		mSortEntriesNext.Count = count;
+		var from = mSortEntries.Ptr;
+		var to = mSortEntriesNext.Ptr;
+		int32[3][SortBuckets] counts = default;
+		let list = items.Ptr;
+		for (int i < count)
+		{
+			var key = list[i].key;
+			if (shadows)
+				key = (uint64)(int)Internal.UnsafeCastToPtr(list[i].mesh) * 1099511628211 ^ (uint64)(uint32)(list[i].renderer.windSway * 100.0f);
+			let folded = (uint32)(key ^ (key >> 32));
+			from[i].key = folded;
+			from[i].index = (int32)i;
+			counts[0][folded & (SortBuckets - 1)]++;
+			counts[1][(folded >> SortRadixBits) & (SortBuckets - 1)]++;
+			counts[2][folded >> (SortRadixBits * 2)]++;
+		}
+		for (int pass < 3)
+		{
+			int32 at = 0;
+			for (int bucket < SortBuckets)
 			{
-				let byMesh = (int)Internal.UnsafeCastToPtr(a.mesh) <=> (int)Internal.UnsafeCastToPtr(b.mesh);
-				return byMesh != 0 ? byMesh : a.renderer.windSway <=> b.renderer.windSway;
-			});
+				let inBucket = counts[pass][bucket];
+				counts[pass][bucket] = at;
+				at += inBucket;
+			}
+			let shift = pass * SortRadixBits;
+			for (int i < count)
+			{
+				let digit = (from[i].key >> shift) & (SortBuckets - 1);
+				to[counts[pass][digit]++] = from[i];
+			}
+			Swap!(from, to);
+		}
+		mSorted.Count = count;
+		let sorted = mSorted.Ptr;
+		for (int i < count)
+			sorted[i] = list[from[i].index];
+		Swap!(items, mSorted);
 	}
 
 	/// The sky, solid things, plants, particles and lines, into the HDR scene target.
@@ -728,7 +786,7 @@ class RenderView
 			int end = start + 1;
 			while (end < items.Count && items[end].key == items[start].key)
 				end++;
-			SubmitBatch(view, items, start, end - start, false, true);
+			SubmitBatch(view, items, start, end - start, true);
 			start = end;
 		}
 	}
@@ -787,7 +845,7 @@ class RenderView
 			int end = start + 1;
 			while (end < items.Count && items[end].key == items[start].key)
 				end++;
-			SubmitBatch(view, items, start, end - start, false);
+			SubmitBatch(view, items, start, end - start);
 			start = end;
 		}
 	}
@@ -810,7 +868,7 @@ class RenderView
 
 	/// Draws `count` items from `start` that share a mesh and material, as one instanced draw (as many as the frame's
 	/// instance memory has room for).
-	void SubmitBatch(uint16 view, List<RenderItem> items, int start, int count, bool shadowPass, bool transparent = false)
+	void SubmitBatch(uint16 view, List<RenderItem> items, int start, int count, bool transparent = false)
 	{
 		let stride = (uint16)sizeof(InstanceData);
 		let available = (int)bgfx.get_avail_instance_data_buffer((uint32)count, stride);
@@ -824,7 +882,7 @@ class RenderView
 		// Foliage/particle batches use proxy renderers without a GameObject.
 		let owner = items[start].renderer.GameObject;
 		let shaded = shading != .Rendered && (owner == null || !EditorOnlyObjects.Contains(owner.Id));
-		let wire = !shadowPass && shaded && shading == .Wireframe;
+		let wire = shaded && shading == .Wireframe;
 		if (wire)
 		{
 			// Black lines, coloured by their glow alone (see ApplyShading).
@@ -847,17 +905,6 @@ class RenderView
 		else
 			bgfx.set_index_buffer(mesh.IndexBuffer, 0, (uint32)mesh.IndexCount);
 		bgfx.set_instance_data_buffer(&buffer, 0, (uint32)drawCount);
-
-		if (shadowPass)
-		{
-			SetWindUniforms(first.renderer.windSway);
-			bgfx.set_uniform(RenderResources.uShadowViewProj, &mShadowPassViewProj, 1);
-			if (mShadowScissor[2] > 0)
-				bgfx.set_scissor((uint16)mShadowScissor[0], (uint16)mShadowScissor[1], (uint16)mShadowScissor[2], (uint16)mShadowScissor[3]);
-			bgfx.set_state(Gfx.StateWriteZ | Gfx.StateDepthLess, 0);
-			bgfx.submit(view, RenderResources.ShadowProgram, 0, 0xff);
-			return;
-		}
 
 		let renderer = first.renderer;
 		SetFrameUniforms();
@@ -918,24 +965,25 @@ class RenderView
 	static void FillInstances(InstanceData* data, List<RenderItem> items, int start, int count)
 	{
 		for (int i < count)
+			FillInstance(data + i, &items.Ptr[start + i]);
+	}
+
+	[Inline]
+	static void FillInstance(InstanceData* data, RenderItem* item)
+	{
+		let renderer = item.renderer;
+		let color = renderer.color;
+		data.world = item.world;
+		let material = item.material;
+		if (material == null)
 		{
-			let item = items[start + i];
-			let color = item.renderer.color;
-			data[i].world = item.world;
-			if (item.material == null)
-			{
-				data[i].world.m[3] = item.renderer.metallic;
-				data[i].world.m[7] = item.renderer.roughness;
-				data[i].world.m[11] = 1;
-			}
-			data[i].color = .(color.r * item.tint.r, color.g * item.tint.g, color.b * item.tint.b, color.a * item.tint.a);
-			let material = item.material;
-			if (material != null)
-			{
-				let tint = data[i].color;
-				data[i].color = .(tint.r * material.color.r, tint.g * material.color.g, tint.b * material.color.b, tint.a * material.color.a);
-			}
+			data.world.m[3] = renderer.metallic;
+			data.world.m[7] = renderer.roughness;
+			data.world.m[11] = 1;
+			data.color = .(color.r * item.tint.r, color.g * item.tint.g, color.b * item.tint.b, color.a * item.tint.a);
 		}
+		else
+			data.color = .(color.r * item.tint.r * material.color.r, color.g * item.tint.g * material.color.g, color.b * item.tint.b * material.color.b, color.a * item.tint.a * material.color.a);
 	}
 
 	/// A material, when the renderer (or this part) has one, replaces the renderer's own surface settings.

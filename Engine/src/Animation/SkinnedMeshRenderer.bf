@@ -735,9 +735,14 @@ class SkinnedMeshRenderer : Component
 						scale = Vector3.Lerp(fromScale, scale, weight);
 					}
 					LayerPose(i, ref position, ref rotation, ref scale);
-					bone.LocalPosition = Mirror(position);
-					bone.LocalRotation = Mirror(rotation);
-					bone.LocalScale = scale;
+					bone.SetLocalPoseDeferred(Mirror(position), Mirror(rotation), scale);
+				}
+				// Each branch is told once, from its top, rather than once for each bone above every bone.
+				for (int i < mModel.Joints.Count)
+				{
+					let parent = mModel.Joints[i].parent;
+					if (parent < 0 || mBones[parent] == null || mBones[parent].GameObject.IsDestroyed)
+						mBones[i]?.PoseChanged();
 				}
 			}
 			return;

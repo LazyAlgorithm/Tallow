@@ -68,6 +68,8 @@ abstract class Component
 	bool mAwake;
 	bool mStarted;
 	bool mRegistered;
+	/// In OnUnregister as part of a batch of objects going, which the scene clears out of its lists in one pass.
+	bool mLeavingTogether;
 	/// The Profiler's marker slot for its type (ProfilerComponents), -1 until it is first timed.
 	int32 mProfileSlot = -1;
 

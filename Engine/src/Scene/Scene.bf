@@ -186,6 +186,8 @@ class Scene
 	List<GameObject> mObjects = new .() ~ delete _;
 	Dictionary<uint32, GameObject> mById = new .() ~ delete _;
 	List<Component> mComponents = new .() ~ delete _;
+	/// mComponents less the engine classes that have no per-frame work (sIdleTypes): what the update loops go through.
+	List<Component> mRunning = new .() ~ delete _;
 	List<Component> mPendingStart = new .() ~ delete _;
 	List<GameObject> mDestroyQueue = new .() ~ delete _;
 	uint32 mNextId = 1;
@@ -312,6 +314,11 @@ class Scene
 		Physics.ApplyWorldState(gameObject);
 	}
 
+	/// Classes of the engine with no FixedUpdate, Update, LateUpdate or OnFrame, which most of a big scene is made of.
+	/// Exact classes only: a game's class derived from one may well have them.
+	static HashSet<Type> sIdleTypes = new .() { typeof(MeshRenderer), typeof(Light), typeof(Camera), typeof(Rigidbody),
+		typeof(BoxCollider), typeof(SphereCollider), typeof(CapsuleCollider), typeof(MeshCollider) } ~ delete _;
+
 	void IndexTag(GameObject gameObject, StringView tag, bool add)
 	{
 		if (add)
@@ -399,7 +406,7 @@ class Scene
 			*slot.field = null;
 		mReferenceSlots.Clear();
 		while (mRoots.Count > 0)
-			DestroyImmediate(mRoots.Back);
+			DestroyTogether(scope List<GameObject>()..AddRange(mRoots));
 		mDestroyQueue.Clear();
 		mPendingStart.Clear();
 		mNextId = 1;
@@ -552,6 +559,9 @@ class Scene
 		let index = mComponents.IndexOf(old);
 		if (index >= 0)
 			mComponents[index] = replacement;
+		let running = mRunning.IndexOf(old);
+		if (running >= 0)
+			mRunning[running] = replacement;
 		let pending = mPendingStart.IndexOf(old);
 		if (pending >= 0)
 			mPendingStart[pending] = replacement;
@@ -604,14 +614,57 @@ class Scene
 	/// Destroys an object right now. Prefer Destroy from gameplay code.
 	public void DestroyImmediate(GameObject gameObject)
 	{
-		// Every component under the object hears that it is going before any object is freed, so that one can still
-		// look at the others in OnUnregister (IK putting back the bones under it, say).
-		UnregisterTree(gameObject);
-		DestroyTree(gameObject);
+		DestroyTogether(scope List<GameObject>() { gameObject });
+	}
+
+	/// Destroys several objects right now, in far less time than one by one.
+	public void DestroyImmediate(List<GameObject> objects)
+	{
+		DestroyTogether(objects);
+	}
+
+	/// Objects going together. Their components hear it first, before any object is freed, so that one can still look
+	/// at the others in OnUnregister (IK putting back the bones under it, say). Then what they leave behind in the
+	/// scene's lists is swept out in one pass, so that the cost does not grow with objects times scene size.
+	void DestroyTogether(List<GameObject> objects)
+	{
+		// From an OnDestroy while a batch is going: it joins that batch, and is freed with it.
+		if (mGoing != null)
+		{
+			for (let gameObject in objects)
+			{
+				if (!gameObject.[Friend]mGoing)
+				{
+					UnregisterTree(gameObject);
+					mGoing.Add(gameObject);
+				}
+			}
+			return;
+		}
+		let going = scope List<GameObject>();
+		mGoing = going;
+		for (int i < objects.Count)
+		{
+			let gameObject = objects[i];
+			// Under something else in the batch: it goes with that.
+			if (!gameObject.[Friend]mGoing)
+			{
+				UnregisterTree(gameObject);
+				going.Add(gameObject);
+			}
+		}
+		Sweep();
+		mGoing = null;
+		for (int i < going.Count)
+		{
+			if (going[i].[Friend]mGoing)
+				DestroyTree(going[i]);
+		}
 	}
 
 	void UnregisterTree(GameObject gameObject)
 	{
+		gameObject.[Friend]mGoing = true;
 		let children = gameObject.Transform.Children;
 		for (int i = children.Count - 1; i >= 0; i--)
 		{
@@ -621,14 +674,95 @@ class Scene
 		for (int i = gameObject.Components.Count - 1; i >= 0; i--)
 		{
 			if (i < gameObject.Components.Count)
-				UnregisterComponent(gameObject.Components[i]);
+				UnregisterComponent(gameObject.Components[i], true);
+		}
+	}
+
+	static void Keep(List<Component> list)
+	{
+		int kept = 0;
+		for (int i < list.Count)
+		{
+			let component = list[i];
+			if (component.[Friend]mRegistered)
+				list[kept++] = component;
+		}
+		list.Count = kept;
+	}
+
+	static void Keep(List<GameObject> list)
+	{
+		int kept = 0;
+		for (int i < list.Count)
+		{
+			let gameObject = list[i];
+			if (!gameObject.[Friend]mGoing)
+				list[kept++] = gameObject;
+		}
+		list.Count = kept;
+	}
+
+	/// Takes every component and object of the batch out of the scene's lists, keeping the order of the rest.
+	void Sweep()
+	{
+		Keep(mComponents);
+		Keep(mRunning);
+		for (let type in mSweptTypes)
+		{
+			if (mByType.TryGetValue(type, let list))
+				Keep(list);
+		}
+		mSweptTypes.Clear();
+		if (mSweepRenderers)
+		{
+			mSweepRenderers = false;
+			int kept = 0;
+			for (int i < Renderers.Count)
+			{
+				let renderer = Renderers[i];
+				if (renderer.[Friend]mRegistered)
+					Renderers[kept++] = renderer;
+			}
+			Renderers.Count = kept;
+		}
+		if (mRunningStarts)
+		{
+			// RunPendingStarts is going through the list: leave gaps rather than move what it has yet to reach.
+			for (int i < mPendingStart.Count)
+			{
+				let component = mPendingStart[i];
+				if (component != null && !component.[Friend]mRegistered)
+					mPendingStart[i] = null;
+			}
+		}
+		else
+			Keep(mPendingStart);
+		Keep(mDeferredStart);
+		Keep(mObjects);
+		Keep(mRoots);
+		if (mClearing)
+			return;
+		// Clear non-owning references before freeing their targets.
+		for (int i = mReferenceSlots.Count - 1; i >= 0; i--)
+		{
+			let slot = mReferenceSlots[i];
+			if (!slot.owner.[Friend]mRegistered)
+			{
+				// The component's own fields are about to be freed with it.
+				mReferenceSlots.RemoveAtFast(i);
+				continue;
+			}
+			let target = OwnerOf(*slot.field);
+			if (target != null && target.[Friend]mGoing)
+				*slot.field = null;
 		}
 	}
 
 	void DestroyTree(GameObject gameObject)
 	{
-		// Clear non-owning references before freeing their targets.
-		if (!mClearing)
+		// Added to the tree after the batch was swept, by a component going: the long way.
+		let swept = gameObject.[Friend]mGoing;
+		if (!mClearing && !swept)
 		{
 			for (let slot in mReferenceSlots)
 			{
@@ -636,6 +770,7 @@ class Scene
 					*slot.field = null;
 			}
 		}
+		gameObject.[Friend]mGoing = false;
 		let transform = gameObject.Transform;
 		while (transform.Children.Count > 0)
 			DestroyTree(transform.Children.Back.GameObject);
@@ -644,12 +779,19 @@ class Scene
 			UnregisterComponent(gameObject.Components[i]);
 
 		if (transform.Parent != null)
-			transform.Parent.Children.Remove(transform);
-		else
+		{
+			let siblings = transform.Parent.Children;
+			let index = siblings.LastIndexOf(transform);
+			if (index >= 0)
+				siblings.RemoveAt(index);
+		}
+		else if (!swept)
 			mRoots.Remove(gameObject);
-		mObjects.Remove(gameObject);
+		if (!swept)
+			mObjects.Remove(gameObject);
 		mById.Remove(gameObject.Id);
-		mDestroyQueue.Remove(gameObject);
+		if (!mDestroyQueue.IsEmpty)
+			mDestroyQueue.Remove(gameObject);
 		for (int i < gameObject.TagCount)
 			IndexTag(gameObject, gameObject.GetTag(i), false);
 		delete gameObject;
@@ -661,6 +803,8 @@ class Scene
 			return;
 		component.[Friend]mRegistered = true;
 		mComponents.Add(component);
+		if (!sIdleTypes.Contains(component.GetType()))
+			mRunning.Add(component);
 		IndexComponent(component, true);
 		AddReferenceSlots(component);
 		component.OnRegister();
@@ -668,7 +812,8 @@ class Scene
 			WakeComponent(component);
 	}
 
-	void UnregisterComponent(Component component)
+	/// `together`: part of a batch, whose Sweep takes it out of the scene's lists.
+	void UnregisterComponent(Component component, bool together = false)
 	{
 		if (!component.[Friend]mRegistered)
 			return;
@@ -677,6 +822,21 @@ class Scene
 			if (component.Enabled)
 				component.OnDisable();
 			component.OnDestroy();
+		}
+		if (together)
+		{
+			component.[Friend]mLeavingTogether = true;
+			component.OnUnregister();
+			component.[Friend]mLeavingTogether = false;
+			component.[Friend]mRegistered = false;
+			component.[Friend]mAwake = false;
+			var type = component.GetType();
+			while (type != null && type != typeof(Component))
+			{
+				mSweptTypes.Add(type);
+				type = type.BaseType;
+			}
+			return;
 		}
 		if (!mClearing)
 		{
@@ -694,6 +854,7 @@ class Scene
 		component.[Friend]mRegistered = false;
 		component.[Friend]mAwake = false;
 		mComponents.Remove(component);
+		mRunning.Remove(component);
 		IndexComponent(component, false);
 		let pending = mPendingStart.IndexOf(component);
 		if (pending >= 0)
@@ -705,6 +866,15 @@ class Scene
 				mPendingStart.RemoveAt(pending);
 		}
 		mDeferredStart.Remove(component);
+	}
+
+	/// A renderer leaving the scene.
+	void RendererLeft(MeshRenderer renderer)
+	{
+		if (renderer.[Friend]mLeavingTogether)
+			mSweepRenderers = true;
+		else
+			Renderers.Remove(renderer);
 	}
 
 	void WakeComponent(Component component)
@@ -730,7 +900,7 @@ class Scene
 		SaveSystem.SceneStarting(this);
 		mPlaying = true;
 		Active = this;
-		Time.Time = 0;
+		Time.Restart();
 		Time.Tick = 0;
 		for (int i = 0; i < mComponents.Count; i++)
 			WakeComponent(mComponents[i]);
@@ -790,6 +960,10 @@ class Scene
 
 	List<Component> mDeferredStart = new .() ~ delete _;
 	bool mRunningStarts;
+	/// The batch DestroyTogether has under way, and what it has for Sweep.
+	List<GameObject> mGoing;
+	HashSet<Type> mSweptTypes = new .() ~ delete _;
+	bool mSweepRenderers;
 
 	static ProfilerMarker sStartMarker = .("Start", .Scripts);
 	static ProfilerMarker sPreTickMarker = .("Network Pre-Tick", .Networking);
@@ -838,9 +1012,9 @@ class Scene
 		using (sPreTickMarker.Sample())
 			Network?.PreTick();
 		sFixedMarker.Begin();
-		for (int i = 0; i < mComponents.Count; i++)
+		for (int i = 0; i < mRunning.Count; i++)
 		{
-			let component = mComponents[i];
+			let component = mRunning[i];
 			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 				Run(component, .FixedUpdate);
 		}
@@ -882,9 +1056,9 @@ class Scene
 			Updating = false;
 		}
 		sFrameComponentsMarker.Begin();
-		for (int i = 0; i < mComponents.Count; i++)
+		for (int i = 0; i < mRunning.Count; i++)
 		{
-			let component = mComponents[i];
+			let component = mRunning[i];
 			if (component.IsActiveAndEnabled)
 				Run(component, .OnFrame);
 		}
@@ -898,9 +1072,9 @@ class Scene
 			using (sStartMarker.Sample())
 				RunPendingStarts();
 			sUpdateMarker.Begin();
-			for (int i = 0; i < mComponents.Count; i++)
+			for (int i = 0; i < mRunning.Count; i++)
 			{
-				let component = mComponents[i];
+				let component = mRunning[i];
 				if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 					Run(component, .Update);
 			}
@@ -909,9 +1083,9 @@ class Scene
 			using (sPathsMarker.Sample())
 				NavigationAgent.FindQueuedPaths();
 			sLateMarker.Begin();
-			for (int i = 0; i < mComponents.Count; i++)
+			for (int i = 0; i < mRunning.Count; i++)
 			{
-				let component = mComponents[i];
+				let component = mRunning[i];
 				if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 					Run(component, .LateUpdate);
 			}
@@ -928,8 +1102,9 @@ class Scene
 		sDestroyMarker.Begin();
 		while (mDestroyQueue.Count > 0)
 		{
-			let gameObject = mDestroyQueue.PopBack();
-			DestroyImmediate(gameObject);
+			let queued = scope List<GameObject>()..AddRange(mDestroyQueue);
+			mDestroyQueue.Clear();
+			DestroyTogether(queued);
 		}
 		Profiler.End();
 	}

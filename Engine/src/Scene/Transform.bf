@@ -12,7 +12,9 @@ class Transform
 	Quaternion mLocalRotation = .Identity;
 	Vector3 mLocalScale = .One;
 	Matrix4 mWorld = .Identity;
+	Quaternion mWorldRotation = .Identity;
 	bool mDirty = true;
+	bool mRotationDirty = true;
 
 	/// The objects directly under this one, in Hierarchy order. Use SetParent to move one.
 	public List<Transform> Children = new .() ~ delete _;
@@ -111,7 +113,17 @@ class Transform
 	/// The rotation in the world.
 	public Quaternion Rotation
 	{
-		get => mParent != null ? (mParent.Rotation * mLocalRotation).Normalized : mLocalRotation;
+		get
+		{
+			if (mParent == null)
+				return mLocalRotation;
+			if (mRotationDirty)
+			{
+				mWorldRotation = (mParent.Rotation * mLocalRotation).Normalized;
+				mRotationDirty = false;
+			}
+			return mWorldRotation;
+		}
 		set
 		{
 			if (mParent != null)
@@ -195,7 +207,13 @@ class Transform
 		if (mParent != null)
 			mParent.Children.Remove(this);
 		else
-			mGameObject.Scene?.[Friend]mRoots.Remove(mGameObject);
+		{
+			// Usually the newest root: a new object starts as one.
+			let roots = mGameObject.Scene?.[Friend]mRoots;
+			let index = roots?.LastIndexOf(mGameObject) ?? -1;
+			if (index >= 0)
+				roots.RemoveAt(index);
+		}
 		mParent = parent;
 		if (mParent != null)
 			mParent.Children.Add(this);
@@ -231,6 +249,7 @@ class Transform
 	void MarkDirty()
 	{
 		Version++;
+		mRotationDirty = true;
 		if (mDirty)
 		{
 			// Children may still hold a clean matrix when only the version changed.

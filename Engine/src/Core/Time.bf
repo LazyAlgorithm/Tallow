@@ -17,8 +17,9 @@ static class Time
 	public static float DeltaTime;
 	/// Seconds since the last frame, whatever TimeScale is (for pause menus).
 	public static float UnscaledDeltaTime;
-	/// Seconds of game time since play started.
+	/// Seconds of game time since play started. It follows TimeScale, and stands still when that is 0.
 	public static float Time;
+	static double sPlayed;
 	/// Seconds since the program started, whether or not the game is playing or paused. Shaders use this for
 	/// "time", so that animated materials move in the editor too.
 	public static float RealTime;
@@ -35,4 +36,18 @@ static class Time
 	public static float InterpolationAlpha;
 	/// Frames a second, averaged over the last second or so.
 	public static float SmoothedFps;
+
+	/// Back to the start of play.
+	public static void Restart()
+	{
+		sPlayed = 0;
+		Time = 0;
+	}
+
+	/// Game time moves on by a frame. Added up in a double: a float stops gaining short frames after a day or so.
+	public static void Advance(float seconds)
+	{
+		sPlayed += seconds;
+		Time = (float)sPlayed;
+	}
 }

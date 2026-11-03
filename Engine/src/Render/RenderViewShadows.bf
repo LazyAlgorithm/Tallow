@@ -28,6 +28,9 @@ extension RenderView
 		mShadowParams = .(1.0f / RenderResources.ShadowAtlasSize, ShadowBias, 1.0f, filterRadius);
 	}
 
+	/// The casters of the cascade or tile being drawn.
+	List<RenderItem*> mShadowVisible = new .() ~ delete _;
+
 	/// The point and spot lights' shadows, all in one view: each tile is a spot light's view or one face of a point
 	/// light's cube, drawn through its own matrix and kept to its part of the atlas by a scissor. Casters come from
 	/// the light's view, including walls outside the camera's: a wall behind the viewer must still stop a remote
@@ -41,28 +44,63 @@ extension RenderView
 		Matrix4 identity = .Identity;
 		bgfx.set_view_transform(view, &identity, &identity);
 		bgfx.touch(view);
-		List<RenderItem> visible = scope .();
+		let items = mShadowItems.Ptr;
 		for (let tile in mLights.Tiles)
 		{
 			mShadowPassViewProj = tile.drawViewProj;
 			mShadowScissor = .(tile.x, tile.y, tile.size, tile.size);
-			visible.Clear();
-			for (let item in mShadowItems)
+			mShadowVisible.Clear();
+			for (int i < mShadowItems.Count)
 			{
-				if (tile.frustum.IntersectsSphere(item.center, item.radius))
-					visible.Add(item);
+				if (tile.frustum.IntersectsSphere(items[i].center, items[i].radius))
+					mShadowVisible.Add(&items[i]);
 			}
-			int start = 0;
-			while (start < visible.Count)
-			{
-				int end = start + 1;
-				while (end < visible.Count && visible[end].mesh == visible[start].mesh && visible[end].renderer.windSway == visible[start].renderer.windSway)
-					end++;
-				SubmitBatch(view, visible, start, end - start, true);
-				start = end;
-			}
+			SubmitShadowCasters(view);
 		}
 		mShadowScissor = default;
+	}
+
+	/// mShadowVisible, in runs of one mesh and sway.
+	void SubmitShadowCasters(uint16 view)
+	{
+		let visible = mShadowVisible;
+		int start = 0;
+		while (start < visible.Count)
+		{
+			int end = start + 1;
+			while (end < visible.Count && visible[end].mesh == visible[start].mesh && visible[end].renderer.windSway == visible[start].renderer.windSway)
+				end++;
+			SubmitShadowBatch(view, start, end - start);
+			start = end;
+		}
+	}
+
+	/// Draws `count` of mShadowVisible from `start` as one instanced draw into the shadow map.
+	void SubmitShadowBatch(uint16 view, int start, int count)
+	{
+		let stride = (uint16)sizeof(InstanceData);
+		let drawCount = Math.Min(count, (int)bgfx.get_avail_instance_data_buffer((uint32)count, stride));
+		if (drawCount <= 0)
+			return;
+		bgfx.InstanceDataBuffer buffer = default;
+		bgfx.alloc_instance_data_buffer(&buffer, (uint32)drawCount, stride);
+		let data = (InstanceData*)buffer.data;
+		let items = mShadowVisible.Ptr + start;
+		for (int i < drawCount)
+			FillInstance(data + i, items[i]);
+		let mesh = items[0].mesh;
+		if (mesh.IsDynamic)
+			bgfx.set_dynamic_vertex_buffer(0, mesh.DynamicBuffer, 0, (uint32)mesh.VertexCount);
+		else
+			bgfx.set_vertex_buffer(0, mesh.VertexBuffer, 0, (uint32)mesh.VertexCount);
+		bgfx.set_index_buffer(mesh.IndexBuffer, 0, (uint32)mesh.IndexCount);
+		bgfx.set_instance_data_buffer(&buffer, 0, (uint32)drawCount);
+		SetWindUniforms(items[0].renderer.windSway);
+		bgfx.set_uniform(RenderResources.uShadowViewProj, &mShadowPassViewProj, 1);
+		if (mShadowScissor[2] > 0)
+			bgfx.set_scissor((uint16)mShadowScissor[0], (uint16)mShadowScissor[1], (uint16)mShadowScissor[2], (uint16)mShadowScissor[3]);
+		bgfx.set_state(Gfx.StateWriteZ | Gfx.StateDepthLess, 0);
+		bgfx.submit(view, RenderResources.ShadowProgram, 0, 0xff);
 	}
 
 	/// How far behind a cascade's view things can stand and still cast a shadow into it.
@@ -185,24 +223,18 @@ extension RenderView
 	{
 		let center = mCascadeCenter[cascade];
 		let radius = mCascadeRadius[cascade];
-		List<RenderItem> visible = scope .();
-		for (let item in mShadowItems)
+		let items = mShadowItems.Ptr;
+		mShadowVisible.Clear();
+		for (int i < mShadowItems.Count)
 		{
+			let item = &items[i];
 			let offset = item.center - center;
 			if (Mathf.Abs(Vector3.Dot(offset, mLightRight)) > radius + item.radius)
 				continue;
 			if (Mathf.Abs(Vector3.Dot(offset, mLightUp)) > radius + item.radius)
 				continue;
-			visible.Add(item);
+			mShadowVisible.Add(item);
 		}
-		int start = 0;
-		while (start < visible.Count)
-		{
-			int end = start + 1;
-			while (end < visible.Count && visible[end].mesh == visible[start].mesh && visible[end].renderer.windSway == visible[start].renderer.windSway)
-				end++;
-			SubmitBatch(view, visible, start, end - start, true);
-			start = end;
-		}
+		SubmitShadowCasters(view);
 	}
 }
