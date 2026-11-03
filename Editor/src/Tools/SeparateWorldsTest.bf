@@ -136,11 +136,8 @@ extension EditorApp
 			{
 				physics.QueryWorldStates = uint32.MaxValue;
 			}
-			ShapeCastHit shapeHit;
-			let found = physics.SphereCast(.(-6, 1, z), 0.05f, .(1, 0, 0), 5.8f, out shapeHit);
-			result = default;
-			result.gameObject = shapeHit.gameObject;
-			return found;
+			// At the middle of the characters' capsules (a character's position is its capsule's centre).
+			return physics.Raycast(.(-6, walkerA.Transform.Position.y, z), .(1, 0, 0), 5.8f, out result);
 		}
 		Expect(RayAt(A, -1, out hit) && hit.gameObject == walkerA, "A sees its character");
 		Expect(!RayAt(B, -1, out hit), "B does not see A's character");
@@ -179,11 +176,7 @@ extension EditorApp
 				physics.QueryWorldStates = uint32.MaxValue;
 			}
 			let at = walkerB.Transform.Position;
-			ShapeCastHit shapeHit;
-			let found = physics.SphereCast(at + .(0, 0, -5), 0.05f, .(0, 0, 1), 10, out shapeHit);
-			result = default;
-			result.gameObject = shapeHit.gameObject;
-			return found;
+			return physics.Raycast(at + .(0, 0, -5), .(0, 0, 1), 10, out result);
 		}
 		let foundB = RayThrough(B, out hit);
 		Expect(foundB && hit.gameObject == walkerB, scope $"before the shift B finds B's character ({foundB} {(foundB ? hit.gameObject.Name : "")} at {walkerB.Transform.Position})");
