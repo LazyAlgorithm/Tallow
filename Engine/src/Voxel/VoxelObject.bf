@@ -57,6 +57,10 @@ class VoxelObject : Component
 	/// Pieces that break off are debris: they rest on the ground, but characters walk through them and rays (shots)
 	/// pass through them. Off, they block like any other body.
 	public bool debrisPieces = false;
+	/// With a palette material (docs/materials.md): the palette entry of the outside, and of surfaces exposed by
+	/// carving. -1 uses Color and Interior Color as they are.
+	[Range(-1, 255)] public int32 paletteEntry = -1;
+	[Range(-1, 255)] public int32 interiorPaletteEntry = -1;
 	/// Seconds before a piece that broke off is removed (by the server in multiplayer). 0 keeps pieces for good.
 	public float pieceLifetime = 0;
 	/// When this piece is removed (Time.Time), or 0.
@@ -117,7 +121,7 @@ class VoxelObject : Component
 	{
 		get
 		{
-			var hash = ShapeHash ^ (int32)color.ToABGR() * 3 ^ (int32)interiorColor.ToABGR() * 5 ^ (int32)(interiorTiling * 1000) * 11;
+			var hash = ShapeHash ^ (int32)color.ToABGR() * 3 ^ (int32)interiorColor.ToABGR() * 5 ^ (int32)(interiorTiling * 1000) * 11 ^ (paletteEntry + 2) * 13 ^ (interiorPaletteEntry + 2) * 17;
 			for (let c in interiorMaterial.RawChars)
 				hash = hash * 16777619 ^ (int32)c;
 			return hash;
@@ -505,6 +509,7 @@ class VoxelObject : Component
 		let insideMaterial = InteriorMaterialFor(renderer);
 		List<uint32> outsideIndices = scope .();
 		List<uint32> insideIndices = scope .();
+		mPaletteFlat = renderer?.SharedMaterial?.IsPalette ?? false;
 		March(insideMaterial != null, outsideIndices, insideIndices);
 		mMesh.Upload();
 		MakeParts(insideMaterial, outsideIndices, insideIndices);
@@ -523,6 +528,9 @@ class VoxelObject : Component
 
 	/// Marching cubes over the grid into mMesh. Triangles touching carved samples go in `inside`, the rest in
 	/// `outside`, so that the two can be drawn with different materials.
+	/// In palette mode each triangle gets vertices of its own in one colour, so palette entries never blend.
+	bool mPaletteFlat;
+
 	void March(bool insideHasMaterial, List<uint32> outside, List<uint32> inside)
 	{
 		let cells = mSamples - 1;
@@ -530,6 +538,11 @@ class VoxelObject : Component
 		let offset = Vector3(GridSize * 0.5f) - mCenter;
 		uint32 outer = mSurface != null ? (uint32)0xFFFFFFFF : color.ToABGR();
 		uint32 inner = insideHasMaterial ? (uint32)0xFFFFFFFF : interiorColor.ToABGR();
+		// A palette entry, matt, no glow or flags (include/palette.sh).
+		if (mPaletteFlat && paletteEntry >= 0)
+			outer = Color.FromBytes((uint8)Math.Min(paletteEntry, 255), 0, 24 << 3, 0).ToABGR();
+		if (mPaletteFlat && interiorPaletteEntry >= 0)
+			inner = Color.FromBytes((uint8)Math.Min(interiorPaletteEntry, 255), 0, 28 << 3, 0).ToABGR();
 		uint32[12] edgeVertex = default;
 		bool[12] edgeCarved = default;
 		for (int z < cells)
@@ -579,7 +592,23 @@ class VoxelObject : Component
 					for (int i = 0; MarchingTables.Triangles[row + i] != -1; i += 3)
 					{
 						let e0 = MarchingTables.Triangles[row + i], e1 = MarchingTables.Triangles[row + i + 2], e2 = MarchingTables.Triangles[row + i + 1];
-						let list = (edgeCarved[e0] || edgeCarved[e1] || edgeCarved[e2]) ? inside : outside;
+						let carvedTriangle = edgeCarved[e0] || edgeCarved[e1] || edgeCarved[e2];
+						let list = carvedTriangle ? inside : outside;
+						if (mPaletteFlat)
+						{
+							// One colour for the whole triangle: the inside's, or the first corner's.
+							let flat = carvedTriangle ? inner : mMesh.Vertices[(int)edgeVertex[e0]].color;
+							for (let edge in int[3](e0, e1, e2))
+							{
+								var vertex = mMesh.Vertices[(int)edgeVertex[edge]];
+								vertex.color = flat;
+								let index = (uint32)mMesh.Vertices.Count;
+								mMesh.Vertices.Add(vertex);
+								mMesh.Indices.Add(index);
+								list.Add(index);
+							}
+							continue;
+						}
 						for (let edge in int[3](e0, e1, e2))
 						{
 							mMesh.Indices.Add(edgeVertex[edge]);
@@ -830,6 +859,8 @@ class VoxelObject : Component
 		voxels.size = size;
 		voxels.color = color;
 		voxels.interiorColor = interiorColor;
+		voxels.paletteEntry = paletteEntry;
+		voxels.interiorPaletteEntry = interiorPaletteEntry;
 		voxels.interiorMaterial.Set(interiorMaterial);
 		voxels.interiorTiling = interiorTiling;
 		voxels.minimumPieceSize = minimumPieceSize;

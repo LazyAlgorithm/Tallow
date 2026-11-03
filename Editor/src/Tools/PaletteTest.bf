@@ -117,6 +117,34 @@ extension EditorApp
 		pane.AddComponent<ModelMesh>().Set(glass);
 		Expect(SceneSerializer.SaveToFile(mScene, scope $"{Assets.ProjectPath}/PaletteTest/Palette.tscene"), "the scene is written");
 
+		// A palette voxel wall: after a carve every triangle is wholly the outside's entry or the inside's.
+		SceneSerializer.Load(mScene, "scene \"Voxels\"\n");
+		let wall = mScene.CreateGameObject("Wall");
+		wall.AddComponent<MeshRenderer>().material.Set("PaletteTest/box.tmat");
+		let voxels = wall.AddComponent<VoxelObject>();
+		voxels.shape = .Box;
+		voxels.size = 2;
+		voxels.resolution = 16;
+		voxels.paletteEntry = 5;
+		voxels.interiorPaletteEntry = 6;
+		voxels.anchored = true;
+		voxels.Rebuild();
+		voxels.Carve(wall.Transform.Position + .(0, 0, -1), 0.6f);
+		let voxelMesh = voxels.[Friend]mMesh;
+		let outerColor = Color.FromBytes(5, 0, 24 << 3, 0).ToABGR(), innerColor = Color.FromBytes(6, 0, 28 << 3, 0).ToABGR();
+		int outsideTriangles = 0, insideTriangles = 0, mixed = 0;
+		for (int i = 0; i + 2 < voxelMesh.Indices.Count; i += 3)
+		{
+			let c0 = voxelMesh.Vertices[(int)voxelMesh.Indices[i]].color, c1 = voxelMesh.Vertices[(int)voxelMesh.Indices[i + 1]].color, c2 = voxelMesh.Vertices[(int)voxelMesh.Indices[i + 2]].color;
+			if (c0 != c1 || c1 != c2 || (c0 != outerColor && c0 != innerColor))
+				mixed++;
+			else if (c0 == outerColor)
+				outsideTriangles++;
+			else
+				insideTriangles++;
+		}
+		Expect(mixed == 0 && outsideTriangles > 0 && insideTriangles > 0, scope $"a carved palette voxel wall has one entry per triangle ({outsideTriangles} outside, {insideTriangles} inside, {mixed} mixed)");
+
 		SceneSerializer.Load(mScene, stash);
 		mScene.Path.Set(stashPath);
 		Log.Info(scope $"PALETTE-TEST {pass ? "PASS" : "FAIL"}: {report}");
