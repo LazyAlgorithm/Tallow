@@ -605,6 +605,8 @@ class RenderView
 	/// solid, blended, and (being glass-like) casts no shadow.
 	static bool IsTransparent(MeshRenderer renderer, Material material)
 	{
+		if (renderer.vertexAlpha)
+			return true;
 		if (material == null)
 			return renderer.color.a < OpaqueAlpha;
 		return material.IsTransparent || (material.blend == .Opaque && renderer.color.a * material.color.a < OpaqueAlpha);

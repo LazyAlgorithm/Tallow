@@ -41,6 +41,10 @@ class Camera : Component
 	/// indoors, where much of the scene is behind walls. See docs/occlusion-culling.md.
 	public bool occlusionCulling = false;
 
+	/// Where the viewer is this frame: the game's camera, or in the editor the Scene view's while not playing. Lines and
+	/// trails turn to face it.
+	public static Vector3 ViewerPosition;
+
 	public override void OnRegister() => Scene.Cameras.Add(this);
 	public override void OnUnregister()
 	{

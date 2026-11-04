@@ -73,7 +73,10 @@ class GameApp : Application
 		SceneManager.Update(mScene);
 		let camera = FindCamera();
 		if (camera != null)
+		{
 			VoxelTerrain.ViewerPosition = camera.Transform.Position;
+			Camera.ViewerPosition = camera.Transform.Position;
+		}
 		else if (mScene.Network != null && mScene.Network.Identities.Count > 0)
 			VoxelTerrain.ViewerPosition = mScene.Network.Identities.Back.Transform.Position;
 		// A server keeps the terrain loaded, and detailed, around every player as well.

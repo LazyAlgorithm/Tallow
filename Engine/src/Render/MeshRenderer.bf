@@ -174,6 +174,9 @@ class MeshRenderer : Component
 	/// Sets a colour of the renderer's material (a copy of its own is made the first time).
 	public void SetMaterialColor(StringView name, Color value) => SetMaterialValue(name, .(value.r, value.g, value.b, value.a));
 
+	/// Set by lines and trails whose colours fade: drawn see-through, as an alpha below 1 in Color is.
+	[NonSerialized]
+	public bool vertexAlpha;
 	/// World-space offset applied only when drawing. The network layer uses it to blend out corrections.
 	[NonSerialized]
 	public Vector3 VisualOffset;

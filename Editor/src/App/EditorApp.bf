@@ -498,6 +498,7 @@ class EditorApp : Application
 		}
 		let gameCamera = FindGameCamera();
 		VoxelTerrain.ViewerPosition = (mPlay != .Edit && gameCamera != null) ? gameCamera.Transform.Position : mCamPosition;
+		Camera.ViewerPosition = VoxelTerrain.ViewerPosition;
 		if (mPlay != .Paused)
 		{
 			Input.Enabled = mPlay == .Playing && mGameFocused;
