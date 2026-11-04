@@ -4,8 +4,8 @@ using System.Collections;
 namespace Tallow;
 
 /// A line through a list of points, drawn as a flat strip that faces the viewer (docs/lines-and-trails.md): aim
-/// guides, laser beams, cables, paths on a map. A script sets the points (SetPositions, SetPosition, PositionCount);
-/// in the editor, Children As Points draws it through this object's children instead. Its look
+/// guides, laser beams, cables, paths on a map. Its points are a list, edited in the Inspector or set by a script
+/// (SetPositions, SetPosition, PositionCount); Children As Points draws it through this object's children instead. Its look
 /// is its own (colours, Material, Texture, Glow), drawn through a hidden child object.
 [Component]
 class LineRenderer : Component
@@ -22,11 +22,18 @@ class LineRenderer : Component
 	public Color endColor = .White;
 	/// View: turned to face the camera. Transform Z: flat, facing along this object's forward axis.
 	public LineAlignment alignment = .View;
-	/// Stretch: a texture once along the whole line. Tile: again every metre.
+	/// Stretch: a texture once along the whole line. Tile: again every Tile Length.
 	public LineTextureMode textureMode = .Stretch;
+	/// With Tile: how long one repeat of the texture is, in metres.
+	public float tileLength = 1;
+	/// Draws it in dashes this long, in metres, with Gap Length between: 0 for a solid line. Dashes as long as the
+	/// width make square dots.
+	public float dashLength = 0;
+	public float gapLength = 0.1f;
 	/// A material (.tmat) to draw it with, for a see-through or additive one; empty draws it in its colours.
 	public String material = new .() ~ delete _;
-	/// A texture laid along it (Texture Mode), when there is no material.
+	/// A texture laid along it (Texture Mode): across the image is across the line. Its alpha makes the line
+	/// see-through, so a texture with clear parts draws only its solid ones.
 	public String texture = new .() ~ delete _;
 	/// Whether it is drawn in its own colours, unlit by the scene's lights.
 	public bool unlit = true;
@@ -38,8 +45,8 @@ class LineRenderer : Component
 	/// out in the editor.
 	public bool childrenAsPoints = false;
 
-	/// The points, in the world or this object's space (Use World Space). Set by scripts, not saved with the scene.
-	[NonSerialized]
+	/// The points, in the world or this object's space (Use World Space). Edited in the Inspector and saved with the
+	/// scene, or set by scripts (SetPositions, SetPosition, PositionCount, or this list itself).
 	public List<Vector3> positions = new .() { .(0, 0, 0), .(0, 0, 1) } ~ delete _;
 
 	Ribbon mRibbon = new .() ~ delete _;
@@ -138,7 +145,7 @@ class LineRenderer : Component
 			mPoints[i].width = Math.Max(Mathf.Lerp(startWidth, endWidth, t), 0);
 			mPoints[i].color = Color.Lerp(startColor, endColor, t);
 		}
-		mRibbon.Build(Transform, mPoints, alignment, textureMode, loop);
+		mRibbon.Build(Transform, mPoints, .() { alignment = alignment, textureMode = textureMode, loop = loop, dash = dashLength, gap = gapLength, tileLength = tileLength, textured = !texture.IsEmpty });
 	}
 
 	public override void OnDrawGizmos(bool selected)

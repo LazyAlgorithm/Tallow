@@ -201,6 +201,8 @@ static class SceneSerializer
 				text.AppendF("{}", FieldNumbers.ReadUnsigned(field));
 			else
 				text.Append(name);
+		case .List, .Array:
+			FieldLists.Write(field, text);
 		}
 	}
 
@@ -250,6 +252,8 @@ static class SceneSerializer
 			}
 			else
 				FieldNumbers.ReadText(field, tokens[0]);
+		case .List, .Array:
+			FieldLists.Read(field, tokens);
 		}
 	}
 
@@ -465,6 +469,8 @@ static class SceneSerializer
 				continue;
 			if (field.kind == .ObjectReference && tokens.Count >= 3)
 				references.Add((field, (uint32)ParseInt(tokens[2]), (tokens.Count > 3 ? ParseInt(tokens[3]) : -1)));
+			else if (field.kind == .List || field.kind == .Array)
+				FieldLists.Read(field, Span<StringView>(tokens.Ptr + 2, tokens.Count - 2), references);
 			else
 				ReadValue(field, Span<StringView>(tokens.Ptr + 2, tokens.Count - 2));
 			return;

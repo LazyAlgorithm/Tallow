@@ -64,6 +64,10 @@ class ComponentClipboard
 				if (field.name != tokens[0]) continue;
 				if (field.kind == .ObjectReference && mSourceScene != target.Scene)
 					ComponentRegistry.AssignReference(field, null);
+				else if (field.HoldsReferences && mSourceScene != target.Scene)
+				{
+					// References into another scene mean nothing here: the list keeps what it had.
+				}
 				else
 					SceneSerializer.ReadValue(field, .(tokens.Ptr + 1, tokens.Count - 1));
 				break;

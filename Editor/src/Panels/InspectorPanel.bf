@@ -639,9 +639,105 @@ extension EditorApp
 	{
 		let label = scope String();
 		NiceName(field.name, label);
+		if (field.kind == .List || field.kind == .Array)
+			return DrawCollection(field, label);
 		BeginProperty(label.CStr());
 		ImGui.PushID(field.ptr);
 		defer ImGui.PopID();
+		return DrawValue(field);
+	}
+
+	/// Lists and arrays opened or closed by hand in the Inspector, by their field's address: short ones start open,
+	/// long ones closed.
+	HashSet<int> mToggledCollections = new .() ~ delete _;
+
+	/// A List or array field: its size on its own row, then a row for each element when opened, each with buttons to
+	/// move it up and remove it.
+	bool DrawCollection(FieldRef field, StringView label)
+	{
+		let key = (int)field.ptr;
+		let count = FieldLists.Count(field);
+		var open = (count <= 16) != mToggledCollections.Contains(key);
+		let resizable = FieldLists.CanResize(field);
+		bool changed = false;
+		ImGui.TableNextRow();
+		ImGui.TableNextColumn();
+		ImGui.PushID(field.ptr);
+		defer ImGui.PopID();
+		if (ImGui.TreeNode(scope $"{label}###list", open ? 1 << 5 : 0) != open)
+		{
+			open = !open;
+			if (!mToggledCollections.Remove(key))
+				mToggledCollections.Add(key);
+		}
+		if (open)
+			ImGui.TreePop();
+		ImGui.TableNextColumn();
+		if (resizable)
+		{
+			var size = (int32)count;
+			ImGui.SetNextItemWidth(-1);
+			if (ImGui.InputInt("##size", ref size))
+			{
+				// Growing copies the last element into the new ones, as Unity's Inspector does.
+				size = Math.Clamp(size, 0, (int32)count + 1000);
+				if (size > count)
+				{
+					for (int i = count; i < size; i++)
+						changed |= FieldLists.Duplicate(field, i - 1);
+				}
+				else
+					changed |= FieldLists.Resize(field, size);
+			}
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("How many elements: + adds a copy of the last, - removes the last");
+		}
+		else
+			ImGui.TextDisabled(scope $"{count} (fixed size)");
+		if (!open || changed)
+			return changed;
+
+		for (int i < FieldLists.Count(field))
+		{
+			ImGui.TableNextRow();
+			ImGui.TableNextColumn();
+			ImGui.PushID((int32)i);
+			ImGui.AlignTextToFramePadding();
+			ImGui.TextDisabled(scope $"    {i}");
+			ImGui.TableNextColumn();
+			var action = 0;
+			if (resizable)
+			{
+				if (ImGui.SmallButton("^") && i > 0)
+					action = 1;
+				ImGui.SameLine(0, 2);
+				if (ImGui.SmallButton("x"))
+					action = 2;
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("Remove");
+				ImGui.SameLine(0, 4);
+			}
+			ImGui.SetNextItemWidth(-1);
+			changed |= DrawValue(FieldLists.Element(field, i));
+			ImGui.PopID();
+			if (action == 1)
+			{
+				FieldLists.Move(field, i, i - 1);
+				changed = true;
+				break;
+			}
+			if (action == 2)
+			{
+				changed |= FieldLists.RemoveAt(field, i);
+				break;
+			}
+		}
+		return changed;
+	}
+
+	/// The editor for one value of a field (the field itself, or one element of a list).
+	bool DrawValue(FieldRef field)
+	{
 		switch (field.kind)
 		{
 		case .Float:
@@ -726,6 +822,9 @@ extension EditorApp
 				ImGui.EndCombo();
 			}
 			return changed;
+		case .List, .Array:
+			// Not nested: a list's elements are single values.
+			return false;
 		}
 	}
 

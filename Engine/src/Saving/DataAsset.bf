@@ -373,7 +373,8 @@ abstract class DataAsset
 		ComponentRegistry.GetFields(this, typeof(DataAsset), fields);
 		for (let field in fields)
 		{
-			if (field.kind == .ObjectReference)
+			// No scene to refer to; and [Saved] fields go in the "saved" line below.
+			if (field.HoldsReferences || ((field.kind == .List || field.kind == .Array) && field.saved))
 				continue;
 			text.AppendF("field {} ", field.name);
 			SceneSerializer.WriteValue(field, text);
@@ -418,7 +419,7 @@ abstract class DataAsset
 				continue;
 			for (let field in fields)
 			{
-				if (field.name == tokens[1] && field.kind != .ObjectReference)
+				if (field.name == tokens[1] && !field.HoldsReferences)
 				{
 					SceneSerializer.ReadValue(field, Span<StringView>(tokens.Ptr + 2, tokens.Count - 2));
 					break;

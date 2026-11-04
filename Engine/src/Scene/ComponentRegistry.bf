@@ -21,7 +21,11 @@ enum FieldKind
 	Color,
 	String,
 	Enum,
-	ObjectReference
+	ObjectReference,
+	/// A List<T> of any of the kinds above (FieldRef.elementKind): see FieldLists.
+	List,
+	/// An array of any of the kinds above, T[] or a fixed-size T[N]: see FieldLists.
+	Array
 }
 
 /// One serializable field of a live component.
@@ -39,6 +43,14 @@ struct FieldRef
 	public float rangeMax;
 	/// Marked [Layer]: an integer that is one of the project's layers, or -1 for none.
 	public bool isLayer;
+	/// For a List or Array: what each element is, and its type.
+	public FieldKind elementKind;
+	public Type elementType;
+	/// Marked [Saved] (kept by save games through SaveFields as well).
+	public bool saved;
+
+	/// Whether the field is, or holds, references to objects in the scene.
+	public bool HoldsReferences => kind == .ObjectReference || ((kind == .List || kind == .Array) && elementKind == .ObjectReference);
 }
 
 /// Component type registry and field reflection shared by the scene serializer and the Inspector.
@@ -222,6 +234,46 @@ static class ComponentRegistry
 		}
 	}
 
+	/// What kind of single value a field of this type holds; false for a type fields cannot hold.
+	public static bool Classify(Type fieldType, out FieldKind kind)
+	{
+		kind = .Float;
+		let storage = FieldNumbers.Storage(fieldType);
+		if (storage == typeof(float))
+			kind = .Float;
+		else if (storage == typeof(double))
+			kind = .Double;
+		else if (fieldType.IsEnum && storage.IsInteger && fieldType.Size <= 8)
+			kind = .Enum;
+		else if (storage.IsInteger)
+			kind = .Int;
+		else if (storage == typeof(char8) || storage == typeof(char16) || storage == typeof(char32))
+			kind = .Char;
+		else if (fieldType == typeof(Vector4))
+			kind = .Vector4;
+		else if (fieldType == typeof(Int3))
+			kind = .Int3;
+		else if (fieldType == typeof(Matrix4))
+			kind = .Matrix4;
+		else if (fieldType == typeof(bool))
+			kind = .Bool;
+		else if (fieldType == typeof(Vector2))
+			kind = .Vector2;
+		else if (fieldType == typeof(Vector3))
+			kind = .Vector3;
+		else if (fieldType == typeof(Quaternion))
+			kind = .Quaternion;
+		else if (fieldType == typeof(Color))
+			kind = .Color;
+		else if (fieldType == typeof(String))
+			kind = .String;
+		else if (fieldType == typeof(GameObject) || fieldType == typeof(Transform) || fieldType == typeof(Component) || fieldType.IsSubtypeOf(typeof(Component)))
+			kind = .ObjectReference;
+		else
+			return false;
+		return true;
+	}
+
 	static void BuildLayout(Type targetType, Type stopAt, bool forReload, List<FieldRef> fields)
 	{
 		List<TypeInstance> chain = scope .();
@@ -244,37 +296,14 @@ static class ComponentRegistry
 
 				FieldRef fieldRef = default;
 				let fieldType = field.FieldType;
-				let storage = FieldNumbers.Storage(fieldType);
-				if (storage == typeof(float))
-					fieldRef.kind = .Float;
-				else if (storage == typeof(double))
-					fieldRef.kind = .Double;
-				else if (fieldType.IsEnum && storage.IsInteger && fieldType.Size <= 8)
-					fieldRef.kind = .Enum;
-				else if (storage.IsInteger)
-					fieldRef.kind = .Int;
-				else if (storage == typeof(char8) || storage == typeof(char16) || storage == typeof(char32))
-					fieldRef.kind = .Char;
-				else if (fieldType == typeof(Vector4))
-					fieldRef.kind = .Vector4;
-				else if (fieldType == typeof(Int3))
-					fieldRef.kind = .Int3;
-				else if (fieldType == typeof(Matrix4))
-					fieldRef.kind = .Matrix4;
-				else if (fieldType == typeof(bool))
-					fieldRef.kind = .Bool;
-				else if (fieldType == typeof(Vector2))
-					fieldRef.kind = .Vector2;
-				else if (fieldType == typeof(Vector3))
-					fieldRef.kind = .Vector3;
-				else if (fieldType == typeof(Quaternion))
-					fieldRef.kind = .Quaternion;
-				else if (fieldType == typeof(Color))
-					fieldRef.kind = .Color;
-				else if (fieldType == typeof(String))
-					fieldRef.kind = .String;
-				else if (fieldType == typeof(GameObject) || fieldType == typeof(Transform) || fieldType == typeof(Component) || fieldType.IsSubtypeOf(typeof(Component)))
-					fieldRef.kind = .ObjectReference;
+				if (Classify(fieldType, out fieldRef.kind))
+				{
+				}
+				else if (FieldLists.ElementOf(fieldType) case .Ok(let element) && Classify(element, out fieldRef.elementKind))
+				{
+					fieldRef.kind = fieldType.IsArray || fieldType.IsSizedArray ? .Array : .List;
+					fieldRef.elementType = element;
+				}
 				else continue;
 
 				fieldRef.name = field.Name;
@@ -283,6 +312,7 @@ static class ComponentRegistry
 				fieldRef.hidden = field.GetCustomAttribute<HideInInspectorAttribute>() case .Ok;
 				fieldRef.sync = field.GetCustomAttribute<SyncAttribute>() case .Ok;
 				fieldRef.isLayer = field.GetCustomAttribute<LayerAttribute>() case .Ok;
+				fieldRef.saved = field.GetCustomAttribute<SavedAttribute>() case .Ok;
 				if (field.GetCustomAttribute<RangeAttribute>() case .Ok(let range))
 				{
 					fieldRef.hasRange = true;

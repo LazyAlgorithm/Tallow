@@ -62,7 +62,7 @@ extension EditorApp
 		{
 			for (let field in fields)
 			{
-				if (!field.hidden && field.kind != .ObjectReference)
+				if (!field.hidden && !field.HoldsReferences)
 					changed |= DrawField(field);
 			}
 			ImGui.EndTable();

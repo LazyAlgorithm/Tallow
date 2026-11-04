@@ -25,11 +25,18 @@ class TrailRenderer : Component
 	public bool emitting = true;
 	/// View: turned to face the camera. Transform Z: flat, facing along this object's forward axis.
 	public LineAlignment alignment = .View;
-	/// Stretch: a texture once along the whole trail. Tile: again every metre.
+	/// Stretch: a texture once along the whole trail. Tile: again every Tile Length.
 	public LineTextureMode textureMode = .Stretch;
+	/// With Tile: how long one repeat of the texture is, in metres.
+	public float tileLength = 1;
+	/// Draws it in dashes this long, in metres, with Gap Length between: 0 for a solid line. Dashes as long as the
+	/// width make square dots.
+	public float dashLength = 0;
+	public float gapLength = 0.1f;
 	/// A material (.tmat) to draw it with, for a see-through or additive one; empty draws it in its colours.
 	public String material = new .() ~ delete _;
-	/// A texture laid along it (Texture Mode), when there is no material.
+	/// A texture laid along it (Texture Mode): across the image is across the line. Its alpha makes the line
+	/// see-through, so a texture with clear parts draws only its solid ones.
 	public String texture = new .() ~ delete _;
 	/// Whether it is drawn in its own colours, unlit by the scene's lights.
 	public bool unlit = true;
@@ -145,7 +152,7 @@ class TrailRenderer : Component
 				mPoints.Add(.() { position = position, width = Math.Max(Mathf.Lerp(startWidth, endWidth, t), 0), color = Color.Lerp(startColor, endColor, t) });
 			}
 		}
-		mRibbon.Build(Transform, mPoints, alignment, textureMode, false);
+		mRibbon.Build(Transform, mPoints, .() { alignment = alignment, textureMode = textureMode, loop = false, dash = dashLength, gap = gapLength, tileLength = tileLength, textured = !texture.IsEmpty });
 	}
 
 	public override void OnDrawGizmos(bool selected)

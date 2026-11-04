@@ -405,6 +405,9 @@ class Scene
 		for (let slot in mReferenceSlots)
 			*slot.field = null;
 		mReferenceSlots.Clear();
+		for (let entry in mReferenceLists)
+			FieldLists.ClearReferences(entry.field, scope (value) => true);
+		mReferenceLists.Clear();
 		while (mRoots.Count > 0)
 			DestroyTogether(scope List<GameObject>()..AddRange(mRoots));
 		mDestroyQueue.Clear();
@@ -492,6 +495,9 @@ class Scene
 	/// Every reference field of every registered component, kept up to date as components come and go, so that
 	/// destroying an object does not have to look through every component's fields to find what points at it.
 	List<ReferenceSlot> mReferenceSlots = new .() ~ delete _;
+	/// List and array fields of references (their elements move when they are resized, so they are looked through
+	/// whole when an object goes).
+	List<(Component owner, FieldRef field)> mReferenceLists = new .() ~ delete _;
 
 	void AddReferenceSlots(Component component)
 	{
@@ -499,6 +505,8 @@ class Scene
 		ComponentRegistry.GetFields(component, fields);
 		for (let field in fields)
 		{
+			if ((field.kind == .List || field.kind == .Array) && field.elementKind == .ObjectReference)
+				mReferenceLists.Add((component, field));
 			if (field.kind != .ObjectReference)
 				continue;
 			ReferenceSlot slot;
@@ -514,6 +522,11 @@ class Scene
 		{
 			if (mReferenceSlots[i].owner == component)
 				mReferenceSlots.RemoveAtFast(i);
+		}
+		for (int i = mReferenceLists.Count - 1; i >= 0; i--)
+		{
+			if (mReferenceLists[i].owner == component)
+				mReferenceLists.RemoveAtFast(i);
 		}
 	}
 
@@ -778,6 +791,20 @@ class Scene
 			if (target != null && target.[Friend]mGoing)
 				*slot.field = null;
 		}
+		for (int i = mReferenceLists.Count - 1; i >= 0; i--)
+		{
+			let entry = mReferenceLists[i];
+			if (!entry.owner.[Friend]mRegistered)
+			{
+				mReferenceLists.RemoveAtFast(i);
+				continue;
+			}
+			FieldLists.ClearReferences(entry.field, scope (value) =>
+				{
+					let target = OwnerOf(value);
+					return target != null && target.[Friend]mGoing;
+				});
+		}
 	}
 
 	void DestroyTree(GameObject gameObject)
@@ -791,6 +818,8 @@ class Scene
 				if (OwnerOf(*slot.field) == gameObject)
 					*slot.field = null;
 			}
+			for (let entry in mReferenceLists)
+				FieldLists.ClearReferences(entry.field, scope (value) => OwnerOf(value) == gameObject);
 		}
 		gameObject.[Friend]mGoing = false;
 		let transform = gameObject.Transform;

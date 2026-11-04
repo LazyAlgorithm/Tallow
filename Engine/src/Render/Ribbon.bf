@@ -4,6 +4,7 @@ using System.Collections;
 namespace Tallow;
 
 /// Which way a line's or trail's ribbon faces.
+[Reflect(.All)]
 enum LineAlignment : int32
 {
 	/// Turned round its own length to face the viewer, so it always looks its full width.
@@ -13,6 +14,7 @@ enum LineAlignment : int32
 }
 
 /// How a texture is laid along a line or trail.
+[Reflect(.All)]
 enum LineTextureMode : int32
 {
 	/// Once along its whole length.
@@ -103,67 +105,70 @@ class Ribbon
 		mRenderer = null;
 	}
 
-	/// Rebuilds the strip along points (in the world), each its width across, in the object's space.
-	public void Build(Transform owner, List<RibbonPoint> points, LineAlignment alignment, LineTextureMode textureMode, bool loop)
+	List<RibbonPoint> mPath = new .() ~ delete _;
+	List<float> mAlong = new .() ~ delete _;
+	List<RibbonPoint> mRun = new .() ~ delete _;
+	List<float> mRunAlong = new .() ~ delete _;
+
+	/// Rebuilds the strip along points (in the world), each its width across, in the hidden object's space: solid, or
+	/// in dashes Style.dash long with Style.gap between.
+	public void Build(Transform owner, List<RibbonPoint> points, RibbonStyle style)
 	{
 		if (mMesh == null || Renderer == null)
 			return;
 		let transform = mHolder.Transform;
-		var count = points.Count;
-		let drawn = count >= 2 ? (loop && count >= 3 ? count + 1 : count) : 0;
-		var capacity = Math.Max(mCapacity, 2);
-		while (capacity < drawn)
-			capacity *= 2;
 		let toLocal = transform.WorldToLocal;
 		let viewer = Camera.ViewerPosition;
 		let facing = owner.Forward;
-		var transparent = false;
+		var transparent = style.textured;
 
-		// Distance along the strip, for the texture.
-		float total = 0;
-		for (int i = 1; i < drawn; i++)
-			total += (points[i % count].position - points[i - 1].position).Length;
-
-		mMesh.Vertices.Clear();
-		float along = 0;
-		var side = Vector3(1, 0, 0);
-		for (int i < drawn)
+		// The path, closed round for a loop, and how far along it each point is.
+		mPath.Clear();
+		mAlong.Clear();
+		if (points.Count >= 2)
 		{
-			let point = points[i % count];
+			mPath.AddRange(points);
+			if (style.loop && points.Count >= 3)
+				mPath.Add(points[0]);
+		}
+		float total = 0;
+		for (int i < mPath.Count)
+		{
 			if (i > 0)
-				along += (point.position - points[i - 1].position).Length;
-			// The direction along the strip here: between the points either side (round the join of a loop).
-			Vector3 previous, next;
-			if (loop && drawn > count)
-			{
-				previous = points[(i - 1 + count) % count].position;
-				next = points[(i + 1) % count].position;
-			}
-			else
-			{
-				previous = points[Math.Max(i - 1, 0)].position;
-				next = points[Math.Min(i + 1, count - 1)].position;
-			}
-			var tangent = next - previous;
-			if (tangent.LengthSquared < 1.0e-12f)
-				tangent = Vector3(0, 0, 1);
-			tangent = tangent.Normalized;
-			let normal = alignment == .View ? (viewer - point.position) : facing;
-			var across = Vector3.Cross(tangent, normal);
-			// Keeps the last good side where the strip points straight at the viewer.
-			if (across.LengthSquared > 1.0e-10f)
-				side = across.Normalized;
-			let half = side * (point.width * 0.5f);
-			let u = textureMode == .Tile ? along : (total > 0 ? along / total : 0);
-			let localNormal = toLocal.TransformDirection(normal.LengthSquared > 1.0e-12f ? normal.Normalized : Vector3.Up);
-			mMesh.AddVertex(toLocal.TransformPoint(point.position - half), localNormal, point.color, .(u, 0));
-			mMesh.AddVertex(toLocal.TransformPoint(point.position + half), localNormal, point.color, .(u, 1));
-			if (point.color.a < 0.999f)
+				total += (mPath[i].position - mPath[i - 1].position).Length;
+			mAlong.Add(total);
+			if (mPath[i].color.a < 0.999f)
 				transparent = true;
 		}
-		// Spare vertices on the last point (or the object, with nothing drawn) make triangles with no area.
-		let rest = drawn > 0 ? mMesh.Vertices.Back : MeshVertex(.Zero, .Up, 0, .Zero);
-		while (mMesh.Vertices.Count < capacity * 2)
+		let closed = style.loop && points.Count >= 3;
+
+		mMesh.Vertices.Clear();
+		if (mPath.Count >= 2 && total > 0)
+		{
+			let dashed = style.dash > 0 && style.gap > 0;
+			if (!dashed)
+				AddRun(0, total, total, closed, toLocal, viewer, facing, style);
+			else
+			{
+				let period = style.dash + style.gap;
+				// At most this many dashes, so a tiny dash on a long line cannot make millions of quads.
+				let most = 20000;
+				var made = 0;
+				for (var from = 0.0f; from < total && made < most; from += period)
+				{
+					AddRun(from, Math.Min(from + style.dash, total), total, false, toLocal, viewer, facing, style);
+					made++;
+				}
+			}
+		}
+
+		// Spare quads sit on one point, drawing nothing; the buffers only grow.
+		let quads = mMesh.Vertices.Count / 4;
+		var capacity = Math.Max(mCapacity, 4);
+		while (capacity < quads)
+			capacity *= 2;
+		let rest = mMesh.Vertices.Count > 0 ? mMesh.Vertices.Back : MeshVertex(.Zero, .Up, 0, .Zero);
+		while (mMesh.Vertices.Count < capacity * 4)
 			mMesh.Vertices.Add(rest);
 
 		mRenderer.vertexAlpha = transparent;
@@ -171,9 +176,9 @@ class Ribbon
 		{
 			mCapacity = capacity;
 			mMesh.Indices.Clear();
-			for (int i < capacity - 1)
+			for (int i < capacity)
 			{
-				let a = (uint32)(i * 2);
+				let a = (uint32)(i * 4);
 				mMesh.AddTriangle(a, a + 2, a + 1);
 				mMesh.AddTriangle(a + 1, a + 2, a + 3);
 			}
@@ -185,4 +190,102 @@ class Ribbon
 			mMesh.UpdateDynamic();
 		}
 	}
+
+	/// The path's point `distance` along it, its width and colour blended between the points either side.
+	RibbonPoint PointAt(float distance)
+	{
+		var i = 1;
+		while (i < mAlong.Count - 1 && mAlong[i] < distance)
+			i++;
+		let a = mPath[i - 1];
+		let b = mPath[i];
+		let span = mAlong[i] - mAlong[i - 1];
+		let t = span > 0 ? Math.Clamp((distance - mAlong[i - 1]) / span, 0, 1) : 0;
+		return .() { position = Vector3.Lerp(a.position, b.position, t), width = Mathf.Lerp(a.width, b.width, t), color = Color.Lerp(a.color, b.color, t) };
+	}
+
+	/// Quads along the path from `from` to `to` (in metres along it): one between each two points on the way.
+	void AddRun(float from, float to, float total, bool closed, Matrix4 toLocal, Vector3 viewer, Vector3 facing, RibbonStyle style)
+	{
+		if (to - from <= 1.0e-5f)
+			return;
+		mRun.Clear();
+		mRunAlong.Clear();
+		mRun.Add(PointAt(from));
+		mRunAlong.Add(from);
+		for (int i < mPath.Count)
+		{
+			if (mAlong[i] > from + 1.0e-5f && mAlong[i] < to - 1.0e-5f)
+			{
+				mRun.Add(mPath[i]);
+				mRunAlong.Add(mAlong[i]);
+			}
+		}
+		mRun.Add(PointAt(to));
+		mRunAlong.Add(to);
+
+		let count = mRun.Count;
+		var side = Vector3(1, 0, 0);
+		Vector3 lastLeft = default, lastRight = default, lastNormal = default;
+		Color lastColor = default;
+		float lastU = 0;
+		for (int i < count)
+		{
+			let point = mRun[i];
+			// The direction along the strip here: between the points either side (round the join of a closed loop).
+			Vector3 previous, next;
+			if (closed && (i == 0 || i == count - 1))
+			{
+				previous = mRun[count - 2].position;
+				next = mRun[1].position;
+			}
+			else
+			{
+				previous = mRun[Math.Max(i - 1, 0)].position;
+				next = mRun[Math.Min(i + 1, count - 1)].position;
+			}
+			var tangent = next - previous;
+			if (tangent.LengthSquared < 1.0e-12f)
+				tangent = Vector3(0, 0, 1);
+			tangent = tangent.Normalized;
+			let normal = style.alignment == .View ? (viewer - point.position) : facing;
+			let across = Vector3.Cross(tangent, normal);
+			// Keeps the last good side where the strip points straight at the viewer.
+			if (across.LengthSquared > 1.0e-10f)
+				side = across.Normalized;
+			let half = side * (point.width * 0.5f);
+			let along = mRunAlong[i];
+			let u = style.textureMode == .Tile ? along / Math.Max(style.tileLength, 0.0001f) : along / total;
+			let localNormal = toLocal.TransformDirection(normal.LengthSquared > 1.0e-12f ? normal.Normalized : Vector3.Up);
+			let left = toLocal.TransformPoint(point.position - half);
+			let right = toLocal.TransformPoint(point.position + half);
+			if (i > 0)
+			{
+				mMesh.AddVertex(lastLeft, lastNormal, lastColor, .(lastU, 0));
+				mMesh.AddVertex(lastRight, lastNormal, lastColor, .(lastU, 1));
+				mMesh.AddVertex(left, localNormal, point.color, .(u, 0));
+				mMesh.AddVertex(right, localNormal, point.color, .(u, 1));
+			}
+			lastLeft = left;
+			lastRight = right;
+			lastNormal = localNormal;
+			lastColor = point.color;
+			lastU = u;
+		}
+	}
+}
+
+/// How a strip is laid out, from its component's fields.
+struct RibbonStyle
+{
+	public LineAlignment alignment;
+	public LineTextureMode textureMode;
+	public bool loop;
+	/// Dash and gap lengths in metres; solid when either is 0.
+	public float dash;
+	public float gap;
+	/// How long one repeat of the texture is, with Tile.
+	public float tileLength;
+	/// Whether it has a texture, whose alpha then makes it see-through where the texture is.
+	public bool textured;
 }

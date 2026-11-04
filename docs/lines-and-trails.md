@@ -18,13 +18,16 @@ Each draws through a hidden child object that holds its mesh. That object isn't 
 | Start Width, End Width | Width at the first and last point, in metres. |
 | Start Color, End Color | Colour at the first and last point, blended between. An alpha below 1 makes the line see-through. |
 | Alignment | View or Transform Z (see above). |
-| Texture Mode | Stretch: the texture runs once along the whole line. Tile: it repeats every metre, so dashes keep their size as the line grows. |
+| Texture Mode | Stretch: the texture runs once along the whole line. Tile: it repeats every Tile Length, so it keeps its size as the line grows. |
+| Tile Length | With Tile, how long one repeat of the texture is, in metres. |
+| Dash Length, Gap Length | Draws the line in dashes this long with gaps this long between, in metres. Dash Length 0 is a solid line. A dash as long as the width makes square dots. |
 | Material, Texture | What to draw it with. With neither, it draws in its colours. |
 | Unlit, Cast Shadows | Lines are unlit and cast no shadows by default. |
 | Glow | Makes it glow in its own colours, through bloom. |
-| Children As Points | Draws the line through the object's children, in order, instead of the points a script set. This is how to lay one out in the editor. |
+| Positions | The points, as a list: set its size, then each point's X, Y and Z. Saved with the scene. |
+| Children As Points | Draws the line through the object's children, in order, instead of Positions, so you can drag the points in the Scene view. |
 
-Scripts set the points. These are not saved with the scene.
+Scripts can set the points too (`positions` is a `List<Vector3>`, so anything a list does works on it as well):
 
 ```beef
 let line = GetComponent<LineRenderer>();
@@ -46,7 +49,21 @@ aim.startColor = .(1, 1, 1);
 aim.endColor = Color.Lerp(.(1, 1, 1, 0), .(1, 0.2f, 0.1f, 0), power);
 ```
 
-For a dotted line, give it a dash texture and Texture Mode Tile.
+## Textures
+
+The texture is laid along the line: the image's width runs along the line and its height across it. With Stretch, the image is stretched once over the whole line. With Tile, it repeats every Tile Length metres, so arrows or chevrons keep their size however long the line gets. The texture's alpha makes the line see-through where the image is clear, so an image of one arrow on a clear background gives a row of arrows. Start Color and End Color tint the texture.
+
+## Dotted and dashed lines
+
+Set Dash Length and Gap Length, with no texture needed. For dots, make the dash as long as the line is wide:
+
+```beef
+aim.startWidth = aim.endWidth = 0.08f;
+aim.dashLength = 0.08f;   // square dots
+aim.gapLength = 0.12f;
+```
+
+Dashes follow the line's corners and blend its widths and colours like a solid line.
 
 ## Trail Renderer
 
@@ -58,7 +75,7 @@ For a dotted line, give it a dash texture and Texture Mode Tile.
 | Start Color, End Color | Colour at the object and at the tail. The default fades to fully see-through. |
 | Emitting | Off: no new points are added and the trail fades away. It starts again when turned back on. |
 | Show In Editor | Also draws in the editor while not playing. |
-| Alignment, Texture Mode, Material, Texture, Unlit, Cast Shadows, Glow | As for Line Renderer. |
+| Alignment, Texture Mode, Tile Length, Dash Length, Gap Length, Material, Texture, Unlit, Cast Shadows, Glow | As for Line Renderer. |
 
 Call `Clear()` after a teleport or respawn so the trail doesn't streak across the level. `PositionCount` and `GetPosition(i)` (oldest first) read the trail's current points.
 
