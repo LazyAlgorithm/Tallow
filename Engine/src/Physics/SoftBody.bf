@@ -63,6 +63,8 @@ class SoftBody : Component
 	[Range(0, 20)]
 	public float wobbleDamping = 3;
 	public float friction = 0.4f;
+	/// How much it bounces when it lands, on top of springing back from its squash: 0 not at all, 1 back up as fast
+	/// as it came down (a jelly or ball: its whole body; cloth: where it touches).
 	[Range(0, 1)]
 	public float bounciness = 0;
 	public float gravityScale = 1;
@@ -112,6 +114,7 @@ class SoftBody : Component
 	[CLink] static extern void tn_soft_shift(void* world, uint32 bodyId, float* offset);
 	[CLink] static extern void tn_soft_set_pressure(void* world, uint32 bodyId, float pressure);
 	[CLink] static extern void tn_soft_damp_wobble(void* world, uint32 bodyId, float rate, float step);
+	[CLink] static extern void tn_soft_bounce(void* world, uint32 bodyId, float bounciness, float* state);
 	[CLink] static extern void tn_soft_proxies(void* world, uint32* bodies, int32* closed, float* reach, uint32 count);
 
 	/// native/tallow_softbody.cpp's Config, in the same order.
@@ -144,6 +147,8 @@ class SoftBody : Component
 	// A jelly's air (Jolt's pressure: pressure times volume), let in over its first moments: all at once, it
 	// tangles the small faces round a sphere's poles.
 	float mAir;
+	/// tn_soft_bounce's memory of the current landing.
+	float[10] mBounce;
 	float mAge;
 	// A shell's own Rigidbody, which its vertices do not collide with (uint32.MaxValue until it is found).
 	uint32 mIgnored = uint32.MaxValue;
@@ -295,7 +300,8 @@ class SoftBody : Component
 		config.pressure = 0;
 		config.damping = damping;
 		config.friction = friction;
-		config.restitution = bounciness;
+		// A jelly bounces as a whole (tn_soft_bounce); Jolt's own, vertex by vertex, is for cloth.
+		config.restitution = kind == .Jelly ? 0 : bounciness;
 		// A shell is carried by its object, which has the weight.
 		config.gravityFactor = shell ? 0 : gravityScale;
 		config.vertexRadius = Math.Max(thickness, 0);
@@ -443,7 +449,11 @@ class SoftBody : Component
 		let system = mWorld.[Friend]mSystem;
 		FollowMovedObject();
 		if (kind == .Jelly)
+		{
 			tn_soft_damp_wobble(system, mBody, wobbleDamping, step);
+			if (bounciness > 0)
+				tn_soft_bounce(system, mBody, bounciness, &mBounce);
+		}
 		if (mAir > 0 && mAge < AirTime)
 		{
 			mAge += step;

@@ -196,14 +196,19 @@ public:
 		const auto& vertices = manifold.GetVertices();
 		if (shell != shells.end())
 			shell->second.touched.resize(vertices.size());
+		JPH::Vec3 pushed = JPH::Vec3::sZero();
 		for (size_t i = 0; i < vertices.size(); i++)
 		{
 			if (!manifold.HasContact(vertices[i]))
 				continue;
 			touched.insert(manifold.GetContactBodyID(vertices[i]).GetIndexAndSequenceNumber());
+			pushed += vertices[i].mCollisionPlane.GetNormal();
 			if (shell != shells.end())
 				shell->second.touched[i] = 1;
 		}
+		// Which way what it touched pushed it, summed until tn_soft_bounce reads it (the step clears the vertices').
+		if (pushed.LengthSq() > 1.0e-12f)
+			contactNormals[id] += soft.GetRotation() * pushed;
 		// A rope keeps which way each of its points was pushed off what it touched (zero where it touched nothing),
 		// as the step clears it: tn_rope_wraps reads it.
 		auto rope = ropes.find(id);
@@ -264,6 +269,8 @@ public:
 	std::unordered_map<uint32_t, Shell> shells;
 	// Each rope's points' contact normals in the last step (relative to the body), for tn_rope_wraps.
 	std::unordered_map<uint32_t, std::vector<JPH::Vec3>> ropes;
+	// Each soft body's summed contact normals since tn_soft_bounce last read them.
+	std::unordered_map<uint32_t, JPH::Vec3> contactNormals;
 	// Each soft body's proxy, while it has one.
 	std::unordered_map<uint32_t, uint32_t> proxies;
 };
@@ -749,6 +756,7 @@ TN_API void tn_soft_forget(JPH_PhysicsSystem* world, uint32_t bodyId)
 	}
 	touches.ropes.erase(bodyId);
 	touches.bodies.erase(bodyId);
+	touches.contactNormals.erase(bodyId);
 }
 
 namespace
@@ -1044,6 +1052,112 @@ TN_API void tn_soft_damp_wobble(JPH_PhysicsSystem* world, uint32_t bodyId, float
 		if (vertex.mInvMass > 0)
 			vertex.mVelocity = whole + (vertex.mVelocity - whole) * keep;
 	}
+}
+
+/// Bounciness for a closed soft body as a whole. Jolt's restitution only turns round the few vertices touching
+/// what the body lands on, and the rest of the body, still falling, pulls them back, so a jelly hardly bounces
+/// whatever it is set to. This watches the body's own velocity instead: the speed it hits something at, and then,
+/// once it has stopped squashing in and its own springing back is at its height (or it has left the ground), adds
+/// `bounciness` of the speed it lost: 0 leaves it as its squash sprang it back, 1 sends it away as fast as it came.
+/// Called before each step; `state` (10 floats, zero at first) is kept by the caller between steps.
+TN_API void tn_soft_bounce(JPH_PhysicsSystem* world, uint32_t bodyId, float bounciness, float* state)
+{
+	// state: 0 speed hit at, 1 armed (in a landing, not yet bounced), 2 steps without contact, 3-5 last velocity
+	// without contact, 6 last speed away from the ground, 7-9 the ground's normal.
+	// What it touched in the last step, as the contact listener saw it.
+	JPH::Vec3 normal = JPH::Vec3::sZero();
+	{
+		auto& touches = TouchesOf(world);
+		std::lock_guard<std::mutex> guard(touches.mutex);
+		auto found = touches.contactNormals.find(bodyId);
+		if (found != touches.contactNormals.end())
+		{
+			normal = found->second;
+			touches.contactNormals.erase(found);
+		}
+	}
+	JPH::BodyLockWrite lock(Locks(world), JPH::BodyID(bodyId));
+	if (!lock.Succeeded() || !lock.GetBody().IsActive())
+		return;
+	auto* soft = Soft(lock.GetBody());
+	if (!soft)
+		return;
+	auto& vertices = soft->GetVertices();
+	JPH::Vec3 momentum = JPH::Vec3::sZero();
+	float mass = 0;
+	for (const auto& vertex : vertices)
+	{
+		if (vertex.mInvMass <= 0)
+			continue;
+		momentum += vertex.mVelocity / vertex.mInvMass;
+		mass += 1.0f / vertex.mInvMass;
+	}
+	if (mass <= 0)
+		return;
+	const JPH::Vec3 whole = momentum / mass;
+	const float minimum = 0.5f;
+	if (normal.LengthSq() < 1.0e-12f)
+	{
+		// Left the ground while still armed: its springing back is all it had, so it is topped up now.
+		if (state[1] > 0.5f)
+		{
+			const JPH::Vec3 n(state[7], state[8], state[9]);
+			const float away = whole.Dot(n);
+			const float target = away + bounciness * std::max(state[0] - away, 0.0f);
+			if (away < target)
+			{
+				const JPH::Vec3 add = n * (target - away);
+				for (auto& vertex : vertices)
+					if (vertex.mInvMass > 0)
+						vertex.mVelocity += add;
+			}
+			state[1] = 0;
+		}
+		state[2] += 1;
+		state[3] = whole.GetX();
+		state[4] = whole.GetY();
+		state[5] = whole.GetZ();
+		return;
+	}
+	normal = normal.Normalized();
+	if (state[1] < 0.5f)
+	{
+		// A new landing after a step or more in the air: how fast it came in.
+		if (state[2] >= 1)
+		{
+			const JPH::Vec3 before(state[3], state[4], state[5]);
+			const float speed = -before.Dot(normal);
+			if (speed > minimum && bounciness > 0)
+			{
+				state[0] = speed;
+				state[1] = 1;
+				state[6] = -speed;
+				state[7] = normal.GetX();
+				state[8] = normal.GetY();
+				state[9] = normal.GetZ();
+			}
+		}
+		state[2] = 0;
+		return;
+	}
+	state[2] = 0;
+	const JPH::Vec3 n(state[7], state[8], state[9]);
+	const float away = whole.Dot(n);
+	// Still squashing in, or still springing out faster each step: wait.
+	if (away < 0 || away > state[6] + 1.0e-4f)
+	{
+		state[6] = away;
+		return;
+	}
+	const float target = away + bounciness * std::max(state[0] - away, 0.0f);
+	if (away < target)
+	{
+		const JPH::Vec3 add = n * (target - away);
+		for (auto& vertex : vertices)
+			if (vertex.mInvMass > 0)
+				vertex.mVelocity += add;
+	}
+	state[1] = 0;
 }
 
 /// A soft body's (or a rope's) box in the world, as Jolt last moved it. False when there is no such body.

@@ -23,7 +23,8 @@ Soft bodies fall, fold over and rest on colliders, and they push rigidbodies and
 | Spring Back | Shell, From Surface: how far the surface springs back from, in metres (default 0.03). Pushed in further, it stays dented. |
 | Dent Speed | Shell: how fast something must hit it to dent it, in metres a second (default 3, about 11 km/h). |
 | Dent Mode | Shell: From Impacts (its object's collider takes the hits) or From Surface (the shell is pushed in itself). See Dents. |
-| Friction, Bounciness, Gravity Scale | As on a Rigidbody. |
+| Friction, Gravity Scale | As on a Rigidbody. |
+| Bounciness | How much it bounces when it lands, on top of springing back from its squash. A jelly bounces as a whole: once it has stopped squashing in, it gets back this share of the speed it lost (0: only its own springback, 1: it leaves as fast as it arrived). Cloth bounces point by point where it touches. |
 | Thickness | How far from its surface it keeps other things, in metres. |
 | Wind Drag | How much Wind Zones push it (0 not at all; cloth and jelly, not shells). Wind blows on each face by how squarely it faces the wind, drags along faces it slides past, and is gusty from place to place across the cloth (more with the Wind Zone's Gusts), so a flag streams out and flaps. |
 | Iterations | Solver passes each step: more is stiffer and costs more. |
