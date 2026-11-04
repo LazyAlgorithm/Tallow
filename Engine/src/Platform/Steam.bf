@@ -543,12 +543,15 @@ static class Steam
 		}
 		Watchdog.Stage = "checking Steam Workshop";
 		Workshop.Update();
+		Watchdog.Stage = "checking Steam lobbies";
+		SteamLobbies.Update();
 		Watchdog.Stage = was;
 	}
 
 	public static void Shutdown()
 	{
 		Workshop.Reset();
+		SteamLobbies.Reset();
 		if (sReady)
 			ClearPresence();
 		if (sReady && sShutdown != null)
