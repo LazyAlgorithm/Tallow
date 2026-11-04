@@ -138,22 +138,46 @@ extension EditorApp
 	{
 		let parent = Selected;
 		let gameObject = mScene.CreateGameObject(name, parent != null ? parent.Transform : null);
+		// The surface it was dropped on, if any, and which way that faces.
+		var surface = Vector3.Zero;
+		var onSurface = false;
 		if (parent == null || parent.IsFolder)
 		{
 			// Drop new objects in front of the scene camera, on the surface in the middle of the view when it is near.
 			let forward = Quaternion.Euler(mCamPitch, mCamYaw, 0) * Vector3.Forward;
 			var position = mCamPosition + forward * 8.0f;
-			if (forward.y < -0.05f)
-				position = mCamPosition + forward * Math.Min(-mCamPosition.y / forward.y, 30.0f);
+			if (forward.y < -0.05f && mCamPosition.y / -forward.y <= 30.0f)
+			{
+				position = mCamPosition + forward * (-mCamPosition.y / forward.y);
+				surface = .Up;
+				onSurface = true;
+			}
+			else if (forward.y < -0.05f)
+				position = mCamPosition + forward * 30.0f;
 			Vector3 point, normal;
 			if (RaycastScene(Ray(mCamPosition, forward), out point, out normal, null, false, 30))
+			{
 				position = point;
+				surface = normal.LengthSquared > 1.0e-6f ? normal.Normalized : .Up;
+				onSurface = true;
+			}
 			gameObject.Transform.Position = position;
 		}
 		if (!mesh.IsEmpty)
 		{
 			let renderer = gameObject.AddComponent<MeshRenderer>();
 			renderer.mesh.Set(mesh);
+			// Rests on the surface instead of half inside it: something made to fall (a Rigidbody, a jelly) would be
+			// thrown out of the ground on Play.
+			if (onSurface)
+			{
+				let bounds = renderer.WorldBounds;
+				let extents = bounds.Extents;
+				let reach = Math.Abs(surface.x) * extents.x + Math.Abs(surface.y) * extents.y + Math.Abs(surface.z) * extents.z;
+				let below = Vector3.Dot(surface, gameObject.Transform.Position - bounds.Center) + reach;
+				if (below > 0)
+					gameObject.Transform.Position = gameObject.Transform.Position + surface * below;
+			}
 		}
 		mSelectedId = gameObject.Id;
 		MarkDirty();

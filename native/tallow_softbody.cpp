@@ -1057,9 +1057,10 @@ TN_API void tn_soft_damp_wobble(JPH_PhysicsSystem* world, uint32_t bodyId, float
 /// Bounciness for a closed soft body as a whole. Jolt's restitution only turns round the few vertices touching
 /// what the body lands on, and the rest of the body, still falling, pulls them back, so a jelly hardly bounces
 /// whatever it is set to. This watches the body's own velocity instead: the speed it hits something at, and then,
-/// once it has stopped squashing in and its own springing back is at its height (or it has left the ground), adds
-/// `bounciness` of the speed it lost: 0 leaves it as its squash sprang it back, 1 sends it away as fast as it came.
-/// Called before each step; `state` (10 floats, zero at first) is kept by the caller between steps.
+/// once it has stopped squashing in and its own springing back is at its height (or it has left the ground), sets its
+/// speed away from the ground to `bounciness` times the speed it hit at, whatever its squash would have given it: 0
+/// lands with a squash and a wobble but no hop, 1 leaves as fast as it came. Only the body as a whole is changed, so
+/// it keeps its wobble. Called before each step; `state` (10 floats, zero at first) is kept by the caller.
 TN_API void tn_soft_bounce(JPH_PhysicsSystem* world, uint32_t bodyId, float bounciness, float* state)
 {
 	// state: 0 speed hit at, 1 armed (in a landing, not yet bounced), 2 steps without contact, 3-5 last velocity
@@ -1103,14 +1104,11 @@ TN_API void tn_soft_bounce(JPH_PhysicsSystem* world, uint32_t bodyId, float boun
 		{
 			const JPH::Vec3 n(state[7], state[8], state[9]);
 			const float away = whole.Dot(n);
-			const float target = away + bounciness * std::max(state[0] - away, 0.0f);
-			if (away < target)
-			{
-				const JPH::Vec3 add = n * (target - away);
-				for (auto& vertex : vertices)
-					if (vertex.mInvMass > 0)
-						vertex.mVelocity += add;
-			}
+			const float target = bounciness * state[0];
+			const JPH::Vec3 add = n * (target - away);
+			for (auto& vertex : vertices)
+				if (vertex.mInvMass > 0)
+					vertex.mVelocity += add;
 			state[1] = 0;
 		}
 		state[2] += 1;
@@ -1127,7 +1125,7 @@ TN_API void tn_soft_bounce(JPH_PhysicsSystem* world, uint32_t bodyId, float boun
 		{
 			const JPH::Vec3 before(state[3], state[4], state[5]);
 			const float speed = -before.Dot(normal);
-			if (speed > minimum && bounciness > 0)
+			if (speed > minimum)
 			{
 				state[0] = speed;
 				state[1] = 1;
@@ -1149,14 +1147,11 @@ TN_API void tn_soft_bounce(JPH_PhysicsSystem* world, uint32_t bodyId, float boun
 		state[6] = away;
 		return;
 	}
-	const float target = away + bounciness * std::max(state[0] - away, 0.0f);
-	if (away < target)
-	{
-		const JPH::Vec3 add = n * (target - away);
-		for (auto& vertex : vertices)
-			if (vertex.mInvMass > 0)
-				vertex.mVelocity += add;
-	}
+	const float target = bounciness * state[0];
+	const JPH::Vec3 add = n * (target - away);
+	for (auto& vertex : vertices)
+		if (vertex.mInvMass > 0)
+			vertex.mVelocity += add;
 	state[1] = 0;
 }
 

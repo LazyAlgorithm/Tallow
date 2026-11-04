@@ -63,8 +63,8 @@ class SoftBody : Component
 	[Range(0, 20)]
 	public float wobbleDamping = 3;
 	public float friction = 0.4f;
-	/// How much it bounces when it lands, on top of springing back from its squash: 0 not at all, 1 back up as fast
-	/// as it came down (a jelly or ball: its whole body; cloth: where it touches).
+	/// How much it bounces when it lands, as on a Rigidbody: 0 lands with a squash and a wobble but no hop, 1 bounces
+	/// back up as fast as it came down (a jelly: its whole body; cloth: where it touches).
 	[Range(0, 1)]
 	public float bounciness = 0;
 	public float gravityScale = 1;
@@ -451,8 +451,7 @@ class SoftBody : Component
 		if (kind == .Jelly)
 		{
 			tn_soft_damp_wobble(system, mBody, wobbleDamping, step);
-			if (bounciness > 0)
-				tn_soft_bounce(system, mBody, bounciness, &mBounce);
+			tn_soft_bounce(system, mBody, bounciness, &mBounce);
 		}
 		if (mAir > 0 && mAge < AirTime)
 		{
