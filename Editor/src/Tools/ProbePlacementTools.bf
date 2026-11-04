@@ -69,8 +69,12 @@ extension EditorApp
 		if (mPlaceAtStart > 0 && --mPlaceAtStart == 0)
 		{
 			StartPlacement();
+			// Waited for without joining: the thread is joined below, and joining one twice can hang.
 			if (Placing)
-				mPlaceThread.Join();
+			{
+				while (!Volatile.Read(ref mPlaceFinished))
+					Thread.Sleep(5);
+			}
 		}
 		if (mPlacementPlan != null && mPlaceScene != mScene)
 			DeleteAndNullify!(mPlacementPlan);

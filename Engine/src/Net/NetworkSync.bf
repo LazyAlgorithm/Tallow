@@ -949,7 +949,7 @@ static class NetworkSync
 		let slot = list.slots[index];
 		if (slot.isString)
 		{
-			let text = *(String*)slot.ptr;
+			let text = StringFields.Writable(slot.ptr);
 			if (text != null)
 				text..Clear().Append(StringView((char8*)&data[0], length));
 		}

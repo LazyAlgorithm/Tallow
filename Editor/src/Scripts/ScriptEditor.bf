@@ -270,7 +270,13 @@ extension EditorApp
 	{
 		if (!mCheckRunning || !Interlocked.Load(ref mCheckFinished))
 			return;
-		mCheckThread?.Join();
+		// Release the thread now: joining a finished thread a second time (the next save, or quitting) waits on
+		// whatever thread the system has since given its slot to, and the editor freezes.
+		if (mCheckThread != null)
+		{
+			mCheckThread.Join();
+			DeleteAndNullify!(mCheckThread);
+		}
 		mCheckRunning = false;
 		ClearAndDeleteItems!(mProblems);
 		for (let line in mCheckLog.Split('\n'))

@@ -688,7 +688,8 @@ extension EditorApp
 		case .Color:
 			return ImGui.ColorEdit4("##v", ref *(Color*)field.ptr, ImGui.ColorFlags.Float);
 		case .String:
-			let original = *(String*)field.ptr;
+			// A field given a text literal gets its own copy before it can be typed into.
+			let original = StringFields.Writable(field.ptr, field.name);
 			let temporary = scope String();
 			let text = original != null ? original : temporary;
 			bool changed;

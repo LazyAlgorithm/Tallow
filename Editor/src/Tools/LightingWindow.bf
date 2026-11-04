@@ -83,8 +83,10 @@ extension EditorApp
 			StartBake();
 			if (Baking)
 			{
-				// At start-up the bake is waited for, so the frames after it show the result.
-				mBakeThread.Join();
+				// At start-up the bake is waited for, so the frames after it show the result. Not by joining: the
+				// thread is joined below, and joining one twice can hang.
+				while (!Volatile.Read(ref mBakeFinished))
+					Thread.Sleep(5);
 			}
 		}
 		if (!Baking)
