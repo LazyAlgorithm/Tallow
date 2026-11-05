@@ -5,7 +5,7 @@ namespace {NAMESPACE};
 
 /// Walking round the gallery: WASD, the mouse to look, Shift to hurry, Space to jump, Escape to free the mouse.
 [Component]
-class Visitor : Component
+class Visitor : Script
 {
 	public Camera view;
 	public float walkSpeed = 4.5f;
@@ -22,7 +22,7 @@ class Visitor : Component
 		Input.LockCursor = true;
 	}
 
-	public override void Update()
+	public override void Update(TickInput input, float deltaTime)
 	{
 		if (Input.GetKeyDown(.Escape))
 			Input.LockCursor = !Input.LockCursor;

@@ -747,11 +747,10 @@ class NodeGraph
 		EmitFlow(node, code, indent, 0);
 	}
 
-	/// The class the generated component is built on: Component, unless a node needs more (On Tick needs a
-	/// Network Script, which is what gives it input syncing and prediction).
+	/// The class the generated script is built on: Script, unless a node needs more.
 	public void BaseClass(String output)
 	{
-		output.Set("Component");
+		output.Set("Script");
 		for (let node in nodes)
 		{
 			if (!node.def.requiresBase.IsEmpty)
@@ -819,9 +818,6 @@ class NodeGraph
 			else
 				code.AppendF("\t{}\n\t{{\n{}{}\t}}\n\n", signature, locals, body);
 		}
-		// A Network Script must say what a tick does, even if this graph leaves it empty.
-		if (baseClass == "NetworkScript" && !methods.Contains("OnTick"))
-			code.Append("\tpublic override void OnTick(TickInput input, float deltaTime)\n\t{\n\t}\n\n");
 		// Subgraphs used here (and any they use) become private methods of this component.
 		List<String> pending = scope .();
 		List<String> done = scope .();

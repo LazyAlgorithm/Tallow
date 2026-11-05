@@ -59,7 +59,7 @@ class NavigationSurface : Component
 	/// The Navigation Link a path's leg crosses (FindPath's link id), or null.
 	public NavigationLink LinkOf(int32 id) => id >= 0 && id < mLinks.Count ? mLinks[id] : null;
 
-	public override void Update() => RefreshOverlay();
+	public override void OnLocalUpdate() => RefreshOverlay();
 
 	static void Mix(ref int64 hash, float value)
 	{

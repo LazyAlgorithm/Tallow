@@ -7,7 +7,7 @@ namespace Sandbox;
 /// Put it on the object that has the CharacterController (or Rigidbody); the Animator can be on a child (the visual model).
 /// It only looks at velocity, so it works the same for the local player and for other players.
 [Component]
-class CharacterAnimation : Component
+class CharacterAnimation : Script
 {
 	public float walkSpeed = 0.4f;
 	public float runSpeed = 4.5f;
@@ -21,7 +21,7 @@ class CharacterAnimation : Component
 		mAnimator = GameObject.GetComponentInChildren<Animator>();
 	}
 
-	public override void Update()
+	public override void Update(TickInput input, float deltaTime)
 	{
 		// Works with a CharacterController, or with a Rigidbody on characters that still use one.
 		let controller = GetComponent<CharacterController>();

@@ -48,6 +48,70 @@ class NetworkIdentity : Component
 	public PhysicsPrediction physicsPrediction = .Auto;
 
 
+	/// Whether a player controls this object: its scripts' Update gets that player's controls. Off for things the
+	/// server runs by itself (NPCs, projectiles), whose Update gets empty controls even on a host. Objects the
+	/// server spawns with NetworkManager.Adopt are switched off; player characters are on.
+	public bool playerControlled = true;
+
+	/// The controls of the last tick run, for TickInput.previous.
+	[NonSerialized]
+	public NetInput LastInput;
+
+	public override void OnRegister()
+	{
+		GameObject.[Friend]mNetworkIdentity = this;
+	}
+
+	public override void OnUnregister()
+	{
+		if (GameObject.[Friend]mNetworkIdentity == this)
+			GameObject.[Friend]mNetworkIdentity = null;
+	}
+
+	/// This machine's controls for the object: from its Network Behaviours (GatherInput), or the project's input
+	/// actions when it has none. Empty when no player controls it.
+	public NetInput GatherControls()
+	{
+		NetInput input = default;
+		if (!playerControlled)
+			return input;
+		if (!GatherFromBehaviours(ref input))
+			LocalControls.Read(ref input);
+		return input;
+	}
+
+	/// Calls GatherInput on the object's Network Behaviours; false if it has none.
+	public bool GatherFromBehaviours(ref NetInput input)
+	{
+		bool any = false;
+		for (let component in GameObject.Components)
+		{
+			if (let behaviour = component as NetworkBehaviour)
+			{
+				behaviour.GatherInput(ref input);
+				any = true;
+			}
+		}
+		return any;
+	}
+
+	/// Runs one tick of Update on every running component of this object (Component.Update).
+	public void TickUpdate(NetInput input, float deltaTime)
+	{
+		TickInput tick;
+		tick.raw = (playerControlled || ownerId != 0) ? input : default;
+		tick.previous = LastInput;
+		LastInput = tick.raw;
+		let scene = GameObject.Scene;
+		let components = GameObject.Components;
+		for (int i = 0; i < components.Count; i++)
+		{
+			let component = components[i];
+			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
+				scene.[Friend]RunUpdate(component, tick, deltaTime);
+		}
+	}
+
 	/// 0 means owned by the server; otherwise the id of the controlling client.
 	[HideInInspector]
 	public int32 ownerId = 0;
@@ -433,7 +497,7 @@ abstract class NetworkBehaviour : Component
 		}
 	}
 
-	/// Server, inside Simulate or OnTick: until EndLagCompensation, every other networked object is where this
+	/// Server, inside Simulate or Update: until EndLagCompensation, every other networked object is where this
 	/// object's player was seeing it when they gave the controls being run. Wrap the ray cast for a shot or a
 	/// swing in the pair, so that it is judged against what the player aimed at; deal the damage after ending.
 	/// Returns false and does nothing where it does not apply (no session, a client, the host's own player).

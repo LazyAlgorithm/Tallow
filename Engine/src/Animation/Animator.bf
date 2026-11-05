@@ -965,7 +965,7 @@ class Animator : Component
 		return Math.Min(time, clip.duration);
 	}
 
-	public override void Update()
+	public override void OnLocalUpdate()
 	{
 		if (mController != null && mController.UsesLayers)
 		{

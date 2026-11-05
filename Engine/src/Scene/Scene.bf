@@ -319,8 +319,11 @@ class Scene
 
 	/// Classes of the engine with no FixedUpdate, Update, LateUpdate or OnFrame, which most of a big scene is made of.
 	/// Exact classes only: a game's class derived from one may well have them.
-	static HashSet<Type> sIdleTypes = new .() { typeof(MeshRenderer), typeof(Light), typeof(Camera), typeof(Rigidbody),
-		typeof(BoxCollider), typeof(SphereCollider), typeof(CapsuleCollider), typeof(MeshCollider) } ~ delete _;
+	static HashSet<Type> sIdleTypes = new .()
+		{
+			typeof(MeshRenderer), typeof(Light), typeof(Camera), typeof(Rigidbody),
+			typeof(BoxCollider), typeof(SphereCollider), typeof(CapsuleCollider), typeof(MeshCollider)
+		} ~ delete _;
 
 	void IndexTag(GameObject gameObject, StringView tag, bool add)
 	{
@@ -1032,7 +1035,8 @@ class Scene
 	static ProfilerMarker sPostTickMarker = .("Network Post-Tick", .Networking);
 	static ProfilerMarker sPhysicsMarker = .("Physics.Step", .Physics);
 	static ProfilerMarker sFrameComponentsMarker = .("OnFrame (every component)", .Scripts);
-	static ProfilerMarker sUpdateMarker = .("Update (every component)", .Scripts);
+	static ProfilerMarker sUpdateMarker = .("Update and OnLocalUpdate (every component)", .Scripts);
+	static ProfilerMarker sTickUpdateMarker = .("Update (networked objects, offline)", .Scripts);
 	static ProfilerMarker sLateMarker = .("LateUpdate (every component)", .Scripts);
 	static ProfilerMarker sFixedMarker = .("FixedUpdate (every component)", .Scripts);
 	static ProfilerMarker sVoiceMarker = .("VoiceChat.Update", .Audio);
@@ -1053,13 +1057,48 @@ class Scene
 		switch (method)
 		{
 		case .FixedUpdate: component.FixedUpdate();
-		case .Update: component.Update();
+		case .Update: component.Update(mFrameInput, Time.DeltaTime);
 		case .LateUpdate: component.LateUpdate();
 		case .OnFrame: component.OnFrame();
+		case .OnLocalUpdate: component.OnLocalUpdate();
 		}
 		if (timed)
 			Profiler.End();
 		Watchdog.Running = null;
+	}
+
+	/// Calls Component.Update with the given controls (a network tick's, or this frame's).
+	void RunUpdate(Component component, TickInput input, float deltaTime)
+	{
+		Watchdog.Running = component;
+		let timed = ProfilerComponents.Timing;
+		if (timed)
+			Profiler.Begin(ProfilerComponents.MarkerFor(component, .Update));
+		component.Update(input, deltaTime);
+		if (timed)
+			Profiler.End();
+		Watchdog.Running = null;
+	}
+
+	/// This frame's local controls, for the Update of objects without a Network Identity.
+	TickInput mFrameInput;
+
+	/// Whether Update on this object runs per network tick (it has a Network Identity) rather than per frame.
+	[Inline]
+	static bool TicksUpdate(GameObject gameObject) => gameObject.[Friend]mNetworkIdentity != null;
+
+	/// With no session running, objects with a Network Identity run Update here, once per tick, with the local
+	/// controls (or none, for objects no player controls). In a session the network runs them (NetworkManager).
+	void TickUpdatesOffline()
+	{
+		if (Network != null && Network.Mode != .Offline)
+			return;
+		for (int i = 0; i < mRunning.Count; i++)
+		{
+			let identity = mRunning[i] as NetworkIdentity;
+			if (identity != null && identity.IsActiveAndEnabled)
+				identity.TickUpdate(identity.GatherControls(), Time.FixedDeltaTime);
+		}
 	}
 
 	/// One fixed simulation tick: gameplay FixedUpdate, then physics.
@@ -1073,6 +1112,8 @@ class Scene
 			RunPendingStarts();
 		using (sPreTickMarker.Sample())
 			Network?.PreTick();
+		using (sTickUpdateMarker.Sample())
+			TickUpdatesOffline();
 		sFixedMarker.Begin();
 		for (int i = 0; i < mRunning.Count; i++)
 		{
@@ -1133,12 +1174,20 @@ class Scene
 		{
 			using (sStartMarker.Sample())
 				RunPendingStarts();
+			mFrameInput.previous = mFrameInput.raw;
+			mFrameInput.raw = default;
+			LocalControls.Read(ref mFrameInput.raw);
 			sUpdateMarker.Begin();
 			for (int i = 0; i < mRunning.Count; i++)
 			{
 				let component = mRunning[i];
 				if (component.[Friend]mStarted && component.IsActiveAndEnabled)
-					Run(component, .Update);
+				{
+					Run(component, .OnLocalUpdate);
+					// Update runs here for objects without a Network Identity; theirs runs per tick.
+					if (!TicksUpdate(component.GameObject) && component.IsActiveAndEnabled)
+						Run(component, .Update);
+				}
 			}
 			Profiler.End();
 			// Paths the agents asked for in Update, found together on the job threads.

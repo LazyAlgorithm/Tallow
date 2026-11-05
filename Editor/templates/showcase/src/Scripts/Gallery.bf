@@ -8,7 +8,7 @@ namespace {NAMESPACE};
 /// The first run of an empty scene builds it; --author-scene then saves it as Scenes/Gallery.tscene, so all of it is
 /// ordinary objects that can be moved in the editor. What is left here is what moves while playing.
 [Component]
-class Gallery : Component
+class Gallery : Script
 {
 	public bool built;
 
@@ -114,7 +114,7 @@ class Gallery : Component
 		mVisitor.pitch = place.pitch;
 	}
 
-	public override void Update()
+	public override void Update(TickInput input, float deltaTime)
 	{
 		if (!Scene.IsPlaying || mVisitor == null)
 			return;
@@ -463,8 +463,10 @@ class Gallery : Component
 	void BuildYard()
 	{
 		for (int row < 6)
+		{
 			for (int i < 6 - row)
 				MakeCrate(.(30 + (i - (5 - row) * 0.5f) * 1.04f, 0.5f + row * 1.01f, -24));
+		}
 		for (int i < 14)
 		{
 			let o = Box(scope $"Domino {i}", .(20 + i * 0.95f, 0.8f, -12), .(0.22f, 1.6f, 0.8f), .(0.85f, 0.82f, 0.74f), 0.5f);

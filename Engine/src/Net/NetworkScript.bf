@@ -74,33 +74,71 @@ enum InputButton : int32
 	Custom1, Custom2, Custom3, Custom4, Custom5, Custom6, Custom7, Custom8
 }
 
-/// Base class for anything a player controls. Write what happens in one tick and the engine does the networking:
+/// Reads this machine's controls into a NetInput: the project's input actions (Window > Input Actions), keyboard
+/// and mouse or a controller. Used for every Update that gets local controls, and by NetworkScript.
+static class LocalControls
+{
+	/// The look direction built up from the mouse, for objects with no NetworkScript of their own.
+	public static float Yaw;
+	public static float Pitch;
+
+	public static void Read(ref NetInput input)
+	{
+		Read(ref input, ref Yaw, ref Pitch);
+	}
+
+	public static void Read(ref NetInput input, ref float yaw, ref float pitch, bool mouseLook = true, bool holdRightMouseToLook = true, float sensitivity = 0.15f)
+	{
+		if (mouseLook && (!holdRightMouseToLook || Input.GetMouseButton(1) || InputActions.FromGamepad("Look")))
+		{
+			let look = InputActions.Delta("Look");
+			yaw += look.x * sensitivity;
+			pitch = Mathf.Clamp(pitch - look.y * sensitivity, -85, 85);
+		}
+		let move = InputActions.Vector("Move");
+		input.moveX = move.x;
+		input.moveZ = move.y;
+		input.yaw = yaw;
+		input.pitch = pitch;
+		input.SetButton((int)InputButton.Jump, InputActions.Held("Jump"));
+		input.SetButton((int)InputButton.Sprint, InputActions.Held("Sprint"));
+		input.SetButton((int)InputButton.Crouch, InputActions.Held("Crouch"));
+		input.SetButton((int)InputButton.Fire, InputActions.Held("Fire"));
+		input.SetButton((int)InputButton.Use, InputActions.Held("Use"));
+		input.SetButton((int)InputButton.Reload, InputActions.Held("Reload"));
+		input.SetButton((int)InputButton.Ability1, InputActions.Held("Ability1"));
+		input.SetButton((int)InputButton.Ability2, InputActions.Held("Ability2"));
+	}
+}
+
+/// Base class for anything a player controls, with its own mouse-look settings and extra controls (ReadInput).
+/// Write what happens in one step in Update and the engine does the networking:
 ///
 ///   [Component]
 ///   class Hover : NetworkScript
 ///   {
 ///       public float speed = 5;
-///       public override void OnTick(TickInput input, float deltaTime)
+///       public override void Update(TickInput input, float deltaTime)
 ///       {
 ///           Transform.Position += input.MoveDirection * speed * deltaTime;
 ///           if (input.Pressed(.Jump)) Transform.Position += .(0, 1, 0);
 ///       }
 ///   }
 ///
-/// The engine reads the keyboard and mouse on the controlling player's machine, sends the controls to the server,
-/// runs OnTick there and on that player's own machine at once (so there is no delay in their own view), and when
-/// the two disagree puts the object back to the server's state and runs the missed ticks again. Other players see
-/// the result. With no session it simply runs every tick with the local controls.
+/// Any component's Update works this way on an object with a Network Identity (Component.Update); a Network Script
+/// makes sure the object has one. The engine reads the controls on the controlling player's machine, sends them to
+/// the server, runs Update there and on that player's own machine at once (so there is no delay in their own
+/// view), and when the two disagree puts the object back to the server's state and runs the missed ticks again.
+/// Other players see the result. With no session it simply runs every tick with the local controls.
 ///
 /// Rules that keep that working:
-/// - Take controls only from the TickInput, never from Input: OnTick also runs on the server, and is run again
+/// - Take controls only from the TickInput, never from Input: Update also runs on the server, and is run again
 ///   after a correction.
 /// - Move the object through its Transform, Rigidbody or CharacterController. Their state is what gets corrected.
 ///   Other fields are not rewound; mark ones clients need to see with [Sync] and change them on the server.
-/// - OnTick may run several times for one tick on the controlling machine. Things that must happen once, such as
-///   playing a sound or spawning something, belong in an `if (IsServer)` or `if (!IsReplaying)` block.
-///
-/// The object needs a Network Identity; one is added when a session starts if it is missing.
+/// - Update may run several times for one tick on the controlling machine. Things that must happen once, such as
+///   playing a sound or spawning something, belong in an `if (IsServer)` or `if (!IsReplaying)` block, or in
+///   OnLocalUpdate.
 [Component]
 abstract class NetworkScript : NetworkBehaviour
 {
@@ -113,7 +151,6 @@ abstract class NetworkScript : NetworkBehaviour
 
 	float mYaw;
 	float mPitch;
-	NetInput mPrevious;
 
 	/// The view direction built up from the mouse on this machine.
 	public float Yaw { get => mYaw; set => mYaw = value; }
@@ -122,55 +159,20 @@ abstract class NetworkScript : NetworkBehaviour
 	/// True while a tick is being run again after a correction from the server.
 	public bool IsReplaying => Scene.Network != null && Scene.Network.Replaying;
 
-	/// What happens in one tick.
-	public abstract void OnTick(TickInput input, float deltaTime);
-
 	/// Add the game's own controls here: input.SetButton((int)InputButton.Custom1, Input.GetKey(.G)).
 	/// Runs only on the machine of the player who controls the object.
 	protected virtual void ReadInput(ref NetInput input) { }
 
+	public override void Awake()
+	{
+		// Update runs per tick, networked, only on objects with an identity.
+		if (GetComponent<NetworkIdentity>() == null)
+			GameObject.AddComponent<NetworkIdentity>();
+	}
+
 	public override void GatherInput(ref NetInput input)
 	{
-		// From the project's input actions (Window > Input Actions): keyboard and mouse, or a controller.
-		if (mouseLook && (!holdRightMouseToLook || Input.GetMouseButton(1) || InputActions.FromGamepad("Look")))
-		{
-			let look = InputActions.Delta("Look");
-			mYaw += look.x * mouseSensitivity;
-			mPitch = Mathf.Clamp(mPitch - look.y * mouseSensitivity, -85, 85);
-		}
-		let move = InputActions.Vector("Move");
-		input.moveX = move.x;
-		input.moveZ = move.y;
-		input.yaw = mYaw;
-		input.pitch = mPitch;
-		input.SetButton((int)InputButton.Jump, InputActions.Held("Jump"));
-		input.SetButton((int)InputButton.Sprint, InputActions.Held("Sprint"));
-		input.SetButton((int)InputButton.Crouch, InputActions.Held("Crouch"));
-		input.SetButton((int)InputButton.Fire, InputActions.Held("Fire"));
-		input.SetButton((int)InputButton.Use, InputActions.Held("Use"));
-		input.SetButton((int)InputButton.Reload, InputActions.Held("Reload"));
-		input.SetButton((int)InputButton.Ability1, InputActions.Held("Ability1"));
-		input.SetButton((int)InputButton.Ability2, InputActions.Held("Ability2"));
+		LocalControls.Read(ref input, ref mYaw, ref mPitch, mouseLook, holdRightMouseToLook, mouseSensitivity);
 		ReadInput(ref input);
-	}
-
-	public override void FixedUpdate()
-	{
-		// Without a session nobody calls Simulate, so run it here with the local controls.
-		if (Scene.Network == null || Scene.Network.Mode == .Offline)
-		{
-			NetInput input = default;
-			GatherInput(ref input);
-			Simulate(input, Time.FixedDeltaTime);
-		}
-	}
-
-	public override void Simulate(NetInput input, float deltaTime)
-	{
-		TickInput tickInput;
-		tickInput.raw = input;
-		tickInput.previous = mPrevious;
-		OnTick(tickInput, deltaTime);
-		mPrevious = input;
 	}
 }

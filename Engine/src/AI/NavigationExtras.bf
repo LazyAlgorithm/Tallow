@@ -135,7 +135,7 @@ class NavigationObstacle : Component
 	/// Its footprint as a circle (for agents steering round it).
 	public float Radius => shape == .Cylinder ? size.x * 0.5f : Math.Sqrt(size.x * size.x + size.z * size.z) * 0.5f;
 
-	public override void Update()
+	public override void OnLocalUpdate()
 	{
 		let position = Transform.Position + Transform.Rotation * center;
 		let rotation = Transform.Rotation;

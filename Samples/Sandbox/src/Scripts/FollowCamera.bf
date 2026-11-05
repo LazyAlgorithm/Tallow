@@ -5,7 +5,7 @@ namespace Sandbox;
 
 /// Third-person camera for the object this client controls.
 [Component]
-class FollowCamera : Component
+class FollowCamera : Script
 {
 	public float distance = 7.0f;
 	public float height = 2.5f;

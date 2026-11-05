@@ -6,12 +6,12 @@ namespace Sandbox;
 /// Left click digs, middle click builds, aimed with the main camera. Works on voxel terrain
 /// and on destructible VoxelObjects (which break apart when cut through).
 [Component]
-class Digger : Component
+class Digger : Script
 {
 	public float radius = 3.0f;
 	public float strength = 1.5f;
 
-	public override void Update()
+	public override void Update(TickInput input, float deltaTime)
 	{
 		let dig = Input.GetMouseButton(0);
 		let build = Input.GetMouseButton(2);

@@ -47,7 +47,7 @@ class Hover : NetworkScript
     public float speed = 5;
     [Sync] public int32 score;
 
-    public override void OnTick(TickInput input, float deltaTime)
+    public override void Update(TickInput input, float deltaTime)
     {
         Transform.Position += input.MoveDirection * speed * deltaTime;
         if (input.Pressed(.Jump))
@@ -62,9 +62,11 @@ class Hover : NetworkScript
 
 Three rules keep prediction working:
 
-- Take controls only from the `TickInput`, never from `Input`. `OnTick` also runs on the server for another player's controls, and runs again after a correction.
+- Take controls only from the `TickInput`, never from `Input`. `Update` also runs on the server for another player's controls, and runs again after a correction.
 - Move the object through its Transform, Rigidbody or Character Controller. Those are what get corrected. Other fields are not rewound; mark the ones clients need with `[Sync]` and change them on the server.
-- `OnTick` can run more than once for the same tick on the player's machine. Do one-off things (sounds, spawning) inside `if (IsServer)` or `if (!IsReplaying)`.
+- `Update` can run more than once for the same tick on the player's machine. Do one-off things (sounds, spawning) inside `if (IsServer)` or `if (!IsReplaying)`.
+
+Any script's `Update(TickInput input, float deltaTime)` works this way once its object has a Network Identity; `NetworkScript` adds one for you and gives the object its own mouse-look settings and `ReadInput`. On objects without an identity, `Update` runs once a frame with the local controls instead. Objects no player controls (untick **Player Controlled** on the Network Identity; objects spawned with `Adopt` start unticked) get empty controls, so NPCs never act on the host's keys. For per-frame work that is only for this machine (effects, UI), override `OnLocalUpdate()`.
 
 With no session the same script runs every tick with the local controls. Put the script on the player prefab named in the session's **Player Prefab**; one is spawned for each player, at the scene's Spawn Points (see the spawn points page). **Team Count** on the session shares players out among teams.
 
@@ -112,7 +114,7 @@ A player aims at what they see, and what they see of everyone else is the past: 
 So when the server runs a player's tick, it knows what moment that player was looking at. Wrap the ray cast in the pair below and, for its length, every other networked object is back where that player saw it:
 
 ```beef
-public override void OnTick(TickInput input, float deltaTime)
+public override void Update(TickInput input, float deltaTime)
 {
     if (IsServer && input.Pressed(.Fire))
     {

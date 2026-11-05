@@ -590,7 +590,7 @@ class NavigationAgent : AIMovementDriver
 		Transform.Position = position;
 	}
 
-	public override void Update()
+	public override void OnLocalUpdate()
 	{
 		// In multiplayer the server moves agents; a client's copy follows what the server sends.
 		if (NetworkSync.IsClientOf(Scene)) return;

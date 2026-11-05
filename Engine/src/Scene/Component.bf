@@ -118,8 +118,18 @@ abstract class Component
 	public virtual void Start() { }
 	/// Called at the fixed tick rate (Time.FixedDeltaTime apart), with physics: the place for movement and forces.
 	public virtual void FixedUpdate() { }
-	/// Called once a frame while playing.
-	public virtual void Update() { }
+	/// The object's gameplay step. Write it once; the engine picks when it runs:
+	/// - On an object with a Network Identity: once per network tick (deltaTime is Time.FixedDeltaTime), with the
+	///   controls of the player who controls the object. It runs on the server and, predicted, on that player's
+	///   machine, and runs again after a correction (see NetworkScript for the rules that keep that working).
+	///   Objects no player controls (NetworkIdentity.playerControlled off) get empty controls.
+	/// - Everywhere else: once a frame (deltaTime is Time.DeltaTime), with this machine's controls.
+	/// Take controls from input rather than Input, and the script works the same in both.
+	public virtual void Update(TickInput input, float deltaTime) { }
+	/// Called once a frame while playing, on this machine only: never networked, never replayed. Engine components do
+	/// their per-frame work here; game scripts put gameplay in Script.Update and keep this for effects, UI and other
+	/// work that is only for the local player.
+	public virtual void OnLocalUpdate() { }
 	/// Called once a frame after every Update: the place for cameras that follow something.
 	public virtual void LateUpdate() { }
 	/// Called when the component stops running: switched off, its object switched off, or before OnDestroy.

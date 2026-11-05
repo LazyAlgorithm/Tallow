@@ -30,6 +30,8 @@ class GameObject
 
 	Scene mScene;
 	Entity mEntity;
+	/// Set by NetworkIdentity while it is registered: whether Update runs per tick (Component.Update).
+	NetworkIdentity mNetworkIdentity;
 	bool mActive = true;
 	bool mDestroyed;
 	/// Being taken out of the scene (Scene.DestroyTogether).

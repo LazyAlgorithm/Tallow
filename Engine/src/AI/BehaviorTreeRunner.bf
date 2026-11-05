@@ -279,7 +279,7 @@ class BehaviorTreeRunner : Component
 		return node;
 	}
 
-	public override void Update()
+	public override void OnLocalUpdate()
 	{
 		if (mLoaded != tree)
 			Reload();

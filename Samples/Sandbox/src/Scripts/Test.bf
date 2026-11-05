@@ -4,7 +4,7 @@ using Tallow;
 namespace Sandbox;
 
 [Component]
-class Test : Component
+class Test : Script
 {
 	public float speed = 1.0f;
 	public ParticleSystem particalSystem;
@@ -13,7 +13,7 @@ class Test : Component
 	{
 	}
 
-	public override void Update()
+	public override void Update(TickInput input, float deltaTime)
 	{
 		if (Input.GetKeyDown(.Space))
 		{

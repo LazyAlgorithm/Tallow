@@ -56,7 +56,7 @@ class SceneLoader : Component
 			mLoad.allowActivation = true;
 	}
 
-	public override void Update()
+	public override void OnLocalUpdate()
 	{
 		if (mLoad == null)
 			return;

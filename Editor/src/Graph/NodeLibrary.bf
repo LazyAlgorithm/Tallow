@@ -65,7 +65,7 @@ static class NodeLibrary
 	static void AddEventAndFlowNodes()
 	{
 		Add("event.start", "Events", "On Start", .Event, "Start");
-		Add("event.update", "Events", "On Update", .Event, "Update").Out("Delta Time", .Float);
+		TickOutputs(Add("event.update", "Events", "On Update", .Event, "Update"));
 		Add("event.fixed", "Events", "On Fixed Update", .Event, "FixedUpdate");
 		Add("event.late", "Events", "On Late Update", .Event, "LateUpdate");
 		Add("flow.branch", "Flow", "Branch", .Branch, "").In("Condition", .Bool).Out("True", .Flow).Out("False", .Flow);
@@ -80,18 +80,23 @@ static class NodeLibrary
 		Add("event.gui", "Events", "On GUI", .Event, "OnGUI");
 	}
 
-	/// Multiplayer. Everything a graph does through the engine is shared the same way it is from code; these are
-	/// for the cases code would use a Network Script or a message for.
-	static void AddNetworkNodes()
+	/// Update's signature and outputs: the delta time and the controls (Component.Update).
+	static void TickOutputs(NodeDef def)
 	{
-		let tick = Add("net.tick", "Network", "On Tick", .Event, "OnTick");
-		tick.signature.Set("public override void OnTick(TickInput input, float deltaTime)");
-		tick.requiresBase.Set("NetworkScript");
-		tick.Out("Delta Time", .Float, "float", "deltaTime").Out("Move", .Vector2, "Vector2", "input.Move").Out("Move Direction", .Vector3, "Vector3", "input.MoveDirection")
+		def.signature.Set("public override void Update(TickInput input, float deltaTime)");
+		def.Out("Delta Time", .Float, "float", "deltaTime").Out("Move", .Vector2, "Vector2", "input.Move").Out("Move Direction", .Vector3, "Vector3", "input.MoveDirection")
 			.Out("Yaw", .Float, "float", "input.Yaw").Out("Pitch", .Float, "float", "input.Pitch").Out("Look Rotation", .Quaternion, "Quaternion", "input.LookRotation")
 			.Out("Jump", .Bool, "bool", "input.Jump").Out("Jump Pressed", .Bool, "bool", "input.Pressed(.Jump)").Out("Sprint", .Bool, "bool", "input.Sprint")
 			.Out("Crouch", .Bool, "bool", "input.Crouch").Out("Fire", .Bool, "bool", "input.Fire").Out("Fire Pressed", .Bool, "bool", "input.Pressed(.Fire)")
 			.Out("Use Pressed", .Bool, "bool", "input.Pressed(.Use)");
+	}
+
+	/// Multiplayer. Everything a graph does through the engine is shared the same way it is from code; these are
+	/// for the cases code would use a Network Script or a message for.
+	static void AddNetworkNodes()
+	{
+		// Graphs saved before Update took the controls: the same event under its old name.
+		TickOutputs(Add("net.tick", "Network", "On Tick (old name of On Update)", .Event, "Update"));
 		let event = Add("net.event", "Network", "On Network Event", .Event, "OnNetworkEvent");
 		event.signature.Set("public override void OnNetworkEvent(StringView name, float value)");
 		event.guard.Set("name == {0}");
@@ -490,7 +495,7 @@ static class NodeLibrary
 		switch (name)
 		{
 		case "Awake","Start","Update","FixedUpdate","LateUpdate","OnEnable","OnDisable","OnDestroy","OnRegister","OnUnregister","OnFrame","OnGUI",
-			"OnBeforeSave","SaveFields","OnSaving","OnLoaded","OnValidate","OnDrawGizmos","Simulate","GatherInput","OnTick","ReadInput","OnNetworkEvent","ToString","GetHashCode","Dispose":
+			"OnBeforeSave","SaveFields","OnSaving","OnLoaded","OnValidate","OnDrawGizmos","Simulate","GatherInput","OnLocalUpdate","ReadInput","OnNetworkEvent","ToString","GetHashCode","Dispose":
 			return true;
 		}
 		return false;
@@ -812,7 +817,7 @@ static class NodeLibrary
 	public static bool IsReservedName(StringView name)
 	{
 		for (let reserved in StringView[?]("GameObject", "Transform", "Scene", "IsAwake", "Enabled", "IsActiveAndEnabled", "GetComponent", "Awake", "OnEnable", "Start",
-			"FixedUpdate", "Update", "LateUpdate", "OnDisable", "OnDestroy", "OnRegister", "OnUnregister", "OnFrame", "OnGUI", "OnBeforeSave", "SaveFields", "OnSaving", "OnLoaded", "OnValidate", "OnDrawGizmos",
+			"FixedUpdate", "Update", "OnLocalUpdate", "LateUpdate", "OnDisable", "OnDestroy", "OnRegister", "OnUnregister", "OnFrame", "OnGUI", "OnBeforeSave", "SaveFields", "OnSaving", "OnLoaded", "OnValidate", "OnDrawGizmos",
 			"this", "base", "float", "bool", "int", "String", "Vector3", "true", "false", "null", "var", "let", "if", "else", "for", "while", "return", "class", "public", "delete", "new", "scope"))
 		{
 			if (name == reserved)

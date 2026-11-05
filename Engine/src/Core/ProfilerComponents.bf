@@ -14,11 +14,12 @@ static class ProfilerComponents
 		Update,
 		LateUpdate,
 		OnFrame,
+		OnLocalUpdate,
 	}
 
-	static StringView[4] sMethodNames = .(".FixedUpdate()", ".Update()", ".LateUpdate()", ".OnFrame()");
+	static StringView[5] sMethodNames = .(".FixedUpdate()", ".Update()", ".LateUpdate()", ".OnFrame()", ".OnLocalUpdate()");
 	static Dictionary<Type, int32> sSlots = new .() ~ delete _;
-	static List<int32[4]> sMarkers = new .() ~ delete _;
+	static List<int32[5]> sMarkers = new .() ~ delete _;
 
 	/// Whether components are being timed one by one now.
 	public static bool Timing => Profiler.Enabled && Profiler.ComponentSamples;
@@ -34,8 +35,8 @@ static class ProfilerComponents
 				let name = scope String();
 				type.GetName(name);
 				let category = CategoryOf(type, name);
-				int32[4] markers = default;
-				for (int i < 4)
+				int32[5] markers = default;
+				for (int i < markers.Count)
 					markers[i] = Profiler.Marker(scope String()..AppendF("{}{}", name, sMethodNames[i]), category);
 				slot = (int32)sMarkers.Count;
 				sMarkers.Add(markers);

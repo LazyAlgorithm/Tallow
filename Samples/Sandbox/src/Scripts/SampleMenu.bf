@@ -7,7 +7,7 @@ namespace Sandbox;
 /// Methods named in onclick="..." / onload="..." are called by the document; fields named in
 /// bind="..." are shown (and, for inputs, edited) by it.
 [Component]
-class SampleMenu : Component
+class SampleMenu : Script
 {
 	public String playerName = new .("Player") ~ delete _;
 	[Range(0, 1)]

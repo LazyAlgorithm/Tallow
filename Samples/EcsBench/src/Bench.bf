@@ -136,7 +136,7 @@ class Bench : Component
 			RenderView.InstancedSources.Remove(mSource);
 	}
 
-	public override void Update()
+	public override void Update(TickInput input, float deltaTime)
 	{
 		let now = SDL.SDL_GetTicksNS();
 		if (mLastFrame != 0 && mFrame > WarmupFrames)

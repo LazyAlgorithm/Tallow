@@ -5,7 +5,7 @@ namespace Sandbox;
 
 /// Example component: walks its Navigation Agent to a random reachable spot, waits a moment, and picks another.
 [Component]
-class Wanderer : Component
+class Wanderer : Script
 {
 	/// How far from where it started it wanders.
 	public float range = 9;
@@ -28,7 +28,7 @@ class Wanderer : Component
 		mRandom = new Random((int32)GameObject.Id);
 	}
 
-	public override void Update()
+	public override void Update(TickInput input, float deltaTime)
 	{
 		let data = mAgent?.surface?.Data;
 		if (mAgent == null)

@@ -477,7 +477,23 @@ class Hover : Script
     100,000). Compare builds with interleaved runs, not against numbers from another session.
   - `ComponentRefStats.SlowPath` counts references that had to be refreshed. The benchmark reports it per
     frame; it stays in the hundreds against millions of accesses.
-- [ ] 3. `Component` renamed `Script` for behaviours, with the new `Update` below.
+- [x] **3. `Script` and the new `Update`.** Done as designed in "Update: one signature" above:
+  - `Script` (Engine/src/Scene/Script.bf) is the base for game scripts; templates, the generated new-project
+    scripts, the editor's New Script and script graphs use it. `Component` stays underneath until step 4 and
+    Phase 4 move engine components to data.
+  - `Update(TickInput input, float deltaTime)` replaces both the old `Update()` and `NetworkScript.OnTick`. On an
+    object with a `NetworkIdentity` it runs once per tick: in a session from the network's simulation (server,
+    the owner's prediction and replays), offline from `Scene.FixedUpdate`. Elsewhere it runs once a frame with
+    this machine's controls (`LocalControls`).
+  - `NetworkIdentity.playerControlled` (on by default, off for objects spawned with `Adopt`, set on player
+    spawns): objects no player controls get empty controls, so NPCs no longer get the host's input. A dedicated
+    server now runs its own objects (`SimulateOwned(0, default)`) instead of never ticking them.
+  - `OnLocalUpdate()` is the per-frame, never-networked call; the engine's own components that used `Update()`
+    moved to it, and the profiler times it separately.
+  - Script graphs: On Update gives the controls; old graphs' On Tick nodes compile to the same `Update`.
+  - Checked by `EcsChecks.UpdateChecks` (a plain object updates per frame, a networked one per tick with empty
+    controls when no player controls it); Sandbox runs as host in game and editor.
+  - Not yet checked: a real two-machine session and Windows/web builds.
 - [ ] 4. Scene's object and component lists replaced by queries; frame and tick order run through the world.
 
 ## Benchmark results

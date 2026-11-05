@@ -11,7 +11,7 @@ class Mover : Component
 	public Vector3 spin;
 	public float halfSize = 10;
 
-	public override void Update()
+	public override void Update(TickInput input, float deltaTime)
 	{
 		var position = Transform.LocalPosition;
 		Workload.Step(ref position, ref velocity, halfSize, Time.DeltaTime);

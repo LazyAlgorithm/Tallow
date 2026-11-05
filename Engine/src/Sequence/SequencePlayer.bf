@@ -373,7 +373,7 @@ class SequencePlayer : Component
 		}
 	}
 
-	public override void Update()
+	public override void OnLocalUpdate()
 	{
 		if (!Mine)
 		{

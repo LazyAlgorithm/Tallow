@@ -143,6 +143,7 @@ extension NetworkManager
 						behaviour.Simulate(input, Time.FixedDeltaTime);
 				}
 			}
+			identity.TickUpdate(input, Time.FixedDeltaTime);
 		}
 	}
 
@@ -157,16 +158,18 @@ extension NetworkManager
 			input.SetButton(0, mTick % 90 == 0);
 			return input;
 		}
+		bool gathered = false;
+		bool controlled = false;
 		for (let identity in mIdentities)
 		{
 			if (identity.ownerId != LocalClientId || !identity.IsActiveAndEnabled)
 				continue;
-			for (let component in identity.GameObject.Components)
-			{
-				if (let behaviour = component as NetworkBehaviour)
-					behaviour.GatherInput(ref input);
-			}
+			gathered |= identity.GatherFromBehaviours(ref input);
+			controlled |= identity.playerControlled || identity.ownerId != 0;
 		}
+		// A player object with only plain scripts reads the project's input actions.
+		if (!gathered && controlled)
+			LocalControls.Read(ref input);
 		return input;
 	}
 
@@ -184,6 +187,11 @@ extension NetworkManager
 			{
 				mHostInput = GatherLocalInput();
 				SimulateOwned(0, mHostInput);
+			}
+			else
+			{
+				// A dedicated server still runs its own objects (NPCs and the like), with empty controls.
+				SimulateOwned(0, default);
 			}
 			for (let client in mClients)
 			{

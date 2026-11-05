@@ -205,6 +205,7 @@ class NetworkManager
 		Unregister(identity);
 		identity.NetId = mNextSpawnId++;
 		identity.ownerId = 0;
+		identity.playerControlled = false;
 		identity.PrefabName.Set(prefabPath);
 		Register(identity);
 		for (let client in mClients)
@@ -724,7 +725,10 @@ class NetworkManager
 		let player = Spawn(PlayerPrefab, position, rotation, clientId);
 		let identity = player?.GetComponent<NetworkIdentity>();
 		if (identity != null)
+		{
 			identity.team = team;
+			identity.playerControlled = true;
+		}
 		return player;
 	}
 

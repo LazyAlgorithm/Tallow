@@ -7,7 +7,7 @@ namespace Sandbox;
 /// Shoots heavy balls where the screen's middle points (press F): for knocking things over and denting shells. The
 /// default ball (10 kg at 30 m/s) dents a 100 kg shell cube a good way in; lighter or slower ones barely mark it.
 [Component]
-class BallLauncher : Component
+class BallLauncher : Script
 {
 	public KeyCode fireKey = .F;
 	/// How fast a ball leaves, in metres a second.
@@ -23,7 +23,7 @@ class BallLauncher : Component
 	// The balls out, by id (one deleted by something else is simply no longer found).
 	List<uint32> mBalls = new .() ~ delete _;
 
-	public override void Update()
+	public override void Update(TickInput input, float deltaTime)
 	{
 		let identity = GetComponent<NetworkIdentity>();
 		if (identity != null && Scene.Network != null && !identity.IsOwner)

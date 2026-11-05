@@ -314,7 +314,7 @@ class DialogueRunner : Component
 		}
 	}
 
-	public override void Update()
+	public override void OnLocalUpdate()
 	{
 		if (!Mine && syncSerial != mAppliedSerial)
 			Follow();

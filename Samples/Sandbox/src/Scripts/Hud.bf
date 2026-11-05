@@ -5,7 +5,7 @@ namespace Sandbox;
 
 /// Example in-game interface drawn with the GUI class.
 [Component]
-class Hud : Component
+class Hud : Script
 {
 	bool mShowHelp = true;
 

@@ -184,11 +184,11 @@ static class ProjectGenerator
 
 			/// Example component: rotates its object. Public fields show up in the Inspector.
 			[Component]
-			class Spinner : Component
+			class Spinner : Script
 			{{
 				public Vector3 degreesPerSecond = .(0, 45, 0);
 
-				public override void Update()
+				public override void Update(TickInput input, float deltaTime)
 				{{
 					Transform.Rotate(degreesPerSecond * Time.DeltaTime);
 				}}
@@ -204,7 +204,7 @@ static class ProjectGenerator
 
 			/// Third-person camera for the object this client controls.
 			[Component]
-			class FollowCamera : Component
+			class FollowCamera : Script
 			{{
 				public float distance = 7.0f;
 				public float height = 2.5f;
@@ -238,12 +238,12 @@ static class ProjectGenerator
 			/// Left click digs, middle click builds, aimed with the main camera. Works on voxel terrain
 			/// and on destructible VoxelObjects (which break apart when cut through).
 			[Component]
-			class Digger : Component
+			class Digger : Script
 			{{
 				public float radius = 3.0f;
 				public float strength = 1.5f;
 
-				public override void Update()
+				public override void Update(TickInput input, float deltaTime)
 				{{
 					let dig = Input.GetMouseButton(0);
 					let build = Input.GetMouseButton(2);
@@ -278,7 +278,7 @@ static class ProjectGenerator
 
 			/// Example in-game interface drawn with the GUI class.
 			[Component]
-			class Hud : Component
+			class Hud : Script
 			{{
 				bool mShowHelp = true;
 
@@ -390,7 +390,7 @@ static class ProjectGenerator
 		{
 			let command = scope String();
 			command.AppendF("{} ", Terminal.Python);
-			Terminal.Quote(scope $"{engineRoot}/tools/engine_versions.py", command);
+			Terminal.Quote(scope $"{engineRoot}/tools/engine_versions.py" , command);
 			command.Append(" pin-new ");
 			Terminal.Quote(folder, command);
 			command.Append(" ");

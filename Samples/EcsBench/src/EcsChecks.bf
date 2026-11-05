@@ -10,6 +10,25 @@ struct Marked
 {
 }
 
+/// Counts the Update calls it gets, for EcsChecks.UpdateChecks.
+[Component]
+class UpdateCounter : Component
+{
+	public int frames;
+	public int ticks;
+	public bool sawControls;
+
+	public override void Update(TickInput input, float deltaTime)
+	{
+		if (deltaTime == Time.FixedDeltaTime && GameObject.GetComponent<NetworkIdentity>() != null)
+			ticks++;
+		else
+			frames++;
+		if (input.raw.moveX != 0 || input.raw.moveZ != 0 || input.raw.buttons != 0)
+			sawControls = true;
+	}
+}
+
 /// Checks of the ECS layer (World, Query, ParallelFor, deferred changes), run with TALLOW_BENCH_MODE=check.
 static class EcsChecks
 {
@@ -71,6 +90,7 @@ static class EcsChecks
 		world.Delete(entities[0]);
 		Expect(!world.IsAlive(entities[0]) && world.Count<Pose>() == 999, "Delete");
 		SceneChecks();
+		UpdateChecks();
 		return sFailures;
 	}
 
@@ -107,5 +127,28 @@ static class EcsChecks
 		scene.DestroyImmediate(parent);
 		Expect(!world.IsAlive(parentEntity) && !world.IsAlive(childEntity), "destroying objects deletes their entities");
 		Expect(world.Count<ObjectLink>() == 0, "no entities left behind");
+	}
+
+	/// Update runs per frame on plain objects and per tick on networked ones; an object no player controls gets
+	/// empty controls (Component.Update).
+	static void UpdateChecks()
+	{
+		let previous = Scene.Active;
+		let scene = scope Scene();
+		let plain = scene.CreateGameObject("Plain").AddComponent<UpdateCounter>();
+		let networkedObject = scene.CreateGameObject("Networked");
+		let identity = networkedObject.AddComponent<NetworkIdentity>();
+		identity.playerControlled = false;
+		let networked = networkedObject.AddComponent<UpdateCounter>();
+		scene.StartPlay();
+		for (int i < 3)
+			scene.Update();
+		for (int i < 2)
+			scene.FixedUpdate();
+		Expect(plain.frames == 3 && plain.ticks == 0, scope $"plain object: Update once a frame (frames {plain.frames}, ticks {plain.ticks})");
+		Expect(networked.ticks == 2 && networked.frames == 0, scope $"networked object: Update once a tick (frames {networked.frames}, ticks {networked.ticks})");
+		Expect(!networked.sawControls, "an object no player controls gets empty controls");
+		scene.StopPlay();
+		Scene.Active = previous;
 	}
 }

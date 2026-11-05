@@ -22,7 +22,7 @@ extension NetworkManager
 	// Client: the server tick everything else is being shown at this tick.
 	double mViewTick;
 
-	/// Server, while a player's tick is being run (in OnTick or Simulate): puts every other networked object back
+	/// Server, while a player's tick is being run (in Update or Simulate): puts every other networked object back
 	/// where that player's machine was showing it when they gave these controls, until EndLagCompensation. A
 	/// player aims at what they see, which is the past: the time their controls took to arrive, plus the moment's
 	/// delay everything they do not control is shown with. Do the ray cast or overlap test for a shot or a swing

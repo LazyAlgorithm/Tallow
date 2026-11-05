@@ -4,7 +4,7 @@ using Tallow;
 namespace Sandbox;
 
 [Component]
-class NewScript : Component
+class NewScript : Script
 {
 	public float speed = 1.0f;
 
@@ -12,7 +12,7 @@ class NewScript : Component
 	{
 	}
 
-	public override void Update()
+	public override void Update(TickInput input, float deltaTime)
 	{
 	}
 }

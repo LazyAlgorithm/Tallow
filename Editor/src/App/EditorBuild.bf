@@ -116,7 +116,7 @@ extension EditorApp
 			namespace {0};
 
 			[Component]
-			class {1} : Component
+			class {1} : Script
 			{{
 				public float speed = 1.0f;
 
@@ -124,7 +124,7 @@ extension EditorApp
 				{{
 				}}
 
-				public override void Update()
+				public override void Update(TickInput input, float deltaTime)
 				{{
 				}}
 			}}
