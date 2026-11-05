@@ -92,6 +92,7 @@ static class EcsChecks
 		SceneChecks();
 		UpdateChecks();
 		DataChecks();
+		PrefabChecks();
 		return sFailures;
 	}
 
@@ -212,5 +213,44 @@ static class EcsChecks
 
 		cube.RemoveComponent<Motion>();
 		Expect(!cube.HasComponent<Motion>() && cube.HasComponent<Pose>(), "RemoveComponent<T> for a data component");
+	}
+
+	/// Phase 3 exit, engine side: a prefab with data and a script survives instance, edit, save, load and play.
+	static void PrefabChecks()
+	{
+		let previous = Scene.Active;
+		let path = scope String();
+		Environment.GetEnvironmentVariable("TMPDIR", path).IgnoreError();
+		if (path.IsEmpty)
+			path.Set("/tmp");
+		path.AppendF("/ecs-check-{}.tprefab", (int)Internal.UnsafeCastToPtr(path) & 0xFFFF);
+
+		let source = scope Scene();
+		let root = source.CreateGameObject("Crate");
+		root.AddComponent<Motion>(.() { velocity = .(1, 0, 0), spin = .(0, 10, 0) });
+		root.AddComponent<UpdateCounter>();
+		source.CreateGameObject("Lid", root.Transform).AddComponent<Pose>(.() { position = .(0, 2, 0), rotation = .Identity });
+		Expect(Prefab.Save(root, path), "prefab with data components saves");
+
+		let level = scope Scene();
+		let instance = Prefab.Create(level, path);
+		Expect(instance != null && instance.GetComponent<Motion>()?.spin.y == 10, "prefab instance has the prefab's data");
+		instance?.GetComponent<Motion>().velocity = .(4, 0, 0);
+		let text = scope String();
+		SceneSerializer.Save(level, text);
+
+		let played = scope Scene();
+		SceneSerializer.Load(played, text);
+		played.StartPlay();
+		for (int i < 5)
+			played.Update();
+		let crate = played.Find("Crate");
+		let lid = played.Find("Lid");
+		Expect(crate != null && crate.GetComponent<Motion>()?.velocity.x == 4, "the instance's edit survives save, load and play");
+		Expect(lid != null && lid.GetComponent<Pose>()?.position.y == 2 && lid.Transform.Parent?.GameObject == crate, "child data and hierarchy survive");
+		Expect(crate?.GetComponent<UpdateCounter>()?.frames == 5, "the instance's script runs in play");
+		played.StopPlay();
+		Scene.Active = previous;
+		System.IO.File.Delete(path).IgnoreError();
 	}
 }

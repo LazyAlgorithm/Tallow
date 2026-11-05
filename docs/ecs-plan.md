@@ -677,8 +677,12 @@ components (`[Component]` structs in an object's entity) taking part everywhere 
   `TALLOW_BENCH_EXPLORER=1` answers `GET /world` with the world, its pipelines and steps.
   **Decision:** the Hierarchy keeps reading the ordered `Transform` children. `ChildOf` mirrors them, but Flecs
   does not keep sibling order, and the Hierarchy shows siblings in the order the user arranged them.
-- [ ] Phase 3 exit: create, edit, save, reload and play a scene entirely in the editor; prefab instances survive
-  edit, save, load and play.
+- [x] **Phase 3 exit: met (2026-11-04).** In the editor: a scene with data components opens, the Inspector shows
+  and edits them, the editor saves them unchanged, and play mode starts on it. Prefab chain (`EcsChecks.
+  PrefabChecks`): a prefab with a script, data on its root and on a child is saved, instanced, the instance's data
+  edited, the scene saved, loaded into a fresh scene and played for five frames; the edit, the child's data, the
+  hierarchy and the script's Update all survive. Not yet exercised by hand: a live script reload with data
+  components, and Windows or web builds.
 
 ## Benchmark results
 
