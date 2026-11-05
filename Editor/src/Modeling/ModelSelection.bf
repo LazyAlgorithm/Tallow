@@ -51,9 +51,9 @@ extension EditorApp
 	{
 		if (mModelHiddenObject == 0 || (mModelEditing && mModelObject == mModelHiddenObject))
 			return;
-		let model = mScene.FindById(mModelHiddenObject)?.GetComponent<ModelMesh>();
+		let model = GameObject.ComponentOn<ModelMesh>(mScene.FindById(mModelHiddenObject));
 		mModelHiddenObject = 0;
-		if (model == null)
+		if (!model.IsValid)
 			return;
 		for (let face in model.Edit.faces)
 			face.hidden = false;

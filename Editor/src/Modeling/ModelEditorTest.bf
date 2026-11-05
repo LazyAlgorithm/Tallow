@@ -58,9 +58,9 @@ extension EditorApp
 		mModelDrawHeight = 1;
 		FinishShape();
 		let block = Selected;
-		let model = block?.GetComponent<ModelMesh>();
-		Expect(model != null && model.Edit.faces.Count == 6 && block.GetComponent<MeshRenderer>().ActiveMesh?.Indices.Count == 36, "drawing a box makes a 6-faced model the renderer draws");
-		if (model == null)
+		let model = GameObject.ComponentOn<ModelMesh>(block);
+		Expect(model.IsValid && model.Edit.faces.Count == 6 && block.GetComponent<MeshRenderer>().ActiveMesh?.Indices.Count == 36, "drawing a box makes a 6-faced model the renderer draws");
+		if (!model.IsValid)
 		{
 			Log.Info(scope $"MODEL-TEST FAIL: {report}");
 			return;
@@ -178,11 +178,11 @@ extension EditorApp
 		// Undo takes the bevel off; redo puts it back. The model is rebuilt from the scene's text each way.
 		let bevelled = model.Edit.faces.Count;
 		Undo();
-		let undone = mScene.FindById(block.Id)?.GetComponent<ModelMesh>();
-		Expect(undone != null && undone.Edit.faces.Count == facesBefore && undone.DrawnMesh != null, scope $"undo takes the bevel off ({undone?.Edit.faces.Count} faces)");
+		let undone = GameObject.ComponentOn<ModelMesh>(mScene.FindById(block.Id));
+		Expect(undone.IsValid && undone.Edit.faces.Count == facesBefore && undone.DrawnMesh != null, scope $"undo takes the bevel off ({undone?.Edit.faces.Count} faces)");
 		Redo();
-		let redone = mScene.FindById(block.Id)?.GetComponent<ModelMesh>();
-		Expect(redone != null && redone.Edit.faces.Count == bevelled, "redo puts it back");
+		let redone = GameObject.ComponentOn<ModelMesh>(mScene.FindById(block.Id));
+		Expect(redone.IsValid && redone.Edit.faces.Count == bevelled, "redo puts it back");
 
 		// A doorway: a box cut out of a wall.
 		mModelEditing = false;
@@ -644,7 +644,7 @@ extension EditorApp
 		// Texture painting: a new picture, a dab on the top, written to its file.
 		mModelPaintSize = 64;
 		NewModelPaintTexture(model, model.Edit);
-		let renderer = model.GetComponent<MeshRenderer>();
+		let renderer = model.GameObject.GetComponent<MeshRenderer>();
 		let paintPath = scope String(renderer.texture);
 		let painted = ModelPaintReady(model);
 		let changed = painted ? mModelPaint.Dab(model.Edit, .(0, 2, 0), 0.4f, .(1, 0, 0, 1), 1, 1) : 0;
@@ -682,14 +682,14 @@ extension EditorApp
 		{
 			let level = LODGroup.LevelInName(child.GameObject.Name);
 			let childModel = child.GameObject.GetComponent<ModelMesh>();
-			if (level <= 0 || childModel == null)
+			if (level <= 0 || !childModel.IsValid)
 				continue;
 			levels++;
 			let count = MeshOps.TriangleCount(childModel.Edit);
 			smaller &= count < previous && childModel.Edit.IsClosed();
 			previous = count;
 		}
-		expect(group != null && levels == 2 && smaller && group.LevelCount == 3 && model.GetComponent<MeshRenderer>().LodLevel == 0, scope $"Make Levels of Detail adds 2 simpler closed levels and a LOD Group ({levels} levels)");
+		expect(group != null && levels == 2 && smaller && group.LevelCount == 3 && model.GameObject.GetComponent<MeshRenderer>().LodLevel == 0, scope $"Make Levels of Detail adds 2 simpler closed levels and a LOD Group ({levels} levels)");
 		MakeModelLods(model);
 		int32 again = 0;
 		for (let child in model.Transform.Children)

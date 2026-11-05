@@ -124,6 +124,7 @@ static class EcsChecks
 		SavedTransformChecks();
 		ViewmodelChecks();
 		ComputeChecks();
+		ModelMeshChecks();
 		return sFailures;
 	}
 
@@ -676,6 +677,47 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Model Mesh: Set builds and draws at once; two objects with the same model share one mesh; a copy made from
+	/// text (Instantiate, no OnValidate) is built on the next frame in edit mode, even switched off; reading a scene
+	/// builds it; removing it takes its mesh off the renderer.
+	static void ModelMeshChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let shape = MeshShapes.Create(.Box, .());
+			defer delete shape;
+			let a = scene.CreateGameObject("A");
+			let rendererA = a.AddComponent<MeshRenderer>();
+			let modelA = a.AddComponent<ModelMesh>();
+			Expect(modelA.worldScaleUVs && modelA.data.IsEmpty, "a model has its defaults");
+			modelA.Set(shape);
+			Expect(modelA.DrawnMesh != null && rendererA.RuntimeMesh == modelA.DrawnMesh, "Set builds it and the renderer draws it");
+			let b = scene.CreateGameObject("B");
+			b.AddComponent<MeshRenderer>();
+			let modelB = b.AddComponent<ModelMesh>();
+			modelB.Set(shape);
+			Expect(modelB.DrawnMesh == modelA.DrawnMesh, "the same model on two objects is one mesh");
+			let text = scope String();
+			SceneSerializer.SaveObjectTree(a, text);
+			let copy = SceneSerializer.Instantiate(scene, text);
+			let copyModel = copy.GetComponent<ModelMesh>();
+			copyModel.enabled = false;
+			scene.Update();
+			Expect(copyModel.DrawnMesh == modelA.DrawnMesh && copy.GetComponent<MeshRenderer>().RuntimeMesh == modelA.DrawnMesh, "a copy is built on the next frame (switched off too) and shares the mesh");
+			let sceneText = scope String();
+			SceneSerializer.Save(scene, sceneText);
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, sceneText);
+			let loadedA = loaded.Find("A");
+			Expect(loadedA.GetComponent<ModelMesh>().DrawnMesh != null && loadedA.GetComponent<MeshRenderer>().RuntimeMesh == loadedA.GetComponent<ModelMesh>().DrawnMesh, "reading a scene builds it at once");
+			b.RemoveComponent<ModelMesh>();
+			Expect(b.GetComponent<MeshRenderer>().RuntimeMesh == null && rendererA.RuntimeMesh == modelA.DrawnMesh, "removing one takes its mesh off its renderer, and the others keep theirs");
+		}
+		Scene.Active = previous;
 	}
 
 	/// Compute Effect: defaults, nothing to run without a shader, and (where compute is supported) running every

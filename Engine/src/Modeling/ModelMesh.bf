@@ -3,20 +3,106 @@ using System.Collections;
 
 namespace Tallow;
 
-/// A model built in the editor (docs/modeling.md): its faces are kept in the scene, inline, and drawn through the
-/// object's Mesh Renderer. Objects with the same model share one mesh, so copies of a whitebox piece are drawn
-/// together. Faces in material slot 0 use the Mesh Renderer's material; slots 1 and up use Materials.
-[Component]
-class ModelMesh : Component
+/// A ModelMesh's settings, in its entity (ModelMesh is the handle).
+[Component, HandleData]
+struct ModelMeshData
 {
 	/// The model as text (the .tmesh format). Edited with the Scene view's model tools, not by hand.
 	[HideInInspector]
-	public String data = new .() ~ delete _;
+	public String data = new .();
 	/// Materials (.tmat) for slots 1, 2, ... separated by ';'. Slot 0 is the Mesh Renderer's material.
-	public String materials = new .() ~ delete _;
+	public String materials = new .();
 	/// Auto texture coordinates repeat once a metre in the world, so a stretched object keeps the same texture size.
 	/// Off: once a metre of the model's own space, stretching with the object.
 	public bool worldScaleUVs = true;
+
+	public this() { }
+}
+
+/// A model built in the editor (docs/modeling.md): its faces are kept in the scene, inline, and drawn through the
+/// object's Mesh Renderer. Objects with the same model share one mesh, so copies of a whitebox piece are drawn
+/// together. Faces in material slot 0 use the Mesh Renderer's material; slots 1 and up use Materials.
+///
+/// A handle (ComponentHandle): its settings are ModelMeshData's fields, what it keeps between frames its ModelMeshState.
+/// ModelMesh.FrameAll (from Scene.RunOnFrames) does what OnRegister and OnFrame did; OnRemove what OnUnregister did.
+[Component, HandleFields]
+struct ModelMesh : ComponentHandle<ModelMeshData>
+{
+	/// What it keeps between frames, made the first time it is asked for.
+	public ModelMeshState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<ModelMeshState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			if (state.[Friend]mGameObject == null)
+			{
+				state.[Friend]mGameObject = mGameObject;
+			}
+			return state;
+		}
+	}
+
+	// The API, unchanged: each member is documented on ModelMeshState.
+	public EditMesh Edit => Runtime.Edit;
+	public Vector3 UVScale => Runtime.UVScale;
+	public Mesh DrawnMesh => Runtime.DrawnMesh;
+	public void Save() => Runtime.Save();
+	public void Set(EditMesh mesh) => Runtime.Set(mesh);
+	public void Preview() => Runtime.Preview();
+	public void Rebuild() => Runtime.Rebuild();
+	public bool Export(StringView path) => Runtime.Export(path);
+
+	/// What OnFrame did, in edit mode as well as play (from Scene.RunOnFrames). One not built yet (just added, copied
+	/// or made from a prefab) is built whether or not it is switched on, as OnRegister built it.
+	public static void FrameAll(Scene scene)
+	{
+		for (let component in scene.FindComponents<ModelMesh>(.. scope .()))
+		{
+			let state = component.Runtime;
+			if (component.IsActiveAndEnabled || state.NeedsBuild)
+				state.Frame();
+		}
+	}
+
+	/// After the Inspector changes a field or a scene is read: built again if its text or materials changed.
+	static void OnValidate(GameObject gameObject) => gameObject.GetComponent<ModelMesh>().Runtime.OnValidate();
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		// As OnUnregister did: the renderer lets go of the mesh, and the shared mesh loses a user. While the whole
+		// scene goes, only the latter (its renderer is going too).
+		if (let state = ComponentState<ModelMeshState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
+		{
+			let scene = state.[Friend]mGameObject?.Scene;
+			if (scene != null && !scene.[Friend]mClearing)
+				state.Unregister();
+			else
+				state.[Friend]Release();
+		}
+		ComponentState<ModelMeshState>.Release(world, entity);
+		HandleComponents.FreeLists(world, entity, typeof(ModelMesh));
+	}
+}
+
+/// What a ModelMesh keeps between frames. Its settings are read from the entity each time.
+[DataFields(typeof(ModelMeshData), "Settings")]
+class ModelMeshState
+{
+	GameObject mGameObject;
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+	public Scene Scene => mGameObject.Scene;
+	public ModelMesh Handle => mGameObject.GetComponent<ModelMesh>();
+	T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
+	T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
+	ref ModelMeshData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<ModelMeshData>();
+	}
 
 	/// A built model shared by every object with the same text (and scale, with World Scale UVs).
 	class Shared
@@ -75,9 +161,11 @@ class ModelMesh : Component
 	/// The mesh drawn now.
 	public Mesh DrawnMesh => mPreview ?? mShared?.mesh;
 
-	public override void OnRegister() => Rebuild();
+	/// Not built from its text yet, or built from other text or materials.
+	public bool NeedsBuild => mParsed != Settings.data || mBuiltMaterials != Settings.materials || mBuiltWorldScale != Settings.worldScaleUVs || (mShared == null && mPreview == null);
 
-	public override void OnUnregister()
+	/// What OnUnregister did (the handle's OnRemove).
+	public void Unregister()
 	{
 		let renderer = GetComponent<MeshRenderer>();
 		if (renderer)
@@ -92,14 +180,20 @@ class ModelMesh : Component
 		ClearAndDeleteItems(mPreviewSlots);
 	}
 
-	public override void OnValidate()
+	public void OnValidate()
 	{
 		if (mParsed != data || mBuiltMaterials != materials || mBuiltWorldScale != worldScaleUVs)
 			Rebuild();
 	}
 
-	public override void OnFrame()
+	public void Frame()
 	{
+		// Built the first frame after it is added or copied (OnRegister did it at once; a handle has no such hook).
+		if (NeedsBuild)
+		{
+			Rebuild();
+			return;
+		}
 		if (mAttachPending)
 		{
 			mAttachPending = false;

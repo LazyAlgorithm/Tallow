@@ -1489,6 +1489,7 @@ class Scene
 		}
 		SkinnedMeshRenderer.FrameAll(this);
 		ComputeEffect.FrameAll(this);
+		ModelMesh.FrameAll(this);
 		ParticleSystem.FrameAll(this);
 		LineRenderer.FrameAll(this);
 		TrailRenderer.FrameAll(this);

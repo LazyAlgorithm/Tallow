@@ -93,15 +93,15 @@ extension EditorApp
 		get
 		{
 			if (!mModelEditing)
-				return null;
+				return default;
 			let selected = Selected;
 			if (selected == null || selected.Id != mModelObject)
 			{
 				mModelEditing = false;
-				return null;
+				return default;
 			}
 			let model = selected.GetComponent<ModelMesh>();
-			if (model == null)
+			if (!model.IsValid)
 				mModelEditing = false;
 			return model;
 		}
@@ -147,7 +147,7 @@ extension EditorApp
 
 	void StartModelEditing(GameObject target)
 	{
-		if (target == null || target.GetComponent<ModelMesh>() == null)
+		if (target == null || !target.GetComponent<ModelMesh>().IsValid)
 			return;
 		mModelEditing = true;
 		mModelObject = target.Id;
@@ -232,17 +232,17 @@ extension EditorApp
 		{
 			if (mModelEditing)
 				mModelEditing = false;
-			else if (selected != null && selected.GetComponent<ModelMesh>() != null)
+			else if (selected != null && selected.GetComponent<ModelMesh>().IsValid)
 				StartModelEditing(selected);
 		}
 		let model = EditedModel;
-		if (model == null)
+		if (!model.IsValid)
 		{
 			mModelTool = .None;
 			// Shift+A (Add Shape's keys) adds a shape.
 			if (keysFree && ModelShortcutPressed(ModelCommandShortcut(.AddShape)))
 				ImGui.OpenPopup("##modeladd");
-			DrawModelAddPopup(null, null);
+			DrawModelAddPopup(default, null);
 			return false;
 		}
 		let mesh = model.Edit;
@@ -263,7 +263,7 @@ extension EditorApp
 				return false;
 		}
 		DrawModelPopups(model, mesh);
-		if (!mModelEditing || EditedModel == null)
+		if (!mModelEditing || !EditedModel.IsValid)
 			return false;
 		ValidateModelSelection(mesh);
 		DrawModelSelection(mesh, world, toLocal);
@@ -448,7 +448,7 @@ extension EditorApp
 		else if (mModelDraw == .Waiting && mModelDrawHit)
 			Gizmos.OnTopLines.Circle(mModelDrawFrom, .Up, 0.25f, .(1, 0.75f, 0.2f, 1));
 		let model = EditedModel;
-		if (model == null)
+		if (!model.IsValid)
 			return;
 		let mesh = model.Edit;
 		let world = model.Transform.LocalToWorld;
@@ -1093,7 +1093,7 @@ extension EditorApp
 		let otherModel = other.GetComponent<ModelMesh>();
 		EditMesh otherMesh = null;
 		bool ownOther = false;
-		if (otherModel != null)
+		if (otherModel.IsValid)
 			otherMesh = otherModel.Edit;
 		else
 		{
@@ -1175,15 +1175,15 @@ extension EditorApp
 		{
 			DrawModelShapes();
 			let selected = Selected;
-			let model = selected?.GetComponent<ModelMesh>();
-			if (selected != null && model == null && selected.HasComponent<MeshRenderer>() && mPlay == .Edit)
+			let model = GameObject.ComponentOn<ModelMesh>(selected);
+			if (selected != null && !model.IsValid && selected.HasComponent<MeshRenderer>() && mPlay == .Edit)
 			{
 				ImGui.SeparatorText("Selected object");
 				if (ImGui.Button("Make Editable Model", .(-1, 0)))
 					ConvertToModel(selected);
 				ImGui.TextDisabled("Turns its mesh into faces the model tools can change.");
 			}
-			if (model != null && mPlay == .Edit)
+			if (model.IsValid && mPlay == .Edit)
 				DrawModelTools(model);
 			if (mPlay == .Edit)
 			{
@@ -1692,7 +1692,7 @@ extension EditorApp
 		for (let child in owner.Transform.Children)
 		{
 			let level = LODGroup.LevelInName(child.GameObject.Name);
-			if (level > 0 && child.GameObject.GetComponent<ModelMesh>() != null)
+			if (level > 0 && child.GameObject.GetComponent<ModelMesh>().IsValid)
 				old.Add(child.GameObject);
 		}
 		for (let go in old)
@@ -1743,7 +1743,7 @@ extension EditorApp
 		else
 		{
 			let names = scope List<StringView>();
-			let renderer = model.GetComponent<MeshRenderer>();
+			let renderer = model.GameObject.GetComponent<MeshRenderer>();
 			names.Add((renderer && !renderer.material.IsEmpty) ? renderer.material : "Material");
 			for (let name in model.materials.Split(';'))
 				names.Add(name);
@@ -1842,8 +1842,8 @@ extension EditorApp
 		ImGui.SetNextWindowSize(.(560, 660), 4);
 		if (ImGui.Begin("UV Editor", &mShowUVEditor))
 		{
-			let model = Selected?.GetComponent<ModelMesh>();
-			if (model == null)
+			let model = GameObject.ComponentOn<ModelMesh>(Selected);
+			if (!model.IsValid)
 				ImGui.TextDisabled("Select a model.");
 			else
 				DrawUVCanvas(model);
@@ -1854,7 +1854,7 @@ extension EditorApp
 	/// The texture a model is drawn with: its material's, or the renderer's own.
 	static void ModelTexturePath(ModelMesh model, String into)
 	{
-		let renderer = model.GetComponent<MeshRenderer>();
+		let renderer = model.GameObject.GetComponent<MeshRenderer>();
 		if (!renderer)
 			return;
 		let material = renderer.SharedMaterial;
@@ -1864,7 +1864,7 @@ extension EditorApp
 	/// Gives a model a texture of its own (the renderer's; a material's texture would change every model using it).
 	bool SetModelTexture(ModelMesh model, StringView path)
 	{
-		let renderer = model.GetComponent<MeshRenderer>();
+		let renderer = model.GameObject.GetComponent<MeshRenderer>();
 		if (!renderer)
 			return false;
 		let material = renderer.SharedMaterial;

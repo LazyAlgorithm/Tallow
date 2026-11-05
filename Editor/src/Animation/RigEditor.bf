@@ -108,7 +108,7 @@ extension EditorApp
 		let skinned = target.GetComponent<SkinnedMeshRenderer>();
 		if (skinned && !skinned.model.IsEmpty)
 			output.Set(skinned.model);
-		else if (model != null)
+		else if (model.IsValid)
 		{
 			// An editable model is written out as a .glb to rig.
 			let name = scope String(target.Name);
@@ -955,7 +955,7 @@ extension EditorApp
 		let renderer = target.GetComponent<MeshRenderer>();
 		if (skinned && !skinned.model.IsEmpty)
 			output.Set(skinned.model);
-		else if (target.GetComponent<ModelMesh>() != null)
+		else if (target.GetComponent<ModelMesh>().IsValid)
 			output.Set("its editable model (written as a .glb)");
 		else if (renderer && (Assets.IsModelPath(renderer.mesh) && !renderer.mesh.EndsWith(".tmesh", .OrdinalIgnoreCase)))
 			output.Set(renderer.mesh);

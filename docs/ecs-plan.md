@@ -1133,6 +1133,18 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   Checked by `EcsChecks.ComputeChecks`: defaults, nothing to run without a shader, and with Sandbox's compiled ripple
   shader copied in for the check, a frame in edit mode running it on the GPU and showing it, and switching it off.
 
+- [x] **ModelMesh** (tools/class_to_handle.py, then by hand). `ModelMeshData` (the model text, materials, World Scale
+  UVs), the handle, and `ModelMeshState` (the edit mesh, the shared mesh, previews, parts; the shared-mesh table
+  moved with it). A handle has no hook for being added, so instead of OnRegister it builds lazily: `ModelMesh.FrameAll`
+  (from `Scene.RunOnFrames`, edit and play) builds any that `NeedsBuild`, switched on or not, and does OnFrame for the
+  rest; its static OnValidate builds one as a scene is read. Code that sets a model through `Set` / `Save` builds at
+  once, as before. OnRemove does OnUnregister (or only gives up its share of the mesh while the scene clears).
+  `GameObject.ComponentOn<T>(object)` is new: what `object?.GetComponent<T>()` gave for a class component.
+  The modelling tools were updated (`?.GetComponent<ModelMesh>`, `return null`, `model.GetComponent`, null checks).
+  Checked by `EcsChecks.ModelMeshChecks` (Set, sharing, a copy built the next frame even switched off, reading a
+  scene, removing), the editor's `--model-test` and `--palette-test` (both PASS on a scratch project), and the
+  Gallery self-test.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

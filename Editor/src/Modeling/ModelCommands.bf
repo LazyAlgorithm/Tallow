@@ -517,7 +517,7 @@ extension EditorApp
 	{
 		if (!ImGui.BeginPopup("##modeladd"))
 			return;
-		ImGui.TextDisabled(model != null ? "Add into this model" : "Add a shape");
+		ImGui.TextDisabled(model.IsValid ? "Add into this model" : "Add a shape");
 		ImGui.Separator();
 		int32 chosen = -1;
 		for (int32 k < (int32)MeshShapes.Names.Count)
@@ -525,7 +525,7 @@ extension EditorApp
 			if (ImGui.MenuItem(scope String(MeshShapes.Names[k]).CStr()))
 				chosen = k;
 		}
-		if (model == null)
+		if (!model.IsValid)
 		{
 			ImGui.Separator();
 			if (ImGui.MenuItem("Draw a Shape in the Scene..."))
@@ -538,7 +538,7 @@ extension EditorApp
 		if (chosen < 0)
 			return;
 		mModelDrawKind = chosen;
-		if (model == null)
+		if (!model.IsValid)
 		{
 			AddShapeInView((MeshShapes.Kind)chosen);
 			return;

@@ -262,6 +262,9 @@ class GameObject
 
 	/// The object's built-in component T; not valid (`if (light)` is false) if it has none.
 	public T GetComponent<T>() where T : struct, IComponentHandle => mScene.World.Has(mEntity, T.DataIndex) ? MakeHandle<T>() : default;
+	/// A built-in component on an object that may be null: an invalid handle when it is (what `?.GetComponent<T>()`
+	/// gave for a class component; a handle cannot be null).
+	public static T ComponentOn<T>(GameObject gameObject) where T : struct, IComponentHandle => gameObject != null ? gameObject.GetComponent<T>() : default;
 
 	public bool HasComponent<T>() where T : struct, IComponentHandle => mScene.World.Has(mEntity, T.DataIndex);
 

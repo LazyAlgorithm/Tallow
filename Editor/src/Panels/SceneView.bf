@@ -410,7 +410,7 @@ extension EditorApp
 			}
 		}
 		// A model in edit mode shows its own edges instead of the object's box.
-		if (selected != null && EditedModel == null)
+		if (selected != null && !EditedModel.IsValid)
 		{
 			let renderer = selected.GetComponent<MeshRenderer>();
 			if (renderer && renderer.ActiveMesh != null)
