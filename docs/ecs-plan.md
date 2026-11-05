@@ -1206,6 +1206,20 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   risk. Converting it needs threads that hold the state class (not `this` component) and the extensions moved
   onto the state.
 
+- **Staying classes for now: Rope and SoftBody.** A scene has a few. Both are tied into PhysicsWorld (its rope list
+  and soft-body proxies hold the class, with native tie / body handles), networking (rope ties, snaps and changes
+  are requests addressed by component index; dents are shared), Water (floating ropes) and each other
+  (`SoftBody.UpdateProxies` takes the ropes), and no test covers them yet beyond the Gallery's rope. Converting them
+  is possible now (`ObjectRef<Transform>` for the attachments; note `ObjectRef<T>`'s implicit conversion from T
+  would duplicate the Transform one for that T, so it needs a guard first) but gains nothing measurable. Do it
+  with rope and soft-body checks written first, against the class.
+- **Phase 5 status (2026-11-05):** converted Animator, NavigationAgent, BehaviorTreeRunner, DialogueRunner,
+  SequencePlayer, SpawnPoint, SceneLoader, SavedTransform, StreamingSource, ViewmodelPose, ComputeEffect,
+  ModelMesh, LODGroup, VoxelObject and Joint. Staying classes, each with its reason above: the IK components,
+  VoxelTerrain, Rope, SoftBody. Exit check: the Gallery (Showcase) self-test passes (`SHOWCASE_READY rooms=8`, no
+  errors), with EcsBench checks, the editor's model, palette, separate-worlds and world-streaming tests. Still open
+  from Phase 4: colliders (the stacking question, options a/b/c) are classes until it is decided.
+
 ## Benchmark results
 
 See "Phase 1 results" above.
