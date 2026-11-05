@@ -12,9 +12,31 @@ Work through the phases in order. Each phase ends with the engine building (`./b
 Showcase passing `tools/validate_showcase.py` once it has been ported, the code formatted
 (`tools/format/format_code.py`), and a commit on the `ecs` branch.
 
+## Product contract: invisible ECS and networking (2026-11-04)
+
+**Tallow should feel like a conventional Unity-style game engine while obtaining the advantages of ECS and networking by default.** An ordinary developer creates GameObjects, adds components, writes one normal gameplay script, builds prefabs, and presses Play. They do not need to know Flecs, declare queries, create system classes, write custom replication/prediction code, or manually manage jobs just to build a normal game. Engine internals may change incompatibly; preserving the ease and clarity of authoring game code matters more than source compatibility with older engine projects.
+
+### Default path, with no special optimization or networking code
+
+- **One intuitive authoring model:** Inspector components, GameObjects, familiar lifecycle methods, prefab editing, hierarchies, physics, animation, and visual scripting all work through one engine-backed component model. The same code works for offline and networked use wherever behavior is semantically the same.
+- **ECS invisibility:** Flecs owns authoritative engine component storage. Tallow chooses packed queries, batching, dirty tracking, lifecycle management, job scheduling, and render extraction internally. The standard authoring experience requires no ECS concepts.
+- **Networking invisibility:** For networked objects, the engine supplies useful defaults for authority, ownership, spawning/despawning, replication, interest management, interpolation, reconciliation, and prediction. A new developer should be able to add a Network Identity and get a working basic multiplayer object without implementing RPC plumbing, tick buffers, or custom serializers. A project still needs a session/transport and a way to assign player ownership; the engine must make those explicit and easy.
+- **Advanced escape hatches:** Expose optional custom ECS systems, replication policies, prediction controls, ownership options, physics filters, network diagnostics, and explicit scheduling only for cases that need them. Advanced customization must not be a prerequisite for acceptable default operation.
+- **Breaking changes are acceptable:** Eliminate legacy object duplication, ownership indirection, and compatibility layers when they inhibit a cleaner implementation. Keep familiar property names and script patterns where they improve usability, not because old binaries or projects must compile unchanged.
+- **No misleading blanket performance guarantees:** 10,000 uncomplicated static or instanced objects should be an ordinary benchmark target, not an advanced DOTS exercise. But arbitrary 10,000-instance gameplay scripts, unique materials, heavy physics, or networking bandwidth cannot be optimized away automatically. Profile the full workload and expose a useful cause/effect diagnosis; optimize safe common patterns without changing gameplay semantics.
+- **No silent semantic changes:** Automatic systems must respect script ordering contracts, physics ownership, lifecycle events, and server authority. Do not silently parallelize user scripts or infer networking authority in ambiguous cases. Supply understandable defaults and editor diagnostics.
+
+### Acceptance tests for this contract
+
+1. From a blank project, create a moving prefab using one ordinary script, duplicate it 10,000 times, and run without manually adding ECS systems. Record frame avg/p99, CPU work, memory, and render batches against the main branch on the same hardware; identify the bottleneck, including arbitrary script costs.
+2. From the same authoring model, create a two-client multiplayer scene with a player and physics props using built-in Network Identity/session setup. Verify spawn, ownership, remote movement, reconciliation, join/leave, and no custom network script or serializer.
+3. Validate that editor duplication, save/load, prefab updates, hot reload, physics, animation, and visual scripting use the same authoritative runtime component state.
+4. Verify advanced ECS and networking overrides do not change default behavior in projects that never opt into them.
+5. For every phase, track complexity as well as speed: number of game-code concepts, special annotations, manual setup steps, and per-object helper scripts required by an introductory project.
+
 ## Goals
 
-1. **Scripting stays as close to Unity as possible.** A Unity developer opens a script and recognises
+1. **Scripting and ordinary component workflows stay as close to Unity as possible.** A Unity developer opens a script and recognises
    everything. Nobody has to write a query or a system to make a game. Unity DOTS's learning curve is the thing
    to avoid.
 2. **The engine scales.** Transforms, rendering, physics sync, animation, particles, AI crowds and network
