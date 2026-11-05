@@ -141,6 +141,10 @@ static class Flecs
 
 	[LinkName("tallow_ecs_entity_ids")] public static extern int32 EntityIds(void* world, uint64 entity, uint64* output, int32 max);
 
+	[LinkName("tallow_ecs_explorer_start")] public static extern void* ExplorerStart(void* world, uint16 port);
+	[LinkName("tallow_ecs_explorer_poll")] public static extern void ExplorerPoll(void* server, float deltaTime);
+	[LinkName("tallow_ecs_explorer_stop")] public static extern void ExplorerStop(void* server);
+
 	// ---- Pipelines and steps ----
 	public function void StepCallback(void* context);
 	[LinkName("tallow_ecs_pipeline_new")] public static extern uint64 PipelineNew(void* world, char8* name, uint64 tag);

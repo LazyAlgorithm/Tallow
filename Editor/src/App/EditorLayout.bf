@@ -301,6 +301,8 @@ extension EditorApp
 		}
 		if (ImGui.BeginMenu("Window"))
 		{
+			if (ImGui.MenuItem("Flecs Explorer"))
+				OpenFlecsExplorer();
 			if (ImGui.MenuItem("Achievements"))
 				mShowAchievements = true;
 			if (ImGui.MenuItem("Input Actions"))
@@ -606,5 +608,21 @@ extension EditorApp
 			ImGui.TextDisabled(text.CStr());
 		}
 		ImGui.End();
+	}
+}
+
+extension EditorApp
+{
+	/// Window > Flecs Explorer: serves the open scene's ECS world (docs/ecs-plan.md) and opens the Explorer in the
+	/// browser, which connects to it on localhost.
+	void OpenFlecsExplorer()
+	{
+		if (!mScene.World.StartExplorer())
+		{
+			Log.Error(scope $"The Flecs Explorer could not start: this build leaves it out, or port {World.ExplorerPort} is in use.");
+			return;
+		}
+		Log.Info(scope $"Flecs Explorer: serving the scene on port {World.ExplorerPort}.");
+		Terminal.Open("https://www.flecs.dev/explorer/?remote=true");
 	}
 }

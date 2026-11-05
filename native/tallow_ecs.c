@@ -442,6 +442,53 @@ TALLOW_ECS_API int32_t tallow_ecs_entity_ids(const ecs_world_t* world, uint64_t 
 	return type->count;
 }
 
+// ---- Flecs Explorer ----
+
+// Starts Flecs's REST server on port so the Flecs Explorer (flecs.dev/explorer) can show this world. Returns the
+// server, or NULL when the build leaves the Explorer out (TALLOW_FLECS_EXPLORER) or the port is taken. Requests are
+// answered by tallow_ecs_explorer_poll on the calling thread.
+TALLOW_ECS_API void* tallow_ecs_explorer_start(ecs_world_t* world, uint16_t port)
+{
+#ifdef FLECS_REST
+	ecs_http_server_desc_t desc = {0};
+	desc.port = port;
+	ecs_http_server_t* server = ecs_rest_server_init(world, &desc);
+	if (!server)
+		return NULL;
+	if (ecs_http_server_start(server) != 0)
+	{
+		ecs_rest_server_fini(server);
+		return NULL;
+	}
+	return server;
+#else
+	(void)world;
+	(void)port;
+	return NULL;
+#endif
+}
+
+TALLOW_ECS_API void tallow_ecs_explorer_poll(void* server, float delta_time)
+{
+#ifdef FLECS_REST
+	if (server)
+		ecs_http_server_dequeue((ecs_http_server_t*)server, delta_time);
+#else
+	(void)server;
+	(void)delta_time;
+#endif
+}
+
+TALLOW_ECS_API void tallow_ecs_explorer_stop(void* server)
+{
+#ifdef FLECS_REST
+	if (server)
+		ecs_rest_server_fini((ecs_http_server_t*)server);
+#else
+	(void)server;
+#endif
+}
+
 // ---- Pipelines and steps ----
 
 // A pipeline that runs the systems tagged with tag, ordered by phase as Flecs's own pipeline is.

@@ -65,7 +65,41 @@ sealed class World
 
 	public ~this()
 	{
+		StopExplorer();
 		Flecs.WorldFree(mWorld);
+	}
+
+	// ---- Flecs Explorer ----
+
+	void* mExplorer;
+
+	/// The port the Flecs Explorer connects to by default.
+	public const uint16 ExplorerPort = 27750;
+
+	/// Serves this world to the Flecs Explorer (https://www.flecs.dev/explorer) until StopExplorer. False if the build
+	/// has no Explorer support or the port is in use. Scene answers its requests once a frame (PollExplorer).
+	public bool StartExplorer(uint16 port = ExplorerPort)
+	{
+		if (mExplorer == null)
+			mExplorer = Flecs.ExplorerStart(mWorld, port);
+		return mExplorer != null;
+	}
+
+	public bool ExplorerRunning => mExplorer != null;
+
+	public void PollExplorer(float deltaTime)
+	{
+		if (mExplorer != null)
+			Flecs.ExplorerPoll(mExplorer, deltaTime);
+	}
+
+	public void StopExplorer()
+	{
+		if (mExplorer != null)
+		{
+			Flecs.ExplorerStop(mExplorer);
+			mExplorer = null;
+		}
 	}
 
 	/// A pipeline: the steps (and later systems) tagged for it, run in phase order by Run. Scene has two, Frame and

@@ -1225,6 +1225,8 @@ class Scene
 				Profiler.End();
 			});
 		World.AddStep(mFramePipeline, "Frame.Destroy", .OnStore, new => RunDestroyQueue);
+		// Answers the Flecs Explorer, when the editor has started it (World.StartExplorer).
+		World.AddStep(mFramePipeline, "Frame.Explorer", .OnStore, new () => World.PollExplorer(Time.UnscaledDeltaTime));
 	}
 
 	/// One fixed simulation tick through the Tick pipeline: pending Starts, the network's receive and simulation,

@@ -12,6 +12,7 @@ namespace EcsBench;
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
 ///   TALLOW_BENCH_OUT    file a JSON line of results is added to (default: printed only)
+///   TALLOW_BENCH_EXPLORER 1 serves the scene to the Flecs Explorer (port 27750) while it runs
 /// Frame time is from one Update to the next, so it includes the render extract and submitting the frame. Update
 /// time is from this component's Update to its LateUpdate: every Mover's Update, or the ECS system.
 [Component]
@@ -49,6 +50,9 @@ class Bench : Component
 		if (ReadSetting("TALLOW_BENCH_FRAMES", text..Clear()) && int.Parse(text) case .Ok(let frames))
 			mFrames = frames;
 		ReadSetting("TALLOW_BENCH_OUT", mOutput);
+		// TALLOW_BENCH_EXPLORER=1: serve the scene to the Flecs Explorer while the benchmark runs.
+		if (ReadSetting("TALLOW_BENCH_EXPLORER", text..Clear()) && text == "1")
+			Console.WriteLine(Scene.World.StartExplorer() ? "EcsBench: Flecs Explorer on port 27750" : "EcsBench: Flecs Explorer unavailable");
 		Gfx.SetVsync(false);
 		mHalfSize = Workload.HalfSize(mCount);
 		// Far enough back to see the whole box.

@@ -669,7 +669,14 @@ components (`[Component]` structs in an object's entity) taking part everywhere 
   makes the reload ask for a full rebuild, which reloads the scene from text. New data types appear in Add
   Component after a reload. Checked by `EcsChecks` (the save and read-back round trip); not yet exercised with a
   live reload.
-- [ ] 3d. Hierarchy reading `ChildOf`; Flecs Explorer menu item (Debug builds).
+- [x] **3d. Flecs Explorer; Hierarchy.** Window > Flecs Explorer serves the open scene's world over Flecs's REST
+  server (port 27750, `World.StartExplorer`) and opens https://www.flecs.dev/explorer, which connects to it; the
+  scene answers requests once a frame (the Frame pipeline's Explorer step). The REST, HTTP, JSON and stats addons
+  are now in every native build (`TALLOW_FLECS_EXPLORER`, on by default) because the native library is always
+  built in Release; nothing listens until something starts the server. Checked: the benchmark started with
+  `TALLOW_BENCH_EXPLORER=1` answers `GET /world` with the world, its pipelines and steps.
+  **Decision:** the Hierarchy keeps reading the ordered `Transform` children. `ChildOf` mirrors them, but Flecs
+  does not keep sibling order, and the Hierarchy shows siblings in the order the user arranged them.
 - [ ] Phase 3 exit: create, edit, save, reload and play a scene entirely in the editor; prefab instances survive
   edit, save, load and play.
 
