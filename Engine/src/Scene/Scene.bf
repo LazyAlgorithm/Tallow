@@ -319,11 +319,8 @@ class Scene
 
 	/// Classes of the engine with no FixedUpdate, Update, LateUpdate or OnFrame, which most of a big scene is made of.
 	/// Exact classes only: a game's class derived from one may well have them.
-	static HashSet<Type> sIdleTypes = new .()
-		{
-			typeof(MeshRenderer), typeof(Light), typeof(Camera), typeof(Rigidbody),
-			typeof(BoxCollider), typeof(SphereCollider), typeof(CapsuleCollider), typeof(MeshCollider)
-		} ~ delete _;
+	static HashSet<Type> sIdleTypes = new .() { typeof(MeshRenderer), typeof(Light), typeof(Camera), typeof(Rigidbody),
+		typeof(BoxCollider), typeof(SphereCollider), typeof(CapsuleCollider), typeof(MeshCollider) } ~ delete _;
 
 	void IndexTag(GameObject gameObject, StringView tag, bool add)
 	{
