@@ -972,11 +972,26 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   (defaults, Move without a character, made on play, falling to the ground, walking, SetCapsule writing the
   settings, switched off and on, Teleport, a missing controller, stopping, save, freed on remove and with the scene);
   the separate-worlds test (characters in two world states) and the Gallery self-test pass, and Campus plays.
-- [ ] Collider, Joint,
-  CharacterController, SoftBody, Rope, and the Phase 5 set.
-- [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with
-  the components above converted, a Gallery made from the template builds and its `--self-test` prints
-  `SHOWCASE_READY rooms=8 probes=2` with no errors.)
+- **Staying classes for now** (each listed with what it waits for):
+  - **Colliders** (Box, Sphere, Capsule, Mesh, Compound, Convex) — **waiting on the project owner.** They are a class
+    hierarchy (`GetComponent<Collider>()` finds any kind), static bodies are made once at Start with no per-frame
+    cost, and objects stack them: without a Rigidbody each collider is its own static body, and the Tumble Toys
+    aircraft prefabs put several BoxColliders on one object (a Rigidbody takes only the first). Handles allow one of
+    a kind per object. Options: (a) keep them classes; (b) one of each kind per object, with every collider on an
+    object merged into one compound body (stacked ones moved into a Compound Collider when a scene loads); (c)
+    stacked colliders moved to child objects when a scene loads.
+  - **Joint and Rope** hold references to other objects (`Rigidbody connectedTo`, `Transform startAttachedTo`), and
+    built-in component data cannot hold object references yet (DataComponents leaves them out: a pointer would
+    dangle, and saving, the Inspector picker and clearing on destroy are not done for data). Phase 5: object
+    references in data (an entity id, saved as the object, resolved on use), then these two and LODGroup.
+  - **SoftBody** runs a FixedUpdate and LateUpdate of its own and shares its native proxy pass with Rope
+    (`UpdateProxies(world, softBodies, ropes)`); it moves with Rope in Phase 5. A handful per scene, so nothing is
+    lost meanwhile.
+  - **LODGroup** (holds renderer handles) and **UIDocument** (stacked on objects in every project) as before.
+- [x] **Phase 4 exit.** A Gallery made from the showcase template with everything above converted builds and its
+  `--self-test --frames 1500` prints `SHOWCASE_READY rooms=8 probes=2` with no `[error]` line, which is what
+  `tools/validate_showcase.py --play` checks on a packaged engine (the package step itself is Phase 8's release
+  build). EcsBench checks all pass; the Campus copy plays 400 frames clean.
 
 ## Benchmark results
 
