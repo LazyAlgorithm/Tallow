@@ -258,12 +258,18 @@ carry over, now computed as column passes instead of per-object reflection:
    mode uses that:
    - clients run the same fixed-tick simulation from the same inputs, and the server sends inputs plus
      occasional state, instead of every moving body every snapshot;
+   - the shared clock already exists and is reused as is: one fixed tick rate (`Time.TickRate`, `Time.Tick`),
+     clients kept in step with the server through `TickScale`, and inputs stamped with the server tick they were
+     given at. New here: relaying every player's inputs for a tick to each client, which today go to the server
+     only. A client that has not received some player's input for a tick predicts it (repeats the last one) and
+     rolls back when the real input arrives;
    - each machine hashes the replicated columns every N ticks and sends the hash to the server; a mismatch
      triggers a full-state resync of the affected entities (or the world), and late joiners get a full state
      first.
 
-   The physics is deterministic, but the game code around it must be too, and that is the hard part:
-   - fixed tick only, and no `Time.DeltaTime` or wall-clock time in simulation code;
+   The physics and the tick are deterministic, but the game code around them must be too, and that is the
+   hard part:
+   - simulation code uses the tick's `deltaTime` only, never `Time.DeltaTime`, `Time.Time` or wall-clock time;
    - iteration in a stable order (sort by entity id where Flecs table order could differ);
    - seeded per-tick random numbers;
    - Beef and native code built without fast-math or floating-point contraction;
@@ -382,9 +388,10 @@ Steps, each committed on its own (see "Networking" under Architecture for the de
   with a replay cap.
   **Exit:** the cost per re-simulated tick is recorded; a stack of predicted crates corrects without visible
   snapping.
-- **6g. Deterministic mode (hybrid first).** Inputs plus hashes for physics props, state for players,
-  desync detection and resync, full state for late joiners, the deterministic math functions, and build flags
-  checked on every platform.
+- **6g. Deterministic mode (hybrid first).** Built on the existing shared tick and clock sync: relay every
+  player's inputs to each client, predict missing inputs and roll back when they arrive, inputs plus hashes for
+  physics props, state for players, desync detection and resync, full state for late joiners, the deterministic
+  math functions, and build flags checked on every platform.
   **Exit:** Windows, Linux and macOS clients stay in sync for 10 minutes of heavy prop physics (no hash
   mismatch), and bytes per client are measured against 6e.
 
@@ -414,8 +421,9 @@ before (from `main`) and after each of 6c to 6g: server CPU per tick and bytes p
   toggles for things that switch on and off often.
 - **Determinism for rollback.** Predicted systems must be deterministic within a build: fixed tick, no
   frame-time dependence, ordered iteration. Document this next to the networked `Update`'s rules.
-  Deterministic mode (step 6g) raises the bar to every platform: build flags, math functions and iteration
-  order all matter. One mismatch shows up as a desync, so hash checks and resync are required, not optional.
+  Deterministic mode (step 6g) raises the bar to every platform. The shared tick and Jolt's cross-platform
+  determinism already exist, so what is left is game code: build flags, math functions and iteration order
+  all matter. One mismatch shows up as a desync, so hash checks and resync are required, not optional.
 - **Flecs upgrades.** Pin the tag in `third_party/flecs` and keep the shim small, so an upgrade only touches
   `tallow_ecs.c`.
 - **Possible later addition:** a second scripting language (C# or Luau) can bind to the same component
