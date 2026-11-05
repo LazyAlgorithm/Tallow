@@ -634,13 +634,14 @@ class Hover : Script
     classes). Interleaved Release benchmark against the pre-Phase-2 build at 100,000 objects: frame
     32.6 / 32.0 / 33.3 ms before, 29.4 / 29.2 / 29.1 ms now (the callback lists skip classes with nothing to
     run). Script update is 5.2 to 5.4 ms before, 6.0 to 6.4 ms now; at 10,000 objects both are unchanged.
-  - Where the script-update difference comes from (bisected with interleaved builds): step 2 alone matches the
-    original (update 5.1 to 5.45 ms against 5.3 to 5.6). It appears with step 3. Not the cause, each tested by
-    removing it: the NetworkIdentity check, the new `Update` arguments (the same with a no-argument
-    `OnLocalUpdate`), the size of `GameObject` (the identity pointer is now a bool). Layout changes move frame
-    and script time in opposite directions, so it looks like memory layout rather than extra work. Open: find
-    it with a profiler (perf is not installed on the test machine). The whole frame is about 20% faster than the
-    original (26.4 against 32.8 ms with the bool).
+  - Where the script-update difference comes from: the engine Profiler (`--profile-report`, per-script timing)
+    on both builds at 100,000 objects shows the same per-call cost: `Mover.Update()` 6.99 ms before and 7.16 ms
+    now for 100,000 calls, loop overhead 4.44 and 4.49 ms. The difference is cache warmth, not work. Before, the
+    OnFrame pass called an empty `OnFrame()` on every Mover just before Update, which loaded every script,
+    GameObject and Transform into the cache; it also called empty `LateUpdate()` and `FixedUpdate()` on all of
+    them. The callback lists skip those calls (the frame is about 20% faster: 26.4 against 32.8 ms), so Update is
+    now the first pass to touch the scripts each frame and takes the cache misses OnFrame used to take. Nothing
+    to fix; Phase 4 removes most of the remaining misses by moving engine data into columns.
 
 **Phase 2 exit: met (2026-11-04).** New Empty, Sample and Showcase projects created with the launcher build and
 run; the Showcase self-test reports `SHOWCASE_READY rooms=8 probes=2` with no errors; the Sandbox runs in game
