@@ -190,12 +190,90 @@ full width at once. Scripts and anything touching the editor stay on the main th
 - `NetworkIdentity` becomes a data component, and `[Replicated]` marks data components (or fields) that sync.
 - Per tick, replicated columns are copied into a ring buffer of snapshots. Delta compression compares against
   the client's last acknowledged snapshot, column by column (`NetCompression.bf` reused).
-- Rollback restores columns from the snapshot, then re-runs the fixed pipeline: predicted systems and
-  `NetworkScript.OnTick` for predicted objects. This replaces the per-object re-run in today's
+- Rollback restores columns from the snapshot, then re-runs the fixed pipeline: predicted systems and the
+  networked `Update` for predicted objects. This replaces the per-object re-run in today's
   `NetworkManagerHistory`; lag compensation reads positions from the same history.
-- Interest management: a spatial query per client picks which replicated entities it receives.
+- Interest management: a spatial query per client picks which replicated entities it receives (detailed
+  below).
 - Script fields marked for sync keep using the reflection-based path from `NetworkSync.bf`. Bulk state such
   as transforms and physics goes through columns.
+
+#### Bandwidth: keep what exists, move it onto columns
+
+Tallow already has most of the standard bandwidth tools (`docs/NETWORK_BANDWIDTH_OPTIONS.md`). All of them
+carry over, now computed as column passes instead of per-object reflection:
+
+- Skipping objects unchanged for a few snapshots, with periodic refreshes.
+- `dormantWhenSleeping`: one reliable final transform, then nothing until the body wakes.
+- `QuantizedTransform` (24-bit positions, smallest-three rotation, 14 bytes) and `QuantizedBody` (finer
+  positions, smallest-three rotation, both velocities: 28 bytes moving, 16 at rest).
+- Per-object rates (`remoteIntervalTicks`), the per-client budget (`SnapshotBytesPerSecond`),
+  `snapshotPriority`, the relevance radius, and lossless compression (ENet or message frames).
+
+#### Bandwidth: new work
+
+1. **Good defaults.** Today every one of these is opt-in and new games ship the legacy format. Change the
+   defaults:
+   - physics bodies use `QuantizedBody` with `dormantWhenSleeping`;
+   - other moving networked objects use `QuantizedTransform`;
+   - `OptimizeSnapshots` and `LosslessCompression` are on.
+
+   The exact format stays available per object (`fullPrecision`) for things that need it. The network panel
+   shows estimated bytes per client per second, so the cost of a choice is visible in the editor.
+2. **Field-by-field deltas against each client's acknowledged snapshot.**
+   - Each client acknowledges snapshot numbers.
+   - The server keeps, per client, the last acknowledged baseline for each relevant entity (from the snapshot
+     ring buffer, not a copy per client).
+   - An entity record becomes a changed-fields mask plus only those fields. Positions are sent as
+     variable-length differences in quantized steps, and velocities and rotations only when they changed past
+     their quantization step.
+   - When the baseline is older than the history (`HistorySize`) or was never acknowledged, the full
+     quantized record is sent. Keep today's guarantee that an unchanged transform never depends on an
+     unacknowledged baseline.
+3. **Column-grouped packets.** Inside a snapshot packet, write all entity ids, then all change masks, then
+   each field for every entity, rather than one entity record after another. Similar values sit together and
+   the lossless coder compresses them better. Keep it only if the measurements show a win over per-entity
+   records once compressed.
+4. **Dynamic priority.** Replace the fixed `snapshotPriority` ordering with a priority accumulator per
+   (client, entity):
+   - each tick the accumulator grows by a weight from distance to the client's player, being inside the
+     client's camera view, speed, recent interaction with the client's player, and the object's
+     `snapshotPriority` (now a base weight);
+   - within the budget, the highest accumulators are sent first, and sending resets the accumulator.
+
+   Distant, slow or off-screen objects update less often instead of being cut off, and nothing starves.
+5. **Full interest management.** Relevance today filters transforms only. Make it cover spawns and despawns,
+   synced script fields, enabled/active changes and gameplay events:
+   - Build one spatial grid per tick from `Transform` columns, then each client's relevant set from it, with
+     hysteresis (the leave radius is larger than the enter radius).
+   - Per-object relevance modes: `Always`, `Distance` (the default for props), `OwnerOnly`, `Team`, and a hook
+     for custom rules (line of sight, rooms, streaming cells).
+   - An object leaving relevance is hidden on the client, not destroyed. It keeps its entity so re-entry is
+     one full-state update instead of a respawn.
+6. **Physics rollback through Jolt's state recorder.** For predicted bodies, save and restore Jolt state with
+   `SaveState` / `RestoreState`, limited to the bodies in the prediction's islands rather than the whole world.
+   Measure the cost per re-simulated tick, and cap how many ticks a correction may replay.
+7. **Deterministic mode: send inputs, not bodies.** Jolt is already built with
+   `CROSS_PLATFORM_DETERMINISTIC ON`, so physics gives the same results on every platform. An optional session
+   mode uses that:
+   - clients run the same fixed-tick simulation from the same inputs, and the server sends inputs plus
+     occasional state, instead of every moving body every snapshot;
+   - each machine hashes the replicated columns every N ticks and sends the hash to the server; a mismatch
+     triggers a full-state resync of the affected entities (or the world), and late joiners get a full state
+     first.
+
+   The physics is deterministic, but the game code around it must be too, and that is the hard part:
+   - fixed tick only, and no `Time.DeltaTime` or wall-clock time in simulation code;
+   - iteration in a stable order (sort by entity id where Flecs table order could differ);
+   - seeded per-tick random numbers;
+   - Beef and native code built without fast-math or floating-point contraction;
+   - engine-provided deterministic `Sin`/`Cos`/`Sqrt` (Jolt has its own) instead of the platform C library's
+     in simulation code.
+
+   Start as a hybrid: deterministic simulation for physics props and server-authoritative state for
+   players, so most of the bandwidth is saved without the whole game having to be deterministic. Rollback on
+   desync replays the whole simulated set, so measure it against world size. Large worlds may need input
+   delay instead of rollback.
 
 ### Scenes, prefabs, saving
 
@@ -281,10 +359,37 @@ Each phase lists its exit check. Sizes are relative: S, M, L.
 
 ### Phase 6: Networking (L)
 
-- `NetworkIdentity` as data, column snapshots, delta compression, rollback through the fixed pipeline,
-  `NetworkScript.OnTick` on top, lag compensation, interest management, host migration.
-- **Exit:** networked Showcase exhibits pass. Measure a dedicated server with many replicated entities and
-  several simulated clients, before (from `main`) and after.
+Steps, each committed on its own (see "Networking" under Architecture for the details):
+
+- **6a. Port.** `NetworkIdentity` as data, column snapshots, rollback through the fixed pipeline with the
+  networked `Update` on top, lag compensation and host migration. The existing bandwidth options carry over,
+  computed from columns.
+  **Exit:** networked Showcase exhibits pass; the existing test fixture profiles (baseline, exact, quantized,
+  sleep, rate, budget, compressed, all, steam) produce the same bytes as `main`.
+- **6b. Defaults.** Quantized formats, dormancy, optimized snapshots and compression on by default, plus the
+  bytes-per-client estimate in the network panel.
+  **Exit:** a new project's networked objects use the new defaults.
+- **6c. Field deltas.** Per-client acknowledged baselines, change masks and variable-length position
+  differences, then the column-grouped packet layout (kept only if it measures smaller).
+  **Exit:** bytes per client measured against 6b on the 4096-prop scaling workload.
+- **6d. Dynamic priority.** Per-(client, entity) accumulators replace fixed ordering under the budget.
+  **Exit:** under a tight budget, near and visible objects update at full rate, far ones degrade smoothly and
+  none go stale past a set limit.
+- **6e. Interest management.** Relevance covers spawns, despawns, fields and events; spatial grid; relevance
+  modes; hysteresis; hide-not-destroy.
+  **Exit:** a large map where each client receives only its area, with no pop-in at the hysteresis edge.
+- **6f. Physics rollback via Jolt state.** Island-limited `SaveState` / `RestoreState` for predicted bodies,
+  with a replay cap.
+  **Exit:** the cost per re-simulated tick is recorded; a stack of predicted crates corrects without visible
+  snapping.
+- **6g. Deterministic mode (hybrid first).** Inputs plus hashes for physics props, state for players,
+  desync detection and resync, full state for late joiners, the deterministic math functions, and build flags
+  checked on every platform.
+  **Exit:** Windows, Linux and macOS clients stay in sync for 10 minutes of heavy prop physics (no hash
+  mismatch), and bytes per client are measured against 6e.
+
+**Phase exit:** measure a dedicated server with thousands of replicated bodies and many simulated clients,
+before (from `main`) and after each of 6c to 6g: server CPU per tick and bytes per client per second.
 
 ### Phase 7: Scripting experience (M)
 
@@ -308,7 +413,9 @@ Each phase lists its exit check. Sizes are relative: S, M, L.
 - **Adding or removing components often is slow** (entities move between tables). Use enabled flags or Flecs
   toggles for things that switch on and off often.
 - **Determinism for rollback.** Predicted systems must be deterministic within a build: fixed tick, no
-  frame-time dependence, ordered iteration. Document this next to `OnTick`'s rules.
+  frame-time dependence, ordered iteration. Document this next to the networked `Update`'s rules.
+  Deterministic mode (step 6g) raises the bar to every platform: build flags, math functions and iteration
+  order all matter. One mismatch shows up as a desync, so hash checks and resync are required, not optional.
 - **Flecs upgrades.** Pin the tag in `third_party/flecs` and keep the shim small, so an upgrade only touches
   `tallow_ecs.c`.
 - **Possible later addition:** a second scripting language (C# or Luau) can bind to the same component
