@@ -984,7 +984,8 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
     built-in component data cannot hold object references yet (DataComponents leaves them out: a pointer would
     dangle, and saving, the Inspector picker and clearing on destroy are not done for data). Phase 5: object
     references in data (an entity id, saved as the object, resolved on use), then these two and LODGroup.
-    *Unblocked:* `ObjectRef<T>` is done (Phase 5 progress).
+    *Unblocked:* `ObjectRef<T>` is done (Phase 5 progress). *Since then:* Joint and LODGroup are handles; Rope (with SoftBody) stays a
+    class for now (Phase 5 progress, "Staying classes for now: Rope and SoftBody").
   - **SoftBody** runs a FixedUpdate and LateUpdate of its own and shares its native proxy pass with Rope
     (`UpdateProxies(world, softBodies, ropes)`); it moves with Rope in Phase 5. A handful per scene, so nothing is
     lost meanwhile.
