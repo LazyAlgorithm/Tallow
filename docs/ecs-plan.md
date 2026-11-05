@@ -1082,6 +1082,20 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   count, playing again, removing it restoring the object, freeing. In the Sandbox's Navigation scene the crate
   follows its sequence as before; the Gallery self-test passes.
 
+- [x] **SpawnPoint.** All data (`SpawnPointData`, its use counters `[NonSerialized]` there too), no runtime
+  state; its gizmo is the handle's static DrawGizmos. `SpawnPoints` (Next, Random, Place, Count, the start phase)
+  works on handles and returns an invalid one where it returned null. World streaming keeps objects with one by
+  `HasComponent` (an `is SpawnPoint` there had silently become false). Map rules find a handle field's default
+  from its data's initializers. Checked by `EcsChecks.SpawnChecks`: defaults, Count, the start phase line-up first,
+  teams, Place, switched off, saving settings but not use, loading. The Gallery self-test passes.
+  Games that update: `SpawnPoints.Next(...) != null` and `point == null` (fix_handle_nulls.py).
+- **Staying classes for now (Phase 5):** the IK components (LimbIK, LookAtIK, FootPlacement, HandPose). They
+  share an abstract base that layers each solver over the pose before it, fade their weight with a network event
+  (`NetworkSync.SendEvent` / `OnNetworkEvent` on a Component), give the pose back in OnBeforeSave, and the editor's
+  rig tools (IK rig setup, hand posing, baking) and ShatterLock's WeaponHold build them in code and keep them as
+  class references. A scene has a handful, so the ECS gains nothing measurable. Converting them needs
+  `OnNetworkEvent` and `OnBeforeSave` for handles first. The state classes could keep the abstract base as it is.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

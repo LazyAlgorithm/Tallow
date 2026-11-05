@@ -3,10 +3,9 @@ using System.Collections;
 
 namespace Tallow;
 
-/// A place where players or other objects may appear. Put as many in the scene as you like and ask SpawnPoints for
-/// one; the object's position is where to appear and its rotation is which way to face.
-[Component]
-class SpawnPoint : Component
+/// A Spawn Point's settings and use, in its entity (SpawnPoint is the handle).
+[Component, HandleData]
+struct SpawnPointData
 {
 	/// Which team may use this point. 0 means any team.
 	public int32 team = 0;
@@ -17,10 +16,20 @@ class SpawnPoint : Component
 	public float clearRadius = 1.0f;
 
 	/// Order of use; the point used longest ago is the "next" one.
-	[NonSerialized] public int64 LastUsed;
-	[NonSerialized] public bool UsedThisStart;
-	[NonSerialized] public int32 UseCount;
+	[NonSerialized] public int64 LastUsed = 0;
+	[NonSerialized] public bool UsedThisStart = false;
+	[NonSerialized] public int32 UseCount = 0;
 
+	public this() { }
+}
+
+/// A place where players or other objects may appear. Put as many in the scene as you like and ask SpawnPoints for
+/// one; the object's position is where to appear and its rotation is which way to face.
+///
+/// A handle (ComponentHandle): everything it has is SpawnPointData, so it has no runtime state of its own.
+[Component, HandleFields]
+struct SpawnPoint : ComponentHandle<SpawnPointData>
+{
 	public Vector3 Position => Transform.Position;
 	public Quaternion Rotation => Transform.Rotation;
 
@@ -39,7 +48,14 @@ class SpawnPoint : Component
 
 	/// A ring on the ground, a post the height of a person and an arrow for the facing, in the team's colour.
 	/// Start-only points have a second, inner ring.
-	public override void OnDrawGizmos(bool selected)
+	static void DrawGizmos(GameObject gameObject, bool selected)
+	{
+		if (gameObject.Scene == null)
+			return;
+		gameObject.GetComponent<SpawnPoint>().DrawGizmo(selected);
+	}
+
+	void DrawGizmo(bool selected)
 	{
 		var color = TeamColor(team);
 		color.a = selected ? 1.0f : 0.55f;
@@ -94,8 +110,8 @@ static class SpawnPoints
 	{
 		scene.SpawnStartOver = false;
 		scene.SpawnPhaseTime = 0;
-		for (let component in scene.ComponentsOfType(typeof(SpawnPoint)))
-			((SpawnPoint)component).UsedThisStart = false;
+		for (let point in scene.FindComponents<SpawnPoint>(.. scope .()))
+			point.UsedThisStart = false;
 	}
 
 	/// Closes the start phase now; from here only ordinary points are given out.
@@ -108,13 +124,10 @@ static class SpawnPoints
 	public static int Count(Scene scene, int32 team = 0)
 	{
 		int count = 0;
-		for (let component in scene.ComponentsOfType(typeof(SpawnPoint)))
+		for (let point in scene.Components<SpawnPoint>(.. scope .()))
 		{
-			if (let point = component as SpawnPoint)
-			{
-				if (point.IsActiveAndEnabled && !point.startOnly && (team == 0 || point.team == team || point.team == 0))
-					count++;
-			}
+			if (point.GameObject.ActiveInHierarchy && !point.startOnly && (team == 0 || point.team == team || point.team == 0))
+				count++;
 		}
 		return count;
 	}
@@ -134,7 +147,7 @@ static class SpawnPoints
 	static SpawnPoint Choose(List<SpawnPoint> tier, bool random)
 	{
 		if (tier.IsEmpty)
-			return null;
+			return default;
 		if (random)
 			return tier[(int)(sRandom.NextDouble() * tier.Count) % tier.Count];
 		var best = tier[0];
@@ -150,13 +163,10 @@ static class SpawnPoints
 	{
 		List<SpawnPoint> all = scope .();
 		List<Vector3> bodies = scope .();
-		for (let component in scene.Components)
+		for (let point in scene.Components<SpawnPoint>(.. scope .()))
 		{
-			if (let point = component as SpawnPoint)
-			{
-				if (point.IsActiveAndEnabled)
-					all.Add(point);
-			}
+			if (point.GameObject.ActiveInHierarchy)
+				all.Add(point);
 		}
 		for (let controller in scene.Components<CharacterController>(.. scope .()))
 		{
@@ -169,9 +179,9 @@ static class SpawnPoints
 				bodies.Add(body.Transform.Position);
 		}
 		if (all.IsEmpty)
-			return null;
+			return default;
 		List<SpawnPoint> tier = scope .();
-		SpawnPoint chosen = null;
+		SpawnPoint chosen = default;
 		if (IsStartPhase(scene))
 		{
 			// Own team's line-up first, then shared start points.
@@ -190,7 +200,7 @@ static class SpawnPoints
 			}
 			chosen = Choose(tier, random);
 		}
-		for (int pass = 0; pass < 2 && chosen == null; pass++)
+		for (int pass = 0; pass < 2 && !chosen.IsValid; pass++)
 		{
 			let mustBeFree = pass == 0;
 			tier.Clear();
@@ -200,7 +210,7 @@ static class SpawnPoints
 					tier.Add(point);
 			}
 			chosen = Choose(tier, random);
-			if (chosen == null && team != 0)
+			if (!chosen.IsValid && team != 0)
 			{
 				tier.Clear();
 				for (let point in all)
@@ -211,7 +221,7 @@ static class SpawnPoints
 				chosen = Choose(tier, random);
 			}
 		}
-		if (chosen == null)
+		if (!chosen.IsValid)
 		{
 			// Nothing suitable at all: any ordinary point is better than none, then any point.
 			tier.Clear();
@@ -220,7 +230,9 @@ static class SpawnPoints
 				if (!point.startOnly)
 					tier.Add(point);
 			}
-			chosen = Choose(tier, random) ?? Choose(all, random);
+			chosen = Choose(tier, random);
+			if (!chosen)
+				chosen = Choose(all, random);
 		}
 		chosen.LastUsed = ++sSequence;
 		chosen.UseCount++;
@@ -242,7 +254,7 @@ static class SpawnPoints
 		position = default;
 		rotation = .Identity;
 		let point = Pick(scene, team, random);
-		if (point == null)
+		if (!point.IsValid)
 			return false;
 		position = point.Position;
 		rotation = point.Rotation;
@@ -255,8 +267,8 @@ static class SpawnPoints
 	public static SpawnPoint Place(GameObject object, int32 team = 0, bool random = false)
 	{
 		let point = Pick(object.Scene, team, random);
-		if (point == null)
-			return null;
+		if (!point.IsValid)
+			return default;
 		object.Transform.SetPositionAndRotation(point.Position, point.Rotation);
 		let controller = object.GetComponent<CharacterController>();
 		if (controller.IsValid)

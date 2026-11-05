@@ -121,11 +121,11 @@ class WorldStreamer
 		bool Keeps(GameObject gameObject)
 		{
 			let light = gameObject.GetComponent<Light>();
-			if ((light && light.type == .Directional) || gameObject.HasComponent<Camera>())
+			if ((light && light.type == .Directional) || gameObject.HasComponent<Camera>() || gameObject.HasComponent<SpawnPoint>())
 				return true;
 			for (let component in gameObject.Components)
 			{
-				if (component is NetworkIdentity || component is VoxelTerrain || component is StreamingSource || component is SpawnPoint)
+				if (component is NetworkIdentity || component is VoxelTerrain || component is StreamingSource)
 					return true;
 			}
 			for (let child in gameObject.Transform.Children)

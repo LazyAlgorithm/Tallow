@@ -219,6 +219,21 @@ static class MapRules
 	/// such component or field.
 	static void DefaultValue(StringView typeName, StringView fieldName, String text)
 	{
+		// A built-in component (a handle): its data's field initializers.
+		if (let handle = HandleComponents.Find(typeName))
+		{
+			let fields = scope List<FieldRef>();
+			DataComponents.GetFields(handle.dataType, handle.defaults.Ptr, fields);
+			for (let field in fields)
+			{
+				if (field.name == fieldName)
+				{
+					SceneSerializer.WriteValue(field, text);
+					return;
+				}
+			}
+			return;
+		}
 		let info = ComponentRegistry.Find(typeName);
 		if (info == null)
 			return;

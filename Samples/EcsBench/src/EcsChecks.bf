@@ -119,6 +119,7 @@ static class EcsChecks
 		BehaviourChecks();
 		DialogueChecks();
 		SequenceChecks();
+		SpawnChecks();
 		return sFailures;
 	}
 
@@ -671,6 +672,49 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Spawn Point: all data, no state; the chooser's order, teams and start-only points; Place; save and load.
+	static void SpawnChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			SpawnPoint Point(StringView name, Vector3 at, int32 team, bool startOnly = false)
+			{
+				let o = scene.CreateGameObject(name);
+				o.Transform.Position = at;
+				let point = o.AddComponent<SpawnPoint>();
+				point.team = team;
+				point.startOnly = startOnly;
+				return point;
+			}
+			let any = Point("Any", .(0, 0, 0), 0);
+			Expect(any.clearRadius == 1 && any.UseCount == 0, "a point has its defaults");
+			let red = Point("Red", .(10, 0, 0), 1);
+			let line = Point("Red line-up", .(20, 0, 0), 1, true);
+			Expect(SpawnPoints.Count(scene) == 2 && SpawnPoints.Count(scene, 1) == 2 && SpawnPoints.Count(scene, 2) == 1, "Count leaves out start-only points and other teams'");
+			scene.StartPlay();
+			Expect(SpawnPoints.Next(scene, 1) == line && line.UsedThisStart, "the start phase gives a team its line-up first");
+			let second = SpawnPoints.Next(scene, 1);
+			Expect(second == red, "then its own ordinary point");
+			Expect(SpawnPoints.Next(scene, 2) == any, "another team gets the shared one");
+			let player = scene.CreateGameObject("Player");
+			let placed = SpawnPoints.Place(player, 1);
+			Expect(placed && player.Transform.Position == placed.Position && placed.UseCount == 2, "Place moves an object to a point and counts the use");
+			scene.StopPlay();
+			red.enabled = false;
+			Expect(SpawnPoints.Count(scene, 1) == 1, "a switched-off point is not given out");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(!text.Contains("UseCount") && text.Contains("field startOnly 1"), "it saves its settings, not its use");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Red line-up").GetComponent<SpawnPoint>();
+			Expect(copy && copy.team == 1 && copy.startOnly && copy.UseCount == 0, "and loads");
+		}
+		Scene.Active = previous;
 	}
 
 	/// Sequence Player: Play On Start (Frame.Sequences), moving a track's object, finishing, the playing count,
