@@ -52,7 +52,7 @@ struct LineRendererData
 
 /// A line through a list of points, drawn as a flat strip that faces the viewer (docs/lines-and-trails.md): aim
 /// guides, laser beams, cables, paths on a map. Its points are a list, edited in the Inspector or set by a script
-/// (SetPositions, SetPosition, PositionCount); Children As Points draws it through this object's children instead. Its look
+/// (AddPosition, SetPositions, SetPosition, PositionCount), with no objects needed; Children As Points draws it through this object's children instead. Its look
 /// is its own (colours, Material, Texture, Glow), drawn through a hidden child object.
 ///
 /// A handle (ComponentHandle): its settings are LineRendererData's fields; the strip it draws is its LineState.
@@ -100,6 +100,12 @@ struct LineRenderer : ComponentHandle<LineRendererData>
 		let points = Points;
 		return (index >= 0 && index < points.Count) ? points[index] : .Zero;
 	}
+
+	/// Adds a point at the end of the line.
+	public void AddPosition(Vector3 position) => Points.Add(position);
+
+	/// Removes every point.
+	public void ClearPositions() => Points.Clear();
 
 	/// Replaces every point.
 	public void SetPositions(Span<Vector3> points)

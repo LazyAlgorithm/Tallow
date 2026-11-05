@@ -550,6 +550,12 @@ static class EcsChecks
 			Expect(Internal.UnsafeCastToPtr(first.positions) != Internal.UnsafeCastToPtr(second.positions), "each line owns its own point list");
 			first.SetPositions(scope Vector3[](.(0, 0, 0), .(3, 0, 0), .(3, 4, 0)));
 			Expect(first.PositionCount == 3 && Math.Abs(first.Length - 7) < 0.001f && second.PositionCount == 2, "SetPositions changes that line only");
+			second.AddPosition(.(0, 0, 3));
+			Expect(second.PositionCount == 3 && second.GetPosition(2) == .(0, 0, 3), "AddPosition adds a point at the end");
+			second.ClearPositions();
+			second.AddPosition(.Zero);
+			second.AddPosition(.(0, 0, 1));
+			Expect(second.PositionCount == 2, "ClearPositions empties the line");
 			let info = HandleComponents.Find(typeof(LineRenderer));
 			HandleComponents.Assign(b.GetData(info.dataType), a.GetData(info.dataType), info);
 			Expect(second.PositionCount == 3 && Internal.UnsafeCastToPtr(first.positions) != Internal.UnsafeCastToPtr(second.positions), "pasting values copies the points, not the list");
