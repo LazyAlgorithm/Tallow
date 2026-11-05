@@ -148,6 +148,14 @@ static class EcsChecks
 		Expect(plain.frames == 3 && plain.ticks == 0, scope $"plain object: Update once a frame (frames {plain.frames}, ticks {plain.ticks})");
 		Expect(networked.ticks == 2 && networked.frames == 0, scope $"networked object: Update once a tick (frames {networked.frames}, ticks {networked.ticks})");
 		Expect(!networked.sawControls, "an object no player controls gets empty controls");
+
+		// The per-callback lists only hold classes that override the callback.
+		Expect(ScriptCallbackIndex.Of(typeof(UpdateCounter)) == .Update, "UpdateCounter overrides Update only");
+		Expect(ScriptCallbackIndex.Of(typeof(Mover)) == .Update, "Mover overrides Update only");
+		Expect(ScriptCallbackIndex.Of(typeof(MeshRenderer)) & ~ScriptCallbacks.OnFrame == .None, "MeshRenderer has no per-frame gameplay callbacks");
+		Expect(ScriptCallbackIndex.Of(typeof(Animator)).HasFlag(.OnLocalUpdate), "Animator overrides OnLocalUpdate");
+		Expect(ScriptCallbackIndex.Of(typeof(CharacterMotor)).HasFlag(.FixedUpdate), "CharacterMotor overrides FixedUpdate");
+		Expect(ScriptCallbackIndex.Of(typeof(Bench)) == .Update | .LateUpdate, "Bench overrides Update and LateUpdate");
 		scene.StopPlay();
 		Scene.Active = previous;
 	}

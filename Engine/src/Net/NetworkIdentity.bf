@@ -107,7 +107,7 @@ class NetworkIdentity : Component
 		for (int i = 0; i < components.Count; i++)
 		{
 			let component = components[i];
-			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
+			if (component.[Friend]mCallbacks.HasFlag(.Update) && component.[Friend]mStarted && component.IsActiveAndEnabled)
 				scene.[Friend]RunUpdate(component, tick, deltaTime);
 		}
 	}

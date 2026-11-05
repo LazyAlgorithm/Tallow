@@ -72,6 +72,8 @@ abstract class Component
 	bool mLeavingTogether;
 	/// The Profiler's marker slot for its type (ProfilerComponents), -1 until it is first timed.
 	int32 mProfileSlot = -1;
+	/// Which per-frame callbacks this component's class overrides (ScriptCallbacks), set when it joins a scene.
+	ScriptCallbacks mCallbacks;
 
 	/// The object this component is on.
 	public GameObject GameObject { [Inline] get => mGameObject; }

@@ -189,8 +189,41 @@ class Scene
 	List<GameObject> mObjects = new .() ~ delete _;
 	Dictionary<uint32, GameObject> mById = new .() ~ delete _;
 	List<Component> mComponents = new .() ~ delete _;
-	/// mComponents less the engine classes that have no per-frame work (sIdleTypes): what the update loops go through.
-	List<Component> mRunning = new .() ~ delete _;
+	/// The components whose class overrides each per-frame callback (ScriptCallbacks), in the order they joined.
+	/// The update loops go through these only.
+	List<Component> mFixedList = new .() ~ delete _;
+	/// Update or OnLocalUpdate.
+	List<Component> mFrameList = new .() ~ delete _;
+	List<Component> mLateList = new .() ~ delete _;
+	List<Component> mOnFrameList = new .() ~ delete _;
+
+	void AddToCallbackLists(Component component)
+	{
+		let callbacks = ScriptCallbackIndex.Of(component.GetType());
+		component.[Friend]mCallbacks = callbacks;
+		if (callbacks.HasFlag(.FixedUpdate))
+			mFixedList.Add(component);
+		if (callbacks.HasFlag(.Update) || callbacks.HasFlag(.OnLocalUpdate))
+			mFrameList.Add(component);
+		if (callbacks.HasFlag(.LateUpdate))
+			mLateList.Add(component);
+		if (callbacks.HasFlag(.OnFrame))
+			mOnFrameList.Add(component);
+	}
+
+	void RemoveFromCallbackLists(Component component)
+	{
+		let callbacks = component.[Friend]mCallbacks;
+		if (callbacks.HasFlag(.FixedUpdate))
+			mFixedList.Remove(component);
+		if (callbacks.HasFlag(.Update) || callbacks.HasFlag(.OnLocalUpdate))
+			mFrameList.Remove(component);
+		if (callbacks.HasFlag(.LateUpdate))
+			mLateList.Remove(component);
+		if (callbacks.HasFlag(.OnFrame))
+			mOnFrameList.Remove(component);
+	}
+
 	List<Component> mPendingStart = new .() ~ delete _;
 	List<GameObject> mDestroyQueue = new .() ~ delete _;
 	uint32 mNextId = 1;
@@ -316,14 +349,6 @@ class Scene
 	{
 		Physics.ApplyWorldState(gameObject);
 	}
-
-	/// Classes of the engine with no FixedUpdate, Update, LateUpdate or OnFrame, which most of a big scene is made of.
-	/// Exact classes only: a game's class derived from one may well have them.
-	static HashSet<Type> sIdleTypes = new .()
-		{
-			typeof(MeshRenderer), typeof(Light), typeof(Camera), typeof(Rigidbody),
-			typeof(BoxCollider), typeof(SphereCollider), typeof(CapsuleCollider), typeof(MeshCollider)
-		} ~ delete _;
 
 	void IndexTag(GameObject gameObject, StringView tag, bool add)
 	{
@@ -582,9 +607,22 @@ class Scene
 		let index = mComponents.IndexOf(old);
 		if (index >= 0)
 			mComponents[index] = replacement;
-		let running = mRunning.IndexOf(old);
-		if (running >= 0)
-			mRunning[running] = replacement;
+		if (ScriptCallbackIndex.Of(replacement.GetType()) == old.[Friend]mCallbacks)
+		{
+			replacement.[Friend]mCallbacks = old.[Friend]mCallbacks;
+			for (let list in scope List<Component>[](mFixedList, mFrameList, mLateList, mOnFrameList))
+			{
+				let at = list.IndexOf(old);
+				if (at >= 0)
+					list[at] = replacement;
+			}
+		}
+		else
+		{
+			// The reloaded class overrides different callbacks: it joins the end of its lists.
+			RemoveFromCallbackLists(old);
+			AddToCallbackLists(replacement);
+		}
 		let pending = mPendingStart.IndexOf(old);
 		if (pending >= 0)
 			mPendingStart[pending] = replacement;
@@ -751,7 +789,10 @@ class Scene
 	void Sweep()
 	{
 		Keep(mComponents);
-		Keep(mRunning);
+		Keep(mFixedList);
+		Keep(mFrameList);
+		Keep(mLateList);
+		Keep(mOnFrameList);
 		for (let type in mSweptTypes)
 		{
 			if (mByType.TryGetValue(type, let list))
@@ -868,8 +909,7 @@ class Scene
 			return;
 		component.[Friend]mRegistered = true;
 		mComponents.Add(component);
-		if (!sIdleTypes.Contains(component.GetType()))
-			mRunning.Add(component);
+		AddToCallbackLists(component);
 		IndexComponent(component, true);
 		AddReferenceSlots(component);
 		component.OnRegister();
@@ -919,7 +959,7 @@ class Scene
 		component.[Friend]mRegistered = false;
 		component.[Friend]mAwake = false;
 		mComponents.Remove(component);
-		mRunning.Remove(component);
+		RemoveFromCallbackLists(component);
 		IndexComponent(component, false);
 		let pending = mPendingStart.IndexOf(component);
 		if (pending >= 0)
@@ -1093,10 +1133,12 @@ class Scene
 	{
 		if (Network != null && Network.Mode != .Offline)
 			return;
-		for (int i = 0; i < mRunning.Count; i++)
+		if (!mByType.TryGetValue(typeof(NetworkIdentity), let identities))
+			return;
+		for (int i = 0; i < identities.Count; i++)
 		{
-			let identity = mRunning[i] as NetworkIdentity;
-			if (identity != null && identity.IsActiveAndEnabled)
+			let identity = (NetworkIdentity)identities[i];
+			if (identity.IsActiveAndEnabled)
 				identity.TickUpdate(identity.GatherControls(), Time.FixedDeltaTime);
 		}
 	}
@@ -1115,9 +1157,9 @@ class Scene
 		using (sTickUpdateMarker.Sample())
 			TickUpdatesOffline();
 		sFixedMarker.Begin();
-		for (int i = 0; i < mRunning.Count; i++)
+		for (int i = 0; i < mFixedList.Count; i++)
 		{
-			let component = mRunning[i];
+			let component = mFixedList[i];
 			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 				Run(component, .FixedUpdate);
 		}
@@ -1159,9 +1201,9 @@ class Scene
 			Updating = false;
 		}
 		sFrameComponentsMarker.Begin();
-		for (int i = 0; i < mRunning.Count; i++)
+		for (int i = 0; i < mOnFrameList.Count; i++)
 		{
-			let component = mRunning[i];
+			let component = mOnFrameList[i];
 			if (component.IsActiveAndEnabled)
 				Run(component, .OnFrame);
 		}
@@ -1178,14 +1220,16 @@ class Scene
 			mFrameInput.raw = default;
 			LocalControls.Read(ref mFrameInput.raw);
 			sUpdateMarker.Begin();
-			for (int i = 0; i < mRunning.Count; i++)
+			for (int i = 0; i < mFrameList.Count; i++)
 			{
-				let component = mRunning[i];
+				let component = mFrameList[i];
 				if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 				{
-					Run(component, .OnLocalUpdate);
+					let callbacks = component.[Friend]mCallbacks;
+					if (callbacks.HasFlag(.OnLocalUpdate))
+						Run(component, .OnLocalUpdate);
 					// Update runs here for objects without a Network Identity; theirs runs per tick.
-					if (!TicksUpdate(component.GameObject) && component.IsActiveAndEnabled)
+					if (callbacks.HasFlag(.Update) && !TicksUpdate(component.GameObject) && component.IsActiveAndEnabled)
 						Run(component, .Update);
 				}
 			}
@@ -1194,9 +1238,9 @@ class Scene
 			using (sPathsMarker.Sample())
 				NavigationAgent.FindQueuedPaths();
 			sLateMarker.Begin();
-			for (int i = 0; i < mRunning.Count; i++)
+			for (int i = 0; i < mLateList.Count; i++)
 			{
-				let component = mRunning[i];
+				let component = mLateList[i];
 				if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 					Run(component, .LateUpdate);
 			}
