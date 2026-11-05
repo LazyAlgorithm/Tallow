@@ -330,7 +330,11 @@ extension EditorApp
 			ImGui.EndTable();
 		}
 		if (changed)
+		{
 			MarkDirty();
+			if (info.onValidate != null)
+				info.onValidate(gameObject);
+		}
 		DrawHandleTools(gameObject, info);
 		return false;
 	}
@@ -348,6 +352,8 @@ extension EditorApp
 			DrawSkinnedClips(gameObject.GetComponent<SkinnedMeshRenderer>());
 		else if (info.handleType == typeof(Foliage))
 			DrawFoliageTools(gameObject.GetComponent<Foliage>());
+		else if (info.handleType == typeof(ViewmodelPose))
+			DrawViewmodelPoseTools(gameObject.GetComponent<ViewmodelPose>());
 		else if (info.handleType == typeof(SequencePlayer))
 			DrawSequencePlayerTools(gameObject.GetComponent<SequencePlayer>());
 		else if (info.handleType == typeof(DialogueRunner))
@@ -614,8 +620,6 @@ extension EditorApp
 	{
 		if (let surface = component as NavigationSurface)
 			DrawNavigationTools(surface);
-		if (let pose = component as ViewmodelPose)
-			DrawViewmodelPoseTools(pose);
 		if (let limb = component as LimbIK)
 			DrawLimbIKTools(limb);
 		if (let link = component as NavigationLink)

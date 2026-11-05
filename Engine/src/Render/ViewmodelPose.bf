@@ -2,16 +2,9 @@ using System;
 
 namespace Tallow;
 
-/// Moves a first-person viewmodel: put it on the object that holds the arms and weapon (a child of the camera, on the
-/// Camera's Viewmodel Layer). It carries the weapon from a hip pose to an aim pose (aiming down the sights: in the
-/// middle of the screen, the sights on the crosshair), bobs it as the player walks and lets it lag a little behind
-/// when the view turns, worked out from how the camera moves, so the only code a game needs is setting Aiming and,
-/// for recoil, calling Kick. See docs/viewmodel.md.
-///
-/// In the editor, Preview shows the pose part way from hip to aim while not playing, and the Inspector's buttons take
-/// the object's current place as the hip or the aim pose: move it until it looks right in the Game view, then press.
-[Component]
-class ViewmodelPose : Component
+/// A ViewmodelPose's settings, in its entity (ViewmodelPose is the handle).
+[Component, HandleData]
+struct ViewmodelPoseData
 {
 	/// Where the weapon rests (the object's local position and rotation, in degrees, under the camera).
 	public Vector3 hipPosition = .(0.12f, -0.12f, 0.28f);
@@ -20,7 +13,7 @@ class ViewmodelPose : Component
 	public Vector3 aimPosition = .(0, -0.05f, 0.24f);
 	public Vector3 aimRotation = .Zero;
 	/// Set by the game while the player aims down the sights.
-	public bool aiming;
+	public bool aiming = false;
 	/// How quickly the weapon comes up to aim and goes back: the whole way in 1 / Aim Speed seconds.
 	[Range(1, 40)]
 	public float aimSpeed = 8;
@@ -48,7 +41,116 @@ class ViewmodelPose : Component
 
 	/// Edit mode only: shows the pose this far from hip (0) to aim (1), to line the two up in the Game view.
 	[Range(0, 1)]
-	public float preview;
+	public float preview = 0;
+
+	public this() { }
+}
+
+/// Moves a first-person viewmodel: put it on the object that holds the arms and weapon (a child of the camera, on the
+/// Camera's Viewmodel Layer). It carries the weapon from a hip pose to an aim pose (aiming down the sights: in the
+/// middle of the screen, the sights on the crosshair), bobs it as the player walks and lets it lag a little behind
+/// when the view turns, worked out from how the camera moves, so the only code a game needs is setting Aiming and,
+/// for recoil, calling Kick. See docs/viewmodel.md.
+///
+/// In the editor, Preview shows the pose part way from hip to aim while not playing, and the Inspector's buttons take
+/// the object's current place as the hip or the aim pose: move it until it looks right in the Game view, then press.
+///
+/// A handle (ComponentHandle): its settings are ViewmodelPoseData's fields, what it keeps between frames its ViewmodelPoseState.
+/// ViewmodelPose.FrameAll (a step in the frame pipeline) does what Start, OnLocalUpdate and OnDisable did.
+[Component, HandleFields]
+struct ViewmodelPose : ComponentHandle<ViewmodelPoseData>
+{
+	/// What it keeps between frames, made the first time it is asked for.
+	public ViewmodelPoseState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<ViewmodelPoseState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			if (state.[Friend]mGameObject == null)
+			{
+				state.[Friend]mGameObject = mGameObject;
+			}
+			return state;
+		}
+	}
+
+	// The API, unchanged: each member is documented on ViewmodelPoseState.
+	public float AimBlend => Runtime.AimBlend;
+	public void Kick(float amount = 1) => Runtime.Kick(amount);
+	public void UseCurrentAsHip() => Runtime.UseCurrentAsHip();
+	public void UseCurrentAsAim() => Runtime.UseCurrentAsAim();
+
+	/// After every LateUpdate (the Frame.Viewmodels step): moves every switched-on one on an active object, as
+	/// LateUpdate did.
+	public static void FrameAll(Scene scene)
+	{
+		if (!scene.IsPlaying)
+			return;
+		for (let component in scene.FindComponents<ViewmodelPose>(.. scope .()))
+		{
+			let state = component.Runtime;
+			if (!component.IsActiveAndEnabled)
+			{
+				if (state.[Friend]mWasActive)
+				{
+					state.[Friend]mWasActive = false;
+					
+				}
+				continue;
+			}
+			// Switched on again (OnEnable): the camera's last place is not where it was.
+			if (!state.[Friend]mWasActive)
+				state.[Friend]mHasLast = false;
+			state.[Friend]mWasActive = true;
+			if (!state.[Friend]mStarted)
+			{
+				state.[Friend]mStarted = true;
+				
+			}
+			state.Frame();
+		}
+	}
+
+	/// When play stops, they start again next time (as Start runs once per play).
+	public static void StopAll(Scene scene)
+	{
+		for (let (entity, state) in ComponentState<ViewmodelPoseState>.In(scene.World, .. scope .()))
+		{
+			state.[Friend]mStarted = false;
+			state.[Friend]mWasActive = false;
+		}
+	}
+
+	/// After the Inspector changes a field or a scene is read: the edit-mode preview.
+	static void OnValidate(GameObject gameObject) => gameObject.GetComponent<ViewmodelPose>().Runtime.OnValidate();
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		ComponentState<ViewmodelPoseState>.Release(world, entity);
+	}
+}
+
+/// What a ViewmodelPose keeps between frames. Its settings are read from the entity each time.
+[DataFields(typeof(ViewmodelPoseData), "Settings")]
+class ViewmodelPoseState
+{
+	GameObject mGameObject;
+	bool mStarted;
+	bool mWasActive;
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+	public Scene Scene => mGameObject.Scene;
+	public ViewmodelPose Handle => mGameObject.GetComponent<ViewmodelPose>();
+	T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
+	T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
+	ref ViewmodelPoseData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<ViewmodelPoseData>();
+	}
 
 	/// How far the weapon is raised to aim, 0 (hip) to 1 (aimed), after easing: for a game to narrow its field of
 	/// view or show a scope in step with it.
@@ -69,19 +171,16 @@ class ViewmodelPose : Component
 		mKick = Math.Min(mKick + Math.Max(amount, 0), 3);
 	}
 
-	public override void OnValidate()
+	/// What OnValidate did (the handle's static OnValidate).
+	public void OnValidate()
 	{
 		// While editing, show the preview pose straight away.
 		if (Scene != null && !Scene.IsPlaying)
 			Apply(Ease(Mathf.Clamp01(preview)), .Zero, .Zero, 0);
 	}
 
-	public override void OnEnable()
-	{
-		mHasLast = false;
-	}
-
-	public override void LateUpdate()
+	/// What LateUpdate did.
+	public void Frame()
 	{
 		let camera = Transform.Parent;
 		if (camera == null)

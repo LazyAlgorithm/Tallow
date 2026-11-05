@@ -447,6 +447,7 @@ static class SceneSerializer
 		}
 		List<(GameObject object, uint32 parent)> parents = scope .();
 		List<Component> loaded = scope .();
+		let validateHandles = scope List<(GameObject, HandleComponents.Info)>();
 		List<(FieldRef field, uint32 id, int index)> references = scope .();
 
 		for (let rawLine in text.Split('\n'))
@@ -523,6 +524,8 @@ static class SceneSerializer
 				{
 					component = null;
 					HandleComponents.Add(current, handle);
+					if (handle.onValidate != null)
+						validateHandles.Add((current, handle));
 					current.Scene.World.Enable(current.Entity, handle.index, tokens[3] == "1");
 					fields.Clear();
 					HandleComponents.GetFields(current, handle, fields);
@@ -545,6 +548,8 @@ static class SceneSerializer
 		ResolveReferences(scene, references, created);
 		for (let c in loaded)
 			c.OnValidate();
+		for (let (gameObject, handle) in validateHandles)
+			handle.onValidate(gameObject);
 		return first;
 	}
 

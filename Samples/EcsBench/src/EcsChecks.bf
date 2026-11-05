@@ -122,6 +122,7 @@ static class EcsChecks
 		SpawnChecks();
 		SceneLoaderChecks();
 		SavedTransformChecks();
+		ViewmodelChecks();
 		return sFailures;
 	}
 
@@ -674,6 +675,46 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Viewmodel Pose: the edit-mode preview through the handle's OnValidate (from the scene loader too), coming up
+	/// to aim in the Frame.Viewmodels step, and Kick.
+	static void ViewmodelChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let camera = scene.CreateGameObject("Camera");
+			let arms = scene.CreateGameObject("Arms", camera.Transform);
+			let pose = arms.AddComponent<ViewmodelPose>();
+			Expect(pose.aimSpeed == 8 && pose.preview == 0 && !pose.aiming, "a pose has its defaults");
+			pose.preview = 1;
+			HandleComponents.Find(typeof(ViewmodelPose)).onValidate(arms);
+			Expect((arms.Transform.LocalPosition - pose.aimPosition).Length < 0.001f, "OnValidate shows the preview pose while editing");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Arms");
+			copy.Transform.LocalPosition = .Zero;
+			SceneSerializer.Load(loaded, text);
+			Expect((loaded.Find("Arms").Transform.LocalPosition - pose.aimPosition).Length < 0.001f, "reading a scene runs it too");
+			pose.preview = 0;
+			scene.StartPlay();
+			pose.aiming = true;
+			for (int i < 60)
+			{
+				Time.DeltaTime = 1 / 30.0f;
+				scene.Update();
+			}
+			Expect((arms.Transform.LocalPosition - pose.aimPosition).Length < 0.002f && pose.AimBlend > 0.99f, scope $"aiming brings it to the aim pose ({arms.Transform.LocalPosition})");
+			pose.Kick();
+			scene.Update();
+			Expect(arms.Transform.LocalPosition.z < pose.aimPosition.z - 0.01f, "Kick pushes it back");
+			scene.StopPlay();
+		}
+		Scene.Active = previous;
 	}
 
 	/// Saved Transform: its own save (static SaveFields) under the old key, the place and a body's velocity coming

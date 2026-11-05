@@ -273,6 +273,9 @@ static class HandleComponents
 		/// The handle's `static void OnSaving(GameObject)` and `static void OnLoaded(GameObject)`, if it has them:
 		/// what a class component's OnSaving and OnLoaded did, around SaveSystem reading and writing [Saved] fields.
 		public function void(GameObject gameObject) onSaving;
+		/// The handle's `static void OnValidate(GameObject)`, if it has one: called after the Inspector changes one of
+		/// its fields and after a scene file is read, as a class component's OnValidate is.
+		public function void(GameObject gameObject) onValidate;
 		/// The handle's `static void OnGUI(Scene)`, if it has one: GUI.Run calls it after the class components'.
 		public function void(Scene scene) onGUI;
 		public function void(GameObject gameObject) onLoaded;
@@ -324,6 +327,8 @@ static class HandleComponents
 				info.saveData = (function void(void*, SaveIO))saver.Ptr;
 			if (type.GetMethod("SaveFields", .Static | .Public | .NonPublic) case .Ok(let saveObject))
 				info.saveObject = (function void(GameObject, SaveIO))saveObject.Ptr;
+			if (type.GetMethod("OnValidate", .Static | .Public | .NonPublic) case .Ok(let validate))
+				info.onValidate = (function void(GameObject))validate.Ptr;
 			if (type.GetMethod("OnGUI", .Static | .Public | .NonPublic) case .Ok(let gui))
 				info.onGUI = (function void(Scene))gui.Ptr;
 			if (type.GetMethod("OnSaving", .Static | .Public | .NonPublic) case .Ok(let saving))

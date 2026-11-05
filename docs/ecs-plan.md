@@ -1119,6 +1119,14 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   and streaming keeps objects with one by `HasComponent`. The editor's `--world-streaming-test` passes on a
   scratch project (its walker has a source: loading round it, stand-ins, the floating origin).
 
+- [x] **Handles' OnValidate.** A handle may have `static void OnValidate(GameObject)`; the Inspector calls it after
+  changing one of its fields, and the scene loader after reading the scene, as for class components.
+- [x] **ViewmodelPose** (tools/class_to_handle.py, then by hand): data, handle, state. A `Frame.Viewmodels` step
+  after `Frame.LateUpdate` does what LateUpdate did; switching it on again forgets the camera's last place (what
+  OnEnable did); its edit-mode preview is the OnValidate hook above. The Inspector's hip / aim buttons moved to
+  `DrawHandleTools`. Checked by `EcsChecks.ViewmodelChecks`: defaults, the preview from OnValidate and from reading
+  a scene, coming up to aim while playing, Kick.
+
 ## Benchmark results
 
 See "Phase 1 results" above.
