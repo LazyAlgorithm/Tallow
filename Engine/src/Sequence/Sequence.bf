@@ -773,7 +773,7 @@ class SequenceEvaluator
 
 	void ApplyCamera(SequenceTrack track, float time)
 	{
-		if (ViewCamera == null)
+		if (!ViewCamera)
 			return;
 		Vector3 position;
 		Quaternion rotation;
@@ -839,7 +839,7 @@ class SequenceEvaluator
 		if (key.value > 0)
 			return key.value;
 		let camera = shot.GetComponent<Camera>();
-		return camera != null ? camera.fieldOfView : 60;
+		return camera ? camera.fieldOfView : 60;
 	}
 
 	void Moment(SequenceTrack track, SequenceKey key, GameObject target)

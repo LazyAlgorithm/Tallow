@@ -104,6 +104,7 @@ static class EcsChecks
 		WindChecks();
 		DecalChecks();
 		ProbeChecks();
+		CameraChecks();
 		return sFailures;
 	}
 
@@ -353,6 +354,34 @@ static class EcsChecks
 		volume.size = .(4, 2, 4);
 		volume.Counts(let x, let y, let z);
 		Expect(x == 5 && y == 3 && z == 5 && volume.spacing == 1, "a Light Probe Volume counts its probes from its data");
+	}
+
+	/// Camera: the view camera is the oldest active one unless overridden; the override goes when its object does.
+	static void CameraChecks()
+	{
+		let scene = scope Scene();
+		Expect(!scene.ViewCamera, "no camera: ViewCamera is not valid");
+		let main = scene.CreateGameObject("Main").AddComponent<Camera>();
+		let second = scene.CreateGameObject("Second").AddComponent<Camera>();
+		Expect(main.fieldOfView == 60 && main.viewmodelLayer == -1 && main.farClip == 1000, "a Camera has its defaults");
+		Expect(scene.ViewCamera == main && scene.Cameras.Count == 2, "the oldest camera is the view camera");
+		main.enabled = false;
+		Expect(scene.ViewCamera == second && scene.Cameras.Count == 1, "a switched-off camera is passed over");
+		main.enabled = true;
+		second.GameObject.SetActive(false);
+		scene.CameraOverride = second;
+		Expect(scene.ViewCamera == main, "an inactive override is passed over");
+		second.GameObject.SetActive(true);
+		Expect(scene.ViewCamera == second, "an active override is the view camera");
+		scene.DestroyImmediate(second.GameObject);
+		Expect(!scene.CameraOverride && scene.ViewCamera == main, "the override goes with its object");
+		main.fieldOfView = 75;
+		Expect(Math.Abs(main.GetCameraData(1).fieldOfView - 75) < 0.001f, "GetCameraData reads the handle's data");
+		let text = scope String();
+		SceneSerializer.Save(scene, text);
+		let loaded = scope Scene();
+		SceneSerializer.Load(loaded, text);
+		Expect(loaded.ViewCamera && loaded.ViewCamera.fieldOfView == 75, "a Camera saves and loads");
 	}
 
 	static void HandleChecks()

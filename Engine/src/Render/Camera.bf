@@ -10,8 +10,86 @@ namespace Tallow;
 /// drawn in a pass of their own after the world, with their own field of view and a near clip close to the eye, over
 /// whatever is in front of the camera, so a gun never pokes into a wall it is held against and keeps its shape however
 /// wide the world's field of view is set. See docs/viewmodel.md.
-[Component]
-class Camera : Component
+///
+/// A handle (ComponentHandle): its settings are CameraSettings' fields, in the object's entity.
+[Component, HandleFields]
+struct Camera : ComponentHandle<CameraSettings>
+{
+	/// Where the viewer is this frame: the game's camera, or in the editor the Scene view's while not playing. Lines and
+	/// trails turn to face it.
+	public static Vector3 ViewerPosition;
+
+	/// From the world to the camera's view.
+	public Matrix4 ViewMatrix
+	{
+		get
+		{
+			let t = Transform;
+			let position = t.Position;
+			let rotation = t.Rotation;
+			return Matrix4.LookAt(position, position + rotation * Vector3.Forward, rotation * Vector3.Up);
+		}
+	}
+
+	/// From the camera's view to the screen, for a picture of a width-to-height ratio.
+	public Matrix4 GetProjection(float aspect)
+	{
+		let settings = Data;
+		if (settings.orthographic)
+		{
+			let h = settings.orthographicSize;
+			let w = h * aspect;
+			return Matrix4.Ortho(-w, w, -h, h, settings.nearClip, settings.farClip, Gfx.HomogeneousDepth);
+		}
+		return Matrix4.Perspective(settings.fieldOfView, aspect, settings.nearClip, settings.farClip, Gfx.HomogeneousDepth);
+	}
+
+	/// Everything a RenderView needs to draw from this camera.
+	public CameraData GetCameraData(float aspect)
+	{
+		let settings = Data;
+		CameraData data;
+		data.view = ViewMatrix;
+		data.projection = GetProjection(aspect);
+		data.position = Transform.Position;
+		data.forward = Transform.Forward;
+		data.near = settings.nearClip;
+		data.far = settings.farClip;
+		data.fieldOfView = settings.fieldOfView;
+		data.aspect = aspect;
+		data.orthographic = settings.orthographic;
+		data.orthographicSize = settings.orthographicSize;
+		data.hasViewmodel = settings.viewmodelLayer >= 0 && !settings.orthographic;
+		data.viewmodelLayer = settings.viewmodelLayer;
+		data.viewmodelCastsShadows = settings.viewmodelCastsShadows;
+		data.occlusionCulling = settings.occlusionCulling;
+		data.viewmodelProjection = Matrix4.Perspective(settings.viewmodelFieldOfView, aspect, Math.Max(settings.viewmodelNearClip, 0.001f), 50.0f, Gfx.HomogeneousDepth);
+		return data;
+	}
+
+	static void DrawGizmos(GameObject gameObject, bool selected)
+	{
+		if (!selected)
+			return;
+		let camera = gameObject.GetComponent<Camera>();
+		let data = camera.GetCameraData(16.0f / 9.0f);
+		var shortened = data;
+		shortened.far = Math.Min(camera.farClip, 8.0f);
+		shortened.projection = camera.orthographic ? data.projection : Matrix4.Perspective(camera.fieldOfView, data.aspect, camera.nearClip, shortened.far, Gfx.HomogeneousDepth);
+		Gizmos.Lines.Frustum((shortened.projection * shortened.view).Inverse, .(0.9f, 0.9f, 0.9f, 1));
+		// The viewmodel's own view, out to an arm's length, in amber: what is on the viewmodel layer and inside it
+		// is what the player sees of their arms and weapon.
+		if (camera.viewmodelLayer >= 0 && !camera.orthographic)
+		{
+			let reach = Matrix4.Perspective(camera.viewmodelFieldOfView, data.aspect, Math.Max(camera.viewmodelNearClip, 0.001f), 1.0f, Gfx.HomogeneousDepth);
+			Gizmos.Lines.Frustum((reach * data.view).Inverse, .(1, 0.7f, 0.2f, 1));
+		}
+	}
+}
+
+/// A Camera's settings.
+[Component, HandleData]
+struct CameraSettings
 {
 	/// How much the camera sees from top to bottom, in degrees.
 	[Range(10, 120)]
@@ -41,81 +119,7 @@ class Camera : Component
 	/// indoors, where much of the scene is behind walls. See docs/occlusion-culling.md.
 	public bool occlusionCulling = false;
 
-	/// Where the viewer is this frame: the game's camera, or in the editor the Scene view's while not playing. Lines and
-	/// trails turn to face it.
-	public static Vector3 ViewerPosition;
-
-	public override void OnRegister() => Scene.Cameras.Add(this);
-	public override void OnUnregister()
-	{
-		Scene.Cameras.Remove(this);
-		if (Scene.CameraOverride == this)
-			Scene.CameraOverride = null;
-	}
-
-	/// From the world to the camera's view.
-	public Matrix4 ViewMatrix
-	{
-		get
-		{
-			let t = Transform;
-			let position = t.Position;
-			let rotation = t.Rotation;
-			return Matrix4.LookAt(position, position + rotation * Vector3.Forward, rotation * Vector3.Up);
-		}
-	}
-
-	/// From the camera's view to the screen, for a picture of a width-to-height ratio.
-	public Matrix4 GetProjection(float aspect)
-	{
-		if (orthographic)
-		{
-			let h = orthographicSize;
-			let w = h * aspect;
-			return Matrix4.Ortho(-w, w, -h, h, nearClip, farClip, Gfx.HomogeneousDepth);
-		}
-		return Matrix4.Perspective(fieldOfView, aspect, nearClip, farClip, Gfx.HomogeneousDepth);
-	}
-
-	/// Everything a RenderView needs to draw from this camera.
-	public CameraData GetCameraData(float aspect)
-	{
-		CameraData data;
-		data.view = ViewMatrix;
-		data.projection = GetProjection(aspect);
-		data.position = Transform.Position;
-		data.forward = Transform.Forward;
-		data.near = nearClip;
-		data.far = farClip;
-		data.fieldOfView = fieldOfView;
-		data.aspect = aspect;
-		data.orthographic = orthographic;
-		data.orthographicSize = orthographicSize;
-		data.hasViewmodel = viewmodelLayer >= 0 && !orthographic;
-		data.viewmodelLayer = viewmodelLayer;
-		data.viewmodelCastsShadows = viewmodelCastsShadows;
-		data.occlusionCulling = occlusionCulling;
-		data.viewmodelProjection = Matrix4.Perspective(viewmodelFieldOfView, aspect, Math.Max(viewmodelNearClip, 0.001f), 50.0f, Gfx.HomogeneousDepth);
-		return data;
-	}
-
-	public override void OnDrawGizmos(bool selected)
-	{
-		if (!selected)
-			return;
-		let data = GetCameraData(16.0f / 9.0f);
-		var shortened = data;
-		shortened.far = Math.Min(farClip, 8.0f);
-		shortened.projection = orthographic ? data.projection : Matrix4.Perspective(fieldOfView, data.aspect, nearClip, shortened.far, Gfx.HomogeneousDepth);
-		Gizmos.Lines.Frustum((shortened.projection * shortened.view).Inverse, .(0.9f, 0.9f, 0.9f, 1));
-		// The viewmodel's own view, out to an arm's length, in amber: what is on the viewmodel layer and inside it
-		// is what the player sees of their arms and weapon.
-		if (viewmodelLayer >= 0 && !orthographic)
-		{
-			let reach = Matrix4.Perspective(viewmodelFieldOfView, data.aspect, Math.Max(viewmodelNearClip, 0.001f), 1.0f, Gfx.HomogeneousDepth);
-			Gizmos.Lines.Frustum((reach * data.view).Inverse, .(1, 0.7f, 0.2f, 1));
-		}
-	}
+	public this() { }
 }
 
 /// Everything the renderer needs to know about a viewpoint.

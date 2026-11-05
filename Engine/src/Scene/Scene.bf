@@ -332,26 +332,58 @@ class Scene
 	}
 
 	/// Every Camera in the scene.
-	public List<Camera> Cameras = new .() ~ delete _;
+	List<Camera> mCameras = new .() ~ delete _;
+	/// The scene's switched-on cameras, oldest object first. Rebuilt each time it is read.
+	public List<Camera> Cameras
+	{
+		get
+		{
+			mCameras.Clear();
+			Components(mCameras);
+			mCameras.Sort(scope (a, b) => a.GameObject.Id <=> b.GameObject.Id);
+			return mCameras;
+		}
+	}
+
 	/// What the world streams around (docs/world-streaming.md).
 	public List<StreamingSource> StreamingSources = new .() ~ delete _;
 	/// The scene's world streaming, once it has used it (WorldStreaming.Of).
 	public WorldStreamer Streamer ~ delete _;
-	/// When set (and active), the camera the game is seen through instead of the first one: a cutscene's.
-	public Camera CameraOverride;
-	/// The camera the game is seen through: CameraOverride when it is active, otherwise the first active camera.
+	// Kept as the entity, which Flecs can tell is gone, rather than the object, which would dangle.
+	Entity mCameraOverride;
+	/// When set (and active), the camera the game is seen through instead of the first one: a cutscene's. Not
+	/// valid once its object or component is gone.
+	public Camera CameraOverride
+	{
+		get
+		{
+			if (mCameraOverride.IsNull || !World.IsAlive(mCameraOverride))
+				return default;
+			let link = World.Get<ObjectLink>(mCameraOverride);
+			return link != null && link.gameObject != null ? link.gameObject.GetComponent<Camera>() : default;
+		}
+		set
+		{
+			mCameraOverride = value.GameObject != null ? value.GameObject.Entity : default;
+		}
+	}
+
+	/// The camera the game is seen through: CameraOverride when it is active, otherwise the first active camera (of
+	/// the oldest object); not valid if there is none.
 	public Camera ViewCamera
 	{
 		get
 		{
-			if (CameraOverride != null && CameraOverride.IsActiveAndEnabled)
-				return CameraOverride;
-			for (let camera in Cameras)
+			let cameraOverride = CameraOverride;
+			if (cameraOverride && cameraOverride.IsActiveAndEnabled)
+				return cameraOverride;
+			Camera best = default;
+			for (let camera in Components<Camera>(.. scope .()))
 			{
-				if (camera.IsActiveAndEnabled)
-					return camera;
+				if (camera.GameObject.ActiveInHierarchy && (best.GameObject == null || camera.GameObject.Id < best.GameObject.Id))
+					best = camera;
 			}
-			return null;
+			return best;
 		}
 	}
 

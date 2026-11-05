@@ -275,6 +275,6 @@ static class AssetPreviews
 		sEntries.Clear();
 		DeleteAndNullify!(sView);
 		DeleteAndNullify!(sScene);
-		sCamera = null;
+		sCamera = default;
 	}
 }

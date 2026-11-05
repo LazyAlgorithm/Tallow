@@ -17,7 +17,7 @@ class FollowCamera : Script
 			return;
 		let camera = Scene.FindComponent<Camera>();
 		let motor = GetComponent<CharacterMotor>();
-		if (camera == null)
+		if (!camera)
 			return;
 		let yaw = motor != null ? motor.Yaw : 0;
 		let pitch = motor != null ? motor.Pitch : 0;

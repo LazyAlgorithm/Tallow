@@ -840,9 +840,9 @@ extension EditorApp
 	static char8* ObjectIcon(GameObject gameObject)
 	{
 		if (gameObject.IsFolder) return Icons.Folder;
+		if (gameObject.HasComponent<Camera>()) return Icons.Camera;
 		for (let component in gameObject.Components)
 		{
-			if (component is Camera) return Icons.Camera;
 			if (component is VoxelTerrain) return Icons.Terrain;
 			if (component is ParticleSystem) return Icons.Particles;
 			if (component is NetworkSession) return Icons.Network;

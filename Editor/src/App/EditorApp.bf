@@ -501,7 +501,7 @@ class EditorApp : Application
 			SceneManager.Update(mScene);
 		}
 		let gameCamera = FindGameCamera();
-		VoxelTerrain.ViewerPosition = (mPlay != .Edit && gameCamera != null) ? gameCamera.Transform.Position : mCamPosition;
+		VoxelTerrain.ViewerPosition = (mPlay != .Edit && gameCamera) ? gameCamera.Transform.Position : mCamPosition;
 		Camera.ViewerPosition = VoxelTerrain.ViewerPosition;
 		if (mPlay != .Paused)
 		{
@@ -521,7 +521,7 @@ class EditorApp : Application
 	void AlignSceneCameraToGameCamera()
 	{
 		let camera = FindGameCamera();
-		if (camera == null)
+		if (!camera)
 			return;
 		let euler = camera.Transform.EulerAngles;
 		mCamPitch = Mathf.Clamp(euler.x + 8, -89, 89);
@@ -554,7 +554,7 @@ class EditorApp : Application
 
 		AssetPreviews.Update();
 		let gameCamera = FindGameCamera();
-		if (mGameVisible && gameCamera != null)
+		if (mGameVisible && gameCamera)
 		{
 			mGameView.Resize((int32)mGameSize.x, (int32)mGameSize.y);
 			mGameView.Render(mScene, gameCamera.GetCameraData(mGameSize.x / Math.Max(mGameSize.y, 1)));

@@ -268,7 +268,7 @@ class SequencePlayer : Component
 	void Show()
 	{
 		let camera = mEvaluator.ViewCamera;
-		if (camera == null || !useCameraShots)
+		if (!camera || !useCameraShots)
 			return;
 		let shot = mEvaluator.HasShot(mTime) && (mState == .Playing || mState == .Paused);
 		if (shot)
@@ -277,7 +277,7 @@ class SequencePlayer : Component
 			if (!camera.GameObject.ActiveSelf)
 			{
 				let own = Scene.ViewCamera;
-				if (own != null && own != camera)
+				if (own && own != camera)
 				{
 					camera.nearClip = own.nearClip;
 					camera.farClip = own.farClip;
@@ -293,10 +293,10 @@ class SequencePlayer : Component
 	void ReleaseCamera()
 	{
 		let camera = mEvaluator.ViewCamera;
-		if (camera == null)
+		if (!camera)
 			return;
 		if (Scene.CameraOverride == camera)
-			Scene.CameraOverride = null;
+			Scene.CameraOverride = default;
 		if (camera.GameObject.ActiveSelf)
 			camera.GameObject.SetActive(false);
 	}

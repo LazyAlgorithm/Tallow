@@ -79,7 +79,7 @@ class GameApp : Application
 		SaveSystem.Update();
 		SceneManager.Update(mScene);
 		let camera = FindCamera();
-		if (camera != null)
+		if (camera)
 		{
 			VoxelTerrain.ViewerPosition = camera.Transform.Position;
 			Camera.ViewerPosition = camera.Transform.Position;
@@ -111,7 +111,7 @@ class GameApp : Application
 	protected override void OnRender()
 	{
 		let camera = FindCamera();
-		if (camera == null)
+		if (!camera)
 			return;
 		mView.Resize(Width, Height);
 		// --effects "ao=1,dof=0.6,...": try the screen effects on any scene (docs/post-processing.md).

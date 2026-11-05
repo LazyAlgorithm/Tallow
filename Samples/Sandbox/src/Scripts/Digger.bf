@@ -18,7 +18,7 @@ class Digger : Script
 		if (!dig && !build)
 			return;
 		let camera = Scene.FindComponent<Camera>();
-		if (camera == null)
+		if (!camera)
 			return;
 		RaycastHit hit;
 		if (!Scene.Physics.Raycast(camera.Transform.Position, camera.Transform.Forward, 200, out hit))

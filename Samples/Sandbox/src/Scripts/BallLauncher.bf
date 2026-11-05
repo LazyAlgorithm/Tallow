@@ -36,7 +36,7 @@ class BallLauncher : Script
 	public void Fire()
 	{
 		let camera = Scene.FindComponent<Camera>();
-		if (camera == null)
+		if (!camera)
 			return;
 		// What the screen's middle (straight ahead of the camera) points at, or far away along it, aimed at from in
 		// front of the shooter.

@@ -19,7 +19,7 @@ extension EditorApp
 			pose.UseCurrentAsAim();
 			MarkDirty();
 		}
-		if (pose.Transform.Parent == null || pose.Transform.Parent.GameObject.GetComponent<Camera>() == null)
+		if (pose.Transform.Parent == null || !pose.Transform.Parent.GameObject.GetComponent<Camera>())
 			ImGui.TextDisabled("Put this on a child of the camera: it moves the arms and weapon under it.");
 		else
 			ImGui.TextDisabled("Move the object until it looks right in the Game view, then press a button. Preview blends hip to aim.");

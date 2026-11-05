@@ -788,7 +788,8 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
 - **Validity:** `if (light)` or `light.IsValid`. Beef cannot make `light == null` work on a struct: it compiles
   with warning BF0472 ("always false"), and `if (let light = GetComponent<Light>())` is always true, also with
   BF0472. Each handle conversion has to look for these warnings and for `= null`, `== null` and `!= null` on the
-  converted type, in the engine and in every game that updates to this engine.
+  converted type, in the engine and in every game that updates to this engine. `component is Light` and
+  `component as Light` on a Component compile with no warning and are always false/null: search for them too.
 - **On and off:** `light.enabled` uses Flecs's per-component toggle (`CanToggle`, added to every `HandleData`
   type when a world registers it); queries skip switched-off components without a check of their own.
 - **Files:** a handle saves as the class did (`component Tallow.Light enabled 1` and `field` lines), so old
@@ -839,7 +840,16 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   (4 captures, as before) and in the editor the Hall probe shows its fields, Capture Now and "Captured: 512 x 512,
   8 levels", with the spheres mirroring the room.
 - [x] **LightProbeVolume.** The baker and ProbePlacer read it through `FindComponents`; checked for its counts.
-- [ ] LODGroup, Camera, MeshRenderer, SkinnedMeshRenderer,
+- [x] **Camera.** Its settings are `CameraSettings` (CameraData was already the renderer's per-view struct).
+  `Scene.Cameras` is the switched-on cameras from `Components<Camera>`, oldest object first; `ViewCamera` is the
+  override if active, else the active camera of the oldest object, and is not valid when there is none.
+  `CameraOverride` is kept as the entity, which Flecs can tell is gone, so it stops being valid when its object is
+  destroyed without a hook. The build's BF0472 warnings found every `camera == null` in the engine and editor (16
+  places, now `!camera`); the Sandbox scripts had three more. `component is Camera` tests (world streaming,
+  hierarchy icons) became `HasComponent<Camera>()`: those compile without a warning and are always false, so they
+  have to be searched for (`grep -E "(is|as) Camera\b"`). Checked by `EcsChecks.CameraChecks`; the Sandbox's
+  follow camera drives the game view.
+- [ ] LODGroup (moves with MeshRenderer, which it holds a list of), MeshRenderer, SkinnedMeshRenderer,
   LineRenderer, TrailRenderer, ParticleSystem, Foliage, Water, AudioSource, AudioListener, AudioReverbZone,
   Rigidbody, Collider, Joint, CharacterController, SoftBody, Rope, and the Phase 5 set.
 - [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with

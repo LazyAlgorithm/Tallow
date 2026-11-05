@@ -24,7 +24,7 @@ extension EditorApp
 			{
 				mGameVisible = true;
 				mGameSize = size;
-				if (FindGameCamera() != null && mGameView.Width > 0)
+				if (FindGameCamera() && mGameView.Width > 0)
 				{
 					ImGui.Picture(mGameView.OutputTexture, .(mGameView.Width, mGameView.Height));
 					// While the mouse is locked to the view the pointer is hidden and cannot hover: the view keeps the game.
