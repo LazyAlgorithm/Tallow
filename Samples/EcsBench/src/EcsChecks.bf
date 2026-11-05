@@ -111,6 +111,7 @@ static class EcsChecks
 		ParticleChecks();
 		LineChecks();
 		FoliageChecks();
+		WaterChecks();
 		return sFailures;
 	}
 
@@ -534,6 +535,73 @@ static class EcsChecks
 			Expect(ComponentState<ParticleState>.Count == before, "RemoveComponent frees the particles");
 		}
 		Expect(ComponentState<ParticleState>.Count == before, "particles are freed with their scene");
+	}
+
+	/// Water and Floater: the surface from the data, Water.At, [Sync] fields of handle data, save and load.
+	static void WaterChecks()
+	{
+		let before = ComponentState<WaterState>.Count;
+		{
+			let scene = scope Scene();
+			let pond = scene.CreateGameObject("Pond");
+			pond.Transform.Position = .(0, 2, 0);
+			let water = pond.AddComponent<Water>();
+			Expect(water.look == .Realistic && water.size == .(40, 40) && water.depth == 10 && water.waveHeight == 0.4f, "a Water has its defaults");
+			water.waveHeight = 0;
+			Expect(water.SurfaceAt(.(3, 0, 3), 0.0, let still, let up, ?) && Math.Abs(still - 2) < 0.0001f && (up - Vector3.Up).Length < 0.0001f, "still water is flat at the object's height");
+			water.waveHeight = 1;
+			float lowest = float.MaxValue, highest = float.MinValue;
+			for (int i < 40)
+			{
+				water.SurfaceAt(.(i * 0.7f, 0, 1), 0.0, let height, ?, ?);
+				lowest = Math.Min(lowest, height);
+				highest = Math.Max(highest, height);
+			}
+			Expect(highest - lowest > 0.3f && highest < 3.01f && lowest > 0.99f, scope $"waves follow a changed setting ({lowest} to {highest})");
+			Expect(water.Contains(.(0, 0, 0)) && !water.Contains(.(0, -9, 0)) && !water.Contains(.(30, 0, 0)), "Contains: below the surface, above the bottom, over the water");
+			Expect(Water.At(scene, .(1, 1, 1)) == water && !Water.At(scene, .(100, 1, 1)), "Water.At finds it, and not where there is none");
+			let deeper = scene.CreateGameObject("Higher pond");
+			deeper.Transform.Position = .(0, 3, 0);
+			let higher = deeper.AddComponent<Water>();
+			higher.size = .(4, 4);
+			Expect(Water.At(scene, .(0, 1, 0)) == higher, "Water.At picks the highest level");
+			higher.enabled = false;
+			Expect(Water.At(scene, .(0, 1, 0)) == water, "a switched-off Water is not found");
+			deeper.SetActive(false);
+			higher.enabled = true;
+			Expect(Water.At(scene, .(0, 1, 0)) == water, "nor one on an inactive object");
+			// [Sync] fields of a built-in component are found by offset, so they follow the data when it moves.
+			let identity = pond.AddComponent<NetworkIdentity>();
+			let slots = NetworkSync.[Friend]Slots(identity);
+			int found = 0;
+			for (let slot in slots.slots)
+			{
+				if (slot.dataIndex == ComponentId<WaterData>.Index)
+					found++;
+			}
+			Expect(found >= 25, scope $"Water's [Sync] fields are network slots ({found})");
+			int heightSlot = -1;
+			for (int i < slots.slots.Count)
+			{
+				if (slots.slots[i].dataIndex >= 0 && slots.slots[i].Ptr == &water.waveHeight)
+					heightSlot = i;
+			}
+			Expect(heightSlot >= 0, "the wave height has a slot");
+			let floater = pond.AddComponent<Floater>();
+			Expect(floater.buoyancy == 1.6f && floater.drag == 1, "a Floater has its defaults");
+			Expect(heightSlot >= 0 && slots.slots[heightSlot].Ptr == &water.waveHeight && *(float*)slots.slots[heightSlot].Ptr == 1, "the slot follows the data to its new table");
+			NetworkSync.Forget(identity);
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains("component Tallow.Water enabled 1") && text.Contains("field waveHeight 1") && text.Contains("component Tallow.Floater"), "Water and Floater save as before");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Pond").GetComponent<Water>();
+			Expect(copy && copy.waveHeight == 1 && loaded.Find("Pond").GetComponent<Floater>(), "Water and Floater load");
+			pond.RemoveComponent<Water>();
+			Expect(ComponentState<WaterState>.Count == before, "RemoveComponent frees the waves (the only Water whose surface was asked for)");
+		}
+		Expect(ComponentState<WaterState>.Count == before, "waves are freed with their scene");
 	}
 
 	/// Foliage: owned text in component data (the packed plants), plants kept in FoliageState, Sync and Read.

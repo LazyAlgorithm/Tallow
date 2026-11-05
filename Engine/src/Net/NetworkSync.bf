@@ -113,7 +113,7 @@ static class NetworkSync
 			if ((body != null && !body.isKinematic) || object.GetComponent<CharacterController>() != null
 				|| object.GetComponent<AIMovementDriver>() != null || object.GetComponent<BehaviorTreeRunner>() != null
 				|| object.GetComponent<NetworkBehaviour>() != null || (object.GetComponent<DialogueRunner>()?.shared ?? false) || (object.GetComponent<SequencePlayer>()?.shared ?? false)
-				|| (object.GetComponent<SoftBody>()?.MovesByItself ?? false) || object.GetComponent<Water>() != null)
+				|| (object.GetComponent<SoftBody>()?.MovesByItself ?? false) || object.HasComponent<Water>())
 				wanted.Add(object);
 		}
 		for (let object in wanted)
@@ -828,12 +828,29 @@ static class NetworkSync
 
 	class Slot
 	{
+		/// Where the field is, for a class component's field. A built-in component's (handle) data lives in its
+		/// entity and moves when the object's components change, so for those it is found each time (Ptr).
 		public void* ptr;
+		public GameObject owner;
+		public int32 dataIndex = -1;
+		public int offset;
 		public int32 size;
 		public bool isString;
 		/// A String field's type: String or SharedString.
 		public Type type;
 		public List<uint8> last = new .() ~ delete _;
+
+		/// The field now, or null if its component has gone.
+		public void* Ptr
+		{
+			get
+			{
+				if (dataIndex < 0)
+					return ptr;
+				let data = owner.Scene?.World?.Get(owner.Entity, dataIndex);
+				return data != null ? (uint8*)data + offset : null;
+			}
+		}
 	}
 
 	/// The [Sync] fields of an identity's object, in a fixed order that is the same on every machine (by component,
@@ -868,6 +885,12 @@ static class NetworkSync
 		int signature = identity.GameObject.Components.Count;
 		for (let component in identity.GameObject.Components)
 			signature = signature * 31 + (int)(void*)Internal.UnsafeCastToPtr(component);
+		let handles = scope List<HandleComponents.Info>();
+		HandleComponents.On(identity.GameObject, handles);
+		// By name, so that every machine lists them in the same order.
+		handles.Sort(scope (a, b) => a.fullName.CompareTo(b.fullName));
+		for (let info in handles)
+			signature = signature * 31 + info.index + 1;
 		if (sSlots.TryGetValue(identity, let existing))
 		{
 			if (existing.signature == signature)
@@ -900,6 +923,32 @@ static class NetworkSync
 				list.slots.Add(slot);
 			}
 		}
+		// Then the built-in components' [Sync] fields (Water's settings), found by offset in their data.
+		for (let info in handles)
+		{
+			let data = identity.GameObject.GetData(info.dataType);
+			if (data == null)
+				continue;
+			fields.Clear();
+			HandleComponents.GetFields(identity.GameObject, info, fields);
+			fields.Sort(scope (a, b) => a.name.CompareTo(b.name));
+			for (let field in fields)
+			{
+				if (!field.sync)
+					continue;
+				let size = SizeOf(field);
+				if (size == 0 && field.kind != .String)
+					continue;
+				let slot = new Slot();
+				slot.owner = identity.GameObject;
+				slot.dataIndex = info.index;
+				slot.offset = (uint8*)field.ptr - (uint8*)data;
+				slot.size = size;
+				slot.isString = field.kind == .String;
+				slot.type = field.type;
+				list.slots.Add(slot);
+			}
+		}
 		sSlots[identity] = list;
 		return list;
 	}
@@ -912,9 +961,12 @@ static class NetworkSync
 
 	static Span<uint8> Bytes(Slot slot)
 	{
+		let ptr = slot.Ptr;
+		if (ptr == null)
+			return default;
 		if (!slot.isString)
-			return .((uint8*)slot.ptr, slot.size);
-		let text = StringFields.Get(slot.ptr, slot.type);
+			return .((uint8*)ptr, slot.size);
+		let text = StringFields.Get(ptr, slot.type);
 		return Span<uint8>((uint8*)text.Ptr, text.Length);
 	}
 
@@ -971,15 +1023,18 @@ static class NetworkSync
 		if (index >= list.slots.Count)
 			return;
 		let slot = list.slots[index];
+		let ptr = slot.Ptr;
+		if (ptr == null)
+			return;
 		if (slot.isString)
 		{
 			if (slot.type == typeof(SharedString))
-				*(SharedString*)slot.ptr = StringView((char8*)&data[0], length);
-			else if (let text = StringFields.Writable(slot.ptr))
+				*(SharedString*)ptr = StringView((char8*)&data[0], length);
+			else if (let text = StringFields.Writable(ptr))
 				text..Clear().Append(StringView((char8*)&data[0], length));
 		}
 		else if (length == slot.size)
-			Internal.MemCpy(slot.ptr, &data[0], length);
+			Internal.MemCpy(ptr, &data[0], length);
 	}
 
 	// ---- soft bodies ----

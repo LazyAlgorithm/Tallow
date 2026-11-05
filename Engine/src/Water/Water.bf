@@ -27,13 +27,14 @@ enum WaterLook : int32
 ///   under the surface sees through the water's colour, cut off exactly at the waterline.
 ///
 ///   let water = Water.At(Scene, point);
-///   if (water != null && water.SurfaceAt(point, let height, let normal, let velocity)) ...
-[Component]
-class Water : Component
+///   if (water && water.SurfaceAt(point, let height, let normal, let velocity)) ...
+///
+/// A handle (ComponentHandle): its settings are WaterData's fields; the waves worked out from them and what floated
+/// at the last step are its WaterState.
+/// A Water's settings, in its entity (Water is the handle). They are [Sync]: the server's reach every client.
+[Component, HandleData]
+struct WaterData
 {
-	/// Gerstner waves summed for the surface.
-	public const int WaveCount = 4;
-
 	/// How it is drawn. Choosing one in the GameObject menu also sets the colours and grid to suit it (UseLook).
 	[Sync]
 	public WaterLook look = .Realistic;
@@ -130,6 +131,15 @@ class Water : Component
 	[Sync]
 	public float waterAngularDrag = 1;
 
+	public this() { }
+}
+
+[Component, HandleFields]
+struct Water : ComponentHandle<WaterData>
+{
+	/// Gerstner waves summed for the surface.
+	public const int WaveCount = 4;
+
 	/// One wave of the sum: travelling along direction (x, z), wavenumber k = 2 pi / length, amplitude (half its
 	/// height), steepness (how far points swing along it) and angular speed.
 	public struct Wave
@@ -141,11 +151,15 @@ class Water : Component
 		public float omega;
 	}
 
-	Wave[WaveCount] mWaves;
-	// The settings the waves were made from: they are made again when one changes.
-	float[8] mWaveKey = .(-1, -1, -1, -1, -1, -1, -1, -1);
-	// Bodies in the water at the last step (for Floater.InWater).
-	HashSet<uint32> mFloating = new .() ~ delete _;
+	/// The waves and what floated, made the first time they are needed.
+	public WaterState State
+	{
+		get
+		{
+			CheckValid();
+			return ComponentState<WaterState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+		}
+	}
 
 	// The relative lengths and heights of the four waves, and how far each turns from the main direction (times
 	// Wave Spread). The seed nudges the turns.
@@ -163,32 +177,33 @@ class Water : Component
 	{
 		get
 		{
-			UpdateWaves();
-			return .(&mWaves[0], WaveCount);
+			let state = UpdateWaves();
+			return .(&state.waves[0], WaveCount);
 		}
 	}
 
-	void UpdateWaves()
+	WaterState UpdateWaves()
 	{
+		let state = State;
 		float[8] key = .(waveHeight, waveLength, waveDirection, waveSpread, choppiness, waveSpeed, (float)waveSeed, 0);
 		bool same = true;
 		for (int i < key.Count)
-			same &= key[i] == mWaveKey[i];
+			same &= key[i] == state.waveKey[i];
 		if (same)
-			return;
-		mWaveKey = key;
+			return state;
+		state.waveKey = key;
 		float heightSum = 0;
 		for (int i < WaveCount)
 			heightSum += sHeights[i];
 		// A small generator every machine runs the same way: the seed's arrangement is the same everywhere.
-		uint32 state = (uint32)waveSeed * 747796405u + 2891336453u;
+		uint32 seed = (uint32)waveSeed * 747796405u + 2891336453u;
 		for (int i < WaveCount)
 		{
-			state = state * 1664525u + 1013904223u;
-			let jitter = (float)((state >> 8) & 0xffff) / 65535.0f * 2 - 1;
+			seed = seed * 1664525u + 1013904223u;
+			let jitter = (float)((seed >> 8) & 0xffff) / 65535.0f * 2 - 1;
 			let turn = i == 0 ? 0 : (sTurns[i] + jitter * 0.25f);
 			let angle = (waveDirection + turn * waveSpread) * Mathf.Deg2Rad;
-			var wave = ref mWaves[i];
+			var wave = ref state.waves[i];
 			wave.direction = .(Math.Cos(angle), Math.Sin(angle));
 			let length = Math.Max(waveLength * sLengths[i], 0.05f);
 			wave.k = Math.PI_f * 2 / length;
@@ -197,15 +212,16 @@ class Water : Component
 			wave.steepness = wave.amplitude > 0 ? Math.Clamp(choppiness, 0, 1) * 0.95f / (wave.k * wave.amplitude * WaveCount) : 0;
 			wave.omega = Math.Sqrt(9.81f * wave.k) * waveSpeed;
 		}
+		return state;
 	}
 
 	/// Each wave's phase at a time, worked out in double precision so that waves stay smooth however long a session
 	/// runs: the angle the wave has travelled, kept to one turn.
 	public void Phases(double time, ref float[WaveCount] phases)
 	{
-		UpdateWaves();
+		let state = UpdateWaves();
 		for (int i < WaveCount)
-			phases[i] = (float)Math.IEEERemainder((double)mWaves[i].omega * time, Math.PI_d * 2);
+			phases[i] = (float)Math.IEEERemainder((double)state.waves[i].omega * time, Math.PI_d * 2);
 	}
 
 	// ------------------------------------------------------------------ the shared clock
@@ -260,7 +276,7 @@ class Water : Component
 		velocity = .(flow.x, 0, flow.y);
 		if (!Covers(point))
 			return false;
-		UpdateWaves();
+		let state = UpdateWaves();
 		float[WaveCount] phases = default;
 		Phases(time, ref phases);
 		// The waves swing points sideways as well as up: find the point of still water that ends up over this one.
@@ -271,7 +287,7 @@ class Water : Component
 			var shift = Vector2.Zero;
 			for (int i < WaveCount)
 			{
-				let wave = mWaves[i];
+				let wave = state.waves[i];
 				let theta = wave.k * (wave.direction.x * origin.x + wave.direction.y * origin.y) - phases[i];
 				shift += wave.direction * (wave.steepness * wave.amplitude * Math.Cos(theta));
 			}
@@ -281,7 +297,7 @@ class Water : Component
 		Vector3 n = .(0, 1, 0);
 		for (int i < WaveCount)
 		{
-			let wave = mWaves[i];
+			let wave = state.waves[i];
 			let theta = wave.k * (wave.direction.x * origin.x + wave.direction.y * origin.y) - phases[i];
 			let s = Math.Sin(theta);
 			let c = Math.Cos(theta);
@@ -333,18 +349,17 @@ class Water : Component
 	public static Water At(Scene scene, Vector3 point, float reach = 0, GameObject forObject = null)
 	{
 		if (scene == null)
-			return null;
-		Water best = null;
-		for (let component in scene.ComponentsOfType(typeof(Water)))
+			return default;
+		Water best = default;
+		for (let water in scene.Components<Water>(.. scope .()))
 		{
-			let water = (Water)component;
-			if (!water.IsActiveAndEnabled || !Meets(scene, water.GameObject, forObject))
+			if (!water.GameObject.ActiveInHierarchy || !Meets(scene, water.GameObject, forObject))
 				continue;
 			let level = water.Level;
 			let top = level + Math.Max(water.waveHeight, 0) + reach;
 			if (point.y > top || point.y < water.Bottom - reach || !water.Covers(point))
 				continue;
-			if (best == null || level > best.Level)
+			if (!best || level > best.Level)
 				best = water;
 		}
 		return best;
@@ -401,33 +416,33 @@ class Water : Component
 	/// Rollback supplies its historical tick rather than the scene's current clock.
 	static void SimulateAt(Scene scene, float deltaTime, double time)
 	{
-		let waters = scene.ComponentsOfType(typeof(Water));
+		let waters = scene.Components<Water>(.. scope .());
 		if (waters.Count == 0)
 			return;
-		for (let component in waters)
-			((Water)component).mFloating.Clear();
+		for (let water in waters)
+			water.State.floating.Clear();
 		for (let component in scene.ComponentsOfType(typeof(Rigidbody)))
 		{
 			let body = (Rigidbody)component;
 			if (!body.IsActiveAndEnabled || body.isKinematic || !body.HasBody || (!scene.Physics.SeparatesWorldStates && !body.GameObject.InActiveWorld))
 				continue;
 			let floater = body.GameObject.GetComponent<Floater>();
-			if (floater != null && !floater.IsActiveAndEnabled)
+			if (floater && !floater.IsActiveAndEnabled)
 				continue;
 			let position = body.Transform.Position;
 			// Things as tall as a few metres can reach the water from above its surface.
 			let water = At(scene, position, 4, body.GameObject);
-			if (water == null || (floater == null && !water.floatRigidbodies))
+			if (!water || (!floater && !water.floatRigidbodies))
 				continue;
 			if (!water.SurfaceAt(position, time, let height, let normal, let velocity))
 				continue;
-			let factor = floater?.buoyancy ?? water.buoyancy;
-			let drag = floater?.drag ?? water.waterDrag;
-			let angularDrag = floater?.angularDrag ?? water.waterAngularDrag;
+			let factor = floater ? floater.buoyancy : water.buoyancy;
+			let drag = floater ? floater.drag : water.waterDrag;
+			let angularDrag = floater ? floater.angularDrag : water.waterAngularDrag;
 			// Under the bottom there is no water to push up: the surface is the bottom there.
 			let surface = position.y < water.Bottom ? Vector3(position.x, water.Bottom, position.z) : Vector3(position.x, height, position.z);
 			if (scene.Physics.ApplyBuoyancy(body.BodyId, surface, normal, factor, drag, angularDrag, velocity, deltaTime))
-				water.mFloating.Add(body.BodyId);
+				water.State.floating.Add(body.BodyId);
 		}
 		// Jelly, cloth and ropes float vertex by vertex; a shell rides its Rigidbody, which floats above.
 		for (let component in scene.ComponentsOfType(typeof(SoftBody)))
@@ -461,7 +476,7 @@ class Water : Component
 		if (bodyId == uint32.MaxValue || scene.Physics == null)
 			return;
 		let floater = owner.GetComponent<Floater>();
-		if (floater != null && !floater.IsActiveAndEnabled)
+		if (floater && !floater.IsActiveAndEnabled)
 			return;
 		let system = scene.Physics.[Friend]mSystem;
 		Vector3 min = default, max = default;
@@ -469,7 +484,7 @@ class Water : Component
 			return;
 		let center = (min + max) * 0.5f;
 		let water = At(scene, center, (max.y - min.y) * 0.5f + 1, owner);
-		if (water == null || (floater == null && !water.floatRigidbodies) || min.y > water.Level + water.waveHeight + SoftBand || max.y < water.Bottom)
+		if (!water || (!floater && !water.floatRigidbodies) || min.y > water.Level + water.waveHeight + SoftBand || max.y < water.Bottom)
 			return;
 		let nx = Math.Clamp((int)Math.Ceiling((max.x - min.x) / SoftSampleSpacing) + 1, 2, SoftSamples);
 		let nz = Math.Clamp((int)Math.Ceiling((max.z - min.z) / SoftSampleSpacing) + 1, 2, SoftSamples);
@@ -495,31 +510,42 @@ class Water : Component
 		}
 		let gravity = Math.Abs(scene.Physics.Gravity.y) * gravityScale;
 		let wake = water.waveHeight > 0 || water.flow != .Zero;
-		let buoyancy = floater?.buoyancy ?? water.buoyancy;
-		let drag = floater?.drag ?? water.waterDrag;
+		let buoyancy = floater ? floater.buoyancy : water.buoyancy;
+		let drag = floater ? floater.drag : water.waterDrag;
 		if (tn_soft_float(system, bodyId, &samples, (uint32)nx, (uint32)nz, min.x, min.z, cellX, cellZ, water.Bottom, SoftBand, buoyancy, drag, gravity, deltaTime, wake) > 0)
-			water.mFloating.Add(bodyId);
+			water.State.floating.Add(bodyId);
 	}
 
 	/// Whether a Rigidbody was in this water at the last physics step.
-	public bool IsFloating(Rigidbody body) => body != null && body.HasBody && mFloating.Contains(body.BodyId);
+	public bool IsFloating(Rigidbody body) => body != null && body.HasBody && Floating(body.BodyId);
 	/// Whether any of a soft body's vertices were in this water at the last physics step (a shell: its Rigidbody).
-	public bool IsFloating(SoftBody soft) => soft != null && soft.HasBody && mFloating.Contains(soft.BodyId);
+	public bool IsFloating(SoftBody soft) => soft != null && soft.HasBody && Floating(soft.BodyId);
 	/// Whether any of a rope's points were in this water at the last physics step.
-	public bool IsFloating(Rope rope) => rope != null && rope.HasBody && mFloating.Contains(rope.BodyId);
+	public bool IsFloating(Rope rope) => rope != null && rope.HasBody && Floating(rope.BodyId);
 
-	public override void OnDrawGizmos(bool selected)
+	bool Floating(uint32 bodyId)
 	{
+		let state = ComponentState<WaterState>.Get(mGameObject.Scene.World, mGameObject.Entity);
+		return state != null && state.floating.Contains(bodyId);
+	}
+
+	static void OnRemove(void* world, uint64 entity) => ComponentState<WaterState>.Release(world, entity);
+
+	static void DrawGizmos(GameObject gameObject, bool selected)
+	{
+		let water = gameObject.GetComponent<Water>();
+		let transform = gameObject.Transform;
+		let endless = water.endless, depth = water.depth, size = water.size;
 		let tint = selected ? Color(0.3f, 0.8f, 1.0f, 1) : Color(0.3f, 0.7f, 1.0f, 0.4f);
 		if (endless)
 		{
-			let at = Transform.Position;
+			let at = transform.Position;
 			Gizmos.Lines.Circle(at, .Up, 4, tint);
 			Gizmos.Lines.Line(at, at - Vector3(0, Math.Max(depth, 0), 0), tint);
 			return;
 		}
 		// The surface's rectangle, and when selected the box the water fills.
-		let model = Transform.LocalToWorld;
+		let model = transform.LocalToWorld;
 		let half = Vector3(size.x * 0.5f, 0, size.y * 0.5f);
 		Gizmos.Lines.Box(.(-half, half), model, tint);
 		if (selected)
@@ -531,11 +557,9 @@ class Water : Component
 	}
 }
 
-/// Sets how one Rigidbody, soft body or rope floats in Water, in place of the water's own settings; disabled, it
-/// does not float at all. Floating needs Water's Float Rigidbodies only for objects without one. (Angular Drag is
-/// for Rigidbodies: soft bodies and ropes are slowed vertex by vertex.)
-[Component]
-class Floater : Component
+/// A Floater's settings.
+[Component, HandleData]
+struct FloaterData
 {
 	/// How strongly it floats: 1 neither floats nor sinks, more floats higher (a cork), less sinks (a stone).
 	public float buoyancy = 1.6f;
@@ -545,6 +569,15 @@ class Floater : Component
 	/// How quickly the water stops it turning, likewise.
 	public float angularDrag = 1;
 
+	public this() { }
+}
+
+/// Sets how one Rigidbody, soft body or rope floats in Water, in place of the water's own settings; disabled, it
+/// does not float at all. Floating needs Water's Float Rigidbodies only for objects without one. (Angular Drag is
+/// for Rigidbodies: soft bodies and ropes are slowed vertex by vertex.)
+[Component, HandleFields]
+struct Floater : ComponentHandle<FloaterData>
+{
 	/// Whether it was in water at the last physics step.
 	public bool InWater
 	{
@@ -553,13 +586,21 @@ class Floater : Component
 			let body = GameObject.GetComponent<Rigidbody>();
 			let soft = GameObject.GetComponent<SoftBody>();
 			let rope = GameObject.GetComponent<Rope>();
-			for (let component in Scene.ComponentsOfType(typeof(Water)))
+			for (let water in Scene.FindComponents<Water>(.. scope .()))
 			{
-				let water = (Water)component;
 				if (water.IsFloating(body) || water.IsFloating(soft) || water.IsFloating(rope))
 					return true;
 			}
 			return false;
 		}
 	}
+}
+
+/// What a Water keeps outside its data: the waves worked out from its settings (made again when one changes) and the
+/// bodies that were in it at the last step (for Floater.InWater).
+class WaterState
+{
+	public Water.Wave[Water.WaveCount] waves;
+	public float[8] waveKey = .(-1, -1, -1, -1, -1, -1, -1, -1);
+	public HashSet<uint32> floating = new .() ~ delete _;
 }

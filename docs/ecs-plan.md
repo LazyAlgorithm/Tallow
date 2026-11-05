@@ -933,7 +933,19 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   re-read on a text change, Reset, freed on remove and with the scene); the editor's `--undo-test-foliage` passes on
   a one-Foliage scene, and Campus loads and draws. (On Campus itself that test paints off its terrain tile and adds
   nothing, as it did before.)
-- [ ] Water, Rigidbody, Collider, Joint,
+- [x] **Water and Floater.** Their settings are `WaterData` and `FloaterData`; the waves worked out from the settings
+  and the bodies floating at the last step are a `WaterState`. `Water.At` returns a handle that is not valid where
+  there is no water (`if (!water)`, not `== null`). The renderer, buoyancy (`Simulate`, rollback's `SimulateAt`) and
+  the Character Controller's swimming read `scene.Components<Water>`. **[Sync] on built-in components:** Water's
+  settings are `[Sync]`. NetworkSync's slots used to hold a pointer into the component; handle data moves between
+  Flecs tables, so a slot for a handle field keeps its object, its data's index and its offset, and finds the field
+  each time it is read or written (`Slot.Ptr`). Handle slots come after the class components' slots, by handle name,
+  then field name, so every machine has the same order; the object's handle types are part of the slot list's
+  signature. Checked by `EcsChecks.WaterChecks` (defaults, flat and waved surface after a setting change, Contains,
+  At with several waters, switched off and inactive, [Sync] slots found and following the data to a new table, save
+  and load, freed on remove and with the scene); the editor's `--separate-worlds-test` passes (a crate floats in its
+  world state's water and one in the other falls through) and the Gallery self-test passes.
+- [ ] Rigidbody, Collider, Joint,
   CharacterController, SoftBody, Rope, and the Phase 5 set.
 - [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with
   the components above converted, a Gallery made from the template builds and its `--self-test` prints

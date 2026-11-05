@@ -74,11 +74,10 @@ extension RenderView
 	{
 		VisibleWater = 0;
 		mWaterItems.Clear();
-		mCameraWater = null;
-		for (let component in scene.ComponentsOfType(typeof(Water)))
+		mCameraWater = default;
+		for (let water in scene.Components<Water>(.. scope .()))
 		{
-			let water = (Water)component;
-			if (!water.IsActiveAndEnabled || !water.GameObject.InActiveWorld || HidesHere(water.GameObject))
+			if (!water.GameObject.ActiveInHierarchy || !water.GameObject.InActiveWorld || HidesHere(water.GameObject))
 				continue;
 			if (!water.endless && !frustum.Intersects(WaterBounds(water)))
 				continue;
@@ -329,7 +328,7 @@ extension RenderView
 		let time = Water.ViewTime(scene);
 		// The near plane's corners reach this far from the camera.
 		let reach = camera.near * 3 + 0.05f;
-		Water inside = null;
+		Water inside = default;
 		float insideLevel = 0;
 		for (let water in mWaterItems)
 		{
@@ -337,14 +336,14 @@ extension RenderView
 				continue;
 			if (camera.position.y - reach > height || camera.position.y < water.Bottom)
 				continue;
-			if (inside == null || water.Level > insideLevel)
+			if (!inside || water.Level > insideLevel)
 			{
 				inside = water;
 				insideLevel = water.Level;
 			}
 		}
 		mCameraWater = inside;
-		if (inside == null)
+		if (!inside)
 			return;
 		CopySceneForWater((uint16)(ViewBase + UnderwaterCopyView), "Underwater copy");
 		let view = (uint16)(ViewBase + UnderwaterView);

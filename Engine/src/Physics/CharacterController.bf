@@ -106,7 +106,7 @@ class CharacterController : Component
 		let middle = Transform.Position + center;
 		let half = shape == .Capsule ? height * 0.5f : boxSize.y * 0.5f;
 		let water = Water.At(Scene, middle, half, GameObject);
-		if (water == null)
+		if (!water)
 			return false;
 		float surface;
 		Vector3 current;
@@ -328,7 +328,7 @@ class CharacterController : Component
 		let middle = Transform.Position + center;
 		let half = shape == .Capsule ? height * 0.5f : boxSize.y * 0.5f;
 		let water = Water.At(Scene, middle, half, GameObject);
-		if (water == null)
+		if (!water)
 			return false;
 		float surface;
 		Vector3 current;
