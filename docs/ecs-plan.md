@@ -19,8 +19,9 @@ Showcase passing `tools/validate_showcase.py` once it has been ported, the code 
    to avoid.
 2. **The engine scales.** Transforms, rendering, physics sync, animation, particles, AI crowds and network
    state live in packed Flecs tables and are processed in bulk, on several threads where it is safe.
-3. **Networking gets simpler and cheaper.** Snapshots, rollback, delta compression and interest management
-   work on component columns instead of walking each object's fields.
+3. **Networking gets simpler and cheaper, and stays invisible.** Snapshots, rollback, delta compression and
+   interest management work on component columns instead of walking each object's fields. As today, a game
+   developer adds a Network Identity and writes `Update`. Everything else happens behind the scenes.
 4. **Game code rarely touches memory management.** The gameplay API avoids handing scripts heap objects to free.
 
 ## What a game developer sees
@@ -187,6 +188,33 @@ full width at once. Scripts and anything touching the editor stay on the main th
 
 ### Networking
 
+**Rule: it just works, as it does now.** Fish-Net is the reference for *how* prediction and input forwarding
+behave, not for its API. A game developer never writes replicate or reconcile methods, never marks inputs or
+state structs, and never picks formats, rates, priorities or relevance to get a working game. They add a
+Network Identity to an object and write `Update(TickInput input, float deltaTime)`. The engine works out the
+rest from what is on the object:
+
+| Object | What the engine does on its own |
+| --- | --- |
+| Controlled by a player | Inputs sent to the server and forwarded to clients it is relevant to; predicted on every client; exact state for the owner's corrections |
+| Rigidbody, no player | `QuantizedBody`, dormant while sleeping, predicted on clients, dynamic priority, distance relevance |
+| Moves without physics (doors, platforms, NPCs) | `QuantizedTransform`, dynamic priority, distance relevance |
+| Never moves after spawning | Spawned once, nothing per tick |
+| Script fields that change | Sent when they change, to the clients the object is relevant to |
+
+- Every per-object and per-session setting that exists today stays, as an optional override in an
+  **Advanced** foldout of the Network Identity and Network Session Inspectors. Defaults are what a new
+  user gets, and they are the right choice for most games.
+- Values the engine can measure, it tunes itself: input delay follows each client's ping and jitter (0 when
+  the connection is good), the snapshot budget follows the connection, and the interpolation delay follows
+  packet loss.
+- Rollback, island limiting, skipped identical inputs, the rollback cap, baselines, deltas and packet layout
+  are internal details with no settings at all.
+- Lockstep mode (item 8) is one switch on the Network Session. Nothing in game code changes when it is
+  turned on, apart from the determinism rules the debugger and the script editor point out.
+- The network panel shows what the engine chose for each object and why, and the estimated bytes per
+  client, so nothing is hidden from someone who wants to look.
+
 - `NetworkIdentity` becomes a data component, and `[Replicated]` marks data components (or fields) that sync.
 - Per tick, replicated columns are copied into a ring buffer of snapshots. Delta compression compares against
   the client's last acknowledged snapshot, column by column (`NetCompression.bf` reused).
@@ -212,14 +240,11 @@ carry over, now computed as column passes instead of per-object reflection:
 
 #### Bandwidth: new work
 
-1. **Good defaults.** Today every one of these is opt-in and new games ship the legacy format. Change the
-   defaults:
-   - physics bodies use `QuantizedBody` with `dormantWhenSleeping`;
-   - other moving networked objects use `QuantizedTransform`;
-   - `OptimizeSnapshots` and `LosslessCompression` are on.
-
-   The exact format stays available per object (`fullPrecision`) for things that need it. The network panel
-   shows estimated bytes per client per second, so the cost of a choice is visible in the editor.
+1. **Good defaults, chosen automatically.** Today every bandwidth option is opt-in and new games ship the
+   legacy format. Instead, the engine picks per object from the table above: `QuantizedBody` with
+   `dormantWhenSleeping` for physics bodies, `QuantizedTransform` for other moving objects, and
+   `OptimizeSnapshots` and `LosslessCompression` always on. The exact format stays available as an Advanced
+   override (`fullPrecision`) for the rare object that needs it.
 2. **Field-by-field deltas against each client's acknowledged snapshot.**
    - Each client acknowledges snapshot numbers.
    - The server keeps, per client, the last acknowledged baseline for each relevant entity (from the snapshot
@@ -265,7 +290,8 @@ carry over, now computed as column passes instead of per-object reflection:
      entities. A small difference from the full world is fixed by the next correction. Never do this in
      lockstep mode (item 8), where every machine must compute bit-identical results and Jolt guarantees that
      only when the whole simulated set is stepped the same way.
-7. **Input forwarding with server reconciliation (the main path, as Fish-Net does it).** The server relays
+7. **Input forwarding with server reconciliation (the main path; Fish-Net is the reference for how it
+   behaves).** Automatic for every player-controlled object, with no code or settings. The server relays
    each player's inputs to the clients that player is relevant to, as well as running them itself:
    - clients predict remote players in the present from their forwarded inputs, instead of showing them in
      the past, and so predict the props they push correctly. With predicted physics on
@@ -285,7 +311,7 @@ carry over, now computed as column passes instead of per-object reflection:
      hidden information stays hidden and the cost does not grow with the whole server's player count;
    - the shared clock is reused as is: one fixed tick (`Time.TickRate`, `Time.Tick`), clients kept in step
      through `TickScale`, and inputs stamped with the server tick they were given at.
-8. **Lockstep mode (optional, per game).** For games where moving objects vastly outnumber players and every
+8. **Lockstep mode (optional, one switch on the Network Session).** For games where moving objects vastly outnumber players and every
    client should simulate everything (RTS, physics sandboxes, co-op), a session can stop sending body state
    entirely: inputs plus hashes only.
    - Each machine hashes the simulated columns every N ticks and sends it to the server. A mismatch
@@ -402,9 +428,11 @@ Steps, each committed on its own (see "Networking" under Architecture for the de
   computed from columns.
   **Exit:** networked Showcase exhibits pass; the existing test fixture profiles (baseline, exact, quantized,
   sleep, rate, budget, compressed, all, steam) produce the same bytes as `main`.
-- **6b. Defaults.** Quantized formats, dormancy, optimized snapshots and compression on by default, plus the
-  bytes-per-client estimate in the network panel.
-  **Exit:** a new project's networked objects use the new defaults.
+- **6b. It just works.** Automatic per-object choices from the table under Networking, Advanced foldouts
+  for every existing setting, self-tuning input delay, budget and interpolation, and the network panel's "what
+  was chosen and why" view with bytes per client.
+  **Exit:** a new project with a networked player and a pile of physics crates plays smoothly between two
+  machines with no networking settings touched, and its scripts contain nothing but `Update`.
 - **6c. Field deltas.** Per-client acknowledged baselines, change masks and variable-length position
   differences, then the column-grouped packet layout (kept only if it measures smaller).
   **Exit:** bytes per client measured against 6b on the 4096-prop scaling workload.
