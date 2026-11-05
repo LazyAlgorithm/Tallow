@@ -412,6 +412,49 @@ Goal for this phase, from the project owner: scripts work as close to today's as
 - **Scripts keep running in registration order**, not sorted by type as "Frame and tick order" suggests. Sorting
   would change the order of `Update` calls between scripts.
 
+### Update: one signature, networked when the object is (project owner, 2026-11-04)
+
+Every script writes the same `Update`, and the engine decides behind the scenes how it runs:
+
+```beef
+[Component]
+class Hover : Script
+{
+	public float speed = 5;
+
+	public override void Update(TickInput input, float deltaTime)
+	{
+		Transform.Position += input.MoveDirection * speed * deltaTime;
+		if (input.Pressed(.Jump))
+			Transform.Position += .(0, 1, 0);
+	}
+}
+```
+
+- **Without a Network Identity:** `Update` runs once per frame, as today's `Update()` does. `deltaTime` is the
+  frame's `Time.DeltaTime`, and `input` holds this machine's controls for the frame. `input.previous` holds the
+  last frame's, so `Pressed` and `Released` work.
+- **With a Network Identity:** `Update` runs each tick at `Time.FixedDeltaTime`, exactly as `NetworkScript.OnTick`
+  does now. That means running on the server, predicted on the controlling player's machine, and run again
+  after a correction. `input` holds the controlling player's controls for that tick. Objects no player
+  controls (NPCs, doors, pickups) get an empty `input` and run on the server only; clients see the result.
+  Host mode needs care here: the host's player and server objects both have `ownerId` 0 today, so "controlled
+  by a player" must become its own flag on `NetworkIdentity`, set when an object is spawned as a player or given
+  to one. That way NPCs don't receive the host's controls.
+- **`OnLocalUpdate()`:** runs every frame on every object, networked or not, for work that is only for this
+  machine: effects, UI, camera feel. It replaces today's frame `Update()` wherever that work must not be
+  networked. Engine components that override `Update()` today (8 of them) move to `OnLocalUpdate()`, so they
+  behave exactly as before.
+- **`OnTick` goes away.** `NetworkScript` keeps its mouse look and `ReadInput`, and its per-tick code moves to
+  `Update`.
+- **`FixedUpdate` and `LateUpdate` are unchanged:** fixed-step physics work, and once per frame after every
+  `Update`.
+- The `OnTick` rules apply to `Update` on a networked object: take controls from `input`, not `Input`, and guard
+  one-off effects with `if (IsServer)` or `if (!IsReplaying)`. The script editor should warn about `Input.`
+  inside `Update` on a script whose object has a Network Identity.
+- Breaking change: `override void Update()` becomes `override void Update(TickInput input, float deltaTime)`.
+  The samples and templates are ported in this step.
+
 ### Steps
 
 - [x] **1. An entity for every GameObject.** `Scene.World` holds one entity per object (`GameObject.Entity`),
@@ -420,7 +463,7 @@ Goal for this phase, from the project owner: scripts work as close to today's as
   the Sandbox runs.
 - [ ] 2. Transform data (local pose, world matrix, dirty flags) stored in the entity, with the `Transform` API
   unchanged.
-- [ ] 3. `Component` renamed `Script` for behaviours.
+- [ ] 3. `Component` renamed `Script` for behaviours, with the new `Update` below.
 - [ ] 4. Scene's object and component lists replaced by queries; frame and tick order run through the world.
 
 ## Benchmark results
