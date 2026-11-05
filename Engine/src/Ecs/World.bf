@@ -131,7 +131,40 @@ sealed class World
 		let id = info.size == 0 ? Flecs.Tag(mWorld, info.name.CStr()) : Flecs.Component(mWorld, info.name.CStr(), info.size, info.alignment);
 		Runtime.Assert(id != 0, scope $"Flecs refused component {info.name}");
 		mIds[index] = id;
+		mIndexById[id] = index;
 		return id;
+	}
+
+	Dictionary<uint64, int32> mIndexById = new .() ~ delete _;
+
+	// ---- By type index (ComponentTypes), for the editor and scene files ----
+
+	/// This world's Flecs id for the data component with ComponentTypes index index.
+	public uint64 IdOf(int32 index)
+	{
+		if (index < mIds.Count && mIds[index] != 0)
+			return mIds[index];
+		return Register(index);
+	}
+
+	/// The entity's data for that type, or null. Valid until the entity's components change.
+	public void* Get(Entity entity, int32 index) => Flecs.GetMut(mWorld, entity.id, IdOf(index));
+	/// The entity's data for that type, added (zeroed) first if missing.
+	public void* Ensure(Entity entity, int32 index) => Flecs.Ensure(Writer, entity.id, IdOf(index), ComponentTypes.Get(index).size);
+	public bool Has(Entity entity, int32 index) => Flecs.Has(mWorld, entity.id, IdOf(index));
+	public void Remove(Entity entity, int32 index) => Flecs.Remove(Writer, entity.id, IdOf(index));
+
+	/// The ComponentTypes indices of the data components and tags the entity has, in Flecs's order. Relationships
+	/// (ChildOf) and ids registered outside World are left out.
+	public void TypesOf(Entity entity, List<int32> output)
+	{
+		uint64[64] ids = ?;
+		let count = Math.Min(Flecs.EntityIds(mWorld, entity.id, &ids, 64), 64);
+		for (int i < count)
+		{
+			if (mIndexById.TryGetValue(ids[i], let index))
+				output.Add(index);
+		}
 	}
 
 	// ---- Entities ----

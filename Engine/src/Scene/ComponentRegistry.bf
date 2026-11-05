@@ -234,6 +234,29 @@ static class ComponentRegistry
 		}
 	}
 
+	/// The same for a value of a struct type at data (a data component in a World).
+	public static void GetFields(Type type, void* data, List<FieldRef> fields)
+	{
+		LayoutKey key;
+		key.type = type;
+		key.stopAt = null;
+		key.forReload = false;
+		using (sLayoutLock.Enter())
+		{
+			if (!sLayouts.TryGetValue(key, var layout))
+			{
+				layout = new List<FieldRef>();
+				BuildLayout(type, null, false, layout);
+				sLayouts[key] = layout;
+			}
+			for (var field in layout)
+			{
+				field.ptr = (uint8*)data + (int)field.ptr;
+				fields.Add(field);
+			}
+		}
+	}
+
 	/// What kind of single value a field of this type holds; false for a type fields cannot hold.
 	public static bool Classify(Type fieldType, out FieldKind kind)
 	{

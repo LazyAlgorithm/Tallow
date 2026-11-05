@@ -110,6 +110,8 @@ abstract class Component
 
 	/// The first component of a type on the same object, or null.
 	public T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
+	/// The object's data component T, or null (GameObject.GetComponent).
+	public T* GetComponent<T>() where T : struct => mGameObject.GetComponent<T>();
 
 	// ---- gameplay callbacks (play mode only) ----
 	/// Called once when play starts (or when the component is added while playing), before any Start.

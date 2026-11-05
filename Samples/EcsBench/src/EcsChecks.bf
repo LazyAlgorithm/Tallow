@@ -91,6 +91,7 @@ static class EcsChecks
 		Expect(!world.IsAlive(entities[0]) && world.Count<Pose>() == 999, "Delete");
 		SceneChecks();
 		UpdateChecks();
+		DataChecks();
 		return sFailures;
 	}
 
@@ -174,5 +175,35 @@ static class EcsChecks
 		Expect(ScriptCallbackIndex.Of(typeof(Bench)) == .Update | .LateUpdate, "Bench overrides Update and LateUpdate");
 		scene.StopPlay();
 		Scene.Active = previous;
+	}
+
+	/// Data components on GameObjects: the generic API, the editor's by-type API, and scene files (Phase 3).
+	static void DataChecks()
+	{
+		let scene = scope Scene();
+		let cube = scene.CreateGameObject("Cube");
+		let motion = cube.AddComponent<Motion>(.() { velocity = .(1, 2, 3), spin = .(0, 90, 0) });
+		Expect(motion != null && motion.velocity.y == 2, "AddComponent<T>(value) for a data component");
+		Expect(cube.HasComponent<Motion>() && cube.GetComponent<Motion>().spin.y == 90, "GetComponent<T> for a data component");
+		cube.Transform.LocalPosition = .(5, 0, 0);
+		cube.AddComponent<Pose>();
+		Expect(cube.GetComponent<Motion>().velocity.z == 3, "data survives another data component being added");
+
+		let listed = scope List<DataComponents.Info>();
+		DataComponents.On(cube, listed);
+		Expect(listed.Count == 2, scope $"DataComponents.On lists the object's two data components ({listed.Count}), not engine bookkeeping");
+		Expect(DataComponents.Find("EcsBench.Motion") != null && DataComponents.Find("Tallow.TransformData") == null, "registry lists game data, hides [EngineData]");
+
+		let text = scope String();
+		SceneSerializer.Save(scene, text);
+		Expect(text.Contains("data EcsBench.Motion"), "scene text has a data block");
+		let loaded = scope Scene();
+		SceneSerializer.Load(loaded, text);
+		let copy = loaded.Find("Cube");
+		Expect(copy != null && copy.HasComponent<Motion>() && copy.GetComponent<Motion>().velocity.y == 2 && copy.GetComponent<Motion>().spin.y == 90, "data component values survive save and load");
+		Expect(copy != null && copy.HasComponent<Pose>() && copy.Transform.LocalPosition.x == 5, "every data component and the transform survive");
+
+		cube.RemoveComponent<Motion>();
+		Expect(!cube.HasComponent<Motion>() && cube.HasComponent<Pose>(), "RemoveComponent<T> for a data component");
 	}
 }

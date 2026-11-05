@@ -143,6 +143,21 @@ static class SceneSerializer
 				text.Append('\n');
 			}
 		}
+		// Data components ([Component] structs in the object's entity), after the scripts.
+		let data = scope List<DataComponents.Info>();
+		DataComponents.On(gameObject, data);
+		for (let info in data)
+		{
+			text.AppendF("data {}\n", info.fullName);
+			fields.Clear();
+			DataComponents.GetFields(info.type, gameObject.GetData(info.type), fields);
+			for (let field in fields)
+			{
+				text.AppendF("field {} ", field.name);
+				WriteValue(field, text);
+				text.Append('\n');
+			}
+		}
 		for (let child in transform.Children)
 			SaveObject(child.GameObject, text, false, skip);
 	}
@@ -201,7 +216,7 @@ static class SceneSerializer
 				text.AppendF("{}", FieldNumbers.ReadUnsigned(field));
 			else
 				text.Append(name);
-		case .List, .Array:
+		case .List,.Array:
 			FieldLists.Write(field, text);
 		}
 	}
@@ -252,7 +267,7 @@ static class SceneSerializer
 			}
 			else
 				FieldNumbers.ReadText(field, tokens[0]);
-		case .List, .Array:
+		case .List,.Array:
 			FieldLists.Read(field, tokens);
 		}
 	}
@@ -355,6 +370,8 @@ static class SceneSerializer
 		Dictionary<uint32, GameObject> created = scope .();
 		GameObject current = null;
 		Component component = null;
+		// Reading the fields of a data component: fields point into the entity, valid until its next change.
+		bool readingData = false;
 		List<FieldRef> fields = scope .();
 		List<StringView> tokens = scope .();
 		List<String> storage = scope .();
@@ -393,6 +410,7 @@ static class SceneSerializer
 				current.SetActive(tokens[5] == "1");
 				parents.Add((current, (uint32)ParseInt(tokens[3])));
 				component = null;
+				readingData = false;
 			}
 			else if (key == "folder" && current != null)
 			{
@@ -419,8 +437,22 @@ static class SceneSerializer
 				t.LocalRotation = .(ParseFloat(tokens[4]), ParseFloat(tokens[5]), ParseFloat(tokens[6]), ParseFloat(tokens[7]));
 				t.LocalScale = .(ParseFloat(tokens[8]), ParseFloat(tokens[9]), ParseFloat(tokens[10]));
 			}
+			else if (key == "data" && current != null && tokens.Count >= 2)
+			{
+				component = null;
+				fields.Clear();
+				readingData = false;
+				if (let info = DataComponents.Find(tokens[1]))
+				{
+					DataComponents.GetFields(info.type, current.AddData(info.type), fields);
+					readingData = true;
+				}
+				else
+					Log.Warning(scope $"Scene references unknown data component {tokens[1]}; it was skipped.");
+			}
 			else if (key == "component" && current != null && tokens.Count >= 4)
 			{
+				readingData = false;
 				component = AddSavedComponent(current, tokens);
 				if (component != null)
 				{
@@ -429,7 +461,7 @@ static class SceneSerializer
 					loaded.Add(component);
 				}
 			}
-			else if (key == "field" && component != null && tokens.Count >= 2)
+			else if (key == "field" && (component != null || readingData) && tokens.Count >= 2)
 				ReadSavedField(fields, tokens, references);
 		}
 

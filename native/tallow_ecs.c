@@ -431,6 +431,17 @@ TALLOW_ECS_API uint64_t tallow_ecs_system_new(ecs_world_t* world, const char* na
 	return ecs_system_init(world, &desc);
 }
 
+// The ids (components, tags, pairs) an entity has, written to out up to max; returns how many it has.
+TALLOW_ECS_API int32_t tallow_ecs_entity_ids(const ecs_world_t* world, uint64_t entity, uint64_t* out, int32_t max)
+{
+	const ecs_type_t* type = ecs_get_type(world, entity);
+	if (!type)
+		return 0;
+	for (int32_t i = 0; i < type->count && i < max; i++)
+		out[i] = type->array[i];
+	return type->count;
+}
+
 // ---- Pipelines and steps ----
 
 // A pipeline that runs the systems tagged with tag, ordered by phase as Flecs's own pipeline is.

@@ -206,6 +206,13 @@ static class MapFiles
 					missingTypes.Add(new String(type));
 				continue;
 			}
+			if (line.StartsWith("data "))
+			{
+				let type = line.Substring(5);
+				if (DataComponents.Find(type) == null && !missingTypes.ContainsAlt(type))
+					missingTypes.Add(new String(type));
+				continue;
+			}
 			let path = scope String();
 			if (!QuotedPath(line, path))
 				continue;

@@ -232,6 +232,30 @@ class GameObject
 
 	/// Adds a new component of a type and returns it. While the scene plays, it wakes at once (Awake, OnEnable) and
 	/// starts before the next Update.
+	// ---- Data components ([Component] structs, stored in the object's entity) ----
+
+	/// Adds data component T (or keeps the one there) and sets it to value. Returns where it is, valid until the
+	/// object's data components change.
+	public T* AddComponent<T>(T value = default) where T : struct
+	{
+		let world = mScene.World;
+		world.Set<T>(mEntity, value);
+		return world.Get<T>(mEntity);
+	}
+
+	/// The object's data component T, or null. Valid until the object's data components change: read or write it
+	/// right away rather than keeping the pointer.
+	public T* GetComponent<T>() where T : struct => mScene.World.Get<T>(mEntity);
+
+	public bool HasComponent<T>() where T : struct => mScene.World.Has<T>(mEntity);
+
+	public void RemoveComponent<T>() where T : struct => mScene.World.Remove<T>(mEntity);
+
+	/// The same by type, for the editor and scene files (DataComponents).
+	public void* AddData(Type type) => mScene.World.Ensure(mEntity, ComponentTypes.Add(type, type.Size, type.Align));
+	public void* GetData(Type type) => mScene.World.Get(mEntity, ComponentTypes.Add(type, type.Size, type.Align));
+	public void RemoveData(Type type) => mScene.World.Remove(mEntity, ComponentTypes.Add(type, type.Size, type.Align));
+
 	public T AddComponent<T>() where T : Component
 	{
 		return (T)AddComponent(typeof(T));

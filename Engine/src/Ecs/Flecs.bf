@@ -139,6 +139,8 @@ static class Flecs
 	[LinkName("tallow_ecs_table_versions")] public static extern uint32* TableVersions(void* world);
 	[LinkName("tallow_ecs_table_version_mask")] public static extern int32 TableVersionMask();
 
+	[LinkName("tallow_ecs_entity_ids")] public static extern int32 EntityIds(void* world, uint64 entity, uint64* output, int32 max);
+
 	// ---- Pipelines and steps ----
 	public function void StepCallback(void* context);
 	[LinkName("tallow_ecs_pipeline_new")] public static extern uint64 PipelineNew(void* world, char8* name, uint64 tag);
