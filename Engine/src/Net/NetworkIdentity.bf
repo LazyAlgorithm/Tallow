@@ -59,13 +59,16 @@ class NetworkIdentity : Component
 
 	public override void OnRegister()
 	{
-		GameObject.[Friend]mNetworkIdentity = this;
+		GameObject.[Friend]mNetworked = true;
 	}
 
 	public override void OnUnregister()
 	{
-		if (GameObject.[Friend]mNetworkIdentity == this)
-			GameObject.[Friend]mNetworkIdentity = null;
+		// Another identity on the same object keeps it networked.
+		var others = false;
+		for (let component in GameObject.Components)
+			others |= component != this && component is NetworkIdentity && component.[Friend]mRegistered;
+		GameObject.[Friend]mNetworked = others;
 	}
 
 	/// This machine's controls for the object: from its Network Behaviours (GatherInput), or the project's input

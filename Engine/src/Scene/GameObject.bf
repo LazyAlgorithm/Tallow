@@ -30,9 +30,10 @@ class GameObject
 
 	Scene mScene;
 	Entity mEntity;
-	/// Set by NetworkIdentity while it is registered: whether Update runs per tick (Component.Update).
-	NetworkIdentity mNetworkIdentity;
 	bool mActive = true;
+	/// Set by NetworkIdentity while it is registered: Update runs per tick (Component.Update). A bool beside the
+	/// others rather than a reference, so GameObject does not grow: every script call reads this object.
+	bool mNetworked;
 	bool mDestroyed;
 	/// Being taken out of the scene (Scene.DestroyTogether).
 	bool mGoing;

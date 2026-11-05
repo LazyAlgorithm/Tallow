@@ -633,8 +633,14 @@ class Hover : Script
   - Checked by `EcsChecks` (steps run in phase order around Update; callback detection for engine and sample
     classes). Interleaved Release benchmark against the pre-Phase-2 build at 100,000 objects: frame
     32.6 / 32.0 / 33.3 ms before, 29.4 / 29.2 / 29.1 ms now (the callback lists skip classes with nothing to
-    run). Script update is 5.2 to 5.4 ms before, 6.0 to 6.2 ms now: about 8 ns more per Update call, from the
-    new `Update(input, deltaTime)` call itself. At 10,000 objects both are unchanged.
+    run). Script update is 5.2 to 5.4 ms before, 6.0 to 6.4 ms now; at 10,000 objects both are unchanged.
+  - Where the script-update difference comes from (bisected with interleaved builds): step 2 alone matches the
+    original (update 5.1 to 5.45 ms against 5.3 to 5.6). It appears with step 3. Not the cause, each tested by
+    removing it: the NetworkIdentity check, the new `Update` arguments (the same with a no-argument
+    `OnLocalUpdate`), the size of `GameObject` (the identity pointer is now a bool). Layout changes move frame
+    and script time in opposite directions, so it looks like memory layout rather than extra work. Open: find
+    it with a profiler (perf is not installed on the test machine). The whole frame is about 20% faster than the
+    original (26.4 against 32.8 ms with the bool).
 
 **Phase 2 exit: met (2026-11-04).** New Empty, Sample and Showcase projects created with the launcher build and
 run; the Showcase self-test reports `SHOWCASE_READY rooms=8 probes=2` with no errors; the Sandbox runs in game

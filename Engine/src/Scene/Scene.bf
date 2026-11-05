@@ -1127,7 +1127,7 @@ class Scene
 
 	/// Whether Update on this object runs per network tick (it has a Network Identity) rather than per frame.
 	[Inline]
-	static bool TicksUpdate(GameObject gameObject) => gameObject.[Friend]mNetworkIdentity != null;
+	static bool TicksUpdate(GameObject gameObject) => gameObject.[Friend]mNetworked;
 
 	/// With no session running, objects with a Network Identity run Update here, once per tick, with the local
 	/// controls (or none, for objects no player controls). In a session the network runs them (NetworkManager).
