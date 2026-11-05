@@ -112,7 +112,7 @@ static class NetworkSync
 			let body = object.GetComponent<Rigidbody>();
 			if ((body.IsValid && !body.isKinematic) || object.HasComponent<CharacterController>()
 				|| object.HasComponent<NavigationAgent>() || object.GetComponent<AIMovementDriver>() != null || object.HasComponent<BehaviorTreeRunner>()
-				|| object.GetComponent<NetworkBehaviour>() != null || (object.GetComponent<DialogueRunner>()?.shared ?? false) || (object.GetComponent<SequencePlayer>()?.shared ?? false)
+				|| object.GetComponent<NetworkBehaviour>() != null || (object.HasComponent<DialogueRunner>() && object.GetComponent<DialogueRunner>().shared) || (object.GetComponent<SequencePlayer>()?.shared ?? false)
 				|| (object.GetComponent<SoftBody>()?.MovesByItself ?? false) || object.HasComponent<Water>())
 				wanted.Add(object);
 		}
@@ -670,13 +670,14 @@ static class NetworkSync
 
 	/// A client asks the server to move a shared conversation on: 0 advance, 1 choose index, 2 start at node,
 	/// 3 stop. serial is the conversation step it saw, so a request about a line already gone is dropped.
-	public static void DialogueRequest(DialogueRunner runner, int32 action, int32 serial, StringView node, int32 index = 0)
+	public static void DialogueRequest(DialogueRunnerState runner, int32 action, int32 serial, StringView node, int32 index = 0)
 	{
 		let network = Active(runner.Scene);
 		if (network == null || network.IsServer || node.Length > 64)
 			return;
 		let payload = scope NetWriter();
-		WriteComponent<DialogueRunner>(payload, runner);
+		// One Dialogue Runner per object: the object says which.
+		WriteTransform(payload, runner.Transform);
 		payload.Write(action);
 		payload.Write(serial);
 		payload.Write(index);
@@ -689,17 +690,19 @@ static class NetworkSync
 		let network = Active(Scene.Active);
 		if (network == null || !network.IsServer)
 			return;
-		let runner = ReadComponent<DialogueRunner>(ref reader, network);
+		DialogueRunner runner = default;
+		if (ReadTransform(ref reader, network, let transform) && transform != null)
+			runner = transform.GameObject.GetComponent<DialogueRunner>();
 		let action = reader.Read<int32>();
 		let serial = reader.Read<int32>();
 		let index = reader.Read<int32>();
 		let node = scope String();
 		reader.ReadString(node);
-		if (!reader.Ok || runner == null || !runner.shared || action < 0 || action > 3 || node.Length > 64)
+		if (!reader.Ok || !runner || !runner.shared || action < 0 || action > 3 || node.Length > 64)
 			return;
 		if (runner.onlyOwnerChooses)
 		{
-			let owner = Anchor(runner).GetComponent<NetworkIdentity>();
+			let owner = Anchor(runner.GameObject).GetComponent<NetworkIdentity>();
 			if (owner == null || owner.ownerId != sender)
 				return;
 		}

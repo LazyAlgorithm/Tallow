@@ -117,6 +117,7 @@ static class EcsChecks
 		AnimatorChecks();
 		NavigationChecks();
 		BehaviourChecks();
+		DialogueChecks();
 		return sFailures;
 	}
 
@@ -669,6 +670,62 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Dialogue Runner: started by Frame.Dialogue (Play On Start), lines, choices, events, and its [Saved] fields
+	/// through SaveSystem (the first handle with any: SaveData, OnSaving and OnLoaded).
+	static void DialogueChecks()
+	{
+		let before = ComponentState<DialogueRunnerState>.Count;
+		let previous = Scene.Active;
+		let path = scope String()..AppendF("{}/../build/check_talk.tdialogue", Assets.ProjectPath);
+		if (System.IO.File.WriteAllText(path, "speaker a \"A\"\n\nnode start\n\tsay a \"Hello\"\n\tchoice \"Yes\" yes\n\tchoice \"No\" no\nnode yes\n\tadd agreed 1\n\tsay a \"Good\"\n\tevent Agreed 2\nnode no\n\tsay a \"Bye\"\n") case .Err)
+		{
+			Expect(false, scope $"the check dialogue could not be written to {path}");
+			return;
+		}
+		DialogueVariables.Clear();
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let guide = scene.CreateGameObject("Guide");
+			let talk = guide.AddComponent<DialogueRunner>();
+			Expect(talk.startNode == "start" && !talk.playOnStart && talk.readingSpeed == 15 && talk.savedNode == -1 && talk.syncNode == -1, "a runner has its defaults");
+			talk.dialogue.Set(path);
+			talk.playOnStart = true;
+			talk.showLines = false;
+			talk.acceptInput = false;
+			float agreed = 0;
+			talk.OnEvent.Add(new [&] (name, value) => { if (name == "Agreed") agreed = value; });
+			SaveSystem.SceneStarting(scene);
+			scene.StartPlay();
+			Time.DeltaTime = 0.1f;
+			scene.Update();
+			Expect(talk.IsPlaying && talk.View == .Line && talk.Line != null && talk.Line.text == "Hello", "Play On Start plays it (Frame.Dialogue)");
+			talk.Advance();
+			Expect(talk.View == .Choices && talk.Choices.Count == 2, "then offers its answers");
+			talk.Choose(0);
+			Expect(talk.Line != null && talk.Line.text == "Good" && DialogueVariables.Get("agreed") == 1, "an answer goes to its node");
+			talk.Advance();
+			scene.Update();
+			Expect(agreed == 2 && !talk.IsPlaying, scope $"its event reaches the game ({agreed})");
+			let saved = SaveSystem.Capture(scene);
+			defer delete saved;
+			let text = scope String();
+			saved.ToText(text);
+			Expect(text.Contains("Tallow.DialogueRunner") && text.Contains("agreed"), "a save keeps its [Saved] fields (OnSaving ran)");
+			DialogueVariables.Clear();
+			talk.savedVariables.Clear();
+			SaveSystem.Apply(saved, scene);
+			Expect(talk.savedVariables.Contains("agreed") && DialogueVariables.Get("agreed") == 1, "and loading puts them back (OnLoaded ran)");
+			scene.StopPlay();
+			guide.RemoveComponent<DialogueRunner>();
+			Expect(ComponentState<DialogueRunnerState>.Count == before, "RemoveComponent frees its state");
+		}
+		Scene.Active = previous;
+		DialogueVariables.Clear();
+		Expect(ComponentState<DialogueRunnerState>.Count == before, "runners are freed with their scene");
+		System.IO.File.Delete(path).IgnoreError();
 	}
 
 	/// Behavior Tree Runner: owned text settings, started and ticked by the Frame.Behaviour step (Home, events in and

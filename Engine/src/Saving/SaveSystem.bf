@@ -384,12 +384,27 @@ static class SaveSystem
 			if (component.HasSavedFields)
 				return true;
 		}
+		if (HandlesWithSaves(root, scope .()) > 0)
+			return true;
 		for (let child in root.Transform.Children)
 		{
 			if (HasSavedContent(child.GameObject))
 				return true;
 		}
 		return false;
+	}
+
+	/// The built-in components on an object whose data has [Saved] fields (keyed by their full name, one per object).
+	static int HandlesWithSaves(GameObject gameObject, List<HandleComponents.Info> output)
+	{
+		let all = scope List<HandleComponents.Info>();
+		HandleComponents.On(gameObject, all);
+		for (let info in all)
+		{
+			if (info.saveData != null)
+				output.Add(info);
+		}
+		return output.Count;
 	}
 
 	static void ComponentKey(Component component, String key)
@@ -420,6 +435,11 @@ static class SaveSystem
 			{
 				if (component.HasSavedFields)
 					component.OnSaving();
+			}
+			for (let info in HandlesWithSaves(gameObject, .. scope .()))
+			{
+				if (info.onSaving != null)
+					info.onSaving(gameObject);
 			}
 		}
 		root.Set("format", SaveNode.MakeInt(1));
@@ -487,6 +507,21 @@ static class SaveSystem
 				ComponentKey(component, componentKey);
 				entry.Set(componentKey, io.TakeRoot());
 			}
+			// Built-in components' [Saved] data fields, keyed by the component's name.
+			for (let info in HandlesWithSaves(gameObject, .. scope .()))
+			{
+				if (entry == null)
+				{
+					key.Clear();
+					if (!KeyOf(gameObject, key))
+						break;
+					entry = new SaveNode(.Object);
+				}
+				let io = scope SaveIO();
+				io.references = references;
+				info.saveData(gameObject.GetData(info.dataType), io);
+				entry.Set(info.fullName, io.TakeRoot());
+			}
 			if (entry != null)
 				objects.Set(key, entry);
 		}
@@ -551,6 +586,7 @@ static class SaveSystem
 			Resolve(scene, references, key);
 
 		let loaded = scope List<Component>();
+		let loadedHandles = scope List<(GameObject, HandleComponents.Info)>();
 		let componentKey = scope String();
 		for (int i < objects.keys.Count)
 		{
@@ -573,9 +609,22 @@ static class SaveSystem
 				component.SaveFields(io);
 				loaded.Add(component);
 			}
+			for (let info in HandlesWithSaves(gameObject, .. scope .()))
+			{
+				let fields = entry[info.fullName];
+				if (fields == null)
+					continue;
+				let io = scope SaveIO(fields);
+				io.references = references;
+				info.saveData(gameObject.GetData(info.dataType), io);
+				if (info.onLoaded != null)
+					loadedHandles.Add((gameObject, info));
+			}
 		}
 		for (let component in loaded)
 			component.OnLoaded();
+		for (let (gameObject, info) in loadedHandles)
+			info.onLoaded(gameObject);
 	}
 
 	/// Destroys the scene's own objects that had been destroyed when the game was saved.

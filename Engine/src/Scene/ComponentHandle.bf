@@ -36,6 +36,9 @@ struct HandleDataAttribute : Attribute, IOnTypeInit
 					code.AppendF("\t\tcase {}: return new {}();\n", index++, field.FieldType);
 			}
 		}
+		// [Saved] fields: SaveCodegen gives the struct SaveFields; SaveSystem reaches it through this, by pointer.
+		if (SaveCodegen.DeclaresSaved(type))
+			Compiler.EmitTypeBody(type, "static void SaveData(void* data, Tallow.SaveIO io)\n{\n\t((Self*)data).SaveFields(io);\n}\n");
 		if (index == 0)
 			return;
 		Compiler.EmitTypeBody(type, scope $"static System.Object NewList(int32 index)\n{{\n\tswitch (index)\n\t{{\n{code}\t}}\n\treturn null;\n}}\n");
@@ -251,6 +254,14 @@ static class HandleComponents
 		public List<int> texts = new .() ~ delete _;
 		/// The data's `NewList` ([HandleData] makes it): an empty list for its index-th list field.
 		public function Object(int32 index) newList;
+		/// The data's `SaveData` ([HandleData] makes it when the data has [Saved] fields): reads or writes them.
+		public function void(void* data, SaveIO io) saveData;
+		/// The handle's `static void OnSaving(GameObject)` and `static void OnLoaded(GameObject)`, if it has them:
+		/// what a class component's OnSaving and OnLoaded did, around SaveSystem reading and writing [Saved] fields.
+		public function void(GameObject gameObject) onSaving;
+		/// The handle's `static void OnGUI(Scene)`, if it has one: GUI.Run calls it after the class components'.
+		public function void(Scene scene) onGUI;
+		public function void(GameObject gameObject) onLoaded;
 	}
 
 	static List<Info> sInfos ~ DeleteContainerAndItems!(_);
@@ -295,6 +306,14 @@ static class HandleComponents
 				info.drawGizmos = method;
 			if (type.GetMethod("OnRemove", .Static | .Public | .NonPublic) case .Ok(let method))
 				info.onRemove = (Flecs.RemoveCallback)method.Ptr;
+			if (data.GetMethod("SaveData", .Static | .Public | .NonPublic) case .Ok(let saver))
+				info.saveData = (function void(void*, SaveIO))saver.Ptr;
+			if (type.GetMethod("OnGUI", .Static | .Public | .NonPublic) case .Ok(let gui))
+				info.onGUI = (function void(Scene))gui.Ptr;
+			if (type.GetMethod("OnSaving", .Static | .Public | .NonPublic) case .Ok(let saving))
+				info.onSaving = (function void(GameObject))saving.Ptr;
+			if (type.GetMethod("OnLoaded", .Static | .Public | .NonPublic) case .Ok(let loaded))
+				info.onLoaded = (function void(GameObject))loaded.Ptr;
 			for (let field in data.GetFields(.Public | .Instance))
 			{
 				if (let generic = field.FieldType as SpecializedGenericType)
@@ -449,6 +468,16 @@ static class HandleComponents
 	{
 		if (let data = gameObject.GetData(info.dataType))
 			DataComponents.GetFields(info.dataType, data, fields, gameObject);
+	}
+
+	/// Runs the OnGUI of every handle type that has one (GUI.Run).
+	public static void RunGUI(Scene scene)
+	{
+		for (let info in Types)
+		{
+			if (info.onGUI != null)
+				info.onGUI(scene);
+		}
 	}
 
 	/// Draws the gizmos of every handle component on the object (SceneView).

@@ -1055,6 +1055,24 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   warnings: its wandering agents match, and its Guard wanders differently on every run on both builds (the tree
   context's Random is unseeded). The Gallery self-test passes.
 
+- [x] **Handles in save games.** `[Saved]` fields in a `[HandleData]` struct get SaveCodegen's `SaveFields`, and
+  `[HandleData]` adds `static SaveData(void*, SaveIO)` calling it. SaveSystem's Capture and Apply include each
+  handle on an object whose data has one, keyed by the component's full name. A handle may have
+  `static void OnSaving(GameObject)` / `OnLoaded(GameObject)` (what a class component's overrides did), found
+  as `DrawGizmos` is.
+- [x] **Handles' OnGUI.** A handle may have `static void OnGUI(Scene)`. `GUI.Run` calls them
+  (`HandleComponents.RunGUI`) after the class components'.
+- [x] **DialogueRunner.** `DialogueRunnerData` (settings, `[Sync]` fields with the `syncChoices` text, `[Saved]`
+  fields), the handle, and `DialogueRunnerState` (the conversation, voice, events). A new `Frame.Dialogue` step does
+  Start (Play On Start), OnLocalUpdate and OnDisable; its OnGUI, OnSaving and OnLoaded are the static hooks above;
+  Awake runs when its state is made. A client's requests name the object (one runner per object), not a component
+  index. The Inspector's runner tools moved to `DrawHandleTools`. Made by `scratchpad/tohandle.py` (it moves a
+  class component's settings into data, its body into the state, writes the forwarders, FrameAll / StopAll /
+  OnGUI / OnSaving / OnLoaded / OnRemove from the overrides it has, and `datadefaults.py` gives bare data fields
+  `= default`). Checked by `EcsChecks.DialogueChecks`: defaults, Play On Start, a line, the answers, a choice
+  setting a variable, an event reaching the game, a save keeping its `[Saved]` fields and loading putting them back,
+  freeing. The Sandbox guide's welcome line shows as before; the Gallery self-test passes.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

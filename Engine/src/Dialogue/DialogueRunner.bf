@@ -3,23 +3,14 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Plays a dialogue (a `.tdialogue` file, see DialogueAsset and docs/dialogue.md): each line as a subtitle with its
-/// voice recording, the answers as buttons the player picks with the mouse, the number keys or a controller, and
-/// `event` steps handed to the game.
-///
-///   let talk = GetComponent<DialogueRunner>();
-///   talk.OnEvent.Add(new (name, value) => { if (name == "OpenGate") gate.Open(); });
-///   talk.Play();                 // from Start Node; or Play("shop")
-///
-/// Shared: in a network session the server runs the conversation and every player sees the same lines and answers;
-/// any player (or, with Only Owner Chooses, the object's owner) can move it on. Otherwise each machine runs its own.
-[Component]
-class DialogueRunner : Component
+/// A DialogueRunner's settings, in its entity (DialogueRunner is the handle).
+[Component, HandleData]
+struct DialogueRunnerData
 {
 	/// The dialogue file.
-	public String dialogue = new .() ~ delete _;
+	public String dialogue = new .();
 	/// The node Play starts at.
-	public String startNode = new .("start") ~ delete _;
+	public String startNode = new .("start");
 	/// Starts the conversation when the scene starts.
 	public bool playOnStart = false;
 	/// Lines move on by themselves when their recording ends (or, without one, after time to read them). Off: the
@@ -42,17 +33,154 @@ class DialogueRunner : Component
 	public bool onlyOwnerChooses = false;
 
 	// What a shared conversation shows, set by the server.
-	[Sync, HideInInspector] public int32 syncSerial;
+	[Sync, HideInInspector] public int32 syncSerial = default;
 	[Sync, HideInInspector] public int32 syncNode = -1;
-	[Sync, HideInInspector] public int32 syncStep;
-	[Sync, HideInInspector] public int32 syncView;
+	[Sync, HideInInspector] public int32 syncStep = default;
+	[Sync, HideInInspector] public int32 syncView = default;
 	/// The offered choices' step numbers, separated by commas.
-	[Sync, HideInInspector] public String syncChoices = new .() ~ delete _;
+	[Sync, HideInInspector] public String syncChoices = new .();
 
 	// Kept in saves: the dialogue variables and where the conversation was.
-	[Saved, HideInInspector] public String savedVariables = new .() ~ delete _;
+	[Saved, HideInInspector] public String savedVariables = new .();
 	[Saved, HideInInspector] public int32 savedNode = -1;
-	[Saved, HideInInspector] public int32 savedStep;
+	[Saved, HideInInspector] public int32 savedStep = default;
+
+	public this() { }
+}
+
+/// Plays a dialogue (a `.tdialogue` file, see DialogueAsset and docs/dialogue.md): each line as a subtitle with its
+/// voice recording, the answers as buttons the player picks with the mouse, the number keys or a controller, and
+/// `event` steps handed to the game.
+///
+///   let talk = GetComponent<DialogueRunner>();
+///   talk.OnEvent.Add(new (name, value) => { if (name == "OpenGate") gate.Open(); });
+///   talk.Play();                 // from Start Node; or Play("shop")
+///
+/// Shared: in a network session the server runs the conversation and every player sees the same lines and answers;
+/// any player (or, with Only Owner Chooses, the object's owner) can move it on. Otherwise each machine runs its own.
+///
+/// A handle (ComponentHandle): its settings are DialogueRunnerData's fields, what it keeps between frames its DialogueRunnerState.
+/// DialogueRunner.FrameAll (a step in the frame pipeline) does what Start, OnLocalUpdate and OnDisable did.
+[Component, HandleFields]
+struct DialogueRunner : ComponentHandle<DialogueRunnerData>
+{
+	/// What it keeps between frames, made the first time it is asked for.
+	public DialogueRunnerState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<DialogueRunnerState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			if (state.[Friend]mGameObject == null)
+			{
+				state.[Friend]mGameObject = mGameObject;
+				state.Awake();
+			}
+			return state;
+		}
+	}
+
+	// The API, unchanged: each member is documented on DialogueRunnerState.
+	public DialogueConversation Conversation => Runtime.Conversation;
+	public DialogueView View => Runtime.View;
+	public bool IsPlaying => Runtime.IsPlaying;
+	public DialogueStep Line => Runtime.Line;
+	public List<DialogueStep> Choices => Runtime.Choices;
+	public int32 Selected => Runtime.Selected;
+	public DialogueSpeaker Speaker => Runtime.Speaker;
+	public bool Play() => Runtime.Play();
+	public bool Play(StringView node) => Runtime.Play(node);
+	public void Advance() => Runtime.Advance();
+	public void Choose(int index) => Runtime.Choose(index);
+	public void Stop() => Runtime.Stop();
+	public void ApplyRequest(int32 action, int32 serial, StringView node, int32 index) => Runtime.ApplyRequest(action, serial, node, index);
+	public float LineDuration => Runtime.LineDuration;
+	public ref Event<delegate void(StringView name, float value)> OnEvent => ref Runtime.OnEvent;
+	public ref Event<delegate void(DialogueStep line)> OnLine => ref Runtime.OnLine;
+	public ref Event<delegate void()> OnChoices => ref Runtime.OnChoices;
+	public ref Event<delegate void()> OnEnded => ref Runtime.OnEnded;
+
+	/// Starts DialogueRunners that have not started, moves every switched-on one on an active object a frame on, and
+	/// tells one that has been switched off (OnDisable).
+	public static void FrameAll(Scene scene)
+	{
+		if (!scene.IsPlaying)
+			return;
+		for (let component in scene.FindComponents<DialogueRunner>(.. scope .()))
+		{
+			let state = component.Runtime;
+			if (!component.IsActiveAndEnabled)
+			{
+				if (state.[Friend]mWasActive)
+				{
+					state.[Friend]mWasActive = false;
+					state.OnDisable();
+				}
+				continue;
+			}
+			state.[Friend]mWasActive = true;
+			if (!state.[Friend]mStarted)
+			{
+				state.[Friend]mStarted = true;
+				state.Start();
+			}
+			state.Frame();
+		}
+	}
+
+	/// When play stops, they start again next time (as Start runs once per play).
+	public static void StopAll(Scene scene)
+	{
+		for (let (entity, state) in ComponentState<DialogueRunnerState>.In(scene.World, .. scope .()))
+		{
+			state.[Friend]mStarted = false;
+			state.[Friend]mWasActive = false;
+		}
+	}
+
+	/// GUI.Run: what OnGUI did, for each switched-on one on an active object that has started.
+	static void OnGUI(Scene scene)
+	{
+		for (let component in scene.Components<DialogueRunner>(.. scope .()))
+		{
+			if (component.GameObject.ActiveInHierarchy && ComponentState<DialogueRunnerState>.Get(scene.World, component.GameObject.Entity) != null)
+				component.Runtime.OnGUI();
+		}
+	}
+
+	/// SaveSystem: what OnSaving did.
+	static void OnSaving(GameObject gameObject) => gameObject.GetComponent<DialogueRunner>().Runtime.OnSaving();
+
+	/// SaveSystem: what OnLoaded did.
+	static void OnLoaded(GameObject gameObject) => gameObject.GetComponent<DialogueRunner>().Runtime.OnLoaded();
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		ComponentState<DialogueRunnerState>.Release(world, entity);
+		HandleComponents.FreeLists(world, entity, typeof(DialogueRunner));
+	}
+}
+
+/// What a DialogueRunner keeps between frames. Its settings are read from the entity each time.
+[DataFields(typeof(DialogueRunnerData), "Settings")]
+class DialogueRunnerState
+{
+	GameObject mGameObject;
+	bool mStarted;
+	bool mWasActive;
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+	public Scene Scene => mGameObject.Scene;
+	public DialogueRunner Handle => mGameObject.GetComponent<DialogueRunner>();
+	T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
+	T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
+	ref DialogueRunnerData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<DialogueRunnerData>();
+	}
 
 	/// An `event` step was reached: its name and number. On the server only in a shared conversation, where the game
 	/// decides what happens; otherwise on the machine running it.
@@ -88,18 +216,19 @@ class DialogueRunner : Component
 	/// The speaker of the line shown, or null (a narrator, or no line).
 	public DialogueSpeaker Speaker => Line != null && mConversation.Asset != null ? mConversation.Asset.FindSpeaker(Line.speaker) : null;
 
-	public override void Awake()
+	/// What Awake did: once, when the state is made.
+	public void Awake()
 	{
 		mConversation.OnEvent.Add(new => ConversationEvent);
 	}
 
-	public override void Start()
+	public void Start()
 	{
 		if (playOnStart && Mine)
 			Play();
 	}
 
-	public override void OnDisable() => HideLine();
+	public void OnDisable() => HideLine();
 
 	/// True where this conversation is run: always unless it is shared in a session, then on the server.
 	bool Mine => !shared || !NetworkSync.InSession(Scene) || (Scene.Network != null && Scene.Network.IsServer);
@@ -317,7 +446,7 @@ class DialogueRunner : Component
 		}
 	}
 
-	public override void OnLocalUpdate()
+	public void Frame()
 	{
 		if (!Mine && syncSerial != mAppliedSerial)
 			Follow();
@@ -360,7 +489,7 @@ class DialogueRunner : Component
 			Choose(mSelected);
 	}
 
-	public override void OnGUI()
+	public void OnGUI()
 	{
 		if (!showChoices || mConversation.View != .Choices)
 			return;
@@ -384,7 +513,7 @@ class DialogueRunner : Component
 		}
 	}
 
-	public override void OnSaving()
+	public void OnSaving()
 	{
 		savedVariables.Clear();
 		DialogueVariables.ToText(savedVariables);
@@ -392,7 +521,7 @@ class DialogueRunner : Component
 		savedStep = mConversation.StepIndex;
 	}
 
-	public override void OnLoaded()
+	public void OnLoaded()
 	{
 		DialogueVariables.FromText(savedVariables);
 		if (savedNode >= 0 && Mine && mConversation.Restore(DialogueAsset.Load(dialogue), savedNode, savedStep))
