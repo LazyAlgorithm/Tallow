@@ -125,6 +125,7 @@ static class EcsChecks
 		ViewmodelChecks();
 		ComputeChecks();
 		ModelMeshChecks();
+		LODChecks();
 		return sFailures;
 	}
 
@@ -677,6 +678,60 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// LOD Group: finds its `_LOD` children on the next frame (switched off too), the levels a camera's distance
+	/// gives, a setting changed by code used at the next pick, a new child found, reading a scene, and removing it.
+	static void LODChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let cube = MeshShapes.Create(.Box, .());
+			defer delete cube;
+			let mesh = scope Mesh();
+			cube.Build(mesh, .One);
+			let rock = scene.CreateGameObject("Rock");
+			MeshRenderer Level(StringView name)
+			{
+				let o = scene.CreateGameObject(name, rock.Transform);
+				let renderer = o.AddComponent<MeshRenderer>();
+				renderer.RuntimeMesh = mesh;
+				return renderer;
+			}
+			let near = Level("Rock_LOD0");
+			let far = Level("Rock_LOD1");
+			let group = rock.AddComponent<LODGroup>();
+			Expect(group.source == .Children && group.level1Below == 0.4f, "a group has its defaults");
+			group.enabled = false;
+			scene.Update();
+			Expect(group.LevelCount == 2 && near.LodGroup == group.Runtime && far.LodLevel == 1, "the next frame it finds its levels (switched off too)");
+			group.enabled = true;
+			CameraData camera = default;
+			camera.fieldOfView = 60;
+			camera.position = .(0, 0.5f, -2);
+			Expect(group.LevelFor(camera) == 0, "near, level 0");
+			camera.position = .(0, 0.5f, -20);
+			Expect(group.LevelFor(camera) == 1 && group.MeshAt(near.[Friend]State, mesh, 1) == null && group.MeshAt(far.[Friend]State, mesh, 1) == mesh, "farther, level 1, drawn by the _LOD1 renderer only");
+			camera.position = .(0, 0.5f, -5000);
+			Expect(group.LevelFor(camera) == -1, "a speck is not drawn");
+			group.cullBelow = 0;
+			camera.position = .(0, 0.5f, -5001);
+			Expect(group.LevelFor(camera) == 1, "a setting changed by code is used at the next pick");
+			let third = Level("Rock_LOD2");
+			scene.Update();
+			Expect(group.LevelCount == 3 && third.LodGroup == group.Runtime, "a new child is found");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Rock").GetComponent<LODGroup>();
+			Expect(copy.LevelCount == 3 && copy.cullBelow == 0, "reading a scene finds them at once");
+			rock.RemoveComponent<LODGroup>();
+			Expect(near.LodGroup == null && far.LodGroup == null, "removing it lets its renderers go");
+		}
+		Scene.Active = previous;
 	}
 
 	/// Model Mesh: Set builds and draws at once; two objects with the same model share one mesh; a copy made from

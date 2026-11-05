@@ -3,22 +3,11 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Levels of detail: far away, an object is drawn with fewer triangles, and when it is only a speck it is not drawn at
-/// all. The level is picked for each camera from how much of the screen's height the object covers. See docs/lod.md.
-[Component]
-class LODGroup : Component
+/// A LODGroup's settings, in its entity (LODGroup is the handle).
+[Component, HandleData]
+struct LODGroupData
 {
-	public enum Source
-	{
-		/// The children (or deeper objects) named `..._LOD0`, `..._LOD1`, `..._LOD2`, `..._LOD3` are the levels, as model
-		/// files from most tools name them. Renderers without such a name are drawn at every level, except the
-		/// group's own when there is no `_LOD0`: that is level 0.
-		Children,
-		/// Every renderer under the object is simplified when the scene loads to make the lower levels.
-		Generated
-	}
-
-	public Source source = .Children;
+	public LODGroup.Source source = .Children;
 	/// Below this share of the screen's height, level 1 is drawn instead of level 0.
 	[Range(0, 1)]
 	public float level1Below = 0.4f;
@@ -40,10 +29,120 @@ class LODGroup : Component
 	[Range(0.02f, 1)]
 	public float level3Triangles = 0.08f;
 
+	public this() { }
+}
+
+/// Levels of detail: far away, an object is drawn with fewer triangles, and when it is only a speck it is not drawn at
+/// all. The level is picked for each camera from how much of the screen's height the object covers. See docs/lod.md.
+///
+/// A handle (ComponentHandle): its settings are LODGroupData's fields, what it keeps between frames its LODGroupState.
+/// LODGroup.FrameAll (a step in the frame pipeline) does what Start, OnLocalUpdate and OnDisable did.
+[Component, HandleFields]
+struct LODGroup : ComponentHandle<LODGroupData>
+{
+	/// What it keeps between frames, made the first time it is asked for.
+	public LODGroupState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<LODGroupState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			if (state.[Friend]mGameObject == null)
+			{
+				state.[Friend]mGameObject = mGameObject;
+			}
+			return state;
+		}
+	}
+
+	public enum Source
+	{
+		/// The children (or deeper objects) named `..._LOD0`, `..._LOD1`, `..._LOD2`, `..._LOD3` are the levels, as model
+		/// files from most tools name them. Renderers without such a name are drawn at every level, except the
+		/// group's own when there is no `_LOD0`: that is level 0.
+		Children,
+		/// Every renderer under the object is simplified when the scene loads to make the lower levels.
+		Generated
+	}
+
 	/// Above 1 keeps detail to farther away (a high quality setting); below 1 drops it sooner. Applies to every group.
 	public static float Bias = 1;
 	/// Draws every group at this level (-1: as usual). For checking levels in the editor and in tests.
 	public static int32 ForceLevel = -1;
+
+	/// The level a name gives (`Rock_LOD2` is 2), or -1.
+	public static int32 LevelInName(StringView name)
+	{
+		// Ends in _LOD and one digit, in any case.
+		if (name.Length < 5 || name[name.Length - 5] != '_' || !name[name.Length - 1].IsDigit)
+			return -1;
+		if (!name.Substring(name.Length - 4, 3).Equals("LOD", true))
+			return -1;
+		return name[name.Length - 1] - '0';
+	}
+
+	// The API, unchanged: each member is documented on LODGroupState.
+	public int32 LevelCount => Runtime.LevelCount;
+	public Span<MeshRenderer> Renderers => Runtime.Renderers;
+	public void Refresh() => Runtime.Refresh();
+	public Bounds WorldBounds => Runtime.WorldBounds;
+	public float ScreenHeight(CameraData camera) => Runtime.ScreenHeight(camera);
+	public int32 LevelForHeight(float height) => Runtime.LevelForHeight(height);
+	public int32 LevelFor(CameraData camera) => Runtime.LevelFor(camera);
+	public float LastScreenHeight => Runtime.LastScreenHeight;
+	public float TrianglesAt(int32 level) => Runtime.TrianglesAt(level);
+	public Mesh MeshAt(RenderProxy renderer, Mesh mesh, int32 level) => Runtime.MeshAt(renderer, mesh, level);
+
+	/// What OnFrame did, in edit mode as well as play (from Scene.RunOnFrames): finds its renderers again when the
+	/// objects under it changed. One not refreshed yet (just added, copied or made from a prefab) finds them whether
+	/// or not it is switched on, as OnRegister did.
+	public static void FrameAll(Scene scene)
+	{
+		for (let component in scene.FindComponents<LODGroup>(.. scope .()))
+		{
+			let state = component.Runtime;
+			if (component.IsActiveAndEnabled || !state.[Friend]mRefreshed)
+				state.Frame();
+		}
+	}
+
+	/// After the Inspector changes a field or a scene is read.
+	static void OnValidate(GameObject gameObject) => gameObject.GetComponent<LODGroup>().Runtime.OnValidate();
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		// As OnUnregister did: its renderers forget it (unless the whole scene is going with them).
+		if (let state = ComponentState<LODGroupState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
+		{
+			let scene = state.[Friend]mGameObject?.Scene;
+			if (scene != null && !scene.[Friend]mClearing)
+				state.Unregister();
+		}
+		ComponentState<LODGroupState>.Release(world, entity);
+	}
+}
+
+/// What a LODGroup keeps between frames. Its settings are read from the entity each time.
+[DataFields(typeof(LODGroupData), "Settings")]
+class LODGroupState
+{
+	GameObject mGameObject;
+	bool mRefreshed;
+	/// The settings as they were at the last Refresh or level pick: drawing reads these, not the entity, per renderer.
+	LODGroupData mSettings;
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+	public Scene Scene => mGameObject.Scene;
+	public LODGroup Handle => mGameObject.GetComponent<LODGroup>();
+	T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
+	T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
+	ref LODGroupData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<LODGroupData>();
+	}
 
 	List<MeshRenderer> mRenderers = new .() ~ delete _;
 	int32 mLevelCount = 1;
@@ -59,12 +158,8 @@ class LODGroup : Component
 	/// The renderers it controls.
 	public Span<MeshRenderer> Renderers => mRenderers;
 
-	public override void OnRegister()
-	{
-		Refresh();
-	}
-
-	public override void OnUnregister()
+	/// What OnUnregister did (the handle's OnRemove).
+	public void Unregister()
 	{
 		for (let renderer in mRenderers)
 		{
@@ -74,15 +169,15 @@ class LODGroup : Component
 		mRenderers.Clear();
 	}
 
-	public override void OnValidate()
+	public void OnValidate()
 	{
 		Refresh();
 	}
 
 	/// Each frame: finds its renderers again if the objects under it changed.
-	public override void OnFrame()
+	public void Frame()
 	{
-		if (HashHierarchy() != mHierarchyHash)
+		if (!mRefreshed || HashHierarchy() != mHierarchyHash)
 			Refresh();
 	}
 
@@ -100,20 +195,12 @@ class LODGroup : Component
 		return hash;
 	}
 
-	/// The level a name gives (`Rock_LOD2` is 2), or -1.
-	public static int32 LevelInName(StringView name)
-	{
-		// Ends in _LOD and one digit, in any case.
-		if (name.Length < 5 || name[name.Length - 5] != '_' || !name[name.Length - 1].IsDigit)
-			return -1;
-		if (!name.Substring(name.Length - 4, 3).Equals("LOD", true))
-			return -1;
-		return name[name.Length - 1] - '0';
-	}
 
 	/// Finds the renderers under it and their levels.
 	public void Refresh()
 	{
+		mSettings = Settings;
+		mRefreshed = true;
 		for (let renderer in mRenderers)
 		{
 			if (renderer && renderer.LodGroup == this)
@@ -124,7 +211,7 @@ class LODGroup : Component
 		void Walk(Transform transform, int32 level)
 		{
 			var level;
-			let named = LevelInName(transform.GameObject.Name);
+			let named = LODGroup.LevelInName(transform.GameObject.Name);
 			if (named >= 0 && source == .Children)
 				level = named;
 			if (transform.GameObject.HasComponent<MeshRenderer>())
@@ -139,7 +226,7 @@ class LODGroup : Component
 			}
 			for (let child in transform.Children)
 			{
-				if (child.GameObject.GetComponent<LODGroup>() == null)
+				if (!child.GameObject.GetComponent<LODGroup>().IsValid)
 					Walk(child, level);
 			}
 		}
@@ -197,15 +284,15 @@ class LODGroup : Component
 	/// The level a screen height gives: 0 full detail, -1 not drawn.
 	public int32 LevelForHeight(float height)
 	{
-		let h = height * Math.Max(Bias, 0.01f);
-		if (cullBelow > 0 && h < cullBelow)
+		let h = height * Math.Max(LODGroup.Bias, 0.01f);
+		if (mSettings.cullBelow > 0 && h < mSettings.cullBelow)
 			return -1;
 		int32 level = 0;
-		if (h < level1Below)
+		if (h < mSettings.level1Below)
 			level = 1;
-		if (h < level2Below)
+		if (h < mSettings.level2Below)
 			level = 2;
-		if (h < level3Below)
+		if (h < mSettings.level3Below)
 			level = 3;
 		return Math.Min(level, mLevelCount - 1);
 	}
@@ -213,10 +300,11 @@ class LODGroup : Component
 	/// The level drawn for a camera: 0 full detail, -1 not drawn.
 	public int32 LevelFor(CameraData camera)
 	{
-		if (ForceLevel >= 0)
-			return Math.Min(ForceLevel, mLevelCount - 1);
+		if (LODGroup.ForceLevel >= 0)
+			return Math.Min(LODGroup.ForceLevel, mLevelCount - 1);
 		if (mPickedFrame == Time.FrameCount && mPickedFrom == camera.position)
 			return mPicked;
+		mSettings = Settings;
 		mPickedHeight = ScreenHeight(camera);
 		mPicked = LevelForHeight(mPickedHeight);
 		mPickedFrame = Time.FrameCount;
@@ -233,9 +321,9 @@ class LODGroup : Component
 		switch (level)
 		{
 		case 0: return 1;
-		case 1: return level1Triangles;
-		case 2: return level2Triangles;
-		default: return level3Triangles;
+		case 1: return mSettings.level1Triangles;
+		case 2: return mSettings.level2Triangles;
+		default: return mSettings.level3Triangles;
 		}
 	}
 
@@ -244,7 +332,7 @@ class LODGroup : Component
 	{
 		if (level < 0 || mesh == null)
 			return null;
-		if (source == .Children)
+		if (mSettings.source == .Children)
 			return renderer.LodLevel < 0 || renderer.LodLevel == level ? mesh : null;
 		if (level == 0 || mesh.IsDynamic)
 			return mesh;

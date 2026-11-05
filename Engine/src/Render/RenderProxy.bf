@@ -161,7 +161,7 @@ class RenderProxy
 
 	/// The LOD Group above it that picks when it is drawn, if any (set by the group).
 	[NonSerialized]
-	public LODGroup LodGroup;
+	public LODGroupState LodGroup;
 	/// Its level in that group (from an `_LOD<n>` name), or -1 for every level.
 	[NonSerialized]
 	public int8 LodLevel = -1;

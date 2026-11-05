@@ -1722,7 +1722,7 @@ extension EditorApp
 			report.AppendF("{}{}", report.IsEmpty ? "" : ", ", MeshOps.TriangleCount(simpler));
 		}
 		var group = owner.GetComponent<LODGroup>();
-		if (group == null)
+		if (!group.IsValid)
 			group = owner.AddComponent<LODGroup>();
 		group.source = .Children;
 		group.Refresh();

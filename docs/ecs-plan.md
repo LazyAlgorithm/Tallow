@@ -1145,6 +1145,18 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   scene, removing), the editor's `--model-test` and `--palette-test` (both PASS on a scratch project), and the
   Gallery self-test.
 
+- [x] **LODGroup** (tools/class_to_handle.py, then by hand). `LODGroupData`, the handle (with `Source`, `Bias`,
+  `ForceLevel` and `LevelInName`), and `LODGroupState`, which a renderer's `RenderProxy.LodGroup` now points to. The
+  state keeps a copy of the settings, taken at each Refresh and each level pick (once per group per camera a frame),
+  so drawing (`LevelForHeight`, `MeshAt`, `TrianglesAt`) reads no entity data per renderer. Like ModelMesh it has no
+  OnRegister: `LODGroup.FrameAll` (in `Scene.RunOnFrames`) refreshes one not yet refreshed, switched on or not, and
+  does OnFrame for the rest; static OnValidate refreshes it as a scene is read; OnRemove does OnUnregister. The
+  Inspector's LOD tools moved to `DrawHandleTools`. Checked by `EcsChecks.LODChecks` (finding levels next frame,
+  levels by distance, culling, a setting changed by code, a new child, reading a scene, removing) and the editor's
+  `--model-test` (Make Levels of Detail). A/B against 785b001f on Sandbox's Culling scene (33 groups, 900 frames,
+  3 runs each): 9.53 s against 9.49 s average (the run may be frame-capped, so this shows no regression rather than
+  a gain), and the final frames are pixel-identical.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

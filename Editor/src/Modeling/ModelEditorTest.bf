@@ -689,7 +689,7 @@ extension EditorApp
 			smaller &= count < previous && childModel.Edit.IsClosed();
 			previous = count;
 		}
-		expect(group != null && levels == 2 && smaller && group.LevelCount == 3 && model.GameObject.GetComponent<MeshRenderer>().LodLevel == 0, scope $"Make Levels of Detail adds 2 simpler closed levels and a LOD Group ({levels} levels)");
+		expect(group.IsValid && levels == 2 && smaller && group.LevelCount == 3 && model.GameObject.GetComponent<MeshRenderer>().LodLevel == 0, scope $"Make Levels of Detail adds 2 simpler closed levels and a LOD Group ({levels} levels)");
 		MakeModelLods(model);
 		int32 again = 0;
 		for (let child in model.Transform.Children)

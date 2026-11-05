@@ -352,6 +352,8 @@ extension EditorApp
 			DrawSkinnedClips(gameObject.GetComponent<SkinnedMeshRenderer>());
 		else if (info.handleType == typeof(Foliage))
 			DrawFoliageTools(gameObject.GetComponent<Foliage>());
+		else if (info.handleType == typeof(LODGroup))
+			DrawLODGroupTools(gameObject.GetComponent<LODGroup>());
 		else if (info.handleType == typeof(ViewmodelPose))
 			DrawViewmodelPoseTools(gameObject.GetComponent<ViewmodelPose>());
 		else if (info.handleType == typeof(SequencePlayer))
@@ -628,8 +630,6 @@ extension EditorApp
 			DrawNavigationObstacleTools(obstacle);
 		if (let area = component as NavigationArea)
 			DrawNavigationAreaTools(area);
-		if (let lodGroup = component as LODGroup)
-			DrawLODGroupTools(lodGroup);
 		if (let hand = component as HandPose)
 			DrawHandPoseTools(hand);
 		if (let feet = component as FootPlacement)

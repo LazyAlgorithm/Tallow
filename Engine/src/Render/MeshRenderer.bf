@@ -101,7 +101,7 @@ struct MeshRenderer : ComponentHandle<MeshRendererData>
 	/// Whether it can move by itself (a Rigidbody, or a skinned model), and so is no Auto occluder.
 	public bool IsMoving => State.IsMoving;
 	/// The LOD Group above it that picks when it is drawn, if any (set by the group).
-	public ref LODGroup LodGroup => ref State.LodGroup;
+	public ref LODGroupState LodGroup => ref State.LodGroup;
 	/// Its level in that group (from an `_LOD<n>` name), or -1 for every level.
 	public ref int8 LodLevel => ref State.LodLevel;
 	/// Assign a procedurally built mesh. The renderer does not take ownership.
