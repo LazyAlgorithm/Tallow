@@ -341,6 +341,8 @@ extension EditorApp
 			DrawAudioTools(gameObject.GetComponent<AudioSource>());
 		else if (info.handleType == typeof(ReflectionProbe))
 			DrawReflectionProbeTools(gameObject.GetComponent<ReflectionProbe>());
+		else if (info.handleType == typeof(SkinnedMeshRenderer))
+			DrawSkinnedClips(gameObject.GetComponent<SkinnedMeshRenderer>());
 	}
 
 	// ---- Data components ([Component] structs in the object's entity, DataComponents) ----
@@ -619,8 +621,6 @@ extension EditorApp
 			DrawTerrainTools(terrain);
 		else if (let voxels = component as VoxelObject)
 			DrawVoxelObjectTools(voxels);
-		else if (let skinned = component as SkinnedMeshRenderer)
-			DrawSkinnedClips(skinned);
 	}
 
 	/// A rigged model's parts, and the clips found in its file: click one to play it.

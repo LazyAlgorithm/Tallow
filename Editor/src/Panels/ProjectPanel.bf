@@ -998,7 +998,7 @@ extension EditorApp
 		let made = CreateObject(name);
 		let skinned = made.AddComponent<SkinnedMeshRenderer>();
 		skinned.model.Set(relative);
-		skinned.OnValidate();
+		skinned.Refresh();
 		return made;
 	}
 

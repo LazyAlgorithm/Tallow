@@ -11,16 +11,17 @@ namespace Tallow;
 /// lists the parts; SetPartMaterial from code). A material on the Mesh Renderer covers every part that has none of
 /// its own. A model with one plain material is one mesh drawn with the Mesh Renderer's settings, as before.
 /// See docs/skinned-materials.md.
-[Component]
-class SkinnedMeshRenderer : Component
+/// A Skinned Mesh Renderer's settings, in its entity (SkinnedMeshRenderer is the handle).
+[Component, HandleData]
+struct SkinnedMeshRendererData
 {
 	/// Rigged .glb / .gltf file relative to the project's asset folder.
-	public String model = new .() ~ delete _;
+	public SharedString model = default;
 	/// Clip to start with; empty plays the first clip in the file.
-	public String clip = new .() ~ delete _;
+	public SharedString clip = default;
 	/// Rigged .glb files whose clips this model can play too, separated by ';': a file of animations made for the
 	/// same skeleton (bones are matched by name), such as the Basic Motions asset pack for POLYGON characters.
-	public String clipLibrary = new .() ~ delete _;
+	public SharedString clipLibrary = default;
 	public float speed = 1.0f;
 	public bool loop = true;
 	/// Makes an object for every bone of the skeleton, under this one, and bends the mesh from those objects: then
@@ -31,21 +32,180 @@ class SkinnedMeshRenderer : Component
 	/// Bends the mesh on the graphics card (much cheaper for crowds), where it can do compute work. Off bends it on the
 	/// CPU, keeping the bent vertices in Mesh.Vertices for code that reads them.
 	public bool gpuSkinning = true;
-	/// Set by an Animator whose controller uses layers or blend trees: it poses the bone objects from the model's
-	/// clips itself, so the renderer leaves them alone.
-	[NonSerialized]
-	public bool posedByAnimator;
 	/// The parts' own materials, "Part=Materials/skin.tmat;Other=..." (the Inspector edits it as a list).
 	[HideInInspector]
-	public String materials = new .() ~ delete _;
+	public SharedString materials = default;
 	/// Parts not drawn, by name, separated by ';': the clothes a character is not wearing, when every choice of a
 	/// character customizer is a part of one model ("Hat_Tricorn;Hair_Long").
-	public String hiddenParts = new .() ~ delete _;
+	public SharedString hiddenParts = default;
 	/// Parts drawn only into shadows, by name, separated by ';': a first-person player's own head.
-	public String shadowOnlyParts = new .() ~ delete _;
+	public SharedString shadowOnlyParts = default;
 	/// Each part's colour, multiplying its material's, "Coat=0.5 0.1 0.1;Hair=0.2 0.15 0.1" (red, green, blue from 0
 	/// to 1): one model dressed in many colours.
-	public String partColors = new .() ~ delete _;
+	public SharedString partColors = default;
+
+
+	public this() { }
+}
+
+/// A handle (ComponentHandle): its settings are SkinnedMeshRendererData's fields; the model, the clips playing and
+/// the bent mesh are its SkinnedRig, kept outside the data and freed with the component.
+[Component, HandleFields]
+struct SkinnedMeshRenderer : ComponentHandle<SkinnedMeshRendererData>
+{
+	/// The rig, made the first time it is needed, with the settings copied in from the entity now (a changed model,
+	/// clip or clip library is loaded, as the Inspector's edits were).
+	public SkinnedRig Rig
+	{
+		get
+		{
+			CheckValid();
+			let world = mGameObject.Scene.World;
+			let rig = ComponentState<SkinnedRig>.Make(world, mGameObject.Entity);
+			if (rig.[Friend]mGameObject == null)
+			{
+				rig.[Friend]mGameObject = mGameObject;
+				rig.[Friend]mEcsWorld = world;
+				rig.[Friend]mEntity = mGameObject.Entity;
+				rig.data = Data;
+				rig.[Friend]Started();
+			}
+			else
+				rig.[Friend]Refresh(Data);
+			return rig;
+		}
+	}
+
+	/// Set by an Animator whose controller uses layers or blend trees: it poses the bone objects from the model's
+	/// clips itself, so the renderer leaves them alone.
+	public ref bool posedByAnimator => ref Rig.posedByAnimator;
+
+	public Transform Bone(StringView name) => Rig.Bone(name);
+	public int BoneCount => Rig.BoneCount;
+	public Transform BoneAt(int joint) => Rig.BoneAt(joint);
+	public bool PoseBones(StringView clipName, float time) => Rig.PoseBones(clipName, time);
+	public StringView CurrentClip => Rig.CurrentClip;
+	public SkinnedModel Model => Rig.Model;
+	public int PartCount => Rig.PartCount;
+	public StringView PartName(int index) => Rig.PartName(index);
+	public void GetPartMaterial(StringView part, String path) => Rig.GetPartMaterial(part, path);
+	public bool HasClip(StringView name) => Rig.HasClip(name);
+	public void Play(StringView name, float fadeSeconds = 0.15f) => Rig.Play(name, fadeSeconds);
+	public void PlayLayer(StringView name, StringView bones, float fadeSeconds = 0.15f) => Rig.PlayLayer(name, bones, fadeSeconds);
+	public void StopLayer(float fadeSeconds = 0.15f) => Rig.StopLayer(fadeSeconds);
+	public StringView CurrentLayerClip => Rig.CurrentLayerClip;
+	public bool SkinnedOnGpu => Rig.SkinnedOnGpu;
+	/// Loads what the settings now name (a changed model, clip or clip library) at once, rather than on the next frame.
+	public void Refresh()
+	{
+		Rig.[Friend]mGameObject = mGameObject;
+	}
+
+	/// Animates and bends it now, as a frame does (an editor tool that poses it outside the frame).
+	public void FrameNow() => Rig.[Friend]Frame();
+	public Bounds BoundsFromJoints() => Rig.BoundsFromJoints();
+
+	/// Gives a part a .tmat of its own (empty: back to the model's own material). In a network session, on the server
+	/// or on the owner's machine, every machine follows.
+	public void SetPartMaterial(int index, StringView path)
+	{
+		let part = PartName(index);
+		if (part.IsEmpty || path.Contains(';') || path.Contains('='))
+			return;
+		let current = scope String();
+		GetPartMaterial(part, current);
+		if (current == path)
+			return;
+		let rebuilt = scope String();
+		for (var entry in materials.View.Split(';'))
+		{
+			let equals = entry.IndexOf('=');
+			if (entry.IsEmpty || (equals > 0 && entry.Substring(0, equals) == part))
+				continue;
+			rebuilt.AppendF("{}{}", rebuilt.IsEmpty ? "" : ";", entry);
+		}
+		if (!path.IsEmpty)
+			rebuilt.AppendF("{}{}={}", rebuilt.IsEmpty ? "" : ";", part, path);
+		materials = rebuilt;
+		if (mGameObject.HasComponent<MeshRenderer>())
+			NetworkSync.MaterialChanged(mGameObject.GetComponent<MeshRenderer>(), 2, path, .(index, 0, 0, 0));
+	}
+
+	/// Sets a part's colour (Part Colors), by the part's name.
+	public void SetPartColor(StringView part, Color color)
+	{
+		SkinnedRig.SetEntry(ref partColors, part, scope $"{color.r:0.###} {color.g:0.###} {color.b:0.###}");
+	}
+
+	/// Hides or shows a part (Hidden Parts), by the part's name.
+	public void SetPartHidden(StringView part, bool hidden) => SkinnedRig.SetListed(ref hiddenParts, part, hidden);
+
+	/// Draws a part only into shadows, or normally again (Shadow Only Parts), by the part's name.
+	public void SetPartShadowOnly(StringView part, bool shadowOnly) => SkinnedRig.SetListed(ref shadowOnlyParts, part, shadowOnly);
+
+	/// Animates and re-skins every switched-on renderer on an active object, in the editor as well as in play mode
+	/// (the Frame.OnFrame step).
+	public static void FrameAll(Scene scene)
+	{
+		for (let skinned in scene.Components<SkinnedMeshRenderer>(.. scope .()))
+		{
+			if (skinned.GameObject.ActiveInHierarchy)
+				skinned.Rig.[Friend]Frame();
+		}
+	}
+
+	/// Bends every rigged model whose bones are objects from where those objects are now. Scene.Update calls it at the
+	/// end of the frame, after animation, scripts and IK have had their say.
+	public static void SkinFromBones(Scene scene) => SkinnedRig.SkinFromBones(scene);
+	/// Bends every model queued this frame on the CPU (SkinnedRig.FinishCpuSkinning).
+	public static void FinishCpuSkinning() => SkinnedRig.FinishCpuSkinning();
+	/// Has every rig of a model load it again (SkinnedModel.Forget).
+	public static void ModelChanged(StringView path) => SkinnedRig.ModelChanged(path);
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		if (let rig = ComponentState<SkinnedRig>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
+			rig.[Friend]Detach();
+		ComponentState<SkinnedRig>.Release(world, entity);
+	}
+}
+
+/// What a Skinned Mesh Renderer keeps between frames: the model, the clips playing and their blend, the bone objects
+/// and the bent mesh it hands its Mesh Renderer. `data` is a copy of the settings, refreshed whenever the handle
+/// hands the rig out.
+[DataFields(typeof(SkinnedMeshRendererData), "data")]
+class SkinnedRig
+{
+	public SkinnedMeshRendererData data = .();
+	/// Set by an Animator whose controller uses layers or blend trees (see SkinnedMeshRenderer.posedByAnimator).
+	public bool posedByAnimator;
+
+	GameObject mGameObject;
+	World mEcsWorld;
+	Entity mEntity;
+
+	public ~this()
+	{
+		// Frees the GPU skinning buffers and arrays (GpuSkinning.bf).
+		ReleaseGpuSkinning();
+	}
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+	public Scene Scene => mGameObject.Scene;
+	MeshRenderer Renderer => (mGameObject != null && mGameObject.HasComponent<MeshRenderer>()) ? mGameObject.GetComponent<MeshRenderer>() : default;
+	bool IsActiveAndEnabled => mGameObject != null && !mGameObject.IsDestroyed && mGameObject.ActiveInHierarchy && mGameObject.GetComponent<SkinnedMeshRenderer>().enabled;
+
+	/// Takes new settings: a changed model, clip or clip library is loaded, Expose Bones makes or forgets the bones.
+	void Refresh(SkinnedMeshRendererData settings)
+	{
+		let before = data;
+		data = settings;
+		if (before.model != data.model || before.clip != data.clip || before.clipLibrary != data.clipLibrary)
+			Reload();
+		if (mBonesFor != exposeBones)
+			SyncBones();
+	}
 
 	SkinnedModel mModel;
 	String mLoadedPath = new .() ~ delete _;
@@ -78,7 +238,7 @@ class SkinnedMeshRenderer : Component
 	bool[] mLayerMask ~ delete _;
 	String mLayerBones = new .() ~ delete _;
 	static int32 sNextStagger;
-	static List<SkinnedMeshRenderer> sAll = new .() ~ delete _;
+	static List<SkinnedRig> sAll = new .() ~ delete _;
 
 	/// While nothing draws the model, its mesh is bent only on every this many frames.
 	const int HiddenSkinInterval = 8;
@@ -191,14 +351,13 @@ class SkinnedMeshRenderer : Component
 			BoneObject(i);
 	}
 
-	/// Bends every rigged model whose bones are objects from where those objects are now. Scene.Update calls it at the
-	/// end of the frame, after animation, scripts and IK have had their say.
+	/// Bends every rigged model whose bones are objects from where those objects are now (SkinnedMeshRenderer).
 	public static void SkinFromBones(Scene scene)
 	{
-		for (let renderer in sAll)
+		for (let (entity, rig) in ComponentState<SkinnedRig>.In(scene.World, .. scope .()))
 		{
-			if (renderer.exposeBones && renderer.mBones != null && renderer.GameObject != null && !renderer.GameObject.IsDestroyed && renderer.Scene == scene && renderer.IsActiveAndEnabled)
-				renderer.SkinNow();
+			if (rig.exposeBones && rig.mBones != null && rig.IsActiveAndEnabled)
+				rig.SkinNow();
 		}
 	}
 
@@ -234,7 +393,7 @@ class SkinnedMeshRenderer : Component
 			return false;
 		if (!mSkinnedOnce)
 			return true;
-		let renderer = GetComponent<MeshRenderer>();
+		let renderer = Renderer;
 		if (!renderer || renderer.LastDrawnFrame >= Time.FrameCount - 1)
 			return true;
 		return (Time.FrameCount + mStagger) % HiddenSkinInterval == 0;
@@ -256,20 +415,15 @@ class SkinnedMeshRenderer : Component
 	public StringView CurrentClip => mCurrent != null ? (StringView)mCurrent.name : "";
 	public SkinnedModel Model => mModel;
 
-	public override void OnRegister()
+	/// Made: load the model.
+	void Started()
 	{
 		sAll.Add(this);
 		Reload();
 	}
 
-	public override void OnValidate()
-	{
-		Reload();
-		if (mBonesFor != exposeBones)
-			SyncBones();
-	}
-
-	public override void OnUnregister()
+	/// The component is going: nothing may draw or bend this rig's mesh any more.
+	void Detach()
 	{
 		sAll.Remove(this);
 		if (mCpuQueued)
@@ -277,11 +431,14 @@ class SkinnedMeshRenderer : Component
 			sCpuQueue.Remove(this);
 			mCpuQueued = false;
 		}
-		let renderer = GetComponent<MeshRenderer>();
-		if (renderer && renderer.RuntimeMesh == mMesh)
-			renderer.RuntimeMesh = null;
-		if (renderer && renderer.RuntimeParts == mParts)
-			renderer.RuntimeParts = null;
+		// The renderer's proxy, if it is still there (it may have gone first as the entity is deleted).
+		if (let proxy = ComponentState<RenderProxy>.Get(mEcsWorld, mEntity))
+		{
+			if (proxy.RuntimeMesh == mMesh)
+				proxy.RuntimeMesh = null;
+			if (proxy.RuntimeParts == mParts)
+				proxy.RuntimeParts = null;
+		}
 	}
 
 	/// The model's parts (one per material) when it is drawn in parts, else none: their names are the model's
@@ -293,7 +450,7 @@ class SkinnedMeshRenderer : Component
 	public void GetPartMaterial(StringView part, String path)
 	{
 		path.Clear();
-		for (var entry in materials.Split(';'))
+		for (var entry in materials.View.Split(';'))
 		{
 			let equals = entry.IndexOf('=');
 			if (equals > 0 && entry.Substring(0, equals) == part)
@@ -304,39 +461,12 @@ class SkinnedMeshRenderer : Component
 		}
 	}
 
-	/// Gives a part a .tmat of its own (empty: back to the model's own material). In a network session, on the server
-	/// or on the owner's machine, every machine follows.
-	public void SetPartMaterial(int index, StringView path)
-	{
-		let part = PartName(index);
-		if (part.IsEmpty || path.Contains(';') || path.Contains('='))
-			return;
-		let current = scope String();
-		GetPartMaterial(part, current);
-		if (current == path)
-			return;
-		let rebuilt = scope String();
-		for (var entry in materials.Split(';'))
-		{
-			let equals = entry.IndexOf('=');
-			if (entry.IsEmpty || (equals > 0 && entry.Substring(0, equals) == part))
-				continue;
-			rebuilt.AppendF("{}{}", rebuilt.IsEmpty ? "" : ";", entry);
-		}
-		if (!path.IsEmpty)
-			rebuilt.AppendF("{}{}={}", rebuilt.IsEmpty ? "" : ";", part, path);
-		materials.Set(rebuilt);
-		let renderer = GetComponent<MeshRenderer>();
-		if (renderer)
-			NetworkSync.MaterialChanged(renderer, 2, path, .(index, 0, 0, 0));
-	}
-
 	/// Which material each part draws with: its own .tmat, else the Mesh Renderer's material, else the model's.
 	void ResolvePartMaterials(MeshRenderer renderer)
 	{
 		let rendererMaterial = renderer.ActiveMaterial;
 		let rendererKey = rendererMaterial != null ? (int32)(int)Internal.UnsafeCastToPtr(rendererMaterial) ^ rendererMaterial.Revision : 0;
-		if (mResolvedMaterials == materials && mResolvedRendererMaterial == rendererKey)
+		if (materials == mResolvedMaterials && mResolvedRendererMaterial == rendererKey)
 			return;
 		mResolvedMaterials.Set(materials);
 		mResolvedRendererMaterial = rendererKey;
@@ -349,18 +479,6 @@ class SkinnedMeshRenderer : Component
 		}
 	}
 
-	/// Sets a part's colour (Part Colors), by the part's name.
-	public void SetPartColor(StringView part, Color color)
-	{
-		SetEntry(partColors, part, scope $"{color.r:0.###} {color.g:0.###} {color.b:0.###}");
-	}
-
-	/// Hides or shows a part (Hidden Parts), by the part's name.
-	public void SetPartHidden(StringView part, bool hidden) => SetListed(hiddenParts, part, hidden);
-
-	/// Draws a part only into shadows, or normally again (Shadow Only Parts), by the part's name.
-	public void SetPartShadowOnly(StringView part, bool shadowOnly) => SetListed(shadowOnlyParts, part, shadowOnly);
-
 	static bool Listed(StringView list, StringView name)
 	{
 		for (var entry in list.Split(';'))
@@ -372,12 +490,12 @@ class SkinnedMeshRenderer : Component
 		return false;
 	}
 
-	static void SetListed(String list, StringView name, bool listed)
+	public static void SetListed(ref SharedString list, StringView name, bool listed)
 	{
 		if (Listed(list, name) == listed || name.IsEmpty)
 			return;
 		let rebuilt = scope String();
-		for (var entry in list.Split(';'))
+		for (var entry in list.View.Split(';'))
 		{
 			entry.Trim();
 			if (!entry.IsEmpty && entry != name)
@@ -385,13 +503,13 @@ class SkinnedMeshRenderer : Component
 		}
 		if (listed)
 			rebuilt.AppendF("{}{}", rebuilt.IsEmpty ? "" : ";", name);
-		list.Set(rebuilt);
+		list = rebuilt;
 	}
 
-	static void SetEntry(String list, StringView name, StringView value)
+	public static void SetEntry(ref SharedString list, StringView name, StringView value)
 	{
 		let rebuilt = scope String();
-		for (var entry in list.Split(';'))
+		for (var entry in list.View.Split(';'))
 		{
 			let equals = entry.IndexOf('=');
 			if (entry.IsEmpty || (equals > 0 && entry.Substring(0, equals) == name))
@@ -399,7 +517,7 @@ class SkinnedMeshRenderer : Component
 			rebuilt.AppendF("{}{}", rebuilt.IsEmpty ? "" : ";", entry);
 		}
 		rebuilt.AppendF("{}{}={}", rebuilt.IsEmpty ? "" : ";", name, value);
-		list.Set(rebuilt);
+		list = rebuilt;
 	}
 
 	/// Applies Hidden Parts, Shadow Only Parts and Part Colors to the parts, when one of them has changed.
@@ -416,7 +534,7 @@ class SkinnedMeshRenderer : Component
 			mParts[i].shadowOnly = Listed(shadowOnlyParts, name);
 			mParts[i].tint = .White;
 		}
-		for (var entry in partColors.Split(';'))
+		for (var entry in partColors.View.Split(';'))
 		{
 			let equals = entry.IndexOf('=');
 			if (equals <= 0)
@@ -438,7 +556,7 @@ class SkinnedMeshRenderer : Component
 		}
 	}
 
-	/// Has every renderer of a model load it again (SkinnedModel.Forget).
+	/// Has every rig of a model load it again (SkinnedModel.Forget).
 	public static void ModelChanged(StringView path)
 	{
 		for (let renderer in sAll)
@@ -450,11 +568,11 @@ class SkinnedMeshRenderer : Component
 
 	void Reload()
 	{
-		if (model.IsEmpty || mLoadedPath == model)
+		if (model.IsEmpty || model == mLoadedPath)
 		{
-			if (mModel != null && mLoadedLibrary != clipLibrary)
+			if (mModel != null && clipLibrary != mLoadedLibrary)
 				ImportLibraries();
-			if (mModel != null && !clip.IsEmpty && CurrentClip != clip)
+			if (mModel != null && !clip.IsEmpty && clip != CurrentClip)
 				Play(clip, 0.2f);
 			return;
 		}
@@ -522,7 +640,7 @@ class SkinnedMeshRenderer : Component
 	void ImportLibraries()
 	{
 		mLoadedLibrary.Set(clipLibrary);
-		for (var path in clipLibrary.Split(';'))
+		for (var path in clipLibrary.View.Split(';'))
 		{
 			path.Trim();
 			if (path.IsEmpty)
@@ -552,7 +670,7 @@ class SkinnedMeshRenderer : Component
 		mFade = 0;
 		mFadeDuration = mPrevious != null ? fadeSeconds : 0;
 		// In multiplayer a clip started by the server, or by the player who controls this object, plays everywhere.
-		NetworkSync.AnimationPlayed(this, name, fadeSeconds);
+		NetworkSync.AnimationPlayed(mGameObject.GetComponent<SkinnedMeshRenderer>(), name, fadeSeconds);
 	}
 
 	/// Plays a clip on some bones only, over the main clip: `bones` names them, separated by ';', and each takes
@@ -680,15 +798,15 @@ class SkinnedMeshRenderer : Component
 		mDone[index] = true;
 	}
 
-	/// Animates and re-skins every frame, in the editor as well as in play mode.
-	public override void OnFrame()
+	/// Animates and re-skins (SkinnedMeshRenderer.FrameAll, every frame, in the editor as well as in play mode).
+	void Frame()
 	{
 		if (mModel == null || mMesh == null)
 			return;
 		if (mAttachPending)
 		{
 			mAttachPending = false;
-			var renderer = GetComponent<MeshRenderer>();
+			var renderer = Renderer;
 			if (!renderer)
 				renderer = GameObject.AddComponent<MeshRenderer>();
 			renderer.RuntimeMesh = mMesh;
@@ -696,7 +814,7 @@ class SkinnedMeshRenderer : Component
 		}
 		if (mParts.Count > 0)
 		{
-			let renderer = GetComponent<MeshRenderer>();
+			let renderer = Renderer;
 			if (renderer)
 				ResolvePartMaterials(renderer);
 			ResolvePartLooks();
@@ -758,7 +876,7 @@ class SkinnedMeshRenderer : Component
 
 	/// Models waiting to be bent on the CPU this frame: Scene.Update bends them together, spread over the job threads
 	/// (FinishCpuSkinning).
-	static List<SkinnedMeshRenderer> sCpuQueue = new .() ~ delete _;
+	static List<SkinnedRig> sCpuQueue = new .() ~ delete _;
 	bool mCpuQueued;
 	Bounds mCpuBounds;
 

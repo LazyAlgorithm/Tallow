@@ -107,6 +107,7 @@ static class EcsChecks
 		CameraChecks();
 		AudioChecks();
 		RendererChecks();
+		SkinnedChecks();
 		return sFailures;
 	}
 
@@ -450,6 +451,46 @@ static class EcsChecks
 			Expect(ComponentState<RenderProxy>.Count == before, "RemoveComponent frees the proxy (reading fields makes none)");
 		}
 		Expect(ComponentState<RenderProxy>.Count == before, "proxies are freed with their scene");
+	}
+
+	/// Skinned Mesh Renderer: settings in Flecs, the model and clips in its SkinnedRig.
+	static void SkinnedChecks()
+	{
+		let before = ComponentState<SkinnedRig>.Count;
+		{
+			let scene = scope Scene();
+			let man = scene.CreateGameObject("Man");
+			let skinned = man.AddComponent<SkinnedMeshRenderer>();
+			Expect(skinned.model.IsEmpty && skinned.speed == 1 && skinned.loop && skinned.gpuSkinning && !skinned.exposeBones, "a Skinned Mesh Renderer has its defaults");
+			Expect(ComponentState<SkinnedRig>.Count == before, "reading settings makes no rig");
+			skinned.model = "Models/rigged_sample.glb";
+			skinned.clip = "Wave";
+			Expect(skinned.Model != null && skinned.CurrentClip == "Wave", "setting the model and clip loads them");
+			Expect(ComponentState<SkinnedRig>.Count == before + 1, "the rig is made once it is needed");
+			skinned.SetPartHidden("Hat", true);
+			skinned.SetPartHidden("Coat", true);
+			skinned.SetPartHidden("Hat", false);
+			Expect(skinned.hiddenParts == "Coat", "SetPartHidden writes the setting");
+			skinned.SetPartColor("Coat", .(0.5f, 0.25f, 1, 1));
+			Expect(skinned.partColors == "Coat=0.5 0.25 1", "SetPartColor writes the setting");
+			SkinnedMeshRenderer.FrameAll(scene);
+			let renderer = man.GetComponent<MeshRenderer>();
+			Expect(renderer && renderer.RuntimeMesh != null, "a frame hands the bent mesh to a Mesh Renderer it adds");
+			skinned.exposeBones = true;
+			SkinnedMeshRenderer.FrameAll(scene);
+			Expect(skinned.BoneCount == skinned.Model.Joints.Count && skinned.BoneCount > 0, "Expose Bones makes the bone objects");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains("component Tallow.SkinnedMeshRenderer enabled 1") && text.Contains("field clip \"Wave\""), "a Skinned Mesh Renderer saves as before");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Man").GetComponent<SkinnedMeshRenderer>();
+			Expect(copy && copy.model == "Models/rigged_sample.glb" && copy.hiddenParts == "Coat" && copy.exposeBones, "a Skinned Mesh Renderer loads");
+			man.RemoveComponent<SkinnedMeshRenderer>();
+			Expect(renderer.RuntimeMesh == null, "removing it takes its mesh off the Mesh Renderer");
+			Expect(ComponentState<SkinnedRig>.Count == before, "RemoveComponent frees the rig");
+		}
+		Expect(ComponentState<SkinnedRig>.Count == before, "rigs are freed with their scene");
 	}
 
 	static void HandleChecks()

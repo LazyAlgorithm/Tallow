@@ -46,7 +46,7 @@ extension EditorApp
 	{
 		let editing = mPlay == .Edit;
 		let skinned = FindSkinned(animator);
-		if (skinned == null)
+		if (!skinned)
 		{
 			ImGui.TextDisabled("No Skinned Mesh Renderer on this object or below it.");
 			return;
@@ -56,7 +56,7 @@ extension EditorApp
 			if (ImGui.MenuItem("Expose Bones", null, false, editing))
 			{
 				skinned.exposeBones = true;
-				skinned.OnFrame();
+				skinned.FrameNow();
 				MarkDirty();
 			}
 			ImGui.TextDisabled("Bones need to be objects to be posed and keyed.");
@@ -279,14 +279,14 @@ extension EditorApp
 	{
 		let animator = SelectedAnimator();
 		let skinned = animator != null ? FindSkinned(animator) : BoneOwner(Selected);
-		if (HasArg("--bone-map") && skinned != null && skinned.Model != null)
+		if (HasArg("--bone-map") && skinned && skinned.Model != null)
 			OpenBoneMap(skinned.Model);
 		if (HasArg("--hand-posing"))
 			mShowHandPosing = true;
 		// Waits for the Scene view to be laid out, since the test clicks on a bone.
 		if (HasArg("--rig-test"))
 			mRigTestFrames = 20;
-		if (animator == null || skinned == null || skinned.Model == null)
+		if (animator == null || !skinned || skinned.Model == null)
 			return;
 		if (HasArg("--ik-rig"))
 			SetUpIKRig(animator, skinned);
@@ -313,8 +313,8 @@ extension EditorApp
 	void RunRigTest()
 	{
 		let animator = SelectedAnimator();
-		let skinned = animator != null ? FindSkinned(animator) : null;
-		if (skinned == null || skinned.Model == null || skinned.BoneCount == 0)
+		SkinnedMeshRenderer skinned = animator != null ? FindSkinned(animator) : default;
+		if (!skinned || skinned.Model == null || skinned.BoneCount == 0)
 		{
 			Log.Info("RIG-TEST FAIL: select a rigged character's Animator, with Expose Bones on");
 			return;
@@ -422,8 +422,8 @@ extension EditorApp
 	void DrawHandPosingContents()
 	{
 		let animator = SelectedAnimator();
-		let skinned = animator != null ? FindSkinned(animator) : null;
-		if (skinned == null || skinned.Model == null)
+		SkinnedMeshRenderer skinned = animator != null ? FindSkinned(animator) : default;
+		if (!skinned || skinned.Model == null)
 		{
 			ImGui.TextDisabled("Select a rigged character (its Animator's object or one of its bones).");
 			return;
@@ -465,7 +465,7 @@ extension EditorApp
 		let fingers = scope List<Transform>();
 		Descendants(hand, fingers);
 		let skinned = FindSkinned(animator);
-		let model = skinned != null ? skinned.Model : null;
+		let model = skinned ? skinned.Model : null;
 		for (let bone in fingers)
 		{
 			let joint = model != null ? model.FindJoint(bone.GameObject.Name) : -1;

@@ -913,8 +913,8 @@ class Material
 			used.Add(((Foliage)component).ActiveMaterial);
 		// A Skinned Mesh Renderer names its materials, and may not have looked them up yet.
 		let names = scope String();
-		for (let component in Scene.Active.ComponentsOfType(typeof(SkinnedMeshRenderer)))
-			names.Append(((SkinnedMeshRenderer)component).materials, ";");
+		for (let skinned in Scene.Active.FindComponents<SkinnedMeshRenderer>(.. scope .()))
+			names.Append(skinned.materials, ";");
 		for (var entry in sCache)
 		{
 			let material = entry.value;

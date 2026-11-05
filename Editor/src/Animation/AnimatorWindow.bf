@@ -675,8 +675,8 @@ extension EditorApp
 				}
 			}
 			// Clips inside the selected object's skinned model are named, not files.
-			let skinned = selectedAnimator != null ? FindSkinned(selectedAnimator) : null;
-			if (skinned != null && skinned.Model != null)
+			SkinnedMeshRenderer skinned = selectedAnimator != null ? FindSkinned(selectedAnimator) : default;
+			if (skinned && skinned.Model != null)
 			{
 				for (let modelClip in skinned.Model.Clips)
 				{
@@ -949,15 +949,15 @@ extension EditorApp
 	static SkinnedMeshRenderer FindSkinned(Animator animator)
 	{
 		let own = animator.GetComponent<SkinnedMeshRenderer>();
-		if (own != null)
+		if (own)
 			return own;
 		for (let child in animator.Transform.Children)
 		{
 			let found = child.GameObject.GetComponent<SkinnedMeshRenderer>();
-			if (found != null)
+			if (found)
 				return found;
 		}
-		return null;
+		return default;
 	}
 
 	/// One condition of a transition: its parameter, how it is compared and with what. True when it is to be removed.

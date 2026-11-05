@@ -75,13 +75,13 @@ static class GpuSkinning
 	}
 }
 
-extension SkinnedMeshRenderer
+extension SkinnedRig
 {
 	bgfx.DynamicVertexBufferHandle mGpuSource = .() { idx = uint16.MaxValue };
 	bgfx.DynamicVertexBufferHandle mGpuBones = .() { idx = uint16.MaxValue };
 	// Each joint's box round the vertices it moves, at rest (model space), to bound the bent mesh without its vertices.
-	Bounds[] mJointBounds ~ delete _;
-	Vector4[] mBoneRows ~ delete _;
+	Bounds[] mJointBounds;
+	Vector4[] mBoneRows;
 	bool mGpuSkinned;
 
 	/// Whether the last bend was done on the graphics card (Mesh.Vertices then stay at rest).
@@ -101,11 +101,6 @@ extension SkinnedMeshRenderer
 		DeleteAndNullify!(mJointBounds);
 		DeleteAndNullify!(mBoneRows);
 		mGpuSkinned = false;
-	}
-
-	public ~this()
-	{
-		ReleaseGpuSkinning();
 	}
 
 	/// The rest pose, joints and weights for the shader, and each joint's box. Made on the first GPU bend.

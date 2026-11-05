@@ -37,36 +37,36 @@ extension EditorApp
 	SkinnedMeshRenderer BoneOwner(GameObject selected)
 	{
 		if (selected == null)
-			return null;
+			return default;
 		for (var t = selected.Transform; t != null; t = t.Parent)
 		{
 			let skinned = t.GameObject.GetComponent<SkinnedMeshRenderer>();
-			if (skinned != null && skinned.BoneCount > 0)
+			if (skinned && skinned.BoneCount > 0)
 				return skinned;
 			if (t.GameObject.GetComponent<Animator>() != null)
 			{
 				let below = SkinnedBelow(t, 3);
-				if (below != null)
+				if (below)
 					return below;
 			}
 		}
-		return null;
+		return default;
 	}
 
 	static SkinnedMeshRenderer SkinnedBelow(Transform parent, int levels)
 	{
 		if (levels == 0)
-			return null;
+			return default;
 		for (let child in parent.Children)
 		{
 			let skinned = child.GameObject.GetComponent<SkinnedMeshRenderer>();
-			if (skinned != null && skinned.BoneCount > 0)
+			if (skinned && skinned.BoneCount > 0)
 				return skinned;
 			let below = SkinnedBelow(child, levels - 1);
-			if (below != null)
+			if (below)
 				return below;
 		}
-		return null;
+		return default;
 	}
 
 	/// Draws the shown skeleton and its IK handles, and remembers them for clicks. Called with the other gizmos.
@@ -78,7 +78,7 @@ extension EditorApp
 			return;
 		let selected = Selected;
 		let skinned = BoneOwner(selected);
-		if (skinned == null || skinned.Model == null)
+		if (!skinned || skinned.Model == null)
 			return;
 		let model = skinned.Model;
 		let core = scope String();
@@ -295,7 +295,7 @@ extension EditorApp
 		bool handle = false;
 		for (let pick in mBonePicks)
 			handle |= pick.handle && pick.transform == hit;
-		let parentIsBone = hit.Parent != null && hit.Parent.GameObject.GetComponent<SkinnedMeshRenderer>() == null && !hit.Parent.GameObject.Name.EndsWith(".Armature");
+		let parentIsBone = hit.Parent != null && !hit.Parent.GameObject.HasComponent<SkinnedMeshRenderer>() && !hit.Parent.GameObject.Name.EndsWith(".Armature");
 		if (!handle && parentIsBone && mGizmoOperation == 0)
 			mGizmoOperation = 1;
 		return true;

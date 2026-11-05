@@ -442,33 +442,36 @@ static class NetworkSync
 
 	// ---- animation ----
 
-	static void WriteAnimation(NetWriter payload, Component player, StringView clip, float fade)
+	static void WriteAnimation(NetWriter payload, Animator animator, SkinnedMeshRenderer skinned, StringView clip, float fade)
 	{
-		let skinned = player as SkinnedMeshRenderer;
-		payload.Write<bool>(skinned != null);
-		if (skinned != null)
-			WriteComponent<SkinnedMeshRenderer>(payload, skinned);
+		payload.Write<bool>(animator == null);
+		// An object has one Skinned Mesh Renderer: the object says which.
+		if (animator == null)
+			WriteTransform(payload, skinned.Transform);
 		else
-			WriteComponent<Animator>(payload, (Animator)player);
+			WriteComponent<Animator>(payload, animator);
 		payload.WriteString(clip);
 		payload.Write(fade);
 	}
 
 	/// Called when an Animator or Skinned Mesh Renderer starts a different clip. The server tells everyone. A
 	/// client tells the server only about objects it controls, such as its own player.
-	public static void AnimationPlayed(Component player, StringView clip, float fade)
+	public static void AnimationPlayed(Animator player, StringView clip, float fade) => AnimationPlayed(player, default, player.GameObject, clip, fade);
+	public static void AnimationPlayed(SkinnedMeshRenderer player, StringView clip, float fade) => AnimationPlayed(null, player, player.GameObject, clip, fade);
+
+	static void AnimationPlayed(Animator animator, SkinnedMeshRenderer skinned, GameObject object, StringView clip, float fade)
 	{
-		let network = Active(player.Scene);
+		let network = Active(object.Scene);
 		if (network == null || sApplying)
 			return;
 		if (!network.IsServer)
 		{
-			let owner = Anchor(player).GetComponent<NetworkIdentity>();
+			let owner = Anchor(object).GetComponent<NetworkIdentity>();
 			if (owner == null || !owner.IsOwner)
 				return;
 		}
 		let payload = scope NetWriter();
-		WriteAnimation(payload, player, clip, fade);
+		WriteAnimation(payload, animator, skinned, clip, fade);
 		if (network.IsServer)
 			network.SendToAll(MsgAnimation, payload);
 		else
@@ -548,7 +551,10 @@ static class NetworkSync
 		else if (kind == 1)
 			renderer.SetMaterialValue(name, value);
 		else
-			renderer.GameObject.GetComponent<SkinnedMeshRenderer>()?.SetPartMaterial((int)value.x, name);
+		{
+			if (renderer.GameObject.HasComponent<SkinnedMeshRenderer>())
+				renderer.GameObject.GetComponent<SkinnedMeshRenderer>().SetPartMaterial((int)value.x, name);
+		}
 		sApplying = wasApplying;
 	}
 
@@ -588,27 +594,30 @@ static class NetworkSync
 		if (network == null)
 			return;
 		let isSkinned = reader.Read<bool>();
-		SkinnedMeshRenderer skinned = null;
+		SkinnedMeshRenderer skinned = default;
 		Animator animator = null;
 		if (isSkinned)
-			skinned = ReadComponent<SkinnedMeshRenderer>(ref reader, network);
+		{
+			if (ReadTransform(ref reader, network, let transform) && transform != null && transform.GameObject.HasComponent<SkinnedMeshRenderer>())
+				skinned = transform.GameObject.GetComponent<SkinnedMeshRenderer>();
+		}
 		else
 			animator = ReadComponent<Animator>(ref reader, network);
 		let clip = scope String();
 		reader.ReadString(clip);
 		let fade = reader.Read<float>();
-		if (!reader.Ok || (skinned == null && animator == null) || !fade.IsFinite)
+		if (!reader.Ok || (!skinned && animator == null) || !fade.IsFinite)
 			return;
 		if (network.IsServer)
 		{
 			// From the client that controls the object: play it here, which passes it on to the others.
-			let owner = Anchor(skinned != null ? (Component)skinned : animator).GetComponent<NetworkIdentity>();
+			let owner = Anchor(skinned ? skinned.GameObject : animator.GameObject).GetComponent<NetworkIdentity>();
 			if (owner == null || owner.ownerId != sender)
 				return;
 		}
 		let wasApplying = sApplying;
 		sApplying = !network.IsServer;
-		if (skinned != null)
+		if (skinned)
 			skinned.Play(clip, fade);
 		else
 			animator.Play(clip, fade);
@@ -1267,15 +1276,21 @@ static class NetworkSync
 				}
 				continue;
 			}
-			StringView clip = "";
-			if (let skinned = component as SkinnedMeshRenderer)
-				clip = skinned.CurrentClip;
-			else if (let animator = component as Animator)
-				clip = animator.CurrentClip;
-			if (clip.IsEmpty)
+			if (let animator = component as Animator)
+			{
+				if (animator.CurrentClip.IsEmpty)
+					continue;
+				payload.Clear();
+				WriteAnimation(payload, animator, default, animator.CurrentClip, 0);
+				network.SendToClient(clientId, MsgAnimation, payload);
+			}
+		}
+		for (let skinned in network.Scene.Components<SkinnedMeshRenderer>(.. scope .()))
+		{
+			if (skinned.CurrentClip.IsEmpty)
 				continue;
 			payload.Clear();
-			WriteAnimation(payload, component, clip, 0);
+			WriteAnimation(payload, null, skinned, skinned.CurrentClip, 0);
 			network.SendToClient(clientId, MsgAnimation, payload);
 		}
 	}

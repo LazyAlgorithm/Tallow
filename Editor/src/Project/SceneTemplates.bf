@@ -108,7 +108,7 @@ static class SceneTemplates
 		let skinned = rigged.AddComponent<SkinnedMeshRenderer>();
 		skinned.model.Set("Models/rigged_sample.glb");
 		skinned.clip.Set("Wave");
-		skinned.OnValidate();
+		skinned.Refresh();
 
 		let boulder = scene.CreateGameObject("Boulder");
 		boulder.Transform.Position = .(4.5f, 42.4f, 1);

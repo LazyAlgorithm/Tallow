@@ -55,7 +55,7 @@ class Animator : Component
 		let clip = FindClip(state.clip);
 		if (clip != null)
 			return clip.duration;
-		if (mSkinned != null && mSkinned.Model != null)
+		if (mSkinned && mSkinned.Model != null)
 		{
 			let modelClip = mSkinned.Model.FindClip(state.clip);
 			if (modelClip != null)
@@ -246,7 +246,7 @@ class Animator : Component
 		let clip = FindClip(name);
 		if (clip != null)
 			return clip.duration;
-		if (mSkinned != null && mSkinned.Model != null)
+		if (mSkinned && mSkinned.Model != null)
 		{
 			let modelClip = mSkinned.Model.FindClip(name);
 			if (modelClip != null)
@@ -306,7 +306,7 @@ class Animator : Component
 			return true;
 		}
 		// A clip of the rigged model, onto its bone objects (Expose Bones).
-		if (mSkinned != null && mSkinned.Model != null && mSkinned.exposeBones)
+		if (mSkinned && mSkinned.Model != null && mSkinned.exposeBones)
 		{
 			let model = mSkinned.Model;
 			let modelClip = model.FindClip(clipName);
@@ -495,7 +495,7 @@ class Animator : Component
 		if (mBones.Count == 0)
 			Collect(Transform);
 		EnsurePoseArrays();
-		if (mSkinned != null)
+		if (mSkinned)
 			mSkinned.posedByAnimator = mSkinned.exposeBones;
 		// Only the machine that decides (the server, or the owner) moves between states; the others follow it.
 		let decides = NetworkSync.IsMine(this);
@@ -650,7 +650,7 @@ class Animator : Component
 		let clip = FindClip(state.clip);
 		if (clip != null)
 			StartClip(clip, fade);
-		else if (mSkinned != null && mSkinned.HasClip(state.clip))
+		else if (mSkinned && mSkinned.HasClip(state.clip))
 		{
 			mSkinned.loop = state.loop;
 			mSkinned.Play(state.clip, fade);
@@ -687,7 +687,7 @@ class Animator : Component
 		}
 		let state = mController.states[mState];
 		mStateTime += Time.DeltaTime * speed * state.speed;
-		if (mSkinned != null)
+		if (mSkinned)
 			mSkinned.speed = speed * state.speed;
 		if (!decides || IsInTransition)
 			return;
@@ -836,12 +836,12 @@ class Animator : Component
 		ClearAndDeleteItems!(mTrackMaps);
 		Collect(Transform);
 		mSkinned = GetComponent<SkinnedMeshRenderer>();
-		if (mSkinned == null)
+		if (!mSkinned)
 		{
 			for (let child in Transform.Children)
 			{
 				mSkinned = child.GameObject.GetComponent<SkinnedMeshRenderer>();
-				if (mSkinned != null)
+				if (mSkinned)
 					break;
 			}
 		}

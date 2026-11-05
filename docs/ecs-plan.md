@@ -886,7 +886,19 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   Fixed on the way: component sizes are registered by stride (`strideof`), not size, so a struct whose size is not
   a multiple of its alignment is no longer read past its end; using a handle that is not valid stops with a clear
   message instead of crashing (`CheckValid` before state is made).
-- [ ] SkinnedMeshRenderer, LineRenderer, TrailRenderer, ParticleSystem, Foliage, Water, Rigidbody, Collider, Joint,
+- [x] **SkinnedMeshRenderer.** Its settings are `SkinnedMeshRendererData` (the model, clip and part lists are
+  `SharedString`). The model, clips playing, blend, layer, bone objects, bent mesh and GPU skinning buffers are a
+  `SkinnedRig` in `ComponentState`; the handle hands it out with the settings copied in, and a changed model, clip
+  or clip library is loaded then (what OnValidate did). `SkinnedMeshRenderer.FrameAll` animates switched-on rigs on
+  active objects at the end of the Frame.OnFrame step (in the editor too, as OnFrame did); OnRemove takes the bent
+  mesh off the object's RenderProxy and frees the rig. SetPartMaterial, SetPartColor, SetPartHidden and
+  SetPartShadowOnly write the settings through the handle. Network clip events name the object; a joining player
+  is sent each rig's clip from the query. Editor tools call `Refresh()` (load now) and `FrameNow()` in place of
+  OnValidate and OnFrame. Checked by `EcsChecks.SkinnedChecks` (defaults, no rig until needed, model and clip load,
+  part lists, the Mesh Renderer it adds, Expose Bones, save and load, freed on remove and with the scene; the
+  bench now has `Models/rigged_sample.glb`); the Sandbox's Skinning scene and main scene animate as before, the
+  Inspector shows it, and the Gallery self-test passes.
+- [ ] LineRenderer, TrailRenderer, ParticleSystem, Foliage, Water, Rigidbody, Collider, Joint,
   CharacterController, SoftBody, Rope, and the Phase 5 set.
 - [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with
   the components above converted, a Gallery made from the template builds and its `--self-test` prints

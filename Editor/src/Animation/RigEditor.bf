@@ -106,7 +106,7 @@ extension EditorApp
 		let model = target.GetComponent<ModelMesh>();
 		let renderer = target.GetComponent<MeshRenderer>();
 		let skinned = target.GetComponent<SkinnedMeshRenderer>();
-		if (skinned != null && !skinned.model.IsEmpty)
+		if (skinned && !skinned.model.IsEmpty)
 			output.Set(skinned.model);
 		else if (model != null)
 		{
@@ -953,7 +953,7 @@ extension EditorApp
 	{
 		let skinned = target.GetComponent<SkinnedMeshRenderer>();
 		let renderer = target.GetComponent<MeshRenderer>();
-		if (skinned != null && !skinned.model.IsEmpty)
+		if (skinned && !skinned.model.IsEmpty)
 			output.Set(skinned.model);
 		else if (target.GetComponent<ModelMesh>() != null)
 			output.Set("its editable model (written as a .glb)");
@@ -1369,7 +1369,7 @@ extension EditorApp
 	void UseRigged(GameObject target)
 	{
 		var skinned = target.GetComponent<SkinnedMeshRenderer>();
-		if (skinned == null)
+		if (!skinned)
 			skinned = target.AddComponent<SkinnedMeshRenderer>();
 		if (!target.HasComponent<MeshRenderer>())
 			target.AddComponent<MeshRenderer>();
@@ -1381,7 +1381,7 @@ extension EditorApp
 		// Its bones as objects under it, in the Hierarchy and Inspector, ready to pose, key and drive with IK.
 		skinned.exposeBones = true;
 		SkinnedModel.Forget(mRiggedPath);
-		skinned.OnValidate();
+		skinned.Refresh();
 		MarkDirty();
 		RigMessage(scope $"{target.Name} now plays {mRiggedPath}, with its bones under it. Give its Skinned Mesh Renderer a clip (or a Clip Library of animations) to see it move.");
 	}

@@ -1422,6 +1422,7 @@ class Scene
 			if (component.IsActiveAndEnabled)
 				Run(component, .OnFrame);
 		}
+		SkinnedMeshRenderer.FrameAll(this);
 		Profiler.End();
 	}
 

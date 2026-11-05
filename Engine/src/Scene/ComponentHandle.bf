@@ -198,7 +198,7 @@ struct DataFieldsAttribute : Attribute, IOnTypeInit
 	{
 		let code = scope String();
 		for (let field in mData.GetFields(.Public | .Instance))
-			code.AppendF("public ref {} {} {{ [Inline] get => ref {}.{}; }}\n", field.FieldType, field.Name, mMember, field.Name);
+			code.AppendF("public ref {} {} {{ [System.Inline] get => ref {}.{}; }}\n", field.FieldType, field.Name, mMember, field.Name);
 		Compiler.EmitTypeBody(type, code);
 	}
 }

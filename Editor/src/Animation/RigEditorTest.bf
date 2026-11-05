@@ -97,9 +97,9 @@ extension EditorApp
 			{
 				UseRigged(target);
 				let skinned = target.GetComponent<SkinnedMeshRenderer>();
-				Check(skinned != null && skinned.model == rigged, "the object plays the rigged model");
-				Check(skinned != null && skinned.exposeBones && skinned.BoneCount == mRig.bones.Count && skinned.Bone("Hips") != null && skinned.Bone("Hips").Parent != null,
-scope $"its bones are objects under it ({(skinned != null ? skinned.BoneCount : 0)} of {mRig.bones.Count})");
+				Check(skinned && skinned.model == rigged, "the object plays the rigged model");
+				Check(skinned && skinned.exposeBones && skinned.BoneCount == mRig.bones.Count && skinned.Bone("Hips") != null && skinned.Bone("Hips").Parent != null,
+scope $"its bones are objects under it ({(skinned ? skinned.BoneCount : 0)} of {mRig.bones.Count})");
 				// Hand Posing works on it: a fist curls the fingers.
 				let animator = target.GetComponent<Animator>();
 				Check(animator != null, "it has an Animator");

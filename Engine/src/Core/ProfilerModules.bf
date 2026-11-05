@@ -176,8 +176,6 @@ static class ProfilerModules
 		{
 			if (component is Animator)
 				animators++;
-			else if (component is SkinnedMeshRenderer)
-				skinned++;
 			else if (component is NavigationAgent)
 				agents++;
 			else if (component is BehaviorTreeRunner)
@@ -191,6 +189,7 @@ static class ProfilerModules
 			}
 		}
 		sAnimators.Set(animators);
+		skinned = (int32)scene.Components<SkinnedMeshRenderer>(.. scope .()).Count;
 		sSkinned.Set(skinned);
 		for (let source in scene.Components<AudioSource>(.. scope .()))
 		{

@@ -173,7 +173,7 @@ static class AssetPreviews
 			{
 				let skinned = object.AddComponent<SkinnedMeshRenderer>();
 				skinned.model.Set(relative);
-				skinned.OnValidate();
+				skinned.Refresh();
 			}
 		}
 		return true;

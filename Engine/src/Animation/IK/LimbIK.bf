@@ -120,7 +120,7 @@ class LimbIK : IKComponent
 	/// right is +X. Zero when the model is not a humanoid.
 	public static Vector3 HumanForward(SkinnedMeshRenderer skinned)
 	{
-		if (skinned == null || skinned.Model == null || !skinned.Model.HumanMap.IsHumanoid)
+		if (!skinned || skinned.Model == null || !skinned.Model.HumanMap.IsHumanoid)
 			return .Zero;
 		let map = skinned.Model.HumanMap;
 		var left = skinned.Bone(map[.LeftUpperLeg]);
@@ -154,7 +154,7 @@ class LimbIK : IKComponent
 			for (var parent = tip.Parent; parent != null && mBendSign == 0; parent = parent.Parent)
 			{
 				let skinned = parent.GameObject.GetComponent<SkinnedMeshRenderer>();
-				if (skinned == null || skinned.Model == null || !skinned.Model.HumanMap.IsHumanoid)
+				if (!skinned || skinned.Model == null || !skinned.Model.HumanMap.IsHumanoid)
 					continue;
 				let map = skinned.Model.HumanMap;
 				if (skinned.Bone(map[.LeftHand]) == tip || skinned.Bone(map[.RightHand]) == tip)
