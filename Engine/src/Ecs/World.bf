@@ -37,6 +37,7 @@ sealed class World
 	/// Flecs id of each ComponentTypes index, 0 until registered in this world.
 	List<uint64> mIds = new .() ~ delete _;
 	int32 mStageCount = 1;
+	int32 mDeferDepth;
 
 	static bool sChecked;
 
@@ -87,35 +88,36 @@ sealed class World
 
 	// ---- Entities ----
 
-	public Entity Create() => .(Flecs.New(mWorld));
+	public Entity Create() => .(Flecs.New(Writer));
 
 	/// Makes count entities with T (zeroed) and adds their ids to output. Much faster than Create and Add in a loop.
 	public void CreateMany<T>(int count, List<Entity> output) where T : struct
 	{
 		if (count <= 0)
 			return;
+		Runtime.Assert(mDeferDepth == 0, "World.CreateMany cannot be deferred");
 		let ids = Flecs.BulkNew(mWorld, Id<T>(), (int32)count);
 		output.AddRange(Span<Entity>((Entity*)ids, count));
 	}
 
-	public void Delete(Entity entity) => Flecs.Delete(mWorld, entity.id);
+	public void Delete(Entity entity) => Flecs.Delete(Writer, entity.id);
 	public bool IsAlive(Entity entity) => Flecs.IsAlive(mWorld, entity.id);
 
-	public void Add<T>(Entity entity) where T : struct => Flecs.Add(mWorld, entity.id, Id<T>());
-	public void Remove<T>(Entity entity) where T : struct => Flecs.Remove(mWorld, entity.id, Id<T>());
+	public void Add<T>(Entity entity) where T : struct => Flecs.Add(Writer, entity.id, Id<T>());
+	public void Remove<T>(Entity entity) where T : struct => Flecs.Remove(Writer, entity.id, Id<T>());
 	public bool Has<T>(Entity entity) where T : struct => Flecs.Has(mWorld, entity.id, Id<T>());
 
 	/// The entity's T, or null if it has none. Valid until the entity's components change.
 	public T* Get<T>(Entity entity) where T : struct => (T*)Flecs.GetMut(mWorld, entity.id, Id<T>());
 
 	/// The entity's T, added (zeroed) first if it has none. Valid until the entity's components change.
-	public ref T Ensure<T>(Entity entity) where T : struct => ref *(T*)Flecs.Ensure(mWorld, entity.id, Id<T>(), sizeof(T));
+	public ref T Ensure<T>(Entity entity) where T : struct => ref *(T*)Flecs.Ensure(Writer, entity.id, Id<T>(), sizeof(T));
 
 	/// Adds T if needed and sets it to value.
 	public void Set<T>(Entity entity, T value) where T : struct
 	{
 		var value;
-		Flecs.Set(mWorld, entity.id, Id<T>(), sizeof(T), &value);
+		Flecs.Set(Writer, entity.id, Id<T>(), sizeof(T), &value);
 	}
 
 	/// How many entities have T.
@@ -124,7 +126,7 @@ sealed class World
 	// ---- Hierarchy ----
 
 	/// Makes child a child of parent (ChildOf), or of nothing with Entity.Null.
-	public void SetParent(Entity child, Entity parent) => Flecs.SetParent(mWorld, child.id, parent.id);
+	public void SetParent(Entity child, Entity parent) => Flecs.SetParent(Writer, child.id, parent.id);
 	public Entity Parent(Entity entity) => .(Flecs.Parent(mWorld, entity.id));
 
 	// ---- Frames ----
@@ -132,9 +134,25 @@ sealed class World
 	/// Runs every Flecs system in pipeline order.
 	public void Progress(float deltaTime) => Flecs.Progress(mWorld, deltaTime);
 
-	/// Structural changes (Create, Add, Remove, Delete) between these wait until DeferEnd: needed while iterating.
-	public void DeferBegin() => Flecs.DeferBegin(mWorld);
-	public void DeferEnd() => Flecs.DeferEnd(mWorld);
+	/// Changes (Create, Add, Remove, Set, Delete, SetParent) between these are queued and applied at the last
+	/// DeferEnd: needed while iterating a query. Reads (Get, Has) still see the world as it was. Flecs 4.2 has no
+	/// deferred mode on the world itself, so the changes go to stage 0 and DeferEnd merges it.
+	public void DeferBegin()
+	{
+		mDeferDepth++;
+	}
+
+	public void DeferEnd()
+	{
+		Runtime.Assert(mDeferDepth > 0, "World.DeferEnd without DeferBegin");
+		if (--mDeferDepth == 0)
+			Flecs.Merge(Flecs.Stage(mWorld, 0));
+	}
+
+	public bool IsDeferred => mDeferDepth > 0;
+
+	/// Where changes go: the world, or stage 0 while deferred.
+	void* Writer => mDeferDepth > 0 ? Flecs.Stage(mWorld, 0) : mWorld;
 
 	/// Makes sure there is a stage (a private command queue) for each of count threads.
 	public void EnsureStages(int32 count)

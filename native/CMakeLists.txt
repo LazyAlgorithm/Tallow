@@ -153,6 +153,7 @@ add_subdirectory(${TP}/opus opus EXCLUDE_FROM_ALL)
 add_library(tallow_flecs OBJECT ${TP}/flecs/flecs.c tallow_ecs.c)
 target_include_directories(tallow_flecs PRIVATE ${TP}/flecs)
 target_compile_definitions(tallow_flecs PRIVATE FLECS_CUSTOM_BUILD FLECS_SYSTEM FLECS_PIPELINE FLECS_META FLECS_OS_API_IMPL FLECS_LOG
+	FLECS_CACHED_QUERIES FLECS_QUERY_PLANS FLECS_PREFAB FLECS_FRAME
 	$<$<CONFIG:Debug>:FLECS_REST FLECS_HTTP FLECS_STATS FLECS_JSON>)
 if(TALLOW_FLECS_EXPLORER)
 	target_compile_definitions(tallow_flecs PRIVATE FLECS_REST FLECS_HTTP FLECS_STATS FLECS_JSON)

@@ -65,8 +65,9 @@ static class Flecs
 	[LinkName("tallow_ecs_stage")] public static extern void* Stage(void* world, int32 index);
 	[LinkName("tallow_ecs_readonly_begin")] public static extern bool ReadonlyBegin(void* world, bool multiThreaded);
 	[LinkName("tallow_ecs_readonly_end")] public static extern void ReadonlyEnd(void* world);
-	[LinkName("tallow_ecs_defer_begin")] public static extern bool DeferBegin(void* world);
-	[LinkName("tallow_ecs_defer_end")] public static extern bool DeferEnd(void* world);
+	/// Applies the changes queued on a stage (Flecs 4.2 queues changes on stages; the world itself never defers).
+	[LinkName("tallow_ecs_merge")] public static extern void Merge(void* stage);
+	[LinkName("tallow_ecs_is_stage")] public static extern bool IsStage(void* world);
 
 	// ---- Components ----
 	[LinkName("tallow_ecs_component")] public static extern uint64 Component(void* world, char8* name, int32 size, int32 alignment);
@@ -116,6 +117,8 @@ static class Flecs
 	[LinkName("tallow_ecs_iter_delta_time")] public static extern float IterDeltaTime(void* iterator);
 	[LinkName("tallow_ecs_iter_ctx")] public static extern void* IterContext(void* iterator);
 	[LinkName("tallow_ecs_iter_world")] public static extern void* IterWorld(void* iterator);
+	/// The stage a system's changes should be queued on.
+	[LinkName("tallow_ecs_iter_stage")] public static extern void* IterStage(void* iterator);
 
 	// ---- Systems ----
 	[LinkName("tallow_ecs_phase")] public static extern uint64 PhaseId(Phase phase);

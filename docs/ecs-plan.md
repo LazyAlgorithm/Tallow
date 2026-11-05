@@ -318,9 +318,17 @@ Each phase lists its exit check. Sizes are relative: S, M, L.
 
 ### What was built
 
-- `third_party/flecs`: Flecs **v4.1.6**, not v4.2.0. v4.2.0 came out on 2026-11-04 and removes
-  `ecs_defer_begin` / `ecs_defer_end`, which this plan relies on. It also moves cached queries and prefabs
-  behind new build flags. Look at it again later, as its own change.
+- `third_party/flecs`: Flecs **v4.2.0**. Phase 1 started on v4.1.6 and moved to 4.2.0 the same day. The
+  differences that matter here:
+  - 4.2 has no deferred mode on the world, so `ecs_defer_begin` / `ecs_defer_end` are gone. Changes are queued
+    by passing a *stage* instead of the world, and applied with `ecs_merge`. `World.DeferBegin` / `DeferEnd`
+    keep their meaning by sending changes to stage 0 and merging it at the last `DeferEnd`. A system queues
+    its changes on `it->stage` (`Flecs.IterStage`).
+  - Cached queries, query plans, prefabs and frame functions are now addons, so the custom build turns on
+    `FLECS_CACHED_QUERIES`, `FLECS_QUERY_PLANS`, `FLECS_PREFAB` and `FLECS_FRAME`.
+  - `ecs_entity_desc_t` no longer has `.add`, so the shim adds a system's phase after creating it.
+- `TALLOW_BENCH_MODE=check` runs `Samples/EcsBench/src/EcsChecks.bf`: set/get, deferred changes during
+  iteration, `ParallelFor` coverage and delete. All of them pass in Debug and Release.
 - `native/tallow_ecs.c`, built into `tallow_native` as the `tallow_flecs` object library. Release native builds
   leave out the Explorer addons unless `-DTALLOW_FLECS_EXPLORER=ON` is set. `tools/build.py` always builds the
   native libraries as Release, so the editor needs that flag to get the Explorer.
@@ -356,19 +364,21 @@ Frame time, avg / p99 (ms), from one Update to the next (includes the render ext
 
 | Objects | GameObject | ECS 1 thread | ECS 16 threads | Memory growth GameObject / ECS |
 | --- | --- | --- | --- | --- |
-| 1,000 | 0.31 / 1.12 | 0.25 / 1.07 | 0.24 / 1.04 | 23 MB / 22 MB |
-| 10,000 | 1.76 / 2.11 | 1.15 / 1.25 | 0.73 / 0.92 | 39 MB / 27 MB |
-| 50,000 | 16.96 / 17.82 | 4.84 / 5.42 | 3.04 / 6.49 | 116 MB / 50 MB |
-| 100,000 | 34.74 / 36.55 | 9.31 / 9.95 | 5.82 / 12.65 | 197 MB / 63 MB |
+| 1,000 | 0.28 / 0.60 | 0.23 / 0.68 | 0.23 / 0.65 | 23 MB / 22 MB |
+| 10,000 | 1.82 / 1.96 | 1.05 / 1.08 | 0.74 / 1.29 | 40 MB / 27 MB |
+| 50,000 | 16.30 / 16.76 | 4.64 / 4.71 | 2.96 / 6.39 | 116 MB / 49 MB |
+| 100,000 | 33.77 / 35.90 | 9.28 / 9.61 | 5.83 / 7.34 | 197 MB / 66 MB |
 
 Update time, avg / p99 (ms): every `Mover.Update`, or the move system:
 
 | Objects | GameObject | ECS 1 thread | ECS 16 threads |
 | --- | --- | --- | --- |
-| 1,000 | 0.03 / 0.04 | 0.04 / 0.06 | 0.03 / 0.04 |
-| 10,000 | 0.38 / 0.38 | 0.52 / 0.57 | 0.11 / 0.19 |
-| 50,000 | 1.79 / 1.83 | 2.19 / 2.38 | 0.38 / 0.52 |
-| 100,000 | 3.57 / 3.62 | 4.20 / 4.30 | 0.70 / 0.89 |
+| 1,000 | 0.03 / 0.04 | 0.04 / 0.05 | 0.03 / 0.07 |
+| 10,000 | 0.39 / 0.40 | 0.45 / 0.47 | 0.11 / 0.15 |
+| 50,000 | 1.80 / 1.85 | 2.12 / 2.13 | 0.38 / 0.45 |
+| 100,000 | 3.52 / 3.59 | 4.19 / 4.34 | 0.72 / 0.90 |
+
+These are Flecs 4.2.0 numbers. The same runs on 4.1.6 were within run-to-run noise of these.
 
 Spawning 100,000 objects took 119 ms as GameObjects and 17 ms as entities.
 
@@ -381,7 +391,7 @@ Reading the numbers:
   sorts the draws. The ECS path hands over columns that are already grouped. At 100,000 objects a frame is
   3.7× faster on one thread and 6× faster on 16.
 - Memory growth is about a third of today's at 100,000 objects.
-- With 16 threads, the 99th percentile at 50k and 100k is about twice the average. Some frames lose time
+- With 16 threads, the 99th percentile at 50k (and on some runs at 100k) is about twice the average. Some frames lose time
   handing work to the `Jobs` threads. Look into this in Phase 2 (fewer, larger batches, or keeping the workers
   awake during the frame) before engine systems depend on `ParallelFor`.
 

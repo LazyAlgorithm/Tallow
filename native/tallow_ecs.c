@@ -102,15 +102,21 @@ TALLOW_ECS_API void tallow_ecs_readonly_end(ecs_world_t* world)
 	ecs_readonly_end(world);
 }
 
-// Structural changes (add, remove, delete) made between these are applied at defer_end.
-TALLOW_ECS_API bool tallow_ecs_defer_begin(ecs_world_t* world)
+// Flecs 4.2 has no deferred mode on the world: changes are queued by passing a stage instead of the world, and
+// applied when that stage is merged. Beef's World.DeferBegin/DeferEnd use stage 0 this way.
+TALLOW_ECS_API void tallow_ecs_merge(ecs_world_t* stage)
 {
-	return ecs_defer_begin(world);
+	ecs_merge(stage);
 }
 
-TALLOW_ECS_API bool tallow_ecs_defer_end(ecs_world_t* world)
+TALLOW_ECS_API bool tallow_ecs_is_stage(const ecs_world_t* world)
 {
-	return ecs_defer_end(world);
+	return ecs_is_stage(world);
+}
+
+TALLOW_ECS_API ecs_world_t* tallow_ecs_iter_stage(const ecs_iter_t* it)
+{
+	return it->stage;
 }
 
 // ---- Components ----

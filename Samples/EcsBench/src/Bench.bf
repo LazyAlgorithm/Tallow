@@ -7,7 +7,8 @@ namespace EcsBench;
 
 /// Runs one benchmark and quits (docs/ecs-plan.md, Phase 1; tools/run_ecs_bench.py runs the whole set). Set by
 /// environment variables:
-///   TALLOW_BENCH_MODE   gameobject (Mover components), ecs (one thread) or ecs-mt (every Jobs thread)
+///   TALLOW_BENCH_MODE   gameobject (Mover components), ecs (one thread), ecs-mt (every Jobs thread), or check
+///                       (runs EcsChecks and exits with 1 if any fail)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
 ///   TALLOW_BENCH_OUT    file a JSON line of results is added to (default: printed only)
@@ -54,6 +55,12 @@ class Bench : Component
 		Transform.Position = .(0, mHalfSize * 0.6f, -mHalfSize * 3.2f);
 		Transform.LookAt(.Zero);
 
+		if (mMode == "check")
+		{
+			let failures = EcsChecks.Run();
+			Console.WriteLine(failures == 0 ? "EcsBench checks: all passed" : scope $"EcsBench checks: {failures} FAILED");
+			Environment.Exit(failures == 0 ? 0 : 1);
+		}
 		mMemoryBefore = ProfilerModules.ProcessMemory();
 		let start = SDL.SDL_GetTicksNS();
 		if (mMode == "gameobject")
