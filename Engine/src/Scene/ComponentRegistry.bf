@@ -48,6 +48,11 @@ struct FieldRef
 	public Type elementType;
 	/// Marked [Saved] (kept by save games through SaveFields as well).
 	public bool saved;
+	/// For a built-in component's data field (DataComponents.GetFields with an object): the object whose data it is,
+	/// and the data type. An ObjectRef field finds its scene by it, and the serializer finds the data again after
+	/// the entity has moved tables.
+	public GameObject owner;
+	public Type ownerType;
 
 	/// Whether the field is, or holds, references to objects in the scene.
 	public bool HoldsReferences => kind == .ObjectReference || ((kind == .List || kind == .Array) && elementKind == .ObjectReference);
@@ -142,6 +147,8 @@ static class ComponentRegistry
 	/// Scene references are non-owning. Components match by their reflected type.
 	public static GameObject ReferenceOwner(FieldRef field)
 	{
+		if (ObjectRefs.Is(field.type))
+			return ObjectRefs.Owner(field);
 		let value = *(Object*)field.ptr;
 		if (let go = value as GameObject) return go;
 		if (let transform = value as Transform) return transform.GameObject;
@@ -151,6 +158,8 @@ static class ComponentRegistry
 
 	public static bool AssignReference(FieldRef field, GameObject go, int index = -1)
 	{
+		if (ObjectRefs.Is(field.type))
+			return ObjectRefs.Assign(field, go, index);
 		if (go == null)
 		{
 			*(Object*)field.ptr = null;
@@ -297,7 +306,7 @@ static class ComponentRegistry
 		else if (fieldType == typeof(String) || fieldType == typeof(SharedString))
 			kind = .String;
 		else if (fieldType == typeof(GameObject) || fieldType == typeof(Transform) || fieldType == typeof(Component) || fieldType.IsSubtypeOf(typeof(Component))
-			|| HandleComponents.IsHandle(fieldType))
+			|| HandleComponents.IsHandle(fieldType) || ObjectRefs.Is(fieldType))
 			kind = .ObjectReference;
 		else
 			return false;

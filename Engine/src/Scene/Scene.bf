@@ -686,7 +686,8 @@ class Scene
 		{
 			if ((field.kind == .List || field.kind == .Array) && field.elementKind == .ObjectReference)
 				mReferenceLists.Add((component, field));
-			if (field.kind != .ObjectReference)
+			// An ObjectRef is an id looked up on use: nothing to clear.
+			if (field.kind != .ObjectReference || ObjectRefs.Is(field.type))
 				continue;
 			ReferenceSlot slot;
 			slot.owner = component;
@@ -1211,6 +1212,7 @@ class Scene
 	static ProfilerMarker sPathsMarker = .("Navigation Paths", .AI);
 	static ProfilerMarker sIKMarker = .("IK", .Animation);
 	static ProfilerMarker sAnimatorMarker = .("Animators", .Animation);
+	static ProfilerMarker sNavigationMarker = .("Navigation.Agents", .AI);
 	static ProfilerMarker sSkinMarker = .("Skinning", .Animation);
 	static ProfilerMarker sDestroyMarker = .("Destroy", .Scripts);
 
@@ -1305,6 +1307,8 @@ class Scene
 			}
 			);
 		World.AddStep(mTickPipeline, "Tick.FixedUpdate", .OnUpdate, new => RunFixedUpdates);
+		// Agents walking through a controller or body steer them after the scripts' FixedUpdate, before physics.
+		World.AddStep(mTickPipeline, "Tick.Navigation", .OnUpdate, new () => NavigationAgent.TickAll(this));
 		World.AddStep(mTickPipeline, "Tick.Physics", .OnValidate, new () =>
 			{
 				using (sPhysicsMarker.Sample())
@@ -1344,6 +1348,13 @@ class Scene
 				}
 			});
 		World.AddStep(mFramePipeline, "Frame.Update", .OnUpdate, new => RunFrameUpdates);
+		// Navigation agents move once the scripts have set their destinations (NavigationAgent.OnLocalUpdate did, in
+		// component order).
+		World.AddStep(mFramePipeline, "Frame.Navigation", .OnUpdate, new () =>
+			{
+				using (sNavigationMarker.Sample())
+					NavigationAgent.FrameAll(this);
+			});
 		// Animators pose their bones once the scripts have set their parameters (Animator.OnLocalUpdate did, in
 		// component order); LateUpdate and IK see the pose.
 		World.AddStep(mFramePipeline, "Frame.Animators", .OnUpdate, new () =>

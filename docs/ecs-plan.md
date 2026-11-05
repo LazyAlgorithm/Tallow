@@ -984,6 +984,7 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
     built-in component data cannot hold object references yet (DataComponents leaves them out: a pointer would
     dangle, and saving, the Inspector picker and clearing on destroy are not done for data). Phase 5: object
     references in data (an entity id, saved as the object, resolved on use), then these two and LODGroup.
+    *Unblocked:* `ObjectRef<T>` is done (Phase 5 progress).
   - **SoftBody** runs a FixedUpdate and LateUpdate of its own and shares its native proxy pass with Rope
     (`UpdateProxies(world, softBodies, ropes)`); it moves with Rope in Phase 5. A handful per scene, so nothing is
     lost meanwhile.
@@ -1014,6 +1015,33 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   (not in its rest pose), the editor's `--rigger-test` passes, the Gallery self-test passes and Campus plays.
   `--rig-test` needs a character whose model has clips: on one without, it now says so instead of stopping on an
   index out of range.
+
+- [x] **Object references in data (`ObjectRef<T>`, Engine/src/Scene/ObjectRef.bf).** Holds the target object's id
+  (and, for a class component, its index on the object) and looks it up when used. A destroyed object is not
+  found, so the reference reads as none without anything having to clear it, and nothing dangles when the data
+  moves tables. T is GameObject, Transform, a class component or a handle. It converts from a GameObject,
+  Transform or Component, so `agent.surface = surface;` reads as before. `ComponentRegistry` treats it as an
+  ObjectReference field (`ObjectRefs.Owner` / `Assign`), so it saves as class references do (`field surface <id>
+  <index>`), loads (remapped for copies, re-finding the field after the entity has moved tables) and is picked in
+  the Inspector. `FieldRef` gained `owner` / `ownerType` (set by `DataComponents.GetFields(..., owner)`), which
+  give the reference its scene. Scene reference slots and script reload migration skip ObjectRef fields.
+- [x] **NavigationAgent.** `NavigationAgentData` (the settings; `surface` is an `ObjectRef<NavigationSurface>`),
+  the `NavigationAgent` handle and `NavigationAgentState` (the path, steering, link crossing, OnLinkStarted /
+  OnLinkFinished events). `agent.Surface` is the resolved surface, the one set or the one SetDestination found
+  (`agent.surface?.Data` becomes `agent.Surface?.Data`); the state resolves it once per update or tick.
+  `NavigationAgent.FrameAll` (a new `Frame.Navigation` step after `Frame.Update`, before `Frame.Animators`) does
+  what OnLocalUpdate did and stops an agent that has been switched off, as OnDisable did. `TickAll` (a new
+  `Tick.Navigation` step after `Tick.FixedUpdate`) does what FixedUpdate did. The scene's crowd index holds states
+  (listed when first made, taken out in OnRemove with the path queue). A handle can't derive from
+  `AIMovementDriver`, which stays for projects' own movers: `BTContext.Mover` is now an `AIMover` struct holding
+  the object's Navigation Agent or its driver (`mover.IsValid` instead of `!= null`). Checked by
+  `EcsChecks.NavigationChecks`: defaults, the reference, the crowd, walking a baked path, switching off, save and
+  load to the loaded surface, a destroyed surface reading as none, and freeing. A surface's box runs from its
+  position by its size, not around it. The Sandbox's Navigation scene at frame 480 matches the previous commit,
+  apart from one agent slightly further along (agents now move after all the scripts' Update, not in component
+  order). The Gallery self-test passes and Campus plays.
+  Games that update: `GetComponent<NavigationAgent>() == null` checks (fix_handle_nulls.py), `agent.surface?.Data`,
+  and a project's `AIMovementDriver` subclass keeps working through `AIMover`.
 
 ## Benchmark results
 

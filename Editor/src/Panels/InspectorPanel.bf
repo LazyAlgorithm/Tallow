@@ -428,7 +428,7 @@ extension EditorApp
 		if (!open || remove)
 			return remove;
 		fields.Clear();
-		DataComponents.GetFields(info.type, gameObject.GetData(info.type), fields);
+		DataComponents.GetFields(info.type, gameObject.GetData(info.type), fields, gameObject);
 		bool changed = false;
 		if (fields.Count > 0 && BeginPropertyTable("datafields"))
 		{
@@ -1189,17 +1189,20 @@ extension EditorApp
 		{
 			if (ImGui.Selectable("None", target == null))
 				changed = ComponentRegistry.AssignReference(field, null);
+			// An ObjectRef in a built-in component's data names what it refers to by its T.
+			let refType = ObjectRefs.TargetOf(field.type) ?? field.type;
+			let current = ObjectRefs.Is(field.type) ? ObjectRefs.Target(field) : *(Object*)field.ptr;
 			for (let go in mScene.Objects)
 			{
 				ImGui.PushID((int32)go.Id);
-				let handle = HandleComponents.Find(field.type);
+				let handle = HandleComponents.Find(refType);
 				if (handle != null)
 				{
 					// A built-in component handle: objects that have one.
 					if (go.GetData(handle.dataType) != null && ImGui.Selectable(scope $"{go.Name} ({handle.name})" .CStr(), target == go))
 						changed = ComponentRegistry.AssignReference(field, go);
 				}
-				else if (field.type == typeof(GameObject) || field.type == typeof(Transform))
+				else if (refType == typeof(GameObject) || refType == typeof(Transform))
 				{
 					if (ImGui.Selectable(go.Name.CStr(), target == go))
 						changed = ComponentRegistry.AssignReference(field, go);
@@ -1207,9 +1210,9 @@ extension EditorApp
 				else for (int i < go.Components.Count)
 					{
 						let component = go.Components[i];
-						if (component.GetType() != field.type && !component.GetType().IsSubtypeOf(field.type)) continue;
+						if (component.GetType() != refType && !component.GetType().IsSubtypeOf(refType)) continue;
 						ImGui.PushID((int32)i);
-						if (ImGui.Selectable(scope $"{go.Name} ({component.GetType()})" .CStr(), *(Object*)field.ptr == component))
+						if (ImGui.Selectable(scope $"{go.Name} ({component.GetType()})" .CStr(), current == component))
 							changed = ComponentRegistry.AssignReference(field, go, i);
 						ImGui.PopID();
 					}

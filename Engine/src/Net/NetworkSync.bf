@@ -111,7 +111,7 @@ static class NetworkSync
 				continue;
 			let body = object.GetComponent<Rigidbody>();
 			if ((body.IsValid && !body.isKinematic) || object.HasComponent<CharacterController>()
-				|| object.GetComponent<AIMovementDriver>() != null || object.GetComponent<BehaviorTreeRunner>() != null
+				|| object.HasComponent<NavigationAgent>() || object.GetComponent<AIMovementDriver>() != null || object.GetComponent<BehaviorTreeRunner>() != null
 				|| object.GetComponent<NetworkBehaviour>() != null || (object.GetComponent<DialogueRunner>()?.shared ?? false) || (object.GetComponent<SequencePlayer>()?.shared ?? false)
 				|| (object.GetComponent<SoftBody>()?.MovesByItself ?? false) || object.HasComponent<Water>())
 				wanted.Add(object);

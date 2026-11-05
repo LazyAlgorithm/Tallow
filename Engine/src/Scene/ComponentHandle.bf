@@ -448,7 +448,7 @@ static class HandleComponents
 	public static void GetFields(GameObject gameObject, Info info, List<FieldRef> fields)
 	{
 		if (let data = gameObject.GetData(info.dataType))
-			DataComponents.GetFields(info.dataType, data, fields);
+			DataComponents.GetFields(info.dataType, data, fields, gameObject);
 	}
 
 	/// Draws the gizmos of every handle component on the object (SceneView).

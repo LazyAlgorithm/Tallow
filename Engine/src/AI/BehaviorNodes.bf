@@ -512,7 +512,7 @@ abstract class BTMove : BTNode
 	protected override BTStatus OnTick(BTContext context)
 	{
 		let mover = context.Mover;
-		if (mover == null)
+		if (!mover.IsValid)
 			return .Failure;
 		if (!mAsked || Follow)
 		{
@@ -539,7 +539,7 @@ abstract class BTMove : BTNode
 	{
 		// Finishing normally leaves the agent standing where it arrived; being interrupted must stop it.
 		if (aborted)
-			context.Mover?.StopMovement();
+			context.Mover.StopMovement();
 	}
 }
 
@@ -620,7 +620,8 @@ class BTWander : BTMove
 	{
 		base.OnStart(context);
 		// A point the agent can reach, when its surface is baked; otherwise anywhere in the circle.
-		let data = context.Object.GetComponent<NavigationAgent>()?.surface?.Data;
+		let agent = context.Object.GetComponent<NavigationAgent>();
+		let data = agent ? agent.Surface?.Data : null;
 		if (data != null && data.RandomPoint(context.runner.Home, Number(0), context.random, let reachable))
 		{
 			mPoint = reachable;
@@ -642,7 +643,7 @@ class BTStopMoving : BTNode
 {
 	protected override BTStatus OnTick(BTContext context)
 	{
-		context.Mover?.StopMovement();
+		context.Mover.StopMovement();
 		return .Success;
 	}
 }

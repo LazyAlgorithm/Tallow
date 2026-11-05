@@ -92,14 +92,17 @@ static class DataComponents
 		return null;
 	}
 
-	/// The editable fields of a data component whose value is at data. Only plain values and SharedString: a data
-	/// component holds nothing it would have to free.
-	public static void GetFields(Type type, void* data, List<FieldRef> fields)
+	/// The editable fields of a data component whose value is at data: plain values, SharedString and ObjectRef (and,
+	/// for a built-in component's data, the String fields and lists it owns). With owner, the object whose data it
+	/// is, which ObjectRef fields need to find their scene.
+	public static void GetFields(Type type, void* data, List<FieldRef> fields, GameObject owner = null)
 	{
 		let all = scope List<FieldRef>();
 		ComponentRegistry.GetFields(type, data, all);
-		for (let field in all)
+		for (var field in all)
 		{
+			field.owner = owner;
+			field.ownerType = type;
 			switch (field.kind)
 			{
 			case .String:
@@ -110,7 +113,11 @@ static class DataComponents
 				// A built-in component's data may own lists of plain values (HandleComponents.OwnLists).
 				if (type.HasCustomAttribute<HandleDataAttribute>() && field.elementKind != .String && field.elementKind != .ObjectReference)
 					fields.Add(field);
-			case .ObjectReference,.Array:
+			case .ObjectReference:
+				// An id looked up on use (ObjectRef): never a pointer.
+				if (ObjectRefs.Is(field.type))
+					fields.Add(field);
+			case .Array:
 				continue;
 			default:
 				fields.Add(field);

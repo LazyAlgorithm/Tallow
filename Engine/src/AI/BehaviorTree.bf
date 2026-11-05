@@ -476,13 +476,17 @@ class BTContext
 	public Scene Scene => runner.Scene;
 	/// Its transform.
 	public Transform Transform => runner.Transform;
-	/// The object's movement component, or null with a one-time warning if it has none.
-	public AIMovementDriver Mover
+	/// The object's movement component (its Navigation Agent, or a project's AIMovementDriver), or none with a
+	/// one-time warning if it has neither.
+	public AIMover Mover
 	{
 		get
 		{
-			let mover = runner.GetComponent<AIMovementDriver>();
-			if (mover == null && !mWarned)
+			AIMover mover = .();
+			mover.agent = runner.GameObject.GetComponent<NavigationAgent>();
+			if (!mover.agent)
+				mover.driver = runner.GetComponent<AIMovementDriver>();
+			if (!mover.IsValid && !mWarned)
 			{
 				mWarned = true;
 				Log.Warning(scope $"Behaviour tree on '{Object.Name}' uses a movement node, but the object has no Navigation Agent.");

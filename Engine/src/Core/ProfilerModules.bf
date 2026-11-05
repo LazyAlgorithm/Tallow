@@ -173,11 +173,10 @@ static class ProfilerModules
 		// One look over the scene's components for the counts by kind.
 		int32 animators = 0, skinned = 0, sources = 0, agents = 0, trees = 0, documents = 0, systems = 0, particles = 0;
 		animators = (int32)scene.Components<Animator>(.. scope .()).Count;
+		agents = (int32)scene.Components<NavigationAgent>(.. scope .()).Count;
 		for (let component in scene.Components)
 		{
-			if (component is NavigationAgent)
-				agents++;
-			else if (component is BehaviorTreeRunner)
+			if (component is BehaviorTreeRunner)
 				trees++;
 			else if (component is UIDocument)
 				documents++;

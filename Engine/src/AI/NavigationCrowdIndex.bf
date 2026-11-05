@@ -15,7 +15,7 @@ class NavigationCrowdIndex
 
 	struct Entry
 	{
-		public NavigationAgent agent;
+		public NavigationAgentState agent;
 		public uint32 version;
 		public Vector3 offset;
 		/// The cell it is listed in (Key), and its place in that cell's list; hasCell is false when its position is
@@ -27,10 +27,10 @@ class NavigationCrowdIndex
 
 	Scene mScene;
 	List<Entry> mEntries = new .() ~ delete _;
-	Dictionary<NavigationAgent, int32> mIndex = new .() ~ delete _;
+	Dictionary<NavigationAgentState, int32> mIndex = new .() ~ delete _;
 	List<int32> mFree = new .() ~ delete _;
 	Dictionary<int64, List<int32>> mCells = new .() ~ DeleteDictionaryAndValues!(_);
-	List<NavigationAgent> mResult = new .() ~ delete _;
+	List<NavigationAgentState> mResult = new .() ~ delete _;
 	float mLargestRadius;
 	int64 mRefreshedUpdate = -1;
 	int32 mRefreshedTick = -1;
@@ -44,7 +44,7 @@ class NavigationCrowdIndex
 	static int64 Key(int32 x, int32 z) => ((int64)x << 32) | (uint32)z;
 	static int32 CellOf(float coordinate) => (int32)Math.Floor(coordinate / CellSize);
 
-	public void Register(NavigationAgent agent)
+	public void Register(NavigationAgentState agent)
 	{
 		if (mIndex.ContainsKey(agent)) return;
 		int32 id;
@@ -64,7 +64,7 @@ class NavigationCrowdIndex
 		mLargestRadius = Math.Max(mLargestRadius, agent.radius);
 	}
 
-	public void Unregister(NavigationAgent agent)
+	public void Unregister(NavigationAgentState agent)
 	{
 		if (!mIndex.TryGetValue(agent, let id)) return;
 		Unlist(id);
@@ -75,7 +75,7 @@ class NavigationCrowdIndex
 
 	/// The agents that may be within distance of a point on the ground (with their radius): every one that is, and
 	/// perhaps a few that are not. The list is reused by the next query.
-	public List<NavigationAgent> Query(Vector3 center, float distance)
+	public List<NavigationAgentState> Query(Vector3 center, float distance)
 	{
 		Refresh();
 		mResult.Clear();

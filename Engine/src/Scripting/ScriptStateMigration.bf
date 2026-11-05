@@ -48,7 +48,7 @@ class ScriptStateMigration
 			ComponentRegistry.GetFields(component, fields, true);
 			for (let field in fields)
 			{
-				if (field.kind == .ObjectReference)
+				if (field.kind == .ObjectReference && !ObjectRefs.Is(field.type))
 				{
 					if (let target = (*(Object*)field.ptr) as Component)
 					{

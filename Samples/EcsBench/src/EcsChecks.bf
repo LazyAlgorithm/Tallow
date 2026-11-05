@@ -115,6 +115,7 @@ static class EcsChecks
 		RigidbodyChecks();
 		CharacterChecks();
 		AnimatorChecks();
+		NavigationChecks();
 		return sFailures;
 	}
 
@@ -667,6 +668,69 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Navigation Agent: an ObjectRef to its surface (saved as the object, none once the object goes), walking a baked
+	/// path in the Frame.Navigation step, the crowd, switching off, and freeing.
+	static void NavigationChecks()
+	{
+		let before = ComponentState<NavigationAgentState>.Count;
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let floor = scene.CreateGameObject("Floor");
+			floor.Transform.Position = .(0, -0.1f, 0);
+			floor.AddComponent<BoxCollider>().size = .(24, 0.2f, 24);
+			let area = scene.CreateGameObject("Area");
+			// A surface's box runs from its position by its size.
+			area.Transform.Position = .(-10, -0.5f, -10);
+			let surface = area.AddComponent<NavigationSurface>();
+			surface.size = .(20, 4, 20);
+			surface.cellSize = 0.4f;
+			surface.includeRenderMeshes = false;
+			Expect(surface.Bake() && surface.Data != null, "a surface bakes over a box floor");
+			let walker = scene.CreateGameObject("Walker");
+			walker.Transform.Position = .(-5, 0, -5);
+			let agent = walker.AddComponent<NavigationAgent>();
+			Expect(!agent.surface.IsSet && agent.radius == 0.4f && agent.useLinks, "an agent has its defaults");
+			agent.surface = surface;
+			Expect(agent.surface.id == area.Id && agent.Surface == surface, "its surface is an ObjectRef to the surface's object");
+			Expect(scene.NavigationCrowd.Query(walker.Transform.Position, 1).Contains(agent.Runtime), "it is in the scene's crowd");
+			scene.StartPlay();
+			agent.SetDestination(.(5, 0, 5), 4, 0.3f);
+			for (int i < 60)
+			{
+				Time.DeltaTime = 0.1f;
+				scene.Update();
+				if (agent.HasArrived)
+					break;
+			}
+			let at = walker.Transform.Position;
+			Expect(agent.HasArrived && Math.Abs(at.x - 5) < 0.5f && Math.Abs(at.z - 5) < 0.5f, scope $"Frame.Navigation walks it to its destination (at {at})");
+			agent.SetDestination(.(-5, 0, 5), 4, 0.3f);
+			Time.DeltaTime = 0.1f;
+			scene.Update();
+			agent.enabled = false;
+			scene.Update();
+			Expect(agent.Path.IsEmpty && !agent.HasArrived, "switching it off stops it, as OnDisable did");
+			agent.enabled = true;
+			scene.StopPlay();
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains(scope $"field surface {area.Id} 0"), "the reference saves as the object and component");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Walker").GetComponent<NavigationAgent>();
+			Expect(copy && copy.Surface != null && copy.Surface == loaded.Find("Area").GetComponent<NavigationSurface>(), "and loads, pointing at the loaded surface");
+			scene.Destroy(area);
+			scene.Update();
+			Expect(agent.Surface == null, "a destroyed surface reads as none");
+			walker.RemoveComponent<NavigationAgent>();
+			Expect(scene.NavigationCrowd.Query(.(-5, 0, 5), 50).IsEmpty, "removing it takes it out of the crowd");
+		}
+		Scene.Active = previous;
+		Expect(ComponentState<NavigationAgentState>.Count == before, "agents are freed with their scene");
 	}
 
 	/// Animator: owned text settings, started and moved on by the Frame.Animators step, a clip posing child bones.

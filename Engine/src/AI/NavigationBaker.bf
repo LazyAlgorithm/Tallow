@@ -13,7 +13,7 @@ static class NavigationBaker
 		while (transform != null)
 		{
 			let go = transform.GameObject;
-			if (go.HasComponent<Rigidbody>() || go.GetComponent<NavigationAgent>() != null || go.GetComponent<NavigationObstacle>() != null) return false;
+			if (go.HasComponent<Rigidbody>() || go.HasComponent<NavigationAgent>() || go.GetComponent<NavigationObstacle>() != null) return false;
 			transform = transform.Parent;
 		}
 		return true;

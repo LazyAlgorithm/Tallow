@@ -30,9 +30,9 @@ class Wanderer : Script
 
 	public override void Update(TickInput input, float deltaTime)
 	{
-		let data = mAgent?.surface?.Data;
-		if (mAgent == null)
+		if (!mAgent)
 			return;
+		let data = mAgent.Surface?.Data;
 		if (mAgent.IsCrossingLink || (!mAgent.HasArrived && !mAgent.PathFailed && mAgent.Path.Count > 0))
 			return;
 		mWait -= Time.DeltaTime;

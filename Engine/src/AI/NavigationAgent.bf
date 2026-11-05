@@ -3,37 +3,16 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Moves its object along paths found on a Navigation Surface: call SetDestination, then watch HasArrived or
-/// PathFailed. It walks through the object's Character Controller or Rigidbody when it has one. See
-/// docs/navigation.md.
-[Component]
-class NavigationAgent : AIMovementDriver
+/// A Navigation Agent's settings, in its entity (NavigationAgent is the handle).
+[Component, HandleData]
+struct NavigationAgentData
 {
-	static ProfilerMarker sAvoidProfile = .("Navigation.Avoid", .AI);
-	static ProfilerMarker sNeighborsProfile = .("Navigation.Avoid.Neighbors", .AI);
-	static ProfilerMarker sSteerProfile = .("Navigation.Avoid.Candidates", .AI);
-
-	/// Steering round others looks only at the agents near this one (Scene.NavigationCrowd); off, at every agent in the
-	/// scene, for comparing.
-	public static bool UseSpatialAvoidance = true;
-	/// The turns Avoid tries each side of the wanted direction, in degrees.
-	const int AvoidTurns = 11;
-	static float[AvoidTurns] sAvoidAngles = .(0, 15, -15, 30, -30, 50, -50, 75, -75, 105, -105);
-	static Quaternion[AvoidTurns] sAvoidRotations;
-
-	static this()
-	{
-		for (int i < AvoidTurns)
-			sAvoidRotations[i] = Quaternion.AngleAxis(sAvoidAngles[i], Vector3.Up);
-	}
-
 	/// The surface to find paths on. Empty: the one in the scene's active world state.
-	public NavigationSurface surface;
-	bool mFoundSurface;
+	public ObjectRef<NavigationSurface> surface = .();
 	/// How far the start and destination may be moved to reach a usable cell.
 	public float snapDistance = 2;
 	/// Offset from the object's origin to the agent's feet (walking) or centre (flying).
-	public Vector3 baseOffset;
+	public Vector3 baseOffset = .Zero;
 	/// Shortest time between two path searches. A search runs only when the destination or the navigation data changed,
 	/// or the agent was pushed off its path.
 	public float repathInterval = 0.3f;
@@ -52,10 +31,186 @@ class NavigationAgent : AIMovementDriver
 	/// Uses Navigation Links (jumps, ladders, teleporters) when they are the shorter way.
 	public bool useLinks = true;
 
+	public this() { }
+}
+
+/// Moves its object along paths found on a Navigation Surface: call SetDestination, then watch HasArrived or
+/// PathFailed. It walks through the object's Character Controller or Rigidbody when it has one. See
+/// docs/navigation.md.
+///
+/// A handle (ComponentHandle): its settings are NavigationAgentData's fields, its path and steering its
+/// NavigationAgentState. Agents move on in the Frame.Navigation step after the scripts' Update and in the
+/// Tick.Navigation step after their FixedUpdate, as OnLocalUpdate and FixedUpdate did.
+[Component, HandleFields]
+struct NavigationAgent : ComponentHandle<NavigationAgentData>
+{
+	/// Steering round others looks only at the agents near this one (Scene.NavigationCrowd); off, at every agent in the
+	/// scene, for comparing.
+	public static bool UseSpatialAvoidance = true;
+
+	/// Its path and steering, made (and listed in the scene's crowd) the first time it is asked for.
+	public NavigationAgentState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<NavigationAgentState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			if (state.[Friend]mGameObject == null)
+			{
+				state.[Friend]mGameObject = mGameObject;
+				mGameObject.Scene.NavigationCrowd.Register(state);
+			}
+			return state;
+		}
+	}
+
+	// The API, unchanged: each member is documented on NavigationAgentState.
+	/// The surface it finds paths on (its `surface`, or the one it found), or null.
+	public NavigationSurface Surface => Runtime.Surface;
+	public bool PathPending => Runtime.PathPending;
+	public bool PathFailed => Runtime.PathFailed;
+	public bool HasArrived => Runtime.HasArrived;
+	public List<Vector3> Path => Runtime.Path;
+	public List<int32> PathLinks => Runtime.PathLinks;
+	public NavigationLink CurrentLink => Runtime.CurrentLink;
+	public bool IsCrossingLink => Runtime.IsCrossingLink;
+	public Vector3 Velocity => Runtime.Velocity;
+	public float RemainingDistance => Runtime.RemainingDistance;
+	public ref Event<delegate void(NavigationLink link)> OnLinkStarted => ref Runtime.OnLinkStarted;
+	public ref Event<delegate void(NavigationLink link)> OnLinkFinished => ref Runtime.OnLinkFinished;
+	public void SetDestination(Vector3 point, float speed, float stoppingDistance) => Runtime.SetDestination(point, speed, stoppingDistance);
+	public void StopMovement() => Runtime.StopMovement();
+
+	/// Scene.Update calls it after the components' Update (NavigationAgentState.FindQueuedPaths).
+	public static void FindQueuedPaths() => NavigationAgentState.FindQueuedPaths();
+
+	/// Moves every switched-on agent on an active object a frame on, and stops one that has been switched off.
+	public static void FrameAll(Scene scene)
+	{
+		if (!scene.IsPlaying)
+			return;
+		for (let agent in scene.FindComponents<NavigationAgent>(.. scope .()))
+		{
+			let state = agent.Runtime;
+			if (!agent.IsActiveAndEnabled)
+			{
+				if (state.[Friend]mWasActive)
+				{
+					state.[Friend]mWasActive = false;
+					state.StopMovement();
+				}
+				continue;
+			}
+			state.[Friend]mWasActive = true;
+			state.Frame();
+		}
+	}
+
+	/// Moves every switched-on agent on an active object a fixed tick on (through its controller or body).
+	public static void TickAll(Scene scene)
+	{
+		if (!scene.IsPlaying)
+			return;
+		for (let agent in scene.Components<NavigationAgent>(.. scope .()))
+		{
+			if (agent.GameObject.ActiveInHierarchy)
+				agent.Runtime.Tick();
+		}
+	}
+
+	static void DrawGizmos(GameObject gameObject, bool selected)
+	{
+		if (selected && gameObject.Scene != null)
+			gameObject.GetComponent<NavigationAgent>().Runtime.DrawGizmos(selected);
+	}
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		if (let state = ComponentState<NavigationAgentState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
+			state.[Friend]Leave();
+		ComponentState<NavigationAgentState>.Release(world, entity);
+	}
+}
+
+/// What a Navigation Agent keeps between frames: its path, where it is on it and how it is steering. Its settings
+/// are read from the entity each time.
+[DataFields(typeof(NavigationAgentData), "Settings")]
+class NavigationAgentState
+{
+	GameObject mGameObject;
+	// The surface, found again once per update or tick (its object may have gone, or `surface` been changed).
+	NavigationSurface mSurface;
+	ObjectRef<NavigationSurface> mSurfaceRef;
+	int64 mSurfaceUpdate = -1;
+	int32 mSurfaceTick = -1;
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+	public Scene Scene => mGameObject?.Scene;
+	public bool IsActiveAndEnabled => mGameObject.ActiveInHierarchy && mGameObject.GetComponent<NavigationAgent>().enabled;
+	T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
+	ref NavigationAgentData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<NavigationAgentData>();
+	}
+
+	/// The surface it finds paths on: its `surface` setting, or the one SetDestination found for it.
+	public NavigationSurface Surface
+	{
+		get
+		{
+			let scene = Scene;
+			if (scene == null)
+				return null;
+			let wanted = Settings.surface;
+			if (!wanted.Equals(mSurfaceRef) || mSurfaceUpdate != scene.UpdateCount || mSurfaceTick != Time.Tick)
+			{
+				mSurfaceRef = wanted;
+				mSurfaceUpdate = scene.UpdateCount;
+				mSurfaceTick = Time.Tick;
+				mSurface = wanted.Component(scene) as NavigationSurface;
+			}
+			return mSurface;
+		}
+	}
+
 	/// The agent started crossing a Navigation Link (to play a jump or climb animation).
 	public Event<delegate void(NavigationLink link)> OnLinkStarted ~ _.Dispose();
 	/// The agent got to the far end of a link.
 	public Event<delegate void(NavigationLink link)> OnLinkFinished ~ _.Dispose();
+
+	/// Leaves the crowd and the path queue (its component was removed or its object destroyed).
+	void Leave()
+	{
+		if (mQueued)
+		{
+			mQueued = false;
+			sQueue.Remove(this);
+		}
+		if (let scene = Scene)
+			scene.[Friend]mNavigationCrowd?.Unregister(this);
+	}
+
+	static ProfilerMarker sAvoidProfile = .("Navigation.Avoid", .AI);
+	static ProfilerMarker sNeighborsProfile = .("Navigation.Avoid.Neighbors", .AI);
+	static ProfilerMarker sSteerProfile = .("Navigation.Avoid.Candidates", .AI);
+
+	/// The turns Avoid tries each side of the wanted direction, in degrees.
+	const int AvoidTurns = 11;
+	static float[AvoidTurns] sAvoidAngles = .(0, 15, -15, 30, -30, 50, -50, 75, -75, 105, -105);
+	static Quaternion[AvoidTurns] sAvoidRotations;
+
+	static this()
+	{
+		for (int i < AvoidTurns)
+			sAvoidRotations[i] = Quaternion.AngleAxis(sAvoidAngles[i], Vector3.Up);
+	}
+
+	bool mFoundSurface;
+	/// Switched on and active last frame (switching off stops it, as OnDisable did).
+	bool mWasActive;
 
 	List<Vector3> mPath = new .() ~ delete _;
 	List<int32> mLegLinks = new .() ~ delete _;
@@ -71,9 +226,9 @@ class NavigationAgent : AIMovementDriver
 	/// Waiting in sQueue for its path to be found with the others this frame.
 	bool mQueued;
 	/// Agents whose paths are found together after the frame's Update, on the job threads (FindQueuedPaths).
-	static List<NavigationAgent> sQueue = new .() ~ delete _;
-	public override bool PathPending => mQueued;
-	public override bool PathFailed
+	static List<NavigationAgentState> sQueue = new .() ~ delete _;
+	public bool PathPending => mQueued;
+	public bool PathFailed
 	{
 		get
 		{
@@ -82,7 +237,7 @@ class NavigationAgent : AIMovementDriver
 		}
 	}
 
-	public override bool HasArrived
+	public bool HasArrived
 	{
 		get
 		{
@@ -130,7 +285,7 @@ class NavigationAgent : AIMovementDriver
 		}
 	}
 
-	bool Flying => surface?.Data != null && surface.Data.flying;
+	bool Flying => Surface?.Data?.flying ?? false;
 	Vector3 Feet => Transform.Position + baseOffset;
 	/// Walking compares positions on the ground plane, so a pivot that floats above or sinks below the baked floor still arrives.
 	float Distance(Vector3 a, Vector3 b)
@@ -166,14 +321,15 @@ class NavigationAgent : AIMovementDriver
 		return candidate.GameObject.InActiveWorld;
 	}
 
-	public override void SetDestination(Vector3 point, float speed, float stoppingDistance)
+	public void SetDestination(Vector3 point, float speed, float stoppingDistance)
 	{
 		if (NetworkSync.IsClientOf(Scene)) return;
 		mSpeed = Math.Max(speed, 0);
 		mStop = Math.Max(stoppingDistance, 0.05f);
 		// With no surface set, the one in the scene's world state (looked for again when the world state changes);
 		// with world states set apart, one sharing the agent's own world states.
-		if (surface == null || (mFoundSurface && !SurfaceFits(surface)))
+		let current = Surface;
+		if (current == null || (mFoundSurface && !SurfaceFits(current)))
 		{
 			for (let component in Scene.ComponentsOfType(typeof(NavigationSurface)))
 			{
@@ -181,7 +337,7 @@ class NavigationAgent : AIMovementDriver
 				{
 					if (candidate.IsActiveAndEnabled && SurfaceFits(candidate))
 					{
-						if (candidate != surface)
+						if (candidate != current)
 							mDirty = true;
 						surface = candidate;
 						mFoundSurface = true;
@@ -205,7 +361,7 @@ class NavigationAgent : AIMovementDriver
 		mTimer = Math.Max(repathInterval, 0.01f);
 		mDirty = false;
 		mRetry = Math.Max(repathInterval, 1);
-		if (surface?.Data == null)
+		if (Surface?.Data == null)
 		{
 			mQueued = false;
 			sQueue.Remove(this);
@@ -232,7 +388,7 @@ class NavigationAgent : AIMovementDriver
 			return;
 		mQueued = false;
 		sQueue.Remove(this);
-		let data = surface?.Data;
+		let data = Surface?.Data;
 		if (data == null)
 			return;
 		let found = data.FindPath(Feet, mDestination + baseOffset, mPath, mLegLinks, snapDistance, useLinks, smoothPath);
@@ -245,12 +401,12 @@ class NavigationAgent : AIMovementDriver
 	{
 		while (!sQueue.IsEmpty)
 		{
-			let data = sQueue[0].surface?.Data;
-			let agents = scope List<NavigationAgent>();
+			let data = sQueue[0].Surface?.Data;
+			let agents = scope List<NavigationAgentState>();
 			for (int i = sQueue.Count - 1; i >= 0; i--)
 			{
 				let agent = sQueue[i];
-				if (agent.surface?.Data == data)
+				if (agent.Surface?.Data == data)
 				{
 					agents.Add(agent);
 					sQueue.RemoveAt(i);
@@ -324,7 +480,7 @@ class NavigationAgent : AIMovementDriver
 		mDeviation = Math.Max(data.cellSize * 1.5f, (mWaypoint == 1 ? SegmentDistance(Feet, mPath[0], mPath[1]) : 0) + data.cellSize * 0.5f);
 	}
 
-	public override void StopMovement()
+	public void StopMovement()
 	{
 		if (mQueued)
 		{
@@ -366,15 +522,15 @@ class NavigationAgent : AIMovementDriver
 	Vector3 Desired(float dt)
 	{
 		mVelocity = .Zero;
-		if (!mRequested || mFailed || mWaypoint >= mPath.Count || surface?.Data == null || mLink != null) return .Zero;
+		if (!mRequested || mFailed || mWaypoint >= mPath.Count || Surface?.Data == null || mLink != null) return .Zero;
 		let position = Feet;
-		while (mWaypoint < mPath.Count && Distance(mPath[mWaypoint], position) <= (mWaypoint == mPath.Count - 1 ? mStop : Math.Min(0.1f, surface.Data.cellSize * 0.2f)))
+		while (mWaypoint < mPath.Count && Distance(mPath[mWaypoint], position) <= (mWaypoint == mPath.Count - 1 ? mStop : Math.Min(0.1f, Surface.Data.cellSize * 0.2f)))
 		{
 			mWaypoint++;
 			// At the start of a link: cross it.
 			if (mWaypoint < mPath.Count && mLegLinks.Count == mPath.Count && mLegLinks[mWaypoint - 1] >= 0)
 			{
-				let link = surface.LinkOf(mLegLinks[mWaypoint - 1]);
+				let link = Surface.LinkOf(mLegLinks[mWaypoint - 1]);
 				if (link != null)
 				{
 					StartLink(link, mPath[mWaypoint - 1], mPath[mWaypoint]);
@@ -386,7 +542,7 @@ class NavigationAgent : AIMovementDriver
 		var delta = mPath[mWaypoint] - position;
 		let body = GetComponent<Rigidbody>();
 		// Gravity or the character controller keeps these on the floor, so they are only steered sideways.
-		if (((body.IsValid && !body.isKinematic) || HasComponent<CharacterController>()) && !surface.Data.flying)
+		if (((body.IsValid && !body.isKinematic) || HasComponent<CharacterController>()) && !Surface.Data.flying)
 			delta.y = 0;
 		if (faceMovement && delta.x * delta.x + delta.z * delta.z > 0.00001f)
 		{
@@ -419,16 +575,16 @@ class NavigationAgent : AIMovementDriver
 	{
 		using (sAvoidProfile.Sample())
 		{
-			let data = surface.Data;
+			let data = Surface.Data;
 			let horizon = 1.5f;
 			let lookAround = radius + mSpeed * horizon + 1;
 			// Who is near.
 			let others = scope List<(Vector3 position, Vector3 velocity, float radius, float share)>();
 			using (sNeighborsProfile.Sample())
 			{
-				void AddAgent(NavigationAgent other)
+				void AddAgent(NavigationAgentState other)
 				{
-					if (other == this || !other.IsActiveAndEnabled || other.surface != surface)
+					if (other == this || !other.IsActiveAndEnabled || other.Surface != Surface)
 						return;
 					let at = other.Feet;
 					if (Distance(at, position) > lookAround + other.radius)
@@ -438,15 +594,15 @@ class NavigationAgent : AIMovementDriver
 					let share = other.avoidancePriority > avoidancePriority ? 0.25f : (other.avoidancePriority < avoidancePriority ? 1.0f : 0.5f);
 					others.Add((at, other.mVelocity, other.radius, share));
 				}
-				if (UseSpatialAvoidance)
+				if (NavigationAgent.UseSpatialAvoidance)
 				{
 					for (let other in Scene.NavigationCrowd.Query(position, lookAround))
 						AddAgent(other);
 				}
 				else
 				{
-					for (let component in Scene.ComponentsOfType(typeof(NavigationAgent)))
-						AddAgent((NavigationAgent)component);
+					for (let agent in Scene.Components<NavigationAgent>(.. scope .()))
+						AddAgent(agent.Runtime);
 				}
 				for (let component in Scene.ComponentsOfType(typeof(NavigationObstacle)))
 				{
@@ -566,7 +722,7 @@ class NavigationAgent : AIMovementDriver
 		// On to the leg after the link.
 		mWaypoint = Math.Min(mWaypoint + 1, (int32)mPath.Count);
 		if (mWaypoint < mPath.Count)
-			mDeviation = Math.Max(mDeviation, Distance(Feet, mPath[mWaypoint - 1]) + surface.Data.cellSize);
+			mDeviation = Math.Max(mDeviation, Distance(Feet, mPath[mWaypoint - 1]) + Surface.Data.cellSize);
 		OnLinkFinished(link);
 	}
 
@@ -590,14 +746,15 @@ class NavigationAgent : AIMovementDriver
 		Transform.Position = position;
 	}
 
-	public override void OnLocalUpdate()
+	/// What OnLocalUpdate did: once a frame while playing (NavigationAgent.FrameAll).
+	public void Frame()
 	{
 		// In multiplayer the server moves agents; a client's copy follows what the server sends.
 		if (NetworkSync.IsClientOf(Scene)) return;
 		mTimer -= Time.DeltaTime;
 		if (mRequested)
 		{
-			let data = surface?.Data;
+			let data = Surface?.Data;
 			if (data != null && data.Revision != mRevision)
 				mDirty = true;
 			// A failed search is retried slowly in case the agent has since moved somewhere routable.
@@ -622,7 +779,8 @@ class NavigationAgent : AIMovementDriver
 		}
 	}
 
-	public override void FixedUpdate()
+	/// What FixedUpdate did: once a tick while playing (NavigationAgent.TickAll).
+	public void Tick()
 	{
 		if (NetworkSync.IsClientOf(Scene)) return;
 		let controller = GetComponent<CharacterController>();
@@ -660,30 +818,8 @@ class NavigationAgent : AIMovementDriver
 		body.Velocity = velocity;
 	}
 
-	public override void OnRegister()
-	{
-		base.OnRegister();
-		Scene.NavigationCrowd.Register(this);
-	}
-
-	public override void OnDisable()
-	{
-		StopMovement();
-	}
-
-	public override void OnUnregister()
-	{
-		Scene.NavigationCrowd.Unregister(this);
-		if (mQueued)
-		{
-			mQueued = false;
-			sQueue.Remove(this);
-		}
-		base.OnUnregister();
-	}
-
 	/// While selected: its path, with link legs dashed orange.
-	public override void OnDrawGizmos(bool selected)
+	public void DrawGizmos(bool selected)
 	{
 		if (!selected || mPath.Count == 0)
 			return;

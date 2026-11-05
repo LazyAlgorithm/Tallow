@@ -175,7 +175,7 @@ static class SceneSerializer
 		{
 			text.AppendF("data {}\n", info.fullName);
 			fields.Clear();
-			DataComponents.GetFields(info.type, gameObject.GetData(info.type), fields);
+			DataComponents.GetFields(info.type, gameObject.GetData(info.type), fields, gameObject);
 			for (let field in fields)
 			{
 				text.AppendF("field {} ", field.name);
@@ -213,7 +213,7 @@ static class SceneSerializer
 				{
 					let value = gameObject.AddData(info.type);
 					Internal.MemSet(value, 0, info.type.Size);
-					DataComponents.GetFields(info.type, value, fields);
+					DataComponents.GetFields(info.type, value, fields, gameObject);
 					reading = true;
 				}
 			}
@@ -265,7 +265,12 @@ static class SceneSerializer
 		case .ObjectReference:
 			let go = ComponentRegistry.ReferenceOwner(field);
 			int index = -1;
-			if (let component = (*(Object*)field.ptr) as Component)
+			if (ObjectRefs.Is(field.type))
+			{
+				if (let component = ObjectRefs.Target(field))
+					index = go.Components.IndexOf(component);
+			}
+			else if (let component = (*(Object*)field.ptr) as Component)
 				index = go.Components.IndexOf(component);
 			text.AppendF("{} {}", go != null ? go.Id : 0, index);
 		case .Enum:
@@ -315,7 +320,8 @@ static class SceneSerializer
 			StringFields.Set(field.ptr, field.type, tokens[0], field.name);
 		case .ObjectReference:
 			let id = (uint32)ParseInt(tokens[0]);
-			ComponentRegistry.AssignReference(field, id == 0 ? null : Scene.Active?.FindById(id), tokens.Length > 1 ? ParseInt(tokens[1]) : -1);
+			let scene = field.owner?.Scene ?? Scene.Active;
+			ComponentRegistry.AssignReference(field, id == 0 ? null : scene?.FindById(id), tokens.Length > 1 ? ParseInt(tokens[1]) : -1);
 		case .Enum:
 			if (Enum.Parse(field.type, tokens[0]) case .Ok(let value))
 			{
@@ -503,7 +509,7 @@ static class SceneSerializer
 				readingData = false;
 				if (let info = DataComponents.Find(tokens[1]))
 				{
-					DataComponents.GetFields(info.type, current.AddData(info.type), fields);
+					DataComponents.GetFields(info.type, current.AddData(info.type), fields, current);
 					readingData = true;
 				}
 				else
@@ -597,11 +603,34 @@ static class SceneSerializer
 	/// Points each saved reference at its object: one read with it, else one already in the scene.
 	static void ResolveReferences(Scene scene, List<(FieldRef field, uint32 id, int index)> references, Dictionary<uint32, GameObject> created)
 	{
-		for (let reference in references)
+		let again = scope List<FieldRef>();
+		for (var reference in references)
 		{
 			GameObject target = null;
 			if (reference.id != 0 && !created.TryGetValue(reference.id, out target))
 				target = scene.FindById(reference.id);
+			// A field of a built-in component's data: the entity has likely moved tables since it was read, so the
+			// field is found again.
+			if (reference.field.owner != null && reference.field.ownerType != null)
+			{
+				let data = reference.field.owner.GetData(reference.field.ownerType);
+				if (data == null)
+					continue;
+				again.Clear();
+				DataComponents.GetFields(reference.field.ownerType, data, again, reference.field.owner);
+				bool found = false;
+				for (let field in again)
+				{
+					if (field.name == reference.field.name)
+					{
+						reference.field = field;
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+					continue;
+			}
 			ComponentRegistry.AssignReference(reference.field, target, reference.index);
 		}
 	}
