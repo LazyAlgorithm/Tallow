@@ -351,8 +351,8 @@ static class NetworkSync
 		let target = ReadObject(ref reader, network);
 		let point = reader.Read<Vector3>();
 		let radius = reader.Read<float>();
-		let voxels = target?.GetComponent<VoxelObject>();
-		if (!reader.Ok || voxels == null || !Finite(point) || !radius.IsFinite)
+		let voxels = GameObject.ComponentOn<VoxelObject>(target);
+		if (!reader.Ok || !voxels.IsValid || !Finite(point) || !radius.IsFinite)
 			return;
 		if (network.IsServer && !ClientCarves)
 			return;

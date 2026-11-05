@@ -13,40 +13,26 @@ enum VoxelShape : int32
 	Mesh
 }
 
-/// A destructible object built from a small marching-cubes grid. Carve() removes material in
-/// real time; pieces that are cut loose break off and fall as their own physics objects.
-///
-/// Almost any object can be one. Set Shape to Mesh and name a model: the model is filled in as solid material (it
-/// must be closed, like a real object, for the engine to tell its inside from its outside) and keeps its own colours
-/// and texture coordinates on the outside. The outside is drawn with the Mesh Renderer's material; the surfaces that
-/// carving exposes are drawn with Interior Material, or, with none, with an inside made from the outside's material
-/// (the same texture carried through the solid, tinted by Interior Color and rougher).
-///
-/// What you get is the model re-made from a grid of Resolution cells: parts thinner than a cell are lost and sharp
-/// edges are softened, so raise Resolution for fine models and keep thin sheets as ordinary meshes.
-///
-/// Collision: with a MeshCollider and no Rigidbody the object has exact (static) triangle
-/// collision. Jolt cannot simulate moving triangle meshes, so pieces that break off collide
-/// with a convex hull wrapped around their surface.
-[Component]
-class VoxelObject : Component
+/// A VoxelObject's settings, in its entity (VoxelObject is the handle).
+[Component, HandleData]
+struct VoxelObjectData
 {
 	public VoxelShape shape = .Sphere;
 	/// Shape Mesh: the model to make destructible. It keeps its own size; Size is not used.
-	public String mesh = new .() ~ delete _;
+	public String mesh = new .();
 	/// Grid cells along each axis (8 to 48). Higher is smoother and slower to re-mesh.
 	public int32 resolution = 24;
 	/// Edge length of the grid in local units.
 	public float size = 4.0f;
 	/// Shape Box: its width, height and depth (a wall, a slab, a block), in local units. Zero: a cube of Size. The
 	/// grid then covers the longest side, so a thin side gets fewer cells: Resolution counts along the longest.
-	public Vector3 boxSize;
+	public Vector3 boxSize = default;
 	public Color color = .FromBytes(150, 146, 140);
 	/// Color of surfaces exposed by carving. With an inside made from the outside's material, its tint.
 	public Color interiorColor = .FromBytes(96, 82, 70);
 	/// The material (.tmat) of surfaces exposed by carving: the wood inside a painted crate, the concrete inside a
 	/// plastered wall. Empty: an inside made from the Mesh Renderer's material, or plain Interior Color without one.
-	public String interiorMaterial = new .() ~ delete _;
+	public String interiorMaterial = new .();
 	/// How many times the inside's texture repeats in each unit of the object's own space.
 	public float interiorTiling = 1;
 	/// Detach pieces that are no longer connected to the largest part (play mode only).
@@ -67,6 +53,110 @@ class VoxelObject : Component
 	/// Seconds before a piece that broke off is removed (by the server in multiplayer). 0 keeps pieces for good.
 	public float pieceLifetime = 0;
 	/// When this piece is removed (Time.Time), or 0.
+
+	public this() { }
+}
+
+/// A destructible object built from a small marching-cubes grid. Carve() removes material in
+/// real time; pieces that are cut loose break off and fall as their own physics objects.
+///
+/// Almost any object can be one. Set Shape to Mesh and name a model: the model is filled in as solid material (it
+/// must be closed, like a real object, for the engine to tell its inside from its outside) and keeps its own colours
+/// and texture coordinates on the outside. The outside is drawn with the Mesh Renderer's material; the surfaces that
+/// carving exposes are drawn with Interior Material, or, with none, with an inside made from the outside's material
+/// (the same texture carried through the solid, tinted by Interior Color and rougher).
+///
+/// What you get is the model re-made from a grid of Resolution cells: parts thinner than a cell are lost and sharp
+/// edges are softened, so raise Resolution for fine models and keep thin sheets as ordinary meshes.
+///
+/// Collision: with a MeshCollider and no Rigidbody the object has exact (static) triangle
+/// collision. Jolt cannot simulate moving triangle meshes, so pieces that break off collide
+/// with a convex hull wrapped around their surface.
+///
+/// A handle (ComponentHandle): its settings are VoxelObjectData's fields, what it keeps between frames its VoxelObjectState.
+/// VoxelObject.FrameAll (from Scene.RunOnFrames) does what OnRegister and OnFrame did; OnRemove what OnUnregister did.
+[Component, HandleFields]
+struct VoxelObject : ComponentHandle<VoxelObjectData>
+{
+	/// What it keeps between frames, made the first time it is asked for.
+	public VoxelObjectState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<VoxelObjectState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			if (state.[Friend]mGameObject == null)
+			{
+				state.[Friend]mGameObject = mGameObject;
+				// What OnRegister did first: the untouched shape, unless SpawnPiece is about to give it a grid. Code
+				// that adds one sets its fields before its first use, so the shape is theirs.
+				if (!VoxelObjectState.[Friend]sMakingPiece)
+					state.Fill();
+			}
+			return state;
+		}
+	}
+
+	// The API, unchanged: each member is documented on VoxelObjectState.
+	public float RemoveAt { get => Runtime.RemoveAt; set => Runtime.RemoveAt = value; }
+	/// Builds it again if its settings changed (what the Inspector does; code that changes a shape calls it too).
+	public void OnValidate() => Runtime.OnValidate();
+	public bool IsEmpty => Runtime.IsEmpty;
+	public float GridSize => Runtime.GridSize;
+	public void ResetShape() => Runtime.ResetShape();
+	public void Fill() => Runtime.Fill();
+	public void Rebuild() => Runtime.Rebuild();
+	public bool Carve(Vector3 worldPoint, float radius) => Runtime.Carve(worldPoint, radius);
+	public bool CarveLocal(Vector3 objectPoint, float radius) => Runtime.CarveLocal(objectPoint, radius);
+
+	/// What OnFrame did, in edit mode as well as play (from Scene.RunOnFrames). One not built yet (just added, copied
+	/// or read) is built whether or not it is switched on, as OnRegister built it.
+	public static void FrameAll(Scene scene)
+	{
+		for (let component in scene.FindComponents<VoxelObject>(.. scope .()))
+		{
+			let state = component.Runtime;
+			if (component.IsActiveAndEnabled || !state.[Friend]mRegistered)
+				state.Frame();
+		}
+	}
+
+	/// After the Inspector changes a field or a scene is read.
+	static void OnValidate(GameObject gameObject) => gameObject.GetComponent<VoxelObject>().Runtime.OnValidate();
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		// As OnUnregister did: the renderer lets go of its mesh (unless the whole scene is going).
+		if (let state = ComponentState<VoxelObjectState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
+		{
+			let scene = state.[Friend]mGameObject?.Scene;
+			if (scene != null && !scene.[Friend]mClearing)
+				state.Unregister();
+		}
+		ComponentState<VoxelObjectState>.Release(world, entity);
+		HandleComponents.FreeLists(world, entity, typeof(VoxelObject));
+	}
+}
+
+/// What a VoxelObject keeps between frames. Its settings are read from the entity each time.
+[DataFields(typeof(VoxelObjectData), "Settings")]
+class VoxelObjectState
+{
+	GameObject mGameObject;
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+	public Scene Scene => mGameObject.Scene;
+	public VoxelObject Handle => mGameObject.GetComponent<VoxelObject>();
+	T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
+	T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
+	ref VoxelObjectData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<VoxelObjectData>();
+	}
+
 	float mRemoveAt;
 	/// When this piece that broke off is due to be removed (Time.Time), or 0 if it stays. Set it to now to remove it
 	/// sooner (by the server in multiplayer), for instance to keep the number of pieces down.
@@ -100,6 +190,8 @@ class VoxelObject : Component
 	int32 mSamples;
 	int32 mBuiltHash;
 	bool mCustom;
+	/// Built once since it was added (what OnRegister did).
+	bool mRegistered;
 
 	public bool IsEmpty => mMesh == null || mMesh.Indices.Count == 0;
 	int Index(int x, int y, int z) => x + y * mSamples + z * mSamples * mSamples;
@@ -156,15 +248,8 @@ class VoxelObject : Component
 		}
 	}
 
-	public override void OnRegister()
-	{
-		// A piece that is breaking off is given its grid by SpawnPiece.
-		if (!mCustom && !sMakingPiece)
-			Fill();
-		Rebuild();
-	}
-
-	public override void OnUnregister()
+	/// What OnUnregister did (the handle's OnRemove).
+	public void Unregister()
 	{
 		let renderer = GetComponent<MeshRenderer>();
 		if (renderer && renderer.RuntimeMesh == mMesh)
@@ -173,7 +258,7 @@ class VoxelObject : Component
 			renderer.RuntimeParts = null;
 	}
 
-	public override void OnValidate()
+	public void OnValidate()
 	{
 		if (LookHash == mBuiltHash)
 			return;
@@ -203,14 +288,28 @@ class VoxelObject : Component
 			let piece = Scene.FindById(id);
 			if (piece == null || piece.IsDestroyed)
 				continue;
-			piece.GetComponent<VoxelObject>()?.DestroyPieces();
+			let other = piece.GetComponent<VoxelObject>();
+			if (other.IsValid)
+				other.Runtime.DestroyPieces();
 			Scene.Destroy(piece);
 		}
 		mPieces.Clear();
 	}
 
-	public override void OnFrame()
+	public void Frame()
 	{
+		// Built the first frame after it is added, copied or read, unless code has built it already (OnRegister did
+		// this at once; a handle has no such hook). Its grid was filled when its state was made.
+		if (!mRegistered)
+		{
+			mRegistered = true;
+			if (mMesh == null)
+			{
+				if (!mCustom && mDensity == null)
+					Fill();
+				Rebuild();
+			}
+		}
 		if (mRemoveAt > 0 && Time.Time >= mRemoveAt && !NetworkSync.IsClientOf(Scene))
 		{
 			mRemoveAt = 0;
@@ -698,7 +797,7 @@ class VoxelObject : Component
 	{
 		if (mDensity == null)
 			return false;
-		if (NetworkSync.RouteCarve(this, worldPoint, radius))
+		if (NetworkSync.RouteCarve(Handle, worldPoint, radius))
 			return false;
 		return CarveLocal(Transform.InverseTransformPoint(worldPoint), radius);
 	}
@@ -882,6 +981,9 @@ class VoxelObject : Component
 		}
 		sMakingPiece = true;
 		let voxels = piece.AddComponent<VoxelObject>();
+		// Its state is made now, without the untouched shape: SpawnPiece gives it its grid.
+		let pieceState = voxels.Runtime;
+		pieceState.mCustom = true;
 		sMakingPiece = false;
 		voxels.shape = shape;
 		voxels.mesh.Set(mesh);
@@ -899,27 +1001,27 @@ class VoxelObject : Component
 		voxels.debrisPieces = debrisPieces;
 		voxels.pieceLifetime = pieceLifetime;
 		if (pieceLifetime > 0)
-			voxels.mRemoveAt = Time.Time + pieceLifetime;
-		voxels.mCustom = true;
+			pieceState.mRemoveAt = Time.Time + pieceLifetime;
+		pieceState.mCustom = true;
 		// A piece is the same grid with everything else taken out: the same place in the model, the same surface.
-		voxels.mMeshSize = mMeshSize;
-		voxels.mCenter = mCenter;
-		voxels.mShapeHash = voxels.ShapeHash;
+		pieceState.mMeshSize = mMeshSize;
+		pieceState.mCenter = mCenter;
+		pieceState.mShapeHash = pieceState.ShapeHash;
 		if (mSurface != null)
 		{
-			ReleaseSurface(voxels.mSurface);
-			voxels.mSurface = mSurface;
+			ReleaseSurface(pieceState.mSurface);
+			pieceState.mSurface = mSurface;
 			mSurface.users++;
 		}
 		let count = mSamples * mSamples * mSamples;
-		voxels.mSamples = mSamples;
-		voxels.mDensity = new int8[count];
-		voxels.mCarved = new bool[count];
+		pieceState.mSamples = mSamples;
+		pieceState.mDensity = new int8[count];
+		pieceState.mCarved = new bool[count];
 		for (int i < count)
 		{
 			// Neighbours of the piece keep their (negative) density so its surface stays where it was.
-			voxels.mDensity[i] = labels[i] == label ? mDensity[i] : (mDensity[i] > 0 ? (int8) - 127 : mDensity[i]);
-			voxels.mCarved[i] = mCarved[i];
+			pieceState.mDensity[i] = labels[i] == label ? mDensity[i] : (mDensity[i] > 0 ? (int8) - 127 : mDensity[i]);
+			pieceState.mCarved[i] = mCarved[i];
 		}
 		voxels.Rebuild();
 		piece.AddComponent<ConvexCollider>();

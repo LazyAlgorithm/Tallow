@@ -216,7 +216,7 @@ static class ProjectGenerator
 						return;
 					let camera = Scene.FindComponent<Camera>();
 					let motor = GetComponent<CharacterMotor>();
-					if (camera == null)
+					if (!camera.IsValid)
 						return;
 					let yaw = motor != null ? motor.Yaw : 0;
 					let pitch = motor != null ? motor.Pitch : 0;
@@ -250,13 +250,13 @@ static class ProjectGenerator
 					if (!dig && !build)
 						return;
 					let camera = Scene.FindComponent<Camera>();
-					if (camera == null)
+					if (!camera.IsValid)
 						return;
 					RaycastHit hit;
 					if (!Scene.Physics.Raycast(camera.Transform.Position, camera.Transform.Forward, 200, out hit))
 						return;
-					let voxels = hit.gameObject != null ? hit.gameObject.GetComponent<VoxelObject>() : null;
-					if (voxels != null)
+					let voxels = hit.gameObject != null ? hit.gameObject.GetComponent<VoxelObject>() : VoxelObject();
+					if (voxels.IsValid)
 					{{
 						if (dig)
 							voxels.Carve(hit.point, radius * 0.3f);

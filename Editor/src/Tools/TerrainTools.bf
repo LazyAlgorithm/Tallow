@@ -354,7 +354,7 @@ extension EditorApp
 			MarkDirty();
 		}
 		// Any model can be made destructible: this takes the one the object is already drawn with.
-		let drawn = voxels.GetComponent<MeshRenderer>();
+		let drawn = voxels.GameObject.GetComponent<MeshRenderer>();
 		if (drawn && !drawn.mesh.IsEmpty && !drawn.mesh.StartsWith("builtin:") && (voxels.shape != .Mesh || voxels.mesh != drawn.mesh))
 		{
 			if (ImGui.Button("Make This Model Destructible"))
@@ -590,7 +590,7 @@ extension EditorApp
 		}
 		let terrain = selected.GetComponent<VoxelTerrain>();
 		let voxels = selected.GetComponent<VoxelObject>();
-		if (terrain == null && voxels == null)
+		if (terrain == null && !voxels.IsValid)
 		{
 			EndBrushStroke();
 			return false;

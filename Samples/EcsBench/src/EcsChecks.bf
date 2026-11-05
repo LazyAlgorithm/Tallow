@@ -126,6 +126,7 @@ static class EcsChecks
 		ComputeChecks();
 		ModelMeshChecks();
 		LODChecks();
+		VoxelObjectChecks();
 		return sFailures;
 	}
 
@@ -678,6 +679,68 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Voxel Object: the shape code sets before its first use is the one filled; one only added is built on the next
+	/// frame (with a renderer added for it); carving; a cut-off half breaking away as a piece with its own grid; a
+	/// piece's lifetime; reading a scene; removing it.
+	static void VoxelObjectChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let wall = scene.CreateGameObject("Wall");
+			wall.AddComponent<MeshRenderer>();
+			let voxels = wall.AddComponent<VoxelObject>();
+			Expect(voxels.shape == .Sphere && voxels.resolution == 24 && voxels.breakOffPieces, "it has its defaults");
+			voxels.shape = .Box;
+			voxels.size = 2;
+			voxels.resolution = 16;
+			voxels.anchored = true;
+			voxels.OnValidate();
+			Expect(!voxels.IsEmpty && wall.GetComponent<MeshRenderer>().RuntimeMesh != null, "fields set before its first use make its shape, and OnValidate builds it");
+			let plain = scene.CreateGameObject("Plain");
+			let lone = plain.AddComponent<VoxelObject>();
+			scene.Update();
+			Expect(!lone.IsEmpty && plain.GetComponent<MeshRenderer>().RuntimeMesh != null, "one only added is built on the next frame, with a renderer added");
+			let before = wall.GetComponent<MeshRenderer>().RuntimeMesh.Indices.Count;
+			Expect(voxels.Carve(wall.Transform.Position + .(0, 0, -1), 0.6f) && wall.GetComponent<MeshRenderer>().RuntimeMesh.Indices.Count != before, "Carve changes it");
+			scene.StartPlay();
+			// A slab cut through the middle: the top half is no longer held up and breaks away.
+			for (float x = -1.3f; x <= 1.3f; x += 0.25f)
+				for (float z = -1.3f; z <= 1.3f; z += 0.25f)
+					voxels.Carve(wall.Transform.Position + .(x, 0, z), 0.3f);
+			GameObject fragment = null;
+			for (let o in scene.Objects)
+			{
+				if (o.Name == "Fragment" && !o.IsDestroyed)
+					fragment = o;
+			}
+			let piece = GameObject.ComponentOn<VoxelObject>(fragment);
+			Expect(piece.IsValid && !piece.IsEmpty && fragment.HasComponent<Rigidbody>() && !voxels.IsEmpty, "a half cut off breaks away as a piece with its own grid");
+			if (piece.IsValid)
+			{
+				Expect(!piece.anchored && piece.shape == .Box && piece.resolution == 16, "the piece takes the settings");
+				// The bench's clock does not run by itself: put the time past the piece's end.
+				let time = Time.Time;
+				piece.RemoveAt = time + 1;
+				Time.Time = time + 2;
+				scene.Update();
+				Time.Time = time;
+				Expect(fragment.IsDestroyed || scene.FindById(fragment.Id) == null, "a piece's lifetime ends it");
+			}
+			scene.StopPlay();
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Wall").GetComponent<VoxelObject>();
+			Expect(copy.shape == .Box && copy.size == 2 && !copy.IsEmpty && loaded.Find("Wall").GetComponent<MeshRenderer>().RuntimeMesh != null, "reading a scene builds it");
+			plain.RemoveComponent<VoxelObject>();
+			Expect(plain.GetComponent<MeshRenderer>().RuntimeMesh == null, "removing it takes its mesh off the renderer");
+		}
+		Scene.Active = previous;
 	}
 
 	/// LOD Group: finds its `_LOD` children on the next frame (switched off too), the levels a camera's distance

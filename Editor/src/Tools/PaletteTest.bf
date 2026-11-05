@@ -150,7 +150,7 @@ extension EditorApp
 		voxels.anchored = true;
 		voxels.Rebuild();
 		voxels.Carve(wall.Transform.Position + .(0, 0, -1), 0.6f);
-		let voxelMesh = voxels.[Friend]mMesh;
+		let voxelMesh = voxels.Runtime.[Friend]mMesh;
 		let outerColor = Color.FromBytes(5, 0, 24 << 3, 0).ToABGR(), innerColor = Color.FromBytes(6, 0, 28 << 3, 0).ToABGR();
 		int outsideTriangles = 0, insideTriangles = 0, mixed = 0;
 		for (int i = 0; i + 2 < voxelMesh.Indices.Count; i += 3)

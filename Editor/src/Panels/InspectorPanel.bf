@@ -352,6 +352,8 @@ extension EditorApp
 			DrawSkinnedClips(gameObject.GetComponent<SkinnedMeshRenderer>());
 		else if (info.handleType == typeof(Foliage))
 			DrawFoliageTools(gameObject.GetComponent<Foliage>());
+		else if (info.handleType == typeof(VoxelObject))
+			DrawVoxelObjectTools(gameObject.GetComponent<VoxelObject>());
 		else if (info.handleType == typeof(LODGroup))
 			DrawLODGroupTools(gameObject.GetComponent<LODGroup>());
 		else if (info.handleType == typeof(ViewmodelPose))
@@ -638,8 +640,6 @@ extension EditorApp
 			DrawSoftBodyTools(soft);
 		if (let terrain = component as VoxelTerrain)
 			DrawTerrainTools(terrain);
-		else if (let voxels = component as VoxelObject)
-			DrawVoxelObjectTools(voxels);
 	}
 
 	/// A rigged model's parts, and the clips found in its file: click one to play it.

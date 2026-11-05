@@ -651,8 +651,16 @@ class Scene
 	{
 		if (mByType.TryGetValue(type, let list))
 			return list;
+		// A built-in component is not a Component class, so it is never in this list: say so once rather than
+		// let a script that was written before it became a handle find nothing without a word.
+		if (type.IsValueType && !sWarnedHandleTypes.Contains(type) && HandleComponents.Find(type) != null)
+		{
+			sWarnedHandleTypes.Add(type);
+			Log.Warning(scope $"ComponentsOfType({type.GetName(.. scope .())}) finds nothing: it is a built-in component. Use scene.Components<{type.GetName(.. scope .())}>() (or FindComponents) instead.");
+		}
 		return sNoComponents;
 	}
+	static HashSet<Type> sWarnedHandleTypes = new .() ~ delete _;
 
 	/// Adds every registered component of that class (or one derived from it) to the list.
 	public void FindComponents<T>(List<T> found) where T : Component
@@ -1491,6 +1499,7 @@ class Scene
 		ComputeEffect.FrameAll(this);
 		ModelMesh.FrameAll(this);
 		LODGroup.FrameAll(this);
+		VoxelObject.FrameAll(this);
 		ParticleSystem.FrameAll(this);
 		LineRenderer.FrameAll(this);
 		TrailRenderer.FrameAll(this);

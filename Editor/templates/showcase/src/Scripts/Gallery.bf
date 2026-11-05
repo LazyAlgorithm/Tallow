@@ -181,7 +181,7 @@ class Gallery : Script
 		if (!Scene.Physics.Raycast(view.Position + view.Forward * 0.7f, view.Forward, 30, let hit) || hit.gameObject == null)
 			return;
 		let voxels = hit.gameObject.GetComponent<VoxelObject>();
-		if (voxels != null)
+		if (voxels.IsValid)
 		{
 			if (direction < 0)
 				voxels.Carve(hit.point, 0.45f);
@@ -219,7 +219,11 @@ class Gallery : Script
 				continue;
 			let step = speed * Time.DeltaTime + 0.3f;
 			if (Scene.Physics.Raycast(ball.Transform.Position, velocity / speed, step, let hit) && hit.gameObject != null)
-				hit.gameObject.GetComponent<VoxelObject>()?.Carve(hit.point, 0.9f);
+			{
+				let carved = hit.gameObject.GetComponent<VoxelObject>();
+				if (carved.IsValid)
+					carved.Carve(hit.point, 0.9f);
+			}
 		}
 	}
 

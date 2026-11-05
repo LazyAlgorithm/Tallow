@@ -24,7 +24,7 @@ class CharacterAnimation : Script
 	public override void Update(TickInput input, float deltaTime)
 	{
 		let body = GetComponent<Rigidbody>();
-		if (mAnimator == null || body == null || !body.HasBody)
+		if (!mAnimator.IsValid || !body.IsValid || !body.HasBody)
 			return;
 		let velocity = body.Velocity;
 		let ground = Math.Sqrt(velocity.x * velocity.x + velocity.z * velocity.z);

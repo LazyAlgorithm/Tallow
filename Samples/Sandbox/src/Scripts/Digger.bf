@@ -23,8 +23,8 @@ class Digger : Script
 		RaycastHit hit;
 		if (!Scene.Physics.Raycast(camera.Transform.Position, camera.Transform.Forward, 200, out hit))
 			return;
-		let voxels = hit.gameObject != null ? hit.gameObject.GetComponent<VoxelObject>() : null;
-		if (voxels != null)
+		let voxels = hit.gameObject != null ? hit.gameObject.GetComponent<VoxelObject>() : VoxelObject();
+		if (voxels.IsValid)
 		{
 			if (dig)
 				voxels.Carve(hit.point, radius * 0.3f);

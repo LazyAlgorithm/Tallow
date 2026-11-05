@@ -1157,6 +1157,31 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   3 runs each): 9.53 s against 9.49 s average (the run may be frame-capped, so this shows no regression rather than
   a gain), and the final frames are pixel-identical.
 
+- [x] **VoxelObject** (tools/class_to_handle.py, then by hand). `VoxelObjectData` (shape, size, colours, pieces...),
+  the handle, and `VoxelObjectState` (the grid, mesh, surface, pieces). OnRegister's two halves moved: the grid is
+  filled when the state is made (its first use; code that adds one sets its fields first, so the shape is theirs),
+  except while `SpawnPiece` is making a piece, which hands over its own grid; the mesh is built by `FrameAll`
+  (`Scene.RunOnFrames`) the first frame one has none, switched on or not, or at once by OnValidate / Rebuild / Carve
+  as before. OnRemove does OnUnregister. `OnValidate()` stays public on the handle (scripts call it after setting a
+  shape). Network carves route the handle. Checked by `EcsChecks.VoxelObjectChecks` (shape set before first use,
+  built next frame with a renderer added, Carve, a half cut off breaking away as a piece with its settings and own
+  grid, piece lifetime, reading a scene, removing), the editor's `--palette-test` and `--separate-worlds-test`
+  (PASS), and the Gallery self-test.
+- [x] **Script null checks found by building projects.** A handle compared with null in a script only warns
+  (BF0472), and template scripts are compiled only inside a project, so these were missed: the showcase
+  Gallery's `voxels != null` (always true, so its terrain branch never ran), the common template's
+  CharacterAnimation (`mAnimator == null || body == null`, always false since Phase 4), and ProjectGenerator's
+  generated `camera == null` and `voxels != null`. All fixed. A fresh default project, a fresh showcase and Sandbox
+  now build with no BF0472 in their scripts. To find more: build a project with `BeefBuild -verbosity=normal` and
+  grep BF0472.
+- [x] **`Scene.ComponentsOfType(typeof(SomeHandle))`** finds nothing, as a handle is not a Component class (and
+  `(SomeHandle)component` compiles); it now logs a warning once per type naming `scene.Components<T>()` instead.
+  `GameObject.ComponentOn<T>(object)` is for engine and editor code; inside a script `GameObject` is the
+  component's own object, so scripts write `o != null ? o.GetComponent<T>() : T()`.
+- Games that update for VoxelObject: `GetComponent<VoxelObject>() != null` / `?.Carve` (use IsValid),
+  `ComponentsOfType(typeof(VoxelObject))` with `(VoxelObject)c` (use `Scene.Components<VoxelObject>()`).
+  Seen in the user's MyGame / Canous (AuthoredCampus, Exhibition), Gallery copies and Digger copies.
+
 ## Benchmark results
 
 See "Phase 1 results" above.
