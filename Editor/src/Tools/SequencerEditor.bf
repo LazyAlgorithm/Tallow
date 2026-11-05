@@ -95,9 +95,8 @@ extension EditorApp
 	{
 		if (mScene == null)
 			return null;
-		for (let component in mScene.ComponentsOfType(typeof(SequencePlayer)))
+		for (let player in mScene.FindComponents<SequencePlayer>(.. scope .()))
 		{
-			let player = (SequencePlayer)component;
 			if (player.sequence == mSeqRelative)
 				return player.GameObject;
 		}

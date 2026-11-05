@@ -1066,12 +1066,21 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   fields), the handle, and `DialogueRunnerState` (the conversation, voice, events). A new `Frame.Dialogue` step does
   Start (Play On Start), OnLocalUpdate and OnDisable; its OnGUI, OnSaving and OnLoaded are the static hooks above;
   Awake runs when its state is made. A client's requests name the object (one runner per object), not a component
-  index. The Inspector's runner tools moved to `DrawHandleTools`. Made by `scratchpad/tohandle.py` (it moves a
+  index. The Inspector's runner tools moved to `DrawHandleTools`. Made by `tools/class_to_handle.py` (it moves a
   class component's settings into data, its body into the state, writes the forwarders, FrameAll / StopAll /
-  OnGUI / OnSaving / OnLoaded / OnRemove from the overrides it has, and `datadefaults.py` gives bare data fields
+  OnGUI / OnSaving / OnLoaded / OnRemove from the overrides it has, and `tools/handle_data_defaults.py` gives bare data fields
   `= default`). Checked by `EcsChecks.DialogueChecks`: defaults, Play On Start, a line, the answers, a choice
   setting a variable, an event reaching the game, a save keeping its `[Saved]` fields and loading putting them back,
   freeing. The Sandbox guide's welcome line shows as before; the Gallery self-test passes.
+
+- [x] **SequencePlayer.** Made with `tools/class_to_handle.py` as DialogueRunner was: `SequencePlayerData` (settings,
+  `[Sync]`, `[Saved]`), the handle (`SequencePlayer.PlayingCount` too) and `SequencePlayerState`. A new
+  `Frame.Sequences` step does Start / OnLocalUpdate / OnDisable. OnRemove does what OnDisable did as a component
+  went: it stops counting as playing and, unless the scene is being cleared, puts back what it moved (Restore
+  When Done). Client requests name the object; the Sequencer window finds players with `FindComponents`. Checked by
+  `EcsChecks.SequenceChecks`: defaults, Play On Start, a track moving its object, a save, finishing and the playing
+  count, playing again, removing it restoring the object, freeing. In the Sandbox's Navigation scene the crate
+  follows its sequence as before; the Gallery self-test passes.
 
 ## Benchmark results
 

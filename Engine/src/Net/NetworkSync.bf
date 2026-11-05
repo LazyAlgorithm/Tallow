@@ -112,7 +112,7 @@ static class NetworkSync
 			let body = object.GetComponent<Rigidbody>();
 			if ((body.IsValid && !body.isKinematic) || object.HasComponent<CharacterController>()
 				|| object.HasComponent<NavigationAgent>() || object.GetComponent<AIMovementDriver>() != null || object.HasComponent<BehaviorTreeRunner>()
-				|| object.GetComponent<NetworkBehaviour>() != null || (object.HasComponent<DialogueRunner>() && object.GetComponent<DialogueRunner>().shared) || (object.GetComponent<SequencePlayer>()?.shared ?? false)
+				|| object.GetComponent<NetworkBehaviour>() != null || (object.HasComponent<DialogueRunner>() && object.GetComponent<DialogueRunner>().shared) || (object.HasComponent<SequencePlayer>() && object.GetComponent<SequencePlayer>().shared)
 				|| (object.GetComponent<SoftBody>()?.MovesByItself ?? false) || object.HasComponent<Water>())
 				wanted.Add(object);
 		}
@@ -710,13 +710,14 @@ static class NetworkSync
 	}
 
 	/// A client asks the server to control a shared sequence: 0 play, 1 pause, 2 resume, 3 stop, 4 skip, 5 seek to time.
-	public static void SequenceRequest(SequencePlayer player, int32 action, float time)
+	public static void SequenceRequest(SequencePlayerState player, int32 action, float time)
 	{
 		let network = Active(player.Scene);
 		if (network == null || network.IsServer)
 			return;
 		let payload = scope NetWriter();
-		WriteComponent<SequencePlayer>(payload, player);
+		// One Sequence Player per object: the object says which.
+		WriteTransform(payload, player.Transform);
 		payload.Write(action);
 		payload.Write(time);
 		network.SendToServer(MsgSequence, payload);
@@ -727,14 +728,16 @@ static class NetworkSync
 		let network = Active(Scene.Active);
 		if (network == null || !network.IsServer)
 			return;
-		let player = ReadComponent<SequencePlayer>(ref reader, network);
+		SequencePlayer player = default;
+		if (ReadTransform(ref reader, network, let transform) && transform != null)
+			player = transform.GameObject.GetComponent<SequencePlayer>();
 		let action = reader.Read<int32>();
 		let time = reader.Read<float>();
-		if (!reader.Ok || player == null || !player.shared || action < 0 || action > 5 || !time.IsFinite)
+		if (!reader.Ok || !player || !player.shared || action < 0 || action > 5 || !time.IsFinite)
 			return;
 		if (player.onlyOwnerControls)
 		{
-			let owner = Anchor(player).GetComponent<NetworkIdentity>();
+			let owner = Anchor(player.GameObject).GetComponent<NetworkIdentity>();
 			if (owner == null || owner.ownerId != sender)
 				return;
 		}

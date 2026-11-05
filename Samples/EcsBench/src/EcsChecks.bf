@@ -118,6 +118,7 @@ static class EcsChecks
 		NavigationChecks();
 		BehaviourChecks();
 		DialogueChecks();
+		SequenceChecks();
 		return sFailures;
 	}
 
@@ -670,6 +671,60 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Sequence Player: Play On Start (Frame.Sequences), moving a track's object, finishing, the playing count,
+	/// Restore When Done putting the object back when it is removed, saving, freeing.
+	static void SequenceChecks()
+	{
+		let before = ComponentState<SequencePlayerState>.Count;
+		let previous = Scene.Active;
+		let path = scope String()..AppendF("{}/../build/check_slide.tsequence", Assets.ProjectPath);
+		if (System.IO.File.WriteAllText(path, "sequence length 1 framerate 30\ntrack transform \"Box\"\n\tkey 0 position 0 0 0 rotation 0 0 0\n\tkey 1 position 10 0 0 rotation 0 0 0\n") case .Err)
+		{
+			Expect(false, scope $"the check sequence could not be written to {path}");
+			return;
+		}
+		let playing = SequencePlayer.PlayingCount;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let crate = scene.CreateGameObject("Box");
+			let director = scene.CreateGameObject("Director");
+			let player = director.AddComponent<SequencePlayer>();
+			Expect(!player.playOnStart && player.speed == 1 && player.skippable && player.useCameraShots, "a player has its defaults");
+			player.sequence.Set(path);
+			player.playOnStart = true;
+			bool finished = false;
+			player.OnFinished.Add(new [&] () => { finished = true; });
+			SaveSystem.SceneStarting(scene);
+			scene.StartPlay();
+			Time.DeltaTime = 0.5f;
+			scene.Update();
+			Expect(player.IsPlaying && SequencePlayer.PlayingCount == playing + 1, "Play On Start plays it (Frame.Sequences)");
+			scene.Update();
+			let x = crate.Transform.Position.x;
+			Expect(x > 4 && x < 11, scope $"it moves its track's object (x {x})");
+			let saved = SaveSystem.Capture(scene);
+			defer delete saved;
+			let text = scope String();
+			saved.ToText(text);
+			Expect(text.Contains("Tallow.SequencePlayer"), "a save keeps where it was");
+			scene.Update();
+			scene.Update();
+			Expect(finished && player.State == .Finished && SequencePlayer.PlayingCount == playing, "it finishes");
+			player.restoreWhenDone = true;
+			player.Play();
+			scene.Update();
+			Expect(player.IsPlaying && crate.Transform.Position.x > 0, "it plays again");
+			director.RemoveComponent<SequencePlayer>();
+			Expect(SequencePlayer.PlayingCount == playing && crate.Transform.Position.x == 0, "removing it stops it and puts the object back");
+			Expect(ComponentState<SequencePlayerState>.Count == before, "RemoveComponent frees its state");
+			scene.StopPlay();
+		}
+		Scene.Active = previous;
+		Expect(ComponentState<SequencePlayerState>.Count == before && SequencePlayer.PlayingCount == playing, "players are freed with their scene");
+		System.IO.File.Delete(path).IgnoreError();
 	}
 
 	/// Dialogue Runner: started by Frame.Dialogue (Play On Start), lines, choices, events, and its [Saved] fields

@@ -1164,6 +1164,7 @@ class Scene
 		Animator.StopAll(this);
 		BehaviorTreeRunner.StopAll(this);
 		DialogueRunner.StopAll(this);
+		SequencePlayer.StopAll(this);
 					CharacterController.SyncAll(this);
 	}
 
@@ -1353,6 +1354,8 @@ class Scene
 		World.AddStep(mFramePipeline, "Frame.Update", .OnUpdate, new => RunFrameUpdates);
 		// Conversations move on after the scripts' Update (DialogueRunner.OnLocalUpdate did, in component order).
 		World.AddStep(mFramePipeline, "Frame.Dialogue", .OnUpdate, new () => DialogueRunner.FrameAll(this));
+		// Sequences move their objects after the scripts' Update (SequencePlayer.OnLocalUpdate did).
+		World.AddStep(mFramePipeline, "Frame.Sequences", .OnUpdate, new () => SequencePlayer.FrameAll(this));
 		// Behaviour trees think after the scripts' Update (BehaviorTreeRunner.OnLocalUpdate did, in component order),
 		// before the agents they steer move.
 		World.AddStep(mFramePipeline, "Frame.Behaviour", .OnUpdate, new () =>
