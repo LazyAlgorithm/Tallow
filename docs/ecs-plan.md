@@ -250,36 +250,66 @@ carry over, now computed as column passes instead of per-object reflection:
      for custom rules (line of sight, rooms, streaming cells).
    - An object leaving relevance is hidden on the client, not destroyed. It keeps its entity so re-entry is
      one full-state update instead of a respawn.
-6. **Physics rollback through Jolt's state recorder.** For predicted bodies, save and restore Jolt state with
-   `SaveState` / `RestoreState`, limited to the bodies in the prediction's islands rather than the whole world.
-   Measure the cost per re-simulated tick, and cap how many ticks a correction may replay.
-7. **Deterministic mode: send inputs, not bodies.** Jolt is already built with
-   `CROSS_PLATFORM_DETERMINISTIC ON`, so physics gives the same results on every platform. An optional session
-   mode uses that:
-   - clients run the same fixed-tick simulation from the same inputs, and the server sends inputs plus
-     occasional state, instead of every moving body every snapshot;
-   - the shared clock already exists and is reused as is: one fixed tick rate (`Time.TickRate`, `Time.Tick`),
-     clients kept in step with the server through `TickScale`, and inputs stamped with the server tick they were
-     given at. New here: relaying every player's inputs for a tick to each client, which today go to the server
-     only. A client that has not received some player's input for a tick predicts it (repeats the last one) and
-     rolls back when the real input arrives;
-   - each machine hashes the replicated columns every N ticks and sends the hash to the server; a mismatch
-     triggers a full-state resync of the affected entities (or the world), and late joiners get a full state
+6. **Rollback that costs only what moves.**
+   - Save and restore Jolt state with `SaveState` / `RestoreState`, filtered so sleeping bodies are not
+     copied. Jolt skips sleeping bodies when stepping, so a replay costs roughly active bodies × ticks
+     replayed, not all bodies.
+   - **Skip identical inputs.** When a late input matches what the client guessed (the player kept holding
+     the same keys, which is the common case), nothing is replayed.
+   - **Optional input delay** per session (0 to 3 ticks): inputs are applied a few ticks after they are
+     given, so most arrive before they are needed and rollbacks become rare. 0 keeps today's feel.
+   - **Rollback window cap:** an input or correction older than the cap triggers a state resync of the
+     affected entities instead of a long replay.
+   - **Island-limited rollback (state sync only).** In the modes below where the server sends corrections,
+     rewind only the islands (groups of bodies in contact) touched by the changed input or the corrected
+     entities. A small difference from the full world is fixed by the next correction. Never do this in
+     lockstep mode (item 8), where every machine must compute bit-identical results and Jolt guarantees that
+     only when the whole simulated set is stepped the same way.
+7. **Input forwarding with server reconciliation (the main path, as Fish-Net does it).** The server relays
+   each player's inputs to the clients that player is relevant to, as well as running them itself:
+   - clients predict remote players in the present from their forwarded inputs, instead of showing them in
+     the past, and so predict the props they push correctly. With predicted physics on
+     (`NetworkManager.PredictPhysics`), crates hit by another player move on every screen the tick it
+     happens;
+   - a client missing a player's input for a tick repeats the last one, and replays from that tick when the
+     real input arrives (with item 6's skips and cap);
+   - **the server still sends state** and stays authoritative, so nothing depends on perfect determinism:
+     drift, late joiners and cheaters are corrected as today. Because Jolt is built with
+     `CROSS_PLATFORM_DETERMINISTIC ON` and everyone runs the same inputs on the same tick, corrections are rare
+     and tiny. So state for well-predicted bodies can drop to a low refresh rate under dynamic priority
+     (item 4) and is sent at full rate only when something diverges;
+   - inputs travel inside the snapshot packets (several ticks batched, each tick's input as a difference from
+     the previous, at most 9 bytes per player per tick), so one player's inputs cost about what one moving
+     body's state does;
+   - interest management (item 5) applies: a client receives only the inputs of players relevant to it, so
+     hidden information stays hidden and the cost does not grow with the whole server's player count;
+   - the shared clock is reused as is: one fixed tick (`Time.TickRate`, `Time.Tick`), clients kept in step
+     through `TickScale`, and inputs stamped with the server tick they were given at.
+8. **Lockstep mode (optional, per game).** For games where moving objects vastly outnumber players and every
+   client should simulate everything (RTS, physics sandboxes, co-op), a session can stop sending body state
+   entirely: inputs plus hashes only.
+   - Each machine hashes the simulated columns every N ticks and sends it to the server. A mismatch
+     triggers a full-state resync of the affected entities (or the world). Late joiners get a full state
      first.
+   - Rollback replays the whole simulated set (item 6 without island limiting). Use input delay by default
+     in this mode.
+   - Limits to document: every client simulates the whole world, so the weakest player's machine sets the
+     object budget; there is no hidden information (wallhacks become trivial), so it does not suit
+     competitive shooters; late join costs a full-state download.
 
-   The physics and the tick are deterministic, but the game code around them must be too, and that is the
-   hard part:
+   The physics and the tick are deterministic already. The game code around them must be too (this also
+   makes item 7's corrections rarer):
    - simulation code uses the tick's `deltaTime` only, never `Time.DeltaTime`, `Time.Time` or wall-clock time;
    - iteration in a stable order (sort by entity id where Flecs table order could differ);
    - seeded per-tick random numbers;
    - Beef and native code built without fast-math or floating-point contraction;
    - engine-provided deterministic `Sin`/`Cos`/`Sqrt` (Jolt has its own) instead of the platform C library's
      in simulation code.
-
-   Start as a hybrid: deterministic simulation for physics props and server-authoritative state for
-   players, so most of the bandwidth is saved without the whole game having to be deterministic. Rollback on
-   desync replays the whole simulated set, so measure it against world size. Large worlds may need input
-   delay instead of rollback.
+9. **Desync and prediction debugger.** In both item 7 and item 8, hash each system's output columns per tick
+   in Debug builds. When machines disagree, the network panel shows the first tick and the first system
+   where the hashes split, plus the entities and fields that differ. In item 7 the same data shows how often
+   and how far predictions are corrected, per object type. The script editor warns about `Time.DeltaTime`,
+   `Time.Time`, unseeded random numbers and platform math inside a networked `Update`.
 
 ### Scenes, prefabs, saving
 
@@ -384,19 +414,25 @@ Steps, each committed on its own (see "Networking" under Architecture for the de
 - **6e. Interest management.** Relevance covers spawns, despawns, fields and events; spatial grid; relevance
   modes; hysteresis; hide-not-destroy.
   **Exit:** a large map where each client receives only its area, with no pop-in at the hysteresis edge.
-- **6f. Physics rollback via Jolt state.** Island-limited `SaveState` / `RestoreState` for predicted bodies,
-  with a replay cap.
-  **Exit:** the cost per re-simulated tick is recorded; a stack of predicted crates corrects without visible
-  snapping.
-- **6g. Deterministic mode (hybrid first).** Built on the existing shared tick and clock sync: relay every
-  player's inputs to each client, predict missing inputs and roll back when they arrive, inputs plus hashes for
-  physics props, state for players, desync detection and resync, full state for late joiners, the deterministic
-  math functions, and build flags checked on every platform.
-  **Exit:** Windows, Linux and macOS clients stay in sync for 10 minutes of heavy prop physics (no hash
-  mismatch), and bytes per client are measured against 6e.
+- **6f. Rollback costs.** Filtered Jolt `SaveState` / `RestoreState`, skipping identical inputs, optional
+  input delay, rollback window cap, island-limited rollback for state sync.
+  **Exit:** the cost per re-simulated tick is recorded for a couple of hundred active bodies; a stack of
+  predicted crates corrects without visible snapping.
+- **6g. Input forwarding (Fish-Net style).** Relay relevant players' inputs to each client, predict remote
+  players and props in the present, keep server reconciliation, lower state rates for well-predicted bodies.
+  **Exit:** two clients pushing the same crates see them move the same tick on both screens; corrections stay
+  rare and small over 10 minutes; bytes per client measured against 6e.
+- **6h. Lockstep mode (optional).** Inputs and hashes only, whole-set rollback, input delay by default, resync,
+  full state for late joiners, the deterministic math functions and build flags checked on every platform.
+  **Exit:** Windows, Linux and macOS clients stay in sync for 10 minutes of heavy prop physics with no hash
+  mismatch.
+- **6i. Desync and prediction debugger.** Per-system hashes, the first-split view in the network panel,
+  correction statistics and the script editor warnings.
+  **Exit:** a desync planted on purpose (an unseeded random number in one script) is found by the debugger,
+  down to the system and the field.
 
 **Phase exit:** measure a dedicated server with thousands of replicated bodies and many simulated clients,
-before (from `main`) and after each of 6c to 6g: server CPU per tick and bytes per client per second.
+before (from `main`) and after each of 6c to 6h: server CPU per tick and bytes per client per second.
 
 ### Phase 7: Scripting experience (M)
 
@@ -421,7 +457,7 @@ before (from `main`) and after each of 6c to 6g: server CPU per tick and bytes p
   toggles for things that switch on and off often.
 - **Determinism for rollback.** Predicted systems must be deterministic within a build: fixed tick, no
   frame-time dependence, ordered iteration. Document this next to the networked `Update`'s rules.
-  Deterministic mode (step 6g) raises the bar to every platform. The shared tick and Jolt's cross-platform
+  Lockstep mode (step 6h) raises the bar to every platform. The shared tick and Jolt's cross-platform
   determinism already exist, so what is left is game code: build flags, math functions and iteration order
   all matter. One mismatch shows up as a desync, so hash checks and resync are required, not optional.
 - **Flecs upgrades.** Pin the tag in `third_party/flecs` and keep the shim small, so an upgrade only touches
