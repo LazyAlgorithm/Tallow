@@ -1096,6 +1096,16 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   class references. A scene has a handful, so the ECS gains nothing measurable. Converting them needs
   `OnNetworkEvent` and `OnBeforeSave` for handles first. The state classes could keep the abstract base as it is.
 
+- [x] **SceneLoader** (tools/class_to_handle.py): data, handle, state (the load); a `Frame.SceneLoaders` step does
+  Start (Load On Start) and OnLocalUpdate. Checked by `EcsChecks.SceneLoaderChecks` (an additive load from Load On
+  Start, progress reaching 1).
+- [x] **UI bindings find built-in components' fields.** `UIDocument.FindField` (bind="...") looked only through
+  class components, so since Phase 4 a document could not bind to a converted component's field (a Light's
+  intensity, say). It now looks through the object's handles' data too. Already so before the ECS work:
+  SceneLoader's `progress` is `[NonSerialized]`, which leaves it out of the fields a binding can find, so the
+  `bind="progress"` its documentation suggests finds nothing. Left as it is (making it a field would add it to scene
+  files); worth a decision.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

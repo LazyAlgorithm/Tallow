@@ -195,6 +195,22 @@ class UIDocument : Component
 				}
 			}
 		}
+		// Built-in components' fields are their data's (the pointer is used at once, before the entity can move).
+		let handles = scope List<HandleComponents.Info>();
+		HandleComponents.On(GameObject, handles);
+		for (let info in handles)
+		{
+			fields.Clear();
+			HandleComponents.GetFields(GameObject, info, fields);
+			for (let field in fields)
+			{
+				if (field.name == name)
+				{
+					result = field;
+					return true;
+				}
+			}
+		}
 		return false;
 	}
 

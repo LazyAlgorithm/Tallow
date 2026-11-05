@@ -120,6 +120,7 @@ static class EcsChecks
 		DialogueChecks();
 		SequenceChecks();
 		SpawnChecks();
+		SceneLoaderChecks();
 		return sFailures;
 	}
 
@@ -672,6 +673,52 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Scene Loader: Load On Start (Frame.SceneLoaders) adding a scene, its progress reaching 1, Finished, and a UI
+	/// binding finding a handle's field.
+	static void SceneLoaderChecks()
+	{
+		let previous = Scene.Active;
+		let path = scope String()..AppendF("{}/../build/check_room.tscene", Assets.ProjectPath);
+		{
+			let room = scope Scene();
+			room.CreateGameObject("Room Box");
+			let text = scope String();
+			SceneSerializer.Save(room, text);
+			if (System.IO.File.WriteAllText(path, text) case .Err)
+			{
+				Expect(false, scope $"the check scene could not be written to {path}");
+				return;
+			}
+		}
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let o = scene.CreateGameObject("Loader");
+			let loader = o.AddComponent<SceneLoader>();
+			Expect(loader.loadOnStart && !loader.additive && loader.activateWhenReady, "a loader has its defaults");
+			loader.scene.Set(path);
+			loader.additive = true;
+			scene.StartPlay();
+			for (int i < 300)
+			{
+				Time.DeltaTime = 1 / 60.0f;
+				scene.Update();
+				SceneManager.Update(scene);
+				if (loader.Finished && scene.Find("Room Box") != null)
+					break;
+			}
+			// The frame after it is done, the loader lets go of it and shows 1.
+			scene.Update();
+			Expect(loader.Finished && loader.progress == 1 && scene.Find("Room Box") != null, "Load On Start adds the scene");
+			let document = o.AddComponent<UIDocument>();
+			let shown = scope String();
+			Expect(document.ReadBinding("progress", shown) || document.ReadBinding("additive", shown), "a UI binding finds a built-in component's field");
+			scene.StopPlay();
+		}
+		Scene.Active = previous;
+		System.IO.File.Delete(path).IgnoreError();
 	}
 
 	/// Spawn Point: all data, no state; the chooser's order, teams and start-only points; Place; save and load.
