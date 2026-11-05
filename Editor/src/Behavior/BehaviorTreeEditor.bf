@@ -127,11 +127,9 @@ extension EditorApp
 		int reloaded = 0;
 		if (mScene != null && mPlay != .Edit)
 		{
-			for (let component in mScene.Components)
+			for (let handle in mScene.Components<BehaviorTreeRunner>(.. scope .()))
 			{
-				let runner = component as BehaviorTreeRunner;
-				if (runner == null)
-					continue;
+				let runner = handle.Runtime;
 				// Those running it as their tree or as a subtree.
 				if (runner.UsesFile(mTreePath))
 				{
@@ -144,21 +142,22 @@ extension EditorApp
 	}
 
 	/// The runner to show live: the selected object's if it uses this tree, otherwise the first one that does.
-	BehaviorTreeRunner WatchedRunner()
+	BehaviorTreeRunnerState WatchedRunner()
 	{
 		if (mScene == null || mPlay == .Edit || mTree == null)
 			return null;
-		bool Uses(BehaviorTreeRunner runner) => runner != null && runner.UsesFile(mTreePath);
-		let selected = Selected?.GetComponent<BehaviorTreeRunner>();
-		if (Uses(selected))
-			return selected;
-		for (let component in mScene.Components)
+		bool Uses(BehaviorTreeRunnerState runner) => runner != null && runner.UsesFile(mTreePath);
+		if (Selected != null && Selected.HasComponent<BehaviorTreeRunner>())
 		{
-			if (let runner = component as BehaviorTreeRunner)
-			{
-				if (Uses(runner))
-					return runner;
-			}
+			let selected = Selected.GetComponent<BehaviorTreeRunner>().Runtime;
+			if (Uses(selected))
+				return selected;
+		}
+		for (let handle in mScene.Components<BehaviorTreeRunner>(.. scope .()))
+		{
+			let runner = handle.Runtime;
+			if (Uses(runner))
+				return runner;
 		}
 		return null;
 	}
@@ -182,7 +181,7 @@ extension EditorApp
 	}
 
 	/// Colour for a node's live state, and how strongly to show it (0 = not at all).
-	Color TreeStatusColor(BehaviorTreeRunner runner, int32 nodeId, out float strength, out StringView label)
+	Color TreeStatusColor(BehaviorTreeRunnerState runner, int32 nodeId, out float strength, out StringView label)
 	{
 		strength = 0;
 		label = "";
@@ -262,7 +261,7 @@ extension EditorApp
 		ImGui.End();
 	}
 
-	void DrawBehaviorToolbar(BehaviorTreeRunner runner)
+	void DrawBehaviorToolbar(BehaviorTreeRunnerState runner)
 	{
 		ImGui.SetCursorPosX(6);
 		ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 4);
@@ -284,7 +283,7 @@ extension EditorApp
 		ImGui.TextDisabled(info.CStr());
 	}
 
-	void DrawTreeCanvas(BehaviorTreeRunner runner)
+	void DrawTreeCanvas(BehaviorTreeRunnerState runner)
 	{
 		var canvas = CanvasView.Layout("##treecanvas");
 		// Fitted to the canvas while Fit View is on: again whenever the canvas changes size.
@@ -311,7 +310,7 @@ extension EditorApp
 	}
 
 	/// Parent-to-child links, lit up in the colour of the child's latest result while an object runs the tree.
-	void DrawTreeLinks(CanvasView canvas, BehaviorTreeRunner runner)
+	void DrawTreeLinks(CanvasView canvas, BehaviorTreeRunnerState runner)
 	{
 		for (let link in mTree.links)
 		{
@@ -329,7 +328,7 @@ extension EditorApp
 
 	/// Every node, with its latest result, settings, pins and its place among its siblings. Returns what is under
 	/// the mouse.
-	TreeHover DrawTreeNodes(CanvasView canvas, BehaviorTreeRunner runner)
+	TreeHover DrawTreeNodes(CanvasView canvas, BehaviorTreeRunnerState runner)
 	{
 		TreeHover hover = default;
 		hover.pin = -1;
@@ -685,7 +684,7 @@ extension EditorApp
 	}
 
 	/// What the watched object remembers, in a panel at the canvas's bottom left.
-	void DrawBlackboard(CanvasView canvas, BehaviorTreeRunner runner)
+	void DrawBlackboard(CanvasView canvas, BehaviorTreeRunnerState runner)
 	{
 		let count = runner.Blackboard.Values.Count;
 		let height = 34 + Math.Max(count, 1) * 19;

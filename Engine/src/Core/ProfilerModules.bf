@@ -174,11 +174,10 @@ static class ProfilerModules
 		int32 animators = 0, skinned = 0, sources = 0, agents = 0, trees = 0, documents = 0, systems = 0, particles = 0;
 		animators = (int32)scene.Components<Animator>(.. scope .()).Count;
 		agents = (int32)scene.Components<NavigationAgent>(.. scope .()).Count;
+		trees = (int32)scene.Components<BehaviorTreeRunner>(.. scope .()).Count;
 		for (let component in scene.Components)
 		{
-			if (component is BehaviorTreeRunner)
-				trees++;
-			else if (component is UIDocument)
+			if (component is UIDocument)
 				documents++;
 		}
 		for (let system in scene.Particles)

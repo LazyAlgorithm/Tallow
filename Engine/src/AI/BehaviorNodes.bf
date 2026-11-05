@@ -256,8 +256,6 @@ class BTCallMethod : BTNode
 		let name = Text(0);
 		for (let component in context.Object.Components)
 		{
-			if (component == context.runner)
-				continue;
 			let type = component.GetType() as TypeInstance;
 			if (type == null)
 				continue;

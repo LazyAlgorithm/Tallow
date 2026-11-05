@@ -1043,6 +1043,18 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   Games that update: `GetComponent<NavigationAgent>() == null` checks (fix_handle_nulls.py), `agent.surface?.Data`,
   and a project's `AIMovementDriver` subclass keeps working through `AIMover`.
 
+- [x] **BehaviorTreeRunner.** `BehaviorTreeRunnerData` (`tree` and `startValues` are owned String), the handle,
+  and `BehaviorTreeRunnerState` (the tree, blackboard and events), which is what nodes see as `context.runner`,
+  with GameObject / Transform / Scene / GetComponent (class and handle) so node code did not change. A new
+  `Frame.Behaviour` step after `Frame.Update` and before `Frame.Navigation` does Start (Home, Start Values, the
+  tree) once per play and OnLocalUpdate, and aborts running nodes when a runner is switched off (OnDisable).
+  OnRemove ends the running nodes as OnDestroy did, except when the whole scene is being cleared. The handle's
+  tree file is `runner.TreeData`, since a handle's `Data` is its settings. The editor's Behavior tab works on the
+  state. Checked by `EcsChecks.BehaviourChecks`: defaults, start (Home, tree, Start Values), an Alarm sent for
+  each Hit, no ticks while switched off, save and load, freeing. The Sandbox's Navigation scene plays with no
+  warnings: its wandering agents match, and its Guard wanders differently on every run on both builds (the tree
+  context's Random is unseeded). The Gallery self-test passes.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

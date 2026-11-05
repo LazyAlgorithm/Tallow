@@ -1162,6 +1162,7 @@ class Scene
 		// Built-in components' bodies leave the physics world as the class components' did in OnDisable.
 		Rigidbody.SyncAll(this);
 		Animator.StopAll(this);
+		BehaviorTreeRunner.StopAll(this);
 					CharacterController.SyncAll(this);
 	}
 
@@ -1213,6 +1214,7 @@ class Scene
 	static ProfilerMarker sIKMarker = .("IK", .Animation);
 	static ProfilerMarker sAnimatorMarker = .("Animators", .Animation);
 	static ProfilerMarker sNavigationMarker = .("Navigation.Agents", .AI);
+	static ProfilerMarker sBehaviourMarker = .("Behaviour.Trees", .AI);
 	static ProfilerMarker sSkinMarker = .("Skinning", .Animation);
 	static ProfilerMarker sDestroyMarker = .("Destroy", .Scripts);
 
@@ -1348,6 +1350,13 @@ class Scene
 				}
 			});
 		World.AddStep(mFramePipeline, "Frame.Update", .OnUpdate, new => RunFrameUpdates);
+		// Behaviour trees think after the scripts' Update (BehaviorTreeRunner.OnLocalUpdate did, in component order),
+		// before the agents they steer move.
+		World.AddStep(mFramePipeline, "Frame.Behaviour", .OnUpdate, new () =>
+			{
+				using (sBehaviourMarker.Sample())
+					BehaviorTreeRunner.FrameAll(this);
+			});
 		// Navigation agents move once the scripts have set their destinations (NavigationAgent.OnLocalUpdate did, in
 		// component order).
 		World.AddStep(mFramePipeline, "Frame.Navigation", .OnUpdate, new () =>

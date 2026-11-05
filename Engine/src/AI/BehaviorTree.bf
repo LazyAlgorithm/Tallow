@@ -460,7 +460,7 @@ class Blackboard
 class BTContext
 {
 	/// The component running the tree.
-	public BehaviorTreeRunner runner;
+	public BehaviorTreeRunnerState runner;
 	/// What the tree remembers.
 	public Blackboard blackboard;
 	/// Seconds since the tree last ticked.

@@ -80,20 +80,134 @@ static class BehaviorTreeAssets
 	public static int LoadedCount => sEntries.Count + sStale.Count;
 }
 
-/// Runs a behaviour tree asset (.tbt) for its object. Movement nodes drive a Navigation Agent on the same object.
-/// The Behavior tab in the editor shows the tree of the selected object live while the game plays.
-[Component]
-class BehaviorTreeRunner : Component
+/// A Behavior Tree Runner's settings, in its entity (BehaviorTreeRunner is the handle). `tree` and `startValues`
+/// are text the data owns.
+[Component, HandleData]
+struct BehaviorTreeRunnerData
 {
 	/// Tree file, relative to the project's asset folder.
-	public String tree = new .() ~ delete _;
+	public String tree = new .();
 	/// Seconds between ticks. 0 ticks every frame; a little higher is cheaper for crowds.
 	public float tickInterval = 0;
 	/// Start over when the tree finishes. Off leaves it stopped.
 	public bool restartWhenDone = true;
 	/// What the blackboard holds at the start, so one tree can be tuned per character:
 	/// `ammo 3; alert false; post 4 0 -2` (a number, true or false, or a position), separated by semicolons.
-	public String startValues = new .() ~ delete _;
+	public String startValues = new .();
+
+	public this() { }
+}
+
+/// Runs a behaviour tree asset (.tbt) for its object. Movement nodes drive a Navigation Agent on the same object.
+/// The Behavior tab in the editor shows the tree of the selected object live while the game plays.
+///
+/// A handle (ComponentHandle): its settings are BehaviorTreeRunnerData's fields; the running tree, blackboard and
+/// events are its BehaviorTreeRunnerState (what nodes see as `context.runner`). Trees start and tick in the
+/// Frame.Behaviour step after the scripts' Update (before agents move), as Start and OnLocalUpdate did.
+[Component, HandleFields]
+struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
+{
+	/// The running tree, made the first time it is asked for.
+	public BehaviorTreeRunnerState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<BehaviorTreeRunnerState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			state.[Friend]mGameObject = mGameObject;
+			return state;
+		}
+	}
+
+	// The API, unchanged: each member is documented on BehaviorTreeRunnerState.
+	public Blackboard Blackboard => Runtime.Blackboard;
+	/// The tree file it runs, or null (the state's Data: a handle's Data is its settings).
+	public BehaviorTreeData TreeData => Runtime.Data;
+	public int32 TickCount => Runtime.TickCount;
+	public ref Vector3 Home => ref Runtime.Home;
+	public ref Event<delegate void(StringView name)> OnTreeEvent => ref Runtime.OnTreeEvent;
+	public BTStatus StatusOf(int32 nodeId) => Runtime.StatusOf(nodeId);
+	public int32 LastTickOf(int32 nodeId) => Runtime.LastTickOf(nodeId);
+	public BTStatus StatusOf(StringView path, int32 nodeId) => Runtime.StatusOf(path, nodeId);
+	public int32 LastTickOf(StringView path, int32 nodeId) => Runtime.LastTickOf(path, nodeId);
+	public bool UsesFile(StringView path) => Runtime.UsesFile(path);
+	public void ApplyStartValues() => Runtime.ApplyStartValues();
+	public void Reload() => Runtime.Reload();
+	public BTStatus Tick(float deltaTime) => Runtime.Tick(deltaTime);
+	public void SendEvent(StringView name) => Runtime.SendEvent(name);
+	public bool TakeEvent(StringView name, float withinSeconds, bool consume) => Runtime.TakeEvent(name, withinSeconds, consume);
+	public void RaiseTreeEvent(StringView name) => Runtime.RaiseTreeEvent(name);
+
+	/// Starts runners that have not started, ticks every switched-on one on an active object, and aborts the
+	/// running nodes of one that has been switched off.
+	public static void FrameAll(Scene scene)
+	{
+		if (!scene.IsPlaying)
+			return;
+		for (let runner in scene.FindComponents<BehaviorTreeRunner>(.. scope .()))
+		{
+			let state = runner.Runtime;
+			if (!runner.IsActiveAndEnabled)
+			{
+				if (state.[Friend]mWasActive)
+				{
+					state.[Friend]mWasActive = false;
+					state.OnDisable();
+				}
+				continue;
+			}
+			state.[Friend]mWasActive = true;
+			if (!state.[Friend]mStarted)
+			{
+				state.[Friend]mStarted = true;
+				state.Start();
+			}
+			state.Frame();
+		}
+	}
+
+	/// When play stops, runners start again next time (as Start runs once per play).
+	public static void StopAll(Scene scene)
+	{
+		for (let (entity, state) in ComponentState<BehaviorTreeRunnerState>.In(scene.World, .. scope .()))
+		{
+			state.[Friend]mStarted = false;
+			state.[Friend]mWasActive = false;
+		}
+	}
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		// As OnDestroy did: running nodes end (stopping the agent), unless the whole scene is going.
+		if (let state = ComponentState<BehaviorTreeRunnerState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
+		{
+			let scene = state.[Friend]mGameObject?.Scene;
+			if (scene != null && !scene.[Friend]mClearing)
+				state.[Friend]Unload();
+		}
+		ComponentState<BehaviorTreeRunnerState>.Release(world, entity);
+		HandleComponents.FreeLists(world, entity, typeof(BehaviorTreeRunner));
+	}
+}
+
+/// What a Behavior Tree Runner keeps between frames: the tree it runs, its blackboard and the events sent to it.
+/// Its settings are read from the entity each time.
+[DataFields(typeof(BehaviorTreeRunnerData), "Settings")]
+class BehaviorTreeRunnerState
+{
+	GameObject mGameObject;
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+	public Scene Scene => mGameObject.Scene;
+	/// A component on the runner's object (nodes find its mover and the like through it).
+	public T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
+	public T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	ref BehaviorTreeRunnerData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<BehaviorTreeRunnerData>();
+	}
 
 	/// A tree file the runner uses (its own, or one run as a subtree), with its running nodes by id.
 	class TreeFile
@@ -126,6 +240,8 @@ class BehaviorTreeRunner : Component
 	public int32 TickCount => mContext.tick;
 	/// Where the object was when the tree started.
 	public Vector3 Home;
+	bool mStarted;
+	bool mWasActive;
 	/// The tree's Send Event nodes: `runner.OnTreeEvent.Add(new (name) => { if (name == "Alarm") RingBell(); });`
 	public Event<delegate void(StringView name)> OnTreeEvent ~ _.Dispose();
 
@@ -158,7 +274,7 @@ class BehaviorTreeRunner : Component
 		return null;
 	}
 
-	public override void Start()
+	public void Start()
 	{
 		Home = Transform.Position;
 		ApplyStartValues();
@@ -279,7 +395,8 @@ class BehaviorTreeRunner : Component
 		return node;
 	}
 
-	public override void OnLocalUpdate()
+	/// What OnLocalUpdate did: once a frame while playing (BehaviorTreeRunner.FrameAll).
+	public void Frame()
 	{
 		if (mLoaded != tree)
 			Reload();
@@ -336,14 +453,10 @@ class BehaviorTreeRunner : Component
 		OnTreeEvent(name);
 	}
 
-	public override void OnDisable()
+	/// What OnDisable did.
+	public void OnDisable()
 	{
 		if (mRoot != null)
 			mRoot.Abort(mContext);
-	}
-
-	public override void OnDestroy()
-	{
-		Unload();
 	}
 }

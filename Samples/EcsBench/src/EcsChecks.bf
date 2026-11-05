@@ -116,6 +116,7 @@ static class EcsChecks
 		CharacterChecks();
 		AnimatorChecks();
 		NavigationChecks();
+		BehaviourChecks();
 		return sFailures;
 	}
 
@@ -668,6 +669,61 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Behavior Tree Runner: owned text settings, started and ticked by the Frame.Behaviour step (Home, events in and
+	/// out), not ticked while switched off, save and load, freeing.
+	static void BehaviourChecks()
+	{
+		let before = ComponentState<BehaviorTreeRunnerState>.Count;
+		let previous = Scene.Active;
+		// A tree in the build folder (not the project's assets): an Alarm for each Hit.
+		let path = scope String()..AppendF("{}/../build/check_alarm.tbt", Assets.ProjectPath);
+		if (System.IO.File.WriteAllText(path, "tree \"Alarm\"\nnode 1 root 0 0\nnode 2 sequence 0 110\nnode 3 event.received -130 240 \"Hit\" \"1\" \"true\"\nnode 4 event.send 130 240 \"Alarm\"\nlink 1 2\nlink 2 3\nlink 2 4\n") case .Err)
+		{
+			Expect(false, scope $"the check tree could not be written to {path}");
+			return;
+		}
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let guard = scene.CreateGameObject("Guard");
+			guard.Transform.Position = .(3, 0, 4);
+			let runner = guard.AddComponent<BehaviorTreeRunner>();
+			Expect(runner.tree.IsEmpty && runner.tickInterval == 0 && runner.restartWhenDone && runner.startValues.IsEmpty, "a runner has its defaults");
+			runner.tree.Set(path);
+			runner.startValues.Set("ammo 3");
+			int alarms = 0;
+			runner.OnTreeEvent.Add(new [&] (name) => { if (name == "Alarm") alarms++; });
+			scene.StartPlay();
+			Time.DeltaTime = 0.1f;
+			scene.Update();
+			Expect(runner.TreeData != null && runner.Home == Vector3(3, 0, 4) && runner.TickCount == 1, "playing starts it (Home, its tree) and ticks it");
+			Expect(runner.Blackboard.GetNumber("ammo") == 3, "Start Values go on its blackboard");
+			scene.Update();
+			Expect(alarms == 0, "no Hit, no Alarm");
+			runner.SendEvent("Hit");
+			scene.Update();
+			scene.Update();
+			Expect(alarms == 1, scope $"a Hit gives one Alarm ({alarms})");
+			runner.enabled = false;
+			let ticks = runner.TickCount;
+			scene.Update();
+			Expect(runner.TickCount == ticks, "switched off, it does not tick");
+			runner.enabled = true;
+			scene.StopPlay();
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Guard").GetComponent<BehaviorTreeRunner>();
+			Expect(copy && copy.tree == path && copy.startValues == "ammo 3", "it saves and loads");
+			guard.RemoveComponent<BehaviorTreeRunner>();
+			Expect(ComponentState<BehaviorTreeRunnerState>.Count == before, "RemoveComponent frees its state");
+		}
+		Scene.Active = previous;
+		Expect(ComponentState<BehaviorTreeRunnerState>.Count == before, "runners are freed with their scene");
+		System.IO.File.Delete(path).IgnoreError();
 	}
 
 	/// Navigation Agent: an ObjectRef to its surface (saved as the object, none once the object goes), walking a baked
