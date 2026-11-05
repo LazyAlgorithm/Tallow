@@ -3,23 +3,12 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Emits small meshes (cubes by default, which suits low-poly art) that move, shrink and fade.
-/// A whole system is drawn as one instanced call. It previews in the editor without pressing Play.
-[Component]
-class ParticleSystem : Component
+/// A Particle System's settings, in its entity (ParticleSystem is the handle).
+[Component, HandleData]
+struct ParticleSystemData
 {
-	struct Particle
-	{
-		public Vector3 position;
-		public Vector3 velocity;
-		public Vector3 spin;
-		public float age;
-		public float lifetime;
-		public float seed;
-	}
-
 	/// The mesh each particle is drawn with.
-	public String mesh = new .("builtin:cube") ~ delete _;
+	public SharedString mesh = "builtin:cube";
 	/// The most particles alive at once.
 	public int32 maxParticles = 500;
 	/// Particles per second.
@@ -56,6 +45,87 @@ class ParticleSystem : Component
 	/// Simulate in world space, so moving the emitter leaves a trail.
 	public bool worldSpace = true;
 
+	public this() { }
+}
+
+/// Emits small meshes (cubes by default, which suits low-poly art) that move, shrink and fade.
+/// A whole system is drawn as one instanced call. It previews in the editor without pressing Play.
+///
+/// A handle (ComponentHandle): its settings are ParticleSystemData's fields; the living particles are its
+/// ParticleState, kept outside the data and freed with the component.
+[Component, HandleFields]
+struct ParticleSystem : ComponentHandle<ParticleSystemData>
+{
+	/// The particles, made the first time they are needed, with the settings copied in from the entity now.
+	public ParticleState State
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<ParticleState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			state.[Friend]mGameObject = mGameObject;
+			state.data = Data;
+			return state;
+		}
+	}
+
+	/// How many particles are alive now.
+	public int32 AliveCount
+	{
+		get
+		{
+			if (!this)
+				return 0;
+			let state = ComponentState<ParticleState>.Get(mGameObject.Scene.World, mGameObject.Entity);
+			return state != null ? state.AliveCount : 0;
+		}
+	}
+
+	/// The box round the living particles, in the world.
+	public Bounds WorldBounds => State.WorldBounds;
+
+	/// Restarts the system, including its burst. In a network session, from the server or the object's owner, it
+	/// plays on every machine.
+	public void Play()
+	{
+		NetworkSync.ParticlesPlayed(this);
+		State.Restart();
+	}
+
+	/// Moves every switched-on system on an active object on by a frame (the Frame.OnFrame step).
+	public static void FrameAll(Scene scene)
+	{
+		for (let system in scene.Components<ParticleSystem>(.. scope .()))
+		{
+			if (system.GameObject.ActiveInHierarchy)
+				system.State.Frame();
+		}
+	}
+
+	static void OnRemove(void* world, uint64 entity) => ComponentState<ParticleState>.Release(world, entity);
+}
+
+/// A Particle System's living particles and what it keeps between frames. `data` is a copy of the settings.
+[DataFields(typeof(ParticleSystemData), "data")]
+class ParticleState
+{
+	public ParticleSystemData data = .();
+
+	struct Particle
+	{
+		public Vector3 position;
+		public Vector3 velocity;
+		public Vector3 spin;
+		public float age;
+		public float lifetime;
+		public float seed;
+	}
+
+	GameObject mGameObject;
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+
 	List<Particle> mParticles = new .() ~ delete _;
 	float mEmitAccumulator;
 	uint32 mRandom = 0x9e3779b9;
@@ -67,13 +137,9 @@ class ParticleSystem : Component
 	/// The box round the living particles, in the world.
 	public Bounds WorldBounds => mBounds;
 
-	public override void OnRegister() => Scene.Particles.Add(this);
-	public override void OnUnregister() => Scene.Particles.Remove(this);
-
-	/// Restarts the system, including its burst.
-	public void Play()
+	/// Starts again, burst included (ParticleSystem.Play).
+	public void Restart()
 	{
-		NetworkSync.ParticlesPlayed(this);
 		mParticles.Clear();
 		mBurstDone = false;
 		mEmitAccumulator = 0;
@@ -114,7 +180,8 @@ class ParticleSystem : Component
 		mParticles.Add(p);
 	}
 
-	public override void OnFrame()
+	/// Emits and moves the particles (ParticleSystem.FrameAll, every frame, in the editor too).
+	public void Frame()
 	{
 		let dt = Math.Min(Time.UnscaledDeltaTime, 0.05f);
 		if (!mBurstDone)

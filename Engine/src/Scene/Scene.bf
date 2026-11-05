@@ -414,7 +414,19 @@ class Scene
 	}
 
 	/// Every Particle System in the scene.
-	public List<ParticleSystem> Particles = new .() ~ delete _;
+	List<ParticleState> mParticles = new .() ~ delete _;
+	/// Every switched-on Particle System's particles, with its settings copied in (from one query, each call).
+	public List<ParticleState> Particles
+	{
+		get
+		{
+			mParticles.Clear();
+			for (let system in Components<ParticleSystem>(.. scope .()))
+				mParticles.Add(system.State);
+			return mParticles;
+		}
+	}
+
 	/// The decals made by Decals.Spawn, oldest first. Their texture strings are owned here.
 	public List<SpawnedDecal> SpawnedDecals = new .() ~ { for (let decal in _) delete decal.texture; delete _; };
 
@@ -1423,6 +1435,7 @@ class Scene
 				Run(component, .OnFrame);
 		}
 		SkinnedMeshRenderer.FrameAll(this);
+		ParticleSystem.FrameAll(this);
 		Profiler.End();
 	}
 

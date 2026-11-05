@@ -1192,7 +1192,7 @@ class RenderView
 		let stride = (uint16)sizeof(InstanceData);
 		for (let system in scene.Particles)
 		{
-			if (!system.IsActiveAndEnabled || system.AliveCount == 0 || !system.GameObject.InActiveWorld || HidesHere(system.GameObject))
+			if (!system.GameObject.ActiveInHierarchy || system.AliveCount == 0 || !system.GameObject.InActiveWorld || HidesHere(system.GameObject))
 				continue;
 			let mesh = Assets.GetMesh(system.mesh);
 			if (mesh == null || !mesh.HasGpuData || !frustum.Intersects(system.WorldBounds))

@@ -59,12 +59,13 @@ extension NetworkSync
 	static bool Decides(NetworkManager network, GameObject object) => network.IsServer || Owns(network.LocalClientId, object.Transform);
 
 	/// What a client may change on objects it owns: how they look and sound, never how they play.
-	static bool Cosmetic(Component component) => component is ParticleSystem;
+	/// (No script is: every cosmetic component is now a built-in handle, below.)
+	static bool Cosmetic(Component component) => false;
 
 	/// The built-in components that are cosmetic in the same way.
 	static bool Cosmetic(HandleComponents.Info info) => info.handleType == typeof(Light) || info.handleType == typeof(AudioSource)
 		|| info.handleType == typeof(Decal) || info.handleType == typeof(AudioReverbZone) || info.handleType == typeof(MeshRenderer)
-		|| info.handleType == typeof(SkinnedMeshRenderer);
+		|| info.handleType == typeof(SkinnedMeshRenderer) || info.handleType == typeof(ParticleSystem);
 
 	/// Sends a state message whose first keyLength bytes name what it is about: the server passes it on and keeps
 	/// the latest for players who join later; a client asks the server.
@@ -358,7 +359,8 @@ extension NetworkSync
 			return;
 		let payload = scope NetWriter();
 		payload.Write((uint8)EffectKind.Particles);
-		WriteComponentAt(payload, particles);
+		// An object has one Particle System: the object says which.
+		WriteTransform(payload, particles.Transform);
 		if (network.IsServer)
 			network.SendToAll(MsgEffect, payload);
 		else
@@ -421,8 +423,10 @@ extension NetworkSync
 		{
 		case .Particles:
 			let start = reader.Position - 1;
-			let particles = ReadComponentAt(ref reader, network) as ParticleSystem;
-			if (particles == null || !reader.Ok)
+			ParticleSystem particles = default;
+			if (ReadTransform(ref reader, network, let transform) && transform != null && transform.GameObject.HasComponent<ParticleSystem>())
+				particles = transform.GameObject.GetComponent<ParticleSystem>();
+			if (!particles || !reader.Ok)
 				return;
 			if (network.IsServer)
 			{

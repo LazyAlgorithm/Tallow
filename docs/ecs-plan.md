@@ -898,7 +898,18 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   part lists, the Mesh Renderer it adds, Expose Bones, save and load, freed on remove and with the scene; the
   bench now has `Models/rigged_sample.glb`); the Sandbox's Skinning scene and main scene animate as before, the
   Inspector shows it, and the Gallery self-test passes.
-- [ ] LineRenderer, TrailRenderer, ParticleSystem, Foliage, Water, Rigidbody, Collider, Joint,
+- [x] **ParticleSystem.** Its settings are `ParticleSystemData`; the living particles, emitter clock and bounds are
+  a `ParticleState` in `ComponentState`. `ParticleSystem.FrameAll` moves switched-on systems on active objects in
+  the Frame.OnFrame step (in the editor too); `Scene.Particles` is built from the query, which replaces the
+  registration list. Play over the network names the object. Checked by `EcsChecks.ParticleChecks` (defaults,
+  burst, Play, switched off, inactive object, save and load, freed on remove and with the scene); the Sandbox's
+  campfire previews in the editor and the Gallery self-test passes.
+- [ ] **LineRenderer and TrailRenderer stay class components for now** (like LODGroup). A line's points are a
+  `List<Vector3>` saved with the scene, and data components hold no heap fields: a list would need an owned
+  buffer type in data with copy hooks (the Inspector's Copy/Paste Component copies data byte for byte). Trail
+  shares Line's Ribbon, a hidden child object made and destroyed with the component. Revisit with that buffer
+  type in Phase 5.
+- [ ] Foliage, Water, Rigidbody, Collider, Joint,
   CharacterController, SoftBody, Rope, and the Phase 5 set.
 - [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with
   the components above converted, a Gallery made from the template builds and its `--self-test` prints

@@ -182,11 +182,11 @@ static class ProfilerModules
 				trees++;
 			else if (component is UIDocument)
 				documents++;
-			else if (let system = component as ParticleSystem)
-			{
-				systems++;
-				particles += system.AliveCount;
-			}
+		}
+		for (let system in scene.Particles)
+		{
+			systems++;
+			particles += system.AliveCount;
 		}
 		sAnimators.Set(animators);
 		skinned = (int32)scene.Components<SkinnedMeshRenderer>(.. scope .()).Count;

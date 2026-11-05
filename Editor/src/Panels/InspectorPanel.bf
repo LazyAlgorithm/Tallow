@@ -844,7 +844,10 @@ extension EditorApp
 		for (let component in gameObject.Components)
 		{
 			if (component is VoxelTerrain) return Icons.Terrain;
-			if (component is ParticleSystem) return Icons.Particles;
+		}
+		if (gameObject.HasComponent<ParticleSystem>()) return Icons.Particles;
+		for (let component in gameObject.Components)
+		{
 			if (component is NetworkSession) return Icons.Network;
 		}
 		if (gameObject.HasComponent<Light>()) return Icons.Light;

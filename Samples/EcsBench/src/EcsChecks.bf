@@ -108,6 +108,7 @@ static class EcsChecks
 		AudioChecks();
 		RendererChecks();
 		SkinnedChecks();
+		ParticleChecks();
 		return sFailures;
 	}
 
@@ -491,6 +492,46 @@ static class EcsChecks
 			Expect(ComponentState<SkinnedRig>.Count == before, "RemoveComponent frees the rig");
 		}
 		Expect(ComponentState<SkinnedRig>.Count == before, "rigs are freed with their scene");
+	}
+
+	/// Particle System: settings in Flecs, particles in its ParticleState, Scene.Particles from the query.
+	static void ParticleChecks()
+	{
+		let before = ComponentState<ParticleState>.Count;
+		{
+			let scene = scope Scene();
+			let fire = scene.CreateGameObject("Fire");
+			let system = fire.AddComponent<ParticleSystem>();
+			Expect(system.mesh == "builtin:cube" && system.maxParticles == 500 && system.looping && system.AliveCount == 0, "a Particle System has its defaults");
+			system.burst = 20;
+			system.looping = false;
+			system.lifetime = 10;
+			ParticleSystem.FrameAll(scene);
+			Expect(system.AliveCount == 20, "a frame emits the burst");
+			Expect(scene.Particles.Count == 1 && scene.Particles[0].burst == 20 && scene.Particles[0].AliveCount == 20, "Scene.Particles gives the state with the settings copied in");
+			system.Play();
+			Expect(system.AliveCount == 0, "Play starts again");
+			ParticleSystem.FrameAll(scene);
+			Expect(system.AliveCount == 20, "and the burst comes again");
+			system.enabled = false;
+			Expect(scene.Particles.Count == 0, "a switched-off system is not drawn");
+			ParticleSystem.FrameAll(scene);
+			Expect(system.AliveCount == 20, "nor moved on");
+			system.enabled = true;
+			fire.SetActive(false);
+			Expect(scene.Particles.Count == 1, "on an inactive object it is listed (the renderer skips it)");
+			fire.SetActive(true);
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains("component Tallow.ParticleSystem enabled 1") && text.Contains("field burst 20"), "a Particle System saves as before");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Fire").GetComponent<ParticleSystem>();
+			Expect(copy && copy.burst == 20 && !copy.looping && copy.AliveCount == 0, "a Particle System loads, with no particles yet");
+			fire.RemoveComponent<ParticleSystem>();
+			Expect(ComponentState<ParticleState>.Count == before, "RemoveComponent frees the particles");
+		}
+		Expect(ComponentState<ParticleState>.Count == before, "particles are freed with their scene");
 	}
 
 	static void HandleChecks()
