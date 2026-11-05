@@ -609,7 +609,36 @@ class Hover : Script
   - Checked by `EcsChecks.UpdateChecks` (a plain object updates per frame, a networked one per tick with empty
     controls when no player controls it); Sandbox runs as host in game and editor.
   - Not yet checked: a real two-machine session and Windows/web builds.
-- [ ] 4. Scene's object and component lists replaced by queries; frame and tick order run through the world.
+- [x] **4. Script dispatch and the frame and tick order through the world.**
+  - One list per callback (FixedUpdate, Update/OnLocalUpdate, LateUpdate, OnFrame) holding only components whose
+    class overrides it, found once per class by reflection (`ScriptCallbackIndex`). This replaces `mRunning` and
+    the hand-kept `sIdleTypes`. A class whose methods reflection cannot see goes in every list. Lists keep the
+    order components joined (not sorted by type, so call order between scripts is as before).
+  - `Scene` has two Flecs pipelines, `FramePipeline` and `TickPipeline`, and its work is in steps (immediate
+    systems with no query, `World.AddStep`) in Flecs phases:
+    - Tick: OnLoad Starts, PostLoad NetworkReceive (PreTick), PreUpdate Update (networked objects, offline),
+      OnUpdate FixedUpdate, OnValidate Physics (water and Jolt), PostUpdate NetworkSend (PostTick).
+    - Frame: OnLoad OnFrame, PostLoad Audio (voice and audio), PreUpdate Starts, OnUpdate Update and
+      OnLocalUpdate, OnValidate Paths, PostUpdate LateUpdate, PreStore Animation (IK and skinning), OnStore
+      Destroy.
+    Engine systems from Phase 4 on are added to these pipelines by phase. Flecs 4.2 never defers the world, so
+    steps and the scripts they run change it directly. Running a pipeline from inside one of the same scene is
+    refused with an error.
+  - The world now imports Flecs's system and pipeline modules (`ecs_mini` leaves them out).
+  - **Decision: object lists stay.** `mObjects`, `mRoots`, `mById`, `mComponents` and `mByType` remain as ordered
+    indexes beside the world. Their order is load-bearing: scene identities get network ids in this order on every
+    machine, saves and scene files are written in it, and the Hierarchy shows siblings in it. Flecs tables do
+    not keep a stable order across adds and removes. Queries take over where order does not matter, as data moves
+    into components (Phase 4 on).
+  - Checked by `EcsChecks` (steps run in phase order around Update; callback detection for engine and sample
+    classes). Interleaved Release benchmark against the pre-Phase-2 build at 100,000 objects: frame
+    32.6 / 32.0 / 33.3 ms before, 29.4 / 29.2 / 29.1 ms now (the callback lists skip classes with nothing to
+    run). Script update is 5.2 to 5.4 ms before, 6.0 to 6.2 ms now: about 8 ns more per Update call, from the
+    new `Update(input, deltaTime)` call itself. At 10,000 objects both are unchanged.
+
+**Phase 2 exit: met (2026-11-04).** New Empty, Sample and Showcase projects created with the launcher build and
+run; the Showcase self-test reports `SHOWCASE_READY rooms=8 probes=2` with no errors; the Sandbox runs in game
+and editor with its ported scripts. Not yet built for Windows or the web.
 
 ## Benchmark results
 

@@ -46,7 +46,11 @@ enum
 
 TALLOW_ECS_API ecs_world_t* tallow_ecs_world_new(void)
 {
-	return ecs_mini();
+	// ecs_mini leaves the addons out; systems and pipelines (Scene's Frame and Tick) need these two.
+	ecs_world_t* world = ecs_mini();
+	ECS_IMPORT(world, FlecsSystem);
+	ECS_IMPORT(world, FlecsPipeline);
+	return world;
 }
 
 TALLOW_ECS_API ecs_world_t* tallow_ecs_world_new_full(void)
@@ -424,6 +428,80 @@ TALLOW_ECS_API uint64_t tallow_ecs_system_new(ecs_world_t* world, const char* na
 	desc.callback = (ecs_iter_action_t)callback;
 	desc.callback_ctx = ctx;
 	desc.multi_threaded = multi_threaded;
+	return ecs_system_init(world, &desc);
+}
+
+// ---- Pipelines and steps ----
+
+// A pipeline that runs the systems tagged with tag, ordered by phase as Flecs's own pipeline is.
+TALLOW_ECS_API uint64_t tallow_ecs_pipeline_new(ecs_world_t* world, const char* name, uint64_t tag)
+{
+	ecs_entity_desc_t entity = {0};
+	entity.name = name;
+	ecs_pipeline_desc_t desc = {0};
+	desc.entity = ecs_entity_init(world, &entity);
+	desc.query.terms[0].id = EcsSystem;
+	desc.query.terms[1].id = tag;
+	desc.query.terms[2].id = EcsPhase;
+	desc.query.terms[2].src.id = EcsCascade;
+	desc.query.terms[2].trav = EcsDependsOn;
+	desc.query.terms[3].id = EcsDisabled;
+	desc.query.terms[3].src.id = EcsUp;
+	desc.query.terms[3].trav = EcsDependsOn;
+	desc.query.terms[3].oper = EcsNot;
+	desc.query.terms[4].id = EcsDisabled;
+	desc.query.terms[4].src.id = EcsUp;
+	desc.query.terms[4].trav = EcsChildOf;
+	desc.query.terms[4].oper = EcsNot;
+	return ecs_pipeline_init(world, &desc);
+}
+
+TALLOW_ECS_API void tallow_ecs_run_pipeline(ecs_world_t* world, uint64_t pipeline, float delta_time)
+{
+	ecs_run_pipeline(world, pipeline, delta_time);
+}
+
+typedef void (*tallow_ecs_step_fn)(void* ctx);
+
+typedef struct tallow_ecs_step_t
+{
+	tallow_ecs_step_fn fn;
+	void* ctx;
+} tallow_ecs_step_t;
+
+static void tallow_ecs_run_step(ecs_iter_t* it)
+{
+	// An immediate system gets the world itself, and Flecs 4.2 never defers the world, so what a step (or a script
+	// it runs) changes takes effect at once: creating an object and reading it back works as outside a pipeline.
+	tallow_ecs_step_t* step = (tallow_ecs_step_t*)it->callback_ctx;
+	step->fn(step->ctx);
+}
+
+// A step: a system with no query that calls fn(ctx) once each time its pipeline (tagged tag) runs, in phase.
+// It runs on the calling thread with direct access to the world.
+TALLOW_ECS_API uint64_t tallow_ecs_step_new(ecs_world_t* world, const char* name, int32_t phase, uint64_t tag, tallow_ecs_step_fn fn, void* ctx)
+{
+	ecs_entity_t phase_id = tallow_ecs_phase(phase);
+	if (!phase_id || !fn)
+		return 0;
+	ecs_entity_desc_t entity = {0};
+	entity.name = name;
+	entity.sep = ".";
+	ecs_entity_t system = ecs_entity_init(world, &entity);
+	if (!system)
+		return 0;
+	ecs_add_pair(world, system, EcsDependsOn, phase_id);
+	ecs_add_id(world, system, phase_id);
+	ecs_add_id(world, system, tag);
+	tallow_ecs_step_t* step = ecs_os_malloc_t(tallow_ecs_step_t);
+	step->fn = fn;
+	step->ctx = ctx;
+	ecs_system_desc_t desc = {0};
+	desc.entity = system;
+	desc.callback = tallow_ecs_run_step;
+	desc.callback_ctx = step;
+	desc.callback_ctx_free = ecs_os_api.free_;
+	desc.immediate = true;
 	return ecs_system_init(world, &desc);
 }
 

@@ -140,9 +140,25 @@ static class EcsChecks
 		let identity = networkedObject.AddComponent<NetworkIdentity>();
 		identity.playerControlled = false;
 		let networked = networkedObject.AddComponent<UpdateCounter>();
+		// Steps added by phase run at their place in the frame: before and after the scripts' Update.
+		int before = -1;
+		int after = -1;
+		scene.World.AddStep(scene.FramePipeline, "Check.Before", .PreUpdate, new [&] () =>
+			{
+				if (before < 0)
+					before = plain.frames;
+			}
+			);
+		scene.World.AddStep(scene.FramePipeline, "Check.After", .PostUpdate, new [&] () =>
+			{
+				if (after < 0)
+					after = plain.frames;
+			}
+			);
 		scene.StartPlay();
 		for (int i < 3)
 			scene.Update();
+		Expect(before == 0 && after == 1, scope $"Frame pipeline runs steps in phase order around Update (before {before}, after {after})");
 		for (int i < 2)
 			scene.FixedUpdate();
 		Expect(plain.frames == 3 && plain.ticks == 0, scope $"plain object: Update once a frame (frames {plain.frames}, ticks {plain.ticks})");

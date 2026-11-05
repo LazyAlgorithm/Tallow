@@ -407,6 +407,7 @@ class Scene
 	public this()
 	{
 		Physics = new PhysicsWorld();
+		AddSteps();
 	}
 
 	public ~this()
@@ -1108,6 +1109,7 @@ class Scene
 	}
 
 	/// Calls Component.Update with the given controls (a network tick's, or this frame's).
+	[Inline]
 	void RunUpdate(Component component, TickInput input, float deltaTime)
 	{
 		Watchdog.Running = component;
@@ -1143,19 +1145,102 @@ class Scene
 		}
 	}
 
-	/// One fixed simulation tick: gameplay FixedUpdate, then physics.
+	/// The scene's two pipelines (docs/ecs-plan.md, "Frame and tick order"): the steps below, in Flecs phases, so
+	/// that engine systems added later run at their place among them. Steps in one phase run in the order added.
+	World.Pipeline mFramePipeline;
+	World.Pipeline mTickPipeline;
+	/// The per-frame pipeline: add engine systems or steps to it by phase (World.AddStep).
+	public World.Pipeline FramePipeline => mFramePipeline;
+	/// The fixed-tick pipeline.
+	public World.Pipeline TickPipeline => mTickPipeline;
+
+	void AddSteps()
+	{
+		mTickPipeline = World.CreatePipeline("Tick");
+		World.AddStep(mTickPipeline, "Tick.Starts", .OnLoad, new () =>
+			{
+				using (sStartMarker.Sample()) RunPendingStarts();
+			}
+			);
+		World.AddStep(mTickPipeline, "Tick.NetworkReceive", .PostLoad, new () =>
+			{
+				using (sPreTickMarker.Sample()) Network?.PreTick();
+			}
+			);
+		World.AddStep(mTickPipeline, "Tick.Update", .PreUpdate, new () =>
+			{
+				using (sTickUpdateMarker.Sample()) TickUpdatesOffline();
+			}
+			);
+		World.AddStep(mTickPipeline, "Tick.FixedUpdate", .OnUpdate, new => RunFixedUpdates);
+		World.AddStep(mTickPipeline, "Tick.Physics", .OnValidate, new () =>
+			{
+				using (sPhysicsMarker.Sample())
+				{
+					Water.Simulate(this, Time.FixedDeltaTime);
+					Physics.Step(Time.FixedDeltaTime);
+				}
+			});
+		World.AddStep(mTickPipeline, "Tick.NetworkSend", .PostUpdate, new () =>
+			{
+				using (sPostTickMarker.Sample()) Network?.PostTick();
+			}
+			);
+
+		mFramePipeline = World.CreatePipeline("Frame");
+		World.AddStep(mFramePipeline, "Frame.OnFrame", .OnLoad, new => RunOnFrames);
+		World.AddStep(mFramePipeline, "Frame.Audio", .PostLoad, new () =>
+			{
+				using (sVoiceMarker.Sample())
+					VoiceChat.Update(this);
+				using (sAudioMarker.Sample())
+					Audio.Update(this);
+			});
+		World.AddStep(mFramePipeline, "Frame.Starts", .PreUpdate, new () =>
+			{
+				if (!mPlaying)
+					return;
+				using (sStartMarker.Sample())
+					RunPendingStarts();
+			});
+		World.AddStep(mFramePipeline, "Frame.Update", .OnUpdate, new => RunFrameUpdates);
+		// Paths the agents asked for in Update, found together on the job threads.
+		World.AddStep(mFramePipeline, "Frame.Paths", .OnValidate, new () =>
+			{
+				if (!mPlaying)
+					return;
+				using (sPathsMarker.Sample())
+					NavigationAgent.FindQueuedPaths();
+			});
+		World.AddStep(mFramePipeline, "Frame.LateUpdate", .PostUpdate, new => RunLateUpdates);
+		// Inverse kinematics goes on top of whatever clips and scripts made of the pose this frame, and rigged models
+		// whose bones are objects are skinned from the result.
+		World.AddStep(mFramePipeline, "Frame.Animation", .PreStore, new () =>
+			{
+				using (sIKMarker.Sample())
+					IKSystem.Solve(this);
+				sSkinMarker.Begin();
+				SkinnedMeshRenderer.SkinFromBones(this);
+				SkinnedMeshRenderer.FinishCpuSkinning();
+				Profiler.End();
+			});
+		World.AddStep(mFramePipeline, "Frame.Destroy", .OnStore, new => RunDestroyQueue);
+	}
+
+	/// One fixed simulation tick through the Tick pipeline: pending Starts, the network's receive and simulation,
+	/// Update on networked objects when offline, FixedUpdate, physics, then the network's send.
 	public void FixedUpdate()
 	{
 		if (!mPlaying)
 			return;
 		Active = this;
 		SpawnPhaseTime += Time.FixedDeltaTime;
-		using (sStartMarker.Sample())
-			RunPendingStarts();
-		using (sPreTickMarker.Sample())
-			Network?.PreTick();
-		using (sTickUpdateMarker.Sample())
-			TickUpdatesOffline();
+		RunPipeline(mTickPipeline, Time.FixedDeltaTime);
+		Time.Tick++;
+	}
+
+	void RunFixedUpdates()
+	{
 		sFixedMarker.Begin();
 		for (int i = 0; i < mFixedList.Count; i++)
 		{
@@ -1164,14 +1249,6 @@ class Scene
 				Run(component, .FixedUpdate);
 		}
 		Profiler.End();
-		using (sPhysicsMarker.Sample())
-		{
-			Water.Simulate(this, Time.FixedDeltaTime);
-			Physics.Step(Time.FixedDeltaTime);
-		}
-		using (sPostTickMarker.Sample())
-			Network?.PostTick();
-		Time.Tick++;
 	}
 
 	/// Per-frame update. In edit mode only the destroy queue is processed.
@@ -1187,8 +1264,9 @@ class Scene
 	/// How many times Update has run.
 	public int64 UpdateCount { get; private set; }
 
-	/// Runs one frame: OnFrame on every component (in the editor too), then while playing the pending Starts, Update,
-	/// LateUpdate and the end-of-frame work (destroys, IK, skinning).
+	/// Runs one frame through the Frame pipeline: OnFrame on every component (in the editor too), audio, then while
+	/// playing the pending Starts, Update and OnLocalUpdate, queued paths and LateUpdate, and always IK, skinning and
+	/// the destroy queue.
 	public void Update()
 	{
 		Active = this;
@@ -1200,6 +1278,27 @@ class Scene
 		{
 			Updating = false;
 		}
+		RunPipeline(mFramePipeline, Time.DeltaTime);
+	}
+
+	bool mInPipeline;
+
+	/// Runs one of the scene's pipelines. Flecs keeps one running pipeline per world, so a frame or tick asked for
+	/// from inside another (a script calling Scene.Update) is refused rather than corrupting it.
+	void RunPipeline(World.Pipeline pipeline, float deltaTime)
+	{
+		if (mInPipeline)
+		{
+			Log.Error("Scene.Update or Scene.FixedUpdate was called from inside a frame or tick of the same scene; ignored.");
+			return;
+		}
+		mInPipeline = true;
+		World.Run(pipeline, deltaTime);
+		mInPipeline = false;
+	}
+
+	void RunOnFrames()
+	{
 		sFrameComponentsMarker.Begin();
 		for (int i = 0; i < mOnFrameList.Count; i++)
 		{
@@ -1208,52 +1307,49 @@ class Scene
 				Run(component, .OnFrame);
 		}
 		Profiler.End();
-		using (sVoiceMarker.Sample())
-			VoiceChat.Update(this);
-		using (sAudioMarker.Sample())
-			Audio.Update(this);
-		if (mPlaying)
+	}
+
+	void RunFrameUpdates()
+	{
+		if (!mPlaying)
+			return;
+		mFrameInput.previous = mFrameInput.raw;
+		mFrameInput.raw = default;
+		LocalControls.Read(ref mFrameInput.raw);
+		let deltaTime = Time.DeltaTime;
+		sUpdateMarker.Begin();
+		for (int i = 0; i < mFrameList.Count; i++)
 		{
-			using (sStartMarker.Sample())
-				RunPendingStarts();
-			mFrameInput.previous = mFrameInput.raw;
-			mFrameInput.raw = default;
-			LocalControls.Read(ref mFrameInput.raw);
-			sUpdateMarker.Begin();
-			for (int i = 0; i < mFrameList.Count; i++)
+			let component = mFrameList[i];
+			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 			{
-				let component = mFrameList[i];
-				if (component.[Friend]mStarted && component.IsActiveAndEnabled)
-				{
-					let callbacks = component.[Friend]mCallbacks;
-					if (callbacks.HasFlag(.OnLocalUpdate))
-						Run(component, .OnLocalUpdate);
-					// Update runs here for objects without a Network Identity; theirs runs per tick.
-					if (callbacks.HasFlag(.Update) && !TicksUpdate(component.GameObject) && component.IsActiveAndEnabled)
-						Run(component, .Update);
-				}
+				let callbacks = component.[Friend]mCallbacks;
+				if (callbacks.HasFlag(.OnLocalUpdate))
+					Run(component, .OnLocalUpdate);
+				// Update runs here for objects without a Network Identity; theirs runs per tick.
+				if (callbacks.HasFlag(.Update) && !TicksUpdate(component.GameObject) && component.IsActiveAndEnabled)
+					RunUpdate(component, mFrameInput, deltaTime);
 			}
-			Profiler.End();
-			// Paths the agents asked for in Update, found together on the job threads.
-			using (sPathsMarker.Sample())
-				NavigationAgent.FindQueuedPaths();
-			sLateMarker.Begin();
-			for (int i = 0; i < mLateList.Count; i++)
-			{
-				let component = mLateList[i];
-				if (component.[Friend]mStarted && component.IsActiveAndEnabled)
-					Run(component, .LateUpdate);
-			}
-			Profiler.End();
 		}
-		// Inverse kinematics goes on top of whatever clips and scripts made of the pose this frame, and rigged models
-		// whose bones are objects are skinned from the result.
-		using (sIKMarker.Sample())
-			IKSystem.Solve(this);
-		sSkinMarker.Begin();
-		SkinnedMeshRenderer.SkinFromBones(this);
-		SkinnedMeshRenderer.FinishCpuSkinning();
 		Profiler.End();
+	}
+
+	void RunLateUpdates()
+	{
+		if (!mPlaying)
+			return;
+		sLateMarker.Begin();
+		for (int i = 0; i < mLateList.Count; i++)
+		{
+			let component = mLateList[i];
+			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
+				Run(component, .LateUpdate);
+		}
+		Profiler.End();
+	}
+
+	void RunDestroyQueue()
+	{
 		sDestroyMarker.Begin();
 		while (mDestroyQueue.Count > 0)
 		{

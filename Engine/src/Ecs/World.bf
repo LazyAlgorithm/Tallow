@@ -68,6 +68,44 @@ sealed class World
 		Flecs.WorldFree(mWorld);
 	}
 
+	/// A pipeline: the steps (and later systems) tagged for it, run in phase order by Run. Scene has two, Frame and
+	/// Tick (docs/ecs-plan.md, "Frame and tick order").
+	public struct Pipeline
+	{
+		public uint64 id;
+		public uint64 tag;
+	}
+
+	/// The steps' bodies, freed after the world (which frees its own record of them).
+	List<delegate void()> mSteps = new .() ~ DeleteContainerAndItems!(_);
+
+	public Pipeline CreatePipeline(StringView name)
+	{
+		Pipeline pipeline;
+		pipeline.tag = Flecs.Tag(mWorld, scope String()..AppendF("{}Step", name).CStr());
+		pipeline.id = Flecs.PipelineNew(mWorld, scope String(name).CStr(), pipeline.tag);
+		Runtime.Assert(pipeline.id != 0, "Flecs refused the pipeline");
+		return pipeline;
+	}
+
+	/// Adds a step to a pipeline: body runs once each time the pipeline runs, in phase (steps in one phase run in
+	/// the order they were added). The world owns body. Steps may change the world directly.
+	public void AddStep(Pipeline pipeline, StringView name, Flecs.Phase phase, delegate void() body)
+	{
+		mSteps.Add(body);
+		let id = Flecs.StepNew(mWorld, scope String(name).CStr(), phase, pipeline.tag, => RunStep, Internal.UnsafeCastToPtr(body));
+		Runtime.Assert(id != 0, "Flecs refused the step");
+	}
+
+	static void RunStep(void* context)
+	{
+		let body = (delegate void())Internal.UnsafeCastToObject(context);
+		body();
+	}
+
+	/// Runs every step and system of a pipeline, in phase order.
+	public void Run(Pipeline pipeline, float deltaTime) => Flecs.RunPipeline(mWorld, pipeline.id, deltaTime);
+
 	/// The ecs_world_t, for engine code that calls Flecs directly.
 	public void* Native => mWorld;
 

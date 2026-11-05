@@ -139,6 +139,12 @@ static class Flecs
 	[LinkName("tallow_ecs_table_versions")] public static extern uint32* TableVersions(void* world);
 	[LinkName("tallow_ecs_table_version_mask")] public static extern int32 TableVersionMask();
 
+	// ---- Pipelines and steps ----
+	public function void StepCallback(void* context);
+	[LinkName("tallow_ecs_pipeline_new")] public static extern uint64 PipelineNew(void* world, char8* name, uint64 tag);
+	[LinkName("tallow_ecs_run_pipeline")] public static extern void RunPipeline(void* world, uint64 pipeline, float deltaTime);
+	[LinkName("tallow_ecs_step_new")] public static extern uint64 StepNew(void* world, char8* name, Phase phase, uint64 tag, StepCallback callback, void* context);
+
 	// ---- Systems ----
 	[LinkName("tallow_ecs_phase")] public static extern uint64 PhaseId(Phase phase);
 	[LinkName("tallow_ecs_system_new")] public static extern uint64 SystemNew(void* world, char8* name, Phase phase, uint64* ids, TermAccess* access, int32 count, SystemCallback callback, void* context, bool multiThreaded);
