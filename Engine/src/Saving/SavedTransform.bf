@@ -67,7 +67,7 @@ class SavedTransform : Component
 		var spin = Vector3.Zero;
 		if (io.Writing)
 		{
-			if (body != null && body.HasBody && !body.isKinematic)
+			if (body.IsValid && body.HasBody && !body.isKinematic)
 			{
 				let state = body.State;
 				linear = state.linearVelocity;
@@ -77,12 +77,12 @@ class SavedTransform : Component
 				linear = character.Velocity;
 		}
 		var hasLinear = false, hasSpin = false;
-		if (velocity && (body != null || character != null) && io.Key("velocity"))
+		if (velocity && (body.IsValid || character != null) && io.Key("velocity"))
 		{
 			io.Value(ref linear);
 			hasLinear = true;
 		}
-		if (angularVelocity && body != null && io.Key("spin"))
+		if (angularVelocity && body.IsValid && io.Key("spin"))
 		{
 			io.Value(ref spin);
 			hasSpin = true;
@@ -96,7 +96,7 @@ class SavedTransform : Component
 			Transform.LocalRotation = turned;
 			Transform.LocalScale = size;
 		}
-		if (body != null && body.HasBody)
+		if (body.IsValid && body.HasBody)
 		{
 			// The body already exists (loading while playing): move it and set it going at once.
 			var state = body.State;
@@ -124,7 +124,7 @@ class SavedTransform : Component
 		if (!mPending)
 			return;
 		let body = GetComponent<Rigidbody>();
-		if (body != null && body.HasBody)
+		if (body.IsValid && body.HasBody)
 		{
 			var state = body.State;
 			state.linearVelocity = mPendingVelocity;
@@ -140,7 +140,7 @@ class SavedTransform : Component
 			mPending = false;
 			return;
 		}
-		if (body == null && character == null)
+		if (!body.IsValid && character == null)
 			mPending = false;
 	}
 }

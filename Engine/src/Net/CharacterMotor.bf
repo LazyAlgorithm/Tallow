@@ -91,7 +91,7 @@ class CharacterMotor : NetworkBehaviour
 		}
 
 		let body = GetComponent<Rigidbody>();
-		if (body == null || !body.HasBody)
+		if (!body.IsValid || !body.HasBody)
 			return;
 		var velocity = body.Velocity;
 		let horizontal = Vector3.MoveTowards(.(velocity.x, 0, velocity.z), target, acceleration * deltaTime);

@@ -34,7 +34,7 @@ abstract class Collider : Component
 	void CreateStaticBody()
 	{
 		// A Rigidbody on the same object owns the body; otherwise this collider is static.
-		if (mStaticBody == uint32.MaxValue && GetComponent<Rigidbody>() == null)
+		if (mStaticBody == uint32.MaxValue && !HasComponent<Rigidbody>())
 			mStaticBody = Scene.Physics.CreateBody(Transform, GetShape(), null);
 	}
 

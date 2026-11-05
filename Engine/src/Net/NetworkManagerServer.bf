@@ -358,7 +358,7 @@ extension NetworkManager
 			WritePredictedBody(writer, identity);
 			return;
 		}
-		else if (identity.remoteFormat == .QuantizedBody && identity.GetComponent<Rigidbody>()?.HasBody == true)
+		else if (identity.remoteFormat == .QuantizedBody && identity.GetComponent<Rigidbody>().HasBody)
 			NetPack.WriteMotion(writer, identity.GetComponent<Rigidbody>().State);
 		else if (identity.remoteFormat != .Legacy)
 			NetPack.WriteTransform(writer, identity.Transform.Position, identity.Transform.Rotation, identity.remoteFormat == .QuantizedTransform);

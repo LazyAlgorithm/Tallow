@@ -1158,6 +1158,8 @@ class Scene
 		}
 		mPendingStart.Clear();
 		mPlaying = false;
+		// Built-in components' bodies leave the physics world as the class components' did in OnDisable.
+		Rigidbody.SyncAll(this);
 	}
 
 	void RunPendingStarts()
@@ -1281,7 +1283,11 @@ class Scene
 		mTickPipeline = World.CreatePipeline("Tick");
 		World.AddStep(mTickPipeline, "Tick.Starts", .OnLoad, new () =>
 			{
-				using (sStartMarker.Sample()) RunPendingStarts();
+				using (sStartMarker.Sample())
+				{
+					RunPendingStarts();
+					Rigidbody.SyncAll(this);
+				}
 			}
 			);
 		World.AddStep(mTickPipeline, "Tick.NetworkReceive", .PostLoad, new () =>
@@ -1327,7 +1333,10 @@ class Scene
 				if (!mPlaying)
 					return;
 				using (sStartMarker.Sample())
+				{
 					RunPendingStarts();
+					Rigidbody.SyncAll(this);
+				}
 			});
 		World.AddStep(mFramePipeline, "Frame.Update", .OnUpdate, new => RunFrameUpdates);
 		// Paths the agents asked for in Update, found together on the job threads.

@@ -137,10 +137,10 @@ class Gallery : Script
 			Shove();
 		if ((Input.LockCursor && Input.GetMouseButtonDown(0)) || (mTestShots > 0 && Time.FrameCount > 60 && Time.FrameCount % 12 == 0 && mTestShots-- > 0))
 			Fire();
-		if (mFired != null && mFired.HasBody)
+		if (mFired.HasBody)
 		{
 			mFired.Velocity = mFiredVelocity;
-			mFired = null;
+			mFired = default;
 		}
 		mNextCut -= Time.DeltaTime;
 		if (mNextCut <= 0)
@@ -170,7 +170,7 @@ class Gallery : Script
 		let view = mVisitor.view.Transform;
 		// Starts past the visitor's own capsule, which the ray would otherwise hit first.
 		if (Scene.Physics.Raycast(view.Position + view.Forward * 0.7f, view.Forward, 14, let hit) && hit.gameObject != null)
-			hit.gameObject.GetComponent<Rigidbody>()?.AddImpulse(view.Forward * 60);
+			hit.gameObject.GetComponent<Rigidbody>().AddImpulse(view.Forward * 60);
 	}
 
 	/// Where the eye points: a thin cut through a voxel object, or a dig (-1) or mound (1) in the ground.

@@ -362,7 +362,7 @@ class Rope : Component
 	/// the rope pulls: a slack rope steers nothing.
 	void TurnByKnot(Rigidbody body, Vector3 tied, Vector3 along)
 	{
-		if (body == null || body.isKinematic || knotStiffness <= 0 || along.LengthSquared < 1.0e-8f)
+		if (!body.IsValid || body.isKinematic || knotStiffness <= 0 || along.LengthSquared < 1.0e-8f)
 			return;
 		let taut = Mathf.Clamp01(mKnotPull / Math.Max(body.mass * 9.81f, 0.001f));
 		if (taut <= 0.01f)
@@ -388,13 +388,14 @@ class Rope : Component
 	{
 		for (var up = at; up != null; up = up.Parent)
 		{
-			if (let body = up.GameObject.GetComponent<Rigidbody>())
+			let body = up.GameObject.GetComponent<Rigidbody>();
+			if (body)
 			{
 				body.EnsureBody();
-				return body.HasBody ? body : null;
+				return body.HasBody ? body : default;
 			}
 		}
-		return null;
+		return default;
 	}
 
 	void CreateBody()
@@ -481,10 +482,10 @@ class Rope : Component
 
 		// It does not catch on what its ends are tied to.
 		let startBody = PulledBody(StartObject);
-		let endBody = tied ? PulledBody(endAttachedTo) : null;
-		if (startBody != null)
+		let endBody = tied ? PulledBody(endAttachedTo) : Rigidbody();
+		if (startBody.IsValid)
 			tn_soft_ignore(system, mBody, startBody.BodyId);
-		if (endBody != null && endBody != startBody)
+		if (endBody.IsValid && endBody != startBody)
 			tn_soft_ignore(system, mBody, endBody.BodyId);
 
 		var renderer = GetComponent<MeshRenderer>();
@@ -632,8 +633,8 @@ class Rope : Component
 					TurnByKnot(endBody, end, mPositions[Math.Max(count - 3, 0)] - end);
 			}
 		}
-		let startPulls = startBody != null && !startBody.isKinematic;
-		let endPulls = endBody != null && !endBody.isKinematic;
+		let startPulls = startBody.IsValid && !startBody.isKinematic;
+		let endPulls = endBody.IsValid && !endBody.isKinematic;
 		if (!startPulls && !endPulls)
 		{
 			if (mTie != null)
@@ -645,7 +646,7 @@ class Rope : Component
 		}
 		// A tie to the world (or to a kinematic body) is made again when that end has moved, and one round what it
 		// wraps when that has changed.
-		var moved = (startBody == null && (start - mTiedStart).LengthSquared > 1.0e-4f) || (endBody == null && (end - mTiedEnd).LengthSquared > 1.0e-4f);
+		var moved = (!startBody.IsValid && (start - mTiedStart).LengthSquared > 1.0e-4f) || (!endBody.IsValid && (end - mTiedEnd).LengthSquared > 1.0e-4f);
 		var from = start;
 		var to = end;
 		uint32 first = 0, last = 0;
@@ -671,8 +672,8 @@ class Rope : Component
 			return;
 		if (mTie != null)
 			tn_rope_untie(system, mTie);
-		let startId = startBody?.BodyId ?? uint32.MaxValue;
-		let endId = endBody?.BodyId ?? uint32.MaxValue;
+		let startId = startBody.BodyId;
+		let endId = endBody.BodyId;
 		if (wrapped)
 		{
 			// The rope between the first and last points it wraps round is fixed; the rest is shared by the two ends.

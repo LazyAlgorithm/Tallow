@@ -945,7 +945,23 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   At with several waters, switched off and inactive, [Sync] slots found and following the data to a new table, save
   and load, freed on remove and with the scene); the editor's `--separate-worlds-test` passes (a crate floats in its
   world state's water and one in the other falls through) and the Gallery self-test passes.
-- [ ] Rigidbody, Collider, Joint,
+- [x] **Rigidbody.** Its settings are `RigidbodyData`; its body id is a `RigidbodyState` (OnRemove takes the body out of
+  the physics world). With no Start, OnEnable or OnDisable, `Rigidbody.SyncAll(scene)` runs after the pending Starts
+  of each tick and each frame, and once more when play stops: a switched-on Rigidbody on an active object gets its
+  body while the scene plays (all of an object built in code exists by then, as Start relied on), and one switched
+  off, on an inactive object, or in a stopped scene loses it. `EnsureBody()` still makes it at once.
+  `PhysicsWorld.CreateBody` takes a `RigidbodyData*` (null for a static collider's body). The body calls (Velocity,
+  AddForce, Sleep, State...) do nothing on a handle with no body, so code that used `GetComponent<Rigidbody>()?.X`
+  reads as before with `.X`. The build's BF0472 warnings found 40 `== null` / `!= null` / `?.` uses in the engine
+  (SavedTransform, NavigationAgent, NetworkIdentity, SoftBody, Rope, Joint, Water...), now `IsValid` or
+  `HasComponent<Rigidbody>()`; `component as Rigidbody` (WorldStreaming's origin shift) and `component is Rigidbody`
+  (SpawnPoint's crowding test) compiled silently and were always false, now queries. The showcase template's
+  Gallery script had two more. Checked by `EcsChecks.RigidbodyChecks` (defaults, no body before play, calls on an
+  absent body, body on play, falling, Velocity, switched off and on, inactive object, resting on the ground, a body
+  built in code made at the next Starts with its collider, removal, stopping, save and load, freed with the scene);
+  the Gallery self-test passes, `--separate-worlds-test` passes, and the Campus copy plays 400 frames without errors.
+  Games that update to this engine need the same search (BF0472 on Rigidbody, `as`/`is Rigidbody`).
+- [ ] Collider, Joint,
   CharacterController, SoftBody, Rope, and the Phase 5 set.
 - [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with
   the components above converted, a Gallery made from the template builds and its `--self-test` prints

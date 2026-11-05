@@ -499,7 +499,7 @@ class PhysicsWorld
 
 	/// Creates a body that follows (static/kinematic) or drives (dynamic) the given transform.
 	/// Returns the body id, or uint32.MaxValue on failure.
-	public uint32 CreateBody(Transform transform, ShapeDesc desc, Rigidbody rigidbody)
+	public uint32 CreateBody(Transform transform, ShapeDesc desc, RigidbodyData* rigidbody)
 	{
 		EnsureCreated();
 		let shape = CreateShape(desc);
@@ -784,7 +784,8 @@ class PhysicsWorld
 		// Most objects have no body: setting their layer must not look through every one.
 		bool hasBody = false;
 		for (let component in gameObject.Components)
-			hasBody |= component is Collider || component is Rigidbody || component is CharacterController;
+			hasBody |= component is Collider || component is CharacterController;
+		hasBody |= gameObject.HasComponent<Rigidbody>();
 		if (!hasBody)
 			return;
 		for (let entry in mEntries)

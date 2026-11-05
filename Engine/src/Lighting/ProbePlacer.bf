@@ -337,7 +337,7 @@ class ProbePlacer
 		for (var at = gameObject.Transform; at != null; at = at.Parent)
 		{
 			let body = at.GameObject.GetComponent<Rigidbody>();
-			if (body != null && !body.isKinematic)
+			if (body.IsValid && !body.isKinematic)
 				return true;
 		}
 		return false;

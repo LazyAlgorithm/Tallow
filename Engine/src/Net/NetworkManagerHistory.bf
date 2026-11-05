@@ -396,7 +396,7 @@ extension NetworkManager
 	{
 		for (let entry in owned)
 		{
-			if (entry.identity.GetComponent<Rigidbody>()?.HasBody == true)
+			if (entry.identity.GetComponent<Rigidbody>().HasBody)
 				return true;
 		}
 		return false;
@@ -407,7 +407,7 @@ extension NetworkManager
 	{
 		for (let identity in mIdentities)
 		{
-			if (identity.ownerId != LocalClientId && !identity.Predicted && identity.GetComponent<Rigidbody>()?.HasBody == true)
+			if (identity.ownerId != LocalClientId && !identity.Predicted && identity.GetComponent<Rigidbody>().HasBody)
 				others.Add((identity, identity.CaptureState()));
 		}
 	}

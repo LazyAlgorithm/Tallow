@@ -352,7 +352,7 @@ class NavigationAgent : AIMovementDriver
 		if (!mDriving) return;
 		mDriving = false;
 		let body = GetComponent<Rigidbody>();
-		if (body != null && body.HasBody && !body.isKinematic)
+		if (body.IsValid && body.HasBody && !body.isKinematic)
 		{
 			var velocity = body.Velocity;
 			velocity.x = 0;
@@ -386,7 +386,7 @@ class NavigationAgent : AIMovementDriver
 		var delta = mPath[mWaypoint] - position;
 		let body = GetComponent<Rigidbody>();
 		// Gravity or the character controller keeps these on the floor, so they are only steered sideways.
-		if (((body != null && !body.isKinematic) || GetComponent<CharacterController>() != null) && !surface.Data.flying)
+		if (((body.IsValid && !body.isKinematic) || GetComponent<CharacterController>() != null) && !surface.Data.flying)
 			delta.y = 0;
 		if (faceMovement && delta.x * delta.x + delta.z * delta.z > 0.00001f)
 		{
@@ -580,7 +580,7 @@ class NavigationAgent : AIMovementDriver
 			return;
 		}
 		let body = GetComponent<Rigidbody>();
-		if (body != null && body.HasBody && !body.isKinematic)
+		if (body.IsValid && body.HasBody && !body.isKinematic)
 		{
 			var state = body.State;
 			state.position = position;
@@ -613,7 +613,7 @@ class NavigationAgent : AIMovementDriver
 				Repath();
 		}
 		let body = GetComponent<Rigidbody>();
-		if (GetComponent<CharacterController>() == null && (body == null || body.isKinematic))
+		if (GetComponent<CharacterController>() == null && (!body.IsValid || body.isKinematic))
 		{
 			if (mLink != null)
 				CrossLink(Time.DeltaTime);
@@ -626,7 +626,7 @@ class NavigationAgent : AIMovementDriver
 	{
 		if (NetworkSync.IsClientOf(Scene)) return;
 		let controller = GetComponent<CharacterController>();
-		let physical = controller != null || (GetComponent<Rigidbody>()?.HasBody ?? false) && !GetComponent<Rigidbody>().isKinematic;
+		let physical = controller != null || GetComponent<Rigidbody>().HasBody && !GetComponent<Rigidbody>().isKinematic;
 		if (mLink != null && physical)
 		{
 			CrossLink(Time.FixedDeltaTime);
@@ -643,7 +643,7 @@ class NavigationAgent : AIMovementDriver
 			return;
 		}
 		let body = GetComponent<Rigidbody>();
-		if (body == null || body.isKinematic || !body.HasBody) return;
+		if (!body.IsValid || body.isKinematic || !body.HasBody) return;
 		let desired = Desired(Time.FixedDeltaTime);
 		// Velocity is only written while following a path; an idle or arrived agent can be pushed, thrown or dropped.
 		if (!mRequested || mFailed || mWaypoint >= mPath.Count)

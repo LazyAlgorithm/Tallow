@@ -131,7 +131,7 @@ extension NetworkManager
 				continue;
 			}
 			let asleep = (flags & NetPack.FlagSleeping) != 0;
-			if ((flags & NetPack.FlagPredicted) != 0 && PredictPhysics && (int32)(mTick - identity.PredictPausedUntil) >= 0 && identity.GetComponent<Rigidbody>()?.HasBody == true)
+			if ((flags & NetPack.FlagPredicted) != 0 && PredictPhysics && (int32)(mTick - identity.PredictPausedUntil) >= 0 && identity.GetComponent<Rigidbody>().HasBody)
 			{
 				// Old news about a body this machine runs ahead of the server is no use to it.
 				if (identity.Predicted && (int32)(serverTick - identity.ServerStateTick) <= 0)
@@ -152,7 +152,7 @@ extension NetworkManager
 				identity.HoldKey((uint32)(serverTick - interval));
 			// Character motors may use velocity slots for prediction metadata. Only
 			// rigidbodies carry physical spin that is safe to extrapolate.
-			if ((flags & (NetPack.FlagFull | NetPack.FlagPredicted | NetPack.FlagMotion)) != 0 && identity.GetComponent<Rigidbody>() != null)
+			if ((flags & (NetPack.FlagFull | NetPack.FlagPredicted | NetPack.FlagMotion)) != 0 && identity.HasComponent<Rigidbody>())
 				identity.PushBodyKey(serverTick, state, asleep);
 			else
 				identity.PushKey(serverTick, state.position, state.rotation, asleep);

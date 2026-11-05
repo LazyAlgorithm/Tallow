@@ -43,7 +43,7 @@ class NetworkIdentity : Component
 	public bool distanceFiltered;
 	/// Higher values are serviced first when a session has a bandwidth budget.
 	public int32 snapshotPriority;
-	public bool SnapshotSleeping => dormantWhenSleeping && GetComponent<Rigidbody>()?.IsSleeping == true;
+	public bool SnapshotSleeping => dormantWhenSleeping && GetComponent<Rigidbody>().IsSleeping;
 	/// Whether clients simulate this body themselves while the server owns it (NetworkManager.PredictPhysics).
 	public PhysicsPrediction physicsPrediction = .Auto;
 
@@ -170,7 +170,7 @@ class NetworkIdentity : Component
 			if (physicsPrediction == .Off || ownerId != 0)
 				return false;
 			let body = GetComponent<Rigidbody>();
-			if (body == null || body.isKinematic || !body.HasBody)
+			if (!body.IsValid || body.isKinematic || !body.HasBody)
 				return false;
 			if (physicsPrediction == .On)
 				return true;
@@ -187,7 +187,7 @@ class NetworkIdentity : Component
 	public void RecordTick(uint32 tick)
 	{
 		History[tick % HistorySize] = CaptureState();
-		HistoryAsleep[tick % HistorySize] = GetComponent<Rigidbody>()?.IsSleeping == true;
+		HistoryAsleep[tick % HistorySize] = GetComponent<Rigidbody>().IsSleeping;
 	}
 
 	/// Client: puts a predicted body back in a state, resting if it was.
@@ -195,7 +195,7 @@ class NetworkIdentity : Component
 	{
 		ApplyState(state);
 		if (asleep)
-			GetComponent<Rigidbody>()?.Sleep();
+			GetComponent<Rigidbody>().Sleep();
 	}
 
 	public bool IsOwner => Scene.Network != null && ownerId == Scene.Network.LocalClientId;
@@ -425,7 +425,7 @@ class NetworkIdentity : Component
 	public BodyState CaptureState()
 	{
 		let body = GetComponent<Rigidbody>();
-		if (body != null && body.HasBody)
+		if (body.IsValid && body.HasBody)
 		{
 			var bodyState = body.State;
 			for (let component in GameObject.Components)
@@ -463,7 +463,7 @@ class NetworkIdentity : Component
 				behaviour.PreparePredictionState(state);
 		}
 		let body = GetComponent<Rigidbody>();
-		if (body != null && body.HasBody)
+		if (body.IsValid && body.HasBody)
 			body.SetState(state);
 		else
 		{

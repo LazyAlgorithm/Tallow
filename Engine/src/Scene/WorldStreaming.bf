@@ -553,22 +553,22 @@ class WorldStreamer
 		for (let root in scene.Roots)
 			root.Transform.Position = root.Transform.Position - shift;
 		Origin += shift;
+		for (let body in scene.Components<Rigidbody>(.. scope .()))
+		{
+			if (body.HasBody)
+			{
+				var state = body.State;
+				state.position -= shift;
+				body.SetState(state);
+			}
+		}
 		for (let component in scene.Components)
 		{
-			if (let body = component as Rigidbody)
-			{
-				if (body.HasBody)
-				{
-					var state = body.State;
-					state.position -= shift;
-					body.SetState(state);
-				}
-			}
-			else if (let character = component as CharacterController)
+			if (let character = component as CharacterController)
 				character.Teleport(character.Transform.Position, character.Velocity);
 			else if (let collider = component as Collider)
 			{
-				if (collider.GetComponent<Rigidbody>() == null)
+				if (!collider.HasComponent<Rigidbody>())
 					collider.Refresh();
 			}
 		}

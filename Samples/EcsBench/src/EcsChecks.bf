@@ -112,6 +112,7 @@ static class EcsChecks
 		LineChecks();
 		FoliageChecks();
 		WaterChecks();
+		RigidbodyChecks();
 		return sFailures;
 	}
 
@@ -535,6 +536,74 @@ static class EcsChecks
 			Expect(ComponentState<ParticleState>.Count == before, "RemoveComponent frees the particles");
 		}
 		Expect(ComponentState<ParticleState>.Count == before, "particles are freed with their scene");
+	}
+
+	/// Rigidbody: a body made once the scene plays, following switching off, inactive objects, removal and stopping.
+	static void RigidbodyChecks()
+	{
+		let before = ComponentState<RigidbodyState>.Count;
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let ground = scene.CreateGameObject("Ground");
+			ground.Transform.Position = .(0, -0.5f, 0);
+			ground.AddComponent<BoxCollider>().size = .(20, 1, 20);
+			let crate = scene.CreateGameObject("Crate");
+			crate.Transform.Position = .(0, 3, 0);
+			crate.AddComponent<BoxCollider>();
+			let body = crate.AddComponent<Rigidbody>();
+			body.mass = 4;
+			Expect(body.mass == 4 && body.useGravity && !body.isKinematic && body.friction == 0.5f && !body.HasBody, "a Rigidbody has its defaults and no body before play");
+			Expect(body.Velocity == .Zero && !body.IsSleeping, "an absent body reads as still");
+			body.AddForce(.(1, 0, 0));
+			scene.StartPlay();
+			scene.Update();
+			Expect(body.HasBody, "playing makes the body");
+			let id = body.BodyId;
+			for (int i < 30)
+				scene.FixedUpdate();
+			Expect(crate.Transform.Position.y < 2.9f, scope $"the body falls ({crate.Transform.Position.y})");
+			body.Velocity = .(0, 0, 2);
+			Expect(Math.Abs(body.Velocity.z - 2) < 0.01f, "Velocity sets the body's speed");
+			body.enabled = false;
+			scene.FixedUpdate();
+			Expect(!body.HasBody, "switching it off takes the body out");
+			body.enabled = true;
+			scene.Update();
+			Expect(body.HasBody && body.BodyId != uint32.MaxValue, "switching it on makes a body again");
+			crate.SetActive(false);
+			scene.FixedUpdate();
+			Expect(!body.HasBody, "an inactive object has no body");
+			crate.SetActive(true);
+			scene.FixedUpdate();
+			Expect(body.HasBody, "and it comes back with the object");
+			for (int i < 240)
+				scene.FixedUpdate();
+			Expect(Math.Abs(crate.Transform.Position.y - 0.5f) < 0.1f, scope $"it rests on the ground ({crate.Transform.Position.y})");
+			// Built in code: the body is made at the next Starts, with every component there.
+			let ball = scene.CreateGameObject("Ball");
+			ball.Transform.Position = .(4, 2, 0);
+			let ballBody = ball.AddComponent<Rigidbody>();
+			ball.AddComponent<SphereCollider>();
+			Expect(!ballBody.HasBody, "a body waits for the next Starts");
+			scene.FixedUpdate();
+			Expect(ballBody.HasBody, "and is made with its collider");
+			ball.RemoveComponent<Rigidbody>();
+			Expect(ComponentState<RigidbodyState>.Count == before + 1, "RemoveComponent takes its body out");
+			let pushed = id != uint32.MaxValue;
+			Expect(pushed, "the body had an id");
+			scene.StopPlay();
+			Expect(!body.HasBody, "stopping play takes the body out");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains("component Tallow.Rigidbody enabled 1") && text.Contains("field mass 4"), "a Rigidbody saves as before");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			Expect(loaded.Find("Crate").GetComponent<Rigidbody>().mass == 4, "and loads");
+		}
+		Scene.Active = previous;
+		Expect(ComponentState<RigidbodyState>.Count == before, "bodies are freed with their scene");
 	}
 
 	/// Water and Floater: the surface from the data, Water.At, [Sync] fields of handle data, save and load.

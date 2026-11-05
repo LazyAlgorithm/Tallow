@@ -183,11 +183,11 @@ class SoftBody : Component
 	/// it, one of this soft body's Mass. So it falls, is pushed and hits things like any body.
 	void GiveShellABody()
 	{
-		Rigidbody rigid = null;
-		for (var up = Transform; up != null && rigid == null; up = up.Parent)
+		Rigidbody rigid = default;
+		for (var up = Transform; up != null && !rigid.IsValid; up = up.Parent)
 			rigid = up.GameObject.GetComponent<Rigidbody>();
 		// A Rigidbody higher up moves with its own colliders.
-		if (rigid != null && rigid.GameObject != GameObject)
+		if (rigid.IsValid && rigid.GameObject != GameObject)
 			return;
 		if (GetComponent<Collider>() == null)
 		{
@@ -197,9 +197,10 @@ class SoftBody : Component
 			// A convex wrap of the mesh, which follows its dents.
 			GameObject.AddComponent<ConvexCollider>();
 			// A Rigidbody that started without a collider made no body: it can now.
-			rigid?.RebuildBody();
+			if (rigid.IsValid)
+				rigid.RebuildBody();
 		}
-		if (rigid == null)
+		if (!rigid.IsValid)
 		{
 			rigid = GameObject.AddComponent<Rigidbody>();
 			rigid.mass = Math.Max(mass, 0.001f);
@@ -461,9 +462,9 @@ class SoftBody : Component
 		if (kind == .Shell)
 		{
 			var own = GetComponent<Rigidbody>();
-			for (var up = Transform.Parent; own == null && up != null; up = up.Parent)
+			for (var up = Transform.Parent; !own.IsValid && up != null; up = up.Parent)
 				own = up.GameObject.GetComponent<Rigidbody>();
-			if (mIgnored == uint32.MaxValue && own != null && own.BodyId != uint32.MaxValue)
+			if (mIgnored == uint32.MaxValue && own.IsValid && own.BodyId != uint32.MaxValue)
 			{
 				mIgnored = own.BodyId;
 				tn_soft_ignore(system, mBody, mIgnored);
@@ -471,7 +472,7 @@ class SoftBody : Component
 			// The shell is held where its object will be once this step has moved its rigidbody.
 			var objectMatrix = Transform.LocalToWorld;
 			var objectNext = objectMatrix;
-			if (own != null && own.BodyId != uint32.MaxValue && !own.isKinematic)
+			if (own.IsValid && own.BodyId != uint32.MaxValue && !own.isKinematic)
 			{
 				let pivot = own.Transform.Position;
 				let spin = own.AngularVelocity;
@@ -565,7 +566,7 @@ class SoftBody : Component
 		NetworkSync.DentsSettled(this);
 		let convex = GetComponent<ConvexCollider>();
 		let rigid = GetComponent<Rigidbody>();
-		if (convex == null || rigid == null || mRest.Count < 4)
+		if (convex == null || !rigid.IsValid || mRest.Count < 4)
 			return;
 		let dents = scope List<Vector3>();
 		GetDents(dents);

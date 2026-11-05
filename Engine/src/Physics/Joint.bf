@@ -32,7 +32,7 @@ class Joint : Component
 	/// Joins two bodies from code at a point in world space, adding a Joint component to the first.
 	public static Joint Connect(Rigidbody a, Rigidbody b, Vector3 worldAnchor, Vector3 worldAxis, float swingLimit = 0)
 	{
-		if (a == null || b == null || a == b)
+		if (!a.IsValid || !b.IsValid || a == b)
 			return null;
 		let joint = a.GameObject.AddComponent<Joint>();
 		joint.connectedTo = b;
@@ -72,7 +72,7 @@ class Joint : Component
 	{
 		Release();
 		let mine = GetComponent<Rigidbody>();
-		if (mine == null || connectedTo == null || !Scene.IsPlaying)
+		if (!mine.IsValid || !connectedTo.IsValid || !Scene.IsPlaying)
 			return;
 		// Both bodies must exist first, whichever order the components started in.
 		mine.EnsureBody();
@@ -89,7 +89,7 @@ class Joint : Component
 		let point = Transform.TransformPoint(anchor);
 		Gizmos.Lines.Sphere(point, 0.08f, .(1, 0.7f, 0.2f, 1));
 		Gizmos.Lines.Line(point, point + Transform.Rotation * axis.Normalized * 0.4f, .(1, 0.7f, 0.2f, 1));
-		if (connectedTo != null)
+		if (connectedTo.IsValid)
 			Gizmos.Lines.Line(point, connectedTo.Transform.Position, .(1, 0.7f, 0.2f, 0.5f));
 	}
 }

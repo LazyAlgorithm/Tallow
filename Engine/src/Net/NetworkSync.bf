@@ -110,7 +110,7 @@ static class NetworkSync
 			if (object.GetComponent<NetworkIdentity>() != null)
 				continue;
 			let body = object.GetComponent<Rigidbody>();
-			if ((body != null && !body.isKinematic) || object.GetComponent<CharacterController>() != null
+			if ((body.IsValid && !body.isKinematic) || object.GetComponent<CharacterController>() != null
 				|| object.GetComponent<AIMovementDriver>() != null || object.GetComponent<BehaviorTreeRunner>() != null
 				|| object.GetComponent<NetworkBehaviour>() != null || (object.GetComponent<DialogueRunner>()?.shared ?? false) || (object.GetComponent<SequencePlayer>()?.shared ?? false)
 				|| (object.GetComponent<SoftBody>()?.MovesByItself ?? false) || object.HasComponent<Water>())

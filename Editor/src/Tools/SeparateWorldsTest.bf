@@ -204,7 +204,7 @@ extension EditorApp
 			if (object.Name != "Fragment")
 				continue;
 			pieces++;
-			if (object.EffectiveWorldStates == A && object.GetComponent<Rigidbody>()?.debris == true)
+			if (object.EffectiveWorldStates == A && object.HasComponent<Rigidbody>() && object.GetComponent<Rigidbody>().debris)
 				pieceInA++;
 		}
 		Expect(pieces > 0 && pieceInA == pieces, scope $"carved pieces are A-only debris ({pieceInA}/{pieces})");

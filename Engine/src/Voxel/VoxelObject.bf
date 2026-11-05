@@ -684,7 +684,7 @@ class VoxelObject : Component
 			boxCollider.size = Vector3.Max(mMesh.Bounds.Extents * 2.0f, .(0.05f));
 		}
 		let body = GetComponent<Rigidbody>();
-		if (body != null)
+		if (body.IsValid)
 			body.RebuildBody();
 		else
 			GetComponent<Collider>()?.Refresh();
@@ -755,7 +755,7 @@ class VoxelObject : Component
 	/// Swaps static triangle collision for a convex body so what is left of the object can fall and roll.
 	void MakeDynamic()
 	{
-		if (GetComponent<Rigidbody>() != null)
+		if (HasComponent<Rigidbody>())
 			return;
 		let staticCollider = GetComponent<MeshCollider>();
 		if (staticCollider != null)

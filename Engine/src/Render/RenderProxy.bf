@@ -157,7 +157,7 @@ class RenderProxy
 	}
 
 	/// Whether it can move by itself (a Rigidbody, or a skinned model), and so is no Auto occluder.
-	public bool IsMoving => mGameObject != null && (mGameObject.GetComponent<Rigidbody>() != null || mGameObject.HasComponent<SkinnedMeshRenderer>());
+	public bool IsMoving => mGameObject != null && (mGameObject.HasComponent<Rigidbody>() || mGameObject.HasComponent<SkinnedMeshRenderer>());
 
 	/// The LOD Group above it that picks when it is drawn, if any (set by the group).
 	[NonSerialized]

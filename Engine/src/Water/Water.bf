@@ -421,10 +421,9 @@ struct Water : ComponentHandle<WaterData>
 			return;
 		for (let water in waters)
 			water.State.floating.Clear();
-		for (let component in scene.ComponentsOfType(typeof(Rigidbody)))
+		for (let body in scene.Components<Rigidbody>(.. scope .()))
 		{
-			let body = (Rigidbody)component;
-			if (!body.IsActiveAndEnabled || body.isKinematic || !body.HasBody || (!scene.Physics.SeparatesWorldStates && !body.GameObject.InActiveWorld))
+			if (!body.GameObject.ActiveInHierarchy || body.isKinematic || !body.HasBody || (!scene.Physics.SeparatesWorldStates && !body.GameObject.InActiveWorld))
 				continue;
 			let floater = body.GameObject.GetComponent<Floater>();
 			if (floater && !floater.IsActiveAndEnabled)
@@ -517,7 +516,7 @@ struct Water : ComponentHandle<WaterData>
 	}
 
 	/// Whether a Rigidbody was in this water at the last physics step.
-	public bool IsFloating(Rigidbody body) => body != null && body.HasBody && Floating(body.BodyId);
+	public bool IsFloating(Rigidbody body) => body.IsValid && body.HasBody && Floating(body.BodyId);
 	/// Whether any of a soft body's vertices were in this water at the last physics step (a shell: its Rigidbody).
 	public bool IsFloating(SoftBody soft) => soft != null && soft.HasBody && Floating(soft.BodyId);
 	/// Whether any of a rope's points were in this water at the last physics step.
