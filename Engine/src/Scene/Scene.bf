@@ -1037,6 +1037,8 @@ class Scene
 			IndexTag(gameObject, gameObject.GetTag(i), false);
 		// Children went first (above), so this never takes another object's entity with it.
 		gameObject.Transform.[Friend]Unbind();
+		// Destroyed now (DestroyImmediate does not set it), so its built-in components' OnRemove see IsGoing.
+		gameObject.[Friend]mDestroyed = true;
 		if (World.IsAlive(gameObject.Entity))
 			World.Delete(gameObject.Entity);
 		delete gameObject;
@@ -1173,6 +1175,7 @@ class Scene
 		SequencePlayer.StopAll(this);
 		SceneLoader.StopAll(this);
 		ViewmodelPose.StopAll(this);
+		Joint.StopAll(this);
 					CharacterController.SyncAll(this);
 	}
 
@@ -1366,6 +1369,9 @@ class Scene
 		World.AddStep(mFramePipeline, "Frame.Dialogue", .OnUpdate, new () => DialogueRunner.FrameAll(this));
 		// Scene loaders start (Load On Start) and follow their loads (SceneLoader.Start and OnLocalUpdate did).
 		World.AddStep(mFramePipeline, "Frame.SceneLoaders", .OnUpdate, new () => SceneLoader.FrameAll(this));
+		// Joints are made as they start or are switched on, and let go when switched off (Joint's Start, OnEnable
+		// and OnDisable did this).
+		World.AddStep(mFramePipeline, "Frame.Joints", .OnUpdate, new () => Joint.FrameAll(this));
 		// Sequences move their objects after the scripts' Update (SequencePlayer.OnLocalUpdate did).
 		World.AddStep(mFramePipeline, "Frame.Sequences", .OnUpdate, new () => SequencePlayer.FrameAll(this));
 		// Behaviour trees think after the scripts' Update (BehaviorTreeRunner.OnLocalUpdate did, in component order),

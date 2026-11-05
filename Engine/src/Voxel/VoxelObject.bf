@@ -126,11 +126,11 @@ struct VoxelObject : ComponentHandle<VoxelObjectData>
 
 	static void OnRemove(void* world, uint64 entity)
 	{
-		// As OnUnregister did: the renderer lets go of its mesh (unless the whole scene is going).
+		// As OnUnregister did: the renderer lets go of its mesh (unless the whole object is going, IsGoing: the renderer may be gone).
 		if (let state = ComponentState<VoxelObjectState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
 		{
-			let scene = state.[Friend]mGameObject?.Scene;
-			if (scene != null && !scene.[Friend]mClearing)
+			let owner = state.[Friend]mGameObject;
+			if (owner != null && !owner.IsGoing)
 				state.Unregister();
 		}
 		ComponentState<VoxelObjectState>.Release(world, entity);

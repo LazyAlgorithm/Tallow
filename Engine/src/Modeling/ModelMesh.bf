@@ -71,11 +71,11 @@ struct ModelMesh : ComponentHandle<ModelMeshData>
 	static void OnRemove(void* world, uint64 entity)
 	{
 		// As OnUnregister did: the renderer lets go of the mesh, and the shared mesh loses a user. While the whole
-		// scene goes, only the latter (its renderer is going too).
+		// object goes (IsGoing), only the latter: its renderer is going too, and may be gone.
 		if (let state = ComponentState<ModelMeshState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
 		{
-			let scene = state.[Friend]mGameObject?.Scene;
-			if (scene != null && !scene.[Friend]mClearing)
+			let owner = state.[Friend]mGameObject;
+			if (owner != null && !owner.IsGoing)
 				state.Unregister();
 			else
 				state.[Friend]Release();

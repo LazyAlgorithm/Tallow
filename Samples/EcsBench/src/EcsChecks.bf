@@ -127,6 +127,7 @@ static class EcsChecks
 		ModelMeshChecks();
 		LODChecks();
 		VoxelObjectChecks();
+		JointChecks();
 		return sFailures;
 	}
 
@@ -681,6 +682,61 @@ static class EcsChecks
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
 	}
 
+	/// Joint: made when play starts (Frame.Joints), Connect from code, switched off and on, Connected To saved in the
+	/// class's format (`<id> -1`) and read back, a hanging body held at its length, and removed.
+	static void JointChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			Rigidbody Body(StringView name, Vector3 at, bool kinematic)
+			{
+				let o = scene.CreateGameObject(name);
+				o.Transform.Position = at;
+				o.AddComponent<SphereCollider>();
+				let body = o.AddComponent<Rigidbody>();
+				body.isKinematic = kinematic;
+				return body;
+			}
+			let post = Body("Post", .(0, 5, 0), true);
+			let weight = Body("Weight", .(0, 3, 0), false);
+			let joint = weight.GameObject.AddComponent<Joint>();
+			joint.ConnectedTo = post;
+			joint.anchor = .(0, 2, 0);
+			Expect(joint.ConnectedTo == post && joint.swingLimit == 0, "Connected To takes a Rigidbody and gives it back");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains(scope $"field connectedTo {post.GameObject.Id} -1"), "it saves Connected To as the class did");
+			scene.StartPlay();
+			scene.Update();
+			Expect(joint.IsConnected, "it is made when play starts");
+			weight.Velocity = .(4, 0, 0);
+			for (int i < 120)
+				scene.FixedUpdate();
+			let length = (weight.Transform.Position - post.Transform.Position).Length;
+			Expect(Math.Abs(length - 2) < 0.15f, scope $"it holds the weight at its length ({length})");
+			joint.enabled = false;
+			scene.Update();
+			Expect(!joint.IsConnected, "switched off, it lets go");
+			joint.enabled = true;
+			scene.Update();
+			Expect(joint.IsConnected, "switched on again, it is made again");
+			let third = Body("Third", .(0, 1, 0), false);
+			let made = Joint.Connect(third, weight, .(0, 2, 0), .Up, 30);
+			Expect(made.IsValid && made.IsConnected && made.swingLimit == 30, "Connect joins two bodies from code");
+			Expect(!Joint.Connect(third, third, .Zero, .Up).IsValid, "and not a body to itself");
+			weight.GameObject.RemoveComponent<Joint>();
+			Expect(!weight.GameObject.HasComponent<Joint>(), "it can be removed while connected");
+			scene.StopPlay();
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Weight").GetComponent<Joint>();
+			Expect(copy.ConnectedTo.IsValid && copy.ConnectedTo.GameObject == loaded.Find("Post") && copy.anchor == .(0, 2, 0), "reading a scene finds Connected To again");
+		}
+		Scene.Active = previous;
+	}
+
 	/// Voxel Object: the shape code sets before its first use is the one filled; one only added is built on the next
 	/// frame (with a renderer added for it); carving; a cut-off half breaking away as a piece with its own grid; a
 	/// piece's lifetime; reading a scene; removing it.
@@ -724,11 +780,13 @@ static class EcsChecks
 				Expect(!piece.anchored && piece.shape == .Box && piece.resolution == 16, "the piece takes the settings");
 				// The bench's clock does not run by itself: put the time past the piece's end.
 				let time = Time.Time;
+				let fragmentId = fragment.Id;
 				piece.RemoveAt = time + 1;
 				Time.Time = time + 2;
 				scene.Update();
 				Time.Time = time;
-				Expect(fragment.IsDestroyed || scene.FindById(fragment.Id) == null, "a piece's lifetime ends it");
+				// Looked up by id: the object itself is deleted once it has gone.
+				Expect(scene.FindById(fragmentId) == null, "a piece's lifetime ends it");
 			}
 			scene.StopPlay();
 			let text = scope String();

@@ -1182,6 +1182,30 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   `ComponentsOfType(typeof(VoxelObject))` with `(VoxelObject)c` (use `Scene.Components<VoxelObject>()`).
   Seen in the user's MyGame / Canous (AuthoredCampus, Exhibition), Gallery copies and Digger copies.
 
+- [x] **Joint.** `JointData` with `connectedTo` an `ObjectRef<Rigidbody>` (saved as `<object id> -1`, as the
+  class's handle field was, so existing scenes load), the handle (`ConnectedTo` gives the Rigidbody, `Connect`,
+  `IsConnected`, `Rebuild`, a static DrawGizmos) and `JointState` (the physics joint). A `Frame.Joints` step does
+  Start / OnEnable / OnDisable; OnRemove lets the joint go, also when its object is destroyed (bodies should not go
+  with a constraint still on them). `ObjectRef<T>` converts implicitly from T, so `joint.connectedTo = body` takes a
+  handle. Checked by `EcsChecks.JointChecks`: Connected To round trip and saved format, made at play, holding a
+  swinging weight at its length, switched off and on, Connect (and not to itself), removal while connected,
+  reading a scene. Games that update: ShatterLock's Ragdoll (`GetComponent<Joint>()?.IsConnected == true`, use
+  `.IsValid && ...IsConnected`); `Joint.Connect` returns an invalid handle, not null.
+- [x] **`GameObject.IsGoing`** (destroyed, or its scene emptying). When an object is destroyed its class components
+  are unregistered first, then `World.Delete` runs its handles' OnRemove in Flecs' own order, so a handle's
+  OnRemove must not reach into the object's other built-in components, which may already be freed. ModelMesh,
+  LODGroup, ComputeEffect, VoxelObject and BehaviorTreeRunner now check `IsGoing` instead of only the scene clearing;
+  `DestroyTree` sets the destroyed flag before deleting the entity (DestroyImmediate did not). SequencePlayer
+  (puts back other objects) and Joint (the physics constraint) still act when only their object goes.
+- **An intermittent SIGTRAP in the checks** turned out to be the voxel check reading a destroyed GameObject
+  (`fragment.IsDestroyed` after it was deleted; Beef's debug object check traps). Fixed in the check (look the id
+  up). To find such a crash without a debugger: `coredumpctl info -1` gives the stack, `addr2line -e <exe> <addr>`
+  the line.
+- **Staying a class for now: VoxelTerrain.** One per scene; split over nine `extension VoxelTerrain` files;
+  OnRegister starts worker threads; its own undo, streaming and editor brushes. Nothing measurable to gain, real
+  risk. Converting it needs threads that hold the state class (not `this` component) and the extensions moved
+  onto the state.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

@@ -175,8 +175,8 @@ struct ComputeEffect : ComponentHandle<ComputeEffectData>
 		// Removed while showing: the renderer goes back to its own texture (OnDisable did this).
 		if (let state = ComponentState<ComputeEffectState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
 		{
-			let scene = state.[Friend]mGameObject?.Scene;
-			if (state.[Friend]mWasActive && scene != null && !scene.[Friend]mClearing)
+			let owner = state.[Friend]mGameObject;
+			if (state.[Friend]mWasActive && owner != null && !owner.IsGoing)
 				state.OnDisable();
 		}
 		ComponentState<ComputeEffectState>.Release(world, entity);

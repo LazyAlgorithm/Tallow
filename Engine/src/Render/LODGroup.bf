@@ -111,11 +111,11 @@ struct LODGroup : ComponentHandle<LODGroupData>
 
 	static void OnRemove(void* world, uint64 entity)
 	{
-		// As OnUnregister did: its renderers forget it (unless the whole scene is going with them).
+		// As OnUnregister did: its renderers forget it (unless the whole object is going, IsGoing: they are going with it).
 		if (let state = ComponentState<LODGroupState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
 		{
-			let scene = state.[Friend]mGameObject?.Scene;
-			if (scene != null && !scene.[Friend]mClearing)
+			let owner = state.[Friend]mGameObject;
+			if (owner != null && !owner.IsGoing)
 				state.Unregister();
 		}
 		ComponentState<LODGroupState>.Release(world, entity);

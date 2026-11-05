@@ -171,6 +171,10 @@ class GameObject
 	public bool ActiveSelf => mActive;
 	/// True once Scene.Destroy has been called on the object; it is freed at the end of the frame.
 	public bool IsDestroyed => mDestroyed;
+	/// The whole object is going: destroyed, or its scene is being emptied. A built-in component's OnRemove then
+	/// leaves the object's other components alone: they are going too, and some may be gone already (Flecs removes
+	/// an entity's components in its own order).
+	public bool IsGoing => mDestroyed || (mScene != null && mScene.[Friend]mClearing);
 
 	/// Whether the object and every parent above it are switched on: only then do its components run.
 	public bool ActiveInHierarchy

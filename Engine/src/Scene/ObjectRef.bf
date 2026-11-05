@@ -30,6 +30,20 @@ struct ObjectRef<T> : IObjectRef
 
 	public static implicit operator Self(Transform target) => target != null ? .(target.GameObject.Id) : .();
 
+	/// From what it refers to: a built-in component handle (an invalid one gives none) or a class component.
+	public static implicit operator Self(T target)
+	{
+		// A handle starts with its object; a class reference is the object itself.
+		let held = *(Object*)(void*)&target;
+		if (typeof(T).IsValueType)
+			return held != null ? .(((GameObject)held).Id) : .();
+		if (let component = held as Component)
+			return (Self)component;
+		if (let transform = held as Transform)
+			return (Self)transform;
+		return (Self)(held as GameObject);
+	}
+
 	public static implicit operator Self(Component target)
 	{
 		if (target == null || target.GameObject == null)

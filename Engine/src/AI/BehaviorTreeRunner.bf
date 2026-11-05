@@ -178,11 +178,11 @@ struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
 
 	static void OnRemove(void* world, uint64 entity)
 	{
-		// As OnDestroy did: running nodes end (stopping the agent), unless the whole scene is going.
+		// As OnDestroy did: running nodes end (stopping the agent), unless the whole object is going (IsGoing).
 		if (let state = ComponentState<BehaviorTreeRunnerState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
 		{
-			let scene = state.[Friend]mGameObject?.Scene;
-			if (scene != null && !scene.[Friend]mClearing)
+			let owner = state.[Friend]mGameObject;
+			if (owner != null && !owner.IsGoing)
 				state.[Friend]Unload();
 		}
 		ComponentState<BehaviorTreeRunnerState>.Release(world, entity);
