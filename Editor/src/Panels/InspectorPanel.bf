@@ -237,8 +237,98 @@ extension EditorApp
 			gameObject.RemoveComponent(remove);
 			MarkDirty();
 		}
+		DrawHandleSections(gameObject, fields);
 		DrawDataSections(gameObject, fields);
 		DrawAddComponent(gameObject);
+	}
+
+	// ---- Built-in components that are handles (Light..., HandleComponents) ----
+
+	void DrawHandleSections(GameObject gameObject, List<FieldRef> fields)
+	{
+		let handles = scope List<HandleComponents.Info>();
+		HandleComponents.On(gameObject, handles);
+		HandleComponents.Info remove = null;
+		for (let info in handles)
+		{
+			ImGui.PushID(info.index + 100000);
+			if (DrawHandleSection(gameObject, info, fields))
+				remove = info;
+			ImGui.PopID();
+		}
+		if (remove != null)
+		{
+			gameObject.RemoveData(remove.dataType);
+			MarkDirty();
+		}
+	}
+
+	/// A handle component, drawn like a script component: enable toggle, icon, menu and fields. True when its menu
+	/// asked to remove it.
+	bool DrawHandleSection(GameObject gameObject, HandleComponents.Info info, List<FieldRef> fields)
+	{
+		let world = gameObject.Scene.World;
+		let title = scope String();
+		NiceName(info.name, title);
+		ImGui.Separator();
+		let open = ImGui.CollapsingHeader(scope String()..AppendF("            {}###handle", title).CStr(), ImGui.TreeFlags.DefaultOpen | ImGui.TreeFlags.AllowOverlap);
+		bool remove = false;
+		let size = info.dataType.Size;
+		if (ImGui.BeginPopupContextItem("HandleMenu"))
+		{
+			let value = (uint8*)gameObject.GetData(info.dataType);
+			if (ImGui.MenuItem("Reset"))
+			{
+				HandleComponents.Reset(gameObject, info);
+				MarkDirty();
+			}
+			if (ImGui.MenuItem("Copy Component"))
+			{
+				mDataClipboardType = info.dataType;
+				mDataClipboard.Clear();
+				mDataClipboard.AddRange(Span<uint8>(value, size));
+			}
+			if (ImGui.MenuItem("Paste Component Values", null, false, mDataClipboardType == info.dataType))
+			{
+				Internal.MemCpy(value, mDataClipboard.Ptr, size);
+				MarkDirty();
+			}
+			ImGui.Separator();
+			if (ImGui.MenuItem("Remove Component"))
+				remove = true;
+			ImGui.EndPopup();
+		}
+		ImGui.SameLine(30);
+		ImGui.PushStyleVar(ImGui.StyleVar.FramePadding, ImGui.Vec2(1, 1));
+		bool enabled = world.IsEnabled(gameObject.Entity, info.index);
+		if (ImGui.Checkbox("##enabled", ref enabled))
+		{
+			world.Enable(gameObject.Entity, info.index, enabled);
+			MarkDirty();
+		}
+		ImGui.PopStyleVar();
+		ImGui.SameLine(54);
+		ImGui.TextColored(Icons.ComponentColor, ComponentIcon(info.name));
+		ImGui.SameLine(ImGui.GetWindowWidth() - 30);
+		if (ImGui.SmallButton(Icons.Menu))
+			ImGui.OpenPopup("HandleMenu");
+		if (!open || remove)
+			return remove;
+		fields.Clear();
+		HandleComponents.GetFields(gameObject, info, fields);
+		bool changed = false;
+		if (fields.Count > 0 && BeginPropertyTable("handlefields"))
+		{
+			for (let field in fields)
+			{
+				if (!field.hidden)
+					changed |= DrawField(field);
+			}
+			ImGui.EndTable();
+		}
+		if (changed)
+			MarkDirty();
+		return false;
 	}
 
 	// ---- Data components ([Component] structs in the object's entity, DataComponents) ----
@@ -619,6 +709,23 @@ extension EditorApp
 	/// The components of one category that can be added (those matching the search, when searching).
 	void AddComponentChoices(GameObject gameObject, StringView category, bool searching)
 	{
+		// Built-in components that are handles (Light...): one of each per object.
+		for (let info in HandleComponents.Types)
+		{
+			if (ComponentCategory(info.fullName, info.name) != category)
+				continue;
+			let label = scope String();
+			NiceName(info.name, label);
+			if (searching && !info.name.Contains(mComponentSearch, true) && !label.Contains(mComponentSearch, true) && !category.Contains(mComponentSearch, true))
+				continue;
+			let has = gameObject.GetData(info.dataType) != null;
+			if (ImGui.Selectable(scope $"{StringView(ComponentIcon(info.name))}  {label}##{info.fullName}" , false, has ? ImGui.SelectableFlags.Disabled : 0))
+			{
+				HandleComponents.Add(gameObject, info);
+				MarkDirty();
+				ImGui.CloseCurrentPopup();
+			}
+		}
 		for (let info in ComponentRegistry.Types)
 		{
 			if (!mScriptCatalog.IsVisible(info) || ComponentCategory(info.fullName, info.name) != category)
@@ -730,11 +837,11 @@ extension EditorApp
 		for (let component in gameObject.Components)
 		{
 			if (component is Camera) return Icons.Camera;
-			if (component is Light) return Icons.Light;
 			if (component is VoxelTerrain) return Icons.Terrain;
 			if (component is ParticleSystem) return Icons.Particles;
 			if (component is NetworkSession) return Icons.Network;
 		}
+		if (gameObject.HasComponent<Light>()) return Icons.Light;
 		return Icons.Cube;
 	}
 
@@ -1049,7 +1156,14 @@ extension EditorApp
 			for (let go in mScene.Objects)
 			{
 				ImGui.PushID((int32)go.Id);
-				if (field.type == typeof(GameObject) || field.type == typeof(Transform))
+				let handle = HandleComponents.Find(field.type);
+				if (handle != null)
+				{
+					// A built-in component handle: objects that have one.
+					if (go.GetData(handle.dataType) != null && ImGui.Selectable(scope $"{go.Name} ({handle.name})" .CStr(), target == go))
+						changed = ComponentRegistry.AssignReference(field, go);
+				}
+				else if (field.type == typeof(GameObject) || field.type == typeof(Transform))
 				{
 					if (ImGui.Selectable(go.Name.CStr(), target == go))
 						changed = ComponentRegistry.AssignReference(field, go);

@@ -371,7 +371,7 @@ class RenderView
 		let env = scene.Environment;
 		let sun = GatherLights(scene, camera);
 		let lightDirection = SetSun(sun);
-		let castShadows = DrawShadows && ShadowsEnabled && sun != null && sun.castShadows && shading == .Rendered;
+		let castShadows = DrawShadows && ShadowsEnabled && sun && sun.castShadows && shading == .Rendered;
 		SetFrameConstants(camera, env);
 		Reflections.Update(scene, mSunDir, mSunColor, CapturesReflections && !Capture);
 		mReflectionIntensity = Math.Max(env.reflectionIntensity, 0);
@@ -454,19 +454,19 @@ class RenderView
 	/// scene's other lights into this view's clusters. Returns the sun.
 	Light GatherLights(Scene scene, CameraData camera)
 	{
-		Light sun = null;
+		Light sun = default;
 		// Directional lights other than the sun go in the ordinary light list, so fill lights still count.
 		for (let light in scene.Lights)
 		{
 			if (!light.IsActiveAndEnabled || !light.GameObject.InActiveWorld || light.type != .Directional)
 				continue;
-			if (sun == null || (!sun.castShadows && light.castShadows))
+			if (!sun || (!sun.castShadows && light.castShadows))
 				sun = light;
 		}
 		let shadowed = DrawShadows && ShadowsEnabled ? MaxShadowedLights : 0;
 		mLights.Build(scene, camera, sun, shadowed, RenderResources.ShadowAtlasSize);
 		mHasLocalShadows = mLights.Tiles.Count > 0;
-		mLightCount = .(mLights.DirectionalCount, sun != null ? sun.shadowMaskChannel + 1 : 0, mLights.Lights.Count, 0);
+		mLightCount = .(mLights.DirectionalCount, sun ? sun.shadowMaskChannel + 1 : 0, mLights.Lights.Count, 0);
 		mClusterViewProj = mLights.ViewProj;
 		mClusterForward = .(mLights.CameraForward, 0);
 		mClusterParams = .(mLights.SliceScale, mLights.SliceOffset, mLights.Near, 0);
@@ -485,8 +485,8 @@ class RenderView
 	/// light travels in.
 	Vector3 SetSun(Light sun)
 	{
-		mHasSun = sun != null;
-		if (sun == null)
+		mHasSun = sun;
+		if (!sun)
 		{
 			let direction = Vector3(0.3f, -1.0f, 0.2f).Normalized;
 			mSunColor = .(0, 0, 0, 1);

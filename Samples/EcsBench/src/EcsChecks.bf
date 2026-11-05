@@ -10,6 +10,13 @@ struct Marked
 {
 }
 
+/// Holds a reference to another object's Light, for EcsChecks.HandleChecks.
+[Component]
+class LampUser : Component
+{
+	public Light lamp;
+}
+
 /// Counts the Update calls it gets, for EcsChecks.UpdateChecks.
 [Component]
 class UpdateCounter : Component
@@ -93,6 +100,7 @@ static class EcsChecks
 		UpdateChecks();
 		DataChecks();
 		PrefabChecks();
+		HandleChecks();
 		return sFailures;
 	}
 
@@ -252,5 +260,50 @@ static class EcsChecks
 		played.StopPlay();
 		Scene.Active = previous;
 		System.IO.File.Delete(path).IgnoreError();
+	}
+
+	/// Phase 4: built-in components as handles over data (Light first).
+	static void HandleChecks()
+	{
+		let previous = Scene.Active;
+		let scene = scope Scene();
+		let lamp = scene.CreateGameObject("Lamp");
+		let light = lamp.AddComponent<Light>();
+		Expect(light && light.IsValid, "AddComponent<Light> gives a valid handle");
+		Expect(light.intensity == 1 && light.range == 10 && light.spotAngle == 45 && light.shadowMaskChannel == -1 && light.castShadows, "a new Light has its field initializers");
+		light.type = .Point;
+		light.intensity *= 3;
+		light.color.g = 0.5f;
+		Expect(lamp.GetComponent<Light>().intensity == 3 && lamp.GetComponent<Light>().color.g == 0.5f && lamp.GetComponent<Light>().type == .Point, "handle fields write through to the data");
+		Expect(!scene.CreateGameObject("Empty").GetComponent<Light>(), "GetComponent on an object without one is not valid");
+		Expect(scene.Lights.Count == 1, "Scene.Lights finds the light");
+		light.enabled = false;
+		Expect(!light.enabled && scene.Lights.Count == 0 && scene.AllLights.Count == 1, "a switched-off light is left out of Scene.Lights");
+		light.enabled = true;
+		Expect(scene.Lights.Count == 1, "switched back on");
+
+		let user = scene.CreateGameObject("User").AddComponent<LampUser>();
+		user.lamp = light;
+		let text = scope String();
+		SceneSerializer.Save(scene, text);
+		Expect(text.Contains("component Tallow.Light enabled 1") && text.Contains("field intensity 3"), "a Light saves as a component line with its fields");
+
+		let loaded = scope Scene();
+		SceneSerializer.Load(loaded, text);
+		let loadedLamp = loaded.Find("Lamp");
+		Light loadedLight = loadedLamp != null ? loadedLamp.GetComponent<Light>() : default;
+		Expect(loadedLight && loadedLight.intensity == 3 && loadedLight.type == .Point && loadedLight.color.g == 0.5f, "a Light loads with its values");
+		let loadedUser = loaded.Find("User")?.GetComponent<LampUser>();
+		Expect(loadedUser != null && loadedUser.lamp && loadedUser.lamp.GameObject == loadedLamp, "a script's Light field is saved as a reference and resolved");
+		loadedLight.enabled = false;
+		let again = scope String();
+		SceneSerializer.Save(loaded, again);
+		Expect(again.Contains("component Tallow.Light enabled 0"), "a switched-off light saves as such");
+		loaded.DestroyImmediate(loadedLamp);
+		Expect(!loadedUser.lamp, "destroying the light's object clears the reference to it");
+
+		lamp.RemoveComponent<Light>();
+		Expect(!light && !lamp.HasComponent<Light>(), "RemoveComponent<Light> leaves the handle not valid");
+		Scene.Active = previous;
 	}
 }

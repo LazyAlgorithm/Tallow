@@ -568,6 +568,23 @@ TALLOW_ECS_API void tallow_ecs_enable(ecs_world_t* world, uint64_t entity, bool 
 	ecs_enable(world, entity, enabled);
 }
 
+// Lets a component be switched off per entity (ecs_enable_id); queries then skip entities where it is off. Must be
+// called before any entity has the component.
+TALLOW_ECS_API void tallow_ecs_can_toggle(ecs_world_t* world, uint64_t component)
+{
+	ecs_add_id(world, component, EcsCanToggle);
+}
+
+TALLOW_ECS_API void tallow_ecs_enable_id(ecs_world_t* world, uint64_t entity, uint64_t id, bool enabled)
+{
+	ecs_enable_id(world, entity, id, enabled);
+}
+
+TALLOW_ECS_API bool tallow_ecs_is_enabled_id(ecs_world_t* world, uint64_t entity, uint64_t id)
+{
+	return ecs_is_enabled_id(world, entity, id);
+}
+
 // ---- Cached component references ----
 
 // A reference to one entity's component that stays valid as the entity's row moves between and within tables.

@@ -164,6 +164,9 @@ sealed class World
 		let info = ComponentTypes.Get(index);
 		let id = info.size == 0 ? Flecs.Tag(mWorld, info.name.CStr()) : Flecs.Component(mWorld, info.name.CStr(), info.size, info.alignment);
 		Runtime.Assert(id != 0, scope $"Flecs refused component {info.name}");
+		// A built-in component's data can be switched off per object (ComponentHandle.enabled).
+		if (info.type != null && info.type.GetCustomAttribute<HandleDataAttribute>() case .Ok)
+			Flecs.CanToggle(mWorld, id);
 		mIds[index] = id;
 		mIndexById[id] = index;
 		return id;
@@ -187,6 +190,9 @@ sealed class World
 	public void* Ensure(Entity entity, int32 index) => Flecs.Ensure(Writer, entity.id, IdOf(index), ComponentTypes.Get(index).size);
 	public bool Has(Entity entity, int32 index) => Flecs.Has(mWorld, entity.id, IdOf(index));
 	public void Remove(Entity entity, int32 index) => Flecs.Remove(Writer, entity.id, IdOf(index));
+	/// Switches a [HandleData] component on or off for one entity; queries skip it while it is off.
+	public void Enable(Entity entity, int32 index, bool enabled) => Flecs.EnableId(Writer, entity.id, IdOf(index), enabled);
+	public bool IsEnabled(Entity entity, int32 index) => Flecs.IsEnabledId(mWorld, entity.id, IdOf(index));
 
 	/// The ComponentTypes indices of the data components and tags the entity has, in Flecs's order. Relationships
 	/// (ChildOf) and ids registered outside World are left out.

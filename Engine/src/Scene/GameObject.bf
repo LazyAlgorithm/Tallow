@@ -251,6 +251,31 @@ class GameObject
 
 	public void RemoveComponent<T>() where T : struct => mScene.World.Remove<T>(mEntity);
 
+	// ---- Built-in components (handles: Light, MeshRenderer... docs/ecs-plan.md) ----
+
+	/// Adds built-in component T with its default values, or returns the one the object has.
+	public T AddComponent<T>() where T : struct, IComponentHandle
+	{
+		HandleComponents.Add(this, HandleComponents.Find(typeof(T)));
+		return MakeHandle<T>();
+	}
+
+	/// The object's built-in component T; not valid (`if (light)` is false) if it has none.
+	public T GetComponent<T>() where T : struct, IComponentHandle => mScene.World.Has(mEntity, T.DataIndex) ? MakeHandle<T>() : default;
+
+	public bool HasComponent<T>() where T : struct, IComponentHandle => mScene.World.Has(mEntity, T.DataIndex);
+
+	public void RemoveComponent<T>() where T : struct, IComponentHandle => mScene.World.Remove(mEntity, T.DataIndex);
+
+	/// A handle is the object and nothing more (ComponentHandle), so it is made by writing the object into it.
+	T MakeHandle<T>() where T : struct, IComponentHandle
+	{
+		System.Diagnostics.Debug.Assert(sizeof(T) == sizeof(GameObject), "A component handle must not declare fields");
+		T handle = default;
+		*(GameObject*)&handle = this;
+		return handle;
+	}
+
 	/// The same by type, for the editor and scene files (DataComponents).
 	public void* AddData(Type type) => mScene.World.Ensure(mEntity, ComponentTypes.Add(type, type.Size, type.Align));
 	public void* GetData(Type type) => mScene.World.Get(mEntity, ComponentTypes.Add(type, type.Size, type.Align));

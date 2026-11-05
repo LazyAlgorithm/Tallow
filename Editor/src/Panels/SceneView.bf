@@ -396,6 +396,20 @@ extension EditorApp
 			if (component.IsActiveAndEnabled && (only == 0 || component.GameObject.Id == only) && !SceneHidden(component.GameObject))
 				component.OnDrawGizmos(component.GameObject == selected);
 		}
+		// Built-in components that are handles (Light...) draw theirs from a static DrawGizmos.
+		for (let info in HandleComponents.Types)
+		{
+			if (!info.drawGizmos.IsInitialized)
+				continue;
+			for (let gameObject in mScene.Objects)
+			{
+				if (!gameObject.ActiveInHierarchy || (only != 0 && gameObject.Id != only) || SceneHidden(gameObject))
+					continue;
+				let world = mScene.World;
+				if (world.Has(gameObject.Entity, info.index) && world.IsEnabled(gameObject.Entity, info.index))
+					info.drawGizmos.Invoke(null, gameObject, gameObject == selected).IgnoreError();
+			}
+		}
 		// A model in edit mode shows its own edges instead of the object's box.
 		if (selected != null && EditedModel == null)
 		{

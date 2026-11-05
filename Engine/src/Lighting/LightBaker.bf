@@ -205,12 +205,12 @@ class LightBaker
 
 	void GatherLights(Scene scene)
 	{
-		Light sun = null;
+		Light sun = default;
 		for (let light in scene.Lights)
 		{
 			if (!light.IsActiveAndEnabled || !light.GameObject.InActiveWorld || light.type != .Directional)
 				continue;
-			if (sun == null || (!sun.castShadows && light.castShadows))
+			if (!sun || (!sun.castShadows && light.castShadows))
 				sun = light;
 		}
 		for (let light in scene.Lights)

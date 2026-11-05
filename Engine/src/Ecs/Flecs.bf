@@ -101,6 +101,9 @@ static class Flecs
 	[LinkName("tallow_ecs_modified")] public static extern void Modified(void* world, uint64 entity, uint64 id);
 	[LinkName("tallow_ecs_count")] public static extern int32 Count(void* world, uint64 id);
 	[LinkName("tallow_ecs_enable")] public static extern void Enable(void* world, uint64 entity, bool enabled);
+	[LinkName("tallow_ecs_can_toggle")] public static extern void CanToggle(void* world, uint64 component);
+	[LinkName("tallow_ecs_enable_id")] public static extern void EnableId(void* world, uint64 entity, uint64 id, bool enabled);
+	[LinkName("tallow_ecs_is_enabled_id")] public static extern bool IsEnabledId(void* world, uint64 entity, uint64 id);
 
 	// ---- Relationships and hierarchy ----
 	[LinkName("tallow_ecs_pair")] public static extern uint64 Pair(uint64 relationship, uint64 target);

@@ -143,6 +143,21 @@ static class SceneSerializer
 				text.Append('\n');
 			}
 		}
+		// Built-in components that are handles (Light...): the same lines as a script component.
+		let handles = scope List<HandleComponents.Info>();
+		HandleComponents.On(gameObject, handles);
+		for (let info in handles)
+		{
+			text.AppendF("component {} enabled {}\n", info.fullName, gameObject.Scene.World.IsEnabled(gameObject.Entity, info.index) ? 1 : 0);
+			fields.Clear();
+			HandleComponents.GetFields(gameObject, info, fields);
+			for (let field in fields)
+			{
+				text.AppendF("field {} ", field.name);
+				WriteValue(field, text);
+				text.Append('\n');
+			}
+		}
 		// Data components ([Component] structs in the object's entity), after the scripts.
 		SaveData(gameObject, text);
 		for (let child in transform.Children)
@@ -498,6 +513,17 @@ static class SceneSerializer
 			else if (key == "component" && current != null && tokens.Count >= 4)
 			{
 				readingData = false;
+				// A built-in component that is a handle (Light...): its fields are its data's.
+				if (let handle = HandleComponents.Find(tokens[1]))
+				{
+					component = null;
+					HandleComponents.Add(current, handle);
+					current.Scene.World.Enable(current.Entity, handle.index, tokens[3] == "1");
+					fields.Clear();
+					HandleComponents.GetFields(current, handle, fields);
+					readingData = true;
+					continue;
+				}
 				component = AddSavedComponent(current, tokens);
 				if (component != null)
 				{

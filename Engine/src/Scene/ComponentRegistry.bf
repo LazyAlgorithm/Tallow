@@ -159,6 +159,12 @@ static class ComponentRegistry
 		Object value = null;
 		if (field.type == typeof(GameObject))
 			value = go;
+		// A built-in component handle holds its object (ComponentHandle): set when the object has that component.
+		else if (let handle = HandleComponents.Find(field.type))
+		{
+			*(Object*)field.ptr = go.Scene?.World.Has(go.Entity, handle.index) == true ? go : null;
+			return *(Object*)field.ptr != null;
+		}
 		else if (field.type == typeof(Transform))
 			value = go.Transform;
 		else
@@ -290,7 +296,8 @@ static class ComponentRegistry
 			kind = .Color;
 		else if (fieldType == typeof(String))
 			kind = .String;
-		else if (fieldType == typeof(GameObject) || fieldType == typeof(Transform) || fieldType == typeof(Component) || fieldType.IsSubtypeOf(typeof(Component)))
+		else if (fieldType == typeof(GameObject) || fieldType == typeof(Transform) || fieldType == typeof(Component) || fieldType.IsSubtypeOf(typeof(Component))
+			|| HandleComponents.IsHandle(fieldType))
 			kind = .ObjectReference;
 		else
 			return false;

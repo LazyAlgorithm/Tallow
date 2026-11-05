@@ -57,7 +57,7 @@ extension NetworkSync
 	static bool Decides(NetworkManager network, GameObject object) => network.IsServer || Owns(network.LocalClientId, object.Transform);
 
 	/// What a client may change on objects it owns: how they look and sound, never how they play.
-	static bool Cosmetic(Component component) => component is Light || component is MeshRenderer || component is SkinnedMeshRenderer || component is ParticleSystem
+	static bool Cosmetic(Component component) => component is MeshRenderer || component is SkinnedMeshRenderer || component is ParticleSystem
 		|| component is AudioSource;
 
 	/// Sends a state message whose first keyLength bytes name what it is about: the server passes it on and keeps
@@ -133,11 +133,12 @@ extension NetworkSync
 		public int32 type;
 		public Color color;
 		public float intensity, range, innerSpotAngle, spotAngle, shadowStrength;
-		public bool inverseSquare, castShadows, bakedOnly;
+		public bool inverseSquare, castShadows, bakedOnly, enabled;
 
 		public this(Light light)
 		{
 			this = default;
+			enabled = light.enabled;
 			type = (int32)light.type;
 			color = light.color;
 			intensity = light.intensity;
@@ -165,6 +166,7 @@ extension NetworkSync
 			light.inverseSquare = inverseSquare;
 			light.castShadows = castShadows;
 			light.bakedOnly = bakedOnly;
+			light.enabled = enabled;
 		}
 
 		public uint64 Hash
@@ -182,25 +184,25 @@ extension NetworkSync
 		}
 	}
 
-	/// Each tick: Lights whose settings changed since they were last looked at are sent (by the server, or by the
-	/// client that owns them). A light seen for the first time is only noted: every machine has it as it is.
+	/// Each tick: Lights whose settings (or on/off) changed since they were last looked at are sent (by the server,
+	/// or by the client that owns them). A light seen for the first time is only noted: every machine has it as it
+	/// is. A light is found by its object, which has one at most.
 	public static void WatchLights(NetworkManager network)
 	{
 		let payload = scope NetWriter();
-		for (let component in network.Scene.ComponentsOfType(typeof(Light)))
+		for (let light in network.Scene.AllLights)
 		{
-			let light = (Light)component;
 			let settings = LightSettings(light);
 			let hash = settings.Hash;
-			let seen = light.[Friend]mSharedHash;
+			let seen = light.SharedHash;
 			if (seen == hash)
 				continue;
-			light.[Friend]mSharedHash = hash;
+			light.SharedHash = hash;
 			if (seen == 0 || !Everywhere(network, light.GameObject) || !Decides(network, light.GameObject))
 				continue;
 			payload.Clear();
 			payload.Write((uint8)StateKind.Light);
-			WriteComponentAt(payload, light);
+			WriteTransform(payload, light.Transform);
 			let keyLength = payload.Data.Count;
 			payload.Write(settings);
 			SendState(network, payload, keyLength);
@@ -222,7 +224,13 @@ extension NetworkSync
 				return;
 			object = transform.GameObject;
 		}
-		else if (kind == .Enabled || kind == .Light)
+		else if (kind == .Light)
+		{
+			if (!ReadTransform(ref reader, network, let transform))
+				return;
+			object = transform.GameObject;
+		}
+		else if (kind == .Enabled)
 		{
 			component = ReadComponentAt(ref reader, network);
 			object = component?.GameObject;
@@ -235,7 +243,7 @@ extension NetworkSync
 		if (kind == .Light)
 		{
 			settings = reader.Read<LightSettings>();
-			if (!(component is Light) || !settings.Valid)
+			if (!object.HasComponent<Light>() || !settings.Valid)
 				return;
 		}
 		else
@@ -245,7 +253,8 @@ extension NetworkSync
 		// A client may change only how what it owns looks; the server passes it on to everyone else and keeps it.
 		if (network.IsServer)
 		{
-			if (!Owns(sender, object.Transform) || component == null || !Cosmetic(component))
+			// A Light is cosmetic.
+			if (!Owns(sender, object.Transform) || (kind != .Light && (component == null || !Cosmetic(component))))
 				return;
 			let payload = scope NetWriter();
 			payload.Data.AddRange(Span<uint8>(reader.Start + start, reader.Position - start));
@@ -258,9 +267,9 @@ extension NetworkSync
 		case .Active: object.SetActive(on);
 		case .Enabled: if (!(component is NetworkIdentity)) component.Enabled = on;
 		case .Light:
-			let light = (Light)component;
+			let light = object.GetComponent<Light>();
 			settings.Apply(light);
-			light.[Friend]mSharedHash = settings.Hash;
+			light.SharedHash = settings.Hash;
 		}
 		sApplying = wasApplying;
 	}

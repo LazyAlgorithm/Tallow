@@ -770,6 +770,48 @@ components (`[Component]` structs in an object's entity) taking part everywhere 
   hierarchy and the script's Update all survive. Not yet exercised by hand: a live script reload with data
   components, and Windows or web builds.
 
+## Phase 4 progress
+
+**Decision (project owner, 2026-11-04): full handles**, as "Built-in components: same names, now handles"
+describes, rather than keeping the classes and mirroring their data. Built-in components move one at a time.
+
+### How a handle works
+
+- The settings live in a `[Component, HandleData]` struct in the object's entity (`LightData`). Field
+  initializers are the defaults; the struct needs an explicit `public this() {}` so reflection can run them.
+- The handle is `[Component, HandleFields] struct Light : ComponentHandle<LightData>`. It holds only the
+  GameObject (Engine/src/Scene/ComponentHandle.bf). `[HandleFields]` writes, at compile time, a `ref` property for
+  every public field of the data, so `light.intensity = 2`, `light.intensity *= 2` and `light.color.a = 0.5f`
+  read as before. Behaviour goes on the handle as methods and properties.
+- `GameObject.AddComponent<T>()`, `GetComponent<T>()`, `HasComponent<T>()` and `RemoveComponent<T>()` have
+  overloads for handles (`where T : struct, IComponentHandle`) beside the script and data ones.
+- **Validity:** `if (light)` or `light.IsValid`. Beef cannot make `light == null` work on a struct: it compiles
+  with warning BF0472 ("always false"), and `if (let light = GetComponent<Light>())` is always true, also with
+  BF0472. Each handle conversion has to look for these warnings and for `= null`, `== null` and `!= null` on the
+  converted type, in the engine and in every game that updates to this engine.
+- **On and off:** `light.enabled` uses Flecs's per-component toggle (`CanToggle`, added to every `HandleData`
+  type when a world registers it); queries skip switched-off components without a check of their own.
+- **Files:** a handle saves as the class did (`component Tallow.Light enabled 1` and `field` lines), so old
+  scenes load and newly saved ones are unchanged.
+- **References:** a script field of a handle type (`public Light lamp;`) is an object reference. It is saved as
+  the object, dropped and picked in the Inspector, and cleared when the object is destroyed, as a class field is.
+- **Editor:** the Inspector draws handles like script components (enable toggle, icon, Reset, Copy, Paste
+  Values, Remove). Add Component lists them in their category. Gizmos come from an optional
+  `static void DrawGizmos(GameObject, bool selected)` on the handle.
+- **Lists:** `Scene.Lights` is now built from a query of `LightData` and `ObjectLink` each time it is read.
+
+### Components
+
+- [x] **Light.** The renderer, light clusters, light baking, world streaming and network sync read the handle.
+  Network sync addresses a light by its object and also carries `enabled`. Checked by `EcsChecks.HandleChecks`
+  (defaults, field writes, enable and `Scene.Lights`, save and load, a script's `Light` field resolved and
+  cleared on destroy, remove). The Sandbox renders with its sun and lamp. In the editor, the Lamp loads from the
+  existing scene and shows in the Inspector as before, and an editor save writes the Light blocks back unchanged.
+- [ ] Decal, ReflectionProbe, LightProbeVolume, WindZone, LODGroup, Camera, MeshRenderer, SkinnedMeshRenderer,
+  LineRenderer, TrailRenderer, ParticleSystem, Foliage, Water, AudioSource, AudioListener, AudioReverbZone,
+  Rigidbody, Collider, Joint, CharacterController, SoftBody, Rope, and the Phase 5 set.
+- [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

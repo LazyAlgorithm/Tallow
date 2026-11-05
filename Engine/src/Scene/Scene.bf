@@ -257,7 +257,39 @@ class Scene
 	/// Every Mesh Renderer in the scene (each adds itself when it joins).
 	public List<MeshRenderer> Renderers = new .() ~ delete _;
 	/// Every Light in the scene.
-	public List<Light> Lights = new .() ~ delete _;
+	Query<LightData, ObjectLink> mLightQuery ~ delete _;
+	List<Light> mLights = new .() ~ delete _;
+	List<Light> mAllLights = new .() ~ delete _;
+
+	/// The scene's switched-on lights (Light.enabled), on active and inactive objects alike, in no set order. Rebuilt
+	/// each time it is read; keep the list only until the scene changes.
+	public List<Light> Lights => GatherLights(mLights, true);
+	/// Every light, switched on or not (network sync).
+	public List<Light> AllLights => GatherLights(mAllLights, false);
+
+	List<Light> GatherLights(List<Light> output, bool enabledOnly)
+	{
+		output.Clear();
+		if (enabledOnly)
+		{
+			if (mLightQuery == null)
+				mLightQuery = new .(World, .Read, .Read);
+			for (var chunk in mLightQuery)
+			{
+				for (let link in chunk.Read<ObjectLink>())
+					output.Add(link.gameObject.GetComponent<Light>());
+			}
+			return output;
+		}
+		for (let gameObject in mObjects)
+		{
+			let light = gameObject.GetComponent<Light>();
+			if (light)
+				output.Add(light);
+		}
+		return output;
+	}
+
 	/// Every Camera in the scene.
 	public List<Camera> Cameras = new .() ~ delete _;
 	/// What the world streams around (docs/world-streaming.md).

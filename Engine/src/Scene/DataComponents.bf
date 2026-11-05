@@ -49,6 +49,9 @@ static class DataComponents
 				continue;
 			if (type.GetCustomAttribute<EngineDataAttribute>() case .Ok)
 				continue;
+			// Behind a built-in component (HandleComponents), which shows it under its own name, or a handle itself.
+			if (type.GetCustomAttribute<HandleDataAttribute>() case .Ok || HandleComponents.IsHandle(type))
+				continue;
 			let info = new Info();
 			type.GetFullName(info.fullName);
 			type.GetName(info.name);
