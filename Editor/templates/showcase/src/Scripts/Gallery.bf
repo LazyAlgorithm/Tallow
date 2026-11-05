@@ -744,7 +744,7 @@ class Gallery : Script
 		seal.Transform.Position = .(4, 0.05f, -16);
 		seal.Transform.Rotation = Quaternion.Euler(90, 0, 0);
 		let mark = seal.AddComponent<Decal>();
-		mark.texture.Set("Textures/ring.png");
+		mark.texture = "Textures/ring.png";
 		mark.size = .(8, 8, 1);
 		mark.color = .(0.16f, 0.14f, 0.13f);
 	}

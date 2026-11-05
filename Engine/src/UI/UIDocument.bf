@@ -206,9 +206,7 @@ class UIDocument : Component
 			return false;
 		if (field.kind == .String)
 		{
-			let value = *(String*)field.ptr;
-			if (value != null)
-				text.Append(value);
+			text.Append(StringFields.Get(field.ptr, field.type));
 		}
 		else
 			SceneSerializer.WriteValue(field, text);

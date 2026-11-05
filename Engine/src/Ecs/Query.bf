@@ -195,3 +195,17 @@ class Query<T1, T2, T3, T4> : QueryBase where T1 : struct where T2 : struct wher
 		Create(world, ids, access, types);
 	}
 }
+
+/// A query whose types are known only when it runs (ComponentTypes indices): what the engine uses to list the
+/// objects with a given component handle.
+class IndexQuery : QueryBase
+{
+	public this(World world, Span<int32> types, Span<Flecs.TermAccess> access)
+	{
+		Runtime.Assert(types.Length <= 4 && types.Length == access.Length);
+		uint64[4] ids = default;
+		for (int i < types.Length)
+			ids[i] = world.IdOf(types[i]);
+		Create(world, .(&ids, types.Length), access, types);
+	}
+}

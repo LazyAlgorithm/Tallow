@@ -39,6 +39,24 @@ static class StringFields
 		return copy;
 	}
 
+	/// The text of a String or SharedString field (FieldKind.String; type is the field's type).
+	public static StringView Get(void* slot, Type type)
+	{
+		if (type == typeof(SharedString))
+			return ((SharedString*)slot).View;
+		let text = *(String*)slot;
+		return text != null ? (StringView)text : default;
+	}
+
+	/// Sets a String or SharedString field (FieldKind.String; type is the field's type).
+	public static void Set(void* slot, Type type, StringView value, StringView name = default)
+	{
+		if (type == typeof(SharedString))
+			*(SharedString*)slot = value;
+		else
+			Set(slot, value, name);
+	}
+
 	/// Sets the field at `slot` to `value`, giving an empty field a new String.
 	public static void Set(void* slot, StringView value, StringView name = default)
 	{
@@ -64,7 +82,8 @@ static class StringFields
 		const uint32 writable = 0x04 | 0x08 | 0x40 | 0x80; // READWRITE, WRITECOPY, EXECUTE_READWRITE, EXECUTE_WRITECOPY
 		return (protect & writable) == 0;
 	}
-#elif BF_PLATFORM_LINUX
+
+	#elif BF_PLATFORM_LINUX
 	[CRepr]
 	struct PhdrInfo
 	{
@@ -121,7 +140,7 @@ static class StringFields
 	public static bool IsReadOnly(void* address)
 	{
 		Query query = .() { address = (uint)address };
-		dl_iterate_phdr(=> CheckImage, &query);
+		dl_iterate_phdr( => CheckImage, &query);
 		return query.readOnly;
 	}
 #else

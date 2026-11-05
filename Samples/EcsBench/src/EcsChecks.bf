@@ -101,6 +101,9 @@ static class EcsChecks
 		DataChecks();
 		PrefabChecks();
 		HandleChecks();
+		WindChecks();
+		DecalChecks();
+		ProbeChecks();
 		return sFailures;
 	}
 
@@ -263,6 +266,95 @@ static class EcsChecks
 	}
 
 	/// Phase 4: built-in components as handles over data (Light first).
+	/// Wind Zone and Foliage Bender are handles: Wind reads the zones from Flecs.
+	static void WindChecks()
+	{
+		let scene = scope Scene();
+		let zone = scene.CreateGameObject("Wind").AddComponent<WindZone>();
+		zone.Transform.LookAt(.(0, 0, 10));
+		zone.strength = 2;
+		Expect(Math.Abs(Wind.At(scene, .Zero).z - 2) < 0.001f, "a Global Wind Zone blows the way it faces");
+		let gust = scene.CreateGameObject("Gust").AddComponent<WindZone>();
+		gust.shape = .Sphere;
+		gust.radius = 4;
+		gust.Transform.LookAt(.(0, 0, 10));
+		Expect(Math.Abs(Wind.At(scene, .Zero).z - 3) < 0.001f && Math.Abs(Wind.At(scene, .(0, 0, 50)).z - 2) < 0.001f, "a Sphere zone adds only inside its reach");
+		gust.enabled = false;
+		Expect(Math.Abs(Wind.At(scene, .Zero).z - 2) < 0.001f, "a switched-off zone does not blow");
+		zone.GameObject.SetActive(false);
+		Expect(Wind.At(scene, .Zero).Length < 0.001f, "a zone on an inactive object does not blow");
+		let bender = scene.CreateGameObject("Bender").AddComponent<FoliageBender>();
+		Expect(bender.radius == 0.9f && bender.strength == 1, "a Foliage Bender has its defaults");
+		Vector4[8] places = default, push = default;
+		FoliageBender.Gather(scene, .Zero, ref places, ref push);
+		Expect(places[0].w == 0.9f && push[0].x == 1, "Foliage Bender gathers from Flecs");
+		let text = scope String();
+		SceneSerializer.Save(scene, text);
+		let loaded = scope Scene();
+		SceneSerializer.Load(loaded, text);
+		let loadedGust = loaded.Find("Gust").GetComponent<WindZone>();
+		Expect(loadedGust && loadedGust.shape == .Sphere && loadedGust.radius == 4 && !loadedGust.enabled, "a Wind Zone saves and loads");
+	}
+
+	/// SharedString in handle data (Decal's texture), saved and edited like a String.
+	static void DecalChecks()
+	{
+		SharedString a = "Textures/ring.png";
+		SharedString b = scope String("Textures/ring.png");
+		Expect(a == b && a == "Textures/ring.png" && ((SharedString)default).IsEmpty, "SharedString keeps one copy of each text");
+		let scene = scope Scene();
+		let decal = scene.CreateGameObject("Seal").AddComponent<Decal>();
+		Expect(decal.texture.IsEmpty && decal.size == Vector3(1, 1, 0.5f) && decal.roughness == 0.8f, "a Decal has its defaults");
+		decal.texture = "Textures/ring.png";
+		decal.order = 3;
+		// Moving the entity between tables copies the data byte for byte; the text must survive it.
+		scene.Find("Seal").AddComponent<WindZone>();
+		Expect(decal.texture == "Textures/ring.png", "SharedString survives the entity moving tables");
+		Expect(scene.Components<Decal>(.. scope .()).Count == 1, "Scene.Components<Decal> finds it");
+		let fields = scope List<FieldRef>();
+		HandleComponents.GetFields(decal.GameObject, HandleComponents.Find(typeof(Decal)), fields);
+		Expect(fields.FindIndex(scope (field) => field.name == "texture") >= 0, "the texture field is editable");
+		let text = scope String();
+		SceneSerializer.Save(scene, text);
+		Expect(text.Contains("component Tallow.Decal enabled 1") && text.Contains("\"Textures/ring.png\""), "a Decal saves its texture");
+		let loaded = scope Scene();
+		SceneSerializer.Load(loaded, text);
+		let loadedDecal = loaded.Find("Seal").GetComponent<Decal>();
+		Expect(loadedDecal && loadedDecal.texture == "Textures/ring.png" && loadedDecal.order == 3, "a Decal loads its texture");
+	}
+
+	/// Reflection Probe keeps its capture state outside its data (ComponentState), freed by the remove hook.
+	static void ProbeChecks()
+	{
+		let before = ComponentState<ReflectionProbeState>.Count;
+		{
+			let scene = scope Scene();
+			let probe = scene.CreateGameObject("Probe").AddComponent<ReflectionProbe>();
+			Expect(!probe.Captured && probe.WantsCapture(0) && probe.size == Vector3(10, 10, 10), "a new probe wants capturing");
+			probe.CaptureStarted(0);
+			probe.CaptureFinished(5);
+			Expect(probe.Captured && probe.LastLevel == 5 && ComponentState<ReflectionProbeState>.Count == before + 1, "capturing keeps state outside the data");
+			// Moving tables (adding another component) must keep the same state.
+			probe.GameObject.AddComponent<WindZone>();
+			Expect(probe.Captured && probe.LastLevel == 5, "the state stays with the entity");
+			probe.GameObject.RemoveComponent<ReflectionProbe>();
+			Expect(ComponentState<ReflectionProbeState>.Count == before, "RemoveComponent frees the state");
+			let second = scene.CreateGameObject("Second").AddComponent<ReflectionProbe>();
+			second.CaptureStarted(0);
+			scene.DestroyImmediate(second.GameObject);
+			Expect(ComponentState<ReflectionProbeState>.Count == before, "destroying the object frees the state");
+			scene.CreateGameObject("Third").AddComponent<ReflectionProbe>().CaptureStarted(0);
+			Expect(scene.FindComponents<ReflectionProbe>(.. scope .()).Count == 1 && scene.FindComponent<ReflectionProbe>(), "FindComponents finds handles");
+		}
+		Expect(ComponentState<ReflectionProbeState>.Count == before, "the scene ending frees the state");
+
+		let scene = scope Scene();
+		let volume = scene.CreateGameObject("Volume").AddComponent<LightProbeVolume>();
+		volume.size = .(4, 2, 4);
+		volume.Counts(let x, let y, let z);
+		Expect(x == 5 && y == 3 && z == 5 && volume.spacing == 1, "a Light Probe Volume counts its probes from its data");
+	}
+
 	static void HandleChecks()
 	{
 		let previous = Scene.Active;

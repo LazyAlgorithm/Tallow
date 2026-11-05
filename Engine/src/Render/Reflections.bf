@@ -9,8 +9,141 @@ namespace Tallow;
 /// indoors: put a probe in each room, sized to its walls. It captures when it is first drawn, and again with
 /// Capture() (or every refreshInterval seconds). What is in the box is lit by its cube, fading into the sky or the
 /// next probe over blendDistance from its edges.
-[Component]
-class ReflectionProbe : Component
+///
+/// A handle (ComponentHandle): its settings are ReflectionProbeData's fields, in the object's entity; its cube is
+/// kept outside them (ReflectionProbeState).
+[Component, HandleFields]
+struct ReflectionProbe : ComponentHandle<ReflectionProbeData>
+{
+	/// Its cube and capture progress; null until it is first captured.
+	ReflectionProbeState State => ComponentState<ReflectionProbeState>.Get(mGameObject.Scene.World, mGameObject.Entity);
+	/// The same, made if missing: only for a valid probe (the state is freed when the component goes).
+	ReflectionProbeState MadeState => ComponentState<ReflectionProbeState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+
+	/// The cube with its rougher levels, once captured.
+	public bgfx.TextureHandle Cube
+	{
+		get
+		{
+			let state = State;
+			return state != null ? state.cube : .() { idx = uint16.MaxValue };
+		}
+	}
+
+	/// Whether it has been captured (until then it reflects nothing and surfaces use the sky).
+	public bool Captured => State?.captured ?? false;
+	/// The last of the cube's levels (roughness 1).
+	public int32 LastLevel => State?.lastLevel ?? 0;
+
+	/// Captures it again (over the next frames; it keeps its old cube until then).
+	public void Capture()
+	{
+		if (let state = State)
+			state.wanted = true;
+	}
+
+	/// The box in the world.
+	public Bounds WorldBox
+	{
+		get
+		{
+			let transform = Transform;
+			let world = transform.LocalToWorld;
+			let scale = Vector3(world.Right.Length, world.Up.Length, world.Forward.Length);
+			let size = this.size;
+			let half = Vector3(Math.Abs(size.x * scale.x), Math.Abs(size.y * scale.y), Math.Abs(size.z * scale.z)) * 0.5f;
+			let center = transform.Position;
+			return .(center - half, center + half);
+		}
+	}
+
+	/// Where it sees from, in the world.
+	public Vector3 CapturePoint => Transform.Position + captureOffset;
+
+	/// How far a point is outside the box (0 inside it).
+	public float Outside(Vector3 point)
+	{
+		let area = WorldBox;
+		let dx = Math.Max(Math.Max(area.min.x - point.x, point.x - area.max.x), 0);
+		let dy = Math.Max(Math.Max(area.min.y - point.y, point.y - area.max.y), 0);
+		let dz = Math.Max(Math.Max(area.min.z - point.z, point.z - area.max.z), 0);
+		return Math.Sqrt(dx * dx + dy * dy + dz * dz);
+	}
+
+	/// How much of its reflection a point gets: 1 inside the box, fading to 0 blendDistance outside it (as the
+	/// shaders work it out for each pixel).
+	public float Weight(Vector3 point) => 1 - Math.Clamp(Outside(point) / Math.Max(blendDistance, 0.001f), 0, 1);
+
+	/// Whether it should be captured now: never yet, asked to, moved or changed in the editor, or due a refresh.
+	public bool WantsCapture(int32 generation)
+	{
+		let state = State;
+		if (state == null || state.wanted || !state.captured || generation != state.generation)
+			return true;
+		let scene = Scene;
+		if (scene != null && scene.IsPlaying)
+			return refreshInterval > 0 && Time.Time - state.capturedAt >= refreshInterval;
+		return Hash() != state.capturedState;
+	}
+
+	int64 Hash()
+	{
+		let area = WorldBox;
+		let eye = CapturePoint;
+		int64 hash = resolution;
+		Reflections.Mix(ref hash, area.min);
+		Reflections.Mix(ref hash, area.max);
+		Reflections.Mix(ref hash, eye);
+		return hash;
+	}
+
+	/// The cube to capture into, made at this size (a new one when the size changed).
+	public bgfx.TextureHandle CubeFor(int32 cubeSize) => MadeState.CubeFor(cubeSize);
+
+	/// Called by Reflections when a capture starts, and when it is finished.
+	public void CaptureStarted(int32 generation)
+	{
+		let state = MadeState;
+		state.wanted = false;
+		state.generation = generation;
+		state.capturedState = Hash();
+		state.capturedAt = Time.Time;
+	}
+
+	public void CaptureFinished(int32 lastLevel)
+	{
+		let state = MadeState;
+		state.captured = true;
+		state.lastLevel = lastLevel;
+		// The first time, shiny things in view could only mirror the sky. Once more, and they mirror this cube.
+		if (!state.secondPass)
+		{
+			state.secondPass = true;
+			state.wanted = true;
+		}
+	}
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		Reflections.Forget(world, entity);
+		ComponentState<ReflectionProbeState>.Release(world, entity);
+	}
+
+	static void DrawGizmos(GameObject gameObject, bool selected)
+	{
+		let probe = gameObject.GetComponent<ReflectionProbe>();
+		let tint = selected ? Color(0.4f, 0.85f, 1.0f, 1) : Color(0.3f, 0.7f, 0.9f, 0.5f);
+		Gizmos.Lines.Box(probe.WorldBox, .Identity, tint);
+		let eye = probe.CapturePoint;
+		Gizmos.Lines.Line(eye - .(0.25f, 0, 0), eye + .(0.25f, 0, 0), tint);
+		Gizmos.Lines.Line(eye - .(0, 0.25f, 0), eye + .(0, 0.25f, 0), tint);
+		Gizmos.Lines.Line(eye - .(0, 0, 0.25f), eye + .(0, 0, 0.25f), tint);
+	}
+}
+
+/// A Reflection Probe's settings.
+[Component, HandleData]
+struct ReflectionProbeData
 {
 	/// The box it covers, in metres around the object (scaled with it, not turned with it).
 	public Vector3 size = .(10, 10, 10);
@@ -33,142 +166,46 @@ class ReflectionProbe : Component
 	/// changing time of day or moving things; each capture draws the scene six times, one face a frame.
 	public float refreshInterval = 0;
 
-	/// The cube with its rougher levels, once captured.
-	public bgfx.TextureHandle Cube => mCube;
-	/// Whether it has been captured (until then it reflects nothing and surfaces use the sky).
-	public bool Captured => mCaptured;
-	/// The last of the cube's levels (roughness 1).
-	public int32 LastLevel => mLastLevel;
+	public this() { }
+}
 
-	bgfx.TextureHandle mCube = .() { idx = uint16.MaxValue };
-	int32 mCubeSize;
-	bool mCaptured;
-	int32 mLastLevel;
-	bool mWanted = true;
-	bool mSecondPass;
-	float mCapturedAt;
+/// What a Reflection Probe keeps outside its data: its cube and how far its capturing has got.
+class ReflectionProbeState
+{
+	public bgfx.TextureHandle cube = .() { idx = uint16.MaxValue };
+	public int32 cubeSize;
+	public bool captured;
+	public int32 lastLevel;
+	public bool wanted = true;
+	public bool secondPass;
+	public float capturedAt;
 	// What it looked like when captured: a change to where it is or how it is set captures it again in the editor.
-	int64 mCapturedState;
-	int32 mGeneration = -1;
+	public int64 capturedState;
+	public int32 generation = -1;
 
 	public ~this()
 	{
 		ReleaseCube();
 	}
 
-	/// Captures it again (over the next frames; it keeps its old cube until then).
-	public void Capture()
+	public bgfx.TextureHandle CubeFor(int32 size)
 	{
-		mWanted = true;
-	}
-
-	/// The box in the world.
-	public Bounds WorldBox
-	{
-		get
-		{
-			let world = Transform.LocalToWorld;
-			let scale = Vector3(world.Right.Length, world.Up.Length, world.Forward.Length);
-			let half = Vector3(Math.Abs(size.x * scale.x), Math.Abs(size.y * scale.y), Math.Abs(size.z * scale.z)) * 0.5f;
-			let center = Transform.Position;
-			return .(center - half, center + half);
-		}
-	}
-
-	/// Where it sees from, in the world.
-	public Vector3 CapturePoint => Transform.Position + captureOffset;
-
-	/// How far a point is outside the box (0 inside it).
-	public float Outside(Vector3 point)
-	{
-		let area = WorldBox;
-		let dx = Math.Max(Math.Max(area.min.x - point.x, point.x - area.max.x), 0);
-		let dy = Math.Max(Math.Max(area.min.y - point.y, point.y - area.max.y), 0);
-		let dz = Math.Max(Math.Max(area.min.z - point.z, point.z - area.max.z), 0);
-		return Math.Sqrt(dx * dx + dy * dy + dz * dz);
-	}
-
-	/// How much of its reflection a point gets: 1 inside the box, fading to 0 blendDistance outside it (as the
-	/// shaders work it out for each pixel).
-	public float Weight(Vector3 point) => 1 - Math.Clamp(Outside(point) / Math.Max(blendDistance, 0.001f), 0, 1);
-
-	public override void OnUnregister()
-	{
-		Reflections.Forget(this);
-	}
-
-	public override void OnDrawGizmos(bool selected)
-	{
-		let tint = selected ? Color(0.4f, 0.85f, 1.0f, 1) : Color(0.3f, 0.7f, 0.9f, 0.5f);
-		Gizmos.Lines.Box(WorldBox, .Identity, tint);
-		let eye = CapturePoint;
-		Gizmos.Lines.Line(eye - .(0.25f, 0, 0), eye + .(0.25f, 0, 0), tint);
-		Gizmos.Lines.Line(eye - .(0, 0.25f, 0), eye + .(0, 0.25f, 0), tint);
-		Gizmos.Lines.Line(eye - .(0, 0, 0.25f), eye + .(0, 0, 0.25f), tint);
-	}
-
-	/// Whether it should be captured now: never yet, asked to, moved or changed in the editor, or due a refresh.
-	public bool WantsCapture(int32 generation)
-	{
-		if (mWanted || !mCaptured || generation != mGeneration)
-			return true;
-		let scene = Scene;
-		if (scene != null && scene.IsPlaying)
-			return refreshInterval > 0 && Time.Time - mCapturedAt >= refreshInterval;
-		return State() != mCapturedState;
-	}
-
-	int64 State()
-	{
-		let area = WorldBox;
-		let eye = CapturePoint;
-		int64 hash = resolution;
-		Reflections.Mix(ref hash, area.min);
-		Reflections.Mix(ref hash, area.max);
-		Reflections.Mix(ref hash, eye);
-		return hash;
-	}
-
-	/// The cube to capture into, made at this size (a new one when the size changed).
-	public bgfx.TextureHandle CubeFor(int32 cubeSize)
-	{
-		if (mCube.Valid && mCubeSize == cubeSize)
-			return mCube;
+		if (cube.Valid && cubeSize == size)
+			return cube;
 		ReleaseCube();
-		mCube = bgfx.create_texture_cube((uint16)cubeSize, true, 1, .RGBA16F, Gfx.TextureRenderTarget | Gfx.SamplerClamp, null, 0);
-		mCubeSize = cubeSize;
-		mCaptured = false;
-		return mCube;
-	}
-
-	/// Called by Reflections when a capture starts, and when it is finished.
-	public void CaptureStarted(int32 generation)
-	{
-		mWanted = false;
-		mGeneration = generation;
-		mCapturedState = State();
-		mCapturedAt = Time.Time;
-	}
-
-	public void CaptureFinished(int32 lastLevel)
-	{
-		mCaptured = true;
-		mLastLevel = lastLevel;
-		// The first time, shiny things in view could only mirror the sky. Once more, and they mirror this cube.
-		if (!mSecondPass)
-		{
-			mSecondPass = true;
-			mWanted = true;
-		}
+		cube = bgfx.create_texture_cube((uint16)size, true, 1, .RGBA16F, Gfx.TextureRenderTarget | Gfx.SamplerClamp, null, 0);
+		cubeSize = size;
+		captured = false;
+		return cube;
 	}
 
 	void ReleaseCube()
 	{
-		if (mCube.Valid && Gfx.Initialized)
-			bgfx.destroy_texture(mCube);
-		mCube.idx = uint16.MaxValue;
-		mCaptured = false;
-		mSecondPass = false;
+		if (cube.Valid && Gfx.Initialized)
+			bgfx.destroy_texture(cube);
+		cube.idx = uint16.MaxValue;
+		captured = false;
+		secondPass = false;
 	}
 }
 
@@ -236,25 +273,40 @@ static class Reflections
 	static int32 sGeneration;
 	static int32 sAppliedResolution = -1;
 
-	// The capture under way: the sky (sJobProbe null) or a probe; sStep counts its frames.
+	// The capture under way: the sky (sJobProbe default) or a probe; sStep counts its frames.
 	static bool sJobRunning;
 	static bool sJobSky;
 	static ReflectionProbe sJobProbe;
 	static Scene sJobScene;
+	// The job's probe as its World and entity, which outlast the probe's GameObject (Forget).
+	static void* sJobWorld;
+	static uint64 sJobEntity;
 	static int32 sStep;
 	static int32 sJobSize;
 	static int64 sJobSkyState;
 
 	/// The probes in the scene being drawn that are ready, for RenderView to choose from.
 	public static List<ReflectionProbe> Ready = new .() ~ delete _;
+	// Ready's entities, and their World's.
+	static List<uint64> sReadyEntities = new .() ~ delete _;
+	static void* sReadyWorld;
 
-	/// A probe is going away: the capture under way, and the list of ready probes, must not keep it.
-	public static void Forget(ReflectionProbe probe)
+	/// A probe is going away (its component's OnRemove, given its World and entity): the capture under way, and the
+	/// list of ready probes, must not keep it.
+	public static void Forget(void* world, uint64 entity)
 	{
-		Ready.Remove(probe);
-		if (sJobProbe == probe)
+		if (world == sReadyWorld)
 		{
-			sJobProbe = null;
+			let index = sReadyEntities.IndexOf(entity);
+			if (index >= 0)
+			{
+				Ready.RemoveAt(index);
+				sReadyEntities.RemoveAt(index);
+			}
+		}
+		if (sJobRunning && sJobProbe.GameObject != null && world == sJobWorld && entity == sJobEntity)
+		{
+			sJobProbe = default;
 			sJobRunning = false;
 		}
 	}
@@ -311,6 +363,8 @@ static class Reflections
 	public static void Update(Scene scene, Vector4 sunDir, Vector4 sunColor, bool advance)
 	{
 		Ready.Clear();
+		sReadyEntities.Clear();
+		sReadyWorld = Internal.UnsafeCastToPtr(scene.World);
 		if (!Enabled || !Gfx.Initialized || !Supported)
 			return;
 		EnsureCreated();
@@ -321,17 +375,19 @@ static class Reflections
 		}
 		if (ProbesEnabled)
 		{
-			for (let component in scene.ComponentsOfType(typeof(ReflectionProbe)))
+			for (let probe in scene.Components<ReflectionProbe>(.. scope .()))
 			{
-				let probe = (ReflectionProbe)component;
-				if (probe.IsActiveAndEnabled && probe.GameObject.InActiveWorld && probe.Captured)
+				if (probe.GameObject.ActiveInHierarchy && probe.GameObject.InActiveWorld && probe.Captured)
+				{
 					Ready.Add(probe);
+					sReadyEntities.Add(probe.GameObject.Entity.id);
+				}
 			}
 		}
 		if (!advance || sUpdatedFrame == Time.FrameCount)
 			return;
 		sUpdatedFrame = Time.FrameCount;
-		if (sJobRunning && (sJobScene != scene || (sJobProbe != null && (sJobProbe.GameObject == null || sJobProbe.GameObject.IsDestroyed || sJobProbe.Scene != scene))))
+		if (sJobRunning && (sJobScene != scene || (sJobProbe.GameObject != null && (sJobProbe.GameObject.IsDestroyed || !sJobProbe || sJobProbe.Scene != scene))))
 			sJobRunning = false;
 		if (!sJobRunning)
 			StartNext(scene, sunDir, sunColor);
@@ -363,7 +419,7 @@ static class Reflections
 		{
 			sJobRunning = true;
 			sJobSky = true;
-			sJobProbe = null;
+			sJobProbe = default;
 			sJobScene = scene;
 			sJobSize = SkySize;
 			sJobSkyState = skyState;
@@ -374,14 +430,15 @@ static class Reflections
 		}
 		if (!ProbesEnabled)
 			return;
-		for (let component in scene.ComponentsOfType(typeof(ReflectionProbe)))
+		for (let probe in scene.Components<ReflectionProbe>(.. scope .()))
 		{
-			let probe = (ReflectionProbe)component;
-			if (!probe.IsActiveAndEnabled || !probe.GameObject.InActiveWorld || !probe.WantsCapture(sGeneration))
+			if (!probe.GameObject.ActiveInHierarchy || !probe.GameObject.InActiveWorld || !probe.WantsCapture(sGeneration))
 				continue;
 			sJobRunning = true;
 			sJobSky = false;
 			sJobProbe = probe;
+			sJobWorld = Internal.UnsafeCastToPtr(scene.World);
+			sJobEntity = probe.GameObject.Entity.id;
 			sJobScene = scene;
 			sJobSize = SizeOf(probe);
 			sStep = 0;
@@ -612,10 +669,11 @@ static class Reflections
 			EnsureCreated();
 		let on = Enabled && sSkyReady && sSkyCube.Valid;
 		let sky = on ? sSkyCube : sBlackCube;
-		var chosen = (on && probe >= 0 && probe < Ready.Count) ? Ready[probe] : null;
-		Vector4 reflection = .(on ? 1 : 0, sSkyLastLevel, chosen != null ? Math.Max(chosen.intensity, 0.0001f) : 0, intensity);
+		ReflectionProbe chosen = (on && probe >= 0 && probe < Ready.Count) ? Ready[probe] : default;
+		let hasProbe = chosen.GameObject != null;
+		Vector4 reflection = .(on ? 1 : 0, sSkyLastLevel, hasProbe ? Math.Max(chosen.intensity, 0.0001f) : 0, intensity);
 		Vector4 min = .(0, 0, 0, 0), max = .(0, 0, 0, 0), position = .(0, 0, 0, 0);
-		if (chosen != null)
+		if (hasProbe)
 		{
 			let area = chosen.WorldBox;
 			min = .(area.min, chosen.boxProjection ? 1 : 0);
@@ -628,7 +686,7 @@ static class Reflections
 		bgfx.set_uniform(uProbeMin, &min, 1);
 		bgfx.set_uniform(uProbeMax, &max, 1);
 		bgfx.set_uniform(uProbePos, &position, 1);
-		bgfx.set_texture(13, sReflectionProbe, chosen != null ? chosen.Cube : sky, uint32.MaxValue);
+		bgfx.set_texture(13, sReflectionProbe, hasProbe ? chosen.Cube : sky, uint32.MaxValue);
 		bgfx.set_texture(14, sReflectionSky, sky, uint32.MaxValue);
 	}
 

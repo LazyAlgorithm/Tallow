@@ -261,8 +261,7 @@ static class SceneSerializer
 			let v = *(Color*)field.ptr;
 			text.AppendF("{} {} {} {}", v.r, v.g, v.b, v.a);
 		case .String:
-			let str = *(String*)field.ptr;
-			Quote(str != null ? (StringView)str : "", text);
+			Quote(StringFields.Get(field.ptr, field.type), text);
 		case .ObjectReference:
 			let go = ComponentRegistry.ReferenceOwner(field);
 			int index = -1;
@@ -313,7 +312,7 @@ static class SceneSerializer
 			if (tokens.Length >= 4)
 				*(Color*)field.ptr = .(ParseFloat(tokens[0]), ParseFloat(tokens[1]), ParseFloat(tokens[2]), ParseFloat(tokens[3]));
 		case .String:
-			StringFields.Set(field.ptr, tokens[0], field.name);
+			StringFields.Set(field.ptr, field.type, tokens[0], field.name);
 		case .ObjectReference:
 			let id = (uint32)ParseInt(tokens[0]);
 			ComponentRegistry.AssignReference(field, id == 0 ? null : Scene.Active?.FindById(id), tokens.Length > 1 ? ParseInt(tokens[1]) : -1);

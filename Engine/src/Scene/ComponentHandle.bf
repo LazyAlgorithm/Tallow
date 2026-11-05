@@ -109,6 +109,49 @@ struct HandleFieldsAttribute : Attribute, IOnTypeInit
 	}
 }
 
+/// What a built-in component keeps outside its data, one T for each entity that has asked for one: GPU textures,
+/// voices, physics bodies. Things like these must not be in the data, which Flecs copies byte for byte. Free it from
+/// the handle's `static void OnRemove(void* world, uint64 entity) => ComponentState<T>.Release(world, entity);`.
+static class ComponentState<T> where T : class, new, delete
+{
+	struct Key : IHashable, IEquatable<Key>
+	{
+		public void* world;
+		public uint64 entity;
+
+		public int GetHashCode() => (int)(uint)world ^ (int)(entity ^ (entity >> 32)) * 31;
+		public bool Equals(Key other) => world == other.world && entity == other.entity;
+		public static bool operator ==(Key a, Key b) => a.Equals(b);
+	}
+
+	static Dictionary<Key, T> sStates = new .() ~ DeleteDictionaryAndValues!(_);
+
+	static Key KeyOf(World world, Entity entity) => .() { world = Internal.UnsafeCastToPtr(world), entity = entity.id };
+
+	/// The entity's state, or null if it has none yet.
+	public static T Get(World world, Entity entity) => sStates.TryGetValue(KeyOf(world, entity), let state) ? state : null;
+
+	/// The entity's state, made the first time it is asked for.
+	public static T Make(World world, Entity entity)
+	{
+		let key = KeyOf(world, entity);
+		if (sStates.TryGetValue(key, let state))
+			return state;
+		let made = new T();
+		sStates[key] = made;
+		return made;
+	}
+
+	/// Frees the entity's state, if it has any (from a handle's OnRemove: world is the World object).
+	public static void Release(void* world, uint64 entity)
+	{
+		if (sStates.GetAndRemove(.() { world = world, entity = entity }) case .Ok(let pair))
+			delete pair.value;
+	}
+
+	public static int Count => sStates.Count;
+}
+
 /// The built-in component handles there are, found by reflection: what Add Component, the Inspector, scene files and
 /// object references use to treat them like script components.
 static class HandleComponents
@@ -126,6 +169,9 @@ static class HandleComponents
 		public uint8[] defaults ~ delete _;
 		/// The handle's `static void DrawGizmos(GameObject gameObject, bool selected)`, if it has one.
 		public MethodInfo drawGizmos;
+		/// The handle's `static void OnRemove(void* world, uint64 entity)`, if it has one: called as the component
+		/// leaves an entity, to free what it kept outside its data (ComponentState). world is the World object.
+		public Flecs.RemoveCallback onRemove;
 	}
 
 	static List<Info> sInfos ~ DeleteContainerAndItems!(_);
@@ -168,6 +214,8 @@ static class HandleComponents
 			}
 			if (type.GetMethod("DrawGizmos", .Static | .Public | .NonPublic) case .Ok(let method))
 				info.drawGizmos = method;
+			if (type.GetMethod("OnRemove", .Static | .Public | .NonPublic) case .Ok(let method))
+				info.onRemove = (Flecs.RemoveCallback)method.Ptr;
 			sInfos.Add(info);
 			sByHandle[type] = info;
 			sByIndex[info.index] = info;

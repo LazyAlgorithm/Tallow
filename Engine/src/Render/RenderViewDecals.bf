@@ -27,10 +27,9 @@ extension RenderView
 		mDecalItems.Clear();
 		Decals.Expire(scene);
 		let unitBox = Bounds(.(-0.5f), .(0.5f));
-		for (let component in scene.ComponentsOfType(typeof(Decal)))
+		for (let decal in scene.Components<Decal>(.. scope .()))
 		{
-			let decal = (Decal)component;
-			if (!decal.IsActiveAndEnabled || !decal.GameObject.InActiveWorld || HidesHere(decal.GameObject) || decal.opacity <= 0 || decal.color.a <= 0)
+			if (!decal.GameObject.ActiveInHierarchy || !decal.GameObject.InActiveWorld || HidesHere(decal.GameObject) || decal.opacity <= 0 || decal.color.a <= 0)
 				continue;
 			let volume = decal.BoxMatrix;
 			if (!frustum.Intersects(unitBox.Transformed(volume)))

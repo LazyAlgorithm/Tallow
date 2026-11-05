@@ -798,7 +798,26 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
 - **Editor:** the Inspector draws handles like script components (enable toggle, icon, Reset, Copy, Paste
   Values, Remove). Add Component lists them in their category. Gizmos come from an optional
   `static void DrawGizmos(GameObject, bool selected)` on the handle.
-- **Lists:** `Scene.Lights` is now built from a query of `LightData` and `ObjectLink` each time it is read.
+- **Lists:** `scene.Components<T>(list)` gives every switched-on component of a handle type, from a cached
+  Flecs query of its data and `ObjectLink` (`IndexQuery`, a query built from ComponentTypes indices). Switched-off
+  components are not visited at all; callers still check the object is active. `scene.FindComponents<T>(list)` and
+  `FindComponent<T>()` have handle overloads that include switched-off ones, as for scripts. `Scene.Lights` and
+  `AllLights` are built from these each time they are read.
+- **Text in data:** `SharedString` (Engine/src/Core/SharedString.bf) is a pointer to one interned, never-freed
+  copy of a text, so data holding it can be copied byte for byte. It converts to and from `StringView` and
+  `String`, so `decal.texture = "Textures/ring.png"` and `if (decal.texture == "x")` read as before (an exact
+  `String` overload of `==` keeps literals unambiguous). It is a `FieldKind.String` field: scene files, the
+  Inspector, `[Sync]` and UI bindings read and write it through `StringFields.Get/Set(slot, type, ...)`. Meant
+  for asset paths and names, not text that changes every frame. `decal.texture.Set(...)` no longer exists.
+- **State outside the data:** GPU textures, voices and bodies must not be in data that Flecs copies. A handle
+  keeps them in `ComponentState<TState>` (a table keyed by World and entity), made on first use, and declares
+  `static void OnRemove(void* world, uint64 entity)` to free them. HandleComponents finds `OnRemove` by
+  reflection, and each World registers it as the component's Flecs `on_remove` hook (`tallow_ecs_on_remove`), so
+  it runs on RemoveComponent, on destroying the object, and when the scene's world ends. Engine code that keeps a
+  handle across frames (Reflections' capture job) is told in the same hook, by World and entity, because the
+  GameObject may be gone by then.
+- **Inspector tools:** the tools a class used to draw under its fields (`component as Decal`) are called from
+  `InspectorPanel.DrawHandleTools` by handle type.
 
 ### Components
 
@@ -807,10 +826,25 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   (defaults, field writes, enable and `Scene.Lights`, save and load, a script's `Light` field resolved and
   cleared on destroy, remove). The Sandbox renders with its sun and lamp. In the editor, the Lamp loads from the
   existing scene and shows in the Inspector as before, and an editor save writes the Light blocks back unchanged.
-- [ ] Decal, ReflectionProbe, LightProbeVolume, WindZone, LODGroup, Camera, MeshRenderer, SkinnedMeshRenderer,
+- [x] **WindZone and FoliageBender.** `Wind.At`, `Wind.Gather` and `FoliageBender.Gather` read
+  `scene.Components<T>`. Checked by `EcsChecks.WindChecks` (global and sphere wind, switched off, inactive
+  object, bender gather, save and load).
+- [x] **Decal.** `texture` is a `SharedString`. The renderer and the Scene view's picking read
+  `scene.Components<Decal>`; Stick to Surface moved to DrawHandleTools. Checked by `EcsChecks.DecalChecks`
+  (SharedString interning, defaults, the text surviving a table move, editable field, save and load).
+- [x] **ReflectionProbe.** Its cube and capture progress are `ReflectionProbeState` in `ComponentState`, freed by
+  `OnRemove`, which also tells Reflections to drop the probe from its ready list and capture job. Checked by
+  `EcsChecks.ProbeChecks` (state made on capture, kept across a table move, freed by RemoveComponent, by
+  destroying the object and by the scene ending; FindComponents). The Gallery captures its two probes
+  (4 captures, as before) and in the editor the Hall probe shows its fields, Capture Now and "Captured: 512 x 512,
+  8 levels", with the spheres mirroring the room.
+- [x] **LightProbeVolume.** The baker and ProbePlacer read it through `FindComponents`; checked for its counts.
+- [ ] LODGroup, Camera, MeshRenderer, SkinnedMeshRenderer,
   LineRenderer, TrailRenderer, ParticleSystem, Foliage, Water, AudioSource, AudioListener, AudioReverbZone,
   Rigidbody, Collider, Joint, CharacterController, SoftBody, Rope, and the Phase 5 set.
-- [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`.
+- [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with
+  the components above converted, a Gallery made from the template builds and its `--self-test` prints
+  `SHOWCASE_READY rooms=8 probes=2` with no errors.)
 
 ## Benchmark results
 

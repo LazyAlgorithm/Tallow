@@ -103,6 +103,9 @@ static class Flecs
 	[LinkName("tallow_ecs_enable")] public static extern void Enable(void* world, uint64 entity, bool enabled);
 	[LinkName("tallow_ecs_can_toggle")] public static extern void CanToggle(void* world, uint64 component);
 	[LinkName("tallow_ecs_enable_id")] public static extern void EnableId(void* world, uint64 entity, uint64 id, bool enabled);
+	public function void RemoveCallback(void* context, uint64 entity);
+	/// Calls callback(context, entity) for each entity that loses the component (removed, deleted, world ended).
+	[LinkName("tallow_ecs_on_remove")] public static extern void OnRemove(void* world, uint64 component, RemoveCallback callback, void* context);
 	[LinkName("tallow_ecs_is_enabled_id")] public static extern bool IsEnabledId(void* world, uint64 entity, uint64 id);
 
 	// ---- Relationships and hierarchy ----

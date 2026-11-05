@@ -124,7 +124,7 @@ extension EditorApp
 		var count = 0;
 		for (let gameObject in mScene.FindAllWithTag(ProbePlacer.Tag, .. scope .()))
 		{
-			if (gameObject.GetComponent<ReflectionProbe>() != null || gameObject.GetComponent<LightProbeVolume>() != null)
+			if (gameObject.HasComponent<ReflectionProbe>() || gameObject.HasComponent<LightProbeVolume>())
 				count++;
 		}
 		return count;

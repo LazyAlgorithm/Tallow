@@ -92,8 +92,8 @@ static class DataComponents
 		return null;
 	}
 
-	/// The editable fields of a data component whose value is at data. Only plain values: a data component holds
-	/// no references to the heap.
+	/// The editable fields of a data component whose value is at data. Only plain values and SharedString: a data
+	/// component holds nothing it would have to free.
 	public static void GetFields(Type type, void* data, List<FieldRef> fields)
 	{
 		let all = scope List<FieldRef>();
@@ -102,7 +102,10 @@ static class DataComponents
 		{
 			switch (field.kind)
 			{
-			case .String,.ObjectReference,.List,.Array:
+			case .String:
+				if (field.type == typeof(SharedString))
+					fields.Add(field);
+			case .ObjectReference,.List,.Array:
 				continue;
 			default:
 				fields.Add(field);

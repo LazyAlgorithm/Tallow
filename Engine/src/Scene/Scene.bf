@@ -256,38 +256,79 @@ class Scene
 	// Non-owning lists maintained by the components themselves in OnRegister / OnUnregister.
 	/// Every Mesh Renderer in the scene (each adds itself when it joins).
 	public List<MeshRenderer> Renderers = new .() ~ delete _;
-	/// Every Light in the scene.
-	Query<LightData, ObjectLink> mLightQuery ~ delete _;
+	/// The query behind Components<T>() for each handle type, by its data's ComponentTypes index.
+	Dictionary<int32, IndexQuery> mHandleQueries = new .() ~ DeleteDictionaryAndValues!(_);
+
+	/// Every switched-on component of handle type T in the scene (Light, WindZone...), on active and inactive
+	/// objects alike, in no set order. Straight from Flecs: a switched-off one is not visited at all.
+	public void Components<T>(List<T> output) where T : struct, IComponentHandle
+	{
+		let index = T.DataIndex;
+		IndexQuery query;
+		if (!mHandleQueries.TryGetValue(index, out query))
+		{
+			int32[2] types = .(index, ComponentId<ObjectLink>.Index);
+			Flecs.TermAccess[2] access = .(.Filter, .Read);
+			query = new IndexQuery(World, types, access);
+			mHandleQueries[index] = query;
+		}
+		for (var chunk in query)
+		{
+			for (let link in chunk.Read<ObjectLink>())
+			{
+				output.Add(link.gameObject.[Friend]MakeHandle<T>());
+			}
+		}
+	}
+
+	/// Every component of handle type T in the scene, switched on or not, as FindComponents does for a script.
+	public void FindComponents<T>(List<T> output) where T : struct, IComponentHandle => AllComponents(output);
+
+	/// The first component of handle type T in the scene, switched on or not; not valid if there is none.
+	public T FindComponent<T>() where T : struct, IComponentHandle
+	{
+		for (let gameObject in mObjects)
+		{
+			if (gameObject.HasComponent<T>())
+				return gameObject.GetComponent<T>();
+		}
+		return default;
+	}
+
+	/// Every component of handle type T in the scene, switched on or not.
+	public void AllComponents<T>(List<T> output) where T : struct, IComponentHandle
+	{
+		for (let gameObject in mObjects)
+		{
+			if (gameObject.HasComponent<T>())
+				output.Add(gameObject.GetComponent<T>());
+		}
+	}
+
 	List<Light> mLights = new .() ~ delete _;
 	List<Light> mAllLights = new .() ~ delete _;
 
 	/// The scene's switched-on lights (Light.enabled), on active and inactive objects alike, in no set order. Rebuilt
 	/// each time it is read; keep the list only until the scene changes.
-	public List<Light> Lights => GatherLights(mLights, true);
-	/// Every light, switched on or not (network sync).
-	public List<Light> AllLights => GatherLights(mAllLights, false);
-
-	List<Light> GatherLights(List<Light> output, bool enabledOnly)
+	public List<Light> Lights
 	{
-		output.Clear();
-		if (enabledOnly)
+		get
 		{
-			if (mLightQuery == null)
-				mLightQuery = new .(World, .Read, .Read);
-			for (var chunk in mLightQuery)
-			{
-				for (let link in chunk.Read<ObjectLink>())
-					output.Add(link.gameObject.GetComponent<Light>());
-			}
-			return output;
+			mLights.Clear();
+			Components(mLights);
+			return mLights;
 		}
-		for (let gameObject in mObjects)
+	}
+
+	/// Every light, switched on or not (network sync).
+	public List<Light> AllLights
+	{
+		get
 		{
-			let light = gameObject.GetComponent<Light>();
-			if (light)
-				output.Add(light);
+			mAllLights.Clear();
+			AllComponents(mAllLights);
+			return mAllLights;
 		}
-		return output;
 	}
 
 	/// Every Camera in the scene.

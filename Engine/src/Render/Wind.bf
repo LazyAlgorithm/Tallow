@@ -19,8 +19,43 @@ enum WindShape : int32
 /// The bending is done on the graphics card, so it costs the same for one plant as for fifty thousand. The four
 /// Sphere zones nearest the camera take part; Global zones always do. Wind is the same on every machine if the zones
 /// are (zones in a scene are; one moved by a script moves on other machines if its object is shared).
-[Component]
-class WindZone : Component
+///
+/// A handle (ComponentHandle): its settings are WindZoneData's fields, in the object's entity.
+[Component, HandleFields]
+struct WindZone : ComponentHandle<WindZoneData>
+{
+	/// The wind this zone makes at a point (nothing outside a Sphere zone's reach).
+	public Vector3 WindAt(Vector3 position)
+	{
+		let transform = Transform;
+		let wind = transform.Forward * strength;
+		if (shape == .Global)
+			return wind;
+		let scale = transform.LocalScale;
+		let reach = Math.Max(radius * Math.Max(Math.Max(scale.x, scale.y), scale.z), 0.0001f);
+		return wind * Mathf.Clamp01(1 - (position - transform.Position).Length / reach);
+	}
+
+	static void DrawGizmos(GameObject gameObject, bool selected)
+	{
+		let zone = gameObject.GetComponent<WindZone>();
+		let transform = gameObject.Transform;
+		let from = transform.Position;
+		let color = Color(0.55f, 0.85f, 1.0f, selected ? 1.0f : 0.5f);
+		let forward = transform.Forward, right = transform.Right;
+		let length = 1.0f + Math.Min(zone.strength, 6) * 0.4f;
+		let tip = from + forward * length;
+		Gizmos.Lines.Line(from, tip, color);
+		Gizmos.Lines.Line(tip, tip - forward * 0.3f + right * 0.15f, color);
+		Gizmos.Lines.Line(tip, tip - forward * 0.3f - right * 0.15f, color);
+		if (zone.shape == .Sphere && selected)
+			Gizmos.Lines.Sphere(from, zone.radius, color);
+	}
+}
+
+/// A Wind Zone's settings.
+[Component, HandleData]
+struct WindZoneData
 {
 	public WindShape shape = .Global;
 	/// How hard it blows: 0 still air, 1 a breeze, 3 a strong wind, 6 a gale.
@@ -31,36 +66,7 @@ class WindZone : Component
 	/// How far a Sphere zone reaches.
 	public float radius = 10;
 
-	static List<WindZone> sAll = new .() ~ delete _;
-
-	public override void OnRegister() => sAll.Add(this);
-	public override void OnUnregister() => sAll.Remove(this);
-
-	/// The wind this zone makes at a point (nothing outside a Sphere zone's reach).
-	public Vector3 WindAt(Vector3 position)
-	{
-		let wind = Transform.Forward * strength;
-		if (shape == .Global)
-			return wind;
-		let reach = Math.Max(radius * Math.Max(Math.Max(Transform.LocalScale.x, Transform.LocalScale.y), Transform.LocalScale.z), 0.0001f);
-		return wind * Mathf.Clamp01(1 - (position - Transform.Position).Length / reach);
-	}
-
-	public override void OnDrawGizmos(bool selected)
-	{
-		let from = Transform.Position;
-		let color = Color(0.55f, 0.85f, 1.0f, selected ? 1.0f : 0.5f);
-		let forward = Transform.Forward, right = Transform.Right;
-		let length = 1.0f + Math.Min(strength, 6) * 0.4f;
-		let tip = from + forward * length;
-		DebugDraw.Line(from, tip, color);
-		DebugDraw.Line(tip, tip - forward * 0.3f + right * 0.15f, color);
-		DebugDraw.Line(tip, tip - forward * 0.3f - right * 0.15f, color);
-		if (shape == .Sphere && selected)
-			DebugDraw.Sphere(from, radius, color);
-	}
-
-	public static List<WindZone> All => sAll;
+	public this() { }
 }
 
 /// Reading the wind from code, for anything that should drift with it: smoke, a sail, a paper bag.
@@ -70,12 +76,8 @@ static class Wind
 	public static Vector3 At(Scene scene, Vector3 position)
 	{
 		var wind = Vector3.Zero;
-		for (let zone in WindZone.All)
-		{
-			if (zone.GameObject == null || zone.GameObject.IsDestroyed || zone.Scene != scene || !zone.IsActiveAndEnabled)
-				continue;
+		for (let zone in Zones(scene, .. scope .()))
 			wind = wind + zone.WindAt(position);
-		}
 		return wind;
 	}
 
@@ -83,12 +85,21 @@ static class Wind
 	public static float Gusts(Scene scene)
 	{
 		float gusts = 0;
-		for (let zone in WindZone.All)
+		for (let zone in Zones(scene, .. scope .()))
 		{
-			if (zone.GameObject != null && !zone.GameObject.IsDestroyed && zone.Scene == scene && zone.IsActiveAndEnabled && zone.shape == .Global)
+			if (zone.shape == .Global)
 				gusts = Math.Max(gusts, zone.gusts);
 		}
 		return gusts;
+	}
+
+	/// The scene's switched-on zones on active objects.
+	static void Zones(Scene scene, List<WindZone> output)
+	{
+		if (scene == null)
+			return;
+		scene.Components(output);
+		output.RemoveAll(scope (zone) => !zone.GameObject.ActiveInHierarchy);
 	}
 
 	/// How rough the air is for cloth and ropes (Soft Body, Rope): some flutter always, more with gusts.
@@ -106,10 +117,8 @@ static class Wind
 			zones[i] = default;
 			push[i] = default;
 		}
-		for (let zone in WindZone.All)
+		for (let zone in Zones(scene, .. scope .()))
 		{
-			if (zone.GameObject == null || zone.GameObject.IsDestroyed || zone.Scene != scene || !zone.IsActiveAndEnabled)
-				continue;
 			let blowing = zone.Transform.Forward * zone.strength;
 			if (zone.shape == .Global)
 			{
@@ -155,27 +164,16 @@ static class Wind
 /// Nothing is sent over the network. Each machine bends its own plants round the objects it has, and it has every
 /// player, so other players part the grass on your screen as they do on theirs. The eight nearest the camera take
 /// part.
-[Component]
-class FoliageBender : Component
+///
+/// A handle (ComponentHandle): its settings are FoliageBenderData's fields, in the object's entity.
+[Component, HandleFields]
+struct FoliageBender : ComponentHandle<FoliageBenderData>
 {
-	/// How far from the object plants are pushed.
-	public float radius = 0.9f;
-	/// How hard: 1 lays grass well over, 0.3 only brushes it, 0 does nothing.
-	[Range(0, 2)]
-	public float strength = 1;
-	/// Where the pushing is centred, in the object's own space: its feet, as a rule.
-	public Vector3 offset = .Zero;
-
-	static List<FoliageBender> sAll = new .() ~ delete _;
-	public static List<FoliageBender> All => sAll;
-
-	public override void OnRegister() => sAll.Add(this);
-	public override void OnUnregister() => sAll.Remove(this);
-
-	public override void OnDrawGizmos(bool selected)
+	static void DrawGizmos(GameObject gameObject, bool selected)
 	{
+		let bender = gameObject.GetComponent<FoliageBender>();
 		if (selected)
-			DebugDraw.Sphere(Transform.TransformPoint(offset), radius, .(0.45f, 0.95f, 0.4f, 1));
+			Gizmos.Lines.Sphere(gameObject.Transform.TransformPoint(bender.offset), bender.radius, .(0.45f, 0.95f, 0.4f, 1));
 	}
 
 	/// What the renderer hands the graphics card: the eight pushers nearest a point, nearest first (xyz place, w
@@ -210,9 +208,9 @@ class FoliageBender : Component
 				return;
 			}
 		}
-		for (let bender in sAll)
+		for (let bender in scene.Components<FoliageBender>(.. scope .()))
 		{
-			if (bender.GameObject == null || bender.GameObject.IsDestroyed || bender.Scene != scene || !bender.IsActiveAndEnabled)
+			if (!bender.GameObject.ActiveInHierarchy)
 				continue;
 			let scale = bender.Transform.LocalToWorld.Right.Length;
 			Take(bender.Transform.TransformPoint(bender.offset), bender.radius * scale, bender.strength, ref places, ref push);
@@ -223,10 +221,25 @@ class FoliageBender : Component
 			if (controller.GameObject.IsDestroyed || !controller.IsActiveAndEnabled)
 				continue;
 			// One with a Foliage Bender of its own has said how it wants to push.
-			if (controller.GetComponent<FoliageBender>() != null)
+			if (controller.GameObject.HasComponent<FoliageBender>())
 				continue;
 			let feet = controller.Transform.TransformPoint(controller.center - Vector3(0, controller.height * 0.5f, 0));
 			Take(feet, Math.Max(controller.radius * 2.2f, 0.6f), 1, ref places, ref push);
 		}
 	}
+}
+
+/// A Foliage Bender's settings.
+[Component, HandleData]
+struct FoliageBenderData
+{
+	/// How far from the object plants are pushed.
+	public float radius = 0.9f;
+	/// How hard: 1 lays grass well over, 0.3 only brushes it, 0 does nothing.
+	[Range(0, 2)]
+	public float strength = 1;
+	/// Where the pushing is centred, in the object's own space: its feet, as a rule.
+	public Vector3 offset = .Zero;
+
+	public this() { }
 }

@@ -166,7 +166,15 @@ sealed class World
 		Runtime.Assert(id != 0, scope $"Flecs refused component {info.name}");
 		// A built-in component's data can be switched off per object (ComponentHandle.enabled).
 		if (info.type != null && info.type.GetCustomAttribute<HandleDataAttribute>() case .Ok)
+		{
 			Flecs.CanToggle(mWorld, id);
+			// One that keeps things outside its data (ComponentState) frees them when it goes.
+			if (let handle = HandleComponents.Find(index))
+			{
+				if (handle.onRemove != null)
+					Flecs.OnRemove(mWorld, id, handle.onRemove, Internal.UnsafeCastToPtr(this));
+			}
+		}
 		mIds[index] = id;
 		mIndexById[id] = index;
 		return id;

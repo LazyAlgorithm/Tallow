@@ -294,7 +294,7 @@ static class ComponentRegistry
 			kind = .Quaternion;
 		else if (fieldType == typeof(Color))
 			kind = .Color;
-		else if (fieldType == typeof(String))
+		else if (fieldType == typeof(String) || fieldType == typeof(SharedString))
 			kind = .String;
 		else if (fieldType == typeof(GameObject) || fieldType == typeof(Transform) || fieldType == typeof(Component) || fieldType.IsSubtypeOf(typeof(Component))
 			|| HandleComponents.IsHandle(fieldType))

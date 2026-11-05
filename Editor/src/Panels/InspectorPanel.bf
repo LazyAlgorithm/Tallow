@@ -328,7 +328,17 @@ extension EditorApp
 		}
 		if (changed)
 			MarkDirty();
+		DrawHandleTools(gameObject, info);
 		return false;
+	}
+
+	/// The extra tools under a built-in component's fields (Stick to Surface, Bake...).
+	void DrawHandleTools(GameObject gameObject, HandleComponents.Info info)
+	{
+		if (info.handleType == typeof(Decal))
+			DrawDecalTools(gameObject.GetComponent<Decal>());
+		else if (info.handleType == typeof(ReflectionProbe))
+			DrawReflectionProbeTools(gameObject.GetComponent<ReflectionProbe>());
 	}
 
 	// ---- Data components ([Component] structs in the object's entity, DataComponents) ----
@@ -587,10 +597,6 @@ extension EditorApp
 			DrawLimbIKTools(limb);
 		if (let foliage = component as Foliage)
 			DrawFoliageTools(foliage);
-		if (let decal = component as Decal)
-			DrawDecalTools(decal);
-		if (let probe = component as ReflectionProbe)
-			DrawReflectionProbeTools(probe);
 		if (let runner = component as DialogueRunner)
 			DrawDialogueRunnerTools(runner);
 		if (let sequencePlayer = component as SequencePlayer)
@@ -994,15 +1000,19 @@ extension EditorApp
 		case .Color:
 			return ImGui.ColorEdit4("##v", ref *(Color*)field.ptr, ImGui.ColorFlags.Float);
 		case .String:
+			if (field.type == typeof(SharedString))
+			{
+				let edited = scope String(((SharedString*)field.ptr).View);
+				if (!DrawStringField(edited, field.name))
+					return false;
+				*(SharedString*)field.ptr = edited;
+				return true;
+			}
 			// A field given a text literal gets its own copy before it can be typed into.
 			let original = StringFields.Writable(field.ptr, field.name);
 			let temporary = scope String();
 			let text = original != null ? original : temporary;
-			bool changed;
-			if (field.name == "mesh" || field.name == "model" || field.name == "texture" || field.name == "document" || field.name == "prefab" || field.name == "tree" || field.name == "controller" || field.name == "material" || field.name == "interiorMaterial" || field.name == "scene" || field.name == "shader" || field.name == "bakedData" || field.name == "audioClip" || field.name == "dialogue" || field.name == "sequence" || field.name.EndsWith("Prefab"))
-				changed = DrawAssetPicker(text, field.name);
-			else
-				changed = ImGui.InputText("##v", text);
+			let changed = DrawStringField(text, field.name);
 			if (changed && original == null)
 				*(String*)field.ptr = new String(text);
 			return changed;
@@ -1125,6 +1135,14 @@ extension EditorApp
 			ImGui.EndPopup();
 		}
 		return changed;
+	}
+
+	/// A text field's editor: an asset picker for fields named like asset paths, otherwise a text box.
+	bool DrawStringField(String text, StringView name)
+	{
+		if (name == "mesh" || name == "model" || name == "texture" || name == "document" || name == "prefab" || name == "tree" || name == "controller" || name == "material" || name == "interiorMaterial" || name == "scene" || name == "shader" || name == "bakedData" || name == "audioClip" || name == "dialogue" || name == "sequence" || name.EndsWith("Prefab"))
+			return DrawAssetPicker(text, name);
+		return ImGui.InputText("##v", text);
 	}
 
 	bool DrawObjectPicker(FieldRef field)

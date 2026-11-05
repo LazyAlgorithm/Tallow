@@ -575,6 +575,40 @@ TALLOW_ECS_API void tallow_ecs_can_toggle(ecs_world_t* world, uint64_t component
 	ecs_add_id(world, component, EcsCanToggle);
 }
 
+/* A component's on_remove hook calls fn(context, entity) for each entity losing it (removed, deleted, or the world
+ * ending): how a built-in component frees what it keeps outside its data. */
+typedef void (*tallow_ecs_remove_fn)(void* context, uint64_t entity);
+
+typedef struct tallow_ecs_remove_hook
+{
+	tallow_ecs_remove_fn fn;
+	void* context;
+} tallow_ecs_remove_hook;
+
+static void tallow_ecs_call_remove_hook(ecs_iter_t* it)
+{
+	const tallow_ecs_remove_hook* hook = it->ctx;
+	for (int32_t i = 0; i < it->count; i++)
+		hook->fn(hook->context, it->entities[i]);
+}
+
+static void tallow_ecs_free_remove_hook(void* hook)
+{
+	ecs_os_free(hook);
+}
+
+TALLOW_ECS_API void tallow_ecs_on_remove(ecs_world_t* world, uint64_t component, tallow_ecs_remove_fn fn, void* context)
+{
+	tallow_ecs_remove_hook* hook = ecs_os_malloc_t(tallow_ecs_remove_hook);
+	hook->fn = fn;
+	hook->context = context;
+	ecs_type_hooks_t hooks = {0};
+	hooks.on_remove = tallow_ecs_call_remove_hook;
+	hooks.ctx = hook;
+	hooks.ctx_free = tallow_ecs_free_remove_hook;
+	ecs_set_hooks_id(world, component, &hooks);
+}
+
 TALLOW_ECS_API void tallow_ecs_enable_id(ecs_world_t* world, uint64_t entity, uint64_t id, bool enabled)
 {
 	ecs_enable_id(world, entity, id, enabled);

@@ -810,6 +810,8 @@ static class NetworkSync
 		public void* ptr;
 		public int32 size;
 		public bool isString;
+		/// A String field's type: String or SharedString.
+		public Type type;
 		public List<uint8> last = new .() ~ delete _;
 	}
 
@@ -873,6 +875,7 @@ static class NetworkSync
 				slot.ptr = field.ptr;
 				slot.size = size;
 				slot.isString = field.kind == .String;
+				slot.type = field.type;
 				list.slots.Add(slot);
 			}
 		}
@@ -890,8 +893,8 @@ static class NetworkSync
 	{
 		if (!slot.isString)
 			return .((uint8*)slot.ptr, slot.size);
-		let text = *(String*)slot.ptr;
-		return text != null ? Span<uint8>((uint8*)text.Ptr, text.Length) : default;
+		let text = StringFields.Get(slot.ptr, slot.type);
+		return Span<uint8>((uint8*)text.Ptr, text.Length);
 	}
 
 	static void WriteField(NetWriter payload, NetworkIdentity identity, int index, Slot slot)
@@ -949,8 +952,9 @@ static class NetworkSync
 		let slot = list.slots[index];
 		if (slot.isString)
 		{
-			let text = StringFields.Writable(slot.ptr);
-			if (text != null)
+			if (slot.type == typeof(SharedString))
+				*(SharedString*)slot.ptr = StringView((char8*)&data[0], length);
+			else if (let text = StringFields.Writable(slot.ptr))
 				text..Clear().Append(StringView((char8*)&data[0], length));
 		}
 		else if (length == slot.size)

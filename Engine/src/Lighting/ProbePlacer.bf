@@ -302,9 +302,9 @@ class ProbePlacer
 				}
 			}
 		}
-		for (let probe in scene.FindComponents<ReflectionProbe>(.. scope .()))
+		for (let probe in scene.Components<ReflectionProbe>(.. scope .()))
 		{
-			if (probe.IsActiveAndEnabled && !probe.GameObject.HasTag(Tag))
+			if (probe.GameObject.ActiveInHierarchy && !probe.GameObject.HasTag(Tag))
 				mOwnReflections.Add(probe.WorldBox);
 		}
 		for (let volume in scene.FindComponents<LightProbeVolume>(.. scope .()))
@@ -1502,7 +1502,7 @@ class ProbePlacer
 		for (int i = tagged.Count - 1; i >= 0; i--)
 		{
 			let gameObject = tagged[i];
-			if (gameObject.GetComponent<ReflectionProbe>() == null && gameObject.GetComponent<LightProbeVolume>() == null)
+			if (!gameObject.HasComponent<ReflectionProbe>() && !gameObject.HasComponent<LightProbeVolume>())
 				continue;
 			for (let child in scope List<Transform>(gameObject.Transform.Children))
 				child.SetParent(gameObject.Transform.Parent, true);

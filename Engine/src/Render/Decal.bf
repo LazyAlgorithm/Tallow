@@ -7,11 +7,34 @@ namespace Tallow;
 /// is pressed along the object's forward (blue) axis onto the surfaces in the box, lit like them, and fades out on
 /// surfaces turned away from it. Moving or rotating the object moves the decal; parent it to a moving object to
 /// carry it along. For many short-lived marks (bullet holes, footprints), use Decals.Spawn instead.
-[Component]
-class Decal : Component
+///
+/// A handle (ComponentHandle): its settings are DecalData's fields, in the object's entity.
+[Component, HandleFields]
+struct Decal : ComponentHandle<DecalData>
+{
+	/// The box the decal projects through, in the world: the unit cube scaled by size, then by the object.
+	public Matrix4 BoxMatrix => Transform.LocalToWorld * Matrix4.Scale(size);
+
+	static void DrawGizmos(GameObject gameObject, bool selected)
+	{
+		let tint = selected ? Color(1.0f, 0.75f, 0.2f, 1) : Color(0.9f, 0.6f, 0.2f, 0.6f);
+		let volume = gameObject.GetComponent<Decal>().BoxMatrix;
+		Gizmos.Lines.Box(.(.(-0.5f), .(0.5f)), volume, tint);
+		// Which way the picture is pressed: an arrow from the box's centre along its depth.
+		let center = volume.TransformPoint(.Zero);
+		let tip = volume.TransformPoint(.(0, 0, 0.5f));
+		Gizmos.Lines.Line(center, tip, tint);
+		let up = volume.TransformPoint(.(0, 0.5f, 0));
+		Gizmos.Lines.Line(center, up, tint);
+	}
+}
+
+/// A Decal's settings.
+[Component, HandleData]
+struct DecalData
 {
 	/// The picture. Its alpha decides where the decal shows; none draws a solid rectangle in the colour.
-	public String texture = new .() ~ delete _;
+	public SharedString texture = default;
 	/// Multiplies the picture; its alpha fades the whole decal.
 	public Color color = .White;
 	/// The box's width (X), height (Y) and depth (Z, along the projection), in metres, before the object's scale.
@@ -34,21 +57,7 @@ class Decal : Component
 	/// Decals with a higher order are drawn over those with a lower one where they overlap.
 	public int32 order = 0;
 
-	/// The box the decal projects through, in the world: the unit cube scaled by size, then by the object.
-	public Matrix4 BoxMatrix => Transform.LocalToWorld * Matrix4.Scale(size);
-
-	public override void OnDrawGizmos(bool selected)
-	{
-		let tint = selected ? Color(1.0f, 0.75f, 0.2f, 1) : Color(0.9f, 0.6f, 0.2f, 0.6f);
-		let volume = BoxMatrix;
-		Gizmos.Lines.Box(.(.(-0.5f), .(0.5f)), volume, tint);
-		// Which way the picture is pressed: an arrow from the box's centre along its depth.
-		let center = volume.TransformPoint(.Zero);
-		let tip = volume.TransformPoint(.(0, 0, 0.5f));
-		Gizmos.Lines.Line(center, tip, tint);
-		let up = volume.TransformPoint(.(0, 0.5f, 0));
-		Gizmos.Lines.Line(center, up, tint);
-	}
+	public this() { }
 }
 
 /// A decal made by Decals.Spawn: not an object, just a box, a picture and how long it lasts.

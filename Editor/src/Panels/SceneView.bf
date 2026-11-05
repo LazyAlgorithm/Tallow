@@ -354,10 +354,9 @@ extension EditorApp
 			}
 		}
 		// A decal is clicked where the ray enters its box before reaching the surface it lies on.
-		for (let component in mScene.ComponentsOfType(typeof(Decal)))
+		for (let decal in mScene.Components<Decal>(.. scope .()))
 		{
-			let decal = (Decal)component;
-			if (!decal.IsActiveAndEnabled || !decal.GameObject.InActiveWorld || !PickableInScene(decal.GameObject))
+			if (!decal.GameObject.ActiveInHierarchy || !decal.GameObject.InActiveWorld || !PickableInScene(decal.GameObject))
 				continue;
 			let volume = decal.BoxMatrix;
 			let toLocal = volume.Inverse;
