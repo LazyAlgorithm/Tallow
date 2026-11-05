@@ -3,24 +3,15 @@ using System.Collections;
 
 namespace Tallow;
 
-/// One kind of plant, many times over: grass, flowers, bushes, rocks, trees. Every plant of a Foliage component is the
-/// same model, drawn together by the graphics card (instanced), so tens of thousands cost little; each gets its own
-/// turn, size and shade so that they do not look stamped out. Add one Foliage for each kind of plant (several can sit
-/// on the same object), then paint them on with the Foliage brush in the Inspector, or place them from code.
-///
-/// Mesh is a model whose foot is at its origin: "builtin:grass", "builtin:bush", "builtin:tree", "builtin:pine", or a
-/// model of your own. Plants bend in the wind (Wind Zone) by Sway. They are part of the scene, saved with it, and the
-/// same on every machine; Paint and Erase from code change only the machine they are called on.
-///
-/// Plants are scenery: they have no colliders, and nothing is drawn beyond View Distance (they thin out towards it
-/// rather than stopping at a line).
-[Component]
-class Foliage : Component
+/// A Foliage's settings and its plants (packed), in its entity (Foliage is the handle). The plants as plants are its
+/// FoliageState; the packed text is written from them when the scene is saved (Sync).
+[Component, HandleData]
+struct FoliageData
 {
 	/// The plant's model: "builtin:grass", "builtin:bush", "builtin:tree", "builtin:pine", or a model in the project.
-	public String mesh = new .("builtin:grass") ~ delete _;
+	public SharedString mesh = "builtin:grass";
 	/// A material (.tmat) for the plants. Empty: the model's own colours, two-sided, smoothly shaded.
-	public String material = new .() ~ delete _;
+	public SharedString material = default;
 	public Color color = .White;
 	/// How much plants differ in shade from one to the next.
 	[Range(0, 1)]
@@ -40,9 +31,130 @@ class Foliage : Component
 	/// The brush: no plants on ground steeper than this, in degrees.
 	[Range(0, 90)]
 	public float maxSlope = 45;
-	/// Every plant, packed (16 bytes each, as text). Written when the scene is saved.
+	/// Every plant, packed (16 bytes each, as text). Written when the scene is saved. Owned by the data
+	/// (HandleComponents.OwnLists), not interned: it is long and changes with every brush stroke.
 	[HideInInspector]
-	public String plants = new .() ~ delete _;
+	public String plants = new .();
+
+	public this() { }
+}
+
+/// One kind of plant, many times over: grass, flowers, bushes, rocks, trees. Every plant of a Foliage component is the
+/// same model, drawn together by the graphics card (instanced), so tens of thousands cost little; each gets its own
+/// turn, size and shade so that they do not look stamped out. Add one Foliage for each kind of plant, each on an
+/// object of its own (the Terrain Tools' Foliage tool makes a child of the terrain for each), then paint them on with
+/// the Foliage brush in the Inspector, or place them from code.
+///
+/// Mesh is a model whose foot is at its origin: "builtin:grass", "builtin:bush", "builtin:tree", "builtin:pine", or a
+/// model of your own. Plants bend in the wind (Wind Zone) by Sway. They are part of the scene, saved with it, and the
+/// same on every machine; Paint and Erase from code change only the machine they are called on.
+///
+/// Plants are scenery: they have no colliders, and nothing is drawn beyond View Distance (they thin out towards it
+/// rather than stopping at a line).
+///
+/// A handle (ComponentHandle): its settings are FoliageData's fields; the plants are its FoliageState.
+[Component, HandleFields]
+struct Foliage : ComponentHandle<FoliageData>
+{
+	/// Times every Foliage's View Distance (a quality setting).
+	public static float DistanceScale = 1;
+
+	/// The plants, with the settings copied in now (and re-read from the packed text if that was changed, as by
+	/// loading or undo).
+	public FoliageState State
+	{
+		get
+		{
+			CheckValid();
+			ref FoliageData data = ref Data;
+			if (data.plants == null)
+				data.plants = new .();
+			let state = ComponentState<FoliageState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			state.[Friend]mGameObject = mGameObject;
+			state.data = data;
+			state.[Friend]Read();
+			return state;
+		}
+	}
+
+	/// How many plants there are.
+	public int32 Count => State.Count;
+	public Mesh Mesh => Assets.GetMesh(mesh);
+	/// Stands in for a Mesh Renderer when the plants are drawn.
+	public RenderProxy Proxy => State.Proxy;
+	public Material ActiveMaterial => State.ActiveMaterial;
+
+	/// Packs the plants into the `plants` field if they have changed since it was last written. Saving a scene does
+	/// it; so must anything else that takes the scene as text (the editor's undo, and its copy of the scene taken
+	/// before play).
+	public void Sync() => State.Sync();
+
+	/// Sync for every Foliage of a scene.
+	public static void SyncAll(Scene scene)
+	{
+		for (let foliage in scene.FindComponents<Foliage>(.. scope .()))
+			foliage.Sync();
+	}
+
+	/// Adds one plant at a place in the world. turn is in degrees about the plant's own up; scale 0 picks a size
+	/// between Min Scale and Max Scale.
+	public void Add(Vector3 worldPosition, float turn = -1, float scale = 0) => State.Add(worldPosition, turn, scale);
+	/// Removes every plant.
+	public void Clear() => State.Clear();
+	/// The brush (FoliageState.Paint).
+	public int32 Paint(Vector3 worldCenter, float radius, float amount = 1) => State.Paint(worldCenter, radius, amount);
+	/// Removes the plants inside a circle (measured flat, whatever their height). Returns how many went.
+	public int32 Erase(Vector3 worldCenter, float radius) => State.Erase(worldCenter, radius);
+	/// Puts plants back on sculpted ground (FoliageState.FollowGround).
+	public int32 FollowGround(VoxelTerrain terrain, Vector3 worldCenter, float radius) => State.FollowGround(terrain, worldCenter, radius);
+	/// Where a plant is, in the world.
+	public Vector3 PositionOf(int index) => State.PositionOf(index);
+
+	/// The terrain a Foliage's plants stand on: one on its own object, else on the nearest parent, else the scene's.
+	public static VoxelTerrain GroundOf(GameObject gameObject)
+	{
+		for (var transform = gameObject.Transform; transform != null; transform = transform.Parent)
+		{
+			if (let terrain = transform.GameObject.GetComponent<VoxelTerrain>())
+				return terrain;
+		}
+		return gameObject.Scene?.FindComponent<VoxelTerrain>();
+	}
+
+	/// Called by a terrain when its ground has been sculpted inside a sphere (radius below 0: anywhere): every
+	/// Foliage standing on that terrain follows the ground.
+	public static void GroundChanged(VoxelTerrain terrain, Vector3 worldCenter, float radius)
+	{
+		let scene = terrain.Scene;
+		if (scene == null)
+			return;
+		for (let foliage in scene.FindComponents<Foliage>(.. scope .()))
+		{
+			let state = foliage.State;
+			if (state.Count == 0 || GroundOf(foliage.GameObject) != terrain)
+				continue;
+			state.FollowGround(terrain, worldCenter, radius);
+		}
+	}
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		ComponentState<FoliageState>.Release(world, entity);
+		HandleComponents.FreeLists(world, entity, typeof(Foliage));
+	}
+}
+
+/// What a Foliage keeps outside its data: its plants, the grid of cells they are found by, and what draws them.
+/// `data` is a copy of the settings (its `plants` text is the component's, written here by Sync).
+[DataFields(typeof(FoliageData), "data")]
+class FoliageState
+{
+	public FoliageData data;
+	GameObject mGameObject;
+
+	public GameObject GameObject => mGameObject;
+	Transform Transform => mGameObject.Transform;
+	Scene Scene => mGameObject.Scene;
 
 	struct Plant
 	{
@@ -71,11 +183,6 @@ class Foliage : Component
 	static int32 sSeeds = 1;
 	Random mRandom = new .(12345 + 7919 * sSeeds++) ~ delete _;
 	float mCarry;
-
-	static List<Foliage> sAll = new .() ~ delete _;
-	public static List<Foliage> All => sAll;
-	/// Times every Foliage's View Distance (a quality setting).
-	public static float DistanceScale = 1;
 
 	/// How many plants there are.
 	public int32 Count => (int32)mPlants.Count;
@@ -112,17 +219,6 @@ class Foliage : Component
 		}
 	}
 
-	public override void OnRegister()
-	{
-		sAll.Add(this);
-		Read();
-	}
-
-	public override void OnUnregister() => sAll.Remove(this);
-	public override void OnValidate() => Read();
-
-	public override void OnBeforeSave() => Sync();
-
 	/// Packs the plants into the `plants` field if they have changed since it was last written. Saving a scene does
 	/// it; so must anything else that takes the scene as text (the editor's undo, and its copy of the scene taken
 	/// before play).
@@ -132,16 +228,6 @@ class Foliage : Component
 			return;
 		Write();
 		mChanged = false;
-	}
-
-	/// Sync for every Foliage of a scene.
-	public static void SyncAll(Scene scene)
-	{
-		for (let foliage in sAll)
-		{
-			if (foliage.GameObject != null && !foliage.GameObject.IsDestroyed && foliage.Scene == scene)
-				foliage.Sync();
-		}
 	}
 
 	// ---- placing ----
@@ -208,9 +294,7 @@ class Foliage : Component
 	/// else level ground at the height given.
 	bool Ground(float x, float z, float top, float fallback, out Vector3 point)
 	{
-		var terrain = GameObject.GetComponent<VoxelTerrain>();
-		if (terrain == null)
-			terrain = Scene.FindComponent<VoxelTerrain>();
+		let terrain = Foliage.GroundOf(mGameObject);
 		if (terrain != null)
 			return terrain.Raycast(Ray(.(x, top, z), .(0, -1, 0)), Math.Max(top - fallback, 1) * 2 + 8, out point);
 		if (Scene.IsPlaying)
@@ -321,23 +405,6 @@ class Foliage : Component
 			mChanged = true;
 		}
 		return removed;
-	}
-
-	/// Called by a terrain when its ground has been sculpted inside a sphere (radius below 0: anywhere): every
-	/// Foliage standing on that terrain follows the ground.
-	public static void GroundChanged(VoxelTerrain terrain, Vector3 worldCenter, float radius)
-	{
-		for (let foliage in sAll)
-		{
-			if (foliage.GameObject == null || foliage.GameObject.IsDestroyed || foliage.Scene != terrain.Scene || foliage.mPlants.Count == 0)
-				continue;
-			// Its ground is this terrain when it sits on the terrain's object, or on an object with no terrain of
-			// its own in a scene whose terrain this is.
-			let own = foliage.GameObject.GetComponent<VoxelTerrain>();
-			if (own != terrain && (own != null || foliage.Scene.FindComponent<VoxelTerrain>() != terrain))
-				continue;
-			foliage.FollowGround(terrain, worldCenter, radius);
-		}
 	}
 
 	/// Puts the plants inside a sphere (radius below 0: all of them) back on the ground after it has been sculpted.
@@ -465,7 +532,7 @@ class Foliage : Component
 			RebuildCells();
 		let toWorld = Transform.LocalToWorld;
 		let camera = Transform.InverseTransformPoint(cameraWorld);
-		let reach = Math.Max(viewDistance * DistanceScale, 1);
+		let reach = Math.Max(viewDistance * Foliage.DistanceScale, 1);
 		let fadeFrom = reach * 0.66f;
 		let height = Mesh != null ? Mesh.Bounds.max.y * maxScale + 0.5f : 2;
 		for (int32 cz = CellOf(camera.z - reach); cz <= CellOf(camera.z + reach); cz++)

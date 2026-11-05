@@ -909,8 +909,8 @@ class Material
 				}
 			}
 		}
-		for (let component in Scene.Active.ComponentsOfType(typeof(Foliage)))
-			used.Add(((Foliage)component).ActiveMaterial);
+		for (let foliage in Scene.Active.FindComponents<Foliage>(.. scope .()))
+			used.Add(foliage.ActiveMaterial);
 		// A Skinned Mesh Renderer names its materials, and may not have looked them up yet.
 		let names = scope String();
 		for (let skinned in Scene.Active.FindComponents<SkinnedMeshRenderer>(.. scope .()))

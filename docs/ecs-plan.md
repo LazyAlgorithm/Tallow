@@ -917,7 +917,23 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   component, paste and Reset copy points not lists, hidden child made, saved without it and removed with the
   component, save and load, trails in editor and play, freed with the scene); a test scene draws a tapered
   gradient line and a dashed loop, the Inspector edits the point list, and the Gallery self-test passes.
-- [ ] Foliage, Water, Rigidbody, Collider, Joint,
+- [x] **Foliage.** Its settings are `FoliageData`; the packed plants text is a `String` the data owns (text in data
+  that is long and changes with every brush stroke, so not a `SharedString`, which is interned and never freed):
+  `HandleComponents.OwnLists` / `FreeLists` now copy and free `String` fields as they do lists, and the Inspector and
+  scene files read them as `FieldKind.String`. The plants, cells, render proxy and own material are a `FoliageState`;
+  the handle's `State` reads the text again whenever it differs from what was last read, which is what OnValidate
+  did (loading, undo writing the text in place). `Foliage.All` is gone: the renderer reads `scene.Components<Foliage>`.
+  **One per object:** a Foliage was documented as stackable on one object, and the Terrain Tools' Foliage tool did
+  that. Now each kind of plant added from the tool is a child object of the terrain (named Grass, Bush...), the tool
+  lists the terrain's own Foliage and its children's, and the brush paints a child's Foliage while the terrain is
+  selected. A Foliage stands on the terrain of its object, else of its nearest parent, else the scene's
+  (`Foliage.GroundOf`), so children of the terrain follow its sculpting. No scene in the samples, templates or
+  projects had two Foliage on one object (the Campus scenes keep each on its own object). Checked by
+  `EcsChecks.FoliageChecks` (defaults, each Foliage's own text, Paint, Add, Erase, Visible, Sync, save and load,
+  re-read on a text change, Reset, freed on remove and with the scene); the editor's `--undo-test-foliage` passes on
+  a one-Foliage scene, and Campus loads and draws. (On Campus itself that test paints off its terrain tile and adds
+  nothing, as it did before.)
+- [ ] Water, Rigidbody, Collider, Joint,
   CharacterController, SoftBody, Rope, and the Phase 5 set.
 - [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with
   the components above converted, a Gallery made from the template builds and its `--self-test` prints

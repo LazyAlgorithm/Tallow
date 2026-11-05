@@ -285,32 +285,26 @@ extension EditorApp
 		if (owner == null)
 			return false;
 		let terrain = owner.GetComponent<VoxelTerrain>();
-		// The object's Foliage components, in the order the text has them.
-		List<Foliage> kinds = scope .();
-		for (let component in owner.Components)
-		{
-			if (let foliage = component as Foliage)
-				kinds.Add(foliage);
-		}
-		int kind = 0;
+		// The object's Foliage (one at most: a handle).
+		let foliage = owner.GetComponent<Foliage>();
 		bool anyPlants = false;
 		for (var line in after.Split('\n'))
 		{
 			line.Trim();
 			if (!line.StartsWith("field plants "))
 				continue;
-			if (kind >= kinds.Count)
+			if (!foliage || anyPlants)
 				return false;
 			var value = line.Substring(13);
 			value.Trim();
 			if (value.StartsWith('"') && value.EndsWith('"') && value.Length >= 2)
 				value = value.Substring(1, value.Length - 2);
-			if (kinds[kind].plants != value)
-			{
-				kinds[kind].plants.Set(value);
-				kinds[kind].OnValidate();
-			}
-			kind++;
+			// The state reads the text again the next time it is used.
+			ref String plants = ref foliage.plants;
+			if (plants == null)
+				plants = new .();
+			if (plants != value)
+				plants.Set(value);
 			anyPlants = true;
 		}
 		if (terrain == null)

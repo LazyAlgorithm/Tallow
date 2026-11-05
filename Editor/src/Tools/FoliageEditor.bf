@@ -15,9 +15,9 @@ extension EditorApp
 		let painting = mFoliagePainting == foliage;
 		if (ToolButton("Paint", painting, 90))
 		{
-			mFoliagePainting = painting ? null : foliage;
+			mFoliagePainting = painting ? default : foliage;
 			// On a terrain this is the Terrain Tools' Foliage tool; elsewhere no terrain brush is in the way.
-			mBrushTool = (mFoliagePainting != null && foliage.GameObject.GetComponent<VoxelTerrain>() != null) ? FoliageTool : -1;
+			mBrushTool = (mFoliagePainting && foliage.GameObject.GetComponent<VoxelTerrain>() != null) ? FoliageTool : -1;
 		}
 		ImGui.SameLine();
 		ImGui.TextDisabled(scope String()..AppendF("{} plants", foliage.Count).CStr());
@@ -27,7 +27,7 @@ extension EditorApp
 			ImGui.SliderFloat("##foliagesize", ref mFoliageBrush, 0.5f, 30, "%.1f");
 			ImGui.EndTable();
 		}
-		let terrain = foliage.GameObject.GetComponent<VoxelTerrain>() ?? mScene.FindComponent<VoxelTerrain>();
+		let terrain = Foliage.GroundOf(foliage.GameObject);
 		ImGui.BeginDisabled(terrain == null || terrain.mode != .Fixed);
 		if (ImGui.Button("Fill Terrain"))
 		{
@@ -59,7 +59,7 @@ extension EditorApp
 			MarkDirty();
 		}
 		if (painting)
-			ImGui.TextWrapped("Drag in the Scene view to paint plants on the ground. Hold Shift to erase. Ctrl+Z undoes a stroke. Add another Foliage component for another kind of plant.");
+			ImGui.TextWrapped("Drag in the Scene view to paint plants on the ground. Hold Shift to erase. Ctrl+Z undoes a stroke. For another kind of plant, add a Foliage to another object.");
 		else
 			ImGui.TextDisabled("Press Paint, then drag in the Scene view.");
 	}
@@ -67,12 +67,16 @@ extension EditorApp
 	/// Runs the Foliage brush under the mouse. Returns true when it is in control of the mouse.
 	bool UpdateFoliageBrush(GameObject selected, ImGui.Vec2 origin, ImGui.Vec2 size)
 	{
-		if (mFoliagePainting == null)
-			return false;
-		// The component may have been removed, or another object selected.
-		if (selected == null || !selected.Components.Contains(mFoliagePainting))
+		if (!mFoliagePainting)
 		{
-			mFoliagePainting = null;
+			mFoliagePainting = default;
+			return false;
+		}
+		// Painted while its own object is selected, or the terrain it stands on (the Terrain Tools' Foliage tool).
+		let ground = Foliage.GroundOf(mFoliagePainting.GameObject);
+		if (selected == null || (selected != mFoliagePainting.GameObject && (ground == null || ground.GameObject != selected)))
+		{
+			mFoliagePainting = default;
 			return false;
 		}
 		if (!mSceneHovered || mFlying)
@@ -82,13 +86,13 @@ extension EditorApp
 		let ray = mSceneCamera.ViewportPointToRay((mouse.x - origin.x) / size.x, (mouse.y - origin.y) / size.y);
 		Vector3 point = default;
 		bool found = false;
-		let terrain = selected.GetComponent<VoxelTerrain>() ?? mScene.FindComponent<VoxelTerrain>();
+		let terrain = ground;
 		if (terrain != null)
 			found = terrain.Raycast(ray, 800, out point);
 		else if (Math.Abs(ray.direction.y) > 0.0001f)
 		{
 			// No terrain: level ground at the object's height.
-			let t = (selected.Transform.Position.y - ray.origin.y) / ray.direction.y;
+			let t = (foliage.Transform.Position.y - ray.origin.y) / ray.direction.y;
 			if (t > 0)
 			{
 				point = ray.origin + ray.direction * t;

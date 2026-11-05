@@ -408,7 +408,7 @@ class EditorApp : Application
 	void RunFoliageUndoTest()
 	{
 		let foliage = mScene.FindComponent<Foliage>();
-		if (foliage == null)
+		if (!foliage)
 		{
 			Log.Error("UNDO-TEST FAIL: the scene has no Foliage");
 			return;
@@ -427,13 +427,13 @@ class EditorApp : Application
 		let n2 = foliage.Count;
 		Undo();
 		let u1 = mScene.FindComponent<Foliage>();
-		let afterOne = u1 != null ? u1.Count : -1;
+		let afterOne = u1 ? u1.Count : -1;
 		Undo();
 		let u2 = mScene.FindComponent<Foliage>();
-		let afterTwo = u2 != null ? u2.Count : -1;
+		let afterTwo = u2 ? u2.Count : -1;
 		Redo();
 		let r1 = mScene.FindComponent<Foliage>();
-		let afterRedo = r1 != null ? r1.Count : -1;
+		let afterRedo = r1 ? r1.Count : -1;
 		let pass = n1 > n0 && n2 > n1 && afterOne == n1 && afterTwo == n0 && afterRedo == n1 && u1 == foliage && u2 == foliage && r1 == foliage;
 		Log.Info(scope $"UNDO-TEST {pass ? "PASS" : "FAIL"}: plants {n0} -> {n1} -> {n2}; undo {afterOne}, undo {afterTwo}, redo {afterRedo}; same component kept: {u1 == foliage && u2 == foliage && r1 == foliage}");
 	}

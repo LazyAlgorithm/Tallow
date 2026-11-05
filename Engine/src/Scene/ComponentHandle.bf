@@ -246,6 +246,9 @@ static class HandleComponents
 		public Flecs.RemoveCallback onRemove;
 		/// The data's List<T> fields (offset and type): lists the component's data owns (OwnLists, FreeLists).
 		public List<(int offset, Type type)> lists = new .() ~ delete _;
+		/// The data's String fields (offsets): text the component's data owns, copied and freed with it as lists are.
+		/// For text that changes, or is too long to intern as a SharedString (Foliage's packed plants).
+		public List<int> texts = new .() ~ delete _;
 		/// The data's `NewList` ([HandleData] makes it): an empty list for its index-th list field.
 		public function Object(int32 index) newList;
 	}
@@ -299,7 +302,11 @@ static class HandleComponents
 					if (generic.UnspecializedType == typeof(List<>))
 						info.lists.Add((field.MemberOffset, field.FieldType));
 				}
+				else if (field.FieldType == typeof(String))
+					info.texts.Add(field.MemberOffset);
 			}
+			if (!info.texts.IsEmpty && info.onRemove == null)
+				Log.Error(scope $"{info.name} has String fields but no OnRemove calling HandleComponents.FreeLists: its text would leak.");
 			if (!info.lists.IsEmpty && data.GetMethod("NewList", .Static | .Public | .NonPublic) case .Ok(let maker))
 				info.newList = (function Object(int32))maker.Ptr;
 			if (!info.lists.IsEmpty && info.onRemove == null)
@@ -390,7 +397,8 @@ static class HandleComponents
 		OwnLists(data, info);
 	}
 
-	/// Lists in built-in component data: a component's data owns each List<T> field's list. Wherever the data is
+	/// Lists and text in built-in component data: a component's data owns each List<T> field's list and each String
+	/// field's text. Wherever the data is
 	/// copied byte for byte (added with its defaults, reset, pasted), OwnLists gives the copy lists of its own, and
 	/// the handle's OnRemove frees them with FreeLists. Copies of the data kept elsewhere (a RenderProxy's) only
 	/// read them.
@@ -402,6 +410,12 @@ static class HandleComponents
 			if (*(Object*)slot != null)
 				FieldLists.CloneList(slot, info.newList != null ? info.newList(i) : null);
 		}
+		for (let offset in info.texts)
+		{
+			let slot = (String*)((uint8*)data + offset);
+			if (*slot != null)
+				*slot = new String(*slot);
+		}
 	}
 
 	/// Frees the lists a component's data owns.
@@ -409,13 +423,22 @@ static class HandleComponents
 	{
 		for (let list in info.lists)
 			FieldLists.FreeList((uint8*)data + list.offset);
+		for (let offset in info.texts)
+		{
+			let slot = (String*)((uint8*)data + offset);
+			let text = *slot;
+			*slot = null;
+			// A literal (a field initializer of "" rather than new .()) is not ours to free.
+			if (text != null && !StringFields.IsReadOnly(Internal.UnsafeCastToPtr(text)))
+				delete text;
+		}
 	}
 
 	/// The same from a handle's OnRemove: world is the World object.
 	public static void FreeLists(void* world, uint64 entity, Type handleType)
 	{
 		let info = Find(handleType);
-		if (info == null || info.lists.IsEmpty)
+		if (info == null || (info.lists.IsEmpty && info.texts.IsEmpty))
 			return;
 		if (let data = ((World)Internal.UnsafeCastToObject(world)).Get(Entity(entity), info.index))
 			FreeLists(data, info);

@@ -110,6 +110,7 @@ static class EcsChecks
 		SkinnedChecks();
 		ParticleChecks();
 		LineChecks();
+		FoliageChecks();
 		return sFailures;
 	}
 
@@ -533,6 +534,57 @@ static class EcsChecks
 			Expect(ComponentState<ParticleState>.Count == before, "RemoveComponent frees the particles");
 		}
 		Expect(ComponentState<ParticleState>.Count == before, "particles are freed with their scene");
+	}
+
+	/// Foliage: owned text in component data (the packed plants), plants kept in FoliageState, Sync and Read.
+	static void FoliageChecks()
+	{
+		let before = ComponentState<FoliageState>.Count;
+		{
+			let scene = scope Scene();
+			let field = scene.CreateGameObject("Field");
+			field.Transform.Position = .(10, 0, 0);
+			let grass = field.AddComponent<Foliage>();
+			Expect(grass.mesh == "builtin:grass" && grass.density == 6 && grass.plants != null && grass.plants.IsEmpty && grass.Count == 0, "a Foliage has its defaults");
+			let other = scene.CreateGameObject("Bushes").AddComponent<Foliage>();
+			Expect(Internal.UnsafeCastToPtr(grass.plants) != Internal.UnsafeCastToPtr(other.plants), "each Foliage owns its own plants text");
+			let added = grass.Paint(.(10, 0, 0), 3);
+			Expect(added > 10 && grass.Count == added, scope $"Paint scatters plants ({added})");
+			Expect(grass.plants.IsEmpty, "the packed text is written only by Sync");
+			let world = grass.PositionOf(0);
+			Expect(Math.Abs(world.x - 10) <= 3.01f && Math.Abs(world.y) < 0.001f, "plants are placed in the world round the brush");
+			grass.Add(.(11, 0, 1), 90, 2);
+			Expect(grass.Count == added + 1, "Add places one plant");
+			let erased = grass.Erase(.(11, 0, 1), 0.01f);
+			Expect(erased >= 1 && grass.Count == added + 1 - erased, "Erase removes the plants inside its circle");
+			let count = grass.Count;
+			let visible = scope List<int32>();
+			let frustum = Frustum(Matrix4.Perspective(70, 1, 0.1f, 200, false) * Matrix4.LookAt(.(10, 2, -10), .(10, 0, 0), .Up), false);
+			grass.State.Visible(.(10, 2, -10), frustum, visible);
+			Expect(visible.Count == count, scope $"every plant near the camera is visible ({visible.Count} of {count})");
+			Expect(scene.Components<Foliage>(.. scope .()).Count == 2, "Components<Foliage> lists both");
+			let text = scope String();
+			Foliage.SyncAll(scene);
+			Expect(!grass.plants.IsEmpty && grass.plants.Length >= count * 21, "Sync packs the plants (16 bytes each, as base 64)");
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains("component Tallow.Foliage enabled 1") && text.Contains("field plants "), "a Foliage saves as before, with its plants");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Field").GetComponent<Foliage>();
+			Expect(copy && copy.Count == count && copy.plants == grass.plants, "a Foliage loads with its plants");
+			Expect((copy.PositionOf(0) - grass.PositionOf(0)).Length < 0.001f, "a loaded plant stands where it stood");
+			// Undo writes the text in place; the plants follow it the next time they are used.
+			copy.plants.Clear();
+			Expect(copy.Count == 0, "plants are read again when the text changes");
+			copy.plants.Set(grass.plants);
+			Expect(copy.Count == count, "and back");
+			let info = HandleComponents.Find(typeof(Foliage));
+			HandleComponents.Reset(field, info);
+			Expect(grass.plants != null && grass.plants.IsEmpty && grass.Count == 0, "Reset gives the Foliage empty text of its own");
+			field.RemoveComponent<Foliage>();
+			Expect(ComponentState<FoliageState>.Count == before + 2, "RemoveComponent frees the plants");
+		}
+		Expect(ComponentState<FoliageState>.Count == before, "plants are freed with their scene");
 	}
 
 	/// Line and Trail Renderer: a list owned by component data, and the hidden child that draws them.

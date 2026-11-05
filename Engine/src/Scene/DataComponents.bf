@@ -103,7 +103,8 @@ static class DataComponents
 			switch (field.kind)
 			{
 			case .String:
-				if (field.type == typeof(SharedString))
+				// A built-in component's data may own String fields too (HandleComponents.OwnLists).
+				if (field.type == typeof(SharedString) || type.HasCustomAttribute<HandleDataAttribute>())
 					fields.Add(field);
 			case .List:
 				// A built-in component's data may own lists of plain values (HandleComponents.OwnLists).

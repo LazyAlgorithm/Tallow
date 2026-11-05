@@ -346,6 +346,8 @@ extension EditorApp
 			DrawReflectionProbeTools(gameObject.GetComponent<ReflectionProbe>());
 		else if (info.handleType == typeof(SkinnedMeshRenderer))
 			DrawSkinnedClips(gameObject.GetComponent<SkinnedMeshRenderer>());
+		else if (info.handleType == typeof(Foliage))
+			DrawFoliageTools(gameObject.GetComponent<Foliage>());
 	}
 
 	// ---- Data components ([Component] structs in the object's entity, DataComponents) ----
@@ -612,8 +614,6 @@ extension EditorApp
 			DrawViewmodelPoseTools(pose);
 		if (let limb = component as LimbIK)
 			DrawLimbIKTools(limb);
-		if (let foliage = component as Foliage)
-			DrawFoliageTools(foliage);
 		if (let runner = component as DialogueRunner)
 			DrawDialogueRunnerTools(runner);
 		if (let sequencePlayer = component as SequencePlayer)

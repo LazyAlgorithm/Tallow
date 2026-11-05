@@ -39,7 +39,7 @@ extension EditorApp
 			{
 				mBrushTool = mBrushTool == i ? -1 : i;
 				if (mBrushTool != FoliageTool)
-					mFoliagePainting = null;
+					mFoliagePainting = default;
 			}
 			if (i == FoliageTool && ImGui.IsItemHovered())
 				ImGui.SetTooltip("Grass, bushes and trees painted on the ground.");
@@ -101,15 +101,19 @@ extension EditorApp
 		ImGui.TextDisabled(terrain.editsFolder.IsEmpty ? "Sculpting is saved with the scene" : terrain.editsFolder.CStr());
 	}
 
-	/// The Foliage tool: the kinds of plant on this terrain (each a Foliage component on its object), buttons to add
-	/// more, and which one the brush paints.
+	/// The Foliage tool: the kinds of plant on this terrain (each a Foliage on the terrain's object or one of its
+	/// children: an object has one Foliage at most), buttons to add more, and which one the brush paints.
 	void DrawTerrainFoliage(VoxelTerrain terrain)
 	{
 		let owner = terrain.GameObject;
 		List<Foliage> kinds = scope .();
-		for (let component in owner.Components)
+		let own = owner.GetComponent<Foliage>();
+		if (own)
+			kinds.Add(own);
+		for (let child in owner.Transform.Children)
 		{
-			if (let foliage = component as Foliage)
+			let foliage = child.GameObject.GetComponent<Foliage>();
+			if (foliage)
 				kinds.Add(foliage);
 		}
 		ImGui.TextDisabled("Add a kind of plant:");
@@ -124,8 +128,11 @@ extension EditorApp
 				ImGui.SameLine();
 			if (ImGui.Button(scope String()..AppendF("+ {}", StringView(labels[i])).CStr()))
 			{
-				let added = owner.AddComponent<Foliage>();
-				added.mesh.Set(StringView(meshes[i]));
+				// A child of the terrain for each kind, placed on it, so it follows the terrain's own ground.
+				let holder = mScene.CreateGameObject(StringView(labels[i]), owner.Transform);
+				holder.Transform.SetParent(owner.Transform, false);
+				var added = holder.AddComponent<Foliage>();
+				added.mesh = StringView(meshes[i]);
 				added.density = densities[i];
 				added.sway = sways[i];
 				added.viewDistance = distances[i];
@@ -142,7 +149,7 @@ extension EditorApp
 		ImGui.Spacing();
 		for (let foliage in kinds)
 		{
-			ImGui.PushID(Internal.UnsafeCastToPtr(foliage));
+			ImGui.PushID(Internal.UnsafeCastToPtr(foliage.GameObject));
 			let painting = mFoliagePainting == foliage;
 			var name = StringView(foliage.mesh);
 			if (name.StartsWith("builtin:"))
@@ -151,7 +158,7 @@ extension EditorApp
 			if (slash >= 0)
 				name.RemoveFromStart(slash + 1);
 			if (ToolButton(scope String()..AppendF("{}  ({})", name, foliage.Count).CStr(), painting, ImGui.GetContentRegionAvail().x - 70))
-				mFoliagePainting = painting ? null : foliage;
+				mFoliagePainting = painting ? default : foliage;
 			if (ImGui.IsItemHovered())
 				ImGui.SetTooltip("Paint this kind of plant. Its settings (mesh, density, sizes, sway) are in its Foliage component below.");
 			ImGui.SameLine();
@@ -168,7 +175,7 @@ extension EditorApp
 			ImGui.SliderFloat("##foliagesize", ref mFoliageBrush, 0.5f, 30, "%.1f");
 			ImGui.EndTable();
 		}
-		if (mFoliagePainting != null)
+		if (mFoliagePainting)
 			ImGui.TextWrapped("Drag in the Scene view to paint. Hold Shift to erase. Ctrl+Z undoes a stroke.");
 		else
 			ImGui.TextDisabled("Pick a kind of plant above to paint it.");

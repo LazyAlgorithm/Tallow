@@ -634,12 +634,11 @@ class RenderView
 	/// Every plant near enough and in view, one item each, in runs of one kind of plant.
 	void GatherFoliage(Scene scene, CameraData camera, Frustum frustum, bool castShadows, float shadowRange)
 	{
-		for (let foliage in Foliage.All)
+		for (let handle in scene.Components<Foliage>(.. scope .()))
 		{
-			if (foliage.GameObject == null || foliage.GameObject.IsDestroyed || foliage.Scene != scene)
+			if (!handle.GameObject.ActiveInHierarchy || !handle.GameObject.InActiveWorld || HidesHere(handle.GameObject))
 				continue;
-			if (!foliage.IsActiveAndEnabled || !foliage.GameObject.InActiveWorld || HidesHere(foliage.GameObject))
-				continue;
+			let foliage = handle.State;
 			let mesh = foliage.Mesh;
 			if (mesh == null || !mesh.HasGpuData)
 				continue;
