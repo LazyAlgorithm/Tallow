@@ -102,6 +102,40 @@ static class FieldLists
 		return element;
 	}
 
+	/// Replaces the List in the slot (a List<T> field of plain values, in a built-in component's data) with a copy of
+	/// its own in made, an empty list of the same type, so the data owns its list (HandleComponents.OwnLists).
+	public static void CloneList(void* slot, Object made)
+	{
+		let source = *(Object*)slot;
+		*(Object*)slot = made;
+		if (source == null || made == null || !ListLayoutKnown())
+			return;
+		let count = *(int_cosize*)((uint8*)Internal.UnsafeCastToPtr(source) + sListSize);
+		if (count == 0)
+			return;
+		let element = (made.GetType() as SpecializedGenericType).GetGenericArg(0);
+		let list = made as IList;
+		let zero = scope uint8[Math.Max(element.Size, 1)]*;
+		Internal.MemSet(zero, 0, Math.Max(element.Size, 1));
+		for (int i < count)
+		{
+			var value = Variant.Create(element, zero);
+			list.Add(value);
+			value.Dispose();
+		}
+		let from = *(uint8**)((uint8*)Internal.UnsafeCastToPtr(source) + sListItems);
+		let to = *(uint8**)((uint8*)Internal.UnsafeCastToPtr(made) + sListItems);
+		Internal.MemCpy(to, from, count * element.Stride);
+	}
+
+	/// Frees the List in the slot and empties it.
+	public static void FreeList(void* slot)
+	{
+		let list = *(Object*)slot;
+		*(Object*)slot = null;
+		delete list;
+	}
+
 	/// Whether elements can be added and removed (not for a fixed-size T[N]).
 	public static bool CanResize(FieldRef field) => !field.type.IsSizedArray;
 
@@ -248,8 +282,8 @@ static class FieldLists
 		switch (kind)
 		{
 		case .Vector2: return 2;
-		case .Vector3, .Int3: return 3;
-		case .Vector4, .Quaternion, .Color: return 4;
+		case .Vector3,.Int3: return 3;
+		case .Vector4,.Quaternion,.Color: return 4;
 		case .Matrix4: return 16;
 		case .ObjectReference: return 2;
 		default: return 1;

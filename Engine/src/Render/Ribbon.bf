@@ -48,35 +48,58 @@ struct RibbonLook
 class Ribbon
 {
 	Mesh mMesh ~ delete _;
-	GameObject mHolder;
-	MeshRenderer mRenderer;
+	// The hidden child, by its id: the ribbon may outlive it (children go before their parent's components).
+	Scene mScene;
+	uint32 mHolderId;
 	int mCapacity;
 
-	/// The renderer drawing the strip, or null before the first frame.
-	public MeshRenderer Renderer => (mHolder != null && !mHolder.IsDestroyed) ? mRenderer : default;
+	/// The hidden child drawing the strip, or null.
+	GameObject Holder
+	{
+		get
+		{
+			if (mScene == null || mHolderId == 0)
+				return null;
+			let holder = mScene.FindById(mHolderId);
+			return (holder != null && !holder.IsDestroyed) ? holder : null;
+		}
+	}
+
+	/// The renderer drawing the strip, or not valid before the first frame.
+	public MeshRenderer Renderer
+	{
+		get
+		{
+			let holder = Holder;
+			return (holder != null && holder.HasComponent<MeshRenderer>()) ? holder.GetComponent<MeshRenderer>() : default;
+		}
+	}
 
 	/// Makes the hidden child that draws the strip, if it is not there, and gives it the look.
-	public void Attach(Component owner, RibbonLook look)
+	public void Attach(GameObject owner, RibbonLook look)
 	{
-		if (mHolder == null || mHolder.IsDestroyed)
+		var holder = Holder;
+		if (holder == null)
 		{
-			mHolder = owner.Scene.CreateGameObject(scope $"{owner.GameObject.Name} (drawn)");
-			mHolder.Transient = true;
-			mHolder.Transform.SetParent(owner.Transform, false);
-			mRenderer = mHolder.AddComponent<MeshRenderer>();
-			mRenderer.mesh.Clear();
-			mRenderer.backFaceCulling = false;
-			mRenderer.flatShading = false;
-			mRenderer.inReflectionProbes = false;
+			holder = owner.Scene.CreateGameObject(scope $"{owner.Name} (drawn)");
+			holder.Transient = true;
+			holder.Transform.SetParent(owner.Transform, false);
+			mScene = owner.Scene;
+			mHolderId = holder.Id;
+			let made = holder.AddComponent<MeshRenderer>();
+			made.mesh.Clear();
+			made.backFaceCulling = false;
+			made.flatShading = false;
+			made.inReflectionProbes = false;
 			if (mMesh == null)
 				mMesh = new Mesh();
-			mMesh.Name.Set(owner.GameObject.Name);
-			mRenderer.RuntimeMesh = mMesh;
+			mMesh.Name.Set(owner.Name);
+			made.RuntimeMesh = mMesh;
 			mCapacity = 0;
 		}
-		if (!mHolder.ActiveSelf)
-			mHolder.SetActive(true);
-		let renderer = mRenderer;
+		if (!holder.ActiveSelf)
+			holder.SetActive(true);
+		let renderer = holder.GetComponent<MeshRenderer>();
 		if (!renderer.Enabled)
 			renderer.Enabled = true;
 		if (renderer.material != look.material)
@@ -92,17 +115,26 @@ class Ribbon
 	/// Stops drawing the strip (it comes back with the next Attach).
 	public void Detach()
 	{
-		if (mHolder != null && !mHolder.IsDestroyed && mRenderer.Enabled)
-			mRenderer.Enabled = false;
+		let renderer = Renderer;
+		if (renderer && renderer.Enabled)
+			renderer.Enabled = false;
 	}
 
 	/// Removes the hidden child, when the line or trail itself is removed.
 	public void Remove()
 	{
-		if (mHolder != null && !mHolder.IsDestroyed)
-			mHolder.Scene.Destroy(mHolder);
-		mHolder = null;
-		mRenderer = default;
+		if (let holder = Holder)
+		{
+			// Not while the scene is emptied: everything is going anyway.
+			if (!holder.Scene.[Friend]mClearing)
+			{
+				// Its mesh is this ribbon's, which is about to go.
+				holder.GetComponent<MeshRenderer>().RuntimeMesh = null;
+				holder.Scene.Destroy(holder);
+			}
+		}
+		mScene = null;
+		mHolderId = 0;
 	}
 
 	List<RibbonPoint> mPath = new .() ~ delete _;
@@ -114,9 +146,10 @@ class Ribbon
 	/// in dashes Style.dash long with Style.gap between.
 	public void Build(Transform owner, List<RibbonPoint> points, RibbonStyle style)
 	{
-		if (mMesh == null || !Renderer)
+		let renderer = Renderer;
+		if (mMesh == null || !renderer)
 			return;
-		let transform = mHolder.Transform;
+		let transform = renderer.Transform;
 		let toLocal = transform.WorldToLocal;
 		let viewer = Camera.ViewerPosition;
 		let facing = owner.Forward;
@@ -171,7 +204,7 @@ class Ribbon
 		while (mMesh.Vertices.Count < capacity * 4)
 			mMesh.Vertices.Add(rest);
 
-		mRenderer.vertexAlpha = transparent;
+		renderer.vertexAlpha = transparent;
 		if (capacity != mCapacity || !mMesh.HasGpuData)
 		{
 			mCapacity = capacity;

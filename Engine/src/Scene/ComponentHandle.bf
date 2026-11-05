@@ -16,9 +16,30 @@ interface IComponentHandle
 
 /// Marks the data struct behind a component handle. It is kept out of DataComponents (the handle shows it in the
 /// Inspector and scene files under its own name), and it can be switched off per object (`enabled`).
+///
+/// For each List<T> field it adds `static Object NewList(int32 index)`, which makes an empty list for the index-th
+/// list field: HandleComponents gives every copy of the data lists of its own with it (reflection cannot make a
+/// List<T> it never saw made).
 [AttributeUsage(.Struct, .ReflectAttribute)]
-struct HandleDataAttribute : Attribute
+struct HandleDataAttribute : Attribute, IOnTypeInit
 {
+	[Comptime]
+	public void OnTypeInit(Type type, Self* prev)
+	{
+		let code = scope String();
+		int32 index = 0;
+		for (let field in type.GetFields(.Public | .Instance))
+		{
+			if (let generic = field.FieldType as SpecializedGenericType)
+			{
+				if (generic.UnspecializedType == typeof(List<>))
+					code.AppendF("\t\tcase {}: return new {}();\n", index++, field.FieldType);
+			}
+		}
+		if (index == 0)
+			return;
+		Compiler.EmitTypeBody(type, scope $"static System.Object NewList(int32 index)\n{{\n\tswitch (index)\n\t{{\n{code}\t}}\n\treturn null;\n}}\n");
+	}
 }
 
 /// The base of a built-in component handle: the object it belongs to. A handle is as small as a reference and is
@@ -223,6 +244,10 @@ static class HandleComponents
 		/// The handle's `static void OnRemove(void* world, uint64 entity)`, if it has one: called as the component
 		/// leaves an entity, to free what it kept outside its data (ComponentState). world is the World object.
 		public Flecs.RemoveCallback onRemove;
+		/// The data's List<T> fields (offset and type): lists the component's data owns (OwnLists, FreeLists).
+		public List<(int offset, Type type)> lists = new .() ~ delete _;
+		/// The data's `NewList` ([HandleData] makes it): an empty list for its index-th list field.
+		public function Object(int32 index) newList;
 	}
 
 	static List<Info> sInfos ~ DeleteContainerAndItems!(_);
@@ -267,6 +292,18 @@ static class HandleComponents
 				info.drawGizmos = method;
 			if (type.GetMethod("OnRemove", .Static | .Public | .NonPublic) case .Ok(let method))
 				info.onRemove = (Flecs.RemoveCallback)method.Ptr;
+			for (let field in data.GetFields(.Public | .Instance))
+			{
+				if (let generic = field.FieldType as SpecializedGenericType)
+				{
+					if (generic.UnspecializedType == typeof(List<>))
+						info.lists.Add((field.MemberOffset, field.FieldType));
+				}
+			}
+			if (!info.lists.IsEmpty && data.GetMethod("NewList", .Static | .Public | .NonPublic) case .Ok(let maker))
+				info.newList = (function Object(int32))maker.Ptr;
+			if (!info.lists.IsEmpty && info.onRemove == null)
+				Log.Error(scope $"{info.name} has list fields but no OnRemove calling HandleComponents.FreeLists: its lists would leak.");
 			sInfos.Add(info);
 			sByHandle[type] = info;
 			sByIndex[info.index] = info;
@@ -333,6 +370,7 @@ static class HandleComponents
 			return existing;
 		let data = world.Ensure(gameObject.Entity, info.index);
 		Internal.MemCpy(data, info.defaults.Ptr, info.defaults.Count);
+		OwnLists(data, info);
 		return data;
 	}
 
@@ -340,7 +378,47 @@ static class HandleComponents
 	public static void Reset(GameObject gameObject, Info info)
 	{
 		if (let data = gameObject.Scene.World.Get(gameObject.Entity, info.index))
-			Internal.MemCpy(data, info.defaults.Ptr, info.defaults.Count);
+			Assign(data, info.defaults.Ptr, info);
+	}
+
+	/// Copies a component's data over another's: what the copy owned is freed and it gets lists of its own (a
+	/// plain byte copy would leave two components owning one list).
+	public static void Assign(void* data, void* from, Info info)
+	{
+		FreeLists(data, info);
+		Internal.MemCpy(data, from, info.defaults.Count);
+		OwnLists(data, info);
+	}
+
+	/// Lists in built-in component data: a component's data owns each List<T> field's list. Wherever the data is
+	/// copied byte for byte (added with its defaults, reset, pasted), OwnLists gives the copy lists of its own, and
+	/// the handle's OnRemove frees them with FreeLists. Copies of the data kept elsewhere (a RenderProxy's) only
+	/// read them.
+	public static void OwnLists(void* data, Info info)
+	{
+		for (int32 i < (int32)info.lists.Count)
+		{
+			let slot = (uint8*)data + info.lists[i].offset;
+			if (*(Object*)slot != null)
+				FieldLists.CloneList(slot, info.newList != null ? info.newList(i) : null);
+		}
+	}
+
+	/// Frees the lists a component's data owns.
+	public static void FreeLists(void* data, Info info)
+	{
+		for (let list in info.lists)
+			FieldLists.FreeList((uint8*)data + list.offset);
+	}
+
+	/// The same from a handle's OnRemove: world is the World object.
+	public static void FreeLists(void* world, uint64 entity, Type handleType)
+	{
+		let info = Find(handleType);
+		if (info == null || info.lists.IsEmpty)
+			return;
+		if (let data = ((World)Internal.UnsafeCastToObject(world)).Get(Entity(entity), info.index))
+			FreeLists(data, info);
 	}
 
 	/// The editable and saved fields of the component's data.

@@ -284,13 +284,16 @@ extension EditorApp
 			}
 			if (ImGui.MenuItem("Copy Component"))
 			{
+				ClearDataClipboard();
 				mDataClipboardType = info.dataType;
-				mDataClipboard.Clear();
+				mDataClipboardHandle = info;
 				mDataClipboard.AddRange(Span<uint8>(value, size));
+				// The clipboard keeps lists of its own, so the copy outlives the component.
+				HandleComponents.OwnLists(mDataClipboard.Ptr, info);
 			}
 			if (ImGui.MenuItem("Paste Component Values", null, false, mDataClipboardType == info.dataType))
 			{
-				Internal.MemCpy(value, mDataClipboard.Ptr, size);
+				HandleComponents.Assign(value, mDataClipboard.Ptr, info);
 				MarkDirty();
 			}
 			ImGui.Separator();
@@ -350,6 +353,18 @@ extension EditorApp
 	/// The copied data component: its type and bytes (data components hold plain values only).
 	Type mDataClipboardType;
 	List<uint8> mDataClipboard = new .() ~ delete _;
+	/// The built-in component the clipboard was copied from, whose lists it owns (null for a data component).
+	HandleComponents.Info mDataClipboardHandle;
+
+	/// Empties the component clipboard, freeing the lists a built-in component's copy owned.
+	void ClearDataClipboard()
+	{
+		if (mDataClipboardHandle != null && mDataClipboard.Count >= mDataClipboardHandle.defaults.Count)
+			HandleComponents.FreeLists(mDataClipboard.Ptr, mDataClipboardHandle);
+		mDataClipboardHandle = null;
+		mDataClipboardType = null;
+		mDataClipboard.Clear();
+	}
 
 	void DrawDataSections(GameObject gameObject, List<FieldRef> fields)
 	{
@@ -389,8 +404,8 @@ extension EditorApp
 			}
 			if (ImGui.MenuItem("Copy Component"))
 			{
+				ClearDataClipboard();
 				mDataClipboardType = info.type;
-				mDataClipboard.Clear();
 				mDataClipboard.AddRange(Span<uint8>(value, size));
 			}
 			if (ImGui.MenuItem("Paste Component Values", null, false, mDataClipboardType == info.type))

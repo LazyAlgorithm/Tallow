@@ -1436,6 +1436,8 @@ class Scene
 		}
 		SkinnedMeshRenderer.FrameAll(this);
 		ParticleSystem.FrameAll(this);
+		LineRenderer.FrameAll(this);
+		TrailRenderer.FrameAll(this);
 		Profiler.End();
 	}
 
@@ -1475,6 +1477,9 @@ class Scene
 			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 				Run(component, .LateUpdate);
 		}
+		// Lines and trails follow what the scripts moved.
+		LineRenderer.LateAll(this);
+		TrailRenderer.LateAll(this);
 		Profiler.End();
 	}
 

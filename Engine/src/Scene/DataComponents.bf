@@ -105,7 +105,11 @@ static class DataComponents
 			case .String:
 				if (field.type == typeof(SharedString))
 					fields.Add(field);
-			case .ObjectReference,.List,.Array:
+			case .List:
+				// A built-in component's data may own lists of plain values (HandleComponents.OwnLists).
+				if (type.HasCustomAttribute<HandleDataAttribute>() && field.elementKind != .String && field.elementKind != .ObjectReference)
+					fields.Add(field);
+			case .ObjectReference,.Array:
 				continue;
 			default:
 				fields.Add(field);

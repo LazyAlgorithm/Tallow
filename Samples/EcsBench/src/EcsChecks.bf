@@ -109,6 +109,7 @@ static class EcsChecks
 		RendererChecks();
 		SkinnedChecks();
 		ParticleChecks();
+		LineChecks();
 		return sFailures;
 	}
 
@@ -532,6 +533,62 @@ static class EcsChecks
 			Expect(ComponentState<ParticleState>.Count == before, "RemoveComponent frees the particles");
 		}
 		Expect(ComponentState<ParticleState>.Count == before, "particles are freed with their scene");
+	}
+
+	/// Line and Trail Renderer: a list owned by component data, and the hidden child that draws them.
+	static void LineChecks()
+	{
+		let lines = ComponentState<LineState>.Count;
+		let trails = ComponentState<TrailState>.Count;
+		{
+			let scene = scope Scene();
+			let a = scene.CreateGameObject("A");
+			let b = scene.CreateGameObject("B");
+			let first = a.AddComponent<LineRenderer>();
+			let second = b.AddComponent<LineRenderer>();
+			Expect(first.PositionCount == 2 && first.GetPosition(1) == .(0, 0, 1) && first.material.IsEmpty, "a Line Renderer starts with its two default points");
+			Expect(Internal.UnsafeCastToPtr(first.positions) != Internal.UnsafeCastToPtr(second.positions), "each line owns its own point list");
+			first.SetPositions(scope Vector3[](.(0, 0, 0), .(3, 0, 0), .(3, 4, 0)));
+			Expect(first.PositionCount == 3 && Math.Abs(first.Length - 7) < 0.001f && second.PositionCount == 2, "SetPositions changes that line only");
+			let info = HandleComponents.Find(typeof(LineRenderer));
+			HandleComponents.Assign(b.GetData(info.dataType), a.GetData(info.dataType), info);
+			Expect(second.PositionCount == 3 && Internal.UnsafeCastToPtr(first.positions) != Internal.UnsafeCastToPtr(second.positions), "pasting values copies the points, not the list");
+			first.SetPosition(0, .(1, 1, 1));
+			Expect(second.GetPosition(0) == .Zero, "and the copy stays as it was");
+			HandleComponents.Reset(b, info);
+			Expect(second.PositionCount == 2, "Reset brings back the default points");
+			LineRenderer.FrameAll(scene);
+			Expect(a.Transform.Children.Count == 1 && first.DrawnBy && first.DrawnBy.RuntimeMesh != null, "a frame makes the hidden child that draws it");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains("component Tallow.LineRenderer enabled 1") && !text.Contains("(drawn)"), "a line saves, without its hidden child");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("A").GetComponent<LineRenderer>();
+			Expect(copy && copy.PositionCount == 3 && copy.GetPosition(0) == .(1, 1, 1), "a line loads with its points");
+			first.enabled = false;
+			LineRenderer.FrameAll(scene);
+			Expect(!first.DrawnBy.enabled, "a switched-off line stops drawing");
+			a.RemoveComponent<LineRenderer>();
+			scene.[Friend]RunDestroyQueue();
+			Expect(a.Transform.Children.Count == 0, "removing it removes its hidden child");
+
+			let ball = scene.CreateGameObject("Ball");
+			let trail = ball.AddComponent<TrailRenderer>();
+			Expect(trail.time == 0.5f && trail.emitting && !trail.showInEditor, "a Trail Renderer has its defaults");
+			TrailRenderer.FrameAll(scene);
+			Expect(trail.PositionCount == 0, "in the editor it draws nothing unless Show In Editor");
+			for (int i < 5)
+			{
+				ball.Transform.Position = .(i, 0, 0);
+				TrailRenderer.LateAll(scene);
+			}
+			Expect(trail.PositionCount == 5 && trail.GetPosition(4) == .(4, 0, 0), "while playing it leaves points behind");
+			trail.enabled = false;
+			TrailRenderer.FrameAll(scene);
+			Expect(trail.PositionCount == 0, "switched off, it starts afresh");
+		}
+		Expect(ComponentState<LineState>.Count == lines && ComponentState<TrailState>.Count == trails, "lines and trails are freed with their scene");
 	}
 
 	static void HandleChecks()

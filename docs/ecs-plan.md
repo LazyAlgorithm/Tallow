@@ -904,11 +904,19 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   registration list. Play over the network names the object. Checked by `EcsChecks.ParticleChecks` (defaults,
   burst, Play, switched off, inactive object, save and load, freed on remove and with the scene); the Sandbox's
   campfire previews in the editor and the Gallery self-test passes.
-- [ ] **LineRenderer and TrailRenderer stay class components for now** (like LODGroup). A line's points are a
-  `List<Vector3>` saved with the scene, and data components hold no heap fields: a list would need an owned
-  buffer type in data with copy hooks (the Inspector's Copy/Paste Component copies data byte for byte). Trail
-  shares Line's Ribbon, a hidden child object made and destroyed with the component. Revisit with that buffer
-  type in Phase 5.
+- [x] **LineRenderer and TrailRenderer.** Lists in data, added for them: a built-in component's data may hold
+  `List<T>` fields of plain values, and the data owns them. Wherever the data is copied byte for byte (added with
+  its defaults, Reset, the Inspector's Paste Component Values), `HandleComponents.OwnLists` gives the copy lists of
+  its own, made by a `NewList` function `[HandleData]` writes at compile time (reflection cannot make a `List<T>`
+  it never saw made); the handle's OnRemove frees them with `HandleComponents.FreeLists`. The Inspector clipboard
+  keeps lists of its own. Copies kept elsewhere (a state's `data`) only read them. A line's points are
+  `LineRendererData.positions`; its strip is a `LineState`, a trail's points and clock a `TrailState`. Both
+  rebuild in the Frame.OnFrame step in the editor and after the scripts' LateUpdate while playing; switched-off
+  ones stop drawing. Ribbon holds its hidden child by id, since children are destroyed before their parent's
+  components go, and leaves it alone while the scene is emptied. Checked by `EcsChecks.LineChecks` (own lists per
+  component, paste and Reset copy points not lists, hidden child made, saved without it and removed with the
+  component, save and load, trails in editor and play, freed with the scene); a test scene draws a tapered
+  gradient line and a dashed loop, the Inspector edits the point list, and the Gallery self-test passes.
 - [ ] Foliage, Water, Rigidbody, Collider, Joint,
   CharacterController, SoftBody, Rope, and the Phase 5 set.
 - [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with
@@ -918,3 +926,24 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
 ## Benchmark results
 
 See "Phase 1 results" above.
+
+### Against the engine before the ECS (2026-11-05, after ParticleSystem)
+
+EcsBench `gameobject` mode (one GameObject per cube, a MeshRenderer and a Mover script each), Release, three
+interleaved runs per side: 08125074 (Phase 1, which only added Flecs beside the old engine) against `ecs` with
+everything above converted.
+
+| Cubes | Measure | Before | Now | Change |
+|---|---|---|---|---|
+| 10,000 | frame | 1.76 ms | 1.64 ms | 7% faster |
+| 10,000 | frame p99 | 1.98 ms | 1.75 ms | 12% faster |
+| 10,000 | script Update | 0.37 ms | 0.44 ms | 17% slower |
+| 10,000 | spawn | 11.9 ms | 8.1 ms | 32% faster |
+| 100,000 | frame | 34.3 ms | 20.0 ms | 42% faster |
+| 100,000 | frame p99 | 36.6 ms | 20.9 ms | 43% faster |
+| 100,000 | script Update | 3.55 ms | 4.22 ms | 19% slower |
+| 100,000 | spawn | 118 ms | 73 ms | 38% faster |
+| 100,000 | memory | 206 MB | 186 MB | 10% less |
+
+The frame gain is the render path reading MeshRenderer data from one query. Script Update is slower: each
+Mover's Transform reads and writes go through the entity now. To look at with the Profiler (Phase 7).
