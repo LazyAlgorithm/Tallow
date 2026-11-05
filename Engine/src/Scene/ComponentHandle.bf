@@ -256,6 +256,20 @@ static class HandleComponents
 		public function Object(int32 index) newList;
 		/// The data's `SaveData` ([HandleData] makes it when the data has [Saved] fields): reads or writes them.
 		public function void(void* data, SaveIO io) saveData;
+		/// The handle's `static void SaveFields(GameObject, SaveIO)`, if it has one: a component that writes its own
+		/// save (SavedTransform) rather than [Saved] fields.
+		public function void(GameObject gameObject, SaveIO io) saveObject;
+		/// Whether SaveSystem keeps anything of this component.
+		public bool Saves => saveData != null || saveObject != null;
+
+		/// Reads or writes what a save keeps of the component on an object.
+		public void Save(GameObject gameObject, SaveIO io)
+		{
+			if (saveObject != null)
+				saveObject(gameObject, io);
+			else if (saveData != null)
+				saveData(gameObject.GetData(dataType), io);
+		}
 		/// The handle's `static void OnSaving(GameObject)` and `static void OnLoaded(GameObject)`, if it has them:
 		/// what a class component's OnSaving and OnLoaded did, around SaveSystem reading and writing [Saved] fields.
 		public function void(GameObject gameObject) onSaving;
@@ -308,6 +322,8 @@ static class HandleComponents
 				info.onRemove = (Flecs.RemoveCallback)method.Ptr;
 			if (data.GetMethod("SaveData", .Static | .Public | .NonPublic) case .Ok(let saver))
 				info.saveData = (function void(void*, SaveIO))saver.Ptr;
+			if (type.GetMethod("SaveFields", .Static | .Public | .NonPublic) case .Ok(let saveObject))
+				info.saveObject = (function void(GameObject, SaveIO))saveObject.Ptr;
 			if (type.GetMethod("OnGUI", .Static | .Public | .NonPublic) case .Ok(let gui))
 				info.onGUI = (function void(Scene))gui.Ptr;
 			if (type.GetMethod("OnSaving", .Static | .Public | .NonPublic) case .Ok(let saving))

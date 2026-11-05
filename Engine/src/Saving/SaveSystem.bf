@@ -401,7 +401,7 @@ static class SaveSystem
 		HandleComponents.On(gameObject, all);
 		for (let info in all)
 		{
-			if (info.saveData != null)
+			if (info.Saves)
 				output.Add(info);
 		}
 		return output.Count;
@@ -519,7 +519,7 @@ static class SaveSystem
 				}
 				let io = scope SaveIO();
 				io.references = references;
-				info.saveData(gameObject.GetData(info.dataType), io);
+				info.Save(gameObject, io);
 				entry.Set(info.fullName, io.TakeRoot());
 			}
 			if (entry != null)
@@ -616,7 +616,7 @@ static class SaveSystem
 					continue;
 				let io = scope SaveIO(fields);
 				io.references = references;
-				info.saveData(gameObject.GetData(info.dataType), io);
+				info.Save(gameObject, io);
 				if (info.onLoaded != null)
 					loadedHandles.Add((gameObject, info));
 			}

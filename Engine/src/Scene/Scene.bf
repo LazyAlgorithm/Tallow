@@ -1314,6 +1314,8 @@ class Scene
 		World.AddStep(mTickPipeline, "Tick.FixedUpdate", .OnUpdate, new => RunFixedUpdates);
 		// Agents walking through a controller or body steer them after the scripts' FixedUpdate, before physics.
 		World.AddStep(mTickPipeline, "Tick.Navigation", .OnUpdate, new () => NavigationAgent.TickAll(this));
+		// A saved velocity loaded before its body existed is given to it (SavedTransform.FixedUpdate did).
+		World.AddStep(mTickPipeline, "Tick.SavedTransforms", .OnUpdate, new () => SavedTransform.TickAll(this));
 		World.AddStep(mTickPipeline, "Tick.Physics", .OnValidate, new () =>
 			{
 				using (sPhysicsMarker.Sample())

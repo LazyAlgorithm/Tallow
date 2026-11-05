@@ -9,28 +9,20 @@ namespace Tallow;
 ///
 /// An object made while the game ran (from a prefab, or a registered network prefab) with this component on it is
 /// made again when a save is loaded, so dropped and placed things come back where they were.
-[Component]
-class SavedTransform : Component
+///
+/// A handle (ComponentHandle): its settings are SavedTransformData's fields. It writes its own save
+/// (`static SaveFields`, which SaveSystem finds as it does OnSaving); a velocity loaded before the body exists
+/// waits in a SavedTransformState until the first tick.
+[Component, HandleFields]
+struct SavedTransform : ComponentHandle<SavedTransformData>
 {
-	public bool positionX = true;
-	public bool positionY = true;
-	public bool positionZ = true;
-	public bool rotation = true;
-	public bool scale = false;
-	/// With a Rigidbody or Character Controller: its speed and direction.
-	public bool velocity = true;
-	/// With a Rigidbody: how fast it spins.
-	public bool angularVelocity = true;
-
-	bool mPending;
-	Vector3 mPendingVelocity;
-	Vector3 mPendingSpin;
-
-	public override bool HasSavedFields => true;
-
-	public override void SaveFields(SaveIO io)
+	/// SaveSystem: what the class's SaveFields did.
+	static void SaveFields(GameObject gameObject, SaveIO io)
 	{
-		base.SaveFields(io);
+		let settings = gameObject.GetComponent<SavedTransform>();
+		let Transform = gameObject.Transform;
+		let positionX = settings.positionX, positionY = settings.positionY, positionZ = settings.positionZ;
+		let rotation = settings.rotation, scale = settings.scale, velocity = settings.velocity, angularVelocity = settings.angularVelocity;
 		var position = Transform.LocalPosition;
 		var turned = Transform.LocalRotation;
 		var size = Transform.LocalScale;
@@ -61,8 +53,8 @@ class SavedTransform : Component
 			moved = true;
 		}
 
-		let body = GetComponent<Rigidbody>();
-		let character = GetComponent<CharacterController>();
+		let body = gameObject.GetComponent<Rigidbody>();
+		let character = gameObject.GetComponent<CharacterController>();
 		var linear = Vector3.Zero;
 		var spin = Vector3.Zero;
 		if (io.Writing)
@@ -113,34 +105,74 @@ class SavedTransform : Component
 		else if (hasLinear || hasSpin)
 		{
 			// Loaded before the body exists (loading at start): set it going on the first tick.
-			mPending = true;
-			mPendingVelocity = linear;
-			mPendingSpin = spin;
+			let state = ComponentState<SavedTransformState>.Make(gameObject.Scene.World, gameObject.Entity);
+			state.gameObject = gameObject;
+			state.pending = true;
+			state.pendingVelocity = linear;
+			state.pendingSpin = spin;
 		}
 	}
 
-	public override void FixedUpdate()
+	/// What FixedUpdate did, for the ones with a velocity waiting (Tick.SavedTransforms, after Tick.FixedUpdate).
+	public static void TickAll(Scene scene)
 	{
-		if (!mPending)
-			return;
-		let body = GetComponent<Rigidbody>();
+		for (let (entity, state) in ComponentState<SavedTransformState>.In(scene.World, .. scope .()))
+		{
+			if (state.pending && state.gameObject != null && state.gameObject.ActiveInHierarchy)
+				Tick(state);
+		}
+	}
+
+	static void Tick(SavedTransformState waiting)
+	{
+		let gameObject = waiting.gameObject;
+		let Transform = gameObject.Transform;
+		let body = gameObject.GetComponent<Rigidbody>();
 		if (body.IsValid && body.HasBody)
 		{
 			var state = body.State;
-			state.linearVelocity = mPendingVelocity;
-			state.angularVelocity = mPendingSpin;
+			state.linearVelocity = waiting.pendingVelocity;
+			state.angularVelocity = waiting.pendingSpin;
 			body.SetState(state);
-			mPending = false;
+			waiting.pending = false;
 			return;
 		}
-		let character = GetComponent<CharacterController>();
+		let character = gameObject.GetComponent<CharacterController>();
 		if (character.IsValid && character.HasCharacter)
 		{
-			character.Teleport(Transform.Position, mPendingVelocity);
-			mPending = false;
+			character.Teleport(Transform.Position, waiting.pendingVelocity);
+			waiting.pending = false;
 			return;
 		}
 		if (!body.IsValid && !character.IsValid)
-			mPending = false;
+			waiting.pending = false;
 	}
+
+	static void OnRemove(void* world, uint64 entity) => ComponentState<SavedTransformState>.Release(world, entity);
+}
+
+/// What to keep, in the object's entity (SavedTransform is the handle).
+[Component, HandleData]
+struct SavedTransformData
+{
+	public bool positionX = true;
+	public bool positionY = true;
+	public bool positionZ = true;
+	public bool rotation = true;
+	public bool scale = false;
+	/// With a Rigidbody or Character Controller: its speed and direction.
+	public bool velocity = true;
+	/// With a Rigidbody: how fast it spins.
+	public bool angularVelocity = true;
+
+	public this() { }
+}
+
+/// A velocity loaded before the object's body existed, given to it on the first tick that it does.
+class SavedTransformState
+{
+	public GameObject gameObject;
+	public bool pending;
+	public Vector3 pendingVelocity;
+	public Vector3 pendingSpin;
 }

@@ -1106,6 +1106,14 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   `bind="progress"` its documentation suggests finds nothing. Left as it is (making it a field would add it to scene
   files); worth a decision.
 
+- [x] **SavedTransform.** `SavedTransformData` (what to keep), the handle, and a `SavedTransformState` made only
+  when a velocity is loaded before the object's body exists. A handle may now write its own save with
+  `static void SaveFields(GameObject, SaveIO)` (`HandleComponents.Info.saveObject`; `Info.Save` calls whichever
+  the handle has). Its save entry keeps the class's key, `Tallow.SavedTransform`, so existing saves load. A
+  `Tick.SavedTransforms` step after `Tick.FixedUpdate` hands a waiting velocity to the body or character, as
+  FixedUpdate did. Checked by `EcsChecks.SavedTransformChecks`: defaults, a save with place and velocity, loading
+  them back while playing, and a velocity loaded before play given on the first tick. The Gallery self-test passes.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

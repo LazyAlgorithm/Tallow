@@ -121,6 +121,7 @@ static class EcsChecks
 		SequenceChecks();
 		SpawnChecks();
 		SceneLoaderChecks();
+		SavedTransformChecks();
 		return sFailures;
 	}
 
@@ -673,6 +674,52 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Saved Transform: its own save (static SaveFields) under the old key, the place and a body's velocity coming
+	/// back, and a velocity loaded before the body exists given on the first tick.
+	static void SavedTransformChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let crate = scene.CreateGameObject("Crate");
+			crate.Transform.Position = .(1, 5, 2);
+			crate.AddComponent<BoxCollider>();
+			let body = crate.AddComponent<Rigidbody>();
+			body.useGravity = false;
+			let saved = crate.AddComponent<SavedTransform>();
+			Expect(saved.positionX && saved.rotation && !saved.scale && saved.velocity, "it has its defaults");
+			SaveSystem.SceneStarting(scene);
+			scene.StartPlay();
+			scene.FixedUpdate();
+			var state = body.State;
+			state.position = .(4, 5, 2);
+			state.linearVelocity = .(3, 0, 0);
+			body.SetState(state);
+			crate.Transform.Position = .(4, 5, 2);
+			let snapshot = SaveSystem.Capture(scene);
+			defer delete snapshot;
+			let text = scope String();
+			snapshot.ToText(text);
+			Expect(text.Contains("Tallow.SavedTransform") && text.Contains("velocity"), "a save keeps its place and velocity under its old key");
+			state.position = .(-9, 5, 0);
+			state.linearVelocity = .Zero;
+			body.SetState(state);
+			crate.Transform.Position = .(-9, 5, 0);
+			SaveSystem.Apply(snapshot, scene);
+			let at = crate.Transform.Position;
+			Expect(Math.Abs(at.x - 4) < 0.01f && Math.Abs(body.Velocity.x - 3) < 0.01f, scope $"loading puts back its place and sets it moving ({at}, {body.Velocity})");
+			scene.StopPlay();
+			// Loaded before the body exists: the velocity waits for the first tick.
+			SaveSystem.Apply(snapshot, scene);
+			scene.StartPlay();
+			scene.FixedUpdate();
+			Expect(Math.Abs(body.Velocity.x - 3) < 0.01f, scope $"a velocity loaded before the body exists is given on the first tick ({body.Velocity})");
+			scene.StopPlay();
+		}
+		Scene.Active = previous;
 	}
 
 	/// Scene Loader: Load On Start (Frame.SceneLoaders) adding a scene, its progress reaching 1, Finished, and a UI
