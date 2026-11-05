@@ -68,7 +68,7 @@ class LODGroup : Component
 	{
 		for (let renderer in mRenderers)
 		{
-			if (renderer.LodGroup == this)
+			if (renderer && renderer.LodGroup == this)
 				renderer.LodGroup = null;
 		}
 		mRenderers.Clear();
@@ -92,7 +92,7 @@ class LODGroup : Component
 		void Walk(Transform transform)
 		{
 			hash = hash * 31 + transform.Children.Count;
-			hash = hash * 31 + (transform.GameObject.GetComponent<MeshRenderer>() != null ? 1 : 0);
+			hash = hash * 31 + (transform.GameObject.HasComponent<MeshRenderer>() ? 1 : 0);
 			for (let child in transform.Children)
 				Walk(child);
 		}
@@ -116,7 +116,7 @@ class LODGroup : Component
 	{
 		for (let renderer in mRenderers)
 		{
-			if (renderer.LodGroup == this)
+			if (renderer && renderer.LodGroup == this)
 				renderer.LodGroup = null;
 		}
 		mRenderers.Clear();
@@ -127,8 +127,9 @@ class LODGroup : Component
 			let named = LevelInName(transform.GameObject.Name);
 			if (named >= 0 && source == .Children)
 				level = named;
-			if (let renderer = transform.GameObject.GetComponent<MeshRenderer>())
+			if (transform.GameObject.HasComponent<MeshRenderer>())
 			{
+				let renderer = transform.GameObject.GetComponent<MeshRenderer>();
 				// A renderer belongs to the nearest group above it.
 				renderer.LodGroup = this;
 				renderer.LodLevel = (int8)level;
@@ -151,7 +152,7 @@ class LODGroup : Component
 			bool hasZero = false;
 			for (let renderer in mRenderers)
 				hasZero |= renderer.LodLevel == 0;
-			if (own != null && own.LodLevel < 0 && !hasZero)
+			if (own && own.LodLevel < 0 && !hasZero)
 				own.LodLevel = 0;
 		}
 		mHierarchyHash = HashHierarchy();
@@ -239,7 +240,7 @@ class LODGroup : Component
 	}
 
 	/// What a renderer of this group draws for a level: its own mesh, a simplified one, or null (not at this level).
-	public Mesh MeshAt(MeshRenderer renderer, Mesh mesh, int32 level)
+	public Mesh MeshAt(RenderProxy renderer, Mesh mesh, int32 level)
 	{
 		if (level < 0 || mesh == null)
 			return null;

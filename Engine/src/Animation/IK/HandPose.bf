@@ -188,7 +188,7 @@ class HandPose : IKComponent
 	{
 		for (let child in bone.Children)
 		{
-			if (child.Children.Count == 0 && child.GameObject.GetComponent<MeshRenderer>() != null)
+			if (child.Children.Count == 0 && child.GameObject.HasComponent<MeshRenderer>())
 				continue;
 			return child;
 		}
@@ -209,7 +209,7 @@ class HandPose : IKComponent
 		bool anyNamed = false;
 		for (let child in root.Children)
 		{
-			if (Next(child) == null && child.Children.Count == 0 && child.GameObject.GetComponent<MeshRenderer>() != null)
+			if (Next(child) == null && child.Children.Count == 0 && child.GameObject.HasComponent<MeshRenderer>())
 				continue;
 			let name = child.GameObject.Name;
 			int slot = -1;

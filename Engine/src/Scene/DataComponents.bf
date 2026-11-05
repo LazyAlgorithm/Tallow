@@ -56,7 +56,7 @@ static class DataComponents
 			type.GetFullName(info.fullName);
 			type.GetName(info.name);
 			info.type = type;
-			info.index = ComponentTypes.Add(type, type.Size, type.Align);
+			info.index = ComponentTypes.Add(type, type.Stride, type.Align);
 			sInfos.Add(info);
 		}
 		sInfos.Sort(scope (a, b) => a.name.CompareTo(b.name));

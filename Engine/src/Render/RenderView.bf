@@ -34,7 +34,7 @@ class RenderView
 	{
 		public uint64 key;
 		public Mesh mesh;
-		public MeshRenderer renderer;
+		public RenderProxy renderer;
 		/// The material this item is drawn with: a part's own (MeshRenderer.RuntimeParts) or the renderer's.
 		public Material material;
 		public Matrix4 world;
@@ -617,7 +617,7 @@ class RenderView
 
 	/// A colour alpha below 1, or a Transparent material, makes an object see-through: it is drawn after everything
 	/// solid, blended, and (being glass-like) casts no shadow.
-	static bool IsTransparent(MeshRenderer renderer, Material material)
+	static bool IsTransparent(RenderProxy renderer, Material material)
 	{
 		if (renderer.vertexAlpha)
 			return true;
@@ -678,7 +678,7 @@ class RenderView
 	/// proxy stands in for a Mesh Renderer, carrying the settings every copy shares (as Foliage.Proxy does).
 	public struct InstancedDraws
 	{
-		public MeshRenderer proxy;
+		public RenderProxy proxy;
 		public Mesh mesh;
 		public Material material;
 		public Span<Matrix4> matrices;
@@ -897,7 +897,7 @@ class RenderView
 	/// The baked light probe grid for a thing whose middle is here (0: the scene's grid, or no probes).
 	int32 LightGridAt(Vector3 center) => mProbeGrid != null && mProbeGrid.grids.Count > 1 ? mProbeGrid.Pick(center) : 0;
 
-	static uint64 MakeKey(MeshRenderer renderer, Mesh mesh, Material material)
+	static uint64 MakeKey(RenderProxy renderer, Mesh mesh, Material material)
 	{
 		uint64 key = (uint64)(int)Internal.UnsafeCastToPtr(mesh);
 		if (renderer.HasLightmap)
@@ -1104,7 +1104,7 @@ class RenderView
 	}
 
 	/// A material, when the renderer (or this part) has one, replaces the renderer's own surface settings.
-	static Surface ResolveSurface(MeshRenderer renderer, Material shared, Matrix4 world)
+	static Surface ResolveSurface(RenderProxy renderer, Material shared, Matrix4 world)
 	{
 		Surface surface = default;
 		surface.material = .(renderer.metallic, renderer.roughness, renderer.flatShading ? 1 : 0, renderer.unlit ? 1 : 0);
@@ -1152,7 +1152,7 @@ class RenderView
 
 	/// The renderer's baked lighting: its lightmap, and the direction and shadowmask maps that go with it. A mesh
 	/// without lightmap coordinates (a lower level of detail) is drawn without it, lit by the light probes.
-	static void SetLightmapUniforms(MeshRenderer renderer, Mesh mesh)
+	static void SetLightmapUniforms(RenderProxy renderer, Mesh mesh)
 	{
 		Vector4 bakedTransform = renderer.lightmapScaleOffset;
 		Vector4 bakedDecode = renderer.lightmapDecode;
@@ -1165,7 +1165,7 @@ class RenderView
 		bgfx.set_texture(10, RenderResources.sLightmapShadowmask, Assets.GetTexture(renderer.lightmapShadowmask, .Data), uint32.MaxValue);
 	}
 
-	static void SetSurfaceUniforms(MeshRenderer renderer, ref Surface surface)
+	static void SetSurfaceUniforms(RenderProxy renderer, ref Surface surface)
 	{
 		bgfx.set_uniform(RenderResources.uMaterial, &surface.material, 1);
 		bgfx.set_uniform(RenderResources.uEmissive, &surface.emissive, 1);

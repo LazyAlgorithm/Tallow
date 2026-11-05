@@ -53,7 +53,7 @@ class Ribbon
 	int mCapacity;
 
 	/// The renderer drawing the strip, or null before the first frame.
-	public MeshRenderer Renderer => (mHolder != null && !mHolder.IsDestroyed) ? mRenderer : null;
+	public MeshRenderer Renderer => (mHolder != null && !mHolder.IsDestroyed) ? mRenderer : default;
 
 	/// Makes the hidden child that draws the strip, if it is not there, and gives it the look.
 	public void Attach(Component owner, RibbonLook look)
@@ -102,7 +102,7 @@ class Ribbon
 		if (mHolder != null && !mHolder.IsDestroyed)
 			mHolder.Scene.Destroy(mHolder);
 		mHolder = null;
-		mRenderer = null;
+		mRenderer = default;
 	}
 
 	List<RibbonPoint> mPath = new .() ~ delete _;
@@ -114,7 +114,7 @@ class Ribbon
 	/// in dashes Style.dash long with Style.gap between.
 	public void Build(Transform owner, List<RibbonPoint> points, RibbonStyle style)
 	{
-		if (mMesh == null || Renderer == null)
+		if (mMesh == null || !Renderer)
 			return;
 		let transform = mHolder.Transform;
 		let toLocal = transform.WorldToLocal;

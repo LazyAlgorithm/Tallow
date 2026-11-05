@@ -191,7 +191,7 @@ class SoftBody : Component
 			return;
 		if (GetComponent<Collider>() == null)
 		{
-			let mesh = GetComponent<MeshRenderer>()?.ActiveMesh;
+			let mesh = MeshRenderer.MeshOf(GameObject);
 			if (mesh == null || mesh.Vertices.Count < 4)
 				return;
 			// A convex wrap of the mesh, which follows its dents.
@@ -236,7 +236,7 @@ class SoftBody : Component
 		mBody = uint32.MaxValue;
 		mWorld = null;
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null && renderer.RuntimeMesh == mMesh)
+		if (renderer && renderer.RuntimeMesh == mMesh)
 			renderer.RuntimeMesh = null;
 	}
 
@@ -245,7 +245,7 @@ class SoftBody : Component
 		if (mBody != uint32.MaxValue)
 			return;
 		let renderer = GetComponent<MeshRenderer>();
-		let source = renderer?.ActiveMesh;
+		let source = renderer ? renderer.ActiveMesh : null;
 		if (source == null || source.Vertices.Count < 3 || source.Indices.Count < 3)
 		{
 			Log.Warning(scope $"Soft Body on '{GameObject.Name}' needs a Mesh Renderer with a mesh.");

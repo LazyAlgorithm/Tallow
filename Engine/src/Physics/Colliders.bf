@@ -167,7 +167,7 @@ class MeshCollider : Collider
 			return desc;
 		}
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null)
+		if (renderer)
 			desc.mesh = renderer.ActiveMesh;
 		return desc;
 	}
@@ -270,7 +270,7 @@ class ConvexCollider : Collider
 	void CollectHull(GameObject object)
 	{
 		let renderer = object.GetComponent<MeshRenderer>();
-		let mesh = renderer?.ActiveMesh;
+		let mesh = renderer ? renderer.ActiveMesh : null;
 		if (mesh != null)
 		{
 			let relative = Transform.WorldToLocal * object.Transform.LocalToWorld;
@@ -285,7 +285,7 @@ class ConvexCollider : Collider
 		for (let child in object.Transform.Children)
 		{
 			let childMesh = child.GameObject.GetComponent<MeshRenderer>();
-			if (mesh != null && childMesh != null && childMesh.mesh.Contains('#')) continue;
+			if (mesh != null && childMesh && childMesh.mesh.Contains('#')) continue;
 			CollectHull(child.GameObject);
 		}
 	}
@@ -311,7 +311,7 @@ class ConvexCollider : Collider
 			return desc;
 		}
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null)
+		if (renderer)
 			desc.mesh = renderer.ActiveMesh;
 		return desc;
 	}

@@ -80,7 +80,7 @@ extension EditorApp
 	bool UpdateSoftBodyPaint(GameObject selected, ImGui.Vec2 origin, ImGui.Vec2 size)
 	{
 		let body = selected?.GetComponent<SoftBody>();
-		let mesh = selected?.GetComponent<MeshRenderer>()?.ActiveMesh;
+		let mesh = MeshRenderer.MeshOf(selected);
 		if (mSoftPaint == .None || body == null || mesh == null || mPlay != .Edit)
 			return false;
 		if (mesh != mSoftMesh || mesh.Vertices.Count != mSoftMeshVertices)

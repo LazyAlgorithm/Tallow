@@ -80,7 +80,7 @@ class ModelMesh : Component
 	public override void OnUnregister()
 	{
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null)
+		if (renderer)
 		{
 			if (renderer.RuntimeMesh == DrawnMesh)
 				renderer.RuntimeMesh = null;
@@ -234,7 +234,7 @@ class ModelMesh : Component
 	{
 		// The renderer may not exist yet while a scene is still loading this object's components.
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer == null)
+		if (!renderer)
 		{
 			mAttachPending = true;
 			return;

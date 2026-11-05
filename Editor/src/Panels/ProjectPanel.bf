@@ -1014,8 +1014,8 @@ extension EditorApp
 		}
 		if (IsImageFile(relative))
 		{
-			let renderer = Selected?.GetComponent<MeshRenderer>();
-			if (renderer != null)
+			MeshRenderer renderer = Selected != null ? Selected.GetComponent<MeshRenderer>() : default;
+			if (renderer)
 			{
 				renderer.texture.Set(relative);
 				MarkDirty();

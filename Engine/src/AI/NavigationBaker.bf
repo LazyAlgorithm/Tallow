@@ -60,7 +60,7 @@ static class NavigationBaker
 		{
 			for (let renderer in scene.Renderers)
 			{
-				if (!renderer.IsActiveAndEnabled || renderer.GetComponent<Collider>() != null || !IsStaticGeometry(renderer.GameObject) || (renderer.GameObject.EffectiveWorldStates & worlds) == 0) continue;
+				if (!renderer.IsActiveAndEnabled || renderer.GameObject.GetComponent<Collider>() != null || !IsStaticGeometry(renderer.GameObject) || (renderer.GameObject.EffectiveWorldStates & worlds) == 0) continue;
 				let mesh = renderer.ActiveMesh;
 				if (mesh == null || mesh.Indices.Count == 0 || (limit && !Overlaps(renderer.WorldBounds, region))) continue;
 				Vector3 position, scale;

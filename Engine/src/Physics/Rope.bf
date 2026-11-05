@@ -295,7 +295,7 @@ class Rope : Component
 		for (int i = count - 1; i >= middle; i--)
 			other.mSeed.Add(mPositions[i]);
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null)
+		if (renderer)
 		{
 			let drawn = holder.AddComponent<MeshRenderer>();
 			drawn.color = renderer.color;
@@ -338,7 +338,7 @@ class Rope : Component
 			centre = collider.center;
 			half = collider.size * 0.5f;
 		}
-		else if (let mesh = on.GameObject.GetComponent<MeshRenderer>()?.ActiveMesh)
+		else if (let mesh = MeshRenderer.MeshOf(on.GameObject))
 		{
 			centre = mesh.Bounds.Center;
 			half = mesh.Bounds.Size * 0.5f;
@@ -488,7 +488,7 @@ class Rope : Component
 			tn_soft_ignore(system, mBody, endBody.BodyId);
 
 		var renderer = GetComponent<MeshRenderer>();
-		if (renderer == null)
+		if (!renderer)
 			renderer = GameObject.AddComponent<MeshRenderer>();
 		delete mMesh;
 		mMesh = new Mesh();
@@ -517,7 +517,7 @@ class Rope : Component
 		mWorld = null;
 		mPull = 0;
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null && renderer.RuntimeMesh == mMesh)
+		if (renderer && renderer.RuntimeMesh == mMesh)
 			renderer.RuntimeMesh = null;
 	}
 

@@ -348,8 +348,8 @@ class WorldStreamer
 		{
 			if (!gameObject.ActiveSelf)
 				return;
-			if (let renderer = gameObject.GetComponent<MeshRenderer>())
-				Add(renderer);
+			if (gameObject.HasComponent<MeshRenderer>())
+				Add(gameObject.GetComponent<MeshRenderer>());
 			for (let child in gameObject.Transform.Children)
 				Walk(child.GameObject);
 		}

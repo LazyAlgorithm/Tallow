@@ -22,8 +22,23 @@ struct AudioSource : ComponentHandle<AudioSourceData>
 	const float OccludedVolume = 0.55f;
 
 	/// The voice and what it has loaded; null until it first plays.
-	AudioSourceState State => ComponentState<AudioSourceState>.Get(mGameObject.Scene.World, mGameObject.Entity);
-	AudioSourceState MadeState => ComponentState<AudioSourceState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+	AudioSourceState State
+	{
+		get
+		{
+			CheckValid();
+			return ComponentState<AudioSourceState>.Get(mGameObject.Scene.World, mGameObject.Entity);
+		}
+	}
+
+	AudioSourceState MadeState
+	{
+		get
+		{
+			CheckValid();
+			return ComponentState<AudioSourceState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+		}
+	}
 
 	/// Whether the sound is playing now.
 	public bool IsPlaying

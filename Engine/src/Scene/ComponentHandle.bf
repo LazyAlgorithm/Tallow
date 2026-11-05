@@ -62,10 +62,18 @@ struct ComponentHandle<TData> : IComponentHandle where TData : struct, new
 		[Inline]
 		get
 		{
+			Runtime.Assert(mGameObject != null, "A component handle that is not valid was used: GetComponent found none. Check it with `if (handle)` first.");
 			let data = mGameObject.GetComponent<TData>();
 			Runtime.Assert(data != null, "A component handle was used after its component or object was removed. Check it with `if (handle)` first.");
 			return ref *data;
 		}
+	}
+
+	/// Stops with a clear message when the handle is not valid (before touching what the component keeps outside
+	/// its data, which would otherwise be made for an object that has no such component).
+	protected void CheckValid()
+	{
+		Runtime.Assert(mGameObject != null && mGameObject.Scene != null && mGameObject.HasComponent<TData>(), "A component handle that is not valid was used. Check it with `if (handle)` first.");
 	}
 
 	/// Whether the component is switched on. A switched-off component is skipped by the engine (a light gives no light).
@@ -171,6 +179,30 @@ static class ComponentState<T> where T : class, new, delete
 	}
 }
 
+/// On a class that keeps a copy of a component's data in a field (RenderProxy keeps a MeshRendererData in `data`):
+/// adds a ref property for every public field of that data, as [HandleFields] does for a handle.
+[AttributeUsage(.Class | .Struct)]
+struct DataFieldsAttribute : Attribute, IOnTypeInit
+{
+	Type mData;
+	String mMember;
+
+	public this(Type data, String member)
+	{
+		mData = data;
+		mMember = member;
+	}
+
+	[Comptime]
+	public void OnTypeInit(Type type, Self* prev)
+	{
+		let code = scope String();
+		for (let field in mData.GetFields(.Public | .Instance))
+			code.AppendF("public ref {} {} {{ [Inline] get => ref {}.{}; }}\n", field.FieldType, field.Name, mMember, field.Name);
+		Compiler.EmitTypeBody(type, code);
+	}
+}
+
 /// The built-in component handles there are, found by reflection: what Add Component, the Inspector, scene files and
 /// object references use to treat them like script components.
 static class HandleComponents
@@ -224,8 +256,8 @@ static class HandleComponents
 			type.GetName(info.name);
 			info.handleType = type;
 			info.dataType = data;
-			info.index = ComponentTypes.Add(data, data.Size, data.Align);
-			info.defaults = new uint8[data.Size];
+			info.index = ComponentTypes.Add(data, data.Stride, data.Align);
+			info.defaults = new uint8[data.Stride];
 			if (data.CreateValue() case .Ok(let value))
 			{
 				Internal.MemCpy(info.defaults.Ptr, value, data.Size);

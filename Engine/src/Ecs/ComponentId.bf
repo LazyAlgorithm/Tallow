@@ -59,5 +59,5 @@ static class ComponentTypes
 /// are plain structs with no heap fields (docs/ecs-plan.md, "Systems").
 static class ComponentId<T> where T : struct
 {
-	public static readonly int32 Index = ComponentTypes.Add(typeof(T), sizeof(T), alignof(T));
+	public static readonly int32 Index = ComponentTypes.Add(typeof(T), strideof(T), alignof(T));
 }

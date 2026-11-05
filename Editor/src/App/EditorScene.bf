@@ -213,7 +213,7 @@ extension EditorApp
 		var radius = 1.5f;
 		var center = selected.Transform.Position;
 		let renderer = selected.GetComponent<MeshRenderer>();
-		if (renderer != null)
+		if (renderer)
 		{
 			let bounds = renderer.WorldBounds;
 			center = bounds.Center;

@@ -29,7 +29,7 @@ class Bench : Component
 	World mWorld ~ delete _;
 	Query<Pose, Motion, RenderMatrix> mMove ~ delete _;
 	Query<RenderMatrix> mDraw ~ delete _;
-	MeshRenderer mProxy ~ delete _;
+	RenderProxy mProxy ~ delete _;
 	delegate void(Scene scene, List<RenderView.InstancedDraws> output) mSource ~ delete _;
 
 	List<double> mFrameTimes = new .() ~ delete _;
@@ -116,7 +116,7 @@ class Bench : Component
 		}
 		mMove = new .(mWorld);
 		mDraw = new .(mWorld, .Read);
-		mProxy = new MeshRenderer();
+		mProxy = new RenderProxy();
 		mSource = new => GatherDraws;
 		RenderView.InstancedSources.Add(mSource);
 	}

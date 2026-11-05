@@ -186,9 +186,9 @@ class LightBaker
 			volume.Counts(let x, let y, let z);
 			mVolumes.Add(.() { area = volume.WorldBox, x = x, y = y, z = z, fade = Math.Max(volume.blendDistance, 0.01f) });
 		}
-		for (let renderer in scene.Renderers)
+		for (let renderer in scene.Components<MeshRenderer>(.. scope .()))
 		{
-			if (!renderer.bakedLighting || !renderer.IsActiveAndEnabled || !renderer.GameObject.InActiveWorld || renderer.shadowOnly || renderer.color.a < 0.999f)
+			if (!renderer.bakedLighting || !renderer.GameObject.ActiveInHierarchy || !renderer.GameObject.InActiveWorld || renderer.shadowOnly || renderer.color.a < 0.999f)
 				continue;
 			let meshes = scope List<Mesh>();
 			if (!LightmapUV.MeshesFor(renderer, meshes))
@@ -1201,14 +1201,14 @@ class LightBaker
 				Assets.ReplaceTexture(path, picture.pixels.Ptr, picture.width, picture.height);
 		}
 		// Renderers baked before and not now lose their lightmaps.
-		for (let renderer in scene.Renderers)
+		for (let renderer in scene.Components<MeshRenderer>(.. scope .()))
 		{
 			if (renderer.lightmap.StartsWith(folder))
 				ClearLightmap(renderer);
 		}
 		for (let object in Objects)
 		{
-			if (!scene.Renderers.Contains(object.renderer))
+			if (!object.renderer)
 				continue;
 			let renderer = object.renderer;
 			renderer.lightmap.Set(scope $"{folder}/Lightmap-{object.atlas}.png");
@@ -1248,7 +1248,7 @@ class LightBaker
 	/// Takes the scene's baked lighting away (the files stay).
 	public static void Clear(Scene scene)
 	{
-		for (let renderer in scene.Renderers)
+		for (let renderer in scene.Components<MeshRenderer>(.. scope .()))
 		{
 			if (!renderer.lightmap.IsEmpty && renderer.lightmap.Contains("_Baked/"))
 				ClearLightmap(renderer);

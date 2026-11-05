@@ -171,7 +171,7 @@ class ComputeEffect : Component
 		if (!Compute.Run(compiled, mTexture, values))
 			return false;
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null)
+		if (renderer)
 			renderer.TextureOverride = mTexture.Texture;
 		return true;
 	}
@@ -190,7 +190,7 @@ class ComputeEffect : Component
 	public override void OnDisable()
 	{
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null)
+		if (renderer)
 			renderer.TextureOverride = .() { idx = uint16.MaxValue };
 	}
 }

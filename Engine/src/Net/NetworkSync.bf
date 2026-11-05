@@ -499,10 +499,11 @@ static class NetworkSync
 	public static void MaterialChanged(MeshRenderer renderer, int32 kind, StringView name, Vector4 value)
 	{
 		let network = Active(renderer.Scene);
-		if (network == null || sApplying || !IsMine(renderer) || name.Length > 200)
+		if (network == null || sApplying || !IsMine(renderer.GameObject) || name.Length > 200)
 			return;
 		let payload = scope NetWriter();
-		WriteComponent<MeshRenderer>(payload, renderer);
+		// An object has one Mesh Renderer: the object says which.
+		WriteTransform(payload, renderer.Transform);
 		payload.Write((uint8)kind);
 		payload.WriteString(name);
 		payload.Write(value);
@@ -517,22 +518,24 @@ static class NetworkSync
 		let network = Active(Scene.Active);
 		if (network == null)
 			return;
-		let renderer = ReadComponent<MeshRenderer>(ref reader, network);
+		MeshRenderer renderer = default;
+		if (ReadTransform(ref reader, network, let transform) && transform != null)
+			renderer = transform.GameObject.GetComponent<MeshRenderer>();
 		let kind = (int32)reader.Read<uint8>();
 		let name = scope String();
 		reader.ReadString(name);
 		let value = reader.Read<Vector4>();
 		// kind 0: the renderer's material; 1: one of its material's values; 2: a skinned model's part's material
 		// (value.x is the part).
-		if (!reader.Ok || renderer == null || kind > 2 || name.Length > 200 || !value.x.IsFinite || !value.y.IsFinite || !value.z.IsFinite || !value.w.IsFinite)
+		if (!reader.Ok || !renderer || kind > 2 || name.Length > 200 || !value.x.IsFinite || !value.y.IsFinite || !value.z.IsFinite || !value.w.IsFinite)
 			return;
 		if (network.IsServer)
 		{
-			let owner = Anchor(renderer).GetComponent<NetworkIdentity>();
+			let owner = Anchor(renderer.GameObject).GetComponent<NetworkIdentity>();
 			if (owner == null || owner.ownerId != sender || owner.ownerId == 0)
 				return;
 			let payload = scope NetWriter();
-			WriteComponent<MeshRenderer>(payload, renderer);
+			WriteTransform(payload, renderer.Transform);
 			payload.Write((uint8)kind);
 			payload.WriteString(name);
 			payload.Write(value);
@@ -641,12 +644,15 @@ static class NetworkSync
 
 	/// True when this machine is the one in charge of a component's object: always with no session, the server
 	/// for objects nobody owns, and the owning client otherwise.
-	public static bool IsMine(Component component)
+	public static bool IsMine(Component component) => IsMine(component.GameObject);
+
+	/// The same for an object (a built-in component's).
+	public static bool IsMine(GameObject gameObject)
 	{
-		let network = Active(component.Scene);
+		let network = Active(gameObject.Scene);
 		if (network == null)
 			return true;
-		let identity = Anchor(component).GetComponent<NetworkIdentity>();
+		let identity = Anchor(gameObject).GetComponent<NetworkIdentity>();
 		if (identity == null)
 			return network.IsServer;
 		return identity.ownerId == network.LocalClientId || (network.IsServer && identity.ownerId == 0);

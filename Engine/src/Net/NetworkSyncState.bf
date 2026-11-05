@@ -59,11 +59,11 @@ extension NetworkSync
 	static bool Decides(NetworkManager network, GameObject object) => network.IsServer || Owns(network.LocalClientId, object.Transform);
 
 	/// What a client may change on objects it owns: how they look and sound, never how they play.
-	static bool Cosmetic(Component component) => component is MeshRenderer || component is SkinnedMeshRenderer || component is ParticleSystem;
+	static bool Cosmetic(Component component) => component is SkinnedMeshRenderer || component is ParticleSystem;
 
 	/// The built-in components that are cosmetic in the same way.
 	static bool Cosmetic(HandleComponents.Info info) => info.handleType == typeof(Light) || info.handleType == typeof(AudioSource)
-		|| info.handleType == typeof(Decal) || info.handleType == typeof(AudioReverbZone);
+		|| info.handleType == typeof(Decal) || info.handleType == typeof(AudioReverbZone) || info.handleType == typeof(MeshRenderer);
 
 	/// Sends a state message whose first keyLength bytes name what it is about: the server passes it on and keeps
 	/// the latest for players who join later; a client asks the server.

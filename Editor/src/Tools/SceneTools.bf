@@ -202,7 +202,7 @@ extension EditorApp
 	void AddRendererBounds(GameObject gameObject, ref Bounds bounds)
 	{
 		let renderer = gameObject.GetComponent<MeshRenderer>();
-		if (renderer != null && renderer.IsActiveAndEnabled && renderer.ActiveMesh != null)
+		if (renderer && renderer.IsActiveAndEnabled && renderer.ActiveMesh != null)
 		{
 			let world = renderer.WorldBounds;
 			bounds.Encapsulate(world.min);
@@ -722,7 +722,7 @@ extension EditorApp
 		Bounds bounds;
 		let hasBounds = HierarchyBounds(selected, out bounds);
 		// Prefab instances draw through their children: box the whole thing.
-		if (hasBounds && selected.GetComponent<MeshRenderer>() == null)
+		if (hasBounds && !selected.HasComponent<MeshRenderer>())
 			Gizmos.Lines.Box(bounds, .Identity, .(1.0f, 0.62f, 0.15f, 1));
 		if (SnapActive && mSnapMove > 0.001f)
 		{

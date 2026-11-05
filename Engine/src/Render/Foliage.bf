@@ -65,7 +65,7 @@ class Foliage : Component
 	bool mCellsStale;
 	bool mChanged;
 	String mSynced = new .() ~ delete _;
-	MeshRenderer mProxy = new .() ~ delete _;
+	RenderProxy mProxy = new .() ~ delete _;
 	Material mOwnMaterial = new .() ~ delete _;
 	// A different run of chances for each component, or two kinds of plant would land in the same places.
 	static int32 sSeeds = 1;
@@ -82,7 +82,7 @@ class Foliage : Component
 	public Mesh Mesh => Assets.GetMesh(mesh);
 
 	/// Stands in for a Mesh Renderer when the plants are drawn: the settings every plant shares.
-	public MeshRenderer Proxy
+	public RenderProxy Proxy
 	{
 		get
 		{

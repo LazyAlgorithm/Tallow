@@ -254,8 +254,34 @@ class Scene
 	}
 
 	// Non-owning lists maintained by the components themselves in OnRegister / OnUnregister.
-	/// Every Mesh Renderer in the scene (each adds itself when it joins).
-	public List<MeshRenderer> Renderers = new .() ~ delete _;
+	Query<MeshRendererData, ObjectLink> mRendererQuery ~ delete _;
+	List<RenderProxy> mRenderers = new .() ~ delete _;
+	/// What the renderer draws: every switched-on Mesh Renderer's RenderProxy, its settings copied in from the
+	/// entity as the list is made. Rebuilt each time it is read (once per view); keep it only for the frame.
+	public List<RenderProxy> Renderers
+	{
+		get
+		{
+			mRenderers.Clear();
+			if (mRendererQuery == null)
+				mRendererQuery = new .(World, .Read, .Read);
+			for (var chunk in mRendererQuery)
+			{
+				let settings = chunk.Read<MeshRendererData>();
+				let links = chunk.Read<ObjectLink>();
+				let entities = chunk.Entities;
+				for (int i < chunk.Count)
+				{
+					let proxy = ComponentState<RenderProxy>.Make(World, entities[i]);
+					proxy.[Friend]mGameObject = links[i].gameObject;
+					proxy.data = settings[i];
+					mRenderers.Add(proxy);
+				}
+			}
+			return mRenderers;
+		}
+	}
+
 	/// The query behind Components<T>() for each handle type, by its data's ComponentTypes index.
 	Dictionary<int32, IndexQuery> mHandleQueries = new .() ~ DeleteDictionaryAndValues!(_);
 
@@ -905,18 +931,6 @@ class Scene
 				Keep(list);
 		}
 		mSweptTypes.Clear();
-		if (mSweepRenderers)
-		{
-			mSweepRenderers = false;
-			int kept = 0;
-			for (int i < Renderers.Count)
-			{
-				let renderer = Renderers[i];
-				if (renderer.[Friend]mRegistered)
-					Renderers[kept++] = renderer;
-			}
-			Renderers.Count = kept;
-		}
 		if (mRunningStarts)
 		{
 			// RunPendingStarts is going through the list: leave gaps rather than move what it has yet to reach.
@@ -1080,14 +1094,6 @@ class Scene
 	}
 
 	/// A renderer leaving the scene.
-	void RendererLeft(MeshRenderer renderer)
-	{
-		if (renderer.[Friend]mLeavingTogether)
-			mSweepRenderers = true;
-		else
-			Renderers.Remove(renderer);
-	}
-
 	void WakeComponent(Component component)
 	{
 		if (component.IsAwake)
@@ -1174,7 +1180,6 @@ class Scene
 	/// The batch DestroyTogether has under way, and what it has for Sweep.
 	List<GameObject> mGoing;
 	HashSet<Type> mSweptTypes = new .() ~ delete _;
-	bool mSweepRenderers;
 
 	static ProfilerMarker sStartMarker = .("Start", .Scripts);
 	static ProfilerMarker sPreTickMarker = .("Network Pre-Tick", .Networking);

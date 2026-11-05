@@ -870,9 +870,24 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   counts playing sources from the query. Checked by `EcsChecks.AudioChecks` (defaults, no voice until played,
   Play(clip), reverb weights, listener, save and load, voices freed with the scene); the Sandbox, whose Boulder has
   a source, plays without errors.
-- [ ] LODGroup (moves with MeshRenderer, which it holds a list of), MeshRenderer, SkinnedMeshRenderer,
-  LineRenderer, TrailRenderer, ParticleSystem, Foliage, Water, AudioSource, AudioListener, AudioReverbZone,
-  Rigidbody, Collider, Joint, CharacterController, SoftBody, Rope, and the Phase 5 set.
+- [x] **MeshRenderer.** Its saved settings are `MeshRendererData` (mesh, texture, material and the lightmap
+  paths are `SharedString`). What the renderer works out at run time (material caches, runtime mesh and parts,
+  LOD level, last drawn frame, visual offset) lives in a `RenderProxy`, a class kept in `ComponentState` and freed
+  by OnRemove. The draw path (RenderView, occlusion, planar reflections, foliage, instanced sources) takes
+  `RenderProxy`; `Scene.Renderers` builds the list from one query, copying each entity's settings into its proxy,
+  which replaces the old registration list and its sweep. Code that writes settings (light baking, the editor
+  tools, voxels, ropes, soft bodies) uses the `MeshRenderer` handle. `MeshRenderer.MeshOf(gameObject)` reads a
+  mesh without making a proxy for an object that has no renderer. Material changes over the network name the
+  object. LODGroup stays a class component; it keeps handles and asks for meshes by proxy.
+  Checked by `EcsChecks.RendererChecks` (defaults, writes, Scene.Renderers, runtime values in the proxy, switching
+  off, moving tables, save and load, proxies freed on remove and with the scene); the Sandbox draws as before and
+  the Gallery self-test passes. EcsBench `gameobject` (Release, A/B against the commit before, interleaved): 10k
+  cubes 1.71 → 1.63 ms a frame; 100k cubes 26.6 → 20.4 ms a frame, update 6.5 → 4.3 ms, spawn 142 → 74 ms.
+  Fixed on the way: component sizes are registered by stride (`strideof`), not size, so a struct whose size is not
+  a multiple of its alignment is no longer read past its end; using a handle that is not valid stops with a clear
+  message instead of crashing (`CheckValid` before state is made).
+- [ ] SkinnedMeshRenderer, LineRenderer, TrailRenderer, ParticleSystem, Foliage, Water, Rigidbody, Collider, Joint,
+  CharacterController, SoftBody, Rope, and the Phase 5 set.
 - [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with
   the components above converted, a Gallery made from the template builds and its `--self-test` prints
   `SHOWCASE_READY rooms=8 probes=2` with no errors.)

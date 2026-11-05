@@ -70,7 +70,9 @@ static class LightmapUV
 	/// for that stretch, so that a wall's broad faces get the texels rather than its thin edges. Coordinates that
 	/// came with a model are used as they are. False when it cannot have a lightmap (a mesh rewritten every frame, or
 	/// one drawing another's vertices).
-	public static bool MeshesFor(MeshRenderer renderer, List<Mesh> output)
+	public static bool MeshesFor(MeshRenderer renderer, List<Mesh> output) => MeshesFor(renderer.Proxy, output);
+
+	public static bool MeshesFor(RenderProxy renderer, List<Mesh> output)
 	{
 		output.Clear();
 		let parts = renderer.DrawnParts;

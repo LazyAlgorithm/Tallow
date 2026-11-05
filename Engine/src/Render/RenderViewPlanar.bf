@@ -25,7 +25,7 @@ extension RenderView
 
 	RenderView mPlanarView ~ delete _;
 	HashSet<uint32> mPlanarHidden = new .() ~ delete _;
-	MeshRenderer mPlanarRenderer;
+	RenderProxy mPlanarRenderer;
 	bool mPlanarDrawn;
 
 	static uint16 PlanarBaseFor(uint16 viewBase)

@@ -125,7 +125,7 @@ extension EditorApp
 				DrawObjectInspector(selected);
 				// The material its Mesh Renderer uses, under the components, as in Unity.
 				let renderer = selected.GetComponent<MeshRenderer>();
-				if (renderer != null && !renderer.material.IsEmpty)
+				if (renderer && !renderer.material.IsEmpty)
 				{
 					let name = scope String();
 					Path.GetFileNameWithoutExtension(renderer.material, name);

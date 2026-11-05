@@ -106,6 +106,7 @@ static class EcsChecks
 		ProbeChecks();
 		CameraChecks();
 		AudioChecks();
+		RendererChecks();
 		return sFailures;
 	}
 
@@ -183,7 +184,6 @@ static class EcsChecks
 		// The per-callback lists only hold classes that override the callback.
 		Expect(ScriptCallbackIndex.Of(typeof(UpdateCounter)) == .Update, "UpdateCounter overrides Update only");
 		Expect(ScriptCallbackIndex.Of(typeof(Mover)) == .Update, "Mover overrides Update only");
-		Expect(ScriptCallbackIndex.Of(typeof(MeshRenderer)) & ~ScriptCallbacks.OnFrame == .None, "MeshRenderer has no per-frame gameplay callbacks");
 		Expect(ScriptCallbackIndex.Of(typeof(Animator)).HasFlag(.OnLocalUpdate), "Animator overrides OnLocalUpdate");
 		Expect(ScriptCallbackIndex.Of(typeof(CharacterMotor)).HasFlag(.FixedUpdate), "CharacterMotor overrides FixedUpdate");
 		Expect(ScriptCallbackIndex.Of(typeof(Bench)) == .Update | .LateUpdate, "Bench overrides Update and LateUpdate");
@@ -415,6 +415,41 @@ static class EcsChecks
 			Expect(loaded.Find("Radio").GetComponent<AudioSource>().audioClip == "Sounds/missing.wav" && loaded.Find("Ears").HasComponent<AudioListener>(), "audio components load");
 		}
 		Expect(ComponentState<AudioSourceState>.Count == before, "voices are freed with their scene");
+	}
+
+	/// Mesh Renderer: data in Flecs, what the renderer keeps in its RenderProxy, Scene.Renderers from the query.
+	static void RendererChecks()
+	{
+		let before = ComponentState<RenderProxy>.Count;
+		{
+			let scene = scope Scene();
+			let cube = scene.CreateGameObject("Cube");
+			let renderer = cube.AddComponent<MeshRenderer>();
+			Expect(renderer.mesh == "builtin:cube" && renderer.roughness == 0.85f && renderer.castShadows && renderer.occluder == .Auto, "a Mesh Renderer has its defaults");
+			renderer.mesh.Set("builtin:sphere");
+			renderer.color.g = 0.25f;
+			Expect(cube.GetComponent<MeshRenderer>().mesh == "builtin:sphere" && cube.GetComponent<MeshRenderer>().color.g == 0.25f, "mesh.Set and color writes reach the data");
+			let list = scene.Renderers;
+			Expect(list.Count == 1 && list[0].mesh == "builtin:sphere" && list[0].GameObject == cube && list[0].Renderer == renderer, "Scene.Renderers gives the proxy with the settings copied in");
+			renderer.VisualOffset = .(0, 1, 0);
+			Expect(Math.Abs(renderer.RenderMatrix.Translation.y - 1) < 0.001f, "runtime-only values live in the proxy");
+			renderer.enabled = false;
+			Expect(scene.Renderers.Count == 0, "a switched-off renderer is not drawn");
+			renderer.enabled = true;
+			cube.AddComponent<WindZone>();
+			Expect(renderer.VisualOffset.y == 1 && scene.Renderers.Count == 1, "the proxy stays with the entity as it moves tables");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains("component Tallow.MeshRenderer enabled 1") && text.Contains("field mesh \"builtin:sphere\""), "a Mesh Renderer saves as before");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let loadedRenderer = loaded.Find("Cube").GetComponent<MeshRenderer>();
+			Expect(loadedRenderer && loadedRenderer.mesh == "builtin:sphere" && Math.Abs(loadedRenderer.color.g - 0.25f) < 0.001f, "a Mesh Renderer loads");
+			Expect(MeshRenderer.MeshOf(scene.CreateGameObject("Empty")) == null, "MeshOf an object without a renderer is null");
+			cube.RemoveComponent<MeshRenderer>();
+			Expect(ComponentState<RenderProxy>.Count == before, "RemoveComponent frees the proxy (reading fields makes none)");
+		}
+		Expect(ComponentState<RenderProxy>.Count == before, "proxies are freed with their scene");
 	}
 
 	static void HandleChecks()

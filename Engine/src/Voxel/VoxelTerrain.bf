@@ -414,7 +414,7 @@ class VoxelTerrain : Component
 			if (!child.GameObject.Transient)
 				continue;
 			let renderer = child.GameObject.GetComponent<MeshRenderer>();
-			if (renderer != null)
+			if (renderer)
 				renderer.RuntimeMesh = null;
 			let collider = child.GameObject.GetComponent<MeshCollider>();
 			if (collider != null)
@@ -478,8 +478,8 @@ class VoxelTerrain : Component
 			mFlat = flat;
 			for (let chunk in mChunks.Values)
 			{
-				let drawn = chunk.gameObject?.GetComponent<MeshRenderer>();
-				if (drawn != null)
+				MeshRenderer drawn = chunk.gameObject != null ? chunk.gameObject.GetComponent<MeshRenderer>() : default;
+				if (drawn)
 					drawn.flatShading = flat;
 			}
 		}

@@ -119,6 +119,7 @@ class VoxelObject : Component
 			return size;
 		}
 	}
+
 	bool HasBoxSize => shape == .Box && boxSize.x > 0 && boxSize.y > 0 && boxSize.z > 0;
 	float CellSize => GridSize / (mSamples - 1);
 
@@ -166,9 +167,9 @@ class VoxelObject : Component
 	public override void OnUnregister()
 	{
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null && renderer.RuntimeMesh == mMesh)
+		if (renderer && renderer.RuntimeMesh == mMesh)
 			renderer.RuntimeMesh = null;
-		if (renderer != null && renderer.RuntimeParts == mParts)
+		if (renderer && renderer.RuntimeParts == mParts)
 			renderer.RuntimeParts = null;
 	}
 
@@ -221,7 +222,7 @@ class VoxelObject : Component
 			return;
 		mAttachPending = false;
 		var renderer = GetComponent<MeshRenderer>();
-		if (renderer == null)
+		if (!renderer)
 		{
 			renderer = GameObject.AddComponent<MeshRenderer>();
 			renderer.roughness = 0.9f;
@@ -495,7 +496,7 @@ class VoxelObject : Component
 			if (loaded != null)
 				return loaded;
 		}
-		let outside = renderer != null ? renderer.ActiveMaterial : null;
+		let outside = renderer ? renderer.ActiveMaterial : null;
 		if (outside == null)
 			return null;
 		if (mDerivedInterior == null || mDerivedFrom != outside || mDerivedRevision != outside.Revision)
@@ -538,14 +539,14 @@ class VoxelObject : Component
 		let insideMaterial = InteriorMaterialFor(renderer);
 		List<uint32> outsideIndices = scope .();
 		List<uint32> insideIndices = scope .();
-		mPaletteFlat = renderer?.SharedMaterial?.IsPalette ?? false;
+		mPaletteFlat = renderer ? (renderer.SharedMaterial?.IsPalette ?? false) : false;
 		March(insideMaterial != null, outsideIndices, insideIndices);
 		mMesh.Upload();
 		MakeParts(insideMaterial, outsideIndices, insideIndices);
 
 		// The renderer may not exist yet while a scene or prefab is still loading this object's
 		// components, so attaching (or creating) it is finished in OnFrame.
-		if (renderer != null)
+		if (renderer)
 		{
 			renderer.RuntimeMesh = mMesh;
 			renderer.RuntimeParts = mParts.Count > 0 ? mParts : null;
@@ -869,7 +870,7 @@ class VoxelObject : Component
 		let source = GetComponent<MeshRenderer>();
 		// Renderer first, so the piece's mesh is attached (and its collider can be built) immediately.
 		let renderer = piece.AddComponent<MeshRenderer>();
-		if (source != null)
+		if (source)
 		{
 			renderer.roughness = source.roughness;
 			renderer.metallic = source.metallic;

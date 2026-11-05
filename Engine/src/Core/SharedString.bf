@@ -48,6 +48,18 @@ struct SharedString : IHashable, IEquatable<SharedString>
 	public int Length => mText != null ? mText.Length : 0;
 	public bool IsEmpty => mText == null;
 
+	/// Changes the text (`renderer.mesh.Set("Models/Rock.glb")` writes through to the component, as for a String).
+	public void Set(StringView text) mut => this = .(text);
+	/// Makes it empty.
+	public void Clear() mut => mText = null;
+
+	public bool StartsWith(StringView text) => View.StartsWith(text);
+	public bool EndsWith(StringView text) => View.EndsWith(text);
+	public bool EndsWith(StringView text, StringComparison comparison) => View.EndsWith(text, comparison);
+	public bool StartsWith(StringView text, StringComparison comparison) => View.StartsWith(text, comparison);
+	public bool Contains(StringView text) => View.Contains(text);
+	public bool Contains(char8 c) => View.Contains(c);
+
 	public static implicit operator SharedString(StringView text) => .(text);
 	public static implicit operator SharedString(String text) => .(text != null ? (StringView)text : default);
 	public static implicit operator StringView(SharedString text) => text.View;

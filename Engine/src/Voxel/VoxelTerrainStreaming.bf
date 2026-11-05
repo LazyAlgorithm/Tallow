@@ -316,7 +316,7 @@ extension VoxelTerrain
 		if (chunk.gameObject == null)
 			return;
 		let renderer = chunk.gameObject.GetComponent<MeshRenderer>();
-		if (renderer != null)
+		if (renderer)
 			renderer.RuntimeMesh = null;
 		let collider = chunk.gameObject.GetComponent<MeshCollider>();
 		if (collider != null)
@@ -363,7 +363,7 @@ extension VoxelTerrain
 		{
 			chunk.gameObject.SetActive(true);
 			let drawn = chunk.gameObject.GetComponent<MeshRenderer>();
-			if (drawn != null)
+			if (drawn)
 				drawn.flatShading = mFlat;
 			// Rebuild the collision for the new surface (not when only the drawing detail changed).
 			let collider = chunk.gameObject.GetComponent<MeshCollider>();

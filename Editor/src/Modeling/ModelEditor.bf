@@ -835,7 +835,8 @@ extension EditorApp
 			let made = CreateModelObject(scope $"{original.Name} Part" , part, original.Transform.Position);
 			made.Transform.Rotation = original.Transform.Rotation;
 			made.Transform.LocalScale = original.Transform.LocalScale;
-			made.GetComponent<MeshRenderer>().material.Set(original.GetComponent<MeshRenderer>()?.material ?? "");
+			let originalRenderer = original.GetComponent<MeshRenderer>();
+			made.GetComponent<MeshRenderer>().material = originalRenderer ? originalRenderer.material : default;
 			mSelectedId = original.Id;
 			return;
 		}
@@ -1097,7 +1098,7 @@ extension EditorApp
 		else
 		{
 			let renderer = other.GetComponent<MeshRenderer>();
-			if (renderer?.ActiveMesh == null)
+			if (!renderer || renderer.ActiveMesh == null)
 				return;
 			otherMesh = EditMesh.FromMesh(renderer.ActiveMesh);
 			ownOther = true;
@@ -1131,7 +1132,7 @@ extension EditorApp
 	void ConvertToModel(GameObject target)
 	{
 		let renderer = target.GetComponent<MeshRenderer>();
-		if (renderer == null || renderer.ActiveMesh == null)
+		if (!renderer || renderer.ActiveMesh == null)
 			return;
 		let mesh = EditMesh.FromMesh(renderer.ActiveMesh);
 		defer delete mesh;
@@ -1175,7 +1176,7 @@ extension EditorApp
 			DrawModelShapes();
 			let selected = Selected;
 			let model = selected?.GetComponent<ModelMesh>();
-			if (selected != null && model == null && selected.GetComponent<MeshRenderer>() != null && mPlay == .Edit)
+			if (selected != null && model == null && selected.HasComponent<MeshRenderer>() && mPlay == .Edit)
 			{
 				ImGui.SeparatorText("Selected object");
 				if (ImGui.Button("Make Editable Model", .(-1, 0)))
@@ -1707,7 +1708,7 @@ extension EditorApp
 			let child = mScene.CreateGameObject(scope $"{owner.Name}_LOD{level}" , owner.Transform);
 			let childRenderer = child.AddComponent<MeshRenderer>();
 			childRenderer.mesh.Clear();
-			if (renderer != null)
+			if (renderer)
 			{
 				childRenderer.material.Set(renderer.material);
 				childRenderer.texture.Set(renderer.texture);
@@ -1743,7 +1744,7 @@ extension EditorApp
 		{
 			let names = scope List<StringView>();
 			let renderer = model.GetComponent<MeshRenderer>();
-			names.Add((renderer != null && !renderer.material.IsEmpty) ? renderer.material : "Material");
+			names.Add((renderer && !renderer.material.IsEmpty) ? renderer.material : "Material");
 			for (let name in model.materials.Split(';'))
 				names.Add(name);
 			ok = GlbWriter.Write(full, model.Edit, names);
@@ -1854,7 +1855,7 @@ extension EditorApp
 	static void ModelTexturePath(ModelMesh model, String into)
 	{
 		let renderer = model.GetComponent<MeshRenderer>();
-		if (renderer == null)
+		if (!renderer)
 			return;
 		let material = renderer.SharedMaterial;
 		into.Set((material != null && !material.texture.IsEmpty) ? material.texture : renderer.texture);
@@ -1864,7 +1865,7 @@ extension EditorApp
 	bool SetModelTexture(ModelMesh model, StringView path)
 	{
 		let renderer = model.GetComponent<MeshRenderer>();
-		if (renderer == null)
+		if (!renderer)
 			return false;
 		let material = renderer.SharedMaterial;
 		if (material != null && !material.texture.IsEmpty)

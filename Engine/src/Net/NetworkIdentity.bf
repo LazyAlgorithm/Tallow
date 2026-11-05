@@ -249,11 +249,8 @@ class NetworkIdentity : Component
 
 	void ApplyVisualOffset(GameObject gameObject)
 	{
-		for (let component in gameObject.Components)
-		{
-			if (let renderer = component as MeshRenderer)
-				renderer.VisualOffset = mVisualOffset;
-		}
+		if (gameObject.HasComponent<MeshRenderer>())
+			gameObject.GetComponent<MeshRenderer>().VisualOffset = mVisualOffset;
 		for (let child in gameObject.Transform.Children)
 			ApplyVisualOffset(child.GameObject);
 	}

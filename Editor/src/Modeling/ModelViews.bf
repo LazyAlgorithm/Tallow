@@ -108,8 +108,8 @@ extension EditorApp
 		centre = mCamPosition + AnglesForward(mCamYaw, mCamPitch) * 10;
 		radius = 2;
 		let selected = Selected;
-		let renderer = selected?.GetComponent<MeshRenderer>();
-		if (renderer != null && renderer.ActiveMesh != null)
+		MeshRenderer renderer = selected != null ? selected.GetComponent<MeshRenderer>() : default;
+		if (renderer && renderer.ActiveMesh != null)
 		{
 			let bounds = renderer.WorldBounds;
 			centre = bounds.Center;
@@ -564,7 +564,7 @@ extension EditorApp
 		if (selected != null && !mSceneOrtho)
 		{
 			let renderer = selected.GetComponent<MeshRenderer>();
-			pivot = (renderer != null && renderer.ActiveMesh != null) ? renderer.WorldBounds.Center : selected.Transform.Position;
+			pivot = (renderer && renderer.ActiveMesh != null) ? renderer.WorldBounds.Center : selected.Transform.Position;
 			mSceneOrthoDistance = Math.Max((pivot - mCamPosition).Length, 1);
 		}
 		mCamYaw = Math.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;

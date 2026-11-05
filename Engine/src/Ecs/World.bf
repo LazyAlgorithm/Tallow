@@ -240,13 +240,13 @@ sealed class World
 	public T* Get<T>(Entity entity) where T : struct => (T*)Flecs.GetMut(mWorld, entity.id, Id<T>());
 
 	/// The entity's T, added (zeroed) first if it has none. Valid until the entity's components change.
-	public ref T Ensure<T>(Entity entity) where T : struct => ref *(T*)Flecs.Ensure(Writer, entity.id, Id<T>(), sizeof(T));
+	public ref T Ensure<T>(Entity entity) where T : struct => ref *(T*)Flecs.Ensure(Writer, entity.id, Id<T>(), strideof(T));
 
 	/// Adds T if needed and sets it to value.
 	public void Set<T>(Entity entity, T value) where T : struct
 	{
 		var value;
-		Flecs.Set(Writer, entity.id, Id<T>(), sizeof(T), &value);
+		Flecs.Set(Writer, entity.id, Id<T>(), strideof(T), &value);
 	}
 
 	/// How many entities have T.

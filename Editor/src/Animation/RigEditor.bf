@@ -119,7 +119,7 @@ extension EditorApp
 			}
 			output.Set(scope $"Models/{name}.glb");
 			let names = scope List<StringView>();
-			names.Add((renderer != null && !renderer.material.IsEmpty) ? renderer.material : "Material");
+			names.Add((renderer && !renderer.material.IsEmpty) ? renderer.material : "Material");
 			for (let slot in model.materials.Split(';'))
 				names.Add(slot);
 			let full = Assets.ResolvePath(output, .. scope .());
@@ -127,7 +127,7 @@ extension EditorApp
 			if (!GlbWriter.Write(full, model.Edit, names))
 				output.Clear();
 		}
-		else if (renderer != null && (Assets.IsModelPath(renderer.mesh) && !renderer.mesh.EndsWith(".tmesh", .OrdinalIgnoreCase)))
+		else if (renderer && (Assets.IsModelPath(renderer.mesh) && !renderer.mesh.EndsWith(".tmesh", .OrdinalIgnoreCase)))
 			output.Set(renderer.mesh);
 	}
 
@@ -957,7 +957,7 @@ extension EditorApp
 			output.Set(skinned.model);
 		else if (target.GetComponent<ModelMesh>() != null)
 			output.Set("its editable model (written as a .glb)");
-		else if (renderer != null && (Assets.IsModelPath(renderer.mesh) && !renderer.mesh.EndsWith(".tmesh", .OrdinalIgnoreCase)))
+		else if (renderer && (Assets.IsModelPath(renderer.mesh) && !renderer.mesh.EndsWith(".tmesh", .OrdinalIgnoreCase)))
 			output.Set(renderer.mesh);
 	}
 
@@ -1371,7 +1371,7 @@ extension EditorApp
 		var skinned = target.GetComponent<SkinnedMeshRenderer>();
 		if (skinned == null)
 			skinned = target.AddComponent<SkinnedMeshRenderer>();
-		if (target.GetComponent<MeshRenderer>() == null)
+		if (!target.HasComponent<MeshRenderer>())
 			target.AddComponent<MeshRenderer>();
 		// An Animator, so the Animation window, the IK rig and Hand Posing work on it straight away.
 		if (target.GetComponent<Animator>() == null)

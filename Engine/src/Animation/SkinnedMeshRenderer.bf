@@ -235,7 +235,7 @@ class SkinnedMeshRenderer : Component
 		if (!mSkinnedOnce)
 			return true;
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer == null || renderer.LastDrawnFrame >= Time.FrameCount - 1)
+		if (!renderer || renderer.LastDrawnFrame >= Time.FrameCount - 1)
 			return true;
 		return (Time.FrameCount + mStagger) % HiddenSkinInterval == 0;
 	}
@@ -278,9 +278,9 @@ class SkinnedMeshRenderer : Component
 			mCpuQueued = false;
 		}
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null && renderer.RuntimeMesh == mMesh)
+		if (renderer && renderer.RuntimeMesh == mMesh)
 			renderer.RuntimeMesh = null;
-		if (renderer != null && renderer.RuntimeParts == mParts)
+		if (renderer && renderer.RuntimeParts == mParts)
 			renderer.RuntimeParts = null;
 	}
 
@@ -327,7 +327,7 @@ class SkinnedMeshRenderer : Component
 			rebuilt.AppendF("{}{}={}", rebuilt.IsEmpty ? "" : ";", part, path);
 		materials.Set(rebuilt);
 		let renderer = GetComponent<MeshRenderer>();
-		if (renderer != null)
+		if (renderer)
 			NetworkSync.MaterialChanged(renderer, 2, path, .(index, 0, 0, 0));
 	}
 
@@ -689,7 +689,7 @@ class SkinnedMeshRenderer : Component
 		{
 			mAttachPending = false;
 			var renderer = GetComponent<MeshRenderer>();
-			if (renderer == null)
+			if (!renderer)
 				renderer = GameObject.AddComponent<MeshRenderer>();
 			renderer.RuntimeMesh = mMesh;
 			renderer.RuntimeParts = mParts.Count > 0 ? mParts : null;
@@ -697,7 +697,7 @@ class SkinnedMeshRenderer : Component
 		if (mParts.Count > 0)
 		{
 			let renderer = GetComponent<MeshRenderer>();
-			if (renderer != null)
+			if (renderer)
 				ResolvePartMaterials(renderer);
 			ResolvePartLooks();
 		}

@@ -277,9 +277,9 @@ class GameObject
 	}
 
 	/// The same by type, for the editor and scene files (DataComponents).
-	public void* AddData(Type type) => mScene.World.Ensure(mEntity, ComponentTypes.Add(type, type.Size, type.Align));
-	public void* GetData(Type type) => mScene.World.Get(mEntity, ComponentTypes.Add(type, type.Size, type.Align));
-	public void RemoveData(Type type) => mScene.World.Remove(mEntity, ComponentTypes.Add(type, type.Size, type.Align));
+	public void* AddData(Type type) => mScene.World.Ensure(mEntity, ComponentTypes.Add(type, type.Stride, type.Align));
+	public void* GetData(Type type) => mScene.World.Get(mEntity, ComponentTypes.Add(type, type.Stride, type.Align));
+	public void RemoveData(Type type) => mScene.World.Remove(mEntity, ComponentTypes.Add(type, type.Stride, type.Align));
 
 	public T AddComponent<T>() where T : Component
 	{

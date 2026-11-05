@@ -17,7 +17,7 @@ extension EditorApp
 			for (let renderer in group.Renderers)
 			{
 				var mesh = renderer.ActiveMesh;
-				mesh = group.MeshAt(renderer, mesh, i);
+				mesh = group.MeshAt(renderer.Proxy, mesh, i);
 				if (mesh == null)
 					continue;
 				renderers++;

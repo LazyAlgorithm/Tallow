@@ -28,7 +28,7 @@ struct Chunk
 	/// this chunk lacks.
 	public Span<T> Field<T>(int term) where T : struct
 	{
-		let data = (T*)Flecs.IterField(mIterator, (int32)term, sizeof(T));
+		let data = (T*)Flecs.IterField(mIterator, (int32)term, strideof(T));
 		if (data == null)
 			return .();
 		Debug.Assert(Flecs.IterFieldIsSelf(mIterator, (int32)term), "Query term matched a shared value; Tallow queries only match an entity's own data");

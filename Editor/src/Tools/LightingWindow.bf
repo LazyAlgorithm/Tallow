@@ -191,7 +191,7 @@ extension EditorApp
 	void MarkBaked(Transform transform, bool baked)
 	{
 		let renderer = transform.GameObject.GetComponent<MeshRenderer>();
-		if (renderer != null)
+		if (renderer)
 			renderer.bakedLighting = baked;
 		for (let child in transform.Children)
 			MarkBaked(child, baked);

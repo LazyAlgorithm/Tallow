@@ -16,9 +16,24 @@ namespace Tallow;
 struct ReflectionProbe : ComponentHandle<ReflectionProbeData>
 {
 	/// Its cube and capture progress; null until it is first captured.
-	ReflectionProbeState State => ComponentState<ReflectionProbeState>.Get(mGameObject.Scene.World, mGameObject.Entity);
+	ReflectionProbeState State
+	{
+		get
+		{
+			CheckValid();
+			return ComponentState<ReflectionProbeState>.Get(mGameObject.Scene.World, mGameObject.Entity);
+		}
+	}
+
 	/// The same, made if missing: only for a valid probe (the state is freed when the component goes).
-	ReflectionProbeState MadeState => ComponentState<ReflectionProbeState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+	ReflectionProbeState MadeState
+	{
+		get
+		{
+			CheckValid();
+			return ComponentState<ReflectionProbeState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+		}
+	}
 
 	/// The cube with its rougher levels, once captured.
 	public bgfx.TextureHandle Cube

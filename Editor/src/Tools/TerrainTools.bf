@@ -348,7 +348,7 @@ extension EditorApp
 		}
 		// Any model can be made destructible: this takes the one the object is already drawn with.
 		let drawn = voxels.GetComponent<MeshRenderer>();
-		if (drawn != null && !drawn.mesh.IsEmpty && !drawn.mesh.StartsWith("builtin:") && (voxels.shape != .Mesh || voxels.mesh != drawn.mesh))
+		if (drawn && !drawn.mesh.IsEmpty && !drawn.mesh.StartsWith("builtin:") && (voxels.shape != .Mesh || voxels.mesh != drawn.mesh))
 		{
 			if (ImGui.Button("Make This Model Destructible"))
 			{
@@ -669,7 +669,7 @@ extension EditorApp
 	void CarveWithBrush(GameObject selected, VoxelObject voxels, Ray ray)
 	{
 		let renderer = selected.GetComponent<MeshRenderer>();
-		let mesh = renderer != null ? renderer.ActiveMesh : null;
+		let mesh = renderer ? renderer.ActiveMesh : null;
 		if (mesh == null)
 			return;
 		let toLocal = selected.Transform.WorldToLocal;

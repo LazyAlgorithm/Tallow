@@ -208,7 +208,7 @@ class OcclusionBuffer
 	public void Build(Scene scene, CameraData camera, Frustum frustum)
 	{
 		Begin(camera);
-		List<(float size, MeshRenderer renderer, Mesh mesh)> candidates = scope .();
+		List<(float size, RenderProxy renderer, Mesh mesh)> candidates = scope .();
 		let tanHalf = Math.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
 		for (let renderer in scene.Renderers)
 		{

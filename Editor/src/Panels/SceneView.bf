@@ -413,7 +413,7 @@ extension EditorApp
 		if (selected != null && EditedModel == null)
 		{
 			let renderer = selected.GetComponent<MeshRenderer>();
-			if (renderer != null && renderer.ActiveMesh != null)
+			if (renderer && renderer.ActiveMesh != null)
 				Gizmos.Lines.Box(renderer.ActiveMesh.Bounds, selected.Transform.LocalToWorld, .(1.0f, 0.62f, 0.15f, 1));
 		}
 		BuildSceneToolGizmos();

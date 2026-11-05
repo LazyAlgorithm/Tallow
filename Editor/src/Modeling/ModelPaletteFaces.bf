@@ -47,7 +47,7 @@ extension EditorApp
 	void DrawPaletteFaces(ModelMesh model, EditMesh mesh)
 	{
 		let renderer = model.GameObject.GetComponent<MeshRenderer>();
-		let material = renderer?.SharedMaterial;
+		let material = renderer ? renderer.SharedMaterial : null;
 		if (material == null || !material.IsPalette)
 			return;
 		ImGui.SeparatorText("Palette faces");

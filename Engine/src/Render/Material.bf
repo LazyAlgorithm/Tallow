@@ -896,9 +896,8 @@ class Material
 		if (sMadeInCode < sSweepAt || !FreeUnusedMaterials || Scene.Active == null)
 			return;
 		let used = scope HashSet<Material>();
-		for (let component in Scene.Active.ComponentsOfType(typeof(MeshRenderer)))
+		for (let renderer in Scene.Active.FindComponents<MeshRenderer>(.. scope .()))
 		{
-			let renderer = (MeshRenderer)component;
 			if (renderer.SharedMaterial != null)
 				used.Add(renderer.SharedMaterial);
 			if (renderer.RuntimeParts != null)
