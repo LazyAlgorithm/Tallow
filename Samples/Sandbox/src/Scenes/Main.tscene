@@ -688,7 +688,7 @@ field hiddenParts ""
 field shadowOnlyParts ""
 field partColors ""
 component Tallow.Animator enabled 1
-field clips "Person_Rigged_1.tanim"
+field clips "Animations/Person_Rigged_1.tanim"
 field defaultClip "Idle"
 field speed 1
 field controller ""
