@@ -237,7 +237,90 @@ extension EditorApp
 			gameObject.RemoveComponent(remove);
 			MarkDirty();
 		}
+		DrawDataSections(gameObject, fields);
 		DrawAddComponent(gameObject);
+	}
+
+	// ---- Data components ([Component] structs in the object's entity, DataComponents) ----
+
+	/// The copied data component: its type and bytes (data components hold plain values only).
+	Type mDataClipboardType;
+	List<uint8> mDataClipboard = new .() ~ delete _;
+
+	void DrawDataSections(GameObject gameObject, List<FieldRef> fields)
+	{
+		let data = scope List<DataComponents.Info>();
+		DataComponents.On(gameObject, data);
+		DataComponents.Info remove = null;
+		for (let info in data)
+		{
+			ImGui.PushID(info.index);
+			if (DrawDataSection(gameObject, info, fields))
+				remove = info;
+			ImGui.PopID();
+		}
+		if (remove != null)
+		{
+			gameObject.RemoveData(remove.type);
+			MarkDirty();
+		}
+	}
+
+	/// One data component: a header with its menu, and its fields. True when its menu asked to remove it.
+	bool DrawDataSection(GameObject gameObject, DataComponents.Info info, List<FieldRef> fields)
+	{
+		let title = scope String();
+		NiceName(info.name, title);
+		ImGui.Separator();
+		let open = ImGui.CollapsingHeader(scope String()..AppendF("      {}###data", title).CStr(), ImGui.TreeFlags.DefaultOpen | ImGui.TreeFlags.AllowOverlap);
+		bool remove = false;
+		let size = info.type.Size;
+		if (ImGui.BeginPopupContextItem("DataMenu"))
+		{
+			let value = (uint8*)gameObject.GetData(info.type);
+			if (ImGui.MenuItem("Reset"))
+			{
+				Internal.MemSet(value, 0, size);
+				MarkDirty();
+			}
+			if (ImGui.MenuItem("Copy Component"))
+			{
+				mDataClipboardType = info.type;
+				mDataClipboard.Clear();
+				mDataClipboard.AddRange(Span<uint8>(value, size));
+			}
+			if (ImGui.MenuItem("Paste Component Values", null, false, mDataClipboardType == info.type))
+			{
+				Internal.MemCpy(value, mDataClipboard.Ptr, size);
+				MarkDirty();
+			}
+			ImGui.Separator();
+			if (ImGui.MenuItem("Remove Component"))
+				remove = true;
+			ImGui.EndPopup();
+		}
+		ImGui.SameLine(30);
+		ImGui.TextColored(Icons.ComponentColor, Icons.Transform);
+		ImGui.SameLine(ImGui.GetWindowWidth() - 30);
+		if (ImGui.SmallButton(Icons.Menu))
+			ImGui.OpenPopup("DataMenu");
+		if (!open || remove)
+			return remove;
+		fields.Clear();
+		DataComponents.GetFields(info.type, gameObject.GetData(info.type), fields);
+		bool changed = false;
+		if (fields.Count > 0 && BeginPropertyTable("datafields"))
+		{
+			for (let field in fields)
+			{
+				if (!field.hidden)
+					changed |= DrawField(field);
+			}
+			ImGui.EndTable();
+		}
+		if (changed)
+			MarkDirty();
+		return false;
 	}
 
 	/// The object's icon, active toggle and name.
@@ -499,6 +582,26 @@ extension EditorApp
 			if (!searching)
 				ImGui.EndMenu();
 		}
+		// Data components: [Component] structs, for systems (docs/ecs-plan.md).
+		if (!DataComponents.Types.IsEmpty && (searching || ImGui.BeginMenu("Data")))
+		{
+			for (let info in DataComponents.Types)
+			{
+				let label = scope String();
+				NiceName(info.name, label);
+				if (searching && !info.name.Contains(mComponentSearch, true) && !label.Contains(mComponentSearch, true) && !StringView("Data").Contains(mComponentSearch, true))
+					continue;
+				let has = gameObject.GetData(info.type) != null;
+				if (ImGui.Selectable(scope $"{StringView(Icons.Transform)}  {label}##data{info.fullName}" , false, has ? ImGui.SelectableFlags.Disabled : 0))
+				{
+					gameObject.AddData(info.type);
+					MarkDirty();
+					ImGui.CloseCurrentPopup();
+				}
+			}
+			if (!searching)
+				ImGui.EndMenu();
+		}
 		if (mComponentClipboard.HasData)
 		{
 			ImGui.Separator();
@@ -664,7 +767,7 @@ extension EditorApp
 		ImGui.TableNextColumn();
 		ImGui.PushID(field.ptr);
 		defer ImGui.PopID();
-		if (ImGui.TreeNode(scope $"{label}###list", open ? 1 << 5 : 0) != open)
+		if (ImGui.TreeNode(scope $"{label}###list" , open ? 1 << 5 : 0) != open)
 		{
 			open = !open;
 			if (!mToggledCollections.Remove(key))
@@ -822,7 +925,7 @@ extension EditorApp
 				ImGui.EndCombo();
 			}
 			return changed;
-		case .List, .Array:
+		case .List,.Array:
 			// Not nested: a list's elements are single values.
 			return false;
 		}

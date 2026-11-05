@@ -187,6 +187,7 @@ static class ImGui
 		public const int32 NoAutoClosePopups = 1 << 0;
 		public const int32 SpanAllColumns = 1 << 1;
 		public const int32 AllowDoubleClick = 1 << 2;
+		public const int32 Disabled = 1 << 3;
 	}
 
 	public static class HoveredFlags

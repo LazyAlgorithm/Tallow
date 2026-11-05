@@ -344,8 +344,27 @@ extension ScriptReload
 				return false;
 		}
 		let migration = scope ScriptStateMigration();
+		// Data components as text, read back by field name once the new types are in (a same-size struct may have
+		// renamed or moved its fields; a size change refuses the reload above).
+		let data = scope List<(GameObject gameObject, String text)>();
+		defer
+		{
+			for (let entry in data)
+				delete entry.text;
+		}
 		if (scene != null)
+		{
 			migration.Capture(scene, updates);
+			for (let gameObject in scene.Objects)
+			{
+				let text = new String();
+				SceneSerializer.SaveData(gameObject, text);
+				if (text.IsEmpty)
+					delete text;
+				else
+					data.Add((gameObject, text));
+			}
+		}
 		#if BF_PLATFORM_LINUX
 		if (!MakeModuleDataWritable(path, maps, pages, error))
 			return false;
@@ -371,12 +390,17 @@ extension ScriptReload
 				sCanonicalTypes[ids[i]] = table[i];
 		}
 		ComponentRegistry.Refresh();
+		DataComponents.Refresh();
 		committed = true;
 		KeepModule(module);
 		mModules.Add(module.handle);
 		mCurrentModule = module.handle;
 		if (scene != null)
+		{
 			migration.Restore(scene);
+			for (let entry in data)
+				SceneSerializer.LoadData(entry.gameObject, entry.text);
+		}
 		return true;
 #else
 		error.Set("Script reload needs a 64-bit Linux or Windows debug build.");

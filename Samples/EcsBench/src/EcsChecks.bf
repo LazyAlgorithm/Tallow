@@ -203,6 +203,13 @@ static class EcsChecks
 		Expect(copy != null && copy.HasComponent<Motion>() && copy.GetComponent<Motion>().velocity.y == 2 && copy.GetComponent<Motion>().spin.y == 90, "data component values survive save and load");
 		Expect(copy != null && copy.HasComponent<Pose>() && copy.Transform.LocalPosition.x == 5, "every data component and the transform survive");
 
+		// What script reload does: data blocks out, values changed, blocks read back by field name.
+		let blocks = scope String();
+		SceneSerializer.SaveData(cube, blocks);
+		cube.GetComponent<Motion>().velocity = .(9, 9, 9);
+		SceneSerializer.LoadData(cube, blocks);
+		Expect(cube.GetComponent<Motion>().velocity.y == 2 && cube.GetComponent<Motion>().spin.y == 90, "SaveData and LoadData put data back by field name");
+
 		cube.RemoveComponent<Motion>();
 		Expect(!cube.HasComponent<Motion>() && cube.HasComponent<Pose>(), "RemoveComponent<T> for a data component");
 	}

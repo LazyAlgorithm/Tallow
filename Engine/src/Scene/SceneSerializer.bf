@@ -144,8 +144,18 @@ static class SceneSerializer
 			}
 		}
 		// Data components ([Component] structs in the object's entity), after the scripts.
+		SaveData(gameObject, text);
+		for (let child in transform.Children)
+			SaveObject(child.GameObject, text, false, skip);
+	}
+
+	/// An object's data components as "data" blocks: in scene files, and across a script reload (ScriptReloadStructural)
+	/// so that values follow their fields by name if a struct's fields were renamed or moved.
+	public static void SaveData(GameObject gameObject, String text)
+	{
 		let data = scope List<DataComponents.Info>();
 		DataComponents.On(gameObject, data);
+		let fields = scope List<FieldRef>();
 		for (let info in data)
 		{
 			text.AppendF("data {}\n", info.fullName);
@@ -158,8 +168,43 @@ static class SceneSerializer
 				text.Append('\n');
 			}
 		}
-		for (let child in transform.Children)
-			SaveObject(child.GameObject, text, false, skip);
+	}
+
+	/// Puts back data blocks written by SaveData: each data component is set to its type's zero value, then its
+	/// fields that still exist are read by name.
+	public static void LoadData(GameObject gameObject, StringView text)
+	{
+		let fields = scope List<FieldRef>();
+		let tokens = scope List<StringView>();
+		let storage = scope List<String>();
+		let references = scope List<(FieldRef field, uint32 id, int index)>();
+		defer
+		{
+			for (let s in storage)
+				delete s;
+		}
+		bool reading = false;
+		for (let line in text.Split('\n'))
+		{
+			tokens.Clear();
+			Tokenize(line, tokens, storage);
+			if (tokens.Count < 2)
+				continue;
+			if (tokens[0] == "data")
+			{
+				fields.Clear();
+				reading = false;
+				if (let info = DataComponents.Find(tokens[1]))
+				{
+					let value = gameObject.AddData(info.type);
+					Internal.MemSet(value, 0, info.type.Size);
+					DataComponents.GetFields(info.type, value, fields);
+					reading = true;
+				}
+			}
+			else if (tokens[0] == "field" && reading)
+				ReadSavedField(fields, tokens, references);
+		}
 	}
 
 	public static void WriteValue(FieldRef field, String text)

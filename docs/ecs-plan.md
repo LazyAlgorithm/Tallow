@@ -647,6 +647,32 @@ class Hover : Script
 run; the Showcase self-test reports `SHOWCASE_READY rooms=8 probes=2` with no errors; the Sandbox runs in game
 and editor with its ported scripts. Not yet built for Windows or the web.
 
+## Phase 3 progress
+
+Scripts and GameObjects stayed classes in Phase 2, so the editor already handled them; Phase 3 is about data
+components (`[Component]` structs in an object's entity) taking part everywhere scripts do.
+
+- [x] **3a. Data components on objects and in files.** `AddComponent<T>(value)`, `GetComponent<T>` (a pointer,
+  valid until the object's data changes), `HasComponent<T>`, `RemoveComponent<T>` for structs, beside the class
+  versions; by-type versions (`AddData`, `GetData`, `RemoveData`) for the editor. `DataComponents` lists a
+  project's data types and their plain-value fields; `[EngineData]` hides engine bookkeeping (`ObjectLink`,
+  `InactiveSelf`, `TransformData`). Scene files keep them as `data <type>` blocks of `field` lines after the
+  scripts. Map checks report a data type the game lacks.
+- [x] **3b. Editor.** The Inspector shows each data component after the scripts, with its fields, and a menu:
+  Reset, Copy, Paste Values, Remove. Add Component has a Data group. Undo, the play-mode snapshot, the prefab
+  editor and prefab files all go through `SceneSerializer`, so they carry data components without changes of
+  their own; prefab instances are copies (no override records), so they keep whatever the file has.
+  Checked: a scene with data opens in the editor and the Inspector shows the values; saving from the editor
+  writes them back unchanged.
+- [x] **3c. Hot reload.** Data components are written out as text before a script reload and read back by field
+  name after it, so reordered fields keep their values and renamed ones start at zero. A size change already
+  makes the reload ask for a full rebuild, which reloads the scene from text. New data types appear in Add
+  Component after a reload. Checked by `EcsChecks` (the save and read-back round trip); not yet exercised with a
+  live reload.
+- [ ] 3d. Hierarchy reading `ChildOf`; Flecs Explorer menu item (Debug builds).
+- [ ] Phase 3 exit: create, edit, save, reload and play a scene entirely in the editor; prefab instances survive
+  edit, save, load and play.
+
 ## Benchmark results
 
 See "Phase 1 results" above.
