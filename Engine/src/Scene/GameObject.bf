@@ -29,6 +29,7 @@ class GameObject
 	public String SpawnedFrom ~ delete _;
 
 	Scene mScene;
+	Entity mEntity;
 	bool mActive = true;
 	bool mDestroyed;
 	/// Being taken out of the scene (Scene.DestroyTogether).
@@ -161,6 +162,8 @@ class GameObject
 
 	/// The scene the object is in.
 	public Scene Scene { [Inline] get => mScene; }
+	/// The object's entity in its scene's World (docs/ecs-plan.md), or Entity.Null outside a scene.
+	public Entity Entity { [Inline] get => mEntity; }
 	/// Whether this object itself is switched on, whatever its parents are (see ActiveInHierarchy).
 	public bool ActiveSelf => mActive;
 	/// True once Scene.Destroy has been called on the object; it is freed at the end of the frame.
@@ -190,6 +193,13 @@ class GameObject
 			return;
 		let wasActive = ActiveInHierarchy;
 		mActive = active;
+		if (mScene != null && !mEntity.IsNull)
+		{
+			if (active)
+				mScene.World.Remove<InactiveSelf>(mEntity);
+			else
+				mScene.World.Add<InactiveSelf>(mEntity);
+		}
 		let isActive = ActiveInHierarchy;
 		if (wasActive != isActive && mScene != null && mScene.IsPlaying)
 			NotifyActiveChanged(isActive);

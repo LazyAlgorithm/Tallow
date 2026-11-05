@@ -397,6 +397,32 @@ Reading the numbers:
 
 **Go/no-go:** the numbers support going ahead with Phase 2. The final decision is the project owner's.
 
+## Phase 2 progress
+
+Goal for this phase, from the project owner: scripts work as close to today's as possible.
+
+### Decisions
+
+- **`GameObject` stays a class.** It is the engine-owned front for its entity, not the value type described
+  under "GameObject" above. Beef treats `struct == null` as always false and lets no operator change that, and a
+  class's `==` operator is ignored when comparing with `null`. A struct GameObject would silently turn every
+  `target == null` in existing scripts into `false`. Dangling is handled as it is today: when an object is
+  destroyed, `Scene` clears every script field and list entry that pointed at it, so `target == null` becomes
+  true, as in Unity.
+- **Scripts keep running in registration order**, not sorted by type as "Frame and tick order" suggests. Sorting
+  would change the order of `Update` calls between scripts.
+
+### Steps
+
+- [x] **1. An entity for every GameObject.** `Scene.World` holds one entity per object (`GameObject.Entity`),
+  with `ObjectLink` pointing back to the object, `ChildOf` following `Transform.SetParent`, and an `InactiveSelf`
+  tag while `ActiveSelf` is false. The entity is deleted with its object. Checked by `EcsChecks.SceneChecks`;
+  the Sandbox runs.
+- [ ] 2. Transform data (local pose, world matrix, dirty flags) stored in the entity, with the `Transform` API
+  unchanged.
+- [ ] 3. `Component` renamed `Script` for behaviours.
+- [ ] 4. Scene's object and component lists replaced by queries; frame and tick order run through the world.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

@@ -218,6 +218,9 @@ class Transform
 			mParent.Children.Add(this);
 		else
 			mGameObject.Scene?.[Friend]mRoots.Add(mGameObject);
+		let scene = mGameObject.Scene;
+		if (scene != null && !mGameObject.Entity.IsNull)
+			scene.World.SetParent(mGameObject.Entity, mParent != null ? mParent.GameObject.Entity : .Null);
 		if (keepWorldPose)
 		{
 			let local = mParent != null ? mParent.WorldToLocal * world : world;

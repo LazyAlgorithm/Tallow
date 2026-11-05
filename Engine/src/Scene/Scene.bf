@@ -181,6 +181,9 @@ class Scene
 	public String Path = new .() ~ delete _;
 	/// The scene's sky, lighting, fog and screen effects.
 	public SceneEnvironment Environment = new .() ~ delete _;
+	/// The ECS storage behind the scene's objects (docs/ecs-plan.md): one entity for each GameObject, parented with
+	/// ChildOf as the objects are. Deleted after the objects (the destructor clears the scene first).
+	public World World = new .() ~ delete _;
 
 	List<GameObject> mRoots = new .() ~ delete _;
 	List<GameObject> mObjects = new .() ~ delete _;
@@ -316,8 +319,11 @@ class Scene
 
 	/// Classes of the engine with no FixedUpdate, Update, LateUpdate or OnFrame, which most of a big scene is made of.
 	/// Exact classes only: a game's class derived from one may well have them.
-	static HashSet<Type> sIdleTypes = new .() { typeof(MeshRenderer), typeof(Light), typeof(Camera), typeof(Rigidbody),
-		typeof(BoxCollider), typeof(SphereCollider), typeof(CapsuleCollider), typeof(MeshCollider) } ~ delete _;
+	static HashSet<Type> sIdleTypes = new .()
+		{
+			typeof(MeshRenderer), typeof(Light), typeof(Camera), typeof(Rigidbody),
+			typeof(BoxCollider), typeof(SphereCollider), typeof(CapsuleCollider), typeof(MeshCollider)
+		} ~ delete _;
 
 	void IndexTag(GameObject gameObject, StringView tag, bool add)
 	{
@@ -433,6 +439,9 @@ class Scene
 		mNextId = Math.Max(mNextId, useId + 1);
 		gameObject.Id = useId;
 		gameObject.[Friend]mScene = this;
+		let entity = World.Create();
+		World.Set<ObjectLink>(entity, .() { gameObject = gameObject });
+		gameObject.[Friend]mEntity = entity;
 		mObjects.Add(gameObject);
 		mById[useId] = gameObject;
 		mRoots.Add(gameObject);
@@ -845,6 +854,9 @@ class Scene
 			mDestroyQueue.Remove(gameObject);
 		for (int i < gameObject.TagCount)
 			IndexTag(gameObject, gameObject.GetTag(i), false);
+		// Children went first (above), so this never takes another object's entity with it.
+		if (World.IsAlive(gameObject.Entity))
+			World.Delete(gameObject.Entity);
 		delete gameObject;
 	}
 

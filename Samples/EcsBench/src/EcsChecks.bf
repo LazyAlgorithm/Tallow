@@ -70,6 +70,31 @@ static class EcsChecks
 			break;
 		world.Delete(entities[0]);
 		Expect(!world.IsAlive(entities[0]) && world.Count<Pose>() == 999, "Delete");
+		SceneChecks();
 		return sFailures;
+	}
+
+	/// GameObjects and their entities stay in step (docs/ecs-plan.md, Phase 2).
+	static void SceneChecks()
+	{
+		let scene = scope Scene();
+		let world = scene.World;
+		let parent = scene.CreateGameObject("Parent");
+		let child = scene.CreateGameObject("Child", parent.Transform);
+		Expect(world.IsAlive(parent.Entity) && world.IsAlive(child.Entity), "each GameObject has a live entity");
+		Expect(world.Get<ObjectLink>(child.Entity).gameObject == child, "ObjectLink points back at the GameObject");
+		Expect(world.Parent(child.Entity) == parent.Entity, "ChildOf follows the hierarchy");
+		child.Transform.SetParent(null);
+		Expect(world.Parent(child.Entity).IsNull, "SetParent(null) clears ChildOf");
+		child.Transform.SetParent(parent.Transform);
+		child.SetActive(false);
+		Expect(world.Has<InactiveSelf>(child.Entity), "SetActive(false) tags the entity");
+		child.SetActive(true);
+		Expect(!world.Has<InactiveSelf>(child.Entity), "SetActive(true) clears the tag");
+		let childEntity = child.Entity;
+		let parentEntity = parent.Entity;
+		scene.DestroyImmediate(parent);
+		Expect(!world.IsAlive(parentEntity) && !world.IsAlive(childEntity), "destroying objects deletes their entities");
+		Expect(world.Count<ObjectLink>() == 0, "no entities left behind");
 	}
 }
