@@ -1114,6 +1114,11 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   FixedUpdate did. Checked by `EcsChecks.SavedTransformChecks`: defaults, a save with place and velocity, loading
   them back while playing, and a velocity loaded before play given on the first tick. The Gallery self-test passes.
 
+- [x] **StreamingSource.** A data-only handle (`extraRadius`); the streamer finds sources with
+  `scene.Components<StreamingSource>` instead of the `Scene.StreamingSources` list they registered in (removed),
+  and streaming keeps objects with one by `HasComponent`. The editor's `--world-streaming-test` passes on a
+  scratch project (its walker has a source: loading round it, stand-ins, the floating origin).
+
 ## Benchmark results
 
 See "Phase 1 results" above.

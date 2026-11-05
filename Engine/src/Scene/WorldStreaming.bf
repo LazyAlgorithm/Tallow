@@ -8,14 +8,21 @@ namespace Tallow;
 /// What a streamed world loads round (docs/world-streaming.md): put one on the player (on a server every player's
 /// object has one, so the world is loaded round each of them), a vehicle or a camera. With none in the scene, the
 /// world streams round the scene's cameras.
-[Component]
-class StreamingSource : Component
+///
+/// A handle (ComponentHandle) holding only data: the streamer finds the sources with a query.
+[Component, HandleFields]
+struct StreamingSource : ComponentHandle<StreamingSourceData>
+{
+}
+
+/// A Streaming Source's settings, in its entity.
+[Component, HandleData]
+struct StreamingSourceData
 {
 	/// Added to the scene's Load Radius for this source: a fast vehicle may want more of the world ahead of it.
 	public float extraRadius = 0;
 
-	public override void OnRegister() => Scene.StreamingSources.Add(this);
-	public override void OnUnregister() => Scene.StreamingSources.Remove(this);
+	public this() { }
 }
 
 /// World streaming (docs/world-streaming.md): one large scene, saved as a grid of cells that load and unload round
@@ -121,11 +128,11 @@ class WorldStreamer
 		bool Keeps(GameObject gameObject)
 		{
 			let light = gameObject.GetComponent<Light>();
-			if ((light && light.type == .Directional) || gameObject.HasComponent<Camera>() || gameObject.HasComponent<SpawnPoint>())
+			if ((light && light.type == .Directional) || gameObject.HasComponent<Camera>() || gameObject.HasComponent<SpawnPoint>() || gameObject.HasComponent<StreamingSource>())
 				return true;
 			for (let component in gameObject.Components)
 			{
-				if (component is NetworkIdentity || component is VoxelTerrain || component is StreamingSource)
+				if (component is NetworkIdentity || component is VoxelTerrain)
 					return true;
 			}
 			for (let child in gameObject.Transform.Children)
@@ -449,9 +456,9 @@ class WorldStreamer
 	/// Where the world streams round: the Streaming Sources, else the scene's cameras.
 	public void Sources(Scene scene, List<(Vector3 position, float extra)> sources)
 	{
-		for (let source in scene.StreamingSources)
+		for (let source in scene.Components<StreamingSource>(.. scope .()))
 		{
-			if (source.IsActiveAndEnabled)
+			if (source.GameObject.ActiveInHierarchy)
 				sources.Add((source.Transform.Position, source.extraRadius));
 		}
 		if (!sources.IsEmpty)

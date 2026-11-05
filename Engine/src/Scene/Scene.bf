@@ -371,8 +371,6 @@ class Scene
 		}
 	}
 
-	/// What the world streams around (docs/world-streaming.md).
-	public List<StreamingSource> StreamingSources = new .() ~ delete _;
 	/// The scene's world streaming, once it has used it (WorldStreaming.Of).
 	public WorldStreamer Streamer ~ delete _;
 	// Kept as the entity, which Flecs can tell is gone, rather than the object, which would dangle.
