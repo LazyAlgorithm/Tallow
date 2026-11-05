@@ -7,8 +7,8 @@ namespace Tallow;
 /// Put [Component] on every component class. It keeps the type, its constructor and its fields
 /// in the reflection data so the class can be created by name when a scene loads, listed in
 /// the Add Component menu, and edited in the Inspector. Beef does not inherit attributes, so
-/// each subclass needs its own.
-[AttributeUsage(.Class, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .All, AlwaysIncludeUser = .AssumeInstantiated | .IncludeAllMethods)]
+/// each subclass needs its own. On a struct it marks an ECS data component (docs/ecs-plan.md).
+[AttributeUsage(.Class | .Struct, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .All, AlwaysIncludeUser = .AssumeInstantiated | .IncludeAllMethods)]
 struct ComponentAttribute : Attribute
 {
 }

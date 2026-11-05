@@ -395,6 +395,7 @@ class RenderView
 		if (mOcclusionOn)
 			OcclusionCulled = mOcclusion.Culled;
 		GatherFoliage(scene, camera, frustum, castShadows || mHasLocalShadows, shadowRange);
+		GatherInstanced(scene, frustum, castShadows || mHasLocalShadows, camera, shadowRange);
 		Wind.Gather(scene, camera.position, out mWind, ref mWindZone, ref mWindPush);
 		FoliageBender.Gather(scene, camera.position, ref mBender, ref mBenderPush);
 		VisibleRenderers = (int32)(mItems.Count + mViewmodelItems.Count);
@@ -668,6 +669,65 @@ class RenderView
 				item.key = ProbeKey(key, item.probe, item.lightGrid) * 2 + (Mirrored(item.world) ? 1u : 0u);
 				mFoliageItems.Add(item);
 				if (shadows && InShadowRange(item, camera, shadowRange))
+					mShadowItems.Add(item);
+			}
+		}
+	}
+
+	/// Many copies of one mesh, handed in from outside the scene's renderers: the ECS render extract (docs/ecs-plan.md).
+	/// proxy stands in for a Mesh Renderer, carrying the settings every copy shares (as Foliage.Proxy does).
+	public struct InstancedDraws
+	{
+		public MeshRenderer proxy;
+		public Mesh mesh;
+		public Material material;
+		public Span<Matrix4> matrices;
+	}
+
+	/// Called while a scene's draws are gathered, for each view; add to the list to have instances drawn. Lists of
+	/// matrices must stay valid until the frame is submitted.
+	public static Event<delegate void(Scene scene, List<InstancedDraws> output)> InstancedSources ~ _.Dispose();
+	List<InstancedDraws> mInstancedDraws = new .() ~ delete _;
+
+	/// Every instance from InstancedSources in view (or casting a shadow into it), drawn like foliage: in runs that are
+	/// already grouped by mesh and material, so they are not sorted.
+	void GatherInstanced(Scene scene, Frustum frustum, bool castShadows, CameraData camera, float shadowRange)
+	{
+		if (!InstancedSources.HasListeners)
+			return;
+		mInstancedDraws.Clear();
+		InstancedSources(scene, mInstancedDraws);
+		for (let draws in mInstancedDraws)
+		{
+			let mesh = draws.mesh;
+			if (mesh == null || !mesh.HasGpuData || draws.proxy == null)
+				continue;
+			let key = MakeKey(draws.proxy, mesh, draws.material);
+			let localBounds = mesh.Bounds;
+			let shadows = castShadows && draws.proxy.castShadows;
+			for (let world in draws.matrices)
+			{
+				let bounds = localBounds.Transformed(world);
+				let center = bounds.Center;
+				let radius = bounds.Extents.Length;
+				let drawn = frustum.Intersects(bounds);
+				let shadow = shadows && (center - camera.position).Length - radius < shadowRange;
+				if (!drawn && !shadow)
+					continue;
+				RenderItem item;
+				item.mesh = mesh;
+				item.renderer = draws.proxy;
+				item.material = draws.material;
+				item.world = world;
+				item.tint = .White;
+				item.center = center;
+				item.radius = radius;
+				item.probe = Reflections.Pick(item.center, item.radius);
+				item.lightGrid = LightGridAt(item.center);
+				item.key = ProbeKey(key, item.probe, item.lightGrid) * 2 + (Mirrored(item.world) ? 1u : 0u);
+				if (drawn)
+					mFoliageItems.Add(item);
+				if (shadow)
 					mShadowItems.Add(item);
 			}
 		}

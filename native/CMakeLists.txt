@@ -10,6 +10,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(TP ${CMAKE_CURRENT_SOURCE_DIR}/../third_party)
+# Flecs Explorer support (REST, HTTP, stats, JSON) in a Release native build, for the editor (docs/ecs-plan.md).
+option(TALLOW_FLECS_EXPLORER "Build Flecs's Explorer addons into a Release native build" OFF)
 
 if(EMSCRIPTEN)
 	# Emscripten turns SSE into WebAssembly SIMD. bx asks for SSE 4.2 on every non-MSVC compiler, and Jolt's headers
@@ -145,6 +147,20 @@ if(MSVC AND CMAKE_C_COMPILER_ID MATCHES "Clang")
 endif()
 add_subdirectory(${TP}/opus opus EXCLUDE_FROM_ALL)
 
+# ---- Flecs v4.2.0 (entity component system, docs/ecs-plan.md), vendored single-file distribution ----
+# A custom build with only the addons Tallow uses. The Explorer's addons (REST, HTTP, stats, JSON) are left out of
+# Release builds, which are what games ship with.
+add_library(tallow_flecs OBJECT ${TP}/flecs/flecs.c tallow_ecs.c)
+target_include_directories(tallow_flecs PRIVATE ${TP}/flecs)
+target_compile_definitions(tallow_flecs PRIVATE FLECS_CUSTOM_BUILD FLECS_SYSTEM FLECS_PIPELINE FLECS_META FLECS_OS_API_IMPL FLECS_LOG
+	$<$<CONFIG:Debug>:FLECS_REST FLECS_HTTP FLECS_STATS FLECS_JSON>)
+if(TALLOW_FLECS_EXPLORER)
+	target_compile_definitions(tallow_flecs PRIVATE FLECS_REST FLECS_HTTP FLECS_STATS FLECS_JSON)
+endif()
+if(NOT MSVC)
+	target_compile_options(tallow_flecs PRIVATE -std=gnu99)
+endif()
+
 # ---- Tallow shim: Dear ImGui (docking) + ImGuizmo + stb_image + cgltf ----
 add_library(tallow_native STATIC
 	${TP}/cimgui/cimgui.cpp
@@ -169,6 +185,7 @@ add_library(tallow_native STATIC
 	$<TARGET_OBJECTS:tallow_navigation>
 	$<TARGET_OBJECTS:tallow_collision_support>
 	$<TARGET_OBJECTS:tallow_softbody>
+	$<TARGET_OBJECTS:tallow_flecs>
 	tallow_audio.c
 	tallow_web.c
 	tallow_http.c

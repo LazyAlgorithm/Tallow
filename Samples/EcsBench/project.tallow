@@ -1,0 +1,3 @@
+name = EcsBench
+startScene = Scenes/Bench.tscene
+engine = /home/zerker24/GitWorktrees/tallow-ecs

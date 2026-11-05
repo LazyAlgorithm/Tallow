@@ -1,0 +1,41 @@
+scene "Bench"
+env skyZenith 0.16 0.36 0.72 1
+env skyHorizon 0.62 0.76 0.9 1
+env skyGround 0.28 0.27 0.26 1
+env ambientSky 0.42 0.5 0.62 1
+env ambientGround 0.22 0.2 0.18 1
+env fogColor 0.62 0.76 0.9 1
+env ambientIntensity 0.55
+env fogDensity 0
+env exposure 1
+env bloom 0
+env bloomThreshold 1
+env shadowDistance 160
+object 1 parent 0 active 1 name "Main Camera"
+transform 0 0 -60 0 0 0 1 1 1 1
+component Tallow.Camera enabled 1
+field fieldOfView 60
+field nearClip 0.1
+field farClip 2000
+field orthographic 0
+field orthographicSize 5
+field viewmodelLayer -1
+field viewmodelFieldOfView 55
+field viewmodelNearClip 0.01
+field viewmodelCastsShadows 0
+field occlusionCulling 0
+component EcsBench.Bench enabled 1
+object 2 parent 0 active 1 name "Directional Light"
+transform 0 6 0 0.4082179 -0.23456971 0.10938165 0.87542605 1 1 1
+component Tallow.Light enabled 1
+field type Directional
+field color 1 0.96 0.88 1
+field intensity 1.5
+field range 10
+field inverseSquare 0
+field bakedOnly 0
+field shadowMaskChannel -1
+field innerSpotAngle -1
+field spotAngle 45
+field castShadows 0
+field shadowStrength 1

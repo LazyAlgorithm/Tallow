@@ -314,13 +314,79 @@ Each phase lists its exit check. Sizes are relative: S, M, L.
 - **Possible later addition:** a second scripting language (C# or Luau) can bind to the same component
   registry and handles. Nothing in this plan blocks it.
 
+## Phase 1 results (2026-11-04)
+
+### What was built
+
+- `third_party/flecs`: Flecs **v4.1.6**, not v4.2.0. v4.2.0 came out on 2026-11-04 and removes
+  `ecs_defer_begin` / `ecs_defer_end`, which this plan relies on. It also moves cached queries and prefabs
+  behind new build flags. Look at it again later, as its own change.
+- `native/tallow_ecs.c`, built into `tallow_native` as the `tallow_flecs` object library. Release native builds
+  leave out the Explorer addons unless `-DTALLOW_FLECS_EXPLORER=ON` is set. `tools/build.py` always builds the
+  native libraries as Release, so the editor needs that flag to get the Explorer.
+- `Engine/src/Ecs/`: `Flecs.bf` (shim declarations), `World.bf` (`World`, `Entity`), `ComponentId.bf`, `Query.bf`
+  (`Query<T1>` to `Query<T1, T2, T3, T4>`, `Chunk.Read<T>()` / `Write<T>()`, `ParallelFor`).
+- `[Component]` may now go on structs.
+- `RenderView.InstancedSources`: a minimal render extract hook. Each source hands over runs of matrices for
+  one mesh, which are culled and drawn like foliage, in runs and without sorting. Phase 4 replaces it with the
+  real extract.
+- `Samples/EcsBench` and `tools/run_ecs_bench.py`.
+
+### Decisions made while building it
+
+- **Component ids:** Flecs ids belong to one world, so `ComponentId<T>.Index` is a global index, and
+  `world.Id<T>()` turns it into that world's Flecs id the first time it is used. Field layouts are not passed
+  to `FLECS_META` yet; that comes in Phase 3, when the Inspector needs them.
+- **Threads:** `Query.ParallelFor` runs on Tallow's `Jobs` threads. The world goes read-only, each thread uses
+  its own Flecs stage, and `ecs_worker_iter` splits each table between the threads. Flecs's own thread pool is
+  not used, so the two never compete for cores.
+- **Query arity:** Beef has no variadic generics, so there is one class each for one to four terms.
+- **`GetComponent<T>`:** answered: one name works. Beef picks between overloads by their constraints, so
+  `GetComponent<T>() where T : Script` and `GetComponent<T>() where T : struct, IComponentHandle` live side by
+  side. Checked with BeefBuild 0.43.6.
+
+### Benchmark
+
+These are Release builds on an AMD Ryzen 9 7900X (24 threads) with an RTX 3070 and Vulkan, at 1600×900 with
+vsync off. Each run measured 600 frames after a 120-frame warm-up. "GameObject" is the engine as it is today:
+one GameObject per cube with a `MeshRenderer` and a `Mover` component. The ECS runs used 1 thread and
+`Jobs.ThreadCount` = 16 threads. Run it with `tools/run_ecs_bench.py`.
+
+Frame time, avg / p99 (ms), from one Update to the next (includes the render extract and the submit):
+
+| Objects | GameObject | ECS 1 thread | ECS 16 threads | Memory growth GameObject / ECS |
+| --- | --- | --- | --- | --- |
+| 1,000 | 0.31 / 1.12 | 0.25 / 1.07 | 0.24 / 1.04 | 23 MB / 22 MB |
+| 10,000 | 1.76 / 2.11 | 1.15 / 1.25 | 0.73 / 0.92 | 39 MB / 27 MB |
+| 50,000 | 16.96 / 17.82 | 4.84 / 5.42 | 3.04 / 6.49 | 116 MB / 50 MB |
+| 100,000 | 34.74 / 36.55 | 9.31 / 9.95 | 5.82 / 12.65 | 197 MB / 63 MB |
+
+Update time, avg / p99 (ms): every `Mover.Update`, or the move system:
+
+| Objects | GameObject | ECS 1 thread | ECS 16 threads |
+| --- | --- | --- | --- |
+| 1,000 | 0.03 / 0.04 | 0.04 / 0.06 | 0.03 / 0.04 |
+| 10,000 | 0.38 / 0.38 | 0.52 / 0.57 | 0.11 / 0.19 |
+| 50,000 | 1.79 / 1.83 | 2.19 / 2.38 | 0.38 / 0.52 |
+| 100,000 | 3.57 / 3.62 | 4.20 / 4.30 | 0.70 / 0.89 |
+
+Spawning 100,000 objects took 119 ms as GameObjects and 17 ms as entities.
+
+Reading the numbers:
+
+- The ECS system's update also builds each cube's world matrix. The GameObject path builds its matrices later,
+  during rendering, so single-threaded update times are about even, which is expected. Multithreaded, the
+  system is about 5× faster.
+- Most of the frame time saved comes from the render extract. The GameObject path walks every renderer and
+  sorts the draws. The ECS path hands over columns that are already grouped. At 100,000 objects a frame is
+  3.7× faster on one thread and 6× faster on 16.
+- Memory growth is about a third of today's at 100,000 objects.
+- With 16 threads, the 99th percentile at 50k and 100k is about twice the average. Some frames lose time
+  handing work to the `Jobs` threads. Look into this in Phase 2 (fewer, larger batches, or keeping the workers
+  awake during the frame) before engine systems depend on `ParallelFor`.
+
+**Go/no-go:** the numbers support going ahead with Phase 2. The final decision is the project owner's.
+
 ## Benchmark results
 
-To be filled in at the end of Phase 1.
-
-| Objects | GameObject avg / p99 (ms) | ECS 1 thread avg / p99 (ms) | ECS N threads avg / p99 (ms) | Memory before / after |
-| --- | --- | --- | --- | --- |
-| 1,000 | | | | |
-| 10,000 | | | | |
-| 50,000 | | | | |
-| 100,000 | | | | |
+See "Phase 1 results" above.
