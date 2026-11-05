@@ -1488,6 +1488,7 @@ class Scene
 				Run(component, .OnFrame);
 		}
 		SkinnedMeshRenderer.FrameAll(this);
+		ComputeEffect.FrameAll(this);
 		ParticleSystem.FrameAll(this);
 		LineRenderer.FrameAll(this);
 		TrailRenderer.FrameAll(this);

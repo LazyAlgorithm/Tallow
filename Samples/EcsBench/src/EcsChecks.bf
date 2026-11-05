@@ -123,6 +123,7 @@ static class EcsChecks
 		SceneLoaderChecks();
 		SavedTransformChecks();
 		ViewmodelChecks();
+		ComputeChecks();
 		return sFailures;
 	}
 
@@ -675,6 +676,46 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Compute Effect: defaults, nothing to run without a shader, and (where compute is supported) running every
+	/// frame in edit mode through Scene.RunOnFrames, showing on the Mesh Renderer, and letting go when switched off.
+	static void ComputeChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let o = scene.CreateGameObject("Screen");
+			let renderer = o.AddComponent<MeshRenderer>();
+			let effect = o.AddComponent<ComputeEffect>();
+			Expect(effect.width == 256 && effect.stepsPerFrame == 1 && effect.everyFrame && effect.Texture == null, "an effect has its defaults");
+			Expect(!effect.Step(), "with no shader there is nothing to run");
+			scene.Update();
+			Expect(effect.Texture == null, "and a frame does nothing");
+			// Sandbox's ripple shader and its compiled code, copied in for the check and taken out after.
+			let sandbox = scope String()..AppendF("{}/../../Sandbox/src/Shaders", Assets.ProjectPath);
+			let compiled = scope String()..AppendF("Compiled/{}/Shaders_ripple_tcompute_cs.bin", Gfx.ShaderFolder);
+			let here = scope String()..AppendF("{}/Shaders", Assets.ProjectPath);
+			let copied = Compute.Supported && System.IO.File.Exists(scope $"{sandbox}/{compiled}") &&
+				System.IO.Directory.CreateDirectory(scope $"{here}/Compiled/{Gfx.ShaderFolder}") case .Ok &&
+				System.IO.File.Copy(scope $"{sandbox}/ripple.tcompute", scope $"{here}/ripple.tcompute") case .Ok &&
+				System.IO.File.Copy(scope $"{sandbox}/{compiled}", scope $"{here}/{compiled}") case .Ok;
+			Console.WriteLine(scope $"  (compute supported: {Compute.Supported}, shader copied: {copied})");
+			defer { if (copied) System.IO.Directory.DelTree(here).IgnoreError(); }
+			if (copied)
+			{
+				effect.shader.Set("Shaders/ripple.tcompute");
+				scene.Update();
+				Expect(effect.Texture != null && renderer.TextureOverride.idx == effect.Texture.Texture.idx, "a frame in edit mode runs it and shows it on the renderer");
+				effect.enabled = false;
+				scene.Update();
+				Expect(renderer.TextureOverride.idx == uint16.MaxValue, "switched off, the renderer shows its own texture again");
+			}
+			o.RemoveComponent<ComputeEffect>();
+			Expect(!o.HasComponent<ComputeEffect>(), "it can be removed");
+		}
+		Scene.Active = previous;
 	}
 
 	/// Viewmodel Pose: the edit-mode preview through the handle's OnValidate (from the scene loader too), coming up

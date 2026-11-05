@@ -1127,6 +1127,12 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   `DrawHandleTools`. Checked by `EcsChecks.ViewmodelChecks`: defaults, the preview from OnValidate and from reading
   a scene, coming up to aim while playing, Kick.
 
+- [x] **ComputeEffect** (tools/class_to_handle.py, which now takes OnFrame too): data, handle, state (the texture,
+  the shader, the values set). `ComputeEffect.FrameAll` runs from `Scene.RunOnFrames`, in edit mode as well as
+  play, as OnFrame did; switching it off or removing it gives the Mesh Renderer its own texture back (OnDisable).
+  Checked by `EcsChecks.ComputeChecks`: defaults, nothing to run without a shader, and with Sandbox's compiled ripple
+  shader copied in for the check, a frame in edit mode running it on the GPU and showing it, and switching it off.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

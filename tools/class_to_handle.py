@@ -16,7 +16,7 @@ a = body.index(first); b = body.index(end)
 settings = body[a:b].replace(' ~ delete _;', ';')
 logic = body[:a] + body[b:]
 hooks = {}
-for hook, new in [('Awake', 'Awake'), ('Start', 'Start'), ('OnDisable', 'OnDisable'), ('OnLocalUpdate', 'Frame'),
+for hook, new in [('Awake', 'Awake'), ('Start', 'Start'), ('OnDisable', 'OnDisable'), ('OnLocalUpdate', 'Frame'), ('OnFrame', 'Frame'),
                   ('OnGUI', 'OnGUI'), ('OnSaving', 'OnSaving'), ('OnLoaded', 'OnLoaded'), ('OnDestroy', 'OnDestroy'),
                   ('OnValidate', 'OnValidate')]:
     pat = f'public override void {hook}()'
@@ -84,7 +84,7 @@ frame.append(f'''	/// Starts {name}s that have not started, moves every switched
 				state.[Friend]mStarted = true;
 				{"state.Start();" if 'Start' in hooks else ""}
 			}}
-			{"state.Frame();" if 'OnLocalUpdate' in hooks else ""}
+			{"state.Frame();" if ('OnLocalUpdate' in hooks or 'OnFrame' in hooks) else ""}
 		}}
 	}}
 

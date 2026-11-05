@@ -104,19 +104,106 @@ static class Compute
 	}
 }
 
-/// Runs a compute shader every frame and shows the result as the texture of this object's Mesh Renderer. No script
-/// needed: add it, pick a .tcompute file, press Play.
-[Component]
-class ComputeEffect : Component
+/// A ComputeEffect's settings, in its entity (ComputeEffect is the handle).
+[Component, HandleData]
+struct ComputeEffectData
 {
 	/// The compute shader (.tcompute).
-	public String shader = new .() ~ delete _;
+	public String shader = new .();
 	public int32 width = 256;
 	public int32 height = 256;
 	/// How many steps to run each frame. More makes a simulation move faster.
 	public int32 stepsPerFrame = 1;
 	/// Off: the shader runs only when Step is called.
 	public bool everyFrame = true;
+
+	public this() { }
+}
+
+/// Runs a compute shader every frame and shows the result as the texture of this object's Mesh Renderer. No script
+/// needed: add it, pick a .tcompute file, press Play.
+///
+/// A handle (ComponentHandle): its settings are ComputeEffectData's fields, what it keeps between frames its ComputeEffectState.
+/// ComputeEffect.FrameAll (from Scene.RunOnFrames) does what OnFrame and OnDisable did.
+[Component, HandleFields]
+struct ComputeEffect : ComponentHandle<ComputeEffectData>
+{
+	/// What it keeps between frames, made the first time it is asked for.
+	public ComputeEffectState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<ComputeEffectState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			if (state.[Friend]mGameObject == null)
+			{
+				state.[Friend]mGameObject = mGameObject;
+			}
+			return state;
+		}
+	}
+
+	// The API, unchanged: each member is documented on ComputeEffectState.
+	public ComputeTexture Texture => Runtime.Texture;
+	public void SetVector(StringView name, Vector4 value) => Runtime.SetVector(name, value);
+	public void SetFloat(StringView name, float value) => Runtime.SetFloat(name, value);
+	public void SetColor(StringView name, Color value) => Runtime.SetColor(name, value);
+	public bool Step() => Runtime.Step();
+
+	/// What OnFrame did, in edit mode as well as play (from Scene.RunOnFrames), and OnDisable for one switched off.
+	public static void FrameAll(Scene scene)
+	{
+		for (let component in scene.FindComponents<ComputeEffect>(.. scope .()))
+		{
+			let state = component.Runtime;
+			if (!component.IsActiveAndEnabled)
+			{
+				if (state.[Friend]mWasActive)
+				{
+					state.[Friend]mWasActive = false;
+					state.OnDisable();
+				}
+				continue;
+			}
+			state.[Friend]mWasActive = true;
+			state.Frame();
+		}
+	}
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		// Removed while showing: the renderer goes back to its own texture (OnDisable did this).
+		if (let state = ComponentState<ComputeEffectState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
+		{
+			let scene = state.[Friend]mGameObject?.Scene;
+			if (state.[Friend]mWasActive && scene != null && !scene.[Friend]mClearing)
+				state.OnDisable();
+		}
+		ComponentState<ComputeEffectState>.Release(world, entity);
+		HandleComponents.FreeLists(world, entity, typeof(ComputeEffect));
+	}
+}
+
+/// What a ComputeEffect keeps between frames. Its settings are read from the entity each time.
+[DataFields(typeof(ComputeEffectData), "Settings")]
+class ComputeEffectState
+{
+	GameObject mGameObject;
+	bool mStarted;
+	bool mWasActive;
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+	public Scene Scene => mGameObject.Scene;
+	public ComputeEffect Handle => mGameObject.GetComponent<ComputeEffect>();
+	T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
+	T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
+	ref ComputeEffectData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<ComputeEffectData>();
+	}
 
 	ComputeTexture mTexture ~ delete _;
 	ShaderAsset mShader;
@@ -176,7 +263,7 @@ class ComputeEffect : Component
 		return true;
 	}
 
-	public override void OnFrame()
+	public void Frame()
 	{
 		if (!everyFrame || shader.IsEmpty)
 			return;
@@ -187,7 +274,7 @@ class ComputeEffect : Component
 		}
 	}
 
-	public override void OnDisable()
+	public void OnDisable()
 	{
 		let renderer = GetComponent<MeshRenderer>();
 		if (renderer)
