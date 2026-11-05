@@ -158,6 +158,8 @@ static class Subtitles
 	struct Tracked
 	{
 		public AudioSource source;
+		/// The source's voice: it is forgotten when this goes (AudioSourceState.Unload).
+		public AudioSourceState state;
 		public SubtitleTrack track;
 		public int32 shown;
 		public int32 cue;
@@ -265,6 +267,7 @@ static class Subtitles
 			return;
 		Tracked tracked;
 		tracked.source = source;
+		tracked.state = ComponentState<AudioSourceState>.Get(source.Scene.World, source.GameObject.Entity);
 		tracked.track = track;
 		tracked.shown = 0;
 		tracked.cue = -1;
@@ -321,12 +324,12 @@ static class Subtitles
 		}
 	}
 
-	/// Forgets an Audio Source that is going away.
-	public static void Forget(AudioSource source)
+	/// Forgets an Audio Source's voice that is going away.
+	public static void Forget(AudioSourceState state)
 	{
 		for (int i = sTracked.Count - 1; i >= 0; i--)
 		{
-			if (sTracked[i].source == source)
+			if (sTracked[i].state == state)
 			{
 				Hide(sTracked[i].shown);
 				sTracked.RemoveAt(i);

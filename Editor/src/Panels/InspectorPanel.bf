@@ -337,6 +337,8 @@ extension EditorApp
 	{
 		if (info.handleType == typeof(Decal))
 			DrawDecalTools(gameObject.GetComponent<Decal>());
+		else if (info.handleType == typeof(AudioSource))
+			DrawAudioTools(gameObject.GetComponent<AudioSource>());
 		else if (info.handleType == typeof(ReflectionProbe))
 			DrawReflectionProbeTools(gameObject.GetComponent<ReflectionProbe>());
 	}
@@ -589,8 +591,6 @@ extension EditorApp
 	{
 		if (let surface = component as NavigationSurface)
 			DrawNavigationTools(surface);
-		if (let source = component as AudioSource)
-			DrawAudioTools(source);
 		if (let pose = component as ViewmodelPose)
 			DrawViewmodelPoseTools(pose);
 		if (let limb = component as LimbIK)

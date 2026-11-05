@@ -862,8 +862,8 @@ class SequenceEvaluator
 			{
 				NetworkSync.Quiet = wasQuiet;
 			}
-			let source = target?.GetComponent<AudioSource>();
-			if (source != null)
+			AudioSource source = target != null ? target.GetComponent<AudioSource>() : default;
+			if (source)
 			{
 				source.volume = key.value;
 				source.Play(key.text);
@@ -928,7 +928,7 @@ class SequenceEvaluator
 		NetworkSync.Quiet = true;
 		for (let source in mSounds)
 		{
-			if (!source.GameObject.IsDestroyed)
+			if (!source.GameObject.IsDestroyed && source)
 				source.Stop();
 		}
 		NetworkSync.Quiet = wasQuiet;

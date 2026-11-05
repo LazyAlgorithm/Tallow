@@ -817,6 +817,21 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   it runs on RemoveComponent, on destroying the object, and when the scene's world ends. Engine code that keeps a
   handle across frames (Reflections' capture job) is told in the same hook, by World and entity, because the
   GameObject may be gone by then.
+- **One per object:** Flecs keeps a component once per entity, so an object has at most one of each built-in
+  component; AddComponent returns the one already there. No scene or prefab in the samples, the Gallery template or
+  the projects under ~/TallowProjects and ~/TesseraProjects had two of the same built-in component on one object
+  (only UIDocument, which is not converted), and DialogueRunner only adds a source when there is none. A second
+  sound goes on a child object or through PlayOneShot. Colliders and Joints need the same rule or a compound
+  shape when they are converted; flagged for the project owner.
+- **Behaviour that was a callback:** a handle has no OnFrame, Start or OnDisable. Engine code runs it from a
+  pipeline step instead: Audio Listener and Audio Source each have a `static FrameAll(Scene)` called from the
+  scene's Frame.Audio step. Audio Source's Play On Start happens there once the scene plays, and a source switched
+  off or on an inactive object has its voice stopped there, as OnDisable did.
+- **Network switches:** `handle.enabled = x` sends `NetworkSync.HandleEnabledChanged` (object path plus the
+  handle's full name) as Component.Enabled sends EnabledChanged; a client may switch only cosmetic ones (Light,
+  AudioSource, Decal, AudioReverbZone) on objects it owns.
+- **Scripts:** Component has `GetComponent<T>()` and `HasComponent<T>()` overloads for handles (without them,
+  `GetComponent<AudioSource>()` in a script picked the raw data overload and returned a pointer).
 - **Inspector tools:** the tools a class used to draw under its fields (`component as Decal`) are called from
   `InspectorPanel.DrawHandleTools` by handle type.
 
@@ -849,6 +864,12 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   hierarchy icons) became `HasComponent<Camera>()`: those compile without a warning and are always false, so they
   have to be searched for (`grep -E "(is|as) Camera\b"`). Checked by `EcsChecks.CameraChecks`; the Sandbox's
   follow camera drives the game view.
+- [x] **AudioSource, AudioListener, AudioReverbZone.** The voice, its loaded clip, occlusion and the Play On
+  Start flag are `AudioSourceState`; its destructor (run by OnRemove) stops the voice and takes down the subtitles
+  following it (Subtitles keys them by the state now). Network sound events name the source by its object. Profiler
+  counts playing sources from the query. Checked by `EcsChecks.AudioChecks` (defaults, no voice until played,
+  Play(clip), reverb weights, listener, save and load, voices freed with the scene); the Sandbox, whose Boulder has
+  a source, plays without errors.
 - [ ] LODGroup (moves with MeshRenderer, which it holds a list of), MeshRenderer, SkinnedMeshRenderer,
   LineRenderer, TrailRenderer, ParticleSystem, Foliage, Water, AudioSource, AudioListener, AudioReverbZone,
   Rigidbody, Collider, Joint, CharacterController, SoftBody, Rope, and the Phase 5 set.

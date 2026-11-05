@@ -18,7 +18,9 @@ extension NetworkSync
 	{
 		Active,
 		Enabled,
-		Light
+		Light,
+		/// A built-in component (handle) switched on or off: the object, then the handle's full name.
+		HandleEnabled
 	}
 
 	enum EffectKind : uint8
@@ -57,8 +59,11 @@ extension NetworkSync
 	static bool Decides(NetworkManager network, GameObject object) => network.IsServer || Owns(network.LocalClientId, object.Transform);
 
 	/// What a client may change on objects it owns: how they look and sound, never how they play.
-	static bool Cosmetic(Component component) => component is MeshRenderer || component is SkinnedMeshRenderer || component is ParticleSystem
-		|| component is AudioSource;
+	static bool Cosmetic(Component component) => component is MeshRenderer || component is SkinnedMeshRenderer || component is ParticleSystem;
+
+	/// The built-in components that are cosmetic in the same way.
+	static bool Cosmetic(HandleComponents.Info info) => info.handleType == typeof(Light) || info.handleType == typeof(AudioSource)
+		|| info.handleType == typeof(Decal) || info.handleType == typeof(AudioReverbZone);
 
 	/// Sends a state message whose first keyLength bytes name what it is about: the server passes it on and keeps
 	/// the latest for players who join later; a client asks the server.
@@ -93,6 +98,22 @@ extension NetworkSync
 	}
 
 	// ---- switches ----
+
+	/// ComponentHandle.enabled: a built-in component switched on or off.
+	public static void HandleEnabledChanged(GameObject object, HandleComponents.Info info, bool on)
+	{
+		let network = Active(object.Scene);
+		if (network == null || sApplying || info == null || !Everywhere(network, object) || !Decides(network, object)
+			|| (!network.IsServer && !Cosmetic(info)))
+			return;
+		let payload = scope NetWriter();
+		payload.Write((uint8)StateKind.HandleEnabled);
+		WriteTransform(payload, object.Transform);
+		payload.WriteString(info.fullName);
+		let keyLength = payload.Data.Count;
+		payload.Write<bool>(on);
+		SendState(network, payload, keyLength);
+	}
 
 	/// GameObject.SetActive: an object switched on or off.
 	public static void ActiveChanged(GameObject object)
@@ -218,7 +239,19 @@ extension NetworkSync
 		let kind = (StateKind)reader.Read<uint8>();
 		GameObject object = null;
 		Component component = null;
-		if (kind == .Active)
+		HandleComponents.Info handle = null;
+		if (kind == .HandleEnabled)
+		{
+			if (!ReadTransform(ref reader, network, let transform) || transform == null)
+				return;
+			object = transform.GameObject;
+			let name = scope String();
+			reader.ReadString(name);
+			handle = HandleComponents.Find(name);
+			if (handle == null || !object.Scene.World.Has(object.Entity, handle.index))
+				return;
+		}
+		else if (kind == .Active)
 		{
 			if (!ReadTransform(ref reader, network, let transform))
 				return;
@@ -254,7 +287,8 @@ extension NetworkSync
 		if (network.IsServer)
 		{
 			// A Light is cosmetic.
-			if (!Owns(sender, object.Transform) || (kind != .Light && (component == null || !Cosmetic(component))))
+			let cosmetic = kind == .Light || (kind == .HandleEnabled ? Cosmetic(handle) : component != null && Cosmetic(component));
+			if (!Owns(sender, object.Transform) || !cosmetic)
 				return;
 			let payload = scope NetWriter();
 			payload.Data.AddRange(Span<uint8>(reader.Start + start, reader.Position - start));
@@ -266,6 +300,7 @@ extension NetworkSync
 		{
 		case .Active: object.SetActive(on);
 		case .Enabled: if (!(component is NetworkIdentity)) component.Enabled = on;
+		case .HandleEnabled: object.Scene.World.Enable(object.Entity, handle.index, on);
 		case .Light:
 			let light = object.GetComponent<Light>();
 			settings.Apply(light);

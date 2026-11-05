@@ -112,6 +112,9 @@ abstract class Component
 	public T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
 	/// The object's data component T, or null (GameObject.GetComponent).
 	public T* GetComponent<T>() where T : struct => mGameObject.GetComponent<T>();
+	/// The object's built-in component T (Light, AudioSource...); not valid (`if (source)` is false) if it has none.
+	public T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	public bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
 
 	// ---- gameplay callbacks (play mode only) ----
 	/// Called once when play starts (or when the component is added while playing), before any Start.

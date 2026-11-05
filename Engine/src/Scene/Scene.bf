@@ -1299,7 +1299,11 @@ class Scene
 				using (sVoiceMarker.Sample())
 					VoiceChat.Update(this);
 				using (sAudioMarker.Sample())
+				{
+					AudioListener.FrameAll(this);
+					AudioSource.FrameAll(this);
 					Audio.Update(this);
+				}
 			});
 		World.AddStep(mFramePipeline, "Frame.Starts", .PreUpdate, new () =>
 			{

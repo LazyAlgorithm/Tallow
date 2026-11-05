@@ -363,10 +363,9 @@ static class Audio
 		float level = 0, roomSize = 0.5f, damping = 0.5f;
 		if (scene != null)
 		{
-			for (let component in scene.ComponentsOfType(typeof(AudioReverbZone)))
+			for (let zone in scene.Components<AudioReverbZone>(.. scope .()))
 			{
-				let zone = (AudioReverbZone)component;
-				if (!zone.IsActiveAndEnabled)
+				if (!zone.GameObject.ActiveInHierarchy)
 					continue;
 				let weight = zone.WeightAt(sListenerPosition) * zone.amount;
 				if (weight > level)

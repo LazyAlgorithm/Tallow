@@ -165,16 +165,19 @@ static class NetworkSync
 
 	/// The object that names a component across machines: the nearest ancestor with a Network Identity, or the
 	/// component's own object when there is none.
-	static GameObject Anchor(Component component)
+	static GameObject Anchor(Component component) => Anchor(component.GameObject);
+
+	/// The nearest object at or above this one with a Network Identity (the object itself when there is none).
+	static GameObject Anchor(GameObject gameObject)
 	{
-		var transform = component.Transform;
+		var transform = gameObject.Transform;
 		while (transform != null)
 		{
 			if (transform.GameObject.GetComponent<NetworkIdentity>() != null)
 				return transform.GameObject;
 			transform = transform.Parent;
 		}
-		return component.GameObject;
+		return gameObject;
 	}
 
 	static void Collect<T>(GameObject root, List<T> found) where T : Component
@@ -620,12 +623,13 @@ static class NetworkSync
 			return;
 		if (!network.IsServer)
 		{
-			let owner = Anchor(source).GetComponent<NetworkIdentity>();
+			let owner = Anchor(source.GameObject).GetComponent<NetworkIdentity>();
 			if (owner == null || !owner.IsOwner)
 				return;
 		}
 		let payload = scope NetWriter();
-		WriteComponent<AudioSource>(payload, source);
+		// An object has one Audio Source: the object says which.
+		WriteTransform(payload, source.Transform);
 		payload.Write(action);
 		payload.WriteString(action == 0 ? (StringView)source.audioClip : clip);
 		payload.Write(volume);
@@ -775,16 +779,18 @@ static class NetworkSync
 		let network = Active(Scene.Active);
 		if (network == null)
 			return;
-		let source = ReadComponent<AudioSource>(ref reader, network);
+		AudioSource source = default;
+		if (ReadTransform(ref reader, network, let transform) && transform != null)
+			source = transform.GameObject.GetComponent<AudioSource>();
 		let action = reader.Read<int32>();
 		let clip = scope String();
 		reader.ReadString(clip);
 		let volume = reader.Read<float>();
-		if (!reader.Ok || source == null || !volume.IsFinite || action < 0 || action > 2)
+		if (!reader.Ok || !source || !volume.IsFinite || action < 0 || action > 2)
 			return;
 		if (network.IsServer)
 		{
-			let owner = Anchor(source).GetComponent<NetworkIdentity>();
+			let owner = Anchor(source.GameObject).GetComponent<NetworkIdentity>();
 			if (owner == null || owner.ownerId != sender)
 				return;
 		}
@@ -795,7 +801,7 @@ static class NetworkSync
 		{
 		case 0:
 			if (!clip.IsEmpty)
-				source.audioClip.Set(clip);
+				source.audioClip = clip;
 			source.Play();
 		case 1: source.Stop();
 		default: source.PlayOneShot(clip, volume);

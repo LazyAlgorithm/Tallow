@@ -264,9 +264,9 @@ class DialogueRunner : Component
 		if (mSubtitle != 0)
 			Subtitles.Hide(mSubtitle);
 		mSubtitle = 0;
-		if (mVoice != null && mVoice.IsPlaying && (mVoice.localOnly || Mine))
+		if (mVoice && mVoice.IsPlaying && (mVoice.localOnly || Mine))
 			mVoice.Stop();
-		mVoice = null;
+		mVoice = default;
 	}
 
 	/// Plays a line's recording: from the speaker's object when it has an Audio Source, otherwise from this object.
@@ -274,14 +274,17 @@ class DialogueRunner : Component
 	{
 		if (line.audio.IsEmpty)
 			return;
-		AudioSource source = null;
+		AudioSource source = default;
 		if (speaker != null && !speaker.objectName.IsEmpty)
-			source = Scene.Find(speaker.objectName)?.GetComponent<AudioSource>();
-		if (source == null)
-			source = GetComponent<AudioSource>();
-		if (source == null)
 		{
-			if (mOwnVoice == null)
+			if (let speakerObject = Scene.Find(speaker.objectName))
+				source = speakerObject.GetComponent<AudioSource>();
+		}
+		if (!source)
+			source = GetComponent<AudioSource>();
+		if (!source)
+		{
+			if (!mOwnVoice)
 			{
 				mOwnVoice = GameObject.AddComponent<AudioSource>();
 				mOwnVoice.playOnStart = false;
@@ -321,8 +324,8 @@ class DialogueRunner : Component
 		let view = mConversation.View;
 		if (view == .Line && autoAdvance && Mine)
 		{
-			let voicing = mVoice != null && mVoice.IsPlaying;
-			if (!voicing && Time.Time - mLineStarted >= (Line.audio.IsEmpty || mVoice == null ? LineDuration : 0.4f))
+			let voicing = mVoice && mVoice.IsPlaying;
+			if (!voicing && Time.Time - mLineStarted >= (Line.audio.IsEmpty || !mVoice ? LineDuration : 0.4f))
 				Advance();
 		}
 		if (acceptInput && Time.FrameCount != mShownFrame && (view == .Line || view == .Choices))

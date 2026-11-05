@@ -105,6 +105,7 @@ static class EcsChecks
 		DecalChecks();
 		ProbeChecks();
 		CameraChecks();
+		AudioChecks();
 		return sFailures;
 	}
 
@@ -382,6 +383,38 @@ static class EcsChecks
 		let loaded = scope Scene();
 		SceneSerializer.Load(loaded, text);
 		Expect(loaded.ViewCamera && loaded.ViewCamera.fieldOfView == 75, "a Camera saves and loads");
+	}
+
+	/// Audio Source, Listener and Reverb Zone are handles; a source's voice is AudioSourceState.
+	static void AudioChecks()
+	{
+		let before = ComponentState<AudioSourceState>.Count;
+		{
+			let scene = scope Scene();
+			let radio = scene.CreateGameObject("Radio");
+			let source = radio.AddComponent<AudioSource>();
+			Expect(source.volume == 1 && source.maxDistance == 40 && source.playOnStart && source.spatial && source.audioClip.IsEmpty, "an Audio Source has its defaults");
+			Expect(!source.IsPlaying && source.Length == 0 && ComponentState<AudioSourceState>.Count == before, "a source that never played keeps no voice");
+			source.Play("Sounds/missing.wav");
+			Expect(source.audioClip == "Sounds/missing.wav" && !source.IsPlaying, "Play(clip) sets the clip; a missing file does not play");
+			AudioSource.FrameAll(scene);
+			let zone = scene.CreateGameObject("Hall").AddComponent<AudioReverbZone>();
+			zone.radius = 10;
+			zone.fade = 5;
+			Expect(zone.WeightAt(.Zero) == 1 && Math.Abs(zone.WeightAt(.(7.5f, 0, 0)) - 0.5f) < 0.001f && zone.WeightAt(.(11, 0, 0)) == 0, "a Reverb Zone weighs points from its data");
+			let ears = scene.CreateGameObject("Ears");
+			ears.Transform.Position = .(3, 4, 5);
+			ears.AddComponent<AudioListener>();
+			AudioListener.FrameAll(scene);
+			Expect(!scene.IsPlaying || Audio.ListenerPosition == Vector3(3, 4, 5), "an Audio Listener places the ears");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains("component Tallow.AudioSource enabled 1") && text.Contains("component Tallow.AudioListener enabled 1"), "audio components save under their names");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			Expect(loaded.Find("Radio").GetComponent<AudioSource>().audioClip == "Sounds/missing.wav" && loaded.Find("Ears").HasComponent<AudioListener>(), "audio components load");
+		}
+		Expect(ComponentState<AudioSourceState>.Count == before, "voices are freed with their scene");
 	}
 
 	static void HandleChecks()

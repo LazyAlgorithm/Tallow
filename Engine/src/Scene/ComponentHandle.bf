@@ -72,7 +72,15 @@ struct ComponentHandle<TData> : IComponentHandle where TData : struct, new
 	public bool enabled
 	{
 		get => mGameObject.Scene.World.IsEnabled(mGameObject.Entity, DataIndex);
-		set => mGameObject.Scene.World.Enable(mGameObject.Entity, DataIndex, value);
+		set
+		{
+			let world = mGameObject.Scene.World;
+			if (world.IsEnabled(mGameObject.Entity, DataIndex) == value)
+				return;
+			world.Enable(mGameObject.Entity, DataIndex, value);
+			// In multiplayer, as Component.Enabled: the server's (or an owner's cosmetic) switch reaches everyone.
+			NetworkSync.HandleEnabledChanged(mGameObject, HandleComponents.Find(DataIndex), value);
+		}
 	}
 
 	public bool Enabled
@@ -150,6 +158,17 @@ static class ComponentState<T> where T : class, new, delete
 	}
 
 	public static int Count => sStates.Count;
+
+	/// Every state kept for entities of world, with its entity.
+	public static void In(World world, List<(Entity entity, T state)> output)
+	{
+		let key = Internal.UnsafeCastToPtr(world);
+		for (let (k, state) in sStates)
+		{
+			if (k.world == key)
+				output.Add((Entity(k.entity), state));
+		}
+	}
 }
 
 /// The built-in component handles there are, found by reflection: what Add Component, the Inspector, scene files and
