@@ -850,7 +850,7 @@ class SequenceEvaluator
 			if (target == null)
 				return;
 			let animator = target.GetComponent<Animator>();
-			if (animator != null)
+			if (animator.IsValid)
 				animator.Play(key.text, key.length);
 		case .Audio:
 			if (key.text.IsEmpty)
@@ -914,7 +914,11 @@ class SequenceEvaluator
 				continue;
 			let at = track.KeyAt(time);
 			if (at >= 0)
-				target.GetComponent<Animator>()?.Play(track.keys[at].text, 0);
+			{
+				let animator = target.GetComponent<Animator>();
+				if (animator.IsValid)
+					animator.Play(track.keys[at].text, 0);
+			}
 		}
 	}
 

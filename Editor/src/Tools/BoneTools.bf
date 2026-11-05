@@ -43,7 +43,7 @@ extension EditorApp
 			let skinned = t.GameObject.GetComponent<SkinnedMeshRenderer>();
 			if (skinned && skinned.BoneCount > 0)
 				return skinned;
-			if (t.GameObject.GetComponent<Animator>() != null)
+			if (t.GameObject.GetComponent<Animator>().IsValid)
 			{
 				let below = SkinnedBelow(t, 3);
 				if (below)

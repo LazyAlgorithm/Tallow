@@ -1160,6 +1160,7 @@ class Scene
 		mPlaying = false;
 		// Built-in components' bodies leave the physics world as the class components' did in OnDisable.
 		Rigidbody.SyncAll(this);
+		Animator.StopAll(this);
 					CharacterController.SyncAll(this);
 	}
 
@@ -1209,6 +1210,7 @@ class Scene
 	static ProfilerMarker sAudioMarker = .("Audio.Update", .Audio);
 	static ProfilerMarker sPathsMarker = .("Navigation Paths", .AI);
 	static ProfilerMarker sIKMarker = .("IK", .Animation);
+	static ProfilerMarker sAnimatorMarker = .("Animators", .Animation);
 	static ProfilerMarker sSkinMarker = .("Skinning", .Animation);
 	static ProfilerMarker sDestroyMarker = .("Destroy", .Scripts);
 
@@ -1342,6 +1344,13 @@ class Scene
 				}
 			});
 		World.AddStep(mFramePipeline, "Frame.Update", .OnUpdate, new => RunFrameUpdates);
+		// Animators pose their bones once the scripts have set their parameters (Animator.OnLocalUpdate did, in
+		// component order); LateUpdate and IK see the pose.
+		World.AddStep(mFramePipeline, "Frame.Animators", .OnUpdate, new () =>
+			{
+				using (sAnimatorMarker.Sample())
+					Animator.FrameAll(this);
+			});
 		// Paths the agents asked for in Update, found together on the job threads.
 		World.AddStep(mFramePipeline, "Frame.Paths", .OnValidate, new () =>
 			{

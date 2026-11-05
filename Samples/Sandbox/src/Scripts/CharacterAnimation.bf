@@ -26,9 +26,9 @@ class CharacterAnimation : Script
 		// Works with a CharacterController, or with a Rigidbody on characters that still use one.
 		let controller = GetComponent<CharacterController>();
 		let body = GetComponent<Rigidbody>();
-		if (mAnimator == null || (controller == null && (body == null || !body.HasBody)))
+		if (!mAnimator || (!controller && !body.HasBody))
 			return;
-		let velocity = controller != null ? controller.Velocity : body.Velocity;
+		let velocity = controller ? controller.Velocity : body.Velocity;
 		let ground = Math.Sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
 		// A short delay stops slopes and steps from flickering into the jump pose.
 		mAirTime = Math.Abs(velocity.y) > airSpeed ? mAirTime + Time.DeltaTime : 0;

@@ -86,11 +86,11 @@ extension EditorApp
 		while (object != null)
 		{
 			let animator = object.GetComponent<Animator>();
-			if (animator != null)
+			if (animator.IsValid)
 				return animator;
 			object = object.Transform.Parent?.GameObject;
 		}
-		return null;
+		return default;
 	}
 
 	void SaveAnimator()
@@ -181,7 +181,7 @@ extension EditorApp
 		{
 			let controller = mAnimController;
 			// The running Animator to watch: the selected one, if it uses this controller.
-			Animator live = (mPlay != .Edit && selectedAnimator != null && selectedAnimator.Controller == controller) ? selectedAnimator : null;
+			Animator live = (mPlay != .Edit && selectedAnimator.IsValid && selectedAnimator.Controller == controller) ? selectedAnimator : default;
 			mAnimState = Math.Min(mAnimState, (int32)controller.states.Count - 1);
 			if (mAnimTransition >= controller.transitions.Count)
 				mAnimTransition = -1;
@@ -202,7 +202,7 @@ extension EditorApp
 	/// Follows the selection: an object whose Animator uses another controller switches the window to it.
 	void FollowSelectedController(Animator selectedAnimator)
 	{
-		if (selectedAnimator == null || selectedAnimator.controller.IsEmpty || selectedAnimator.controller == mAnimControllerPath)
+		if (!selectedAnimator.IsValid || selectedAnimator.controller.IsEmpty || selectedAnimator.controller == mAnimControllerPath)
 			return;
 		let controller = AnimatorController.Load(selectedAnimator.controller);
 		if (controller == null)
@@ -301,7 +301,7 @@ extension EditorApp
 			mAnimDirty = true;
 		}
 		ImGui.SameLine();
-		var value = live != null ? live.GetParameter(i) : parameter.defaultValue;
+		var value = live.IsValid ? live.GetParameter(i) : parameter.defaultValue;
 		bool changed = false;
 		ImGui.SetNextItemWidth(72);
 		switch (parameter.type)
@@ -320,10 +320,10 @@ extension EditorApp
 			if (ImGui.SmallButton(value != 0 ? "(set)" : "fire"))
 			{
 				value = 1;
-				changed = live != null;
+				changed = live.IsValid;
 			}
 		}
-		if (changed && live != null)
+		if (changed && live.IsValid)
 		{
 			switch (parameter.type)
 			{
@@ -365,7 +365,7 @@ extension EditorApp
 		// Status line, top left of the canvas.
 		let status = scope String();
 		status.Append(mAnimControllerPath);
-		if (live != null)
+		if (live.IsValid)
 			status.AppendF("   Watching: {}  ({})", live.GameObject.Name, live.CurrentState);
 		else if (mAnimLinkFrom != -3)
 			status.Append("   Click the state this transition goes to (Esc cancels).");
@@ -464,7 +464,7 @@ extension EditorApp
 			let state = controller.states[i];
 			if (state.layer != mAnimLayer)
 				continue;
-			let isLive = live != null && live.StateIndexOn(mAnimLayer) == i;
+			let isLive = live.IsValid && live.StateIndexOn(mAnimLayer) == i;
 			var color = i == layerDefault ? Color(0.78f, 0.48f, 0.14f, 1) : Color(0.32f, 0.32f, 0.35f, 1);
 			if (isLive)
 				color = .(0.22f, 0.40f, 0.68f, 1);
@@ -675,7 +675,7 @@ extension EditorApp
 				}
 			}
 			// Clips inside the selected object's skinned model are named, not files.
-			SkinnedMeshRenderer skinned = selectedAnimator != null ? FindSkinned(selectedAnimator) : default;
+			SkinnedMeshRenderer skinned = selectedAnimator.IsValid ? FindSkinned(selectedAnimator) : default;
 			if (skinned && skinned.Model != null)
 			{
 				for (let modelClip in skinned.Model.Clips)
@@ -813,9 +813,9 @@ extension EditorApp
 	/// The tree as a picture: clips as dots, each as big as its share now, and the parameters now as a cross.
 	void DrawBlendPicture(AnimatorController controller, AnimatorController.BlendTree tree, Animator selectedAnimator)
 	{
-		let live = (mPlay != .Edit && selectedAnimator != null && selectedAnimator.Controller == controller) ? selectedAnimator : null;
-		let x = tree.parameterX >= 0 ? (live != null ? live.GetParameter(tree.parameterX) : (tree.parameterX < controller.parameters.Count ? controller.parameters[tree.parameterX].defaultValue : 0)) : 0;
-		let y = tree.parameterY >= 0 ? (live != null ? live.GetParameter(tree.parameterY) : (tree.parameterY < controller.parameters.Count ? controller.parameters[tree.parameterY].defaultValue : 0)) : 0;
+		let live = (mPlay != .Edit && selectedAnimator.IsValid && selectedAnimator.Controller == controller) ? selectedAnimator : Animator();
+		let x = tree.parameterX >= 0 ? (live.IsValid ? live.GetParameter(tree.parameterX) : (tree.parameterX < controller.parameters.Count ? controller.parameters[tree.parameterX].defaultValue : 0)) : 0;
+		let y = tree.parameterY >= 0 ? (live.IsValid ? live.GetParameter(tree.parameterY) : (tree.parameterY < controller.parameters.Count ? controller.parameters[tree.parameterY].defaultValue : 0)) : 0;
 		List<float> weights = scope .();
 		tree.Weights(x, y, weights);
 		ImGui.Dummy(.(0, 4));
@@ -901,10 +901,10 @@ extension EditorApp
 		ImGui.SetCursorPosX(8);
 		ImGui.SetNextItemWidth(170);
 		// While the game plays the weight shown is the running Animator's, and changing it changes it there.
-		var weight = live != null ? live.GetLayerWeight(mAnimLayer) : layer.weight;
+		var weight = live.IsValid ? live.GetLayerWeight(mAnimLayer) : layer.weight;
 		if (ImGui.SliderFloat("Weight##layer", ref weight, 0, 1))
 		{
-			if (live != null)
+			if (live.IsValid)
 				live.SetLayerWeight(mAnimLayer, weight);
 			else
 			{
@@ -948,7 +948,7 @@ extension EditorApp
 
 	static SkinnedMeshRenderer FindSkinned(Animator animator)
 	{
-		let own = animator.GetComponent<SkinnedMeshRenderer>();
+		let own = animator.GameObject.GetComponent<SkinnedMeshRenderer>();
 		if (own)
 			return own;
 		for (let child in animator.Transform.Children)

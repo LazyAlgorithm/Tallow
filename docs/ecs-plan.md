@@ -993,6 +993,28 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   `tools/validate_showcase.py --play` checks on a packaged engine (the package step itself is Phase 8's release
   build). EcsBench checks all pass; the Campus copy plays 400 frames clean.
 
+## Phase 5 progress
+
+Same method as Phase 4: one component at a time, each with its checks, committed on its own.
+
+- [x] **Animator.** Its settings are `AnimatorData`; `clips`, `defaultClip` and `controller` stay `String` (text the
+  data owns), so `animator.clips.Append(...)` and `defaultClip.Set(...)` work as before. The bones, clips playing,
+  controller, layers and parameters are an `AnimatorState`, which reads the settings from the entity each time; the
+  handle forwards the whole API. With no Start or OnLocalUpdate, `Animator.FrameAll` runs in a new `Frame.Animators`
+  step right after `Frame.Update` (the scripts' Update and OnLocalUpdate) while playing: it starts animators that have
+  not started (Bind, then the default clip) and moves every switched-on one on an active object a frame on, so
+  scripts' parameters are in before the pose and LateUpdate and IK see it, as with the usual component order.
+  `StopPlay` lets them start again next play. Flecs gives steps unique names: a second "Frame.Animation" step
+  silently replaced IK's, so the new one is "Frame.Animators". `GameObject.GetComponentInChildren<T>()` has a handle
+  overload. Network animation messages name the animator by its object, as Skinned Mesh Renderer's do (the
+  messages are a few bytes shorter than with the component index). `tools/fix_handle_nulls.py <build log> <Type...>` rewrites the BF0472 `== null` / `!= null` sites the build reports into `IsValid`; 22 were in the
+  editor's animation and rig tools, more in Sequence and the Sandbox's CharacterAnimation. Checked by
+  `EcsChecks.AnimatorChecks` (defaults, owned clip text, GetComponentInChildren, started by the step, SampleClip
+  posing a child bone, stopping, save and load, freed on remove and with the scene); the Sandbox character idles
+  (not in its rest pose), the editor's `--rigger-test` passes, the Gallery self-test passes and Campus plays.
+  `--rig-test` needs a character whose model has clips: on one without, it now says so instead of stopping on an
+  index out of range.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

@@ -278,7 +278,7 @@ extension EditorApp
 	void ApplyRigSwitches()
 	{
 		let animator = SelectedAnimator();
-		let skinned = animator != null ? FindSkinned(animator) : BoneOwner(Selected);
+		let skinned = animator.IsValid ? FindSkinned(animator) : BoneOwner(Selected);
 		if (HasArg("--bone-map") && skinned && skinned.Model != null)
 			OpenBoneMap(skinned.Model);
 		if (HasArg("--hand-posing"))
@@ -286,7 +286,7 @@ extension EditorApp
 		// Waits for the Scene view to be laid out, since the test clicks on a bone.
 		if (HasArg("--rig-test"))
 			mRigTestFrames = 20;
-		if (animator == null || !skinned || skinned.Model == null)
+		if (!animator.IsValid || !skinned || skinned.Model == null)
 			return;
 		if (HasArg("--ik-rig"))
 			SetUpIKRig(animator, skinned);
@@ -313,7 +313,7 @@ extension EditorApp
 	void RunRigTest()
 	{
 		let animator = SelectedAnimator();
-		SkinnedMeshRenderer skinned = animator != null ? FindSkinned(animator) : default;
+		SkinnedMeshRenderer skinned = animator.IsValid ? FindSkinned(animator) : default;
 		if (!skinned || skinned.Model == null || skinned.BoneCount == 0)
 		{
 			Log.Info("RIG-TEST FAIL: select a rigged character's Animator, with Expose Bones on");
@@ -322,6 +322,11 @@ extension EditorApp
 		bool pass = true;
 		let report = scope String();
 		let model = skinned.Model;
+		if (model.Clips.IsEmpty)
+		{
+			Log.Info("RIG-TEST FAIL: the selected character's model has no clips to copy (pick one with a clip library)");
+			return;
+		}
 		CreateClipFor(animator);
 		SkinnedModel.Clip source = model.Clips[0];
 		for (let clip in model.Clips)
@@ -422,7 +427,7 @@ extension EditorApp
 	void DrawHandPosingContents()
 	{
 		let animator = SelectedAnimator();
-		SkinnedMeshRenderer skinned = animator != null ? FindSkinned(animator) : default;
+		SkinnedMeshRenderer skinned = animator.IsValid ? FindSkinned(animator) : default;
 		if (!skinned || skinned.Model == null)
 		{
 			ImGui.TextDisabled("Select a rigged character (its Animator's object or one of its bones).");

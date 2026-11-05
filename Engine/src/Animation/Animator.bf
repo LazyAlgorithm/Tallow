@@ -4,19 +4,126 @@ using System.IO;
 
 namespace Tallow;
 
-/// Plays animation clips on the bones (child objects) below this object, blending smoothly when the clip changes.
-/// A bone is any descendant GameObject; clips refer to bones by name.
-[Component]
-class Animator : Component
+/// An Animator's settings, in its entity (Animator is the handle). The clip list, default clip and controller path
+/// are text the data owns (HandleComponents.OwnLists), so `animator.clips.Append(...)` works as before.
+[Component, HandleData]
+struct AnimatorData
 {
 	/// Clip files separated by semicolons, e.g. "Animations/idle.tanim;Animations/walk.tanim".
-	public String clips = new .() ~ delete _;
+	public String clips = new .();
 	/// Name of the clip to start with.
-	public String defaultClip = new .("Idle") ~ delete _;
+	public String defaultClip = new .("Idle");
 	public float speed = 1.0f;
 	/// An Animator Controller (.tcontroller) made in the Animator window. With one set, the Animator runs its
 	/// state machine: scripts set parameters, and transitions pick the clip. Without one, scripts call Play.
-	public String controller = new .() ~ delete _;
+	public String controller = new .();
+
+	public this() { }
+}
+
+/// Plays animation clips on the bones (child objects) below this object, blending smoothly when the clip changes.
+/// A bone is any descendant GameObject; clips refer to bones by name.
+///
+/// A handle (ComponentHandle): its settings are AnimatorData's fields; the bones, clips playing and controller state
+/// are its AnimatorState. Animators start (Bind, then the default clip) and move on after the scripts' Update each
+/// frame while the scene plays (Animator.FrameAll, the Frame.Animators step), as Start and OnLocalUpdate did.
+[Component, HandleFields]
+struct Animator : ComponentHandle<AnimatorData>
+{
+	/// What the animator keeps between frames, made the first time it is asked for.
+	public AnimatorState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<AnimatorState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			state.[Friend]mGameObject = mGameObject;
+			return state;
+		}
+	}
+
+	// The API, unchanged: each member is documented on AnimatorState.
+	public AnimatorController Controller => Runtime.Controller;
+	public StringView CurrentState => Runtime.CurrentState;
+	public int32 CurrentStateIndex => Runtime.CurrentStateIndex;
+	public float StateTime => Runtime.StateTime;
+	public float NormalizedTime => Runtime.NormalizedTime;
+	public bool IsInTransition => Runtime.IsInTransition;
+	public void SetFloat(StringView name, float value) => Runtime.SetFloat(name, value);
+	public void SetInteger(StringView name, int32 value) => Runtime.SetInteger(name, value);
+	public void SetBool(StringView name, bool value) => Runtime.SetBool(name, value);
+	public void SetTrigger(StringView name) => Runtime.SetTrigger(name);
+	public void ResetTrigger(StringView name) => Runtime.ResetTrigger(name);
+	public float GetFloat(StringView name) => Runtime.GetFloat(name);
+	public int32 GetInteger(StringView name) => Runtime.GetInteger(name);
+	public bool GetBool(StringView name) => Runtime.GetBool(name);
+	public float GetParameter(int32 index) => Runtime.GetParameter(index);
+	public void ApplyRemote(int32 kind, int32 index, float value) => Runtime.ApplyRemote(kind, index, value);
+	public int32 LayerCount => Runtime.LayerCount;
+	public void SetLayerWeight(int32 layer, float weight) => Runtime.SetLayerWeight(layer, weight);
+	public void SetLayerWeight(StringView layer, float weight) => Runtime.SetLayerWeight(layer, weight);
+	public float GetLayerWeight(int32 layer) => Runtime.GetLayerWeight(layer);
+	public int32 StateIndexOn(int32 layer) => Runtime.StateIndexOn(layer);
+	public float NormalizedTimeOn(int32 layer) => Runtime.NormalizedTimeOn(layer);
+	public void CrossFade(StringView stateName, float fadeSeconds = 0.15f) => Runtime.CrossFade(stateName, fadeSeconds);
+	public StringView CurrentClip => Runtime.CurrentClip;
+	public bool IsFinished => Runtime.IsFinished;
+	public void Bind() => Runtime.Bind();
+	public bool HasClip(StringView name) => Runtime.HasClip(name);
+	public void Play(StringView name, float fadeSeconds = 0.15f) => Runtime.Play(name, fadeSeconds);
+	public void SampleClip(AnimationClip clip, float time) => Runtime.SampleClip(clip, time);
+	public bool RestPose(Transform child, out Vector3 position, out Quaternion rotation, out Vector3 scale) => Runtime.RestPose(child, out position, out rotation, out scale);
+
+	/// Starts animators that have not started and moves every switched-on one on an active object a frame on.
+	public static void FrameAll(Scene scene)
+	{
+		if (!scene.IsPlaying)
+			return;
+		for (let animator in scene.Components<Animator>(.. scope .()))
+		{
+			if (!animator.GameObject.ActiveInHierarchy)
+				continue;
+			let state = animator.Runtime;
+			if (!state.[Friend]mStarted)
+			{
+				state.[Friend]mStarted = true;
+				state.Start();
+			}
+			state.Frame();
+		}
+	}
+
+	/// When play stops, animators start again next time (as Start runs once per play).
+	public static void StopAll(Scene scene)
+	{
+		for (let (entity, state) in ComponentState<AnimatorState>.In(scene.World, .. scope .()))
+			state.[Friend]mStarted = false;
+	}
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		ComponentState<AnimatorState>.Release(world, entity);
+		HandleComponents.FreeLists(world, entity, typeof(Animator));
+	}
+}
+
+/// What an Animator keeps between frames. Its settings are read from the entity each time (`clips` and the rest).
+[DataFields(typeof(AnimatorData), "Settings")]
+class AnimatorState
+{
+	GameObject mGameObject;
+	bool mStarted;
+
+	public GameObject GameObject => mGameObject;
+	Transform Transform => mGameObject.Transform;
+	Scene Scene => mGameObject.Scene;
+	Animator Handle => mGameObject.GetComponent<Animator>();
+	T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	ref AnimatorData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<AnimatorData>();
+	}
 
 	struct Bone
 	{
@@ -106,7 +213,7 @@ class Animator : Component
 		if (index < 0 || index >= mParameters.Count || mParameters[index] == value)
 			return;
 		mParameters[index] = value;
-		NetworkSync.AnimatorChanged(this, 0, index, value);
+		NetworkSync.AnimatorChanged(Handle, 0, index, value);
 	}
 
 	/// Sets a number parameter of the controller. Unknown names are ignored. In a network session the value is
@@ -211,7 +318,7 @@ class Animator : Component
 		if (mLayers[layer].weight == value)
 			return;
 		mLayers[layer].weight = value;
-		NetworkSync.AnimatorChanged(this, 2, layer, value);
+		NetworkSync.AnimatorChanged(Handle, 2, layer, value);
 	}
 
 	public void SetLayerWeight(StringView layer, float weight) => SetLayerWeight(mController != null ? mController.FindLayer(layer) : -1, weight);
@@ -429,7 +536,7 @@ class Animator : Component
 			mState = index;
 			mStateTime = 0;
 		}
-		NetworkSync.AnimatorChanged(this, 1, index, fade);
+		NetworkSync.AnimatorChanged(Handle, 1, index, fade);
 	}
 
 	void EnsurePoseArrays()
@@ -498,7 +605,7 @@ class Animator : Component
 		if (mSkinned)
 			mSkinned.posedByAnimator = mSkinned.exposeBones;
 		// Only the machine that decides (the server, or the owner) moves between states; the others follow it.
-		let decides = NetworkSync.IsMine(this);
+		let decides = NetworkSync.IsMine(mGameObject);
 		for (int32 l < (int32)mLayers.Count)
 			AdvanceLayer(l, decides);
 		BlendLayers();
@@ -655,7 +762,7 @@ class Animator : Component
 			mSkinned.loop = state.loop;
 			mSkinned.Play(state.clip, fade);
 		}
-		NetworkSync.AnimatorChanged(this, 1, index, fade);
+		NetworkSync.AnimatorChanged(Handle, 1, index, fade);
 	}
 
 	/// Jumps to a state of the controller by name, cross-fading over the given time. With layers, the state's own
@@ -678,7 +785,7 @@ class Animator : Component
 		if (mController.states.Count == 0)
 			return;
 		// The machine in charge of the object decides; the others are told which state was entered.
-		let decides = NetworkSync.IsMine(this);
+		let decides = NetworkSync.IsMine(mGameObject);
 		if (mState < 0)
 		{
 			if (!decides)
@@ -812,7 +919,7 @@ class Animator : Component
 	/// True once a non-looping clip has reached its end.
 	public bool IsFinished => mCurrent != null && !mCurrent.loop && mTime >= mCurrent.duration;
 
-	public override void Start()
+	public void Start()
 	{
 		Bind();
 		if (mController == null)
@@ -895,7 +1002,7 @@ class Animator : Component
 				continue;
 			StartClip(clip, fadeSeconds);
 			// In multiplayer a clip started by the server, or by the player who controls this object, plays everywhere.
-			NetworkSync.AnimationPlayed(this, name, fadeSeconds);
+			NetworkSync.AnimationPlayed(Handle, name, fadeSeconds);
 			return;
 		}
 	}
@@ -965,7 +1072,7 @@ class Animator : Component
 		return Math.Min(time, clip.duration);
 	}
 
-	public override void OnLocalUpdate()
+	public void Frame()
 	{
 		if (mController != null && mController.UsesLayers)
 		{

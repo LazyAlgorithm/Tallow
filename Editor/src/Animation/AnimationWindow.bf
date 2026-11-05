@@ -105,8 +105,8 @@ extension EditorApp
 		mClipPreview = false;
 		mClipPosedTime = -1;
 		let object = mScene != null ? mScene.FindById(mClipAnimatorId) : null;
-		let animator = object?.GetComponent<Animator>();
-		if (animator != null)
+		let animator = object != null ? object.GetComponent<Animator>() : Animator();
+		if (animator.IsValid)
 		{
 			let rest = scope AnimationClip();
 			animator.SampleClip(rest, 0);
@@ -384,7 +384,7 @@ extension EditorApp
 	{
 		let editing = mPlay == .Edit;
 		let animator = SelectedAnimator();
-		if (animator == null)
+		if (!animator.IsValid)
 		{
 			DrawNoAnimator(editing);
 			return false;

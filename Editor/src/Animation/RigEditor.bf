@@ -1374,7 +1374,7 @@ extension EditorApp
 		if (!target.HasComponent<MeshRenderer>())
 			target.AddComponent<MeshRenderer>();
 		// An Animator, so the Animation window, the IK rig and Hand Posing work on it straight away.
-		if (target.GetComponent<Animator>() == null)
+		if (!target.GetComponent<Animator>().IsValid)
 			target.AddComponent<Animator>();
 		skinned.model.Set(mRiggedPath);
 		skinned.clip.Clear();

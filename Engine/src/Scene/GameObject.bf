@@ -319,6 +319,32 @@ class GameObject
 		return null;
 	}
 
+	/// The first built-in component of a type on this object or anything under it, searching this object first; not
+	/// valid if there is none.
+	public T GetComponentInChildren<T>() where T : struct, IComponentHandle
+	{
+		if (HasComponent<T>())
+			return GetComponent<T>();
+		for (let child in Transform.Children)
+		{
+			if (child.GameObject.HasHandleInChildren<T>())
+				return child.GameObject.GetComponentInChildren<T>();
+		}
+		return default;
+	}
+
+	bool HasHandleInChildren<T>() where T : struct, IComponentHandle
+	{
+		if (HasComponent<T>())
+			return true;
+		for (let child in Transform.Children)
+		{
+			if (child.GameObject.HasHandleInChildren<T>())
+				return true;
+		}
+		return false;
+	}
+
 	/// The first component of a type on this object or anything under it, searching this object first, or null.
 	public T GetComponentInChildren<T>() where T : Component
 	{

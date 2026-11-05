@@ -114,6 +114,7 @@ static class EcsChecks
 		WaterChecks();
 		RigidbodyChecks();
 		CharacterChecks();
+		AnimatorChecks();
 		return sFailures;
 	}
 
@@ -191,7 +192,6 @@ static class EcsChecks
 		// The per-callback lists only hold classes that override the callback.
 		Expect(ScriptCallbackIndex.Of(typeof(UpdateCounter)) == .Update, "UpdateCounter overrides Update only");
 		Expect(ScriptCallbackIndex.Of(typeof(Mover)) == .Update, "Mover overrides Update only");
-		Expect(ScriptCallbackIndex.Of(typeof(Animator)).HasFlag(.OnLocalUpdate), "Animator overrides OnLocalUpdate");
 		Expect(ScriptCallbackIndex.Of(typeof(CharacterMotor)).HasFlag(.FixedUpdate), "CharacterMotor overrides FixedUpdate");
 		Expect(ScriptCallbackIndex.Of(typeof(Bench)) == .Update | .LateUpdate, "Bench overrides Update and LateUpdate");
 		scene.StopPlay();
@@ -667,6 +667,54 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
+	}
+
+	/// Animator: owned text settings, started and moved on by the Frame.Animators step, a clip posing child bones.
+	static void AnimatorChecks()
+	{
+		let before = ComponentState<AnimatorState>.Count;
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let rig = scene.CreateGameObject("Rig");
+			let arm = scene.CreateGameObject("Arm", rig.Transform);
+			let animator = rig.AddComponent<Animator>();
+			Expect(animator.defaultClip == "Idle" && animator.clips.IsEmpty && animator.speed == 1 && animator.controller.IsEmpty, "an Animator has its defaults");
+			animator.clips.Append("Animations/none.tanim");
+			Expect(animator.clips == "Animations/none.tanim", "its clip list is text it owns");
+			Expect(rig.GetComponentInChildren<Animator>() == animator && !arm.GetComponentInChildren<Animator>(), "GetComponentInChildren finds a built-in component");
+			// A clip made in code: the arm turns 90 degrees about Y over a second.
+			let clip = scope AnimationClip();
+			clip.name.Set("Turn");
+			clip.duration = 1;
+			clip.loop = true;
+			let track = clip.AddTrack("Arm");
+			track.keys.Add(.() { time = 0, rotation = .Identity, scale = .(1, 1, 1) });
+			track.keys.Add(.() { time = 1, rotation = Quaternion.AngleAxis(90, .Up), scale = .(1, 1, 1) });
+			scene.StartPlay();
+			Time.DeltaTime = 0.5f;
+			scene.Update();
+			Expect(animator.Runtime.[Friend]mStarted, "playing starts the Animator (Bind)");
+			animator.SampleClip(clip, 0.5f);
+			let turned = arm.Transform.LocalRotation;
+			Expect(Math.Abs(Quaternion.Dot(turned, Quaternion.AngleAxis(45, .Up))) > 0.999f, "SampleClip poses the child bone");
+			animator.SetFloat("Speed", 2);
+			Expect(animator.GetFloat("Speed") == 0, "without a controller, parameters are not kept");
+			scene.StopPlay();
+			Expect(!animator.Runtime.[Friend]mStarted, "stopping play lets it start again next time");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains("component Tallow.Animator enabled 1") && text.Contains("field clips \"Animations/none.tanim\""), "an Animator saves as before");
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("Rig").GetComponent<Animator>();
+			Expect(copy && copy.clips == "Animations/none.tanim" && copy.defaultClip == "Idle", "and loads");
+			rig.RemoveComponent<Animator>();
+			Expect(ComponentState<AnimatorState>.Count == before, "RemoveComponent frees its state");
+		}
+		Scene.Active = previous;
+		Expect(ComponentState<AnimatorState>.Count == before, "animators are freed with their scene");
 	}
 
 	/// Water and Floater: the surface from the data, Water.At, [Sync] fields of handle data, save and load.
