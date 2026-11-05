@@ -25,6 +25,12 @@ struct ComponentRef<T> where T : struct
 		// The same check ecs_ref_get_id starts with, without the call.
 		if (mRef.tableVersionFast == world.TableVersion(mRef.tableId) && mRef.tableId != 0)
 			return (T*)mRef.ptr;
+		ComponentRefStats.SlowPath++;
 		return (T*)Flecs.RefGet(world.Native, &mRef, mId);
 	}
+}
+
+static class ComponentRefStats
+{
+	public static int64 SlowPath;
 }

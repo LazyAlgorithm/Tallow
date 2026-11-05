@@ -174,6 +174,7 @@ class Bench : Component
 		line.AppendF("{{\"mode\": \"{}\", \"count\": {}, \"threads\": {}, \"frames\": {}, ", mMode, mCount, mMode == "ecs-mt" ? Jobs.ThreadCount : 1, mFrameTimes.Count);
 		line.AppendF("\"frame_avg_ms\": {:F3}, \"frame_p99_ms\": {:F3}, ", Average(mFrameTimes), Percentile(mFrameTimes, 0.99));
 		line.AppendF("\"update_avg_ms\": {:F3}, \"update_p99_ms\": {:F3}, ", Average(mUpdateTimes), Percentile(mUpdateTimes, 0.99));
+		line.AppendF("\"ref_slow_per_frame\": {}, ", ComponentRefStats.SlowPath / Math.Max(mFrame, 1));
 		line.AppendF("\"spawn_ms\": {:F1}, \"memory_before\": {}, \"memory_after\": {}}}", mSpawnMs, mMemoryBefore, mMemoryAfter);
 		Console.WriteLine(line);
 		if (!mOutput.IsEmpty)

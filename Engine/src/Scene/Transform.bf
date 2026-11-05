@@ -25,11 +25,12 @@ class Transform
 {
 	GameObject mGameObject;
 	Transform mParent;
-	/// Where the data lives until the object joins a scene (and after it leaves one).
-	TransformData mOwn = .Default;
 	/// The scene's world and the reference into it, once bound (Bind).
 	World mWorld;
 	ComponentRef<TransformData> mRef;
+	/// Where the data lives while the object is in no scene (before Bind and after Unbind): kept off the object, so
+	/// a bound Transform stays small and the fields used on every access share a cache line.
+	TransformData* mLoose = Loose(.Default) ~ delete _;
 
 	/// The objects directly under this one, in Hierarchy order. Use SetParent to move one.
 	public List<Transform> Children = new .() ~ delete _;
@@ -42,19 +43,27 @@ class Transform
 		mGameObject = gameObject;
 	}
 
-	/// The data: in the entity once bound, otherwise mOwn.
+	static TransformData* Loose(TransformData value)
+	{
+		let data = new TransformData();
+		*data = value;
+		return data;
+	}
+
+	/// The data: in the entity once bound, otherwise mLoose.
 	[Inline]
 	ref TransformData D()
 	{
 		if (mWorld == null)
-			return ref mOwn;
+			return ref *mLoose;
 		return ref *mRef.Get(mWorld);
 	}
 
 	/// Moves the data into the object's entity (Scene does this when the object joins it).
 	void Bind(World world, Entity entity)
 	{
-		world.Set<TransformData>(entity, mOwn);
+		world.Set<TransformData>(entity, *mLoose);
+		DeleteAndNullify!(mLoose);
 		mRef = .(world, entity);
 		mWorld = world;
 	}
@@ -64,7 +73,7 @@ class Transform
 	{
 		if (mWorld == null)
 			return;
-		mOwn = D();
+		mLoose = Loose(D());
 		mWorld = null;
 	}
 

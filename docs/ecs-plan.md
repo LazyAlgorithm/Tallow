@@ -467,11 +467,16 @@ class Hover : Script
   call into C. The shim is built inside `flecs.c`'s translation unit (`native/tallow_flecs.c`) so it can read
   the world's table versions without changes to the vendored files. Checked by `EcsChecks`; the Sandbox runs in
   game and editor.
-  - Cost, measured with the GameObject benchmark (Release; script update / frame, avg ms): 10,000 objects
-    0.42 / 1.86 against 0.39 / 1.82 before; 100,000 objects 7.6 / 39.2 against 3.5 / 33.8 before. Small scenes
-    are unchanged. At 100,000 the data now sits apart from its `Transform` object, which costs about two extra
-    cache lines per object. This is paid back in Phase 4, when the renderer and world-matrix propagation read
-    `TransformData` columns in bulk instead of object by object.
+  - Cost: none measurable. Release GameObject benchmark at 100,000 objects, run interleaved with a build of the
+    pre-Phase-2 commit on the same machine. Frame / script update in ms: original 30.87 / 5.20, 31.49 / 5.35,
+    32.16 / 5.53; now 31.57 / 5.54, 31.34 / 5.36, 30.67 / 5.25.
+  - A `Transform` object must stay small. A first version kept a 136-byte fallback copy inside every
+    `Transform`, which split the fields used on every access across cache lines and made 100,000-object scripts
+    about 2× slower. The fallback now lives on the heap, only while the object is in no scene.
+  - Single benchmark runs vary a lot between sessions (the same build gave 3.5 to 9 ms of script update at
+    100,000). Compare builds with interleaved runs, not against numbers from another session.
+  - `ComponentRefStats.SlowPath` counts references that had to be refreshed. The benchmark reports it per
+    frame; it stays in the hundreds against millions of accesses.
 - [ ] 3. `Component` renamed `Script` for behaviours, with the new `Update` below.
 - [ ] 4. Scene's object and component lists replaced by queries; frame and tick order run through the world.
 
