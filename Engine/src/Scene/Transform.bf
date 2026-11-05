@@ -3,18 +3,33 @@ using System.Collections;
 
 namespace Tallow;
 
+/// A Transform's data, kept in its GameObject's entity (docs/ecs-plan.md, Phase 2). Engine systems can read and
+/// write it in bulk through queries; Transform is the per-object way in.
+[Component]
+struct TransformData
+{
+	public Vector3 localPosition;
+	public Quaternion localRotation;
+	public Vector3 localScale;
+	/// The cached local-to-world matrix and world rotation, valid while dirty and rotationDirty are false.
+	public Matrix4 world;
+	public Quaternion worldRotation;
+	public bool dirty;
+	public bool rotationDirty;
+
+	public static Self Default => .() { localPosition = .Zero, localRotation = .Identity, localScale = .One, world = .Identity, worldRotation = .Identity, dirty = true, rotationDirty = true };
+}
+
 /// Position, rotation and scale of a GameObject, arranged in a parent/child hierarchy.
 class Transform
 {
 	GameObject mGameObject;
 	Transform mParent;
-	Vector3 mLocalPosition = .Zero;
-	Quaternion mLocalRotation = .Identity;
-	Vector3 mLocalScale = .One;
-	Matrix4 mWorld = .Identity;
-	Quaternion mWorldRotation = .Identity;
-	bool mDirty = true;
-	bool mRotationDirty = true;
+	/// Where the data lives until the object joins a scene (and after it leaves one).
+	TransformData mOwn = .Default;
+	/// The scene's world and the reference into it, once bound (Bind).
+	World mWorld;
+	ComponentRef<TransformData> mRef;
 
 	/// The objects directly under this one, in Hierarchy order. Use SetParent to move one.
 	public List<Transform> Children = new .() ~ delete _;
@@ -27,6 +42,32 @@ class Transform
 		mGameObject = gameObject;
 	}
 
+	/// The data: in the entity once bound, otherwise mOwn.
+	[Inline]
+	ref TransformData D()
+	{
+		if (mWorld == null)
+			return ref mOwn;
+		return ref *mRef.Get(mWorld);
+	}
+
+	/// Moves the data into the object's entity (Scene does this when the object joins it).
+	void Bind(World world, Entity entity)
+	{
+		world.Set<TransformData>(entity, mOwn);
+		mRef = .(world, entity);
+		mWorld = world;
+	}
+
+	/// Takes the data back out of the entity before the entity is deleted.
+	void Unbind()
+	{
+		if (mWorld == null)
+			return;
+		mOwn = D();
+		mWorld = null;
+	}
+
 	/// The object this transform belongs to.
 	public GameObject GameObject { [Inline] get => mGameObject; }
 	/// The transform this one is under, or null at the top of the scene.
@@ -35,61 +76,74 @@ class Transform
 	/// The position relative to the parent (in the world, for an object with no parent).
 	public Vector3 LocalPosition
 	{
-		get => mLocalPosition;
+		get => D().localPosition;
 		set
 		{
-			mLocalPosition = value;
-			MarkDirty();
+			ref TransformData data = ref D();
+			data.localPosition = value;
+			MarkDirty(ref data);
 		}
 	}
 
 	/// The rotation relative to the parent.
 	public Quaternion LocalRotation
 	{
-		get => mLocalRotation;
+		get => D().localRotation;
 		set
 		{
-			mLocalRotation = value;
-			MarkDirty();
+			ref TransformData data = ref D();
+			data.localRotation = value;
+			MarkDirty(ref data);
 		}
 	}
 
 	/// The size relative to the parent: 1 on each axis is unchanged.
 	public Vector3 LocalScale
 	{
-		get => mLocalScale;
+		get => D().localScale;
 		set
 		{
-			mLocalScale = value;
-			MarkDirty();
+			ref TransformData data = ref D();
+			data.localScale = value;
+			MarkDirty(ref data);
 		}
 	}
 
 	/// LocalRotation as angles in degrees about X, Y and Z.
 	public Vector3 LocalEulerAngles
 	{
-		get => mLocalRotation.EulerAngles;
+		get => D().localRotation.EulerAngles;
 		set
 		{
-			mLocalRotation = Quaternion.Euler(value);
-			MarkDirty();
+			ref TransformData data = ref D();
+			data.localRotation = Quaternion.Euler(value);
+			MarkDirty(ref data);
 		}
 	}
 
 	/// The local position, rotation and scale as one matrix.
-	public Matrix4 LocalMatrix => Matrix4.TRS(mLocalPosition, mLocalRotation, mLocalScale);
+	public Matrix4 LocalMatrix
+	{
+		get
+		{
+			ref TransformData data = ref D();
+			return Matrix4.TRS(data.localPosition, data.localRotation, data.localScale);
+		}
+	}
 
 	/// The matrix from this object's own space to the world, through every parent.
 	public Matrix4 LocalToWorld
 	{
 		get
 		{
-			if (mDirty)
+			ref TransformData data = ref D();
+			if (data.dirty)
 			{
-				mWorld = mParent != null ? mParent.LocalToWorld * LocalMatrix : LocalMatrix;
-				mDirty = false;
+				let local = Matrix4.TRS(data.localPosition, data.localRotation, data.localScale);
+				data.world = mParent != null ? mParent.LocalToWorld * local : local;
+				data.dirty = false;
 			}
-			return mWorld;
+			return data.world;
 		}
 	}
 
@@ -103,9 +157,9 @@ class Transform
 		set
 		{
 			if (mParent != null)
-				mLocalPosition = mParent.WorldToLocal.TransformPoint(value);
+				D().localPosition = mParent.WorldToLocal.TransformPoint(value);
 			else
-				mLocalPosition = value;
+				D().localPosition = value;
 			MarkDirty();
 		}
 	}
@@ -115,19 +169,20 @@ class Transform
 	{
 		get
 		{
-			if (mRotationDirty)
+			ref TransformData data = ref D();
+			if (data.rotationDirty)
 			{
-				mWorldRotation = mParent != null ? (mParent.Rotation * mLocalRotation).Normalized : mLocalRotation;
-				mRotationDirty = false;
+				data.worldRotation = mParent != null ? (mParent.Rotation * data.localRotation).Normalized : data.localRotation;
+				data.rotationDirty = false;
 			}
-			return mWorldRotation;
+			return data.worldRotation;
 		}
 		set
 		{
 			if (mParent != null)
-				mLocalRotation = (mParent.Rotation.Conjugate * value).Normalized;
+				D().localRotation = (mParent.Rotation.Conjugate * value).Normalized;
 			else
-				mLocalRotation = value;
+				D().localRotation = value;
 			MarkDirty();
 		}
 	}
@@ -165,8 +220,9 @@ class Transform
 	/// Rotates by euler angles in degrees, in local space.
 	public void Rotate(Vector3 eulerDegrees)
 	{
-		mLocalRotation = (mLocalRotation * Quaternion.Euler(eulerDegrees)).Normalized;
-		MarkDirty();
+		ref TransformData data = ref D();
+		data.localRotation = (data.localRotation * Quaternion.Euler(eulerDegrees)).Normalized;
+		MarkDirty(ref data);
 	}
 
 	/// Turns the object to face a point in the world, keeping its up as near world up as it can.
@@ -224,7 +280,8 @@ class Transform
 		if (keepWorldPose)
 		{
 			let local = mParent != null ? mParent.WorldToLocal * world : world;
-			local.Decompose(out mLocalPosition, out mLocalRotation, out mLocalScale);
+			ref TransformData data = ref D();
+			local.Decompose(out data.localPosition, out data.localRotation, out data.localScale);
 		}
 		MarkDirty();
 		// A new parent can take the object into or out of the active world state (or, with world states set apart,
@@ -238,9 +295,10 @@ class Transform
 	/// below is told once instead of once for each posed transform above it. Nothing may read a world pose in between.
 	public void SetLocalPoseDeferred(Vector3 position, Quaternion rotation, Vector3 scale)
 	{
-		mLocalPosition = position;
-		mLocalRotation = rotation;
-		mLocalScale = scale;
+		ref TransformData data = ref D();
+		data.localPosition = position;
+		data.localRotation = rotation;
+		data.localScale = scale;
 	}
 
 	/// Tells this transform and everything below it that the pose changed (after SetLocalPoseDeferred).
@@ -249,16 +307,18 @@ class Transform
 		MarkDirty();
 	}
 
-	void MarkDirty()
+	void MarkDirty() => MarkDirty(ref D());
+
+	void MarkDirty(ref TransformData data)
 	{
 		Version++;
 		// A child's world pose is only ever worked out from its parent's, which leaves the parent clean: so with this
 		// one dirty, everything below it is too, and need not be told again. Whatever keeps a child's Version also reads
 		// the child's world pose, so that the next move here comes through to it.
-		if (mDirty && mRotationDirty)
+		if (data.dirty && data.rotationDirty)
 			return;
-		mDirty = true;
-		mRotationDirty = true;
+		data.dirty = true;
+		data.rotationDirty = true;
 		for (int i < Children.Count)
 			Children[i].MarkDirty();
 	}

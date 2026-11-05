@@ -5,6 +5,8 @@
 // its address to the iterator functions. The buffer must not move while an iteration is running.
 #include "flecs.h"
 
+#include <stddef.h>
+
 #include <string.h>
 
 #if defined(_WIN32)
@@ -429,3 +431,41 @@ TALLOW_ECS_API void tallow_ecs_enable(ecs_world_t* world, uint64_t entity, bool 
 {
 	ecs_enable(world, entity, enabled);
 }
+
+// ---- Cached component references ----
+
+// A reference to one entity's component that stays valid as the entity's row moves between and within tables.
+// Getting through it costs a version compare unless the table changed. Beef keeps it in a buffer of
+// tallow_ecs_ref_size() bytes (Ecs/ComponentRef.bf).
+TALLOW_ECS_API int32_t tallow_ecs_ref_size(void)
+{
+	return (int32_t)sizeof(ecs_ref_t);
+}
+
+TALLOW_ECS_API void tallow_ecs_ref_init(const ecs_world_t* world, uint64_t entity, uint64_t id, ecs_ref_t* out)
+{
+	*out = ecs_ref_init_id(world, entity, id);
+}
+
+TALLOW_ECS_API void* tallow_ecs_ref_get(const ecs_world_t* world, ecs_ref_t* ref, uint64_t id)
+{
+	return ecs_ref_get_id(world, ref, id);
+}
+
+// The world's table version array (ECS_TABLE_VERSION_ARRAY_SIZE entries), which ecs_ref_get_id compares a ref
+// against. Beef does the same compare inline and only calls tallow_ecs_ref_get when it fails. Needs the private
+// world struct, which is why this file is built inside flecs.c's translation unit (tallow_flecs.c).
+TALLOW_ECS_API const uint32_t* tallow_ecs_table_versions(const ecs_world_t* world)
+{
+	return world->table_version;
+}
+
+TALLOW_ECS_API int32_t tallow_ecs_table_version_mask(void)
+{
+	return ECS_TABLE_VERSION_ARRAY_BITMASK;
+}
+
+// Where Beef's mirror of ecs_ref_t (Flecs.RefBuffer) expects each field.
+_Static_assert(offsetof(ecs_ref_t, table_id) == 8, "ecs_ref_t.table_id moved");
+_Static_assert(offsetof(ecs_ref_t, table_version_fast) == 16, "ecs_ref_t.table_version_fast moved");
+_Static_assert(offsetof(ecs_ref_t, ptr) == 24, "ecs_ref_t.ptr moved");

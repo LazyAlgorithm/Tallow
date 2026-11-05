@@ -40,6 +40,12 @@ sealed class World
 	int32 mDeferDepth;
 
 	static bool sChecked;
+	static uint64 sTableVersionMask;
+	uint32* mTableVersions;
+
+	/// For ComponentRef's inline fast path: the version Flecs keeps for a table id.
+	[Inline]
+	public uint32 TableVersion(uint64 tableId) => mTableVersions[tableId & sTableVersionMask];
 
 	public this()
 	{
@@ -48,9 +54,13 @@ sealed class World
 			sChecked = true;
 			let size = Flecs.IterSize();
 			Runtime.Assert(size <= Flecs.IterBuffer.Size, scope $"Flecs ecs_iter_t is {size} bytes; raise Flecs.IterBuffer.Size");
+			let refSize = Flecs.RefSize();
+			Runtime.Assert(refSize == Flecs.RefBuffer.Size, scope $"Flecs ecs_ref_t is {refSize} bytes; update Flecs.RefBuffer");
+			sTableVersionMask = (uint64)Flecs.TableVersionMask();
 		}
 		mWorld = Flecs.WorldNew();
 		Runtime.Assert(mWorld != null, "Flecs could not create a world");
+		mTableVersions = Flecs.TableVersions(mWorld);
 	}
 
 	public ~this()

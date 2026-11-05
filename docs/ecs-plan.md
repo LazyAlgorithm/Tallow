@@ -461,8 +461,17 @@ class Hover : Script
   with `ObjectLink` pointing back to the object, `ChildOf` following `Transform.SetParent`, and an `InactiveSelf`
   tag while `ActiveSelf` is false. The entity is deleted with its object. Checked by `EcsChecks.SceneChecks`;
   the Sandbox runs.
-- [ ] 2. Transform data (local pose, world matrix, dirty flags) stored in the entity, with the `Transform` API
-  unchanged.
+- [x] **2. Transform data in the entity.** `TransformData` (local pose, cached world matrix and rotation,
+  dirty flags) lives in the object's entity. `Transform` keeps its API and reaches the data through a
+  `ComponentRef<T>`, a Flecs `ecs_ref_t` whose version check is done inline in Beef, so the common case makes no
+  call into C. The shim is built inside `flecs.c`'s translation unit (`native/tallow_flecs.c`) so it can read
+  the world's table versions without changes to the vendored files. Checked by `EcsChecks`; the Sandbox runs in
+  game and editor.
+  - Cost, measured with the GameObject benchmark (Release; script update / frame, avg ms): 10,000 objects
+    0.42 / 1.86 against 0.39 / 1.82 before; 100,000 objects 7.6 / 39.2 against 3.5 / 33.8 before. Small scenes
+    are unchanged. At 100,000 the data now sits apart from its `Transform` object, which costs about two extra
+    cache lines per object. This is paid back in Phase 4, when the renderer and world-matrix propagation read
+    `TransformData` columns in bulk instead of object by object.
 - [ ] 3. `Component` renamed `Script` for behaviours, with the new `Update` below.
 - [ ] 4. Scene's object and component lists replaced by queries; frame and tick order run through the world.
 

@@ -91,6 +91,17 @@ static class EcsChecks
 		Expect(world.Has<InactiveSelf>(child.Entity), "SetActive(false) tags the entity");
 		child.SetActive(true);
 		Expect(!world.Has<InactiveSelf>(child.Entity), "SetActive(true) clears the tag");
+		// Transform data lives in the entity and follows it as it moves between tables.
+		parent.Transform.LocalPosition = .(1, 2, 3);
+		child.Transform.LocalPosition = .(0, 1, 0);
+		Expect(world.Get<TransformData>(child.Entity).localPosition.y == 1, "Transform writes land in TransformData");
+		child.SetActive(false);
+		child.Transform.LocalPosition = .(0, 5, 0);
+		Expect(child.Transform.Position == Vector3(1, 7, 3), "world position after the entity changed tables");
+		child.SetActive(true);
+		world.Get<TransformData>(parent.Entity).localPosition = .(0, 0, 0);
+		parent.Transform.PoseChanged();
+		Expect(child.Transform.Position == Vector3(0, 5, 0), "writes through the world are seen by Transform");
 		let childEntity = child.Entity;
 		let parentEntity = parent.Entity;
 		scene.DestroyImmediate(parent);

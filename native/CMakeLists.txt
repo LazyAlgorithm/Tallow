@@ -150,7 +150,7 @@ add_subdirectory(${TP}/opus opus EXCLUDE_FROM_ALL)
 # ---- Flecs v4.2.0 (entity component system, docs/ecs-plan.md), vendored single-file distribution ----
 # A custom build with only the addons Tallow uses. The Explorer's addons (REST, HTTP, stats, JSON) are left out of
 # Release builds, which are what games ship with.
-add_library(tallow_flecs OBJECT ${TP}/flecs/flecs.c tallow_ecs.c)
+add_library(tallow_flecs OBJECT tallow_flecs.c)
 target_include_directories(tallow_flecs PRIVATE ${TP}/flecs)
 target_compile_definitions(tallow_flecs PRIVATE FLECS_CUSTOM_BUILD FLECS_SYSTEM FLECS_PIPELINE FLECS_META FLECS_OS_API_IMPL FLECS_LOG
 	FLECS_CACHED_QUERIES FLECS_QUERY_PLANS FLECS_PREFAB FLECS_FRAME

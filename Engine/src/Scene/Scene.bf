@@ -439,6 +439,7 @@ class Scene
 		let entity = World.Create();
 		World.Set<ObjectLink>(entity, .() { gameObject = gameObject });
 		gameObject.[Friend]mEntity = entity;
+		gameObject.Transform.[Friend]Bind(World, entity);
 		mObjects.Add(gameObject);
 		mById[useId] = gameObject;
 		mRoots.Add(gameObject);
@@ -852,6 +853,7 @@ class Scene
 		for (int i < gameObject.TagCount)
 			IndexTag(gameObject, gameObject.GetTag(i), false);
 		// Children went first (above), so this never takes another object's entity with it.
+		gameObject.Transform.[Friend]Unbind();
 		if (World.IsAlive(gameObject.Entity))
 			World.Delete(gameObject.Entity);
 		delete gameObject;

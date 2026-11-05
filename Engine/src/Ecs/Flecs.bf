@@ -52,6 +52,18 @@ static class Flecs
 		public IterBuffer source;
 	}
 
+	/// An ecs_ref_t without FLECS_DEBUG (native/tallow_ecs.c checks the field offsets; World checks the size).
+	[CRepr]
+	public struct RefBuffer
+	{
+		public const int Size = 32;
+		public uint64 entity;
+		public uint64 tableId;
+		public uint32 tableVersionFast;
+		public uint16 tableVersion;
+		public void* ptr;
+	}
+
 	public function void SystemCallback(void* iterator);
 
 	// ---- Worlds ----
@@ -119,6 +131,13 @@ static class Flecs
 	[LinkName("tallow_ecs_iter_world")] public static extern void* IterWorld(void* iterator);
 	/// The stage a system's changes should be queued on.
 	[LinkName("tallow_ecs_iter_stage")] public static extern void* IterStage(void* iterator);
+
+	// ---- Cached component references ----
+	[LinkName("tallow_ecs_ref_size")] public static extern int32 RefSize();
+	[LinkName("tallow_ecs_ref_init")] public static extern void RefInit(void* world, uint64 entity, uint64 id, RefBuffer* output);
+	[LinkName("tallow_ecs_ref_get")] public static extern void* RefGet(void* world, RefBuffer* reference, uint64 id);
+	[LinkName("tallow_ecs_table_versions")] public static extern uint32* TableVersions(void* world);
+	[LinkName("tallow_ecs_table_version_mask")] public static extern int32 TableVersionMask();
 
 	// ---- Systems ----
 	[LinkName("tallow_ecs_phase")] public static extern uint64 PhaseId(Phase phase);
