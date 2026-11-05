@@ -562,11 +562,14 @@ class WorldStreamer
 				body.SetState(state);
 			}
 		}
+		for (let character in scene.Components<CharacterController>(.. scope .()))
+		{
+			if (character.HasCharacter)
+				character.Teleport(character.Transform.Position, character.Velocity);
+		}
 		for (let component in scene.Components)
 		{
-			if (let character = component as CharacterController)
-				character.Teleport(character.Transform.Position, character.Velocity);
-			else if (let collider = component as Collider)
+			if (let collider = component as Collider)
 			{
 				if (!collider.HasComponent<Rigidbody>())
 					collider.Refresh();

@@ -73,11 +73,11 @@ class SavedTransform : Component
 				linear = state.linearVelocity;
 				spin = state.angularVelocity;
 			}
-			else if (character != null)
+			else if (character.IsValid)
 				linear = character.Velocity;
 		}
 		var hasLinear = false, hasSpin = false;
-		if (velocity && (body.IsValid || character != null) && io.Key("velocity"))
+		if (velocity && (body.IsValid || character.IsValid) && io.Key("velocity"))
 		{
 			io.Value(ref linear);
 			hasLinear = true;
@@ -108,7 +108,7 @@ class SavedTransform : Component
 				state.angularVelocity = spin;
 			body.SetState(state);
 		}
-		else if (character != null && character.HasCharacter)
+		else if (character.IsValid && character.HasCharacter)
 			character.Teleport(Transform.Position, hasLinear ? linear : .Zero);
 		else if (hasLinear || hasSpin)
 		{
@@ -134,13 +134,13 @@ class SavedTransform : Component
 			return;
 		}
 		let character = GetComponent<CharacterController>();
-		if (character != null && character.HasCharacter)
+		if (character.IsValid && character.HasCharacter)
 		{
 			character.Teleport(Transform.Position, mPendingVelocity);
 			mPending = false;
 			return;
 		}
-		if (!body.IsValid && character == null)
+		if (!body.IsValid && !character.IsValid)
 			mPending = false;
 	}
 }

@@ -76,7 +76,7 @@ class CharacterMotor : NetworkBehaviour
 		let facing = Quaternion.Euler(0, input.yaw, 0);
 		let target = WishVelocity(input);
 		let controller = GetComponent<CharacterController>();
-		if (controller != null)
+		if (controller.IsValid)
 		{
 			// Speed is measured against the floor, so a moving platform carries the character without a fight.
 			// CanJump also covers the ticks spent rolling over a step's edge, so control does not dip on stairs.

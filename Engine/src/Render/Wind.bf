@@ -215,10 +215,9 @@ struct FoliageBender : ComponentHandle<FoliageBenderData>
 			let scale = bender.Transform.LocalToWorld.Right.Length;
 			Take(bender.Transform.TransformPoint(bender.offset), bender.radius * scale, bender.strength, ref places, ref push);
 		}
-		for (let component in scene.ComponentsOfType(typeof(CharacterController)))
+		for (let controller in scene.Components<CharacterController>(.. scope .()))
 		{
-			let controller = (CharacterController)component;
-			if (controller.GameObject.IsDestroyed || !controller.IsActiveAndEnabled)
+			if (!controller.GameObject.ActiveInHierarchy)
 				continue;
 			// One with a Foliage Bender of its own has said how it wants to push.
 			if (controller.GameObject.HasComponent<FoliageBender>())

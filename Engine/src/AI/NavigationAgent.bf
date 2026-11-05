@@ -386,7 +386,7 @@ class NavigationAgent : AIMovementDriver
 		var delta = mPath[mWaypoint] - position;
 		let body = GetComponent<Rigidbody>();
 		// Gravity or the character controller keeps these on the floor, so they are only steered sideways.
-		if (((body.IsValid && !body.isKinematic) || GetComponent<CharacterController>() != null) && !surface.Data.flying)
+		if (((body.IsValid && !body.isKinematic) || HasComponent<CharacterController>()) && !surface.Data.flying)
 			delta.y = 0;
 		if (faceMovement && delta.x * delta.x + delta.z * delta.z > 0.00001f)
 		{
@@ -574,7 +574,7 @@ class NavigationAgent : AIMovementDriver
 	void Place(Vector3 position)
 	{
 		let controller = GetComponent<CharacterController>();
-		if (controller != null)
+		if (controller.IsValid)
 		{
 			controller.Teleport(position);
 			return;
@@ -613,7 +613,7 @@ class NavigationAgent : AIMovementDriver
 				Repath();
 		}
 		let body = GetComponent<Rigidbody>();
-		if (GetComponent<CharacterController>() == null && (!body.IsValid || body.isKinematic))
+		if (!HasComponent<CharacterController>() && (!body.IsValid || body.isKinematic))
 		{
 			if (mLink != null)
 				CrossLink(Time.DeltaTime);
@@ -626,13 +626,13 @@ class NavigationAgent : AIMovementDriver
 	{
 		if (NetworkSync.IsClientOf(Scene)) return;
 		let controller = GetComponent<CharacterController>();
-		let physical = controller != null || GetComponent<Rigidbody>().HasBody && !GetComponent<Rigidbody>().isKinematic;
+		let physical = controller.IsValid || GetComponent<Rigidbody>().HasBody && !GetComponent<Rigidbody>().isKinematic;
 		if (mLink != null && physical)
 		{
 			CrossLink(Time.FixedDeltaTime);
 			return;
 		}
-		if (controller != null)
+		if (controller.IsValid)
 		{
 			// A character controller walks the path itself: it climbs steps, stays on slopes and keeps falling when idle.
 			let wanted = Desired(Time.FixedDeltaTime);

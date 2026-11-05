@@ -113,6 +113,7 @@ static class EcsChecks
 		FoliageChecks();
 		WaterChecks();
 		RigidbodyChecks();
+		CharacterChecks();
 		return sFailures;
 	}
 
@@ -604,6 +605,68 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<RigidbodyState>.Count == before, "bodies are freed with their scene");
+	}
+
+	/// Character Controller: a Jolt character made once the scene plays, walking, shape changes, switching off.
+	static void CharacterChecks()
+	{
+		let before = ComponentState<CharacterControllerState>.Count;
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let ground = scene.CreateGameObject("Ground");
+			ground.Transform.Position = .(0, -0.5f, 0);
+			ground.AddComponent<BoxCollider>().size = .(40, 1, 40);
+			let walker = scene.CreateGameObject("Walker");
+			walker.Transform.Position = .(0, 1.5f, 0);
+			let controller = walker.AddComponent<CharacterController>();
+			Expect(controller.shape == .Capsule && controller.radius == 0.35f && controller.height == 1.8f && controller.canSwim && !controller.HasCharacter, "a Character Controller has its defaults and no character before play");
+			controller.Move(.(1, 0, 0), 1);
+			Expect(Math.Abs(walker.Transform.Position.x - 1) < 0.0001f, "with no character, Move shifts the transform");
+			walker.Transform.Position = .(0, 1.5f, 0);
+			scene.StartPlay();
+			scene.Update();
+			Expect(controller.HasCharacter, "playing makes the character");
+			for (int i < 60)
+			{
+				controller.SimpleMove(.Zero, Time.FixedDeltaTime);
+				scene.FixedUpdate();
+			}
+			Expect(controller.IsGrounded && Math.Abs(walker.Transform.Position.y - 0.9f) < 0.1f, scope $"it falls and stands on the ground ({walker.Transform.Position.y})");
+			for (int i < 30)
+			{
+				controller.SimpleMove(.(2, 0, 0), Time.FixedDeltaTime);
+				scene.FixedUpdate();
+			}
+			Expect(walker.Transform.Position.x > 0.8f, scope $"SimpleMove walks ({walker.Transform.Position.x})");
+			Expect(controller.SetCapsule(0.3f, 1.2f), "SetCapsule takes a shape that fits");
+			Expect(controller.radius == 0.3f && controller.height == 1.2f, "and writes the settings");
+			let wall = scene.CreateGameObject("Wall");
+			wall.Transform.Position = .(walker.Transform.Position.x, 0.9f, 0);
+			wall.AddComponent<BoxCollider>().size = .(0.2f, 0.2f, 0.2f);
+			scene.FixedUpdate();
+			controller.enabled = false;
+			scene.FixedUpdate();
+			Expect(!controller.HasCharacter, "switching it off takes the character away");
+			controller.enabled = true;
+			scene.Update();
+			Expect(controller.HasCharacter, "and on makes it again");
+			controller.Teleport(.(5, 2, 5));
+			Expect(walker.Transform.Position == .(5, 2, 5), "Teleport moves it");
+			let missing = ground.GetComponent<CharacterController>();
+			missing.Teleport(.(1, 1, 1));
+			Expect(!missing.HasCharacter && missing.Velocity == .Zero && ground.Transform.Position == .(0, -0.5f, 0), "a missing controller reads as none, and Teleport on it does nothing");
+			scene.StopPlay();
+			Expect(!controller.HasCharacter && scene.Physics.Controllers.Count == 0, "stopping play takes the character away");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			Expect(text.Contains("component Tallow.CharacterController enabled 1") && text.Contains("field radius 0.3"), "a Character Controller saves as before");
+			walker.RemoveComponent<CharacterController>();
+			Expect(ComponentState<CharacterControllerState>.Count == before, "RemoveComponent frees its state");
+		}
+		Scene.Active = previous;
+		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
 	}
 
 	/// Water and Floater: the surface from the data, Water.At, [Sync] fields of handle data, save and load.

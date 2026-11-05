@@ -110,7 +110,7 @@ static class NetworkSync
 			if (object.GetComponent<NetworkIdentity>() != null)
 				continue;
 			let body = object.GetComponent<Rigidbody>();
-			if ((body.IsValid && !body.isKinematic) || object.GetComponent<CharacterController>() != null
+			if ((body.IsValid && !body.isKinematic) || object.HasComponent<CharacterController>()
 				|| object.GetComponent<AIMovementDriver>() != null || object.GetComponent<BehaviorTreeRunner>() != null
 				|| object.GetComponent<NetworkBehaviour>() != null || (object.GetComponent<DialogueRunner>()?.shared ?? false) || (object.GetComponent<SequencePlayer>()?.shared ?? false)
 				|| (object.GetComponent<SoftBody>()?.MovesByItself ?? false) || object.HasComponent<Water>())
@@ -371,7 +371,7 @@ static class NetworkSync
 
 	static void WriteShape(NetWriter payload, CharacterController controller)
 	{
-		payload.Write<uint32>(controller.GetComponent<NetworkIdentity>().NetId);
+		payload.Write<uint32>(controller.GameObject.GetComponent<NetworkIdentity>().NetId);
 		payload.Write<int32>((int32)controller.shape);
 		payload.Write(controller.radius);
 		payload.Write(controller.height);
@@ -385,7 +385,7 @@ static class NetworkSync
 	public static void ShapeChanged(CharacterController controller)
 	{
 		let network = Active(controller.Scene);
-		if (network == null || sApplying || controller.GetComponent<NetworkIdentity>() == null)
+		if (network == null || sApplying || controller.GameObject.GetComponent<NetworkIdentity>() == null)
 			return;
 		let payload = scope NetWriter();
 		WriteShape(payload, controller);
@@ -410,8 +410,10 @@ static class NetworkSync
 		if (!reader.Ok || shape < 0 || shape > (int32)CharacterShape.Box || !radius.IsFinite || !height.IsFinite || !Finite(boxSize) || !edgeRadius.IsFinite || !Finite(center))
 			return;
 		let identity = network.FindIdentity(netId);
-		let controller = identity?.GetComponent<CharacterController>();
-		if (controller == null)
+		if (identity == null)
+			return;
+		let controller = identity.GetComponent<CharacterController>();
+		if (!controller)
 			return;
 		if (!network.IsServer)
 		{
@@ -423,7 +425,7 @@ static class NetworkSync
 		// Only the player who controls a character may ask to change it, and only into something that fits.
 		if (identity.ownerId == sender)
 		{
-			let old = (controller.shape, controller.radius, controller.height, controller.boxSize, controller.edgeRadius, controller.center);
+			let old = controller.Data;
 			controller.shape = (CharacterShape)shape;
 			controller.radius = radius;
 			controller.height = height;
@@ -432,7 +434,7 @@ static class NetworkSync
 			controller.center = center;
 			if (controller.ApplyShape())
 				return; // which told everyone
-			(controller.shape, controller.radius, controller.height, controller.boxSize, controller.edgeRadius, controller.center) = old;
+			controller.Data = old;
 		}
 		// Refused: put the asker back to what the server has.
 		let payload = scope NetWriter();
@@ -1301,7 +1303,7 @@ static class NetworkSync
 		for (let identity in network.Identities)
 		{
 			let controller = identity.GetComponent<CharacterController>();
-			if (controller != null)
+			if (controller.IsValid)
 			{
 				payload.Clear();
 				WriteShape(payload, controller);

@@ -961,6 +961,17 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   built in code made at the next Starts with its collider, removal, stopping, save and load, freed with the scene);
   the Gallery self-test passes, `--separate-worlds-test` passes, and the Campus copy plays 400 frames without errors.
   Games that update to this engine need the same search (BF0472 on Rigidbody, `as`/`is Rigidbody`).
+- [x] **CharacterController.** Its settings are `CharacterControllerData`; the Jolt character and everything it knows
+  between steps (state, air time, swimming, push sizes) are a `CharacterControllerState`, which reads the settings
+  from the entity each time (`[DataFields]` over a `ref` property), because SetCapsule, SetBox and the network write
+  them. The handle forwards the API unchanged; its read-only properties give "none" on a handle that is not valid, and
+  `Teleport` does nothing there (NetworkIdentity used `?.Teleport`). `CharacterController.SyncAll` makes and takes away
+  characters beside `Rigidbody.SyncAll`. `PhysicsWorld.Controllers` lists the states (soft contact between
+  characters). Wind, world streaming's origin shift and spawn crowding read `scene.Components<CharacterController>`
+  (two of those were `component is/as CharacterController`, silently false). Checked by `EcsChecks.CharacterChecks`
+  (defaults, Move without a character, made on play, falling to the ground, walking, SetCapsule writing the
+  settings, switched off and on, Teleport, a missing controller, stopping, save, freed on remove and with the scene);
+  the separate-worlds test (characters in two world states) and the Gallery self-test pass, and Campus plays.
 - [ ] Collider, Joint,
   CharacterController, SoftBody, Rope, and the Phase 5 set.
 - [ ] Phase 4 exit: the Showcase's rendering and physics exhibits pass `tools/validate_showcase.py`. (So far, with

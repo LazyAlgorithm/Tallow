@@ -1160,6 +1160,7 @@ class Scene
 		mPlaying = false;
 		// Built-in components' bodies leave the physics world as the class components' did in OnDisable.
 		Rigidbody.SyncAll(this);
+					CharacterController.SyncAll(this);
 	}
 
 	void RunPendingStarts()
@@ -1287,6 +1288,7 @@ class Scene
 				{
 					RunPendingStarts();
 					Rigidbody.SyncAll(this);
+					CharacterController.SyncAll(this);
 				}
 			}
 			);
@@ -1336,6 +1338,7 @@ class Scene
 				{
 					RunPendingStarts();
 					Rigidbody.SyncAll(this);
+					CharacterController.SyncAll(this);
 				}
 			});
 		World.AddStep(mFramePipeline, "Frame.Update", .OnUpdate, new => RunFrameUpdates);

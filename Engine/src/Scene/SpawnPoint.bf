@@ -157,8 +157,11 @@ static class SpawnPoints
 				if (point.IsActiveAndEnabled)
 					all.Add(point);
 			}
-			else if (component.IsActiveAndEnabled && component is CharacterController)
-				bodies.Add(component.Transform.Position);
+		}
+		for (let controller in scene.Components<CharacterController>(.. scope .()))
+		{
+			if (controller.GameObject.ActiveInHierarchy)
+				bodies.Add(controller.Transform.Position);
 		}
 		for (let body in scene.Components<Rigidbody>(.. scope .()))
 		{
@@ -256,7 +259,7 @@ static class SpawnPoints
 			return null;
 		object.Transform.SetPositionAndRotation(point.Position, point.Rotation);
 		let controller = object.GetComponent<CharacterController>();
-		if (controller != null)
+		if (controller.IsValid)
 			controller.Teleport(point.Position);
 		let body = object.GetComponent<Rigidbody>();
 		if (body.IsValid && body.HasBody)

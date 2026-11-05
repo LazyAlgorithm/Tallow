@@ -440,7 +440,7 @@ class NetworkIdentity : Component
 		state.rotation = Transform.Rotation;
 		// A character controller has no body, but its velocity (falling speed above all) must survive a rewind.
 		let controller = GetComponent<CharacterController>();
-		if (controller != null)
+		if (controller.IsValid)
 		{
 			state.linearVelocity = controller.Velocity;
 			// A character does not spin, so the unused slot carries how long it has been airborne (for the jump grace).
@@ -468,7 +468,7 @@ class NetworkIdentity : Component
 		else
 		{
 			Transform.SetPositionAndRotation(state.position, state.rotation);
-			GetComponent<CharacterController>()?.Teleport(state.position, state.linearVelocity, state.angularVelocity.x);
+			GetComponent<CharacterController>().Teleport(state.position, state.linearVelocity, state.angularVelocity.x);
 		}
 		for (let component in GameObject.Components)
 		{

@@ -9,20 +9,9 @@ enum CharacterShape : int32
 	Box
 }
 
-/// Moves an object through the world by sweeping a shape, using Jolt's virtual character: it climbs steps, stays on
-/// slopes up to a limit, follows the floor downhill and pushes dynamic bodies. It replaces a Rigidbody and collider on
-/// anything that walks.
-///
-/// The controller only moves when a script tells it to, once per fixed tick:
-///
-///   controller.SimpleMove(direction * speed, Time.FixedDeltaTime, jumpPressed ? 6 : 0);   // gravity handled for you
-///   controller.Move(velocity, Time.FixedDeltaTime);                                         // full control
-///
-/// A Capsule slides around obstacles most smoothly. A Box matches crates and furniture; Edge Radius rounds its edges
-/// so it does not catch on seams and small lips. The box stays axis-aligned unless Turn Shape With Object is on,
-/// because turning a long box next to a wall can push a corner into the wall.
-[Component]
-class CharacterController : Component
+/// A Character Controller's settings, in its entity (CharacterController is the handle).
+[Component, HandleData]
+struct CharacterControllerData
 {
 	public CharacterShape shape = .Capsule;
 	/// Capsule: radius and total height, tips included.
@@ -33,7 +22,7 @@ class CharacterController : Component
 	/// Box: how far its edges and corners are rounded.
 	public float edgeRadius = 0.1f;
 	/// Middle of the shape relative to the object's origin. Use (0, height / 2, 0) when the origin is at the feet.
-	public Vector3 center;
+	public Vector3 center = .Zero;
 	/// Tallest step it walks up, and how far it follows the floor down.
 	public float stepHeight = 0.4f;
 	/// Steepest slope, in degrees, it can stand and walk on.
@@ -44,7 +33,7 @@ class CharacterController : Component
 	/// Multiplies the scene's gravity in SimpleMove.
 	public float gravityScale = 1;
 	/// Turn the collision shape with the object's rotation. Leave off for boxes unless they are square.
-	public bool turnShapeWithObject;
+	public bool turnShapeWithObject = false;
 	/// Seconds after leaving the ground during which a jump is still allowed. It covers the few ticks a rounded
 	/// shape spends rolling over the edge of a step, and forgives a jump pressed just past a ledge.
 	public float jumpGrace = 0.12f;
@@ -61,6 +50,142 @@ class CharacterController : Component
 	/// Swimming speed as a share of the speed SimpleMove or Swim is given.
 	[Range(0, 2)]
 	public float swimSpeed = 0.6f;
+
+	public this() { }
+}
+
+/// Moves an object through the world by sweeping a shape, using Jolt's virtual character: it climbs steps, stays on
+/// slopes up to a limit, follows the floor downhill and pushes dynamic bodies. It replaces a Rigidbody and collider on
+/// anything that walks.
+///
+/// The controller only moves when a script tells it to, once per fixed tick:
+///
+///   controller.SimpleMove(direction * speed, Time.FixedDeltaTime, jumpPressed ? 6 : 0);   // gravity handled for you
+///   controller.Move(velocity, Time.FixedDeltaTime);                                         // full control
+///
+/// A Capsule slides around obstacles most smoothly. A Box matches crates and furniture; Edge Radius rounds its edges
+/// so it does not catch on seams and small lips. The box stays axis-aligned unless Turn Shape With Object is on,
+/// because turning a long box next to a wall can push a corner into the wall.
+///
+/// A handle (ComponentHandle): its settings are CharacterControllerData's fields; the Jolt character and what it
+/// knows between steps are its CharacterControllerState. The character is made once the scene plays and the
+/// component is switched on and its object active (CharacterController.SyncAll, after the Starts of each frame and
+/// tick), and taken away when it is switched off, its object made inactive, the component removed or play stopped.
+[Component, HandleFields]
+struct CharacterController : ComponentHandle<CharacterControllerData>
+{
+	/// The character, made the first time it is asked for.
+	public CharacterControllerState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<CharacterControllerState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			state.[Friend]mGameObject = mGameObject;
+			return state;
+		}
+	}
+
+	CharacterControllerState Existing => IsValid ? ComponentState<CharacterControllerState>.Get(mGameObject.Scene.World, mGameObject.Entity) : null;
+
+	/// False in edit mode and while disabled; Move then just shifts the transform.
+	public bool HasCharacter => Existing?.HasCharacter ?? false;
+	public bool IsGrounded => Existing?.IsGrounded ?? false;
+	/// Grounded, or airborne for no longer than Jump Grace without having jumped (CharacterControllerState.CanJump).
+	public bool CanJump => Existing?.CanJump ?? false;
+	/// Seconds since it last stood on the ground; 0 while grounded.
+	public float AirTime => Existing?.AirTime ?? 0;
+	/// Touching ground that is steeper than Max Slope.
+	public bool IsOnSteepGround => Existing?.IsOnSteepGround ?? false;
+	/// Velocity after the last move, so it already reflects walls and floors that stopped it.
+	public Vector3 Velocity => Existing?.Velocity ?? .Zero;
+	public Vector3 GroundNormal => Existing?.GroundNormal ?? .Zero;
+	/// Velocity of whatever it stands on, for example a moving platform.
+	public Vector3 GroundVelocity => Existing?.GroundVelocity ?? .Zero;
+	/// Swimming (CharacterControllerState.IsSwimming).
+	public bool IsSwimming => IsValid && Runtime.IsSwimming;
+
+	/// Moves for one step at exactly this velocity. Gravity is not added; use SimpleMove for a walking character.
+	public void Move(Vector3 velocity, float deltaTime) => Runtime.Move(velocity, deltaTime);
+	/// Walks at the given horizontal velocity for one step (CharacterControllerState.SimpleMove).
+	public void SimpleMove(Vector3 horizontalVelocity, float deltaTime, float jumpSpeed = 0) => Runtime.SimpleMove(horizontalVelocity, deltaTime, jumpSpeed);
+	/// Swims at a velocity in any direction (CharacterControllerState.Swim).
+	public void Swim(Vector3 velocity, float deltaTime, float jumpSpeed = 0) => Runtime.Swim(velocity, deltaTime, jumpSpeed);
+	/// Puts the character somewhere with a given velocity, for respawns and for network corrections.
+	/// Does nothing on a handle that is not valid, as `controller?.Teleport(...)` did.
+	public void Teleport(Vector3 position, Vector3 velocity = .Zero, float airTime = -1)
+	{
+		if (IsValid)
+			Runtime.Teleport(position, velocity, airTime);
+	}
+	/// Applies the shape fields after changing them (CharacterControllerState.ApplyShape).
+	public bool ApplyShape(float maxPenetration = 0.03f) => Runtime.ApplyShape(maxPenetration);
+	/// Takes a shape decided on another machine, without asking whether it fits here.
+	public void ApplyRemoteShape(CharacterShape newShape, float newRadius, float newHeight, Vector3 newBoxSize, float newEdgeRadius, Vector3 newCenter) => Runtime.ApplyRemoteShape(newShape, newRadius, newHeight, newBoxSize, newEdgeRadius, newCenter);
+	/// Becomes a capsule of this size if it fits here. On false nothing changes.
+	public bool SetCapsule(float newRadius, float newHeight, Vector3 newCenter = .Zero) => Runtime.SetCapsule(newRadius, newHeight, newCenter);
+	/// Becomes a box of this size if it fits here. On false nothing changes.
+	public bool SetBox(Vector3 newSize, float newEdgeRadius = 0.1f, Vector3 newCenter = .Zero) => Runtime.SetBox(newSize, newEdgeRadius, newCenter);
+
+	/// Makes and takes away characters to match the components (the scene calls it after running Starts).
+	public static void SyncAll(Scene scene)
+	{
+		let playing = scene.IsPlaying;
+		for (let (entity, state) in ComponentState<CharacterControllerState>.In(scene.World, .. scope .()))
+		{
+			let gameObject = state.GameObject;
+			let controller = gameObject.GetComponent<CharacterController>();
+			if (!playing || !controller || !controller.enabled || !gameObject.ActiveInHierarchy)
+			{
+				if (state.HasCharacter)
+					state.Destroy();
+				state.[Friend]mFailed = false;
+			}
+		}
+		if (!playing)
+			return;
+		for (let controller in scene.Components<CharacterController>(.. scope .()))
+		{
+			if (!controller.GameObject.ActiveInHierarchy)
+				continue;
+			let state = controller.Runtime;
+			if (!state.HasCharacter && !state.[Friend]mFailed)
+				state.[Friend]mFailed = !state.Create(.Zero);
+		}
+	}
+
+	static void DrawGizmos(GameObject gameObject, bool selected)
+	{
+		if (selected && gameObject.Scene != null)
+			gameObject.GetComponent<CharacterController>().Runtime.DrawGizmos(selected);
+	}
+
+	static void OnRemove(void* world, uint64 entity) => ComponentState<CharacterControllerState>.Release(world, entity);
+}
+
+/// What a Character Controller keeps outside its data: its Jolt character and what it knows between steps. Its
+/// settings are read from the entity each time (they can be changed by SetCapsule and the network).
+[DataFields(typeof(CharacterControllerData), "Settings")]
+class CharacterControllerState
+{
+	GameObject mGameObject;
+	// Making the character failed: not tried again each frame (it is when the component is switched off and on).
+	bool mFailed;
+
+	public GameObject GameObject => mGameObject;
+	Transform Transform => mGameObject.Transform;
+	Scene Scene => mGameObject.Scene;
+	ref CharacterControllerData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<CharacterControllerData>();
+	}
+
+	public ~this()
+	{
+		if (mCharacter != null && mGameObject?.Scene?.Physics != null)
+			Destroy();
+	}
 
 	void* mCharacter;
 	Jolt.CharacterState mState;
@@ -113,28 +238,6 @@ class CharacterController : Component
 		return water.SurfaceAt(middle, out surface, ?, out current) && surface - (middle.y - half) >= swimDepth - slack;
 	}
 
-	public override void Start()
-	{
-		mReady = true;
-		Create(.Zero);
-	}
-
-	public override void OnEnable()
-	{
-		if (mReady)
-			Create(.Zero);
-	}
-
-	public override void OnDisable()
-	{
-		Destroy();
-	}
-
-	public override void OnDestroy()
-	{
-		mReady = false;
-	}
-
 	Vector3 WorldScale
 	{
 		get
@@ -183,7 +286,7 @@ class CharacterController : Component
 
 	Quaternion ShapeRotation => turnShapeWithObject ? Transform.Rotation : Quaternion.Identity;
 
-	bool Create(Vector3 velocity)
+	public bool Create(Vector3 velocity)
 	{
 		if (HasCharacter)
 			return true;
@@ -205,7 +308,7 @@ class CharacterController : Component
 		return true;
 	}
 
-	void Destroy()
+	public void Destroy()
 	{
 		if (mCharacter != null)
 		{
@@ -390,7 +493,7 @@ class CharacterController : Component
 		// The floor band depends on the shape, so the character is rebuilt around the shape that was just accepted.
 		Rebuild();
 		// In multiplayer the server decides and every machine follows; see NetworkSync.
-		NetworkSync.ShapeChanged(this);
+		NetworkSync.ShapeChanged(mGameObject.GetComponent<CharacterController>());
 		return HasCharacter;
 	}
 
@@ -422,32 +525,32 @@ class CharacterController : Component
 	/// Becomes a capsule of this size if it fits here. On false nothing changes.
 	public bool SetCapsule(float newRadius, float newHeight, Vector3 newCenter = .Zero)
 	{
-		let old = (shape, radius, height, center);
+		let old = Settings;
 		shape = .Capsule;
 		radius = newRadius;
 		height = newHeight;
 		center = newCenter;
 		if (ApplyShape())
 			return true;
-		(shape, radius, height, center) = old;
+		Settings = old;
 		return false;
 	}
 
 	/// Becomes a box of this size if it fits here. On false nothing changes.
 	public bool SetBox(Vector3 newSize, float newEdgeRadius = 0.1f, Vector3 newCenter = .Zero)
 	{
-		let old = (shape, boxSize, edgeRadius, center);
+		let old = Settings;
 		shape = .Box;
 		boxSize = newSize;
 		edgeRadius = newEdgeRadius;
 		center = newCenter;
 		if (ApplyShape())
 			return true;
-		(shape, boxSize, edgeRadius, center) = old;
+		Settings = old;
 		return false;
 	}
 
-	public override void OnDrawGizmos(bool selected)
+	public void DrawGizmos(bool selected)
 	{
 		if (!selected)
 			return;

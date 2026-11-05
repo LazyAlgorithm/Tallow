@@ -239,7 +239,7 @@ class PhysicsWorld
 	List<Entry> mMoving = new .() ~ delete _;
 	List<void*> mCharacters = new .() ~ delete _;
 	/// Every live character controller in this world, for the soft push between characters.
-	public List<CharacterController> Controllers = new .() ~ delete _;
+	public List<CharacterControllerState> Controllers = new .() ~ delete _;
 	Dictionary<uint32, Entry> mByBody = new .() ~ delete _;
 	bool mBroadPhaseDirty;
 	int64 mNextOptimize;
@@ -784,8 +784,8 @@ class PhysicsWorld
 		// Most objects have no body: setting their layer must not look through every one.
 		bool hasBody = false;
 		for (let component in gameObject.Components)
-			hasBody |= component is Collider || component is CharacterController;
-		hasBody |= gameObject.HasComponent<Rigidbody>();
+			hasBody |= component is Collider;
+		hasBody |= gameObject.HasComponent<Rigidbody>() || gameObject.HasComponent<CharacterController>();
 		if (!hasBody)
 			return;
 		for (let entry in mEntries)
