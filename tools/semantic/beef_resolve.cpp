@@ -499,11 +499,21 @@ void Resolve(Context& context, std::istringstream& in)
 	BfSystem_RemoveOldData(system);
 }
 
-int main()
+void TraceStartup(const char* stage)
 {
+	if (std::getenv("TALLOW_ANALYSIS_TRACE"))
+		std::cerr << "Beef analysis: " << stage << "\n" << std::flush;
+}
+
+int Run()
+{
+	TraceStartup("initialising platform");
 	BfpSystem_Init(2, 0);
+	TraceStartup("initialising compiler library");
 	IDEHelper_ProgramStart();
+	TraceStartup("creating resolve context");
 	Context context;
+	TraceStartup("context ready");
 	auto system = context.system;
 	auto compiler = context.compiler;
 	std::cout << "TALLOW_HELLO 1 b62833e327d6b08f3566b31102c57646de6916b0\n" << std::flush;
@@ -558,4 +568,18 @@ int main()
 	BfCompiler_Delete(compiler);
 	BfSystem_Delete(system);
 	IDEHelper_ProgramDone();
+	return 0;
+}
+
+int main()
+{
+	try
+	{
+		return Run();
+	}
+	catch (const std::exception& error)
+	{
+		std::cerr << "Beef analysis startup failed: " << error.what() << "\n";
+		return 2;
+	}
 }

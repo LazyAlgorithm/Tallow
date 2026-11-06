@@ -269,7 +269,7 @@ jobs:
           beef_root="$(cygpath -w "$PWD/beef-win")"
           cd tallow
           python tools/semantic/build_helper.py --beef-root "$beef_root" --output build/semantic/beef-resolve.exe
-          python tools/semantic/test_service.py --helper build/semantic/beef-resolve.exe --beef-root "$beef_root"
+          TALLOW_ANALYSIS_TRACE=1 python tools/semantic/test_service.py --helper build/semantic/beef-resolve.exe --beef-root "$beef_root"
 
       - name: Build and package
         run: |

@@ -61,7 +61,8 @@ class Worker:
             self.close()
             raise RuntimeError('Beef analysis timed out; helper stopped')
         if line is None:
-            raise RuntimeError(f'Beef analysis helper exited ({self.process.poll()})')
+            self.process.wait(timeout=1)
+            raise RuntimeError(f'Beef analysis helper exited ({self.process.returncode})')
         return line
 
     def until(self, prefix):
