@@ -90,6 +90,11 @@ def main():
         (stage / 'tools').mkdir()
         for name in ('build_player.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'toolchain.txt', 'setup_dependencies.ps1'):
             shutil.copy2(root / 'tools' / name, stage / 'tools' / name)
+        shutil.copytree(root / 'tools/semantic', stage / 'tools/semantic', ignore=ignore)
+        analysis = root / 'build/semantic' / ('beef-resolve.exe' if windows else 'beef-resolve')
+        if analysis.is_file() and analysis.with_suffix('.json').is_file():
+            shutil.copy2(analysis, stage / 'tools/semantic' / analysis.name)
+            shutil.copy2(analysis.with_suffix('.json'), stage / 'tools/semantic' / analysis.with_suffix('.json').name)
         for relative in [*archives, shaderc, texturec, modelsettings, modelconv]:
             destination = stage / relative
             destination.parent.mkdir(parents=True, exist_ok=True)

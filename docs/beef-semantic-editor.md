@@ -1,7 +1,8 @@
 # Beef semantic editor integration
 
-Phase 7f investigation, 2026-11-06. The backend is **not implemented yet**. The native editor still uses ApiIndex
-completion; its compiler diagnostics come from background builds of saved files.
+Phase 7f implementation checkpoint, 2026-11-06. The built-in editor now connects to a persistent, isolated Beef
+compiler helper for member completion, overload signatures, definition navigation, documentation and unsaved-buffer
+diagnostics. ApiIndex remains the visibly labelled fallback. Full 7f acceptance remains open.
 
 ## Backend decision
 
@@ -55,3 +56,39 @@ once per changed revision. This fixes branched edits reaching a saved undo index
 Edits clear old diagnostic markers. Background saved-file checks queue a newer save rather than dropping it,
 and markers are only applied to a matching, saved document revision. ApiIndex no longer falls back to arbitrary
 member words when it has identified a type with no matching members. None of these changes is semantic IntelliSense.
+
+## Implemented and tested
+
+`tools/semantic/build_helper.py` builds the C++ resolve helper. `service.py` reads the generated Beef workspace,
+loads its dependency graph and maintains parser revisions. `BeefAnalysisClient` owns the process and performs pipe
+I/O on a worker thread. `ScriptSemantic` debounces edits (200 ms for completion; 750 ms for diagnostics), replaces
+queued work with the latest request, and rejects responses when project generation, any open buffer revision or the
+requested cursor has changed. A stalled compiler is killed after a 30-second timeout; stopping the editor joins its
+worker. Results never save or overwrite script files.
+
+The editor toolbar exposes **Definition**, **Signature** and **Info**. Completion follows the native widget's normal
+completion trigger; opening an argument list or typing a comma requests signatures. Info displays compiler-supplied
+`///` documentation. Diagnostics use the native editor's zero-based line numbers. The compiler uses UTF-8 byte
+offsets; CRLF files are normalised when loaded, consistently with the editor document representation.
+
+The helper manifest hashes the linked compiler library. A different compiler fails closed to basic completion;
+rebuild the helper against that installation. Linux uses the compiler's static libraries; Windows loads its installed
+compiler DLLs. The service supports the generated `src` layout, Debug/Release and Linux64/Win64, and explicitly
+rejects unsupported configuration selections or custom source layouts.
+
+Local Linux checks passed for inherited/generic members, two overloads, declaration locations, compiler documentation,
+unsaved type and syntax errors, clearing corrected diagnostics, revision echoes and invalid cursor rejection. The
+actual EcsBench/engine dependency graph resolves comptime-generated Light members. The Beef process client passed
+startup, round-trip and repeated shutdown checks. The updated editor and `PatrolExample` compile in Linux Debug.
+Windows helper integration and packaged startup are covered by the ECS CI steps but await results for this checkpoint.
+
+## Still required
+
+- Interactive editor checks for project switching, hot reload and completion/diagnostic presentation.
+- Find-references, version-validated rename and safe suggested fixes; the current toolbar does not offer these.
+- Wider compiler/configuration compatibility, missing-import/changed-API fixtures and Unicode cursor fixtures.
+- Comparative responsiveness, memory and edit-to-play measurements. A successful prototype resolve is not an editor
+  performance acceptance result.
+
+The original implementation requirements above remain the acceptance checklist; implemented parts are not a claim
+that every requirement has passed.

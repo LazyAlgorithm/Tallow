@@ -47,9 +47,15 @@ Custom resources still need correct destructors. Existing arbitrary delegates re
 and retired hot-reload instances remain limitations described in `script-hot-reload.md`.
 
 The EcsBench ownership checks cover duplicate adoption, cleanup-before-delete ordering, play restart, component
-removal, object destruction and detached-component deletion. Runtime results must be recorded after BeefBuild
-and EcsBench complete; writing these tests is not a passing runtime result.
+removal, object destruction and detached-component deletion. These passed in Linux Debug and Release at `d9993ece` (workflow 42264324947), including shutdown/cancellation and
+releasing a batch after shutdown. Windows compiled successfully; equivalent runtime checks there remain pending.
 
 Preload shutdown joins workers before discarding pending payloads. Outstanding batches become done/cancelled
 and remain safe to inspect until their owner releases them. Uploaded image staging buffers are freed immediately;
 `AssetLoader.Busy` includes work currently executing on a decoding thread.
+
+A complete, compiled gameplay example is [`PatrolExample.bf`](../Samples/EcsBench/src/PatrolExample.bf).
+Attach it to a visible GameObject and set `speed` and `distance` in the Inspector. It moves between two points using
+`Transform` and the supplied `deltaTime`; its waypoint collection is adopted once in `Awake`, with no per-frame
+allocation or manual deletion. This is a local movement example, not a navigation, collision or network prediction
+controller. Mutable reference collections are not automatically deep-copied into rollback history.

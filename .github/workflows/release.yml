@@ -119,6 +119,13 @@ jobs:
           path: tallow/build/native
           key: ${{ steps.native-key.outputs.key }}
 
+      - name: Build and check Beef analysis
+        if: github.ref == 'refs/heads/ecs'
+        run: |
+          cd tallow
+          python3 tools/semantic/build_helper.py --beef-root "$HOME/beef" --output build/semantic/beef-resolve
+          LD_LIBRARY_PATH="$HOME/beef/IDE/dist:$LD_LIBRARY_PATH" python3 tools/semantic/test_service.py --helper build/semantic/beef-resolve --beef-root "$HOME/beef"
+
       - name: Build and package
         run: |
           export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
@@ -161,6 +168,7 @@ jobs:
             "$BEEFBUILD" -workspace=Samples/EcsBench -config="$config" -platform=Linux64
             "Samples/EcsBench/build/${config}_Linux64/EcsBench/EcsBench" --generate-graph-fixture "$PWD/Samples/EcsBench/src/GeneratedTickProbe.bf"
             "$BEEFBUILD" -workspace=Samples/EcsBench -config="$config" -platform=Linux64
+            "Samples/EcsBench/build/${config}_Linux64/EcsBench/EcsBench" --check-semantic-client "$PWD" "$PWD/Samples/EcsBench"
             xvfb-run -a python3 tools/run_ecs_bench.py --check --config "$config" --timeout 600
           done
 
@@ -254,6 +262,14 @@ jobs:
         with:
           path: tallow/build/native-win
           key: ${{ steps.native-key.outputs.key }}
+
+      - name: Build and check Beef analysis
+        if: github.ref == 'refs/heads/ecs'
+        run: |
+          beef_root="$(cygpath -w "$PWD/beef-win")"
+          cd tallow
+          python tools/semantic/build_helper.py --beef-root "$beef_root" --output build/semantic/beef-resolve.exe
+          python tools/semantic/test_service.py --helper build/semantic/beef-resolve.exe --beef-root "$beef_root"
 
       - name: Build and package
         run: |

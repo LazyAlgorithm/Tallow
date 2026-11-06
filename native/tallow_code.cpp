@@ -26,6 +26,10 @@ namespace
 		uint64_t revision = 0;
 		uint64_t dirtyRevision = 0;
 		bool dirty = false;
+		bool semantic = false;
+		bool completionPending = false;
+		uint64_t completionRevision = 0;
+		int32_t completionCursor = -1;
 		size_t lastUndoIndex = 0;
 		bool markup = false;
 		// Which of the editor's code colour sets this document was last given (tn_code_set_palette).
@@ -175,6 +179,24 @@ namespace
 			at = end;
 		}
 		return "";
+	}
+
+	int32_t CursorOffset(Document* document)
+	{
+		const auto cursor = document->editor.GetMainCursorPosition();
+		size_t offset = cursor.index;
+		for (size_t line = 0; line < cursor.line; ++line)
+			offset += document->editor.GetLineText(line).size() + 1;
+		return static_cast<int32_t>(offset);
+	}
+
+	void RequestCompletion(Document* document, TextEditor::AutoCompleteState& state)
+	{
+		state.suggestions.clear();
+		state.suggestionsPromise = true;
+		document->completionPending = true;
+		document->completionRevision = document->revision;
+		document->completionCursor = CursorOffset(document);
 	}
 
 	void CompleteBeef(TextEditor* editor, TextEditor::AutoCompleteState& state)
@@ -409,7 +431,12 @@ TN_API void* tn_code_create(const char* text, int language)
 		// Scripts complete from the engine's and the project's own code; see CompleteBeef.
 		TextEditor::AutoCompleteConfig config;
 		config.suggestionWidth = 40;
-		config.callback = [document](TextEditor::AutoCompleteState& state) { CompleteBeef(&document->editor, state); };
+		config.callback = [document](TextEditor::AutoCompleteState& state) {
+			if (document->semantic)
+				RequestCompletion(document, state);
+			else
+				CompleteBeef(&document->editor, state);
+		};
 		editor.SetAutoCompleteConfig(&config);
 	}
 	else
@@ -419,10 +446,53 @@ TN_API void* tn_code_create(const char* text, int language)
 	editor.SetTransactionCallback([document](const std::vector<TextEditor::Change>& changes) {
 		if (changes.empty()) return;
 		++document->revision;
+		document->completionPending = false;
 		// Compiler locations refer to an older buffer as soon as it is edited, including undo/redo.
 		document->editor.ClearMarkers();
 	});
 	return document;
+}
+
+// All widget calls, including applying worker results, stay on the UI thread.
+TN_API int32_t tn_code_cursor_offset(void* handle) { return CursorOffset(static_cast<Document*>(handle)); }
+
+TN_API void tn_code_semantic_mode(void* handle, bool enabled)
+{
+	auto* document = static_cast<Document*>(handle);
+	if (document->semantic == enabled) return;
+	document->semantic = enabled;
+	document->completionPending = false;
+	document->editor.SetAutoCompleteSuggestions({});
+}
+
+TN_API bool tn_code_completion_request(void* handle, uint64_t* revision, int32_t* cursor)
+{
+	auto* document = static_cast<Document*>(handle);
+	if (!document->completionPending) return false;
+	document->completionPending = false;
+	*revision = document->completionRevision;
+	*cursor = document->completionCursor;
+	return true;
+}
+
+TN_API bool tn_code_completion_result(void* handle, uint64_t revision, int32_t cursor, const char* words)
+{
+	auto* document = static_cast<Document*>(handle);
+	if (!document->semantic || revision != document->revision || cursor != CursorOffset(document) ||
+		revision != document->completionRevision || cursor != document->completionCursor) return false;
+	std::vector<std::string> suggestions;
+	const char* at = words != nullptr ? words : "";
+	while (*at)
+	{
+		const char* end = strchr(at, '\n');
+		if (end == nullptr)
+			end = at + strlen(at);
+		if (end > at)
+			suggestions.emplace_back(at, end);
+		at = *end ? end + 1 : end;
+	}
+	document->editor.SetAutoCompleteSuggestions(suggestions);
+	return true;
 }
 
 // The editor describes the code it found: begin, one call per type (members separated by newlines), end.

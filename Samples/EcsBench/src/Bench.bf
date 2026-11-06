@@ -152,7 +152,6 @@ class Bench : Component
 		mUpdateStart = SDL.SDL_GetTicksNS();
 		if (mWorld != null)
 		{
-			let deltaTime = Time.DeltaTime;
 			let halfSize = mHalfSize;
 			if (mMode == "ecs-mt")
 				mMove.ParallelFor(scope (chunk) => MoveSystem.Run(chunk, halfSize, deltaTime));

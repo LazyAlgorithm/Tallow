@@ -69,6 +69,7 @@ extension EditorApp
 	void PollScriptReload()
 	{
 		CollectCheckResults();
+		PollAnalysis();
 		if (!mReloadReady) return;
 		if (mScriptPollClock.ElapsedMilliseconds >= 500)
 		{

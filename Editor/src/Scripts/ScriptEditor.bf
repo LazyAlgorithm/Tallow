@@ -155,6 +155,11 @@ extension EditorApp
 
 	void OpenScript(StringView path, int32 line = -1)
 	{
+		let absolutePath = scope String();
+		Path.GetFullPath(path, absolutePath);
+		var path;
+		if (!absolutePath.IsEmpty)
+			path = absolutePath;
 		mShowScripts = true;
 		mDockScripts = true;
 		ScriptDocument document = null;
@@ -323,7 +328,7 @@ extension EditorApp
 			problem.file.Trim();
 			mProblems.Add(problem);
 		}
-		AddDeterminismWarnings(scope $"{Project.Current.Path}/src", 0);
+		AddDeterminismWarnings(scope $"{Project.Current.Path}/src" , 0);
 		for (let document in mScripts)
 			ApplyProblems(document);
 		if (mCheckWasReload)
@@ -373,7 +378,7 @@ extension EditorApp
 			let name = scope String();
 			entry.GetFileName(name);
 			if (!name.StartsWith('.') && name != "build")
-				AddDeterminismWarnings(scope $"{folder}/{name}", depth + 1);
+				AddDeterminismWarnings(scope $"{folder}/{name}" , depth + 1);
 		}
 	}
 
@@ -434,6 +439,7 @@ extension EditorApp
 			{
 				let active = mActiveScript;
 				DrawScriptToolbar(active);
+				DrawAnalysisToolbar(active);
 				let problemsHeight = mProblems.Count > 0 ? Math.Min(120.0f, 26.0f + mProblems.Count * 20.0f) : 0.0f;
 				DrawScriptTabs(active, problemsHeight);
 				if (problemsHeight > 0)
@@ -538,6 +544,12 @@ extension EditorApp
 				SaveScript(close);
 			if (mActiveScript == close)
 				mActiveScript = null;
+			if (mAnalysisDocument == close)
+			{
+				mAnalysisDocument = null;
+				mAnalysisRequest++;
+				mAnalysisHint.Clear();
+			}
 			mScripts.Remove(close);
 			tn_code_destroy(close.handle);
 			delete close;

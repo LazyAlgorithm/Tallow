@@ -69,8 +69,10 @@ static class AssetLoader
 			get
 			{
 				for (let job in mJobs)
+				{
 					if (job.cancelled)
 						return true;
+				}
 				return false;
 			}
 		}
@@ -219,6 +221,7 @@ static class AssetLoader
 		if (sThreads.Count > 0)
 			return;
 		sQuit = false;
+		sWake.Reset();
 		for (int i < 2)
 		{
 			let thread = new Thread(new => WorkerMain);

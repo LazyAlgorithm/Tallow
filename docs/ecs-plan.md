@@ -537,7 +537,7 @@ Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API
 - [ ] Audit actual lifetime ownership, leaks, double-frees and stale references across GameObjects, components, prefab instances, assets, event subscriptions, coroutines, timers, async jobs and callbacks before adding abstractions.
 - [ ] Keep scene objects and components engine-owned. Automatically disconnect or cancel owner-bound events, timers, coroutines and callbacks at the appropriate destruction/unload point; do not leave callbacks to removed or hot-reloaded script instances. Preserve existing lifecycle semantics.
 - [ ] Give asset use safe, resource-manager-owned handles with clear sharing, caching, version validation, reference/lifetime and unloading semantics for textures, meshes, materials, audio and other shared resources. Avoid duplicate loads and accidental permanent retention of streamed assets.
-- [ ] Investigate native Beef ownership patterns and small **optional** deterministic cleanup helpers for ordinary heap objects and collections, with explicit guidance for cross-scene and async lifetimes, reference cycles and weak ownership. Do not introduce a mandatory tracing GC or claim arbitrary object graphs are automatically collected.
+- [x] Investigate native Beef ownership patterns and small **optional** deterministic cleanup helpers for ordinary heap objects and collections, with explicit guidance for cross-scene and async lifetimes, reference cycles and weak ownership. Do not introduce a mandatory tracing GC or claim arbitrary object graphs are automatically collected.
 - [ ] Ensure ECS table moves, component removal, scene unload and script hot reload invalidate or refresh handles safely. Measure any new wrapper against the existing Beef API and do not add allocations or expensive lookups to every scripted update.
 - [ ] Update example scripts, templates and API docs so ordinary spawn / component / resource / subscription workflows need no explicit `delete`, `scope` or ECS query. Keep advanced explicit ownership and systems available for performance-critical code.
 
@@ -547,7 +547,7 @@ Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API
 
 **Current baseline:** `native/tallow_code.cpp` uses `CompleteBeef` with API-indexed names and text-based guesses for type/member completion. `Editor/src/Scripts/ScriptEditor.bf` already runs background BeefBuild error checks. Upgrade these mechanisms to semantic editing rather than adding another scripting language.
 
-- [x] Investigate maintained Beef compiler and BeefIDE analysis interfaces; choose a reliable in-process service or isolated helper process, with clear version compatibility, startup/error handling and fallback when semantic analysis is unavailable. Decision (2026-11-06): a version-pinned isolated resolve-only compiler helper; [source investigation and implementation requirements](beef-semantic-editor.md). The helper itself is not implemented; the remaining 7f checks stay open.
+- [x] Investigate maintained Beef compiler and BeefIDE analysis interfaces; choose a reliable in-process service or isolated helper process, with clear version compatibility, startup/error handling and fallback when semantic analysis is unavailable. Decision (2026-11-06): a version-pinned isolated resolve-only compiler helper; [source investigation and implementation requirements](beef-semantic-editor.md). The helper and editor connection are implemented with local Linux compiler fixtures and process tests; remaining 7f acceptance checks stay open.
 - [ ] Provide **context-aware member completion** (including inherited and generic members, engine and project types), expected argument and return types, overload selection and parameter/signature help while typing. Do not guess members from source words when the actual type is known.
 - [ ] Add diagnostics and editor navigation for unresolved types, missing imports, wrong argument counts/types, deprecated APIs and source locations; provide hover documentation, go-to-definition, find-references, rename and safe suggested fixes where Beef tooling permits.
 - [ ] Keep semantic analysis responsive while typing via debounced background work, cancellation, cached project symbols and incremental updates. Diagnostic locations and suggestions must match unsaved buffers; do not require a full game rebuild for every keystroke.
@@ -576,9 +576,17 @@ Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API
 
 ### Phase 7 continuation (2026-11-06; validation in progress)
 
+Validated checkpoint: [`d9993ece`](https://github.com/LazyAlgorithm/Tallow/commit/d9993ece0bc844da0f9c643755abe9a4d8b98abe),
+[workflow 42264324947](https://github.com/LazyAlgorithm/Tallow/actions/runs/42264324947): Linux and Windows build/package
+passed. Linux EcsBench passed in **both Debug and Release**, after regenerating and recompiling the visual-graph
+fixture in each configuration. This includes owner cleanup, preload shutdown, callback ordering and 120 ticks of
+byte-for-byte handwritten/generated-script restore/replay. Native document tests and the five benchmark-runner tests
+also passed. This does not replace the external multiplayer, hardware performance or interactive editor checks.
+The initial detached-owner cleanup crash was fixed by retaining its ownership registries until destructor cleanup.
+
 - Owner-bound cleanup and preload batches: `Component.Own`, `OnCleanup`, lifecycle release and retirement release;
   [ownership contract and limitations](component-ownership.md). Shared asset cache lifetime handles and arbitrary
-  external subscription/task cleanup remain unfinished. New EcsBench ownership regression cases require runtime validation.
+  external subscription/task cleanup remain unfinished. EcsBench ownership regression cases passed at the validated checkpoint above.
 - Preload jobs whose last batch was released during loading are now freed after adoption, instead of remaining
   in the job map indefinitely. Shared asset cache eviction is still a separate unfinished item.
 - Script snapshot/replay field lists retain their capacity between ticks and clear borrowed field pointers on every
@@ -594,7 +602,7 @@ Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API
   compiler-backed semantic completion; [the required backend remains open](beef-semantic-editor.md).
 - `ecs` pushes now run the existing Linux/Windows build workflow without release publication. Linux adds Debug/Release
   EcsBench checks and generated-graph recompilation. CI outcome must be recorded before marking runtime validation done.
-- The documented Linux `toolchain-2` download returned 404; no local BeefBuild or LLVM 22 toolchain was available.
+- The documented Linux `toolchain-2` download returned 404. The matching CI compiler was subsequently retrieved for local validation.
   The externally maintained `~/TallowEcsTests` network fixtures are not in this checkout. Full network regressions,
   hardware performance comparisons, safe shared asset unloading, handle-lifetime audit, semantic editor implementation,
   and the remaining compatibility/platform matrix still block Phase 7 exit.

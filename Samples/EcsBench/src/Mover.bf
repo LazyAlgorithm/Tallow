@@ -14,8 +14,8 @@ class Mover : Component
 	public override void Update(TickInput input, float deltaTime)
 	{
 		var position = Transform.LocalPosition;
-		Workload.Step(ref position, ref velocity, halfSize, Time.DeltaTime);
+		Workload.Step(ref position, ref velocity, halfSize, deltaTime);
 		Transform.LocalPosition = position;
-		Transform.Rotate(spin * Time.DeltaTime);
+		Transform.Rotate(spin * deltaTime);
 	}
 }
