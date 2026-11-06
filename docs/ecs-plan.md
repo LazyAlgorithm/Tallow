@@ -532,7 +532,7 @@ Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API
 
 **Phase 7 work started (2026-11-06, `ecs` branch; not yet benchmarked or build-verified):**
 - State-sync replay now saves the same supported script value fields as lockstep and attempts to restore them before resimulation. This is local history, not automatic replication; `[Sync]` remains opt-in.
-- Script-field restoration now validates the full payload length before modifying fields. Nonserialized fields are left alone; private supported fields are included.
+- Script-field restoration now validates the full payload length and a local object/field-layout signature before modifying fields. Nonserialized fields are left alone; private supported fields are included. On mismatch, state sync adopts the authoritative state without replay rather than running against invalid history.
 - ECS checks were added for local-only/private fields, `[Sync]` fields, and malformed payloads; passing test results still required.
 - World-space Transform setters now reuse one validated ECS data reference when writing and marking dirty. No scripting API or update order changed; impact still needs profiling.
 - [ ] BeefBuild compile, network rollback regression suites (including correction under latency/jitter/loss), visual-graph compilation, multi-platform checks, and script-update benchmarks remain required.
@@ -1706,9 +1706,11 @@ nine profiles.
   - `NetRandom.Value(this)` / `Range(this, min, max)`: random numbers every machine in step agrees on (seeded from
     the object's network id, its exact position and rotation, and a salt), what the warning suggests.
   - Found by building it: replays restored physics and transforms but not scripts, so a script's own state (a
-    counter in Update) drifted on any client that replayed. Lockstep's exact snapshots now also keep and put back
-    the value fields of the scripts on the objects a client runs (`ScriptFields`). (State sync's replays still
-    do not; a script's state that must survive a correction belongs in [Sync] fields or the body.)
+    counter in Update) drifted on any client that replayed. Lockstep's exact snapshots keep and put back the
+    supported value fields of the scripts on the objects a client runs (`ScriptFields`). State-sync clients now
+    also save and restore those fields as *local prediction history* (2026-11-06, compile/network regression
+    validation pending). `[Sync]` still controls server-to-client field replication; it is not required for
+    supported local rollback state. Snapshots with changed script instances or field layouts are rejected.
   - Correction statistics: the panel's ROLLBACK line by cause (6g) and the LOCKSTEP line (6h).
   - `~/TallowEcsTests/NetworkDesync` (dedicated server, A and B in lockstep with the debugger on, 64 crates): 10
     seconds with nothing planted finds nothing; then `Sway.Update` adds an unseeded random number to the players'
