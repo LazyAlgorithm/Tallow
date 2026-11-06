@@ -153,7 +153,11 @@ extension NetworkManager
 			if (let behaviour = component as NetworkBehaviour)
 			{
 				if (behaviour.IsActiveAndEnabled)
+				{
 					behaviour.Simulate(input, Time.FixedDeltaTime);
+					if (DesyncDebugger)
+						DesyncNoteScript(identity, behaviour, true);
+				}
 			}
 		}
 		identity.TickUpdate(input, Time.FixedDeltaTime);
@@ -195,6 +199,7 @@ extension NetworkManager
 		MapSharing.Tick(this);
 		if (IsServer)
 		{
+			DesyncBeginTick(mTick + 1);
 			if (mMode == .Host)
 			{
 				// Rounded as a client's are, so that forwarded to clients it runs the same there.
@@ -235,10 +240,12 @@ extension NetworkManager
 				mSimulatingClient = -1;
 			}
 			NoteApplied(mTick + 1);
+			DesyncNoteClientTicks();
 		}
 		else if (mConnected && LocalClientId > 0)
 		{
 			mTick++;
+			DesyncBeginTick(mTick);
 			ApplyRemoteStates();
 			// Rounded to what the server will receive, so that both sides simulate from the same numbers.
 			let input = NetPack.Quantize(GatherLocalInput());

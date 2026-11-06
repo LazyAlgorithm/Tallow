@@ -1357,6 +1357,8 @@ class Scene
 				{
 					Water.Simulate(this, Time.FixedDeltaTime);
 					Physics.Step(Time.FixedDeltaTime);
+					if (Network != null && Network.DesyncDebugger)
+						Network.[Friend]DesyncNotePhysics();
 				}
 			});
 		World.AddStep(mTickPipeline, "Tick.NetworkSend", .PostUpdate, new () =>

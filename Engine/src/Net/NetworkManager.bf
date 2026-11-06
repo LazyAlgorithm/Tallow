@@ -361,6 +361,8 @@ class NetworkManager
 		/// Lockstep: whether it has been sent the exact state of everything (since joining or asking again); and
 		/// until when its own controls go back to it (the server repeated some).
 		public bool lockstepSynced;
+		/// Desync debugger: which of this client's ticks each of the last noted server ticks ran.
+		public uint32[128] desyncTicks;
 		public uint32 ownInputsUntil;
 		/// The last controls forwarded to it for each player, and when.
 		public Dictionary<uint32, (NetInput input, uint32 tick)> forwarded = new .() ~ delete _;
@@ -560,6 +562,9 @@ class NetworkManager
 		case MsgForward: return "forwarded controls";
 		case MsgDesync: return "lockstep resync";
 		case MsgLockstepState: return "lockstep state";
+		case MsgDesyncQuery: return "desync debugger query";
+		case MsgDesyncHashes: return "desync debugger hashes";
+		case MsgDesyncFields: return "desync debugger fields";
 		case 16, 17, 18, 19: return "host migration";
 		case NetCompression.MessageType: return "compressed";
 		case NetworkSync.MsgTerrainBrush: return "terrain";
@@ -595,6 +600,16 @@ class NetworkManager
 			into.AppendF("LOCKSTEP {} hashes checked, {} differed (each resyncs), {} replays from exact physics snapshots, {} exact states taken up\n", HashChecks, HashMismatches, LockstepReplays, LockstepStatesTaken);
 		else if (Lockstep)
 			into.AppendF("LOCKSTEP {} desyncs reported, {} states sent for changes made here, {} asked for again, {} exact states sent (the last {} bytes)\n", LockstepResyncs, LockstepChangesSent, LockstepRetries, LockstepStatesSent, LockstepStateBytes);
+		if (DesyncDebugger)
+		{
+			into.AppendF("DESYNC DEBUGGER on, {} found", DesyncsFound);
+			if (LastDesync != null)
+			{
+				into.Append("; the last: first split at ");
+				LastDesync.Describe(into);
+			}
+			into.Append('\n');
+		}
 		if (IsClient && mRemotePlayers.Count > 0)
 			into.AppendF("FORWARD {} other players run in the present from their controls, {} guesses wrong and {} right, {} replays for changed controls\n", mRemotePlayers.Count, GuessesWrong, GuessesRight, InputReplays);
 		if (IsClient && Rollbacks > 0)
@@ -1185,6 +1200,8 @@ class NetworkManager
 						ReadInputs(client, ref reader);
 					else if (client != null && type == MsgDesync)
 						ReadDesync(client, ref reader);
+					else if (client != null && type == MsgDesyncQuery)
+						ReadDesyncQuery(client, ref reader);
 					else if (client != null && type == MsgLink)
 					{
 						client.lossPercent = reader.Read<uint8>();
@@ -1213,6 +1230,8 @@ class NetworkManager
 					case MsgHide: ReadHide(ref reader);
 					case MsgForward: ReadForwarded(ref reader);
 					case MsgLockstepState: ReadLockstepState(ref reader);
+					case MsgDesyncHashes: ReadDesyncHashes(ref reader);
+					case MsgDesyncFields: ReadDesyncFields(ref reader);
 					case MsgCustom: Dispatch(reader.Read<uint8>(), 0, ref reader);
 					case MsgOwner:
 						let ownedId = reader.Read<uint32>();

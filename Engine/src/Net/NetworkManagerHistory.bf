@@ -196,7 +196,11 @@ extension NetworkManager
 			if (!onlyGuess)
 			{
 				if (worst > CorrectionThreshold)
+				{
 					CorrectionsOwn++;
+					// The debugger looks into why this machine's own prediction went wrong.
+					DesyncInvestigate(ackTick > 30 ? ackTick - 30 : 0, ackTick);
+				}
 				else if (remoteWorst > CorrectionThreshold)
 					CorrectionsOtherPlayers++;
 				else
@@ -537,6 +541,7 @@ extension NetworkManager
 		for (uint32 tick = ackTick + 1; tick <= mTick; tick++)
 		{
 			mReplayTick = tick;
+			DesyncBeginTick(tick);
 			mScene.RunReplayTick();
 		}
 		// Put back as they were; one resting before and still resting is left alone (putting it back would wake it).
@@ -586,6 +591,8 @@ extension NetworkManager
 			return;
 		Water.[Friend]SimulateAt(mScene, Time.FixedDeltaTime, mReplayTick / (double)Time.TickRate);
 		mScene.Physics.Step(Time.FixedDeltaTime);
+		if (DesyncDebugger)
+			DesyncNotePhysics();
 	}
 
 	/// Replay.Record: where what this machine moves ended the tick, for the next comparison with the server.

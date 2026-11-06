@@ -303,6 +303,7 @@ extension EditorApp
 			problem.file.Trim();
 			mProblems.Add(problem);
 		}
+		AddDeterminismWarnings(scope $"{Project.Current.Path}/src", 0);
 		for (let document in mScripts)
 			ApplyProblems(document);
 		if (mCheckWasReload)
@@ -315,6 +316,45 @@ extension EditorApp
 			Log.Info("Scripts compiled. Use File > Rebuild & Reload to run the new code.");
 		else
 			Log.Error(scope $"Scripts have {mProblems.Count} problem(s); see the Scripts tab.");
+	}
+
+	/// Networked code that would come out differently on different machines (ScriptDeterminism), as warnings.
+	void AddDeterminismWarnings(StringView folder, int depth)
+	{
+		if (depth > 32 || !Directory.Exists(folder))
+			return;
+		for (let entry in Directory.EnumerateFiles(folder))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (name.StartsWith('.') || !name.EndsWith(".bf", .OrdinalIgnoreCase))
+				continue;
+			let path = scope $"{folder}/{name}";
+			let source = scope String();
+			if (File.ReadAllText(path, source) case .Err)
+				continue;
+			if (!source.Contains("TickInput") && !source.Contains("Simulate("))
+				continue;
+			List<ScriptDeterminism.Warning> warnings = scope .();
+			ScriptDeterminism.Check(source, warnings);
+			for (let warning in warnings)
+			{
+				let problem = new ScriptProblem();
+				problem.isError = false;
+				problem.file.Set(path);
+				problem.line = (int32)warning.line;
+				problem.message.Set(warning.message);
+				delete warning.message;
+				mProblems.Add(problem);
+			}
+		}
+		for (let entry in Directory.EnumerateDirectories(folder))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (!name.StartsWith('.') && name != "build")
+				AddDeterminismWarnings(scope $"{folder}/{name}", depth + 1);
+		}
 	}
 
 	void ApplyProblems(ScriptDocument document)

@@ -36,6 +36,8 @@ extension NetworkManager
 		public void*[ExactRingSize] states;
 		public uint32[ExactRingSize] tick;
 		public uint32[ExactRingSize] generation;
+		/// The public fields of the scripts on the objects this machine runs, as they were (see SaveScriptFields).
+		public List<uint8>[ExactRingSize] scripts;
 
 		public ~this() { Clear(); }
 
@@ -46,6 +48,7 @@ extension NetworkManager
 				PhysicsWorld.FreeExact(states[i]);
 				states[i] = null;
 				tick[i] = 0;
+				DeleteAndNullify!(scripts[i]);
 			}
 		}
 	}
@@ -178,6 +181,8 @@ extension NetworkManager
 			RequestResync(true);
 			return;
 		}
+		if (mExact.scripts[slot] != null)
+			ScriptFields(mExact.scripts[slot], true);
 		let h = ackTick % NetworkIdentity.HistorySize;
 		List<(NetworkIdentity identity, BodyState state)> run = scope .();
 		for (let identity in mIdentities)
@@ -216,6 +221,8 @@ extension NetworkManager
 	/// Client: whether this machine has taken up the server's exact state (hashes are only compared after).
 	bool mLockstepSynced;
 	uint32 mSyncedAt;
+	/// Client: the last tick whose hash matched the server's.
+	uint32 mLastGoodHash;
 	/// Client: exact states taken up; server: sent, and the size of the last.
 	public int32 LockstepStatesTaken, LockstepStatesSent, LockstepStateBytes;
 
@@ -297,6 +304,55 @@ extension NetworkManager
 		mExact.states[slot] = mScene.Physics.SaveExact(mExact.states[slot]);
 		mExact.tick[slot] = tick;
 		mExact.generation[slot] = mScene.Physics.BodyGeneration;
+		if (mExact.scripts[slot] == null)
+			mExact.scripts[slot] = new .();
+		ScriptFields(mExact.scripts[slot], false);
+	}
+
+	/// The value fields (numbers, vectors, flags) the Inspector shows on the scripts of the objects this machine runs
+	/// (its own player and the others it runs), saved into `data` or, with `restore`, put back from it: a replay
+	/// starts from the scripts' state at that tick, not where they ended up. False if the scripts are not the same
+	/// as when saved (nothing is put back then).
+	bool ScriptFields(List<uint8> data, bool restore)
+	{
+		if (!restore)
+			data.Clear();
+		int at = 0;
+		List<FieldRef> fields = scope .();
+		for (let identity in mIdentities)
+		{
+			if (identity.ownerId != LocalClientId && !identity.RemoteRun)
+				continue;
+			for (let component in identity.GameObject.Components)
+			{
+				if (!component.[Friend]mCallbacks.HasFlag(.Update) && !(component is NetworkBehaviour))
+					continue;
+				fields.Clear();
+				ComponentRegistry.GetFields(component, fields);
+				for (let field in fields)
+				{
+					switch (field.kind)
+					{
+					case .Float, .Double, .Char, .Vector4, .Int3, .Matrix4, .Int, .Bool, .Vector2, .Vector3, .Quaternion, .Color, .Enum:
+						let size = field.type.Size;
+						if (restore)
+						{
+							if (at + size > data.Count)
+								return false;
+							Internal.MemCpy(field.ptr, &data[at], size);
+						}
+						else
+						{
+							data.Count = at + size;
+							Internal.MemCpy(&data[at], field.ptr, size);
+						}
+						at += size;
+					default:
+					}
+				}
+			}
+		}
+		return !restore || at == data.Count;
 	}
 
 	/// Client, in lockstep, after forwarded controls came in: if a guess was wrong (or the server ran this
@@ -342,8 +398,11 @@ extension NetworkManager
 			if (ClientHash(ackTick) != serverHash)
 			{
 				HashMismatches++;
+				DesyncInvestigate(Math.Max(mLastGoodHash, mSyncedAt), ackTick);
 				RequestResync();
 			}
+			else
+				mLastGoodHash = ackTick;
 		}
 	}
 
@@ -366,6 +425,8 @@ extension NetworkManager
 		}
 		if (!mScene.Physics.RestoreExact(mExact.states[slot]))
 			return false;
+		if (mExact.scripts[slot] != null)
+			ScriptFields(mExact.scripts[slot], true);
 		// What the physics engine does not hold (players with no body) goes back from its own history.
 		for (let entry in owned)
 		{
@@ -436,6 +497,7 @@ extension NetworkManager
 		mOwnFixedFrom = 0;
 		mLockstepSynced = false;
 		mSyncedAt = 0;
+		mLastGoodHash = 0;
 		if (Lockstep)
 			LockstepBindAll();
 	}

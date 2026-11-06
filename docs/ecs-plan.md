@@ -1666,6 +1666,42 @@ nine profiles.
   - macOS: not runnable here (no Mac). Jolt is built with `CROSS_PLATFORM_DETERMINISTIC` there as on the others; check
     `NetworkLockstepCross` with a Mac client before claiming it.
 
+### 6i steps
+
+- [x] **6i EXIT MET** (2026-11-06), `Engine/src/Net/NetworkManagerDesync.bf`:
+  - `NetworkManager.DesyncDebugger` (`NetworkSession.desyncDebugger`, Advanced; off by default, it is for finding
+    a desync, not for shipping). The server and every client note, for 128 ticks, what each system did to each
+    simulated object: after every script's `Simulate` and `Update` its public (Inspector) value fields and the
+    object's position and rotation, and after the physics step every simulated body's position, rotation and
+    velocities. The server notes which tick of each client's it ran at each of its own ticks.
+  - When a client's hash differs from the server's (lockstep), or a correction puts its own player back (state
+    sync: why its prediction went wrong), it asks the server (`MsgDesyncQuery` = 26) for its **per-system hashes**
+    of the ticks since the last good check (`MsgDesyncHashes` = 27), finds the first tick and system that differ,
+    then asks for that system's fields at that tick (`MsgDesyncFields` = 28) and compares them field by field.
+  - The answer is `NetworkManager.LastDesync` (tick, system, object, each differing field here and on the
+    server), a console warning, and the network panel's DESYNC DEBUGGER line (the **first-split view**), e.g.
+    `tick 612 in Sway.Update on Player (id 1073741824): sway 0 here, 0.0043 on the server; Transform.position
+    (2.6766574, 2, -1.1007833) here, (2.6810024, 2, -1.1007833) on the server`.
+  - **Script editor warnings** (`ScriptDeterminism.Check`, shown with the compiler's after each check): inside a
+    networked `Update(TickInput ...)` or `Simulate(NetInput ...)`, a `Random` made with no seed (or drawn from),
+    `Time.DeltaTime`, the clock or frame count (`Time.Time`, `DateTime.Now`, `Stopwatch` ...) and reading keys or
+    the mouse directly. Nothing outside those methods is flagged.
+  - `NetRandom.Value(this)` / `Range(this, min, max)`: random numbers every machine in step agrees on (seeded from
+    the object's network id, its exact position and rotation, and a salt), what the warning suggests.
+  - Found by building it: replays restored physics and transforms but not scripts, so a script's own state (a
+    counter in Update) drifted on any client that replayed. Lockstep's exact snapshots now also keep and put back
+    the value fields of the scripts on the objects a client runs (`ScriptFields`). (State sync's replays still
+    do not; a script's state that must survive a correction belongs in [Sync] fields or the body.)
+  - Correction statistics: the panel's ROLLBACK line by cause (6g) and the LOCKSTEP line (6h).
+  - `~/TallowEcsTests/NetworkDesync` (dedicated server, A and B in lockstep with the debugger on, 64 crates): 10
+    seconds with nothing planted finds nothing; then `Sway.Update` adds an unseeded random number to the players'
+    position, and the debugger names **tick 612 (where the server started it, in A's ticks), system Sway.Update,
+    object Player, field sway**; the panel shows it. Also checks the editor warnings on a sample script (3, all
+    inside Update) and that NetRandom agrees between two scenes.
+  - Limits: only public value fields are compared (state in private fields shows only through positions); an
+    object made at a different tick on each machine has its scripts' state differ from the start.
+  - NetworkLockstep (90 s, 0 differed), network suites as for 6h.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

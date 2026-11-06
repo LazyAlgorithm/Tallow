@@ -423,7 +423,11 @@ class NetworkIdentityState
 		{
 			let component = components[i];
 			if (component.[Friend]mCallbacks.HasFlag(.Update) && component.[Friend]mStarted && component.IsActiveAndEnabled)
+			{
 				scene.[Friend]RunUpdate(component, tick, deltaTime);
+				if (scene.Network != null && scene.Network.DesyncDebugger)
+					scene.Network.[Friend]DesyncNoteScript(Handle, component, false);
+			}
 		}
 	}
 

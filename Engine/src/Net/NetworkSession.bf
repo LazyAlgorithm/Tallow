@@ -50,6 +50,11 @@ class NetworkSession : Component
 	/// moving objects far outnumber players; not for competitive games (nothing is hidden). Physics prediction is
 	/// turned on with it, and controls are used 2 ticks after they are given unless set otherwise.
 	public bool lockstep;
+	/// The desync debugger (on the server and every client): notes what each system did to each simulated object
+	/// every tick, and when a client splits from the server finds the first tick, system, object and field. Costs
+	/// memory and time: for finding a desync, not for shipping.
+	[Advanced]
+	public bool desyncDebugger;
 	/// Share joining players out among this many teams, each going to the smallest. 0 for no teams. A player's
 	/// team is on their Network Identity, and they appear at Spawn Points for that team.
 	public int32 teamCount = 0;
@@ -80,6 +85,7 @@ class NetworkSession : Component
 		network.LosslessCompression = losslessCompression;
 		network.FieldDeltas = fieldDeltas;
 		network.Lockstep = lockstep;
+		network.DesyncDebugger = desyncDebugger;
 		if (lockstep)
 			network.PredictPhysics = true;
 		network.InputDelayTicks = inputDelayTicks;
