@@ -25,6 +25,8 @@ Showcase passing `tools/validate_showcase.py` once it has been ported, the code 
 - **Breaking changes are acceptable:** Eliminate legacy object duplication, ownership indirection, and compatibility layers when they inhibit a cleaner implementation. Keep familiar property names and script patterns where they improve usability, not because old binaries or projects must compile unchanged.
 - **No misleading blanket performance guarantees:** 10,000 uncomplicated static or instanced objects should be an ordinary benchmark target, not an advanced DOTS exercise. But arbitrary 10,000-instance gameplay scripts, unique materials, heavy physics, or networking bandwidth cannot be optimized away automatically. Profile the full workload and expose a useful cause/effect diagnosis; optimize safe common patterns without changing gameplay semantics.
 - **No silent semantic changes:** Automatic systems must respect script ordering contracts, physics ownership, lifecycle events, and server authority. Do not silently parallelize user scripts or infer networking authority in ambiguous cases. Supply understandable defaults and editor diagnostics.
+- **Ordinary scripts are a performance target, not merely a compatibility layer:** optimize the default `Script.Update(TickInput, float)` path and the engine work around it. Custom ECS systems remain an optional escape hatch, not the expected solution for typical games.
+- **Prediction-safe by default:** simulation affecting authoritative or predicted state uses fixed-tick inputs, stable dependencies and reproducible ordering. Rendering, UI and other presentation work may be frame-rate driven but must not feed nondeterministic values into predicted state. Preserve rollback/replay correctness as an invariant of every optimization. Reducing avoidable divergence should reduce corrective resimulations, but latency, late inputs, authority changes and real prediction error still require rollback/reconciliation.
 
 ### Acceptance tests for this contract
 
@@ -33,6 +35,7 @@ Showcase passing `tools/validate_showcase.py` once it has been ported, the code 
 3. Validate that editor duplication, save/load, prefab updates, hot reload, physics, animation, and visual scripting use the same authoritative runtime component state.
 4. Verify advanced ECS and networking overrides do not change default behavior in projects that never opt into them.
 5. For every phase, track complexity as well as speed: number of game-code concepts, special annotations, manual setup steps, and per-object helper scripts required by an introductory project.
+6. Run identical seeded, fixed-tick game and network-prediction scenarios before and after each script optimization; compare per-tick state hashes, authoritative/client replay results and events, plus correction count, rollback count, re-simulated ticks and CPU cost under repeatable packet latency/loss. Distinguish deterministic mismatches from unavoidable network corrections.
 
 ## Goals
 
@@ -45,6 +48,7 @@ Showcase passing `tools/validate_showcase.py` once it has been ported, the code 
    interest management work on component columns instead of walking each object's fields. As today, a game
    developer adds a Network Identity and writes `Update`. Everything else happens behind the scenes.
 4. **Game code rarely touches memory management.** The gameplay API avoids handing scripts heap objects to free.
+5. **Fast normal scripts with deterministic results.** The default `Script` and GameObject workflow should benefit materially from ECS without developer-written queries, changed execution semantics or non-reproducible prediction.
 
 ## What a game developer sees
 
@@ -484,11 +488,37 @@ Steps, each committed on its own (see "Networking" under Architecture for the de
 **Phase exit:** measure a dedicated server with thousands of replicated bodies and many simulated clients,
 before (from `main`) and after each of 6c to 6h: server CPU per tick and bytes per client per second.
 
-### Phase 7: Scripting experience (M)
+### Phase 7: Scripting experience and transparent performance (L)
 
-- The low-allocation gameplay API, coroutine helpers and editor quick fixes above.
-- The Systems tier documented as advanced, with the Showcase crowd exhibit in both styles.
-- **Exit:** a new project's template scripts contain no `delete`, `scope` or queries.
+**Product objective:** ordinary GameObject scripts stay recognisably Unity-like and are themselves fast. An ECS-backed engine with faster rendering but slower `Script.Update` is not the finished experience. No new annotation, query, system class, thread configuration or manual memory management should be required to obtain the default improvements.
+
+#### 7a. Profile and optimize the default script path
+
+- Profile end-to-end frame cost and isolate script dispatch, transform/component reads and writes, cache misses, dirty propagation, engine callback indexing and ECS reference refresh. The November 5 benchmarks show faster total frames but slower `Mover.Update` (10k: 0.37 → 0.44 ms; 100k: 3.55 → 4.22 ms); treat this as an explicit regression to investigate, not a tradeoff to ignore.
+- Optimize hot `Transform` and built-in component handle access, reuse validated references where safe, avoid unnecessary lookups and allocations, and preserve the visible property API. Component references must remain valid across archetype moves, deletes, prefab changes, reloads and world transfers.
+- Reduce callback overhead using callback-specific lists, efficient iteration and, where measured safe, compiler-generated or type-specialized dispatch/accessors. Benchmark against the existing virtual-call path; do not assume grouping or code generation is automatically faster.
+- Keep script instance lifecycle, enabled-state handling, `Awake`/`Start`/`Update`/`FixedUpdate`/`LateUpdate`, inspector fields, hot reload and registration order unchanged. Type grouping or new iteration order cannot silently change gameplay behavior.
+- Automatically batch compatible **engine** work (transform propagation, animation, render extraction, physics sync, navigation, network snapshots) through ECS queries, dirty data and Jobs where safe. Avoid per-object redundant work even when gameplay remains a conventional script.
+- Keep explicitly written `Query`/`ParallelFor` systems as an advanced optimization for unusually large homogeneous simulations. Do not promise that arbitrary script bodies can be automatically vectorized or executed in parallel.
+
+#### 7b. Deterministic execution and network prediction invariants
+
+- **Fixed-tick authority:** on an object with Network Identity, `Update(TickInput input, float deltaTime)` runs on the deterministic fixed simulation tick and uses the supplied tick input and fixed delta, as already specified in Phase 2. Preserve the same behavior on server, predicted client and replay. Non-networked `Update` may remain per-frame; gameplay that must be reproduced during prediction must not depend on `Time.DeltaTime`, render frame rate or wall-clock time.
+- **Stable ordering:** preserve script registration order and explicitly order state-dependent engine systems, command application, spawn/despawn and event dispatch. Flecs table iteration order and worker completion order are *not* gameplay ordering guarantees. Predicted simulations must use stable entity identities and canonical iteration/reduction order where results depend on order.
+- **Safe parallelism:** parallelize only disjoint data updates or operations with proven order independence. Gather and apply shared writes, collisions, forces, events and reductions in an explicitly deterministic sequence. Never silently parallelize ordinary user scripts or allow races, unordered atomics or floating-point reductions to change predicted results.
+- **Repeatable inputs and state:** provide/use seeded, serializable RNG for predicted gameplay; deterministic scheduling and physics-step parameters; stable spawn IDs and tick-stamped commands; reproducible state snapshots including all gameplay fields and RNG state. Isolate presentation-only effects, audio, camera and UI from authoritative state.
+- **Floating-point/platform boundary:** test within-build same-platform replay equivalence first. Cross-platform lockstep is a stricter separate Phase 6h goal requiring compatible compiler flags, floating-point behavior, math and physics verification; do not claim bitwise determinism on Windows/Linux/macOS without tests.
+- **Prediction and correction:** correctness comes first. More deterministic replay prevents *avoidable* divergence and corrective rollbacks, but cannot eliminate rollbacks caused by latency, missing/late inputs, server decisions or physics interactions. Retain authoritative reconciliation, state hashes, rollback and resynchronization; never suppress a necessary correction to improve a metric.
+- **Diagnostics:** expose tick, system/script, entity, input hash, RNG state, first divergent field and cause where possible. Warn when a networked script reads frame-dependent state, nondeterministic RNG or unordered shared results in predicted `Update`.
+
+#### 7c. Acceptance benchmarks and developer experience
+
+- Compare pre-ECS `main`, current `ecs` baseline and optimized `ecs` on the **same reference hardware and build settings**, with interleaved Release runs. Use ordinary editor-created prefabs with 1k/10k/50k/100k moving scripted objects, including a realistic mix of rendering, collision, AI and networked movement. Report frame average/p99, script-update average/p99, CPU time, memory, allocation count, spawn/despawn, batches and component-access costs.
+- Run the identical workload as an optional explicit ECS system to measure the remaining gap, but judge the default GameObject path by its own performance and ease of use. Set numeric targets after collecting baseline and hardware data; do not promise 60 FPS for arbitrary 100k-object games.
+- Test deterministic hashes and observable script/event order before versus after optimizations on fixed input sequences (including changes to archetypes, enabled state, hierarchy and script reload). Exercise single-thread versus multithread schedules repeatedly. Where order is part of the contract, results must match; document any intentionally different semantics.
+- Test server/client prediction and rollback under reproducible packet delay, jitter and loss, with replay and resimulation. Require no new desyncs, lost events, different authoritative outcomes or greater avoidable correction frequency from performance optimizations. Report correction/rollback counts, re-simulated ticks and CPU separately from network-induced corrections.
+- Preserve the low-allocation gameplay API, coroutine helpers and editor quick fixes above. Document the Systems tier as **advanced**, with a Showcase crowd exhibit in both normal-script and explicit-system styles.
+- **Exit:** a new project's template scripts contain no `delete`, `scope` or queries; ordinary scripts measurably improve over the pre-ECS baseline or a documented blocker explains the remaining script regression; full-frame gains are reported separately; fixed-tick/replay/network determinism checks pass; a developer needs no special ECS knowledge to realize the measured default-path improvements.
 
 ### Phase 8: Docs and release (M)
 
@@ -501,15 +531,10 @@ before (from `main`) and after each of 6c to 6h: server CPU per tick and bytes p
 
 - **Half-converted engine.** Work on the `ecs` branch and keep `main` releasable. Merge only after Phase 5
   at the earliest, or Phase 6 if networked games are the priority.
-- **Script speed is unchanged, not improved.** Scripts stay per-object virtual calls, about today's cost. The
-  gains come from engine systems and from moving hot gameplay to the Systems tier when the profiler says so.
+- **Script speed is a known regression and an explicit Phase 7 target.** Scripts currently remain per-object calls; the November 5 benchmark shows approximately 17–19% slower script-update time despite better whole-frame throughput. Phase 7 must profile and improve the ordinary `Script` path without forcing developers into Systems. Some workloads may still benefit greatly from optional explicit ECS systems; quantify that gap rather than hiding it.
 - **Adding or removing components often is slow** (entities move between tables). Use enabled flags or Flecs
   toggles for things that switch on and off often.
-- **Determinism for rollback.** Predicted systems must be deterministic within a build: fixed tick, no
-  frame-time dependence, ordered iteration. Document this next to the networked `Update`'s rules.
-  Lockstep mode (step 6h) raises the bar to every platform. The shared tick and Jolt's cross-platform
-  determinism already exist, so what is left is game code: build flags, math functions and iteration order
-  all matter. One mismatch shows up as a desync, so hash checks and resync are required, not optional.
+- **Determinism is a hard constraint on optimization, not a presumed side effect of ECS.** Preserve fixed-tick input semantics, stable state-dependent ordering, reproducible RNG and physics settings, and canonical application of parallel results for server/predicted client/replay. Verify same-build repeatability with per-tick hashes and adversarial tests, then separately validate cross-platform lockstep (6h). Hashes, reconciliation and resync remain mandatory; reduced avoidable mismatches can reduce corrective rollbacks, but network latency and authoritative changes still require them.
 - **Flecs upgrades.** Pin the tag in `third_party/flecs` and keep the shim small, so an upgrade only touches
   `tallow_ecs.c`.
 - **Possible later addition:** a second scripting language (C# or Luau) can bind to the same component
