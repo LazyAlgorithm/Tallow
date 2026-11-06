@@ -165,6 +165,7 @@ extension NetworkManager
 		// Until the server has consumed one of our inputs there is nothing to compare against: adopt its state.
 		let comparable = ackTick > 0 && mTick - ackTick < NetworkIdentity.HistorySize;
 		float worst = 0;
+		bool ownRight = false;
 		if (comparable)
 		{
 			worst = PredictionError(ackTick, owned);
@@ -180,17 +181,29 @@ extension NetworkManager
 				return;
 			}
 			if (worst <= CorrectionThreshold)
+			{
 				PhysicsRollbacks++;
+				ownRight = true;
+			}
 			worst = Math.Max(worst, bodyWorst);
 		}
 
 		LastCorrection = worst;
 		Rollbacks++;
 		mStatRollbacks++;
-		if (!comparable)
+		// A correction from further back than the cap is taken as it is, eased in, rather than run again for that long.
+		let tooOld = comparable && (int32)(mTick - ackTick) > MaxReplayTicks;
+		if (tooOld)
+			Resyncs++;
+		if (!comparable || tooOld)
 		{
 			for (let entry in owned)
+			{
 				entry.identity.ApplyState(entry.state);
+				if (tooOld)
+					for (int i < NetworkIdentity.HistorySize)
+						entry.identity.History[i] = entry.state;
+			}
 			for (let body in bodies)
 			{
 				body.identity.ApplyBodyState(body.state, body.asleep);
@@ -198,9 +211,113 @@ extension NetworkManager
 			}
 			return;
 		}
+		let began = SDL.SDL_GetTicksNS();
+		// With the player's own objects right, only the bodies near what was wrong need running again.
+		List<(NetworkIdentity identity, BodyState state, bool asleep)> frozen = scope .();
+		if (ownRight && LimitReplayToIslands)
+			FreezeOutsideIsland(ackTick, owned, bodies, frozen);
+		LastReplayFrozen = (int32)frozen.Count;
 		RewindTo(ackTick, owned, bodies);
 		mStatReplayed += (int32)(mTick - ackTick);
 		ReplayInputs(ackTick, owned);
+		for (let entry in frozen)
+		{
+			entry.identity.ReplayFrozen = false;
+			entry.identity.ApplyBodyState(entry.state, entry.asleep);
+		}
+		RollbackNanoseconds += SDL.SDL_GetTicksNS() - began;
+		ReplayedTicks += mTick - ackTick;
+	}
+
+	/// For tests: off runs every predicted body again in every replay, as before island limiting.
+	public static bool LimitReplayToIslands = true;
+	/// Client: the longest a replay may be, in ticks; a correction from further back is taken as it is (Resyncs).
+	const int32 MaxReplayTicks = 30;
+	/// Client: time spent going back and running ticks again, and how many ticks were run again (the network panel
+	/// divides one by the other: the cost of a replayed tick).
+	public uint64 RollbackNanoseconds;
+	public int64 ReplayedTicks;
+	/// Client: corrections from further back than MaxReplayTicks, taken without a replay.
+	public int32 Resyncs;
+	/// Client: how many predicted bodies the last replay left still, being far from what was corrected.
+	public int32 LastReplayFrozen;
+
+	/// Client, before a replay that only bodies need: works out the island of predicted bodies that could touch a
+	/// corrected one (or this machine's own objects) over the ticks run again, each reaching as far as its size and
+	/// speed take it, and those reached in turn; every other predicted body is held asleep through the replay and
+	/// put back afterwards, so the physics engine skips it. Jolt skips sleeping bodies when stepping, so the replay
+	/// costs about the island's bodies times the ticks, not every body's.
+	void FreezeOutsideIsland(uint32 ackTick, List<(NetworkIdentity identity, BodyState state)> owned, List<ServerBody> bodies, List<(NetworkIdentity identity, BodyState state, bool asleep)> frozen)
+	{
+		let seconds = (float)(mTick - ackTick + 1) * Time.FixedDeltaTime;
+		List<(NetworkIdentity identity, Vector3 at, float reach, bool reached)> predicted = scope .();
+		for (let identity in mIdentities)
+		{
+			if (!identity.Predicted || !identity.GetComponent<Rigidbody>().HasBody)
+				continue;
+			let scale = identity.Transform.LocalScale;
+			let size = Math.Max(scale.x, Math.Max(scale.y, scale.z));
+			let body = identity.GetComponent<Rigidbody>();
+			let speed = body.IsSleeping ? 0 : body.Velocity.Length;
+			let reach = size * 0.9f + speed * seconds + 0.25f;
+			predicted.Add((identity, identity.Transform.Position, reach, false));
+		}
+		if (predicted.Count < 8)
+			return;
+		List<(Vector3 at, float reach)> seeds = scope .();
+		for (let entry in owned)
+			seeds.Add((entry.identity.Transform.Position, 1.5f + entry.identity.CaptureState().linearVelocity.Length * seconds));
+		let ahead = Time.FixedDeltaTime * Math.Max(mServerInterval, 1);
+		for (var p in ref predicted)
+		{
+			// A body with no history yet, or one the server corrects, is in the island.
+			if ((int32)(ackTick - p.identity.PredictedSince) < 0)
+				p.reached = true;
+		}
+		for (let body in bodies)
+		{
+			let history = body.identity.History[ackTick % NetworkIdentity.HistorySize];
+			var error = (history.position - body.state.position).Length;
+			error = Math.Max(error, (1.0f - Mathf.Abs(Quaternion.Dot(history.rotation, body.state.rotation))) * 2.0f);
+			error = Math.Max(error, (history.linearVelocity - body.state.linearVelocity).Length * ahead);
+			if (error <= CorrectionThreshold)
+				continue;
+			for (var p in ref predicted)
+				if (p.identity == body.identity)
+					p.reached = true;
+		}
+		// Grow the island: anything within reach of something in it, until nothing more is.
+		List<int> queue = scope .();
+		for (int i < predicted.Count)
+			if (predicted[i].reached)
+				queue.Add(i);
+		for (let seed in seeds)
+			for (int i < predicted.Count)
+				if (!predicted[i].reached && (predicted[i].at - seed.at).Length < predicted[i].reach + seed.reach)
+				{
+					predicted[i].reached = true;
+					queue.Add(i);
+				}
+		for (int q = 0; q < queue.Count; q++)
+		{
+			let from = predicted[queue[q]];
+			for (int i < predicted.Count)
+			{
+				if (predicted[i].reached || (predicted[i].at - from.at).Length >= predicted[i].reach + from.reach)
+					continue;
+				predicted[i].reached = true;
+				queue.Add(i);
+			}
+		}
+		for (let p in predicted)
+		{
+			if (p.reached)
+				continue;
+			let body = p.identity.GetComponent<Rigidbody>();
+			frozen.Add((p.identity, p.identity.CaptureState(), body.IsSleeping));
+			p.identity.ReplayFrozen = true;
+			body.Sleep();
+		}
 	}
 
 	/// Client: puts everything this machine predicts back as it was at the end of a tick: the server's word where
@@ -213,7 +330,7 @@ extension NetworkManager
 		Replaying = true;
 		for (let identity in mIdentities)
 		{
-			if (identity.Predicted && (int32)(tick - identity.PredictedSince) >= 0)
+			if (identity.Predicted && !identity.ReplayFrozen && (int32)(tick - identity.PredictedSince) >= 0)
 				identity.ApplyBodyState(identity.History[slot], identity.HistoryAsleep[slot]);
 		}
 		for (let body in bodies)
@@ -237,7 +354,7 @@ extension NetworkManager
 	void JumpToServer(uint32 ackTick, List<(NetworkIdentity identity, BodyState state)> owned, List<ServerBody> bodies)
 	{
 		let lead = (uint32)Math.Clamp(PendingInputs, 1, 30);
-		let last = mInputs[mTick % InputHistory];
+		let last = mInputs[(mTick + mInputDelayUsed) % InputHistory];
 		for (let entry in owned)
 		{
 			entry.identity.ApplyState(entry.state);
@@ -251,7 +368,7 @@ extension NetworkManager
 			body.identity.PredictedSince = target;
 		}
 		uint32 first = target >= (uint32)InputHistory ? target - (uint32)InputHistory + 1 : 1;
-		for (uint32 tick = Math.Max(mTick + 1, first); tick <= target; tick++)
+		for (uint32 tick = Math.Max(mTick + 1 + mInputDelayUsed, first); tick <= target + mInputDelayUsed; tick++)
 			mInputs[tick % InputHistory] = last;
 		mServerOffset -= (double)(target - mTick);
 		mTick = target;
@@ -356,7 +473,7 @@ extension NetworkManager
 	{
 		// Objects moved by the physics engine need it stepped as well. That moves every other body too, so those
 		// this machine does not predict are put back afterwards: where they are is the server's business.
-		List<(NetworkIdentity identity, BodyState state)> others = scope .();
+		List<(NetworkIdentity identity, BodyState state, bool asleep)> others = scope .();
 		bool stepPhysics = PredictedBodies > 0 || AnyHasBody(owned);
 		if (stepPhysics)
 			CaptureOtherBodies(others);
@@ -377,14 +494,19 @@ extension NetworkManager
 			mReplayTick = tick;
 			mScene.RunReplayTick();
 		}
+		// Put back as they were; one resting before and still resting is left alone (putting it back would wake it).
 		for (let entry in others)
-			entry.identity.ApplyState(entry.state);
+		{
+			if (entry.asleep && entry.identity.GetComponent<Rigidbody>().IsSleeping)
+				continue;
+			entry.identity.ApplyBodyState(entry.state, entry.asleep);
+		}
 	}
 
 	// The tick being replayed and what ReplayInputs gathered, for the Replay.* steps.
 	uint32 mReplayTick;
 	List<(NetworkIdentity identity, BodyState state)> mReplayOwned;
-	List<(NetworkIdentity identity, BodyState state)> mReplayOthers;
+	List<(NetworkIdentity identity, BodyState state, bool asleep)> mReplayOthers;
 	bool mReplayStepPhysics;
 
 	/// Replay.RemoteStates: what is shown in the past is put where it was shown that tick, for predicted bodies to
@@ -428,7 +550,7 @@ extension NetworkManager
 			entry.identity.History[mReplayTick % NetworkIdentity.HistorySize] = entry.identity.CaptureState();
 		for (let identity in mIdentityStates)
 		{
-			if (identity.Predicted && (int32)(mReplayTick - identity.PredictedSince) >= 0)
+			if (identity.Predicted && !identity.ReplayFrozen && (int32)(mReplayTick - identity.PredictedSince) >= 0)
 				identity.RecordTick(mReplayTick);
 		}
 	}
@@ -444,12 +566,13 @@ extension NetworkManager
 	}
 
 	/// The state of every physics body this machine neither owns nor predicts, to put back after a replay.
-	void CaptureOtherBodies(List<(NetworkIdentity identity, BodyState state)> others)
+	void CaptureOtherBodies(List<(NetworkIdentity identity, BodyState state, bool asleep)> others)
 	{
 		for (let identity in mIdentities)
 		{
-			if (identity.ownerId != LocalClientId && !identity.Predicted && identity.GetComponent<Rigidbody>().HasBody)
-				others.Add((identity, identity.CaptureState()));
+			let body = identity.GetComponent<Rigidbody>();
+			if (identity.ownerId != LocalClientId && !identity.Predicted && body.HasBody)
+				others.Add((identity, identity.CaptureState(), body.IsSleeping));
 		}
 	}
 }

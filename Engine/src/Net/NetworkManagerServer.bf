@@ -232,10 +232,18 @@ extension NetworkManager
 			ApplyRemoteStates();
 			// Rounded to what the server will receive, so that both sides simulate from the same numbers.
 			let input = NetPack.Quantize(GatherLocalInput());
-			mInputs[mTick % InputHistory] = input;
+			// With an input delay the controls given now are for a few ticks on; until then, what was given then.
+			let delay = (uint32)Math.Clamp(InputDelayTicks, 0, 3);
+			if (delay != mInputDelayUsed)
+			{
+				for (uint32 ahead = 1; ahead < delay; ahead++)
+					mInputs[(mTick + ahead) % InputHistory] = input;
+				mInputDelayUsed = delay;
+			}
+			mInputs[(mTick + delay) % InputHistory] = input;
 			SendInputs();
 			UpdateLink();
-			SimulateOwned(LocalClientId, input);
+			SimulateOwned(LocalClientId, mInputs[mTick % InputHistory]);
 		}
 	}
 

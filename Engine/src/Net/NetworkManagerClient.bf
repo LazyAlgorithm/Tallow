@@ -8,16 +8,17 @@ extension NetworkManager
 {
 	void SendInputs()
 	{
-		let count = (int)Math.Min((uint32)InputRedundancy, mTick);
+		let newest = mTick + mInputDelayUsed;
+		let count = (int)Math.Min((uint32)InputRedundancy, newest);
 		mWriter.Clear();
 		mWriter.Write(MsgInput);
-		mWriter.Write(mTick);
+		mWriter.Write(newest);
 		mWriter.Write((uint8)count);
 		mWriter.Write((uint16)((int64)Math.Round(mViewTick * 4) & 0xFFFF));
 		NetInput previous = default;
 		for (int i = count - 1; i >= 0; i--)
 		{
-			let input = mInputs[(mTick - (uint32)i) % InputHistory];
+			let input = mInputs[(newest - (uint32)i) % InputHistory];
 			NetPack.WriteInput(mWriter, input, previous, i != count - 1);
 			previous = input;
 		}

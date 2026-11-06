@@ -1547,6 +1547,37 @@ nine profiles.
     once (with `nohysteresis`: 9 objects blink, 88 changes); 3,937 bytes a second against 42,368 with no radius.
     Network suites, Voice, HostMigration, AntiCheat, the networked Gallery and its self-test as before.
 
+### 6f steps
+
+- [x] **6f EXIT MET** (2026-11-05):
+  - Cost recorded: `RollbackNanoseconds` / `ReplayedTicks` (the panel's ROLLBACK line: corrections, ticks run
+    again, microseconds each, resyncs, bodies left still).
+  - Island-limited rollback (state sync): when the player's own objects were right and only bodies were
+    corrected, the predicted bodies that could touch a corrected one or the player's objects over the replay
+    (size plus speed times the replayed time, grown transitively) are run again; the rest are held asleep and
+    put back afterwards, so Jolt skips them. `LimitReplayToIslands` (static, for tests) turns it off.
+  - Sleeping bodies nobody here predicts are no longer woken after every replay by being put back.
+  - Rollback window cap: a correction from more than 30 ticks back is taken as it is, eased in (`Resyncs`).
+  - Optional input delay: `InputDelayTicks` 0 to 3 (NetworkSession `inputDelayTicks`, Advanced): controls
+    given now are stored for that tick on, sent as such, and used then here and on the server; 0 is as before.
+    Tuning it from ping and jitter is left with the clock tuning it would interact with (the client already
+    aims for a depth of controls waiting on the server, which is what a delay adds to).
+  - Not done: Jolt `SaveState` / `RestoreState`. Bodies are rewound one by one from their own history (what
+    was already there), which costs the predicted bodies, not all of them, and island limiting covers the
+    stepping cost the filtered save was for. Contact caches are not restored either way; if replays show
+    divergence that exact restore would fix, it is the next thing to try.
+  - Skipping identical inputs belongs with input forwarding (6g): it applies when a client has guessed another
+    player's controls, which clients do not do yet.
+  - `~/TallowEcsTests/NetworkRollback` (new, Release), loopback with 40 ms lag, 200 predicted crates in 10
+    clusters kicked in turn by the server, alternating 5-second stretches: **54.8 microseconds a replayed tick
+    limited to the island (up to 185 bodies left still) against 129.0 running every body**; 75 and 56
+    corrections in those stretches (a small difference outside the island is put right by the next one, as
+    planned). A stack of 5 crates knocked over on the server: the top one comes down on the client at most
+    0.162 m in a tick against 0.126 on the server, no snap, and ends 0.000 m from the server's.
+  - `~/TallowEcsTests/NetworkInputDelay` (new): with delays 0 and 2 the player starts moving 0 and 2 ticks after
+    its controls, 5 seconds of walking need no corrections, and client and server agree to 0.0000 m.
+  - Network suites, Voice, HostMigration, AntiCheat and the rest as before.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

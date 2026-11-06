@@ -156,6 +156,7 @@ struct NetworkIdentity : ComponentHandle<NetworkIdentityData>
 	public ref bool ServerAsleep => ref Runtime.ServerAsleep;
 	public ref int32 Misses => ref Runtime.Misses;
 	public ref uint32 PredictPausedUntil => ref Runtime.PredictPausedUntil;
+	public ref bool ReplayFrozen => ref Runtime.ReplayFrozen;
 	public bool CanPredictPhysics => Runtime.CanPredictPhysics;
 	public void RecordTick(uint32 tick) => Runtime.RecordTick(tick);
 	public void ApplyBodyState(BodyState state, bool asleep) => Runtime.ApplyBodyState(state, asleep);
@@ -467,6 +468,10 @@ class NetworkIdentityState
 	public int32 Misses;
 	[NonSerialized]
 	public uint32 PredictPausedUntil;
+	/// Client, during a replay: a predicted body far from everything being corrected, held still (asleep) and put
+	/// back as it was afterwards instead of being run again (island-limited rollback).
+	[NonSerialized]
+	public bool ReplayFrozen;
 
 	/// Server: whether clients can simulate this object (see physicsPrediction).
 	public bool CanPredictPhysics

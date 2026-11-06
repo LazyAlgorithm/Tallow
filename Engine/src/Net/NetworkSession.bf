@@ -38,6 +38,9 @@ class NetworkSession : Component
 	public bool losslessCompression = true;
 	[Advanced]
 	public bool messageCompression;
+	/// Controls are used this many ticks after they are given (0 to 3): fewer corrections, a little delay.
+	[Advanced]
+	public int32 inputDelayTicks;
 	/// Send each client only what changed since what it is known to have received.
 	[Advanced]
 	public bool fieldDeltas = true;
@@ -70,6 +73,7 @@ class NetworkSession : Component
 		network.SnapshotRelevanceRadius = snapshotRelevanceRadius;
 		network.LosslessCompression = losslessCompression;
 		network.FieldDeltas = fieldDeltas;
+		network.InputDelayTicks = inputDelayTicks;
 		network.MessageCompression = messageCompression;
 		network.TeamCount = teamCount;
 		network.Transport = transport;

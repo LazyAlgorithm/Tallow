@@ -426,6 +426,12 @@ class NetworkManager
 	public int32 SnapshotBytesPerSecond;
 	/// World-unit radius around each client's player, for distanceFiltered identities. Zero disables.
 	public float SnapshotRelevanceRadius;
+	/// Client: controls given now are used this many ticks later (0 to 3), here and on the server, so that they
+	/// are there before the server needs them and corrections become rare, at the price of that much delay on
+	/// everything the player does. 0 keeps the player's own movement immediate.
+	public int32 InputDelayTicks;
+	uint32 mInputDelayUsed;
+
 	/// Under a snapshot budget, what goes first is worked out per client and object (on by default): each snapshot an
 	/// object waits, it gains its weight (more when near the client's player and in front of it, and with its
 	/// snapshotPriority), and the heaviest go. Near, visible objects then keep the full rate, far ones slow
@@ -571,6 +577,8 @@ class NetworkManager
 		into.AppendF("NETWORK {} tick {} clients {} sent {} B/s received {} B/s objects {}\n", IsServer ? (mMode == .Host ? "host" : "server") : (IsClient ? "client" : "offline"), mTick, mClients.Count, BytesSentPerSecond, BytesReceivedPerSecond, mIdentityStates.Count);
 		for (let client in mClients)
 			into.AppendF("CLIENT {} {} B/s, {} inputs waiting, {}% snapshots lost, budget {}\n", client.id, client.bytesPerSecond, client.queue.Count, client.lossPercent, SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget);
+		if (IsClient && Rollbacks > 0)
+			into.AppendF("ROLLBACK {} corrections, {} ticks run again at {:0.0} microseconds each, {} taken without a replay (too old), last replay left {} bodies still\n", Rollbacks, ReplayedTicks, ReplayedTicks > 0 ? RollbackNanoseconds / 1000.0 / ReplayedTicks : 0, Resyncs, LastReplayFrozen);
 		if (IsClient)
 			into.AppendF("LINK {}{}% snapshots lost, others shown {:0.0} ticks in the past, {:0.0} ticks of controls waiting on the server\n", mHaveDeltaPacket ? scope $"field deltas ({DeltaMisses} missed), {HiddenObjects} hidden as out of area, " : "", LossPercent, ViewDelayTicks, mDepth);
 		into.Append("SENT BY KIND");
