@@ -37,3 +37,8 @@ The new code has to call into the engine that is already running, and use its da
 **Windows.** A Windows program shares nothing with a library unless each symbol is exported, and an export table has no room for a whole engine. So Windows' own loader is not used. The debug editor is linked with `/MAP`, which writes down where everything in it is. When it starts, the editor reserves a stretch of address space just below itself and notes where (`.tallow-reload/session-*.host`). `tools/reload_scripts.py` then links the script library with Beef's own linker (`lld-link`, in `bin/llvm/bin` beside BeefBuild) at an exact address in that space, against a stand-in object that places every symbol of the editor, and of the libraries loaded before, at its real address. Every reference to the engine is resolved by the linker like any other, and the editor copies the library's sections into place itself. Libraries fill the reserved space from the top down; each is a megabyte or two, and the space is some hundreds of megabytes.
 
 What that means in practice on Windows:
+Components with live `Own`, `OnCleanup` or `ListenWorldState` registrations require stopping Play before structural
+replacement. The reload is refused before committing candidate types and current code/resources stay active.
+Field serialization cannot recreate arbitrary resource ownership or retarget delegates safely. After stopping,
+apply the reload and start Play again so `Awake` reacquires resources. This is an explicit current limitation,
+not seamless resource migration.

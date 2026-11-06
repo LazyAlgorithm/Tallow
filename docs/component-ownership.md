@@ -42,7 +42,9 @@ it cannot destroy its own owner or add resources/cleanup callbacks during cleanu
 publisher must still account for that publisher's lifetime.
 
 Reacquire resources in Awake on a new play session. Do not use old batch/resource references after StopPlay,
-removal, scene teardown or hot reload; owned references are not transferred to a replacement script instance.
+removal or scene teardown. Structural hot reload refuses to replace a component with live adopted resources or
+cleanup callbacks: stop Play before applying it, then resources are reacquired by Awake on the next session.
+This prevents a replacement instance from retaining freed resources or losing its subscriptions silently.
 Custom resources still need correct destructors. Existing arbitrary delegates retained outside this mechanism
 and retired hot-reload instances remain limitations described in `script-hot-reload.md`.
 
@@ -59,3 +61,9 @@ Attach it to a visible GameObject and set `speed` and `distance` in the Inspecto
 `Transform` and the supplied `deltaTime`; its waypoint collection is adopted once in `Awake`, with no per-frame
 allocation or manual deletion. This is a local movement example, not a navigation, collision or network prediction
 controller. Mutable reference collections are not automatically deep-copied into rollback history.
+
+`ListenWorldState(new (from, to) => { ... })` subscribes to the owner's scene and disconnects automatically at
+component cleanup. Register in `Awake`; the engine owns the delegate, so do not delete it or register the same
+delegate elsewhere. It observes changes even while the component is disabled. The raw scene event remains available
+for advanced use. The graphics-free `EcsBench --check-lifetimes` command covers delivery, stop/restart, removal,
+scene unload and rejection of unsafe live-resource reloads.

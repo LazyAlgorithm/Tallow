@@ -674,6 +674,7 @@ class Scene
 		}
 		return sNoComponents;
 	}
+
 	static HashSet<Type> sWarnedHandleTypes = new .() ~ delete _;
 
 	/// Adds every registered component of that class (or one derived from it) to the list.

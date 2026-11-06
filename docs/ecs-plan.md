@@ -576,6 +576,16 @@ Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API
 
 ### Phase 7 continuation (2026-11-06; validation in progress)
 
+- Compiler-backed editor checkpoint: isolated Beef analysis is connected to unsaved documents with version/cursor
+  checks, completion, overload help, documentation, definitions and diagnostics. Actual Linux compiler and process
+  fixtures pass. Windows helper startup compatibility is being corrected; 7f is not yet complete.
+- All Beef files changed during this continuation use the repository formatter. `PatrolExample.bf` compiles and
+  demonstrates ordinary Transform gameplay plus component-owned collection cleanup.
+- Graphics-free ownership checks pass locally in Linux Debug, including owner-bound world-state subscriptions and
+  cleanup on stop/restart, removal and unload. Live owned resources explicitly block structural instance replacement
+  until Play stops: field serialization cannot safely migrate arbitrary resources or delegates yet.
+
+
 Validated checkpoint: [`d9993ece`](https://github.com/LazyAlgorithm/Tallow/commit/d9993ece0bc844da0f9c643755abe9a4d8b98abe),
 [workflow 42264324947](https://github.com/LazyAlgorithm/Tallow/actions/runs/42264324947): Linux and Windows build/package
 passed. Linux EcsBench passed in **both Debug and Release**, after regenerating and recompiling the visual-graph

@@ -47,7 +47,10 @@ class ReplayFieldCounter : Script
 	public int32 presentation;
 
 	public float Elapsed => elapsed;
-	public void SetElapsed(float value) { elapsed = value; }
+	public void SetElapsed(float value)
+	{
+		elapsed = value;
+	}
 
 	public override void Update(TickInput input, float deltaTime)
 	{
@@ -60,15 +63,25 @@ class ReplayFieldCounter : Script
 class LocalDisableProbe : Script
 {
 	public int updates;
-	public override void OnLocalUpdate() { Enabled = false; }
-	public override void Update(TickInput input, float deltaTime) { updates++; }
+	public override void OnLocalUpdate()
+	{
+		Enabled = false;
+	}
+
+	public override void Update(TickInput input, float deltaTime)
+	{
+		updates++;
+	}
 }
 
 /// A resource with an observable lifetime for the owner-cleanup regression checks.
 class OwnedProbe
 {
 	public static int deleted;
-	public ~this() { deleted++; }
+	public ~this()
+	{
+		deleted++;
+	}
 }
 
 [Component]
@@ -89,6 +102,22 @@ class OwnershipProbe : Script
 	}
 }
 
+/// Exercises automatic disconnection without retaining a manually managed delegate.
+[Component]
+class WorldStateListenerProbe : Script
+{
+	public static int calls;
+
+	public override void Awake()
+	{
+		ListenWorldState(new (from, to) =>
+			{
+				calls++;
+			}
+			);
+	}
+}
+
 /// Checks of the ECS layer (World, Query, ParallelFor, deferred changes), run with TALLOW_BENCH_MODE=check.
 static class EcsChecks
 {
@@ -101,6 +130,44 @@ static class EcsChecks
 			sFailures++;
 			Console.WriteLine($"  FAILED: {what}");
 		}
+	}
+
+	/// Lifetime checks that do not create a graphics device or window.
+	public static int RunLifetimeChecks()
+	{
+		sFailures = 0;
+		OwnershipChecks();
+		WorldStateListenerChecks();
+		Console.WriteLine(sFailures == 0 ? "Ownership checks: all passed" : "Ownership checks failed");
+		return sFailures == 0 ? 0 : 1;
+	}
+
+	static void WorldStateListenerChecks()
+	{
+		let active = Scene.Active;
+		defer
+		{
+			Scene.Active = active;
+		}
+		WorldStateListenerProbe.calls = 0;
+		let scene = scope Scene();
+		let owner = scene.CreateGameObject("Listener");
+		let script = owner.AddComponent<WorldStateListenerProbe>();
+		scene.StartPlay();
+		scene.WorldState = 1;
+		Expect(WorldStateListenerProbe.calls == 1, "owner-bound listener receives world-state changes");
+		scene.StopPlay();
+		Expect(scene.WorldStateChanged.IsEmpty, "StopPlay disconnects owner-bound listeners");
+		scene.WorldState = 0;
+		Expect(WorldStateListenerProbe.calls == 1, "stopped listeners are not invoked");
+		scene.StartPlay();
+		scene.WorldState = 1;
+		Expect(WorldStateListenerProbe.calls == 2, "restarting adds one fresh subscription");
+		owner.RemoveComponent(script);
+		Expect(scene.WorldStateChanged.IsEmpty, "component removal disconnects its subscription");
+		owner.AddComponent<WorldStateListenerProbe>();
+		scene.Clear();
+		Expect(scene.WorldStateChanged.IsEmpty, "scene unload disconnects all owner-bound listeners");
 	}
 
 	public static int Run()
@@ -152,6 +219,7 @@ static class EcsChecks
 		SceneChecks();
 		UpdateChecks();
 		OwnershipChecks();
+		WorldStateListenerChecks();
 		GeneratedGraphChecks();
 		DataChecks();
 		PrefabChecks();
@@ -239,8 +307,10 @@ static class EcsChecks
 		ComponentRegistry.GetFields(script, fields, true);
 		bool replicated = false;
 		for (let field in fields)
+		{
 			if (field.name == "tickDelta")
 				replicated = field.sync;
+		}
 		Expect(replicated, "generated Sync fields use the ordinary reflection path");
 		let text = scope String();
 		SceneSerializer.Save(scene, text);
@@ -256,13 +326,22 @@ static class EcsChecks
 		OwnershipProbe.cleaned = 0;
 		OwnershipProbe.cleanupBeforeDelete = true;
 		let active = Scene.Active;
-		defer { Scene.Active = active; }
+		defer
+		{
+			Scene.Active = active;
+		}
 		{
 			let scene = scope Scene();
 			let owner = scene.CreateGameObject("Owner");
 			owner.AddComponent<OwnershipProbe>();
 			scene.StartPlay();
+			let updates = scope List<ScriptReload.TypeUpdate>();
+			updates.Add(.() { original = typeof(OwnershipProbe), script = true });
+			let error = scope String();
+			Expect(!ScriptStateMigration.CanReplace(scene, updates, error), "live owned resources block unsafe instance replacement");
+			Expect(OwnedProbe.deleted == 0, "a rejected reload leaves the running owner's resources intact");
 			scene.StopPlay();
+			Expect(ScriptStateMigration.CanReplace(scene, updates, error), "stopping play permits replacement after cleanup");
 			Expect(OwnedProbe.deleted == 1 && OwnershipProbe.cleaned == 1, "StopPlay releases each owned resource and cleanup once");
 			scene.StartPlay();
 			let script = owner.GetComponent<OwnershipProbe>();
@@ -1039,8 +1118,10 @@ static class EcsChecks
 			scene.StartPlay();
 			// A slab cut through the middle: the top half is no longer held up and breaks away.
 			for (float x = -1.3f; x <= 1.3f; x += 0.25f)
+			{
 				for (float z = -1.3f; z <= 1.3f; z += 0.25f)
 					voxels.Carve(wall.Transform.Position + .(x, 0, z), 0.3f);
+			}
 			GameObject fragment = null;
 			for (let o in scene.Objects)
 			{
@@ -1191,10 +1272,14 @@ static class EcsChecks
 			let here = scope String()..AppendF("{}/Shaders", Assets.ProjectPath);
 			let copied = Compute.Supported && System.IO.File.Exists(scope $"{sandbox}/{compiled}") &&
 				System.IO.Directory.CreateDirectory(scope $"{here}/Compiled/{Gfx.ShaderFolder}") case .Ok &&
-				System.IO.File.Copy(scope $"{sandbox}/ripple.tcompute", scope $"{here}/ripple.tcompute") case .Ok &&
-				System.IO.File.Copy(scope $"{sandbox}/{compiled}", scope $"{here}/{compiled}") case .Ok;
+				System.IO.File.Copy(scope $"{sandbox}/ripple.tcompute" , scope $"{here}/ripple.tcompute") case .Ok &&
+				System.IO.File.Copy(scope $"{sandbox}/{compiled}" , scope $"{here}/{compiled}") case .Ok;
 			Console.WriteLine(scope $"  (compute supported: {Compute.Supported}, shader copied: {copied})");
-			defer { if (copied) System.IO.Directory.DelTree(here).IgnoreError(); }
+			defer
+			{
+				if (copied)
+					System.IO.Directory.DelTree(here).IgnoreError();
+			}
 			if (copied)
 			{
 				effect.shader.Set("Shaders/ripple.tcompute");
@@ -1408,7 +1493,11 @@ static class EcsChecks
 			player.sequence.Set(path);
 			player.playOnStart = true;
 			bool finished = false;
-			player.OnFinished.Add(new [&] () => { finished = true; });
+			player.OnFinished.Add(new [&] () =>
+				{
+					finished = true;
+				}
+				);
 			SaveSystem.SceneStarting(scene);
 			scene.StartPlay();
 			Time.DeltaTime = 0.5f;
@@ -1463,7 +1552,12 @@ static class EcsChecks
 			talk.showLines = false;
 			talk.acceptInput = false;
 			float agreed = 0;
-			talk.OnEvent.Add(new [&] (name, value) => { if (name == "Agreed") agreed = value; });
+			talk.OnEvent.Add(new [&] (name, value) =>
+				{
+					if (name == "Agreed")
+						agreed = value;
+				}
+				);
 			SaveSystem.SceneStarting(scene);
 			scene.StartPlay();
 			Time.DeltaTime = 0.1f;
@@ -1518,7 +1612,12 @@ static class EcsChecks
 			runner.tree.Set(path);
 			runner.startValues.Set("ammo 3");
 			int alarms = 0;
-			runner.OnTreeEvent.Add(new [&] (name) => { if (name == "Alarm") alarms++; });
+			runner.OnTreeEvent.Add(new [&] (name) =>
+				{
+					if (name == "Alarm")
+						alarms++;
+				}
+				);
 			scene.StartPlay();
 			Time.DeltaTime = 0.1f;
 			scene.Update();

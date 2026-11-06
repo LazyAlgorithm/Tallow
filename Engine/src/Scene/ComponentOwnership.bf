@@ -3,6 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
+/// Optional ownership and scene subscriptions tied to a component lifetime.
 extension Component
 {
 	// Allocated only when used; ordinary Update and component access pay no lookup cost.
@@ -39,6 +40,23 @@ extension Component
 			mOwnedCleanup = new .();
 		if (!mOwnedCleanup.Contains(cleanup))
 			mOwnedCleanup.Add(cleanup);
+	}
+
+	/// Subscribes to this scene's world-state changes until play stops, the component is removed or it is retired
+	/// by hot reload. Register again in Awake for each play session. The engine owns callback; do not delete it or
+	/// register that same delegate elsewhere. Changes are delivered on the scene thread, including while disabled.
+	public void ListenWorldState(delegate void(int32 from, int32 to) callback)
+	{
+		if (callback == null) return;
+		Runtime.Assert(!mOwnershipClosed && GameObject?.Scene != null, "A world-state listener needs a live scene owner.");
+		let scene = Scene;
+		Runtime.Assert(!scene.WorldStateChanged.Contains(callback), "A world-state delegate may only be adopted once.");
+		scene.WorldStateChanged.Add(callback);
+		OnCleanup(new () =>
+			{
+				scene.WorldStateChanged.Remove(callback, true).IgnoreError();
+			}
+			);
 	}
 
 	void ReleaseOwned()

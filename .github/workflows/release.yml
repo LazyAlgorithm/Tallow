@@ -169,6 +169,7 @@ jobs:
             "Samples/EcsBench/build/${config}_Linux64/EcsBench/EcsBench" --generate-graph-fixture "$PWD/Samples/EcsBench/src/GeneratedTickProbe.bf"
             "$BEEFBUILD" -workspace=Samples/EcsBench -config="$config" -platform=Linux64
             "Samples/EcsBench/build/${config}_Linux64/EcsBench/EcsBench" --check-semantic-client "$PWD" "$PWD/Samples/EcsBench"
+            "Samples/EcsBench/build/${config}_Linux64/EcsBench/EcsBench" --check-lifetimes
             xvfb-run -a python3 tools/run_ecs_bench.py --check --config "$config" --timeout 600
           done
 

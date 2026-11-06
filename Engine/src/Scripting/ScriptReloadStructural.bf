@@ -5,6 +5,7 @@ using System.IO;
 
 namespace Tallow;
 
+/// Structural script replacement, metadata remapping and retired-instance ownership.
 extension ScriptReload
 {
 	static List<Type> sCanonicalTypes = new .() ~ RetireTypeLookup(_);
@@ -355,6 +356,7 @@ extension ScriptReload
 		}
 		if (scene != null)
 		{
+			if (!ScriptStateMigration.CanReplace(scene, updates, error)) return false;
 			migration.Capture(scene, updates);
 			for (let gameObject in scene.Objects)
 			{

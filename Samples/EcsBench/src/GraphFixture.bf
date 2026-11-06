@@ -20,7 +20,10 @@ static class GraphFixture
 		graph.Connect(tick.id, 1, set.id, 2);
 		let path = scope $"{output}.tgraph";
 		graph.Save(path);
-		defer { File.Delete(path).IgnoreError(); }
+		defer
+		{
+			File.Delete(path).IgnoreError();
+		}
 		let loaded = scope NodeGraph();
 		if (!loaded.Load(path) || loaded.FindVariable("steps")?.type != .Int || !loaded.FindVariable("tickDelta").networked)
 		{

@@ -39,7 +39,10 @@ extension NetworkManager
 		/// The public fields of the scripts on the objects this machine runs, as they were (see SaveScriptFields).
 		public List<uint8>[ExactRingSize] scripts;
 
-		public ~this() { Clear(); }
+		public ~this()
+		{
+			Clear();
+		}
 
 		public void Clear()
 		{
@@ -107,10 +110,10 @@ extension NetworkManager
 			return;
 		if (mScene.Physics.FixedBodyIndex == null)
 			mScene.Physics.FixedBodyIndex = new (transform) =>
-			{
-				let id = transform.GameObject.GetComponent<NetworkIdentity>();
-				return id.IsValid && id.NetId != 0 ? LockstepBodyIndex(id.NetId) : uint32.MaxValue;
-			};
+				{
+					let id = transform.GameObject.GetComponent<NetworkIdentity>();
+					return id.IsValid && id.NetId != 0 ? LockstepBodyIndex(id.NetId) : uint32.MaxValue;
+				};
 		let body = identity.GetComponent<Rigidbody>();
 		if (!body.IsValid || !body.HasBody)
 			return;
@@ -174,8 +177,10 @@ extension NetworkManager
 		}
 		List<(NetworkIdentity identity, Vector3 drawn)> before = scope .();
 		for (let identity in mIdentities)
+		{
 			if (identity.ownerId == LocalClientId || identity.RemoteRun || identity.Predicted)
 				before.Add((identity, identity.Transform.Position + identity.SmoothOffset));
+		}
 		if (!mScene.Physics.RestoreExact(mExact.states[slot]) || !mScene.Physics.RestoreShared(data))
 		{
 			RequestResync(true);
@@ -261,11 +266,15 @@ extension NetworkManager
 		uint64 hash = 0;
 		HashSet<uint32> players = scope .();
 		if (mMode == .Host)
+		{
 			if (let player = PlayerObject(0))
 				players.Add(player.GetComponent<NetworkIdentity>().NetId);
+		}
 		for (let client in mClients)
+		{
 			if (let player = PlayerObject(client.id))
 				players.Add(player.GetComponent<NetworkIdentity>().NetId);
+		}
 		for (let identity in mIdentities)
 		{
 			if (!identity.IsActiveAndEnabled)
@@ -359,7 +368,7 @@ extension NetworkManager
 				{
 					switch (field.kind)
 					{
-					case .Float, .Double, .Char, .Vector4, .Int3, .Matrix4, .Int, .Bool, .Vector2, .Vector3, .Quaternion, .Color, .Enum:
+					case .Float,.Double,.Char,.Vector4,.Int3,.Matrix4,.Int,.Bool,.Vector2,.Vector3,.Quaternion,.Color,.Enum:
 						let size = field.type.Size;
 						schema = ((schema << 7) | (schema >> 57)) ^ (uint64)(int)field.ptr ^ (uint64)size;
 						if (restore)

@@ -27,12 +27,6 @@ void* CompilerSymbol(const char* name)
 		throw std::runtime_error(std::string("Compiler ABI entry is unavailable: ") + name);
 	return reinterpret_cast<void*>(address);
 }
-void BfpSystem_Init(int a0, int a1)
-{
-	using Function = void (*)(int, int);
-	static auto fn = reinterpret_cast<Function>(CompilerSymbol("BfpSystem_Init"));
-	return fn(a0, a1);
-}
 void IDEHelper_ProgramStart()
 {
 	using Function = void (*)();
@@ -508,7 +502,10 @@ void TraceStartup(const char* stage)
 int Run()
 {
 	TraceStartup("initialising platform");
+#ifndef _WIN32
+	// Windows compiler DLLs keep the platform API private (BFP_NOEXPORT).
 	BfpSystem_Init(2, 0);
+#endif
 	TraceStartup("initialising compiler library");
 	IDEHelper_ProgramStart();
 	TraceStartup("creating resolve context");

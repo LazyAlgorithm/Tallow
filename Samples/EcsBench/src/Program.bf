@@ -11,6 +11,8 @@ class Program
 			return GraphFixture.Write(args[1]);
 		if (args.Count == 3 && args[0] == "--check-semantic-client")
 			return SemanticClientChecks.Run(args[1], args[2]);
+		if (args.Count == 1 && args[0] == "--check-lifetimes")
+			return EcsChecks.RunLifetimeChecks();
 		GameSetup.Register();
 		return EditorMain.Run(args);
 	}
