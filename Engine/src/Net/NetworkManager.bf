@@ -350,6 +350,8 @@ class NetworkManager
 		public int32 autoBudget, calmSeconds;
 		public int cursor;
 		public Dictionary<uint32, SnapshotDelivery> delivered = new .() ~ delete _;
+		/// With DynamicPriority under a budget: how much each object waiting to be sent has gained.
+		public Dictionary<uint32, float> waiting = new .() ~ delete _;
 		/// What it is known to have, once it acknowledges packets (field deltas); null until then.
 		public DeltaClient deltas ~ delete _;
 		/// Ticks since the last snapshot for which no controls had arrived.
@@ -422,6 +424,16 @@ class NetworkManager
 	public int32 SnapshotBytesPerSecond;
 	/// World-unit radius around each client's player, for distanceFiltered identities. Zero disables.
 	public float SnapshotRelevanceRadius;
+	/// Under a snapshot budget, what goes first is worked out per client and object (on by default): each snapshot an
+	/// object waits, it gains its weight (more when near the client's player and in front of it, and with its
+	/// snapshotPriority), and the heaviest go. Near, visible objects then keep the full rate, far ones slow
+	/// smoothly, and none waits longer than StaleTicks while the budget can fit them. Off: the fixed order (owned,
+	/// snapshotPriority, oldest first).
+	public bool DynamicPriority = true;
+	/// With DynamicPriority: an object not sent for this many ticks goes ahead of everything but the client's own.
+	public int32 StaleTicks = 60;
+	/// With DynamicPriority: how far, in world units, counts as near (an object this far away weighs half).
+	public float PriorityNearDistance = 16;
 	/// Lossless compression: native ENet coder for Direct; independent message frames for Steam/WebRTC.
 	public bool LosslessCompression = true;
 	/// Force transport-independent lossless frames (also useful for testing Steam's message path over Direct).
@@ -822,6 +834,8 @@ class NetworkManager
 		for (let client in mClients)
 			client.delivered.Remove(identity.NetId);
 		ForgetDeltas(identity.NetId);
+		for (let client in mClients)
+			client.waiting.Remove(identity.NetId);
 		let index = mIdentities.IndexOf(identity);
 		if (index >= 0)
 		{

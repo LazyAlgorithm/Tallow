@@ -412,6 +412,27 @@ extension NetworkManager
 		public int32 priority;
 		public uint32 tick;
 		public uint32 netId;
+		/// With DynamicPriority under a budget: what it has gained by waiting, with this snapshot's weight.
+		public float score;
+		public float weight;
+		public bool sent;
+	}
+
+	/// How much an object gains for a client in a snapshot it waits (DynamicPriority): 1 + its snapshotPriority,
+	/// halved at PriorityNearDistance from the client's player and less beyond, and 0.4 of that behind the player
+	/// (outside a cone of about 120 degrees in front of it, further than 4 units away).
+	float PriorityWeight(SnapshotRow row, GameObject player, Vector3 playerAt, Vector3 facing)
+	{
+		var weight = 1.0f + Math.Max(row.settings.snapshotPriority, 0);
+		if (player == null)
+			return weight;
+		let offset = row.position - playerAt;
+		let distanceSquared = offset.LengthSquared;
+		let near = Math.Max(PriorityNearDistance, 0.01f);
+		weight /= 1 + distanceSquared / (near * near);
+		if (distanceSquared > 16 && Vector3.Dot(offset, facing) < 0.5f * Math.Sqrt(distanceSquared))
+			weight *= 0.4f;
+		return weight;
 	}
 
 	List<SnapshotRow> mSnapshotRows = new .() ~ delete _;
@@ -481,6 +502,12 @@ extension NetworkManager
 				if (changed || sent.repeats < (int32)SnapshotRepeats || refresh)
 					candidates.Add(i);
 			}
+			let perSecond = SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget;
+			let budget = perSecond > 0 ? Math.Max(128, (int)((int64)perSecond * Math.Max(SnapshotInterval, 1) / Math.Max(Time.TickRate, 1))) : int.MaxValue;
+			// With room for everything the order only decides which packet a record goes in; under a budget it
+			// decides what goes at all.
+			let dynamic = DynamicPriority && budget != int.MaxValue;
+			let facing = player != null ? player.Transform.Forward : Vector3.Forward;
 			// Ownership, explicit priority, then age. Stable id breaks ties so every client is deterministic. Each
 			// candidate's place is worked out once, not in every comparison.
 			keys.Clear();
@@ -488,23 +515,42 @@ extension NetworkManager
 			{
 				let row = ref mSnapshotRows[i];
 				SnapshotDelivery sent = default;
-				client.delivered.TryGetValue(row.netId, out sent);
-				keys.Add(.() { row = i, own = row.settings.ownerId == client.id, priority = row.settings.snapshotPriority, tick = sent.tick, netId = row.netId });
-			}
-			keys.Sort(scope (a, b) =>
+				let known = client.delivered.TryGetValue(row.netId, out sent);
+				SnapshotOrder key = .() { row = i, own = row.settings.ownerId == client.id, priority = row.settings.snapshotPriority, tick = sent.tick, netId = row.netId };
+				if (dynamic)
 				{
-					if (a.own != b.own) return a.own ? -1 : 1;
-					if (a.priority != b.priority) return b.priority <=> a.priority;
-					return a.tick != b.tick ? a.tick <=> b.tick : a.netId <=> b.netId;
-				});
+					key.weight = PriorityWeight(row, player, playerAt, facing);
+					float waited = 0;
+					client.waiting.TryGetValue(row.netId, out waited);
+					key.score = waited + key.weight;
+					// Never sent, or waiting too long: ahead of all the rest, the longest waiting first.
+					if (!known)
+						key.score = 2.0e9f;
+					else if ((int32)(mTick - sent.tick) >= StaleTicks)
+						key.score = 1.0e9f + (float)(mTick - sent.tick);
+				}
+				keys.Add(key);
+			}
+			if (dynamic)
+				keys.Sort(scope (a, b) =>
+					{
+						if (a.own != b.own) return a.own ? -1 : 1;
+						if (a.score != b.score) return b.score <=> a.score;
+						return a.netId <=> b.netId;
+					});
+			else
+				keys.Sort(scope (a, b) =>
+					{
+						if (a.own != b.own) return a.own ? -1 : 1;
+						if (a.priority != b.priority) return b.priority <=> a.priority;
+						return a.tick != b.tick ? a.tick <=> b.tick : a.netId <=> b.netId;
+					});
 			BeginSnapshotPacket(client);
 			int count = 0, spent = 0;
 			bool reliable = false;
 			let limit = Math.Clamp(SnapshotPacketBytes, 256, 1200);
-			let perSecond = SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget;
-			let budget = perSecond > 0 ? Math.Max(128, (int)((int64)perSecond * Math.Max(SnapshotInterval, 1) / Math.Max(Time.TickRate, 1))) : int.MaxValue;
 			let header = client.deltas != null ? 15 : 13;
-			for (let key in keys)
+			for (var key in ref keys)
 			{
 				let full = SnapshotRecord(key.row, client.id);
 				var record = full;
@@ -524,6 +570,7 @@ extension NetworkManager
 					if (!EncodeDelta(ring, full, idLength, !own && sent.repeats >= (int32)SnapshotRepeats, mDeltaEncoded))
 					{
 						// The client has this already: nothing to send, and nothing to repeat or refresh.
+						key.sent = true;
 						sent.repeats = (int32)SnapshotRepeats;
 						sent.tick = mTick;
 						sent.change = row.changedAt;
@@ -542,6 +589,7 @@ extension NetworkManager
 				let flush = count > 0 && (!own && mWriter.Data.Count + record.Length > limit || reliable != dormant);
 				let cost = record.Length + ((count == 0 || flush) ? header : 0);
 				if (!own && spent + cost > budget) continue;
+				key.sent = true;
 				if (flush)
 				{
 					FlushSnapshotPacket(client, count, reliable);
@@ -566,6 +614,17 @@ extension NetworkManager
 					client.delivered[row.netId] = sent;
 			}
 			FlushSnapshotPacket(client, count, reliable);
+			// What waited gains its weight; what went starts again.
+			if (dynamic)
+			{
+				for (let key in keys)
+				{
+					if (key.sent)
+						client.waiting.Remove(key.netId);
+					else
+						client.waiting[key.netId] = key.score >= 1.0e9f ? key.weight : key.score;
+				}
+			}
 			if (count == 0 && spent == 0)
 			{
 				BeginSnapshotPacket(client);

@@ -1500,6 +1500,25 @@ nine profiles.
   measurable difference and was not kept. What is left is the encoding itself; 6d's priority pass will walk the
   same rows and is the place to look at it again.
 
+### 6d steps
+
+- [x] **6d EXIT MET** (2026-11-05). `DynamicPriority` (on by default; only under a snapshot budget, set or
+  self-tuned, as with room for everything the order only decides packets): per client and object, each snapshot
+  an object waits it gains 1 + snapshotPriority, divided by 1 + (distance / PriorityNearDistance)^2 from the
+  client's player, times 0.4 outside a 120 degree cone in front of it (beyond 4 units); the heaviest go and start
+  again from 0. Never sent, or not sent for `StaleTicks` (60), goes ahead of all but the client's own. Ties by id,
+  so every run is the same. `~/TallowEcsTests/NetworkPriority` (new), 120 moving objects 5 to 240 m away, half in
+  front and half behind, 15,000 bytes a second:
+
+  | | 5 m | 15 m | 30 m | 60 m | 120 m | 240 m |
+  |---|---|---|---|---|---|---|
+  | in front, a second | 20.0 | 20.0 | 16.1 | 5.0 | 1.5 | 1.0 |
+  | behind | 19.1 | 14.2 | 6.5 | 2.3 | 1.0 | 1.0 |
+  | fixed order (both) | 10.0 | 9.8-10 | 6.9-10 | 6.7-10 | 6.7-10 | 6.7-10 |
+
+  Longest wait 59 ticks (limit 60). The NetworkBytes fixture copy turns it off for its hand-set profiles (the
+  "budget" one keeps main's bytes); network suites otherwise as after 6c.
+
 ## Benchmark results
 
 See "Phase 1 results" above.
