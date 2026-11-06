@@ -134,10 +134,10 @@ jobs:
           ldd "$HOME/beef/IDE/dist/BeefBuild" > ecs-toolchain/dependencies.txt
           for library in $(awk '/=> \// {print $3}' ecs-toolchain/dependencies.txt); do
             case "$(basename "$library")" in
-              libLLVM*|libffi*|libxml2*|libedit*|libtinfo*|libhunspell*) cp -L "$library" ecs-toolchain/lib/ ;;
+              libLLVM*|libffi*|libxml2*|libedit*|libtinfo*|libhunspell*|libicu*|libz3*) cp -L "$library" ecs-toolchain/lib/ ;;
             esac
           done
-          tar -czf ecs-toolchain/beef.tar.gz -C "$HOME/beef" IDE/dist BeefLibs
+          tar -chzf ecs-toolchain/beef.tar.gz -C "$HOME/beef" IDE/dist BeefLibs
 
       - name: Keep ECS validation toolchain
         if: github.ref == 'refs/heads/ecs'
@@ -165,6 +165,7 @@ jobs:
           done
 
       - name: Keep the zip
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Tallow-Linux
