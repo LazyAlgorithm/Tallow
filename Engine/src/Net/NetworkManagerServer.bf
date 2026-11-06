@@ -511,20 +511,27 @@ extension NetworkManager
 				let row = ref mSnapshotRows[key.row];
 				let own = key.own;
 				let dormant = !own && row.sleeping;
+				SnapshotDelivery sent = default;
+				SnapshotDelivery* deliveredAt = null;
+				if (client.delivered.TryGetRef(row.netId, ?, out deliveredAt))
+					sent = *deliveredAt;
+				DeltaRing ring = null;
+				int idLength = 0;
 				if (client.deltas != null)
 				{
-					SnapshotDelivery before = default;
-					client.delivered.TryGetValue(row.netId, out before);
-					if (!EncodeDelta(client, row.netId, full, !own && before.repeats >= (int32)SnapshotRepeats, mDeltaEncoded))
+					ring = client.deltas.Ring(row.netId);
+					idLength = IdLength(full);
+					if (!EncodeDelta(ring, full, idLength, !own && sent.repeats >= (int32)SnapshotRepeats, mDeltaEncoded))
 					{
 						// The client has this already: nothing to send, and nothing to repeat or refresh.
-						SnapshotDelivery known = default;
-						client.delivered.TryGetValue(row.netId, out known);
-						known.repeats = (int32)SnapshotRepeats;
-						known.tick = mTick;
-						known.change = row.changedAt;
-						known.dormant = dormant;
-						client.delivered[row.netId] = known;
+						sent.repeats = (int32)SnapshotRepeats;
+						sent.tick = mTick;
+						sent.change = row.changedAt;
+						sent.dormant = dormant;
+						if (deliveredAt != null)
+							*deliveredAt = sent;
+						else
+							client.delivered[row.netId] = sent;
 						continue;
 					}
 					record = mDeltaEncoded.Data;
@@ -543,19 +550,20 @@ extension NetworkManager
 				}
 				reliable = dormant;
 				mWriter.Data.AddRange(record);
-				if (client.deltas != null)
-					NoteDeltaSent(client, row.netId, full);
+				if (ring != null)
+					NoteDeltaSent(client, ring, row.netId, full, idLength);
 				row.identity.NoteSent(record.Length);
 				count++;
 				spent += cost;
-				SnapshotDelivery sent = default;
-				client.delivered.TryGetValue(row.netId, out sent);
 				let same = sent.change == row.changedAt && sent.dormant == dormant;
 				sent.repeats = dormant ? (int32)SnapshotRepeats : (same ? sent.repeats + 1 : 1);
 				sent.tick = mTick;
 				sent.change = row.changedAt;
 				sent.dormant = dormant;
-				client.delivered[row.netId] = sent;
+				if (deliveredAt != null)
+					*deliveredAt = sent;
+				else
+					client.delivered[row.netId] = sent;
 			}
 			FlushSnapshotPacket(client, count, reliable);
 			if (count == 0 && spent == 0)

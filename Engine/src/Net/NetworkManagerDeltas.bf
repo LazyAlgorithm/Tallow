@@ -234,12 +234,10 @@ extension NetworkManager
 	/// Server: how a record goes to a delta client. Returns false when it is the same as one the client has and
 	/// need not be said again (mayLeaveOut: not its own, and not one of the few repeats that tell a client an object
 	/// has stopped); otherwise the encoded record is left in `into`.
-	bool EncodeDelta(ClientInfo client, uint32 netId, Span<uint8> record, bool mayLeaveOut, NetWriter into)
+	bool EncodeDelta(DeltaRing ring, Span<uint8> record, int idLength, bool mayLeaveOut, NetWriter into)
 	{
 		into.Clear();
-		let idLength = IdLength(record);
 		let body = Span<uint8>(record.Ptr + idLength, record.Length - idLength);
-		let ring = client.deltas.Ring(netId);
 		let baseline = ring.Baseline();
 		bool same = false;
 		if (baseline >= 0)
@@ -291,13 +289,12 @@ extension NetworkManager
 	}
 
 	/// Server: a record went out in the current packet; keep it until it is known to have arrived or is too old.
-	void NoteDeltaSent(ClientInfo client, uint32 netId, Span<uint8> record)
+	void NoteDeltaSent(ClientInfo client, DeltaRing ring, uint32 netId, Span<uint8> record, int idLength)
 	{
-		let idLength = IdLength(record);
 		if (record.Length - idLength > DeltaRecordBytes)
 			return;
 		let deltas = client.deltas;
-		deltas.Ring(netId).Push(mTick, deltas.currentPacket, .(record.Ptr + idLength, record.Length - idLength));
+		ring.Push(mTick, deltas.currentPacket, .(record.Ptr + idLength, record.Length - idLength));
 		deltas.packetObjects[deltas.currentPacket % DeltaPacketSlots].Add(netId);
 	}
 

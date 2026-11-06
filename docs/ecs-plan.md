@@ -1484,8 +1484,21 @@ nine profiles.
     the comparison. NetworkEcs, PhysicsPrediction, NetworkBandwidth, NetworkBytesEcs, Voice, HostMigration,
     AntiCheat, Water, Decals, Dialogue, Sequencer, ScriptCatalog as before; SpawnPoints' occupied-point order
     (C A C A / A C A C) flips from run to run (not networked, seen on alternate runs of the same build).
-- [ ] Column-grouped packet layout, kept only if it measures smaller.
-- [ ] Exit: bytes per client measured against 6b on the 4096-prop scaling workload.
+- [x] **Column-grouped layout: measured, not kept** (2026-11-05). Record heads (id, baseline, length, mask) in
+  the packet and the differing bytes gathered at its end: NetworkScale 415,457 instead of 418,613 bytes a second
+  (-0.75%), and most of that from fuller packets (the gathered bytes were not counted against the packet size in
+  the experiment), not from the layout; the range coder already finds the repeats. Not worth a two-pass reader.
+- [x] **6c EXIT MET** (2026-11-05). NetworkScale, Release, bytes per client after compression:
+
+  | | first two seconds | then, a second | snapshot build |
+  |---|---|---|---|
+  | 6b (3c5d6939) | 2,497,661 | 801,015 | 1.70 ms |
+  | 6c | 1,515,692 (-39%) | 418,613 (-48%) | 2.01 ms (+18%) |
+
+  The build cost was 2.12 ms until each record's delivery and ring were looked up once instead of two or three
+  times (the same bytes, hash C6D61B659FD16B2D). Keeping a ring pointer in the delivery as well made no
+  measurable difference and was not kept. What is left is the encoding itself; 6d's priority pass will walk the
+  same rows and is the place to look at it again.
 
 ## Benchmark results
 
