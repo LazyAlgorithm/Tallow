@@ -242,7 +242,7 @@ extension NetworkManager
 		let began = SDL.SDL_GetTicksNS();
 		// With the player's own objects right, only the bodies near what was wrong need running again.
 		List<(NetworkIdentity identity, BodyState state, bool asleep)> frozen = scope .();
-		if (ownRight && LimitReplayToIslands)
+		if (ownRight && LimitReplayToIslands && !Lockstep)
 			FreezeOutsideIsland(ackTick, owned, bodies, frozen);
 		LastReplayFrozen = (int32)frozen.Count;
 		RewindTo(ackTick, owned, bodies);
@@ -466,7 +466,7 @@ extension NetworkManager
 			error = Math.Max(error, (1.0f - Mathf.Abs(Quaternion.Dot(predicted.rotation, body.state.rotation))) * 2.0f);
 			error = Math.Max(error, (predicted.linearVelocity - body.state.linearVelocity).Length * ahead);
 			worst = Math.Max(worst, error);
-			if (error <= CorrectionThreshold)
+			if (error <= CorrectionThreshold || Lockstep)
 				body.identity.Misses = 0;
 			else if (++body.identity.Misses >= MissesBeforePause)
 			{
@@ -597,6 +597,7 @@ extension NetworkManager
 			entry.identity.History[mReplayTick % NetworkIdentity.HistorySize] = entry.identity.CaptureState();
 		for (let remote in mRemotePlayers.Values)
 			remote.identity.History[mReplayTick % NetworkIdentity.HistorySize] = remote.identity.CaptureState();
+		defer SaveExactAt(mReplayTick);
 		for (let identity in mIdentityStates)
 		{
 			if (identity.Predicted && !identity.ReplayFrozen && (int32)(mReplayTick - identity.PredictedSince) >= 0)

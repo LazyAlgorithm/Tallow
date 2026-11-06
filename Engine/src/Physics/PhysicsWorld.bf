@@ -540,7 +540,19 @@ class PhysicsWorld
 				Jolt.JPH_BodyCreationSettings_SetMassPropertiesOverride(settings, &mass);
 			}
 		}
-		let bodyId = Jolt.JPH_BodyInterface_CreateAndAddBody(mBodyInterface, settings, Jolt.Activate);
+		uint32 bodyId = uint32.MaxValue;
+		// A body every machine must give the same id (lockstep: the physics engine's results depend on ids).
+		if (FixedBodyIndex != null)
+		{
+			let wanted = FixedBodyIndex(transform);
+			if (wanted < (uint32)mBodyCapacity && !mByBody.ContainsKey(wanted) && Jolt.JPH_BodyInterface_CreateBodyWithID(mBodyInterface, wanted, settings) != null)
+			{
+				Jolt.JPH_BodyInterface_AddBody(mBodyInterface, wanted, Jolt.Activate);
+				bodyId = wanted;
+			}
+		}
+		if (bodyId == uint32.MaxValue)
+			bodyId = Jolt.JPH_BodyInterface_CreateAndAddBody(mBodyInterface, settings, Jolt.Activate);
 		Jolt.JPH_BodyCreationSettings_Destroy(settings);
 		if (bodyId == uint32.MaxValue)
 		{
@@ -741,8 +753,87 @@ class PhysicsWorld
 		delete entry;
 	}
 
+	/// Changes whenever a body is added or removed: an exact snapshot (SaveExact) can only be put back onto the same
+	/// set of bodies.
+	public uint32 BodyGeneration { get; private set; }
+
+	/// Every body's state, its contacts and its constraints, exactly, into `reuse` (or a new snapshot when null). Put
+	/// back with RestoreExact, stepping again gives bit for bit what it gave before. Free with FreeExact.
+	public void* SaveExact(void* reuse)
+	{
+		if (mSystem == null)
+			return reuse;
+		for (let entry in mEntries)
+			Flush(entry.bodyId);
+		return Jolt.tn_physics_state_save(mSystem, reuse);
+	}
+
+	/// Puts a snapshot from SaveExact back, and every transform with its body. False if it could not be (the set of
+	/// bodies changed since, or it is damaged), having changed nothing that matters.
+	public bool RestoreExact(void* state)
+	{
+		if (mSystem == null || state == null || !Jolt.tn_physics_state_restore(mSystem, state))
+			return false;
+		for (let entry in mEntries)
+		{
+			if (entry.outOfWorld)
+				continue;
+			Vector3 position = default;
+			Quaternion rotation = default;
+			Jolt.JPH_BodyInterface_GetPosition(mBodyInterface, entry.bodyId, &position);
+			Jolt.JPH_BodyInterface_GetRotation(mBodyInterface, entry.bodyId, &rotation);
+			entry.transform.SetPositionAndRotation(position, rotation);
+			entry.lastVersion = entry.transform.Version;
+		}
+		return true;
+	}
+
+	/// How many times game code has put a moving body somewhere (SetState, or a dynamic body's transform written)
+	/// rather than the simulation moving it. The network watches it in lockstep, where clients must be told.
+	public uint32 Teleports;
+
+	/// When set, the body id a new body must have (uint32.MaxValue: any). The network sets it in lockstep.
+	public delegate uint32 BodyIndexFor(Transform transform);
+	public BodyIndexFor FixedBodyIndex ~ delete _;
+
+	/// The bodies from index `firstIndex` up and their contacts with static bodies, exactly, as bytes to send to another
+	/// machine that gives the same bodies the same ids (lockstep).
+	public void SaveShared(uint32 firstIndex, List<uint8> into)
+	{
+		into.Clear();
+		if (mSystem == null)
+			return;
+		for (let entry in mEntries)
+			Flush(entry.bodyId);
+		let state = Jolt.tn_physics_state_save_shared(mSystem, firstIndex);
+		let size = Jolt.tn_physics_state_size(state);
+		into.Count = size;
+		Jolt.tn_physics_state_copy(state, into.Ptr, size);
+		Jolt.tn_physics_state_free(state);
+	}
+
+	/// Puts bodies' state from SaveShared on another machine in place, with their transforms. False if a body in it
+	/// is not here.
+	public bool RestoreShared(Span<uint8> data)
+	{
+		if (mSystem == null || data.Length == 0)
+			return false;
+		let state = Jolt.tn_physics_state_from(data.Ptr, data.Length);
+		let ok = RestoreExact(state);
+		Jolt.tn_physics_state_free(state);
+		return ok;
+	}
+
+	public static int ExactSize(void* state) => state != null ? Jolt.tn_physics_state_size(state) : 0;
+	public static void FreeExact(void* state)
+	{
+		if (state != null)
+			Jolt.tn_physics_state_free(state);
+	}
+
 	void Track(Entry entry)
 	{
+		BodyGeneration++;
 		entry.index = (int32)mEntries.Count;
 		mEntries.Add(entry);
 		if (entry.dynamic || entry.kinematic)
@@ -754,6 +845,7 @@ class PhysicsWorld
 
 	void Untrack(Entry entry)
 	{
+		BodyGeneration++;
 		mEntries.RemoveAtFast(entry.index);
 		if (entry.index < mEntries.Count)
 			mEntries[entry.index].index = entry.index;
@@ -1017,7 +1109,11 @@ class PhysicsWorld
 			if (entry.kinematic)
 				Jolt.JPH_BodyInterface_MoveKinematic(mBodyInterface, entry.bodyId, &position, &rotation, deltaTime);
 			else
+			{
+				if (entry.dynamic)
+					Teleports++;
 				Jolt.JPH_BodyInterface_SetPositionAndRotation(mBodyInterface, entry.bodyId, &position, &rotation, Jolt.Activate);
+			}
 		}
 
 		for (let soft in mSoftBodies.Values)
@@ -1053,6 +1149,13 @@ class PhysicsWorld
 	{
 		if (!mByBody.TryGetValue(bodyId, let entry) || entry.transform.Version == entry.lastVersion)
 			return;
+		// A kinematic body is moved by the next step (MoveKinematic, which gives it the velocity that pushes what it
+		// meets); teleporting it here would leave that out, so how a tick plays would depend on whether something
+		// read its state first.
+		if (entry.kinematic && !entry.external && !entry.outOfWorld)
+			return;
+		if (entry.dynamic)
+			Teleports++;
 		var position = entry.transform.Position;
 		var rotation = entry.transform.Rotation;
 		Jolt.JPH_BodyInterface_SetPositionAndRotation(mBodyInterface, bodyId, &position, &rotation, Jolt.Activate);
@@ -1071,6 +1174,12 @@ class PhysicsWorld
 		Jolt.JPH_BodyInterface_GetRotation(mBodyInterface, bodyId, &state.rotation);
 		Jolt.JPH_BodyInterface_GetLinearVelocity(mBodyInterface, bodyId, &state.linearVelocity);
 		Jolt.JPH_BodyInterface_GetAngularVelocity(mBodyInterface, bodyId, &state.angularVelocity);
+		// A kinematic body moved this tick is where its transform says (the step takes it there).
+		if (mByBody.TryGetValue(bodyId, let entry) && entry.kinematic && entry.transform.Version != entry.lastVersion)
+		{
+			state.position = entry.transform.Position;
+			state.rotation = entry.transform.Rotation;
+		}
 		return state;
 	}
 
@@ -1080,6 +1189,7 @@ class PhysicsWorld
 		if (!mByBody.TryGetValue(bodyId, let entry))
 			return;
 		var state = stateIn;
+		Teleports++;
 		if (entry.dynamic)
 			Jolt.JPH_BodyInterface_SetPositionRotationAndVelocity(mBodyInterface, bodyId, &state.position, &state.rotation, &state.linearVelocity, &state.angularVelocity);
 		else

@@ -25,6 +25,9 @@ extension NetworkManager
 		bool relevant;
 		if (row.settings.relevance == .OwnerOnly)
 			relevant = false;
+		else if (Lockstep)
+			// Every client runs the whole world.
+			relevant = true;
 		else if (!row.settings.distanceFiltered || SnapshotRelevanceRadius <= 0 || player == null)
 			relevant = true;
 		else

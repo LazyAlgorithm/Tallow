@@ -97,14 +97,16 @@ extension NetworkManager
 	}
 
 	/// Whether a player's object goes to other clients exactly (FlagFull), for running it from its controls.
-	bool ForwardsFor(NetworkIdentityState identity) => InputForwarding && identity.ChosenKind == .Player && identity.Chosen.playerControlled;
+	bool ForwardsFor(NetworkIdentityState identity) => (InputForwarding || Lockstep) && identity.ChosenKind == .Player && identity.Chosen.playerControlled;
 
 	/// Server, after a client's snapshot: the controls of the players in its area for the last two snapshots'
 	/// worth of ticks (so one lost packet loses nothing), each as a difference from the one before.
 	void SendForwarded(ClientInfo to)
 	{
-		if (!InputForwarding || to.lastProcessedTick == 0)
+		if (!(InputForwarding || Lockstep) || to.lastProcessedTick == 0)
 			return;
+		// (Not to a client about to be sent the whole state again: it could not match until it has it.)
+		let hashDue = Lockstep && to.lockstepSynced && mTick % HashEvery == 0;
 		let count = (uint32)Math.Clamp(SnapshotInterval * 2 + 1, 1, 32);
 		mWriter.Clear();
 		mWriter.Write(MsgForward);
@@ -125,7 +127,7 @@ extension NetworkManager
 				return;
 			let n = (uint32)Math.Min(count, newest);
 			// Nothing new since the last sent, which the client keeps on using: said again only once a second.
-			if (to.forwarded.TryGetValue(identity.NetId, let sent) && mTick - sent.tick < (uint32)Time.TickRate)
+			if (ownerId != to.id && to.forwarded.TryGetValue(identity.NetId, let sent) && mTick - sent.tick < (uint32)Time.TickRate)
 			{
 				bool same = true;
 				for (uint32 i < n)
@@ -150,9 +152,18 @@ extension NetworkManager
 		for (let client in mClients)
 			if (client != to)
 				Add(client.id, client.applied, client.appliedNewest);
-		if (players == 0)
+		// Lockstep: a client whose controls the server had to guess (they came late) is told what it ran with.
+		if (Lockstep && (int32)(to.ownInputsUntil - mTick) > 0)
+			Add(to.id, to.applied, to.appliedNewest);
+		if (players == 0 && !hashDue)
 			return;
 		mWriter.Data[countAt] = (uint8)players;
+		if (Lockstep)
+		{
+			mWriter.Write((uint8)(hashDue ? 1 : 0));
+			if (hashDue)
+				mWriter.Write(ServerHash());
+		}
 		Send(to.peer, false);
 	}
 
@@ -163,7 +174,7 @@ extension NetworkManager
 		let serverTick = reader.Read<uint32>();
 		let ackTick = reader.Read<uint32>();
 		let players = (int)reader.Read<uint8>();
-		if (!reader.Ok || !InputForwarding || ackTick == 0)
+		if (!reader.Ok || !(InputForwarding || Lockstep) || ackTick == 0)
 			return;
 		for (int p < players)
 		{
@@ -173,7 +184,10 @@ extension NetworkManager
 				return;
 			NetInput previous = default;
 			RemotePlayer remote = null;
-			if (mByNetId.TryGetValue(netId, let identity) && identity.ownerId != LocalClientId && identity.IsActiveAndEnabled && !identity.GameObject.NetworkHidden)
+			bool mine = false;
+			if (mByNetId.TryGetValue(netId, let mineIdentity) && mineIdentity.ownerId == LocalClientId)
+				mine = Lockstep;
+			else if (mByNetId.TryGetValue(netId, let identity) && identity.ownerId != LocalClientId && identity.IsActiveAndEnabled && !identity.GameObject.NetworkHidden)
 			{
 				if (!mRemotePlayers.TryGetValue(netId, out remote))
 				{
@@ -194,13 +208,24 @@ extension NetworkManager
 				if (!reader.Ok)
 					return;
 				previous = input;
-				if (remote == null)
+				if (remote == null && !mine)
 					continue;
 				// The server ran this one at serverTick - (count - 1 - i), which is this machine's ackTick minus as much.
 				let local = (int64)ackTick - (int64)(count - 1 - i);
 				if (local <= 0)
 					continue;
 				let tick = (uint32)local;
+				if (mine)
+				{
+					// What the server really ran this machine's player with, where it differs from what was given.
+					if ((int32)(mTick - tick) >= 0 && mTick - tick < (uint32)ExactRingSize && !InputsSame(mInputs[tick % InputHistory], input))
+					{
+						mInputs[tick % InputHistory] = input;
+						if (mOwnFixedFrom == 0 || (int32)(tick - mOwnFixedFrom) < 0)
+							mOwnFixedFrom = tick;
+					}
+					continue;
+				}
 				let slot = tick % InputHistory;
 				if (remote.knownAt[slot] == tick)
 					continue;
@@ -220,6 +245,17 @@ extension NetworkManager
 						GuessesRight++;
 				}
 			}
+		}
+		if (Lockstep)
+		{
+			bool hasHash = false;
+			uint64 hash = 0;
+			if (reader.Remaining > 0 && reader.Read<uint8>() != 0)
+			{
+				hash = reader.Read<uint64>();
+				hasHash = reader.Ok;
+			}
+			LockstepCatchUp(ackTick, hasHash, hash);
 		}
 	}
 
@@ -268,7 +304,7 @@ extension NetworkManager
 			// In the order the server runs them: the host's, then each client's by joining (owner id).
 			if ((identity.ownerId < LocalClientId) != beforeOwn)
 				continue;
-			if (!replaying && (!InputForwarding || (int32)(mTick - remote.heardAt) > Time.TickRate * 2 || !identity.IsActiveAndEnabled || identity.ownerId == LocalClientId || identity.GameObject.NetworkHidden))
+			if (!replaying && (!(InputForwarding || Lockstep) || (int32)(mTick - remote.heardAt) > Time.TickRate * 2 || !identity.IsActiveAndEnabled || identity.ownerId == LocalClientId || identity.GameObject.NetworkHidden))
 			{
 				if (dropped == null)
 					dropped = scope:: .();

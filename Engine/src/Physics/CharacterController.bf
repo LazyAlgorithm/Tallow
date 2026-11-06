@@ -238,16 +238,7 @@ class CharacterControllerState
 		return water.SurfaceAt(middle, out surface, ?, out current) && surface - (middle.y - half) >= swimDepth - slack;
 	}
 
-	Vector3 WorldScale
-	{
-		get
-		{
-			Vector3 position, scale;
-			Quaternion rotation;
-			Transform.LocalToWorld.Decompose(out position, out rotation, out scale);
-			return Vector3.Abs(scale);
-		}
-	}
+	Vector3 WorldScale => Transform.WorldScale;
 
 	/// The shape as configured, in world units, and the height above the origin below which a contact is the floor.
 	ShapeDesc Describe(out float supportHeight)

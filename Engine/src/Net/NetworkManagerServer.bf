@@ -21,6 +21,7 @@ extension NetworkManager
 		mWriter.WriteString(SessionContext);
 		// Whether this server sends field deltas to clients that acknowledge what they receive.
 		mWriter.Write((uint8)(FieldDeltas && OptimizeSnapshots ? 1 : 0));
+		mWriter.Write((uint8)(Lockstep ? 1 : 0));
 		Send(peer, true);
 		// Bring the newcomer up to date with everything spawned so far, then add their player.
 		for (let identity in mIdentities)
@@ -196,7 +197,8 @@ extension NetworkManager
 		{
 			if (mMode == .Host)
 			{
-				mHostInput = GatherLocalInput();
+				// Rounded as a client's are, so that forwarded to clients it runs the same there.
+				mHostInput = NetPack.Quantize(GatherLocalInput());
 				SimulateOwned(0, mHostInput);
 			}
 			else
@@ -223,6 +225,7 @@ extension NetworkManager
 					client.lastProcessedTick++;
 					client.view += 1;
 					client.starved++;
+					client.ownInputsUntil = mTick + 40;
 					mStatStarved++;
 				}
 				mSimulatingClient = client.id;
@@ -240,7 +243,7 @@ extension NetworkManager
 			// Rounded to what the server will receive, so that both sides simulate from the same numbers.
 			let input = NetPack.Quantize(GatherLocalInput());
 			// With an input delay the controls given now are for a few ticks on; until then, what was given then.
-			let delay = (uint32)Math.Clamp(InputDelayTicks, 0, 3);
+			let delay = (uint32)Math.Clamp(InputDelayTicks < 0 ? (Lockstep ? 2 : 0) : InputDelayTicks, 0, 3);
 			if (delay != mInputDelayUsed)
 			{
 				for (uint32 ahead = 1; ahead < delay; ahead++)
@@ -266,17 +269,24 @@ extension NetworkManager
 			mTick++;
 			ShareRoster();
 			CloseOpenPlaces();
+			if (Lockstep)
+				NoteServerOnlyChanges();
 			if (mTick % (uint32)Math.Max(SnapshotInterval, 1) == 0)
 			{
 				for (let client in mClients)
 					SendForwarded(client);
 				SendSnapshots();
+				if (Lockstep)
+					for (let client in mClients)
+						if (client.lastProcessedTick > 0 && !client.lockstepSynced)
+							SendLockstepState(client);
 				NetworkSync.ServerTick(this);
 			}
 		}
 		else if (mConnected && LocalClientId > 0)
 		{
 			PredictedBodies = 0;
+			defer SaveExactAt(mTick);
 			for (let identity in mIdentityStates)
 			{
 				if (identity.ownerId == LocalClientId || identity.RemoteRun)
@@ -446,7 +456,7 @@ extension NetworkManager
 	/// would otherwise say nothing more of it, and the client would keep its mistake.
 	bool RestingCheckDue(SnapshotRow row, bool known, SnapshotDelivery sent, GameObject player, Vector3 playerAt)
 	{
-		if (!known || !PredictPhysics || player == null || !row.identity.PhysicsPredictable || row.settings.ownerId > 0)
+		if (Lockstep || !known || !PredictPhysics || player == null || !row.identity.PhysicsPredictable || row.settings.ownerId > 0)
 			return false;
 		if (mTick - sent.tick < (uint32)Time.TickRate || (row.position - playerAt).LengthSquared > PriorityNearDistance * PriorityNearDistance)
 			return false;
@@ -527,6 +537,12 @@ extension NetworkManager
 				let known = client.delivered.TryGetValue(row.netId, out sent);
 				if (!own && known && SkipForwarded(client, row))
 					continue;
+				if (Lockstep)
+				{
+					// Every client runs these itself: sent only until it has the exact state of everything.
+					if (LockstepSkip(client, row))
+						continue;
+				}
 				// Its own objects go every snapshot while they change (what its prediction is checked against), then a
 				// few times more and at the refresh rate, as the full snapshot sends them.
 				if (!own && known && mTick - sent.tick < (uint32)Math.Max(row.settings.remoteIntervalTicks, SnapshotInterval)) continue;

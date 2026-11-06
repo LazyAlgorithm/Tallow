@@ -331,7 +331,7 @@ class Project
 			// These quotes survive TOML parsing and keep Hub/user folders with spaces intact for lld-link.
 			linkWin.AppendF("\\\"{}/{}\\\" ", nativeWin, archive);
 		}
-		linkWin.Append("user32.lib gdi32.lib shell32.lib winmm.lib imm32.lib ole32.lib oleaut32.lib version.lib setupapi.lib advapi32.lib ws2_32.lib psapi.lib uuid.lib cfgmgr32.lib");
+		linkWin.Append("user32.lib gdi32.lib shell32.lib winmm.lib imm32.lib ole32.lib oleaut32.lib version.lib setupapi.lib advapi32.lib ws2_32.lib psapi.lib uuid.lib cfgmgr32.lib dbghelp.lib");
 		// The debug build also writes a map of where everything in it is: script reload links against that.
 		proj.AppendF("\n[Configs.Debug.Win64]\nCLibType = \"Static\"\nOtherLinkFlags = \"$(LinkFlags) {0} /MAP\"\n\n[Configs.Release.Win64]\nCLibType = \"Static\"\nOtherLinkFlags = \"$(LinkFlags) {0}\"\n", linkWin);
 		File.WriteAllText(scope $"{Path}/BeefProj.toml" , proj).IgnoreError();

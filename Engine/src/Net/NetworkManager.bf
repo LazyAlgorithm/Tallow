@@ -358,6 +358,10 @@ class NetworkManager
 		public NetInput[InputHistory] applied;
 		public uint32 appliedNewest;
 		public uint32 inputChangedAt;
+		/// Lockstep: whether it has been sent the exact state of everything (since joining or asking again); and
+		/// until when its own controls go back to it (the server repeated some).
+		public bool lockstepSynced;
+		public uint32 ownInputsUntil;
 		/// The last controls forwarded to it for each player, and when.
 		public Dictionary<uint32, (NetInput input, uint32 tick)> forwarded = new .() ~ delete _;
 		/// What it is known to have, once it acknowledges packets (field deltas); null until then.
@@ -432,10 +436,11 @@ class NetworkManager
 	public int32 SnapshotBytesPerSecond;
 	/// World-unit radius around each client's player, for distanceFiltered identities. Zero disables.
 	public float SnapshotRelevanceRadius;
-	/// Client: controls given now are used this many ticks later (0 to 3), here and on the server, so that they
+	/// Client: controls given now are used this many ticks later (0 to 3; -1, the default, is 0, or 2 in lockstep),
+	/// here and on the server, so that they
 	/// are there before the server needs them and corrections become rare, at the price of that much delay on
 	/// everything the player does. 0 keeps the player's own movement immediate.
-	public int32 InputDelayTicks;
+	public int32 InputDelayTicks = -1;
 	uint32 mInputDelayUsed;
 
 	/// Under a snapshot budget, what goes first is worked out per client and object (on by default): each snapshot an
@@ -553,6 +558,8 @@ class NetworkManager
 		case MsgLink: return "connection reports";
 		case MsgHide: return "out of area";
 		case MsgForward: return "forwarded controls";
+		case MsgDesync: return "lockstep resync";
+		case MsgLockstepState: return "lockstep state";
 		case 16, 17, 18, 19: return "host migration";
 		case NetCompression.MessageType: return "compressed";
 		case NetworkSync.MsgTerrainBrush: return "terrain";
@@ -584,6 +591,10 @@ class NetworkManager
 		into.AppendF("NETWORK {} tick {} clients {} sent {} B/s received {} B/s objects {}\n", IsServer ? (mMode == .Host ? "host" : "server") : (IsClient ? "client" : "offline"), mTick, mClients.Count, BytesSentPerSecond, BytesReceivedPerSecond, mIdentityStates.Count);
 		for (let client in mClients)
 			into.AppendF("CLIENT {} {} B/s, {} inputs waiting, {}% snapshots lost, budget {}\n", client.id, client.bytesPerSecond, client.queue.Count, client.lossPercent, SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget);
+		if (Lockstep && IsClient)
+			into.AppendF("LOCKSTEP {} hashes checked, {} differed (each resyncs), {} replays from exact physics snapshots, {} exact states taken up\n", HashChecks, HashMismatches, LockstepReplays, LockstepStatesTaken);
+		else if (Lockstep)
+			into.AppendF("LOCKSTEP {} desyncs reported, {} states sent for changes made here, {} asked for again, {} exact states sent (the last {} bytes)\n", LockstepResyncs, LockstepChangesSent, LockstepRetries, LockstepStatesSent, LockstepStateBytes);
 		if (IsClient && mRemotePlayers.Count > 0)
 			into.AppendF("FORWARD {} other players run in the present from their controls, {} guesses wrong and {} right, {} replays for changed controls\n", mRemotePlayers.Count, GuessesWrong, GuessesRight, InputReplays);
 		if (IsClient && Rollbacks > 0)
@@ -845,6 +856,7 @@ class NetworkManager
 		mIdentities.Add(identity);
 		mIdentityStates.Add(identity.Runtime);
 		mByNetId[identity.NetId] = identity;
+		LockstepBind(identity);
 		if (identity.Runtime.[Friend]mPartsIdLimit == 0)
 			identity.Runtime.[Friend]mPartsIdLimit = Scene.NextId;
 	}
@@ -1171,6 +1183,8 @@ class NetworkManager
 					}
 					else if (client != null && type == MsgInput)
 						ReadInputs(client, ref reader);
+					else if (client != null && type == MsgDesync)
+						ReadDesync(client, ref reader);
 					else if (client != null && type == MsgLink)
 					{
 						client.lossPercent = reader.Read<uint8>();
@@ -1198,6 +1212,7 @@ class NetworkManager
 					case MsgSnapshotDelta: ReadDeltaSnapshot(ref reader);
 					case MsgHide: ReadHide(ref reader);
 					case MsgForward: ReadForwarded(ref reader);
+					case MsgLockstepState: ReadLockstepState(ref reader);
 					case MsgCustom: Dispatch(reader.Read<uint8>(), 0, ref reader);
 					case MsgOwner:
 						let ownedId = reader.Read<uint32>();

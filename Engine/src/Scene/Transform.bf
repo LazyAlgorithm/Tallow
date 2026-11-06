@@ -106,6 +106,32 @@ class Transform
 		}
 	}
 
+	/// The size in the world on the object's own axes: the local scales multiplied up the parents, exactly (so it
+	/// does not change with how the object is turned). Where a parent scaled unevenly has something turned below it
+	/// the result is skewed and this is the best fit, from the world matrix.
+	public Vector3 WorldScale
+	{
+		get
+		{
+			var scale = D().localScale;
+			bool turnedBelow = D().localRotation != .Identity;
+			for (var parent = mParent; parent != null; parent = parent.mParent)
+			{
+				let parentScale = parent.D().localScale;
+				if (turnedBelow && (parentScale.x != parentScale.y || parentScale.y != parentScale.z))
+				{
+					Vector3 t, s;
+					Quaternion q;
+					LocalToWorld.Decompose(out t, out q, out s);
+					return Vector3.Abs(s);
+				}
+				scale *= parentScale;
+				turnedBelow |= parent.D().localRotation != .Identity;
+			}
+			return Vector3.Abs(scale);
+		}
+	}
+
 	/// The size relative to the parent: 1 on each axis is unchanged.
 	public Vector3 LocalScale
 	{

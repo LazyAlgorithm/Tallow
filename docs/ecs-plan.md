@@ -1609,6 +1609,63 @@ nine profiles.
   - Network suites, NetworkScale (418,613 bytes a second, unchanged), NetworkRollback, Voice, HostMigration,
     AntiCheat and the rest as before.
 
+### 6h steps
+
+- [x] **6h EXIT MET for Linux and Windows; macOS not checked** (2026-11-06), `Engine/src/Net/NetworkManagerLockstep.bf`:
+  - `NetworkManager.Lockstep` (the server's; clients learn it in the welcome), `NetworkSession.lockstep` (turns on
+    physics prediction with it). Every client runs the whole world: relevance is off, every player's controls are
+    forwarded to every client whatever the distance (6g's forwarding, on in lockstep even with `InputForwarding`
+    off), and once a client has the exact state of everything the server leaves bodies and players out of its
+    snapshots. `InputDelayTicks` is -1 by default: 2 ticks in lockstep, 0 otherwise.
+  - Every networked body gets the same Jolt body id on every machine (`LockstepBodyIndex`: the upper half of the
+    ids, a quarter for scene objects by id, an eighth each for spawns and fragments; `PhysicsWorld.FixedBodyIndex`,
+    `CreateBodyWithID`); a body made before its object had a network id is made again with its id.
+  - Exact physics snapshots (`PhysicsWorld.SaveExact` / `RestoreExact`, Jolt's StateRecorder with bodies,
+    contacts and constraints; native `tn_physics_state_*`), one a tick, 48 kept on the client. A forwarded
+    control found different from the guess, or the server saying it ran this machine's own controls differently
+    (they came late and it repeated the last: `ownInputsUntil`, sent back for 40 ticks), goes back to the snapshot
+    before and runs again (`LockstepReplays`).
+  - Joining (and after a desync) the server sends `MsgLockstepState` = 25: the state of the shared bodies and
+    their contacts (`SaveShared`, a `StateRecorderFilter` for ids from the upper half; about 9-20 KB), for the
+    tick of the client's controls it has just run. The client restores its own snapshot of that tick, puts the
+    server's in and runs the ticks since.
+  - Every 30 ticks the forwarded-controls message carries the server's hash (FNV of each player's and predicted
+    body's position, rotation and velocities, summed so order does not matter). A hash that differs sends
+    `MsgDesync` = 24 and the server sends the state again (`LockstepResyncs`). A state the client cannot take up
+    (too late, or bodies came or went in between) or a replay it cannot do asks again (`LockstepRetries`).
+  - What the server does that clients cannot work out (bodies made or removed: `PhysicsWorld.BodyGeneration`;
+    a body put somewhere by game code: `PhysicsWorld.Teleports`) sends every client the state again
+    (`LockstepChangesSent`), with no hash to a client until it has it.
+  - The panel: LOCKSTEP line (client: hashes, mismatches, replays, states taken; server: desyncs, states for
+    changes, retries, states sent).
+  - Determinism fixes found on the way, on every mode:
+    - `Transform.WorldScale` (new): local scales multiplied up the parents, exactly. Colliders and
+      CharacterController took their scale from the decomposed world matrix, which gives 1 +- an ulp for a turned
+      object: a crate whose body was made while tipped over got a box 1e-7 off and a different inertia, so the
+      same saved state stepped differently (53 of 160 hashes differed before, 0 after).
+    - Reading a kinematic body's state (`GetState`, `SaveExact`) no longer teleports it to its moved transform
+      before the step: the step's MoveKinematic gives it the velocity that pushes what it meets, and whether
+      something read it first changed how the tick played.
+    - The host's own controls are quantized as a client's are (forwarded, they run the same everywhere).
+    - Windows links failed on the ecs branch (Flecs uses dbghelp): `dbghelp.lib` added to the launcher's and
+      projects' Win64 link lists.
+  - `~/TallowEcsTests/NetworkLockstep` (dedicated server, A and B, 40 ms lag each way, 64 crates in 16 stacks the
+    players wander through, put back up on the server every 20 s, client C joining late; `LOCKSTEP_SECONDS`,
+    arg `off`): **10 minutes, 2400 hashes checked, 0 differed; late joiner 599 checks, 0 differed; 1327 bytes a
+    second to each client.**
+  - `~/TallowEcsTests/NetworkLockstepCross` (one process per machine: `server <port> <s>`, `client <host> <port>
+    <s>`; built by `~/TallowEcsTests/crossbuild.sh <engine> <test> <out>` for Linux and for Windows with
+    BeefBuild.exe under Wine): **a Linux server, a Windows client (Wine) and a Linux client, 10 minutes of crates
+    knocked about and restacked: 1180 hashes checked on each client, 0 differed, 0 desyncs** (62 states sent for
+    the restacks, 2 asked for again).
+  - `~/TallowEcsTests/ExactRestore`: state saved in one world and put into another with the same ids (different
+    pasts) steps the same for 1200 ticks.
+  - Same results as 6g (d7967aaf): NetworkEcs (82), PhysicsPrediction (22), NetworkForwarding, NetworkRollback,
+    NetworkInputDelay, NetworkDeltas, NetworkInterest, NetworkPriority, NetworkTuning, HostMigration, NetworkBytes
+    profiles, Profiler, SpawnPoints, Maps, SkinnedMaterials; the other ported suites match main.
+  - macOS: not runnable here (no Mac). Jolt is built with `CROSS_PLATFORM_DETERMINISTIC` there as on the others; check
+    `NetworkLockstepCross` with a Mac client before claiming it.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

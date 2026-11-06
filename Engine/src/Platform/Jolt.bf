@@ -57,6 +57,14 @@ static class Jolt
 	[CLink] public static extern void tn_character_destroy(void* character, void* system);
 	[CLink] public static extern uint32 tn_character_inner_body(void* character);
 	[CLink] public static extern void tn_physics_set_debris(uint32 bodyId, bool debris);
+	[CLink] public static extern void* tn_physics_state_save(void* system, void* reuse);
+	[CLink] public static extern bool tn_physics_state_restore(void* system, void* state);
+	[CLink] public static extern int tn_physics_state_size(void* state);
+	[CLink] public static extern void tn_physics_state_free(void* state);
+	[CLink] public static extern void* tn_physics_state_save_shared(void* system, uint32 firstIndex);
+	[CLink] public static extern void tn_physics_state_copy(void* state, uint8* into, int size);
+	[CLink] public static extern void* tn_physics_state_from(uint8* data, int size);
+	[CLink] public static extern void* JPH_BodyInterface_CreateBodyWithID(void* bodyInterface, uint32 bodyId, void* settings);
 	[CLink] public static extern void* tn_joint_create(void* system, uint32 bodyA, uint32 bodyB, Vector3* anchor, Vector3* axis, float halfConeAngle);
 	[CLink] public static extern void* tn_hinge_create(void* system, uint32 bodyA, uint32 bodyB, Vector3* anchor, Vector3* axis, Vector3* childAxis, Vector3* childNormal);
 	[CLink] public static extern void* tn_slider_create(void* system, uint32 a, uint32 b, Vector3* anchor, Vector3* childAnchor, Vector3* axis, Vector3* childAxis, Vector3* childNormal, float travel);

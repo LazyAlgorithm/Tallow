@@ -38,12 +38,18 @@ class NetworkSession : Component
 	public bool losslessCompression = true;
 	[Advanced]
 	public bool messageCompression;
-	/// Controls are used this many ticks after they are given (0 to 3): fewer corrections, a little delay.
+	/// Controls are used this many ticks after they are given (0 to 3): fewer corrections, a little delay. -1: 0,
+	/// or 2 in lockstep.
 	[Advanced]
-	public int32 inputDelayTicks;
+	public int32 inputDelayTicks = -1;
 	/// Send each client only what changed since what it is known to have received.
 	[Advanced]
 	public bool fieldDeltas = true;
+	/// Lockstep: every client runs the whole world from everyone's controls, and the server sends no body state
+	/// once a client has it, only controls and a hash to check by. For RTS, physics sandboxes and co-op, where
+	/// moving objects far outnumber players; not for competitive games (nothing is hidden). Physics prediction is
+	/// turned on with it, and controls are used 2 ticks after they are given unless set otherwise.
+	public bool lockstep;
 	/// Share joining players out among this many teams, each going to the smallest. 0 for no teams. A player's
 	/// team is on their Network Identity, and they appear at Spawn Points for that team.
 	public int32 teamCount = 0;
@@ -73,6 +79,9 @@ class NetworkSession : Component
 		network.SnapshotRelevanceRadius = snapshotRelevanceRadius;
 		network.LosslessCompression = losslessCompression;
 		network.FieldDeltas = fieldDeltas;
+		network.Lockstep = lockstep;
+		if (lockstep)
+			network.PredictPhysics = true;
 		network.InputDelayTicks = inputDelayTicks;
 		network.MessageCompression = messageCompression;
 		network.TeamCount = teamCount;

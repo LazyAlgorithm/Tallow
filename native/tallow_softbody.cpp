@@ -28,6 +28,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -1548,3 +1549,85 @@ TN_API float tn_rope_pull(void* tie, float step)
 		return std::abs(static_cast<JPH::PulleyConstraint*>(tie)->GetTotalLambdaPosition()) / step;
 	return std::abs(static_cast<JPH::DistanceConstraint*>(tie)->GetTotalLambdaPosition()) / step;
 }
+
+// ---- Exact physics snapshots (lockstep rollback) ----
+// Every body, contact cache and constraint, as Jolt saves them: putting one back and stepping again gives bit for bit
+// what stepping gave the first time, which per-body rewinding cannot (warm-started contacts are lost).
+#include <Jolt/Physics/StateRecorderImpl.h>
+
+extern "C" void* tn_physics_state_save(JPH_PhysicsSystem* world, void* reuse)
+{
+	auto* system = reinterpret_cast<JoltcSystem*>(world)->physicsSystem;
+	auto* recorder = reuse != nullptr ? static_cast<JPH::StateRecorderImpl*>(reuse) : new JPH::StateRecorderImpl();
+	recorder->Clear();
+	system->SaveState(*recorder, JPH::EStateRecorderState::All);
+	return recorder;
+}
+
+extern "C" bool tn_physics_state_restore(JPH_PhysicsSystem* world, void* state)
+{
+	auto* system = reinterpret_cast<JoltcSystem*>(world)->physicsSystem;
+	auto* recorder = static_cast<JPH::StateRecorderImpl*>(state);
+	recorder->Rewind();
+	return system->RestoreState(*recorder);
+}
+
+extern "C" size_t tn_physics_state_size(void* state)
+{
+	return static_cast<JPH::StateRecorderImpl*>(state)->GetDataSize();
+}
+
+extern "C" void tn_physics_state_free(void* state)
+{
+	delete static_cast<JPH::StateRecorderImpl*>(state);
+}
+
+// Lockstep: the state every machine shares, to send to one that must catch up. Bodies with an index from `base` up
+// (networked bodies, whose ids every machine makes the same), and contacts between those and static bodies (scene
+// geometry, made in the same order everywhere). Constraints are left out (their list differs between machines).
+class SharedBodiesFilter final : public JPH::StateRecorderFilter
+{
+public:
+	explicit SharedBodiesFilter(uint32_t inBase) : mBase(inBase) {}
+	bool ShouldSaveBody(const JPH::Body &inBody) const override { return inBody.GetID().GetIndex() >= mBase; }
+	bool ShouldSaveConstraint(const JPH::Constraint &) const override { return false; }
+	bool ShouldSaveContact(const JPH::BodyID &inBody1, const JPH::BodyID &inBody2) const override
+	{
+		return Shared(inBody1) && Shared(inBody2);
+	}
+	const JPH::BodyLockInterface *mLock = nullptr;
+private:
+	bool Shared(const JPH::BodyID &inBody) const
+	{
+		if (inBody.GetIndex() >= mBase)
+			return true;
+		JPH::BodyLockRead lock(*mLock, inBody);
+		return lock.Succeeded() && lock.GetBody().IsStatic();
+	}
+	uint32_t mBase;
+};
+
+extern "C" void* tn_physics_state_save_shared(JPH_PhysicsSystem* world, uint32_t base)
+{
+	auto* system = reinterpret_cast<JoltcSystem*>(world)->physicsSystem;
+	auto* recorder = new JPH::StateRecorderImpl();
+	SharedBodiesFilter filter(base);
+	filter.mLock = &system->GetBodyLockInterfaceNoLock();
+	system->SaveState(*recorder, JPH::EStateRecorderState(uint8_t(JPH::EStateRecorderState::Global) | uint8_t(JPH::EStateRecorderState::Bodies) | uint8_t(JPH::EStateRecorderState::Contacts)), &filter);
+	return recorder;
+}
+
+extern "C" void tn_physics_state_copy(void* state, uint8_t* into, size_t size)
+{
+	auto* recorder = static_cast<JPH::StateRecorderImpl*>(state);
+	const std::string data = recorder->GetData();
+	std::memcpy(into, data.data(), std::min(size, data.size()));
+}
+
+extern "C" void* tn_physics_state_from(const uint8_t* data, size_t size)
+{
+	auto* recorder = new JPH::StateRecorderImpl();
+	recorder->WriteBytes(data, size);
+	return recorder;
+}
+

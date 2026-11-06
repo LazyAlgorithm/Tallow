@@ -56,16 +56,7 @@ abstract class Collider : Component
 		}
 	}
 
-	protected Vector3 WorldScale
-	{
-		get
-		{
-			Vector3 t, s;
-			Quaternion q;
-			Transform.LocalToWorld.Decompose(out t, out q, out s);
-			return Vector3.Abs(s);
-		}
-	}
+	protected Vector3 WorldScale => Transform.WorldScale;
 }
 
 /// A box-shaped collider.

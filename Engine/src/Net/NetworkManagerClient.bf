@@ -70,6 +70,8 @@ extension NetworkManager
 		mDeltasOffered = reader.Remaining > 0 && reader.Read<uint8>() != 0 && FieldDeltas;
 		ResetDeltas();
 		ResetForwarding();
+		Lockstep = reader.Remaining > 0 && reader.Read<uint8>() != 0;
+		ResetLockstep();
 		mConnected = reader.Ok;
 		mTick = 0;
 		mHaveSnapshot = false;
@@ -218,7 +220,8 @@ extension NetworkManager
 		// With field deltas (always sent in parts) a resting body is left out only while it is as the client last
 		// heard: one this machine has moving, guessing a push that did not happen there, is put back (checked once
 		// per snapshot, with its first packet; should a later packet of it say otherwise, that is taken in turn).
-		if (sawPrevious && (!part || fresh && mDeltasOffered))
+		// (Not in lockstep, where bodies are never in snapshots once a client has everything.)
+		if (sawPrevious && !Lockstep && (!part || fresh && mDeltasOffered))
 		{
 			for (let identity in mIdentities)
 			{
