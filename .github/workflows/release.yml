@@ -134,9 +134,12 @@ jobs:
           sudo apt-get install -y xvfb mesa-vulkan-drivers
           cd tallow
           python3 -m unittest discover -s tools -p test_run_ecs_bench.py -v
+          python3 tools/run_code_editor_tests.py
           for config in Debug Release; do
             "$BEEFBUILD" -workspace=. -config="$config" -platform=Linux64
             "build/${config}_Linux64/TallowLauncher/TallowLauncher" --build-project "$PWD/Samples/EcsBench"
+            "$BEEFBUILD" -workspace=Samples/EcsBench -config="$config" -platform=Linux64
+            "Samples/EcsBench/build/${config}_Linux64/EcsBench/EcsBench" --generate-graph-fixture "$PWD/Samples/EcsBench/src/GeneratedTickProbe.bf"
             "$BEEFBUILD" -workspace=Samples/EcsBench -config="$config" -platform=Linux64
             xvfb-run -a python3 tools/run_ecs_bench.py --check --config "$config" --timeout 600
           done

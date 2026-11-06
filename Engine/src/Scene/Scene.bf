@@ -211,6 +211,18 @@ class Scene
 			mOnFrameList.Add(component);
 	}
 
+	/// After all script instances have been replaced, rebuild once in registration order. Adding a callback
+	/// during hot reload must not move that script behind scripts registered after it.
+	void RebuildCallbackLists()
+	{
+		mFixedList.Clear();
+		mFrameList.Clear();
+		mLateList.Clear();
+		mOnFrameList.Clear();
+		for (let component in mComponents)
+			AddToCallbackLists(component);
+	}
+
 	void RemoveFromCallbackLists(Component component)
 	{
 		let callbacks = component.[Friend]mCallbacks;
@@ -760,21 +772,14 @@ class Scene
 		let index = mComponents.IndexOf(old);
 		if (index >= 0)
 			mComponents[index] = replacement;
-		if (ScriptCallbackIndex.Of(replacement.GetType()) == old.[Friend]mCallbacks)
+		// Migration rebuilds membership in registration order once all replacements are installed. Until then,
+		// replace references in place; no callback can retain the retired instance.
+		replacement.[Friend]mCallbacks = old.[Friend]mCallbacks;
+		for (let list in scope List<Component>[](mFixedList, mFrameList, mLateList, mOnFrameList))
 		{
-			replacement.[Friend]mCallbacks = old.[Friend]mCallbacks;
-			for (let list in scope List<Component>[](mFixedList, mFrameList, mLateList, mOnFrameList))
-			{
-				let at = list.IndexOf(old);
-				if (at >= 0)
-					list[at] = replacement;
-			}
-		}
-		else
-		{
-			// The reloaded class overrides different callbacks: it joins the end of its lists.
-			RemoveFromCallbackLists(old);
-			AddToCallbackLists(replacement);
+			let at = list.IndexOf(old);
+			if (at >= 0)
+				list[at] = replacement;
 		}
 		let pending = mPendingStart.IndexOf(old);
 		if (pending >= 0)
@@ -1572,10 +1577,13 @@ class Scene
 			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 			{
 				let callbacks = component.[Friend]mCallbacks;
-				if (callbacks.HasFlag(.OnLocalUpdate))
+				let hasLocalUpdate = callbacks.HasFlag(.OnLocalUpdate);
+				if (hasLocalUpdate)
 					Run(component, .OnLocalUpdate);
+				// Only a callback between the checks can change enabled state or the hierarchy. Ordinary Update-only
+				// scripts do not need to walk their parents twice. Preserve the recheck after OnLocalUpdate.
 				// Update runs here for objects without a Network Identity; theirs runs per tick.
-				if (callbacks.HasFlag(.Update) && !TicksUpdate(component.GameObject) && component.IsActiveAndEnabled)
+				if (callbacks.HasFlag(.Update) && !TicksUpdate(component.GameObject) && (!hasLocalUpdate || component.IsActiveAndEnabled))
 					RunUpdate(component, mFrameInput, deltaTime);
 			}
 		}

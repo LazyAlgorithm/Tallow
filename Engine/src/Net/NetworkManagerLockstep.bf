@@ -316,6 +316,11 @@ extension NetworkManager
 		ScriptFields(mExact.scripts[slot], false);
 	}
 
+	// ScriptFields runs on the simulation thread without user callbacks. Reuse capacity across ticks instead
+	// of allocating two temporary lists per snapshot/replay; clear borrowed references on every exit.
+	List<FieldRef> mScriptFieldScratch = new .() ~ delete _;
+	List<(void* ptr, int size)> mScriptRestoreScratch = new .() ~ delete _;
+
 	/// The supported value fields (including private fields) of the scripts this machine runs, saved locally for
 	/// both state sync and lockstep. [Sync] is still only for replication; replay history is never sent. A changed
 	/// field layout is rejected before any fields are changed, even when its total byte size is the same.
@@ -327,8 +332,15 @@ extension NetworkManager
 			return false;
 		int at = sizeof(uint64);
 		uint64 schema = 5381;
-		List<FieldRef> fields = scope .();
-		List<(void* ptr, int size)> restoreFields = scope .();
+		let fields = mScriptFieldScratch;
+		let restoreFields = mScriptRestoreScratch;
+		fields.Clear();
+		restoreFields.Clear();
+		defer
+		{
+			fields.Clear();
+			restoreFields.Clear();
+		}
 		for (let identity in mIdentities)
 		{
 			if (identity.ownerId != LocalClientId && !identity.RemoteRun)

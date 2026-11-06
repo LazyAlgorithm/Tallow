@@ -56,6 +56,14 @@ class ReplayFieldCounter : Script
 	}
 }
 
+[Component]
+class LocalDisableProbe : Script
+{
+	public int updates;
+	public override void OnLocalUpdate() { Enabled = false; }
+	public override void Update(TickInput input, float deltaTime) { updates++; }
+}
+
 /// A resource with an observable lifetime for the owner-cleanup regression checks.
 class OwnedProbe
 {
@@ -144,6 +152,7 @@ static class EcsChecks
 		SceneChecks();
 		UpdateChecks();
 		OwnershipChecks();
+		GeneratedGraphChecks();
 		DataChecks();
 		PrefabChecks();
 		HandleChecks();
@@ -214,6 +223,33 @@ static class EcsChecks
 		Expect(world.Count<ObjectLink>() == 0, "no entities left behind");
 	}
 
+	static void GeneratedGraphChecks()
+	{
+		let scene = scope Scene();
+		let owner = scene.CreateGameObject("Graph");
+		let script = owner.AddComponent<GeneratedTickProbe>();
+		Expect(script.steps == 7, "integer graph variables retain their type and default");
+		for (int i < 100)
+		{
+			let delta = (i + 1) / 1024.0f;
+			script.Update(default, delta);
+			Expect(script.tickDelta == delta, "generated Update uses the supplied tick delta");
+		}
+		List<FieldRef> fields = scope .();
+		ComponentRegistry.GetFields(script, fields, true);
+		bool replicated = false;
+		for (let field in fields)
+			if (field.name == "tickDelta")
+				replicated = field.sync;
+		Expect(replicated, "generated Sync fields use the ordinary reflection path");
+		let text = scope String();
+		SceneSerializer.Save(scene, text);
+		let loaded = scope Scene();
+		SceneSerializer.Load(loaded, text);
+		let copy = loaded.Find("Graph")?.GetComponent<GeneratedTickProbe>();
+		Expect(copy != null && copy.steps == script.steps && copy.tickDelta == script.tickDelta, "generated script fields survive scene round trip");
+	}
+
 	static void OwnershipChecks()
 	{
 		OwnedProbe.deleted = 0;
@@ -238,6 +274,15 @@ static class EcsChecks
 		}
 		Expect(OwnershipProbe.cleanupBeforeDelete, "cleanup callbacks run before resource deletion");
 		Expect(OwnedProbe.deleted == 3 && OwnershipProbe.cleaned == 3, "scene teardown does not release resources twice");
+		// The last batch may disappear before its worker completes. Once adopted, that job must leave the cache.
+		let jobsBefore = AssetLoader.[Friend]sJobs.Count;
+		let job = new AssetLoader.Job() { waiting = 1 };
+		AssetLoader.[Friend]sJobs[new String("phase7-abandoned-preload")] = job;
+		AssetLoader.[Friend]Release(job);
+		Expect(AssetLoader.[Friend]sJobs.Count == jobsBefore + 1, "in-flight preload remains alive until adoption");
+		AssetLoader.[Friend]FinishAdoption(job);
+		Expect(AssetLoader.[Friend]sJobs.Count == jobsBefore, "an abandoned preload job is released after adoption");
+
 		// Even components never registered with a scene own what they explicitly adopted.
 		{
 			let loose = scope OwnershipProbe();
@@ -253,6 +298,7 @@ static class EcsChecks
 		let previous = Scene.Active;
 		let scene = scope Scene();
 		let plain = scene.CreateGameObject("Plain").AddComponent<UpdateCounter>();
+		let localDisable = scene.CreateGameObject("LocalDisable").AddComponent<LocalDisableProbe>();
 		let networkedObject = scene.CreateGameObject("Networked");
 		let identity = networkedObject.AddComponent<NetworkIdentity>();
 		identity.playerControlled = false;
@@ -280,7 +326,17 @@ static class EcsChecks
 			scene.FixedUpdate();
 		Expect(plain.frames == 3 && plain.ticks == 0, scope $"plain object: Update once a frame (frames {plain.frames}, ticks {plain.ticks})");
 		Expect(networked.ticks == 2 && networked.frames == 0, scope $"networked object: Update once a tick (frames {networked.frames}, ticks {networked.ticks})");
+		Expect(localDisable.updates == 0, "OnLocalUpdate disabling a script prevents its Update in the same frame");
 		Expect(!networked.sawControls, "an object no player controls gets empty controls");
+
+		// Rebuilding callback membership after a metadata change retains registration order.
+		let order = scope List<Component>(scene.[Friend]mFrameList.GetEnumerator());
+		ScriptCallbackIndex.[Friend]sByType[typeof(UpdateCounter)] = .None;
+		ScriptCallbackIndex.Refresh();
+		scene.[Friend]RebuildCallbackLists();
+		Expect(scene.[Friend]mFrameList.Count == order.Count, "callback rebuild restores the current masks");
+		for (int i < order.Count)
+			Expect(scene.[Friend]mFrameList[i] == order[i], "callback rebuild preserves registration order");
 
 		// The per-callback lists only hold classes that override the callback.
 		Expect(ScriptCallbackIndex.Of(typeof(UpdateCounter)) == .Update, "UpdateCounter overrides Update only");

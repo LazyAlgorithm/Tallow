@@ -547,7 +547,7 @@ Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API
 
 **Current baseline:** `native/tallow_code.cpp` uses `CompleteBeef` with API-indexed names and text-based guesses for type/member completion. `Editor/src/Scripts/ScriptEditor.bf` already runs background BeefBuild error checks. Upgrade these mechanisms to semantic editing rather than adding another scripting language.
 
-- [ ] Investigate maintained Beef compiler and BeefIDE analysis interfaces; choose a reliable in-process service or isolated helper process, with clear version compatibility, startup/error handling and fallback when semantic analysis is unavailable. Do not assume Beef exposes a ready-made language server.
+- [x] Investigate maintained Beef compiler and BeefIDE analysis interfaces; choose a reliable in-process service or isolated helper process, with clear version compatibility, startup/error handling and fallback when semantic analysis is unavailable. Decision (2026-11-06): a version-pinned isolated resolve-only compiler helper; [source investigation and implementation requirements](beef-semantic-editor.md). The helper itself is not implemented; the remaining 7f checks stay open.
 - [ ] Provide **context-aware member completion** (including inherited and generic members, engine and project types), expected argument and return types, overload selection and parameter/signature help while typing. Do not guess members from source words when the actual type is known.
 - [ ] Add diagnostics and editor navigation for unresolved types, missing imports, wrong argument counts/types, deprecated APIs and source locations; provide hover documentation, go-to-definition, find-references, rename and safe suggested fixes where Beef tooling permits.
 - [ ] Keep semantic analysis responsive while typing via debounced background work, cancellation, cached project symbols and incremental updates. Diagnostic locations and suggestions must match unsaved buffers; do not require a full game rebuild for every keystroke.
@@ -573,6 +573,31 @@ Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API
 - World-space Transform setters now reuse one validated ECS data reference when writing and marking dirty. No scripting API or update order changed; impact still needs profiling.
 - Measurement infrastructure continued (2026-11-06): `tools/run_ecs_bench.py` now runs the existing correctness suite with `--check`, alternates baseline/current checkouts across repeated measurements, validates each result, and checkpoints raw JSONL with build/host provenance. Five synthetic runner regression tests pass; these are not engine runtime results. Commands and remaining home checks: [Phase 7 validation](ecs-phase7-validation.md).
 - [ ] BeefBuild compile, network rollback regression suites (including correction under latency/jitter/loss), visual-graph compilation, multi-platform checks, and script-update benchmarks remain required.
+
+### Phase 7 continuation (2026-11-06; validation in progress)
+
+- Owner-bound cleanup and preload batches: `Component.Own`, `OnCleanup`, lifecycle release and retirement release;
+  [ownership contract and limitations](component-ownership.md). Shared asset cache lifetime handles and arbitrary
+  external subscription/task cleanup remain unfinished. New EcsBench ownership regression cases require runtime validation.
+- Preload jobs whose last batch was released during loading are now freed after adoption, instead of remaining
+  in the job map indefinitely. Shared asset cache eviction is still a separate unfinished item.
+- Script snapshot/replay field lists retain their capacity between ticks and clear borrowed field pointers on every
+  exit. Schema validation and field copy order are unchanged; allocation/time measurements remain pending.
+- Default script dispatch skips its redundant hierarchy walk when no OnLocalUpdate ran; still rechecks enabled state
+  after that callback. No script ordering or parallel execution change. Performance impact remains unmeasured.
+- Hot reload clears cached callback masks and rebuilds callback lists in registration order once replacements are
+  installed. The old path appended scripts whose callbacks changed, silently changing their execution order.
+- Visual graphs now retain integer variable types on load. EcsBench can regenerate a real graph fixture, then
+  compile and exercise its Script.Update signature, Sync metadata and scene round trip.
+- Editor dirty state now follows document content/revisions, including branched undo/redo. New saves queue checks;
+  stale diagnostics are withheld from edited buffers. Native editor regression tests pass locally. This is not
+  compiler-backed semantic completion; [the required backend remains open](beef-semantic-editor.md).
+- `ecs` pushes now run the existing Linux/Windows build workflow without release publication. Linux adds Debug/Release
+  EcsBench checks and generated-graph recompilation. CI outcome must be recorded before marking runtime validation done.
+- The documented Linux `toolchain-2` download returned 404; no local BeefBuild or LLVM 22 toolchain was available.
+  The externally maintained `~/TallowEcsTests` network fixtures are not in this checkout. Full network regressions,
+  hardware performance comparisons, safe shared asset unloading, handle-lifetime audit, semantic editor implementation,
+  and the remaining compatibility/platform matrix still block Phase 7 exit.
 
 ### Phase 8: Docs and release (M)
 

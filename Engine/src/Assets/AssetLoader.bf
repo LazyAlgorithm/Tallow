@@ -163,25 +163,41 @@ static class AssetLoader
 		sWake.Set(false);
 	}
 
+	// Called with sMonitor held, after the upload has finished and the last batch has let go.
+	static void ForgetJob(Job job)
+	{
+		for (let entry in sJobs)
+		{
+			if (entry.value == job)
+			{
+				let key = entry.key;
+				sJobs.Remove(key);
+				delete key;
+				break;
+			}
+		}
+		delete job;
+	}
+
 	static void Release(Job job)
 	{
 		using (sMonitor.Enter())
 		{
-			if (--job.waiting > 0 || !job.adopted)
-				return;
-			// Nobody is waiting and it has been handed over: the job can go.
-			for (let entry in sJobs)
-			{
-				if (entry.value == job)
-				{
-					let key = entry.key;
-					sJobs.Remove(key);
-					delete key;
-					break;
-				}
-			}
+			if (--job.waiting == 0 && job.adopted)
+				ForgetJob(job);
 		}
-		delete job;
+	}
+
+	static void FinishAdoption(Job job)
+	{
+		using (sMonitor.Enter())
+		{
+			job.adopted = true;
+			// A component can be removed while its preload is in flight. Release cannot free that job until
+			// the worker/upload is done; finish the release here rather than retaining an ownerless job forever.
+			if (job.waiting == 0)
+				ForgetJob(job);
+		}
 	}
 
 	static void StartThreads()
@@ -311,8 +327,7 @@ static class AssetLoader
 				else
 					Log.Warning(scope $"Could not load texture {job.path}");
 			}
-			using (sMonitor.Enter())
-				job.adopted = true;
+			FinishAdoption(job);
 			if (SDL.SDL_GetTicksNS() - start > budget)
 				break;
 		}

@@ -1,0 +1,51 @@
+# Component-owned resources
+
+`Component.Own` transfers an **exclusively owned** heap object to a component. The component releases it after
+its destruction/unregistration callbacks, when play stops, when hot reload retires it, or as a fallback on deletion.
+No ownership lookup or cleanup runs in each Update. The ownership lists are allocated only when used; components
+currently carry two nullable list fields and a closed-state flag, whose memory impact still needs benchmarking.
+
+```beef
+[Component]
+class Preloader : Script
+{
+    AssetLoader.Batch loading;
+
+    public override void Awake()
+    {
+        loading = AssetLoader.Preload(this, "Models/room.glb", "Textures/wall.png");
+    }
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        if (loading.IsDone)
+        {
+            // The ordinary renderer/asset APIs can now use the cached assets.
+        }
+    }
+}
+```
+
+The overload releases the preload **batch**, not the shared loaded meshes/textures. Existing unowned `Preload`
+callers retain their existing responsibility to delete the batch. The shared asset caches still require explicit
+unload coordination; this change does not provide versioned/refcounted shared asset handles.
+
+Use `Own(new List<...>())` for an exclusively owned collection. Do not also give an adopted field a `~ delete _`
+initializer, manually delete the adopted object, adopt it into another component, or adopt a cache-owned asset
+such as a mesh returned by `Assets.GetMesh`. Adopting the same object twice into one component is deduplicated.
+Adoption does not recursively collect referenced objects, eliminate ownership cycles, or make raw references weak.
+
+`OnCleanup(new () => { ... })` transfers a cleanup delegate to the owner. It runs once, in reverse registration
+order, before owned resources are deleted. Use it to disconnect a known subscription or cancel/join owned work.
+It does not discover subscriptions or cancel arbitrary tasks automatically. Cleanup must run on the scene thread;
+it cannot destroy its own owner or add resources/cleanup callbacks during cleanup. Code registered on an external
+publisher must still account for that publisher's lifetime.
+
+Reacquire resources in Awake on a new play session. Do not use old batch/resource references after StopPlay,
+removal, scene teardown or hot reload; owned references are not transferred to a replacement script instance.
+Custom resources still need correct destructors. Existing arbitrary delegates retained outside this mechanism
+and retired hot-reload instances remain limitations described in `script-hot-reload.md`.
+
+The EcsBench ownership checks cover duplicate adoption, cleanup-before-delete ordering, play restart, component
+removal, object destruction and detached-component deletion. Runtime results must be recorded after BeefBuild
+and EcsBench complete; writing these tests is not a passing runtime result.

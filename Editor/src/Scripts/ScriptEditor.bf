@@ -21,6 +21,7 @@ extension EditorApp
 		public bool readOnly;
 		/// The ApiIndex revision this script was last coloured with.
 		public int apiRevision;
+		public uint64 checkedRevision;
 	}
 
 	class ScriptProblem
@@ -36,6 +37,7 @@ extension EditorApp
 	[CLink] static extern char8* tn_code_get_text(void* handle);
 	[CLink] static extern void tn_code_render(void* handle, char8* id, float width, float height);
 	[CLink] static extern bool tn_code_is_dirty(void* handle);
+	[CLink] static extern uint64 tn_code_revision(void* handle);
 	[CLink] static extern void tn_code_mark_saved(void* handle);
 	[CLink] static extern void tn_code_set_read_only(void* handle, bool readOnly);
 	[CLink] static extern void tn_code_undo(void* handle);
@@ -69,6 +71,7 @@ extension EditorApp
 	// Background compile.
 	Thread mCheckThread ~ delete _;
 	bool mCheckRunning;
+	bool mCheckQueued;
 	bool mCheckFinished;
 	bool mCheckSucceeded;
 	String mCheckLog = new .() ~ delete _;
@@ -226,6 +229,12 @@ extension EditorApp
 		}
 	}
 
+	void CaptureCheckDocuments()
+	{
+		for (let document in mScripts)
+			document.checkedRevision = tn_code_revision(document.handle);
+	}
+
 	/// Compiles the project on a worker thread so typing is never blocked.
 	void StartErrorCheck()
 	{
@@ -234,17 +243,22 @@ extension EditorApp
 			QueueScriptReload();
 			return;
 		}
-		mCheckWasReload = false;
 		if (mCheckRunning)
+		{
+			mCheckQueued = true;
 			return;
+		}
+		mCheckQueued = false;
+		mCheckWasReload = false;
 		if (mCheckThread != null)
 		{
 			mCheckThread.Join();
 			delete mCheckThread;
 			mCheckThread = null;
 		}
+		CaptureCheckDocuments();
 		mCheckRunning = true;
-		mCheckFinished = false;
+		Interlocked.Store(ref mCheckFinished, false);
 		mCheckThread = new Thread(new () =>
 			{
 				let project = Project.Current;
@@ -278,6 +292,12 @@ extension EditorApp
 			DeleteAndNullify!(mCheckThread);
 		}
 		mCheckRunning = false;
+		// A save during this build invalidates its diagnostics. Always check the latest saved sources.
+		if (mCheckQueued && !mCheckWasReload)
+		{
+			StartErrorCheck();
+			return;
+		}
 		ClearAndDeleteItems!(mProblems);
 		for (let line in mCheckLog.Split('\n'))
 		{
@@ -360,6 +380,8 @@ extension EditorApp
 	void ApplyProblems(ScriptDocument document)
 	{
 		tn_code_clear_markers(document.handle);
+		if (tn_code_is_dirty(document.handle) || document.checkedRevision != tn_code_revision(document.handle))
+			return;
 		for (let problem in mProblems)
 		{
 			if (problem.file == document.path)

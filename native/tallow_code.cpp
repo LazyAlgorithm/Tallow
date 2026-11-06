@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -21,7 +22,10 @@ namespace
 		TextEditor editor;
 		TrieAutoComplete completion;
 		std::string text;
-		size_t savedUndoIndex = 0;
+		std::string savedText;
+		uint64_t revision = 0;
+		uint64_t dirtyRevision = 0;
+		bool dirty = false;
 		size_t lastUndoIndex = 0;
 		bool markup = false;
 		// Which of the editor's code colour sets this document was last given (tn_code_set_palette).
@@ -189,7 +193,8 @@ namespace
 			const std::string owner = line.substr(begin, end - begin);
 			if (!owner.empty() && isdigit((unsigned char)owner[0])) return;   // a number such as 1.5
 			std::vector<std::string> members;
-			if (apiTypes.count(owner))
+			bool knownType = apiTypes.count(owner) != 0;
+			if (knownType)
 				MembersOf(owner, members);
 			else if (!owner.empty())
 			{
@@ -198,9 +203,10 @@ namespace
 				if (type.empty() && owner == "Transform") type = "Transform";
 				if (type.empty() && owner == "GameObject") type = "GameObject";
 				if (type.empty() && owner == "Scene") type = "Scene";
-				if (!type.empty()) MembersOf(type, members);
+				knownType = !type.empty();
+				if (knownType) MembersOf(type, members);
 			}
-			if (!members.empty())
+			if (knownType)
 			{
 				Offer(state.suggestions, members, term, 200);
 				return;
@@ -408,8 +414,14 @@ TN_API void* tn_code_create(const char* text, int language)
 	}
 	else
 		document->completion.Connect(&editor);
-	document->savedUndoIndex = editor.GetUndoIndex();
-	document->lastUndoIndex = document->savedUndoIndex;
+	document->savedText = editor.GetText();
+	document->lastUndoIndex = editor.GetUndoIndex();
+	editor.SetTransactionCallback([document](const std::vector<TextEditor::Change>& changes) {
+		if (changes.empty()) return;
+		++document->revision;
+		// Compiler locations refer to an older buffer as soon as it is edited, including undo/redo.
+		document->editor.ClearMarkers();
+	});
 	return document;
 }
 
@@ -514,13 +526,22 @@ TN_API void tn_code_render(void* handle, const char* id, float width, float heig
 TN_API bool tn_code_is_dirty(void* handle)
 {
 	Document* document = (Document*)handle;
-	return document->editor.GetUndoIndex() != document->savedUndoIndex;
+	if (document->dirtyRevision != document->revision)
+	{
+		document->dirty = document->editor.GetText() != document->savedText;
+		document->dirtyRevision = document->revision;
+	}
+	return document->dirty;
 }
+
+TN_API uint64_t tn_code_revision(void* handle) { return ((Document*)handle)->revision; }
 
 TN_API void tn_code_mark_saved(void* handle)
 {
 	Document* document = (Document*)handle;
-	document->savedUndoIndex = document->editor.GetUndoIndex();
+	document->savedText = document->editor.GetText();
+	document->dirtyRevision = document->revision;
+	document->dirty = false;
 }
 
 TN_API void tn_code_set_read_only(void* handle, bool readOnly) { ((Document*)handle)->editor.SetReadOnlyEnabled(readOnly); }

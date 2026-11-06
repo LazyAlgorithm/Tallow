@@ -84,6 +84,7 @@ extension EditorApp
 			delete mCheckThread;
 			mCheckThread = null;
 		}
+		CaptureCheckDocuments();
 		mCheckWasReload = true;
 		mCheckRunning = true;
 		Interlocked.Store(ref mCheckFinished, false);

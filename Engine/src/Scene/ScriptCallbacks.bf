@@ -60,5 +60,8 @@ static class ScriptCallbackIndex
 		return found;
 	}
 
+	/// Type metadata can be replaced in place by hot reload. Never reuse its old callback mask.
+	public static void Refresh() => sByType.Clear();
+
 	static Dictionary<Type, ScriptCallbacks> sByType = new .() ~ delete _;
 }

@@ -381,6 +381,7 @@ class NodeGraph
 				{
 				case "vector": type = .Vector3;
 				case "bool": type = .Bool;
+				case "int": type = .Int;
 				case "text": type = .String;
 				}
 				let variable = AddVariable(tokens[2], type);

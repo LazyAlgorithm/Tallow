@@ -113,6 +113,7 @@ class ScriptStateMigration
 			saved.owner.Components[saved.index] = replacement;
 			scene.[Friend]ReplaceComponent(saved.old, replacement);
 		}
+		scene.[Friend]RebuildCallbackLists();
 		List<FieldRef> fields = scope .();
 		List<StringView> tokens = scope .();
 		List<String> storage = scope .();
