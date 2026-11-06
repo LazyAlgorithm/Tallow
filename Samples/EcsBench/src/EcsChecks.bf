@@ -56,6 +56,31 @@ class ReplayFieldCounter : Script
 	}
 }
 
+/// A resource with an observable lifetime for the owner-cleanup regression checks.
+class OwnedProbe
+{
+	public static int deleted;
+	public ~this() { deleted++; }
+}
+
+[Component]
+class OwnershipProbe : Script
+{
+	public static int cleaned;
+	public static bool cleanupBeforeDelete;
+
+	public override void Awake()
+	{
+		let resource = Own(new OwnedProbe());
+		Own(resource);
+		OnCleanup(new () =>
+			{
+				cleanupBeforeDelete &= OwnedProbe.deleted == cleaned;
+				cleaned++;
+			});
+	}
+}
+
 /// Checks of the ECS layer (World, Query, ParallelFor, deferred changes), run with TALLOW_BENCH_MODE=check.
 static class EcsChecks
 {
@@ -118,6 +143,7 @@ static class EcsChecks
 		Expect(!world.IsAlive(entities[0]) && world.Count<Pose>() == 999, "Delete");
 		SceneChecks();
 		UpdateChecks();
+		OwnershipChecks();
 		DataChecks();
 		PrefabChecks();
 		HandleChecks();
@@ -186,6 +212,38 @@ static class EcsChecks
 		scene.DestroyImmediate(parent);
 		Expect(!world.IsAlive(parentEntity) && !world.IsAlive(childEntity), "destroying objects deletes their entities");
 		Expect(world.Count<ObjectLink>() == 0, "no entities left behind");
+	}
+
+	static void OwnershipChecks()
+	{
+		OwnedProbe.deleted = 0;
+		OwnershipProbe.cleaned = 0;
+		OwnershipProbe.cleanupBeforeDelete = true;
+		let active = Scene.Active;
+		defer { Scene.Active = active; }
+		{
+			let scene = scope Scene();
+			let owner = scene.CreateGameObject("Owner");
+			owner.AddComponent<OwnershipProbe>();
+			scene.StartPlay();
+			scene.StopPlay();
+			Expect(OwnedProbe.deleted == 1 && OwnershipProbe.cleaned == 1, "StopPlay releases each owned resource and cleanup once");
+			scene.StartPlay();
+			let script = owner.GetComponent<OwnershipProbe>();
+			owner.RemoveComponent(script);
+			Expect(OwnedProbe.deleted == 2 && OwnershipProbe.cleaned == 2, "restarted component gets a fresh resource lifetime");
+			owner.AddComponent<OwnershipProbe>();
+			scene.DestroyImmediate(owner);
+			Expect(OwnedProbe.deleted == 3 && OwnershipProbe.cleaned == 3, "object destruction releases owned resources once");
+		}
+		Expect(OwnershipProbe.cleanupBeforeDelete, "cleanup callbacks run before resource deletion");
+		Expect(OwnedProbe.deleted == 3 && OwnershipProbe.cleaned == 3, "scene teardown does not release resources twice");
+		// Even components never registered with a scene own what they explicitly adopted.
+		{
+			let loose = scope OwnershipProbe();
+			loose.Own(new OwnedProbe());
+		}
+		Expect(OwnedProbe.deleted == 4, "a detached component releases adopted resources on deletion");
 	}
 
 	/// Update runs per frame on plain objects and per tick on networked ones; an object no player controls gets

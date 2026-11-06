@@ -37,6 +37,7 @@ extension ScriptReload
 	static List<Component> sRetired = new .() ~ DeleteContainerAndItems!(_);
 	public static void Retire(Component component)
 	{
+		component.[Friend]ReleaseOwned();
 		sRetired.Add(component);
 	}
 

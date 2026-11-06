@@ -125,6 +125,14 @@ static class AssetLoader
 		return batch;
 	}
 
+	/// Starts an owner-bound preload. The batch is released automatically with the component; loaded assets
+	/// remain in their shared caches. Do not delete the returned batch or use it after owner cleanup.
+	public static Batch Preload(Component owner, params StringView[] paths)
+	{
+		Runtime.Assert(owner != null, "An owner-bound preload needs a component.");
+		return owner.Own(Preload(params paths));
+	}
+
 	/// Starts loading one thing of a given kind into a batch.
 	public static void Add(Batch batch, StringView path, Kind kind)
 	{

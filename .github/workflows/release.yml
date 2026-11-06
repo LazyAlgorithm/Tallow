@@ -16,7 +16,7 @@ name: Engine release
 on:
   push:
     tags: ['v*']
-    branches: [dev, main]
+    branches: [dev, main, ecs]
   workflow_dispatch:
     inputs:
       publish:
@@ -126,6 +126,20 @@ jobs:
           python3 tools/package_engine.py --platform linux --folder ../out/Tallow-Linux
           python3 tools/validate_showcase.py --package ../out/Tallow-Linux --work ../showcase-test
           cd ../out && zip -qr9 Tallow-Linux.zip Tallow-Linux
+
+      - name: ECS regression builds and checks
+        if: github.ref == 'refs/heads/ecs'
+        run: |
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          sudo apt-get install -y xvfb mesa-vulkan-drivers
+          cd tallow
+          python3 -m unittest discover -s tools -p test_run_ecs_bench.py -v
+          for config in Debug Release; do
+            "$BEEFBUILD" -workspace=. -config="$config" -platform=Linux64
+            "build/${config}_Linux64/TallowLauncher/TallowLauncher" --build-project "$PWD/Samples/EcsBench"
+            "$BEEFBUILD" -workspace=Samples/EcsBench -config="$config" -platform=Linux64
+            xvfb-run -a python3 tools/run_ecs_bench.py --check --config "$config" --timeout 600
+          done
 
       - name: Keep the zip
         uses: actions/upload-artifact@v4

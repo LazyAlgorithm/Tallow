@@ -1050,6 +1050,7 @@ class Scene
 	{
 		if (component.[Friend]mRegistered)
 			return;
+		component.[Friend]mOwnershipClosed = false;
 		component.[Friend]mRegistered = true;
 		mComponents.Add(component);
 		AddToCallbackLists(component);
@@ -1075,6 +1076,7 @@ class Scene
 		{
 			component.[Friend]mLeavingTogether = true;
 			component.OnUnregister();
+			component.[Friend]ReleaseOwned();
 			component.[Friend]mLeavingTogether = false;
 			component.[Friend]mRegistered = false;
 			component.[Friend]mAwake = false;
@@ -1099,6 +1101,7 @@ class Scene
 			}
 		}
 		component.OnUnregister();
+		component.[Friend]ReleaseOwned();
 		component.[Friend]mRegistered = false;
 		component.[Friend]mAwake = false;
 		mComponents.Remove(component);
@@ -1121,6 +1124,7 @@ class Scene
 	{
 		if (component.IsAwake)
 			return;
+		component.[Friend]mOwnershipClosed = false;
 		component.[Friend]mAwake = true;
 		component.Awake();
 		if (component.Enabled)
@@ -1174,6 +1178,7 @@ class Scene
 			if (component.Enabled)
 				component.OnDisable();
 			component.OnDestroy();
+			component.[Friend]ReleaseOwned();
 			component.[Friend]mAwake = false;
 			component.[Friend]mStarted = false;
 		}
