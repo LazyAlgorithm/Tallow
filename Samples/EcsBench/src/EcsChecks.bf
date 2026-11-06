@@ -848,6 +848,13 @@ static class EcsChecks
 		Expect(script.presentation == 7, "[NonSerialized] presentation fields are left alone");
 		snapshot.Add(0);
 		Expect(!net.[Friend]ScriptFields(snapshot, true) && script.count == 3, "a changed snapshot size never partially restores fields");
+		snapshot.RemoveAt(snapshot.Count - 1);
+		script.count = 11;
+		let added = scene.CreateGameObject("New Replay");
+		let addedIdentity = added.AddComponent<NetworkIdentity>();
+		addedIdentity.ownerId = 2;
+		added.AddComponent<ReplayFieldCounter>();
+		Expect(!net.[Friend]ScriptFields(snapshot, true) && script.count == 11, "a changed script set does not restore an old layout");
 		scene.StopPlay();
 		scene.Network = null;
 		delete net;
