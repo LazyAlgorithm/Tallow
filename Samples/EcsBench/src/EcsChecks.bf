@@ -948,6 +948,7 @@ static class EcsChecks
 		let identity = gameObject.AddComponent<NetworkIdentity>();
 		identity.ownerId = 2;
 		let script = gameObject.AddComponent<ReplayFieldCounter>();
+		let generated = gameObject.AddComponent<GeneratedTickProbe>();
 		scene.StartPlay();
 		script.count = 3;
 		script.SetElapsed(0.75f);
@@ -963,6 +964,24 @@ static class EcsChecks
 		snapshot.Add(0);
 		Expect(!net.[Friend]ScriptFields(snapshot, true) && script.count == 3, "a changed snapshot size never partially restores fields");
 		snapshot.RemoveAt(snapshot.Count - 1);
+		List<uint8> beforeTick = scope .();
+		List<uint8> expectedTick = scope .();
+		List<uint8> replayedTick = scope .();
+		for (int tick < 120)
+		{
+			net.[Friend]ScriptFields(beforeTick, false);
+			script.Update(default, 1.0f / 64);
+			generated.Update(default, 1.0f / 64);
+			net.[Friend]ScriptFields(expectedTick, false);
+			Expect(net.[Friend]ScriptFields(beforeTick, true), "fixed-tick replay restores the prior script state");
+			script.Update(default, 1.0f / 64);
+			generated.Update(default, 1.0f / 64);
+			net.[Friend]ScriptFields(replayedTick, false);
+			bool same = expectedTick.Count == replayedTick.Count;
+			for (int i < expectedTick.Count && same)
+				same &= expectedTick[i] == replayedTick[i];
+			Expect(same, "handwritten and generated script state matches byte-for-byte after fixed-tick replay");
+		}
 		script.count = 11;
 		let added = scene.CreateGameObject("New Replay");
 		let addedIdentity = added.AddComponent<NetworkIdentity>();

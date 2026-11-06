@@ -6,8 +6,8 @@ namespace Tallow;
 extension Component
 {
 	// Allocated only when used; ordinary Update and component access pay no lookup cost.
-	List<Object> mOwnedResources ~ delete _;
-	List<delegate void()> mOwnedCleanup ~ delete _;
+	List<Object> mOwnedResources;
+	List<delegate void()> mOwnedCleanup;
 	bool mOwnershipClosed;
 
 	/// Transfers an exclusively owned heap object to this component. It is deleted after OnDestroy/OnUnregister,

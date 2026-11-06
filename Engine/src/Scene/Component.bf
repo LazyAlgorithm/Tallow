@@ -83,7 +83,10 @@ abstract class Component
 
 	public ~this()
 	{
+		// Keep the registries alive until detached owners have released their contents.
 		ReleaseOwned();
+		delete mOwnedCleanup;
+		delete mOwnedResources;
 	}
 
 	/// The object this component is on.
