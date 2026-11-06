@@ -157,6 +157,7 @@ struct NetworkIdentity : ComponentHandle<NetworkIdentityData>
 	public ref int32 Misses => ref Runtime.Misses;
 	public ref uint32 PredictPausedUntil => ref Runtime.PredictPausedUntil;
 	public ref bool ReplayFrozen => ref Runtime.ReplayFrozen;
+	public ref bool RemoteRun => ref Runtime.RemoteRun;
 	public bool CanPredictPhysics => Runtime.CanPredictPhysics;
 	public void RecordTick(uint32 tick) => Runtime.RecordTick(tick);
 	public void ApplyBodyState(BodyState state, bool asleep) => Runtime.ApplyBodyState(state, asleep);
@@ -472,6 +473,9 @@ class NetworkIdentityState
 	/// back as it was afterwards instead of being run again (island-limited rollback).
 	[NonSerialized]
 	public bool ReplayFrozen;
+	/// Client: another player's object run here in the present from its forwarded controls (input forwarding).
+	[NonSerialized]
+	public bool RemoteRun;
 
 	/// Server: whether clients can simulate this object (see physicsPrediction).
 	public bool CanPredictPhysics

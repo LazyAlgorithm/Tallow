@@ -1578,6 +1578,37 @@ nine profiles.
     its controls, 5 seconds of walking need no corrections, and client and server agree to 0.0000 m.
   - Network suites, Voice, HostMigration, AntiCheat and the rest as before.
 
+### 6g steps
+
+- [x] **6g EXIT MET** (2026-11-05), `Engine/src/Net/NetworkManagerForwarding.bf`:
+  - `NetworkManager.InputForwarding` (on by default). Each snapshot, the server sends every client
+    (`MsgForward` = 23, just before the snapshot) the controls the other players in its area were run with
+    over the last two snapshots' ticks, each a difference from the one before; a player whose controls have
+    not changed is said again only once a second. Interest management applies (a player out of the area is
+    not forwarded, and is dropped on the client when hidden).
+  - The client runs those players in the present (`NetworkIdentity.RemoteRun`), in the server's order (owner
+    id below its own first), guessing the last known controls; forwarded ticks map to its own through the
+    tick pair snapshots already carry. A guess found wrong at the next snapshot replays from it (counted as
+    `InputReplays`, not `Rollbacks`; `GuessesWrong` / `GuessesRight`). A player not heard of for 2 seconds
+    goes back to being shown in the past.
+  - Forwarded players go exactly (FlagFull) but only for 3 snapshots after their controls change and every
+    fourth otherwise (`SkipForwarded`): they come out the same on the client.
+  - Lag compensation leaves forwarded players alone (the shooter saw them in the present). The NetworkEcs copy
+    of the Network suite expects that now; the rest of it matches main.
+  - Fixes found on the way: replays put other players' bodies back as if nobody ran them (now excluded); with
+    field deltas, a resting body is left out of snapshots while unchanged, so a push a client guessed that did
+    not happen was never corrected. Delta snapshots now check predicted bodies last heard of at rest against
+    that state (with the first packet of each snapshot), and the server sends a resting predicted body within
+    `PriorityNearDistance` of a player once a second even unchanged (a few bytes).
+  - The panel: FORWARD line, ROLLBACK line split by cause (own objects, other players, bodies).
+  - `~/TallowEcsTests/NetworkForwarding` (new; dedicated server, clients A and B, 40 ms lag each way,
+    `WANDER_SECONDS`): B pushes a row of crates: **A and B have them 0.000 m apart at every moment with
+    forwarding, 0.608 m without**. Ten minutes of both players wandering among 12 crates: **0 corrections**,
+    848 replays for changed controls (2480 guesses wrong, 11257 right), **1015 bytes a second to each client
+    against 948 without (6e)**.
+  - Network suites, NetworkScale (418,613 bytes a second, unchanged), NetworkRollback, Voice, HostMigration,
+    AntiCheat and the rest as before.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

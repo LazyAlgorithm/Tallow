@@ -354,6 +354,12 @@ class NetworkManager
 		public Dictionary<uint32, float> waiting = new .() ~ delete _;
 		/// Objects out of its area (hidden there); see UpdateRelevance.
 		public HashSet<uint32> outside = new .() ~ delete _;
+		/// The controls it was run with, by server tick, for forwarding to the other players (input forwarding).
+		public NetInput[InputHistory] applied;
+		public uint32 appliedNewest;
+		public uint32 inputChangedAt;
+		/// The last controls forwarded to it for each player, and when.
+		public Dictionary<uint32, (NetInput input, uint32 tick)> forwarded = new .() ~ delete _;
 		/// What it is known to have, once it acknowledges packets (field deltas); null until then.
 		public DeltaClient deltas ~ delete _;
 		/// Ticks since the last snapshot for which no controls had arrived.
@@ -546,6 +552,7 @@ class NetworkManager
 		case MsgOwner: return "ownership";
 		case MsgLink: return "connection reports";
 		case MsgHide: return "out of area";
+		case MsgForward: return "forwarded controls";
 		case 16, 17, 18, 19: return "host migration";
 		case NetCompression.MessageType: return "compressed";
 		case NetworkSync.MsgTerrainBrush: return "terrain";
@@ -577,8 +584,10 @@ class NetworkManager
 		into.AppendF("NETWORK {} tick {} clients {} sent {} B/s received {} B/s objects {}\n", IsServer ? (mMode == .Host ? "host" : "server") : (IsClient ? "client" : "offline"), mTick, mClients.Count, BytesSentPerSecond, BytesReceivedPerSecond, mIdentityStates.Count);
 		for (let client in mClients)
 			into.AppendF("CLIENT {} {} B/s, {} inputs waiting, {}% snapshots lost, budget {}\n", client.id, client.bytesPerSecond, client.queue.Count, client.lossPercent, SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget);
+		if (IsClient && mRemotePlayers.Count > 0)
+			into.AppendF("FORWARD {} other players run in the present from their controls, {} guesses wrong and {} right, {} replays for changed controls\n", mRemotePlayers.Count, GuessesWrong, GuessesRight, InputReplays);
 		if (IsClient && Rollbacks > 0)
-			into.AppendF("ROLLBACK {} corrections, {} ticks run again at {:0.0} microseconds each, {} taken without a replay (too old), last replay left {} bodies still\n", Rollbacks, ReplayedTicks, ReplayedTicks > 0 ? RollbackNanoseconds / 1000.0 / ReplayedTicks : 0, Resyncs, LastReplayFrozen);
+			into.AppendF("ROLLBACK {} corrections ({} for own objects, {} other players, {} bodies), {} ticks run again at {:0.0} microseconds each, {} taken without a replay (too old), last replay left {} bodies still\n", Rollbacks, CorrectionsOwn, CorrectionsOtherPlayers, CorrectionsBodies, ReplayedTicks, ReplayedTicks > 0 ? RollbackNanoseconds / 1000.0 / ReplayedTicks : 0, Resyncs, LastReplayFrozen);
 		if (IsClient)
 			into.AppendF("LINK {}{}% snapshots lost, others shown {:0.0} ticks in the past, {:0.0} ticks of controls waiting on the server\n", mHaveDeltaPacket ? scope $"field deltas ({DeltaMisses} missed), {HiddenObjects} hidden as out of area, " : "", LossPercent, ViewDelayTicks, mDepth);
 		into.Append("SENT BY KIND");
@@ -845,6 +854,7 @@ class NetworkManager
 		for (let client in mClients)
 			client.delivered.Remove(identity.NetId);
 		ForgetDeltas(identity.NetId);
+		ForgetRemotePlayer(identity.NetId);
 		for (let client in mClients)
 		{
 			client.waiting.Remove(identity.NetId);
@@ -1187,12 +1197,14 @@ class NetworkManager
 					case MsgSnapshotPart: ReadSnapshot(ref reader, true);
 					case MsgSnapshotDelta: ReadDeltaSnapshot(ref reader);
 					case MsgHide: ReadHide(ref reader);
+					case MsgForward: ReadForwarded(ref reader);
 					case MsgCustom: Dispatch(reader.Read<uint8>(), 0, ref reader);
 					case MsgOwner:
 						let ownedId = reader.Read<uint32>();
 						let newOwner = reader.Read<int32>();
 						if (reader.Ok && mByNetId.TryGetValue(ownedId, let owned))
 						{
+							ForgetRemotePlayer(ownedId);
 							owned.ownerId = newOwner;
 							owned.ClearKeys();
 						}

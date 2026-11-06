@@ -69,6 +69,7 @@ extension NetworkManager
 			OnSessionContext(context);
 		mDeltasOffered = reader.Remaining > 0 && reader.Read<uint8>() != 0 && FieldDeltas;
 		ResetDeltas();
+		ResetForwarding();
 		mConnected = reader.Ok;
 		mTick = 0;
 		mHaveSnapshot = false;
@@ -171,6 +172,13 @@ extension NetworkManager
 			// Out of this machine's area until news newer than that arrives.
 			if (!ShowIfHidden(identity, serverTick))
 				continue;
+			// Another player run here from its forwarded controls: checked like this machine's own.
+			if (identity.RemoteRun && identity.ownerId != LocalClientId && (flags & NetPack.FlagFull) != 0)
+			{
+				if (!part || fresh || serverTick == mLastSnapshotTick)
+					owned.Add((identity, state));
+				continue;
+			}
 			if (identity.ownerId == LocalClientId)
 			{
 				identity.Predicted = false;
@@ -207,12 +215,18 @@ extension NetworkManager
 		}
 		// A whole snapshot leaves out only what has not changed for a few snapshots, so a predicted body it does not
 		// mention is where the server last said. (Packets of a split snapshot may leave things out for other reasons.)
-		if (!part && sawPrevious)
+		// With field deltas (always sent in parts) a resting body is left out only while it is as the client last
+		// heard: one this machine has moving, guessing a push that did not happen there, is put back (checked once
+		// per snapshot, with its first packet; should a later packet of it say otherwise, that is taken in turn).
+		if (sawPrevious && (!part || fresh && mDeltasOffered))
 		{
 			for (let identity in mIdentities)
 			{
-				if (identity.Predicted && identity.ServerStateTick != serverTick && identity.ServerStateTick != 0)
-					bodies.Add(.() { identity = identity, state = identity.ServerState, asleep = identity.ServerAsleep });
+				if (!identity.Predicted || identity.ServerStateTick == serverTick || identity.ServerStateTick == 0)
+					continue;
+				if (part && !identity.ServerAsleep)
+					continue;
+				bodies.Add(.() { identity = identity, state = identity.ServerState, asleep = identity.ServerAsleep });
 			}
 		}
 		if (fresh)

@@ -318,6 +318,7 @@ extension NetworkManager
 		mTargetDepth = CalmDepth;
 		mViewDelay = 0;
 		ResetDeltas();
+		ResetForwarding();
 		for (let identity in mIdentities)
 		{
 			identity.Predicted = false;

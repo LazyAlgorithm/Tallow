@@ -140,16 +140,22 @@ extension NetworkManager
 			let identity = mIdentities[i];
 			if (identity.ownerId != ownerId || !identity.IsActiveAndEnabled)
 				continue;
-			for (let component in identity.GameObject.Components)
-			{
-				if (let behaviour = component as NetworkBehaviour)
-				{
-					if (behaviour.IsActiveAndEnabled)
-						behaviour.Simulate(input, Time.FixedDeltaTime);
-				}
-			}
-			identity.TickUpdate(input, Time.FixedDeltaTime);
+			SimulateIdentity(identity, input);
 		}
+	}
+
+	/// One object's networked Update (and its behaviours' Simulate) for a tick, with a player's controls.
+	void SimulateIdentity(NetworkIdentity identity, NetInput input)
+	{
+		for (let component in identity.GameObject.Components)
+		{
+			if (let behaviour = component as NetworkBehaviour)
+			{
+				if (behaviour.IsActiveAndEnabled)
+					behaviour.Simulate(input, Time.FixedDeltaTime);
+			}
+		}
+		identity.TickUpdate(input, Time.FixedDeltaTime);
 	}
 
 	NetInput GatherLocalInput()
@@ -225,6 +231,7 @@ extension NetworkManager
 				EndLagCompensation();
 				mSimulatingClient = -1;
 			}
+			NoteApplied(mTick + 1);
 		}
 		else if (mConnected && LocalClientId > 0)
 		{
@@ -243,7 +250,9 @@ extension NetworkManager
 			mInputs[(mTick + delay) % InputHistory] = input;
 			SendInputs();
 			UpdateLink();
+			RunRemotePlayers(mTick, false, true);
 			SimulateOwned(LocalClientId, mInputs[mTick % InputHistory]);
+			RunRemotePlayers(mTick, false, false);
 		}
 	}
 
@@ -259,6 +268,8 @@ extension NetworkManager
 			CloseOpenPlaces();
 			if (mTick % (uint32)Math.Max(SnapshotInterval, 1) == 0)
 			{
+				for (let client in mClients)
+					SendForwarded(client);
 				SendSnapshots();
 				NetworkSync.ServerTick(this);
 			}
@@ -268,7 +279,7 @@ extension NetworkManager
 			PredictedBodies = 0;
 			for (let identity in mIdentityStates)
 			{
-				if (identity.ownerId == LocalClientId)
+				if (identity.ownerId == LocalClientId || identity.RemoteRun)
 					identity.History[mTick % NetworkIdentity.HistorySize] = identity.CaptureState();
 				else if (identity.Predicted)
 				{
@@ -285,7 +296,7 @@ extension NetworkManager
 		// Objects this machine does not move itself change once a tick; they are drawn gliding between ticks.
 		for (let identity in mIdentityStates)
 		{
-			identity.NoteTick(identity.ownerId != LocalClientId && !identity.Predicted && !(IsServer && identity.ownerId == 0));
+			identity.NoteTick(identity.ownerId != LocalClientId && !identity.Predicted && !identity.RemoteRun && !(IsServer && identity.ownerId == 0));
 			// The server remembers where everything has been lately, for lag compensation.
 			if (IsServer && mClients.Count > 0)
 				identity.PushKey(mTick, identity.Transform.Position, identity.Transform.Rotation);
@@ -379,7 +390,8 @@ extension NetworkManager
 		let flagsAt = writer.Data.Count;
 		// A body set to be predicted (physicsPrediction On) is, whatever its other snapshot settings.
 		let predicted = settings.ownerId != clientId && identity.PhysicsPredictable;
-		if (settings.ownerId == clientId || settings.remoteFormat == .Legacy && settings.fullPrecision && !(predicted && settings.physicsPrediction == .On))
+		// A player whose controls are forwarded goes exactly to everyone, who run it from them.
+		if (settings.ownerId == clientId || ForwardsFor(identity) || settings.remoteFormat == .Legacy && settings.fullPrecision && !(predicted && settings.physicsPrediction == .On))
 		{
 			writer.Write(NetPack.FlagFull);
 			writer.Write(identity.CaptureState());
@@ -424,6 +436,21 @@ extension NetworkManager
 		public float score;
 		public float weight;
 		public bool sent;
+		/// A resting body sent although the client has it, to check the client's prediction of it.
+		public bool check;
+	}
+
+	/// Server: a body clients predict that rests here goes again once a second to a client whose player is near it,
+	/// even unchanged (with field deltas, a few bytes). A client that guessed a push that never happened (another
+	/// player's controls guessed wrong, its own late) has that body moving where the server's is still; the server
+	/// would otherwise say nothing more of it, and the client would keep its mistake.
+	bool RestingCheckDue(SnapshotRow row, bool known, SnapshotDelivery sent, GameObject player, Vector3 playerAt)
+	{
+		if (!known || !PredictPhysics || player == null || !row.identity.PhysicsPredictable || row.settings.ownerId > 0)
+			return false;
+		if (mTick - sent.tick < (uint32)Time.TickRate || (row.position - playerAt).LengthSquared > PriorityNearDistance * PriorityNearDistance)
+			return false;
+		return row.identity.GetComponent<Rigidbody>().IsSleeping;
 	}
 
 	/// How much an object gains for a client in a snapshot it waits (DynamicPriority): 1 + its snapshotPriority,
@@ -498,12 +525,14 @@ extension NetworkManager
 					continue;
 				SnapshotDelivery sent = default;
 				let known = client.delivered.TryGetValue(row.netId, out sent);
+				if (!own && known && SkipForwarded(client, row))
+					continue;
 				// Its own objects go every snapshot while they change (what its prediction is checked against), then a
 				// few times more and at the refresh rate, as the full snapshot sends them.
 				if (!own && known && mTick - sent.tick < (uint32)Math.Max(row.settings.remoteIntervalTicks, SnapshotInterval)) continue;
 				let changed = !known || sent.change != row.changedAt || sent.dormant != row.sleeping;
 				let refresh = !row.sleeping && mTick - sent.tick >= (uint32)(Math.Max(SnapshotInterval, 1) * (int32)RefreshEvery);
-				if (changed || sent.repeats < (int32)SnapshotRepeats || refresh)
+				if (changed || sent.repeats < (int32)SnapshotRepeats || refresh || RestingCheckDue(row, known, sent, player, playerAt))
 					candidates.Add(i);
 			}
 			let perSecond = SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget;
@@ -520,7 +549,7 @@ extension NetworkManager
 				let row = ref mSnapshotRows[i];
 				SnapshotDelivery sent = default;
 				let known = client.delivered.TryGetValue(row.netId, out sent);
-				SnapshotOrder key = .() { row = i, own = row.settings.ownerId == client.id, priority = row.settings.snapshotPriority, tick = sent.tick, netId = row.netId };
+				SnapshotOrder key = .() { row = i, own = row.settings.ownerId == client.id, priority = row.settings.snapshotPriority, tick = sent.tick, netId = row.netId, check = RestingCheckDue(row, known, sent, player, playerAt) };
 				if (dynamic)
 				{
 					key.weight = PriorityWeight(row, player, playerAt, facing);
@@ -571,7 +600,7 @@ extension NetworkManager
 				{
 					ring = client.deltas.Ring(row.netId);
 					idLength = IdLength(full);
-					if (!EncodeDelta(ring, full, idLength, !own && sent.repeats >= (int32)SnapshotRepeats, mDeltaEncoded))
+					if (!EncodeDelta(ring, full, idLength, !own && !key.check && sent.repeats >= (int32)SnapshotRepeats, mDeltaEncoded))
 					{
 						// The client has this already: nothing to send, and nothing to repeat or refresh.
 						key.sent = true;

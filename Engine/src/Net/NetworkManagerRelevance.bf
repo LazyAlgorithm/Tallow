@@ -105,6 +105,7 @@ extension NetworkManager
 			return;
 		if (identity.ownerId == LocalClientId)
 			return;
+		ForgetRemotePlayer(netId);
 		identity.HiddenAt = Math.Max(tick, 1);
 		if (!identity.GameObject.NetworkHidden)
 			HiddenObjects++;

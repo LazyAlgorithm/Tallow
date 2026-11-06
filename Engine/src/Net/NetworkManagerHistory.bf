@@ -40,8 +40,11 @@ extension NetworkManager
 			return false;
 		for (let identity in mIdentities)
 		{
-			// A body clients predict is seen by the player where it is now, as their own player is.
+			// A body clients predict is seen by the player where it is now, as their own player is; so is another
+			// player whose controls are forwarded to this one (run there in the present).
 			if (identity.ownerId == forObject.ownerId || !identity.IsActiveAndEnabled || identity.PhysicsPredictable)
+				continue;
+			if (ForwardsFor(identity.Runtime) && IsRelevantTo(forObject.ownerId, identity.NetId))
 				continue;
 			BodyState then;
 			if (!identity.Sample(view, 0, out then))
@@ -97,7 +100,7 @@ extension NetworkManager
 			mViewTick = at;
 		for (let identity in mIdentities)
 		{
-			if (identity.ownerId == LocalClientId || identity.Predicted || !identity.HasKeys)
+			if (identity.ownerId == LocalClientId || identity.Predicted || identity.RemoteRun || !identity.HasKeys)
 				continue;
 			BodyState state;
 			if (!identity.Sample(at, mServerInterval, out state))
@@ -139,6 +142,8 @@ extension NetworkManager
 		List<(NetworkIdentity identity, Vector3 drawn)> before = scope .();
 		for (let entry in owned)
 			before.Add((entry.identity, entry.identity.Transform.Position + entry.identity.SmoothOffset));
+		for (let remote in mRemotePlayers.Values)
+			before.Add((remote.identity, remote.identity.Transform.Position + remote.identity.SmoothOffset));
 		if (bodies.Count > 0)
 		{
 			for (let identity in mIdentities)
@@ -166,31 +171,54 @@ extension NetworkManager
 		let comparable = ackTick > 0 && mTick - ackTick < NetworkIdentity.HistorySize;
 		float worst = 0;
 		bool ownRight = false;
+		// Run again only because a guessed control of another player was wrong: not a correction.
+		bool onlyGuess = false;
 		if (comparable)
 		{
+			// This machine's own objects, and the other players run here from forwarded controls (whose guessed
+			// controls being wrong is not a mistake of this machine's).
 			worst = PredictionError(ackTick, owned);
+			let remoteWorst = PredictionError(ackTick, owned, true);
 			mStatOwnWorst = Math.Max(mStatOwnWorst, worst);
 			PendingInputs = (int32)(mTick - ackTick);
 			let bodyWorst = BodyPredictionError(ackTick, bodies);
 			mStatBodyWorst = Math.Max(mStatBodyWorst, Math.Min(bodyWorst, 1000));
-			if (worst <= CorrectionThreshold && bodyWorst <= CorrectionThreshold)
+			// A forwarded control that differs from the guess made for its tick means running the ticks since again.
+			let guessWrong = GuessedWrong(ackTick);
+			if (worst <= CorrectionThreshold && bodyWorst <= CorrectionThreshold && remoteWorst <= CorrectionThreshold && !guessWrong)
 			{
 				// Nothing moved: leave any easing already under way alone.
 				before.Clear();
 				SettleResting(bodies);
 				return;
 			}
+			onlyGuess = guessWrong && worst <= CorrectionThreshold;
+			if (!onlyGuess)
+			{
+				if (worst > CorrectionThreshold)
+					CorrectionsOwn++;
+				else if (remoteWorst > CorrectionThreshold)
+					CorrectionsOtherPlayers++;
+				else
+					CorrectionsBodies++;
+			}
 			if (worst <= CorrectionThreshold)
 			{
-				PhysicsRollbacks++;
+				if (!onlyGuess)
+					PhysicsRollbacks++;
 				ownRight = true;
 			}
 			worst = Math.Max(worst, bodyWorst);
 		}
 
-		LastCorrection = worst;
-		Rollbacks++;
-		mStatRollbacks++;
+		if (onlyGuess)
+			InputReplays++;
+		else
+		{
+			LastCorrection = worst;
+			Rollbacks++;
+			mStatRollbacks++;
+		}
 		// A correction from further back than the cap is taken as it is, eased in, rather than run again for that long.
 		let tooOld = comparable && (int32)(mTick - ackTick) > MaxReplayTicks;
 		if (tooOld)
@@ -237,6 +265,9 @@ extension NetworkManager
 	/// divides one by the other: the cost of a replayed tick).
 	public uint64 RollbackNanoseconds;
 	public int64 ReplayedTicks;
+	/// Client: what corrections were for: this machine's own objects being wrong, another player run here from
+	/// forwarded controls (with the right controls), or only bodies.
+	public int32 CorrectionsOwn, CorrectionsOtherPlayers, CorrectionsBodies;
 	/// Client: corrections from further back than MaxReplayTicks, taken without a replay.
 	public int32 Resyncs;
 	/// Client: how many predicted bodies the last replay left still, being far from what was corrected.
@@ -267,6 +298,9 @@ extension NetworkManager
 		List<(Vector3 at, float reach)> seeds = scope .();
 		for (let entry in owned)
 			seeds.Add((entry.identity.Transform.Position, 1.5f + entry.identity.CaptureState().linearVelocity.Length * seconds));
+		// Other players run here move through the replay too; what they could reach is in the island.
+		for (let remote in mRemotePlayers.Values)
+			seeds.Add((remote.identity.Transform.Position, 1.5f + 8 * seconds));
 		let ahead = Time.FixedDeltaTime * Math.Max(mServerInterval, 1);
 		for (var p in ref predicted)
 		{
@@ -347,6 +381,15 @@ extension NetworkManager
 			entry.identity.ApplyState(entry.state);
 			entry.identity.History[slot] = entry.state;
 		}
+		// Other players run here that the server said nothing new of go back to where they were run to then.
+		for (let remote in mRemotePlayers.Values)
+		{
+			bool told = false;
+			for (let entry in owned)
+				told |= entry.identity == remote.identity;
+			if (!told)
+				remote.identity.ApplyState(remote.identity.History[slot]);
+		}
 	}
 
 	/// The server has got ahead of this machine, which must have stopped for a moment. Takes its state and jumps the
@@ -383,11 +426,13 @@ extension NetworkManager
 
 	/// How far the prediction for a tick was from what the server says: the largest of the position error, the
 	/// rotation error and a changed prediction state, over every owned object.
-	float PredictionError(uint32 ackTick, List<(NetworkIdentity identity, BodyState state)> owned)
+	float PredictionError(uint32 ackTick, List<(NetworkIdentity identity, BodyState state)> owned, bool remote = false)
 	{
 		float worst = 0;
 		for (let entry in owned)
 		{
+			if (entry.identity.RemoteRun != remote)
+				continue;
 			let predicted = entry.identity.History[ackTick % NetworkIdentity.HistorySize];
 			if (predicted.prediction0.w != entry.state.prediction0.w)
 				worst = Math.Max(worst, 1);
@@ -522,7 +567,9 @@ extension NetworkManager
 	{
 		if (!Replaying)
 			return;
+		RunRemotePlayers(mReplayTick, true, true);
 		SimulateOwned(LocalClientId, mInputs[mReplayTick % InputHistory]);
+		RunRemotePlayers(mReplayTick, true, false);
 		// A replayed contact can hand a transform motor to a body during this tick.
 		if (!mReplayStepPhysics && AnyHasBody(mReplayOwned))
 		{
@@ -548,6 +595,8 @@ extension NetworkManager
 			return;
 		for (let entry in mReplayOwned)
 			entry.identity.History[mReplayTick % NetworkIdentity.HistorySize] = entry.identity.CaptureState();
+		for (let remote in mRemotePlayers.Values)
+			remote.identity.History[mReplayTick % NetworkIdentity.HistorySize] = remote.identity.CaptureState();
 		for (let identity in mIdentityStates)
 		{
 			if (identity.Predicted && !identity.ReplayFrozen && (int32)(mReplayTick - identity.PredictedSince) >= 0)
@@ -571,7 +620,7 @@ extension NetworkManager
 		for (let identity in mIdentities)
 		{
 			let body = identity.GetComponent<Rigidbody>();
-			if (identity.ownerId != LocalClientId && !identity.Predicted && body.HasBody)
+			if (identity.ownerId != LocalClientId && !identity.Predicted && !identity.RemoteRun && body.HasBody)
 				others.Add((identity, identity.CaptureState(), body.IsSleeping));
 		}
 	}
