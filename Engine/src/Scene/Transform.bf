@@ -113,8 +113,9 @@ class Transform
 	{
 		get
 		{
-			var scale = D().localScale;
-			bool turnedBelow = D().localRotation != .Identity;
+			ref TransformData data = ref D();
+			var scale = data.localScale;
+			bool turnedBelow = data.localRotation != .Identity;
 			for (var parent = mParent; parent != null; parent = parent.mParent)
 			{
 				let parentScale = parent.D().localScale;
@@ -191,11 +192,9 @@ class Transform
 		get => LocalToWorld.Translation;
 		set
 		{
-			if (mParent != null)
-				D().localPosition = mParent.WorldToLocal.TransformPoint(value);
-			else
-				D().localPosition = value;
-			MarkDirty();
+			ref TransformData data = ref D();
+			data.localPosition = mParent != null ? mParent.WorldToLocal.TransformPoint(value) : value;
+			MarkDirty(ref data);
 		}
 	}
 
@@ -214,11 +213,9 @@ class Transform
 		}
 		set
 		{
-			if (mParent != null)
-				D().localRotation = (mParent.Rotation.Conjugate * value).Normalized;
-			else
-				D().localRotation = value;
-			MarkDirty();
+			ref TransformData data = ref D();
+			data.localRotation = mParent != null ? (mParent.Rotation.Conjugate * value).Normalized : value;
+			MarkDirty(ref data);
 		}
 	}
 
