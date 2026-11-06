@@ -342,6 +342,8 @@ class NetworkManager
 		public uint32 lastProcessedTick;
 		public uint32 lastReceivedTick;
 		public int32 snapshotsSent;
+		/// Bytes sent to this client this second so far, and over the last whole second (the network panel).
+		public int32 statSent, bytesPerSecond;
 		public int cursor;
 		public Dictionary<uint32, SnapshotDelivery> delivered = new .() ~ delete _;
 		/// Ticks since the last snapshot for which no controls had arrived.
@@ -458,6 +460,8 @@ class NetworkManager
 	public static bool LogStats;
 	int32 mStatRollbacks, mStatReplayed, mStatSnapshots, mStatStarved, mStatDropped, mStatTicks;
 	int32 mStatSent, mStatReceived, mStatPacketsSent, mStatHeld;
+	/// Bytes sent this second so far and over the last whole second, by kind of message (its first byte).
+	int32[256] mStatByKind, mBytesByKind;
 	float mStatOwnWorst, mStatBodyWorst;
 	/// Bytes sent and received in the last full second, for the editor's network panel and --netstats.
 	public int32 BytesSentPerSecond, BytesReceivedPerSecond;
@@ -478,6 +482,89 @@ class NetworkManager
 	/// client. Anything worked out from it alone (the swell on some water, a day and night cycle) comes out the
 	/// same on every machine without being sent.
 	public double ServerTick => IsServer || !mClockSet ? (double)mTick : (double)mTick + mServerOffset;
+	/// Bytes sent over the last second by kind of message (snapshots, spawns, rope, soft body...), for the panel.
+	public void BytesByKind(List<(StringView kind, int32 bytes)> into)
+	{
+		for (int kind < 256)
+		{
+			if (mBytesByKind[kind] > 0)
+				into.Add((MessageName((uint8)kind), mBytesByKind[kind]));
+		}
+	}
+
+	public static StringView MessageName(uint8 kind)
+	{
+		switch (kind)
+		{
+		case MsgWelcome: return "welcome";
+		case MsgSpawn: return "spawns";
+		case MsgDespawn: return "despawns";
+		case MsgInput: return "controls";
+		case MsgSnapshot, MsgSnapshotPart: return "snapshots";
+		case MsgCustom: return "custom";
+		case MsgOwner: return "ownership";
+		case 16, 17, 18, 19: return "host migration";
+		case NetCompression.MessageType: return "compressed";
+		case NetworkSync.MsgTerrainBrush: return "terrain";
+		case NetworkSync.MsgVoxelCarve: return "voxel carving";
+		case NetworkSync.MsgCharacterShape: return "character shape";
+		case NetworkSync.MsgAnimation: return "animation";
+		case NetworkSync.MsgField: return "synced fields";
+		case NetworkSync.MsgAudio: return "audio";
+		case NetworkSync.MsgEvent: return "events";
+		case NetworkSync.MsgAnimator: return "animator";
+		case NetworkSync.MsgMaterial: return "materials";
+		case NetworkSync.MsgDialogue: return "dialogue";
+		case NetworkSync.MsgSequence: return "sequences";
+		case NetworkSync.MsgRope: return "ropes";
+		case NetworkSync.MsgSoftBody: return "soft bodies";
+		case NetworkSync.MsgState: return "object state";
+		case NetworkSync.MsgEffect: return "effects";
+		case AntiCheat.MsgAntiCheat: return "anti-cheat";
+		case VoiceChat.MsgVoice: return "voice";
+		case MapSharing.MsgMap: return "maps";
+		default: return "other";
+		}
+	}
+
+	/// The network panel as text: the session, each client, and each shared object with what was chosen for it and
+	/// why (server), or what this machine is doing with it (client). One line each.
+	public void Describe(String into)
+	{
+		into.AppendF("NETWORK {} tick {} clients {} sent {} B/s received {} B/s objects {}\n", IsServer ? (mMode == .Host ? "host" : "server") : (IsClient ? "client" : "offline"), mTick, mClients.Count, BytesSentPerSecond, BytesReceivedPerSecond, mIdentityStates.Count);
+		for (let client in mClients)
+			into.AppendF("CLIENT {} {} B/s, {} inputs waiting\n", client.id, client.bytesPerSecond, client.queue.Count);
+		into.Append("SENT BY KIND");
+		for (int kind < 256)
+		{
+			if (mBytesByKind[kind] > 0)
+				into.AppendF(" {} {}", MessageName((uint8)kind), mBytesByKind[kind]);
+		}
+		into.Append('\n');
+		let why = scope String();
+		for (let identity in mIdentityStates)
+		{
+			let chosen = identity.Chosen;
+			why.Clear();
+			if (IsServer)
+				identity.Explain(this, why);
+			else
+				why.Append(identity.ownerId == LocalClientId ? "this machine's own: predicted" : (identity.Predicted ? "predicted" : "shown a moment in the past"));
+			if (IsServer)
+				into.AppendF("OBJECT {} {} owner {} {} {} {} B/s {} sends/s: {}\n", identity.NetId, identity.GameObject.Name, identity.ownerId, identity.ChosenKind, chosen.remoteFormat, identity.BytesPerSecond, identity.SendsPerSecond, why);
+			else
+				into.AppendF("OBJECT {} {} owner {}: {}\n", identity.NetId, identity.GameObject.Name, identity.ownerId, why);
+		}
+	}
+
+	/// Server: each client's id, the snapshot and message bytes sent to it over the last second, and how many ticks of
+	/// its controls are waiting (the network panel).
+	public void ClientStats(List<(int32 id, int32 bytesPerSecond, int32 inputsWaiting)> into)
+	{
+		for (let client in mClients)
+			into.Add((client.id, client.bytesPerSecond, (int32)client.queue.Count));
+	}
+
 	/// Client: how many ticks of controls the server has waiting (smoothed), and how many this machine aims for.
 	public float InputsWaiting => mDepth;
 	/// Client: how many ticks of controls this machine aims to have waiting on the server.
@@ -489,6 +576,15 @@ class NetworkManager
 			return;
 		BytesSentPerSecond = mStatSent;
 		TransportBytesSentPerSecond = mStatTransportSent;
+		mBytesByKind = mStatByKind;
+		mStatByKind = default;
+		for (let client in mClients)
+		{
+			client.bytesPerSecond = client.statSent;
+			client.statSent = 0;
+		}
+		for (let identity in mIdentityStates)
+			identity.[Friend]RollStats();
 		mStatTransportSent = 0;
 		BytesReceivedPerSecond = mStatReceived;
 		if (LogStats && IsServer)
@@ -831,6 +927,14 @@ class NetworkManager
 			return;
 		mStatSent += (int32)mWriter.Data.Count;
 		mStatPacketsSent++;
+		// Engine and game messages go as MsgCustom with their own id next.
+		if (mWriter.Data.Count > 0)
+			mStatByKind[mWriter.Data[0] == MsgCustom && mWriter.Data.Count > 1 ? mWriter.Data[1] : mWriter.Data[0]] += (int32)mWriter.Data.Count;
+		if (IsServer)
+		{
+			if (let client = FindClient(peer))
+				client.statSent += (int32)mWriter.Data.Count;
+		}
 		Span<uint8> payload = mWriter.Data;
 		if (MessageCompression || LosslessCompression && Transport != .Direct)
 		{

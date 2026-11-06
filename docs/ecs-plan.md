@@ -1412,7 +1412,15 @@ nine profiles.
     with nothing set: 72,105 bytes against 547,798 for `baseline` and 48,020 for the hand-tuned `all`),
     Network, NetworkBandwidth, PhysicsPrediction, Voice, HostMigration, AntiCheat, Water, Maps, Decals,
     Dialogue, Sequencer, SpawnPoints, ScriptCatalog.
-- [ ] Network panel: what was chosen and why, bytes per client.
+- [x] **Network panel** (2026-11-05). Window > Network (`--network-window` opens it): the session, each
+  client with the bytes a second sent to it and its controls waiting, the bytes of the last second by kind of
+  message (snapshots, object state, ropes, soft bodies...; engine messages are counted by their own id inside
+  MsgCustom), and each shared object with what it was taken as, its format, its bytes a second and why
+  (`NetworkIdentityState.Explain`). `NetworkManager.Describe` writes the same as text (the Gallery's
+  `--net-report` prints it). What it found at once in the networked Gallery: 9,885 bytes a second to one client,
+  6,480 of them the two flickering braziers, because changed light settings were looked at and sent every tick.
+  They are now looked at once per snapshot: 5,510 bytes a second, of which the swinging wrecking ball is 1,100 and
+  each predicted crate at rest 55.
 - [ ] Self-tuning: input delay, snapshot budget, interpolation delay.
 - [ ] Exit: a new project with a networked player and a pile of crates, nothing set by hand.
 

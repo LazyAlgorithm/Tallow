@@ -119,6 +119,9 @@ class Gallery : Script
 			let at = identity.GameObject.Transform.Position;
 			Console.WriteLine(scope $"NETPOS {identity.NetId} {at.x:0.000} {at.y:0.000} {at.z:0.000} {identity.GameObject.Name}");
 		}
+		let panel = scope String();
+		network.Describe(panel);
+		Console.Write(panel);
 		// Carving is shared as events every machine applies: the same cuts give the same surfaces.
 		for (let voxels in Scene.FindComponents<VoxelObject>(.. scope .()))
 		{

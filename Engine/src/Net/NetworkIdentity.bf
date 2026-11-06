@@ -257,6 +257,54 @@ class NetworkIdentityState
 	[NonSerialized]
 	public NetworkObjectKind ChosenKind = .AsSet;
 
+	/// Server: snapshot bytes sent about this object (to all clients) and how many times it was sent, this second
+	/// so far and over the last whole second (the network panel).
+	int32 mStatBytes, mStatSends;
+	public int32 BytesPerSecond, SendsPerSecond;
+
+	public void NoteSent(int bytes)
+	{
+		mStatBytes += (int32)bytes;
+		mStatSends++;
+	}
+
+	void RollStats()
+	{
+		BytesPerSecond = mStatBytes;
+		SendsPerSecond = mStatSends;
+		mStatBytes = mStatSends = 0;
+	}
+
+	/// Server: why Choose chose what it did, in a few words (the network panel).
+	public void Explain(NetworkManager network, String into)
+	{
+		let settings = Settings;
+		switch (ChosenKind)
+		{
+		case .AsSet:
+			into.Append("Automatic is off: the settings as set");
+			return;
+		case .Player:
+			if (settings.ownerId != 0)
+				into.AppendF("a player's (client {}): sent to the others first", settings.ownerId);
+			else
+				into.Append("the host's player: sent to the others first");
+		case .Body:
+			into.Append("a dynamic Rigidbody: body motion");
+			if (Chosen.dormantWhenSleeping)
+				into.Append(", quiet while asleep");
+			else if (network.PredictPhysics && CanPredictPhysics)
+				into.Append(", predicted on clients (so mentioned while asleep)");
+		case .Moving:
+			into.Append("no Rigidbody: packed transform; sent only when it moves");
+		}
+		if (Chosen.distanceFiltered)
+			into.Append(network.SnapshotRelevanceRadius > 0 ? scope $", near players only ({network.SnapshotRelevanceRadius:0} m)" : ", to everyone (no relevance radius set)");
+		bool byHand = settings.remoteFormat != .Legacy || settings.fullPrecision || settings.remoteIntervalTicks != 0 || settings.dormantWhenSleeping || settings.distanceFiltered || settings.snapshotPriority != 0;
+		if (byHand)
+			into.Append("; some settings set by hand are kept");
+	}
+
 	/// Server: works out Chosen from the object as it is now (NetworkIdentityData.automatic). Only settings left at
 	/// their defaults are chosen: one set by hand (in the Inspector or from code) is kept.
 	public void Choose(NetworkManager network)

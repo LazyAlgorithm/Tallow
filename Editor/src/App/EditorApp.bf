@@ -228,6 +228,7 @@ class EditorApp : Application
 		if (HasArg("--preferences"))
 			mShowPreferences = true;
 		ApplyProfilerSwitches();
+		ApplyNetworkSwitches();
 		// --model-views: Window > Model Views open; --scene-view "front|top|...|ortho": the Scene view's view selector.
 		if (HasArg("--model-views"))
 			mShowModelViews = true;

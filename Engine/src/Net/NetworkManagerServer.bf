@@ -263,8 +263,10 @@ extension NetworkManager
 				}
 			}
 		}
-		// Lights changed this tick, by the server or by the client that owns them.
-		if (IsServer || (mConnected && LocalClientId > 0))
+		// Lights changed since the last snapshot, by the server or by the client that owns them: looked at as often as
+		// snapshots go, so that a light changed every frame (a flicker every machine plays itself, or a game's
+		// own animation) costs one message per snapshot, not one per tick.
+		if ((IsServer || (mConnected && LocalClientId > 0)) && mTick % (uint32)Math.Max(SnapshotInterval, 1) == 0)
 			NetworkSync.WatchLights(this);
 		// Objects this machine does not move itself change once a tick; they are drawn gliding between ticks.
 		for (let identity in mIdentityStates)
@@ -501,6 +503,7 @@ extension NetworkManager
 				}
 				reliable = dormant;
 				mWriter.Data.AddRange(record);
+				row.identity.NoteSent(record.Length);
 				count++;
 				spent += cost;
 				SnapshotDelivery sent = default;
@@ -566,6 +569,7 @@ extension NetworkManager
 				// Nothing is said about an object that has not changed for a few snapshots.
 				if (!everything && mSnapshotNumber - identity.ChangedAt >= SnapshotRepeats && (mSnapshotNumber + identity.NetId) % RefreshEvery != 0)
 					continue;
+				let recordAt = mWriter.Data.Count;
 				WriteId(identity.NetId);
 				if (identity.ownerId == client.id || identity.Chosen.fullPrecision)
 				{
@@ -577,6 +581,7 @@ extension NetworkManager
 					WritePredictedBody(mWriter, identity);
 				else
 					NetPack.Write(mWriter, identity.Sent);
+				identity.NoteSent(mWriter.Data.Count - recordAt);
 				count++;
 			}
 			var written = (uint16)Math.Min(count, 65535);

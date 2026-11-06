@@ -71,6 +71,7 @@ extension EditorApp
 		DrawModelWindow();
 		DrawQualityWindow();
 		DrawProfilerWindow();
+		DrawNetworkWindow();
 		DrawWorldMapWindow();
 		DrawPreferencesWindow();
 		DrawLightingWindow();
@@ -115,7 +116,7 @@ extension EditorApp
 
 	/// The windows that can be closed, as they are named in the open-windows file. The layout file keeps where they
 	/// are docked, but not whether they are open, so that is kept beside it (windows5_<project>.txt).
-	static StringView[?] sOpenWindowNames = .("Model", "Rigging", "Animation", "Animator", "Dialogue", "Sequencer", "Map Builder", "UV Editor", "Graphics Quality", "Lighting", "Model Views", "Scripts", "Profiler", "World Map");
+	static StringView[?] sOpenWindowNames = .("Model", "Rigging", "Animation", "Animator", "Dialogue", "Sequencer", "Map Builder", "UV Editor", "Graphics Quality", "Lighting", "Model Views", "Scripts", "Profiler", "World Map", "Network");
 	int32 mOpenWindowsSaved = -1;
 	bool mRetiredWindow;
 
@@ -137,6 +138,7 @@ extension EditorApp
 		case 10: return &mShowModelViews;
 		case 12: return &mShowProfiler;
 		case 13: return &mShowWorldMap;
+		case 14: return &mShowNetwork;
 		default: return &mShowScripts;
 		}
 	}
@@ -337,6 +339,8 @@ extension EditorApp
 				mShowQuality = !mShowQuality;
 			if (ImGui.MenuItem("Profiler", null, mShowProfiler))
 				mShowProfiler = !mShowProfiler;
+			if (ImGui.MenuItem("Network", null, mShowNetwork))
+				mShowNetwork = !mShowNetwork;
 			if (ImGui.MenuItem("World Map", null, mShowWorldMap))
 				mShowWorldMap = !mShowWorldMap;
 			if (ImGui.MenuItem("Lighting", null, mShowLighting))
