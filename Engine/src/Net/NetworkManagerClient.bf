@@ -21,6 +21,7 @@ extension NetworkManager
 			NetPack.WriteInput(mWriter, input, previous, i != count - 1);
 			previous = input;
 		}
+		WriteAcknowledgements();
 		Send(mServerPeer, false);
 	}
 
@@ -65,6 +66,8 @@ extension NetworkManager
 		reader.ReadString(context);
 		if (reader.Ok && OnSessionContext != null)
 			OnSessionContext(context);
+		mDeltasOffered = reader.Remaining > 0 && reader.Read<uint8>() != 0 && FieldDeltas;
+		ResetDeltas();
 		mConnected = reader.Ok;
 		mTick = 0;
 		mHaveSnapshot = false;

@@ -62,6 +62,8 @@ struct NetReader
 	/// The bytes being read, and how far into them the next read starts (to pass a message on as it came).
 	public uint8* Start => mData;
 	public int Position => mOffset;
+	/// Bytes left to read.
+	public int Remaining => mLength - mOffset;
 
 	/// A reader over some received bytes.
 	public this(uint8* data, int length)

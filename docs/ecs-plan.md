@@ -1449,6 +1449,44 @@ nine profiles.
   without error. With `--lag 40 --jitter 10 --loss 2`: one correction of 0.038 while the controls depth rose
   from 1.5 to 3, then calm; 4,040 bytes a second. Gallery self-test still ready (rooms=8 probes=2).
 
+### 6c steps
+
+- [x] **Workload** (2026-11-05): `~/TallowEcsTests/NetworkScale` (new), the 4096-prop scaling workload: a 64 x 64
+  grid, an eighth moved by script, an eighth physics bodies kept moving, the rest bodies at rest, all with
+  automatic NetworkIdentity settings; two clients, 600 ticks, bytes per client counted after compression.
+  Clients acknowledge every packet six ticks after it goes (`TestAcknowledgeAll`). 6b (3c5d6939): 2,497,661
+  bytes in the first two seconds, then **801,015 bytes a second per client**; snapshots 1.70 ms each.
+- [x] **Acknowledged baselines and change masks** (2026-11-05; `NetworkManagerDeltas.bf`, `FieldDeltas`, on by
+  default, NetworkSession `fieldDeltas` under Advanced):
+  - The welcome says the server can send deltas. The client says so with its controls, then acknowledges the
+    delta packets it got: the newest packet number and a mask back to the newest of two acknowledgements ago
+    (3 to 11 bytes, only when a packet with records arrived), so each is acknowledged at least twice.
+  - The server keeps, per client and object, the last 8 records sent and which arrived. A record goes as
+    [id][ticks back to the baseline][length][a mask of the bytes that differ][those bytes XORed with the
+    baseline's]: the newest acknowledged record is the baseline. The same as the baseline: [id][back][0].
+    Left out altogether when the same as the baseline, once its stop-repeats are done, unless the client runs it
+    itself (a body it predicts, or its own object, can drift from what it was sent: the loopback test found a
+    predicted crate left 0.74 m astray when they were left out).
+  - The client keeps the 8 newest ticks of records received per object, rebuilds ordinary records and reads
+    the packet as before, so prediction and interpolation see the same records. A packet whose baseline was
+    pushed out by newer ones (late under jitter) is dropped and not acknowledged; a real miss counts in
+    `DeltaMisses` (shown in the panel; 0 in every test).
+  - Clients that never acknowledge (the byte-for-byte fixtures) get the ordinary packets: NetworkBytes
+    profiles are unchanged.
+  - Results: NetworkScale **418,613 bytes a second per client (-48%)**, first two seconds 1,515,692 (-39%);
+    snapshots 2.12 ms each (+24%: per-object ring lookups, to come down). Network: both players running
+    **749 bytes a second to the client instead of 2,141 (-65%)**, controls up 1,156 -> 1,247 for the
+    acknowledgements; idle 300 down, controls the same. PhysicsPrediction at rest 413 -> 306. The sample
+    project (exit6b.sh): resting crates 54 -> 3 bytes a second, the client's own player 1,720 -> 760.
+  - Checked by `~/TallowEcsTests/NetworkDeltas` (new): 40 objects of each record kind over loopback, calm,
+    20% loss with 30 ms jitter, calm again, against where the server had them: the same accuracy as without
+    deltas (0.044 m at worst, calm), 17,150 instead of 25,238 bytes a second, no misses. Run with `off` for
+    the comparison. NetworkEcs, PhysicsPrediction, NetworkBandwidth, NetworkBytesEcs, Voice, HostMigration,
+    AntiCheat, Water, Decals, Dialogue, Sequencer, ScriptCatalog as before; SpawnPoints' occupied-point order
+    (C A C A / A C A C) flips from run to run (not networked, seen on alternate runs of the same build).
+- [ ] Column-grouped packet layout, kept only if it measures smaller.
+- [ ] Exit: bytes per client measured against 6b on the 4096-prop scaling workload.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

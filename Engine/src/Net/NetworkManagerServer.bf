@@ -19,6 +19,8 @@ extension NetworkManager
 		mWriter.Write(client.id);
 		mWriter.Write(mTick);
 		mWriter.WriteString(SessionContext);
+		// Whether this server sends field deltas to clients that acknowledge what they receive.
+		mWriter.Write((uint8)(FieldDeltas && OptimizeSnapshots ? 1 : 0));
 		Send(peer, true);
 		// Bring the newcomer up to date with everything spawned so far, then add their player.
 		for (let identity in mIdentities)
@@ -120,6 +122,9 @@ extension NetworkManager
 			else
 				client.lastInput = clean; // too late for its own tick, but still the freshest word on what the player wants
 		}
+		// Which delta packets reached it, when it says.
+		if (reader.Remaining > 0)
+			ReadAcknowledgements(client, ref reader);
 		// A client that runs ahead builds a backlog; drop the oldest to bound latency.
 		while (client.queue.Count > MaxQueuedInputs)
 		{
@@ -328,6 +333,11 @@ extension NetworkManager
 
 	void BeginSnapshotPacket(ClientInfo client)
 	{
+		if (client.deltas != null)
+		{
+			BeginDeltaPacket(client);
+			return;
+		}
 		mWriter.Clear();
 		mWriter.Write(MsgSnapshotPart);
 		mWriter.Write(mTick);
@@ -405,6 +415,7 @@ extension NetworkManager
 	}
 
 	List<SnapshotRow> mSnapshotRows = new .() ~ delete _;
+	NetWriter mDeltaEncoded = new .() ~ delete _;
 	NetWriter mSnapshotRecords = new .() ~ delete _;
 
 	/// A row's record for a client, written into mSnapshotRecords the first time it is asked for.
@@ -492,17 +503,37 @@ extension NetworkManager
 			let limit = Math.Clamp(SnapshotPacketBytes, 256, 1200);
 			let perSecond = SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget;
 			let budget = perSecond > 0 ? Math.Max(128, (int)((int64)perSecond * Math.Max(SnapshotInterval, 1) / Math.Max(Time.TickRate, 1))) : int.MaxValue;
+			let header = client.deltas != null ? 15 : 13;
 			for (let key in keys)
 			{
-				let record = SnapshotRecord(key.row, client.id);
+				let full = SnapshotRecord(key.row, client.id);
+				var record = full;
 				let row = ref mSnapshotRows[key.row];
 				let own = key.own;
 				let dormant = !own && row.sleeping;
+				if (client.deltas != null)
+				{
+					SnapshotDelivery before = default;
+					client.delivered.TryGetValue(row.netId, out before);
+					if (!EncodeDelta(client, row.netId, full, !own && before.repeats >= (int32)SnapshotRepeats, mDeltaEncoded))
+					{
+						// The client has this already: nothing to send, and nothing to repeat or refresh.
+						SnapshotDelivery known = default;
+						client.delivered.TryGetValue(row.netId, out known);
+						known.repeats = (int32)SnapshotRepeats;
+						known.tick = mTick;
+						known.change = row.changedAt;
+						known.dormant = dormant;
+						client.delivered[row.netId] = known;
+						continue;
+					}
+					record = mDeltaEncoded.Data;
+				}
 				// One coherent correction for all owned objects: replay must not advance them once per chunk, so they all
 				// go first and in one packet (an exceptionally large group goes over the limit rather than in two).
 				// Others follow in the same packet while they fit.
 				let flush = count > 0 && (!own && mWriter.Data.Count + record.Length > limit || reliable != dormant);
-				let cost = record.Length + ((count == 0 || flush) ? 13 : 0);
+				let cost = record.Length + ((count == 0 || flush) ? header : 0);
 				if (!own && spent + cost > budget) continue;
 				if (flush)
 				{
@@ -512,6 +543,8 @@ extension NetworkManager
 				}
 				reliable = dormant;
 				mWriter.Data.AddRange(record);
+				if (client.deltas != null)
+					NoteDeltaSent(client, row.netId, full);
 				row.identity.NoteSent(record.Length);
 				count++;
 				spent += cost;

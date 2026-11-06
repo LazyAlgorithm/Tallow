@@ -350,6 +350,8 @@ class NetworkManager
 		public int32 autoBudget, calmSeconds;
 		public int cursor;
 		public Dictionary<uint32, SnapshotDelivery> delivered = new .() ~ delete _;
+		/// What it is known to have, once it acknowledges packets (field deltas); null until then.
+		public DeltaClient deltas ~ delete _;
 		/// Ticks since the last snapshot for which no controls had arrived.
 		public int32 starved;
 	}
@@ -519,7 +521,7 @@ class NetworkManager
 		case MsgSpawn: return "spawns";
 		case MsgDespawn: return "despawns";
 		case MsgInput: return "controls";
-		case MsgSnapshot, MsgSnapshotPart: return "snapshots";
+		case MsgSnapshot, MsgSnapshotPart, MsgSnapshotDelta: return "snapshots";
 		case MsgCustom: return "custom";
 		case MsgOwner: return "ownership";
 		case MsgLink: return "connection reports";
@@ -555,7 +557,7 @@ class NetworkManager
 		for (let client in mClients)
 			into.AppendF("CLIENT {} {} B/s, {} inputs waiting, {}% snapshots lost, budget {}\n", client.id, client.bytesPerSecond, client.queue.Count, client.lossPercent, SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget);
 		if (IsClient)
-			into.AppendF("LINK {}% snapshots lost, others shown {:0.0} ticks in the past, {:0.0} ticks of controls waiting on the server\n", LossPercent, ViewDelayTicks, mDepth);
+			into.AppendF("LINK {}{}% snapshots lost, others shown {:0.0} ticks in the past, {:0.0} ticks of controls waiting on the server\n", mHaveDeltaPacket ? scope $"field deltas ({DeltaMisses} missed), " : "", LossPercent, ViewDelayTicks, mDepth);
 		into.Append("SENT BY KIND");
 		for (int kind < 256)
 		{
@@ -819,6 +821,7 @@ class NetworkManager
 	{
 		for (let client in mClients)
 			client.delivered.Remove(identity.NetId);
+		ForgetDeltas(identity.NetId);
 		let index = mIdentities.IndexOf(identity);
 		if (index >= 0)
 		{
@@ -1154,6 +1157,7 @@ class NetworkManager
 					case MsgDespawn: ReadDespawn(ref reader);
 					case MsgSnapshot: ReadSnapshot(ref reader);
 					case MsgSnapshotPart: ReadSnapshot(ref reader, true);
+					case MsgSnapshotDelta: ReadDeltaSnapshot(ref reader);
 					case MsgCustom: Dispatch(reader.Read<uint8>(), 0, ref reader);
 					case MsgOwner:
 						let ownedId = reader.Read<uint32>();

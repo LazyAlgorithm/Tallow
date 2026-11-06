@@ -38,6 +38,9 @@ class NetworkSession : Component
 	public bool losslessCompression = true;
 	[Advanced]
 	public bool messageCompression;
+	/// Send each client only what changed since what it is known to have received.
+	[Advanced]
+	public bool fieldDeltas = true;
 	/// Share joining players out among this many teams, each going to the smallest. 0 for no teams. A player's
 	/// team is on their Network Identity, and they appear at Spawn Points for that team.
 	public int32 teamCount = 0;
@@ -66,6 +69,7 @@ class NetworkSession : Component
 		network.SnapshotBytesPerSecond = snapshotBytesPerSecond;
 		network.SnapshotRelevanceRadius = snapshotRelevanceRadius;
 		network.LosslessCompression = losslessCompression;
+		network.FieldDeltas = fieldDeltas;
 		network.MessageCompression = messageCompression;
 		network.TeamCount = teamCount;
 		network.Transport = transport;
