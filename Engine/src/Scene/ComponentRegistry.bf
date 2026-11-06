@@ -168,11 +168,14 @@ static class ComponentRegistry
 		Object value = null;
 		if (field.type == typeof(GameObject))
 			value = go;
-		// A built-in component handle holds its object (ComponentHandle): set when the object has that component.
+		// A built-in component handle holds its object (ComponentHandle): set when the object has that component, and
+		// otherwise left as it was (as for a class component: dropping an object without one changes nothing).
 		else if (let handle = HandleComponents.Find(field.type))
 		{
-			*(Object*)field.ptr = go.Scene?.World.Has(go.Entity, handle.index) == true ? go : null;
-			return *(Object*)field.ptr != null;
+			if (go.Scene?.World.Has(go.Entity, handle.index) != true)
+				return false;
+			*(Object*)field.ptr = go;
+			return true;
 		}
 		else if (field.type == typeof(Transform))
 			value = go.Transform;

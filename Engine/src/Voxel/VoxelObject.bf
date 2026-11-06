@@ -124,6 +124,16 @@ struct VoxelObject : ComponentHandle<VoxelObjectData>
 	/// After the Inspector changes a field or a scene is read.
 	static void OnValidate(GameObject gameObject) => gameObject.GetComponent<VoxelObject>().Runtime.OnValidate();
 
+	/// Built as soon as it is added, as OnRegister did (not a piece SpawnPiece is about to fill in).
+	static void OnAdded(GameObject gameObject)
+	{
+		if (gameObject.Scene == null || VoxelObjectState.[Friend]sMakingPiece)
+			return;
+		let state = gameObject.GetComponent<VoxelObject>().Runtime;
+		state.[Friend]mRegistered = true;
+		state.[Friend]Rebuild();
+	}
+
 	static void OnRemove(void* world, uint64 entity)
 	{
 		// As OnUnregister did: the renderer lets go of its mesh (unless the whole object is going, IsGoing: the renderer may be gone).
@@ -298,8 +308,8 @@ class VoxelObjectState
 
 	public void Frame()
 	{
-		// Built the first frame after it is added, copied or read, unless code has built it already (OnRegister did
-		// this at once; a handle has no such hook). Its grid was filled when its state was made.
+		// Built here when OnAdded did not build it (a piece, or one read from a scene before it joined it), unless
+		// code has built it already. Its grid was filled when its state was made.
 		if (!mRegistered)
 		{
 			mRegistered = true;

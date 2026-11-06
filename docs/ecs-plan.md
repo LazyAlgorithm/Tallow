@@ -1311,11 +1311,26 @@ Before any 6a change, `main` (e9d87cdd) and this branch (6aa1c427) gave the same
 - [x] **Restored suites, beyond networking** (2026-11-05): the 45 other suites taken out in 80213f07, each run on
   `main` and on this branch (`~/TallowEcsTests`, scratch runner): 25 give the same results; 5 fail the same way on
   `main` (AsyncLoading, CodeEditor, GraphApi, Http, Material: not this branch's doing); Maps and AntiCheat (network)
-  match after the MapFiles fix (a map's `component` lines may name built-in components). Being worked through:
-  Decals (1 failure), Water (2), ScriptCatalog (crash), and 16 suites written against the class API that need a
-  copy for this branch (as Network did): AnimationLayers, BehaviorTree, CharacterController, Culling, Dialogue,
-  Foliage, Joints, Navigation, NavigationMesh, Profiler, References, Sequencer, SkinnedMaterials, SpawnPoints,
-  Viewmodel, VoxelObject.
+  match after the MapFiles fix (a map's `component` lines may name built-in components). Decals, Water and
+  ScriptCatalog match with branch copies (Water registers its identity through `Register`; ScriptCatalog names a
+  built-in component that is still a class). The 16 suites written against the class API have branch copies too
+  (lifecycle calls become `Runtime.Frame()`/`Tick()`/`Start()`, `== null` becomes `IsValid`, save hooks are the
+  handles' static OnSaving/OnLoaded, one runner or Foliage per object) and all 16 give `main`'s results:
+  AnimationLayers, BehaviorTree, CharacterController, Culling, Dialogue, Foliage, Joints, Navigation,
+  NavigationMesh, Profiler (timings only), References, Sequencer, SkinnedMaterials (crashes at the same place as
+  on `main`), SpawnPoints, Viewmodel, VoxelObject. Engine fixes they found:
+  - Dropping an object without the component on a handle-typed reference field cleared it; it now leaves the
+    value as a class field does (References: save/load and prefab remapping of `Camera` fields).
+  - SpawnPoint picks among points in creation order again (Flecs query order changed which of two equally old
+    points won).
+  - `LODGroup.LevelForHeight` reads the current settings (it used those of the last pick).
+  - NavigationAgent joins the scene's crowd index when added (`OnAdded`), not on first use: the index and other
+    agents' avoidance missed agents before their first frame and in edit mode.
+  - VoxelObject builds its mesh when added (`OnAdded`), as OnRegister did, not on the first frame.
+  Rechecked after them: Network, NetworkBytes (same bytes), Water, Maps, Decals, AntiCheat, ScriptCatalog and the
+  Gallery self-test. Water's timing line is slower on this branch (194 µs against 145 µs, Debug); open item: a
+  frame with 2000 objects and no networked ones costs about 0.17 ms more than `main` (the handles' FrameAll
+  passes each walk the scene), to look at with the profiler in 6b.
 - [ ] Lag compensation and host migration checked on the handles (the migration code is ported and compiles; no
   test of it ran yet on this branch).
 - [ ] Networked Showcase exhibits (the 6a exit).

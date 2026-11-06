@@ -308,6 +308,14 @@ class LODGroupState
 	/// The level a screen height gives: 0 full detail, -1 not drawn.
 	public int32 LevelForHeight(float height)
 	{
+		// Asked from outside a level pick (a game, the editor): with the settings as they are now.
+		mSettings = Settings;
+		return PickLevel(height);
+	}
+
+	// The level for a screen height, by the settings copied at the last Refresh or pick.
+	int32 PickLevel(float height)
+	{
 		let h = height * Math.Max(LODGroup.Bias, 0.01f);
 		if (mSettings.cullBelow > 0 && h < mSettings.cullBelow)
 			return -1;
@@ -330,7 +338,7 @@ class LODGroupState
 			return mPicked;
 		mSettings = Settings;
 		mPickedHeight = ScreenHeight(camera);
-		mPicked = LevelForHeight(mPickedHeight);
+		mPicked = PickLevel(mPickedHeight);
 		mPickedFrame = Time.FrameCount;
 		mPickedFrom = camera.position;
 		return mPicked;

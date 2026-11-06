@@ -124,6 +124,15 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 			gameObject.GetComponent<NavigationAgent>().Runtime.DrawGizmos(selected);
 	}
 
+	/// Listed in the scene's crowd as soon as it is added (as OnRegister did), so the crowd index and the other
+	/// agents' avoidance see it before its first frame and in edit mode.
+	static void ReadRuntime(NavigationAgentState state) { }
+	static void OnAdded(GameObject gameObject)
+	{
+		if (gameObject.Scene != null)
+			ReadRuntime(gameObject.GetComponent<NavigationAgent>().Runtime);
+	}
+
 	static void OnRemove(void* world, uint64 entity)
 	{
 		if (let state = ComponentState<NavigationAgentState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))

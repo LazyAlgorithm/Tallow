@@ -163,9 +163,10 @@ static class SpawnPoints
 	{
 		List<SpawnPoint> all = scope .();
 		List<Vector3> bodies = scope .();
-		for (let point in scene.Components<SpawnPoint>(.. scope .()))
+		// In the order the points were made, as before: among points used equally long ago the first one wins.
+		for (let point in scene.FindComponents<SpawnPoint>(.. scope .()))
 		{
-			if (point.GameObject.ActiveInHierarchy)
+			if (point.enabled && point.GameObject.ActiveInHierarchy)
 				all.Add(point);
 		}
 		for (let controller in scene.Components<CharacterController>(.. scope .()))
