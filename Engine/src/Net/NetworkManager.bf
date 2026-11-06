@@ -462,6 +462,8 @@ class NetworkManager
 	/// Client: how many physics bodies this machine is predicting.
 	public int32 PredictedBodies;
 
+	/// --net-describe N: print the network panel as text (Describe) at tick N, on every machine.
+	public static int32 DescribeAtTick;
 	/// Print a line of network figures once a second (--netstats), for finding out why a connection feels rough.
 	public static bool LogStats;
 	int32 mStatRollbacks, mStatReplayed, mStatSnapshots, mStatStarved, mStatDropped, mStatTicks;

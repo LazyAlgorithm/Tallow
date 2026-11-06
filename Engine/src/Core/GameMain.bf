@@ -175,6 +175,8 @@ static class GameMain
 				Watchdog.TestStall = true;
 			else if (arg == "--netstats")
 				NetworkManager.LogStats = true;
+			else if (arg == "--net-describe" && hasValue)
+				NetworkManager.DescribeAtTick = (int32)SceneSerializer.ParseInt(args[++i]);
 			else if (arg == "--editor")
 			{
 				Console.WriteLine("This game was built without the editor.");

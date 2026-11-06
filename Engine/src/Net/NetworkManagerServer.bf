@@ -279,6 +279,13 @@ extension NetworkManager
 		}
 		mTransport?.Flush();
 		ReportStats();
+		if (DescribeAtTick > 0 && mTick == (uint32)DescribeAtTick)
+		{
+			let text = scope String();
+			Describe(text);
+			Console.Write(text);
+			Console.Out.Flush();
+		}
 	}
 
 	/// Object ids are large numbers with the kind in the top bits; on the wire the kind goes in the low two bits,

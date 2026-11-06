@@ -40,6 +40,8 @@ static class EditorMain
 				NetworkManager.SimulatedJitterMs = Math.Max(0, SceneSerializer.ParseInt(args[i + 1]));
 			else if (arg == "--netstats")
 				NetworkManager.LogStats = true;
+			else if (arg == "--net-describe" && i + 1 < args.Count)
+				NetworkManager.DescribeAtTick = (int32)SceneSerializer.ParseInt(args[i + 1]);
 			else if (arg == "--lag" && i + 1 < args.Count)
 				NetworkManager.SimulatedLagMs = Math.Max(0, SceneSerializer.ParseInt(args[i + 1]));
 			else if (arg == "--loss" && i + 1 < args.Count)

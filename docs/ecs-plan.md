@@ -1438,7 +1438,16 @@ nine profiles.
     loss each way (38% of snapshots) it goes to 8.8 and the server sets a 16,000 bytes a second budget; calm
     again, the budget goes and the view returns to 4; the movers keep arriving. Network: lag compensation finds
     the target 0.30 behind instead of 0.40, as others are shown nearer the present; movement stays even.
-- [ ] Exit: a new project with a networked player and a pile of crates, nothing set by hand.
+- [x] **6b EXIT MET** (2026-11-05). `~/TallowEcsTests/exit6b.sh <engine> <work>` makes a project with
+  `TallowLauncher --create --sample`, builds it (no warnings), hosts it and joins it over loopback with bots
+  driving both players, and prints each machine's panel (`--net-describe N`, new; also in development builds).
+  Nothing networking is set by hand; the sample's scripts have no networking code left: the camera script
+  asks `IsMine` (new on every component: this machine is in charge of the object), and CharacterAnimation picks
+  its clip from how far the object moved, so it works for a Character Controller, a Rigidbody or a network-moved
+  player alike (it read a Rigidbody the sample player does not have, so it never animated). Loopback: 2,666
+  bytes a second to the client (each resting crate 54), no rollbacks, no waits for news, 6 crates predicted
+  without error. With `--lag 40 --jitter 10 --loss 2`: one correction of 0.038 while the controls depth rose
+  from 1.5 to 3, then calm; 4,040 bytes a second. Gallery self-test still ready (rooms=8 probes=2).
 
 ## Benchmark results
 

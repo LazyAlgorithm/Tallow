@@ -3,9 +3,10 @@ using Tallow;
 
 namespace {NAMESPACE};
 
-/// Picks the animation for a character from how its Rigidbody is moving: Idle, Walk, Run or Jump.
-/// Put it on the object that has the Rigidbody; the Animator can be on a child (the visual model).
-/// It only looks at velocity, so it works the same for the local player and for other players.
+/// Picks the animation for a character from how it is moving: Idle, Walk, Run or Jump. Put it on the character
+/// (the Animator can be on a child, the visual model). It only looks at how far the object moved each update, so it
+/// works the same whether a Character Controller, a Rigidbody or the network moves it: for the local player and for
+/// other players alike.
 [Component]
 class CharacterAnimation : Script
 {
@@ -14,22 +15,32 @@ class CharacterAnimation : Script
 	public float airSpeed = 1.6f;
 
 	Animator mAnimator;
+	Vector3 mLastPosition;
+	bool mMoved;
 	float mAirTime;
 
 	public override void Start()
 	{
 		mAnimator = GameObject.GetComponentInChildren<Animator>();
+		mLastPosition = Transform.Position;
 	}
 
 	public override void Update(TickInput input, float deltaTime)
 	{
-		let body = GetComponent<Rigidbody>();
-		if (!mAnimator.IsValid || !body.IsValid || !body.HasBody)
+		if (!mAnimator.IsValid || deltaTime <= 0)
 			return;
-		let velocity = body.Velocity;
+		let position = Transform.Position;
+		let velocity = (position - mLastPosition) / deltaTime;
+		mLastPosition = position;
+		// The first update has nothing to compare with.
+		if (!mMoved)
+		{
+			mMoved = true;
+			return;
+		}
 		let ground = Math.Sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
 		// A short delay stops slopes and steps from flickering into the jump pose.
-		mAirTime = Math.Abs(velocity.y) > airSpeed ? mAirTime + Time.DeltaTime : 0;
+		mAirTime = Math.Abs(velocity.y) > airSpeed ? mAirTime + deltaTime : 0;
 		if (mAirTime > 0.12f)
 			mAnimator.Play("Jump", 0.1f);
 		else if (ground > runSpeed)

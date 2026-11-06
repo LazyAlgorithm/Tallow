@@ -111,6 +111,11 @@ abstract class Component
 		}
 	}
 
+	/// True when this machine is in charge of the object: always when playing alone; in a network session, for the
+	/// player this machine controls and, on the host, for everything nobody else does. A camera that follows "the
+	/// player" follows the one that is mine.
+	public bool IsMine => NetworkSync.IsMine(mGameObject);
+
 	/// True when this component is enabled and its object is active in the hierarchy.
 	public bool IsActiveAndEnabled => mEnabled && mGameObject.ActiveInHierarchy;
 

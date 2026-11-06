@@ -202,7 +202,7 @@ static class ProjectGenerator
 
 			namespace {0};
 
-			/// Third-person camera for the object this client controls.
+			/// Third-person camera behind the player this machine controls.
 			[Component]
 			class FollowCamera : Script
 			{{
@@ -211,8 +211,7 @@ static class ProjectGenerator
 
 				public override void LateUpdate()
 				{{
-					let identity = GetComponent<NetworkIdentity>();
-					if (identity.IsValid && Scene.Network != null && !identity.IsOwner)
+					if (!IsMine)
 						return;
 					let camera = Scene.FindComponent<Camera>();
 					let motor = GetComponent<CharacterMotor>();
