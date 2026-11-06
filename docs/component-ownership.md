@@ -18,7 +18,7 @@ class Preloader : Script
 
     public override void Update(TickInput input, float deltaTime)
     {
-        if (loading.IsDone)
+        if (loading.IsDone && !loading.IsCancelled)
         {
             // The ordinary renderer/asset APIs can now use the cached assets.
         }
@@ -49,3 +49,7 @@ and retired hot-reload instances remain limitations described in `script-hot-rel
 The EcsBench ownership checks cover duplicate adoption, cleanup-before-delete ordering, play restart, component
 removal, object destruction and detached-component deletion. Runtime results must be recorded after BeefBuild
 and EcsBench complete; writing these tests is not a passing runtime result.
+
+Preload shutdown joins workers before discarding pending payloads. Outstanding batches become done/cancelled
+and remain safe to inspect until their owner releases them. Uploaded image staging buffers are freed immediately;
+`AssetLoader.Busy` includes work currently executing on a decoding thread.

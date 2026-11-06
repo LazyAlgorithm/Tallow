@@ -127,6 +127,26 @@ jobs:
           python3 tools/validate_showcase.py --package ../out/Tallow-Linux --work ../showcase-test
           cd ../out && zip -qr9 Tallow-Linux.zip Tallow-Linux
 
+      - name: Package ECS validation toolchain
+        if: github.ref == 'refs/heads/ecs'
+        run: |
+          mkdir -p ecs-toolchain/lib
+          ldd "$HOME/beef/IDE/dist/BeefBuild" > ecs-toolchain/dependencies.txt
+          for library in $(awk '/=> \// {print $3}' ecs-toolchain/dependencies.txt); do
+            case "$(basename "$library")" in
+              libLLVM*|libffi*|libxml2*|libedit*|libtinfo*|libhunspell*) cp -L "$library" ecs-toolchain/lib/ ;;
+            esac
+          done
+          tar -czf ecs-toolchain/beef.tar.gz -C "$HOME/beef" IDE/dist BeefLibs
+
+      - name: Keep ECS validation toolchain
+        if: github.ref == 'refs/heads/ecs'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ECS-Linux-toolchain
+          path: ecs-toolchain/
+          retention-days: 3
+
       - name: ECS regression builds and checks
         if: github.ref == 'refs/heads/ecs'
         run: |

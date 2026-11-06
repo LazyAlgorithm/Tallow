@@ -283,6 +283,23 @@ static class EcsChecks
 		AssetLoader.[Friend]FinishAdoption(job);
 		Expect(AssetLoader.[Friend]sJobs.Count == jobsBefore, "an abandoned preload job is released after adoption");
 
+		// Shutdown joins workers and clears pending jobs, while batches remain safe to inspect and delete.
+		{
+			let batch = scope AssetLoader.Batch();
+			let pending = new AssetLoader.Job() { waiting = 1 };
+			pending.images = new .();
+			pending.images.Add(new SkinnedModel.PendingImage());
+			batch.AddJob(pending);
+			AssetLoader.[Friend]sJobs[new String("phase7-shutdown")] = pending;
+			AssetLoader.[Friend]sQueue.Add(pending);
+			Expect(AssetLoader.Busy, "queued preload is busy");
+			AssetLoader.Shutdown();
+			Expect(!AssetLoader.Busy && batch.IsDone && batch.IsCancelled, "shutdown terminates pending batches safely");
+			Expect(pending.images == null && AssetLoader.[Friend]sJobs.Count == 0, "shutdown releases decoded payload and cache keys");
+			AssetLoader.Shutdown();
+		}
+		Expect(AssetLoader.[Friend]sJobs.Count == 0, "cancelled batches release without stale map entries");
+
 		// Even components never registered with a scene own what they explicitly adopted.
 		{
 			let loose = scope OwnershipProbe();

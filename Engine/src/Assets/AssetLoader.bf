@@ -30,6 +30,7 @@ static class AssetLoader
 		public Kind kind;
 		public bool finished;
 		public bool adopted;
+		public bool cancelled;
 		public Mesh mesh;
 		public SkinnedModel model;
 		public List<SkinnedModel.PendingImage> images ~ DeleteContainerAndItems!(_);
@@ -62,6 +63,17 @@ static class AssetLoader
 		/// 0 to 1.
 		public float Progress => Total == 0 ? 1 : (float)Loaded / Total;
 		public bool IsDone => Loaded == Total;
+		/// Shutdown cancelled at least one item before it reached the shared cache.
+		public bool IsCancelled
+		{
+			get
+			{
+				for (let job in mJobs)
+					if (job.cancelled)
+						return true;
+				return false;
+			}
+		}
 
 		public ~this()
 		{
@@ -84,6 +96,7 @@ static class AssetLoader
 	static Dictionary<String, Job> sJobs = new .() ~ delete _;
 	static List<Thread> sThreads = new .() ~ delete _;
 	static bool sQuit;
+	static int32 sWorking;
 
 	/// The kind of thing a path is, by its extension, or false for something this loader does not handle.
 	public static bool KindOf(StringView path, out Kind kind)
@@ -205,6 +218,7 @@ static class AssetLoader
 #if !BF_PLATFORM_WASM
 		if (sThreads.Count > 0)
 			return;
+		sQuit = false;
 		for (int i < 2)
 		{
 			let thread = new Thread(new => WorkerMain);
@@ -253,6 +267,7 @@ static class AssetLoader
 				{
 					job = sQueue[0];
 					sQueue.RemoveAt(0);
+					sWorking++;
 				}
 			}
 			if (job == null)
@@ -263,6 +278,7 @@ static class AssetLoader
 			Work(job);
 			using (sMonitor.Enter())
 			{
+				sWorking--;
 				job.finished = true;
 				sFinished.Add(job);
 				LoadedInBackground++;
@@ -327,6 +343,7 @@ static class AssetLoader
 				else
 					Log.Warning(scope $"Could not load texture {job.path}");
 			}
+			DiscardPayload(job);
 			FinishAdoption(job);
 			if (SDL.SDL_GetTicksNS() - start > budget)
 				break;
@@ -339,7 +356,27 @@ static class AssetLoader
 		get
 		{
 			using (sMonitor.Enter())
-				return sQueue.Count > 0 || sFinished.Count > 0;
+				return sWorking > 0 || sQueue.Count > 0 || sFinished.Count > 0;
+		}
+	}
+
+	// Only after a worker has finished or has been joined. Uploaded objects have already transferred
+	// to their caches; abandoned jobs still own their decoded payload here.
+	static void DiscardPayload(Job job)
+	{
+		delete job.mesh;
+		job.mesh = null;
+		delete job.model;
+		job.model = null;
+		if (job.pixels != null)
+		{
+			Native.tn_image_free(job.pixels);
+			job.pixels = null;
+		}
+		if (job.images != null)
+		{
+			DeleteContainerAndItems!(job.images);
+			job.images = null;
 		}
 	}
 
@@ -355,5 +392,27 @@ static class AssetLoader
 			delete thread;
 		}
 		sThreads.Clear();
+		using (sMonitor.Enter())
+		{
+			sQueue.Clear();
+			sFinished.Clear();
+			for (let entry in sJobs)
+			{
+				let job = entry.value;
+				if (!job.adopted)
+				{
+					DiscardPayload(job);
+					job.cancelled = true;
+					job.finished = true;
+					job.adopted = true;
+				}
+				if (job.waiting == 0)
+					delete job;
+				delete entry.key;
+			}
+			// Live batches retain their jobs until Release; a later preload starts a fresh job.
+			sJobs.Clear();
+			sWorking = 0;
+		}
 	}
 }
