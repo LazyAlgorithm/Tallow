@@ -225,9 +225,16 @@ extension NetworkManager
 		}
 		// A correction from further back than the cap is taken as it is, eased in, rather than run again for that long.
 		let tooOld = comparable && (int32)(mTick - ackTick) > MaxReplayTicks;
-		if (tooOld)
+		// Validate and restore local gameplay fields before rewinding the world. If scripts have changed since
+		// that tick, an unsafe replay would diverge again: take the server's state instead.
+		let scripts = ackTick % ExactRingSize;
+		let badScripts = comparable && !tooOld && (mExact.tick[scripts] != ackTick || mExact.scripts[scripts] == null
+			|| !ScriptFields(mExact.scripts[scripts], true));
+		if (tooOld || badScripts)
 			Resyncs++;
-		if (!comparable || tooOld)
+		if (badScripts)
+			Log.Warning("State-sync replay cannot restore a changed script snapshot; using the server's state.");
+		if (!comparable || tooOld || badScripts)
 		{
 			for (let entry in owned)
 			{
@@ -394,11 +401,6 @@ extension NetworkManager
 			if (!told)
 				remote.identity.ApplyState(remote.identity.History[slot]);
 		}
-		// Rewind the scripts as well as transforms and bodies before running their Update again. The history is
-		// local, including fields without [Sync]; [Sync] still controls what travels over the network.
-		let scripts = tick % ExactRingSize;
-		if (mExact.tick[scripts] != tick || mExact.scripts[scripts] == null || !ScriptFields(mExact.scripts[scripts], true))
-			Log.Warning("State-sync replay could not restore script fields at the acknowledged tick.");
 	}
 
 	/// The server has got ahead of this machine, which must have stopped for a moment. Takes its state and jumps the
