@@ -571,6 +571,7 @@ Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API
 - Script-field restoration now validates the full payload length and a local object/field-layout signature before modifying fields. Nonserialized fields are left alone; private supported fields are included. On mismatch, state sync adopts the authoritative state without replay rather than running against invalid history.
 - ECS checks were added for local-only/private fields, `[Sync]` fields, and malformed payloads; passing test results still required.
 - World-space Transform setters now reuse one validated ECS data reference when writing and marking dirty. No scripting API or update order changed; impact still needs profiling.
+- Measurement infrastructure continued (2026-11-06): `tools/run_ecs_bench.py` now runs the existing correctness suite with `--check`, alternates baseline/current checkouts across repeated measurements, validates each result, and checkpoints raw JSONL with build/host provenance. Five synthetic runner regression tests pass; these are not engine runtime results. Commands and remaining home checks: [Phase 7 validation](ecs-phase7-validation.md).
 - [ ] BeefBuild compile, network rollback regression suites (including correction under latency/jitter/loss), visual-graph compilation, multi-platform checks, and script-update benchmarks remain required.
 
 ### Phase 8: Docs and release (M)
