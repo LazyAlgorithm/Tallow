@@ -24,6 +24,39 @@ extension NetworkManager
 		Send(mServerPeer, false);
 	}
 
+	/// Client, every tick: once a second, tells the server what share of snapshots went missing, and tunes how far in
+	/// the past others are shown. It starts at two snapshots' worth; each second the view ran past the newest news of
+	/// something moving it goes half a snapshot further back (at most six snapshots); every three calm seconds it
+	/// comes a quarter of the way back towards a snapshot and a tick (at least half a tick at a time). It eases
+	/// between values, so nothing jumps. Losses alone do not move it: what matters is whether news came in time.
+	void UpdateLink()
+	{
+		let interval = (float)Math.Max(mServerInterval, 1);
+		if (mViewDelay <= 0)
+			mViewDelay = mViewDelayWanted = interval * 2;
+		mViewDelay += Math.Clamp(mViewDelayWanted - mViewDelay, -0.02f, 0.05f);
+		if (++mLinkTicks < Time.TickRate)
+			return;
+		let total = mLinkGot + mLinkMissed;
+		LossPercent = total > 0 ? mLinkMissed * 100 / total : 0;
+		let nearest = interval + 1;
+		if (mLinkHeld > 0)
+		{
+			mViewDelayWanted = Math.Min(mViewDelayWanted + interval * 0.5f, interval * 6);
+			mViewCalmSeconds = 0;
+		}
+		else if (++mViewCalmSeconds >= 3)
+		{
+			mViewDelayWanted = Math.Max(mViewDelayWanted - Math.Max(0.5f, (mViewDelayWanted - nearest) * 0.25f), nearest);
+			mViewCalmSeconds = 0;
+		}
+		mLinkGot = mLinkMissed = mLinkHeld = mLinkTicks = 0;
+		mWriter.Clear();
+		mWriter.Write(MsgLink);
+		mWriter.Write((uint8)Math.Clamp(LossPercent, 0, 100));
+		Send(mServerPeer, false);
+	}
+
 	void ReadWelcome(ref NetReader reader)
 	{
 		LocalClientId = reader.Read<int32>();
@@ -38,6 +71,8 @@ extension NetworkManager
 		mClockSet = false;
 		mDepth = 2;
 		mTargetDepth = CalmDepth;
+		mViewDelay = 0;
+		mLinkGot = mLinkMissed = mLinkHeld = mLinkTicks = 0;
 		for (let identity in mIdentities)
 			identity.Predicted = false;
 		SendAddress();
@@ -98,6 +133,12 @@ extension NetworkManager
 		mStatSnapshots++;
 		// Snapshots can overtake one another on the way; one older than the last has nothing to add.
 		let fresh = !mHaveSnapshot || (int32)(serverTick - mLastSnapshotTick) > 0;
+		if (fresh)
+		{
+			mLinkGot++;
+			if (mHaveSnapshot)
+				mLinkMissed += (int32)Math.Clamp((serverTick - mLastSnapshotTick) / interval, 1, 30) - 1;
+		}
 		if (!part && !fresh) return;
 		// With the snapshot before this one in hand, an object it left out is known to have been still then.
 		let sawPrevious = mHaveSnapshot && serverTick - mLastSnapshotTick == interval;

@@ -9,7 +9,7 @@ namespace Tallow.Editor;
 extension EditorApp
 {
 	bool mShowNetwork;
-	List<(int32 id, int32 bytesPerSecond, int32 inputsWaiting)> mNetworkClients = new .() ~ delete _;
+	List<(int32 id, int32 bytesPerSecond, int32 inputsWaiting, int32 lossPercent, int32 budget)> mNetworkClients = new .() ~ delete _;
 	List<(StringView kind, int32 bytes)> mNetworkKinds = new .() ~ delete _;
 
 	/// --network-window opens it at start.
@@ -47,11 +47,13 @@ extension EditorApp
 			network.ClientStats(mNetworkClients);
 			if (mNetworkClients.IsEmpty)
 				ImGui.Text("No clients yet.");
-			else if (ImGui.BeginTable("netclients", 3, ImGui.TableFlags.SizingStretchProp))
+			else if (ImGui.BeginTable("netclients", 5, ImGui.TableFlags.SizingStretchProp))
 			{
 				ImGui.TableSetupColumn("Client");
 				ImGui.TableSetupColumn("Bytes a second to it");
 				ImGui.TableSetupColumn("Controls waiting");
+				ImGui.TableSetupColumn("Snapshots lost");
+				ImGui.TableSetupColumn("Budget (tuned)");
 				ImGui.TableHeadersRow();
 				for (let client in mNetworkClients)
 				{
@@ -62,10 +64,16 @@ extension EditorApp
 					ImGui.Text(scope $"{client.bytesPerSecond}");
 					ImGui.TableNextColumn();
 					ImGui.Text(scope $"{client.inputsWaiting}");
+					ImGui.TableNextColumn();
+					ImGui.Text(scope $"{client.lossPercent}%");
+					ImGui.TableNextColumn();
+					ImGui.Text(client.budget > 0 ? scope $"{client.budget} bytes/s" : "none needed");
 				}
 				ImGui.EndTable();
 			}
 		}
+		if (network.IsClient)
+			ImGui.Text(scope $"{network.LossPercent}% of snapshots lost; others shown {network.ViewDelayTicks:0.0} ticks in the past; {network.InputsWaiting:0.0} ticks of controls waiting on the server (aiming for {network.InputsWanted:0.0})");
 		mNetworkKinds.Clear();
 		network.BytesByKind(mNetworkKinds);
 		if (!mNetworkKinds.IsEmpty)

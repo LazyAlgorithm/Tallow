@@ -91,7 +91,7 @@ extension NetworkManager
 	{
 		if (!mClockSet)
 			return;
-		let delay = InterpolationTicks > 0 ? InterpolationTicks : mServerInterval * 2;
+		let delay = InterpolationTicks > 0 ? (double)InterpolationTicks : (mViewDelay > 0 ? (double)mViewDelay : mServerInterval * 2);
 		let at = (double)tick + mServerOffset - delay;
 		if (now)
 			mViewTick = at;
@@ -103,7 +103,10 @@ extension NetworkManager
 			if (!identity.Sample(at, mServerInterval, out state))
 				continue;
 			if (now && at > (double)identity.NewestKeyTick && state.linearVelocity != .Zero)
+			{
 				mStatHeld++;
+				mLinkHeld++;
+			}
 			// Something lying still needs nothing done; leaving it alone also lets a physics body go to sleep.
 			let transform = identity.Transform;
 			if ((transform.Position - state.position).LengthSquared < 1.0e-8f && Mathf.Abs(Quaternion.Dot(transform.Rotation, state.rotation)) > 0.999999f)

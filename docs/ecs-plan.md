@@ -1421,7 +1421,23 @@ nine profiles.
   6,480 of them the two flickering braziers, because changed light settings were looked at and sent every tick.
   They are now looked at once per snapshot: 5,510 bytes a second, of which the swinging wrecking ball is 1,100 and
   each predicted crate at rest 55.
-- [ ] Self-tuning: input delay, snapshot budget, interpolation delay.
+- [x] **Self-tuning** (2026-11-05), with nothing set by hand:
+  - Input delay: already tuned (the client aims for a number of ticks of its controls waiting on the server,
+    raised when the server runs dry, lowered after 200 calm snapshots, and steers its clock by it). Applying
+    inputs a few ticks late locally (rollback avoidance) is 6f.
+  - Interpolation delay (`InterpolationTicks` 0): starts at two snapshots; each second the view runs past the
+    newest news of something moving it goes half a snapshot further back (at most six snapshots); every three calm
+    seconds it comes a quarter of the way back to a snapshot and a tick. Eased, so nothing jumps. Losses alone do
+    not move it (a first version did, and sat near the maximum under steady loss).
+  - Snapshot budget (`SnapshotBytesPerSecond` 0): clients count snapshots missing from the ticks they receive
+    and say so once a second (`MsgLink`, 3 bytes); at 3% lost or more the server cuts that client's budget to
+    three quarters of what it was getting (never below 16 KB/s, as a loss is as often bad luck as too much sent),
+    calm seconds grow it back, and well above what is needed it goes.
+  - The panel shows each client's losses and budget, and on a client its losses, view delay and controls waiting.
+  - Checked by `~/TallowEcsTests/NetworkTuning` (new): calm, the view comes from 6 ticks to 4; at 20% simulated
+    loss each way (38% of snapshots) it goes to 8.8 and the server sets a 16,000 bytes a second budget; calm
+    again, the budget goes and the view returns to 4; the movers keep arriving. Network: lag compensation finds
+    the target 0.30 behind instead of 0.40, as others are shown nearer the present; movement stays even.
 - [ ] Exit: a new project with a networked player and a pile of crates, nothing set by hand.
 
 ## Benchmark results

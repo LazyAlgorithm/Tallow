@@ -344,6 +344,10 @@ class NetworkManager
 		public int32 snapshotsSent;
 		/// Bytes sent to this client this second so far, and over the last whole second (the network panel).
 		public int32 statSent, bytesPerSecond;
+		/// The share of snapshots it says went missing over its last second, and the snapshot budget the server has
+		/// worked out for it from that (0: none needed). See TuneBudget.
+		public uint8 lossPercent;
+		public int32 autoBudget, calmSeconds;
 		public int cursor;
 		public Dictionary<uint32, SnapshotDelivery> delivered = new .() ~ delete _;
 		/// Ticks since the last snapshot for which no controls had arrived.
@@ -358,6 +362,8 @@ class NetworkManager
 	const uint8 MsgCustom = 6;
 	const uint8 MsgOwner = 7;
 	const uint8 MsgSnapshotPart = 8;
+	/// Client, once a second: how many snapshots went missing (the server tunes its budget for that client by it).
+	const uint8 MsgLink = 20;
 	// Each packet of controls repeats the ticks before it, so that a lost packet costs nothing.
 	const int InputRedundancy = 3;
 	// More controls than this waiting on the server means the client has run ahead; the oldest are dropped.
@@ -474,6 +480,17 @@ class NetworkManager
 	double mServerOffset;
 	bool mClockSet;
 	float mDepth = 2, mTargetDepth = CalmDepth;
+	/// Client: snapshots that arrived and that went missing (gaps in their ticks), and how many times the view ran
+	/// past the newest news of something moving, this second so far.
+	int32 mLinkGot, mLinkMissed, mLinkHeld, mLinkTicks;
+	/// Client: how far in the past objects are shown (ticks), and where it is heading; see UpdateLink.
+	float mViewDelay, mViewDelayWanted;
+	int32 mViewCalmSeconds;
+	/// Client: the share of snapshots lost over the last second.
+	public int32 LossPercent;
+	/// Client: how far in the past, in ticks, objects this machine does not control are shown now (InterpolationTicks
+	/// when set, otherwise tuned to the connection).
+	public float ViewDelayTicks => InterpolationTicks > 0 ? InterpolationTicks : mViewDelay;
 	int32 mCalmSnapshots;
 	uint32 mSnapshotNumber;
 	// How many ticks of controls the client aims to have waiting on the server when all is calm.
@@ -503,6 +520,7 @@ class NetworkManager
 		case MsgSnapshot, MsgSnapshotPart: return "snapshots";
 		case MsgCustom: return "custom";
 		case MsgOwner: return "ownership";
+		case MsgLink: return "connection reports";
 		case 16, 17, 18, 19: return "host migration";
 		case NetCompression.MessageType: return "compressed";
 		case NetworkSync.MsgTerrainBrush: return "terrain";
@@ -533,7 +551,9 @@ class NetworkManager
 	{
 		into.AppendF("NETWORK {} tick {} clients {} sent {} B/s received {} B/s objects {}\n", IsServer ? (mMode == .Host ? "host" : "server") : (IsClient ? "client" : "offline"), mTick, mClients.Count, BytesSentPerSecond, BytesReceivedPerSecond, mIdentityStates.Count);
 		for (let client in mClients)
-			into.AppendF("CLIENT {} {} B/s, {} inputs waiting\n", client.id, client.bytesPerSecond, client.queue.Count);
+			into.AppendF("CLIENT {} {} B/s, {} inputs waiting, {}% snapshots lost, budget {}\n", client.id, client.bytesPerSecond, client.queue.Count, client.lossPercent, SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget);
+		if (IsClient)
+			into.AppendF("LINK {}% snapshots lost, others shown {:0.0} ticks in the past, {:0.0} ticks of controls waiting on the server\n", LossPercent, ViewDelayTicks, mDepth);
 		into.Append("SENT BY KIND");
 		for (int kind < 256)
 		{
@@ -559,10 +579,37 @@ class NetworkManager
 
 	/// Server: each client's id, the snapshot and message bytes sent to it over the last second, and how many ticks of
 	/// its controls are waiting (the network panel).
-	public void ClientStats(List<(int32 id, int32 bytesPerSecond, int32 inputsWaiting)> into)
+	public void ClientStats(List<(int32 id, int32 bytesPerSecond, int32 inputsWaiting, int32 lossPercent, int32 budget)> into)
 	{
 		for (let client in mClients)
-			into.Add((client.id, client.bytesPerSecond, (int32)client.queue.Count));
+			into.Add((client.id, client.bytesPerSecond, (int32)client.queue.Count, client.lossPercent, (SnapshotBytesPerSecond > 0) ? SnapshotBytesPerSecond : client.autoBudget));
+	}
+
+	/// The least a budget worked out from a connection goes down to: a lost snapshot is as often bad luck as too
+	/// much being sent, and below this cutting the budget would starve a small game for nothing.
+	const int32 LeastAutoBudget = 16000;
+
+	/// Server, as a client reports its losses (MsgLink, once a second), with no SnapshotBytesPerSecond set: losses
+	/// cut what it is sent to three quarters of what it was getting (never below LeastAutoBudget); calm seconds let
+	/// it grow back by a quarter every three; well above what it needs, the budget goes. Nearer and more important
+	/// objects go first under a budget, so the far ones are what slows.
+	void TuneBudget(ClientInfo client)
+	{
+		if (SnapshotBytesPerSecond > 0)
+			return;
+		if (client.lossPercent >= 3)
+		{
+			let cut = (int32)(Math.Max(client.bytesPerSecond, client.autoBudget > 0 ? Math.Min(client.autoBudget, client.bytesPerSecond) : client.bytesPerSecond) * 0.75f);
+			client.autoBudget = Math.Max(cut, LeastAutoBudget);
+			client.calmSeconds = 0;
+		}
+		else if (client.autoBudget > 0 && ++client.calmSeconds >= 3)
+		{
+			client.calmSeconds = 0;
+			client.autoBudget = (int32)(client.autoBudget * 1.25f);
+			if (client.autoBudget > client.bytesPerSecond * 4 + LeastAutoBudget)
+				client.autoBudget = 0;
+		}
 	}
 
 	/// Client: how many ticks of controls the server has waiting (smoothed), and how many this machine aims for.
@@ -1081,6 +1128,12 @@ class NetworkManager
 					}
 					else if (client != null && type == MsgInput)
 						ReadInputs(client, ref reader);
+					else if (client != null && type == MsgLink)
+					{
+						client.lossPercent = reader.Read<uint8>();
+						if (reader.Ok)
+							TuneBudget(client);
+					}
 					else if (client != null && type == MsgCustom)
 					{
 						let messageId = reader.Read<uint8>();

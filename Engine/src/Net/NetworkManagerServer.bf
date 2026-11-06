@@ -229,6 +229,7 @@ extension NetworkManager
 			let input = NetPack.Quantize(GatherLocalInput());
 			mInputs[mTick % InputHistory] = input;
 			SendInputs();
+			UpdateLink();
 			SimulateOwned(LocalClientId, input);
 		}
 	}
@@ -482,7 +483,8 @@ extension NetworkManager
 			int count = 0, spent = 0;
 			bool reliable = false;
 			let limit = Math.Clamp(SnapshotPacketBytes, 256, 1200);
-			let budget = SnapshotBytesPerSecond > 0 ? Math.Max(128, (int)((int64)SnapshotBytesPerSecond * Math.Max(SnapshotInterval, 1) / Math.Max(Time.TickRate, 1))) : int.MaxValue;
+			let perSecond = SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget;
+			let budget = perSecond > 0 ? Math.Max(128, (int)((int64)perSecond * Math.Max(SnapshotInterval, 1) / Math.Max(Time.TickRate, 1))) : int.MaxValue;
 			for (let key in keys)
 			{
 				let record = SnapshotRecord(key.row, client.id);

@@ -316,6 +316,7 @@ extension NetworkManager
 		mClockSet = false;
 		mDepth = 2;
 		mTargetDepth = CalmDepth;
+		mViewDelay = 0;
 		for (let identity in mIdentities)
 		{
 			identity.Predicted = false;
