@@ -520,6 +520,23 @@ before (from `main`) and after each of 6c to 6h: server CPU per tick and bytes p
 - Preserve the low-allocation gameplay API, coroutine helpers and editor quick fixes above. Document the Systems tier as **advanced**, with a Showcase crowd exhibit in both normal-script and explicit-system styles.
 - **Exit:** a new project's template scripts contain no `delete`, `scope` or queries; ordinary scripts measurably improve over the pre-ECS baseline or a documented blocker explains the remaining script regression; full-frame gains are reported separately; fixed-tick/replay/network determinism checks pass; a developer needs no special ECS knowledge to realize the measured default-path improvements.
 
+#### 7d. Full-engine compatibility and scripting audit
+
+Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API across **every** engine subsystem: scene and hierarchy, transforms, lifecycle and input, editor Inspector and code editor, visual-script compilation, prefab and serialization, save/load, hot reload, animation and IK, physics and character controllers, rendering, shader and compute graphs, terrain/voxels, particles, audio and voice, navigation and AI, networking, multiplayer replay, world streaming and mobile/web targets. Where internal work must become data-oriented, keep the existing script-facing behavior or document a deliberate compatibility change.
+
+- [ ] Audit each subsystem for stale pre-ECS storage and duplicate authoritative state, missing dirty propagation, callbacks still relying on old scene lists, and handles invalidated by entity/table changes.
+- [ ] Compile and exercise editor-generated visual scripts against the current `Script` API and `[Sync]` fields, including scene serialization, hot reload, and network replay.
+- [ ] Run ordinary Beef scripts and generated visual scripts through the same workload and record CPU, memory, input-to-response latency, and deterministic replay outcomes.
+- [ ] Finish editor diagnostics, completion and suggestions against Beef's compiler tooling before considering a second scripting backend. A future optional C# backend needs a measured managed/native boundary and allocation budget; it must not impose runtime costs on Beef-only games.
+- [ ] Require scene/prefab/network behavior to remain the same across Release and Debug builds and relevant platforms, including dynamic components, entity moves, unload/reload and network corrections.
+
+**Phase 7 work started (2026-11-06, `ecs` branch; not yet benchmarked or build-verified):**
+- State-sync replay now saves the same supported script value fields as lockstep and attempts to restore them before resimulation. This is local history, not automatic replication; `[Sync]` remains opt-in.
+- Script-field restoration now validates the full payload length before modifying fields. Nonserialized fields are left alone; private supported fields are included.
+- ECS checks were added for local-only/private fields, `[Sync]` fields, and malformed payloads; passing test results still required.
+- World-space Transform setters now reuse one validated ECS data reference when writing and marking dirty. No scripting API or update order changed; impact still needs profiling.
+- [ ] BeefBuild compile, network rollback regression suites (including correction under latency/jitter/loss), visual-graph compilation, multi-platform checks, and script-update benchmarks remain required.
+
 ### Phase 8: Docs and release (M)
 
 - Update every page in `docs/` that mentions `Component`, `OnRegister` or scene lists. Add `docs/ecs.md`
