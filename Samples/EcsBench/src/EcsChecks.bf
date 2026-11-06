@@ -27,7 +27,7 @@ class UpdateCounter : Component
 
 	public override void Update(TickInput input, float deltaTime)
 	{
-		if (deltaTime == Time.FixedDeltaTime && GameObject.GetComponent<NetworkIdentity>() != null)
+		if (deltaTime == Time.FixedDeltaTime && GameObject.GetComponent<NetworkIdentity>().IsValid)
 			ticks++;
 		else
 			frames++;
@@ -128,6 +128,7 @@ static class EcsChecks
 		LODChecks();
 		VoxelObjectChecks();
 		JointChecks();
+		NetworkIdentityChecks();
 		return sFailures;
 	}
 
@@ -733,6 +734,65 @@ static class EcsChecks
 			SceneSerializer.Load(loaded, text);
 			let copy = loaded.Find("Weight").GetComponent<Joint>();
 			Expect(copy.ConnectedTo.IsValid && copy.ConnectedTo.GameObject == loaded.Find("Post") && copy.anchor == .(0, 2, 0), "reading a scene finds Connected To again");
+		}
+		Scene.Active = previous;
+	}
+
+	/// Network Identity: joins the session when play starts and at once when added during play (in the order the
+	/// objects were made), leaves and joins again as its object or itself is switched off and on, leaves when removed
+	/// or destroyed and when play stops; its settings are saved and read; corrections are eased in each frame.
+	static void NetworkIdentityChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let net = new NetworkManager(scene);
+			scene.Network = net;
+			net.[Friend]mMode = .Server;
+			net.LocalClientId = -1;
+			net.[Friend]mConnected = true;
+			let first = scene.CreateGameObject("First");
+			first.AddComponent<MeshRenderer>();
+			let a = first.AddComponent<NetworkIdentity>();
+			a.fullPrecision = true;
+			a.remoteFormat = .ExactTransform;
+			a.ownerId = 3;
+			Expect(first.[Friend]mNetworked && net.Identities.Count == 0, "added in the editor, its object ticks but it joins no session yet");
+			let text = scope String();
+			SceneSerializer.Save(scene, text);
+			scene.StartPlay();
+			Expect(net.Identities.Count == 1 && net.Identities[0] == a && a.NetId == first.Id, "it joins when play starts");
+			let second = scene.CreateGameObject("Second");
+			let b = second.AddComponent<NetworkIdentity>();
+			Expect(net.Identities.Count == 2 && net.Identities[1] == b, "one added while playing joins at once, after the first");
+			second.SetActive(false);
+			Expect(net.Identities.Count == 1, "its object switched off, it leaves");
+			second.SetActive(true);
+			Expect(net.Identities.Count == 2 && net.FindIdentity(b.NetId) == b, "switched on again, it joins again");
+			a.enabled = false;
+			Expect(net.Identities.Count == 1 && !net.FindIdentity(a.NetId).IsValid, "switched off itself, it leaves");
+			a.enabled = true;
+			Expect(net.Identities.Count == 2, "and joins again");
+			a.SmoothOffset = .(0.5f, 0, 0);
+			scene.Update();
+			let drawn = first.GetComponent<MeshRenderer>().VisualOffset;
+			Expect(a.SmoothOffset.x < 0.5f && a.SmoothOffset.x > 0 && Math.Abs(drawn.x - a.SmoothOffset.x) < 1.0e-5f, scope $"a correction is eased in each frame and drawn ({a.SmoothOffset.x}, {drawn.x})");
+			second.RemoveComponent<NetworkIdentity>();
+			Expect(net.Identities.Count == 1 && !second.[Friend]mNetworked, "removed, it leaves and its object no longer ticks");
+			let third = scene.CreateGameObject("Third");
+			third.AddComponent<NetworkIdentity>();
+			Expect(net.Identities.Count == 2, "a third joins");
+			scene.DestroyImmediate(third);
+			Expect(net.Identities.Count == 1, "destroyed, it leaves");
+			scene.StopPlay();
+			Expect(net.Identities.Count == 0, "when play stops they leave");
+			scene.Network = null;
+			delete net;
+			let loaded = scope Scene();
+			SceneSerializer.Load(loaded, text);
+			let copy = loaded.Find("First").GetComponent<NetworkIdentity>();
+			Expect(copy.IsValid && copy.fullPrecision && copy.remoteFormat == .ExactTransform && copy.ownerId == 3 && copy.correctionSmoothing == 12, "its settings are saved and read");
 		}
 		Scene.Active = previous;
 	}

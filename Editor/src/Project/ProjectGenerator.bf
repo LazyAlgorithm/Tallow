@@ -212,7 +212,7 @@ static class ProjectGenerator
 				public override void LateUpdate()
 				{{
 					let identity = GetComponent<NetworkIdentity>();
-					if (identity != null && Scene.Network != null && !identity.IsOwner)
+					if (identity.IsValid && Scene.Network != null && !identity.IsOwner)
 						return;
 					let camera = Scene.FindComponent<Camera>();
 					let motor = GetComponent<CharacterMotor>();

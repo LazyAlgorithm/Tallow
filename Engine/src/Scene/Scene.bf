@@ -1140,6 +1140,16 @@ class Scene
 		Active = this;
 		Time.Restart();
 		Time.Tick = 0;
+		// Built-in components that join something while on (a Network Identity its session) do so first, in the
+		// order the objects were made, so that scripts waking next find them.
+		if (!HandleComponents.Switched.IsEmpty)
+		{
+			for (int i = 0; i < mObjects.Count; i++)
+			{
+				if (mObjects[i].ActiveInHierarchy)
+					HandleComponents.NotifySwitched(mObjects[i], true);
+			}
+		}
 		for (int i = 0; i < mComponents.Count; i++)
 			WakeComponent(mComponents[i]);
 	}
@@ -1166,6 +1176,11 @@ class Scene
 			component.[Friend]mStarted = false;
 		}
 		mPendingStart.Clear();
+		for (int i = mObjects.Count - 1; i >= 0 && !HandleComponents.Switched.IsEmpty; i--)
+		{
+			if (mObjects[i].ActiveInHierarchy)
+				HandleComponents.NotifySwitched(mObjects[i], false);
+		}
 		mPlaying = false;
 		// Built-in components' bodies leave the physics world as the class components' did in OnDisable.
 		Rigidbody.SyncAll(this);
@@ -1176,7 +1191,7 @@ class Scene
 		SceneLoader.StopAll(this);
 		ViewmodelPose.StopAll(this);
 		Joint.StopAll(this);
-					CharacterController.SyncAll(this);
+		CharacterController.SyncAll(this);
 	}
 
 	void RunPendingStarts()
@@ -1279,11 +1294,12 @@ class Scene
 	{
 		if (Network != null && Network.Mode != .Offline)
 			return;
-		if (!mByType.TryGetValue(typeof(NetworkIdentity), let identities))
-			return;
-		for (int i = 0; i < identities.Count; i++)
+		// In the order the objects were made, as the identities were when they were classes.
+		for (int i = 0; i < mObjects.Count; i++)
 		{
-			let identity = (NetworkIdentity)identities[i];
+			if (!mObjects[i].[Friend]mNetworked)
+				continue;
+			let identity = mObjects[i].GetComponent<NetworkIdentity>();
 			if (identity.IsActiveAndEnabled)
 				identity.TickUpdate(identity.GatherControls(), Time.FixedDeltaTime);
 		}
@@ -1495,6 +1511,8 @@ class Scene
 	void RunOnFrames()
 	{
 		sFrameComponentsMarker.Begin();
+		// Networked objects' drawn positions first, so that scripts that follow one see where it is drawn.
+		NetworkIdentity.FrameAll(this);
 		for (int i = 0; i < mOnFrameList.Count; i++)
 		{
 			let component = mOnFrameList[i];

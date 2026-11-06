@@ -49,8 +49,9 @@ extension NetworkSync
 	{
 		for (var at = object.Transform; at != null; at = at.Parent)
 		{
-			if (let identity = at.GameObject.GetComponent<NetworkIdentity>())
-				return object.Id < identity.[Friend]mPartsIdLimit || object.Id < network.SceneIdLimit;
+			let identity = at.GameObject.GetComponent<NetworkIdentity>();
+			if (identity.IsValid)
+				return object.Id < identity.Runtime.[Friend]mPartsIdLimit || object.Id < network.SceneIdLimit;
 		}
 		return object.Id < network.SceneIdLimit;
 	}
@@ -105,7 +106,8 @@ extension NetworkSync
 	public static void HandleEnabledChanged(GameObject object, HandleComponents.Info info, bool on)
 	{
 		let network = Active(object.Scene);
-		if (network == null || sApplying || info == null || !Everywhere(network, object) || !Decides(network, object)
+		// A Network Identity's own switch stays on each machine (it says whether the object is in the session).
+		if (network == null || sApplying || info == null || info.handleType == typeof(NetworkIdentity) || !Everywhere(network, object) || !Decides(network, object)
 			|| (!network.IsServer && !Cosmetic(info)))
 			return;
 		let payload = scope NetWriter();
@@ -136,7 +138,7 @@ extension NetworkSync
 	public static void EnabledChanged(Component component)
 	{
 		let network = Active(component.Scene);
-		if (network == null || sApplying || component is NetworkIdentity || !Everywhere(network, component.GameObject) || !Decides(network, component.GameObject)
+		if (network == null || sApplying || !Everywhere(network, component.GameObject) || !Decides(network, component.GameObject)
 			|| (!network.IsServer && !Cosmetic(component)))
 			return;
 		let payload = scope NetWriter();
@@ -301,8 +303,8 @@ extension NetworkSync
 		switch (kind)
 		{
 		case .Active: object.SetActive(on);
-		case .Enabled: if (!(component is NetworkIdentity)) component.Enabled = on;
-		case .HandleEnabled: object.Scene.World.Enable(object.Entity, handle.index, on);
+		case .Enabled: component.Enabled = on;
+		case .HandleEnabled: HandleComponents.SetEnabled(object, handle, on);
 		case .Light:
 			let light = object.GetComponent<Light>();
 			settings.Apply(light);

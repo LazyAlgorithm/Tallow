@@ -179,7 +179,7 @@ class NetworkManager
 		if (mMode == .Offline)
 			return true;
 		let identity = gameObject.GetComponent<NetworkIdentity>();
-		if (identity == null || !mByNetId.ContainsKey(identity.NetId))
+		if (!identity.IsValid || !mByNetId.ContainsKey(identity.NetId))
 			return true;
 		if (!IsServer)
 			return mApplyingDespawn;
@@ -200,7 +200,7 @@ class NetworkManager
 		if (!IsServer)
 			return;
 		var identity = root.GetComponent<NetworkIdentity>();
-		if (identity == null)
+		if (!identity.IsValid)
 			return;
 		Unregister(identity);
 		identity.NetId = mNextSpawnId++;
@@ -311,7 +311,7 @@ class NetworkManager
 	/// Server only: hands control of an object to a client (or back to the server with 0).
 	public void SetOwner(NetworkIdentity identity, int32 ownerId)
 	{
-		if (!IsServer || identity == null)
+		if (!IsServer || !identity.IsValid)
 			return;
 		identity.ownerId = ownerId;
 		mWriter.Clear();
@@ -375,6 +375,8 @@ class NetworkManager
 	NetworkMode mMode = .Offline;
 	List<ClientInfo> mClients = new .() ~ DeleteContainerAndItems!(_);
 	List<NetworkIdentity> mIdentities = new .() ~ delete _;
+	// Their states, in the same order (what the loops over every object use: no lookup per object).
+	List<NetworkIdentityState> mIdentityStates = new .() ~ delete _;
 	Dictionary<uint32, NetworkIdentity> mByNetId = new .() ~ delete _;
 	static Dictionary<String, PrefabFactory> sPrefabs = new .() ~ DeleteDictionaryAndKeysAndValues!(_);
 	NetWriter mWriter = new .() ~ delete _;
@@ -516,6 +518,8 @@ class NetworkManager
 	public uint32 Tick => mTick;
 	/// Every networked object. To find one by id, FindIdentity is much faster.
 	public List<NetworkIdentity> Identities => mIdentities;
+	/// The same identities' states, in the same order: for engine loops over every object.
+	public List<NetworkIdentityState> IdentityStates => mIdentityStates;
 
 	/// A session for a scene, offline until StartServer or StartClient.
 	public this(Scene scene)
@@ -638,14 +642,11 @@ class NetworkManager
 
 	void RegisterSceneIdentities()
 	{
-		for (let component in mScene.Components)
+		for (let identity in NetworkIdentity.InSceneOrder(mScene, .. scope .()))
 		{
-			if (let identity = component as NetworkIdentity)
-			{
-				if (identity.NetId == 0)
-					identity.NetId = identity.GameObject.Id;
-				Register(identity);
-			}
+			if (identity.NetId == 0)
+				identity.NetId = identity.GameObject.Id;
+			Register(identity);
 		}
 	}
 
@@ -654,7 +655,7 @@ class NetworkManager
 	{
 		if (mByNetId.TryGetValue(netId, let identity))
 			return identity;
-		return null;
+		return default;
 	}
 
 	void Register(NetworkIdentity identity)
@@ -662,17 +663,23 @@ class NetworkManager
 		if (identity.NetId == 0 || mByNetId.ContainsKey(identity.NetId))
 			return;
 		mIdentities.Add(identity);
+		mIdentityStates.Add(identity.Runtime);
 		mByNetId[identity.NetId] = identity;
-		if (identity.[Friend]mPartsIdLimit == 0)
-			identity.[Friend]mPartsIdLimit = Scene.NextId;
+		if (identity.Runtime.[Friend]mPartsIdLimit == 0)
+			identity.Runtime.[Friend]mPartsIdLimit = Scene.NextId;
 	}
 
 	void Unregister(NetworkIdentity identity)
 	{
 		for (let client in mClients)
 			client.delivered.Remove(identity.NetId);
-		if (mIdentities.Remove(identity))
+		let index = mIdentities.IndexOf(identity);
+		if (index >= 0)
+		{
+			mIdentities.RemoveAt(index);
+			mIdentityStates.RemoveAt(index);
 			mByNetId.Remove(identity.NetId);
+		}
 	}
 
 	/// Number of teams players are shared out among as they join, each going to the smallest. 0 for no teams.
@@ -723,8 +730,8 @@ class NetworkManager
 			rotation = .Identity;
 		}
 		let player = Spawn(PlayerPrefab, position, rotation, clientId);
-		let identity = player?.GetComponent<NetworkIdentity>();
-		if (identity != null)
+		let identity = GameObject.ComponentOn<NetworkIdentity>(player);
+		if (identity.IsValid)
 		{
 			identity.team = team;
 			identity.playerControlled = true;
@@ -763,14 +770,14 @@ class NetworkManager
 		String.NewOrSet!(gameObject.SpawnedFrom, prefab);
 		gameObject.Transform.SetPositionAndRotation(position, rotation);
 		var identity = gameObject.GetComponent<NetworkIdentity>();
-		if (identity == null)
+		if (!identity.IsValid)
 			identity = gameObject.AddComponent<NetworkIdentity>();
 		Unregister(identity);
 		identity.NetId = netId;
 		identity.ownerId = ownerId;
 		identity.PrefabName.Set(prefab);
 		// Everything the prefab made is part of it on every machine.
-		identity.[Friend]mPartsIdLimit = mScene.NextId;
+		identity.Runtime.[Friend]mPartsIdLimit = mScene.NextId;
 		Register(identity);
 		return gameObject;
 	}

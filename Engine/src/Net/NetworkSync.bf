@@ -107,7 +107,7 @@ static class NetworkSync
 		for (let object in network.Scene.Objects)
 		{
 			if (!object.ActiveInHierarchy) continue;
-			if (object.GetComponent<NetworkIdentity>() != null)
+			if (object.GetComponent<NetworkIdentity>().IsValid)
 				continue;
 			let body = object.GetComponent<Rigidbody>();
 			if ((body.IsValid && !body.isKinematic) || object.HasComponent<CharacterController>()
@@ -124,7 +124,7 @@ static class NetworkSync
 	/// shared. Call it on every machine at the same moment (for example from something that is itself synced).
 	public static void EnsureShared(GameObject object)
 	{
-		if (Active(object.Scene) != null && object.GetComponent<NetworkIdentity>() == null)
+		if (Active(object.Scene) != null && !object.GetComponent<NetworkIdentity>().IsValid)
 			object.AddComponent<NetworkIdentity>();
 	}
 
@@ -136,7 +136,7 @@ static class NetworkSync
 		if (network == null)
 			return;
 		var identity = object.GetComponent<NetworkIdentity>();
-		if (identity == null)
+		if (!identity.IsValid)
 			identity = object.AddComponent<NetworkIdentity>();
 		network.AdoptFragment(identity);
 	}
@@ -148,8 +148,8 @@ static class NetworkSync
 	static void WriteObject(NetWriter writer, GameObject object)
 	{
 		let identity = object.GetComponent<NetworkIdentity>();
-		writer.Write<bool>(identity != null);
-		writer.Write<uint32>(identity != null ? identity.NetId : object.Id);
+		writer.Write<bool>(identity.IsValid);
+		writer.Write<uint32>(identity.IsValid ? identity.NetId : object.Id);
 	}
 
 	static GameObject ReadObject(ref NetReader reader, NetworkManager network)
@@ -160,7 +160,7 @@ static class NetworkSync
 			return null;
 		if (!viaIdentity)
 			return network.Scene.FindById(id);
-		return network.FindIdentity(id)?.GameObject;
+		return network.FindIdentity(id).GameObject;
 	}
 
 	/// The object that names a component across machines: the nearest ancestor with a Network Identity, or the
@@ -173,7 +173,7 @@ static class NetworkSync
 		var transform = gameObject.Transform;
 		while (transform != null)
 		{
-			if (transform.GameObject.GetComponent<NetworkIdentity>() != null)
+			if (transform.GameObject.GetComponent<NetworkIdentity>().IsValid)
 				return transform.GameObject;
 			transform = transform.Parent;
 		}
@@ -209,7 +209,7 @@ static class NetworkSync
 		if (transform == null)
 			return;
 		var anchor = transform;
-		while (anchor != null && anchor.GameObject.GetComponent<NetworkIdentity>() == null)
+		while (anchor != null && !anchor.GameObject.GetComponent<NetworkIdentity>().IsValid)
 			anchor = anchor.Parent;
 		if (anchor == null)
 			anchor = transform;
@@ -244,7 +244,8 @@ static class NetworkSync
 	{
 		for (var at = transform; at != null; at = at.Parent)
 		{
-			if (let identity = at.GameObject.GetComponent<NetworkIdentity>())
+			let identity = at.GameObject.GetComponent<NetworkIdentity>();
+			if (identity.IsValid)
 				return sender != 0 && identity.ownerId == sender;
 		}
 		return false;
@@ -385,7 +386,7 @@ static class NetworkSync
 	public static void ShapeChanged(CharacterController controller)
 	{
 		let network = Active(controller.Scene);
-		if (network == null || sApplying || controller.GameObject.GetComponent<NetworkIdentity>() == null)
+		if (network == null || sApplying || !controller.GameObject.GetComponent<NetworkIdentity>().IsValid)
 			return;
 		let payload = scope NetWriter();
 		WriteShape(payload, controller);
@@ -410,7 +411,7 @@ static class NetworkSync
 		if (!reader.Ok || shape < 0 || shape > (int32)CharacterShape.Box || !radius.IsFinite || !height.IsFinite || !Finite(boxSize) || !edgeRadius.IsFinite || !Finite(center))
 			return;
 		let identity = network.FindIdentity(netId);
-		if (identity == null)
+		if (!identity.IsValid)
 			return;
 		let controller = identity.GetComponent<CharacterController>();
 		if (!controller)
@@ -466,7 +467,7 @@ static class NetworkSync
 		if (!network.IsServer)
 		{
 			let owner = Anchor(object).GetComponent<NetworkIdentity>();
-			if (owner == null || !owner.IsOwner)
+			if (!owner.IsValid || !owner.IsOwner)
 				return;
 		}
 		let payload = scope NetWriter();
@@ -534,7 +535,7 @@ static class NetworkSync
 		if (network.IsServer)
 		{
 			let owner = Anchor(renderer.GameObject).GetComponent<NetworkIdentity>();
-			if (owner == null || owner.ownerId != sender || owner.ownerId == 0)
+			if (!owner.IsValid || owner.ownerId != sender || owner.ownerId == 0)
 				return;
 			let payload = scope NetWriter();
 			WriteTransform(payload, renderer.Transform);
@@ -573,7 +574,7 @@ static class NetworkSync
 		if (network.IsServer)
 		{
 			let owner = Anchor(animator.GameObject).GetComponent<NetworkIdentity>();
-			if (owner == null || owner.ownerId != sender || owner.ownerId == 0)
+			if (!owner.IsValid || owner.ownerId != sender || owner.ownerId == 0)
 				return;
 			// Passed on to the other players as it is applied here.
 			let payload = scope NetWriter();
@@ -613,7 +614,7 @@ static class NetworkSync
 		{
 			// From the client that controls the object: play it here, which passes it on to the others.
 			let owner = Anchor(skinned ? skinned.GameObject : animator.GameObject).GetComponent<NetworkIdentity>();
-			if (owner == null || owner.ownerId != sender)
+			if (!owner.IsValid || owner.ownerId != sender)
 				return;
 		}
 		let wasApplying = sApplying;
@@ -637,7 +638,7 @@ static class NetworkSync
 		if (!network.IsServer)
 		{
 			let owner = Anchor(source.GameObject).GetComponent<NetworkIdentity>();
-			if (owner == null || !owner.IsOwner)
+			if (!owner.IsValid || !owner.IsOwner)
 				return;
 		}
 		let payload = scope NetWriter();
@@ -663,7 +664,7 @@ static class NetworkSync
 		if (network == null)
 			return true;
 		let identity = Anchor(gameObject).GetComponent<NetworkIdentity>();
-		if (identity == null)
+		if (!identity.IsValid)
 			return network.IsServer;
 		return identity.ownerId == network.LocalClientId || (network.IsServer && identity.ownerId == 0);
 	}
@@ -703,7 +704,7 @@ static class NetworkSync
 		if (runner.onlyOwnerChooses)
 		{
 			let owner = Anchor(runner.GameObject).GetComponent<NetworkIdentity>();
-			if (owner == null || owner.ownerId != sender)
+			if (!owner.IsValid || owner.ownerId != sender)
 				return;
 		}
 		runner.ApplyRequest(action, serial, node, index);
@@ -738,7 +739,7 @@ static class NetworkSync
 		if (player.onlyOwnerControls)
 		{
 			let owner = Anchor(player.GameObject).GetComponent<NetworkIdentity>();
-			if (owner == null || owner.ownerId != sender)
+			if (!owner.IsValid || owner.ownerId != sender)
 				return;
 		}
 		player.ApplyRequest(action, time);
@@ -783,7 +784,7 @@ static class NetworkSync
 		if (network.IsServer)
 		{
 			let owner = Anchor(component).GetComponent<NetworkIdentity>();
-			if (owner == null || owner.ownerId != sender)
+			if (!owner.IsValid || owner.ownerId != sender)
 				return;
 			component.OnNetworkEvent(name, value);
 			let payload = scope NetWriter();
@@ -813,7 +814,7 @@ static class NetworkSync
 		if (network.IsServer)
 		{
 			let owner = Anchor(source.GameObject).GetComponent<NetworkIdentity>();
-			if (owner == null || owner.ownerId != sender)
+			if (!owner.IsValid || owner.ownerId != sender)
 				return;
 		}
 		// On the server, doing it here passes it on to the other players.
@@ -1024,7 +1025,7 @@ static class NetworkSync
 		if (!reader.Ok)
 			return;
 		let identity = network.FindIdentity(netId);
-		if (identity == null)
+		if (!identity.IsValid)
 			return;
 		let list = Slots(identity);
 		if (index >= list.slots.Count)

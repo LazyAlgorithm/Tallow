@@ -226,6 +226,7 @@ class GameObject
 			else
 				component.OnDisable();
 		}
+		HandleComponents.NotifySwitched(this, active);
 		for (let child in Transform.Children)
 		{
 			// Children that are switched off themselves were already disabled.

@@ -393,7 +393,7 @@ class SoftBody : Component
 	}
 
 	/// Whether the server says where this body is: a free soft body on a networked object, on a client.
-	bool FollowsServer => Free && Scene.Network != null && !Scene.Network.IsServer && GetComponent<NetworkIdentity>() != null;
+	bool FollowsServer => Free && Scene.Network != null && !Scene.Network.IsServer && GetComponent<NetworkIdentity>().IsValid;
 
 	/// A body with nothing holding it to its object, which carries its object instead.
 	bool Free => mPinned.IsEmpty && kind != .Shell;

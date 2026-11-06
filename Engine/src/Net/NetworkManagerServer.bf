@@ -77,7 +77,7 @@ extension NetworkManager
 	/// Server only: removes a spawned object everywhere.
 	public void Despawn(GameObject gameObject)
 	{
-		if (!IsServer || gameObject.GetComponent<NetworkIdentity>() == null)
+		if (!IsServer || !gameObject.GetComponent<NetworkIdentity>().IsValid)
 			return;
 		// Scene.Destroy asks AllowDestroy, which tells the clients.
 		mScene.Destroy(gameObject);
@@ -252,7 +252,7 @@ extension NetworkManager
 		else if (mConnected && LocalClientId > 0)
 		{
 			PredictedBodies = 0;
-			for (let identity in mIdentities)
+			for (let identity in mIdentityStates)
 			{
 				if (identity.ownerId == LocalClientId)
 					identity.History[mTick % NetworkIdentity.HistorySize] = identity.CaptureState();
@@ -267,7 +267,7 @@ extension NetworkManager
 		if (IsServer || (mConnected && LocalClientId > 0))
 			NetworkSync.WatchLights(this);
 		// Objects this machine does not move itself change once a tick; they are drawn gliding between ticks.
-		for (let identity in mIdentities)
+		for (let identity in mIdentityStates)
 		{
 			identity.NoteTick(identity.ownerId != LocalClientId && !identity.Predicted && !(IsServer && identity.ownerId == 0));
 			// The server remembers where everything has been lately, for lag compensation.
@@ -336,19 +336,21 @@ extension NetworkManager
 	}
 
 	/// A body clients simulate themselves: its exact motion, and whether it rests.
-	static void WritePredictedBody(NetWriter writer, NetworkIdentity identity)
+	static void WritePredictedBody(NetWriter writer, NetworkIdentityState identity)
 	{
 		let body = identity.GetComponent<Rigidbody>();
 		NetPack.WriteBody(writer, body.State, body.IsSleeping);
 	}
 
-	void WriteSnapshotRecord(NetWriter writer, NetworkIdentity identity, int32 clientId)
+	void WriteSnapshotRecord(NetWriter writer, NetworkIdentityState identity, int32 clientId)
 	{
+		// Its settings read once (a copy: nothing here adds or removes components).
+		let settings = *identity.GameObject.GetComponent<NetworkIdentityData>();
 		WriteNetId(writer, identity.NetId);
 		let flagsAt = writer.Data.Count;
 		// A body set to be predicted (physicsPrediction On) is, whatever its other snapshot settings.
-		let predicted = identity.ownerId != clientId && identity.PhysicsPredictable;
-		if (identity.ownerId == clientId || identity.remoteFormat == .Legacy && identity.fullPrecision && !(predicted && identity.physicsPrediction == .On))
+		let predicted = settings.ownerId != clientId && identity.PhysicsPredictable;
+		if (settings.ownerId == clientId || settings.remoteFormat == .Legacy && settings.fullPrecision && !(predicted && settings.physicsPrediction == .On))
 		{
 			writer.Write(NetPack.FlagFull);
 			writer.Write(identity.CaptureState());
@@ -358,31 +360,42 @@ extension NetworkManager
 			WritePredictedBody(writer, identity);
 			return;
 		}
-		else if (identity.remoteFormat == .QuantizedBody && identity.GetComponent<Rigidbody>().HasBody)
+		else if (settings.remoteFormat == .QuantizedBody && identity.GetComponent<Rigidbody>().HasBody)
 			NetPack.WriteMotion(writer, identity.GetComponent<Rigidbody>().State);
-		else if (identity.remoteFormat != .Legacy)
-			NetPack.WriteTransform(writer, identity.Transform.Position, identity.Transform.Rotation, identity.remoteFormat == .QuantizedTransform);
+		else if (settings.remoteFormat != .Legacy)
+			NetPack.WriteTransform(writer, identity.Transform.Position, identity.Transform.Rotation, settings.remoteFormat == .QuantizedTransform);
 		else
 			NetPack.Write(writer, identity.Sent);
-		if (identity.ownerId != clientId && identity.SnapshotSleeping)
+		if (settings.ownerId != clientId && identity.SnapshotSleeping)
 			writer.Data[flagsAt] |= NetPack.FlagSleeping;
+	}
+
+	struct SnapshotOrder
+	{
+		public NetworkIdentityState identity;
+		public bool own;
+		public int32 priority;
+		public uint32 tick;
+		public uint32 netId;
 	}
 
 	void SendOptimizedSnapshots()
 	{
 		mSnapshotNumber++;
-		for (let identity in mIdentities)
+		for (let identity in mIdentityStates)
 			identity.NoteSnapshot(mSnapshotNumber, true, PredictPhysics);
 		let record = scope NetWriter();
-		let candidates = scope List<NetworkIdentity>();
+		let candidates = scope List<NetworkIdentityState>();
+		let keys = scope List<SnapshotOrder>();
 		for (let client in mClients)
 		{
 			let player = PlayerObject(client.id);
 			candidates.Clear();
-			for (let identity in mIdentities)
+			for (let identity in mIdentityStates)
 			{
-				let own = identity.ownerId == client.id;
-				if (!own && identity.distanceFiltered && SnapshotRelevanceRadius > 0 && player != null &&
+				let settings = *identity.GameObject.GetComponent<NetworkIdentityData>();
+				let own = settings.ownerId == client.id;
+				if (!own && settings.distanceFiltered && SnapshotRelevanceRadius > 0 && player != null &&
 					(identity.Transform.Position - player.Transform.Position).LengthSquared > SnapshotRelevanceRadius * SnapshotRelevanceRadius)
 				{
 					client.delivered.Remove(identity.NetId);
@@ -395,22 +408,31 @@ extension NetworkManager
 					candidates.Add(identity);
 					continue;
 				}
-				if (known && mTick - sent.tick < (uint32)Math.Max(identity.remoteIntervalTicks, SnapshotInterval)) continue;
-				let changed = !known || sent.change != identity.ChangedAt || sent.dormant != identity.SnapshotSleeping;
-				let refresh = !identity.SnapshotSleeping && mTick - sent.tick >= (uint32)(Math.Max(SnapshotInterval, 1) * (int32)RefreshEvery);
+				if (known && mTick - sent.tick < (uint32)Math.Max(settings.remoteIntervalTicks, SnapshotInterval)) continue;
+				let sleeping = settings.dormantWhenSleeping && identity.GetComponent<Rigidbody>().IsSleeping;
+				let changed = !known || sent.change != identity.ChangedAt || sent.dormant != sleeping;
+				let refresh = !sleeping && mTick - sent.tick >= (uint32)(Math.Max(SnapshotInterval, 1) * (int32)RefreshEvery);
 				if (changed || sent.repeats < (int32)SnapshotRepeats || refresh)
 					candidates.Add(identity);
 			}
-			// Ownership, explicit priority, then age. Stable id breaks ties so every client is deterministic.
-			candidates.Sort(scope (a, b) =>
+			// Ownership, explicit priority, then age. Stable id breaks ties so every client is deterministic. Each
+			// candidate's place is worked out once, not in every comparison.
+			keys.Clear();
+			for (let identity in candidates)
+			{
+				SnapshotDelivery sent = default;
+				client.delivered.TryGetValue(identity.NetId, out sent);
+				keys.Add(.() { identity = identity, own = identity.ownerId == client.id, priority = identity.snapshotPriority, tick = sent.tick, netId = identity.NetId });
+			}
+			keys.Sort(scope (a, b) =>
 				{
-					if ((a.ownerId == client.id) != (b.ownerId == client.id)) return a.ownerId == client.id ? -1 : 1;
-					if (a.snapshotPriority != b.snapshotPriority) return b.snapshotPriority <=> a.snapshotPriority;
-					SnapshotDelivery sa = default, sb = default;
-					client.delivered.TryGetValue(a.NetId, out sa);
-					client.delivered.TryGetValue(b.NetId, out sb);
-					return sa.tick != sb.tick ? sa.tick <=> sb.tick : a.NetId <=> b.NetId;
+					if (a.own != b.own) return a.own ? -1 : 1;
+					if (a.priority != b.priority) return b.priority <=> a.priority;
+					return a.tick != b.tick ? a.tick <=> b.tick : a.netId <=> b.netId;
 				});
+			candidates.Clear();
+			for (let key in keys)
+				candidates.Add(key.identity);
 			BeginSnapshotPacket(client);
 			int count = 0, spent = 0;
 			bool reliable = false, containsOwned = false;
@@ -478,7 +500,7 @@ extension NetworkManager
 			return;
 		}
 		mSnapshotNumber++;
-		for (let identity in mIdentities)
+		for (let identity in mIdentityStates)
 			identity.NoteSnapshot(mSnapshotNumber, false, PredictPhysics);
 		for (let client in mClients)
 		{
@@ -494,7 +516,7 @@ extension NetworkManager
 			int count = 0;
 			// A newcomer is told about everything, a few times over in case a snapshot is lost.
 			let everything = client.snapshotsSent < (int32)SnapshotRepeats;
-			for (let identity in mIdentities)
+			for (let identity in mIdentityStates)
 			{
 				// Nothing is said about an object that has not changed for a few snapshots.
 				if (!everything && mSnapshotNumber - identity.ChangedAt >= SnapshotRepeats && (mSnapshotNumber + identity.NetId) % RefreshEvery != 0)

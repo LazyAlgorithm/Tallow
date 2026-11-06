@@ -78,7 +78,10 @@ extension NetworkManager
 			return;
 		mRosterIn = RosterTicks;
 		if (mHostPlayerNetId == 0)
-			mHostPlayerNetId = PlayerObject(0)?.GetComponent<NetworkIdentity>()?.NetId ?? 0;
+		{
+			let hostIdentity = GameObject.ComponentOn<NetworkIdentity>(PlayerObject(0));
+			mHostPlayerNetId = hostIdentity.IsValid ? hostIdentity.NetId : 0;
+		}
 		mWriter.Clear();
 		mWriter.Write(MsgRoster);
 		mWriter.Write(mHostPlayerNetId);
@@ -248,7 +251,8 @@ extension NetworkManager
 			mNextClientId = Math.Max(mNextClientId, entry.id + 1);
 		}
 		mReclaimEnds = Milliseconds + ReclaimMilliseconds;
-		mHostPlayerNetId = PlayerObject(0)?.GetComponent<NetworkIdentity>()?.NetId ?? 0;
+		let hostIdentity = GameObject.ComponentOn<NetworkIdentity>(PlayerObject(0));
+		mHostPlayerNetId = hostIdentity.IsValid ? hostIdentity.NetId : 0;
 		Log.Info("This machine is now the host.");
 		if (OnBecameHost != null)
 			OnBecameHost();

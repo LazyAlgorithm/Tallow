@@ -27,7 +27,7 @@ static class Prefab
 	static GameObject Share(Scene scene, GameObject root, StringView path)
 	{
 		let network = scene.Network;
-		if (root == null || network == null || network.Mode == .Offline || root.GetComponent<NetworkIdentity>() == null)
+		if (root == null || network == null || network.Mode == .Offline || !root.GetComponent<NetworkIdentity>().IsValid)
 			return root;
 		if (network.IsServer)
 		{

@@ -324,7 +324,7 @@ static class SaveSystem
 		while (check != null)
 		{
 			let identity = check.GameObject.GetComponent<NetworkIdentity>();
-			if (identity != null && identity.ownerId != 0)
+			if (identity.IsValid && identity.ownerId != 0)
 				return true;
 			check = check.Parent;
 		}

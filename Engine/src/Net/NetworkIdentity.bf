@@ -24,52 +24,202 @@ enum PhysicsPrediction : int32
 	Off
 }
 
-/// Marks an object as replicated. The server owns its state; clients predict it locally and are corrected.
-[Component]
-class NetworkIdentity : Component
+/// A NetworkIdentity's settings, in its entity (NetworkIdentity is the handle).
+[Component, HandleData]
+struct NetworkIdentityData
 {
-	public const int HistorySize = 128;
 	/// Send exact transform/body snapshots for small or precision-sensitive objects.
-	public bool fullPrecision;
-	BodyState mSentFull;
-	bool mSentAsleep;
+	public bool fullPrecision = default;
 	/// Remote snapshot format only; the owning client's prediction always receives exact BodyState.
 	public RemoteSnapshotFormat remoteFormat = .Legacy;
 	/// Minimum server ticks between remote updates; zero uses the session snapshot interval.
-	public int32 remoteIntervalTicks;
+	public int32 remoteIntervalTicks = default;
 	/// Suppress periodic sleeping refreshes after a reliable final transform. Off by default.
-	public bool dormantWhenSleeping;
+	public bool dormantWhenSleeping = default;
 	/// Distance filtering applies only to objects opting in. Zero session radius disables it.
-	public bool distanceFiltered;
+	public bool distanceFiltered = default;
 	/// Higher values are serviced first when a session has a bandwidth budget.
-	public int32 snapshotPriority;
-	public bool SnapshotSleeping => dormantWhenSleeping && GetComponent<Rigidbody>().IsSleeping;
+	public int32 snapshotPriority = default;
 	/// Whether clients simulate this body themselves while the server owns it (NetworkManager.PredictPhysics).
 	public PhysicsPrediction physicsPrediction = .Auto;
-
-
 	/// Whether a player controls this object: its scripts' Update gets that player's controls. Off for things the
 	/// server runs by itself (NPCs, projectiles), whose Update gets empty controls even on a host. Objects the
 	/// server spawns with NetworkManager.Adopt are switched off; player characters are on.
 	public bool playerControlled = true;
+	/// 0 means owned by the server; otherwise the id of the controlling client.
+	[HideInInspector]
+	public int32 ownerId = 0;
+	/// The player's team in a session with teams (1 upward), set by the server when the player is spawned and
+	/// shared with everyone. 0 when there are no teams.
+	[Sync]
+	public int32 team = default;
+	/// How quickly corrections are blended out (per second).
+	public float correctionSmoothing = 12.0f;
+
+	public this() { }
+}
+
+/// Marks an object as replicated. The server owns its state; clients predict it locally and are corrected.
+///
+/// A handle (ComponentHandle): its settings are NetworkIdentityData's fields, what it keeps between frames its NetworkIdentityState.
+/// OnAdded does what OnRegister and OnEnable did, FrameAll (in Scene.RunOnFrames) OnFrame and switching on and off,
+/// OnRemove OnDisable and OnUnregister. NetworkManager and NetworkSync hold the state (NetworkIdentityState).
+[Component, HandleFields]
+struct NetworkIdentity : ComponentHandle<NetworkIdentityData>
+{
+	/// What it keeps between frames, made the first time it is asked for.
+	public NetworkIdentityState Runtime
+	{
+		get
+		{
+			CheckValid();
+			let state = ComponentState<NetworkIdentityState>.Make(mGameObject.Scene.World, mGameObject.Entity);
+			if (state.[Friend]mGameObject == null)
+			{
+				state.[Friend]mGameObject = mGameObject;
+			}
+			return state;
+		}
+	}
+
+	// The API, unchanged: each member is documented on NetworkIdentityState.
+	public const int HistorySize = NetworkIdentityState.HistorySize;
+	public bool SnapshotSleeping => Runtime.SnapshotSleeping;
+	public ref NetInput LastInput => ref Runtime.LastInput;
+	public NetInput GatherControls() => Runtime.GatherControls();
+	public bool GatherFromBehaviours(ref NetInput input) => Runtime.GatherFromBehaviours(ref input);
+	public void TickUpdate(NetInput input, float deltaTime) => Runtime.TickUpdate(input, deltaTime);
+	public ref uint32 NetId => ref Runtime.NetId;
+	public ref BodyState[HistorySize] History => ref Runtime.History;
+	public ref String PrefabName => ref Runtime.PrefabName;
+	public ref bool PhysicsPredictable => ref Runtime.PhysicsPredictable;
+	public ref bool Predicted => ref Runtime.Predicted;
+	public ref uint32 PredictedSince => ref Runtime.PredictedSince;
+	public ref bool[HistorySize] HistoryAsleep => ref Runtime.HistoryAsleep;
+	public ref BodyState ServerState => ref Runtime.ServerState;
+	public ref uint32 ServerStateTick => ref Runtime.ServerStateTick;
+	public ref bool ServerAsleep => ref Runtime.ServerAsleep;
+	public ref int32 Misses => ref Runtime.Misses;
+	public ref uint32 PredictPausedUntil => ref Runtime.PredictPausedUntil;
+	public bool CanPredictPhysics => Runtime.CanPredictPhysics;
+	public void RecordTick(uint32 tick) => Runtime.RecordTick(tick);
+	public void ApplyBodyState(BodyState state, bool asleep) => Runtime.ApplyBodyState(state, asleep);
+	public bool IsOwner => Runtime.IsOwner;
+	public ref Vector3 SmoothOffset => ref Runtime.SmoothOffset;
+	public Vector3 VisualPosition => Runtime.VisualPosition;
+	public void NoteTick(bool smoothBetweenTicks) => Runtime.NoteTick(smoothBetweenTicks);
+	public ref NetPack.Packed Sent => ref Runtime.Sent;
+	public ref uint32 ChangedAt => ref Runtime.ChangedAt;
+	public void NoteSnapshot(uint32 number, bool includeFullState = false, bool predictPhysics = false) => Runtime.NoteSnapshot(number, includeFullState, predictPhysics);
+	public bool HasKeys => Runtime.HasKeys;
+	public uint32 NewestKeyTick => Runtime.NewestKeyTick;
+	public void ClearKeys() => Runtime.ClearKeys();
+	public void PushKey(uint32 tick, Vector3 position, Quaternion rotation, bool stationary = false) => Runtime.PushKey(tick, position, rotation, stationary);
+	public void HoldKey(uint32 tick) => Runtime.HoldKey(tick);
+	public void PushBodyKey(uint32 tick, BodyState state, bool stationary = false) => Runtime.PushBodyKey(tick, state, stationary);
+	public bool Sample(double tick, float maxAhead, out BodyState state) => Runtime.Sample(tick, maxAhead, out state);
+	public BodyState CaptureState() => Runtime.CaptureState();
+	public void ApplyState(BodyState state) => Runtime.ApplyState(state);
+	/// The per-frame easing (what the class's OnFrame did); the scene runs it, so a script need not.
+	public void OnFrame() => Runtime.Frame();
+
+	/// The scene's identities in the order their objects were made (the order the class components had, which
+	/// is the order snapshots list them in).
+	public static void InSceneOrder(Scene scene, List<NetworkIdentity> into)
+	{
+		for (let gameObject in scene.Objects)
+		{
+			if (gameObject.[Friend]mNetworked)
+				into.Add(gameObject.GetComponent<NetworkIdentity>());
+		}
+	}
+
+	/// Once a frame (from Scene.RunOnFrames, where the class's OnFrame ran): eases corrections in.
+	public static void FrameAll(Scene scene)
+	{
+		// Every identity has a state from the moment it is added (OnAdded). One with no correction to ease, not
+		// smoothed between ticks and drawn where it is has nothing to do, which is most of them on a server.
+		let world = scene.World;
+		for (let (entity, state) in ComponentState<NetworkIdentityState>.In(world, .. scope .()))
+		{
+			if (!state.[Friend]HasFrameWork)
+				continue;
+			let gameObject = state.GameObject;
+			if (gameObject != null && gameObject.ActiveInHierarchy && world.IsEnabled(entity, DataIndex))
+				state.Frame();
+		}
+	}
+
+	/// As soon as one is added: the object's Update runs per tick (what OnRegister did), and while playing it joins
+	/// the session at once (what OnEnable did then), so that a spawn goes out the same tick.
+	static void OnAdded(GameObject gameObject)
+	{
+		gameObject.[Friend]mNetworked = true;
+		let identity = gameObject.GetComponent<NetworkIdentity>();
+		if (gameObject.Scene.IsPlaying && identity.IsActiveAndEnabled)
+			identity.Runtime.Enable();
+	}
+
+	/// Joins or leaves the session as it is switched on or off while playing (OnEnable, OnDisable).
+	static void OnSwitched(GameObject gameObject, bool on)
+	{
+		let state = gameObject.GetComponent<NetworkIdentity>().Runtime;
+		if (on)
+			state.Enable();
+		else
+			state.OnDisable();
+	}
+
+	static void OnRemove(void* world, uint64 entity)
+	{
+		// As OnDisable and OnUnregister did: it leaves the session. Neither touches the object's other components,
+		// so this is safe while the whole object goes too.
+		if (let state = ComponentState<NetworkIdentityState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
+		{
+			state.OnDisable();
+			state.[Friend]mGameObject.[Friend]mNetworked = false;
+		}
+		ComponentState<NetworkIdentityState>.Release(world, entity);
+	}
+}
+
+/// What a NetworkIdentity keeps between frames. Its settings are read from the entity each time.
+[DataFields(typeof(NetworkIdentityData), "Settings")]
+class NetworkIdentityState
+{
+	GameObject mGameObject;
+	// In the session's identities (Enable) and not taken out since (OnDisable).
+	bool mJoined;
+
+	public GameObject GameObject => mGameObject;
+	public Transform Transform => mGameObject.Transform;
+	public Scene Scene => mGameObject.Scene;
+	public NetworkIdentity Handle => mGameObject.GetComponent<NetworkIdentity>();
+	/// The session keeps its identities' states as well as their handles (NetworkManager.IdentityStates), so that
+	/// its loops over every object do not look each one's state up again; where a handle is wanted, a state is one.
+	public static implicit operator NetworkIdentity(NetworkIdentityState state) => state.Handle;
+	public T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
+	public T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	public bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
+	public bool IsActiveAndEnabled => mGameObject.ActiveInHierarchy && mGameObject.Scene.World.IsEnabled(mGameObject.Entity, NetworkIdentity.DataIndex);
+	ref NetworkIdentityData Settings
+	{
+		[Inline]
+		get => ref *mGameObject.GetComponent<NetworkIdentityData>();
+	}
+
+	public const int HistorySize = 128;
+	BodyState mSentFull;
+	bool mSentAsleep;
+	public bool SnapshotSleeping => dormantWhenSleeping && GetComponent<Rigidbody>().IsSleeping;
+
+
 
 	/// The controls of the last tick run, for TickInput.previous.
 	[NonSerialized]
 	public NetInput LastInput;
 
-	public override void OnRegister()
-	{
-		GameObject.[Friend]mNetworked = true;
-	}
 
-	public override void OnUnregister()
-	{
-		// Another identity on the same object keeps it networked.
-		var others = false;
-		for (let component in GameObject.Components)
-			others |= component != this && component is NetworkIdentity && component.[Friend]mRegistered;
-		GameObject.[Friend]mNetworked = others;
-	}
 
 	/// This machine's controls for the object: from its Network Behaviours (GatherInput), or the project's input
 	/// actions when it has none. Empty when no player controls it.
@@ -115,14 +265,7 @@ class NetworkIdentity : Component
 		}
 	}
 
-	/// 0 means owned by the server; otherwise the id of the controlling client.
-	[HideInInspector]
-	public int32 ownerId = 0;
 
-	/// The player's team in a session with teams (1 upward), set by the server when the player is spawned and
-	/// shared with everyone. 0 when there are no teams.
-	[Sync]
-	public int32 team;
 
 	[NonSerialized]
 	public uint32 NetId;
@@ -203,8 +346,6 @@ class NetworkIdentity : Component
 	/// Remaining visual error after a server correction; it is blended out instead of popping.
 	[NonSerialized]
 	public Vector3 SmoothOffset;
-	/// How quickly corrections are blended out (per second).
-	public float correctionSmoothing = 12.0f;
 
 	// Where the object was at the end of the last two ticks, for drawing it between them.
 	Vector3 mTickPrevious, mTickCurrent;
@@ -225,7 +366,10 @@ class NetworkIdentity : Component
 		mTickSmoothing = smoothBetweenTicks;
 	}
 
-	public override void OnFrame()
+	// Whether Frame would change anything (see FrameAll).
+	bool HasFrameWork => mTickSmoothing || SmoothOffset.LengthSquared > 0 || mVisualOffset.LengthSquared > 0;
+
+	public void Frame()
 	{
 		// Large errors (teleports, respawns) are not worth easing.
 		if (SmoothOffset.LengthSquared < 1.0e-8f || SmoothOffset.LengthSquared > 25.0f)
@@ -409,17 +553,24 @@ class NetworkIdentity : Component
 		return true;
 	}
 
-	public override void OnEnable()
+	/// What OnEnable did: joins the session (OnAdded, and FrameAll when switched on again).
+	public void Enable()
 	{
+		mJoined = true;
 		if (NetId == 0)
-			NetId = GameObject.Id;
-		Scene.Network?.[Friend]Register(this);
+			NetId = mGameObject.Id;
+		mGameObject.Scene.Network?.[Friend]Register(Handle);
 	}
 
-	public override void OnDisable()
+	/// What OnDisable did: leaves the session (switched off, removed, or play stopping). Once per Enable.
+	public void OnDisable()
 	{
-		NetworkSync.Forget(this);
-		Scene.Network?.[Friend]Unregister(this);
+		if (!mJoined)
+			return;
+		mJoined = false;
+		let handle = Handle;
+		NetworkSync.Forget(handle);
+		mGameObject.Scene.Network?.[Friend]Unregister(handle);
 	}
 
 	public BodyState CaptureState()
@@ -476,45 +627,4 @@ class NetworkIdentity : Component
 				behaviour.RestorePredictionState(state);
 		}
 	}
-}
-
-/// Base class for networked gameplay scripts.
-///
-/// Put movement in Simulate: it runs on the server for every client input, and on the owning
-/// client immediately (prediction) and again when the server corrects it (replay). It must
-/// depend only on the input, the delta time and simulation state.
-[Component]
-abstract class NetworkBehaviour : Component
-{
-	public NetworkIdentity Identity => GetComponent<NetworkIdentity>();
-	public bool IsServer => Scene.Network == null || Scene.Network.IsServer;
-	public bool IsOwner
-	{
-		get
-		{
-			let identity = Identity;
-			return identity != null && identity.IsOwner;
-		}
-	}
-
-	/// Server, inside Simulate or Update: until EndLagCompensation, every other networked object is where this
-	/// object's player was seeing it when they gave the controls being run. Wrap the ray cast for a shot or a
-	/// swing in the pair, so that it is judged against what the player aimed at; deal the damage after ending.
-	/// Returns false and does nothing where it does not apply (no session, a client, the host's own player).
-	public bool BeginLagCompensation() => Scene.Network != null && Scene.Network.BeginLagCompensation(Identity);
-	public void EndLagCompensation() => Scene.Network?.EndLagCompensation();
-
-	/// Custom transform-based motors can store rewindable simulation state in the unused velocity slots.
-	/// Do not override slots owned by a Rigidbody or CharacterController on the same object.
-	public virtual void CapturePredictionState(ref BodyState state) { }
-	/// Extra motor metadata alongside an active body's actual velocities.
-	public virtual void CaptureBodyPredictionState(ref BodyState state) { }
-	/// Restore a motor/body mode before the transform and velocities are applied.
-	public virtual void PreparePredictionState(BodyState state) { }
-	public virtual void RestorePredictionState(BodyState state) { }
-
-	/// Called once per tick on the owning client to sample the local controls.
-	public virtual void GatherInput(ref NetInput input) { }
-	/// Advance this object by one tick using the given input.
-	public virtual void Simulate(NetInput input, float deltaTime) { }
 }

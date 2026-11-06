@@ -26,7 +26,7 @@ class BallLauncher : Script
 	public override void Update(TickInput input, float deltaTime)
 	{
 		let identity = GetComponent<NetworkIdentity>();
-		if (identity != null && Scene.Network != null && !identity.IsOwner)
+		if (identity.IsValid && Scene.Network != null && !identity.IsOwner)
 			return;
 		if (Input.GetKeyDown(fireKey))
 			Fire();

@@ -145,6 +145,9 @@ class LODGroupState
 	}
 
 	List<MeshRenderer> mRenderers = new .() ~ delete _;
+	// Each renderer's entity: a renderer whose object was destroyed (DestroyImmediate) is found out by its entity,
+	// whose id is never alive again, without touching the object, which is gone.
+	List<Entity> mEntities = new .() ~ delete _;
 	int32 mLevelCount = 1;
 	int mHierarchyHash;
 	// The last camera a level was picked for, and the level, so the renderers of one group agree cheaply.
@@ -156,17 +159,34 @@ class LODGroupState
 	/// How many levels it has (1 when it found none).
 	public int32 LevelCount => mLevelCount;
 	/// The renderers it controls.
-	public Span<MeshRenderer> Renderers => mRenderers;
+	public Span<MeshRenderer> Renderers { get { Prune(); return mRenderers; } }
+
+	/// Whether the i-th renderer is still there (its object not destroyed, the renderer not removed).
+	bool Has(int i) => mGameObject.Scene.World.IsAlive(mEntities[i]) && mRenderers[i];
+
+	// Its renderers that are still there; the others leave the lists.
+	void Prune()
+	{
+		for (int i = mRenderers.Count - 1; i >= 0; i--)
+		{
+			if (!Has(i))
+			{
+				mRenderers.RemoveAt(i);
+				mEntities.RemoveAt(i);
+			}
+		}
+	}
 
 	/// What OnUnregister did (the handle's OnRemove).
 	public void Unregister()
 	{
-		for (let renderer in mRenderers)
+		for (int i < mRenderers.Count)
 		{
-			if (renderer && renderer.LodGroup == this)
-				renderer.LodGroup = null;
+			if (Has(i) && mRenderers[i].LodGroup == this)
+				mRenderers[i].LodGroup = null;
 		}
 		mRenderers.Clear();
+		mEntities.Clear();
 	}
 
 	public void OnValidate()
@@ -201,12 +221,13 @@ class LODGroupState
 	{
 		mSettings = Settings;
 		mRefreshed = true;
-		for (let renderer in mRenderers)
+		for (int i < mRenderers.Count)
 		{
-			if (renderer && renderer.LodGroup == this)
-				renderer.LodGroup = null;
+			if (Has(i) && mRenderers[i].LodGroup == this)
+				mRenderers[i].LodGroup = null;
 		}
 		mRenderers.Clear();
+		mEntities.Clear();
 		mLevelCount = source == .Generated ? Math.Clamp(generatedLevels, 2, 4) : 1;
 		void Walk(Transform transform, int32 level)
 		{
@@ -221,6 +242,7 @@ class LODGroupState
 				renderer.LodGroup = this;
 				renderer.LodLevel = (int8)level;
 				mRenderers.Add(renderer);
+				mEntities.Add(transform.GameObject.Entity);
 				if (level >= 0)
 					mLevelCount = Math.Max(mLevelCount, level + 1);
 			}
@@ -237,6 +259,7 @@ class LODGroupState
 		{
 			let own = GameObject.GetComponent<MeshRenderer>();
 			bool hasZero = false;
+			Prune();
 			for (let renderer in mRenderers)
 				hasZero |= renderer.LodLevel == 0;
 			if (own && own.LodLevel < 0 && !hasZero)
@@ -252,6 +275,7 @@ class LODGroupState
 		get
 		{
 			var bounds = Bounds.Empty;
+			Prune();
 			for (let renderer in mRenderers)
 			{
 				if (renderer.LodLevel > 0 || !renderer.IsActiveAndEnabled)

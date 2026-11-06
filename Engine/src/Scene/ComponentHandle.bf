@@ -54,7 +54,7 @@ struct HandleDataAttribute : Attribute, IOnTypeInit
 /// `[HandleFields]` to have a property for every public field of its data, so that `light.intensity = 2` and
 /// `light.color.a = 0.5f` read as they did when Light was a class.
 [Reflect(.All)]
-struct ComponentHandle<TData> : IComponentHandle where TData : struct, new
+struct ComponentHandle<TData> : IComponentHandle, IHashable where TData : struct, new
 {
 	protected GameObject mGameObject;
 
@@ -74,6 +74,11 @@ struct ComponentHandle<TData> : IComponentHandle where TData : struct, new
 	public GameObject GameObject => mGameObject;
 	public Transform Transform => mGameObject.Transform;
 	public Scene Scene => mGameObject?.Scene;
+
+	/// Another component on the same object, as a class component's GetComponent.
+	public T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	public T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
+	public bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
 
 	/// The object exists and still has this component.
 	public bool IsValid => mGameObject != null && mGameObject.Scene != null && mGameObject.HasComponent<TData>();
@@ -110,8 +115,11 @@ struct ComponentHandle<TData> : IComponentHandle where TData : struct, new
 			if (world.IsEnabled(mGameObject.Entity, DataIndex) == value)
 				return;
 			world.Enable(mGameObject.Entity, DataIndex, value);
+			let info = HandleComponents.Find(DataIndex);
+			if (info.onSwitched != null && mGameObject.Scene.IsPlaying && mGameObject.ActiveInHierarchy)
+				info.onSwitched(mGameObject, value);
 			// In multiplayer, as Component.Enabled: the server's (or an owner's cosmetic) switch reaches everyone.
-			NetworkSync.HandleEnabledChanged(mGameObject, HandleComponents.Find(DataIndex), value);
+			NetworkSync.HandleEnabledChanged(mGameObject, info, value);
 		}
 	}
 
@@ -279,6 +287,40 @@ static class HandleComponents
 		/// The handle's `static void OnGUI(Scene)`, if it has one: GUI.Run calls it after the class components'.
 		public function void(Scene scene) onGUI;
 		public function void(GameObject gameObject) onLoaded;
+		/// The handle's `static void OnAdded(GameObject)`, if it has one: called as soon as the component is added
+		/// (AddComponent, a scene or prefab line, the Inspector), before a scene's saved fields are read, as a class
+		/// component's OnRegister (and, while playing, OnEnable) were.
+		public function void(GameObject gameObject) onAdded;
+		/// The handle's `static void OnSwitched(GameObject, bool on)`, if it has one: called while playing when the
+		/// component starts or stops counting as on (its object is switched on or off, `enabled` changes, play starts
+		/// or stops), where a class component got OnEnable and OnDisable. Not for adding or removing it (OnAdded,
+		/// OnRemove).
+		public function void(GameObject gameObject, bool on) onSwitched;
+	}
+
+	static List<Info> sSwitched ~ delete _;
+
+	/// The handles with an OnSwitched hook.
+	public static List<Info> Switched
+	{
+		get
+		{
+			if (sInfos == null)
+				Build();
+			return sSwitched;
+		}
+	}
+
+	/// Tells the object's switched-on handles with OnSwitched that they now count as on or off (the object was
+	/// switched on or off, or play started or stopped). Scene and GameObject call it while playing.
+	public static void NotifySwitched(GameObject gameObject, bool on)
+	{
+		let world = gameObject.Scene.World;
+		for (let info in Switched)
+		{
+			if (world.Has(gameObject.Entity, info.index) && world.IsEnabled(gameObject.Entity, info.index))
+				info.onSwitched(gameObject, on);
+		}
 	}
 
 	static List<Info> sInfos ~ DeleteContainerAndItems!(_);
@@ -298,6 +340,7 @@ static class HandleComponents
 	static void Build()
 	{
 		sInfos = new .();
+		sSwitched = new .();
 		sByHandle = new .();
 		sByIndex = new .();
 		for (let type in ScriptReload.ReflectedTypes)
@@ -335,6 +378,13 @@ static class HandleComponents
 				info.onSaving = (function void(GameObject))saving.Ptr;
 			if (type.GetMethod("OnLoaded", .Static | .Public | .NonPublic) case .Ok(let loaded))
 				info.onLoaded = (function void(GameObject))loaded.Ptr;
+			if (type.GetMethod("OnAdded", .Static | .Public | .NonPublic) case .Ok(let added))
+				info.onAdded = (function void(GameObject))added.Ptr;
+			if (type.GetMethod("OnSwitched", .Static | .Public | .NonPublic) case .Ok(let switched))
+			{
+				info.onSwitched = (function void(GameObject, bool))switched.Ptr;
+				sSwitched.Add(info);
+			}
 			for (let field in data.GetFields(.Public | .Instance))
 			{
 				if (let generic = field.FieldType as SpecializedGenericType)
@@ -418,7 +468,25 @@ static class HandleComponents
 		let data = world.Ensure(gameObject.Entity, info.index);
 		Internal.MemCpy(data, info.defaults.Ptr, info.defaults.Count);
 		OwnLists(data, info);
+		if (info.onAdded != null)
+		{
+			info.onAdded(gameObject);
+			// The hook may have added components, which moves the entity's data.
+			return world.Get(gameObject.Entity, info.index);
+		}
 		return data;
+	}
+
+	/// Switches the component on or off as `enabled` does, without telling the session (for a switch that came from
+	/// it): OnSwitched runs if it counts.
+	public static void SetEnabled(GameObject gameObject, Info info, bool on)
+	{
+		let world = gameObject.Scene.World;
+		if (world.IsEnabled(gameObject.Entity, info.index) == on)
+			return;
+		world.Enable(gameObject.Entity, info.index, on);
+		if (info.onSwitched != null && gameObject.Scene.IsPlaying && gameObject.ActiveInHierarchy)
+			info.onSwitched(gameObject, on);
 	}
 
 	/// Sets the component back to its default values.

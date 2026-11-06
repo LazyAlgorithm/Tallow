@@ -817,6 +817,12 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   it runs on RemoveComponent, on destroying the object, and when the scene's world ends. Engine code that keeps a
   handle across frames (Reflections' capture job) is told in the same hook, by World and entity, because the
   GameObject may be gone by then.
+  A handle that keeps other handles in a list must not test them with `if (handle)` once their object may have been
+  destroyed (the test reads the object): keep the entity too and check `World.IsAlive` first (LODGroupState).
+- **Being added, switched on and off:** `static void OnAdded(GameObject)` runs inside `HandleComponents.Add`, before
+  a scene's saved fields are read (a class's OnRegister, and OnEnable while playing); `static void OnSwitched
+  (GameObject, bool on)` runs while playing when the component starts or stops counting as on (SetActive,
+  `enabled`, play starting or stopping): a class's OnEnable / OnDisable. NetworkIdentity uses both (Phase 6).
 - **One per object:** Flecs keeps a component once per entity, so an object has at most one of each built-in
   component; AddComponent returns the one already there. No scene or prefab in the samples, the Gallery template or
   the projects under ~/TallowProjects and ~/TesseraProjects had two of the same built-in component on one object
@@ -1221,6 +1227,80 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   VoxelTerrain, Rope, SoftBody. Exit check: the Gallery (Showcase) self-test passes (`SHOWCASE_READY rooms=8`, no
   errors), with EcsBench checks, the editor's model, palette, separate-worlds and world-streaming tests. Colliders
   (from Phase 4): the project owner chose (a), they stay classes (2026-11-05).
+
+## Phase 6 progress
+
+### Baselines (2026-11-05)
+
+The network tests were taken out of the repo in 80213f07; they are kept outside it (by request) in
+`~/TallowEcsTests`, with `nettest.sh <engine root> <test> <out dir>` (CONFIG=Release for timing) and `main`'s output
+in `baseline-main/`:
+
+- `Network` (82 checks; `NetworkEcs` is the same test written for this branch: `Update(TickInput, float)`,
+  `CharacterController.SyncAll`, state classes, handle tests with `.IsValid`), `NetworkBandwidth` (31),
+  `PhysicsPrediction` (22).
+- `NetworkBytes` (new): a hash of every byte a server sends to two clients, then three, over 150 ticks of 64 props
+  (half of them bodies, moving, then resting), for each fixture profile (baseline exact quantized sleep rate budget
+  compressed all steam, set as Tumble Toys' NetworkValidation sets them). This is the 6a exit's "same bytes as
+  `main`".
+- `NetworkPerf` (new): the same with 2000 props, timing the server's SendSnapshots and the frame, plus a run with
+  no identities as a control.
+
+Before any 6a change, `main` (e9d87cdd) and this branch (6aa1c427) gave the same results on all of them.
+
+### 6a steps
+
+- [x] **NetworkIdentity is a handle** (`NetworkIdentityData`: format, interval, dormancy, distance filter,
+  priority, physics prediction, player control, owner, team, correction smoothing; `NetworkIdentityState`: the net
+  id, history, keys, prediction and smoothing state). `NetworkBehaviour` moved to its own file, unchanged.
+  - Two new handle hooks, found by reflection like the others: `static void OnAdded(GameObject)`, called by
+    `HandleComponents.Add` (AddComponent, a scene or prefab line, the Inspector) before saved fields are read, as
+    a class component's OnRegister was (and OnEnable while playing); and `static void OnSwitched(GameObject, bool
+    on)`, called while playing when the component starts or stops counting as on: `SetActive` (and its children),
+    `enabled`, a switch from the session (`HandleComponents.SetEnabled`), and play starting and stopping (the
+    scene goes through its objects in the order they were made, before the class components wake, and backwards
+    when play stops). Identities join the session at exactly the moments the class did, so `Identities` (the
+    order snapshots list objects in) and `mPartsIdLimit` are the same.
+  - `NetworkManager.IdentityStates` keeps each identity's state beside its handle, and the per-object loops of
+    the server (snapshots, PostTick) use it; a state converts to its handle implicitly. Settings are read once per
+    record. The snapshot order is computed once per candidate rather than in every comparison (the order is total,
+    by NetId, so the result is the same).
+  - `ComponentHandle` gained `GetComponent<T>` / `HasComponent<T>` (the object's) and `IHashable` (handles are
+    dictionary keys: NetworkSync's slots). Offline networked Update (`TickUpdatesOffline`) and
+    `RegisterSceneIdentities` go through the scene's objects in order, as the class registry did.
+  - An identity's own on/off switch is not sent to other machines (as before; `is NetworkIdentity` tests on class
+    components, now always false, were removed). WorldStreaming keeps cells with identities by `HasComponent`.
+  - A wire detail: `team`'s [Sync] slot now comes after the class components' [Sync] fields (handles' fields are
+    listed after the classes'). Both ends run the same engine, so this only matters to a recording.
+  - Fixed while here: `LODGroup` kept MeshRenderer handles of LOD children that `DestroyImmediate` freed, and its
+    next Refresh read the freed object (the editor's `--model-test` crashed, also before this change). It keeps
+    each renderer's entity and checks `World.IsAlive` before touching one. **The model test had been run on a
+    scratch copy of MyGame whose engine path pointed at another worktree** (tallow-rename-continue), so the Phase
+    5 notes saying it passed were not about this branch; it and the other three editor tests are now run in a
+    fresh project made by this branch's launcher (`--create`), where all four pass.
+  - Sandbox's FollowCamera and BallLauncher and ProjectGenerator's camera script tested `identity != null`, which
+    is always true for a handle and so asserted on objects without one in a session: `identity.IsValid`.
+  - Checked: `NetworkEcs` 82, `NetworkBandwidth` 31, `PhysicsPrediction` 22, all the same as `main`, and
+    `NetworkBytes` identical for all nine profiles (also at 2000 props); `EcsChecks.NetworkIdentityChecks` (joins
+    at play and at once when added during play, in order; leaves and joins as its object or itself is switched;
+    removed, destroyed, play stopping; settings saved and read; corrections eased and drawn); EcsBench checks;
+    Gallery self-test; editor model, palette, separate-worlds and world-streaming tests.
+  - Timing (Release, 2000 props, 3 clients, 150 ticks; SendSnapshots ms, `main` / this branch):
+    baseline 94 / 103, quantized 63 / 82, all 81 / 90. Before the state list and hoisting it was 123 / 177 / 177.
+    What is left is mostly handle lookups in CaptureState (the Rigidbody's). The identities' per-frame easing costs
+    about 2 ms over the 150 frames, against 5 ms for the class's OnFrame (most identities have nothing to ease and
+    are skipped).
+  - **Found, not networking:** a frame with 2000 objects (1000 of them bodies) and no identities costs 25 ms over
+    150 frames on this branch against 0 on `main`: the handles' FrameAll passes (each builds a list of its
+    components every frame). To look at in the performance pass.
+  - Games that update: `GetComponent<NetworkIdentity>() == null` / `!= null` (use `.IsValid`), `?.` on an
+    identity, `as` / `is NetworkIdentity`, `NetworkIdentity x = null` (use `default`), `FindIdentity` returning
+    an invalid handle, not null. Build with `-verbosity=normal` and grep BF0472 to find the tests.
+- [ ] Column snapshots (snapshot fields read from the identities' data in Flecs order rather than object by object).
+- [ ] Rollback through the fixed pipeline with the networked Update on top.
+- [ ] Lag compensation and host migration checked on the handles (the migration code is ported and compiles; no
+  test of it ran yet on this branch).
+- [ ] Networked Showcase exhibits (the 6a exit).
 
 ## Benchmark results
 

@@ -166,7 +166,7 @@ abstract class NetworkScript : NetworkBehaviour
 	public override void Awake()
 	{
 		// Update runs per tick, networked, only on objects with an identity.
-		if (GetComponent<NetworkIdentity>() == null)
+		if (!GetComponent<NetworkIdentity>().IsValid)
 			GameObject.AddComponent<NetworkIdentity>();
 	}
 

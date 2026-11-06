@@ -33,7 +33,7 @@ extension NetworkManager
 	/// short and free of side effects: find out what was hit, end, then deal the damage.
 	public bool BeginLagCompensation(NetworkIdentity forObject)
 	{
-		if (!IsServer || mRewound || forObject == null || forObject.ownerId <= 0 || forObject.ownerId != mSimulatingClient)
+		if (!IsServer || mRewound || !forObject.IsValid || forObject.ownerId <= 0 || forObject.ownerId != mSimulatingClient)
 			return false;
 		let view = Math.Max(mSimulatingView, (double)mTick - Math.Max(MaxRewindTicks, 0));
 		if (view >= (double)mTick)
