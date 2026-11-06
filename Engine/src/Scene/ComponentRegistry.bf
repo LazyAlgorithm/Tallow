@@ -36,6 +36,8 @@ struct FieldRef
 	public void* ptr;
 	public Type type;
 	public bool hidden;
+	/// Marked [Advanced]: drawn under the Inspector's Advanced foldout.
+	public bool advanced;
 	/// Marked [Sync]: shared from the server to clients.
 	public bool sync;
 	public bool hasRange;
@@ -352,6 +354,7 @@ static class ComponentRegistry
 				fieldRef.type = fieldType;
 				fieldRef.ptr = (void*)(int)field.MemberOffset;
 				fieldRef.hidden = field.GetCustomAttribute<HideInInspectorAttribute>() case .Ok;
+				fieldRef.advanced = field.GetCustomAttribute<AdvancedAttribute>() case .Ok;
 				fieldRef.sync = field.GetCustomAttribute<SyncAttribute>() case .Ok;
 				fieldRef.isLayer = field.GetCustomAttribute<LayerAttribute>() case .Ok;
 				fieldRef.saved = field.GetCustomAttribute<SavedAttribute>() case .Ok;

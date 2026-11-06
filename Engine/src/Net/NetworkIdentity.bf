@@ -6,7 +6,13 @@ namespace Tallow;
 [Reflect(.All)]
 enum RemoteSnapshotFormat : int32
 {
-	Legacy, ExactTransform, QuantizedTransform,
+	/// The packed transform (2 mm steps, two bytes of turn while upright): the smallest record for most things, and
+	/// what Automatic uses for players and moving objects.
+	Legacy,
+	/// Exact floats.
+	ExactTransform,
+	/// Finer steps (0.1 mm) and a full rotation.
+	QuantizedTransform,
 	/// A physics body shown in the past, with how it is moving: a finely packed position and rotation plus both
 	/// velocities, about a third of the size of a full record. For many small bodies clients only watch.
 	QuantizedBody }
@@ -24,23 +30,53 @@ enum PhysicsPrediction : int32
 	Off
 }
 
+/// What the engine takes an object to be when it chooses how to share it (NetworkIdentity.automatic), shown in the
+/// network panel.
+[Reflect(.All)]
+enum NetworkObjectKind : int32
+{
+	/// A player's character: packed transforms to everyone else (2 mm steps, two bytes of turn while upright), sent
+	/// first.
+	Player,
+	/// A dynamic Rigidbody nobody controls: QuantizedBody, quiet while it sleeps, near players only (when the
+	/// session has a relevance radius).
+	Body,
+	/// Anything else that moves (doors, platforms, NPCs): packed transforms, near players only. One that never
+	/// moves costs nothing after it is spawned, as an unchanged object is not sent.
+	Moving,
+	/// Automatic is off: the settings are used as they are.
+	AsSet
+}
+
 /// A NetworkIdentity's settings, in its entity (NetworkIdentity is the handle).
 [Component, HandleData]
 struct NetworkIdentityData
 {
+	/// On: the engine chooses the format, dormancy, relevance and priority below from what is on the object (a
+	/// player, a physics body, something else that moves), for each one still at its default; one set by hand is
+	/// kept. The network panel shows what it chose and why. Off: the settings below are used exactly as they are.
+	[Advanced]
+	public bool automatic = true;
 	/// Send exact transform/body snapshots for small or precision-sensitive objects.
+	[Advanced]
 	public bool fullPrecision = default;
 	/// Remote snapshot format only; the owning client's prediction always receives exact BodyState.
+	[Advanced]
 	public RemoteSnapshotFormat remoteFormat = .Legacy;
 	/// Minimum server ticks between remote updates; zero uses the session snapshot interval.
+	[Advanced]
 	public int32 remoteIntervalTicks = default;
 	/// Suppress periodic sleeping refreshes after a reliable final transform. Off by default.
+	[Advanced]
 	public bool dormantWhenSleeping = default;
 	/// Distance filtering applies only to objects opting in. Zero session radius disables it.
+	[Advanced]
 	public bool distanceFiltered = default;
 	/// Higher values are serviced first when a session has a bandwidth budget.
+	[Advanced]
 	public int32 snapshotPriority = default;
 	/// Whether clients simulate this body themselves while the server owns it (NetworkManager.PredictPhysics).
+	[Advanced]
 	public PhysicsPrediction physicsPrediction = .Auto;
 	/// Whether a player controls this object: its scripts' Update gets that player's controls. Off for things the
 	/// server runs by itself (NPCs, projectiles), whose Update gets empty controls even on a host. Objects the
@@ -54,6 +90,7 @@ struct NetworkIdentityData
 	[Sync]
 	public int32 team = default;
 	/// How quickly corrections are blended out (per second).
+	[Advanced]
 	public float correctionSmoothing = 12.0f;
 
 	public this() { }
@@ -211,7 +248,54 @@ class NetworkIdentityState
 	public const int HistorySize = 128;
 	BodyState mSentFull;
 	bool mSentAsleep;
-	public bool SnapshotSleeping => dormantWhenSleeping && GetComponent<Rigidbody>().IsSleeping;
+	public bool SnapshotSleeping => Chosen.dormantWhenSleeping && GetComponent<Rigidbody>().IsSleeping;
+
+	/// Server: the settings snapshots use, worked out by Choose each snapshot (the identity's own settings when
+	/// automatic is off), and what the engine took the object to be.
+	[NonSerialized]
+	public NetworkIdentityData Chosen;
+	[NonSerialized]
+	public NetworkObjectKind ChosenKind = .AsSet;
+
+	/// Server: works out Chosen from the object as it is now (NetworkIdentityData.automatic). Only settings left at
+	/// their defaults are chosen: one set by hand (in the Inspector or from code) is kept.
+	public void Choose(NetworkManager network)
+	{
+		Chosen = Settings;
+		if (!Chosen.automatic)
+		{
+			ChosenKind = .AsSet;
+			return;
+		}
+		RemoteSnapshotFormat format;
+		bool dormant, near;
+		int32 priority;
+		let body = GetComponent<Rigidbody>();
+		if (Chosen.ownerId != 0 || (!PrefabName.IsEmpty && PrefabName == network.PlayerPrefab))
+		{
+			ChosenKind = .Player;
+			(format, dormant, near, priority) = (.Legacy, false, false, 1);
+		}
+		else if (body.IsValid && !body.isKinematic)
+		{
+			ChosenKind = .Body;
+			// Quiet while it sleeps only when clients do not predict it: a predicted body at rest is mentioned now
+			// and then, which is how a client that stopped predicting it (a script moved it, prediction was off)
+			// takes it up again.
+			(format, dormant, near, priority) = (.QuantizedBody, !(network.PredictPhysics && CanPredictPhysics), true, 0);
+		}
+		else
+		{
+			ChosenKind = .Moving;
+			(format, dormant, near, priority) = (.Legacy, false, true, 0);
+		}
+		if (Chosen.remoteFormat == .Legacy)
+			Chosen.remoteFormat = format;
+		Chosen.dormantWhenSleeping |= dormant;
+		Chosen.distanceFiltered |= near;
+		if (Chosen.snapshotPriority == 0)
+			Chosen.snapshotPriority = priority;
+	}
 
 
 
@@ -419,7 +503,7 @@ class NetworkIdentityState
 			PhysicsPredictable = predictable;
 			mSentOnce = false;
 		}
-		if (fullPrecision || predictable)
+		if (Chosen.fullPrecision || predictable)
 		{
 			let exact = CaptureState();
 			let asleep = predictable && GetComponent<Rigidbody>().IsSleeping;
@@ -559,6 +643,7 @@ class NetworkIdentityState
 		mJoined = true;
 		if (NetId == 0)
 			NetId = mGameObject.Id;
+		Chosen = Settings;
 		mGameObject.Scene.Network?.[Friend]Register(Handle);
 	}
 

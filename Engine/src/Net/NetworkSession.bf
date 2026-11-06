@@ -13,28 +13,37 @@ class NetworkSession : Component
 	public NetworkTransportKind transport = .Direct;
 	/// Steam App ID to use when Transport is Steam. 0 uses the one in Project Settings, or Valve's public test
 	/// app (480) if the project has none.
+	[Advanced]
 	public int32 steamAppId = 0;
 	/// Who to join when Mode is Client: an IP address, or the host's Steam ID when Transport is Steam.
 	public String address = new .("127.0.0.1") ~ delete _;
 	public int32 port = 7777;
 	/// Name passed to NetworkManager.RegisterPrefab; spawned once per player.
 	public String playerPrefab = new .("Player") ~ delete _;
+	[Advanced]
 	public int32 snapshotInterval = 3;
 	/// Optional remote snapshot batching and per-identity bandwidth controls.
-	public bool optimizeSnapshots;
+	[Advanced]
+	public bool optimizeSnapshots = true;
+	[Advanced]
 	public int32 snapshotPacketBytes = 1100;
 	/// Per-client snapshot application payload budget; zero is unlimited.
+	[Advanced]
 	public int32 snapshotBytesPerSecond;
 	/// Only distanceFiltered identities use this radius. Zero disables relevance filtering.
+	[Advanced]
 	public float snapshotRelevanceRadius;
 	/// Lossless packet compression. Direct ENet requires it on every peer; Steam/WebRTC use message frames.
-	public bool losslessCompression;
+	[Advanced]
+	public bool losslessCompression = true;
+	[Advanced]
 	public bool messageCompression;
 	/// Share joining players out among this many teams, each going to the smallest. 0 for no teams. A player's
 	/// team is on their Network Identity, and they appear at Spawn Points for that team.
 	public int32 teamCount = 0;
 	/// Share scene objects that move on their own (physics bodies, AI, character controllers) without each needing
 	/// a Network Identity added by hand.
+	[Advanced]
 	public bool autoReplicate = true;
 
 	/// Set by the application from the command line; .Offline means "use the component's mode".

@@ -343,7 +343,7 @@ extension NetworkManager
 	}
 
 	void WriteSnapshotRecord(NetWriter writer, NetworkIdentityState identity, int32 clientId) =>
-		WriteSnapshotRecord(writer, identity, *identity.GameObject.GetComponent<NetworkIdentityData>(), clientId);
+		WriteSnapshotRecord(writer, identity, identity.Chosen, clientId);
 
 	void WriteSnapshotRecord(NetWriter writer, NetworkIdentityState identity, NetworkIdentityData settings, int32 clientId)
 	{
@@ -421,10 +421,11 @@ extension NetworkManager
 		mSnapshotRecords.Clear();
 		for (let identity in mIdentityStates)
 		{
+			identity.Choose(this);
 			identity.NoteSnapshot(mSnapshotNumber, true, PredictPhysics);
 			SnapshotRow row = default;
 			row.identity = identity;
-			row.settings = *identity.GameObject.GetComponent<NetworkIdentityData>();
+			row.settings = identity.Chosen;
 			row.position = identity.Transform.Position;
 			row.netId = identity.NetId;
 			row.changedAt = identity.ChangedAt;
@@ -451,12 +452,9 @@ extension NetworkManager
 				}
 				SnapshotDelivery sent = default;
 				let known = client.delivered.TryGetValue(row.netId, out sent);
-				if (own)
-				{
-					candidates.Add(i);
-					continue;
-				}
-				if (known && mTick - sent.tick < (uint32)Math.Max(row.settings.remoteIntervalTicks, SnapshotInterval)) continue;
+				// Its own objects go every snapshot while they change (what its prediction is checked against), then a
+				// few times more and at the refresh rate, as the full snapshot sends them.
+				if (!own && known && mTick - sent.tick < (uint32)Math.Max(row.settings.remoteIntervalTicks, SnapshotInterval)) continue;
 				let changed = !known || sent.change != row.changedAt || sent.dormant != row.sleeping;
 				let refresh = !row.sleeping && mTick - sent.tick >= (uint32)(Math.Max(SnapshotInterval, 1) * (int32)RefreshEvery);
 				if (changed || sent.repeats < (int32)SnapshotRepeats || refresh)
@@ -480,7 +478,7 @@ extension NetworkManager
 				});
 			BeginSnapshotPacket(client);
 			int count = 0, spent = 0;
-			bool reliable = false, containsOwned = false;
+			bool reliable = false;
 			let limit = Math.Clamp(SnapshotPacketBytes, 256, 1200);
 			let budget = SnapshotBytesPerSecond > 0 ? Math.Max(128, (int)((int64)SnapshotBytesPerSecond * Math.Max(SnapshotInterval, 1) / Math.Max(Time.TickRate, 1))) : int.MaxValue;
 			for (let key in keys)
@@ -489,9 +487,10 @@ extension NetworkManager
 				let row = ref mSnapshotRows[key.row];
 				let own = key.own;
 				let dormant = !own && row.sleeping;
-				// One coherent correction for all owned objects: replay must not advance them once per chunk.
-				// Exceptional large ownership groups retain legacy fragmentation rather than replaying twice.
-				let flush = count > 0 && (!own && (containsOwned || mWriter.Data.Count + record.Length > limit) || reliable != dormant);
+				// One coherent correction for all owned objects: replay must not advance them once per chunk, so they all
+				// go first and in one packet (an exceptionally large group goes over the limit rather than in two).
+				// Others follow in the same packet while they fit.
+				let flush = count > 0 && (!own && mWriter.Data.Count + record.Length > limit || reliable != dormant);
 				let cost = record.Length + ((count == 0 || flush) ? 13 : 0);
 				if (!own && spent + cost > budget) continue;
 				if (flush)
@@ -499,10 +498,8 @@ extension NetworkManager
 					FlushSnapshotPacket(client, count, reliable);
 					BeginSnapshotPacket(client);
 					count = 0;
-					containsOwned = false;
 				}
 				reliable = dormant;
-				containsOwned |= own;
 				mWriter.Data.AddRange(record);
 				count++;
 				spent += cost;
@@ -546,7 +543,10 @@ extension NetworkManager
 		}
 		mSnapshotNumber++;
 		for (let identity in mIdentityStates)
+		{
+			identity.Choose(this);
 			identity.NoteSnapshot(mSnapshotNumber, false, PredictPhysics);
+		}
 		for (let client in mClients)
 		{
 			mWriter.Clear();
@@ -567,7 +567,7 @@ extension NetworkManager
 				if (!everything && mSnapshotNumber - identity.ChangedAt >= SnapshotRepeats && (mSnapshotNumber + identity.NetId) % RefreshEvery != 0)
 					continue;
 				WriteId(identity.NetId);
-				if (identity.ownerId == client.id || identity.fullPrecision)
+				if (identity.ownerId == client.id || identity.Chosen.fullPrecision)
 				{
 					// Their own objects go exactly, velocity and all: this is what their prediction is checked against.
 					mWriter.Write(NetPack.FlagFull);

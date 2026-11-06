@@ -397,8 +397,9 @@ class NetworkManager
 	public String PlayerPrefab = new .() ~ delete _;
 	/// Server ticks between snapshots: 3 gives 20 snapshots per second at 60 ticks.
 	public int32 SnapshotInterval = 3;
-	/// Optional packet batching, remote formats, rates, dormancy and relevance. Legacy behaviour by default.
-	public bool OptimizeSnapshots;
+	/// Packet batching, remote formats, rates, dormancy and relevance (on by default; off sends the older full
+	/// snapshot of everything that changed to each client).
+	public bool OptimizeSnapshots = true;
 	/// Optional CPU timing of snapshot encoding and decoding, independent of frame pacing.
 	public bool ProfileSnapshots;
 	/// With ProfileSnapshots on: time spent building and reading snapshots, in total and at worst.
@@ -412,7 +413,7 @@ class NetworkManager
 	/// World-unit radius around each client's player, for distanceFiltered identities. Zero disables.
 	public float SnapshotRelevanceRadius;
 	/// Lossless compression: native ENet coder for Direct; independent message frames for Steam/WebRTC.
-	public bool LosslessCompression;
+	public bool LosslessCompression = true;
 	/// Force transport-independent lossless frames (also useful for testing Steam's message path over Direct).
 	public bool MessageCompression;
 	/// ENet UDP payload totals, including transport headers, retransmissions and compression.

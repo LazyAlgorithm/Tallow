@@ -1387,6 +1387,35 @@ Before any 6a change, `main` (e9d87cdd) and this branch (6aa1c427) gave the same
 **6a exit: met (2026-11-05).** Networked Showcase exhibits pass, and NetworkBytes gives `main`'s bytes for all
 nine profiles.
 
+### 6b steps
+
+- [x] **Automatic per-object choices and Advanced foldouts** (2026-11-05).
+  - `NetworkIdentityData.automatic` (on by default): each snapshot the server works out the settings it uses
+    (`NetworkIdentityState.Choose` into `Chosen`, with `ChosenKind`) from what is on the object. A player's
+    object (owned by a client, or spawned from the player prefab): packed transform, sent first. A dynamic
+    Rigidbody: `QuantizedBody`, distance relevance, and dormant while asleep unless clients predict it (a
+    predicted body at rest has to be mentioned now and then, or a client that stopped predicting it never takes
+    it up again: PhysicsPrediction found this). Anything else: packed transform, distance relevance. Only
+    settings left at their defaults are chosen; one set by hand is kept, so code that sets `remoteIntervalTicks`
+    keeps working (NetworkBandwidth found this). Off: the settings exactly as set.
+  - The packed transform (`Legacy`: 2 mm steps, a two-byte turn while upright) is what players and movers get,
+    not `QuantizedTransform` as the table above said: it is never larger, and smaller for upright things (the
+    running-players check measured it).
+  - `OptimizeSnapshots` and `LosslessCompression` are on by default (NetworkManager and NetworkSession).
+  - The optimized send now treats a client's own objects like the rest (sent while they change, a few times
+    more, then at the refresh rate; it sent them every snapshot) and lets other records share their packet while
+    they fit (it always began a new one). Idle traffic to a client in the Network suite: 340 bytes a second on
+    `main`, 1980 with the optimized path as it was, 260 now; two players running: 2141 on `main`, 2221 now.
+  - `[Advanced]` (new attribute): the Inspector draws such fields under a closed Advanced foldout. Every
+    Network Identity setting but Player Controlled, and the Network Session's tuning, are Advanced.
+  - Checked: NetworkBytesEcs (the nine profiles with `automatic = false` give `main`'s bytes; a tenth, `auto`,
+    with nothing set: 72,105 bytes against 547,798 for `baseline` and 48,020 for the hand-tuned `all`),
+    Network, NetworkBandwidth, PhysicsPrediction, Voice, HostMigration, AntiCheat, Water, Maps, Decals,
+    Dialogue, Sequencer, SpawnPoints, ScriptCatalog.
+- [ ] Network panel: what was chosen and why, bytes per client.
+- [ ] Self-tuning: input delay, snapshot budget, interpolation delay.
+- [ ] Exit: a new project with a networked player and a pile of crates, nothing set by hand.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

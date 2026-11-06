@@ -20,6 +20,37 @@ extension EditorApp
 		return true;
 	}
 
+	/// A component's fields: the ordinary ones, then any marked [Advanced] under a foldout that starts closed.
+	bool DrawFieldList(List<FieldRef> fields, StringView id)
+	{
+		bool changed = false, anyAdvanced = false;
+		if (fields.Count > 0 && BeginPropertyTable(scope String(id)))
+		{
+			for (let field in fields)
+			{
+				if (field.advanced)
+					anyAdvanced |= !field.hidden;
+				else if (!field.hidden)
+					changed |= DrawField(field);
+			}
+			ImGui.EndTable();
+		}
+		if (anyAdvanced && ImGui.TreeNode(scope $"Advanced###{id}advanced"))
+		{
+			if (BeginPropertyTable(scope $"{id}advancedtable"))
+			{
+				for (let field in fields)
+				{
+					if (field.advanced && !field.hidden)
+						changed |= DrawField(field);
+				}
+				ImGui.EndTable();
+			}
+			ImGui.TreePop();
+		}
+		return changed;
+	}
+
 	bool BeginPropertyTable(char8* id)
 	{
 		if (!ImGui.BeginTable(id, 2, ImGui.TableFlags.SizingStretchProp))
@@ -320,15 +351,7 @@ extension EditorApp
 		fields.Clear();
 		HandleComponents.GetFields(gameObject, info, fields);
 		bool changed = false;
-		if (fields.Count > 0 && BeginPropertyTable("handlefields"))
-		{
-			for (let field in fields)
-			{
-				if (!field.hidden)
-					changed |= DrawField(field);
-			}
-			ImGui.EndTable();
-		}
+		changed |= DrawFieldList(fields, "handlefields");
 		if (changed)
 		{
 			MarkDirty();
@@ -444,15 +467,7 @@ extension EditorApp
 		fields.Clear();
 		DataComponents.GetFields(info.type, gameObject.GetData(info.type), fields, gameObject);
 		bool changed = false;
-		if (fields.Count > 0 && BeginPropertyTable("datafields"))
-		{
-			for (let field in fields)
-			{
-				if (!field.hidden)
-					changed |= DrawField(field);
-			}
-			ImGui.EndTable();
-		}
+		changed |= DrawFieldList(fields, "datafields");
 		if (changed)
 			MarkDirty();
 		return false;
@@ -566,15 +581,7 @@ extension EditorApp
 		fields.Clear();
 		ComponentRegistry.GetFields(component, fields);
 		bool changed = false;
-		if (fields.Count > 0 && BeginPropertyTable("fields"))
-		{
-			for (let field in fields)
-			{
-				if (!field.hidden)
-					changed |= DrawField(field);
-			}
-			ImGui.EndTable();
-		}
+		changed |= DrawFieldList(fields, "fields");
 		if (changed)
 		{
 			component.OnValidate();

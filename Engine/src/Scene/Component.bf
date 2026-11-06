@@ -25,6 +25,12 @@ struct HideInInspectorAttribute : Attribute
 {
 }
 
+/// Show a field under the Inspector's closed Advanced foldout: an optional override whose default suits most games.
+[AttributeUsage(.Field, .ReflectAttribute)]
+struct AdvancedAttribute : Attribute
+{
+}
+
 /// Keep a public field out of scene files and the Inspector.
 [AttributeUsage(.Field, .ReflectAttribute)]
 struct NonSerializedAttribute : Attribute
