@@ -1296,7 +1296,17 @@ Before any 6a change, `main` (e9d87cdd) and this branch (6aa1c427) gave the same
   - Games that update: `GetComponent<NetworkIdentity>() == null` / `!= null` (use `.IsValid`), `?.` on an
     identity, `as` / `is NetworkIdentity`, `NetworkIdentity x = null` (use `default`), `FindIdentity` returning
     an invalid handle, not null. Build with `-verbosity=normal` and grep BF0472 to find the tests.
-- [ ] Column snapshots (snapshot fields read from the identities' data in Flecs order rather than object by object).
+- [x] **Column snapshots** (2026-11-05). The optimized send (every profile but `baseline`) reads what it needs of
+  each identity once per tick into a row (`SnapshotRow`: its `NetworkIdentityData`, position, net id, change
+  number, whether it rests) instead of once per client, and writes each record at most twice a tick, for the
+  object's owner and for everyone else, copying the bytes into each client's packets (a record depends on the
+  client only through who owns the object). Rows are in registration order, not Flecs order: snapshot order is
+  part of the bytes. NetworkBytes the same as `main` for all nine profiles; Network, NetworkBandwidth and
+  PhysicsPrediction too. NetworkPerf (2000 props, 2 clients, Release, three interleaved runs, send ms):
+  quantized 74-78 (main 63-64, this branch before 82), all 75-80 (main 80-82, before 90), baseline 99-105 (main
+  92-93; that path is unchanged). Left for 6b: quantized is still slower than `main` (the body and transform reads
+  through handles); the frames with no network work (the `noid` control: 25 ms over the run against 0) are the
+  FrameAll item above.
 - [x] **Rollback through the fixed pipeline.** A tick is now Tick.Starts (its own pipeline, `TickStart`), then the
   network's receive (`NetworkManager.PreTick`, called from `Scene.FixedUpdate` between pipelines), then
   `TickPipeline`. The receive left the pipeline because a correction rewinds and replays ticks, and Flecs keeps one

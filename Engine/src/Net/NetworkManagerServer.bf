@@ -342,10 +342,11 @@ extension NetworkManager
 		NetPack.WriteBody(writer, body.State, body.IsSleeping);
 	}
 
-	void WriteSnapshotRecord(NetWriter writer, NetworkIdentityState identity, int32 clientId)
+	void WriteSnapshotRecord(NetWriter writer, NetworkIdentityState identity, int32 clientId) =>
+		WriteSnapshotRecord(writer, identity, *identity.GameObject.GetComponent<NetworkIdentityData>(), clientId);
+
+	void WriteSnapshotRecord(NetWriter writer, NetworkIdentityState identity, NetworkIdentityData settings, int32 clientId)
 	{
-		// Its settings read once (a copy: nothing here adds or removes components).
-		let settings = *identity.GameObject.GetComponent<NetworkIdentityData>();
 		WriteNetId(writer, identity.NetId);
 		let flagsAt = writer.Data.Count;
 		// A body set to be predicted (physicsPrediction On) is, whatever its other snapshot settings.
@@ -370,59 +371,106 @@ extension NetworkManager
 			writer.Data[flagsAt] |= NetPack.FlagSleeping;
 	}
 
-	struct SnapshotOrder
+	/// What a snapshot needs of one identity this tick, read once for every client: its settings, where it is,
+	/// whether it rests, and its record as it goes to its owner and to everyone else (each written the first time
+	/// a client needs it; a record depends on the client only through who owns the object).
+	struct SnapshotRow
 	{
 		public NetworkIdentityState identity;
+		public NetworkIdentityData settings;
+		public Vector3 position;
+		public uint32 netId;
+		public uint32 changedAt;
+		public bool sleeping;
+		public int32 ownAt, ownLength, otherAt, otherLength;
+	}
+
+	struct SnapshotOrder
+	{
+		public int32 row;
 		public bool own;
 		public int32 priority;
 		public uint32 tick;
 		public uint32 netId;
 	}
 
+	List<SnapshotRow> mSnapshotRows = new .() ~ delete _;
+	NetWriter mSnapshotRecords = new .() ~ delete _;
+
+	/// A row's record for a client, written into mSnapshotRecords the first time it is asked for.
+	Span<uint8> SnapshotRecord(int32 index, int32 clientId)
+	{
+		ref SnapshotRow row = ref mSnapshotRows[index];
+		let own = row.settings.ownerId == clientId;
+		if ((own ? row.ownLength : row.otherLength) < 0)
+		{
+			let at = (int32)mSnapshotRecords.Data.Count;
+			// Anyone but the owner: an id no client has.
+			WriteSnapshotRecord(mSnapshotRecords, row.identity, row.settings, own ? clientId : -2);
+			let length = (int32)mSnapshotRecords.Data.Count - at;
+			if (own) { row.ownAt = at; row.ownLength = length; }
+			else { row.otherAt = at; row.otherLength = length; }
+		}
+		return own ? .(mSnapshotRecords.Data.Ptr + row.ownAt, row.ownLength) : .(mSnapshotRecords.Data.Ptr + row.otherAt, row.otherLength);
+	}
+
 	void SendOptimizedSnapshots()
 	{
 		mSnapshotNumber++;
+		mSnapshotRows.Clear();
+		mSnapshotRecords.Clear();
 		for (let identity in mIdentityStates)
+		{
 			identity.NoteSnapshot(mSnapshotNumber, true, PredictPhysics);
-		let record = scope NetWriter();
-		let candidates = scope List<NetworkIdentityState>();
+			SnapshotRow row = default;
+			row.identity = identity;
+			row.settings = *identity.GameObject.GetComponent<NetworkIdentityData>();
+			row.position = identity.Transform.Position;
+			row.netId = identity.NetId;
+			row.changedAt = identity.ChangedAt;
+			row.sleeping = row.settings.dormantWhenSleeping && identity.GetComponent<Rigidbody>().IsSleeping;
+			row.ownLength = row.otherLength = -1;
+			mSnapshotRows.Add(row);
+		}
+		let candidates = scope List<int32>();
 		let keys = scope List<SnapshotOrder>();
 		for (let client in mClients)
 		{
 			let player = PlayerObject(client.id);
+			let playerAt = player != null ? player.Transform.Position : Vector3.Zero;
 			candidates.Clear();
-			for (let identity in mIdentityStates)
+			for (int32 i < (int32)mSnapshotRows.Count)
 			{
-				let settings = *identity.GameObject.GetComponent<NetworkIdentityData>();
-				let own = settings.ownerId == client.id;
-				if (!own && settings.distanceFiltered && SnapshotRelevanceRadius > 0 && player != null &&
-					(identity.Transform.Position - player.Transform.Position).LengthSquared > SnapshotRelevanceRadius * SnapshotRelevanceRadius)
+				let row = ref mSnapshotRows[i];
+				let own = row.settings.ownerId == client.id;
+				if (!own && row.settings.distanceFiltered && SnapshotRelevanceRadius > 0 && player != null &&
+					(row.position - playerAt).LengthSquared > SnapshotRelevanceRadius * SnapshotRelevanceRadius)
 				{
-					client.delivered.Remove(identity.NetId);
+					client.delivered.Remove(row.netId);
 					continue;
 				}
 				SnapshotDelivery sent = default;
-				let known = client.delivered.TryGetValue(identity.NetId, out sent);
+				let known = client.delivered.TryGetValue(row.netId, out sent);
 				if (own)
 				{
-					candidates.Add(identity);
+					candidates.Add(i);
 					continue;
 				}
-				if (known && mTick - sent.tick < (uint32)Math.Max(settings.remoteIntervalTicks, SnapshotInterval)) continue;
-				let sleeping = settings.dormantWhenSleeping && identity.GetComponent<Rigidbody>().IsSleeping;
-				let changed = !known || sent.change != identity.ChangedAt || sent.dormant != sleeping;
-				let refresh = !sleeping && mTick - sent.tick >= (uint32)(Math.Max(SnapshotInterval, 1) * (int32)RefreshEvery);
+				if (known && mTick - sent.tick < (uint32)Math.Max(row.settings.remoteIntervalTicks, SnapshotInterval)) continue;
+				let changed = !known || sent.change != row.changedAt || sent.dormant != row.sleeping;
+				let refresh = !row.sleeping && mTick - sent.tick >= (uint32)(Math.Max(SnapshotInterval, 1) * (int32)RefreshEvery);
 				if (changed || sent.repeats < (int32)SnapshotRepeats || refresh)
-					candidates.Add(identity);
+					candidates.Add(i);
 			}
 			// Ownership, explicit priority, then age. Stable id breaks ties so every client is deterministic. Each
 			// candidate's place is worked out once, not in every comparison.
 			keys.Clear();
-			for (let identity in candidates)
+			for (let i in candidates)
 			{
+				let row = ref mSnapshotRows[i];
 				SnapshotDelivery sent = default;
-				client.delivered.TryGetValue(identity.NetId, out sent);
-				keys.Add(.() { identity = identity, own = identity.ownerId == client.id, priority = identity.snapshotPriority, tick = sent.tick, netId = identity.NetId });
+				client.delivered.TryGetValue(row.netId, out sent);
+				keys.Add(.() { row = i, own = row.settings.ownerId == client.id, priority = row.settings.snapshotPriority, tick = sent.tick, netId = row.netId });
 			}
 			keys.Sort(scope (a, b) =>
 				{
@@ -430,25 +478,22 @@ extension NetworkManager
 					if (a.priority != b.priority) return b.priority <=> a.priority;
 					return a.tick != b.tick ? a.tick <=> b.tick : a.netId <=> b.netId;
 				});
-			candidates.Clear();
-			for (let key in keys)
-				candidates.Add(key.identity);
 			BeginSnapshotPacket(client);
 			int count = 0, spent = 0;
 			bool reliable = false, containsOwned = false;
 			let limit = Math.Clamp(SnapshotPacketBytes, 256, 1200);
 			let budget = SnapshotBytesPerSecond > 0 ? Math.Max(128, (int)((int64)SnapshotBytesPerSecond * Math.Max(SnapshotInterval, 1) / Math.Max(Time.TickRate, 1))) : int.MaxValue;
-			for (let identity in candidates)
+			for (let key in keys)
 			{
-				record.Clear();
-				WriteSnapshotRecord(record, identity, client.id);
-				let dormant = identity.ownerId != client.id && identity.SnapshotSleeping;
-				let own = identity.ownerId == client.id;
+				let record = SnapshotRecord(key.row, client.id);
+				let row = ref mSnapshotRows[key.row];
+				let own = key.own;
+				let dormant = !own && row.sleeping;
 				// One coherent correction for all owned objects: replay must not advance them once per chunk.
 				// Exceptional large ownership groups retain legacy fragmentation rather than replaying twice.
-				let flush = count > 0 && (!own && (containsOwned || mWriter.Data.Count + record.Data.Count > limit) || reliable != dormant);
-				let cost = record.Data.Count + ((count == 0 || flush) ? 13 : 0);
-				if (identity.ownerId != client.id && spent + cost > budget) continue;
+				let flush = count > 0 && (!own && (containsOwned || mWriter.Data.Count + record.Length > limit) || reliable != dormant);
+				let cost = record.Length + ((count == 0 || flush) ? 13 : 0);
+				if (!own && spent + cost > budget) continue;
 				if (flush)
 				{
 					FlushSnapshotPacket(client, count, reliable);
@@ -458,17 +503,17 @@ extension NetworkManager
 				}
 				reliable = dormant;
 				containsOwned |= own;
-				mWriter.Data.AddRange(record.Data);
+				mWriter.Data.AddRange(record);
 				count++;
 				spent += cost;
 				SnapshotDelivery sent = default;
-				client.delivered.TryGetValue(identity.NetId, out sent);
-				let same = sent.change == identity.ChangedAt && sent.dormant == dormant;
+				client.delivered.TryGetValue(row.netId, out sent);
+				let same = sent.change == row.changedAt && sent.dormant == dormant;
 				sent.repeats = dormant ? (int32)SnapshotRepeats : (same ? sent.repeats + 1 : 1);
 				sent.tick = mTick;
-				sent.change = identity.ChangedAt;
+				sent.change = row.changedAt;
 				sent.dormant = dormant;
-				client.delivered[identity.NetId] = sent;
+				client.delivered[row.netId] = sent;
 			}
 			FlushSnapshotPacket(client, count, reliable);
 			if (count == 0 && spent == 0)
