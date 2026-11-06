@@ -648,7 +648,7 @@ static class NetworkSync
 		payload.WriteString(action == 0 ? (StringView)source.audioClip : clip);
 		payload.Write(volume);
 		if (network.IsServer)
-			network.SendToAll(MsgAudio, payload);
+			network.SendNear(source.Transform.Position, MsgAudio, payload, source.maxDistance);
 		else
 			network.SendToServer(MsgAudio, payload);
 	}
@@ -1004,8 +1004,24 @@ static class NetworkSync
 				slot.last.AddRange(bytes);
 				payload.Clear();
 				WriteField(payload, identity, i, slot);
-				network.SendToAll(MsgField, payload);
+				// Only to clients whose area it is in; the rest get all its fields when it comes back.
+				network.SendAbout(identity.NetId, MsgField, payload);
 			}
+		}
+	}
+
+	/// Server: every [Sync] field of an object, to one client (it has just come into that client's area).
+	public static void SendFieldsTo(NetworkManager network, NetworkIdentity identity, int32 clientId)
+	{
+		let list = Slots(identity);
+		if (list.slots.Count == 0)
+			return;
+		let payload = scope NetWriter();
+		for (int i < list.slots.Count)
+		{
+			payload.Clear();
+			WriteField(payload, identity, i, list.slots[i]);
+			network.SendToClient(clientId, MsgField, payload);
 		}
 	}
 

@@ -227,6 +227,8 @@ class Scene
 	List<Component> mPendingStart = new .() ~ delete _;
 	List<GameObject> mDestroyQueue = new .() ~ delete _;
 	uint32 mNextId = 1;
+	/// How many objects are NetworkHidden (0: none, so nothing need look).
+	int32 mNetworkHiddenCount;
 	/// The id the next new object gets. A streamed world keeps it in its file, so objects made while some cells are
 	/// not loaded never take the ids of objects in them.
 	public uint32 NextId

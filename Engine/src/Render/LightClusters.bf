@@ -111,7 +111,7 @@ class LightClusters
 		let frustum = Frustum(ViewProj, Gfx.HomogeneousDepth);
 		for (let light in scene.Lights)
 		{
-			if (!light.IsActiveAndEnabled || !light.GameObject.InActiveWorld || light == sun)
+			if (!light.IsActiveAndEnabled || !light.GameObject.InActiveWorld || light == sun || light.GameObject.HiddenInHierarchy)
 				continue;
 			if (light.type == .Directional)
 			{

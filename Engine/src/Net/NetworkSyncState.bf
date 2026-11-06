@@ -364,7 +364,7 @@ extension NetworkSync
 		// An object has one Particle System: the object says which.
 		WriteTransform(payload, particles.Transform);
 		if (network.IsServer)
-			network.SendToAll(MsgEffect, payload);
+			network.SendNear(particles.Transform.Position, MsgEffect, payload);
 		else
 			network.SendToServer(MsgEffect, payload);
 	}
@@ -385,7 +385,7 @@ extension NetworkSync
 		payload.Write(lifetime);
 		payload.Write(color);
 		payload.Write(angleLimit);
-		network.SendToAll(MsgEffect, payload);
+		network.SendNear(volume.Translation, MsgEffect, payload);
 		return false;
 	}
 
@@ -406,7 +406,7 @@ extension NetworkSync
 		payload.Write((int32)group);
 		payload.Write(minDistance);
 		payload.Write(maxDistance);
-		network.SendToAll(MsgEffect, payload);
+		network.SendNear(position, MsgEffect, payload, maxDistance);
 		return false;
 	}
 
@@ -436,7 +436,7 @@ extension NetworkSync
 					return;
 				let payload = scope NetWriter();
 				payload.Data.AddRange(Span<uint8>(reader.Start + start, reader.Position - start));
-				network.SendToAll(MsgEffect, payload);
+				network.SendNear(particles.Transform.Position, MsgEffect, payload);
 			}
 			sApplying = true;
 			particles.Play();

@@ -167,6 +167,9 @@ extension NetworkManager
 				return;
 			if (!mByNetId.TryGetValue(netId, let identity))
 				continue;
+			// Out of this machine's area until news newer than that arrives.
+			if (!ShowIfHidden(identity, serverTick))
+				continue;
 			if (identity.ownerId == LocalClientId)
 			{
 				identity.Predicted = false;

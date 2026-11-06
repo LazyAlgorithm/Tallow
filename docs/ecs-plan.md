@@ -1519,6 +1519,34 @@ nine profiles.
   Longest wait 59 ticks (limit 60). The NetworkBytes fixture copy turns it off for its hand-set profiles (the
   "budget" one keeps main's bytes); network suites otherwise as after 6c.
 
+### 6e steps
+
+- [x] **6e EXIT MET** (2026-11-05; `NetworkManagerRelevance.bf`):
+  - Relevance per client with hysteresis: an object comes into a client's area within
+    `SnapshotRelevanceRadius` of its player and leaves past `RelevanceHysteresis` (1.2) times that.
+  - Hide, not destroy: leaving, the client is told (`MsgHide`, reliable, with the tick) and the object is
+    `GameObject.NetworkHidden` there: not drawn (`RenderView.HidesHere`, so renderers, skinned meshes,
+    particles, decals, water), lights and sounds off, scripts running. The first record newer than the hiding
+    shows it again with its keys cleared, so it appears where the server has it, not gliding from where it was.
+  - Spawns: a spawned object outside a client's area is hidden at its first snapshot.
+  - Fields and events: changed [Sync] fields go only to clients whose area the object is in
+    (`SendAbout`); coming back, the client is sent all of them (`NetworkSync.SendFieldsTo`). Particles,
+    decals, one-shot sounds and Audio Source actions go to clients near where they happen (`SendNear`; sounds
+    as far as their max distance if that is further). Animator parameters, clips, character shapes and soft
+    body dents still go to everyone: they are state a hidden object would need to be right when shown, and
+    resending them on entry is left for when a game needs it.
+  - Relevance modes: `NetworkIdentityData.relevance` Auto (chosen: bodies and moving things nearby, players
+    to everyone), Everyone, Nearby, OwnerOnly. The panel says which.
+  - Spatial grid: not built. The candidate pass already visits each object once per client, and the distance
+    test is the cheap part of it; with many clients it is the place for one (the Phase 6 exit's dedicated
+    server measurement).
+  - `~/TallowEcsTests/NetworkInterest` (new), loopback, 300 moving objects along 600 m, radius 50: at the start
+    270 hidden; walking the line at 12 m/s for 30 s, everything within 40 m shown and nothing past 75 m on every
+    tick; 175 objects shown again, none away from where the server had it; a [Sync] field changed while out of
+    the area right when back; stepping 4 m back and forth at the edge for 10 s, no object changes more than
+    once (with `nohysteresis`: 9 objects blink, 88 changes); 3,937 bytes a second against 42,368 with no radius.
+    Network suites, Voice, HostMigration, AntiCheat, the networked Gallery and its self-test as before.
+
 ## Benchmark results
 
 See "Phase 1 results" above.

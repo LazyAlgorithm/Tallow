@@ -136,7 +136,7 @@ class RenderView
 	public HashSet<uint32> hiddenHere;
 
 	/// Whether this view leaves the object out by hiddenHere.
-	public bool HidesHere(GameObject gameObject) => hiddenHere != null && hiddenHere.Count > 0 && hiddenHere.Contains(gameObject.Id);
+	public bool HidesHere(GameObject gameObject) => (hiddenHere != null && hiddenHere.Count > 0 && hiddenHere.Contains(gameObject.Id)) || gameObject.HiddenInHierarchy;
 	// The scene's baked light probes, if any.
 	LightProbeSet mProbeGrid;
 	List<Mesh> mLightmapMeshes = new .() ~ delete _;

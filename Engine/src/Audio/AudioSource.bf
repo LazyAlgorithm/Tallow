@@ -241,6 +241,9 @@ struct AudioSource : ComponentHandle<AudioSourceData>
 		else
 			parameters.reverbSend = Mathf.Clamp01(settings.reverbSend);
 		cutoff = Math.Min(cutoff, Math.Max(settings.lowpass, 20));
+		// Hidden by the network (out of this client's area): not heard.
+		if (GameObject.HiddenInHierarchy)
+			level = 0;
 		// Outside the scene's world state it keeps its place, and is heard only as the echo it is given, if any.
 		if (!GameObject.InActiveWorld)
 		{

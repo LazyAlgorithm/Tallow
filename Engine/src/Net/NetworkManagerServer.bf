@@ -486,12 +486,8 @@ extension NetworkManager
 			{
 				let row = ref mSnapshotRows[i];
 				let own = row.settings.ownerId == client.id;
-				if (!own && row.settings.distanceFiltered && SnapshotRelevanceRadius > 0 && player != null &&
-					(row.position - playerAt).LengthSquared > SnapshotRelevanceRadius * SnapshotRelevanceRadius)
-				{
-					client.delivered.Remove(row.netId);
+				if (!own && !UpdateRelevance(client, row, player, playerAt))
 					continue;
-				}
 				SnapshotDelivery sent = default;
 				let known = client.delivered.TryGetValue(row.netId, out sent);
 				// Its own objects go every snapshot while they change (what its prediction is checked against), then a

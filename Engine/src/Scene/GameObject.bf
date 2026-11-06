@@ -34,6 +34,7 @@ class GameObject
 	/// Set by NetworkIdentity while it is registered: Update runs per tick (Component.Update). A bool beside the
 	/// others rather than a reference, so GameObject does not grow: every script call reads this object.
 	bool mNetworked;
+	bool mNetworkHidden;
 	bool mDestroyed;
 	/// Being taken out of the scene (Scene.DestroyTogether).
 	bool mGoing;
@@ -99,6 +100,39 @@ class GameObject
 
 	/// True when the object, and every object above it, is part of the scene's active world state: a parent left
 	/// out of a state takes its children out with it.
+	/// Hidden by the network: out of this client's area of interest (NetworkIdentityData.relevance). Not drawn or
+	/// heard, with everything under it, but kept, its scripts running, until it is in the area again.
+	public bool NetworkHidden
+	{
+		get => mNetworkHidden;
+		set
+		{
+			if (mNetworkHidden == value)
+				return;
+			mNetworkHidden = value;
+			if (mScene != null)
+				mScene.[Friend]mNetworkHiddenCount += value ? 1 : -1;
+		}
+	}
+
+	/// This object or one above it is NetworkHidden.
+	public bool HiddenInHierarchy
+	{
+		get
+		{
+			if (mScene == null || mScene.[Friend]mNetworkHiddenCount <= 0)
+				return false;
+			var transform = Transform;
+			while (transform != null)
+			{
+				if (transform.GameObject.mNetworkHidden)
+					return true;
+				transform = transform.Parent;
+			}
+			return false;
+		}
+	}
+
 	public bool InActiveWorld => mScene == null || (EffectiveWorldStates & (1u << mScene.WorldState)) != 0;
 
 	// ---- tags ----

@@ -4,6 +4,19 @@ using System.Collections;
 namespace Tallow;
 
 [Reflect(.All)]
+/// Which clients hear about an object (NetworkIdentityData.relevance).
+enum NetworkRelevance : int32
+{
+	/// Chosen with the rest (automatic): bodies and moving things near players only, players to everyone.
+	Auto,
+	/// Every client, however far.
+	Everyone,
+	/// Clients whose player is within the session's relevance radius (NetworkManager.SnapshotRelevanceRadius).
+	Nearby,
+	/// Only the client that owns it (and the server).
+	OwnerOnly
+}
+
 enum RemoteSnapshotFormat : int32
 {
 	/// The packed transform (2 mm steps, two bytes of turn while upright): the smallest record for most things, and
@@ -72,6 +85,10 @@ struct NetworkIdentityData
 	/// Distance filtering applies only to objects opting in. Zero session radius disables it.
 	[Advanced]
 	public bool distanceFiltered = default;
+	/// Which clients hear about it: snapshots, its [Sync] fields and the effects it plays. Out of a client's area
+	/// it is hidden there, not destroyed, and shown again with fresh news when it comes back.
+	[Advanced]
+	public NetworkRelevance relevance = .Auto;
 	/// Higher values are serviced first when a session has a bandwidth budget.
 	[Advanced]
 	public int32 snapshotPriority = default;
@@ -129,6 +146,7 @@ struct NetworkIdentity : ComponentHandle<NetworkIdentityData>
 	public ref uint32 NetId => ref Runtime.NetId;
 	public ref BodyState[HistorySize] History => ref Runtime.History;
 	public ref String PrefabName => ref Runtime.PrefabName;
+	public ref uint32 HiddenAt => ref Runtime.HiddenAt;
 	public ref bool PhysicsPredictable => ref Runtime.PhysicsPredictable;
 	public ref bool Predicted => ref Runtime.Predicted;
 	public ref uint32 PredictedSince => ref Runtime.PredictedSince;
@@ -298,9 +316,11 @@ class NetworkIdentityState
 		case .Moving:
 			into.Append("no Rigidbody: packed transform; sent only when it moves");
 		}
-		if (Chosen.distanceFiltered)
+		if (Chosen.relevance == .OwnerOnly)
+			into.Append(", to its owner only");
+		else if (Chosen.distanceFiltered)
 			into.Append(network.SnapshotRelevanceRadius > 0 ? scope $", near players only ({network.SnapshotRelevanceRadius:0} m)" : ", to everyone (no relevance radius set)");
-		bool byHand = settings.remoteFormat != .Legacy || settings.fullPrecision || settings.remoteIntervalTicks != 0 || settings.dormantWhenSleeping || settings.distanceFiltered || settings.snapshotPriority != 0;
+		bool byHand = settings.remoteFormat != .Legacy || settings.fullPrecision || settings.remoteIntervalTicks != 0 || settings.dormantWhenSleeping || settings.distanceFiltered || settings.snapshotPriority != 0 || settings.relevance != .Auto;
 		if (byHand)
 			into.Append("; some settings set by hand are kept");
 	}
@@ -310,6 +330,14 @@ class NetworkIdentityState
 	public void Choose(NetworkManager network)
 	{
 		Chosen = Settings;
+		defer
+		{
+			// A relevance chosen by hand wins over everything else.
+			if (Chosen.relevance == .Everyone)
+				Chosen.distanceFiltered = false;
+			else if (Chosen.relevance == .Nearby)
+				Chosen.distanceFiltered = true;
+		}
 		if (!Chosen.automatic)
 		{
 			ChosenKind = .AsSet;
@@ -408,6 +436,9 @@ class NetworkIdentityState
 	public BodyState[HistorySize] History;
 	[NonSerialized]
 	public String PrefabName = new .() ~ delete _;
+	/// Client: the server tick at which it went out of this machine's area (hidden), 0 while it is in it.
+	[NonSerialized]
+	public uint32 HiddenAt;
 
 	// ---- physics prediction ----
 

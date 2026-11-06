@@ -352,6 +352,8 @@ class NetworkManager
 		public Dictionary<uint32, SnapshotDelivery> delivered = new .() ~ delete _;
 		/// With DynamicPriority under a budget: how much each object waiting to be sent has gained.
 		public Dictionary<uint32, float> waiting = new .() ~ delete _;
+		/// Objects out of its area (hidden there); see UpdateRelevance.
+		public HashSet<uint32> outside = new .() ~ delete _;
 		/// What it is known to have, once it acknowledges packets (field deltas); null until then.
 		public DeltaClient deltas ~ delete _;
 		/// Ticks since the last snapshot for which no controls had arrived.
@@ -537,6 +539,7 @@ class NetworkManager
 		case MsgCustom: return "custom";
 		case MsgOwner: return "ownership";
 		case MsgLink: return "connection reports";
+		case MsgHide: return "out of area";
 		case 16, 17, 18, 19: return "host migration";
 		case NetCompression.MessageType: return "compressed";
 		case NetworkSync.MsgTerrainBrush: return "terrain";
@@ -569,7 +572,7 @@ class NetworkManager
 		for (let client in mClients)
 			into.AppendF("CLIENT {} {} B/s, {} inputs waiting, {}% snapshots lost, budget {}\n", client.id, client.bytesPerSecond, client.queue.Count, client.lossPercent, SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget);
 		if (IsClient)
-			into.AppendF("LINK {}{}% snapshots lost, others shown {:0.0} ticks in the past, {:0.0} ticks of controls waiting on the server\n", mHaveDeltaPacket ? scope $"field deltas ({DeltaMisses} missed), " : "", LossPercent, ViewDelayTicks, mDepth);
+			into.AppendF("LINK {}{}% snapshots lost, others shown {:0.0} ticks in the past, {:0.0} ticks of controls waiting on the server\n", mHaveDeltaPacket ? scope $"field deltas ({DeltaMisses} missed), {HiddenObjects} hidden as out of area, " : "", LossPercent, ViewDelayTicks, mDepth);
 		into.Append("SENT BY KIND");
 		for (int kind < 256)
 		{
@@ -835,7 +838,10 @@ class NetworkManager
 			client.delivered.Remove(identity.NetId);
 		ForgetDeltas(identity.NetId);
 		for (let client in mClients)
+		{
 			client.waiting.Remove(identity.NetId);
+			client.outside.Remove(identity.NetId);
+		}
 		let index = mIdentities.IndexOf(identity);
 		if (index >= 0)
 		{
@@ -1172,6 +1178,7 @@ class NetworkManager
 					case MsgSnapshot: ReadSnapshot(ref reader);
 					case MsgSnapshotPart: ReadSnapshot(ref reader, true);
 					case MsgSnapshotDelta: ReadDeltaSnapshot(ref reader);
+					case MsgHide: ReadHide(ref reader);
 					case MsgCustom: Dispatch(reader.Read<uint8>(), 0, ref reader);
 					case MsgOwner:
 						let ownedId = reader.Read<uint32>();
