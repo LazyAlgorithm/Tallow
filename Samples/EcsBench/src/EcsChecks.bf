@@ -36,6 +36,26 @@ class UpdateCounter : Component
 	}
 }
 
+/// Script fields used for prediction can be rewound without [Sync]; [Sync] is for replication only.
+[Component]
+class ReplayFieldCounter : Script
+{
+	[Sync]
+	public int32 count;
+	float elapsed;
+	[NonSerialized]
+	public int32 presentation;
+
+	public float Elapsed => elapsed;
+	public void SetElapsed(float value) { elapsed = value; }
+
+	public override void Update(TickInput input, float deltaTime)
+	{
+		count++;
+		elapsed += deltaTime;
+	}
+}
+
 /// Checks of the ECS layer (World, Query, ParallelFor, deferred changes), run with TALLOW_BENCH_MODE=check.
 static class EcsChecks
 {
@@ -129,6 +149,7 @@ static class EcsChecks
 		VoxelObjectChecks();
 		JointChecks();
 		NetworkIdentityChecks();
+		ScriptReplayChecks();
 		return sFailures;
 	}
 
@@ -794,6 +815,42 @@ static class EcsChecks
 			let copy = loaded.Find("First").GetComponent<NetworkIdentity>();
 			Expect(copy.IsValid && copy.fullPrecision && copy.remoteFormat == .ExactTransform && copy.ownerId == 3 && copy.correctionSmoothing == 12, "its settings are saved and read");
 		}
+		Scene.Active = previous;
+	}
+
+	/// State sync saves script fields locally for replay whether or not they are [Sync], including private value
+	/// fields. [NonSerialized] presentation state is not touched. No transport is needed to check the snapshot.
+	static void ScriptReplayChecks()
+	{
+		let previous = Scene.Active;
+		let scene = scope Scene();
+		Scene.Active = scene;
+		let net = new NetworkManager(scene);
+		scene.Network = net;
+		net.[Friend]mMode = .Client;
+		net.LocalClientId = 2;
+		net.[Friend]mConnected = true;
+		let gameObject = scene.CreateGameObject("Replay");
+		let identity = gameObject.AddComponent<NetworkIdentity>();
+		identity.ownerId = 2;
+		let script = gameObject.AddComponent<ReplayFieldCounter>();
+		scene.StartPlay();
+		script.count = 3;
+		script.SetElapsed(0.75f);
+		script.presentation = 5;
+		List<uint8> snapshot = scope .();
+		Expect(net.[Friend]ScriptFields(snapshot, false), "prediction script fields can be captured");
+		script.count = 10;
+		script.SetElapsed(2);
+		script.presentation = 7;
+		Expect(net.[Friend]ScriptFields(snapshot, true), "prediction script fields can be restored");
+		Expect(script.count == 3 && Math.Abs(script.Elapsed - 0.75f) < 1.0e-6f, "both [Sync] and private non-networked script fields rewind");
+		Expect(script.presentation == 7, "[NonSerialized] presentation fields are left alone");
+		snapshot.Add(0);
+		Expect(!net.[Friend]ScriptFields(snapshot, true) && script.count == 3, "a changed snapshot size never partially restores fields");
+		scene.StopPlay();
+		scene.Network = null;
+		delete net;
 		Scene.Active = previous;
 	}
 
