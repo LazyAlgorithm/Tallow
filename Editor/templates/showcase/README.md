@@ -13,6 +13,8 @@ Open `src/Scenes/Gallery.tscene` in the editor: every room is a set of ordinary 
 - **Terrain Field**: voxel ground you can dig and raise as you play; collision follows.
 - **Soft Body Lab**: fire balls at steel shells to dent them for good, jelly that wobbles and ignores the wind (Wind Drag 0), a cloth curtain, and robots that path round it all on a NavMesh.
 
+**Together:** run the built game with `--host` on one machine and `--connect <host address>` on another (`--port <n>` on both to change from 7777). The physics yard, the robots, the water and the voxels are shared, as the engine shares whatever moves by itself; each player walks round as their own visitor, and what they fire stays on their machine.
+
 `src/Scripts/Gallery.bf` holds what moves while playing, and the code that first built the scene: empty the scene down to the Gallery object and run with `--author-scene` to build and save it again.
 
 The rigged character is derived from Quaternius's CC0 asset; see `src/Models/LICENSE.txt`. Other assets are generated for this sample.

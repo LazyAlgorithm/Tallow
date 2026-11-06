@@ -1348,7 +1348,19 @@ Before any 6a change, `main` (e9d87cdd) and this branch (6aa1c427) gave the same
   host, the second reconnects with its old client id, the old host's player goes, the others keep their owners
   (the new host's own player becomes owner 0), the world is as it was, and the new host's field changes and
   spawns reach the client with no repeated net id. 12 checks, the same on `main` and `ecs`, three runs each clean.
-- [ ] Networked Showcase exhibits (the 6a exit).
+- [x] **Networked Showcase exhibits (the 6a exit)** (2026-11-05). The Gallery had none: it now starts a session
+  in `Gallery.Awake` when run with `--host` or `--connect <address>` (`--port`), before the visitor exists, so the
+  scene's moving exhibits are shared and each machine keeps its own visitor and balls (README updated). A test
+  switch `--net-report N` prints what is shared, where, and each voxel object's surface size;
+  `~/TallowEcsTests/gallery_net.sh` makes a Gallery from this branch, runs a host and a client 4 s apart and
+  compares them. Physics Yard (8 shots into the crate stack): 43 shared objects, 23 moved, every one but the
+  walking robots within 0.25 m on the client (all at 0.00), the robots walking on the client. Voxel Quarry (20
+  cuts before the client joined): the cut pillar's surface identical on the client. Found on the way, also on
+  `main`: the patrol robots never set off (a robot not yet sent anywhere has neither arrived nor failed); fixed
+  in the template. The plain self-test still gives `SHOWCASE_READY rooms=8 probes=2 objects=368`.
+
+**6a exit: met (2026-11-05).** Networked Showcase exhibits pass, and NetworkBytes gives `main`'s bytes for all
+nine profiles.
 
 ## Benchmark results
 

@@ -57,6 +57,74 @@ class Gallery : Script
 	{
 		if (!built)
 			Build();
+		// Played with --host, or --connect <address> (and --port <n>): the exhibits are shared. The session starts
+		// here, before the visitor and anything fired exist, so it shares what the scene was built with (the
+		// bodies, robots, water and voxels) and each machine keeps its own visitor and balls.
+		let mode = NetworkSession.ModeOverride;
+		if (mode != .Offline && Scene.Network == null)
+		{
+			// No player prefab: each machine has its own visitor.
+			let network = new NetworkManager(Scene);
+			Scene.Network = network;
+			let port = (uint16)(NetworkSession.PortOverride > 0 ? NetworkSession.PortOverride : 7777);
+			let started = mode == .Client ? network.StartClient(NetworkSession.AddressOverride.IsEmpty ? "127.0.0.1" : NetworkSession.AddressOverride, port)
+				: network.StartServer(port, mode == .Host);
+			if (!started)
+				Log.Error("The gallery's network session could not start; running offline.");
+		}
+	}
+
+	public override void OnDestroy()
+	{
+		if (Scene.Network != null)
+		{
+			Scene.Network.Stop();
+			delete Scene.Network;
+			Scene.Network = null;
+		}
+	}
+
+	/// Test switch --net-report N: at frame N, says what is shared and where each shared object is.
+	int mNetReport = -1;
+	Dictionary<uint32, Vector3> mSharedAtStart = new .() ~ delete _;
+
+	void NoteShared()
+	{
+		if (Scene.Network == null)
+			return;
+		for (let identity in Scene.Network.Identities)
+			mSharedAtStart[identity.NetId] = identity.GameObject.Transform.Position;
+	}
+
+	void ReportShared()
+	{
+		let network = Scene.Network;
+		if (network == null)
+		{
+			Console.WriteLine("SHOWCASE_NET offline");
+			for (let robot in mRobots)
+				Console.WriteLine(scope $"ROBOT {robot.Transform.Position.x:0.000} {robot.Transform.Position.z:0.000}");
+			return;
+		}
+		int moved = 0;
+		for (let identity in network.Identities)
+		{
+			let at = identity.GameObject.Transform.Position;
+			if (mSharedAtStart.TryGetValue(identity.NetId, let start) && (at - start).Length > 0.5f)
+				moved++;
+		}
+		Console.WriteLine(scope $"SHOWCASE_NET role={network.IsServer ? "host" : "client"} connected={network.IsConnected ? 1 : 0} clients={network.ClientCount} shared={network.Identities.Count} moved={moved}");
+		for (let identity in network.Identities)
+		{
+			let at = identity.GameObject.Transform.Position;
+			Console.WriteLine(scope $"NETPOS {identity.NetId} {at.x:0.000} {at.y:0.000} {at.z:0.000} {identity.GameObject.Name}");
+		}
+		// Carving is shared as events every machine applies: the same cuts give the same surfaces.
+		for (let voxels in Scene.FindComponents<VoxelObject>(.. scope .()))
+		{
+			let mesh = voxels.GameObject.GetComponent<MeshRenderer>().RuntimeMesh;
+			Console.WriteLine(scope $"VOXEL {voxels.GameObject.Id} {(mesh != null ? mesh.Indices.Count : 0)} {voxels.GameObject.Name}");
+		}
 	}
 
 	public override void Start()
@@ -98,6 +166,9 @@ class Gallery : Script
 			mTestShots = SceneSerializer.ParseInt(value);
 		if (app.GetArg("--cut-test", value))
 			mTestCuts = SceneSerializer.ParseInt(value);
+		if (app.GetArg("--net-report", value))
+			mNetReport = SceneSerializer.ParseInt(value);
+		NoteShared();
 		if (app.HasArg("--self-test"))
 			Console.WriteLine(scope $"SHOWCASE_READY rooms={sRooms.Count} probes={Scene.FindComponents<ReflectionProbe>(.. scope .()).Count} objects={Scene.Objects.Count}");
 	}
@@ -107,7 +178,7 @@ class Gallery : Script
 	{
 		(Vector3 at, float yaw, float pitch)[?] places = .(
 			(.(4, 1.1f, -28), 0, 0), (.(0, 1.1f, 3), 0, 6), (.(-12, 1.1f, 3), 50, 6), (.(15, 1.6f, 6), 62, 6),
-			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12), (.(30.6f, 1.6f, -40), 180, 0), (.(-14, 1.1f, -44), 270, 12), (.(-28, 1.1f, -22), 180, 10), (.(-14.5f, 1.6f, -58), -15, 20), (.(7, 1.1f, 10), 90, 8), (.(6, 1.1f, 13), 180, 10), (.(12.5f, 1.1f, 9), 80, 22), (.(17, 1.1f, 11), 260, 14), (.(1, 1.1f, 9), 180, 12));
+			(.(19, 1.1f, -28), 40, 4), (.(-14, 1.1f, -9), 240, 10), (.(-34, 1.1f, -11), 60, 4), (.(4, 1.1f, -38), 180, 8), (.(-5, 1.1f, -42), 150, 4), (.(3, 1.1f, -8), 200, -12), (.(30.6f, 1.6f, -40), 180, 0), (.(-14, 1.1f, -44), 270, 12), (.(-28, 1.1f, -22), 180, 10), (.(-14.5f, 1.6f, -58), -15, 20), (.(7, 1.1f, 10), 90, 8), (.(6, 1.1f, 13), 180, 10), (.(12.5f, 1.1f, 9), 80, 22), (.(17, 1.1f, 11), 260, 14), (.(1, 1.1f, 9), 180, 12), (.(21, 1.1f, -24), 90, 0));
 		let place = places[Math.Clamp(view, 0, places.Count - 1)];
 		mVisitor.GetComponent<CharacterController>().Teleport(place.at);
 		mVisitor.yaw = place.yaw;
@@ -158,10 +229,13 @@ class Gallery : Script
 		BlastVoxels();
 		for (let robot in mRobots)
 		{
-			if (!robot.PathPending && (robot.HasArrived || robot.PathFailed))
+			// A robot not yet sent anywhere has neither arrived nor failed: it is sent off too.
+			if (!robot.PathPending && (robot.HasArrived || robot.PathFailed || robot.Path.Count == 0))
 				robot.SetDestination(.(-6 + Scatter() * 20, 0, -57 + Scatter() * 19), 2.2f, 0.4f);
 		}
 		ShowRoom();
+		if (Time.FrameCount == mNetReport)
+			ReportShared();
 	}
 
 	/// Pushes whatever rigid body the visitor is looking at.
