@@ -163,6 +163,12 @@ class Session:
     def resolve(self, request):
         started = time.monotonic()
         path = str(Path(request['path']).resolve())
+        # Preserve the editor's spelling (including Windows short paths and symlinked workspaces).
+        aliases = {os.path.normcase(str(Path(buffer['path']).resolve())): buffer['path']
+                   for buffer in request.get('buffers', [])}
+        aliases[os.path.normcase(path)] = request['path']
+        def editor_path(value):
+            return aliases.get(os.path.normcase(str(Path(value).resolve())), value)
         if path not in self.sources:
             raise ValueError('The document is outside the configured project source graph')
         changed = False
@@ -214,12 +220,12 @@ class Session:
             documentation = encoded[start:end].decode('utf-8')
         self.worker.send(f'RESOLVE {quote(path)} {cursor} {KINDS[kind]} {identifier} {quote(documentation)}')
         rows = self.worker.until('TALLOW_RESULT ')
-        result = dict(id=identifier, generation=request.get('generation'), path=path, cursor=cursor, kind=kind,
-                      revision=self.sources[path]['revision'], versions={str(Path(b['path']).resolve()): b['revision'] for b in request.get('buffers', [])},
+        result = dict(id=identifier, generation=request.get('generation'), path=request['path'], cursor=cursor, kind=kind,
+                      revision=self.sources[path]['revision'], versions={b['path']: b['revision'] for b in request.get('buffers', [])},
                       completions=[], signatures=[], diagnostics=[], definition=None, documentation=[], raw='')
         for row in rows:
             if row[0] == 'TALLOW_DIAG':
-                result['diagnostics'].append(dict(warning=row[3] == '1', file=decode(row[4]), start=int(row[5]),
+                result['diagnostics'].append(dict(warning=row[3] == '1', file=editor_path(decode(row[4])), start=int(row[5]),
                                                   end=int(row[6]), line=int(row[7]), column=int(row[8]), message=decode(row[9])))
             elif row[0] == 'TALLOW_RESULT':
                 result['raw'] = decode(row[4])
@@ -235,7 +241,7 @@ class Session:
             elif len(parts) >= 2 and parts[0] == 'invoke':
                 result['signatures'].append(parts[1].replace('\x01', ''))
             elif len(parts) >= 4 and parts[0] == 'defLoc':
-                result['definition'] = dict(path=parts[1], line=int(parts[2]), column=int(parts[3]))
+                result['definition'] = dict(path=editor_path(parts[1]), line=int(parts[2]), column=int(parts[3]))
         result['elapsed_ms'] = (time.monotonic() - started) * 1000
         return result
 
