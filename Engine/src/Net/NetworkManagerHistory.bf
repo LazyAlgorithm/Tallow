@@ -394,6 +394,11 @@ extension NetworkManager
 			if (!told)
 				remote.identity.ApplyState(remote.identity.History[slot]);
 		}
+		// Rewind the scripts as well as transforms and bodies before running their Update again. The history is
+		// local, including fields without [Sync]; [Sync] still controls what travels over the network.
+		let scripts = tick % ExactRingSize;
+		if (mExact.tick[scripts] != tick || mExact.scripts[scripts] == null || !ScriptFields(mExact.scripts[scripts], true))
+			Log.Warning("State-sync replay could not restore script fields at the acknowledged tick.");
 	}
 
 	/// The server has got ahead of this machine, which must have stopped for a moment. Takes its state and jumps the
