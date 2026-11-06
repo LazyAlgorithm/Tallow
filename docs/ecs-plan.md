@@ -1331,8 +1331,13 @@ Before any 6a change, `main` (e9d87cdd) and this branch (6aa1c427) gave the same
   Gallery self-test. Water's timing line is slower on this branch (194 µs against 145 µs, Debug); open item: a
   frame with 2000 objects and no networked ones costs about 0.17 ms more than `main` (the handles' FrameAll
   passes each walk the scene), to look at with the profiler in 6b.
-- [ ] Lag compensation and host migration checked on the handles (the migration code is ported and compiles; no
-  test of it ran yet on this branch).
+- [x] **Lag compensation and host migration checked on the handles** (2026-11-05). Lag compensation: the Network
+  suite's rewind checks pass as on `main`. Host migration had no test on either branch, so one was written
+  (`~/TallowEcsTests/HostMigration`, builds unchanged against both): a host and two clients over loopback with
+  HostMigration on; the host spawns a pickup and changes a [Sync] field, then leaves. The first client becomes the
+  host, the second reconnects with its old client id, the old host's player goes, the others keep their owners
+  (the new host's own player becomes owner 0), the world is as it was, and the new host's field changes and
+  spawns reach the client with no repeated net id. 12 checks, the same on `main` and `ecs`, three runs each clean.
 - [ ] Networked Showcase exhibits (the 6a exit).
 
 ## Benchmark results
