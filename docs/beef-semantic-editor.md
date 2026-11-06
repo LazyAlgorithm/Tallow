@@ -80,7 +80,8 @@ Local Linux checks passed for inherited/generic members, two overloads, declarat
 unsaved type and syntax errors, clearing corrected diagnostics, revision echoes and invalid cursor rejection. The
 actual EcsBench/engine dependency graph resolves comptime-generated Light members. The Beef process client passed
 startup, round-trip and repeated shutdown checks. The updated editor and `PatrolExample` compile in Linux Debug.
-Windows helper integration and packaged startup are covered by the ECS CI steps but await results for this checkpoint.
+Windows helper fixtures and engine package build pass at `3525c548` (workflow 42271437073).
+Interactive packaged-editor checks remain pending.
 
 ## Still required
 

@@ -170,9 +170,36 @@ static class EcsChecks
 		Expect(scene.WorldStateChanged.IsEmpty, "scene unload disconnects all owner-bound listeners");
 	}
 
+	/// A cached reference must refresh even when the native table's short version wraps around.
+	public static int RunReferenceChecks()
+	{
+		let world = scope World();
+		let entity = world.Create();
+		world.Set<Pose>(entity, .());
+		var reference = ComponentRef<Pose>(world, entity);
+		const int TableVersionPeriod = 65536;
+		for (int i < TableVersionPeriod)
+			world.Set<Pose>(world.Create(), .());
+		let expected = world.Get<Pose>(entity);
+		if (reference.Get(world) != expected)
+		{
+			Console.WriteLine("Cached reference did not refresh after table version wrap");
+			return 1;
+		}
+		world.Remove<Pose>(entity);
+		if (reference.Get(world) != null) return 1;
+		world.Set<Pose>(entity, .());
+		if (reference.Get(world) != world.Get<Pose>(entity)) return 1;
+		world.Delete(entity);
+		if (reference.Get(world) != null) return 1;
+		Console.WriteLine("Cached reference checks: all passed");
+		return 0;
+	}
+
 	public static int Run()
 	{
 		sFailures = 0;
+		Expect(RunReferenceChecks() == 0, "cached references survive table version wrap, removal and deletion");
 		let world = scope World();
 		let entities = scope List<Entity>();
 		world.CreateMany<Pose>(1000, entities);

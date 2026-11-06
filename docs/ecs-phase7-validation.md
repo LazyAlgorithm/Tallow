@@ -62,5 +62,31 @@ the command instead of silently producing a partial success table. A process tim
 They test scheduling, isolated result files, metric validation and failure handling using synthetic data;
 they do not execute Beef or produce engine performance numbers.
 
-Attempted Release build: blocked by missing BeefBuild. No engine build, ECS runtime checks, multiplayer
-checks, graphical checks or hardware benchmarks were completed here. Phase 7 remains in progress.
+The pinned compiler and native archives are now available in this workspace. Linux Debug and Release builds
+succeed. The full ECS checks, including generated graph compilation, passed in both configurations in workflow
+42264324947. Native editor regression checks and actual compiler-analysis fixtures pass locally. At `3525c548`,
+Windows compiler-analysis fixtures and the engine package build pass (workflow 42271437073). These are not
+interactive editor or Windows runtime acceptance results.
+
+Graphics-free checks are available after building EcsBench:
+
+```sh
+Samples/EcsBench/build/Release_Linux64/EcsBench/EcsBench --check-lifetimes
+Samples/EcsBench/build/Release_Linux64/EcsBench/EcsBench --check-references
+Samples/EcsBench/build/Release_Linux64/EcsBench/EcsBench --bench-script-cpu 10000 600
+```
+
+Use the corresponding Debug/Windows executable for those builds. Lifetime checks cover owned allocations,
+subscriptions, stop/restart, removal, unload and safe refusal of live-resource replacement. Reference checks
+exercise 65,536 table mutations, removal/re-addition and entity deletion. The reference test reproduced a stale
+cached pointer before the native slow-path fix and passes after it.
+
+The CPU benchmark uses the same deterministic Mover workload, warms up 120 updates and reports Scene.Update
+average/p99, spawn time, process memory and a position checksum. It resolves world matrices outside the timed
+interval to model the cache state left by render extraction. It creates no graphics device, renderer, collision
+bodies or AI agents. It does **not** measure whole frames, GPU time, multiplayer or a representative mixed game.
+Local cloud-host timings cannot replace the requested reference-PC benchmarks. The initial ECS baseline crashes
+at 100k objects because of the cached-reference bug; never report a fabricated baseline measurement for that case.
+
+External multiplayer fixtures, interactive graphics/platform checks, resource migration and the full mixed-workload
+performance acceptance remain pending. Phase 7 remains in progress.

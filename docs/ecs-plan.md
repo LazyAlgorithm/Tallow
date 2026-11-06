@@ -576,9 +576,16 @@ Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API
 
 ### Phase 7 continuation (2026-11-06; validation in progress)
 
+- Large-scene reference fix: the CPU-only 100k-object workload reproduced a crash in both the initial Phase 7
+  baseline and current ECS branch. Flecs's 16-bit secondary table version could wrap and retain a freed component
+  pointer. The native slow path now resolves from the entity after the 32-bit fast version changes. The focused
+  65,536-mutation test failed before the fix and passes after it, including removal, re-addition and deletion.
+  The normal cached-reference fast path is unchanged. Full native CI validation is pending for this change.
+
+
 - Compiler-backed editor checkpoint: isolated Beef analysis is connected to unsaved documents with version/cursor
   checks, completion, overload help, documentation, definitions and diagnostics. Actual Linux compiler and process
-  fixtures pass. Windows helper startup compatibility is being corrected; 7f is not yet complete.
+  fixtures pass. Windows helper fixtures and engine package build pass at `3525c548`; 7f is not yet complete.
 - All Beef files changed during this continuation use the repository formatter. `PatrolExample.bf` compiles and
   demonstrates ordinary Transform gameplay plus component-owned collection cleanup.
 - Graphics-free ownership checks pass locally in Linux Debug, including owner-bound world-state subscriptions and
