@@ -318,12 +318,15 @@ extension NetworkManager
 
 	/// The supported value fields (including private fields) of the scripts this machine runs, saved locally for
 	/// both state sync and lockstep. [Sync] is still only for replication; replay history is never sent. A changed
-	/// field layout is not restored if its size differs. Validate the entire layout before changing any field.
+	/// field layout is rejected before any fields are changed, even when its total byte size is the same.
 	bool ScriptFields(List<uint8> data, bool restore)
 	{
 		if (!restore)
-			data.Clear();
-		int at = 0;
+			data.Count = sizeof(uint64);
+		else if (data.Count < sizeof(uint64))
+			return false;
+		int at = sizeof(uint64);
+		uint64 schema = 5381;
 		List<FieldRef> fields = scope .();
 		List<(void* ptr, int size)> restoreFields = scope .();
 		for (let identity in mIdentities)
@@ -334,6 +337,10 @@ extension NetworkManager
 			{
 				if (!component.[Friend]mCallbacks.HasFlag(.Update) && !(component is NetworkBehaviour))
 					continue;
+				// Identity, script instance and each field address distinguish changed object sets and layouts,
+				// including a hot-reloaded script whose new fields happen to occupy the same number of bytes.
+				schema = ((schema << 7) | (schema >> 57)) ^ (uint64)identity.NetId;
+				schema = ((schema << 7) | (schema >> 57)) ^ (uint64)(int)Internal.UnsafeCastToPtr(component);
 				fields.Clear();
 				ComponentRegistry.GetFields(component, fields, true);
 				for (let field in fields)
@@ -342,6 +349,7 @@ extension NetworkManager
 					{
 					case .Float, .Double, .Char, .Vector4, .Int3, .Matrix4, .Int, .Bool, .Vector2, .Vector3, .Quaternion, .Color, .Enum:
 						let size = field.type.Size;
+						schema = ((schema << 7) | (schema >> 57)) ^ (uint64)(int)field.ptr ^ (uint64)size;
 						if (restore)
 						{
 							if (at + size > data.Count)
@@ -363,13 +371,19 @@ extension NetworkManager
 		{
 			if (at != data.Count)
 				return false;
-			at = 0;
+			uint64 savedSchema = 0;
+			Internal.MemCpy(&savedSchema, &data[0], sizeof(uint64));
+			if (schema != savedSchema)
+				return false;
+			at = sizeof(uint64);
 			for (let field in restoreFields)
 			{
 				Internal.MemCpy(field.ptr, &data[at], field.size);
 				at += field.size;
 			}
 		}
+		else
+			Internal.MemCpy(&data[0], &schema, sizeof(uint64));
 		return true;
 	}
 
