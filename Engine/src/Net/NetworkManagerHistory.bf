@@ -359,37 +359,75 @@ extension NetworkManager
 			CaptureOtherBodies(others);
 
 		Replaying = true;
+		mReplayOwned = owned;
+		mReplayOthers = others;
+		mReplayStepPhysics = stepPhysics;
 		defer
 		{
 			Replaying = false;
+			mReplayOwned = null;
+			mReplayOthers = null;
 		}
+		// Each tick goes through the scene's ReplayPipeline (the Replay.* steps below, and any a game adds).
 		for (uint32 tick = ackTick + 1; tick <= mTick; tick++)
 		{
-			// What is shown in the past is put where it was shown that tick, for predicted bodies to run into.
-			if (PredictedBodies > 0)
-				ApplyRemoteStates(tick, false);
-			SimulateOwned(LocalClientId, mInputs[tick % InputHistory]);
-			// A replayed contact can hand a transform motor to a body during this tick.
-			if (!stepPhysics && AnyHasBody(owned))
-			{
-				stepPhysics = true;
-				CaptureOtherBodies(others);
-			}
-			if (stepPhysics)
-			{
-				Water.[Friend]SimulateAt(mScene, Time.FixedDeltaTime, tick / (double)Time.TickRate);
-				mScene.Physics.Step(Time.FixedDeltaTime);
-			}
-			for (let entry in owned)
-				entry.identity.History[tick % NetworkIdentity.HistorySize] = entry.identity.CaptureState();
-			for (let identity in mIdentities)
-			{
-				if (identity.Predicted && (int32)(tick - identity.PredictedSince) >= 0)
-					identity.RecordTick(tick);
-			}
+			mReplayTick = tick;
+			mScene.RunReplayTick();
 		}
 		for (let entry in others)
 			entry.identity.ApplyState(entry.state);
+	}
+
+	// The tick being replayed and what ReplayInputs gathered, for the Replay.* steps.
+	uint32 mReplayTick;
+	List<(NetworkIdentity identity, BodyState state)> mReplayOwned;
+	List<(NetworkIdentity identity, BodyState state)> mReplayOthers;
+	bool mReplayStepPhysics;
+
+	/// Replay.RemoteStates: what is shown in the past is put where it was shown that tick, for predicted bodies to
+	/// run into.
+	void ReplayRemoteStates()
+	{
+		if (Replaying && PredictedBodies > 0)
+			ApplyRemoteStates(mReplayTick, false);
+	}
+
+	/// Replay.Update: the networked Update (and Simulate) of what this machine controls, with that tick's controls.
+	void ReplayUpdate()
+	{
+		if (!Replaying)
+			return;
+		SimulateOwned(LocalClientId, mInputs[mReplayTick % InputHistory]);
+		// A replayed contact can hand a transform motor to a body during this tick.
+		if (!mReplayStepPhysics && AnyHasBody(mReplayOwned))
+		{
+			mReplayStepPhysics = true;
+			CaptureOtherBodies(mReplayOthers);
+		}
+	}
+
+	/// Replay.Physics: objects moved by the physics engine need it stepped as well (bodies nobody here predicts are
+	/// put back after the replay).
+	void ReplayPhysics()
+	{
+		if (!Replaying || !mReplayStepPhysics)
+			return;
+		Water.[Friend]SimulateAt(mScene, Time.FixedDeltaTime, mReplayTick / (double)Time.TickRate);
+		mScene.Physics.Step(Time.FixedDeltaTime);
+	}
+
+	/// Replay.Record: where what this machine moves ended the tick, for the next comparison with the server.
+	void ReplayRecord()
+	{
+		if (!Replaying)
+			return;
+		for (let entry in mReplayOwned)
+			entry.identity.History[mReplayTick % NetworkIdentity.HistorySize] = entry.identity.CaptureState();
+		for (let identity in mIdentityStates)
+		{
+			if (identity.Predicted && (int32)(mReplayTick - identity.PredictedSince) >= 0)
+				identity.RecordTick(mReplayTick);
+		}
 	}
 
 	static bool AnyHasBody(List<(NetworkIdentity identity, BodyState state)> owned)

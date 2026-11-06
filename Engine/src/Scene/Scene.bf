@@ -1309,15 +1309,27 @@ class Scene
 	/// that engine systems added later run at their place among them. Steps in one phase run in the order added.
 	World.Pipeline mFramePipeline;
 	World.Pipeline mTickPipeline;
+	World.Pipeline mTickStartPipeline;
+	World.Pipeline mReplayPipeline;
 	/// The per-frame pipeline: add engine systems or steps to it by phase (World.AddStep).
 	public World.Pipeline FramePipeline => mFramePipeline;
 	/// The fixed-tick pipeline.
 	public World.Pipeline TickPipeline => mTickPipeline;
+	/// The pipeline a client runs for each tick it replays after a correction from the server (see AddSteps).
+	public World.Pipeline ReplayPipeline => mReplayPipeline;
+
+	/// Runs one replayed tick (NetworkManager, from the network's receive, between pipelines).
+	public void RunReplayTick() => World.Run(mReplayPipeline, Time.FixedDeltaTime);
 
 	void AddSteps()
 	{
+		// A tick runs in three parts: Tick.Starts (its own pipeline), then the network's receive, then the rest
+		// (TickPipeline). The receive is between pipelines, not a step, because a correction from the server rewinds
+		// and replays ticks through ReplayPipeline, and Flecs cannot run a pipeline inside another.
+		mTickStartPipeline = World.CreatePipeline("TickStart");
 		mTickPipeline = World.CreatePipeline("Tick");
-		World.AddStep(mTickPipeline, "Tick.Starts", .OnLoad, new () =>
+		mReplayPipeline = World.CreatePipeline("Replay");
+		World.AddStep(mTickStartPipeline, "Tick.Starts", .OnLoad, new () =>
 			{
 				using (sStartMarker.Sample())
 				{
@@ -1325,11 +1337,6 @@ class Scene
 					Rigidbody.SyncAll(this);
 					CharacterController.SyncAll(this);
 				}
-			}
-			);
-		World.AddStep(mTickPipeline, "Tick.NetworkReceive", .PostLoad, new () =>
-			{
-				using (sPreTickMarker.Sample()) Network?.PreTick();
 			}
 			);
 		World.AddStep(mTickPipeline, "Tick.Update", .PreUpdate, new () =>
@@ -1355,6 +1362,14 @@ class Scene
 				using (sPostTickMarker.Sample()) Network?.PostTick();
 			}
 			);
+
+		// One replayed tick on a client correcting its prediction (NetworkManager): what the server was showing then,
+		// the networked Update of what this machine controls, physics if anything predicted needs it, and noting
+		// where everything ended up. A game's own predicted systems go in this pipeline as well as TickPipeline.
+		World.AddStep(mReplayPipeline, "Replay.RemoteStates", .PostLoad, new () => Network?.[Friend]ReplayRemoteStates());
+		World.AddStep(mReplayPipeline, "Replay.Update", .PreUpdate, new () => Network?.[Friend]ReplayUpdate());
+		World.AddStep(mReplayPipeline, "Replay.Physics", .OnValidate, new () => Network?.[Friend]ReplayPhysics());
+		World.AddStep(mReplayPipeline, "Replay.Record", .PostUpdate, new () => Network?.[Friend]ReplayRecord());
 
 		mFramePipeline = World.CreatePipeline("Frame");
 		World.AddStep(mFramePipeline, "Frame.OnFrame", .OnLoad, new => RunOnFrames);
@@ -1446,6 +1461,9 @@ class Scene
 			return;
 		Active = this;
 		SpawnPhaseTime += Time.FixedDeltaTime;
+		RunPipeline(mTickStartPipeline, Time.FixedDeltaTime);
+		using (sPreTickMarker.Sample())
+			Network?.PreTick();
 		RunPipeline(mTickPipeline, Time.FixedDeltaTime);
 		Time.Tick++;
 	}

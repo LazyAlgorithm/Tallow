@@ -202,7 +202,8 @@ static class MapFiles
 				let space = type.IndexOf(' ');
 				if (space >= 0)
 					type = type.Substring(0, space);
-				if (ComponentRegistry.Find(type) == null && !missingTypes.ContainsAlt(type))
+				// A class component or a built-in one (a handle: SpawnPoint, Light...).
+				if (ComponentRegistry.Find(type) == null && HandleComponents.Find(type) == null && !missingTypes.ContainsAlt(type))
 					missingTypes.Add(new String(type));
 				continue;
 			}

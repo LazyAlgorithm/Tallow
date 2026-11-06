@@ -364,8 +364,8 @@ static class HandleComponents
 			}
 			if (type.GetMethod("DrawGizmos", .Static | .Public | .NonPublic) case .Ok(let method))
 				info.drawGizmos = method;
-			if (type.GetMethod("OnRemove", .Static | .Public | .NonPublic) case .Ok(let method))
-				info.onRemove = (Flecs.RemoveCallback)method.Ptr;
+			if (type.GetMethod("OnRemove", .Static | .Public | .NonPublic) case .Ok(let remove))
+				info.onRemove = (Flecs.RemoveCallback)remove.Ptr;
 			if (data.GetMethod("SaveData", .Static | .Public | .NonPublic) case .Ok(let saver))
 				info.saveData = (function void(void*, SaveIO))saver.Ptr;
 			if (type.GetMethod("SaveFields", .Static | .Public | .NonPublic) case .Ok(let saveObject))

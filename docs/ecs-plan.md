@@ -702,7 +702,7 @@ class Hover : Script
     order components joined (not sorted by type, so call order between scripts is as before).
   - `Scene` has two Flecs pipelines, `FramePipeline` and `TickPipeline`, and its work is in steps (immediate
     systems with no query, `World.AddStep`) in Flecs phases:
-    - Tick: OnLoad Starts, PostLoad NetworkReceive (PreTick), PreUpdate Update (networked objects, offline),
+    - Tick: OnLoad Starts (its own pipeline), then NetworkReceive (PreTick, between pipelines: Phase 6), PreUpdate Update (networked objects, offline),
       OnUpdate FixedUpdate, OnValidate Physics (water and Jolt), PostUpdate NetworkSend (PostTick).
     - Frame: OnLoad OnFrame, PostLoad Audio (voice and audio), PreUpdate Starts, OnUpdate Update and
       OnLocalUpdate, OnValidate Paths, PostUpdate LateUpdate, PreStore Animation (IK and skinning), OnStore
@@ -1297,7 +1297,25 @@ Before any 6a change, `main` (e9d87cdd) and this branch (6aa1c427) gave the same
     identity, `as` / `is NetworkIdentity`, `NetworkIdentity x = null` (use `default`), `FindIdentity` returning
     an invalid handle, not null. Build with `-verbosity=normal` and grep BF0472 to find the tests.
 - [ ] Column snapshots (snapshot fields read from the identities' data in Flecs order rather than object by object).
-- [ ] Rollback through the fixed pipeline with the networked Update on top.
+- [x] **Rollback through the fixed pipeline.** A tick is now Tick.Starts (its own pipeline, `TickStart`), then the
+  network's receive (`NetworkManager.PreTick`, called from `Scene.FixedUpdate` between pipelines), then
+  `TickPipeline`. The receive left the pipeline because a correction rewinds and replays ticks, and Flecs keeps one
+  current-pipeline state per world (`world->pq`), so a pipeline run inside a step would break the tick around it.
+  Each replayed tick runs `Scene.ReplayPipeline`: Replay.RemoteStates (PostLoad), Replay.Update (PreUpdate: the
+  networked Update and Simulate of what this machine controls), Replay.Physics (OnValidate: water and Jolt, when
+  anything replayed needs it), Replay.Record (PostUpdate: history for the next comparison). A game adds its own
+  predicted systems to it beside TickPipeline. Same work in the same order as the loop it replaces. A game step
+  added to TickPipeline at OnLoad now runs after the receive (it ran before). Checked: Network, PhysicsPrediction
+  (which corrects and replays: 1, 2 and 11 corrections in its cases), NetworkBandwidth, Voice and NetworkBytes the
+  same as `main`; EcsBench checks.
+- [x] **Restored suites, beyond networking** (2026-11-05): the 45 other suites taken out in 80213f07, each run on
+  `main` and on this branch (`~/TallowEcsTests`, scratch runner): 25 give the same results; 5 fail the same way on
+  `main` (AsyncLoading, CodeEditor, GraphApi, Http, Material: not this branch's doing); Maps and AntiCheat (network)
+  match after the MapFiles fix (a map's `component` lines may name built-in components). Being worked through:
+  Decals (1 failure), Water (2), ScriptCatalog (crash), and 16 suites written against the class API that need a
+  copy for this branch (as Network did): AnimationLayers, BehaviorTree, CharacterController, Culling, Dialogue,
+  Foliage, Joints, Navigation, NavigationMesh, Profiler, References, Sequencer, SkinnedMaterials, SpawnPoints,
+  Viewmodel, VoxelObject.
 - [ ] Lag compensation and host migration checked on the handles (the migration code is ported and compiles; no
   test of it ran yet on this branch).
 - [ ] Networked Showcase exhibits (the 6a exit).
