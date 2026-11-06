@@ -295,30 +295,34 @@ extension NetworkManager
 		return hash;
 	}
 
-	/// Client, after each tick (live or replayed) in lockstep: an exact snapshot of the physics.
+	/// Client, after each tick (live or replayed): the scripts' state for both replay modes, and the exact physics
+	/// state for lockstep. State sync already keeps its own physics and transform history.
 	void SaveExactAt(uint32 tick)
 	{
-		if (!Lockstep || mScene.Physics == null)
-			return;
 		let slot = tick % ExactRingSize;
-		mExact.states[slot] = mScene.Physics.SaveExact(mExact.states[slot]);
+		if (Lockstep)
+		{
+			if (mScene.Physics == null)
+				return;
+			mExact.states[slot] = mScene.Physics.SaveExact(mExact.states[slot]);
+			mExact.generation[slot] = mScene.Physics.BodyGeneration;
+		}
 		mExact.tick[slot] = tick;
-		mExact.generation[slot] = mScene.Physics.BodyGeneration;
 		if (mExact.scripts[slot] == null)
 			mExact.scripts[slot] = new .();
 		ScriptFields(mExact.scripts[slot], false);
 	}
 
-	/// The value fields (numbers, vectors, flags) the Inspector shows on the scripts of the objects this machine runs
-	/// (its own player and the others it runs), saved into `data` or, with `restore`, put back from it: a replay
-	/// starts from the scripts' state at that tick, not where they ended up. False if the scripts are not the same
-	/// as when saved (nothing is put back then).
+	/// The supported value fields (including private fields) of the scripts this machine runs, saved locally for
+	/// both state sync and lockstep. [Sync] is still only for replication; replay history is never sent. A changed
+	/// field layout is not restored if its size differs. Validate the entire layout before changing any field.
 	bool ScriptFields(List<uint8> data, bool restore)
 	{
 		if (!restore)
 			data.Clear();
 		int at = 0;
 		List<FieldRef> fields = scope .();
+		List<(void* ptr, int size)> restoreFields = scope .();
 		for (let identity in mIdentities)
 		{
 			if (identity.ownerId != LocalClientId && !identity.RemoteRun)
@@ -328,7 +332,7 @@ extension NetworkManager
 				if (!component.[Friend]mCallbacks.HasFlag(.Update) && !(component is NetworkBehaviour))
 					continue;
 				fields.Clear();
-				ComponentRegistry.GetFields(component, fields);
+				ComponentRegistry.GetFields(component, fields, true);
 				for (let field in fields)
 				{
 					switch (field.kind)
@@ -339,7 +343,7 @@ extension NetworkManager
 						{
 							if (at + size > data.Count)
 								return false;
-							Internal.MemCpy(field.ptr, &data[at], size);
+							restoreFields.Add((field.ptr, size));
 						}
 						else
 						{
@@ -352,7 +356,18 @@ extension NetworkManager
 				}
 			}
 		}
-		return !restore || at == data.Count;
+		if (restore)
+		{
+			if (at != data.Count)
+				return false;
+			at = 0;
+			for (let field in restoreFields)
+			{
+				Internal.MemCpy(field.ptr, &data[at], field.size);
+				at += field.size;
+			}
+		}
+		return true;
 	}
 
 	/// Client, in lockstep, after forwarded controls came in: if a guess was wrong (or the server ran this
