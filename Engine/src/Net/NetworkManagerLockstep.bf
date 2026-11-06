@@ -181,8 +181,11 @@ extension NetworkManager
 			RequestResync(true);
 			return;
 		}
-		if (mExact.scripts[slot] != null)
-			ScriptFields(mExact.scripts[slot], true);
+		if (mExact.scripts[slot] == null || !ScriptFields(mExact.scripts[slot], true))
+		{
+			RequestResync(true);
+			return;
+		}
 		let h = ackTick % NetworkIdentity.HistorySize;
 		List<(NetworkIdentity identity, BodyState state)> run = scope .();
 		for (let identity in mIdentities)
@@ -440,8 +443,8 @@ extension NetworkManager
 		}
 		if (!mScene.Physics.RestoreExact(mExact.states[slot]))
 			return false;
-		if (mExact.scripts[slot] != null)
-			ScriptFields(mExact.scripts[slot], true);
+		if (mExact.scripts[slot] == null || !ScriptFields(mExact.scripts[slot], true))
+			return false;
 		// What the physics engine does not hold (players with no body) goes back from its own history.
 		for (let entry in owned)
 		{
