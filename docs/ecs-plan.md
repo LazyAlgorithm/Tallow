@@ -973,7 +973,8 @@ describes, rather than keeping the classes and mirroring their data. Built-in co
   settings, switched off and on, Teleport, a missing controller, stopping, save, freed on remove and with the scene);
   the separate-worlds test (characters in two world states) and the Gallery self-test pass, and Campus plays.
 - **Staying classes for now** (each listed with what it waits for):
-  - **Colliders** (Box, Sphere, Capsule, Mesh, Compound, Convex) — **waiting on the project owner.** They are a class
+  - **Colliders** (Box, Sphere, Capsule, Mesh, Compound, Convex) — **decided 2026-11-05 by the project owner:
+    (a), they stay classes.** Stacking keeps working as it does, nothing changes for games. They are a class
     hierarchy (`GetComponent<Collider>()` finds any kind), static bodies are made once at Start with no per-frame
     cost, and objects stack them: without a Rigidbody each collider is its own static body, and the Tumble Toys
     aircraft prefabs put several BoxColliders on one object (a Rigidbody takes only the first). Handles allow one of
@@ -1218,8 +1219,8 @@ Same method as Phase 4: one component at a time, each with its checks, committed
   SequencePlayer, SpawnPoint, SceneLoader, SavedTransform, StreamingSource, ViewmodelPose, ComputeEffect,
   ModelMesh, LODGroup, VoxelObject and Joint. Staying classes, each with its reason above: the IK components,
   VoxelTerrain, Rope, SoftBody. Exit check: the Gallery (Showcase) self-test passes (`SHOWCASE_READY rooms=8`, no
-  errors), with EcsBench checks, the editor's model, palette, separate-worlds and world-streaming tests. Still open
-  from Phase 4: colliders (the stacking question, options a/b/c) are classes until it is decided.
+  errors), with EcsBench checks, the editor's model, palette, separate-worlds and world-streaming tests. Colliders
+  (from Phase 4): the project owner chose (a), they stay classes (2026-11-05).
 
 ## Benchmark results
 
