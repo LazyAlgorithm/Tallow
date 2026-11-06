@@ -995,7 +995,7 @@ static class EcsChecks
 			generated.Update(default, 1.0f / 64);
 			net.[Friend]ScriptFields(replayedTick, false);
 			bool same = expectedTick.Count == replayedTick.Count;
-			for (int i < expectedTick.Count && same)
+			for (int i = 0; i < expectedTick.Count && same; i++)
 				same &= expectedTick[i] == replayedTick[i];
 			Expect(same, "handwritten and generated script state matches byte-for-byte after fixed-tick replay");
 		}
