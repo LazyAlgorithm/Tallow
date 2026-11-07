@@ -66,6 +66,9 @@ struct Config
 	int32_t dihedral;     // bend by the angle between faces (jelly) rather than by distance (cloth)
 	int32_t shell;        // every vertex is held near its place on the object (skinned to it), which dents
 	int32_t impacts;      // shell: held exactly in place, dented by its object's collider's hits instead of its own
+	int32_t visualOnly;   // DrivenJelly: follow a Rigidbody without supplying collision response
+	float visualSpring;   // elastic spring return per step
+	float visualDamping;  // relative vertex velocity retention per step
 	uint32_t layer;
 	uint64_t userData;
 };
@@ -115,6 +118,9 @@ struct Shell
 	bool skinned = false;
 	// Dented by its object's hits (Impacts) rather than by being pushed in itself; the object's body, once known.
 	bool fromImpacts = false;
+	bool visualOnly = false;
+	float visualSpring = 0.25f;
+	float visualDamping = 0.75f;
 	uint32_t owner = 0xFFFFFFFFu;
 	// Counts up each time it dents (or its dents are set), for tn_soft_dent_revision.
 	uint32_t revision = 0;
@@ -180,7 +186,7 @@ public:
 		std::lock_guard<std::mutex> guard(mutex);
 		// A shell dented by its object's hits only follows the object: the object's collider meets everything.
 		auto shell = shells.find(soft.GetID().GetIndexAndSequenceNumber());
-		if (shell != shells.end() && shell->second.fromImpacts)
+		if (shell != shells.end() && (shell->second.fromImpacts || shell->second.visualOnly))
 			return JPH::SoftBodyValidateResult::RejectContact;
 		auto found = ignored.find(soft.GetID().GetIndexAndSequenceNumber());
 		if (found != ignored.end() && std::find(found->second.begin(), found->second.end(), other.GetID().GetIndexAndSequenceNumber()) != found->second.end())
@@ -418,6 +424,9 @@ TN_API uint32_t tn_soft_create(JPH_PhysicsSystem* world, const Config* config, c
 		kept.dentSpeed = std::max(config->dentSpeed, 0.0f);
 		kept.dentDepth = std::max(config->dentDepth, 0.001f);
 		kept.fromImpacts = config->impacts != 0;
+		kept.visualOnly = config->visualOnly != 0;
+		kept.visualSpring = std::clamp(config->visualSpring, 0.0f, 1.0f);
+		kept.visualDamping = std::clamp(config->visualDamping, 0.0f, 1.0f);
 		for (const auto& vertex : shared->mVertices)
 			kept.original.push_back(vertex.mPosition);
 		std::vector<JPH::Vec3> outward(shared->mVertices.size(), JPH::Vec3::sZero());
@@ -532,6 +541,116 @@ TN_API void tn_soft_set_positions(JPH_PhysicsSystem* world, uint32_t bodyId, con
 		}
 	}
 	Bodies(world).ActivateBody(JPH::BodyID(bodyId));
+}
+
+
+/// Returns the mass-weighted world velocity of a free soft body's vertices.
+/// Pinned vertices have no mass in the simulation and are ignored.
+namespace
+{
+float SoftVelocity(JPH::SoftBodyMotionProperties& soft, JPH::Vec3& average)
+{
+	float mass = 0.0f;
+	JPH::Vec3 weighted = JPH::Vec3::sZero();
+	for (const auto& vertex : soft.GetVertices())
+	{
+		if (vertex.mInvMass <= 0.0f)
+			continue;
+		const float vertexMass = 1.0f / vertex.mInvMass;
+		weighted += vertex.mVelocity * vertexMass;
+		mass += vertexMass;
+	}
+	average = mass > 0.0f ? weighted / mass : JPH::Vec3::sZero();
+	return mass;
+}
+}
+
+TN_API uint32_t tn_soft_velocity(JPH_PhysicsSystem* world, uint32_t bodyId, float* output)
+{
+	if (!world || !output)
+		return 0;
+	JPH::BodyLockRead lock(Locks(world), JPH::BodyID(bodyId));
+	if (!lock.Succeeded())
+		return 0;
+	const JPH::Body& body = lock.GetBody();
+	auto* soft = Soft(const_cast<JPH::Body&>(body));
+	if (!soft)
+		return 0;
+	JPH::Vec3 average;
+	if (SoftVelocity(*soft, average) <= 0.0f)
+		return 0;
+	const JPH::Vec3 worldVelocity = body.GetCenterOfMassTransform().Multiply3x3(average);
+	output[0] = worldVelocity.GetX();
+	output[1] = worldVelocity.GetY();
+	output[2] = worldVelocity.GetZ();
+	return 1;
+}
+
+/// Changes center-of-mass velocity without discarding per-vertex deformation/wobble.
+TN_API void tn_soft_set_velocity(JPH_PhysicsSystem* world, uint32_t bodyId, const float* velocity)
+{
+	if (!world || !velocity)
+		return;
+	bool changed = false;
+	{
+		JPH::BodyLockWrite lock(Locks(world), JPH::BodyID(bodyId));
+		if (!lock.Succeeded())
+			return;
+		JPH::Body& body = lock.GetBody();
+		auto* soft = Soft(body);
+		if (!soft)
+			return;
+		JPH::Vec3 current;
+		if (SoftVelocity(*soft, current) <= 0.0f)
+			return;
+		const JPH::Vec3 desired = body.GetInverseCenterOfMassTransform().Multiply3x3(JPH::Vec3(velocity[0], velocity[1], velocity[2]));
+		const JPH::Vec3 delta = desired - current;
+		for (auto& vertex : soft->GetVertices())
+			if (vertex.mInvMass > 0.0f)
+				vertex.mVelocity += delta;
+		changed = true;
+	}
+	if (changed)
+		Bodies(world).ActivateBody(JPH::BodyID(bodyId));
+}
+
+/// Changes the total momentum by impulse (N*s) with the same delta-V for every movable vertex.
+/// This preserves relative jelly motion while respecting the total simulated mass.
+TN_API void tn_soft_impulse(JPH_PhysicsSystem* world, uint32_t bodyId, const float* impulse)
+{
+	if (!world || !impulse)
+		return;
+	bool changed = false;
+	{
+		JPH::BodyLockWrite lock(Locks(world), JPH::BodyID(bodyId));
+		if (!lock.Succeeded())
+			return;
+		JPH::Body& body = lock.GetBody();
+		auto* soft = Soft(body);
+		if (!soft)
+			return;
+		JPH::Vec3 average;
+		const float mass = SoftVelocity(*soft, average);
+		if (mass <= 0.0f)
+			return;
+		const JPH::Vec3 worldDelta(impulse[0] / mass, impulse[1] / mass, impulse[2] / mass);
+		const JPH::Vec3 localDelta = body.GetInverseCenterOfMassTransform().Multiply3x3(worldDelta);
+		for (auto& vertex : soft->GetVertices())
+			if (vertex.mInvMass > 0.0f)
+				vertex.mVelocity += localDelta;
+		changed = true;
+	}
+	if (changed)
+		Bodies(world).ActivateBody(JPH::BodyID(bodyId));
+}
+
+/// A one-physics-step force; the Beef API supplies the fixed step duration.
+TN_API void tn_soft_force(JPH_PhysicsSystem* world, uint32_t bodyId, const float* force, float step)
+{
+	if (!force || step <= 0.0f)
+		return;
+	const float impulse[3] = { force[0] * step, force[1] * step, force[2] * step };
+	tn_soft_impulse(world, bodyId, impulse);
 }
 
 namespace
@@ -908,7 +1027,7 @@ TN_API void tn_soft_skin(JPH_PhysicsSystem* world, uint32_t bodyId, const float*
 				// or leaning on it.
 				const JPH::Vec3 carriedNow = step > 0 ? (bindToBodyNext * JPH::Vec3(bind) - place) / step : JPH::Vec3::sZero();
 				const float inward = -(vertex.mVelocity - carriedNow).Dot(out);
-				if (hit && depth > shell.dentYield && inward >= shell.dentSpeed)
+				if (!shell.visualOnly && hit && depth > shell.dentYield && inward >= shell.dentSpeed)
 				{
 					// Pushed in past what springs back: the rest of the way it was pushed is a dent.
 					JPH::Vec3(bodyToBind * (place + away * (1.0f - shell.dentYield / depth))).StoreFloat3(&bind);
@@ -921,7 +1040,9 @@ TN_API void tn_soft_skin(JPH_PhysicsSystem* world, uint32_t bodyId, const float*
 					const JPH::Vec3 now = bindToBody * JPH::Vec3(bind);
 					const JPH::Vec3 carried = (bindToBodyNext * JPH::Vec3(bind) - now) / step;
 					const JPH::Vec3 back = now - vertex.mPosition;
-					vertex.mVelocity = carried + (vertex.mVelocity - carried) * 0.75f + back * (0.25f / step);
+					const float damping = shell.visualOnly ? shell.visualDamping : 0.75f;
+					const float spring = shell.visualOnly ? shell.visualSpring : 0.25f;
+					vertex.mVelocity = carried + (vertex.mVelocity - carried) * damping + back * (spring / step);
 				}
 			}
 		}
