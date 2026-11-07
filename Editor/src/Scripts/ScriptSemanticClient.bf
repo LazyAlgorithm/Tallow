@@ -147,7 +147,7 @@ class ScriptSemantic
 		for (int i < sources.Count)
 		{
 			let source = sources[i];
-			let snapshot = scope $"{requestDirectory}/overlay-{}.bf", i;
+			let snapshot = scope $"{requestDirectory}/overlay-{i}.bf";
 			if (File.WriteAllText(snapshot, source.text) case .Err)
 			{
 				result.Set("error\tCould not save an unsaved Beef script snapshot.\n");
