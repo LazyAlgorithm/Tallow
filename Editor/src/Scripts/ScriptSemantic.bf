@@ -200,16 +200,23 @@ extension EditorApp
 		}
 		if (kind == "diagnostics")
 		{
-			tn_code_clear_markers(target.handle);
+			// Keep the legacy analyzer compatible with the newer Console-only diagnostics policy.
+			// Code-editor error markers are intentionally no longer created.
 			if (let diagnostics = result["diagnostics"]?.items)
 			{
 				for (let diagnostic in diagnostics)
 				{
-					if (diagnostic["file"]?.text == target.path)
-						tn_code_add_marker(target.handle, (int32)diagnostic["line"].AsInteger,
-							diagnostic["warning"].AsInteger == 0, diagnostic["message"].text.CStr());
+					if (diagnostic["file"]?.text != target.path)
+						continue;
+					let problem = new ScriptProblem();
+					problem.file.Set(target.path);
+					problem.line = (int32)diagnostic["line"].AsInteger;
+					problem.isError = diagnostic["warning"].AsInteger == 0;
+					problem.message.Set(diagnostic["message"]?.text ?? "");
+					mProblems.Add(problem);
 				}
 			}
+			PublishScriptDiagnostics();
 		}
 		if (kind == "definition")
 		{
