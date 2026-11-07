@@ -70,3 +70,11 @@ DrivenJelly has **no independent collision response**: it remains a visual-only 
 When the Rigidbody makes contact, Tallow captures the contact position and relative speed and pushes **nearby** skin vertices inward, bounded by Driven Flex. Springs then return the surface toward its original shape. This doesn't apply force to the Rigidbody or alter the ordinary sphere collider.
 
 Tune Driven Flex around 0.2–0.35, Driven Spring 0.2–0.35 and Driven Damping 0.7–0.85, then observe high-speed wall impacts. These are starting points, not verified presets. Changes to native code require a **local** Tallow build; no GitHub Actions workflow is run.
+
+## Free Jelly camera and update ordering
+
+Soft-body readback now runs as `Frame.SoftBodies`, after `Frame.Starts` and before `Frame.Update`. This copies Jolt's simulated vertices into the mesh and, for a free `SoftBodyKind.Jelly`, updates the object's Transform. Cameras and gameplay scripts see the new Transform regardless of their order in the scene.
+
+`LateUpdate` still runs once per rendered frame, as expected; the old problem was the *relative order of component callbacks*, not the callback name. A camera declared before a soft body used to see the old position and then have the ball move later in that same `LateUpdate` pass.
+
+Free jelly physics still steps at the fixed tick rate. Camera smoothing remains useful to avoid visual stepping when the render frame rate is higher than the simulation tick rate.

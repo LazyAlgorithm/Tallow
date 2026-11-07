@@ -1400,6 +1400,15 @@ class Scene
 					CharacterController.SyncAll(this);
 				}
 			});
+		// Physics ticks have already finished. Free soft bodies carry their
+		// GameObject position when their vertices are read back; do this
+		// before any gameplay Update or camera LateUpdate, independent of
+		// GameObject registration order.
+		World.AddStep(mFramePipeline, "Frame.SoftBodies", .PreUpdate, new () =>
+			{
+				if (mPlaying)
+					Physics.[Friend]SyncSoftBodiesForFrame();
+			});
 		World.AddStep(mFramePipeline, "Frame.Update", .OnUpdate, new => RunFrameUpdates);
 		// Conversations move on after the scripts' Update (DialogueRunner.OnLocalUpdate did, in component order).
 		World.AddStep(mFramePipeline, "Frame.Dialogue", .OnUpdate, new () => DialogueRunner.FrameAll(this));

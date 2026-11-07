@@ -709,6 +709,18 @@ class PhysicsWorld
 	/// Soft bodies (SoftBody components) by body id: each moves its pins and feels the wind before a step.
 	Dictionary<uint32, SoftBody> mSoftBodies = new .() ~ delete _;
 
+	/// Bring all soft-body poses and render meshes up to date once per frame,
+	/// BEFORE gameplay Update and camera LateUpdate. Previously SoftBody did
+	/// this in its own LateUpdate: if the camera joined first it looked at
+	/// yesterday's ball transform, while the ball rendered at today's.
+	void SyncSoftBodiesForFrame()
+	{
+		if (mSystem == null || mSoftBodies.IsEmpty)
+			return;
+		for (let soft in mSoftBodies.Values)
+			soft.[Friend]ReadBack();
+	}
+
 	void AddSoftBody(uint32 bodyId, SoftBody owner) => mSoftBodies[bodyId] = owner;
 
 	/// Ropes (Rope components): each moves its ends and ties its pull before a step.

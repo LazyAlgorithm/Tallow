@@ -663,11 +663,9 @@ class SoftBody : Component
 		mIgnored = uint32.MaxValue;
 	}
 
-	public override void LateUpdate()
-	{
-		ReadBack();
-	}
-
+	// Called by PhysicsWorld.SyncSoftBodiesForFrame before scripts' Update.
+	// A camera's LateUpdate must see the current Jolt pose even if the
+	// camera component was registered before the SoftBody.
 	/// The simulation's vertices into Positions and the mesh drawn.
 	void ReadBack()
 	{
