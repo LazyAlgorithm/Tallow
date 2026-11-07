@@ -36,44 +36,6 @@ class UpdateCounter : Component
 	}
 }
 
-/// Script fields used for prediction can be rewound without [Sync]; [Sync] is for replication only.
-[Component]
-class ReplayFieldCounter : Script
-{
-	[Sync]
-	public int32 count;
-	float elapsed;
-	[NonSerialized]
-	public int32 presentation;
-
-	public float Elapsed => elapsed;
-	public void SetElapsed(float value)
-	{
-		elapsed = value;
-	}
-
-	public override void Update(TickInput input, float deltaTime)
-	{
-		count++;
-		elapsed += deltaTime;
-	}
-}
-
-[Component]
-class LocalDisableProbe : Script
-{
-	public int updates;
-	public override void OnLocalUpdate()
-	{
-		Enabled = false;
-	}
-
-	public override void Update(TickInput input, float deltaTime)
-	{
-		updates++;
-	}
-}
-
 /// Changes enabled state before Update, for EcsChecks.UpdateChecks.
 [Component]
 class LocalUpdateGate : Component
@@ -98,50 +60,6 @@ class LocalUpdateGate : Component
 	}
 }
 
-/// A resource with an observable lifetime for the owner-cleanup regression checks.
-class OwnedProbe
-{
-	public static int deleted;
-	public ~this()
-	{
-		deleted++;
-	}
-}
-
-[Component]
-class OwnershipProbe : Script
-{
-	public static int cleaned;
-	public static bool cleanupBeforeDelete;
-
-	public override void Awake()
-	{
-		let resource = Own(new OwnedProbe());
-		Own(resource);
-		OnCleanup(new () =>
-			{
-				cleanupBeforeDelete &= OwnedProbe.deleted == cleaned;
-				cleaned++;
-			});
-	}
-}
-
-/// Exercises automatic disconnection without retaining a manually managed delegate.
-[Component]
-class WorldStateListenerProbe : Script
-{
-	public static int calls;
-
-	public override void Awake()
-	{
-		ListenWorldState(new (from, to) =>
-			{
-				calls++;
-			}
-			);
-	}
-}
-
 /// Checks of the ECS layer (World, Query, ParallelFor, deferred changes), run with TALLOW_BENCH_MODE=check.
 static class EcsChecks
 {
@@ -156,74 +74,9 @@ static class EcsChecks
 		}
 	}
 
-	/// Lifetime checks that do not create a graphics device or window.
-	public static int RunLifetimeChecks()
-	{
-		sFailures = 0;
-		OwnershipChecks();
-		WorldStateListenerChecks();
-		Console.WriteLine(sFailures == 0 ? "Ownership checks: all passed" : "Ownership checks failed");
-		return sFailures == 0 ? 0 : 1;
-	}
-
-	static void WorldStateListenerChecks()
-	{
-		let active = Scene.Active;
-		defer
-		{
-			Scene.Active = active;
-		}
-		WorldStateListenerProbe.calls = 0;
-		let scene = scope Scene();
-		let owner = scene.CreateGameObject("Listener");
-		let script = owner.AddComponent<WorldStateListenerProbe>();
-		scene.StartPlay();
-		scene.WorldState = 1;
-		Expect(WorldStateListenerProbe.calls == 1, "owner-bound listener receives world-state changes");
-		scene.StopPlay();
-		Expect(scene.WorldStateChanged.IsEmpty, "StopPlay disconnects owner-bound listeners");
-		scene.WorldState = 0;
-		Expect(WorldStateListenerProbe.calls == 1, "stopped listeners are not invoked");
-		scene.StartPlay();
-		scene.WorldState = 1;
-		Expect(WorldStateListenerProbe.calls == 2, "restarting adds one fresh subscription");
-		owner.RemoveComponent(script);
-		Expect(scene.WorldStateChanged.IsEmpty, "component removal disconnects its subscription");
-		owner.AddComponent<WorldStateListenerProbe>();
-		scene.Clear();
-		Expect(scene.WorldStateChanged.IsEmpty, "scene unload disconnects all owner-bound listeners");
-	}
-
-	/// A cached reference must refresh even when the native table's short version wraps around.
-	public static int RunReferenceChecks()
-	{
-		let world = scope World();
-		let entity = world.Create();
-		world.Set<Pose>(entity, .());
-		var reference = ComponentRef<Pose>(world, entity);
-		const int TableVersionPeriod = 65536;
-		for (int i < TableVersionPeriod)
-			world.Set<Pose>(world.Create(), .());
-		let expected = world.Get<Pose>(entity);
-		if (reference.Get(world) != expected)
-		{
-			Console.WriteLine("Cached reference did not refresh after table version wrap");
-			return 1;
-		}
-		world.Remove<Pose>(entity);
-		if (reference.Get(world) != null) return 1;
-		world.Set<Pose>(entity, .());
-		if (reference.Get(world) != world.Get<Pose>(entity)) return 1;
-		world.Delete(entity);
-		if (reference.Get(world) != null) return 1;
-		Console.WriteLine("Cached reference checks: all passed");
-		return 0;
-	}
-
 	public static int Run()
 	{
 		sFailures = 0;
-		Expect(RunReferenceChecks() == 0, "cached references survive table version wrap, removal and deletion");
 		let world = scope World();
 		let entities = scope List<Entity>();
 		world.CreateMany<Pose>(1000, entities);
@@ -269,9 +122,6 @@ static class EcsChecks
 		Expect(!world.IsAlive(entities[0]) && world.Count<Pose>() == 999, "Delete");
 		SceneChecks();
 		UpdateChecks();
-		OwnershipChecks();
-		WorldStateListenerChecks();
-		GeneratedGraphChecks();
 		sFailures += ScriptPathChecks.Run();
 		DataChecks();
 		PrefabChecks();
@@ -304,7 +154,6 @@ static class EcsChecks
 		VoxelObjectChecks();
 		JointChecks();
 		NetworkIdentityChecks();
-		ScriptReplayChecks();
 		return sFailures;
 	}
 
@@ -343,102 +192,6 @@ static class EcsChecks
 		Expect(world.Count<ObjectLink>() == 0, "no entities left behind");
 	}
 
-	static void GeneratedGraphChecks()
-	{
-		let scene = scope Scene();
-		let owner = scene.CreateGameObject("Graph");
-		let script = owner.AddComponent<GeneratedTickProbe>();
-		Expect(script.steps == 7, "integer graph variables retain their type and default");
-		for (int i < 100)
-		{
-			let delta = (i + 1) / 1024.0f;
-			script.Update(default, delta);
-			Expect(script.tickDelta == delta, "generated Update uses the supplied tick delta");
-		}
-		List<FieldRef> fields = scope .();
-		ComponentRegistry.GetFields(script, fields, true);
-		bool replicated = false;
-		for (let field in fields)
-		{
-			if (field.name == "tickDelta")
-				replicated = field.sync;
-		}
-		Expect(replicated, "generated Sync fields use the ordinary reflection path");
-		let text = scope String();
-		SceneSerializer.Save(scene, text);
-		let loaded = scope Scene();
-		SceneSerializer.Load(loaded, text);
-		let copy = loaded.Find("Graph")?.GetComponent<GeneratedTickProbe>();
-		Expect(copy != null && copy.steps == script.steps && copy.tickDelta == script.tickDelta, "generated script fields survive scene round trip");
-	}
-
-	static void OwnershipChecks()
-	{
-		OwnedProbe.deleted = 0;
-		OwnershipProbe.cleaned = 0;
-		OwnershipProbe.cleanupBeforeDelete = true;
-		let active = Scene.Active;
-		defer
-		{
-			Scene.Active = active;
-		}
-		{
-			let scene = scope Scene();
-			let owner = scene.CreateGameObject("Owner");
-			owner.AddComponent<OwnershipProbe>();
-			scene.StartPlay();
-			let updates = scope List<ScriptReload.TypeUpdate>();
-			updates.Add(.() { original = typeof(OwnershipProbe), script = true });
-			let error = scope String();
-			Expect(!ScriptStateMigration.CanReplace(scene, updates, error), "live owned resources block unsafe instance replacement");
-			Expect(OwnedProbe.deleted == 0, "a rejected reload leaves the running owner's resources intact");
-			scene.StopPlay();
-			Expect(ScriptStateMigration.CanReplace(scene, updates, error), "stopping play permits replacement after cleanup");
-			Expect(OwnedProbe.deleted == 1 && OwnershipProbe.cleaned == 1, "StopPlay releases each owned resource and cleanup once");
-			scene.StartPlay();
-			let script = owner.GetComponent<OwnershipProbe>();
-			owner.RemoveComponent(script);
-			Expect(OwnedProbe.deleted == 2 && OwnershipProbe.cleaned == 2, "restarted component gets a fresh resource lifetime");
-			owner.AddComponent<OwnershipProbe>();
-			scene.DestroyImmediate(owner);
-			Expect(OwnedProbe.deleted == 3 && OwnershipProbe.cleaned == 3, "object destruction releases owned resources once");
-		}
-		Expect(OwnershipProbe.cleanupBeforeDelete, "cleanup callbacks run before resource deletion");
-		Expect(OwnedProbe.deleted == 3 && OwnershipProbe.cleaned == 3, "scene teardown does not release resources twice");
-		// The last batch may disappear before its worker completes. Once adopted, that job must leave the cache.
-		let jobsBefore = AssetLoader.[Friend]sJobs.Count;
-		let job = new AssetLoader.Job() { waiting = 1 };
-		AssetLoader.[Friend]sJobs[new String("phase7-abandoned-preload")] = job;
-		AssetLoader.[Friend]Release(job);
-		Expect(AssetLoader.[Friend]sJobs.Count == jobsBefore + 1, "in-flight preload remains alive until adoption");
-		AssetLoader.[Friend]FinishAdoption(job);
-		Expect(AssetLoader.[Friend]sJobs.Count == jobsBefore, "an abandoned preload job is released after adoption");
-
-		// Shutdown joins workers and clears pending jobs, while batches remain safe to inspect and delete.
-		{
-			let batch = scope AssetLoader.Batch();
-			let pending = new AssetLoader.Job() { waiting = 1 };
-			pending.images = new .();
-			pending.images.Add(new SkinnedModel.PendingImage());
-			batch.AddJob(pending);
-			AssetLoader.[Friend]sJobs[new String("phase7-shutdown")] = pending;
-			AssetLoader.[Friend]sQueue.Add(pending);
-			Expect(AssetLoader.Busy, "queued preload is busy");
-			AssetLoader.Shutdown();
-			Expect(!AssetLoader.Busy && batch.IsDone && batch.IsCancelled, "shutdown terminates pending batches safely");
-			Expect(pending.images == null && AssetLoader.[Friend]sJobs.Count == 0, "shutdown releases decoded payload and cache keys");
-			AssetLoader.Shutdown();
-		}
-		Expect(AssetLoader.[Friend]sJobs.Count == 0, "cancelled batches release without stale map entries");
-
-		// Even components never registered with a scene own what they explicitly adopted.
-		{
-			let loose = scope OwnershipProbe();
-			loose.Own(new OwnedProbe());
-		}
-		Expect(OwnedProbe.deleted == 4, "a detached component releases adopted resources on deletion");
-	}
-
 	/// Update runs per frame on plain objects and per tick on networked ones; an object no player controls gets
 	/// empty controls (Component.Update).
 	static void UpdateChecks()
@@ -446,7 +199,6 @@ static class EcsChecks
 		let previous = Scene.Active;
 		let scene = scope Scene();
 		let plain = scene.CreateGameObject("Plain").AddComponent<UpdateCounter>();
-		let localDisable = scene.CreateGameObject("LocalDisable").AddComponent<LocalDisableProbe>();
 		let networkedObject = scene.CreateGameObject("Networked");
 		let identity = networkedObject.AddComponent<NetworkIdentity>();
 		identity.playerControlled = false;
@@ -474,17 +226,8 @@ static class EcsChecks
 			scene.FixedUpdate();
 		Expect(plain.frames == 3 && plain.ticks == 0, scope $"plain object: Update once a frame (frames {plain.frames}, ticks {plain.ticks})");
 		Expect(networked.ticks == 2 && networked.frames == 0, scope $"networked object: Update once a tick (frames {networked.frames}, ticks {networked.ticks})");
-		Expect(localDisable.updates == 0, "OnLocalUpdate disabling a script prevents its Update in the same frame");
 		Expect(!networked.sawControls, "an object no player controls gets empty controls");
 
-		// Rebuilding callback membership after a metadata change retains registration order.
-		let order = scope List<Component>(scene.[Friend]mFrameList.GetEnumerator());
-		ScriptCallbackIndex.[Friend]sByType[typeof(UpdateCounter)] = .None;
-		ScriptCallbackIndex.Refresh();
-		scene.[Friend]RebuildCallbackLists();
-		Expect(scene.[Friend]mFrameList.Count == order.Count, "callback rebuild restores the current masks");
-		for (int i < order.Count)
-			Expect(scene.[Friend]mFrameList[i] == order[i], "callback rebuild preserves registration order");
 		let selfGate = scene.CreateGameObject("Self gate").AddComponent<LocalUpdateGate>();
 		let parent = scene.CreateGameObject("Parent gate");
 		let parentGate = scene.CreateGameObject("Child gate", parent.Transform).AddComponent<LocalUpdateGate>();
@@ -1092,68 +835,6 @@ static class EcsChecks
 			let copy = loaded.Find("First").GetComponent<NetworkIdentity>();
 			Expect(copy.IsValid && copy.fullPrecision && copy.remoteFormat == .ExactTransform && copy.ownerId == 3 && copy.correctionSmoothing == 12, "its settings are saved and read");
 		}
-		Scene.Active = previous;
-	}
-
-	/// State sync saves script fields locally for replay whether or not they are [Sync], including private value
-	/// fields. [NonSerialized] presentation state is not touched. No transport is needed to check the snapshot.
-	static void ScriptReplayChecks()
-	{
-		let previous = Scene.Active;
-		let scene = scope Scene();
-		Scene.Active = scene;
-		let net = new NetworkManager(scene);
-		scene.Network = net;
-		net.[Friend]mMode = .Client;
-		net.LocalClientId = 2;
-		net.[Friend]mConnected = true;
-		let gameObject = scene.CreateGameObject("Replay");
-		let identity = gameObject.AddComponent<NetworkIdentity>();
-		identity.ownerId = 2;
-		let script = gameObject.AddComponent<ReplayFieldCounter>();
-		let generated = gameObject.AddComponent<GeneratedTickProbe>();
-		scene.StartPlay();
-		script.count = 3;
-		script.SetElapsed(0.75f);
-		script.presentation = 5;
-		List<uint8> snapshot = scope .();
-		Expect(net.[Friend]ScriptFields(snapshot, false), "prediction script fields can be captured");
-		script.count = 10;
-		script.SetElapsed(2);
-		script.presentation = 7;
-		Expect(net.[Friend]ScriptFields(snapshot, true), "prediction script fields can be restored");
-		Expect(script.count == 3 && Math.Abs(script.Elapsed - 0.75f) < 1.0e-6f, "both [Sync] and private non-networked script fields rewind");
-		Expect(script.presentation == 7, "[NonSerialized] presentation fields are left alone");
-		snapshot.Add(0);
-		Expect(!net.[Friend]ScriptFields(snapshot, true) && script.count == 3, "a changed snapshot size never partially restores fields");
-		snapshot.RemoveAt(snapshot.Count - 1);
-		List<uint8> beforeTick = scope .();
-		List<uint8> expectedTick = scope .();
-		List<uint8> replayedTick = scope .();
-		for (int tick < 120)
-		{
-			net.[Friend]ScriptFields(beforeTick, false);
-			script.Update(default, 1.0f / 64);
-			generated.Update(default, 1.0f / 64);
-			net.[Friend]ScriptFields(expectedTick, false);
-			Expect(net.[Friend]ScriptFields(beforeTick, true), "fixed-tick replay restores the prior script state");
-			script.Update(default, 1.0f / 64);
-			generated.Update(default, 1.0f / 64);
-			net.[Friend]ScriptFields(replayedTick, false);
-			bool same = expectedTick.Count == replayedTick.Count;
-			for (int i = 0; i < expectedTick.Count && same; i++)
-				same &= expectedTick[i] == replayedTick[i];
-			Expect(same, "handwritten and generated script state matches byte-for-byte after fixed-tick replay");
-		}
-		script.count = 11;
-		let added = scene.CreateGameObject("New Replay");
-		let addedIdentity = added.AddComponent<NetworkIdentity>();
-		addedIdentity.ownerId = 2;
-		added.AddComponent<ReplayFieldCounter>();
-		Expect(!net.[Friend]ScriptFields(snapshot, true) && script.count == 11, "a changed script set does not restore an old layout");
-		scene.StopPlay();
-		scene.Network = null;
-		delete net;
 		Scene.Active = previous;
 	}
 

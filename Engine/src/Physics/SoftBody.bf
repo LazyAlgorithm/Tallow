@@ -303,6 +303,10 @@ class SoftBody : Component
 			Rigidbody driver = default;
 			for (var up = Transform; up != null && !driver.IsValid; up = up.Parent)
 				driver = up.GameObject.GetComponent<Rigidbody>();
+			// Scene runs component Start callbacks before Rigidbody.SyncAll. Create the driver
+			// now when required, so an ordinary editor-authored ball works on the first play tick.
+			if (driver.IsValid && !driver.HasBody)
+				driver.EnsureBody();
 			if (!driver.IsValid || !driver.HasBody)
 			{
 				Log.Warning(scope $"Driven Jelly on '{GameObject.Name}' needs a Rigidbody with a collider on this object or an ancestor.");

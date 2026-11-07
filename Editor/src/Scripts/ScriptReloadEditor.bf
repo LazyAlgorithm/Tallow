@@ -69,7 +69,6 @@ extension EditorApp
 	void PollScriptReload()
 	{
 		CollectCheckResults();
-		PollAnalysis();
 		if (!mReloadReady) return;
 		if (mScriptPollClock.ElapsedMilliseconds >= 500)
 		{
@@ -85,7 +84,6 @@ extension EditorApp
 			delete mCheckThread;
 			mCheckThread = null;
 		}
-		CaptureCheckDocuments();
 		mCheckWasReload = true;
 		mCheckRunning = true;
 		Interlocked.Store(ref mCheckFinished, false);

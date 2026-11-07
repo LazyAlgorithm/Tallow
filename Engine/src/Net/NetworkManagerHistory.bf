@@ -225,16 +225,9 @@ extension NetworkManager
 		}
 		// A correction from further back than the cap is taken as it is, eased in, rather than run again for that long.
 		let tooOld = comparable && (int32)(mTick - ackTick) > MaxReplayTicks;
-		// Validate and restore local gameplay fields before rewinding the world. If scripts have changed since
-		// that tick, an unsafe replay would diverge again: take the server's state instead.
-		let scripts = ackTick % ExactRingSize;
-		let badScripts = comparable && !tooOld && (mExact.tick[scripts] != ackTick || mExact.scripts[scripts] == null
-			|| !ScriptFields(mExact.scripts[scripts], true));
-		if (tooOld || badScripts)
+		if (tooOld)
 			Resyncs++;
-		if (badScripts)
-			Log.Warning("State-sync replay cannot restore a changed script snapshot; using the server's state.");
-		if (!comparable || tooOld || badScripts)
+		if (!comparable || tooOld)
 		{
 			for (let entry in owned)
 			{

@@ -39,26 +39,6 @@ class ScriptStateMigration
 	List<Saved> mSaved = new .() ~ DeleteContainerAndItems!(_);
 	List<Reference> mReferences = new .() ~ DeleteContainerAndItems!(_);
 
-	/// Resource factories and delegates cannot be reconstructed by field serialization. Refuse replacement while
-	/// such a lifetime is open, before committing metadata; the current instances remain usable until play stops.
-	public static bool CanReplace(Scene scene, List<ScriptReload.TypeUpdate> types, String error)
-	{
-		for (let component in scene.Components)
-		{
-			if (component.[Friend]mOwnershipClosed) continue;
-			if ((component.[Friend]mOwnedResources?.Count ?? 0) == 0 && (component.[Friend]mOwnedCleanup?.Count ?? 0) == 0) continue;
-			for (let update in types)
-			{
-				if (update.script && component.GetType() == update.original)
-				{
-					error.Set(scope $"Stop Play before reloading {component.GetType()}: it owns live resources or subscriptions. Current code remains active.");
-					return false;
-				}
-			}
-		}
-		return true;
-	}
-
 	public void Capture(Scene scene, List<ScriptReload.TypeUpdate> types)
 	{
 		List<FieldRef> fields = scope .();
@@ -133,7 +113,6 @@ class ScriptStateMigration
 			saved.owner.Components[saved.index] = replacement;
 			scene.[Friend]ReplaceComponent(saved.old, replacement);
 		}
-		scene.[Friend]RebuildCallbackLists();
 		List<FieldRef> fields = scope .();
 		List<StringView> tokens = scope .();
 		List<String> storage = scope .();

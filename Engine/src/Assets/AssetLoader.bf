@@ -30,7 +30,6 @@ static class AssetLoader
 		public Kind kind;
 		public bool finished;
 		public bool adopted;
-		public bool cancelled;
 		public Mesh mesh;
 		public SkinnedModel model;
 		public List<SkinnedModel.PendingImage> images ~ DeleteContainerAndItems!(_);
@@ -63,19 +62,6 @@ static class AssetLoader
 		/// 0 to 1.
 		public float Progress => Total == 0 ? 1 : (float)Loaded / Total;
 		public bool IsDone => Loaded == Total;
-		/// Shutdown cancelled at least one item before it reached the shared cache.
-		public bool IsCancelled
-		{
-			get
-			{
-				for (let job in mJobs)
-				{
-					if (job.cancelled)
-						return true;
-				}
-				return false;
-			}
-		}
 
 		public ~this()
 		{
@@ -98,7 +84,6 @@ static class AssetLoader
 	static Dictionary<String, Job> sJobs = new .() ~ delete _;
 	static List<Thread> sThreads = new .() ~ delete _;
 	static bool sQuit;
-	static int32 sWorking;
 
 	/// The kind of thing a path is, by its extension, or false for something this loader does not handle.
 	public static bool KindOf(StringView path, out Kind kind)
@@ -140,14 +125,6 @@ static class AssetLoader
 		return batch;
 	}
 
-	/// Starts an owner-bound preload. The batch is released automatically with the component; loaded assets
-	/// remain in their shared caches. Do not delete the returned batch or use it after owner cleanup.
-	public static Batch Preload(Component owner, params StringView[] paths)
-	{
-		Runtime.Assert(owner != null, "An owner-bound preload needs a component.");
-		return owner.Own(Preload(params paths));
-	}
-
 	/// Starts loading one thing of a given kind into a batch.
 	public static void Add(Batch batch, StringView path, Kind kind)
 	{
@@ -178,41 +155,25 @@ static class AssetLoader
 		sWake.Set(false);
 	}
 
-	// Called with sMonitor held, after the upload has finished and the last batch has let go.
-	static void ForgetJob(Job job)
-	{
-		for (let entry in sJobs)
-		{
-			if (entry.value == job)
-			{
-				let key = entry.key;
-				sJobs.Remove(key);
-				delete key;
-				break;
-			}
-		}
-		delete job;
-	}
-
 	static void Release(Job job)
 	{
 		using (sMonitor.Enter())
 		{
-			if (--job.waiting == 0 && job.adopted)
-				ForgetJob(job);
+			if (--job.waiting > 0 || !job.adopted)
+				return;
+			// Nobody is waiting and it has been handed over: the job can go.
+			for (let entry in sJobs)
+			{
+				if (entry.value == job)
+				{
+					let key = entry.key;
+					sJobs.Remove(key);
+					delete key;
+					break;
+				}
+			}
 		}
-	}
-
-	static void FinishAdoption(Job job)
-	{
-		using (sMonitor.Enter())
-		{
-			job.adopted = true;
-			// A component can be removed while its preload is in flight. Release cannot free that job until
-			// the worker/upload is done; finish the release here rather than retaining an ownerless job forever.
-			if (job.waiting == 0)
-				ForgetJob(job);
-		}
+		delete job;
 	}
 
 	static void StartThreads()
@@ -220,8 +181,6 @@ static class AssetLoader
 #if !BF_PLATFORM_WASM
 		if (sThreads.Count > 0)
 			return;
-		sQuit = false;
-		sWake.Reset();
 		for (int i < 2)
 		{
 			let thread = new Thread(new => WorkerMain);
@@ -270,7 +229,6 @@ static class AssetLoader
 				{
 					job = sQueue[0];
 					sQueue.RemoveAt(0);
-					sWorking++;
 				}
 			}
 			if (job == null)
@@ -281,7 +239,6 @@ static class AssetLoader
 			Work(job);
 			using (sMonitor.Enter())
 			{
-				sWorking--;
 				job.finished = true;
 				sFinished.Add(job);
 				LoadedInBackground++;
@@ -346,8 +303,8 @@ static class AssetLoader
 				else
 					Log.Warning(scope $"Could not load texture {job.path}");
 			}
-			DiscardPayload(job);
-			FinishAdoption(job);
+			using (sMonitor.Enter())
+				job.adopted = true;
 			if (SDL.SDL_GetTicksNS() - start > budget)
 				break;
 		}
@@ -359,27 +316,7 @@ static class AssetLoader
 		get
 		{
 			using (sMonitor.Enter())
-				return sWorking > 0 || sQueue.Count > 0 || sFinished.Count > 0;
-		}
-	}
-
-	// Only after a worker has finished or has been joined. Uploaded objects have already transferred
-	// to their caches; abandoned jobs still own their decoded payload here.
-	static void DiscardPayload(Job job)
-	{
-		delete job.mesh;
-		job.mesh = null;
-		delete job.model;
-		job.model = null;
-		if (job.pixels != null)
-		{
-			Native.tn_image_free(job.pixels);
-			job.pixels = null;
-		}
-		if (job.images != null)
-		{
-			DeleteContainerAndItems!(job.images);
-			job.images = null;
+				return sQueue.Count > 0 || sFinished.Count > 0;
 		}
 	}
 
@@ -395,27 +332,5 @@ static class AssetLoader
 			delete thread;
 		}
 		sThreads.Clear();
-		using (sMonitor.Enter())
-		{
-			sQueue.Clear();
-			sFinished.Clear();
-			for (let entry in sJobs)
-			{
-				let job = entry.value;
-				if (!job.adopted)
-				{
-					DiscardPayload(job);
-					job.cancelled = true;
-					job.finished = true;
-					job.adopted = true;
-				}
-				if (job.waiting == 0)
-					delete job;
-				delete entry.key;
-			}
-			// Live batches retain their jobs until Release; a later preload starts a fresh job.
-			sJobs.Clear();
-			sWorking = 0;
-		}
 	}
 }

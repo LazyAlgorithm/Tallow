@@ -200,7 +200,10 @@ class Transform
 		set
 		{
 			ref TransformData data = ref D();
-			data.localPosition = mParent != null ? mParent.WorldToLocal.TransformPoint(value) : value;
+			if (mParent != null)
+				data.localPosition = mParent.WorldToLocal.TransformPoint(value);
+			else
+				data.localPosition = value;
 			MarkDirty(ref data);
 		}
 	}
@@ -221,7 +224,10 @@ class Transform
 		set
 		{
 			ref TransformData data = ref D();
-			data.localRotation = mParent != null ? (mParent.Rotation.Conjugate * value).Normalized : value;
+			if (mParent != null)
+				data.localRotation = (mParent.Rotation.Conjugate * value).Normalized;
+			else
+				data.localRotation = value;
 			MarkDirty(ref data);
 		}
 	}

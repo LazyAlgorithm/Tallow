@@ -81,14 +81,6 @@ abstract class Component
 	/// Which per-frame callbacks this component's class overrides (ScriptCallbacks), set when it joins a scene.
 	ScriptCallbacks mCallbacks;
 
-	public ~this()
-	{
-		// Keep the registries alive until detached owners have released their contents.
-		ReleaseOwned();
-		delete mOwnedCleanup;
-		delete mOwnedResources;
-	}
-
 	/// The object this component is on.
 	public GameObject GameObject { [Inline] get => mGameObject; }
 	/// The transform of the object this component is on.

@@ -191,11 +191,8 @@ extension NetworkManager
 			RequestResync(true);
 			return;
 		}
-		if (mExact.scripts[slot] == null || !ScriptFields(mExact.scripts[slot], true))
-		{
-			RequestResync(true);
-			return;
-		}
+		if (mExact.scripts[slot] != null)
+			ScriptFields(mExact.scripts[slot], true);
 		let h = ackTick % NetworkIdentity.HistorySize;
 		List<(NetworkIdentity identity, BodyState state)> run = scope .();
 		for (let identity in mIdentities)
@@ -312,32 +309,20 @@ extension NetworkManager
 		return hash;
 	}
 
-	/// Client, after each tick (live or replayed): the scripts' state for both replay modes, and the exact physics
-	/// state for lockstep. State sync already keeps its own physics and transform history.
+	/// Client, after each tick (live or replayed) in lockstep: an exact snapshot of the physics.
 	void SaveExactAt(uint32 tick)
 	{
+		if (!Lockstep || mScene.Physics == null)
+			return;
 		let slot = tick % ExactRingSize;
-		if (Lockstep)
-		{
-			if (mScene.Physics == null)
-				return;
-			mExact.states[slot] = mScene.Physics.SaveExact(mExact.states[slot]);
-			mExact.generation[slot] = mScene.Physics.BodyGeneration;
-		}
+		mExact.states[slot] = mScene.Physics.SaveExact(mExact.states[slot]);
 		mExact.tick[slot] = tick;
+		mExact.generation[slot] = mScene.Physics.BodyGeneration;
 		if (mExact.scripts[slot] == null)
 			mExact.scripts[slot] = new .();
 		ScriptFields(mExact.scripts[slot], false);
 	}
 
-	// ScriptFields runs on the simulation thread without user callbacks. Reuse capacity across ticks instead
-	// of allocating two temporary lists per snapshot/replay; clear borrowed references on every exit.
-	List<FieldRef> mScriptFieldScratch = new .() ~ delete _;
-	List<(void* ptr, int size)> mScriptRestoreScratch = new .() ~ delete _;
-
-	/// The supported value fields (including private fields) of the scripts this machine runs, saved locally for
-	/// both state sync and lockstep. [Sync] is still only for replication; replay history is never sent. A changed
-	/// field layout is rejected before any fields are changed, even when its total byte size is the same.
 	/// The reflected value fields (numbers, vectors, flags), including private fields, on the scripts of the objects this machine runs
 	/// (its own player and the others it runs), saved into `data` or, with `restore`, put back from it: a replay
 	/// starts from the scripts' state at that tick, not where they ended up. False if the scripts are not the same
@@ -361,9 +346,7 @@ extension NetworkManager
 		{
 			schema = (schema ^ value) * 1099511628211UL;
 		}
-		let fields = mScriptFieldScratch;
-		fields.Clear();
-		defer fields.Clear();
+		List<FieldRef> fields = scope .();
 		for (let identity in mIdentities)
 		{
 			if (identity.ownerId != LocalClientId && !identity.RemoteRun)
@@ -490,8 +473,8 @@ extension NetworkManager
 		}
 		if (!mScene.Physics.RestoreExact(mExact.states[slot]))
 			return false;
-		if (mExact.scripts[slot] == null || !ScriptFields(mExact.scripts[slot], true))
-			return false;
+		if (mExact.scripts[slot] != null)
+			ScriptFields(mExact.scripts[slot], true);
 		// What the physics engine does not hold (players with no body) goes back from its own history.
 		for (let entry in owned)
 		{

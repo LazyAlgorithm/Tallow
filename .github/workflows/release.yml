@@ -16,7 +16,7 @@ name: Engine release
 on:
   push:
     tags: ['v*']
-    branches: [dev, main, ecs]
+    branches: [dev, main]
   workflow_dispatch:
     inputs:
       publish:
@@ -119,13 +119,6 @@ jobs:
           path: tallow/build/native
           key: ${{ steps.native-key.outputs.key }}
 
-      - name: Build and check Beef analysis
-        if: github.ref == 'refs/heads/ecs'
-        run: |
-          cd tallow
-          python3 tools/semantic/build_helper.py --beef-root "$HOME/beef" --output build/semantic/beef-resolve
-          LD_LIBRARY_PATH="$HOME/beef/IDE/dist:$LD_LIBRARY_PATH" python3 tools/semantic/test_service.py --helper build/semantic/beef-resolve --beef-root "$HOME/beef"
-
       - name: Build and package
         run: |
           export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
@@ -134,48 +127,7 @@ jobs:
           python3 tools/validate_showcase.py --package ../out/Tallow-Linux --work ../showcase-test
           cd ../out && zip -qr9 Tallow-Linux.zip Tallow-Linux
 
-      - name: Package ECS validation toolchain
-        if: github.ref == 'refs/heads/ecs'
-        run: |
-          mkdir -p ecs-toolchain/lib
-          ldd "$HOME/beef/IDE/dist/BeefBuild" > ecs-toolchain/dependencies.txt
-          for library in $(awk '/=> \// {print $3}' ecs-toolchain/dependencies.txt); do
-            case "$(basename "$library")" in
-              libLLVM*|libffi*|libxml2*|libedit*|libtinfo*|libhunspell*|libicu*|libz3*) cp -L "$library" ecs-toolchain/lib/ ;;
-            esac
-          done
-          tar -chzf ecs-toolchain/beef.tar.gz -C "$HOME/beef" IDE/dist BeefLibs
-
-      - name: Keep ECS validation toolchain
-        if: github.ref == 'refs/heads/ecs'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ECS-Linux-toolchain
-          path: ecs-toolchain/
-          retention-days: 3
-
-      - name: ECS regression builds and checks
-        if: github.ref == 'refs/heads/ecs'
-        run: |
-          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
-          sudo apt-get install -y xvfb mesa-vulkan-drivers
-          cd tallow
-          python3 -m unittest discover -s tools -p test_run_ecs_bench.py -v
-          python3 tools/run_code_editor_tests.py
-          for config in Debug Release; do
-            "$BEEFBUILD" -workspace=. -config="$config" -platform=Linux64
-            "build/${config}_Linux64/TallowLauncher/TallowLauncher" --build-project "$PWD/Samples/EcsBench"
-            "$BEEFBUILD" -workspace=Samples/EcsBench -config="$config" -platform=Linux64
-            "Samples/EcsBench/build/${config}_Linux64/EcsBench/EcsBench" --generate-graph-fixture "$PWD/Samples/EcsBench/src/GeneratedTickProbe.bf"
-            "$BEEFBUILD" -workspace=Samples/EcsBench -config="$config" -platform=Linux64
-            "Samples/EcsBench/build/${config}_Linux64/EcsBench/EcsBench" --check-semantic-client "$PWD" "$PWD/Samples/EcsBench"
-            "Samples/EcsBench/build/${config}_Linux64/EcsBench/EcsBench" --check-lifetimes
-            "Samples/EcsBench/build/${config}_Linux64/EcsBench/EcsBench" --check-references
-            xvfb-run -a python3 tools/run_ecs_bench.py --check --config "$config" --timeout 600
-          done
-
       - name: Keep the zip
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Tallow-Linux
@@ -264,14 +216,6 @@ jobs:
         with:
           path: tallow/build/native-win
           key: ${{ steps.native-key.outputs.key }}
-
-      - name: Build and check Beef analysis
-        if: github.ref == 'refs/heads/ecs'
-        run: |
-          beef_root="$(cygpath -w "$PWD/beef-win")"
-          cd tallow
-          python tools/semantic/build_helper.py --beef-root "$beef_root" --output build/semantic/beef-resolve.exe
-          TALLOW_ANALYSIS_TRACE=1 python tools/semantic/test_service.py --helper build/semantic/beef-resolve.exe --beef-root "$beef_root"
 
       - name: Build and package
         run: |

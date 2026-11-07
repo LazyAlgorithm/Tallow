@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <unordered_map>
@@ -23,14 +22,7 @@ namespace
 		TextEditor editor;
 		TrieAutoComplete completion;
 		std::string text;
-		std::string savedText;
-		uint64_t revision = 0;
-		uint64_t dirtyRevision = 0;
-		bool dirty = false;
-		bool semantic = false;
-		bool completionPending = false;
-		uint64_t completionRevision = 0;
-		int32_t completionCursor = -1;
+		size_t savedUndoIndex = 0;
 		size_t lastUndoIndex = 0;
 		bool markup = false;
 		// Which of the editor's code colour sets this document was last given (tn_code_set_palette).
@@ -193,24 +185,6 @@ namespace
 		return "";
 	}
 
-	int32_t CursorOffset(Document* document)
-	{
-		const auto cursor = document->editor.GetMainCursorPosition();
-		size_t offset = cursor.index;
-		for (size_t line = 0; line < cursor.line; ++line)
-			offset += document->editor.GetLineText(line).size() + 1;
-		return static_cast<int32_t>(offset);
-	}
-
-	void RequestCompletion(Document* document, TextEditor::AutoCompleteState& state)
-	{
-		state.suggestions.clear();
-		state.suggestionsPromise = true;
-		document->completionPending = true;
-		document->completionRevision = document->revision;
-		document->completionCursor = CursorOffset(document);
-	}
-
 	void CompleteBeef(TextEditor* editor, TextEditor::AutoCompleteState& state)
 	{
 		state.suggestions.clear();
@@ -227,8 +201,7 @@ namespace
 			const std::string owner = line.substr(begin, end - begin);
 			if (!owner.empty() && isdigit((unsigned char)owner[0])) return;   // a number such as 1.5
 			std::vector<std::string> members;
-			bool knownType = apiTypes.count(owner) != 0;
-			if (knownType)
+			if (apiTypes.count(owner))
 				MembersOf(owner, members);
 			else if (!owner.empty())
 			{
@@ -237,10 +210,9 @@ namespace
 				if (type.empty() && owner == "Transform") type = "Transform";
 				if (type.empty() && owner == "GameObject") type = "GameObject";
 				if (type.empty() && owner == "Scene") type = "Scene";
-				knownType = !type.empty();
-				if (knownType) MembersOf(type, members);
+				if (!type.empty()) MembersOf(type, members);
 			}
-			if (knownType)
+			if (!members.empty())
 			{
 				Offer(state.suggestions, members, term, 200);
 				return;
@@ -483,58 +455,9 @@ TN_API void* tn_code_create(const char* text, int language)
 	}
 	else
 		document->completion.Connect(&editor);
-	document->savedText = editor.GetText();
-	document->lastUndoIndex = editor.GetUndoIndex();
-	editor.SetTransactionCallback([document](const std::vector<TextEditor::Change>& changes) {
-		if (changes.empty()) return;
-		++document->revision;
-		document->completionPending = false;
-		// Compiler locations refer to an older buffer as soon as it is edited, including undo/redo.
-		document->editor.ClearMarkers();
-	});
+	document->savedUndoIndex = editor.GetUndoIndex();
+	document->lastUndoIndex = document->savedUndoIndex;
 	return document;
-}
-
-// All widget calls, including applying worker results, stay on the UI thread.
-TN_API int32_t tn_code_cursor_offset(void* handle) { return CursorOffset(static_cast<Document*>(handle)); }
-
-TN_API void tn_code_semantic_mode(void* handle, bool enabled)
-{
-	auto* document = static_cast<Document*>(handle);
-	if (document->semantic == enabled) return;
-	document->semantic = enabled;
-	document->completionPending = false;
-	document->editor.SetAutoCompleteSuggestions({});
-}
-
-TN_API bool tn_code_completion_request(void* handle, uint64_t* revision, int32_t* cursor)
-{
-	auto* document = static_cast<Document*>(handle);
-	if (!document->completionPending) return false;
-	document->completionPending = false;
-	*revision = document->completionRevision;
-	*cursor = document->completionCursor;
-	return true;
-}
-
-TN_API bool tn_code_completion_result(void* handle, uint64_t revision, int32_t cursor, const char* words)
-{
-	auto* document = static_cast<Document*>(handle);
-	if (!document->semantic || revision != document->revision || cursor != CursorOffset(document) ||
-		revision != document->completionRevision || cursor != document->completionCursor) return false;
-	std::vector<std::string> suggestions;
-	const char* at = words != nullptr ? words : "";
-	while (*at)
-	{
-		const char* end = strchr(at, '\n');
-		if (end == nullptr)
-			end = at + strlen(at);
-		if (end > at)
-			suggestions.emplace_back(at, end);
-		at = *end ? end + 1 : end;
-	}
-	document->editor.SetAutoCompleteSuggestions(suggestions);
-	return true;
 }
 
 // The editor describes the code it found: begin, one call per type (members separated by newlines), end.
@@ -808,22 +731,13 @@ TN_API void tn_code_replace_text(void* handle, const char* text)
 TN_API bool tn_code_is_dirty(void* handle)
 {
 	Document* document = (Document*)handle;
-	if (document->dirtyRevision != document->revision)
-	{
-		document->dirty = document->editor.GetText() != document->savedText;
-		document->dirtyRevision = document->revision;
-	}
-	return document->dirty;
+	return document->editor.GetUndoIndex() != document->savedUndoIndex;
 }
-
-TN_API uint64_t tn_code_revision(void* handle) { return ((Document*)handle)->revision; }
 
 TN_API void tn_code_mark_saved(void* handle)
 {
 	Document* document = (Document*)handle;
-	document->savedText = document->editor.GetText();
-	document->dirtyRevision = document->revision;
-	document->dirty = false;
+	document->savedUndoIndex = document->editor.GetUndoIndex();
 }
 
 TN_API void tn_code_set_read_only(void* handle, bool readOnly) { ((Document*)handle)->editor.SetReadOnlyEnabled(readOnly); }

@@ -1,272 +1,177 @@
 using System;
 using System.Collections;
-using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using Tallow;
 
 namespace Tallow.Editor;
 
-/// Compiler-backed analysis, navigation and diagnostics for open script documents.
-extension EditorApp
+/// An immutable source snapshot sent to Beef's resolver. Rename compares these again before editing buffers.
+class ScriptSourceSnapshot
 {
-	[CLink] static extern int32 tn_code_cursor_offset(void* handle);
-	[CLink] static extern void tn_code_semantic_mode(void* handle, bool enabled);
-	[CLink] static extern bool tn_code_completion_request(void* handle, out uint64 revision, out int32 cursor);
-	[CLink] static extern bool tn_code_completion_result(void* handle, uint64 revision, int32 cursor, char8* words);
+	public String path = new .() ~ delete _;
+	public String text = new .() ~ delete _;
+	public String replacement = new .() ~ delete _;
+}
 
-	BeefAnalysisClient mAnalysis ~ delete _;
-	String mAnalysisProject = new .() ~ delete _;
-	String mAnalysisHint = new .() ~ delete _;
-	bool mAnalysisAttempted;
-	int32 mAnalysisGeneration;
-	int32 mAnalysisRequest;
-	int32 mAnalysisHintCursor = -1;
-	int32 mAnalysisAutoCursor = -1;
-	uint64 mAnalysisSeenRevision = uint64.MaxValue;
-	uint64 mAnalysisDiagnosedRevision = uint64.MaxValue;
-	ScriptDocument mAnalysisDocument;
-	Stopwatch mAnalysisIdle = new .(true) ~ delete _;
+/// A compiler-resolved symbol occurrence. Offsets and lengths are UTF-8 bytes, as in Beef source files.
+struct ScriptSymbolReference
+{
+	public int file;
+	public int start;
+	public int length;
+}
 
-	void ResetAnalysis()
+/// Runs the Beef IDE resolver outside the editor. The UI owns snapshots until the worker finishes, and rejects
+/// results when any open source changed. No resolver operation writes the project's source files.
+class ScriptSemantic
+{
+	[CLink] static extern char8* tn_code_canonical_path(char8* path);
+
+	/// Uses the same absolute, symlink-resolved source names as the compiler worker.
+	public static void CanonicalPath(StringView file, String output)
 	{
-		DeleteAndNullify!(mAnalysis);
-		mAnalysisAttempted = false;
-		mAnalysisGeneration++;
-		mAnalysisDocument = null;
-		mAnalysisSeenRevision = uint64.MaxValue;
-		mAnalysisDiagnosedRevision = uint64.MaxValue;
-		mAnalysisHint.Clear();
-		for (let document in mScripts)
-			tn_code_semantic_mode(document.handle, false);
+		output.Set(StringView(tn_code_canonical_path(scope String(file).CStr())));
+		output.Replace('\\', '/');
 	}
 
-	void PollAnalysis()
+	Thread mWorker;
+	bool mFinished;
+	String mFolder = new .() ~ delete _;
+	String mCommand = new .() ~ delete _;
+	public bool running;
+	public String operation = new .() ~ delete _;
+	public String path = new .() ~ delete _;
+	public String renameName = new .() ~ delete _;
+	public String result = new .() ~ delete _;
+	public String status = new .() ~ delete _;
+	public int cursor;
+	public List<ScriptSourceSnapshot> sources = new .() ~ DeleteContainerAndItems!(_);
+
+	public ~this()
 	{
-		let project = Project.Current;
-		if (project == null || mScripts.Count == 0) return;
-		if (mAnalysisProject != project.Path)
+		if (mWorker != null)
 		{
-			ResetAnalysis();
-			mAnalysisProject.Set(project.Path);
+			mWorker.Join();
+			delete mWorker;
 		}
-		if (!mAnalysisAttempted)
+		if (!mFolder.IsEmpty)
+			Directory.DelTree(mFolder).IgnoreError();
+	}
+
+	public int Find(StringView file)
+	{
+		let canonical = scope String();
+		CanonicalPath(file, canonical);
+		for (int i < sources.Count)
 		{
-			mAnalysisAttempted = true;
-#if BF_PLATFORM_LINUX || BF_PLATFORM_WINDOWS
-			let service = scope $"{project.EngineRoot}/tools/semantic/service.py";
-			let helper = scope $"{project.EngineRoot}/build/semantic/beef-resolve";
-		#if BF_PLATFORM_WINDOWS
-			helper.Append(".exe");
-		#endif
-			if (!File.Exists(helper))
-			{
-				helper.Set(scope $"{project.EngineRoot}/tools/semantic/beef-resolve");
-		#if BF_PLATFORM_WINDOWS
-				helper.Append(".exe");
-		#endif
-			}
-			if (File.Exists(service) && File.Exists(helper))
-			{
-				project.WriteBuildFiles();
-				mAnalysis = new .(project.Path, service, helper);
-			}
-#endif
+			if (Path.Equals(sources[i].path, canonical))
+				return i;
 		}
-		let ready = mAnalysis?.Ready ?? false;
-		for (let document in mScripts)
-			tn_code_semantic_mode(document.handle, ready && document.path.EndsWith(".bf"));
-		if (!ready) return;
-		let response = scope String();
-		if (mAnalysis.TakeResult(response))
-			ApplyAnalysis(response);
-		let active = mActiveScript;
-		if (active == null || !active.path.EndsWith(".bf")) return;
-		let revision = tn_code_revision(active.handle);
-		if (mAnalysisDocument != active || mAnalysisSeenRevision != revision)
+		return -1;
+	}
+
+	public void Add(StringView file, StringView text)
+	{
+		let index = Find(file);
+		if (index >= 0)
 		{
-			mAnalysisDocument = active;
-			mAnalysisSeenRevision = revision;
-			mAnalysisDiagnosedRevision = uint64.MaxValue;
-			mAnalysisHint.Clear();
-			mAnalysisAutoCursor = -1;
-			mAnalysisIdle.Restart();
-		}
-		let currentCursor = tn_code_cursor_offset(active.handle);
-		if (currentCursor != mAnalysisHintCursor)
-			mAnalysisHint.Clear();
-		if (mAnalysisIdle.ElapsedMilliseconds < 200) return;
-		if (tn_code_completion_request(active.handle, let requestRevision, let cursor))
-		{
-			if (requestRevision == revision)
-				RequestAnalysis(active, "completion", cursor);
+			sources[index].text.Set(text);
 			return;
 		}
-		if (mAnalysisAutoCursor != currentCursor && currentCursor > 0)
-		{
-			let text = StringView(tn_code_get_text(active.handle));
-			if (currentCursor <= text.Length && (text[currentCursor - 1] == '(' || text[currentCursor - 1] == ','))
-			{
-				mAnalysisAutoCursor = currentCursor;
-				RequestAnalysis(active, "completion", currentCursor);
-				return;
-			}
-		}
-		if (mAnalysisIdle.ElapsedMilliseconds >= 750 && mAnalysisDiagnosedRevision != revision)
-		{
-			mAnalysisDiagnosedRevision = revision;
-			RequestAnalysis(active, "diagnostics", -1);
-		}
+		let source = new ScriptSourceSnapshot();
+		CanonicalPath(file, source.path);
+		source.text.Set(text);
+		sources.Add(source);
 	}
 
-	void RequestAnalysis(ScriptDocument document, StringView kind, int32 cursor)
+	public bool AddFolder(StringView folder, int depth = 0)
 	{
-		if (document == null || !(mAnalysis?.Ready ?? false)) return;
-		let request = scope SaveNode(.Object);
-		request.Set("id", SaveNode.MakeInt(++mAnalysisRequest));
-		request.Set("generation", SaveNode.MakeInt(mAnalysisGeneration));
-		request.Set("path", SaveNode.MakeString(document.path));
-		request.Set("cursor", SaveNode.MakeInt(cursor));
-		request.Set("kind", SaveNode.MakeString(kind));
-		let buffers = new SaveNode(.List);
-		request.Set("buffers", buffers);
-		for (let open in mScripts)
+		if (depth > 32)
+			return false;
+		for (let entry in Directory.EnumerateFiles(folder))
 		{
-			if (!open.path.EndsWith(".bf")) continue;
-			let buffer = new SaveNode(.Object);
-			buffer.Set("path", SaveNode.MakeString(open.path));
-			buffer.Set("revision", SaveNode.MakeInt((int64)tn_code_revision(open.handle)));
-			buffer.Set("text", SaveNode.MakeString(StringView(tn_code_get_text(open.handle))));
-			buffers.items.Add(buffer);
+			let name = scope String();
+			entry.GetFileName(name);
+			if (!name.EndsWith(".bf", .OrdinalIgnoreCase))
+				continue;
+			let file = scope $"{folder}/{name}";
+			let source = scope String();
+			if (File.ReadAllText(file, source, true) case .Err)
+				return false;
+			Add(file, source);
 		}
-		let text = scope String();
-		request.ToText(text, false);
-		mAnalysis.Submit(text);
+		for (let entry in Directory.EnumerateDirectories(folder))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (!name.StartsWith('.') && name != "build" && !AddFolder(scope $"{folder}/{name}" , depth + 1))
+				return false;
+		}
+		return true;
 	}
 
-	void ApplyAnalysis(StringView response)
+	public bool Start(StringView request, StringView file, int byteOffset, StringView newName = "")
 	{
-		let result = SaveNode.FromText(response);
-		defer delete result;
-		if (result == null || result["id"]?.AsInteger != mAnalysisRequest || result["generation"]?.AsInteger != mAnalysisGeneration) return;
-		if (result["error"] != null) return;
-		let versions = result["versions"];
-		if (versions == null || versions.keys == null) return;
-		for (int i < versions.Count)
+		if (running || Project.Current == null)
+			return false;
+		operation.Set(request);
+		CanonicalPath(file, path);
+		if (path.Contains('\t') || path.Contains('\n') || newName.Contains('\t') || newName.Contains('\n'))
+			return false;
+		cursor = byteOffset;
+		renameName.Set(newName);
+		result.Clear();
+		status.Set("Beef: resolving...");
+		if (!mFolder.IsEmpty)
+			Directory.DelTree(mFolder).IgnoreError();
+		mFolder.Set(scope $"{Project.Current.Path}/.tallow-language/{SDL.SDL_GetTicksNS()}");
+		if (Directory.CreateDirectory(mFolder) case .Err)
+			return false;
+		let manifest = scope $"operation\t{request}\nfile\t{path}\ncursor\t{byteOffset}\nnew_name\t{newName}\n";
+		for (int i < sources.Count)
 		{
-			ScriptDocument match = null;
-			for (let document in mScripts)
-			{
-				if (document.path == versions.keys[i])
-				{
-					match = document;
-					break;
-				}
-			}
-			if (match == null || tn_code_revision(match.handle) != (uint64)versions.items[i].AsInteger) return;
+			let source = sources[i];
+			if (source.path.Contains('\t') || source.path.Contains('\n'))
+				return false;
+			let snapshot = scope $"{mFolder}/{i}.bf";
+			if (File.WriteAllText(snapshot, source.text) case .Err)
+				return false;
+			manifest.AppendF("overlay\t{}\t{}\n", source.path, snapshot);
 		}
-		ScriptDocument target = null;
-		for (let document in mScripts)
-		{
-			if (document.path == result["path"]?.text)
+		if (File.WriteAllText(scope $"{mFolder}/request.tsv" , manifest) case .Err)
+			return false;
+		mCommand.Clear();
+		mCommand.AppendF("{} ", Terminal.Python);
+		Terminal.Quote(scope $"{Project.Current.EngineRoot}/tools/beef_language_service.py" , mCommand);
+		mCommand.Append(" --project ");
+		Terminal.Quote(Project.Current.Path, mCommand);
+		mCommand.Append(" --request ");
+		Terminal.Quote(mFolder, mCommand);
+		mCommand.Append(" > ");
+		Terminal.Quote(scope $"{mFolder}/worker.log" , mCommand);
+		mCommand.Append(" 2>&1");
+		running = true;
+		mFinished = false;
+		mWorker = new Thread(new () =>
 			{
-				target = document;
-				break;
-			}
-		}
-		if (target == null) return;
-		let kind = result["kind"]?.text;
-		let cursor = (int32)(result["cursor"]?.AsInteger ?? -1);
-		if (kind != "diagnostics" && tn_code_cursor_offset(target.handle) != cursor) return;
-		if (kind == "completion")
-		{
-			let words = scope String();
-			if (let completions = result["completions"]?.items)
-			{
-				for (let item in completions)
-					words.Append(item.text, "\n");
-			}
-			tn_code_completion_result(target.handle, (uint64)result["revision"].AsInteger, cursor, words.CStr());
-			mAnalysisHint.Clear();
-			mAnalysisHintCursor = cursor;
-			if (let signatures = result["signatures"]?.items)
-			{
-				for (let item in signatures)
-				{
-					if (!mAnalysisHint.IsEmpty)
-						mAnalysisHint.Append("   |   ");
-					mAnalysisHint.Append(item.text);
-				}
-			}
-		}
-		if (kind == "diagnostics")
-		{
-			// Keep the legacy analyzer compatible with the newer Console-only diagnostics policy.
-			// Code-editor error markers are intentionally no longer created.
-			if (let diagnostics = result["diagnostics"]?.items)
-			{
-				for (let diagnostic in diagnostics)
-				{
-					if (diagnostic["file"]?.text != target.path)
-						continue;
-					let problem = new ScriptProblem();
-					problem.file.Set(target.path);
-					problem.line = (int32)diagnostic["line"].AsInteger;
-					problem.isError = diagnostic["warning"].AsInteger == 0;
-					problem.message.Set(diagnostic["message"]?.text ?? "");
-					mProblems.Add(problem);
-				}
-			}
-			PublishScriptDiagnostics();
-		}
-		if (kind == "definition")
-		{
-			let definition = result["definition"];
-			if (definition != null && !definition.IsNull)
-				OpenScript(definition["path"].text, (int32)definition["line"].AsInteger);
-		}
-		if (kind == "hover")
-		{
-			mAnalysisHintCursor = cursor;
-			mAnalysisHint.Clear();
-			if (let documentation = result["documentation"]?.items)
-			{
-				for (let item in documentation)
-				{
-					if (!mAnalysisHint.IsEmpty)
-						mAnalysisHint.Append("\n");
-					mAnalysisHint.Append(item.text);
-				}
-			}
-			if (mAnalysisHint.IsEmpty)
-				mAnalysisHint.Set("No documentation at this position.");
-		}
+				let exitCode = Terminal.Run(mCommand);
+				if (File.ReadAllText(scope $"{mFolder}/response.tsv" , result, true) case .Err)
+					result.Set(scope $"error\tBeef language service failed ({exitCode}); see {mFolder}/worker.log\n");
+				Interlocked.Store(ref mFinished, true);
+			});
+		mWorker.Start(false);
+		return true;
 	}
 
-	void DrawAnalysisToolbar(ScriptDocument active)
+	public bool Collect()
 	{
-		let ready = mAnalysis?.Ready ?? false;
-		ImGui.SetCursorPosX(6);
-		if (ready)
-			ImGui.TextDisabled("Beef compiler");
-		else if (mAnalysis != null && !mAnalysis.Failed)
-			ImGui.TextDisabled("Starting Beef analysis...");
-		else
-			ImGui.TextDisabled("Basic completion");
-		ImGui.SameLine();
-		ImGui.BeginDisabled(!ready || active == null);
-		if (ImGui.SmallButton("Definition") && active != null)
-			RequestAnalysis(active, "definition", tn_code_cursor_offset(active.handle));
-		ImGui.SameLine();
-		if (ImGui.SmallButton("Signature") && active != null)
-			RequestAnalysis(active, "completion", tn_code_cursor_offset(active.handle));
-		ImGui.SameLine();
-		if (ImGui.SmallButton("Info") && active != null)
-			RequestAnalysis(active, "hover", tn_code_cursor_offset(active.handle));
-		ImGui.EndDisabled();
-		if (!mAnalysisHint.IsEmpty)
-		{
-			ImGui.SameLine();
-			ImGui.TextDisabled(mAnalysisHint.CStr());
-		}
+		if (!running || !Interlocked.Load(ref mFinished))
+			return false;
+		mWorker.Join();
+		DeleteAndNullify!(mWorker);
+		running = false;
+		status.Set("Beef: ready");
+		return true;
 	}
 }

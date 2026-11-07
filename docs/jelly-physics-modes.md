@@ -1,138 +1,64 @@
-# Tallow Jelly Physics Modes — ECS Branch Change Log
+# Jelly physics for Jelly Golf
 
-This document describes the opt-in additions for three alternative jelly-ball setups.
-The implementation targets GitHub's `ecs` branch. It does **not** include unpushed
-local ECS roadmap work. Keep local changes and merge normally; do not hard-reset.
+This integration has two **Jolt** approaches. It deliberately does not add a scale-based or preanimated jelly component.
 
-## Choose one mode per ball
+## 1. Full soft-body Jelly — physical deformation
 
-### A. Real Jolt jelly (authoritative deformation)
+**Setup:** Put a `MeshRenderer` and `SoftBody` on the ball, then select `kind = Jelly`. A separate Rigidbody is not needed. Jolt simulates the actual soft-body vertices, contacts, and motion.
 
-- Ball object: `MeshRenderer`, `SoftBody` with `kind = Jelly`.
-- No Rigidbody on the ball. Jolt soft-body vertices determine motion and collision.
-- New public Beef API: `soft.Velocity` (world-space get/set), `soft.AddImpulse(Vector3)`,
-  and `soft.AddForce(Vector3)`.
-- `Velocity` is the mass-weighted average of movable vertex velocities; setting it adds
-  an equal delta-V to each movable vertex and keeps its relative wobble.
-- `AddImpulse` preserves existing wobble and distributes the total change in momentum
-  using the current simulated mass. Pinned vertices remain pinned.
-- `AddForce` is the same distribution for one `Time.FixedDeltaTime` step.
-  Call it once per fixed tick, not once per rendered frame.
-- Shell and DrivenJelly intentionally ignore these mutating APIs; use their Rigidbody.
+The existing `SoftBodyKind.Jelly` remains unchanged, but the `SoftBody` class now has:
+- `Velocity` (get/set): mass-weighted velocity of the movable vertices; a setter shifts all movable velocities equally without erasing their relative wobble
+- `AddImpulse(Vector3)`: changes the body's total momentum, preserving its current wobble
+- `AddForce(Vector3)`: applies a force over one fixed timestep; call it once per fixed tick
 
-Example (in a gameplay script, with a valid SoftBody):
+Example Beef gameplay code (with a valid reference to the ball's `SoftBody`):
+
 ```beef
-soft.Velocity = .(0, 0, 2);
-soft.AddImpulse(aim * shotStrength);
-soft.AddForce(windForce);
+soft.AddImpulse(aimDirection * shotStrength);
 ```
 
-### B. Cheap visual-only jelly — Rigidbody + JellyVisual
+**Tradeoff:** This is physically deformable and more costly; its body and contacts, not a rigid sphere, decide how the ball moves. Multiplayer shot/scoring rules should remain server-authoritative.
 
-- Ball parent: `Rigidbody` + `SphereCollider` (or another appropriate collider).
-- Uncollided mesh child: `MeshRenderer` + new `JellyVisual` component.
-- No `SoftBody` component on this child.
-- Normal rigid-body movement, hits, collision, rollback, and networking are unchanged.
-- The visual child scales with speed and wobbles after abrupt velocity changes.
-- Only the visual child's transform changes; **do not attach colliders to it**.
-- Tune `stretchPerSpeed`, `maxStretch`, `kickPerSpeedChange`,
-  `wobbleStrength`, `wobbleFrequency`, and `wobbleDamping`.
-- This is simple squash/stretch, not vertex-level soft-body deformation.
+## 2. DrivenJelly — a physically simulated visual skin
 
-### C. Rigidbody-driven Jolt elastic skin — SoftBodyKind.DrivenJelly
+**Setup (no animation clips or rigs):**
 
-- Ball parent (or same object): `Rigidbody` + `SphereCollider`.
-- Mesh object (may be a child): `MeshRenderer` + `SoftBody`, `kind = DrivenJelly`.
-- The engine requires a live Rigidbody on the object or an ancestor.
-- Rigidbody is solely responsible for gameplay movement and physical collisions.
-- The skin uses Jolt's existing shell/skinning path to spring around its driven pose,
-  without permanent dents. The soft body's external physical contacts are rejected
-  so it cannot exert a second force on obstacles or the Rigidbody.
-- Settings: `drivenFlex` (maximum skin deviation from reference),
-  `drivenSpring` (spring-back per step), `drivenDamping` (velocity retention).
-- Unlike Shell, DrivenJelly never creates a Rigidbody/ConvexCollider automatically,
-  never permanently dents, never follows the body's dynamic center as a free jelly,
-  and is excluded from soft-body collision proxies.
-- It costs more than JellyVisual because Jolt simulates vertices and updates a
-  dynamic mesh. Verify skin motion and mesh alignment in the interactive editor.
-
-## Exact source changes
-
-1. `Engine/src/Physics/SoftBody.bf`
-   - Appended enum `SoftBodyKind.DrivenJelly` without changing existing enum values.
-   - Exposed Velocity, AddImpulse, AddForce (real simulated soft bodies only).
-   - Added drivenFlex, drivenSpring, drivenDamping editor settings.
-   - Validates a parent/self Rigidbody for DrivenJelly, follows the existing
-     Shell driver update, suppresses self-motion, wind and extra collision proxies.
-   - Added native C ABI declarations / configuration matching the C++ struct.
-
-2. `native/tallow_softbody.cpp`
-   - Added `tn_soft_velocity`, `tn_soft_set_velocity`, `tn_soft_impulse`,
-     and `tn_soft_force`, using vertex masses, Jolt body locks and body wake-up.
-   - Extended the native configuration with `visualOnly`, `visualSpring`,
-     and `visualDamping` in the same order as the Beef structure.
-   - The shell skinning path can now provide a visual-only elastic mode:
-     no collision response, no permanent dents, tunable spring and damping.
-
-3. `Engine/src/Physics/JellyVisual.bf` (new)
-   - Lightweight mesh-child scale animation driven by parent Rigidbody velocity.
-
-4. `docs/jelly-physics-modes.md` (this document).
-
-## Local merge and troubleshooting
-
-After saving/committing your existing local work:
-
-```sh
-git fetch origin
-git switch your-local-roadmap-branch
-git merge origin/ecs
+```text
+GolfBall (GameObject)
+  Rigidbody
+  SphereCollider
+  NetworkIdentity (when needed for multiplayer)
+  BallMesh (child GameObject, no Collider)
+    MeshRenderer (closed, triangulated ball mesh)
+    SoftBody (kind = DrivenJelly)
 ```
 
-If you are *already* working on local `ecs`, use `git switch ecs` followed by
-`git merge origin/ecs`. Resolve any conflict manually, particularly in
-`SoftBody.bf`, `tallow_softbody.cpp`, or the physics pipeline.
+You can also put the `SoftBody` on the Rigidbody object itself, with a MeshRenderer there. The Rigidbody must have a Collider on **the same GameObject** as the Rigidbody; the SoftBody may be on that object or a child.
 
-If the Beef compiler complains of a missing `tn_soft_*` symbol, rebuild the
-native library and engine together. These new exports require updated native
-artifacts; an older native binary will not resolve them.
+The Rigidbody controls positions, rigid collisions, bounces, rolling, and ordinary network prediction. Jolt updates the individual surface vertices and springs them back to the driver's moving shape. The skin does not collide independently with objects, does not permanently dent, and does not change the rigid ball's gameplay physics.
 
-If the visual-only mode fails to appear, confirm:
-- `JellyVisual` is on a **child** of a Rigidbody, not the parent collider.
-- `DrivenJelly` has a live parent/self Rigidbody with a collider and a
-  `MeshRenderer` with triangles.
-- Visual-only physics uses one authoritative sphere collider, not a second
-  collider on the jelly mesh.
-- The SoftBodyKind numeric order is preserved (new value appended after Shell).
+**Inspector tuning** (default values):
+- `drivenFlex = 0.2`: the maximum allowed surface lag/deviation in metres
+- `drivenSpring = 0.25`: how strongly the mesh returns toward its shape each fixed step
+- `drivenDamping = 0.75`: how much relative vertex velocity survives each step
 
-## Validation checklist (not yet executed)
+`SoftBody` also has the usual solver settings (`mass`, `stiffness`, `iterations`, etc.). A clean sphere mesh with sufficient vertices is needed to see the motion clearly. This mode needs no authored animations, weight painting, or rigging.
 
-- Build native Jolt bindings and the Beef engine in Linux Debug/Release and Windows.
-- A Jelly sphere receives Velocity/AddImpulse/AddForce, wakes, settles, and
-  has the expected total momentum change at varying mesh resolutions.
-- Pins do not move and fully pinned soft bodies ignore motion calls.
-- Shell and Cloth remain unchanged; existing Shell dents still behave correctly.
-- JellyVisual on a Rigidbody child renders and restores its original scale
-  when disabled; its mesh child has no collider.
-- DrivenJelly on a Rigidbody child wobbles and returns to its rest shape;
-  its rigid sphere alone collides, moves, and determines scored contacts.
-- DrivenJelly does not register a free-body network identity or create collision
-  proxies; parent Rigidbody moves identically with or without the visual skin.
-- Check save/load of all new fields and component types; test spawn/despawn and
-  hot reload to detect stale body handles.
-- Run multiplayer (two clients, latency/jitter/loss) with shots, resets and
-  course transitions. Compare authoritative ball positions and scoring.
-- Measure total frame time, physics step cost, GPU draw calls and dynamic mesh
-  bandwidth for 1/8/16 balls and 10k+ course props.
+**Startup fix:** Tallow creates normal Rigidbody bodies during `Rigidbody.SyncAll`, after components' `Start`. DrivenJelly now calls `Rigidbody.EnsureBody()` if its driver has not been created yet. This avoids its previous failure to initialize at an ordinary scene launch.
 
-## Limitations
+## Which should the game use?
 
-- No CI or interactive gameplay test was run as part of this GitHub-only edit.
-- A large change on an unpushed local ECS branch may require manual merges.
-- DrivenJelly is **visual physics**, not a physically deforming collision shape;
-  in particular, the rigid collider cannot squeeze through smaller holes.
-- JellyVisual is a cheap transform animation, not a true soft-body solver.
-- An impulse/force on a full Jelly body can produce different vertex
-  deformation on different multiplayer clients. Keep scoring server-authoritative.
-- A fully accurate per-vertex hit-point impulse or rigid-body-style torque
-  is not added in this change; those are separate features.
+Use `DrivenJelly` for the default multiplayer golf ball when visually detailed wobble and ordinary predictable Rigidbody behavior matter. Use full `Jelly` for bonus modes or objects where jelly deformation should change the physical simulation.
+
+Both modes simulate vertices; their computational costs vary with vertex count, mesh topology, solver settings, and simultaneous balls. This is **not** a benchmark or guarantee.
+
+## Validation on Linux / Windows
+
+1. Build the engine and native library together: `./build.sh --config Debug --jobs 8` on Linux, or the corresponding Windows build process.
+2. Place a SphereCollider and Rigidbody on a parent, MeshRenderer and DrivenJelly SoftBody on an uncollided child, and start play. Confirm the soft-body component has a body from the first tick.
+3. Hit and roll the ball; verify the surface flexes and returns to its rest shape while the rigid sphere determines its motion.
+4. Switch to full `Jelly`, then test `Velocity`, `AddImpulse`, and `AddForce` using a closed mesh.
+5. Check that existing `Cloth` and `Shell` behavior remains unchanged; test a networked rigid ball with latency/jitter/loss.
+6. Profile with realistic ball counts (1, 8, 16+) and meshes. **Interactive behavior and multiplayer correctness are not verified just by source review or a successful build.**
+
+Only `Engine/src/Physics/SoftBody.bf`, `native/tallow_softbody.cpp`, and this guide are changed by this jelly transplant. No `JellyVisual` component is included.

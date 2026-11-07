@@ -110,7 +110,6 @@ static class ComponentRegistry
 			sInfos = null;
 		}
 		ClearFieldCache();
-		ScriptCallbackIndex.Refresh();
 		// Scripts were reloaded: loaded data assets are of the old classes.
 		DataAsset.ClearCache();
 		Build();

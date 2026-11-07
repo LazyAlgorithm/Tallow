@@ -636,24 +636,12 @@ TALLOW_ECS_API void tallow_ecs_ref_init(const ecs_world_t* world, uint64_t entit
 
 TALLOW_ECS_API void* tallow_ecs_ref_get(const ecs_world_t* world, ecs_ref_t* ref, uint64_t id)
 {
-	// The inline Beef check already detected a changed 32-bit version. Flecs's secondary 16-bit table
-	// version can wrap after 65,536 mutations and incorrectly keep a pointer to an old allocation. Resolve
-	// from the entity again on this slow path instead of accepting that short-version equality.
-	if (!ecs_is_alive(world, ref->entity))
-	{
-		ref->table_id = 0;
-		ref->ptr = NULL;
-		return NULL;
-	}
-	void* ptr = (void*)ecs_get_id(world, ref->entity, id);
-	if (ptr == NULL)
-	{
-		ref->table_id = 0;
-		ref->ptr = NULL;
-		return NULL;
-	}
-	*ref = ecs_ref_from_ptr(world, ref->entity, id, ptr);
-	return ptr;
+	// Beef already checked the 32-bit fast version. Flecs's second check compares a 16-bit table version,
+	// which can wrap while a script holds an unused reference (e.g. spawning 100,000 objects). Force the
+	// slow path to resolve the entity's current row instead of accepting a stale pointer after 65,536 moves.
+	ref->table_id = 0;
+	ref->table_version_fast = ~flecs_get_table_version_fast(world, 0);
+	return ecs_ref_get_id(world, ref, id);
 }
 
 // The world's table version array (ECS_TABLE_VERSION_ARRAY_SIZE entries), which ecs_ref_get_id compares a ref

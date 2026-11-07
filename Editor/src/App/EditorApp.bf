@@ -443,7 +443,6 @@ class EditorApp : Application
 	{
 		// A rig being made is kept (RigEditor.bf).
 		StopRig();
-		mAnalysis?.Stop();
 		AssetPreviews.Shutdown();
 		if (mCheckThread != null)
 			mCheckThread.Join();

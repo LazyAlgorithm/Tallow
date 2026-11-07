@@ -79,10 +79,7 @@ extension EditorApp
 				previousStart = int.MaxValue;
 			if (reference.start == previousStart)
 				continue;
-			let outsideProject = !source.path.StartsWith(sourceRoot);
-			let generated = FindSourceGraph(source.path, scope String());
-			let overlapping = (reference.start + reference.length) > previousStart;
-			if (outsideProject || generated || overlapping)
+			if (!source.path.StartsWith(sourceRoot) || FindSourceGraph(source.path, scope String()) || reference.start + reference.length > previousStart)
 			{
 				mSemantic.status.Set("Rename contains a generated, external or overlapping reference and cannot be applied.");
 				return false;

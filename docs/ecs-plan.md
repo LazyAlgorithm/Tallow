@@ -490,7 +490,7 @@ before (from `main`) and after each of 6c to 6h: server CPU per tick and bytes p
 
 ### Phase 7: Scripting experience and transparent performance (L)
 
-**Product objective:** finish and test the ECS engine with Beef as the sole gameplay language for this roadmap. Ordinary GameObject scripts stay recognisably Unity-like and fast, while engine internals use ECS where it improves performance. An ECS-backed engine with faster rendering but slower `Script.Update` is not the finished experience. No new annotation, query, system class, thread configuration or manual memory management should be required for the default improvements. Other gameplay languages and an interpreted mod runtime are out of scope until the ECS migration, benchmarks, editor and release checks pass.
+**Product objective:** ordinary GameObject scripts stay recognisably Unity-like and are themselves fast. An ECS-backed engine with faster rendering but slower `Script.Update` is not the finished experience. No new annotation, query, system class, thread configuration or manual memory management should be required to obtain the default improvements.
 
 #### 7a. Profile and optimize the default script path
 
@@ -520,110 +520,7 @@ before (from `main`) and after each of 6c to 6h: server CPU per tick and bytes p
 - Preserve the low-allocation gameplay API, coroutine helpers and editor quick fixes above. Document the Systems tier as **advanced**, with a Showcase crowd exhibit in both normal-script and explicit-system styles.
 - **Exit:** a new project's template scripts contain no `delete`, `scope` or queries; ordinary scripts measurably improve over the pre-ECS baseline or a documented blocker explains the remaining script regression; full-frame gains are reported separately; fixed-tick/replay/network determinism checks pass; a developer needs no special ECS knowledge to realize the measured default-path improvements.
 
-#### 7d. Full-engine compatibility and scripting audit
-
-Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API across **every** engine subsystem: scene and hierarchy, transforms, lifecycle and input, editor Inspector and code editor, visual-script compilation, prefab and serialization, save/load, hot reload, animation and IK, physics and character controllers, rendering, shader and compute graphs, terrain/voxels, particles, audio and voice, navigation and AI, networking, multiplayer replay, world streaming and mobile/web targets. Where internal work must become data-oriented, keep the existing script-facing behavior or document a deliberate compatibility change.
-
-- [ ] Audit each subsystem for stale pre-ECS storage and duplicate authoritative state, missing dirty propagation, callbacks still relying on old scene lists, and handles invalidated by entity/table changes.
-- [ ] Compile and exercise editor-generated visual scripts against the current `Script` API and `[Sync]` fields, including scene serialization, hot reload, and network replay.
-- [ ] Run ordinary Beef scripts and generated visual scripts through the same workload and record CPU, memory, input-to-response latency, and deterministic replay outcomes.
-- [ ] Validate compiler-backed Beef completion, parameter hints, navigation and diagnostics through the built-in editor (7f). Generated visual scripts and handwritten scripts must compile against the same authoritative gameplay API. No second scripting backend is part of Phase 7.
-- [ ] Require scene/prefab/network behavior to remain the same across Release and Debug builds and relevant platforms, including dynamic components, entity moves, unload/reload and network corrections.
-
-#### 7e. Beef gameplay API and automatic resource management
-
-**Developer contract:** Beef remains the only gameplay language in Phase 7. Keep `[Component] class ... : Script`, `GameObject`, `Transform`, `GetComponent<T>`, lifecycle callbacks, `[ShowInInspector]` and existing code working. Internal ECS data layouts and batching may change where measured faster; ordinary scripts must not need queries, allocators or manual cleanup for common engine resources. `[Sync]` stays opt-in for network replication and is independent of local prediction/replay history.
-
-- [ ] Audit actual lifetime ownership, leaks, double-frees and stale references across GameObjects, components, prefab instances, assets, event subscriptions, coroutines, timers, async jobs and callbacks before adding abstractions.
-- [ ] Keep scene objects and components engine-owned. Automatically disconnect or cancel owner-bound events, timers, coroutines and callbacks at the appropriate destruction/unload point; do not leave callbacks to removed or hot-reloaded script instances. Preserve existing lifecycle semantics.
-- [ ] Give asset use safe, resource-manager-owned handles with clear sharing, caching, version validation, reference/lifetime and unloading semantics for textures, meshes, materials, audio and other shared resources. Avoid duplicate loads and accidental permanent retention of streamed assets.
-- [x] Investigate native Beef ownership patterns and small **optional** deterministic cleanup helpers for ordinary heap objects and collections, with explicit guidance for cross-scene and async lifetimes, reference cycles and weak ownership. Do not introduce a mandatory tracing GC or claim arbitrary object graphs are automatically collected.
-- [ ] Ensure ECS table moves, component removal, scene unload and script hot reload invalidate or refresh handles safely. Measure any new wrapper against the existing Beef API and do not add allocations or expensive lookups to every scripted update.
-- [ ] Update example scripts, templates and API docs so ordinary spawn / component / resource / subscription workflows need no explicit `delete`, `scope` or ECS query. Keep advanced explicit ownership and systems available for performance-critical code.
-
-**7e exit:** engine-owned resource and script lifetime tests pass for scene/prefab unload, asset reuse/streaming, hot reload, network correction and repeated create/destroy cycles; common gameplay examples are concise and no slower in measured hot paths.
-
-#### 7f. Compiler-backed Beef IntelliSense and code editor
-
-**Current baseline:** `native/tallow_code.cpp` uses `CompleteBeef` with API-indexed names and text-based guesses for type/member completion. `Editor/src/Scripts/ScriptEditor.bf` already runs background BeefBuild error checks. Upgrade these mechanisms to semantic editing rather than adding another scripting language.
-
-- [x] Investigate maintained Beef compiler and BeefIDE analysis interfaces; choose a reliable in-process service or isolated helper process, with clear version compatibility, startup/error handling and fallback when semantic analysis is unavailable. Decision (2026-11-06): a version-pinned isolated resolve-only compiler helper; [source investigation and implementation requirements](beef-semantic-editor.md). The helper and editor connection are implemented with local Linux compiler fixtures and process tests; remaining 7f acceptance checks stay open.
-- [ ] Provide **context-aware member completion** (including inherited and generic members, engine and project types), expected argument and return types, overload selection and parameter/signature help while typing. Do not guess members from source words when the actual type is known.
-- [ ] Add diagnostics and editor navigation for unresolved types, missing imports, wrong argument counts/types, deprecated APIs and source locations; provide hover documentation, go-to-definition, find-references, rename and safe suggested fixes where Beef tooling permits.
-- [ ] Keep semantic analysis responsive while typing via debounced background work, cancellation, cached project symbols and incremental updates. Diagnostic locations and suggestions must match unsaved buffers; do not require a full game rebuild for every keystroke.
-- [ ] Surface authoritative engine API documentation and correctly handle `Script` lifecycle, component handles, ECS-backed `Transform`, `[ShowInInspector]`, `[Saved]`, `[Sync]`, `TickInput` and visual-script-generated Beef. Completion must be accurate for the actual project build configuration and platform.
-- [ ] Preserve the current embedded editor's undo/redo, syntax colors, folding, search and save/reload flow. Benchmark responsiveness, diagnostics latency, edit-to-play time and memory against the current `ApiIndex` fallback; guard against crashes or stale suggestions during hot reload.
-- [ ] Add fixture-based editor tests for overloads, inherited methods, generic component lookups, wrong types, unsaved files, compiler errors and changed APIs. Verify generated visual scripts compile with identical diagnostics.
-
-**7f exit:** common engine methods receive correct compiler-informed completion, signature help and diagnostics in the built-in editor; edits/hot reload remain responsive; Beef is the sole tested gameplay language.
-
-#### 7g. Finish and verify the ECS migration before modding work
-
-- [ ] Run the 7c performance and deterministic-networking acceptance benchmarks plus the 7d full-engine compatibility matrix on representative Release/Debug builds and available Windows/Linux/macOS/web/mobile targets. Record untested hardware or targets rather than claiming validation.
-- [ ] Run BeefBuild, the state-sync and lockstep script-history regression tests, generated visual-script compile tests, prefab/save/load/hot reload checks, and repeated owner/resource cleanup tests. Re-run network delay/jitter/loss tests after any change to script scheduling or state.
-- [ ] Report current-versus-baseline frame averages/p99, `Script.Update` costs, memory, spawn/despawn, and editor edit-to-play latency. The acceptance metric is the **ordinary Beef script path**, not only explicit ECS systems.
-- [ ] Do not add C#, Luau, Lua or another runtime as part of the ECS roadmap. An optional sandboxed interpreted language for mods may be evaluated **after** ECS functionality, performance, determinism and editor/API validation are complete, in a separate proposal.
-
-**Phase 7 overall exit:** every checked subsystem works with the native Beef gameplay API; basic gameplay is resource-safe by default; the editor provides semantic Beef tooling; the normal script path is benchmarked and optimized; network replay and cross-platform regressions are tested. Explicitly list any remaining failures or unavailable test platforms.
-
-**Phase 7 work started (2026-11-06, `ecs` branch; not yet benchmarked or build-verified):**
-- State-sync replay now saves the same supported script value fields as lockstep and attempts to restore them before resimulation. This is local history, not automatic replication; `[Sync]` remains opt-in.
-- Script-field restoration now validates the full payload length and a local object/field-layout signature before modifying fields. Nonserialized fields are left alone; private supported fields are included. On mismatch, state sync adopts the authoritative state without replay rather than running against invalid history.
-- ECS checks were added for local-only/private fields, `[Sync]` fields, and malformed payloads; passing test results still required.
-- World-space Transform setters now reuse one validated ECS data reference when writing and marking dirty. No scripting API or update order changed; impact still needs profiling.
-- Measurement infrastructure continued (2026-11-06): `tools/run_ecs_bench.py` now runs the existing correctness suite with `--check`, alternates baseline/current checkouts across repeated measurements, validates each result, and checkpoints raw JSONL with build/host provenance. Five synthetic runner regression tests pass; these are not engine runtime results. Commands and remaining home checks: [Phase 7 validation](ecs-phase7-validation.md).
-- [ ] BeefBuild compile, network rollback regression suites (including correction under latency/jitter/loss), visual-graph compilation, multi-platform checks, and script-update benchmarks remain required.
-
-### Phase 7 continuation (2026-11-06; validation in progress)
-
-- Large-scene reference fix: the CPU-only 100k-object workload reproduced a crash in both the initial Phase 7
-  baseline and current ECS branch. Flecs's 16-bit secondary table version could wrap and retain a freed component
-  pointer. The native slow path now resolves from the entity after the 32-bit fast version changes. The focused
-  65,536-mutation test failed before the fix and passes after it, including removal, re-addition and deletion.
-  The normal cached-reference fast path is unchanged. Full native CI validation is pending for this change.
-
-
-- Compiler-backed editor checkpoint: isolated Beef analysis is connected to unsaved documents with version/cursor
-  checks, completion, overload help, documentation, definitions and diagnostics. Actual Linux compiler and process
-  fixtures pass. Windows helper fixtures and engine package build pass at `3525c548`; 7f is not yet complete.
-- All Beef files changed during this continuation use the repository formatter. `PatrolExample.bf` compiles and
-  demonstrates ordinary Transform gameplay plus component-owned collection cleanup.
-- Graphics-free ownership checks pass locally in Linux Debug, including owner-bound world-state subscriptions and
-  cleanup on stop/restart, removal and unload. Live owned resources explicitly block structural instance replacement
-  until Play stops: field serialization cannot safely migrate arbitrary resources or delegates yet.
-
-
-Validated checkpoint: [`d9993ece`](https://github.com/LazyAlgorithm/Tallow/commit/d9993ece0bc844da0f9c643755abe9a4d8b98abe),
-[workflow 42264324947](https://github.com/LazyAlgorithm/Tallow/actions/runs/42264324947): Linux and Windows build/package
-passed. Linux EcsBench passed in **both Debug and Release**, after regenerating and recompiling the visual-graph
-fixture in each configuration. This includes owner cleanup, preload shutdown, callback ordering and 120 ticks of
-byte-for-byte handwritten/generated-script restore/replay. Native document tests and the five benchmark-runner tests
-also passed. This does not replace the external multiplayer, hardware performance or interactive editor checks.
-The initial detached-owner cleanup crash was fixed by retaining its ownership registries until destructor cleanup.
-
-- Owner-bound cleanup and preload batches: `Component.Own`, `OnCleanup`, lifecycle release and retirement release;
-  [ownership contract and limitations](component-ownership.md). Shared asset cache lifetime handles and arbitrary
-  external subscription/task cleanup remain unfinished. EcsBench ownership regression cases passed at the validated checkpoint above.
-- Preload jobs whose last batch was released during loading are now freed after adoption, instead of remaining
-  in the job map indefinitely. Shared asset cache eviction is still a separate unfinished item.
-- Script snapshot/replay field lists retain their capacity between ticks and clear borrowed field pointers on every
-  exit. Schema validation and field copy order are unchanged; allocation/time measurements remain pending.
-- Default script dispatch skips its redundant hierarchy walk when no OnLocalUpdate ran; still rechecks enabled state
-  after that callback. No script ordering or parallel execution change. Performance impact remains unmeasured.
-- Hot reload clears cached callback masks and rebuilds callback lists in registration order once replacements are
-  installed. The old path appended scripts whose callbacks changed, silently changing their execution order.
-- Visual graphs now retain integer variable types on load. EcsBench can regenerate a real graph fixture, then
-  compile and exercise its Script.Update signature, Sync metadata and scene round trip.
-- Editor dirty state now follows document content/revisions, including branched undo/redo. New saves queue checks;
-  stale diagnostics are withheld from edited buffers. Native editor regression tests pass locally. This is not
-  compiler-backed semantic completion; [the required backend remains open](beef-semantic-editor.md).
-- `ecs` pushes now run the existing Linux/Windows build workflow without release publication. Linux adds Debug/Release
-  EcsBench checks and generated-graph recompilation. CI outcome must be recorded before marking runtime validation done.
-- The documented Linux `toolchain-2` download returned 404. The matching CI compiler was subsequently retrieved for local validation.
-  The externally maintained `~/TallowEcsTests` network fixtures are not in this checkout. Full network regressions,
-  hardware performance comparisons, safe shared asset unloading, handle-lifetime audit, semantic editor implementation,
-  and the remaining compatibility/platform matrix still block Phase 7 exit.
-#### 7f. Additional semantic editor requirements (added by the project owner, 2026-11-06)
+#### 7d. Beef semantic editor support (added by the project owner, 2026-11-06)
 
 - Replace source-scanning completion in the code editor with Beef's own compiler/IDE semantic support.
   Resolve the project's actual dependencies, defines and unsaved documents. Provide type-aware completion,
@@ -662,9 +559,8 @@ The initial detached-owner cleanup crash was fixed by retaining its ownership re
 - **Determinism is a hard constraint on optimization, not a presumed side effect of ECS.** Preserve fixed-tick input semantics, stable state-dependent ordering, reproducible RNG and physics settings, and canonical application of parallel results for server/predicted client/replay. Verify same-build repeatability with per-tick hashes and adversarial tests, then separately validate cross-platform lockstep (6h). Hashes, reconciliation and resync remain mandatory; reduced avoidable mismatches can reduce corrective rollbacks, but network latency and authoritative changes still require them.
 - **Flecs upgrades.** Pin the tag in `third_party/flecs` and keep the shim small, so an upgrade only touches
   `tallow_ecs.c`.
-- **Post-ECS consideration only:** an optional sandboxed interpreted language for mod support can be evaluated
-  in a separate roadmap once ECS, the Beef editor/API, performance and networking tests pass. No second runtime is
-  required for the current roadmap.
+- **Possible later addition:** a second scripting language (C# or Luau) can bind to the same component
+  registry and handles. Nothing in this plan blocks it.
 
 ## Phase 1 results (2026-11-04)
 
@@ -1815,11 +1711,9 @@ nine profiles.
   - `NetRandom.Value(this)` / `Range(this, min, max)`: random numbers every machine in step agrees on (seeded from
     the object's network id, its exact position and rotation, and a salt), what the warning suggests.
   - Found by building it: replays restored physics and transforms but not scripts, so a script's own state (a
-    counter in Update) drifted on any client that replayed. Lockstep's exact snapshots keep and put back the
-    supported value fields of the scripts on the objects a client runs (`ScriptFields`). State-sync clients now
-    also save and restore those fields as *local prediction history* (2026-11-06, compile/network regression
-    validation pending). `[Sync]` still controls server-to-client field replication; it is not required for
-    supported local rollback state. Snapshots with changed script instances or field layouts are rejected.
+    counter in Update) drifted on any client that replayed. Lockstep's exact snapshots now also keep and put back
+    the value fields of the scripts on the objects a client runs (`ScriptFields`). (State sync's replays still
+    do not; a script's state that must survive a correction belongs in [Sync] fields or the body.)
   - Correction statistics: the panel's ROLLBACK line by cause (6g) and the LOCKSTEP line (6h).
   - `~/TallowEcsTests/NetworkDesync` (dedicated server, A and B in lockstep with the debugger on, 64 crates): 10
     seconds with nothing planted finds nothing; then `Sway.Update` adds an unseeded random number to the players'
