@@ -13,7 +13,9 @@ enum SoftBodyKind : int32
 	/// A body that keeps its shape on its object and dents where it is hit, and stays dented: car bodies, crates,
 	/// metal panels. It rides its object's Rigidbody (the shell ignores that body's collider), given one of its Mass
 	/// if it has none. How it dents: Dent Mode.
-	Shell
+	Shell,
+	/// A visual-only elastic skin driven by a Rigidbody on this object or an ancestor. The Rigidbody alone decides collisions.
+	DrivenJelly
 }
 
 [Reflect(.All)]
@@ -85,6 +87,14 @@ class SoftBody : Component
 	/// Shell: how fast something must hit it to dent it, in metres a second (3 is about 11 km/h). Slower knocks,
 	/// leaning on it and loads resting on it spring back however hard they press.
 	public float dentSpeed = 3;
+	/// DrivenJelly: maximum distance in metres the mesh can lag behind its Rigidbody's reference surface.
+	public float drivenFlex = 0.2f;
+	/// DrivenJelly: spring-back factor per fixed step (0..1); higher returns to the reference shape faster.
+	[Range(0, 1)]
+	public float drivenSpring = 0.25f;
+	/// DrivenJelly: how much relative vertex velocity persists each fixed step (0..1); lower settles sooner.
+	[Range(0, 1)]
+	public float drivenDamping = 0.75f;
 	/// The vertices held in place, by number ("0-12 40 41"): Paint Pins in the editor writes these.
 	public String pins = new .() ~ delete _;
 	/// Where it is softer than Stiffness says, by vertex ("12=0.5 13=0.25"): painted in the editor.
@@ -108,6 +118,10 @@ class SoftBody : Component
 	[CLink] static extern uint32 tn_soft_read(void* world, uint32 bodyId, float* positions, float* velocities, uint32 capacity);
 	[CLink] static extern void tn_soft_move_pinned(void* world, uint32 bodyId, uint32* indices, float* targets, uint32 count, float step);
 	[CLink] static extern void tn_soft_set_positions(void* world, uint32 bodyId, float* positions, float* velocities, uint32 count);
+	[CLink] static extern uint32 tn_soft_velocity(void* world, uint32 bodyId, float* velocity);
+	[CLink] static extern void tn_soft_set_velocity(void* world, uint32 bodyId, float* velocity);
+	[CLink] static extern void tn_soft_impulse(void* world, uint32 bodyId, float* impulse);
+	[CLink] static extern void tn_soft_force(void* world, uint32 bodyId, float* force, float step);
 	[CLink] static extern void tn_soft_wind(void* world, uint32 bodyId, float* wind, float drag, float turbulence, float time, float step);
 	[CLink] static extern uint32 tn_soft_touching(void* world, uint32 bodyId, uint32* output, uint32 capacity);
 	[CLink] static extern void tn_soft_world_destroyed(void* world);
@@ -122,7 +136,8 @@ class SoftBody : Component
 	struct NativeConfig
 	{
 		public float mass, stretch, shear, bend, pressure, damping, friction, restitution, gravityFactor, vertexRadius, dentDepth, dentYield, dentSpeed, stepTime;
-		public int32 iterations, doubleSided, longRange, dihedral, shell, impacts;
+		public int32 iterations, doubleSided, longRange, dihedral, shell, impacts, visualOnly;
+		public float visualSpring, visualDamping;
 		public uint32 layer;
 		public uint64 userData;
 	}
@@ -169,6 +184,44 @@ class SoftBody : Component
 	public int SimulatedVertexCount => mRest.Count;
 	/// Where each simulated vertex is now, in the world (updated every frame while it runs).
 	public List<Vector3> Positions => mPositions;
+
+	/// Mass-weighted world velocity of the moving vertices. For DrivenJelly, control the parent Rigidbody instead.
+	public Vector3 Velocity
+	{
+		get
+		{
+			var velocity = Vector3.Zero;
+			if (HasBody && mWorld != null)
+				tn_soft_velocity(mWorld.[Friend]mSystem, mBody, (float*)&velocity);
+			return velocity;
+		}
+		set
+		{
+			if (!HasBody || mWorld == null || kind == .Shell || kind == .DrivenJelly)
+				return;
+			var velocity = value;
+			tn_soft_set_velocity(mWorld.[Friend]mSystem, mBody, (float*)&velocity);
+		}
+	}
+
+	/// Changes the momentum of the freely simulated vertices, keeping their relative wobble.
+	/// An impulse is in newton seconds; pinned vertices are not moved.
+	public void AddImpulse(Vector3 impulse)
+	{
+		if (!HasBody || mWorld == null || kind == .Shell || kind == .DrivenJelly)
+			return;
+		var change = impulse;
+		tn_soft_impulse(mWorld.[Friend]mSystem, mBody, (float*)&change);
+	}
+
+	/// Adds a force for one fixed physics step. Call once per physics tick, as with Rigidbody.AddForce.
+	public void AddForce(Vector3 force)
+	{
+		if (!HasBody || mWorld == null || kind == .Shell || kind == .DrivenJelly)
+			return;
+		var change = force;
+		tn_soft_force(mWorld.[Friend]mSystem, mBody, (float*)&change, Time.FixedDeltaTime);
+	}
 
 	public override void Start()
 	{
@@ -245,6 +298,17 @@ class SoftBody : Component
 	{
 		if (mBody != uint32.MaxValue)
 			return;
+		if (kind == .DrivenJelly)
+		{
+			Rigidbody driver = default;
+			for (var up = Transform; up != null && !driver.IsValid; up = up.Parent)
+				driver = up.GameObject.GetComponent<Rigidbody>();
+			if (!driver.IsValid || !driver.HasBody)
+			{
+				Log.Warning(scope $"Driven Jelly on '{GameObject.Name}' needs a Rigidbody with a collider on this object or an ancestor.");
+				return;
+			}
+		}
 		let renderer = GetComponent<MeshRenderer>();
 		let source = renderer ? renderer.ActiveMesh : null;
 		if (source == null || source.Vertices.Count < 3 || source.Indices.Count < 3)
@@ -288,6 +352,8 @@ class SoftBody : Component
 		NativeConfig config = default;
 		let cloth = kind == .Cloth;
 		let shell = kind == .Shell;
+		let driven = kind == .DrivenJelly;
+		let skinned = shell || driven;
 		config.mass = Math.Max(mass, 0.001f);
 		// Compliance (how far a constraint gives under force) from 1e-2 (stiffness 0) to 1e-6 (stiffness 1).
 		config.stretch = Compliance(stiffness);
@@ -304,17 +370,20 @@ class SoftBody : Component
 		// A jelly bounces as a whole (tn_soft_bounce); Jolt's own, vertex by vertex, is for cloth.
 		config.restitution = kind == .Jelly ? 0 : bounciness;
 		// A shell is carried by its object, which has the weight.
-		config.gravityFactor = shell ? 0 : gravityScale;
+		config.gravityFactor = skinned ? 0 : gravityScale;
 		config.vertexRadius = Math.Max(thickness, 0);
-		config.dentDepth = Math.Max(dentDepth, 0.001f);
+		config.dentDepth = driven ? Math.Max(drivenFlex, 0.001f) : Math.Max(dentDepth, 0.001f);
 		config.dentYield = Math.Max(springBack, 0);
 		mDentsFromServer = shell && NetworkSync.IsClientOf(Scene);
 		config.dentSpeed = mDentsFromServer ? 1.0e9f : Math.Max(dentSpeed, 0);
-		config.shell = shell ? 1 : 0;
+		config.shell = skinned ? 1 : 0;
+		config.visualOnly = driven ? 1 : 0;
+		config.visualSpring = Mathf.Clamp01(drivenSpring);
+		config.visualDamping = Mathf.Clamp01(drivenDamping);
 		config.impacts = (shell && dentMode == .FromImpacts) ? 1 : 0;
 		config.iterations = Math.Clamp(iterations, 1, 32);
 		config.stepTime = Time.FixedDeltaTime;
-		config.doubleSided = (cloth || shell) ? 1 : 0;
+		config.doubleSided = (cloth || skinned) ? 1 : 0;
 		config.longRange = cloth ? 1 : 0;
 		// Jelly bends by the angle between faces: by distance, many thin faces meeting at a point (a sphere's poles)
 		// shiver. Cloth bends by distance: by angle, a cloth folded sharply (draped over something) gains speed at
@@ -396,7 +465,7 @@ class SoftBody : Component
 	bool FollowsServer => Free && Scene.Network != null && !Scene.Network.IsServer && GetComponent<NetworkIdentity>().IsValid;
 
 	/// A body with nothing holding it to its object, which carries its object instead.
-	bool Free => mPinned.IsEmpty && kind != .Shell;
+	bool Free => mPinned.IsEmpty && kind != .Shell && kind != .DrivenJelly;
 
 	/// Whether it moves its object by itself (cloth or jelly with nothing pinned): such an object is shared when a
 	/// network session starts, like a Rigidbody's.
@@ -404,7 +473,7 @@ class SoftBody : Component
 	{
 		get
 		{
-			if (kind == .Shell)
+			if (kind == .Shell || kind == .DrivenJelly)
 				return false;
 			if (mBody != uint32.MaxValue)
 				return mPinned.IsEmpty;
@@ -459,7 +528,7 @@ class SoftBody : Component
 			mAge += step;
 			tn_soft_set_pressure(system, mBody, mAir * Math.Min(mAge / AirTime, 1));
 		}
-		if (kind == .Shell)
+		if (kind == .Shell || kind == .DrivenJelly)
 		{
 			var own = GetComponent<Rigidbody>();
 			for (var up = Transform.Parent; !own.IsValid && up != null; up = up.Parent)
@@ -496,7 +565,7 @@ class SoftBody : Component
 			tn_soft_move_pinned(system, mBody, mPinned.Ptr, mTargets.Ptr, (uint32)mPinned.Count, step);
 		}
 		// A shell rides its object, so the wind does not blow it about.
-		if (windDrag > 0 && kind != .Shell)
+		if (windDrag > 0 && kind != .Shell && kind != .DrivenJelly)
 		{
 			var wind = Wind.At(Scene, Transform.Position) * WindSpeed;
 			if (wind.LengthSquared > 0.0001f)
@@ -521,6 +590,9 @@ class SoftBody : Component
 		let reach = scope List<float>(bodies.Count);
 		for (let (id, soft) in bodies)
 		{
+			// A driven jelly is only a rendered skin, never a collision proxy for other bodies.
+			if (soft.kind == .DrivenJelly)
+				continue;
 			ids.Add(id);
 			closed.Add(soft.kind == .Cloth ? 0 : 1);
 			reach.Add(Math.Max(soft.thickness, 0.005f) * 2 + 0.05f);
