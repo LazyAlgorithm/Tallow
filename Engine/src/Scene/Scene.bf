@@ -1578,7 +1578,6 @@ class Scene
 			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 			{
 				let callbacks = component.[Friend]mCallbacks;
-<<<<<<< Updated upstream
 				let hasLocalUpdate = callbacks.HasFlag(.OnLocalUpdate);
 				if (hasLocalUpdate)
 					Run(component, .OnLocalUpdate);
@@ -1586,17 +1585,6 @@ class Scene
 				// scripts do not need to walk their parents twice. Preserve the recheck after OnLocalUpdate.
 				// Update runs here for objects without a Network Identity; theirs runs per tick.
 				if (callbacks.HasFlag(.Update) && !TicksUpdate(component.GameObject) && (!hasLocalUpdate || component.IsActiveAndEnabled))
-=======
-				if (callbacks.HasFlag(.OnLocalUpdate))
-				{
-					Run(component, .OnLocalUpdate);
-					// Local callbacks can disable this component or its hierarchy before Update.
-					if (!component.IsActiveAndEnabled)
-						continue;
-				}
-				// Update runs here for objects without a Network Identity; theirs runs per tick.
-				if (callbacks.HasFlag(.Update) && !TicksUpdate(component.GameObject))
->>>>>>> Stashed changes
 					RunUpdate(component, mFrameInput, deltaTime);
 			}
 		}

@@ -200,14 +200,7 @@ class Transform
 		set
 		{
 			ref TransformData data = ref D();
-<<<<<<< Updated upstream
 			data.localPosition = mParent != null ? mParent.WorldToLocal.TransformPoint(value) : value;
-=======
-			if (mParent != null)
-				data.localPosition = mParent.WorldToLocal.TransformPoint(value);
-			else
-				data.localPosition = value;
->>>>>>> Stashed changes
 			MarkDirty(ref data);
 		}
 	}
@@ -228,14 +221,7 @@ class Transform
 		set
 		{
 			ref TransformData data = ref D();
-<<<<<<< Updated upstream
 			data.localRotation = mParent != null ? (mParent.Rotation.Conjugate * value).Normalized : value;
-=======
-			if (mParent != null)
-				data.localRotation = (mParent.Rotation.Conjugate * value).Normalized;
-			else
-				data.localRotation = value;
->>>>>>> Stashed changes
 			MarkDirty(ref data);
 		}
 	}

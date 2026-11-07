@@ -520,7 +520,6 @@ before (from `main`) and after each of 6c to 6h: server CPU per tick and bytes p
 - Preserve the low-allocation gameplay API, coroutine helpers and editor quick fixes above. Document the Systems tier as **advanced**, with a Showcase crowd exhibit in both normal-script and explicit-system styles.
 - **Exit:** a new project's template scripts contain no `delete`, `scope` or queries; ordinary scripts measurably improve over the pre-ECS baseline or a documented blocker explains the remaining script regression; full-frame gains are reported separately; fixed-tick/replay/network determinism checks pass; a developer needs no special ECS knowledge to realize the measured default-path improvements.
 
-<<<<<<< Updated upstream
 #### 7d. Full-engine compatibility and scripting audit
 
 Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API across **every** engine subsystem: scene and hierarchy, transforms, lifecycle and input, editor Inspector and code editor, visual-script compilation, prefab and serialization, save/load, hot reload, animation and IK, physics and character controllers, rendering, shader and compute graphs, terrain/voxels, particles, audio and voice, navigation and AI, networking, multiplayer replay, world streaming and mobile/web targets. Where internal work must become data-oriented, keep the existing script-facing behavior or document a deliberate compatibility change.
@@ -624,8 +623,7 @@ The initial detached-owner cleanup crash was fixed by retaining its ownership re
   The externally maintained `~/TallowEcsTests` network fixtures are not in this checkout. Full network regressions,
   hardware performance comparisons, safe shared asset unloading, handle-lifetime audit, semantic editor implementation,
   and the remaining compatibility/platform matrix still block Phase 7 exit.
-=======
-#### 7d. Beef semantic editor support (added by the project owner, 2026-11-06)
+#### 7f. Additional semantic editor requirements (added by the project owner, 2026-11-06)
 
 - Replace source-scanning completion in the code editor with Beef's own compiler/IDE semantic support.
   Resolve the project's actual dependencies, defines and unsaved documents. Provide type-aware completion,
@@ -646,7 +644,6 @@ The initial detached-owner cleanup crash was fixed by retaining its ownership re
   projects, including generics, shadowing, unsaved changes, stale results and rename undo. Determinism warnings
   remain visible in the Console. Completion and diagnostics must not repeatedly reset the editor or cause
   flickering on unchanged text. A new project requires no language-server setup from its author.
->>>>>>> Stashed changes
 
 ### Phase 8: Docs and release (M)
 

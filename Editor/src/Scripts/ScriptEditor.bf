@@ -19,12 +19,9 @@ extension EditorApp
 		public bool open = true;
 		/// Code generated from a graph: shown for reference, edited through the graph.
 		public bool readOnly;
-<<<<<<< Updated upstream
 		/// The ApiIndex revision this script was last coloured with.
 		public int apiRevision;
 		public uint64 checkedRevision;
-=======
->>>>>>> Stashed changes
 	}
 
 	class ScriptProblem
@@ -155,16 +152,8 @@ extension EditorApp
 
 	void OpenScript(StringView sourcePath, int32 line = -1)
 	{
-<<<<<<< Updated upstream
-		let absolutePath = scope String();
-		Path.GetFullPath(path, absolutePath);
-		var path;
-		if (!absolutePath.IsEmpty)
-			path = absolutePath;
-=======
 		let path = scope String();
 		ScriptSemantic.CanonicalPath(sourcePath, path);
->>>>>>> Stashed changes
 		mShowScripts = true;
 		mDockScripts = true;
 		ScriptDocument document = null;
@@ -331,12 +320,7 @@ extension EditorApp
 			mProblems.Add(problem);
 		}
 		AddDeterminismWarnings(scope $"{Project.Current.Path}/src" , 0);
-<<<<<<< Updated upstream
-		for (let document in mScripts)
-			ApplyProblems(document);
-=======
 		PublishScriptDiagnostics();
->>>>>>> Stashed changes
 		if (mCheckWasReload)
 		{
 			FinishScriptReload();
@@ -385,21 +369,6 @@ extension EditorApp
 			entry.GetFileName(name);
 			if (!name.StartsWith('.') && name != "build")
 				AddDeterminismWarnings(scope $"{folder}/{name}" , depth + 1);
-<<<<<<< Updated upstream
-		}
-	}
-
-	void ApplyProblems(ScriptDocument document)
-	{
-		tn_code_clear_markers(document.handle);
-		if (tn_code_is_dirty(document.handle) || document.checkedRevision != tn_code_revision(document.handle))
-			return;
-		for (let problem in mProblems)
-		{
-			if (problem.file == document.path)
-				tn_code_add_marker(document.handle, problem.line, problem.isError, problem.message.CStr());
-=======
->>>>>>> Stashed changes
 		}
 	}
 
@@ -449,16 +418,8 @@ extension EditorApp
 			{
 				let active = mActiveScript;
 				DrawScriptToolbar(active);
-<<<<<<< Updated upstream
-				DrawAnalysisToolbar(active);
-				let problemsHeight = mProblems.Count > 0 ? Math.Min(120.0f, 26.0f + mProblems.Count * 20.0f) : 0.0f;
-				DrawScriptTabs(active, problemsHeight);
-				if (problemsHeight > 0)
-					DrawScriptProblems(problemsHeight);
-=======
 				DrawSemanticTools(active);
 				DrawScriptTabs(active);
->>>>>>> Stashed changes
 			}
 		}
 		ImGui.End();
@@ -553,12 +514,6 @@ extension EditorApp
 				SaveScript(close);
 			if (mActiveScript == close)
 				mActiveScript = null;
-			if (mAnalysisDocument == close)
-			{
-				mAnalysisDocument = null;
-				mAnalysisRequest++;
-				mAnalysisHint.Clear();
-			}
 			mScripts.Remove(close);
 			tn_code_destroy(close.handle);
 			delete close;

@@ -8,11 +8,8 @@
 
 #include <algorithm>
 #include <cstring>
-<<<<<<< Updated upstream
 #include <cstdint>
-=======
 #include <filesystem>
->>>>>>> Stashed changes
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -445,13 +442,6 @@ TN_API void* tn_code_create(const char* text, int language)
 	{
 		TextEditor::AutoCompleteConfig config;
 		config.suggestionWidth = 40;
-<<<<<<< Updated upstream
-		config.callback = [document](TextEditor::AutoCompleteState& state) {
-			if (document->semantic)
-				RequestCompletion(document, state);
-			else
-				CompleteBeef(&document->editor, state);
-=======
 		config.callback = [document](TextEditor::AutoCompleteState& state)
 		{
 			state.suggestions.clear();
@@ -473,7 +463,6 @@ TN_API void* tn_code_create(const char* text, int language)
 			document->completionStart = (int)start;
 			document->semanticRequest = 1;
 			document->semanticCursor = (int)end;
->>>>>>> Stashed changes
 		};
 		editor.SetAutoCompleteConfig(&config);
 		editor.SetTextHoverCallback([document](TextEditor::PopupData& data)

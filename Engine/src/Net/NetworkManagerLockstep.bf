@@ -330,7 +330,6 @@ extension NetworkManager
 		ScriptFields(mExact.scripts[slot], false);
 	}
 
-<<<<<<< Updated upstream
 	// ScriptFields runs on the simulation thread without user callbacks. Reuse capacity across ticks instead
 	// of allocating two temporary lists per snapshot/replay; clear borrowed references on every exit.
 	List<FieldRef> mScriptFieldScratch = new .() ~ delete _;
@@ -339,36 +338,17 @@ extension NetworkManager
 	/// The supported value fields (including private fields) of the scripts this machine runs, saved locally for
 	/// both state sync and lockstep. [Sync] is still only for replication; replay history is never sent. A changed
 	/// field layout is rejected before any fields are changed, even when its total byte size is the same.
-	bool ScriptFields(List<uint8> data, bool restore)
-=======
 	/// The reflected value fields (numbers, vectors, flags), including private fields, on the scripts of the objects this machine runs
 	/// (its own player and the others it runs), saved into `data` or, with `restore`, put back from it: a replay
 	/// starts from the scripts' state at that tick, not where they ended up. False if the scripts are not the same
 	/// as when saved (nothing is put back then).
 	bool ScriptFields(List<uint8> data, bool restore, bool checkOnly = false)
->>>>>>> Stashed changes
 	{
 		// Validate the entire schema before touching any field. In-place restores can otherwise leave half a
 		// script rewound when a later field, instance or component changed during a reload or spawn/despawn.
 		if (restore && !checkOnly && !ScriptFields(data, true, true))
 			return false;
 		if (!restore)
-<<<<<<< Updated upstream
-			data.Count = sizeof(uint64);
-		else if (data.Count < sizeof(uint64))
-			return false;
-		int at = sizeof(uint64);
-		uint64 schema = 5381;
-		let fields = mScriptFieldScratch;
-		let restoreFields = mScriptRestoreScratch;
-		fields.Clear();
-		restoreFields.Clear();
-		defer
-		{
-			fields.Clear();
-			restoreFields.Clear();
-		}
-=======
 		{
 			data.Clear();
 			data.Count = sizeof(uint64);
@@ -381,8 +361,9 @@ extension NetworkManager
 		{
 			schema = (schema ^ value) * 1099511628211UL;
 		}
-		List<FieldRef> fields = scope .();
->>>>>>> Stashed changes
+		let fields = mScriptFieldScratch;
+		fields.Clear();
+		defer fields.Clear();
 		for (let identity in mIdentities)
 		{
 			if (identity.ownerId != LocalClientId && !identity.RemoteRun)
@@ -393,19 +374,11 @@ extension NetworkManager
 			{
 				if (!component.[Friend]mCallbacks.HasFlag(.Update) && !(component is NetworkBehaviour))
 					continue;
-<<<<<<< Updated upstream
-				// Identity, script instance and each field address distinguish changed object sets and layouts,
-				// including a hot-reloaded script whose new fields happen to occupy the same number of bytes.
-				schema = ((schema << 7) | (schema >> 57)) ^ (uint64)identity.NetId;
-				schema = ((schema << 7) | (schema >> 57)) ^ (uint64)(int)Internal.UnsafeCastToPtr(component);
-				fields.Clear();
-=======
 				Include((uint64)(uint)Internal.UnsafeCastToPtr(component));
 				Include((uint64)(uint32)component.GetType().TypeId);
 				Include(component.IsActiveAndEnabled ? 1 : 0);
 				fields.Clear();
 				// Private counters and RNG seeds affect prediction just as public fields do.
->>>>>>> Stashed changes
 				ComponentRegistry.GetFields(component, fields, true);
 				for (let field in fields)
 				{
@@ -413,24 +386,16 @@ extension NetworkManager
 					{
 					case .Float,.Double,.Char,.Vector4,.Int3,.Matrix4,.Int,.Bool,.Vector2,.Vector3,.Quaternion,.Color,.Enum:
 						let size = field.type.Size;
-<<<<<<< Updated upstream
-						schema = ((schema << 7) | (schema >> 57)) ^ (uint64)(int)field.ptr ^ (uint64)size;
-=======
 						Include(HashBytes(field.name.Ptr, field.name.Length));
 						Include((uint64)(uint32)field.type.TypeId);
 						Include((uint64)(uint)field.ptr);
 						Include((uint64)size);
->>>>>>> Stashed changes
 						if (restore)
 						{
 							if (size > data.Count - at)
 								return false;
-<<<<<<< Updated upstream
-							restoreFields.Add((field.ptr, size));
-=======
 							if (!checkOnly)
 								Internal.MemCpy(field.ptr, &data[at], size);
->>>>>>> Stashed changes
 						}
 						else
 						{
@@ -443,26 +408,6 @@ extension NetworkManager
 				}
 			}
 		}
-<<<<<<< Updated upstream
-		if (restore)
-		{
-			if (at != data.Count)
-				return false;
-			uint64 savedSchema = 0;
-			Internal.MemCpy(&savedSchema, &data[0], sizeof(uint64));
-			if (schema != savedSchema)
-				return false;
-			at = sizeof(uint64);
-			for (let field in restoreFields)
-			{
-				Internal.MemCpy(field.ptr, &data[at], field.size);
-				at += field.size;
-			}
-		}
-		else
-			Internal.MemCpy(&data[0], &schema, sizeof(uint64));
-		return true;
-=======
 		if (!restore)
 		{
 			Internal.MemCpy(data.Ptr, &schema, sizeof(uint64));
@@ -471,7 +416,6 @@ extension NetworkManager
 		uint64 savedSchema = 0;
 		Internal.MemCpy(&savedSchema, data.Ptr, sizeof(uint64));
 		return at == data.Count && savedSchema == schema;
->>>>>>> Stashed changes
 	}
 
 	/// Client, in lockstep, after forwarded controls came in: if a guess was wrong (or the server ran this
