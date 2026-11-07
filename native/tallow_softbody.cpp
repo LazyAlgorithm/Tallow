@@ -1030,20 +1030,24 @@ TN_API void tn_soft_skin(JPH_PhysicsSystem* world, uint32_t bodyId, const float*
 			// Its collisions compress nearby skinned vertices, not the ball's
 			// physics body. Springs restore their shape on subsequent ticks.
 			const float reach = std::max(shell.dentDepth * 1.7f, 0.35f);
+			// Contacts were reported at the Rigidbody's current pose; the
+			// skin already moved to its predicted next pose. Move contact
+			// positions and normals with it so the squash stays on the hit side.
+			const JPH::Mat44 impactToNext = next * Matrix(objectMatrix).Inversed();
 			for (const auto& hit : shell.hits)
 			{
 				if (hit.count == 0 || hit.speed <= 0)
 					continue;
-				const JPH::Vec3 inward = worldToBody.Multiply3x3(hit.into).NormalizedOr(JPH::Vec3::sAxisY());
+				const JPH::Vec3 inward = worldToBody.Multiply3x3(impactToNext.Multiply3x3(hit.into)).NormalizedOr(JPH::Vec3::sAxisY());
 				const float depth = shell.dentDepth * std::clamp(hit.speed / 8.0f, 0.0f, 1.0f);
-				const JPH::Vec3 contact = worldToBody * hit.points[0];
+				const JPH::Vec3 contact = worldToBody * (impactToNext * hit.points[0]);
 				for (uint32_t i = 0; i < vertices.size(); ++i)
 				{
 					auto& vertex = vertices[i];
 					if (vertex.mInvMass == 0)
 						continue;
-					if (i < shell.outward.size() && JPH::Vec3(shell.outward[i]).Dot(inward) >= -0.1f)
-						continue;
+					// Contact-distance falloff limits deformation to the impact
+					// patch, even as the rigid ball spins beneath its visual skin.
 					const float distance = (vertex.mPosition - contact).Length();
 					const float weight = std::clamp(1.0f - distance / reach, 0.0f, 1.0f);
 					if (weight <= 0)
