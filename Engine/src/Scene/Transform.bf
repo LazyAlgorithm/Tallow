@@ -85,7 +85,9 @@ class Transform
 	/// The position relative to the parent (in the world, for an object with no parent).
 	public Vector3 LocalPosition
 	{
+		[Inline]
 		get => D().localPosition;
+		[Inline]
 		set
 		{
 			ref TransformData data = ref D();
@@ -97,7 +99,9 @@ class Transform
 	/// The rotation relative to the parent.
 	public Quaternion LocalRotation
 	{
+		[Inline]
 		get => D().localRotation;
+		[Inline]
 		set
 		{
 			ref TransformData data = ref D();
@@ -118,7 +122,8 @@ class Transform
 			bool turnedBelow = data.localRotation != .Identity;
 			for (var parent = mParent; parent != null; parent = parent.mParent)
 			{
-				let parentScale = parent.D().localScale;
+				ref TransformData parentData = ref parent.D();
+				let parentScale = parentData.localScale;
 				if (turnedBelow && (parentScale.x != parentScale.y || parentScale.y != parentScale.z))
 				{
 					Vector3 t, s;
@@ -127,7 +132,7 @@ class Transform
 					return Vector3.Abs(s);
 				}
 				scale *= parentScale;
-				turnedBelow |= parent.D().localRotation != .Identity;
+				turnedBelow |= parentData.localRotation != .Identity;
 			}
 			return Vector3.Abs(scale);
 		}
@@ -136,7 +141,9 @@ class Transform
 	/// The size relative to the parent: 1 on each axis is unchanged.
 	public Vector3 LocalScale
 	{
+		[Inline]
 		get => D().localScale;
+		[Inline]
 		set
 		{
 			ref TransformData data = ref D();
@@ -193,7 +200,14 @@ class Transform
 		set
 		{
 			ref TransformData data = ref D();
+<<<<<<< Updated upstream
 			data.localPosition = mParent != null ? mParent.WorldToLocal.TransformPoint(value) : value;
+=======
+			if (mParent != null)
+				data.localPosition = mParent.WorldToLocal.TransformPoint(value);
+			else
+				data.localPosition = value;
+>>>>>>> Stashed changes
 			MarkDirty(ref data);
 		}
 	}
@@ -214,7 +228,14 @@ class Transform
 		set
 		{
 			ref TransformData data = ref D();
+<<<<<<< Updated upstream
 			data.localRotation = mParent != null ? (mParent.Rotation.Conjugate * value).Normalized : value;
+=======
+			if (mParent != null)
+				data.localRotation = (mParent.Rotation.Conjugate * value).Normalized;
+			else
+				data.localRotation = value;
+>>>>>>> Stashed changes
 			MarkDirty(ref data);
 		}
 	}

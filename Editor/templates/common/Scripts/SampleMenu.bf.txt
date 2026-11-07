@@ -9,11 +9,16 @@ namespace {NAMESPACE};
 [Component]
 class SampleMenu : Script
 {
-	public String playerName = new .("Player") ~ delete _;
+	public String playerName;
 	[Range(0, 1)]
 	public float volume = 0.6f;
 
 	UIDocument Document => GetComponent<UIDocument>();
+
+	public this()
+	{
+		playerName = CreateString("Player");
+	}
 
 	void SetStatus(StringView text)
 	{
@@ -29,8 +34,7 @@ class SampleMenu : Script
 
 	public void OnPlay()
 	{
-		SetStatus(scope $"Have fun, {playerName}!");
-		Log.Info(scope $"SampleMenu: play pressed by {playerName}");
+		Document.Find("status")?.SetTextFormat("Have fun, {}!", playerName);
 	}
 
 	public void OnLouder() => volume = Mathf.Clamp01(volume + 0.1f);

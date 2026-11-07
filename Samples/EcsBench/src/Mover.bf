@@ -5,7 +5,7 @@ namespace EcsBench;
 
 /// The GameObject version: one component per cube, run by the scene's Update like any game script.
 [Component]
-class Mover : Component
+class Mover : Script
 {
 	public Vector3 velocity;
 	public Vector3 spin;

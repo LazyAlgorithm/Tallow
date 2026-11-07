@@ -8,7 +8,7 @@ namespace Tallow.Editor;
 
 /// The Scripts tab: a code editor in the style of Visual Studio's dark theme with syntax
 /// colouring, bracket matching, foldable blocks, find/replace, completion and undo/redo.
-/// Saving a script compiles the project in the background and marks errors on their lines.
+/// Saving a script compiles the project in the background and sends diagnostics to the Console.
 extension EditorApp
 {
 	class ScriptDocument
@@ -19,9 +19,12 @@ extension EditorApp
 		public bool open = true;
 		/// Code generated from a graph: shown for reference, edited through the graph.
 		public bool readOnly;
+<<<<<<< Updated upstream
 		/// The ApiIndex revision this script was last coloured with.
 		public int apiRevision;
 		public uint64 checkedRevision;
+=======
+>>>>>>> Stashed changes
 	}
 
 	class ScriptProblem
@@ -45,10 +48,7 @@ extension EditorApp
 	[CLink] static extern bool tn_code_can_undo(void* handle);
 	[CLink] static extern bool tn_code_can_redo(void* handle);
 	[CLink] static extern void tn_code_focus(void* handle);
-	[CLink] static extern void tn_code_clear_markers(void* handle);
-	[CLink] static extern void tn_code_add_marker(void* handle, int32 line, bool error, char8* message);
 	[CLink] static extern void tn_code_goto_line(void* handle, int32 line);
-	[CLink] static extern void tn_code_refresh(void* handle);
 	[CLink] static extern bool igBeginTabBar(char8* id, int32 flags);
 	[CLink] static extern void igEndTabBar();
 	[CLink] static extern bool igBeginTabItem(char8* label, bool* open, int32 flags);
@@ -153,19 +153,24 @@ extension EditorApp
 		OpenScript(scriptPath);
 	}
 
-	void OpenScript(StringView path, int32 line = -1)
+	void OpenScript(StringView sourcePath, int32 line = -1)
 	{
+<<<<<<< Updated upstream
 		let absolutePath = scope String();
 		Path.GetFullPath(path, absolutePath);
 		var path;
 		if (!absolutePath.IsEmpty)
 			path = absolutePath;
+=======
+		let path = scope String();
+		ScriptSemantic.CanonicalPath(sourcePath, path);
+>>>>>>> Stashed changes
 		mShowScripts = true;
 		mDockScripts = true;
 		ScriptDocument document = null;
 		for (let existing in mScripts)
 		{
-			if (existing.path == path)
+			if (Path.Equals(existing.path, path))
 				document = existing;
 		}
 		if (document == null)
@@ -176,19 +181,16 @@ extension EditorApp
 				Log.Error(scope $"Could not open {path}");
 				return;
 			}
-			// Reads the engine's and the project's code for colouring and completion (the first time), or picks up
-			// scripts changed since.
+			// The source index supplies type colouring; completion and navigation use Beef's resolver.
 			if (path.EndsWith(".bf"))
 				ApiIndex.Ensure();
 			document = new ScriptDocument();
-			document.apiRevision = ApiIndex.Revision;
 			document.path.Set(path);
 			Path.GetFileName(path, document.name);
 			document.handle = tn_code_create(text.CStr(), path.EndsWith(".tui") ? 1 : (path.EndsWith(".tcss") ? 2 : ((path.EndsWith(".tshader") || path.EndsWith(".tcompute")) ? 3 : 0)));
 			document.readOnly = FindSourceGraph(path, scope String());
 			tn_code_set_read_only(document.handle, document.readOnly);
 			mScripts.Add(document);
-			ApplyProblems(document);
 		}
 		mSelectScript = document;
 		mFocusScripts = true;
@@ -219,7 +221,7 @@ extension EditorApp
 		}
 		else
 		{
-			// What was just written may declare new types and members: completion learns them now.
+			// Refresh the source index used by type colouring and visual scripting.
 			ApiIndex.RefreshProject();
 			StartErrorCheck();
 		}
@@ -329,8 +331,12 @@ extension EditorApp
 			mProblems.Add(problem);
 		}
 		AddDeterminismWarnings(scope $"{Project.Current.Path}/src" , 0);
+<<<<<<< Updated upstream
 		for (let document in mScripts)
 			ApplyProblems(document);
+=======
+		PublishScriptDiagnostics();
+>>>>>>> Stashed changes
 		if (mCheckWasReload)
 		{
 			FinishScriptReload();
@@ -340,7 +346,7 @@ extension EditorApp
 		if (mCheckSucceeded)
 			Log.Info("Scripts compiled. Use File > Rebuild & Reload to run the new code.");
 		else
-			Log.Error(scope $"Scripts have {mProblems.Count} problem(s); see the Scripts tab.");
+			Log.Error("Scripts have errors; see the Console.");
 	}
 
 	/// Networked code that would come out differently on different machines (ScriptDeterminism), as warnings.
@@ -379,6 +385,7 @@ extension EditorApp
 			entry.GetFileName(name);
 			if (!name.StartsWith('.') && name != "build")
 				AddDeterminismWarnings(scope $"{folder}/{name}" , depth + 1);
+<<<<<<< Updated upstream
 		}
 	}
 
@@ -391,11 +398,14 @@ extension EditorApp
 		{
 			if (problem.file == document.path)
 				tn_code_add_marker(document.handle, problem.line, problem.isError, problem.message.CStr());
+=======
+>>>>>>> Stashed changes
 		}
 	}
 
 	void DrawScripts()
 	{
+		CollectSemantic();
 		if (!mShowScripts)
 			return;
 		if (mDockScripts && mAssetCenterDock != 0)
@@ -439,11 +449,16 @@ extension EditorApp
 			{
 				let active = mActiveScript;
 				DrawScriptToolbar(active);
+<<<<<<< Updated upstream
 				DrawAnalysisToolbar(active);
 				let problemsHeight = mProblems.Count > 0 ? Math.Min(120.0f, 26.0f + mProblems.Count * 20.0f) : 0.0f;
 				DrawScriptTabs(active, problemsHeight);
 				if (problemsHeight > 0)
 					DrawScriptProblems(problemsHeight);
+=======
+				DrawSemanticTools(active);
+				DrawScriptTabs(active);
+>>>>>>> Stashed changes
 			}
 		}
 		ImGui.End();
@@ -486,15 +501,13 @@ extension EditorApp
 		ImGui.SameLine(0, 14);
 		if (mCheckRunning)
 			ImGui.TextColored(EditorTheme.Warning, "Compiling...");
-		else if (mProblems.Count > 0)
-			ImGui.TextColored(EditorTheme.Error, scope String()..AppendF("{} problem(s)", mProblems.Count).CStr());
 		else
 			ImGui.TextDisabled("Ctrl+S save   Ctrl+F find   Ctrl+Space complete");
 	}
 
-	/// One tab per open file, each a code editor, above the problem list (`problemsHeight` high). A script made from a
+	/// One tab per open file, each a code editor. A script made from a
 	/// graph is read-only, with a button to turn it into an ordinary script.
-	void DrawScriptTabs(ScriptDocument active, float problemsHeight)
+	void DrawScriptTabs(ScriptDocument active)
 	{
 		if (active != null && active.readOnly)
 		{
@@ -522,13 +535,9 @@ extension EditorApp
 				if (igBeginTabItem(document.name.CStr(), &document.open, flags))
 				{
 					mActiveScript = document;
-					if (document.apiRevision != ApiIndex.Revision)
-					{
-						document.apiRevision = ApiIndex.Revision;
-						tn_code_refresh(document.handle);
-					}
 					let avail = ImGui.GetContentRegionAvail();
-					tn_code_render(document.handle, "##code", avail.x, Math.Max(avail.y - problemsHeight, 60));
+					tn_code_render(document.handle, "##code", avail.x, Math.Max(avail.y, 60));
+					UpdateSemantic(document);
 					igEndTabItem();
 				}
 				ImGui.PopID();
@@ -556,22 +565,4 @@ extension EditorApp
 		}
 	}
 
-	/// The problems the last check found: click one to go to it.
-	void DrawScriptProblems(float problemsHeight)
-	{
-		ImGui.BeginChild("problems", .(0, problemsHeight), ImGui.ChildBorders);
-		for (int32 i = 0; i < (int32)mProblems.Count; i++)
-		{
-			let problem = mProblems[i];
-			let fileName = scope String();
-			Path.GetFileName(problem.file, fileName);
-			let label = scope String();
-			label.AppendF("{}({}): {}##{}", fileName, problem.line + 1, problem.message, i);
-			ImGui.PushStyleColor(ImGui.Col.Text, problem.isError ? EditorTheme.Error : EditorTheme.Warning);
-			if (ImGui.Selectable(label.CStr()))
-				OpenScript(problem.file, problem.line);
-			ImGui.PopStyleColor();
-		}
-		ImGui.EndChild();
-	}
 }

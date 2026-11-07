@@ -36,6 +36,7 @@ class UpdateCounter : Component
 	}
 }
 
+<<<<<<< Updated upstream
 /// Script fields used for prediction can be rewound without [Sync]; [Sync] is for replication only.
 [Component]
 class ReplayFieldCounter : Script
@@ -66,6 +67,24 @@ class LocalDisableProbe : Script
 	public override void OnLocalUpdate()
 	{
 		Enabled = false;
+=======
+/// Changes enabled state before Update, for EcsChecks.UpdateChecks.
+[Component]
+class LocalUpdateGate : Component
+{
+	public Component target;
+	public bool disableParent;
+	public int updates;
+	public int localUpdates;
+
+	public override void OnLocalUpdate()
+	{
+		localUpdates++;
+		if (disableParent)
+			Transform.Parent.GameObject.SetActive(false);
+		else
+			(target ?? this).Enabled = false;
+>>>>>>> Stashed changes
 	}
 
 	public override void Update(TickInput input, float deltaTime)
@@ -74,6 +93,7 @@ class LocalDisableProbe : Script
 	}
 }
 
+<<<<<<< Updated upstream
 /// A resource with an observable lifetime for the owner-cleanup regression checks.
 class OwnedProbe
 {
@@ -118,6 +138,8 @@ class WorldStateListenerProbe : Script
 	}
 }
 
+=======
+>>>>>>> Stashed changes
 /// Checks of the ECS layer (World, Query, ParallelFor, deferred changes), run with TALLOW_BENCH_MODE=check.
 static class EcsChecks
 {
@@ -245,9 +267,13 @@ static class EcsChecks
 		Expect(!world.IsAlive(entities[0]) && world.Count<Pose>() == 999, "Delete");
 		SceneChecks();
 		UpdateChecks();
+<<<<<<< Updated upstream
 		OwnershipChecks();
 		WorldStateListenerChecks();
 		GeneratedGraphChecks();
+=======
+		sFailures += ScriptPathChecks.Run();
+>>>>>>> Stashed changes
 		DataChecks();
 		PrefabChecks();
 		HandleChecks();
@@ -452,6 +478,7 @@ static class EcsChecks
 		Expect(localDisable.updates == 0, "OnLocalUpdate disabling a script prevents its Update in the same frame");
 		Expect(!networked.sawControls, "an object no player controls gets empty controls");
 
+<<<<<<< Updated upstream
 		// Rebuilding callback membership after a metadata change retains registration order.
 		let order = scope List<Component>(scene.[Friend]mFrameList.GetEnumerator());
 		ScriptCallbackIndex.[Friend]sByType[typeof(UpdateCounter)] = .None;
@@ -460,6 +487,23 @@ static class EcsChecks
 		Expect(scene.[Friend]mFrameList.Count == order.Count, "callback rebuild restores the current masks");
 		for (int i < order.Count)
 			Expect(scene.[Friend]mFrameList[i] == order[i], "callback rebuild preserves registration order");
+=======
+		let selfGate = scene.CreateGameObject("Self gate").AddComponent<LocalUpdateGate>();
+		let parent = scene.CreateGameObject("Parent gate");
+		let parentGate = scene.CreateGameObject("Child gate", parent.Transform).AddComponent<LocalUpdateGate>();
+		parentGate.disableParent = true;
+		let targetGate = scene.CreateGameObject("Target gate").AddComponent<LocalUpdateGate>();
+		let target = scene.CreateGameObject("Target").AddComponent<UpdateCounter>();
+		targetGate.target = target;
+		scene.Update();
+		Expect(selfGate.localUpdates == 1 && selfGate.updates == 0, "OnLocalUpdate disabling itself skips Update");
+		Expect(parentGate.localUpdates == 1 && parentGate.updates == 0, "OnLocalUpdate disabling its parent skips Update");
+		Expect(targetGate.localUpdates == 1 && targetGate.updates == 1 && target.frames == 0, "OnLocalUpdate disabling a later script preserves registration order");
+		targetGate.Enabled = false;
+		target.Enabled = true;
+		scene.Update();
+		Expect(selfGate.localUpdates == 1 && parentGate.localUpdates == 1 && targetGate.updates == 1 && target.frames == 1, "disabled callbacks stay skipped and a re-enabled Update-only script runs");
+>>>>>>> Stashed changes
 
 		// The per-callback lists only hold classes that override the callback.
 		Expect(ScriptCallbackIndex.Of(typeof(UpdateCounter)) == .Update, "UpdateCounter overrides Update only");

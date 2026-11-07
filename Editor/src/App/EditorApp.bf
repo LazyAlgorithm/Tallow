@@ -549,7 +549,6 @@ class EditorApp : Application
 			BuildGizmos();
 		if (mSceneVisible)
 		{
-			mSceneView.Resize((int32)mSceneSize.x, (int32)mSceneSize.y);
 			mSceneView.Render(mScene, mSceneCamera);
 		}
 		RenderModelViews();
@@ -558,7 +557,6 @@ class EditorApp : Application
 		let gameCamera = FindGameCamera();
 		if (mGameVisible && gameCamera)
 		{
-			mGameView.Resize((int32)mGameSize.x, (int32)mGameSize.y);
 			mGameView.Render(mScene, gameCamera.GetCameraData(mGameSize.x / Math.Max(mGameSize.y, 1)));
 		}
 		ImGui.tn_imgui_render(ImGuiView);

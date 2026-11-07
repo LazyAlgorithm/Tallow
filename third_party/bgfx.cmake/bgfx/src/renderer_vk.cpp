@@ -5065,6 +5065,27 @@ VK_IMPORT_DEVICE
 			while (result != VK_SUCCESS
 			   &&  searchIndex >= 0);
 
+			if (VK_ERROR_OUT_OF_DEVICE_MEMORY == result
+			&&  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT == propertyFlags)
+			{
+				// Discrete GPUs can run out of local memory while compatible host
+				// memory is still available. Restrict the retry to non-local heaps.
+				VkMemoryRequirements fallback = *requirements;
+				for (uint32_t ii = 0; ii < m_memoryProperties.memoryTypeCount; ++ii)
+				{
+					if (0 != (m_memoryProperties.memoryTypes[ii].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) )
+					{
+						fallback.memoryTypeBits &= ~(1u << ii);
+					}
+				}
+
+				if (0 != fallback.memoryTypeBits)
+				{
+					BX_TRACE("Device-local memory exhausted; retrying %llu bytes in compatible host memory.", (unsigned long long)requirements->size);
+					result = allocateMemory(&fallback, 0, memory, _forcePrivateDeviceAllocation);
+				}
+			}
+
 			return result;
 		}
 
@@ -6907,6 +6928,10 @@ VK_DESTROY
 		m_numSides = 1;
 
 		VkResult result = createImages(_commandBuffer);
+		BGFX_FATAL(VK_SUCCESS == result
+			, Fatal::UnableToCreateTexture
+			, "Failed to create %ux%u render target: %s.", m_width, m_height, getName(result)
+			);
 
 		if (VK_SUCCESS == result)
 		{
@@ -7185,7 +7210,11 @@ VK_DESTROY
 				, swizzle ? " (swizzle BGRA8 -> RGBA8)" : ""
 				);
 
-			VK_CHECK(createImages(_commandBuffer, _external) );
+			const VkResult imageResult = createImages(_commandBuffer, _external);
+			BGFX_FATAL(VK_SUCCESS == imageResult
+				, Fatal::UnableToCreateTexture
+				, "Failed to create %ux%u texture: %s.", m_width, m_height, getName(imageResult)
+				);
 
 			if (isVideoDecodeDst)
 			{
@@ -7605,12 +7634,9 @@ VK_DESTROY
 		const VkImageLayout oldLayout = m_currentImageLayout;
 		const VkImageLayout oldSingleMsaaLayout = m_currentSingleMsaaImageLayout;
 
-		const uint32_t numLayers = false
-			|| m_type == VK_IMAGE_VIEW_TYPE_CUBE
-			|| m_type == VK_IMAGE_VIEW_TYPE_CUBE_ARRAY
-			? m_numSides
-			: _numLayers
-			;
+		// Framebuffer attachments select individual cube faces just like array
+		// layers. Resolving every face from a nonzero layer overruns the image.
+		const uint32_t numLayers = _numLayers;
 
 		if (needResolve)
 		{

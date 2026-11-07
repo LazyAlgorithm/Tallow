@@ -44,6 +44,8 @@ extension EditorApp
 				mSceneSize = size;
 				mSceneOrigin = origin;
 				UpdateSceneCamera(size.x / size.y);
+				// Queue the image only after resizing: Resize destroys the previous output texture.
+				mSceneView.Resize((int32)size.x, (int32)size.y);
 				if (mSceneView.Width > 0)
 					ImGui.Picture(mSceneView.OutputTexture, .(mSceneView.Width, mSceneView.Height));
 				mSceneHovered = ImGui.IsItemHovered();

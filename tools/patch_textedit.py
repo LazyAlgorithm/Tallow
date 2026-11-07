@@ -99,3 +99,65 @@ if new not in c:
     assert c.count(old) == 1, 'TextEditor.cpp layout changed (completion trigger)'
     open(source, 'w', encoding='utf-8').write(c.replace(old, new, 1))
 
+# A completed asynchronous request must release the pending state, including an empty result.
+c = open(source, encoding='utf-8').read()
+old = "void TextEditor::AutoComplete::setSuggestions(const std::vector<std::string>& suggestions) {\n\tstate.suggestions = suggestions;"
+new = old + "\n\tstate.suggestionsPromise = false;"
+if new not in c:
+    assert c.count(old) == 1, 'TextEditor.cpp layout changed (asynchronous completion)'
+    open(source, 'w', encoding='utf-8').write(c.replace(old, new, 1))
+# Expose the active compiler completion for a ghost-text suffix; acceptance still uses the widget's undo path.
+h = open(header, encoding='utf-8').read()
+anchor = '\tinline void SetAutoCompleteSuggestions(const std::vector<std::string>& suggestions) { autocomplete.setSuggestions(suggestions); }'
+addition = '\n\tinline std::string GetAutoCompletePreview() { return autocomplete.isActive() ? autocomplete.getReplacement() : ""; }\n\tinline DocPos GetAutoCompleteStart() const { return autocomplete.getStart(); }'
+if 'GetAutoCompletePreview()' not in h:
+    assert h.count(anchor) == 1, 'TextEditor.h layout changed (completion preview)'
+    open(header, 'w', encoding='utf-8').write(h.replace(anchor, anchor + addition, 1))
+
+# A stale async result can retry the active popup or release its promise without showing obsolete choices.
+h = open(header, encoding='utf-8').read()
+anchor = '\tinline DocPos GetAutoCompleteStart() const { return autocomplete.getStart(); }'
+addition = '\n\tinline bool IsAutoCompleteActive() const { return autocomplete.isActive(); }\n\tinline void ClearAutoCompleteSuggestions(bool pending) { autocomplete.clearSuggestions(pending); }'
+if 'ClearAutoCompleteSuggestions' not in h:
+    assert h.count(anchor) == 1, 'TextEditor.h layout changed (pending completion)'
+    h = h.replace(anchor, anchor + addition, 1)
+anchor = '\t\tvoid setSuggestions(const std::vector<std::string>& suggestions);'
+addition = '\n\t\tinline void clearSuggestions(bool pending) { state.suggestions.clear(); state.suggestionsPromise = pending; currentSelection = 0; }'
+if 'void clearSuggestions(bool pending)' not in h:
+    assert h.count(anchor) == 1, 'TextEditor.h layout changed (clear completion)'
+    h = h.replace(anchor, anchor + addition, 1)
+open(header, 'w', encoding='utf-8').write(h)
+
+# Ghost text belongs to the editor child draw list, above its opaque background, with the text-area clip.
+h = open(header, encoding='utf-8').read()
+anchor = '\tinline bool IsDocPosVisible(DocPos pos) const { return isDocPosVisible(normalizePos(pos)); }'
+addition = '\n\tvoid DrawInlineText(DocPos pos, const char* text, ImU32 color);'
+if 'void DrawInlineText(' not in h:
+    assert h.count(anchor) == 1, 'TextEditor.h layout changed (inline text)'
+    h = h.replace(anchor, anchor + addition, 1)
+anchor = '\tImDrawList* drawList;\n\n\tImFont* font;'
+if 'ImVec2 textClipMin, textClipMax;' not in h:
+    assert h.count(anchor) == 1, 'TextEditor.h layout changed (text clip)'
+    h = h.replace(anchor, '\tImDrawList* drawList;\n\tImVec2 textClipMin, textClipMax;\n\n\tImFont* font;', 1)
+open(header, 'w', encoding='utf-8').write(h)
+c = open(source, encoding='utf-8').read()
+anchor = '\t\t// render parts in the text area\n'
+if 'textClipMin = drawList->GetClipRectMin();' not in c:
+    assert c.count(anchor) == 1, 'TextEditor.cpp layout changed (text clip)'
+    c = c.replace(anchor, '\t\ttextClipMin = drawList->GetClipRectMin();\n\t\ttextClipMax = drawList->GetClipRectMax();\n\n' + anchor, 1)
+c = c.replace('visPos.row >= firstVisibleRow && visPos.row < lastVisibleRow &&', 'visPos.row >= firstVisibleRow && visPos.row <= lastVisibleRow &&', 1)
+anchor = 'bool TextEditor::isDocPosVisible(DocPos docPos) const {'
+addition = """// Draw on the editor child, after its text, using the same font and text-area clip.
+void TextEditor::DrawInlineText(DocPos pos, const char* text, ImU32 color) {
+    if (IsDocPosVisible(pos)) {
+        drawList->PushClipRect(textClipMin, textClipMax, true);
+        drawList->AddText(font, fontSize, DocPos2ScreenPos(pos), color, text);
+        drawList->PopClipRect();
+    }
+}
+
+""".replace('    ', '\t')
+if 'void TextEditor::DrawInlineText(' not in c:
+    assert c.count(anchor) == 1, 'TextEditor.cpp layout changed (inline text)'
+    c = c.replace(anchor, addition + anchor, 1)
+open(source, 'w', encoding='utf-8').write(c)

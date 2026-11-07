@@ -36,7 +36,7 @@ extension NetworkManager
 		public void*[ExactRingSize] states;
 		public uint32[ExactRingSize] tick;
 		public uint32[ExactRingSize] generation;
-		/// The public fields of the scripts on the objects this machine runs, as they were (see SaveScriptFields).
+		/// The reflected value fields of scripts on the objects this machine runs, as they were (see ScriptFields).
 		public List<uint8>[ExactRingSize] scripts;
 
 		public ~this()
@@ -172,6 +172,11 @@ extension NetworkManager
 		if (ackTick == 0 || (int32)(mTick - ackTick) < 0 || mTick - ackTick >= (uint32)ExactRingSize - 1 || mExact.tick[slot] != ackTick || mExact.generation[slot] != mScene.Physics.BodyGeneration)
 		{
 			// Too late to take up (or bodies came and went since): ask again.
+			RequestResync(true);
+			return;
+		}
+		if (mExact.scripts[slot] == null || !ScriptFields(mExact.scripts[slot], true, true))
+		{
 			RequestResync(true);
 			return;
 		}
@@ -325,6 +330,7 @@ extension NetworkManager
 		ScriptFields(mExact.scripts[slot], false);
 	}
 
+<<<<<<< Updated upstream
 	// ScriptFields runs on the simulation thread without user callbacks. Reuse capacity across ticks instead
 	// of allocating two temporary lists per snapshot/replay; clear borrowed references on every exit.
 	List<FieldRef> mScriptFieldScratch = new .() ~ delete _;
@@ -334,8 +340,20 @@ extension NetworkManager
 	/// both state sync and lockstep. [Sync] is still only for replication; replay history is never sent. A changed
 	/// field layout is rejected before any fields are changed, even when its total byte size is the same.
 	bool ScriptFields(List<uint8> data, bool restore)
+=======
+	/// The reflected value fields (numbers, vectors, flags), including private fields, on the scripts of the objects this machine runs
+	/// (its own player and the others it runs), saved into `data` or, with `restore`, put back from it: a replay
+	/// starts from the scripts' state at that tick, not where they ended up. False if the scripts are not the same
+	/// as when saved (nothing is put back then).
+	bool ScriptFields(List<uint8> data, bool restore, bool checkOnly = false)
+>>>>>>> Stashed changes
 	{
+		// Validate the entire schema before touching any field. In-place restores can otherwise leave half a
+		// script rewound when a later field, instance or component changed during a reload or spawn/despawn.
+		if (restore && !checkOnly && !ScriptFields(data, true, true))
+			return false;
 		if (!restore)
+<<<<<<< Updated upstream
 			data.Count = sizeof(uint64);
 		else if (data.Count < sizeof(uint64))
 			return false;
@@ -350,19 +368,44 @@ extension NetworkManager
 			fields.Clear();
 			restoreFields.Clear();
 		}
+=======
+		{
+			data.Clear();
+			data.Count = sizeof(uint64);
+		}
+		else if (data.Count < sizeof(uint64))
+			return false;
+		int at = sizeof(uint64);
+		uint64 schema = 14695981039346656037UL;
+		void Include(uint64 value)
+		{
+			schema = (schema ^ value) * 1099511628211UL;
+		}
+		List<FieldRef> fields = scope .();
+>>>>>>> Stashed changes
 		for (let identity in mIdentities)
 		{
 			if (identity.ownerId != LocalClientId && !identity.RemoteRun)
 				continue;
+			Include(identity.NetId);
+			Include(identity.GameObject.Id);
 			for (let component in identity.GameObject.Components)
 			{
 				if (!component.[Friend]mCallbacks.HasFlag(.Update) && !(component is NetworkBehaviour))
 					continue;
+<<<<<<< Updated upstream
 				// Identity, script instance and each field address distinguish changed object sets and layouts,
 				// including a hot-reloaded script whose new fields happen to occupy the same number of bytes.
 				schema = ((schema << 7) | (schema >> 57)) ^ (uint64)identity.NetId;
 				schema = ((schema << 7) | (schema >> 57)) ^ (uint64)(int)Internal.UnsafeCastToPtr(component);
 				fields.Clear();
+=======
+				Include((uint64)(uint)Internal.UnsafeCastToPtr(component));
+				Include((uint64)(uint32)component.GetType().TypeId);
+				Include(component.IsActiveAndEnabled ? 1 : 0);
+				fields.Clear();
+				// Private counters and RNG seeds affect prediction just as public fields do.
+>>>>>>> Stashed changes
 				ComponentRegistry.GetFields(component, fields, true);
 				for (let field in fields)
 				{
@@ -370,12 +413,24 @@ extension NetworkManager
 					{
 					case .Float,.Double,.Char,.Vector4,.Int3,.Matrix4,.Int,.Bool,.Vector2,.Vector3,.Quaternion,.Color,.Enum:
 						let size = field.type.Size;
+<<<<<<< Updated upstream
 						schema = ((schema << 7) | (schema >> 57)) ^ (uint64)(int)field.ptr ^ (uint64)size;
+=======
+						Include(HashBytes(field.name.Ptr, field.name.Length));
+						Include((uint64)(uint32)field.type.TypeId);
+						Include((uint64)(uint)field.ptr);
+						Include((uint64)size);
+>>>>>>> Stashed changes
 						if (restore)
 						{
-							if (at + size > data.Count)
+							if (size > data.Count - at)
 								return false;
+<<<<<<< Updated upstream
 							restoreFields.Add((field.ptr, size));
+=======
+							if (!checkOnly)
+								Internal.MemCpy(field.ptr, &data[at], size);
+>>>>>>> Stashed changes
 						}
 						else
 						{
@@ -388,6 +443,7 @@ extension NetworkManager
 				}
 			}
 		}
+<<<<<<< Updated upstream
 		if (restore)
 		{
 			if (at != data.Count)
@@ -406,6 +462,16 @@ extension NetworkManager
 		else
 			Internal.MemCpy(&data[0], &schema, sizeof(uint64));
 		return true;
+=======
+		if (!restore)
+		{
+			Internal.MemCpy(data.Ptr, &schema, sizeof(uint64));
+			return true;
+		}
+		uint64 savedSchema = 0;
+		Internal.MemCpy(&savedSchema, data.Ptr, sizeof(uint64));
+		return at == data.Count && savedSchema == schema;
+>>>>>>> Stashed changes
 	}
 
 	/// Client, in lockstep, after forwarded controls came in: if a guess was wrong (or the server ran this
@@ -465,6 +531,8 @@ extension NetworkManager
 	{
 		let slot = tick % ExactRingSize;
 		if (tick == 0 || mExact.tick[slot] != tick || mExact.states[slot] == null || mExact.generation[slot] != mScene.Physics.BodyGeneration)
+			return false;
+		if (mExact.scripts[slot] == null || !ScriptFields(mExact.scripts[slot], true, true))
 			return false;
 		List<(NetworkIdentity identity, Vector3 drawn)> before = scope .();
 		List<(NetworkIdentity identity, BodyState state)> owned = scope .();

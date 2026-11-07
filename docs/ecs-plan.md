@@ -520,6 +520,7 @@ before (from `main`) and after each of 6c to 6h: server CPU per tick and bytes p
 - Preserve the low-allocation gameplay API, coroutine helpers and editor quick fixes above. Document the Systems tier as **advanced**, with a Showcase crowd exhibit in both normal-script and explicit-system styles.
 - **Exit:** a new project's template scripts contain no `delete`, `scope` or queries; ordinary scripts measurably improve over the pre-ECS baseline or a documented blocker explains the remaining script regression; full-frame gains are reported separately; fixed-tick/replay/network determinism checks pass; a developer needs no special ECS knowledge to realize the measured default-path improvements.
 
+<<<<<<< Updated upstream
 #### 7d. Full-engine compatibility and scripting audit
 
 Before Phase 7 exits, verify the ECS-backed state and the ordinary scripting API across **every** engine subsystem: scene and hierarchy, transforms, lifecycle and input, editor Inspector and code editor, visual-script compilation, prefab and serialization, save/load, hot reload, animation and IK, physics and character controllers, rendering, shader and compute graphs, terrain/voxels, particles, audio and voice, navigation and AI, networking, multiplayer replay, world streaming and mobile/web targets. Where internal work must become data-oriented, keep the existing script-facing behavior or document a deliberate compatibility change.
@@ -623,6 +624,29 @@ The initial detached-owner cleanup crash was fixed by retaining its ownership re
   The externally maintained `~/TallowEcsTests` network fixtures are not in this checkout. Full network regressions,
   hardware performance comparisons, safe shared asset unloading, handle-lifetime audit, semantic editor implementation,
   and the remaining compatibility/platform matrix still block Phase 7 exit.
+=======
+#### 7d. Beef semantic editor support (added by the project owner, 2026-11-06)
+
+- Replace source-scanning completion in the code editor with Beef's own compiler/IDE semantic support.
+  Resolve the project's actual dependencies, defines and unsaved documents. Provide type-aware completion,
+  parameter/signature information, symbol information, go-to-definition and live compiler diagnostics.
+  Run compiler work away from the editor thread and discard responses for stale document revisions.
+- Show the selected semantic completion as faint inline text (Tab accepts, Escape dismisses), without changing
+  the source until accepted. Reuse project/compiler state for responsive completion, prioritise it over
+  background diagnostics, and record cold/warm request latency on a real project (project owner, 2026-11-06).
+- Add project-wide **Rename Symbol**, like Visual Studio: resolve the selected symbol and its references
+  through Beef, preview affected files, and apply one reversible edit. Distinguish shadowed locals and
+  unrelated same-name members; preserve comments and strings. Refuse stale edits and read-only dependency
+  changes. Keep open unsaved buffers consistent with edits to other project files.
+- Preserve Tallow's determinism warnings alongside compiler diagnostics. **All warnings and errors belong in
+  the Console, with clickable file/line navigation; no problem list or diagnostic markers in the code editor**
+  (project owner, 2026-11-06). Flag frame-dependent
+  input/time and unseeded randomness in predicted simulation and explain the fixed-tick or seeded alternative.
+- **Exit:** compiler-backed completion, definitions, diagnostics and rename are exercised on real multi-file
+  projects, including generics, shadowing, unsaved changes, stale results and rename undo. Determinism warnings
+  remain visible in the Console. Completion and diagnostics must not repeatedly reset the editor or cause
+  flickering on unchanged text. A new project requires no language-server setup from its author.
+>>>>>>> Stashed changes
 
 ### Phase 8: Docs and release (M)
 
@@ -1808,6 +1832,77 @@ nine profiles.
   - Limits: only public value fields are compared (state in private fields shows only through positions); an
     object made at a different tick on each machine has its scripts' state differ from the start.
   - NetworkLockstep (90 s, 0 differed), network suites as for 6h.
+
+## Phase 7 progress
+
+- [~] **Phase 7 completion work (2026-11-06):** ongoing; the measurements and exit checks below must be
+  completed before this phase is marked done. The new compiler-backed editor requirement is included in this
+  phase, with inline suggestions and console-only clickable diagnostics as requested.
+  - Ordinary starter scripts now use the supplied simulation delta; the local digging tool uses
+    `OnLocalUpdate`. New starter projects contain no `scope`, `delete` or queries in their scripts.
+  - `Script.CreateString` / `CreateList<T>` own reusable resources until the script is destroyed. Formatted
+    `GUI.LabelFormat` and `UIElement.SetTextFormat` keep temporary text inside the engine. `ScriptTimer`
+    advances an ordinary serialisable float field with the supplied delta; it supports waits in explicit
+    script sequences without an opaque suspended call stack.
+  - The Gallery courtyard has blue ordinary-script and orange optional-query crowds. A headless Gallery
+    check confirms matching positions for all 36 pairs over ten frames. `docs/systems.md` documents actual
+    query APIs, ownership, ordering and safe parallel work; systems remain an advanced tier.
+  - The code editor's old Problems pane and inline diagnostic markers are removed. Compiler and determinism
+    diagnostics go to Console with source locations; clicking one opens its file at the reported line.
+    Semantic rename previews and applies source edits to open buffers with a single global undo. Serialized
+    names in scenes and prefabs are not part of a code-symbol rename and the preview explains this.
+  - Typed-dot completion, accepting a real Beef result with Tab, ghost-text accept/dismiss/caret invalidation,
+    unsaved multi-file rename, stale-result rejection, console diagnostic navigation and cold helper setup
+    have targeted tests. Persistent-worker latency and final distribution/editor checks are still underway.
+
+- [~] **7a: ordinary script dispatch and repeatable comparisons** (2026-11-06):
+  - `Scene.RunFrameUpdates` checked `IsActiveAndEnabled` twice for every Update-only script. Each check walks
+    the object's parents. There is no user callback between these checks on that path, so it now checks once.
+    Components with `OnLocalUpdate` still check again after it: the callback can disable the component or a
+    parent. The callback lists, registration order, virtual calls, network tick path and component reference
+    validation are unchanged.
+  - EcsBench's Update checks cover self-disable, parent-disable, disabling a later script in registration order,
+    and re-enabling an Update-only script.
+  - `tools/run_ecs_bench.py` accepts `--executable`, `--baseline-executable` and `--runs`. Save a Release player
+    before rebuilding, then compare on the same machine:
+
+    ```sh
+    python3 tools/run_ecs_bench.py --modes gameobject --counts 1000 10000 50000 100000 \
+        --frames 600 --runs 3 --baseline-executable /path/to/saved/EcsBench --output comparison.jsonl
+    ```
+
+    The runner alternates baseline/current and current/baseline pairs. Tables show medians of each run's
+    measurements (including the median per-run p99, not a pooled percentile); the JSON lines retain each run,
+    labelled by variant and repetition. It rejects missing or mismatched result records.
+  - Preliminary measurement: Ryzen 9 7900X, Linux64 Release, `e05cda22` rebuilt before the change versus the
+    dispatch change, three interleaved runs per side, 120 warm-up and 600 measured frames. Other applications
+    were active; the run-to-run spread is substantial, so these numbers are not an isolated performance claim
+    and cannot be compared directly with November 5's results. Raw runs: `benchmarks/ecs-7a-20261106.jsonl`.
+
+    | Objects | Measure | Baseline avg / p99 (ms) | Dispatch change avg / p99 (ms) |
+    |---|---|---|---|
+    | 10,000 | frame | 4.425 / 11.123 | 3.995 / 11.000 |
+    | 10,000 | script Update | 1.113 / 3.017 | 1.009 / 2.840 |
+    | 100,000 | frame | 29.221 / 31.104 | 28.664 / 30.697 |
+    | 100,000 | script Update | 8.247 / 9.432 | 8.063 / 9.500 |
+
+  - Checks: `./build.sh --skip-shaders` (native libraries and Debug launcher), Release EcsBench with
+    `TALLOW_BENCH_MODE=check` (all passed), NetworkEcs (82 PASS), engine formatter and `git diff --check`.
+    Runner checks outside the repo cover alternating pairs, raw record labels, comparison tables and invalid
+    nonpositive inputs. An ECS Gallery project was created and compiled for manual editor testing.
+  - Packaged `tools/validate_showcase.py --play`: creation, asset checks, pinned compilation and relocation
+    compilation passed. Play reached `SHOWCASE_READY rooms=8 probes=2 objects=368`, then bgfx aborted with
+    Vulkan `VK_ERROR_DEVICE_LOST`. A direct OpenGL retry segfaulted during startup. Gallery play validation
+    remains unresolved; neither graphics failure is counted as a passing acceptance test. Opening the Gallery
+    in the editor also reaches the project window and then loses the Vulkan device; a blank editor project
+    does too. The blank editor passed a 60-frame startup/shutdown check with Mesa software Vulkan
+    (`VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json`). Hardware-rendered editor validation
+    remains open. The Gallery editor still segfaulted with software Vulkan, so use the blank project for
+    manual startup testing; the Gallery is not a validated editor test target.
+  - Remaining: profile transform access, reference refresh, dirty propagation and cache costs separately; compare
+    callback dispatch strategies before changing them; complete 7b/7c's fixed-input, lifecycle/hot-reload,
+    network-replay and mixed-workload acceptance matrix. This slice does not close the November 5 script
+    regression or Phase 7's exit criteria.
 
 ## Benchmark results
 

@@ -5,7 +5,7 @@ namespace Tallow;
 
 /// The desync debugger (6i). With `DesyncDebugger` on, the server and every client note, for each tick, what each
 /// simulated object (players, and the bodies clients run themselves) looked like after each system that touched it:
-/// each script's Simulate and Update (its public fields and the object's position and rotation), and the physics step
+/// each script's Simulate and Update (its reflected value fields and the object's position and rotation), and the physics step
 /// (each body's position, rotation and velocities). When a client's hash differs from the server's (lockstep), or
 /// a correction puts this machine's own player back (state sync), the client asks the server for its per-system
 /// hashes of the ticks since the last good check, finds the first tick and system where the two split, then asks
@@ -13,8 +13,8 @@ namespace Tallow;
 /// is `LastDesync`, the console and the network panel.
 ///
 /// It costs memory (128 ticks of every simulated object's fields) and some time each tick: for finding a desync,
-/// not for shipping. Only public (Inspector) fields are compared; a script whose state is in private fields shows
-/// only through its object's position.
+/// not for shipping. Private fields are included so hidden counters and RNG seeds can be diagnosed; heap-owned
+/// collections and arbitrary value structs are not yet inspected.
 extension NetworkManager
 {
 	/// Note what every system did to every simulated object, and find the first difference when a desync shows.
@@ -36,7 +36,16 @@ extension NetworkManager
 		public String system = new .() ~ delete _;
 		public String objectName = new .() ~ delete _;
 		public uint32 netId;
-		public List<DesyncField> fields = new .() ~ { for (let f in _) { delete f.name; delete f.here; delete f.server; } delete _; };
+		public List<DesyncField> fields = new .() ~
+			{
+				for (let f in _)
+				{
+					delete f.name;
+					delete f.here;
+					delete f.server;
+				}
+				delete _;
+			};
 
 		public void Describe(String into)
 		{
@@ -157,7 +166,7 @@ extension NetworkManager
 		return hash;
 	}
 
-	/// After a script's Simulate or Update ran on an object: its public fields and where the object is.
+	/// After a script's Simulate or Update ran on an object: its reflected fields and where the object is.
 	void DesyncNoteScript(NetworkIdentity identity, Component component, bool simulate)
 	{
 		let entries = DesyncCurrent();
@@ -172,12 +181,12 @@ extension NetworkManager
 		}
 		let system = simulate ? systems.simulate : systems.update;
 		List<FieldRef> fields = scope .();
-		ComponentRegistry.GetFields(component, fields);
+		ComponentRegistry.GetFields(component, fields, true);
 		for (let field in fields)
 		{
 			switch (field.kind)
 			{
-			case .Float, .Double, .Char, .Vector4, .Int3, .Matrix4, .Int, .Bool, .Vector2, .Vector3, .Quaternion, .Color, .Enum:
+			case .Float,.Double,.Char,.Vector4,.Int3,.Matrix4,.Int,.Bool,.Vector2,.Vector3,.Quaternion,.Color,.Enum:
 				DesyncAdd(entries, identity.NetId, system, field.name, field.kind, field.ptr, field.type.Size);
 			case .String:
 				if (let text = *(String*)field.ptr)
@@ -238,7 +247,13 @@ extension NetworkManager
 		{
 			int at = -1;
 			for (int i < into.Count)
-				if (into[i].system == entry.system) { at = i; break; }
+			{
+				if (into[i].system == entry.system)
+				{
+					at = i;
+					break;
+				}
+			}
 			if (at < 0)
 			{
 				at = into.Count;
@@ -295,7 +310,13 @@ extension NetworkManager
 				uint64 here = 0;
 				bool have = false;
 				for (let entry in mine)
-					if (mDesyncNames[entry.system] == name) { here = entry.hash; have = true; }
+				{
+					if (mDesyncNames[entry.system] == name)
+					{
+						here = entry.hash;
+						have = true;
+					}
+				}
 				if (!have || here != hash)
 				{
 					foundTick = tick;
@@ -337,15 +358,37 @@ extension NetworkManager
 		{
 		case .Float: into.AppendF("{}", *(float*)&v);
 		case .Double: into.AppendF("{}", *(double*)&v);
-		case .Int, .Enum:
-			if (size == 8) into.AppendF("{}", *(int64*)&v); else if (size == 4) into.AppendF("{}", *(int32*)&v); else if (size == 2) into.AppendF("{}", *(int16*)&v); else into.AppendF("{}", v[0]);
+		case .Int,.Enum:
+			if (size == 8)
+				into.AppendF("{}", *(int64*)&v);
+			else if (size == 4)
+				into.AppendF("{}", *(int32*)&v);
+			else if (size == 2)
+				into.AppendF("{}", *(int16*)&v);
+			else
+				into.AppendF("{}", v[0]);
 		case .Bool: into.Append(v[0] != 0 ? "true" : "false");
-		case .Vector2: let p = (float*)&v; into.AppendF("({}, {})", p[0], p[1]);
-		case .Vector3, .Int3:
-			if (kind == .Int3) { let p = (int32*)&v; into.AppendF("({}, {}, {})", p[0], p[1], p[2]); }
-			else { let p = (float*)&v; into.AppendF("({}, {}, {})", p[0], p[1], p[2]); }
-		case .Vector4, .Quaternion, .Color: let p = (float*)&v; into.AppendF("({}, {}, {}, {})", p[0], p[1], p[2], p[3]);
-		case .String: into.Append('"'); into.Append(StringView((char8*)&v, size)); into.Append('"');
+		case .Vector2:
+			let p = (float*)&v;
+			into.AppendF("({}, {})", p[0], p[1]);
+		case .Vector3,.Int3:
+			if (kind == .Int3)
+			{
+				let p = (int32*)&v;
+				into.AppendF("({}, {}, {})", p[0], p[1], p[2]);
+			}
+			else
+			{
+				let p = (float*)&v;
+				into.AppendF("({}, {}, {})", p[0], p[1], p[2]);
+			}
+		case .Vector4,.Quaternion,.Color:
+			let p = (float*)&v;
+			into.AppendF("({}, {}, {}, {})", p[0], p[1], p[2], p[3]);
+		case .String:
+			into.Append('"');
+			into.Append(StringView((char8*)&v, size));
+			into.Append('"');
 		default: into.AppendF("{} bytes", size);
 		}
 	}
@@ -365,9 +408,13 @@ extension NetworkManager
 		let record = DesyncRecord(tick);
 		List<DesyncEntry> mine = scope .();
 		if (record != null)
+		{
 			for (let entry in record.entries)
+			{
 				if (mDesyncNames[entry.system] == system)
 					mine.Add(entry);
+			}
+		}
 		HashSet<int> matched = scope .();
 		let fieldName = scope String();
 		for (int i < count)
@@ -382,7 +429,13 @@ extension NetworkManager
 				break;
 			int found = -1;
 			for (int m < mine.Count)
-				if (mine[m].netId == netId && mDesyncNames[mine[m].field] == fieldName) { found = m; break; }
+			{
+				if (mine[m].netId == netId && mDesyncNames[mine[m].field] == fieldName)
+				{
+					found = m;
+					break;
+				}
+			}
 			if (found >= 0)
 				matched.Add(found);
 			bool same = found >= 0 && mine[found].size == size && Internal.MemCmp(&mine[found].value, &value, size == 0xFF ? 8 : size) == 0;
@@ -402,7 +455,13 @@ extension NetworkManager
 		{
 			// Everything the server had matched: what differs is something only this machine noted.
 			for (int m < mine.Count)
-				if (!matched.Contains(m)) { report.netId = mine[m].netId; break; }
+			{
+				if (!matched.Contains(m))
+				{
+					report.netId = mine[m].netId;
+					break;
+				}
+			}
 		}
 		if (mByNetId.TryGetValue(report.netId, let identity))
 			report.objectName.Set(identity.GameObject.Name);
@@ -418,12 +477,14 @@ extension NetworkManager
 	uint32 DesyncServerTick(ClientInfo client, uint32 clientTick)
 	{
 		for (int i < DesyncRing)
+		{
 			if (client.desyncTicks[i] == clientTick && clientTick != 0)
 			{
 				let serverTick = mDesyncTicks[i] != null ? mDesyncTicks[i].tick : 0;
 				if (serverTick % DesyncRing == (uint32)i)
 					return serverTick;
 			}
+		}
 		return 0;
 	}
 
