@@ -85,7 +85,7 @@ After saving/committing your existing local work:
 
 ```sh
 git fetch origin
-git switch <your-local-roadmap-branch>
+git switch your-local-roadmap-branch
 git merge origin/ecs
 ```
 
