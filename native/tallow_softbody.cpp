@@ -255,7 +255,9 @@ public:
 				hit.points[i] = JPH::Vec3(side == 0 ? manifold.GetWorldSpaceContactPointOn1(i) : manifold.GetWorldSpaceContactPointOn2(i));
 			const JPH::RVec3 at(hit.points[0]);
 			hit.speed = (other.GetPointVelocity(at) - own.GetPointVelocity(at)).Dot(into);
-			if (hit.speed < shell->second.dentSpeed)
+			// Permanent dents have their own threshold. Elastic jelly reacts
+			// to smaller impacts, without affecting the rigid body's contacts.
+			if (hit.speed < (shell->second.visualOnly ? 0.35f : shell->second.dentSpeed))
 				continue;
 			const float ownInverse = own.IsDynamic() ? own.GetMotionPropertiesUnchecked()->GetInverseMass() : 0.0f;
 			const float otherInverse = other.IsDynamic() ? other.GetMotionPropertiesUnchecked()->GetInverseMass() : 0.0f;
@@ -848,7 +850,9 @@ TN_API void tn_soft_ignore(JPH_PhysicsSystem* world, uint32_t bodyId, uint32_t i
 		{
 			touches.shellOwners.erase(shell->second.owner);
 			shell->second.owner = ignoredBody;
-			if (shell->second.fromImpacts)
+			// The rigid ball's collisions drive *visual* jelly impulses, too.
+			// DrivenJelly's own soft-body contacts are always rejected.
+			if (shell->second.fromImpacts || shell->second.visualOnly)
 				touches.shellOwners[ignoredBody] = bodyId;
 		}
 	}
@@ -998,16 +1002,66 @@ TN_API void tn_soft_skin(JPH_PhysicsSystem* world, uint32_t bodyId, const float*
 		const JPH::Mat44 next = Matrix(objectNext);
 		if (shell.skinned && !body.IsActive() && next == shell.lastObject && shell.hits.empty())
 			return;
-		shell.lastObject = next;
 		auto& settings = const_cast<JPH::SoftBodySharedSettings&>(*soft->GetSettings());
+		const JPH::Mat44 bodyToWorld = body.GetCenterOfMassTransform().ToMat44();
+		const JPH::Mat44 worldToBody = body.GetInverseCenterOfMassTransform().ToMat44();
 		const JPH::Mat44 bindToBody = BindToBody(body, shell, objectMatrix);
 		const JPH::Mat44 bindToBodyNext = BindToBody(body, shell, objectNext);
 		const JPH::Mat44 bodyToBind = bindToBody.Inversed();
 		auto& vertices = soft->GetVertices();
+
+		if (shell.visualOnly && shell.skinned)
+		{
+			// A visual skin must ride the Rigidbody instead of chasing its
+			// moving pose at spring speed. Both the vertices and their Verlet
+			// history follow the rigid transform; Jolt simulates only wobble.
+			const JPH::Mat44 carry = worldToBody * next * shell.lastObject.Inversed() * bodyToWorld;
+			for (auto& vertex : vertices)
+			{
+				vertex.mPosition = carry * vertex.mPosition;
+				vertex.mPreviousPosition = carry * vertex.mPreviousPosition;
+				vertex.mVelocity = carry.Multiply3x3(vertex.mVelocity);
+			}
+		}
+
+		if (shell.visualOnly && !shell.hits.empty())
+		{
+			// The ordinary Rigidbody collider is the only source of contacts.
+			// Its collisions compress nearby skinned vertices, not the ball's
+			// physics body. Springs restore their shape on subsequent ticks.
+			const float reach = std::max(shell.dentDepth * 1.7f, 0.35f);
+			for (const auto& hit : shell.hits)
+			{
+				if (hit.count == 0 || hit.speed <= 0)
+					continue;
+				const JPH::Vec3 inward = worldToBody.Multiply3x3(hit.into).NormalizedOr(JPH::Vec3::sAxisY());
+				const float depth = shell.dentDepth * std::clamp(hit.speed / 8.0f, 0.0f, 1.0f);
+				const JPH::Vec3 contact = worldToBody * hit.points[0];
+				for (uint32_t i = 0; i < vertices.size(); ++i)
+				{
+					auto& vertex = vertices[i];
+					if (vertex.mInvMass == 0)
+						continue;
+					if (i < shell.outward.size() && JPH::Vec3(shell.outward[i]).Dot(inward) >= -0.1f)
+						continue;
+					const float distance = (vertex.mPosition - contact).Length();
+					const float weight = std::clamp(1.0f - distance / reach, 0.0f, 1.0f);
+					if (weight <= 0)
+						continue;
+					const float falloff = weight * weight * (3.0f - 2.0f * weight);
+					const JPH::Vec3 push = inward * (depth * falloff);
+					vertex.mPosition += push;
+					vertex.mPreviousPosition += push;
+					vertex.mVelocity += inward * (hit.speed * 0.08f * falloff);
+				}
+			}
+		}
+
 		bool dented = false;
 		if (shell.fromImpacts && !shell.hits.empty())
-			dented = DentFromHits(shell, settings, bodyToBind * body.GetInverseCenterOfMassTransform().ToMat44());
+			dented = DentFromHits(shell, settings, bodyToBind * worldToBody);
 		shell.hits.clear();
+		shell.lastObject = next;
 		if (shell.skinned)
 		{
 			for (uint32_t i = 0; i < vertices.size(); i++)
@@ -1037,12 +1091,17 @@ TN_API void tn_soft_skin(JPH_PhysicsSystem* world, uint32_t bodyId, const float*
 				// own motion carries the vertex.
 				if (step > 0)
 				{
-					const JPH::Vec3 now = bindToBody * JPH::Vec3(bind);
-					const JPH::Vec3 carried = (bindToBodyNext * JPH::Vec3(bind) - now) / step;
+					const JPH::Vec3 now = (shell.visualOnly ? bindToBodyNext : bindToBody) * JPH::Vec3(bind);
+					const JPH::Vec3 carried = (bindToBodyNext * JPH::Vec3(bind) - bindToBody * JPH::Vec3(bind)) / step;
 					const JPH::Vec3 back = now - vertex.mPosition;
 					const float damping = shell.visualOnly ? shell.visualDamping : 0.75f;
 					const float spring = shell.visualOnly ? shell.visualSpring : 0.25f;
-					vertex.mVelocity = carried + (vertex.mVelocity - carried) * damping + back * (spring / step);
+					// Skin vertices already follow the Rigidbody's pose; applying
+					// its translation as velocity a second time makes the sphere lag.
+					if (shell.visualOnly)
+						vertex.mVelocity = vertex.mVelocity * damping + back * (spring / step);
+					else
+						vertex.mVelocity = carried + (vertex.mVelocity - carried) * damping + back * (spring / step);
 				}
 			}
 		}

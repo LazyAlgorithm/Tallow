@@ -62,3 +62,11 @@ Both modes simulate vertices; their computational costs vary with vertex count, 
 6. Profile with realistic ball counts (1, 8, 16+) and meshes. **Interactive behavior and multiplayer correctness are not verified just by source review or a successful build.**
 
 Only `Engine/src/Physics/SoftBody.bf`, `native/tallow_softbody.cpp`, and this guide are changed by this jelly transplant. No `JellyVisual` component is included.
+
+## DrivenJelly skin-follow and impact response (ECS fix)
+
+DrivenJelly has **no independent collision response**: it remains a visual-only Jolt skin following the ball's Rigidbody. The physics step now carries the whole skin with the Rigidbody's pose, instead of making the entire visible sphere chase the ball using springs. Its simulated vertices retain local elastic movement.
+
+When the Rigidbody makes contact, Tallow captures the contact position and relative speed and pushes **nearby** skin vertices inward, bounded by Driven Flex. Springs then return the surface toward its original shape. This doesn't apply force to the Rigidbody or alter the ordinary sphere collider.
+
+Tune Driven Flex around 0.2–0.35, Driven Spring 0.2–0.35 and Driven Damping 0.7–0.85, then observe high-speed wall impacts. These are starting points, not verified presets. Changes to native code require a **local** Tallow build; no GitHub Actions workflow is run.
