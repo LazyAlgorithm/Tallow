@@ -145,7 +145,9 @@ TN_API bool tn_gfx_init(SDL_Window* window, int width, int height, int renderer,
 #if defined(SDL_PLATFORM_LINUX)
 	// bgfx's OpenGL backends call eglGetDisplay with our X11 display. On a Wayland desktop some
 	// EGL drivers guess "Wayland" from the environment and crash, so state the platform explicitly.
-	setenv("EGL_PLATFORM", "x11", 0);
+	const char* videoDriver = SDL_GetCurrentVideoDriver();
+	if (videoDriver != nullptr)
+		setenv("EGL_PLATFORM", SDL_strcmp(videoDriver, "wayland") == 0 ? "wayland" : "x11", 1);
 #endif
 
 #if defined(SDL_PLATFORM_WINDOWS)

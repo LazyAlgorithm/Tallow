@@ -85,7 +85,9 @@ class Transform
 	/// The position relative to the parent (in the world, for an object with no parent).
 	public Vector3 LocalPosition
 	{
+		[Inline]
 		get => D().localPosition;
+		[Inline]
 		set
 		{
 			ref TransformData data = ref D();
@@ -97,7 +99,9 @@ class Transform
 	/// The rotation relative to the parent.
 	public Quaternion LocalRotation
 	{
+		[Inline]
 		get => D().localRotation;
+		[Inline]
 		set
 		{
 			ref TransformData data = ref D();
@@ -113,11 +117,13 @@ class Transform
 	{
 		get
 		{
-			var scale = D().localScale;
-			bool turnedBelow = D().localRotation != .Identity;
+			ref TransformData data = ref D();
+			var scale = data.localScale;
+			bool turnedBelow = data.localRotation != .Identity;
 			for (var parent = mParent; parent != null; parent = parent.mParent)
 			{
-				let parentScale = parent.D().localScale;
+				ref TransformData parentData = ref parent.D();
+				let parentScale = parentData.localScale;
 				if (turnedBelow && (parentScale.x != parentScale.y || parentScale.y != parentScale.z))
 				{
 					Vector3 t, s;
@@ -126,7 +132,7 @@ class Transform
 					return Vector3.Abs(s);
 				}
 				scale *= parentScale;
-				turnedBelow |= parent.D().localRotation != .Identity;
+				turnedBelow |= parentData.localRotation != .Identity;
 			}
 			return Vector3.Abs(scale);
 		}
@@ -135,7 +141,9 @@ class Transform
 	/// The size relative to the parent: 1 on each axis is unchanged.
 	public Vector3 LocalScale
 	{
+		[Inline]
 		get => D().localScale;
+		[Inline]
 		set
 		{
 			ref TransformData data = ref D();
@@ -191,11 +199,12 @@ class Transform
 		get => LocalToWorld.Translation;
 		set
 		{
+			ref TransformData data = ref D();
 			if (mParent != null)
-				D().localPosition = mParent.WorldToLocal.TransformPoint(value);
+				data.localPosition = mParent.WorldToLocal.TransformPoint(value);
 			else
-				D().localPosition = value;
-			MarkDirty();
+				data.localPosition = value;
+			MarkDirty(ref data);
 		}
 	}
 
@@ -214,11 +223,12 @@ class Transform
 		}
 		set
 		{
+			ref TransformData data = ref D();
 			if (mParent != null)
-				D().localRotation = (mParent.Rotation.Conjugate * value).Normalized;
+				data.localRotation = (mParent.Rotation.Conjugate * value).Normalized;
 			else
-				D().localRotation = value;
-			MarkDirty();
+				data.localRotation = value;
+			MarkDirty(ref data);
 		}
 	}
 

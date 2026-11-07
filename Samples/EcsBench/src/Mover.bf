@@ -5,7 +5,7 @@ namespace EcsBench;
 
 /// The GameObject version: one component per cube, run by the scene's Update like any game script.
 [Component]
-class Mover : Component
+class Mover : Script
 {
 	public Vector3 velocity;
 	public Vector3 spin;
@@ -14,8 +14,8 @@ class Mover : Component
 	public override void Update(TickInput input, float deltaTime)
 	{
 		var position = Transform.LocalPosition;
-		Workload.Step(ref position, ref velocity, halfSize, Time.DeltaTime);
+		Workload.Step(ref position, ref velocity, halfSize, deltaTime);
 		Transform.LocalPosition = position;
-		Transform.Rotate(spin * Time.DeltaTime);
+		Transform.Rotate(spin * deltaTime);
 	}
 }

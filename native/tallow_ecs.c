@@ -636,6 +636,11 @@ TALLOW_ECS_API void tallow_ecs_ref_init(const ecs_world_t* world, uint64_t entit
 
 TALLOW_ECS_API void* tallow_ecs_ref_get(const ecs_world_t* world, ecs_ref_t* ref, uint64_t id)
 {
+	// Beef already checked the 32-bit fast version. Flecs's second check compares a 16-bit table version,
+	// which can wrap while a script holds an unused reference (e.g. spawning 100,000 objects). Force the
+	// slow path to resolve the entity's current row instead of accepting a stale pointer after 65,536 moves.
+	ref->table_id = 0;
+	ref->table_version_fast = ~flecs_get_table_version_fast(world, 0);
 	return ecs_ref_get_id(world, ref, id);
 }
 

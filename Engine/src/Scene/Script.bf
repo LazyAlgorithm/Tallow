@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 
 namespace Tallow;
 
@@ -19,4 +20,27 @@ namespace Tallow;
 [Component]
 abstract class Script : Component
 {
+	List<Object> mOwned ~ DeleteContainerAndItems!(_);
+
+	/// Creates text owned by this script. Keep the returned String in a field and edit it with Set or Append;
+	/// the engine frees it with the script. Do not delete it or replace it with an independently owned string.
+	public String CreateString(StringView value = "")
+	{
+		let text = new String(value);
+		if (mOwned == null)
+			mOwned = new .();
+		mOwned.Add(text);
+		return text;
+	}
+
+	/// Creates a list owned by this script. Its elements must be values or references owned elsewhere;
+	/// destroying the script frees the list, not objects referred to by its elements.
+	public List<T> CreateList<T>()
+	{
+		let list = new List<T>();
+		if (mOwned == null)
+			mOwned = new .();
+		mOwned.Add(list);
+		return list;
+	}
 }

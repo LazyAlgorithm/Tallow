@@ -260,6 +260,7 @@ static class ImGui
 		public const int32 Z = 571;
 		public const int32 F1 = 572;
 		public const int32 F2 = 573;
+		public const int32 F12 = 583;
 		public const int32 F5 = 576;
 		public const int32 Minus = 598;
 		public const int32 Period = 599;

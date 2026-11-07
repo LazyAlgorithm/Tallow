@@ -662,6 +662,7 @@ class Scene
 		}
 		return sNoComponents;
 	}
+
 	static HashSet<Type> sWarnedHandleTypes = new .() ~ delete _;
 
 	/// Adds every registered component of that class (or one derived from it) to the list.
@@ -1568,9 +1569,14 @@ class Scene
 			{
 				let callbacks = component.[Friend]mCallbacks;
 				if (callbacks.HasFlag(.OnLocalUpdate))
+				{
 					Run(component, .OnLocalUpdate);
+					// Local callbacks can disable this component or its hierarchy before Update.
+					if (!component.IsActiveAndEnabled)
+						continue;
+				}
 				// Update runs here for objects without a Network Identity; theirs runs per tick.
-				if (callbacks.HasFlag(.Update) && !TicksUpdate(component.GameObject) && component.IsActiveAndEnabled)
+				if (callbacks.HasFlag(.Update) && !TicksUpdate(component.GameObject))
 					RunUpdate(component, mFrameInput, deltaTime);
 			}
 		}

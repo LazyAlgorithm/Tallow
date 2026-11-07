@@ -14,7 +14,10 @@ extension EditorApp
 		if (ImGui.Begin("Console"))
 		{
 			if (ImGui.Button("Clear"))
+			{
 				Log.Clear();
+				ClearAndDeleteItems!(mPublishedScriptDiagnostics);
+			}
 			ImGui.SameLine();
 			ImGui.TextDisabled(scope String()..AppendF("{} messages", Log.Entries.Count).CStr());
 			ImGui.Separator();
@@ -23,11 +26,23 @@ extension EditorApp
 			for (int i < Log.Entries.Count)
 			{
 				let entry = Log.Entries[i];
-				switch (entry.level)
+				if (entry.file != null && entry.line >= 0)
 				{
-				case .Info: ImGui.Text(entry.text);
-				case .Warning: ImGui.TextColored(EditorTheme.Warning, entry.text.CStr());
-				case .Error: ImGui.TextColored(EditorTheme.Error, entry.text.CStr());
+					ImGui.PushID((int32)i);
+					ImGui.PushStyleColor(ImGui.Col.Text, entry.level == .Error ? EditorTheme.Error : EditorTheme.Warning);
+					if (ImGui.Selectable(entry.text.CStr()))
+						OpenConsoleDiagnostic(entry);
+					ImGui.PopStyleColor();
+					ImGui.PopID();
+				}
+				else
+				{
+					switch (entry.level)
+					{
+					case .Info: ImGui.Text(entry.text);
+					case .Warning: ImGui.TextColored(EditorTheme.Warning, entry.text.CStr());
+					case .Error: ImGui.TextColored(EditorTheme.Error, entry.text.CStr());
+					}
 				}
 			}
 			ImGui.PopFont();
@@ -39,5 +54,14 @@ extension EditorApp
 			ImGui.EndChild();
 		}
 		ImGui.End();
+	}
+
+	/// Opens the structured source location carried by a compiler or determinism diagnostic.
+	bool OpenConsoleDiagnostic(Log.Entry entry)
+	{
+		if (entry.file == null || entry.line < 0 || !File.Exists(entry.file))
+			return false;
+		OpenScript(entry.file, entry.line);
+		return true;
 	}
 }

@@ -61,6 +61,14 @@ static class GUI
 		ImGui.DrawText(At(x, y), color, cstr);
 	}
 
+	/// Draws formatted text without requiring the caller to create a temporary string.
+	public static void LabelFormat(float x, float y, StringView format, params Span<Object> args)
+	{
+		let text = scope String();
+		text.AppendF(format, params args);
+		Label(x, y, text);
+	}
+
 	public static void Box(float x, float y, float width, float height, Color color)
 	{
 		ImGui.DrawRectFilled(At(x, y), At(x + width, y + height), color, 4);

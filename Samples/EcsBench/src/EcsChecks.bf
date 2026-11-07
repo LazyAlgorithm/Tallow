@@ -36,6 +36,30 @@ class UpdateCounter : Component
 	}
 }
 
+/// Changes enabled state before Update, for EcsChecks.UpdateChecks.
+[Component]
+class LocalUpdateGate : Component
+{
+	public Component target;
+	public bool disableParent;
+	public int updates;
+	public int localUpdates;
+
+	public override void OnLocalUpdate()
+	{
+		localUpdates++;
+		if (disableParent)
+			Transform.Parent.GameObject.SetActive(false);
+		else
+			(target ?? this).Enabled = false;
+	}
+
+	public override void Update(TickInput input, float deltaTime)
+	{
+		updates++;
+	}
+}
+
 /// Checks of the ECS layer (World, Query, ParallelFor, deferred changes), run with TALLOW_BENCH_MODE=check.
 static class EcsChecks
 {
@@ -98,6 +122,7 @@ static class EcsChecks
 		Expect(!world.IsAlive(entities[0]) && world.Count<Pose>() == 999, "Delete");
 		SceneChecks();
 		UpdateChecks();
+		sFailures += ScriptPathChecks.Run();
 		DataChecks();
 		PrefabChecks();
 		HandleChecks();
@@ -202,6 +227,22 @@ static class EcsChecks
 		Expect(plain.frames == 3 && plain.ticks == 0, scope $"plain object: Update once a frame (frames {plain.frames}, ticks {plain.ticks})");
 		Expect(networked.ticks == 2 && networked.frames == 0, scope $"networked object: Update once a tick (frames {networked.frames}, ticks {networked.ticks})");
 		Expect(!networked.sawControls, "an object no player controls gets empty controls");
+
+		let selfGate = scene.CreateGameObject("Self gate").AddComponent<LocalUpdateGate>();
+		let parent = scene.CreateGameObject("Parent gate");
+		let parentGate = scene.CreateGameObject("Child gate", parent.Transform).AddComponent<LocalUpdateGate>();
+		parentGate.disableParent = true;
+		let targetGate = scene.CreateGameObject("Target gate").AddComponent<LocalUpdateGate>();
+		let target = scene.CreateGameObject("Target").AddComponent<UpdateCounter>();
+		targetGate.target = target;
+		scene.Update();
+		Expect(selfGate.localUpdates == 1 && selfGate.updates == 0, "OnLocalUpdate disabling itself skips Update");
+		Expect(parentGate.localUpdates == 1 && parentGate.updates == 0, "OnLocalUpdate disabling its parent skips Update");
+		Expect(targetGate.localUpdates == 1 && targetGate.updates == 1 && target.frames == 0, "OnLocalUpdate disabling a later script preserves registration order");
+		targetGate.Enabled = false;
+		target.Enabled = true;
+		scene.Update();
+		Expect(selfGate.localUpdates == 1 && parentGate.localUpdates == 1 && targetGate.updates == 1 && target.frames == 1, "disabled callbacks stay skipped and a re-enabled Update-only script runs");
 
 		// The per-callback lists only hold classes that override the callback.
 		Expect(ScriptCallbackIndex.Of(typeof(UpdateCounter)) == .Update, "UpdateCounter overrides Update only");
@@ -825,8 +866,10 @@ static class EcsChecks
 			scene.StartPlay();
 			// A slab cut through the middle: the top half is no longer held up and breaks away.
 			for (float x = -1.3f; x <= 1.3f; x += 0.25f)
+			{
 				for (float z = -1.3f; z <= 1.3f; z += 0.25f)
 					voxels.Carve(wall.Transform.Position + .(x, 0, z), 0.3f);
+			}
 			GameObject fragment = null;
 			for (let o in scene.Objects)
 			{
@@ -977,10 +1020,14 @@ static class EcsChecks
 			let here = scope String()..AppendF("{}/Shaders", Assets.ProjectPath);
 			let copied = Compute.Supported && System.IO.File.Exists(scope $"{sandbox}/{compiled}") &&
 				System.IO.Directory.CreateDirectory(scope $"{here}/Compiled/{Gfx.ShaderFolder}") case .Ok &&
-				System.IO.File.Copy(scope $"{sandbox}/ripple.tcompute", scope $"{here}/ripple.tcompute") case .Ok &&
-				System.IO.File.Copy(scope $"{sandbox}/{compiled}", scope $"{here}/{compiled}") case .Ok;
+				System.IO.File.Copy(scope $"{sandbox}/ripple.tcompute" , scope $"{here}/ripple.tcompute") case .Ok &&
+				System.IO.File.Copy(scope $"{sandbox}/{compiled}" , scope $"{here}/{compiled}") case .Ok;
 			Console.WriteLine(scope $"  (compute supported: {Compute.Supported}, shader copied: {copied})");
-			defer { if (copied) System.IO.Directory.DelTree(here).IgnoreError(); }
+			defer
+			{
+				if (copied)
+					System.IO.Directory.DelTree(here).IgnoreError();
+			}
 			if (copied)
 			{
 				effect.shader.Set("Shaders/ripple.tcompute");
@@ -1194,7 +1241,11 @@ static class EcsChecks
 			player.sequence.Set(path);
 			player.playOnStart = true;
 			bool finished = false;
-			player.OnFinished.Add(new [&] () => { finished = true; });
+			player.OnFinished.Add(new [&] () =>
+				{
+					finished = true;
+				}
+				);
 			SaveSystem.SceneStarting(scene);
 			scene.StartPlay();
 			Time.DeltaTime = 0.5f;
@@ -1249,7 +1300,12 @@ static class EcsChecks
 			talk.showLines = false;
 			talk.acceptInput = false;
 			float agreed = 0;
-			talk.OnEvent.Add(new [&] (name, value) => { if (name == "Agreed") agreed = value; });
+			talk.OnEvent.Add(new [&] (name, value) =>
+				{
+					if (name == "Agreed")
+						agreed = value;
+				}
+				);
 			SaveSystem.SceneStarting(scene);
 			scene.StartPlay();
 			Time.DeltaTime = 0.1f;
@@ -1304,7 +1360,12 @@ static class EcsChecks
 			runner.tree.Set(path);
 			runner.startValues.Set("ammo 3");
 			int alarms = 0;
-			runner.OnTreeEvent.Add(new [&] (name) => { if (name == "Alarm") alarms++; });
+			runner.OnTreeEvent.Add(new [&] (name) =>
+				{
+					if (name == "Alarm")
+						alarms++;
+				}
+				);
 			scene.StartPlay();
 			Time.DeltaTime = 0.1f;
 			scene.Update();

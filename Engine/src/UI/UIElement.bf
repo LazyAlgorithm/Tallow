@@ -142,6 +142,13 @@ class UIElement
 	/// Sets its text.
 	public void SetText(StringView value) => text.Set(value);
 
+	/// Replaces the element's text with formatted values; temporary text belongs to the engine.
+	public void SetTextFormat(StringView format, params Span<Object> args)
+	{
+		text.Clear();
+		text.AppendF(format, params args);
+	}
+
 	/// Gives the element a class it does not have yet, or takes one away: SetClass("selected", isSelected).
 	public void SetClass(StringView name, bool on)
 	{

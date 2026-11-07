@@ -190,7 +190,7 @@ static class ProjectGenerator
 
 				public override void Update(TickInput input, float deltaTime)
 				{{
-					Transform.Rotate(degreesPerSecond * Time.DeltaTime);
+					Transform.Rotate(degreesPerSecond * deltaTime);
 				}}
 			}}
 
@@ -242,7 +242,8 @@ static class ProjectGenerator
 				public float radius = 3.0f;
 				public float strength = 1.5f;
 
-				public override void Update(TickInput input, float deltaTime)
+				// Local camera tool; this callback is not replayed as predicted simulation.
+				public override void OnLocalUpdate()
 				{{
 					let dig = Input.GetMouseButton(0);
 					let build = Input.GetMouseButton(2);
@@ -284,7 +285,7 @@ static class ProjectGenerator
 				public override void OnGUI()
 				{{
 					GUI.Box(12, 12, 250, mShowHelp ? 118 : 34, .(0, 0, 0, 0.45f));
-					GUI.Label(22, 20, scope $"{{(int)Time.SmoothedFps}} fps");
+					GUI.LabelFormat(22, 20, "{{}} fps", (int)Time.SmoothedFps);
 					if (GUI.Button(170, 16, 82, 24, mShowHelp ? "Hide help" : "Help"))
 						mShowHelp = !mShowHelp;
 					if (mShowHelp)
@@ -296,7 +297,7 @@ static class ProjectGenerator
 					}}
 					let network = Scene.Network;
 					if (network != null && network.Mode != .Offline)
-						GUI.Label(GUI.Width - 220, 20, scope $"{{network.Mode}}  tick {{network.Tick}}");
+						GUI.LabelFormat(GUI.Width - 220, 20, "{{}}  tick {{}}", network.Mode, network.Tick);
 				}}
 			}}
 

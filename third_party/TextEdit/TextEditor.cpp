@@ -177,6 +177,9 @@ bool TextEditor::render(const char* title, const ImVec2& size, ImGuiChildFlags c
 			ImVec2(offset + textRightOffset + cursorWidth, drawList->GetClipRectMax().y),
 			true);
 
+		textClipMin = drawList->GetClipRectMin();
+		textClipMax = drawList->GetClipRectMax();
+
 		// render parts in the text area
 		renderCurrentLineHighlight();
 		renderActiveBracketBackground();
@@ -1695,6 +1698,15 @@ void TextEditor::handleMouseInteractions() {
 //	TextEditor::isDocPosVisible
 //
 
+// Draw on the editor child, after its text, using the same font and text-area clip.
+void TextEditor::DrawInlineText(DocPos pos, const char* text, ImU32 color) {
+	if (IsDocPosVisible(pos)) {
+		drawList->PushClipRect(textClipMin, textClipMax, true);
+		drawList->AddText(font, fontSize, DocPos2ScreenPos(pos), color, text);
+		drawList->PopClipRect();
+	}
+}
+
 bool TextEditor::isDocPosVisible(DocPos docPos) const {
 	if (isLineHidden(docPos.line)) {
 		return false;
@@ -1703,7 +1715,7 @@ bool TextEditor::isDocPosVisible(DocPos docPos) const {
 		const auto visPos = docPos2VisPos(docPos);
 
 		return
-			visPos.row >= firstVisibleRow && visPos.row < lastVisibleRow &&
+			visPos.row >= firstVisibleRow && visPos.row <= lastVisibleRow &&
 			visPos.column >= firstVisibleColumn && visPos.column < lastVisibleColumn;
 	}
 }
@@ -8777,6 +8789,7 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 
 void TextEditor::AutoComplete::setSuggestions(const std::vector<std::string>& suggestions) {
 	state.suggestions = suggestions;
+	state.suggestionsPromise = false;
 	currentSelection = 0;
 }
 

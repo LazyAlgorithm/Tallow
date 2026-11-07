@@ -1,0 +1,4 @@
+tree "Think"
+node 1 root 0 0
+node 2 wait 0 110 "0.2" "0"
+link 1 2

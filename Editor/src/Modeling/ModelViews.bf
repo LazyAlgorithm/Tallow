@@ -317,6 +317,7 @@ extension EditorApp
 				viewport.origin = .(cell.x, cell.y + bar);
 				viewport.size = .(cellSize.x, cellSize.y - bar);
 				UpdateModelViewCamera(viewport, viewport.size.x / viewport.size.y);
+				viewport.view.Resize((int32)viewport.size.x, (int32)viewport.size.y);
 				ImGui.SetCursorScreenPos(viewport.origin);
 				if (viewport.view.Width > 0)
 					ImGui.Picture(viewport.view.OutputTexture, .(viewport.view.Width, viewport.view.Height));
@@ -514,7 +515,6 @@ extension EditorApp
 			viewport.view.hiddenHere = mSceneView.hiddenHere;
 			viewport.view.shading = viewport.shading;
 			viewport.view.hideRenderers = mSceneView.hideRenderers;
-			viewport.view.Resize((int32)viewport.size.x, (int32)viewport.size.y);
 			viewport.view.Render(mScene, viewport.camera);
 		}
 	}

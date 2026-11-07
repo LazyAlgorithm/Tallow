@@ -172,6 +172,7 @@ class Gallery : Script
 		if (app.GetArg("--net-report", value))
 			mNetReport = SceneSerializer.ParseInt(value);
 		NoteShared();
+		Scene.CreateGameObject("Script and system crowd").AddComponent<GalleryCrowd>();
 		if (app.HasArg("--self-test"))
 			Console.WriteLine(scope $"SHOWCASE_READY rooms={sRooms.Count} probes={Scene.FindComponents<ReflectionProbe>(.. scope .()).Count} objects={Scene.Objects.Count}");
 	}
