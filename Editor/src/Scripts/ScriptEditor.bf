@@ -520,10 +520,14 @@ extension EditorApp
 			RequestRebuild();
 		}
 		ImGui.SameLine(0, 14);
+		// Keep the toolbar layout stable while the background compiler runs.
+		// The hint never disappears, so buttons do not shift during resolution.
+		ImGui.TextDisabled("Ctrl+S save   Ctrl+F find   Ctrl+Space complete");
 		if (mCheckRunning)
+		{
+			ImGui.SameLine(0, 14);
 			ImGui.TextColored(EditorTheme.Warning, "Compiling...");
-		else
-			ImGui.TextDisabled("Ctrl+S save   Ctrl+F find   Ctrl+Space complete");
+		}
 	}
 
 	/// One tab per open file, each a code editor. A script made from a

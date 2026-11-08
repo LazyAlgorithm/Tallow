@@ -8,6 +8,56 @@ from unittest.mock import patch
 import reload_scripts
 
 
+class LinkPipelineTests(unittest.TestCase):
+    def test_persistent_platform_workspaces(self):
+        root = Path('/tmp/MyGame')
+        self.assertEqual(reload_scripts.reload_workspace(root, 'linux'),
+                         root / '.tallow-reload/workspace-linux64')
+        self.assertEqual(reload_scripts.reload_workspace(root, 'windows'),
+                         root / '.tallow-reload/workspace-win64')
+
+    def test_game_objects_explicit_and_deps_archived(self):
+        one, dep, two = [Path(name) for name in ('game-one.o', 'engine.o', 'game-two.o')]
+        prepared = [Path(name) for name in ('prepared-one.o', 'prepared-engine.o', 'prepared-two.o')]
+        game, dependencies = reload_scripts.partition_link_objects(
+            [one, dep, two], prepared, [one, two])
+        self.assertEqual(game, [prepared[0], prepared[2]])
+        self.assertEqual(dependencies, [prepared[1]])
+
+    def test_archive_reused_until_dependency_changes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            obj = root / 'engine.o'
+            obj.write_bytes(b'first')
+            archive = root / 'resident-dependencies.a'
+            invocations = []
+
+            def build(args, check):
+                self.assertEqual(args[:2], ['ar', 'rcs'])
+                invocations.append(args)
+                Path(args[2]).write_bytes(b'archived')
+
+            with patch.object(reload_scripts.subprocess, 'run', side_effect=build):
+                result, reused = reload_scripts.cached_dependency_archive([obj], archive)
+                self.assertEqual(result, archive)
+                self.assertFalse(reused)
+                self.assertEqual(len(invocations), 1)
+                result, reused = reload_scripts.cached_dependency_archive([obj], archive)
+                self.assertTrue(reused)
+                self.assertEqual(len(invocations), 1)
+                obj.write_bytes(b'changed content with different length')
+                result, reused = reload_scripts.cached_dependency_archive([obj], archive)
+                self.assertFalse(reused)
+                self.assertEqual(len(invocations), 2)
+
+    def test_no_dependency_archive_needed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            result, reused = reload_scripts.cached_dependency_archive(
+                [], Path(folder) / 'empty.a')
+            self.assertIsNone(result)
+            self.assertFalse(reused)
+
+
 class ObjectCacheTests(unittest.TestCase):
     def test_reuses_only_matching_objects_and_host_symbol_sets(self):
         with tempfile.TemporaryDirectory() as folder:

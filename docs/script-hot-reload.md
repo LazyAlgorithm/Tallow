@@ -41,7 +41,18 @@ Supported changes include method edits, new component scripts, adding/removing/r
 The project `build/script-reload.log` includes timing information for source scanning, the BeefBuild invocation,
 and the full native reload build. Linux also separates object inspection, ELF object preparation, and linking.
 The Linux reload worker caches ELF objects whose bytes and actually affected host definitions have
-not changed, avoiding repeated symbol rewriting on ordinary method saves. Adding unrelated exported
+not changed, avoiding repeated symbol rewriting on ordinary method saves.
+Linux now links gameplay objects and reflection metadata explicitly and puts existing engine/editor
+dependency objects into a cached static archive. The linker extracts dependency implementations
+only when necessary. A link error retries the previous full-object link for compatibility.
+Both Linux and Windows keep their temporary Beef workspaces across editor launches so that
+incremental compiler caches can survive closing and reopening the editor. Windows already uses
+indexed dependency .lib archives, with on-demand extraction.
+Linux logs game/dependency object counts, archive reuse and full-link fallback.
+Set `TALLOW_RELOAD_FLAT_LINK=1` before launching Tallow to use the old Linux full-object link
+for diagnosis. Compilation of scripts and type metadata still takes time: this changes link
+inputs, not the underlying Beef compiler. Validate with the measured reload log before
+assuming a given game has improved. Adding unrelated exported
 functions to the host no longer invalidates every dependency object. Missing objects, changed object
 bytes and changed relevant host definitions still trigger a fresh rewrite. The log reports all three
 miss categories. The first reload in a new editor session will have a cold cache.
