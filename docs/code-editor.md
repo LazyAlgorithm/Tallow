@@ -46,10 +46,17 @@ and other asset references are not compiler symbols and are not rewritten by cod
 
 ## Errors and determinism warnings
 
-Compiler errors and warnings, semantic-worker failures and the engine's determinism warnings appear in the
-Console, with source locations that open the relevant script. Errors and warnings are shown only in the Console;
-the code pane has no diagnostic markers or separate problem list. Compiler diagnostics are refreshed from
-unsaved text after typing pauses; saving still runs the normal build and hot-reload checks.
+Compiler errors appear as red wavy underlines in the Scripts tab, with a tooltip explaining the problem.
+Regular compiler warnings are amber; potential optimization issues (for example unused code or allocation
+warnings) are teal, and network determinism warnings are violet. Optimization and determinism warnings stay
+in the editor rather than flooding the Console. Diagnostics update from unsaved source after typing pauses,
+while saving still runs the normal build and hot-reload checks. Stale underlines disappear as soon as a document
+is edited and return after the next full diagnostic check.
+
+The Console keeps concise one-line errors and collapses identical repeated messages into a single row with
+a repeat count. Enable **Stack traces / details** to inspect multiline logs and stack traces without
+cluttering the default view. Source-linked compiler errors remain clickable, and worker failures still appear
+in the Console.
 
 The determinism checks remain enabled alongside Beef's diagnostics. In predicted `Update(TickInput, ...)` and
 `Simulate(NetInput, ...)`, they flag unseeded randomness, frame-dependent time, clocks and direct key/mouse reads.

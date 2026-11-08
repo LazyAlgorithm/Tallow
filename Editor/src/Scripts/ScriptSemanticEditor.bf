@@ -103,6 +103,7 @@ extension EditorApp
 				let problem = new ScriptProblem();
 				problem.file.Set(source.path);
 				problem.line = (int32)warning.line;
+				problem.kind = .Determinism;
 				problem.message.Set(warning.message);
 				delete warning.message;
 				mProblems.Add(problem);
@@ -110,7 +111,8 @@ extension EditorApp
 		}
 	}
 
-	/// Compiler and determinism diagnostics belong in the console, once per distinct source location and message.
+	/// A complete check replaces editor squiggles; partial semantic queries preserve the last full snapshot.
+	/// Only compiler errors (and service failures) go to the Console. Other diagnostics stay in the code pane.
 	void PublishScriptDiagnostics(bool complete = true)
 	{
 		if (mScriptDiagnosticClearVersion != Log.ClearVersion)
@@ -118,21 +120,31 @@ extension EditorApp
 			ClearAndDeleteItems!(mPublishedScriptDiagnostics);
 			mScriptDiagnosticClearVersion = Log.ClearVersion;
 		}
+		if (complete)
+		{
+			ClearAndDeleteItems!(mDisplayedScriptProblems);
+			for (let problem in mProblems)
+				mDisplayedScriptProblems.Add(problem);
+			mProblems.Clear();
+			RefreshScriptDiagnostics();
+		}
 		let active = new HashSet<String>();
-		// Completion and hover can report only a subset of the workspace's diagnostics.
 		if (!complete)
 		{
 			for (let key in mPublishedScriptDiagnostics)
 				active.Add(new String(key));
 		}
-		for (let problem in mProblems)
+		let problems = complete ? mDisplayedScriptProblems : mProblems;
+		for (let problem in problems)
 		{
-			let message = scope $"{problem.file}({problem.line + 1}): {problem.message}";
-			let key = scope $"{(problem.isError ? "error" : "warning")} {message}";
+			if (!problem.isError)
+				continue;
+			let message = problem.line < 0 ? scope String(problem.message) : scope String()..AppendF("{}({}): {}", problem.file, problem.line + 1, problem.message);
+			let key = scope $"error {message}";
 			if (active.Contains(key))
 				continue;
 			if (!mPublishedScriptDiagnostics.Contains(key))
-				Log.Add(problem.isError ? .Error : .Warning, message, problem.file, problem.line);
+				Log.Add(.Error, message, problem.file, problem.line);
 			active.Add(new String(key));
 		}
 		DeleteContainerAndItems!(mPublishedScriptDiagnostics);
@@ -176,6 +188,7 @@ extension EditorApp
 				problem.file.Set(mSemantic.path);
 				problem.message.Set(fields[1]);
 				problem.isError = true;
+				problem.line = -1;
 				mProblems.Add(problem);
 			case "completion":
 				suggestions.Append(fields[1]);
@@ -194,8 +207,11 @@ extension EditorApp
 					let problem = new ScriptProblem();
 					problem.file.Set(fields[1]);
 					problem.line = (int32)SceneSerializer.ParseInt(fields[2]);
+					problem.column = (int32)SceneSerializer.ParseInt(fields[3]);
 					problem.isError = fields[4] == "error";
 					problem.message.Set(fields[5]);
+					if (!problem.isError && IsOptimizationWarning(problem.message))
+						problem.kind = .Optimization;
 					mProblems.Add(problem);
 				}
 			case "reference":
@@ -211,7 +227,8 @@ extension EditorApp
 				}
 			}
 		}
-		AddSnapshotDeterminismWarnings();
+		if (mSemantic.operation == "diagnostics")
+			AddSnapshotDeterminismWarnings();
 		PublishScriptDiagnostics(mSemantic.operation == "diagnostics");
 		if (document != null && mSemantic.operation == "completion")
 		{
@@ -257,6 +274,8 @@ extension EditorApp
 			}
 			mSemanticObserved.Set(text);
 			mSemanticObservedPath.Set(document.path);
+			// Old squiggles refer to an earlier source revision: do not show misleading locations.
+			tn_code_clear_diagnostics(document.handle);
 			mSemanticChangedAt = Time.RealTime;
 			mSemanticNeedsCheck = true;
 		}

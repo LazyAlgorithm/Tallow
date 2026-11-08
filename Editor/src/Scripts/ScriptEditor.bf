@@ -8,7 +8,14 @@ namespace Tallow.Editor;
 
 /// The Scripts tab: a code editor in the style of Visual Studio's dark theme with syntax
 /// colouring, bracket matching, foldable blocks, find/replace, completion and undo/redo.
-/// Saving a script compiles the project in the background and sends diagnostics to the Console.
+/// Saving a script compiles the project in the background and updates in-editor diagnostics.
+enum ScriptProblemKind
+{
+	Compiler,
+	Optimization,
+	Determinism
+}
+
 extension EditorApp
 {
 	class ScriptDocument
@@ -25,8 +32,10 @@ extension EditorApp
 	{
 		public String file = new .() ~ delete _;
 		public String message = new .() ~ delete _;
-		public int32 line;
+		public int32 line = -1;
+		public int32 column;
 		public bool isError;
+		public ScriptProblemKind kind;
 	}
 
 	[CLink] static extern void* tn_code_create(char8* text, int32 language);
@@ -35,6 +44,8 @@ extension EditorApp
 	[CLink] static extern void tn_code_render(void* handle, char8* id, float width, float height);
 	[CLink] static extern bool tn_code_is_dirty(void* handle);
 	[CLink] static extern void tn_code_mark_saved(void* handle);
+	[CLink] static extern void tn_code_clear_diagnostics(void* handle);
+	[CLink] static extern void tn_code_add_diagnostic(void* handle, int32 line, int32 column, int32 kind, bool isError, char8* message);
 	[CLink] static extern void tn_code_set_read_only(void* handle, bool readOnly);
 	[CLink] static extern void tn_code_undo(void* handle);
 	[CLink] static extern void tn_code_redo(void* handle);
@@ -57,6 +68,8 @@ extension EditorApp
 			delete _;
 		};
 	List<ScriptProblem> mProblems = new .() ~ DeleteContainerAndItems!(_);
+	// Full diagnostic snapshots stay alive for open code tabs; partial completion queries must not erase them.
+	List<ScriptProblem> mDisplayedScriptProblems = new .() ~ DeleteContainerAndItems!(_);
 	ScriptDocument mActiveScript;
 	ScriptDocument mSelectScript;
 	bool mScriptsFocused;
@@ -175,12 +188,30 @@ extension EditorApp
 			document.readOnly = FindSourceGraph(path, scope String());
 			tn_code_set_read_only(document.handle, document.readOnly);
 			mScripts.Add(document);
+			RefreshScriptDiagnostics();
 		}
 		mSelectScript = document;
 		mFocusScripts = true;
 		if (line >= 0)
 			tn_code_goto_line(document.handle, line);
 		tn_code_focus(document.handle);
+	}
+
+	/// Refresh squiggles for every open script from the most recent complete diagnostics snapshot.
+	void RefreshScriptDiagnostics()
+	{
+		for (let document in mScripts)
+		{
+			tn_code_clear_diagnostics(document.handle);
+			if (!document.path.EndsWith(".bf"))
+				continue;
+			for (let problem in mDisplayedScriptProblems)
+			{
+				if (problem.line < 0 || !Path.Equals(problem.file, document.path))
+					continue;
+				tn_code_add_diagnostic(document.handle, problem.line, problem.column, (int32)problem.kind, problem.isError, problem.message.CStr());
+			}
+		}
 	}
 
 	void SaveScript(ScriptDocument document)
@@ -260,6 +291,46 @@ extension EditorApp
 		return -1;
 	}
 
+	/// Parse BeefBuild's line/column diagnostics into the same model used by the language service.
+	static bool IsOptimizationWarning(StringView message)
+	{
+		return message.Contains("unused") || message.Contains("Unused") ||
+			message.Contains("optim") || message.Contains("Optim") ||
+			message.Contains("performance") || message.Contains("Performance") ||
+			message.Contains("allocation") || message.Contains("Allocation");
+	}
+
+	void ParseCompilerDiagnostics(StringView output)
+	{
+		for (let line in output.Split('\n'))
+		{
+			let isError = line.StartsWith("ERROR:");
+			if (!isError && !line.StartsWith("WARNING"))
+				continue;
+			// BeefBuild: ERROR: message at line 12:5 in /path/File.bf
+			let atIndex = LastIndexOfText(line, " at line ");
+			let inIndex = LastIndexOfText(line, " in ");
+			if (atIndex < 0 || inIndex < atIndex)
+				continue;
+			let colon = line.IndexOf(':');
+			if (colon < 0 || colon >= atIndex)
+				continue;
+			let problem = new ScriptProblem();
+			problem.isError = isError;
+			problem.message.Set(line.Substring(colon + 1, atIndex - colon - 1));
+			problem.message.Trim();
+			let location = line.Substring(atIndex + 9, inIndex - atIndex - 9);
+			let split = location.IndexOf(':');
+			problem.line = SceneSerializer.ParseInt(split > 0 ? location.Substring(0, split) : location) - 1;
+			problem.column = split > 0 ? (int32)Math.Max(SceneSerializer.ParseInt(location.Substring(split + 1)) - 1, 0) : 0;
+			problem.file.Set(line.Substring(inIndex + 4));
+			problem.file.Trim();
+			if (!isError && IsOptimizationWarning(problem.message))
+				problem.kind = .Optimization;
+			mProblems.Add(problem);
+		}
+	}
+
 	void CollectCheckResults()
 	{
 		if (!mCheckRunning || !Interlocked.Load(ref mCheckFinished))
@@ -273,30 +344,7 @@ extension EditorApp
 		}
 		mCheckRunning = false;
 		ClearAndDeleteItems!(mProblems);
-		for (let line in mCheckLog.Split('\n'))
-		{
-			let isError = line.StartsWith("ERROR:");
-			if (!isError && !line.StartsWith("WARNING"))
-				continue;
-			// Compiler lines look like: ERROR: message at line 12:5 in /path/File.bf
-			let atIndex = LastIndexOfText(line, " at line ");
-			let inIndex = LastIndexOfText(line, " in ");
-			if (atIndex < 0 || inIndex < atIndex)
-				continue;
-			let problem = new ScriptProblem();
-			problem.isError = isError;
-			let colon = line.IndexOf(':');
-			problem.message.Set(line.Substring(colon + 1, atIndex - colon - 1));
-			problem.message.Trim();
-			var location = line.Substring(atIndex + 9, inIndex - atIndex - 9);
-			let split = location.IndexOf(':');
-			if (split > 0)
-				location = location.Substring(0, split);
-			problem.line = SceneSerializer.ParseInt(location) - 1;
-			problem.file.Set(line.Substring(inIndex + 4));
-			problem.file.Trim();
-			mProblems.Add(problem);
-		}
+		ParseCompilerDiagnostics(mCheckLog);
 		AddDeterminismWarnings(scope $"{Project.Current.Path}/src" , 0);
 		PublishScriptDiagnostics();
 		if (mCheckWasReload)
@@ -334,6 +382,7 @@ extension EditorApp
 			{
 				let problem = new ScriptProblem();
 				problem.isError = false;
+				problem.kind = .Determinism;
 				problem.file.Set(path);
 				problem.line = (int32)warning.line;
 				problem.message.Set(warning.message);

@@ -37,12 +37,11 @@ extension EditorApp
 		{
 			let log = scope String();
 			project.ReadBuildLog(log);
-			for (let line in log.Split('\n'))
-			{
-				if (!line.IsEmpty)
-					Log.Error(line);
-			}
-			Log.Error("Compile failed. Fix the errors above and choose File > Rebuild & Reload again.");
+			ClearAndDeleteItems!(mProblems);
+			ParseCompilerDiagnostics(log);
+			AddDeterminismWarnings(scope $"{project.Path}/src", 0);
+			PublishScriptDiagnostics();
+			Log.Error("Compile failed. Fix the underlined script errors and choose File > Rebuild & Reload again.");
 			return;
 		}
 		let command = scope String();

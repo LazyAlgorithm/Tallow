@@ -7,6 +7,7 @@
 #include "extras/TrieAutoComplete.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -747,6 +748,53 @@ TN_API bool tn_code_can_undo(void* handle) { return ((Document*)handle)->editor.
 TN_API bool tn_code_can_redo(void* handle) { return ((Document*)handle)->editor.CanRedo(); }
 TN_API void tn_code_focus(void* handle) { ((Document*)handle)->editor.SetFocus(); }
 TN_API void tn_code_clear_markers(void* handle) { ((Document*)handle)->editor.ClearMarkers(); }
+
+// Distinct squiggle categories let compiler, optimization and determinism markers coexist
+// with the editor's own search highlights. Lines and columns use zero-based UTF-8 positions.
+TN_API void tn_code_clear_diagnostics(void* handle)
+{
+	TextEditor& editor = ((Document*)handle)->editor;
+	for (size_t kind = 50; kind <= 53; ++kind)
+		editor.ClearSquiggles(kind);
+}
+
+TN_API void tn_code_add_diagnostic(void* handle, int line, int column, int kind, bool isError, const char* message)
+{
+	if (line < 0) return;
+	TextEditor& editor = ((Document*)handle)->editor;
+	if ((size_t)line >= editor.GetLineCount()) return;
+	const std::string source = editor.GetLineText((size_t)line);
+	if (source.empty()) return;
+
+	// Use the compiler's column when available; line-based checks underline the statement.
+	size_t begin = 0;
+	while (begin < source.size() && std::isspace((unsigned char)source[begin])) ++begin;
+	if (begin == source.size()) return;
+	size_t end = begin;
+	if (kind == 2)
+	{
+		end = source.find("//", begin);
+		if (end == std::string::npos) end = source.size();
+		while (end > begin && std::isspace((unsigned char)source[end - 1])) --end;
+	}
+	else
+	{
+		if (column >= 0 && (size_t)column < source.size() && !std::isspace((unsigned char)source[(size_t)column]))
+			begin = (size_t)column;
+		end = begin;
+		if (std::isalnum((unsigned char)source[begin]) || source[begin] == '_')
+			while (end < source.size() && (std::isalnum((unsigned char)source[end]) || source[end] == '_')) ++end;
+		else
+			end = begin + 1;
+	}
+	if (end <= begin) end = begin + 1;
+	const size_t squiggleType = isError ? 50 : (kind == 1 ? 51 : (kind == 2 ? 52 : 53));
+	const ImU32 color = isError ? IM_COL32(245, 71, 71, 255) :
+		(kind == 1 ? IM_COL32(60, 196, 205, 255) :
+		(kind == 2 ? IM_COL32(181, 125, 255, 255) : IM_COL32(235, 185, 64, 255)));
+	editor.AddSquiggle(TextEditor::DocPos((size_t)line, begin),
+		TextEditor::DocPos((size_t)line, end), squiggleType, color, message ? message : "");
+}
 
 // line is zero based. Errors are red, warnings amber; the message shows when hovering the line.
 TN_API void tn_code_add_marker(void* handle, int line, bool error, const char* message)
