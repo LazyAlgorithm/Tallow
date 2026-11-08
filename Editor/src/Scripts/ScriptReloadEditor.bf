@@ -121,7 +121,7 @@ extension EditorApp
 				return;
 			}
 			// New fields and components must be reflected in the Inspector in Edit mode.
-			conservative = true;
+			mReloadForceConservative = true;
 		}
 		mScriptsNeedReload = true;
 		mReloadQueued = true;
