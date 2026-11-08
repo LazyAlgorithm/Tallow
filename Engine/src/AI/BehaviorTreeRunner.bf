@@ -145,7 +145,12 @@ struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
 	{
 		if (!scene.IsPlaying)
 			return;
-		for (let runner in scene.Components<BehaviorTreeRunner>(.. scope .()))
+		let runners = scope List<BehaviorTreeRunner>();
+		scene.Components<BehaviorTreeRunner>(runners);
+		// ECS tables have no defined iteration order. Preserve a stable per-object
+		// processing order for AI side effects and authoritative networking.
+		runners.Sort(scope (a, b) => a.GameObject.Id <=> b.GameObject.Id);
+		for (let runner in runners)
 		{
 			if (!runner.GameObject.ActiveInHierarchy)
 				continue;
