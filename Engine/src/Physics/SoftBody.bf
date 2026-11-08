@@ -273,10 +273,22 @@ class SoftBody : Component
 	}
 
 	/// Makes the body again from the mesh and settings (after changing them while it runs). It starts at rest.
+	/// Keep the object's requested pose: a free body's first ReadBack during creation must not
+	/// override a teleport performed immediately before rebuilding.
 	public void Rebuild()
 	{
+		let position = Transform.Position;
+		let rotation = Transform.Rotation;
 		DestroyBody();
 		CreateBody();
+		if (HasBody && Free)
+		{
+			// CreateBody synchronizes the new vertices and may change the object's position.
+			// Restore the requested pose and sync once more, moving the simulated vertices
+			// too (FollowMovedObject), instead of just moving the rendered GameObject.
+			Transform.SetPositionAndRotation(position, rotation);
+			ReadBack();
+		}
 	}
 
 	void DestroyBody()
