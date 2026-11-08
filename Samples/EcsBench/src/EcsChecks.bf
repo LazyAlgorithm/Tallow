@@ -859,7 +859,7 @@ static class EcsChecks
 			// one synchronized field, without requiring a real transport in the check.
 			let structure = scope NetWriter();
 			NetworkSync.[Friend]WriteEcsComponents(structure, a, NetworkSync.[Friend]Slots(a));
-			let structureReader = NetReader(structure.Data.Ptr, structure.Data.Count);
+			var structureReader = NetReader(structure.Data.Ptr, structure.Data.Count);
 			Expect(NetworkManager.ReadNetId(ref structureReader) == a.NetId
 				&& structureReader.Read<uint8>() == 1, "custom ECS data type is announced on the wire");
 			let structureName = scope String();
@@ -882,7 +882,7 @@ static class EcsChecks
 				let fieldMessage = scope NetWriter();
 				NetworkSync.[Friend]WriteField(fieldMessage, a, replicatedSpeed, replicatedSlots.slots[replicatedSpeed]);
 				first.GetComponent<SyncedEcsMotion>().speed = 0;
-				let fieldReader = NetReader(fieldMessage.Data.Ptr, fieldMessage.Data.Count);
+				var fieldReader = NetReader(fieldMessage.Data.Ptr, fieldMessage.Data.Count);
 				NetworkSync.[Friend]OnField(0, ref fieldReader);
 				Expect(fieldReader.Ok && first.GetComponent<SyncedEcsMotion>().speed == 4.5f,
 					"network field message writes directly into the same ECS struct the script and query see");
@@ -892,7 +892,7 @@ static class EcsChecks
 			let emptyStructure = scope NetWriter();
 			NetworkManager.WriteNetId(emptyStructure, a.NetId);
 			emptyStructure.Write((uint8)0);
-			let emptyReader = NetReader(emptyStructure.Data.Ptr, emptyStructure.Data.Count);
+			var emptyReader = NetReader(emptyStructure.Data.Ptr, emptyStructure.Data.Count);
 			NetworkSync.[Friend]OnEcsComponents(0, ref emptyReader);
 			Expect(!first.HasComponent<SyncedEcsMotion>(), "empty structure removes a formerly synchronized ECS component");
 			first.AddComponent<SyncedEcsMotion>(.() { speed = 3, localOnly = 9 });
