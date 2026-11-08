@@ -800,7 +800,8 @@ static class NodeLibrary
 					.Out("Object", .Object, "GameObject", "ecsObject$N");
 				for (let field in info.type.GetFields(.Public | .Instance))
 				{
-					if (!EcsPin(field.FieldType, let pin))
+					PinType pin;
+					if (!EcsPin(field.FieldType, out pin))
 						continue;
 					loop.Out(field.Name, pin, "", scope $"ecsData$N[ecsIndex$N].{field.Name}");
 				}
@@ -808,7 +809,8 @@ static class NodeLibrary
 			}
 			for (let field in info.type.GetFields(.Public | .Instance))
 			{
-				if (!EcsPin(field.FieldType, let pin))
+				PinType pin;
+				if (!EcsPin(field.FieldType, out pin))
 					continue; // Unsupported types should not generate graphs that cannot compile.
 				let get = scope $"ecs:{typeName}.{field.Name}.get";
 				if (Find(get) == null)
