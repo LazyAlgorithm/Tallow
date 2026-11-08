@@ -289,6 +289,10 @@ class SoftBody : Component
 		mIgnored = uint32.MaxValue;
 		mBody = uint32.MaxValue;
 		mWorld = null;
+		// Never carry the old body's vertex cache into a newly created body.
+		// CreateBody calls ReadBack immediately; FollowMovedObject would otherwise
+		// see old vertices and shift the new body away from its spawn transform.
+		mPositions.Clear();
 		let renderer = GetComponent<MeshRenderer>();
 		if (renderer && renderer.RuntimeMesh == mMesh)
 			renderer.RuntimeMesh = null;
