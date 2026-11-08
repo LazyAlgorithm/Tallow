@@ -5,6 +5,7 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+export TALLOW_ROOT="$ROOT"
 PULL=0
 SKIP_BUILD=0
 ARGS=()
