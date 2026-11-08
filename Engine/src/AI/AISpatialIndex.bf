@@ -25,6 +25,14 @@ class AISpatialIndex
 	/// adds this to its query reach so the edge of a large obstacle is included.
 	public float MaxObstacleRadius { get; private set; }
 
+	/// Runtime broadphase counters for profiling server-side AI workloads.
+	/// Cumulative over this scene's life, not reset every frame.
+	public int64 Rebuilds { get; private set; }
+	public int64 ObjectQueries { get; private set; }
+	public int64 ObjectCandidates { get; private set; }
+	public int64 ObstacleQueries { get; private set; }
+	public int64 ObstacleCandidates { get; private set; }
+
 	public this(Scene scene)
 	{
 		mScene = scene;
@@ -69,6 +77,7 @@ class AISpatialIndex
 		if (mUpdate == mScene.UpdateCount && mTick == Time.Tick && mCount == mScene.Objects.Count)
 			return;
 
+		Rebuilds++;
 		mUpdate = mScene.UpdateCount;
 		mTick = Time.Tick;
 		mCount = mScene.Objects.Count;
@@ -149,6 +158,8 @@ class AISpatialIndex
 	{
 		Refresh();
 		Gather(mObjects, center, reach, output);
+		ObjectQueries++;
+		ObjectCandidates += output.Count;
 	}
 
 	/// Nearby *candidates* for navigation avoidance. Carved or disabled
@@ -157,5 +168,7 @@ class AISpatialIndex
 	{
 		Refresh();
 		Gather(mObstacles, center, reach + MaxObstacleRadius, output);
+		ObstacleQueries++;
+		ObstacleCandidates += output.Count;
 	}
 }
