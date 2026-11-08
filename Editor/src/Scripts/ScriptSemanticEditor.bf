@@ -284,7 +284,7 @@ extension EditorApp
 		int32 cursor = 0;
 		let request = tn_code_take_semantic_request(document.handle, &cursor);
 		if (request != 0)
-			RequestSemantic(document, request == 2 ? "symbol" : "completion", cursor);
+			RequestSemantic(document, request == 2 ? "symbol" : (request == 3 ? "signature" : "completion"), cursor);
 		else if (mSemanticNeedsCheck && Time.RealTime - mSemanticChangedAt > 1.5f)
 			RequestSemantic(document, "diagnostics");
 	}

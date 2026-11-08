@@ -1698,13 +1698,34 @@ void TextEditor::handleMouseInteractions() {
 //	TextEditor::isDocPosVisible
 //
 
-// Draw on the editor child, after its text, using the same font and text-area clip.
+// Ghost completions are visual only. Shift an existing paired closer and the rest of its
+// line to the right of the preview, without modifying the source or the undo history.
 void TextEditor::DrawInlineText(DocPos pos, const char* text, ImU32 color) {
-	if (IsDocPosVisible(pos)) {
-		drawList->PushClipRect(textClipMin, textClipMax, true);
-		drawList->AddText(font, fontSize, DocPos2ScreenPos(pos), color, text);
-		drawList->PopClipRect();
+	if (!text || !*text || !IsDocPosVisible(pos)) return;
+	drawList->PushClipRect(textClipMin, textClipMax, true);
+	const ImVec2 screen = DocPos2ScreenPos(pos);
+	const auto& line = document[pos.line];
+	if (pos.index < line.size() && (line[pos.index].codepoint == ')' ||
+		line[pos.index].codepoint == ']' || line[pos.index].codepoint == '}')) {
+		// The ordinary renderer has already drawn the closer at the caret. Redraw the
+		// line tail in its preview position so neither it nor the ghost text is clipped by it.
+		const float previewWidth = ImGui::CalcTextSize(text).x;
+		drawList->AddRectFilled(screen, ImVec2(textClipMax.x, screen.y + glyphSize.y),
+			palette.get(Color::background));
+		float x = screen.x + previewWidth;
+		for (size_t i = pos.index; i < line.size() && x < textClipMax.x; ++i) {
+			const auto& glyph = line[i];
+			if (glyph.codepoint != ' ' && glyph.codepoint != '\t')
+				font->RenderChar(drawList, fontSize, ImVec2(x, screen.y),
+					palette.get(glyph.color), glyph.codepoint);
+			x += glyph.columns * glyphSize.x;
+		}
+		// This late overlay also covered the editor's caret, so restore it.
+		drawList->AddLine(screen, ImVec2(screen.x, screen.y + fontSize),
+			palette.get(Color::cursor));
 	}
+	drawList->AddText(font, fontSize, screen, color, text);
+	drawList->PopClipRect();
 }
 
 bool TextEditor::isDocPosVisible(DocPos docPos) const {
@@ -2489,6 +2510,19 @@ void TextEditor::handleCharacter(ImWchar character) {
 	const auto opener = character;
 	const auto isPaired = !config.overwrite && config.completePairedGlyphs && CodePoint::isPairOpener(opener);
 	const auto closer = CodePoint::toPairCloser(opener);
+
+	// After typing or accepting completion inside a paired expression, typing its
+	// closing glyph should advance over the existing closer, not insert a duplicate.
+	if (!cursors.hasMultiple() && !cursors.anyHasSelection() &&
+		(character == ')' || character == ']' || character == '}')) {
+		const auto at = cursors.getCurrent().getSelectionEnd();
+		if (at.line < document.size() && at.index < document[at.line].size() &&
+			document[at.line][at.index].codepoint == character) {
+			completePairCloser = 0;
+			moveRight(false, false);
+			return;
+		}
+	}
 
 	// ignore input if it was the closing character for a pair that was automatically inserted
 	if (completePairCloser) {

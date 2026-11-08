@@ -89,6 +89,23 @@ class SemanticTests(unittest.TestCase):
         self.assertIn('signature\t', self.query('completion', source, marker='this.Run('))
         self.assertIn(f'definition\t{self.a}\t5\t25', self.query('definition', '\n\n\n' + self.source, marker='this.cou'))
 
+    def test_argument_completion_and_signature_help(self):
+        source = (
+            'namespace Demo; class Thing { '
+            'void Use(int first, int second) { } '
+            'void Run(int inputValue) { '
+            'int localValue = inputValue; '
+            'this.Use(localV, inputValue); '
+            '} }'
+        )
+        result = self.query('completion', source, marker='this.Use(localV')
+        self.assertIn('completion\tlocalValue\t', result)
+        self.assertNotIn('error\t', result)
+        result = self.query('signature', source, marker='this.Use(')
+        self.assertIn('signature\t', result)
+        result = self.query('signature', source, marker='this.Use(localV,')
+        self.assertIn('signature\t', result)
+
     def test_changed_declarations_and_file_switch(self):
         source = self.source.replace('this.count++;', 'this.co;')
         self.assertIn('completion\tcount\t', self.query('completion', source, marker='this.co'))

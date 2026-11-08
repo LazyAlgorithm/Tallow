@@ -15,6 +15,11 @@ comes from the compiler's overload resolution. Hover information reports the com
 The selected suggestion appears as a faint suffix at the cursor. **Tab** accepts it and **Escape** dismisses it;
 the suggestion list remains available for choosing another member. Typing more of the same member filters the
 cached suggestions immediately. Changing the receiver or surrounding source requests fresh compiler results.
+Suggestions also include local variables and parameters when completing arguments inside calls. Opening a
+function call or typing a comma requests parameter-signature help without replacing completion suggestions.
+When a suggested identifier precedes an auto-inserted closing `) ` or `] `, the editor visually moves the
+closing glyph aside while previewing; no source text changes until completion is accepted. Typing the closer
+after completion steps over an existing closing glyph instead of inserting a duplicate.
 
 Queries run in a background process which keeps the workspace compiler ready between requests. Editing remains
 available while a query runs, and results from an older source snapshot are discarded. Member-prefix typing

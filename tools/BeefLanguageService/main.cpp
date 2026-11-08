@@ -138,7 +138,7 @@ static int Query(Workspace& workspace, const std::vector<std::string>& args)
 		auto& projects = workspace.projects;
 		auto& parsers = workspace.parsers;
 		bool needsCompile = first || mode == "diagnostics" || mode == "references" || mode == "rename";
-		const bool interactive = mode == "completion" || mode == "symbol" || mode == "definition";
+		const bool interactive = mode == "completion" || mode == "signature" || mode == "symbol" || mode == "definition";
 		void* targetProject = nullptr;
 		std::string targetSource;
 		for (const auto& line : lines)
@@ -192,7 +192,7 @@ static int Query(Workspace& workspace, const std::vector<std::string>& args)
 		BfParser_SetIsClassifying(parser);
 		BfParser_SetSource(parser, targetSource.c_str(), (int)targetSource.size(), target.c_str(), ++workspace.revision);
 		BfParser_SetAutocomplete(parser, cursor);
-		int kind = mode == "completion" ? 3 : mode == "definition" ? 5 : mode == "symbol" ? 14 : 6;
+		int kind = (mode == "completion" || mode == "signature") ? 3 : mode == "definition" ? 5 : mode == "symbol" ? 14 : 6;
 		void* resolve = BfParser_CreateResolvePassData(parser, kind, false);
 		BfParser_Parse(parser, pass, false);
 		BfParser_Reduce(parser, pass);

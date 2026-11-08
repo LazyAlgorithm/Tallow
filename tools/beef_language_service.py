@@ -283,7 +283,7 @@ def rename(executable, rows, contents, folder, project, path, cursor, new_name, 
 def execute(project, folder):
     request, overlays = read_request(folder)
     mode = request['operation']
-    if mode not in {'completion', 'definition', 'symbol', 'diagnostics', 'references', 'rename'}:
+    if mode not in {'completion', 'signature', 'definition', 'symbol', 'diagnostics', 'references', 'rename'}:
         raise RuntimeError('Unknown semantic operation.')
     path = Path(request['file']).resolve()
     cursor = int(request.get('cursor', '0'))
@@ -305,7 +305,12 @@ def execute(project, folder):
         elif kind == 'insertRange' and len(fields) >= 2:
             start, end = map(int, fields[1].split())
             output.append(['range', str(max(0, start)), str(cursor if end < 0 else end)])
-        elif mode == 'completion' and kind in {'method', 'value', 'type', 'namespace', 'keyword', 'generic', 'interface', 'struct', 'class', 'field', 'property', 'object', 'pointer', 'token', 'valuetype', 'label', 'this'} and len(fields) >= 2:
+        elif mode == 'completion' and kind in {
+            'method', 'value', 'type', 'namespace', 'keyword', 'generic', 'interface',
+            'struct', 'class', 'field', 'property', 'object', 'pointer', 'token',
+            'valuetype', 'label', 'this', 'local', 'parameter', 'param', 'argument',
+            'constant', 'const', 'enumCase', 'enumValue', 'enum', 'delegate', 'function',
+        } and len(fields) >= 2:
             label, _, detail = fields[1].partition('\x03')
             label = label.partition('\x02')[0]
             output.append(['completion', clean(label), clean(detail or kind)])

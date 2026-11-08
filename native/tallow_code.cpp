@@ -586,8 +586,12 @@ TN_API void tn_code_render(void* handle, const char* id, float width, float heig
 			const std::string before = document->editor.GetSectionText(TextEditor::DocPos(0, 0), cursor);
 			if (!before.empty() && (before.back() == '(' || before.back() == ','))
 			{
-				document->semanticRequest = 3;
-				document->semanticCursor = (int)before.size();
+				// Parameter hints are not completion lists: keep the active suggestion popup intact.
+				if (document->semanticRequest != 1)
+				{
+					document->semanticRequest = 3;
+					document->semanticCursor = (int)before.size();
+				}
 			}
 			if (!before.empty() && (before.back() == ')' || before.back() == ';')) document->signature.clear();
 		}
