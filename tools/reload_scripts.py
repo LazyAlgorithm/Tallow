@@ -61,6 +61,19 @@ def schema(text):
     return hashlib.sha256(' '.join(result).encode()).hexdigest()
 
 
+def reload_strategy(mode, baseline, current, platform):
+    """Only unchanged declarations can use Linux's existing method-table patcher.
+
+    The runtime verifies ABI and type IDs before applying any patches; the editor
+    automatically retries structural reload if that validation rejects the module.
+    """
+    if (mode == 'automatic' and platform == 'linux'
+            and current['code'] != baseline['code']
+            and current['schemas'] == baseline['schemas']):
+        return 'methods'
+    return 'structural'
+
+
 def project_path(project, text):
     """A path from a workspace file. Under Wine a Windows workspace names this system's folders as Z:/..."""
     if os.name != 'nt' and re.match(r'^[zZ]:[\\/]', text):
@@ -667,7 +680,7 @@ def windows_build(project, name, args, baseline, current, snapshot_seconds, relo
     manifest.parent.mkdir(parents=True, exist_ok=True)
     # What a later reload needs to know about this one, if it is taken up.
     Path(str(manifest) + '.json').write_text(json.dumps({
-        'top': base, 'state': state,
+        'top': base, 'state': state, 'schemas': current['schemas'], 'code': current['code'],
         'loaded': {symbol: address for symbol, address in placed.items()
                    if low <= address < high and not symbol.startswith(PRIVATE_TO_IMAGE) and not symbol.startswith('reload_private_')}}))
     temporary = manifest.with_suffix('.tmp')
@@ -685,6 +698,8 @@ def windows_commit(args, baseline):
     record = json.loads(Path(str(args.manifest.resolve()) + '.json').read_text())
     baseline['loaded'].update(record['loaded'])
     baseline['state'].update(record['state'])
+    baseline['schemas'] = record['schemas']
+    baseline['code'] = record['code']
     baseline['top'] = record['top']
     args.baseline.write_text(json.dumps(baseline))
     return 0
@@ -697,6 +712,8 @@ def main():
     parser.add_argument('--baseline', required=True, type=Path)
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--commit', action='store_true', help='Record symbols of an activated generation.')
+    parser.add_argument('--mode', choices=('automatic', 'conservative'), default='automatic',
+                        help='Automatic uses lightweight method patching for compatible Linux edits.')
     parser.add_argument('--platform', choices=('linux', 'windows'), default='windows' if os.name == 'nt' else 'linux')
     parser.add_argument('--host-info', type=Path, help='Windows: the file the running program wrote about where it is loaded (default: the baseline with .host).')
     args = parser.parse_args()
@@ -729,7 +746,10 @@ def main():
     if args.commit:
         baseline = json.loads(args.baseline.read_text())
         module = Path(json.loads(args.manifest.read_text().splitlines()[0].removeprefix('module ')))
+        built = json.loads(Path(str(args.manifest) + '.source.json').read_text())
         baseline['exports'].update(exported_symbols(module))
+        baseline['schemas'] = built['schemas']
+        baseline['code'] = built['code']
         args.baseline.write_text(json.dumps(baseline))
         return 0
     if args.snapshot:
@@ -746,6 +766,8 @@ def main():
     if args.manifest is None:
         parser.error('--manifest is required for builds')
     name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
+    strategy = reload_strategy(args.mode, baseline, current, 'linux')
+    print(f'Reload strategy: {strategy}', flush=True)
     workspace = project / '.tallow-reload' / (args.baseline.stem + '-workspace')
     workspace.mkdir(parents=True, exist_ok=True)
     source = workspace / 'src'
@@ -823,14 +845,19 @@ def main():
     subprocess.run(['objcopy', '--redefine-syms=' + str(mapping), str(vdata), str(metadata_object)], check=True)
     subprocess.run(['c++', '-shared', '-Wl,-Bsymbolic', '-o', str(module), *map(str, linked_objects), str(metadata_object)], check=True)
     link_seconds = time.perf_counter() - link_started
-    lines = ['module ' + json.dumps(str(module)), 'mode structural']
+    lines = ['module ' + json.dumps(str(module)), 'mode ' + strategy]
     lines += [f'class {symbol} {size}' for symbol, size in classes]
-    lines += [f'shared {symbol} {size}' for symbol, size in shared.items()]
+    # The method patcher copies mutable state from the current module, while
+    # structural reload uses its own shared-state migration implementation.
+    field = 'state' if strategy == 'methods' else 'shared'
+    lines += [f'{field} {symbol} {size}' for symbol, size in shared.items()]
     manifest = args.manifest.resolve()
     manifest.parent.mkdir(parents=True, exist_ok=True)
     temporary = manifest.with_suffix('.tmp')
     temporary.write_text('\n'.join(lines) + '\n')
     temporary.replace(manifest)
+    Path(str(manifest) + '.source.json').write_text(json.dumps({
+        'schemas': current['schemas'], 'code': current['code']}))
     total_seconds = time.perf_counter() - reload_started
     print(f'Compiled script library: {module}. Engine implementations remain in the host.', flush=True)
     print(f'Reload total: {total_seconds:.2f}s '

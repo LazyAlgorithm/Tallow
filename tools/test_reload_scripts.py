@@ -79,5 +79,22 @@ class ObjectCacheTests(unittest.TestCase):
                 self.assertEqual(len(calls), 6)
 
 
+class ReloadStrategyTests(unittest.TestCase):
+    def test_method_only_edits_use_lightweight_linux_path(self):
+        baseline = {'schemas': {'Scripts/Player.bf': 'declaration'}, 'code': 'old'}
+        updated = {'schemas': baseline['schemas'], 'code': 'new'}
+        self.assertEqual(reload_scripts.reload_strategy('automatic', baseline, updated, 'linux'), 'methods')
+        self.assertEqual(reload_scripts.reload_strategy('conservative', baseline, updated, 'linux'), 'structural')
+        self.assertEqual(reload_scripts.reload_strategy('automatic', baseline, updated, 'windows'), 'structural')
+        self.assertEqual(reload_scripts.reload_strategy('automatic', baseline, baseline, 'linux'), 'structural')
+
+    def test_declaration_changes_use_structural_path(self):
+        baseline = {'schemas': {'Scripts/Player.bf': 'old'}, 'code': 'old'}
+        updated = {'schemas': {'Scripts/Player.bf': 'new'}, 'code': 'new'}
+        self.assertEqual(reload_scripts.reload_strategy('automatic', baseline, updated, 'linux'), 'structural')
+        added = {'schemas': {**baseline['schemas'], 'Scripts/Enemy.bf': 'new'}, 'code': 'new'}
+        self.assertEqual(reload_scripts.reload_strategy('automatic', baseline, added, 'linux'), 'structural')
+
+
 if __name__ == '__main__':
     unittest.main()

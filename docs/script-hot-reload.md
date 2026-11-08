@@ -1,5 +1,15 @@
 # Automatic script library reload
 
+Linux and Windows x86-64 Debug editors watch project `.bf` files, including additions, removals and graph-generated scripts.
+
+**Project Settings > Scripting > Script Reload** offers:
+
+- **Automatic (default):** On Linux, compatible method-only changes use the existing lightweight native dispatch patcher. A change to declarations, fields, or script types uses structural reload. If method patch validation fails, Tallow retries the structural path without discarding the last working code. Windows currently uses structural reload for both kinds of edits.
+- **Conservative:** Always use structural compilation and state migration, including method-only changes.
+- **Manual:** Saving and external file changes do not activate script code. Use **File > Reload Scripts** (Ctrl+R) when ready. **Check Errors** compiles without activating. **Force Structural Script Reload** overrides Automatic or Manual without restarting the editor.
+
+The selected mode is saved to `project.tallow` and defaults to Automatic for existing projects.
+
 Linux and Windows x86-64 Debug editors watch project `.bf` files, including additions, removals and graph-generated scripts. Saving in the Scripts tab also queues a reload. Editor saves update the file monitor immediately so one save does not trigger a second identical compilation when the monitor polls. Changes debounce briefly (150 ms) before the compiler builds a versioned game library on a worker thread. Generated Beef workspace configuration files are rewritten only when their content changes to preserve incremental compiler caches. Engine/editor implementations and their state remain in the host. Beef still compiles changed code and metadata; no manual full-project rebuild is required for supported game-script edits.
 
 At a frame boundary, the editor loads the library, maps its type metadata onto stable resident identities, refreshes the component registry, replaces project component instances and restores compatible fields/references. The editor window, scene objects, physics world and Play state remain alive. The activation scene is passed explicitly, including in Edit mode. Activated symbols are recorded so newly added types work through later generations.
