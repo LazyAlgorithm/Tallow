@@ -10,6 +10,7 @@ namespace EcsBench;
 extension Bench
 {
 	List<Rigidbody> mPhysicsBodies = new .() ~ delete _;
+	int mPhysicsErrorBits;
 
 	bool IsExtendedMode()
 	{
@@ -105,6 +106,17 @@ extension Bench
 			mPhysicsBodies.Add(body);
 			mBodies++;
 		}
+	}
+
+	int CountCreatedBodies()
+	{
+		int created = 0;
+		for (let body in mPhysicsBodies)
+		{
+			if (body.HasBody)
+				created++;
+		}
+		return created;
 	}
 
 	int CountSleepingBodies()
