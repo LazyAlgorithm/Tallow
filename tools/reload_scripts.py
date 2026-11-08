@@ -62,6 +62,68 @@ def cached_dependency_archive(objects, archive):
     return archive, False
 
 
+def beef_build_artifacts(workspace, name, platform):
+    """Compiler outputs: distinguish game code from resident dependency code.
+
+    The linker input list is also our best available inventory of emitted
+    Linux object files. For Windows, BeefBuild uses indexed .lib archives.
+    """
+    root = workspace / 'build' / ('Debug_Win64' if platform == 'windows' else 'Debug_Linux64') / name
+    if platform == 'linux':
+        args = root / 'ObjectArgs.txt'
+        try:
+            paths = [Path(item) for item in shlex.split(args.read_text())
+                     if item.endswith('.o') and Path(item).name != 'vdata.o']
+        except OSError:
+            paths = []
+        return {
+            'game': [path for path in paths if path.parent == root],
+            'dependencies': [path for path in paths if path.parent != root],
+            'reflection': [root / 'vdata.o'],
+        }
+    build = root.parent
+    return {
+        'game': [root / (name + '__.lib')],
+        'dependencies': [path for path in build.rglob('*__.lib') if path.parent != root]
+                        if build.is_dir() else [],
+        'reflection': [root / 'vdata.obj'],
+    }
+
+
+def build_output_state(workspace, name, platform):
+    """Record cheap file timestamps; changed means rewritten, not necessarily recompiled."""
+    buckets = {}
+    for category, paths in beef_build_artifacts(workspace, name, platform).items():
+        stamps = {}
+        for path in paths:
+            try:
+                stat = path.stat()
+                stamps[str(path)] = (stat.st_size, stat.st_mtime_ns)
+            except OSError:
+                pass
+        buckets[category] = stamps
+    return buckets
+
+
+def build_output_activity(before, after):
+    """Count compiler outputs added/rewritten for both Linux and Windows."""
+    results = {}
+    for category in ('game', 'dependencies', 'reflection'):
+        old, new = before.get(category, {}), after.get(category, {})
+        results[category] = {
+            'total': len(new),
+            'rewritten': sum(1 for path, stamp in new.items() if path in old and old[path] != stamp),
+            'new': sum(1 for path in new if path not in old),
+        }
+    return results
+
+
+def build_activity_label(activity):
+    return ', '.join(
+        f'{name} {values["rewritten"]} rewritten/{values["new"]} new/{values["total"]} present'
+        for name, values in activity.items())
+
+
 def write_if_changed(path, content):
     """Preserve modification time when a generated Beef workspace config is unchanged.
 
@@ -606,14 +668,18 @@ def windows_build(project, name, args, baseline, current, snapshot_seconds, relo
     write_if_changed(workspace / 'BeefProj.toml', proj_text)
     command, environment = beef_command(workspace)
     log = workspace / 'compiler.log'
+    outputs_before = build_output_state(workspace, name, 'windows')
     compile_started = time.perf_counter()
     if os.environ.get('TALLOW_RELOAD_TRACE_COMPILER') == '1':
         command = [arg if not arg.startswith('-verbosity=') else '-verbosity=diagnostic' for arg in command]
     with open(log, 'w') as output:
         completed = subprocess.run(command, env=environment, stdout=output, stderr=subprocess.STDOUT)
     compile_seconds = time.perf_counter() - compile_started
+    outputs_after = build_output_state(workspace, name, 'windows')
     print(f'Reload timings: source scan {snapshot_seconds:.2f}s, BeefBuild {compile_seconds:.2f}s', flush=True)
     print(f'Reload compiler cache: {workspace}', flush=True)
+    print('BeefBuild outputs: ' + build_activity_label(
+        build_output_activity(outputs_before, outputs_after)), flush=True)
     text = log.read_text(errors='replace')
     # The throwaway link reports everything it could not find, which is everything; only the compiler's word counts.
     shown = [line for line in text.split('\n') if line.strip() and not re.match(r'^(lld-link: warning|>>>|MESA|pci id|\s)', line)]
@@ -853,13 +919,17 @@ def main():
     proj_text = (project / 'BeefProj.toml').read_text()
     proj_text = proj_text.replace('[Configs.Debug.Linux64]', '[Configs.Debug.Linux64]\nBuildKind = "DynamicLib"', 1)
     write_if_changed(workspace / 'BeefProj.toml', proj_text)
+    outputs_before = build_output_state(workspace, name, 'linux')
     compile_started = time.perf_counter()
     verbosity = 'diagnostic' if os.environ.get('TALLOW_RELOAD_TRACE_COMPILER') == '1' else 'minimal'
     completed = subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}',
                                 '-config=Debug', f'-verbosity={verbosity}'])
     compile_seconds = time.perf_counter() - compile_started
+    outputs_after = build_output_state(workspace, name, 'linux')
     print(f'Reload timings: source scan {snapshot_seconds:.2f}s, BeefBuild {compile_seconds:.2f}s', flush=True)
     print(f'Reload compiler cache: {workspace}', flush=True)
+    print('BeefBuild outputs: ' + build_activity_label(
+        build_output_activity(outputs_before, outputs_after)), flush=True)
     if completed.returncode:
         return completed.returncode
     # A save during compilation must never activate a stale or mixed revision.
