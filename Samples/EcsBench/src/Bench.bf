@@ -174,6 +174,8 @@ class Bench : Component
 			mDrawCounts.Add(RenderView.FrameDrawCalls);
 		// ProfilerModules clears this only while recording; benchmark runs leave recording off.
 		RenderView.FrameDrawCalls = 0;
+		if (mMode.StartsWith("physics-"))
+			mPhysicsErrorBits |= Scene.Physics.LastStepError;
 		mUpdateStart = SDL.SDL_GetTicksNS();
 		if (mWorld != null && mMode != "ecs-static")
 		{
