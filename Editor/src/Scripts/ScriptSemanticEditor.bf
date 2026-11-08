@@ -26,6 +26,7 @@ extension EditorApp
 	bool mSemanticNeedsCheck;
 	int mSemanticApiRevision;
 	bool mRenameOpen;
+	bool mOpenSymbolRenamePopup;
 	bool mSymbolInfoRequested;
 	bool mSymbolInfoOpen;
 	bool mRenamePreview;
@@ -301,7 +302,7 @@ extension EditorApp
 		mRenameOpen = true;
 		mRenamePreview = false;
 		mSymbolNewName.Clear();
-		ImGui.OpenPopup("Rename Symbol Across Project");
+		mOpenSymbolRenamePopup = true;
 	}
 
 	/// F2/F12 and the semantic popups stay active without dedicating a toolbar
@@ -314,6 +315,11 @@ extension EditorApp
 			RequestSemantic(document, "definition");
 		if (ready && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F2))
 			BeginScriptSymbolRename();
+		if (mOpenSymbolRenamePopup)
+		{
+			ImGui.OpenPopup("Rename Symbol Across Project");
+			mOpenSymbolRenamePopup = false;
+		}
 		if (mSymbolInfoOpen)
 		{
 			ImGui.OpenPopup("Symbol Information");
