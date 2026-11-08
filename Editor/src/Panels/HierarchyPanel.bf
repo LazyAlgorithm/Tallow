@@ -219,7 +219,8 @@ extension EditorApp
 			}
 			let confirmed = ImGui.InputText("##hierarchyrename", mHierarchyRenameText, ImGui.InputFlags.EnterReturnsTrue);
 			let cancelled = ImGui.IsKeyPressed(ImGui.Key.Escape);
-			let finished = ImGui.IsItemDeactivated();
+			let finished = ImGui.IsItemDeactivatedAfterEdit() ||
+				(ImGui.IsMouseClicked(0) && !ImGui.IsItemHovered() && !ImGui.IsItemActive());
 			ImGui.SetCursorScreenPos(afterRow);
 			if (confirmed || cancelled || finished)
 				FinishHierarchyRename(!cancelled);

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.IO;
 using Tallow;
 
 namespace Tallow.Editor;
@@ -333,7 +334,8 @@ extension EditorApp
 	{
 		if (gameObject == null || gameObject.IsDestroyed || gameObject.Transient || mPlay != .Edit)
 			return false;
-		if (!Directory.Exists(folder) || !folder.StartsWith(Assets.ProjectPath))
+		if (!Directory.Exists(folder) ||
+			!(folder == Assets.ProjectPath || folder.StartsWith(scope $"{Assets.ProjectPath}/")))
 		{
 			Log.Warning("Drop a scene object into a folder inside the project's Assets.");
 			return false;
