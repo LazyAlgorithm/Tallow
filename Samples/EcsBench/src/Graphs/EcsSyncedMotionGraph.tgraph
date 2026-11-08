@@ -1,0 +1,11 @@
+graph "EcsSyncedMotionGraph"
+node 1 event.update 40 60
+node 2 ecs:EcsBench.SyncedEcsMotion.each 330 60
+node 3 math.add 615 210
+node 4 ecs:EcsBench.SyncedEcsMotion.speed.set 910 120
+link 1 0 2 0
+link 2 0 4 0
+link 2 1 4 1
+link 2 2 3 0
+link 1 1 3 1
+link 3 0 4 2
