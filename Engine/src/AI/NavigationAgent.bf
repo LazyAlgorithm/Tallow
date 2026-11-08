@@ -84,25 +84,34 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 	/// Scene.Update calls it after the components' Update (NavigationAgentState.FindQueuedPaths).
 	public static void FindQueuedPaths() => NavigationAgentState.FindQueuedPaths();
 
-	/// Moves every switched-on agent on an active object a frame on, and stops one that has been switched off.
+	/// Moves enabled agents through the cached Flecs handle query, without
+	/// scanning GameObjects that do not have an enabled NavigationAgent.
 	public static void FrameAll(Scene scene)
 	{
 		if (!scene.IsPlaying)
 			return;
-		for (let agent in scene.FindComponents<NavigationAgent>(.. scope .()))
+		for (let agent in scene.Components<NavigationAgent>(.. scope .()))
 		{
-			let state = agent.Runtime;
-			if (!agent.IsActiveAndEnabled)
-			{
-				if (state.[Friend]mWasActive)
-				{
-					state.[Friend]mWasActive = false;
-					state.StopMovement();
-				}
+			if (!agent.GameObject.ActiveInHierarchy)
 				continue;
-			}
+			let state = agent.Runtime;
 			state.[Friend]mWasActive = true;
 			state.Frame();
+		}
+	}
+
+	/// Called by the existing handle lifecycle for disable, hierarchy changes
+	/// and play stop. Halt steering and clear the path as OnDisable did, without
+	/// an O(scene objects) scan on every navigation frame.
+	static void OnSwitched(GameObject gameObject, bool on)
+	{
+		if (on)
+			return;
+		let state = ComponentState<NavigationAgentState>.Get(gameObject.Scene.World, gameObject.Entity);
+		if (state != null && state.[Friend]mWasActive)
+		{
+			state.[Friend]mWasActive = false;
+			state.StopMovement();
 		}
 	}
 
