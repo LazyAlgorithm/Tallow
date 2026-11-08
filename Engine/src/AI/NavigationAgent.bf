@@ -88,7 +88,10 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 	/// scanning GameObjects that do not have an enabled NavigationAgent.
 	public static void FrameAll(Scene scene)
 	{
-		if (!scene.IsPlaying)
+		// Server-authoritative AI: remote clients should not even enumerate
+		// behavior runners/navigation agents or instantiate their runtime state.
+		// They display the replicated transform and gameplay state instead.
+		if (!scene.IsPlaying || NetworkSync.IsClientOf(scene))
 			return;
 		let agents = scope List<NavigationAgent>();
 		scene.Components<NavigationAgent>(agents);
@@ -126,7 +129,10 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 	/// Moves every switched-on agent on an active object a fixed tick on (through its controller or body).
 	public static void TickAll(Scene scene)
 	{
-		if (!scene.IsPlaying)
+		// Server-authoritative AI: remote clients should not even enumerate
+		// behavior runners/navigation agents or instantiate their runtime state.
+		// They display the replicated transform and gameplay state instead.
+		if (!scene.IsPlaying || NetworkSync.IsClientOf(scene))
 			return;
 		let agents = scope List<NavigationAgent>();
 		scene.Components<NavigationAgent>(agents);
