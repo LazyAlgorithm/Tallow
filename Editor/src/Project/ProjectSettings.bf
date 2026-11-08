@@ -73,7 +73,11 @@ extension EditorApp
 		switch (project.ReloadMode)
 		{
 		case .Automatic:
-			ImGui.TextWrapped("Default: fast method patching for compatible body-only edits; structural reload for changes to declarations. Falls back to structural reload when method validation fails.");
+#if BF_PLATFORM_LINUX
+			ImGui.TextWrapped("Default: patch compatible method-body changes without recreating script components. Declaration changes use structural reload; incompatible patches automatically retry it.");
+#else
+			ImGui.TextWrapped("Default: structural reload preserves supported script state. Lightweight method patching is available on Linux.");
+#endif
 		case .Conservative:
 			ImGui.TextWrapped("Always compile and migrate the full script library, including method-only edits. Use this to investigate hot-reload compatibility.");
 		case .Manual:

@@ -164,7 +164,9 @@ class Project
 			case "engine": EngineRoot.Set(value);
 			case "library": Libraries.Add(new String(value));
 			case "link": LinkFlags.Set(value);
-			case "scriptReload": if (Enum.Parse<ScriptReloadMode>(value) case .Ok(let mode)) ReloadMode = mode;
+			case "scriptReload":
+				if (Enum.Parse<ScriptReloadMode>(value) case .Ok(let mode))
+					ReloadMode = mode;
 			}
 		}
 		if (!Name.IsEmpty)

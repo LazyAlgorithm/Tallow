@@ -4,11 +4,18 @@ Linux and Windows x86-64 Debug editors watch project `.bf` files, including addi
 
 **Project Settings > Scripting > Script Reload** offers:
 
-- **Automatic (default):** On Linux, compatible method-only changes use the existing lightweight native dispatch patcher. A change to declarations, fields, or script types uses structural reload. If method patch validation fails, Tallow retries the structural path without discarding the last working code. Windows currently uses structural reload for both kinds of edits.
+- **Automatic (default):** On Linux, compatible method-only changes use the existing lightweight native dispatch patcher without refreshing the component and asset catalogs. A change to declarations, fields, or script types uses structural reload. If method patch validation fails, Tallow retries the structural path without discarding the last working code. Windows currently uses structural reload for both kinds of edits.
 - **Conservative:** Always use structural compilation and state migration, including method-only changes.
 - **Manual:** Saving and external file changes do not activate script code. Use **File > Reload Scripts** (Ctrl+R) when ready. **Check Errors** compiles without activating. **Force Structural Script Reload** overrides Automatic or Manual without restarting the editor.
 
 The selected mode is saved to `project.tallow` and defaults to Automatic for existing projects.
+The method-only path currently reduces activation and catalog-refresh overhead, but **it still invokes
+BeefBuild for a new native script library**. It is not yet a persistent incremental compiler; compiler
+time and module linking remain visible in the timing log.
+
+To validate source formatting after changes, run
+`python3 tools/format/format_code.py --check Editor/src/Project/Project.bf Editor/src/Project/ProjectSettings.bf Editor/src/Scripts/ScriptReloadEditor.bf Editor/src/Scripts/ScriptEditor.bf Editor/src/App/EditorBuild.bf Editor/src/App/EditorLayout.bf`.
+The repository also includes `python3 tools/test_reload_scripts.py` for Python reload-mode and cache tests.
 
 Linux and Windows x86-64 Debug editors watch project `.bf` files, including additions, removals and graph-generated scripts. Saving in the Scripts tab also queues a reload. Editor saves update the file monitor immediately so one save does not trigger a second identical compilation when the monitor polls. Changes debounce briefly (150 ms) before the compiler builds a versioned game library on a worker thread. Generated Beef workspace configuration files are rewritten only when their content changes to preserve incremental compiler caches. Engine/editor implementations and their state remain in the host. Beef still compiles changed code and metadata; no manual full-project rebuild is required for supported game-script edits.
 

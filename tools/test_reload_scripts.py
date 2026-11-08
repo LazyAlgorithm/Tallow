@@ -88,6 +88,13 @@ class ReloadStrategyTests(unittest.TestCase):
         self.assertEqual(reload_scripts.reload_strategy('automatic', baseline, updated, 'windows'), 'structural')
         self.assertEqual(reload_scripts.reload_strategy('automatic', baseline, baseline, 'linux'), 'structural')
 
+    def test_schema_change_detection(self):
+        original = 'namespace Demo; class Player { int speed = 1; void Tick() { speed++; } }'
+        body_changed = 'namespace Demo; class Player { int speed = 1; void Tick() { speed += 2; } }'
+        field_changed = 'namespace Demo; class Player { int speed = 2; void Tick() { speed++; } }'
+        self.assertEqual(reload_scripts.schema(original), reload_scripts.schema(body_changed))
+        self.assertNotEqual(reload_scripts.schema(original), reload_scripts.schema(field_changed))
+
     def test_declaration_changes_use_structural_path(self):
         baseline = {'schemas': {'Scripts/Player.bf': 'old'}, 'code': 'old'}
         updated = {'schemas': {'Scripts/Player.bf': 'new'}, 'code': 'new'}

@@ -25,7 +25,9 @@ extension EditorApp
 	{
 		if (!mReloadReady)
 		{
-			FullRebuildAndRestart();
+			SaveAllScripts();
+			mWantFullRestart = true;
+			mBusyFrames = 3;
 			return;
 		}
 		SaveAllScripts();

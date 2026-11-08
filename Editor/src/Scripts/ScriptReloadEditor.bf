@@ -164,10 +164,17 @@ extension EditorApp
 			mReloadReady = false;
 			Log.Warning("Scripts activated, but symbol tracking failed; restart before another reload.");
 		}
-		mScriptCatalog.Refresh(Assets.ProjectPath, project.Name);
-		NodeLibrary.RefreshCodeNodes();
-		RefreshAssetList();
-		Log.Info("Script library reloaded; scene, supported fields and Play state preserved.");
+		// Method-only edits leave declarations, component registration and assets intact.
+		// Avoid rescanning the project when just the script dispatch table changed.
+		let manifest = scope String();
+		File.ReadAllText(mReloadManifest, manifest).IgnoreError();
+		if (!manifest.Contains("mode methods"))
+		{
+			mScriptCatalog.Refresh(Assets.ProjectPath, project.Name);
+			NodeLibrary.RefreshCodeNodes();
+			RefreshAssetList();
+		}
+		Log.Info("Script library reloaded; scene and Play state preserved.");
 		mStatus.Set("Scripts reloaded.");
 	}
 }
