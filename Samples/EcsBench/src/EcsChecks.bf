@@ -163,6 +163,7 @@ static class EcsChecks
 		RigidbodyChecks();
 		CharacterChecks();
 		AnimatorChecks();
+		AISpatialChecks();
 		NavigationChecks();
 		BehaviourChecks();
 		DialogueChecks();
@@ -1512,6 +1513,46 @@ static class EcsChecks
 		Scene.Active = previous;
 		Expect(ComponentState<BehaviorTreeRunnerState>.Count == before, "runners are freed with their scene");
 		System.IO.File.Delete(path).IgnoreError();
+	}
+
+	/// Perception and obstacle avoidance share one scene spatial snapshot rather than
+	/// doing a full object/obstacle scan for each AI runner and navigation agent.
+	static void AISpatialChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let near = scene.CreateGameObject("Near");
+			near.Transform.Position = .(1, 0, 2);
+			let far = scene.CreateGameObject("Far");
+			far.Transform.Position = .(40, 0, 40);
+			let results = scope List<GameObject>();
+			scene.AISpatial.QueryObjects(.Zero, 4, results);
+			Expect(results.Contains(near) && !results.Contains(far), "AI spatial query narrows nearby targets");
+			let added = scene.CreateGameObject("Added Later");
+			added.Transform.Position = .(2, 0, 1);
+			scene.AISpatial.QueryObjects(.Zero, 4, results);
+			Expect(results.Contains(added), "new objects invalidate the spatial index within a frame");
+			near.Transform.Position = .(40, 0, 45);
+			scene.Update();
+			scene.AISpatial.QueryObjects(.Zero, 4, results);
+			Expect(!results.Contains(near) && results.Contains(added), "spatial index follows moved objects after scene update");
+			let obstacleObject = scene.CreateGameObject("Large obstacle");
+			obstacleObject.Transform.Position = .(11, 0, 0);
+			let obstacle = obstacleObject.AddComponent<NavigationObstacle>();
+			obstacle.carve = false;
+			obstacle.size = .(20, 1, 1);
+			let nearby = scope List<NavigationObstacle>();
+			scene.AISpatial.QueryObstacles(.Zero, 2, nearby);
+			Expect(nearby.Contains(obstacle) && scene.AISpatial.MaxObstacleRadius > 10,
+				"navigation spatial query includes obstacle footprints even when the centre is far away");
+			obstacleObject.SetActive(false);
+			scene.Update();
+			scene.AISpatial.QueryObstacles(.Zero, 2, nearby);
+			Expect(!nearby.Contains(obstacle), "spatial obstacle query drops inactive obstacles on the next frame");
+		}
+		Scene.Active = previous;
 	}
 
 	/// Navigation Agent: an ObjectRef to its surface (saved as the object, none once the object goes), walking a baked
