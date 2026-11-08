@@ -100,6 +100,12 @@ class ReloadStrategyTests(unittest.TestCase):
         self.assertEqual(reload_scripts.reload_strategy('automatic', baseline, updated, 'windows'), 'structural')
         self.assertEqual(reload_scripts.reload_strategy('automatic', baseline, baseline, 'linux'), 'structural')
 
+    def test_method_patch_disabled_after_structural_activation(self):
+        baseline = {'schemas': {'Scripts/Player.bf': 'declaration'}, 'code': 'old',
+                    'method_patch_eligible': False}
+        updated = {'schemas': baseline['schemas'], 'code': 'new'}
+        self.assertEqual(reload_scripts.reload_strategy('automatic', baseline, updated, 'linux'), 'structural')
+
     def test_schema_change_detection(self):
         original = 'namespace Demo; class Player { int speed = 1; void Tick() { speed++; } }'
         body_changed = 'namespace Demo; class Player { int speed = 1; void Tick() { speed += 2; } }'

@@ -77,12 +77,14 @@ def classify_changes(baseline, current):
 
 
 def reload_strategy(mode, baseline, current, platform):
-    """Only unchanged declarations can use Linux's existing method-table patcher.
+    """Use method patching only while metadata still belongs to the original host.
 
-    The runtime verifies ABI and type IDs before applying any patches; the editor
-    automatically retries structural reload if that validation rejects the module.
+    Structural activation replaces reflected class metadata, which the old
+    method patcher's resident class lookup cannot reliably recognize afterward.
+    Avoid another doomed patch attempt until the editor restarts.
     """
     if (mode == 'automatic' and platform == 'linux'
+            and baseline.get('method_patch_eligible', True)
             and current['code'] != baseline['code']
             and current['schemas'] == baseline['schemas']):
         return 'methods'
@@ -770,6 +772,8 @@ def main():
         baseline['exports'].update(exported_symbols(module))
         baseline['schemas'] = built['schemas']
         baseline['code'] = built['code']
+        if 'mode structural' in args.manifest.read_text():
+            baseline['method_patch_eligible'] = False
         args.baseline.write_text(json.dumps(baseline))
         return 0
     if args.snapshot:

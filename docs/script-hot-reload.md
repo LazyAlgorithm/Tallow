@@ -4,7 +4,7 @@ Linux and Windows x86-64 Debug editors watch project `.bf` files, including addi
 
 **Project Settings > Scripting > Script Reload** offers:
 
-- **Automatic (default):** On Linux, compatible method-only changes use the existing lightweight native dispatch patcher without refreshing the component and asset catalogs. A change to declarations, fields, or script types uses structural reload. If method patch validation fails, Tallow retries the structural path without discarding the last working code. Windows currently uses structural reload for both kinds of edits.
+- **Automatic (default):** On Linux, compatible method-only changes use the existing lightweight native dispatch patcher without refreshing the component and asset catalogs. A change to declarations, fields, or script types uses structural reload. If method patch validation fails, Tallow reuses the **already-compiled** library for structural activation without another BeefBuild or link. After any structural activation the method patcher is disabled until the editor restarts because it cannot reliably match class metadata replaced by structural migration. Windows currently uses structural reload for both kinds of edits.
 - **Conservative:** Always use structural compilation and state migration, including method-only changes.
 - **Manual:** Saving and external file changes do not activate script code. Use **File > Reload Scripts** (Ctrl+R) when ready. **Check Errors** compiles without activating. **Force Structural Script Reload** overrides Automatic or Manual without restarting the editor.
 

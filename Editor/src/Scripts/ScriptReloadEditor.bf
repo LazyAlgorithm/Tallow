@@ -188,19 +188,25 @@ extension EditorApp
 			return;
 		}
 		let error = scope String();
-		if (!mScriptReload.Apply(mReloadManifest, error, mScene))
+		bool applied = mScriptReload.Apply(mReloadManifest, error, mScene);
+		if (!applied)
 		{
-			// The lightweight patch path validates ABI/type compatibility before changing
-			// live dispatch data. Retry with structural migration when it cannot apply.
+			// Method validation does not change live script state. Use the library
+			// already compiled and linked instead of invoking BeefBuild again.
 			let manifest = scope String();
-			File.ReadAllText(mReloadManifest, manifest).IgnoreError();
-			if (manifest.Contains("mode methods"))
+			if (File.ReadAllText(mReloadManifest, manifest) case .Ok && manifest.Contains("mode methods"))
 			{
-				Log.Warning(scope $"Method patch unavailable ({error}); retrying structural script reload.");
-				mStatus.Set("Retrying structural script reload...");
-				QueueScriptReload(false, true, true);
-				return;
+				Log.Warning(scope $"Method patch unavailable ({error}); using structural reload of the same library.");
+				manifest.Replace("mode methods", "mode structural");
+				error.Clear();
+				if (File.WriteAllText(mReloadManifest, manifest) case .Ok)
+					applied = mScriptReload.Apply(mReloadManifest, error, mScene);
+				else
+					error.Set("Could not switch script manifest to structural reload.");
 			}
+		}
+		if (!applied)
+		{
 			mPlayAfterCompile = false;
 			Log.Error(error);
 			mStatus.Set(error);
