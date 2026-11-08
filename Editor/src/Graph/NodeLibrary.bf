@@ -59,6 +59,7 @@ static class NodeLibrary
 		AddShaderNodes();
 		AddCodeNodes();
 		AddApiNodes();
+		AddEcsNodes();
 	}
 
 	/// The events a component's code starts from, and branching and loops.
@@ -219,6 +220,7 @@ static class NodeLibrary
 		{
 			AddCodeNodes();
 			AddApiNodes();
+			AddEcsNodes();
 		}
 	}
 
@@ -743,6 +745,66 @@ static class NodeLibrary
 					count++;
 			}
 			return count;
+		}
+	}
+
+
+	// ---- project-defined ECS data in ordinary visual scripts ----
+
+	/// The same custom [Component] structs appear on GameObjects, in Flecs queries and
+	/// in the visual graph. An Object pin defaults to the graph's own GameObject.
+	/// These nodes use the GameObject's ECS entity, so scripts and graphs work on
+	/// exactly the same data (and [Sync] fields use the normal replication path).
+	static void AddEcsNodes()
+	{
+		for (let info in DataComponents.Types)
+		{
+			let typeName = info.fullName;
+			let has = scope $"ecs:{typeName}.has";
+			if (Find(has) == null)
+				Add(has, "ECS", scope $"{info.name}: Has Component", .Value,
+					scope $"({{0}} != null && {{0}}.HasComponent<{typeName}>())")
+					.In("Object", .Object, "GameObject", "GameObject").Out("Has", .Bool);
+			let add = scope $"ecs:{typeName}.add";
+			if (Find(add) == null)
+				Add(add, "ECS", scope $"{info.name}: Add Component", .Action,
+					scope $"if ({{0}} != null) {{0}}.AddComponent<{typeName}>();")
+					.In("Object", .Object, "GameObject", "GameObject");
+			let remove = scope $"ecs:{typeName}.remove";
+			if (Find(remove) == null)
+				Add(remove, "ECS", scope $"{info.name}: Remove Component", .Action,
+					scope $"if ({{0}} != null) {{0}}.RemoveComponent<{typeName}>();")
+					.In("Object", .Object, "GameObject", "GameObject");
+			for (let field in info.type.GetFields(.Public | .Instance))
+			{
+				PinType pin;
+				if (field.FieldType == typeof(float))
+					pin = .Float;
+				else if (field.FieldType == typeof(int32))
+					pin = .Int;
+				else if (field.FieldType == typeof(bool))
+					pin = .Bool;
+				else if (field.FieldType == typeof(Vector2))
+					pin = .Vector2;
+				else if (field.FieldType == typeof(Vector3))
+					pin = .Vector3;
+				else if (field.FieldType == typeof(Quaternion))
+					pin = .Quaternion;
+				else if (field.FieldType == typeof(Color))
+					pin = .Color;
+				else
+					continue; // Unsupported types should not generate graphs that cannot compile.
+				let get = scope $"ecs:{typeName}.{field.Name}.get";
+				if (Find(get) == null)
+					Add(get, "ECS", scope $"{info.name}: Get {field.Name}", .Value,
+						scope $"({{0}} != null && {{0}}.GetComponent<{typeName}>() != null ? {{0}}.GetComponent<{typeName}>().{field.Name} : default)")
+						.In("Object", .Object, "GameObject", "GameObject").Out("Value", pin);
+				let set = scope $"ecs:{typeName}.{field.Name}.set";
+				if (Find(set) == null)
+					Add(set, "ECS", scope $"{info.name}: Set {field.Name}", .Action,
+						scope $"if ({{0}} != null && {{0}}.GetComponent<{typeName}>() != null) {{0}}.GetComponent<{typeName}>().{field.Name} = {{1}};")
+						.In("Object", .Object, "GameObject", "GameObject").In("Value", pin);
+			}
 		}
 	}
 
