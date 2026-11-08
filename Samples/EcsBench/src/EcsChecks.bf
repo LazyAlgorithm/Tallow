@@ -1530,6 +1530,10 @@ static class EcsChecks
 			let results = scope List<GameObject>();
 			scene.AISpatial.QueryObjects(.Zero, 4, results);
 			Expect(results.Contains(near) && !results.Contains(far), "AI spatial query narrows nearby targets");
+			let rebuilt = scene.AISpatial.Rebuilds;
+			scene.AISpatial.QueryObjects(.Zero, 4, results);
+			Expect(scene.AISpatial.Rebuilds == rebuilt && scene.AISpatial.ObjectQueries >= 2,
+				"multiple tree queries in one frame reuse a single spatial snapshot");
 			let added = scene.CreateGameObject("Added Later");
 			added.Transform.Position = .(2, 0, 1);
 			scene.AISpatial.QueryObjects(.Zero, 4, results);
@@ -1537,6 +1541,7 @@ static class EcsChecks
 			near.Transform.Position = .(40, 0, 45);
 			scene.Update();
 			scene.AISpatial.QueryObjects(.Zero, 4, results);
+			Expect(scene.AISpatial.Rebuilds > rebuilt, "spatial snapshot is refreshed on the next scene frame");
 			Expect(!results.Contains(near) && results.Contains(added), "spatial index follows moved objects after scene update");
 			let obstacleObject = scene.CreateGameObject("Large obstacle");
 			obstacleObject.Transform.Position = .(11, 0, 0);
