@@ -90,7 +90,12 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 	{
 		if (!scene.IsPlaying)
 			return;
-		for (let agent in scene.Components<NavigationAgent>(.. scope .()))
+		let agents = scope List<NavigationAgent>();
+		scene.Components<NavigationAgent>(agents);
+		// Flecs iteration order varies by archetype. Keep authoritative movement
+		// updates in stable object order, even after components are added.
+		agents.Sort(scope (a, b) => a.GameObject.Id <=> b.GameObject.Id);
+		for (let agent in agents)
 		{
 			if (!agent.GameObject.ActiveInHierarchy)
 				continue;
@@ -120,7 +125,12 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 	{
 		if (!scene.IsPlaying)
 			return;
-		for (let agent in scene.Components<NavigationAgent>(.. scope .()))
+		let agents = scope List<NavigationAgent>();
+		scene.Components<NavigationAgent>(agents);
+		// Flecs iteration order varies by archetype. Keep authoritative movement
+		// updates in stable object order, even after components are added.
+		agents.Sort(scope (a, b) => a.GameObject.Id <=> b.GameObject.Id);
+		for (let agent in agents)
 		{
 			if (agent.GameObject.ActiveInHierarchy)
 				agent.Runtime.Tick();
