@@ -1484,10 +1484,21 @@ static class EcsChecks
 			scene.Update();
 			Expect(alarms == 1, scope $"a Hit gives one Alarm ({alarms})");
 			runner.enabled = false;
+			Expect(scene.Components<BehaviorTreeRunner>(.. scope .()).IsEmpty,
+				"disabled behavior runner is excluded from ECS scheduling");
 			let ticks = runner.TickCount;
 			scene.Update();
 			Expect(runner.TickCount == ticks, "switched off, it does not tick");
 			runner.enabled = true;
+			Expect(scene.Components<BehaviorTreeRunner>(.. scope .()).Count == 1,
+				"re-enabled behavior runner returns to ECS scheduling");
+			guard.SetActive(false);
+			ticks = runner.TickCount;
+			scene.Update();
+			Expect(runner.TickCount == ticks, "disabled GameObject hierarchy prevents behavior ticks");
+			guard.SetActive(true);
+			scene.Update();
+			Expect(runner.TickCount > ticks, "behavior runner resumes after hierarchy reactivation");
 			scene.StopPlay();
 			let text = scope String();
 			SceneSerializer.Save(scene, text);
@@ -1545,9 +1556,20 @@ static class EcsChecks
 			Time.DeltaTime = 0.1f;
 			scene.Update();
 			agent.enabled = false;
+			Expect(scene.Components<NavigationAgent>(.. scope .()).IsEmpty,
+				"disabled navigation agent is excluded from ECS scheduling");
+			Expect(agent.Path.IsEmpty && !agent.HasArrived,
+				"disabling immediately cancels navigation, even before the next frame");
 			scene.Update();
 			Expect(agent.Path.IsEmpty && !agent.HasArrived, "switching it off stops it, as OnDisable did");
 			agent.enabled = true;
+			Expect(scene.Components<NavigationAgent>(.. scope .()).Count == 1,
+				"re-enabled navigation agent returns to ECS scheduling");
+			agent.SetDestination(.(5, 0, 5), 4, 0.3f);
+			walker.SetActive(false);
+			Expect(agent.Path.IsEmpty && !agent.HasArrived,
+				"disabling the agent's GameObject stops active navigation immediately");
+			walker.SetActive(true);
 			scene.StopPlay();
 			let text = scope String();
 			SceneSerializer.Save(scene, text);
