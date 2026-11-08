@@ -680,11 +680,11 @@ class NodeGraph
 				// Defer structural changes until iteration finishes (also on early return).
 				code.Append("{\n");
 				code.Append('\t', indent + 1);
+				code.AppendF("let ecsQuery{0} = Scene.World.ObjectsWith<{1}>();\n", node.id, node.def.code);
+				code.Append('\t', indent + 1);
 				code.Append("Scene.World.DeferBegin();\n");
 				code.Append('\t', indent + 1);
 				code.Append("defer Scene.World.DeferEnd();\n");
-				code.Append('\t', indent + 1);
-				code.AppendF("let ecsQuery{0} = Scene.World.ObjectsWith<{1}>();\n", node.id, node.def.code);
 				code.Append('\t', indent + 1);
 				code.AppendF("for (var ecsChunk{0} in ecsQuery{0})\n", node.id);
 				code.Append('\t', indent + 1);
