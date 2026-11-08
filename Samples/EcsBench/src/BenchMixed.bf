@@ -87,6 +87,8 @@ extension Bench
 		let allocations = AllocationCount();
 		let cpu = CpuMilliseconds();
 		let cpuPerFrame = cpu >= 0 ? (cpu - mCpuStart) / Math.Max(mFrameTimes.Count, 1) : -1;
+		let sleeping = CountSleepingBodies();
+		let capacityError = mMode.StartsWith("physics-") ? Scene.Physics.LastStepError : 0;
 		let destroyStart = Profiler.Now;
 		if (mWorld != null)
 		{
@@ -106,6 +108,8 @@ extension Bench
 			line.AppendF("\"allocation_count\": {}, ", allocations - mAllocationsStart);
 		else
 			line.Append("\"allocation_count\": null, ");
-		line.AppendF("\"physics_bodies\": {}, \"behavior_trees\": {}, \"network_identities\": {}, ", mBodies, mTrees, mNetworked);
+		line.AppendF("\"physics_bodies\": {}, \"sleeping_bodies\": {}, \"static_colliders\": {}, \"physics_step_error\": {}, \"behavior_trees\": {}, \"network_identities\": {}, ",
+			mBodies, sleeping, mMode == "physics-static" ? mCount + 1 : (mMode.StartsWith("physics-") ? 1 : 0),
+			capacityError, mTrees, mNetworked);
 	}
 }
