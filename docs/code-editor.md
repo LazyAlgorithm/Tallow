@@ -17,7 +17,7 @@ the suggestion list remains available for choosing another member. Typing more o
 cached suggestions immediately. Changing the receiver or surrounding source requests fresh compiler results.
 Suggestions also include local variables and parameters when completing arguments inside calls. Opening a
 function call or typing a comma requests parameter-signature help without replacing completion suggestions.
-When a suggested identifier precedes an auto-inserted closing `) ` or `] `, the editor visually moves the
+When a suggested identifier precedes an auto-inserted closing `)` or `]`, the editor visually moves the
 closing glyph aside while previewing; no source text changes until completion is accepted. Typing the closer
 after completion steps over an existing closing glyph instead of inserting a duplicate.
 
