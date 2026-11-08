@@ -244,6 +244,9 @@ extension EditorApp
 			return;
 		}
 		mPlayAfterCompile = false;
-		mStatus.Set("Scripts ready. Press Play when you want to start.");
+		if (mPlay == .Edit)
+			mStatus.Set("Scripts ready. Press Play when you want to start.");
+		else
+			mStatus.Set("Scripts hot reloaded.");
 	}
 }
