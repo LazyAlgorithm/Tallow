@@ -162,7 +162,7 @@ def alias_objects(objects, game_objects, aliases, resident, shared):
         digest = hashlib.sha256()
         for name in sorted(names):
             digest.update(name.encode('utf-8'))
-            digest.update(b'\\0')
+            digest.update(b'\0')
         return digest.hexdigest()
 
     resident_digest = names_digest(resident)
@@ -734,7 +734,7 @@ def main():
                      if symbol.endswith('13sBfClassVDataE')]
     # Demangle all class names in one process instead of launching c++filt per class.
     if class_symbols:
-        names = subprocess.run(['c++filt'], input='\\n'.join(symbol for symbol, _ in class_symbols) + '\\n',
+        names = subprocess.run(['c++filt'], input='\n'.join(symbol for symbol, _ in class_symbols) + '\n',
                                text=True, stdout=subprocess.PIPE, check=True).stdout.splitlines()
         for (symbol, size), demangled in zip(class_symbols, names):
             key = demangled.removeprefix('bf::').removesuffix('::sBfClassVData').replace('::', '_')
