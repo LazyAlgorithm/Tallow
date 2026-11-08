@@ -94,6 +94,14 @@ extension EditorApp
 	{
 		if (fromEditorSave)
 			mScriptMonitor.Poll(Assets.ProjectPath);
+		// Skip a new compiler process for no-op/whitespace-only script saves
+		// on every desktop platform. Explicit reload requests still run.
+		if (!explicitRequest && !mCheckRunning && !mReloadQueued && CheckScriptChanges() == 0)
+		{
+			mScriptsNeedReload = false;
+			mStatus.Clear();
+			return;
+		}
 		if (!explicitRequest && Project.Current.ReloadMode == .Manual)
 		{
 			mScriptsNeedReload = true;

@@ -168,6 +168,22 @@ def schema(text):
     return hashlib.sha256(' '.join(result).encode()).hexdigest()
 
 
+def normalized_source(text):
+    """Conservative token fingerprint for whitespace-only changes.
+
+    Keep comments and string/character literals exactly, including whitespace
+    inside them. Complex multiline strings and preprocessor directives use
+    their original bytes because their layout can affect compilation.
+    """
+    if ('"""' in text or '@"' in text or re.search(r'(?m)^\\s*#', text)):
+        return hashlib.sha256(text.encode()).hexdigest()
+    digest = hashlib.sha256()
+    for token in TOKEN.finditer(text):
+        digest.update(token.group().encode('utf-8'))
+        digest.update(b'\\0')
+    return digest.hexdigest()
+
+
 def classify_changes(baseline, current):
     """Classify edits against the last activated version without invoking BeefBuild.
 
@@ -179,6 +195,11 @@ def classify_changes(baseline, current):
     if baseline['schemas'] != current['schemas']:
         return 11
     if baseline['code'] != current['code']:
+        # No build is necessary when only insignificant whitespace changed.
+        # Old snapshots without normalized fingerprints remain conservative.
+        if (baseline.get('normalized_code') is not None and
+                baseline['normalized_code'] == current.get('normalized_code')):
+            return 0
         return 10
     return 0
 
@@ -222,9 +243,15 @@ def snapshot(project):
         if file.is_file():
             digest.update(str(file).encode()); digest.update(file.read_bytes())
     code = hashlib.sha256()
+    normalized = hashlib.sha256()
     for file in sorted((project / 'src').rglob('*.bf')):
-        code.update(str(file.relative_to(project / 'src')).encode()); code.update(file.read_bytes())
-    return {'schemas': sources, 'resident': digest.hexdigest(), 'code': code.hexdigest()}
+        relative = str(file.relative_to(project / 'src')).encode()
+        data = file.read_bytes()
+        code.update(relative); code.update(data)
+        normalized.update(relative)
+        normalized.update(normalized_source(data.decode('utf-8')).encode())
+    return {'schemas': sources, 'resident': digest.hexdigest(),
+            'code': code.hexdigest(), 'normalized_code': normalized.hexdigest()}
 
 
 def symbols(objects):
@@ -810,6 +837,7 @@ def windows_build(project, name, args, baseline, current, snapshot_seconds, relo
     # What a later reload needs to know about this one, if it is taken up.
     Path(str(manifest) + '.json').write_text(json.dumps({
         'top': base, 'state': state, 'schemas': current['schemas'], 'code': current['code'],
+        'normalized_code': current['normalized_code'],
         'loaded': {symbol: address for symbol, address in placed.items()
                    if low <= address < high and not symbol.startswith(PRIVATE_TO_IMAGE) and not symbol.startswith('reload_private_')}}))
     temporary = manifest.with_suffix('.tmp')
@@ -829,6 +857,7 @@ def windows_commit(args, baseline):
     baseline['state'].update(record['state'])
     baseline['schemas'] = record['schemas']
     baseline['code'] = record['code']
+    baseline['normalized_code'] = record['normalized_code']
     baseline['top'] = record['top']
     args.baseline.write_text(json.dumps(baseline))
     return 0
@@ -884,6 +913,7 @@ def main():
         baseline['exports'].update(exported_symbols(module))
         baseline['schemas'] = built['schemas']
         baseline['code'] = built['code']
+        baseline['normalized_code'] = built['normalized_code']
         if 'mode structural' in args.manifest.read_text():
             baseline['method_patch_eligible'] = False
         args.baseline.write_text(json.dumps(baseline))
@@ -1028,7 +1058,8 @@ def main():
     temporary.write_text('\n'.join(lines) + '\n')
     temporary.replace(manifest)
     Path(str(manifest) + '.source.json').write_text(json.dumps({
-        'schemas': current['schemas'], 'code': current['code']}))
+        'schemas': current['schemas'], 'code': current['code'],
+        'normalized_code': current['normalized_code']}))
     total_seconds = time.perf_counter() - reload_started
     print(f'Compiled script library: {module}. Engine implementations remain in the host.', flush=True)
     print(f'Reload total: {total_seconds:.2f}s '

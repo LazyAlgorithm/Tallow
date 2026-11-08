@@ -24,6 +24,12 @@ Manual mode also defers compilation until explicit Reload Scripts or a Play atte
 A cheap `--classify` invocation compares the saved source with the last successfully activated
 script library (0 unchanged, 10 method-only, 11 structural, 3 incompatible resident code).
 No script compiler or native linker is invoked for method-only saves while idle in Edit mode.
+Whitespace-only saves now skip BeefBuild entirely on Linux and Windows when the
+source token stream is unchanged. String/comment content stays significant; multiline
+strings and preprocessor directives conservatively preserve raw source bytes. The
+same check runs before Play, including when Manual mode has marked scripts dirty.
+Explicit rebuild commands are not suppressed. Existing baseline snapshots without
+a normalized-source fingerprint perform one ordinary build before using the shortcut.
 The method-only path currently reduces activation and catalog-refresh overhead, but **it still invokes
 BeefBuild for a new native script library**. It is not yet a persistent incremental compiler; compiler
 time and module linking remain visible in the timing log.

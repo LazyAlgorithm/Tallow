@@ -85,6 +85,10 @@ extension EditorApp
 			return;
 		// Always save first; unsaved scripts must not run stale code.
 		SaveAllScripts();
+		// Manual mode also needs to recognize harmless formatting changes.
+		// Do not queue a build for a script revision equivalent to the host.
+		if (mScriptsNeedReload && !mCheckRunning && !mReloadQueued && CheckScriptChanges() == 0)
+			mScriptsNeedReload = false;
 		if (mCheckRunning || mReloadQueued)
 		{
 			mPlayAfterCompile = true;

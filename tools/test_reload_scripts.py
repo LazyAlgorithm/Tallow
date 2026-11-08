@@ -175,6 +175,29 @@ class BuildActivityTests(unittest.TestCase):
 
 
 class ChangeClassificationTests(unittest.TestCase):
+    def test_whitespace_only_edits_do_not_request_recompile(self):
+        source = 'class Player { public int speed = 2; void Update() { speed++; } }'
+        formatted = 'class Player{\\n    public int speed = 2;\\n    void Update(){ speed++; }\\n}'
+        self.assertEqual(reload_scripts.normalized_source(source),
+                         reload_scripts.normalized_source(formatted))
+        self.assertNotEqual(reload_scripts.normalized_source(source),
+                            reload_scripts.normalized_source(formatted.replace('speed++', 'speed += 2')))
+        base = {'resident': 'engine', 'schemas': {'Player.bf': 'signature'},
+                'code': 'raw1', 'normalized_code': reload_scripts.normalized_source(source)}
+        now = {**base, 'code': 'raw2',
+               'normalized_code': reload_scripts.normalized_source(formatted)}
+        self.assertEqual(reload_scripts.classify_changes(base, now), 0)
+        now['normalized_code'] = reload_scripts.normalized_source(formatted.replace('speed++', 'speed += 2'))
+        self.assertEqual(reload_scripts.classify_changes(base, now), 10)
+
+    def test_literal_and_preprocessor_whitespace_is_not_ignored(self):
+        self.assertNotEqual(reload_scripts.normalized_source('let s = "a b";'),
+                            reload_scripts.normalized_source('let s = "a  b";'))
+        self.assertNotEqual(reload_scripts.normalized_source('#if A\\nfoo();'),
+                            reload_scripts.normalized_source('#if A\\n foo();'))
+        self.assertNotEqual(reload_scripts.normalized_source('let s = """ a b """;'),
+                            reload_scripts.normalized_source('let s = """ a  b """;'))
+
     def test_classify_saved_edits_without_compiling(self):
         baseline = {'resident': 'engine', 'schemas': {'Player.bf': 'signature'}, 'code': 'old'}
         self.assertEqual(reload_scripts.classify_changes(baseline, baseline), 0)
