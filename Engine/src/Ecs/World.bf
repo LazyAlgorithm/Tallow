@@ -38,6 +38,9 @@ sealed class World
 	List<uint64> mIds = new .() ~ delete _;
 	int32 mStageCount = 1;
 	int32 mDeferDepth;
+	/// Cached scene-object queries used by visual scripts and other scene-facing systems.
+	/// Kept in the World so they are not rebuilt once per graph Update.
+	Dictionary<int32, QueryBase> mObjectQueries = new .() ~ delete _;
 
 	static bool sChecked;
 	static uint64 sTableVersionMask;
@@ -66,6 +69,10 @@ sealed class World
 	public ~this()
 	{
 		StopExplorer();
+		// Native queries must be released before their Flecs world.
+		for (let query in mObjectQueries.Values)
+			delete query;
+		mObjectQueries.Clear();
 		Flecs.WorldFree(mWorld);
 	}
 
@@ -251,6 +258,20 @@ sealed class World
 
 	/// How many entities have T.
 	public int Count<T>() where T : struct => Flecs.Count(mWorld, Id<T>());
+
+	/// Cached query of scene GameObjects with custom ECS data T. This returns the same
+	/// Flecs query each time; do not delete it. Useful for high-volume visual graphs
+	/// and scripts that want a familiar object while processing packed data.
+	public Query<T, ObjectLink> ObjectsWith<T>() where T : struct
+	{
+		let key = ComponentId<T>.Index;
+		if (mObjectQueries.TryGetValue(key, let existing))
+			return (Query<T, ObjectLink>)existing;
+		let query = new Query<T, ObjectLink>(this, .ReadWrite, .Read);
+		mObjectQueries[key] = query;
+		return query;
+	}
+
 
 	// ---- Hierarchy ----
 
