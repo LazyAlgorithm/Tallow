@@ -10,6 +10,25 @@ struct Marked
 {
 }
 
+/// Custom ECS data can live on the very same entity as scripts and NetworkIdentity.
+[Component]
+struct SyncedEcsMotion
+{
+	[Sync] public float speed;
+	public int32 localOnly;
+}
+
+[Component]
+class EcsMotionScript : Script
+{
+	public override void Update(TickInput input, float deltaTime)
+	{
+		let motion = GetComponent<SyncedEcsMotion>();
+		if (motion != null)
+			motion.speed += deltaTime;
+	}
+}
+
 /// Holds a reference to another object's Light, for EcsChecks.HandleChecks.
 [Component]
 class LampUser : Component
@@ -799,6 +818,37 @@ static class EcsChecks
 			a.fullPrecision = true;
 			a.remoteFormat = .ExactTransform;
 			a.ownerId = 3;
+			first.AddComponent<SyncedEcsMotion>(.() { speed = 2, localOnly = 7 });
+			let script = first.AddComponent<EcsMotionScript>();
+			script.Update(default, 0.5f);
+			Expect(first.GetComponent<SyncedEcsMotion>().speed == 2.5f, "ordinary script reads and writes its own ECS data");
+			let query = scope Query<SyncedEcsMotion, ObjectLink>(scene.World);
+			bool foundMotion = false;
+			for (var chunk in query)
+			{
+				let motions = chunk.Read<SyncedEcsMotion>();
+				let links = chunk.Read<ObjectLink>();
+				for (int i < chunk.Count)
+					if (links[i].gameObject == first && motions[i].speed == 2.5f)
+						foundMotion = true;
+			}
+			Expect(foundMotion, "query sees the identical data written by the normal script");
+			let syncedSlots = NetworkSync.[Friend]Slots(a);
+			int syncSlot = -1;
+			for (int i < syncedSlots.slots.Count)
+				if (syncedSlots.slots[i].dataIndex == ComponentId<SyncedEcsMotion>.Index)
+					syncSlot = i;
+			Expect(syncSlot >= 0 && syncedSlots.syncedDataTypes.Count == 1,
+				"custom ECS [Sync] data joins ordinary script/handle network slots");
+			first.AddComponent<Pose>();
+			Expect(syncSlot >= 0 && syncedSlots.slots[syncSlot].Ptr == &first.GetComponent<SyncedEcsMotion>().speed,
+				"network slot follows ECS data after an archetype change");
+			first.RemoveComponent<SyncedEcsMotion>();
+			Expect(NetworkSync.[Friend]Slots(a).syncedDataTypes.Count == 0,
+				"removing custom ECS data invalidates the network layout");
+			first.AddComponent<SyncedEcsMotion>(.() { speed = 3, localOnly = 9 });
+			Expect(NetworkSync.[Friend]Slots(a).syncedDataTypes.Count == 1,
+				"adding custom ECS data restores its network layout");
 			Expect(first.[Friend]mNetworked && net.Identities.Count == 0, "added in the editor, its object ticks but it joins no session yet");
 			let text = scope String();
 			SceneSerializer.Save(scene, text);
@@ -834,6 +884,8 @@ static class EcsChecks
 			SceneSerializer.Load(loaded, text);
 			let copy = loaded.Find("First").GetComponent<NetworkIdentity>();
 			Expect(copy.IsValid && copy.fullPrecision && copy.remoteFormat == .ExactTransform && copy.ownerId == 3 && copy.correctionSmoothing == 12, "its settings are saved and read");
+			Expect(loaded.Find("First").GetComponent<SyncedEcsMotion>()?.speed == 3 && loaded.Find("First").GetComponent<EcsMotionScript>() != null,
+				"saved scene preserves script and ECS data on the same networked object");
 		}
 		Scene.Active = previous;
 	}
