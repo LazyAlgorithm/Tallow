@@ -292,14 +292,20 @@ def main() -> int:
                     check_out.unlink(missing_ok=True)
             write_json(out / "checks.json", {"checks": checks})
         if not args.no_profiles:
-            for count in args.profile_counts:
-                for variant, player in players:
-                    code, log = run_case(f"script dispatch profile x {count}", variant, player,
-                                         [str(player), "--profile-scripts", str(count)], env0)
-                    (out / f"profile-{variant}-{count}.log").write_text(log, encoding="utf-8")
-                    if code == 0:
-                        for profile in profile_records(log, variant, count):
-                            append_jsonl(out / "profiles.jsonl", profile)
+            for flag, suite, counts in (
+                ("--profile-scripts", "scripts", args.profile_counts),
+                ("--profile-ecs", "ecs-cpu", args.ecs_profile_counts),
+                ("--profile-scene", "scene-cpu", args.scene_profile_counts),
+            ):
+                for count in counts:
+                    for variant, player in players:
+                        code, log = run_case(f"{suite} profile x {count}", variant, player,
+                                             [str(player), flag, str(count)], env0)
+                        (out / f"profile-{suite}-{variant}-{count}.log").write_text(log, encoding="utf-8")
+                        if code == 0:
+                            for profile in profile_records(log, variant, count):
+                                profile["suite"] = suite
+                                append_jsonl(out / "profiles.jsonl", profile)
         if not args.headless_only:
             total = len(cases) * args.runs * len(players)
             run_number = 0
