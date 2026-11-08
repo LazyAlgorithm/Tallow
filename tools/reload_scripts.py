@@ -425,8 +425,11 @@ def windows_build(project, name, args, baseline, current):
     write_if_changed(workspace / 'BeefProj.toml', proj_text)
     command, environment = beef_command(workspace)
     log = workspace / 'compiler.log'
+    compile_started = time.perf_counter()
     with open(log, 'w') as output:
         completed = subprocess.run(command, env=environment, stdout=output, stderr=subprocess.STDOUT)
+    compile_seconds = time.perf_counter() - compile_started
+    print(f'Reload timings: source scan {snapshot_seconds:.2f}s, BeefBuild {compile_seconds:.2f}s', flush=True)
     text = log.read_text(errors='replace')
     # The throwaway link reports everything it could not find, which is everything; only the compiler's word counts.
     shown = [line for line in text.split('\n') if line.strip() and not re.match(r'^(lld-link: warning|>>>|MESA|pci id|\s)', line)]
@@ -563,6 +566,9 @@ def windows_build(project, name, args, baseline, current):
     temporary.write_text('\n'.join(lines) + '\n')
     temporary.replace(manifest)
     print(f'Compiled script library: {module}. Engine implementations remain in the host.', flush=True)
+    print(f'Reload total: {time.perf_counter() - reload_started:.2f}s '
+          f'(BeefBuild {compile_seconds:.2f}s, other stages '
+          f'{time.perf_counter() - reload_started - compile_seconds:.2f}s)', flush=True)
     return 0
 
 
@@ -593,7 +599,9 @@ def main():
                 setattr(args, key, Path(str(value)[2:].replace('\\', '/')))
                 args.platform = 'windows'
     project = args.project.resolve()
+    reload_started = time.perf_counter()
     current = snapshot(project)
+    snapshot_seconds = time.perf_counter() - reload_started
     if args.platform == 'windows':
         name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
         if args.commit:
@@ -644,7 +652,10 @@ def main():
     proj_text = (project / 'BeefProj.toml').read_text()
     proj_text = proj_text.replace('[Configs.Debug.Linux64]', '[Configs.Debug.Linux64]\nBuildKind = "DynamicLib"', 1)
     write_if_changed(workspace / 'BeefProj.toml', proj_text)
+    compile_started = time.perf_counter()
     completed = subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}', '-config=Debug', '-verbosity=minimal'])
+    compile_seconds = time.perf_counter() - compile_started
+    print(f'Reload timings: source scan {snapshot_seconds:.2f}s, BeefBuild {compile_seconds:.2f}s', flush=True)
     if completed.returncode:
         return completed.returncode
     # A save during compilation must never activate a stale or mixed revision.
@@ -704,7 +715,10 @@ def main():
     temporary = manifest.with_suffix('.tmp')
     temporary.write_text('\n'.join(lines) + '\n')
     temporary.replace(manifest)
+    total_seconds = time.perf_counter() - reload_started
     print(f'Compiled script library: {module}. Engine implementations remain in the host.', flush=True)
+    print(f'Reload total: {total_seconds:.2f}s '
+          f'(BeefBuild {compile_seconds:.2f}s, other stages {total_seconds - compile_seconds:.2f}s)', flush=True)
     return 0
 
 

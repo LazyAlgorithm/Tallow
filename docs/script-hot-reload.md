@@ -6,6 +6,10 @@ At a frame boundary, the editor loads the library, maps its type metadata onto s
 
 Supported changes include method edits, new component scripts, adding/removing/retyping supported instance fields, and inspector attributes. Same-name/type fields retain their values; newly added or retyped fields use their new initializers. Supported private runtime fields are also preserved unless marked NonSerialized. Awake/Start state is preserved and those callbacks are not repeated; OnValidate runs after restoring values. Constructors and field initializers run for replacement instances.
 
+The project `build/script-reload.log` includes timing information for source scanning, the BeefBuild invocation,
+and the full native reload build. The remaining time includes workspace setup, object processing, validation,
+and linking. This helps distinguish compiler latency from Tallow's own reload overhead without guessing.
+
 ## Inspector attributes
 
 ```beef
