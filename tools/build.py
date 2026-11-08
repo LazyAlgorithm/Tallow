@@ -5,7 +5,9 @@ On Windows run from an x64 Visual Studio developer shell with clang-cl installed
 Cross-building Windows from Linux is handled by tools/windows/setup.sh instead.
 """
 import argparse
+import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -13,6 +15,38 @@ import sys
 
 NATIVE_TARGETS = ['tallow_native', 'bgfx', 'bimg', 'bimg_decode', 'bx', 'SDL3-static', 'joltc', 'Jolt', 'enet',
                   'shaderc', 'texturec', 'tallow_modelsettings', 'tallow_modelconv']
+
+
+def ensure_source_identity(root: Path) -> None:
+    """Give source worktrees a valid engine identity without changing packaged releases.
+
+    Engine Manager's installed builds carry their own immutable manifest.
+    A git worktree has no packaged manifest, but the project builder still
+    requires one to pin projects and validate version compatibility.
+    """
+    if (root / 'tallow-package.txt').exists():
+        return
+    git = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=root,
+                         capture_output=True, text=True, check=False)
+    build = git.stdout.strip() if git.returncode == 0 else ''
+    if not re.fullmatch(r'[0-9a-f]{40}', build):
+        return  # A non-git source bundle needs its own packaged manifest.
+
+    manifest = root / 'tallow-version.json'
+    if manifest.exists():
+        try:
+            current = json.loads(manifest.read_text(encoding='utf-8'))
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(f'Invalid engine identity at {manifest}: {exc}') from exc
+        if current.get('version') != '0.0.0-dev':
+            return  # Never overwrite a release / installed engine identity.
+        if current.get('build') == build:
+            return
+    manifest.write_text(json.dumps({
+        'engine': 'Tallow', 'version': '0.0.0-dev', 'build': build,
+        'project_format': 1
+    }, indent=2) + '\n', encoding='utf-8')
+    print(f'Source engine identity: 0.0.0-dev ({build[:12]})', flush=True)
 
 
 def main():
@@ -29,6 +63,7 @@ def main():
         parser.error('--jobs must be positive.')
     if sys.platform not in ('linux', 'win32'):
         parser.error('This entry point supports Linux and Windows; see docs/macos.md for macOS.')
+    ensure_source_identity(root)
     windows = os.name == 'nt'
     beef = os.environ.get('BEEFBUILD', 'BeefBuild')
     required = [beef] + ([] if args.skip_native else ['cmake', 'ninja', 'clang-cl' if windows else 'c++'])
