@@ -112,6 +112,7 @@ def alias_host_globals(source, target, names):
     shsize, shcount = struct.unpack_from('<HH', data, 58)
     sections = [struct.unpack_from('<IIQQQQIIQQ', data, shoff + i * shsize) for i in range(shcount)]
     removed_functions = []
+    matched = set()
     for section in sections:
         if section[1] != 2:  # SHT_SYMTAB
             continue
@@ -122,6 +123,7 @@ def alias_host_globals(source, target, names):
             end = string_table.find(b'\0', name_index)
             name = string_table[name_index:end].decode()
             if name in names and index != 0:
+                matched.add(name)
                 if info & 15 == 2 and index < len(sections):
                     removed_functions.append((index, value, value + size))
                     body = sections[index][4] + value
@@ -138,15 +140,45 @@ def alias_host_globals(source, target, names):
             if any(a <= position < b for a, b in ranges):
                 struct.pack_into('<Qq', data, offset + 8, 0, 0)
     target.write_bytes(data)
+    return sorted(matched)
+
+
+def affected_host_symbols(data, names):
+    """Find host definitions actually present in an ELF object.
+
+    The broad host export list grows after script reloads; only symbols defined
+    by this particular object can change its rewritten output. This is a
+    conservative exact check, never a heuristic substring search.
+    """
+    if data[:6] != b'\x7fELF\x02\x01':
+        raise ValueError('Reload requires little-endian ELF64 object files.')
+    shoff = struct.unpack_from('<Q', data, 40)[0]
+    shsize, shcount = struct.unpack_from('<HH', data, 58)
+    sections = [struct.unpack_from('<IIQQQQIIQQ', data, shoff + i * shsize) for i in range(shcount)]
+    matched = set()
+    for section in sections:
+        if section[1] != 2:  # SHT_SYMTAB
+            continue
+        strings = sections[section[6]]
+        table = data[strings[4]:strings[4] + strings[5]]
+        for offset in range(section[4], section[4] + section[5], section[9]):
+            name_index, info, other, index, value, size = struct.unpack_from('<IBBHQQ', data, offset)
+            if index == 0:
+                continue
+            end = table.find(b'\0', name_index)
+            name = table[name_index:end].decode()
+            if name in names:
+                matched.add(name)
+    return sorted(matched)
 
 
 def alias_objects(objects, game_objects, aliases, resident, shared):
     """Reuse unchanged ELF symbol rewrites across hot-reload generations.
 
-    A cached object is valid only when both its exact source bytes and the
-    complete host-symbol set used to rewrite it match. A new host symbol after
-    a reload invalidates the corresponding cache rather than risking a stale
-    definition or duplicate global. Cache files belong to this editor session.
+    A cached object is valid only when its exact bytes and affected host
+    definitions are unchanged. This avoids invalidating thousands of engine
+    objects just because a reload introduced an unrelated export. Cache files
+    belong to this editor session.
     """
     aliases.mkdir(exist_ok=True)
     cache_path = aliases / 'object-cache.json'
@@ -171,18 +203,39 @@ def alias_objects(objects, game_objects, aliases, resident, shared):
     updated = {}
     result = []
     reused = 0
+    reasons = {'cold': 0, 'changed': 0, 'symbols': 0}
     for index, obj in enumerate(objects):
         target = aliases / f'{index}-{obj.name}'
         is_game = obj in game_objects
         host_names = shared if is_game else resident
         scope_digest = shared_digest if is_game else resident_digest
-        object_digest = hashlib.sha256(obj.read_bytes()).hexdigest()
+        data = obj.read_bytes()
+        object_digest = hashlib.sha256(data).hexdigest()
         key = str(index)
         record = {'source': str(obj), 'object': object_digest, 'host': scope_digest}
-        if previous.get(key) == record and target.is_file():
+        last = previous.get(key)
+        same_object = (isinstance(last, dict) and last.get('source') == str(obj)
+                       and last.get('object') == object_digest and target.is_file())
+        matching_symbols = None
+        if same_object and last.get('host') == scope_digest:
+            matching_symbols = last.get('matched')
+        elif same_object and isinstance(last.get('matched'), list):
+            # Newly exported symbols matter only if this specific object
+            # defines them. Compare the precise affected-symbol set.
+            candidate = affected_host_symbols(data, host_names)
+            if candidate == last['matched']:
+                matching_symbols = candidate
+        if same_object and matching_symbols is not None:
             reused += 1
         else:
-            alias_host_globals(obj, target, host_names)
+            if not isinstance(last, dict) or not target.is_file():
+                reasons['cold'] += 1
+            elif not same_object:
+                reasons['changed'] += 1
+            else:
+                reasons['symbols'] += 1
+            matching_symbols = alias_host_globals(obj, target, host_names)
+        record['matched'] = matching_symbols
         updated[key] = record
         result.append(target)
 
@@ -190,7 +243,7 @@ def alias_objects(objects, game_objects, aliases, resident, shared):
     temporary = cache_path.with_suffix('.tmp')
     temporary.write_text(json.dumps(updated))
     temporary.replace(cache_path)
-    return result, reused
+    return result, reused, reasons
 
 
 def exported_symbols(path):
@@ -754,7 +807,7 @@ def main():
     # Existing runtime functions/data stay in the host. New generic implementations
     # emitted for game code can be included without duplicating engine state.
     alias_started = time.perf_counter()
-    linked_objects, reused = alias_objects(objects, game_objects, aliases, resident, shared)
+    linked_objects, reused, reuse_reasons = alias_objects(objects, game_objects, aliases, resident, shared)
     alias_seconds = time.perf_counter() - alias_started
     renamed = {symbol: 'reload_private_' + symbol for symbol in metadata
                if symbol in resident and (symbol.endswith('11sBfTypeDataE')
@@ -785,6 +838,9 @@ def main():
     print(f'Reload stages: inspect objects {objects_scanned_seconds:.2f}s, '
           f'prepare objects {alias_seconds:.2f}s ({reused}/{len(objects)} reused), '
           f'link {link_seconds:.2f}s', flush=True)
+    print(f'Reload object cache: cold/missing {reuse_reasons["cold"]}, '
+          f'object changed {reuse_reasons["changed"]}, '
+          f'relevant host symbols changed {reuse_reasons["symbols"]}', flush=True)
     return 0
 
 

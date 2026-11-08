@@ -8,9 +8,12 @@ Supported changes include method edits, new component scripts, adding/removing/r
 
 The project `build/script-reload.log` includes timing information for source scanning, the BeefBuild invocation,
 and the full native reload build. Linux also separates object inspection, ELF object preparation, and linking.
-The Linux reload worker caches ELF objects whose bytes and host symbol sets have not changed, avoiding
-repeated symbol rewriting on ordinary method saves. New/modified objects and changes to the running
-host's exported symbol set cause safe cache misses. Source/ABI checks still run on every reload.
+The Linux reload worker caches ELF objects whose bytes and actually affected host definitions have
+not changed, avoiding repeated symbol rewriting on ordinary method saves. Adding unrelated exported
+functions to the host no longer invalidates every dependency object. Missing objects, changed object
+bytes and changed relevant host definitions still trigger a fresh rewrite. The log reports all three
+miss categories. The first reload in a new editor session will have a cold cache.
+Source/ABI checks still run on every reload.
 This helps distinguish compiler latency from Tallow's own reload overhead without guessing.
 
 To see BeefBuild's own detailed rebuild activity, set `TALLOW_RELOAD_TRACE_COMPILER=1` in the
