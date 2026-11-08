@@ -173,8 +173,11 @@ struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
 		if (on)
 			return;
 		let state = ComponentState<BehaviorTreeRunnerState>.Get(gameObject.Scene.World, gameObject.Entity);
-		if (state != null && state.[Friend]mWasActive)
+		if (state != null)
 		{
+			// A tree may have been ticked explicitly between enabling and the
+			// first scheduled frame. Always abort on disable; BTNode.Abort is
+			// idempotent for nodes that are not running.
 			state.[Friend]mWasActive = false;
 			state.OnDisable();
 		}
