@@ -1487,7 +1487,7 @@ static class EcsChecks
 			runner.enabled = false;
 			Expect(scene.Components<BehaviorTreeRunner>(.. scope .()).IsEmpty,
 				"disabled behavior runner is excluded from ECS scheduling");
-			let ticks = runner.TickCount;
+			var ticks = runner.TickCount;
 			scene.Update();
 			Expect(runner.TickCount == ticks, "switched off, it does not tick");
 			runner.enabled = true;
