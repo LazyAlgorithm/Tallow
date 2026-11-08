@@ -140,6 +140,59 @@ def alias_host_globals(source, target, names):
     target.write_bytes(data)
 
 
+def alias_objects(objects, game_objects, aliases, resident, shared):
+    """Reuse unchanged ELF symbol rewrites across hot-reload generations.
+
+    A cached object is valid only when both its exact source bytes and the
+    complete host-symbol set used to rewrite it match. A new host symbol after
+    a reload invalidates the corresponding cache rather than risking a stale
+    definition or duplicate global. Cache files belong to this editor session.
+    """
+    aliases.mkdir(exist_ok=True)
+    cache_path = aliases / 'object-cache.json'
+    try:
+        previous = json.loads(cache_path.read_text())
+        if not isinstance(previous, dict):
+            previous = {}
+    except (OSError, ValueError):
+        previous = {}
+
+    # The game and dependency objects intentionally use different host scopes.
+    def names_digest(names):
+        digest = hashlib.sha256()
+        for name in sorted(names):
+            digest.update(name.encode('utf-8'))
+            digest.update(b'\\0')
+        return digest.hexdigest()
+
+    resident_digest = names_digest(resident)
+    shared_digest = names_digest(shared)
+    game_objects = set(game_objects)
+    updated = {}
+    result = []
+    reused = 0
+    for index, obj in enumerate(objects):
+        target = aliases / f'{index}-{obj.name}'
+        is_game = obj in game_objects
+        host_names = shared if is_game else resident
+        scope_digest = shared_digest if is_game else resident_digest
+        object_digest = hashlib.sha256(obj.read_bytes()).hexdigest()
+        key = str(index)
+        record = {'source': str(obj), 'object': object_digest, 'host': scope_digest}
+        if previous.get(key) == record and target.is_file():
+            reused += 1
+        else:
+            alias_host_globals(obj, target, host_names)
+        updated[key] = record
+        result.append(target)
+
+    # A failed or interrupted cache write must not leave an incomplete index.
+    temporary = cache_path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(updated))
+    temporary.replace(cache_path)
+    return result, reused
+
+
 def exported_symbols(path):
     command = ['nm', '-g', '-S', '--defined-only', str(path)]
     values = {}
@@ -426,6 +479,8 @@ def windows_build(project, name, args, baseline, current, snapshot_seconds, relo
     command, environment = beef_command(workspace)
     log = workspace / 'compiler.log'
     compile_started = time.perf_counter()
+    if os.environ.get('TALLOW_RELOAD_TRACE_COMPILER') == '1':
+        command = [arg if not arg.startswith('-verbosity=') else '-verbosity=diagnostic' for arg in command]
     with open(log, 'w') as output:
         completed = subprocess.run(command, env=environment, stdout=output, stderr=subprocess.STDOUT)
     compile_seconds = time.perf_counter() - compile_started
@@ -654,7 +709,9 @@ def main():
     proj_text = proj_text.replace('[Configs.Debug.Linux64]', '[Configs.Debug.Linux64]\nBuildKind = "DynamicLib"', 1)
     write_if_changed(workspace / 'BeefProj.toml', proj_text)
     compile_started = time.perf_counter()
-    completed = subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}', '-config=Debug', '-verbosity=minimal'])
+    verbosity = 'diagnostic' if os.environ.get('TALLOW_RELOAD_TRACE_COMPILER') == '1' else 'minimal'
+    completed = subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}',
+                                '-config=Debug', f'-verbosity={verbosity}'])
     compile_seconds = time.perf_counter() - compile_started
     print(f'Reload timings: source scan {snapshot_seconds:.2f}s, BeefBuild {compile_seconds:.2f}s', flush=True)
     if completed.returncode:
@@ -663,6 +720,7 @@ def main():
     if current != snapshot(project):
         print('ERROR: Source declarations or resident code changed during compilation; build again.', flush=True)
         return 4
+    object_stage_started = time.perf_counter()
     root = workspace / 'build' / 'Debug_Linux64' / name
     tokens = shlex.split((root / 'ObjectArgs.txt').read_text())
     objects = [Path(p) for p in tokens if p.endswith('.o') and Path(p).name != 'vdata.o']
@@ -672,9 +730,13 @@ def main():
     force.update(obj.stem for obj in game_objects)
     _, metadata = symbols([vdata])
     classes = []
-    for symbol, size in metadata.items():
-        if symbol.endswith('13sBfClassVDataE'):
-            demangled = subprocess.check_output(['c++filt', symbol], text=True).strip()
+    class_symbols = [(symbol, size) for symbol, size in metadata.items()
+                     if symbol.endswith('13sBfClassVDataE')]
+    # Demangle all class names in one process instead of launching c++filt per class.
+    if class_symbols:
+        names = subprocess.run(['c++filt'], input='\\n'.join(symbol for symbol, _ in class_symbols) + '\\n',
+                               text=True, stdout=subprocess.PIPE, check=True).stdout.splitlines()
+        for (symbol, size), demangled in zip(class_symbols, names):
             key = demangled.removeprefix('bf::').removesuffix('::sBfClassVData').replace('::', '_')
             if key in force:
                 classes.append((symbol, size))
@@ -687,15 +749,13 @@ def main():
     for symbol, size in shared.items():
         if resident[symbol] != size:
             raise ValueError('Static field layout changed; change its name or full rebuild: ' + symbol)
+    objects_scanned_seconds = time.perf_counter() - object_stage_started
     aliases = workspace / 'aliased-objects'
-    aliases.mkdir(exist_ok=True)
-    linked_objects = []
-    for index, obj in enumerate(objects):
-        target = aliases / f'{index}-{obj.name}'
-        # Existing runtime functions/data stay in the host. New generic implementations
-        # emitted for game code can be included without duplicating engine state.
-        alias_host_globals(obj, target, shared if obj in game_objects else resident)
-        linked_objects.append(target)
+    # Existing runtime functions/data stay in the host. New generic implementations
+    # emitted for game code can be included without duplicating engine state.
+    alias_started = time.perf_counter()
+    linked_objects, reused = alias_objects(objects, game_objects, aliases, resident, shared)
+    alias_seconds = time.perf_counter() - alias_started
     renamed = {symbol: 'reload_private_' + symbol for symbol in metadata
                if symbol in resident and (symbol.endswith('11sBfTypeDataE')
                    or (symbol.endswith('13sBfClassVDataE') and symbol not in {s for s, _ in classes}))}
@@ -706,8 +766,10 @@ def main():
     mapping = aliases / 'metadata-renames.txt'
     mapping.write_text(''.join(f'{a} {b}\n' for a, b in renamed.items()))
     metadata_object = aliases / 'vdata.o'
+    link_started = time.perf_counter()
     subprocess.run(['objcopy', '--redefine-syms=' + str(mapping), str(vdata), str(metadata_object)], check=True)
     subprocess.run(['c++', '-shared', '-Wl,-Bsymbolic', '-o', str(module), *map(str, linked_objects), str(metadata_object)], check=True)
+    link_seconds = time.perf_counter() - link_started
     lines = ['module ' + json.dumps(str(module)), 'mode structural']
     lines += [f'class {symbol} {size}' for symbol, size in classes]
     lines += [f'shared {symbol} {size}' for symbol, size in shared.items()]
@@ -720,6 +782,9 @@ def main():
     print(f'Compiled script library: {module}. Engine implementations remain in the host.', flush=True)
     print(f'Reload total: {total_seconds:.2f}s '
           f'(BeefBuild {compile_seconds:.2f}s, other stages {total_seconds - compile_seconds:.2f}s)', flush=True)
+    print(f'Reload stages: inspect objects {objects_scanned_seconds:.2f}s, '
+          f'prepare objects {alias_seconds:.2f}s ({reused}/{len(objects)} reused), '
+          f'link {link_seconds:.2f}s', flush=True)
     return 0
 
 
