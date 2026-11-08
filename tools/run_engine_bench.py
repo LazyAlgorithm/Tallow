@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run Tallow's existing EcsBench cases and record reproducible, per-run results.
+"""Run Tallow's expanded ECS branch engine benchmark suite with structured results.
 
 Requires a built Samples/EcsBench player. Run from any directory:
     python3 tools/run_full_bench.py --preset quick
@@ -8,8 +8,9 @@ Requires a built Samples/EcsBench player. Run from any directory:
 
 Writes results.jsonl, summary.csv, summary.md, profiles.jsonl, checks.json and
 metadata.json into a timestamped folder under build/benchmark-results/.
-The physics/render/network/AI saturation scenarios in docs/benchmarks/README.md
-are proposals, not implemented EcsBench modes yet.
+Physics modes cover Jolt body workloads; AI and network-identity modes run offline.
+Real client/server traffic, GPU timings, pathfinding and specialist subsystems
+remain pending (see docs/benchmarks/ENGINE_COVERAGE.md).
 """
 from __future__ import annotations
 
