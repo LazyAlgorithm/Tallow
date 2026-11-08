@@ -129,6 +129,51 @@ class ObjectCacheTests(unittest.TestCase):
                 self.assertEqual(len(calls), 6)
 
 
+
+class BuildActivityTests(unittest.TestCase):
+    def test_modified_output_is_not_assumed_to_mean_recompiled(self):
+        before = {
+            'game': {'game.o': (100, 1)},
+            'dependencies': {'engine.o': (100, 1), 'editor.o': (100, 1)},
+            'reflection': {'vdata.o': (50, 1)},
+        }
+        after = {
+            'game': {'game.o': (110, 2), 'other.o': (50, 2)},
+            'dependencies': {'engine.o': (100, 1), 'editor.o': (100, 1)},
+            'reflection': {'vdata.o': (60, 2)},
+        }
+        result = reload_scripts.build_output_activity(before, after)
+        self.assertEqual(result['game'], {'total': 2, 'rewritten': 1, 'new': 1})
+        self.assertEqual(result['dependencies'], {'total': 2, 'rewritten': 0, 'new': 0})
+        self.assertEqual(result['reflection'], {'total': 1, 'rewritten': 1, 'new': 0})
+
+    def test_linux_inventory_distinguishes_game_from_dependencies(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            game_root = workspace / 'build/Debug_Linux64/Test'
+            engine_root = workspace / 'build/Debug_Linux64/Tallow'
+            game_root.mkdir(parents=True)
+            engine_root.mkdir(parents=True)
+            game = game_root / 'script.o'
+            engine = engine_root / 'engine.o'
+            metadata = game_root / 'vdata.o'
+            game.write_bytes(b'one')
+            engine.write_bytes(b'two')
+            metadata.write_bytes(b'three')
+            (game_root / 'ObjectArgs.txt').write_text(str(game) + ' ' + str(engine))
+            artifacts = reload_scripts.beef_build_artifacts(workspace, 'Test', 'linux')
+            self.assertEqual(artifacts['game'], [game])
+            self.assertEqual(artifacts['dependencies'], [engine])
+            before = reload_scripts.build_output_state(workspace, 'Test', 'linux')
+            engine.write_bytes(b'longer engine contents')
+            after = reload_scripts.build_output_state(workspace, 'Test', 'linux')
+            activity = reload_scripts.build_output_activity(before, after)
+            self.assertEqual(activity['dependencies']['rewritten'], 1)
+            self.assertEqual(activity['game']['rewritten'], 0)
+
+
+
+
 class ChangeClassificationTests(unittest.TestCase):
     def test_classify_saved_edits_without_compiling(self):
         baseline = {'resident': 'engine', 'schemas': {'Player.bf': 'signature'}, 'code': 'old'}

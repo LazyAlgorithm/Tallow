@@ -59,6 +59,19 @@ miss categories. The first reload in a new editor session will have a cold cache
 Source/ABI checks still run on every reload.
 This helps distinguish compiler latency from Tallow's own reload overhead without guessing.
 
+Reloads now log **BeefBuild outputs** separately for gameplay, dependency archives/objects,
+and reflection metadata. These are file timestamp changes (rewritten or newly created), not
+proof of semantic recompilation. If dependency outputs remain untouched but BeefBuild still
+takes several seconds, that latency is outside Tallow's native link step.
+
+To measure the no-change BeefBuild baseline, **close the editor after a successful reload**
+and run `python3 tools/profile_reload_compiler.py /path/to/GameProject --runs 2` from
+the Tallow source checkout. The script reuses the exact temporary workspace and invokes
+the compiler twice with diagnostic verbosity, prints output-file activity and timings,
+and saves `beef-profile-1.log` and `beef-profile-2.log` in the workspace.
+Do not run it concurrently with the editor or another build. No source files or
+build configurations are changed. This diagnostic supports Linux and Windows.
+
 To see BeefBuild's own detailed rebuild activity, set `TALLOW_RELOAD_TRACE_COMPILER=1` in the
 environment **before launching Tallow**, then save a script and inspect `build/script-reload.log`.
 This enables compiler diagnostics rather than changing the build's optimization settings.
