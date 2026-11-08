@@ -60,8 +60,13 @@ extension EditorApp
 #endif
 	}
 
-	void QueueScriptReload()
+	/// A save already tells us which files changed. Consume the monitor snapshot
+	/// immediately so its next 500ms poll will not schedule a duplicate build.
+	/// External disk edits are still detected normally by PollScriptReload.
+	void QueueScriptReload(bool fromEditorSave = false)
 	{
+		if (fromEditorSave)
+			mScriptMonitor.Poll(Assets.ProjectPath);
 		mReloadQueued = true;
 		mScriptDebounce.Restart();
 	}
@@ -76,7 +81,7 @@ extension EditorApp
 			if (mScriptMonitor.Poll(Assets.ProjectPath))
 				QueueScriptReload();
 		}
-		if (!mReloadQueued || mCheckRunning || mScriptDebounce.ElapsedMilliseconds < 350) return;
+		if (!mReloadQueued || mCheckRunning || mScriptDebounce.ElapsedMilliseconds < 150) return;
 		mReloadQueued = false;
 		if (mCheckThread != null)
 		{

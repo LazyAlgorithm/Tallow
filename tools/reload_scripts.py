@@ -17,6 +17,18 @@ import time
 TOKEN = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|=>|[A-Za-z_][A-Za-z_0-9]*|[^\s]', re.S)
 
 
+def write_if_changed(path, content):
+    """Preserve modification time when a generated Beef workspace config is unchanged.
+
+    BeefBuild uses file timestamps for its incremental cache. Rewriting these
+    files on every script save can invalidate that cache and trigger needless work.
+    """
+    if path.is_file() and path.read_text() == content:
+        return False
+    path.write_text(content)
+    return True
+
+
 def schema(text):
     """Conservatively keep declarations and discard only method/accessor bodies."""
     tokens = [m.group() for m in TOKEN.finditer(text) if not m.group().startswith(('//', '/*'))]
@@ -401,15 +413,16 @@ def windows_build(project, name, args, baseline, current):
     for key, entry in config['Projects'].items():
         path = '.' if key == name else (entry['Path'] if re.match(r'^[A-Za-z]:', entry['Path']) else windows_path((project / entry['Path']).resolve()))
         entries.append(f'{key} = {{Path = {json.dumps(path)}}}')
-    (workspace / 'BeefSpace.toml').write_text('FileVersion = 1\nProjects = {' + ', '.join(entries) + '}\n[Workspace]\nStartupProject = ' + json.dumps(name)
-                                              + '\n\n[Configs.Debug.Win64]\nToolset = "LLVM"\n')
+    write_if_changed(workspace / 'BeefSpace.toml',
+                     'FileVersion = 1\nProjects = {' + ', '.join(entries) + '}\n[Workspace]\nStartupProject = ' + json.dumps(name)
+                     + '\n\n[Configs.Debug.Win64]\nToolset = "LLVM"\n')
     # The compiler is only wanted for its object files. Its own link is given what it needs to pass quickly.
     quick = '[Configs.Debug.Win64]\nBuildKind = "DynamicLib"\nCLibType = "Static"\nOtherLinkFlags = "/DLL /NOENTRY /FORCE /DEBUG:NONE /NODEFAULTLIB"\n'
     proj_text = (project / 'BeefProj.toml').read_text()
     proj_text, replaced = re.subn(r'\[Configs\.Debug\.Win64\]\n(?:[^\[\n][^\n]*\n|\n(?!\[))*', lambda _: quick + '\n', proj_text, count=1)
     if not replaced:
         proj_text += '\n' + quick
-    (workspace / 'BeefProj.toml').write_text(proj_text)
+    write_if_changed(workspace / 'BeefProj.toml', proj_text)
     command, environment = beef_command(workspace)
     log = workspace / 'compiler.log'
     with open(log, 'w') as output:
@@ -626,10 +639,11 @@ def main():
     for key, entry in config['Projects'].items():
         path = '.' if key == name else str((project / entry['Path']).resolve())
         entries.append(f'{key} = {{Path = {json.dumps(path)}}}')
-    (workspace / 'BeefSpace.toml').write_text('FileVersion = 1\nProjects = {' + ', '.join(entries) + '}\n[Workspace]\nStartupProject = ' + json.dumps(name) + '\n')
+    write_if_changed(workspace / 'BeefSpace.toml',
+                     'FileVersion = 1\nProjects = {' + ', '.join(entries) + '}\n[Workspace]\nStartupProject = ' + json.dumps(name) + '\n')
     proj_text = (project / 'BeefProj.toml').read_text()
     proj_text = proj_text.replace('[Configs.Debug.Linux64]', '[Configs.Debug.Linux64]\nBuildKind = "DynamicLib"', 1)
-    (workspace / 'BeefProj.toml').write_text(proj_text)
+    write_if_changed(workspace / 'BeefProj.toml', proj_text)
     completed = subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}', '-config=Debug', '-verbosity=minimal'])
     if completed.returncode:
         return completed.returncode

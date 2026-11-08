@@ -14,7 +14,7 @@ extension EditorApp
 		if (mReloadReady)
 		{
 			SaveAllScripts();
-			QueueScriptReload();
+			QueueScriptReload(true);
 			return;
 		}
 		FullRebuildAndRestart();

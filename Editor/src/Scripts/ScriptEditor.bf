@@ -256,7 +256,7 @@ extension EditorApp
 	{
 		if (mReloadReady)
 		{
-			QueueScriptReload();
+			QueueScriptReload(true);
 			return;
 		}
 		mCheckWasReload = false;
