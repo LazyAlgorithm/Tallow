@@ -61,6 +61,21 @@ def schema(text):
     return hashlib.sha256(' '.join(result).encode()).hexdigest()
 
 
+def classify_changes(baseline, current):
+    """Classify edits against the last activated version without invoking BeefBuild.
+
+    Return 0 for unchanged, 10 for method-only, 11 for structural and
+    3 when the resident engine or build configuration changed.
+    """
+    if baseline['resident'] != current['resident']:
+        return 3
+    if baseline['schemas'] != current['schemas']:
+        return 11
+    if baseline['code'] != current['code']:
+        return 10
+    return 0
+
+
 def reload_strategy(mode, baseline, current, platform):
     """Only unchanged declarations can use Linux's existing method-table patcher.
 
@@ -732,13 +747,7 @@ def main():
     snapshot_seconds = time.perf_counter() - reload_started
     if args.classify:
         baseline = json.loads(args.baseline.read_text())
-        if baseline['resident'] != current['resident']:
-            return 3
-        if baseline['schemas'] != current['schemas']:
-            return 11
-        if baseline['code'] != current['code']:
-            return 10
-        return 0
+        return classify_changes(baseline, current)
     if args.platform == 'windows':
         name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
         if args.commit:

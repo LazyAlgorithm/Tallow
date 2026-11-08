@@ -63,9 +63,6 @@ extension EditorApp
 #endif
 	}
 
-	/// A save already tells us which files changed. Consume the monitor snapshot
-	/// immediately so its next 500ms poll will not schedule a duplicate build.
-	/// External disk edits are still detected normally by PollScriptReload.
 	/// Compare the saved source against the last activated library, without compiling it.
 	/// Exit codes: 0 unchanged, 10 methods only, 11 declarations, 3 incompatible host.
 	int CheckScriptChanges()
@@ -82,7 +79,13 @@ extension EditorApp
 		command.Append(" > ");
 		command.Append(Terminal.Null);
 		command.Append(" 2>&1");
-		return Terminal.Run(command);
+		let status = Terminal.Run(command);
+#if BF_PLATFORM_LINUX
+		// system() returns the wait status, not the process exit code.
+		if (status >= 0)
+			return (status >> 8) & 0xFF;
+#endif
+		return status;
 	}
 
 	/// A save already tells us which files changed. The script mode decides

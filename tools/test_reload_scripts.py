@@ -79,6 +79,18 @@ class ObjectCacheTests(unittest.TestCase):
                 self.assertEqual(len(calls), 6)
 
 
+class ChangeClassificationTests(unittest.TestCase):
+    def test_classify_saved_edits_without_compiling(self):
+        baseline = {'resident': 'engine', 'schemas': {'Player.bf': 'signature'}, 'code': 'old'}
+        self.assertEqual(reload_scripts.classify_changes(baseline, baseline), 0)
+        method = {**baseline, 'code': 'new'}
+        self.assertEqual(reload_scripts.classify_changes(baseline, method), 10)
+        structural = {**method, 'schemas': {'Player.bf': 'new signature'}}
+        self.assertEqual(reload_scripts.classify_changes(baseline, structural), 11)
+        incompatible = {**baseline, 'resident': 'updated engine'}
+        self.assertEqual(reload_scripts.classify_changes(baseline, incompatible), 3)
+
+
 class ReloadStrategyTests(unittest.TestCase):
     def test_method_only_edits_use_lightweight_linux_path(self):
         baseline = {'schemas': {'Scripts/Player.bf': 'declaration'}, 'code': 'old'}
