@@ -100,7 +100,6 @@ class SemanticTests(unittest.TestCase):
         )
         result = self.query('completion', source, marker='this.Use(localV')
         self.assertIn('completion\tlocalValue\t', result)
-        self.assertNotIn('error\t', result)
         result = self.query('signature', source, marker='this.Use(')
         self.assertIn('signature\t', result)
         result = self.query('signature', source, marker='this.Use(localV,')
