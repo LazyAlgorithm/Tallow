@@ -411,6 +411,39 @@ TN_API void* tn_code_create(const char* text, int language)
 	editor.SetShowScrollbarMiniMapEnabled(true);
 	editor.SetShowWhitespacesEnabled(false);
 	editor.SetText(std::string_view(text != nullptr ? text : ""));
+	editor.SetTextContextMenuCallback([document](TextEditor::PopupData& data)
+	{
+		TextEditor& code = document->editor;
+		const bool editable = !code.IsReadOnlyEnabled();
+		const bool selected = code.AnyCursorHasSelection();
+		if (ImGui::MenuItem("Undo", "Ctrl+Z", false, code.CanUndo())) code.Undo();
+		if (ImGui::MenuItem("Redo", "Ctrl+Y", false, code.CanRedo())) code.Redo();
+		ImGui::Separator();
+		if (ImGui::MenuItem("Cut", "Ctrl+X", false, editable && selected)) code.Cut();
+		if (ImGui::MenuItem("Copy", "Ctrl+C", false, selected)) code.Copy();
+		if (ImGui::MenuItem("Paste", "Ctrl+V", false, editable)) code.Paste();
+		if (ImGui::MenuItem("Select All", "Ctrl+A")) code.SelectAll();
+		if (code.GetLanguageName() == "Beef")
+		{
+			ImGui::Separator();
+			const int cursor = (int)code.GetSectionText(TextEditor::DocPos(0, 0), data.pos).size();
+			if (ImGui::MenuItem("Go to Definition", "F12"))
+			{
+				document->semanticRequest = 4;
+				document->semanticCursor = cursor;
+			}
+			if (ImGui::MenuItem("Symbol / Parameters"))
+			{
+				document->semanticRequest = 5;
+				document->semanticCursor = cursor;
+			}
+			if (ImGui::MenuItem("Rename Symbol", "F2"))
+			{
+				document->semanticRequest = 6;
+				document->semanticCursor = cursor;
+			}
+		}
+	});
 	if (language == 0)
 	{
 		TextEditor::AutoCompleteConfig config;
@@ -754,6 +787,11 @@ TN_API void tn_code_mark_saved(void* handle)
 TN_API void tn_code_set_read_only(void* handle, bool readOnly) { ((Document*)handle)->editor.SetReadOnlyEnabled(readOnly); }
 TN_API void tn_code_undo(void* handle) { ((Document*)handle)->editor.Undo(); }
 TN_API void tn_code_redo(void* handle) { ((Document*)handle)->editor.Redo(); }
+TN_API void tn_code_cut(void* handle) { ((Document*)handle)->editor.Cut(); }
+TN_API void tn_code_copy(void* handle) { ((Document*)handle)->editor.Copy(); }
+TN_API void tn_code_paste(void* handle) { ((Document*)handle)->editor.Paste(); }
+TN_API void tn_code_select_all(void* handle) { ((Document*)handle)->editor.SelectAll(); }
+TN_API bool tn_code_has_selection(void* handle) { return ((Document*)handle)->editor.AnyCursorHasSelection(); }
 TN_API bool tn_code_can_undo(void* handle) { return ((Document*)handle)->editor.CanUndo(); }
 TN_API bool tn_code_can_redo(void* handle) { return ((Document*)handle)->editor.CanRedo(); }
 TN_API void tn_code_focus(void* handle) { ((Document*)handle)->editor.SetFocus(); }

@@ -49,6 +49,11 @@ extension EditorApp
 	[CLink] static extern void tn_code_set_read_only(void* handle, bool readOnly);
 	[CLink] static extern void tn_code_undo(void* handle);
 	[CLink] static extern void tn_code_redo(void* handle);
+	[CLink] static extern void tn_code_cut(void* handle);
+	[CLink] static extern void tn_code_copy(void* handle);
+	[CLink] static extern void tn_code_paste(void* handle);
+	[CLink] static extern void tn_code_select_all(void* handle);
+	[CLink] static extern bool tn_code_has_selection(void* handle);
 	[CLink] static extern bool tn_code_can_undo(void* handle);
 	[CLink] static extern bool tn_code_can_redo(void* handle);
 	[CLink] static extern void tn_code_focus(void* handle);
@@ -461,7 +466,7 @@ extension EditorApp
 		}
 		ImGui.PushStyleVar(ImGui.StyleVar.WindowPadding, ImGui.Vec2(0, 0));
 		ImGui.PushStyleColor(ImGui.Col.WindowBg, EditorTheme.CodeBackground);
-		let visible = ImGui.Begin("Scripts", &mShowScripts, ImGui.WindowFlags.NoScrollbar | ImGui.WindowFlags.NoScrollWithMouse);
+		let visible = ImGui.Begin("Scripts", &mShowScripts, ImGui.WindowFlags.NoScrollbar | ImGui.WindowFlags.NoScrollWithMouse | ImGui.WindowFlags.MenuBar);
 		ImGui.PopStyleColor();
 		ImGui.PopStyleVar();
 		mScriptsFocused = false;
@@ -485,49 +490,72 @@ extension EditorApp
 		ImGui.End();
 	}
 
-	/// Save, Save All, Undo, Redo, Check Errors and Rebuild & Reload, then how the last check went.
+	/// Compact editor-local menu. The main application menu remains available
+	/// for scene operations, while these commands apply to the selected script.
 	void DrawScriptToolbar(ScriptDocument active)
 	{
-		ImGui.SetCursorPosX(6);
-		ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 4);
-		ImGui.BeginDisabled(active == null);
-		if (ImGui.SmallButton("Save") && active != null)
-			SaveScript(active);
-		ImGui.SameLine();
-		if (ImGui.SmallButton("Save All"))
-			SaveAllScripts();
-		ImGui.SameLine(0, 14);
-		ImGui.BeginDisabled(active == null || !tn_code_can_undo(active.handle));
-		if (ImGui.SmallButton("Undo"))
-			tn_code_undo(active.handle);
-		ImGui.EndDisabled();
-		ImGui.SameLine();
-		ImGui.BeginDisabled(active == null || !tn_code_can_redo(active.handle));
-		if (ImGui.SmallButton("Redo"))
-			tn_code_redo(active.handle);
-		ImGui.EndDisabled();
-		ImGui.EndDisabled();
-		ImGui.SameLine(0, 14);
-		if (ImGui.SmallButton("Check Errors"))
+		if (!ImGui.BeginMenuBar())
+			return;
+		if (ImGui.BeginMenu("File"))
 		{
-			SaveAllScripts();
-			StartErrorCheck();
+			if (ImGui.MenuItem("Save Script", "Ctrl+S", false, active != null && !active.readOnly))
+				SaveScript(active);
+			if (ImGui.MenuItem("Save All Scripts", null, false, mScripts.Count > 0))
+				SaveAllScripts();
+			ImGui.Separator();
+			if (ImGui.MenuItem("Check Errors"))
+			{
+				SaveAllScripts();
+				StartErrorCheck();
+			}
+			if (ImGui.MenuItem("Rebuild & Reload"))
+			{
+				SaveAllScripts();
+				RequestRebuild();
+			}
+			ImGui.EndMenu();
 		}
-		ImGui.SameLine();
-		if (ImGui.SmallButton("Rebuild & Reload"))
+		if (ImGui.BeginMenu("Edit"))
 		{
-			SaveAllScripts();
-			RequestRebuild();
+			bool editable = active != null && !active.readOnly;
+			bool selected = active != null && tn_code_has_selection(active.handle);
+			if (ImGui.MenuItem("Undo", "Ctrl+Z", false, editable && tn_code_can_undo(active.handle)))
+				tn_code_undo(active.handle);
+			if (ImGui.MenuItem("Redo", "Ctrl+Y", false, editable && tn_code_can_redo(active.handle)))
+				tn_code_redo(active.handle);
+			ImGui.Separator();
+			if (ImGui.MenuItem("Cut", "Ctrl+X", false, editable && selected))
+				tn_code_cut(active.handle);
+			if (ImGui.MenuItem("Copy", "Ctrl+C", false, selected))
+				tn_code_copy(active.handle);
+			if (ImGui.MenuItem("Paste", "Ctrl+V", false, editable))
+				tn_code_paste(active.handle);
+			if (ImGui.MenuItem("Select All", "Ctrl+A", false, active != null))
+				tn_code_select_all(active.handle);
+			ImGui.EndMenu();
 		}
-		ImGui.SameLine(0, 14);
-		// Keep the toolbar layout stable while the background compiler runs.
-		// The hint never disappears, so buttons do not shift during resolution.
-		ImGui.TextDisabled("Ctrl+S save   Ctrl+F find   Ctrl+Space complete");
+		if (ImGui.BeginMenu("Navigate"))
+		{
+			bool ready = active != null && active.path.EndsWith(".bf") && !mSemantic.running;
+			if (ImGui.MenuItem("Go to Definition", "F12", false, ready))
+				RequestSemantic(active, "definition");
+			if (ImGui.MenuItem("Symbol / Parameters", null, false, ready))
+			{
+				mSymbolInfoRequested = true;
+				RequestSemantic(active, "symbol");
+			}
+			if (ImGui.MenuItem("Rename Symbol", "F2", false, ready))
+				BeginScriptSymbolRename();
+			if (ImGui.MenuItem("Undo Symbol Rename", null, false, !mRenameUndo.IsEmpty))
+				UndoSymbolRename();
+			ImGui.EndMenu();
+		}
 		if (mCheckRunning)
 		{
 			ImGui.SameLine(0, 14);
 			ImGui.TextColored(EditorTheme.Warning, "Compiling...");
 		}
+		ImGui.EndMenuBar();
 	}
 
 	/// One tab per open file, each a code editor. A script made from a

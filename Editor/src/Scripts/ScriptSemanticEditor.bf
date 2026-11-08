@@ -283,40 +283,37 @@ extension EditorApp
 			return;
 		int32 cursor = 0;
 		let request = tn_code_take_semantic_request(document.handle, &cursor);
-		if (request != 0)
-			RequestSemantic(document, request == 2 ? "symbol" : (request == 3 ? "signature" : "completion"), cursor);
+		if (request == 6)
+			BeginScriptSymbolRename();
+		else if (request == 5)
+		{
+			mSymbolInfoRequested = true;
+			RequestSemantic(document, "symbol", cursor);
+		}
+		else if (request != 0)
+			RequestSemantic(document, request == 4 ? "definition" : (request == 2 ? "symbol" : (request == 3 ? "signature" : "completion")), cursor);
 		else if (mSemanticNeedsCheck && Time.RealTime - mSemanticChangedAt > 1.5f)
 			RequestSemantic(document, "diagnostics");
 	}
 
+	void BeginScriptSymbolRename()
+	{
+		mRenameOpen = true;
+		mRenamePreview = false;
+		mSymbolNewName.Clear();
+		ImGui.OpenPopup("Rename Symbol Across Project");
+	}
+
+	/// F2/F12 and the semantic popups stay active without dedicating a toolbar
+	/// row to them. The right-click menu in the native code widget feeds the
+	/// same semantic request path.
 	void DrawSemanticTools(ScriptDocument document)
 	{
 		bool ready = document != null && document.path.EndsWith(".bf") && !mSemantic.running;
-		ImGui.BeginDisabled(!ready);
-		if (ImGui.SmallButton("Definition (F12)") || (ready && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F12)))
+		if (ready && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F12))
 			RequestSemantic(document, "definition");
-		ImGui.SameLine();
-		if (ImGui.SmallButton("Symbol / Parameters"))
-		{
-			mSymbolInfoRequested = true;
-			RequestSemantic(document, "symbol");
-		}
-		ImGui.SameLine();
-		if (ImGui.SmallButton("Rename Symbol (F2)") || (ready && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F2)))
-		{
-			mRenameOpen = true;
-			mRenamePreview = false;
-			mSymbolNewName.Clear();
-			ImGui.OpenPopup("Rename Symbol Across Project");
-		}
-		ImGui.EndDisabled();
-		ImGui.SameLine();
-		ImGui.BeginDisabled(mRenameUndo.IsEmpty);
-		if (ImGui.SmallButton("Undo Rename"))
-			UndoSymbolRename();
-		ImGui.EndDisabled();
-		if (!mSemantic.status.IsEmpty)
-			ImGui.TextDisabled(mSemantic.status.CStr());
+		if (ready && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F2))
+			BeginScriptSymbolRename();
 		if (mSymbolInfoOpen)
 		{
 			ImGui.OpenPopup("Symbol Information");
