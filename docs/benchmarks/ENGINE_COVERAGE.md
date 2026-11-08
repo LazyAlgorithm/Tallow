@@ -21,7 +21,7 @@ Requires Python 3.11+, CMake, Ninja, BeefBuild, a working Vulkan display/driver 
 
 Outputs are saved in timestamped directories under `build/benchmark-results/`: `metadata.json`, `results.jsonl`, `summary.csv`, `summary.md`, `profiles.jsonl`, individual profile logs, `checks.json`, `failures.jsonl` on failures, `coverage.json` and `status.json`. All completed runs are appended immediately, even if a later test fails.
 
-For reproducible comparisons use **Release** builds, a fixed resolution/quality setting, VSync off, a consistent power profile, an idle desktop, the same drivers and same processor. Run 3–5 times per case and compare medians. The standard preset comprises 56 graphics/frame configurations × 3 repeats, plus 6 CPU-only profile configurations and correctness suites. The stress preset is intentionally expensive and may exhaust memory.
+For reproducible comparisons use **Release** builds, a fixed resolution/quality setting, VSync off, a consistent power profile, an idle desktop, the same drivers and same processor. Run 3–5 times per case and compare medians. The standard preset comprises 54 graphics/frame configurations × 3 repeats, plus 6 CPU-only profile configurations and correctness suites. The stress preset is intentionally expensive and may exhaust memory.
 
 ## Implemented, instrumented benchmarks
 
