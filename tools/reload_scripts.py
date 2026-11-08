@@ -709,6 +709,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('project', type=Path)
     parser.add_argument('--snapshot', action='store_true')
+    parser.add_argument('--classify', action='store_true',
+                        help='Exit 0 unchanged, 10 method-only, 11 declarations, 3 incompatible resident code.')
     parser.add_argument('--baseline', required=True, type=Path)
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--commit', action='store_true', help='Record symbols of an activated generation.')
@@ -728,6 +730,15 @@ def main():
     reload_started = time.perf_counter()
     current = snapshot(project)
     snapshot_seconds = time.perf_counter() - reload_started
+    if args.classify:
+        baseline = json.loads(args.baseline.read_text())
+        if baseline['resident'] != current['resident']:
+            return 3
+        if baseline['schemas'] != current['schemas']:
+            return 11
+        if baseline['code'] != current['code']:
+            return 10
+        return 0
     if args.platform == 'windows':
         name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
         if args.commit:

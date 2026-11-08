@@ -68,21 +68,28 @@ extension EditorApp
 				}
 				ImGui.EndCombo();
 			}
+			BeginProperty("Reload Methods In Edit");
+			if (ImGui.Checkbox("##reloadmethodsin edit", ref project.ReloadMethodsInEdit))
+				project.Save();
+			BeginProperty("Play After Compile");
+			if (ImGui.Checkbox("##playaftercompile", ref project.PlayAfterCompile))
+				project.Save();
 			ImGui.EndTable();
 		}
 		switch (project.ReloadMode)
 		{
 		case .Automatic:
 #if BF_PLATFORM_LINUX
-			ImGui.TextWrapped("Default: patch compatible method-body changes without recreating script components. Declaration changes use structural reload; incompatible patches automatically retry it.");
+			ImGui.TextWrapped("In Edit mode, fields and component declarations reload automatically for the Inspector. Method-body changes are deferred unless Reload Methods In Edit is enabled. While playing, changes hot reload.");
 #else
-			ImGui.TextWrapped("Default: structural reload preserves supported script state. Lightweight method patching is available on Linux.");
+			ImGui.TextWrapped("In Edit mode, fields and component declarations reload automatically for the Inspector. Method changes are deferred unless enabled above. While playing, structural reload preserves supported state.");
 #endif
 		case .Conservative:
 			ImGui.TextWrapped("Always compile and migrate the full script library, including method-only edits. Use this to investigate hot-reload compatibility.");
 		case .Manual:
 			ImGui.TextWrapped("Save without compiling or activating scripts. Use File > Reload Scripts when ready. Check Errors remains available.");
 		}
+		ImGui.TextWrapped("Play never enters while compilation is running or scripts are pending. By default, press Play again after a successful compile; Play After Compile enables automatic entry.");
 		if (ImGui.Button("Force Structural Script Reload"))
 			ForceConservativeScriptReload();
 	}

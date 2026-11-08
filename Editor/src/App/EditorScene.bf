@@ -83,6 +83,26 @@ extension EditorApp
 	{
 		if (mPlay != .Edit)
 			return;
+		// Always save first; unsaved scripts must not run stale code.
+		SaveAllScripts();
+		if (mCheckRunning || mReloadQueued)
+		{
+			mPlayAfterCompile = Project.Current.PlayAfterCompile;
+			mStatus.Set("Scripts are compiling. Play is blocked until they are ready.");
+			return;
+		}
+		if (mScriptsNeedReload)
+		{
+			if (!mReloadReady)
+			{
+				mStatus.Set("Script reload is unavailable. Use Full Rebuild & Restart before Play.");
+				return;
+			}
+			mPlayAfterCompile = Project.Current.PlayAfterCompile;
+			QueueScriptReload(true, true);
+			mStatus.Set("Compiling scripts before Play. Press Play again when ready.");
+			return;
+		}
 		StopSequencePreview();
 		if (EditingPrefab)
 		{

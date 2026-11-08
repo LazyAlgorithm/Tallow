@@ -238,6 +238,7 @@ extension EditorApp
 		{
 			// Refresh the source index used by type colouring and visual scripting.
 			ApiIndex.RefreshProject();
+			mScriptsNeedReload = true;
 			if (Project.Current.ReloadMode != .Manual)
 				StartErrorCheck();
 		}

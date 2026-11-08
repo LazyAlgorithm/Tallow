@@ -9,6 +9,20 @@ Linux and Windows x86-64 Debug editors watch project `.bf` files, including addi
 - **Manual:** Saving and external file changes do not activate script code. Use **File > Reload Scripts** (Ctrl+R) when ready. **Check Errors** compiles without activating. **Force Structural Script Reload** overrides Automatic or Manual without restarting the editor.
 
 The selected mode is saved to `project.tallow` and defaults to Automatic for existing projects.
+
+Automatic now keeps gameplay method-body changes pending while in Edit mode by default. Script
+declarations (new components, fields, method signatures and inspector attributes) still trigger
+structural reload in Edit mode, so newly added fields can be configured in the Inspector.
+The **Reload Methods In Edit** project toggle restores method hot-reload on every save.
+When Play is pressed with a reload in progress or pending, Tallow stays in Edit mode
+until compilation succeeds. It does **not** automatically enter Play: press Play again
+after the successful compile. The separate **Play After Compile** option is opt-in.
+A failed compilation retains the previous live code and keeps Play blocked.
+Manual mode also defers compilation until explicit Reload Scripts or a Play attempt.
+
+A cheap `--classify` invocation compares the saved source with the last successfully activated
+script library (0 unchanged, 10 method-only, 11 structural, 3 incompatible resident code).
+No script compiler or native linker is invoked for method-only saves while idle in Edit mode.
 The method-only path currently reduces activation and catalog-refresh overhead, but **it still invokes
 BeefBuild for a new native script library**. It is not yet a persistent incremental compiler; compiler
 time and module linking remain visible in the timing log.
