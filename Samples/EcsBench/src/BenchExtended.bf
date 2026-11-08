@@ -89,17 +89,17 @@ extension Bench
 
 		for (int i < mCount)
 		{
-			let box = Scene.CreateGameObject("Body");
-			mSpawned.Add(box);
+			let bodyObject = Scene.CreateGameObject("Body");
+			mSpawned.Add(bodyObject);
 			let x = i % side;
 			let y = i / (side * side);
 			let z = (i / side) % side;
-			box.Transform.LocalPosition = .((x - (side - 1) * 0.5f) * 1.04f,
+			bodyObject.Transform.LocalPosition = .((x - (side - 1) * 0.5f) * 1.04f,
 				1.0f + y * 1.04f, (z - (side - 1) * 0.5f) * 1.04f);
-			box.AddComponent<BoxCollider>();
+			bodyObject.AddComponent<BoxCollider>();
 			if (mMode == "physics-static")
 				continue;
-			let body = box.AddComponent<Rigidbody>();
+			let body = bodyObject.AddComponent<Rigidbody>();
 			body.isKinematic = mMode == "physics-kinematic";
 			body.useGravity = mMode != "physics-kinematic";
 			body.allowSleeping = mMode == "physics-sleep";
