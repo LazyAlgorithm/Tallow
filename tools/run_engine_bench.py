@@ -301,17 +301,19 @@ def main() -> int:
                         for profile in profile_records(log, variant, count):
                             append_jsonl(out / "profiles.jsonl", profile)
         if not args.headless_only:
-            total = len(args.counts) * len(args.modes) * args.runs * len(players)
+            total = len(cases) * args.runs * len(players)
             run_number = 0
-            for count in args.counts:
-                for mode in args.modes:
+            for mode in args.modes:
+                for count in (args.counts if args.counts is not None else defaults["groups"][MODE_GROUPS[mode]]):
                     for repeat in range(1, args.runs + 1):
                         order = players if repeat % 2 else list(reversed(players))
                         for variant, player in order:
                             run_number += 1
                             result_file = out / ".one-result.jsonl"
                             env = {**env0, "TALLOW_BENCH_MODE": mode, "TALLOW_BENCH_COUNT": str(count),
-                                   "TALLOW_BENCH_FRAMES": str(args.frames), "TALLOW_BENCH_OUT": str(result_file)}
+                                   "TALLOW_BENCH_FRAMES": str(args.frames),
+                                   "TALLOW_BENCH_WARMUP": str(max(args.warmup, 600) if mode == "physics-sleep" else args.warmup),
+                                   "TALLOW_BENCH_OUT": str(result_file)}
                             print(f"[{run_number}/{total}] ", end="", flush=True)
                             code, log = run_case(f"{mode} x {count} (repeat {repeat}/{args.runs})", variant,
                                                  player, [str(player), "--project", str(project)], env, result_file)
@@ -349,6 +351,12 @@ def main() -> int:
         write_json(out / "status.json", {"completed_performance_runs": len(results),
                                           "checks": len(checks), "failures": len(failures),
                                           "utc_end": datetime.now(timezone.utc).isoformat()})
+    write_json(out / "coverage.json", {
+        "runnable": list(MODES),
+        "headless": ["check-scripts", "ecs-check", "scripts", "ecs-cpu", "scene-cpu"],
+        "pending": PENDING,
+        "note": "physics modes have no MeshRenderer; net-offline does not send packets."
+    })
     print(f"Finished: {len(results)} performance runs, {len(failures)} failures. Files in {out}", flush=True)
     return 1 if failures else 0
 
