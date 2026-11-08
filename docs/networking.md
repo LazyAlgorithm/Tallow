@@ -31,6 +31,7 @@ Add a **Network Session** component (Add Component > Networking) to an object in
 | Particles (`ParticleSystem.Play`) | From the server or the object's owner, it plays on every machine. |
 | Decals (`Decals.Spawn`) and one-shot sounds (`Audio.PlayOneShot`) | From the server, every machine presses the decal and plays the sound where it is. A game that already shares its shots and impacts itself is not doubled: an effect arriving from the server within half a second of the same one played on that machine (same picture or clip, near the same place) is played once. A client's own calls stay its own. |
 | Fields marked `[Sync]`, and graph variables ticked **Networked** | The server's value is copied to every client when it changes. |
+| Custom ECS `[Component] struct` data on networked GameObjects | Supported `[Sync]` fields are copied like script fields; the server also mirrors adding/removing those synchronized data components. |
 
 A player who joins late receives all of it: the terrain and voxel edits so far, objects created and destroyed, current shapes, clips and synced values, and what is switched off and how the lights are set.
 
