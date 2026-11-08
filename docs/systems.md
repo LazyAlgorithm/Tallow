@@ -21,6 +21,48 @@ inputs and the fixed delta, including during prediction replay. Use those argume
 work such as a local camera or GUI may use `OnLocalUpdate`, `LateUpdate` or `OnGUI` instead. Direct input reads,
 frame time and unseeded randomness in predicted updates receive clickable determinism warnings in the Console.
 
+## Mixed script and ECS data
+
+A GameObject is already an ECS entity; these are not separate authoring modes.
+You can put a normal script and an ECS data component on the same object:
+
+```beef
+[Component]
+struct SpeedData
+{
+    [Sync] public float speed;
+}
+
+[Component]
+class Accelerate : Script
+{
+    public override void Update(TickInput input, float deltaTime)
+    {
+        let speed = GetComponent<SpeedData>();
+        if (speed != null)
+            speed.speed += deltaTime;
+    }
+}
+```
+
+The same `SpeedData` can be read by `Query<SpeedData, ObjectLink>`. With a
+`NetworkIdentity` on the GameObject, supported `[Sync]` fields participate
+in Tallow's existing networking. Custom ECS data on bare `World.CreateMany`
+entities without an ObjectLink is not automatically networked yet.
+
+You can also borrow `Scene.World.ObjectsWith<SpeedData>()`, a query cached for
+the lifetime of the World. Do not delete that query. It returns packed
+`SpeedData` and `ObjectLink` columns and excludes standalone entities
+without a GameObject.
+
+**Visual scripting:** after compiling a project `[Component] struct`, open a
+graph and search the **ECS** category for its component and field nodes.
+**For Each** creates one query iteration for all matching objects; its
+Body flow exposes the current object and direct packed data-field outputs.
+Runtime Add/Remove operations inside that graph loop are deferred until the
+loop exits. Generated graphs use the same GameObject component storage and
+network behavior as Beef scripts.
+
 ## When a query helps
 
 Use a query when profiling identifies a large homogeneous workload. The Gallery courtyard has two small crowds:
