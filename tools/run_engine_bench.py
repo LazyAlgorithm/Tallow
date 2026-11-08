@@ -25,11 +25,40 @@ import statistics
 import subprocess
 import sys
 
-MODES = ("gameobject", "ecs", "ecs-mt", "mixed")
+MODE_GROUPS = {
+    "gameobject": "throughput", "ecs": "throughput", "ecs-mt": "throughput",
+    "ecs-static": "throughput", "render-static": "throughput",
+    "script-empty": "throughput", "prefab": "throughput", "mixed": "throughput",
+    "ai-tree": "identity", "net-offline": "identity",
+    "physics-active": "physics", "physics-sleep": "physics",
+    "physics-kinematic": "physics", "physics-static": "physics",
+}
+MODES = tuple(MODE_GROUPS)
 PRESETS = {
-    "quick": {"counts": [1_000, 10_000], "frames": 240, "runs": 1, "profiles": [1_000]},
-    "standard": {"counts": [1_000, 10_000, 50_000, 100_000], "frames": 600, "runs": 3, "profiles": [1_000, 10_000]},
-    "stress": {"counts": [10_000, 50_000, 100_000, 200_000], "frames": 1_200, "runs": 5, "profiles": [10_000, 100_000]},
+    "quick": {"groups": {"throughput": [1000, 10000], "identity": [100, 1000], "physics": [100, 500]},
+              "frames": 240, "runs": 1, "profiles": [1000], "ecs_profiles": [10000], "scene_profiles": [100]},
+    "standard": {"groups": {"throughput": [1000, 10000, 50000, 100000],
+                            "identity": [100, 1000, 5000], "physics": [100, 500, 1000, 5000]},
+                 "frames": 600, "runs": 3, "profiles": [1000, 10000],
+                 "ecs_profiles": [10000, 100000], "scene_profiles": [100, 1000]},
+    "stress": {"groups": {"throughput": [10000, 50000, 100000, 200000],
+                          "identity": [1000, 5000, 10000], "physics": [1000, 5000, 10000]},
+               "frames": 1200, "runs": 5, "profiles": [10000, 100000],
+               "ecs_profiles": [100000, 1000000], "scene_profiles": [1000, 10000]},
+}
+PENDING = {
+    "live-network": "server/clients, bandwidth, loss, rollback, migration",
+    "nav-crowd": "real navmesh pathfinding, crowd avoidance, baking",
+    "animation": "rigs, blending, IK, skinning and retargeting",
+    "audio": "voice mixing, latency, streaming and HRTF",
+    "GPU-render": "GPU timings, materials, post effects, shadows and compute",
+    "streaming": "chunk/scene loading, stand-ins, floating origin",
+    "voxel": "terrain generation, marching cubes, mesh rebuild and persistence",
+    "softbody": "jelly, rope, joints and physical collisions",
+    "editor": "inspector, scene manipulation and script hot reload",
+    "assets": "import, compression, model conversion, build and shader throughput",
+    "UI": "layout, text and input dispatch",
+    "multiplatform": "Linux, Windows, macOS and Web",
 }
 METRICS = (
     "frame_avg_ms", "frame_p99_ms", "update_avg_ms", "update_p99_ms",
