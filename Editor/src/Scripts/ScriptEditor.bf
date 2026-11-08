@@ -358,7 +358,31 @@ extension EditorApp
 		if (mCheckSucceeded)
 		{
 			Log.Info("Scripts compiled. Use File > Rebuild & Reload to run the new code.");
-			mStatus.Clear();
+			if (mPlayAfterCompile && mPlay == .Edit)
+			{
+				// A standalone error check may have been in progress when Play
+				// was requested. The checked binary is not an activated reload.
+				if (mScriptsNeedReload)
+				{
+					if (mReloadReady)
+					{
+						QueueScriptReload(true, true);
+						mStatus.Set("Waiting to compile scripts before Play...");
+					}
+					else
+					{
+						mPlayAfterCompile = false;
+						mStatus.Set("Script reload is unavailable. Full Rebuild & Restart before Play.");
+					}
+				}
+				else
+				{
+					mPlayAfterCompile = false;
+					StartPlay();
+				}
+			}
+			else
+				mStatus.Clear();
 		}
 		else
 		{
