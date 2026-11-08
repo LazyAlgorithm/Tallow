@@ -143,7 +143,10 @@ struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
 	/// nodes immediately, without walking every GameObject to find disabled AI.
 	public static void FrameAll(Scene scene)
 	{
-		if (!scene.IsPlaying)
+		// Server-authoritative AI: remote clients should not even enumerate
+		// behavior runners/navigation agents or instantiate their runtime state.
+		// They display the replicated transform and gameplay state instead.
+		if (!scene.IsPlaying || NetworkSync.IsClientOf(scene))
 			return;
 		let runners = scope List<BehaviorTreeRunner>();
 		scene.Components<BehaviorTreeRunner>(runners);
