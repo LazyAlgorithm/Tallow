@@ -67,7 +67,7 @@ METRICS = (
     "script_only_avg_ms", "script_only_p99_ms", "process_cpu_ms_per_frame",
     "spawn_ms", "despawn_ms", "draw_calls_avg", "memory_growth_mib",
     "allocation_count", "ref_slow_per_frame", "physics_bodies", "sleeping_bodies",
-    "static_colliders", "physics_step_error", "behavior_trees", "network_identities",
+    "static_colliders", "created_bodies", "physics_step_error", "behavior_trees", "network_identities",
 )
 
 
@@ -161,17 +161,19 @@ def summarize(rows: list[dict], output: Path) -> None:
 
     lines = ["# Tallow benchmark summary", "", "Median of completed runs; p99 is the median of each run's p99.",
              "Lower frame/update milliseconds is better. Results depend on machine, GPU and window settings.", "",
-             "| Variant | Mode | Objects | Runs | Frame avg / p99 (ms) | Update avg / p99 (ms) | Spawn (ms) | Memory growth (MiB) |",
-             "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
+             "| Variant | Mode | Objects | Runs | Frame avg / p95 / p99 / p99.9 (ms) | Update avg / p99 (ms) | Spawn (ms) | Memory growth (MiB) | Actual Jolt / sleeping |",
+             "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     def fmt(row: dict, key: str) -> str:
         value = row.get(key)
         return f"{value:.3f}" if value is not None else "n/a"
     for key in sorted(medians):
         row = medians[key]
         lines.append(f"| {row['variant']} | {row['mode']} | {row['count']:,} | {row['runs']} | "
-                     f"{fmt(row, 'frame_avg_ms')} / {fmt(row, 'frame_p99_ms')} | "
+                     f"{fmt(row, 'frame_avg_ms')} / {fmt(row, 'frame_p95_ms')} / "
+                     f"{fmt(row, 'frame_p99_ms')} / {fmt(row, 'frame_p999_ms')} | "
                      f"{fmt(row, 'update_avg_ms')} / {fmt(row, 'update_p99_ms')} | "
-                     f"{fmt(row, 'spawn_ms')} | {fmt(row, 'memory_growth_mib')} |")
+                     f"{fmt(row, 'spawn_ms')} | {fmt(row, 'memory_growth_mib')} | "
+                     f"{fmt(row, 'created_bodies')} / {fmt(row, 'sleeping_bodies')} |")
     if any(key[0] == "baseline" for key in medians):
         lines += ["", "## Baseline comparison", "", "Negative change means the current build is faster.", "",
                   "| Mode | Objects | Frame average change | Update average change |", "| --- | ---: | ---: | ---: |"]
