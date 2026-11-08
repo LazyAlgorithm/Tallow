@@ -640,7 +640,7 @@ class NavigationAgentState
 				for (let obstacle in nearbyObstacles)
 				{
 					// A carved obstacle is in the navmesh/grid already; a moving or
-					uncarved one is handled by local steering instead.
+					// uncarved one is handled by local steering instead.
 					if (!obstacle.IsActiveAndEnabled || obstacle.Carving)
 						continue;
 					let at = obstacle.Transform.Position + obstacle.Transform.Rotation * obstacle.center;
