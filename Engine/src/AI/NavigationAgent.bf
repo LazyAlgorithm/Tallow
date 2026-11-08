@@ -113,8 +113,11 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 		if (on)
 			return;
 		let state = ComponentState<NavigationAgentState>.Get(gameObject.Scene.World, gameObject.Entity);
-		if (state != null && state.[Friend]mWasActive)
+		if (state != null)
 		{
+			// A destination may be requested immediately after enabling, before
+			// FrameAll sets mWasActive again. Disabling must still cancel it.
+			// StopMovement is safe even if the agent was already stopped.
 			state.[Friend]mWasActive = false;
 			state.StopMovement();
 		}
