@@ -87,8 +87,8 @@ extension EditorApp
 		SaveAllScripts();
 		if (mCheckRunning || mReloadQueued)
 		{
-			mPlayAfterCompile = Project.Current.PlayAfterCompile;
-			mStatus.Set("Scripts are compiling. Play is blocked until they are ready.");
+			mPlayAfterCompile = true;
+			mStatus.Set(mCheckRunning ? "Compiling scripts before Play..." : "Waiting to compile scripts before Play...");
 			return;
 		}
 		if (mScriptsNeedReload)
@@ -98,9 +98,9 @@ extension EditorApp
 				mStatus.Set("Script reload is unavailable. Use Full Rebuild & Restart before Play.");
 				return;
 			}
-			mPlayAfterCompile = Project.Current.PlayAfterCompile;
+			mPlayAfterCompile = true;
 			QueueScriptReload(true, true);
-			mStatus.Set("Compiling scripts before Play. Press Play again when ready.");
+			mStatus.Set("Waiting to compile scripts before Play...");
 			return;
 		}
 		StopSequencePreview();
@@ -109,6 +109,8 @@ extension EditorApp
 			Log.Warning("A prefab is open. Go back to the scene to play.");
 			return;
 		}
+		// A successful Play transition must never retain a stale compile notice.
+		mStatus.Clear();
 		// Side files (sculpted terrain) must be on disk, because stopping reloads the scene.
 		for (let component in mScene.Components)
 			component.OnBeforeSave();

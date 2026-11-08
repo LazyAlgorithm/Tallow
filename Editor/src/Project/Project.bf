@@ -115,8 +115,6 @@ class Project
 	public ScriptReloadMode ReloadMode = .Automatic;
 	/// Method-body changes can wait until Play; field/component changes still reload in Edit mode.
 	public bool ReloadMethodsInEdit;
-	/// Explicit opt-in: start Play after a requested script compile succeeds.
-	public bool PlayAfterCompile;
 
 	/// Folder shown as "Assets" in the editor: scripts, models, scenes, textures and prefabs.
 	/// On disk it is the Beef project's src folder, so scripts placed anywhere inside are compiled.
@@ -172,7 +170,6 @@ class Project
 				if (Enum.Parse<ScriptReloadMode>(value) case .Ok(let mode))
 					ReloadMode = mode;
 			case "reloadMethodsInEdit": ReloadMethodsInEdit = value == "1";
-			case "playAfterCompile": PlayAfterCompile = value == "1";
 			}
 		}
 		if (!Name.IsEmpty)
@@ -231,8 +228,6 @@ class Project
 			text.AppendF("scriptReload = {}\n", ReloadMode.ToString(.. scope .()));
 		if (ReloadMethodsInEdit)
 			text.Append("reloadMethodsInEdit = 1\n");
-		if (PlayAfterCompile)
-			text.Append("playAfterCompile = 1\n");
 		File.WriteAllText(scope $"{Path}/project.tallow" , text).IgnoreError();
 	}
 

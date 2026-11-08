@@ -15,9 +15,10 @@ declarations (new components, fields, method signatures and inspector attributes
 structural reload in Edit mode, so newly added fields can be configured in the Inspector.
 The **Reload Methods In Edit** project toggle restores method hot-reload on every save.
 When Play is pressed with a reload in progress or pending, Tallow stays in Edit mode
-until compilation succeeds. It does **not** automatically enter Play: press Play again
-after the successful compile. The separate **Play After Compile** option is opt-in.
-A failed compilation retains the previous live code and keeps Play blocked.
+while it compiles, and automatically enters Play when the reload succeeds. No second click
+or setting is required. A failed compilation retains the previous live code and keeps Play blocked.
+The top-of-editor status is cleared on successful Play entry and updated for compile failures.
+The old `playAfterCompile` project setting is no longer used or saved.
 Manual mode also defers compilation until explicit Reload Scripts or a Play attempt.
 
 A cheap `--classify` invocation compares the saved source with the last successfully activated

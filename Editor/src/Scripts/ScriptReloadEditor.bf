@@ -153,7 +153,7 @@ extension EditorApp
 		mCheckWasReload = true;
 		mCheckRunning = true;
 		Interlocked.Store(ref mCheckFinished, false);
-		mStatus.Set("Compiling script library...");
+		mStatus.Set(mPlayAfterCompile ? "Compiling scripts before Play..." : "Compiling script library...");
 		mCheckThread = new Thread(new () =>
 			{
 				let project = Project.Current;
@@ -243,15 +243,16 @@ extension EditorApp
 			mStatus.Set("Additional script changes pending compilation.");
 			return;
 		}
-		if (mPlayAfterCompile && project.PlayAfterCompile && mPlay == .Edit)
+		if (mPlayAfterCompile && mPlay == .Edit)
 		{
 			mPlayAfterCompile = false;
+			mStatus.Clear();
 			StartPlay();
 			return;
 		}
 		mPlayAfterCompile = false;
 		if (mPlay == .Edit)
-			mStatus.Set("Scripts ready. Press Play when you want to start.");
+			mStatus.Clear();
 		else
 			mStatus.Set("Scripts hot reloaded.");
 	}

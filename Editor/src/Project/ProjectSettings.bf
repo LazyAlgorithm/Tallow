@@ -71,9 +71,6 @@ extension EditorApp
 			BeginProperty("Reload Methods In Edit");
 			if (ImGui.Checkbox("##reloadmethodsinedit", ref project.ReloadMethodsInEdit))
 				project.Save();
-			BeginProperty("Play After Compile");
-			if (ImGui.Checkbox("##playaftercompile", ref project.PlayAfterCompile))
-				project.Save();
 			ImGui.EndTable();
 		}
 		switch (project.ReloadMode)
@@ -89,7 +86,7 @@ extension EditorApp
 		case .Manual:
 			ImGui.TextWrapped("Save without compiling or activating scripts. Use File > Reload Scripts when ready. Check Errors remains available.");
 		}
-		ImGui.TextWrapped("Play never enters while compilation is running or scripts are pending. By default, press Play again after a successful compile; Play After Compile enables automatic entry.");
+		ImGui.TextWrapped("Press Play once: pending scripts compile before gameplay starts. Play starts automatically after a successful reload, and stays in Edit mode if compilation fails.");
 		if (ImGui.Button("Force Structural Script Reload"))
 			ForceConservativeScriptReload();
 	}

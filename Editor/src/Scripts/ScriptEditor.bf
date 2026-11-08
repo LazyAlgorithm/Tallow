@@ -356,9 +356,16 @@ extension EditorApp
 			return;
 		}
 		if (mCheckSucceeded)
+		{
 			Log.Info("Scripts compiled. Use File > Rebuild & Reload to run the new code.");
+			mStatus.Clear();
+		}
 		else
+		{
 			Log.Error("Scripts have errors; see the Console.");
+			mPlayAfterCompile = false;
+			mStatus.Set("Script compilation failed. See Console.");
+		}
 	}
 
 	/// Networked code that would come out differently on different machines (ScriptDeterminism), as warnings.

@@ -563,6 +563,9 @@ class EditorApp : Application
 		// Long blocking jobs run after a frame that shows the "working" message has been presented.
 		if (mBusyFrames > 0 && --mBusyFrames == 0)
 		{
+			// Clear the previous operation before dispatch: actions may set a
+			// new status that must remain visible while asynchronous work runs.
+			mStatus.Clear();
 			if (mWantRebuild)
 				RebuildAndReload();
 			if (mWantBuildGame)
@@ -572,7 +575,6 @@ class EditorApp : Application
 			mWantFullRestart = false;
 			mWantRebuild = false;
 			mWantBuildGame = false;
-			mStatus.Clear();
 		}
 	}
 }
