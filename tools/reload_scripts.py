@@ -387,7 +387,7 @@ def host_info(path):
     return values
 
 
-def windows_build(project, name, args, baseline, current):
+def windows_build(project, name, args, baseline, current, snapshot_seconds, reload_started):
     info = host_info(args.host_info or args.baseline.with_suffix('.host'))
     workspace = project / '.tallow-reload' / (args.baseline.stem + '-workspace')
     workspace.mkdir(parents=True, exist_ok=True)
@@ -566,9 +566,10 @@ def windows_build(project, name, args, baseline, current):
     temporary.write_text('\n'.join(lines) + '\n')
     temporary.replace(manifest)
     print(f'Compiled script library: {module}. Engine implementations remain in the host.', flush=True)
-    print(f'Reload total: {time.perf_counter() - reload_started:.2f}s '
+    total_seconds = time.perf_counter() - reload_started
+    print(f'Reload total: {total_seconds:.2f}s '
           f'(BeefBuild {compile_seconds:.2f}s, other stages '
-          f'{time.perf_counter() - reload_started - compile_seconds:.2f}s)', flush=True)
+          f'{total_seconds - compile_seconds:.2f}s)', flush=True)
     return 0
 
 
@@ -616,7 +617,7 @@ def main():
             return 3
         if args.manifest is None:
             parser.error('--manifest is required for builds')
-        return windows_build(project, name, args, baseline, current)
+        return windows_build(project, name, args, baseline, current, snapshot_seconds, reload_started)
     if args.commit:
         baseline = json.loads(args.baseline.read_text())
         module = Path(json.loads(args.manifest.read_text().splitlines()[0].removeprefix('module ')))
