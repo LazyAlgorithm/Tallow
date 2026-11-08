@@ -121,5 +121,13 @@ extension Bench
 		line.AppendF("\"physics_bodies\": {}, \"behavior_trees\": {}, \"network_identities\": {}, ", mBodies, mTrees, mNetworked);
 		line.AppendF("\"ai_agents\": {}, \"ai_targets\": {}, \"ai_tree_ticks\": {}, \"navigation_bake_ms\": {:F3}, ",
 			mAiAgents, mAiTargets, aiTicks, mNavBakeMs);
+		if (mMode == "ai")
+		{
+			let spatial = Scene.AISpatial;
+			line.AppendF("\"ai_broadphase_builds\": {}, \"ai_object_queries\": {}, \"ai_object_candidates\": {}, ",
+				spatial.Rebuilds, spatial.ObjectQueries, spatial.ObjectCandidates);
+			line.AppendF("\"ai_obstacle_queries\": {}, \"ai_obstacle_candidates\": {}, ",
+				spatial.ObstacleQueries, spatial.ObstacleCandidates);
+		}
 	}
 }
