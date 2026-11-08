@@ -68,11 +68,15 @@ Visual Behavior Tree + Inspector + Script + ECS Components
 - [ ] Verify state transitions and deterministic scheduling order with live
   server/client, play-stop-play, object reuse, and hot reload.
 
-### 2. Shared AI perception and obstacle indexing [planned]
-- [ ] Index relevant target positions/tag/name categories in a scene-owned
-  spatial index; eliminate `BTSenses.Find()`'s per-AI full scene scan.
-- [ ] Index dynamic Navigation Obstacles; eliminate `NavigationAgent.Avoid()`'s
-  per-agent obstacle scan.
+### 2. Shared AI perception and obstacle indexing [in progress]
+- [x] Add a scene-owned 2D spatial broadphase for nearby target candidates;
+  remove `BTSenses.Find()`'s repeated per-AI full-scene scan while retaining
+  the same exact name/tag, range, view cone and raycast checks.
+- [x] Index dynamic Navigation Obstacles once per scene update/tick; use a
+  spatial candidate query in `NavigationAgent.Avoid()` instead of scanning
+  every obstacle per agent. Include each obstacle's physical radius.
+- [ ] Improve target type/tag-specific indexing and account for changes to
+  objects that move after the spatial snapshot was built within a frame.
 - [ ] Use efficient, thread-safe snapshots of positions/velocities for
   perception and avoidance, preserving the current line-of-sight rules,
   `#Tag`, prefix name patterns and inactive-world filtering.
@@ -150,12 +154,13 @@ Visual Behavior Tree + Inspector + Script + ECS Components
 
 ## First patch and how to test
 
-The first code patch targets **Stage 1**. It replaces O(scene objects) handle
-searches for every frame's Behavior Tree and Navigation Agent scheduling with
-the cached Flecs handle component query already used elsewhere in the engine.
-The existing handle-switch callback is used to stop/abort state immediately
-when a component or its hierarchy is disabled; this preserves behavior while
-avoiding a separate full-scene scan for disabled components.
+The initial implementation covers **Stage 1** and the first part of **Stage 2**.
+It replaces per-frame scene-wide handle searches with existing cached Flecs
+queries, keeps updates in stable GameObject ID order, and immediately stops or
+aborts disabled AI via handle lifecycle callbacks. It also adds a single
+scene-owned spatial candidate index shared by behavior-tree perception and
+navigation obstacle avoidance. The index is updated once per scene frame/tick;
+exact range/visibility checks are still done by the original algorithms.
 
 No behavior-tree algorithms, navigation algorithms, networking formats, APIs,
 or tick ordering are intended to change in Stage 1.
