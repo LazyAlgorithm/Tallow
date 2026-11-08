@@ -17,6 +17,51 @@ import time
 TOKEN = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|=>|[A-Za-z_][A-Za-z_0-9]*|[^\s]', re.S)
 
 
+def reload_workspace(project, platform):
+    """Persist Beef's incremental cache across editor launches on both OSes."""
+    return project / '.tallow-reload' / ('workspace-win64' if platform == 'windows' else 'workspace-linux64')
+
+
+def partition_link_objects(objects, prepared, game_objects):
+    """Keep game objects explicit and package only resident dependencies."""
+    game = set(game_objects)
+    game_links, dependency_links = [], []
+    for original, linked in zip(objects, prepared):
+        (game_links if original in game else dependency_links).append(linked)
+    return game_links, dependency_links
+
+
+def cached_dependency_archive(objects, archive):
+    """Cache an indexed library of host-aware dependency objects.
+
+    Prepared objects are rewritten when their contents or matching host
+    exports change, so a file stamp is sufficient for archive invalidation.
+    """
+    if not objects:
+        return None, False
+    stamp = archive.with_suffix(archive.suffix + '.stamp')
+    digest = hashlib.sha256()
+    for obj in objects:
+        stat = obj.stat()
+        digest.update(os.fsencode(obj))
+        digest.update(b'\0')
+        digest.update(f'{stat.st_size}:{stat.st_mtime_ns}\n'.encode())
+    signature = digest.hexdigest()
+    if archive.is_file() and stamp.is_file() and stamp.read_text() == signature:
+        return archive, True
+    temp = archive.with_name(archive.name + '.tmp')
+    if temp.exists():
+        temp.unlink()
+    try:
+        subprocess.run(['ar', 'rcs', str(temp), *map(str, objects)], check=True)
+        temp.replace(archive)
+        stamp.write_text(signature)
+    finally:
+        if temp.exists():
+            temp.unlink()
+    return archive, False
+
+
 def write_if_changed(path, content):
     """Preserve modification time when a generated Beef workspace config is unchanged.
 
@@ -525,7 +570,7 @@ def host_info(path):
 
 def windows_build(project, name, args, baseline, current, snapshot_seconds, reload_started):
     info = host_info(args.host_info or args.baseline.with_suffix('.host'))
-    workspace = project / '.tallow-reload' / (args.baseline.stem + '-workspace')
+    workspace = reload_workspace(project, 'windows')
     workspace.mkdir(parents=True, exist_ok=True)
     source = workspace / 'src'
     if cross():
@@ -568,6 +613,7 @@ def windows_build(project, name, args, baseline, current, snapshot_seconds, relo
         completed = subprocess.run(command, env=environment, stdout=output, stderr=subprocess.STDOUT)
     compile_seconds = time.perf_counter() - compile_started
     print(f'Reload timings: source scan {snapshot_seconds:.2f}s, BeefBuild {compile_seconds:.2f}s', flush=True)
+    print(f'Reload compiler cache: {workspace}', flush=True)
     text = log.read_text(errors='replace')
     # The throwaway link reports everything it could not find, which is everything; only the compiler's word counts.
     shown = [line for line in text.split('\n') if line.strip() and not re.match(r'^(lld-link: warning|>>>|MESA|pci id|\s)', line)]
@@ -792,7 +838,7 @@ def main():
     name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
     strategy = reload_strategy(args.mode, baseline, current, 'linux')
     print(f'Reload strategy: {strategy}', flush=True)
-    workspace = project / '.tallow-reload' / (args.baseline.stem + '-workspace')
+    workspace = reload_workspace(project, 'linux')
     workspace.mkdir(parents=True, exist_ok=True)
     source = workspace / 'src'
     if not source.exists():
@@ -813,6 +859,7 @@ def main():
                                 '-config=Debug', f'-verbosity={verbosity}'])
     compile_seconds = time.perf_counter() - compile_started
     print(f'Reload timings: source scan {snapshot_seconds:.2f}s, BeefBuild {compile_seconds:.2f}s', flush=True)
+    print(f'Reload compiler cache: {workspace}', flush=True)
     if completed.returncode:
         return completed.returncode
     # A save during compilation must never activate a stale or mixed revision.
@@ -854,6 +901,7 @@ def main():
     # emitted for game code can be included without duplicating engine state.
     alias_started = time.perf_counter()
     linked_objects, reused, reuse_reasons = alias_objects(objects, game_objects, aliases, resident, shared)
+    game_links, dependency_links = partition_link_objects(objects, linked_objects, game_objects)
     alias_seconds = time.perf_counter() - alias_started
     renamed = {symbol: 'reload_private_' + symbol for symbol in metadata
                if symbol in resident and (symbol.endswith('11sBfTypeDataE')
@@ -867,7 +915,29 @@ def main():
     metadata_object = aliases / 'vdata.o'
     link_started = time.perf_counter()
     subprocess.run(['objcopy', '--redefine-syms=' + str(mapping), str(vdata), str(metadata_object)], check=True)
-    subprocess.run(['c++', '-shared', '-Wl,-Bsymbolic', '-o', str(module), *map(str, linked_objects), str(metadata_object)], check=True)
+    archive_started = time.perf_counter()
+    dependency_archive, archive_reused = cached_dependency_archive(
+        dependency_links, aliases / 'resident-dependencies.a')
+    archive_seconds = time.perf_counter() - archive_started
+    # Game implementations and complete type metadata are mandatory. Resident
+    # dependencies are indexed, so ld extracts only genuinely missing code.
+    full_link = ['c++', '-shared', '-Wl,-Bsymbolic', '-o', str(module),
+                 *map(str, linked_objects), str(metadata_object)]
+    fast_link = ['c++', '-shared', '-Wl,-Bsymbolic', '-o', str(module),
+                 *map(str, game_links), str(metadata_object)]
+    if dependency_archive is not None:
+        fast_link.append(str(dependency_archive))
+    fallback = False
+    if os.environ.get('TALLOW_RELOAD_FLAT_LINK') == '1':
+        fallback = True
+        subprocess.run(full_link, check=True)
+    else:
+        try:
+            subprocess.run(fast_link, check=True)
+        except subprocess.CalledProcessError:
+            print('WARNING: Archive link failed; retrying the full-object linker.', flush=True)
+            fallback = True
+            subprocess.run(full_link, check=True)
     link_seconds = time.perf_counter() - link_started
     lines = ['module ' + json.dumps(str(module)), 'mode ' + strategy]
     lines += [f'class {symbol} {size}' for symbol, size in classes]
@@ -888,7 +958,9 @@ def main():
           f'(BeefBuild {compile_seconds:.2f}s, other stages {total_seconds - compile_seconds:.2f}s)', flush=True)
     print(f'Reload stages: inspect objects {objects_scanned_seconds:.2f}s, '
           f'prepare objects {alias_seconds:.2f}s ({reused}/{len(objects)} reused), '
-          f'link {link_seconds:.2f}s', flush=True)
+          f'link {link_seconds:.2f}s (archive {archive_seconds:.2f}s)', flush=True)
+    print(f'Reload link inputs: game {len(game_links)}, dependencies {len(dependency_links)}, '
+          f'archive reused {archive_reused}, flat fallback {fallback}', flush=True)
     print(f'Reload object cache: cold/missing {reuse_reasons["cold"]}, '
           f'object changed {reuse_reasons["changed"]}, '
           f'relevant host symbols changed {reuse_reasons["symbols"]}', flush=True)
