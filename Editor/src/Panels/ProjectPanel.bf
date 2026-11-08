@@ -31,6 +31,8 @@ extension EditorApp
 	String mNewDataType = new .() ~ delete _;
 	String mPendingMoveFrom = new .() ~ delete _;
 	String mPendingMoveTo = new .() ~ delete _;
+	uint32 mPendingPrefabId;
+	String mPendingPrefabFolder = new .() ~ delete _;
 	int32 mNewItemKind = -1; // 0 folder, 1 script, 2 scene
 	ProjectFolderMonitor mFolderMonitor = new .() ~ delete _;
 	ScriptComponentCatalog mScriptCatalog = new .() ~ delete _;
@@ -180,6 +182,16 @@ extension EditorApp
 			MoveAsset(mPendingMoveFrom, mPendingMoveTo);
 			mPendingMoveFrom.Clear();
 		}
+		// Defer new asset creation until the grid is finished: saving a
+		// prefab refreshes the list and must not invalidate its iteration.
+		if (mPendingPrefabId != 0)
+		{
+			let dropped = mScene.FindById(mPendingPrefabId);
+			if (dropped != null)
+				SaveSceneObjectAsPrefab(dropped, mPendingPrefabFolder);
+			mPendingPrefabId = 0;
+			mPendingPrefabFolder.Clear();
+		}
 		DrawProjectPopups();
 	}
 
@@ -248,6 +260,7 @@ extension EditorApp
 		ImGui.InvisibleButton("##gridspace", .(Math.Max(rest.x, 1), Math.Max(rest.y, 24)));
 		if (ImGui.IsItemClicked(0))
 			mSelectedAsset.Clear();
+		AcceptMoveInto(mBrowsePath);
 		if (ImGui.BeginPopupContextItem("gridmenu"))
 		{
 			DrawProjectCreateMenu();
@@ -428,7 +441,8 @@ extension EditorApp
 		}
 	}
 
-	/// Makes the last drawn item a drop target that moves the dragged asset into a folder.
+	/// Accept asset moves and Hierarchy object drops onto folder rows,
+	/// folder tiles, and the currently browsed folder's empty grid area.
 	void AcceptMoveInto(StringView folder)
 	{
 		if (!ImGui.BeginDragDropTarget())
@@ -439,6 +453,12 @@ extension EditorApp
 			mPendingMoveFrom.Clear();
 			mPendingMoveFrom.AppendF("{}/{}", Assets.ProjectPath, StringView((char8*)payload.data, payload.dataSize));
 			mPendingMoveTo.Set(folder);
+		}
+		let objectPayload = ImGui.AcceptDragDropPayload("GAMEOBJECT");
+		if (objectPayload != null && objectPayload.dataSize == sizeof(uint32))
+		{
+			mPendingPrefabId = *(uint32*)objectPayload.data;
+			mPendingPrefabFolder.Set(folder);
 		}
 		ImGui.EndDragDropTarget();
 	}
