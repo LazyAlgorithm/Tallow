@@ -61,10 +61,12 @@ PENDING = {
     "multiplatform": "Linux, Windows, macOS and Web",
 }
 METRICS = (
-    "frame_avg_ms", "frame_p99_ms", "update_avg_ms", "update_p99_ms",
+    "frame_avg_ms", "frame_p50_ms", "frame_p95_ms", "frame_p99_ms", "frame_p999_ms",
+    "update_avg_ms", "update_p95_ms", "update_p99_ms",
     "script_only_avg_ms", "script_only_p99_ms", "process_cpu_ms_per_frame",
     "spawn_ms", "despawn_ms", "draw_calls_avg", "memory_growth_mib",
-    "allocation_count", "ref_slow_per_frame", "physics_bodies", "behavior_trees", "network_identities",
+    "allocation_count", "ref_slow_per_frame", "physics_bodies", "sleeping_bodies",
+    "static_colliders", "physics_step_error", "behavior_trees", "network_identities",
 )
 
 
@@ -195,8 +197,12 @@ def main() -> int:
     parser.add_argument("--baseline-executable", type=Path, help="Optional earlier EcsBench player for A/B testing")
     parser.add_argument("--output-dir", type=Path, default=root / "build" / "benchmark-results")
     parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES))
+    parser.add_argument("--list", action="store_true", help="List implemented and pending coverage")
+    parser.add_argument("--warmup", type=int, default=120, help="Frame warm-up; sleeping physics uses at least 600")
     parser.add_argument("--counts", nargs="+", type=int)
     parser.add_argument("--profile-counts", nargs="*", type=int)
+    parser.add_argument("--ecs-profile-counts", nargs="*", type=int)
+    parser.add_argument("--scene-profile-counts", nargs="*", type=int)
     parser.add_argument("--runs", type=int)
     parser.add_argument("--frames", type=int)
     parser.add_argument("--timeout", type=int, default=1800, help="Seconds allowed per player launch")
@@ -205,12 +211,26 @@ def main() -> int:
     parser.add_argument("--headless-only", action="store_true", help="Run --check-scripts and --profile-scripts only")
     parser.add_argument("--fail-fast", action="store_true", help="Stop on first failure (partial files stay saved)")
     args = parser.parse_args()
+    if args.list:
+        print("Implemented workloads:")
+        for mode, group in MODE_GROUPS.items():
+            print(f"  {mode:22s} [{group}]")
+        print("\nHeadless: --check-scripts, --profile-scripts, --profile-ecs, --profile-scene")
+        print("\nPending coverage (not reported as benchmark measurements):")
+        for name, purpose in PENDING.items():
+            print(f"  {name:22s} {purpose}")
+        return 0
     defaults = PRESETS[args.preset]
-    args.counts = args.counts if args.counts is not None else defaults["counts"]
+    cases = [(mode, count) for mode in args.modes
+             for count in (args.counts if args.counts is not None else defaults["groups"][MODE_GROUPS[mode]])]
     args.frames = args.frames if args.frames is not None else defaults["frames"]
     args.runs = args.runs if args.runs is not None else defaults["runs"]
     args.profile_counts = args.profile_counts if args.profile_counts is not None else defaults["profiles"]
-    if args.frames <= 0 or args.runs <= 0 or args.timeout <= 0 or any(n <= 0 for n in [*args.counts, *args.profile_counts]):
+    args.ecs_profile_counts = args.ecs_profile_counts if args.ecs_profile_counts is not None else defaults["ecs_profiles"]
+    args.scene_profile_counts = args.scene_profile_counts if args.scene_profile_counts is not None else defaults["scene_profiles"]
+    if args.frames <= 0 or args.runs <= 0 or args.timeout <= 0 or args.warmup <= 0 or any(
+            n <= 0 for n in [*(args.counts or []), *args.profile_counts,
+                            *args.ecs_profile_counts, *args.scene_profile_counts]):
         parser.error("Counts, frames, runs and timeout must be positive")
     platform_name = "Win64" if os.name == "nt" else "Linux64"
     binary_name = "EcsBench.exe" if os.name == "nt" else "EcsBench"
@@ -233,6 +253,9 @@ def main() -> int:
     out.mkdir(parents=True)
     meta = metadata(root, args)
     meta["executables"] = {variant: str(player) for variant, player in players}
+    meta["cases"] = [{"mode": mode, "count": count} for mode, count in cases]
+    meta["pending_coverage"] = PENDING
+    meta["warmup_frames"] = args.warmup
     write_json(out / "metadata.json", meta)
     print(f"Results: {out}", flush=True)
     results: list[dict] = []
