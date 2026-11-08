@@ -16,6 +16,7 @@ extension EditorApp
 	String mReloadManifest = new .() ~ delete _;
 	bool mReloadReady;
 	bool mReloadQueued;
+	bool mReloadForceConservative;
 	bool mCheckWasReload;
 	bool mWantFullRestart;
 
@@ -63,11 +64,15 @@ extension EditorApp
 	/// A save already tells us which files changed. Consume the monitor snapshot
 	/// immediately so its next 500ms poll will not schedule a duplicate build.
 	/// External disk edits are still detected normally by PollScriptReload.
-	void QueueScriptReload(bool fromEditorSave = false)
+	void QueueScriptReload(bool fromEditorSave = false, bool explicitRequest = false, bool conservative = false)
 	{
 		if (fromEditorSave)
 			mScriptMonitor.Poll(Assets.ProjectPath);
+		if (!explicitRequest && Project.Current.ReloadMode == .Manual)
+			return;
 		mReloadQueued = true;
+		if (conservative)
+			mReloadForceConservative = true;
 		mScriptDebounce.Restart();
 	}
 
@@ -83,6 +88,8 @@ extension EditorApp
 		}
 		if (!mReloadQueued || mCheckRunning || mScriptDebounce.ElapsedMilliseconds < 150) return;
 		mReloadQueued = false;
+		let conservative = mReloadForceConservative || Project.Current.ReloadMode == .Conservative;
+		mReloadForceConservative = false;
 		if (mCheckThread != null)
 		{
 			mCheckThread.Join();
@@ -105,6 +112,7 @@ extension EditorApp
 				Terminal.Quote(mReloadBaseline, command);
 				command.Append(" --manifest ");
 				Terminal.Quote(mReloadManifest, command);
+				command.Append(conservative ? " --mode conservative" : " --mode automatic");
 				command.Append(" > ");
 				Terminal.Quote(scope $"{project.Path}/build/script-reload.log" , command);
 				command.Append(" 2>&1");
@@ -127,6 +135,17 @@ extension EditorApp
 		let error = scope String();
 		if (!mScriptReload.Apply(mReloadManifest, error, mScene))
 		{
+			// The lightweight patch path validates ABI/type compatibility before changing
+			// live dispatch data. Retry with structural migration when it cannot apply.
+			let manifest = scope String();
+			File.ReadAllText(mReloadManifest, manifest).IgnoreError();
+			if (manifest.Contains("mode methods") && Project.Current.ReloadMode == .Automatic)
+			{
+				Log.Warning(scope $"Method patch unavailable ({error}); retrying structural script reload.");
+				mStatus.Set("Retrying structural script reload...");
+				QueueScriptReload(false, true, true);
+				return;
+			}
 			Log.Error(error);
 			mStatus.Set(error);
 			return;

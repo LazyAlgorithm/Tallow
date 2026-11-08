@@ -5,6 +5,14 @@ using Tallow;
 
 namespace Tallow.Editor;
 
+/// How saving Beef scripts affects the running editor. Configured per project.
+enum ScriptReloadMode
+{
+	Automatic,
+	Conservative,
+	Manual
+}
+
 /// A game project on disk: a Beef workspace that links the engine, plus scenes and assets.
 ///
 ///   MyGame/project.tallow     name, start scene, engine location
@@ -103,6 +111,8 @@ class Project
 	public List<String> Libraries = new .() ~ DeleteContainerAndItems!(_);
 	/// Extra linker arguments, e.g. "-lcurl" or a path to a .a file.
 	public String LinkFlags = new .() ~ delete _;
+	/// Automatically patch compatible methods, always use structural reload, or compile only on request.
+	public ScriptReloadMode ReloadMode = .Automatic;
 
 	/// Folder shown as "Assets" in the editor: scripts, models, scenes, textures and prefabs.
 	/// On disk it is the Beef project's src folder, so scripts placed anywhere inside are compiled.
@@ -154,6 +164,7 @@ class Project
 			case "engine": EngineRoot.Set(value);
 			case "library": Libraries.Add(new String(value));
 			case "link": LinkFlags.Set(value);
+			case "scriptReload": if (Enum.Parse<ScriptReloadMode>(value) case .Ok(let mode)) ReloadMode = mode;
 			}
 		}
 		if (!Name.IsEmpty)
@@ -208,6 +219,8 @@ class Project
 			text.AppendF("library = {}\n", library);
 		if (!LinkFlags.IsEmpty)
 			text.AppendF("link = {}\n", LinkFlags);
+		if (ReloadMode != .Automatic)
+			text.AppendF("scriptReload = {}\n", ReloadMode.ToString(.. scope .()));
 		File.WriteAllText(scope $"{Path}/project.tallow" , text).IgnoreError();
 	}
 

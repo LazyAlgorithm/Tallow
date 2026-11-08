@@ -22,6 +22,7 @@ extension EditorApp
 		if (ImGui.Begin("Project Settings", &mShowSettings, ImGui.WindowFlags.NoDocking | ImGui.WindowFlags.NoCollapse))
 		{
 			DrawGeneralSettings(project);
+			DrawScriptReloadSettings(project);
 			DrawProjectConfigSettings();
 			DrawLibrarySettings(project);
 			ImGui.SeparatorText("Native libraries");
@@ -37,6 +38,49 @@ extension EditorApp
 				RequestRebuild();
 		}
 		ImGui.End();
+	}
+
+	/// Reload policy is a development-time project option, not a gameplay dependency.
+	void DrawScriptReloadSettings(Project project)
+	{
+		ImGui.SeparatorText("Scripting");
+		if (BeginPropertyTable("scriptreload"))
+		{
+			BeginProperty("Script Reload");
+			let selected = scope String();
+			project.ReloadMode.ToString(selected);
+			ImGui.SetNextItemWidth(-1);
+			if (ImGui.BeginCombo("##scriptreload", selected.CStr()))
+			{
+				for (let (name, mode) in Enum.GetEnumerator<ScriptReloadMode>())
+				{
+					if (ImGui.Selectable(scope String(name).CStr(), mode == project.ReloadMode))
+					{
+						project.ReloadMode = mode;
+						project.Save();
+						if (mode == .Manual)
+						{
+							mReloadQueued = false;
+							mReloadForceConservative = false;
+							mScriptMonitor.Poll(Assets.ProjectPath);
+						}
+					}
+				}
+				ImGui.EndCombo();
+			}
+			ImGui.EndTable();
+		}
+		switch (project.ReloadMode)
+		{
+		case .Automatic:
+			ImGui.TextWrapped("Default: fast method patching for compatible body-only edits; structural reload for changes to declarations. Falls back to structural reload when method validation fails.");
+		case .Conservative:
+			ImGui.TextWrapped("Always compile and migrate the full script library, including method-only edits. Use this to investigate hot-reload compatibility.");
+		case .Manual:
+			ImGui.TextWrapped("Save without compiling or activating scripts. Use File > Reload Scripts when ready. Check Errors remains available.");
+		}
+		if (ImGui.Button("Force Structural Script Reload"))
+			ForceConservativeScriptReload();
 	}
 
 	/// The start scene, audio, anti-cheat, saving, voice chat and Steam.

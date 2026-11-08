@@ -216,7 +216,7 @@ extension EditorApp
 
 	void SaveScript(ScriptDocument document)
 	{
-		if (document.readOnly)
+		if (document.readOnly || !tn_code_is_dirty(document.handle))
 			return;
 		let text = StringView(tn_code_get_text(document.handle));
 		if (File.WriteAllText(document.path, text) case .Err)
@@ -238,7 +238,8 @@ extension EditorApp
 		{
 			// Refresh the source index used by type colouring and visual scripting.
 			ApiIndex.RefreshProject();
-			StartErrorCheck();
+			if (Project.Current.ReloadMode != .Manual)
+				StartErrorCheck();
 		}
 	}
 
@@ -254,7 +255,7 @@ extension EditorApp
 	/// Compiles the project on a worker thread so typing is never blocked.
 	void StartErrorCheck()
 	{
-		if (mReloadReady)
+		if (mReloadReady && Project.Current.ReloadMode != .Manual)
 		{
 			QueueScriptReload(true);
 			return;

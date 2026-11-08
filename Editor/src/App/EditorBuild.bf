@@ -14,10 +14,22 @@ extension EditorApp
 		if (mReloadReady)
 		{
 			SaveAllScripts();
-			QueueScriptReload(true);
+			QueueScriptReload(true, true);
 			return;
 		}
 		FullRebuildAndRestart();
+	}
+
+	/// Explicitly bypass method patching without rebuilding/restarting the whole editor.
+	void ForceConservativeScriptReload()
+	{
+		if (!mReloadReady)
+		{
+			FullRebuildAndRestart();
+			return;
+		}
+		SaveAllScripts();
+		QueueScriptReload(true, true, true);
 	}
 
 	void FullRebuildAndRestart()
