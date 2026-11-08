@@ -37,6 +37,52 @@ A player who joins late receives all of it: the terrain and voxel edits so far, 
 
 On a client, calls that the server must decide (`Brush`, `Carve`) are sent to the server and take effect a moment later, when the server passes them back.
 
+## ECS data and ordinary scripts on one networked object
+
+You can add a normal `Script`, built-in components, and a project-defined
+`[Component]` struct to the **same** GameObject, including on a network prefab.
+Their data is stored in that GameObject's Flecs entity, so scripts, the Inspector,
+visual scripting and ECS queries all access the same values.
+
+```beef
+[Component]
+struct FlightData
+{
+    [Sync] public Vector3 velocity;
+    [Sync] public float fuel;
+    public int32 localEffect; // not sent
+}
+
+[Component]
+class FlightController : Script
+{
+    public override void Update(TickInput input, float deltaTime)
+    {
+        let flight = GetComponent<FlightData>();
+        if (flight != null)
+            Transform.Position += flight.velocity * deltaTime;
+    }
+}
+```
+
+Add `NetworkIdentity` to the object (or use a networked prefab). Tallow
+synchronizes supported `[Sync]` fields of the custom ECS struct alongside
+ordinary script fields, including changes made by direct ECS queries. It also
+sends the custom synchronized data-component layout when it changes, so clients
+can add or remove the same data type. Its other fields are local.
+
+Visual graphs have an **ECS** category: component Has/Add/Remove, primitive
+Get/Set, and a **For Each** loop that walks packed ECS data with one graph
+script. `Scene.World.ObjectsWith<FlightData>()` provides the equivalent
+cached query in code for scene GameObjects, each of which has an `ObjectLink`.
+
+This automatic bridge applies to **scene GameObjects with a NetworkIdentity**;
+`World.CreateMany<T>` entities that have no GameObject/ObjectLink are not
+currently auto-replicated or predicted. Pure entity-only replication remains
+a separate milestone. The ordinary network-prediction rules still apply to
+code or graphs that update shared ECS data: authoritative writes, fixed-tick
+inputs, reproducible ordering and replay safety matter.
+
 ## Writing a player: NetworkScript
 
 Derive from `NetworkScript` and write what happens in one tick. The engine reads the controls, sends them, runs your code on the server and on the player's own machine, and corrects the player's machine when the two disagree.
