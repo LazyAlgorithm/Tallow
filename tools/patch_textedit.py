@@ -177,3 +177,41 @@ if old_pair in c:
 elif new_pair not in c:
     raise AssertionError('TextEditor.cpp layout changed (paired closer)')
 open(source, 'w', encoding='utf-8').write(c)
+
+
+# Parameter signatures belong in autocomplete's header instead of an overlapping tooltip.
+h = open(header, encoding='utf-8').read()
+old = "\tinline bool IsAutoCompleteActive() const { return autocomplete.isActive(); }\n\tinline void ClearAutoCompleteSuggestions(bool pending)"
+new = "\tinline bool IsAutoCompleteActive() const { return autocomplete.isActive(); }\n\tinline void SetAutoCompleteSignature(const std::string& signature) { autocomplete.setSignature(signature); }\n\tinline void ClearAutoCompleteSuggestions(bool pending)"
+if old in h:
+    h = h.replace(old, new, 1)
+elif new not in h:
+    raise AssertionError('TextEditor.h layout changed (signature API)')
+old = "\t\tvoid setSuggestions(const std::vector<std::string>& suggestions);\n\t\tinline void clearSuggestions"
+new = "\t\tvoid setSuggestions(const std::vector<std::string>& suggestions);\n\t\tinline void setSignature(const std::string& value) { signature = value; }\n\t\tinline void clearSuggestions"
+if old in h:
+    h = h.replace(old, new, 1)
+elif new not in h:
+    raise AssertionError('TextEditor.h layout changed (signature setter)')
+old = "\t\tAutoCompleteConfig configuration;\n\t\tAutoCompleteState state;\n\t\tbool triggeredManually"
+new = "\t\tAutoCompleteConfig configuration;\n\t\tAutoCompleteState state;\n\t\tstd::string signature;\n\t\tbool triggeredManually"
+if old in h:
+    h = h.replace(old, new, 1)
+elif new not in h:
+    raise AssertionError('TextEditor.h layout changed (signature storage)')
+open(header, 'w', encoding='utf-8').write(h)
+
+c = open(source, encoding='utf-8').read()
+old = "\tconst auto visibleSuggestions = (suggestions == 0) ? 1 : std::min(static_cast<size_t>(10), suggestions);\n\tconst auto& style = ImGui::GetStyle();\n\tconst auto height = ImGui::GetFrameHeightWithSpacing() * visibleSuggestions + style.WindowPadding.y * 2.0f;\n\tImGui::SetNextWindowSize(ImVec2(configuration.suggestionWidth * glyphSize.x, height));"
+new = "\t// Parameter help is a header within the completion window, not another popup on\n\t// top of it. A bounded, scrollable header keeps long overload lists from hiding suggestions.\n\tconst auto visibleSuggestions = (suggestions == 0) ? 1 : std::min(static_cast<size_t>(signature.empty() ? 10 : 8), suggestions);\n\tconst auto& style = ImGui::GetStyle();\n\tconst float signatureHeight = signature.empty() ? 0.0f : ImGui::GetTextLineHeightWithSpacing() * 3.0f;\n\tconst auto height = ImGui::GetFrameHeightWithSpacing() * visibleSuggestions + style.WindowPadding.y * 2.0f +\n\t\t(signature.empty() ? 0.0f : signatureHeight + style.ItemSpacing.y + 1.0f);\n\tImGui::SetNextWindowSize(ImVec2(configuration.suggestionWidth * glyphSize.x, height));"
+if old in c:
+    c = c.replace(old, new, 1)
+elif new not in c:
+    raise AssertionError('TextEditor.cpp layout changed (signature popup sizing)')
+old = "\t\t} else {\n\t\t\t// do we have any suggestions\n\t\t\tif (suggestions) {"
+new = "\t\t} else {\n\t\t\tif (!signature.empty())\n\t\t\t{\n\t\t\t\tImGui::BeginChild(\"##signatureHelp\", ImVec2(0.0f, signatureHeight), false, ImGuiWindowFlags_NoNav);\n\t\t\t\tImGui::TextWrapped(\"%s\", signature.c_str());\n\t\t\t\tImGui::EndChild();\n\t\t\t\tImGui::Separator();\n\t\t\t}\n\t\t\t// do we have any suggestions\n\t\t\tif (suggestions) {"
+if old in c:
+    c = c.replace(old, new, 1)
+elif new not in c:
+    raise AssertionError('TextEditor.cpp layout changed (signature header)')
+open(source, 'w', encoding='utf-8').write(c)

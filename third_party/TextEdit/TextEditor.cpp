@@ -8722,9 +8722,13 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 		requestDeactivation = true;
 	}
 
-	const auto visibleSuggestions = (suggestions == 0) ? 1 : std::min(static_cast<size_t>(10), suggestions);
+	// Parameter help is a header within the completion window, not another popup on
+	// top of it. A bounded, scrollable header keeps long overload lists from hiding suggestions.
+	const auto visibleSuggestions = (suggestions == 0) ? 1 : std::min(static_cast<size_t>(signature.empty() ? 10 : 8), suggestions);
 	const auto& style = ImGui::GetStyle();
-	const auto height = ImGui::GetFrameHeightWithSpacing() * visibleSuggestions + style.WindowPadding.y * 2.0f;
+	const float signatureHeight = signature.empty() ? 0.0f : ImGui::GetTextLineHeightWithSpacing() * 3.0f;
+	const auto height = ImGui::GetFrameHeightWithSpacing() * visibleSuggestions + style.WindowPadding.y * 2.0f +
+		(signature.empty() ? 0.0f : signatureHeight + style.ItemSpacing.y + 1.0f);
 	ImGui::SetNextWindowSize(ImVec2(configuration.suggestionWidth * glyphSize.x, height));
 
 	const ImGuiWindowFlags flags =
@@ -8743,6 +8747,13 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 			active = false;
 
 		} else {
+			if (!signature.empty())
+			{
+				ImGui::BeginChild("##signatureHelp", ImVec2(0.0f, signatureHeight), false, ImGuiWindowFlags_NoNav);
+				ImGui::TextWrapped("%s", signature.c_str());
+				ImGui::EndChild();
+				ImGui::Separator();
+			}
 			// do we have any suggestions
 			if (suggestions) {
 				const auto items = state.suggestions.size();

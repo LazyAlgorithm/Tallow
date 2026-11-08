@@ -830,6 +830,7 @@ public:
 	inline std::string GetAutoCompletePreview() { return autocomplete.isActive() ? autocomplete.getReplacement() : ""; }
 	inline DocPos GetAutoCompleteStart() const { return autocomplete.getStart(); }
 	inline bool IsAutoCompleteActive() const { return autocomplete.isActive(); }
+	inline void SetAutoCompleteSignature(const std::string& signature) { autocomplete.setSignature(signature); }
 	inline void ClearAutoCompleteSuggestions(bool pending) { autocomplete.clearSuggestions(pending); }
 
 	// support functions for unicode codepoints
@@ -1830,6 +1831,7 @@ protected:
 
 		// specify a new set of suggestions
 		void setSuggestions(const std::vector<std::string>& suggestions);
+		inline void setSignature(const std::string& value) { signature = value; }
 		inline void clearSuggestions(bool pending) { state.suggestions.clear(); state.suggestionsPromise = pending; currentSelection = 0; }
 
 		// get information
@@ -1851,6 +1853,7 @@ protected:
 		std::chrono::system_clock::time_point activationTime;
 		AutoCompleteConfig configuration;
 		AutoCompleteState state;
+		std::string signature;
 		bool triggeredManually = false;
 		size_t currentSelection = 0;
 

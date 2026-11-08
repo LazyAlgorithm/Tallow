@@ -566,6 +566,9 @@ TN_API void tn_code_render(void* handle, const char* id, float width, float heig
 		document->editor.SetPalette(s_palette);
 		document->paletteVersion = s_paletteVersion;
 	}
+	// Display parameter signatures inside the suggestion popup when it is open,
+	// instead of creating a second tooltip at exactly the same caret position.
+	document->editor.SetAutoCompleteSignature(document->signature);
 	tn_imgui_push_mono_font();
 	document->editor.Render(id, ImVec2(width, height));
 	const std::string suffix = InlineSuffix(document);
@@ -595,7 +598,8 @@ TN_API void tn_code_render(void* handle, const char* id, float width, float heig
 			}
 			if (!before.empty() && (before.back() == ')' || before.back() == ';')) document->signature.clear();
 		}
-		if (!document->signature.empty())
+		document->editor.SetAutoCompleteSignature(document->signature);
+		if (!document->signature.empty() && !document->editor.IsAutoCompleteActive())
 		{
 			ImVec2 position = document->editor.DocPos2ScreenPos(document->editor.GetMainCursorPosition());
 			position.y += document->editor.GetLineHeight();
@@ -643,6 +647,7 @@ TN_API void tn_code_invalidate_semantics(void* handle)
 	document->cachedCompletions.clear();
 	document->hintSource.clear();
 	document->signature.clear();
+	document->editor.SetAutoCompleteSignature("");
 }
 
 // Drop a stale response without leaving an unresolved popup behind. A visible completion retries at the current cursor.
@@ -666,6 +671,7 @@ TN_API void tn_code_semantic_signature(void* handle, const char* signature)
 {
 	Document* document = (Document*)handle;
 	document->signature = signature ? signature : "";
+	document->editor.SetAutoCompleteSignature(document->signature);
 	document->signatureCursor = (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
 }
 
