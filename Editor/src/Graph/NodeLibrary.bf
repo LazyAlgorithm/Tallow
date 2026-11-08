@@ -751,6 +751,20 @@ static class NodeLibrary
 
 	// ---- project-defined ECS data in ordinary visual scripts ----
 
+	static bool EcsPin(Type type, out PinType pin)
+	{
+		pin = .Float;
+		if (type == typeof(float)) pin = .Float;
+		else if (type == typeof(int32)) pin = .Int;
+		else if (type == typeof(bool)) pin = .Bool;
+		else if (type == typeof(Vector2)) pin = .Vector2;
+		else if (type == typeof(Vector3)) pin = .Vector3;
+		else if (type == typeof(Quaternion)) pin = .Quaternion;
+		else if (type == typeof(Color)) pin = .Color;
+		else return false;
+		return true;
+	}
+
 	/// The same custom [Component] structs appear on GameObjects, in Flecs queries and
 	/// in the visual graph. An Object pin defaults to the graph's own GameObject.
 	/// These nodes use the GameObject's ECS entity, so scripts and graphs work on
@@ -775,24 +789,26 @@ static class NodeLibrary
 				Add(remove, "ECS", scope $"{info.name}: Remove Component", .Action,
 					scope $"if ({{0}} != null) {{0}}.RemoveComponent<{typeName}>();")
 					.In("Object", .Object, "GameObject", "GameObject");
+			// One visual graph can process a whole packed query without one script per object.
+			// Its Object output is useful for traditional API calls, and its field
+			// outputs read directly from the contiguous ECS column.
+			let each = scope $"ecs:{typeName}.each";
+			if (Find(each) == null)
+			{
+				let loop = Add(each, "ECS", scope $"{info.name}: For Each", .EcsEach, typeName)
+					.In("", .Flow).Out("Body", .Flow)
+					.Out("Object", .Object, "GameObject", "ecsObject$N");
+				for (let field in info.type.GetFields(.Public | .Instance))
+				{
+					if (!EcsPin(field.FieldType, let pin))
+						continue;
+					loop.Out(field.Name, pin, "", scope $"ecsData$N[ecsIndex$N].{field.Name}");
+				}
+				loop.Out("Done", .Flow);
+			}
 			for (let field in info.type.GetFields(.Public | .Instance))
 			{
-				PinType pin;
-				if (field.FieldType == typeof(float))
-					pin = .Float;
-				else if (field.FieldType == typeof(int32))
-					pin = .Int;
-				else if (field.FieldType == typeof(bool))
-					pin = .Bool;
-				else if (field.FieldType == typeof(Vector2))
-					pin = .Vector2;
-				else if (field.FieldType == typeof(Vector3))
-					pin = .Vector3;
-				else if (field.FieldType == typeof(Quaternion))
-					pin = .Quaternion;
-				else if (field.FieldType == typeof(Color))
-					pin = .Color;
-				else
+				if (!EcsPin(field.FieldType, let pin))
 					continue; // Unsupported types should not generate graphs that cannot compile.
 				let get = scope $"ecs:{typeName}.{field.Name}.get";
 				if (Find(get) == null)
