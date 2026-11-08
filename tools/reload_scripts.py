@@ -175,12 +175,12 @@ def normalized_source(text):
     inside them. Complex multiline strings and preprocessor directives use
     their original bytes because their layout can affect compilation.
     """
-    if ('"""' in text or '@"' in text or re.search(r'(?m)^\\s*#', text)):
+    if ('"""' in text or '@"' in text or re.search(r'(?m)^\s*#', text)):
         return hashlib.sha256(text.encode()).hexdigest()
     digest = hashlib.sha256()
     for token in TOKEN.finditer(text):
         digest.update(token.group().encode('utf-8'))
-        digest.update(b'\\0')
+        digest.update(b'\0')
     return digest.hexdigest()
 
 

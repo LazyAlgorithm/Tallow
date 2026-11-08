@@ -177,7 +177,7 @@ class BuildActivityTests(unittest.TestCase):
 class ChangeClassificationTests(unittest.TestCase):
     def test_whitespace_only_edits_do_not_request_recompile(self):
         source = 'class Player { public int speed = 2; void Update() { speed++; } }'
-        formatted = 'class Player{\\n    public int speed = 2;\\n    void Update(){ speed++; }\\n}'
+        formatted = 'class Player{\n    public int speed = 2;\n    void Update(){ speed++; }\n}'
         self.assertEqual(reload_scripts.normalized_source(source),
                          reload_scripts.normalized_source(formatted))
         self.assertNotEqual(reload_scripts.normalized_source(source),
@@ -193,8 +193,8 @@ class ChangeClassificationTests(unittest.TestCase):
     def test_literal_and_preprocessor_whitespace_is_not_ignored(self):
         self.assertNotEqual(reload_scripts.normalized_source('let s = "a b";'),
                             reload_scripts.normalized_source('let s = "a  b";'))
-        self.assertNotEqual(reload_scripts.normalized_source('#if A\\nfoo();'),
-                            reload_scripts.normalized_source('#if A\\n foo();'))
+        self.assertNotEqual(reload_scripts.normalized_source('#if A\nfoo();'),
+                            reload_scripts.normalized_source('#if A\n foo();'))
         self.assertNotEqual(reload_scripts.normalized_source('let s = """ a b """;'),
                             reload_scripts.normalized_source('let s = """ a  b """;'))
 
