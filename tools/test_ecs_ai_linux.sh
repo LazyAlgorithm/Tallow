@@ -29,7 +29,15 @@ if [[ -z "${BEEFBUILD:-}" ]]; then
 fi
 echo "Compiler: $BEEFBUILD"
 
-if [[ "${1:-}" != "--quick" ]]; then
+if [[ "${1:-}" == "--reuse-native" ]]; then
+    echo
+    echo "== Reusing completed native libraries, compiling Beef launcher and test binaries =="
+    if [[ ! -f "$root/build/native/libtallow_native.a" ]]; then
+        echo "ERROR: Native libraries missing. Rerun without --reuse-native." >&2
+        exit 1
+    fi
+    ./build.sh --config Debug --skip-native --skip-shaders
+elif [[ "${1:-}" != "--quick" ]]; then
     echo
     echo "== Building Tallow launcher and native dependencies (first checkout build may take longer) =="
     ./build.sh --config Debug --skip-shaders
