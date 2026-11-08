@@ -82,5 +82,30 @@ echo "== Mixed GameObject/ECS/Behavior Tree/NetworkIdentity smoke (200 objects) 
 )
 
 echo
+echo "== AI crowd smoke: 200 Behavior Trees, Navigation Agents and nearby targets =="
+crowd_result="$root/ecs-ai-crowd-smoke.jsonl"
+rm -f "$crowd_result"
+(
+    cd "$project"
+    TALLOW_BENCH_MODE=ai TALLOW_BENCH_COUNT=200 TALLOW_BENCH_FRAMES=90 \
+        TALLOW_BENCH_OUT="$crowd_result" "$bench" --project "$project"
+)
+python3 - "$crowd_result" <<'PY'
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+if not path.is_file():
+    sys.exit('ERROR: AI crowd benchmark produced no result JSON.')
+rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+if len(rows) != 1 or rows[0].get('mode') != 'ai':
+    sys.exit('ERROR: expected exactly one AI crowd result.')
+result = rows[0]
+if result.get('ai_agents') != 200 or result.get('behavior_trees') != 200 or result.get('ai_tree_ticks', 0) <= 0:
+    sys.exit('ERROR: AI crowd did not initialize and tick all expected agents.')
+print('PASS: 200 AI agents, 200 trees, active behavior ticks and navigation benchmark completed')
+PY
+
+echo
 echo "ALL TEST COMMANDS PASSED"
-echo "Please share ecs-ai-navigation-test.log and any visual/editor issues."
+echo "Please share ecs-ai-navigation-test.log and ecs-ai-crowd-smoke.jsonl."
