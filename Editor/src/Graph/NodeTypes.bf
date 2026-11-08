@@ -10,7 +10,7 @@ namespace Tallow.Editor;
 /// RaycastHit); its pin names the exact type. Enum names its enum the same way.
 enum PinType { Flow, Float, Bool, Vector3, String, Int, Object, Enum, Vector2, Quaternion, Color }
 
-enum NodeKind { Event, Action, Value, Branch, Param, Return, GetVariable, SetVariable, Loop, While, ShaderOutput }
+enum NodeKind { Event, Action, Value, Branch, Param, Return, GetVariable, SetVariable, Loop, While, ShaderOutput, EcsEach }
 
 struct PinDef
 {
