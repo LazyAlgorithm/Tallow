@@ -69,7 +69,7 @@ extension EditorApp
 				ImGui.EndCombo();
 			}
 			BeginProperty("Reload Methods In Edit");
-			if (ImGui.Checkbox("##reloadmethodsin edit", ref project.ReloadMethodsInEdit))
+			if (ImGui.Checkbox("##reloadmethodsinedit", ref project.ReloadMethodsInEdit))
 				project.Save();
 			BeginProperty("Play After Compile");
 			if (ImGui.Checkbox("##playaftercompile", ref project.PlayAfterCompile))
