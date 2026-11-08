@@ -875,6 +875,8 @@ static class NetworkSync
 		public List<String> syncedDataTypes = new .() ~ DeleteContainerAndItems!(_);
 		/// Reset when the component layout changes; the server must announce that layout before field indices.
 		public bool structureSent;
+		/// Remembers removals so a client returning to relevance can be told to clear the data.
+		public bool everHadSyncedData;
 	}
 
 	static Dictionary<NetworkIdentity, SlotList> sSlots = new .() ~ DeleteDictionaryAndValues!(_);
@@ -914,15 +916,18 @@ static class NetworkSync
 		dataComponents.Sort(scope (a, b) => a.fullName.CompareTo(b.fullName));
 		for (let info in dataComponents)
 			signature = signature * 31 + info.index + 1;
+		bool everHadSyncedData = false;
 		if (sSlots.TryGetValue(identity, let existing))
 		{
 			if (existing.signature == signature)
 				return existing;
+			everHadSyncedData = existing.everHadSyncedData || !existing.syncedDataTypes.IsEmpty;
 			sSlots.Remove(identity);
 			delete existing;
 		}
 		let list = new SlotList();
 		list.signature = signature;
+		list.everHadSyncedData = everHadSyncedData;
 		List<FieldRef> fields = scope .();
 		for (let component in identity.GameObject.Components)
 		{
@@ -1004,6 +1009,12 @@ static class NetworkSync
 			if (hasSyncedFields)
 				list.syncedDataTypes.Add(new String(info.fullName));
 		}
+		if (!list.syncedDataTypes.IsEmpty)
+			list.everHadSyncedData = true;
+		// Ordinary network objects with no synchronized ECS data must not each
+		// generate an extra reliable empty-layout message on their first tick.
+		if (!list.everHadSyncedData)
+			list.structureSent = true;
 		sSlots[identity] = list;
 		return list;
 	}
@@ -1138,8 +1149,11 @@ static class NetworkSync
 	{
 		let list = Slots(identity);
 		let payload = scope NetWriter();
-		WriteEcsComponents(payload, identity, list);
-		network.SendToClient(clientId, MsgEcsComponents, payload);
+		if (list.everHadSyncedData)
+		{
+			WriteEcsComponents(payload, identity, list);
+			network.SendToClient(clientId, MsgEcsComponents, payload);
+		}
 		if (list.slots.Count == 0)
 			return;
 		for (int i < list.slots.Count)
@@ -1458,8 +1472,11 @@ static class NetworkSync
 			}
 			let list = Slots(identity);
 			payload.Clear();
-			WriteEcsComponents(payload, identity, list);
-			network.SendToClient(clientId, MsgEcsComponents, payload);
+			if (list.everHadSyncedData)
+			{
+				WriteEcsComponents(payload, identity, list);
+				network.SendToClient(clientId, MsgEcsComponents, payload);
+			}
 			for (int i < list.slots.Count)
 			{
 				payload.Clear();
