@@ -18,7 +18,7 @@ namespace EcsBench;
 [Component]
 class Bench : Component
 {
-	const int WarmupFrames = 120;
+	int mWarmupFrames = 120;
 
 	String mMode = new .("ecs") ~ delete _;
 	int mCount = 10000;
@@ -50,6 +50,8 @@ class Bench : Component
 			mCount = count;
 		if (ReadSetting("TALLOW_BENCH_FRAMES", text..Clear()) && int.Parse(text) case .Ok(let frames))
 			mFrames = frames;
+		if (ReadSetting("TALLOW_BENCH_WARMUP", text..Clear()) && int.Parse(text) case .Ok(let warmup) && warmup >= 1)
+			mWarmupFrames = warmup;
 		ReadSetting("TALLOW_BENCH_OUT", mOutput);
 		// TALLOW_BENCH_EXPLORER=1: serve the scene to the Flecs Explorer while the benchmark runs.
 		if (ReadSetting("TALLOW_BENCH_EXPLORER", text..Clear()) && text == "1")
@@ -66,14 +68,22 @@ class Bench : Component
 			Console.WriteLine(failures == 0 ? "EcsBench checks: all passed" : scope $"EcsBench checks: {failures} FAILED");
 			Environment.Exit(failures == 0 ? 0 : 1);
 		}
+		if (mMode != "gameobject" && mMode != "mixed" && mMode != "ecs" &&
+			mMode != "ecs-mt" && mMode != "ecs-static" && !IsExtendedMode())
+		{
+			Console.WriteLine(scope $"Unknown EcsBench mode: {mMode}");
+			Environment.Exit(2);
+		}
 		mMemoryBefore = ProfilerModules.ProcessMemory();
 		let start = SDL.SDL_GetTicksNS();
 		if (mMode == "gameobject")
 			SpawnGameObjects();
 		else if (mMode == "mixed")
 			SpawnMixed();
-		else
+		else if (mMode == "ecs" || mMode == "ecs-mt" || mMode == "ecs-static")
 			SpawnEntities();
+		else
+			SpawnExtended();
 		mSpawnMs = (SDL.SDL_GetTicksNS() - start) / 1e6;
 		// Last in the registration list: measure callbacks separately from engine systems before LateUpdate.
 		GameObject.AddComponent<BenchEndUpdate>().owner = this;
@@ -118,7 +128,8 @@ class Bench : Component
 			Workload.Start(i, mHalfSize, let position, let velocity, let spin);
 			mWorld.Set<Pose>(entities[i], .() { position = position, rotation = .Identity });
 			mWorld.Set<Motion>(entities[i], .() { velocity = velocity, spin = spin });
-			mWorld.Add<RenderMatrix>(entities[i]);
+			mWorld.Set<RenderMatrix>(entities[i], .() { world = Matrix4.TRS(position, .Identity,
+				.(Workload.CubeScale, Workload.CubeScale, Workload.CubeScale)) });
 		}
 		mMove = new .(mWorld);
 		mDraw = new .(mWorld, .Read);
@@ -149,22 +160,22 @@ class Bench : Component
 	public override void Update(TickInput input, float deltaTime)
 	{
 		let now = SDL.SDL_GetTicksNS();
-		if (mLastFrame != 0 && mFrame > WarmupFrames)
+		if (mLastFrame != 0 && mFrame > mWarmupFrames)
 			mFrameTimes.Add((now - mLastFrame) / 1e6);
 		mLastFrame = now;
 		mFrame++;
-		if (mFrame == WarmupFrames)
+		if (mFrame == mWarmupFrames)
 		{
 			mMemoryAfter = ProfilerModules.ProcessMemory();
 			mCpuStart = CpuMilliseconds();
 			mAllocationsStart = AllocationCount();
 		}
-		if (mFrame > WarmupFrames)
+		if (mFrame > mWarmupFrames)
 			mDrawCounts.Add(RenderView.FrameDrawCalls);
 		// ProfilerModules clears this only while recording; benchmark runs leave recording off.
 		RenderView.FrameDrawCalls = 0;
 		mUpdateStart = SDL.SDL_GetTicksNS();
-		if (mWorld != null)
+		if (mWorld != null && mMode != "ecs-static")
 		{
 			let halfSize = mHalfSize;
 			if (mMode == "ecs-mt")
@@ -179,7 +190,7 @@ class Bench : Component
 
 	public override void LateUpdate()
 	{
-		if (mFrame > WarmupFrames)
+		if (mFrame > mWarmupFrames)
 			mUpdateTimes.Add((SDL.SDL_GetTicksNS() - mUpdateStart) / 1e6);
 		if (mFrameTimes.Count >= mFrames)
 			Finish();
@@ -187,7 +198,7 @@ class Bench : Component
 
 	public void EndScriptUpdates()
 	{
-		if (mFrame > WarmupFrames)
+		if (mFrame > mWarmupFrames)
 			mScriptTimes.Add((SDL.SDL_GetTicksNS() - mUpdateStart) / 1e6);
 	}
 
@@ -195,12 +206,16 @@ class Bench : Component
 	{
 		let line = scope String();
 		line.AppendF("{{\"mode\": \"{}\", \"count\": {}, \"threads\": {}, \"frames\": {}, ", mMode, mCount, mMode == "ecs-mt" ? Jobs.ThreadCount : 1, mFrameTimes.Count);
-		line.AppendF("\"frame_avg_ms\": {:F3}, \"frame_p99_ms\": {:F3}, ", Average(mFrameTimes), Percentile(mFrameTimes, 0.99));
-		line.AppendF("\"update_avg_ms\": {:F3}, \"update_p99_ms\": {:F3}, ", Average(mUpdateTimes), Percentile(mUpdateTimes, 0.99));
+		line.AppendF("\"frame_avg_ms\": {:F3}, \"frame_p50_ms\": {:F3}, \"frame_p95_ms\": {:F3}, \"frame_p99_ms\": {:F3}, \"frame_p999_ms\": {:F3}, ",
+			Average(mFrameTimes), Percentile(mFrameTimes, 0.5), Percentile(mFrameTimes, 0.95),
+			Percentile(mFrameTimes, 0.99), Percentile(mFrameTimes, 0.999));
+		line.AppendF("\"update_avg_ms\": {:F3}, \"update_p95_ms\": {:F3}, \"update_p99_ms\": {:F3}, ",
+			Average(mUpdateTimes), Percentile(mUpdateTimes, 0.95), Percentile(mUpdateTimes, 0.99));
 		line.AppendF("\"script_only_avg_ms\": {:F3}, \"script_only_p99_ms\": {:F3}, ", Average(mScriptTimes), Percentile(mScriptTimes, 0.99));
 		line.AppendF("\"ref_slow_per_frame\": {}, ", ComponentRefStats.SlowPath / Math.Max(mFrame, 1));
 		FinishCounters(line);
-		line.AppendF("\"spawn_ms\": {:F1}, \"memory_before\": {}, \"memory_after\": {}}}", mSpawnMs, mMemoryBefore, mMemoryAfter);
+		line.AppendF("\"spawn_ms\": {:F1}, \"warmup_frames\": {}, \"jobs_threads\": {}, \"memory_before\": {}, \"memory_after\": {}}}",
+			mSpawnMs, mWarmupFrames, Jobs.ThreadCount, mMemoryBefore, mMemoryAfter);
 		Console.WriteLine(line);
 		if (!mOutput.IsEmpty)
 		{
