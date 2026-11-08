@@ -46,11 +46,23 @@ Visual Behavior Tree + Inspector + Script + ECS Components
 
 ## Work stages and acceptance gates
 
-### 0. Baseline and compatibility [ ]
-- [ ] Get a clean Linux compile and `TALLOW_BENCH_MODE=check` pass on the
-  unified-ECS parent branch; do not mistake untested code for a passing baseline.
-- [ ] Capture current AI and navigation timings, path visits, AI tick counts, and
-  host/client bandwidth for representative worlds. Include per-frame spikes.
+### 0. Baseline and compatibility [in progress]
+- [x] The first `ecs-ai-navigation` candidate (commit `30c8b41a`) compiled
+  on Linux64 with **0 errors / 13 warnings** and passed the full
+  `TALLOW_BENCH_MODE=check` suite on 2026-11-08.
+- [x] The mixed 200-object benchmark completed 120 measured frames:
+  0.241 ms average frame / 1.580 ms p99 frame; 4 behavior trees,
+  2 physics bodies and 10 offline NetworkIdentity components.
+- [ ] Run the same Linux checks on the **unified ECS parent** branch and
+  capture the baseline for a controlled A/B comparison.
+- [x] Add an AI-specific crowd workload: every agent has a behavior tree and
+  Navigation Agent on one GameObject, with navigation, tagged perception and
+  authoritative-style offline NetworkIdentity bookkeeping. `tools/run_ai_bench.py`
+  records frame/update avg + p99, tree tick counts and broadphase candidate
+  volumes at configurable counts; initial smoke runs 200 agents.
+- [ ] Capture **actual** 100/1k/5k/10k crowd results from Linux. No measurements
+  exist for this new mode yet. Measure host/client bandwidth in a real network
+  session, not an offline NetworkIdentity benchmark.
 - [ ] Add a dedicated automated AI/network regression mode and reproduce the
   current navigation/behavior baseline, including save/load and disabled state.
 
@@ -65,6 +77,10 @@ Visual Behavior Tree + Inspector + Script + ECS Components
   same ECS query path (TickAll already used it).
 - [x] Handle enable/disable and hierarchy deactivation through existing
   `OnSwitched` hooks so disabled runners do not need to be scanned every frame.
+- [x] The Linux `check` regression verifies ECS query scheduling, immediate
+  cancellation, enabled/disabled transitions and hierarchy reactivation.
+- [x] Do not enumerate or initialize AI runtime objects on remote clients:
+  authority check now happens **before** the frame/fixed ECS queries.
 - [ ] Verify state transitions and deterministic scheduling order with live
   server/client, play-stop-play, object reuse, and hot reload.
 
@@ -80,8 +96,11 @@ Visual Behavior Tree + Inspector + Script + ECS Components
 - [ ] Use efficient, thread-safe snapshots of positions/velocities for
   perception and avoidance, preserving the current line-of-sight rules,
   `#Tag`, prefix name patterns and inactive-world filtering.
-- [ ] Batch raycasts where safe and expose separate broadphase/narrowphase
-  profiler counters and configurable per-frame budgets.
+- [x] Record scene-owned broadphase rebuild, perception query, obstacle query
+  and candidate counts for profiling. Regression checks verify queries in
+  the same frame reuse one snapshot.
+- [ ] Batch raycasts where safe and expose narrowphase profiling and
+  configurable per-frame budgets.
 
 ### 3. ECS-first tree runtime [planned]
 - [ ] Compile each `.tbt` definition once into a shared, indexed layout/bytecode;
@@ -111,9 +130,10 @@ Visual Behavior Tree + Inspector + Script + ECS Components
   world states, and moving obstacles.
 
 ### 5. Automatic authority and replication [planned]
-- [ ] Preserve server-only `BehaviorTreeRunner.Frame` and
-  `NavigationAgentState.Frame/Tick`; remote clients must not run AI decisions,
-  path requests or crowd steering.
+- [x] Preserve server-only `BehaviorTreeRunner.Frame` and
+  `NavigationAgentState.Frame/Tick`, and skip enumeration/startup entirely
+  on network clients. Remote clients must not run AI decisions, paths,
+  or crowd steering. Requires a live network regression before acceptance.
 - [ ] Ensure common prefabs and dynamic AI spawns automatically get network
   identity/lifecycle under the networking policy. A sync checkbox on every
   internal AI field is **not** the authoring requirement.
@@ -170,5 +190,9 @@ same Beef toolchain used for the engine, then run:
 `TALLOW_BENCH_MODE=check Samples/EcsBench/build/Release_Linux64/EcsBench/EcsBench --project Samples/EcsBench`
 See `tools/test_ecs_ai_linux.sh` for an update/build/test wrapper.
 
-**Status notes:** Stages 2–7 are roadmap work, not implemented by the initial
-patch. Explicit developer test results are needed before marking Stage 1 verified.
+**Status notes:** The first ECS query/lifecycle patch passed the developer's
+Linux compile and full `check` suite (`30c8b41a`). The newer client
+authority shortcut, crowd benchmark, profiling counters and additional
+assertions are pushed but **not yet compiled or tested**. Stages 2–7 remain
+partially implemented or planned. A real dedicated-host/client networking
+validation is still a non-negotiable merge gate.
