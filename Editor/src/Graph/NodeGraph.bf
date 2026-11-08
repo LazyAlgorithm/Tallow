@@ -673,6 +673,44 @@ class NodeGraph
 				node = FollowFlow(node, node.def.kind == .Loop ? 2 : 1);
 				continue;
 			}
+			if (node.def.kind == .EcsEach)
+			{
+				// Query once per World, not once per object or per frame. Outputs on this
+				// node refer to the current packed data row inside its Body flow.
+				// Defer structural changes until iteration finishes (also on early return).
+				code.Append("{\n");
+				code.Append('\t', indent + 1);
+				code.Append("Scene.World.DeferBegin();\n");
+				code.Append('\t', indent + 1);
+				code.Append("defer Scene.World.DeferEnd();\n");
+				code.Append('\t', indent + 1);
+				code.AppendF("let ecsQuery{0} = Scene.World.ObjectsWith<{1}>();\n", node.id, node.def.code);
+				code.Append('\t', indent + 1);
+				code.AppendF("for (var ecsChunk{0} in ecsQuery{0})\n", node.id);
+				code.Append('\t', indent + 1);
+				code.Append("{\n");
+				code.Append('\t', indent + 2);
+				code.AppendF("let ecsData{0} = ecsChunk{0}.Write<{1}>();\n", node.id, node.def.code);
+				code.Append('\t', indent + 2);
+				code.AppendF("let ecsLinks{0} = ecsChunk{0}.Read<ObjectLink>();\n", node.id);
+				code.Append('\t', indent + 2);
+				code.AppendF("for (int32 ecsIndex{0} = 0; ecsIndex{0} < ecsChunk{0}.Count; ecsIndex{0}++)\n", node.id);
+				code.Append('\t', indent + 2);
+				code.Append("{\n");
+				code.Append('\t', indent + 3);
+				code.AppendF("let ecsObject{0} = ecsLinks{0}[ecsIndex{0}].gameObject;\n", node.id);
+				code.Append('\t', indent + 3);
+				code.AppendF("if (ecsObject{0} == null || !ecsObject{0}.ActiveInHierarchy) continue;\n", node.id);
+				EmitFlow(FollowFlow(node, 0), code, indent + 3, depth + 1);
+				code.Append('\t', indent + 2);
+				code.Append("}\n");
+				code.Append('\t', indent + 1);
+				code.Append("}\n");
+				code.Append('\t', indent);
+				code.Append("}\n");
+				node = FollowFlow(node, (int32)node.def.outputs.Count - 1);
+				continue;
+			}
 			if (node.def.kind == .Return)
 			{
 				code.Append("return ");
