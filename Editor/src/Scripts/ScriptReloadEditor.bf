@@ -139,7 +139,7 @@ extension EditorApp
 			// live dispatch data. Retry with structural migration when it cannot apply.
 			let manifest = scope String();
 			File.ReadAllText(mReloadManifest, manifest).IgnoreError();
-			if (manifest.Contains("mode methods") && Project.Current.ReloadMode == .Automatic)
+			if (manifest.Contains("mode methods"))
 			{
 				Log.Warning(scope $"Method patch unavailable ({error}); retrying structural script reload.");
 				mStatus.Set("Retrying structural script reload...");
