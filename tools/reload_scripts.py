@@ -916,8 +916,15 @@ def main():
     link_started = time.perf_counter()
     subprocess.run(['objcopy', '--redefine-syms=' + str(mapping), str(vdata), str(metadata_object)], check=True)
     archive_started = time.perf_counter()
-    dependency_archive, archive_reused = cached_dependency_archive(
-        dependency_links, aliases / 'resident-dependencies.a')
+    archive_failed = False
+    try:
+        dependency_archive, archive_reused = cached_dependency_archive(
+            dependency_links, aliases / 'resident-dependencies.a')
+    except (OSError, subprocess.CalledProcessError) as error:
+        # A missing archiver or unsupported dependency object must not prevent
+        # Play. The original full-object linker remains an operational fallback.
+        print(f'WARNING: Dependency archive unavailable ({error}); using the full-object linker.', flush=True)
+        dependency_archive, archive_reused, archive_failed = None, False, True
     archive_seconds = time.perf_counter() - archive_started
     # Game implementations and complete type metadata are mandatory. Resident
     # dependencies are indexed, so ld extracts only genuinely missing code.
@@ -928,7 +935,7 @@ def main():
     if dependency_archive is not None:
         fast_link.append(str(dependency_archive))
     fallback = False
-    if os.environ.get('TALLOW_RELOAD_FLAT_LINK') == '1':
+    if archive_failed or os.environ.get('TALLOW_RELOAD_FLAT_LINK') == '1':
         fallback = True
         subprocess.run(full_link, check=True)
     else:
