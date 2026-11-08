@@ -67,7 +67,9 @@ extension Bench
 			agent.avoidOthers = true;
 			let runner = bot.AddComponent<BehaviorTreeRunner>();
 			runner.tree.Set("BehaviorTrees/Crowd.tbt");
-			runner.tickInterval = 0.1f;
+			// Deliberately evaluate every frame to measure worst-case decisions;
+			// normal games can set a larger interval or use AI LOD.
+			runner.tickInterval = 0;
 			mTrees++;
 			mAiAgents++;
 
