@@ -21,8 +21,12 @@ struct SyncedEcsMotion
 [Component]
 class EcsMotionScript : Script
 {
+	public bool advance;
+
 	public override void Update(TickInput input, float deltaTime)
 	{
+		if (!advance)
+			return;
 		let motion = GetComponent<SyncedEcsMotion>();
 		if (motion != null)
 			motion.speed += deltaTime;
@@ -820,7 +824,9 @@ static class EcsChecks
 			a.ownerId = 3;
 			first.AddComponent<SyncedEcsMotion>(.() { speed = 2, localOnly = 7 });
 			let script = first.AddComponent<EcsMotionScript>();
+			script.advance = true;
 			script.Update(default, 0.5f);
+			script.advance = false;
 			Expect(first.GetComponent<SyncedEcsMotion>().speed == 2.5f, "ordinary script reads and writes its own ECS data");
 			let query = scope Query<SyncedEcsMotion, ObjectLink>(scene.World);
 			bool foundMotion = false;
