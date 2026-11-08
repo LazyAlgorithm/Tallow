@@ -622,10 +622,15 @@ class NavigationAgentState
 					for (let agent in Scene.Components<NavigationAgent>(.. scope .()))
 						AddAgent(agent.Runtime);
 				}
-				for (let component in Scene.ComponentsOfType(typeof(NavigationObstacle)))
+				// The shared spatial index is refreshed once per scene update.
+				// Include the largest obstacle radius in its broadphase query so
+				// large boxes whose centres are farther away are not missed.
+				let nearbyObstacles = scope List<NavigationObstacle>();
+				Scene.AISpatial.QueryObstacles(position, lookAround, nearbyObstacles);
+				for (let obstacle in nearbyObstacles)
 				{
-					let obstacle = (NavigationObstacle)component;
-					// A carved obstacle is in the grid already; a moving (or uncarved) one is steered round.
+					// A carved obstacle is in the navmesh/grid already; a moving or
+					uncarved one is handled by local steering instead.
 					if (!obstacle.IsActiveAndEnabled || obstacle.Carving)
 						continue;
 					let at = obstacle.Transform.Position + obstacle.Transform.Rotation * obstacle.center;
