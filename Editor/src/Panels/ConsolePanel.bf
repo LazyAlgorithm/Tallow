@@ -21,7 +21,7 @@ extension EditorApp
 				ClearAndDeleteItems!(mPublishedScriptDiagnostics);
 			}
 			ImGui.SameLine();
-			ImGui.Checkbox("Stack traces / details", &mConsoleShowDetails);
+			ImGui.Checkbox("Stack traces / details", ref mConsoleShowDetails);
 			ImGui.SameLine();
 			ImGui.TextDisabled(scope String()..AppendF("{} unique messages", Log.Entries.Count).CStr());
 			ImGui.Separator();
