@@ -51,6 +51,15 @@ not changed, avoiding repeated symbol rewriting on ordinary method saves.
 Linux now links gameplay objects and reflection metadata explicitly and puts existing engine/editor
 dependency objects into a cached static archive. The linker extracts dependency implementations
 only when necessary. A link error retries the previous full-object link for compatibility.
+Prepared ELF objects are now cached by **source object path**, not by the
+object's position in BeefBuild's `ObjectArgs.txt` linker list. Adding or removing
+a component can reorder that list without changing the object itself, so using
+position as the cache key falsely invalidated many existing entries. Existing
+index-keyed cache records are migrated in place and retain their prepared
+object paths. Reordered but byte-identical objects will no longer require
+ELF symbol rewriting. Truly changed objects still require rewriting; a changed
+dependency archive still requires rebuilding. This does **not** prevent BeefBuild
+from rewriting dependency output files when its own reflection/type graph changes.
 Both Linux and Windows keep their temporary Beef workspaces across editor launches so that
 incremental compiler caches can survive closing and reopening the editor. Windows already uses
 indexed dependency .lib archives, with on-demand extraction.
