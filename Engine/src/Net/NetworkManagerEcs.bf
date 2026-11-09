@@ -188,7 +188,8 @@ extension NetworkManager
 		}
 		let state = scope NetWriter();
 		let toCheck = Math.Min(NativeScanPerSnapshot, mNativeRows.Count);
-		for (int i < toCheck && !mNativeRows.IsEmpty)
+		int checkedCount = 0;
+		while (checkedCount < toCheck && !mNativeRows.IsEmpty)
 		{
 			if (mNativeCursor >= mNativeRows.Count)
 				mNativeCursor = 0;
@@ -210,7 +211,7 @@ extension NetworkManager
 				NativeQueueState(row, -1);
 			}
 			mNativeCursor++;
-			i++;
+			checkedCount++;
 		}
 		NativeFlush(-1);
 	}
