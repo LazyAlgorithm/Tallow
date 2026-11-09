@@ -78,7 +78,7 @@ extension NetworkManager
 	static bool NativeSerialize(World world, Entity entity, NetWriter writer)
 	{
 		writer.Clear();
-		if (!world.IsAlive(entity) || world.Has<ObjectLink>(entity))
+		if (!world.IsAlive(entity) || world.IsSceneObject(entity))
 			return false;
 		let indices = scope List<int32>();
 		world.TypesOf(entity, indices);
