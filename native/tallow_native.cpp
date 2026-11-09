@@ -171,7 +171,7 @@ TN_API bool tn_gfx_init(SDL_Window* window, int width, int height, int renderer,
 	if (!bgfx::init(init))
 	{
 		fprintf(stderr, "Tallow graphics: bgfx failed to initialize the requested rendering backend. "
-			"Try --renderer opengl or set TALLOW_GFX_TRACE=1 for diagnostics.\\n");
+			"Try --renderer opengl or set TALLOW_GFX_TRACE=1 for diagnostics.\n");
 		s_window = nullptr;
 		return false;
 	}
@@ -181,7 +181,7 @@ TN_API bool tn_gfx_init(SDL_Window* window, int width, int height, int renderer,
 	{
 		fprintf(stderr, "Tallow graphics: bgfx selected Noop instead of a real graphics backend. "
 			"The editor cannot render. Check Vulkan drivers, or try --renderer opengl "
-			"(TALLOW_GFX_TRACE=1 for diagnostics).\\n");
+			"(TALLOW_GFX_TRACE=1 for diagnostics).\n");
 		bgfx::shutdown();
 		s_window = nullptr;
 		return false;
