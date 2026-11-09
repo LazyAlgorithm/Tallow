@@ -266,7 +266,10 @@ sealed class World
 		if (DataComponents.IsSynced(ComponentId<T>.Index))
 		{
 			for (int i < count)
-				TrackNativeCandidate(Entity(ids[i]), ComponentId<T>.Index);
+			{
+				Entity entity = .(ids[i]);
+				TrackNativeCandidate(entity, ComponentId<T>.Index);
+			}
 		}
 	}
 
