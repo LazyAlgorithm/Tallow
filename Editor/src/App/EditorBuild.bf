@@ -162,7 +162,7 @@ extension EditorApp
 			    {{
 			    }}
 			}}
-							""", project.Name, name);
+			""", project.Name, name);
 		case .Movement:
 			text.AppendF("""
 			using System;
@@ -181,7 +181,7 @@ extension EditorApp
 			        Transform.Rotate(degreesPerSecond * deltaTime);
 			    }}
 			}}
-							""", project.Name, name);
+			""", project.Name, name);
 		case .Timer:
 			text.AppendF("""
 			using System;
@@ -210,7 +210,7 @@ extension EditorApp
 			        // Put the repeated action here.
 			    }}
 			}}
-							""", project.Name, name);
+			""", project.Name, name);
 		case .Gui:
 			text.AppendF("""
 			using System;
@@ -227,7 +227,7 @@ extension EditorApp
 			        GUI.Label(20, 20, "Hello from {1}");
 			    }}
 			}}
-							""", project.Name, name);
+			""", project.Name, name);
 		case .Networked:
 			text.AppendF("""
 			using System;
@@ -255,7 +255,7 @@ extension EditorApp
 			        // Client-only presentation belongs here.
 			    }}
 			}}
-							""", project.Name, name);
+			""", project.Name, name);
 		case .EcsData:
 			text.AppendF("""
 			using System;
@@ -270,7 +270,7 @@ extension EditorApp
 			    public float speed;
 			    public Vector3 velocity;
 			}}
-							""", project.Name, name);
+			""", project.Name, name);
 		case .EcsSynced:
 			text.AppendF("""
 			using System;
@@ -287,7 +287,7 @@ extension EditorApp
 			    [Sync] public Vector3 velocity;
 			    public int32 localEffectId;
 			}}
-							""", project.Name, name);
+			""", project.Name, name);
 		case .EcsMixed:
 			text.AppendF("""
 			using System;
@@ -318,7 +318,7 @@ extension EditorApp
 			            Transform.Rotate(.(0, data.speed * deltaTime, 0));
 			    }}
 			}}
-							""", project.Name, name);
+			""", project.Name, name);
 		case .EcsQuery:
 			text.AppendF("""
 			using System;
@@ -357,7 +357,7 @@ extension EditorApp
 			        }}
 			    }}
 			}}
-							""", project.Name, name);
+			""", project.Name, name);
 		case .EcsBulk:
 			text.AppendF("""
 			using System;
@@ -408,7 +408,7 @@ extension EditorApp
 			        mEntities.Clear();
 			    }}
 			}}
-							""", project.Name, name);
+			""", project.Name, name);
 		}
 		if (File.WriteAllText(path, text) case .Ok)
 		{
@@ -417,4 +417,5 @@ extension EditorApp
 		}
 		else
 			Log.Error(scope $"Could not create script {path}.");
-	}}
+	}
+}
