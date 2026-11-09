@@ -1070,9 +1070,16 @@ static class NetworkSync
 	static void OnEcsComponents(int32 sender, ref NetReader reader)
 	{
 		let network = Active(Scene.Active);
-		if (network == null || network.IsServer)
+		if (network == null)
 			return;
 		let netId = NetworkManager.ReadNetId(ref reader);
+		if (netId == SchemaNetId)
+		{
+			OnSchema(network, sender, ref reader);
+			return;
+		}
+		if (network.IsServer)
+			return;
 		let count = (int)reader.Read<uint8>();
 		if (!reader.Ok || count > 64)
 			return;
@@ -1188,6 +1195,9 @@ static class NetworkSync
 		let network = Active(Scene.Active);
 		if (network == null || network.IsServer)
 			return; // only the server's values are shared
+		// Indices into a list of [Sync] fields the server does not have (see SyncSchema).
+		if (network.[Friend]mServerSchema != 0 && network.[Friend]mServerSchema != SyncSchema)
+			return;
 		let netId = NetworkManager.ReadNetId(ref reader);
 		let index = (int)reader.ReadVarUInt();
 		let length = (int)reader.ReadVarUInt();
@@ -1478,6 +1488,7 @@ static class NetworkSync
 	/// Server: brings a player who has just connected up to date with everything above.
 	public static void ClientJoined(NetworkManager network, int32 clientId)
 	{
+		SendSchemaTo(network, clientId);
 		network.Replay(clientId);
 		let payload = scope NetWriter();
 		for (let identity in network.Identities)
@@ -1537,4 +1548,167 @@ static class NetworkSync
 			network.SendToClient(clientId, MsgAnimation, payload);
 		}
 	}
+
+	// ---- [Sync] declarations across a script reload ----
+	//
+	// Fields go by their index in each object's list of [Sync] fields, so every machine must declare the same ones. A
+	// session starts with one build; a script reload during it (in the editor) can change them on one machine. Then
+	// that machine sends a hash of its declarations (the server to every client, a client to the server), with net id
+	// 0 in an ECS layout message, and a client applies fields only while its hash is the server's. When they are
+	// the same again (the other editor has reloaded too) the server sends that client every field afresh. Nothing is
+	// sent in a session where no machine reloads. Bare entities do not need this: they are matched by name.
+
+	const uint32 SchemaNetId = 0;
+	static uint64 sSchema;
+	static int sSchemaGeneration = -1;
+
+	/// A hash of every [Sync] declaration in the program (script classes and data components: type, field name and
+	/// size). Machines with different ones cannot use each other's field indices.
+	public static uint64 SyncSchema
+	{
+		get
+		{
+			let generation = DataComponents.Generation;
+			if (generation == sSchemaGeneration)
+				return sSchema;
+			sSchemaGeneration = generation;
+			uint64 hash = 14695981039346656037UL;
+			let names = scope List<StringView>();
+			let sizes = scope Dictionary<StringView, int>();
+			for (let info in ComponentRegistry.Types)
+			{
+				names.Clear();
+				sizes.Clear();
+				for (let field in info.type.GetFields(.Instance | .Public | .NonPublic))
+				{
+					if ((field.GetCustomAttribute<SyncAttribute>() case .Ok) || (field.GetCustomAttribute<SyncPositionAttribute>() case .Ok))
+					{
+						names.Add(field.Name);
+						sizes[field.Name] = field.FieldType.Size;
+					}
+				}
+				if (names.IsEmpty)
+					continue;
+				names.Sort(scope (a, b) => a.CompareTo(b));
+				MixSchema(ref hash, info.fullName, 0);
+				for (let name in names)
+					MixSchema(ref hash, name, sizes[name]);
+			}
+			for (let info in DataComponents.SyncedTypes)
+			{
+				MixSchema(ref hash, info.fullName, 0);
+				for (let field in info.syncedFields)
+					MixSchema(ref hash, field.name, field.size);
+			}
+			sSchema = hash == 0 ? 1 : hash;
+			return sSchema;
+		}
+	}
+
+	static void MixSchema(ref uint64 hash, StringView name, int size)
+	{
+		for (let c in name.RawChars)
+			hash = (hash ^ (uint8)c) * 1099511628211UL;
+		hash = (hash ^ (uint64)(size + 0x100)) * 1099511628211UL;
+	}
+
+	static void WriteSchema(NetWriter payload, uint64 schema)
+	{
+		NetworkManager.WriteNetId(payload, SchemaNetId);
+		payload.Write(schema);
+	}
+
+	/// Each tick, server and client: tells the other side when a script reload has changed this machine's [Sync]
+	/// declarations.
+	public static void WatchSchema(NetworkManager network)
+	{
+		let schema = SyncSchema;
+		if (network.[Friend]mSchemaAtStart == 0)
+		{
+			network.[Friend]mSchemaAtStart = schema;
+			network.[Friend]mSchemaSent = schema;
+			return;
+		}
+		if (schema == network.[Friend]mSchemaSent)
+			return;
+		network.[Friend]mSchemaSent = schema;
+		let payload = scope NetWriter();
+		WriteSchema(payload, schema);
+		if (network.IsServer)
+		{
+			network.SendToAll(MsgEcsComponents, payload);
+			for (let client in network.[Friend]mClients)
+			{
+				if ((client.syncSchema != 0 ? client.syncSchema : network.[Friend]mSchemaAtStart) == schema)
+					SendEveryField(network, client.id);
+			}
+		}
+		else
+			network.SendToServer(MsgEcsComponents, payload);
+	}
+
+	/// Server: a client that joins after a reload changed the server's declarations is told them.
+	static void SendSchemaTo(NetworkManager network, int32 clientId)
+	{
+		if (network.[Friend]mSchemaAtStart == 0 || network.[Friend]mSchemaSent == network.[Friend]mSchemaAtStart)
+			return;
+		let payload = scope NetWriter();
+		WriteSchema(payload, network.[Friend]mSchemaSent);
+		network.SendToClient(clientId, MsgEcsComponents, payload);
+	}
+
+	static void OnSchema(NetworkManager network, int32 sender, ref NetReader reader)
+	{
+		let schema = reader.Read<uint64>();
+		if (!reader.Ok || schema == 0)
+			return;
+		let own = SyncSchema;
+		if (network.IsServer)
+		{
+			for (let client in network.[Friend]mClients)
+			{
+				if (client.id != sender)
+					continue;
+				client.syncSchema = schema;
+				if (schema == own)
+					SendEveryField(network, sender);
+			}
+			return;
+		}
+		network.[Friend]mServerSchema = schema;
+		if (schema == own)
+			return;
+		// So that the server knows, and sends everything again once the two agree.
+		let payload = scope NetWriter();
+		WriteSchema(payload, own);
+		network.SendToServer(MsgEcsComponents, payload);
+		if (network.[Friend]mSchemaWarned != schema)
+		{
+			network.[Friend]mSchemaWarned = schema;
+			Log.Warning("The server's [Sync] fields are not the same as this machine's (a script was reloaded on one of them, or they run different builds): [Sync] fields of objects are not applied until they match again.");
+		}
+	}
+
+	/// Server: every [Sync] field of every object a client has in its area, after their declarations agree again.
+	static void SendEveryField(NetworkManager network, int32 clientId)
+	{
+		HashSet<uint32> outside = null;
+		for (let client in network.[Friend]mClients)
+		{
+			if (client.id == clientId)
+				outside = client.outside;
+		}
+		for (let identity in network.Identities)
+		{
+			if (outside == null || !outside.Contains(identity.NetId))
+				SendFieldsTo(network, identity, clientId);
+		}
+	}
+}
+
+extension NetworkManager
+{
+	/// [Sync] declarations (NetworkSync.SyncSchema): this machine's when the session started and as last sent; on a
+	/// client, the server's once it has said (0: assumed the same); the one last warned about.
+	uint64 mSchemaAtStart, mSchemaSent, mServerSchema, mSchemaWarned;
 }

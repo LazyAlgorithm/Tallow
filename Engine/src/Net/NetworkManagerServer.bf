@@ -318,6 +318,8 @@ extension NetworkManager
 		// own animation) costs one message per snapshot, not one per tick.
 		if ((IsServer || (mConnected && LocalClientId > 0)) && mTick % (uint32)Math.Max(SnapshotInterval, 1) == 0)
 			NetworkSync.WatchLights(this);
+		if (IsServer || (mConnected && LocalClientId > 0))
+			NetworkSync.WatchSchema(this);
 		// Objects this machine does not move itself change once a tick; they are drawn gliding between ticks.
 		for (let identity in mIdentityStates)
 		{

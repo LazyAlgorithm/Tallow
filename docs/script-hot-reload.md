@@ -42,6 +42,8 @@ Linux and Windows x86-64 Debug editors watch project `.bf` files, including addi
 
 At a frame boundary, the editor loads the library, maps its type metadata onto stable resident identities, refreshes the component registry, replaces project component instances and restores compatible fields/references. The editor window, scene objects, physics world and Play state remain alive. The activation scene is passed explicitly, including in Edit mode. Activated symbols are recorded so newly added types work through later generations.
 
+In a network session, what changes on the other machines, and how `[Sync]` fields and native ECS systems behave when only one machine reloads, is in [Unified ECS networking](unified-ecs-networking.md#editing-while-playing).
+
 Supported changes include method edits, new component scripts, adding/removing/retyping supported instance fields, and inspector attributes. Same-name/type fields retain their values; newly added or retyped fields use their new initializers. Supported private runtime fields are also preserved unless marked NonSerialized. Awake/Start state is preserved and those callbacks are not repeated; OnValidate runs after restoring values. Constructors and field initializers run for replacement instances.
 
 The project `build/script-reload.log` includes timing information for source scanning, the BeefBuild invocation,

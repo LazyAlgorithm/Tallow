@@ -6,15 +6,26 @@ namespace Tallow;
 /// Native systems and prediction for bare ECS entities (docs/unified-ecs-networking.md, "Native systems and
 /// prediction").
 ///
-/// A native system is game code registered once (like a prefab) that advances one entity's data by one tick:
+/// A native system is game code that advances one entity's data by one tick. Written as a class, it is found and
+/// made by the engine, and editing it while the game plays (script reload) takes effect like a script's Update:
 ///
-///     NetworkManager.AddNativeSystem<ShipMotion>("Ship", new (entity, ship, input, deltaTime) =>
+///     [NativeSystem]
+///     class ShipSystem : NativeSystem<ShipMotion>
+///     {
+///         public override void Update(Entity entity, ref ShipMotion ship, TickInput input, float deltaTime)
 ///         {
 ///             ship.velocity += .(input.Move.x, 0, input.Move.y) * 10 * deltaTime;
 ///             ship.position += ship.velocity * deltaTime;
-///         });
+///         }
+///     }
 ///
-/// Every tick, before scripts' Update, the systems run in the order added:
+/// Or registered once with a delegate (like a prefab), which keeps the code it was made with until the program
+/// restarts:
+///
+///     NetworkManager.AddNativeSystem<ShipMotion>("Ship", new (entity, ship, input, deltaTime) => { ... });
+///
+/// Every tick, before scripts' Update, the systems run: those added with AddNativeSystem in the order added, then
+/// the classes by NativeSystemAttribute.order and name:
 ///   - with no session, on every bare entity with the data, with this machine's controls;
 ///   - on the server, on its own bare entities (with the host's controls on a host, none on a dedicated server), and
 ///     on each entity a client owns (NativeSetOwner) with that client's controls, as they arrive;
@@ -55,49 +66,74 @@ extension NetworkManager
 		}
 	}
 
-	/// A registered native system (AddNativeSystem).
-	abstract class NativeSystem
-	{
-		public String name = new .() ~ delete _;
-		/// Runs on one entity, if it has the data.
-		public abstract void RunOne(World world, Entity entity, TickInput input, float deltaTime);
-		/// Server: runs on every bare entity with the data that no client owns.
-		public abstract void RunServer(World world, NetworkManager network, TickInput input, float deltaTime);
-	}
-
-	class NativeSystemOf<T> : NativeSystem where T : struct
+	/// One added with AddNativeSystem.
+	class NativeSystemOf<T> : NativeSystem<T> where T : struct
 	{
 		public delegate void(Entity entity, ref T data, TickInput input, float deltaTime) run ~ delete _;
 
-		public override void RunOne(World world, Entity entity, TickInput input, float deltaTime)
-		{
-			let data = world.Get<T>(entity);
-			if (data != null)
-				run(entity, ref *data, input, deltaTime);
-		}
+		public override void Update(Entity entity, ref T data, TickInput input, float deltaTime) => run(entity, ref data, input, deltaTime);
+	}
 
-		public override void RunServer(World world, NetworkManager network, TickInput input, float deltaTime)
+	/// Server: whether a client owns any bare entity, and whether it owns this one (it runs it with its controls).
+	bool NativeAnyOwned => mNative != null && !mNative.owned.IsEmpty;
+	bool NativeClientOwns(Entity entity) => mNative.byEntity.TryGetValue(entity.id, let row) && row.owner != 0;
+
+	static List<NativeSystemBase> sNativeSystems = new .() ~ DeleteContainerAndItems!(_);
+	static int sNativeSystemsGeneration = -1;
+	static NetInput sOfflinePrevious;
+
+	/// The systems to run: AddNativeSystem's, then the [NativeSystem] classes, made again from the current code
+	/// whenever a script reload has listed the types again (a reload of method bodies only changes them in place).
+	static List<NativeSystemBase> NativeSystems
+	{
+		get
 		{
-			let owned = network?.mNative != null && !network.mNative.owned.IsEmpty;
-			for (var chunk in world.EntitiesWith<T>())
+			let generation = DataComponents.Generation;
+			if (generation != sNativeSystemsGeneration)
 			{
-				let entities = chunk.Entities;
-				// Every entity in a chunk has the same components: scene objects are skipped a chunk at a time.
-				if (chunk.Count == 0 || world.IsSceneObject(entities[0]))
-					continue;
-				let data = chunk.Write<T>();
-				for (int i < chunk.Count)
-				{
-					if (owned && network.mNative.byEntity.TryGetValue(entities[i].id, let row) && row.owner != 0)
-						continue;
-					run(entities[i], ref data[i], input, deltaTime);
-				}
+				sNativeSystemsGeneration = generation;
+				NativeFindSystems();
 			}
+			return sNativeSystems;
 		}
 	}
 
-	static List<NativeSystem> sNativeSystems = new .() ~ DeleteContainerAndItems!(_);
-	static NetInput sOfflinePrevious;
+	static void NativeFindSystems()
+	{
+		for (int i = sNativeSystems.Count - 1; i >= 0; i--)
+		{
+			if (sNativeSystems[i].found)
+			{
+				delete sNativeSystems[i];
+				sNativeSystems.RemoveAt(i);
+			}
+		}
+		let found = scope List<NativeSystemBase>();
+		for (let type in ScriptReload.ReflectedTypes)
+		{
+			if (type == null || !type.IsObject || type.IsGenericType)
+				continue;
+			if (!(type.GetCustomAttribute<NativeSystemAttribute>() case .Ok(let attribute)))
+				continue;
+			let name = scope String();
+			type.GetFullName(name);
+			Object made = null;
+			if (type.IsSubtypeOf(typeof(NativeSystemBase)) && (type.CreateObject() case .Ok(let object)))
+				made = object;
+			if (made == null)
+			{
+				Log.Warning(scope $"{name} is marked [NativeSystem] but is not a NativeSystem<T> that can be made.");
+				continue;
+			}
+			let system = (NativeSystemBase)made;
+			system.name.Set(name);
+			system.order = attribute.order;
+			system.found = true;
+			found.Add(system);
+		}
+		found.Sort(scope (a, b) => a.order != b.order ? a.order <=> b.order : a.name.CompareTo(b.name));
+		sNativeSystems.AddRange(found);
+	}
 
 	/// Adds a native system for bare entities with data T, run every tick after those added before it (see above).
 	/// Add the same systems, in the same order, on every machine. A system of the same name is replaced.
@@ -107,7 +143,11 @@ extension NetworkManager
 		let entry = new NativeSystemOf<T>();
 		entry.name.Set(name);
 		entry.run = system;
-		sNativeSystems.Add(entry);
+		// Before the classes.
+		int at = 0;
+		while (at < sNativeSystems.Count && !sNativeSystems[at].found)
+			at++;
+		sNativeSystems.Insert(at, entry);
 	}
 
 	public static void RemoveNativeSystem(StringView name)
@@ -123,7 +163,12 @@ extension NetworkManager
 		}
 	}
 
-	public static void ClearNativeSystems() => ClearAndDeleteItems!(sNativeSystems);
+	/// Removes every native system; the [NativeSystem] classes are made again when systems next run.
+	public static void ClearNativeSystems()
+	{
+		ClearAndDeleteItems!(sNativeSystems);
+		sNativeSystemsGeneration = -1;
+	}
 
 	/// Client: replicas it owns and predicts; predictions the server's state showed were wrong (each run again from
 	/// there); ticks run again for them; and predictions begun (an entity given to it).
@@ -135,7 +180,7 @@ extension NetworkManager
 	/// The scene's tick with no session: every bare entity with each system's data, with this machine's controls.
 	public static void RunNativeSystemsOffline(Scene scene)
 	{
-		if (sNativeSystems.IsEmpty || (scene.Network != null && scene.Network.Mode != .Offline))
+		if (NativeSystems.IsEmpty || (scene.Network != null && scene.Network.Mode != .Offline))
 			return;
 		TickInput input;
 		input.raw = default;
@@ -144,7 +189,7 @@ extension NetworkManager
 		sOfflinePrevious = input.raw;
 		let world = scene.World;
 		world.DeferBegin();
-		for (let system in sNativeSystems)
+		for (let system in NativeSystems)
 			system.RunServer(world, null, input, Time.FixedDeltaTime);
 		world.DeferEnd();
 	}
@@ -154,7 +199,7 @@ extension NetworkManager
 	void NativeSimulate(int32 ownerId, NetInput controls)
 	{
 		let native = mNative;
-		if (native == null || sNativeSystems.IsEmpty || Replaying || Lockstep)
+		if (native == null || NativeSystems.IsEmpty || Replaying || Lockstep)
 			return;
 		TickInput input;
 		input.raw = controls;
@@ -167,7 +212,7 @@ extension NetworkManager
 			world.DeferBegin();
 			if (ownerId == 0)
 			{
-				for (let system in sNativeSystems)
+				for (let system in NativeSystems)
 					system.RunServer(world, this, input, deltaTime);
 			}
 			else
@@ -176,7 +221,7 @@ extension NetworkManager
 				{
 					if (row.owner != ownerId)
 						continue;
-					for (let system in sNativeSystems)
+					for (let system in NativeSystems)
 						system.RunOne(world, row.entity, input, deltaTime);
 				}
 			}
@@ -188,7 +233,7 @@ extension NetworkManager
 		world.DeferBegin();
 		for (let predicted in native.predicted.Values)
 		{
-			for (let system in sNativeSystems)
+			for (let system in NativeSystems)
 				system.RunOne(world, predicted.entity, input, deltaTime);
 		}
 		world.DeferEnd();
@@ -281,7 +326,7 @@ extension NetworkManager
 			world.DeferBegin();
 			for (let predicted in wrong)
 			{
-				for (let system in sNativeSystems)
+				for (let system in NativeSystems)
 					system.RunOne(world, predicted.entity, input, deltaTime);
 			}
 			world.DeferEnd();
@@ -354,3 +399,63 @@ extension NetworkManager
 	}
 
 }
+
+/// Marks a class that is a native system (NativeSystem<T>): the engine makes one and runs it every tick, as
+/// NetworkManager describes. Systems run by order, then by full name.
+[AttributeUsage(.Class, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .All, AlwaysIncludeUser = .AssumeInstantiated | .IncludeAllMethods)]
+struct NativeSystemAttribute : Attribute
+{
+	public int32 order;
+
+	public this(int32 order = 0)
+	{
+		this.order = order;
+	}
+}
+
+/// What NetworkManager runs: a native system (NativeSystem<T>, or one added with AddNativeSystem).
+abstract class NativeSystemBase
+{
+	public String name = new .() ~ delete _;
+	/// Made by the engine from a [NativeSystem] class, rather than added with AddNativeSystem.
+	public bool found;
+	public int32 order;
+	/// Runs on one entity, if it has the data.
+	public abstract void RunOne(World world, Entity entity, TickInput input, float deltaTime);
+	/// Server (or with no session): runs on every bare entity with the data that no client owns.
+	public abstract void RunServer(World world, NetworkManager network, TickInput input, float deltaTime);
+}
+
+/// A native system for bare entities with data T: Update advances one entity by one tick. Mark the class
+/// [NativeSystem]; see NetworkManager (NetworkManagerEcsPrediction.bf) for where and when it runs.
+abstract class NativeSystem<T> : NativeSystemBase where T : struct
+{
+	public abstract void Update(Entity entity, ref T data, TickInput input, float deltaTime);
+
+	public override void RunOne(World world, Entity entity, TickInput input, float deltaTime)
+	{
+		let data = world.Get<T>(entity);
+		if (data != null)
+			Update(entity, ref *data, input, deltaTime);
+	}
+
+	public override void RunServer(World world, NetworkManager network, TickInput input, float deltaTime)
+	{
+		let owned = network != null && network.[Friend]NativeAnyOwned;
+		for (var chunk in world.EntitiesWith<T>())
+		{
+			let entities = chunk.Entities;
+			// Every entity in a chunk has the same components: scene objects are skipped a chunk at a time.
+			if (chunk.Count == 0 || world.IsSceneObject(entities[0]))
+				continue;
+			let data = chunk.Write<T>();
+			for (int i < chunk.Count)
+			{
+				if (owned && network.[Friend]NativeClientOwns(entities[i]))
+					continue;
+				Update(entities[i], ref data[i], input, deltaTime);
+			}
+		}
+	}
+}
+

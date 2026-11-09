@@ -354,6 +354,8 @@ class NetworkManager
 		public Dictionary<uint32, float> waiting = new .() ~ delete _;
 		/// Objects out of its area (hidden there); see UpdateRelevance.
 		public HashSet<uint32> outside = new .() ~ delete _;
+		/// Its [Sync] declarations, once it has said (NetworkSync.SyncSchema); 0: the server's at the start.
+		public uint64 syncSchema;
 		/// The controls it was run with, by server tick, for forwarding to the other players (input forwarding).
 		public NetInput[InputHistory] applied;
 		public uint32 appliedNewest;

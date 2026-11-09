@@ -47,8 +47,31 @@ do not need a second workflow. Power users may explicitly query ECS data.
   components it adds uninitialised (Tallow registered them without a
   constructor; every component now gets a zeroing one, as `World.Ensure`,
   `Add` and `CreateMany` document).
-- [ ] **Real multiplayer acceptance**: separate processes done; editing
-  scripts and visual graphs during play is still to do. Done (2026-11-09,
+- [x] **Real multiplayer acceptance** (2026-11-09). Live edits:
+  `~/TallowEcsTests/NetworkLiveEdit/run.py <engine root> <work folder>` (20
+  checks). One Debug program runs as three processes over loopback: a
+  dedicated server and a client that apply each script library (two editors
+  on the same project, the client a second later), and a client that never
+  does (a built game). The game code is edited on disk, the library built
+  with `tools/reload_scripts.py` (3 to 4.4 s each), and the values checked on
+  every process:
+  1. A method edit in a script and in a `[NativeSystem]` class: the new
+     values reach every client.
+  2. A visual graph's constant, through the graph compiler: it reaches every
+     client.
+  3. A new `[Sync]` field on a script (structural): it counts up on the
+     server and reaches the other editor. The built game warns and keeps its
+     last values; it still gets the bare entities.
+  4. A networked graph variable added (structural): likewise.
+  5. A field added to a `[Component]` struct: refused on both editors, and the
+     session carries on.
+
+  Two engine changes came out of it. A native system can be a class, made
+  again after a structural reload (a delegate from `AddNativeSystem` kept
+  its old code). And objects' `[Sync]` fields are not applied while the
+  declarations differ (before, the built game wrote another field's bytes
+  into `mode` and `version`). See *Editing while playing*.
+  Separate processes, done (2026-11-09,
   `~/TallowEcsTests/NetworkUnifiedCross`, run with `crossrun_unified.sh`): a
   Linux dedicated server and four clients in their own processes, two Linux and
   two Windows builds (cross-compiled, run under Wine), 40 ms simulated lag.
@@ -266,8 +289,10 @@ the same in code.
 
 ### Native systems and prediction
 
-A native system advances one bare entity's data by one tick. It is registered
-once, on every machine, in the same order (like a prefab):
+A native system advances one bare entity's data by one tick. Write it as a
+class marked `[NativeSystem]`: the engine finds it, makes one and runs it on
+every machine, and editing it while the game plays takes effect like a
+script's `Update` (see *Editing while playing*):
 
 ```beef
 [Component]
@@ -277,18 +302,30 @@ struct ShipMotion
     [Sync] public int32 jumps;
 }
 
-NetworkManager.AddNativeSystem<ShipMotion>("Ship", new (entity, ship, input, deltaTime) =>
+[NativeSystem]
+class ShipSystem : NativeSystem<ShipMotion>
+{
+    public override void Update(Entity entity, ref ShipMotion ship, TickInput input, float deltaTime)
     {
         ship.position += Vector3(input.Move.x, 0, input.Move.y) * 8 * deltaTime;
         if (input.Pressed(.Jump))
             ship.jumps++;
-    });
+    }
+}
 
 // Server: this client's controls fly it, and it predicts it.
 Scene.Network.NativeSetOwner(ship, clientId);
 ```
 
-Every tick, before scripts' `Update`, the systems run in the order added:
+A system can also be registered once with a delegate, on every machine in the
+same order, like a prefab:
+`NetworkManager.AddNativeSystem<ShipMotion>("Ship", new (entity, ship, input,
+deltaTime) => { ... })`. That keeps the code it was made with until the
+program restarts: a script reload does not change it.
+
+Every tick, before scripts' `Update`, the systems run: those added with
+`AddNativeSystem` in the order added, then the classes by
+`[NativeSystem(order)]` and full name:
 
 - with no session, on every bare entity with the data (not GameObjects), with
   this machine's controls;
@@ -331,6 +368,36 @@ Native entity replication uses reserved engine message ID **237**. GameObject
 ECS component layout uses **236**. Both IDs are distinct from anti-cheat
 (**243**) and map-sharing (**242**); engine-reserved message IDs are
 **236–255**.
+
+### Editing while playing
+
+In the editor, scripts are reloaded while a session plays (Linux and Windows
+Debug, [script hot reload](script-hot-reload.md)). In a session:
+
+- A method body (a script's `Update`, a `[NativeSystem]` class, a graph
+  compiled again) takes effect on the machine that reloaded. What it does to
+  synced data reaches every client, including built games running the old
+  code.
+- A new or changed `[Sync]` field on a script, or a graph variable made
+  networked, changes the list of fields on that machine only. GameObject
+  fields go by index, so the machines must agree. Each machine notes a hash of
+  its `[Sync]` declarations (`NetworkSync.SyncSchema`). One that changes it
+  during a session tells the other side: the server tells every client, a
+  client tells the server. A client applies objects' `[Sync]` fields only
+  while its hash is the server's. Otherwise it keeps the last values and logs
+  a warning. When the two agree again (the other editor reloaded the same
+  change, or the game is restarted with it), the server sends that client
+  every field afresh. Nothing extra is sent in a session where no machine
+  reloads. Bare entities are matched by type and field name, so they carry
+  on regardless: unknown fields are skipped, and missing ones keep their
+  values.
+- A change to a `[Component]` struct's layout (a field added, removed or
+  retyped) is refused while playing ("Full rebuild required"). The session
+  goes on with the code it has; stop, rebuild and play again.
+
+So for multiplayer testing, run each player as an editor on the same project
+(each reloads what is saved) or restart built games after a change to `[Sync]`
+fields.
 
 ## Visual scripting
 
@@ -489,6 +556,9 @@ the hysteresis).
    <out dir>`, then its program with `<count> <moving percent> [radius]`;
    `NetworkObjectsPerf` built against both engines with `<count> <moving
    percent>`, interleaved.
+9. Editing while playing: `python3 ~/TallowEcsTests/NetworkLiveEdit/run.py
+   <engine root> <work folder>` (builds the program and the graph generator
+   in the work folder, Linux Debug).
 
 ## Design decision for later pure ECS networking
 
