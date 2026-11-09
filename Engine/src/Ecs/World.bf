@@ -41,13 +41,21 @@ sealed class World
 	/// Assigned by the NetworkManager for this Scene while a session is active.
 	public NetworkManager NativeNetwork;
 
+	/// Test the scene-object link without registering its component in a
+	/// standalone bulk ECS world merely to ask whether the entity is raw.
+	public bool IsSceneObject(Entity entity)
+	{
+		let index = ComponentId<ObjectLink>.Index;
+		return index < mIds.Count && mIds[index] != 0 && Flecs.Has(mWorld, entity.id, mIds[index]);
+	}
+
 	void TrackNativeCandidate(Entity entity, int32 index)
 	{
 		if (entity.IsNull || !DataComponents.IsSynced(index) || mNativeCandidates.Contains(entity.id))
 			return;
 		// Only the first enrolment needs a Flecs lookup. Query-driven
 		// Set<T> calls on already-networked entities stay cheap.
-		if (Has<ObjectLink>(entity))
+		if (IsSceneObject(entity))
 			return;
 		if (mNativeCandidates.Add(entity.id))
 			NativeNetwork?.NativeCandidateAdded(entity);
