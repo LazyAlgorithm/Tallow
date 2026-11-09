@@ -7,7 +7,6 @@ namespace Tallow;
 /// These entities deliberately have no GameObject, Transform or NetworkIdentity.
 extension NetworkManager
 {
-	public const uint8 MsgNativeEcs = 243;
 	const int NativeBatchLimit = 1000;
 	const int NativeScanPerSnapshot = 512;
 	const int NativeMaxTypes = 32;
@@ -144,9 +143,9 @@ extension NetworkManager
 			return;
 		mNativeBatch.Data[0] = (uint8)mNativeBatchCount;
 		if (toClient < 0)
-			SendToAll(MsgNativeEcs, mNativeBatch);
+			SendToAll(NetworkSync.MsgNativeEcs, mNativeBatch);
 		else
-			SendToClient(toClient, MsgNativeEcs, mNativeBatch);
+			SendToClient(toClient, NetworkSync.MsgNativeEcs, mNativeBatch);
 		mNativeBatch.Clear();
 		mNativeBatchCount = 0;
 	}
@@ -263,7 +262,9 @@ extension NetworkManager
 
 	public static void OnNativeMessage(int32 sender, ref NetReader reader)
 	{
-		let network = Scene.Active?.Network;
+		// Poll sets Dispatching to the exact session that received this packet;
+		// Scene.Active can be another scene while switching levels.
+		let network = NetworkManager.Dispatching;
 		if (network == null || !network.IsClient)
 			return; // The server never accepts ECS state from clients.
 		let count = (int)reader.Read<uint8>();
