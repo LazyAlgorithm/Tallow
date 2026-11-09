@@ -148,6 +148,10 @@ TN_API bool tn_gfx_init(SDL_Window* window, int width, int height, int renderer,
 	const char* videoDriver = SDL_GetCurrentVideoDriver();
 	if (videoDriver != nullptr)
 		setenv("EGL_PLATFORM", SDL_strcmp(videoDriver, "wayland") == 0 ? "wayland" : "x11", 1);
+	// Auto backend selection may fall all the way back to bgfx's non-rendering Noop backend.
+	// Tallow ships Vulkan shaders on Linux and requires a real renderer for its editor.
+	// --renderer opengl remains available for machines with a working OpenGL driver.
+	if (renderer < 0) renderer = (int)bgfx::RendererType::Vulkan;
 #endif
 
 #if defined(SDL_PLATFORM_WINDOWS)
@@ -164,7 +168,25 @@ TN_API bool tn_gfx_init(SDL_Window* window, int width, int height, int renderer,
 	init.callback = &s_callback;
 	FillSwapChain(init.swapChain, init.platformData, window, width, height);
 	s_window = window;
-	return bgfx::init(init);
+	if (!bgfx::init(init))
+	{
+		fprintf(stderr, "Tallow graphics: bgfx failed to initialize the requested rendering backend. "
+			"Try --renderer opengl or set TALLOW_GFX_TRACE=1 for diagnostics.\\n");
+		s_window = nullptr;
+		return false;
+	}
+	// bgfx::init can succeed with a Noop device after other backends are unavailable.
+	// Noop silently accepts draw calls but cannot display the launcher/editor.
+	if (bgfx::getRendererType() == bgfx::RendererType::Noop)
+	{
+		fprintf(stderr, "Tallow graphics: bgfx selected Noop instead of a real graphics backend. "
+			"The editor cannot render. Check Vulkan drivers, or try --renderer opengl "
+			"(TALLOW_GFX_TRACE=1 for diagnostics).\\n");
+		bgfx::shutdown();
+		s_window = nullptr;
+		return false;
+	}
+	return true;
 }
 
 TN_API void tn_gfx_reset(int width, int height, uint32_t resetFlags)
