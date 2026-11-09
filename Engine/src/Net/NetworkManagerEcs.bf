@@ -218,9 +218,10 @@ extension NetworkManager
 		{
 			if (!NativeSerialize(Scene.World, row.entity, state))
 				continue;
-			row.last.Clear();
-			row.last.AddRange(state.Data);
-			NativeQueueState(row, clientId);
+			// Do not replace the broadcast baseline while sending an individual
+			// late joiner its current state: existing clients still need the
+			// next server tick's changed-field update.
+			NativeQueue(1, row.netId, state.Data, clientId);
 		}
 		NativeFlush(clientId);
 	}
