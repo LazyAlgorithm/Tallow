@@ -34,6 +34,24 @@ struct Entity : IHashable, IEquatable<Entity>
 sealed class World
 {
 	void* mWorld;
+	/// Only bare entities with reflected [Sync] data are tracked. Ordinary packed
+	/// Flecs entities incur no per-entity networking state or automatic GameObject.
+	HashSet<uint64> mNativeCandidates = new .() ~ delete _;
+	public HashSet<uint64> NativeCandidates => mNativeCandidates;
+	/// Assigned by the NetworkManager for this Scene while a session is active.
+	public NetworkManager NativeNetwork;
+
+	void TrackNativeCandidate(Entity entity, int32 index)
+	{
+		if (entity.IsNull || !DataComponents.IsSynced(index) || Has<ObjectLink>(entity))
+			return;
+		if (mNativeCandidates.Add(entity.id))
+			NativeNetwork?.NativeCandidateAdded(entity);
+	}
+
+	/// Replication can stop when the last synchronized type is removed.
+	public void ForgetNativeCandidate(Entity entity) => mNativeCandidates.Remove(entity.id);
+
 	/// Flecs id of each ComponentTypes index, 0 until registered in this world.
 	List<uint64> mIds = new .() ~ delete _;
 	int32 mStageCount = 1;
@@ -202,7 +220,12 @@ sealed class World
 	/// The entity's data for that type, or null. Valid until the entity's components change.
 	public void* Get(Entity entity, int32 index) => Flecs.GetMut(mWorld, entity.id, IdOf(index));
 	/// The entity's data for that type, added (zeroed) first if missing.
-	public void* Ensure(Entity entity, int32 index) => Flecs.Ensure(Writer, entity.id, IdOf(index), ComponentTypes.Get(index).size);
+	public void* Ensure(Entity entity, int32 index)
+	{
+		let data = Flecs.Ensure(Writer, entity.id, IdOf(index), ComponentTypes.Get(index).size);
+		TrackNativeCandidate(entity, index);
+		return data;
+	}
 	public bool Has(Entity entity, int32 index) => Flecs.Has(mWorld, entity.id, IdOf(index));
 	public void Remove(Entity entity, int32 index) => Flecs.Remove(Writer, entity.id, IdOf(index));
 	/// Switches a [HandleData] component on or off for one entity; queries skip it while it is off.
@@ -234,12 +257,28 @@ sealed class World
 		Runtime.Assert(mDeferDepth == 0, "World.CreateMany cannot be deferred");
 		let ids = Flecs.BulkNew(mWorld, Id<T>(), (int32)count);
 		output.AddRange(Span<Entity>((Entity*)ids, count));
+		// One reflection check per bulk operation, not per entity. Unmarked
+		// components continue to use Flecs's original fast bulk-create path.
+		if (DataComponents.IsSynced(ComponentId<T>.Index))
+		{
+			for (int i < count)
+				TrackNativeCandidate(Entity(ids[i]), ComponentId<T>.Index);
+		}
 	}
 
-	public void Delete(Entity entity) => Flecs.Delete(Writer, entity.id);
+	public void Delete(Entity entity)
+	{
+		if (mNativeCandidates.Remove(entity.id))
+			NativeNetwork?.NativeCandidateRemoved(entity);
+		Flecs.Delete(Writer, entity.id);
+	}
 	public bool IsAlive(Entity entity) => Flecs.IsAlive(mWorld, entity.id);
 
-	public void Add<T>(Entity entity) where T : struct => Flecs.Add(Writer, entity.id, Id<T>());
+	public void Add<T>(Entity entity) where T : struct
+	{
+		Flecs.Add(Writer, entity.id, Id<T>());
+		TrackNativeCandidate(entity, ComponentId<T>.Index);
+	}
 	public void Remove<T>(Entity entity) where T : struct => Flecs.Remove(Writer, entity.id, Id<T>());
 	public bool Has<T>(Entity entity) where T : struct => Flecs.Has(mWorld, entity.id, Id<T>());
 
@@ -247,13 +286,19 @@ sealed class World
 	public T* Get<T>(Entity entity) where T : struct => (T*)Flecs.GetMut(mWorld, entity.id, Id<T>());
 
 	/// The entity's T, added (zeroed) first if it has none. Valid until the entity's components change.
-	public ref T Ensure<T>(Entity entity) where T : struct => ref *(T*)Flecs.Ensure(Writer, entity.id, Id<T>(), strideof(T));
+	public ref T Ensure<T>(Entity entity) where T : struct
+	{
+		let data = (T*)Flecs.Ensure(Writer, entity.id, Id<T>(), strideof(T));
+		TrackNativeCandidate(entity, ComponentId<T>.Index);
+		return ref *data;
+	}
 
 	/// Adds T if needed and sets it to value.
 	public void Set<T>(Entity entity, T value) where T : struct
 	{
 		var value;
 		Flecs.Set(Writer, entity.id, Id<T>(), strideof(T), &value);
+		TrackNativeCandidate(entity, ComponentId<T>.Index);
 	}
 
 	/// How many entities have T.
