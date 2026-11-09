@@ -50,7 +50,15 @@ The Linux reload worker caches ELF objects whose bytes and actually affected hos
 not changed, avoiding repeated symbol rewriting on ordinary method saves.
 Linux now links gameplay objects and reflection metadata explicitly and puts existing engine/editor
 dependency objects into a cached static archive. The linker extracts dependency implementations
-only when necessary. A link error retries the previous full-object link for compatibility.
+only when necessary. New script declarations can still cause BeefBuild to rewrite
+many engine/editor object outputs. To avoid spending extra time repacking
+thousands of prepared dependency objects, Linux builds an indexed **thin** static
+archive that references those objects in place. The archive index is refreshed
+when prepared objects change, and GNU/LLVM linkers extract needed implementations
+normally. An archiver without thin-archive support falls back to the original
+full archive; a link error retries the previous full-object linker for compatibility.
+Thin archives optimize Tallow's archive construction stage, not BeefBuild's
+compilation, symbol rewriting of truly changed objects, or linker resolution.
 Prepared ELF objects are now cached by **source object path**, not by the
 object's position in BeefBuild's `ObjectArgs.txt` linker list. Adding or removing
 a component can reorder that list without changing the object itself, so using
