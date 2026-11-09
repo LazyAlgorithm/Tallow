@@ -27,6 +27,8 @@ static class DataComponents
 		public bool synced;
 		/// Those fields, by name: what native ECS replication sends (NetworkManagerEcs.bf).
 		public List<SyncedField> syncedFields = new .() ~ DeleteContainerAndItems!(_);
+		/// Where its [SyncPosition] Vector3 field is, or -1: a bare entity with it is sent only to clients near it.
+		public int32 positionOffset = -1;
 	}
 
 	/// A [Sync] field of a data component, where it is in the struct.
@@ -110,6 +112,8 @@ static class DataComponents
 			{
 				if (!field.sync)
 					continue;
+				if (field.syncPosition && field.type == typeof(Vector3))
+					info.positionOffset = (int32)(int)field.ptr;
 				let size = NetworkSync.SizeOf(field);
 				if (size == 0 && field.type != typeof(SharedString))
 					continue;

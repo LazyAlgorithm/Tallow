@@ -241,6 +241,7 @@ sealed class World
 		TrackNativeCandidate(entity, index);
 		return data;
 	}
+
 	public bool Has(Entity entity, int32 index) => Flecs.Has(mWorld, entity.id, IdOf(index));
 	public void Remove(Entity entity, int32 index) => Flecs.Remove(Writer, entity.id, IdOf(index));
 	/// Switches a [HandleData] component on or off for one entity; queries skip it while it is off.
@@ -290,6 +291,7 @@ sealed class World
 			NativeNetwork?.NativeCandidateRemoved(entity);
 		Flecs.Delete(Writer, entity.id);
 	}
+
 	public bool IsAlive(Entity entity) => Flecs.IsAlive(mWorld, entity.id);
 
 	public void Add<T>(Entity entity) where T : struct
@@ -297,6 +299,7 @@ sealed class World
 		Flecs.Add(Writer, entity.id, Id<T>());
 		TrackNativeCandidate(entity, ComponentId<T>.Index);
 	}
+
 	public void Remove<T>(Entity entity) where T : struct => Flecs.Remove(Writer, entity.id, Id<T>());
 	public bool Has<T>(Entity entity) where T : struct => Flecs.Has(mWorld, entity.id, Id<T>());
 
@@ -331,6 +334,19 @@ sealed class World
 		if (mObjectQueries.TryGetValue(key, let existing))
 			return (Query<T, ObjectLink>)existing;
 		let query = new Query<T, ObjectLink>(this, .ReadWrite, .Read);
+		mObjectQueries[key] = query;
+		return query;
+	}
+
+
+	/// Cached query of every entity with T, scene objects and bare entities alike (World.IsSceneObject tells them
+	/// apart). The same Flecs query each time; do not delete it.
+	public Query<T> EntitiesWith<T>() where T : struct
+	{
+		let key = -1 - ComponentId<T>.Index;
+		if (mObjectQueries.TryGetValue(key, let existing))
+			return (Query<T>)existing;
+		let query = new Query<T>(this);
 		mObjectQueries[key] = query;
 		return query;
 	}

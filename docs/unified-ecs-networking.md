@@ -83,13 +83,19 @@ do not need a second workflow. Power users may explicitly query ECS data.
   types described once, fields by bit mask, a per-snapshot byte budget shared
   fairly between new entities and changes, and late joiners paced over
   snapshots with the baseline every other client holds.
-- [ ] **Native ECS prediction and relevance**: the implementation is
-  server-authoritative state replication, not client-authoritative movement,
-  rollback or interest-filtered spatial streaming. Add a deterministic
-  fixed-tick query scheduling contract, entity input/owner mapping, prediction
-  history and reconciliation. Relevance needs a well-defined spatial component
-  and a per-client last-delivered baseline. Do not claim that a pure ECS query
-  automatically predicts like a GameObject NetworkBehaviour yet.
+- [x] **Native ECS prediction and relevance** (2026-11-09): each client has
+  its own stream and the server knows what each holds (`NativeView`). A
+  `[SyncPosition]` Vector3 field makes an entity *spatial*: it goes only to
+  clients whose player is within `SnapshotRelevanceRadius`, and leaves past
+  `RelevanceHysteresis` times that. Native systems (`AddNativeSystem<T>`) are
+  the fixed-tick scheduling contract. `NativeSetOwner` maps an entity to a
+  client's controls; the owner predicts it, notes its synced state after every
+  tick, and on each snapshot's ack takes the server's state and runs its
+  controls again where they differ (see *Native systems and prediction*).
+  `~/TallowEcsTests/NetworkNativePredict` passes 33 checks, and the
+  cross-process test has each of four Linux and Windows clients fly a ship.
+  Over 5 s of steady flight there were **0 corrections**, and each stopped ship
+  matched the server bit for bit.
 - [ ] **Performance acceptance**: profile 1k/10k/50k/100k ordinary scripts,
   batched visual loops, mixed ECS objects, snapshot/field serialization and
   net bandwidth under realistic relevance filtering; optimize allocations
@@ -188,30 +194,100 @@ When it is sent (server, with each snapshot, every `SnapshotInterval` ticks):
   there before, and what does not fit goes first in the next snapshot. 10,000
   made at once reach two clients in 27 ticks while a change to an older one
   takes 3 (the first implementation: 60 ticks, about 80 bytes each).
-- A client that joins late is told the type table at once, then sent the
-  entities already there over the following snapshots,
-  `NativeJoinBytesPerSnapshot` (32 KB) at a time. It is sent the state every
-  other client holds (not a newer one) and reads past changes to entities it
-  has not been sent yet; those come whole later.
-- Everything is reliable and in order; deletes go with the next snapshot, in
-  batches.
+- Each client has its own stream of records, and the server keeps the set of
+  entities it holds. A change goes to the clients holding the entity. A client
+  that joins late is told the type table at once, then sent the entities
+  already there over the following snapshots, `NativeJoinBytesPerSnapshot`
+  (32 KB) at a time, with the state every other client holds.
+- **Relevance**: an entity with a `[SyncPosition]` Vector3 field (which is
+  synced like `[Sync]`) goes only to clients whose player is within
+  `SnapshotRelevanceRadius`. It is deleted on a client once it is further than
+  `RelevanceHysteresis` times that, and sent whole again when it comes back,
+  with whatever changed meanwhile. Its owner always holds it. Entities without
+  the field, and every entity when the radius is 0 or the client has no
+  player yet, go to everyone. As with Nearby GameObjects, an entity is found
+  leaving or coming back when it is compared, in its turn (within a snapshot
+  or a few for up to 16,384 entities). Unlike a GameObject, which is hidden, a
+  bare entity is deleted on the client, local-only data with it.
+  `NativeHeldBy(clientId)`, `NativeIsHeldBy(entity, clientId)`, `NativeEntered`
+  and `NativeLeft` tell the server what clients hold.
+- Everything is reliable and in order; deletes go with the next snapshot.
 - Host migration: the new host takes the replicas it holds as its own
-  entities, under the same network ids, and sends them whole to everyone;
-  clients that come back drop their replicas first.
+  entities, under the same network ids and owners (its own become the
+  server's), and sends them whole to everyone; clients that come back drop
+  their replicas first.
 - After a script reload the server describes the types again and sends every
   entity whole.
 
-`NetworkManager.Describe` (Window > Network) has a NATIVE ECS line: entities,
-how many wait to be sent, clients catching up, and the records and bytes
-sent. `NativeEntityCount`, `NativeWaiting` and `NativeBytes` give the same in
-code.
+`NetworkManager.Describe` (Window > Network) has a NATIVE ECS line. On the
+server it shows entities, how many are owned by clients, how many wait to be
+sent, the records and bytes sent, and entities that came into or left a
+client's area. On a client it shows replicas, bytes, how many are predicted,
+and corrections. `NativeEntityCount`, `NativeWaiting` and `NativeBytes` give
+the same in code.
 
-**Not yet equivalent to fully network-predicted ECS**: clients must not
-independently run authoritative query movement on replicas and assume
-rollback will reconcile it, and must not create the same authoritative bare
-entities themselves (they would be duplicates). Every client is sent every
-entity: there is no relevance filtering yet, and changes go reliably, not as
-unreliable snapshot deltas.
+### Native systems and prediction
+
+A native system advances one bare entity's data by one tick. It is registered
+once, on every machine, in the same order (like a prefab):
+
+```beef
+[Component]
+struct ShipMotion
+{
+    [SyncPosition] public Vector3 position;
+    [Sync] public int32 jumps;
+}
+
+NetworkManager.AddNativeSystem<ShipMotion>("Ship", new (entity, ship, input, deltaTime) =>
+    {
+        ship.position += Vector3(input.Move.x, 0, input.Move.y) * 8 * deltaTime;
+        if (input.Pressed(.Jump))
+            ship.jumps++;
+    });
+
+// Server: this client's controls fly it, and it predicts it.
+Scene.Network.NativeSetOwner(ship, clientId);
+```
+
+Every tick, before scripts' `Update`, the systems run in the order added:
+
+- with no session, on every bare entity with the data (not GameObjects), with
+  this machine's controls;
+- on the server, on its own bare entities (with the host's controls on a host,
+  none on a dedicated server), and on each entity a client owns with that
+  client's controls as they are run (the tick its NetworkScripts run);
+- on a client, only on the replicas it owns, at once, with its own controls.
+  It notes their synced data after each tick. With each snapshot the server
+  sends its state of them and the last tick of the client's controls it has
+  run (an *ack* record). Where that differs from what the client noted for the
+  same tick, the client takes the server's state and runs its controls since
+  then again for those entities only (`NativeCorrections`,
+  `NativeReplayedTicks`). Owned entities are compared every snapshot, outside
+  the round robin, so each ack has their state.
+
+The contract (what makes the replay right):
+
+- A system may depend only on the entity it is given: its data, the controls
+  and the delta time. Not other entities, wall-clock time or `Input`. The order
+  entities are run in is not fixed.
+- Only `[Sync]` fields are put right by the server and run again; the others
+  stay each machine's own.
+- Add, Remove and Delete inside a system are deferred to the end of the run.
+  `CreateMany` cannot be called there.
+- A client runs no system on the server's entities. Those are shown as the
+  server last sent them, without interpolation yet. Lockstep sessions do not
+  run native systems.
+- When a client's controls arrive after the server has run their tick, the
+  server carries on with the last ones it had, and the owner is corrected (as
+  for GameObjects). In one process every scene shares `Time.TickScale`, so
+  clients cannot run ahead of the server and such corrections are normal
+  there (7 in 300 ticks at 30 ms in `NetworkNativePredict`). In separate
+  processes there were none.
+
+Still not supported: clients creating the same authoritative bare entities
+themselves (they would be duplicates), interpolation of other clients'
+entities, and changes as unreliable snapshot deltas (they go reliably).
 
 Native entity replication uses reserved engine message ID **237**. GameObject
 ECS component layout uses **236**. Both IDs are distinct from anti-cheat
@@ -267,7 +343,9 @@ wall-clock time during prediction.
    is unchanged and no stale field index is applied.
 5. Bare entities, in one process: `~/TallowEcsTests/nettest.sh <engine root>
    NetworkNativeEcs <out dir>` (a dedicated server and three clients over
-   loopback; `--bulk N` sets the big spawn, 10,000 by default) and
+   loopback; `--bulk N` sets the big spawn, 10,000 by default),
+   `nettest.sh <engine root> NetworkNativePredict <out dir>` (relevance,
+   native systems, ownership and prediction under lag and loss) and
    `nettest.sh <engine root> HostMigrationNative <out dir>`.
 6. **Do not** create the same authoritative bare entities independently on
    both machines: client-side creation suppression or deterministic matching
@@ -278,8 +356,7 @@ wall-clock time during prediction.
 8. Repeat with 1k/10k bare synced entities across separate processes and
    machines, then a typical mixed scene: measure FPS, packet rate, reliable
    bytes, snapshot build/read time, and corrections. Compare with the
-   original `ecs` branch under equivalent settings. The native path is not yet
-   spatially filtered or predicted.
+   original `ecs` branch under equivalent settings.
 
 ## Design decision for later pure ECS networking
 

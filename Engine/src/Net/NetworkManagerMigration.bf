@@ -251,7 +251,7 @@ extension NetworkManager
 			mNextClientId = Math.Max(mNextClientId, entry.id + 1);
 		}
 		mReclaimEnds = Milliseconds + ReclaimMilliseconds;
-		NativeBecameHost();
+		NativeBecameHost(oldId);
 		let hostIdentity = GameObject.ComponentOn<NetworkIdentity>(PlayerObject(0));
 		mHostPlayerNetId = hostIdentity.IsValid ? hostIdentity.NetId : 0;
 		Log.Info("This machine is now the host.");

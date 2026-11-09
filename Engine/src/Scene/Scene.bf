@@ -1342,6 +1342,8 @@ class Scene
 				}
 			}
 			);
+		// Native ECS systems with no session (in one, the network runs them with each player's controls).
+		World.AddStep(mTickPipeline, "Tick.NativeSystems", .PreUpdate, new () => NetworkManager.RunNativeSystemsOffline(this));
 		World.AddStep(mTickPipeline, "Tick.Update", .PreUpdate, new () =>
 			{
 				using (sTickUpdateMarker.Sample()) TickUpdatesOffline();

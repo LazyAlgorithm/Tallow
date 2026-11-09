@@ -40,6 +40,8 @@ struct FieldRef
 	public bool advanced;
 	/// Marked [Sync]: shared from the server to clients.
 	public bool sync;
+	/// Marked [SyncPosition] (which shares it as [Sync] does): where a bare ECS entity is, for relevance.
+	public bool syncPosition;
 	public bool hasRange;
 	public float rangeMin;
 	public float rangeMax;
@@ -355,7 +357,8 @@ static class ComponentRegistry
 				fieldRef.ptr = (void*)(int)field.MemberOffset;
 				fieldRef.hidden = field.GetCustomAttribute<HideInInspectorAttribute>() case .Ok;
 				fieldRef.advanced = field.GetCustomAttribute<AdvancedAttribute>() case .Ok;
-				fieldRef.sync = field.GetCustomAttribute<SyncAttribute>() case .Ok;
+				fieldRef.syncPosition = field.GetCustomAttribute<SyncPositionAttribute>() case .Ok;
+				fieldRef.sync = fieldRef.syncPosition || (field.GetCustomAttribute<SyncAttribute>() case .Ok);
 				fieldRef.isLayer = field.GetCustomAttribute<LayerAttribute>() case .Ok;
 				fieldRef.saved = field.GetCustomAttribute<SavedAttribute>() case .Ok;
 				if (field.GetCustomAttribute<RangeAttribute>() case .Ok(let range))

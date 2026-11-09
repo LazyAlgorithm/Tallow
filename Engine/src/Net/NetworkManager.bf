@@ -605,9 +605,9 @@ class NetworkManager
 		if (mNative != null && (NativeEntityCount > 0 || mNative.bytes > 0))
 		{
 			if (IsServer)
-				into.AppendF("NATIVE ECS {} bare entities (no GameObjects), {} waiting to be sent, {} clients catching up; sent {} full, {} change and {} destroy records, {} bytes\n", NativeEntityCount, NativeWaiting, mNative.joiners.Count, mNative.fullRecords, mNative.changeRecords, mNative.destroyRecords, mNative.bytes);
+				into.AppendF("NATIVE ECS {} bare entities (no GameObjects), {} owned by clients, {} waiting to be sent; sent {} full, {} change and {} destroy records, {} bytes; {} came into a client's area, {} left one\n", NativeEntityCount, mNative.owned.Count, NativeWaiting, mNative.fullRecords, mNative.changeRecords, mNative.destroyRecords, mNative.bytes, mNative.entered, mNative.left);
 			else
-				into.AppendF("NATIVE ECS {} replicas of the server's bare entities (no GameObjects), {} bytes received\n", NativeEntityCount, mNative.bytes);
+				into.AppendF("NATIVE ECS {} replicas of the server's bare entities (no GameObjects), {} bytes received; {} predicted here, {} corrections, {} ticks run again\n", NativeEntityCount, mNative.bytes, mNative.predicted.Count, mNative.corrections, mNative.replayedTicks);
 		}
 		if (Lockstep && IsClient)
 			into.AppendF("LOCKSTEP {} hashes checked, {} differed (each resyncs), {} replays from exact physics snapshots, {} exact states taken up\n", HashChecks, HashMismatches, LockstepReplays, LockstepStatesTaken);

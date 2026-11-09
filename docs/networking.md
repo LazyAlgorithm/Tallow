@@ -76,10 +76,11 @@ Get/Set, and a **For Each** loop that walks packed ECS data with one graph
 script. `Scene.World.ObjectsWith<FlightData>()` provides the equivalent
 cached query in code for scene GameObjects, each of which has an `ObjectLink`.
 
-This automatic bridge applies to **scene GameObjects with a NetworkIdentity**;
-`World.CreateMany<T>` entities that have no GameObject/ObjectLink are not
-currently auto-replicated or predicted. Pure entity-only replication remains
-a separate milestone. The ordinary network-prediction rules still apply to
+This automatic bridge applies to **scene GameObjects with a NetworkIdentity**.
+Bare `World.CreateMany<T>` entities with `[Sync]` data are replicated by the
+server with no GameObject, filtered by distance with a `[SyncPosition]` field,
+and run by native systems that the owning client predicts (see
+docs/unified-ecs-networking.md, *Bare Flecs entities*). The ordinary network-prediction rules still apply to
 code or graphs that update shared ECS data: authoritative writes, fixed-tick
 inputs, reproducible ordering and replay safety matter.
 

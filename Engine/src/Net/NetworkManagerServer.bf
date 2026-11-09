@@ -145,6 +145,7 @@ extension NetworkManager
 				continue;
 			SimulateIdentity(identity, input);
 		}
+		NativeSimulate(ownerId, input);
 	}
 
 	/// One object's networked Update (and its behaviours' Simulate) for a tick, with a player's controls.

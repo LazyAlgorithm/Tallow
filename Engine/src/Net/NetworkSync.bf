@@ -11,6 +11,14 @@ struct SyncAttribute : Attribute
 {
 }
 
+/// Marks the Vector3 field of a [Component] struct that is where a bare ECS entity is (it is shared like [Sync]).
+/// Native ECS replication then sends the entity only to clients whose player is within the session's
+/// SnapshotRelevanceRadius, as Nearby objects are (docs/unified-ecs-networking.md).
+[AttributeUsage(.Field, .ReflectAttribute)]
+struct SyncPositionAttribute : Attribute
+{
+}
+
 /// Makes engine features work in multiplayer without game code: when a network session is running, the calls
 /// below route themselves through the server and reach every machine. With no session they do nothing.
 ///
@@ -1069,7 +1077,11 @@ static class NetworkSync
 		if (!reader.Ok || count > 64)
 			return;
 		let names = scope List<String>();
-		defer { for (let name in names) delete name; }
+		defer
+		{
+			for (let name in names)
+				delete name;
+		}
 		for (int i < count)
 		{
 			let name = new String();
@@ -1091,14 +1103,18 @@ static class NetworkSync
 			DataComponents.GetFields(info.type, gameObject.GetData(info.type), fields, gameObject);
 			bool synced = false;
 			for (let field in fields)
+			{
 				if (field.sync && (SizeOf(field) > 0 || field.kind == .String))
 					synced = true;
+			}
 			if (!synced)
 				continue;
 			bool keep = false;
 			for (let name in names)
+			{
 				if (name == info.fullName)
 					keep = true;
+			}
 			if (!keep)
 				gameObject.RemoveData(info.type);
 		}
