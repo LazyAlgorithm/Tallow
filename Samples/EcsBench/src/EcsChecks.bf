@@ -314,7 +314,6 @@ static class EcsChecks
 		Expect(!cube.HasComponent<Motion>() && cube.HasComponent<Pose>(), "RemoveComponent<T> for a data component");
 	}
 
-	/// Phase 3 exit, engine side: a prefab with data and a script survives instance, edit, save, load and play.
 	/// Bare entities with [Sync] data enroll in replication automatically,
 	/// without getting a GameObject or altering the packed Flecs layout.
 	static void NativeNetworkChecks()
@@ -351,6 +350,7 @@ static class EcsChecks
 			"bulk-created native candidates are cleaned up on destruction");
 	}
 
+	/// Phase 3 exit, engine side: a prefab with data and a script survives instance, edit, save, load and play.
 	static void PrefabChecks()
 	{
 		let previous = Scene.Active;

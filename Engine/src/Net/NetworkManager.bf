@@ -409,6 +409,12 @@ class NetworkManager
 	NetCompression mCompression ~ delete _;
 	List<uint8> mCompressed = new .() ~ delete _;
 	List<uint8> mDecompressed = new .() ~ delete _;
+	// Bare ECS entity replication (NetworkManagerEcs.bf). Declared here rather than in that extension because Beef
+	// runs an extension's field destructors before this class's ~this, and Stop() there still uses these.
+	List<NativeRow> mNativeRows = new .() ~ DeleteContainerAndItems!(_);
+	Dictionary<uint64, NativeRow> mNativeByEntity = new .() ~ delete _;
+	Dictionary<uint32, Entity> mNativeRemote = new .() ~ delete _;
+	NetWriter mNativeBatch = new .() ~ delete _;
 	int32 mStatTransportSent;
 	/// Encoded application bytes offered to the transport before simulated loss (not physical wire bytes).
 	public int32 TransportBytesSentPerSecond;

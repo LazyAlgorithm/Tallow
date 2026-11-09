@@ -23,12 +23,11 @@ extension NetworkManager
 		public List<uint8> last = new .() ~ delete _;
 	}
 
-	List<NativeRow> mNativeRows = new .() ~ DeleteContainerAndItems!(_);
-	Dictionary<uint64, NativeRow> mNativeByEntity = new .() ~ delete _;
-	Dictionary<uint32, Entity> mNativeRemote = new .() ~ delete _;
+	// The session's lists (mNativeRows, mNativeByEntity, mNativeRemote, mNativeBatch) are declared in
+	// NetworkManager.bf: Beef destroys an extension's fields before the class's own ~this, whose Stop()
+	// still needs them to delete a client's replicas.
 	uint32 mNativeNextId = 1;
 	int mNativeCursor;
-	NetWriter mNativeBatch = new .() ~ delete _;
 	int mNativeBatchCount;
 
 	/// A synced bare entity created with World.CreateMany, Add, Ensure or Set.
