@@ -34,13 +34,20 @@ def partition_link_objects(objects, prepared, game_objects):
 def cached_dependency_archive(objects, archive):
     """Cache an indexed library of host-aware dependency objects.
 
-    Prepared objects are rewritten when their contents or matching host
-    exports change, so a file stamp is sufficient for archive invalidation.
+    Linux can link thin archives: their members reference the already-cached
+    prepared ELF files instead of copying every object into the .a on each
+    new game component. This avoids repacking thousands of dependency objects
+    after BeefBuild changes reflection/generic code. Fall back to a normal
+    archive when the installed archiver does not support thin archives.
+    Prepared object files live beside this archive and are not deleted while
+    the editor runs; their content/mtime signature invalidates the index.
     """
     if not objects:
         return None, False
     stamp = archive.with_suffix(archive.suffix + '.stamp')
     digest = hashlib.sha256()
+    # A one-time format bump replaces previously cached fat archives.
+    digest.update(b'tallow-thin-archive-v1\0')
     for obj in objects:
         stat = obj.stat()
         digest.update(os.fsencode(obj))
@@ -53,7 +60,15 @@ def cached_dependency_archive(objects, archive):
     if temp.exists():
         temp.unlink()
     try:
-        subprocess.run(['ar', 'rcs', str(temp), *map(str, objects)], check=True)
+        try:
+            subprocess.run(['ar', 'rcsT', str(temp), *map(str, objects)], check=True)
+        except subprocess.CalledProcessError:
+            # BSD/older archivers may lack GNU/LLVM's thin-archive modifier.
+            # The original full archive remains correct, only slower.
+            print('WARNING: Thin archives unavailable; using a full dependency archive.', flush=True)
+            if temp.exists():
+                temp.unlink()
+            subprocess.run(['ar', 'rcs', str(temp), *map(str, objects)], check=True)
         temp.replace(archive)
         stamp.write_text(signature)
     finally:
