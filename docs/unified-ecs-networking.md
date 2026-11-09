@@ -47,9 +47,20 @@ do not need a second workflow. Power users may explicitly query ECS data.
   components it adds uninitialised (Tallow registered them without a
   constructor; every component now gets a zeroing one, as `World.Ensure`,
   `Add` and `CreateMany` document).
-- [ ] **Real multiplayer acceptance**: Linux server/client and Windows/Linux
-  client, spawn/despawn, late join, interest exit/return, add/remove custom
-  components during play, script and visual-graph edits, and disconnect/rejoin.
+- [ ] **Real multiplayer acceptance**: separate processes done; editing
+  scripts and visual graphs during play is still to do. Done (2026-11-09,
+  `~/TallowEcsTests/NetworkUnifiedCross`, run with `crossrun_unified.sh`): a
+  Linux dedicated server and four clients in their own processes, two Linux and
+  two Windows builds (cross-compiled, run under Wine), 40 ms simulated lag.
+  Two join at the start, two about 10 s in (late join), and one Windows client
+  leaves after the third phase and comes back in a new scene. Checked at each
+  phase on every client: networked GameObjects with a `[Component]` struct with
+  `[Sync]` fields and a script (spawn, despawn, field changes, a second synced
+  struct added to and removed from some of them, one leaving every client's
+  area and its changes while away showing when it returns, through
+  `relevance = .Nearby`), and bare entities (made, changed, deleted, more made
+  later). 35 checks pass, run twice. Not covered yet: live script and
+  visual-graph edits while playing, and separate machines.
 - [ ] **Prediction acceptance**: compare state hashes and correction frequency
   for normal-script vs query-based movement under packet delay, loss and
   rollback. Arbitrary query systems are not automatically prediction-aware.
@@ -261,7 +272,10 @@ wall-clock time during prediction.
 6. **Do not** create the same authoritative bare entities independently on
    both machines: client-side creation suppression or deterministic matching
    is still pending and doing so makes duplicates.
-7. Repeat with 1k/10k bare synced entities across separate processes and
+7. Separate processes and platforms: `~/TallowEcsTests/crossbuild.sh <engine
+   root> NetworkUnifiedCross <out dir>` (needs `tools/windows/setup.sh` and the
+   engine's `build/native-win`), then `crossrun_unified.sh <out dir>`.
+8. Repeat with 1k/10k bare synced entities across separate processes and
    machines, then a typical mixed scene: measure FPS, packet rate, reliable
    bytes, snapshot build/read time, and corrections. Compare with the
    original `ecs` branch under equivalent settings. The native path is not yet
