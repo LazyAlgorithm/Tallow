@@ -18,6 +18,8 @@ extension NetworkManager
 		public Entity entity;
 		public uint32 netId;
 		public int index;
+		/// A replica may have been sent to a late joiner before its first broadcast.
+		public bool announced;
 		public List<uint8> last = new .() ~ delete _;
 	}
 
@@ -64,7 +66,7 @@ extension NetworkManager
 		if (!IsServer || !mNativeByEntity.TryGetValue(entity.id, let row))
 			return;
 		// An entity that was never sent need not produce a destroy packet.
-		if (!row.last.IsEmpty)
+		if (row.announced)
 			NativeQueueDestroy(row.netId, -1);
 		// Flush at the next snapshot, not once per entity deletion.
 		// A large bulk despawn otherwise becomes thousands of packets.
@@ -164,8 +166,11 @@ extension NetworkManager
 		mNativeBatchCount++;
 	}
 
-	void NativeQueueState(NativeRow row, int32 toClient) =>
+	void NativeQueueState(NativeRow row, int32 toClient)
+	{
 		NativeQueue(1, row.netId, row.last, toClient);
+		row.announced = true;
+	}
 
 	void NativeQueueDestroy(uint32 netId, int32 toClient) =>
 		NativeQueue(2, netId, default, toClient);
@@ -191,7 +196,7 @@ extension NetworkManager
 			if (!NativeSerialize(Scene.World, row.entity, state))
 			{
 				// Removed [Sync] data or an entity destroyed outside World.Delete.
-				if (!row.last.IsEmpty)
+				if (row.announced)
 					NativeQueueDestroy(row.netId, -1);
 				Scene.World.ForgetNativeCandidate(row.entity);
 				NativeRemoveRow(row);
@@ -228,6 +233,7 @@ extension NetworkManager
 			// late joiner its current state: existing clients still need the
 			// next server tick's changed-field update.
 			NativeQueue(1, row.netId, state.Data, clientId);
+			row.announced = true;
 		}
 		NativeFlush(clientId);
 	}
