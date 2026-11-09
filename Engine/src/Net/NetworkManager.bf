@@ -572,6 +572,7 @@ class NetworkManager
 		case NetworkSync.MsgCharacterShape: return "character shape";
 		case NetworkSync.MsgAnimation: return "animation";
 		case NetworkSync.MsgField: return "synced fields";
+		case NetworkSync.MsgEcsComponents: return "ECS component layouts";
 		case NetworkSync.MsgNativeEcs: return "native ECS";
 		case NetworkSync.MsgAudio: return "audio";
 		case NetworkSync.MsgEvent: return "events";
