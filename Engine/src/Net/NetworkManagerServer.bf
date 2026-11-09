@@ -33,6 +33,7 @@ extension NetworkManager
 			SpawnPlayer(client.id);
 		AntiCheat.ClientJoined(this, client.id);
 		NetworkSync.ClientJoined(this, client.id);
+		NativeClientJoined(client.id);
 		if (OnClientJoined != null)
 			OnClientJoined(client.id);
 		Log.Info(scope $"Client {client.id} connected.");
@@ -288,6 +289,7 @@ extension NetworkManager
 						if (client.lastProcessedTick > 0 && !client.lockstepSynced)
 							SendLockstepState(client);
 				NetworkSync.ServerTick(this);
+				NativeServerTick();
 			}
 		}
 		else if (mConnected && LocalClientId > 0)
