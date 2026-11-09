@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Pure-Python regression tests for the hot-reload ELF object cache."""
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -34,7 +35,7 @@ class LinkPipelineTests(unittest.TestCase):
             invocations = []
 
             def build(args, check):
-                self.assertEqual(args[:2], ['ar', 'rcs'])
+                self.assertEqual(args[:2], ['ar', 'rcsT'])
                 invocations.append(args)
                 Path(args[2]).write_bytes(b'archived')
 
@@ -49,6 +50,32 @@ class LinkPipelineTests(unittest.TestCase):
                 obj.write_bytes(b'changed content with different length')
                 result, reused = reload_scripts.cached_dependency_archive([obj], archive)
                 self.assertFalse(reused)
+                self.assertEqual(len(invocations), 2)
+
+    def test_falls_back_to_regular_archive_when_thin_is_unsupported(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            obj = root / 'object.o'
+            obj.write_bytes(b'data')
+            archive = root / 'resident-dependencies.a'
+            invocations = []
+
+            def build(args, check):
+                invocations.append(args[1])
+                if args[1] == 'rcsT':
+                    Path(args[2]).write_bytes(b'partial')
+                    raise subprocess.CalledProcessError(1, args)
+                self.assertEqual(args[1], 'rcs')
+                Path(args[2]).write_bytes(b'full archive')
+
+            with patch.object(reload_scripts.subprocess, 'run', side_effect=build):
+                result, reused = reload_scripts.cached_dependency_archive([obj], archive)
+                self.assertEqual(result, archive)
+                self.assertFalse(reused)
+                self.assertEqual(invocations, ['rcsT', 'rcs'])
+                self.assertEqual(archive.read_bytes(), b'full archive')
+                result, reused = reload_scripts.cached_dependency_archive([obj], archive)
+                self.assertTrue(reused)
                 self.assertEqual(len(invocations), 2)
 
     def test_no_dependency_archive_needed(self):
