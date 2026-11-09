@@ -23,6 +23,8 @@ static class DataComponents
 		public Type type;
 		/// The type's place in ComponentTypes (the same in every World).
 		public int32 index;
+		/// At least one field marked [Sync] that the network serializer supports.
+		public bool synced;
 	}
 
 	static List<Info> sInfos ~ DeleteContainerAndItems!(_);
@@ -57,6 +59,16 @@ static class DataComponents
 			type.GetName(info.name);
 			info.type = type;
 			info.index = ComponentTypes.Add(type, type.Stride, type.Align);
+			let fields = scope List<FieldRef>();
+			GetFields(type, null, fields);
+			for (let field in fields)
+			{
+				if (field.sync && (NetworkSync.SizeOf(field) > 0 || field.kind == .String))
+				{
+					info.synced = true;
+					break;
+				}
+			}
 			sInfos.Add(info);
 		}
 		sInfos.Sort(scope (a, b) => a.name.CompareTo(b.name));
@@ -90,6 +102,14 @@ static class DataComponents
 				return info;
 		}
 		return null;
+	}
+
+	/// Whether a game-defined ECS data type has a supported [Sync] field.
+	/// Computed once per reflection refresh; checking a hot CreateMany is cheap.
+	public static bool IsSynced(int32 index)
+	{
+		let info = Find(index);
+		return info != null && info.synced;
 	}
 
 	/// The editable fields of a data component whose value is at data: plain values, SharedString and ObjectRef (and,
