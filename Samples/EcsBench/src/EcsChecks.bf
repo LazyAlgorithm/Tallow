@@ -147,6 +147,7 @@ static class EcsChecks
 		UpdateChecks();
 		sFailures += ScriptPathChecks.Run();
 		DataChecks();
+		NativeNetworkChecks();
 		PrefabChecks();
 		HandleChecks();
 		WindChecks();
@@ -314,6 +315,42 @@ static class EcsChecks
 	}
 
 	/// Phase 3 exit, engine side: a prefab with data and a script survives instance, edit, save, load and play.
+	/// Bare entities with [Sync] data enroll in replication automatically,
+	/// without getting a GameObject or altering the packed Flecs layout.
+	static void NativeNetworkChecks()
+	{
+		let scene = scope Scene();
+		let world = scene.World;
+		let entities = scope List<Entity>();
+		world.CreateMany<SyncedEcsMotion>(8, entities);
+		Expect(entities.Count == 8 && world.NativeCandidates.Count == 8,
+			"CreateMany with synced ECS data registers native network candidates");
+		Expect(world.Get<ObjectLink>(entities[0]) == null,
+			"native ECS replication does not allocate GameObjects");
+
+		let local = scope List<Entity>();
+		world.CreateMany<Marked>(8, local);
+		Expect(world.NativeCandidates.Count == 8,
+			"unmarked ECS data remains local, even when created in bulk");
+		let extra = world.Create();
+		world.Set<SyncedEcsMotion>(extra, .() { speed = 7 });
+		Expect(world.NativeCandidates.Contains(extra.id),
+			"Set on a bare ECS entity automatically enrolls its synced data");
+
+		let go = scene.CreateGameObject("Hybrid");
+		go.AddComponent<SyncedEcsMotion>(.() { speed = 3 });
+		Expect(!world.NativeCandidates.Contains(go.Entity.id),
+			"a GameObject with ECS data stays on the existing NetworkIdentity path");
+
+		world.Delete(extra);
+		Expect(!world.NativeCandidates.Contains(extra.id),
+			"deleting a bare entity releases its native network candidate");
+		for (let entity in entities)
+			world.Delete(entity);
+		Expect(world.NativeCandidates.Count == 0,
+			"bulk-created native candidates are cleaned up on destruction");
+	}
+
 	static void PrefabChecks()
 	{
 		let previous = Scene.Active;
