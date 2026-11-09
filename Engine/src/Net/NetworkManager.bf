@@ -794,6 +794,7 @@ class NetworkManager
 		LocalClientId = hostAlsoPlays ? 0 : -1;
 		NetworkSync.Prepare(this);
 		RegisterSceneIdentities();
+		NativeStart();
 		if (hostAlsoPlays && !PlayerPrefab.IsEmpty)
 			SpawnPlayer(0);
 		Log.Info(scope $"Server listening on port {port}.");
@@ -818,6 +819,7 @@ class NetworkManager
 		LocalClientId = -1;
 		NetworkSync.Prepare(this);
 		RegisterSceneIdentities();
+		NativeStart();
 		Log.Info(scope $"Connecting to {address}:{port}...");
 		return true;
 	}
@@ -825,6 +827,7 @@ class NetworkManager
 	/// Leaves the session: a server tells its clients and closes, a client disconnects.
 	public void Stop()
 	{
+		NativeStop();
 		if (mTransport != null)
 		{
 			if (mServerPeer != null)
