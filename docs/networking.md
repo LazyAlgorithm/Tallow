@@ -31,10 +31,57 @@ Add a **Network Session** component (Add Component > Networking) to an object in
 | Particles (`ParticleSystem.Play`) | From the server or the object's owner, it plays on every machine. |
 | Decals (`Decals.Spawn`) and one-shot sounds (`Audio.PlayOneShot`) | From the server, every machine presses the decal and plays the sound where it is. A game that already shares its shots and impacts itself is not doubled: an effect arriving from the server within half a second of the same one played on that machine (same picture or clip, near the same place) is played once. A client's own calls stay its own. |
 | Fields marked `[Sync]`, and graph variables ticked **Networked** | The server's value is copied to every client when it changes. |
+| Custom ECS `[Component] struct` data on networked GameObjects | Supported `[Sync]` fields are copied like script fields; the server also mirrors adding/removing those synchronized data components. |
 
 A player who joins late receives all of it: the terrain and voxel edits so far, objects created and destroyed, current shapes, clips and synced values, and what is switched off and how the lights are set.
 
 On a client, calls that the server must decide (`Brush`, `Carve`) are sent to the server and take effect a moment later, when the server passes them back.
+
+## ECS data and ordinary scripts on one networked object
+
+You can add a normal `Script`, built-in components, and a project-defined
+`[Component]` struct to the **same** GameObject, including on a network prefab.
+Their data is stored in that GameObject's Flecs entity, so scripts, the Inspector,
+visual scripting and ECS queries all access the same values.
+
+```beef
+[Component]
+struct FlightData
+{
+    [Sync] public Vector3 velocity;
+    [Sync] public float fuel;
+    public int32 localEffect; // not sent
+}
+
+[Component]
+class FlightController : Script
+{
+    public override void Update(TickInput input, float deltaTime)
+    {
+        let flight = GetComponent<FlightData>();
+        if (flight != null)
+            Transform.Position += flight.velocity * deltaTime;
+    }
+}
+```
+
+Add `NetworkIdentity` to the object (or use a networked prefab). Tallow
+synchronizes supported `[Sync]` fields of the custom ECS struct alongside
+ordinary script fields, including changes made by direct ECS queries. It also
+sends the custom synchronized data-component layout when it changes, so clients
+can add or remove the same data type. Its other fields are local.
+
+Visual graphs have an **ECS** category: component Has/Add/Remove, primitive
+Get/Set, and a **For Each** loop that walks packed ECS data with one graph
+script. `Scene.World.ObjectsWith<FlightData>()` provides the equivalent
+cached query in code for scene GameObjects, each of which has an `ObjectLink`.
+
+This automatic bridge applies to **scene GameObjects with a NetworkIdentity**;
+`World.CreateMany<T>` entities that have no GameObject/ObjectLink are not
+currently auto-replicated or predicted. Pure entity-only replication remains
+a separate milestone. The ordinary network-prediction rules still apply to
+code or graphs that update shared ECS data: authoritative writes, fixed-tick
+inputs, reproducible ordering and replay safety matter.
 
 ## Writing a player: NetworkScript
 

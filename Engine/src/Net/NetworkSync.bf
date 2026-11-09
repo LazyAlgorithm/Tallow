@@ -33,6 +33,8 @@ static class NetworkSync
 	public const uint8 MsgCharacterShape = 252;
 	public const uint8 MsgAnimation = 253;
 	public const uint8 MsgField = 254;
+	/// Reliable inventory of synchronized custom ECS data components on one networked object.
+	public const uint8 MsgEcsComponents = 242;
 	public const uint8 MsgAudio = 249;
 	public const uint8 MsgEvent = 247;
 	public const uint8 MsgAnimator = 246;
@@ -80,6 +82,7 @@ static class NetworkSync
 		NetworkManager.RegisterMessage(MsgCharacterShape, new => OnCharacterShape);
 		NetworkManager.RegisterMessage(MsgAnimation, new => OnAnimation);
 		NetworkManager.RegisterMessage(MsgField, new => OnField);
+		NetworkManager.RegisterMessage(MsgEcsComponents, new => OnEcsComponents);
 		NetworkManager.RegisterMessage(MsgAudio, new => OnAudio);
 		VoiceChat.EnsureRegistered();
 		NetworkManager.RegisterMessage(MsgEvent, new => OnEvent);
@@ -836,8 +839,8 @@ static class NetworkSync
 
 	class Slot
 	{
-		/// Where the field is, for a class component's field. A built-in component's (handle) data lives in its
-		/// entity and moves when the object's components change, so for those it is found each time (Ptr).
+		/// Where the field is for a class component. ECS data (both built-in and game-defined)
+		/// moves between Flecs tables, so Ptr resolves its current location every time.
 		public void* ptr;
 		public GameObject owner;
 		public int32 dataIndex = -1;
@@ -868,6 +871,12 @@ static class NetworkSync
 		public List<Slot> slots = new .() ~ DeleteContainerAndItems!(_);
 		/// Changes when components are added, removed or replaced by a script reload.
 		public int signature;
+		/// Stable type names of custom data components containing supported [Sync] fields.
+		public List<String> syncedDataTypes = new .() ~ DeleteContainerAndItems!(_);
+		/// Reset when the component layout changes; the server must announce that layout before field indices.
+		public bool structureSent;
+		/// Remembers removals so a client returning to relevance can be told to clear the data.
+		public bool everHadSyncedData;
 	}
 
 	static Dictionary<NetworkIdentity, SlotList> sSlots = new .() ~ DeleteDictionaryAndValues!(_);
@@ -899,15 +908,26 @@ static class NetworkSync
 		handles.Sort(scope (a, b) => a.fullName.CompareTo(b.fullName));
 		for (let info in handles)
 			signature = signature * 31 + info.index + 1;
+		// Custom [Component] structs can live beside class scripts and built-in handles on
+		// the same GameObject entity. Include their layout in the cache key and sort their
+		// names, not Flecs table order, so server and client agree on field indices.
+		let dataComponents = scope List<DataComponents.Info>();
+		DataComponents.On(identity.GameObject, dataComponents);
+		dataComponents.Sort(scope (a, b) => a.fullName.CompareTo(b.fullName));
+		for (let info in dataComponents)
+			signature = signature * 31 + info.index + 1;
+		bool everHadSyncedData = false;
 		if (sSlots.TryGetValue(identity, let existing))
 		{
 			if (existing.signature == signature)
 				return existing;
+			everHadSyncedData = existing.everHadSyncedData || !existing.syncedDataTypes.IsEmpty;
 			sSlots.Remove(identity);
 			delete existing;
 		}
 		let list = new SlotList();
 		list.signature = signature;
+		list.everHadSyncedData = everHadSyncedData;
 		List<FieldRef> fields = scope .();
 		for (let component in identity.GameObject.Components)
 		{
@@ -957,6 +977,44 @@ static class NetworkSync
 				list.slots.Add(slot);
 			}
 		}
+		// Game-defined ECS structs use the same [Sync] wire format as ordinary scripts.
+		// Resolve fields by offset every time: adding another component may move this
+		// struct to another Flecs table without invalidating the network field slot.
+		for (let info in dataComponents)
+		{
+			let data = identity.GameObject.GetData(info.type);
+			if (data == null)
+				continue;
+			fields.Clear();
+			DataComponents.GetFields(info.type, data, fields, identity.GameObject);
+			fields.Sort(scope (a, b) => a.name.CompareTo(b.name));
+			bool hasSyncedFields = false;
+			for (let field in fields)
+			{
+				if (!field.sync)
+					continue;
+				let size = SizeOf(field);
+				if (size == 0 && field.kind != .String)
+					continue;
+				hasSyncedFields = true;
+				let slot = new Slot();
+				slot.owner = identity.GameObject;
+				slot.dataIndex = info.index;
+				slot.offset = (uint8*)field.ptr - (uint8*)data;
+				slot.size = size;
+				slot.isString = field.kind == .String;
+				slot.type = field.type;
+				list.slots.Add(slot);
+			}
+			if (hasSyncedFields)
+				list.syncedDataTypes.Add(new String(info.fullName));
+		}
+		if (!list.syncedDataTypes.IsEmpty)
+			list.everHadSyncedData = true;
+		// Ordinary network objects with no synchronized ECS data must not each
+		// generate an extra reliable empty-layout message on their first tick.
+		if (!list.everHadSyncedData)
+			list.structureSent = true;
 		sSlots[identity] = list;
 		return list;
 	}
@@ -987,6 +1045,75 @@ static class NetworkSync
 		payload.Data.AddRange(Span<uint8>(bytes.Ptr, Math.Min(bytes.Length, 60000)));
 	}
 
+	/// The synchronized ECS type layout precedes field messages, which use compact numeric indices.
+	/// Only game-defined structs containing supported [Sync] fields are mirrored. Other ECS
+	/// components may stay local; built-in handles already have their own lifecycle protocol.
+	static void WriteEcsComponents(NetWriter writer, NetworkIdentity identity, SlotList list)
+	{
+		NetworkManager.WriteNetId(writer, identity.NetId);
+		writer.Write((uint8)Math.Min(list.syncedDataTypes.Count, 64));
+		for (int i < list.syncedDataTypes.Count && i < 64; i++)
+			writer.WriteString(list.syncedDataTypes[i]);
+	}
+
+	static void OnEcsComponents(int32 sender, ref NetReader reader)
+	{
+		let network = Active(Scene.Active);
+		if (network == null || network.IsServer)
+			return;
+		let netId = NetworkManager.ReadNetId(ref reader);
+		let count = (int)reader.Read<uint8>();
+		if (!reader.Ok || count > 64)
+			return;
+		let names = scope List<String>();
+		defer { for (let name in names) delete name; }
+		for (int i < count)
+		{
+			let name = new String();
+			reader.ReadString(name);
+			names.Add(name);
+		}
+		if (!reader.Ok)
+			return;
+		let identity = network.FindIdentity(netId);
+		if (!identity.IsValid)
+			return;
+		let gameObject = identity.GameObject;
+		let existing = scope List<DataComponents.Info>();
+		DataComponents.On(gameObject, existing);
+		// Only remove server-replicated types; never remove purely local data.
+		for (let info in existing)
+		{
+			let fields = scope List<FieldRef>();
+			DataComponents.GetFields(info.type, gameObject.GetData(info.type), fields, gameObject);
+			bool synced = false;
+			for (let field in fields)
+				if (field.sync && (SizeOf(field) > 0 || field.kind == .String))
+					synced = true;
+			if (!synced)
+				continue;
+			bool keep = false;
+			for (let name in names)
+				if (name == info.fullName)
+					keep = true;
+			if (!keep)
+				gameObject.RemoveData(info.type);
+		}
+		for (let name in names)
+		{
+			let info = DataComponents.Find(name);
+			if (info == null)
+			{
+				Log.Warning(scope $"Unknown networked ECS component '{name}'; client and server may have different game builds.");
+				continue;
+			}
+			if (gameObject.GetData(info.type) == null)
+				gameObject.AddData(info.type);
+		}
+		// Changes of archetype invalidate cached field indices and addresses.
+		Forget(identity);
+	}
+
 	/// Server, once per snapshot: sends every [Sync] field whose value changed since it was last sent.
 	public static void ServerTick(NetworkManager network)
 	{
@@ -994,6 +1121,13 @@ static class NetworkSync
 		for (let identity in network.Identities)
 		{
 			let list = Slots(identity);
+			if (!list.structureSent)
+			{
+				payload.Clear();
+				WriteEcsComponents(payload, identity, list);
+				network.SendAbout(identity.NetId, MsgEcsComponents, payload);
+				list.structureSent = true;
+			}
 			for (int i < list.slots.Count)
 			{
 				let slot = list.slots[i];
@@ -1014,9 +1148,14 @@ static class NetworkSync
 	public static void SendFieldsTo(NetworkManager network, NetworkIdentity identity, int32 clientId)
 	{
 		let list = Slots(identity);
+		let payload = scope NetWriter();
+		if (list.everHadSyncedData)
+		{
+			WriteEcsComponents(payload, identity, list);
+			network.SendToClient(clientId, MsgEcsComponents, payload);
+		}
 		if (list.slots.Count == 0)
 			return;
-		let payload = scope NetWriter();
 		for (int i < list.slots.Count)
 		{
 			payload.Clear();
@@ -1332,6 +1471,12 @@ static class NetworkSync
 				network.SendToClient(clientId, MsgCharacterShape, payload);
 			}
 			let list = Slots(identity);
+			payload.Clear();
+			if (list.everHadSyncedData)
+			{
+				WriteEcsComponents(payload, identity, list);
+				network.SendToClient(clientId, MsgEcsComponents, payload);
+			}
 			for (int i < list.slots.Count)
 			{
 				payload.Clear();
