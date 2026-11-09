@@ -43,7 +43,11 @@ sealed class World
 
 	void TrackNativeCandidate(Entity entity, int32 index)
 	{
-		if (entity.IsNull || !DataComponents.IsSynced(index) || Has<ObjectLink>(entity))
+		if (entity.IsNull || !DataComponents.IsSynced(index) || mNativeCandidates.Contains(entity.id))
+			return;
+		// Only the first enrolment needs a Flecs lookup. Query-driven
+		// Set<T> calls on already-networked entities stay cheap.
+		if (Has<ObjectLink>(entity))
 			return;
 		if (mNativeCandidates.Add(entity.id))
 			NativeNetwork?.NativeCandidateAdded(entity);
