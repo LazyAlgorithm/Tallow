@@ -1052,7 +1052,7 @@ static class NetworkSync
 	{
 		NetworkManager.WriteNetId(writer, identity.NetId);
 		writer.Write((uint8)Math.Min(list.syncedDataTypes.Count, 64));
-		for (int i < list.syncedDataTypes.Count && i < 64; i++)
+		for (int i = 0; i < list.syncedDataTypes.Count && i < 64; i++)
 			writer.WriteString(list.syncedDataTypes[i]);
 	}
 
