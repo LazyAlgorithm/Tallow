@@ -61,9 +61,27 @@ do not need a second workflow. Power users may explicitly query ECS data.
   `relevance = .Nearby`), and bare entities (made, changed, deleted, more made
   later). 35 checks pass, run twice. Not covered yet: live script and
   visual-graph edits while playing, and separate machines.
-- [ ] **Prediction acceptance**: compare state hashes and correction frequency
-  for normal-script vs query-based movement under packet delay, loss and
-  rollback. Arbitrary query systems are not automatically prediction-aware.
+- [x] **Prediction acceptance** (2026-11-09, `~/TallowEcsTests/NetworkPredictQuery`,
+  run with `crossbuild.sh` then `crossrun_predict.sh`). A predicted player
+  moves by its controls, written three ways. In each case a Linux server, a
+  Linux client and a Windows client run in their own processes: 8 s at 40 ms
+  lag, then 10 s with 5% of packets lost as well, then stop and compare
+  positions with the server.
+
+  | Movement | Corrections, 40 ms | With 5% loss | Stopped |
+  |---|---|---|---|
+  | Script moving its own Transform | 0 | 0 | exactly the server's |
+  | Query in `TickPipeline` only | 160 (every snapshot) | 200 | exactly the server's |
+  | The same query also in `ReplayPipeline` | 0 | 0 | exactly the server's |
+
+  Linux and Windows clients gave the same numbers. A query is not
+  prediction-aware by itself: a correction replays the scripts' `Update` but
+  not the query, so the replayed ticks lose their movement and the next
+  snapshot corrects again. Add the same step to `Scene.ReplayPipeline` (after
+  `Replay.Update`, in `.PreUpdate`) and have it move only what this machine
+  runs (everything on the server, `IsOwner` objects on a client); see
+  *Queries and prediction*. Bare entities use native systems instead, which
+  are replayed for their owner.
 - [x] **Native entity replication**: `World.CreateMany<T>`, `Set<T>`,
   `Ensure<T>` and `Add<T>` enrol GameObject-free entities when a game-defined
   `[Component]` struct has supported `[Sync]` fields; server-assigned network
@@ -305,6 +323,38 @@ resulting graph script to an ordinary GameObject, with or without other scripts.
 When authoritative network behavior matters, run it through the same
 network-tick rules as normal scripts; do not read untracked `Input` or
 wall-clock time during prediction.
+
+## Queries and prediction
+
+A query that moves predicted GameObjects must run in replays as well as
+ticks:
+
+```beef
+// The script stores its controls (data.move = input.Move); the query moves by them.
+void MovePilots(Scene scene)
+{
+    let network = scene.Network;
+    for (var chunk in scene.World.ObjectsWith<PilotData>())
+    {
+        let pilots = chunk.Read<PilotData>();
+        let links = chunk.Read<ObjectLink>();
+        for (int i < chunk.Count)
+        {
+            let pilot = links[i].gameObject;
+            if (network != null && !network.IsServer && !pilot.GetComponent<NetworkIdentity>().IsOwner)
+                continue;
+            pilot.Transform.Position += Vector3(pilots[i].move.x, 0, pilots[i].move.y) * pilots[i].speed * Time.FixedDeltaTime;
+        }
+    }
+}
+
+scene.World.AddStep(scene.TickPipeline, "Game.MovePilots", .OnUpdate, new () => MovePilots(scene));
+scene.World.AddStep(scene.ReplayPipeline, "Game.MovePilots", .PreUpdate, new () => MovePilots(scene));
+```
+
+Only the Transform, bodies and controllers are rewound for a replay. ECS data
+the query reads, such as `move` above, must be set again by the replayed
+`Update`, or be derived from rewound state.
 
 ## Compatibility and constraints
 
