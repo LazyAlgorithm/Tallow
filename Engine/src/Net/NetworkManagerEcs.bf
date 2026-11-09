@@ -63,7 +63,9 @@ extension NetworkManager
 	/// Called before World.Delete: a destroyed bare entity must disappear on clients.
 	public void NativeCandidateRemoved(Entity entity)
 	{
-		if (!IsServer || !mNativeByEntity.TryGetValue(entity.id, let row))
+		if (!IsServer)
+			return;
+		if (!mNativeByEntity.TryGetValue(entity.id, let row))
 			return;
 		// An entity that was never sent need not produce a destroy packet.
 		if (row.announced)
