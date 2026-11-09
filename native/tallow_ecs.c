@@ -127,7 +127,14 @@ TALLOW_ECS_API ecs_world_t* tallow_ecs_iter_stage(const ecs_iter_t* it)
 
 // ---- Components ----
 
-// Registers a plain-data component (no constructor or destructor: Tallow's data components hold no heap fields).
+// Flecs leaves a component it adds uninitialised unless its type has a constructor. Tallow promises zeroed data
+// (World.Ensure, Add, CreateMany), and stale bytes would differ between machines, so every component gets this one.
+static void tallow_ecs_zero_ctor(void* ptr, int32_t count, const ecs_type_info_t* type_info)
+{
+	ecs_os_memset(ptr, 0, type_info->size * count);
+}
+
+// Registers a plain-data component (no destructor: Tallow's data components hold no heap fields).
 TALLOW_ECS_API uint64_t tallow_ecs_component(ecs_world_t* world, const char* name, int32_t size, int32_t alignment)
 {
 	ecs_entity_desc_t entity = {0};
@@ -142,7 +149,14 @@ TALLOW_ECS_API uint64_t tallow_ecs_component(ecs_world_t* world, const char* nam
 	desc.entity = id;
 	desc.type.size = size;
 	desc.type.alignment = alignment;
-	return ecs_component_init(world, &desc);
+	ecs_entity_t component = ecs_component_init(world, &desc);
+	if (component)
+	{
+		ecs_type_hooks_t hooks = {0};
+		hooks.ctor = tallow_ecs_zero_ctor;
+		ecs_set_hooks_id(world, component, &hooks);
+	}
+	return component;
 }
 
 // A component with no data (a tag).
