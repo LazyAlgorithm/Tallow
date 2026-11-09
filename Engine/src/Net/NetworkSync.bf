@@ -27,16 +27,16 @@ struct SyncAttribute : Attribute
 /// Players that join later are brought up to date with all of it.
 static class NetworkSync
 {
-	// Message ids the engine keeps for itself; games should use ids below 240.
+	// Message ids the engine keeps for itself; games should use ids below 236.
 	public const uint8 MsgTerrainBrush = 250;
 	public const uint8 MsgVoxelCarve = 251;
 	public const uint8 MsgCharacterShape = 252;
 	public const uint8 MsgAnimation = 253;
 	public const uint8 MsgField = 254;
 	/// Reliable inventory of synchronized custom ECS data components on one networked object.
-	public const uint8 MsgEcsComponents = 242;
+	public const uint8 MsgEcsComponents = 236;
 	/// Reliable batches for GameObject-free entities with [Sync] ECS data.
-	public const uint8 MsgNativeEcs = 243;
+	public const uint8 MsgNativeEcs = 237;
 	public const uint8 MsgAudio = 249;
 	public const uint8 MsgEvent = 247;
 	public const uint8 MsgAnimator = 246;
