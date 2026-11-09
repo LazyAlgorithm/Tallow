@@ -195,9 +195,23 @@ wall-clock time during prediction.
    second client receives it. Add/remove the custom data during play, join
    late, then move out of interest radius and back in. Verify local-only data
    is unchanged and no stale field index is applied.
-5. Repeat with a typical mixed scene and measure FPS, packet rate, packet
-   bytes, snapshot build/read time, and corrections. Compare with the
-   original `ecs` branch under equivalent settings.
+5. For the new bare-entity path, create 32 `SyncedEcsMotion` entities
+   with `World.CreateMany<T>` **on the server**, then use `Set<T>` to change
+   their [Sync] fields. In the client's native `Query<SyncedEcsMotion>`,
+   verify the 32 replicas have no ObjectLink, values match, and
+   `NetworkManager.Describe` reports the expected native replica count.
+   Remove/add a synchronized component on the server; delete one entity.
+   Verify the matching remote changes without local GameObjects.
+6. Test a late-joining client both before and after the server has sent its
+   first native snapshot; delete an entity between the join and the next
+   snapshot. Also verify client-created local-only data is not replicated.
+   **Do not** create the same authoritative raw entities independently on
+   both machines: client-side creation suppression/deterministic matching is
+   still pending and doing so currently makes duplicates.
+7. Repeat with 1k/10k bare synced entities, then a typical mixed scene:
+   measure FPS, packet rate, reliable bytes, snapshot build/read time,
+   and corrections. Compare with the original `ecs` branch under equivalent
+   settings. The native path is not yet spatially filtered or predicted.
 
 ## Design decision for later pure ECS networking
 
