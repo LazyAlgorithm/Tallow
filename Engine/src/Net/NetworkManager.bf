@@ -572,6 +572,7 @@ class NetworkManager
 		case NetworkSync.MsgCharacterShape: return "character shape";
 		case NetworkSync.MsgAnimation: return "animation";
 		case NetworkSync.MsgField: return "synced fields";
+		case NetworkSync.MsgNativeEcs: return "native ECS";
 		case NetworkSync.MsgAudio: return "audio";
 		case NetworkSync.MsgEvent: return "events";
 		case NetworkSync.MsgAnimator: return "animator";
@@ -596,6 +597,8 @@ class NetworkManager
 		into.AppendF("NETWORK {} tick {} clients {} sent {} B/s received {} B/s objects {}\n", IsServer ? (mMode == .Host ? "host" : "server") : (IsClient ? "client" : "offline"), mTick, mClients.Count, BytesSentPerSecond, BytesReceivedPerSecond, mIdentityStates.Count);
 		for (let client in mClients)
 			into.AppendF("CLIENT {} {} B/s, {} inputs waiting, {}% snapshots lost, budget {}\n", client.id, client.bytesPerSecond, client.queue.Count, client.lossPercent, SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget);
+		if (mNativeRows.Count > 0 || mNativeRemote.Count > 0)
+			into.AppendF("NATIVE ECS {} server entities, {} client replicas (no GameObjects)\n", mNativeRows.Count, mNativeRemote.Count);
 		if (Lockstep && IsClient)
 			into.AppendF("LOCKSTEP {} hashes checked, {} differed (each resyncs), {} replays from exact physics snapshots, {} exact states taken up\n", HashChecks, HashMismatches, LockstepReplays, LockstepStatesTaken);
 		else if (Lockstep)
