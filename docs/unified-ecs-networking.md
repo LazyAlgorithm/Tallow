@@ -114,10 +114,20 @@ do not need a second workflow. Power users may explicitly query ECS data.
   cross-process test has each of four Linux and Windows clients fly a ship.
   Over 5 s of steady flight there were **0 corrections**, and each stopped ship
   matched the server bit for bit.
-- [ ] **Performance acceptance**: profile 1k/10k/50k/100k ordinary scripts,
-  batched visual loops, mixed ECS objects, snapshot/field serialization and
-  net bandwidth under realistic relevance filtering; optimize allocations
-  and structural cache checks without breaking synchronization.
+- [x] **Performance acceptance** (2026-11-09, Release, Linux, interleaved
+  A/B against the `ecs` branch at 14b97ac0; see *Performance* for the
+  tables). Ordinary scripts, mixed objects and ECS systems at
+  1k/10k/50k/100k (`tools/run_ecs_bench.py`, 3 runs each, the noisiest row
+  repeated with 6) and the headless script paths (`--profile-scripts`) are
+  within run-to-run noise of the `ecs` branch. Networked GameObjects send the
+  same bytes and cost the same (`~/TallowEcsTests/NetworkObjectsPerf`).
+  Bare entities under relevance (`~/TallowEcsTests/NetworkNativePerf`, 1k to
+  100k, a server and two clients, each holding a fifth) cost the server under
+  1 ms per snapshot and stay exact once still. Two fixes came out of it: a
+  change no client holds no longer spends the byte budget (2.5 times the
+  updates per client when everything moves), and each entity's types and
+  data are found through cached Flecs references while its table is
+  unchanged (a quarter off the send time).
 
 ## Supported now on networked scene GameObjects
 
@@ -229,6 +239,12 @@ When it is sent (server, with each snapshot, every `SnapshotInterval` ticks):
   bare entity is deleted on the client, local-only data with it.
   `NativeHeldBy(clientId)`, `NativeIsHeldBy(entity, clientId)`, `NativeEntered`
   and `NativeLeft` tell the server what clients hold.
+- A change to an entity no client holds (none is near it) costs nothing of
+  the budget, so when much is moving the bandwidth goes to what clients see.
+  `NativePassSnapshots` is how many snapshots the last full pass of the round
+  robin took: the longest a change can wait. `NativeCaughtUp` is true when
+  nothing is waiting and that pass found nothing new, so every client holds
+  exactly what the server has in its area (for tests and tools).
 - Everything is reliable and in order; deletes go with the next snapshot.
 - Host migration: the new host takes the replicas it holds as its own
   entities, under the same network ids and owners (its own become the
@@ -240,8 +256,12 @@ When it is sent (server, with each snapshot, every `SnapshotInterval` ticks):
 `NetworkManager.Describe` (Window > Network) has a NATIVE ECS line. On the
 server it shows entities, how many are owned by clients, how many wait to be
 sent, the records and bytes sent, and entities that came into or left a
-client's area. On a client it shows replicas, bytes, how many are predicted,
-and corrections. `NativeEntityCount`, `NativeWaiting` and `NativeBytes` give
+client's area, how long a pass over them takes, and whether clients have
+caught up. On a client it shows replicas, bytes, how many are predicted,
+and corrections. Both show the time spent putting snapshots together (server)
+or reading them (client), also `NativeSendMilliseconds` and
+`NativeReadMilliseconds`, and in the Profiler as *Native ECS Send* and
+*Native ECS Read*. `NativeEntityCount`, `NativeWaiting` and `NativeBytes` give
 the same in code.
 
 ### Native systems and prediction
@@ -375,6 +395,65 @@ the query reads, such as `move` above, must be set again by the replayed
 - Data component structure is synchronized for types with supported `[Sync]`
   fields. Other components (including visual-only data) remain local.
 
+## Performance
+
+Release, Linux, one machine (2026-11-09). Each comparison interleaves the two
+builds and takes the median of the runs.
+
+Scene update against the `ecs` branch (`run_ecs_bench.py`, frame average,
+3 runs; the ECS 10k row repeated with 6, which gave +0.3%):
+
+| Objects | GameObject | Mixed | ECS |
+| --- | --- | --- | --- |
+| 1,000 | -4.6% | +5.8% | +4.3% |
+| 10,000 | -0.8% | -2.8% | +0.3% |
+| 50,000 | -0.5% | +0.4% | +1.6% |
+| 100,000 | -1.7% | +0.7% | +0.6% |
+
+The 1k rows take a quarter of a millisecond, where a few microseconds of
+scheduling show as several percent either way. The headless script paths
+(`--profile-scripts`: scene and dispatch loops, transform reads and writes,
+GetComponent, movers) are within ±5% at every count, mostly within ±2%. The
+unified data paths, new rows there, per object per tick: a script's
+`GetComponent<T>()` on a `[Component]` struct and a write, 6 to 7 ns; an
+`ObjectsWith<T>` query writing it, 1.1 ns; the same query reading the struct
+and its object's Transform, 2.7 ns at 1k and 7.3 ns at 100k.
+
+Networked GameObjects (`NetworkObjectsPerf`: a dedicated server and two
+clients in one process, unpaced; Nearby, radius 252 m over a 1 km square;
+a moving object also changes a `[Sync]` field of its script every tick):
+
+| Objects | Moving | Server tick, `ecs` / unified | Client tick | Bytes |
+| --- | --- | --- | --- | --- |
+| 1,000 | 10% | 0.348 / 0.341 ms | 0.225 / 0.231 ms | identical |
+| 1,000 | 100% | 0.522 / 0.517 ms | 0.337 / 0.341 ms | identical |
+| 10,000 | 10% | 5.51 / 5.52 ms | 3.92 / 3.81 ms | identical |
+| 10,000 | 100% | 7.87 / 7.69 ms | 4.97 / 5.04 ms | identical |
+
+Bare entities (`NetworkNativePerf`: the same layout, each entity a
+`Particle` with a `[SyncPosition]` and a `[Sync]` Vector3, moved by a native
+system; each client holds about a fifth). Send is per snapshot (every 3
+ticks); the pass is the longest a change can wait:
+
+| Entities | Moving | Server tick (p99) | Send | Client tick | Read | Per client | Pass |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | 100% | 0.10 (0.33) ms | 0.10 ms | 0.05 ms | 0.01 ms | 76 KB/s | 1 |
+| 10,000 | 10% | 0.28 (0.76) ms | 0.61 ms | 0.05 ms | 0.01 ms | 101 KB/s | 1 |
+| 10,000 | 100% | 0.38 (1.1) ms | 0.41 ms | 0.14 ms | 0.04 ms | 330 KB/s | 3 |
+| 50,000 | 10% | 0.55 (1.4) ms | 0.96 ms | 0.08 ms | 0.02 ms | 122 KB/s | 4 |
+| 50,000 | 100% | 0.48 (1.4) ms | 0.38 ms | 0.16 ms | 0.04 ms | 325 KB/s | 12 |
+| 100,000 | 10% | 0.68 (1.7) ms | 0.98 ms | 0.09 ms | 0.03 ms | 129 KB/s | 7 |
+| 100,000 | 100% | 0.59 (1.7) ms | 0.35 ms | 0.15 ms | 0.03 ms | 316 KB/s | 31 |
+
+With 10% moving the send is bound by the scan (16,384 compared per snapshot,
+about 60 ns each); with everything moving, by the byte budget, so at 100,000
+a moving entity is updated about every 1.5 s. Raise
+`NativeBytesPerSnapshot` for more, at the cost of bandwidth. Initial delivery
+of 100,000 (20,000 to each client) took 274 ticks at the default budgets.
+After everything stopped, every replica matched the server exactly at every
+size, and each client held what was within the radius (and nothing beyond
+the hysteresis).
+
 ## Test sequence on the developer machine
 
 1. Build Tallow from `ecs-unified-authoring-network` and run the ECS bench
@@ -403,10 +482,13 @@ the query reads, such as `move` above, must be set again by the replayed
 7. Separate processes and platforms: `~/TallowEcsTests/crossbuild.sh <engine
    root> NetworkUnifiedCross <out dir>` (needs `tools/windows/setup.sh` and the
    engine's `build/native-win`), then `crossrun_unified.sh <out dir>`.
-8. Repeat with 1k/10k bare synced entities across separate processes and
-   machines, then a typical mixed scene: measure FPS, packet rate, reliable
-   bytes, snapshot build/read time, and corrections. Compare with the
-   original `ecs` branch under equivalent settings.
+8. Performance (Release): `tools/run_ecs_bench.py --counts 1000 10000 50000
+   100000 --modes gameobject mixed ecs --runs 3 --baseline-executable <ecs
+   branch EcsBench>`; `EcsBench --profile-scripts <count>` from both builds,
+   interleaved; `CONFIG=Release nettest.sh <engine root> NetworkNativePerf
+   <out dir>`, then its program with `<count> <moving percent> [radius]`;
+   `NetworkObjectsPerf` built against both engines with `<count> <moving
+   percent>`, interleaved.
 
 ## Design decision for later pure ECS networking
 

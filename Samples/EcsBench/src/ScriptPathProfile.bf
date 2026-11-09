@@ -115,6 +115,40 @@ static class ScriptPathProfile
 				for (let mover in movers)
 					mover.Update(default, Time.FixedDeltaTime);
 			});
+		// The unified data path (docs/unified-ecs-networking.md): a [Component] struct on every object, as a script
+		// reaches it and as a query walks it. Last, so that the rows above stay comparable with builds without it.
+		let objects = scope List<GameObject>(count);
+		for (let transform in transforms)
+		{
+			objects.Add(transform.GameObject);
+			transform.GameObject.AddComponent<SyncedEcsMotion>(.() { speed = 1 });
+		}
+		Measure("data_script_get_set", count, scope [&] () =>
+			{
+				for (let obj in objects)
+					obj.GetComponent<SyncedEcsMotion>().speed += 0.5f;
+			});
+		Measure("data_objects_with_query", count, scope [&] () =>
+			{
+				for (var chunk in scene.World.ObjectsWith<SyncedEcsMotion>())
+				{
+					let motions = chunk.Write<SyncedEcsMotion>();
+					for (int i < chunk.Count)
+						motions[i].speed += 0.5f;
+				}
+			});
+		Measure("data_query_with_object", count, scope [&] () =>
+			{
+				float sum = 0;
+				for (var chunk in scene.World.ObjectsWith<SyncedEcsMotion>())
+				{
+					let motions = chunk.Read<SyncedEcsMotion>();
+					let links = chunk.Read<ObjectLink>();
+					for (int i < chunk.Count)
+						sum += motions[i].speed + links[i].gameObject.Transform.LocalPosition.x;
+				}
+				sSink.x = sum;
+			});
 		let beforeDestroy = Profiler.Now;
 		scene.Clear();
 		Console.WriteLine(scope $"PROFILE despawn count={count} ms={(Profiler.Now - beforeDestroy) / 1e6:0.000} checksum={sSink}");

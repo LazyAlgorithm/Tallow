@@ -34,7 +34,8 @@ extension NetworkManager
 	const int NativeMessageBytes = 1100;
 
 	/// Server: bytes of bare entity state to send per snapshot. New entities and changes share it, each getting at
-	/// least half while the other has something waiting; what does not fit goes in the next snapshot, in turn.
+	/// least half while the other has something waiting; what does not fit goes in the next snapshot, in turn. A change
+	/// to an entity no client holds costs nothing.
 	public int32 NativeBytesPerSnapshot = 32 * 1024;
 	/// Server: bytes per snapshot, for each client, of entities it is to be sent whole: those already there when it
 	/// joined, and those that came into its area.
@@ -56,6 +57,13 @@ extension NetworkManager
 		public bool spatial;
 		public Vector3 position;
 		public List<uint8> last = new .() ~ delete _;
+		/// The synced types it had when last encoded, in SyncedTypes order, each with a reference to its data that
+		/// stays good while the entity's table is unchanged; cachedCount -1: not known (or more than CachedTypes).
+		public const int CachedTypes = 4;
+		public int32 cachedCount = -1;
+		public int cachedGeneration;
+		public DataComponents.Info[CachedTypes] cachedTypes;
+		public Flecs.RefBuffer[CachedTypes] cachedRefs;
 	}
 
 	/// A synchronized type as the session sends it: its fields in wire order.
@@ -108,6 +116,11 @@ extension NetworkManager
 		public int generation;
 		public uint32 nextNetId = 1;
 		public int cursor;
+		/// The round robin: a change was sent in the pass under way; none was in the last whole pass; passes so far;
+		/// snapshots the pass under way and the last whole one took.
+		public bool passChanged, lastPassQuiet, compareChanged;
+		public int64 passes;
+		public int passSnapshots, lastPassSnapshots;
 		// Both: the type table by wire id (server: what it described; client: what it was told).
 		public List<NativeType> types = new .() ~ DeleteContainerAndItems!(_);
 		// Client
@@ -128,11 +141,18 @@ extension NetworkManager
 		public int64 entered, left;
 		/// Client: predictions found wrong and run again, the ticks run again, and predictions started.
 		public int64 corrections, replayedTicks, predictionStarts;
+		/// Time spent putting snapshots together (server) or reading them (client), in nanoseconds.
+		public int64 sendNanos, readNanos;
 		public bool warnedTypes;
 	}
 
 	/// Server: bare entities with synced data. Client: replicas of the server's.
 	public int NativeEntityCount => mNative == null ? 0 : (IsServer ? mNative.rows.Count : mNative.remote.Count);
+	/// Server: true when nothing is waiting and the last whole pass over the entities found nothing to send, so every
+	/// client holds exactly what the server has (in its area).
+	public bool NativeCaughtUp => mNative == null || !IsServer || (NativeWaiting == 0 && (mNative.rows.Count == 0 || mNative.lastPassQuiet));
+	/// Server: snapshots the last whole pass over the entities took: the longest a change waits to be sent.
+	public int NativePassSnapshots => mNative == null ? 0 : mNative.lastPassSnapshots;
 	/// Server: entities not sent yet, and entities clients are still to be sent whole.
 	public int NativeWaiting
 	{
@@ -215,6 +235,12 @@ extension NetworkManager
 
 	/// Bytes of native ECS records sent (server) or received (client) this session.
 	public int64 NativeBytes => mNative?.bytes ?? 0;
+	/// Milliseconds spent this session putting native ECS records together (server) and reading them (client).
+	public double NativeSendMilliseconds => (mNative?.sendNanos ?? 0) / 1e6;
+	public double NativeReadMilliseconds => (mNative?.readNanos ?? 0) / 1e6;
+
+	static ProfilerMarker sNativeSendMarker = .("Native ECS Send", .Networking);
+	static ProfilerMarker sNativeReadMarker = .("Native ECS Read", .Networking);
 
 	/// The network id of a bare synced entity (the server's or a client's replica), or 0.
 	public uint32 NativeNetId(Entity entity)
@@ -349,13 +375,29 @@ extension NetworkManager
 	/// into, noting where it is in row. False when it has none, or no longer exists.
 	bool NativeEncode(World world, NativeRow row, NetWriter into)
 	{
-		let entity = row.entity;
 		row.spatial = false;
 		into.Clear();
+		// Usually the entity is where it was last time (the same table, untouched), so its types are the ones noted
+		// then, and each one's data is where its reference points.
+		let cached = row.cachedCount;
+		if (cached > 0 && row.cachedGeneration == DataComponents.Generation)
+		{
+			let first = ref row.cachedRefs[0];
+			if (first.tableId != 0 && first.tableVersionFast == world.TableVersion(first.tableId))
+			{
+				into.Data.Add((uint8)cached);
+				for (int i < cached)
+					NativeEncodeType(row, row.cachedTypes[i], (uint8*)row.cachedRefs[i].ptr, into);
+				return true;
+			}
+		}
+		row.cachedCount = -1;
+		let entity = row.entity;
 		if (!world.IsAlive(entity))
 			return false;
 		into.Data.Add(0);
 		int count = 0;
+		bool cacheable = true;
 		for (let info in DataComponents.SyncedTypes)
 		{
 			let data = (uint8*)world.Get(entity, info.index);
@@ -368,28 +410,47 @@ extension NetworkManager
 				mNative.warnedTypes = true;
 				break;
 			}
-			into.WriteVarUInt(NativeWireId(info));
-			if (info.positionOffset >= 0)
+			NativeEncodeType(row, info, data, into);
+			if (count < NativeRow.CachedTypes)
 			{
-				row.spatial = true;
-				row.position = *(Vector3*)(data + info.positionOffset);
+				row.cachedTypes[count] = info;
+				Flecs.RefInit(world.Native, entity.id, world.IdOf(info.index), &row.cachedRefs[count]);
+				// Resolved now, so that the next encode finds its table and pointer.
+				Flecs.RefGet(world.Native, &row.cachedRefs[count], world.IdOf(info.index));
 			}
-			for (let field in info.syncedFields)
-			{
-				if (field.size > 0)
-				{
-					into.Data.AddRange(Span<uint8>(data + field.offset, field.size));
-					continue;
-				}
-				let text = ((SharedString*)(data + field.offset)).View;
-				let length = Math.Min(text.Length, NativeMaxTextBytes);
-				into.WriteVarUInt((uint32)length);
-				into.Data.AddRange(Span<uint8>((uint8*)text.Ptr, length));
-			}
+			else
+				cacheable = false;
 			count++;
 		}
 		into.Data[0] = (uint8)count;
+		if (cacheable && count > 0)
+		{
+			row.cachedCount = (int32)count;
+			row.cachedGeneration = DataComponents.Generation;
+		}
 		return count > 0;
+	}
+
+	void NativeEncodeType(NativeRow row, DataComponents.Info info, uint8* data, NetWriter into)
+	{
+		into.WriteVarUInt(NativeWireId(info));
+		if (info.positionOffset >= 0)
+		{
+			row.spatial = true;
+			row.position = *(Vector3*)(data + info.positionOffset);
+		}
+		for (let field in info.syncedFields)
+		{
+			if (field.size > 0)
+			{
+				into.Data.AddRange(Span<uint8>(data + field.offset, field.size));
+				continue;
+			}
+			let text = ((SharedString*)(data + field.offset)).View;
+			let length = Math.Min(text.Length, NativeMaxTextBytes);
+			into.WriteVarUInt((uint32)length);
+			into.Data.AddRange(Span<uint8>((uint8*)text.Ptr, length));
+		}
 	}
 
 	static uint32 NativeVar(List<uint8> data, ref int at)
@@ -543,9 +604,11 @@ extension NetworkManager
 
 	/// After a row was compared with what was last sent: the change (if any) goes to the clients holding it that
 	/// should still; the others holding it are told to delete it, and those it should reach now are queued for it.
-	void NativeDeliver(NativeRow row, NetWriter change)
+	/// True when the change went to at least one client.
+	bool NativeDeliver(NativeRow row, NetWriter change)
 	{
 		let native = mNative;
+		bool sent = false;
 		NetWriter destroy = null;
 		for (let view in native.views)
 		{
@@ -554,7 +617,10 @@ extension NetworkManager
 			if (held && relevant)
 			{
 				if (change != null)
+				{
 					NativeAppend(change, view);
+					sent = true;
+				}
 			}
 			else if (held)
 			{
@@ -571,6 +637,7 @@ extension NetworkManager
 			else if (relevant)
 				NativeQueue(view, row.netId);
 		}
+		return sent;
 	}
 
 	/// Server, each snapshot: destroys; new entities and changes within NativeBytesPerSnapshot; then, for clients that
@@ -580,6 +647,17 @@ extension NetworkManager
 		let native = mNative;
 		if (native == null || !IsServer)
 			return;
+		using (sNativeSendMarker.Sample())
+		{
+			let start = Profiler.Now;
+			NativeSendSnapshot();
+			native.sendNanos += Profiler.Now - start;
+		}
+	}
+
+	void NativeSendSnapshot()
+	{
+		let native = mNative;
 		// After a script reload the types may be laid out differently: describe them again and send everything whole.
 		if (native.generation != DataComponents.Generation)
 			NativeRestartTypes();
@@ -605,6 +683,7 @@ extension NetworkManager
 		}
 		native.ownerChanges.Clear();
 		let budget = Math.Max((int)NativeBytesPerSnapshot, 1);
+		native.passSnapshots++;
 		int used = 0;
 		int scanned = 0;
 		// What clients own is compared every snapshot, ahead of the rest: their prediction is checked against it.
@@ -659,6 +738,7 @@ extension NetworkManager
 		{
 			// Deleted outside World.Delete, or its last synced type was removed: it goes from the clients.
 			NativeDestroyEverywhere(row.netId);
+			native.compareChanged = true;
 			used += 4;
 			world.ForgetNativeCandidate(row.entity);
 			NativeRemoveRow(row);
@@ -676,8 +756,9 @@ extension NetworkManager
 			NativeEncodeFull(row.netId, now, record);
 		row.last.Clear();
 		row.last.AddRange(now);
-		NativeDeliver(row, record);
-		used += record.Data.Count;
+		native.compareChanged = true;
+		if (NativeDeliver(row, record))
+			used += record.Data.Count;
 		return true;
 	}
 
@@ -689,7 +770,14 @@ extension NetworkManager
 		while (scanned < Math.Min(NativeScanPerSnapshot, native.rows.Count) && used < limit)
 		{
 			if (native.cursor >= native.rows.Count)
+			{
 				native.cursor = 0;
+				native.lastPassQuiet = !native.passChanged;
+				native.passChanged = false;
+				native.passes++;
+				native.lastPassSnapshots = native.passSnapshots;
+				native.passSnapshots = 0;
+			}
 			let row = native.rows[native.cursor];
 			scanned++;
 			// A new one goes whole, from the queue; an owned one was compared already.
@@ -705,8 +793,10 @@ extension NetworkManager
 				break;
 			}
 			// When it is gone, the last row moves into this place, so the cursor stays.
+			native.compareChanged = false;
 			if (NativeCompare(world, row, ref used))
 				native.cursor++;
+			native.passChanged |= native.compareChanged;
 		}
 	}
 
@@ -985,6 +1075,17 @@ extension NetworkManager
 		if (network == null || !network.IsClient || network.mNative == null)
 			return;
 		network.mNative.bytes += reader.Remaining;
+		using (sNativeReadMarker.Sample())
+		{
+			let start = Profiler.Now;
+			network.NativeReadRecords(ref reader);
+			network.mNative.readNanos += Profiler.Now - start;
+		}
+	}
+
+	void NativeReadRecords(ref NetReader reader)
+	{
+		let network = this;
 		while (reader.Ok && reader.Remaining > 0)
 		{
 			switch (reader.Read<uint8>())
