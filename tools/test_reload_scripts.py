@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Pure-Python regression tests for the hot-reload ELF object cache."""
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -127,6 +128,98 @@ class ObjectCacheTests(unittest.TestCase):
                     {'state': 4, 'more_state': 8})
                 self.assertEqual(reused, 1)
                 self.assertEqual(len(calls), 6)
+
+
+
+    def test_inserting_or_reordering_objects_preserves_source_cache(self):
+        # ObjectArgs.txt is a linker list, not a stable cache identity.
+        # A new component may appear in the middle of that list.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            game = root / 'game.o'
+            dep = root / 'engine.o'
+            other = root / 'other.o'
+            added = root / 'new-script.o'
+            for path in (game, dep, other, added):
+                path.write_bytes(path.name.encode())
+            calls = []
+
+            def alias(source, target, names):
+                calls.append(source)
+                target.write_bytes(source.read_bytes())
+                return []
+
+            aliases = root / 'aliases'
+            with patch.object(reload_scripts, 'alias_host_globals', side_effect=alias):
+                original = [game, dep, other]
+                first, reused, reasons = reload_scripts.alias_objects(
+                    original, [game, other], aliases, {'existing': 4}, {'shared': 4})
+                self.assertEqual(reused, 0)
+                self.assertEqual(reasons['cold'], 3)
+                self.assertEqual(len(calls), 3)
+
+                reordered = [added, other, dep, game]
+                second, reused, reasons = reload_scripts.alias_objects(
+                    reordered, [added, other, game], aliases,
+                    {'existing': 4}, {'shared': 4})
+                self.assertEqual(reused, 3)
+                self.assertEqual(reasons, {'cold': 1, 'changed': 0, 'symbols': 0})
+                self.assertEqual(len(calls), 4)
+                self.assertEqual(second[1], first[2])
+                self.assertEqual(second[2], first[1])
+                self.assertEqual(second[3], first[0])
+                self.assertNotEqual(second[0], first[0])
+
+                # Removing a file also shifts the list; it must not flush
+                # prepared dependencies or remaining game objects.
+                third, reused, reasons = reload_scripts.alias_objects(
+                    [dep, other], [other], aliases, {'existing': 4}, {'shared': 4})
+                self.assertEqual(reused, 2)
+                self.assertEqual(reasons['cold'], 0)
+                self.assertEqual(third, [first[1], first[2]])
+
+    def test_legacy_index_cache_is_migrated_without_rewriting_objects(self):
+        # Pre-fix sessions stored numeric keys and index-prefixed alias files.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            game = root / 'game.o'
+            dep = root / 'dependency.o'
+            added = root / 'new.o'
+            for path in (game, dep, added):
+                path.write_bytes(path.name.encode())
+            calls = []
+
+            def alias(source, target, names):
+                calls.append(source)
+                target.write_bytes(source.read_bytes())
+                return []
+
+            aliases = root / 'aliases'
+            with patch.object(reload_scripts, 'alias_host_globals', side_effect=alias):
+                first, _, _ = reload_scripts.alias_objects(
+                    [game, dep], [game], aliases, {'host': 4}, {'state': 4})
+                stable = json.loads((aliases / 'object-cache.json').read_text())
+                legacy = {}
+                for index, source in enumerate((game, dep)):
+                    record = dict(stable[str(source)])
+                    record.pop('target')
+                    legacy[str(index)] = record
+                    (aliases / f'{index}-{source.name}').write_bytes(first[index].read_bytes())
+                (aliases / 'object-cache.json').write_text(json.dumps(legacy))
+                calls.clear()
+
+                prepared, reused, reasons = reload_scripts.alias_objects(
+                    [added, dep, game], [added, game], aliases,
+                    {'host': 4}, {'state': 4})
+                self.assertEqual(reused, 2)
+                self.assertEqual(reasons, {'cold': 1, 'changed': 0, 'symbols': 0})
+                self.assertEqual(calls, [added])
+                self.assertEqual(prepared[1], aliases / '1-dependency.o')
+                self.assertEqual(prepared[2], aliases / '0-game.o')
+                upgraded = json.loads((aliases / 'object-cache.json').read_text())
+                self.assertIn(str(game), upgraded)
+                self.assertIn(str(dep), upgraded)
+                self.assertNotIn('0', upgraded)
 
 
 
