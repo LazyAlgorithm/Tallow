@@ -62,7 +62,10 @@ sealed class World
 	}
 
 	/// Replication can stop when the last synchronized type is removed.
-	public void ForgetNativeCandidate(Entity entity) => mNativeCandidates.Remove(entity.id);
+	public void ForgetNativeCandidate(Entity entity)
+	{
+		mNativeCandidates.Remove(entity.id);
+	}
 
 	/// Flecs id of each ComponentTypes index, 0 until registered in this world.
 	List<uint64> mIds = new .() ~ delete _;
