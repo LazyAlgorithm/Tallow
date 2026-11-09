@@ -102,7 +102,8 @@ static class DataComponents
 	public static Info Find(int32 index)
 	{
 		// Build on first use and invalidate after a script-library reload.
-		let types = Types;
+		if (sInfos == null)
+			Build();
 		if (sByIndex.TryGetValue(index, let info))
 			return info;
 		return null;
