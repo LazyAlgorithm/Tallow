@@ -43,12 +43,25 @@ do not need a second workflow. Power users may explicitly query ECS data.
 - [ ] **Prediction acceptance**: compare state hashes and correction frequency
   for normal-script vs query-based movement under packet delay, loss and
   rollback. Arbitrary query systems are not automatically prediction-aware.
-- [ ] **Native entity-only replication**: `World.CreateMany<T>` without a
-  GameObject/ObjectLink still has no `NetworkIdentity` adapter, replicated
-  spawn/despawn, schema, or prediction history. Build a direct ECS network
-  entity registry, per-entity net IDs, authoritative lifecycle, marked data
-  replication and reconciliation before claiming *all* native ECS entities
-  network exactly like GameObjects. Preserve the packed ECS benchmark path.
+- [x] **Initial native entity replication implementation (awaiting build and multiplayer validation)**:
+  `World.CreateMany<T>`, `Set<T>`, `Ensure<T>` and `Add<T>` enroll
+  GameObject-free entities when a game-defined `[Component]` data struct has
+  supported `[Sync]` fields. Server-assigned IDs, authoritative creation,
+  deletion, type/field-name state serialization, changed-state tracking,
+  reliable bounded batches, client replica mapping, session cleanup and late
+  join snapshots are now wired in without allocating a GameObject.
+- [ ] **Native ECS networking acceptance**: validate builds and full packet
+  round-trips, archetype moves, add/remove synced types, delete/recreate,
+  server state changed during join, session restart and a large bulk spawn.
+  Also address initial baseline fairness and sending late-join state over
+  multiple ticks rather than bursting it.
+- [ ] **Native ECS prediction and relevance**: the first implementation is
+  server-authoritative state replication, not client-authoritative movement,
+  rollback or interest-filtered spatial streaming. Add a deterministic
+  fixed-tick query scheduling contract, entity input/owner mapping, prediction
+  history and reconciliation. Relevance needs a well-defined spatial component
+  and a per-client last-delivered baseline. Do not claim that a pure ECS query
+  automatically predicts like a GameObject NetworkBehaviour yet.
 - [ ] **Performance acceptance**: profile 1k/10k/50k/100k ordinary scripts,
   batched visual loops, mixed ECS objects, snapshot/field serialization and
   net bandwidth under realistic relevance filtering; optimize allocations
@@ -86,6 +99,55 @@ data component's existence. The `localTrailIndex` field remains local.
 Normal code can also use `Scene.World.ObjectsWith<ProjectileMotion>()` to
 iterate cached packed `ProjectileMotion` and `ObjectLink` columns. That query
 includes scene GameObjects, **not** raw entity-only objects.
+
+## Bare Flecs entities (experimental on the unified branch)
+
+A game-defined `[Component]` struct with supported `[Sync]` fields is the
+opt-in signal. When the network is running, the server automatically registers
+bare entities created or populated with `World.CreateMany<T>`,
+`World.Set<T>`, `World.Add<T>` or `World.Ensure<T>`. No `NetworkIdentity`,
+GameObject wrapper or separate registration call is required:
+
+```beef
+[Component]
+struct BulletMotion
+{
+    [Sync] public Vector3 position;
+    [Sync] public Vector3 velocity;
+    public int32 localEffectIndex; // not sent
+}
+
+// Run on the authoritative server:
+let bullets = scope List<Entity>();
+Scene.World.CreateMany<BulletMotion>(32, bullets);
+for (let entity in bullets)
+    Scene.World.Set<BulletMotion>(entity, .() { position = .(0, 2, 0), velocity = .(0, 0, 5) });
+```
+
+Clients receive replicated bare Flecs entities, with their own local Entity
+handles (a network ID is not the Flecs Entity ID). Supported synchronized
+fields and synchronized component presence are server-owned. The client can
+query the same `BulletMotion` type without an ObjectLink; local-only components
+are not automatically removed. Deleting on the server sends a reliable
+despawn. Existing server entities are sent to new clients.
+
+**Not yet equivalent to fully network-predicted ECS**: clients must not
+independently run authoritative query movement and assume rollback will
+reconcile it. The first stage uses reliable changed-state messages, not
+snapshot-delta compression or spatial relevance. Changes are examined in
+round-robin batches of at most 512 entities per snapshot interval, so very
+large native ECS spawns can take multiple intervals to appear remotely.
+Late join currently sends the whole native inventory at once. Server and
+client must use matching reflected component schemas and game builds.
+A native synced type with unsupported or excessively large fields is not
+guaranteed to replicate; supported primitive, vector and SharedString fields
+are the intended first tests. This feature remains unverified until its Beef
+build and a real server/client session pass on the developer machine.
+
+Network diagnostic text now reports native server entities and client replicas
+separately from GameObject network identities. Native entity replication uses
+reserved engine message ID **243**. The old GameObject ECS layout message
+remains ID **242**.
 
 ## Visual scripting
 
@@ -140,9 +202,8 @@ wall-clock time during prediction.
 ## Design decision for later pure ECS networking
 
 Do not silently allocate a GameObject per raw ECS entity merely to replicate
-it; that would erase the benefits of `CreateMany`. Implement direct net IDs
-and lifecycle for entity-only data and use the same snapshot/field serializer
-as GameObject-associated entities. Keep predictable script callbacks, entity
-spawn ordering, relevancy, history and rollback semantics. Until then, advanced
-ECS systems can operate on networked GameObjects via their existing entity
-(`ObjectLink`), without a second user-visible entity type.
+it; that would erase the benefits of `CreateMany`. The experimental native
+replication path deliberately uses direct network IDs and packed Flecs data.
+The next milestone is deterministic script/query scheduling, relevance,
+prediction history and rollback semantics, with a compatible low-overhead
+serializer for both object-backed and pure ECS data.
