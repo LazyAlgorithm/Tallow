@@ -35,6 +35,8 @@ static class NetworkSync
 	public const uint8 MsgField = 254;
 	/// Reliable inventory of synchronized custom ECS data components on one networked object.
 	public const uint8 MsgEcsComponents = 242;
+	/// Reliable batches for GameObject-free entities with [Sync] ECS data.
+	public const uint8 MsgNativeEcs = 243;
 	public const uint8 MsgAudio = 249;
 	public const uint8 MsgEvent = 247;
 	public const uint8 MsgAnimator = 246;
@@ -83,6 +85,7 @@ static class NetworkSync
 		NetworkManager.RegisterMessage(MsgAnimation, new => OnAnimation);
 		NetworkManager.RegisterMessage(MsgField, new => OnField);
 		NetworkManager.RegisterMessage(MsgEcsComponents, new => OnEcsComponents);
+		NetworkManager.RegisterMessage(MsgNativeEcs, new => NetworkManager.OnNativeMessage);
 		NetworkManager.RegisterMessage(MsgAudio, new => OnAudio);
 		VoiceChat.EnsureRegistered();
 		NetworkManager.RegisterMessage(MsgEvent, new => OnEvent);
@@ -881,7 +884,7 @@ static class NetworkSync
 
 	static Dictionary<NetworkIdentity, SlotList> sSlots = new .() ~ DeleteDictionaryAndValues!(_);
 
-	static int32 SizeOf(FieldRef field)
+	public static int32 SizeOf(FieldRef field)
 	{
 		switch (field.kind)
 		{
