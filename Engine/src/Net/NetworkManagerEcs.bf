@@ -275,7 +275,7 @@ extension NetworkManager
 		if (network == null || !network.IsClient)
 			return; // The server never accepts ECS state from clients.
 		let count = (int)reader.Read<uint8>();
-		for (int i < count && reader.Ok)
+		for (int i = 0; i < count && reader.Ok; i++)
 		{
 			let operation = reader.Read<uint8>();
 			let netId = reader.Read<uint32>();
@@ -313,7 +313,7 @@ extension NetworkManager
 			created = true;
 		}
 		let present = scope List<int32>();
-		for (int i < count && reader.Ok)
+		for (int i = 0; i < count && reader.Ok; i++)
 		{
 			let name = scope String();
 			reader.ReadString(name);
@@ -329,7 +329,7 @@ extension NetworkManager
 				world.Ensure(entity, info.index);
 				present.Add(info.index);
 			}
-			for (int j < fieldCount && reader.Ok)
+			for (int j = 0; j < fieldCount && reader.Ok; j++)
 			{
 				let fieldName = scope String();
 				reader.ReadString(fieldName);
