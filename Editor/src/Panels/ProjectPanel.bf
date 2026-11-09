@@ -34,6 +34,7 @@ extension EditorApp
 	uint32 mPendingPrefabId;
 	String mPendingPrefabFolder = new .() ~ delete _;
 	int32 mNewItemKind = -1; // 0 folder, 1 script, 2 scene
+	ScriptTemplateKind mNewScriptTemplate = .Basic;
 	ProjectFolderMonitor mFolderMonitor = new .() ~ delete _;
 	ScriptComponentCatalog mScriptCatalog = new .() ~ delete _;
 	Stopwatch mFolderScanClock = new .(true) ~ delete _;
@@ -620,8 +621,35 @@ extension EditorApp
 	{
 		if (ImGui.MenuItem("Folder"))
 			BeginNewItem(0, "New Folder");
-		if (ImGui.MenuItem("Script"))
-			BeginNewItem(1, "NewScript");
+		if (ImGui.BeginMenu("Script"))
+		{
+			if (ImGui.MenuItem("Basic Component"))
+				BeginNewScriptTemplate(.Basic, "NewScript");
+			if (ImGui.MenuItem("Movement"))
+				BeginNewScriptTemplate(.Movement, "MovementScript");
+			if (ImGui.MenuItem("Timed Action"))
+				BeginNewScriptTemplate(.Timer, "TimedAction");
+			if (ImGui.MenuItem("GUI / HUD"))
+				BeginNewScriptTemplate(.Gui, "HudScript");
+			if (ImGui.MenuItem("Networked Behaviour"))
+				BeginNewScriptTemplate(.Networked, "NetworkBehaviour");
+			ImGui.Separator();
+			if (ImGui.BeginMenu("ECS"))
+			{
+				if (ImGui.MenuItem("Data Component (struct)"))
+					BeginNewScriptTemplate(.EcsData, "NewData");
+				if (ImGui.MenuItem("Synced Data Component"))
+					BeginNewScriptTemplate(.EcsSynced, "SyncedData");
+				if (ImGui.MenuItem("Script + Data"))
+					BeginNewScriptTemplate(.EcsMixed, "MixedBehaviour");
+				if (ImGui.MenuItem("GameObject Query Processor"))
+					BeginNewScriptTemplate(.EcsQuery, "QueryProcessor");
+				if (ImGui.MenuItem("Pure ECS Bulk Entities"))
+					BeginNewScriptTemplate(.EcsBulk, "BulkProcessor");
+				ImGui.EndMenu();
+			}
+			ImGui.EndMenu();
+		}
 		if (ImGui.MenuItem("Scene"))
 			BeginNewItem(2, "NewScene");
 		if (ImGui.MenuItem("Graph (visual script)"))
@@ -669,6 +697,12 @@ extension EditorApp
 			}
 			ImGui.EndMenu();
 		}
+	}
+
+	void BeginNewScriptTemplate(ScriptTemplateKind template, StringView defaultName)
+	{
+		mNewScriptTemplate = template;
+		BeginNewItem(1, defaultName);
 	}
 
 	void BeginNewItem(int32 kind, StringView defaultName)
@@ -743,11 +777,11 @@ extension EditorApp
 		}
 		if (ImGui.BeginPopupModal("Create Asset", null, ImGui.WindowFlags.AlwaysAutoResize))
 		{
-			ImGui.Text(mNewItemKind == 0 ? "Folder name" : (mNewItemKind == 1 ? "Script class name" : (mNewItemKind == 3 ? "Graph name (becomes the component's class name)" : (mNewItemKind == 6 ? "Behavior tree name" : (mNewItemKind == 7 ? "Animator controller name" : (mNewItemKind == 8 ? "Animation clip name" : (mNewItemKind == 9 ? "Material name" : (mNewItemKind == 10 ? "Shader name" : (mNewItemKind == 11 ? "Compute shader name" : (mNewItemKind == 12 ? "Shader graph name" : (mNewItemKind == 16 ? "Shader subgraph name" : (mNewItemKind == 14 ? "Dialogue name" : (mNewItemKind == 15 ? "Sequence name" : "Scene name")))))))))))));
+			ImGui.Text(mNewItemKind == 0 ? "Folder name" : (mNewItemKind == 1 ? "Script / ECS component type name" : (mNewItemKind == 3 ? "Graph name (becomes the component's class name)" : (mNewItemKind == 6 ? "Behavior tree name" : (mNewItemKind == 7 ? "Animator controller name" : (mNewItemKind == 8 ? "Animation clip name" : (mNewItemKind == 9 ? "Material name" : (mNewItemKind == 10 ? "Shader name" : (mNewItemKind == 11 ? "Compute shader name" : (mNewItemKind == 12 ? "Shader graph name" : (mNewItemKind == 16 ? "Shader subgraph name" : (mNewItemKind == 14 ? "Dialogue name" : (mNewItemKind == 15 ? "Sequence name" : "Scene name")))))))))))));
 			ImGui.SetNextItemWidth(300);
 			let enter = ImGui.InputText("##newname", mNewItemName, ImGui.InputFlags.EnterReturnsTrue);
 			if (mNewItemKind == 1)
-				ImGui.TextDisabled("Scripts are compiled with File > Rebuild & Reload.");
+				ImGui.TextDisabled("Created in the current Project folder; script changes are detected automatically.");
 			if (ImGui.Button("Create", .(120, 0)) || enter)
 			{
 				CreateAsset();
@@ -828,7 +862,7 @@ extension EditorApp
 			if (Directory.CreateDirectory(scope $"{mBrowsePath}/{mNewItemName}") case .Err)
 				Log.Error("Could not create the folder.");
 		case 1:
-			CreateScript(mNewItemName);
+			CreateScript(mNewItemName, mNewScriptTemplate);
 		case 2:
 			if (!ProjectGenerator.IsValidName(mNewItemName))
 			{
