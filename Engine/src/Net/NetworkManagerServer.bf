@@ -73,6 +73,7 @@ extension NetworkManager
 		}
 		AntiCheat.ClientLeft(this, client.id);
 		MapSharing.ClientLeft(client.id);
+		NativeClientLeft(client.id);
 		Log.Info(scope $"Client {client.id} disconnected.");
 		mClients.Remove(client);
 		delete client;
@@ -285,9 +286,13 @@ extension NetworkManager
 					SendForwarded(client);
 				SendSnapshots();
 				if (Lockstep)
+				{
 					for (let client in mClients)
+					{
 						if (client.lastProcessedTick > 0 && !client.lockstepSynced)
 							SendLockstepState(client);
+					}
+				}
 				NetworkSync.ServerTick(this);
 				NativeServerTick();
 			}
@@ -504,8 +509,16 @@ extension NetworkManager
 			// Anyone but the owner: an id no client has.
 			WriteSnapshotRecord(mSnapshotRecords, row.identity, row.settings, own ? clientId : -2);
 			let length = (int32)mSnapshotRecords.Data.Count - at;
-			if (own) { row.ownAt = at; row.ownLength = length; }
-			else { row.otherAt = at; row.otherLength = length; }
+			if (own)
+			{
+				row.ownAt = at;
+				row.ownLength = length;
+			}
+			else
+			{
+				row.otherAt = at;
+				row.otherLength = length;
+			}
 		}
 		return own ? .(mSnapshotRecords.Data.Ptr + row.ownAt, row.ownLength) : .(mSnapshotRecords.Data.Ptr + row.otherAt, row.otherLength);
 	}

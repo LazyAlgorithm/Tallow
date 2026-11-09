@@ -3,303 +3,808 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Server-authoritative replication of bare Flecs entities with [Sync] data.
-/// These entities deliberately have no GameObject, Transform or NetworkIdentity.
+/// Server-authoritative replication of bare Flecs entities with [Sync] data (docs/unified-ecs-networking.md).
+/// The entities have no GameObject, Transform or NetworkIdentity: each client makes entities of its own with the
+/// same [Component] data, tied to the server's by a network id.
+///
+/// A MsgNativeEcs message is a run of records, each starting with its kind:
+///   type     wire id, full name, field count, then each [Sync] field's name and size (0 for SharedString text)
+///   full     net id, type count, then each type's wire id and all its fields (text: length, then bytes)
+///   change   net id, type count, then each changed type's wire id, a bit per field, and the fields that changed
+///   destroy  net id
+/// A full record lists every synced type the entity has (a client removes the others). A change record holds the
+/// fields that differ from the last state the server sent, which every client that has the entity holds: a client
+/// that joins late is sent that same state, not a newer one, and reads past changes to entities it has not been
+/// sent yet. Everything goes reliably, in order.
 extension NetworkManager
 {
-	const int NativeBatchLimit = 1000;
-	const int NativeScanPerSnapshot = 512;
+	const uint8 NativeRecordType = 1;
+	const uint8 NativeRecordFull = 2;
+	const uint8 NativeRecordChange = 3;
+	const uint8 NativeRecordDestroy = 4;
 	const int NativeMaxTypes = 32;
-	const int NativeMaxFields = 64;
+	const int NativeMaxFields = 256;
+	const int NativeMaxTextBytes = 1024;
 	const int NativeMaxFieldBytes = 1024;
+	/// Records are packed into messages of about this size.
+	const int NativeMessageBytes = 1100;
+
+	/// Server: bytes of bare entity state to send per snapshot. New entities and changes share it, each getting at
+	/// least half while the other has something waiting; what does not fit goes in the next snapshot, in turn.
+	public int32 NativeBytesPerSnapshot = 32 * 1024;
+	/// Server: bytes per snapshot of the entities that were already there, for each client that joined late.
+	public int32 NativeJoinBytesPerSnapshot = 32 * 1024;
+	/// Server: how many entities are compared with what was last sent, per snapshot (round robin).
+	public int32 NativeScanPerSnapshot = 16384;
 
 	class NativeRow
 	{
 		public Entity entity;
 		public uint32 netId;
 		public int index;
-		/// A replica may have been sent to a late joiner before its first broadcast.
+		/// Its full state has gone to every client, so last is what they all hold.
 		public bool announced;
 		public List<uint8> last = new .() ~ delete _;
 	}
 
-	// The session's lists (mNativeRows, mNativeByEntity, mNativeRemote, mNativeBatch) are declared in
-	// NetworkManager.bf: Beef destroys an extension's fields before the class's own ~this, whose Stop()
-	// still needs them to delete a client's replicas.
-	uint32 mNativeNextId = 1;
-	int mNativeCursor;
-	int mNativeBatchCount;
+	/// A synchronized type as the session sends it: its fields in wire order.
+	class NativeType
+	{
+		/// Its ComponentTypes index on this machine, or -1 when this machine has no such synced type.
+		public int32 index = -1;
+		public String fullName = new .() ~ delete _;
+		/// Each field's size on the wire (0 for text) and where it goes in this machine's struct (-1: a field this
+		/// machine's type lacks, or has with another size).
+		public List<(int32 wireSize, int32 offset)> fields = new .() ~ delete _;
+		/// The fields' names (server: to describe the type again to a client that joins later).
+		public List<String> names = new .() ~ DeleteContainerAndItems!(_);
+	}
 
-	/// A synced bare entity created with World.CreateMany, Add, Ensure or Set.
-	/// Called only when its type has a supported [Sync] field.
+	/// A client that joined late, and the entities it is still to be sent.
+	class NativeJoiner
+	{
+		public int32 clientId;
+		public List<uint32> pending = new .() ~ delete _;
+		public int next;
+	}
+
+	/// Native ECS replication state for one session.
+	class NativeReplication
+	{
+		// Server
+		public List<NativeRow> rows = new .() ~ DeleteContainerAndItems!(_);
+		public Dictionary<uint64, NativeRow> byEntity = new .() ~ delete _;
+		public Dictionary<uint32, NativeRow> byNetId = new .() ~ delete _;
+		/// Net ids of rows not yet sent, oldest first (rows deleted meanwhile are passed over).
+		public List<uint32> unannounced = new .() ~ delete _;
+		public int unannouncedNext;
+		public List<uint32> destroyed = new .() ~ delete _;
+		public List<NativeJoiner> joiners = new .() ~ DeleteContainerAndItems!(_);
+		/// ComponentTypes index to wire id, for the types described so far.
+		public Dictionary<int32, uint32> wireIds = new .() ~ delete _;
+		public int generation;
+		public uint32 nextNetId = 1;
+		public int cursor;
+		// Both: the type table by wire id (server: what it described; client: what it was told).
+		public List<NativeType> types = new .() ~ DeleteContainerAndItems!(_);
+		// Client
+		public Dictionary<uint32, Entity> remote = new .() ~ delete _;
+		public Dictionary<uint64, uint32> remoteIds = new .() ~ delete _;
+		// Scratch
+		public NetWriter message = new .() ~ delete _;
+		public int32 messageTo = -2;
+		public NetWriter state = new .() ~ delete _;
+		public NetWriter record = new .() ~ delete _;
+		public List<int32> present = new .() ~ delete _;
+		// Totals since the session started
+		public int64 bytes;
+		public int64 fullRecords, changeRecords, destroyRecords;
+		public bool warnedTypes;
+	}
+
+	/// Server: bare entities with synced data. Client: replicas of the server's.
+	public int NativeEntityCount => mNative == null ? 0 : (IsServer ? mNative.rows.Count : mNative.remote.Count);
+	/// Server: entities not sent yet, and entities late joiners are still to be sent.
+	public int NativeWaiting
+	{
+		get
+		{
+			if (mNative == null)
+				return 0;
+			int waiting = mNative.unannounced.Count - mNative.unannouncedNext;
+			for (let joiner in mNative.joiners)
+				waiting += joiner.pending.Count - joiner.next;
+			return waiting;
+		}
+	}
+
+	/// Bytes of native ECS records sent (server) or received (client) this session.
+	public int64 NativeBytes => mNative?.bytes ?? 0;
+
+	/// The network id of a bare synced entity (the server's or a client's replica), or 0.
+	public uint32 NativeNetId(Entity entity)
+	{
+		if (mNative == null)
+			return 0;
+		if (mNative.byEntity.TryGetValue(entity.id, let row))
+			return row.netId;
+		if (mNative.remoteIds.TryGetValue(entity.id, let netId))
+			return netId;
+		return 0;
+	}
+
+	/// A client's replica of the server entity with that network id, or a null Entity.
+	public Entity NativeEntity(uint32 netId)
+	{
+		if (mNative != null && mNative.remote.TryGetValue(netId, let entity))
+			return entity;
+		if (mNative != null && mNative.byNetId.TryGetValue(netId, let row))
+			return row.entity;
+		return default;
+	}
+
+	// ---- server ----
+
+	/// A bare entity was made or given synced data (World.CreateMany, Add, Ensure or Set).
 	public void NativeCandidateAdded(Entity entity)
 	{
-		if (!IsServer || entity.IsNull || mNativeByEntity.ContainsKey(entity.id))
+		if (mNative == null || !IsServer || entity.IsNull || mNative.byEntity.ContainsKey(entity.id))
 			return;
+		NativeAddRow(entity, mNative.nextNetId++);
+	}
+
+	NativeRow NativeAddRow(Entity entity, uint32 netId)
+	{
+		let native = mNative;
 		let row = new NativeRow();
 		row.entity = entity;
-		row.netId = mNativeNextId++;
-		row.index = mNativeRows.Count;
-		mNativeRows.Add(row);
-		mNativeByEntity[entity.id] = row;
+		row.netId = netId;
+		row.index = native.rows.Count;
+		native.rows.Add(row);
+		native.byEntity[entity.id] = row;
+		native.byNetId[netId] = row;
+		native.unannounced.Add(netId);
+		return row;
 	}
 
 	void NativeRemoveRow(NativeRow row)
 	{
-		mNativeByEntity.Remove(row.entity.id);
-		let last = mNativeRows.Count - 1;
+		let native = mNative;
+		native.byEntity.Remove(row.entity.id);
+		native.byNetId.Remove(row.netId);
+		let last = native.rows.Count - 1;
 		if (row.index != last)
 		{
-			mNativeRows[row.index] = mNativeRows[last];
-			mNativeRows[row.index].index = row.index;
+			native.rows[row.index] = native.rows[last];
+			native.rows[row.index].index = row.index;
 		}
-		mNativeRows.RemoveAt(last);
-		if (mNativeCursor > mNativeRows.Count)
-			mNativeCursor = 0;
+		native.rows.RemoveAt(last);
 		delete row;
 	}
 
-	/// Called before World.Delete: a destroyed bare entity must disappear on clients.
+	/// World.Delete of a synced bare entity: it goes from every client with the next snapshot.
 	public void NativeCandidateRemoved(Entity entity)
 	{
-		if (!IsServer)
+		if (mNative == null || !IsServer)
 			return;
-		if (!mNativeByEntity.TryGetValue(entity.id, let row))
+		NativeRow row;
+		if (!mNative.byEntity.TryGetValue(entity.id, out row))
 			return;
-		// An entity that was never sent need not produce a destroy packet.
+		// One never sent needs no destroy.
 		if (row.announced)
-			NativeQueueDestroy(row.netId, -1);
-		// Flush at the next snapshot, not once per entity deletion.
-		// A large bulk despawn otherwise becomes thousands of packets.
+			mNative.destroyed.Add(row.netId);
 		NativeRemoveRow(row);
 	}
 
-	/// Collects all supported [Sync] fields, with stable component and field names.
-	/// No full component memory blobs or pointers are sent over the wire.
-	static bool NativeSerialize(World world, Entity entity, NetWriter writer)
+	/// The wire id of a synced type, describing it to everyone first if this session has not yet.
+	uint32 NativeWireId(DataComponents.Info info)
 	{
-		writer.Clear();
-		if (!world.IsAlive(entity) || world.IsSceneObject(entity))
-			return false;
-		let indices = scope List<int32>();
-		world.TypesOf(entity, indices);
-		let types = scope List<DataComponents.Info>();
-		for (let index in indices)
+		let native = mNative;
+		if (native.wireIds.TryGetValue(info.index, let known))
+			return known;
+		let wireId = (uint32)native.types.Count;
+		let type = new NativeType();
+		type.index = info.index;
+		type.fullName.Set(info.fullName);
+		for (let field in info.syncedFields)
 		{
-			let info = DataComponents.Find(index);
-			if (info != null && info.synced && world.Get(entity, index) != null)
-				types.Add(info);
+			type.fields.Add((field.size, field.offset));
+			type.names.Add(new String(field.name));
 		}
-		if (types.IsEmpty)
-			return false;
-		types.Sort(scope (a, b) => a.fullName.CompareTo(b.fullName));
-		if (types.Count > NativeMaxTypes)
+		native.types.Add(type);
+		native.wireIds[info.index] = wireId;
+		// Ahead of the record that uses it. A client that joins later is sent the whole table.
+		let description = scope NetWriter();
+		NativeWriteType(description, wireId, type);
+		NativeAppend(description, -1);
+		return wireId;
+	}
+
+	static void NativeWriteType(NetWriter into, uint32 wireId, NativeType type)
+	{
+		into.Clear();
+		into.Write(NativeRecordType);
+		into.WriteVarUInt(wireId);
+		into.WriteString(type.fullName);
+		into.WriteVarUInt((uint32)type.fields.Count);
+		for (int i < type.fields.Count)
 		{
-			Log.Warning("Bare ECS entity has more synchronized types than the native ECS protocol supports.");
-			return false;
+			into.WriteString(type.names[i]);
+			into.WriteVarUInt((uint32)type.fields[i].wireSize);
 		}
-		writer.Write((uint8)types.Count);
-		for (let info in types)
+	}
+
+	/// The entity's synced data as the body of a full record (type count, then each type's wire id and fields), in
+	/// into. False when it has none, or no longer exists.
+	bool NativeEncode(World world, Entity entity, NetWriter into)
+	{
+		into.Clear();
+		if (!world.IsAlive(entity))
+			return false;
+		into.Data.Add(0);
+		int count = 0;
+		for (let info in DataComponents.SyncedTypes)
 		{
-			writer.WriteString(info.fullName);
-			let fields = scope List<FieldRef>();
-			DataComponents.GetFields(info.type, world.Get(entity, info.index), fields);
-			fields.Sort(scope (a, b) => a.name.CompareTo(b.name));
-			int count = 0;
-			for (let field in fields)
-				if (field.sync && (NetworkSync.SizeOf(field) > 0 || field.kind == .String))
-					count++;
-			if (count > NativeMaxFields)
+			let data = (uint8*)world.Get(entity, info.index);
+			if (data == null)
+				continue;
+			if (count == NativeMaxTypes)
 			{
-				Log.Warning("Bare ECS component has too many synchronized fields.");
+				if (!mNative.warnedTypes)
+					Log.Warning(scope $"A bare ECS entity has more than {NativeMaxTypes} synchronized types; the rest are not sent.");
+				mNative.warnedTypes = true;
+				break;
+			}
+			into.WriteVarUInt(NativeWireId(info));
+			for (let field in info.syncedFields)
+			{
+				if (field.size > 0)
+				{
+					into.Data.AddRange(Span<uint8>(data + field.offset, field.size));
+					continue;
+				}
+				let text = ((SharedString*)(data + field.offset)).View;
+				let length = Math.Min(text.Length, NativeMaxTextBytes);
+				into.WriteVarUInt((uint32)length);
+				into.Data.AddRange(Span<uint8>((uint8*)text.Ptr, length));
+			}
+			count++;
+		}
+		into.Data[0] = (uint8)count;
+		return count > 0;
+	}
+
+	static uint32 NativeVar(List<uint8> data, ref int at)
+	{
+		uint32 value = 0;
+		for (int shift = 0; shift < 35 && at < data.Count; shift += 7)
+		{
+			let part = data[at++];
+			value |= (uint32)(part & 0x7F) << shift;
+			if ((part & 0x80) == 0)
+				break;
+		}
+		return value;
+	}
+
+	static void NativeEncodeFull(uint32 netId, List<uint8> body, NetWriter into)
+	{
+		into.Clear();
+		into.Write(NativeRecordFull);
+		into.WriteVarUInt(netId);
+		into.Data.AddRange(body);
+	}
+
+	/// A change record in into: the fields of now that differ from row.last, which every client holding the entity
+	/// has. False when the two list different types, which takes a full record.
+	bool NativeEncodeChange(NativeRow row, List<uint8> now, NetWriter into)
+	{
+		let old = row.last;
+		if (old.IsEmpty || now.IsEmpty || old[0] != now[0])
+			return false;
+		let types = mNative.types;
+		into.Clear();
+		into.Write(NativeRecordChange);
+		into.WriteVarUInt(row.netId);
+		let countAt = into.Data.Count;
+		into.Data.Add(0);
+		int changedTypes = 0;
+		int a = 1;
+		int b = 1;
+		for (int t < now[0])
+		{
+			let wireA = NativeVar(old, ref a);
+			let wireB = NativeVar(now, ref b);
+			if (wireA != wireB || wireB >= (uint32)types.Count)
 				return false;
-			}
-			writer.Write((uint8)count);
-			for (let field in fields)
+			let type = types[(int)wireB];
+			let typeStart = b;
+			uint8[NativeMaxFields / 8] mask = default;
+			bool changed = false;
+			for (int f < type.fields.Count)
 			{
-				if (!field.sync)
-					continue;
-				let size = NetworkSync.SizeOf(field);
-				if (size == 0 && field.kind != .String)
-					continue;
-				writer.WriteString(field.name);
-				if (field.kind == .String)
+				let size = (int)type.fields[f].wireSize;
+				int lengthA = size;
+				int lengthB = size;
+				if (size == 0)
 				{
-					let text = StringFields.Get(field.ptr, field.type);
-					let length = Math.Min(text.Length, NativeMaxFieldBytes);
-					writer.Write((uint16)length);
-					writer.Data.AddRange(Span<uint8>((uint8*)text.Ptr, length));
+					lengthA = (int)NativeVar(old, ref a);
+					lengthB = (int)NativeVar(now, ref b);
 				}
-				else
+				if (lengthA != lengthB || Internal.MemCmp(old.Ptr + a, now.Ptr + b, lengthB) != 0)
 				{
-					writer.Write((uint16)size);
-					writer.Data.AddRange(Span<uint8>((uint8*)field.ptr, size));
+					mask[f >> 3] |= (uint8)(1 << (f & 7));
+					changed = true;
 				}
+				a += lengthA;
+				b += lengthB;
+			}
+			if (!changed)
+				continue;
+			changedTypes++;
+			into.WriteVarUInt(wireB);
+			for (int i < (type.fields.Count + 7) / 8)
+				into.Data.Add(mask[i]);
+			var at = typeStart;
+			for (int f < type.fields.Count)
+			{
+				let fieldStart = at;
+				int length = type.fields[f].wireSize;
+				if (length == 0)
+					length = (int)NativeVar(now, ref at);
+				at += length;
+				// A text field goes with its length.
+				if ((mask[f >> 3] & (1 << (f & 7))) != 0)
+					into.Data.AddRange(Span<uint8>(now.Ptr + fieldStart, at - fieldStart));
 			}
 		}
+		into.Data[countAt] = (uint8)changedTypes;
 		return true;
 	}
 
-	void NativeFlush(int32 toClient)
+	/// Adds a record to the message for everyone (toClient -1) or for one client, sending what is there first if the
+	/// record is for someone else or would make the message too big.
+	void NativeAppend(NetWriter record, int32 toClient)
 	{
-		if (mNativeBatchCount == 0)
+		let native = mNative;
+		if (native.messageTo != toClient || native.message.Data.Count + record.Data.Count > NativeMessageBytes)
+			NativeFlush();
+		native.messageTo = toClient;
+		native.message.Data.AddRange(record.Data);
+		switch (record.Data[0])
+		{
+		case NativeRecordFull: native.fullRecords++;
+		case NativeRecordChange: native.changeRecords++;
+		case NativeRecordDestroy: native.destroyRecords++;
+		default:
+		}
+	}
+
+	void NativeFlush()
+	{
+		let native = mNative;
+		if (native.message.Data.IsEmpty)
 			return;
-		mNativeBatch.Data[0] = (uint8)mNativeBatchCount;
-		if (toClient < 0)
-			SendToAll(NetworkSync.MsgNativeEcs, mNativeBatch);
-		else
-			SendToClient(toClient, NetworkSync.MsgNativeEcs, mNativeBatch);
-		mNativeBatch.Clear();
-		mNativeBatchCount = 0;
+		if (native.messageTo == -1)
+			SendToAll(NetworkSync.MsgNativeEcs, native.message);
+		else if (native.messageTo >= 0)
+			SendToClient(native.messageTo, NetworkSync.MsgNativeEcs, native.message);
+		native.bytes += native.message.Data.Count;
+		native.message.Clear();
 	}
 
-	void NativeQueue(uint8 operation, uint32 netId, Span<uint8> data, int32 toClient)
-	{
-		let needed = 5 + data.Length;
-		if (mNativeBatchCount >= 255 || (mNativeBatchCount > 0 && mNativeBatch.Data.Count + needed > NativeBatchLimit))
-			NativeFlush(toClient);
-		if (mNativeBatchCount == 0)
-			mNativeBatch.Write((uint8)0);
-		mNativeBatch.Write(operation);
-		mNativeBatch.Write(netId);
-		if (operation == 1)
-			mNativeBatch.Data.AddRange(data);
-		mNativeBatchCount++;
-	}
-
-	void NativeQueueState(NativeRow row, int32 toClient)
-	{
-		NativeQueue(1, row.netId, row.last, toClient);
-		row.announced = true;
-	}
-
-	void NativeQueueDestroy(uint32 netId, int32 toClient) =>
-		NativeQueue(2, netId, default, toClient);
-
-	/// Send only changed native ECS state, in bounded batches. This shares
-	/// the session's normal snapshot cadence but does not claim prediction.
+	/// Server, each snapshot: destroys; new entities and changes within NativeBytesPerSnapshot; then, for clients that
+	/// joined late, the entities that were already there.
 	public void NativeServerTick()
 	{
-		if (!IsServer)
+		let native = mNative;
+		if (native == null || !IsServer)
 			return;
-		if (mNativeRows.IsEmpty)
+		// After a script reload the types may be laid out differently: describe them again and send everything whole.
+		if (native.generation != DataComponents.Generation)
+			NativeRestartTypes();
+		let world = Scene.World;
+		let record = native.record;
+		for (let netId in native.destroyed)
 		{
-			NativeFlush(-1); // pending bulk despawns
-			return;
+			record.Clear();
+			record.Write(NativeRecordDestroy);
+			record.WriteVarUInt(netId);
+			NativeAppend(record, -1);
 		}
-		let state = scope NetWriter();
-		let toCheck = Math.Min(NativeScanPerSnapshot, mNativeRows.Count);
-		int checkedCount = 0;
-		while (checkedCount < toCheck && !mNativeRows.IsEmpty)
+		native.destroyed.Clear();
+		let budget = Math.Max((int)NativeBytesPerSnapshot, 1);
+		int used = 0;
+		int scanned = 0;
+		// Changes and new entities each get at least half while the other is waiting, and the whole otherwise.
+		let newWaiting = native.unannouncedNext < native.unannounced.Count;
+		NativeSendChanges(world, newWaiting ? budget / 2 : budget, ref used, ref scanned);
+		NativeSendNew(world, budget, ref used);
+		NativeSendChanges(world, budget, ref used, ref scanned);
+		NativeFlush();
+		for (int i = native.joiners.Count - 1; i >= 0; i--)
 		{
-			if (mNativeCursor >= mNativeRows.Count)
-				mNativeCursor = 0;
-			let row = mNativeRows[mNativeCursor];
-			if (!NativeSerialize(Scene.World, row.entity, state))
+			if (NativeSendJoiner(native.joiners[i]))
 			{
-				// Removed [Sync] data or an entity destroyed outside World.Delete.
-				if (row.announced)
-					NativeQueueDestroy(row.netId, -1);
-				Scene.World.ForgetNativeCandidate(row.entity);
+				delete native.joiners[i];
+				native.joiners.RemoveAt(i);
+			}
+		}
+	}
+
+	/// Compares rows with what was last sent, round robin from where the last snapshot stopped, and sends change records
+	/// until used reaches limit. It stops at the first one that does not fit, which goes first next time.
+	void NativeSendChanges(World world, int limit, ref int used, ref int scanned)
+	{
+		let native = mNative;
+		let state = native.state;
+		let record = native.record;
+		while (scanned < Math.Min(NativeScanPerSnapshot, native.rows.Count) && used < limit)
+		{
+			if (native.cursor >= native.rows.Count)
+				native.cursor = 0;
+			let row = native.rows[native.cursor];
+			scanned++;
+			// A new one goes whole, from the queue.
+			if (!row.announced)
+			{
+				native.cursor++;
+				continue;
+			}
+			if (!NativeEncode(world, row.entity, state))
+			{
+				// Deleted outside World.Delete, or its last synced type was removed: it goes from the clients.
+				record.Clear();
+				record.Write(NativeRecordDestroy);
+				record.WriteVarUInt(row.netId);
+				NativeAppend(record, -1);
+				used += record.Data.Count;
+				world.ForgetNativeCandidate(row.entity);
+				// The last row moves into this place, so the cursor stays.
 				NativeRemoveRow(row);
 				continue;
 			}
-			if (row.last.Count != state.Data.Count ||
-				(state.Data.Count > 0 && Internal.MemCmp(row.last.Ptr, state.Data.Ptr, state.Data.Count) != 0))
+			let now = state.Data;
+			if (now.Count == row.last.Count && Internal.MemCmp(now.Ptr, row.last.Ptr, now.Count) == 0)
 			{
-				row.last.Clear();
-				row.last.AddRange(state.Data);
-				NativeQueueState(row, -1);
+				native.cursor++;
+				continue;
 			}
-			mNativeCursor++;
-			checkedCount++;
+			if (!NativeEncodeChange(row, now, record))
+				NativeEncodeFull(row.netId, now, record);
+			if (used > 0 && used + record.Data.Count > limit)
+			{
+				scanned--;
+				break;
+			}
+			NativeAppend(record, -1);
+			used += record.Data.Count;
+			row.last.Clear();
+			row.last.AddRange(now);
+			native.cursor++;
 		}
-		NativeFlush(-1);
 	}
 
-	/// A late-joining client receives the existing bare entities, not merely
-	/// changes made after it connected.
+	/// Sends new entities whole, oldest first, until used reaches limit.
+	void NativeSendNew(World world, int limit, ref int used)
+	{
+		let native = mNative;
+		let state = native.state;
+		let record = native.record;
+		while (native.unannouncedNext < native.unannounced.Count && used < limit)
+		{
+			let netId = native.unannounced[native.unannouncedNext];
+			if (!native.byNetId.TryGetValue(netId, let row) || row.announced)
+			{
+				native.unannouncedNext++;
+				continue;
+			}
+			if (!NativeEncode(world, row.entity, state))
+			{
+				// Gone before it was ever sent: nobody needs telling.
+				world.ForgetNativeCandidate(row.entity);
+				NativeRemoveRow(row);
+				native.unannouncedNext++;
+				continue;
+			}
+			NativeEncodeFull(netId, state.Data, record);
+			if (used > 0 && used + record.Data.Count > limit)
+				break;
+			NativeAppend(record, -1);
+			used += record.Data.Count;
+			row.last.Clear();
+			row.last.AddRange(state.Data);
+			row.announced = true;
+			native.unannouncedNext++;
+		}
+		if (native.unannouncedNext >= 1024 && native.unannouncedNext * 2 >= native.unannounced.Count)
+		{
+			native.unannounced.RemoveRange(0, native.unannouncedNext);
+			native.unannouncedNext = 0;
+		}
+	}
+
+	/// Sends a late joiner part of what was there when it joined, as the other clients hold it. True when done.
+	bool NativeSendJoiner(NativeJoiner joiner)
+	{
+		let native = mNative;
+		let record = native.record;
+		let limit = Math.Max((int)NativeJoinBytesPerSnapshot, 1);
+		int used = 0;
+		while (joiner.next < joiner.pending.Count && used < limit)
+		{
+			let netId = joiner.pending[joiner.next];
+			// Deleted since (the client is told nothing), or to be sent again whole to everyone.
+			if (!native.byNetId.TryGetValue(netId, let row) || !row.announced)
+			{
+				joiner.next++;
+				continue;
+			}
+			NativeEncodeFull(netId, row.last, record);
+			if (used > 0 && used + record.Data.Count > limit)
+				break;
+			NativeAppend(record, joiner.clientId);
+			used += record.Data.Count;
+			joiner.next++;
+		}
+		NativeFlush();
+		return joiner.next >= joiner.pending.Count;
+	}
+
+	/// A client joined: it is told the types now, and sent the entities already there over the next snapshots.
 	public void NativeClientJoined(int32 clientId)
 	{
-		if (!IsServer)
+		let native = mNative;
+		if (native == null || !IsServer)
 			return;
-		// A server deletion batch must not be reused as this client's
-		// initial state packet.
-		NativeFlush(-1);
-		let state = scope NetWriter();
-		for (let row in mNativeRows)
+		NativeClientLeft(clientId);
+		NativeFlush();
+		for (int wireId < native.types.Count)
 		{
-			if (!NativeSerialize(Scene.World, row.entity, state))
-				continue;
-			// Do not replace the broadcast baseline while sending an individual
-			// late joiner its current state: existing clients still need the
-			// next server tick's changed-field update.
-			NativeQueue(1, row.netId, state.Data, clientId);
-			row.announced = true;
+			NativeWriteType(native.record, (uint32)wireId, native.types[wireId]);
+			NativeAppend(native.record, clientId);
 		}
-		NativeFlush(clientId);
+		NativeFlush();
+		let joiner = new NativeJoiner();
+		joiner.clientId = clientId;
+		for (let row in native.rows)
+		{
+			if (row.announced)
+				joiner.pending.Add(row.netId);
+		}
+		// In the order they were made.
+		joiner.pending.Sort();
+		native.joiners.Add(joiner);
 	}
 
-	/// Begin tracking candidates that existed before networking started.
+	public void NativeClientLeft(int32 clientId)
+	{
+		if (mNative == null)
+			return;
+		for (int i = mNative.joiners.Count - 1; i >= 0; i--)
+		{
+			if (mNative.joiners[i].clientId == clientId)
+			{
+				delete mNative.joiners[i];
+				mNative.joiners.RemoveAt(i);
+			}
+		}
+	}
+
+	/// After a script reload: the types are described again (perhaps laid out differently) and every entity goes whole.
+	void NativeRestartTypes()
+	{
+		let native = mNative;
+		native.generation = DataComponents.Generation;
+		ClearAndDeleteItems!(native.types);
+		native.wireIds.Clear();
+		// Everyone, late joiners included, is sent everything again.
+		ClearAndDeleteItems!(native.joiners);
+		native.unannounced.Clear();
+		native.unannouncedNext = 0;
+		for (let row in native.rows)
+		{
+			row.last.Clear();
+			row.announced = false;
+			native.unannounced.Add(row.netId);
+		}
+		native.unannounced.Sort();
+	}
+
+	/// The session started (either side). On the server, bare entities with synced data made before it are sent too.
 	public void NativeStart()
 	{
+		if (mNative == null)
+			mNative = new NativeReplication();
 		Scene.World.NativeNetwork = this;
 		if (!IsServer)
 			return;
-		for (let id in Scene.World.NativeCandidates)
+		mNative.generation = DataComponents.Generation;
+		// Oldest first, so that net ids follow the order the entities were made in.
+		let ids = scope List<uint64>(Scene.World.NativeCandidates.GetEnumerator());
+		ids.Sort();
+		for (let id in ids)
 			NativeCandidateAdded(.(id));
 	}
 
-	/// Forget old session mapping. Client-side replicas are not GameObjects,
-	/// so they must be explicitly deleted when leaving a session.
+	/// The session ended: a client's replicas are deleted (they are not GameObjects, so nothing else would).
 	public void NativeStop()
 	{
-		if (Scene.World.NativeNetwork == this)
-			Scene.World.NativeNetwork = null;
-		for (let entity in mNativeRemote.Values)
-			if (Scene.World.IsAlive(entity))
-				Scene.World.Delete(entity);
-		mNativeRemote.Clear();
-		ClearAndDeleteItems!(mNativeRows);
-		mNativeByEntity.Clear();
-		mNativeCursor = 0;
-		mNativeNextId = 1;
-		mNativeBatch.Clear();
-		mNativeBatchCount = 0;
+		let world = mScene?.World;
+		if (world != null && world.NativeNetwork == this)
+			world.NativeNetwork = null;
+		if (mNative == null)
+			return;
+		if (world != null)
+		{
+			for (let entity in mNative.remote.Values)
+			{
+				if (world.IsAlive(entity))
+					world.Delete(entity);
+			}
+		}
+		DeleteAndNullify!(mNative);
+	}
+
+	/// This client became the host: the replicas it holds become its own entities, under the same net ids, and go
+	/// whole to everyone who comes back.
+	void NativeBecameHost()
+	{
+		let native = mNative;
+		if (native == null)
+			return;
+		let world = Scene.World;
+		let ids = scope List<uint32>(native.remote.Keys);
+		ids.Sort();
+		uint32 highest = 0;
+		for (let netId in ids)
+		{
+			let entity = native.remote[netId];
+			highest = Math.Max(highest, netId);
+			if (world.IsAlive(entity) && !native.byEntity.ContainsKey(entity.id))
+				NativeAddRow(entity, netId);
+		}
+		native.remote.Clear();
+		native.remoteIds.Clear();
+		native.nextNetId = Math.Max(native.nextNetId, highest + 1);
+		// The table described the old host's types.
+		ClearAndDeleteItems!(native.types);
+		native.wireIds.Clear();
+		native.generation = DataComponents.Generation;
+		// Its own bare synced entities join them.
+		let own = scope List<uint64>(world.NativeCandidates.GetEnumerator());
+		own.Sort();
+		for (let id in own)
+			NativeCandidateAdded(.(id));
+	}
+
+	// ---- client ----
+
+	/// Client: a new host took this machine (back): the replicas from before go, and the new host sends everything.
+	void NativeResetReplicas()
+	{
+		let native = mNative;
+		if (native == null)
+			return;
+		let world = Scene.World;
+		for (let entity in native.remote.Values)
+		{
+			if (world.IsAlive(entity))
+				world.Delete(entity);
+		}
+		native.remote.Clear();
+		native.remoteIds.Clear();
+		ClearAndDeleteItems!(native.types);
 	}
 
 	public static void OnNativeMessage(int32 sender, ref NetReader reader)
 	{
-		// Poll sets Dispatching to the exact session that received this packet;
-		// Scene.Active can be another scene while switching levels.
+		// Poll sets Dispatching to the session that received this; Scene.Active can be another scene while
+		// switching levels.
 		let network = NetworkManager.Dispatching;
-		if (network == null || !network.IsClient)
-			return; // The server never accepts ECS state from clients.
-		let count = (int)reader.Read<uint8>();
-		for (int i = 0; i < count && reader.Ok; i++)
+		// The server never takes ECS state from clients.
+		if (network == null || !network.IsClient || network.mNative == null)
+			return;
+		network.mNative.bytes += reader.Remaining;
+		while (reader.Ok && reader.Remaining > 0)
 		{
-			let operation = reader.Read<uint8>();
-			let netId = reader.Read<uint32>();
-			if (!reader.Ok)
-				return;
-			if (operation == 2)
+			switch (reader.Read<uint8>())
 			{
-				if (network.mNativeRemote.TryGetValue(netId, let old))
-				{
-					network.mNativeRemote.Remove(netId);
-					network.Scene.World.Delete(old);
-				}
+			case NativeRecordType: network.NativeReadType(ref reader);
+			case NativeRecordFull: network.NativeReadFull(ref reader);
+			case NativeRecordChange: network.NativeReadChange(ref reader);
+			case NativeRecordDestroy: network.NativeReadDestroy(ref reader);
+			default: reader.Ok = false;
 			}
-			else if (operation == 1)
-				network.NativeReadState(netId, ref reader);
-			else
-				return;
 		}
 	}
 
-	void NativeReadState(uint32 netId, ref NetReader reader)
+	void NativeReadType(ref NetReader reader)
 	{
+		let native = mNative;
+		let wireId = reader.ReadVarUInt();
+		let name = scope String();
+		reader.ReadString(name);
+		let fieldCount = reader.ReadVarUInt();
+		if (!reader.Ok || wireId >= 4096 || fieldCount > NativeMaxFields)
+		{
+			reader.Ok = false;
+			return;
+		}
+		let type = new NativeType();
+		type.fullName.Set(name);
+		let info = DataComponents.Find(name);
+		if (info != null && info.synced)
+			type.index = info.index;
+		let fieldName = scope String();
+		for (int i < fieldCount)
+		{
+			fieldName.Clear();
+			reader.ReadString(fieldName);
+			let wireSize = (int32)reader.ReadVarUInt();
+			if (wireSize > NativeMaxFieldBytes)
+				reader.Ok = false;
+			int32 offset = -1;
+			if (info != null)
+			{
+				for (let field in info.syncedFields)
+				{
+					if (field.name == fieldName && field.size == wireSize)
+						offset = field.offset;
+				}
+			}
+			type.fields.Add((wireSize, offset));
+		}
+		if (!reader.Ok)
+		{
+			delete type;
+			return;
+		}
+		while (native.types.Count <= (int)wireId)
+			native.types.Add(null);
+		delete native.types[(int)wireId];
+		native.types[(int)wireId] = type;
+	}
+
+	NativeType NativeTypeOf(uint32 wireId) => wireId < (uint32)mNative.types.Count ? mNative.types[(int)wireId] : null;
+
+	/// Reads one type's fields (those set in mask, or every one without a mask) into data; null data reads past them.
+	static void NativeReadFields(ref NetReader reader, NativeType type, uint8* data, uint8* mask)
+	{
+		for (int f < type.fields.Count)
+		{
+			if (mask != null && (mask[f >> 3] & (1 << (f & 7))) == 0)
+				continue;
+			let (wireSize, offset) = type.fields[f];
+			int length = wireSize;
+			if (wireSize == 0)
+			{
+				length = (int)reader.ReadVarUInt();
+				if (length > NativeMaxTextBytes)
+					reader.Ok = false;
+			}
+			if (!reader.Ok || reader.Remaining < length)
+			{
+				reader.Ok = false;
+				return;
+			}
+			let bytes = reader.Start + reader.Position;
+			if (data != null && offset >= 0)
+			{
+				if (wireSize > 0)
+					Internal.MemCpy(data + offset, bytes, wireSize);
+				else
+					*(SharedString*)(data + offset) = StringView((char8*)bytes, length);
+			}
+			reader.Skip(length);
+		}
+	}
+
+	void NativeReadFull(ref NetReader reader)
+	{
+		let native = mNative;
 		let world = Scene.World;
+		let netId = reader.ReadVarUInt();
 		let count = (int)reader.Read<uint8>();
 		if (!reader.Ok || count > NativeMaxTypes)
 		{
@@ -308,57 +813,28 @@ extension NetworkManager
 		}
 		bool created = false;
 		Entity entity;
-		if (!mNativeRemote.TryGetValue(netId, out entity) || !world.IsAlive(entity))
+		if (!native.remote.TryGetValue(netId, out entity) || !world.IsAlive(entity))
 		{
 			entity = world.Create();
 			created = true;
 		}
-		let present = scope List<int32>();
-		for (int i = 0; i < count && reader.Ok; i++)
+		let present = native.present;
+		present.Clear();
+		for (int t < count)
 		{
-			let name = scope String();
-			reader.ReadString(name);
-			let fieldCount = (int)reader.Read<uint8>();
-			if (!reader.Ok || fieldCount > NativeMaxFields)
+			let type = NativeTypeOf(reader.ReadVarUInt());
+			if (type == null)
 			{
 				reader.Ok = false;
 				break;
 			}
-			let info = DataComponents.Find(name);
-			if (info != null && info.synced)
+			uint8* data = null;
+			if (type.index >= 0)
 			{
-				world.Ensure(entity, info.index);
-				present.Add(info.index);
+				data = (uint8*)world.Ensure(entity, type.index);
+				present.Add(type.index);
 			}
-			for (int j = 0; j < fieldCount && reader.Ok; j++)
-			{
-				let fieldName = scope String();
-				reader.ReadString(fieldName);
-				let length = (int)reader.Read<uint16>();
-				if (!reader.Ok || length > NativeMaxFieldBytes)
-				{
-					reader.Ok = false;
-					break;
-				}
-				uint8[NativeMaxFieldBytes] bytes = ?;
-				for (int b < length)
-					bytes[b] = reader.Read<uint8>();
-				if (!reader.Ok || info == null || !info.synced)
-					continue;
-				let fields = scope List<FieldRef>();
-				DataComponents.GetFields(info.type, world.Get(entity, info.index), fields);
-				for (let field in fields)
-				{
-					if (!field.sync || field.name != fieldName)
-						continue;
-					let size = NetworkSync.SizeOf(field);
-					if (field.kind == .String && field.type == typeof(SharedString))
-						*(SharedString*)field.ptr = StringView((char8*)&bytes[0], length);
-					else if (size == length && size > 0)
-						Internal.MemCpy(field.ptr, &bytes[0], size);
-					break;
-				}
-			}
+			NativeReadFields(ref reader, type, data, null);
 		}
 		if (!reader.Ok)
 		{
@@ -366,14 +842,57 @@ extension NetworkManager
 				world.Delete(entity);
 			return;
 		}
-		// Server-owned [Sync] types have an authoritative presence list.
-		// Local-only ECS data on the same entity is never removed.
-		let existing = scope List<int32>();
-		world.TypesOf(entity, existing);
-		for (let index in existing)
-			if (DataComponents.IsSynced(index) && !present.Contains(index))
-				world.Remove(entity, index);
-		mNativeRemote[netId] = entity;
+		// Synced types the server's entity no longer has go; this machine's own local-only data stays.
+		for (let info in DataComponents.SyncedTypes)
+		{
+			if (!present.Contains(info.index) && world.Has(entity, info.index))
+				world.Remove(entity, info.index);
+		}
+		native.remote[netId] = entity;
+		native.remoteIds[entity.id] = netId;
 	}
 
+	void NativeReadChange(ref NetReader reader)
+	{
+		let world = Scene.World;
+		let netId = reader.ReadVarUInt();
+		let count = (int)reader.Read<uint8>();
+		if (!reader.Ok || count > NativeMaxTypes)
+		{
+			reader.Ok = false;
+			return;
+		}
+		// One this client has not been sent yet (it joined late) is read past: it comes whole later.
+		Entity entity = default;
+		let known = mNative.remote.TryGetValue(netId, out entity) && world.IsAlive(entity);
+		uint8[NativeMaxFields / 8] mask = default;
+		for (int t < count)
+		{
+			let type = NativeTypeOf(reader.ReadVarUInt());
+			if (type == null)
+			{
+				reader.Ok = false;
+				return;
+			}
+			for (int i < (type.fields.Count + 7) / 8)
+				mask[i] = reader.Read<uint8>();
+			uint8* data = null;
+			if (known && type.index >= 0)
+				data = (uint8*)world.Ensure(entity, type.index);
+			NativeReadFields(ref reader, type, data, &mask[0]);
+		}
+	}
+
+	void NativeReadDestroy(ref NetReader reader)
+	{
+		let netId = reader.ReadVarUInt();
+		if (!reader.Ok)
+			return;
+		if (mNative.remote.GetAndRemove(netId) case .Ok(let pair))
+		{
+			mNative.remoteIds.Remove(pair.value.id);
+			if (Scene.World.IsAlive(pair.value))
+				Scene.World.Delete(pair.value);
+		}
+	}
 }

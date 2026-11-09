@@ -25,11 +25,49 @@ static class DataComponents
 		public int32 index;
 		/// At least one field marked [Sync] that the network serializer supports.
 		public bool synced;
+		/// Those fields, by name: what native ECS replication sends (NetworkManagerEcs.bf).
+		public List<SyncedField> syncedFields = new .() ~ DeleteContainerAndItems!(_);
+	}
+
+	/// A [Sync] field of a data component, where it is in the struct.
+	public class SyncedField
+	{
+		public String name = new .() ~ delete _;
+		public int32 offset;
+		/// Its size in bytes, or 0 for SharedString text.
+		public int32 size;
 	}
 
 	static List<Info> sInfos ~ DeleteContainerAndItems!(_);
 	/// O(1) type lookup for hot World.Set/Ensure/Add calls.
 	static Dictionary<int32, Info> sByIndex = new .() ~ delete _;
+	/// Indexed by ComponentTypes index: whether that type is a data component with [Sync] fields. World.Set, Ensure
+	/// and Add ask on every call, so this is a plain list, not a lookup.
+	static List<bool> sSyncedByIndex = new .() ~ delete _;
+	static List<Info> sSynced = new .() ~ delete _;
+	static int sGeneration;
+
+	/// The data components with [Sync] fields, by full name: the order native ECS replication lists them in.
+	public static List<Info> SyncedTypes
+	{
+		get
+		{
+			if (sInfos == null)
+				Build();
+			return sSynced;
+		}
+	}
+
+	/// Changes whenever the types are listed again (after a script reload), so that a cache of them can tell.
+	public static int Generation
+	{
+		get
+		{
+			if (sInfos == null)
+				Build();
+			return sGeneration;
+		}
+	}
 
 	/// Every data component a game can add, sorted by name.
 	public static List<Info> Types
@@ -46,6 +84,9 @@ static class DataComponents
 	{
 		sInfos = new .();
 		sByIndex.Clear();
+		sSyncedByIndex.Clear();
+		sSynced.Clear();
+		sGeneration++;
 		for (let type in ScriptReload.ReflectedTypes)
 		{
 			if (type == null || !type.IsStruct || type.IsGenericType)
@@ -62,20 +103,38 @@ static class DataComponents
 			type.GetName(info.name);
 			info.type = type;
 			info.index = ComponentTypes.Add(type, type.Stride, type.Align);
+			// With no data, each field's pointer is its offset.
 			let fields = scope List<FieldRef>();
 			GetFields(type, null, fields);
 			for (let field in fields)
 			{
-				if (field.sync && (NetworkSync.SizeOf(field) > 0 || field.kind == .String))
-				{
-					info.synced = true;
-					break;
-				}
+				if (!field.sync)
+					continue;
+				let size = NetworkSync.SizeOf(field);
+				if (size == 0 && field.type != typeof(SharedString))
+					continue;
+				let synced = new SyncedField();
+				synced.name.Set(field.name);
+				synced.offset = (int32)(int)field.ptr;
+				synced.size = size;
+				info.syncedFields.Add(synced);
 			}
+			// By name, not declaration order: a type split over several files lists its fields in the order the
+			// compiler met them, which differs between Windows and Linux builds.
+			info.syncedFields.Sort(scope (a, b) => a.name.CompareTo(b.name));
+			info.synced = !info.syncedFields.IsEmpty;
 			sInfos.Add(info);
 			sByIndex[info.index] = info;
+			if (info.synced)
+			{
+				while (sSyncedByIndex.Count <= info.index)
+					sSyncedByIndex.Add(false);
+				sSyncedByIndex[info.index] = true;
+				sSynced.Add(info);
+			}
 		}
 		sInfos.Sort(scope (a, b) => a.name.CompareTo(b.name));
+		sSynced.Sort(scope (a, b) => a.fullName.CompareTo(b.fullName));
 	}
 
 	/// Scripts were reloaded: the types may have changed.
@@ -86,6 +145,8 @@ static class DataComponents
 			DeleteContainerAndItems!(sInfos);
 			sInfos = null;
 			sByIndex.Clear();
+			sSyncedByIndex.Clear();
+			sSynced.Clear();
 		}
 	}
 
@@ -110,11 +171,13 @@ static class DataComponents
 	}
 
 	/// Whether a game-defined ECS data type has a supported [Sync] field.
-	/// Computed once per reflection refresh; checking a hot CreateMany is cheap.
+	/// Computed once per reflection refresh; World.Set, Ensure and Add ask on every call.
+	[Inline]
 	public static bool IsSynced(int32 index)
 	{
-		let info = Find(index);
-		return info != null && info.synced;
+		if (sInfos == null)
+			Build();
+		return index < sSyncedByIndex.Count && sSyncedByIndex[index];
 	}
 
 	/// The editable fields of a data component whose value is at data: plain values, SharedString and ObjectRef (and,

@@ -70,6 +70,8 @@ extension NetworkManager
 		mDeltasOffered = reader.Remaining > 0 && reader.Read<uint8>() != 0 && FieldDeltas;
 		ResetDeltas();
 		ResetForwarding();
+		// Replicas a previous host sent go: this server sends its own.
+		NativeResetReplicas();
 		Lockstep = reader.Remaining > 0 && reader.Read<uint8>() != 0;
 		ResetLockstep();
 		mConnected = reader.Ok;

@@ -251,6 +251,7 @@ extension NetworkManager
 			mNextClientId = Math.Max(mNextClientId, entry.id + 1);
 		}
 		mReclaimEnds = Milliseconds + ReclaimMilliseconds;
+		NativeBecameHost();
 		let hostIdentity = GameObject.ComponentOn<NetworkIdentity>(PlayerObject(0));
 		mHostPlayerNetId = hostIdentity.IsValid ? hostIdentity.NetId : 0;
 		Log.Info("This machine is now the host.");
@@ -303,6 +304,7 @@ extension NetworkManager
 			Send(peer, true);
 		}
 		AntiCheat.ClientJoined(this, id);
+		NativeClientJoined(id);
 		mRosterIn = 0;
 		Log.Info(scope $"Client {id} came back.");
 	}
@@ -319,6 +321,7 @@ extension NetworkManager
 		mViewDelay = 0;
 		ResetDeltas();
 		ResetForwarding();
+		NativeResetReplicas();
 		for (let identity in mIdentities)
 		{
 			identity.Predicted = false;

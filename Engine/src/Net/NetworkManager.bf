@@ -409,12 +409,10 @@ class NetworkManager
 	NetCompression mCompression ~ delete _;
 	List<uint8> mCompressed = new .() ~ delete _;
 	List<uint8> mDecompressed = new .() ~ delete _;
-	// Bare ECS entity replication (NetworkManagerEcs.bf). Declared here rather than in that extension because Beef
-	// runs an extension's field destructors before this class's ~this, and Stop() there still uses these.
-	List<NativeRow> mNativeRows = new .() ~ DeleteContainerAndItems!(_);
-	Dictionary<uint64, NativeRow> mNativeByEntity = new .() ~ delete _;
-	Dictionary<uint32, Entity> mNativeRemote = new .() ~ delete _;
-	NetWriter mNativeBatch = new .() ~ delete _;
+	// Bare ECS entity replication (NetworkManagerEcs.bf), made when a session starts. Declared here rather than in
+	// that extension because Beef runs an extension's field destructors before this class's ~this, and Stop() there
+	// still needs it to delete a client's replicas.
+	NativeReplication mNative ~ delete _;
 	int32 mStatTransportSent;
 	/// Encoded application bytes offered to the transport before simulated loss (not physical wire bytes).
 	public int32 TransportBytesSentPerSecond;
@@ -560,7 +558,7 @@ class NetworkManager
 		case MsgSpawn: return "spawns";
 		case MsgDespawn: return "despawns";
 		case MsgInput: return "controls";
-		case MsgSnapshot, MsgSnapshotPart, MsgSnapshotDelta: return "snapshots";
+		case MsgSnapshot,MsgSnapshotPart,MsgSnapshotDelta: return "snapshots";
 		case MsgCustom: return "custom";
 		case MsgOwner: return "ownership";
 		case MsgLink: return "connection reports";
@@ -571,7 +569,7 @@ class NetworkManager
 		case MsgDesyncQuery: return "desync debugger query";
 		case MsgDesyncHashes: return "desync debugger hashes";
 		case MsgDesyncFields: return "desync debugger fields";
-		case 16, 17, 18, 19: return "host migration";
+		case 16,17,18,19: return "host migration";
 		case NetCompression.MessageType: return "compressed";
 		case NetworkSync.MsgTerrainBrush: return "terrain";
 		case NetworkSync.MsgVoxelCarve: return "voxel carving";
@@ -604,8 +602,13 @@ class NetworkManager
 		into.AppendF("NETWORK {} tick {} clients {} sent {} B/s received {} B/s objects {}\n", IsServer ? (mMode == .Host ? "host" : "server") : (IsClient ? "client" : "offline"), mTick, mClients.Count, BytesSentPerSecond, BytesReceivedPerSecond, mIdentityStates.Count);
 		for (let client in mClients)
 			into.AppendF("CLIENT {} {} B/s, {} inputs waiting, {}% snapshots lost, budget {}\n", client.id, client.bytesPerSecond, client.queue.Count, client.lossPercent, SnapshotBytesPerSecond > 0 ? SnapshotBytesPerSecond : client.autoBudget);
-		if (mNativeRows.Count > 0 || mNativeRemote.Count > 0)
-			into.AppendF("NATIVE ECS {} server entities, {} client replicas (no GameObjects)\n", mNativeRows.Count, mNativeRemote.Count);
+		if (mNative != null && (NativeEntityCount > 0 || mNative.bytes > 0))
+		{
+			if (IsServer)
+				into.AppendF("NATIVE ECS {} bare entities (no GameObjects), {} waiting to be sent, {} clients catching up; sent {} full, {} change and {} destroy records, {} bytes\n", NativeEntityCount, NativeWaiting, mNative.joiners.Count, mNative.fullRecords, mNative.changeRecords, mNative.destroyRecords, mNative.bytes);
+			else
+				into.AppendF("NATIVE ECS {} replicas of the server's bare entities (no GameObjects), {} bytes received\n", NativeEntityCount, mNative.bytes);
+		}
 		if (Lockstep && IsClient)
 			into.AppendF("LOCKSTEP {} hashes checked, {} differed (each resyncs), {} replays from exact physics snapshots, {} exact states taken up\n", HashChecks, HashMismatches, LockstepReplays, LockstepStatesTaken);
 		else if (Lockstep)

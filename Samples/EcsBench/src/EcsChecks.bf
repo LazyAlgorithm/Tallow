@@ -872,15 +872,19 @@ static class EcsChecks
 				let motions = chunk.Read<SyncedEcsMotion>();
 				let links = chunk.Read<ObjectLink>();
 				for (int i < chunk.Count)
+				{
 					if (links[i].gameObject == first && motions[i].speed == 2.5f)
 						foundMotion = true;
+				}
 			}
 			Expect(foundMotion, "query sees the identical data written by the normal script");
 			let syncedSlots = NetworkSync.[Friend]Slots(a);
 			int syncSlot = -1;
 			for (int i < syncedSlots.slots.Count)
+			{
 				if (syncedSlots.slots[i].dataIndex == ComponentId<SyncedEcsMotion>.Index)
 					syncSlot = i;
+			}
 			Expect(syncSlot >= 0 && syncedSlots.syncedDataTypes.Count == 1,
 				"custom ECS [Sync] data joins ordinary script/handle network slots");
 			first.AddComponent<Pose>();
@@ -917,8 +921,10 @@ static class EcsChecks
 			let replicatedSlots = NetworkSync.[Friend]Slots(a);
 			int replicatedSpeed = -1;
 			for (int i < replicatedSlots.slots.Count)
+			{
 				if (replicatedSlots.slots[i].dataIndex == ComponentId<SyncedEcsMotion>.Index)
 					replicatedSpeed = i;
+			}
 			if (replicatedSpeed >= 0)
 			{
 				first.GetComponent<SyncedEcsMotion>().speed = 4.5f;

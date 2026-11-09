@@ -87,6 +87,17 @@ struct NetReader
 		return value;
 	}
 
+	/// Moves past count bytes (Ok false, and nothing skipped, if there are not that many).
+	public void Skip(int count) mut
+	{
+		if (count < 0 || mOffset + count > mLength)
+		{
+			Ok = false;
+			return;
+		}
+		mOffset += count;
+	}
+
 	/// Reads a whole number written in as few bytes as it needs.
 	public uint32 ReadVarUInt() mut
 	{
