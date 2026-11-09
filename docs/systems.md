@@ -47,8 +47,15 @@ class Accelerate : Script
 
 The same `SpeedData` can be read by `Query<SpeedData, ObjectLink>`. With a
 `NetworkIdentity` on the GameObject, supported `[Sync]` fields participate
-in Tallow's existing networking. Custom ECS data on bare `World.CreateMany`
-entities without an ObjectLink is not automatically networked yet.
+in Tallow's existing networking. On the experimental
+`ecs-unified-authoring-network` branch, bare entities created with
+`World.CreateMany<T>` (or populated with `Set<T>`, `Add<T>`, `Ensure<T>`)
+are also automatically registered for **server-authoritative replication**
+when the `[Component]` struct has supported `[Sync]` fields. These entities
+stay packed in Flecs and get no hidden GameObjects; ordinary unmarked data
+remains local. This native path is not yet validated or prediction-aware:
+arbitrary ECS query systems must not assume rollback/replay works automatically.
+See `docs/unified-ecs-networking.md` for its current limits.
 
 You can also borrow `Scene.World.ObjectsWith<SpeedData>()`, a query cached for
 the lifetime of the World. Do not delete that query. It returns packed
