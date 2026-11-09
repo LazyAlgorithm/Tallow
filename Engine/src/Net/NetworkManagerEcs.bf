@@ -66,10 +66,9 @@ extension NetworkManager
 			return;
 		// An entity that was never sent need not produce a destroy packet.
 		if (!row.last.IsEmpty)
-		{
 			NativeQueueDestroy(row.netId, -1);
-			NativeFlush(-1);
-		}
+		// Flush at the next snapshot, not once per entity deletion.
+		// A large bulk despawn otherwise becomes thousands of packets.
 		NativeRemoveRow(row);
 	}
 
@@ -176,8 +175,13 @@ extension NetworkManager
 	/// the session's normal snapshot cadence but does not claim prediction.
 	public void NativeServerTick()
 	{
-		if (!IsServer || mNativeRows.IsEmpty)
+		if (!IsServer)
 			return;
+		if (mNativeRows.IsEmpty)
+		{
+			NativeFlush(-1); // pending bulk despawns
+			return;
+		}
 		let state = scope NetWriter();
 		let toCheck = Math.Min(NativeScanPerSnapshot, mNativeRows.Count);
 		for (int i < toCheck && !mNativeRows.IsEmpty)
@@ -213,6 +217,9 @@ extension NetworkManager
 	{
 		if (!IsServer)
 			return;
+		// A server deletion batch must not be reused as this client's
+		// initial state packet.
+		NativeFlush(-1);
 		let state = scope NetWriter();
 		for (let row in mNativeRows)
 		{
@@ -286,7 +293,10 @@ extension NetworkManager
 		let world = Scene.World;
 		let count = (int)reader.Read<uint8>();
 		if (!reader.Ok || count > NativeMaxTypes)
+		{
+			reader.Ok = false;
 			return;
+		}
 		bool created = false;
 		Entity entity;
 		if (!mNativeRemote.TryGetValue(netId, out entity) || !world.IsAlive(entity))
@@ -301,7 +311,10 @@ extension NetworkManager
 			reader.ReadString(name);
 			let fieldCount = (int)reader.Read<uint8>();
 			if (!reader.Ok || fieldCount > NativeMaxFields)
+			{
+				reader.Ok = false;
 				break;
+			}
 			let info = DataComponents.Find(name);
 			if (info != null && info.synced)
 			{
