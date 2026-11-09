@@ -146,8 +146,9 @@ build and a real server/client session pass on the developer machine.
 
 Network diagnostic text now reports native server entities and client replicas
 separately from GameObject network identities. Native entity replication uses
-reserved engine message ID **243**. The old GameObject ECS layout message
-remains ID **242**.
+reserved engine message ID **237**. GameObject ECS component layout uses
+**236**. Both IDs are distinct from anti-cheat (**243**) and map-sharing
+(**242**); engine-reserved message IDs are **236–255**.
 
 ## Visual scripting
 
@@ -163,7 +164,7 @@ wall-clock time during prediction.
 
 ## Compatibility and constraints
 
-- The ECS layout message uses engine network message ID **242**. Server and
+- The ECS layout message uses engine network message ID **236**. Server and
   client should run the same game/engine build; mixed protocol versions are
   not supported. Current message format caps the synchronized type inventory
   at 64 types per object and uses normal `WriteString` type names.
