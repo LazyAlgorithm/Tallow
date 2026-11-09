@@ -364,21 +364,48 @@ def alias_objects(objects, game_objects, aliases, resident, shared):
     resident_digest = names_digest(resident)
     shared_digest = names_digest(shared)
     game_objects = set(game_objects)
+    # BeefBuild lists objects in link order, which is NOT stable when adding a
+    # script/component: one insertion may renumber thousands of unrelated files.
+    # Reuse the prepared ELF object by source path, not its current list index.
+    # Migrate legacy index-keyed caches in place so upgrading the editor does
+    # not force every existing object through alias_host_globals again.
+    by_source = {}
+    for old_key, old_record in previous.items():
+        if not isinstance(old_record, dict) or not isinstance(old_record.get('source'), str):
+            continue
+        source = old_record['source']
+        saved_target = old_record.get('target')
+        if isinstance(saved_target, str) and Path(saved_target).name == saved_target:
+            prepared = aliases / saved_target
+        elif old_key.isdecimal():
+            prepared = aliases / f'{old_key}-{Path(source).name}'
+        else:
+            continue
+        by_source[source] = (old_record, prepared)
+
     updated = {}
     result = []
     reused = 0
     reasons = {'cold': 0, 'changed': 0, 'symbols': 0}
-    for index, obj in enumerate(objects):
-        target = aliases / f'{index}-{obj.name}'
+    for obj in objects:
+        source = str(obj)
+        cached = by_source.get(source)
+        if cached is not None:
+            last, target = cached
+        else:
+            # The full path is the identity; the short hash keeps aliases
+            # portable across filesystem limits and avoids same-name clashes.
+            token = hashlib.sha256(os.fsencode(obj)).hexdigest()[:24]
+            target = aliases / f'{token}-{obj.name}'
+            last = None
         is_game = obj in game_objects
         host_names = shared if is_game else resident
         scope_digest = shared_digest if is_game else resident_digest
         data = obj.read_bytes()
         object_digest = hashlib.sha256(data).hexdigest()
-        key = str(index)
-        record = {'source': str(obj), 'object': object_digest, 'host': scope_digest}
-        last = previous.get(key)
-        same_object = (isinstance(last, dict) and last.get('source') == str(obj)
+        record = {'source': source, 'target': target.name,
+                  'object': object_digest, 'host': scope_digest}
+        same_object = (isinstance(last, dict) and last.get('source') == source
                        and last.get('object') == object_digest and target.is_file())
         matching_symbols = None
         if same_object and last.get('host') == scope_digest:
@@ -400,7 +427,7 @@ def alias_objects(objects, game_objects, aliases, resident, shared):
                 reasons['symbols'] += 1
             matching_symbols = alias_host_globals(obj, target, host_names)
         record['matched'] = matching_symbols
-        updated[key] = record
+        updated[source] = record
         result.append(target)
 
     # A failed or interrupted cache write must not leave an incomplete index.
