@@ -84,3 +84,34 @@ also be built on the first query and cached in the user's cache directory. Linux
 that build; Windows uses the existing clang-cl/MSVC build environment. Normal packaged use needs neither step.
 The Windows worker's completion and reference queries have been exercised under Wine; native Windows UI and
 macOS semantic-worker validation remain separate platform checks. The macOS semantic worker is not implemented.
+
+## Creating script templates
+
+In the **Project** panel, right-click an empty area or use the Create menu and choose **Script**.
+The basic script is still available, and these options create a named `.bf` source file in
+the currently selected folder:
+
+- **Basic Component** — standard `[Component] class : Script` with Start/Update
+- **Movement** — a rotating component using `deltaTime`
+- **Timed Action** — a simple repeatable timer without a coroutine
+- **GUI / HUD** — an immediate-mode `OnGUI` component
+- **Networked Behaviour** — an ordinary script with a synchronized field, network-tick
+  `Update`, and `OnLocalUpdate` for client-only presentation
+
+The **Script → ECS** submenu offers:
+
+- **Data Component (struct)** — a packed `[Component] struct`
+- **Synced Data Component** — reflected ECS data with `[Sync]` fields for a
+  GameObject with `NetworkIdentity`
+- **Script + Data** — a regular GameObject script and an ECS data struct in one file
+- **GameObject Query Processor** — iterate `Scene.World.ObjectsWith<T>()`, including
+  the matching scene GameObject through `ObjectLink`
+- **Pure ECS Bulk Entities** — bulk-create entity-only data with `World.CreateMany<T>`
+  and update it through a packed `Query<T>`. These are not GameObjects and
+  are not automatically network-replicated.
+
+Each template uses the project namespace and requested class/type name. Selecting one
+does not insert a `GameObject` into the current scene. Attach a behavior script or
+ECS data component through the Inspector as appropriate. New script and ECS types are
+compiled and made available through normal script reload.
+
