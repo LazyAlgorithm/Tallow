@@ -28,6 +28,8 @@ static class DataComponents
 	}
 
 	static List<Info> sInfos ~ DeleteContainerAndItems!(_);
+	/// O(1) type lookup for hot World.Set/Ensure/Add calls.
+	static Dictionary<int32, Info> sByIndex = new .() ~ delete _;
 
 	/// Every data component a game can add, sorted by name.
 	public static List<Info> Types
@@ -43,6 +45,7 @@ static class DataComponents
 	static void Build()
 	{
 		sInfos = new .();
+		sByIndex.Clear();
 		for (let type in ScriptReload.ReflectedTypes)
 		{
 			if (type == null || !type.IsStruct || type.IsGenericType)
@@ -70,6 +73,7 @@ static class DataComponents
 				}
 			}
 			sInfos.Add(info);
+			sByIndex[info.index] = info;
 		}
 		sInfos.Sort(scope (a, b) => a.name.CompareTo(b.name));
 	}
@@ -81,6 +85,7 @@ static class DataComponents
 		{
 			DeleteContainerAndItems!(sInfos);
 			sInfos = null;
+			sByIndex.Clear();
 		}
 	}
 
@@ -96,11 +101,10 @@ static class DataComponents
 
 	public static Info Find(int32 index)
 	{
-		for (let info in Types)
-		{
-			if (info.index == index)
-				return info;
-		}
+		// Build on first use and invalidate after a script-library reload.
+		let types = Types;
+		if (sByIndex.TryGetValue(index, let info))
+			return info;
 		return null;
 	}
 
