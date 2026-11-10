@@ -122,7 +122,43 @@ Measured on a 512-script project (TallowCompileBench, Ryzen 9 7900X, Debug):
 Most of what is left is BeefBuild itself: about 1.9 s of every compile is its frontend checking the whole
 engine, editor and game again (each BeefBuild starts with nothing loaded), however small the edit. Adding or
 removing a type also makes it regenerate most of the engine's object files (it does so in a workspace of a few
-classes too), which is the extra 1.4 s of those rows.
+classes too), which is the extra 1.4 s of those rows. Script reloads no longer pay either: see below.
+
+## Compile speed on Linux: the compile server
+
+Script reloads compile with the Beef compiler kept loaded between builds, as the Beef IDE keeps it, instead of a
+new BeefBuild each time. `tools/BeefCompileServer/Serve.bf` is BeefBuild's own code (BuildApp) with a loop around
+it; `tools/beef_compile_server.py` builds it from the Beef install's BeefBuild and IDE sources (a Linux install of
+Beef is built from them, so nothing more is installed: it takes about 5 s, once per Beef install, into
+`~/.cache/tallow/beef-compile-server`), and `reload_scripts.py` uses it:
+
+- `--snapshot` (the editor opening a project) starts a server for the project's reload workspace, which builds
+  once. The server leaves when the editor does, or after an hour without a build.
+- Each reload asks it to build (`.tallow-reload/workspace-linux64/.compile-server`: a `request` file in, a `done`
+  file out, its output in `server.log`). It looks at time stamps, recompiles only the sources that changed or
+  were added or removed, and keeps everything else it parsed and built.
+- It leaves out the archive BeefBuild makes of a dynamic library's 5,000 objects (78 MB, up to 2 s): reload links
+  its own module from the objects.
+- When it cannot be used (another platform, a Beef install without its sources, still being built, it crashed),
+  the reload runs BeefBuild as before and says which compiled it on the `Reload timings` line.
+  `TALLOW_COMPILE_SERVER=0` turns it off; `TALLOW_RELOAD_TRACE_COMPILER=1` uses BeefBuild with full output.
+
+Every reload also runs `reload_scripts.py` three times (classify, build, commit). What each run works out per file
+is cached by size and time stamp (`.tallow-reload/source-cache.json`, and the game objects' and reflection
+object's symbols beside the aliased objects), so only what an edit changed is read again.
+
+The same project, whole reloads as the editor runs them (classify, build and commit), lld:
+
+| | BeefBuild | Compile server |
+|---|---|---|
+| Method body edit | 4.1 s | 1.1-1.2 s (compile 0.23 s) |
+| New field | 4.1 s | 1.6 s (compile 0.65 s) |
+| A script added or removed | 5.7 s | 1.6 s (compile 0.65 s) |
+
+**Keep the engine and editor free of compiler warnings.** Beef records a type that produced a warning as failed,
+so that the warning is shown again, and recompiles it and everything depending on it on every build. Thirteen
+warnings made the server regenerate EditorApp, NetworkManager and others each time (about 1.5 s); a game's own
+warnings cost the same for its types.
 
 ## Inspector attributes
 

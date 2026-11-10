@@ -15,6 +15,11 @@ import struct
 import tomllib
 import time
 
+try:
+    import beef_compile_server
+except ImportError:  # An engine copy without it compiles with BeefBuild.
+    beef_compile_server = None
+
 TOKEN = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|=>|[A-Za-z_][A-Za-z_0-9]*|[^\s]', re.S)
 
 
@@ -133,6 +138,30 @@ def beef_build_artifacts(workspace, name, platform):
 
 def build_output_state(workspace, name, platform):
     """Record cheap file timestamps; changed means rewritten, not necessarily recompiled."""
+    if platform == 'linux':
+        # Every object in the build folders (a stale one counts too: this only feeds the log), read by folder
+        # instead of parsing the 5,000-object link list.
+        buckets = {'game': {}, 'dependencies': {}, 'reflection': {}}
+        try:
+            folders = [entry for entry in os.scandir(workspace / 'build' / 'Debug_Linux64') if entry.is_dir()]
+        except OSError:
+            return buckets
+        for folder in folders:
+            game = folder.name == name
+            try:
+                entries = list(os.scandir(folder.path))
+            except OSError:
+                continue
+            for entry in entries:
+                if not entry.name.endswith('.o'):
+                    continue
+                try:
+                    status = entry.stat()
+                except OSError:
+                    continue
+                bucket = ('reflection' if entry.name == 'vdata.o' else 'game') if game else 'dependencies'
+                buckets[bucket][entry.path] = (status.st_size, status.st_mtime_ns)
+        return buckets
     buckets = {}
     for category, paths in beef_build_artifacts(workspace, name, platform).items():
         stamps = {}
@@ -267,10 +296,60 @@ def project_path(project, text):
     return (project / text).resolve()
 
 
+class SourceCache:
+    """What snapshot() worked out per file (its hash, and a script's declaration and token fingerprints), reused while
+    the file's size and time stamp stay the same: a snapshot reads and fingerprints every engine, editor and game
+    source, and each reload takes three. As git does, a file changed in the last two seconds is read again rather
+    than trusted, since a second save within the file system's time stamp resolution could keep the same stamp."""
+    RACY_NS = 2_000_000_000
+
+    def __init__(self, project):
+        self.path = project / '.tallow-reload' / 'source-cache.json'
+        try:
+            self.entries = json.loads(self.path.read_text())
+            if not isinstance(self.entries, dict):
+                self.entries = {}
+        except (OSError, ValueError):
+            self.entries = {}
+        self.used = {}
+        self.now = time.time_ns()
+
+    def get(self, file, script):
+        """(sha256 of the bytes, declaration fingerprint, token fingerprint); the last two only for scripts."""
+        key = str(file)
+        status = file.stat()
+        stamp = [status.st_size, status.st_mtime_ns]
+        entry = self.entries.get(key)
+        if isinstance(entry, list) and len(entry) == 4 and entry[0] == stamp and (entry[2] is not None or not script):
+            self.used[key] = entry
+            return entry[1], entry[2], entry[3]
+        data = file.read_bytes()
+        values = [hashlib.sha256(data).hexdigest(), None, None]
+        if script:
+            text = data.decode('utf-8')
+            values[1], values[2] = schema(text), normalized_source(text)
+        if self.now - status.st_mtime_ns > self.RACY_NS:
+            self.used[key] = [stamp, *values]
+        return tuple(values)
+
+    def save(self):
+        if self.used != self.entries:
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                temporary = self.path.with_suffix(f'.{os.getpid()}.tmp')
+                temporary.write_text(json.dumps(self.used))
+                temporary.replace(self.path)
+            except OSError:
+                pass
+
+
 def snapshot(project):
     config = tomllib.loads((project / 'BeefSpace.toml').read_text())
     engine = project_path(project, config['Projects']['Tallow']['Path']).parent
-    sources = {str(p.relative_to(project / 'src')): schema(p.read_text()) for p in sorted((project / 'src').rglob('*.bf'))}
+    cache = SourceCache(project)
+    scripts = sorted((project / 'src').rglob('*.bf'))
+    fingerprints = {file: cache.get(file, True) for file in scripts}
+    sources = {str(file.relative_to(project / 'src')): fingerprints[file][1] for file in scripts}
     digest = hashlib.sha256()
     files = list((engine / 'Engine' / 'src').rglob('*.bf')) + list((engine / 'Editor' / 'src').rglob('*.bf'))
     files += list((engine / 'native').glob('*.cpp')) + list((engine / 'native').glob('*.h')) + [engine / 'native' / 'CMakeLists.txt']
@@ -282,15 +361,16 @@ def snapshot(project):
             files += list(folder.rglob('*.bf')) + [folder / 'BeefProj.toml']
     for file in sorted(set(files)):
         if file.is_file():
-            digest.update(str(file).encode()); digest.update(file.read_bytes())
+            digest.update(str(file).encode()); digest.update(cache.get(file, False)[0].encode())
     code = hashlib.sha256()
     normalized = hashlib.sha256()
-    for file in sorted((project / 'src').rglob('*.bf')):
+    for file in scripts:
         relative = str(file.relative_to(project / 'src')).encode()
-        data = file.read_bytes()
-        code.update(relative); code.update(data)
+        file_hash, _, tokens = fingerprints[file]
+        code.update(relative); code.update(file_hash.encode())
         normalized.update(relative)
-        normalized.update(normalized_source(data.decode('utf-8')).encode())
+        normalized.update(tokens.encode())
+    cache.save()
     return {'schemas': sources, 'resident': digest.hexdigest(),
             'code': code.hexdigest(), 'normalized_code': normalized.hexdigest()}
 
@@ -305,6 +385,48 @@ def symbols(objects):
             force.add(parts[-1][len('FORCELINKMOD_'):])
         if len(parts) == 4 and parts[2] in ('B', 'D'):
             values[parts[3]] = int(parts[1], 16)
+    return force, values
+
+
+NM_LINE = re.compile(r'^(.*):[0-9a-f]+(?: ([0-9a-f]+))? (\S) (\S+)$')
+
+
+def cached_symbols(objects, cache_path):
+    """symbols() for the game's objects, running nm only on those rewritten since the last reload (one, for a
+    method edit, of hundreds)."""
+    try:
+        cache = json.loads(cache_path.read_text())
+        if not isinstance(cache, dict):
+            cache = {}
+    except (OSError, ValueError):
+        cache = {}
+    stamps, stale = {}, []
+    for obj in objects:
+        status = obj.stat()
+        stamps[str(obj)] = [status.st_size, status.st_mtime_ns]
+        entry = cache.get(str(obj))
+        if not (isinstance(entry, dict) and entry.get('stamp') == stamps[str(obj)]):
+            stale.append(obj)
+    fresh = {str(obj): {'stamp': stamps[str(obj)], 'force': [], 'values': {}} for obj in stale}
+    if stale:
+        output = subprocess.check_output(['nm', '-A', '-g', '-S', '--defined-only', *map(str, stale)], text=True)
+        for line in output.splitlines():
+            match = NM_LINE.match(line)
+            if match is None or match[1] not in fresh:
+                continue
+            record = fresh[match[1]]
+            if match[4].startswith('FORCELINKMOD_'):
+                record['force'].append(match[4][len('FORCELINKMOD_'):])
+            if match[2] is not None and match[3] in ('B', 'D'):
+                record['values'][match[4]] = int(match[2], 16)
+    updated = {str(obj): fresh.get(str(obj)) or cache[str(obj)] for obj in objects}
+    force, values = set(), {}
+    for record in updated.values():
+        force.update(record['force'])
+        values.update(record['values'])
+    temporary = cache_path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(updated))
+    temporary.replace(cache_path)
     return force, values
 
 
@@ -500,6 +622,30 @@ def exported_symbols(path):
         if len(parts) == 4:
             values[parts[3]] = int(parts[1], 16)
     return values
+
+
+def vdata_symbols(vdata, cache_path):
+    """The reflection object's data symbols (symbols()) and every sized symbol it defines (exported_symbols()),
+    from one nm run, or none while it is unchanged: it is a 12 MB object with tens of thousands of symbols."""
+    status = vdata.stat()
+    stamp = [status.st_size, status.st_mtime_ns]
+    try:
+        cached = json.loads(cache_path.read_text())
+        if cached.get('stamp') == stamp:
+            return cached['data'], cached['exported']
+    except (OSError, ValueError, AttributeError, KeyError):
+        pass
+    data, exported = {}, {}
+    for line in subprocess.check_output(['nm', '-g', '-S', '--defined-only', str(vdata)], text=True).splitlines():
+        parts = line.split()
+        if len(parts) == 4:
+            exported[parts[3]] = int(parts[1], 16)
+            if parts[2] in ('B', 'D'):
+                data[parts[3]] = exported[parts[3]]
+    temporary = cache_path.with_suffix('.tmp')
+    temporary.write_text(json.dumps({'stamp': stamp, 'data': data, 'exported': exported}))
+    temporary.replace(cache_path)
+    return data, exported
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -945,6 +1091,41 @@ def windows_commit(args, baseline):
     return 0
 
 
+def linux_commit(args):
+    """Records what an activated generation exports and was built from, as the next reload's baseline."""
+    baseline = json.loads(args.baseline.read_text())
+    module = Path(json.loads(args.manifest.read_text().splitlines()[0].removeprefix('module ')))
+    built = json.loads(Path(str(args.manifest) + '.source.json').read_text())
+    baseline['exports'].update(exported_symbols(module))
+    baseline['schemas'] = built['schemas']
+    baseline['code'] = built['code']
+    baseline['normalized_code'] = built['normalized_code']
+    if 'mode structural' in args.manifest.read_text():
+        baseline['method_patch_eligible'] = False
+    args.baseline.write_text(json.dumps(baseline))
+    return 0
+
+
+def prepare_linux_workspace(project, name):
+    """The workspace reloads compile in: the game as a dynamic library, beside the engine and editor."""
+    workspace = reload_workspace(project, 'linux')
+    workspace.mkdir(parents=True, exist_ok=True)
+    source = workspace / 'src'
+    if not source.exists():
+        source.symlink_to(project / 'src', target_is_directory=True)
+    config = tomllib.loads((project / 'BeefSpace.toml').read_text())
+    entries = []
+    for key, entry in config['Projects'].items():
+        path = '.' if key == name else str((project / entry['Path']).resolve())
+        entries.append(f'{key} = {{Path = {json.dumps(path)}}}')
+    write_if_changed(workspace / 'BeefSpace.toml',
+                     'FileVersion = 1\nProjects = {' + ', '.join(entries) + '}\n[Workspace]\nStartupProject = ' + json.dumps(name) + '\n')
+    proj_text = (project / 'BeefProj.toml').read_text()
+    proj_text = proj_text.replace('[Configs.Debug.Linux64]', '[Configs.Debug.Linux64]\nBuildKind = "DynamicLib"', 1)
+    write_if_changed(workspace / 'BeefProj.toml', proj_text)
+    return workspace
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('project', type=Path)
@@ -968,6 +1149,8 @@ def main():
                 args.platform = 'windows'
     project = args.project.resolve()
     reload_started = time.perf_counter()
+    if args.commit and args.platform != 'windows':
+        return linux_commit(args)
     current = snapshot(project)
     snapshot_seconds = time.perf_counter() - reload_started
     if args.classify:
@@ -988,24 +1171,19 @@ def main():
         if args.manifest is None:
             parser.error('--manifest is required for builds')
         return windows_build(project, name, args, baseline, current, snapshot_seconds, reload_started)
-    if args.commit:
-        baseline = json.loads(args.baseline.read_text())
-        module = Path(json.loads(args.manifest.read_text().splitlines()[0].removeprefix('module ')))
-        built = json.loads(Path(str(args.manifest) + '.source.json').read_text())
-        baseline['exports'].update(exported_symbols(module))
-        baseline['schemas'] = built['schemas']
-        baseline['code'] = built['code']
-        baseline['normalized_code'] = built['normalized_code']
-        if 'mode structural' in args.manifest.read_text():
-            baseline['method_patch_eligible'] = False
-        args.baseline.write_text(json.dumps(baseline))
-        return 0
     if args.snapshot:
         args.baseline.parent.mkdir(parents=True, exist_ok=True)
         name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
         host = project / 'build' / 'Debug_Linux64' / name / name
         current['exports'] = exported_symbols(host)
         args.baseline.write_text(json.dumps(current))
+        # Starts the compile server now, so the first reload finds it loaded instead of starting it.
+        try:
+            if beef_compile_server is not None:
+                beef_compile_server.build(prepare_linux_workspace(project, name), ['-config=Debug', '-verbosity=minimal'],
+                                          wait=False, skip_archive=True)
+        except OSError as error:
+            print(f'Compile server not started: {error}', flush=True)
         return 0
     baseline = json.loads(args.baseline.read_text())
     if baseline['resident'] != current['resident']:
@@ -1016,34 +1194,25 @@ def main():
     name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
     strategy = reload_strategy(args.mode, baseline, current, 'linux')
     print(f'Reload strategy: {strategy}', flush=True)
-    workspace = reload_workspace(project, 'linux')
-    workspace.mkdir(parents=True, exist_ok=True)
-    source = workspace / 'src'
-    if not source.exists():
-        source.symlink_to(project / 'src', target_is_directory=True)
-    config = tomllib.loads((project / 'BeefSpace.toml').read_text())
-    entries = []
-    for key, entry in config['Projects'].items():
-        path = '.' if key == name else str((project / entry['Path']).resolve())
-        entries.append(f'{key} = {{Path = {json.dumps(path)}}}')
-    write_if_changed(workspace / 'BeefSpace.toml',
-                     'FileVersion = 1\nProjects = {' + ', '.join(entries) + '}\n[Workspace]\nStartupProject = ' + json.dumps(name) + '\n')
-    proj_text = (project / 'BeefProj.toml').read_text()
-    proj_text = proj_text.replace('[Configs.Debug.Linux64]', '[Configs.Debug.Linux64]\nBuildKind = "DynamicLib"', 1)
-    write_if_changed(workspace / 'BeefProj.toml', proj_text)
+    workspace = prepare_linux_workspace(project, name)
     outputs_before = build_output_state(workspace, name, 'linux')
     compile_started = time.perf_counter()
-    verbosity = 'diagnostic' if os.environ.get('TALLOW_RELOAD_TRACE_COMPILER') == '1' else 'minimal'
-    completed = subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}',
-                                '-config=Debug', f'-verbosity={verbosity}'])
+    trace = os.environ.get('TALLOW_RELOAD_TRACE_COMPILER') == '1'
+    build_args = ['-config=Debug', f'-verbosity={"diagnostic" if trace else "minimal"}']
+    # The compiler kept loaded between reloads recompiles only what changed (tools/beef_compile_server.py).
+    returncode = None if trace or beef_compile_server is None else beef_compile_server.build(workspace, build_args, skip_archive=True)
+    compiler = 'compile server'
+    if returncode is None:
+        compiler = 'BeefBuild'
+        returncode = subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}', *build_args]).returncode
     compile_seconds = time.perf_counter() - compile_started
     outputs_after = build_output_state(workspace, name, 'linux')
-    print(f'Reload timings: source scan {snapshot_seconds:.2f}s, BeefBuild {compile_seconds:.2f}s', flush=True)
+    print(f'Reload timings: source scan {snapshot_seconds:.2f}s, {compiler} {compile_seconds:.2f}s', flush=True)
     print(f'Reload compiler cache: {workspace}', flush=True)
     print('BeefBuild outputs: ' + build_activity_label(
         build_output_activity(outputs_before, outputs_after)), flush=True)
-    if completed.returncode:
-        return completed.returncode
+    if returncode:
+        return returncode
     # A save during compilation must never activate a stale or mixed revision.
     if current != snapshot(project):
         print('ERROR: Source declarations or resident code changed during compilation; build again.', flush=True)
@@ -1054,9 +1223,10 @@ def main():
     objects = [Path(p) for p in tokens if p.endswith('.o') and Path(p).name != 'vdata.o']
     game_objects = [p for p in objects if p.parent == root]
     vdata = root / 'vdata.o'
-    force, state = symbols(game_objects)
+    (workspace / 'aliased-objects').mkdir(exist_ok=True)
+    force, state = cached_symbols(game_objects, workspace / 'aliased-objects' / 'game-symbols.json')
     force.update(obj.stem for obj in game_objects)
-    _, metadata = symbols([vdata])
+    metadata, vdata_exports = vdata_symbols(vdata, workspace / 'aliased-objects' / 'vdata-symbols.json')
     classes = []
     class_symbols = [(symbol, size) for symbol, size in metadata.items()
                      if symbol.endswith('13sBfClassVDataE')]
@@ -1089,7 +1259,7 @@ def main():
                if symbol in resident and (symbol.endswith('11sBfTypeDataE')
                    or (symbol.endswith('13sBfClassVDataE') and symbol not in {s for s, _ in classes}))}
     # nm's data list excludes read-only metadata on some toolchains.
-    for symbol in exported_symbols(vdata):
+    for symbol in vdata_exports:
         if symbol in resident and symbol.endswith('11sBfTypeDataE'):
             renamed[symbol] = 'reload_private_' + symbol
     mapping = aliases / 'metadata-renames.txt'
@@ -1154,7 +1324,7 @@ def main():
     total_seconds = time.perf_counter() - reload_started
     print(f'Compiled script library: {module}. Engine implementations remain in the host.', flush=True)
     print(f'Reload total: {total_seconds:.2f}s '
-          f'(BeefBuild {compile_seconds:.2f}s, other stages {total_seconds - compile_seconds:.2f}s)', flush=True)
+          f'({compiler} {compile_seconds:.2f}s, other stages {total_seconds - compile_seconds:.2f}s)', flush=True)
     print(f'Reload stages: inspect objects {objects_scanned_seconds:.2f}s, '
           f'prepare objects {alias_seconds:.2f}s ({reused}/{len(objects)} reused), '
           f'link {link_seconds:.2f}s (archive {archive_seconds:.2f}s)', flush=True)
