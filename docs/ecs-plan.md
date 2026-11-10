@@ -553,7 +553,7 @@ before (from `main`) and after each of 6c to 6h: server CPU per tick and bytes p
 
 - **Half-converted engine.** Work on the `ecs` branch and keep `main` releasable. Merge only after Phase 5
   at the earliest, or Phase 6 if networked games are the priority.
-- **Script speed is a known regression and an explicit Phase 7 target.** Scripts currently remain per-object calls; the November 5 benchmark shows approximately 17–19% slower script-update time despite better whole-frame throughput. Phase 7 must profile and improve the ordinary `Script` path without forcing developers into Systems. Some workloads may still benefit greatly from optional explicit ECS systems; quantify that gap rather than hiding it.
+- **Script speed was a known regression and an explicit Phase 7 target; it is closed ("Phase 7 exit").** The November 5 benchmark showed approximately 17–19% slower script-update time; the cause was engine frame steps walking every object, and ordinary scripts are now 33–51% faster than before the ECS from 50,000 objects up. Phase 7 must profile and improve the ordinary `Script` path without forcing developers into Systems. Some workloads may still benefit greatly from optional explicit ECS systems; quantify that gap rather than hiding it.
 - **Adding or removing components often is slow** (entities move between tables). Use enabled flags or Flecs
   toggles for things that switch on and off often.
 - **Determinism is a hard constraint on optimization, not a presumed side effect of ECS.** Preserve fixed-tick input semantics, stable state-dependent ordering, reproducible RNG and physics settings, and canonical application of parallel results for server/predicted client/replay. Verify same-build repeatability with per-tick hashes and adversarial tests, then separately validate cross-platform lockstep (6h). Hashes, reconciliation and resync remain mandatory; reduced avoidable mismatches can reduce corrective rollbacks, but network latency and authoritative changes still require them.
@@ -1726,8 +1726,8 @@ nine profiles.
 
 ## Phase 7 progress
 
-- [~] **Phase 7 completion work (2026-11-06):** ongoing; the measurements and exit checks below must be
-  completed before this phase is marked done. The new compiler-backed editor requirement is included in this
+- [x] **Phase 7 completion work (2026-11-06, finished 2026-11-09; see "Phase 7 exit" below).** The measurements
+  and exit checks below were completed before this phase was marked done. The new compiler-backed editor requirement is included in this
   phase, with inline suggestions and console-only clickable diagnostics as requested.
   - Ordinary starter scripts now use the supplied simulation delta; the local digging tool uses
     `OnLocalUpdate`. New starter projects contain no `scope`, `delete` or queries in their scripts.
@@ -1746,7 +1746,7 @@ nine profiles.
     unsaved multi-file rename, stale-result rejection, console diagnostic navigation and cold helper setup
     have targeted tests. Persistent-worker latency and final distribution/editor checks are still underway.
 
-- [~] **7a: ordinary script dispatch and repeatable comparisons** (2026-11-06):
+- [x] **7a: ordinary script dispatch and repeatable comparisons** (2026-11-06, finished 2026-11-09):
   - `Scene.RunFrameUpdates` checked `IsActiveAndEnabled` twice for every Update-only script. Each check walks
     the object's parents. There is no user callback between these checks on that path, so it now checks once.
     Components with `OnLocalUpdate` still check again after it: the callback can disable the component or a
@@ -1835,10 +1835,48 @@ nine profiles.
     (mutating getters) and Water.SimulationTime/ViewTime (double). Checked by ECS copies of the GraphApi and
     CodeEditor suites (`~/TallowEcsTests/GraphApiEcs`, `CodeEditorEcs`): graphs compile to `Script` and
     networked graphs to `Update(TickInput)`, as intended.
-  - Remaining: profile transform access, reference refresh, dirty propagation and cache costs separately; compare
-    callback dispatch strategies before changing them; complete 7b/7c's fixed-input, lifecycle/hot-reload,
-    network-replay and mixed-workload acceptance matrix. This slice does not close the November 5 script
-    regression or Phase 7's exit criteria.
+  - Profiling the parts separately (the Mover builds above) showed Transform access through the entity, reference
+    refresh and dirty propagation cost no more than the old fields, so they and the callback dispatch were left as
+    they are; there was nothing there to win back.
+  - **Desync debugger false alarm (2026-11-09).** A correction just after joining made the client look into tick 1,
+    where it had nothing for the server's players yet, and it reported that as a desync ahead of the real one
+    (NetworkDesync had been failing since the unified-networking work). Objects not noted on this machine at that
+    tick are skipped now. The NetworkUnifiedCross test's scene getter captured the scene by value, so the Windows
+    client that rejoins crashed on the deleted scene; fixed in the test.
+
+- [x] **Phase 7 exit (2026-11-09).**
+  - Template scripts contain no `delete`, `scope` or queries (above).
+  - Ordinary scripts against the engine before the ECS (08125074), interleaved Release runs, Ryzen 9 7900X, three
+    per side, 600 frames (EcsBench `gameobject`: a Mover script and a MeshRenderer per cube); raw runs
+    `benchmarks/ecs-7-exit-20261109.jsonl`:
+
+    | Objects | Frame before → now (ms) | Change | Script Update before → now (ms) | Change | Memory |
+    |---|---|---|---|---|---|
+    | 1,000 | 0.240 → 0.246 | +2.5% | 0.019 → 0.025 | +6 us | 24 → 24 MB |
+    | 10,000 | 1.411 → 1.303 | −7.7% | 0.268 → 0.284 | +16 us (+6%) | 41 → 40 MB |
+    | 50,000 | 15.74 → 9.01 | −42.8% | 2.200 → 1.466 | −33.4% | 122 → 114 MB |
+    | 100,000 | 36.48 → 19.60 | −46.3% | 5.962 → 2.903 | −51.3% | 207 → 190 MB |
+
+    Below about 10,000 scripted objects Update costs a few microseconds a frame more than before: per object, the
+    loop also checks whether Update runs per tick (Network Identity) and passes the tick input. That is the
+    documented remainder; it is under 0.02 ms a frame at 10,000 objects.
+  - The same work as an explicit system (EcsBench `ecs`, one thread) takes 0.30 ms at 10,000 and 2.84 ms at
+    100,000: the same as ordinary scripts now (0.29 and 2.88). Spread over 16 threads (`ecs-mt`) it is 0.08 and
+    0.48 ms. The whole-frame gap (19.2 ms against 7.3 ms at 100,000) is per-object engine work for GameObjects
+    (transform propagation and render extraction), not scripts.
+  - Mixed workload (EcsBench `mixed`: prefabs with physics bodies, behaviour trees and Network Identities; this
+    branch only, the engine before the ECS has no such mode): 1,000 objects 0.27 ms a frame (p99 0.40), 10,000
+    objects 1.50 ms (p99 1.95), scripts 0.30 ms; spawn 27 ms and despawn 4.8 ms for 10,000.
+  - Determinism and networking: NetworkDesync, NetworkLockstep, NetworkRollback (Release), NetworkInputDelay,
+    NetworkForwarding, NetworkInterest, NetworkPriority, NetworkDeltas, NetworkTuning, NetworkNativePredict,
+    NetworkNativeEcs (39), HostMigration (12) and NetworkLiveEdit (20) pass; Linux and Windows (Wine) clients agree
+    in NetworkPredictQuery (script, query and replayed-query prediction) and NetworkUnifiedCross (late joiners and
+    a Windows client that leaves and rejoins). All 55 restored suites in `~/TallowEcsTests` match `main`'s results
+    (Network's lag-compensation check is the one changed for input forwarding).
+  - Editor: compiler-backed requests on the Gallery: the first completion 1.2 s (worker start), then 71 ms, 110 ms
+    after an unsaved edit, diagnostics 104 ms; `tools/test_beef_language_service.py` and
+    `tools/test_reload_scripts.py` pass. The packaged Gallery passes `validate_showcase.py --play` and opens in
+    the editor with no Vulkan validation errors.
 
 ## Benchmark results
 
