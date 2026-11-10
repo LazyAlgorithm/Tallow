@@ -29,7 +29,7 @@ def main():
     parser.add_argument('--config', choices=['Debug', 'Release'], default='Release')
     parser.add_argument('--frames', type=int, default=600)
     parser.add_argument('--counts', type=int, nargs='+', default=COUNTS)
-    parser.add_argument('--modes', nargs='+', choices=[*MODES, 'mixed'], default=MODES)
+    parser.add_argument('--modes', nargs='+', choices=[*MODES, 'mixed', 'ai'], default=MODES)
     parser.add_argument('--output', type=Path, help='Keep the JSON lines here as well.')
     parser.add_argument('--runs', type=int, default=1, help='Repeat each case; tables show medians of the runs.')
     parser.add_argument('--executable', type=Path, help='Use this player instead of the sample build.')

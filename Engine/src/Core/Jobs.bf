@@ -53,7 +53,12 @@ public static class Jobs
 #if !BF_PLATFORM_WASM
 		let cores = (int32)Platform.BfpSystem_GetNumLogicalCPUs(null);
 		// One core is the calling thread's; a few are left for the physics and audio threads.
-		let workers = Math.Clamp(cores - 2, 0, 15);
+		var workers = Math.Clamp(cores - 2, 0, 15);
+		// TALLOW_JOB_THREADS=N caps the threads sharing a batch (the calling one included): a server sharing its machine,
+		// or a test showing that results do not depend on the thread count.
+		let limit = scope String();
+		if (Environment.GetEnvironmentVariable("TALLOW_JOB_THREADS", limit) case .Ok && int32.Parse(limit) case .Ok(let threads) && threads >= 1)
+			workers = Math.Min(workers, threads - 1);
 		for (int i < workers)
 		{
 			let wake = new WaitEvent();

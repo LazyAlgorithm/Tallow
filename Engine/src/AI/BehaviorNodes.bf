@@ -354,16 +354,17 @@ static class BTSenses
 		return NameMatches(object.Name, pattern);
 	}
 
-	/// The first active object a pattern matches (`#Tag` or a name), or null.
+	/// The first active object a pattern matches (`#Tag` or a name), or null. An exact name finds the first object of
+	/// that name, active or not, as Scene.Find does. The matches come from the scene's AIPerception, gathered once a
+	/// frame, rather than a look through every object for each tree.
 	public static GameObject FindOne(Scene scene, StringView pattern)
 	{
-		if (pattern.StartsWith('#'))
-			return scene.FindWithTag(pattern.Substring(1));
-		if (!pattern.EndsWith('*'))
-			return scene.Find(pattern);
-		for (let object in scene.Objects)
+		let exact = !pattern.StartsWith('#') && !pattern.EndsWith('*');
+		for (let object in scene.AIPerception.Matching(pattern))
 		{
-			if (object.ActiveInHierarchy && NameMatches(object.Name, pattern))
+			if (exact)
+				return object;
+			if (!object.IsDestroyed && object.ActiveInHierarchy)
 				return object;
 		}
 		return null;
@@ -418,6 +419,18 @@ static class BTSenses
 		return HasLineOfSight(scene, looker, eye, target, head) || (sightPoints >= 3 && HasLineOfSight(scene, looker, eye, target, feet));
 	}
 
+	/// Stores what was found under key, and where it is under key + ".position" (positionKey keeps that text between
+	/// ticks, so a node does not build it each time).
+	public static void Remember(BTContext context, StringView key, GameObject found, String positionKey)
+	{
+		if (key.IsEmpty)
+			return;
+		if (positionKey.Length != key.Length + 9 || !positionKey.StartsWith(key) || !positionKey.EndsWith(".position"))
+			positionKey..Set(key).Append(".position");
+		context.blackboard.SetObject(key, found);
+		context.blackboard.SetVector(positionKey, found.Transform.Position);
+	}
+
 	/// Nearest object whose name matches and that passes the range, view-cone and line-of-sight tests.
 	/// fieldOfView is the full cone angle in degrees; 360 or more looks all around. needSight false skips the ray.
 	public static GameObject Find(BTContext context, StringView pattern, float range, float fieldOfView, float eyeHeight, bool needSight, int sightPoints = 1)
@@ -430,14 +443,19 @@ static class BTSenses
 		let minimumDot = fieldOfView >= 360 ? -2.0f : Math.Cos(Mathf.Clamp(fieldOfView, 0, 360) * 0.5f * Mathf.Deg2Rad);
 		GameObject best = null;
 		float bestDistance = range;
-		for (let candidate in context.Scene.Objects)
+		// Only what the pattern matches, near here: the scene's AIPerception gathers the matches once a frame (and puts
+		// a crowd of them in a grid), where each tree used to look through every object.
+		let candidates = scope List<GameObject>();
+		context.Scene.AIPerception.Near(pattern, context.Transform.Position, range, candidates);
+		for (let candidate in candidates)
 		{
-			if (candidate == self || !candidate.ActiveInHierarchy || !Matches(candidate, pattern) || IsPartOf(candidate, self))
+			if (candidate == self || candidate.IsDestroyed || !candidate.ActiveInHierarchy || !Matches(candidate, pattern) || IsPartOf(candidate, self))
 				continue;
 			let targetPoint = candidate.Transform.Position + Vector3(0, eyeHeight * 0.5f, 0);
 			var flat = candidate.Transform.Position - context.Transform.Position;
 			let distance = flat.Length;
-			if (distance > bestDistance)
+			// The candidates come in no set order: of two as near, the older object (lower id) is kept.
+			if (distance > bestDistance || (distance == bestDistance && best != null && candidate.Id > best.Id))
 				continue;
 			flat.y = 0;
 			if (flat.LengthSquared > 0.0001f && Vector3.Dot(flat.Normalized, forward) < minimumDot)
@@ -455,17 +473,14 @@ static class BTSenses
 /// anything solid. The object and where it was seen are remembered under Store As and Store As + ".position".
 class BTCanSee : BTNode
 {
+	String mPositionKey = new .() ~ delete _;
+
 	protected override BTStatus OnTick(BTContext context)
 	{
 		let found = BTSenses.Find(context, Text(0), Number(1), Number(2), Number(3), true, (int)Number(5));
 		if (found == null)
 			return .Failure;
-		let key = Text(4);
-		if (!key.IsEmpty)
-		{
-			context.blackboard.SetObject(key, found);
-			context.blackboard.SetVector(scope $"{key}.position" , found.Transform.Position);
-		}
+		BTSenses.Remember(context, Text(4), found, mPositionKey);
 		return .Success;
 	}
 }
@@ -473,17 +488,14 @@ class BTCanSee : BTNode
 /// Succeeds when an object with a matching name is within a distance, in any direction and through walls.
 class BTIsNear : BTNode
 {
+	String mPositionKey = new .() ~ delete _;
+
 	protected override BTStatus OnTick(BTContext context)
 	{
 		let found = BTSenses.Find(context, Text(0), Number(1), 360, 0, false);
 		if (found == null)
 			return .Failure;
-		let key = Text(2);
-		if (!key.IsEmpty)
-		{
-			context.blackboard.SetObject(key, found);
-			context.blackboard.SetVector(scope $"{key}.position" , found.Transform.Position);
-		}
+		BTSenses.Remember(context, Text(2), found, mPositionKey);
 		return .Success;
 	}
 }

@@ -1882,6 +1882,38 @@ nine profiles.
 
 See "Phase 1 results" above.
 
+### Navigation and behaviour trees as systems (2026-11-10)
+
+Navigation Agents and Behavior Tree Runners were Flecs data with a class runtime, but each agent still did its own
+work: every tree searched the whole scene for names and tags, every agent steered round the others one after
+another on the main thread, and both walked a component list rebuilt each frame. Now:
+
+- `Scene.BehaviorTrees` (BehaviorTreeSystem) and `Scene.NavigationAgents` (NavigationAgentSystem) take their runners
+  and agents from a cached Flecs query (HandleRoster), rebuilt only when entities change and kept in object order,
+  so ticking does not depend on which table Flecs keeps an entity in. Switching a runner or agent (or its object)
+  off stops it at once; one removed mid-step is skipped.
+- `Scene.AIPerception` gathers what a name or `#Tag` matches once a frame (again when objects are added, removed or
+  tagged) and puts large sets in a PointGrid, so Can See, Is Near and Move To Object look only near the agent.
+  Ties go to the older object, so the answer does not depend on grid order. Node number settings are parsed once.
+- Navigation copies agents and moving obstacles into packed arrays and a PointGrid each step, follows paths on the
+  main thread oldest first, then steers on the job threads in tiles wider than an agent looks round (2 x 2
+  checkerboard phases). Within a tile agents steer oldest first, each seeing the ones before, as before; results are
+  identical with 1, 4 and 16 threads (`TALLOW_JOB_THREADS`).
+- Trees still tick on the main thread: nodes, including a project's own, may touch any object. Surfaces, obstacles,
+  links and areas stay classes: a scene has few of them.
+
+EcsBench `ai` (every object a runner on Crowd.tbt plus an agent, a baked grid, a target every 25th, a moving
+obstacle every 100th; Release, 16 threads, median of three interleaved runs):
+
+| Agents | Before the ECS (08125074) | `ecs` before this (a7dda783) | Now |
+|---|---|---|---|
+| 1,000 | 8.32 ms (p99 9.60) | 14.97 ms (p99 19.02) | 1.61 ms (p99 1.99) |
+| 4,000 | 42.27 ms (p99 43.85) | 60.27 ms (p99 65.51) | 5.15 ms (p99 6.55) |
+
+At 4,000 the trees take 0.88 ms and navigation 4.1 ms (steering 3.3 ms of it); one thread, 20 ms. Crowd quality,
+measured on 12 crossing, circle and swap scenarios (920 agents), matches one-agent-at-a-time steering: 795 arrive
+against 790, overlap 3,695 against 3,440 (agent-metres summed over frames).
+
 ### Against the engine before the ECS (2026-11-05, after ParticleSystem)
 
 EcsBench `gameobject` mode (one GameObject per cube, a MeshRenderer and a Mover script each), Release, three

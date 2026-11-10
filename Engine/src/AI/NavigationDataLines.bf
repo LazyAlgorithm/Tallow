@@ -7,16 +7,28 @@ namespace Tallow;
 /// a path where it can.
 extension NavigationData
 {
+	/// Gets the data ready for LineClear calls from up to `threads` job threads at once (on the main thread).
+	public void PrepareLines(int threads)
+	{
+		CommitNavMesh();
+		Mesh?.PrepareWorkers(threads);
+	}
+
 	/// True when an agent can go straight from a to b: every cell the line crosses is usable and linked to the one
 	/// before it (so the agent's shape fits all the way), and, walking, the floor stays close to the line's height.
 	/// The point where the line stops is `reached`.
 	public bool LineClear(Vector3 a, Vector3 b, out Vector3 reached)
 	{
+		CommitNavMesh();
+		return LineClear(a, b, out reached, -1);
+	}
+
+	/// LineClear from a job thread (worker is Jobs.ThreadIndex), after the main thread has called PrepareLines: any
+	/// number of threads may test lines at once, as long as nothing changes the data meanwhile.
+	public bool LineClear(Vector3 a, Vector3 b, out Vector3 reached, int worker)
+	{
 		if (Mesh != null)
-		{
-			CommitNavMesh();
-			return Mesh.LineClear(a, b, out reached);
-		}
+			return Mesh.LineClear(a, b, out reached, worker);
 		using (sLineClearProfile.Sample())
 		{
 			if (!flying)

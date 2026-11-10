@@ -208,11 +208,12 @@ class NavigationMesh
 	public bool Usable(int32 polygon) => polygon >= 0 && tn_nav_valid_poly(mHandle, (uint32)polygon);
 
 	/// Whether an agent can walk straight from `from` to `to` over the floor; `reached` is where it stops.
-	public bool LineClear(Vector3 from, Vector3 to, out Vector3 reached)
+	/// worker: the job thread's index (after PrepareWorkers), or -1 on the main thread.
+	public bool LineClear(Vector3 from, Vector3 to, out Vector3 reached, int worker = -1)
 	{
 		var a = from, b = to;
 		var stop = from;
-		let clear = tn_nav_line(mHandle, mQuery, &a, &b, &stop);
+		let clear = tn_nav_line(mHandle, worker < 0 ? mQuery : mWorkerQueries[worker], &a, &b, &stop);
 		reached = stop;
 		return clear;
 	}

@@ -7,7 +7,9 @@ namespace EcsBench;
 
 /// Runs one benchmark and quits (docs/ecs-plan.md, Phase 1; tools/run_ecs_bench.py runs the whole set). Set by
 /// environment variables:
-///   TALLOW_BENCH_MODE   gameobject (Mover components), mixed (prefabs with physics/AI/network identities), ecs (one thread), ecs-mt (every Jobs thread), or check
+///   TALLOW_BENCH_MODE   gameobject (Mover components), mixed (prefabs with physics/AI/network identities), ai (a crowd
+///                       with a behaviour tree and navigation agent on every object, BenchAI.bf), ecs (one thread),
+///                       ecs-mt (every Jobs thread), or check
 ///                       (runs EcsChecks and exits with 1 if any fail)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
@@ -72,6 +74,8 @@ class Bench : Component
 			SpawnGameObjects();
 		else if (mMode == "mixed")
 			SpawnMixed();
+		else if (mMode == "ai")
+			SpawnAICrowd();
 		else
 			SpawnEntities();
 		mSpawnMs = (SDL.SDL_GetTicksNS() - start) / 1e6;
@@ -164,6 +168,8 @@ class Bench : Component
 		// ProfilerModules clears this only while recording; benchmark runs leave recording off.
 		RenderView.FrameDrawCalls = 0;
 		mUpdateStart = SDL.SDL_GetTicksNS();
+		if (mMode == "ai")
+			MoveAIObstacles(deltaTime);
 		if (mWorld != null)
 		{
 			let halfSize = mHalfSize;
@@ -200,6 +206,8 @@ class Bench : Component
 		line.AppendF("\"script_only_avg_ms\": {:F3}, \"script_only_p99_ms\": {:F3}, ", Average(mScriptTimes), Percentile(mScriptTimes, 0.99));
 		line.AppendF("\"ref_slow_per_frame\": {}, ", ComponentRefStats.SlowPath / Math.Max(mFrame, 1));
 		FinishCounters(line);
+		if (mMode == "ai")
+			FinishAI(line);
 		line.AppendF("\"spawn_ms\": {:F1}, \"memory_before\": {}, \"memory_after\": {}}}", mSpawnMs, mMemoryBefore, mMemoryAfter);
 		Console.WriteLine(line);
 		if (!mOutput.IsEmpty)

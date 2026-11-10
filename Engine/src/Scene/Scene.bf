@@ -255,6 +255,45 @@ class Scene
 		}
 	}
 
+	NavigationAgentSystem mNavigationAgents ~ delete _;
+	BehaviorTreeSystem mBehaviorTrees ~ delete _;
+	AIPerception mAIPerception ~ delete _;
+	/// Goes up when an object is added or removed or a tag changes (AIPerception gathers again).
+	int32 mObjectsRevision;
+
+	/// The scene's switched-on Navigation Agents, moved together each frame and tick (NavigationAgent.FrameAll).
+	public NavigationAgentSystem NavigationAgents
+	{
+		get
+		{
+			if (mNavigationAgents == null)
+				mNavigationAgents = new .(this);
+			return mNavigationAgents;
+		}
+	}
+
+	/// The scene's switched-on Behavior Tree Runners, ticked together each frame (BehaviorTreeRunner.FrameAll).
+	public BehaviorTreeSystem BehaviorTrees
+	{
+		get
+		{
+			if (mBehaviorTrees == null)
+				mBehaviorTrees = new .(this);
+			return mBehaviorTrees;
+		}
+	}
+
+	/// What behaviour trees look for, by name or tag, gathered once per frame or tick (BTSenses).
+	public AIPerception AIPerception
+	{
+		get
+		{
+			if (mAIPerception == null)
+				mAIPerception = new .(this);
+			return mAIPerception;
+		}
+	}
+
 	// Non-owning lists maintained by the components themselves in OnRegister / OnUnregister.
 	Query<MeshRendererData, ObjectLink> mRendererQuery ~ delete _;
 	List<RenderProxy> mRenderers = new .() ~ delete _;
@@ -499,8 +538,12 @@ class Scene
 		Physics.ApplyWorldState(gameObject);
 	}
 
+	/// The objects with a tag, in the order they were tagged (destroyed ones until the end of the frame), or null.
+	List<GameObject> TaggedList(StringView tag) => mTagged.TryGetValueAlt(tag, let list) ? list : null;
+
 	void IndexTag(GameObject gameObject, StringView tag, bool add)
 	{
+		mObjectsRevision++;
 		if (add)
 		{
 			List<GameObject> list;
@@ -619,6 +662,7 @@ class Scene
 		gameObject.[Friend]mEntity = entity;
 		gameObject.Transform.[Friend]Bind(World, entity);
 		mObjects.Add(gameObject);
+		mObjectsRevision++;
 		mById[useId] = gameObject;
 		mRoots.Add(gameObject);
 		if (parent != null)
@@ -1040,6 +1084,7 @@ class Scene
 		if (!swept)
 			mObjects.Remove(gameObject);
 		mById.Remove(gameObject.Id);
+		mObjectsRevision++;
 		if (!mDestroyQueue.IsEmpty)
 			mDestroyQueue.Remove(gameObject);
 		for (int i < gameObject.TagCount)
@@ -1252,6 +1297,7 @@ class Scene
 	static ProfilerMarker sAnimatorMarker = .("Animators", .Animation);
 	static ProfilerMarker sNavigationMarker = .("Navigation.Agents", .AI);
 	static ProfilerMarker sBehaviourMarker = .("Behaviour.Trees", .AI);
+	static ProfilerMarker sNavigationTickMarker = .("Navigation.Tick", .AI);
 	static ProfilerMarker sSkinMarker = .("Skinning", .Animation);
 	static ProfilerMarker sDestroyMarker = .("Destroy", .Scripts);
 
@@ -1359,7 +1405,11 @@ class Scene
 			);
 		World.AddStep(mTickPipeline, "Tick.FixedUpdate", .OnUpdate, new => RunFixedUpdates);
 		// Agents walking through a controller or body steer them after the scripts' FixedUpdate, before physics.
-		World.AddStep(mTickPipeline, "Tick.Navigation", .OnUpdate, new () => NavigationAgent.TickAll(this));
+		World.AddStep(mTickPipeline, "Tick.Navigation", .OnUpdate, new () =>
+			{
+				using (sNavigationTickMarker.Sample())
+					NavigationAgent.TickAll(this);
+			});
 		// A saved velocity loaded before its body existed is given to it (SavedTransform.FixedUpdate did).
 		World.AddStep(mTickPipeline, "Tick.SavedTransforms", .OnUpdate, new () => SavedTransform.TickAll(this));
 		World.AddStep(mTickPipeline, "Tick.Physics", .OnValidate, new () =>

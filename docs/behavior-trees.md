@@ -68,7 +68,7 @@ Tree files are read once and shared by every runner that uses them, so a crowd r
 | Target Within | Succeeds while a remembered object or position is within a distance. |
 | Heard Noise | Succeeds if a noise was made within earshot in the last **Within Seconds**. Remembers where under **Store As** and who made it under Store As + `.source`. Each noise is heard once, so a guard goes to look and then carries on. |
 
-Instead of a name, Can See, Is Near and Move To Object take `#Tag` for any object with that tag (`#Enemy`, `#Player`). Can See's **Sight Points** is 1 for one ray to the middle of the target, 2 to also try its head, 3 to try its head and feet: a target crouched behind low cover is still seen when its head shows.
+Instead of a name, Can See, Is Near and Move To Object take `#Tag` for any object with that tag (`#Enemy`, `#Player`). What a name or tag matches is gathered once a frame (and again when objects are added, removed or tagged), not looked for through the whole scene by every tree; when many objects match (a crowd looking for each other) they are also sorted into squares, so each looks only at those near it. Of two objects found at exactly the same distance, the older one is kept. Can See's **Sight Points** is 1 for one ray to the middle of the target, 2 to also try its head, 3 to try its head and feet: a target crouched behind low cover is still seen when its head shows.
 
 Noises are made by the game: `AINoise.Make(Scene, position, radius, source)` for a gunshot (`radius` 30), footsteps (3), a thrown bottle landing. A listener hears it if it is within `radius` times its **Hearing**. The source object does not hear its own noise. `AINoise.Forget()` drops them all, for a new level.
 
@@ -148,7 +148,7 @@ Trees think on the server (and in single-player games) only; clients see what th
 ## Limits
 
 - Can See still tests rays to points up the target, not its whole shape.
-- A tree is interpreted, not compiled (files are shared, but each runner has its own running nodes).
+- A tree is interpreted, not compiled (files are shared, but each runner has its own running nodes). Runners tick one after another on the main thread, oldest object first, because nodes (and a project's own) may touch any object; a node's number settings are read from their text once, not every tick.
 - There is no undo in the Behavior tab.
 - Hearing ignores walls: a noise is heard within its radius whatever is in between.
 

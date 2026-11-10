@@ -105,6 +105,46 @@ class BTNodeData
 	public Vector2 position;
 	/// One value per parameter of the definition, written the way the editor shows it.
 	public List<String> values = new .() ~ DeleteContainerAndItems!(_);
+
+	// Values read as numbers, with the text each was read from: a crowd running one tree reads each text once, not
+	// once per node per tick. A value changed since is read again.
+	List<float> mNumbers ~ delete _;
+	List<String> mNumberTexts ~ DeleteContainerAndItems!(_);
+
+	/// Value index as a number (0 if it is not one).
+	public float Number(int index)
+	{
+		if (index >= values.Count)
+			return 0;
+		if (mNumbers == null || mNumbers.Count != values.Count)
+		{
+			if (mNumbers == null)
+			{
+				mNumbers = new .();
+				mNumberTexts = new .();
+			}
+			ClearAndDeleteItems!(mNumberTexts);
+			mNumbers.Clear();
+			for (int i < values.Count)
+			{
+				mNumbers.Add(0);
+				mNumberTexts.Add(null);
+			}
+		}
+		let text = values[index];
+		var read = mNumberTexts[index];
+		if (read == null || read != text)
+		{
+			if (read == null)
+			{
+				read = new .();
+				mNumberTexts[index] = read;
+			}
+			read.Set(text);
+			mNumbers[index] = SceneSerializer.ParseFloat(text);
+		}
+		return mNumbers[index];
+	}
 }
 
 /// A link from a parent node to one of its children.
@@ -511,7 +551,7 @@ abstract class BTNode
 	public int32 lastTick = -1;
 
 	protected StringView Text(int index) => index < data.values.Count ? (StringView)data.values[index] : "";
-	protected float Number(int index) => SceneSerializer.ParseFloat(Text(index));
+	protected float Number(int index) => data.Number(index);
 	protected bool Flag(int index) => Text(index) == "true" || Text(index) == "1";
 	protected Vector3 Vector(int index)
 	{

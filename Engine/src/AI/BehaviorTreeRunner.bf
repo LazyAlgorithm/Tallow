@@ -103,7 +103,8 @@ struct BehaviorTreeRunnerData
 ///
 /// A handle (ComponentHandle): its settings are BehaviorTreeRunnerData's fields; the running tree, blackboard and
 /// events are its BehaviorTreeRunnerState (what nodes see as `context.runner`). Trees start and tick in the
-/// Frame.Behaviour step after the scripts' Update (before agents move), as Start and OnLocalUpdate did.
+/// Frame.Behaviour step after the scripts' Update (before agents move), as Start and OnLocalUpdate did: the scene's
+/// BehaviorTreeSystem (Scene.BehaviorTrees) takes the switched-on runners straight from Flecs, oldest object first.
 [Component, HandleFields]
 struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
 {
@@ -113,9 +114,7 @@ struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
 		get
 		{
 			CheckValid();
-			let state = ComponentState<BehaviorTreeRunnerState>.Make(mGameObject.Scene.World, mGameObject.Entity);
-			state.[Friend]mGameObject = mGameObject;
-			return state;
+			return StateOf(mGameObject);
 		}
 	}
 
@@ -138,31 +137,34 @@ struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
 	public bool TakeEvent(StringView name, float withinSeconds, bool consume) => Runtime.TakeEvent(name, withinSeconds, consume);
 	public void RaiseTreeEvent(StringView name) => Runtime.RaiseTreeEvent(name);
 
-	/// Starts runners that have not started, ticks every switched-on one on an active object, and aborts the
-	/// running nodes of one that has been switched off.
+	/// The state of the runner on an object that has one, made the first time it is asked for.
+	static BehaviorTreeRunnerState StateOf(GameObject gameObject)
+	{
+		let state = ComponentState<BehaviorTreeRunnerState>.Make(gameObject.Scene.World, gameObject.Entity);
+		if (state.[Friend]mGameObject != gameObject || state.[Friend]mWorld != gameObject.Scene.World)
+			state.[Friend]Bind(gameObject);
+		return state;
+	}
+
+	/// Starts runners that have not started and ticks every switched-on one on an active object (Scene.BehaviorTrees);
+	/// one whose object has been switched off aborts its running nodes (OnSwitched does that for one switched off
+	/// itself).
 	public static void FrameAll(Scene scene)
 	{
-		if (!scene.IsPlaying)
+		if (!scene.IsPlaying || scene.World.Count(DataIndex) == 0)
 			return;
-		for (let runner in scene.FindComponents<BehaviorTreeRunner>(.. scope .()))
+		scene.BehaviorTrees.Frame();
+	}
+
+	/// Switched off (or its object, or play stopped): its running nodes end, as OnDisable did.
+	static void OnSwitched(GameObject gameObject, bool on)
+	{
+		if (on)
+			return;
+		if (let state = ComponentState<BehaviorTreeRunnerState>.Get(gameObject.Scene.World, gameObject.Entity))
 		{
-			let state = runner.Runtime;
-			if (!runner.IsActiveAndEnabled)
-			{
-				if (state.[Friend]mWasActive)
-				{
-					state.[Friend]mWasActive = false;
-					state.OnDisable();
-				}
-				continue;
-			}
-			state.[Friend]mWasActive = true;
-			if (!state.[Friend]mStarted)
-			{
-				state.[Friend]mStarted = true;
-				state.Start();
-			}
-			state.Frame();
+			state.[Friend]mWasActive = false;
+			state.OnDisable();
 		}
 	}
 
@@ -184,6 +186,7 @@ struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
 			let owner = state.[Friend]mGameObject;
 			if (owner != null && !owner.IsGoing)
 				state.[Friend]Unload();
+			BehaviorTreeSystem.sReleased++;
 		}
 		ComponentState<BehaviorTreeRunnerState>.Release(world, entity);
 		HandleComponents.FreeLists(world, entity, typeof(BehaviorTreeRunner));
@@ -203,10 +206,26 @@ class BehaviorTreeRunnerState
 	/// A component on the runner's object (nodes find its mover and the like through it).
 	public T GetComponent<T>() where T : Component => mGameObject.GetComponent<T>();
 	public T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
+	// The settings, through a reference that follows the entity's data (a version compare, not a lookup, per read).
+	ComponentRef<BehaviorTreeRunnerData> mSettings;
+	World mWorld;
 	ref BehaviorTreeRunnerData Settings
 	{
 		[Inline]
-		get => ref *mGameObject.GetComponent<BehaviorTreeRunnerData>();
+		get
+		{
+			let world = mGameObject.Scene.World;
+			if (world != mWorld)
+				Bind(mGameObject);
+			return ref *mSettings.Get(world);
+		}
+	}
+
+	void Bind(GameObject gameObject)
+	{
+		mGameObject = gameObject;
+		mWorld = gameObject.Scene.World;
+		mSettings = .(mWorld, gameObject.Entity);
 	}
 
 	/// A tree file the runner uses (its own, or one run as a subtree), with its running nodes by id.

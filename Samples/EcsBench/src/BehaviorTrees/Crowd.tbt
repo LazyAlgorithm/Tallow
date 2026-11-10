@@ -1,0 +1,12 @@
+tree "Crowd"
+node 1 root 0 0
+node 2 reactive.selector 0 110
+node 3 sequence -190 250
+node 4 near -320 360 "#Target" "12" "target"
+node 5 nav.target -110 360 "target" "3" "0.8" "false"
+node 6 nav.wander 200 250 "5" "2"
+link 1 2
+link 2 3
+link 3 4
+link 3 5
+link 2 6

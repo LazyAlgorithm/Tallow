@@ -40,12 +40,14 @@ struct NavigationAgentData
 ///
 /// A handle (ComponentHandle): its settings are NavigationAgentData's fields, its path and steering its
 /// NavigationAgentState. Agents move on in the Frame.Navigation step after the scripts' Update and in the
-/// Tick.Navigation step after their FixedUpdate, as OnLocalUpdate and FixedUpdate did.
+/// Tick.Navigation step after their FixedUpdate, as OnLocalUpdate and FixedUpdate did, all of a scene's agents
+/// together (Scene.NavigationAgents, NavigationAgentSystem): they follow their paths oldest first, then steer round
+/// each other at once on the job threads.
 [Component, HandleFields]
 struct NavigationAgent : ComponentHandle<NavigationAgentData>
 {
-	/// Steering round others looks only at the agents near this one (Scene.NavigationCrowd); off, at every agent in the
-	/// scene, for comparing.
+	/// Steering round others looks only at the agents near this one (a grid of where they are, made each step); off, at
+	/// every agent in the scene, for comparing.
 	public static bool UseSpatialAvoidance = true;
 
 	/// Its path and steering, made (and listed in the scene's crowd) the first time it is asked for.
@@ -54,13 +56,7 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 		get
 		{
 			CheckValid();
-			let state = ComponentState<NavigationAgentState>.Make(mGameObject.Scene.World, mGameObject.Entity);
-			if (state.[Friend]mGameObject == null)
-			{
-				state.[Friend]mGameObject = mGameObject;
-				mGameObject.Scene.NavigationCrowd.Register(state);
-			}
-			return state;
+			return StateOf(mGameObject);
 		}
 	}
 
@@ -84,37 +80,46 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 	/// Scene.Update calls it after the components' Update (NavigationAgentState.FindQueuedPaths).
 	public static void FindQueuedPaths() => NavigationAgentState.FindQueuedPaths();
 
-	/// Moves every switched-on agent on an active object a frame on, and stops one that has been switched off.
+	/// The state of the agent on an object that has one, made (and listed in the scene's crowd) the first time.
+	static NavigationAgentState StateOf(GameObject gameObject)
+	{
+		let world = gameObject.Scene.World;
+		let state = ComponentState<NavigationAgentState>.Make(world, gameObject.Entity);
+		if (state.[Friend]mGameObject == null)
+		{
+			state.[Friend]Bind(gameObject);
+			gameObject.Scene.NavigationCrowd.Register(state);
+		}
+		return state;
+	}
+
+	/// Moves every switched-on agent on an active object a frame on, and stops one whose object has been switched off
+	/// (OnSwitched stops one switched off itself). In multiplayer only the server moves agents; a client's copies follow
+	/// what it sends.
 	public static void FrameAll(Scene scene)
 	{
-		if (!scene.IsPlaying)
+		if (!scene.IsPlaying || scene.World.Count(DataIndex) == 0 || NetworkSync.IsClientOf(scene))
 			return;
-		for (let agent in scene.FindComponents<NavigationAgent>(.. scope .()))
-		{
-			let state = agent.Runtime;
-			if (!agent.IsActiveAndEnabled)
-			{
-				if (state.[Friend]mWasActive)
-				{
-					state.[Friend]mWasActive = false;
-					state.StopMovement();
-				}
-				continue;
-			}
-			state.[Friend]mWasActive = true;
-			state.Frame();
-		}
+		scene.NavigationAgents.Frame();
 	}
 
 	/// Moves every switched-on agent on an active object a fixed tick on (through its controller or body).
 	public static void TickAll(Scene scene)
 	{
-		if (!scene.IsPlaying)
+		if (!scene.IsPlaying || scene.World.Count(DataIndex) == 0 || NetworkSync.IsClientOf(scene))
 			return;
-		for (let agent in scene.Components<NavigationAgent>(.. scope .()))
+		scene.NavigationAgents.Tick();
+	}
+
+	/// Switched off (or its object, or play stopped): it stops, as OnDisable did.
+	static void OnSwitched(GameObject gameObject, bool on)
+	{
+		if (on)
+			return;
+		if (let state = ComponentState<NavigationAgentState>.Get(gameObject.Scene.World, gameObject.Entity))
 		{
-			if (agent.GameObject.ActiveInHierarchy)
-				agent.Runtime.Tick();
+			state.[Friend]mWasActive = false;
+			state.StopMovement();
 		}
 	}
 
@@ -136,7 +141,10 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 	static void OnRemove(void* world, uint64 entity)
 	{
 		if (let state = ComponentState<NavigationAgentState>.Get((World)Internal.UnsafeCastToObject(world), Entity(entity)))
+		{
 			state.[Friend]Leave();
+			NavigationAgentSystem.sReleased++;
+		}
 		ComponentState<NavigationAgentState>.Release(world, entity);
 	}
 }
@@ -159,10 +167,26 @@ class NavigationAgentState
 	public bool IsActiveAndEnabled => mGameObject.ActiveInHierarchy && mGameObject.GetComponent<NavigationAgent>().enabled;
 	T GetComponent<T>() where T : struct, IComponentHandle => mGameObject.GetComponent<T>();
 	bool HasComponent<T>() where T : struct, IComponentHandle => mGameObject.HasComponent<T>();
+	// The settings, through a reference that follows the entity's data (a version compare, not a lookup, per read).
+	ComponentRef<NavigationAgentData> mSettings;
+	World mWorld;
 	ref NavigationAgentData Settings
 	{
 		[Inline]
-		get => ref *mGameObject.GetComponent<NavigationAgentData>();
+		get
+		{
+			let world = mGameObject.Scene.World;
+			if (world != mWorld)
+				Bind(mGameObject);
+			return ref *mSettings.Get(world);
+		}
+	}
+
+	void Bind(GameObject gameObject)
+	{
+		mGameObject = gameObject;
+		mWorld = gameObject.Scene.World;
+		mSettings = .(mWorld, gameObject.Entity);
 	}
 
 	/// The surface it finds paths on: its `surface` setting, or the one SetDestination found for it.
@@ -202,22 +226,9 @@ class NavigationAgentState
 			scene.[Friend]mNavigationCrowd?.Unregister(this);
 	}
 
-	static ProfilerMarker sAvoidProfile = .("Navigation.Avoid", .AI);
-	static ProfilerMarker sNeighborsProfile = .("Navigation.Avoid.Neighbors", .AI);
-	static ProfilerMarker sSteerProfile = .("Navigation.Avoid.Candidates", .AI);
-
-	/// The turns Avoid tries each side of the wanted direction, in degrees.
-	const int AvoidTurns = 11;
-	static float[AvoidTurns] sAvoidAngles = .(0, 15, -15, 30, -30, 50, -50, 75, -75, 105, -105);
-	static Quaternion[AvoidTurns] sAvoidRotations;
-
-	static this()
-	{
-		for (int i < AvoidTurns)
-			sAvoidRotations[i] = Quaternion.AngleAxis(sAvoidAngles[i], Vector3.Up);
-	}
-
 	bool mFoundSurface;
+	/// Its place in this step's NavigationAgentSystem members, or -1.
+	int32 mMember = -1;
 	/// Switched on and active last frame (switching off stops it, as OnDisable did).
 	bool mWasActive;
 
@@ -528,8 +539,12 @@ class NavigationAgentState
 		}
 	}
 
-	Vector3 Desired(float dt)
+	/// Moves on along the path (waypoints passed, a link reached, turning to face the way) and returns the velocity it
+	/// wants before steering round others; steer says whether it should steer (NavigationAgentSystem does that for
+	/// every agent at once).
+	Vector3 Prepare(float dt, out bool steer)
 	{
+		steer = false;
 		mVelocity = .Zero;
 		if (!mRequested || mFailed || mWaypoint >= mPath.Count || Surface?.Data == null || mLink != null) return .Zero;
 		let position = Feet;
@@ -571,132 +586,61 @@ class NavigationAgentState
 		}
 		if (delta.LengthSquared < 0.00000001f) return .Zero;
 		var wanted = delta.Normalized * Math.Min(mSpeed, delta.Length / Math.Max(dt, 0.001f));
-		if (avoidOthers)
-			wanted = Avoid(wanted, position);
 		mVelocity = wanted;
+		steer = avoidOthers && (wanted.x != 0 || wanted.y != 0 || wanted.z != 0);
 		return wanted;
 	}
 
-	/// Picks the velocity nearest the wanted one that does not run into another agent or a moving obstacle in the
-	/// next second or so, and that stays on the surface. Agents meeting each take half the turn (reciprocal velocity
-	/// obstacles), weighted by priority.
-	Vector3 Avoid(Vector3 wanted, Vector3 position)
+	/// The velocity steering round the others would pick for this agent wanting `wanted` at position, against where
+	/// they are now.
+	Vector3 Avoid(Vector3 wanted, Vector3 position) => Scene.NavigationAgents.SteerNow(this, wanted, position);
+
+	/// Moves on along the path and either moves now (not steering round others) or asks the system to steer first.
+	void Follow(NavigationAgentSystem system, NavigationAgentSystem.Drive drive, float dt)
 	{
-		using (sAvoidProfile.Sample())
+		let wanted = Prepare(dt, let steer);
+		if (steer)
+			system.Request(this, drive, Feet, wanted, mSpeed, Surface.Data);
+		else
 		{
-			let data = Surface.Data;
-			let horizon = 1.5f;
-			let lookAround = radius + mSpeed * horizon + 1;
-			// Who is near.
-			let others = scope List<(Vector3 position, Vector3 velocity, float radius, float share)>();
-			using (sNeighborsProfile.Sample())
+			ApplySteering(drive, wanted);
+			system.Moved(this, drive, wanted);
+		}
+	}
+
+	/// Goes at the velocity steering chose (or the one it wanted), the way its drive moves it.
+	void ApplySteering(NavigationAgentSystem.Drive drive, Vector3 velocity)
+	{
+		mVelocity = velocity;
+		switch (drive)
+		{
+		case .Transform:
+			Transform.Position += velocity * Time.DeltaTime;
+		case .Controller:
+			let controller = GetComponent<CharacterController>();
+			if (!controller.IsValid)
+				return;
+			if (Flying)
+				controller.Move(velocity, Time.FixedDeltaTime);
+			else
+				controller.SimpleMove(velocity, Time.FixedDeltaTime);
+		case .Body:
+			let body = GetComponent<Rigidbody>();
+			if (!body.IsValid || body.isKinematic || !body.HasBody)
+				return;
+			// Velocity is only written while following a path; an idle or arrived agent can be pushed, thrown or dropped.
+			if (!mRequested || mFailed || mWaypoint >= mPath.Count)
 			{
-				void AddAgent(NavigationAgentState other)
-				{
-					if (other == this || !other.IsActiveAndEnabled || other.Surface != Surface)
-						return;
-					let at = other.Feet;
-					if (Distance(at, position) > lookAround + other.radius)
-						return;
-					// Equal priority: each turns half. Against a more important agent this one does it all, against a less
-					// important one a quarter.
-					let share = other.avoidancePriority > avoidancePriority ? 0.25f : (other.avoidancePriority < avoidancePriority ? 1.0f : 0.5f);
-					others.Add((at, other.mVelocity, other.radius, share));
-				}
-				if (NavigationAgent.UseSpatialAvoidance)
-				{
-					for (let other in Scene.NavigationCrowd.Query(position, lookAround))
-						AddAgent(other);
-				}
-				else
-				{
-					for (let agent in Scene.Components<NavigationAgent>(.. scope .()))
-						AddAgent(agent.Runtime);
-				}
-				for (let component in Scene.ComponentsOfType(typeof(NavigationObstacle)))
-				{
-					let obstacle = (NavigationObstacle)component;
-					// A carved obstacle is in the grid already; a moving (or uncarved) one is steered round.
-					if (!obstacle.IsActiveAndEnabled || obstacle.Carving)
-						continue;
-					let at = obstacle.Transform.Position + obstacle.Transform.Rotation * obstacle.center;
-					if (Distance(at, position) > lookAround + obstacle.Radius)
-						continue;
-					others.Add((at, obstacle.Velocity, obstacle.Radius, 1.0f));
-				}
+				Halt();
+				return;
 			}
-			if (others.IsEmpty)
-				return wanted;
-			using (sSteerProfile.Sample())
-			{
-				let speed = wanted.Length;
-				// Time until this velocity first touches each of the others (a large number when never).
-				float TimeToHit(Vector3 velocity)
-				{
-					var soonest = float.MaxValue;
-					for (let other in others)
-					{
-						// Reciprocal: this agent makes its share of the change and counts on the other making the rest, so the
-						// velocity they would close at is its own plus what the other does.
-						var relative = mVelocity - other.velocity + (velocity - mVelocity) / other.share;
-						var offset = other.position - position;
-						if (!Flying)
-						{
-							relative.y = 0;
-							offset.y = 0;
-						}
-						let reach = radius + other.radius;
-						let distanceSquared = offset.LengthSquared;
-						if (distanceSquared < reach * reach)
-						{
-							// Already touching: any velocity that does not move apart counts as an immediate hit.
-							if (Vector3.Dot(relative, offset) > 0)
-								soonest = 0;
-							continue;
-						}
-						let a = relative.LengthSquared;
-						if (a < 0.000001f)
-							continue;
-						let b = Vector3.Dot(offset, relative);
-						let c = distanceSquared - reach * reach;
-						let discriminant = b * b - a * c;
-						if (b <= 0 || discriminant < 0)
-							continue;
-						let t = (b - Math.Sqrt(discriminant)) / a;
-						if (t >= 0 && t < soonest)
-							soonest = t;
-					}
-					return soonest;
-				}
-				// A collision-free wanted velocity has score zero, the global minimum of the existing objective.
-				// Returning it is equivalent to testing all remaining candidates and rejecting their nonnegative scores.
-				if (TimeToHit(wanted) >= horizon) return wanted;
-				var best = wanted;
-				var bestScore = float.MaxValue;
-				for (int s < 3)
-				{
-					let scale = s == 0 ? 1.0f : (s == 1 ? 0.6f : 0.3f);
-					for (int a < AvoidTurns)
-					{
-						// 0, then turning further each side.
-						let candidate = sAvoidRotations[a] * wanted * scale;
-						let hit = TimeToHit(candidate);
-						// Being near what is wanted, and not running into anything soon.
-						var score = (candidate - wanted).Length + (hit < horizon ? speed * 2 * (horizon - hit) / horizon + 0.5f : 0);
-						if (score >= bestScore)
-							continue;
-						// It must stay on the surface for the next moment.
-						if (a != 0 && !data.LineClear(position, position + candidate * 0.4f, ?))
-							continue;
-						best = candidate;
-						bestScore = score;
-					}
-				}
-				// Standing still is the last resort.
-				if (TimeToHit(.Zero) >= horizon && speed * 2.5f < bestScore)
-					best = .Zero;
-				return best;
-			}
+			mDriving = true;
+			var current = body.Velocity;
+			current.x = velocity.x;
+			current.z = velocity.z;
+			if (Flying)
+				current.y = velocity.y;
+			body.Velocity = current;
 		}
 	}
 
@@ -755,11 +699,25 @@ class NavigationAgentState
 		Transform.Position = position;
 	}
 
-	/// What OnLocalUpdate did: once a frame while playing (NavigationAgent.FrameAll).
+	/// Moves this agent a frame on, on its own (agents are moved together each frame while playing; this is for code
+	/// that drives one itself). It steers round the others as they are now.
 	public void Frame()
 	{
 		// In multiplayer the server moves agents; a client's copy follows what the server sends.
-		if (NetworkSync.IsClientOf(Scene)) return;
+		if (Scene == null || NetworkSync.IsClientOf(Scene)) return;
+		Scene.NavigationAgents.StepOne(this, false);
+	}
+
+	/// Moves this agent a fixed tick on (through its controller or body), on its own.
+	public void Tick()
+	{
+		if (Scene == null || NetworkSync.IsClientOf(Scene)) return;
+		Scene.NavigationAgents.StepOne(this, true);
+	}
+
+	/// What OnLocalUpdate did: once a frame while playing (NavigationAgentSystem.Frame).
+	void FrameStep(NavigationAgentSystem system)
+	{
 		mTimer -= Time.DeltaTime;
 		if (mRequested)
 		{
@@ -778,22 +736,23 @@ class NavigationAgentState
 			if (mDirty && mTimer <= 0)
 				Repath();
 		}
+		if (HasComponent<CharacterController>())
+			return;
 		let body = GetComponent<Rigidbody>();
-		if (!HasComponent<CharacterController>() && (!body.IsValid || body.isKinematic))
-		{
-			if (mLink != null)
-				CrossLink(Time.DeltaTime);
-			else
-				Transform.Position += Desired(Time.DeltaTime) * Time.DeltaTime;
-		}
+		if (body.IsValid && !body.isKinematic)
+			return;
+		if (mLink != null)
+			CrossLink(Time.DeltaTime);
+		else
+			Follow(system, .Transform, Time.DeltaTime);
 	}
 
-	/// What FixedUpdate did: once a tick while playing (NavigationAgent.TickAll).
-	public void Tick()
+	/// What FixedUpdate did: once a tick while playing (NavigationAgentSystem.Tick).
+	void TickStep(NavigationAgentSystem system)
 	{
-		if (NetworkSync.IsClientOf(Scene)) return;
 		let controller = GetComponent<CharacterController>();
-		let physical = controller.IsValid || GetComponent<Rigidbody>().HasBody && !GetComponent<Rigidbody>().isKinematic;
+		let body = GetComponent<Rigidbody>();
+		let physical = controller.IsValid || body.HasBody && !body.isKinematic;
 		if (mLink != null && physical)
 		{
 			CrossLink(Time.FixedDeltaTime);
@@ -802,29 +761,12 @@ class NavigationAgentState
 		if (controller.IsValid)
 		{
 			// A character controller walks the path itself: it climbs steps, stays on slopes and keeps falling when idle.
-			let wanted = Desired(Time.FixedDeltaTime);
-			if (Flying)
-				controller.Move(wanted, Time.FixedDeltaTime);
-			else
-				controller.SimpleMove(wanted, Time.FixedDeltaTime);
+			Follow(system, .Controller, Time.FixedDeltaTime);
 			return;
 		}
-		let body = GetComponent<Rigidbody>();
-		if (!body.IsValid || body.isKinematic || !body.HasBody) return;
-		let desired = Desired(Time.FixedDeltaTime);
-		// Velocity is only written while following a path; an idle or arrived agent can be pushed, thrown or dropped.
-		if (!mRequested || mFailed || mWaypoint >= mPath.Count)
-		{
-			Halt();
+		if (!body.IsValid || body.isKinematic || !body.HasBody)
 			return;
-		}
-		mDriving = true;
-		var velocity = body.Velocity;
-		velocity.x = desired.x;
-		velocity.z = desired.z;
-		if (Flying)
-			velocity.y = desired.y;
-		body.Velocity = velocity;
+		Follow(system, .Body, Time.FixedDeltaTime);
 	}
 
 	/// While selected: its path, with link legs dashed orange.

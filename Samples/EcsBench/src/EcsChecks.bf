@@ -166,6 +166,7 @@ static class EcsChecks
 		AnimatorChecks();
 		NavigationChecks();
 		BehaviourChecks();
+		AIChecks();
 		DialogueChecks();
 		SequenceChecks();
 		SpawnChecks();
