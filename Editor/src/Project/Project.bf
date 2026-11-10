@@ -326,7 +326,9 @@ class Project
 		File.WriteAllText(scope $"{Path}/BeefSpace.toml" , space).IgnoreError();
 
 		let native = scope $"{EngineRoot}/build/native";
-		let link = scope String("-Wl,--start-group ");
+		let link = scope String();
+		Toolchain.FastLinkerFlag(link);
+		link.Append("-Wl,--start-group ");
 		for (let archive in StringView[?]("libtallow_native.a", "bgfx/cmake/bgfx/libbgfx.a", "bgfx/cmake/bimg/libbimg.a", "bgfx/cmake/bimg/libbimg_decode.a", "bgfx/cmake/bx/libbx.a", "SDL/libSDL3.a", "joltc/libjoltc.a", "_deps/joltphysics-build/libJolt.a", "enet/libenet.a"))
 			link.AppendF("\\\"{}/{}\\\" ", native, archive);
 		link.AppendF("-Wl,--end-group -lstdc++ -lm -ldl -lpthread -lGL -lX11 {}", LinkFlags);

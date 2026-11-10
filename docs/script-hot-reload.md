@@ -50,7 +50,8 @@ The project `build/script-reload.log` includes timing information for source sca
 and the full native reload build. Linux also separates object inspection, ELF object preparation, and linking.
 The Linux reload worker caches ELF objects whose bytes and actually affected host definitions have
 not changed, avoiding repeated symbol rewriting on ordinary method saves.
-Linux now links gameplay objects and reflection metadata explicitly and puts existing engine/editor
+Linux now links gameplay objects and reflection metadata explicitly and, without mold or lld (see
+[Compile speed](#compile-speed-on-linux-install-mold-or-lld)), puts existing engine/editor
 dependency objects into a cached static archive. The linker extracts dependency implementations
 only when necessary. New script declarations can still cause BeefBuild to rewrite
 many engine/editor object outputs. To avoid spending extra time repacking
@@ -100,6 +101,28 @@ build configurations are changed. This diagnostic supports Linux and Windows.
 To see BeefBuild's own detailed rebuild activity, set `TALLOW_RELOAD_TRACE_COMPILER=1` in the
 environment **before launching Tallow**, then save a script and inspect `build/script-reload.log`.
 This enables compiler diagnostics rather than changing the build's optimization settings.
+
+## Compile speed on Linux: install mold or lld
+
+Every compile ends with a link, and GNU ld (Linux's default) is slow at it. When `ld.mold` or `ld.lld` is on
+PATH (`sudo dnf install mold`, or `lld`; `apt install mold`), the editor links games with it (the project's
+BeefProj.toml gets `-fuse-ld=mold` or `-fuse-ld=lld`), and script reloads link the library with it, reading
+the engine's objects as a lazy `--start-lib` group, so no dependency archive is made or kept. A project's own
+`link` setting comes after, so it can choose another linker.
+
+Measured on a 512-script project (TallowCompileBench, Ryzen 9 7900X, Debug):
+
+| | GNU ld | lld |
+|---|---|---|
+| Game build (error check, Full Rebuild): any edit | 3.7 s | 2.9 s |
+| Game build: a script added or removed | 5.1 s | 4.3 s |
+| Script reload: method body or field edit | 4.4 s | 3.7 s |
+| Script reload: a script added or removed | 8.5 s | 5.3 s |
+
+Most of what is left is BeefBuild itself: about 1.9 s of every compile is its frontend checking the whole
+engine, editor and game again (each BeefBuild starts with nothing loaded), however small the edit. Adding or
+removing a type also makes it regenerate most of the engine's object files (it does so in a workspace of a few
+classes too), which is the extra 1.4 s of those rows.
 
 ## Inspector attributes
 

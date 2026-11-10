@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compile a private game-code library against the running debug host (Linux or Windows)."""
 import argparse
+import bisect
 import hashlib
 import json
 import os
@@ -77,6 +78,31 @@ def cached_dependency_archive(objects, archive):
     return archive, False
 
 
+def object_args(path):
+    """The object files BeefBuild lists in ObjectArgs.txt. They are plain paths separated by spaces unless one
+    needed quoting; shlex handles that case, but takes most of a second on the thousands of paths of a game."""
+    text = path.read_text()
+    if '"' in text or "'" in text or '\\' in text:
+        return shlex.split(text)
+    return text.split()
+
+
+def fast_linker():
+    """mold or lld when installed: they link faster than GNU ld, and read --start-lib groups, so the resident
+    dependencies need no archive (whose index takes seconds to remake after a new script). None otherwise."""
+    for name in ('mold', 'lld'):
+        if shutil.which('ld.' + name):
+            return name
+    return None
+
+
+def response_file(path, args):
+    """Writes args as a response file (@path) for the compiler driver: the object list is too long to be safe
+    on a command line."""
+    path.write_text('\n'.join('"' + str(arg).replace('\\', '\\\\').replace('"', '\\"') + '"' for arg in args) + '\n')
+    return '@' + str(path)
+
+
 def beef_build_artifacts(workspace, name, platform):
     """Compiler outputs: distinguish game code from resident dependency code.
 
@@ -87,7 +113,7 @@ def beef_build_artifacts(workspace, name, platform):
     if platform == 'linux':
         args = root / 'ObjectArgs.txt'
         try:
-            paths = [Path(item) for item in shlex.split(args.read_text())
+            paths = [Path(item) for item in object_args(args)
                      if item.endswith('.o') and Path(item).name != 'vdata.o']
         except OSError:
             paths = []
@@ -311,12 +337,16 @@ def alias_host_globals(source, target, names):
     for section in sections:
         if section[1] != 4:  # SHT_RELA
             continue
-        ranges = [(a, b) for index, a, b in removed_functions if index == section[7]]
+        # Sorted by start (functions do not overlap), so each relocation is looked up instead of tested against
+        # every removed function: the editor's object has thousands of both.
+        ranges = sorted((a, b) for index, a, b in removed_functions if index == section[7])
         if not ranges:
             continue
+        starts = [a for a, _ in ranges]
         for offset in range(section[4], section[4] + section[5], section[9]):
             position = struct.unpack_from('<Q', data, offset)[0]
-            if any(a <= position < b for a, b in ranges):
+            found = bisect.bisect_right(starts, position) - 1
+            if found >= 0 and position < ranges[found][1]:
                 struct.pack_into('<Qq', data, offset + 8, 0, 0)
     target.write_bytes(data)
     return sorted(matched)
@@ -416,10 +446,18 @@ def alias_objects(objects, game_objects, aliases, resident, shared):
         is_game = obj in game_objects
         host_names = shared if is_game else resident
         scope_digest = shared_digest if is_game else resident_digest
-        data = obj.read_bytes()
-        object_digest = hashlib.sha256(data).hexdigest()
+        # BeefBuild rewrites an object it changes: the same size and time stamp are the same bytes. Reading and
+        # hashing thousands of unchanged objects took longer than the link.
+        status = obj.stat()
+        stamp = [status.st_size, status.st_mtime_ns]
+        data = None
+        if isinstance(last, dict) and last.get('stamp') == stamp and isinstance(last.get('object'), str):
+            object_digest = last['object']
+        else:
+            data = obj.read_bytes()
+            object_digest = hashlib.sha256(data).hexdigest()
         record = {'source': source, 'target': target.name,
-                  'object': object_digest, 'host': scope_digest}
+                  'object': object_digest, 'host': scope_digest, 'stamp': stamp}
         same_object = (isinstance(last, dict) and last.get('source') == source
                        and last.get('object') == object_digest and target.is_file())
         matching_symbols = None
@@ -428,6 +466,8 @@ def alias_objects(objects, game_objects, aliases, resident, shared):
         elif same_object and isinstance(last.get('matched'), list):
             # Newly exported symbols matter only if this specific object
             # defines them. Compare the precise affected-symbol set.
+            if data is None:
+                data = obj.read_bytes()
             candidate = affected_host_symbols(data, host_names)
             if candidate == last['matched']:
                 matching_symbols = candidate
@@ -1010,7 +1050,7 @@ def main():
         return 4
     object_stage_started = time.perf_counter()
     root = workspace / 'build' / 'Debug_Linux64' / name
-    tokens = shlex.split((root / 'ObjectArgs.txt').read_text())
+    tokens = object_args(root / 'ObjectArgs.txt')
     objects = [Path(p) for p in tokens if p.endswith('.o') and Path(p).name != 'vdata.o']
     game_objects = [p for p in objects if p.parent == root]
     vdata = root / 'vdata.o'
@@ -1059,14 +1099,19 @@ def main():
     subprocess.run(['objcopy', '--redefine-syms=' + str(mapping), str(vdata), str(metadata_object)], check=True)
     archive_started = time.perf_counter()
     archive_failed = False
-    try:
-        dependency_archive, archive_reused = cached_dependency_archive(
-            dependency_links, aliases / 'resident-dependencies.a')
-    except (OSError, subprocess.CalledProcessError) as error:
-        # A missing archiver or unsupported dependency object must not prevent
-        # Play. The original full-object linker remains an operational fallback.
-        print(f'WARNING: Dependency archive unavailable ({error}); using the full-object linker.', flush=True)
-        dependency_archive, archive_reused, archive_failed = None, False, True
+    linker = fast_linker()
+    if linker is not None:
+        # The dependencies as a lazy group: like an archive, only what the game code needs is linked.
+        dependency_archive, archive_reused = None, False
+    else:
+        try:
+            dependency_archive, archive_reused = cached_dependency_archive(
+                dependency_links, aliases / 'resident-dependencies.a')
+        except (OSError, subprocess.CalledProcessError) as error:
+            # A missing archiver or unsupported dependency object must not prevent
+            # Play. The original full-object linker remains an operational fallback.
+            print(f'WARNING: Dependency archive unavailable ({error}); using the full-object linker.', flush=True)
+            dependency_archive, archive_reused, archive_failed = None, False, True
     archive_seconds = time.perf_counter() - archive_started
     # Game implementations and complete type metadata are mandatory. Resident
     # dependencies are indexed, so ld extracts only genuinely missing code.
@@ -1076,6 +1121,10 @@ def main():
                  *map(str, game_links), str(metadata_object)]
     if dependency_archive is not None:
         fast_link.append(str(dependency_archive))
+    if linker is not None:
+        fast_link = ['c++', '-shared', f'-fuse-ld={linker}', '-Wl,-Bsymbolic', '-o', str(module),
+                     response_file(aliases / 'link-objects.rsp', [*game_links, metadata_object, '-Wl,--start-lib',
+                                                                 *dependency_links, '-Wl,--end-lib'])]
     fallback = False
     if archive_failed or os.environ.get('TALLOW_RELOAD_FLAT_LINK') == '1':
         fallback = True
@@ -1110,7 +1159,7 @@ def main():
           f'prepare objects {alias_seconds:.2f}s ({reused}/{len(objects)} reused), '
           f'link {link_seconds:.2f}s (archive {archive_seconds:.2f}s)', flush=True)
     print(f'Reload link inputs: game {len(game_links)}, dependencies {len(dependency_links)}, '
-          f'archive reused {archive_reused}, flat fallback {fallback}', flush=True)
+          f'linker {linker or "ld"}, archive reused {archive_reused}, flat fallback {fallback}', flush=True)
     print(f'Reload object cache: cold/missing {reuse_reasons["cold"]}, '
           f'object changed {reuse_reasons["changed"]}, '
           f'relevant host symbols changed {reuse_reasons["symbols"]}', flush=True)
