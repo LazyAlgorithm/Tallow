@@ -63,8 +63,10 @@ extension NetworkManager
 		public int AtTick(uint32 atTick)
 		{
 			for (int slot < DeltaRingSize)
+			{
 				if (length[slot] > 0 && tick[slot] == atTick)
 					return slot;
+			}
 			return -1;
 		}
 
@@ -74,8 +76,10 @@ extension NetworkManager
 		public bool IsStale(uint32 atTick)
 		{
 			for (int i < DeltaRingSize)
+			{
 				if (length[i] == 0 || (int32)(tick[i] - atTick) <= 0)
 					return false;
+			}
 			return true;
 		}
 
@@ -86,7 +90,11 @@ extension NetworkManager
 			int slot = -1;
 			for (int i < DeltaRingSize)
 			{
-				if (length[i] == 0) { slot = i; break; }
+				if (length[i] == 0)
+				{
+					slot = i;
+					break;
+				}
 				if (tick[i] == atTick) return;
 				if (slot < 0 || (int32)(tick[i] - tick[slot]) < 0)
 					slot = i;
@@ -137,8 +145,10 @@ extension NetworkManager
 				if (!rings.TryGetValue(netId, let ring))
 					continue;
 				for (int i < DeltaRingSize)
+				{
 					if (ring.length[i] > 0 && ring.packet[i] == number)
 						ring.acked[i] = true;
+				}
 			}
 		}
 	}
@@ -167,8 +177,10 @@ extension NetworkManager
 				client.deltas = new .();
 			}
 			for (int slot < DeltaPacketSlots)
+			{
 				if (client.deltas.packetObjects[slot] != null && !client.deltas.packetAcked[slot] && (int32)(upTo - client.deltas.packetTick[slot]) >= 0)
 					client.deltas.Acknowledge(client.deltas.packetNumber[slot]);
+			}
 		}
 	}
 
@@ -202,8 +214,10 @@ extension NetworkManager
 			return;
 		client.deltas.Acknowledge(newest);
 		for (int k < maskBytes * 8)
+		{
 			if ((bits & ((uint64)1 << k)) != 0)
 				client.deltas.Acknowledge((uint16)(newest - 1 - k));
+		}
 	}
 
 	/// Server: a delta packet's header (the ordinary one, then the packet's number).
@@ -305,8 +319,8 @@ extension NetworkManager
 			delete pair.value;
 		for (let client in mClients)
 		{
-			if (client.deltas != null && client.deltas.rings.GetAndRemove(netId) case .Ok(let pair))
-				delete pair.value;
+			if (client.deltas != null && client.deltas.rings.GetAndRemove(netId) case .Ok(let clientPair))
+				delete clientPair.value;
 		}
 	}
 

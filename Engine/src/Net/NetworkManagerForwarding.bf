@@ -37,8 +37,10 @@ extension NetworkManager
 		{
 			changedAt = mTick;
 			for (let other in mClients)
+			{
 				if (other.id == row.settings.ownerId)
 					changedAt = other.inputChangedAt;
+			}
 		}
 		let interval = (uint32)Math.Max(SnapshotInterval, 1);
 		if (mTick - changedAt <= interval * 3)
@@ -150,8 +152,10 @@ extension NetworkManager
 		if (mMode == .Host)
 			Add(0, mHostApplied, mHostAppliedNewest);
 		for (let client in mClients)
+		{
 			if (client != to)
 				Add(client.id, client.applied, client.appliedNewest);
+		}
 		// Lockstep: a client whose controls the server had to guess (they came late) is told what it ran with.
 		if (Lockstep && (int32)(to.ownInputsUntil - mTick) > 0)
 			Add(to.id, to.applied, to.appliedNewest);
@@ -171,7 +175,7 @@ extension NetworkManager
 	/// (the server tick and the tick of this machine's controls it had just used), as predicted bodies' are.
 	void ReadForwarded(ref NetReader reader)
 	{
-		let serverTick = reader.Read<uint32>();
+		reader.Read<uint32>(); // The server tick: not needed here.
 		let ackTick = reader.Read<uint32>();
 		let players = (int)reader.Read<uint8>();
 		if (!reader.Ok || !(InputForwarding || Lockstep) || ackTick == 0)
@@ -317,8 +321,10 @@ extension NetworkManager
 			SimulateIdentity(identity, input);
 		}
 		if (dropped != null)
+		{
 			for (let netId in dropped)
 				ForgetRemotePlayer(netId);
+		}
 	}
 
 	void ForgetRemotePlayer(uint32 netId)

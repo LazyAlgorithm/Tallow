@@ -97,8 +97,8 @@ extension NetworkManager
 	uint16 DesyncName(StringView name)
 	{
 		let key = scope String(name);
-		if (mDesyncNameIds.TryGetValue(key, let id))
-			return id;
+		if (mDesyncNameIds.TryGetValue(key, let known))
+			return known;
 		let id = (uint16)mDesyncNames.Count;
 		let kept = new String(name);
 		mDesyncNames.Add(kept);
@@ -424,7 +424,7 @@ extension NetworkManager
 			reader.ReadString(fieldName);
 			let kind = (FieldKind)reader.Read<uint8>();
 			let size = reader.Read<uint8>();
-			let value = reader.Read<uint8[16]>();
+			var value = reader.Read<uint8[16]>();
 			if (!reader.Ok)
 				break;
 			int found = -1;

@@ -102,9 +102,9 @@ class Ribbon
 		let renderer = holder.GetComponent<MeshRenderer>();
 		if (!renderer.Enabled)
 			renderer.Enabled = true;
-		if (renderer.material != look.material)
+		if (renderer.material.View != look.material)
 			renderer.material.Set(look.material);
-		if (renderer.texture != look.texture)
+		if (renderer.texture.View != look.texture)
 			renderer.texture.Set(look.texture);
 		renderer.unlit = look.unlit;
 		renderer.castShadows = look.castShadows;

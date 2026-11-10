@@ -179,7 +179,7 @@ extension EditorApp
 		let bevelled = model.Edit.faces.Count;
 		Undo();
 		let undone = GameObject.ComponentOn<ModelMesh>(mScene.FindById(block.Id));
-		Expect(undone.IsValid && undone.Edit.faces.Count == facesBefore && undone.DrawnMesh != null, scope $"undo takes the bevel off ({undone?.Edit.faces.Count} faces)");
+		Expect(undone.IsValid && undone.Edit.faces.Count == facesBefore && undone.DrawnMesh != null, scope $"undo takes the bevel off ({undone ? undone.Edit.faces.Count : 0} faces)");
 		Redo();
 		let redone = GameObject.ComponentOn<ModelMesh>(mScene.FindById(block.Id));
 		Expect(redone.IsValid && redone.Edit.faces.Count == bevelled, "redo puts it back");

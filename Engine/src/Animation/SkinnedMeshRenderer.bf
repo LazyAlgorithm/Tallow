@@ -572,7 +572,7 @@ class SkinnedRig
 		{
 			if (mModel != null && clipLibrary != mLoadedLibrary)
 				ImportLibraries();
-			if (mModel != null && !clip.IsEmpty && clip != CurrentClip)
+			if (mModel != null && !clip.IsEmpty && clip.View != CurrentClip)
 				Play(clip, 0.2f);
 			return;
 		}

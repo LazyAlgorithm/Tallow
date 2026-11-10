@@ -131,7 +131,7 @@ struct VoxelObject : ComponentHandle<VoxelObjectData>
 			return;
 		let state = gameObject.GetComponent<VoxelObject>().Runtime;
 		state.[Friend]mRegistered = true;
-		state.[Friend]Rebuild();
+		state.Rebuild();
 	}
 
 	static void OnRemove(void* world, uint64 entity)

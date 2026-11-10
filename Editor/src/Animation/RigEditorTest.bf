@@ -103,8 +103,8 @@ scope $"its bones are objects under it ({(skinned ? skinned.BoneCount : 0)} of {
 				// Hand Posing works on it: a fist curls the fingers.
 				let animator = target.GetComponent<Animator>();
 				Check(animator.IsValid, "it has an Animator");
-				let hand = skinned?.Bone("LeftHand");
-				let tipBone = skinned?.Bone("LeftHandIndex4");
+				let hand = skinned ? skinned.Bone("LeftHand") : null;
+				let tipBone = skinned ? skinned.Bone("LeftHandIndex4") : null;
 				if (animator.IsValid && hand != null && tipBone != null)
 				{
 					let tipBefore = tipBone.Position;

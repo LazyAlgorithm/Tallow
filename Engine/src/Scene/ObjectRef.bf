@@ -34,7 +34,8 @@ struct ObjectRef<T> : IObjectRef
 	public static implicit operator Self(T target)
 	{
 		// A handle starts with its object; a class reference is the object itself.
-		let held = *(Object*)(void*)&target;
+		var copy = target;
+		let held = *(Object*)(void*)&copy;
 		if (typeof(T).IsValueType)
 			return held != null ? .(((GameObject)held).Id) : .();
 		if (let component = held as Component)

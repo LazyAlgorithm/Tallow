@@ -357,12 +357,12 @@ extension ScriptReload
 			migration.Capture(scene, updates);
 			for (let gameObject in scene.Objects)
 			{
-				let text = new String();
-				SceneSerializer.SaveData(gameObject, text);
-				if (text.IsEmpty)
-					delete text;
+				let saved = new String();
+				SceneSerializer.SaveData(gameObject, saved);
+				if (saved.IsEmpty)
+					delete saved;
 				else
-					data.Add((gameObject, text));
+					data.Add((gameObject, saved));
 			}
 		}
 		#if BF_PLATFORM_LINUX
