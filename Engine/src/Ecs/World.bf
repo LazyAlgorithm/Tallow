@@ -324,6 +324,14 @@ sealed class World
 
 	/// How many entities have T.
 	public int Count<T>() where T : struct => Flecs.Count(mWorld, Id<T>());
+	/// How many entities have the component with this ComponentTypes index, switched on or off.
+	/// A type this world has not registered yet has none, and is not registered by asking.
+	public int Count(int32 index)
+	{
+		if (index >= mIds.Count || mIds[index] == 0)
+			return 0;
+		return Flecs.Count(mWorld, mIds[index]);
+	}
 
 	/// Cached query of scene GameObjects with custom ECS data T. This returns the same
 	/// Flecs query each time; do not delete it. Useful for high-volume visual graphs

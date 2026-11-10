@@ -315,6 +315,8 @@ class Scene
 	/// The first component of handle type T in the scene, switched on or not; not valid if there is none.
 	public T FindComponent<T>() where T : struct, IComponentHandle
 	{
+		if (World.Count(T.DataIndex) == 0)
+			return default;
 		for (let gameObject in mObjects)
 		{
 			if (gameObject.HasComponent<T>())
@@ -326,6 +328,10 @@ class Scene
 	/// Every component of handle type T in the scene, switched on or not.
 	public void AllComponents<T>(List<T> output) where T : struct, IComponentHandle
 	{
+		// Engine steps ask every frame for types most scenes have none of (dialogue, sequences, agents...): Flecs
+		// knows how many entities have the type, switched off or not, without a look at each object.
+		if (World.Count(T.DataIndex) == 0)
+			return;
 		for (let gameObject in mObjects)
 		{
 			if (gameObject.HasComponent<T>())
@@ -1296,6 +1302,8 @@ class Scene
 	void TickUpdatesOffline()
 	{
 		if (Network != null && Network.Mode != .Offline)
+			return;
+		if (World.Count(NetworkIdentity.DataIndex) == 0)
 			return;
 		// In the order the objects were made, as the identities were when they were classes.
 		for (int i = 0; i < mObjects.Count; i++)
