@@ -7,7 +7,7 @@ $input v_wpos
 #include "lighting.sh"
 
 SAMPLER2D(s_albedo, 0);
-SAMPLER2D(s_depth, 12);
+SAMPLER2D(s_depth, 2);
 
 uniform mat4 u_decalInverse;  // world to the unit box
 uniform vec4 u_decalColor;    // linear colour, a: opacity
