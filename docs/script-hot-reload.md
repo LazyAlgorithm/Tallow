@@ -124,7 +124,7 @@ engine, editor and game again (each BeefBuild starts with nothing loaded), howev
 removing a type also makes it regenerate most of the engine's object files (it does so in a workspace of a few
 classes too), which is the extra 1.4 s of those rows. Script reloads no longer pay either: see below.
 
-## Compile speed on Linux: the compile server
+## Compile speed: the compile server
 
 Script reloads compile with the Beef compiler kept loaded between builds, as the Beef IDE keeps it, instead of a
 new BeefBuild each time. `tools/BeefCompileServer/Serve.bf` is BeefBuild's own code (BuildApp) with a loop around
@@ -139,7 +139,7 @@ Beef is built from them, so nothing more is installed: it takes about 5 s, once 
   were added or removed, and keeps everything else it parsed and built.
 - It leaves out the archive BeefBuild makes of a dynamic library's 5,000 objects (78 MB, up to 2 s): reload links
   its own module from the objects.
-- When it cannot be used (another platform, a Beef install without its sources, still being built, it crashed),
+- When it cannot be used (a Beef install without its sources, still being built, it crashed),
   the reload runs BeefBuild as before and says which compiled it on the `Reload timings` line.
   `TALLOW_COMPILE_SERVER=0` turns it off; `TALLOW_RELOAD_TRACE_COMPILER=1` uses BeefBuild with full output.
 
@@ -159,6 +159,36 @@ The same project, whole reloads as the editor runs them (classify, build and com
 so that the warning is shown again, and recompiles it and everything depending on it on every build. Thirteen
 warnings made the server regenerate EditorApp, NetworkManager and others each time (about 1.5 s); a game's own
 warnings cost the same for its types.
+
+### On Windows
+
+Windows reloads use the same server (`.tallow-reload/workspace-win64/.compile-server`), run natively or, when
+building for Windows from Linux, under Wine. The difference is where its sources come from. A Windows install of
+Beef (Beef's own release, which the Tallow toolchain installs) has the compiler only as `IDEHelper64.dll`, without
+the IDE and BeefBuild sources the server is made of, and those must be the ones that DLL was built with. The
+first reload looks for them, builds the server in the background (a minute or two; reloads use BeefBuild until
+then) and puts it beside `BeefBuild.exe` as `BeefCompileServer-<id>.exe`, since it finds its configuration, linker
+and runtime beside itself. The sources are taken from, in order:
+
+1. the Beef source tree around `BeefBuild.exe`, when Beef was built from source;
+2. a `compile-server-src` folder beside the install's `bin` folder;
+3. a git clone of Beef named by `TALLOW_BEEF_SOURCE`;
+4. otherwise a partial clone of Beef fetched from GitHub once into the cache (`%LOCALAPPDATA%\tallow\beef-compile-server`;
+   about 30 MB, a few seconds; with the git Beef brings along when there is no other). `TALLOW_BEEF_FETCH=0` turns
+   this off.
+
+In a clone the right commit is the newest one on Beef's main line, from before the DLL was linked, whose `corlib`
+and `Beefy2D` sources are exactly the install's (both ship with it). The import library for the DLL, which the
+install does not have, is made from the DLL's exports with the install's own `lld-link /lib /def:`.
+`python tools/beef_compile_server.py --build-windows <Beef bin folder> [--wine]` builds it by hand.
+
+The compile step of a reload of the EcsBench sample (Debug, Windows, measured under Wine on Linux):
+
+| | BeefBuild | Compile server |
+|---|---|---|
+| No change | 3.1 s | 0.10 s |
+| Method body edit | 3.4 s | 0.55 s |
+| A script added | 4.5 s | 0.19 s |
 
 ## Inspector attributes
 

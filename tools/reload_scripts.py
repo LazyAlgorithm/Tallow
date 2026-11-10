@@ -885,8 +885,8 @@ def host_info(path):
     return values
 
 
-def windows_build(project, name, args, baseline, current, snapshot_seconds, reload_started):
-    info = host_info(args.host_info or args.baseline.with_suffix('.host'))
+def prepare_windows_workspace(project, name):
+    """The reload workspace for a Windows project: its sources and a configuration whose own link is quick."""
     workspace = reload_workspace(project, 'windows')
     workspace.mkdir(parents=True, exist_ok=True)
     source = workspace / 'src'
@@ -921,26 +921,66 @@ def windows_build(project, name, args, baseline, current, snapshot_seconds, relo
     if not replaced:
         proj_text += '\n' + quick
     write_if_changed(workspace / 'BeefProj.toml', proj_text)
+    return workspace
+
+
+def windows_beef():
+    """The Windows compiler, for tools/beef_compile_server.py."""
+    if cross():
+        return beef_compile_server.WindowsBeef(toolchain() / 'beef/bin', beef_command(Path('.'))[1])
+    beef = shutil.which(os.environ.get('BEEFBUILD', 'BeefBuild'))
+    return beef_compile_server.WindowsBeef(Path(beef).parent) if beef else None
+
+
+def start_windows_server(project, name):
+    """Starts the compile server for a Windows project, so the first reload finds it loaded."""
+    try:
+        beef = windows_beef() if beef_compile_server is not None else None
+        if beef is not None:
+            beef_compile_server.build_windows(beef, prepare_windows_workspace(project, name), WINDOWS_BUILD_ARGS, wait=False)
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f'Compile server not started: {error}', flush=True)
+
+
+WINDOWS_BUILD_ARGS = ['-config=Debug', '-platform=Win64', '-verbosity=minimal']
+
+
+def windows_build(project, name, args, baseline, current, snapshot_seconds, reload_started):
+    info = host_info(args.host_info or args.baseline.with_suffix('.host'))
+    workspace = prepare_windows_workspace(project, name)
+    source = workspace / 'src'
     command, environment = beef_command(workspace)
     log = workspace / 'compiler.log'
     outputs_before = build_output_state(workspace, name, 'windows')
     compile_started = time.perf_counter()
-    if os.environ.get('TALLOW_RELOAD_TRACE_COMPILER') == '1':
+    trace = os.environ.get('TALLOW_RELOAD_TRACE_COMPILER') == '1'
+    if trace:
         command = [arg if not arg.startswith('-verbosity=') else '-verbosity=diagnostic' for arg in command]
     with open(log, 'w') as output:
-        completed = subprocess.run(command, env=environment, stdout=output, stderr=subprocess.STDOUT)
+        # The compiler kept loaded between reloads recompiles only what changed (tools/beef_compile_server.py).
+        returncode = None
+        beef = None if trace or beef_compile_server is None else windows_beef()
+        if beef is not None:
+            try:
+                returncode = beef_compile_server.build_windows(beef, workspace, WINDOWS_BUILD_ARGS, output=output)
+            except (OSError, RuntimeError, ValueError) as error:
+                print(f'Compile server not used: {error}', file=output, flush=True)
+        compiler = 'compile server'
+        if returncode is None:
+            compiler = 'BeefBuild'
+            returncode = subprocess.run(command, env=environment, stdout=output, stderr=subprocess.STDOUT).returncode
     compile_seconds = time.perf_counter() - compile_started
     outputs_after = build_output_state(workspace, name, 'windows')
-    print(f'Reload timings: source scan {snapshot_seconds:.2f}s, BeefBuild {compile_seconds:.2f}s', flush=True)
+    print(f'Reload timings: source scan {snapshot_seconds:.2f}s, {compiler} {compile_seconds:.2f}s', flush=True)
     print(f'Reload compiler cache: {workspace}', flush=True)
     print('BeefBuild outputs: ' + build_activity_label(
         build_output_activity(outputs_before, outputs_after)), flush=True)
     text = log.read_text(errors='replace')
     # The throwaway link reports everything it could not find, which is everything; only the compiler's word counts.
     shown = [line for line in text.split('\n') if line.strip() and not re.match(r'^(lld-link: warning|>>>|MESA|pci id|\s)', line)]
-    if completed.returncode:
+    if returncode:
         print('\n'.join(shown).replace(str(source), str(project / 'src')).replace(windows_path(source), windows_path(project / 'src')), flush=True)
-        return completed.returncode
+        return returncode
     if current != snapshot(project):
         print('ERROR: Source declarations or resident code changed during compilation; build again.', flush=True)
         return 4
@@ -1163,6 +1203,7 @@ def main():
         if args.snapshot:
             args.baseline.parent.mkdir(parents=True, exist_ok=True)
             args.baseline.write_text(json.dumps(windows_snapshot(project, name, current)))
+            start_windows_server(project, name)
             return 0
         baseline = json.loads(args.baseline.read_text())
         if baseline['resident'] != current['resident']:

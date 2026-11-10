@@ -34,8 +34,25 @@ class CompileServerApp : BuildApp
 	String mRequest = new .("start") ~ delete _;
 
 #if BF_PLATFORM_WINDOWS
-	static bool ParentAlive(int32 pid) => true;
+	[CLink, CallingConvention(.Stdcall)] static extern Windows.IntBool MoveFileExW(char16* from, char16* to, uint32 flags);
+
+	static bool ParentAlive(int32 pid)
+	{
+		if (pid <= 0)
+			return true;
+		// SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION; a process that cannot be opened has gone.
+		let process = Windows.OpenProcess(0x00100000 | 0x1000, false, pid);
+		if (process.IsInvalid)
+			return false;
+		defer Windows.CloseHandle(process);
+		return Windows.WaitForSingleObject(process, 0) == 0x102; // WAIT_TIMEOUT: still running
+	}
+
+	/// File.Move does not replace an existing file on Windows. Fails while the file is open (being read).
+	static bool Replace(StringView from, StringView to) => MoveFileExW(from.ToScopedNativeWChar!(), to.ToScopedNativeWChar!(), 1); // REPLACE_EXISTING
 #else
+	static bool Replace(StringView from, StringView to) => File.Move(from, to) case .Ok;
+
 	[CLink] static extern int32 kill(int32 pid, int32 signal);
 	static bool ParentAlive(int32 pid) => pid <= 0 || kill(pid, 0) == 0;
 #endif
@@ -99,7 +116,11 @@ class CompileServerApp : BuildApp
 	{
 		let temporary = scope $"{mServeDir}/done.tmp";
 		if (File.WriteAllText(temporary, scope $"{mRequest} {(mFailed ? "failed" : "ok")} {mClock.Elapsed.TotalSeconds:F3}\n") case .Ok)
-			File.Move(temporary, scope $"{mServeDir}/done").IgnoreError();
+		{
+			// On Windows the client may be reading the last answer just then; it closes it within a millisecond.
+			for (int tries = 0; tries < 2000 && !Replace(temporary, scope $"{mServeDir}/done"); tries++)
+				Thread.Sleep(1);
+		}
 	}
 
 	/// Waits for the next request; false to exit.

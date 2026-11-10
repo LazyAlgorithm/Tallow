@@ -97,7 +97,8 @@ def main():
         for name in ('build_player.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'toolchain.txt', 'setup_dependencies.ps1'):
             shutil.copy2(root / 'tools' / name, stage / 'tools' / name)
         shutil.copy2(root / 'tools/beef_language_service.py', stage / 'tools/beef_language_service.py')
-        # Script reloads compile with the Beef compiler kept loaded (built from the user's Beef install on first use).
+        # Script reloads compile with the Beef compiler kept loaded (built on first use from the sources of the user's
+        # Beef install: its own on Linux, the matching commit's from GitHub on Windows).
         shutil.copy2(root / 'tools/beef_compile_server.py', stage / 'tools/beef_compile_server.py')
         (stage / 'tools/BeefCompileServer').mkdir()
         shutil.copy2(root / 'tools/BeefCompileServer/Serve.bf', stage / 'tools/BeefCompileServer/Serve.bf')
