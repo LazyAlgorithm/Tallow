@@ -48,6 +48,12 @@ static class ApiIndex
 		public List<String> members = new .() ~ DeleteContainerAndItems!(_);
 		public List<Member> signatures = new .() ~ DeleteContainerAndItems!(_);
 		public bool isEnum, isStruct, isNested, isStatic, isAbstract, fromProject, isDelegate;
+		/// Declared with type parameters (`ComponentState<T>`): it cannot be named without them.
+		public bool isGeneric;
+		/// A built-in component handle (`struct Light : ComponentHandle<LightData>`): its data struct's name. The
+		/// handle is a struct, but it reads and writes its object's component like a class reference.
+		public String handleData = new .() ~ delete _;
+		public bool IsHandle => !handleData.IsEmpty;
 
 		public bool Has(StringView member)
 		{
@@ -98,6 +104,7 @@ static class ApiIndex
 		Clear(sEngine);
 		if (!engineRoot.IsEmpty)
 			ScanFolder(scope $"{engineRoot}/Engine/src" , sEngine, true, "");
+		AddHandleFields(sEngine);
 		RefreshProject();
 	}
 
@@ -107,7 +114,35 @@ static class ApiIndex
 		Clear(sProject);
 		if (!sProjectPath.IsEmpty)
 			ScanFolder(scope $"{sProjectPath}/src" , sProject, false, "");
+		AddHandleFields(sProject);
 		Push();
+	}
+
+	/// `[HandleFields]` gives a handle a property for every public field of its data, at compile time, so the source
+	/// does not show them: they are added here from the data struct, as properties that can be set.
+	static void AddHandleFields(Dictionary<String, TypeEntry> types)
+	{
+		for (let entry in types.Values)
+		{
+			if (!entry.IsHandle)
+				continue;
+			let data = types.TryGetValueAlt(entry.handleData, let found) ? found : Find(entry.handleData);
+			if (data == null || data == entry)
+				continue;
+			for (let field in data.signatures)
+			{
+				if (field.kind != .Field || !field.isPublic || field.isStatic || entry.Has(field.name))
+					continue;
+				AddMember(entry, field.name);
+				let property = new Member();
+				property.name.Set(field.name);
+				property.kind = .Property;
+				property.isPublic = true;
+				property.canSet = true;
+				property.type.Set(field.type);
+				entry.signatures.Add(property);
+			}
+		}
 	}
 
 	static void Clear(Dictionary<String, TypeEntry> types)
@@ -133,6 +168,9 @@ static class ApiIndex
 		for (int depth < 10)
 		{
 			if (current == ancestor)
+				return true;
+			// Built-in components are handles now; they stand where class components did.
+			if (current == "ComponentHandle" && ancestor == "Component")
 				return true;
 			let entry = Find(current);
 			if (entry == null || entry.baseType.IsEmpty)
@@ -589,7 +627,8 @@ static class ApiIndex
 					ClearAndDeleteItems!(existing.members);
 					ClearAndDeleteItems!(existing.signatures);
 					existing.baseType.Clear();
-					existing.isEnum = existing.isStruct = existing.isStatic = existing.isAbstract = false;
+					existing.handleData.Clear();
+					existing.isEnum = existing.isStruct = existing.isStatic = existing.isAbstract = existing.isGeneric = false;
 					existing.isNested = false;
 					mPending = existing;
 				}
@@ -605,6 +644,13 @@ static class ApiIndex
 			if (pending.group.IsEmpty)
 				pending.group.Set(mGroup);
 			pending.isStruct |= words[keyword] == "struct";
+			let nameAt = code.IndexOf(declared);
+			if (nameAt >= 0)
+			{
+				var after = code.Substring(nameAt + declared.Length);
+				after.TrimStart();
+				pending.isGeneric |= after.StartsWith('<');
+			}
 			pending.fromProject = !mPublicOnly;
 			for (int i < keyword)
 			{
@@ -620,6 +666,8 @@ static class ApiIndex
 				Words(code.Substring(colon + 1), after);
 				if (after.Count > 0)
 					pending.baseType.Set(after[0]);
+				if (after.Count > 1 && after[0] == "ComponentHandle")
+					pending.handleData.Set(after[1]);
 			}
 			// "enum Kind { A, B = 2 }" on one line.
 			let open = code.IndexOf('{');

@@ -471,7 +471,7 @@ static class NodeLibrary
 	{
 		// "Nothing" still says what type it is, so that the right overload is picked and the code reads clearly.
 		let entry = ApiIndex.Find(type);
-		if (entry != null && entry.isStruct)
+		if (entry != null && entry.isStruct && !(entry.IsHandle && isTarget))
 			output..Clear().AppendF("default({})", type);
 		else if (type == "GameObject" && isTarget)
 			output.Set("GameObject");
@@ -539,14 +539,14 @@ static class NodeLibrary
 		types.Sort(scope (a, b) => a.name.CompareTo(b.name));
 		for (let type in types)
 		{
-			if (type.isEnum || type.isNested || type.isDelegate || type.name.IsEmpty || !type.name[0].IsUpper || type.name.StartsWith("BT") && type.name != "BTStatus")
+			if (type.isEnum || type.isNested || type.isDelegate || type.isGeneric || type.name.IsEmpty || !type.name[0].IsUpper || type.name.StartsWith("BT") && type.name != "BTStatus")
 				continue;
 			let maker = scope ApiNodeMaker(type);
 			if (!maker.CanTarget)
 				continue;
 			for (let member in type.signatures)
 			{
-				if (member.isMutating && type.isStruct)
+				if (member.isMutating && type.isStruct && !type.IsHandle)
 					continue;
 				if (!member.isPublic || member.isGeneric || member.unreadable || member.name == type.name || IsLifecycle(member.name) || member.name.StartsWith("tn_"))
 					continue;
@@ -628,7 +628,7 @@ static class NodeLibrary
 				get.code.AppendF("{}.{}", owner, member.name);
 				get.Out("", pin, mTypeName);
 			}
-			if (!member.canSet || mType.isStruct)
+			if (!member.canSet || (mType.isStruct && !mType.IsHandle))
 				return;
 			let set = Start(scope $"api:{mType.name}.{member.name}=" , scope $"Set {label}" , .Action, isStatic);
 			if (set == null)
@@ -672,7 +672,7 @@ static class NodeLibrary
 				usable++;
 			}
 			let isStatic = member.isStatic;
-			let pure = returns && !hasOut && (LooksPure(member.name) || mType.isStruct || mType.name == "Mathf" || mType.name == "Math");
+			let pure = returns && !hasOut && (LooksPure(member.name) || (mType.isStruct && !mType.IsHandle) || mType.name == "Mathf" || mType.name == "Math");
 			let def = Start(scope $"api:{mType.name}.{member.name}/{usable}" , Spaced(member.name, .. scope .()), pure ? .Value : .Action, isStatic);
 			if (def == null)
 				return;
@@ -754,13 +754,20 @@ static class NodeLibrary
 	static bool EcsPin(Type type, out PinType pin)
 	{
 		pin = .Float;
-		if (type == typeof(float)) pin = .Float;
-		else if (type == typeof(int32)) pin = .Int;
-		else if (type == typeof(bool)) pin = .Bool;
-		else if (type == typeof(Vector2)) pin = .Vector2;
-		else if (type == typeof(Vector3)) pin = .Vector3;
-		else if (type == typeof(Quaternion)) pin = .Quaternion;
-		else if (type == typeof(Color)) pin = .Color;
+		if (type == typeof(float))
+			pin = .Float;
+		else if (type == typeof(int32))
+			pin = .Int;
+		else if (type == typeof(bool))
+			pin = .Bool;
+		else if (type == typeof(Vector2))
+			pin = .Vector2;
+		else if (type == typeof(Vector3))
+			pin = .Vector3;
+		else if (type == typeof(Quaternion))
+			pin = .Quaternion;
+		else if (type == typeof(Color))
+			pin = .Color;
 		else return false;
 		return true;
 	}
@@ -776,18 +783,18 @@ static class NodeLibrary
 			let typeName = info.fullName;
 			let has = scope $"ecs:{typeName}.has";
 			if (Find(has) == null)
-				Add(has, "ECS", scope $"{info.name}: Has Component", .Value,
-					scope $"({{0}} != null && {{0}}.HasComponent<{typeName}>())")
+				Add(has, "ECS", scope $"{info.name}: Has Component" , .Value,
+scope $"({{0}} != null && {{0}}.HasComponent<{typeName}>())")
 					.In("Object", .Object, "GameObject", "GameObject").Out("Has", .Bool);
 			let add = scope $"ecs:{typeName}.add";
 			if (Find(add) == null)
-				Add(add, "ECS", scope $"{info.name}: Add Component", .Action,
-					scope $"if ({{0}} != null) {{0}}.AddComponent<{typeName}>();")
+				Add(add, "ECS", scope $"{info.name}: Add Component" , .Action,
+scope $"if ({{0}} != null) {{0}}.AddComponent<{typeName}>();")
 					.In("Object", .Object, "GameObject", "GameObject");
 			let remove = scope $"ecs:{typeName}.remove";
 			if (Find(remove) == null)
-				Add(remove, "ECS", scope $"{info.name}: Remove Component", .Action,
-					scope $"if ({{0}} != null) {{0}}.RemoveComponent<{typeName}>();")
+				Add(remove, "ECS", scope $"{info.name}: Remove Component" , .Action,
+scope $"if ({{0}} != null) {{0}}.RemoveComponent<{typeName}>();")
 					.In("Object", .Object, "GameObject", "GameObject");
 			// One visual graph can process a whole packed query without one script per object.
 			// Its Object output is useful for traditional API calls, and its field
@@ -795,7 +802,7 @@ static class NodeLibrary
 			let each = scope $"ecs:{typeName}.each";
 			if (Find(each) == null)
 			{
-				let loop = Add(each, "ECS", scope $"{info.name}: For Each", .EcsEach, typeName)
+				let loop = Add(each, "ECS", scope $"{info.name}: For Each" , .EcsEach, typeName)
 					.In("", .Flow).Out("Body", .Flow)
 					.Out("Object", .Object, "GameObject", "ecsObject$N");
 				for (let field in info.type.GetFields(.Public | .Instance))
@@ -814,13 +821,13 @@ static class NodeLibrary
 					continue; // Unsupported types should not generate graphs that cannot compile.
 				let get = scope $"ecs:{typeName}.{field.Name}.get";
 				if (Find(get) == null)
-					Add(get, "ECS", scope $"{info.name}: Get {field.Name}", .Value,
-						scope $"({{0}} != null && {{0}}.GetComponent<{typeName}>() != null ? {{0}}.GetComponent<{typeName}>().{field.Name} : default)")
+					Add(get, "ECS", scope $"{info.name}: Get {field.Name}" , .Value,
+scope $"({{0}} != null && {{0}}.GetComponent<{typeName}>() != null ? {{0}}.GetComponent<{typeName}>().{field.Name} : default)")
 						.In("Object", .Object, "GameObject", "GameObject").Out("Value", pin);
 				let set = scope $"ecs:{typeName}.{field.Name}.set";
 				if (Find(set) == null)
-					Add(set, "ECS", scope $"{info.name}: Set {field.Name}", .Action,
-						scope $"if ({{0}} != null && {{0}}.GetComponent<{typeName}>() != null) {{0}}.GetComponent<{typeName}>().{field.Name} = {{1}};")
+					Add(set, "ECS", scope $"{info.name}: Set {field.Name}" , .Action,
+scope $"if ({{0}} != null && {{0}}.GetComponent<{typeName}>() != null) {{0}}.GetComponent<{typeName}>().{field.Name} = {{1}};")
 						.In("Object", .Object, "GameObject", "GameObject").In("Value", pin);
 			}
 		}

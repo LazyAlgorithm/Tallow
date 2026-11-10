@@ -1790,6 +1790,51 @@ nine profiles.
     (`VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json`). Hardware-rendered editor validation
     remains open. The Gallery editor still segfaulted with software Vulkan, so use the blank project for
     manual startup testing; the Gallery is not a validated editor test target.
+  - **The November 5 script regression was engine steps, not scripts (2026-11-09).** EcsBench's GameObject
+    `update` time runs from the first script's Update to LateUpdate, so on this branch it also covers the frame
+    steps between them (Dialogue, Scene loaders, Joints, Sequences, Behaviour, Navigation, Animators). Five of those
+    called `Scene.FindComponents<T>`, which asked every object in the scene whether it had T, every frame, even
+    with no such component anywhere: 50,000 checks a frame at 10,000 objects. Builds of the Mover script that do
+    nothing, only move, and move and turn, compared against 08125074 (pre-ECS), showed it: with an empty Update the
+    branch took 0.305 ms against 0.046 ms at 10,000 objects, while moving and turning cost about the same on both.
+    `AllComponents`/`FindComponent` now ask Flecs how many entities have the type (switched on or off) and return
+    at once when none do; with some, the walk in creation order is unchanged. The offline network tick does the
+    same for Network Identities. Foliage, LOD groups, Viewmodels, Compute effects, Voxel objects, Model meshes and
+    Water use the same walk and gain too.
+
+    Interleaved Release runs, Ryzen 9 7900X, five per side, 600 frames, Update time of all Movers (median ms):
+
+    | Objects | Mover body | Pre-ECS 08125074 | Before this fix | Now |
+    |---|---|---|---|---|
+    | 10,000 | empty | 0.047 | 0.305 | 0.052 |
+    | 10,000 | move | 0.084 | 0.343 | 0.085 |
+    | 10,000 | move and turn | 0.273 | 0.529 | 0.287 |
+    | 100,000 | empty | 1.370 | 4.205 | 1.602 |
+    | 100,000 | move | 2.547 | 5.024 | 2.090 |
+    | 100,000 | move and turn | 3.620 | (not run) | 2.901 |
+
+    Ordinary scripts are now 20% faster than before the ECS at 100,000 objects and within 5% at 10,000 (about 15 us
+    a frame; the empty-loop difference is the per-object enabled and network checks). Transform reads and writes
+    through the entity cost no more than the old fields did, so component references, dirty propagation and the
+    dispatch path were left as they are.
+  - **Vulkan device loss (2026-11-09).** The packaged Gallery now passes `validate_showcase.py --play` on hardware
+    Vulkan, three further 1,500-frame runs and the Gallery in the editor. The validation layer showed the
+    November 6 errors (images used with no memory bound, framebuffers on freed memory) are gone, and one left: the
+    decal shader declared its depth texture on sampler 12, where `lighting.sh` keeps the 3D light probe grid, so
+    every decal sampled a 2D depth image through a 3D sampler (undefined on the GPU; on GLSL, names decide, so only
+    Vulkan and Metal were affected). Decal depth is on sampler 2 now and the layer reports no errors in the editor
+    or in Play. No other shader shares a sampler register.
+  - **Visual graph nodes for built-in components (2026-11-09).** The editor's source index (`ApiIndex`, which
+    visual graphs and the old completion are made from) did not see the properties `[HandleFields]` generates
+    at compile time, and did not count handles as components, so graphs had no nodes for `AudioSource.volume`,
+    `SpawnPoint.team`, `CharacterController.stepHeight` and the rest, and no Get From Object / Add To Object for
+    built-in components. The index now records each handle's data struct and gives the handle that struct's public
+    fields as settable properties; handles count as components and get setter nodes (other structs still do not).
+    Generic types get no nodes. 5,833 nodes are generated (was 5,018) and all of them compile on this branch
+    except 12 that were already broken: WebRtcTransport (web builds only), ProfilerMarker/ProfilerCounter.Id
+    (mutating getters) and Water.SimulationTime/ViewTime (double). Checked by ECS copies of the GraphApi and
+    CodeEditor suites (`~/TallowEcsTests/GraphApiEcs`, `CodeEditorEcs`): graphs compile to `Script` and
+    networked graphs to `Update(TickInput)`, as intended.
   - Remaining: profile transform access, reference refresh, dirty propagation and cache costs separately; compare
     callback dispatch strategies before changing them; complete 7b/7c's fixed-input, lifecycle/hot-reload,
     network-replay and mixed-workload acceptance matrix. This slice does not close the November 5 script
