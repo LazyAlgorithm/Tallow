@@ -438,6 +438,10 @@ extension NetworkManager
 			}
 			if (found >= 0)
 				matched.Add(found);
+			// An object this machine noted nothing for at that tick did not exist here yet (it joined, or the object
+			// was spawned, after that tick): there is nothing to compare, so it is not a split.
+			else if (!NotedHere(record, netId))
+				continue;
 			bool same = found >= 0 && mine[found].size == size && Internal.MemCmp(&mine[found].value, &value, size == 0xFF ? 8 : size) == 0;
 			if (same)
 				continue;
@@ -463,12 +467,32 @@ extension NetworkManager
 				}
 			}
 		}
+		if (report.netId == 0)
+		{
+			// Only objects that were not here yet differed: no split in what both machines ran.
+			Log.Warning(scope $"[Network] Desync debugger: tick {tick} in {system} differs only in objects this machine did not have yet.");
+			delete report;
+			return;
+		}
 		if (mByNetId.TryGetValue(report.netId, let identity))
 			report.objectName.Set(identity.GameObject.Name);
 		delete LastDesync;
 		LastDesync = report;
 		DesyncsFound++;
 		Log.Warning(scope $"[Network] Desync found: {report.Describe(.. scope .())}");
+	}
+
+	/// Whether any system noted the object at that tick here.
+	static bool NotedHere(DesyncTick record, uint32 netId)
+	{
+		if (record == null)
+			return false;
+		for (let entry in record.entries)
+		{
+			if (entry.netId == netId)
+				return true;
+		}
+		return false;
 	}
 
 	// ---- server: answering ----
