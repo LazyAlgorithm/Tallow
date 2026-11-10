@@ -42,8 +42,10 @@ extension EditorApp
 
 	void DrawHierarchy()
 	{
+		mHierarchyFocused = false;
 		if (ImGui.Begin("Hierarchy"))
 		{
+			mHierarchyFocused = ImGui.IsWindowFocused(ImGui.HoveredFlags.ChildWindows);
 			DrawPrefabBar();
 			if (ImGui.Button("+"))
 				ImGui.OpenPopup("CreateObject");

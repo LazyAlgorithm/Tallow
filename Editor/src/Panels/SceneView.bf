@@ -34,6 +34,7 @@ extension EditorApp
 		if (sceneDock != 0)
 			mAssetCenterDock = sceneDock;
 		mSceneHovered = false;
+		mSceneFocused = open && ImGui.IsWindowFocused(ImGui.HoveredFlags.ChildWindows);
 		if (open)
 		{
 			let size = ImGui.GetContentRegionAvail();

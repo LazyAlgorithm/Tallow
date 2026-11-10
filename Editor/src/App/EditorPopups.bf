@@ -101,7 +101,9 @@ extension EditorApp
 		}
 		if (ctrl && ImGui.IsKeyPressed(ImGui.Key.Y) && !RigUndo(true))
 			Redo();
-		if (ImGui.IsKeyPressed(ImGui.Key.Delete) && !modelling)
+		// Only where objects are picked: the Project panel's Delete is for its assets, and the Inspector's must not
+		// take away the object it shows.
+		if (ImGui.IsKeyPressed(ImGui.Key.Delete) && !modelling && (mHierarchyFocused || mSceneFocused))
 			DeleteSelected();
 		if (!mFlying)
 			HandleViewKeys(ctrl);

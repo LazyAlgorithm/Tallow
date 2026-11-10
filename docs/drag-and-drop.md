@@ -48,6 +48,8 @@ Other assets dropped on the Scene view do what they did before: a scene opens, a
 - the lock;
 - a prefab's preview while dragged, where it lands, and that it is one undo step;
 - that a drag which leaves the view leaves nothing behind.
+- that Delete belongs to the panel it is pressed in: the Project panel asks to delete its selected asset, the
+  Inspector deletes nothing, and the Hierarchy (or Scene view) deletes the selected object.
 
 It logs `DRAG-TEST PASS` or `FAIL` and closes the editor.
 

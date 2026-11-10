@@ -44,6 +44,10 @@ class EditorApp : Application
 	/// Escape was pressed while the mouse was locked: the lock stays off until the Game view is clicked again.
 	bool mLockHeldOff;
 	bool mSceneHovered;
+	/// The Hierarchy or the Scene view has the keyboard: Delete there deletes the selected object. Elsewhere it is
+	/// the panel's own (the Project panel's deletes the selected asset) or nothing.
+	bool mHierarchyFocused;
+	bool mSceneFocused;
 	bool mFlying;
 	bool mWantRebuild;
 	bool mWantBuildGame;

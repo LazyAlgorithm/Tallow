@@ -276,6 +276,12 @@ extension EditorApp
 		{
 			if (ImGui.IsKeyPressed(ImGui.Key.F2))
 				BeginRename(mSelectedAsset);
+			// The same question as Delete in the asset's menu.
+			if (ImGui.IsKeyPressed(ImGui.Key.Delete))
+			{
+				mDeletePath.Set(mSelectedAsset);
+				mOpenDelete = true;
+			}
 		}
 		return activate;
 	}
@@ -848,6 +854,7 @@ extension EditorApp
 			ImGui.SameLine();
 			if (ImGui.Button("Cancel", .(120, 0)))
 				ImGui.CloseCurrentPopup();
+			NoteTestRect("delete-asset-cancel");
 			ImGui.EndPopup();
 		}
 	}
