@@ -92,7 +92,7 @@ extension RenderView
 			bgfx.set_uniform(RenderResources.uDecalParams, &parameters, 1);
 			bgfx.set_texture(0, RenderResources.sAlbedo, Assets.GetTexture(item.texture), (uint32)Gfx.SamplerClamp);
 			bgfx.set_texture(1, RenderResources.sShadowMap, RenderResources.ShadowMap, uint32.MaxValue);
-			bgfx.set_texture(12, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
+			bgfx.set_texture(2, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
 			bgfx.set_vertex_buffer(0, mesh.VertexBuffer, 0, (uint32)mesh.VertexCount);
 			bgfx.set_index_buffer(mesh.IndexBuffer, 0, (uint32)mesh.IndexCount);
 			// The box's far side, where it is behind the scene: the camera may stand inside the box, and only the
