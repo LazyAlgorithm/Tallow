@@ -3,7 +3,8 @@
 #
 # When it runs:
 #   - a version tag is pushed (git tag v0.5 && git push origin v0.5): a release named after the tag;
-#   - a push to main or release: a pre-release named after the date and commit;
+#   - a push to main or release: a pre-release v0.1.N-beta; a push to ecs (the ECS engine): a pre-release v0.2.N-beta
+#     (tools/release_version.sh picks the series from the branch's history);
 #   - a push to dev: Windows/Linux packages and project-open checks, without publication;
 #   - by hand, from the Actions tab (Run workflow): the same, or the zips only as downloadable artifacts.
 #
@@ -16,7 +17,7 @@ name: Engine release
 on:
   push:
     tags: ['v*']
-    branches: [dev, main]
+    branches: [dev, main, ecs]
   workflow_dispatch:
     inputs:
       publish:
@@ -236,7 +237,7 @@ jobs:
 
   release:
     needs: [linux, windows]
-    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release' || startsWith(github.ref, 'refs/tags/'))) || inputs.publish
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ecs' || github.ref == 'refs/heads/release' || startsWith(github.ref, 'refs/tags/'))) || inputs.publish
     runs-on: ubuntu-22.04
     steps:
       - name: Get Tallow version history
