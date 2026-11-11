@@ -88,11 +88,21 @@ static class Toolchain
 		let separator = ':';
 		let suffix = "";
 #endif
+		let home = scope String();
+		Environment.GetEnvironmentVariable("HOME", home).IgnoreError();
 		for (let folder in path.Split(separator))
 		{
 			if (folder.IsEmpty)
 				continue;
 			let candidate = scope String(folder);
+#if !BF_PLATFORM_WINDOWS
+			// export PATH="~/beef/IDE/dist:$PATH" (with quotes) leaves a literal ~ in PATH. Bash expands it when it
+			// looks a command up, so BeefBuild works in a terminal; other programs must do the same to find it.
+			if (!home.IsEmpty && (candidate == "~" || candidate.StartsWith("~/")))
+				candidate.Replace(0, 1, home);
+			else if (!home.IsEmpty && (candidate == "$HOME" || candidate.StartsWith("$HOME/")))
+				candidate.Replace(0, 5, home);
+#endif
 			candidate.Append('/');
 			candidate.Append(program);
 			candidate.Append(suffix);
