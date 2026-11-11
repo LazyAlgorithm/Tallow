@@ -243,6 +243,19 @@ class Scene
 	bool mPlaying;
 	bool mClearing;
 	NavigationCrowdIndex mNavigationCrowd ~ delete _;
+	AISpatialIndex mAISpatial ~ delete _;
+
+	/// Reused by behavior-tree perception and navigation obstacle avoidance.
+	/// It builds spatial candidates once per scene update/tick, not per agent.
+	public AISpatialIndex AISpatial
+	{
+		get
+		{
+			if (mAISpatial == null)
+				mAISpatial = new .(this);
+			return mAISpatial;
+		}
+	}
 
 	/// Where the scene's Navigation Agents stand, for steering round each other (made when the first one joins).
 	public NavigationCrowdIndex NavigationCrowd

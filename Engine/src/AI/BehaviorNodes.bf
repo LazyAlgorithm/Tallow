@@ -430,14 +430,21 @@ static class BTSenses
 		let minimumDot = fieldOfView >= 360 ? -2.0f : Math.Cos(Mathf.Clamp(fieldOfView, 0, 360) * 0.5f * Mathf.Deg2Rad);
 		GameObject best = null;
 		float bestDistance = range;
-		for (let candidate in context.Scene.Objects)
+		// One scene spatial snapshot feeds all AI in this frame; the old code
+		// walked every scene object *for every guard* (O(guards * objects)).
+		// Range, name/tag, cone and raycast checks remain unchanged below.
+		let candidates = scope List<GameObject>();
+		context.Scene.AISpatial.QueryObjects(context.Transform.Position, range, candidates);
+		for (let candidate in candidates)
 		{
-			if (candidate == self || !candidate.ActiveInHierarchy || !Matches(candidate, pattern) || IsPartOf(candidate, self))
+			if (candidate == self || candidate.IsDestroyed || !candidate.ActiveInHierarchy || !Matches(candidate, pattern) || IsPartOf(candidate, self))
 				continue;
 			let targetPoint = candidate.Transform.Position + Vector3(0, eyeHeight * 0.5f, 0);
 			var flat = candidate.Transform.Position - context.Transform.Position;
 			let distance = flat.Length;
-			if (distance > bestDistance)
+			// Spatial buckets have no insertion order. A stable tie-break by
+			// scene ID makes equal-distance target selection reproducible.
+			if (distance > bestDistance || (distance == bestDistance && best != null && candidate.Id < best.Id))
 				continue;
 			flat.y = 0;
 			if (flat.LengthSquared > 0.0001f && Vector3.Dot(flat.Normalized, forward) < minimumDot)

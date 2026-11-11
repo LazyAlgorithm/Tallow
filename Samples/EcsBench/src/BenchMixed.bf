@@ -84,6 +84,18 @@ extension Bench
 
 	void FinishCounters(String line)
 	{
+		int64 aiTicks = 0;
+		if (mMode == "ai")
+		{
+			// Capture how many decisions actually ran, not just that the AI
+			// components existed. A broken scheduler must not benchmark as fast.
+			for (let gameObject in mSpawned)
+			{
+				let runner = gameObject.GetComponent<BehaviorTreeRunner>();
+				if (runner.IsValid)
+					aiTicks += runner.TickCount;
+			}
+		}
 		let allocations = AllocationCount();
 		let cpu = CpuMilliseconds();
 		let cpuPerFrame = cpu >= 0 ? (cpu - mCpuStart) / Math.Max(mFrameTimes.Count, 1) : -1;
@@ -107,5 +119,15 @@ extension Bench
 		else
 			line.Append("\"allocation_count\": null, ");
 		line.AppendF("\"physics_bodies\": {}, \"behavior_trees\": {}, \"network_identities\": {}, ", mBodies, mTrees, mNetworked);
+		line.AppendF("\"ai_agents\": {}, \"ai_targets\": {}, \"ai_tree_ticks\": {}, \"navigation_bake_ms\": {:F3}, ",
+			mAiAgents, mAiTargets, aiTicks, mNavBakeMs);
+		if (mMode == "ai")
+		{
+			let spatial = Scene.AISpatial;
+			line.AppendF("\"ai_broadphase_builds\": {}, \"ai_object_queries\": {}, \"ai_object_candidates\": {}, ",
+				spatial.Rebuilds, spatial.ObjectQueries, spatial.ObjectCandidates);
+			line.AppendF("\"ai_obstacle_queries\": {}, \"ai_obstacle_candidates\": {}, ",
+				spatial.ObstacleQueries, spatial.ObstacleCandidates);
+		}
 	}
 }

@@ -138,24 +138,26 @@ struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
 	public bool TakeEvent(StringView name, float withinSeconds, bool consume) => Runtime.TakeEvent(name, withinSeconds, consume);
 	public void RaiseTreeEvent(StringView name) => Runtime.RaiseTreeEvent(name);
 
-	/// Starts runners that have not started, ticks every switched-on one on an active object, and aborts the
-	/// running nodes of one that has been switched off.
+	/// Starts and updates active runners through the cached Flecs handle query.
+	/// Disabled handles do not appear in this query; OnSwitched aborts running
+	/// nodes immediately, without walking every GameObject to find disabled AI.
 	public static void FrameAll(Scene scene)
 	{
-		if (!scene.IsPlaying)
+		// Server-authoritative AI: remote clients should not even enumerate
+		// behavior runners/navigation agents or instantiate their runtime state.
+		// They display the replicated transform and gameplay state instead.
+		if (!scene.IsPlaying || NetworkSync.IsClientOf(scene))
 			return;
-		for (let runner in scene.FindComponents<BehaviorTreeRunner>(.. scope .()))
+		let runners = scope List<BehaviorTreeRunner>();
+		scene.Components<BehaviorTreeRunner>(runners);
+		// ECS tables have no defined iteration order. Preserve a stable per-object
+		// processing order for AI side effects and authoritative networking.
+		runners.Sort(scope (a, b) => a.GameObject.Id <=> b.GameObject.Id);
+		for (let runner in runners)
 		{
-			let state = runner.Runtime;
-			if (!runner.IsActiveAndEnabled)
-			{
-				if (state.[Friend]mWasActive)
-				{
-					state.[Friend]mWasActive = false;
-					state.OnDisable();
-				}
+			if (!runner.GameObject.ActiveInHierarchy)
 				continue;
-			}
+			let state = runner.Runtime;
 			state.[Friend]mWasActive = true;
 			if (!state.[Friend]mStarted)
 			{
@@ -163,6 +165,24 @@ struct BehaviorTreeRunner : ComponentHandle<BehaviorTreeRunnerData>
 				state.Start();
 			}
 			state.Frame();
+		}
+	}
+
+	/// Fired by the existing GameObject/handle lifecycle on disabling an AI
+	/// component or its hierarchy, and when play stops. Keep the old abort
+	/// semantics without a separate per-frame scan over inactive objects.
+	static void OnSwitched(GameObject gameObject, bool on)
+	{
+		if (on)
+			return;
+		let state = ComponentState<BehaviorTreeRunnerState>.Get(gameObject.Scene.World, gameObject.Entity);
+		if (state != null)
+		{
+			// A tree may have been ticked explicitly between enabling and the
+			// first scheduled frame. Always abort on disable; BTNode.Abort is
+			// idempotent for nodes that are not running.
+			state.[Friend]mWasActive = false;
+			state.OnDisable();
 		}
 	}
 

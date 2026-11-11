@@ -84,34 +84,62 @@ struct NavigationAgent : ComponentHandle<NavigationAgentData>
 	/// Scene.Update calls it after the components' Update (NavigationAgentState.FindQueuedPaths).
 	public static void FindQueuedPaths() => NavigationAgentState.FindQueuedPaths();
 
-	/// Moves every switched-on agent on an active object a frame on, and stops one that has been switched off.
+	/// Moves enabled agents through the cached Flecs handle query, without
+	/// scanning GameObjects that do not have an enabled NavigationAgent.
 	public static void FrameAll(Scene scene)
 	{
-		if (!scene.IsPlaying)
+		// Server-authoritative AI: remote clients should not even enumerate
+		// behavior runners/navigation agents or instantiate their runtime state.
+		// They display the replicated transform and gameplay state instead.
+		if (!scene.IsPlaying || NetworkSync.IsClientOf(scene))
 			return;
-		for (let agent in scene.FindComponents<NavigationAgent>(.. scope .()))
+		let agents = scope List<NavigationAgent>();
+		scene.Components<NavigationAgent>(agents);
+		// Flecs iteration order varies by archetype. Keep authoritative movement
+		// updates in stable object order, even after components are added.
+		agents.Sort(scope (a, b) => a.GameObject.Id <=> b.GameObject.Id);
+		for (let agent in agents)
 		{
-			let state = agent.Runtime;
-			if (!agent.IsActiveAndEnabled)
-			{
-				if (state.[Friend]mWasActive)
-				{
-					state.[Friend]mWasActive = false;
-					state.StopMovement();
-				}
+			if (!agent.GameObject.ActiveInHierarchy)
 				continue;
-			}
+			let state = agent.Runtime;
 			state.[Friend]mWasActive = true;
 			state.Frame();
+		}
+	}
+
+	/// Called by the existing handle lifecycle for disable, hierarchy changes
+	/// and play stop. Halt steering and clear the path as OnDisable did, without
+	/// an O(scene objects) scan on every navigation frame.
+	static void OnSwitched(GameObject gameObject, bool on)
+	{
+		if (on)
+			return;
+		let state = ComponentState<NavigationAgentState>.Get(gameObject.Scene.World, gameObject.Entity);
+		if (state != null)
+		{
+			// A destination may be requested immediately after enabling, before
+			// FrameAll sets mWasActive again. Disabling must still cancel it.
+			// StopMovement is safe even if the agent was already stopped.
+			state.[Friend]mWasActive = false;
+			state.StopMovement();
 		}
 	}
 
 	/// Moves every switched-on agent on an active object a fixed tick on (through its controller or body).
 	public static void TickAll(Scene scene)
 	{
-		if (!scene.IsPlaying)
+		// Server-authoritative AI: remote clients should not even enumerate
+		// behavior runners/navigation agents or instantiate their runtime state.
+		// They display the replicated transform and gameplay state instead.
+		if (!scene.IsPlaying || NetworkSync.IsClientOf(scene))
 			return;
-		for (let agent in scene.Components<NavigationAgent>(.. scope .()))
+		let agents = scope List<NavigationAgent>();
+		scene.Components<NavigationAgent>(agents);
+		// Flecs iteration order varies by archetype. Keep authoritative movement
+		// updates in stable object order, even after components are added.
+		agents.Sort(scope (a, b) => a.GameObject.Id <=> b.GameObject.Id);
+		for (let agent in agents)
 		{
 			if (agent.GameObject.ActiveInHierarchy)
 				agent.Runtime.Tick();
@@ -613,10 +641,15 @@ class NavigationAgentState
 					for (let agent in Scene.Components<NavigationAgent>(.. scope .()))
 						AddAgent(agent.Runtime);
 				}
-				for (let component in Scene.ComponentsOfType(typeof(NavigationObstacle)))
+				// The shared spatial index is refreshed once per scene update.
+				// Include the largest obstacle radius in its broadphase query so
+				// large boxes whose centres are farther away are not missed.
+				let nearbyObstacles = scope List<NavigationObstacle>();
+				Scene.AISpatial.QueryObstacles(position, lookAround, nearbyObstacles);
+				for (let obstacle in nearbyObstacles)
 				{
-					let obstacle = (NavigationObstacle)component;
-					// A carved obstacle is in the grid already; a moving (or uncarved) one is steered round.
+					// A carved obstacle is in the navmesh/grid already; a moving or
+					// uncarved one is handled by local steering instead.
 					if (!obstacle.IsActiveAndEnabled || obstacle.Carving)
 						continue;
 					let at = obstacle.Transform.Position + obstacle.Transform.Rotation * obstacle.center;
