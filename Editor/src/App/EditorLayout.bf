@@ -71,6 +71,7 @@ extension EditorApp
 		DrawModelWindow();
 		DrawQualityWindow();
 		DrawProfilerWindow();
+		DrawPackageWindows();
 		DrawNetworkWindow();
 		DrawWorldMapWindow();
 		DrawPreferencesWindow();
@@ -263,6 +264,18 @@ extension EditorApp
 			if (ImGui.MenuItem("Build..."))
 				OpenBuildWindow();
 			ImGui.Separator();
+			if (ImGui.MenuItem("Import Package..."))
+			{
+				OpenPackageManager();
+				mPackageTab = 1;
+			}
+			if (ImGui.MenuItem("Export Package..."))
+			{
+				let picked = scope List<StringView>();
+				picked.Add(mSelectedAsset.IsEmpty ? (StringView)mBrowsePath : (StringView)mSelectedAsset);
+				OpenExportPackage(picked);
+			}
+			ImGui.Separator();
 			if (ImGui.MenuItem("Open Project Folder"))
 			{
 				Terminal.Open(Project.Current.Path);
@@ -341,6 +354,13 @@ extension EditorApp
 				mShowQuality = !mShowQuality;
 			if (ImGui.MenuItem("Profiler", null, mShowProfiler))
 				mShowProfiler = !mShowProfiler;
+			if (ImGui.MenuItem("Package Manager", null, mShowPackageManager))
+			{
+				if (mShowPackageManager)
+					mShowPackageManager = false;
+				else
+					OpenPackageManager();
+			}
 			if (ImGui.MenuItem("Network", null, mShowNetwork))
 				mShowNetwork = !mShowNetwork;
 			if (ImGui.MenuItem("World Map", null, mShowWorldMap))

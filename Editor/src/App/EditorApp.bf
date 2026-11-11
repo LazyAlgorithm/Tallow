@@ -276,6 +276,27 @@ class EditorApp : Application
 			RunModelImportTest();
 		if (HasArg("--asset-ids-test"))
 			RunAssetIdsTest();
+		if (HasArg("--packages-test"))
+			RunPackagesTest();
+		// Asset packages (docs/packages.md): --package-manager [files|catalogs], --export-package <asset or folder>,
+		// --import-package <file.tpackage> [--import-into <folder>] opens those windows.
+		let packageArg = scope String();
+		if (GetArg("--package-manager", packageArg) || HasArg("--package-manager"))
+		{
+			OpenPackageManager();
+			mPackageTab = packageArg == "files" ? 1 : (packageArg == "catalogs" ? 2 : 0);
+		}
+		if (AssetArg("--export-package", full..Clear()))
+		{
+			let picked = scope List<StringView>();
+			picked.Add(full);
+			OpenExportPackage(picked);
+		}
+		if (GetArg("--import-package", packageArg..Clear()))
+		{
+			GetArg("--import-into", mImportFolder);
+			OpenImportPackage(packageArg);
+		}
 		if (HasArg("--world-streaming-test"))
 			RunWorldStreamingTest();
 		if (HasArg("--separate-worlds-test"))

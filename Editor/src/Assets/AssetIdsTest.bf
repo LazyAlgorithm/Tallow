@@ -52,7 +52,7 @@ extension EditorApp
 		// 2. The open scene names the crate.
 		let probe = mScene.CreateGameObject("AssetIdProbe");
 		let renderer = probe.AddComponent<MeshRenderer>();
-		renderer.mesh.Set(scope $"{t}/a/crate.glb");
+		renderer.mesh = scope $"{t}/a/crate.glb";
 
 		// 3. Moved and renamed in the editor.
 		Directory.CreateDirectory(scope $"{folder}/b").IgnoreError();

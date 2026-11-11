@@ -364,6 +364,12 @@ extension EditorApp
 			BeginRename(entry.path);
 		if (ImGui.MenuItem("Find References"))
 			LogAssetReferences(entry.path);
+		if (ImGui.MenuItem("Export Package..."))
+		{
+			let picked = scope List<StringView>();
+			picked.Add(entry.path);
+			OpenExportPackage(picked);
+		}
 		if (ImGui.MenuItem("Delete"))
 		{
 			mDeletePath.Set(entry.path);
@@ -985,6 +991,9 @@ extension EditorApp
 	/// Copies a file or folder dropped from outside the editor into the folder shown in Project.
 	void ImportExternalFile(StringView source)
 	{
+		// A package is opened in Import Package (docs/packages.md), not copied in as a file.
+		if (ImportDroppedPackage(source))
+			return;
 		let name = scope String();
 		Path.GetFileName(source, name);
 		if (name.IsEmpty)

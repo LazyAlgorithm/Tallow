@@ -96,13 +96,34 @@ extension EditorApp
 	/// paths of open scenes, prefabs, graphs, scripts and other documents, and the Project window.
 	void ApplyAssetMoves(Span<(String from, String to)> moves)
 	{
+		// Scripts, built-in handle components (Mesh Renderer...) and data components alike.
 		let fields = scope List<FieldRef>();
+		let handles = scope List<HandleComponents.Info>();
+		let data = scope List<DataComponents.Info>();
 		for (let gameObject in mScene.Objects)
 		{
 			for (let component in gameObject.Components)
 			{
 				fields.Clear();
 				ComponentRegistry.GetFields(component, fields);
+				for (let field in fields)
+					RemapField(field, moves);
+			}
+			handles.Clear();
+			HandleComponents.On(gameObject, handles);
+			for (let info in handles)
+			{
+				fields.Clear();
+				HandleComponents.GetFields(gameObject, info, fields);
+				for (let field in fields)
+					RemapField(field, moves);
+			}
+			data.Clear();
+			DataComponents.On(gameObject, data);
+			for (let info in data)
+			{
+				fields.Clear();
+				DataComponents.GetFields(info.type, gameObject.GetData(info.type), fields, gameObject);
 				for (let field in fields)
 					RemapField(field, moves);
 			}
@@ -116,6 +137,8 @@ extension EditorApp
 			RemapInPlace(path, moves);
 		for (let document in mScripts)
 			RemapInPlace(document.path, moves);
+		// The Package Manager's records of what each package put in.
+		AssetPackages.ApplyMoves(moves);
 		let project = Project.Current;
 		if (project != null)
 		{
@@ -156,9 +179,10 @@ extension EditorApp
 	{
 		if (field.kind == .String)
 		{
-			let text = *(String*)field.ptr;
-			if (text != null)
-				RemapInPlace(text, moves);
+			// String, SharedString or text owned by handle data: StringFields reads and writes them all.
+			let remapped = scope String();
+			if (RemapAssetPath(StringFields.Get(field.ptr, field.type), moves, remapped))
+				StringFields.Set(field.ptr, field.type, remapped, field.name);
 		}
 		else if ((field.kind == .List || field.kind == .Array) && field.elementKind == .String)
 		{
