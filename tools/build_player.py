@@ -26,7 +26,7 @@ import pack_assets
 
 # Windows system libraries the native libraries call into (SDL, bgfx, ENet, miniaudio).
 WINDOWS_SYSTEM_LIBS = ('user32', 'gdi32', 'shell32', 'winmm', 'imm32', 'ole32', 'oleaut32', 'version', 'setupapi', 'advapi32',
-                       'ws2_32', 'psapi', 'uuid', 'cfgmgr32')
+                       'ws2_32', 'psapi', 'uuid', 'cfgmgr32', 'dbghelp')
 # The same libraries built for the web (tools/web/build_native.sh).
 WEB_NATIVE_LIBS = ('libtallow_native.a', 'bgfx/cmake/bgfx/libbgfx.a', 'bgfx/cmake/bimg/libbimg.a', 'bgfx/cmake/bimg/libbimg_decode.a',
                    'bgfx/cmake/bx/libbx.a', 'SDL/libSDL3.a', 'joltc/libjoltc.a', '_deps/joltphysics-build/libJolt.a', 'enet/libenet.a')
