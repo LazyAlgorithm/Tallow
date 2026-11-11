@@ -29,6 +29,55 @@ class LauncherApp : Application
 	ProjectTemplate mTemplate = .Sample;
 	/// Tools Tallow needs that were not found, when the launcher started.
 	List<String> mMissingTools = new .() ~ DeleteContainerAndItems!(_);
+	// The folder chosen in "Beef is already installed": SDL calls back on its own thread.
+	static Monitor sBeefPickLock = new .() ~ delete _;
+	static String sBeefPicked = new .() ~ delete _;
+	static bool sBeefPickReady;
+
+	static void OnBeefFolderPicked(void* userData, char8** files, int32 filter)
+	{
+		if (files == null || files[0] == null)
+			return;
+		using (sBeefPickLock.Enter())
+		{
+			sBeefPicked.Set(StringView(files[0]));
+			sBeefPickReady = true;
+		}
+	}
+
+	bool BeefMissing()
+	{
+		for (let tool in mMissingTools)
+		{
+			if (tool.Contains("Beef"))
+				return true;
+		}
+		return false;
+	}
+
+	/// Takes a folder picked for Beef: uses it if it holds Beef, and checks again what is still missing.
+	void TakePickedBeefFolder()
+	{
+		let picked = scope String();
+		using (sBeefPickLock.Enter())
+		{
+			if (!sBeefPickReady)
+				return;
+			sBeefPickReady = false;
+			picked.Set(sBeefPicked);
+		}
+		let error = scope String();
+		if (!Toolchain.UseBeefFolder(picked, error))
+		{
+			SetMessage(error, true);
+			return;
+		}
+		Toolchain.Apply();
+		ClearAndDeleteItems!(mMissingTools);
+		Toolchain.FindMissing(mMissingTools);
+		mSetupFailed = false;
+		SetMessage(mMissingTools.IsEmpty ? "Using the Beef compiler you chose." : "Using the Beef compiler you chose. Some tools are still missing.", !mMissingTools.IsEmpty);
+	}
 	bool mMessageIsError;
 	bool mSetupPending;
 	bool mSetupFailed;
@@ -334,9 +383,17 @@ class LauncherApp : Application
 		}
 		else
 		{
+			TakePickedBeefFolder();
 			ImGui.TextWrapped("Tallow needs the following tools to create, open and build projects:");
 			for (let tool in mMissingTools)
 				ImGui.BulletText(tool.CStr());
+			if (BeefMissing())
+			{
+				ImGui.Spacing();
+				ImGui.TextWrapped("Already have Beef installed somewhere Tallow did not look? Choose its folder, and Tallow uses it from now on.");
+				if (ImGui.Button("Beef is installed: choose its folder...", .(330, 32)))
+					SDL.SDL_ShowOpenFolderDialog( => OnBeefFolderPicked, null, Window, null, false);
+			}
 			let packages = scope String();
 			Toolchain.SystemPackagesCommand(packages);
 			if (!packages.IsEmpty)
@@ -351,6 +408,8 @@ class LauncherApp : Application
 				ImGui.TextWrapped("Setup did not complete. You can retry installation.");
 				ImGui.TextWrapped(mMessage.CStr());
 			}
+			else if (!mMessage.IsEmpty)
+				ImGui.TextWrapped(mMessage.CStr());
 			if (ImGui.Button(mSetupFailed ? "Retry installation" : "Install dependencies", .(190, 36)))
 			{
 				mSetupFailed = false;
@@ -660,6 +719,37 @@ class Program
 	{
 		for (int i < args.Count)
 		{
+			// --beef-folder DIR: use the Beef in DIR from now on (what the setup dialog's "choose its folder" does).
+			// --check-tools: print the tools that are still missing and which BeefBuild is used, then quit.
+			if ((args[i] == "--beef-folder" && i + 1 < args.Count) || args[i] == "--check-tools")
+			{
+#if BF_PLATFORM_WINDOWS
+				UseCommandConsole();
+#endif
+				if (args[i] == "--beef-folder")
+				{
+					let error = scope String();
+					if (!Toolchain.UseBeefFolder(args[i + 1], error))
+					{
+						Console.WriteLine(error);
+						return 1;
+					}
+				}
+				Toolchain.Apply();
+				let missing = scope List<String>();
+				defer { ClearAndDeleteItems!(missing); }
+				Toolchain.FindMissing(missing);
+				let beef = scope String();
+				Environment.GetEnvironmentVariable("BEEFBUILD", beef).IgnoreError();
+				if (beef.IsEmpty)
+					beef.Set("BeefBuild on PATH");
+				Console.WriteLine(scope $"BeefBuild: {beef}");
+				for (let tool in missing)
+					Console.WriteLine(scope $"Missing: {tool}");
+				if (missing.IsEmpty)
+					Console.WriteLine("All development tools are installed.");
+				return missing.IsEmpty ? 0 : 2;
+			}
 			if (args[i] == "--create" && i + 1 < args.Count)
 			{
 #if BF_PLATFORM_WINDOWS

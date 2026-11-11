@@ -137,6 +137,86 @@ static class Toolchain
 		return false;
 	}
 
+	/// Where the user said Beef is: the BeefBuild path saved by UseBeefFolder.
+	static void ChosenBeefFile(String path) => path.AppendF("{}/beef-location.txt", Folder);
+
+	/// The BeefBuild the user chose, if one was chosen and it is still there.
+	static bool ChosenBeef(String output)
+	{
+		let text = scope String();
+		if (File.ReadAllText(ChosenBeefFile(.. scope .()), text) case .Err)
+			return false;
+		text.Trim();
+		if (text.IsEmpty || !File.Exists(text))
+			return false;
+		output.Set(text);
+		return true;
+	}
+
+	/// The BeefBuild in a folder the user picked, with Beef's standard libraries beside it: the root of a Beef
+	/// checkout or install (IDE/dist/BeefBuild on Linux, bin/BeefBuild.exe on Windows), or the folder BeefBuild is in.
+	static bool BeefInPicked(StringView folder, String output)
+	{
+		let root = scope String(folder);
+		root.Replace('\\', '/');
+		while (root.Length > 1 && root.EndsWith('/'))
+			root.RemoveFromEnd(1);
+#if BF_PLATFORM_WINDOWS
+		let names = StringView[1]("BeefBuild.exe");
+		// The folder holding BeefBuild under the picked one, and where BeefLibs is from there.
+		let subs = StringView[2]("bin", "");
+		let libsFrom = StringView[2]("../BeefLibs", "../BeefLibs");
+#else
+		let names = StringView[2]("BeefBuild", "BeefBuild.sh");
+		let subs = StringView[2]("IDE/dist", "");
+		let libsFrom = StringView[2]("../../BeefLibs", "../../BeefLibs");
+#endif
+		for (int layout < subs.Count)
+		{
+			let sub = subs[layout];
+			let libs = libsFrom[layout];
+			let dist = scope String(root);
+			if (!sub.IsEmpty)
+				dist.AppendF("/{}", sub);
+			if (!File.Exists(scope $"{dist}/{libs}/corlib/BeefProj.toml"))
+				continue;
+			for (let name in names)
+			{
+				let candidate = scope $"{dist}/{name}";
+				if (File.Exists(candidate))
+				{
+					output.Set(candidate);
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/// Uses the Beef in a folder the user picked from now on (saved in the toolchain folder, so the editor and later
+	/// starts use it too). False, with error saying why, when the folder has no Beef.
+	public static bool UseBeefFolder(StringView folder, String error)
+	{
+		let beef = scope String();
+		if (!BeefInPicked(folder, beef))
+		{
+#if BF_PLATFORM_WINDOWS
+			error.AppendF("No Beef compiler was found in {}. Choose the folder Beef is installed in (the one with bin\\BeefBuild.exe and BeefLibs).", folder);
+#else
+			error.AppendF("No Beef compiler was found in {}. Choose the Beef folder (the one with IDE/dist/BeefBuild and BeefLibs), or its IDE/dist folder.", folder);
+#endif
+			return false;
+		}
+		Directory.CreateDirectory(Folder).IgnoreError();
+		if (File.WriteAllText(ChosenBeefFile(.. scope .()), beef) case .Err)
+		{
+			error.AppendF("Could not save the choice in {}.", Folder);
+			return false;
+		}
+		SetEnv("BEEFBUILD", beef);
+		return true;
+	}
+
 	/// Resolve a user-installed Linux Beef compiler before relying on the managed copy.
 	/// A valid compiler location must also contain Beef's standard libraries.
 	static bool FindUserBeef(String output)
@@ -291,6 +371,13 @@ static class Toolchain
 		OwnBeef(beef);
 		let current = scope String();
 		let userBeef = (Environment.GetEnvironmentVariable("BEEFBUILD", current) case .Ok) && !current.IsEmpty && File.Exists(current);
+		// A Beef the user pointed Tallow at (the launcher's "choose its folder") comes before any other.
+		let chosen = scope String();
+		if (!userBeef && ChosenBeef(chosen))
+		{
+			SetEnv("BEEFBUILD", chosen);
+			return;
+		}
 		var useOwn = File.Exists(beef) && !userBeef && !FindUserBeef(scope .());
 #if BF_PLATFORM_WINDOWS
 		// Microsoft's libraries that the Hub fetched are set up for its own copy of Beef.
@@ -300,8 +387,9 @@ static class Toolchain
 #endif
 		if (useOwn)
 			SetEnv("BEEFBUILD", beef);
-		else if (!userBeef && !File.Exists(beef))
+		else if (!userBeef)
 		{
+			// Passed on even when it is not on PATH (found in ~/Beef, or by asking the user's shell).
 			let discovered = scope String();
 			if (FindUserBeef(discovered))
 				SetEnv("BEEFBUILD", discovered);
