@@ -16,6 +16,9 @@ extension EditorApp
 	String mReloadManifest = new .() ~ delete _;
 	bool mReloadReady;
 	bool mReloadQueued;
+	bool mReloadForceConservative;
+	bool mScriptsNeedReload;
+	bool mPlayAfterCompile;
 	bool mCheckWasReload;
 	bool mWantFullRestart;
 
@@ -60,24 +63,95 @@ extension EditorApp
 #endif
 	}
 
-	void QueueScriptReload()
+	/// Compare the saved source against the last activated library, without compiling it.
+	/// Exit codes: 0 unchanged, 10 methods only, 11 declarations, 3 incompatible host.
+	int CheckScriptChanges()
 	{
+		if (!mReloadReady)
+			return 3;
+		let project = Project.Current;
+		let command = scope String(Terminal.Python)..Append(' ');
+		Terminal.Quote(scope $"{project.EngineRoot}/tools/reload_scripts.py" , command);
+		command.Append(' ');
+		Terminal.Quote(project.Path, command);
+		command.Append(" --classify --baseline ");
+		Terminal.Quote(mReloadBaseline, command);
+		command.Append(" > ");
+		command.Append(Terminal.Null);
+		command.Append(" 2>&1");
+		let status = Terminal.Run(command);
+#if BF_PLATFORM_LINUX
+		// system() returns the wait status, not the process exit code.
+		if (status >= 0)
+			return (status >> 8) & 0xFF;
+#endif
+		return status;
+	}
+
+	/// A save already tells us which files changed. The script mode decides
+	/// whether to reload in Edit mode or defer method changes until Play.
+	void QueueScriptReload(bool fromEditorSave = false, bool explicitRequest = false, bool conservative = false)
+	{
+		if (fromEditorSave)
+			mScriptMonitor.Poll(Assets.ProjectPath);
+		// Skip a new compiler process for no-op/whitespace-only script saves
+		// on every desktop platform. Explicit reload requests still run.
+		if (!explicitRequest && !mCheckRunning && !mReloadQueued && CheckScriptChanges() == 0)
+		{
+			mScriptsNeedReload = false;
+			mStatus.Clear();
+			return;
+		}
+		if (!explicitRequest && Project.Current.ReloadMode == .Manual)
+		{
+			mScriptsNeedReload = true;
+			return;
+		}
+		if (!explicitRequest && mPlay == .Edit && Project.Current.ReloadMode == .Automatic &&
+			!Project.Current.ReloadMethodsInEdit)
+		{
+			let change = CheckScriptChanges();
+			if (change == 0)
+			{
+				if (!mCheckRunning && !mReloadQueued)
+					mScriptsNeedReload = false;
+				return;
+			}
+			mScriptsNeedReload = true;
+			if (change == 10)
+			{
+				mStatus.Set("Script methods changed. Reload on Play or use File > Reload Scripts.");
+				return;
+			}
+			if (change != 11)
+			{
+				mStatus.Set("Script dependencies changed. Full Rebuild & Restart may be required.");
+				return;
+			}
+			// New fields and components must be reflected in the Inspector in Edit mode.
+			mReloadForceConservative = true;
+		}
+		mScriptsNeedReload = true;
 		mReloadQueued = true;
+		if (conservative)
+			mReloadForceConservative = true;
 		mScriptDebounce.Restart();
 	}
 
 	void PollScriptReload()
 	{
 		CollectCheckResults();
-		if (!mReloadReady) return;
 		if (mScriptPollClock.ElapsedMilliseconds >= 500)
 		{
 			mScriptPollClock.Restart();
 			if (mScriptMonitor.Poll(Assets.ProjectPath))
 				QueueScriptReload();
 		}
-		if (!mReloadQueued || mCheckRunning || mScriptDebounce.ElapsedMilliseconds < 350) return;
+		if (!mReloadReady) return;
+		if (!mReloadQueued || mCheckRunning || mScriptDebounce.ElapsedMilliseconds < 150) return;
 		mReloadQueued = false;
+		let conservative = mReloadForceConservative || Project.Current.ReloadMode == .Conservative;
+		mReloadForceConservative = false;
 		if (mCheckThread != null)
 		{
 			mCheckThread.Join();
@@ -87,7 +161,7 @@ extension EditorApp
 		mCheckWasReload = true;
 		mCheckRunning = true;
 		Interlocked.Store(ref mCheckFinished, false);
-		mStatus.Set("Compiling script library...");
+		mStatus.Set(mPlayAfterCompile ? "Compiling scripts before Play..." : "Compiling script library...");
 		mCheckThread = new Thread(new () =>
 			{
 				let project = Project.Current;
@@ -100,6 +174,7 @@ extension EditorApp
 				Terminal.Quote(mReloadBaseline, command);
 				command.Append(" --manifest ");
 				Terminal.Quote(mReloadManifest, command);
+				command.Append(conservative ? " --mode conservative" : " --mode automatic");
 				command.Append(" > ");
 				Terminal.Quote(scope $"{project.Path}/build/script-reload.log" , command);
 				command.Append(" 2>&1");
@@ -115,13 +190,32 @@ extension EditorApp
 	{
 		if (!mCheckSucceeded)
 		{
+			mPlayAfterCompile = false;
 			Log.Error(mCheckLog);
 			mStatus.Set("Script build failed; previous code remains active. See Console.");
 			return;
 		}
 		let error = scope String();
-		if (!mScriptReload.Apply(mReloadManifest, error, mScene))
+		bool applied = mScriptReload.Apply(mReloadManifest, error, mScene);
+		if (!applied)
 		{
+			// Method validation does not change live script state. Use the library
+			// already compiled and linked instead of invoking BeefBuild again.
+			let manifest = scope String();
+			if (File.ReadAllText(mReloadManifest, manifest) case .Ok && manifest.Contains("mode methods"))
+			{
+				Log.Warning(scope $"Method patch unavailable ({error}); using structural reload of the same library.");
+				manifest.Replace("mode methods", "mode structural");
+				error.Clear();
+				if (File.WriteAllText(mReloadManifest, manifest) case .Ok)
+					applied = mScriptReload.Apply(mReloadManifest, error, mScene);
+				else
+					error.Set("Could not switch script manifest to structural reload.");
+			}
+		}
+		if (!applied)
+		{
+			mPlayAfterCompile = false;
 			Log.Error(error);
 			mStatus.Set(error);
 			return;
@@ -140,10 +234,34 @@ extension EditorApp
 			mReloadReady = false;
 			Log.Warning("Scripts activated, but symbol tracking failed; restart before another reload.");
 		}
-		mScriptCatalog.Refresh(Assets.ProjectPath, project.Name);
-		NodeLibrary.RefreshCodeNodes();
-		RefreshAssetList();
-		Log.Info("Script library reloaded; scene, supported fields and Play state preserved.");
-		mStatus.Set("Scripts reloaded.");
+		// Method-only edits leave declarations, component registration and assets intact.
+		// Avoid rescanning the project when just the script dispatch table changed.
+		let manifest = scope String();
+		File.ReadAllText(mReloadManifest, manifest).IgnoreError();
+		if (!manifest.Contains("mode methods"))
+		{
+			mScriptCatalog.Refresh(Assets.ProjectPath, project.Name);
+			NodeLibrary.RefreshCodeNodes();
+			RefreshAssetList();
+		}
+		mScriptsNeedReload = mReloadQueued;
+		Log.Info("Script library reloaded; scene and Play state preserved.");
+		if (mScriptsNeedReload)
+		{
+			mStatus.Set("Additional script changes pending compilation.");
+			return;
+		}
+		if (mPlayAfterCompile && mPlay == .Edit)
+		{
+			mPlayAfterCompile = false;
+			mStatus.Clear();
+			StartPlay();
+			return;
+		}
+		mPlayAfterCompile = false;
+		if (mPlay == .Edit)
+			mStatus.Clear();
+		else
+			mStatus.Set("Scripts hot reloaded.");
 	}
 }

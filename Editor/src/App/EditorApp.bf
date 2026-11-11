@@ -44,6 +44,10 @@ class EditorApp : Application
 	/// Escape was pressed while the mouse was locked: the lock stays off until the Game view is clicked again.
 	bool mLockHeldOff;
 	bool mSceneHovered;
+	/// The Hierarchy or the Scene view has the keyboard: Delete there deletes the selected object. Elsewhere it is
+	/// the panel's own (the Project panel's deletes the selected asset) or nothing.
+	bool mHierarchyFocused;
+	bool mSceneFocused;
 	bool mFlying;
 	bool mWantRebuild;
 	bool mWantBuildGame;
@@ -547,7 +551,6 @@ class EditorApp : Application
 			BuildGizmos();
 		if (mSceneVisible)
 		{
-			mSceneView.Resize((int32)mSceneSize.x, (int32)mSceneSize.y);
 			mSceneView.Render(mScene, mSceneCamera);
 		}
 		RenderModelViews();
@@ -556,7 +559,6 @@ class EditorApp : Application
 		let gameCamera = FindGameCamera();
 		if (mGameVisible && gameCamera != null)
 		{
-			mGameView.Resize((int32)mGameSize.x, (int32)mGameSize.y);
 			mGameView.Render(mScene, gameCamera.GetCameraData(mGameSize.x / Math.Max(mGameSize.y, 1)));
 		}
 		ImGui.tn_imgui_render(ImGuiView);
@@ -564,6 +566,9 @@ class EditorApp : Application
 		// Long blocking jobs run after a frame that shows the "working" message has been presented.
 		if (mBusyFrames > 0 && --mBusyFrames == 0)
 		{
+			// Clear the previous operation before dispatch: actions may set a
+			// new status that must remain visible while asynchronous work runs.
+			mStatus.Clear();
 			if (mWantRebuild)
 				RebuildAndReload();
 			if (mWantBuildGame)
@@ -573,7 +578,6 @@ class EditorApp : Application
 			mWantFullRestart = false;
 			mWantRebuild = false;
 			mWantBuildGame = false;
-			mStatus.Clear();
 		}
 	}
 }

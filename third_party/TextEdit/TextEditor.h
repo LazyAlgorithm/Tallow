@@ -301,6 +301,7 @@ public:
 
 	// see if a specified document location is visible (not folded and currently on screen)
 	inline bool IsDocPosVisible(DocPos pos) const { return isDocPosVisible(normalizePos(pos)); }
+	void DrawInlineText(DocPos pos, const char* text, ImU32 color);
 
 	// see if a visual position covers a glyph
 	inline bool IsVisPosOverGlyph(VisPos pos) const { return typeSetter.isVisPosOverGlyph(normalizePos(pos)); }
@@ -826,6 +827,11 @@ public:
 	// provide autocomplete suggestions asynchronously (in case a callback takes to long and lookup is handled in a separate thread/process)
 	// this call is not threadsafe and must be called from the rendering thread (you must synchronize with your lookup thread yourself)
 	inline void SetAutoCompleteSuggestions(const std::vector<std::string>& suggestions) { autocomplete.setSuggestions(suggestions); }
+	inline std::string GetAutoCompletePreview() { return autocomplete.isActive() ? autocomplete.getReplacement() : ""; }
+	inline DocPos GetAutoCompleteStart() const { return autocomplete.getStart(); }
+	inline bool IsAutoCompleteActive() const { return autocomplete.isActive(); }
+	inline void SetAutoCompleteSignature(const std::string& signature) { autocomplete.setSignature(signature); }
+	inline void ClearAutoCompleteSuggestions(bool pending) { autocomplete.clearSuggestions(pending); }
 
 	// support functions for unicode codepoints
 	struct CodePoint {
@@ -1825,6 +1831,8 @@ protected:
 
 		// specify a new set of suggestions
 		void setSuggestions(const std::vector<std::string>& suggestions);
+		inline void setSignature(const std::string& value) { signature = value; }
+		inline void clearSuggestions(bool pending) { state.suggestions.clear(); state.suggestionsPromise = pending; currentSelection = 0; }
 
 		// get information
 		inline bool isActive() const { return active; }
@@ -1845,6 +1853,7 @@ protected:
 		std::chrono::system_clock::time_point activationTime;
 		AutoCompleteConfig configuration;
 		AutoCompleteState state;
+		std::string signature;
 		bool triggeredManually = false;
 		size_t currentSelection = 0;
 
@@ -2026,6 +2035,7 @@ protected:
 	ImVec2 cursorScreenPos;
 	ImVec2 visibleSize;
 	ImDrawList* drawList;
+	ImVec2 textClipMin, textClipMax;
 
 	ImFont* font;
 	float fontSize;

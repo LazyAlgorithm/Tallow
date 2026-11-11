@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compile a private game-code library against the running debug host (Linux or Windows)."""
 import argparse
+import bisect
 import hashlib
 import json
 import os
@@ -14,7 +15,195 @@ import struct
 import tomllib
 import time
 
+try:
+    import beef_compile_server
+except ImportError:  # An engine copy without it compiles with BeefBuild.
+    beef_compile_server = None
+
 TOKEN = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|=>|[A-Za-z_][A-Za-z_0-9]*|[^\s]', re.S)
+
+
+def reload_workspace(project, platform):
+    """Persist Beef's incremental cache across editor launches on both OSes."""
+    return project / '.tallow-reload' / ('workspace-win64' if platform == 'windows' else 'workspace-linux64')
+
+
+def partition_link_objects(objects, prepared, game_objects):
+    """Keep game objects explicit and package only resident dependencies."""
+    game = set(game_objects)
+    game_links, dependency_links = [], []
+    for original, linked in zip(objects, prepared):
+        (game_links if original in game else dependency_links).append(linked)
+    return game_links, dependency_links
+
+
+def cached_dependency_archive(objects, archive):
+    """Cache an indexed library of host-aware dependency objects.
+
+    Linux can link thin archives: their members reference the already-cached
+    prepared ELF files instead of copying every object into the .a on each
+    new game component. This avoids repacking thousands of dependency objects
+    after BeefBuild changes reflection/generic code. Fall back to a normal
+    archive when the installed archiver does not support thin archives.
+    Prepared object files live beside this archive and are not deleted while
+    the editor runs; their content/mtime signature invalidates the index.
+    """
+    if not objects:
+        return None, False
+    stamp = archive.with_suffix(archive.suffix + '.stamp')
+    digest = hashlib.sha256()
+    # A one-time format bump replaces previously cached fat archives.
+    digest.update(b'tallow-thin-archive-v1\0')
+    for obj in objects:
+        stat = obj.stat()
+        digest.update(os.fsencode(obj))
+        digest.update(b'\0')
+        digest.update(f'{stat.st_size}:{stat.st_mtime_ns}\n'.encode())
+    signature = digest.hexdigest()
+    if archive.is_file() and stamp.is_file() and stamp.read_text() == signature:
+        return archive, True
+    temp = archive.with_name(archive.name + '.tmp')
+    if temp.exists():
+        temp.unlink()
+    try:
+        try:
+            subprocess.run(['ar', 'rcsT', str(temp), *map(str, objects)], check=True)
+        except subprocess.CalledProcessError:
+            # BSD/older archivers may lack GNU/LLVM's thin-archive modifier.
+            # The original full archive remains correct, only slower.
+            print('WARNING: Thin archives unavailable; using a full dependency archive.', flush=True)
+            if temp.exists():
+                temp.unlink()
+            subprocess.run(['ar', 'rcs', str(temp), *map(str, objects)], check=True)
+        temp.replace(archive)
+        stamp.write_text(signature)
+    finally:
+        if temp.exists():
+            temp.unlink()
+    return archive, False
+
+
+def object_args(path):
+    """The object files BeefBuild lists in ObjectArgs.txt. They are plain paths separated by spaces unless one
+    needed quoting; shlex handles that case, but takes most of a second on the thousands of paths of a game."""
+    text = path.read_text()
+    if '"' in text or "'" in text or '\\' in text:
+        return shlex.split(text)
+    return text.split()
+
+
+def fast_linker():
+    """mold or lld when installed: they link faster than GNU ld, and read --start-lib groups, so the resident
+    dependencies need no archive (whose index takes seconds to remake after a new script). None otherwise."""
+    for name in ('mold', 'lld'):
+        if shutil.which('ld.' + name):
+            return name
+    return None
+
+
+def response_file(path, args):
+    """Writes args as a response file (@path) for the compiler driver: the object list is too long to be safe
+    on a command line."""
+    path.write_text('\n'.join('"' + str(arg).replace('\\', '\\\\').replace('"', '\\"') + '"' for arg in args) + '\n')
+    return '@' + str(path)
+
+
+def beef_build_artifacts(workspace, name, platform):
+    """Compiler outputs: distinguish game code from resident dependency code.
+
+    The linker input list is also our best available inventory of emitted
+    Linux object files. For Windows, BeefBuild uses indexed .lib archives.
+    """
+    root = workspace / 'build' / ('Debug_Win64' if platform == 'windows' else 'Debug_Linux64') / name
+    if platform == 'linux':
+        args = root / 'ObjectArgs.txt'
+        try:
+            paths = [Path(item) for item in object_args(args)
+                     if item.endswith('.o') and Path(item).name != 'vdata.o']
+        except OSError:
+            paths = []
+        return {
+            'game': [path for path in paths if path.parent == root],
+            'dependencies': [path for path in paths if path.parent != root],
+            'reflection': [root / 'vdata.o'],
+        }
+    build = root.parent
+    return {
+        'game': [root / (name + '__.lib')],
+        'dependencies': [path for path in build.rglob('*__.lib') if path.parent != root]
+                        if build.is_dir() else [],
+        'reflection': [root / 'vdata.obj'],
+    }
+
+
+def build_output_state(workspace, name, platform):
+    """Record cheap file timestamps; changed means rewritten, not necessarily recompiled."""
+    if platform == 'linux':
+        # Every object in the build folders (a stale one counts too: this only feeds the log), read by folder
+        # instead of parsing the 5,000-object link list.
+        buckets = {'game': {}, 'dependencies': {}, 'reflection': {}}
+        try:
+            folders = [entry for entry in os.scandir(workspace / 'build' / 'Debug_Linux64') if entry.is_dir()]
+        except OSError:
+            return buckets
+        for folder in folders:
+            game = folder.name == name
+            try:
+                entries = list(os.scandir(folder.path))
+            except OSError:
+                continue
+            for entry in entries:
+                if not entry.name.endswith('.o'):
+                    continue
+                try:
+                    status = entry.stat()
+                except OSError:
+                    continue
+                bucket = ('reflection' if entry.name == 'vdata.o' else 'game') if game else 'dependencies'
+                buckets[bucket][entry.path] = (status.st_size, status.st_mtime_ns)
+        return buckets
+    buckets = {}
+    for category, paths in beef_build_artifacts(workspace, name, platform).items():
+        stamps = {}
+        for path in paths:
+            try:
+                stat = path.stat()
+                stamps[str(path)] = (stat.st_size, stat.st_mtime_ns)
+            except OSError:
+                pass
+        buckets[category] = stamps
+    return buckets
+
+
+def build_output_activity(before, after):
+    """Count compiler outputs added/rewritten for both Linux and Windows."""
+    results = {}
+    for category in ('game', 'dependencies', 'reflection'):
+        old, new = before.get(category, {}), after.get(category, {})
+        results[category] = {
+            'total': len(new),
+            'rewritten': sum(1 for path, stamp in new.items() if path in old and old[path] != stamp),
+            'new': sum(1 for path in new if path not in old),
+        }
+    return results
+
+
+def build_activity_label(activity):
+    return ', '.join(
+        f'{name} {values["rewritten"]} rewritten/{values["new"]} new/{values["total"]} present'
+        for name, values in activity.items())
+
+
+def write_if_changed(path, content):
+    """Preserve modification time when a generated Beef workspace config is unchanged.
+
+    BeefBuild uses file timestamps for its incremental cache. Rewriting these
+    files on every script save can invalidate that cache and trigger needless work.
+    """
+    if path.is_file() and path.read_text() == content:
+        return False
+    path.write_text(content)
+    return True
 
 
 def schema(text):
@@ -49,6 +238,57 @@ def schema(text):
     return hashlib.sha256(' '.join(result).encode()).hexdigest()
 
 
+def normalized_source(text):
+    """Conservative token fingerprint for whitespace-only changes.
+
+    Keep comments and string/character literals exactly, including whitespace
+    inside them. Complex multiline strings and preprocessor directives use
+    their original bytes because their layout can affect compilation.
+    """
+    if ('"""' in text or '@"' in text or re.search(r'(?m)^\s*#', text)):
+        return hashlib.sha256(text.encode()).hexdigest()
+    digest = hashlib.sha256()
+    for token in TOKEN.finditer(text):
+        digest.update(token.group().encode('utf-8'))
+        digest.update(b'\0')
+    return digest.hexdigest()
+
+
+def classify_changes(baseline, current):
+    """Classify edits against the last activated version without invoking BeefBuild.
+
+    Return 0 for unchanged, 10 for method-only, 11 for structural and
+    3 when the resident engine or build configuration changed.
+    """
+    if baseline['resident'] != current['resident']:
+        return 3
+    if baseline['schemas'] != current['schemas']:
+        return 11
+    if baseline['code'] != current['code']:
+        # No build is necessary when only insignificant whitespace changed.
+        # Old snapshots without normalized fingerprints remain conservative.
+        if (baseline.get('normalized_code') is not None and
+                baseline['normalized_code'] == current.get('normalized_code')):
+            return 0
+        return 10
+    return 0
+
+
+def reload_strategy(mode, baseline, current, platform):
+    """Use method patching only while metadata still belongs to the original host.
+
+    Structural activation replaces reflected class metadata, which the old
+    method patcher's resident class lookup cannot reliably recognize afterward.
+    Avoid another doomed patch attempt until the editor restarts.
+    """
+    if (mode == 'automatic' and platform == 'linux'
+            and baseline.get('method_patch_eligible', True)
+            and current['code'] != baseline['code']
+            and current['schemas'] == baseline['schemas']):
+        return 'methods'
+    return 'structural'
+
+
 def project_path(project, text):
     """A path from a workspace file. Under Wine a Windows workspace names this system's folders as Z:/..."""
     if os.name != 'nt' and re.match(r'^[zZ]:[\\/]', text):
@@ -56,10 +296,60 @@ def project_path(project, text):
     return (project / text).resolve()
 
 
+class SourceCache:
+    """What snapshot() worked out per file (its hash, and a script's declaration and token fingerprints), reused while
+    the file's size and time stamp stay the same: a snapshot reads and fingerprints every engine, editor and game
+    source, and each reload takes three. As git does, a file changed in the last two seconds is read again rather
+    than trusted, since a second save within the file system's time stamp resolution could keep the same stamp."""
+    RACY_NS = 2_000_000_000
+
+    def __init__(self, project):
+        self.path = project / '.tallow-reload' / 'source-cache.json'
+        try:
+            self.entries = json.loads(self.path.read_text())
+            if not isinstance(self.entries, dict):
+                self.entries = {}
+        except (OSError, ValueError):
+            self.entries = {}
+        self.used = {}
+        self.now = time.time_ns()
+
+    def get(self, file, script):
+        """(sha256 of the bytes, declaration fingerprint, token fingerprint); the last two only for scripts."""
+        key = str(file)
+        status = file.stat()
+        stamp = [status.st_size, status.st_mtime_ns]
+        entry = self.entries.get(key)
+        if isinstance(entry, list) and len(entry) == 4 and entry[0] == stamp and (entry[2] is not None or not script):
+            self.used[key] = entry
+            return entry[1], entry[2], entry[3]
+        data = file.read_bytes()
+        values = [hashlib.sha256(data).hexdigest(), None, None]
+        if script:
+            text = data.decode('utf-8')
+            values[1], values[2] = schema(text), normalized_source(text)
+        if self.now - status.st_mtime_ns > self.RACY_NS:
+            self.used[key] = [stamp, *values]
+        return tuple(values)
+
+    def save(self):
+        if self.used != self.entries:
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                temporary = self.path.with_suffix(f'.{os.getpid()}.tmp')
+                temporary.write_text(json.dumps(self.used))
+                temporary.replace(self.path)
+            except OSError:
+                pass
+
+
 def snapshot(project):
     config = tomllib.loads((project / 'BeefSpace.toml').read_text())
     engine = project_path(project, config['Projects']['Tallow']['Path']).parent
-    sources = {str(p.relative_to(project / 'src')): schema(p.read_text()) for p in sorted((project / 'src').rglob('*.bf'))}
+    cache = SourceCache(project)
+    scripts = sorted((project / 'src').rglob('*.bf'))
+    fingerprints = {file: cache.get(file, True) for file in scripts}
+    sources = {str(file.relative_to(project / 'src')): fingerprints[file][1] for file in scripts}
     digest = hashlib.sha256()
     files = list((engine / 'Engine' / 'src').rglob('*.bf')) + list((engine / 'Editor' / 'src').rglob('*.bf'))
     files += list((engine / 'native').glob('*.cpp')) + list((engine / 'native').glob('*.h')) + [engine / 'native' / 'CMakeLists.txt']
@@ -71,11 +361,18 @@ def snapshot(project):
             files += list(folder.rglob('*.bf')) + [folder / 'BeefProj.toml']
     for file in sorted(set(files)):
         if file.is_file():
-            digest.update(str(file).encode()); digest.update(file.read_bytes())
+            digest.update(str(file).encode()); digest.update(cache.get(file, False)[0].encode())
     code = hashlib.sha256()
-    for file in sorted((project / 'src').rglob('*.bf')):
-        code.update(str(file.relative_to(project / 'src')).encode()); code.update(file.read_bytes())
-    return {'schemas': sources, 'resident': digest.hexdigest(), 'code': code.hexdigest()}
+    normalized = hashlib.sha256()
+    for file in scripts:
+        relative = str(file.relative_to(project / 'src')).encode()
+        file_hash, _, tokens = fingerprints[file]
+        code.update(relative); code.update(file_hash.encode())
+        normalized.update(relative)
+        normalized.update(tokens.encode())
+    cache.save()
+    return {'schemas': sources, 'resident': digest.hexdigest(),
+            'code': code.hexdigest(), 'normalized_code': normalized.hexdigest()}
 
 
 def symbols(objects):
@@ -91,6 +388,48 @@ def symbols(objects):
     return force, values
 
 
+NM_LINE = re.compile(r'^(.*):[0-9a-f]+(?: ([0-9a-f]+))? (\S) (\S+)$')
+
+
+def cached_symbols(objects, cache_path):
+    """symbols() for the game's objects, running nm only on those rewritten since the last reload (one, for a
+    method edit, of hundreds)."""
+    try:
+        cache = json.loads(cache_path.read_text())
+        if not isinstance(cache, dict):
+            cache = {}
+    except (OSError, ValueError):
+        cache = {}
+    stamps, stale = {}, []
+    for obj in objects:
+        status = obj.stat()
+        stamps[str(obj)] = [status.st_size, status.st_mtime_ns]
+        entry = cache.get(str(obj))
+        if not (isinstance(entry, dict) and entry.get('stamp') == stamps[str(obj)]):
+            stale.append(obj)
+    fresh = {str(obj): {'stamp': stamps[str(obj)], 'force': [], 'values': {}} for obj in stale}
+    if stale:
+        output = subprocess.check_output(['nm', '-A', '-g', '-S', '--defined-only', *map(str, stale)], text=True)
+        for line in output.splitlines():
+            match = NM_LINE.match(line)
+            if match is None or match[1] not in fresh:
+                continue
+            record = fresh[match[1]]
+            if match[4].startswith('FORCELINKMOD_'):
+                record['force'].append(match[4][len('FORCELINKMOD_'):])
+            if match[2] is not None and match[3] in ('B', 'D'):
+                record['values'][match[4]] = int(match[2], 16)
+    updated = {str(obj): fresh.get(str(obj)) or cache[str(obj)] for obj in objects}
+    force, values = set(), {}
+    for record in updated.values():
+        force.update(record['force'])
+        values.update(record['values'])
+    temporary = cache_path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(updated))
+    temporary.replace(cache_path)
+    return force, values
+
+
 def alias_host_globals(source, target, names):
     """Leave mutable script data in the host: make its ELF symbols undefined in the module."""
     data = bytearray(source.read_bytes())
@@ -100,6 +439,7 @@ def alias_host_globals(source, target, names):
     shsize, shcount = struct.unpack_from('<HH', data, 58)
     sections = [struct.unpack_from('<IIQQQQIIQQ', data, shoff + i * shsize) for i in range(shcount)]
     removed_functions = []
+    matched = set()
     for section in sections:
         if section[1] != 2:  # SHT_SYMTAB
             continue
@@ -110,6 +450,7 @@ def alias_host_globals(source, target, names):
             end = string_table.find(b'\0', name_index)
             name = string_table[name_index:end].decode()
             if name in names and index != 0:
+                matched.add(name)
                 if info & 15 == 2 and index < len(sections):
                     removed_functions.append((index, value, value + size))
                     body = sections[index][4] + value
@@ -118,14 +459,159 @@ def alias_host_globals(source, target, names):
     for section in sections:
         if section[1] != 4:  # SHT_RELA
             continue
-        ranges = [(a, b) for index, a, b in removed_functions if index == section[7]]
+        # Sorted by start (functions do not overlap), so each relocation is looked up instead of tested against
+        # every removed function: the editor's object has thousands of both.
+        ranges = sorted((a, b) for index, a, b in removed_functions if index == section[7])
         if not ranges:
             continue
+        starts = [a for a, _ in ranges]
         for offset in range(section[4], section[4] + section[5], section[9]):
             position = struct.unpack_from('<Q', data, offset)[0]
-            if any(a <= position < b for a, b in ranges):
+            found = bisect.bisect_right(starts, position) - 1
+            if found >= 0 and position < ranges[found][1]:
                 struct.pack_into('<Qq', data, offset + 8, 0, 0)
     target.write_bytes(data)
+    return sorted(matched)
+
+
+def affected_host_symbols(data, names):
+    """Find host definitions actually present in an ELF object.
+
+    The broad host export list grows after script reloads; only symbols defined
+    by this particular object can change its rewritten output. This is a
+    conservative exact check, never a heuristic substring search.
+    """
+    if data[:6] != b'\x7fELF\x02\x01':
+        raise ValueError('Reload requires little-endian ELF64 object files.')
+    shoff = struct.unpack_from('<Q', data, 40)[0]
+    shsize, shcount = struct.unpack_from('<HH', data, 58)
+    sections = [struct.unpack_from('<IIQQQQIIQQ', data, shoff + i * shsize) for i in range(shcount)]
+    matched = set()
+    for section in sections:
+        if section[1] != 2:  # SHT_SYMTAB
+            continue
+        strings = sections[section[6]]
+        table = data[strings[4]:strings[4] + strings[5]]
+        for offset in range(section[4], section[4] + section[5], section[9]):
+            name_index, info, other, index, value, size = struct.unpack_from('<IBBHQQ', data, offset)
+            if index == 0:
+                continue
+            end = table.find(b'\0', name_index)
+            name = table[name_index:end].decode()
+            if name in names:
+                matched.add(name)
+    return sorted(matched)
+
+
+def alias_objects(objects, game_objects, aliases, resident, shared):
+    """Reuse unchanged ELF symbol rewrites across hot-reload generations.
+
+    A cached object is valid only when its exact bytes and affected host
+    definitions are unchanged. This avoids invalidating thousands of engine
+    objects just because a reload introduced an unrelated export. Cache files
+    belong to this editor session.
+    """
+    aliases.mkdir(exist_ok=True)
+    cache_path = aliases / 'object-cache.json'
+    try:
+        previous = json.loads(cache_path.read_text())
+        if not isinstance(previous, dict):
+            previous = {}
+    except (OSError, ValueError):
+        previous = {}
+
+    # The game and dependency objects intentionally use different host scopes.
+    def names_digest(names):
+        digest = hashlib.sha256()
+        for name in sorted(names):
+            digest.update(name.encode('utf-8'))
+            digest.update(b'\0')
+        return digest.hexdigest()
+
+    resident_digest = names_digest(resident)
+    shared_digest = names_digest(shared)
+    game_objects = set(game_objects)
+    # BeefBuild lists objects in link order, which is NOT stable when adding a
+    # script/component: one insertion may renumber thousands of unrelated files.
+    # Reuse the prepared ELF object by source path, not its current list index.
+    # Migrate legacy index-keyed caches in place so upgrading the editor does
+    # not force every existing object through alias_host_globals again.
+    by_source = {}
+    for old_key, old_record in previous.items():
+        if not isinstance(old_record, dict) or not isinstance(old_record.get('source'), str):
+            continue
+        source = old_record['source']
+        saved_target = old_record.get('target')
+        if isinstance(saved_target, str) and Path(saved_target).name == saved_target:
+            prepared = aliases / saved_target
+        elif old_key.isdecimal():
+            prepared = aliases / f'{old_key}-{Path(source).name}'
+        else:
+            continue
+        by_source[source] = (old_record, prepared)
+
+    updated = {}
+    result = []
+    reused = 0
+    reasons = {'cold': 0, 'changed': 0, 'symbols': 0}
+    for obj in objects:
+        source = str(obj)
+        cached = by_source.get(source)
+        if cached is not None:
+            last, target = cached
+        else:
+            # The full path is the identity; the short hash keeps aliases
+            # portable across filesystem limits and avoids same-name clashes.
+            token = hashlib.sha256(os.fsencode(obj)).hexdigest()[:24]
+            target = aliases / f'{token}-{obj.name}'
+            last = None
+        is_game = obj in game_objects
+        host_names = shared if is_game else resident
+        scope_digest = shared_digest if is_game else resident_digest
+        # BeefBuild rewrites an object it changes: the same size and time stamp are the same bytes. Reading and
+        # hashing thousands of unchanged objects took longer than the link.
+        status = obj.stat()
+        stamp = [status.st_size, status.st_mtime_ns]
+        data = None
+        if isinstance(last, dict) and last.get('stamp') == stamp and isinstance(last.get('object'), str):
+            object_digest = last['object']
+        else:
+            data = obj.read_bytes()
+            object_digest = hashlib.sha256(data).hexdigest()
+        record = {'source': source, 'target': target.name,
+                  'object': object_digest, 'host': scope_digest, 'stamp': stamp}
+        same_object = (isinstance(last, dict) and last.get('source') == source
+                       and last.get('object') == object_digest and target.is_file())
+        matching_symbols = None
+        if same_object and last.get('host') == scope_digest:
+            matching_symbols = last.get('matched')
+        elif same_object and isinstance(last.get('matched'), list):
+            # Newly exported symbols matter only if this specific object
+            # defines them. Compare the precise affected-symbol set.
+            if data is None:
+                data = obj.read_bytes()
+            candidate = affected_host_symbols(data, host_names)
+            if candidate == last['matched']:
+                matching_symbols = candidate
+        if same_object and matching_symbols is not None:
+            reused += 1
+        else:
+            if not isinstance(last, dict) or not target.is_file():
+                reasons['cold'] += 1
+            elif not same_object:
+                reasons['changed'] += 1
+            else:
+                reasons['symbols'] += 1
+            matching_symbols = alias_host_globals(obj, target, host_names)
+        record['matched'] = matching_symbols
+        updated[source] = record
+        result.append(target)
+
+    # A failed or interrupted cache write must not leave an incomplete index.
+    temporary = cache_path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(updated))
+    temporary.replace(cache_path)
+    return result, reused, reasons
 
 
 def exported_symbols(path):
@@ -136,6 +622,30 @@ def exported_symbols(path):
         if len(parts) == 4:
             values[parts[3]] = int(parts[1], 16)
     return values
+
+
+def vdata_symbols(vdata, cache_path):
+    """The reflection object's data symbols (symbols()) and every sized symbol it defines (exported_symbols()),
+    from one nm run, or none while it is unchanged: it is a 12 MB object with tens of thousands of symbols."""
+    status = vdata.stat()
+    stamp = [status.st_size, status.st_mtime_ns]
+    try:
+        cached = json.loads(cache_path.read_text())
+        if cached.get('stamp') == stamp:
+            return cached['data'], cached['exported']
+    except (OSError, ValueError, AttributeError, KeyError):
+        pass
+    data, exported = {}, {}
+    for line in subprocess.check_output(['nm', '-g', '-S', '--defined-only', str(vdata)], text=True).splitlines():
+        parts = line.split()
+        if len(parts) == 4:
+            exported[parts[3]] = int(parts[1], 16)
+            if parts[2] in ('B', 'D'):
+                data[parts[3]] = exported[parts[3]]
+    temporary = cache_path.with_suffix('.tmp')
+    temporary.write_text(json.dumps({'stamp': stamp, 'data': data, 'exported': exported}))
+    temporary.replace(cache_path)
+    return data, exported
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -375,9 +885,9 @@ def host_info(path):
     return values
 
 
-def windows_build(project, name, args, baseline, current):
-    info = host_info(args.host_info or args.baseline.with_suffix('.host'))
-    workspace = project / '.tallow-reload' / (args.baseline.stem + '-workspace')
+def prepare_windows_workspace(project, name):
+    """The reload workspace for a Windows project: its sources and a configuration whose own link is quick."""
+    workspace = reload_workspace(project, 'windows')
     workspace.mkdir(parents=True, exist_ok=True)
     source = workspace / 'src'
     if cross():
@@ -401,25 +911,76 @@ def windows_build(project, name, args, baseline, current):
     for key, entry in config['Projects'].items():
         path = '.' if key == name else (entry['Path'] if re.match(r'^[A-Za-z]:', entry['Path']) else windows_path((project / entry['Path']).resolve()))
         entries.append(f'{key} = {{Path = {json.dumps(path)}}}')
-    (workspace / 'BeefSpace.toml').write_text('FileVersion = 1\nProjects = {' + ', '.join(entries) + '}\n[Workspace]\nStartupProject = ' + json.dumps(name)
-                                              + '\n\n[Configs.Debug.Win64]\nToolset = "LLVM"\n')
+    write_if_changed(workspace / 'BeefSpace.toml',
+                     'FileVersion = 1\nProjects = {' + ', '.join(entries) + '}\n[Workspace]\nStartupProject = ' + json.dumps(name)
+                     + '\n\n[Configs.Debug.Win64]\nToolset = "LLVM"\n')
     # The compiler is only wanted for its object files. Its own link is given what it needs to pass quickly.
     quick = '[Configs.Debug.Win64]\nBuildKind = "DynamicLib"\nCLibType = "Static"\nOtherLinkFlags = "/DLL /NOENTRY /FORCE /DEBUG:NONE /NODEFAULTLIB"\n'
     proj_text = (project / 'BeefProj.toml').read_text()
     proj_text, replaced = re.subn(r'\[Configs\.Debug\.Win64\]\n(?:[^\[\n][^\n]*\n|\n(?!\[))*', lambda _: quick + '\n', proj_text, count=1)
     if not replaced:
         proj_text += '\n' + quick
-    (workspace / 'BeefProj.toml').write_text(proj_text)
+    write_if_changed(workspace / 'BeefProj.toml', proj_text)
+    return workspace
+
+
+def windows_beef():
+    """The Windows compiler, for tools/beef_compile_server.py."""
+    if cross():
+        return beef_compile_server.WindowsBeef(toolchain() / 'beef/bin', beef_command(Path('.'))[1])
+    beef = shutil.which(os.environ.get('BEEFBUILD', 'BeefBuild'))
+    return beef_compile_server.WindowsBeef(Path(beef).parent) if beef else None
+
+
+def start_windows_server(project, name):
+    """Starts the compile server for a Windows project, so the first reload finds it loaded."""
+    try:
+        beef = windows_beef() if beef_compile_server is not None else None
+        if beef is not None:
+            beef_compile_server.build_windows(beef, prepare_windows_workspace(project, name), WINDOWS_BUILD_ARGS, wait=False)
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f'Compile server not started: {error}', flush=True)
+
+
+WINDOWS_BUILD_ARGS = ['-config=Debug', '-platform=Win64', '-verbosity=minimal']
+
+
+def windows_build(project, name, args, baseline, current, snapshot_seconds, reload_started):
+    info = host_info(args.host_info or args.baseline.with_suffix('.host'))
+    workspace = prepare_windows_workspace(project, name)
+    source = workspace / 'src'
     command, environment = beef_command(workspace)
     log = workspace / 'compiler.log'
+    outputs_before = build_output_state(workspace, name, 'windows')
+    compile_started = time.perf_counter()
+    trace = os.environ.get('TALLOW_RELOAD_TRACE_COMPILER') == '1'
+    if trace:
+        command = [arg if not arg.startswith('-verbosity=') else '-verbosity=diagnostic' for arg in command]
     with open(log, 'w') as output:
-        completed = subprocess.run(command, env=environment, stdout=output, stderr=subprocess.STDOUT)
+        # The compiler kept loaded between reloads recompiles only what changed (tools/beef_compile_server.py).
+        returncode = None
+        beef = None if trace or beef_compile_server is None else windows_beef()
+        if beef is not None:
+            try:
+                returncode = beef_compile_server.build_windows(beef, workspace, WINDOWS_BUILD_ARGS, output=output)
+            except (OSError, RuntimeError, ValueError) as error:
+                print(f'Compile server not used: {error}', file=output, flush=True)
+        compiler = 'compile server'
+        if returncode is None:
+            compiler = 'BeefBuild'
+            returncode = subprocess.run(command, env=environment, stdout=output, stderr=subprocess.STDOUT).returncode
+    compile_seconds = time.perf_counter() - compile_started
+    outputs_after = build_output_state(workspace, name, 'windows')
+    print(f'Reload timings: source scan {snapshot_seconds:.2f}s, {compiler} {compile_seconds:.2f}s', flush=True)
+    print(f'Reload compiler cache: {workspace}', flush=True)
+    print('BeefBuild outputs: ' + build_activity_label(
+        build_output_activity(outputs_before, outputs_after)), flush=True)
     text = log.read_text(errors='replace')
     # The throwaway link reports everything it could not find, which is everything; only the compiler's word counts.
     shown = [line for line in text.split('\n') if line.strip() and not re.match(r'^(lld-link: warning|>>>|MESA|pci id|\s)', line)]
-    if completed.returncode:
+    if returncode:
         print('\n'.join(shown).replace(str(source), str(project / 'src')).replace(windows_path(source), windows_path(project / 'src')), flush=True)
-        return completed.returncode
+        return returncode
     if current != snapshot(project):
         print('ERROR: Source declarations or resident code changed during compilation; build again.', flush=True)
         return 4
@@ -543,13 +1104,18 @@ def windows_build(project, name, args, baseline, current):
     manifest.parent.mkdir(parents=True, exist_ok=True)
     # What a later reload needs to know about this one, if it is taken up.
     Path(str(manifest) + '.json').write_text(json.dumps({
-        'top': base, 'state': state,
+        'top': base, 'state': state, 'schemas': current['schemas'], 'code': current['code'],
+        'normalized_code': current['normalized_code'],
         'loaded': {symbol: address for symbol, address in placed.items()
                    if low <= address < high and not symbol.startswith(PRIVATE_TO_IMAGE) and not symbol.startswith('reload_private_')}}))
     temporary = manifest.with_suffix('.tmp')
     temporary.write_text('\n'.join(lines) + '\n')
     temporary.replace(manifest)
     print(f'Compiled script library: {module}. Engine implementations remain in the host.', flush=True)
+    total_seconds = time.perf_counter() - reload_started
+    print(f'Reload total: {total_seconds:.2f}s '
+          f'(BeefBuild {compile_seconds:.2f}s, other stages '
+          f'{total_seconds - compile_seconds:.2f}s)', flush=True)
     return 0
 
 
@@ -557,18 +1123,60 @@ def windows_commit(args, baseline):
     record = json.loads(Path(str(args.manifest.resolve()) + '.json').read_text())
     baseline['loaded'].update(record['loaded'])
     baseline['state'].update(record['state'])
+    baseline['schemas'] = record['schemas']
+    baseline['code'] = record['code']
+    baseline['normalized_code'] = record['normalized_code']
     baseline['top'] = record['top']
     args.baseline.write_text(json.dumps(baseline))
     return 0
+
+
+def linux_commit(args):
+    """Records what an activated generation exports and was built from, as the next reload's baseline."""
+    baseline = json.loads(args.baseline.read_text())
+    module = Path(json.loads(args.manifest.read_text().splitlines()[0].removeprefix('module ')))
+    built = json.loads(Path(str(args.manifest) + '.source.json').read_text())
+    baseline['exports'].update(exported_symbols(module))
+    baseline['schemas'] = built['schemas']
+    baseline['code'] = built['code']
+    baseline['normalized_code'] = built['normalized_code']
+    if 'mode structural' in args.manifest.read_text():
+        baseline['method_patch_eligible'] = False
+    args.baseline.write_text(json.dumps(baseline))
+    return 0
+
+
+def prepare_linux_workspace(project, name):
+    """The workspace reloads compile in: the game as a dynamic library, beside the engine and editor."""
+    workspace = reload_workspace(project, 'linux')
+    workspace.mkdir(parents=True, exist_ok=True)
+    source = workspace / 'src'
+    if not source.exists():
+        source.symlink_to(project / 'src', target_is_directory=True)
+    config = tomllib.loads((project / 'BeefSpace.toml').read_text())
+    entries = []
+    for key, entry in config['Projects'].items():
+        path = '.' if key == name else str((project / entry['Path']).resolve())
+        entries.append(f'{key} = {{Path = {json.dumps(path)}}}')
+    write_if_changed(workspace / 'BeefSpace.toml',
+                     'FileVersion = 1\nProjects = {' + ', '.join(entries) + '}\n[Workspace]\nStartupProject = ' + json.dumps(name) + '\n')
+    proj_text = (project / 'BeefProj.toml').read_text()
+    proj_text = proj_text.replace('[Configs.Debug.Linux64]', '[Configs.Debug.Linux64]\nBuildKind = "DynamicLib"', 1)
+    write_if_changed(workspace / 'BeefProj.toml', proj_text)
+    return workspace
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('project', type=Path)
     parser.add_argument('--snapshot', action='store_true')
+    parser.add_argument('--classify', action='store_true',
+                        help='Exit 0 unchanged, 10 method-only, 11 declarations, 3 incompatible resident code.')
     parser.add_argument('--baseline', required=True, type=Path)
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--commit', action='store_true', help='Record symbols of an activated generation.')
+    parser.add_argument('--mode', choices=('automatic', 'conservative'), default='automatic',
+                        help='Automatic uses lightweight method patching for compatible Linux edits.')
     parser.add_argument('--platform', choices=('linux', 'windows'), default='windows' if os.name == 'nt' else 'linux')
     parser.add_argument('--host-info', type=Path, help='Windows: the file the running program wrote about where it is loaded (default: the baseline with .host).')
     args = parser.parse_args()
@@ -580,7 +1188,14 @@ def main():
                 setattr(args, key, Path(str(value)[2:].replace('\\', '/')))
                 args.platform = 'windows'
     project = args.project.resolve()
+    reload_started = time.perf_counter()
+    if args.commit and args.platform != 'windows':
+        return linux_commit(args)
     current = snapshot(project)
+    snapshot_seconds = time.perf_counter() - reload_started
+    if args.classify:
+        baseline = json.loads(args.baseline.read_text())
+        return classify_changes(baseline, current)
     if args.platform == 'windows':
         name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
         if args.commit:
@@ -588,6 +1203,7 @@ def main():
         if args.snapshot:
             args.baseline.parent.mkdir(parents=True, exist_ok=True)
             args.baseline.write_text(json.dumps(windows_snapshot(project, name, current)))
+            start_windows_server(project, name)
             return 0
         baseline = json.loads(args.baseline.read_text())
         if baseline['resident'] != current['resident']:
@@ -595,19 +1211,20 @@ def main():
             return 3
         if args.manifest is None:
             parser.error('--manifest is required for builds')
-        return windows_build(project, name, args, baseline, current)
-    if args.commit:
-        baseline = json.loads(args.baseline.read_text())
-        module = Path(json.loads(args.manifest.read_text().splitlines()[0].removeprefix('module ')))
-        baseline['exports'].update(exported_symbols(module))
-        args.baseline.write_text(json.dumps(baseline))
-        return 0
+        return windows_build(project, name, args, baseline, current, snapshot_seconds, reload_started)
     if args.snapshot:
         args.baseline.parent.mkdir(parents=True, exist_ok=True)
         name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
         host = project / 'build' / 'Debug_Linux64' / name / name
         current['exports'] = exported_symbols(host)
         args.baseline.write_text(json.dumps(current))
+        # Starts the compile server now, so the first reload finds it loaded instead of starting it.
+        try:
+            if beef_compile_server is not None:
+                beef_compile_server.build(prepare_linux_workspace(project, name), ['-config=Debug', '-verbosity=minimal'],
+                                          wait=False, skip_archive=True)
+        except OSError as error:
+            print(f'Compile server not started: {error}', flush=True)
         return 0
     baseline = json.loads(args.baseline.read_text())
     if baseline['resident'] != current['resident']:
@@ -616,39 +1233,49 @@ def main():
     if args.manifest is None:
         parser.error('--manifest is required for builds')
     name = tomllib.loads((project / 'BeefProj.toml').read_text())['Project']['Name']
-    workspace = project / '.tallow-reload' / (args.baseline.stem + '-workspace')
-    workspace.mkdir(parents=True, exist_ok=True)
-    source = workspace / 'src'
-    if not source.exists():
-        source.symlink_to(project / 'src', target_is_directory=True)
-    config = tomllib.loads((project / 'BeefSpace.toml').read_text())
-    entries = []
-    for key, entry in config['Projects'].items():
-        path = '.' if key == name else str((project / entry['Path']).resolve())
-        entries.append(f'{key} = {{Path = {json.dumps(path)}}}')
-    (workspace / 'BeefSpace.toml').write_text('FileVersion = 1\nProjects = {' + ', '.join(entries) + '}\n[Workspace]\nStartupProject = ' + json.dumps(name) + '\n')
-    proj_text = (project / 'BeefProj.toml').read_text()
-    proj_text = proj_text.replace('[Configs.Debug.Linux64]', '[Configs.Debug.Linux64]\nBuildKind = "DynamicLib"', 1)
-    (workspace / 'BeefProj.toml').write_text(proj_text)
-    completed = subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}', '-config=Debug', '-verbosity=minimal'])
-    if completed.returncode:
-        return completed.returncode
+    strategy = reload_strategy(args.mode, baseline, current, 'linux')
+    print(f'Reload strategy: {strategy}', flush=True)
+    workspace = prepare_linux_workspace(project, name)
+    outputs_before = build_output_state(workspace, name, 'linux')
+    compile_started = time.perf_counter()
+    trace = os.environ.get('TALLOW_RELOAD_TRACE_COMPILER') == '1'
+    build_args = ['-config=Debug', f'-verbosity={"diagnostic" if trace else "minimal"}']
+    # The compiler kept loaded between reloads recompiles only what changed (tools/beef_compile_server.py).
+    returncode = None if trace or beef_compile_server is None else beef_compile_server.build(workspace, build_args, skip_archive=True)
+    compiler = 'compile server'
+    if returncode is None:
+        compiler = 'BeefBuild'
+        returncode = subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}', *build_args]).returncode
+    compile_seconds = time.perf_counter() - compile_started
+    outputs_after = build_output_state(workspace, name, 'linux')
+    print(f'Reload timings: source scan {snapshot_seconds:.2f}s, {compiler} {compile_seconds:.2f}s', flush=True)
+    print(f'Reload compiler cache: {workspace}', flush=True)
+    print('BeefBuild outputs: ' + build_activity_label(
+        build_output_activity(outputs_before, outputs_after)), flush=True)
+    if returncode:
+        return returncode
     # A save during compilation must never activate a stale or mixed revision.
     if current != snapshot(project):
         print('ERROR: Source declarations or resident code changed during compilation; build again.', flush=True)
         return 4
+    object_stage_started = time.perf_counter()
     root = workspace / 'build' / 'Debug_Linux64' / name
-    tokens = shlex.split((root / 'ObjectArgs.txt').read_text())
+    tokens = object_args(root / 'ObjectArgs.txt')
     objects = [Path(p) for p in tokens if p.endswith('.o') and Path(p).name != 'vdata.o']
     game_objects = [p for p in objects if p.parent == root]
     vdata = root / 'vdata.o'
-    force, state = symbols(game_objects)
+    (workspace / 'aliased-objects').mkdir(exist_ok=True)
+    force, state = cached_symbols(game_objects, workspace / 'aliased-objects' / 'game-symbols.json')
     force.update(obj.stem for obj in game_objects)
-    _, metadata = symbols([vdata])
+    metadata, vdata_exports = vdata_symbols(vdata, workspace / 'aliased-objects' / 'vdata-symbols.json')
     classes = []
-    for symbol, size in metadata.items():
-        if symbol.endswith('13sBfClassVDataE'):
-            demangled = subprocess.check_output(['c++filt', symbol], text=True).strip()
+    class_symbols = [(symbol, size) for symbol, size in metadata.items()
+                     if symbol.endswith('13sBfClassVDataE')]
+    # Demangle all class names in one process instead of launching c++filt per class.
+    if class_symbols:
+        names = subprocess.run(['c++filt'], input='\n'.join(symbol for symbol, _ in class_symbols) + '\n',
+                               text=True, stdout=subprocess.PIPE, check=True).stdout.splitlines()
+        for (symbol, size), demangled in zip(class_symbols, names):
             key = demangled.removeprefix('bf::').removesuffix('::sBfClassVData').replace('::', '_')
             if key in force:
                 classes.append((symbol, size))
@@ -661,36 +1288,92 @@ def main():
     for symbol, size in shared.items():
         if resident[symbol] != size:
             raise ValueError('Static field layout changed; change its name or full rebuild: ' + symbol)
+    objects_scanned_seconds = time.perf_counter() - object_stage_started
     aliases = workspace / 'aliased-objects'
-    aliases.mkdir(exist_ok=True)
-    linked_objects = []
-    for index, obj in enumerate(objects):
-        target = aliases / f'{index}-{obj.name}'
-        # Existing runtime functions/data stay in the host. New generic implementations
-        # emitted for game code can be included without duplicating engine state.
-        alias_host_globals(obj, target, shared if obj in game_objects else resident)
-        linked_objects.append(target)
+    # Existing runtime functions/data stay in the host. New generic implementations
+    # emitted for game code can be included without duplicating engine state.
+    alias_started = time.perf_counter()
+    linked_objects, reused, reuse_reasons = alias_objects(objects, game_objects, aliases, resident, shared)
+    game_links, dependency_links = partition_link_objects(objects, linked_objects, game_objects)
+    alias_seconds = time.perf_counter() - alias_started
     renamed = {symbol: 'reload_private_' + symbol for symbol in metadata
                if symbol in resident and (symbol.endswith('11sBfTypeDataE')
                    or (symbol.endswith('13sBfClassVDataE') and symbol not in {s for s, _ in classes}))}
     # nm's data list excludes read-only metadata on some toolchains.
-    for symbol in exported_symbols(vdata):
+    for symbol in vdata_exports:
         if symbol in resident and symbol.endswith('11sBfTypeDataE'):
             renamed[symbol] = 'reload_private_' + symbol
     mapping = aliases / 'metadata-renames.txt'
     mapping.write_text(''.join(f'{a} {b}\n' for a, b in renamed.items()))
     metadata_object = aliases / 'vdata.o'
+    link_started = time.perf_counter()
     subprocess.run(['objcopy', '--redefine-syms=' + str(mapping), str(vdata), str(metadata_object)], check=True)
-    subprocess.run(['c++', '-shared', '-Wl,-Bsymbolic', '-o', str(module), *map(str, linked_objects), str(metadata_object)], check=True)
-    lines = ['module ' + json.dumps(str(module)), 'mode structural']
+    archive_started = time.perf_counter()
+    archive_failed = False
+    linker = fast_linker()
+    if linker is not None:
+        # The dependencies as a lazy group: like an archive, only what the game code needs is linked.
+        dependency_archive, archive_reused = None, False
+    else:
+        try:
+            dependency_archive, archive_reused = cached_dependency_archive(
+                dependency_links, aliases / 'resident-dependencies.a')
+        except (OSError, subprocess.CalledProcessError) as error:
+            # A missing archiver or unsupported dependency object must not prevent
+            # Play. The original full-object linker remains an operational fallback.
+            print(f'WARNING: Dependency archive unavailable ({error}); using the full-object linker.', flush=True)
+            dependency_archive, archive_reused, archive_failed = None, False, True
+    archive_seconds = time.perf_counter() - archive_started
+    # Game implementations and complete type metadata are mandatory. Resident
+    # dependencies are indexed, so ld extracts only genuinely missing code.
+    full_link = ['c++', '-shared', '-Wl,-Bsymbolic', '-o', str(module),
+                 *map(str, linked_objects), str(metadata_object)]
+    fast_link = ['c++', '-shared', '-Wl,-Bsymbolic', '-o', str(module),
+                 *map(str, game_links), str(metadata_object)]
+    if dependency_archive is not None:
+        fast_link.append(str(dependency_archive))
+    if linker is not None:
+        fast_link = ['c++', '-shared', f'-fuse-ld={linker}', '-Wl,-Bsymbolic', '-o', str(module),
+                     response_file(aliases / 'link-objects.rsp', [*game_links, metadata_object, '-Wl,--start-lib',
+                                                                 *dependency_links, '-Wl,--end-lib'])]
+    fallback = False
+    if archive_failed or os.environ.get('TALLOW_RELOAD_FLAT_LINK') == '1':
+        fallback = True
+        subprocess.run(full_link, check=True)
+    else:
+        try:
+            subprocess.run(fast_link, check=True)
+        except subprocess.CalledProcessError:
+            print('WARNING: Archive link failed; retrying the full-object linker.', flush=True)
+            fallback = True
+            subprocess.run(full_link, check=True)
+    link_seconds = time.perf_counter() - link_started
+    lines = ['module ' + json.dumps(str(module)), 'mode ' + strategy]
     lines += [f'class {symbol} {size}' for symbol, size in classes]
-    lines += [f'shared {symbol} {size}' for symbol, size in shared.items()]
+    # The method patcher copies mutable state from the current module, while
+    # structural reload uses its own shared-state migration implementation.
+    field = 'state' if strategy == 'methods' else 'shared'
+    lines += [f'{field} {symbol} {size}' for symbol, size in shared.items()]
     manifest = args.manifest.resolve()
     manifest.parent.mkdir(parents=True, exist_ok=True)
     temporary = manifest.with_suffix('.tmp')
     temporary.write_text('\n'.join(lines) + '\n')
     temporary.replace(manifest)
+    Path(str(manifest) + '.source.json').write_text(json.dumps({
+        'schemas': current['schemas'], 'code': current['code'],
+        'normalized_code': current['normalized_code']}))
+    total_seconds = time.perf_counter() - reload_started
     print(f'Compiled script library: {module}. Engine implementations remain in the host.', flush=True)
+    print(f'Reload total: {total_seconds:.2f}s '
+          f'({compiler} {compile_seconds:.2f}s, other stages {total_seconds - compile_seconds:.2f}s)', flush=True)
+    print(f'Reload stages: inspect objects {objects_scanned_seconds:.2f}s, '
+          f'prepare objects {alias_seconds:.2f}s ({reused}/{len(objects)} reused), '
+          f'link {link_seconds:.2f}s (archive {archive_seconds:.2f}s)', flush=True)
+    print(f'Reload link inputs: game {len(game_links)}, dependencies {len(dependency_links)}, '
+          f'linker {linker or "ld"}, archive reused {archive_reused}, flat fallback {fallback}', flush=True)
+    print(f'Reload object cache: cold/missing {reuse_reasons["cold"]}, '
+          f'object changed {reuse_reasons["changed"]}, '
+          f'relevant host symbols changed {reuse_reasons["symbols"]}', flush=True)
     return 0
 
 

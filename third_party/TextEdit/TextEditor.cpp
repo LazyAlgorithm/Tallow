@@ -177,6 +177,9 @@ bool TextEditor::render(const char* title, const ImVec2& size, ImGuiChildFlags c
 			ImVec2(offset + textRightOffset + cursorWidth, drawList->GetClipRectMax().y),
 			true);
 
+		textClipMin = drawList->GetClipRectMin();
+		textClipMax = drawList->GetClipRectMax();
+
 		// render parts in the text area
 		renderCurrentLineHighlight();
 		renderActiveBracketBackground();
@@ -1695,6 +1698,36 @@ void TextEditor::handleMouseInteractions() {
 //	TextEditor::isDocPosVisible
 //
 
+// Ghost completions are visual only. Shift an existing paired closer and the rest of its
+// line to the right of the preview, without modifying the source or the undo history.
+void TextEditor::DrawInlineText(DocPos pos, const char* text, ImU32 color) {
+	if (!text || !*text || !IsDocPosVisible(pos)) return;
+	drawList->PushClipRect(textClipMin, textClipMax, true);
+	const ImVec2 screen = DocPos2ScreenPos(pos);
+	const auto& line = document[pos.line];
+	if (pos.index < line.size() && (line[pos.index].codepoint == ')' ||
+		line[pos.index].codepoint == ']' || line[pos.index].codepoint == '}')) {
+		// The ordinary renderer has already drawn the closer at the caret. Redraw the
+		// line tail in its preview position so neither it nor the ghost text is clipped by it.
+		const float previewWidth = ImGui::CalcTextSize(text).x;
+		drawList->AddRectFilled(screen, ImVec2(textClipMax.x, screen.y + glyphSize.y),
+			palette.get(Color::background));
+		float x = screen.x + previewWidth;
+		for (size_t i = pos.index; i < line.size() && x < textClipMax.x; ++i) {
+			const auto& glyph = line[i];
+			if (glyph.codepoint != ' ' && glyph.codepoint != '\t')
+				font->RenderChar(drawList, fontSize, ImVec2(x, screen.y),
+					palette.get(glyph.color), glyph.codepoint);
+			x += glyph.columns * glyphSize.x;
+		}
+		// This late overlay also covered the editor's caret, so restore it.
+		drawList->AddLine(screen, ImVec2(screen.x, screen.y + fontSize),
+			palette.get(Color::cursor));
+	}
+	drawList->AddText(font, fontSize, screen, color, text);
+	drawList->PopClipRect();
+}
+
 bool TextEditor::isDocPosVisible(DocPos docPos) const {
 	if (isLineHidden(docPos.line)) {
 		return false;
@@ -1703,7 +1736,7 @@ bool TextEditor::isDocPosVisible(DocPos docPos) const {
 		const auto visPos = docPos2VisPos(docPos);
 
 		return
-			visPos.row >= firstVisibleRow && visPos.row < lastVisibleRow &&
+			visPos.row >= firstVisibleRow && visPos.row <= lastVisibleRow &&
 			visPos.column >= firstVisibleColumn && visPos.column < lastVisibleColumn;
 	}
 }
@@ -2477,6 +2510,19 @@ void TextEditor::handleCharacter(ImWchar character) {
 	const auto opener = character;
 	const auto isPaired = !config.overwrite && config.completePairedGlyphs && CodePoint::isPairOpener(opener);
 	const auto closer = CodePoint::toPairCloser(opener);
+
+	// After typing or accepting completion inside a paired expression, typing its
+	// closing glyph should advance over the existing closer, not insert a duplicate.
+	if (!cursors.hasMultiple() && !cursors.anyHasSelection() &&
+		(character == ')' || character == ']' || character == '}')) {
+		const auto at = cursors.getCurrent().getSelectionEnd();
+		if (at.line < document.size() && at.index < document[at.line].size() &&
+			document[at.line][at.index].codepoint == character) {
+			completePairCloser = 0;
+			moveRight(false, false);
+			return;
+		}
+	}
 
 	// ignore input if it was the closing character for a pair that was automatically inserted
 	if (completePairCloser) {
@@ -8676,9 +8722,13 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 		requestDeactivation = true;
 	}
 
-	const auto visibleSuggestions = (suggestions == 0) ? 1 : std::min(static_cast<size_t>(10), suggestions);
+	// Parameter help is a header within the completion window, not another popup on
+	// top of it. A bounded, scrollable header keeps long overload lists from hiding suggestions.
+	const auto visibleSuggestions = (suggestions == 0) ? 1 : std::min(static_cast<size_t>(signature.empty() ? 10 : 8), suggestions);
 	const auto& style = ImGui::GetStyle();
-	const auto height = ImGui::GetFrameHeightWithSpacing() * visibleSuggestions + style.WindowPadding.y * 2.0f;
+	const float signatureHeight = signature.empty() ? 0.0f : ImGui::GetTextLineHeightWithSpacing() * 3.0f;
+	const auto height = ImGui::GetFrameHeightWithSpacing() * visibleSuggestions + style.WindowPadding.y * 2.0f +
+		(signature.empty() ? 0.0f : signatureHeight + style.ItemSpacing.y + 1.0f);
 	ImGui::SetNextWindowSize(ImVec2(configuration.suggestionWidth * glyphSize.x, height));
 
 	const ImGuiWindowFlags flags =
@@ -8697,6 +8747,13 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 			active = false;
 
 		} else {
+			if (!signature.empty())
+			{
+				ImGui::BeginChild("##signatureHelp", ImVec2(0.0f, signatureHeight), false, ImGuiWindowFlags_NoNav);
+				ImGui::TextWrapped("%s", signature.c_str());
+				ImGui::EndChild();
+				ImGui::Separator();
+			}
 			// do we have any suggestions
 			if (suggestions) {
 				const auto items = state.suggestions.size();
@@ -8777,6 +8834,7 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 
 void TextEditor::AutoComplete::setSuggestions(const std::vector<std::string>& suggestions) {
 	state.suggestions = suggestions;
+	state.suggestionsPromise = false;
 	currentSelection = 0;
 }
 

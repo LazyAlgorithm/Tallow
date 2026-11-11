@@ -7,7 +7,9 @@
 #include "extras/TrieAutoComplete.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -26,6 +28,17 @@ namespace
 		bool markup = false;
 		// Which of the editor's code colour sets this document was last given (tn_code_set_palette).
 		int paletteVersion = 0;
+		int semanticRequest = 0;
+		int semanticCursor = 0;
+		std::string semanticHint;
+		int hintCursor = -1;
+		std::string hintSource;
+		std::string signature;
+		int signatureCursor = -1;
+		size_t semanticUndoIndex = 0;
+		std::vector<std::string> cachedCompletions;
+		std::string completionBefore, completionAfter, completionPrefix;
+		int completionStart = 0;
 	};
 
 	// The code colours every document uses, set by the editor's theme (tn_code_set_palette); version 0 is the
@@ -398,13 +411,81 @@ TN_API void* tn_code_create(const char* text, int language)
 	editor.SetShowScrollbarMiniMapEnabled(true);
 	editor.SetShowWhitespacesEnabled(false);
 	editor.SetText(std::string_view(text != nullptr ? text : ""));
+	editor.SetTextContextMenuCallback([document](TextEditor::PopupData& data)
+	{
+		TextEditor& code = document->editor;
+		const bool editable = !code.IsReadOnlyEnabled();
+		const bool selected = code.AnyCursorHasSelection();
+		if (ImGui::MenuItem("Undo", "Ctrl+Z", false, code.CanUndo())) code.Undo();
+		if (ImGui::MenuItem("Redo", "Ctrl+Y", false, code.CanRedo())) code.Redo();
+		ImGui::Separator();
+		if (ImGui::MenuItem("Cut", "Ctrl+X", false, editable && selected)) code.Cut();
+		if (ImGui::MenuItem("Copy", "Ctrl+C", false, selected)) code.Copy();
+		if (ImGui::MenuItem("Paste", "Ctrl+V", false, editable)) code.Paste();
+		if (ImGui::MenuItem("Select All", "Ctrl+A")) code.SelectAll();
+		if (code.GetLanguageName() == "Beef")
+		{
+			ImGui::Separator();
+			const int cursor = (int)code.GetSectionText(TextEditor::DocPos(0, 0), data.pos).size();
+			if (ImGui::MenuItem("Go to Definition", "F12"))
+			{
+				document->semanticRequest = 4;
+				document->semanticCursor = cursor;
+			}
+			if (ImGui::MenuItem("Symbol / Parameters"))
+			{
+				document->semanticRequest = 5;
+				document->semanticCursor = cursor;
+			}
+			if (ImGui::MenuItem("Rename Symbol", "F2"))
+			{
+				document->semanticRequest = 6;
+				document->semanticCursor = cursor;
+			}
+		}
+	});
 	if (language == 0)
 	{
-		// Scripts complete from the engine's and the project's own code; see CompleteBeef.
 		TextEditor::AutoCompleteConfig config;
 		config.suggestionWidth = 40;
-		config.callback = [document](TextEditor::AutoCompleteState& state) { CompleteBeef(&document->editor, state); };
+		config.callback = [document](TextEditor::AutoCompleteState& state)
+		{
+			state.suggestions.clear();
+			const std::string source = document->editor.GetText();
+			const size_t start = document->editor.GetSectionText(TextEditor::DocPos(0, 0), state.searchTermStart).size();
+			const size_t end = document->editor.GetSectionText(TextEditor::DocPos(0, 0), state.searchTermEnd).size();
+			const std::string prefix = source.substr(start, end - start);
+			// Reuse only a narrower prefix on the identical receiver and unchanged surrounding source.
+			if (!document->cachedCompletions.empty() && source.substr(0, start) == document->completionBefore &&
+				source.substr(end) == document->completionAfter && prefix.rfind(document->completionPrefix, 0) == 0)
+			{
+				for (const auto& word : document->cachedCompletions)
+					if (StartsWithNoCase(word, prefix)) state.suggestions.push_back(word);
+				state.suggestionsPromise = false;
+				document->semanticRequest = 0;
+				return;
+			}
+			state.suggestionsPromise = true;
+			document->completionStart = (int)start;
+			document->semanticRequest = 1;
+			document->semanticCursor = (int)end;
+		};
 		editor.SetAutoCompleteConfig(&config);
+		editor.SetTextHoverCallback([document](TextEditor::PopupData& data)
+		{
+			const int cursor = (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), data.pos).size();
+			const std::string source = document->editor.GetText();
+			if (cursor == document->hintCursor && source == document->hintSource)
+			{
+				if (!document->semanticHint.empty())
+					ImGui::TextUnformatted(document->semanticHint.c_str());
+			}
+			else if (document->semanticRequest == 0)
+			{
+				document->semanticRequest = 2;
+				document->semanticCursor = cursor;
+			}
+		});
 	}
 	else
 		document->completion.Connect(&editor);
@@ -497,6 +578,19 @@ TN_API const char* tn_code_get_text(void* handle)
 	return document->text.c_str();
 }
 
+// The selected completion's remaining suffix is presentation only. Tab/Enter and Escape use TextEdit's
+// normal acceptance/dismissal, preserving its selection, undo history and multi-choice popup.
+static std::string InlineSuffix(Document* document)
+{
+	const std::string selected = document->editor.GetAutoCompletePreview();
+	const auto start = document->editor.GetAutoCompleteStart();
+	const auto cursor = document->editor.GetMainCursorPosition();
+	if (selected.empty() || cursor < start) return "";
+	const std::string prefix = document->editor.GetSectionText(start, cursor);
+	if (!StartsWithNoCase(selected, prefix)) return "";
+	return selected.substr(prefix.size());
+}
+
 TN_API void tn_code_render(void* handle, const char* id, float width, float height)
 {
 	Document* document = (Document*)handle;
@@ -505,10 +599,177 @@ TN_API void tn_code_render(void* handle, const char* id, float width, float heig
 		document->editor.SetPalette(s_palette);
 		document->paletteVersion = s_paletteVersion;
 	}
+	// Display parameter signatures inside the suggestion popup when it is open,
+	// instead of creating a second tooltip at exactly the same caret position.
+	document->editor.SetAutoCompleteSignature(document->signature);
 	tn_imgui_push_mono_font();
 	document->editor.Render(id, ImVec2(width, height));
+	const std::string suffix = InlineSuffix(document);
+	if (!suffix.empty() && ImGui::IsItemVisible())
+		document->editor.DrawInlineText(document->editor.GetMainCursorPosition(), suffix.c_str(), ImGui::GetColorU32(ImGuiCol_TextDisabled));
 	ImGui::PopFont();
 	if (document->markup) CloseTypedTag(document);
+	if (document->editor.GetLanguageName() == "Beef")
+	{
+		const size_t revision = document->editor.GetUndoIndex();
+		const int caret = (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
+		if (revision == document->semanticUndoIndex && caret != document->signatureCursor) document->signature.clear();
+		document->signatureCursor = caret;
+		if (revision != document->semanticUndoIndex)
+		{
+			document->semanticUndoIndex = revision;
+			const auto cursor = document->editor.GetMainCursorPosition();
+			const std::string before = document->editor.GetSectionText(TextEditor::DocPos(0, 0), cursor);
+			if (!before.empty() && (before.back() == '(' || before.back() == ','))
+			{
+				// Parameter hints are not completion lists: keep the active suggestion popup intact.
+				if (document->semanticRequest != 1)
+				{
+					document->semanticRequest = 3;
+					document->semanticCursor = (int)before.size();
+				}
+			}
+			if (!before.empty() && (before.back() == ')' || before.back() == ';')) document->signature.clear();
+		}
+		document->editor.SetAutoCompleteSignature(document->signature);
+		if (!document->signature.empty() && !document->editor.IsAutoCompleteActive())
+		{
+			ImVec2 position = document->editor.DocPos2ScreenPos(document->editor.GetMainCursorPosition());
+			position.y += document->editor.GetLineHeight();
+			ImGui::SetNextWindowPos(position);
+			ImGui::BeginTooltip();
+			ImGui::TextUnformatted(document->signature.c_str());
+			ImGui::EndTooltip();
+		}
+	}
+}
+
+// Match the compiler worker's resolved absolute paths, including projects reached through symlinks.
+TN_API const char* tn_code_canonical_path(const char* path)
+{
+	static thread_local std::string result;
+	std::error_code error;
+	#if defined(__cpp_char8_t)
+	const std::filesystem::path input((const char8_t*)(path ? path : ""));
+#else
+	const auto input = std::filesystem::u8path(path ? path : "");
+#endif
+	const auto resolved = std::filesystem::weakly_canonical(input, error);
+	if (error) result = path ? path : "";
+	else
+	{
+		const auto utf8 = resolved.generic_u8string();
+		result.assign((const char*)utf8.data(), utf8.size());
+	}
+	return result.c_str();
+}
+
+// Semantic requests and results are transferred on the UI thread; the compiler runs in a separate process.
+TN_API int tn_code_take_semantic_request(void* handle, int* cursor)
+{
+	Document* document = (Document*)handle;
+	const int request = document->semanticRequest;
+	*cursor = document->semanticCursor;
+	document->semanticRequest = 0;
+	return request;
+}
+
+TN_API void tn_code_invalidate_semantics(void* handle)
+{
+	Document* document = (Document*)handle;
+	document->cachedCompletions.clear();
+	document->hintSource.clear();
+	document->signature.clear();
+	document->editor.SetAutoCompleteSignature("");
+}
+
+// Drop a stale response without leaving an unresolved popup behind. A visible completion retries at the current cursor.
+TN_API void tn_code_discard_semantic_results(void* handle, bool retry)
+{
+	Document* document = (Document*)handle;
+	document->cachedCompletions.clear();
+	const bool pending = retry && document->editor.IsAutoCompleteActive();
+	document->editor.ClearAutoCompleteSuggestions(pending);
+	if (pending)
+	{
+		document->completionStart = (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetAutoCompleteStart()).size();
+		document->semanticCursor = (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
+		document->semanticRequest = 1;
+	}
+	else if (document->semanticRequest == 1)
+		document->semanticRequest = 0;
+}
+
+TN_API void tn_code_semantic_signature(void* handle, const char* signature)
+{
+	Document* document = (Document*)handle;
+	document->signature = signature ? signature : "";
+	document->editor.SetAutoCompleteSignature(document->signature);
+	document->signatureCursor = (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
+}
+
+TN_API void tn_code_semantic_hint(void* handle, int cursor, const char* hint)
+{
+	Document* document = (Document*)handle;
+	document->hintCursor = cursor;
+	document->hintSource = document->editor.GetText();
+	document->semanticHint = hint ? hint : "";
+}
+
+TN_API int tn_code_cursor_byte(void* handle)
+{
+	Document* document = (Document*)handle;
+	return (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
+}
+
+TN_API void tn_code_semantic_results(void* handle, const char* words)
+{
+	std::vector<std::string> suggestions;
+	const char* at = words ? words : "";
+	while (*at)
+	{
+		const char* end = strchr(at, '\n');
+		const size_t length = end ? (size_t)(end - at) : strlen(at);
+		if (length) suggestions.emplace_back(at, length);
+		if (!end) break;
+		at = end + 1;
+	}
+	Document* document = (Document*)handle;
+	document->editor.SetAutoCompleteSuggestions(suggestions);
+	const std::string source = document->editor.GetText();
+	const size_t end = document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
+	const size_t start = std::min((size_t)std::max(document->completionStart, 0), end);
+	document->cachedCompletions = suggestions;
+	document->completionBefore = source.substr(0, start);
+	document->completionAfter = source.substr(end);
+	document->completionPrefix = source.substr(start, end - start);
+}
+
+static TextEditor::DocPos BytePosition(const std::string& text, size_t offset)
+{
+	TextEditor::DocPos pos(0, 0);
+	for (size_t i = 0; i < std::min(offset, text.size()); i++)
+	{
+		if (text[i] == '\n') { pos.line++; pos.index = 0; }
+		else if (((unsigned char)text[i] & 0xc0) != 0x80) pos.index++;
+	}
+	return pos;
+}
+
+TN_API void tn_code_goto_byte(void* handle, int offset)
+{
+	Document* document = (Document*)handle;
+	document->editor.SetCursor(BytePosition(document->editor.GetText(), (size_t)std::max(offset, 0)));
+}
+
+// A whole-document replacement is one ordinary editor undo step, used by the project rename transaction.
+TN_API void tn_code_replace_text(void* handle, const char* text)
+{
+	Document* document = (Document*)handle;
+	const std::string previous = document->editor.GetText();
+	const auto cursor = document->editor.GetMainCursorPosition();
+	document->editor.ReplaceSectionText(TextEditor::DocPos(0, 0), BytePosition(previous, previous.size()), text ? text : "");
+	document->editor.SetCursor(cursor);
 }
 
 TN_API bool tn_code_is_dirty(void* handle)
@@ -526,10 +787,62 @@ TN_API void tn_code_mark_saved(void* handle)
 TN_API void tn_code_set_read_only(void* handle, bool readOnly) { ((Document*)handle)->editor.SetReadOnlyEnabled(readOnly); }
 TN_API void tn_code_undo(void* handle) { ((Document*)handle)->editor.Undo(); }
 TN_API void tn_code_redo(void* handle) { ((Document*)handle)->editor.Redo(); }
+TN_API void tn_code_cut(void* handle) { ((Document*)handle)->editor.Cut(); }
+TN_API void tn_code_copy(void* handle) { ((Document*)handle)->editor.Copy(); }
+TN_API void tn_code_paste(void* handle) { ((Document*)handle)->editor.Paste(); }
+TN_API void tn_code_select_all(void* handle) { ((Document*)handle)->editor.SelectAll(); }
+TN_API bool tn_code_has_selection(void* handle) { return ((Document*)handle)->editor.AnyCursorHasSelection(); }
 TN_API bool tn_code_can_undo(void* handle) { return ((Document*)handle)->editor.CanUndo(); }
 TN_API bool tn_code_can_redo(void* handle) { return ((Document*)handle)->editor.CanRedo(); }
 TN_API void tn_code_focus(void* handle) { ((Document*)handle)->editor.SetFocus(); }
 TN_API void tn_code_clear_markers(void* handle) { ((Document*)handle)->editor.ClearMarkers(); }
+
+// Distinct squiggle categories let compiler, optimization and determinism markers coexist
+// with the editor's own search highlights. Lines and columns use zero-based UTF-8 positions.
+TN_API void tn_code_clear_diagnostics(void* handle)
+{
+	TextEditor& editor = ((Document*)handle)->editor;
+	for (size_t kind = 50; kind <= 53; ++kind)
+		editor.ClearSquiggles(kind);
+}
+
+TN_API void tn_code_add_diagnostic(void* handle, int line, int column, int kind, bool isError, const char* message)
+{
+	if (line < 0) return;
+	TextEditor& editor = ((Document*)handle)->editor;
+	if ((size_t)line >= editor.GetLineCount()) return;
+	const std::string source = editor.GetLineText((size_t)line);
+	if (source.empty()) return;
+
+	// Use the compiler's column when available; line-based checks underline the statement.
+	size_t begin = 0;
+	while (begin < source.size() && std::isspace((unsigned char)source[begin])) ++begin;
+	if (begin == source.size()) return;
+	size_t end = begin;
+	if (kind == 2)
+	{
+		end = source.find("//", begin);
+		if (end == std::string::npos) end = source.size();
+		while (end > begin && std::isspace((unsigned char)source[end - 1])) --end;
+	}
+	else
+	{
+		if (column >= 0 && (size_t)column < source.size() && !std::isspace((unsigned char)source[(size_t)column]))
+			begin = (size_t)column;
+		end = begin;
+		if (std::isalnum((unsigned char)source[begin]) || source[begin] == '_')
+			while (end < source.size() && (std::isalnum((unsigned char)source[end]) || source[end] == '_')) ++end;
+		else
+			end = begin + 1;
+	}
+	if (end <= begin) end = begin + 1;
+	const size_t squiggleType = isError ? 50 : (kind == 1 ? 51 : (kind == 2 ? 52 : 53));
+	const ImU32 color = isError ? IM_COL32(245, 71, 71, 255) :
+		(kind == 1 ? IM_COL32(60, 196, 205, 255) :
+		(kind == 2 ? IM_COL32(181, 125, 255, 255) : IM_COL32(235, 185, 64, 255)));
+	editor.AddSquiggle(TextEditor::DocPos((size_t)line, begin),
+		TextEditor::DocPos((size_t)line, end), squiggleType, color, message ? message : "");
+}
 
 // line is zero based. Errors are red, warnings amber; the message shows when hovering the line.
 TN_API void tn_code_add_marker(void* handle, int line, bool error, const char* message)

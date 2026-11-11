@@ -8,7 +8,14 @@ namespace Tallow.Editor;
 
 /// The Scripts tab: a code editor in the style of Visual Studio's dark theme with syntax
 /// colouring, bracket matching, foldable blocks, find/replace, completion and undo/redo.
-/// Saving a script compiles the project in the background and marks errors on their lines.
+/// Saving a script compiles the project in the background and updates in-editor diagnostics.
+enum ScriptProblemKind
+{
+	Compiler,
+	Optimization,
+	Determinism
+}
+
 extension EditorApp
 {
 	class ScriptDocument
@@ -19,16 +26,16 @@ extension EditorApp
 		public bool open = true;
 		/// Code generated from a graph: shown for reference, edited through the graph.
 		public bool readOnly;
-		/// The ApiIndex revision this script was last coloured with.
-		public int apiRevision;
 	}
 
 	class ScriptProblem
 	{
 		public String file = new .() ~ delete _;
 		public String message = new .() ~ delete _;
-		public int32 line;
+		public int32 line = -1;
+		public int32 column;
 		public bool isError;
+		public ScriptProblemKind kind;
 	}
 
 	[CLink] static extern void* tn_code_create(char8* text, int32 language);
@@ -37,16 +44,20 @@ extension EditorApp
 	[CLink] static extern void tn_code_render(void* handle, char8* id, float width, float height);
 	[CLink] static extern bool tn_code_is_dirty(void* handle);
 	[CLink] static extern void tn_code_mark_saved(void* handle);
+	[CLink] static extern void tn_code_clear_diagnostics(void* handle);
+	[CLink] static extern void tn_code_add_diagnostic(void* handle, int32 line, int32 column, int32 kind, bool isError, char8* message);
 	[CLink] static extern void tn_code_set_read_only(void* handle, bool readOnly);
 	[CLink] static extern void tn_code_undo(void* handle);
 	[CLink] static extern void tn_code_redo(void* handle);
+	[CLink] static extern void tn_code_cut(void* handle);
+	[CLink] static extern void tn_code_copy(void* handle);
+	[CLink] static extern void tn_code_paste(void* handle);
+	[CLink] static extern void tn_code_select_all(void* handle);
+	[CLink] static extern bool tn_code_has_selection(void* handle);
 	[CLink] static extern bool tn_code_can_undo(void* handle);
 	[CLink] static extern bool tn_code_can_redo(void* handle);
 	[CLink] static extern void tn_code_focus(void* handle);
-	[CLink] static extern void tn_code_clear_markers(void* handle);
-	[CLink] static extern void tn_code_add_marker(void* handle, int32 line, bool error, char8* message);
 	[CLink] static extern void tn_code_goto_line(void* handle, int32 line);
-	[CLink] static extern void tn_code_refresh(void* handle);
 	[CLink] static extern bool igBeginTabBar(char8* id, int32 flags);
 	[CLink] static extern void igEndTabBar();
 	[CLink] static extern bool igBeginTabItem(char8* label, bool* open, int32 flags);
@@ -62,6 +73,8 @@ extension EditorApp
 			delete _;
 		};
 	List<ScriptProblem> mProblems = new .() ~ DeleteContainerAndItems!(_);
+	// Full diagnostic snapshots stay alive for open code tabs; partial completion queries must not erase them.
+	List<ScriptProblem> mDisplayedScriptProblems = new .() ~ DeleteContainerAndItems!(_);
 	ScriptDocument mActiveScript;
 	ScriptDocument mSelectScript;
 	bool mScriptsFocused;
@@ -150,14 +163,16 @@ extension EditorApp
 		OpenScript(scriptPath);
 	}
 
-	void OpenScript(StringView path, int32 line = -1)
+	void OpenScript(StringView sourcePath, int32 line = -1)
 	{
+		let path = scope String();
+		ScriptSemantic.CanonicalPath(sourcePath, path);
 		mShowScripts = true;
 		mDockScripts = true;
 		ScriptDocument document = null;
 		for (let existing in mScripts)
 		{
-			if (existing.path == path)
+			if (Path.Equals(existing.path, path))
 				document = existing;
 		}
 		if (document == null)
@@ -168,19 +183,17 @@ extension EditorApp
 				Log.Error(scope $"Could not open {path}");
 				return;
 			}
-			// Reads the engine's and the project's code for colouring and completion (the first time), or picks up
-			// scripts changed since.
+			// The source index supplies type colouring; completion and navigation use Beef's resolver.
 			if (path.EndsWith(".bf"))
 				ApiIndex.Ensure();
 			document = new ScriptDocument();
-			document.apiRevision = ApiIndex.Revision;
 			document.path.Set(path);
 			Path.GetFileName(path, document.name);
 			document.handle = tn_code_create(text.CStr(), path.EndsWith(".tui") ? 1 : (path.EndsWith(".tcss") ? 2 : ((path.EndsWith(".tshader") || path.EndsWith(".tcompute")) ? 3 : 0)));
 			document.readOnly = FindSourceGraph(path, scope String());
 			tn_code_set_read_only(document.handle, document.readOnly);
 			mScripts.Add(document);
-			ApplyProblems(document);
+			RefreshScriptDiagnostics();
 		}
 		mSelectScript = document;
 		mFocusScripts = true;
@@ -189,9 +202,26 @@ extension EditorApp
 		tn_code_focus(document.handle);
 	}
 
+	/// Refresh squiggles for every open script from the most recent complete diagnostics snapshot.
+	void RefreshScriptDiagnostics()
+	{
+		for (let document in mScripts)
+		{
+			tn_code_clear_diagnostics(document.handle);
+			if (!document.path.EndsWith(".bf"))
+				continue;
+			for (let problem in mDisplayedScriptProblems)
+			{
+				if (problem.line < 0 || !Path.Equals(problem.file, document.path))
+					continue;
+				tn_code_add_diagnostic(document.handle, problem.line, problem.column, (int32)problem.kind, problem.isError, problem.message.CStr());
+			}
+		}
+	}
+
 	void SaveScript(ScriptDocument document)
 	{
-		if (document.readOnly)
+		if (document.readOnly || !tn_code_is_dirty(document.handle))
 			return;
 		let text = StringView(tn_code_get_text(document.handle));
 		if (File.WriteAllText(document.path, text) case .Err)
@@ -211,9 +241,11 @@ extension EditorApp
 		}
 		else
 		{
-			// What was just written may declare new types and members: completion learns them now.
+			// Refresh the source index used by type colouring and visual scripting.
 			ApiIndex.RefreshProject();
-			StartErrorCheck();
+			mScriptsNeedReload = true;
+			if (Project.Current.ReloadMode != .Manual)
+				StartErrorCheck();
 		}
 	}
 
@@ -229,9 +261,9 @@ extension EditorApp
 	/// Compiles the project on a worker thread so typing is never blocked.
 	void StartErrorCheck()
 	{
-		if (mReloadReady)
+		if (mReloadReady && Project.Current.ReloadMode != .Manual)
 		{
-			QueueScriptReload();
+			QueueScriptReload(true);
 			return;
 		}
 		mCheckWasReload = false;
@@ -266,6 +298,46 @@ extension EditorApp
 		return -1;
 	}
 
+	/// Parse BeefBuild's line/column diagnostics into the same model used by the language service.
+	static bool IsOptimizationWarning(StringView message)
+	{
+		return message.Contains("unused") || message.Contains("Unused") ||
+			message.Contains("optim") || message.Contains("Optim") ||
+			message.Contains("performance") || message.Contains("Performance") ||
+			message.Contains("allocation") || message.Contains("Allocation");
+	}
+
+	void ParseCompilerDiagnostics(StringView output)
+	{
+		for (let line in output.Split('\n'))
+		{
+			let isError = line.StartsWith("ERROR:");
+			if (!isError && !line.StartsWith("WARNING"))
+				continue;
+			// BeefBuild: ERROR: message at line 12:5 in /path/File.bf
+			let atIndex = LastIndexOfText(line, " at line ");
+			let inIndex = LastIndexOfText(line, " in ");
+			if (atIndex < 0 || inIndex < atIndex)
+				continue;
+			let colon = line.IndexOf(':');
+			if (colon < 0 || colon >= atIndex)
+				continue;
+			let problem = new ScriptProblem();
+			problem.isError = isError;
+			problem.message.Set(line.Substring(colon + 1, atIndex - colon - 1));
+			problem.message.Trim();
+			let location = line.Substring(atIndex + 9, inIndex - atIndex - 9);
+			let split = location.IndexOf(':');
+			problem.line = SceneSerializer.ParseInt(split > 0 ? location.Substring(0, split) : location) - 1;
+			problem.column = split > 0 ? (int32)Math.Max(SceneSerializer.ParseInt(location.Substring(split + 1)) - 1, 0) : 0;
+			problem.file.Set(line.Substring(inIndex + 4));
+			problem.file.Trim();
+			if (!isError && IsOptimizationWarning(problem.message))
+				problem.kind = .Optimization;
+			mProblems.Add(problem);
+		}
+	}
+
 	void CollectCheckResults()
 	{
 		if (!mCheckRunning || !Interlocked.Load(ref mCheckFinished))
@@ -279,32 +351,9 @@ extension EditorApp
 		}
 		mCheckRunning = false;
 		ClearAndDeleteItems!(mProblems);
-		for (let line in mCheckLog.Split('\n'))
-		{
-			let isError = line.StartsWith("ERROR:");
-			if (!isError && !line.StartsWith("WARNING"))
-				continue;
-			// Compiler lines look like: ERROR: message at line 12:5 in /path/File.bf
-			let atIndex = LastIndexOfText(line, " at line ");
-			let inIndex = LastIndexOfText(line, " in ");
-			if (atIndex < 0 || inIndex < atIndex)
-				continue;
-			let problem = new ScriptProblem();
-			problem.isError = isError;
-			let colon = line.IndexOf(':');
-			problem.message.Set(line.Substring(colon + 1, atIndex - colon - 1));
-			problem.message.Trim();
-			var location = line.Substring(atIndex + 9, inIndex - atIndex - 9);
-			let split = location.IndexOf(':');
-			if (split > 0)
-				location = location.Substring(0, split);
-			problem.line = SceneSerializer.ParseInt(location) - 1;
-			problem.file.Set(line.Substring(inIndex + 4));
-			problem.file.Trim();
-			mProblems.Add(problem);
-		}
-		for (let document in mScripts)
-			ApplyProblems(document);
+		ParseCompilerDiagnostics(mCheckLog);
+		AddDeterminismWarnings(scope $"{Project.Current.Path}/src" , 0);
+		PublishScriptDiagnostics();
 		if (mCheckWasReload)
 		{
 			FinishScriptReload();
@@ -312,23 +361,85 @@ extension EditorApp
 			return;
 		}
 		if (mCheckSucceeded)
+		{
 			Log.Info("Scripts compiled. Use File > Rebuild & Reload to run the new code.");
+			if (mPlayAfterCompile && mPlay == .Edit)
+			{
+				// A standalone error check may have been in progress when Play
+				// was requested. The checked binary is not an activated reload.
+				if (mScriptsNeedReload)
+				{
+					if (mReloadReady)
+					{
+						QueueScriptReload(true, true);
+						mStatus.Set("Waiting to compile scripts before Play...");
+					}
+					else
+					{
+						mPlayAfterCompile = false;
+						mStatus.Set("Script reload is unavailable. Full Rebuild & Restart before Play.");
+					}
+				}
+				else
+				{
+					mPlayAfterCompile = false;
+					StartPlay();
+				}
+			}
+			else
+				mStatus.Clear();
+		}
 		else
-			Log.Error(scope $"Scripts have {mProblems.Count} problem(s); see the Scripts tab.");
+		{
+			Log.Error("Scripts have errors; see the Console.");
+			mPlayAfterCompile = false;
+			mStatus.Set("Script compilation failed. See Console.");
+		}
 	}
 
-	void ApplyProblems(ScriptDocument document)
+	/// Networked code that would come out differently on different machines (ScriptDeterminism), as warnings.
+	void AddDeterminismWarnings(StringView folder, int depth)
 	{
-		tn_code_clear_markers(document.handle);
-		for (let problem in mProblems)
+		if (depth > 32 || !Directory.Exists(folder))
+			return;
+		for (let entry in Directory.EnumerateFiles(folder))
 		{
-			if (problem.file == document.path)
-				tn_code_add_marker(document.handle, problem.line, problem.isError, problem.message.CStr());
+			let name = scope String();
+			entry.GetFileName(name);
+			if (name.StartsWith('.') || !name.EndsWith(".bf", .OrdinalIgnoreCase))
+				continue;
+			let path = scope $"{folder}/{name}";
+			let source = scope String();
+			if (File.ReadAllText(path, source) case .Err)
+				continue;
+			if (!source.Contains("TickInput") && !source.Contains("Simulate("))
+				continue;
+			List<ScriptDeterminism.Warning> warnings = scope .();
+			ScriptDeterminism.Check(source, warnings);
+			for (let warning in warnings)
+			{
+				let problem = new ScriptProblem();
+				problem.isError = false;
+				problem.kind = .Determinism;
+				problem.file.Set(path);
+				problem.line = (int32)warning.line;
+				problem.message.Set(warning.message);
+				delete warning.message;
+				mProblems.Add(problem);
+			}
+		}
+		for (let entry in Directory.EnumerateDirectories(folder))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (!name.StartsWith('.') && name != "build")
+				AddDeterminismWarnings(scope $"{folder}/{name}" , depth + 1);
 		}
 	}
 
 	void DrawScripts()
 	{
+		CollectSemantic();
 		if (!mShowScripts)
 			return;
 		if (mDockScripts && mAssetCenterDock != 0)
@@ -355,7 +466,7 @@ extension EditorApp
 		}
 		ImGui.PushStyleVar(ImGui.StyleVar.WindowPadding, ImGui.Vec2(0, 0));
 		ImGui.PushStyleColor(ImGui.Col.WindowBg, EditorTheme.CodeBackground);
-		let visible = ImGui.Begin("Scripts", &mShowScripts, ImGui.WindowFlags.NoScrollbar | ImGui.WindowFlags.NoScrollWithMouse);
+		let visible = ImGui.Begin("Scripts", &mShowScripts, ImGui.WindowFlags.NoScrollbar | ImGui.WindowFlags.NoScrollWithMouse | ImGui.WindowFlags.MenuBar);
 		ImGui.PopStyleColor();
 		ImGui.PopStyleVar();
 		mScriptsFocused = false;
@@ -372,61 +483,84 @@ extension EditorApp
 			{
 				let active = mActiveScript;
 				DrawScriptToolbar(active);
-				let problemsHeight = mProblems.Count > 0 ? Math.Min(120.0f, 26.0f + mProblems.Count * 20.0f) : 0.0f;
-				DrawScriptTabs(active, problemsHeight);
-				if (problemsHeight > 0)
-					DrawScriptProblems(problemsHeight);
+				DrawSemanticTools(active);
+				DrawScriptTabs(active);
 			}
 		}
 		ImGui.End();
 	}
 
-	/// Save, Save All, Undo, Redo, Check Errors and Rebuild & Reload, then how the last check went.
+	/// Compact editor-local menu. The main application menu remains available
+	/// for scene operations, while these commands apply to the selected script.
 	void DrawScriptToolbar(ScriptDocument active)
 	{
-		ImGui.SetCursorPosX(6);
-		ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 4);
-		ImGui.BeginDisabled(active == null);
-		if (ImGui.SmallButton("Save") && active != null)
-			SaveScript(active);
-		ImGui.SameLine();
-		if (ImGui.SmallButton("Save All"))
-			SaveAllScripts();
-		ImGui.SameLine(0, 14);
-		ImGui.BeginDisabled(active == null || !tn_code_can_undo(active.handle));
-		if (ImGui.SmallButton("Undo"))
-			tn_code_undo(active.handle);
-		ImGui.EndDisabled();
-		ImGui.SameLine();
-		ImGui.BeginDisabled(active == null || !tn_code_can_redo(active.handle));
-		if (ImGui.SmallButton("Redo"))
-			tn_code_redo(active.handle);
-		ImGui.EndDisabled();
-		ImGui.EndDisabled();
-		ImGui.SameLine(0, 14);
-		if (ImGui.SmallButton("Check Errors"))
+		if (!ImGui.BeginMenuBar())
+			return;
+		if (ImGui.BeginMenu("File"))
 		{
-			SaveAllScripts();
-			StartErrorCheck();
+			if (ImGui.MenuItem("Save Script", "Ctrl+S", false, active != null && !active.readOnly))
+				SaveScript(active);
+			if (ImGui.MenuItem("Save All Scripts", null, false, mScripts.Count > 0))
+				SaveAllScripts();
+			ImGui.Separator();
+			if (ImGui.MenuItem("Check Errors"))
+			{
+				SaveAllScripts();
+				StartErrorCheck();
+			}
+			if (ImGui.MenuItem("Rebuild & Reload"))
+			{
+				SaveAllScripts();
+				RequestRebuild();
+			}
+			ImGui.EndMenu();
 		}
-		ImGui.SameLine();
-		if (ImGui.SmallButton("Rebuild & Reload"))
+		if (ImGui.BeginMenu("Edit"))
 		{
-			SaveAllScripts();
-			RequestRebuild();
+			bool editable = active != null && !active.readOnly;
+			bool selected = active != null && tn_code_has_selection(active.handle);
+			if (ImGui.MenuItem("Undo", "Ctrl+Z", false, editable && tn_code_can_undo(active.handle)))
+				tn_code_undo(active.handle);
+			if (ImGui.MenuItem("Redo", "Ctrl+Y", false, editable && tn_code_can_redo(active.handle)))
+				tn_code_redo(active.handle);
+			ImGui.Separator();
+			if (ImGui.MenuItem("Cut", "Ctrl+X", false, editable && selected))
+				tn_code_cut(active.handle);
+			if (ImGui.MenuItem("Copy", "Ctrl+C", false, selected))
+				tn_code_copy(active.handle);
+			if (ImGui.MenuItem("Paste", "Ctrl+V", false, editable))
+				tn_code_paste(active.handle);
+			if (ImGui.MenuItem("Select All", "Ctrl+A", false, active != null))
+				tn_code_select_all(active.handle);
+			ImGui.EndMenu();
 		}
-		ImGui.SameLine(0, 14);
+		if (ImGui.BeginMenu("Navigate"))
+		{
+			bool ready = active != null && active.path.EndsWith(".bf") && !mSemantic.running;
+			if (ImGui.MenuItem("Go to Definition", "F12", false, ready))
+				RequestSemantic(active, "definition");
+			if (ImGui.MenuItem("Symbol / Parameters", null, false, ready))
+			{
+				mSymbolInfoRequested = true;
+				RequestSemantic(active, "symbol");
+			}
+			if (ImGui.MenuItem("Rename Symbol", "F2", false, ready))
+				BeginScriptSymbolRename();
+			if (ImGui.MenuItem("Undo Symbol Rename", null, false, !mRenameUndo.IsEmpty))
+				UndoSymbolRename();
+			ImGui.EndMenu();
+		}
 		if (mCheckRunning)
+		{
+			ImGui.SameLine(0, 14);
 			ImGui.TextColored(EditorTheme.Warning, "Compiling...");
-		else if (mProblems.Count > 0)
-			ImGui.TextColored(EditorTheme.Error, scope String()..AppendF("{} problem(s)", mProblems.Count).CStr());
-		else
-			ImGui.TextDisabled("Ctrl+S save   Ctrl+F find   Ctrl+Space complete");
+		}
+		ImGui.EndMenuBar();
 	}
 
-	/// One tab per open file, each a code editor, above the problem list (`problemsHeight` high). A script made from a
+	/// One tab per open file, each a code editor. A script made from a
 	/// graph is read-only, with a button to turn it into an ordinary script.
-	void DrawScriptTabs(ScriptDocument active, float problemsHeight)
+	void DrawScriptTabs(ScriptDocument active)
 	{
 		if (active != null && active.readOnly)
 		{
@@ -454,13 +588,9 @@ extension EditorApp
 				if (igBeginTabItem(document.name.CStr(), &document.open, flags))
 				{
 					mActiveScript = document;
-					if (document.apiRevision != ApiIndex.Revision)
-					{
-						document.apiRevision = ApiIndex.Revision;
-						tn_code_refresh(document.handle);
-					}
 					let avail = ImGui.GetContentRegionAvail();
-					tn_code_render(document.handle, "##code", avail.x, Math.Max(avail.y - problemsHeight, 60));
+					tn_code_render(document.handle, "##code", avail.x, Math.Max(avail.y, 60));
+					UpdateSemantic(document);
 					igEndTabItem();
 				}
 				ImGui.PopID();
@@ -482,22 +612,4 @@ extension EditorApp
 		}
 	}
 
-	/// The problems the last check found: click one to go to it.
-	void DrawScriptProblems(float problemsHeight)
-	{
-		ImGui.BeginChild("problems", .(0, problemsHeight), ImGui.ChildBorders);
-		for (int32 i = 0; i < (int32)mProblems.Count; i++)
-		{
-			let problem = mProblems[i];
-			let fileName = scope String();
-			Path.GetFileName(problem.file, fileName);
-			let label = scope String();
-			label.AppendF("{}({}): {}##{}", fileName, problem.line + 1, problem.message, i);
-			ImGui.PushStyleColor(ImGui.Col.Text, problem.isError ? EditorTheme.Error : EditorTheme.Warning);
-			if (ImGui.Selectable(label.CStr()))
-				OpenScript(problem.file, problem.line);
-			ImGui.PopStyleColor();
-		}
-		ImGui.EndChild();
-	}
 }

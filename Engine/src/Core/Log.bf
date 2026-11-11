@@ -20,14 +20,29 @@ static class Log
 	{
 		public LogLevel level;
 		public String text;
+		/// Source location for a clickable editor diagnostic; null for ordinary messages.
+		public String file;
+		public int32 line;
+		/// How many times the exact same message has been reported.
+		public int32 repeats;
 	}
 
 	/// The most messages kept; older ones go.
 	public const int MaxEntries = 2000;
 	/// The messages kept, oldest first (the editor's Console shows them).
-	public static List<Entry> Entries = new .() ~ { for (let e in _) delete e.text; delete _; };
+	public static List<Entry> Entries = new .() ~
+		{
+			for (let e in _)
+			{
+				delete e.text;
+				delete e.file;
+			}
+			delete _;
+		};
 	/// Goes up with every message, so that a viewer can tell when to redraw.
 	public static int Version;
+	/// Goes up when messages are cleared, so diagnostic producers can republish active messages once.
+	public static int ClearVersion;
 	static Monitor sMonitor = new .() ~ delete _;
 	static System.IO.FileStream sFile ~ delete _;
 
@@ -70,21 +85,45 @@ static class Log
 	public static void Error(StringView text) => Add(.Error, text);
 
 	/// Logs a message of a level.
-	public static void Add(LogLevel level, StringView text)
+	public static void Add(LogLevel level, StringView text, StringView file = "", int32 line = -1)
 	{
+		bool grouped = false;
 		using (sMonitor.Enter())
 		{
-			if (Entries.Count >= MaxEntries)
+			// Repeated runtime errors and compilation messages should not bury useful new output.
+			for (int i = Entries.Count - 1; i >= 0 && i >= Entries.Count - 128; i--)
+			{
+				var existing = Entries[i];
+				if (existing.level != level || existing.line != line || existing.text != text)
+					continue;
+				if ((existing.file == null && !file.IsEmpty) || (existing.file != null && existing.file != file))
+					continue;
+				existing.repeats++;
+				Entries[i] = existing;
+				Version++;
+				grouped = true;
+				break;
+			}
+			if (!grouped && Entries.Count >= MaxEntries)
 			{
 				delete Entries[0].text;
+				delete Entries[0].file;
 				Entries.RemoveAt(0);
 			}
-			Entry entry;
-			entry.level = level;
-			entry.text = new String(text);
-			Entries.Add(entry);
-			Version++;
+			if (!grouped)
+			{
+				Entry entry;
+				entry.level = level;
+				entry.text = new String(text);
+				entry.file = file.IsEmpty ? null : new String(file);
+				entry.line = line;
+				entry.repeats = 1;
+				Entries.Add(entry);
+				Version++;
+			}
 		}
+		if (grouped)
+			return;
 		switch (level)
 		{
 		case .Info: ToFile(text);
@@ -105,9 +144,13 @@ static class Log
 		using (sMonitor.Enter())
 		{
 			for (let e in Entries)
+			{
 				delete e.text;
+				delete e.file;
+			}
 			Entries.Clear();
 			Version++;
+			ClearVersion++;
 		}
 	}
 }

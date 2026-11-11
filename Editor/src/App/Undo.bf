@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.IO;
 using Tallow;
 
 namespace Tallow.Editor;
@@ -333,21 +334,44 @@ extension EditorApp
 		return true;
 	}
 
-	void SaveSelectedAsPrefab()
+	/// Export a scene object (and its children) into the chosen Project folder.
+	/// Duplicate names receive a numeric suffix rather than overwriting assets.
+	bool SaveSceneObjectAsPrefab(GameObject gameObject, StringView folder)
 	{
-		let selected = Selected;
-		if (selected == null)
-			return;
+		if (gameObject == null || gameObject.IsDestroyed || gameObject.Transient || mPlay != .Edit)
+			return false;
+		if (!Directory.Exists(folder) ||
+			!(folder == Assets.ProjectPath || folder.StartsWith(scope $"{Assets.ProjectPath}/")))
+		{
+			Log.Warning("Drop a scene object into a folder inside the project's Assets.");
+			return false;
+		}
 		let name = scope String();
-		for (let c in selected.Name.RawChars)
+		for (let c in gameObject.Name.RawChars)
 			name.Append(c.IsLetterOrDigit || c == '_' ? c : '_');
 		if (name.IsEmpty)
 			name.Set("Prefab");
-		let path = scope $"{mBrowsePath}/{name}.tprefab";
-		if (Prefab.Save(selected, path))
-			Log.Info(scope $"Saved prefab {path}. Drag it from Project into the Scene to place copies.");
-		else
-			Log.Error(scope $"Could not write {path}");
+		let path = scope String();
+		path.AppendF("{}/{}.tprefab", folder, name);
+		for (int copy = 2; File.Exists(path) && copy < 10000; copy++)
+		{
+			path.Clear();
+			path.AppendF("{}/{}_{}.tprefab", folder, name, copy);
+		}
+		if (File.Exists(path) || !Prefab.Save(gameObject, path))
+		{
+			Log.Error(scope $"Could not write prefab {path}");
+			return false;
+		}
+		Prefab.ClearCache();
+		AssetPreviews.Invalidate(path);
+		Log.Info(scope $"Saved prefab {path}. Drag it from Project into the Scene to place copies.");
 		RefreshAssetList();
+		return true;
+	}
+
+	void SaveSelectedAsPrefab()
+	{
+		SaveSceneObjectAsPrefab(Selected, mBrowsePath);
 	}
 }

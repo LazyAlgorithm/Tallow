@@ -24,6 +24,7 @@ extension EditorApp
 			{
 				mGameVisible = true;
 				mGameSize = size;
+				mGameView.Resize((int32)size.x, (int32)size.y);
 				if (FindGameCamera() != null && mGameView.Width > 0)
 				{
 					ImGui.Picture(mGameView.OutputTexture, .(mGameView.Width, mGameView.Height));

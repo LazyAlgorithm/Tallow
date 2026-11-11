@@ -248,6 +248,8 @@ extension EditorApp
 			ImGui.Separator();
 			if (ImGui.MenuItem("Reload Scripts", "Ctrl+R"))
 				RequestRebuild();
+			if (ImGui.MenuItem("Force Structural Script Reload"))
+				ForceConservativeScriptReload();
 			if (ImGui.MenuItem("Full Rebuild & Restart"))
 			{
 				SaveAllScripts();

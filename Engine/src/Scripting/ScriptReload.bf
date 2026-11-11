@@ -293,15 +293,23 @@ class ScriptReload
 				{
 					let a = host[i] as TypeInstance;
 					let b = table[i] as TypeInstance;
-					if (a == null || b == null || (void*)a.[Friend]mTypeClassVData != original) continue;
-					if ((void*)b.[Friend]mTypeClassVData != replacement || !ValidateClass(a, b, error)) return false;
+					if (a == null || b == null)
+						continue;
+					// Both reflection tables were already checked for identical
+					// type names and layouts. The candidate symbol identifies the
+					// matching reflected class without assuming its host vdata
+					// still points to the original executable's symbol.
+					if ((void*)b.[Friend]mTypeClassVData != replacement)
+						continue;
+					if (!ValidateClass(a, b, error))
+						return false;
 					classes.Add(.() { original = a, replacement = b, size = size });
 					found = true;
 					break;
 				}
 				if (!found)
 				{
-					error.Set("Missing reflected script class metadata.");
+					error.Set(scope $"Missing reflected script class metadata: {symbol}.");
 					return false;
 				}
 			}

@@ -106,6 +106,19 @@ static class Toolchain
 		return false;
 	}
 
+	/// The flag that has games linked with mold or lld when one is installed (Linux): either links a game in a
+	/// fifth of the time GNU ld takes, and every compile ends with a link. Nothing when neither is installed.
+	public static void FastLinkerFlag(String output)
+	{
+#if BF_PLATFORM_LINUX
+		let found = scope String();
+		if (FindOnPath("ld.mold", found))
+			output.Append("-fuse-ld=mold ");
+		else if (FindOnPath("ld.lld", found))
+			output.Append("-fuse-ld=lld ");
+#endif
+	}
+
 	/// Resolve a user-installed Linux Beef compiler before relying on the managed copy.
 	/// A valid compiler location must also contain Beef's standard libraries.
 	static bool FindUserBeef(String output)

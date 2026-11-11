@@ -11,11 +11,41 @@ extension EditorApp
 {
 	// The row pressed with the left button, selected when the button is let go over it (0: none, or it became a drag).
 	uint32 mHierarchyPressed;
+	uint32 mHierarchyDoubleClicked;
+	uint32 mHierarchyRenaming;
+	String mHierarchyRenameText = new .() ~ delete _;
+	bool mHierarchyRenameFocus;
+
+	void BeginHierarchyRename(GameObject gameObject)
+	{
+		if (gameObject == null || mPlay != .Edit)
+			return;
+		mHierarchyRenaming = gameObject.Id;
+		mHierarchyRenameText.Set(gameObject.Name);
+		mHierarchyRenameFocus = true;
+	}
+
+	void FinishHierarchyRename(bool commit)
+	{
+		let gameObject = mScene.FindById(mHierarchyRenaming);
+		if (commit && gameObject != null && !mHierarchyRenameText.IsEmpty &&
+			gameObject.Name != mHierarchyRenameText)
+		{
+			gameObject.Name.Set(mHierarchyRenameText);
+			if (mInspectorLock == gameObject.Id)
+				mInspectorLockName.Set(gameObject.Name);
+			MarkDirty();
+		}
+		mHierarchyRenaming = 0;
+		mHierarchyRenameFocus = false;
+	}
 
 	void DrawHierarchy()
 	{
+		mHierarchyFocused = false;
 		if (ImGui.Begin("Hierarchy"))
 		{
+			mHierarchyFocused = ImGui.IsWindowFocused(ImGui.HoveredFlags.ChildWindows);
 			DrawPrefabBar();
 			if (ImGui.Button("+"))
 				ImGui.OpenPopup("CreateObject");
@@ -114,20 +144,34 @@ extension EditorApp
 		// another object) leaves the selection, and so the Inspector, as it was.
 		if (ImGui.IsItemClicked(0) && !ImGui.IsItemToggledOpen() && mVisibilityDrag == .None)
 			mHierarchyPressed = gameObject.Id;
-		if (mHierarchyPressed == gameObject.Id && ImGui.IsMouseReleased(0))
-		{
-			if (ImGui.IsItemHovered())
-				mSelectedId = gameObject.Id;
-			mHierarchyPressed = 0;
-		}
 		if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
 		{
+			mHierarchyDoubleClicked = gameObject.Id;
 			mSelectedId = gameObject.Id;
 			FocusSelected();
 		}
+		if (mHierarchyPressed == gameObject.Id && ImGui.IsMouseReleased(0))
+		{
+			if (ImGui.IsItemHovered())
+			{
+				let alreadySelected = mSelectedId == gameObject.Id;
+				mSelectedId = gameObject.Id;
+				// A second deliberate click renames the selected item; a
+				// double-click still frames it, and a drag never starts editing.
+				if (alreadySelected && mHierarchyDoubleClicked != gameObject.Id)
+					BeginHierarchyRename(gameObject);
+			}
+			mHierarchyPressed = 0;
+			mHierarchyDoubleClicked = 0;
+		}
+		if (gameObject.Id == mSelectedId && mHierarchyRenaming == 0 &&
+			ImGui.IsWindowFocused() && ImGui.IsKeyPressed(ImGui.Key.F2))
+			BeginHierarchyRename(gameObject);
 		if (ImGui.BeginPopupContextItem())
 		{
 			mSelectedId = gameObject.Id;
+			if (ImGui.MenuItem("Rename", "F2"))
+				BeginHierarchyRename(gameObject);
 			if (ImGui.MenuItem("Duplicate"))
 				DuplicateSelected();
 			if (ImGui.MenuItem("Delete"))
@@ -140,7 +184,7 @@ extension EditorApp
 			DrawCreateMenu();
 			ImGui.EndPopup();
 		}
-		if (ImGui.BeginDragDropSource())
+		if (mHierarchyRenaming != gameObject.Id && ImGui.BeginDragDropSource())
 		{
 			mHierarchyPressed = 0;
 			var id = gameObject.Id;
@@ -161,6 +205,27 @@ extension EditorApp
 				}
 			}
 			ImGui.EndDragDropTarget();
+		}
+		if (mHierarchyRenaming == gameObject.Id)
+		{
+			// Overlay the label, retaining the TreeNode's expand/collapse
+			// affordance and its stable row rectangle for dragging.
+			let afterRow = ImGui.GetCursorScreenPos();
+			let row = ImGui.GetItemRectMin();
+			ImGui.SetCursorScreenPos(.(row.x + 30, row.y));
+			ImGui.SetNextItemWidth(Math.Max(ImGui.GetContentRegionAvail().x - 6, 90));
+			if (mHierarchyRenameFocus)
+			{
+				ImGui.SetKeyboardFocusHere();
+				mHierarchyRenameFocus = false;
+			}
+			let confirmed = ImGui.InputText("##hierarchyrename", mHierarchyRenameText, ImGui.InputFlags.EnterReturnsTrue);
+			let cancelled = ImGui.IsKeyPressed(ImGui.Key.Escape);
+			let finished = ImGui.IsItemDeactivatedAfterEdit() ||
+				(ImGui.IsMouseClicked(0) && !ImGui.IsItemHovered() && !ImGui.IsItemActive());
+			ImGui.SetCursorScreenPos(afterRow);
+			if (confirmed || cancelled || finished)
+				FinishHierarchyRename(!cancelled);
 		}
 		if (open)
 		{

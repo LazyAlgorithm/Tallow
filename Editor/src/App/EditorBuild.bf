@@ -6,6 +6,16 @@ using Bgfx;
 
 namespace Tallow.Editor;
 
+/// Script templates offered by Project > Create > Script.
+enum ScriptTemplateKind
+{
+	Basic,
+	Movement,
+	Timer,
+	Gui,
+	Networked
+}
+
 /// Building: script rebuilds, restarts and game builds.
 extension EditorApp
 {
@@ -14,10 +24,24 @@ extension EditorApp
 		if (mReloadReady)
 		{
 			SaveAllScripts();
-			QueueScriptReload();
+			QueueScriptReload(true, true);
 			return;
 		}
 		FullRebuildAndRestart();
+	}
+
+	/// Explicitly bypass method patching without rebuilding/restarting the whole editor.
+	void ForceConservativeScriptReload()
+	{
+		if (!mReloadReady)
+		{
+			SaveAllScripts();
+			mWantFullRestart = true;
+			mBusyFrames = 3;
+			return;
+		}
+		SaveAllScripts();
+		QueueScriptReload(true, true, true);
 	}
 
 	void FullRebuildAndRestart()
@@ -37,12 +61,11 @@ extension EditorApp
 		{
 			let log = scope String();
 			project.ReadBuildLog(log);
-			for (let line in log.Split('\n'))
-			{
-				if (!line.IsEmpty)
-					Log.Error(line);
-			}
-			Log.Error("Compile failed. Fix the errors above and choose File > Rebuild & Reload again.");
+			ClearAndDeleteItems!(mProblems);
+			ParseCompilerDiagnostics(log);
+			AddDeterminismWarnings(scope $"{project.Path}/src" , 0);
+			PublishScriptDiagnostics();
+			Log.Error("Compile failed. Fix the underlined script errors and choose File > Rebuild & Reload again.");
 			return;
 		}
 		let command = scope String();
@@ -93,7 +116,10 @@ extension EditorApp
 		}
 	}
 
-	void CreateScript(StringView name)
+	/// The old quick-create action keeps the familiar basic Script template.
+	void CreateScript(StringView name) => CreateScript(name, .Basic);
+
+	void CreateScript(StringView name, ScriptTemplateKind template)
 	{
 		let project = Project.Current;
 		if (!ProjectGenerator.IsValidName(name))
@@ -101,7 +127,6 @@ extension EditorApp
 			Log.Error("Script names use letters, digits and underscores, and start with a letter.");
 			return;
 		}
-		// Scripts are created in the folder currently shown in the Project window.
 		let path = scope $"{mBrowsePath}/{name}.bf";
 		if (File.Exists(path))
 		{
@@ -109,28 +134,129 @@ extension EditorApp
 			return;
 		}
 		let text = scope String();
-		text.AppendF("""
+		switch (template)
+		{
+		case .Basic:
+			text.AppendF("""
 			using System;
 			using Tallow;
-
+			
 			namespace {0};
-
+			
+			/// A regular gameplay component. Attach it to any GameObject.
 			[Component]
 			class {1} : Component
 			{{
-				public float speed = 1.0f;
-
-				public override void Start()
-				{{
-				}}
-
-				public override void Update()
-				{{
-				}}
+			    public float speed = 1.0f;
+			
+			    public override void Start()
+			    {{
+			    }}
+			
+			    public override void Update()
+			    {{
+			    }}
 			}}
-
 			""", project.Name, name);
+		case .Movement:
+			text.AppendF("""
+			using System;
+			using Tallow;
+			
+			namespace {0};
+			
+			/// Example motion script: turns its object every frame.
+			[Component]
+			class {1} : Component
+			{{
+			    public Vector3 degreesPerSecond = .(0, 45, 0);
+			
+			    public override void Update()
+			    {{
+			        Transform.Rotate(degreesPerSecond * Time.DeltaTime);
+			    }}
+			}}
+			""", project.Name, name);
+		case .Timer:
+			text.AppendF("""
+			using System;
+			using Tallow;
+			
+			namespace {0};
+			
+			/// Reusable timed action using normal script state, not a coroutine.
+			[Component]
+			class {1} : Component
+			{{
+			    public float interval = 2.0f;
+			    private float mElapsed;
+			
+			    public override void Update()
+			    {{
+			        mElapsed += Time.DeltaTime;
+			        if (mElapsed < interval)
+			            return;
+			        mElapsed = 0;
+			        OnTimer();
+			    }}
+			
+			    void OnTimer()
+			    {{
+			        // Put the repeated action here.
+			    }}
+			}}
+			""", project.Name, name);
+		case .Gui:
+			text.AppendF("""
+			using System;
+			using Tallow;
+			
+			namespace {0};
+			
+			/// Immediate-mode HUD; drawn by the engine while the game is running.
+			[Component]
+			class {1} : Component
+			{{
+			    public override void OnGUI()
+			    {{
+			        GUI.Label(20, 20, "Hello from {1}");
+			    }}
+			}}
+			""", project.Name, name);
+		case .Networked:
+			text.AppendF("""
+			using System;
+			using Tallow;
+			
+			namespace {0};
+			
+			/// Needs a NetworkIdentity on the same GameObject. OnTick runs on the server and is predicted on the
+			/// owner's machine, so take controls from TickInput, never from Input.
+			[Component]
+			class {1} : NetworkScript
+			{{
+			    [Sync] public float degreesPerSecond = 45.0f;
+			
+			    public override void OnTick(TickInput input, float deltaTime)
+			    {{
+			        Transform.Rotate(.(0, degreesPerSecond * deltaTime, 0));
+			    }}
+			
+			    public override void Update()
+			    {{
+			        if (!IsOwner)
+			            return;
+			        // Presentation for the player who owns this object belongs here.
+			    }}
+			}}
+			""", project.Name, name);
+		}
 		if (File.WriteAllText(path, text) case .Ok)
-			Log.Info(scope $"Created {path}. Choose File > Rebuild & Reload to use it.");
+		{
+			Log.Info(scope $"Created {path}. Script changes are detected automatically.");
+			OpenScript(path);
+		}
+		else
+			Log.Error(scope $"Could not create script {path}.");
 	}
 }

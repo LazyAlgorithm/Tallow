@@ -83,12 +83,38 @@ extension EditorApp
 	{
 		if (mPlay != .Edit)
 			return;
+		// Always save first; unsaved scripts must not run stale code.
+		SaveAllScripts();
+		// Manual mode also needs to recognize harmless formatting changes.
+		// Do not queue a build for a script revision equivalent to the host.
+		if (mScriptsNeedReload && !mCheckRunning && !mReloadQueued && CheckScriptChanges() == 0)
+			mScriptsNeedReload = false;
+		if (mCheckRunning || mReloadQueued)
+		{
+			mPlayAfterCompile = true;
+			mStatus.Set(mCheckRunning ? "Compiling scripts before Play..." : "Waiting to compile scripts before Play...");
+			return;
+		}
+		if (mScriptsNeedReload)
+		{
+			if (!mReloadReady)
+			{
+				mStatus.Set("Script reload is unavailable. Use Full Rebuild & Restart before Play.");
+				return;
+			}
+			mPlayAfterCompile = true;
+			QueueScriptReload(true, true);
+			mStatus.Set("Waiting to compile scripts before Play...");
+			return;
+		}
 		StopSequencePreview();
 		if (EditingPrefab)
 		{
 			Log.Warning("A prefab is open. Go back to the scene to play.");
 			return;
 		}
+		// A successful Play transition must never retain a stale compile notice.
+		mStatus.Clear();
 		// Side files (sculpted terrain) must be on disk, because stopping reloads the scene.
 		for (let component in mScene.Components)
 			component.OnBeforeSave();

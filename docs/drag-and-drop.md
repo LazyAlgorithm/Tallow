@@ -16,6 +16,22 @@ Pressing on a row, an object or a tile no longer selects it straight away. It is
 
 The lock button beside the object's name in the Inspector keeps the Inspector on that object, whatever you select afterwards. Lock it, then select other objects, or click through the Project panel, and drag them into its fields. Press it again to make the Inspector follow the selection. The Inspector unlocks by itself if the object is deleted or another scene is opened.
 
+## From Hierarchy into Project: create a prefab
+
+Drag a GameObject row in **Hierarchy** onto a folder in **Project**, onto a
+folder tile, or into the blank area of the current Project folder. Tallow
+serializes the object and its children as a `.tprefab` in that folder.
+
+The scene object remains in place. Existing assets are not overwritten:
+`Crate.tprefab` becomes `Crate_2.tprefab` if the first name is taken.
+The operation is available in Edit mode; creating prefab assets from
+temporary Play-mode objects is disabled.
+
+To rename a Hierarchy object, select it and click its name again, press **F2**
+while the Hierarchy is focused, or choose **Rename** from the object's
+right-click menu. Editing is inline; Enter commits and Escape cancels.
+Double-click still frames the object in the Scene view.
+
 ## Into the Scene view
 
 A prefab, a model or a map piece dragged from the Project panel over the Scene view is shown there before you let go. It is the object itself, standing on whatever surface the mouse points at (with snapping when it is on). Let go to place it: it is selected, as one undo step. Drag it back out of the view, or let go anywhere else, and it is gone again, with nothing to undo.
@@ -32,6 +48,8 @@ Other assets dropped on the Scene view do what they did before: a scene opens, a
 - the lock;
 - a prefab's preview while dragged, where it lands, and that it is one undo step;
 - that a drag which leaves the view leaves nothing behind.
+- that Delete belongs to the panel it is pressed in: the Project panel asks to delete its selected asset, the
+  Inspector deletes nothing, and the Hierarchy (or Scene view) deletes the selected object.
 
 It logs `DRAG-TEST PASS` or `FAIL` and closes the editor.
 

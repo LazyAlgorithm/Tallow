@@ -187,6 +187,7 @@ static class ImGui
 		public const int32 NoAutoClosePopups = 1 << 0;
 		public const int32 SpanAllColumns = 1 << 1;
 		public const int32 AllowDoubleClick = 1 << 2;
+		public const int32 Disabled = 1 << 3;
 	}
 
 	public static class HoveredFlags
@@ -259,6 +260,7 @@ static class ImGui
 		public const int32 Z = 571;
 		public const int32 F1 = 572;
 		public const int32 F2 = 573;
+		public const int32 F12 = 583;
 		public const int32 F5 = 576;
 		public const int32 Minus = 598;
 		public const int32 Period = 599;
@@ -416,6 +418,7 @@ static class ImGui
 	[CLink] static extern void* igGetIO_Nil();
 	[CLink] static extern void ImGuiIO_AddMousePosEvent(void* io, float x, float y);
 	[CLink] static extern void ImGuiIO_AddMouseButtonEvent(void* io, int32 button, bool down);
+	[CLink] static extern void ImGuiIO_AddKeyEvent(void* io, int32 key, bool down);
 	[CLink] static extern bool igIsKeyPressed_Bool(int32 key, bool repeat_);
 	[CLink] static extern bool igIsKeyDown_Nil(int32 key);
 	[CLink] static extern void igPushID_Str(char8* id);
@@ -678,6 +681,8 @@ static class ImGui
 	public static void QueueMousePos(float x, float y) => ImGuiIO_AddMousePosEvent(igGetIO_Nil(), x, y);
 	/// Queues a mouse button going down or up.
 	public static void QueueMouseButton(int32 button, bool down) => ImGuiIO_AddMouseButtonEvent(igGetIO_Nil(), button, down);
+	/// Queues a key (ImGui.Key) going down or up.
+	public static void QueueKey(int32 key, bool down) => ImGuiIO_AddKeyEvent(igGetIO_Nil(), key, down);
 	public static void SetCursorScreenPos(Vec2 pos) => igSetCursorScreenPos(pos);
 	public static void SetCursorPosX(float x) => igSetCursorPosX(x);
 	public static void SetCursorPosY(float y) => igSetCursorPosY(y);

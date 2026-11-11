@@ -70,6 +70,7 @@ def main():
             previous.rename(executable)
         raise
     previous.unlink(missing_ok=True)
+    run([sys.executable, root / 'tools/build_beef_language_service.py', '--platform', 'windows' if windows else 'linux'])
     print(f'Done. Launcher: {executable}')
 
 

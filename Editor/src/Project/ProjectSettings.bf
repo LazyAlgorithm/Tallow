@@ -22,6 +22,7 @@ extension EditorApp
 		if (ImGui.Begin("Project Settings", &mShowSettings, ImGui.WindowFlags.NoDocking | ImGui.WindowFlags.NoCollapse))
 		{
 			DrawGeneralSettings(project);
+			DrawScriptReloadSettings(project);
 			DrawProjectConfigSettings();
 			DrawLibrarySettings(project);
 			ImGui.SeparatorText("Native libraries");
@@ -37,6 +38,57 @@ extension EditorApp
 				RequestRebuild();
 		}
 		ImGui.End();
+	}
+
+	/// Reload policy is a development-time project option, not a gameplay dependency.
+	void DrawScriptReloadSettings(Project project)
+	{
+		ImGui.SeparatorText("Scripting");
+		if (BeginPropertyTable("scriptreload"))
+		{
+			BeginProperty("Script Reload");
+			let selected = scope String();
+			project.ReloadMode.ToString(selected);
+			ImGui.SetNextItemWidth(-1);
+			if (ImGui.BeginCombo("##scriptreload", selected.CStr()))
+			{
+				for (let (name, mode) in Enum.GetEnumerator<ScriptReloadMode>())
+				{
+					if (ImGui.Selectable(scope String(name).CStr(), mode == project.ReloadMode))
+					{
+						project.ReloadMode = mode;
+						project.Save();
+						if (mode == .Manual)
+						{
+							mReloadQueued = false;
+							mReloadForceConservative = false;
+							mScriptMonitor.Poll(Assets.ProjectPath);
+						}
+					}
+				}
+				ImGui.EndCombo();
+			}
+			BeginProperty("Reload Methods In Edit");
+			if (ImGui.Checkbox("##reloadmethodsinedit", ref project.ReloadMethodsInEdit))
+				project.Save();
+			ImGui.EndTable();
+		}
+		switch (project.ReloadMode)
+		{
+		case .Automatic:
+#if BF_PLATFORM_LINUX
+			ImGui.TextWrapped("In Edit mode, fields and component declarations reload automatically for the Inspector. Method-body changes are deferred unless Reload Methods In Edit is enabled. While playing, changes hot reload.");
+#else
+			ImGui.TextWrapped("In Edit mode, fields and component declarations reload automatically for the Inspector. Method changes are deferred unless enabled above. While playing, structural reload preserves supported state.");
+#endif
+		case .Conservative:
+			ImGui.TextWrapped("Always compile and migrate the full script library, including method-only edits. Use this to investigate hot-reload compatibility.");
+		case .Manual:
+			ImGui.TextWrapped("Save without compiling or activating scripts. Use File > Reload Scripts when ready. Check Errors remains available.");
+		}
+		ImGui.TextWrapped("Press Play once: pending scripts compile before gameplay starts. Play starts automatically after a successful reload, and stays in Edit mode if compilation fails.");
+		if (ImGui.Button("Force Structural Script Reload"))
+			ForceConservativeScriptReload();
 	}
 
 	/// The start scene, audio, anti-cheat, saving, voice chat and Steam.

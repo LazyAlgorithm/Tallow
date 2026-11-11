@@ -79,6 +79,12 @@ def main():
         previous.unlink(missing_ok=True)
     if not launcher.is_file():
         parser.error(f'Launcher is not built: {launcher}')
+    language_worker = root / 'build/tools/beef-language-service' / args.platform
+    if not macos:
+        worker = language_worker / ('beef-language-service.exe' if windows else 'beef-language-service')
+        sources = [root / 'tools/BeefLanguageService' / name for name in ('main.cpp', 'api.inc')]
+        if not worker.is_file() or any(source.stat().st_mtime > worker.stat().st_mtime for source in sources):
+            subprocess.run([sys.executable, str(root / 'tools/build_beef_language_service.py'), '--platform', args.platform], check=True)
     output.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix='.tallow-package-', dir=output.parent))
     try:
@@ -90,6 +96,15 @@ def main():
         (stage / 'tools').mkdir()
         for name in ('build_player.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'toolchain.txt', 'setup_dependencies.ps1'):
             shutil.copy2(root / 'tools' / name, stage / 'tools' / name)
+        shutil.copy2(root / 'tools/beef_language_service.py', stage / 'tools/beef_language_service.py')
+        # Script reloads compile with the Beef compiler kept loaded (built on first use from the sources of the user's
+        # Beef install: its own on Linux, the matching commit's from GitHub on Windows).
+        shutil.copy2(root / 'tools/beef_compile_server.py', stage / 'tools/beef_compile_server.py')
+        (stage / 'tools/BeefCompileServer').mkdir()
+        shutil.copy2(root / 'tools/BeefCompileServer/Serve.bf', stage / 'tools/BeefCompileServer/Serve.bf')
+        if not macos:
+            shutil.copytree(language_worker, stage / 'tools/beef-language-service',
+                            ignore=shutil.ignore_patterns('.building-*', 'worker-building*', '*.obj'))
         for relative in [*archives, shaderc, texturec, modelsettings, modelconv]:
             destination = stage / relative
             destination.parent.mkdir(parents=True, exist_ok=True)

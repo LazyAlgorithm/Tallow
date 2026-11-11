@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.IO;
 using Tallow;
 
 namespace Tallow.Editor;
@@ -14,11 +15,13 @@ extension EditorApp
 	/// waited, or a check.
 	class DragTestStep
 	{
-		public enum Kind { Move, Press, Release, Wait, Run }
+		public enum Kind { Move, Press, Release, Wait, Run, Key }
 		public Kind kind;
 		public delegate ImGui.Vec2() at ~ delete _;
 		public delegate void() run ~ delete _;
 		public int frames = 1;
+		/// For Key: the ImGui.Key pressed (down on the first frame, up on the second).
+		public int32 key;
 	}
 
 	List<DragTestStep> mDragTest ~ { if (_ != null) DeleteContainerAndItems!(_); };
@@ -33,6 +36,8 @@ extension EditorApp
 	// What the checks compare with: objects and undo steps before a drop, and where its preview stood.
 	int mDragObjects, mDragUndo;
 	Vector3 mDragPreviewAt;
+	// The object selected when an asset is clicked, which Delete in the Project panel must leave.
+	uint32 mDragKeptId;
 
 	/// Remembers where the item just drawn is, while --drag-test runs.
 	void NoteTestRect(StringView key)
@@ -206,6 +211,46 @@ extension EditorApp
 		Add(.Release);
 		Add(.Wait, null, null, 4);
 		Add(.Run, null, new () => DragExpect(mDropPreview == null && SceneObjects() == mDragObjects, "dragged away and let go elsewhere, the preview is gone"));
+
+		// Delete belongs to the panel it is pressed in.
+		void PressKey(int32 key)
+		{
+			let step = new DragTestStep();
+			step.kind = .Key;
+			step.key = key;
+			step.frames = 2;
+			mDragTest.Add(step);
+			Add(.Wait, null, null, 4);
+		}
+		Click(new () => TestRectCenter("asset:Prefabs/character.tprefab"));
+		Add(.Run, null, new () => mDragKeptId = mSelectedId);
+		PressKey(ImGui.Key.Delete);
+		Add(.Run, null, new () =>
+			{
+				DragExpect(mDragKeptId != 0 && mScene.FindById(mDragKeptId) != null, "Delete in the Project panel leaves the selected object");
+				DragExpect(mDeletePath.EndsWith("character.tprefab"), "and asks to delete the selected asset");
+			});
+		Click(new () => TestRectCenter("delete-asset-cancel"));
+		Add(.Run, null, new () => DragExpect(File.Exists(scope $"{Assets.ProjectPath}/Prefabs/character.tprefab"), "Cancel keeps it"));
+		// By id: an object deleted by mistake must fail the check, not be read after it is gone.
+		let holderId = holder.Id;
+		Click(new () => TestRectCenter(scope $"row:{holderId}"));
+		Click(new () => TestRectCenter("lock"));
+		PressKey(ImGui.Key.Delete);
+		Add(.Run, null, new () => DragExpect(mScene.FindById(holderId) != null, "Delete in the Inspector leaves the object it shows"));
+		Add(.Run, null, new () =>
+			{
+				if (mScene.FindById(holderId) == null)
+				{
+					Log.Info(scope $"DRAG-TEST FAIL: {mDragReport}");
+					Close();
+				}
+			});
+		Click(new () => TestRectCenter("lock"));
+		let otherId = other.Id;
+		Click(new () => TestRectCenter(scope $"row:{otherId}"));
+		PressKey(ImGui.Key.Delete);
+		Add(.Run, null, new () => DragExpect(mScene.FindById(otherId) == null, "Delete in the Hierarchy deletes the selected object"));
 		Add(.Run, null, new () =>
 			{
 				Log.Info(scope $"DRAG-TEST {mDragPass ? "PASS" : "FAIL"}: {mDragReport}");
@@ -234,6 +279,8 @@ extension EditorApp
 			ImGui.QueueMouseButton(0, false);
 		case .Run:
 			step.run();
+		case .Key:
+			ImGui.QueueKey(step.key, mDragFrame == 0);
 		case .Wait:
 		}
 		if (++mDragFrame >= step.frames)
