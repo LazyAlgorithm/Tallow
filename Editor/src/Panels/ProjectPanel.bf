@@ -26,6 +26,8 @@ extension EditorApp
 	String mRenamePath = new .() ~ delete _;
 	String mRenameText = new .() ~ delete _;
 	String mDeletePath = new .() ~ delete _;
+	/// The files that name what is about to be deleted (relative paths).
+	List<String> mDeleteUsers = new .() ~ DeleteContainerAndItems!(_);
 	String mNewItemName = new .() ~ delete _;
 	/// The class of the data asset being made (+ > Data Asset).
 	String mNewDataType = new .() ~ delete _;
@@ -49,9 +51,12 @@ extension EditorApp
 		if (!mModelsScanned)
 		{
 			mModelsScanned = true;
+			RefreshAssetIds();
 			ModelImport.Scan();
 		}
 		if (!mFolderMonitor.Poll(Assets.ProjectPath)) return;
+		// New files get IDs, and assets moved outside the editor have their references brought up to date.
+		RefreshAssetIds();
 		ModelImport.Scan();
 		mScriptCatalog.Refresh(Assets.ProjectPath, Project.Current.Name);
 		if (!Directory.Exists(mBrowsePath))
@@ -83,8 +88,9 @@ extension EditorApp
 
 	/// Program.bf is generated start-up plumbing, not something to edit from the editor.
 	/// Not shown: dot files, the project's plumbing, and "Compiled" folders, which hold built shaders.
+	// An asset's ID file (.tmeta, docs/asset-ids.md) travels with it and is never shown.
 	// A converted model's import settings (docs/model-import.md) are shown in its Inspector, not as a file of their own.
-	static bool IsHidden(StringView name) => name.StartsWith('.') || name == "Program.bf" || name == "Compiled" || (name.EndsWith(".import") && Assets.IsConvertedModel(name.Substring(0, name.Length - 7)));
+	static bool IsHidden(StringView name) => name.StartsWith('.') || name == "Program.bf" || name == "Compiled" || name.EndsWith(AssetDatabase.MetaSuffix) || (name.EndsWith(".import") && Assets.IsConvertedModel(name.Substring(0, name.Length - 7)));
 
 	void ToRelative(StringView full, String outRelative)
 	{
@@ -356,6 +362,8 @@ extension EditorApp
 		}
 		if (ImGui.MenuItem("Rename", "F2"))
 			BeginRename(entry.path);
+		if (ImGui.MenuItem("Find References"))
+			LogAssetReferences(entry.path);
 		if (ImGui.MenuItem("Delete"))
 		{
 			mDeletePath.Set(entry.path);
@@ -482,13 +490,9 @@ extension EditorApp
 			Log.Warning(scope $"{name} already exists in that folder.");
 			return;
 		}
-		bool ok;
-		if (Directory.Exists(from))
-			ok = Directory.Move(from, target) case .Ok;
-		else
-			ok = File.Move(from, target) case .Ok;
-		if (ok)
-			Log.Info(scope $"Moved {name}. Objects that referenced its old path need to be re-linked.");
+		// Its .tmeta and side files go with it, and every file that names it is changed to the new path.
+		if (MoveAssetTracked(from, target))
+			Log.Info(scope $"Moved {name}.");
 		else
 			Log.Error(scope $"Could not move {name}.");
 		RefreshAssetList();
@@ -815,12 +819,11 @@ extension EditorApp
 				let target = scope $"{folder}/{mRenameText}";
 				if (!mRenameText.IsEmpty && !mRenameText.Contains('/') && target != mRenamePath && !File.Exists(target) && !Directory.Exists(target))
 				{
-					bool ok = Directory.Exists(mRenamePath) ? (Directory.Move(mRenamePath, target) case .Ok) : (File.Move(mRenamePath, target) case .Ok);
-					if (!ok)
+					let from = scope String(mRenamePath);
+					if (!MoveAssetTracked(from, target))
 						Log.Error(scope $"Could not rename to {mRenameText}.");
-					if (mBrowsePath == mRenamePath)
-						mBrowsePath.Set(target);
-					mSelectedAsset.Set(target);
+					else
+						mSelectedAsset.Set(target);
 				}
 				RefreshAssetList();
 				ImGui.CloseCurrentPopup();
@@ -835,6 +838,22 @@ extension EditorApp
 		{
 			ImGui.OpenPopup("Delete Asset");
 			mOpenDelete = false;
+			// What still names it, so that deleting something in use is not a surprise.
+			ClearAndDeleteItems!(mDeleteUsers);
+			let relative = scope String();
+			if (AssetDatabase.ToRelative(mDeletePath, relative))
+			{
+				AssetDatabase.FindReferences(relative, mDeleteUsers);
+				for (let user in mDeleteUsers)
+				{
+					let shown = scope String();
+					if (!AssetDatabase.ToRelative(user, shown))
+						Path.GetFileName(user, shown);
+					user.Set(shown);
+				}
+				// A folder's own files naming each other do not count.
+				mDeleteUsers.RemoveAll(scope (user) => { let inside = user.StartsWith(relative) && user.Length > relative.Length && user[relative.Length] == '/'; if (inside) delete user; return inside; });
+			}
 		}
 		if (ImGui.BeginPopupModal("Delete Asset", null, ImGui.WindowFlags.AlwaysAutoResize))
 		{
@@ -842,9 +861,17 @@ extension EditorApp
 			Path.GetFileName(mDeletePath, name);
 			ImGui.Text(scope $"Delete '{name}'?");
 			ImGui.TextDisabled("This removes it from disk and cannot be undone.");
+			if (!mDeleteUsers.IsEmpty)
+			{
+				ImGui.TextColored(.(1, 0.75f, 0.3f, 1), scope $"Still named by {mDeleteUsers.Count} file{(mDeleteUsers.Count == 1) ? "" : "s"}:");
+				for (int i < Math.Min(mDeleteUsers.Count, 8))
+					ImGui.BulletText(mDeleteUsers[i]);
+				if (mDeleteUsers.Count > 8)
+					ImGui.TextDisabled(scope $"and {mDeleteUsers.Count - 8} more");
+			}
 			if (ImGui.Button("Delete", .(120, 0)))
 			{
-				bool ok = Directory.Exists(mDeletePath) ? (Directory.DelTree(mDeletePath) case .Ok) : (File.Delete(mDeletePath) case .Ok);
+				bool ok = AssetDatabase.Delete(mDeletePath) case .Ok;
 				if (!ok)
 					Log.Error(scope $"Could not delete {name}.");
 				mSelectedAsset.Clear();

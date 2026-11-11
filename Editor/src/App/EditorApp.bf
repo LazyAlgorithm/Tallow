@@ -274,6 +274,8 @@ class EditorApp : Application
 			StartDragTest();
 		if (HasArg("--model-import-test"))
 			RunModelImportTest();
+		if (HasArg("--asset-ids-test"))
+			RunAssetIdsTest();
 		if (HasArg("--world-streaming-test"))
 			RunWorldStreamingTest();
 		if (HasArg("--separate-worlds-test"))

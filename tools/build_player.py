@@ -242,7 +242,7 @@ def main():
             if (engine / 'THIRD_PARTY_LICENSES.txt').exists():
                 shutil.copy2(engine / 'THIRD_PARTY_LICENSES.txt', staging / 'THIRD_PARTY_LICENSES.txt')
             for file in (project / 'src').rglob('*'):
-                if not file.is_file() or file.suffix in ('.bf', '.tgraph', '.py', '.sh') or any(part.startswith('.') for part in file.relative_to(project / 'src').parts):
+                if not file.is_file() or file.suffix in ('.bf', '.tgraph', '.py', '.sh', '.tmeta') or any(part.startswith('.') for part in file.relative_to(project / 'src').parts):
                     continue
                 # FBX, OBJ, ... and their import settings: the game gets the converted .glb instead (below).
                 if convert_models.is_converted(file.name) or (file.name.endswith('.import') and convert_models.is_converted(file.name[:-7])):
