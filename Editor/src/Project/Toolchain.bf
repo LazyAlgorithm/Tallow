@@ -159,8 +159,108 @@ static class Toolchain
 			if (BeefIn(root, output))
 				return true;
 		}
+		if (FromLoginShell(output))
+			return true;
 #endif
 		return false;
+	}
+
+#if BF_PLATFORM_LINUX
+	static bool sShellAsked;
+	static String sShellBeef = new .() ~ delete _;
+
+	/// Started from a desktop menu or file manager, Tallow does not get the PATH a terminal has (~/.bashrc,
+	/// ~/.profile and the like add Beef to it there), so a Beef that works in a terminal would be "missing". The user's
+	/// own shell is asked where BeefBuild is, once, with a few seconds' limit.
+	static bool FromLoginShell(String output)
+	{
+		if (!sShellAsked)
+		{
+			sShellAsked = true;
+			let shell = scope String();
+			Environment.GetEnvironmentVariable("SHELL", shell).IgnoreError();
+			if (shell.IsEmpty || !File.Exists(shell))
+				shell.Set("/bin/sh");
+			Directory.CreateDirectory(Folder).IgnoreError();
+			let answer = scope $"{Folder}/shell-beef.txt";
+			File.Delete(answer).IgnoreError();
+			let command = scope String("timeout 5 ");
+			Terminal.Quote(shell, command);
+			command.Append(" -lic 'command -v BeefBuild || command -v BeefBuild.sh' < /dev/null > ");
+			Terminal.Quote(answer, command);
+			command.Append(" 2> /dev/null");
+			Terminal.Run(command);
+			let text = scope String();
+			if (File.ReadAllText(answer, text) case .Ok)
+			{
+				// Interactive shells may print greetings first: the path is the last line.
+				for (let line in text.Split('\n'))
+				{
+					let trimmed = scope String(line);
+					trimmed.Trim();
+					if (trimmed.StartsWith("/") && File.Exists(trimmed))
+						sShellBeef.Set(trimmed);
+				}
+			}
+			File.Delete(answer).IgnoreError();
+		}
+		if (sShellBeef.IsEmpty)
+			return false;
+		output.Set(sShellBeef);
+		return true;
+	}
+
+	/// Whether a C++ compiler and the X11 and OpenGL development files are installed: Beef links every project with
+	/// them. They come from the system's package manager.
+	static bool HasLinuxBuildTools()
+	{
+		let found = scope String();
+		if (!FindOnPath("c++", found) && !FindOnPath("g++", found) && !FindOnPath("clang++", found))
+			return false;
+		for (let library in StringView[2]("libGL.so", "libX11.so"))
+		{
+			bool have = false;
+			for (let folder in StringView[5]("/usr/lib/x86_64-linux-gnu", "/usr/lib64", "/usr/lib", "/lib/x86_64-linux-gnu", "/usr/local/lib"))
+				have |= File.Exists(scope $"{folder}/{library}");
+			if (!have)
+				return false;
+		}
+		return true;
+	}
+#endif
+
+	/// Whether a Python 3.11 or later answers on PATH (an older one, such as Ubuntu 22.04's 3.10, cannot run the
+	/// build scripts).
+	static bool HasPython()
+	{
+		let python = scope String();
+		if (!FindOnPath(Terminal.Python, python))
+			return false;
+		let command = scope String();
+		Terminal.Quote(python, command);
+		command.AppendF(" -c \"import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)\" > {} 2>&1", Terminal.Null);
+		return Terminal.Run(command) == 0;
+	}
+
+	/// The command that installs the system packages Beef links with, for this system's package manager (Linux), or
+	/// nothing when they are installed.
+	public static void SystemPackagesCommand(String command)
+	{
+#if BF_PLATFORM_LINUX
+		if (HasLinuxBuildTools())
+			return;
+		let found = scope String();
+		if (FindOnPath("apt-get", found))
+			command.Append("sudo apt-get install build-essential libgl-dev libx11-dev lld");
+		else if (FindOnPath("dnf", found))
+			command.Append("sudo dnf install gcc gcc-c++ mesa-libGL-devel libX11-devel lld");
+		else if (FindOnPath("pacman", found))
+			command.Append("sudo pacman -S --needed base-devel libglvnd libx11 lld");
+		else if (FindOnPath("zypper", found))
+			command.Append("sudo zypper install gcc gcc-c++ Mesa-libGL-devel libX11-devel lld");
+		else
+			command.Append("a C++ compiler (g++ or clang++) and the libGL and libX11 development packages");
+#endif
 	}
 
 	/// Points this program, and the compilers and scripts it starts, at the tools Tallow Hub installed. Call once at
@@ -220,8 +320,11 @@ static class Toolchain
 			hasBeef = false;
 		if (!hasBeef && !FindUserBeef(beef))
 			missing.Add(new .("the Beef compiler and its standard libraries"));
-		let python = scope String();
-		if (!FindOnPath(Terminal.Python, python))
+		if (!HasPython())
 			missing.Add(new .("Python 3.11 or later"));
+#if BF_PLATFORM_LINUX
+		if (!HasLinuxBuildTools())
+			missing.Add(new .("a C++ compiler and the X11 and OpenGL development files (from your package manager)"));
+#endif
 	}
 }
