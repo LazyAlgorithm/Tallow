@@ -119,6 +119,24 @@ static class Toolchain
 #endif
 	}
 
+	/// A Beef folder (the root of a Beef checkout or install) with its standard libraries: its compiler is
+	/// IDE/dist/BeefBuild, as Beef's own bin/build.sh makes it, or a BeefBuild.sh beside it.
+	static bool BeefIn(StringView root, String output)
+	{
+		if (!File.Exists(scope $"{root}/BeefLibs/corlib/BeefProj.toml"))
+			return false;
+		for (let name in StringView[2]("BeefBuild", "BeefBuild.sh"))
+		{
+			let candidate = scope $"{root}/IDE/dist/{name}";
+			if (File.Exists(candidate))
+			{
+				output.Set(candidate);
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/// Resolve a user-installed Linux Beef compiler before relying on the managed copy.
 	/// A valid compiler location must also contain Beef's standard libraries.
 	static bool FindUserBeef(String output)
@@ -132,22 +150,14 @@ static class Toolchain
 		{
 			for (let relative in StringView[4]("Beef", "beef", "dev/Beef", "dev/beef"))
 			{
-				let candidate = scope $"{home}/{relative}/IDE/dist/BeefBuild.sh";
-				if (File.Exists(candidate) && File.Exists(scope $"{home}/{relative}/BeefLibs/corlib/BeefProj.toml"))
-				{
-					output.Set(candidate);
+				if (BeefIn(scope $"{home}/{relative}", output))
 					return true;
-				}
 			}
 		}
 		for (let root in StringView[2]("/opt/beef", "/opt/Beef"))
 		{
-			let candidate = scope $"{root}/IDE/dist/BeefBuild.sh";
-			if (File.Exists(candidate) && File.Exists(scope $"{root}/BeefLibs/corlib/BeefProj.toml"))
-			{
-				output.Set(candidate);
+			if (BeefIn(root, output))
 				return true;
-			}
 		}
 #endif
 		return false;
