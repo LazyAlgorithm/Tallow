@@ -156,6 +156,18 @@ struct Rigidbody : ComponentHandle<RigidbodyData>
 
 	static void OnRemove(void* world, uint64 entity) => ComponentState<RigidbodyState>.Release(world, entity);
 
+	/// Switched off while playing: the body leaves the physics world at once, as OnDisable did. Waiting for the next
+	/// SyncAll is too late for a network replay, which runs ticks without it: a body switched off by a restored state
+	/// would go on being simulated through the replayed ticks. Switched on, it is made at the next SyncAll (or by
+	/// EnsureBody).
+	static void OnSwitched(GameObject gameObject, bool on)
+	{
+		if (on)
+			return;
+		if (let state = ComponentState<RigidbodyState>.Get(gameObject.Scene.World, gameObject.Entity))
+			state.DestroyBody();
+	}
+
 	/// How fast the body moves, in metres a second, in the world.
 	public Vector3 Velocity
 	{
