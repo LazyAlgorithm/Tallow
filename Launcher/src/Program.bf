@@ -286,7 +286,16 @@ class LauncherApp : Application
 			mSetupThread = null;
 			mSetupFinished = false;
 			mSetupRunning = false;
-			if (mSetupExitCode != 0)
+			if (mSetupExitCode == 3)
+			{
+				// The Linux installer did its part; the system packages it printed are still needed.
+				Toolchain.Apply();
+				ClearAndDeleteItems!(mMissingTools);
+				Toolchain.FindMissing(mMissingTools);
+				SetMessage("Beef and Python are installed. Install the system packages shown above, then press Check again.", true);
+				mSetupFailed = !mMissingTools.IsEmpty;
+			}
+			else if (mSetupExitCode != 0)
 			{
 				SetMessage(scope $"Dependency setup failed (exit {mSetupExitCode}). Check toolchain/install.log for details.", true);
 				mSetupFailed = true;
@@ -317,13 +326,26 @@ class LauncherApp : Application
 		if (mSetupRunning)
 		{
 			ImGui.TextWrapped("Installing development tools in the background. This may take several minutes.");
+#if BF_PLATFORM_WINDOWS
 			ImGui.TextWrapped("Installation log: Tallow/toolchain/install.log (under your Local AppData folder)");
+#else
+			ImGui.TextWrapped(scope $"Installation log: {Toolchain.Folder}/install.log");
+#endif
 		}
 		else
 		{
 			ImGui.TextWrapped("Tallow needs the following tools to create, open and build projects:");
 			for (let tool in mMissingTools)
 				ImGui.BulletText(tool.CStr());
+			let packages = scope String();
+			Toolchain.SystemPackagesCommand(packages);
+			if (!packages.IsEmpty)
+			{
+				ImGui.Spacing();
+				ImGui.TextWrapped("The compiler and development files come from your system's package manager. Install them in a terminal (it asks for your password), then press Install dependencies or Check again:");
+				ImGui.SetNextItemWidth(560);
+				ImGui.InputText("##packages", packages, ImGui.InputFlags.ReadOnly);
+			}
 			if (mSetupFailed)
 			{
 				ImGui.TextWrapped("Setup did not complete. You can retry installation.");
@@ -333,6 +355,20 @@ class LauncherApp : Application
 			{
 				mSetupFailed = false;
 				mSetupPending = true;
+			}
+			ImGui.SameLine();
+			if (ImGui.Button("Check again", .(140, 36)))
+			{
+				// For tools installed meanwhile (a package manager, or a Beef put on PATH).
+				Toolchain.Apply();
+				ClearAndDeleteItems!(mMissingTools);
+				Toolchain.FindMissing(mMissingTools);
+				if (mMissingTools.IsEmpty)
+				{
+					mSetupFailed = false;
+					SetMessage("", false);
+					ImGui.CloseCurrentPopup();
+				}
 			}
 			ImGui.SameLine();
 			if (ImGui.Button("Exit Tallow", .(140, 36)))
@@ -345,6 +381,19 @@ class LauncherApp : Application
 	{
 #if BF_PLATFORM_WINDOWS
 		let script = scope $"{mEngineRoot}/tools/setup_dependencies.ps1";
+		if (!File.Exists(script))
+		{
+			SetMessage("The shared development-tool installer is missing from this Tallow package.", true);
+			mSetupFailed = true;
+			return;
+		}
+		mSetupRunning = true;
+		mSetupFinished = false;
+		mSetupExitCode = -1;
+		mSetupThread = new Thread(new => SetupWorker);
+		mSetupThread.Start(false);
+#elif BF_PLATFORM_LINUX
+		let script = scope $"{mEngineRoot}/tools/setup_dependencies.sh";
 		if (!File.Exists(script))
 		{
 			SetMessage("The shared development-tool installer is missing from this Tallow package.", true);
@@ -376,6 +425,19 @@ class LauncherApp : Application
 		Terminal.Quote(log, command);
 		command.Append(" 2>&1");
 		mSetupExitCode = Terminal.Run(command);
+#elif BF_PLATFORM_LINUX
+		let script = scope $"{mEngineRoot}/tools/setup_dependencies.sh";
+		let folder = scope String(Toolchain.Folder);
+		Directory.CreateDirectory(folder).IgnoreError();
+		let log = scope $"{folder}/install.log";
+		let command = scope String("bash ");
+		Terminal.Quote(script, command);
+		command.Append(" > ");
+		Terminal.Quote(log, command);
+		command.Append(" 2>&1");
+		// system() returns the wait status: the script's exit code is its second byte.
+		let status = Terminal.Run(command);
+		mSetupExitCode = (status >> 8) & 0xff;
 #endif
 		mSetupFinished = true;
 	}
