@@ -2,7 +2,7 @@ name: Publish Tallow API reference
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, ecs]
     paths:
       - 'Engine/**/*.bf'
       - 'tools/generate_api_docs.py'
@@ -25,15 +25,21 @@ jobs:
           ref: gh-pages
           path: site
           persist-credentials: true
+      # main publishes at the site's root; the ECS engine (0.2 series) under ecs/, so the website's API page
+      # can show either. When ecs becomes main, its index moves to the root with no change here.
       - name: Generate static API index
-        run: python3 engine/tools/generate_api_docs.py --root engine --output site --commit "${{ github.sha }}"
+        run: |
+          out=site
+          if [ "${{ github.ref_name }}" != main ]; then out="site/${{ github.ref_name }}"; mkdir -p "$out"; fi
+          echo "API_OUT=${out#site}" >> "$GITHUB_ENV"
+          python3 engine/tools/generate_api_docs.py --root engine --output "$out" --commit "${{ github.sha }}"
       - name: Publish only generated API files
         working-directory: site
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add api.html api-index.json
+          git add ".${API_OUT}/api.html" ".${API_OUT}/api-index.json"
           if ! git diff --cached --quiet; then
-            git commit -m "docs: refresh generated API reference for ${{ github.sha }}"
+            git commit -m "docs: refresh generated API reference (${{ github.ref_name }}) for ${{ github.sha }}"
             git push origin HEAD:gh-pages
           fi
