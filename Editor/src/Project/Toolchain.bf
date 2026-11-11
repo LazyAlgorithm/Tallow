@@ -238,7 +238,13 @@ static class Toolchain
 		Environment.GetEnvironmentVariable("HOME", home).IgnoreError();
 		if (!home.IsEmpty)
 		{
-			for (let relative in StringView[4]("Beef", "beef", "dev/Beef", "dev/beef"))
+			// Desktop launchers often do not inherit PATH entries set by a terminal shell.
+			// Check common Beef checkout locations, including a Beef clone inside ~/Dev/Beef.
+			for (let relative in StringView[14](
+				"Beef", "beef",
+				"Dev/Beef", "Dev/beef", "dev/Beef", "dev/beef",
+				"Dev/Beef/Beef", "Dev/Beef/beef", "Dev/beef/Beef", "Dev/beef/beef",
+				"dev/Beef/Beef", "dev/Beef/beef", "dev/beef/Beef", "dev/beef/beef"))
 			{
 				if (BeefIn(scope $"{home}/{relative}", output))
 					return true;
