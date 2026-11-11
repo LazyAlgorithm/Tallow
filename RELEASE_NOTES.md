@@ -1,3 +1,9 @@
+## Asset IDs and packages
+
+- Stable asset IDs: each asset gets a `.tmeta` beside it (commit them). Moving or renaming in the Project window, or outside the editor, updates every file that names the asset, and what the editor has open; copies get new IDs; Delete lists what still uses an asset; right-click > Find References (`docs/asset-ids.md`). Opening an older project writes a `.tmeta` for every asset once.
+- Asset packages (`.tpackage`): Export Package with dependencies and component scripts, Import Package with New/Changed/Same/Conflict per file, an "into folder" option and in-place updates by ID, and Window > Package Manager to list, re-import and remove packages and to download from catalogs with SHA-256 checks (`docs/packages.md`).
+- Builds leave `.tmeta` files out. New projects ignore `Packages/Downloads/` and `Packages/Exports/`.
+
 ## Tallow Gallery sample
 
 - New-project template with eight areas of ordinary saved objects: reflections and probes, lights and shadows, physics, ropes, water, a walking skinned character, cloth, jelly, dentable shells, destructible voxel objects, editable terrain and NavMesh robots.

@@ -404,7 +404,7 @@ static class ProjectGenerator
 
 		project.WriteBuildFiles();
 
-		Write(scope $"{folder}/.gitignore" , "build/\nrecovery/\n.cache/\nBeefSpace.toml\nBeefProj.toml\n");
+		Write(scope $"{folder}/.gitignore" , "build/\nrecovery/\n.cache/\nPackages/Downloads/\nPackages/Exports/\nBeefSpace.toml\nBeefProj.toml\n");
 
 		if (template == .Showcase)
 		{

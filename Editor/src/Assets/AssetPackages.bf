@@ -327,8 +327,8 @@ static class AssetPackages
 			}
 			let entry = new FileEntry();
 			entry.path.Set(relative);
-			if (asset)
-				AssetDatabase.GetId(relative, entry.id);
+			if (asset && !AssetDatabase.GetId(relative, entry.id))
+				AssetDatabase.ReadMeta(scope $"{root}/{relative}{AssetDatabase.MetaSuffix}", entry.id);
 			entry.crc = PackFile.Crc32(data);
 			entry.size = data.Count;
 			manifest.files.Add(entry);

@@ -65,6 +65,10 @@ Edit > Preferences picks the editor's theme (Tallow Blue by default, Dark, Light
 
 In the Hierarchy, the eye beside an object hides it from the Scene view alone, and the lock keeps clicks in the Scene view from selecting it (drag down the column to set many at once); see `docs/scene-visibility.md`.
 
+Every asset has a stable ID in a `.tmeta` beside it: moving or renaming an asset, in the Project window or outside the editor, changes every scene, prefab, material, UI document and script that names it, and Delete lists what still uses it; see `docs/asset-ids.md`.
+
+Asset packages work like Unity's: right-click > Export Package... writes the picked assets, what they depend on and the scripts of their components to a `.tpackage`; dropping one on the editor imports it (into a folder of your choice, updating assets the project already has by ID), and Window > Package Manager lists, updates and removes packages and downloads them from catalogs; see `docs/packages.md`.
+
 FBX, OBJ, DAE, STL, PLY, 3DS and `.blend` files work like `.glb` models: the editor converts them to glTF behind the scenes, with import settings in the Inspector, and builds ship the converted copies; see `docs/model-import.md`.
 
 Large open worlds stream: tick Stream This Scene and the scene is saved as a grid of cells that load round the players in the background, with merged stand-ins in the distance, a floating origin and a World Map in the editor; see `docs/world-streaming.md`.

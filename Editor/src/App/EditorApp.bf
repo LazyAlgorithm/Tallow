@@ -291,11 +291,18 @@ class EditorApp : Application
 			let picked = scope List<StringView>();
 			picked.Add(full);
 			OpenExportPackage(picked);
+			// --export-package-to <file>: exports it straight away (automated checks).
+			if (GetArg("--export-package-to", mExportFile))
+				ExportPackageNow();
 		}
+		if (GetArg("--package-download", packageArg..Clear()))
+			StartCatalogSwitch(packageArg);
 		if (GetArg("--import-package", packageArg..Clear()))
 		{
 			GetArg("--import-into", mImportFolder);
-			OpenImportPackage(packageArg);
+			// --import-package-now: imports it straight away (automated checks).
+			if (OpenImportPackage(packageArg) && HasArg("--import-package-now"))
+				ImportPackageNow();
 		}
 		if (HasArg("--world-streaming-test"))
 			RunWorldStreamingTest();

@@ -33,6 +33,13 @@ extension EditorApp
 			ApplyAssetMoves(moves);
 	}
 
+	/// The IDs are read before anything uses them (a window opened by a start-up switch comes before the first look).
+	void EnsureAssetIds()
+	{
+		if (!mAssetIdsReady)
+			RefreshAssetIds();
+	}
+
 	/// Moves an asset (full paths) as the Project window does: side files and references go with it.
 	bool MoveAssetTracked(StringView from, StringView to)
 	{
@@ -66,6 +73,27 @@ extension EditorApp
 	{
 		if (path.IsEmpty)
 			return false;
+		// A list of paths separated by ';' (an Animator's clips): each one.
+		if (path.Contains(';'))
+		{
+			bool changed = false;
+			bool first = true;
+			for (let part in path.Split(';'))
+			{
+				if (!first)
+					outPath.Append(';');
+				first = false;
+				let replaced = scope String();
+				if (RemapAssetPath(part, moves, replaced))
+				{
+					outPath.Append(replaced);
+					changed = true;
+				}
+				else
+					outPath.Append(part);
+			}
+			return changed;
+		}
 		let root = Assets.ProjectPath;
 		bool full = path.Length > root.Length && path.StartsWith(root) && path[root.Length] == '/';
 		let relative = full ? path.Substring(root.Length + 1) : path;

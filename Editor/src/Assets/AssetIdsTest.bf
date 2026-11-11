@@ -34,6 +34,7 @@ extension EditorApp
 		File.WriteAllText(scope $"{folder}/wood.tmat", scope $"material 1\ntexture \"{t}/a/tex.png\"\n").IgnoreError();
 		File.WriteAllText(scope $"{folder}/thing.tprefab", scope $"object 1 parent 0 active 1 name \"Thing\"\ncomponent Tallow.MeshRenderer enabled 1\nfield mesh \"{t}/a/crate.glb#Root\"\nfield material \"{t}/wood.tmat\"\n").IgnoreError();
 		File.WriteAllText(scope $"{folder}/notes.txt", scope $"Load(\"{t}/a/crate.glb\"); Load(\"{t}/a/crate.glbx\"); folder \"{t}/a\"\n").IgnoreError();
+		File.WriteAllText(scope $"{folder}/clips.tprefab", scope $"field clips \"{t}/a/tex.png;{t}/a/crate.glb; {t}/keep.tanim\"\n").IgnoreError();
 
 		// 1. New files get IDs.
 		RefreshAssetIds();
@@ -68,6 +69,8 @@ extension EditorApp
 		Expect(text.Contains(scope $"Load(\"{t}/b/crate2.glb\")"), "script-like text changed");
 		Expect(text.Contains(scope $"Load(\"{t}/a/crate.glbx\")"), "a longer name that only starts the same is left alone");
 		Expect(renderer.mesh == scope $"{t}/b/crate2.glb", "the open scene's field changed");
+		File.ReadAllText(scope $"{folder}/clips.tprefab", text..Clear()).IgnoreError();
+		Expect(text.Contains(scope $"\"{t}/a/tex.png;{t}/b/crate2.glb; {t}/keep.tanim\""), "a ';' list of paths has the moved one changed");
 
 		// 4. A folder moved in the editor.
 		Expect(MoveAssetTracked(scope $"{folder}/a", scope $"{folder}/c"), "folder move");

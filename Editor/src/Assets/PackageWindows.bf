@@ -24,6 +24,7 @@ extension EditorApp
 	/// Opens Export Package with these assets (full paths, files or folders) picked.
 	void OpenExportPackage(Span<StringView> fullPaths)
 	{
+		EnsureAssetIds();
 		ClearAndDeleteItems!(mExportPicked);
 		for (let full in fullPaths)
 		{
@@ -159,6 +160,7 @@ extension EditorApp
 	/// Opens a .tpackage in the Import Package window. False (and the reason logged) when it cannot be read.
 	bool OpenImportPackage(StringView file)
 	{
+		EnsureAssetIds();
 		DeleteAndNullify!(mImportPack);
 		DeleteAndNullify!(mImportManifest);
 		ClearAndDeleteItems!(mImportItems);
@@ -241,7 +243,7 @@ extension EditorApp
 						scripts++;
 				}
 			}
-			if (ImGui.BeginChild("importfiles", .(0, -ImGui.GetFrameHeight() * 2.8f), 1))
+			if (ImGui.BeginChild("importfiles", .(0, -ImGui.GetFrameHeight() * 3.6f), 1))
 			{
 				for (int i < mImportItems.Count)
 				{
@@ -260,7 +262,7 @@ extension EditorApp
 				}
 			}
 			ImGui.EndChild();
-			ImGui.TextDisabled("New: added.  Changed: replaced with the package's.  Same: already as in the package.  Conflict: the name is taken; an asset goes beside it under a free name, a script only replaces the project's if ticked.");
+			ImGui.TextWrapped("New: added.  Changed: replaced with the package's.  Same: already as in the package.  Conflict: the name is taken; an asset goes beside it under a free name, a script only replaces the project's if ticked.");
 			ImGui.BeginDisabled(chosen == 0);
 			if (ImGui.Button(scope $"Import {chosen} file{(chosen == 1) ? "" : "s"}", .(180, 0)))
 				ImportPackageNow();
@@ -313,6 +315,7 @@ extension EditorApp
 
 	void RefreshPackageManager()
 	{
+		EnsureAssetIds();
 		ClearAndDeleteItems!(mInstalledPackages);
 		AssetPackages.LoadInstalled(mInstalledPackages);
 		ClearAndDeleteItems!(mPackageFiles);
@@ -428,7 +431,18 @@ extension EditorApp
 				{
 					let kept = scope List<String>();
 					defer { ClearAndDeleteItems!(kept); }
+					bool hadScripts = false;
+					for (let other in mInstalledPackages)
+					{
+						if (other.name != mRemovePackage)
+							continue;
+						for (let file in other.files)
+							hadScripts |= file.path.EndsWith(".bf");
+					}
 					let removed = AssetPackages.Remove(mRemovePackage, kept);
+					// Its scripts are gone: the project is compiled without them.
+					if (hadScripts)
+						RequestRebuild();
 					let message = scope String();
 					message.AppendF("Removed {}: {} file{} deleted", mRemovePackage, removed, (removed == 1) ? "" : "s");
 					if (kept.Count > 0)
@@ -550,12 +564,14 @@ extension EditorApp
 		if (!entry.url.StartsWith("http://") && !entry.url.StartsWith("https://"))
 		{
 			let source = entry.url.StartsWith("file://") ? entry.url.Substring(7) : (StringView)entry.url;
-			if (File.Copy(source, file) case .Err)
+			if (File.Copy(source, file, true) case .Err)
 			{
 				Log.Error(scope $"Could not copy {source}.");
 				return;
 			}
-			OpenImportPackage(file);
+			if (VerifyPackageFile(entry, file) && OpenImportPackage(file) && mImportWhenDownloaded)
+				ImportPackageNow();
+			mImportWhenDownloaded = false;
 			return;
 		}
 		DeleteAndNullify!(mDownloading);
@@ -577,21 +593,46 @@ extension EditorApp
 			Log.Error(scope $"Could not download {mDownloading.name}: {download.Error}");
 			return;
 		}
-		// The catalog's checksum, when it gives one, must match: what was downloaded is what was published.
-		if (!mDownloading.sha256.IsEmpty)
-		{
-			let data = scope List<uint8>();
-			File.ReadAll(download.Path, data).IgnoreError();
-			let hash = SHA256.Hash(data).ToString(.. scope .());
-			if (StringView.Compare(hash, mDownloading.sha256, true) != 0)
-			{
-				Log.Error(scope $"{mDownloading.name}: the download does not match the catalog's checksum, so it was not opened.");
-				File.Delete(download.Path).IgnoreError();
-				return;
-			}
-		}
+		if (!VerifyPackageFile(mDownloading, download.Path))
+			return;
 		Log.Info(scope $"Downloaded {mDownloading.name} {mDownloading.version}.");
-		OpenImportPackage(download.Path);
+		if (OpenImportPackage(download.Path) && mImportWhenDownloaded)
+			ImportPackageNow();
+		mImportWhenDownloaded = false;
+	}
+
+	/// The catalog's checksum, when it gives one, must match: what was fetched is what was published. A file that does
+	/// not match is deleted.
+	static bool VerifyPackageFile(PackageCatalog.Entry entry, StringView file)
+	{
+		if (entry.sha256.IsEmpty)
+			return true;
+		let data = scope List<uint8>();
+		File.ReadAll(file, data).IgnoreError();
+		let hash = SHA256.Hash(data).ToString(.. scope .());
+		if (StringView.Compare(hash, entry.sha256, true) == 0)
+			return true;
+		Log.Error(scope $"{entry.name}: the download does not match the catalog's checksum, so it was not opened.");
+		File.Delete(file).IgnoreError();
+		return false;
+	}
+
+	/// --package-download <catalog address> [--import-package-now]: fetches the catalog and downloads its first
+	/// package (automated checks of catalogs and downloads).
+	bool mImportWhenDownloaded;
+
+	void StartCatalogSwitch(StringView catalog)
+	{
+		ClearAndDeleteItems!(mCatalog);
+		mCatalogError.Clear();
+		PackageCatalog.Fetch(catalog, mCatalog, mCatalogError);
+		if (!mCatalogError.IsEmpty)
+			Log.Error(mCatalogError);
+		Log.Info(scope $"Catalog: {mCatalog.Count} package{(mCatalog.Count == 1) ? "" : "s"}");
+		if (mCatalog.IsEmpty)
+			return;
+		mImportWhenDownloaded = HasArg("--import-package-now");
+		StartPackageDownload(mCatalog[0]);
 	}
 
 	/// A file dropped on the editor that is a package: opened in Import Package rather than copied in.

@@ -663,8 +663,38 @@ static class AssetDatabase
 		return changed;
 	}
 
-	/// The new path for one path, if a move covers it.
+	/// The new path for one path, if a move covers it. A list of paths separated by ';' (an Animator's clips) has each
+	/// of them changed.
 	public static bool RewritePath(StringView path, Span<(StringView from, StringView to)> moves, bool isFolder, String outPath)
+	{
+		if (!path.Contains(';'))
+			return RewriteOne(path, moves, isFolder, outPath);
+		bool changed = false;
+		bool first = true;
+		for (let part in path.Split(';'))
+		{
+			if (!first)
+				outPath.Append(';');
+			first = false;
+			var trimmed = part;
+			trimmed.Trim();
+			let replaced = scope String();
+			if (!trimmed.IsEmpty && RewriteOne(trimmed, moves, isFolder, replaced))
+			{
+				// Spaces round a part stay as they were.
+				let lead = part.IndexOf(trimmed);
+				outPath.Append(part.Substring(0, lead));
+				outPath.Append(replaced);
+				outPath.Append(part.Substring(lead + trimmed.Length));
+				changed = true;
+			}
+			else
+				outPath.Append(part);
+		}
+		return changed;
+	}
+
+	static bool RewriteOne(StringView path, Span<(StringView from, StringView to)> moves, bool isFolder, String outPath)
 	{
 		if (path.IsEmpty)
 			return false;
@@ -742,6 +772,16 @@ static class AssetDatabase
 		void Consider(StringView value)
 		{
 			var value;
+			if (value.Contains(';'))
+			{
+				for (var part in value.Split(';'))
+				{
+					part.Trim();
+					if (!part.IsEmpty && !part.Contains(';'))
+						Consider(part);
+				}
+				return;
+			}
 			let hash = value.IndexOf('#');
 			if (hash > 0)
 				value = value.Substring(0, hash);
