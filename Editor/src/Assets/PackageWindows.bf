@@ -543,6 +543,22 @@ extension EditorApp
 		ImGui.TextDisabled("Catalog addresses, one per line (kept in Packages/sources.txt). A catalog lists packages to download.");
 		if (ImGui.InputTextMultiline("##sources", mCatalogSources, .(-1, ImGui.GetTextLineHeight() * 4.5f)))
 			PackageCatalog.SaveSources(mCatalogSources);
+		// The community packages on the Tallow website, one click away when they were taken out of the list.
+		if (!mCatalogSources.Contains(PackageCatalog.WebsiteCatalog))
+		{
+			if (ImGui.Button("Add the Tallow website's packages"))
+			{
+				if (!mCatalogSources.IsEmpty && !mCatalogSources.EndsWith('\n'))
+					mCatalogSources.Append('\n');
+				mCatalogSources.Append(PackageCatalog.WebsiteCatalog);
+				mCatalogSources.Append('\n');
+				PackageCatalog.SaveSources(mCatalogSources);
+			}
+			ImGui.SameLine();
+		}
+		if (ImGui.Button("Browse Packages Online"))
+			Terminal.Open(PackageCatalog.WebsiteStore);
+		ImGui.SameLine();
 		ImGui.BeginDisabled(mCatalogSources.IsEmpty);
 		if (ImGui.Button("Fetch Catalogs"))
 		{
@@ -734,9 +750,21 @@ static class PackageCatalog
 		outPath.Append("/sources.txt");
 	}
 
+	/// The catalog of the community packages on tallowengine.com (every version a moderator approved there).
+	public const String WebsiteCatalog = "https://tallowengine.com/packages/catalog.txt";
+	/// The same packages as pages, to browse and read about.
+	public const String WebsiteStore = "https://tallowengine.com/packages/";
+
+	/// The project's catalog addresses. A project that has never saved a list starts with the website's catalog.
 	public static void LoadSources(String outText)
 	{
-		File.ReadAllText(SourcesPath(.. scope .()), outText).IgnoreError();
+		let path = SourcesPath(.. scope .());
+		if (!File.Exists(path))
+		{
+			outText.AppendF("{}\n", WebsiteCatalog);
+			return;
+		}
+		File.ReadAllText(path, outText).IgnoreError();
 	}
 
 	public static void SaveSources(StringView text)

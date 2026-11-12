@@ -48,6 +48,9 @@ Window > Package Manager.
   Console), and folders left empty. **Import Again** opens the package file it came from.
 - **Package files**: `.tpackage` files in the project's `Packages` folder and your `Downloads` folder, or any path.
 - **Catalogs**: addresses of package catalogs, one per line (kept in `Packages/sources.txt`, so a team shares them).
+  A project starts with the Tallow website's catalog, `https://tallowengine.com/packages/catalog.txt`: the community
+  packages at https://tallowengine.com/packages/, each checked by a moderator. **Add the Tallow website's packages**
+  puts it back if it was taken out; **Browse Packages Online** opens the site.
   **Fetch Catalogs** lists their packages; **Download and Import...** downloads one into `Packages/Downloads` and
   opens it, or **Update...** when the project has an older version.
 
