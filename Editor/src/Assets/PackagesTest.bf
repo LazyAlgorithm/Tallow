@@ -125,6 +125,13 @@ extension EditorApp
 		}
 		Expect(record != null && record.version == "1.0.0" && record.files.Count >= 4, "recorded as imported");
 
+		ClearAndDeleteItems!(plan);
+		AssetPackages.PlanImport(pack, read, into, plan);
+		bool allSame = true;
+		for (let item in plan)
+			allSame &= item.state == .Same || item.isScript;
+		Expect(allSame, "just imported into a folder, every file shows as Same (references rewritten count as the same)");
+
 		// 4. Moved since, then imported again: found by ID where it is now; a changed file shows as Changed.
 		Directory.CreateDirectory(scope $"{root}/{into}/Elsewhere").IgnoreError();
 		Expect(MoveAssetTracked(scope $"{root}/{into}/{t}/Textures/t.png", scope $"{root}/{into}/Elsewhere/t.png"), "move the imported texture");

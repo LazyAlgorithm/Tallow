@@ -20,6 +20,11 @@ extension EditorApp
 	String mExportAuthor = new .() ~ delete _;
 	String mExportDescription = new .() ~ delete _;
 	String mExportFile = new .() ~ delete _;
+	/// What the last export did, shown under its buttons until something changes.
+	String mExportResult = new .() ~ delete _;
+	bool mExportFailed;
+	/// Frames until Export runs: the window first shows "Exporting..." for a frame, as a large package takes a while.
+	int32 mExportFrames;
 
 	/// Opens Export Package with these assets (full paths, files or folders) picked.
 	void OpenExportPackage(Span<StringView> fullPaths)
@@ -38,6 +43,7 @@ extension EditorApp
 			mExportName.Set(Project.Current.Name);
 		RecollectExport();
 		UpdateExportFile();
+		mExportResult.Clear();
 		mShowExportPackage = true;
 	}
 
@@ -69,7 +75,10 @@ extension EditorApp
 			bool nameChanged = ImGui.InputText("Name", mExportName);
 			nameChanged |= ImGui.InputText("Version", mExportVersion);
 			if (nameChanged)
+			{
 				UpdateExportFile();
+				mExportResult.Clear();
+			}
 			ImGui.InputText("Author", mExportAuthor);
 			ImGui.InputText("Description", mExportDescription);
 			ImGui.InputText("File", mExportFile);
@@ -92,7 +101,7 @@ extension EditorApp
 			if (scripts > 0)
 				summary.AppendF(", {} script{}", scripts, (scripts == 1) ? "" : "s");
 			ImGui.Text(summary);
-			if (ImGui.BeginChild("exportfiles", .(0, -ImGui.GetFrameHeight() * 1.6f), 1))
+			if (ImGui.BeginChild("exportfiles", .(0, -ImGui.GetFrameHeight() * 2.8f), 1))
 			{
 				for (int i < mExportItems.Count)
 				{
@@ -108,9 +117,14 @@ extension EditorApp
 				}
 			}
 			ImGui.EndChild();
-			ImGui.BeginDisabled(included == 0 || mExportName.IsEmpty || mExportFile.IsEmpty);
-			if (ImGui.Button("Export", .(140, 0)))
+			if (mExportFrames > 0 && --mExportFrames == 0)
 				ExportPackageNow();
+			ImGui.BeginDisabled(included == 0 || mExportName.IsEmpty || mExportFile.IsEmpty || mExportFrames > 0);
+			if (ImGui.Button(mExportFrames > 0 ? "Exporting..." : "Export", .(140, 0)))
+			{
+				mExportFrames = 2;
+				mExportResult.Clear();
+			}
 			ImGui.EndDisabled();
 			ImGui.SameLine();
 			if (ImGui.Button("Show Folder", .(140, 0)))
@@ -120,6 +134,8 @@ extension EditorApp
 				Directory.CreateDirectory(folder).IgnoreError();
 				Terminal.Open(folder);
 			}
+			if (!mExportResult.IsEmpty)
+				ImGui.TextColored(mExportFailed ? Color(1, 0.45f, 0.4f, 1) : Color(0.45f, 0.85f, 0.45f, 1), mExportResult);
 		}
 		ImGui.End();
 	}
@@ -138,12 +154,27 @@ extension EditorApp
 				paths.Add(item.path);
 		}
 		let error = scope String();
+		mExportResult.Clear();
 		if (AssetPackages.Export(mExportFile, manifest, paths, error) case .Err)
 		{
 			Log.Error(error);
+			mExportResult.Set(error);
+			mExportFailed = true;
 			return false;
 		}
-		Log.Info(scope $"Exported {manifest.name} {manifest.version} ({manifest.files.Count} files) to {mExportFile}");
+		mExportFailed = false;
+		// Files are stored as they are, so the package is about the size of what it holds.
+		int64 size = 0;
+		for (let file in manifest.files)
+			size += file.size;
+		let shownSize = scope String();
+		if (size >= 1024 * 1024)
+			shownSize.AppendF("{:0.0} MB", size / (1024.0 * 1024.0));
+		else
+			shownSize.AppendF("{} KB", (size + 1023) / 1024);
+		let fileName = Path.GetFileName(mExportFile, .. scope .());
+		mExportResult.AppendF("Exported {} {}: {} files, {}, as {}", manifest.name, manifest.version, manifest.files.Count, shownSize, fileName);
+		Log.Info(scope $"Exported {manifest.name} {manifest.version} ({manifest.files.Count} files, {shownSize}) to {mExportFile}");
 		return true;
 	}
 
@@ -156,6 +187,8 @@ extension EditorApp
 	String mImportFile = new .() ~ delete _;
 	String mImportFolder = new .() ~ delete _;
 	String mImportError = new .() ~ delete _;
+	/// What the last import did, shown at the bottom of the window.
+	String mImportResult = new .() ~ delete _;
 
 	/// Opens a .tpackage in the Import Package window. False (and the reason logged) when it cannot be read.
 	bool OpenImportPackage(StringView file)
@@ -165,6 +198,7 @@ extension EditorApp
 		DeleteAndNullify!(mImportManifest);
 		ClearAndDeleteItems!(mImportItems);
 		mImportError.Clear();
+		mImportResult.Clear();
 		mImportFile.Set(file);
 		mImportPack = new PackFile();
 		mImportManifest = new AssetPackages.Manifest();
@@ -225,8 +259,14 @@ extension EditorApp
 			AssetPackages.LoadInstalled(installed);
 			for (let package in installed)
 			{
-				if (package.name == m.name)
-					ImGui.TextColored(.(0.45f, 0.7f, 1, 1), scope $"Version {package.version} is in this project: this updates it.");
+				if (package.name != m.name)
+					continue;
+				let note = scope String();
+				if (package.version == m.version)
+					note.AppendF("This version is in the project.");
+				else
+					note.AppendF("Version {} is in the project: this updates it.", package.version);
+				ImGui.TextColored(.(0.45f, 0.7f, 1, 1), note);
 			}
 			if (ImGui.InputText("Into folder", mImportFolder, 0, "(empty: where the package's files were)"))
 				ReplanImport();
@@ -267,7 +307,12 @@ extension EditorApp
 			if (ImGui.Button(scope $"Import {chosen} file{(chosen == 1) ? "" : "s"}", .(180, 0)))
 				ImportPackageNow();
 			ImGui.EndDisabled();
-			if (scripts > 0)
+			if (!mImportResult.IsEmpty)
+			{
+				ImGui.SameLine();
+				ImGui.TextColored(.(0.45f, 0.85f, 0.45f, 1), mImportResult);
+			}
+			else if (scripts > 0)
 			{
 				ImGui.SameLine();
 				ImGui.TextDisabled(scope $"{scripts} script{(scripts == 1) ? "" : "s"}: the project is compiled after importing.");
@@ -289,7 +334,10 @@ extension EditorApp
 		ModelImport.Scan();
 		if (scriptsAdded)
 			RequestRebuild();
-		mShowImportPackage = false;
+		// The window stays, showing what was done; what is now in the project shows as Same.
+		ReplanImport();
+		mImportResult.Clear();
+		mImportResult.AppendF("Imported {} file{}{}.", written, (written == 1) ? "" : "s", scriptsAdded ? "; compiling its scripts" : "");
 		return true;
 	}
 

@@ -582,6 +582,37 @@ static class AssetPackages
 			if (owners.TryGetValueAlt(owner, let item) && item.entry.path != entry.path)
 				item.companions.Add(entry);
 		}
+		// A text file that names other files of the package was written with those names changed to where they went,
+		// so it differs from the package's copy without having been changed: compared as importing would write it.
+		let moves = scope List<(StringView from, StringView to)>();
+		for (let item in outItems)
+		{
+			if (item.entry.path != item.target)
+				moves.Add((item.entry.path, item.target));
+		}
+		if (moves.IsEmpty)
+			return;
+		for (let item in outItems)
+		{
+			if (item.state != .Changed || !AssetDatabase.MayHoldReferences(item.entry.path))
+				continue;
+			let data = scope List<uint8>();
+			if (pack.Read(scope $"assets/{item.entry.path}", data) case .Err)
+				continue;
+			if (data.Contains(0))
+				continue;
+			let text = scope String((char8*)data.Ptr, data.Count);
+			if (!AssetDatabase.RewriteText(text, moves))
+				continue;
+			let disk = scope List<uint8>();
+			if (File.ReadAll(scope $"{root}/{item.target}", disk) case .Err)
+				continue;
+			if (disk.Count == text.Length && PackFile.Crc32(disk) == PackFile.Crc32(.((uint8*)text.Ptr, text.Length)))
+			{
+				item.state = .Same;
+				item.include = false;
+			}
+		}
 	}
 
 	/// For "Models/crate.glb.tmeta", "Models/crate.glb"; empty when the file is not a side file.
