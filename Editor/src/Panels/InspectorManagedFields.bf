@@ -73,7 +73,7 @@ extension EditorApp
 				if (kind == "Vector2" && parts.Count == 2)
 				{
 					Vector2 value = .(SceneSerializer.ParseFloat(parts[0]), SceneSerializer.ParseFloat(parts[1]));
-					edited = ImGui.DragFloat2("##value", &value, 0.05f);
+					edited = ImGui.DragFloat2("##value", &value.x, 0.05f);
 					if (edited)
 						newValue.AppendF("{},{}", value.x, value.y);
 				}
