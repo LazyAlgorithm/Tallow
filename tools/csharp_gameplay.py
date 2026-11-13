@@ -42,6 +42,8 @@ def project_xml(name: str, files: list[Path], api: Path,
         "AllowUnsafeBlocks": "false",
         "Deterministic": "true",
         "OutputPath": str(output) + os.sep,
+        "AppendTargetFrameworkToOutputPath": "false",
+        "AppendRuntimeIdentifierToOutputPath": "false",
     }
     for key, value in properties.items():
         ET.SubElement(group, key).text = value
