@@ -6,7 +6,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// An immutable source snapshot sent to Beef's resolver. Rename compares these again before editing buffers.
+/// An immutable source snapshot sent to the selected language compiler. Rename rechecks sources.
 class ScriptSourceSnapshot
 {
 	public String path = new .() ~ delete _;
@@ -14,7 +14,7 @@ class ScriptSourceSnapshot
 	public String replacement = new .() ~ delete _;
 }
 
-/// A compiler-resolved symbol occurrence. Offsets and lengths are UTF-8 bytes, as in Beef source files.
+/// A compiler-resolved symbol occurrence. Offsets and lengths are UTF-8 bytes.
 struct ScriptSymbolReference
 {
 	public int file;
@@ -22,7 +22,7 @@ struct ScriptSymbolReference
 	public int length;
 }
 
-/// Runs the Beef IDE resolver outside the editor. The UI owns snapshots until the worker finishes, and rejects
+/// Runs the compiler language service outside the editor. Snapshots are checked before applying results.
 /// results when any open source changed. No resolver operation writes the project's source files.
 class ScriptSemantic
 {
@@ -85,7 +85,7 @@ class ScriptSemantic
 		sources.Add(source);
 	}
 
-	public bool AddFolder(StringView folder, int depth = 0)
+	public bool AddFolder(StringView folder, StringView suffix = ".bf", int depth = 0)
 	{
 		if (depth > 32)
 			return false;
@@ -93,7 +93,7 @@ class ScriptSemantic
 		{
 			let name = scope String();
 			entry.GetFileName(name);
-			if (!name.EndsWith(".bf", .OrdinalIgnoreCase))
+			if (!name.EndsWith(suffix, .OrdinalIgnoreCase))
 				continue;
 			let file = scope $"{folder}/{name}";
 			let source = scope String();
@@ -105,7 +105,7 @@ class ScriptSemantic
 		{
 			let name = scope String();
 			entry.GetFileName(name);
-			if (!name.StartsWith('.') && name != "build" && !AddFolder(scope $"{folder}/{name}" , depth + 1))
+			if (!name.StartsWith('.') && name != "build" && !AddFolder(scope $"{folder}/{name}" , suffix, depth + 1))
 				return false;
 		}
 		return true;
@@ -122,7 +122,8 @@ class ScriptSemantic
 		cursor = byteOffset;
 		renameName.Set(newName);
 		result.Clear();
-		status.Set("Beef: resolving...");
+		let isCSharp = path.EndsWith(".cs", .OrdinalIgnoreCase);
+		status.Set(isCSharp ? "C#: resolving..." : "Resolving...");
 		if (!mFolder.IsEmpty)
 			Directory.DelTree(mFolder).IgnoreError();
 		mFolder.Set(scope $"{Project.Current.Path}/.tallow-language/{SDL.SDL_GetTicksNS()}");
@@ -134,7 +135,7 @@ class ScriptSemantic
 			let source = sources[i];
 			if (source.path.Contains('\t') || source.path.Contains('\n'))
 				return false;
-			let snapshot = scope $"{mFolder}/{i}.bf";
+			let snapshot = scope $"{mFolder}/{i}{(isCSharp ? ".cs" : ".bf")}";
 			if (File.WriteAllText(snapshot, source.text) case .Err)
 				return false;
 			manifest.AppendF("overlay\t{}\t{}\n", source.path, snapshot);
@@ -143,7 +144,7 @@ class ScriptSemantic
 			return false;
 		mCommand.Clear();
 		mCommand.AppendF("{} ", Terminal.Python);
-		Terminal.Quote(scope $"{Project.Current.EngineRoot}/tools/beef_language_service.py" , mCommand);
+		Terminal.Quote(scope $"{Project.Current.EngineRoot}/tools/{(isCSharp ? "csharp_language_service.py" : "beef_language_service.py")}" , mCommand);
 		mCommand.Append(" --project ");
 		Terminal.Quote(Project.Current.Path, mCommand);
 		mCommand.Append(" --request ");
@@ -157,7 +158,7 @@ class ScriptSemantic
 			{
 				let exitCode = Terminal.Run(mCommand);
 				if (File.ReadAllText(scope $"{mFolder}/response.tsv" , result, true) case .Err)
-					result.Set(scope $"error\tBeef language service failed ({exitCode}); see {mFolder}/worker.log\n");
+					result.Set(scope $"error\tLanguage service failed ({exitCode}); see {mFolder}/worker.log\n");
 				Interlocked.Store(ref mFinished, true);
 			});
 		mWorker.Start(false);
@@ -171,7 +172,7 @@ class ScriptSemantic
 		mWorker.Join();
 		DeleteAndNullify!(mWorker);
 		running = false;
-		status.Set("Beef: ready");
+		status.Set("Language service ready");
 		return true;
 	}
 }
