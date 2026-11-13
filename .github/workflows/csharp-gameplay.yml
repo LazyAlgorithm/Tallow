@@ -29,7 +29,7 @@ jobs:
         run: dotnet build Managed/Tallow.LanguageService/Tallow.LanguageService.csproj -c Debug --nologo
       - name: Verify Roslyn editor features and UTF-8 offsets
         run: dotnet run --project Managed/Tallow.LanguageService.Tests/Tallow.LanguageService.Tests.csproj -- Managed/Tallow.LanguageService/bin/Debug/net11.0/Tallow.LanguageService.dll
-      - name: Generate and compile game + asmdef assemblies
+      - name: Generate and compile game + Tallow assembly-definition assemblies
         run: dotnet run --project Managed/Tallow.Build/Tallow.Build.csproj -- --project Tests/CSharpGameplay --engine-root .
       - name: Smoke-test trusted assembly lifecycle
         run: dotnet run --project Managed/Tallow.ManagedHost/Tallow.ManagedHost.csproj -- Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
