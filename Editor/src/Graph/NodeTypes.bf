@@ -10,7 +10,9 @@ namespace Tallow.Editor;
 /// RaycastHit); its pin names the exact type. Enum names its enum the same way.
 enum PinType { Flow, Float, Bool, Vector3, String, Int, Object, Enum, Vector2, Quaternion, Color }
 
-enum NodeKind { Event, Action, Value, Branch, Param, Return, GetVariable, SetVariable, Loop, While, ShaderOutput, EcsEach }
+/// Control: a flow-control node with its own generated code (Sequence, Do Once, Gate, Delay...; see
+/// NodeGraph.EmitControl), which may keep state in fields and may have several flow inputs.
+enum NodeKind { Event, Action, Value, Branch, Param, Return, GetVariable, SetVariable, Loop, While, ShaderOutput, EcsEach, Control }
 
 struct PinDef
 {
@@ -32,7 +34,15 @@ class NodeDef
 {
 	public String key = new .() ~ delete _;
 	public String title = new .() ~ delete _;
+	/// Where it sits in the add-node menu, a path with '|' between levels ("Math|Float"), as in Unreal's Blueprints.
 	public String category = new .() ~ delete _;
+	/// Other names the search finds it by, such as Unreal's ("Print String", "Event Tick"), separated by spaces.
+	public String keywords = new .() ~ delete _;
+	/// Fields the generated component gets for this node ("bool done$N = {0};"), one per line: state that lasts
+	/// between frames. $N is the node's id, {n} its data inputs' literals.
+	public String fields = new .() ~ delete _;
+	/// Locals the method gets for this node ("RaycastHit hit$N = default;"), one per line.
+	public String locals = new .() ~ delete _;
 	public NodeKind kind;
 	public List<PinDef> inputs = new .() ~ { ClearPins(_); delete _; };
 	public List<PinDef> outputs = new .() ~ { ClearPins(_); delete _; };
@@ -80,6 +90,25 @@ class NodeDef
 	{
 		inputs.Add(Pin(name, type, typeName, fallback));
 		return this;
+	}
+
+	/// Adds search words (other names the node goes by).
+	public NodeDef Also(StringView words)
+	{
+		if (!keywords.IsEmpty)
+			keywords.Append(' ');
+		keywords.Append(words);
+		return this;
+	}
+
+	/// The last part of the category path ("Float" for "Math|Float").
+	public StringView Leaf
+	{
+		get
+		{
+			let bar = category.LastIndexOf('|');
+			return bar < 0 ? (StringView)category : category.Substring(bar + 1);
+		}
 	}
 
 	/// Sets the value the last input added starts with on a new node.

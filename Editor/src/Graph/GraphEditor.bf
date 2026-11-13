@@ -860,91 +860,116 @@ extension EditorApp
 		ImGui.EndPopup();
 	}
 
-	/// Nothing typed: the hand-written nodes by category, then everything read from source (the engine by area and
-	/// then class, the game's own scripts by class). Returns the node chosen, or null.
+	/// One level of the add-node menu: its submenus and the nodes listed in it.
+	class NodeMenu
+	{
+		public String name = new .() ~ delete _;
+		public List<NodeMenu> menus = new .() ~ DeleteContainerAndItems!(_);
+		public List<NodeDef> items = new .() ~ delete _;
+		/// Lists only nodes read from source (an engine or game class), so it goes after the hand-made submenus.
+		public bool fromSource = true;
+
+		public NodeMenu Child(StringView childName)
+		{
+			for (let menu in menus)
+			{
+				if (menu.name == childName)
+					return menu;
+			}
+			let menu = new NodeMenu();
+			menu.name.Set(childName);
+			menus.Add(menu);
+			return menu;
+		}
+	}
+
+	NodeMenu mNodeMenu ~ delete _;
+	int mNodeMenuCount = -1;
+	bool mNodeMenuShader;
+
+	/// The menu tree, built again when nodes were added (a script reload) or the graph kind changed.
+	NodeMenu NodeMenuTree()
+	{
+		let defs = NodeLibrary.Defs;
+		if (mNodeMenu != null && mNodeMenuCount == defs.Count && mNodeMenuShader == mGraph.isShader)
+			return mNodeMenu;
+		delete mNodeMenu;
+		mNodeMenu = new NodeMenu();
+		mNodeMenuCount = defs.Count;
+		mNodeMenuShader = mGraph.isShader;
+		for (let def in defs)
+		{
+			if (def.isShader != mGraph.isShader)
+				continue;
+			var menu = mNodeMenu;
+			for (let part in def.category.Split('|'))
+			{
+				menu = menu.Child(part);
+				menu.fromSource &= def.fromApi;
+			}
+			menu.items.Add(def);
+		}
+		// Top-level categories in Unreal's order (the rest keep the order they were made in).
+		let order = scope List<(int rank, int index, NodeMenu menu)>();
+		for (int i < mNodeMenu.menus.Count)
+			order.Add((NodeLibrary.CategoryRank(mNodeMenu.menus[i].name), i, mNodeMenu.menus[i]));
+		order.Sort(scope (a, b) => a.rank != b.rank ? a.rank <=> b.rank : a.index <=> b.index);
+		for (int i < order.Count)
+			mNodeMenu.menus[i] = order[i].menu;
+		return mNodeMenu;
+	}
+
+	/// Nothing typed: every node in nested menus by category, as Unreal's Blueprint menu has them ("Math", then
+	/// "Float", then the nodes). Nodes read from the engine's source sit in their area's category, under their class;
+	/// the game's own scripts are under My Scripts. Returns the node chosen, or null.
 	NodeDef BrowseNodes()
 	{
 		NodeDef chosen = null;
-		String category = null;
-		bool open = false;
-		for (let def in NodeLibrary.Defs)
-		{
-			if (def.fromApi || def.isShader != mGraph.isShader || IsThisGraph(def))
-				continue;
-			if (category == null || category != def.category)
-			{
-				if (open)
-					ImGui.EndMenu();
-				category = def.category;
-				open = ImGui.BeginMenu(category.CStr());
-			}
-			if (open && ImGui.MenuItem(def.title.CStr()))
-				chosen = def;
-		}
-		if (open)
-			ImGui.EndMenu();
-		ImGui.Separator();
-		if (!mGraph.isShader && ImGui.BeginMenu("Engine"))
-		{
-			List<String> groups = scope .();
-			for (let def in NodeLibrary.Defs)
-			{
-				if (def.fromApi && !def.fromGame && !groups.Contains(def.group))
-					groups.Add(def.group);
-			}
-			groups.Sort(scope (a, b) => a.CompareTo(b));
-			for (let group in groups)
-			{
-				if (ImGui.BeginMenu(group.CStr()))
-				{
-					chosen = ApiClassMenus(group, false) ?? chosen;
-					ImGui.EndMenu();
-				}
-			}
-			ImGui.EndMenu();
-		}
-		if (!mGraph.isShader && ImGui.BeginMenu("Game"))
-		{
-			bool any = false;
-			for (let def in NodeLibrary.Defs)
-				any |= def.fromApi && def.fromGame;
-			if (any)
-				chosen = ApiClassMenus("", true) ?? chosen;
-			else
-				ImGui.TextDisabled("Public members of your scripts appear here.");
-			ImGui.EndMenu();
-		}
+		for (let menu in NodeMenuTree().menus)
+			chosen = DrawNodeMenu(menu) ?? chosen;
 		return chosen;
 	}
 
-	/// A menu per class of the nodes read from source, for one area of the engine or for the game's own scripts.
-	NodeDef ApiClassMenus(StringView group, bool game)
+	NodeDef DrawNodeMenu(NodeMenu menu)
 	{
+		if (!ImGui.BeginMenu(menu.name.CStr()))
+			return null;
 		NodeDef chosen = null;
-		String current = null;
-		bool inside = false;
-		for (let def in NodeLibrary.Defs)
+		for (let def in menu.items)
 		{
-			if (!def.fromApi || def.fromGame != game || (!game && def.group != group))
+			if (IsThisGraph(def) || (mSearchForLink && FirstCompatiblePin(def) < 0))
 				continue;
-			if (current == null || current != def.category)
-			{
-				if (inside)
-					ImGui.EndMenu();
-				current = def.category;
-				inside = ImGui.BeginMenu(current.CStr());
-			}
 			// Inside a class's menu its name is not repeated on every entry.
 			var title = (StringView)def.title;
-			if (title.StartsWith(def.category) && title.Length > def.category.Length + 2)
-				title = title.Substring(def.category.Length + 2);
-			if (inside && ImGui.MenuItem(scope String(title).CStr()))
+			if (title.StartsWith(menu.name) && title.Length > menu.name.Length + 2 && title[menu.name.Length] == ':')
+				title = title.Substring(menu.name.Length + 2);
+			if (ImGui.MenuItem(scope String(title).CStr()))
 				chosen = def;
 		}
-		if (inside)
-			ImGui.EndMenu();
+		// Hand-made submenus, then (after a line) those of classes read from source.
+		bool any = !menu.items.IsEmpty;
+		for (int pass < 2)
+		{
+			bool separated = false;
+			for (let sub in menu.menus)
+			{
+				if (sub.fromSource != (pass == 1))
+					continue;
+				if (pass == 1 && any && !separated)
+				{
+					ImGui.Separator();
+					separated = true;
+				}
+				chosen = DrawNodeMenu(sub) ?? chosen;
+				any = true;
+			}
+		}
+		ImGui.EndMenu();
 		return chosen;
 	}
+
+	/// Whether typed text finds a node: in its title, its other names (Unreal's among them) or its category.
+	static bool Finds(NodeDef def, StringView text) => def.title.Contains(text, true) || def.keywords.Contains(text, true) || def.category.Contains(text, true);
 
 	/// Typed text narrows the list as you type: names that start with it come first, and Enter takes the top one.
 	NodeDef MatchingNodes(bool enter)
@@ -959,11 +984,12 @@ extension EditorApp
 				if (def.isShader != mGraph.isShader || IsThisGraph(def) || (mSearchForLink && FirstCompatiblePin(def) < 0))
 					continue;
 				let starts = mNodeSearch.IsEmpty || def.title.StartsWith(mNodeSearch, .OrdinalIgnoreCase);
-				let contains = def.title.Contains(mNodeSearch, true) || def.category.Contains(mNodeSearch, true);
+				let contains = Finds(def, mNodeSearch);
 				if ((pass == 0 && !starts) || (pass == 1 && (starts || !contains)))
 					continue;
 				let label = scope String();
 				label.AppendF("{}   ({})", def.title, def.category);
+				label.Replace("|", " > ");
 				if (ImGui.Selectable(label.CStr(), shown == 0) || (enter && shown == 0))
 					chosen = def;
 				shown++;

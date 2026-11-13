@@ -97,16 +97,19 @@ static class NodeCanvas
 		}
 	}
 
-	public static Color CategoryColor(StringView category)
+	public static Color CategoryColor(StringView categoryPath)
 	{
+		// By top-level category ("Math" for "Math|Float").
+		let bar = categoryPath.IndexOf('|');
+		let category = bar < 0 ? categoryPath : categoryPath.Substring(0, bar);
 		switch (category)
 		{
-		case "Events": return .(0.62f, 0.22f, 0.22f, 1);
-		case "Flow": return .(0.40f, 0.40f, 0.44f, 1);
-		case "Transform","Object": return .(0.20f, 0.42f, 0.66f, 1);
-		case "Code": return .(0.50f, 0.34f, 0.66f, 1);
+		case "Events","Add Event": return .(0.62f, 0.22f, 0.22f, 1);
+		case "Flow","Flow Control": return .(0.40f, 0.40f, 0.44f, 1);
+		case "Transform","Object","Transformation","Game","Physics","Collision","Audio": return .(0.20f, 0.42f, 0.66f, 1);
+		case "Code","My Scripts": return .(0.50f, 0.34f, 0.66f, 1);
 		case "Subgraph","Subgraphs": return .(0.70f, 0.44f, 0.20f, 1);
-		case "Input","Time": return .(0.22f, 0.50f, 0.48f, 1);
+		case "Input","Time","Networking": return .(0.22f, 0.50f, 0.48f, 1);
 		default: return .(0.26f, 0.48f, 0.30f, 1);
 		}
 	}
