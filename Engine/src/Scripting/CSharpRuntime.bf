@@ -213,7 +213,9 @@ static class CSharpRuntime
 		if (sScene == null || scene != sSession || entity > uint32.MaxValue)
 			return null;
 		let gameObject = sScene.FindById((uint32)entity);
-		return gameObject != null && !gameObject.IsDestroyed ? gameObject : null;
+		if (gameObject == null || gameObject.IsDestroyed)
+			return null;
+		return gameObject;
 	}
 
 	static int32 IsAlive(void* context, uint64 scene, uint64 entity) => Find(scene, entity) != null ? 1 : 0;
