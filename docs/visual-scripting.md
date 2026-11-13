@@ -21,7 +21,13 @@ There is no separate kind of project: graphs and Beef scripts sit in the same pr
 An empty project has no Beef scripts: it starts through the editor's own start-up class (no `Program.bf`), and its
 first scene has a floor and a first-person character made with a visual script
 (`Scripts/FirstPersonCharacter.tgraph`), with a comment box over each part: start-up, walking and sprinting,
-jumping, moving, turning and the camera. Add `src/Program.bf` with a `Main` only if the game needs start-up code
+jumping, moving, turning, crouching and the camera. Crouching (Left Ctrl, or the pad's East button) works as in
+Halo: on the ground the head comes down; in the air the feet come up and the head stays still, so a crouch jump
+gets onto ledges the feet would otherwise catch on. It stays crouched under anything too low to stand up in (the
+Physics > Character nodes Set Character Height and Crouch Lift do this).
+
+The editor opens with the Scene view and the Inspector in front, and the Graph window docked beside the Scene
+view, showing the project's first visual script. Add `src/Program.bf` with a `Main` only if the game needs start-up code
 before any scene loads.
 
 ## Adding nodes

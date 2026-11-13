@@ -116,6 +116,7 @@ extension EditorApp
 		if (!mGraphStepping)
 			ClearAndDeleteItems!(mGraphBack);
 		mGraphStepping = false;
+		mGraphOpenedAtStart = false;
 		mShowGraph = true;
 		mDockGraph = true;
 		NodeLibrary.RefreshSubgraphs(Assets.ProjectPath);
@@ -553,8 +554,54 @@ extension EditorApp
 		public bool pinIsOutput;
 	}
 
+	/// Whether the open graph is the one shown when the editor opened (which leaves the Scene tab in front).
+	bool mGraphOpenedAtStart;
+	bool mGraphStartTried;
+
+	/// With the Graph window open and no graph in it when the editor starts: the project's first visual script
+	/// (Scripts/ first, subgraphs left out), so a new project shows its character's graph.
+	void OpenStartGraph()
+	{
+		mGraphStartTried = true;
+		let found = scope String();
+		void Search(StringView folder, int depth)
+		{
+			if (!found.IsEmpty || depth > 6)
+				return;
+			for (let entry in Directory.EnumerateFiles(folder, "*.tgraph"))
+			{
+				let path = entry.GetFilePath(.. scope .());
+				let text = scope String();
+				if (File.ReadAllText(path, text) case .Ok && !text.Contains("sub.entry"))
+				{
+					found.Set(path);
+					return;
+				}
+			}
+			for (let entry in Directory.EnumerateDirectories(folder))
+			{
+				let name = entry.GetFileName(.. scope .());
+				if (!name.StartsWith('.'))
+					Search(entry.GetFilePath(.. scope .()), depth + 1);
+			}
+		}
+		let scripts = scope $"{Assets.ProjectPath}/Scripts";
+		if (Directory.Exists(scripts))
+			Search(scripts, 0);
+		if (found.IsEmpty)
+			Search(Assets.ProjectPath, 0);
+		if (found.IsEmpty)
+			return;
+		OpenGraph(found);
+		mGraphFocus = false;
+		mGraphOpenedAtStart = true;
+		Log.Info(scope $"Graph window: {Path.GetFileName(found, .. scope .())}");
+	}
+
 	void DrawGraph()
 	{
+		if (mShowGraph && mGraph == null && mPendingGraph.IsEmpty && !mGraphStartTried && Time.FrameCount > 2)
+			OpenStartGraph();
 		if (!mShowGraph && mPendingGraph.IsEmpty)
 			return;
 		if (mDockGraph && mAssetCenterDock != 0)

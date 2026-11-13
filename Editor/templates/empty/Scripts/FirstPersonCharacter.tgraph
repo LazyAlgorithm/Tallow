@@ -2,7 +2,11 @@ graph "FirstPersonCharacter"
 variable float "walkSpeed" "5"
 variable float "sprintSpeed" "9"
 variable float "jumpSpeed" "6"
+variable float "crouchSpeed" "2.5"
+variable float "standHeight" "2"
+variable float "crouchHeight" "1.2"
 variable float "eyeHeight" "0.7"
+variable float "eyeNow" "0.7"
 variable object:GameObject "camera" ""
 node 1 event.start 0 0
 node 2 input.lockmouse 260 0 "" "true"
@@ -14,19 +18,35 @@ node 7 event.update 0 400
 node 8 var.get.float 300 470 "walkSpeed"
 node 9 var.get.float 300 540 "sprintSpeed"
 node 10 logic.select 540 430 "false" "0" "0"
-node 11 math.vscale 800 430 "0 0 0" "1"
-node 12 var.get.float 300 740 "jumpSpeed"
-node 13 logic.select 540 700 "false" "0" "0"
-node 14 physics.charmove 1090 430 "" "" "0 0 0" "0" "0"
-node 15 math.reuler 1090 690 "0" "0" "0"
-node 16 transform.setrotation 1370 690 "" "0 0 0"
-node 17 var.get.object 1660 560 "camera"
-node 18 transform.position 1660 640
-node 19 var.get.float 1660 730 "eyeHeight"
-node 20 math.vector 1900 730 "0" "0" "0"
-node 21 math.vadd 2140 640 "0 0 0" "0 0 0"
-node 22 transform.objsetposition 2140 430 "" "" "0 0 0"
-node 23 transform.objsetrotation 2400 430 "" "" "0 0 0"
+node 11 var.get.float 540 560 "crouchSpeed"
+node 12 logic.select 800 430 "false" "0" "0"
+node 13 math.vscale 1060 430 "0 0 0" "1"
+node 14 var.get.float 300 790 "jumpSpeed"
+node 15 logic.select 540 750 "false" "0" "0"
+node 16 physics.charmove 1350 430 "" "" "0 0 0" "0" "0"
+node 17 math.reuler 1350 720 "0" "0" "0"
+node 18 transform.setrotation 1620 720 "" "0 0 0"
+node 19 var.get.float 300 1030 "crouchHeight"
+node 20 var.get.float 300 1100 "standHeight"
+node 21 logic.select 540 1000 "false" "0" "0"
+node 22 physics.charheight 1620 1000 "" "" "1.2" "2"
+node 23 physics.getcharheight 1950 600 ""
+node 24 var.get.float 1950 690 "standHeight"
+node 25 math.any.sub 2190 600 "0" "0"
+node 26 var.get.float 2190 700 "eyeHeight"
+node 27 math.any.sub 2430 600 "0" "0"
+node 28 var.get.float 2190 800 "eyeNow"
+node 29 physics.crouchlift 2190 880 ""
+node 30 math.any.sub 2430 760 "0" "0"
+node 31 math.finterp 2670 600 "0" "0" "0" "12"
+node 32 var.set.float 2670 430 "" "eyeNow" "0"
+node 33 var.get.object 2930 600 "camera"
+node 34 transform.position 2930 680
+node 35 var.get.float 2930 790 "eyeNow"
+node 36 math.vector 3170 790 "0" "0" "0"
+node 37 math.vadd 3410 680 "0 0 0" "0 0 0"
+node 38 transform.objsetposition 3410 430 "" "" "0 0 0"
+node 39 transform.objsetrotation 3670 430 "" "" "0 0 0"
 link 1 0 2 0
 link 2 0 4 0
 link 3 0 4 1
@@ -35,29 +55,50 @@ link 5 0 6 2
 link 7 9 10 0
 link 9 0 10 1
 link 8 0 10 2
-link 7 3 11 0
-link 10 0 11 1
-link 7 8 13 0
+link 7 10 12 0
+link 11 0 12 1
+link 10 0 12 2
+link 7 3 13 0
 link 12 0 13 1
-link 7 0 14 0
-link 11 0 14 2
-link 7 1 14 3
-link 13 0 14 4
-link 7 4 15 1
-link 14 0 16 0
-link 15 0 16 1
-link 19 0 20 1
-link 18 0 21 0
-link 20 0 21 1
-link 16 0 22 0
-link 17 0 22 1
+link 7 8 15 0
+link 14 0 15 1
+link 7 0 16 0
+link 13 0 16 2
+link 7 1 16 3
+link 15 0 16 4
+link 7 4 17 1
+link 16 0 18 0
+link 17 0 18 1
+link 7 10 21 0
+link 19 0 21 1
+link 20 0 21 2
+link 18 0 22 0
 link 21 0 22 2
-link 22 0 23 0
-link 17 0 23 1
-link 7 6 23 2
+link 20 0 22 3
+link 24 0 25 0
+link 23 0 25 1
+link 26 0 27 0
+link 25 0 27 1
+link 28 0 30 0
+link 29 0 30 1
+link 30 0 31 0
+link 27 0 31 1
+link 7 1 31 2
+link 22 0 32 0
+link 31 0 32 2
+link 35 0 36 1
+link 34 0 37 0
+link 36 0 37 1
+link 32 0 38 0
+link 33 0 38 1
+link 37 0 38 2
+link 38 0 39 0
+link 33 0 39 1
+link 7 6 39 2
 comment -20 -54 1010 260 0.3 0.45 0.35 1 "Start: lock the mouse and find the camera"
-comment 280 376 730 240 0.35 0.42 0.55 1 "Walk, or run while Sprint is held"
-comment 280 646 470 174 0.55 0.42 0.28 1 "Jump: only on the frame Jump is pressed"
-comment 1070 376 230 218 0.45 0.35 0.55 1 "Move the character (gravity is built in)"
-comment 1070 636 510 174 0.55 0.32 0.32 1 "Turn the body to face where you look"
-comment 1640 376 970 474 0.28 0.48 0.52 1 "First-person camera at eye height"
+comment 280 376 990 260 0.35 0.42 0.55 1 "Walk, run while Sprint is held, sneak while crouching"
+comment 280 696 470 174 0.55 0.42 0.28 1 "Jump: only on the frame Jump is pressed"
+comment 1330 376 230 218 0.45 0.35 0.55 1 "Move the character (gravity is built in)"
+comment 1330 666 500 174 0.55 0.32 0.32 1 "Turn the body to face where you look"
+comment 280 946 1550 230 0.5 0.45 0.25 1 "Crouch: head down on the ground, feet up in the air (crouch jump)"
+comment 1930 376 1950 580 0.28 0.48 0.52 1 "First-person camera at eye height, lowered smoothly when crouching"

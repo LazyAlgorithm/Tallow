@@ -56,7 +56,9 @@ class EditorApp : Application
 	bool mOpenSaveAs;
 	bool mFocusGame;
 	bool mFocusScene = true;
-	int32 mFocusInspector;
+	/// Frames left to bring the Inspector in front of the tabs docked with it (Model, Rigging), each time the
+	/// editor opens.
+	int32 mFocusInspector = 12;
 	/// Bring the Scene view to the front now, whatever else is open (set when a prefab is opened).
 	bool mShowScene;
 	uint32 mAssetCenterDock;

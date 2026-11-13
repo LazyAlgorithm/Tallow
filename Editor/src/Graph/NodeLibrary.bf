@@ -657,6 +657,13 @@ static class NodeLibrary
 			"if ({0} != null && {0}.HasComponent<CharacterController>()) {0}.GetComponent<CharacterController>().SimpleMove({1}, {2}, {3});")
 			.In("Target", .Object, "GameObject", "GameObject").In("Velocity", .Vector3).In("Delta Time", .Float).In("Jump Speed", .Float)
 			.Also("Add Movement Input Character Movement Walk SimpleMove Jump Launch Character");
+		Add("physics.charheight", "Physics|Character", "Set Character Height", .Action, "GraphRuntime.SetCharacterHeight({0}, {1}, {2});")
+			.In("Target", .Object, "GameObject", "GameObject").In("Height", .Float).Default("1.2").In("Standing Height", .Float).Default("2")
+			.Also("Crouch Uncrouch Capsule Half Height");
+		Add("physics.getcharheight", "Physics|Character", "Character Height", .Value, "GraphRuntime.CharacterHeight({0})")
+			.In("Target", .Object, "GameObject", "GameObject").Out("", .Float).Also("Is Crouched Capsule Half Height");
+		Add("physics.crouchlift", "Physics|Character", "Crouch Lift", .Value, "GraphRuntime.CrouchLift({0})")
+			.In("Target", .Object, "GameObject", "GameObject").Out("", .Float).Also("Crouch Jump Air Crouch");
 		Add("physics.grounded", "Physics|Character", "Is On Ground", .Value, "(({0} != null && {0}.HasComponent<CharacterController>()) ? {0}.GetComponent<CharacterController>().IsGrounded : false)")
 			.In("Target", .Object, "GameObject", "GameObject").Out("", .Bool).Also("Is Moving On Ground Grounded Falling");
 

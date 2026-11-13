@@ -37,6 +37,52 @@ static class GraphNodes
 /// What code compiled from visual scripts calls for the nodes that take any kind of value (Print, To String, Is Valid).
 static class GraphRuntime
 {
+	/// Makes a character's capsule this tall, keeping it as standingHeight capsule's feet are (crouching), when that
+	/// is not already its height. On the ground the head comes down; in the air the feet come up instead and the head
+	/// stays where it is (lifting the character), as in Halo, so crouching mid-jump clears a ledge the feet would
+	/// have caught on. Standing up is refused while something is in the way, so the character stays crouched.
+	public static void SetCharacterHeight(GameObject target, float height, float standingHeight)
+	{
+		if (target == null || !target.HasComponent<CharacterController>())
+			return;
+		let controller = target.GetComponent<CharacterController>();
+		let shrink = controller.height - height;
+		if (Math.Abs(shrink) < 0.001f)
+			return;
+		let airborne = controller.HasCharacter && !controller.IsGrounded;
+		let velocity = controller.Velocity;
+		let airTime = controller.AirTime;
+		if (!controller.SetCapsule(controller.radius, height, .(0, (height - standingHeight) / 2, 0)))
+			return;
+		if (airborne && shrink > 0)
+		{
+			// The capsule shrank from the top; moving it up by as much puts the top back and lifts the feet.
+			controller.Teleport(target.Transform.Position + Vector3(0, shrink, 0), velocity, airTime);
+			sLiftObject = target;
+			sLiftFrame = Time.FrameCount;
+			sLift = shrink;
+		}
+	}
+
+	static GameObject sLiftObject;
+	static int64 sLiftFrame = -1;
+	static float sLift;
+
+	/// How far Set Character Height lifted this character this frame to keep its head still while crouching in the
+	/// air (0 otherwise). Take it off a smoothed camera height so the view does not jump.
+	public static float CrouchLift(GameObject target)
+	{
+		return target != null && target == sLiftObject && sLiftFrame == Time.FrameCount ? sLift : 0;
+	}
+
+	/// A character's capsule height now (0 without a Character Controller).
+	public static float CharacterHeight(GameObject target)
+	{
+		if (target == null || !target.HasComponent<CharacterController>())
+			return 0;
+		return target.GetComponent<CharacterController>().height;
+	}
+
 	/// Whether an object reference is set (and, for a component handle, its object still has that component).
 	public static bool IsValid(Object value) => value != null;
 

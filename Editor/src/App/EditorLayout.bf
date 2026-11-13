@@ -87,13 +87,13 @@ extension EditorApp
 		{
 			// Scene is the tab shown when the editor opens, whatever tab the saved layout had in
 			// front. Repeated for a few frames because docking settles over the first frames.
-			if (mScripts.Count == 0 && mGraph == null && mUiData == null)
+			if (mScripts.Count == 0 && (mGraph == null || mGraphOpenedAtStart) && mUiData == null)
 				ImGui.SetWindowFocus("Scene");
 			if (Time.FrameCount > 10)
 				mFocusScene = false;
 		}
 		// The Inspector in front of the tabs docked with it, for a few frames while docking settles.
-		if (mFocusInspector > 0)
+		if (mFocusInspector > 0 && Time.FrameCount > 3)
 		{
 			mFocusInspector--;
 			if (mRig == null && !mFocusRig)
@@ -117,7 +117,7 @@ extension EditorApp
 
 	/// The windows that can be closed, as they are named in the open-windows file. The layout file keeps where they
 	/// are docked, but not whether they are open, so that is kept beside it (windows5_<project>.txt).
-	static StringView[?] sOpenWindowNames = .("Model", "Rigging", "Animation", "Animator", "Dialogue", "Sequencer", "Map Builder", "UV Editor", "Graphics Quality", "Lighting", "Model Views", "Scripts", "Profiler", "World Map", "Network");
+	static StringView[?] sOpenWindowNames = .("Model", "Rigging", "Animation", "Animator", "Dialogue", "Sequencer", "Map Builder", "UV Editor", "Graphics Quality", "Lighting", "Model Views", "Scripts", "Profiler", "World Map", "Network", "Graph");
 	int32 mOpenWindowsSaved = -1;
 	bool mRetiredWindow;
 
@@ -140,6 +140,7 @@ extension EditorApp
 		case 12: return &mShowProfiler;
 		case 13: return &mShowWorldMap;
 		case 14: return &mShowNetwork;
+		case 15: return &mShowGraph;
 		default: return &mShowScripts;
 		}
 	}
@@ -181,9 +182,10 @@ extension EditorApp
 		}
 		else
 		{
-			// The first time: the Model and Rigging windows beside the Inspector, Model Views and Scripts beside the Scene view.
-			mShowModel = mShowRig = mShowModelViews = mShowScripts = true;
-			mDockModelViews = mDockScripts = true;
+			// The first time: the Model and Rigging windows beside the Inspector, Model Views and Graph (visual
+			// scripting, the usual way to write game code) beside the Scene view.
+			mShowModel = mShowRig = mShowModelViews = mShowGraph = true;
+			mDockModelViews = mDockGraph = true;
 		}
 		mOpenWindowsSaved = OpenWindowsMask();
 	}
@@ -223,15 +225,17 @@ extension EditorApp
 		mShowModel = true;
 		mShowRig = true;
 		mDockModel = mDockRig = false;
-		mFocusInspector = 5;
+		mFocusInspector = 12;
 		ImGui.DockBuilderDockWindow("Project", bottom);
 		ImGui.DockBuilderDockWindow("Console", bottom);
-		// Tab order follows docking order: Game, Scene, then Scripts on the far right.
+		// Tab order follows docking order: Game, Scene, then Graph on the far right (Scripts docks there when a Beef
+		// script is opened).
 		ImGui.DockBuilderDockWindow("Game", center);
 		ImGui.DockBuilderDockWindow("Scene", center);
 		ImGui.DockBuilderDockWindow("Model Views", center);
+		ImGui.DockBuilderDockWindow("Graph", center);
 		ImGui.DockBuilderDockWindow("Scripts", center);
-		mShowModelViews = mShowScripts = true;
+		mShowModelViews = mShowGraph = true;
 		mFocusScene = true;
 		ImGui.DockBuilderFinish(dockId);
 	}
