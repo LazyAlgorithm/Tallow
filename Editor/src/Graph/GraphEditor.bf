@@ -157,9 +157,10 @@ extension EditorApp
 		let graph = scope NodeGraph();
 		graph.name.Set(name);
 		let update = graph.AddNode(NodeLibrary.Find("event.update"), .(40, 60));
-		let rotate = graph.AddNode(NodeLibrary.Find("transform.rotate"), .(560, 60));
-		let vector = graph.AddNode(NodeLibrary.Find("math.vector"), .(320, 150));
-		let multiply = graph.AddNode(NodeLibrary.Find("math.mul"), .(60, 190));
+		// Left to right in reading order, each node clear of On Update (NodeWidth wide, tall with its many outputs).
+		let multiply = graph.AddNode(NodeLibrary.Find("math.mul"), .(290, 130));
+		let vector = graph.AddNode(NodeLibrary.Find("math.vector"), .(530, 110));
+		let rotate = graph.AddNode(NodeLibrary.Find("transform.rotate"), .(770, 60));
 		multiply.values[1].Set("90");
 		graph.Connect(update.id, 0, rotate.id, 0);
 		graph.Connect(update.id, 1, multiply.id, 0);
@@ -177,7 +178,7 @@ extension EditorApp
 	{
 		let folder = Path.GetDirectoryPath(mGraphPath, .. scope String());
 		let name = scope String();
-		for (int i = 1; ; i++)
+		for (int i = 1;; i++)
 		{
 			name..Clear().AppendF("{}Part{}", mGraph.name, i);
 			if (!File.Exists(scope $"{folder}/{name}.tgraph"))
