@@ -108,14 +108,14 @@ internal static class Program
             new XElement("Nullable", "enable"),
             new XElement("ImplicitUsings", "enable"),
             new XElement("EnableDefaultCompileItems", "false"),
-            // Gameplay scripts can use Vector2/Vector3/Quaternion with just "using Tallow".
-            new XElement("Using", new XAttribute("Include", "System.Numerics")),
             new XElement("AllowUnsafeBlocks", "false"),
             new XElement("Deterministic", "true"),
             new XElement("AppendTargetFrameworkToOutputPath", "false"),
             new XElement("AppendRuntimeIdentifierToOutputPath", "false"),
             new XElement("OutputPath", output + Path.DirectorySeparatorChar));
         var includes = new XElement("ItemGroup",
+            // Using is an MSBuild item, not a PropertyGroup property.
+            new XElement("Using", new XAttribute("Include", "System.Numerics")),
             files.Select(file => new XElement("Compile", new XAttribute("Include", file))));
         var refs = new XElement("ItemGroup",
             new XElement("ProjectReference", new XAttribute("Include", api)));
