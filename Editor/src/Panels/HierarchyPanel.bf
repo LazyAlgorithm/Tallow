@@ -204,6 +204,20 @@ extension EditorApp
 					MarkDirty();
 				}
 			}
+			// A C# source dragged from the Project panel attaches its managed
+			// component to this exact object, not to the current selection.
+			let asset = ImGui.AcceptDragDropPayload("ASSET");
+			if (asset != null && !gameObject.IsFolder)
+			{
+				let relative = StringView((char8*)asset.data, asset.dataSize);
+				if (relative.EndsWith(".cs", .OrdinalIgnoreCase))
+				{
+					let absolute = scope String();
+					Assets.ResolvePath(relative, absolute);
+					mSelectedId = gameObject.Id;
+					AttachManagedScriptAsset(gameObject, absolute);
+				}
+			}
 			ImGui.EndDragDropTarget();
 		}
 		if (mHierarchyRenaming == gameObject.Id)
