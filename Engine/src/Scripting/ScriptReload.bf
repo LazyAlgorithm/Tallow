@@ -49,9 +49,13 @@ class ScriptReload
 	}
 
 #if BF_PLATFORM_LINUX
-	static void* Open(StringView path, String error)
+	/// RTLD_NOW (2), with RTLD_GLOBAL (256) for a library that is kept: a later generation is linked against what
+	/// earlier ones export (tools/reload_scripts.py records each kept generation's exports as resident), so those
+	/// must be visible to it. Opened locally, a getter a script first used in one reload ("undefined symbol:
+	/// ...TickInput13get__Move...") was missing from every reload after.
+	static void* Open(StringView path, String error, bool global = false)
 	{
-		let module = dlopen(scope String(path).CStr(), 2);
+		let module = dlopen(scope String(path).CStr(), global ? 258 : 2);
 		if (module == null)
 		{
 			let message = dlerror();
@@ -366,7 +370,7 @@ class ScriptReload
 #if BF_PLATFORM_LINUX
 		let path = scope String();
 		ManifestModule(text, path);
-		let module = Open(path, error);
+		let module = Open(path, error, true);
 		if (module == null) return false;
 		bool applied = false;
 		defer
