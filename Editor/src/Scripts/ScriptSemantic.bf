@@ -22,8 +22,8 @@ struct ScriptSymbolReference
 	public int length;
 }
 
-/// Runs the compiler language service outside the editor. Snapshots are checked before applying results.
-/// results when any open source changed. No resolver operation writes the project's source files.
+/// Runs the compiler language service outside the editor. Source snapshots
+/// are checked before applying results. User source is never modified by the worker.
 class ScriptSemantic
 {
 	[CLink] static extern char8* tn_code_canonical_path(char8* path);
@@ -143,14 +143,36 @@ class ScriptSemantic
 		if (File.WriteAllText(scope $"{mFolder}/request.tsv" , manifest) case .Err)
 			return false;
 		mCommand.Clear();
-		mCommand.AppendF("{} ", Terminal.Python);
-		Terminal.Quote(scope $"{Project.Current.EngineRoot}/tools/{(isCSharp ? "csharp_language_service.py" : "beef_language_service.py")}" , mCommand);
-		mCommand.Append(" --project ");
-		Terminal.Quote(Project.Current.Path, mCommand);
+		if (isCSharp)
+		{
+			// Execute the managed compiler directly; gameplay scripting never invokes Python.
+			let service = scope $"{Project.Current.EngineRoot}/Managed/Tallow.LanguageService/Tallow.LanguageService.csproj";
+			let dll = scope $"{Project.Current.EngineRoot}/Managed/Tallow.LanguageService/bin/Debug/net11.0/Tallow.LanguageService.dll";
+			if (!File.Exists(dll))
+			{
+				mCommand.Append("dotnet build ");
+				Terminal.Quote(service, mCommand);
+				mCommand.Append(" --configuration Debug --nologo --verbosity quiet && ");
+			}
+			mCommand.Append("dotnet ");
+			Terminal.Quote(dll, mCommand);
+			mCommand.Append(" --project ");
+			Terminal.Quote(Project.Current.Path, mCommand);
+			mCommand.Append(" --engine-root ");
+			Terminal.Quote(Project.Current.EngineRoot, mCommand);
+		}
+		else
+		{
+			// Legacy compiler worker for generated graph sources; migrate separately.
+			mCommand.AppendF("{} ", Terminal.Python);
+			Terminal.Quote(scope $"{Project.Current.EngineRoot}/tools/beef_language_service.py", mCommand);
+			mCommand.Append(" --project ");
+			Terminal.Quote(Project.Current.Path, mCommand);
+		}
 		mCommand.Append(" --request ");
 		Terminal.Quote(mFolder, mCommand);
 		mCommand.Append(" > ");
-		Terminal.Quote(scope $"{mFolder}/worker.log" , mCommand);
+		Terminal.Quote(scope $"{mFolder}/worker.log", mCommand);
 		mCommand.Append(" 2>&1");
 		running = true;
 		mFinished = false;
