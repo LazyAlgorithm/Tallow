@@ -124,7 +124,19 @@ int main(int argc, char** argv)
         !tn_csharp_detach(inputScript))
         return Failure("managed C# cleanup and scene callbacks");
 
+    if (!tn_csharp_unload_game())
+        return Failure("unloading trusted gameplay after Play");
+    if (tn_csharp_load_game(game.c_str()) < 2)
+        return Failure("reloading trusted gameplay for second Play");
+    const int32_t secondPlay = tn_csharp_attach("Gameplay.MoveRight", 1, 1);
+    if (secondPlay < 1 || !tn_csharp_tick(secondPlay, 0.5f))
+        return Failure("running fresh managed component on second Play");
+    if (std::fabs(state.position[0] - 6.0f) > 0.0001f)
+        return Failure("reloaded gameplay did not update the native transform");
+    if (!tn_csharp_detach(secondPlay) || !tn_csharp_unload_game())
+        return Failure("ending second Play session");
+
     tn_csharp_shutdown();
-    std::cout << "PASS hostfxr -> C# lifecycle + network input -> native scene transform\n";
+    std::cout << "PASS hostfxr -> C# lifecycle, input, unload/reload -> native scene\n";
     return 0;
 }
