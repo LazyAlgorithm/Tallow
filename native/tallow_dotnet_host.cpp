@@ -74,38 +74,146 @@ std::basic_string<host_char> platform_string(const char* utf8)
 #endif
 }
 
-std::filesystem::path dotnet_root()
+// Find the SDK/runtime's actual installation, not one assumed distro path.
+// Fedora/Nobara generally use /usr/lib64/dotnet, while Microsoft packages use
+// /usr/share/dotnet and per-user dotnet-install.sh uses ~/.dotnet.
+// The highest installed hostfxr version is used to initialize the requested
+// framework from the supplied runtimeconfig.json.
+void add_root(std::vector<std::filesystem::path>& roots, const std::filesystem::path& root)
 {
-    if (const char* root = std::getenv("DOTNET_ROOT"); root && *root)
-        return std::filesystem::path(platform_string(root));
+    if (root.empty())
+        return;
+    if (std::find(roots.begin(), roots.end(), root) == roots.end())
+        roots.push_back(root);
+}
+
+void add_root_from_env(std::vector<std::filesystem::path>& roots, const char* name)
+{
+    if (const char* value = std::getenv(name); value && *value)
+        add_root(roots, std::filesystem::path(platform_string(value)));
+}
+
+void add_root_from_executable(std::vector<std::filesystem::path>& roots,
+    const std::filesystem::path& executable)
+{
+    std::error_code error;
+    if (!std::filesystem::exists(executable, error))
+        return;
+    const auto resolved = std::filesystem::canonical(executable, error);
+    if (!error && resolved.filename() == "dotnet")
+        add_root(roots, resolved.parent_path());
+}
+
+std::vector<std::filesystem::path> dotnet_roots()
+{
+    std::vector<std::filesystem::path> roots;
+    add_root_from_env(roots, "DOTNET_ROOT");
+#if defined(_WIN64) || defined(__x86_64__) || defined(__aarch64__)
+    add_root_from_env(roots, "DOTNET_ROOT_X64");
+#endif
+    // Find the dotnet CLI that the user actually runs, following symlinks.
+    if (const char* search = std::getenv("PATH"); search && *search)
+    {
+        const std::string value(search);
+#ifdef _WIN32
+        constexpr char separator = ';';
+        constexpr const char* executable = "dotnet.exe";
+#else
+        constexpr char separator = ':';
+        constexpr const char* executable = "dotnet";
+#endif
+        size_t first = 0;
+        while (first <= value.size())
+        {
+            size_t last = value.find(separator, first);
+            if (last == std::string::npos)
+                last = value.size();
+            if (last > first)
+                add_root_from_executable(roots,
+                    std::filesystem::path(platform_string(
+                        value.substr(first, last - first).c_str())) / executable);
+            first = last + 1;
+        }
+    }
 #ifdef _WIN32
     if (const char* files = std::getenv("ProgramFiles"); files && *files)
-        return std::filesystem::path(platform_string(files)) / L"dotnet";
-    return L"C:\\Program Files\\dotnet";
+        add_root(roots, std::filesystem::path(platform_string(files)) / L"dotnet");
+    add_root(roots, L"C:\\Program Files\\dotnet");
 #else
-    return "/usr/share/dotnet";
+    add_root_from_executable(roots, "/usr/bin/dotnet");
+    add_root(roots, "/usr/lib64/dotnet");
+    add_root(roots, "/usr/lib/dotnet");
+    add_root(roots, "/usr/share/dotnet");
+    add_root(roots, "/usr/local/share/dotnet");
+    if (const char* home = std::getenv("HOME"); home && *home)
+        add_root(roots, std::filesystem::path(platform_string(home)) / ".dotnet");
 #endif
+    return roots;
+}
+
+std::vector<int> version_parts(const std::filesystem::path& version)
+{
+    std::vector<int> result;
+    const auto name = version.filename().string();
+    size_t start = 0;
+    while (start < name.size() && result.size() < 3)
+    {
+        size_t end = name.find('.', start);
+        if (end == std::string::npos)
+            end = name.size();
+        try {
+            size_t consumed = 0;
+            int number = std::stoi(name.substr(start, end - start), &consumed);
+            if (consumed != end - start)
+                return {};
+            result.push_back(number);
+        } catch (...) {
+            return {};
+        }
+        start = end + 1;
+    }
+    return result;
 }
 
 std::filesystem::path hostfxr_path()
 {
-    std::filesystem::path folder = dotnet_root() / "host" / "fxr";
-    if (!std::filesystem::is_directory(folder))
-        return {};
-    std::vector<std::filesystem::path> versions;
-    for (const auto& entry : std::filesystem::directory_iterator(folder))
-        if (entry.is_directory())
-            versions.push_back(entry.path());
-    if (versions.empty())
-        return {};
-    std::sort(versions.begin(), versions.end());
 #ifdef _WIN32
-    return versions.back() / "hostfxr.dll";
+    constexpr const char* library = "hostfxr.dll";
 #elif __APPLE__
-    return versions.back() / "libhostfxr.dylib";
+    constexpr const char* library = "libhostfxr.dylib";
 #else
-    return versions.back() / "libhostfxr.so";
+    constexpr const char* library = "libhostfxr.so";
 #endif
+    std::filesystem::path chosen;
+    std::vector<int> highest;
+    // Check all candidate installations, including other roots if an
+    // environment variable points to an incomplete or stale installation.
+    for (const auto& root : dotnet_roots())
+    {
+        const auto folder = root / "host" / "fxr";
+        std::error_code error;
+        if (!std::filesystem::is_directory(folder, error))
+            continue;
+        for (std::filesystem::directory_iterator it(folder, error), end;
+             !error && it != end; it.increment(error))
+        {
+            if (!it->is_directory(error))
+                continue;
+            const auto candidate = it->path() / library;
+            if (!std::filesystem::is_regular_file(candidate, error))
+                continue;
+            const auto version = version_parts(it->path());
+            if (version.empty())
+                continue;
+            if (chosen.empty() || std::lexicographical_compare(
+                    highest.begin(), highest.end(), version.begin(), version.end()))
+            {
+                highest = version;
+                chosen = candidate;
+            }
+        }
+    }
+    return chosen;
 }
 
 void managed_error(const char* action)
@@ -151,7 +259,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
         const auto hostfxr = hostfxr_path();
         if (hostfxr.empty() || !std::filesystem::exists(hostfxr))
         {
-            error = "The .NET 11 runtime hostfxr could not be located.";
+            error = "Cannot find libhostfxr for .NET 11. Check `dotnet --list-runtimes` and DOTNET_ROOT; Tallow searched installed dotnet roots.";
             return 0;
         }
         runtime_library = load_library(hostfxr);
