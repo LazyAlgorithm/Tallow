@@ -74,21 +74,26 @@ public static unsafe class NativeEntrypoints
         Awake, Enable, Start, FixedUpdate, LocalUpdate, LateUpdate, Disable, Gui
     }
     private static int sNextInstance;
-    private static readonly AssemblyLoadContext sRuntimeContext =
-        AssemblyLoadContext.GetLoadContext(typeof(NativeEntrypoints).Assembly) ?? AssemblyLoadContext.Default;
-    private static string? sTrustedAssemblyRoot;
-    private static bool sResolverInstalled;
-    private static string sLastError = "";
-
-    private static Assembly? Resolve(AssemblyLoadContext context, AssemblyName name)
+    // Trusted development gameplay gets a separate collectible context. The engine's
+    // Tallow.API types stay in the host context so class inheritance works correctly.
+    // AssemblyLoadContext does not sandbox third-party code; only engine-built game
+    // assemblies are permitted here.
+    private sealed class GameAssemblyContext(string root) :
+        AssemblyLoadContext("Tallow.TrustedGame", isCollectible: true)
     {
-        if (sTrustedAssemblyRoot is null || name.Name is null)
-            return null;
-
-        // Only the compiler-produced sibling assemblies of the trusted game.
-        string candidate = Path.Combine(sTrustedAssemblyRoot, name.Name, name.Name + ".dll");
-        return File.Exists(candidate) ? context.LoadFromAssemblyPath(candidate) : null;
+        protected override Assembly? Load(AssemblyName name)
+        {
+            if (name.Name == typeof(Script).Assembly.GetName().Name)
+                return typeof(Script).Assembly;
+            if (name.Name is null)
+                return null;
+            string candidate = Path.Combine(root, name.Name, name.Name + ".dll");
+            return File.Exists(candidate) ? LoadFromAssemblyPath(candidate) : null;
+        }
     }
+
+    private static GameAssemblyContext? sGameContext;
+    private static string sLastError = "";
 
     private static int Failure(Exception exception)
     {
@@ -122,38 +127,28 @@ public static unsafe class NativeEntrypoints
     {
         try
         {
-            if (trustedPath == null || sTypes.Count != 0 || sInstances.Count != 0)
+            if (trustedPath == null || sGameContext != null || sTypes.Count != 0 || sInstances.Count != 0)
                 throw new InvalidOperationException("A trusted game is already loaded, or no game path was provided.");
             string path = Path.GetFullPath(Marshal.PtrToStringUTF8((nint)trustedPath) ?? "");
             if (Path.GetFileName(path) != "Tallow.Game.dll" || !File.Exists(path))
                 throw new FileNotFoundException("Only the trusted Tallow.Game assembly can be loaded.", path);
 
-            sTrustedAssemblyRoot = Directory.GetParent(Path.GetDirectoryName(path)!)!.FullName;
-            if (!sResolverInstalled)
-            {
-                sRuntimeContext.Resolving += Resolve;
-                sResolverInstalled = true;
-            }
-
-            Assembly game = sRuntimeContext.LoadFromAssemblyPath(path);
+            string root = Directory.GetParent(Path.GetDirectoryName(path)!)!.FullName;
+            GameAssemblyContext context = new(root);
+            sGameContext = context;
+            Assembly game = context.LoadFromAssemblyPath(path);
             foreach (AssemblyName dependency in game.GetReferencedAssemblies())
             {
-                string candidate = Path.Combine(sTrustedAssemblyRoot, dependency.Name!,
-                    dependency.Name! + ".dll");
+                if (dependency.Name is null)
+                    continue;
+                string candidate = Path.Combine(root, dependency.Name, dependency.Name + ".dll");
                 if (File.Exists(candidate))
-                    sRuntimeContext.LoadFromAssemblyName(dependency);
+                    context.LoadFromAssemblyName(dependency);
             }
 
-            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            // Only scan this game's assemblies, not assemblies loaded by the host.
+            foreach (Assembly assembly in context.Assemblies)
             {
-                string? location = null;
-                try { location = assembly.Location; }
-                catch (NotSupportedException) { }
-                if (assembly != game && (location == null ||
-                    !Path.GetFullPath(location).StartsWith(sTrustedAssemblyRoot +
-                        Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
-                    continue;
-
                 foreach (Type type in assembly.GetTypes())
                 {
                     if (type.IsAbstract || !typeof(Script).IsAssignableFrom(type) ||
@@ -299,6 +294,27 @@ public static unsafe class NativeEntrypoints
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int UnloadGame()
+    {
+        try
+        {
+            if (sInstances.Count != 0)
+                throw new InvalidOperationException(
+                    "Detach all managed components before unloading the gameplay assembly.");
+            sEnabled.Clear();
+            sTypes.Clear();
+            GameAssemblyContext? previous = sGameContext;
+            sGameContext = null;
+            previous?.Unload();
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int Shutdown()
     {
         try
@@ -315,7 +331,9 @@ public static unsafe class NativeEntrypoints
             sEnabled.Clear();
             sInstances.Clear();
             sTypes.Clear();
-            sTrustedAssemblyRoot = null;
+            GameAssemblyContext? previous = sGameContext;
+            sGameContext = null;
+            previous?.Unload();
             return 1;
         }
         catch (Exception exception)
