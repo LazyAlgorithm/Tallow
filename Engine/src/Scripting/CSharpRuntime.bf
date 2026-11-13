@@ -19,11 +19,37 @@ static class CSharpRuntime
 		public function int32(void*, uint64, uint64) isMine;
 	}
 
+	/// The engine drives all component callbacks, preserving native scheduling.
+	public enum ManagedEvent : int32
+	{
+		Awake,
+		Enable,
+		Start,
+		FixedUpdate,
+		LocalUpdate,
+		LateUpdate,
+		Disable,
+		Gui
+	}
+
+	[CRepr]
+	struct NativeTickInput
+	{
+		public float moveX;
+		public float moveZ;
+		public float yaw;
+		public float pitch;
+		public uint32 buttons;
+		public uint32 previousButtons;
+	}
+
 	[CLink] static extern int32 tn_csharp_init(char8* runtimeConfig, char8* managedAssembly);
 	[CLink] static extern int32 tn_csharp_set_callbacks(Callbacks* callbacks);
 	[CLink] static extern int32 tn_csharp_load_game(char8* gameAssembly);
 	[CLink] static extern int32 tn_csharp_attach(char8* typeName, uint64 scene, uint64 entity);
 	[CLink] static extern int32 tn_csharp_tick(int32 instance, float deltaTime);
+	[CLink] static extern int32 tn_csharp_dispatch(int32 instance, int32 eventId, float deltaTime);
+	[CLink] static extern int32 tn_csharp_update_input(int32 instance, NativeTickInput* input, float deltaTime);
 	[CLink] static extern int32 tn_csharp_detach(int32 instance);
 	[CLink] static extern void tn_csharp_shutdown();
 	[CLink] static extern char8* tn_csharp_error();
@@ -118,6 +144,37 @@ static class CSharpRuntime
 		if (!Ready || instance < 0)
 			return false;
 		if (tn_csharp_tick(instance, deltaTime) != 0)
+			return true;
+		Log.Warning(scope $"C# gameplay update failed: {StringView(tn_csharp_error())}");
+		return false;
+	}
+
+	/// Dispatch lifecycle callbacks when Scene invokes the corresponding Component callback.
+	public static bool Dispatch(int32 instance, ManagedEvent eventId, float deltaTime = 0)
+	{
+		if (!Ready || instance <= 0)
+			return false;
+		if (tn_csharp_dispatch(instance, (int32)eventId, deltaTime) > 0)
+			return true;
+		Log.Warning(scope $"C# component callback failed: {StringView(tn_csharp_error())}");
+		return false;
+	}
+
+	/// Send the exact networked TickInput, including previous button state for Pressed/Released.
+	public static bool Update(int32 instance, TickInput input, float deltaTime)
+	{
+		if (!Ready || instance <= 0)
+			return false;
+		NativeTickInput native = .()
+		{
+			moveX = input.raw.moveX,
+			moveZ = input.raw.moveZ,
+			yaw = input.raw.yaw,
+			pitch = input.raw.pitch,
+			buttons = input.raw.buttons,
+			previousButtons = input.previous.buttons
+		};
+		if (tn_csharp_update_input(instance, &native, deltaTime) > 0)
 			return true;
 		Log.Warning(scope $"C# gameplay update failed: {StringView(tn_csharp_error())}");
 		return false;
