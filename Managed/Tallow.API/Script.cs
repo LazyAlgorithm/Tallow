@@ -4,11 +4,11 @@ namespace Tallow;
 
 /// <summary>Marks a gameplay behaviour or an ECS data type for registration.</summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
-public sealed class ComponentAttribute : Attribute;
+public sealed class ComponentAttribute : Attribute { }
 
 /// <summary>Marks state the networking bridge must replicate.</summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-public sealed class SyncAttribute : Attribute;
+public sealed class SyncAttribute : Attribute { }
 
 /// <summary>Controls a numeric field's Inspector range.</summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
