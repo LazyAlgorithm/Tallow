@@ -125,8 +125,21 @@ internal static class Program
         var trees = sourceByPath.Select(pair =>
             CSharpSyntaxTree.ParseText(pair.Value.Text, parse, path: pair.Key)).ToList();
         // Match the generated game assemblies' implicit System.Numerics import.
-        trees.Add(CSharpSyntaxTree.ParseText(
-            "global using System.Numerics;", parse, path: "Tallow.GlobalNumerics.g.cs"));
+        // The game uses SDK-generated implicit usings plus Tallow's extra
+        // System.Numerics import. Roslyn's standalone semantic compilation
+        // must use the SAME global imports as the real generated .csproj,
+        // otherwise source API types produce misleading CS0246 and operator
+        // errors even when the actual game assembly compiles correctly.
+        trees.Add(CSharpSyntaxTree.ParseText("""
+            global using System;
+            global using System.Collections.Generic;
+            global using System.IO;
+            global using System.Linq;
+            global using System.Net.Http;
+            global using System.Threading;
+            global using System.Threading.Tasks;
+            global using System.Numerics;
+            """, parse, path: "Tallow.GameImplicitUsings.g.cs"));
         var compilation = CSharpCompilation.Create("Tallow.SemanticWorkspace", trees,
             References(), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
                 nullableContextOptions: NullableContextOptions.Enable));
