@@ -394,12 +394,12 @@ static void CloseTypedTag(Document* document)
 	document->lastUndoIndex = editor.GetUndoIndex();
 }
 
-// language: 0 internal Beef graph source, 1 UI markup, 2 stylesheet, 3 shader files, 4 C# gameplay
+// language: 0 generated graph source, 1 UI markup, 2 stylesheet, 3 shaders, 4 C# gameplay, 5 assembly definition JSON
 TN_API void* tn_code_create(const char* text, int language)
 {
 	Document* document = new Document();
 	TextEditor& editor = document->editor;
-	editor.SetLanguage(language == 1 ? MarkupLanguage() : (language == 2 ? StyleLanguage() : (language == 3 ? ShaderLanguage() : (language == 4 ? CSharpLanguage() : BeefLanguage()))));
+	editor.SetLanguage(language == 1 ? MarkupLanguage() : (language == 2 ? StyleLanguage() : (language == 3 ? ShaderLanguage() : (language == 4 ? CSharpLanguage() : (language == 5 ? TextEditor::Language::Json() : BeefLanguage())))));
 	document->markup = language == 1;
 	editor.SetPalette(VisualStudioDark());
 	editor.SetTabSize(4);
