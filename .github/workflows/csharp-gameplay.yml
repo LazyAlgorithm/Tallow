@@ -33,3 +33,18 @@ jobs:
         run: dotnet run --project Managed/Tallow.Build/Tallow.Build.csproj -- --project Tests/CSharpGameplay --engine-root .
       - name: Smoke-test trusted assembly lifecycle
         run: dotnet run --project Managed/Tallow.ManagedHost/Tallow.ManagedHost.csproj -- Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
+      - name: Build trusted managed runtime
+        run: dotnet build Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj -c Debug --nologo
+      - name: Compile native hostfxr shim
+        run: |
+          cmake -S Tests/NativeCSharpHost -B Tests/NativeCSharpHost/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build Tests/NativeCSharpHost/build --config Release
+      - name: Test in-process C# gameplay (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
+      - name: Test in-process C# gameplay (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
