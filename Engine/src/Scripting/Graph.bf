@@ -40,7 +40,7 @@ static class GraphRuntime
 	/// Makes a character's capsule this tall, keeping it as standingHeight capsule's feet are (crouching), when that
 	/// is not already its height. On the ground the head comes down; in the air the feet come up instead and the head
 	/// stays where it is (lifting the character), as in Halo, so crouching mid-jump clears a ledge the feet would
-	/// have caught on. Standing up is refused while something is in the way, so the character stays crouched.
+	/// have caught on; standing up in the air lowers the feet again. Standing up is refused while something is in the way, so the character stays crouched.
 	public static void SetCharacterHeight(GameObject target, float height, float standingHeight)
 	{
 		if (target == null || !target.HasComponent<CharacterController>())
@@ -52,7 +52,23 @@ static class GraphRuntime
 		let airborne = controller.HasCharacter && !controller.IsGrounded;
 		let velocity = controller.Velocity;
 		let airTime = controller.AirTime;
-		if (!controller.SetCapsule(controller.radius, height, .(0, (height - standingHeight) / 2, 0)))
+		let center = Vector3(0, (height - standingHeight) / 2, 0);
+		if (airborne && shrink < 0)
+		{
+			// Standing up in the air undoes a crouch jump: the feet go back down and the head stays (growing up
+			// from the feet would pop the head up, like a little jump). Without room below, it grows upwards.
+			let position = target.Transform.Position;
+			controller.Teleport(position + Vector3(0, shrink, 0), velocity, airTime);
+			if (controller.SetCapsule(controller.radius, height, center))
+			{
+				sLiftObject = target;
+				sLiftFrame = Time.FrameCount;
+				sLift = shrink;
+				return;
+			}
+			controller.Teleport(position, velocity, airTime);
+		}
+		if (!controller.SetCapsule(controller.radius, height, center))
 			return;
 		if (airborne && shrink > 0)
 		{
@@ -69,7 +85,7 @@ static class GraphRuntime
 	static float sLift;
 
 	/// How far Set Character Height lifted this character this frame to keep its head still while crouching in the
-	/// air (0 otherwise). Take it off a smoothed camera height so the view does not jump.
+	/// air (negative when standing up in the air lowered it; 0 otherwise). Take it off a smoothed camera height so the view does not jump.
 	public static float CrouchLift(GameObject target)
 	{
 		return target != null && target == sLiftObject && sLiftFrame == Time.FrameCount ? sLift : 0;
