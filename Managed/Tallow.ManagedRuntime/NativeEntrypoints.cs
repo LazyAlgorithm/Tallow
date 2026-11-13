@@ -58,6 +58,21 @@ public static unsafe class NativeEntrypoints
 
     private static readonly Dictionary<string, Type> sTypes = new(StringComparer.Ordinal);
     private static readonly Dictionary<int, Script> sInstances = [];
+    private static readonly HashSet<int> sEnabled = [];
+
+    // Plain native layout, matching tn_csharp_tick_input.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeInput
+    {
+        public float MoveX, MoveZ, Yaw, Pitch;
+        public uint Buttons, PreviousButtons;
+    }
+
+    // These event IDs are shared with the native header and the Beef adapter.
+    private enum ScriptEvent
+    {
+        Awake, Enable, Start, FixedUpdate, LocalUpdate, LateUpdate, Disable, Gui
+    }
     private static int sNextInstance;
     private static readonly AssemblyLoadContext sRuntimeContext =
         AssemblyLoadContext.GetLoadContext(typeof(NativeEntrypoints).Assembly) ?? AssemblyLoadContext.Default;
@@ -168,10 +183,63 @@ public static unsafe class NativeEntrypoints
             script.Attach(new GameObject(sceneId, entityId));
             int instance = ++sNextInstance;
             sInstances.Add(instance, script);
-            script.Awake();
-            script.OnEnable();
-            script.Start();
             return instance;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int Dispatch(int instance, int eventId, float deltaTime)
+    {
+        try
+        {
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            switch ((ScriptEvent)eventId)
+            {
+                case ScriptEvent.Awake: script.Awake(); break;
+                case ScriptEvent.Enable:
+                    if (sEnabled.Add(instance))
+                        script.OnEnable();
+                    break;
+                case ScriptEvent.Start: script.Start(); break;
+                case ScriptEvent.FixedUpdate: script.FixedUpdate(deltaTime); break;
+                case ScriptEvent.LocalUpdate: script.OnLocalUpdate(); break;
+                case ScriptEvent.LateUpdate: script.LateUpdate(deltaTime); break;
+                case ScriptEvent.Disable:
+                    if (sEnabled.Remove(instance))
+                        script.OnDisable();
+                    break;
+                case ScriptEvent.Gui: script.OnGUI(); break;
+                default: throw new ArgumentOutOfRangeException(nameof(eventId), eventId,
+                    "Unknown managed gameplay event.");
+            }
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int UpdateInput(int instance, NativeInput* input, float deltaTime)
+    {
+        try
+        {
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            if (input == null)
+                throw new ArgumentNullException(nameof(input));
+            var tick = new TickInput(
+                new Vector2(input->MoveX, input->MoveZ),
+                new Vector2(input->Yaw, input->Pitch),
+                input->Buttons, input->PreviousButtons);
+            script.Update(tick, deltaTime);
+            return 1;
         }
         catch (Exception exception)
         {
@@ -204,7 +272,11 @@ public static unsafe class NativeEntrypoints
         {
             if (!sInstances.Remove(instance, out Script? script))
                 return 0;
-            try { script.OnDisable(); }
+            try
+            {
+                if (sEnabled.Remove(instance))
+                    script.OnDisable();
+            }
             finally { script.OnDestroy(); }
             return 1;
         }
@@ -231,11 +303,16 @@ public static unsafe class NativeEntrypoints
     {
         try
         {
-            foreach (Script script in sInstances.Values)
+            foreach ((int instance, Script script) in sInstances)
             {
-                try { script.OnDisable(); }
+                try
+                {
+                    if (sEnabled.Contains(instance))
+                        script.OnDisable();
+                }
                 finally { script.OnDestroy(); }
             }
+            sEnabled.Clear();
             sInstances.Clear();
             sTypes.Clear();
             sTrustedAssemblyRoot = null;
