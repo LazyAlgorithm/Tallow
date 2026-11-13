@@ -73,21 +73,21 @@ extension EditorApp
 
 	void RequestSemantic(ScriptDocument document, StringView operation, int cursor = -1)
 	{
-		if (document == null || !document.path.EndsWith(".bf") || mSemantic.running)
+		if (document == null || (!document.path.EndsWith(".cs") && !document.path.EndsWith(".bf")) || mSemantic.running)
 			return;
 		ClearAndDeleteItems!(mSemantic.sources);
-		if (operation == "rename" && !mSemantic.AddFolder(scope $"{Project.Current.Path}/src"))
+		if (operation == "rename" && !mSemantic.AddFolder(scope $"{Project.Current.Path}/src", document.path.EndsWith(".cs") ? ".cs" : ".bf"))
 		{
 			mSemantic.status.Set("Could not snapshot all project scripts for rename.");
 			return;
 		}
 		for (let open in mScripts)
 		{
-			if (open.path.EndsWith(".bf"))
+			if (open.path.EndsWith(document.path.EndsWith(".cs") ? ".cs" : ".bf"))
 				mSemantic.Add(open.path, StringView(tn_code_get_text(open.handle)));
 		}
 		if (!mSemantic.Start(operation, document.path, cursor < 0 ? tn_code_cursor_byte(document.handle) : cursor, mSymbolNewName))
-			mSemantic.status.Set("Could not start Beef language service.");
+			mSemantic.status.Set("Could not start language service.");
 		if (operation == "diagnostics")
 			mSemanticNeedsCheck = false;
 	}
@@ -98,6 +98,8 @@ extension EditorApp
 		for (let source in mSemantic.sources)
 		{
 			List<ScriptDeterminism.Warning> warnings = scope .();
+			if (!source.path.EndsWith(".bf"))
+				continue; // A language-aware C# determinism analyzer will be added separately.
 			ScriptDeterminism.Check(source.text, warnings);
 			for (let warning in warnings)
 			{
@@ -184,7 +186,7 @@ extension EditorApp
 			{
 			case "error":
 				failed = true;
-				mSemantic.status.Set("Beef: see Console for details.");
+				mSemantic.status.Set("Compiler: see Console for details.");
 				let problem = new ScriptProblem();
 				problem.file.Set(mSemantic.path);
 				problem.message.Set(fields[1]);
@@ -257,7 +259,7 @@ extension EditorApp
 
 	void UpdateSemantic(ScriptDocument document)
 	{
-		if (!document.path.EndsWith(".bf"))
+		if (!document.path.EndsWith(".cs") && !document.path.EndsWith(".bf"))
 			return;
 		if (mSemanticApiRevision != ApiIndex.Revision)
 		{
@@ -310,7 +312,7 @@ extension EditorApp
 	/// same semantic request path.
 	void DrawSemanticTools(ScriptDocument document)
 	{
-		bool ready = document != null && document.path.EndsWith(".bf") && !mSemantic.running;
+		bool ready = document != null && (document.path.EndsWith(".cs") || document.path.EndsWith(".bf")) && !mSemantic.running;
 		if (ready && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F12))
 			RequestSemantic(document, "definition");
 		if (ready && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F2))
