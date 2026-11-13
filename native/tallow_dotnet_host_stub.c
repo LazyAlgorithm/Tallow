@@ -18,6 +18,7 @@ int32_t tn_csharp_load_game(const char* trusted_game_dll)
     (void)trusted_game_dll;
     return -1;
 }
+int32_t tn_csharp_unload_game(void) { return 0; }
 int32_t tn_csharp_attach(const char* managed_type, uint64_t scene, uint64_t entity)
 {
     (void)managed_type; (void)scene; (void)entity;
