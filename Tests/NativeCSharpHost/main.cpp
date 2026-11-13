@@ -133,7 +133,16 @@ int main(int argc, char** argv)
         return Failure("running fresh managed component on second Play");
     if (std::fabs(state.position[0] - 6.0f) > 0.0001f)
         return Failure("reloaded gameplay did not update the native transform");
-    if (!tn_csharp_detach(secondPlay) || !tn_csharp_unload_game())
+    if (!tn_csharp_detach(secondPlay))
+        return Failure("detaching second Play script");
+    const int32_t vectorScript = tn_csharp_attach("Gameplay.VectorMath", 1, 1);
+    if (vectorScript < 1 || !tn_csharp_tick(vectorScript, 1.0f))
+        return Failure("running C# vector arithmetic script");
+    if (std::fabs(state.position[0] - 12.5f) > 0.0001f ||
+        std::fabs(state.position[1] - 25.5f) > 0.0001f ||
+        std::fabs(state.position[2] - 44.5f) > 0.0001f)
+        return Failure("vector addition, multiplication or subtraction");
+    if (!tn_csharp_detach(vectorScript) || !tn_csharp_unload_game())
         return Failure("ending second Play session");
 
     tn_csharp_shutdown();
