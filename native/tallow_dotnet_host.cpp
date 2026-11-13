@@ -100,7 +100,7 @@ void add_root_from_executable(std::vector<std::filesystem::path>& roots,
     if (!std::filesystem::exists(executable, error))
         return;
     const auto resolved = std::filesystem::canonical(executable, error);
-    if (!error && resolved.filename() == "dotnet")
+    if (!error && (resolved.filename() == "dotnet" || resolved.filename() == "dotnet.exe"))
         add_root(roots, resolved.parent_path());
 }
 
@@ -108,8 +108,10 @@ std::vector<std::filesystem::path> dotnet_roots()
 {
     std::vector<std::filesystem::path> roots;
     add_root_from_env(roots, "DOTNET_ROOT");
-#if defined(_WIN64) || defined(__x86_64__) || defined(__aarch64__)
+#if defined(_WIN64) || defined(__x86_64__)
     add_root_from_env(roots, "DOTNET_ROOT_X64");
+#elif defined(__aarch64__)
+    add_root_from_env(roots, "DOTNET_ROOT_ARM64");
 #endif
     // Find the dotnet CLI that the user actually runs, following symlinks.
     if (const char* search = std::getenv("PATH"); search && *search)
