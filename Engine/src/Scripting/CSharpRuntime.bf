@@ -46,6 +46,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_init(char8* runtimeConfig, char8* managedAssembly);
 	[CLink] static extern int32 tn_csharp_set_callbacks(Callbacks* callbacks);
 	[CLink] static extern int32 tn_csharp_load_game(char8* gameAssembly);
+	[CLink] static extern int32 tn_csharp_unload_game();
 	[CLink] static extern int32 tn_csharp_attach(char8* typeName, uint64 scene, uint64 entity);
 	[CLink] static extern int32 tn_csharp_tick(int32 instance, float deltaTime);
 	[CLink] static extern int32 tn_csharp_dispatch(int32 instance, int32 eventId, float deltaTime);
@@ -125,6 +126,18 @@ static class CSharpRuntime
 		if (count < 0)
 			Log.Error(scope $"Could not load C# gameplay: {StringView(tn_csharp_error())}");
 		return count;
+	}
+
+	/// Release the trusted game assembly before recompilation or a new Play session.
+	/// Native CSharpBehaviour instances must have been detached first.
+	public static bool UnloadGame()
+	{
+		if (!sStarted)
+			return true;
+		if (tn_csharp_unload_game() != 0)
+			return true;
+		Log.Warning(scope $"C# game unload failed: {StringView(tn_csharp_error())}");
+		return false;
 	}
 
 	/// Returns a managed instance ID; negative when the C# script failed.
