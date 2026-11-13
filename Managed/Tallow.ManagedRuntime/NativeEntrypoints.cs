@@ -59,6 +59,8 @@ public static unsafe class NativeEntrypoints
     private static readonly Dictionary<string, Type> sTypes = new(StringComparer.Ordinal);
     private static readonly Dictionary<int, Script> sInstances = [];
     private static int sNextInstance;
+    private static readonly AssemblyLoadContext sRuntimeContext =
+        AssemblyLoadContext.GetLoadContext(typeof(NativeEntrypoints).Assembly) ?? AssemblyLoadContext.Default;
     private static string? sTrustedAssemblyRoot;
     private static bool sResolverInstalled;
     private static string sLastError = "";
@@ -114,17 +116,17 @@ public static unsafe class NativeEntrypoints
             sTrustedAssemblyRoot = Directory.GetParent(Path.GetDirectoryName(path)!)!.FullName;
             if (!sResolverInstalled)
             {
-                AssemblyLoadContext.Default.Resolving += Resolve;
+                sRuntimeContext.Resolving += Resolve;
                 sResolverInstalled = true;
             }
 
-            Assembly game = AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
+            Assembly game = sRuntimeContext.LoadFromAssemblyPath(path);
             foreach (AssemblyName dependency in game.GetReferencedAssemblies())
             {
                 string candidate = Path.Combine(sTrustedAssemblyRoot, dependency.Name!,
                     dependency.Name! + ".dll");
                 if (File.Exists(candidate))
-                    Assembly.Load(dependency);
+                    sRuntimeContext.LoadFromAssemblyName(dependency);
             }
 
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
