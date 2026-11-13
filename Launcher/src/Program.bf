@@ -144,15 +144,11 @@ class LauncherApp : Application
 
 	void RequestOpen(StringView path)
 	{
-		if (mMissingTools.Count > 0)
-		{
-			// Compiling would only fail: say what is missing first.
-			SetMessage(MissingMessage(.. scope .()), true);
-			return;
-		}
+		// C# errors and missing development tools are reported inside the
+		// editor. Neither prevents opening the project for repair.
 		mPendingOpen.Set(path);
 		mOpenCountdown = 3;
-		SetMessage(scope $"Compiling {path} ..." , false);
+		SetMessage(scope $"Opening {path} ..." , false);
 	}
 
 	/// Asks the engine's version tool about a project: "same", or "upgrade"/"newer" with the two versions after it.
@@ -251,25 +247,36 @@ class LauncherApp : Application
 				return false;
 			}
 		}
-		// Keep a previously successful editor executable usable if a later
-		// native script build fails. Users must be able to fix errors in Tallow's
-		// own code editor instead of being locked out by the launcher.
-		let built = project.Build(false);
+		// The Launcher already links TallowEditor and the native engine. Reuse
+		// that precompiled executable for every C# gameplay project. A broken
+		// game script cannot prevent the editor from starting.
 		if (buildOnly)
 		{
-			if (!built)
+			// Legacy command-line native builds remain explicit for projects that
+			// still contain Beef gameplay; ordinary project opening never uses this.
+			if (!project.Build(false))
 			{
-				error.Set("The project did not compile:\n");
+				error.Set("The legacy native project did not compile:\n");
 				project.ReadBuildLog(error);
+				return false;
 			}
-			return built;
+			return true;
 		}
-		let exe = scope String();
-		project.GetExecutablePath(exe, false);
-		if (!built && !File.Exists(exe))
+		let basePath = SDL.SDL_GetBasePath();
+		if (basePath == null)
 		{
-			error.Set("The project did not compile and has no last successful editor executable. Build the native engine once before using recovery mode.\n");
-			project.ReadBuildLog(error);
+			error.Set("Could not find the precompiled Tallow editor executable.");
+			return false;
+		}
+		let exe = scope String(basePath);
+#if BF_PLATFORM_WINDOWS
+		exe.Append("TallowLauncher.exe");
+#else
+		exe.Append("TallowLauncher");
+#endif
+		if (!File.Exists(exe))
+		{
+			error.Set(scope $"Precompiled Tallow editor not found at {exe}.");
 			return false;
 		}
 		RecentProjects.Add(project.Path);
@@ -277,12 +284,6 @@ class LauncherApp : Application
 		Terminal.Quote(exe, command);
 		command.Append(" --editor --project ");
 		Terminal.Quote(project.Path, command);
-		if (!built)
-		{
-			// The editor reports the saved build errors and stays in Edit mode.
-			command.Append(" --startup-build-failed");
-			Console.WriteLine("Native project build failed; opening the previous editor executable for repairs.");
-		}
 		Terminal.RunDetached(command);
 		return true;
 	}
@@ -734,6 +735,10 @@ class Program
 #endif
 	public static int Main(String[] args)
 	{
+		// Precompiled editor: the native TallowLauncher binary already contains
+		// TallowEditor. C# projects no longer generate or compile an editor exe.
+		if (args.Contains("--editor"))
+			return EditorMain.Run(args);
 		for (int i < args.Count)
 		{
 			// --beef-folder DIR: use the Beef in DIR from now on (what the setup dialog's "choose its folder" does).
