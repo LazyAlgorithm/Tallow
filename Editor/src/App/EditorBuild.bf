@@ -144,6 +144,7 @@ extension EditorApp
 		{
 		case .Basic:
 			text.AppendF("""
+			using System.Numerics;
 			using Tallow;
 
 			namespace {0};
