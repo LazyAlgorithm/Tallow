@@ -180,7 +180,39 @@ class ScriptSemantic
 			{
 				let exitCode = Terminal.Run(mCommand);
 				if (File.ReadAllText(scope $"{mFolder}/response.tsv" , result, true) case .Err)
-					result.Set(scope $"error\tLanguage service failed ({exitCode}); see {mFolder}/worker.log\n");
+				{
+					// The .NET process may fail before it can write response.tsv
+					// (missing SDK, failed restore or missing runtime). Show the
+					// useful error in the editor instead of a raw wait status.
+					let workerLog = scope String();
+					let detail = scope String();
+					if (File.ReadAllText(scope $"{mFolder}/worker.log", workerLog, true) case .Ok)
+					{
+						for (let line in workerLog.Split('\n'))
+						{
+							if (line.Contains("error ") || line.Contains("NETSDK") ||
+								line.Contains("not found") || line.Contains("could not") ||
+								line.Contains("SDK"))
+								detail.Set(line);
+						}
+						if (detail.IsEmpty)
+						{
+							for (let line in workerLog.Split('\n'))
+							{
+								if (!line.IsEmpty)
+								{
+									detail.Set(line);
+									break;
+								}
+							}
+						}
+						if (detail.Length > 450)
+							detail.Remove(450, detail.Length - 450);
+					}
+					result.Set(detail.IsEmpty ?
+						"error\tC# language service could not start. Check .NET 11 SDK and worker.log.\n" :
+						scope $"error\tC# language service: {detail}\n");
+				}
 				Interlocked.Store(ref mFinished, true);
 			});
 		mWorker.Start(false);
