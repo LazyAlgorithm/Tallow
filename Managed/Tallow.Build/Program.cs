@@ -30,7 +30,7 @@ internal static class Program
     {
         var definitions = new Dictionary<string, Definition>(StringComparer.Ordinal);
         var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string path in Directory.EnumerateFiles(source, "*.asmdef", SearchOption.AllDirectories).Order())
+        foreach (string path in Directory.EnumerateFiles(source, "*.tasmdef", SearchOption.AllDirectories).Order())
         {
             using JsonDocument json = JsonDocument.Parse(File.ReadAllText(path));
             JsonElement root = json.RootElement;
