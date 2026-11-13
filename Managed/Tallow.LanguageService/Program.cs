@@ -208,28 +208,102 @@ internal static class Program
         throw new InvalidOperationException($"Unknown semantic operation: {request.Operation}");
     }
 
+    /// <summary>
+    /// Consume the native editor's UTF-8 source snapshot request directly.
+    /// This replaces the former Python glue and does not write user source.
+    /// </summary>
+    private static LanguageRequest FromEditor(string project, string engineRoot, string folder)
+    {
+        string sourceDirectory = Path.GetFullPath(Path.Combine(project, "src"));
+        string apiDirectory = Path.GetFullPath(Path.Combine(engineRoot, "Managed", "Tallow.API"));
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+        var overlays = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string line in File.ReadAllLines(Path.Combine(folder, "request.tsv")))
+        {
+            string[] tokens = line.Split('\t');
+            if (tokens.Length == 3 && tokens[0] == "overlay")
+                overlays[Path.GetFullPath(tokens[1])] = Path.GetFullPath(tokens[2]);
+            else if (tokens.Length == 2)
+                fields[tokens[0]] = tokens[1];
+            else
+                throw new InvalidOperationException("Malformed source-snapshot request.");
+        }
+
+        string active = Path.GetFullPath(fields["file"]);
+        if (!File.Exists(Path.Combine(apiDirectory, "Tallow.API.csproj")) ||
+            !(active.StartsWith(sourceDirectory + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase) && active.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("C# source is outside the trusted game project.");
+
+        var snapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string file in Directory.EnumerateFiles(sourceDirectory, "*.cs", SearchOption.AllDirectories))
+            snapshot[Path.GetFullPath(file)] = File.ReadAllText(file);
+        foreach (string file in Directory.EnumerateFiles(apiDirectory, "*.cs", SearchOption.AllDirectories))
+            snapshot[Path.GetFullPath(file)] = File.ReadAllText(file);
+
+        foreach ((string original, string copy) in overlays)
+        {
+            if (!original.StartsWith(sourceDirectory + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase) || !original.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("A snapshot references source outside this project.");
+            snapshot[original] = File.ReadAllText(copy);
+        }
+
+        if (!snapshot.ContainsKey(active))
+            throw new InvalidOperationException("The requested C# source is missing.");
+
+        return new LanguageRequest
+        {
+            Operation = fields["operation"],
+            File = active,
+            Cursor = int.Parse(fields["cursor"]),
+            NewName = fields.GetValueOrDefault("new_name", ""),
+            Sources = snapshot.Select(pair => new SourceFile { Path = pair.Key, Text = pair.Value }).ToList()
+        };
+    }
+
     public static int Main(string[] args)
     {
-        if (args.Length != 2)
-        {
-            Console.Error.WriteLine("Usage: Tallow.LanguageService <request.json> <response.tsv>");
-            return 2;
-        }
         var response = new List<string>();
+        string output;
         try
         {
-            LanguageRequest request = JsonSerializer.Deserialize<LanguageRequest>(
-                File.ReadAllText(args[0]), new JsonSerializerOptions
-                { PropertyNameCaseInsensitive = true }) ??
-                throw new InvalidOperationException("Empty language-service request.");
-            Run(request, response);
+            if (args.Length == 6 && args[0] == "--project" && args[2] == "--engine-root" &&
+                args[4] == "--request")
+            {
+                output = Path.Combine(args[5], "response.tsv");
+                LanguageRequest request = FromEditor(
+                    Path.GetFullPath(args[1]), Path.GetFullPath(args[3]), Path.GetFullPath(args[5]));
+                Run(request, response);
+            }
+            else if (args.Length == 2)
+            {
+                output = args[1];
+                LanguageRequest request = JsonSerializer.Deserialize<LanguageRequest>(
+                    File.ReadAllText(args[0]), new JsonSerializerOptions
+                    { PropertyNameCaseInsensitive = true }) ??
+                    throw new InvalidOperationException("Empty language-service request.");
+                Run(request, response);
+            }
+            else
+            {
+                Console.Error.WriteLine("Usage: Tallow.LanguageService --project <game> --engine-root <engine> --request <folder>");
+                return 2;
+            }
         }
         catch (Exception exception)
         {
+            if (args.Length >= 6 && args[4] == "--request")
+                output = Path.Combine(args[5], "response.tsv");
+            else if (args.Length == 2)
+                output = args[1];
+            else
+                return 1;
             response.Clear();
             response.Add(Line("error", exception.Message));
         }
-        File.WriteAllText(args[1], string.Join("\n", response) + "\n");
+        File.WriteAllText(output, string.Join("\n", response) + "\n");
         return response.Count > 0 && response[0].StartsWith("error\t", StringComparison.Ordinal) ? 1 : 0;
     }
 }
