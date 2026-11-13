@@ -670,6 +670,43 @@ extension EditorApp
 		}
 	}
 
+	/// Display only successfully compiled [Component] C# classes.
+	/// The catalog is produced by the trusted managed build, never by loading a
+	/// user assembly inside the editor just to inspect its types.
+	void DrawManagedComponentChoices(GameObject gameObject, bool searching)
+	{
+		let catalog = scope $"{Project.Current.Path}/.tallow-csharp/components.tsv";
+		let contents = scope String();
+		if (File.ReadAllText(catalog, contents) case .Err)
+		{
+			if (!searching)
+				ImGui.TextDisabled("Compile your C# scripts to discover components.");
+			return;
+		}
+		for (let line in contents.Split('\n', .RemoveEmptyEntries))
+		{
+			let fullName = scope String(line);
+			fullName.Trim();
+			if (fullName.IsEmpty)
+				continue;
+			let dot = fullName.LastIndexOf('.');
+			let name = dot >= 0 ? StringView(fullName).Substring(dot + 1) : StringView(fullName);
+			if (searching && !fullName.Contains(mComponentSearch, true) &&
+				!name.Contains(mComponentSearch, true) && !StringView("Scripts").Contains(mComponentSearch, true))
+				continue;
+			if (ImGui.Selectable(scope $"{StringView(Icons.Transform)}  {name}##managed{fullName}"))
+			{
+				let component = gameObject.AddComponent<CSharpBehaviour>();
+				if (component != null)
+				{
+					component.scriptType.Set(fullName);
+					MarkDirty();
+				}
+				ImGui.CloseCurrentPopup();
+			}
+		}
+	}
+
 	/// The Add Component button and its menu: components by category, or those matching what is typed.
 	void DrawAddComponent(GameObject gameObject)
 	{
@@ -760,6 +797,9 @@ extension EditorApp
 		}
 		for (let info in ComponentRegistry.Types)
 		{
+			// Native adapter is an implementation detail; users choose their C# type.
+			if (info.name == "CSharpBehaviour")
+				continue;
 			if (!mScriptCatalog.IsVisible(info) || ComponentCategory(info.fullName, info.name) != category)
 				continue;
 			let label = scope String();
@@ -773,6 +813,8 @@ extension EditorApp
 				ImGui.CloseCurrentPopup();
 			}
 		}
+		if (category == "Scripts")
+			DrawManagedComponentChoices(gameObject, searching);
 	}
 
 	/// Puts every field of a component back to the value a new one would have.
