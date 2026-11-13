@@ -355,7 +355,7 @@ extension EditorApp
 			if (ImGui.MenuItem("Convert to Script"))
 				ConvertGraphToScript(entry.path);
 		}
-		else if (entry.name.EndsWith(".bf") || entry.name.EndsWith(".tui") || entry.name.EndsWith(".tcss") || entry.name.EndsWith(".tshader") || entry.name.EndsWith(".tcompute"))
+		else if (entry.name.EndsWith(".cs") || entry.name.EndsWith(".bf") || entry.name.EndsWith(".asmdef") || entry.name.EndsWith(".tui") || entry.name.EndsWith(".tcss") || entry.name.EndsWith(".tshader") || entry.name.EndsWith(".tcompute"))
 		{
 			if (ImGui.MenuItem("Open in Code Editor"))
 				OpenScript(entry.path);
@@ -520,7 +520,9 @@ extension EditorApp
 	}
 
 	static FileBadge[?] sFileBadges = .(
-		.(".bf", .(0.25f, 0.47f, 0.76f, 1), "BF"),
+		.(".cs", .(0.30f, 0.62f, 0.84f, 1), "C#"),
+		(".asmdef", .(0.43f, 0.58f, 0.69f, 1), "ASM"),
+		(".bf", .(0.25f, 0.47f, 0.76f, 1), "CODE"),
 		.(".tscene", .(0.52f, 0.38f, 0.72f, 1), "SCENE"),
 		.(".voxels", .(0.58f, 0.44f, 0.30f, 1), "VOXEL"),
 		.(".tprefab", .(0.24f, 0.56f, 0.78f, 1), "PREFAB"),
@@ -637,13 +639,12 @@ extension EditorApp
 	{
 		if (ImGui.MenuItem("Folder"))
 			BeginNewItem(0, "New Folder");
-		// Visual scripts first: the usual way to write game code. Beef scripts sit beside them and mix freely (a
-		// graph is compiled to a Beef component; each can use the other's public members).
+		// Visual scripts and C# gameplay scripts are created side by side.
 		if (ImGui.MenuItem("Visual Script (Graph)"))
 			BeginNewItem(3, "NewGraph");
 		if (ImGui.MenuItem("Visual Subgraph (reusable node)"))
 			BeginNewItem(5, "NewSubgraph");
-		if (ImGui.BeginMenu("Beef Script (code)"))
+		if (ImGui.BeginMenu("C# Script (code)"))
 		{
 			if (ImGui.MenuItem("Basic Component"))
 				BeginNewScriptTemplate(.Basic, "NewScript");
@@ -672,6 +673,8 @@ extension EditorApp
 			}
 			ImGui.EndMenu();
 		}
+		if (ImGui.MenuItem("Assembly Definition"))
+			BeginNewItem(18, "NewAssembly");
 		if (ImGui.MenuItem("Scene"))
 			BeginNewItem(2, "NewScene");
 		if (ImGui.MenuItem("Behavior Tree"))
@@ -752,7 +755,7 @@ extension EditorApp
 		}
 		else if (entry.name.EndsWith(".tscene"))
 			OpenScene(entry.path);
-		else if (entry.name.EndsWith(".bf"))
+		else if (entry.name.EndsWith(".cs") || entry.name.EndsWith(".bf") || entry.name.EndsWith(".asmdef"))
 			OpenScript(entry.path);
 		else if (entry.name.EndsWith(".tgraph") || entry.name.EndsWith(".tsgraph"))
 			OpenGraph(entry.path);
@@ -905,6 +908,22 @@ extension EditorApp
 				Log.Error("Could not create the folder.");
 		case 1:
 			CreateScript(mNewItemName, mNewScriptTemplate);
+		case 18:
+			if (!ProjectGenerator.IsValidName(mNewItemName))
+			{
+				Log.Error("Assembly names use letters, digits and underscores.");
+				break;
+			}
+			let definition = scope $"{mBrowsePath}/{mNewItemName}.asmdef";
+			if (File.Exists(definition))
+			{
+				Log.Error(scope $"{definition} already exists.");
+				break;
+			}
+			let assemblyText = scope String();
+			assemblyText.AppendF("{{\"name\":\"{}\",\"references\":[]}}", mNewItemName);
+			File.WriteAllText(definition, assemblyText).IgnoreError();
+			Log.Info(scope $"Created {definition}.");
 		case 2:
 			if (!ProjectGenerator.IsValidName(mNewItemName))
 			{
