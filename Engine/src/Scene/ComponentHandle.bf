@@ -263,6 +263,26 @@ static class HandleComponents
 		/// The data's `NewList` ([HandleData] makes it): an empty list for its index-th list field.
 		public function Object(int32 index) newList;
 
+		protected override void GCMarkMembers()
+		{
+			// An override also replaces the compiler's ordinary field marking.
+			GC.Mark!(fullName);
+			GC.Mark!(name);
+			GC.Mark!(handleType);
+			GC.Mark!(dataType);
+			GC.Mark!(defaults);
+			GC.Mark!(lists);
+			GC.Mark!(texts);
+			// defaults is an untyped byte buffer: the leak checker cannot see the
+			// objects it owns without marking the reflected reference fields.
+			if (defaults == null)
+				return;
+			for (let list in lists)
+				GC.Mark!(*(Object*)(defaults.Ptr + list.offset));
+			for (let offset in texts)
+				GC.Mark!(*(String*)(defaults.Ptr + offset));
+		}
+
 		public ~this()
 		{
 			// The registry owns the Strings and Lists constructed for its default data.
