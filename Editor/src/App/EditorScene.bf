@@ -79,6 +79,62 @@ extension EditorApp
 		ResetUndo();
 	}
 
+	/// Find managed gameplay without scanning hidden build artifacts.
+	bool HasCSharpSources(StringView folder, int depth = 0)
+	{
+		if (depth > 32 || !Directory.Exists(folder))
+			return false;
+		for (let entry in Directory.EnumerateFiles(folder))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (name.EndsWith(".cs", .OrdinalIgnoreCase))
+				return true;
+		}
+		for (let entry in Directory.EnumerateDirectories(folder))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (!name.StartsWith('.') && HasCSharpSources(scope $"{folder}/{name}", depth + 1))
+				return true;
+		}
+		return false;
+	}
+
+	/// Initial managed Play loading, using the same scene and component lifecycle as native gameplay.
+	/// No third-party DLL search or untrusted mod loading occurs here.
+	bool PrepareCSharpPlay()
+	{
+		let project = Project.Current;
+		let config = scope $"{project.EngineRoot}/Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json";
+		let runtime = scope $"{project.EngineRoot}/Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll";
+		let game = scope $"{project.Path}/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll";
+		if (!File.Exists(config) || !File.Exists(runtime) || !File.Exists(game))
+		{
+			mStatus.Set("The managed gameplay runtime or game assembly is missing. Check C# errors.");
+			Log.Error(mStatus);
+			return false;
+		}
+		if (!CSharpRuntime.Initialize(config, runtime))
+		{
+			mStatus.Set("Could not initialize the managed runtime. See Console.");
+			return false;
+		}
+		if (!CSharpRuntime.BindScene(mScene))
+		{
+			mStatus.Set("Could not bind the managed scene. See Console.");
+			return false;
+		}
+		if (CSharpRuntime.LoadGame(game) < 0)
+		{
+			CSharpRuntime.UnloadGame();
+			CSharpRuntime.UnbindScene(mScene);
+			mStatus.Set("Could not load C# gameplay. See Console.");
+			return false;
+		}
+		return true;
+	}
+
 	void StartPlay()
 	{
 		if (mPlay != .Edit)
@@ -107,12 +163,24 @@ extension EditorApp
 			mStatus.Set("Waiting to compile scripts before Play...");
 			return;
 		}
+		// Build gameplay C# before starting a scene. The Play request is resumed by
+		// CollectCheckResults once the managed compiler succeeds.
+		let hasCSharp = HasCSharpSources(scope $"{Project.Current.Path}/src");
+		if (hasCSharp && !mManagedBuildReady)
+		{
+			mPlayAfterCompile = true;
+			StartManagedErrorCheck();
+			mStatus.Set("Compiling C# gameplay before Play...");
+			return;
+		}
 		StopSequencePreview();
 		if (EditingPrefab)
 		{
 			Log.Warning("A prefab is open. Go back to the scene to play.");
 			return;
 		}
+		if (hasCSharp && !PrepareCSharpPlay())
+			return;
 		// A successful Play transition must never retain a stale compile notice.
 		mStatus.Clear();
 		// Side files (sculpted terrain) must be on disk, because stopping reloads the scene.
@@ -141,6 +209,13 @@ extension EditorApp
 		if (mPlay == .Edit)
 			return;
 		mScene.StopPlay();
+		// All CSharpBehaviour components have detached in StopPlay. Unload the game
+		// assembly before restoring the edit-time scene, so code can be rebuilt.
+		if (CSharpRuntime.Ready)
+		{
+			CSharpRuntime.UnloadGame();
+			CSharpRuntime.UnbindScene(mScene);
+		}
 		// Data assets as the game left them are not the files: the next Play reads them afresh.
 		DataAsset.ClearCache();
 		if (mScene.Network != null)
