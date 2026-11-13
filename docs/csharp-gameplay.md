@@ -9,7 +9,7 @@ is complete.
 
 - Target .NET 11, C# 15, nullable-enabled managed projects.
 - `Managed/Tallow.Build` generates `Tallow.Game` and assembly-definition projects.
-- `*.asmdef` JSON files describe trusted gameplay assembly boundaries:
+- `*.tasmdef` JSON files describe trusted gameplay assembly boundaries:
   `{"name":"Gameplay","references":[]}`; nested definitions own their own trees.
 - `Managed/Tallow.API` contains initial managed game types and callbacks.
 - `Managed/Tallow.ManagedHost` and `Tests/CSharpGameplay` are smoke-test scaffolding.
@@ -36,7 +36,7 @@ manages entity lifetime. Managed memory is collected by .NET.
 
 ## Security and mod policy
 
-**Third-party / untrusted mod loading is disabled.** `*.asmdef` files are
+**Third-party / untrusted mod loading is disabled.** `*.tasmdef` files are
 organizational boundaries for trusted game source, not permission boundaries.
 `hostfxr`, Roslyn, syntax-tree analyzers and `AssemblyLoadContext` do not
 sandbox untrusted .NET code. ALC is a reload/dependency isolation mechanism,
