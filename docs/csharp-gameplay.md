@@ -12,13 +12,21 @@ is complete.
 - `*.tasmdef` JSON files describe trusted gameplay assembly boundaries:
   `{"name":"Gameplay","references":[]}`; nested definitions own their own trees.
 - `Managed/Tallow.API` contains initial managed game types and callbacks.
-- `Managed/Tallow.ManagedHost` and `Tests/CSharpGameplay` are smoke-test scaffolding.
+- `Managed/Tallow.ManagedHost` and `Tests/CSharpGameplay` are managed smoke-test scaffolding.
+- `Managed/Tallow.ManagedRuntime` exports trusted C# script lifecycle functions to native code.
+- `native/tallow_dotnet_host.cpp` hosts .NET with hostfxr on desktop; WebAssembly has a no-runtime stub.
+- `Engine/src/Scripting/CSharpRuntime.bf` provides a validated scene/entity-handle bridge.
+- `Engine/src/Scripting/CSharpBehaviour.bf` forwards native component callbacks and tick input.
+- `Tests/NativeCSharpHost` verifies C# movement, callbacks, and network button edges in native processes.
 
-This is **not a complete integration**. The managed API currently covers only a
-small subset of Tallow; the native engine bridge, editor compiler/semantic
-integration, component registry, inspection, ECS systems and queries, visual
-scripting, physics, networking, persistence, packaging, and Play-mode lifecycle
-have not yet been implemented or validated for C#. Do not ship on this basis.
+This is **not a complete integration**. The managed API covers only a small
+subset of Tallow. The initial bridge and standalone native/managed lifecycle
+tests now exist, along with editor C# syntax and Roslyn requests; however,
+the normal editor Play transition does not yet initialize and bind the
+managed runtime. Component registry/Inspector support, ECS systems and queries,
+physics, networking parity, serialization, packaging, hot reload, and visual
+scripting C# generation remain incomplete. No full native editor build has
+been validated on this branch. Do not ship on this basis.
 
 ## Gameplay parity requirement
 
@@ -64,5 +72,6 @@ smoke tests are defined in `.github/workflows/csharp-gameplay.yml`.
 
 C# editor diagnostics and completion run Roslyn directly via `dotnet` without
 Python intermediaries. Some unrelated engine/build systems still depend on
-Python until separately migrated. The native C# runtime bridge and full
-gameplay parity are not implemented yet.
+Python until separately migrated. The native C# runtime bridge has passed standalone hostfxr smoke tests on
+Linux and Windows. Normal editor Play startup, cross-assembly field reflection,
+full gameplay parity, and safe managed reload remain unfinished.
