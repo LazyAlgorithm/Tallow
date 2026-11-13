@@ -113,7 +113,7 @@ void managed_error(const char* action)
 template <typename T>
 bool find_entry(const host_char* managed_assembly, const char* method, T& result)
 {
-    constexpr auto unmanaged = reinterpret_cast<const host_char*>(static_cast<intptr_t>(-1));
+    const auto unmanaged = reinterpret_cast<const host_char*>(static_cast<intptr_t>(-1));
     const auto type = platform_string("Tallow.ManagedRuntime.NativeEntrypoints, Tallow.ManagedRuntime");
     const auto method_name = platform_string(method);
     void* pointer = nullptr;
