@@ -2,6 +2,9 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Tallow.ManagedBuild;
 
@@ -168,6 +171,66 @@ internal static class Program
         return paths["Tallow.Game"];
     }
 
+    /// <summary>
+    /// Publish the managed component catalog only after all trusted assemblies
+    /// compiled successfully. Roslyn checks inheritance and attributes, rather
+    /// than guessing classes from file names or executing the user's game.
+    /// </summary>
+    private static void WriteComponentCatalog(string project, string engine)
+    {
+        string source = Path.Combine(project, "src");
+        string api = Path.Combine(engine, "Managed", "Tallow.API");
+        var parse = new CSharpParseOptions(LanguageVersion.CSharp15);
+        var sources = Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal).ToArray();
+        var trees = sources.Select(path => CSharpSyntaxTree.ParseText(
+            File.ReadAllText(path), parse, path: Path.GetFullPath(path))).ToArray();
+        var apiTrees = Directory.EnumerateFiles(api, "*.cs", SearchOption.AllDirectories)
+            .Select(path => CSharpSyntaxTree.ParseText(
+                File.ReadAllText(path), parse, path: Path.GetFullPath(path)));
+        string trusted = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "";
+        var references = trusted.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Select(path => MetadataReference.CreateFromFile(path));
+        var compilation = CSharpCompilation.Create("Tallow.ComponentCatalog",
+            trees.Concat(apiTrees), references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var components = new SortedSet<string>(StringComparer.Ordinal);
+
+        foreach (SyntaxTree tree in trees)
+        {
+            SemanticModel model = compilation.GetSemanticModel(tree);
+            foreach (ClassDeclarationSyntax node in tree.GetRoot().DescendantNodes()
+                .OfType<ClassDeclarationSyntax>())
+            {
+                if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol type || type.IsAbstract)
+                    continue;
+                bool marked = type.GetAttributes().Any(attribute =>
+                    attribute.AttributeClass?.ToDisplayString() == "Tallow.ComponentAttribute");
+                if (!marked)
+                    continue;
+                bool script = false;
+                for (INamedTypeSymbol? parent = type.BaseType; parent != null;
+                    parent = parent.BaseType)
+                {
+                    if (parent.ToDisplayString() == "Tallow.Script")
+                    {
+                        script = true;
+                        break;
+                    }
+                }
+                if (script)
+                    components.Add(type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat));
+            }
+        }
+
+        string catalog = Path.Combine(project, ".tallow-csharp", "components.tsv");
+        Directory.CreateDirectory(Path.GetDirectoryName(catalog)!);
+        string temporary = catalog + ".tmp";
+        File.WriteAllLines(temporary, components);
+        File.Move(temporary, catalog, overwrite: true);
+        Console.WriteLine($"Discovered {components.Count} managed gameplay components.");
+    }
+
     public static int Main(string[] args)
     {
         try
@@ -189,6 +252,8 @@ internal static class Program
             if (build == null)
                 throw new InvalidOperationException("Could not start the .NET SDK.");
             build.WaitForExit();
+            if (build.ExitCode == 0)
+                WriteComponentCatalog(project, engine);
             return build.ExitCode;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
