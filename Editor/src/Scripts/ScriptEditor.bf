@@ -85,6 +85,7 @@ extension EditorApp
 	bool mCheckFinished;
 	bool mCheckSucceeded;
 	bool mCheckManaged;
+	bool mManagedBuildReady;
 	String mCheckLog = new .() ~ delete _;
 
 	/// Opens a script in the Scripts tab (or switches to it if it is already open).
@@ -242,7 +243,10 @@ extension EditorApp
 		}
 		else if (document.path.EndsWith(".cs") || document.path.EndsWith(".tasmdef"))
 		{
-			if (Project.Current.ReloadMode != .Manual)
+			mManagedBuildReady = false;
+			if (mPlay != .Edit)
+				mStatus.Set("C# changed; stop and restart Play to load the new code.");
+			else if (Project.Current.ReloadMode != .Manual)
 				StartManagedErrorCheck();
 		}
 		else
@@ -312,6 +316,7 @@ extension EditorApp
 			DeleteAndNullify!(mCheckThread);
 		}
 		mCheckManaged = true;
+		mManagedBuildReady = false;
 		mCheckWasReload = false;
 		mCheckRunning = true;
 		mCheckFinished = false;
@@ -330,6 +335,15 @@ extension EditorApp
 				Terminal.Quote(logFile, command);
 				command.Append(" 2>&1");
 				mCheckSucceeded = Terminal.Run(command) == 0;
+				if (mCheckSucceeded)
+				{
+					let runtime = scope String("dotnet build ");
+					Terminal.Quote(scope $"{project.EngineRoot}/Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj", runtime);
+					runtime.Append(" --configuration Debug --nologo --verbosity minimal >> ");
+					Terminal.Quote(logFile, runtime);
+					runtime.Append(" 2>&1");
+					mCheckSucceeded = Terminal.Run(runtime) == 0;
+				}
 				mCheckLog.Clear();
 				File.ReadAllText(logFile, mCheckLog).IgnoreError();
 				Interlocked.Store(ref mCheckFinished, true);
@@ -443,8 +457,15 @@ extension EditorApp
 		{
 			ParseManagedDiagnostics(mCheckLog);
 			PublishScriptDiagnostics();
-			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled; native runtime integration is still in progress." : "C# compile failed. See Console.");
+			mManagedBuildReady = mCheckSucceeded;
+			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled." : "C# compilation failed. See Console.");
 			mCheckManaged = false;
+			if (mPlayAfterCompile && mPlay == .Edit)
+			{
+				mPlayAfterCompile = false;
+				if (mCheckSucceeded)
+					StartPlay();
+			}
 			return;
 		}
 		ParseCompilerDiagnostics(mCheckLog);
