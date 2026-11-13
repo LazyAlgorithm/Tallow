@@ -556,7 +556,14 @@ extension EditorApp
 		let component = gameObject.Components[index];
 		let info = ComponentRegistry.Find(component.GetType());
 		let title = scope String();
-		NiceName(info != null ? (StringView)info.name : "Component", title);
+		if (let managed = component as CSharpBehaviour)
+		{
+			let fullName = (StringView)managed.scriptType;
+			let dot = fullName.LastIndexOf('.');
+			NiceName(dot >= 0 ? fullName.Substring(dot + 1) : fullName, title);
+		}
+		else
+			NiceName(info != null ? (StringView)info.name : "Component", title);
 		ImGui.Separator();
 		// The label leaves room for the enable checkbox and icon drawn over the header.
 		let open = ImGui.CollapsingHeader(scope String()..AppendF("            {}###header", title).CStr(), ImGui.TreeFlags.DefaultOpen | ImGui.TreeFlags.AllowOverlap);
