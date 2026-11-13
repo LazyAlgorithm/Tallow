@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -179,6 +180,68 @@ public static unsafe class NativeEntrypoints
             int instance = ++sNextInstance;
             sInstances.Add(instance, script);
             return instance;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
+    // Values come from trusted scene files; never evaluate expressions or
+    // resolve arbitrary types while applying Inspector values.
+    private static object? ParseInspectorValue(Type type, string encoded)
+    {
+        if (type == typeof(float))
+            return float.Parse(encoded, CultureInfo.InvariantCulture);
+        if (type == typeof(int))
+            return int.Parse(encoded, CultureInfo.InvariantCulture);
+        if (type == typeof(bool))
+            return bool.Parse(encoded);
+        if (type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4))
+        {
+            string[] values = encoded.Split(',');
+            int dimensions = type == typeof(Vector2) ? 2 : type == typeof(Vector3) ? 3 : 4;
+            if (values.Length != dimensions)
+                throw new FormatException("Vector component count does not match the C# field type.");
+            float[] numbers = values.Select(value => float.Parse(value, CultureInfo.InvariantCulture)).ToArray();
+            if (numbers.Any(float.IsNaN) || numbers.Any(float.IsInfinity))
+                throw new FormatException("Vector fields require finite coordinates.");
+            return dimensions switch
+            {
+                2 => new Vector2(numbers[0], numbers[1]),
+                3 => new Vector3(numbers[0], numbers[1], numbers[2]),
+                _ => new Vector4(numbers[0], numbers[1], numbers[2], numbers[3])
+            };
+        }
+        return null;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int ApplyFields(int instance, byte* values)
+    {
+        try
+        {
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            if (values == null)
+                return 1;
+            string text = Marshal.PtrToStringUTF8((nint)values) ?? "";
+            foreach (string line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                int separator = line.IndexOf('\t');
+                if (separator < 1)
+                    continue;
+                string name = line[..separator];
+                string value = line[(separator + 1)..];
+                FieldInfo? field = script.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public);
+                if (field is null || field.IsStatic || field.IsInitOnly || field.IsLiteral ||
+                    field.IsNotSerialized)
+                    continue; // Allow scripts to rename/remove fields without breaking old scenes.
+                object? parsed = ParseInspectorValue(field.FieldType, value);
+                if (parsed != null)
+                    field.SetValue(script, parsed);
+            }
+            return 1;
         }
         catch (Exception exception)
         {
