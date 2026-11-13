@@ -36,6 +36,8 @@ using configure_fn = int32_t (*)(void*);
 using load_game_fn = int32_t (*)(const char*);
 using attach_fn = int32_t (*)(const char*, uint64_t, uint64_t);
 using tick_fn = int32_t (*)(int32_t, float);
+using dispatch_fn = int32_t (*)(int32_t, int32_t, float);
+using update_input_fn = int32_t (*)(int32_t, const tn_csharp_tick_input*, float);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
 using shutdown_fn = int32_t (*)();
@@ -47,6 +49,8 @@ configure_fn configure = nullptr;
 load_game_fn load_game = nullptr;
 attach_fn attach = nullptr;
 tick_fn tick = nullptr;
+dispatch_fn dispatch = nullptr;
+update_input_fn update_input = nullptr;
 detach_fn detach = nullptr;
 last_error_fn last_error = nullptr;
 shutdown_fn shutdown_runtime = nullptr;
@@ -189,6 +193,8 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "LoadGame", load_game) ||
             !find_entry(assembly.c_str(), "Attach", attach) ||
             !find_entry(assembly.c_str(), "Tick", tick) ||
+            !find_entry(assembly.c_str(), "Dispatch", dispatch) ||
+            !find_entry(assembly.c_str(), "UpdateInput", update_input) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
             !find_entry(assembly.c_str(), "GetLastError", last_error) ||
             !find_entry(assembly.c_str(), "Shutdown", shutdown_runtime))
@@ -250,6 +256,27 @@ int32_t tn_csharp_tick(int32_t script_instance, float delta_time)
     return result > 0;
 }
 
+int32_t tn_csharp_dispatch(int32_t script_instance, int32_t event_id, float delta_time)
+{
+    if (!started || !dispatch)
+        return 0;
+    const int32_t result = dispatch(script_instance, event_id, delta_time);
+    if (result < 0)
+        managed_error("Dispatching C# component event");
+    return result > 0;
+}
+
+int32_t tn_csharp_update_input(int32_t script_instance,
+    const tn_csharp_tick_input* input, float delta_time)
+{
+    if (!started || !update_input || !input)
+        return 0;
+    const int32_t result = update_input(script_instance, input, delta_time);
+    if (result < 0)
+        managed_error("Updating C# component with network input");
+    return result > 0;
+}
+
 int32_t tn_csharp_detach(int32_t script_instance)
 {
     if (!started || !detach)
@@ -269,6 +296,8 @@ void tn_csharp_shutdown(void)
     load_game = nullptr;
     attach = nullptr;
     tick = nullptr;
+    dispatch = nullptr;
+    update_input = nullptr;
     detach = nullptr;
     last_error = nullptr;
     shutdown_runtime = nullptr;
