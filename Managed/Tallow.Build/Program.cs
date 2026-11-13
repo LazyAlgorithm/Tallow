@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -199,6 +200,8 @@ internal static class Program
             trees.Concat(apiTrees).Append(globalNumerics), references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         var components = new SortedSet<string>(StringComparer.Ordinal);
+        var sourceRows = new SortedSet<string>(StringComparer.Ordinal);
+        var fieldRows = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (SyntaxTree tree in trees)
         {
@@ -222,8 +225,83 @@ internal static class Program
                         break;
                     }
                 }
-                if (script)
-                    components.Add(type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat));
+                if (!script)
+                    continue;
+
+                string className = type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+                components.Add(className);
+                sourceRows.Add(tree.FilePath + "\t" + className);
+
+                // Limit the first Inspector bridge to deterministic, supported
+                // value types. Managed objects/references need their own handles.
+                foreach (IFieldSymbol field in type.GetMembers().OfType<IFieldSymbol>())
+                {
+                    if (field.DeclaredAccessibility != Accessibility.Public || field.IsStatic ||
+                        field.IsConst || field.IsReadOnly || field.IsImplicitlyDeclared ||
+                        field.GetAttributes().Any(a =>
+                            a.AttributeClass?.ToDisplayString() ==
+                            "System.NonSerializedAttribute"))
+                        continue;
+                    string? kind = field.Type.SpecialType switch
+                    {
+                        SpecialType.System_Single => "float",
+                        SpecialType.System_Int32 => "int",
+                        SpecialType.System_Boolean => "bool",
+                        _ => field.Type.ToDisplayString() switch
+                        {
+                            "System.Numerics.Vector2" => "Vector2",
+                            "System.Numerics.Vector3" => "Vector3",
+                            "System.Numerics.Vector4" => "Vector4",
+                            _ => null
+                        }
+                    };
+                    if (kind is null)
+                        continue;
+
+                    string defaultValue = kind switch
+                    {
+                        "bool" => "false", "Vector2" => "0,0",
+                        "Vector3" => "0,0,0", "Vector4" => "0,0,0,0", _ => "0"
+                    };
+                    if (field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+                        is VariableDeclaratorSyntax variable && variable.Initializer != null)
+                    {
+                        SemanticModel fieldModel = compilation.GetSemanticModel(variable.SyntaxTree);
+                        var constant = fieldModel.GetConstantValue(variable.Initializer.Value);
+                        if (constant.HasValue && constant.Value is not null &&
+                            kind is "bool" or "float" or "int")
+                            defaultValue = Convert.ToString(constant.Value, CultureInfo.InvariantCulture) ?? defaultValue;
+                        else if (kind.StartsWith("Vector", StringComparison.Ordinal))
+                        {
+                            ArgumentListSyntax? args = variable.Initializer.Value switch
+                            {
+                                ObjectCreationExpressionSyntax v => v.ArgumentList,
+                                ImplicitObjectCreationExpressionSyntax v => v.ArgumentList,
+                                _ => null
+                            };
+                            if (args != null && args.Arguments.Count == int.Parse(kind["Vector".Length..],
+                                    CultureInfo.InvariantCulture))
+                            {
+                                var numbers = args.Arguments.Select(a => fieldModel.GetConstantValue(a.Expression)).ToArray();
+                                if (numbers.All(c => c.HasValue && c.Value is not null))
+                                    defaultValue = string.Join(",", numbers.Select(c =>
+                                        Convert.ToString(c.Value, CultureInfo.InvariantCulture)));
+                            }
+                        }
+                    }
+                    string rangeMin = "", rangeMax = "";
+                    AttributeData? range = field.GetAttributes().FirstOrDefault(a =>
+                        a.AttributeClass?.ToDisplayString() == "Tallow.RangeAttribute");
+                    if (range is { ConstructorArguments.Length: 2 })
+                    {
+                        rangeMin = Convert.ToString(range.ConstructorArguments[0].Value,
+                            CultureInfo.InvariantCulture) ?? "";
+                        rangeMax = Convert.ToString(range.ConstructorArguments[1].Value,
+                            CultureInfo.InvariantCulture) ?? "";
+                    }
+                    fieldRows.Add(string.Join("\t", className, field.Name, kind,
+                        defaultValue, rangeMin, rangeMax));
+                }
             }
         }
 
@@ -232,7 +310,15 @@ internal static class Program
         string temporary = catalog + ".tmp";
         File.WriteAllLines(temporary, components);
         File.Move(temporary, catalog, overwrite: true);
-        Console.WriteLine($"Discovered {components.Count} managed gameplay components.");
+        // Atomic replacements so a live Inspector never reads partial metadata.
+        static void Publish(string path, IEnumerable<string> rows)
+        {
+            File.WriteAllLines(path + ".tmp", rows);
+            File.Move(path + ".tmp", path, overwrite: true);
+        }
+        Publish(Path.Combine(project, ".tallow-csharp", "component-sources.tsv"), sourceRows);
+        Publish(Path.Combine(project, ".tallow-csharp", "fields.tsv"), fieldRows);
+        Console.WriteLine($"Discovered {components.Count} managed gameplay components and {fieldRows.Count} editable fields.");
     }
 
     public static int Main(string[] args)
