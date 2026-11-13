@@ -1149,6 +1149,7 @@ extension EditorApp
 	void DrawModelWindow()
 	{
 		TickModelTest();
+		TickModelSelectBench();
 		DrawModelHelp();
 		if (!mShowModel)
 		{

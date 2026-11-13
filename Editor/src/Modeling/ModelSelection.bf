@@ -19,6 +19,11 @@ extension EditorApp
 	HashSet<uint64> mModelShownEdges = new .() ~ delete _;
 	/// The object whose faces are hidden, shown again when edit mode ends.
 	uint32 mModelHiddenObject;
+	/// The edited mesh's shown faces for ray tests (what is under the pointer, what can be seen), built again when
+	/// the mesh changes. Picking and drawing call RefreshModelRays first.
+	MeshRayTree mModelRays = new .() ~ delete _;
+
+	void RefreshModelRays(EditMesh mesh) => mModelRays.Refresh(mesh, true);
 
 	static readonly Color ModelSelectColor = .(1, 0.58f, 0.12f, 1);
 	static readonly Color ModelActiveColor = .(1, 0.9f, 0.62f, 1);
@@ -66,6 +71,7 @@ extension EditorApp
 	/// counts, unless x-ray is on.
 	int64 ModelElementAt(EditMesh mesh, Matrix4 world, Matrix4 toLocal, ImGui.Vec2 mouse, ModelSelectMode mode)
 	{
+		RefreshModelRays(mesh);
 		let origin = mSceneOrigin, size = mSceneSize;
 		switch (mode)
 		{
@@ -115,7 +121,7 @@ extension EditorApp
 			let ray = ModelMouseRay(mouse);
 			let localOrigin = toLocal.TransformPoint(ray.origin);
 			let localEnd = toLocal.TransformPoint(ray.origin + ray.direction);
-			return mesh.Raycast(Ray(localOrigin, (localEnd - localOrigin).Normalized), ?, ?, true);
+			return mModelRays.Raycast(Ray(localOrigin, (localEnd - localOrigin).Normalized), ?);
 		}
 	}
 
@@ -172,7 +178,8 @@ extension EditorApp
 		return Math.Sqrt(x * x + y * y);
 	}
 
-	/// Whether a point of the model can be seen from the camera (nothing of the model in front of it).
+	/// Whether a point of the model can be seen from the camera (nothing of the model in front of it). Uses
+	/// mModelRays, so RefreshModelRays first.
 	bool ModelPointVisible(EditMesh mesh, Matrix4 toLocal, Vector3 worldPoint)
 	{
 		if (mModelXRay)
@@ -183,8 +190,7 @@ extension EditorApp
 		let length = along.Length;
 		if (length < 1.0e-4f)
 			return true;
-		let hit = mesh.Raycast(Ray(localCamera, along / length), let distance, ?, true);
-		return hit < 0 || distance >= length * 0.995f - 0.002f;
+		return !mModelRays.Blocked(Ray(localCamera, along / length), length * 0.995f - 0.002f);
 	}
 
 	/// Box selection: everything with its points inside the box (only what can be seen, unless x-ray is on).
@@ -194,6 +200,7 @@ extension EditorApp
 		let min = ImGui.Vec2(Math.Min(from.x, to.x), Math.Min(from.y, to.y));
 		let max = ImGui.Vec2(Math.Max(from.x, to.x), Math.Max(from.y, to.y));
 		let toLocal = world.Inverse;
+		RefreshModelRays(mesh);
 		bool Inside(Vector3 local)
 		{
 			let p = world.TransformPoint(local);
@@ -717,9 +724,10 @@ extension EditorApp
 	void DrawModelSelection(EditMesh mesh, Matrix4 world, Matrix4 toLocal)
 	{
 		let origin = mSceneOrigin, size = mSceneSize;
+		RefreshModelRays(mesh);
 		bool OnScreen(ImGui.Vec2 p) => p.x >= origin.x && p.y >= origin.y && p.x <= origin.x + size.x && p.y <= origin.y + size.y;
-		// Big selections skip the test of what can be seen, to stay quick.
-		let checkSight = ModelSelectionCount < 600;
+		// Huge selections skip the test of what can be seen, to stay quick.
+		let checkSight = ModelSelectionCount < 20000;
 		bool Seen(Vector3 worldPoint) => !checkSight || ModelPointVisible(mesh, toLocal, worldPoint);
 		let shadow = Color(0, 0, 0, 0.6f);
 		void Line(Vector3 a, Vector3 b, Color color, float thickness, bool seen)
@@ -748,7 +756,7 @@ extension EditorApp
 				if (!SceneToScreen(p, origin, size, let screen) || !OnScreen(screen))
 					continue;
 				let selected = mModelVerts.Contains(v);
-				let visible = mesh.positions.Count > 4000 || ModelPointVisible(mesh, toLocal, p);
+				let visible = mesh.positions.Count > 20000 || ModelPointVisible(mesh, toLocal, p);
 				if (!visible && !selected)
 					continue;
 				let alpha = visible ? 1.0f : 0.4f;
