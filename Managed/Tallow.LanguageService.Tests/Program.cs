@@ -63,6 +63,13 @@ internal static class Program
             string diagnostics = Request(service, "diagnostics", badSource, badSource.Length);
             Check("compiler diagnostics", diagnostics.Contains("CS0029"));
 
+            string vectorSource = "class Example { Vector3 v = new(1, 2, 3); " +
+                "void Go() { v += Vector3.UnitX * 2f; v *= 0.5f; } }";
+            string vectorDiagnostics = Request(service, "diagnostics", vectorSource,
+                vectorSource.Length);
+            Check("implicit vectors and arithmetic in Roslyn",
+                !vectorDiagnostics.Contains("diagnostic\t"));
+
             string memberSource = "class Player { public int Speed; }\n" +
                 "class Example { void Go() { Player player = new(); player.S";
             string completions = Request(service, "completion", memberSource, memberSource.Length);
