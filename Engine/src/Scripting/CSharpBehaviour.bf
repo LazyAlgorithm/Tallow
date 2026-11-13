@@ -10,12 +10,53 @@ namespace Tallow;
 class CSharpBehaviour : Component
 {
 	/// The fully qualified managed Script subclass in the game's trusted assemblies.
-	public SharedString scriptType;
+	[HideInInspector] public SharedString scriptType;
+	/// Edited field values: one trusted field name + numeric value per line.
+	/// SharedString is handled by Tallow's existing scene/prefab serializer.
+	[HideInInspector] public SharedString fieldOverrides;
 
 	int32 mInstance = -1;
 
 	/// The managed component is owned by this native component, not the scene's ECS memory.
 	public bool IsLoaded => mInstance > 0 && CSharpRuntime.Ready;
+
+	/// Read an Inspector override, falling back to the source's declared initializer.
+	public bool ReadEditorField(StringView name, String output)
+	{
+		for (let line in fieldOverrides.View.Split('\n', .RemoveEmptyEntries))
+		{
+			let separator = line.IndexOf('\t');
+			if (separator >= 0 && line.Substring(0, separator) == name)
+			{
+				output.Set(line.Substring(separator + 1));
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// Preserve unrelated fields and overwrite a single field's value safely.
+	public void WriteEditorField(StringView name, StringView value)
+	{
+		if (name.IsEmpty || name.Contains('\t') || name.Contains('\n') ||
+			value.Contains('\t') || value.Contains('\n'))
+			return;
+		let updated = scope String();
+		for (let line in fieldOverrides.View.Split('\n', .RemoveEmptyEntries))
+		{
+			let separator = line.IndexOf('\t');
+			if (separator < 0 || line.Substring(0, separator) != name)
+			{
+				updated.Append(line);
+				updated.Append('\n');
+			}
+		}
+		updated.AppendF("{}\t{}\n", name, value);
+		fieldOverrides.Set(updated);
+		if (IsLoaded)
+			CSharpRuntime.ApplyFields(mInstance, fieldOverrides);
+	}
+
 
 	public override void Awake()
 	{
@@ -23,7 +64,11 @@ class CSharpBehaviour : Component
 			return;
 		mInstance = CSharpRuntime.Attach(scriptType, GameObject);
 		if (mInstance > 0)
+		{
+			// Public C# fields are initialized before the first lifecycle callback.
+			CSharpRuntime.ApplyFields(mInstance, fieldOverrides);
 			CSharpRuntime.Dispatch(mInstance, .Awake);
+		}
 	}
 
 	public override void OnEnable()
