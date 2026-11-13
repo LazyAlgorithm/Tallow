@@ -15,6 +15,12 @@ import struct
 import tomllib
 import time
 
+# The bundled Windows Python uses an isolated ._pth file, so it does not add
+# this script's directory to sys.path when run by the editor.
+_tools_dir = str(Path(__file__).resolve().parent)
+if _tools_dir not in sys.path:
+    sys.path.insert(0, _tools_dir)
+
 try:
     import beef_compile_server
 except ImportError:  # An engine copy without it compiles with BeefBuild.

@@ -2,6 +2,7 @@
 """Pure-Python regression tests for the hot-reload ELF object cache."""
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,14 @@ import reload_scripts
 
 
 class LinkPipelineTests(unittest.TestCase):
+    def test_adjacent_compile_server_imports_with_isolated_python(self):
+        # The Windows package runs Python with an isolated ._pth file; -I
+        # reproduces the missing script-directory entry during this import.
+        script = Path(__file__).with_name('reload_scripts.py')
+        probe = ('import runpy; module = runpy.run_path(' + repr(str(script))
+                 + ', run_name="import_probe"); assert module["beef_compile_server"] is not None')
+        subprocess.run([sys.executable, '-I', '-c', probe], check=True)
+
     def test_persistent_platform_workspaces(self):
         root = Path('/tmp/MyGame')
         self.assertEqual(reload_scripts.reload_workspace(root, 'linux'),

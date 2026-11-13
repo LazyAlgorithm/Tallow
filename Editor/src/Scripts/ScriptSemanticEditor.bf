@@ -43,7 +43,7 @@ extension EditorApp
 		ScriptSemantic.CanonicalPath(path, canonical);
 		for (let document in mScripts)
 		{
-			if (Path.Equals(document.path, canonical))
+			if (Path.Equals(document.path, canonical, .Lenient))
 				return document;
 		}
 		return null;
