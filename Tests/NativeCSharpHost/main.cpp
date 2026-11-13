@@ -77,8 +77,8 @@ int main(int argc, char** argv)
     if (!tn_csharp_set_callbacks(&callbacks))
         return Failure("binding engine callbacks");
 
-    if (tn_csharp_load_game(game.c_str()) < 1)
-        return Failure("loading trusted game and asmdefs");
+    if (tn_csharp_load_game(game.c_str()) < 2)
+        return Failure("loading trusted game and Tallow assembly definitions");
 
     const int32_t script = tn_csharp_attach("Gameplay.MoveRight", 1, 1);
     if (script < 1)
@@ -93,7 +93,38 @@ int main(int argc, char** argv)
     if (!tn_csharp_detach(script))
         return Failure("destroying C# component");
 
+    // Verify that Tallow's network input is delivered without polling
+    // local input directly from managed code.
+    const int32_t inputScript = tn_csharp_attach("Gameplay.InputEcho", 1, 1);
+    if (inputScript < 1)
+        return Failure("creating managed network-input component");
+
+    if (!tn_csharp_dispatch(inputScript, TN_CSHARP_AWAKE, 0.0f) ||
+        !tn_csharp_dispatch(inputScript, TN_CSHARP_ENABLE, 0.0f) ||
+        !tn_csharp_dispatch(inputScript, TN_CSHARP_START, 0.0f))
+        return Failure("driving native component lifecycle");
+
+    const tn_csharp_tick_input jump = {0, 1, 0, 0, 1, 0};
+    if (!tn_csharp_update_input(inputScript, &jump, 1.0f))
+        return Failure("delivering predicted tick input");
+    if (std::fabs(state.position[1] - 5.0f) > 0.0001f ||
+        std::fabs(state.position[2] - 1.0f) > 0.0001f)
+        return Failure("applying network move or Jump press");
+
+    const tn_csharp_tick_input held = {0, 1, 0, 0, 1, 1};
+    if (!tn_csharp_update_input(inputScript, &held, 1.0f))
+        return Failure("delivering held tick input");
+    if (std::fabs(state.position[1] - 5.0f) > 0.0001f ||
+        std::fabs(state.position[2] - 2.0f) > 0.0001f)
+        return Failure("Jump was not edge-triggered");
+
+    if (!tn_csharp_dispatch(inputScript, TN_CSHARP_LOCAL_UPDATE, 0.0f) ||
+        !tn_csharp_dispatch(inputScript, TN_CSHARP_LATE_UPDATE, 1.0f) ||
+        !tn_csharp_dispatch(inputScript, TN_CSHARP_DISABLE, 0.0f) ||
+        !tn_csharp_detach(inputScript))
+        return Failure("managed C# cleanup and scene callbacks");
+
     tn_csharp_shutdown();
-    std::cout << "PASS native hostfxr -> C# Update -> native transform bridge\n";
+    std::cout << "PASS hostfxr -> C# lifecycle + network input -> native scene transform\n";
     return 0;
 }
