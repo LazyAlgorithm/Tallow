@@ -190,7 +190,7 @@ extension EditorApp
 			document = new ScriptDocument();
 			document.path.Set(path);
 			Path.GetFileName(path, document.name);
-			document.handle = tn_code_create(text.CStr(), path.EndsWith(".tui") ? 1 : (path.EndsWith(".tcss") ? 2 : ((path.EndsWith(".tshader") || path.EndsWith(".tcompute")) ? 3 : (path.EndsWith(".cs") ? 4 : (path.EndsWith(".asmdef") ? 5 : 0)))));
+			document.handle = tn_code_create(text.CStr(), path.EndsWith(".tui") ? 1 : (path.EndsWith(".tcss") ? 2 : ((path.EndsWith(".tshader") || path.EndsWith(".tcompute")) ? 3 : (path.EndsWith(".cs") ? 4 : (path.EndsWith(".tasmdef") ? 5 : 0)))));
 			document.readOnly = FindSourceGraph(path, scope String());
 			tn_code_set_read_only(document.handle, document.readOnly);
 			mScripts.Add(document);
@@ -240,7 +240,7 @@ extension EditorApp
 			Assets.MakeRelative(document.path, relative);
 			CompileShader(relative);
 		}
-		else if (document.path.EndsWith(".cs") || document.path.EndsWith(".asmdef"))
+		else if (document.path.EndsWith(".cs") || document.path.EndsWith(".tasmdef"))
 		{
 			if (Project.Current.ReloadMode != .Manual)
 				StartManagedErrorCheck();
@@ -267,7 +267,7 @@ extension EditorApp
 	/// Compiles the project on a worker thread so typing is never blocked.
 	void StartErrorCheck()
 	{
-		if (mActiveScript != null && (mActiveScript.path.EndsWith(".cs") || mActiveScript.path.EndsWith(".asmdef")))
+		if (mActiveScript != null && (mActiveScript.path.EndsWith(".cs") || mActiveScript.path.EndsWith(".tasmdef")))
 		{
 			StartManagedErrorCheck();
 			return;
