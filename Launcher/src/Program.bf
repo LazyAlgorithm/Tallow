@@ -251,21 +251,38 @@ class LauncherApp : Application
 				return false;
 			}
 		}
-		if (!project.Build(false))
+		// Keep a previously successful editor executable usable if a later
+		// native script build fails. Users must be able to fix errors in Tallow's
+		// own code editor instead of being locked out by the launcher.
+		let built = project.Build(false);
+		if (buildOnly)
 		{
-			error.Set("The project did not compile:\n");
+			if (!built)
+			{
+				error.Set("The project did not compile:\n");
+				project.ReadBuildLog(error);
+			}
+			return built;
+		}
+		let exe = scope String();
+		project.GetExecutablePath(exe, false);
+		if (!built && !File.Exists(exe))
+		{
+			error.Set("The project did not compile and has no last successful editor executable. Build the native engine once before using recovery mode.\n");
 			project.ReadBuildLog(error);
 			return false;
 		}
-		if (buildOnly)
-			return true;
 		RecentProjects.Add(project.Path);
 		let command = scope String();
-		let exe = scope String();
-		project.GetExecutablePath(exe, false);
 		Terminal.Quote(exe, command);
 		command.Append(" --editor --project ");
 		Terminal.Quote(project.Path, command);
+		if (!built)
+		{
+			// The editor reports the saved build errors and stays in Edit mode.
+			command.Append(" --startup-build-failed");
+			Console.WriteLine("Native project build failed; opening the previous editor executable for repairs.");
+		}
 		Terminal.RunDetached(command);
 		return true;
 	}
