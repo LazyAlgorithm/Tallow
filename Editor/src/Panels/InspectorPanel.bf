@@ -589,6 +589,8 @@ extension EditorApp
 		ComponentRegistry.GetFields(component, fields);
 		bool changed = false;
 		changed |= DrawFieldList(fields, "fields");
+		if (let managed = component as CSharpBehaviour)
+			changed |= DrawManagedFields(managed);
 		if (changed)
 		{
 			component.OnValidate();
