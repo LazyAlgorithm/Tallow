@@ -18,8 +18,49 @@ public sealed class RangeAttribute(float minimum, float maximum) : Attribute
     public float Maximum { get; } = maximum;
 }
 
-/// <summary>Per-tick player input. The native input bridge will populate this.</summary>
-public readonly record struct TickInput(Vector2 Move, Vector2 Look, uint Buttons);
+/// <summary>Buttons automatically collected and transmitted by the network input system.</summary>
+public enum InputButton
+{
+    Jump, Sprint, Crouch, Fire, Use, Reload, Ability1, Ability2,
+    Custom1, Custom2, Custom3, Custom4, Custom5, Custom6, Custom7, Custom8
+}
+
+/// <summary>
+/// The local or server-replayed controls for one gameplay tick.
+/// Look.X is yaw and Look.Y is pitch, both in degrees.
+/// </summary>
+public readonly record struct TickInput(
+    Vector2 Move, Vector2 Look, uint Buttons, uint PreviousButtons = 0)
+{
+    public float Yaw => Look.X;
+    public float Pitch => Look.Y;
+
+    public bool Held(InputButton button) => (Buttons & (1u << (int)button)) != 0;
+    public bool Pressed(InputButton button) =>
+        (Buttons & (1u << (int)button)) != 0 && (PreviousButtons & (1u << (int)button)) == 0;
+    public bool Released(InputButton button) =>
+        (Buttons & (1u << (int)button)) == 0 && (PreviousButtons & (1u << (int)button)) != 0;
+
+    public bool Jump => Held(InputButton.Jump);
+    public bool Sprint => Held(InputButton.Sprint);
+    public bool Crouch => Held(InputButton.Crouch);
+    public bool Fire => Held(InputButton.Fire);
+    public bool Use => Held(InputButton.Use);
+
+    public Quaternion LookRotation =>
+        Quaternion.CreateFromYawPitchRoll(Yaw * (MathF.PI / 180), Pitch * (MathF.PI / 180), 0);
+
+    public Vector3 MoveDirection
+    {
+        get
+        {
+            Vector3 direction = Vector3.Transform(
+                new Vector3(Move.X, 0, Move.Y),
+                Quaternion.CreateFromAxisAngle(Vector3.UnitY, Yaw * (MathF.PI / 180)));
+            return direction.LengthSquared() > 1 ? Vector3.Normalize(direction) : direction;
+        }
+    }
+}
 
 /// <summary>A validated reference to an engine-owned scene entity, not a native pointer.</summary>
 public readonly record struct GameObject(ulong SceneId, ulong Id)
