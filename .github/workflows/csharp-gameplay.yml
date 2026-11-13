@@ -1,0 +1,33 @@
+name: C# gameplay prototype
+
+on:
+  push:
+    branches:
+      - feature/csharp-gameplay
+  pull_request:
+    paths:
+      - 'Managed/**'
+      - 'Tests/CSharpGameplay/**'
+      - '.github/workflows/csharp-gameplay.yml'
+
+jobs:
+  managed-build:
+    name: Build and smoke-test trusted C# assemblies
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+      - name: Build managed gameplay API
+        run: dotnet build Managed/Tallow.API/Tallow.API.csproj -c Debug --nologo
+      - name: Build Roslyn language service
+        run: dotnet build Managed/Tallow.LanguageService/Tallow.LanguageService.csproj -c Debug --nologo
+      - name: Generate and compile game + asmdef assemblies
+        run: dotnet run --project Managed/Tallow.Build/Tallow.Build.csproj -- --project Tests/CSharpGameplay --engine-root .
+      - name: Smoke-test trusted assembly lifecycle
+        run: dotnet run --project Managed/Tallow.ManagedHost/Tallow.ManagedHost.csproj -- Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
