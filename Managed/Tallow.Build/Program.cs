@@ -108,6 +108,8 @@ internal static class Program
             new XElement("Nullable", "enable"),
             new XElement("ImplicitUsings", "enable"),
             new XElement("EnableDefaultCompileItems", "false"),
+            // Gameplay scripts can use Vector2/Vector3/Quaternion with just "using Tallow".
+            new XElement("Using", new XAttribute("Include", "System.Numerics")),
             new XElement("AllowUnsafeBlocks", "false"),
             new XElement("Deterministic", "true"),
             new XElement("AppendTargetFrameworkToOutputPath", "false"),
@@ -191,8 +193,10 @@ internal static class Program
         string trusted = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "";
         var references = trusted.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
             .Select(path => MetadataReference.CreateFromFile(path));
+        var globalNumerics = CSharpSyntaxTree.ParseText(
+            "global using System.Numerics;", parse, path: "Tallow.GlobalNumerics.g.cs");
         var compilation = CSharpCompilation.Create("Tallow.ComponentCatalog",
-            trees.Concat(apiTrees), references,
+            trees.Concat(apiTrees).Append(globalNumerics), references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         var components = new SortedSet<string>(StringComparer.Ordinal);
 
