@@ -30,7 +30,7 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
 }
 
 /// <summary>Reads and writes the ECS transform through the engine bridge.</summary>
-public readonly struct Transform(GameObject gameObject)
+public sealed class Transform(GameObject gameObject)
 {
     public Vector3 Position
     {
@@ -81,11 +81,16 @@ public static class Engine
 public abstract class Script
 {
     public GameObject GameObject { get; private set; }
-    public Transform Transform => GameObject.Transform;
+    private Transform? _transform;
+    public Transform Transform => _transform ??= new Transform(GameObject);
     public bool IsMine => Engine.Bridge.IsMine(GameObject);
 
     /// <summary>Called by Tallow's lifecycle dispatcher, not by gameplay scripts.</summary>
-    public void Attach(GameObject gameObject) => GameObject = gameObject;
+    public void Attach(GameObject gameObject)
+    {
+        GameObject = gameObject;
+        _transform = new Transform(gameObject);
+    }
 
     public virtual void Awake() { }
     public virtual void OnEnable() { }
