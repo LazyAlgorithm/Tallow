@@ -84,11 +84,15 @@ int main(int argc, char** argv)
     if (script < 1)
         return Failure("creating C# component");
 
-    if (!tn_csharp_tick(script, 1.0f))
-        return Failure("executing C# Update");
+    // A scene's Inspector field is applied after component construction, before Awake.
+    if (!tn_csharp_apply_fields(script, "Speed\t6\n"))
+        return Failure("applying saved C# Inspector float field");
+    if (!tn_csharp_dispatch(script, TN_CSHARP_AWAKE, 0.0f) ||
+        !tn_csharp_tick(script, 1.0f))
+        return Failure("executing C# Update with configured Speed");
 
-    if (std::fabs(state.position[0] - 4.0f) > 0.0001f)
-        return Failure("updating native scene position from C#");
+    if (std::fabs(state.position[0] - 6.0f) > 0.0001f)
+        return Failure("managed Inspector field failed to change native movement");
 
     if (!tn_csharp_detach(script))
         return Failure("destroying C# component");
@@ -131,14 +135,14 @@ int main(int argc, char** argv)
     const int32_t secondPlay = tn_csharp_attach("Gameplay.MoveRight", 1, 1);
     if (secondPlay < 1 || !tn_csharp_tick(secondPlay, 0.5f))
         return Failure("running fresh managed component on second Play");
-    if (std::fabs(state.position[0] - 6.0f) > 0.0001f)
+    if (std::fabs(state.position[0] - 8.0f) > 0.0001f)
         return Failure("reloaded gameplay did not update the native transform");
     if (!tn_csharp_detach(secondPlay))
         return Failure("detaching second Play script");
     const int32_t vectorScript = tn_csharp_attach("Gameplay.VectorMath", 1, 1);
     if (vectorScript < 1 || !tn_csharp_tick(vectorScript, 1.0f))
         return Failure("running C# vector arithmetic script");
-    if (std::fabs(state.position[0] - 12.5f) > 0.0001f ||
+    if (std::fabs(state.position[0] - 14.5f) > 0.0001f ||
         std::fabs(state.position[1] - 25.5f) > 0.0001f ||
         std::fabs(state.position[2] - 44.5f) > 0.0001f)
         return Failure("vector addition, multiplication or subtraction");
