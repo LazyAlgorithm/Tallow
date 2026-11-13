@@ -1150,6 +1150,7 @@ extension EditorApp
 	{
 		TickModelTest();
 		TickModelSelectBench();
+		TickGraphNodeTest();
 		DrawModelHelp();
 		if (!mShowModel)
 		{

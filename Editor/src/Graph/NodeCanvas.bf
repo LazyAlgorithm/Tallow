@@ -54,7 +54,7 @@ struct CanvasView
 
 	public Vector2 GraphMouse => ToGraph(mouse);
 
-	public void DrawLink(ImGui.Vec2 a, ImGui.Vec2 b, Color color) => NodeCanvas.DrawLink(a, b, color, zoom);
+	public void DrawLink(ImGui.Vec2 a, ImGui.Vec2 b, Color color, float thickness = 2.2f) => NodeCanvas.DrawLink(a, b, color, zoom, false, thickness);
 }
 
 /// Shared visual language and view transforms for script graphs.
@@ -128,9 +128,42 @@ static class NodeCanvas
 			ImGui.DrawRect(.(min.x - 3, min.y - 3), .(max.x + 3, max.y + 3), border, 6 * zoom, 2);
 	}
 
-	public static void DrawLink(ImGui.Vec2 a, ImGui.Vec2 b, Color color, float zoom, bool vertical = false)
+	public static void DrawLink(ImGui.Vec2 a, ImGui.Vec2 b, Color color, float zoom, bool vertical = false, float thickness = 2.2f)
+	{
+		LinkControls(a, b, zoom, vertical, let c1, let c2);
+		ImDrawList_AddBezierCubic(igGetWindowDrawList(), a, c1, c2, b, color.ToABGR(), Math.Max(thickness * zoom, 1), 24);
+	}
+
+	/// The curve's two middle control points, as DrawLink draws it.
+	static void LinkControls(ImGui.Vec2 a, ImGui.Vec2 b, float zoom, bool vertical, out ImGui.Vec2 c1, out ImGui.Vec2 c2)
 	{
 		let reach = Math.Max(Math.Abs(vertical ? b.y - a.y : b.x - a.x) * 0.5f, 30 * zoom);
-		ImDrawList_AddBezierCubic(igGetWindowDrawList(), a, vertical ? .(a.x, a.y + reach) : .(a.x + reach, a.y), vertical ? .(b.x, b.y - reach) : .(b.x - reach, b.y), b, color.ToABGR(), Math.Max(2.2f * zoom, 1), 24);
+		c1 = vertical ? .(a.x, a.y + reach) : .(a.x + reach, a.y);
+		c2 = vertical ? .(b.x, b.y - reach) : .(b.x - reach, b.y);
+	}
+
+	/// How far a point is from a link's curve, in pixels.
+	public static float LinkDistance(ImGui.Vec2 a, ImGui.Vec2 b, ImGui.Vec2 point, float zoom, bool vertical = false)
+	{
+		LinkControls(a, b, zoom, vertical, let c1, let c2);
+		ImGui.Vec2 At(float t)
+		{
+			let u = 1 - t;
+			let w0 = u * u * u, w1 = 3 * u * u * t, w2 = 3 * u * t * t, w3 = t * t * t;
+			return .(a.x * w0 + c1.x * w1 + c2.x * w2 + b.x * w3, a.y * w0 + c1.y * w1 + c2.y * w2 + b.y * w3);
+		}
+		var best = float.MaxValue;
+		var previous = a;
+		for (int i = 1; i <= 24; i++)
+		{
+			let next = At(i / 24.0f);
+			let dx = next.x - previous.x, dy = next.y - previous.y;
+			let length = dx * dx + dy * dy;
+			let t = length > 0 ? Math.Clamp(((point.x - previous.x) * dx + (point.y - previous.y) * dy) / length, 0, 1) : 0;
+			let x = previous.x + dx * t - point.x, y = previous.y + dy * t - point.y;
+			best = Math.Min(best, x * x + y * y);
+			previous = next;
+		}
+		return Math.Sqrt(best);
 	}
 }

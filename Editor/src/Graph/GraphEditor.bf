@@ -8,7 +8,9 @@ namespace Tallow.Editor;
 /// The Graph tab: a zoomable node canvas for visual scripts (.tgraph files).
 ///   Right-click the canvas to add a node (type to search), drag from a pin to another pin to connect them,
 ///   or drop a link on empty canvas to pick from the nodes that fit it,
-///   Alt+click a pin to disconnect it, Delete removes the selected node, middle-drag pans, the wheel zooms.
+///   drag a link's end off an input to move it (drop it on nothing to remove it), right-click a link or a pin (or
+///   Alt+click a pin) to disconnect it, Delete removes the selected node (or the link under the mouse), middle-drag
+///   pans, the wheel zooms.
 /// Save also compiles the graph to a Beef component next to it; automatic script reload then picks it up like any script.
 extension EditorApp
 {
@@ -40,6 +42,10 @@ extension EditorApp
 	int32 mLinkNode;
 	int32 mLinkPin;
 	bool mLinkFromOutput;
+	// The link was picked up off an input: dropped on nothing it is removed, not offered the node search.
+	bool mLinkDetached;
+	// The link under the mouse (index into mGraph.links), or -1.
+	int mGraphHoverLink = -1;
 	Vector2 mNewNodePosition;
 
 	bool mGraphShowVariables = true;
@@ -583,12 +589,33 @@ extension EditorApp
 
 	void DrawGraphLinks(CanvasView canvas)
 	{
-		for (let link in mGraph.links)
+		// The link nearest the mouse within a few pixels is drawn lit up; right-click or Delete removes it.
+		mGraphHoverLink = -1;
+		var nearest = 6.0f;
+		for (int i < mGraph.links.Count)
 		{
+			let link = mGraph.links[i];
 			let from = mGraph.Find(link.fromNode);
 			let to = mGraph.Find(link.toNode);
-			if (from != null && to != null)
-				canvas.DrawLink(canvas.ToScreen(PinPosition(from, link.fromPin, true)), canvas.ToScreen(PinPosition(to, link.toPin, false)), PinColor(from.def.outputs[link.fromPin].type));
+			if (from == null || to == null || !canvas.hovered || mLinking)
+				continue;
+			let distance = NodeCanvas.LinkDistance(canvas.ToScreen(PinPosition(from, link.fromPin, true)), canvas.ToScreen(PinPosition(to, link.toPin, false)), canvas.mouse, canvas.zoom);
+			if (distance < nearest)
+			{
+				nearest = distance;
+				mGraphHoverLink = i;
+			}
+		}
+		for (int i < mGraph.links.Count)
+		{
+			let link = mGraph.links[i];
+			let from = mGraph.Find(link.fromNode);
+			let to = mGraph.Find(link.toNode);
+			if (from == null || to == null)
+				continue;
+			let lit = i == mGraphHoverLink;
+			let color = PinColor(from.def.outputs[link.fromPin].type);
+			canvas.DrawLink(canvas.ToScreen(PinPosition(from, link.fromPin, true)), canvas.ToScreen(PinPosition(to, link.toPin, false)), lit ? Color(Math.Min(color.r + 0.35f, 1), Math.Min(color.g + 0.35f, 1), Math.Min(color.b + 0.35f, 1), 1) : color, lit ? 4 : 2.2f);
 		}
 	}
 
@@ -655,8 +682,9 @@ extension EditorApp
 		ImGui.DrawText(.(textX, center.y - 8 * zoom), .(0.85f, 0.85f, 0.85f, 1), label.CStr());
 	}
 
-	/// The mouse on the canvas: into a subgraph, linking pins (Alt-click undoes a pin's links), selecting and dragging
-	/// nodes, deleting the selected one, and the right-click menu of nodes to add.
+	/// The mouse on the canvas: into a subgraph, linking pins (dragging a link's end off an input moves or removes
+	/// it; right-click or Alt-click on a pin, or right-click or Delete on a link, disconnects), selecting and
+	/// dragging nodes, deleting the selected one, and the right-click menu of nodes to add.
 	void HandleGraphMouse(CanvasView canvas, GraphHover hover)
 	{
 		let hovered = canvas.hovered;
@@ -666,13 +694,22 @@ extension EditorApp
 			// Step into the subgraph behind this node.
 			Assets.ResolvePath(hover.node.def.key.Substring(hover.node.def.key.IndexOf(':') + 1), mPendingGraph);
 		}
+		// A link is only under the mouse where no node is.
+		if (hover.node != null)
+			mGraphHoverLink = -1;
 		if (hovered && ImGui.IsMouseClicked(0))
 		{
-			if (hover.pin >= 0 && ImGui.IsKeyDown(ImGui.Key.LeftCtrl) == false && Input.GetKey(.LeftAlt))
+			let alt = ImGui.IsKeyDown(ImGui.Key.LeftAlt) || Input.GetKey(.LeftAlt);
+			if (hover.pin >= 0 && !ImGui.IsKeyDown(ImGui.Key.LeftCtrl) && alt)
 				mGraph.DisconnectPin(hover.node.id, hover.pin, !hover.pinIsOutput);
+			else if (hover.pin >= 0 && !hover.pinIsOutput && PickUpLink(hover.node.id, hover.pin))
+			{
+				// Dragging from an input that has a link moves that link's end.
+			}
 			else if (hover.pin >= 0)
 			{
 				mLinking = true;
+				mLinkDetached = false;
 				mLinkNode = hover.node.id;
 				mLinkPin = hover.pin;
 				mLinkFromOutput = hover.pinIsOutput;
@@ -695,20 +732,63 @@ extension EditorApp
 			else
 				mGraphDragNode = 0;
 		}
-		if (hovered && ImGui.IsKeyPressed(ImGui.Key.Delete) && (ImGui.tn_imgui_capture_flags() & 4) == 0)
+		if (hovered && ImGui.IsKeyPressed(ImGui.Key.Delete) && (ImGui.tn_imgui_capture_flags() & 4) == 0 && mGraphHoverLink >= 0)
+		{
+			mGraph.links.RemoveAt(mGraphHoverLink);
+			mGraphHoverLink = -1;
+		}
+		else if (hovered && ImGui.IsKeyPressed(ImGui.Key.Delete) && (ImGui.tn_imgui_capture_flags() & 4) == 0)
 		{
 			let selected = mGraph.Find(mGraphSelected);
 			if (selected != null)
 				mGraph.RemoveNode(selected);
 			mGraphSelected = 0;
 		}
-		if (hovered && ImGui.IsMouseClicked(1))
+		// Right-click on a link, or on a pin with links, disconnects it; elsewhere it opens the node search.
+		if (hovered && ImGui.IsMouseClicked(1) && hover.pin >= 0 && PinHasLinks(hover.node.id, hover.pin, !hover.pinIsOutput))
+			mGraph.DisconnectPin(hover.node.id, hover.pin, !hover.pinIsOutput);
+		else if (hovered && ImGui.IsMouseClicked(1) && mGraphHoverLink >= 0)
+		{
+			mGraph.links.RemoveAt(mGraphHoverLink);
+			mGraphHoverLink = -1;
+		}
+		else if (hovered && ImGui.IsMouseClicked(1))
 		{
 			// Pick up subgraphs created or changed since the list was last built.
 			NodeLibrary.RefreshSubgraphs(Assets.ProjectPath);
 			mGraph.Validate();
 			OpenNodeSearch(graphMouse, false);
 		}
+	}
+
+	bool PinHasLinks(int32 nodeId, int32 pin, bool isInput)
+	{
+		for (let link in mGraph.links)
+		{
+			if (isInput ? (link.toNode == nodeId && link.toPin == pin) : (link.fromNode == nodeId && link.fromPin == pin))
+				return true;
+		}
+		return false;
+	}
+
+	/// Takes the (last) link into an input off it and carries on dragging it from its output. False if the input
+	/// has none.
+	bool PickUpLink(int32 nodeId, int32 pin)
+	{
+		for (int i = mGraph.links.Count - 1; i >= 0; i--)
+		{
+			let link = mGraph.links[i];
+			if (link.toNode != nodeId || link.toPin != pin)
+				continue;
+			mGraph.links.RemoveAt(i);
+			mLinking = true;
+			mLinkDetached = true;
+			mLinkNode = link.fromNode;
+			mLinkPin = link.fromPin;
+			mLinkFromOutput = true;
+			return true;
+		}
+		return false;
 	}
 
 	/// A link being dragged out of a pin: drawn to the mouse, and on release connected to the pin it was dropped on
@@ -737,9 +817,10 @@ extension EditorApp
 			else
 				mGraphStatus.Set("Those pins have different types.");
 		}
-		else if (source != null && canvas.hovered && hover.node == null)
+		else if (source != null && canvas.hovered && hover.node == null && !mLinkDetached)
 			OpenNodeSearch(graphMouse, true);
 		mLinking = false;
+		mLinkDetached = false;
 	}
 
 	/// The add-node menu: browsing by category with nothing typed, else the nodes whose names match as you type.
