@@ -62,7 +62,7 @@ public static unsafe class NativeEntrypoints
 
     // Plain native layout, matching tn_csharp_tick_input.
     [StructLayout(LayoutKind.Sequential)]
-    private struct NativeInput
+    public struct NativeInput
     {
         public float MoveX, MoveZ, Yaw, Pitch;
         public uint Buttons, PreviousButtons;
