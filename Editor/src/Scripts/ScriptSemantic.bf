@@ -37,6 +37,9 @@ class ScriptSemantic
 
 	Thread mWorker;
 	bool mFinished;
+	// Always rebuild Roslyn once after launching the editor: a previously built
+	// DLL may be stale after the user pulls changes to the C# integration branch.
+	bool mCSharpWorkerBuilt;
 	String mFolder = new .() ~ delete _;
 	String mCommand = new .() ~ delete _;
 	public bool running;
@@ -148,7 +151,7 @@ class ScriptSemantic
 			// Execute the managed compiler directly; gameplay scripting never invokes Python.
 			let service = scope $"{Project.Current.EngineRoot}/Managed/Tallow.LanguageService/Tallow.LanguageService.csproj";
 			let dll = scope $"{Project.Current.EngineRoot}/Managed/Tallow.LanguageService/bin/Debug/net11.0/Tallow.LanguageService.dll";
-			if (!File.Exists(dll))
+			if (!mCSharpWorkerBuilt)
 			{
 				mCommand.Append("dotnet build ");
 				Terminal.Quote(service, mCommand);
@@ -179,6 +182,8 @@ class ScriptSemantic
 		mWorker = new Thread(new () =>
 			{
 				let exitCode = Terminal.Run(mCommand);
+				if (isCSharp && exitCode == 0)
+					mCSharpWorkerBuilt = true;
 				if (File.ReadAllText(scope $"{mFolder}/response.tsv" , result, true) case .Err)
 				{
 					// The .NET process may fail before it can write response.tsv
