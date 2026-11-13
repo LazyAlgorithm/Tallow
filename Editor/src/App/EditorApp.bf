@@ -146,6 +146,24 @@ class EditorApp : Application
 		// Shaders edited outside the editor, or never compiled on this machine, are built before anything draws.
 		CompileStaleShaders();
 		ApplyStartupSwitches();
+		// Opening a project must never require valid C# source. Compile on a
+		// background worker after the editor is visible, then show any errors
+		// in the Console. Play remains blocked until a successful compile.
+		if (HasCSharpSources(scope $"{project.Path}/src"))
+		{
+			mManagedBuildReady = false;
+			Log.Info("Checking C# gameplay. Errors can be fixed in the Scripts editor.");
+			StartManagedErrorCheck();
+		}
+		if (HasArg("--startup-build-failed"))
+		{
+			let log = scope String();
+			project.ReadBuildLog(log);
+			Log.Error("The native project build failed. Opened the last successful editor executable so you can repair scripts.");
+			if (!log.IsEmpty)
+				Log.Error(log);
+			mStatus.Set("Build errors detected. Fix scripts before entering Play.");
+		}
 		return true;
 	}
 
