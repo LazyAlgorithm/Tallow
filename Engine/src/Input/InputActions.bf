@@ -89,6 +89,12 @@ class InputAction
 	public Vector2 vector, delta;
 	/// The binding that is doing the most this frame is on a controller.
 	public bool fromGamepad;
+	/// The engine's standard action of the same name and kind, if there is one (not owned). An action with no
+	/// bindings of its own is worked by that one's bindings.
+	public InputAction standard;
+
+	/// The bindings that work it: its own, or the standard action's while it has none.
+	public List<InputBinding> ActiveBindings => (bindings.IsEmpty && standard != null) ? standard.bindings : bindings;
 
 	/// Whether a button action is held.
 	public bool Held => value > 0.5f;
@@ -131,7 +137,8 @@ class InputMap
 ///
 /// The list is the project's `Input.tinput` file, edited in the editor under Window > Input Actions. A project
 /// without one has the engine's standard actions (Move, Look, Jump, Sprint, Crouch, Fire, Use, Reload, Ability1,
-/// Ability2, Submit, Cancel), and those stay available under their names in a project that does not define them.
+/// Ability2, Talk, Submit, Cancel), and those stay available under their names in a project that does not define
+/// them. A project action with no bindings that has a standard action's name (and kind) uses its bindings.
 ///
 /// Directions use one convention everywhere: x is right and y is up (or forward), also for mouse movement.
 static class InputActions
@@ -425,6 +432,36 @@ static class InputActions
 		}
 		Add(sMaps);
 		Add(sStandard);
+		// Project actions with a standard action's name and kind fall back on its bindings while they have none.
+		for (let map in sMaps)
+		{
+			for (let action in map.actions)
+			{
+				action.standard = null;
+				for (let standardMap in sStandard)
+				{
+					let match = standardMap.Find(action.name);
+					if (match != null && match.kind == action.kind)
+					{
+						action.standard = match;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	/// The engine's standard action of a name, or null: what a project action of that name and kind uses while it
+	/// has no bindings.
+	public static InputAction Standard(StringView name)
+	{
+		EnsureLoaded();
+		for (let map in sStandard)
+		{
+			if (let action = map.Find(name))
+				return action;
+		}
+		return null;
 	}
 
 	/// An action by name ("Jump"), or by map and name ("Vehicle/Brake") when two maps use the same name. Null if
@@ -567,7 +604,7 @@ static class InputActions
 		let action = Find(actionName);
 		if (action == null)
 			return;
-		for (let binding in action.bindings)
+		for (let binding in action.ActiveBindings)
 		{
 			if (binding.kind == .Touch ? Input.UsingTouch : (binding.IsGamepad == Input.UsingGamepad && !Input.UsingTouch))
 			{
@@ -618,6 +655,9 @@ static class InputActions
 		let action = Find(actionName);
 		if (action == null || index < 0)
 			return false;
+		// One using the standard bindings takes them as its own first, so the others stay as they were.
+		if (action.bindings.IsEmpty && action.standard != null)
+			action.bindings.AddRange(action.standard.bindings);
 		if (index < action.bindings.Count)
 			action.bindings[index] = binding;
 		else
@@ -671,7 +711,7 @@ static class InputActions
 		if (!enabled)
 			return;
 		float strongest = 0;
-		for (let binding in action.bindings)
+		for (let binding in action.ActiveBindings)
 		{
 			float amount = 0;
 			switch (binding.kind)
@@ -749,6 +789,8 @@ static class InputActions
 	public static void Update()
 	{
 		EnsureLoaded();
+		if (sStale)
+			Rebuild();
 		let deltaTime = Time.UnscaledDeltaTime;
 		for (let map in sMaps)
 		{

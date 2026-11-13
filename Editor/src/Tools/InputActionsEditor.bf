@@ -168,7 +168,7 @@ extension EditorApp
 		if (maps.IsEmpty)
 		{
 			ImGui.PushTextWrapPos(0);
-			ImGui.TextDisabled("This project has no actions of its own, so it has the engine's standard ones: Move, Look, Jump, Sprint, Crouch, Fire, Use, Reload, Ability1, Ability2, Submit and Cancel, on the keyboard and mouse and on a controller. Start from those to change them or add your own, or add an empty map below.");
+			ImGui.TextDisabled("This project has no actions of its own, so it has the engine's standard ones: Move, Look, Jump, Sprint, Crouch, Fire, Use, Reload, Ability1, Ability2, Talk, Submit and Cancel, on the keyboard and mouse and on a controller. Start from those to change them or add your own, or add an empty map below.");
 			ImGui.PopTextWrapPos();
 		}
 	}
@@ -320,6 +320,31 @@ extension EditorApp
 			ImGui.PopID();
 			if (removed)
 				break;
+		}
+		// None of its own: a standard action's name and kind means it uses the standard bindings.
+		if (action.bindings.IsEmpty)
+		{
+			let standard = InputActions.Standard(action.name);
+			ImGui.PushTextWrapPos(0);
+			if (standard != null && standard.kind == action.kind)
+			{
+				let names = scope String();
+				for (let binding in standard.bindings)
+					InputActions.BindingName(binding, names..Append(names.IsEmpty ? "" : ", "));
+				ImGui.TextDisabled(scope String()..AppendF("No bindings of its own, so it uses the standard ones: {}.", names).CStr());
+				ImGui.PopTextWrapPos();
+				if (ImGui.SmallButton("Copy The Standard Bindings"))
+				{
+					action.bindings.AddRange(standard.bindings);
+					mInputDirty = true;
+				}
+				ImGui.SameLine();
+			}
+			else
+			{
+				ImGui.TextDisabled("No bindings: nothing works it yet.");
+				ImGui.PopTextWrapPos();
+			}
 		}
 		if (ImGui.SmallButton("+ Binding"))
 		{

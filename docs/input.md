@@ -57,6 +57,8 @@ A project with no `Input.tinput` has the engine's **standard actions**, and they
 | Talk (voice chat's push to talk) | V | D-pad down |
 | Submit, Cancel | Enter, Esc | South, East |
 
+A project action with **no bindings** of its own that has a standard action's name and kind (a `Jump` button, a `Move` direction) uses the standard bindings until you give it some; the window says so and offers **Copy The Standard Bindings**. `InputActions.SetBinding` on such an action copies the standard bindings in first, so rebinding one keeps the rest.
+
 `NetworkScript` and `CharacterMotor` read these for their built-in controls, so a networked player works with a controller with no code. **Start From The Standard Actions** in the window copies them into the project to change.
 
 ### Letting players change the controls
