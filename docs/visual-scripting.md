@@ -1,7 +1,28 @@
 # Visual scripting
 
-A script graph (`.tgraph`) compiles to an ordinary C#-style Beef component (`<Name>.bf` next to it), so anything it
-does works the same as code: networking, hot reload, the Inspector. Graphs are laid out like Unreal's Blueprints.
+Visual scripts are the usual way to write game code in Tallow, with Beef code alongside whenever it is the better
+tool. A script graph (`.tgraph`) compiles to an ordinary Beef component (`<Name>.bf` next to it, hidden in the
+editor), so anything it does works the same as code: networking, hot reload, the Inspector. Graphs are laid out like
+Unreal's Blueprints.
+
+## Graphs and Beef together
+
+There is no separate kind of project: graphs and Beef scripts sit in the same project and use each other.
+
+- **Beef from a graph:** public methods, properties and fields of your scripts are nodes under **My Scripts**;
+  `[GraphNode]` static methods are nodes under **Code**.
+- **A graph from Beef:** a graph is a component class named after the file, so code can find it
+  (`GetComponent<FirstPersonCharacter>()`), read and set its variables (public fields) and call its Custom Events
+  (`Custom_<Name>()` methods).
+- An Object variable in a graph can hold a Beef component, and a Beef field can hold a graph component.
+
+## New projects
+
+An empty project has no Beef scripts: it starts through the editor's own start-up class (no `Program.bf`), and its
+first scene has a floor and a first-person character made with a visual script
+(`Scripts/FirstPersonCharacter.tgraph`), with a comment box over each part: start-up, walking and sprinting,
+jumping, moving, turning and the camera. Add `src/Program.bf` with a `Main` only if the game needs start-up code
+before any scene loads.
 
 ## Adding nodes
 
@@ -49,6 +70,13 @@ variable says what it refers to (GameObject, Transform, or any component, the en
 object is picked per object in the Inspector, the same as a reference field in code. Game > Get Component has a
 node per component type for taking one off an object; Is Valid works on objects and components.
 
+## Subgraphs
+
+A subgraph is a graph used as one node. Pick **New Subgraph Here** at the top of the right-click menu to make an
+empty one next to the open graph and place its node; **double-click** a subgraph node to open it, and **< Back** in
+the toolbar to return (the subgraph is saved and compiled on the way). Inside, Sub Entry is where it starts,
+Parameter nodes are its inputs and a Return node gives a result.
+
 ## Comments
 
 Press **C** on the canvas, or pick **Add Comment** at the top of the right-click menu, for a comment box (around the
@@ -76,5 +104,7 @@ generated component.
 - `--graph-node-test <text>`: writes a graph for every node whose title has the text in it (`*` for every
   hand-made node, plus a graph using the flow-control nodes together) to `src/GraphNodeTest`; build the project to
   check they all compile.
+- `--write-first-person-template <folder>`: writes the new-project character graph (FirstPersonTemplate.bf) and its
+  code to the folder, normally `Editor/templates/empty/Scripts`, after changing it.
 - `--graph-menu-test <graph>`: opens the graph with the add-node menu showing and logs the menu tree
   (`GRAPH-MENU` lines). With `--graph-compile-test` it only compiles the graph to `<graph>.test.bf`.

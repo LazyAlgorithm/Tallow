@@ -1,0 +1,35 @@
+// Generated from FirstPersonCharacter.tgraph by the Tallow graph compiler.
+// Edit the graph and compile it again; changes made here are overwritten.
+using System;
+using Tallow;
+
+namespace {NAMESPACE};
+
+[Component]
+class FirstPersonCharacter : Script
+{
+	public float walkSpeed = 5f;
+	public float sprintSpeed = 9f;
+	public float jumpSpeed = 6f;
+	public float eyeHeight = 0.7f;
+	public GameObject camera;
+
+	public override void Start()
+	{
+		base.Start();
+		Input.LockCursor = true;
+		if (!GraphRuntime.IsValid(camera))
+		{
+			camera = Scene.Find("Main Camera");
+		}
+	}
+
+	public override void Update(TickInput input, float deltaTime)
+	{
+		if (GameObject != null && GameObject.HasComponent<CharacterController>()) GameObject.GetComponent<CharacterController>().SimpleMove((input.MoveDirection * (input.Sprint ? sprintSpeed : walkSpeed)), deltaTime, (input.Pressed(.Jump) ? jumpSpeed : 0f));
+		Transform.Rotation = Quaternion.Euler(0f, input.Yaw, 0f);
+		if (camera != null) camera.Transform.Position = (Transform.Position + Vector3(0f, eyeHeight, 0f));
+		if (camera != null) camera.Transform.Rotation = input.LookRotation;
+	}
+
+}

@@ -1100,6 +1100,13 @@ class NodeGraph
 			EmitBlock(node, 0, code, indent, depth);
 			EmitThen(node, 2, code, indent, depth);
 		case "flow.isvalid":
+			if (FollowFlow(node, 0) == null && FollowFlow(node, 1) != null)
+			{
+				// Only Is Not Valid is used.
+				Line(code, indent, scope $"if (!GraphRuntime.IsValid({Input(1)}))");
+				EmitBlock(node, 1, code, indent, depth);
+				return;
+			}
 			Line(code, indent, scope $"if (GraphRuntime.IsValid({Input(1)}))");
 			EmitBlock(node, 0, code, indent, depth);
 			if (FollowFlow(node, 1) != null)

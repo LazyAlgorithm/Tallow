@@ -22,7 +22,9 @@ static class SceneTemplates
 		sun.Transform.EulerAngles = .(50, -30, 0);
 	}
 
-	public static void BuildDefault(Scene scene)
+	/// Sun, camera and a floor; with withPlayer (a new project's first scene), the first-person character too if
+	/// the project has it.
+	public static void BuildDefault(Scene scene, bool withPlayer = false)
 	{
 		scene.Clear();
 		AddSunAndCamera(scene, .(0, 3, -9), .(12, 0, 0));
@@ -36,13 +38,21 @@ static class SceneTemplates
 		groundCollider.size = .(10, 0.2f, 10);
 		groundCollider.center = .(0, -0.1f, 0);
 
-		let cube = scene.CreateGameObject("Cube");
-		let cubeRenderer = cube.AddComponent<MeshRenderer>();
-		cubeRenderer.color = .FromBytes(214, 110, 62);
-		cube.Transform.Position = .(0, 3, 0);
-		cube.Transform.EulerAngles = .(20, 30, 10);
-		cube.AddComponent<BoxCollider>();
-		cube.AddComponent<Rigidbody>();
+		// A new empty project's first-person character (a visual script: Scripts/FirstPersonCharacter.tgraph).
+		if (!withPlayer)
+			return;
+		let character = ComponentRegistry.Find(scope $"{Project.Current?.Name}.{FirstPersonTemplate.GraphName}");
+		if (character == null)
+			return;
+		let player = scene.CreateGameObject("Player");
+		player.Transform.Position = .(0, 1.1f, -4);
+		let body = player.AddComponent<MeshRenderer>();
+		body.mesh.Set("builtin:capsule");
+		body.color = .FromBytes(235, 140, 60);
+		let controller = player.AddComponent<CharacterController>();
+		controller.radius = 0.5f;
+		controller.height = 2;
+		player.AddComponent(character.type);
 	}
 
 	static void AddByName(GameObject gameObject, StringView projectName, StringView typeName)

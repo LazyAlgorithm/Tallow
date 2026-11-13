@@ -17,7 +17,7 @@ enum ScriptReloadMode
 ///
 ///   MyGame/project.tallow     name, start scene, engine location
 ///   MyGame/BeefSpace.toml      workspace referencing the Tallow engine projects
-///   MyGame/src/                game code (Program.bf, Scripts/)
+///   MyGame/src/                game code (graphs and scripts; Program.bf only if start-up code is needed)
 ///   MyGame/scenes/             .tscene files
 ///   MyGame/assets/             models and textures
 class Project
@@ -341,7 +341,9 @@ class Project
 #else
 		let targetType = "BeefConsoleApplication";
 #endif
-		proj.AppendF("}}\n\n[Project]\nName = \"{0}\"\nTargetType = \"{1}\"\nStartupObject = \"{0}.Program\"\n", Name, targetType);
+		// The project's own Program.bf if it has one, else the editor's DefaultProgram (no script needed).
+		let startup = File.Exists(scope $"{Path}/src/Program.bf") ? scope $"{Name}.Program" : "Tallow.Editor.DefaultProgram";
+		proj.AppendF("}}\n\n[Project]\nName = \"{0}\"\nTargetType = \"{1}\"\nStartupObject = \"{2}\"\n", Name, targetType, startup);
 		proj.AppendF("\n[Configs.Debug.Linux64]\nOtherLinkFlags = \"$(LinkFlags) -rdynamic {0}\"\n\n[Configs.Release.Linux64]\nCLibType = \"Dynamic\"\nOtherLinkFlags = \"$(LinkFlags) {0}\"\n", link);
 		// The same libraries as built for Windows (build/native-win), and the Windows libraries they call into. The
 		// native libraries use the static C runtime, so the game must too. The project's own link flags are written

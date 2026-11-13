@@ -637,7 +637,13 @@ extension EditorApp
 	{
 		if (ImGui.MenuItem("Folder"))
 			BeginNewItem(0, "New Folder");
-		if (ImGui.BeginMenu("Script"))
+		// Visual scripts first: the usual way to write game code. Beef scripts sit beside them and mix freely (a
+		// graph is compiled to a Beef component; each can use the other's public members).
+		if (ImGui.MenuItem("Visual Script (Graph)"))
+			BeginNewItem(3, "NewGraph");
+		if (ImGui.MenuItem("Visual Subgraph (reusable node)"))
+			BeginNewItem(5, "NewSubgraph");
+		if (ImGui.BeginMenu("Beef Script (code)"))
 		{
 			if (ImGui.MenuItem("Basic Component"))
 				BeginNewScriptTemplate(.Basic, "NewScript");
@@ -668,10 +674,6 @@ extension EditorApp
 		}
 		if (ImGui.MenuItem("Scene"))
 			BeginNewItem(2, "NewScene");
-		if (ImGui.MenuItem("Graph (visual script)"))
-			BeginNewItem(3, "NewGraph");
-		if (ImGui.MenuItem("Subgraph (reusable node)"))
-			BeginNewItem(5, "NewSubgraph");
 		if (ImGui.MenuItem("Behavior Tree"))
 			BeginNewItem(6, "NewTree");
 		if (ImGui.MenuItem("Animator Controller"))

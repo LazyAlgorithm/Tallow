@@ -1152,6 +1152,7 @@ extension EditorApp
 		TickModelSelectBench();
 		TickGraphNodeTest();
 		TickGraphMenuTest();
+		TickFirstPersonTemplate();
 		DrawModelHelp();
 		if (!mShowModel)
 		{

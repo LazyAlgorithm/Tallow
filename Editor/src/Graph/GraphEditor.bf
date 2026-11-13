@@ -106,9 +106,16 @@ extension EditorApp
 	}
 
 	String mPendingGraph = new .() ~ delete _;
+	/// The graphs stepped out of to get into the open one (double-clicking subgraph nodes), for the Back button.
+	List<String> mGraphBack = new .() ~ DeleteContainerAndItems!(_);
+	/// Set while opening a graph by stepping into or back out of a subgraph, which keeps mGraphBack.
+	bool mGraphStepping;
 
 	void OpenGraph(StringView path)
 	{
+		if (!mGraphStepping)
+			ClearAndDeleteItems!(mGraphBack);
+		mGraphStepping = false;
 		mShowGraph = true;
 		mDockGraph = true;
 		NodeLibrary.RefreshSubgraphs(Assets.ProjectPath);
@@ -163,6 +170,38 @@ extension EditorApp
 	}
 
 	/// A reusable graph: Sub Entry starts it, Parameter nodes are its inputs, an optional Return node its result.
+	/// Makes a new, empty subgraph file next to the open graph and places its node here; double-click the node to
+	/// open it, and Back to return.
+	void AddNewSubgraphNode(Vector2 position)
+	{
+		let folder = Path.GetDirectoryPath(mGraphPath, .. scope String());
+		let name = scope String();
+		for (int i = 1; ; i++)
+		{
+			name..Clear().AppendF("{}Part{}", mGraph.name, i);
+			if (!File.Exists(scope $"{folder}/{name}.tgraph"))
+				break;
+		}
+		let path = scope $"{folder}/{name}.tgraph";
+		let graph = scope NodeGraph();
+		graph.name.Set(name);
+		graph.AddNode(NodeLibrary.Find("sub.entry"), .(40, 60));
+		graph.Save(path);
+		NodeLibrary.RefreshSubgraphs(Assets.ProjectPath);
+		let relative = scope String();
+		Assets.MakeRelative(path, relative);
+		let def = NodeLibrary.Find(scope $"sub:{relative}");
+		if (def == null)
+		{
+			mGraphStatus.Set("Could not make the subgraph.");
+			return;
+		}
+		mGraphSelected = mGraph.AddNode(def, position).id;
+		mGraph.Save(mGraphPath);
+		RefreshAssetList();
+		mGraphStatus.Set(scope $"Made {name}: double-click its node to open it.");
+	}
+
 	void CreateSubgraphAsset(StringView name)
 	{
 		if (!ProjectGenerator.IsValidName(name))
@@ -558,6 +597,19 @@ extension EditorApp
 	{
 		ImGui.SetCursorPosX(6);
 		ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 4);
+		if (!mGraphBack.IsEmpty)
+		{
+			let parent = Path.GetFileNameWithoutExtension(mGraphBack.Back, .. scope String());
+			if (ImGui.SmallButton(scope $"< Back to {parent}"))
+			{
+				// Saved (and compiled, so the graph using it picks up changes) on the way out.
+				CompileGraph();
+				mPendingGraph.Set(mGraphBack.Back);
+				delete mGraphBack.PopBack();
+				mGraphStepping = true;
+			}
+			ImGui.SameLine();
+		}
 		if (ImGui.SmallButton("Save"))
 			CompileGraph();
 		ImGui.SameLine();
@@ -834,9 +886,13 @@ extension EditorApp
 		let graphMouse = canvas.GraphMouse;
 		if (hovered && ImGui.IsMouseDoubleClicked(0) && hover.node != null && hover.pin < 0 && (hover.node.def.key.StartsWith("sub:") || hover.node.def.key.StartsWith("shsub:")))
 		{
-			// Step into the subgraph behind this node.
+			// Step into the subgraph behind this node; Back returns here.
 			Assets.ResolvePath(hover.node.def.key.Substring(hover.node.def.key.IndexOf(':') + 1), mPendingGraph);
+			mGraphBack.Add(new String(mGraphPath));
+			mGraphStepping = true;
 		}
+		if (hovered && hover.node != null && hover.pin < 0 && !mLinking && hover.node.def.key.StartsWith("sub:"))
+			ImGui.SetTooltip("Double-click to open this subgraph");
 		// A link is only under the mouse where no node is.
 		if (hover.node != null)
 			mGraphHoverLink = -1;
@@ -1095,6 +1151,11 @@ extension EditorApp
 		if (ImGui.MenuItem("Add Comment", "C"))
 		{
 			AddComment(mNewNodePosition);
+			ImGui.CloseCurrentPopup();
+		}
+		if (!mGraph.isShader && ImGui.MenuItem("New Subgraph Here"))
+		{
+			AddNewSubgraphNode(mNewNodePosition);
 			ImGui.CloseCurrentPopup();
 		}
 		ImGui.Separator();

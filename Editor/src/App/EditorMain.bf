@@ -6,6 +6,14 @@ using Tallow;
 namespace Tallow.Editor;
 
 /// Entry point shared by every project executable: the editor with --editor, otherwise the game.
+/// The start-up class of a project with no Program.bf of its own (a new project starts with none): opens the editor
+/// when started with --editor, otherwise runs the game. A project that needs start-up code adds src/Program.bf
+/// with its own Main (see ProjectGenerator) and the build uses that instead.
+class DefaultProgram
+{
+	public static int Main(String[] args) => EditorMain.Run(args);
+}
+
 static class EditorMain
 {
 	public static int Run(String[] args)
@@ -125,7 +133,7 @@ static class EditorMain
 		if (template == "sample")
 			SceneTemplates.BuildSample(scene, project.Name);
 		else
-			SceneTemplates.BuildDefault(scene);
+			SceneTemplates.BuildDefault(scene, true);
 		scene.Name.Set("Main");
 		let sceneFolder = scope String();
 		if (Path.GetDirectoryPath(path, sceneFolder) case .Ok)

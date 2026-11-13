@@ -611,6 +611,7 @@ static class NodeLibrary
 		Add("transform.right", "Transformation", "Get Right Vector", .Value, "Transform.Right").Out("Right", .Vector3).Also("GetActorRightVector");
 		Add("transform.up", "Transformation", "Get Up Vector", .Value, "(Transform.Rotation * Vector3.Up)").Out("Up", .Vector3).Also("GetActorUpVector");
 		Add("transform.objposition", "Transformation", "Get Location Of", .Value, "({0} != null ? {0}.Transform.Position : Vector3.Zero)").In("Target", .Object, "GameObject", "GameObject").Out("Position", .Vector3).Also("GetActorLocation Target");
+		Add("transform.objsetrotation", "Transformation", "Set Rotation Of", .Action, "if ({0} != null) {0}.Transform.Rotation = {1};").In("Target", .Object, "GameObject", "GameObject").In("Rotation", .Quaternion).Also("SetActorRotation Target");
 		Add("transform.objsetposition", "Transformation", "Set Location Of", .Action, "if ({0} != null) {0}.Transform.Position = {1};").In("Target", .Object, "GameObject", "GameObject").In("Position", .Vector3).Also("SetActorLocation Target Teleport");
 
 		// Game: objects, spawning, time and the application.
@@ -651,6 +652,14 @@ static class NodeLibrary
 		Add("physics.velocity", "Physics", "Get Physics Linear Velocity", .Value, "(({0} != null && {0}.HasComponent<Rigidbody>()) ? {0}.GetComponent<Rigidbody>().Velocity : Vector3.Zero)")
 			.In("Target", .Object, "GameObject", "GameObject").Out("", .Vector3).Also("Get Velocity Speed");
 
+		// Characters (a Character Controller on the object).
+		Add("physics.charmove", "Physics|Character", "Move Character", .Action,
+			"if ({0} != null && {0}.HasComponent<CharacterController>()) {0}.GetComponent<CharacterController>().SimpleMove({1}, {2}, {3});")
+			.In("Target", .Object, "GameObject", "GameObject").In("Velocity", .Vector3).In("Delta Time", .Float).In("Jump Speed", .Float)
+			.Also("Add Movement Input Character Movement Walk SimpleMove Jump Launch Character");
+		Add("physics.grounded", "Physics|Character", "Is On Ground", .Value, "(({0} != null && {0}.HasComponent<CharacterController>()) ? {0}.GetComponent<CharacterController>().IsGrounded : false)")
+			.In("Target", .Object, "GameObject", "GameObject").Out("", .Bool).Also("Is Moving On Ground Grounded Falling");
+
 		// Audio.
 		Add("audio.play2d", "Audio", "Play Sound 2D", .Action, "Audio.PlayOneShot2D({0}, {1});").In("Sound", .String).In("Volume", .Float).Default("1").Also("PlaySound2D UI Sound");
 		Add("audio.playat", "Audio", "Play Sound at Location", .Action, "Audio.PlayOneShot({0}, {1}, {2});").In("Sound", .String).In("Location", .Vector3).In("Volume", .Float).Default("1").Also("PlaySoundAtLocation 3D");
@@ -663,6 +672,7 @@ static class NodeLibrary
 		Add("input.mouse", "Input|Mouse", "Left Mouse Held", .Value, "Input.GetMouseButton(0)").Out("", .Bool).Also("Left Mouse Button");
 		Add("input.rightmouse", "Input|Mouse", "Right Mouse Held", .Value, "Input.GetMouseButton(1)").Out("", .Bool).Also("Right Mouse Button");
 		Add("input.mousepressed", "Input|Mouse", "Left Mouse Pressed", .Value, "Input.GetMouseButtonDown(0)").Out("", .Bool).Also("Click Left Mouse Button");
+		Add("input.lockmouse", "Input|Mouse", "Set Mouse Lock", .Action, "Input.LockCursor = {0};").In("Locked", .Bool).Default("true").Also("Show Mouse Cursor Lock Cursor Input Mode Game Only");
 		Add("input.mousedelta", "Input|Mouse", "Mouse Delta", .Value, "Vector3(Input.MouseDelta.x, Input.MouseDelta.y, 0)").Out("", .Vector3).Also("Turn Look Mouse X Y");
 	}
 

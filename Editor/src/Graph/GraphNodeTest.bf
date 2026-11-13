@@ -341,4 +341,15 @@ extension EditorApp
 	}
 
 	int mGraphMenuTestWait;
+
+	/// Test switch --write-first-person-template <folder>: writes the new-project character graph (see
+	/// FirstPersonTemplate) to the folder, normally the engine's Editor/templates/empty/Scripts.
+	void TickFirstPersonTemplate()
+	{
+		if (!HasArg("--write-first-person-template") || ++mFirstPersonWait != 10)
+			return;
+		FirstPersonTemplate.Write(GetArg("--write-first-person-template", .. scope String()));
+	}
+
+	int mFirstPersonWait;
 }

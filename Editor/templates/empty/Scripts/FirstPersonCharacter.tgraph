@@ -1,0 +1,63 @@
+graph "FirstPersonCharacter"
+variable float "walkSpeed" "5"
+variable float "sprintSpeed" "9"
+variable float "jumpSpeed" "6"
+variable float "eyeHeight" "0.7"
+variable object:GameObject "camera" ""
+node 1 event.start 0 0
+node 2 input.lockmouse 260 0 "" "true"
+node 3 var.get.object 260 120 "camera"
+node 4 flow.isvalid 520 0 "" ""
+node 5 game.find 520 130 "Main Camera"
+node 6 var.set.object 780 0 "" "camera" ""
+node 7 event.update 0 400
+node 8 var.get.float 300 470 "walkSpeed"
+node 9 var.get.float 300 540 "sprintSpeed"
+node 10 logic.select 540 430 "false" "0" "0"
+node 11 math.vscale 800 430 "0 0 0" "1"
+node 12 var.get.float 300 740 "jumpSpeed"
+node 13 logic.select 540 700 "false" "0" "0"
+node 14 physics.charmove 1090 430 "" "" "0 0 0" "0" "0"
+node 15 math.reuler 1090 690 "0" "0" "0"
+node 16 transform.setrotation 1370 690 "" "0 0 0"
+node 17 var.get.object 1660 560 "camera"
+node 18 transform.position 1660 640
+node 19 var.get.float 1660 730 "eyeHeight"
+node 20 math.vector 1900 730 "0" "0" "0"
+node 21 math.vadd 2140 640 "0 0 0" "0 0 0"
+node 22 transform.objsetposition 2140 430 "" "" "0 0 0"
+node 23 transform.objsetrotation 2400 430 "" "" "0 0 0"
+link 1 0 2 0
+link 2 0 4 0
+link 3 0 4 1
+link 4 1 6 0
+link 5 0 6 2
+link 7 9 10 0
+link 9 0 10 1
+link 8 0 10 2
+link 7 3 11 0
+link 10 0 11 1
+link 7 8 13 0
+link 12 0 13 1
+link 7 0 14 0
+link 11 0 14 2
+link 7 1 14 3
+link 13 0 14 4
+link 7 4 15 1
+link 14 0 16 0
+link 15 0 16 1
+link 19 0 20 1
+link 18 0 21 0
+link 20 0 21 1
+link 16 0 22 0
+link 17 0 22 1
+link 21 0 22 2
+link 22 0 23 0
+link 17 0 23 1
+link 7 6 23 2
+comment -20 -54 1010 260 0.3 0.45 0.35 1 "Start: lock the mouse and find the camera"
+comment 280 376 730 240 0.35 0.42 0.55 1 "Walk, or run while Sprint is held"
+comment 280 646 470 174 0.55 0.42 0.28 1 "Jump: only on the frame Jump is pressed"
+comment 1070 376 230 218 0.45 0.35 0.55 1 "Move the character (gravity is built in)"
+comment 1070 636 510 174 0.55 0.32 0.32 1 "Turn the body to face where you look"
+comment 1640 376 970 474 0.28 0.48 0.52 1 "First-person camera at eye height"

@@ -148,7 +148,9 @@ def main():
     space = tomllib.loads((project / 'BeefSpace.toml').read_text())
     dependencies = {key: value for key, value in proj['Dependencies'].items() if key != 'TallowEditor'}
     dependencies.setdefault('Tallow', '*')
-    program = (project / 'src' / 'Program.bf').read_text()
+    # A project with no Program.bf of its own starts through the editor's DefaultProgram.
+    program_file = project / 'src' / 'Program.bf'
+    program = program_file.read_text() if program_file.is_file() else ''
     # Keep the entry point's namespace imports: copied/renamed projects can
     # register scripts from a namespace that differs from the project name.
     imports = [match.group(0) for match in re.finditer(r'^\s*using\s+([A-Za-z_][A-Za-z0-9_.]*)\s*;', program, re.MULTILINE)

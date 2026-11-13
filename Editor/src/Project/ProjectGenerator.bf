@@ -346,6 +346,35 @@ static class ProjectGenerator
 	}
 
 	/// Creates the folder structure and source files. sample adds a voxel world with a networked player.
+	/// Copies a template folder into a project, subfolders too. A file ending in .txt is text with {NAMESPACE} for the
+	/// project's name, and is written without the .txt ("Player.bf.txt" becomes "Player.bf").
+	static void CopyTemplateFiles(StringView source, StringView destination, StringView name)
+	{
+		if (!Directory.Exists(source))
+			return;
+		Directory.CreateDirectory(destination).IgnoreError();
+		for (let entry in Directory.EnumerateDirectories(source))
+		{
+			let sub = entry.GetFileName(.. scope .());
+			CopyTemplateFiles(scope $"{source}/{sub}", scope $"{destination}/{sub}", name);
+		}
+		for (let entry in Directory.EnumerateFiles(source))
+		{
+			let fileName = entry.GetFileName(.. scope .());
+			if (fileName.EndsWith(".txt"))
+			{
+				let text = scope String();
+				if (File.ReadAllText(scope $"{source}/{fileName}" , text, true) case .Err)
+					continue;
+				text.Replace("{NAMESPACE}", name);
+				fileName.RemoveFromEnd(4);
+				Write(scope $"{destination}/{fileName}" , text);
+			}
+			else
+				File.Copy(scope $"{source}/{fileName}" , scope $"{destination}/{fileName}").IgnoreError();
+		}
+	}
+
 	public static bool Create(StringView folder, StringView name, StringView engineRoot, bool sample, String error)
 	{
 		return Create(folder, name, engineRoot, sample ? .Sample : .Empty, error);
@@ -411,6 +440,19 @@ static class ProjectGenerator
 			if (!CopyShowcase(scope $"{engineRoot}/Editor/templates/showcase" , folder, name, error))
 				return false;
 			Write(scope $"{folder}/.template" , "showcase");
+			return true;
+		}
+
+		if (template == .Empty)
+		{
+			// No scripts: the scene's first-person character is a visual script (Scripts/FirstPersonCharacter.tgraph,
+			// with the code it compiles to beside it, hidden in the editor). The project starts through the editor's
+			// DefaultProgram, so there is no Program.bf either.
+			for (let sub in StringView[?]("Scripts", "Prefabs", "Materials", "Textures", "Models", "Scenes"))
+				Directory.CreateDirectory(scope $"{folder}/src/{sub}").IgnoreError();
+			CopyTemplateFiles(scope $"{engineRoot}/Editor/templates/empty", scope $"{folder}/src", name);
+			Write(scope $"{folder}/.template" , "empty");
+			project.WriteBuildFiles();
 			return true;
 		}
 
