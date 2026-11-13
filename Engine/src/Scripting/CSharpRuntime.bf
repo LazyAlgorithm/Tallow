@@ -48,6 +48,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_load_game(char8* gameAssembly);
 	[CLink] static extern int32 tn_csharp_unload_game();
 	[CLink] static extern int32 tn_csharp_attach(char8* typeName, uint64 scene, uint64 entity);
+	[CLink] static extern int32 tn_csharp_apply_fields(int32 instance, char8* values);
 	[CLink] static extern int32 tn_csharp_tick(int32 instance, float deltaTime);
 	[CLink] static extern int32 tn_csharp_dispatch(int32 instance, int32 eventId, float deltaTime);
 	[CLink] static extern int32 tn_csharp_update_input(int32 instance, NativeTickInput* input, float deltaTime);
@@ -190,6 +191,19 @@ static class CSharpRuntime
 		if (tn_csharp_update_input(instance, &native, deltaTime) > 0)
 			return true;
 		Log.Warning(scope $"C# gameplay update failed: {StringView(tn_csharp_error())}");
+		return false;
+	}
+
+	/// Apply serialized public field overrides to a trusted script, including
+	/// while playing. The native component owns these settings for scene files.
+	public static bool ApplyFields(int32 instance, StringView values)
+	{
+		if (!Ready || instance <= 0 || values.IsEmpty)
+			return true;
+		let text = scope String(values);
+		if (tn_csharp_apply_fields(instance, text.CStr()) > 0)
+			return true;
+		Log.Warning(scope $"C# Inspector field initialization failed: {StringView(tn_csharp_error())}");
 		return false;
 	}
 
