@@ -24,6 +24,11 @@ int32_t tn_csharp_attach(const char* managed_type, uint64_t scene, uint64_t enti
     (void)managed_type; (void)scene; (void)entity;
     return -1;
 }
+int32_t tn_csharp_apply_fields(int32_t script_instance, const char* fields)
+{
+    (void)script_instance; (void)fields;
+    return 0;
+}
 int32_t tn_csharp_tick(int32_t script_instance, float delta_time)
 {
     (void)script_instance; (void)delta_time;
