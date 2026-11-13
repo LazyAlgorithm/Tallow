@@ -425,7 +425,7 @@ TN_API void* tn_code_create(const char* text, int language)
 		if (ImGui::MenuItem("Copy", "Ctrl+C", false, selected)) code.Copy();
 		if (ImGui::MenuItem("Paste", "Ctrl+V", false, editable)) code.Paste();
 		if (ImGui::MenuItem("Select All", "Ctrl+A")) code.SelectAll();
-		if (code.GetLanguageName() == "Beef") // Native generated graph code only; C# semantic actions will use Roslyn.
+		if (code.GetLanguageName() == "Beef" || code.GetLanguageName() == "C#")
 		{
 			ImGui::Separator();
 			const int cursor = (int)code.GetSectionText(TextEditor::DocPos(0, 0), data.pos).size();
@@ -446,7 +446,7 @@ TN_API void* tn_code_create(const char* text, int language)
 			}
 		}
 	});
-	if (language == 0)
+	if (language == 0 || language == 4)
 	{
 		TextEditor::AutoCompleteConfig config;
 		config.suggestionWidth = 40;
