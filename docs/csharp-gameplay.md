@@ -8,7 +8,7 @@ is complete.
 ## Current implemented foundation
 
 - Target .NET 11, C# 15, nullable-enabled managed projects.
-- `tools/csharp_gameplay.py` generates `Tallow.Game` and assembly-definition projects.
+- `Managed/Tallow.Build` generates `Tallow.Game` and assembly-definition projects.
 - `*.asmdef` JSON files describe trusted gameplay assembly boundaries:
   `{"name":"Gameplay","references":[]}`; nested definitions own their own trees.
 - `Managed/Tallow.API` contains initial managed game types and callbacks.
@@ -50,14 +50,19 @@ or a dedicated capability-controlled WebAssembly runtime). Do not expose a
 user-installable assembly loader or mod manifest in shipping editor/player
 builds before that review.
 
-## Build prototype
+## Build prototype (Python-free managed tooling)
 
 ```bash
-python3 tools/csharp_gameplay.py --project Tests/CSharpGameplay --generate-only
-python3 tools/csharp_gameplay.py --project Tests/CSharpGameplay
+dotnet run --project Managed/Tallow.Build/Tallow.Build.csproj -- --project Tests/CSharpGameplay --engine-root .
+dotnet build Managed/Tallow.LanguageService/Tallow.LanguageService.csproj
+dotnet run --project Managed/Tallow.ManagedHost/Tallow.ManagedHost.csproj -- Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
 ```
 
 Requires the .NET 11 SDK. Generated projects are local build artifacts under
-the game's `.tallow-csharp` directory. Actual player execution and native
-interop are not connected yet. No native editor or SDK builds have been
-validated in the current environment.
+the game's `.tallow-csharp` directory. Automated Linux and Windows managed
+smoke tests are defined in `.github/workflows/csharp-gameplay.yml`.
+
+C# editor diagnostics and completion run Roslyn directly via `dotnet` without
+Python intermediaries. Some unrelated engine/build systems still depend on
+Python until separately migrated. The native C# runtime bridge and full
+gameplay parity are not implemented yet.
