@@ -24,6 +24,7 @@ extension EditorApp
 	String mSemanticHint = new .() ~ delete _;
 	float mSemanticChangedAt;
 	bool mSemanticNeedsCheck;
+	float mSemanticWorkerFailedAt;
 	int mSemanticApiRevision;
 	bool mRenameOpen;
 	bool mOpenSymbolRenamePopup;
@@ -186,6 +187,7 @@ extension EditorApp
 			{
 			case "error":
 				failed = true;
+				mSemanticWorkerFailedAt = Time.RealTime;
 				mSemantic.status.Set("Compiler: see Console for details.");
 				let problem = new ScriptProblem();
 				problem.file.Set(mSemantic.path);
@@ -282,7 +284,10 @@ extension EditorApp
 			mSemanticChangedAt = Time.RealTime;
 			mSemanticNeedsCheck = true;
 		}
-		if (mSemantic.running || mRenameOpen)
+		// Avoid launching a failing .NET worker on every keystroke.
+		// Retry automatically after a short interval (e.g. after SDK installation).
+		if (mSemantic.running || mRenameOpen ||
+			(mSemanticWorkerFailedAt > 0 && Time.RealTime - mSemanticWorkerFailedAt < 10.0f))
 			return;
 		int32 cursor = 0;
 		let request = tn_code_take_semantic_request(document.handle, &cursor);
