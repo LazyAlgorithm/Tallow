@@ -355,7 +355,7 @@ extension EditorApp
 			if (ImGui.MenuItem("Convert to Script"))
 				ConvertGraphToScript(entry.path);
 		}
-		else if (entry.name.EndsWith(".cs") || entry.name.EndsWith(".bf") || entry.name.EndsWith(".asmdef") || entry.name.EndsWith(".tui") || entry.name.EndsWith(".tcss") || entry.name.EndsWith(".tshader") || entry.name.EndsWith(".tcompute"))
+		else if (entry.name.EndsWith(".cs") || entry.name.EndsWith(".bf") || entry.name.EndsWith(".tasmdef") || entry.name.EndsWith(".tui") || entry.name.EndsWith(".tcss") || entry.name.EndsWith(".tshader") || entry.name.EndsWith(".tcompute"))
 		{
 			if (ImGui.MenuItem("Open in Code Editor"))
 				OpenScript(entry.path);
@@ -521,7 +521,7 @@ extension EditorApp
 
 	static FileBadge[?] sFileBadges = .(
 		.(".cs", .(0.30f, 0.62f, 0.84f, 1), "C#"),
-		(".asmdef", .(0.43f, 0.58f, 0.69f, 1), "ASM"),
+		(".tasmdef", .(0.43f, 0.58f, 0.69f, 1), "ASM"),
 		(".bf", .(0.25f, 0.47f, 0.76f, 1), "CODE"),
 		.(".tscene", .(0.52f, 0.38f, 0.72f, 1), "SCENE"),
 		.(".voxels", .(0.58f, 0.44f, 0.30f, 1), "VOXEL"),
@@ -755,7 +755,7 @@ extension EditorApp
 		}
 		else if (entry.name.EndsWith(".tscene"))
 			OpenScene(entry.path);
-		else if (entry.name.EndsWith(".cs") || entry.name.EndsWith(".bf") || entry.name.EndsWith(".asmdef"))
+		else if (entry.name.EndsWith(".cs") || entry.name.EndsWith(".bf") || entry.name.EndsWith(".tasmdef"))
 			OpenScript(entry.path);
 		else if (entry.name.EndsWith(".tgraph") || entry.name.EndsWith(".tsgraph"))
 			OpenGraph(entry.path);
@@ -914,7 +914,7 @@ extension EditorApp
 				Log.Error("Assembly names use letters, digits and underscores.");
 				break;
 			}
-			let definition = scope $"{mBrowsePath}/{mNewItemName}.asmdef";
+			let definition = scope $"{mBrowsePath}/{mNewItemName}.tasmdef";
 			if (File.Exists(definition))
 			{
 				Log.Error(scope $"{definition} already exists.");
