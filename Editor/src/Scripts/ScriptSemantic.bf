@@ -65,7 +65,7 @@ class ScriptSemantic
 		CanonicalPath(file, canonical);
 		for (int i < sources.Count)
 		{
-			if (Path.Equals(sources[i].path, canonical))
+			if (Path.Equals(sources[i].path, canonical, .Lenient))
 				return i;
 		}
 		return -1;

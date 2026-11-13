@@ -172,7 +172,7 @@ extension EditorApp
 		ScriptDocument document = null;
 		for (let existing in mScripts)
 		{
-			if (Path.Equals(existing.path, path))
+			if (Path.Equals(existing.path, path, .Lenient))
 				document = existing;
 		}
 		if (document == null)
@@ -212,7 +212,7 @@ extension EditorApp
 				continue;
 			for (let problem in mDisplayedScriptProblems)
 			{
-				if (problem.line < 0 || !Path.Equals(problem.file, document.path))
+				if (problem.line < 0 || !Path.Equals(problem.file, document.path, .Lenient))
 					continue;
 				tn_code_add_diagnostic(document.handle, problem.line, problem.column, (int32)problem.kind, problem.isError, problem.message.CStr());
 			}
