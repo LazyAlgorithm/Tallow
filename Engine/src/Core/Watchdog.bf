@@ -15,7 +15,14 @@ static class Watchdog
 
 	static int64 sBeats;
 	static Thread sThread;
+	static Thread sEndThread;
+	static WaitEvent sEndCancelled;
 	static bool sStop;
+
+	static ~this()
+	{
+		Stop();
+	}
 
 	/// Called once a frame by the main loop.
 	public static void Beat()
@@ -50,14 +57,18 @@ static class Watchdog
 	public static void EndWithin(int milliseconds)
 	{
 #if !BF_PLATFORM_WASM
-		let thread = new Thread(new () =>
+		if (sEndThread != null)
+			return;
+		sEndCancelled = new WaitEvent();
+		sEndThread = new Thread(new () =>
 			{
-				Thread.Sleep((int32)milliseconds);
+				if (sEndCancelled.WaitFor(milliseconds))
+					return;
 				Log.Warning("Closing took too long; ending the process.");
 				_exit(0);
 			});
-		thread.IsBackground = true;
-		thread.Start();
+		sEndThread.IsBackground = true;
+		sEndThread.Start(false);
 #endif
 	}
 
@@ -72,6 +83,16 @@ static class Watchdog
 			delete sThread;
 		}
 		sThread = null;
+		// A successful shutdown must finish the timer before the runtime checks for leaks.
+		if (sEndThread != null)
+		{
+			sEndCancelled.Set();
+			sEndThread.Join();
+			delete sEndThread;
+			sEndThread = null;
+			delete sEndCancelled;
+			sEndCancelled = null;
+		}
 	}
 
 	static void Watch()

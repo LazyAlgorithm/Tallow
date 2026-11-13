@@ -428,5 +428,6 @@ class Application
 				SDL.SDL_DestroyWindow(Window);
 			SDL.SDL_Quit();
 		}
+		Watchdog.Stop();
 	}
 }
