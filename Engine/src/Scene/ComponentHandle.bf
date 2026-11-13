@@ -262,6 +262,14 @@ static class HandleComponents
 		public List<int> texts = new .() ~ delete _;
 		/// The data's `NewList` ([HandleData] makes it): an empty list for its index-th list field.
 		public function Object(int32 index) newList;
+
+		public ~this()
+		{
+			// The registry owns the Strings and Lists constructed for its default data.
+			// The byte buffer's field destructor frees only the buffer itself.
+			if (defaults != null)
+				HandleComponents.FreeLists(defaults.Ptr, this);
+		}
 		/// The data's `SaveData` ([HandleData] makes it when the data has [Saved] fields): reads or writes them.
 		public function void(void* data, SaveIO io) saveData;
 		/// The handle's `static void SaveFields(GameObject, SaveIO)`, if it has one: a component that writes its own
