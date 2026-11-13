@@ -89,6 +89,8 @@ namespace
 
 	const TextEditor::Language* BeefLanguage() { return &BeefLanguageMutable(); }
 
+	const TextEditor::Language* CSharpLanguage() { return TextEditor::Language::Cs(); }
+
 	bool IsWordChar(char c) { return isalnum((unsigned char)c) || c == '_'; }
 
 	bool StartsWithNoCase(const std::string& word, const std::string& prefix)
@@ -392,12 +394,12 @@ static void CloseTypedTag(Document* document)
 	document->lastUndoIndex = editor.GetUndoIndex();
 }
 
-// language: 0 Beef, 1 UI markup (HTML-like), 2 stylesheet (CSS-like), 3 shader files (GLSL inside .tshader/.tcompute)
+// language: 0 internal Beef graph source, 1 UI markup, 2 stylesheet, 3 shader files, 4 C# gameplay
 TN_API void* tn_code_create(const char* text, int language)
 {
 	Document* document = new Document();
 	TextEditor& editor = document->editor;
-	editor.SetLanguage(language == 1 ? MarkupLanguage() : (language == 2 ? StyleLanguage() : (language == 3 ? ShaderLanguage() : BeefLanguage())));
+	editor.SetLanguage(language == 1 ? MarkupLanguage() : (language == 2 ? StyleLanguage() : (language == 3 ? ShaderLanguage() : (language == 4 ? CSharpLanguage() : BeefLanguage()))));
 	document->markup = language == 1;
 	editor.SetPalette(VisualStudioDark());
 	editor.SetTabSize(4);
@@ -423,7 +425,7 @@ TN_API void* tn_code_create(const char* text, int language)
 		if (ImGui::MenuItem("Copy", "Ctrl+C", false, selected)) code.Copy();
 		if (ImGui::MenuItem("Paste", "Ctrl+V", false, editable)) code.Paste();
 		if (ImGui::MenuItem("Select All", "Ctrl+A")) code.SelectAll();
-		if (code.GetLanguageName() == "Beef")
+		if (code.GetLanguageName() == "Beef") // Native generated graph code only; C# semantic actions will use Roslyn.
 		{
 			ImGui::Separator();
 			const int cursor = (int)code.GetSectionText(TextEditor::DocPos(0, 0), data.pos).size();
