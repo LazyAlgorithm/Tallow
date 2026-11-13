@@ -261,13 +261,17 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
         const auto hostfxr = hostfxr_path();
         if (hostfxr.empty() || !std::filesystem::exists(hostfxr))
         {
-            error = "Cannot find libhostfxr for .NET 11. Check `dotnet --list-runtimes` and DOTNET_ROOT; Tallow searched installed dotnet roots.";
+            error = "Cannot locate .NET hostfxr. Checked DOTNET_ROOT, the dotnet executable, Fedora /usr/lib64/dotnet, system directories and ~/.dotnet.";
             return 0;
         }
         runtime_library = load_library(hostfxr);
         if (!runtime_library)
         {
-            error = "The .NET 11 hostfxr library could not be loaded.";
+            error = "Could not load .NET hostfxr at " + hostfxr.string();
+#ifndef _WIN32
+            if (const char* detail = dlerror(); detail && *detail)
+                error += std::string(": ") + detail;
+#endif
             return 0;
         }
 
