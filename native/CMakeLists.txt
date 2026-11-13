@@ -162,6 +162,14 @@ if(NOT MSVC)
 	target_compile_options(tallow_flecs PRIVATE -std=gnu99)
 endif()
 
+# Desktop scripting hosts .NET inside the engine; web builds use a linkable
+# no-runtime stub until a dedicated managed WebAssembly backend is provided.
+if(EMSCRIPTEN)
+	set(TALLOW_MANAGED_HOST_SOURCE tallow_dotnet_host_stub.c)
+else()
+	set(TALLOW_MANAGED_HOST_SOURCE tallow_dotnet_host.cpp)
+endif()
+
 # ---- Tallow shim: Dear ImGui (docking) + ImGuizmo + stb_image + cgltf ----
 add_library(tallow_native STATIC
 	${TP}/cimgui/cimgui.cpp
@@ -176,6 +184,7 @@ add_library(tallow_native STATIC
 	${TP}/TextEdit/extras/TrieAutoComplete.cpp
 	tallow_native.cpp
 	tallow_code.cpp
+	${TALLOW_MANAGED_HOST_SOURCE}
 	tallow_bake.cpp
 	tallow_rig.cpp
 	tallow_assets.c
