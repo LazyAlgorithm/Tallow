@@ -161,6 +161,18 @@ internal static class Program
                 if (seen.Count >= 300)
                     break;
             }
+            // The existing code widget displays these in the completion popup header.
+            InvocationExpressionSyntax? invocation = node?.AncestorsAndSelf()
+                .OfType<InvocationExpressionSyntax>().FirstOrDefault();
+            if (invocation != null)
+            {
+                var callInfo = model.GetSymbolInfo(invocation);
+                ISymbol? callable = callInfo.Symbol ?? callInfo.CandidateSymbols.FirstOrDefault() ??
+                    model.GetSymbolInfo(invocation.Expression).Symbol;
+                if (callable != null)
+                    output.Add(Line("signature",
+                        callable.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            }
             return;
         }
 
