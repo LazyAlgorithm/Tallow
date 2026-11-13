@@ -177,7 +177,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
 
         // hdt_load_assembly_and_get_function_pointer is the stable hostfxr
         // delegate type for loading an assembly method from native code.
-        result = get_delegate(handle, 3, reinterpret_cast<void**>(&load_function));
+        result = get_delegate(handle, 5, reinterpret_cast<void**>(&load_function));
         close(handle);
         if (result < 0 || !load_function)
         {
