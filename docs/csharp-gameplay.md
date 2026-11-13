@@ -17,16 +17,23 @@ is complete.
 - `native/tallow_dotnet_host.cpp` hosts .NET with hostfxr on desktop; WebAssembly has a no-runtime stub.
 - `Engine/src/Scripting/CSharpRuntime.bf` provides a validated scene/entity-handle bridge.
 - `Engine/src/Scripting/CSharpBehaviour.bf` forwards native component callbacks and tick input.
+- The editor's Add Component > Scripts menu reads the compiled component catalog
+  and adds managed classes through the native adapter.
+- C# gameplay projects import System.Numerics globally: Vector3 addition,
+  subtraction and multiplication work without an extra `using` directive.
+- The native host searches DOTNET_ROOT, the installed dotnet executable,
+  Fedora/Nobara's /usr/lib64/dotnet, and other standard .NET installation roots.
 - `Tests/NativeCSharpHost` verifies C# movement, callbacks, and network button edges in native processes.
 
 This is **not a complete integration**. The managed API covers only a small
 subset of Tallow. The initial bridge and standalone native/managed lifecycle
-tests now exist, along with editor C# syntax and Roslyn requests; however,
-the normal editor Play transition does not yet initialize and bind the
-managed runtime. Component registry/Inspector support, ECS systems and queries,
-physics, networking parity, serialization, packaging, hot reload, and visual
-scripting C# generation remain incomplete. No full native editor build has
-been validated on this branch. Do not ship on this basis.
+tests now exist, along with editor C# syntax and Roslyn requests. The
+editor has an initial Play/Stop managed runtime initialization and assembly
+unload path, and a native adapter for compiled C# components. The entire
+editor-side workflow is still experimental and requires local testing.
+Managed field editing and serialization, ECS systems/queries, physics,
+networking parity, export packaging, true hot reload, and C# visual-script
+generation remain incomplete. Do not ship on this basis.
 
 ## Gameplay parity requirement
 
@@ -75,3 +82,34 @@ Python intermediaries. Some unrelated engine/build systems still depend on
 Python until separately migrated. The native C# runtime bridge has passed standalone hostfxr smoke tests on
 Linux and Windows. Normal editor Play startup, cross-assembly field reflection,
 full gameplay parity, and safe managed reload remain unfinished.
+
+## Local editor test (Linux)
+
+After pulling this branch and building the editor, create a C# script:
+
+```csharp
+using Tallow;
+
+namespace MyGame_c;
+
+[Component]
+public class NewScript : Script
+{
+    public float Speed = 1.0f;
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        Transform.Position += Vector3.UnitX * Speed * deltaTime;
+    }
+}
+```
+
+Save, compile, select a Cube in the scene, and use **Add Component > Scripts >
+New Script** (or search its class name). Then press Play. Merely creating a
+script file does not automatically attach it to a scene object.
+Unlike editing a reference to a class instance, modifying a local copy of a
+Vector3 property needs a write-back to `Transform.Position`.
+
+If the native runtime cannot find hostfxr, inspect the editor Console and
+`dotnet --list-runtimes`. On Fedora/Nobara, the runtime is often under
+`/usr/lib64/dotnet`. The branch now supports that location.
