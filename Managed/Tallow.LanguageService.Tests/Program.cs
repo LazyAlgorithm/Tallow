@@ -43,6 +43,52 @@ internal static class Program
         }
     }
 
+    private static string RequestWithApi(string service, string operation, string code, int cursor)
+    {
+        // Reproduce the editor's actual semantic compilation: game source
+        // plus Tallow.API source, not just an isolated Vector3 expression.
+        string apiPath = Path.GetFullPath(
+            Path.Combine("Managed", "Tallow.API", "Script.cs"));
+        if (!File.Exists(apiPath))
+            throw new FileNotFoundException("Test requires the trusted gameplay API source.", apiPath);
+        string temporary = Path.Combine(Path.GetTempPath(),
+            "tallow-csharp-api-semantic-" + Guid.NewGuid());
+        Directory.CreateDirectory(temporary);
+        try
+        {
+            string source = Path.Combine(temporary, "VectorOperator.cs");
+            string request = Path.Combine(temporary, "request.json");
+            string response = Path.Combine(temporary, "response.tsv");
+            var payload = new
+            {
+                operation,
+                file = source,
+                cursor = Encoding.UTF8.GetByteCount(code.AsSpan(0, cursor)),
+                sources = new[]
+                {
+                    new { path = source, text = code },
+                    new { path = apiPath, text = File.ReadAllText(apiPath) }
+                }
+            };
+            File.WriteAllText(request, JsonSerializer.Serialize(payload));
+            var info = new ProcessStartInfo("dotnet") { UseShellExecute = false };
+            info.ArgumentList.Add(service);
+            info.ArgumentList.Add(request);
+            info.ArgumentList.Add(response);
+            using var process = Process.Start(info) ??
+                throw new InvalidOperationException("Could not start Roslyn with gameplay API.");
+            process.WaitForExit();
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException(
+                    $"Roslyn gameplay API worker failed: {File.ReadAllText(response)}");
+            return File.ReadAllText(response);
+        }
+        finally
+        {
+            Directory.Delete(temporary, recursive: true);
+        }
+    }
+
     private static void Check(string label, bool condition)
     {
         if (!condition)
@@ -69,6 +115,22 @@ internal static class Program
                 vectorSource.Length);
             Check("implicit vectors and arithmetic in Roslyn",
                 !vectorDiagnostics.Contains("diagnostic\t"));
+
+            string gameplayVector = @"using Tallow;
+[Component]
+public sealed class CubeMover : Script
+{
+    public float Speed = 2f;
+    public override void Update(TickInput input, float deltaTime)
+    {
+        Transform.Position += Vector3.UnitX * Speed * deltaTime;
+        Transform.Position = Transform.Position + new Vector3(1, 0, 0);
+    }
+}";
+            string gameplayDiagnostics = RequestWithApi(
+                service, "diagnostics", gameplayVector, gameplayVector.Length);
+            Check("gameplay Transform.Position += Vector3 * float operators",
+                !gameplayDiagnostics.Contains("diagnostic\t"));
 
             string memberSource = "class Player { public int Speed; }\n" +
                 "class Example { void Go() { Player player = new(); player.S";
