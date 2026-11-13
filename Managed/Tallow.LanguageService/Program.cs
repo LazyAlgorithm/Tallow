@@ -124,6 +124,9 @@ internal static class Program
         var parse = new CSharpParseOptions(LanguageVersion.CSharp15);
         var trees = sourceByPath.Select(pair =>
             CSharpSyntaxTree.ParseText(pair.Value.Text, parse, path: pair.Key)).ToList();
+        // Match the generated game assemblies' implicit System.Numerics import.
+        trees.Add(CSharpSyntaxTree.ParseText(
+            "global using System.Numerics;", parse, path: "Tallow.GlobalNumerics.g.cs"));
         var compilation = CSharpCompilation.Create("Tallow.SemanticWorkspace", trees,
             References(), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
                 nullableContextOptions: NullableContextOptions.Enable));
