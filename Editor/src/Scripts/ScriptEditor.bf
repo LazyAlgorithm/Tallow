@@ -84,6 +84,7 @@ extension EditorApp
 	bool mCheckRunning;
 	bool mCheckFinished;
 	bool mCheckSucceeded;
+	bool mCheckManaged;
 	String mCheckLog = new .() ~ delete _;
 
 	/// Opens a script in the Scripts tab (or switches to it if it is already open).
@@ -183,13 +184,13 @@ extension EditorApp
 				Log.Error(scope $"Could not open {path}");
 				return;
 			}
-			// The source index supplies type colouring; completion and navigation use Beef's resolver.
+			// The native graph-source index supplies type colouring; C# uses Roslyn.
 			if (path.EndsWith(".bf"))
 				ApiIndex.Ensure();
 			document = new ScriptDocument();
 			document.path.Set(path);
 			Path.GetFileName(path, document.name);
-			document.handle = tn_code_create(text.CStr(), path.EndsWith(".tui") ? 1 : (path.EndsWith(".tcss") ? 2 : ((path.EndsWith(".tshader") || path.EndsWith(".tcompute")) ? 3 : 0)));
+			document.handle = tn_code_create(text.CStr(), path.EndsWith(".tui") ? 1 : (path.EndsWith(".tcss") ? 2 : ((path.EndsWith(".tshader") || path.EndsWith(".tcompute")) ? 3 : (path.EndsWith(".cs") ? 4 : (path.EndsWith(".asmdef") ? 5 : 0)))));
 			document.readOnly = FindSourceGraph(path, scope String());
 			tn_code_set_read_only(document.handle, document.readOnly);
 			mScripts.Add(document);
@@ -208,7 +209,7 @@ extension EditorApp
 		for (let document in mScripts)
 		{
 			tn_code_clear_diagnostics(document.handle);
-			if (!document.path.EndsWith(".bf"))
+			if (!document.path.EndsWith(".bf") && !document.path.EndsWith(".cs"))
 				continue;
 			for (let problem in mDisplayedScriptProblems)
 			{
@@ -239,9 +240,14 @@ extension EditorApp
 			Assets.MakeRelative(document.path, relative);
 			CompileShader(relative);
 		}
+		else if (document.path.EndsWith(".cs") || document.path.EndsWith(".asmdef"))
+		{
+			if (Project.Current.ReloadMode != .Manual)
+				StartManagedErrorCheck();
+		}
 		else
 		{
-			// Refresh the source index used by type colouring and visual scripting.
+			// Refresh the native graph-source index used by the legacy visual compiler.
 			ApiIndex.RefreshProject();
 			mScriptsNeedReload = true;
 			if (Project.Current.ReloadMode != .Manual)
@@ -261,12 +267,18 @@ extension EditorApp
 	/// Compiles the project on a worker thread so typing is never blocked.
 	void StartErrorCheck()
 	{
+		if (mActiveScript != null && (mActiveScript.path.EndsWith(".cs") || mActiveScript.path.EndsWith(".asmdef")))
+		{
+			StartManagedErrorCheck();
+			return;
+		}
 		if (mReloadReady && Project.Current.ReloadMode != .Manual)
 		{
 			QueueScriptReload(true);
 			return;
 		}
 		mCheckWasReload = false;
+		mCheckManaged = false;
 		if (mCheckRunning)
 			return;
 		if (mCheckThread != null)
@@ -286,6 +298,82 @@ extension EditorApp
 				Interlocked.Store(ref mCheckFinished, true);
 			});
 		mCheckThread.Start(false);
+	}
+
+	/// Compile trusted gameplay assemblies using the .NET SDK directly.
+	/// This does not invoke the native script reloader or any Python helper.
+	void StartManagedErrorCheck()
+	{
+		if (mCheckRunning)
+			return;
+		if (mCheckThread != null)
+		{
+			mCheckThread.Join();
+			DeleteAndNullify!(mCheckThread);
+		}
+		mCheckManaged = true;
+		mCheckWasReload = false;
+		mCheckRunning = true;
+		mCheckFinished = false;
+		mCheckThread = new Thread(new () =>
+			{
+				let project = Project.Current;
+				Directory.CreateDirectory(scope $"{project.Path}/build").IgnoreError();
+				let logFile = scope $"{project.Path}/build/csharp-build.log";
+				let command = scope String("dotnet run --project ");
+				Terminal.Quote(scope $"{project.EngineRoot}/Managed/Tallow.Build/Tallow.Build.csproj", command);
+				command.Append(" -- --project ");
+				Terminal.Quote(project.Path, command);
+				command.Append(" --engine-root ");
+				Terminal.Quote(project.EngineRoot, command);
+				command.Append(" > ");
+				Terminal.Quote(logFile, command);
+				command.Append(" 2>&1");
+				mCheckSucceeded = Terminal.Run(command) == 0;
+				mCheckLog.Clear();
+				File.ReadAllText(logFile, mCheckLog).IgnoreError();
+				Interlocked.Store(ref mCheckFinished, true);
+			});
+		mCheckThread.Start(false);
+	}
+
+	/// MSBuild diagnostics: path/File.cs(line,column): error CS1234: message [project].
+	void ParseManagedDiagnostics(StringView output)
+	{
+		for (let line in output.Split('\n'))
+		{
+			let start = line.IndexOf(".cs(");
+			if (start < 0)
+				continue;
+			let open = start + 3;
+			let close = line.IndexOf(')', open);
+			if (close <= open)
+				continue;
+			let suffix = line.Substring(close + 1);
+			let errorIndex = suffix.IndexOf(": error ");
+			let warningIndex = suffix.IndexOf(": warning ");
+			bool isError = errorIndex >= 0;
+			let marker = isError ? errorIndex : warningIndex;
+			if (marker < 0)
+				continue;
+			let location = line.Substring(open + 1, close - open - 1);
+			let comma = location.IndexOf(',');
+			if (comma <= 0)
+				continue;
+			let problem = new ScriptProblem();
+			problem.file.Set(line.Substring(0, open));
+			problem.line = (int32)SceneSerializer.ParseInt(location.Substring(0, comma)) - 1;
+			problem.column = (int32)Math.Max(SceneSerializer.ParseInt(location.Substring(comma + 1)) - 1, 0);
+			problem.isError = isError;
+			problem.message.Set(suffix.Substring(marker + (isError ? 8 : 10)));
+			problem.message.Trim();
+			let projectSuffix = problem.message.IndexOf(" [");
+			if (projectSuffix > 0)
+				problem.message.Remove(projectSuffix, problem.message.Length - projectSuffix);
+			if (!isError && IsOptimizationWarning(problem.message))
+				problem.kind = .Optimization;
+			mProblems.Add(problem);
+		}
 	}
 
 	static int LastIndexOfText(StringView text, StringView part)
@@ -351,6 +439,14 @@ extension EditorApp
 		}
 		mCheckRunning = false;
 		ClearAndDeleteItems!(mProblems);
+		if (mCheckManaged)
+		{
+			ParseManagedDiagnostics(mCheckLog);
+			PublishScriptDiagnostics();
+			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled; native runtime integration is still in progress." : "C# compile failed. See Console.");
+			mCheckManaged = false;
+			return;
+		}
 		ParseCompilerDiagnostics(mCheckLog);
 		AddDeterminismWarnings(scope $"{Project.Current.Path}/src" , 0);
 		PublishScriptDiagnostics();
@@ -508,7 +604,9 @@ extension EditorApp
 				SaveAllScripts();
 				StartErrorCheck();
 			}
-			if (ImGui.MenuItem("Rebuild & Reload"))
+			if (active != null && active.path.EndsWith(".cs"))
+				ImGui.TextDisabled("Native C# Play integration is in progress.");
+			else if (ImGui.MenuItem("Rebuild & Reload"))
 			{
 				SaveAllScripts();
 				RequestRebuild();
@@ -536,7 +634,7 @@ extension EditorApp
 		}
 		if (ImGui.BeginMenu("Navigate"))
 		{
-			bool ready = active != null && active.path.EndsWith(".bf") && !mSemantic.running;
+			bool ready = active != null && (active.path.EndsWith(".cs") || active.path.EndsWith(".bf")) && !mSemantic.running;
 			if (ImGui.MenuItem("Go to Definition", "F12", false, ready))
 				RequestSemantic(active, "definition");
 			if (ImGui.MenuItem("Symbol / Parameters", null, false, ready))
