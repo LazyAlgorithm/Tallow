@@ -33,3 +33,55 @@ static class GraphNodes
 	[GraphNode] public static void Print(String text) => Log.Info(text);
 	[GraphNode] public static void PrintNumber(float value) => Log.Info(scope $"{value}");
 }
+
+/// What code compiled from visual scripts calls for the nodes that take any kind of value (Print, To String, Is Valid).
+static class GraphRuntime
+{
+	/// Whether an object reference is set (and, for a component handle, its object still has that component).
+	public static bool IsValid(Object value) => value != null;
+
+	public static bool IsValid<T>(T handle) where T : struct, IComponentHandle
+	{
+		// A handle starts with its object.
+		var copy = handle;
+		let gameObject = *(GameObject*)(void*)&copy;
+		return gameObject != null && gameObject.Scene != null && gameObject.HasComponent<T>();
+	}
+
+	public static void Text(float value, String text) => text.AppendF("{}", value);
+	public static void Text(int value, String text) => text.AppendF("{}", value);
+	public static void Text(int32 value, String text) => text.AppendF("{}", value);
+	public static void Text(bool value, String text) => text.Append(value ? "true" : "false");
+	public static void Text(Vector2 value, String text) => text.AppendF("X={:0.###} Y={:0.###}", value.x, value.y);
+	public static void Text(Vector3 value, String text) => text.AppendF("X={:0.###} Y={:0.###} Z={:0.###}", value.x, value.y, value.z);
+	public static void Text(Color value, String text) => text.AppendF("R={:0.###} G={:0.###} B={:0.###} A={:0.###}", value.r, value.g, value.b, value.a);
+
+	/// A rotation as its Euler angles in degrees.
+	public static void Text(Quaternion value, String text)
+	{
+		let euler = value.EulerAngles;
+		text.AppendF("X={:0.#} Y={:0.#} Z={:0.#}", euler.x, euler.y, euler.z);
+	}
+
+	/// An object by name; a component as its type and its object's name.
+	public static void Text(Object value, String text)
+	{
+		if (value == null)
+			text.Append("None");
+		else if (let gameObject = value as GameObject)
+			text.Append(gameObject.Name);
+		else if (let component = value as Component)
+			text.AppendF("{} ({})", component.GetType().GetName(.. scope .()), component.GameObject?.Name ?? "");
+		else if (let transform = value as Transform)
+			text.AppendF("Transform ({})", transform.GameObject?.Name ?? "");
+		else
+			value.ToString(text);
+	}
+
+	public static void Text<T>(T handle, String text) where T : struct, IComponentHandle
+	{
+		var copy = handle;
+		let gameObject = *(GameObject*)(void*)&copy;
+		text.AppendF("{} ({})", typeof(T).GetName(.. scope .()), gameObject?.Name ?? "None");
+	}
+}

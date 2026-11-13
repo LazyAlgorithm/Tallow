@@ -81,13 +81,16 @@ static class LocalControls
 	/// The look direction built up from the mouse, for objects with no NetworkScript of their own.
 	public static float Yaw;
 	public static float Pitch;
+	/// Whether the look direction (Update's Yaw, Pitch and Look Rotation) only turns while the right mouse button is
+	/// held. Off by default: the mouse always turns it (lock the mouse to keep the cursor in the window).
+	public static bool HoldRightMouseToLook = false;
 
 	public static void Read(ref NetInput input)
 	{
-		Read(ref input, ref Yaw, ref Pitch);
+		Read(ref input, ref Yaw, ref Pitch, true, HoldRightMouseToLook);
 	}
 
-	public static void Read(ref NetInput input, ref float yaw, ref float pitch, bool mouseLook = true, bool holdRightMouseToLook = true, float sensitivity = 0.15f)
+	public static void Read(ref NetInput input, ref float yaw, ref float pitch, bool mouseLook = true, bool holdRightMouseToLook = false, float sensitivity = 0.15f)
 	{
 		if (mouseLook && (!holdRightMouseToLook || Input.GetMouseButton(1) || InputActions.FromGamepad("Look")))
 		{
@@ -144,8 +147,8 @@ abstract class NetworkScript : NetworkBehaviour
 {
 	/// Turn the view with the mouse. Off for objects that do not look around.
 	public bool mouseLook = true;
-	/// Only turn while the right mouse button is held, leaving the cursor free otherwise.
-	public bool holdRightMouseToLook = true;
+	/// Only turn while the right mouse button is held, leaving the cursor free otherwise (off: the mouse always turns).
+	public bool holdRightMouseToLook = false;
 	/// Degrees turned per pixel of mouse movement.
 	public float mouseSensitivity = 0.15f;
 

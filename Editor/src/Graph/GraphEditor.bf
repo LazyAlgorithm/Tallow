@@ -36,6 +36,16 @@ extension EditorApp
 	float mGraphZoom = 1.0f;
 	int32 mGraphSelected;
 	int32 mGraphDragNode;
+	/// Comment boxes: the selected one, the one under the mouse (and whether at its resize corner), and while one is
+	/// dragged, the nodes and comments inside it that move with it.
+	int mCommentSelected = -1;
+	int mCommentHover = -1;
+	bool mCommentHoverCorner;
+	int mCommentDrag = -1;
+	bool mCommentResizing;
+	List<int32> mCommentDragNodes = new .() ~ delete _;
+	List<GraphComment> mCommentDragInner = new .() ~ delete _;
+	const float CommentTitleHeight = 34;
 	bool mGraphFocus;
 	// Link being dragged out of a pin.
 	bool mLinking;
@@ -79,7 +89,7 @@ extension EditorApp
 			let from = source.def.outputs[mLinkPin];
 			for (int32 i = 0; i < (int32)def.inputs.Count; i++)
 			{
-				if (mGraph.Links(from, def.inputs[i]))
+				if (mGraph.CanTake(def, true, i, from))
 					return i;
 			}
 			return -1;
@@ -89,7 +99,7 @@ extension EditorApp
 		let wanted = source.def.inputs[mLinkPin];
 		for (int32 i = 0; i < (int32)def.outputs.Count; i++)
 		{
-			if (mGraph.Links(def.outputs[i], wanted))
+			if (mGraph.CanTake(def, false, i, wanted))
 				return i;
 		}
 		return -1;
@@ -115,6 +125,8 @@ extension EditorApp
 			mShaderPreview = new .();
 		mGraph.Validate();
 		mGraphSelected = 0;
+		mCommentSelected = -1;
+		mCommentDrag = -1;
 		mVariableEditing = -1;
 		mGraphStatus.Clear();
 		mGraphFocus = true;
@@ -574,6 +586,7 @@ extension EditorApp
 		let canvas = CanvasView.Begin("##canvas", ref mGraphPan, ref mGraphZoom);
 
 		mShaderPreview?.Update(mGraph);
+		DrawGraphComments(canvas);
 		NodeCanvas.BeginFont(canvas.zoom);
 		DrawGraphLinks(canvas);
 		let hover = DrawGraphNodes(canvas);
@@ -583,9 +596,139 @@ extension EditorApp
 		HandleGraphMouse(canvas, hover);
 		DrawNodeSearch(canvas);
 		DrawSelectedNodeValues(canvas);
+		DrawSelectedComment(canvas);
 		if (mGraphShowVariables)
 			DrawGraphVariables(.(canvas.origin.x + canvas.size.x - 10, canvas.origin.y + 10), NodeCanvas.CenterNode(canvas.size, mGraphPan, mGraphZoom));
 	}
+
+	/// Comment boxes behind everything else: a tinted area with its title in a bar along the top.
+	void DrawGraphComments(CanvasView canvas)
+	{
+		mCommentHover = -1;
+		mCommentHoverCorner = false;
+		if (mCommentSelected >= mGraph.comments.Count)
+			mCommentSelected = -1;
+		let zoom = canvas.zoom;
+		for (int i < mGraph.comments.Count)
+		{
+			let comment = mGraph.comments[i];
+			let min = canvas.ToScreen(comment.position);
+			let max = canvas.ToScreen(comment.position + comment.size);
+			let c = comment.color;
+			ImGui.DrawRectFilled(min, max, .(c.r, c.g, c.b, 0.22f), 6 * zoom);
+			ImGui.DrawRectFilled(min, .(max.x, Math.Min(min.y + CommentTitleHeight * zoom, max.y)), .(c.r, c.g, c.b, 0.85f), 6 * zoom);
+			ImGui.DrawRect(min, max, i == mCommentSelected ? Color(1, 0.70f, 0.20f, 1) : Color(c.r, c.g, c.b, 0.9f), 6 * zoom, i == mCommentSelected ? 2 : 1);
+			// The resize corner.
+			let corner = 14 * zoom;
+			ImGui.DrawRectFilled(.(max.x - corner, max.y - corner), max, .(c.r, c.g, c.b, 0.7f), 2);
+			if (zoom > 0.25f)
+			{
+				NodeCanvas.BeginFont(zoom * 1.4f);
+				ImGui.DrawText(.(min.x + 10 * zoom, min.y + 6 * zoom), .White, comment.title.CStr());
+				NodeCanvas.EndFont();
+			}
+			let mouse = canvas.mouse;
+			if (canvas.hovered && mouse.x >= min.x && mouse.x <= max.x && mouse.y >= min.y && mouse.y <= max.y)
+			{
+				// Later comments are drawn on top, so the last one under the mouse wins.
+				mCommentHover = i;
+				mCommentHoverCorner = mouse.x >= max.x - corner && mouse.y >= max.y - corner;
+			}
+		}
+	}
+
+	/// A new comment box: around the selected node if there is one, else where the mouse is.
+	void AddComment(Vector2 position)
+	{
+		let comment = new GraphComment();
+		let selected = mGraph.Find(mGraphSelected);
+		if (selected != null)
+		{
+			comment.position = selected.position - Vector2(30, 30 + CommentTitleHeight);
+			comment.size = .(NodeWidth + 60, NodeHeight(selected) + 60 + CommentTitleHeight);
+		}
+		else
+			comment.position = position;
+		mGraph.comments.Add(comment);
+		mCommentSelected = mGraph.comments.Count - 1;
+		mGraphSelected = 0;
+	}
+
+	/// Starts moving (or resizing) a comment; what lies wholly inside it moves along.
+	void StartCommentDrag(int index, bool resize)
+	{
+		mCommentDrag = index;
+		mCommentResizing = resize;
+		mCommentDragNodes.Clear();
+		mCommentDragInner.Clear();
+		if (resize)
+			return;
+		let comment = mGraph.comments[index];
+		bool Inside(Vector2 min, Vector2 max) => min.x >= comment.position.x && min.y >= comment.position.y
+			&& max.x <= comment.position.x + comment.size.x && max.y <= comment.position.y + comment.size.y;
+		for (let node in mGraph.nodes)
+		{
+			if (Inside(node.position, node.position + Vector2(NodeWidth, NodeHeight(node))))
+				mCommentDragNodes.Add(node.id);
+		}
+		for (let other in mGraph.comments)
+		{
+			if (other != comment && Inside(other.position, other.position + other.size))
+				mCommentDragInner.Add(other);
+		}
+	}
+
+	void DragComment(float zoom)
+	{
+		if (mCommentDrag < 0)
+			return;
+		if (!ImGui.IsMouseDown(0) || mCommentDrag >= mGraph.comments.Count)
+		{
+			mCommentDrag = -1;
+			return;
+		}
+		let delta = Input.MouseDelta / zoom;
+		let comment = mGraph.comments[mCommentDrag];
+		if (mCommentResizing)
+		{
+			comment.size = .(Math.Max(comment.size.x + delta.x, 120), Math.Max(comment.size.y + delta.y, CommentTitleHeight + 40));
+			return;
+		}
+		comment.position = comment.position + delta;
+		for (let id in mCommentDragNodes)
+		{
+			let node = mGraph.Find(id);
+			if (node != null)
+				node.position = node.position + delta;
+		}
+		for (let inner in mCommentDragInner)
+			inner.position = inner.position + delta;
+	}
+
+	/// The selected comment's title and colour, in a panel at the canvas's top left.
+	void DrawSelectedComment(CanvasView canvas)
+	{
+		if (mCommentSelected < 0 || mCommentSelected >= mGraph.comments.Count)
+			return;
+		let comment = mGraph.comments[mCommentSelected];
+		ImGui.SetCursorScreenPos(.(canvas.origin.x + 10, canvas.origin.y + 10));
+		ImGui.PushStyleColor(ImGui.Col.ChildBg, EditorTheme.Canvas);
+		ImGui.BeginChild("comment", .(260, 88), ImGui.ChildBorders);
+		ImGui.Text("Comment");
+		ImGui.SetNextItemWidth(-1);
+		if (mCommentFocus)
+		{
+			ImGui.SetKeyboardFocusHere();
+			mCommentFocus = false;
+		}
+		ImGui.InputText("##title", comment.title, 0, "Title");
+		ImGui.SetNextItemWidth(-1);
+		ImGui.ColorEdit3("##color", ref comment.color);
+		ImGui.EndChild();
+		ImGui.PopStyleColor();
+	}
+
+	bool mCommentFocus;
 
 	void DrawGraphLinks(CanvasView canvas)
 	{
@@ -718,10 +861,27 @@ extension EditorApp
 			{
 				mGraphSelected = hover.node.id;
 				mGraphDragNode = hover.node.id;
+				mCommentSelected = -1;
+			}
+			else if (mCommentHover >= 0 && mGraphHoverLink < 0)
+			{
+				// A comment box: drag it (and what is in it), or its corner to resize; double-click to rename.
+				mCommentSelected = mCommentHover;
+				mGraphSelected = 0;
+				StartCommentDrag(mCommentHover, mCommentHoverCorner);
+				if (ImGui.IsMouseDoubleClicked(0))
+					mCommentFocus = true;
 			}
 			else
+			{
 				mGraphSelected = 0;
+				mCommentSelected = -1;
+			}
 		}
+		DragComment(canvas.zoom);
+		// C adds a comment box (around the selected node), as in Unreal.
+		if (hovered && ImGui.IsKeyPressed(ImGui.Key.C) && (ImGui.tn_imgui_capture_flags() & 4) == 0 && !ImGui.IsKeyDown(ImGui.Key.LeftCtrl))
+			AddComment(graphMouse);
 		if (mLinking)
 			DragLink(canvas, hover, graphMouse);
 		if (mGraphDragNode != 0)
@@ -736,6 +896,13 @@ extension EditorApp
 		{
 			mGraph.links.RemoveAt(mGraphHoverLink);
 			mGraphHoverLink = -1;
+		}
+		else if (hovered && ImGui.IsKeyPressed(ImGui.Key.Delete) && (ImGui.tn_imgui_capture_flags() & 4) == 0 && mCommentSelected >= 0 && mCommentSelected < mGraph.comments.Count)
+		{
+			// Deleting a comment box leaves its nodes.
+			delete mGraph.comments[mCommentSelected];
+			mGraph.comments.RemoveAt(mCommentSelected);
+			mCommentSelected = -1;
 		}
 		else if (hovered && ImGui.IsKeyPressed(ImGui.Key.Delete) && (ImGui.tn_imgui_capture_flags() & 4) == 0)
 		{
@@ -812,9 +979,8 @@ extension EditorApp
 			let outputPin = mLinkFromOutput ? mLinkPin : hover.pin;
 			let input = mLinkFromOutput ? hover.node : source;
 			let inputPin = mLinkFromOutput ? hover.pin : mLinkPin;
-			if (mGraph.Links(output.def.outputs[outputPin], input.def.inputs[inputPin]))
-				mGraph.Connect(output.id, outputPin, input.id, inputPin);
-			else
+			// A node with versions for other types (Add, Print, Split...) switches to the one that fits.
+			if (!mGraph.TryConnect(output, outputPin, input, inputPin))
 				mGraphStatus.Set("Those pins have different types.");
 		}
 		else if (source != null && canvas.hovered && hover.node == null && !mLinkDetached)
@@ -850,10 +1016,11 @@ extension EditorApp
 			{
 				// Finish the link that was dragged out to open this search.
 				let pin = FirstCompatiblePin(chosen);
-				if (pin >= 0 && mLinkFromOutput)
-					mGraph.Connect(mLinkNode, mLinkPin, created.id, pin);
-				else if (pin >= 0)
-					mGraph.Connect(created.id, pin, mLinkNode, mLinkPin);
+				let source = mGraph.Find(mLinkNode);
+				if (pin >= 0 && source != null && mLinkFromOutput)
+					mGraph.TryConnect(source, mLinkPin, created, pin);
+				else if (pin >= 0 && source != null)
+					mGraph.TryConnect(created, pin, source, mLinkPin);
 			}
 			ImGui.CloseCurrentPopup();
 		}
@@ -899,7 +1066,7 @@ extension EditorApp
 		mNodeMenuShader = mGraph.isShader;
 		for (let def in defs)
 		{
-			if (def.isShader != mGraph.isShader)
+			if (def.isShader != mGraph.isShader || def.hidden)
 				continue;
 			var menu = mNodeMenu;
 			for (let part in def.category.Split('|'))
@@ -925,6 +1092,12 @@ extension EditorApp
 	NodeDef BrowseNodes()
 	{
 		NodeDef chosen = null;
+		if (ImGui.MenuItem("Add Comment", "C"))
+		{
+			AddComment(mNewNodePosition);
+			ImGui.CloseCurrentPopup();
+		}
+		ImGui.Separator();
 		for (let menu in NodeMenuTree().menus)
 			chosen = DrawNodeMenu(menu) ?? chosen;
 		return chosen;
@@ -981,7 +1154,7 @@ extension EditorApp
 		{
 			for (let def in NodeLibrary.Defs)
 			{
-				if (def.isShader != mGraph.isShader || IsThisGraph(def) || (mSearchForLink && FirstCompatiblePin(def) < 0))
+				if (def.isShader != mGraph.isShader || def.hidden || IsThisGraph(def) || (mSearchForLink && FirstCompatiblePin(def) < 0))
 					continue;
 				let starts = mNodeSearch.IsEmpty || def.title.StartsWith(mNodeSearch, .OrdinalIgnoreCase);
 				let contains = Finds(def, mNodeSearch);
@@ -1113,7 +1286,7 @@ extension EditorApp
 			ImGui.SetNextItemWidth(84);
 			if (ImGui.BeginCombo("##type", TypeLabel(variable.type)))
 			{
-				for (let type in PinType[?](.Float, .Int, .Vector3, .Bool, .String))
+				for (let type in NodeGraph.VariableTypes)
 				{
 					if (ImGui.Selectable(TypeLabel(type), type == variable.type))
 						mGraph.SetVariableType(variable, type);
@@ -1121,7 +1294,30 @@ extension EditorApp
 				ImGui.EndCombo();
 			}
 			ImGui.SameLine();
-			if (variable.type == .Bool)
+			if (variable.type == .Object)
+			{
+				// What it refers to; the object itself is picked per object in the Inspector.
+				ImGui.SetNextItemWidth(100);
+				if (ImGui.BeginCombo("##refers", variable.typeName.CStr()))
+				{
+					ImGui.SetNextItemWidth(-1);
+					ImGui.InputText("##filter", mReferenceFilter, 0, "Search types");
+					if (mReferenceTypes == null)
+						mReferenceTypes = NodeLibrary.ReferenceTypes(.. new .());
+					for (let typeName in mReferenceTypes)
+					{
+						if (!mReferenceFilter.IsEmpty && !typeName.Contains(mReferenceFilter, true))
+							continue;
+						if (ImGui.Selectable(typeName.CStr(), typeName == variable.typeName))
+							mGraph.SetVariableType(variable, .Object, typeName);
+					}
+					ImGui.EndCombo();
+				}
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("What it refers to. Pick the object for it per object in the Inspector.");
+				ImGui.SameLine(322);
+			}
+			else if (variable.type == .Bool)
 			{
 				bool value = variable.value == "true";
 				if (ImGui.Checkbox("##default", ref value))
@@ -1131,12 +1327,26 @@ extension EditorApp
 			else
 			{
 				ImGui.SetNextItemWidth(100);
-				ImGui.InputText("##default", variable.value, 0, variable.type == .Vector3 ? (char8*)"x y z" : (char8*)"default");
+				char8* hint = "default";
+				switch (variable.type)
+				{
+				case .Vector3: hint = "x y z";
+				case .Vector2: hint = "x y";
+				case .Quaternion: hint = "pitch yaw roll";
+				case .Color: hint = "r g b a";
+				default:
+				}
+				ImGui.InputText("##default", variable.value, 0, hint);
 				ImGui.SameLine();
 			}
-			ImGui.Checkbox("##net", ref variable.networked);
-			if (ImGui.IsItemHovered())
-				ImGui.SetTooltip("Networked: in multiplayer the server's value is copied to every client.");
+			if (variable.type == .Object)
+				ImGui.Dummy(.(ImGui.GetFrameHeight(), ImGui.GetFrameHeight()));
+			else
+			{
+				ImGui.Checkbox("##net", ref variable.networked);
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("Networked: in multiplayer the server's value is copied to every client.");
+			}
 			ImGui.SameLine();
 			if (ImGui.SmallButton("Get"))
 				mGraphSelected = mGraph.AddVariableNode(variable, false, nodePosition).id;
@@ -1158,15 +1368,8 @@ extension EditorApp
 		ImGui.PopStyleColor();
 	}
 
-	static char8* TypeLabel(PinType type)
-	{
-		switch (type)
-		{
-		case .Bool: return "Boolean";
-		case .Vector3: return "Vector";
-		case .String: return "Text";
-		case .Int: return "Whole";
-		default: return "Number";
-		}
-	}
+	static char8* TypeLabel(PinType type) => NodeLibrary.TypeLabel(type).Ptr;
+
+	List<String> mReferenceTypes ~ DeleteContainerAndItems!(_);
+	String mReferenceFilter = new .() ~ delete _;
 }

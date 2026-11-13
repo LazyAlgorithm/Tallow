@@ -38,6 +38,11 @@ class NodeDef
 	public String category = new .() ~ delete _;
 	/// Other names the search finds it by, such as Unreal's ("Print String", "Event Tick"), separated by spaces.
 	public String keywords = new .() ~ delete _;
+	/// Versions of one node for different types share a name here ("add" for Add (Float), Add (Vector)...). Linking
+	/// a value of another type into one switches the node to the version that takes it, as overloads do in code.
+	public String overload = new .() ~ delete _;
+	/// Left out of the add-node menu and search (made on demand, such as Get Variable for one component type).
+	public bool hidden;
 	/// Fields the generated component gets for this node ("bool done$N = {0};"), one per line: state that lasts
 	/// between frames. $N is the node's id, {n} its data inputs' literals.
 	public String fields = new .() ~ delete _;
@@ -101,6 +106,13 @@ class NodeDef
 		return this;
 	}
 
+	/// Puts it in a family of versions for different types (see overload).
+	public NodeDef Group(StringView name)
+	{
+		overload.Set(name);
+		return this;
+	}
+
 	/// The last part of the category path ("Float" for "Math|Float").
 	public StringView Leaf
 	{
@@ -158,10 +170,21 @@ class GraphVariable
 {
 	public String name = new .() ~ delete _;
 	public PinType type = .Float;
+	/// For an object variable: what it refers to (GameObject, Transform or a component type).
+	public String typeName = new .("GameObject") ~ delete _;
 	/// Default, written the same way as a pin literal.
 	public String value = new .("0") ~ delete _;
 	/// Shared in multiplayer: the server's value is copied to every client (the field is marked [Sync]).
 	public bool networked;
+}
+
+/// A comment box: a titled, coloured area behind nodes, as in Unreal's Blueprints. Moving it moves the nodes inside.
+class GraphComment
+{
+	public String title = new .("Comment") ~ delete _;
+	public Vector2 position;
+	public Vector2 size = .(400, 260);
+	public Color color = .(0.35f, 0.42f, 0.55f, 1);
 }
 
 struct GraphLink

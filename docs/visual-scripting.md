@@ -30,6 +30,31 @@ components under **ECS**.
 Typing searches titles, categories and Unreal's names for the same thing, so "BeginPlay", "Tick", "Print String",
 "LineTrace" or "SpawnActor" find the Tallow node.
 
+## Nodes for any type
+
+Nodes that exist for several types are one node: place **Add**, **Multiply**, **Lerp**, **Equal**, **Split**,
+**Print String**, **To String**, **Select** (or any typed version, such as Add (Float)) and link a value into it; it
+switches to the version for that type, as overloads do in code. Linking a vector into Add makes it Add (Vector);
+a vector and a float into Multiply makes Multiply (Vector * Float); a rotation and a vector makes Rotate Vector. Its
+title shows the version it is. Values you typed in are kept where the pin's type stays the same.
+
+**Split** takes a Vector (X, Y, Z), Vector 2D (X, Y), Rotation (its Euler angles in degrees: X, Y, Z) or Color (R, G,
+B, A). **Print String** prints anything: numbers, booleans, vectors, rotations (as Euler angles), colors, objects and
+components (by name).
+
+## Variables
+
+A variable can be a Boolean, Integer, Float, String, Vector 2D, Vector, Rotation, Color or **Object**. An Object
+variable says what it refers to (GameObject, Transform, or any component, the engine's or your own), and which
+object is picked per object in the Inspector, the same as a reference field in code. Game > Get Component has a
+node per component type for taking one off an object; Is Valid works on objects and components.
+
+## Comments
+
+Press **C** on the canvas, or pick **Add Comment** at the top of the right-click menu, for a comment box (around the
+selected node if there is one). Drag it by any empty part and everything inside moves with it; drag its bottom-right
+corner to resize. Select it to change its title and colour; Delete removes the box and leaves its nodes.
+
 ## Flow
 
 An exec (white) output links to one input; an exec input takes any number of links, so several paths can run into

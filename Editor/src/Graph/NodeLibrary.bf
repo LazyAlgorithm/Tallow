@@ -28,7 +28,110 @@ static class NodeLibrary
 			if (def.key == key)
 				return def;
 		}
-		return null;
+		return MakeOnDemand(key);
+	}
+
+	static Dictionary<String, List<NodeDef>> sVersions = new .() ~ DeleteDictionaryAndKeysAndValues!(_);
+
+	/// The versions of a node for different types, in the order they are preferred.
+	public static void Versions(StringView group, List<NodeDef> output)
+	{
+		if (sVersions.TryGetAlt(group, ?, let list))
+			output.AddRange(list);
+	}
+
+	/// Makes the named nodes versions of one another (see NodeDef.overload). The first is the one that stays when
+	/// several fit equally well.
+	static void Overload(StringView group, params Span<StringView> keys)
+	{
+		List<NodeDef> list;
+		if (!sVersions.TryGetAlt(group, ?, out list))
+		{
+			list = new .();
+			sVersions[new String(group)] = list;
+		}
+		for (let key in keys)
+		{
+			let def = Find(key);
+			if (def == null)
+			{
+				Log.Warning(scope $"Node versions: no node {key}");
+				continue;
+			}
+			def.Group(group);
+			list.Add(def);
+		}
+	}
+
+	/// Nodes made when first asked for: Get and Set Variable for an object variable of one type
+	/// ("var.get.object:Rigidbody").
+	static NodeDef MakeOnDemand(StringView key)
+	{
+		let get = key.StartsWith("var.get.object:");
+		if (!get && !key.StartsWith("var.set.object:"))
+			return null;
+		let typeName = key.Substring("var.get.object:".Length);
+		if (typeName.IsEmpty)
+			return null;
+		let label = Spaced(typeName, .. scope .());
+		NodeDef def;
+		if (get)
+			def = Add(key, "Variables", scope $"Get Variable ({label})", .GetVariable, "").In("Name", .String).Out("", .Object, typeName);
+		else
+			def = Add(key, "Variables", scope $"Set Variable ({label})", .SetVariable, "").In("", .Flow).In("Name", .String)
+				.In("Value", .Object, typeName, IsStructType(typeName) ? scope $"default({typeName})" : "null").Out("", .Flow);
+		def.hidden = true;
+		return def;
+	}
+
+	/// Whether a type is a struct (a built-in component handle): it has no null, only default.
+	static bool IsStructType(StringView typeName)
+	{
+		let entry = ApiIndex.Find(typeName);
+		return entry != null && entry.isStruct;
+	}
+
+	/// What an object variable can refer to: GameObject, Transform and every component type (the engine's and the
+	/// game's), by name.
+	public static void ReferenceTypes(List<String> output)
+	{
+		output.Add(new .("GameObject"));
+		output.Add(new .("Transform"));
+		ApiIndex.Ensure();
+		let types = ApiIndex.AllTypes(.. scope .());
+		let names = scope List<String>();
+		for (let type in types)
+		{
+			if (type.isEnum || type.isNested || type.isDelegate || type.isGeneric || type.isStatic || type.name == "Component" || type.name.IsEmpty || !type.name[0].IsUpper)
+				continue;
+			if (ApiIndex.IsA(type.name, "Component") && !names.Contains(type.name))
+				names.Add(type.name);
+		}
+		names.Sort(scope (a, b) => a.CompareTo(b));
+		for (let name in names)
+			output.Add(new .(name));
+	}
+
+	/// Get Component nodes, one per component type, under Game > Get Component.
+	static void AddGetComponentNodes()
+	{
+		let types = ReferenceTypes(.. scope .());
+		defer { ClearAndDeleteItems!(types); }
+		for (let type in types)
+		{
+			if (type == "GameObject" || type == "Transform")
+				continue;
+			let key = scope $"game.getcomponent:{type}";
+			if (Find(key) != null)
+				continue;
+			let code = scope String();
+			if (IsStructType(type))
+				code.AppendF("({{0}} != null ? {{0}}.GetComponent<{0}>() : default({0}))", type);
+			else
+				code.AppendF("({{0}} != null ? {{0}}.GetComponent<{0}>() : null)", type);
+			Add(key, "Game|Get Component", scope $"Get {Spaced(type, .. scope .())}", .Value, code).In("Target", .Object, "GameObject", "GameObject")
+				.Out("", .Object, type).Also(scope $"Get Component By Class {type}");
+		}
 	}
 
 	static NodeDef Add(StringView key, StringView category, StringView title, NodeKind kind, StringView code)
@@ -59,7 +162,9 @@ static class NodeLibrary
 		AddShaderNodes();
 		AddCodeNodes();
 		AddApiNodes();
+		AddGetComponentNodes();
 		AddEcsNodes();
+		AddOverloads();
 	}
 
 	// The add-node menu follows Unreal's Blueprints: Add Event, Flow Control, Variables, Math (Float, Integer,
@@ -203,8 +308,8 @@ static class NodeLibrary
 		Add("math.bool", "Utilities|Literals", "Make Literal Bool", .Value, "{0}").In("Value", .Bool).Out("", .Bool).Also("Boolean");
 		Add("math.text", "Utilities|Literals", "Make Literal String", .Value, "{0}").In("Value", .String).Out("", .String).Also("Text");
 		Add("math.self", "Utilities", "Self", .Value, "GameObject").Out("", .Object, "GameObject").Also("This Object Get a reference to self");
-		Add("util.isvalid", "Utilities", "Is Valid", .Value, "({0} != null)").In("Object", .Object).Out("", .Bool).Also("IsValid Null");
-		Add("math.null", "Utilities", "Is Nothing", .Value, "({0} == null)").In("Object", .Object).Out("", .Bool).Also("Null Not Valid");
+		Add("util.isvalid", "Utilities", "Is Valid", .Value, "GraphRuntime.IsValid({0})").In("Object", .Object).Out("", .Bool).Also("IsValid Null");
+		Add("math.null", "Utilities", "Is Nothing", .Value, "!GraphRuntime.IsValid({0})").In("Object", .Object).Out("", .Bool).Also("Null Not Valid");
 		Add("math.same", "Utilities", "Is Same Object", .Value, "({0} === {1})").In("A", .Object).In("B", .Object).Out("", .Bool).Also("Equal Object");
 		Add("logic.select", "Utilities", "Select Float", .Value, "({0} ? {1} : {2})").In("Pick A", .Bool).In("A", .Float).In("B", .Float).Out("", .Float).Also("Choose Number");
 		Add("logic.selectv", "Utilities", "Select Vector", .Value, "({0} ? {1} : {2})").In("Pick A", .Bool).In("A", .Vector3).In("B", .Vector3).Out("", .Vector3).Also("Choose Vector");
@@ -261,7 +366,7 @@ static class NodeLibrary
 
 		// Vector.
 		Add("math.vector", "Math|Vector", "Make Vector", .Value, "Vector3({0}, {1}, {2})").In("X", .Float).In("Y", .Float).In("Z", .Float).Out("", .Vector3).Also("Vector");
-		Add("math.vbreak", "Math|Vector", "Break Vector", .Value, "{0}").In("Vector", .Vector3).Out("X", .Float, "", "{0}.x").Out("Y", .Float, "", "{0}.y").Out("Z", .Float, "", "{0}.z").Also("Split");
+		Add("math.vbreak", "Math|Vector", "Split Vector", .Value, "{0}").In("Vector", .Vector3).Out("X", .Float, "", "{0}.x").Out("Y", .Float, "", "{0}.y").Out("Z", .Float, "", "{0}.z").Also("Break Split");
 		Add("math.vx", "Math|Vector", "Get X (Vector)", .Value, "{0}.x").In("Vector", .Vector3).Out("", .Float).Also("Vector X");
 		Add("math.vy", "Math|Vector", "Get Y (Vector)", .Value, "{0}.y").In("Vector", .Vector3).Out("", .Float).Also("Vector Y");
 		Add("math.vz", "Math|Vector", "Get Z (Vector)", .Value, "{0}.z").In("Vector", .Vector3).Out("", .Float).Also("Vector Z");
@@ -286,14 +391,14 @@ static class NodeLibrary
 		Add("math.vforward", "Math|Vector", "Forward Vector", .Value, "Vector3.Forward").Out("", .Vector3).Also("Constant");
 		Add("math.vright", "Math|Vector", "Right Vector", .Value, "Vector3.Right").Out("", .Vector3).Also("Constant");
 		Add("math.vector2", "Math|Vector 2D", "Make Vector 2D", .Value, "Vector2({0}, {1})").In("X", .Float).In("Y", .Float).Out("", .Vector2).Also("Vector2");
-		Add("math.v2break", "Math|Vector 2D", "Break Vector 2D", .Value, "{0}").In("Vector", .Vector2).Out("X", .Float, "", "{0}.x").Out("Y", .Float, "", "{0}.y").Also("Vector2 Split");
+		Add("math.v2break", "Math|Vector 2D", "Split Vector 2D", .Value, "{0}").In("Vector", .Vector2).Out("X", .Float, "", "{0}.x").Out("Y", .Float, "", "{0}.y").Also("Break Vector2 Split");
 		Add("math.v2length", "Math|Vector 2D", "Vector 2D Length", .Value, "{0}.Length").In("Vector", .Vector2).Out("", .Float);
 		Add("math.v2to3", "Math|Vector 2D", "To Vector (X, 0, Y)", .Value, "Vector3({0}.x, 0, {0}.y)").In("Vector", .Vector2).Out("", .Vector3).Also("Convert Ground");
 
 		// Rotation.
 		Add("math.rotation", "Math|Rotation", "Make Rotation", .Value, "{0}").In("Euler", .Quaternion).Out("", .Quaternion).Also("Make Rotator Rotator");
 		Add("math.reuler", "Math|Rotation", "Make Rotation From Euler", .Value, "Quaternion.Euler({0}, {1}, {2})").In("Pitch (X)", .Float).In("Yaw (Y)", .Float).In("Roll (Z)", .Float).Out("", .Quaternion).Also("Make Rotator");
-		Add("math.rbreak", "Math|Rotation", "Break Rotation", .Value, "{0}").In("Rotation", .Quaternion).Out("Pitch (X)", .Float, "", "{0}.EulerAngles.x").Out("Yaw (Y)", .Float, "", "{0}.EulerAngles.y")
+		Add("math.rbreak", "Math|Rotation", "Split Rotation", .Value, "{0}").In("Rotation", .Quaternion).Out("Pitch (X)", .Float, "", "{0}.EulerAngles.x").Out("Yaw (Y)", .Float, "", "{0}.EulerAngles.y")
 			.Out("Roll (Z)", .Float, "", "{0}.EulerAngles.z").Also("Break Rotator Euler");
 		Add("math.qq", "Math|Rotation", "Combine Rotations", .Value, "({0} * {1})").In("A", .Quaternion).In("B", .Quaternion).Out("", .Quaternion).Also("Compose Rotators");
 		Add("math.rinverse", "Math|Rotation", "Invert Rotation", .Value, "{0}.Conjugate").In("Rotation", .Quaternion).Out("", .Quaternion).Also("Negate Rotator");
@@ -339,7 +444,7 @@ static class NodeLibrary
 
 		// Color.
 		Add("math.color", "Math|Color", "Make Color", .Value, "{0}").In("Value", .Color).Out("", .Color).Also("Linear Color");
-		Add("math.cbreak", "Math|Color", "Break Color", .Value, "{0}").In("Color", .Color).Out("R", .Float, "", "{0}.r").Out("G", .Float, "", "{0}.g").Out("B", .Float, "", "{0}.b").Out("A", .Float, "", "{0}.a");
+		Add("math.cbreak", "Math|Color", "Split Color", .Value, "{0}").In("Color", .Color).Out("R", .Float, "", "{0}.r").Out("G", .Float, "", "{0}.g").Out("B", .Float, "", "{0}.b").Out("A", .Float, "", "{0}.a").Also("Break");
 		Add("math.crgba", "Math|Color", "Make Color From RGBA", .Value, "Color({0}, {1}, {2}, {3})").In("R", .Float).In("G", .Float).In("B", .Float).In("A", .Float).Default("1").Out("", .Color);
 
 		// Text.
@@ -370,15 +475,122 @@ static class NodeLibrary
 		Add("debug.sphere", "Debug", "Draw Debug Sphere", .Action, "DebugDraw.Sphere({0}, {1}, {2});").In("Center", .Vector3).In("Radius", .Float).Default("0.5").In("Color", .Color).Default("0 1 0 1").Also("Gizmo");
 	}
 
+	/// Nodes with versions for several types (Add, Multiply, Print, Split...). Each version can be placed from its
+	/// own category; whichever is placed switches to the right one when something of another type is linked in. The
+	/// plain-named ones at the top of Math ("Add", "Split") are the starting versions.
+	static void AddOverloads()
+	{
+		// Starting versions in Math itself.
+		Add("math.any.add", "Math", "Add", .Value, "({0} + {1})").In("A", .Float).In("B", .Float).Out("", .Float).Also("+ Plus Sum");
+		Add("math.any.sub", "Math", "Subtract", .Value, "({0} - {1})").In("A", .Float).In("B", .Float).Out("", .Float).Also("- Minus");
+		Add("math.any.mul", "Math", "Multiply", .Value, "({0} * {1})").In("A", .Float).In("B", .Float).Default("1").Out("", .Float).Also("* Times Scale");
+		Add("math.any.div", "Math", "Divide", .Value, "({0} / {1})").In("A", .Float).In("B", .Float).Default("1").Out("", .Float).Also("/");
+		Add("math.any.equal", "Math", "Equal", .Value, "({0} == {1})").In("A", .Float).In("B", .Float).Out("", .Bool).Also("==");
+		Add("math.any.lerp", "Math", "Lerp", .Value, "Mathf.Lerp({0}, {1}, {2})").In("A", .Float).In("B", .Float).Default("1").In("Alpha", .Float).Out("", .Float).Also("Blend Mix");
+		Add("math.split", "Math", "Split", .Value, "{0}").In("Value", .Vector3).Out("X", .Float, "", "{0}.x").Out("Y", .Float, "", "{0}.y").Out("Z", .Float, "", "{0}.z")
+			.Also("Break Vector Rotation Euler Color Components");
+
+		// Versions for the other types.
+		Add("math.v2add", "Math|Vector 2D", "Add (Vector 2D)", .Value, "({0} + {1})").In("A", .Vector2).In("B", .Vector2).Out("", .Vector2).Also("+");
+		Add("math.v2sub", "Math|Vector 2D", "Subtract (Vector 2D)", .Value, "({0} - {1})").In("A", .Vector2).In("B", .Vector2).Out("", .Vector2).Also("-");
+		Add("math.v2scale", "Math|Vector 2D", "Multiply (Vector 2D * Float)", .Value, "({0} * {1})").In("Vector", .Vector2).In("Factor", .Float).Default("1").Out("", .Vector2).Also("*");
+		Add("math.v2mul", "Math|Vector 2D", "Multiply (Vector 2D * Vector 2D)", .Value, "Vector2({0}.x * {1}.x, {0}.y * {1}.y)").In("A", .Vector2).In("B", .Vector2).Default("1 1").Out("", .Vector2).Also("*");
+		Add("math.v2div", "Math|Vector 2D", "Divide (Vector 2D / Float)", .Value, "({1} != 0 ? {0} / {1} : Vector2.Zero)").In("Vector", .Vector2).In("Divisor", .Float).Default("1").Out("", .Vector2).Also("/");
+		Add("math.v2normal", "Math|Vector 2D", "Normalize (Vector 2D)", .Value, "{0}.Normalized").In("Vector", .Vector2).Out("", .Vector2);
+		Add("math.v2distance", "Math|Vector 2D", "Distance (Vector 2D)", .Value, "({0} - {1}).Length").In("A", .Vector2).In("B", .Vector2).Out("", .Float);
+		Add("math.v2dot", "Math|Vector 2D", "Dot Product (Vector 2D)", .Value, "Vector2.Dot({0}, {1})").In("A", .Vector2).In("B", .Vector2).Out("", .Float);
+		Add("math.v2lerp", "Math|Vector 2D", "Lerp (Vector 2D)", .Value, "Vector2.Lerp({0}, {1}, {2})").In("A", .Vector2).In("B", .Vector2).In("Alpha", .Float).Out("", .Vector2);
+		Add("math.v2equal", "Math|Vector 2D", "Equal (Vector 2D)", .Value, "({0} == {1})").In("A", .Vector2).In("B", .Vector2).Out("", .Bool).Also("==");
+		Add("math.fvscale", "Math|Vector", "Multiply (Float * Vector)", .Value, "({0} * {1})").In("Factor", .Float).Default("1").In("Vector", .Vector3).Out("", .Vector3).Also("*");
+		Add("math.cadd", "Math|Color", "Add (Color)", .Value, "Color({0}.r + {1}.r, {0}.g + {1}.g, {0}.b + {1}.b, {0}.a + {1}.a)").In("A", .Color).In("B", .Color).Default("0 0 0 0").Out("", .Color).Also("+");
+		Add("math.cscale", "Math|Color", "Multiply (Color * Float)", .Value, "Color({0}.r * {1}, {0}.g * {1}, {0}.b * {1}, {0}.a * {1})").In("Color", .Color).In("Factor", .Float).Default("1").Out("", .Color).Also("* Tint");
+		Add("math.cmul", "Math|Color", "Multiply (Color * Color)", .Value, "Color({0}.r * {1}.r, {0}.g * {1}.g, {0}.b * {1}.b, {0}.a * {1}.a)").In("A", .Color).In("B", .Color).Out("", .Color).Also("* Tint");
+		Add("math.clerp", "Math|Color", "Lerp (Color)", .Value, "Color(Mathf.Lerp({0}.r, {1}.r, {2}), Mathf.Lerp({0}.g, {1}.g, {2}), Mathf.Lerp({0}.b, {1}.b, {2}), Mathf.Lerp({0}.a, {1}.a, {2}))")
+			.In("A", .Color).In("B", .Color).In("Alpha", .Float).Out("", .Color).Also("Blend");
+		Add("math.inotequal", "Math|Integer", "Not Equal (Integer)", .Value, "({0} != {1})").In("A", .Int).In("B", .Int).Out("", .Bool).Also("!=");
+		Add("math.igequal", "Math|Integer", "Greater Equal (Integer)", .Value, "({0} >= {1})").In("A", .Int).In("B", .Int).Out("", .Bool).Also(">=");
+		Add("math.ilequal", "Math|Integer", "Less Equal (Integer)", .Value, "({0} <= {1})").In("A", .Int).In("B", .Int).Out("", .Bool).Also("<=");
+		Add("math.ineg", "Math|Integer", "Negate (Integer)", .Value, "(-{0})").In("Value", .Int).Out("", .Int);
+		Add("math.isign", "Math|Integer", "Sign (Integer)", .Value, "(int32)Math.Sign({0})").In("Value", .Int).Out("", .Int);
+		Add("math.vmin", "Math|Vector", "Min (Vector)", .Value, "Vector3.Min({0}, {1})").In("A", .Vector3).In("B", .Vector3).Out("", .Vector3);
+		Add("math.vmax", "Math|Vector", "Max (Vector)", .Value, "Vector3.Max({0}, {1})").In("A", .Vector3).In("B", .Vector3).Out("", .Vector3);
+		Add("logic.textnotequal", "Utilities|String", "Not Equal (String)", .Value, "(StringView({0}) != StringView({1}))").In("A", .String).In("B", .String).Out("", .Bool).Also("!=");
+		Add("logic.bnotequal", "Math|Boolean", "Not Equal (Boolean)", .Value, "({0} != {1})").In("A", .Bool).In("B", .Bool).Out("", .Bool).Also("!=");
+		Add("logic.vnotequal", "Math|Vector", "Not Equal (Vector)", .Value, "({0} != {1})").In("A", .Vector3).In("B", .Vector3).Out("", .Bool).Also("!=");
+		Add("logic.selecti", "Utilities", "Select Integer", .Value, "({0} ? {1} : {2})").In("Pick A", .Bool).In("A", .Int).In("B", .Int).Out("", .Int);
+		Add("logic.selectb", "Utilities", "Select Boolean", .Value, "({0} ? {1} : {2})").In("Pick A", .Bool).In("A", .Bool).In("B", .Bool).Out("", .Bool);
+		Add("logic.selectv2", "Utilities", "Select Vector 2D", .Value, "({0} ? {1} : {2})").In("Pick A", .Bool).In("A", .Vector2).In("B", .Vector2).Out("", .Vector2);
+		Add("logic.selectr", "Utilities", "Select Rotation", .Value, "({0} ? {1} : {2})").In("Pick A", .Bool).In("A", .Quaternion).In("B", .Quaternion).Out("", .Quaternion);
+		Add("logic.selectc", "Utilities", "Select Color", .Value, "({0} ? {1} : {2})").In("Pick A", .Bool).In("A", .Color).In("B", .Color).Out("", .Color);
+		Add("logic.selects", "Utilities", "Select String", .Value, "({0} ? StringView({1}) : StringView({2}))").In("Pick A", .Bool).In("A", .String).In("B", .String).Out("", .String);
+		Add("logic.selecto", "Utilities", "Select Object", .Value, "({0} ? {1} : {2})").In("Pick A", .Bool).In("A", .Object).In("B", .Object).Out("", .Object);
+
+		// Print and To String take anything; GraphRuntime.Text writes each type.
+		for (let type in PinType[?](.Float, .Int, .Bool, .Vector2, .Vector3, .Quaternion, .Color, .Object))
+		{
+			let suffix = NodeGraph.TypeSuffix(type);
+			let label = TypeLabel(type);
+			if (Find(scope $"debug.print.{suffix}") == null)
+				Add(scope $"debug.print.{suffix}", "Debug", scope $"Print ({label})", .Action, "Log.Info(GraphRuntime.Text({0}, .. scope String()));").In("Value", type).Also("Print String Log");
+			if (type != .Float && type != .Int && type != .Bool && type != .Vector3)
+				Add(scope $"text.{suffix}", "Utilities|String", scope $"To String ({label})", .Value, "GraphRuntime.Text({0}, .. scope:: String())").In("Value", type).Out("", .String).Also("Convert Text");
+		}
+
+		Overload("add", "math.any.add", "math.add", "math.iadd", "math.vadd", "math.v2add", "math.cadd");
+		Overload("subtract", "math.any.sub", "math.sub", "math.isub", "math.vsub", "math.v2sub");
+		Overload("multiply", "math.any.mul", "math.mul", "math.imul", "math.vscale", "math.vmul", "math.fvscale", "math.v2scale", "math.v2mul", "math.cscale", "math.cmul", "math.qq", "math.qmul");
+		Overload("divide", "math.any.div", "math.div", "math.idiv", "math.vdiv", "math.v2div");
+		Overload("modulo", "math.fmod", "math.imod");
+		Overload("negate", "math.neg", "math.ineg", "math.vneg");
+		Overload("abs", "math.abs", "math.iabs");
+		Overload("sign", "math.sign", "math.isign");
+		Overload("min", "math.min", "math.imin", "math.vmin");
+		Overload("max", "math.max", "math.imax", "math.vmax");
+		Overload("clamp", "math.clamp", "math.iclamp");
+		Overload("equal", "math.any.equal", "logic.equal", "math.iequal", "logic.bequal", "logic.textequal", "math.v2equal", "math.vequal", "math.same");
+		Overload("notequal", "logic.notequal", "math.inotequal", "logic.bnotequal", "logic.textnotequal", "logic.vnotequal");
+		Overload("greater", "logic.greater", "math.igreater");
+		Overload("less", "logic.less", "math.iless");
+		Overload("gequal", "logic.gequal", "math.igequal");
+		Overload("lequal", "logic.lequal", "math.ilequal");
+		Overload("lerp", "math.any.lerp", "math.lerp", "math.vlerp", "math.v2lerp", "math.slerp", "math.clerp");
+		Overload("length", "math.vlength", "math.v2length");
+		Overload("normalize", "math.vnormal", "math.v2normal");
+		Overload("distance", "math.vdistance", "math.v2distance");
+		Overload("dot", "math.vdot", "math.v2dot");
+		Overload("interpto", "math.finterp", "math.vinterp", "math.rinterp");
+		Overload("select", "logic.select", "logic.selecti", "logic.selectb", "logic.selectv2", "logic.selectv", "logic.selectr", "logic.selectc", "logic.selects", "logic.selecto");
+		Overload("split", "math.split", "math.vbreak", "math.v2break", "math.rbreak", "math.cbreak");
+		Overload("tostring", "text.float", "text.int", "text.bool", "text.vector2", "text.vector", "text.rotation", "text.color", "text.object");
+		Overload("print", "debug.log", "debug.print.float", "debug.print.int", "debug.print.bool", "debug.print.vector2", "debug.print.vector", "debug.print.rotation", "debug.print.color", "debug.print.object");
+	}
+
 	/// Get and Set Variable for each type. The variable is named by the node's Name value; the Variables panel of the
 	/// Graph tab declares it.
 	static void AddVariableNodes()
 	{
-		for (let type in PinType[?](.Float, .Vector3, .Bool, .String, .Int))
+		for (let type in NodeGraph.VariableTypes)
 		{
-			let label = type == .Float ? "Number" : (type == .Vector3 ? "Vector" : (type == .Bool ? "Boolean" : (type == .Int ? "Whole Number" : "Text")));
+			let label = TypeLabel(type);
 			Add(scope $"var.get.{NodeGraph.TypeSuffix(type)}" , "Variables", scope $"Get Variable ({label})" , .GetVariable, "").In("Name", .String).Out("", type);
 			Add(scope $"var.set.{NodeGraph.TypeSuffix(type)}" , "Variables", scope $"Set Variable ({label})" , .SetVariable, "").In("", .Flow).In("Name", .String).In("Value", type).Out("", .Flow);
+		}
+	}
+
+	/// A type's name in the editor (Variables panel, Get/Set Variable titles).
+	public static StringView TypeLabel(PinType type)
+	{
+		switch (type)
+		{
+		case .Bool: return "Boolean";
+		case .Int: return "Integer";
+		case .String: return "String";
+		case .Vector2: return "Vector 2D";
+		case .Vector3: return "Vector";
+		case .Quaternion: return "Rotation";
+		case .Color: return "Color";
+		case .Object: return "Object";
+		default: return "Float";
 		}
 	}
 
@@ -476,6 +688,7 @@ static class NodeLibrary
 		{
 			AddCodeNodes();
 			AddApiNodes();
+			AddGetComponentNodes();
 			AddEcsNodes();
 		}
 	}
@@ -795,7 +1008,7 @@ static class NodeLibrary
 		types.Sort(scope (a, b) => a.name.CompareTo(b.name));
 		for (let type in types)
 		{
-			if (type.isEnum || type.isNested || type.isDelegate || type.isGeneric || type.name.IsEmpty || !type.name[0].IsUpper || type.name.StartsWith("BT") && type.name != "BTStatus")
+			if (type.isEnum || type.isNested || type.isDelegate || type.isGeneric || type.name.IsEmpty || !type.name[0].IsUpper || type.name.StartsWith("BT") && type.name != "BTStatus" || type.name == "GraphRuntime")
 				continue;
 			let maker = scope ApiNodeMaker(type);
 			if (!maker.CanTarget)

@@ -13,6 +13,8 @@ class NodeGraph
 	public List<GraphNode> nodes = new .() ~ DeleteContainerAndItems!(_);
 	public List<GraphLink> links = new .() ~ delete _;
 	public List<GraphVariable> variables = new .() ~ DeleteContainerAndItems!(_);
+	/// Comment boxes, back to front.
+	public List<GraphComment> comments = new .() ~ DeleteContainerAndItems!(_);
 	/// A shader graph (.tsgraph): its nodes are GLSL and it compiles to a .tshader file, not a component.
 	public bool isShader;
 	int32 mNextId = 1;
@@ -25,11 +27,53 @@ class NodeGraph
 		case .Vector3: return "vector";
 		case .String: return "text";
 		case .Int: return "int";
+		case .Vector2: return "vector2";
+		case .Quaternion: return "rotation";
+		case .Color: return "color";
+		case .Object: return "object";
 		default: return "float";
 		}
 	}
 
-	public static StringView DefaultValue(PinType type) => type == .Vector3 ? "0 0 0" : (type == .Bool ? "false" : ((type == .Float || type == .Int) ? "0" : ""));
+	/// The type a variable suffix stands for ("object:Rigidbody" is an object variable holding a Rigidbody).
+	public static PinType SuffixType(StringView suffix, String typeName)
+	{
+		typeName.Set("GameObject");
+		let colon = suffix.IndexOf(':');
+		let head = colon < 0 ? suffix : suffix.Substring(0, colon);
+		if (colon >= 0)
+			typeName.Set(suffix.Substring(colon + 1));
+		for (let type in VariableTypes)
+		{
+			if (TypeSuffix(type) == head)
+				return type;
+		}
+		return .Float;
+	}
+
+	/// The types a variable can have, in the order the Variables panel lists them.
+	public static readonly PinType[?] VariableTypes = .(.Bool, .Int, .Float, .String, .Vector2, .Vector3, .Quaternion, .Color, .Object);
+
+	/// The key of a variable's Get or Set node.
+	public static void VariableKey(GraphVariable variable, bool set, String key)
+	{
+		key.AppendF("var.{}.{}", set ? "set" : "get", TypeSuffix(variable.type));
+		if (variable.type == .Object && variable.typeName != "GameObject")
+			key.AppendF(":{}", variable.typeName);
+	}
+
+	public static StringView DefaultValue(PinType type)
+	{
+		switch (type)
+		{
+		case .Vector3, .Quaternion: return "0 0 0";
+		case .Vector2: return "0 0";
+		case .Color: return "1 1 1 1";
+		case .Bool: return "false";
+		case .Float, .Int: return "0";
+		default: return "";
+		}
+	}
 
 	/// Whether a link is allowed in this graph. In a shader graph numbers, vectors and colours convert into each
 	/// other, as they do in shader code.
@@ -178,7 +222,7 @@ class NodeGraph
 	/// Places a Get or Set node for a variable.
 	public GraphNode AddVariableNode(GraphVariable variable, bool set, Vector2 position)
 	{
-		let node = AddNode(NodeLibrary.Find(scope $"var.{set ? "set" : "get"}.{TypeSuffix(variable.type)}"), position);
+		let node = AddNode(NodeLibrary.Find(VariableKey(variable, set, .. scope .())), position);
 		node.values[NamePin(node)].Set(variable.name);
 		return node;
 	}
@@ -202,18 +246,19 @@ class NodeGraph
 	}
 
 	/// Changes a variable's type; its nodes change with it and links that no longer fit are dropped.
-	public void SetVariableType(GraphVariable variable, PinType type)
+	public void SetVariableType(GraphVariable variable, PinType type, StringView typeName = "GameObject")
 	{
-		if (variable.type == type)
+		if (variable.type == type && (type != .Object || variable.typeName == typeName))
 			return;
 		variable.type = type;
+		variable.typeName.Set(typeName);
 		variable.value.Set(DefaultValue(type));
 		for (let node in nodes)
 		{
 			if (!IsVariableNode(node) || VariableName(node) != variable.name)
 				continue;
 			let set = node.def.kind == .SetVariable;
-			node.def = NodeLibrary.Find(scope $"var.{set ? "set" : "get"}.{TypeSuffix(type)}");
+			node.def = NodeLibrary.Find(VariableKey(variable, set, .. scope .()));
 			if (set)
 				node.values[2].Set(DefaultValue(type));
 		}
@@ -242,7 +287,113 @@ class NodeGraph
 			title.AppendF("Call {}", node.values[1]);
 		else if ((node.def.key == "event.actionpressed" || node.def.key == "event.actionreleased") && !node.values[0].IsEmpty)
 			title.AppendF("Input Action {} ({})", node.values[0], node.def.key == "event.actionpressed" ? "Pressed" : "Released");
+		else
 			title.Append(node.def.title);
+	}
+
+	/// Links an output to an input, switching either node to its version for those types if it has versions (Add
+	/// becomes Add (Vector) when a vector is linked in). False when no version fits.
+	public bool TryConnect(GraphNode output, int32 outputPin, GraphNode input, int32 inputPin)
+	{
+		if (outputPin >= output.def.outputs.Count || inputPin >= input.def.inputs.Count)
+			return false;
+		// The input side first: the value comes from the output, so the node it goes into adapts to it.
+		let inputVersion = Adapt(input, true, inputPin, output.def.outputs[outputPin]);
+		if (inputVersion != null)
+			SwitchDef(input, inputVersion);
+		if (!Links(output.def.outputs[outputPin], input.def.inputs[inputPin]))
+		{
+			let outputVersion = Adapt(output, false, outputPin, input.def.inputs[inputPin]);
+			if (outputVersion != null)
+				SwitchDef(output, outputVersion);
+		}
+		if (!Links(output.def.outputs[outputPin], input.def.inputs[inputPin]))
+			return false;
+		Connect(output.id, outputPin, input.id, inputPin);
+		return true;
+	}
+
+	/// Whether a pin of a node kind, or of one of its other versions, can link to `other`.
+	public bool CanTake(NodeDef def, bool input, int32 pin, PinDef other)
+	{
+		let versions = scope List<NodeDef>();
+		if (def.overload.IsEmpty)
+			versions.Add(def);
+		else
+			NodeLibrary.Versions(def.overload, versions);
+		for (let version in versions)
+		{
+			let pins = input ? version.inputs : version.outputs;
+			if (pin < pins.Count && (input ? Links(other, pins[pin]) : Links(pins[pin], other)))
+				return true;
+		}
+		return false;
+	}
+
+	/// The version of a node that best takes `other` on one of its pins while keeping its other links: the most
+	/// exact type matches wins, and the node's current version when tied. Null when it has no versions, or none fits.
+	public NodeDef Adapt(GraphNode node, bool input, int32 pin, PinDef other)
+	{
+		if (node.def.overload.IsEmpty)
+			return null;
+		let versions = NodeLibrary.Versions(node.def.overload, .. scope .());
+		NodeDef best = null;
+		int bestScore = -1;
+		int Fit(PinDef from, PinDef to) => !Links(from, to) ? -1000 : ((from.type == to.type && (from.type != .Object || from.typeName == to.typeName)) ? 4 : 1);
+		for (let version in versions)
+		{
+			let pins = input ? version.inputs : version.outputs;
+			if (pin >= pins.Count)
+				continue;
+			int score = input ? Fit(other, pins[pin]) : Fit(pins[pin], other);
+			for (let link in links)
+			{
+				if (link.toNode == node.id && !(input && link.toPin == pin))
+				{
+					let from = Find(link.fromNode);
+					if (from == null)
+						continue;
+					score += link.toPin < version.inputs.Count ? Fit(from.def.outputs[link.fromPin], version.inputs[link.toPin]) : -1000;
+				}
+				else if (link.fromNode == node.id)
+				{
+					let to = Find(link.toNode);
+					if (to == null)
+						continue;
+					score += link.fromPin < version.outputs.Count ? Fit(version.outputs[link.fromPin], to.def.inputs[link.toPin]) : -1000;
+				}
+			}
+			if (version == node.def)
+				score++;
+			if (score >= 0 && score > bestScore)
+			{
+				best = version;
+				bestScore = score;
+			}
+		}
+		return best == node.def ? null : best;
+	}
+
+	/// Changes a node to another version of itself: typed-in values are kept where the pin's type stays the same,
+	/// and links that no longer fit are dropped.
+	public void SwitchDef(GraphNode node, NodeDef def)
+	{
+		let old = node.def;
+		node.def = def;
+		let values = scope List<String>();
+		for (int i < def.inputs.Count)
+		{
+			let pin = def.inputs[i];
+			// A value typed in is kept; one still at the old version's default takes the new one's.
+			let oldDefault = i < old.inputs.Count ? (old.inputs[i].initial != null ? (StringView)old.inputs[i].initial : DefaultValue(old.inputs[i].type)) : "";
+			if (i < old.inputs.Count && old.inputs[i].type == pin.type && i < node.values.Count && node.values[i] != oldDefault)
+				values.Add(new String(node.values[i]));
+			else
+				values.Add(new String(pin.initial != null ? (StringView)pin.initial : DefaultValue(pin.type)));
+		}
+		ClearAndDeleteItems!(node.values);
+		node.values.AddRange(values);
+		Validate();
 	}
 
 	public GraphNode Find(int32 id)
@@ -348,7 +499,12 @@ class NodeGraph
 		let text = scope String();
 		text.AppendF("graph {}\n", SceneSerializer.Quote(name, .. scope .()));
 		for (let variable in variables)
-			text.AppendF("variable {} {} {}{}\n", TypeSuffix(variable.type), SceneSerializer.Quote(variable.name, .. scope .()), SceneSerializer.Quote(variable.value, .. scope .()), variable.networked ? " networked" : "");
+		{
+			let suffix = scope String(TypeSuffix(variable.type));
+			if (variable.type == .Object)
+				suffix.AppendF(":{}", variable.typeName);
+			text.AppendF("variable {} {} {}{}\n", suffix, SceneSerializer.Quote(variable.name, .. scope .()), SceneSerializer.Quote(variable.value, .. scope .()), variable.networked ? " networked" : "");
+		}
 		for (let node in nodes)
 		{
 			text.AppendF("node {} {} {} {}", node.id, node.def.key, node.position.x, node.position.y);
@@ -358,6 +514,11 @@ class NodeGraph
 		}
 		for (let link in links)
 			text.AppendF("link {} {} {} {}\n", link.fromNode, link.fromPin, link.toNode, link.toPin);
+		for (let comment in comments)
+		{
+			text.AppendF("comment {} {} {} {} {} {} {} {} {}\n", comment.position.x, comment.position.y, comment.size.x, comment.size.y,
+				comment.color.r, comment.color.g, comment.color.b, comment.color.a, SceneSerializer.Quote(comment.title, .. scope .()));
+		}
 		File.WriteAllText(path, text).IgnoreError();
 	}
 
@@ -383,14 +544,10 @@ class NodeGraph
 			{
 				if (FindVariable(tokens[2]) != null)
 					continue;
-				PinType type = .Float;
-				switch (tokens[1])
-				{
-				case "vector": type = .Vector3;
-				case "bool": type = .Bool;
-				case "text": type = .String;
-				}
+				let typeName = scope String();
+				let type = SuffixType(tokens[1], typeName);
 				let variable = AddVariable(tokens[2], type);
+				variable.typeName.Set(typeName);
 				if (tokens.Count > 3)
 					variable.value.Set(tokens[3]);
 				variable.networked = tokens.Count > 4 && tokens[4] == "networked";
@@ -406,6 +563,16 @@ class NodeGraph
 				let node = AddNode(def, .(SceneSerializer.ParseFloat(tokens[3]), SceneSerializer.ParseFloat(tokens[4])), SceneSerializer.ParseInt(tokens[1]));
 				for (int i = 0; i < node.values.Count && 5 + i < tokens.Count; i++)
 					node.values[i].Set(tokens[5 + i]);
+			}
+			else if (tokens.Count >= 10 && tokens[0] == "comment")
+			{
+				let comment = new GraphComment();
+				comment.position = .(SceneSerializer.ParseFloat(tokens[1]), SceneSerializer.ParseFloat(tokens[2]));
+				comment.size = .(SceneSerializer.ParseFloat(tokens[3]), SceneSerializer.ParseFloat(tokens[4]));
+				comment.color = .(SceneSerializer.ParseFloat(tokens[5]), SceneSerializer.ParseFloat(tokens[6]), SceneSerializer.ParseFloat(tokens[7]), SceneSerializer.ParseFloat(tokens[8]));
+				if (tokens.Count > 9)
+					comment.title.Set(tokens[9]);
+				comments.Add(comment);
 			}
 			else if (tokens.Count >= 5 && tokens[0] == "link")
 			{
@@ -933,7 +1100,7 @@ class NodeGraph
 			EmitBlock(node, 0, code, indent, depth);
 			EmitThen(node, 2, code, indent, depth);
 		case "flow.isvalid":
-			Line(code, indent, scope $"if ({Input(1)} != null)");
+			Line(code, indent, scope $"if (GraphRuntime.IsValid({Input(1)}))");
 			EmitBlock(node, 0, code, indent, depth);
 			if (FollowFlow(node, 1) != null)
 			{
@@ -1195,7 +1362,7 @@ class NodeGraph
 	/// host's variable of the same name). A variable node whose variable was never declared gets a default field.
 	void EmitFields(List<String> declared, String code)
 	{
-		void Emit(StringView name, PinType type, StringView value, bool networked = false)
+		void Emit(StringView name, PinType type, StringView value, bool networked = false, StringView typeName = "")
 		{
 			let identifier = scope String();
 			NodeLibrary.Identifier(name, identifier);
@@ -1207,18 +1374,26 @@ class NodeGraph
 			declared.Add(new String(identifier));
 			let literal = scope String();
 			Literal(type, value, literal);
-			if (type == .String)
+			if (type == .Object)
+			{
+				// A reference: picked per object in the Inspector (another object, or a component on one).
+				code.AppendF("\tpublic {} {};\n", typeName.IsEmpty ? "GameObject" : typeName, identifier);
+			}
+			else if (type == .String)
 				code.AppendF("\t{}public String {} = new .({}) ~ delete _;\n", networked ? "[Sync] " : "", identifier, literal);
 			else
 				code.AppendF("\t{}public {} {} = {};\n", networked ? "[Sync] " : "", TypeName(type), identifier, literal);
 		}
 		let before = declared.Count;
 		for (let variable in variables)
-			Emit(variable.name, variable.type, variable.value, variable.networked);
+			Emit(variable.name, variable.type, variable.value, variable.networked && variable.type != .Object, variable.typeName);
 		for (let node in nodes)
 		{
 			if (IsVariableNode(node))
-				Emit(VariableName(node), node.def.kind == .SetVariable ? node.def.inputs[2].type : node.def.outputs[0].type, DefaultValue(node.def.kind == .SetVariable ? node.def.inputs[2].type : node.def.outputs[0].type));
+			{
+				let pin = node.def.kind == .SetVariable ? node.def.inputs[2] : node.def.outputs[0];
+				Emit(VariableName(node), pin.type, DefaultValue(pin.type), false, pin.typeName ?? "");
+			}
 		}
 		if (declared.Count > before)
 			code.Append('\n');
