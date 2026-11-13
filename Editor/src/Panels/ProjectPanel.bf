@@ -521,8 +521,8 @@ extension EditorApp
 
 	static FileBadge[?] sFileBadges = .(
 		.(".cs", .(0.30f, 0.62f, 0.84f, 1), "C#"),
-		(".tasmdef", .(0.43f, 0.58f, 0.69f, 1), "ASM"),
-		(".bf", .(0.25f, 0.47f, 0.76f, 1), "CODE"),
+		.(".tasmdef", .(0.43f, 0.58f, 0.69f, 1), "ASM"),
+		.(".bf", .(0.25f, 0.47f, 0.76f, 1), "CODE"),
 		.(".tscene", .(0.52f, 0.38f, 0.72f, 1), "SCENE"),
 		.(".voxels", .(0.58f, 0.44f, 0.30f, 1), "VOXEL"),
 		.(".tprefab", .(0.24f, 0.56f, 0.78f, 1), "PREFAB"),
