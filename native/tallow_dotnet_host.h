@@ -43,6 +43,7 @@ enum tn_csharp_event_id {
 int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly);
 int32_t tn_csharp_set_callbacks(const tn_csharp_callbacks* callbacks);
 int32_t tn_csharp_load_game(const char* trusted_game_dll);
+int32_t tn_csharp_unload_game(void);
 int32_t tn_csharp_attach(const char* managed_type, uint64_t scene, uint64_t entity);
 int32_t tn_csharp_tick(int32_t script_instance, float delta_time);
 int32_t tn_csharp_dispatch(int32_t script_instance, int32_t event_id, float delta_time);
