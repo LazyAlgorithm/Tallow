@@ -82,6 +82,10 @@ internal static class Program
                 signatureSource.IndexOf("Move(1)", StringComparison.Ordinal) + "Move(".Length);
             Check("signature information", signature.Contains("signature\t"));
 
+            string completionSignature = Request(service, "completion", signatureSource,
+                signatureSource.IndexOf("Move(1)", StringComparison.Ordinal) + "Move(".Length);
+            Check("parameter hints in completion popup", completionSignature.Contains("signature\t"));
+
             string unicodeSource = "class 猫 { int 数; void Go() { 数 = 1; } }";
             int unicodeCursor = unicodeSource.LastIndexOf('数') + 1;
             string unicodeReferences = Request(service, "references", unicodeSource, unicodeCursor);
