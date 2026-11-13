@@ -28,6 +28,17 @@ int32_t tn_csharp_tick(int32_t script_instance, float delta_time)
     (void)script_instance; (void)delta_time;
     return 0;
 }
+int32_t tn_csharp_dispatch(int32_t script_instance, int32_t event_id, float delta_time)
+{
+    (void)script_instance; (void)event_id; (void)delta_time;
+    return 0;
+}
+int32_t tn_csharp_update_input(int32_t script_instance,
+    const tn_csharp_tick_input* input, float delta_time)
+{
+    (void)script_instance; (void)input; (void)delta_time;
+    return 0;
+}
 int32_t tn_csharp_detach(int32_t script_instance)
 {
     (void)script_instance;
