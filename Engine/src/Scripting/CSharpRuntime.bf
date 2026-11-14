@@ -22,6 +22,9 @@ static class CSharpRuntime
 		public function int32(void*, uint64, uint64, int32, float*) getTransform;
 		public function int32(void*, uint64, uint64, int32, float*) setTransform;
 		public function void*(void*, char8*) resolveApi;
+		public function uint64(void*, uint64, char8*, int32) createSceneObject;
+		public function uint64(void*, uint64, char8*, int32) findSceneObject;
+		public function uint64(void*, uint64, char8*, int32) instantiatePrefab;
 	}
 
 	/// The engine drives all component callbacks, preserving native scheduling.
@@ -100,6 +103,9 @@ static class CSharpRuntime
 		function int32(void*, uint64, uint64, int32, float*) getTransform = => GetTransform;
 		function int32(void*, uint64, uint64, int32, float*) setTransform = => SetTransform;
 		function void*(void*, char8*) resolver = => ResolveApi;
+		function uint64(void*, uint64, char8*, int32) createObject = => CreateSceneObject;
+		function uint64(void*, uint64, char8*, int32) findObject = => FindSceneObject;
+		function uint64(void*, uint64, char8*, int32) spawnPrefab = => InstantiatePrefab;
 		Callbacks callbacks = .()
 		{
 			context = null,
@@ -110,7 +116,10 @@ static class CSharpRuntime
 			isMine = mine,
 			getTransform = getTransform,
 			setTransform = setTransform,
-			resolveApi = resolver
+			resolveApi = resolver,
+			createSceneObject = createObject,
+			findSceneObject = findObject,
+			instantiatePrefab = spawnPrefab
 		};
 		if (tn_csharp_set_callbacks(&callbacks) == 0)
 		{
@@ -298,6 +307,37 @@ static class CSharpRuntime
 			}
 		}
 		return null;
+	}
+
+	// Scene calls never expose native object pointers. The session token
+	// prevents an old managed Scene from targeting a newer scene.
+	static bool ValidSceneName(uint64 session, char8* name, int32 length) =>
+		sScene != null && session == sSession && sSession != 0 &&
+		name != null && length > 0 && length <= 4096;
+
+	static uint64 CreateSceneObject(void* context, uint64 session, char8* name, int32 length)
+	{
+		if (!ValidSceneName(session, name, length))
+			return 0;
+		let created = sScene.CreateGameObject(.(name, length));
+		return created != null ? created.Id : 0;
+	}
+
+	static uint64 FindSceneObject(void* context, uint64 session, char8* name, int32 length)
+	{
+		if (!ValidSceneName(session, name, length))
+			return 0;
+		let found = sScene.Find(.(name, length));
+		return found != null && !found.IsDestroyed ? found.Id : 0;
+	}
+
+	static uint64 InstantiatePrefab(void* context, uint64 session, char8* path, int32 length)
+	{
+		if (!ValidSceneName(session, path, length))
+			return 0;
+		// Prefab.Instantiate already enforces network authority and ownership.
+		let created = Prefab.Instantiate(sScene, .(path, length));
+		return created != null && !created.IsDestroyed ? created.Id : 0;
 	}
 
 	static int32 IsAlive(void* context, uint64 scene, uint64 entity) => Find(scene, entity) != null ? 1 : 0;

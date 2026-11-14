@@ -24,6 +24,11 @@ typedef struct tn_csharp_callbacks {
     // Resolve an engine-built [CSharpExpose] wrapper once at call-site startup.
     // Only validated, generated C ABI entrypoints are returned.
     void* (*resolve_api)(void*, const char* symbol);
+    // Session-checked scene operations. Returned values are object IDs,
+    // or zero if no object exists / creation is disallowed.
+    uint64_t (*create_scene_object)(void*, uint64_t session, const char* utf8, int32_t byte_length);
+    uint64_t (*find_scene_object)(void*, uint64_t session, const char* utf8, int32_t byte_length);
+    uint64_t (*instantiate_prefab)(void*, uint64_t session, const char* utf8, int32_t byte_length);
 } tn_csharp_callbacks;
 
 // ABI mirror of Tallow's current and previous tick controls.

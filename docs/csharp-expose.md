@@ -139,3 +139,18 @@ which copy messages into the engine's native Console.
 Returning native strings, retaining borrowed pointers, and async callbacks
 are deliberately unsupported until their ownership protocols are defined.
 The integration test checks a non-ASCII string arrives intact over the C ABI.
+
+
+### Managed scene and prefab facade (initial)
+
+C# gameplay now exposes `Script.Scene` and `GameObject.Scene` as a
+session-scoped handle, plus `Scene.CreateGameObject(name)`, `Scene.Find(name)`,
+`Scene.InstantiatePrefab(path)`, and `Prefab.Instantiate(scene, path)`.
+The native callbacks validate the active session, copy at most 4 KiB of UTF-8
+input, and return only the new/found `GameObject.Id`; no Beef `GameObject*`,
+Flecs pointer, or native ownership leaves the engine. Prefab creation calls
+the existing Beef `Prefab.Instantiate` so server authority and replicated
+ownership are preserved, including the possibility of a null client-side
+return. A C++ native-host regression drives the C# facade and checks the
+original names and paths. This first bridge does not yet implement hierarchy
+parenting, full scene iteration, component querying, or all Unity-like APIs.

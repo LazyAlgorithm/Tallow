@@ -61,6 +61,12 @@ internal static class Program
                 _transform.Remove(key);
         }
         public bool IsMine(GameObject gameObject) => IsAlive(gameObject);
+        public ulong CreateSceneObject(ulong sceneSession, string name) =>
+            throw new NotSupportedException("This managed smoke host has no native scene.");
+        public ulong FindSceneObject(ulong sceneSession, string name) =>
+            throw new NotSupportedException("This managed smoke host has no native scene.");
+        public ulong InstantiatePrefab(ulong sceneSession, string path) =>
+            throw new NotSupportedException("This managed smoke host has no native scene.");
         public GameObject Create(ulong id)
         {
             GameObject gameObject = new(1, id);
@@ -109,7 +115,8 @@ internal static class Program
                 // This scripted probe exercises compiler-generated native
                 // exports and requires the in-process hostfxr bridge. The
                 // managed-only host has no Beef function-pointer resolver.
-                if (type.FullName == "Gameplay.GeneratedBindingSmoke")
+                if (type.FullName is "Gameplay.GeneratedBindingSmoke" or
+                    "Gameplay.SceneApiSmoke")
                     continue;
                 if (type.IsAbstract || !typeof(Script).IsAssignableFrom(type) ||
                     !Attribute.IsDefined(type, typeof(ComponentAttribute)))

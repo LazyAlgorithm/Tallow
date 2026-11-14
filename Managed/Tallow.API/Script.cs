@@ -67,10 +67,55 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
 {
     public bool IsValid => Engine.Bridge.IsAlive(this);
     public Transform Transform => new(this);
+    /// <summary>The scene session containing this object; no native pointer is held.</summary>
+    public Scene Scene => new(SceneId);
     /// <summary>Find an attached C# gameplay behaviour on this object.</summary>
     public T? GetComponent<T>() where T : Script =>
         Engine.Bridge.GetManagedComponent(this, typeof(T)) as T;
     public void Destroy() => Engine.Bridge.Destroy(this);
+}
+
+/// <summary>
+/// A reference to the active scene session. Its ID is checked by Beef for
+/// every operation, so stale handles cannot access a subsequently opened scene.
+/// </summary>
+public readonly record struct Scene(ulong SessionId)
+{
+    /// <summary>Create an empty scene object containing a Transform.</summary>
+    public GameObject CreateGameObject(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ulong id = Engine.Bridge.CreateSceneObject(SessionId, name);
+        return id != 0 ? new GameObject(SessionId, id) :
+            throw new InvalidOperationException(
+                "The scene is no longer active or the native object could not be created.");
+    }
+
+    /// <summary>Find the first object with this name (linear scene search).</summary>
+    public GameObject? Find(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ulong id = Engine.Bridge.FindSceneObject(SessionId, name);
+        return id == 0 ? null : new GameObject(SessionId, id);
+    }
+
+    /// <summary>
+    /// Instantiate a prefab with the native network ownership rules. A
+    /// replicated prefab can return null on clients until the server spawns it.
+    /// </summary>
+    public GameObject? InstantiatePrefab(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ulong id = Engine.Bridge.InstantiatePrefab(SessionId, path);
+        return id == 0 ? null : new GameObject(SessionId, id);
+    }
+}
+
+/// <summary>Native prefab instantiation; networking authority remains in Beef.</summary>
+public static class Prefab
+{
+    public static GameObject? Instantiate(Scene scene, string path) =>
+        scene.InstantiatePrefab(path);
 }
 
 /// <summary>
@@ -216,6 +261,9 @@ public interface IEngineBridge
     Script? GetManagedComponent(GameObject gameObject, Type scriptType);
     void Destroy(GameObject gameObject);
     bool IsMine(GameObject gameObject);
+    ulong CreateSceneObject(ulong sceneSession, string name);
+    ulong FindSceneObject(ulong sceneSession, string name);
+    ulong InstantiatePrefab(ulong sceneSession, string path);
 }
 
 public static class Engine
@@ -234,6 +282,9 @@ public static class Engine
         public Script? GetManagedComponent(GameObject gameObject, Type scriptType) => throw Missing();
         public void Destroy(GameObject gameObject) => throw Missing();
         public bool IsMine(GameObject gameObject) => throw Missing();
+        public ulong CreateSceneObject(ulong sceneSession, string name) => throw Missing();
+        public ulong FindSceneObject(ulong sceneSession, string name) => throw Missing();
+        public ulong InstantiatePrefab(ulong sceneSession, string path) => throw Missing();
     }
 
     public static IEngineBridge Bridge { get; private set; } = new UnboundBridge();
@@ -253,6 +304,7 @@ public abstract class Script
     private Transform? _transform;
     public Transform Transform => _transform ??= new Transform(GameObject);
     public bool IsMine => Engine.Bridge.IsMine(GameObject);
+    public Scene Scene => GameObject.Scene;
 
     /// <summary>Find another attached C# behaviour, as in native Beef scripts.</summary>
     public T? GetComponent<T>() where T : Script => GameObject.GetComponent<T>();

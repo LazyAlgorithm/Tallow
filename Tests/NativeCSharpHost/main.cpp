@@ -11,6 +11,10 @@
 struct TestScene
 {
     bool alive = true;
+    std::string createdName;
+    std::string prefabPath;
+    uint32_t createCount = 0;
+    uint32_t prefabCount = 0;
     int alive_checks = 0;
     float position[3] = {};
     float local_position[3] = {};
@@ -112,6 +116,32 @@ static int32_t IsMine(void*, uint64_t scene, uint64_t object)
     return Match(scene, object) ? 1 : 0;
 }
 
+static uint64_t CreateSceneObject(void* context, uint64_t session, const char* utf8, int32_t length)
+{
+    if (!context || session != 1 || !utf8 || length < 1 || length > 4096) return 0;
+    auto* state = static_cast<TestScene*>(context);
+    state->createdName.assign(utf8, static_cast<size_t>(length));
+    ++state->createCount;
+    return 42;
+}
+
+static uint64_t FindSceneObject(void* context, uint64_t session, const char* utf8, int32_t length)
+{
+    if (!context || session != 1 || !utf8 || length < 1 || length > 4096) return 0;
+    auto* state = static_cast<TestScene*>(context);
+    return state->createCount > 0 &&
+           state->createdName == std::string(utf8, static_cast<size_t>(length)) ? 42 : 0;
+}
+
+static uint64_t InstantiatePrefab(void* context, uint64_t session, const char* utf8, int32_t length)
+{
+    if (!context || session != 1 || !utf8 || length < 1 || length > 4096) return 0;
+    auto* state = static_cast<TestScene*>(context);
+    state->prefabPath.assign(utf8, static_cast<size_t>(length));
+    ++state->prefabCount;
+    return 77;
+}
+
 // The standalone native-host test substitutes a tiny ABI-compatible
 // implementation for the generator's reflected Beef fixture. The real
 // launcher resolves the identical symbol IDs from emitted Beef methods.
@@ -183,7 +213,8 @@ int main(int argc, char** argv)
     TestScene state;
     tn_csharp_callbacks callbacks = {
         &state, &Alive, &GetPosition, &SetPosition, &Destroy, &IsMine,
-        &GetTransform, &SetTransform, &ResolveApi
+        &GetTransform, &SetTransform, &ResolveApi,
+        &CreateSceneObject, &FindSceneObject, &InstantiatePrefab
     };
     if (!tn_csharp_set_callbacks(&callbacks))
         return Failure("binding engine callbacks");
@@ -324,6 +355,14 @@ int main(int argc, char** argv)
         return Failure("using generated binding after native rebind");
     if (!tn_csharp_detach(rebound) || firstAverageCalls != 1 || secondAverageCalls != 1)
         return Failure("stale cached native function pointer survived rebind");
+
+    const int32_t sceneApi = tn_csharp_attach("Gameplay.SceneApiSmoke", 1, 1);
+    if (sceneApi < 1 || !tn_csharp_dispatch(sceneApi, TN_CSHARP_AWAKE, 0.0f))
+        return Failure("creating, finding, and instantiating prefab from C#");
+    if (!tn_csharp_detach(sceneApi) || state.createCount != 1 ||
+        state.createdName != "From C#" ||
+        state.prefabCount != 1 || state.prefabPath != "Prefabs/Box.tprefab")
+        return Failure("C# scene API did not forward validated native scene arguments");
 
     if (!tn_csharp_unload_game())
         return Failure("ending second Play session");

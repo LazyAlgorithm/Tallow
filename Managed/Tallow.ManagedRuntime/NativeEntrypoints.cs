@@ -27,6 +27,9 @@ public static unsafe class NativeEntrypoints
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, int> GetTransform;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, int> SetTransform;
         public delegate* unmanaged[Cdecl]<nint, byte*, nint> ResolveApi;
+        public delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> CreateSceneObject;
+        public delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> FindSceneObject;
+        public delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> InstantiatePrefab;
     }
 
     private sealed class NativeBridge(Callbacks callbacks) : IEngineBridge
@@ -108,6 +111,28 @@ public static unsafe class NativeEntrypoints
 
         public bool IsMine(GameObject gameObject) =>
             _callbacks.IsMine(_callbacks.Context, gameObject.SceneId, gameObject.Id) != 0;
+
+        // These calls return opaque object IDs. The native scene validates
+        // the session and keeps ownership; no managed code receives a pointer.
+        private ulong CallScene(
+            delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> callback,
+            ulong session, string value)
+        {
+            byte[] utf8 = Encoding.UTF8.GetBytes(value);
+            if (utf8.Length is 0 or > 4096)
+                return 0;
+            fixed (byte* bytes = utf8)
+                return callback(_callbacks.Context, session, bytes, utf8.Length);
+        }
+
+        public ulong CreateSceneObject(ulong session, string name) =>
+            CallScene(_callbacks.CreateSceneObject, session, name);
+
+        public ulong FindSceneObject(ulong session, string name) =>
+            CallScene(_callbacks.FindSceneObject, session, name);
+
+        public ulong InstantiatePrefab(ulong session, string path) =>
+            CallScene(_callbacks.InstantiatePrefab, session, path);
     }
 
     private static readonly Dictionary<string, Type> sTypes = new(StringComparer.Ordinal);
@@ -169,7 +194,8 @@ public static unsafe class NativeEntrypoints
             if (native->IsAlive == null || native->GetPosition == null ||
                 native->SetPosition == null || native->Destroy == null || native->IsMine == null ||
                 native->GetTransform == null || native->SetTransform == null ||
-                native->ResolveApi == null)
+                native->ResolveApi == null || native->CreateSceneObject == null ||
+                native->FindSceneObject == null || native->InstantiatePrefab == null)
                 throw new InvalidOperationException("Native scene callbacks are missing.");
             Engine.Bind(new NativeBridge(*native));
             GeneratedNativeApi.Bind(native->Context, (nint)native->ResolveApi);
