@@ -11,6 +11,7 @@
 struct TestScene
 {
     bool alive = true;
+    int alive_checks = 0;
     float position[3] = {};
     float local_position[3] = {};
     float scale[3] = {1, 1, 1};
@@ -28,7 +29,9 @@ static bool Match(uint64_t scene, uint64_t object)
 
 static int32_t Alive(void* context, uint64_t scene, uint64_t object)
 {
-    return Match(scene, object) && static_cast<TestScene*>(context)->alive ? 1 : 0;
+    auto* state = static_cast<TestScene*>(context);
+    ++state->alive_checks;
+    return Match(scene, object) && state->alive ? 1 : 0;
 }
 
 static int32_t GetPosition(void* context, uint64_t scene, uint64_t object, float* xyz)
@@ -150,9 +153,14 @@ int main(int argc, char** argv)
     // A scene's Inspector field is applied after component construction, before Awake.
     if (!tn_csharp_apply_fields(script, "Speed\t6\n"))
         return Failure("applying saved C# Inspector float field");
+    const int alive_checks_before = state.alive_checks;
     if (!tn_csharp_dispatch(script, TN_CSHARP_AWAKE, 0.0f) ||
         !tn_csharp_tick(script, 1.0f))
         return Failure("executing C# Update with configured Speed");
+    // Transform.Position += does a get and a set. Both callbacks validate
+    // in-place; no separate native IsAlive call is allowed on this hot path.
+    if (state.alive_checks != alive_checks_before)
+        return Failure("Transform.Position still makes redundant native liveness calls");
 
     if (std::fabs(state.position[0] - 6.0f) > 0.0001f)
         return Failure("managed Inspector field failed to change native movement");
