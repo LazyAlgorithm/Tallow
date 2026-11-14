@@ -304,7 +304,8 @@ def execute(project, folder):
         for fields in raw_completions
         if len(fields) >= 2 and fields[0] == 'property'
     }
-    for fields in raw_completions:
+    for line in info.splitlines():
+        fields = line.split('\t')
         kind = fields[0]
         if kind == 'defLoc' and len(fields) >= 4:
             output.append(['definition', *fields[1:4]])
