@@ -100,7 +100,8 @@ jobs:
                   index($8, "Idle") && index($8, "Hover") && index($8, "Jump")) enumPublic=1
               if ($2 == "privateMode" && $3 == "enum" && $7 == "0") enumPrivate=1
               if ($2 == "hiddenMode" && $3 == "enum" && $7 == "1") enumHidden=1
-              if ($2 == "skippedNonSerialized" || $2 == "implementationOnly") invalid=1
+              if ($2 == "skippedNonSerialized" || $2 == "implementationOnly" ||
+                  $2 == "privateIdOnly") invalid=1
             }
             END {
               if (!speed || !enabled || !serialized || !hiddenPublic || \
