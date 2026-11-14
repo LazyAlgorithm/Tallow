@@ -367,7 +367,17 @@ internal static class Program
         foreach (string file in Directory.EnumerateFiles(sourceDirectory, "*.cs", SearchOption.AllDirectories))
             snapshot[Path.GetFullPath(file)] = File.ReadAllText(file);
         foreach (string file in Directory.EnumerateFiles(apiDirectory, "*.cs", SearchOption.AllDirectories))
+        {
+            // Roslyn must compile the public API source, including our
+            // generated native wrappers, but NOT SDK obj/bin assembly-info
+            // output. Those files aren't part of the C# project and pollute
+            // the editor compilation with duplicate attributes and types.
+            string relative = Path.GetRelativePath(apiDirectory, file);
+            if (relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Any(part => part is "obj" or "bin"))
+                continue;
             snapshot[Path.GetFullPath(file)] = File.ReadAllText(file);
+        }
 
         foreach ((string original, string copy) in overlays)
         {
