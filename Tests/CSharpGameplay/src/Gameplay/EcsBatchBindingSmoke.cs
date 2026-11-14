@@ -1,5 +1,6 @@
 using System;
 using Tallow;
+using Tallow.Generated;
 
 namespace Gameplay;
 
@@ -85,6 +86,25 @@ public sealed class EcsBatchBindingSmoke : Script
             blob.TryCopyLocalData(validSchema, readback) ||
             blob.SetLocalData(validSchema, data))
             throw new InvalidOperationException("Flecs data survived entity deletion.");
+
+        // The build tool generates these strongly typed overloads directly
+        // from marked unmanaged C# structs. No manual schema IDs, raw
+        // buffers or runtime reflection are needed in gameplay code.
+        var typed = scene.CreateLocalEcsEntity();
+        VelocityData velocity = new()
+        {
+            Velocity = new System.Numerics.Vector3(3, 4, 5),
+            Drag = 0.25f,
+            Owner = 17
+        };
+        if (!typed.SetLocalData(in velocity) ||
+            !typed.TryGetLocalData(out VelocityData restored) ||
+            restored.Velocity != velocity.Velocity ||
+            restored.Drag != velocity.Drag ||
+            restored.Owner != velocity.Owner ||
+            !typed.DestroyLocal() ||
+            typed.TryGetLocalData(out restored))
+            throw new InvalidOperationException("Generated typed ECS data bridge failed.");
 
         if (scene.CreateLocalEcsEntities(Span<ulong>.Empty) != 0 ||
             new Scene(999).CreateLocalEcsEntities(batch) != 0 ||

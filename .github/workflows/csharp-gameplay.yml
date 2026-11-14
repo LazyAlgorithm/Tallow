@@ -131,6 +131,18 @@ jobs:
             }
             END { if (!valid || !sync || !drag || !owner || !unsafe || !managed) exit 1 }
           ' "$manifest"
+      - name: Verify generated typed offline ECS extensions exclude unsafe C# layouts
+        shell: bash
+        run: |
+          typed=Tests/CSharpGameplay/.tallow-csharp/generated/Gameplay/Tallow.EcsLocalData.g.cs
+          test -f "$typed"
+          grep -q 'VelocityData value' "$typed"
+          grep -q 'out global::Gameplay.VelocityData result' "$typed"
+          grep -q 'Unsafe.SizeOf<global::Gameplay.VelocityData>()' "$typed"
+          if grep -q 'InvalidNativeLayout' "$typed"; then
+            echo "Unsafe managed ECS type leaked into generated native storage API"
+            exit 1
+          fi
       - name: Verify serialized field IDs survive C# renames and reject collisions
         shell: bash
         run: |

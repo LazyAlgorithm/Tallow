@@ -133,6 +133,9 @@ internal static class Program
         var includes = new XElement("ItemGroup",
             // Using is an MSBuild item, not a PropertyGroup property.
             new XElement("Using", new XAttribute("Include", "System.Numerics")),
+            // Typed ECS data extensions are generated in each trusted
+            // assembly and should be discoverable like built-in APIs.
+            new XElement("Using", new XAttribute("Include", "Tallow.Generated")),
             files.Select(file => new XElement("Compile", new XAttribute("Include", file))));
         var refs = new XElement("ItemGroup",
             new XElement("ProjectReference", new XAttribute("Include", api)));
@@ -179,9 +182,16 @@ internal static class Program
 
         var allTypes = new Dictionary<string, SortedDictionary<string, string>>(
             StringComparer.Ordinal);
+        // Each assembly gets its own typed local-data adapters. No gameplay
+        // assembly scanning or reflection is needed after C# compilation.
+        var allEcsTypes = new Dictionary<string,
+            SortedDictionary<string, (string CSharpType, string SchemaId)>>(
+                StringComparer.Ordinal);
         foreach (var (assembly, sourceFiles) in filesByAssembly)
         {
             var types = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            var ecsTypes = new SortedDictionary<string, (string CSharpType, string SchemaId)>(
+                StringComparer.Ordinal);
             foreach (string sourceFile in sourceFiles)
             {
                 SyntaxTree tree = treesByPath[sourceFile];
@@ -229,8 +239,71 @@ internal static class Program
                     types[name] = symbol.ToDisplayString(
                         SymbolDisplayFormat.FullyQualifiedFormat);
                 }
+
+                foreach (StructDeclarationSyntax node in tree.GetRoot().DescendantNodes()
+                    .OfType<StructDeclarationSyntax>())
+                {
+                    if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol symbol ||
+                        !symbol.GetAttributes().Any(a =>
+                            a.AttributeClass?.ToDisplayString() == "Tallow.ComponentAttribute") ||
+                        !symbol.IsUnmanagedType || symbol.IsRefLikeType ||
+                        symbol.IsGenericType)
+                        continue;
+
+                    bool accessible = true;
+                    for (INamedTypeSymbol? scope = symbol; scope != null;
+                         scope = scope.ContainingType)
+                        if (scope.DeclaredAccessibility is not
+                            (Accessibility.Public or Accessibility.Internal))
+                            accessible = false;
+                    if (!accessible)
+                        continue;
+
+                    IFieldSymbol[] fields = symbol.GetMembers().OfType<IFieldSymbol>()
+                        .Where(field => !field.IsStatic && !field.IsConst &&
+                            !field.IsImplicitlyDeclared).ToArray();
+                    bool supported = fields.Length > 0 && fields.Length <= 128;
+                    foreach (IFieldSymbol field in fields)
+                    {
+                        string kind = field.Type.ToDisplayString();
+                        if (field.IsFixedSizeBuffer || field.IsReadOnly ||
+                            !(field.Type.SpecialType is
+                                SpecialType.System_Boolean or SpecialType.System_Int32 or
+                                SpecialType.System_UInt32 or SpecialType.System_Int64 or
+                                SpecialType.System_UInt64 or SpecialType.System_Single or
+                                SpecialType.System_Double ||
+                              kind is "System.Numerics.Vector2" or
+                                "System.Numerics.Vector3" or
+                                "System.Numerics.Vector4" or
+                                "System.Numerics.Quaternion"))
+                            supported = false;
+                    }
+                    if (!supported)
+                        continue;
+
+                    // Hash the *declaration*, not just its byte count. An
+                    // incompatible same-size field change gets a new Flecs
+                    // ID even during an editor hot reload. Keep assembly and
+                    // field attributes in the signature for distinct layouts.
+                    string name = symbol.ToDisplayString(
+                        SymbolDisplayFormat.CSharpErrorMessageFormat);
+                    string signature = assembly + "|" + name + "|" +
+                        string.Join("|", symbol.GetAttributes().Select(a => a.ToString())) +
+                        "|" + string.Join("|", fields.Select(field =>
+                            field.Name + ":" +
+                            field.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) +
+                            ":" + string.Join(",", field.GetAttributes().Select(a =>
+                                a.ToString()))));
+                    string schemaId = Convert.ToHexString(SHA256.HashData(
+                        Encoding.UTF8.GetBytes("TALLOW_LOCAL_ECS_V1|" + signature))
+                        .AsSpan(0, 8));
+                    ecsTypes[name] = (
+                        symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        schemaId);
+                }
             }
             allTypes.Add(assembly, types);
+            allEcsTypes.Add(assembly, ecsTypes);
         }
 
         // Source is generated under .tallow-csharp, NEVER in the user's src.
@@ -262,6 +335,55 @@ internal static class Program
                 "Tallow.ComponentFactory.g.cs");
             WriteIfDifferent(output, source.ToString());
             filesByAssembly[assembly].Add(output);
+        }
+
+        // Generate strongly typed local data adapters before compilation.
+        // The managed value is copied into a pinned Span<byte> only for one
+        // synchronous generated ABI call. Native Flecs stores opaque bytes;
+        // no C# references/pointers escape, no Jolt state is modified, and
+        // the scene/session/network guards still live in Beef.
+        foreach ((string assembly, var ecsTypes) in allEcsTypes)
+        {
+            var generatedEcs = new StringBuilder();
+            generatedEcs.AppendLine("// Generated by Tallow.Build. Offline-only packed ECS data.")
+                .AppendLine("#nullable enable")
+                .AppendLine("namespace Tallow.Generated;")
+                .Append("public static class EcsLocalData_")
+                .Append(FactoryName(assembly)).AppendLine()
+                .AppendLine("{");
+            foreach ((string typeName, var schema) in ecsTypes)
+            {
+                string type = schema.CSharpType;
+                string id = "0x" + schema.SchemaId + "UL";
+                generatedEcs.Append("    /// <summary>Write local-only ")
+                    .Append(typeName).AppendLine(" to a native Flecs entity.</summary>")
+                    .Append("    public static bool SetLocalData(this global::Tallow.EcsEntity entity, in ")
+                    .Append(type).AppendLine(" value)")
+                    .AppendLine("    {")
+                    .AppendLine("        if (!new global::Tallow.Scene(entity.SessionId).RegisterLocalEcsData(")
+                    .Append("            ").Append(id).Append(", global::System.Runtime.CompilerServices.Unsafe.SizeOf<")
+                    .Append(type).AppendLine(">(), 1))")
+                    .AppendLine("            return false;")
+                    .AppendLine("        var copy = value;")
+                    .Append("        return entity.SetLocalData(").Append(id)
+                    .AppendLine(", global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(")
+                    .AppendLine("            global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref copy, 1)));")
+                    .AppendLine("    }")
+                    .Append("    /// <summary>Read local-only ").Append(typeName)
+                    .AppendLine(" from a native Flecs entity.</summary>")
+                    .Append("    public static bool TryGetLocalData(this global::Tallow.EcsEntity entity, out ")
+                    .Append(type).AppendLine(" result)")
+                    .AppendLine("    {")
+                    .AppendLine("        result = default;")
+                    .Append("        return entity.TryCopyLocalData(").Append(id)
+                    .AppendLine(", global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(")
+                    .AppendLine("            global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref result, 1)));")
+                    .AppendLine("    }");
+            }
+            generatedEcs.AppendLine("}");
+            string ecsPath = Path.Combine(generated, assembly, "Tallow.EcsLocalData.g.cs");
+            WriteIfDifferent(ecsPath, generatedEcs.ToString());
+            filesByAssembly[assembly].Add(ecsPath);
         }
 
         // Game root references all assembly factories explicitly. A future

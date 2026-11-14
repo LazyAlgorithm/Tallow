@@ -924,3 +924,27 @@ authoring-friendly typed ECS, networked replication or a supported way to
 manually create native Jolt data. Source-generated C# field-layout validation
 and typed `[Component]` adapters are still required before general gameplay
 and NativeAOT player use. `[Sync]` does not yet replicate these fields.
+
+
+### Source-generated typed offline C# ECS data adapters
+
+- The trusted gameplay builder now emits `Tallow.EcsLocalData.g.cs`
+  per assembly for eligible `[Component]` unmanaged structs containing
+  supported primitive/Vector fields. Generated C# extension methods
+  `EcsEntity.SetLocalData(in T)` and `EcsEntity.TryGetLocalData(out T)`
+  transfer one struct to/from the existing native Flecs opaque data storage
+  via the counted, pinned byte-span ABI. They do not require handwritten
+  per-component bindings, unsafe C# gameplay, runtime reflection or scanning.
+- Generated schema IDs hash assembly, full type name, field names/types and
+  declared attributes so same-size declaration edits cannot silently reuse
+  a native Flecs ID. Registration passes the actual C# `Unsafe.SizeOf<T>()`
+  and byte alignment 1: this is an **opaque byte column**, not yet a
+  natively introspectable field layout. Field-level native offsets still
+  require explicit generated layout verification in the following phase.
+- Calls reject networked scenes, dead or foreign Flecs entities, bad
+  sessions and mismatched buffer lengths on the native side. Unmanaged
+  struct byte buffers remain local-only and must not be interpreted as
+  deterministic, cross-platform network payloads. [Sync] is not wired yet.
+- The native-host managed smoke tests typed VelocityData round trips and
+  deletion; CI checks that unsupported managed-reference structs have no
+  generated extension. Verify all jobs before considering this complete.
