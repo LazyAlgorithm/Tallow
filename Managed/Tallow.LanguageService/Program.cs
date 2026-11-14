@@ -52,6 +52,57 @@ internal static class Program
 
     private static IEnumerable<MetadataReference> References() => CachedReferences.Value;
 
+    // A stable tree for implicit imports: don't invalidate Roslyn on each query.
+    private static readonly CSharpParseOptions CSharp15 = new(LanguageVersion.CSharp15);
+    private static readonly SyntaxTree GlobalUsings = CSharpSyntaxTree.ParseText("""
+        global using System;
+        global using System.Collections.Generic;
+        global using System.IO;
+        global using System.Linq;
+        global using System.Net.Http;
+        global using System.Threading;
+        global using System.Threading.Tasks;
+        global using System.Numerics;
+        """, CSharp15, path: "Tallow.GameImplicitUsings.g.cs");
+
+    // Immutable Roslyn compilation reused within the single-threaded worker.
+    // Replacing only changed trees retains semantic state for unchanged files.
+    private static CSharpCompilation? CachedCompilation;
+
+    private static CSharpCompilation CompilationFor(IReadOnlyList<SyntaxTree> currentTrees)
+    {
+        if (CachedCompilation is null)
+        {
+            CachedCompilation = CSharpCompilation.Create("Tallow.SemanticWorkspace",
+                currentTrees, References(),
+                // Engine API wrappers use unsafe pointers, but generated game
+                // projects continue forbidding unsafe gameplay code.
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+                    allowUnsafe: true,
+                    nullableContextOptions: NullableContextOptions.Enable));
+            return CachedCompilation;
+        }
+
+        CSharpCompilation compilation = CachedCompilation;
+        var previous = compilation.SyntaxTrees.ToDictionary(
+            tree => tree.FilePath, tree => tree, StringComparer.OrdinalIgnoreCase);
+        var current = currentTrees.ToDictionary(
+            tree => tree.FilePath, tree => tree, StringComparer.OrdinalIgnoreCase);
+
+        foreach (SyntaxTree oldTree in previous.Values)
+            if (!current.ContainsKey(oldTree.FilePath))
+                compilation = compilation.RemoveSyntaxTrees(oldTree);
+        foreach (SyntaxTree newTree in currentTrees)
+        {
+            if (!previous.TryGetValue(newTree.FilePath, out SyntaxTree? oldTree))
+                compilation = compilation.AddSyntaxTrees(newTree);
+            else if (!ReferenceEquals(oldTree, newTree))
+                compilation = compilation.ReplaceSyntaxTree(oldTree, newTree);
+        }
+        CachedCompilation = compilation;
+        return compilation;
+    }
+
     // The editor holds one Roslyn process for many requests. Reuse immutable
     // parsed trees for sources that did not change instead of lexing the full
     // game + public API on every keystroke. A changed overlay replaces its
@@ -156,31 +207,9 @@ internal static class Program
         if (!sourceByPath.TryGetValue(Path.GetFullPath(request.File), out SourceFile? active))
             throw new InvalidOperationException("Requested source is outside the C# project.");
 
-        var parse = new CSharpParseOptions(LanguageVersion.CSharp15);
-        List<SyntaxTree> trees = ParseSnapshots(sourceByPath, parse);
-        // Match the generated game assemblies' implicit System.Numerics import.
-        // The game uses SDK-generated implicit usings plus Tallow's extra
-        // System.Numerics import. Roslyn's standalone semantic compilation
-        // must use the SAME global imports as the real generated .csproj,
-        // otherwise source API types produce misleading CS0246 and operator
-        // errors even when the actual game assembly compiles correctly.
-        trees.Add(CSharpSyntaxTree.ParseText("""
-            global using System;
-            global using System.Collections.Generic;
-            global using System.IO;
-            global using System.Linq;
-            global using System.Net.Http;
-            global using System.Threading;
-            global using System.Threading.Tasks;
-            global using System.Numerics;
-            """, parse, path: "Tallow.GameImplicitUsings.g.cs"));
-        var compilation = CSharpCompilation.Create("Tallow.SemanticWorkspace", trees,
-            References(), // The workspace includes trusted Tallow.API source, whose generated
-            // native function-pointer wrappers use unsafe internally. Game
-            // project MSBuild still forbids unsafe gameplay code.
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
-                allowUnsafe: true,
-                nullableContextOptions: NullableContextOptions.Enable));
+        List<SyntaxTree> trees = ParseSnapshots(sourceByPath, CSharp15);
+        trees.Add(GlobalUsings);
+        CSharpCompilation compilation = CompilationFor(trees);
         SyntaxTree selected = trees.First(tree =>
             string.Equals(tree.FilePath, Path.GetFullPath(request.File), StringComparison.OrdinalIgnoreCase));
         SemanticModel model = compilation.GetSemanticModel(selected);

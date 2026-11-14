@@ -650,3 +650,18 @@ claim automatic replication of dynamically created joints.
   valid override set. It then runs the existing Awake state assertions to
   detect any partial write. Requires managed Linux/Windows CI verification
   and an actual Nobara editor save/reopen test (benchmark B09).
+
+
+### Persistent incremental Roslyn compilation (November 14, 2026)
+
+- The existing persistent C# worker cached parsed trees but recreated its
+  compilation for every completion/diagnostic query. It now retains one
+  immutable `CSharpCompilation` and incrementally replaces/adds/removes
+  changed syntax trees, preserving unchanged API/game semantic caches and
+  stable implicit framework and System.Numerics imports.
+- Persistent-service tests now add a broken C# file and then delete it to
+  verify diagnostics correctly invalidate, in addition to existing
+  changed-source/recovery tests.
+- **Pending tests:** .NET 11 Linux/Windows CI, benchmark B05 p50/p95/p99
+  completions and memory on Nobara, and full interactive editor verification.
+  Project-level assembly-definition semantics remain future work.

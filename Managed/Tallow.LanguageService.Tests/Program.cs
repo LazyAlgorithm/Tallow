@@ -198,6 +198,31 @@ internal static class Program
                 !restoredResult.Contains("diagnostic\t") &&
                 !restoredResult.Contains("error\t"));
 
+            // A new/deleted script must invalidate the compilation even
+            // without any edits to the active code editor tab.
+            string added = Path.Combine(source, "AddedBroken.cs");
+            File.WriteAllText(added, "class AddedBroken { int Count = \"wrong\"; }");
+            string addFolder = Path.Combine(queue, "request-4");
+            Directory.CreateDirectory(addFolder);
+            PublishRequest(addFolder,
+                $"operation\tdiagnostics\nfile\t{file}\ncursor\t0\n");
+            string addResponse = Path.Combine(addFolder, "response.tsv");
+            WaitFor(addResponse, worker);
+            Check("persistent Roslyn discovers newly added source files",
+                File.ReadAllText(addResponse).Contains("CS0029"));
+
+            File.Delete(added);
+            string removeFolder = Path.Combine(queue, "request-5");
+            Directory.CreateDirectory(removeFolder);
+            PublishRequest(removeFolder,
+                $"operation\tdiagnostics\nfile\t{file}\ncursor\t0\n");
+            string removeResponse = Path.Combine(removeFolder, "response.tsv");
+            WaitFor(removeResponse, worker);
+            string removedResult = File.ReadAllText(removeResponse);
+            Check("persistent Roslyn evicts removed source files",
+                !removedResult.Contains("diagnostic\t") &&
+                !removedResult.Contains("error\t"));
+
             File.WriteAllText(Path.Combine(queue, "stop"), "stop");
             Check("persistent Roslyn worker stops cleanly", worker.WaitForExit(5000) &&
                 worker.ExitCode == 0);
