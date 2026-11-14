@@ -225,7 +225,8 @@ internal static class Program
                 // though they are not part of the public gameplay API.
                 // Hide all nonpublic engine API declarations; keep private
                 // fields/methods in the user's own game source visible normally.
-                if (symbol.DeclaredAccessibility != Accessibility.Public &&
+                if (symbol is not INamespaceSymbol &&
+                    symbol.DeclaredAccessibility != Accessibility.Public &&
                     symbol.Locations.Any(location =>
                         location.IsInSource &&
                         location.SourceTree?.FilePath.Replace('\\', '/').Contains(
