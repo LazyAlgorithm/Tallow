@@ -24,6 +24,8 @@ public static unsafe class NativeEntrypoints
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, float*, void> SetPosition;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, void> Destroy;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int> IsMine;
+        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, void> GetTransform;
+        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, void> SetTransform;
     }
 
     private sealed class NativeBridge(Callbacks callbacks) : IEngineBridge
@@ -48,6 +50,25 @@ public static unsafe class NativeEntrypoints
                 throw new ObjectDisposedException(nameof(GameObject), "The native scene entity was destroyed.");
             float* xyz = stackalloc float[3] { position.X, position.Y, position.Z };
             _callbacks.SetPosition(_callbacks.Context, gameObject.SceneId, gameObject.Id, xyz);
+        }
+
+        public Vector4 GetTransform(GameObject gameObject, TransformChannel channel)
+        {
+            if (!IsAlive(gameObject))
+                throw new ObjectDisposedException(nameof(GameObject), "The native scene entity was destroyed.");
+            float* values = stackalloc float[4];
+            _callbacks.GetTransform(_callbacks.Context, gameObject.SceneId, gameObject.Id,
+                (int)channel, values);
+            return new Vector4(values[0], values[1], values[2], values[3]);
+        }
+
+        public void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value)
+        {
+            if (!IsAlive(gameObject))
+                throw new ObjectDisposedException(nameof(GameObject), "The native scene entity was destroyed.");
+            float* values = stackalloc float[4] { value.X, value.Y, value.Z, value.W };
+            _callbacks.SetTransform(_callbacks.Context, gameObject.SceneId, gameObject.Id,
+                (int)channel, values);
         }
 
         public void Destroy(GameObject gameObject) =>
@@ -112,7 +133,8 @@ public static unsafe class NativeEntrypoints
                 throw new ArgumentNullException(nameof(callbacks));
             Callbacks* native = (Callbacks*)callbacks;
             if (native->IsAlive == null || native->GetPosition == null ||
-                native->SetPosition == null || native->Destroy == null || native->IsMine == null)
+                native->SetPosition == null || native->Destroy == null || native->IsMine == null ||
+                native->GetTransform == null || native->SetTransform == null)
                 throw new InvalidOperationException("Native scene callbacks are missing.");
             Engine.Bind(new NativeBridge(*native));
             return 1;
