@@ -183,8 +183,6 @@ internal static class Program
                 }
                 else
                     text.AppendLine($"\t\treturn {call};");
-                if (hasStrings)
-                    text.AppendLine("\t\t}");
                 text.AppendLine("\t}").AppendLine();
                 if (m.CanWrite)
                 {
