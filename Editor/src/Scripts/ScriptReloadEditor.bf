@@ -29,6 +29,8 @@ extension EditorApp
 		if (mManagedGameplay)
 		{
 			mReloadReady = false;
+			mScriptMonitor.ScriptExtension = ".cs";
+			mScriptMonitor.Poll(Assets.ProjectPath);
 			return;
 		}
 #if (BF_PLATFORM_LINUX || BF_PLATFORM_WINDOWS) && BF_64_BIT
@@ -148,10 +150,26 @@ extension EditorApp
 	void PollScriptReload()
 	{
 		CollectCheckResults();
-		// C# source is checked by StartManagedErrorCheck and Play gating. Never
-		// queue a BeefBuild or Python script reload for managed gameplay.
+		// Managed projects are monitored for external source changes, but
+		// never enter the old Beef library reload pipeline.
 		if (mManagedGameplay)
+		{
+			if (mScriptPollClock.ElapsedMilliseconds >= 500)
+			{
+				mScriptPollClock.Restart();
+				if (mScriptMonitor.Poll(Assets.ProjectPath))
+				{
+					mManagedBuildReady = false;
+					if (mCheckRunning)
+						mManagedRecheckQueued = true;
+					else if (mPlay == .Edit && Project.Current.ReloadMode != .Manual)
+						StartManagedErrorCheck();
+					else if (mPlay != .Edit)
+						mStatus.Set("C# scripts changed. Stop and restart Play to use the new code.");
+				}
+			}
 			return;
+		}
 		if (mScriptPollClock.ElapsedMilliseconds >= 500)
 		{
 			mScriptPollClock.Restart();
