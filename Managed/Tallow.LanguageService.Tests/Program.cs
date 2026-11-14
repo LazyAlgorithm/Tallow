@@ -89,6 +89,76 @@ internal static class Program
         }
     }
 
+    private static void TestPersistentServer(string service)
+    {
+        string root = Path.Combine(Path.GetTempPath(),
+            "tallow-roslyn-server-" + Guid.NewGuid());
+        string project = Path.Combine(root, "project");
+        string source = Path.Combine(project, "src");
+        string queue = Path.Combine(root, "queue");
+        string engine = Directory.GetCurrentDirectory();
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(queue);
+        string file = Path.Combine(source, "Mover.cs");
+        File.WriteAllText(file, """
+            using Tallow;
+            [Component] public sealed class Mover : Script
+            {
+                public override void Update(TickInput input, float deltaTime)
+                { Transform.Position += Vector3.UnitX * deltaTime; }
+            }
+            """);
+        var start = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (string arg in new[] { service, "--serve", queue, "--project",
+            project, "--engine-root", engine })
+            start.ArgumentList.Add(arg);
+        using Process worker = Process.Start(start) ??
+            throw new InvalidOperationException("Cannot start persistent Roslyn service.");
+        try
+        {
+            static void WaitFor(string file, Process worker)
+            {
+                for (int i = 0; i < 300; i++)
+                {
+                    if (File.Exists(file))
+                        return;
+                    if (worker.HasExited)
+                        throw new InvalidOperationException("Persistent Roslyn service stopped unexpectedly.");
+                    Thread.Sleep(25);
+                }
+                throw new TimeoutException("Persistent Roslyn service did not respond.");
+            }
+            WaitFor(Path.Combine(queue, "ready"), worker);
+            for (int i = 0; i < 2; i++)
+            {
+                string folder = Path.Combine(queue, $"request-{i}");
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Combine(folder, "request.tsv"),
+                    $"operation\tdiagnostics\nfile\t{file}\ncursor\t0\n");
+                string response = Path.Combine(folder, "response.tsv");
+                WaitFor(response, worker);
+                string result = File.ReadAllText(response);
+                Check($"persistent Roslyn request {i + 1} without restarting .NET",
+                    !result.Contains("diagnostic\t") && !result.Contains("error\t"));
+            }
+            File.WriteAllText(Path.Combine(queue, "stop"), "stop");
+            Check("persistent Roslyn worker stops cleanly", worker.WaitForExit(5000) &&
+                worker.ExitCode == 0);
+        }
+        finally
+        {
+            if (!worker.HasExited)
+                worker.Kill(entireProcessTree: true);
+            worker.WaitForExit();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static void Check(string label, bool condition)
     {
         if (!condition)
@@ -115,6 +185,18 @@ internal static class Program
                 vectorSource.Length);
             Check("implicit vectors and arithmetic in Roslyn",
                 !vectorDiagnostics.Contains("diagnostic\t"));
+
+            string inherited = "class Parent { public void ParentMethod() {} } " +
+                "class Child : Parent { void Go() { this.Par";
+            string inheritedResult = Request(service, "completion", inherited, inherited.Length);
+            Check("compiler completion includes inherited methods",
+                inheritedResult.Contains("completion\tParentMethod"));
+
+            string staticType = "static class StaticUtilities { public static int Calculate() => 1; }" +
+                "class Consumer { void Go() { StaticUtilities.Cal";
+            string staticResult = Request(service, "completion", staticType, staticType.Length);
+            Check("compiler completion includes static methods",
+                staticResult.Contains("completion\tCalculate"));
 
             string gameplayVector = @"using Tallow;
 [Component]
@@ -160,6 +242,7 @@ public sealed class CubeMover : Script
             string unicodeReferences = Request(service, "references", unicodeSource, unicodeCursor);
             Check("UTF-8 source offsets", unicodeReferences.Split("reference\t").Length - 1 >= 2);
 
+            TestPersistentServer(service);
             Console.WriteLine($"Passed {_passed} Roslyn integration tests.");
             return 0;
         }
