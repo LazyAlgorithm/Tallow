@@ -31,25 +31,28 @@ static int32_t Alive(void* context, uint64_t scene, uint64_t object)
     return Match(scene, object) && static_cast<TestScene*>(context)->alive ? 1 : 0;
 }
 
-static void GetPosition(void* context, uint64_t, uint64_t, float* xyz)
+static int32_t GetPosition(void* context, uint64_t scene, uint64_t object, float* xyz)
 {
     auto* state = static_cast<TestScene*>(context);
+    if (!Match(scene, object) || !state->alive || !xyz) return 0;
     for (int i = 0; i < 3; ++i) xyz[i] = state->position[i];
+    return 1;
 }
 
-static void SetPosition(void* context, uint64_t, uint64_t, const float* xyz)
+static int32_t SetPosition(void* context, uint64_t scene, uint64_t object, const float* xyz)
 {
     auto* state = static_cast<TestScene*>(context);
+    if (!Match(scene, object) || !state->alive || !xyz) return 0;
     for (int i = 0; i < 3; ++i) state->position[i] = xyz[i];
+    return 1;
 }
 
-// Mirrors the native engine's typed Transform bridge, including local
-// translation and rotation payloads. The full hierarchy behavior is tested
-// separately by the Beef native editor build.
-static void GetTransform(void* context, uint64_t scene, uint64_t object, int32_t channel, float* value)
+// Mirrors Beef Transform; each operation also validates its scene/entity.
+static int32_t GetTransform(void* context, uint64_t scene, uint64_t object,
+    int32_t channel, float* value)
 {
-    if (!Match(scene, object) || !value) return;
     auto* state = static_cast<TestScene*>(context);
+    if (!Match(scene, object) || !state->alive || !value) return 0;
     for (int i = 0; i < 4; ++i) value[i] = 0;
     const float* from = nullptr;
     int count = 3;
@@ -61,18 +64,21 @@ static void GetTransform(void* context, uint64_t scene, uint64_t object, int32_t
         case 4: case 5: from = state->scale; break;
         case 6: from = state->euler; break;
         case 7: from = state->local_euler; break;
-        case 8: value[2] = 1; return;
-        case 9: value[0] = 1; return;
-        case 10: value[1] = 1; return;
-        default: return;
+        case 8: value[2] = 1; return 1;
+        case 9: value[0] = 1; return 1;
+        case 10: value[1] = 1; return 1;
+        case 12: case 13: return 1; // Test scene has no hierarchy.
+        default: return 0;
     }
     for (int i = 0; i < count; ++i) value[i] = from[i];
+    return 1;
 }
 
-static void SetTransform(void* context, uint64_t scene, uint64_t object, int32_t channel, const float* value)
+static int32_t SetTransform(void* context, uint64_t scene, uint64_t object,
+    int32_t channel, const float* value)
 {
-    if (!Match(scene, object) || !value) return;
     auto* state = static_cast<TestScene*>(context);
+    if (!Match(scene, object) || !state->alive || !value) return 0;
     float* target = nullptr;
     int count = 3;
     switch (channel)
@@ -84,11 +90,12 @@ static void SetTransform(void* context, uint64_t scene, uint64_t object, int32_t
         case 6: target = state->euler; break;
         case 7: target = state->local_euler; break;
         case 11: target = state->last_look_at; break;
-        default: return;
+        default: return 0;
     }
     for (int i = 0; i < count; ++i) target[i] = value[i];
     if (channel == 1)
         for (int i = 0; i < 3; ++i) state->position[i] = value[i];
+    return 1;
 }
 
 static void Destroy(void* context, uint64_t scene, uint64_t object)
