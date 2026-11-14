@@ -19,6 +19,8 @@ class EditorApp : Application
 	RenderView mSceneView ~ delete _;
 	RenderView mGameView ~ delete _;
 	PlayState mPlay = .Edit;
+	/// Managed game projects use the precompiled native host; gameplay is C#.
+	bool mManagedGameplay;
 	/// The game asked to quit while playing: Play stops at the start of the next frame (not in the middle of the
 	/// component that asked, whose scene stopping would replace).
 	bool mStopPlayRequested;
@@ -124,6 +126,7 @@ class EditorApp : Application
 		EditorTheme.Init(themeArg, codeThemeArg);
 
 		mBrowsePath.Set(Assets.ProjectPath);
+		mManagedGameplay = HasCSharpSources(scope $"{project.Path}/src");
 		InitializeScriptReload();
 		mSceneView = new RenderView(10);
 		mSceneView.DrawGizmos = true;
@@ -149,7 +152,7 @@ class EditorApp : Application
 		// Opening a project must never require valid C# source. Compile on a
 		// background worker after the editor is visible, then show any errors
 		// in the Console. Play remains blocked until a successful compile.
-		if (HasCSharpSources(scope $"{project.Path}/src"))
+		if (mManagedGameplay)
 		{
 			mManagedBuildReady = false;
 			Log.Info("Checking C# gameplay. Errors can be fixed in the Scripts editor.");
