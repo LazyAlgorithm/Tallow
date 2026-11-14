@@ -141,6 +141,40 @@ static class CSharpRuntime
 		return false;
 	}
 
+	/// Start an already-built trusted game inside a precompiled native engine.
+	/// The same entry point is shared by Editor Play and the standalone runner.
+	/// Neither needs to compile engine or editor sources.
+	public static bool StartTrustedGame(Scene scene, StringView engineRoot, StringView projectPath)
+	{
+		let config = scope $"{engineRoot}/Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json";
+		let runtime = scope $"{engineRoot}/Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll";
+		let game = scope $"{projectPath}/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll";
+		if (!File.Exists(config) || !File.Exists(runtime) || !File.Exists(game))
+		{
+			Log.Error("C# runtime or compiled game assembly is missing. Build the C# project with the .NET SDK before Play.");
+			return false;
+		}
+		if (!Initialize(config, runtime) || !BindScene(scene))
+			return false;
+		if (LoadGame(game) < 0)
+		{
+			UnloadGame();
+			UnbindScene(scene);
+			return false;
+		}
+		return true;
+	}
+
+	/// Call after Scene.StopPlay: all managed components must be detached first.
+	public static void EndTrustedGame(Scene scene)
+	{
+		if (Ready && sScene == scene)
+		{
+			UnloadGame();
+			UnbindScene(scene);
+		}
+	}
+
 	/// Returns a managed instance ID; negative when the C# script failed.
 	public static int32 Attach(StringView className, GameObject gameObject)
 	{
