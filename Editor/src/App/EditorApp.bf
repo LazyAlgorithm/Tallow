@@ -126,7 +126,10 @@ class EditorApp : Application
 		EditorTheme.Init(themeArg, codeThemeArg);
 
 		mBrowsePath.Set(Assets.ProjectPath);
-		mManagedGameplay = HasCSharpSources(scope $"{project.Path}/src");
+		// Precompiled native editor is the default for the C# transition,
+		// including empty projects before the first C# script is created.
+		// Legacy native Beef authoring remains opt-in via --legacy-native.
+		mManagedGameplay = !HasArg("--legacy-native");
 		InitializeScriptReload();
 		mSceneView = new RenderView(10);
 		mSceneView.DrawGizmos = true;
@@ -152,7 +155,7 @@ class EditorApp : Application
 		// Opening a project must never require valid C# source. Compile on a
 		// background worker after the editor is visible, then show any errors
 		// in the Console. Play remains blocked until a successful compile.
-		if (mManagedGameplay)
+		if (mManagedGameplay && HasCSharpSources(scope $"{project.Path}/src"))
 		{
 			mManagedBuildReady = false;
 			Log.Info("Checking C# gameplay. Errors can be fixed in the Scripts editor.");
