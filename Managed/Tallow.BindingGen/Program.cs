@@ -30,12 +30,21 @@ internal static class Program
 
     private const string HitRecordType = "Tallow.PhysicsQueryHit";
     private static bool IsHitRecord(string type) => type == HitRecordType;
+    // Only these tightly scoped writable buffers cross the generated ABI.
+    // Never expose generic spans, object pointers, references or span returns.
+    private static bool IsSpan(string type) =>
+        type is "System.Span<ulong>" or "System.Span<float>";
+    private static string SpanElement(string type) =>
+        type == "System.Span<ulong>" ? "ulong" : "float";
+    private static string NativeSpanElement(string type) =>
+        type == "System.Span<ulong>" ? "uint64" : "float";
 
     private static bool IsType(string type, bool allowVoid = false) =>
         type is "bool" or "int" or "uint" or "long" or "ulong" or
             "float" or "double" or "string" or "System.Numerics.Vector2" or
             "System.Numerics.Vector3" or "System.Numerics.Vector4" or
-            "System.Numerics.Quaternion" or "Tallow.PhysicsQueryHit" ||
+            "System.Numerics.Quaternion" or "Tallow.PhysicsQueryHit" or
+            "System.Span<ulong>" or "System.Span<float>" ||
         (allowVoid && type == "void");
 
     private static int Dimensions(string type) => type switch
@@ -51,6 +60,7 @@ internal static class Program
             type : type;
 
     private static string NativeType(string type) =>
+        IsSpan(type) ? NativeSpanElement(type) + "*" :
         Dimensions(type) > 0 ? "float*" : type switch
         {
             "bool" or "int" => "int32",
@@ -61,6 +71,7 @@ internal static class Program
         };
 
     private static string CAbiType(string type) =>
+        IsSpan(type) ? SpanElement(type) + "*" :
         Dimensions(type) > 0 ? "float*" : type == "bool" ? "int" : type;
 
     private static List<Method> Parse(string manifest)
@@ -86,7 +97,7 @@ internal static class Program
             if (!owner.StartsWith("Tallow.", StringComparison.Ordinal) ||
                 !Identifier.IsMatch(owner["Tallow.".Length..]) ||
                 !Identifier.IsMatch(name) || !IsType(result, allowVoid: !isField) ||
-                result == "string" ||
+                (result == "string" || IsSpan(result)) ||
                 isField && (name == owner["Tallow.".Length..] || IsHitRecord(result)))
                 throw new FormatException($"Manifest line {i + 1}: unsupported owner or return type: {owner}.{name}.");
             bool canWrite = isField && fields[4] == "getset";
@@ -124,7 +135,7 @@ internal static class Program
     }
 
     private static string ArgumentExpression(Parameter p, int i) =>
-        p.Type == "string" ? $"s{i}" :
+        p.Type == "string" || IsSpan(p.Type) ? $"s{i}" :
         p.Type == "bool" ? $"(p{i} != 0)" :
         Dimensions(p.Type) != 0 ? $"v{i}" : $"p{i}";
 
@@ -143,9 +154,9 @@ internal static class Program
                 List<string> args = [];
                 foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
                 {
-                    if (p.Type == "string")
+                    if (p.Type == "string" || IsSpan(p.Type))
                     {
-                        args.Add($"char8* p{i}");
+                        args.Add($"{(p.Type == "string" ? "char8*" : NativeType(p.Type))} p{i}");
                         args.Add($"int32 p{i}Length");
                     }
                     else
@@ -163,10 +174,12 @@ internal static class Program
                 foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
                 {
                     int count = Dimensions(p.Type);
-                    if (p.Type == "string")
+                    if (p.Type == "string" || IsSpan(p.Type))
                     {
                         text.AppendLine($"\t\tif (p{i}Length < 0 || (p{i}Length > 0 && p{i} == null)) return{(returnType == "void" ? ";" : " default;")}");
-                        text.AppendLine($"\t\tStringView s{i} = .(p{i}, p{i}Length);");
+                        text.AppendLine(p.Type == "string" ?
+                            $"\t\tStringView s{i} = .(p{i}, p{i}Length);" :
+                            $"\t\tSpan<{NativeSpanElement(p.Type)}> s{i} = .(p{i}, p{i}Length);");
                     }
                     if (count > 0)
                     {
@@ -295,10 +308,10 @@ internal static class Program
                 List<string> nativeArgs = [];
                 foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
                 {
-                    if (p.Type == "string")
+                    if (p.Type == "string" || IsSpan(p.Type))
                     {
                         nativeArgs.Add($"p{i}");
-                        nativeArgs.Add($"p{i}Utf8.Length");
+                        nativeArgs.Add(p.Type == "string" ? $"p{i}Utf8.Length" : $"{p.Name}.Length");
                     }
                     else
                         nativeArgs.Add(Dimensions(p.Type) > 0 ? $"p{i}" :
@@ -311,9 +324,9 @@ internal static class Program
                 List<string> types = [];
                 foreach (Parameter p in m.Parameters)
                 {
-                    if (p.Type == "string")
+                    if (p.Type == "string" || IsSpan(p.Type))
                     {
-                        types.Add("byte*");
+                        types.Add(p.Type == "string" ? "byte*" : CAbiType(p.Type));
                         types.Add("int");
                     }
                     else
@@ -326,12 +339,17 @@ internal static class Program
                 types.Add(Dimensions(m.Result) > 0 || IsHitRecord(m.Result) ?
                     "void" : CAbiType(m.Result));
                 string call = $"((delegate* unmanaged[Cdecl]<{string.Join(", ", types)}>)ptr)({string.Join(", ", nativeArgs)})";
-                // The UTF-8 arrays remain pinned for this single native call.
-                bool hasStrings = m.Parameters.Any(p => p.Type == "string");
+                // Pin only for the lifetime of this call. Spans can be
+                // stackalloc or array-backed and may never be retained natively.
+                bool hasPinned = m.Parameters.Any(p => p.Type == "string" || IsSpan(p.Type));
                 foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
+                {
                     if (p.Type == "string")
                         text.AppendLine($"\t\tfixed (byte* p{i} = p{i}Utf8)");
-                if (hasStrings)
+                    else if (IsSpan(p.Type))
+                        text.AppendLine($"\t\tfixed ({CAbiType(p.Type)} p{i} = {p.Name})");
+                }
+                if (hasPinned)
                     text.AppendLine("\t\t{");
                 if (m.Result == "void")
                     text.AppendLine($"\t\t{call};");
@@ -345,7 +363,7 @@ internal static class Program
                         .AppendLine("\t\treturn result;");
                 else
                     text.AppendLine($"\t\treturn {call};");
-                if (hasStrings)
+                if (hasPinned)
                     text.AppendLine("\t\t}");
                 text.AppendLine("\t}").AppendLine();
                 if (m.CanWrite)
@@ -451,6 +469,19 @@ internal static class Program
             !csharpString.Contains("fixed (byte* p0 = p0Utf8)") ||
             !csharpString.Contains("delegate* unmanaged[Cdecl]<byte*, int, void>"))
             throw new Exception("UTF-8 StringView parameter lowering failed.");
+        const string spanManifest = "TALLOW_CSHARP_API_V1\nmethod\tTallow.Ecs\tCopyRigidbodyMasses\tint\tsession:ulong\toffset:int\tentityIds:System.Span<ulong>\tmasses:System.Span<float>\n";
+        List<Method> spanMethods = Parse(spanManifest);
+        string nativeSpan = EmitBeef(spanMethods, Hash(spanManifest));
+        string managedSpan = EmitCSharp(spanMethods, Hash(spanManifest));
+        if (!nativeSpan.Contains("uint64* p2, int32 p2Length, float* p3, int32 p3Length") ||
+            !nativeSpan.Contains("Span<uint64> s2 = .(p2, p2Length);") ||
+            !nativeSpan.Contains("Span<float> s3 = .(p3, p3Length);") ||
+            !nativeSpan.Contains("p2Length < 0 || (p2Length > 0 && p2 == null)") ||
+            !managedSpan.Contains("public static int CopyRigidbodyMasses(ulong session, int offset, System.Span<ulong> entityIds, System.Span<float> masses)") ||
+            !managedSpan.Contains("fixed (ulong* p2 = entityIds)") ||
+            !managedSpan.Contains("fixed (float* p3 = masses)") ||
+            !managedSpan.Contains("delegate* unmanaged[Cdecl]<ulong, int, ulong*, int, float*, int, int>"))
+            throw new Exception("Pinned, counted ECS span ABI lowering failed.");
         const string writableManifest = "TALLOW_CSHARP_API_V1\nfield\tTallow.Time\tTimeScale\tfloat\tgetset\n";
         List<Method> writable = Parse(writableManifest);
         string nativeWritable = EmitBeef(writable, Hash(writableManifest));
@@ -472,7 +503,10 @@ internal static class Program
             "TALLOW_CSHARP_API_V1\nmethod\tTallow.Bad\tGetText\tstring\n",
             "TALLOW_CSHARP_API_V1\nfield\tTallow.Bad\tText\tstring\tget\n",
             "TALLOW_CSHARP_API_V1\nfield\tTallow.Bad\tRaw\tTallow.PhysicsQueryHit\tget\n",
-            "TALLOW_CSHARP_API_V1\nmethod\tTallow.Physics\tEcho\tTallow.PhysicsQueryHit\tvalue:Tallow.PhysicsQueryHit\n"
+            "TALLOW_CSHARP_API_V1\nmethod\tTallow.Physics\tEcho\tTallow.PhysicsQueryHit\tvalue:Tallow.PhysicsQueryHit\n",
+            "TALLOW_CSHARP_API_V1\nmethod\tTallow.Bad\tReturnSpan\tSystem.Span<float>\n",
+            "TALLOW_CSHARP_API_V1\nfield\tTallow.Bad\tSpanField\tSystem.Span<ulong>\tget\n",
+            "TALLOW_CSHARP_API_V1\nmethod\tTallow.Bad\tUnsafe\tint\tbuffer:System.Span<int>\n"
         })
         {
             try { Parse(invalid); throw new Exception("Invalid manifest was accepted."); }

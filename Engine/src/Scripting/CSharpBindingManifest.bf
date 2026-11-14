@@ -42,6 +42,10 @@ static class CSharpBindingManifest
             name.Set("System.Numerics.Quaternion");
         else if (type == typeof(PhysicsQueryHit))
             name.Set("Tallow.PhysicsQueryHit");
+        else if (type == typeof(Span<uint64>))
+            name.Set("System.Span<ulong>");
+        else if (type == typeof(Span<float>))
+            name.Set("System.Span<float>");
         else
             return false;
         return true;
@@ -58,7 +62,8 @@ static class CSharpBindingManifest
         }
 
         let resultType = scope String();
-        if (!MapValueType(method.ReturnType, resultType) || resultType == "string")
+        if (!MapValueType(method.ReturnType, resultType) || resultType == "string" ||
+            resultType.StartsWith("System.Span<"))
         {
             error.AppendF("[CSharpExpose] {} has an unsupported return type. Stage 1 accepts void, bool, int32/64, uint32/64, float/double and Vector2/3/4.", signature);
             return false;
@@ -71,14 +76,14 @@ static class CSharpBindingManifest
             let parameter = scope String();
             let paramType = method.GetParamType(i);
             let flags = method.GetParamFlags(i);
-            // Beef can mark StringView with the implicit/splat metadata used
-            // for its transparent value representation. Those flags are safe
-            // for our explicit byte-pointer + length ABI and must not reject
-            // ordinary StringView arguments. All other non-None flags,
-            // including Params/HasDefault/AppendIdx, remain unsupported.
-            bool stringViewFlags = paramType == typeof(StringView) &&
+            // StringView and explicitly whitelisted Span<T> values can
+            // carry Beef implicit/splat metadata. We lower them into a
+            // pointer plus validated element count and never keep the pointer
+            // after this call. All other modifiers remain unsupported.
+            bool splattedSafeValue = (paramType == typeof(StringView) ||
+                paramType == typeof(Span<uint64>) || paramType == typeof(Span<float>)) &&
                 (flags == .Splat || flags == .Implicit || flags == (.Splat | .Implicit));
-            if ((!stringViewFlags && flags != .None) ||
+            if ((!splattedSafeValue && flags != .None) ||
                 !MapValueType(paramType, parameter) || parameter == "void")
             {
                 error.AppendF("[CSharpExpose] {} parameter {} has unsupported type {} or modifier {} (defaults, params and append are not supported).", signature, i + 1, paramType, flags);

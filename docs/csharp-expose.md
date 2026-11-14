@@ -226,3 +226,15 @@ so the Beef reflection reader obtains the constructor-initialized attribute
 value. Native CI checks the exact `TimeScale\tfloat\tgetset` manifest record
 before checking generated setter source or function pointers; a read-only
 manifest is a build failure rather than a silently reduced public API.
+
+### Counted, pinned ECS buffer parameters (first increment, 2026-11-13)
+
+The generator now recognizes **only** `Span<ulong>` and `Span<float>`
+parameters on explicitly annotated native static methods. They lower to
+pointer + validated element count, with the C# backing memory pinned only
+during the synchronous native call. This permits bulk data copies with one
+managed/native transition per chunk, including array-backed and stackalloc
+buffers. Span results, arbitrary generic spans, native ownership transfer,
+storing a pointer after return, and dynamic reflection of managed component
+layouts are **not** supported. The API remains opt-in and the manifest ABI
+version changes automatically when an annotated signature changes.
