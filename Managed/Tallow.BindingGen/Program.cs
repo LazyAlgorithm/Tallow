@@ -323,6 +323,8 @@ internal static class Program
                         .AppendLine($"\t\treturn new Vector{Dimensions(m.Result)}({string.Join(", ", Enumerable.Range(0, Dimensions(m.Result)).Select(i => $"result[{i}]"))});");
                 else
                     text.AppendLine($"\t\treturn {call};");
+                if (hasStrings)
+                    text.AppendLine("\t\t}");
                 text.AppendLine("\t}").AppendLine();
                 if (m.CanWrite)
                 {
