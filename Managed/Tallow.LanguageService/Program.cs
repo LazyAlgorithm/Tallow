@@ -419,7 +419,7 @@ internal static class Program
         string output;
         try
         {
-            if (args.Length == 7 && args[0] == "--serve" && args[2] == "--project" &&
+            if (args.Length == 6 && args[0] == "--serve" && args[2] == "--project" &&
                 args[4] == "--engine-root")
                 return Serve(Path.GetFullPath(args[3]), Path.GetFullPath(args[5]),
                     Path.GetFullPath(args[1]));
