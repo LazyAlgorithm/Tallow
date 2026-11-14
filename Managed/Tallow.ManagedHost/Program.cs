@@ -44,6 +44,7 @@ internal static class Program
             if (channel == TransformChannel.LocalPosition)
                 SetPosition(gameObject, new Vector3(value.X, value.Y, value.Z));
         }
+        public Script? GetManagedComponent(GameObject gameObject, Type scriptType) => null;
         public void Destroy(GameObject gameObject)
         {
             _positions.Remove(gameObject);
