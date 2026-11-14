@@ -344,33 +344,60 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    private static void DispatchOne(int instance, ScriptEvent eventId, float deltaTime)
+    {
+        if (!sInstances.TryGetValue(instance, out Script? script))
+            throw new InvalidOperationException("Unknown managed gameplay instance.");
+        switch (eventId)
+        {
+            case ScriptEvent.Awake: script.Awake(); break;
+            case ScriptEvent.Enable:
+                if (sEnabled.Add(instance))
+                    script.OnEnable();
+                break;
+            case ScriptEvent.Start: script.Start(); break;
+            case ScriptEvent.FixedUpdate: script.FixedUpdate(deltaTime); break;
+            case ScriptEvent.LocalUpdate: script.OnLocalUpdate(); break;
+            case ScriptEvent.LateUpdate: script.LateUpdate(deltaTime); break;
+            case ScriptEvent.Disable:
+                if (sEnabled.Remove(instance))
+                    script.OnDisable();
+                break;
+            case ScriptEvent.Gui: script.OnGUI(); break;
+            default: throw new ArgumentOutOfRangeException(nameof(eventId), eventId,
+                "Unknown managed gameplay event.");
+        }
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int Dispatch(int instance, int eventId, float deltaTime)
     {
         try
         {
-            if (!sInstances.TryGetValue(instance, out Script? script))
-                throw new InvalidOperationException("Unknown managed gameplay instance.");
-            switch ((ScriptEvent)eventId)
-            {
-                case ScriptEvent.Awake: script.Awake(); break;
-                case ScriptEvent.Enable:
-                    if (sEnabled.Add(instance))
-                        script.OnEnable();
-                    break;
-                case ScriptEvent.Start: script.Start(); break;
-                case ScriptEvent.FixedUpdate: script.FixedUpdate(deltaTime); break;
-                case ScriptEvent.LocalUpdate: script.OnLocalUpdate(); break;
-                case ScriptEvent.LateUpdate: script.LateUpdate(deltaTime); break;
-                case ScriptEvent.Disable:
-                    if (sEnabled.Remove(instance))
-                        script.OnDisable();
-                    break;
-                case ScriptEvent.Gui: script.OnGUI(); break;
-                default: throw new ArgumentOutOfRangeException(nameof(eventId), eventId,
-                    "Unknown managed gameplay event.");
-            }
+            DispatchOne(instance, (ScriptEvent)eventId, deltaTime);
             return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
+    // Contiguous batches can amortize the native-to-CLR transition without
+    // changing public Script methods. Validate the full input before dispatch.
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int DispatchBatch(int* instances, int count, int eventId, float deltaTime)
+    {
+        try
+        {
+            if (count < 0 || count > 4096 || (count > 0 && instances == null))
+                throw new ArgumentOutOfRangeException(nameof(count));
+            for (int i = 0; i < count; i++)
+                if (!sInstances.ContainsKey(instances[i]))
+                    throw new InvalidOperationException("Unknown C# instance in lifecycle batch.");
+            for (int i = 0; i < count; i++)
+                DispatchOne(instances[i], (ScriptEvent)eventId, deltaTime);
+            return count;
         }
         catch (Exception exception)
         {

@@ -623,7 +623,7 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedAddRigidbodyForceAtPosition);
     if (name == "CSharpApi_5a64e6ecc959440f")
         return reinterpret_cast<void*>(&ExposedGetRigidbodyPointVelocity);
-    if (name == "CSharpApi_9e37fa4f1b5124ae")
+    if (name == "CSharpApi_b08ed96d885c92a3")
         return reinterpret_cast<void*>(&ExposedSleepRigidbody);
     if (name == "CSharpApi_f50768d5aeefdfa7")
         return reinterpret_cast<void*>(&ExposedHasCharacterController);
@@ -830,6 +830,28 @@ int main(int argc, char** argv)
         return Failure("managed GetComponent<T> did not resolve sibling C# script");
     if (!tn_csharp_detach(lookup) || !tn_csharp_detach(mover))
         return Failure("cleaning up component lookup");
+
+    // Run two real managed behaviours through one ordered native/CLR entry.
+    const int32_t batchA = tn_csharp_attach("Gameplay.BatchLifecycleSmoke", 1, 1);
+    const int32_t batchB = tn_csharp_attach("Gameplay.BatchLifecycleSmoke", 1, 1);
+    if (batchA < 1 || batchB < 1)
+        return Failure("attaching batch lifecycle probes");
+    const int32_t batchIds[] = {batchA, batchB};
+    const float startX = state.position[0], startY = state.position[1];
+    if (tn_csharp_dispatch_batch(batchIds, 2, TN_CSHARP_FIXED_UPDATE, 0.5f) != 2 ||
+        std::fabs(state.position[0] - startX - 1.0f) > 0.0001f ||
+        tn_csharp_dispatch_batch(batchIds, 2, TN_CSHARP_LATE_UPDATE, 0.25f) != 2 ||
+        std::fabs(state.position[1] - startY - 0.5f) > 0.0001f)
+        return Failure("ordered batched Fixed/LateUpdate");
+    if (tn_csharp_dispatch_batch(nullptr, 0, TN_CSHARP_FIXED_UPDATE, 0.5f) != 0 ||
+        tn_csharp_dispatch_batch(nullptr, 1, TN_CSHARP_FIXED_UPDATE, 0.5f) != -1)
+        return Failure("invalid batch pointer/count");
+    if (!tn_csharp_detach(batchA) || !tn_csharp_detach(batchB))
+        return Failure("batch lifecycle cleanup");
+    const float unchangedX = state.position[0];
+    if (tn_csharp_dispatch_batch(batchIds, 2, TN_CSHARP_FIXED_UPDATE, 0.5f) != -1 ||
+        state.position[0] != unchangedX)
+        return Failure("stale batch instance caused partial execution");
 
     // The method is declared *only* in annotated Beef and emitted for C#
     // by BindingGen; call it through a cached unmanaged function pointer.

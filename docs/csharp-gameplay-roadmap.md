@@ -343,3 +343,18 @@ claim automatic replication of dynamically created joints.
   cases. This remains a **read-only, RigidbodyData-specific first step**,
   not general C# ECS component registration or writable chunk systems.
   Full Linux Beef/Jolt and interactive Nobara validation are outstanding.
+
+### Managed lifecycle callback batching (2026-11-13)
+
+- An optional ordered `DispatchBatch` entrypoint now connects the Beef
+  runtime, C++ hostfxr shim, and .NET managed runtime. It validates a full
+  batch of up to 4096 instance IDs before invoking any callbacks, reuses the
+  same event implementation as single-object `Dispatch`, and retains no pointers.
+- A native-host integration smoke checks two per-instance FixedUpdate and
+  LateUpdate calls in one transition, empty and null buffers, detachment
+  and invalidated IDs. Also corrected the `SleepRigidbody` generated
+  symbol ID in the C++ test resolver (SHA-256 of its manifest signature).
+- **Not yet connected to automatic Scene scheduling.** A component can
+  disable or destroy the next component during its update. The scheduler
+  must preserve those existing per-callback checks and profiling behavior
+  before grouping work. Current scheduling and networking are unchanged.

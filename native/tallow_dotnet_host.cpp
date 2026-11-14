@@ -39,6 +39,7 @@ using attach_fn = int32_t (*)(const char*, uint64_t, uint64_t);
 using apply_fields_fn = int32_t (*)(int32_t, const char*);
 using tick_fn = int32_t (*)(int32_t, float);
 using dispatch_fn = int32_t (*)(int32_t, int32_t, float);
+using dispatch_batch_fn = int32_t (*)(const int32_t*, int32_t, int32_t, float);
 using update_input_fn = int32_t (*)(int32_t, const tn_csharp_tick_input*, float);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
@@ -54,6 +55,7 @@ attach_fn attach = nullptr;
 apply_fields_fn apply_fields = nullptr;
 tick_fn tick = nullptr;
 dispatch_fn dispatch = nullptr;
+dispatch_batch_fn dispatch_batch = nullptr;
 update_input_fn update_input = nullptr;
 detach_fn detach = nullptr;
 last_error_fn last_error = nullptr;
@@ -314,6 +316,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "ApplyFields", apply_fields) ||
             !find_entry(assembly.c_str(), "Tick", tick) ||
             !find_entry(assembly.c_str(), "Dispatch", dispatch) ||
+            !find_entry(assembly.c_str(), "DispatchBatch", dispatch_batch) ||
             !find_entry(assembly.c_str(), "UpdateInput", update_input) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
             !find_entry(assembly.c_str(), "GetLastError", last_error) ||
@@ -407,6 +410,18 @@ int32_t tn_csharp_dispatch(int32_t script_instance, int32_t event_id, float delt
     return result > 0;
 }
 
+int32_t tn_csharp_dispatch_batch(const int32_t* instances, int32_t count,
+    int32_t event_id, float delta_time)
+{
+    if (!started || !dispatch_batch || count < 0 || count > 4096 ||
+        (count > 0 && !instances))
+        return -1;
+    const int32_t result = dispatch_batch(instances, count, event_id, delta_time);
+    if (result < 0)
+        managed_error("Dispatching a C# component batch");
+    return result;
+}
+
 int32_t tn_csharp_update_input(int32_t script_instance,
     const tn_csharp_tick_input* input, float delta_time)
 {
@@ -440,6 +455,7 @@ void tn_csharp_shutdown(void)
     apply_fields = nullptr;
     tick = nullptr;
     dispatch = nullptr;
+    dispatch_batch = nullptr;
     update_input = nullptr;
     detach = nullptr;
     last_error = nullptr;

@@ -59,6 +59,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_apply_fields(int32 instance, char8* values);
 	[CLink] static extern int32 tn_csharp_tick(int32 instance, float deltaTime);
 	[CLink] static extern int32 tn_csharp_dispatch(int32 instance, int32 eventId, float deltaTime);
+    [CLink] static extern int32 tn_csharp_dispatch_batch(int32* instances, int32 count, int32 eventId, float deltaTime);
 	[CLink] static extern int32 tn_csharp_update_input(int32 instance, NativeTickInput* input, float deltaTime);
 	[CLink] static extern int32 tn_csharp_detach(int32 instance);
 	[CLink] static extern void tn_csharp_shutdown();
@@ -228,7 +229,24 @@ static class CSharpRuntime
 		return false;
 	}
 
-	/// Send the exact networked TickInput, including previous button state for Pressed/Released.
+	/// Future scheduler-only entrypoint. Do not pre-collect callbacks that
+    /// could be disabled/destroyed by earlier scripts in the same batch.
+    public static bool DispatchBatch(Span<int32> instances, ManagedEvent eventId, float deltaTime = 0)
+    {
+        if (!Ready)
+            return false;
+        if (instances.Length == 0)
+            return true;
+        if (instances.Length > 4096)
+            return false;
+        int32 result = tn_csharp_dispatch_batch(instances.Ptr, (int32)instances.Length, (int32)eventId, deltaTime);
+        if (result == instances.Length)
+            return true;
+        Log.Warning(scope $"C# batch callback failed: {StringView(tn_csharp_error())}");
+        return false;
+    }
+
+    /// Send the exact networked TickInput, including previous button state for Pressed/Released.
 	public static bool Update(int32 instance, TickInput input, float deltaTime)
 	{
 		if (!Ready || instance <= 0)

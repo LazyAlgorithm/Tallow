@@ -62,6 +62,10 @@ int32_t tn_csharp_attach(const char* managed_type, uint64_t scene, uint64_t enti
 int32_t tn_csharp_apply_fields(int32_t script_instance, const char* fields);
 int32_t tn_csharp_tick(int32_t script_instance, float delta_time);
 int32_t tn_csharp_dispatch(int32_t script_instance, int32_t event_id, float delta_time);
+// Execute an ordered snapshot of managed component lifecycle callbacks in one
+// CLR transition. Returns count on success, -1 on failure; pointers not retained.
+int32_t tn_csharp_dispatch_batch(const int32_t* instances, int32_t count,
+    int32_t event_id, float delta_time);
 int32_t tn_csharp_update_input(int32_t script_instance,
     const tn_csharp_tick_input* input, float delta_time);
 int32_t tn_csharp_detach(int32_t script_instance);
