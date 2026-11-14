@@ -277,3 +277,16 @@ Parameter updates require native `SoftBody.Rebuild()`, so they are intended
 for deliberate configuration, not for changing every physics tick.
 
 - A native-host ABI regression checks collider index order and per-shape dimensions (including invalid indexes), along with validated native soft-body stiffness and wobble-damping updates and rejection of invalid settings.
+
+### ECS-backed native joints from C#
+
+The existing `Joint` handle in Beef is an ECS `ComponentHandle<JointData>`
+backed by Jolt constraints. C# now exposes `GameObject.GetJoint()` and a
+lightweight nullable `Joint` facade with `IsConnected`, `ConnectedTo`, and
+`SwingLimit` (0–179 degrees); setting the swing limit calls the real
+native `Joint.Rebuild()`. `Joint.Connect(rigidbodyA, rigidbodyB, anchor,
+axis, limit)` delegates directly to Beef `Joint.Connect` after validating
+both objects are in the same active scene and have Rigidbody handles. Joint
+creation is **local to the machine** in the current native engine;
+multiplayer games must coordinate creation explicitly. The C# API does not
+claim automatic replication of dynamically created joints.

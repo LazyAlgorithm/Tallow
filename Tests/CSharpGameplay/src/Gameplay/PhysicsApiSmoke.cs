@@ -53,6 +53,14 @@ public sealed class PhysicsApiSmoke : Script
             Vector3 touchPoint = swept.Point;
         }
 
+        // A native Joint remains an ECS handle rather than a managed Jolt object.
+        if (GetJoint() is { } existingJoint)
+        {
+            bool connected = existingJoint.IsConnected;
+            float swingLimit = existingJoint.SwingLimit;
+            Rigidbody? other = existingJoint.ConnectedTo;
+        }
+
         if (GetSoftBody() is { } activeSoftBody)
         {
             SoftBodyKind? mode = activeSoftBody.Kind;

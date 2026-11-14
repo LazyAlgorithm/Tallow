@@ -242,6 +242,85 @@ static class Physics
         return true;
     }
 
+
+    // Joint is already a Flecs ComponentHandle<JointData>. The opaque
+    // session + entity pair is validated before touching its ECS data.
+    [CSharpExpose]
+    public static bool HasJoint(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        return obj != null && obj.HasComponent<Joint>();
+    }
+
+    [CSharpExpose]
+    public static bool IsJointConnected(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<Joint>())
+            return false;
+        return obj.GetComponent<Joint>().IsConnected;
+    }
+
+    [CSharpExpose]
+    public static uint64 GetJointConnectedEntity(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<Joint>())
+            return 0;
+        let other = obj.GetComponent<Joint>().ConnectedTo;
+        if (!other.IsValid)
+            return 0;
+        return (uint64)other.GameObject.Id;
+    }
+
+    [CSharpExpose]
+    public static float GetJointSwingLimit(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<Joint>())
+            return -1;
+        return obj.GetComponent<Joint>().swingLimit;
+    }
+
+    [CSharpExpose]
+    public static bool SetJointSwingLimit(uint64 session, uint64 entity, float degrees)
+    {
+        if (!degrees.IsFinite || degrees < 0 || degrees > 179)
+            return false;
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<Joint>())
+            return false;
+        let joint = obj.GetComponent<Joint>();
+        if (joint.swingLimit == degrees)
+            return true;
+        joint.swingLimit = degrees;
+        joint.Rebuild();
+        return true;
+    }
+
+    /// A native Joint.Connect uses the same ECS-backed JointData and Jolt
+    /// solver as Beef. Dynamic joints are currently LOCAL ONLY: the engine
+    /// requires explicitly coordinated creation for multiplayer sessions.
+    [CSharpExpose]
+    public static bool ConnectJoint(uint64 session, uint64 a, uint64 b,
+        Vector3 anchor, Vector3 axis, float swingLimit)
+    {
+        if (a == b || !swingLimit.IsFinite || swingLimit < 0 || swingLimit > 179 ||
+            !anchor.x.IsFinite || !anchor.y.IsFinite || !anchor.z.IsFinite ||
+            !axis.x.IsFinite || !axis.y.IsFinite || !axis.z.IsFinite ||
+            (axis.x == 0 && axis.y == 0 && axis.z == 0))
+            return false;
+        let first = LiveObject(session, a);
+        let second = LiveObject(session, b);
+        if (first == null || second == null || first.HasComponent<Joint>())
+            return false;
+        let mine = first.GetComponent<Rigidbody>();
+        let other = second.GetComponent<Rigidbody>();
+        if (!mine.IsValid || !other.IsValid)
+            return false;
+        let joint = Joint.Connect(mine, other, anchor, axis, swingLimit);
+        return joint.IsValid;
+    }
     [CSharpExpose]
     public static bool HasSoftBody(uint64 session, uint64 entity)
     {

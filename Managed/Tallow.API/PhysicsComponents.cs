@@ -71,6 +71,51 @@ public readonly record struct ColliderHandle(GameObject GameObject, int Index)
     }
 }
 
+
+/// <summary>
+/// A value handle for Tallow's existing ECS-backed JointData and Jolt
+/// constraint. A joint created during gameplay is local to this machine
+/// unless the game explicitly coordinates its creation over networking.
+/// </summary>
+public readonly record struct Joint(GameObject GameObject)
+{
+    public bool IsValid => Physics.HasJoint(GameObject.SceneId, GameObject.Id);
+    public bool IsConnected => Physics.IsJointConnected(GameObject.SceneId, GameObject.Id);
+    public Rigidbody? ConnectedTo
+    {
+        get
+        {
+            ulong entity = Physics.GetJointConnectedEntity(GameObject.SceneId, GameObject.Id);
+            return entity == 0 ? null : new Rigidbody(new GameObject(GameObject.SceneId, entity));
+        }
+    }
+    public float SwingLimit
+    {
+        get => Physics.GetJointSwingLimit(GameObject.SceneId, GameObject.Id);
+        set
+        {
+            if (!Physics.SetJointSwingLimit(GameObject.SceneId, GameObject.Id, value))
+                throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
+
+    /// <summary>
+    /// Create one local Jolt constraint. Both rigidbodies must belong to the
+    /// same active scene. Runtime-created joints are not auto-replicated.
+    /// </summary>
+    public static Joint? Connect(Rigidbody a, Rigidbody b, Vector3 anchor,
+        Vector3 axis, float swingLimit = 0)
+    {
+        if (a.GameObject.SceneId == 0 ||
+            a.GameObject.SceneId != b.GameObject.SceneId ||
+            a.GameObject.Id == b.GameObject.Id)
+            return null;
+        return Physics.ConnectJoint(a.GameObject.SceneId,
+            a.GameObject.Id, b.GameObject.Id, anchor, axis, swingLimit) ?
+            new Joint(a.GameObject) : null;
+    }
+}
+
 /// <summary>
 /// Value handle to native SoftBody, including free cloth/jelly, dentable shells,
 /// and rigidbody-driven jelly. No soft-body vertex buffer crosses into .NET.

@@ -201,6 +201,9 @@ jobs:
           grep -F 'public static bool SetSoftBodyWobbleDamping(ulong session, ulong entity, float damping)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_dd6b56714b85bea3
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_4e84ac47e4f849a1
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'ConnectJoint'
+          grep -F 'public static bool ConnectJoint(ulong session, ulong a, ulong b,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_b40ba1380ed1e702
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_babf3ef4abb796e0
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_829130371d484610
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e

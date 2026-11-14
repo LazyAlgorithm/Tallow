@@ -468,6 +468,37 @@ public sealed class CubeMover : Script
                     colliderDiagnostics);
             Check("indexed native collider and soft-body parameter C# API compiles", true);
 
+            string jointCode = """
+                using Tallow;
+                using System.Numerics;
+                [Component] class JointProbe : Script
+                {
+                    public override void Start()
+                    {
+                        Joint? joint = GetJoint();
+                        if (joint is { } constraint)
+                        {
+                            float limit = constraint.SwingLimit;
+                            bool active = constraint.IsConnected;
+                            Rigidbody? other = constraint.ConnectedTo;
+                            constraint.SwingLimit = 30f;
+                        }
+                        var rigidbody = GetRigidbody();
+                        if (rigidbody is { } rb)
+                        {
+                            Joint? created = Joint.Connect(rb, rb,
+                                Vector3.Zero, Vector3.UnitY);
+                        }
+                    }
+                }
+                """;
+            string jointDiagnostics = RequestWithApi(service, "diagnostics",
+                jointCode, jointCode.Length);
+            if (jointDiagnostics.Contains("diagnostic\t"))
+                throw new InvalidOperationException(
+                    "Generated ECS Joint bridge produced diagnostics:\n" + jointDiagnostics);
+            Check("native Jolt joint C# API and ECS JointData handle compile", true);
+
             string logCode = "using Tallow; class Demo { void Go() { Log.Info(\"hello\"); } }";
             string logDiagnostics = RequestWithApi(service, "diagnostics", logCode, logCode.Length);
             Check("generated Log.Info accepts managed C# strings",

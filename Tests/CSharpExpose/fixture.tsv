@@ -61,3 +61,9 @@ method	Tallow.Physics	GetSoftBodyStiffness	float	session:ulong	entity:ulong
 method	Tallow.Physics	SetSoftBodyStiffness	bool	session:ulong	entity:ulong	stiffness:float
 method	Tallow.Physics	GetSoftBodyWobbleDamping	float	session:ulong	entity:ulong
 method	Tallow.Physics	SetSoftBodyWobbleDamping	bool	session:ulong	entity:ulong	damping:float
+method	Tallow.Physics	HasJoint	bool	session:ulong	entity:ulong
+method	Tallow.Physics	IsJointConnected	bool	session:ulong	entity:ulong
+method	Tallow.Physics	GetJointConnectedEntity	ulong	session:ulong	entity:ulong
+method	Tallow.Physics	GetJointSwingLimit	float	session:ulong	entity:ulong
+method	Tallow.Physics	SetJointSwingLimit	bool	session:ulong	entity:ulong	degrees:float
+method	Tallow.Physics	ConnectJoint	bool	session:ulong	a:ulong	b:ulong	anchor:System.Numerics.Vector3	axis:System.Numerics.Vector3	swingLimit:float
