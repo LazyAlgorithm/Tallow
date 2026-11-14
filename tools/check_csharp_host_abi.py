@@ -78,6 +78,9 @@ def main() -> int:
         "Tallow.CSharpComponents|EnabledState|int|ulong|ulong|int",
         "Tallow.CSharpComponents|ActiveState|int|ulong|ulong|int",
         "Tallow.CSharpComponents|SetEnabled|bool|ulong|ulong|int|bool",
+        "Tallow.CSharpSceneObjects|ActiveSelfState|int|ulong|ulong",
+        "Tallow.CSharpSceneObjects|ActiveHierarchyState|int|ulong|ulong",
+        "Tallow.CSharpSceneObjects|SetActive|bool|ulong|ulong|bool",
         "Tallow.Ecs|CopyRigidbodyMasses|int|ulong|int|System.Span<ulong>|System.Span<float>",
     ]
     for signature in required:

@@ -505,3 +505,16 @@ claim automatic replication of dynamically created joints.
 - This is a lifecycle parity milestone; automatic managed callback batching
   still requires ordered per-callback native eligibility/profiler checks,
   reconciliation with network replay and performance validation.
+
+### Native GameObject activation in C# gameplay (November 14, 2026)
+
+- Added `GameObject.ActiveSelf`, `GameObject.ActiveInHierarchy`
+  and `GameObject.SetActive(bool)` backed solely by three generated
+  `[CSharpExpose]` wrappers in `CSharpSceneObjects`.
+- Native `GameObject.SetActive` remains responsible for Flecs
+  `InactiveSelf` tags, hierarchy activation notifications,
+  native OnEnable/OnDisable and `NetworkSync.ActiveChanged`.
+  A destroyed or stale object gives a disposed error on the C# side.
+- The native-host regression checks disable/re-enable idempotence and
+  callback order. Native Linux editor CI verifies that all generated
+  active-state symbols exist in the linked precompiled engine.

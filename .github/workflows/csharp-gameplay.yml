@@ -203,6 +203,13 @@ jobs:
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_34a132d032e309a7
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef731dbf203aec09
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_7da78821e8213042
+          # Generated GameObject active state/SetActive must use native
+          # scene tags, hierarchy and network notifications.
+          grep -F 'public static int ActiveSelfState(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetActive(ulong session, ulong entity, bool active)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_3ca4d8686218926e
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_9f9598114aecfa9b
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_fc2a931aa2f66af2
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
           grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6

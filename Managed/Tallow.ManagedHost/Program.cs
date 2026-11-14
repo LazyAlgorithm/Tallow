@@ -123,6 +123,7 @@ internal static class Program
                     "Gameplay.EcsBatchBindingSmoke" or
                     "Gameplay.AddComponentSmoke" or
                     "Gameplay.ComponentEnabledSmoke" or
+                    "Gameplay.GameObjectActiveSmoke" or
                     "Gameplay.PhysicsBindingSmoke" or
                     "Gameplay.PhysicsContactSmoke" or
                     "Gameplay.PhysicsDetailedSmoke" or

@@ -166,6 +166,27 @@ static uint64_t InstantiatePrefab(void* context, uint64_t session, const char* u
 // implementation for the generator's reflected Beef fixture. The real
 // launcher resolves the identical symbol IDs from emitted Beef methods.
 // The isolated host tracks per-adapter state as the Beef Scene would.
+// The isolated GameObject used by the smoke process has no hierarchy.
+static bool smokeObjectActive = true;
+static int32_t smokeActiveScript = -1;
+static int32_t ExposedActiveSelfState(uint64_t session, uint64_t entity)
+{
+    return Match(session, entity) ? (smokeObjectActive ? 1 : 0) : -1;
+}
+static int32_t ExposedActiveHierarchyState(uint64_t session, uint64_t entity)
+{
+    return ExposedActiveSelfState(session, entity);
+}
+static int32_t ExposedSetObjectActive(uint64_t session, uint64_t entity, int32_t active)
+{
+    if (!Match(session, entity)) return 0;
+    const bool next = active != 0;
+    if (smokeObjectActive == next) return 1;
+    smokeObjectActive = next;
+    return smokeActiveScript > 0 ? tn_csharp_dispatch(smokeActiveScript,
+        next ? TN_CSHARP_ENABLE : TN_CSHARP_DISABLE, 0.0f) : 1;
+}
+
 static std::unordered_map<int32_t, bool> nativeComponentEnabled;
 static int32_t ExposedEnabledState(uint64_t session, uint64_t entity, int32_t instance)
 {
@@ -625,6 +646,12 @@ static void* ResolveApi(void*, const char* symbol)
     // Exact signature IDs from the generator's approved exposure manifest.
     if (name == "CSharpApi_5190df22123b013a")
         return reinterpret_cast<void*>(&ExposedAddManagedComponent);
+    if (name == "CSharpApi_3ca4d8686218926e")
+        return reinterpret_cast<void*>(&ExposedActiveSelfState);
+    if (name == "CSharpApi_9f9598114aecfa9b")
+        return reinterpret_cast<void*>(&ExposedActiveHierarchyState);
+    if (name == "CSharpApi_fc2a931aa2f66af2")
+        return reinterpret_cast<void*>(&ExposedSetObjectActive);
     if (name == "CSharpApi_34a132d032e309a7")
         return reinterpret_cast<void*>(&ExposedEnabledState);
     if (name == "CSharpApi_ef731dbf203aec09")
@@ -959,6 +986,19 @@ int main(int argc, char** argv)
     if (!tn_csharp_detach(enableScript))
         return Failure("detaching C# enabled-state smoke");
     nativeComponentEnabled.erase(enableScript);
+
+    // GameObject activation crosses the generated ABI but must still
+    // invoke native-style hierarchy enable/disable callbacks.
+    smokeActiveScript = tn_csharp_attach("Gameplay.GameObjectActiveSmoke", 1, 1);
+    if (smokeActiveScript < 1 ||
+        !tn_csharp_dispatch(smokeActiveScript, TN_CSHARP_AWAKE, 0.0f) ||
+        !tn_csharp_dispatch(smokeActiveScript, TN_CSHARP_ENABLE, 0.0f) ||
+        !tn_csharp_dispatch(smokeActiveScript, TN_CSHARP_START, 0.0f) ||
+        !smokeObjectActive)
+        return Failure("C# GameObject.SetActive and hierarchy state ABI");
+    if (!tn_csharp_detach(smokeActiveScript))
+        return Failure("detaching native GameObject activation smoke");
+    smokeActiveScript = -1;
 
     // Run two real managed behaviours through one ordered native/CLR entry.
     const int32_t batchA = tn_csharp_attach("Gameplay.BatchLifecycleSmoke", 1, 1);

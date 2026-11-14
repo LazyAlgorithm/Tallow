@@ -28,6 +28,9 @@ method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:st
 method	Tallow.CSharpComponents	EnabledState	int	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpComponents	SetEnabled	bool	session:ulong	entity:ulong	instance:int	enabled:bool
+method	Tallow.CSharpSceneObjects	ActiveSelfState	int	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	ActiveHierarchyState	int	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	SetActive	bool	session:ulong	entity:ulong	active:bool
 method	Tallow.Ecs	IsAlive	bool	session:ulong	entity:ulong
 method	Tallow.Ecs	CountRigidbodies	int	session:ulong
 method	Tallow.Ecs	CopyRigidbodyMasses	int	session:ulong	offset:int	entityIds:System.Span<ulong>	masses:System.Span<float>

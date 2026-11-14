@@ -66,6 +66,34 @@ public readonly record struct TickInput(
 public readonly record struct GameObject(ulong SceneId, ulong Id)
 {
     public bool IsValid => Engine.Bridge.IsAlive(this);
+
+    private static bool CheckedActiveState(int state)
+    {
+        if (state < 0)
+            throw new ObjectDisposedException(nameof(GameObject),
+                "The native scene GameObject is no longer alive.");
+        return state != 0;
+    }
+
+    /// <summary>Whether this object is switched on, ignoring parent state.</summary>
+    public bool ActiveSelf =>
+        CheckedActiveState(CSharpSceneObjects.ActiveSelfState(SceneId, Id));
+
+    /// <summary>Whether this object and every parent in its hierarchy are active.</summary>
+    public bool ActiveInHierarchy =>
+        CheckedActiveState(CSharpSceneObjects.ActiveHierarchyState(SceneId, Id));
+
+    /// <summary>
+    /// Activates/deactivates the native GameObject and its descendant
+    /// hierarchy, invoking the usual component and networking callbacks.
+    /// </summary>
+    public void SetActive(bool active)
+    {
+        if (!CSharpSceneObjects.SetActive(SceneId, Id, active))
+            throw new ObjectDisposedException(nameof(GameObject),
+                "The native scene GameObject is no longer alive.");
+    }
+
     public Transform Transform => new(this);
     /// <summary>The scene session containing this object; no native pointer is held.</summary>
     public Scene Scene => new(SceneId);
