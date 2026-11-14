@@ -47,7 +47,7 @@ internal static class Program
     {
         string assemblies = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "";
         return assemblies.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Where(File.Exists).Select(MetadataReference.CreateFromFile).ToArray();
+            .Where(File.Exists).Select(path => (MetadataReference)MetadataReference.CreateFromFile(path)).ToArray();
     });
 
     private static IEnumerable<MetadataReference> References() => CachedReferences.Value;
