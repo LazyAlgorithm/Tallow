@@ -56,12 +56,16 @@ class CSharpBehaviour : Component
 		return false;
 	}
 
-	/// Preserve unrelated fields and overwrite a single field's value safely.
-	public void WriteEditorField(StringView name, StringView value)
+	/// Preserve unrelated serialized fields and reject values that cannot
+	/// round-trip through the scene's line-based override format.
+	/// Return false without storing bad values or desynchronizing Play state.
+	public bool WriteEditorField(StringView name, StringView value)
 	{
 		if (name.IsEmpty || name.Contains('\t') || name.Contains('\n') ||
-			value.Contains('\t') || value.Contains('\n'))
-			return;
+			name.Contains('\r') || name.Contains('\0') ||
+			value.Contains('\t') || value.Contains('\n') ||
+			value.Contains('\r') || value.Contains('\0'))
+			return false;
 		let updated = scope String();
 		for (let line in fieldOverrides.View.Split('\n', .RemoveEmptyEntries))
 		{
@@ -73,9 +77,12 @@ class CSharpBehaviour : Component
 			}
 		}
 		updated.AppendF("{}\t{}\n", name, value);
+		// The managed loader validates the whole override batch before
+		// mutating the live script. Only persist a value if it succeeded.
+		if (IsLoaded && !CSharpRuntime.ApplyFields(mInstance, updated))
+			return false;
 		fieldOverrides.Set(updated);
-		if (IsLoaded)
-			CSharpRuntime.ApplyFields(mInstance, fieldOverrides);
+		return true;
 	}
 
 
