@@ -25,6 +25,7 @@ internal static class GameplayDiagnostics
             // Tallow.API internals are not user gameplay scripts.
             SyntaxNode root = tree.GetRoot();
             SemanticModel semantic = compilation.GetSemanticModel(tree);
+            string[] sourceLines = source.Text.Split('\n');
             foreach (MethodDeclarationSyntax method in root.DescendantNodes()
                 .OfType<MethodDeclarationSyntax>())
             {
@@ -92,7 +93,8 @@ internal static class GameplayDiagnostics
                                 message = "TAL-NET005: Nondeterministic IDs or clocks cannot be replayed; use deterministic tick state.";
                             }
                             else if (called.Name == "GetComponent" &&
-                                invocation.Ancestors().Any(IsLoop))
+                                invocation.Ancestors().Any(IsLoop) &&
+                                IsGameObjectComponentLookup(called))
                             {
                                 category = "optimization";
                                 message = "TAL-PERF002: Repeated component lookup inside a loop; cache references or use a batched ECS query.";
@@ -136,13 +138,26 @@ internal static class GameplayDiagnostics
                         continue;
 
                     var pos = tree.GetLineSpan(location.Span).StartLinePosition;
-                    string lineText = source.Text.Split('\n')[pos.Line];
+                    if (pos.Line < 0 || pos.Line >= sourceLines.Length)
+                        continue;
+                    string lineText = sourceLines[pos.Line];
                     int column = System.Text.Encoding.UTF8.GetByteCount(
                         lineText.AsSpan(0, Math.Min(pos.Character, lineText.Length)));
                     yield return new Warning(tree.FilePath, pos.Line, column, category, message);
                 }
             }
         }
+    }
+
+    private static bool IsGameObjectComponentLookup(IMethodSymbol method)
+    {
+        // Only warn about real Tallow component lookups. An unrelated game
+        // utility named GetComponent is not inherently an ECS hot spot.
+        for (INamedTypeSymbol? owner = method.ContainingType;
+            owner is not null; owner = owner.BaseType)
+            if (owner.ToDisplayString() is "Tallow.Script" or "Tallow.GameObject")
+                return true;
+        return false;
     }
 
     private static bool IsLoop(SyntaxNode syntax) =>
