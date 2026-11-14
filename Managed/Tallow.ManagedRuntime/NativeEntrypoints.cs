@@ -88,9 +88,12 @@ public static unsafe class NativeEntrypoints
                 return null;
             // Managed components share the native scene/entity identity. Never
             // expose scripts from an old scene session or an unrelated entity.
-            foreach (Script script in sInstances.Values)
-                if (script.GameObject == gameObject && scriptType.IsInstanceOfType(script))
-                    return script;
+            // Indexed by native scene/entity handle: avoid scanning every managed
+            // script in the game for each GetComponent<T>() call.
+            if (sByGameObject.TryGetValue(gameObject, out List<Script>? scripts))
+                foreach (Script script in scripts)
+                    if (scriptType.IsInstanceOfType(script))
+                        return script;
             return null;
         }
 
@@ -103,6 +106,8 @@ public static unsafe class NativeEntrypoints
 
     private static readonly Dictionary<string, Type> sTypes = new(StringComparer.Ordinal);
     private static readonly Dictionary<int, Script> sInstances = [];
+    // Preserve attach order for multiple components and subclass lookups.
+    private static readonly Dictionary<GameObject, List<Script>> sByGameObject = [];
     private static readonly HashSet<int> sEnabled = [];
 
     // Plain native layout, matching tn_csharp_tick_input.
@@ -224,6 +229,12 @@ public static unsafe class NativeEntrypoints
             script.Attach(new GameObject(sceneId, entityId));
             int instance = ++sNextInstance;
             sInstances.Add(instance, script);
+            if (!sByGameObject.TryGetValue(script.GameObject, out List<Script>? scripts))
+            {
+                scripts = [];
+                sByGameObject.Add(script.GameObject, scripts);
+            }
+            scripts.Add(script);
             return instance;
         }
         catch (Exception exception)
@@ -375,6 +386,13 @@ public static unsafe class NativeEntrypoints
         {
             if (!sInstances.Remove(instance, out Script? script))
                 return 0;
+            GameObject owner = script.GameObject;
+            if (sByGameObject.TryGetValue(owner, out List<Script>? scripts))
+            {
+                scripts.Remove(script);
+                if (scripts.Count == 0)
+                    sByGameObject.Remove(owner);
+            }
             try
             {
                 if (sEnabled.Remove(instance))
@@ -410,6 +428,7 @@ public static unsafe class NativeEntrypoints
                 throw new InvalidOperationException(
                     "Detach all managed components before unloading the gameplay assembly.");
             sEnabled.Clear();
+            sByGameObject.Clear();
             sTypes.Clear();
             GameAssemblyContext? previous = sGameContext;
             sGameContext = null;
@@ -438,6 +457,7 @@ public static unsafe class NativeEntrypoints
             }
             sEnabled.Clear();
             sInstances.Clear();
+            sByGameObject.Clear();
             sTypes.Clear();
             GameAssemblyContext? previous = sGameContext;
             sGameContext = null;
