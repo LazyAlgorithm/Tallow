@@ -539,3 +539,68 @@ claim automatic replication of dynamically created joints.
   automatic scene batching: integrating the Scene iteration and preserving
   callback-list mutation/profiler order remains separate work. Native
   eligibility checks also have an interop cost that needs measurement.
+
+### Unified C# component lookup (November 14, 2026)
+
+- Added public `IComponent` marker implemented by managed `Script`,
+  `Transform`, and the existing native session-safe `Rigidbody`,
+  `SoftBody`, `CharacterController`, `Joint`, and `ColliderHandle`
+  proxies. `GameObject.GetComponent<T>()` / `Script.GetComponent<T>()`
+  now accept either family through the same strongly typed API.
+- `TryGetComponent<T>(out T)` gives a consistent absence signal for
+  native **struct** handles as well as C# reference scripts. Missing
+  value handles are default/invalid (inspect `IsValid`), not nullable
+  references; this is a necessary difference from Unity's all-class
+  component model. `GetCollider(index)` still handles stacked colliders.
+- Native component resolution uses the **already generated** session-
+  checked physics APIs. No handwritten P/Invoke/API bindings or duplicate
+  ECS/Jolt objects. Unsupported component kinds fail explicitly rather
+  than pretending a missing component is present.
+- The in-process native smoke tests both Script and Rigidbody with the
+  same generic lookup, other supported native handles, Transform, and
+  missing/stale objects. Native scene/UI integration still needs a local
+  editor check; automatic mapping of future exposed native component
+  types will require expanding the handle contract.
+
+### C# Inspector visibility and private serialization (November 14, 2026)
+
+- C# gameplay now understands `[ShowInInspector]` on private fields,
+  the compatibility spelling `[ShowInInspecter]`, `[HideInInspector]`
+  (public or private) and optional Unity-style `[SerializeField]`.
+  A private annotated field is written to the managed field catalog and
+  restored before `Awake` using reflection; arbitrary private fields
+  are **not** deserialized. `[NonSerialized]` overrides all inclusion
+  annotations. Only existing scalar/vector Inspector value types are
+  supported in this stage.
+- The `fields.tsv` catalog adds a seventh, optional hidden flag;
+  older six-column manifests remain visible. The Inspector omits
+  `HideInInspector` rows, and seeds hidden serialized defaults into
+  the native scene component's existing `fieldOverrides` when first
+  inspected. These overrides persist through standard scene/prefab
+  serialization instead of depending on the runtime GC instance.
+- A native-host smoke script verifies all combinations (private visible,
+  private hidden, public hidden, alias spelling, serialized private,
+  NonSerialized rejection, unannotated private rejection) via
+  `tn_csharp_apply_fields` before `Awake`. A catalog CI check will
+  ensure field visibility matches runtime reflection.
+- Runtime changes to hidden fields are **not** automatically written back
+  to authoring scene files during Play, matching the existing editor
+  Play/Stop model. Automatic serialization of arbitrary managed object
+  graphs or private reference fields remains future work.
+
+### C# syntax highlighting and nullable completion (November 14, 2026)
+
+- The Roslyn source snapshot now emits declared class/record/struct/enum/
+  interface/delegate identifiers from game and engine API source as
+  `type` records. The editor's C# widget uses these to recolor
+  `Rigidbody`, `SoftBody`, and new user-defined types without manual
+  API type-name lists. Per-document double-buffered language definitions
+  refresh TextEdit's lexical colors when the known type set changes.
+- Completion treats `body?.AddF` as Roslyn's
+  `ConditionalAccessExpressionSyntax` instead of incorrectly falling
+  through to unrelated global keywords. Nullable native value handles
+  resolve `Nullable<T>` to underlying `T` for conditional member access;
+  ordinary dot access maintains C# semantics.
+- Regression tests cover direct and conditional Rigidbody completion,
+  elimination of irrelevant global suggestions, and compiler-discovered
+  native/user type symbols. Visual editor behavior needs manual testing.

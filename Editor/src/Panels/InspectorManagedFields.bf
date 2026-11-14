@@ -32,7 +32,20 @@ extension EditorApp
 			let kind = columns[2];
 			let current = scope String();
 			if (!component.ReadEditorField(name, current))
+			{
 				current.Set(columns[3]);
+				// Snapshot hidden serialized defaults into the native
+				// scene/prefab fieldOverrides once. They are persisted without
+				// drawing a visible Inspector widget, and later default
+				// initializer changes do not silently overwrite saved values.
+				if (columns.Count >= 7 && columns[6] == "1")
+				{
+					component.WriteEditorField(name, current);
+					changed = true;
+				}
+			}
+			if (columns.Count >= 7 && columns[6] == "1")
+				continue;
 			if (!tableOpen)
 			{
 				if (!BeginPropertyTable("managedCSharpFields"))

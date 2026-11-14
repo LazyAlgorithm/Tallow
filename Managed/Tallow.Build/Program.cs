@@ -236,11 +236,21 @@ internal static class Program
                 // value types. Managed objects/references need their own handles.
                 foreach (IFieldSymbol field in type.GetMembers().OfType<IFieldSymbol>())
                 {
-                    if (field.DeclaredAccessibility != Accessibility.Public || field.IsStatic ||
-                        field.IsConst || field.IsReadOnly || field.IsImplicitlyDeclared ||
-                        field.GetAttributes().Any(a =>
-                            a.AttributeClass?.ToDisplayString() ==
-                            "System.NonSerializedAttribute"))
+                    // Match native Beef's Show/Hide semantics: public fields
+                    // serialize by default, while private ones require an
+                    // explicit serialization marker. Hide means persisted
+                    // but omitted from Inspector UI; NonSerialized always wins.
+                    var fieldAttributes = field.GetAttributes()
+                        .Select(a => a.AttributeClass?.ToDisplayString())
+                        .ToHashSet(StringComparer.Ordinal);
+                    bool show = fieldAttributes.Contains("Tallow.ShowInInspectorAttribute");
+                    bool hide = fieldAttributes.Contains("Tallow.HideInInspectorAttribute");
+                    bool serialize = fieldAttributes.Contains("Tallow.SerializeFieldAttribute");
+                    bool explicitlySerialized = show || hide || serialize;
+                    if ((field.DeclaredAccessibility != Accessibility.Public && !explicitlySerialized) ||
+                        field.IsStatic || field.IsConst || field.IsReadOnly ||
+                        field.IsImplicitlyDeclared ||
+                        fieldAttributes.Contains("System.NonSerializedAttribute"))
                         continue;
                     string? kind = field.Type.SpecialType switch
                     {
@@ -299,8 +309,11 @@ internal static class Program
                         rangeMax = Convert.ToString(range.ConstructorArguments[1].Value,
                             CultureInfo.InvariantCulture) ?? "";
                     }
+                    // The seventh column is a backwards-compatible
+                    // visibility flag: older catalogs have 6 fields and
+                    // therefore remain visible by default in the editor.
                     fieldRows.Add(string.Join("\t", className, field.Name, kind,
-                        defaultValue, rangeMin, rangeMax));
+                        defaultValue, rangeMin, rangeMax, hide ? "1" : "0"));
                 }
             }
         }

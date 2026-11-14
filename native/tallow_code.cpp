@@ -35,6 +35,12 @@ namespace
 		std::string hintSource;
 		std::string signature;
 		int signatureCursor = -1;
+		// Double-buffer to force recoloring when compiler-discovered
+		// types change; TextEdit tracks language definition by pointer.
+		TextEditor::Language csharpLanguages[2];
+		int csharpLanguageSlot = 0;
+		bool isCSharp = false;
+		std::string semanticTypes;
 		size_t semanticUndoIndex = 0;
 		std::vector<std::string> cachedCompletions;
 		std::string completionBefore, completionAfter, completionPrefix;
@@ -435,7 +441,14 @@ TN_API void* tn_code_create(const char* text, int language)
 {
 	Document* document = new Document();
 	TextEditor& editor = document->editor;
-	editor.SetLanguage(language == 1 ? MarkupLanguage() : (language == 2 ? StyleLanguage() : (language == 3 ? ShaderLanguage() : (language == 4 ? CSharpLanguage() : (language == 5 ? TextEditor::Language::Json() : BeefLanguage())))));
+	if (language == 4)
+	{
+		document->isCSharp = true;
+		document->csharpLanguages[0] = *CSharpLanguage();
+		editor.SetLanguage(&document->csharpLanguages[0]);
+	}
+	else
+		editor.SetLanguage(language == 1 ? MarkupLanguage() : (language == 2 ? StyleLanguage() : (language == 3 ? ShaderLanguage() : (language == 5 ? TextEditor::Language::Json() : BeefLanguage()))));
 	document->markup = language == 1;
 	editor.SetPalette(VisualStudioDark());
 	editor.SetTabSize(4);
@@ -752,6 +765,39 @@ TN_API int tn_code_cursor_byte(void* handle)
 {
 	Document* document = (Document*)handle;
 	return (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
+}
+
+// Recolor using types found by the real C# compiler. The widget does not
+// need a list of engine-specific classes (including Rigidbody/SoftBody).
+TN_API void tn_code_semantic_types(void* handle, const char* names)
+{
+	Document* document = (Document*)handle;
+	if (!document || !document->isCSharp)
+		return;
+	const std::string incoming = names ? names : "";
+	if (incoming == document->semanticTypes)
+		return;
+	TextEditor::Language& next = document->csharpLanguages[1 - document->csharpLanguageSlot];
+	next = *CSharpLanguage();
+	size_t start = 0;
+	while (start < incoming.size())
+	{
+		const size_t end = incoming.find('\n', start);
+		const std::string word = incoming.substr(start,
+			end == std::string::npos ? std::string::npos : end - start);
+		if (!word.empty() && word.size() <= 128 &&
+			(std::isalpha((unsigned char)word[0]) || word[0] == '_') &&
+			std::all_of(word.begin() + 1, word.end(), [](char ch) {
+				return std::isalnum((unsigned char)ch) || ch == '_';
+			}))
+			next.declarations.insert(word);
+		if (end == std::string::npos)
+			break;
+		start = end + 1;
+	}
+	document->semanticTypes = incoming;
+	document->csharpLanguageSlot = 1 - document->csharpLanguageSlot;
+	document->editor.SetLanguage(&next);
 }
 
 TN_API void tn_code_semantic_results(void* handle, const char* words)

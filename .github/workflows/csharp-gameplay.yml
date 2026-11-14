@@ -69,6 +69,1496 @@ jobs:
         run: dotnet run --project Managed/Tallow.LanguageService.Tests/Tallow.LanguageService.Tests.csproj -- Managed/Tallow.LanguageService/bin/Debug/net11.0/Tallow.LanguageService.dll
       - name: Generate and compile game + Tallow assembly-definition assemblies
         run: dotnet run --project Managed/Tallow.Build/Tallow.Build.csproj -- --project Tests/CSharpGameplay --engine-root .
+      - name: Check C# Inspector serialization catalog
+        shell: bash
+        run: |
+          catalog=Tests/CSharpGameplay/.tallow-csharp/fields.tsv
+          grep -F 
+      - name: Build trusted managed runtime
+        run: dotnet build Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj -c Debug --nologo
+      - name: Compile native hostfxr shim
+        run: |
+          cmake -S Tests/NativeCSharpHost -B Tests/NativeCSharpHost/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build Tests/NativeCSharpHost/build --config Release
+      - name: Test in-process C# gameplay (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+      - name: Test in-process C# gameplay (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+
+
+  native-editor-linux:
+    name: Compile complete native Beef editor (Linux)
+    # Managed host tests do not compile Editor, Launcher or the full Beef Engine.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
+      LLVM_VERSION: '22'
+      NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+      - name: Install compiler and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake zip xz-utils curl \
+            libx11-dev libxext-dev libxi-dev libxfixes-dev libxcursor-dev libxrandr-dev \
+            libxss-dev libxrender-dev libgl-dev libegl-dev libasound2-dev \
+            libpulse-dev libwayland-dev libxkbcommon-dev \
+            libffi-dev zlib1g-dev libzstd-dev libxml2-dev libedit-dev
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "llvm-$LLVM_VERSION-dev" "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for tool in clang clang++ llvm-ar llvm-config; do
+            sudo ln -sf "/usr/lib/llvm-$LLVM_VERSION/bin/$tool" "/usr/local/bin/$tool"
+          done
+      - name: Cache pinned Beef compiler
+        id: beef-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/beef
+          key: tallow-native-beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+      - name: Build pinned Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          cd ~/beef/bin && ./build.sh
+      - name: Cache native dependency archives
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: build/native
+          key: native-linux-${{ hashFiles('native/**', 'third_party/**', '.github/scripts/native-deps.sh') }}
+      - name: Compile native dependencies
+        run: |
+          python3 tools/patch_textedit.py
+          if [ ! -f build/native/CMakeCache.txt ]; then
+            cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+          cmake --build build/native -j 4 --target $NATIVE_TARGETS
+      - name: Compile Tallow engine, editor and launcher
+        run: |
+          # Use the same full editor build as the author's local Nobara test.
+          # Native libraries above are already built; this step also builds
+          # engine shaders and catches native C++/Beef compile failures.
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          python3 tools/build.py --config Debug --jobs 4 --skip-native
+          test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
+      - name: Verify compiler-reflected opt-in C# manifest
+        run: |
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'CSharpBindingFixture' | grep -F 'Average'
+          grep -F 'CSharpApi_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static float Average(float a, float b)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'CSharpApiVersion_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Prove a real engine API is included and uint32/int32 cross the ABI.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Perlin'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Fbm'
+          grep -F 'public static float Perlin(float x, float y, float z, uint seed)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Read-only native statics should become C# properties, never get_/set_ methods.
+          grep -F 'field' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Time' | grep -F 'DeltaTime'
+          grep -F 'public static float DeltaTime' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'get => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static long FrameCount' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F $'field\tTallow.Time\tTimeScale\tfloat\tgetset' /tmp/tallow-csharp-api.tsv
+          grep -F 'set => __TallowSet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Tallow.Time.TimeScale = value;' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Quaternions use four floats, but must remain distinct from Vector4.
+          grep -F 'Tallow.RotationMath' /tmp/tallow-csharp-api.tsv | grep -F 'EulerDegrees'
+          grep -F 'public static System.Numerics.Quaternion EulerDegrees(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Quaternion v0 = .(p0[0], p0[1], p0[2], p0[3]);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static void Load(string path)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static void Quit()' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_21d00acac55a8847
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e957075e951f3a8f
+          grep -F 'public static bool Button(float x, float y, float width, float height, string label)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Width' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Physics must come from annotated Beef APIs, never handwritten C# imports.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddSoftBodyImpulse'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddRigidbodyForce'
+          grep -F 'public static bool AddSoftBodyImpulse(ulong session, ulong entity, System.Numerics.Vector3 impulse)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector3 GetRigidbodyAngularVelocity(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyTorque(ulong session, ulong entity, System.Numerics.Vector3 torque)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyForceAtPosition(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SimpleMoveCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static int CopyRigidbodyMasses(ulong session, int offset, System.Span<ulong> entityIds, System.Span<float> masses)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Span<uint64> s2 = .(p2, p2Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'Span<float> s3 = .(p3, p3Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Check native AddComponent<T> is in the real precompiled Beef
+          # launcher and present in the generated C# API (not a test stub).
+          grep -F 'public static int Add(ulong session, ulong entity, string managedType)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_5190df22123b013a
+          # C# component lifetime state must use annotated native adapters.
+          grep -F 'public static int EnabledState(ulong session, ulong entity, int instance)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetEnabled(ulong session, ulong entity, int instance, bool enabled)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_34a132d032e309a7
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef731dbf203aec09
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_7da78821e8213042
+          # Generated GameObject active state/SetActive must use native
+          # scene tags, hierarchy and network notifications.
+          grep -F 'public static int ActiveSelfState(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetActive(ulong session, ulong entity, bool active)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_3ca4d8686218926e
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_9f9598114aecfa9b
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_fc2a931aa2f66af2
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
+          grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_1a89e5a6a268148e
+          grep -F 'public static float RaycastDistance(ulong session, System.Numerics.Vector3 origin,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 RaycastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 SphereCastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_51392adf3f18d88a
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef33f8ec5d130d0c
+          # Compiler-reflected, explicitly allowed POD result type; do not
+          # confuse an arbitrary struct with this validated C ABI record.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'RaycastDetails' | grep -F 'Tallow.PhysicsQueryHit'
+          grep -F 'PhysicsQueryHit* result' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static Tallow.PhysicsQueryHit SphereCastDetails(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'GetColliderCount'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'SetSoftBodyStiffness'
+          grep -F 'public static int GetColliderCount(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetSoftBodyWobbleDamping(ulong session, ulong entity, float damping)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_dd6b56714b85bea3
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_4e84ac47e4f849a1
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'ConnectJoint'
+          grep -F 'public static bool ConnectJoint(ulong session, ulong a, ulong b,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_b40ba1380ed1e702
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_babf3ef4abb796e0
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_829130371d484610
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
+          grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Source-grep alone cannot prove that Beef actually exported the
+          # wrapper function pointers. Check reflection on the relinked binary.
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_17858942906a9c6f
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e2772af6e047fd0b
+          if build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_NotApproved; then
+            echo "Native resolver accepted an unapproved API symbol" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
+            echo "Unmarked Beef method appeared in C# bindings" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
+            echo "Unannotated public method leaked into C# API manifest" >&2
+            exit 1
+          fiGameplay.InspectorSerializationSmoke\tprivateSpeed\tfloat' "$catalog"
+          grep -F 
+      - name: Build trusted managed runtime
+        run: dotnet build Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj -c Debug --nologo
+      - name: Compile native hostfxr shim
+        run: |
+          cmake -S Tests/NativeCSharpHost -B Tests/NativeCSharpHost/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build Tests/NativeCSharpHost/build --config Release
+      - name: Test in-process C# gameplay (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+      - name: Test in-process C# gameplay (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+
+
+  native-editor-linux:
+    name: Compile complete native Beef editor (Linux)
+    # Managed host tests do not compile Editor, Launcher or the full Beef Engine.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
+      LLVM_VERSION: '22'
+      NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+      - name: Install compiler and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake zip xz-utils curl \
+            libx11-dev libxext-dev libxi-dev libxfixes-dev libxcursor-dev libxrandr-dev \
+            libxss-dev libxrender-dev libgl-dev libegl-dev libasound2-dev \
+            libpulse-dev libwayland-dev libxkbcommon-dev \
+            libffi-dev zlib1g-dev libzstd-dev libxml2-dev libedit-dev
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "llvm-$LLVM_VERSION-dev" "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for tool in clang clang++ llvm-ar llvm-config; do
+            sudo ln -sf "/usr/lib/llvm-$LLVM_VERSION/bin/$tool" "/usr/local/bin/$tool"
+          done
+      - name: Cache pinned Beef compiler
+        id: beef-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/beef
+          key: tallow-native-beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+      - name: Build pinned Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          cd ~/beef/bin && ./build.sh
+      - name: Cache native dependency archives
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: build/native
+          key: native-linux-${{ hashFiles('native/**', 'third_party/**', '.github/scripts/native-deps.sh') }}
+      - name: Compile native dependencies
+        run: |
+          python3 tools/patch_textedit.py
+          if [ ! -f build/native/CMakeCache.txt ]; then
+            cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+          cmake --build build/native -j 4 --target $NATIVE_TARGETS
+      - name: Compile Tallow engine, editor and launcher
+        run: |
+          # Use the same full editor build as the author's local Nobara test.
+          # Native libraries above are already built; this step also builds
+          # engine shaders and catches native C++/Beef compile failures.
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          python3 tools/build.py --config Debug --jobs 4 --skip-native
+          test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
+      - name: Verify compiler-reflected opt-in C# manifest
+        run: |
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'CSharpBindingFixture' | grep -F 'Average'
+          grep -F 'CSharpApi_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static float Average(float a, float b)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'CSharpApiVersion_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Prove a real engine API is included and uint32/int32 cross the ABI.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Perlin'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Fbm'
+          grep -F 'public static float Perlin(float x, float y, float z, uint seed)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Read-only native statics should become C# properties, never get_/set_ methods.
+          grep -F 'field' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Time' | grep -F 'DeltaTime'
+          grep -F 'public static float DeltaTime' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'get => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static long FrameCount' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F $'field\tTallow.Time\tTimeScale\tfloat\tgetset' /tmp/tallow-csharp-api.tsv
+          grep -F 'set => __TallowSet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Tallow.Time.TimeScale = value;' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Quaternions use four floats, but must remain distinct from Vector4.
+          grep -F 'Tallow.RotationMath' /tmp/tallow-csharp-api.tsv | grep -F 'EulerDegrees'
+          grep -F 'public static System.Numerics.Quaternion EulerDegrees(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Quaternion v0 = .(p0[0], p0[1], p0[2], p0[3]);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static void Load(string path)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static void Quit()' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_21d00acac55a8847
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e957075e951f3a8f
+          grep -F 'public static bool Button(float x, float y, float width, float height, string label)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Width' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Physics must come from annotated Beef APIs, never handwritten C# imports.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddSoftBodyImpulse'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddRigidbodyForce'
+          grep -F 'public static bool AddSoftBodyImpulse(ulong session, ulong entity, System.Numerics.Vector3 impulse)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector3 GetRigidbodyAngularVelocity(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyTorque(ulong session, ulong entity, System.Numerics.Vector3 torque)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyForceAtPosition(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SimpleMoveCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static int CopyRigidbodyMasses(ulong session, int offset, System.Span<ulong> entityIds, System.Span<float> masses)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Span<uint64> s2 = .(p2, p2Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'Span<float> s3 = .(p3, p3Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Check native AddComponent<T> is in the real precompiled Beef
+          # launcher and present in the generated C# API (not a test stub).
+          grep -F 'public static int Add(ulong session, ulong entity, string managedType)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_5190df22123b013a
+          # C# component lifetime state must use annotated native adapters.
+          grep -F 'public static int EnabledState(ulong session, ulong entity, int instance)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetEnabled(ulong session, ulong entity, int instance, bool enabled)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_34a132d032e309a7
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef731dbf203aec09
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_7da78821e8213042
+          # Generated GameObject active state/SetActive must use native
+          # scene tags, hierarchy and network notifications.
+          grep -F 'public static int ActiveSelfState(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetActive(ulong session, ulong entity, bool active)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_3ca4d8686218926e
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_9f9598114aecfa9b
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_fc2a931aa2f66af2
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
+          grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_1a89e5a6a268148e
+          grep -F 'public static float RaycastDistance(ulong session, System.Numerics.Vector3 origin,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 RaycastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 SphereCastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_51392adf3f18d88a
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef33f8ec5d130d0c
+          # Compiler-reflected, explicitly allowed POD result type; do not
+          # confuse an arbitrary struct with this validated C ABI record.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'RaycastDetails' | grep -F 'Tallow.PhysicsQueryHit'
+          grep -F 'PhysicsQueryHit* result' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static Tallow.PhysicsQueryHit SphereCastDetails(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'GetColliderCount'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'SetSoftBodyStiffness'
+          grep -F 'public static int GetColliderCount(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetSoftBodyWobbleDamping(ulong session, ulong entity, float damping)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_dd6b56714b85bea3
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_4e84ac47e4f849a1
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'ConnectJoint'
+          grep -F 'public static bool ConnectJoint(ulong session, ulong a, ulong b,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_b40ba1380ed1e702
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_babf3ef4abb796e0
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_829130371d484610
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
+          grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Source-grep alone cannot prove that Beef actually exported the
+          # wrapper function pointers. Check reflection on the relinked binary.
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_17858942906a9c6f
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e2772af6e047fd0b
+          if build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_NotApproved; then
+            echo "Native resolver accepted an unapproved API symbol" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
+            echo "Unmarked Beef method appeared in C# bindings" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
+            echo "Unannotated public method leaked into C# API manifest" >&2
+            exit 1
+          fiGameplay.InspectorSerializationSmoke\tprivateEnabled\tbool' "$catalog"
+          grep -F 
+      - name: Build trusted managed runtime
+        run: dotnet build Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj -c Debug --nologo
+      - name: Compile native hostfxr shim
+        run: |
+          cmake -S Tests/NativeCSharpHost -B Tests/NativeCSharpHost/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build Tests/NativeCSharpHost/build --config Release
+      - name: Test in-process C# gameplay (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+      - name: Test in-process C# gameplay (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+
+
+  native-editor-linux:
+    name: Compile complete native Beef editor (Linux)
+    # Managed host tests do not compile Editor, Launcher or the full Beef Engine.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
+      LLVM_VERSION: '22'
+      NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+      - name: Install compiler and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake zip xz-utils curl \
+            libx11-dev libxext-dev libxi-dev libxfixes-dev libxcursor-dev libxrandr-dev \
+            libxss-dev libxrender-dev libgl-dev libegl-dev libasound2-dev \
+            libpulse-dev libwayland-dev libxkbcommon-dev \
+            libffi-dev zlib1g-dev libzstd-dev libxml2-dev libedit-dev
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "llvm-$LLVM_VERSION-dev" "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for tool in clang clang++ llvm-ar llvm-config; do
+            sudo ln -sf "/usr/lib/llvm-$LLVM_VERSION/bin/$tool" "/usr/local/bin/$tool"
+          done
+      - name: Cache pinned Beef compiler
+        id: beef-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/beef
+          key: tallow-native-beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+      - name: Build pinned Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          cd ~/beef/bin && ./build.sh
+      - name: Cache native dependency archives
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: build/native
+          key: native-linux-${{ hashFiles('native/**', 'third_party/**', '.github/scripts/native-deps.sh') }}
+      - name: Compile native dependencies
+        run: |
+          python3 tools/patch_textedit.py
+          if [ ! -f build/native/CMakeCache.txt ]; then
+            cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+          cmake --build build/native -j 4 --target $NATIVE_TARGETS
+      - name: Compile Tallow engine, editor and launcher
+        run: |
+          # Use the same full editor build as the author's local Nobara test.
+          # Native libraries above are already built; this step also builds
+          # engine shaders and catches native C++/Beef compile failures.
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          python3 tools/build.py --config Debug --jobs 4 --skip-native
+          test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
+      - name: Verify compiler-reflected opt-in C# manifest
+        run: |
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'CSharpBindingFixture' | grep -F 'Average'
+          grep -F 'CSharpApi_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static float Average(float a, float b)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'CSharpApiVersion_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Prove a real engine API is included and uint32/int32 cross the ABI.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Perlin'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Fbm'
+          grep -F 'public static float Perlin(float x, float y, float z, uint seed)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Read-only native statics should become C# properties, never get_/set_ methods.
+          grep -F 'field' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Time' | grep -F 'DeltaTime'
+          grep -F 'public static float DeltaTime' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'get => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static long FrameCount' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F $'field\tTallow.Time\tTimeScale\tfloat\tgetset' /tmp/tallow-csharp-api.tsv
+          grep -F 'set => __TallowSet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Tallow.Time.TimeScale = value;' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Quaternions use four floats, but must remain distinct from Vector4.
+          grep -F 'Tallow.RotationMath' /tmp/tallow-csharp-api.tsv | grep -F 'EulerDegrees'
+          grep -F 'public static System.Numerics.Quaternion EulerDegrees(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Quaternion v0 = .(p0[0], p0[1], p0[2], p0[3]);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static void Load(string path)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static void Quit()' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_21d00acac55a8847
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e957075e951f3a8f
+          grep -F 'public static bool Button(float x, float y, float width, float height, string label)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Width' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Physics must come from annotated Beef APIs, never handwritten C# imports.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddSoftBodyImpulse'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddRigidbodyForce'
+          grep -F 'public static bool AddSoftBodyImpulse(ulong session, ulong entity, System.Numerics.Vector3 impulse)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector3 GetRigidbodyAngularVelocity(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyTorque(ulong session, ulong entity, System.Numerics.Vector3 torque)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyForceAtPosition(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SimpleMoveCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static int CopyRigidbodyMasses(ulong session, int offset, System.Span<ulong> entityIds, System.Span<float> masses)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Span<uint64> s2 = .(p2, p2Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'Span<float> s3 = .(p3, p3Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Check native AddComponent<T> is in the real precompiled Beef
+          # launcher and present in the generated C# API (not a test stub).
+          grep -F 'public static int Add(ulong session, ulong entity, string managedType)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_5190df22123b013a
+          # C# component lifetime state must use annotated native adapters.
+          grep -F 'public static int EnabledState(ulong session, ulong entity, int instance)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetEnabled(ulong session, ulong entity, int instance, bool enabled)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_34a132d032e309a7
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef731dbf203aec09
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_7da78821e8213042
+          # Generated GameObject active state/SetActive must use native
+          # scene tags, hierarchy and network notifications.
+          grep -F 'public static int ActiveSelfState(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetActive(ulong session, ulong entity, bool active)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_3ca4d8686218926e
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_9f9598114aecfa9b
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_fc2a931aa2f66af2
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
+          grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_1a89e5a6a268148e
+          grep -F 'public static float RaycastDistance(ulong session, System.Numerics.Vector3 origin,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 RaycastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 SphereCastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_51392adf3f18d88a
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef33f8ec5d130d0c
+          # Compiler-reflected, explicitly allowed POD result type; do not
+          # confuse an arbitrary struct with this validated C ABI record.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'RaycastDetails' | grep -F 'Tallow.PhysicsQueryHit'
+          grep -F 'PhysicsQueryHit* result' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static Tallow.PhysicsQueryHit SphereCastDetails(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'GetColliderCount'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'SetSoftBodyStiffness'
+          grep -F 'public static int GetColliderCount(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetSoftBodyWobbleDamping(ulong session, ulong entity, float damping)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_dd6b56714b85bea3
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_4e84ac47e4f849a1
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'ConnectJoint'
+          grep -F 'public static bool ConnectJoint(ulong session, ulong a, ulong b,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_b40ba1380ed1e702
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_babf3ef4abb796e0
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_829130371d484610
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
+          grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Source-grep alone cannot prove that Beef actually exported the
+          # wrapper function pointers. Check reflection on the relinked binary.
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_17858942906a9c6f
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e2772af6e047fd0b
+          if build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_NotApproved; then
+            echo "Native resolver accepted an unapproved API symbol" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
+            echo "Unmarked Beef method appeared in C# bindings" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
+            echo "Unannotated public method leaked into C# API manifest" >&2
+            exit 1
+          fiGameplay.InspectorSerializationSmoke\tserializedCounter\tint' "$catalog"
+          grep -F 
+      - name: Build trusted managed runtime
+        run: dotnet build Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj -c Debug --nologo
+      - name: Compile native hostfxr shim
+        run: |
+          cmake -S Tests/NativeCSharpHost -B Tests/NativeCSharpHost/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build Tests/NativeCSharpHost/build --config Release
+      - name: Test in-process C# gameplay (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+      - name: Test in-process C# gameplay (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+
+
+  native-editor-linux:
+    name: Compile complete native Beef editor (Linux)
+    # Managed host tests do not compile Editor, Launcher or the full Beef Engine.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
+      LLVM_VERSION: '22'
+      NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+      - name: Install compiler and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake zip xz-utils curl \
+            libx11-dev libxext-dev libxi-dev libxfixes-dev libxcursor-dev libxrandr-dev \
+            libxss-dev libxrender-dev libgl-dev libegl-dev libasound2-dev \
+            libpulse-dev libwayland-dev libxkbcommon-dev \
+            libffi-dev zlib1g-dev libzstd-dev libxml2-dev libedit-dev
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "llvm-$LLVM_VERSION-dev" "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for tool in clang clang++ llvm-ar llvm-config; do
+            sudo ln -sf "/usr/lib/llvm-$LLVM_VERSION/bin/$tool" "/usr/local/bin/$tool"
+          done
+      - name: Cache pinned Beef compiler
+        id: beef-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/beef
+          key: tallow-native-beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+      - name: Build pinned Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          cd ~/beef/bin && ./build.sh
+      - name: Cache native dependency archives
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: build/native
+          key: native-linux-${{ hashFiles('native/**', 'third_party/**', '.github/scripts/native-deps.sh') }}
+      - name: Compile native dependencies
+        run: |
+          python3 tools/patch_textedit.py
+          if [ ! -f build/native/CMakeCache.txt ]; then
+            cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+          cmake --build build/native -j 4 --target $NATIVE_TARGETS
+      - name: Compile Tallow engine, editor and launcher
+        run: |
+          # Use the same full editor build as the author's local Nobara test.
+          # Native libraries above are already built; this step also builds
+          # engine shaders and catches native C++/Beef compile failures.
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          python3 tools/build.py --config Debug --jobs 4 --skip-native
+          test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
+      - name: Verify compiler-reflected opt-in C# manifest
+        run: |
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'CSharpBindingFixture' | grep -F 'Average'
+          grep -F 'CSharpApi_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static float Average(float a, float b)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'CSharpApiVersion_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Prove a real engine API is included and uint32/int32 cross the ABI.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Perlin'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Fbm'
+          grep -F 'public static float Perlin(float x, float y, float z, uint seed)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Read-only native statics should become C# properties, never get_/set_ methods.
+          grep -F 'field' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Time' | grep -F 'DeltaTime'
+          grep -F 'public static float DeltaTime' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'get => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static long FrameCount' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F $'field\tTallow.Time\tTimeScale\tfloat\tgetset' /tmp/tallow-csharp-api.tsv
+          grep -F 'set => __TallowSet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Tallow.Time.TimeScale = value;' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Quaternions use four floats, but must remain distinct from Vector4.
+          grep -F 'Tallow.RotationMath' /tmp/tallow-csharp-api.tsv | grep -F 'EulerDegrees'
+          grep -F 'public static System.Numerics.Quaternion EulerDegrees(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Quaternion v0 = .(p0[0], p0[1], p0[2], p0[3]);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static void Load(string path)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static void Quit()' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_21d00acac55a8847
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e957075e951f3a8f
+          grep -F 'public static bool Button(float x, float y, float width, float height, string label)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Width' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Physics must come from annotated Beef APIs, never handwritten C# imports.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddSoftBodyImpulse'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddRigidbodyForce'
+          grep -F 'public static bool AddSoftBodyImpulse(ulong session, ulong entity, System.Numerics.Vector3 impulse)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector3 GetRigidbodyAngularVelocity(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyTorque(ulong session, ulong entity, System.Numerics.Vector3 torque)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyForceAtPosition(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SimpleMoveCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static int CopyRigidbodyMasses(ulong session, int offset, System.Span<ulong> entityIds, System.Span<float> masses)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Span<uint64> s2 = .(p2, p2Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'Span<float> s3 = .(p3, p3Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Check native AddComponent<T> is in the real precompiled Beef
+          # launcher and present in the generated C# API (not a test stub).
+          grep -F 'public static int Add(ulong session, ulong entity, string managedType)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_5190df22123b013a
+          # C# component lifetime state must use annotated native adapters.
+          grep -F 'public static int EnabledState(ulong session, ulong entity, int instance)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetEnabled(ulong session, ulong entity, int instance, bool enabled)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_34a132d032e309a7
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef731dbf203aec09
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_7da78821e8213042
+          # Generated GameObject active state/SetActive must use native
+          # scene tags, hierarchy and network notifications.
+          grep -F 'public static int ActiveSelfState(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetActive(ulong session, ulong entity, bool active)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_3ca4d8686218926e
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_9f9598114aecfa9b
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_fc2a931aa2f66af2
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
+          grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_1a89e5a6a268148e
+          grep -F 'public static float RaycastDistance(ulong session, System.Numerics.Vector3 origin,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 RaycastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 SphereCastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_51392adf3f18d88a
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef33f8ec5d130d0c
+          # Compiler-reflected, explicitly allowed POD result type; do not
+          # confuse an arbitrary struct with this validated C ABI record.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'RaycastDetails' | grep -F 'Tallow.PhysicsQueryHit'
+          grep -F 'PhysicsQueryHit* result' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static Tallow.PhysicsQueryHit SphereCastDetails(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'GetColliderCount'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'SetSoftBodyStiffness'
+          grep -F 'public static int GetColliderCount(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetSoftBodyWobbleDamping(ulong session, ulong entity, float damping)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_dd6b56714b85bea3
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_4e84ac47e4f849a1
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'ConnectJoint'
+          grep -F 'public static bool ConnectJoint(ulong session, ulong a, ulong b,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_b40ba1380ed1e702
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_babf3ef4abb796e0
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_829130371d484610
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
+          grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Source-grep alone cannot prove that Beef actually exported the
+          # wrapper function pointers. Check reflection on the relinked binary.
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_17858942906a9c6f
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e2772af6e047fd0b
+          if build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_NotApproved; then
+            echo "Native resolver accepted an unapproved API symbol" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
+            echo "Unmarked Beef method appeared in C# bindings" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
+            echo "Unannotated public method leaked into C# API manifest" >&2
+            exit 1
+          fiGameplay.InspectorSerializationSmoke\thiddenPublic\tfloat\t5\t\t\t1' "$catalog"
+          grep -F 
+      - name: Build trusted managed runtime
+        run: dotnet build Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj -c Debug --nologo
+      - name: Compile native hostfxr shim
+        run: |
+          cmake -S Tests/NativeCSharpHost -B Tests/NativeCSharpHost/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build Tests/NativeCSharpHost/build --config Release
+      - name: Test in-process C# gameplay (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+      - name: Test in-process C# gameplay (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+
+
+  native-editor-linux:
+    name: Compile complete native Beef editor (Linux)
+    # Managed host tests do not compile Editor, Launcher or the full Beef Engine.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
+      LLVM_VERSION: '22'
+      NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+      - name: Install compiler and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake zip xz-utils curl \
+            libx11-dev libxext-dev libxi-dev libxfixes-dev libxcursor-dev libxrandr-dev \
+            libxss-dev libxrender-dev libgl-dev libegl-dev libasound2-dev \
+            libpulse-dev libwayland-dev libxkbcommon-dev \
+            libffi-dev zlib1g-dev libzstd-dev libxml2-dev libedit-dev
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "llvm-$LLVM_VERSION-dev" "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for tool in clang clang++ llvm-ar llvm-config; do
+            sudo ln -sf "/usr/lib/llvm-$LLVM_VERSION/bin/$tool" "/usr/local/bin/$tool"
+          done
+      - name: Cache pinned Beef compiler
+        id: beef-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/beef
+          key: tallow-native-beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+      - name: Build pinned Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          cd ~/beef/bin && ./build.sh
+      - name: Cache native dependency archives
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: build/native
+          key: native-linux-${{ hashFiles('native/**', 'third_party/**', '.github/scripts/native-deps.sh') }}
+      - name: Compile native dependencies
+        run: |
+          python3 tools/patch_textedit.py
+          if [ ! -f build/native/CMakeCache.txt ]; then
+            cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+          cmake --build build/native -j 4 --target $NATIVE_TARGETS
+      - name: Compile Tallow engine, editor and launcher
+        run: |
+          # Use the same full editor build as the author's local Nobara test.
+          # Native libraries above are already built; this step also builds
+          # engine shaders and catches native C++/Beef compile failures.
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          python3 tools/build.py --config Debug --jobs 4 --skip-native
+          test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
+      - name: Verify compiler-reflected opt-in C# manifest
+        run: |
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'CSharpBindingFixture' | grep -F 'Average'
+          grep -F 'CSharpApi_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static float Average(float a, float b)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'CSharpApiVersion_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Prove a real engine API is included and uint32/int32 cross the ABI.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Perlin'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Fbm'
+          grep -F 'public static float Perlin(float x, float y, float z, uint seed)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Read-only native statics should become C# properties, never get_/set_ methods.
+          grep -F 'field' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Time' | grep -F 'DeltaTime'
+          grep -F 'public static float DeltaTime' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'get => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static long FrameCount' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F $'field\tTallow.Time\tTimeScale\tfloat\tgetset' /tmp/tallow-csharp-api.tsv
+          grep -F 'set => __TallowSet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Tallow.Time.TimeScale = value;' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Quaternions use four floats, but must remain distinct from Vector4.
+          grep -F 'Tallow.RotationMath' /tmp/tallow-csharp-api.tsv | grep -F 'EulerDegrees'
+          grep -F 'public static System.Numerics.Quaternion EulerDegrees(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Quaternion v0 = .(p0[0], p0[1], p0[2], p0[3]);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static void Load(string path)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static void Quit()' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_21d00acac55a8847
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e957075e951f3a8f
+          grep -F 'public static bool Button(float x, float y, float width, float height, string label)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Width' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Physics must come from annotated Beef APIs, never handwritten C# imports.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddSoftBodyImpulse'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddRigidbodyForce'
+          grep -F 'public static bool AddSoftBodyImpulse(ulong session, ulong entity, System.Numerics.Vector3 impulse)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector3 GetRigidbodyAngularVelocity(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyTorque(ulong session, ulong entity, System.Numerics.Vector3 torque)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyForceAtPosition(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SimpleMoveCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static int CopyRigidbodyMasses(ulong session, int offset, System.Span<ulong> entityIds, System.Span<float> masses)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Span<uint64> s2 = .(p2, p2Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'Span<float> s3 = .(p3, p3Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Check native AddComponent<T> is in the real precompiled Beef
+          # launcher and present in the generated C# API (not a test stub).
+          grep -F 'public static int Add(ulong session, ulong entity, string managedType)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_5190df22123b013a
+          # C# component lifetime state must use annotated native adapters.
+          grep -F 'public static int EnabledState(ulong session, ulong entity, int instance)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetEnabled(ulong session, ulong entity, int instance, bool enabled)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_34a132d032e309a7
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef731dbf203aec09
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_7da78821e8213042
+          # Generated GameObject active state/SetActive must use native
+          # scene tags, hierarchy and network notifications.
+          grep -F 'public static int ActiveSelfState(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetActive(ulong session, ulong entity, bool active)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_3ca4d8686218926e
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_9f9598114aecfa9b
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_fc2a931aa2f66af2
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
+          grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_1a89e5a6a268148e
+          grep -F 'public static float RaycastDistance(ulong session, System.Numerics.Vector3 origin,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 RaycastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 SphereCastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_51392adf3f18d88a
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef33f8ec5d130d0c
+          # Compiler-reflected, explicitly allowed POD result type; do not
+          # confuse an arbitrary struct with this validated C ABI record.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'RaycastDetails' | grep -F 'Tallow.PhysicsQueryHit'
+          grep -F 'PhysicsQueryHit* result' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static Tallow.PhysicsQueryHit SphereCastDetails(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'GetColliderCount'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'SetSoftBodyStiffness'
+          grep -F 'public static int GetColliderCount(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetSoftBodyWobbleDamping(ulong session, ulong entity, float damping)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_dd6b56714b85bea3
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_4e84ac47e4f849a1
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'ConnectJoint'
+          grep -F 'public static bool ConnectJoint(ulong session, ulong a, ulong b,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_b40ba1380ed1e702
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_babf3ef4abb796e0
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_829130371d484610
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
+          grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Source-grep alone cannot prove that Beef actually exported the
+          # wrapper function pointers. Check reflection on the relinked binary.
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_17858942906a9c6f
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e2772af6e047fd0b
+          if build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_NotApproved; then
+            echo "Native resolver accepted an unapproved API symbol" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
+            echo "Unmarked Beef method appeared in C# bindings" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
+            echo "Unannotated public method leaked into C# API manifest" >&2
+            exit 1
+          fiGameplay.InspectorSerializationSmoke\thiddenPrivate\tint\t6\t\t\t1' "$catalog"
+          grep -F 
+      - name: Build trusted managed runtime
+        run: dotnet build Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj -c Debug --nologo
+      - name: Compile native hostfxr shim
+        run: |
+          cmake -S Tests/NativeCSharpHost -B Tests/NativeCSharpHost/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build Tests/NativeCSharpHost/build --config Release
+      - name: Test in-process C# gameplay (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+      - name: Test in-process C# gameplay (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+
+
+  native-editor-linux:
+    name: Compile complete native Beef editor (Linux)
+    # Managed host tests do not compile Editor, Launcher or the full Beef Engine.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
+      LLVM_VERSION: '22'
+      NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+      - name: Install compiler and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake zip xz-utils curl \
+            libx11-dev libxext-dev libxi-dev libxfixes-dev libxcursor-dev libxrandr-dev \
+            libxss-dev libxrender-dev libgl-dev libegl-dev libasound2-dev \
+            libpulse-dev libwayland-dev libxkbcommon-dev \
+            libffi-dev zlib1g-dev libzstd-dev libxml2-dev libedit-dev
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "llvm-$LLVM_VERSION-dev" "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for tool in clang clang++ llvm-ar llvm-config; do
+            sudo ln -sf "/usr/lib/llvm-$LLVM_VERSION/bin/$tool" "/usr/local/bin/$tool"
+          done
+      - name: Cache pinned Beef compiler
+        id: beef-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/beef
+          key: tallow-native-beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+      - name: Build pinned Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          cd ~/beef/bin && ./build.sh
+      - name: Cache native dependency archives
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: build/native
+          key: native-linux-${{ hashFiles('native/**', 'third_party/**', '.github/scripts/native-deps.sh') }}
+      - name: Compile native dependencies
+        run: |
+          python3 tools/patch_textedit.py
+          if [ ! -f build/native/CMakeCache.txt ]; then
+            cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+          cmake --build build/native -j 4 --target $NATIVE_TARGETS
+      - name: Compile Tallow engine, editor and launcher
+        run: |
+          # Use the same full editor build as the author's local Nobara test.
+          # Native libraries above are already built; this step also builds
+          # engine shaders and catches native C++/Beef compile failures.
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          python3 tools/build.py --config Debug --jobs 4 --skip-native
+          test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
+      - name: Verify compiler-reflected opt-in C# manifest
+        run: |
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'CSharpBindingFixture' | grep -F 'Average'
+          grep -F 'CSharpApi_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static float Average(float a, float b)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'CSharpApiVersion_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Prove a real engine API is included and uint32/int32 cross the ABI.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Perlin'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Fbm'
+          grep -F 'public static float Perlin(float x, float y, float z, uint seed)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Read-only native statics should become C# properties, never get_/set_ methods.
+          grep -F 'field' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Time' | grep -F 'DeltaTime'
+          grep -F 'public static float DeltaTime' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'get => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static long FrameCount' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F $'field\tTallow.Time\tTimeScale\tfloat\tgetset' /tmp/tallow-csharp-api.tsv
+          grep -F 'set => __TallowSet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Tallow.Time.TimeScale = value;' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Quaternions use four floats, but must remain distinct from Vector4.
+          grep -F 'Tallow.RotationMath' /tmp/tallow-csharp-api.tsv | grep -F 'EulerDegrees'
+          grep -F 'public static System.Numerics.Quaternion EulerDegrees(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Quaternion v0 = .(p0[0], p0[1], p0[2], p0[3]);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static void Load(string path)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static void Quit()' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_21d00acac55a8847
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e957075e951f3a8f
+          grep -F 'public static bool Button(float x, float y, float width, float height, string label)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Width' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Physics must come from annotated Beef APIs, never handwritten C# imports.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddSoftBodyImpulse'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddRigidbodyForce'
+          grep -F 'public static bool AddSoftBodyImpulse(ulong session, ulong entity, System.Numerics.Vector3 impulse)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector3 GetRigidbodyAngularVelocity(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyTorque(ulong session, ulong entity, System.Numerics.Vector3 torque)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyForceAtPosition(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SimpleMoveCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static int CopyRigidbodyMasses(ulong session, int offset, System.Span<ulong> entityIds, System.Span<float> masses)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Span<uint64> s2 = .(p2, p2Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'Span<float> s3 = .(p3, p3Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Check native AddComponent<T> is in the real precompiled Beef
+          # launcher and present in the generated C# API (not a test stub).
+          grep -F 'public static int Add(ulong session, ulong entity, string managedType)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_5190df22123b013a
+          # C# component lifetime state must use annotated native adapters.
+          grep -F 'public static int EnabledState(ulong session, ulong entity, int instance)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetEnabled(ulong session, ulong entity, int instance, bool enabled)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_34a132d032e309a7
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef731dbf203aec09
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_7da78821e8213042
+          # Generated GameObject active state/SetActive must use native
+          # scene tags, hierarchy and network notifications.
+          grep -F 'public static int ActiveSelfState(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetActive(ulong session, ulong entity, bool active)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_3ca4d8686218926e
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_9f9598114aecfa9b
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_fc2a931aa2f66af2
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
+          grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_1a89e5a6a268148e
+          grep -F 'public static float RaycastDistance(ulong session, System.Numerics.Vector3 origin,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 RaycastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 SphereCastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_51392adf3f18d88a
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef33f8ec5d130d0c
+          # Compiler-reflected, explicitly allowed POD result type; do not
+          # confuse an arbitrary struct with this validated C ABI record.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'RaycastDetails' | grep -F 'Tallow.PhysicsQueryHit'
+          grep -F 'PhysicsQueryHit* result' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static Tallow.PhysicsQueryHit SphereCastDetails(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'GetColliderCount'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'SetSoftBodyStiffness'
+          grep -F 'public static int GetColliderCount(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetSoftBodyWobbleDamping(ulong session, ulong entity, float damping)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_dd6b56714b85bea3
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_4e84ac47e4f849a1
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'ConnectJoint'
+          grep -F 'public static bool ConnectJoint(ulong session, ulong a, ulong b,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_b40ba1380ed1e702
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_babf3ef4abb796e0
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_829130371d484610
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
+          grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Source-grep alone cannot prove that Beef actually exported the
+          # wrapper function pointers. Check reflection on the relinked binary.
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_17858942906a9c6f
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e2772af6e047fd0b
+          if build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_NotApproved; then
+            echo "Native resolver accepted an unapproved API symbol" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
+            echo "Unmarked Beef method appeared in C# bindings" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
+            echo "Unannotated public method leaked into C# API manifest" >&2
+            exit 1
+          fiGameplay.InspectorSerializationSmoke\thiddenSerialized\tint\t11\t\t\t1' "$catalog"
+          if grep -F 
+      - name: Build trusted managed runtime
+        run: dotnet build Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj -c Debug --nologo
+      - name: Compile native hostfxr shim
+        run: |
+          cmake -S Tests/NativeCSharpHost -B Tests/NativeCSharpHost/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build Tests/NativeCSharpHost/build --config Release
+      - name: Test in-process C# gameplay (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+      - name: Test in-process C# gameplay (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+
+
+  native-editor-linux:
+    name: Compile complete native Beef editor (Linux)
+    # Managed host tests do not compile Editor, Launcher or the full Beef Engine.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
+      LLVM_VERSION: '22'
+      NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+      - name: Install compiler and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake zip xz-utils curl \
+            libx11-dev libxext-dev libxi-dev libxfixes-dev libxcursor-dev libxrandr-dev \
+            libxss-dev libxrender-dev libgl-dev libegl-dev libasound2-dev \
+            libpulse-dev libwayland-dev libxkbcommon-dev \
+            libffi-dev zlib1g-dev libzstd-dev libxml2-dev libedit-dev
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "llvm-$LLVM_VERSION-dev" "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for tool in clang clang++ llvm-ar llvm-config; do
+            sudo ln -sf "/usr/lib/llvm-$LLVM_VERSION/bin/$tool" "/usr/local/bin/$tool"
+          done
+      - name: Cache pinned Beef compiler
+        id: beef-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/beef
+          key: tallow-native-beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+      - name: Build pinned Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          cd ~/beef/bin && ./build.sh
+      - name: Cache native dependency archives
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: build/native
+          key: native-linux-${{ hashFiles('native/**', 'third_party/**', '.github/scripts/native-deps.sh') }}
+      - name: Compile native dependencies
+        run: |
+          python3 tools/patch_textedit.py
+          if [ ! -f build/native/CMakeCache.txt ]; then
+            cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+          cmake --build build/native -j 4 --target $NATIVE_TARGETS
+      - name: Compile Tallow engine, editor and launcher
+        run: |
+          # Use the same full editor build as the author's local Nobara test.
+          # Native libraries above are already built; this step also builds
+          # engine shaders and catches native C++/Beef compile failures.
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          python3 tools/build.py --config Debug --jobs 4 --skip-native
+          test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
+      - name: Verify compiler-reflected opt-in C# manifest
+        run: |
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'CSharpBindingFixture' | grep -F 'Average'
+          grep -F 'CSharpApi_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static float Average(float a, float b)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'CSharpApiVersion_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Prove a real engine API is included and uint32/int32 cross the ABI.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Perlin'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Fbm'
+          grep -F 'public static float Perlin(float x, float y, float z, uint seed)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Read-only native statics should become C# properties, never get_/set_ methods.
+          grep -F 'field' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Time' | grep -F 'DeltaTime'
+          grep -F 'public static float DeltaTime' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'get => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static long FrameCount' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F $'field\tTallow.Time\tTimeScale\tfloat\tgetset' /tmp/tallow-csharp-api.tsv
+          grep -F 'set => __TallowSet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Tallow.Time.TimeScale = value;' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Quaternions use four floats, but must remain distinct from Vector4.
+          grep -F 'Tallow.RotationMath' /tmp/tallow-csharp-api.tsv | grep -F 'EulerDegrees'
+          grep -F 'public static System.Numerics.Quaternion EulerDegrees(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Quaternion v0 = .(p0[0], p0[1], p0[2], p0[3]);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static void Load(string path)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static void Quit()' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_21d00acac55a8847
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e957075e951f3a8f
+          grep -F 'public static bool Button(float x, float y, float width, float height, string label)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Width' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Physics must come from annotated Beef APIs, never handwritten C# imports.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddSoftBodyImpulse'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddRigidbodyForce'
+          grep -F 'public static bool AddSoftBodyImpulse(ulong session, ulong entity, System.Numerics.Vector3 impulse)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector3 GetRigidbodyAngularVelocity(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyTorque(ulong session, ulong entity, System.Numerics.Vector3 torque)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyForceAtPosition(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SimpleMoveCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static int CopyRigidbodyMasses(ulong session, int offset, System.Span<ulong> entityIds, System.Span<float> masses)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Span<uint64> s2 = .(p2, p2Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'Span<float> s3 = .(p3, p3Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Check native AddComponent<T> is in the real precompiled Beef
+          # launcher and present in the generated C# API (not a test stub).
+          grep -F 'public static int Add(ulong session, ulong entity, string managedType)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_5190df22123b013a
+          # C# component lifetime state must use annotated native adapters.
+          grep -F 'public static int EnabledState(ulong session, ulong entity, int instance)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetEnabled(ulong session, ulong entity, int instance, bool enabled)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_34a132d032e309a7
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef731dbf203aec09
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_7da78821e8213042
+          # Generated GameObject active state/SetActive must use native
+          # scene tags, hierarchy and network notifications.
+          grep -F 'public static int ActiveSelfState(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetActive(ulong session, ulong entity, bool active)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_3ca4d8686218926e
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_9f9598114aecfa9b
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_fc2a931aa2f66af2
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
+          grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_1a89e5a6a268148e
+          grep -F 'public static float RaycastDistance(ulong session, System.Numerics.Vector3 origin,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 RaycastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 SphereCastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_51392adf3f18d88a
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef33f8ec5d130d0c
+          # Compiler-reflected, explicitly allowed POD result type; do not
+          # confuse an arbitrary struct with this validated C ABI record.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'RaycastDetails' | grep -F 'Tallow.PhysicsQueryHit'
+          grep -F 'PhysicsQueryHit* result' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static Tallow.PhysicsQueryHit SphereCastDetails(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'GetColliderCount'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'SetSoftBodyStiffness'
+          grep -F 'public static int GetColliderCount(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetSoftBodyWobbleDamping(ulong session, ulong entity, float damping)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_dd6b56714b85bea3
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_4e84ac47e4f849a1
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'ConnectJoint'
+          grep -F 'public static bool ConnectJoint(ulong session, ulong a, ulong b,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_b40ba1380ed1e702
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_babf3ef4abb796e0
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_829130371d484610
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
+          grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Source-grep alone cannot prove that Beef actually exported the
+          # wrapper function pointers. Check reflection on the relinked binary.
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_17858942906a9c6f
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e2772af6e047fd0b
+          if build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_NotApproved; then
+            echo "Native resolver accepted an unapproved API symbol" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
+            echo "Unmarked Beef method appeared in C# bindings" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
+            echo "Unannotated public method leaked into C# API manifest" >&2
+            exit 1
+          fiGameplay.InspectorSerializationSmoke\tskippedNonSerialized\t' "$catalog"; then
+            echo "NonSerialized field leaked into the Inspector catalog" >&2
+            exit 1
+          fi
+          if grep -F 
+      - name: Build trusted managed runtime
+        run: dotnet build Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj -c Debug --nologo
+      - name: Compile native hostfxr shim
+        run: |
+          cmake -S Tests/NativeCSharpHost -B Tests/NativeCSharpHost/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build Tests/NativeCSharpHost/build --config Release
+      - name: Test in-process C# gameplay (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+      - name: Test in-process C# gameplay (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
+
+
+  native-editor-linux:
+    name: Compile complete native Beef editor (Linux)
+    # Managed host tests do not compile Editor, Launcher or the full Beef Engine.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
+      LLVM_VERSION: '22'
+      NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+      - name: Install compiler and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake zip xz-utils curl \
+            libx11-dev libxext-dev libxi-dev libxfixes-dev libxcursor-dev libxrandr-dev \
+            libxss-dev libxrender-dev libgl-dev libegl-dev libasound2-dev \
+            libpulse-dev libwayland-dev libxkbcommon-dev \
+            libffi-dev zlib1g-dev libzstd-dev libxml2-dev libedit-dev
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "llvm-$LLVM_VERSION-dev" "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for tool in clang clang++ llvm-ar llvm-config; do
+            sudo ln -sf "/usr/lib/llvm-$LLVM_VERSION/bin/$tool" "/usr/local/bin/$tool"
+          done
+      - name: Cache pinned Beef compiler
+        id: beef-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/beef
+          key: tallow-native-beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+      - name: Build pinned Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          cd ~/beef/bin && ./build.sh
+      - name: Cache native dependency archives
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: build/native
+          key: native-linux-${{ hashFiles('native/**', 'third_party/**', '.github/scripts/native-deps.sh') }}
+      - name: Compile native dependencies
+        run: |
+          python3 tools/patch_textedit.py
+          if [ ! -f build/native/CMakeCache.txt ]; then
+            cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+          cmake --build build/native -j 4 --target $NATIVE_TARGETS
+      - name: Compile Tallow engine, editor and launcher
+        run: |
+          # Use the same full editor build as the author's local Nobara test.
+          # Native libraries above are already built; this step also builds
+          # engine shaders and catches native C++/Beef compile failures.
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          python3 tools/build.py --config Debug --jobs 4 --skip-native
+          test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
+      - name: Verify compiler-reflected opt-in C# manifest
+        run: |
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'CSharpBindingFixture' | grep -F 'Average'
+          grep -F 'CSharpApi_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static float Average(float a, float b)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'CSharpApiVersion_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Prove a real engine API is included and uint32/int32 cross the ABI.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Perlin'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Fbm'
+          grep -F 'public static float Perlin(float x, float y, float z, uint seed)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Read-only native statics should become C# properties, never get_/set_ methods.
+          grep -F 'field' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Time' | grep -F 'DeltaTime'
+          grep -F 'public static float DeltaTime' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'get => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static long FrameCount' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F $'field\tTallow.Time\tTimeScale\tfloat\tgetset' /tmp/tallow-csharp-api.tsv
+          grep -F 'set => __TallowSet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Tallow.Time.TimeScale = value;' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Quaternions use four floats, but must remain distinct from Vector4.
+          grep -F 'Tallow.RotationMath' /tmp/tallow-csharp-api.tsv | grep -F 'EulerDegrees'
+          grep -F 'public static System.Numerics.Quaternion EulerDegrees(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Quaternion v0 = .(p0[0], p0[1], p0[2], p0[3]);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static void Load(string path)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static void Quit()' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_21d00acac55a8847
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e957075e951f3a8f
+          grep -F 'public static bool Button(float x, float y, float width, float height, string label)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Width' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Physics must come from annotated Beef APIs, never handwritten C# imports.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddSoftBodyImpulse'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddRigidbodyForce'
+          grep -F 'public static bool AddSoftBodyImpulse(ulong session, ulong entity, System.Numerics.Vector3 impulse)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector3 GetRigidbodyAngularVelocity(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyTorque(ulong session, ulong entity, System.Numerics.Vector3 torque)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool AddRigidbodyForceAtPosition(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SimpleMoveCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static int CopyRigidbodyMasses(ulong session, int offset, System.Span<ulong> entityIds, System.Span<float> masses)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Span<uint64> s2 = .(p2, p2Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'Span<float> s3 = .(p3, p3Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Check native AddComponent<T> is in the real precompiled Beef
+          # launcher and present in the generated C# API (not a test stub).
+          grep -F 'public static int Add(ulong session, ulong entity, string managedType)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_5190df22123b013a
+          # C# component lifetime state must use annotated native adapters.
+          grep -F 'public static int EnabledState(ulong session, ulong entity, int instance)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetEnabled(ulong session, ulong entity, int instance, bool enabled)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_34a132d032e309a7
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef731dbf203aec09
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_7da78821e8213042
+          # Generated GameObject active state/SetActive must use native
+          # scene tags, hierarchy and network notifications.
+          grep -F 'public static int ActiveSelfState(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetActive(ulong session, ulong entity, bool active)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_3ca4d8686218926e
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_9f9598114aecfa9b
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_fc2a931aa2f66af2
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
+          grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_1a89e5a6a268148e
+          grep -F 'public static float RaycastDistance(ulong session, System.Numerics.Vector3 origin,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 RaycastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 SphereCastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_51392adf3f18d88a
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef33f8ec5d130d0c
+          # Compiler-reflected, explicitly allowed POD result type; do not
+          # confuse an arbitrary struct with this validated C ABI record.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'RaycastDetails' | grep -F 'Tallow.PhysicsQueryHit'
+          grep -F 'PhysicsQueryHit* result' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static Tallow.PhysicsQueryHit SphereCastDetails(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'GetColliderCount'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'SetSoftBodyStiffness'
+          grep -F 'public static int GetColliderCount(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetSoftBodyWobbleDamping(ulong session, ulong entity, float damping)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_dd6b56714b85bea3
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_4e84ac47e4f849a1
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'ConnectJoint'
+          grep -F 'public static bool ConnectJoint(ulong session, ulong a, ulong b,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_b40ba1380ed1e702
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_babf3ef4abb796e0
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_829130371d484610
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
+          grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Source-grep alone cannot prove that Beef actually exported the
+          # wrapper function pointers. Check reflection on the relinked binary.
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_17858942906a9c6f
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e2772af6e047fd0b
+          if build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_NotApproved; then
+            echo "Native resolver accepted an unapproved API symbol" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
+            echo "Unmarked Beef method appeared in C# bindings" >&2
+            exit 1
+          fi
+          if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
+            echo "Unannotated public method leaked into C# API manifest" >&2
+            exit 1
+          fiGameplay.InspectorSerializationSmoke\timplementationOnly\t' "$catalog"; then
+            echo "Unmarked private implementation field leaked into Inspector catalog" >&2
+            exit 1
+          fi
       - name: Smoke-test trusted assembly lifecycle
         run: dotnet run --project Managed/Tallow.ManagedHost/Tallow.ManagedHost.csproj -- Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
       - name: Build trusted managed runtime

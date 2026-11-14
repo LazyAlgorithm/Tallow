@@ -10,6 +10,27 @@ public sealed class ComponentAttribute : Attribute { }
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class SyncAttribute : Attribute { }
 
+/// <summary>
+/// Save a private gameplay field and show it in the Inspector. Public fields
+/// are serialized and displayed by default. Values are applied before Awake.
+/// </summary>
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class ShowInInspectorAttribute : Attribute { }
+
+/// <summary>
+/// Keep a serialized C# field hidden in the Inspector, like Beef's
+/// HideInInspector. Also explicitly serializes a private field.
+/// </summary>
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class HideInInspectorAttribute : Attribute { }
+
+/// <summary>
+/// Explicitly serialize a private field, with Inspector editing by default.
+/// Use HideInInspector as well if it should not be displayed.
+/// </summary>
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class SerializeFieldAttribute : Attribute { }
+
 /// <summary>Controls a numeric field's Inspector range.</summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class RangeAttribute(float minimum, float maximum) : Attribute
@@ -62,6 +83,12 @@ public readonly record struct TickInput(
     }
 }
 
+/// <summary>
+/// Public component lookup marker shared by C# Script objects and native
+/// session-checked component handles. Gameplay never sees Beef pointers.
+/// </summary>
+public interface IComponent { }
+
 /// <summary>A validated reference to an engine-owned scene entity, not a native pointer.</summary>
 public readonly record struct GameObject(ulong SceneId, ulong Id)
 {
@@ -97,9 +124,92 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
     public Transform Transform => new(this);
     /// <summary>The scene session containing this object; no native pointer is held.</summary>
     public Scene Scene => new(SceneId);
-    /// <summary>Find an attached C# gameplay behaviour on this object.</summary>
-    public T? GetComponent<T>() where T : Script =>
-        Engine.Bridge.GetManagedComponent(this, typeof(T)) as T;
+    /// <summary>
+    /// Resolve a C# behaviour or a supported native/ECS-backed component
+    /// through one API. Native value handles remain lightweight and validate
+    /// the owning scene on use; no native object or Jolt pointer crosses.
+    /// 
+    /// When missing, C# script/Transform lookups return null, while native
+    /// struct handles return default (IsValid == false). Prefer
+    /// TryGetComponent if absence is possible.
+    /// </summary>
+    public T? GetComponent<T>() where T : IComponent =>
+        TryGetComponent<T>(out var found) ? found : default;
+
+    /// <summary>
+    /// Resolve a component with a consistent missing-component result for
+    /// both managed classes and native value handles. This avoids relying on
+    /// null checks for value-type Rigidbody, SoftBody, Joint, etc.
+    /// </summary>
+    public bool TryGetComponent<T>(out T component) where T : IComponent
+    {
+        Type requested = typeof(T);
+        if (typeof(Script).IsAssignableFrom(requested))
+        {
+            if (Engine.Bridge.GetManagedComponent(this, requested) is T script)
+            {
+                component = script;
+                return true;
+            }
+        }
+        else if (requested == typeof(Transform))
+        {
+            if (IsValid)
+            {
+                component = (T)(object)Transform;
+                return true;
+            }
+        }
+        else if (requested == typeof(Rigidbody))
+        {
+            if (GetRigidbody() is { } rigidbody)
+            {
+                component = (T)(object)rigidbody;
+                return true;
+            }
+        }
+        else if (requested == typeof(SoftBody))
+        {
+            if (GetSoftBody() is { } body)
+            {
+                component = (T)(object)body;
+                return true;
+            }
+        }
+        else if (requested == typeof(CharacterController))
+        {
+            if (GetCharacterController() is { } controller)
+            {
+                component = (T)(object)controller;
+                return true;
+            }
+        }
+        else if (requested == typeof(Joint))
+        {
+            if (GetJoint() is { } joint)
+            {
+                component = (T)(object)joint;
+                return true;
+            }
+        }
+        else if (requested == typeof(ColliderHandle))
+        {
+            // One collider for GetComponent; indexed GetCollider(index) is
+            // still available when multiple shapes share a GameObject.
+            if (GetCollider() is { } collider)
+            {
+                component = (T)(object)collider;
+                return true;
+            }
+        }
+        else
+        {
+            throw new NotSupportedException(
+                $"Component lookup has no native handle mapping for {requested.FullName}.");
+        }
+        component = default!;
+        return false;
+    }
 
     /// <summary>
     /// Attach a new trusted C# behaviour through Tallow's native scene and
@@ -317,7 +427,7 @@ public enum TransformChannel
 /// The same world/local position, rotation, scale and directional properties as
 /// Beef's Transform. All hierarchy math is performed by the native engine.
 /// </summary>
-public sealed class Transform(GameObject gameObject)
+public sealed class Transform(GameObject gameObject) : IComponent
 {
     private Vector4 Read(TransformChannel channel) =>
         Engine.Bridge.GetTransform(gameObject, channel);
@@ -474,7 +584,7 @@ public static class Engine
 /// Familiar Unity-like gameplay callbacks. Tallow owns the component lifetime;
 /// managed allocations are reclaimed by .NET GC.
 /// </summary>
-public abstract class Script
+public abstract class Script : IComponent
 {
     public GameObject GameObject { get; private set; }
 
@@ -520,8 +630,14 @@ public abstract class Script
     public bool IsActiveAndEnabled => CheckedState(CSharpComponents.ActiveState(
         GameObject.SceneId, GameObject.Id, RequireNativeInstance()));
 
-    /// <summary>Find another attached C# behaviour, as in native Beef scripts.</summary>
-    public T? GetComponent<T>() where T : Script => GameObject.GetComponent<T>();
+    /// <summary>
+    /// Find a managed script or a native/ECS component through the same API.
+    /// </summary>
+    public T? GetComponent<T>() where T : IComponent => GameObject.GetComponent<T>();
+
+    /// <summary>Find a component, returning false when it is not attached.</summary>
+    public bool TryGetComponent<T>(out T component) where T : IComponent =>
+        GameObject.TryGetComponent(out component);
 
     /// <summary>Add and return another managed gameplay component.</summary>
     public T AddComponent<T>() where T : Script => GameObject.AddComponent<T>();

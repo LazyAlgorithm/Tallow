@@ -188,6 +188,22 @@ internal static class Program
         int position = ToUtf16(active.Text, request.Cursor);
         position = Math.Clamp(position, 0, active.Text.Length);
 
+        // Collect declared engine and game types from the same Roslyn
+        // source snapshot used by diagnostics/completion. The editor may
+        // color those names without maintaining a handwritten engine list.
+        var declaredTypes = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (SyntaxTree tree in trees)
+        {
+            foreach (BaseTypeDeclarationSyntax declaration in tree.GetRoot()
+                .DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
+                declaredTypes.Add(declaration.Identifier.ValueText);
+            foreach (DelegateDeclarationSyntax declaration in tree.GetRoot()
+                .DescendantNodes().OfType<DelegateDeclarationSyntax>())
+                declaredTypes.Add(declaration.Identifier.ValueText);
+        }
+        foreach (string name in declaredTypes)
+            output.Add(Line("type", name));
+
         if (request.Operation == "diagnostics")
         {
             Diagnostics(compilation, sourceByPath, output);
@@ -207,6 +223,15 @@ internal static class Program
                 root.FindToken(position > 0 ? position - 1 : position).Parent;
             MemberAccessExpressionSyntax? member = node?.AncestorsAndSelf()
                 .OfType<MemberAccessExpressionSyntax>().FirstOrDefault();
+            // Rigidbody?.AddF is a member binding inside a conditional
+            // access expression; it is NOT a normal MemberAccessExpression.
+            // Without resolving its receiver, autocomplete fell back to
+            // unrelated global symbols instead of Rigidbody methods.
+            ConditionalAccessExpressionSyntax? conditional = member is null ?
+                node?.AncestorsAndSelf().OfType<ConditionalAccessExpressionSyntax>()
+                    .FirstOrDefault() : null;
+            ExpressionSyntax? receiverExpression =
+                member?.Expression ?? conditional?.Expression;
 
             // The SDK compiler knows project types, members (including inherited
             // ones), and all referenced framework assemblies. Do not maintain a
@@ -260,12 +285,17 @@ internal static class Program
                 names.TryAdd(symbol.Name, symbol.Kind.ToString());
             }
 
-            if (member != null)
+            if (receiverExpression != null)
             {
-                SymbolInfo expression = model.GetSymbolInfo(member.Expression);
+                SymbolInfo expression = model.GetSymbolInfo(receiverExpression);
                 ISymbol? owner = expression.Symbol ?? expression.CandidateSymbols.FirstOrDefault();
-                ITypeSymbol? receiver = model.GetTypeInfo(member.Expression).Type ??
+                ITypeSymbol? receiver = model.GetTypeInfo(receiverExpression).Type ??
                     (owner as IAliasSymbol)?.Target as ITypeSymbol ?? owner as ITypeSymbol;
+                // Nullable<T> conditional access dispatches to the T
+                // members; ordinary . on Nullable<T> keeps nullable APIs.
+                if (conditional != null && receiver is INamedTypeSymbol nullable &&
+                    nullable.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+                    receiver = nullable.TypeArguments[0];
                 bool staticContext = owner is INamedTypeSymbol ||
                     owner is IAliasSymbol { Target: INamedTypeSymbol };
 
@@ -276,17 +306,19 @@ internal static class Program
                     // types as a fallback for generic and incomplete expressions.
                     foreach (ISymbol symbol in model.LookupSymbols(position, container: named))
                         if (symbol is not IMethodSymbol { MethodKind: MethodKind.Constructor } &&
+                            model.IsAccessible(position, symbol) &&
                             (symbol.IsStatic == staticContext ||
                              symbol is IMethodSymbol { IsExtensionMethod: true } && !staticContext))
                             Add(symbol);
                     for (INamedTypeSymbol? parent = named; parent != null; parent = parent.BaseType)
                         foreach (ISymbol symbol in parent.GetMembers())
                             if (symbol is not IMethodSymbol { MethodKind: MethodKind.Constructor } &&
+                                model.IsAccessible(position, symbol) &&
                                 symbol.IsStatic == staticContext)
                                 Add(symbol);
                     foreach (INamedTypeSymbol iface in named.AllInterfaces)
                         foreach (ISymbol symbol in iface.GetMembers())
-                            if (!staticContext)
+                            if (!staticContext && model.IsAccessible(position, symbol))
                                 Add(symbol);
                 }
                 else if (receiver != null)

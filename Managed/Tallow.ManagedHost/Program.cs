@@ -124,6 +124,8 @@ internal static class Program
                     "Gameplay.AddComponentSmoke" or
                     "Gameplay.ComponentEnabledSmoke" or
                     "Gameplay.GameObjectActiveSmoke" or
+                    "Gameplay.UnifiedComponentLookupSmoke" or
+                    "Gameplay.InspectorSerializationSmoke" or
                     "Gameplay.PhysicsBindingSmoke" or
                     "Gameplay.PhysicsContactSmoke" or
                     "Gameplay.PhysicsDetailedSmoke" or

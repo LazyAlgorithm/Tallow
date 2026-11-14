@@ -6,7 +6,7 @@ namespace Tallow;
 /// Value handle to the existing native ECS-backed Rigidbody. No managed Jolt
 /// simulation or native pointer is stored. Scene sessions are checked in Beef.
 /// </summary>
-public readonly record struct Rigidbody(GameObject GameObject)
+public readonly record struct Rigidbody(GameObject GameObject) : IComponent
 {
     public bool IsValid => Physics.HasRigidbody(GameObject.SceneId, GameObject.Id);
     public bool HasBody => Physics.HasRigidbodyBody(GameObject.SceneId, GameObject.Id);
@@ -53,7 +53,7 @@ public readonly record struct Rigidbody(GameObject GameObject)
 /// character. Native physics performs all shape movement and collision.
 /// Use from Update(TickInput, deltaTime) for predicted network controls.
 /// </summary>
-public readonly record struct CharacterController(GameObject GameObject)
+public readonly record struct CharacterController(GameObject GameObject) : IComponent
 {
     public bool IsValid =>
         Physics.HasCharacterController(GameObject.SceneId, GameObject.Id);
@@ -88,7 +88,7 @@ public enum ColliderKind { Box, Sphere, Capsule, Mesh, Compound, Convex }
 /// of the same type may exist on one GameObject. No native pointer is held;
 /// all reads are validated against the active scene session and object ID.
 /// </summary>
-public readonly record struct ColliderHandle(GameObject GameObject, int Index)
+public readonly record struct ColliderHandle(GameObject GameObject, int Index) : IComponent
 {
     public ColliderKind? Kind
     {
@@ -135,7 +135,7 @@ public readonly record struct ColliderHandle(GameObject GameObject, int Index)
 /// constraint. A joint created during gameplay is local to this machine
 /// unless the game explicitly coordinates its creation over networking.
 /// </summary>
-public readonly record struct Joint(GameObject GameObject)
+public readonly record struct Joint(GameObject GameObject) : IComponent
 {
     public bool IsValid => Physics.HasJoint(GameObject.SceneId, GameObject.Id);
     public bool IsConnected => Physics.IsJointConnected(GameObject.SceneId, GameObject.Id);
@@ -181,7 +181,7 @@ public readonly record struct Joint(GameObject GameObject)
 /// <summary>Matches the native SoftBodyKind modes, including Jelly Golf.</summary>
 public enum SoftBodyKind { Cloth, Jelly, Shell, DrivenJelly }
 
-public readonly record struct SoftBody(GameObject GameObject)
+public readonly record struct SoftBody(GameObject GameObject) : IComponent
 {
     public bool IsValid => Physics.HasSoftBody(GameObject.SceneId, GameObject.Id);
     public bool HasBody => Physics.HasSoftBodySimulation(GameObject.SceneId, GameObject.Id);

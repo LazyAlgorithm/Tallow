@@ -12,6 +12,7 @@ extension EditorApp
 	[CLink] static extern void tn_code_invalidate_semantics(void* handle);
 	[CLink] static extern void tn_code_discard_semantic_results(void* handle, bool retry);
 	[CLink] static extern void tn_code_semantic_signature(void* handle, char8* signature);
+	[CLink] static extern void tn_code_semantic_types(void* handle, char8* types);
 	[CLink] static extern void tn_code_semantic_hint(void* handle, int32 cursor, char8* hint);
 	[CLink] static extern int32 tn_code_cursor_byte(void* handle);
 	[CLink] static extern void tn_code_semantic_results(void* handle, char8* words);
@@ -171,6 +172,7 @@ extension EditorApp
 		}
 		let suggestions = scope String();
 		let signatures = scope String();
+		let types = scope String();
 		if (mSemantic.operation == "symbol")
 			mSemanticHint.Clear();
 		mSymbolReferences.Clear();
@@ -198,6 +200,9 @@ extension EditorApp
 			case "completion":
 				suggestions.Append(fields[1]);
 				suggestions.Append('\n');
+			case "type":
+				types.Append(fields[1]);
+				types.Append('\n');
 			case "signature","info":
 				if (mSemantic.operation == "symbol" && mSemanticHint.Length < 4000)
 					mSemanticHint.AppendF("{}\n", fields[1]);
@@ -237,6 +242,17 @@ extension EditorApp
 					else
 						mSymbolReferences.Add(.() { file = index, start = start, length = length });
 				}
+			}
+		}
+		// Use the compiler's engine/game type names in the C# colorizer.
+		// Each open document has its own palette, preventing stale names
+		// between projects or script revisions.
+		if (!failed)
+		{
+			for (let openScript in mScripts)
+			{
+				if (openScript.path.EndsWith(".cs", .OrdinalIgnoreCase))
+					tn_code_semantic_types(openScript.handle, types.CStr());
 			}
 		}
 		if (mSemantic.operation == "diagnostics")

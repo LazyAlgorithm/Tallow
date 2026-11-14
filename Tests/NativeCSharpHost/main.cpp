@@ -964,6 +964,18 @@ int main(int argc, char** argv)
     if (!tn_csharp_detach(transformScript))
         return Failure("detaching native Transform parity script");
 
+    // The compiler's private/hidden field policy must be enforced again
+    // when applying serialized scene values to a live C# instance.
+    const int32_t fieldsScript = tn_csharp_attach(
+        "Gameplay.InspectorSerializationSmoke", 1, 1);
+    if (fieldsScript < 1 || !tn_csharp_apply_fields(fieldsScript,
+            "privateSpeed\t12.5\naliasEnabled\tfalse\nserializedCounter\t19\n"
+            "hiddenPublic\t8.5\nhiddenPrivate\t15\nhiddenSerialized\t25\n"
+            "skippedNonSerialized\t40\nimplementationOnly\t41\n") ||
+        !tn_csharp_dispatch(fieldsScript, TN_CSHARP_AWAKE, 0.0f) ||
+        !tn_csharp_detach(fieldsScript))
+        return Failure("native C# Inspector private/hidden serialization policy");
+
     // Both GetComponent forms must resolve another script attached to the
     // same native scene entity, without exposing an unsafe Beef object pointer.
     const int32_t mover = tn_csharp_attach("Gameplay.MoveRight", 1, 1);
@@ -973,6 +985,16 @@ int main(int argc, char** argv)
         return Failure("resolving C# GetComponent on the same native object");
     if (std::fabs(state.position[1] - 8.0f) > 0.0001f)
         return Failure("managed GetComponent<T> did not resolve sibling C# script");
+
+    // Managed and native ECS/physics handles resolve through the same
+    // generic API, with no duplicate Jolt objects or custom P/Invoke.
+    const int32_t lookupNative = tn_csharp_attach(
+        "Gameplay.UnifiedComponentLookupSmoke", 1, 1);
+    if (lookupNative < 1 ||
+        !tn_csharp_dispatch(lookupNative, TN_CSHARP_AWAKE, 0.0f) ||
+        !tn_csharp_detach(lookupNative))
+        return Failure("unified managed/native GetComponent<T> and TryGetComponent<T>");
+
     if (!tn_csharp_detach(lookup) || !tn_csharp_detach(mover))
         return Failure("cleaning up component lookup");
 

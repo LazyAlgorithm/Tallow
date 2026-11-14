@@ -244,11 +244,43 @@ internal static class Program
             Check("compiler completion includes inherited methods",
                 inheritedResult.Contains("completion\tParentMethod"));
 
+            // Previously ?. sent autocomplete down the unrelated-globals
+            // path instead of resolving the actual receiver type.
+            string nullableCompletion = "class Thing { public void AddForce() {} } " +
+                "class Driver { void Go(Thing? body) { body?.AddF";
+            string nullableSuggestions = Request(service, "completion",
+                nullableCompletion, nullableCompletion.Length);
+            Check("nullable conditional autocomplete resolves the receiver",
+                nullableSuggestions.Contains("completion\tAddForce\t") &&
+                !nullableSuggestions.Contains("completion\tConsole\t") &&
+                !nullableSuggestions.Contains("completion\tclass\t"));
+
             string staticType = "static class StaticUtilities { public static int Calculate() => 1; }" +
                 "class Consumer { void Go() { StaticUtilities.Cal";
             string staticResult = Request(service, "completion", staticType, staticType.Length);
             Check("compiler completion includes static methods",
                 staticResult.Contains("completion\tCalculate"));
+
+            string nativeMethodCompletion =
+                "using Tallow; [Component] sealed class NativeProbe : Script " +
+                "{ void Go() { Rigidbody body = GetComponent<Rigidbody>(); body.AddF";
+            string nativeMethods = RequestWithApi(service, "completion",
+                nativeMethodCompletion, nativeMethodCompletion.Length);
+            Check("GetComponent<Rigidbody>() completes native physics methods",
+                nativeMethods.Contains("completion\tAddForce\t") &&
+                nativeMethods.Contains("completion\tAddForceAtPosition\t") &&
+                !nativeMethods.Contains("completion\tWriteLine\t"));
+            Check("Roslyn discovers Rigidbody and game-defined types for coloring",
+                nativeMethods.Contains("type\tRigidbody\n") &&
+                nativeMethods.Contains("type\tNativeProbe\n"));
+            string nullableRigidbodyCompletion =
+                "using Tallow; [Component] sealed class NativeProbe : Script " +
+                "{ void Go() { Rigidbody? body = GetRigidbody(); body?.AddF";
+            string nullableRigidbodyMethods = RequestWithApi(service, "completion",
+                nullableRigidbodyCompletion, nullableRigidbodyCompletion.Length);
+            Check("nullable Rigidbody gets underlying physics methods",
+                nullableRigidbodyMethods.Contains("completion\tAddForce\t") &&
+                !nullableRigidbodyMethods.Contains("completion\tConsole\t"));
 
             string gameplayVector = @"using Tallow;
 [Component]

@@ -353,7 +353,8 @@ public static unsafe class NativeEntrypoints
                     continue;
                 string name = line[..separator];
                 string value = line[(separator + 1)..];
-                FieldInfo? field = script.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public);
+                FieldInfo? field = script.GetType().GetField(name,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 // ECMA-335 FieldAttributes.NotSerialized is the 0x0080 metadata bit.
                 // Both FieldInfo.IsNotSerialized and the named enum member are
                 // obsolete in .NET 11; keep the existing Inspector exclusion rule
@@ -362,6 +363,14 @@ public static unsafe class NativeEntrypoints
                 if (field is null || field.IsStatic || field.IsInitOnly || field.IsLiteral ||
                     (field.Attributes & nonSerializedBit) != 0)
                     continue; // Allow scripts to rename/remove fields without breaking old scenes.
+                // Do not allow a scene/prefab file to change arbitrary private
+                // implementation state. The Roslyn catalog and managed loader
+                // must agree on which fields have been opted into persistence.
+                if (!field.IsPublic &&
+                    !field.IsDefined(typeof(ShowInInspectorAttribute), inherit: true) &&
+                    !field.IsDefined(typeof(HideInInspectorAttribute), inherit: true) &&
+                    !field.IsDefined(typeof(SerializeFieldAttribute), inherit: true))
+                    continue;
                 object? parsed = ParseInspectorValue(field.FieldType, value);
                 if (parsed != null)
                     field.SetValue(script, parsed);
