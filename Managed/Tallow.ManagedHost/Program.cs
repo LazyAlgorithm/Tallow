@@ -148,8 +148,8 @@ internal static class Program
                     "Gameplay.ColliderAndSoftSettingsSmoke" or
                     "Gameplay.JointBindingSmoke")
                     continue;
-                if (type.IsAbstract || !typeof(Script).IsAssignableFrom(type) ||
-                    !Attribute.IsDefined(type, typeof(ComponentAttribute)))
+                if (type.IsAbstract || type.ContainsGenericParameters ||
+                    !typeof(Script).IsAssignableFrom(type))
                     continue;
 
                 Script script = (Script)Activator.CreateInstance(type)!;
@@ -171,7 +171,7 @@ internal static class Program
 
         if (tested == 0)
         {
-            Console.Error.WriteLine("No [Component] gameplay scripts were discovered.");
+            Console.Error.WriteLine("No concrete Script gameplay classes were discovered.");
             return 1;
         }
         Console.WriteLine($"Passed {tested} trusted C# component smoke test(s).");

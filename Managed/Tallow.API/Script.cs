@@ -2,7 +2,11 @@ using System.Numerics;
 
 namespace Tallow;
 
-/// <summary>Marks a gameplay behaviour or an ECS data type for registration.</summary>
+/// <summary>
+/// Marks an ECS data struct for registration. Script-derived gameplay classes
+/// are discovered by inheritance; this attribute is optional on legacy
+/// scripts for backwards compatibility.
+/// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
 public sealed class ComponentAttribute : Attribute { }
 
@@ -236,9 +240,9 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
     public T AddComponent<T>() where T : Script
     {
         Type type = typeof(T);
-        if (type.IsAbstract || !Attribute.IsDefined(type, typeof(ComponentAttribute)) ||
+        if (type.IsAbstract || type.ContainsGenericParameters ||
             type.FullName is not string fullName)
-            throw new ArgumentException("C# components must be concrete [Component] Script types.");
+            throw new ArgumentException("C# components must be concrete, non-generic Script types.");
 
         int instance = CSharpComponents.Add(SceneId, Id, fullName);
         if (instance <= 0)

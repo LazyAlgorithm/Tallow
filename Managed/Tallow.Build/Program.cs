@@ -199,10 +199,10 @@ internal static class Program
                 foreach (ClassDeclarationSyntax node in tree.GetRoot().DescendantNodes()
                     .OfType<ClassDeclarationSyntax>())
                 {
-                    if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol symbol ||
-                        !symbol.GetAttributes().Any(a =>
-                            a.AttributeClass?.ToDisplayString() == "Tallow.ComponentAttribute"))
+                    if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol symbol)
                         continue;
+                    // Deriving from Script identifies a gameplay behaviour;
+                    // [Component] is reserved for explicit ECS data structs.
                     bool isScript = false;
                     for (INamedTypeSymbol? parent = symbol.BaseType; parent != null;
                          parent = parent.BaseType)
@@ -518,10 +518,9 @@ internal static class Program
             {
                 if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol type || type.IsAbstract)
                     continue;
-                bool marked = type.GetAttributes().Any(attribute =>
-                    attribute.AttributeClass?.ToDisplayString() == "Tallow.ComponentAttribute");
-                if (!marked)
-                    continue;
+                // A concrete Script subclass is already a component.
+                // Keep [Component] only for ECS structs, where inheritance
+                // cannot distinguish data from an ordinary value type.
                 bool script = false;
                 for (INamedTypeSymbol? parent = type.BaseType; parent != null;
                     parent = parent.BaseType)

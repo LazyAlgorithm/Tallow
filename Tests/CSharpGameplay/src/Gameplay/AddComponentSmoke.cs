@@ -7,7 +7,7 @@ namespace Gameplay;
 /// The native scene can attach multiple C# scripts of the same type without
 /// returning the first script for every AddComponent call.
 /// </summary>
-[Component]
+// The native scene must attach scripts without any [Component] attribute.
 public sealed class AddComponentSmoke : Script
 {
     public override void Awake()

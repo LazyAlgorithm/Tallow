@@ -3,7 +3,7 @@ using Tallow;
 
 namespace Gameplay;
 
-[Component]
+// Script inheritance is sufficient; [Component] is not required.
 public sealed class MoveRight : Script
 {
     [Range(0, 20)]

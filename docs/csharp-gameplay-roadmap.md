@@ -948,3 +948,21 @@ and NativeAOT player use. `[Sync]` does not yet replicate these fields.
 - The native-host managed smoke tests typed VelocityData round trips and
   deletion; CI checks that unsupported managed-reference structs have no
   generated extension. Verify all jobs before considering this complete.
+
+
+### C# Script discovery no longer requires [Component]
+
+- All non-abstract, non-generic classes deriving from `Tallow.Script`
+  are discovered by the trusted Roslyn factory generator and Inspector
+  catalog through inheritance. Neither the build catalog nor static
+  JIT/NativeAOT registry requires `[Component]` for these classes.
+- `GameObject.AddComponent<T>()` likewise accepts any concrete,
+  non-generic `Script` subtype; the trusted generated registry and
+  native object/session checks still enforce attachment validity.
+- `[Component]` remains the explicit annotation for standalone C#
+  `struct` ECS data components; ordinary struct types are **not**
+  automatically registered. The attribute is tolerated on existing script
+  classes for compatibility but is not needed going forward.
+- Smoke tests use unannotated `Gameplay.MoveRight` and
+  `Gameplay.AddComponentSmoke` to cover cross-assembly static
+  registry discovery, Inspector catalog and runtime component attachment.
