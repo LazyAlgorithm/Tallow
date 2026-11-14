@@ -8,6 +8,7 @@ on:
     paths:
       - 'Managed/**'
       - 'Tests/CSharpGameplay/**'
+      - 'Tests/CSharpExpose/**'
       - '.github/workflows/csharp-gameplay.yml'
       - 'Engine/**'
       - 'Editor/**'
@@ -32,6 +33,8 @@ jobs:
           dotnet-version: '11.0.x'
       - name: Verify deterministic compiler-manifest binding generation
         run: dotnet run --project Managed/Tallow.BindingGen/Tallow.BindingGen.csproj -- --self-test
+      - name: Generate managed bindings for native-host smoke fixture
+        run: dotnet run --project Managed/Tallow.BindingGen/Tallow.BindingGen.csproj -- --manifest Tests/CSharpExpose/fixture.tsv --engine-root .
       - name: Build managed gameplay API
         run: dotnet build Managed/Tallow.API/Tallow.API.csproj -c Debug --nologo
       - name: Build Roslyn language service
