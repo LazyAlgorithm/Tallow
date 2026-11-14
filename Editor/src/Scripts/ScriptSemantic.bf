@@ -157,7 +157,12 @@ class ScriptSemantic
 				return false;
 			manifest.AppendF("overlay\t{}\t{}\n", source.path, snapshot);
 		}
-		if (File.WriteAllText(scope $"{mFolder}/request.tsv" , manifest) case .Err)
+		// Atomic publication: the Roslyn worker must never see request.tsv
+		// while its producer still holds the file open (Windows sharing).
+		// Complete all overlays first, then rename on the same filesystem.
+		let pending = scope $"{mFolder}/request.pending";
+		if (File.WriteAllText(pending, manifest) case .Err ||
+			File.Move(pending, scope $"{mFolder}/request.tsv") case .Err)
 			return false;
 		mCommand.Clear();
 		if (isCSharp)

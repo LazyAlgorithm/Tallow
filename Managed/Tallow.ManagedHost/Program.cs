@@ -54,6 +54,7 @@ internal static class Program
             return inverse ? point - position : point + position;
         }
         public Script? GetManagedComponent(GameObject gameObject, Type scriptType) => null;
+        public Script? GetManagedInstance(GameObject gameObject, int instanceId) => null;
         public void Destroy(GameObject gameObject)
         {
             _positions.Remove(gameObject);
@@ -120,6 +121,7 @@ internal static class Program
                     "Gameplay.PhysicsApiSmoke" or
                     "Gameplay.CharacterControllerBindingSmoke" or
                     "Gameplay.EcsBatchBindingSmoke" or
+                    "Gameplay.AddComponentSmoke" or
                     "Gameplay.PhysicsBindingSmoke" or
                     "Gameplay.PhysicsContactSmoke" or
                     "Gameplay.PhysicsDetailedSmoke" or

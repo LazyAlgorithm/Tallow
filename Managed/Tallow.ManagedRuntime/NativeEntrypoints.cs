@@ -106,6 +106,16 @@ public static unsafe class NativeEntrypoints
             return null;
         }
 
+        public Script? GetManagedInstance(GameObject gameObject, int instanceId)
+        {
+            // A script ID is only an opaque handle; it must match the current
+            // scene/object as well as the managed instance table.
+            if (instanceId > 0 && sInstances.TryGetValue(instanceId, out Script? script) &&
+                script.GameObject == gameObject && IsAlive(gameObject))
+                return script;
+            return null;
+        }
+
         public void Destroy(GameObject gameObject) =>
             _callbacks.Destroy(_callbacks.Context, gameObject.SceneId, gameObject.Id);
 

@@ -20,6 +20,23 @@ class CSharpBehaviour : Component
 	/// The managed component is owned by this native component, not the scene's ECS memory.
 	public bool IsLoaded => mInstance > 0 && CSharpRuntime.Ready;
 
+	/// Used after GameObject.AddComponent registered a native adapter.
+	/// RegisterComponent may have called an empty Awake/OnEnable before the
+	/// scriptType was set; dispatch both once the trusted type is known.
+	public int32 Configure(StringView managedType)
+	{
+		if (!scriptType.IsEmpty || managedType.IsEmpty || !CSharpRuntime.Ready)
+			return -1;
+		scriptType.Set(managedType);
+		if (Scene.IsPlaying)
+		{
+			Awake();
+			if (IsLoaded && Enabled)
+				OnEnable();
+		}
+		return mInstance;
+	}
+
 	/// Read an Inspector override, falling back to the source's declared initializer.
 	public bool ReadEditorField(StringView name, String output)
 	{

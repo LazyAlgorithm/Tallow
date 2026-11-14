@@ -452,3 +452,15 @@ claim automatic replication of dynamically created joints.
   and runtime JIT behaviour vary. Compare only similar runners and always
   corroborate with in-editor frame/tick benchmarks.
 
+
+### Windows persistent Roslyn queue race (November 14, 2026)
+
+- An intermittent Windows CI failure on `2eb04a5` showed the service
+  reading `request.tsv` while the test writer still held it open, causing
+  a spurious sharing-violation error in a changed-source diagnostic test.
+- Native editor and managed test client now publish all queue requests as
+  `request.pending` followed by an atomic same-directory rename to
+  `request.tsv`. Existing overlay snapshots are completed before the rename.
+- The C# server also retries Windows sharing/lock violations from older
+  clients instead of confusing a temporary file race with a source error.
+  Behavior for real compiler diagnostics is unchanged.

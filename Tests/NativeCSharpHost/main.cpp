@@ -164,6 +164,19 @@ static uint64_t InstantiatePrefab(void* context, uint64_t session, const char* u
 // The standalone native-host test substitutes a tiny ABI-compatible
 // implementation for the generator's reflected Beef fixture. The real
 // launcher resolves the identical symbol IDs from emitted Beef methods.
+static std::vector<int32_t> addedManagedComponents;
+static int32_t ExposedAddManagedComponent(uint64_t session, uint64_t entity,
+    const char* type, int32_t length)
+{
+    if (session != 1 || entity != 1 || !type || length <= 0 || length > 512)
+        return -1;
+    const std::string name(type, static_cast<size_t>(length));
+    const int32_t id = tn_csharp_attach(name.c_str(), session, entity);
+    if (id > 0)
+        addedManagedComponents.push_back(id);
+    return id;
+}
+
 static int firstAverageCalls = 0;
 static int secondAverageCalls = 0;
 static bool useSecondBinding = false;
@@ -584,6 +597,8 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedVersion);
     // IDs are deterministic SHA-256 signature hashes emitted by BindingGen.
     // Exact signature IDs from the generator's approved exposure manifest.
+    if (name == "CSharpApi_5190df22123b013a")
+        return reinterpret_cast<void*>(&ExposedAddManagedComponent);
     if (name == "CSharpApi_d87ccb801a5fd433")
         return reinterpret_cast<void*>(&ExposedEcsIsAlive);
     if (name == "CSharpApi_8f34b0284d3b1041")
@@ -884,6 +899,19 @@ int main(int argc, char** argv)
         return Failure("managed GetComponent<T> did not resolve sibling C# script");
     if (!tn_csharp_detach(lookup) || !tn_csharp_detach(mover))
         return Failure("cleaning up component lookup");
+
+    // C# AddComponent<T> must return the NEW instance, even if the same
+    // native GameObject already contains a sibling of that exact type.
+    const int32_t adder = tn_csharp_attach("Gameplay.AddComponentSmoke", 1, 1);
+    if (adder < 1 || !tn_csharp_dispatch(adder, TN_CSHARP_AWAKE, 0.0f) ||
+        addedManagedComponents.size() != 2)
+        return Failure("generated C# AddComponent<T> and duplicate instance identity");
+    if (!tn_csharp_detach(adder))
+        return Failure("detaching C# component creation probe");
+    for (int32_t childId : addedManagedComponents)
+        if (!tn_csharp_detach(childId))
+            return Failure("detaching managed components created at runtime");
+    addedManagedComponents.clear();
 
     // Run two real managed behaviours through one ordered native/CLR entry.
     const int32_t batchA = tn_csharp_attach("Gameplay.BatchLifecycleSmoke", 1, 1);

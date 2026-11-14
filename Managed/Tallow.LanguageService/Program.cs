@@ -480,6 +480,13 @@ internal static class Program
                     LanguageRequest request = FromEditor(project, engineRoot, folder);
                     Run(request, response);
                 }
+                catch (IOException ex) when ((uint)ex.HResult is 0x80070020 or 0x80070021)
+                {
+                    // A legacy writer may still have request.tsv open on
+                    // Windows. Retry when unlocked instead of publishing a
+                    // transient sharing violation as a C# compiler error.
+                    continue;
+                }
                 catch (Exception ex)
                 {
                     response.Clear();

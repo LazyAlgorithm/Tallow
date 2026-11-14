@@ -125,6 +125,15 @@ internal static class Program
             throw new InvalidOperationException("Cannot start persistent Roslyn service.");
         try
         {
+            static void PublishRequest(string folder, string content)
+            {
+                // Mirroring the editor's queue protocol avoids exposing a
+                // partially written request.tsv to the persistent worker.
+                string pending = Path.Combine(folder, "request.pending");
+                File.WriteAllText(pending, content);
+                File.Move(pending, Path.Combine(folder, "request.tsv"));
+            }
+
             static void WaitFor(string file, Process worker)
             {
                 for (int i = 0; i < 300; i++)
@@ -142,7 +151,7 @@ internal static class Program
             {
                 string folder = Path.Combine(queue, $"request-{i}");
                 Directory.CreateDirectory(folder);
-                File.WriteAllText(Path.Combine(folder, "request.tsv"),
+                PublishRequest(folder,
                     $"operation\tdiagnostics\nfile\t{file}\ncursor\t0\n");
                 string response = Path.Combine(folder, "response.tsv");
                 WaitFor(response, worker);
@@ -164,7 +173,7 @@ internal static class Program
             File.WriteAllText(file, changedSource);
             string invalidFolder = Path.Combine(queue, "request-2");
             Directory.CreateDirectory(invalidFolder);
-            File.WriteAllText(Path.Combine(invalidFolder, "request.tsv"),
+            PublishRequest(invalidFolder,
                 $"operation\tdiagnostics\nfile\t{file}\ncursor\t0\n");
             string invalidResponse = Path.Combine(invalidFolder, "response.tsv");
             WaitFor(invalidResponse, worker);
@@ -180,7 +189,7 @@ internal static class Program
             File.WriteAllText(file, goodSource);
             string restoredFolder = Path.Combine(queue, "request-3");
             Directory.CreateDirectory(restoredFolder);
-            File.WriteAllText(Path.Combine(restoredFolder, "request.tsv"),
+            PublishRequest(restoredFolder,
                 $"operation\tdiagnostics\nfile\t{file}\ncursor\t0\n");
             string restoredResponse = Path.Combine(restoredFolder, "response.tsv");
             WaitFor(restoredResponse, worker);

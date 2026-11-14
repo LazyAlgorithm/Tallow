@@ -72,6 +72,28 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
     /// <summary>Find an attached C# gameplay behaviour on this object.</summary>
     public T? GetComponent<T>() where T : Script =>
         Engine.Bridge.GetManagedComponent(this, typeof(T)) as T;
+
+    /// <summary>
+    /// Attach a new trusted C# behaviour through Tallow's native scene and
+    /// return precisely that new instance, even if siblings share its type.
+    /// The Scene manages Awake/OnEnable/Start and eventual destruction.
+    /// </summary>
+    public T AddComponent<T>() where T : Script
+    {
+        Type type = typeof(T);
+        if (type.IsAbstract || !Attribute.IsDefined(type, typeof(ComponentAttribute)) ||
+            type.FullName is not string fullName)
+            throw new ArgumentException("C# components must be concrete [Component] Script types.");
+
+        int instance = CSharpComponents.Add(SceneId, Id, fullName);
+        if (instance <= 0)
+            throw new InvalidOperationException(
+                $"Tallow could not add {fullName} to the native scene object.");
+        return Engine.Bridge.GetManagedInstance(this, instance) as T ??
+            throw new InvalidOperationException(
+                $"Tallow failed to resolve newly attached C# component {fullName}.");
+    }
+
     public void Destroy() => Engine.Bridge.Destroy(this);
 
     /// <summary>Number of native class colliders attached to this object.</summary>
@@ -383,6 +405,7 @@ public interface IEngineBridge
     void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value);
     Vector3 TransformPoint(GameObject gameObject, Vector3 point, bool inverse);
     Script? GetManagedComponent(GameObject gameObject, Type scriptType);
+    Script? GetManagedInstance(GameObject gameObject, int instanceId);
     void Destroy(GameObject gameObject);
     bool IsMine(GameObject gameObject);
     ulong CreateSceneObject(ulong sceneSession, string name);
@@ -404,6 +427,7 @@ public static class Engine
         public void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value) => throw Missing();
         public Vector3 TransformPoint(GameObject gameObject, Vector3 point, bool inverse) => throw Missing();
         public Script? GetManagedComponent(GameObject gameObject, Type scriptType) => throw Missing();
+        public Script? GetManagedInstance(GameObject gameObject, int instanceId) => throw Missing();
         public void Destroy(GameObject gameObject) => throw Missing();
         public bool IsMine(GameObject gameObject) => throw Missing();
         public ulong CreateSceneObject(ulong sceneSession, string name) => throw Missing();
@@ -432,6 +456,9 @@ public abstract class Script
 
     /// <summary>Find another attached C# behaviour, as in native Beef scripts.</summary>
     public T? GetComponent<T>() where T : Script => GameObject.GetComponent<T>();
+
+    /// <summary>Add and return another managed gameplay component.</summary>
+    public T AddComponent<T>() where T : Script => GameObject.AddComponent<T>();
 
     public ColliderHandle? GetCollider(int index = 0) => GameObject.GetCollider(index);
     public int ColliderCount => GameObject.ColliderCount;

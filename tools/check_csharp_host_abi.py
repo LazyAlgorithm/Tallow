@@ -74,6 +74,7 @@ def main() -> int:
         raise AssertionError("Rigidbody sleep signature hash diverged")
     required = [
         "Tallow.Physics|SleepRigidbody|bool|ulong|ulong",
+        "Tallow.CSharpComponents|Add|int|ulong|ulong|string",
         "Tallow.Ecs|CopyRigidbodyMasses|int|ulong|int|System.Span<ulong>|System.Span<float>",
     ]
     for signature in required:
