@@ -223,7 +223,7 @@ internal static class Program
                         if (scope.DeclaredAccessibility is not
                             (Accessibility.Public or Accessibility.Internal))
                             throw new InvalidOperationException(
-                                $"[Component] {symbol} is inaccessible to generated " +
+                                $"Script component {symbol} is inaccessible to generated " +
                                 "registration. Make the component class internal or public.");
 
                     if (!symbol.InstanceConstructors.Any(ctor =>
@@ -231,7 +231,7 @@ internal static class Program
                             ctor.DeclaredAccessibility is
                                 (Accessibility.Public or Accessibility.Internal)))
                         throw new InvalidOperationException(
-                            $"[Component] {symbol} needs a parameterless " +
+                            $"Script component {symbol} needs a parameterless " +
                             "constructor accessible to generated registration.");
 
                     string name = symbol.ToDisplayString(
