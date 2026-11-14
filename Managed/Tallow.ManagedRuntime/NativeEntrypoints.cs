@@ -409,7 +409,13 @@ public static unsafe class NativeEntrypoints
                 if (!sInstances.ContainsKey(instances[i]))
                     throw new InvalidOperationException("Unknown C# instance in lifecycle batch.");
             for (int i = 0; i < count; i++)
-                DispatchOne(instances[i], (ScriptEvent)eventId, deltaTime);
+            {
+                // An earlier callback may destroy a later component. Mirror
+                // the input-batch path: only dispatch instances still attached
+                // at the moment their turn arrives.
+                if (sInstances.ContainsKey(instances[i]))
+                    DispatchOne(instances[i], (ScriptEvent)eventId, deltaTime);
+            }
             return count;
         }
         catch (Exception exception)

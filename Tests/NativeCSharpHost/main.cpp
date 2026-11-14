@@ -52,11 +52,22 @@ static int32_t GetPosition(void* context, uint64_t scene, uint64_t object, float
     return 1;
 }
 
+// Exercise a managed callback destroying a later script while the native
+// host is reentered for a Transform write. Normally disabled.
+static int32_t detachOnPositionWrite = 0;
+
 static int32_t SetPosition(void* context, uint64_t scene, uint64_t object, const float* xyz)
 {
     auto* state = static_cast<TestScene*>(context);
     if (!Match(scene, object) || !state->alive || !xyz) return 0;
     for (int i = 0; i < 3; ++i) state->position[i] = xyz[i];
+    if (detachOnPositionWrite > 0)
+    {
+        const int32_t detached = detachOnPositionWrite;
+        detachOnPositionWrite = 0;
+        if (!tn_csharp_detach(detached))
+            return 0;
+    }
     return 1;
 }
 
@@ -892,6 +903,23 @@ int main(int argc, char** argv)
     if (tn_csharp_dispatch_batch(batchIds, 2, TN_CSHARP_FIXED_UPDATE, 0.5f) != -1 ||
         state.position[0] != unchangedX)
         return Failure("stale batch instance caused partial execution");
+
+    // The first managed callback can remove a later attached component
+    // from inside a native Transform write. A batch must not call that
+    // stale component or stop with a partial-failure exception.
+    const int32_t deletingFirst = tn_csharp_attach("Gameplay.BatchLifecycleSmoke", 1, 1);
+    const int32_t deletingSecond = tn_csharp_attach("Gameplay.BatchLifecycleSmoke", 1, 1);
+    if (deletingFirst < 1 || deletingSecond < 1)
+        return Failure("attaching dynamic batch lifecycle probes");
+    const int32_t deletingIds[] = {deletingFirst, deletingSecond};
+    const float beforeDestroyBatch = state.position[0];
+    detachOnPositionWrite = deletingSecond;
+    if (tn_csharp_dispatch_batch(deletingIds, 2, TN_CSHARP_FIXED_UPDATE, 0.25f) != 2 ||
+        detachOnPositionWrite != 0 ||
+        std::fabs(state.position[0] - beforeDestroyBatch - 0.25f) > 0.0001f)
+        return Failure("batch invoked a component removed by an earlier script");
+    if (!tn_csharp_detach(deletingFirst))
+        return Failure("detaching dynamic batch probe");
 
     // The method is declared *only* in annotated Beef and emitted for C#
     // by BindingGen; call it through a cached unmanaged function pointer.

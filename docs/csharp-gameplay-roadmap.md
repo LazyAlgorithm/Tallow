@@ -430,3 +430,17 @@ claim automatic replication of dynamically created joints.
   by the **in-process native-host** suite.
 - Full native editor compilation and native-host smoke still need CI
   confirmation after these fixes; no unverified pass is claimed here.
+
+### Lifecycle-safe batch destruction regression (November 14, 2026)
+
+- `DispatchBatch` validates the initial instance set, then checks each
+  instance again before invoking it. This matches `UpdateInputBatch` and
+  avoids calling an instance detached by an earlier callback.
+- The native-host smoke now uses reentrant `tn_csharp_detach` on the
+  second instance during the first instance's Transform write and verifies
+  exactly one `FixedUpdate` runs. The test is isolated from the normal
+  scene scheduler, which continues to invoke callbacks individually.
+- This closes the detached-instance case only. Dynamic component enable/
+  disable, native callback-list mutation, profiler ordering, network
+  ownership, replay and performance measurements must be preserved before
+  automatically scheduling whole batches.
