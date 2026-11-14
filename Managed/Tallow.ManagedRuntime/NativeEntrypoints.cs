@@ -298,8 +298,13 @@ public static unsafe class NativeEntrypoints
                 string name = line[..separator];
                 string value = line[(separator + 1)..];
                 FieldInfo? field = script.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public);
+                // ECMA-335 FieldAttributes.NotSerialized is the 0x0080 metadata bit.
+                // Both FieldInfo.IsNotSerialized and the named enum member are
+                // obsolete in .NET 11; keep the existing Inspector exclusion rule
+                // without depending on formatter-based serialization APIs.
+                const FieldAttributes nonSerializedBit = (FieldAttributes)0x0080;
                 if (field is null || field.IsStatic || field.IsInitOnly || field.IsLiteral ||
-                    (field.Attributes & FieldAttributes.NotSerialized) != 0)
+                    (field.Attributes & nonSerializedBit) != 0)
                     continue; // Allow scripts to rename/remove fields without breaking old scenes.
                 object? parsed = ParseInspectorValue(field.FieldType, value);
                 if (parsed != null)
