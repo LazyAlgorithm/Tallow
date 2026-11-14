@@ -45,12 +45,13 @@ internal static class Program
 
     private static string RequestWithApi(string service, string operation, string code, int cursor)
     {
-        // Reproduce the editor's actual semantic compilation: game source
-        // plus Tallow.API source, not just an isolated Vector3 expression.
-        string apiPath = Path.GetFullPath(
-            Path.Combine("Managed", "Tallow.API", "Script.cs"));
-        if (!File.Exists(apiPath))
-            throw new FileNotFoundException("Test requires the trusted gameplay API source.", apiPath);
+        // Mirror FromEditor's full trusted API snapshot, including the
+        // engine-build generated properties/methods. Exclude obj/bin SDK
+        // output; those aren't user-facing API source files.
+        string apiRoot = Path.GetFullPath(Path.Combine("Managed", "Tallow.API"));
+        if (!File.Exists(Path.Combine(apiRoot, "Script.cs")))
+            throw new FileNotFoundException("Test requires the trusted gameplay API source.",
+                Path.Combine(apiRoot, "Script.cs"));
         string temporary = Path.Combine(Path.GetTempPath(),
             "tallow-csharp-api-semantic-" + Guid.NewGuid());
         Directory.CreateDirectory(temporary);
@@ -64,11 +65,13 @@ internal static class Program
                 operation,
                 file = source,
                 cursor = Encoding.UTF8.GetByteCount(code.AsSpan(0, cursor)),
-                sources = new[]
-                {
-                    new { path = source, text = code },
-                    new { path = apiPath, text = File.ReadAllText(apiPath) }
-                }
+                sources = Directory.EnumerateFiles(apiRoot, "*.cs", SearchOption.AllDirectories)
+                    .Where(path => !Path.GetRelativePath(apiRoot, path)
+                        .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                        .Any(segment => segment is "obj" or "bin"))
+                    .Select(path => new { path, text = File.ReadAllText(path) })
+                    .Prepend(new { path = source, text = code })
+                    .ToArray()
             };
             File.WriteAllText(request, JsonSerializer.Serialize(payload));
             var info = new ProcessStartInfo("dotnet") { UseShellExecute = false };
@@ -271,8 +274,10 @@ public sealed class CubeMover : Script
                 "long frames = Time.FrameCount; } }";
             string timeDiagnostics = RequestWithApi(service, "diagnostics",
                 timeCode, timeCode.Length);
-            Check("generated C# Time fields appear as typed read-only properties",
-                !timeDiagnostics.Contains("diagnostic\t"));
+            if (timeDiagnostics.Contains("diagnostic\t"))
+                throw new InvalidOperationException(
+                    "Generated C# Time properties produced diagnostics:\n" + timeDiagnostics);
+            Check("generated C# Time fields appear as typed read-only properties", true);
             string timeCompletion = RequestWithApi(service, "completion",
                 "using Tallow; class Probe { void Go() { var fps = Time.Smoo",
                 "using Tallow; class Probe { void Go() { var fps = Time.Smoo".Length);
