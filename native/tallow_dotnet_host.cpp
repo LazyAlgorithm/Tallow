@@ -334,7 +334,8 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
 int32_t tn_csharp_set_callbacks(const tn_csharp_callbacks* callbacks)
 {
     if (!started || !callbacks || !callbacks->is_alive || !callbacks->get_position ||
-        !callbacks->set_position || !callbacks->destroy || !callbacks->is_mine)
+        !callbacks->set_position || !callbacks->destroy || !callbacks->is_mine ||
+        !callbacks->get_transform || !callbacks->set_transform)
     {
         error = "Missing native C# gameplay callbacks.";
         return 0;
