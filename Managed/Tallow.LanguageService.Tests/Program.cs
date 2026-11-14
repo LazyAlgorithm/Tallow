@@ -300,6 +300,32 @@ public sealed class CubeMover : Script
             Check("C# engine warnings do not flag non-predicted Start methods",
                 !noTickWarnings.Contains("TAL-NET") && !noTickWarnings.Contains("TAL-PERF"));
 
+            string localFrame = """
+                using Tallow;
+                [Component] public sealed class FrameProbe : Script
+                {
+                    public override void LateUpdate(float deltaTime)
+                    {
+                        var message = new System.Text.StringBuilder();
+                        var time = DateTime.UtcNow;
+                    }
+                    public override void FixedUpdate(float deltaTime)
+                    {
+                        var values = new float[32];
+                    }
+                    public override void OnLocalUpdate()
+                    {
+                        var values = new int[8];
+                    }
+                }
+                """;
+            string frameWarnings = RequestWithApi(service, "diagnostics",
+                localFrame, localFrame.Length);
+            Check("C# performance hints include LateUpdate, FixedUpdate and OnLocalUpdate",
+                frameWarnings.Split("TAL-PERF001").Length == 4);
+            Check("local frame callbacks do not get misleading network replay warnings",
+                !frameWarnings.Contains("TAL-NET"));
+
             string componentLookup = """
                 using Tallow;
                 [Component] public sealed class LookupProbe : Script
