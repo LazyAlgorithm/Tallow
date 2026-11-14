@@ -969,7 +969,7 @@ int main(int argc, char** argv)
     const int32_t fieldsScript = tn_csharp_attach(
         "Gameplay.InspectorSerializationSmoke", 1, 1);
     if (fieldsScript < 1 || !tn_csharp_apply_fields(fieldsScript,
-            "privateSpeed\t12.5\naliasEnabled\tfalse\nserializedCounter\t19\n"
+            "privateSpeed\t12.5\nprivateEnabled\tfalse\nserializedCounter\t19\n"
             "hiddenPublic\t8.5\nhiddenPrivate\t15\nhiddenSerialized\t25\n"
             "skippedNonSerialized\t40\nimplementationOnly\t41\n") ||
         !tn_csharp_dispatch(fieldsScript, TN_CSHARP_AWAKE, 0.0f) ||
