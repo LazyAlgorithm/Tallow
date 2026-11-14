@@ -71,6 +71,17 @@ public static unsafe class NativeEntrypoints
                 (int)channel, values);
         }
 
+        public Vector3 TransformPoint(GameObject gameObject, Vector3 point, bool inverse)
+        {
+            if (!IsAlive(gameObject))
+                throw new ObjectDisposedException(nameof(GameObject), "The native scene entity was destroyed.");
+            float* values = stackalloc float[4] { point.X, point.Y, point.Z, 0 };
+            _callbacks.GetTransform(_callbacks.Context, gameObject.SceneId, gameObject.Id,
+                inverse ? (int)TransformChannel.InverseTransformPoint :
+                          (int)TransformChannel.TransformPoint, values);
+            return new Vector3(values[0], values[1], values[2]);
+        }
+
         public Script? GetManagedComponent(GameObject gameObject, Type scriptType)
         {
             if (!IsAlive(gameObject))
