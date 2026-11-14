@@ -312,7 +312,12 @@ public static unsafe class NativeEntrypoints
     private static object? ParseInspectorValue(Type type, string encoded)
     {
         if (type == typeof(float))
-            return float.Parse(encoded, CultureInfo.InvariantCulture);
+        {
+            float number = float.Parse(encoded, CultureInfo.InvariantCulture);
+            if (!float.IsFinite(number))
+                throw new FormatException("Inspector float fields must be finite.");
+            return number;
+        }
         if (type == typeof(int))
             return int.Parse(encoded, CultureInfo.InvariantCulture);
         if (type == typeof(bool))
@@ -346,6 +351,10 @@ public static unsafe class NativeEntrypoints
             if (values == null)
                 return 1;
             string text = Marshal.PtrToStringUTF8((nint)values) ?? "";
+            // Validate and parse the whole scene/prefab override set before
+            // mutating the managed instance. A corrupt later field must not
+            // partially apply earlier values before Awake or hot updates.
+            var updates = new List<(FieldInfo Field, object Value)>();
             foreach (string line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 int separator = line.IndexOf('\t');
@@ -373,8 +382,10 @@ public static unsafe class NativeEntrypoints
                     continue;
                 object? parsed = ParseInspectorValue(field.FieldType, value);
                 if (parsed != null)
-                    field.SetValue(script, parsed);
+                    updates.Add((field, parsed));
             }
+            foreach ((FieldInfo field, object parsed) in updates)
+                field.SetValue(script, parsed);
             return 1;
         }
         catch (Exception exception)

@@ -636,3 +636,17 @@ claim automatic replication of dynamically created joints.
   exclusion, other-instance private exclusion, and existing own-private
   completion. Managed CI and interactive Nobara validation are still needed;
   do not infer runtime/editor success from this source change alone.
+
+
+### Atomic C# Inspector value application (November 14, 2026)
+
+- Parsing of the native scene/prefab C# field overrides is now transactional:
+  a malformed persisted value cannot silently apply earlier fields and then
+  leave a half-updated managed Script before Awake. Unsupported/removed fields
+  still follow the existing skip policy. Finite float validation matches the
+  existing vector coordinates rule.
+- The in-process C++ host smoke deliberately sends one valid field followed
+  by an invalid integer and independently tries an infinite float after a
+  valid override set. It then runs the existing Awake state assertions to
+  detect any partial write. Requires managed Linux/Windows CI verification
+  and an actual Nobara editor save/reopen test (benchmark B09).

@@ -972,6 +972,12 @@ int main(int argc, char** argv)
             "privateSpeed\t12.5\nprivateEnabled\tfalse\nserializedCounter\t19\n"
             "hiddenPublic\t8.5\nhiddenPrivate\t15\nhiddenSerialized\t25\n"
             "skippedNonSerialized\t40\nimplementationOnly\t41\n") ||
+        // A malformed trailing value must fail WITHOUT applying the earlier,
+        // otherwise valid privateSpeed=99. Awake below asserts the full
+        // previously saved field set remains intact.
+        tn_csharp_apply_fields(fieldsScript,
+            "privateSpeed\t99\nserializedCounter\tinvalid\n") ||
+        tn_csharp_apply_fields(fieldsScript, "hiddenPublic\tInfinity\n") ||
         !tn_csharp_dispatch(fieldsScript, TN_CSHARP_AWAKE, 0.0f) ||
         !tn_csharp_detach(fieldsScript))
         return Failure("native C# Inspector private/hidden serialization policy");
