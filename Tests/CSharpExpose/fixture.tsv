@@ -1,5 +1,6 @@
 TALLOW_CSHARP_API_V1
 method	Tallow.CSharpBindingFixture	Average	float	a:float	b:float
+method	Tallow.Mathf	Clamp	float	v:float	lo:float	hi:float
 method	Tallow.Noise	Fbm	float	x:float	y:float	z:float	seed:uint	octaves:int
 method	Tallow.Noise	Perlin	float	x:float	y:float	z:float	seed:uint
 field	Tallow.Time	DeltaTime	float	get
