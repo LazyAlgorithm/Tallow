@@ -86,9 +86,16 @@ class CSharpBehaviour : Component
 		mInstance = CSharpRuntime.Attach(scriptType, GameObject);
 		if (mInstance > 0)
 		{
-			// Public C# fields are initialized before the first lifecycle callback.
-			CSharpRuntime.ApplyFields(mInstance, fieldOverrides);
-			CSharpRuntime.Dispatch(mInstance, .Awake);
+			// Never run Awake/OnEnable/Start when serialized state could not
+			// be restored. Otherwise a broken scene could silently initialize
+			// networked gameplay with the wrong field values.
+			if (!CSharpRuntime.ApplyFields(mInstance, fieldOverrides))
+			{
+				ReleaseManaged();
+				return;
+			}
+			if (!CSharpRuntime.Dispatch(mInstance, .Awake))
+				ReleaseManaged();
 		}
 	}
 
