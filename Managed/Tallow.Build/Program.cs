@@ -339,7 +339,14 @@ internal static class Program
             string outputFolder = Path.Combine(output, name);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var csproj = CreateProject(name, filesByAssembly[name].Order(), refPaths, api, outputFolder);
-            csproj.Save(path);
+            // MSBuild treats project file timestamps as inputs. Saving an
+            // identical .csproj on every no-op build invalidates otherwise
+            // reusable compilation state, including referenced asmdefs.
+            using var xml = new MemoryStream();
+            csproj.Save(xml);
+            byte[] bytes = xml.ToArray();
+            if (!File.Exists(path) || !File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes))
+                File.WriteAllBytes(path, bytes);
         }
         Console.WriteLine($"Generated {paths.Count} C# assemblies; game: {paths["Tallow.Game"]}");
         return paths["Tallow.Game"];
@@ -598,15 +605,20 @@ internal static class Program
 
         string catalog = Path.Combine(project, ".tallow-csharp", "components.tsv");
         Directory.CreateDirectory(Path.GetDirectoryName(catalog)!);
-        string temporary = catalog + ".tmp";
-        File.WriteAllLines(temporary, components);
-        File.Move(temporary, catalog, overwrite: true);
-        // Atomic replacements so a live Inspector never reads partial metadata.
+        // Keep no-op catalog timestamps stable; the editor only needs a
+        // metadata refresh when the actual field/type schema has changed.
+        // Changed output is still published via an atomic rename.
         static void Publish(string path, IEnumerable<string> rows)
         {
-            File.WriteAllLines(path + ".tmp", rows);
+            string updated = string.Join(Environment.NewLine, rows);
+            if (updated.Length != 0)
+                updated += Environment.NewLine;
+            if (File.Exists(path) && File.ReadAllText(path) == updated)
+                return;
+            File.WriteAllText(path + ".tmp", updated);
             File.Move(path + ".tmp", path, overwrite: true);
         }
+        Publish(catalog, components);
         Publish(Path.Combine(project, ".tallow-csharp", "component-sources.tsv"), sourceRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields.tsv"), fieldRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields-aot.tsv"), aotFieldRows);
