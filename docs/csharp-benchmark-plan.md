@@ -43,6 +43,23 @@
 - [ ] **B22 — game export portability.** Release build on Windows/Linux **without Beef installed** on target machine; record packaged size, cold start, .NET runtime/bootstrap diagnostics, crash frequency and whether the editor/player ever tries to compile native engine code. Verify exports against older Beef samples too.
 - [ ] **B23 — stability soak.** 30–60 minute automated gameplay loop; scene reload, prefab spawn/destroy, networking reconnect, soft-body world teardown. Track median/p95/p99 frame time over time, managed/native RSS slope, GPU memory and native-handle leaks.
 
+## Automated local compile timing helper
+
+After pulling the C# branch, run:
+
+```bash
+cd ~/GitWorktrees/tallow-csharp
+REPEATS=5 bash tools/benchmark_csharp_compiles.sh
+```
+
+This prepares the .NET build driver, then runs cold, no-op, and warm
+single-file edits **only in disposable fixture copies**, measuring wall time,
+exit status and peak command RSS (where /usr/bin/time exists). It creates
+~/TallowBenchmarks/csharp-DATE/results.csv, separate logs and a shareable
+.tar.gz archive. The timed command includes the .NET driver process and
+MSBuild/C# compilation: it is not the editor's Save-to-Play wall time, nor an
+engine FPS benchmark. No existing game directory or tracked source is changed.
+
 ## Commands and evidence
 
 From an existing updated checkout:
