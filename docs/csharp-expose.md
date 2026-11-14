@@ -116,7 +116,7 @@ support, and full parity is still pending native CI confirmation.
 ### Explicit field setters
 
 The public attribute now has `Writable` (default false). A mutable static
-scalar field annotated `[CSharpExpose(Writable = true)]` emits both native
+scalar field annotated `[CSharpExpose(true)]` emits both native
 get/set C ABI entrypoints and a standard C# property with `get` and `set`.
 The first such field is `Time.TimeScale`. Compiler metadata validates that
 only a public, mutable, static, non-generic field can opt into writes; vector
@@ -220,3 +220,9 @@ Two more regular gameplay APIs use generated bindings directly: `SceneManager.Lo
 ### Basic native GUI in C#
 
 Gameplay can now use the generated `GUI.Button(x, y, width, height, label)` native method and the read-only generated `GUI.Width`/`GUI.Height` properties in `OnGUI()`. The call remains handled by Beef's existing GUI implementation. No handwritten managed GUI methods or native imports are required. Other widgets with `Color`, `ref/out` values and other unsupported ABI types are not exported yet; they will require an expanded generator contract.
+
+The writable option is supplied positionally, as `[CSharpExpose(true)]`,
+so the Beef reflection reader obtains the constructor-initialized attribute
+value. Native CI checks the exact `TimeScale\tfloat\tgetset` manifest record
+before checking generated setter source or function pointers; a read-only
+manifest is a build failure rather than a silently reduced public API.

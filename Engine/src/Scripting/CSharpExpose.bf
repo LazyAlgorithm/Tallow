@@ -34,6 +34,14 @@ struct CSharpExposeAttribute : Attribute
     // grants write access. A mutable native counter is not automatically
     // writable by gameplay scripts.
     public bool Writable;
+
+    // Reflection records the value passed to this constructor (as it does
+    // for NativeSystemAttribute(order)). The prior named-field initializer
+    // did not survive the native manifest reflection path on all builds.
+    public this(bool writable = false)
+    {
+        Writable = writable;
+    }
 }
 
 /// Engine-internal marker applied ONLY to generated ABI entrypoints.
