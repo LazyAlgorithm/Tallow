@@ -74,7 +74,10 @@ static class CSharpBindingManifest
     public static bool Write(StringView path, String error)
     {
         List<String> records = scope .();
-        defer ClearAndDeleteItems!(records);
+        defer
+        {
+            ClearAndDeleteItems!(records);
+        }
 
         for (let type in ScriptReload.ReflectedTypes)
         {
