@@ -340,8 +340,9 @@ internal static class Program
         if (fieldBindings.Count != 2 ||
             !beefFields.Contains("return Tallow.Time.FrameCount;") ||
             !beefFields.Contains("return Tallow.Time.DeltaTime;") ||
-            !csharpFields.Contains("public static long FrameCount => __TallowGet_") ||
-            !csharpFields.Contains("public static float DeltaTime => __TallowGet_") ||
+            !csharpFields.Contains("public static long FrameCount") ||
+            !csharpFields.Contains("public static float DeltaTime") ||
+            !csharpFields.Contains("get => __TallowGet_") ||
             csharpFields.Contains("public static long get_FrameCount"))
             throw new Exception("Read-only static field/property lowering failed.");
         const string writableManifest = "TALLOW_CSHARP_API_V1\nfield\tTallow.Time\tTimeScale\tfloat\tgetset\n";
