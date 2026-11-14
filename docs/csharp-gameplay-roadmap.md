@@ -479,3 +479,11 @@ claim automatic replication of dynamically created joints.
   skips instances detached during a previous callback, and avoids raw
   native pointers. Compare new CI timings, but do not infer improved
   real-game FPS or turn on automatic Scene scheduling from this alone.
+
+### Native export verification for runtime C# AddComponent<T>
+
+- Native editor CI now confirms the generated C# signature for
+  `CSharpComponents.Add` and verifies its exported symbol with the
+  **linked Beef launcher**, not only the C++ mock in hostfxr smoke.
+  This catches the case where fixture bindings compile but real engine
+  reflection omits the annotated native method.
