@@ -260,3 +260,5 @@ penetration depth and body ID. **Ray normal is intentionally null** because
 the current Beef `RaycastHit` doesn't report one; sphere sweeps carry Jolt's
 actual contact normal. The generator rejects arbitrary unmanaged structures
 and structured parameters until per-type reflection/layout validation exists.
+
+- The managed native-host smoke now checks 48-byte struct packing and real data/nullable flags: ray hits carry their collider entity but no invented normal, sphere hits carry the Jolt normal, penetration and body ID. Native CI also verifies both generated Beef symbols are actually callable.
