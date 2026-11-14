@@ -146,9 +146,42 @@ static class EditorMain
 /// templates, which built games do not have.
 class PlayerApp : GameApp
 {
+	Scene mManagedScene;
+
 	protected override bool LoadScene(Scene scene, StringView overridePath)
 	{
 		EditorMain.LoadStartScene(scene, overridePath);
+		let project = Project.Current;
+		let game = scope $"{project.Path}/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll";
+		if (File.Exists(game))
+		{
+			if (!CSharpRuntime.StartTrustedGame(scene, project.EngineRoot, project.Path))
+				return false;
+			mManagedScene = scene;
+		}
+		else
+		{
+			// Do not silently run a C# scene with all its managed behaviours
+			// disabled when the game DLL has not yet been built.
+			for (let component in scene.Components)
+			{
+				if (component as CSharpBehaviour != null)
+				{
+					Log.Error("This scene contains C# scripts, but the gameplay assembly is missing. Compile C# in the editor first.");
+					return false;
+				}
+			}
+		}
 		return true;
+	}
+
+	protected override void OnShutdown()
+	{
+		base.OnShutdown();
+		if (mManagedScene != null)
+		{
+			CSharpRuntime.EndTrustedGame(mManagedScene);
+			mManagedScene = null;
+		}
 	}
 }
