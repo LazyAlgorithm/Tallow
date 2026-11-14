@@ -8,5 +8,8 @@
          gameplay projects continue to disallow unsafe source. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Keep XML output for Roslyn hints. Existing undocumented legacy members
+         should not flood builds; new generated APIs will reuse Beef docstrings. -->
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 </Project>
