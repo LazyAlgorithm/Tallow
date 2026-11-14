@@ -316,6 +316,7 @@ extension EditorApp
 			DeleteAndNullify!(mCheckThread);
 		}
 		mCheckManaged = true;
+		mManagedGameplay = true;
 		mManagedBuildReady = false;
 		mCheckWasReload = false;
 		mCheckRunning = true;
