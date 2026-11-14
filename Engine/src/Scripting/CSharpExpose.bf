@@ -25,7 +25,7 @@ namespace Tallow;
 // The type must survive Beef's compile-on-demand elimination even when no
 // native code calls it yet. Include method metadata so the engine-build scanner
 // sees deliberately annotated members on otherwise-unused static classes.
-[AttributeUsage(.Class | .Struct | .Method | .Property | .Field,
+[AttributeUsage(.Class | .Struct | .Method | .Property | .Field | .StaticField,
     .ReflectAttribute | .AlwaysIncludeTarget, ReflectUser = .All,
     AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 struct CSharpExposeAttribute : Attribute
