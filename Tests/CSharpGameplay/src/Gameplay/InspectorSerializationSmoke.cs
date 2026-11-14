@@ -24,6 +24,17 @@ public sealed class InspectorSerializationSmoke : Script
     [HideInInspector]
     private InspectorMotion hiddenMode = InspectorMotion.Jump;
 
+    public string statusText = "Idle";
+
+    [ShowInInspector]
+    private string privateStatus = "Private default";
+
+    [HideInInspector]
+    private string hiddenStatus = "Hidden default";
+
+    [NonSerialized]
+    public string skippedString = "Unmodified";
+
     [ShowInInspector, Range(0, 20)]
     private float privateSpeed = 3f;
 
@@ -61,7 +72,11 @@ public sealed class InspectorSerializationSmoke : Script
             privateMode != InspectorMotion.Hover ||
             hiddenMode != InspectorMotion.Idle ||
             skippedNonSerialized != 7 || implementationOnly != 8 ||
-            privateIdOnly != 12)
+            privateIdOnly != 12 ||
+            statusText != "Ready to play" ||
+            privateStatus != "saved private text" ||
+            hiddenStatus != "saved hidden text" ||
+            skippedString != "Unmodified")
             throw new InvalidOperationException(
                 "C# private/hidden Inspector state was not restored or private internals were changed.");
     }
