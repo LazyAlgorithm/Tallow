@@ -99,9 +99,11 @@ sealed class World
 	/// to .NET, and never let a short, stale or mismatched layout be copied.
 	public bool SetManagedLocalData(Entity entity, uint64 schemaId, Span<uint8> bytes)
 	{
-		if (!IsManagedLocalEntity(entity) ||
-			!mManagedLocalSchemas.TryGetValue(schemaId, let layout) ||
-			bytes.Length != layout.size)
+		if (!IsManagedLocalEntity(entity))
+			return false;
+		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+			return false;
+		if (bytes.Length != layout.size)
 			return false;
 		Flecs.Set(Writer, entity.id, layout.flecsId, layout.size, &bytes[0]);
 		return true;
@@ -109,9 +111,11 @@ sealed class World
 
 	public bool CopyManagedLocalData(Entity entity, uint64 schemaId, Span<uint8> bytes)
 	{
-		if (!IsManagedLocalEntity(entity) ||
-			!mManagedLocalSchemas.TryGetValue(schemaId, let layout) ||
-			bytes.Length != layout.size)
+		if (!IsManagedLocalEntity(entity))
+			return false;
+		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+			return false;
+		if (bytes.Length != layout.size)
 			return false;
 		let data = (uint8*)Flecs.Get(mWorld, entity.id, layout.flecsId);
 		if (data == null)
@@ -123,8 +127,9 @@ sealed class World
 
 	public bool HasManagedLocalData(Entity entity, uint64 schemaId)
 	{
-		if (!IsManagedLocalEntity(entity) ||
-			!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+		if (!IsManagedLocalEntity(entity))
+			return false;
+		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
 			return false;
 		return Flecs.Has(mWorld, entity.id, layout.flecsId);
 	}
