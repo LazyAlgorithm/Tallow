@@ -181,7 +181,8 @@ internal static class GameplayDiagnostics
         SemanticModel semantic)
     {
         IMethodSymbol? symbol = semantic.GetDeclaredSymbol(method);
-        if (symbol is null || !symbol.ReturnsVoid || !IsGameplayScript(symbol))
+        if (symbol is null || !symbol.IsOverride ||
+            !symbol.ReturnsVoid || !IsGameplayScript(symbol))
             return false;
         return method.Identifier.ValueText switch
         {
@@ -208,12 +209,12 @@ internal static class GameplayDiagnostics
         if (name is not ("Update" or "Simulate"))
             return false;
         IMethodSymbol? symbol = semantic.GetDeclaredSymbol(method);
-        if (symbol is null || symbol.Parameters.Length == 0 ||
+        if (symbol is null || !symbol.IsOverride || symbol.Parameters.Length == 0 ||
             symbol.ReturnsVoid == false || symbol.ContainingType is null)
             return false;
-        string input = symbol.Parameters[0].Type.Name;
-        if (name == "Update" && input != "TickInput" ||
-            name == "Simulate" && input != "NetInput")
+        string input = symbol.Parameters[0].Type.ToDisplayString();
+        if (name == "Update" && input != "Tallow.TickInput" ||
+            name == "Simulate" && input != "Tallow.NetInput")
             return false;
         // Only actual gameplay script components run in predicted ticks.
         return IsGameplayScript(symbol);
