@@ -83,7 +83,7 @@ jobs:
           # member's source identifier when SerializedFieldId is applied.
           awk -F '\t' '
             $1 == "Gameplay.InspectorSerializationSmoke" && $3 == "movementMode" {
-              if ($2 !~ /^[0-9A-F]{32}$/) exit 1
+              if (length($2) != 32 || $2 ~ /[^0-9A-F]/) exit 1
               found=1
             }
             END { if (!found) exit 1 }
