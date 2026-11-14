@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The semantic test executable directly checks the generated C# API
+         value ABI as well as sending separate source snapshots to Roslyn. -->
+    <ProjectReference Include="../Tallow.API/Tallow.API.csproj" />
+  </ItemGroup>
 </Project>
