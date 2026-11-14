@@ -10,6 +10,7 @@ public readonly record struct Rigidbody(GameObject GameObject)
 {
     public bool IsValid => Physics.HasRigidbody(GameObject.SceneId, GameObject.Id);
     public bool HasBody => Physics.HasRigidbodyBody(GameObject.SceneId, GameObject.Id);
+    public bool IsSleeping => Physics.IsRigidbodySleeping(GameObject.SceneId, GameObject.Id);
     public Vector3 Velocity
     {
         get => Physics.GetRigidbodyVelocity(GameObject.SceneId, GameObject.Id);
@@ -25,10 +26,24 @@ public readonly record struct Rigidbody(GameObject GameObject)
 /// Value handle to native SoftBody, including free cloth/jelly, dentable shells,
 /// and rigidbody-driven jelly. No soft-body vertex buffer crosses into .NET.
 /// </summary>
+/// <summary>Matches the native SoftBodyKind modes, including Jelly Golf.</summary>
+public enum SoftBodyKind { Cloth, Jelly, Shell, DrivenJelly }
+
 public readonly record struct SoftBody(GameObject GameObject)
 {
     public bool IsValid => Physics.HasSoftBody(GameObject.SceneId, GameObject.Id);
     public bool HasBody => Physics.HasSoftBodySimulation(GameObject.SceneId, GameObject.Id);
+    public bool IsSleeping => Physics.IsSoftBodySleeping(GameObject.SceneId, GameObject.Id);
+    public SoftBodyKind? Kind
+    {
+        get
+        {
+            int value = Physics.GetSoftBodyMode(GameObject.SceneId, GameObject.Id);
+            return value is >= 0 and <= 3 ? (SoftBodyKind)value : null;
+        }
+    }
+    public int SimulatedVertexCount =>
+        Physics.GetSoftBodyVertexCount(GameObject.SceneId, GameObject.Id);
     public bool CanApplyForces => Physics.CanForceSoftBody(GameObject.SceneId, GameObject.Id);
     public Vector3 Velocity
     {

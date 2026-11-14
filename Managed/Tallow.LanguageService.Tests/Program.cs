@@ -368,6 +368,37 @@ public sealed class CubeMover : Script
                     "Generated physics / soft-body facades produced diagnostics:\n" + physicsDiagnostics);
             Check("native ECS rigidbodies and Jolt soft bodies compile in C# gameplay", true);
 
+            string castCode = """
+                using System.Numerics;
+                using Tallow;
+                [Component] class CastProbe : Script
+                {
+                    public override void Start()
+                    {
+                        PhysicsContact? hit = Scene.Raycast(
+                            Vector3.Zero, Vector3.UnitZ, 10f);
+                        PhysicsContact? sphere = Scene.SphereCast(
+                            Vector3.Zero, 0.5f, Vector3.UnitZ, 10f);
+                        if (GetSoftBody() is { } soft)
+                        {
+                            SoftBodyKind? kind = soft.Kind;
+                            int vertices = soft.SimulatedVertexCount;
+                            bool sleeping = soft.IsSleeping;
+                        }
+                        if (GetRigidbody() is { } body && body.IsSleeping)
+                        {
+                        }
+                    }
+                }
+                """;
+            string castDiagnostics = RequestWithApi(service, "diagnostics",
+                castCode, castCode.Length);
+            if (castDiagnostics.Contains("diagnostic\t"))
+                throw new InvalidOperationException(
+                    "Generated raycast and SoftBody metadata API produced diagnostics:\n" +
+                    castDiagnostics);
+            Check("raycast, sphere cast and native SoftBody metadata C# facade compile", true);
+
             string logCode = "using Tallow; class Demo { void Go() { Log.Info(\"hello\"); } }";
             string logDiagnostics = RequestWithApi(service, "diagnostics", logCode, logCode.Length);
             Check("generated Log.Info accepts managed C# strings",

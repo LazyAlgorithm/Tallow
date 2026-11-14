@@ -118,7 +118,8 @@ internal static class Program
                 if (type.FullName is "Gameplay.GeneratedBindingSmoke" or
                     "Gameplay.SceneApiSmoke" or "Gameplay.TransformParity" or
                     "Gameplay.PhysicsApiSmoke" or
-                    "Gameplay.PhysicsBindingSmoke")
+                    "Gameplay.PhysicsBindingSmoke" or
+                    "Gameplay.PhysicsContactSmoke")
                     continue;
                 if (type.IsAbstract || !typeof(Script).IsAssignableFrom(type) ||
                     !Attribute.IsDefined(type, typeof(ComponentAttribute)))

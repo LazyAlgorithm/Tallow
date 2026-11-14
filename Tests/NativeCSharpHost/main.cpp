@@ -204,6 +204,41 @@ static int32_t ExposedAddSoftBodyImpulse(uint64_t scene, uint64_t entity, const 
     ++physicsSoftImpulses;
     return 1;
 }
+static void ExposedRaycastContact(uint64_t scene, const float* origin,
+                                   const float* direction, float maxDistance,
+                                   uint32_t layerMask, float* result)
+{
+    if (!result) return;
+    if (scene != 1 || !origin || !direction || maxDistance != 10 ||
+        layerMask != UINT32_MAX || direction[2] != 1)
+    {
+        result[0] = 0; result[1] = 0; result[2] = 0; result[3] = -1;
+        return;
+    }
+    result[0] = 1; result[1] = 2; result[2] = 3; result[3] = 2.5f;
+}
+static void ExposedSphereCastContact(uint64_t scene, const float* origin,
+                                    float radius, const float* direction,
+                                    float maxDistance, uint32_t layerMask,
+                                    float* result)
+{
+    if (!result) return;
+    if (scene != 1 || !origin || !direction || radius != 0.5f ||
+        maxDistance != 10 || layerMask != UINT32_MAX || direction[2] != 1)
+    {
+        result[0] = 0; result[1] = 0; result[2] = 0; result[3] = -1;
+        return;
+    }
+    result[0] = 4; result[1] = 5; result[2] = 6; result[3] = 1.5f;
+}
+static int32_t ExposedGetSoftBodyMode(uint64_t scene, uint64_t entity)
+{
+    return Match(scene, entity) ? 1 : -1;
+}
+static int32_t ExposedGetSoftBodyVertexCount(uint64_t scene, uint64_t entity)
+{
+    return Match(scene, entity) ? 128 : 0;
+}
 static float ExposedRaycastDistance(uint64_t scene, const float* origin,
                                    const float* direction, float maxDistance,
                                    uint32_t layerMask) {
@@ -263,6 +298,14 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedAddRigidbodyForce);
     if (name == "CSharpApi_a6cee0af24fc98a6")
         return reinterpret_cast<void*>(&ExposedAddSoftBodyImpulse);
+    if (name == "CSharpApi_51392adf3f18d88a")
+        return reinterpret_cast<void*>(&ExposedRaycastContact);
+    if (name == "CSharpApi_ef33f8ec5d130d0c")
+        return reinterpret_cast<void*>(&ExposedSphereCastContact);
+    if (name == "CSharpApi_0a802b1b0472ee5c")
+        return reinterpret_cast<void*>(&ExposedGetSoftBodyMode);
+    if (name == "CSharpApi_86e73f85faa82f3b")
+        return reinterpret_cast<void*>(&ExposedGetSoftBodyVertexCount);
     if (name == "CSharpApi_ff872a3c0c88b759")
         return reinterpret_cast<void*>(&ExposedRaycastDistance);
     if (name == "CSharpApi_56cd5284bdc6bc18")
@@ -484,6 +527,12 @@ int main(int argc, char** argv)
     if (!tn_csharp_detach(physicsApi) || physicsRigidbodyForces != 1 ||
         physicsSoftImpulses != 1 || std::fabs(physicsSoftPressure - 12.0f) > 0.0001f)
         return Failure("C# native physics ABI marshalling failed");
+
+    const int32_t contactApi = tn_csharp_attach("Gameplay.PhysicsContactSmoke", 1, 1);
+    if (contactApi < 1 || !tn_csharp_dispatch(contactApi, TN_CSHARP_AWAKE, 0.0f))
+        return Failure("calling generated ray and sphere contacts from C#");
+    if (!tn_csharp_detach(contactApi))
+        return Failure("detaching generated contact ABI test");
 
     if (!tn_csharp_unload_game())
         return Failure("ending second Play session");

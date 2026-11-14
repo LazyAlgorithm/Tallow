@@ -185,6 +185,10 @@ jobs:
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_1a89e5a6a268148e
           grep -F 'public static float RaycastDistance(ulong session, System.Numerics.Vector3 origin,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 RaycastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static System.Numerics.Vector4 SphereCastContact(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_51392adf3f18d88a
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef33f8ec5d130d0c
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
           grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
           grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs

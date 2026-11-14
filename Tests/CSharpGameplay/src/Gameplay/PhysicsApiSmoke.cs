@@ -18,9 +18,24 @@ public sealed class PhysicsApiSmoke : Script
         if (GetSoftBody() is { } soft && soft.CanApplyForces)
             soft.AddImpulse(Vector3.UnitZ);
 
-        float distance = Scene.RaycastDistance(
-            Transform.Position, Transform.Forward, 50f);
-        if (distance >= 0)
-            Log.Info("Physics ray hit");
+        if (Scene.Raycast(Transform.Position, Transform.Forward, 50f) is { } contact)
+        {
+            // Both the contact point and distance come from a single Jolt query.
+            Vector3 hitPoint = contact.Point;
+            float hitDistance = contact.Distance;
+        }
+
+        if (Scene.SphereCast(Transform.Position, 0.5f,
+            Transform.Forward, 30f) is { } swept)
+        {
+            Vector3 touchPoint = swept.Point;
+        }
+
+        if (GetSoftBody() is { } activeSoftBody)
+        {
+            SoftBodyKind? mode = activeSoftBody.Kind;
+            int vertexCount = activeSoftBody.SimulatedVertexCount;
+            bool sleeping = activeSoftBody.IsSleeping;
+        }
     }
 }

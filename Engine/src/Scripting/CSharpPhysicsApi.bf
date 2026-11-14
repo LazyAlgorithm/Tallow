@@ -193,6 +193,77 @@ static class Physics
 
     /// -1 means no hit or an inactive scene. Jolt owns the actual query and
     /// layer mask; a structured RaycastHit ABI follows in a later increment.
+
+    /// Closest Jolt ray contact, packed as point.xyz and distance.w.
+    /// No managed solver or additional physics query is involved.
+    /// A negative distance means no hit; object/normal support is separate.
+    [CSharpExpose]
+    public static Vector4 RaycastContact(uint64 session, Vector3 origin,
+        Vector3 direction, float maxDistance, uint32 layerMask)
+    {
+        let scene = LiveScene(session);
+        if (scene == null || scene.Physics == null || !maxDistance.IsFinite ||
+            maxDistance <= 0)
+            return .(0, 0, 0, -1);
+        RaycastHit hit = default;
+        if (!scene.Physics.Raycast(origin, direction, maxDistance, out hit, layerMask))
+            return .(0, 0, 0, -1);
+        return Vector4(hit.point, hit.distance);
+    }
+
+    /// Sphere sweep uses Jolt's native swept-volume contacts, including
+    /// distance zero when starting in overlap. The normal is not in this ABI.
+    [CSharpExpose]
+    public static Vector4 SphereCastContact(uint64 session, Vector3 origin,
+        float radius, Vector3 direction, float maxDistance, uint32 layerMask)
+    {
+        let scene = LiveScene(session);
+        if (scene == null || scene.Physics == null || !radius.IsFinite ||
+            radius <= 0 || !maxDistance.IsFinite || maxDistance <= 0)
+            return .(0, 0, 0, -1);
+        ShapeCastHit hit = default;
+        if (!scene.Physics.SphereCast(origin, radius, direction, maxDistance,
+            out hit, uint32.MaxValue, layerMask))
+            return .(0, 0, 0, -1);
+        return Vector4(hit.point, hit.distance);
+    }
+
+    [CSharpExpose]
+    public static bool IsRigidbodySleeping(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null)
+            return false;
+        let body = obj.GetComponent<Rigidbody>();
+        return body.HasBody && body.IsSleeping;
+    }
+
+    [CSharpExpose]
+    public static bool IsSoftBodySleeping(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        let soft = obj?.GetComponent<SoftBody>();
+        return soft != null && soft.HasBody && soft.IsSleeping;
+    }
+
+    /// Valid SoftBodyKind values: Cloth=0, Jelly=1, Shell=2, DrivenJelly=3.
+    /// -1 means the session/entity or component is no longer valid.
+    [CSharpExpose]
+    public static int32 GetSoftBodyMode(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        let soft = obj?.GetComponent<SoftBody>();
+        return soft != null ? (int32)soft.kind : -1;
+    }
+
+    [CSharpExpose]
+    public static int32 GetSoftBodyVertexCount(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        let soft = obj?.GetComponent<SoftBody>();
+        return soft != null ? (int32)soft.SimulatedVertexCount : 0;
+    }
+
     [CSharpExpose]
     public static float RaycastDistance(uint64 session, Vector3 origin,
         Vector3 direction, float maxDistance, uint32 layerMask)

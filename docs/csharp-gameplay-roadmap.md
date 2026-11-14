@@ -233,3 +233,16 @@ CI: `.github/workflows/csharp-gameplay.yml`. Main implementation: `Managed/Tallo
   sample. Linked native Beef CI verification remains necessary.
 
 - Added standalone native-host physics ABI validation for the generated Rigidbody force, free SoftBody impulse, pressure get/set and raycast-distance calls. It validates scene IDs, vector component order and native callback dispatch; it does not replace linked Jolt integration tests.
+
+### Native ray and sphere contacts (next physics increment)
+
+Native Jolt raycasts and sphere casts now expose **point + distance in one
+query** through generated `Vector4` value ABI, decoded by the C# scene facade
+as nullable `PhysicsContact`. An invalid/missing hit is represented by a
+negative distance. No native object pointers cross the API. The richer
+`RaycastHit` fields (collider entity, normal, shape body id) await generated
+structured-result support; no normals are fabricated. Both operations
+accept layer masks. The C# SoftBody value handle also has read-only
+`Kind` (Cloth/Jelly/Shell/DrivenJelly), `SimulatedVertexCount`, and
+`IsSleeping` metadata. Native-host ABI checks cover contact component order
+and the soft-body mode/vertex data.

@@ -84,12 +84,39 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
 }
 
 /// <summary>
+/// Point and distance from a single native Jolt cast. A richer hit record
+/// (surface normal and hit GameObject) is planned once struct ABI generation
+/// is available; those fields are intentionally not fabricated here.
+/// </summary>
+public readonly record struct PhysicsContact(Vector3 Point, float Distance);
+
+/// <summary>
 /// A reference to the active scene session. Its ID is checked by Beef for
 /// every operation, so stale handles cannot access a subsequently opened scene.
 /// </summary>
 public readonly record struct Scene(ulong SessionId)
 {
     /// <summary>Create an empty scene object containing a Transform.</summary>
+    /// <summary>Closest Jolt ray contact, or null when nothing was hit.</summary>
+    public PhysicsContact? Raycast(Vector3 origin, Vector3 direction,
+        float maxDistance, uint layerMask = uint.MaxValue)
+    {
+        Vector4 result = Physics.RaycastContact(SessionId, origin,
+            direction, maxDistance, layerMask);
+        return result.W < 0 ? null :
+            new PhysicsContact(new Vector3(result.X, result.Y, result.Z), result.W);
+    }
+
+    /// <summary>Native Jolt swept sphere contact, including initial overlaps.</summary>
+    public PhysicsContact? SphereCast(Vector3 origin, float radius,
+        Vector3 direction, float maxDistance, uint layerMask = uint.MaxValue)
+    {
+        Vector4 result = Physics.SphereCastContact(SessionId, origin,
+            radius, direction, maxDistance, layerMask);
+        return result.W < 0 ? null :
+            new PhysicsContact(new Vector3(result.X, result.Y, result.Z), result.W);
+    }
+
     /// <summary>Distance to the nearest Jolt hit, or -1 if no hit.</summary>
     public float RaycastDistance(Vector3 origin, Vector3 direction,
         float maxDistance, uint layerMask = uint.MaxValue) =>

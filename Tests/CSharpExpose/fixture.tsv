@@ -42,3 +42,9 @@ method	Tallow.Physics	SetSoftBodyPressure	bool	session:ulong	entity:ulong	pressu
 method	Tallow.Physics	RepairSoftBody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	DeepestSoftBodyDent	float	session:ulong	entity:ulong
 method	Tallow.Physics	RaycastDistance	float	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	RaycastContact	System.Numerics.Vector4	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	SphereCastContact	System.Numerics.Vector4	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	IsRigidbodySleeping	bool	session:ulong	entity:ulong
+method	Tallow.Physics	IsSoftBodySleeping	bool	session:ulong	entity:ulong
+method	Tallow.Physics	GetSoftBodyMode	int	session:ulong	entity:ulong
+method	Tallow.Physics	GetSoftBodyVertexCount	int	session:ulong	entity:ulong
