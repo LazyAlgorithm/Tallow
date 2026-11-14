@@ -89,7 +89,9 @@ public enum TransformChannel
     Forward = 8,
     Right = 9,
     Up = 10,
-    LookAt = 11
+    LookAt = 11,
+    TransformPoint = 12,
+    InverseTransformPoint = 13
 }
 
 /// <summary>
@@ -188,6 +190,14 @@ public sealed class Transform(GameObject gameObject)
 
     /// <summary>Face a world-space point using Tallow's native LookAt.</summary>
     public void LookAt(Vector3 target) => WriteVector(TransformChannel.LookAt, target);
+
+    /// <summary>Convert a point in local space to world space (including parents and scale).</summary>
+    public Vector3 TransformPoint(Vector3 localPoint) =>
+        Engine.Bridge.TransformPoint(gameObject, localPoint, inverse: false);
+
+    /// <summary>Convert a world-space point back into this object's local space.</summary>
+    public Vector3 InverseTransformPoint(Vector3 worldPoint) =>
+        Engine.Bridge.TransformPoint(gameObject, worldPoint, inverse: true);
 }
 
 /// <summary>
@@ -202,6 +212,7 @@ public interface IEngineBridge
     void SetPosition(GameObject gameObject, Vector3 position);
     Vector4 GetTransform(GameObject gameObject, TransformChannel channel);
     void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value);
+    Vector3 TransformPoint(GameObject gameObject, Vector3 point, bool inverse);
     Script? GetManagedComponent(GameObject gameObject, Type scriptType);
     void Destroy(GameObject gameObject);
     bool IsMine(GameObject gameObject);
@@ -219,6 +230,7 @@ public static class Engine
         public void SetPosition(GameObject gameObject, Vector3 position) => throw Missing();
         public Vector4 GetTransform(GameObject gameObject, TransformChannel channel) => throw Missing();
         public void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value) => throw Missing();
+        public Vector3 TransformPoint(GameObject gameObject, Vector3 point, bool inverse) => throw Missing();
         public Script? GetManagedComponent(GameObject gameObject, Type scriptType) => throw Missing();
         public void Destroy(GameObject gameObject) => throw Missing();
         public bool IsMine(GameObject gameObject) => throw Missing();
