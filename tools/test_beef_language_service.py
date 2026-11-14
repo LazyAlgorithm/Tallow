@@ -79,6 +79,18 @@ class SemanticTests(unittest.TestCase):
             result = self.query('completion', source.replace('item.Ap;', f'item.{prefix};'), marker=f'item.{prefix}')
             self.assertIn('completion\tAppend', result)
 
+    def test_property_accessors_not_suggested_as_methods(self):
+        source = (
+            "namespace Demo; class Thing { "
+            "int mPosition; "
+            "public int Position { get => mPosition; set => mPosition = value; } "
+            "public void Run() { this.Po; } }"
+        )
+        result = self.query('completion', source, marker='this.Po')
+        self.assertIn('completion\tPosition\t', result)
+        self.assertNotIn('completion\tget_Position\t', result)
+        self.assertNotIn('completion\tset_Position\t', result)
+
     def test_symbol_navigation_and_parameters(self):
         result = self.query('definition', marker='this.cou')
         self.assertIn(f'definition\t{self.a}\t2\t25', result)
