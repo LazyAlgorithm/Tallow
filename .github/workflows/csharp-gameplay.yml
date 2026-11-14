@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '11.0.x'
+      - name: Verify deterministic compiler-manifest binding generation
+        run: dotnet run --project Managed/Tallow.BindingGen/Tallow.BindingGen.csproj -- --self-test
       - name: Build managed gameplay API
         run: dotnet build Managed/Tallow.API/Tallow.API.csproj -c Debug --nologo
       - name: Build Roslyn language service
