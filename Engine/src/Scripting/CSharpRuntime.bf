@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 
 namespace Tallow;
 
@@ -20,6 +21,7 @@ static class CSharpRuntime
 		public function int32(void*, uint64, uint64) isMine;
 		public function int32(void*, uint64, uint64, int32, float*) getTransform;
 		public function int32(void*, uint64, uint64, int32, float*) setTransform;
+		public function void*(void*, char8*) resolveApi;
 	}
 
 	/// The engine drives all component callbacks, preserving native scheduling.
@@ -97,6 +99,7 @@ static class CSharpRuntime
 		function int32(void*, uint64, uint64) mine = => IsMine;
 		function int32(void*, uint64, uint64, int32, float*) getTransform = => GetTransform;
 		function int32(void*, uint64, uint64, int32, float*) setTransform = => SetTransform;
+		function void*(void*, char8*) resolver = => ResolveApi;
 		Callbacks callbacks = .()
 		{
 			context = null,
@@ -106,7 +109,8 @@ static class CSharpRuntime
 			destroy = destroy,
 			isMine = mine,
 			getTransform = getTransform,
-			setTransform = setTransform
+			setTransform = setTransform,
+			resolveApi = resolver
 		};
 		if (tn_csharp_set_callbacks(&callbacks) == 0)
 		{
@@ -271,6 +275,28 @@ static class CSharpRuntime
 		if (gameObject == null || gameObject.IsDestroyed)
 			return null;
 		return gameObject;
+	}
+
+	/// Generated wrappers are exported and reflected by Beef. Return their
+	/// function pointers once per managed wrapper, never reflect on every call.
+	static void* ResolveApi(void* context, char8* symbol)
+	{
+		if (symbol == null)
+			return null;
+		let name = StringView(symbol);
+		if (!name.StartsWith("CSharpApi_") && !name.StartsWith("CSharpApiVersion_"))
+			return null;
+		for (let type in ScriptReload.ReflectedTypes)
+		{
+			if (type == null)
+				continue;
+			for (let method in type.GetMethods(.Static | .Public | .DeclaredOnly))
+			{
+				if (method.Name == name)
+					return method.Ptr;
+			}
+		}
+		return null;
 	}
 
 	static int32 IsAlive(void* context, uint64 scene, uint64 entity) => Find(scene, entity) != null ? 1 : 0;
