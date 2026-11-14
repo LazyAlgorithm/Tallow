@@ -376,6 +376,10 @@ internal static class Program
         // Build-only metadata for a future AOT static serializer. No new
         // runtime reflection or scene format is introduced by this manifest.
         var aotFieldRows = new SortedSet<string>(StringComparer.Ordinal);
+        // A schema-only preview of user-defined C# Flecs data structs.
+        // A future native bridge must validate sizeof/alignment and Sync
+        // layouts before allowing writes or network replication.
+        var ecsDataRows = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (SyntaxTree tree in trees)
         {
@@ -536,6 +540,62 @@ internal static class Program
             }
         }
 
+        // C# structs marked [Component] can become native Flecs columns,
+        // but NOT before the runtime proves the binary layout and lifetime
+        // are safe. Describe only explicitly supported unmanaged field kinds
+        // so we can generate typed bindings without runtime type scanning.
+        foreach (SyntaxTree tree in trees)
+        {
+            SemanticModel model = compilation.GetSemanticModel(tree);
+            foreach (StructDeclarationSyntax node in tree.GetRoot().DescendantNodes()
+                .OfType<StructDeclarationSyntax>())
+            {
+                if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol type ||
+                    !type.GetAttributes().Any(a =>
+                        a.AttributeClass?.ToDisplayString() == "Tallow.ComponentAttribute"))
+                    continue;
+                string componentName = type.ToDisplayString(
+                    SymbolDisplayFormat.CSharpErrorMessageFormat);
+                bool allSupported = !type.IsGenericType && type.IsUnmanagedType;
+                var rows = new List<string>();
+                foreach (IFieldSymbol field in type.GetMembers().OfType<IFieldSymbol>())
+                {
+                    if (field.IsStatic || field.IsConst || field.IsImplicitlyDeclared)
+                        continue;
+                    string? kind = field.Type.SpecialType switch
+                    {
+                        SpecialType.System_Boolean => "bool",
+                        SpecialType.System_Int32 => "int",
+                        SpecialType.System_UInt32 => "uint",
+                        SpecialType.System_Int64 => "long",
+                        SpecialType.System_UInt64 => "ulong",
+                        SpecialType.System_Single => "float",
+                        SpecialType.System_Double => "double",
+                        _ => field.Type.ToDisplayString() switch
+                        {
+                            "System.Numerics.Vector2" => "Vector2",
+                            "System.Numerics.Vector3" => "Vector3",
+                            "System.Numerics.Vector4" => "Vector4",
+                            "System.Numerics.Quaternion" => "Quaternion",
+                            _ => null
+                        }
+                    };
+                    if (kind is null || field.IsReadOnly || field.IsFixedSizeBuffer)
+                        allSupported = false;
+                    bool synced = field.GetAttributes().Any(a =>
+                        a.AttributeClass?.ToDisplayString() == "Tallow.SyncAttribute");
+                    rows.Add(string.Join("\t", componentName, field.Name,
+                        kind ?? "unsupported", synced ? "1" : "0"));
+                }
+                // Explicit status prevents the shipping exporter from
+                // misinterpreting an incomplete source layout as compatible.
+                ecsDataRows.Add(string.Join("\t", componentName, "@layout",
+                    allSupported ? "candidate" : "unsupported", "0"));
+                foreach (string row in rows)
+                    ecsDataRows.Add(row);
+            }
+        }
+
         string catalog = Path.Combine(project, ".tallow-csharp", "components.tsv");
         Directory.CreateDirectory(Path.GetDirectoryName(catalog)!);
         string temporary = catalog + ".tmp";
@@ -550,6 +610,7 @@ internal static class Program
         Publish(Path.Combine(project, ".tallow-csharp", "component-sources.tsv"), sourceRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields.tsv"), fieldRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields-aot.tsv"), aotFieldRows);
+        Publish(Path.Combine(project, ".tallow-csharp", "ecs-data.tsv"), ecsDataRows);
         Console.WriteLine($"Discovered {components.Count} managed gameplay components and {fieldRows.Count} editable fields.");
     }
 
