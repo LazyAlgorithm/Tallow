@@ -73,6 +73,14 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
     public T? GetComponent<T>() where T : Script =>
         Engine.Bridge.GetManagedComponent(this, typeof(T)) as T;
     public void Destroy() => Engine.Bridge.Destroy(this);
+
+    /// <summary>Retrieve the existing native ECS-backed Rigidbody handle.</summary>
+    public Rigidbody? GetRigidbody() =>
+        Physics.HasRigidbody(SceneId, Id) ? new Rigidbody(this) : null;
+
+    /// <summary>Retrieve the existing native Jolt soft-body component.</summary>
+    public SoftBody? GetSoftBody() =>
+        Physics.HasSoftBody(SceneId, Id) ? new SoftBody(this) : null;
 }
 
 /// <summary>
@@ -82,6 +90,11 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
 public readonly record struct Scene(ulong SessionId)
 {
     /// <summary>Create an empty scene object containing a Transform.</summary>
+    /// <summary>Distance to the nearest Jolt hit, or -1 if no hit.</summary>
+    public float RaycastDistance(Vector3 origin, Vector3 direction,
+        float maxDistance, uint layerMask = uint.MaxValue) =>
+        Physics.RaycastDistance(SessionId, origin, direction, maxDistance, layerMask);
+
     public GameObject CreateGameObject(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -308,6 +321,9 @@ public abstract class Script
 
     /// <summary>Find another attached C# behaviour, as in native Beef scripts.</summary>
     public T? GetComponent<T>() where T : Script => GameObject.GetComponent<T>();
+
+    public Rigidbody? GetRigidbody() => GameObject.GetRigidbody();
+    public SoftBody? GetSoftBody() => GameObject.GetSoftBody();
 
     /// <summary>Called by Tallow's lifecycle dispatcher, not by gameplay scripts.</summary>
     public void Attach(GameObject gameObject)

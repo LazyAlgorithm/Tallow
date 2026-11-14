@@ -178,6 +178,11 @@ jobs:
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e957075e951f3a8f
           grep -F 'public static bool Button(float x, float y, float width, float height, string label)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'public static float Width' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Physics must come from annotated Beef APIs, never handwritten C# imports.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddSoftBodyImpulse'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'AddRigidbodyForce'
+          grep -F 'public static bool AddSoftBodyImpulse(ulong session, ulong entity, System.Numerics.Vector3 impulse)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float RaycastDistance(ulong session, System.Numerics.Vector3 origin,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
           grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
           grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs

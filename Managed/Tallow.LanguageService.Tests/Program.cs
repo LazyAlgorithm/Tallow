@@ -334,6 +334,40 @@ public sealed class CubeMover : Script
             Check("generated GUI.Button and read-only viewport dimensions compile in C#",
                 !guiDiagnostics.Contains("diagnostic\t"));
 
+            string physicsCode = """
+                using Tallow;
+                using System.Numerics;
+                [Component] class PhysicsProbe : Script
+                {
+                    public override void Start()
+                    {
+                        var rb = GetRigidbody();
+                        if (rb is { } rigidbody)
+                        {
+                            rigidbody.AddImpulse(Vector3.UnitY);
+                            rigidbody.Velocity = Vector3.UnitX;
+                        }
+                        var soft = GetSoftBody();
+                        if (soft is { } jelly)
+                        {
+                            jelly.AddForce(Vector3.UnitY);
+                            jelly.AddImpulse(Vector3.UnitX);
+                            float p = jelly.Pressure;
+                            float d = jelly.DeepestDent;
+                        }
+                        float distance = Scene.RaycastDistance(
+                            Vector3.Zero, Vector3.UnitZ, 50f);
+                    }
+                }
+                """;
+            string physicsDiagnostics = RequestWithApi(service, "diagnostics",
+                physicsCode, physicsCode.Length);
+            if (physicsDiagnostics.Contains("diagnostic\t") ||
+                physicsDiagnostics.Contains("error\t"))
+                throw new InvalidOperationException(
+                    "Generated physics / soft-body facades produced diagnostics:\n" + physicsDiagnostics);
+            Check("native ECS rigidbodies and Jolt soft bodies compile in C# gameplay", true);
+
             string logCode = "using Tallow; class Demo { void Go() { Log.Info(\"hello\"); } }";
             string logDiagnostics = RequestWithApi(service, "diagnostics", logCode, logCode.Length);
             Check("generated Log.Info accepts managed C# strings",

@@ -276,6 +276,13 @@ static class CSharpRuntime
 		sSession++;
 	}
 
+	// Shared with generated, session-safe physics bindings. Keep all scene
+	// ownership checks in the existing trusted C# runtime.
+	public static Scene PhysicsScene(uint64 scene) =>
+		Ready && scene == sSession ? sScene : null;
+
+	public static GameObject PhysicsObject(uint64 scene, uint64 entity) => Find(scene, entity);
+
 	static GameObject Find(uint64 scene, uint64 entity)
 	{
 		if (sScene == null || scene != sSession || entity > uint32.MaxValue)

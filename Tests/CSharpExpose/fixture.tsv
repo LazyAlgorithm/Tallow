@@ -24,3 +24,21 @@ method	Tallow.Application	Quit	void
 field	Tallow.GUI	Width	float	get
 field	Tallow.GUI	Height	float	get
 method	Tallow.GUI	Button	bool	x:float	y:float	width:float	height:float	label:string
+method	Tallow.Physics	HasRigidbody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	HasRigidbodyBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	GetRigidbodyVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
+method	Tallow.Physics	SetRigidbodyVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
+method	Tallow.Physics	AddRigidbodyForce	bool	session:ulong	entity:ulong	force:System.Numerics.Vector3
+method	Tallow.Physics	AddRigidbodyImpulse	bool	session:ulong	entity:ulong	impulse:System.Numerics.Vector3
+method	Tallow.Physics	HasSoftBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	HasSoftBodySimulation	bool	session:ulong	entity:ulong
+method	Tallow.Physics	CanForceSoftBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	GetSoftBodyVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
+method	Tallow.Physics	SetSoftBodyVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
+method	Tallow.Physics	AddSoftBodyImpulse	bool	session:ulong	entity:ulong	impulse:System.Numerics.Vector3
+method	Tallow.Physics	AddSoftBodyForce	bool	session:ulong	entity:ulong	force:System.Numerics.Vector3
+method	Tallow.Physics	GetSoftBodyPressure	float	session:ulong	entity:ulong
+method	Tallow.Physics	SetSoftBodyPressure	bool	session:ulong	entity:ulong	pressure:float
+method	Tallow.Physics	RepairSoftBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	DeepestSoftBodyDent	float	session:ulong	entity:ulong
+method	Tallow.Physics	RaycastDistance	float	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint

@@ -210,3 +210,24 @@ dotnet run --project Managed/Tallow.Build/Tallow.Build.csproj -- --project Tests
 CI: `.github/workflows/csharp-gameplay.yml`. Main implementation: `Managed/Tallow.API`, `Managed/Tallow.Build`, `Managed/Tallow.ManagedRuntime`, `Managed/Tallow.LanguageService`, `native/tallow_dotnet_host.cpp`, `Engine/src/Scripting/CSharpRuntime.bf`, `Engine/src/Scripting/CSharpBehaviour.bf`, `Editor/src/Scripts`, `Editor/src/Panels`, `Launcher/src/Program.bf`.
 
 **Maintenance rule:** As work is verified, check items off and add exact commit SHA/test evidence, distinguishing CI-only success from actual full editor/Nobara confirmation. Continue highest-priority unchecked item in a new chat; don't start over.
+
+## C# physics and soft-body bridge (initial)
+
+- `Physics` is an annotated Beef API class using the **same** Jolt world,
+  existing ECS-backed `Rigidbody` handles and original `SoftBody` components.
+- Every native method takes the opaque Play-session ID and GameObject ID,
+  validates both in `CSharpRuntime`, and returns value types only. Nothing
+  retains a Jolt/body/vertex pointer or constructs a managed physics world.
+- C# gameplay can call `GetRigidbody()` or `GetSoftBody()` on a Script or
+  GameObject and receive a light value handle. Supported operations: velocity
+  get/set, impulses, one-tick forces, soft-body pressure (with native rebuild),
+  shell dent repair / depth, and a first raycast-distance query.
+- `SoftBody` includes free jelly and cloth, dentable shells and DrivenJelly.
+  The native implementation refuses impulse/force calls for Shell/DrivenJelly
+  instead of silently reporting success. Server-authoritative shell repair
+  follows the existing Beef/network path.
+- **ECS caveat:** Rigidbody is already ECS-backed; SoftBody is currently a
+  native class component and is **not** silently converted to Flecs. Dedicated
+  ECS batching and structured RaycastHit results still need generator support.
+- Added managed/Roslyn compile tests for the generated API and a gameplay
+  sample. Linked native Beef CI verification remains necessary.
