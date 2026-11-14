@@ -265,8 +265,7 @@ internal static class Program
                         .ToHashSet(StringComparer.Ordinal);
                     bool show = fieldAttributes.Contains("Tallow.ShowInInspectorAttribute");
                     bool hide = fieldAttributes.Contains("Tallow.HideInInspectorAttribute");
-                    bool serialize = fieldAttributes.Contains("Tallow.SerializeFieldAttribute");
-                    bool explicitlySerialized = show || hide || serialize;
+                    bool explicitlySerialized = show || hide;
                     if ((field.DeclaredAccessibility != Accessibility.Public && !explicitlySerialized) ||
                         field.IsStatic || field.IsConst || field.IsReadOnly ||
                         field.IsImplicitlyDeclared ||
