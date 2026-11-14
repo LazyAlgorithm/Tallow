@@ -806,6 +806,13 @@ int main(int argc, char** argv)
         state.position[2] != beforeRejectedBatch)
         return Failure("stale network-input batch dispatched a valid prefix");
 
+    // This probe deliberately moves the same fake scene object used by
+    // existing fixed-value reload tests. Restore that state so each smoke
+    // case verifies its own operation, not another case's movement.
+    state.position[0] = xBeforeBatch;
+    state.position[1] = yBeforeBatch;
+    state.position[2] = zBeforeBatch;
+
     if (!tn_csharp_dispatch(inputScript, TN_CSHARP_LOCAL_UPDATE, 0.0f) ||
         !tn_csharp_dispatch(inputScript, TN_CSHARP_LATE_UPDATE, 1.0f) ||
         !tn_csharp_dispatch(inputScript, TN_CSHARP_DISABLE, 0.0f) ||
