@@ -71,6 +71,18 @@ public static unsafe class NativeEntrypoints
                 (int)channel, values);
         }
 
+        public Script? GetManagedComponent(GameObject gameObject, Type scriptType)
+        {
+            if (!IsAlive(gameObject))
+                return null;
+            // Managed components share the native scene/entity identity. Never
+            // expose scripts from an old scene session or an unrelated entity.
+            foreach (Script script in sInstances.Values)
+                if (script.GameObject == gameObject && scriptType.IsInstanceOfType(script))
+                    return script;
+            return null;
+        }
+
         public void Destroy(GameObject gameObject) =>
             _callbacks.Destroy(_callbacks.Context, gameObject.SceneId, gameObject.Id);
 
