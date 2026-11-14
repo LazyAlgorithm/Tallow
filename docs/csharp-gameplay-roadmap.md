@@ -753,3 +753,34 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
 - These tests verify source-generation stability only. The existing JIT
   scene serializer still uses field names and AOT factory/setter generation
   is not yet implemented. Cross-runtime scene migration is still pending.
+
+
+### C# code editor CI repair and Inspector string fields (November 14, 2026)
+
+- A completed earlier Linux/Windows GitHub Actions run failed Roslyn's
+  "private user gameplay members still appear in their own class" test.
+  The accessibility check was being evaluated at the **EOF caret position**
+  while typing incomplete `this.se` expressions. The language service now
+  checks inside the source span, preserving private members of the enclosing
+  class without exposing private base/other-class members (commit `7279646`).
+  A subsequent intermediate Linux managed CI passed its Roslyn suite and
+  C# gameplay/Inspector catalog tests; the latest Linux/Windows/full native
+  build still needs independent confirmation.
+- Added **single-line string** public/private/hidden Inspector values using
+  the same Tallow `[ShowInInspector]` and `[HideInInspector]` policy as
+  scalar fields. The compiler generates string field rows/defaults, the Beef
+  Inspector offers a single-line text input, and the managed runtime restores
+  text values before `Awake`. Source defaults containing tab/newline/NUL
+  are rejected with a build diagnostic until escaped string serialization
+  exists. String editing explicitly rejects these separators too.
+- Host smoke verifies public/private/hidden text, [NonSerialized] exclusion
+  and malformed tabbed content; the Linux/Windows field catalog checks
+  string kinds and visibility. Strings with embedded newlines/tabs, collections,
+  nested objects, object references and asset references are **still pending**.
+- Critical lifecycle fix: `CSharpBehaviour.Awake` now detaches a managed
+  instance when restoring serialized overrides fails or the managed `Awake`
+  dispatch fails. A partially initialized script cannot proceed to enabled,
+  Start or networked callbacks. Editor `WriteEditorField` now rejects
+  unrepresentable separators, validates runtime application **before** it
+  commits the new value, and reports success to dirty-state tracking rather
+  than silently persisting bad data. User's native scene test remains needed.
