@@ -197,3 +197,23 @@ cross-runtime deterministic replay, mixed-client network tests, Inspector and
 ECS/Jolt parity, and Windows/Linux actual release exports are mandatory before
 claiming the shipping profile works. See [roadmap](csharp-gameplay-roadmap.md)
 and [benchmark cases B24–B30](csharp-benchmark-plan.md).
+
+
+## C# Inspector supported types and limitations (November 14, 2026)
+
+The C# Inspector field catalog now handles `float`, `int`, `bool`,
+`Vector2`, `Vector3`, `Vector4`, enums and **single-line `string`**
+fields. Public fields appear automatically. The native `[ShowInInspector]`
+and `[HideInInspector]` conventions apply equally to string fields.
+`[NonSerialized]` overrides these annotations.
+
+Strings can contain spaces and ordinary Unicode text. Tabs, newlines,
+carriage returns and NUL cannot be represented by the current line-based
+`fieldOverrides` format: the catalog rejects such source initializer
+constants and the native Inspector rejects edits containing delimiters.
+A later escaped or binary format will be required for arbitrary strings.
+Unsupported complex references and collections are not yet serialized.
+
+When field restoration fails, the native C# adapter no longer proceeds with
+`Awake`; when editing during Play, a failed field batch leaves the previous
+saved override unchanged. This still requires full Nobara editor verification.
