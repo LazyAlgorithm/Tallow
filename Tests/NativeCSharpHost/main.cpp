@@ -112,6 +112,10 @@ static int32_t IsMine(void*, uint64_t scene, uint64_t object)
     return Match(scene, object) ? 1 : 0;
 }
 
+// This host tests native callbacks without linking Beef generated exports.
+// The full editor test supplies the compiler-reflected symbol resolver.
+static void* ResolveApi(void*, const char*) { return nullptr; }
+
 static int Failure(const char* reason)
 {
     std::cerr << "Native C# smoke test failed: " << reason << ": "
@@ -138,7 +142,7 @@ int main(int argc, char** argv)
     TestScene state;
     tn_csharp_callbacks callbacks = {
         &state, &Alive, &GetPosition, &SetPosition, &Destroy, &IsMine,
-        &GetTransform, &SetTransform
+        &GetTransform, &SetTransform, &ResolveApi
     };
     if (!tn_csharp_set_callbacks(&callbacks))
         return Failure("binding engine callbacks");
