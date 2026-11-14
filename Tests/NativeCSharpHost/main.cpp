@@ -302,7 +302,7 @@ static float ExposedRaycastDistance(uint64_t scene, const float* origin,
 // stacked shapes to verify that C# does not confuse attachment index with
 // a unique per-type ECS handle.
 static float testSoftStiffness = 0.9f;
-static float testSoftWobble = 3f;
+static float testSoftWobble = 3.0f;
 static int colliderReads = 0;
 static int32_t ExposedGetColliderCount(uint64_t scene, uint64_t entity)
 {
@@ -689,7 +689,7 @@ int main(int argc, char** argv)
         return Failure("calling generated class collider and soft-body settings ABI");
     if (!tn_csharp_detach(colliderApi) || colliderReads < 3 ||
         std::fabs(testSoftStiffness - 0.75f) > 0.0001f ||
-        std::fabs(testSoftWobble - 4f) > 0.0001f)
+        std::fabs(testSoftWobble - 4.0f) > 0.0001f)
         return Failure("native indexed collider and SoftBody settings ABI mismatch");
 
     if (!tn_csharp_unload_game())
