@@ -444,3 +444,11 @@ claim automatic replication of dynamically created joints.
   disable, native callback-list mutation, profiler ordering, network
   ownership, replay and performance measurements must be preserved before
   automatically scheduling whole batches.
+### Informational CI measurements (November 14, 2026)
+
+- Linux and Windows hostfxr smoke tests invoke the optional dispatch
+  microbenchmark after correctness tests. Results are printed into the job
+  logs, with **no pass/fail performance threshold**: hosted runner hardware
+  and runtime JIT behaviour vary. Compare only similar runners and always
+  corroborate with in-editor frame/tick benchmarks.
+

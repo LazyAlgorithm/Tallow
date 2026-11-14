@@ -80,12 +80,12 @@ jobs:
       - name: Test in-process C# gameplay (Linux)
         if: runner.os == 'Linux'
         run: |
-          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
+          Tests/NativeCSharpHost/build/tallow_native_csharp_smoke Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
       - name: Test in-process C# gameplay (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
+          & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll --benchmark
 
 
   native-editor-linux:

@@ -3,12 +3,14 @@
 #include "../../native/tallow_dotnet_host.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <vector>
 
 static_assert(sizeof(tn_csharp_tick_batch_item) == 32 &&
               offsetof(tn_csharp_tick_batch_item, delta_time) == 28,
@@ -716,9 +718,10 @@ static int Failure(const char* reason)
 
 int main(int argc, char** argv)
 {
-    if (argc != 4)
+    const bool benchmark = argc == 5 && std::string(argv[4]) == "--benchmark";
+    if (argc != 4 && !benchmark)
     {
-        std::cerr << "Usage: host-test <runtimeconfig.json> <managed-runtime.dll> <Tallow.Game.dll>\n";
+        std::cerr << "Usage: host-test <runtimeconfig.json> <managed-runtime.dll> <Tallow.Game.dll> [--benchmark]\n";
         return 2;
     }
 
@@ -1011,6 +1014,68 @@ int main(int argc, char** argv)
         std::fabs(testJointSwingLimit - 45.0f) > 0.0001f ||
         jointConnections != 1)
         return Failure("native Joint swing limit or Connect callback mismatch");
+
+    if (benchmark)
+    {
+        // Only a *microbenchmark*: measures hostfxr dispatch overhead, not
+        // Flecs scheduling, Jolt physics, allocation or real gameplay.
+        constexpr int batchSize = 128;
+        constexpr int iterations = 1000;
+        std::vector<int32_t> probes;
+        probes.reserve(batchSize);
+        for (int i = 0; i < batchSize; ++i)
+        {
+            const int32_t id = tn_csharp_attach("Gameplay.BatchNoopSmoke", 1, 1);
+            if (id < 1)
+                return Failure("attaching the optional C# dispatch benchmark");
+            probes.push_back(id);
+        }
+
+        const auto singles = [&]() -> bool
+        {
+            for (int id : probes)
+                if (!tn_csharp_dispatch(id, TN_CSHARP_FIXED_UPDATE, 0.016f))
+                    return false;
+            return true;
+        };
+        const auto grouped = [&]() -> bool
+        {
+            return tn_csharp_dispatch_batch(probes.data(), batchSize,
+                TN_CSHARP_FIXED_UPDATE, 0.016f) == batchSize;
+        };
+
+        // Exercise both paths before timing to keep CLR JIT warmup out.
+        for (int i = 0; i < 32; ++i)
+            if (!singles() || !grouped())
+                return Failure("warming optional C# dispatch benchmark");
+
+        const auto measure = [&](auto&& action) -> double
+        {
+            const auto start = std::chrono::steady_clock::now();
+            for (int i = 0; i < iterations; ++i)
+                if (!action())
+                    return -1.0;
+            const auto end = std::chrono::steady_clock::now();
+            return std::chrono::duration<double, std::milli>(end - start).count();
+        };
+        // Do both orders to reduce first/second pass effects. Report average.
+        const double scalar1 = measure(singles);
+        const double batch1 = measure(grouped);
+        const double batch2 = measure(grouped);
+        const double scalar2 = measure(singles);
+        if (scalar1 <= 0 || batch1 <= 0 || batch2 <= 0 || scalar2 <= 0)
+            return Failure("timing optional C# dispatch benchmark");
+        const double scalarMs = (scalar1 + scalar2) / 2.0;
+        const double batchedMs = (batch1 + batch2) / 2.0;
+        std::cout << "C# dispatch microbenchmark: " << batchSize * iterations
+                  << " callbacks/run, scalar " << scalarMs
+                  << " ms, batched " << batchedMs
+                  << " ms, ratio " << scalarMs / batchedMs
+                  << "x (host overhead only, not engine FPS)\n";
+        for (int id : probes)
+            if (!tn_csharp_detach(id))
+                return Failure("detaching optional C# benchmark components");
+    }
 
     if (!tn_csharp_unload_game())
         return Failure("ending second Play session");
