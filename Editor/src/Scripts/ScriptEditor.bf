@@ -86,6 +86,7 @@ extension EditorApp
 	bool mCheckSucceeded;
 	bool mCheckManaged;
 	bool mManagedBuildReady;
+	bool mManagedRecheckQueued;
 	String mCheckLog = new .() ~ delete _;
 
 	/// Opens a script in the Scripts tab (or switches to it if it is already open).
@@ -458,9 +459,17 @@ extension EditorApp
 		{
 			ParseManagedDiagnostics(mCheckLog);
 			PublishScriptDiagnostics();
-			mManagedBuildReady = mCheckSucceeded;
+			mManagedBuildReady = mCheckSucceeded && !mManagedRecheckQueued;
 			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled." : "C# compilation failed. See Console.");
 			mCheckManaged = false;
+			if (mManagedRecheckQueued)
+			{
+				// A source changed while .NET was compiling; validate the newest
+				// revision before enabling Play instead of trusting stale output.
+				mManagedRecheckQueued = false;
+				StartManagedErrorCheck();
+				return;
+			}
 			if (mPlayAfterCompile && mPlay == .Edit)
 			{
 				mPlayAfterCompile = false;
