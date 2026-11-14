@@ -262,6 +262,15 @@ internal static class Program
             ExpressionSyntax? receiverExpression =
                 member?.Expression ?? conditional?.Expression;
 
+            // Some requests arrive at EOF while the user is typing an
+            // incomplete member access (this.se). Roslyn's accessibility
+            // checks need a position *inside* the active syntax tree; the
+            // caret at FullSpan.End is outside the source and can incorrectly
+            // reject the user's own private members.
+            int accessPosition = Math.Clamp(position > 0 ? position - 1 : 0,
+                0, Math.Max(0, root.FullSpan.End - 1));
+            INamedTypeSymbol? enclosingType = model.GetEnclosingSymbol(accessPosition)
+                ?.ContainingType;
             // The SDK compiler knows project types, members (including inherited
             // ones), and all referenced framework assemblies. Do not maintain a
             // second hand-written API list for C# completion.
@@ -278,7 +287,11 @@ internal static class Program
                 // and a base class's private fields/methods never leak into
                 // completion. This preserves private user members when the
                 // current code is actually allowed to access them.
-                if (symbol is not INamespaceSymbol && !model.IsAccessible(position, symbol))
+                bool ownPrivate = symbol.DeclaredAccessibility == Accessibility.Private &&
+                    enclosingType is not null &&
+                    SymbolEqualityComparer.Default.Equals(symbol.ContainingType, enclosingType);
+                if (symbol is not INamespaceSymbol &&
+                    !ownPrivate && !model.IsAccessible(accessPosition, symbol))
                     return;
 
                 // The editor places engine API source and game source in one
