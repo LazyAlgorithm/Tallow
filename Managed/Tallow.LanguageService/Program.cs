@@ -306,19 +306,17 @@ internal static class Program
                     // types as a fallback for generic and incomplete expressions.
                     foreach (ISymbol symbol in model.LookupSymbols(position, container: named))
                         if (symbol is not IMethodSymbol { MethodKind: MethodKind.Constructor } &&
-                            model.IsAccessible(position, symbol) &&
                             (symbol.IsStatic == staticContext ||
                              symbol is IMethodSymbol { IsExtensionMethod: true } && !staticContext))
                             Add(symbol);
                     for (INamedTypeSymbol? parent = named; parent != null; parent = parent.BaseType)
                         foreach (ISymbol symbol in parent.GetMembers())
                             if (symbol is not IMethodSymbol { MethodKind: MethodKind.Constructor } &&
-                                model.IsAccessible(position, symbol) &&
-                                symbol.IsStatic == staticContext)
+                                    symbol.IsStatic == staticContext)
                                 Add(symbol);
                     foreach (INamedTypeSymbol iface in named.AllInterfaces)
                         foreach (ISymbol symbol in iface.GetMembers())
-                            if (!staticContext && model.IsAccessible(position, symbol))
+                            if (!staticContext)
                                 Add(symbol);
                 }
                 else if (receiver != null)
