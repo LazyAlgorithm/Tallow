@@ -116,7 +116,7 @@ internal static class Program
                 // exports and requires the in-process hostfxr bridge. The
                 // managed-only host has no Beef function-pointer resolver.
                 if (type.FullName is "Gameplay.GeneratedBindingSmoke" or
-                    "Gameplay.SceneApiSmoke")
+                    "Gameplay.SceneApiSmoke" or "Gameplay.TransformParity")
                     continue;
                 if (type.IsAbstract || !typeof(Script).IsAssignableFrom(type) ||
                     !Attribute.IsDefined(type, typeof(ComponentAttribute)))
