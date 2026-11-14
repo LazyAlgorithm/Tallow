@@ -322,6 +322,14 @@ public static unsafe class NativeEntrypoints
             return int.Parse(encoded, CultureInfo.InvariantCulture);
         if (type == typeof(bool))
             return bool.Parse(encoded);
+        if (type.IsEnum)
+        {
+            object parsed = Enum.Parse(type, encoded, ignoreCase: false);
+            if (!Enum.IsDefined(type, parsed) &&
+                !type.IsDefined(typeof(FlagsAttribute), inherit: false))
+                throw new FormatException("Undefined C# Inspector enum value.");
+            return parsed;
+        }
         if (type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4))
         {
             string[] values = encoded.Split(',');

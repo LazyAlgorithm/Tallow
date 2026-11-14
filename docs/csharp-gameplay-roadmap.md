@@ -665,3 +665,20 @@ claim automatic replication of dynamically created joints.
 - **Pending tests:** .NET 11 Linux/Windows CI, benchmark B05 p50/p95/p99
   completions and memory on Nobara, and full interactive editor verification.
   Project-level assembly-definition semantics remain future work.
+
+
+### Enum-valued C# Inspector fields (November 14, 2026)
+
+- The compiler-built C# field catalog now includes enum types for public,
+  [ShowInInspector], [HideInInspector] and [SerializeField] fields, with
+  declaration-order member names in optional column eight. The existing
+  scalar/vector catalog format and hidden-field persistence remain intact.
+- The native Inspector renders an enum dropdown and persists a selected
+  member name. The .NET loader parses enums before Awake with the same
+  transactional semantics as numeric fields, rejecting invalid names for
+  ordinary enums; explicitly flagged enums can also decode combined values.
+  The editor currently shows declared options (not arbitrary flag bitsets).
+- Added fixture assertions, host tests for valid and invalid enum overrides,
+  and catalog CI checks. **Pending** managed/Linux native builds and editor
+  Play/Stop validation; strings, arrays, object references and general
+  nested serialized types still need conversion.

@@ -252,7 +252,8 @@ internal static class Program
                         field.IsImplicitlyDeclared ||
                         fieldAttributes.Contains("System.NonSerializedAttribute"))
                         continue;
-                    string? kind = field.Type.SpecialType switch
+                    string? kind = field.Type.TypeKind == TypeKind.Enum ? "enum" :
+                        field.Type.SpecialType switch
                     {
                         SpecialType.System_Single => "float",
                         SpecialType.System_Int32 => "int",
@@ -279,8 +280,19 @@ internal static class Program
                         SemanticModel fieldModel = compilation.GetSemanticModel(variable.SyntaxTree);
                         var constant = fieldModel.GetConstantValue(variable.Initializer.Value);
                         if (constant.HasValue && constant.Value is not null &&
-                            kind is "bool" or "float" or "int")
+                            kind is "bool" or "float" or "int" or "enum")
+                        {
                             defaultValue = Convert.ToString(constant.Value, CultureInfo.InvariantCulture) ?? defaultValue;
+                            if (kind == "enum" && field.Type is INamedTypeSymbol enumType)
+                            {
+                                IFieldSymbol? memberName = enumType.GetMembers()
+                                    .OfType<IFieldSymbol>().FirstOrDefault(member =>
+                                        member.HasConstantValue &&
+                                        Equals(member.ConstantValue, constant.Value));
+                                if (memberName != null)
+                                    defaultValue = memberName.Name;
+                            }
+                        }
                         else if (kind.StartsWith("Vector", StringComparison.Ordinal))
                         {
                             ArgumentListSyntax? args = variable.Initializer.Value switch
@@ -312,8 +324,19 @@ internal static class Program
                     // The seventh column is a backwards-compatible
                     // visibility flag: older catalogs have 6 fields and
                     // therefore remain visible by default in the editor.
-                    fieldRows.Add(string.Join("\t", className, field.Name, kind,
-                        defaultValue, rangeMin, rangeMax, hide ? "1" : "0"));
+                    // Optional eighth field lists compiler-discovered enum
+                    // choices without breaking the existing seven columns.
+                    string row = string.Join("\t", className, field.Name, kind,
+                        defaultValue, rangeMin, rangeMax, hide ? "1" : "0");
+                    if (kind == "enum" && field.Type is INamedTypeSymbol enumDeclaration)
+                    {
+                        string names = string.Join("|", enumDeclaration.GetMembers()
+                            .OfType<IFieldSymbol>()
+                            .Where(member => member.HasConstantValue && !member.IsImplicitlyDeclared)
+                            .Select(member => member.Name));
+                        row += "\t" + names;
+                    }
+                    fieldRows.Add(row);
                 }
             }
         }

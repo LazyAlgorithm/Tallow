@@ -79,6 +79,20 @@ extension EditorApp
 				edited = ImGui.Checkbox("##value", ref value);
 				if (edited)
 					newValue.Set(value ? "true" : "false");
+			case "enum":
+				// The catalog lists exactly the enum constants in source order.
+				if (columns.Count >= 8 && ImGui.BeginCombo("##value", current.CStr()))
+				{
+					for (let option in columns[7].Split('|', .RemoveEmptyEntries))
+					{
+						if (ImGui.Selectable(scope String(option).CStr(), current == option))
+						{
+							newValue.Set(option);
+							edited = true;
+						}
+					}
+					ImGui.EndCombo();
+				}
 			case "Vector2", "Vector3", "Vector4":
 				let parts = scope List<StringView>();
 				for (let item in StringView(current).Split(','))

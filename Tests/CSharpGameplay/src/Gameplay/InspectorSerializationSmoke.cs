@@ -5,9 +5,24 @@ namespace Gameplay;
 
 /// Test both catalog serialization policy and runtime field restoration
 /// before C# Awake, without exposing unrelated private implementation data.
+public enum InspectorMotion
+{
+    Idle = 0,
+    Hover = 2,
+    Jump = 9
+}
+
 [Component]
 public sealed class InspectorSerializationSmoke : Script
 {
+    public InspectorMotion movementMode = InspectorMotion.Hover;
+
+    [ShowInInspector]
+    private InspectorMotion privateMode = InspectorMotion.Idle;
+
+    [HideInInspector]
+    private InspectorMotion hiddenMode = InspectorMotion.Jump;
+
     [ShowInInspector, Range(0, 20)]
     private float privateSpeed = 3f;
 
@@ -37,6 +52,9 @@ public sealed class InspectorSerializationSmoke : Script
             privateEnabled || serializedCounter != 19 ||
             MathF.Abs(hiddenPublic - 8.5f) > 0.0001f ||
             hiddenPrivate != 15 || hiddenSerialized != 25 ||
+            movementMode != InspectorMotion.Jump ||
+            privateMode != InspectorMotion.Hover ||
+            hiddenMode != InspectorMotion.Idle ||
             skippedNonSerialized != 7 || implementationOnly != 8)
             throw new InvalidOperationException(
                 "C# private/hidden Inspector state was not restored or private internals were changed.");
