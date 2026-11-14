@@ -26,6 +26,7 @@ public static unsafe class NativeEntrypoints
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int> IsMine;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, int> GetTransform;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, int> SetTransform;
+        public delegate* unmanaged[Cdecl]<nint, byte*, nint> ResolveApi;
     }
 
     private sealed class NativeBridge(Callbacks callbacks) : IEngineBridge
@@ -167,9 +168,11 @@ public static unsafe class NativeEntrypoints
             Callbacks* native = (Callbacks*)callbacks;
             if (native->IsAlive == null || native->GetPosition == null ||
                 native->SetPosition == null || native->Destroy == null || native->IsMine == null ||
-                native->GetTransform == null || native->SetTransform == null)
+                native->GetTransform == null || native->SetTransform == null ||
+                native->ResolveApi == null)
                 throw new InvalidOperationException("Native scene callbacks are missing.");
             Engine.Bind(new NativeBridge(*native));
+            GeneratedNativeApi.Bind(native->Context, (nint)native->ResolveApi);
             return 1;
         }
         catch (Exception exception)
