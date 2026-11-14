@@ -58,12 +58,28 @@ static int32_t GetPosition(void* context, uint64_t scene, uint64_t object, float
 // Exercise a managed callback destroying a later script while the native
 // host is reentered for a Transform write. Normally disabled.
 static int32_t detachOnPositionWrite = 0;
+static int32_t disableOnPositionWrite = 0;
+static std::unordered_map<int32_t, bool> checkedBatchEligibility;
+static int32_t CanDispatch(void*, uint64_t session, uint64_t entity,
+    int32_t instance, int32_t eventId)
+{
+    if (!Match(session, entity) ||
+        (eventId != TN_CSHARP_FIXED_UPDATE && eventId != TN_CSHARP_LATE_UPDATE))
+        return 0;
+    const auto it = checkedBatchEligibility.find(instance);
+    return it != checkedBatchEligibility.end() && it->second ? 1 : 0;
+}
 
 static int32_t SetPosition(void* context, uint64_t scene, uint64_t object, const float* xyz)
 {
     auto* state = static_cast<TestScene*>(context);
     if (!Match(scene, object) || !state->alive || !xyz) return 0;
     for (int i = 0; i < 3; ++i) state->position[i] = xyz[i];
+    if (disableOnPositionWrite > 0)
+    {
+        checkedBatchEligibility[disableOnPositionWrite] = false;
+        disableOnPositionWrite = 0;
+    }
     if (detachOnPositionWrite > 0)
     {
         const int32_t detached = detachOnPositionWrite;
@@ -810,7 +826,8 @@ int main(int argc, char** argv)
     tn_csharp_callbacks callbacks = {
         &state, &Alive, &GetPosition, &SetPosition, &Destroy, &IsMine,
         &GetTransform, &SetTransform, &ResolveApi,
-        &CreateSceneObject, &FindSceneObject, &InstantiatePrefab
+        &CreateSceneObject, &FindSceneObject, &InstantiatePrefab,
+        &CanDispatch
     };
     if (!tn_csharp_set_callbacks(&callbacks))
         return Failure("binding engine callbacks");
@@ -1038,6 +1055,46 @@ int main(int argc, char** argv)
         return Failure("batch invoked a component removed by an earlier script");
     if (!tn_csharp_detach(deletingFirst))
         return Failure("detaching dynamic batch probe");
+
+    // A preceding C# callback can deactivate its sibling. The scheduler's
+    // checked batch must ask native for eligibility at invocation time and
+    // skip that sibling, without losing the original ordered snapshot.
+    const int32_t checkedA = tn_csharp_attach("Gameplay.BatchLifecycleSmoke", 1, 1);
+    const int32_t checkedB = tn_csharp_attach("Gameplay.BatchLifecycleSmoke", 1, 1);
+    if (checkedA < 1 || checkedB < 1)
+        return Failure("attaching checked C# callback batch probes");
+    checkedBatchEligibility[checkedA] = true;
+    checkedBatchEligibility[checkedB] = true;
+    const int32_t checkedIds[] = {checkedA, checkedB};
+    const float checkedStartX = state.position[0];
+    disableOnPositionWrite = checkedB;
+    if (tn_csharp_dispatch_checked_batch(checkedIds, 2,
+            TN_CSHARP_FIXED_UPDATE, 0.25f) != 2 ||
+        disableOnPositionWrite != 0 ||
+        checkedBatchEligibility[checkedB] ||
+        std::fabs(state.position[0] - checkedStartX - 0.25f) > 0.0001f)
+        return Failure("checked batch ran a native-disabled sibling");
+    checkedBatchEligibility[checkedB] = true;
+    const float checkedStartY = state.position[1];
+    if (tn_csharp_dispatch_checked_batch(checkedIds, 2,
+            TN_CSHARP_LATE_UPDATE, 0.5f) != 2 ||
+        std::fabs(state.position[1] - checkedStartY - 1.0f) > 0.0001f)
+        return Failure("checked batch did not preserve ordered eligible callbacks");
+    if (tn_csharp_dispatch_checked_batch(nullptr, 0,
+            TN_CSHARP_FIXED_UPDATE, 0.0f) != 0 ||
+        tn_csharp_dispatch_checked_batch(nullptr, 1,
+            TN_CSHARP_FIXED_UPDATE, 0.0f) != -1 ||
+        tn_csharp_dispatch_checked_batch(checkedIds, 2,
+            TN_CSHARP_AWAKE, 0.0f) != -1)
+        return Failure("checked batch pointer and phase validation");
+    if (!tn_csharp_detach(checkedA) || !tn_csharp_detach(checkedB))
+        return Failure("detaching checked C# callback batch probes");
+    checkedBatchEligibility.clear();
+    const float unchangedCheckedX = state.position[0];
+    if (tn_csharp_dispatch_checked_batch(checkedIds, 2,
+            TN_CSHARP_FIXED_UPDATE, 0.25f) != -1 ||
+        state.position[0] != unchangedCheckedX)
+        return Failure("checked batch partially ran stale initial handles");
 
     // The method is declared *only* in annotated Beef and emitted for C#
     // by BindingGen; call it through a cached unmanaged function pointer.

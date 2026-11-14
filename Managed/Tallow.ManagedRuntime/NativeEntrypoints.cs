@@ -30,6 +30,7 @@ public static unsafe class NativeEntrypoints
         public delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> CreateSceneObject;
         public delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> FindSceneObject;
         public delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> InstantiatePrefab;
+        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, int, int> CanDispatch;
     }
 
     private sealed class NativeBridge(Callbacks callbacks) : IEngineBridge
@@ -145,6 +146,10 @@ public static unsafe class NativeEntrypoints
             CallScene(_callbacks.InstantiatePrefab, session, path);
     }
 
+    // Rebound on each native Scene attachment; copied function pointers
+    // remain valid for the trusted host's lifetime.
+    private static Callbacks sNativeCallbacks;
+
     private static readonly Dictionary<string, Type> sTypes = new(StringComparer.Ordinal);
     private static readonly Dictionary<int, Script> sInstances = [];
     // Preserve attach order for multiple components and subclass lookups.
@@ -218,8 +223,10 @@ public static unsafe class NativeEntrypoints
                 native->SetPosition == null || native->Destroy == null || native->IsMine == null ||
                 native->GetTransform == null || native->SetTransform == null ||
                 native->ResolveApi == null || native->CreateSceneObject == null ||
-                native->FindSceneObject == null || native->InstantiatePrefab == null)
+                native->FindSceneObject == null || native->InstantiatePrefab == null ||
+                native->CanDispatch == null)
                 throw new InvalidOperationException("Native scene callbacks are missing.");
+            sNativeCallbacks = *native;
             Engine.Bind(new NativeBridge(*native));
             GeneratedNativeApi.Bind(native->Context, (nint)native->ResolveApi);
             return 1;
@@ -431,6 +438,46 @@ public static unsafe class NativeEntrypoints
                 // at the moment their turn arrives.
                 if (sInstances.TryGetValue(instances[i], out Script? script))
                     DispatchScript(instances[i], script, (ScriptEvent)eventId, deltaTime);
+            }
+            return count;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
+    /// <summary>
+    /// Scheduler-only variant. Recheck native component registration,
+    /// Start, Enabled and active hierarchy AFTER preceding managed callbacks.
+    /// This matters when C# destroys/disables siblings during FixedUpdate.
+    /// Lifecycle events other than Fixed/Late use the ordinary engine path.
+    /// </summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int DispatchCheckedBatch(int* instances, int count,
+        int eventId, float deltaTime)
+    {
+        try
+        {
+            if (count < 0 || count > 4096 || (count > 0 && instances == null))
+                throw new ArgumentOutOfRangeException(nameof(count));
+            ScriptEvent phase = (ScriptEvent)eventId;
+            if (phase is not (ScriptEvent.FixedUpdate or ScriptEvent.LateUpdate))
+                throw new ArgumentOutOfRangeException(nameof(eventId),
+                    "Checked batches only support native scene FixedUpdate/LateUpdate.");
+            if (sNativeCallbacks.CanDispatch == null)
+                throw new InvalidOperationException("The native scheduler has not been bound.");
+            for (int i = 0; i < count; i++)
+                if (!sInstances.ContainsKey(instances[i]))
+                    throw new InvalidOperationException("Unknown initial C# scheduler instance.");
+            for (int i = 0; i < count; i++)
+            {
+                if (!sInstances.TryGetValue(instances[i], out Script? script))
+                    continue; // Detached by an earlier script.
+                GameObject owner = script.GameObject;
+                if (sNativeCallbacks.CanDispatch(sNativeCallbacks.Context,
+                        owner.SceneId, owner.Id, instances[i], eventId) > 0)
+                    DispatchScript(instances[i], script, phase, deltaTime);
             }
             return count;
         }

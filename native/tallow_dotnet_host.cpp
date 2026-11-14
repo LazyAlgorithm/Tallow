@@ -67,6 +67,7 @@ apply_fields_fn apply_fields = nullptr;
 tick_fn tick = nullptr;
 dispatch_fn dispatch = nullptr;
 dispatch_batch_fn dispatch_batch = nullptr;
+dispatch_batch_fn dispatch_checked_batch = nullptr;
 update_input_fn update_input = nullptr;
 update_input_batch_fn update_input_batch = nullptr;
 detach_fn detach = nullptr;
@@ -329,6 +330,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "Tick", tick) ||
             !find_entry(assembly.c_str(), "Dispatch", dispatch) ||
             !find_entry(assembly.c_str(), "DispatchBatch", dispatch_batch) ||
+            !find_entry(assembly.c_str(), "DispatchCheckedBatch", dispatch_checked_batch) ||
             !find_entry(assembly.c_str(), "UpdateInput", update_input) ||
             !find_entry(assembly.c_str(), "UpdateInputBatch", update_input_batch) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
@@ -351,7 +353,8 @@ int32_t tn_csharp_set_callbacks(const tn_csharp_callbacks* callbacks)
 {
     if (!started || !callbacks || !callbacks->is_alive || !callbacks->get_position ||
         !callbacks->set_position || !callbacks->destroy || !callbacks->is_mine ||
-        !callbacks->get_transform || !callbacks->set_transform)
+        !callbacks->get_transform || !callbacks->set_transform ||
+        !callbacks->can_dispatch)
     {
         error = "Missing native C# gameplay callbacks.";
         return 0;
@@ -435,6 +438,18 @@ int32_t tn_csharp_dispatch_batch(const int32_t* instances, int32_t count,
     return result;
 }
 
+int32_t tn_csharp_dispatch_checked_batch(const int32_t* instances, int32_t count,
+    int32_t event_id, float delta_time)
+{
+    if (!started || !dispatch_checked_batch || count < 0 || count > 4096 ||
+        (count > 0 && !instances))
+        return -1;
+    const int32_t result = dispatch_checked_batch(instances, count, event_id, delta_time);
+    if (result < 0)
+        managed_error("Dispatching a checked C# scene callback batch");
+    return result;
+}
+
 int32_t tn_csharp_update_input(int32_t script_instance,
     const tn_csharp_tick_input* input, float delta_time)
 {
@@ -481,6 +496,7 @@ void tn_csharp_shutdown(void)
     tick = nullptr;
     dispatch = nullptr;
     dispatch_batch = nullptr;
+    dispatch_checked_batch = nullptr;
     update_input = nullptr;
     update_input_batch = nullptr;
     detach = nullptr;

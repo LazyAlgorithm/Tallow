@@ -25,6 +25,7 @@ static class CSharpRuntime
 		public function uint64(void*, uint64, char8*, int32) createSceneObject;
 		public function uint64(void*, uint64, char8*, int32) findSceneObject;
 		public function uint64(void*, uint64, char8*, int32) instantiatePrefab;
+		public function int32(void*, uint64, uint64, int32, int32) canDispatch;
 	}
 
 	/// The engine drives all component callbacks, preserving native scheduling.
@@ -70,6 +71,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_tick(int32 instance, float deltaTime);
 	[CLink] static extern int32 tn_csharp_dispatch(int32 instance, int32 eventId, float deltaTime);
     [CLink] static extern int32 tn_csharp_dispatch_batch(int32* instances, int32 count, int32 eventId, float deltaTime);
+    [CLink] static extern int32 tn_csharp_dispatch_checked_batch(int32* instances, int32 count, int32 eventId, float deltaTime);
 	[CLink] static extern int32 tn_csharp_update_input(int32 instance, NativeTickInput* input, float deltaTime);
     [CLink] static extern int32 tn_csharp_update_input_batch(NativeTickBatchItem* items, int32 count);
 	[CLink] static extern int32 tn_csharp_detach(int32 instance);
@@ -118,6 +120,7 @@ static class CSharpRuntime
 		function uint64(void*, uint64, char8*, int32) createObject = => CreateSceneObject;
 		function uint64(void*, uint64, char8*, int32) findObject = => FindSceneObject;
 		function uint64(void*, uint64, char8*, int32) spawnPrefab = => InstantiatePrefab;
+		function int32(void*, uint64, uint64, int32, int32) canDispatch = => CanDispatch;
 		Callbacks callbacks = .()
 		{
 			context = null,
@@ -131,7 +134,8 @@ static class CSharpRuntime
 			resolveApi = resolver,
 			createSceneObject = createObject,
 			findSceneObject = findObject,
-			instantiatePrefab = spawnPrefab
+			instantiatePrefab = spawnPrefab,
+			canDispatch = canDispatch
 		};
 		if (tn_csharp_set_callbacks(&callbacks) == 0)
 		{
@@ -254,6 +258,27 @@ static class CSharpRuntime
         if (result == instances.Length)
             return true;
         Log.Warning(scope $"C# batch callback failed: {StringView(tn_csharp_error())}");
+        return false;
+    }
+
+    /// Native scheduling primitive: callback eligibility is rechecked in
+    /// the scene before each managed script after earlier callbacks mutate it.
+    /// Use only for contiguous, ordered Fixed/LateUpdate groups; never for
+    /// Awake/Start/Enable, and preserve per-component profiler fallback.
+    public static bool DispatchCheckedBatch(Span<int32> instances,
+        ManagedEvent eventId, float deltaTime)
+    {
+        if (!Ready || (eventId != .FixedUpdate && eventId != .LateUpdate))
+            return false;
+        if (instances.Length == 0)
+            return true;
+        if (instances.Length > 4096)
+            return false;
+        let result = tn_csharp_dispatch_checked_batch(instances.Ptr,
+            (int32)instances.Length, (int32)eventId, deltaTime);
+        if (result == instances.Length)
+            return true;
+        Log.Warning(scope $"Checked C# scene batch failed: {StringView(tn_csharp_error())}");
         return false;
     }
 
@@ -401,6 +426,30 @@ static class CSharpRuntime
 		let name = scope String(symbol);
 		return ResolveApi(null, name.CStr()) != null;
 	}
+
+    /// Called from .NET between callbacks. The scene owns eligibility,
+    /// including registration, Start, component Enabled and parent Active.
+    /// Resolve by exact managed instance, not by script type (duplicates).
+    static int32 CanDispatch(void* context, uint64 session, uint64 entity,
+        int32 instance, int32 eventId)
+    {
+        if (!Ready || (eventId != (int32)ManagedEvent.FixedUpdate &&
+                       eventId != (int32)ManagedEvent.LateUpdate))
+            return 0;
+        let obj = Find(session, entity);
+        if (obj == null)
+            return 0;
+        for (let component in obj.Components)
+        {
+            if (let script = component as CSharpBehaviour)
+            {
+                if (script.ManagedInstance == instance)
+                    return script.[Friend]mRegistered &&
+                        script.[Friend]mStarted && script.IsActiveAndEnabled ? 1 : 0;
+            }
+        }
+        return 0;
+    }
 
 	static int32 IsAlive(void* context, uint64 scene, uint64 entity) => Find(scene, entity) != null ? 1 : 0;
 

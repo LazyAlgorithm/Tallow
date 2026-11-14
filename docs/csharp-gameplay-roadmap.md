@@ -518,3 +518,24 @@ claim automatic replication of dynamically created joints.
 - The native-host regression checks disable/re-enable idempotence and
   callback order. Native Linux editor CI verifies that all generated
   active-state symbols exist in the linked precompiled engine.
+
+### Native-eligible managed lifecycle batching (November 14, 2026)
+
+- New **separate**, scheduler-only `tn_csharp_dispatch_checked_batch`
+  supports ordered FixedUpdate and LateUpdate groups (max 4096).
+  Initial IDs are validated before dispatch; then a native
+  `can_dispatch(scene, object, instance, phase)` callback rechecks the
+  specific `CSharpBehaviour` for registration, Start, Enabled and active
+  hierarchy **immediately before each script**. A previous script may
+  disable or detach a later sibling, which is then skipped.
+- The engine's native callback locates the matching adapter by managed
+  instance ID (not type), and validates the current scene session.
+  Managed code receives only ordinary opaque IDs; no native object pointer
+  is exposed to C# scripts. Awake/Start/Enable/Disable are deliberately
+  excluded and retain the regular callback loop.
+- Native-host smoke tests verify ordered Fixed/Late callbacks, skipping
+  a sibling disabled mid-batch, invalid phases/pointers, and initial stale
+  instance rejection. This establishes eligibility semantics, **not**
+  automatic scene batching: integrating the Scene iteration and preserving
+  callback-list mutation/profiler order remains separate work. Native
+  eligibility checks also have an interop cost that needs measurement.

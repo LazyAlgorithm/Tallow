@@ -29,6 +29,11 @@ typedef struct tn_csharp_callbacks {
     uint64_t (*create_scene_object)(void*, uint64_t session, const char* utf8, int32_t byte_length);
     uint64_t (*find_scene_object)(void*, uint64_t session, const char* utf8, int32_t byte_length);
     uint64_t (*instantiate_prefab)(void*, uint64_t session, const char* utf8, int32_t byte_length);
+    // Validate immediately before an ordered managed callback. The prior
+    // callback may have disabled/destroyed this component or its hierarchy.
+    // Includes session + entity to avoid a stale instance ID being reused.
+    int32_t (*can_dispatch)(void*, uint64_t session, uint64_t entity,
+        int32_t script_instance, int32_t event_id);
 } tn_csharp_callbacks;
 
 // ABI mirror of Tallow's current and previous tick controls.
@@ -74,6 +79,12 @@ int32_t tn_csharp_dispatch(int32_t script_instance, int32_t event_id, float delt
 // CLR transition. Returns count on success, -1 on failure; pointers not retained.
 int32_t tn_csharp_dispatch_batch(const int32_t* instances, int32_t count,
     int32_t event_id, float delta_time);
+// Checked variant for native Scene scheduling of FixedUpdate/LateUpdate.
+// Each script is checked immediately before invocation, not just at batch
+// construction time. It returns accepted snapshot size (skipped entries
+// included), or -1 on invalid input/managed failure.
+int32_t tn_csharp_dispatch_checked_batch(const int32_t* instances,
+    int32_t count, int32_t event_id, float delta_time);
 int32_t tn_csharp_update_input(int32_t script_instance,
     const tn_csharp_tick_input* input, float delta_time);
 // Call Update(TickInput,float) for up to 4096 ordered native records with a
