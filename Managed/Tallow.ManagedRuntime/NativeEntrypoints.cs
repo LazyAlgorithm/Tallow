@@ -322,6 +322,12 @@ public static unsafe class NativeEntrypoints
             return int.Parse(encoded, CultureInfo.InvariantCulture);
         if (type == typeof(bool))
             return bool.Parse(encoded);
+        if (type == typeof(string))
+        {
+            if (encoded.IndexOfAny(['\t', '\r', '\n', '\0']) >= 0)
+                throw new FormatException("Inspector string fields require single-line text.");
+            return encoded;
+        }
         if (type.IsEnum)
         {
             object parsed = Enum.Parse(type, encoded, ignoreCase: false);
