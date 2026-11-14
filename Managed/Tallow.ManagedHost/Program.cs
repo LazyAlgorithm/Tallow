@@ -106,6 +106,11 @@ internal static class Program
 
             foreach (Type type in assembly.GetTypes())
             {
+                // This scripted probe exercises compiler-generated native
+                // exports and requires the in-process hostfxr bridge. The
+                // managed-only host has no Beef function-pointer resolver.
+                if (type.FullName == "Gameplay.GeneratedBindingSmoke")
+                    continue;
                 if (type.IsAbstract || !typeof(Script).IsAssignableFrom(type) ||
                     !Attribute.IsDefined(type, typeof(ComponentAttribute)))
                     continue;
