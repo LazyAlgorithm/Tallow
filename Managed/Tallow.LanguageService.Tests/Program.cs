@@ -148,6 +148,35 @@ internal static class Program
                         $"FAIL: persistent Roslyn request {i + 1} returned:\n{result}");
                 Check($"persistent Roslyn request {i + 1} without restarting .NET", true);
             }
+            // Confirm cached syntax is invalidated when a file changes,
+            // while reusing the same compiler process and other API trees.
+            string goodSource = File.ReadAllText(file);
+            File.WriteAllText(file, goodSource.Replace(
+                "Transform.Position += Vector3.UnitX * deltaTime;",
+                "Transform.Position = \"invalid\";"));
+            string invalidFolder = Path.Combine(queue, "request-2");
+            Directory.CreateDirectory(invalidFolder);
+            File.WriteAllText(Path.Combine(invalidFolder, "request.tsv"),
+                $"operation\tdiagnostics\nfile\t{file}\ncursor\t0\n");
+            string invalidResponse = Path.Combine(invalidFolder, "response.tsv");
+            WaitFor(invalidResponse, worker);
+            string changedResult = File.ReadAllText(invalidResponse);
+            Check("persistent Roslyn invalidates changed game source",
+                changedResult.Contains("CS0029") &&
+                changedResult.Contains("diagnostic\t"));
+
+            File.WriteAllText(file, goodSource);
+            string restoredFolder = Path.Combine(queue, "request-3");
+            Directory.CreateDirectory(restoredFolder);
+            File.WriteAllText(Path.Combine(restoredFolder, "request.tsv"),
+                $"operation\tdiagnostics\nfile\t{file}\ncursor\t0\n");
+            string restoredResponse = Path.Combine(restoredFolder, "response.tsv");
+            WaitFor(restoredResponse, worker);
+            string restoredResult = File.ReadAllText(restoredResponse);
+            Check("persistent Roslyn restores diagnostics after fixing the source",
+                !restoredResult.Contains("diagnostic\t") &&
+                !restoredResult.Contains("error\t"));
+
             File.WriteAllText(Path.Combine(queue, "stop"), "stop");
             Check("persistent Roslyn worker stops cleanly", worker.WaitForExit(5000) &&
                 worker.ExitCode == 0);
