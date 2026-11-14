@@ -52,6 +52,38 @@ internal static class Program
 
     private static IEnumerable<MetadataReference> References() => CachedReferences.Value;
 
+    // The editor holds one Roslyn process for many requests. Reuse immutable
+    // parsed trees for sources that did not change instead of lexing the full
+    // game + public API on every keystroke. A changed overlay replaces its
+    // tree immediately; closed/deleted files are evicted below.
+    private sealed record CachedSyntax(string Text, SyntaxTree Tree);
+    private static readonly Dictionary<string, CachedSyntax> ParsedSources =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static List<SyntaxTree> ParseSnapshots(
+        IReadOnlyDictionary<string, SourceFile> sourceByPath, CSharpParseOptions options)
+    {
+        var trees = new List<SyntaxTree>(sourceByPath.Count + 1);
+        foreach ((string path, SourceFile source) in sourceByPath)
+        {
+            if (!ParsedSources.TryGetValue(path, out CachedSyntax? cached) ||
+                !string.Equals(cached.Text, source.Text, StringComparison.Ordinal))
+            {
+                cached = new CachedSyntax(source.Text,
+                    CSharpSyntaxTree.ParseText(source.Text, options, path: path));
+                ParsedSources[path] = cached;
+            }
+            trees.Add(cached.Tree);
+        }
+        // Live game source sets change when scripts are added/deleted. Never
+        // keep a stale tree from a previous game or scene session.
+        foreach (string stale in ParsedSources.Keys
+            .Where(path => !sourceByPath.ContainsKey(path)).ToArray())
+            ParsedSources.Remove(stale);
+        return trees;
+    }
+
+
     private static ISymbol? SymbolAt(SemanticModel model, SyntaxNode root, int position)
     {
         if (root.FullSpan.IsEmpty)
@@ -125,8 +157,7 @@ internal static class Program
             throw new InvalidOperationException("Requested source is outside the C# project.");
 
         var parse = new CSharpParseOptions(LanguageVersion.CSharp15);
-        var trees = sourceByPath.Select(pair =>
-            CSharpSyntaxTree.ParseText(pair.Value.Text, parse, path: pair.Key)).ToList();
+        List<SyntaxTree> trees = ParseSnapshots(sourceByPath, parse);
         // Match the generated game assemblies' implicit System.Numerics import.
         // The game uses SDK-generated implicit usings plus Tallow's extra
         // System.Numerics import. Roslyn's standalone semantic compilation
