@@ -6,19 +6,21 @@
 extern "C" {
 #endif
 
-// ABI-stable, trusted engine callbacks. Managed code only receives validated
+// ABI-stable, trusted engine callbacks. Transform getters/setters validate
+// session/entity in the same call and return 1 on success, 0 if stale/invalid.
+// Managed code only receives validated
 // scene/object IDs, not pointers into Beef's ECS or reference-counted objects.
 typedef struct tn_csharp_callbacks {
     void* context;
     int32_t (*is_alive)(void*, uint64_t scene, uint64_t entity);
-    void (*get_position)(void*, uint64_t scene, uint64_t entity, float* xyz);
-    void (*set_position)(void*, uint64_t scene, uint64_t entity, const float* xyz);
+    int32_t (*get_position)(void*, uint64_t scene, uint64_t entity, float* xyz);
+    int32_t (*set_position)(void*, uint64_t scene, uint64_t entity, const float* xyz);
     void (*destroy)(void*, uint64_t scene, uint64_t entity);
     int32_t (*is_mine)(void*, uint64_t scene, uint64_t entity);
     // Extended Transform channels match Tallow.API.TransformChannel.
     // Values are four floats: XYZ for vectors, XYZW for quaternions.
-    void (*get_transform)(void*, uint64_t scene, uint64_t entity, int32_t channel, float* xyzw);
-    void (*set_transform)(void*, uint64_t scene, uint64_t entity, int32_t channel, const float* xyzw);
+    int32_t (*get_transform)(void*, uint64_t scene, uint64_t entity, int32_t channel, float* xyzw);
+    int32_t (*set_transform)(void*, uint64_t scene, uint64_t entity, int32_t channel, const float* xyzw);
 } tn_csharp_callbacks;
 
 // ABI mirror of Tallow's current and previous tick controls.
