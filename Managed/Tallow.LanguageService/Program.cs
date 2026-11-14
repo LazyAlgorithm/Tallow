@@ -160,6 +160,13 @@ internal static class Program
         if (request.Operation == "diagnostics")
         {
             Diagnostics(compilation, sourceByPath, output);
+            // Keep Tallow's established cyan performance / purple network
+            // underlines. New category column is optional; older consumers
+            // still understand the first six fields.
+            foreach (GameplayDiagnostics.Warning warning in GameplayDiagnostics.Analyze(
+                compilation, sourceByPath))
+                output.Add(Line("diagnostic", warning.Path, warning.Line,
+                    warning.Utf8Column, "warning", warning.Message, warning.Category));
             return;
         }
 
