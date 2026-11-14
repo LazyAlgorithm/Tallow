@@ -285,6 +285,32 @@ public sealed class CubeMover : Script
                 timeCompletion.Contains("completion\tSmoothedFps") &&
                 !timeCompletion.Contains("completion\tget_SmoothedFps"));
 
+            // Generated native wrappers contain private pointer caches and
+            // internal rebind helpers; neither belongs in gameplay completion.
+            string mathSource = "using Tallow; class Probe { void Go() { var x = Mathf.";
+            string mathResults = RequestWithApi(service, "completion",
+                mathSource, mathSource.Length);
+            Check("public C# Mathf gameplay helpers remain in autocomplete",
+                mathResults.Contains("completion\\tLerp\\t") &&
+                mathResults.Contains("completion\\tMoveTowards\\t") &&
+                mathResults.Contains("completion\\tSmoothStep\\t"));
+            Check("generated native pointers and rebind helpers are hidden",
+                !mathResults.Contains("completion\\ts_Ptr_") &&
+                !mathResults.Contains("completion\\ts_SetPtr_") &&
+                !mathResults.Contains("completion\\t__TallowResetGeneratedNativeBindings") &&
+                !mathResults.Contains("completion\\t__TallowGet_") &&
+                !mathResults.Contains("completion\\t__TallowSet_"));
+            Check("standard .NET math is not duplicated by Tallow.Mathf completion",
+                !mathResults.Contains("completion\\tAbs\\t") &&
+                !mathResults.Contains("completion\\tSin\\t") &&
+                !mathResults.Contains("completion\\tCos\\t") &&
+                !mathResults.Contains("completion\\tSqrt\\t"));
+            string userPrivate = "class Demo { private int secret; void Go() { this.se";
+            string userResults = Request(service, "completion",
+                userPrivate, userPrivate.Length);
+            Check("private user gameplay members still appear in their own class",
+                userResults.Contains("completion\\tsecret\\t"));
+
             string logCode = "using Tallow; class Demo { void Go() { Log.Info(\"hello\"); } }";
             string logDiagnostics = RequestWithApi(service, "diagnostics", logCode, logCode.Length);
             Check("generated Log.Info accepts managed C# strings",
