@@ -101,7 +101,7 @@ extension EditorApp
 			let node = graph.AddNode(NodeLibrary.Find(key), .(40 + (placed % 5) * 250, 40 + (placed / 5) * 230));
 			for (int i < values.Length)
 			{
-				if (values[i] != null)
+				if (!values[i].IsEmpty)
 					node.values[i].Set(values[i]);
 			}
 			return node;
