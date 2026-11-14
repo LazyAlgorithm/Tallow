@@ -25,13 +25,6 @@ public sealed class ShowInInspectorAttribute : Attribute { }
 public sealed class HideInInspectorAttribute : Attribute { }
 
 /// <summary>
-/// Explicitly serialize a private field, with Inspector editing by default.
-/// Use HideInInspector as well if it should not be displayed.
-/// </summary>
-[AttributeUsage(AttributeTargets.Field)]
-public sealed class SerializeFieldAttribute : Attribute { }
-
-/// <summary>
 /// Gives a persisted field a stable identity across C# member renames.
 /// Optional: the default identity is derived from the declaring component
 /// and field name. NativeAOT exporters will consume source-generated IDs,
