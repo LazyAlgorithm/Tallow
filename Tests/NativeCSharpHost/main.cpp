@@ -298,6 +298,74 @@ static float ExposedRaycastDistance(uint64_t scene, const float* origin,
         return -1;
     return 2.5f;
 }
+// Indexed collider class-component ABI. The native host imitates three
+// stacked shapes to verify that C# does not confuse attachment index with
+// a unique per-type ECS handle.
+static float testSoftStiffness = 0.9f;
+static float testSoftWobble = 3f;
+static int colliderReads = 0;
+static int32_t ExposedGetColliderCount(uint64_t scene, uint64_t entity)
+{
+    return Match(scene, entity) ? 3 : 0;
+}
+static int32_t ExposedGetColliderKind(uint64_t scene, uint64_t entity, int32_t index)
+{
+    if (!Match(scene, entity) || index < 0 || index > 2) return -1;
+    ++colliderReads;
+    return index; // Box=0, Sphere=1, Capsule=2
+}
+static void ExposedGetColliderCenter(uint64_t scene, uint64_t entity,
+                                     int32_t index, float* result)
+{
+    if (!result) return;
+    result[0] = 0; result[1] = Match(scene, entity) ? float(index + 1) : 0;
+    result[2] = 0;
+}
+static void ExposedGetColliderBoxSize(uint64_t scene, uint64_t entity,
+                                      int32_t index, float* result)
+{
+    if (!result) return;
+    result[0] = Match(scene, entity) && index == 0 ? 1 : 0;
+    result[1] = Match(scene, entity) && index == 0 ? 2 : 0;
+    result[2] = Match(scene, entity) && index == 0 ? 3 : 0;
+}
+static float ExposedGetColliderSphereRadius(uint64_t scene, uint64_t entity,
+                                           int32_t index)
+{
+    return Match(scene, entity) && index == 1 ? 0.5f : -1;
+}
+static float ExposedGetColliderCapsuleRadius(uint64_t scene, uint64_t entity,
+                                            int32_t index)
+{
+    return Match(scene, entity) && index == 2 ? 0.4f : -1;
+}
+static float ExposedGetColliderCapsuleHeight(uint64_t scene, uint64_t entity,
+                                            int32_t index)
+{
+    return Match(scene, entity) && index == 2 ? 1.8f : -1;
+}
+static float ExposedGetSoftBodyStiffness(uint64_t scene, uint64_t entity)
+{
+    return Match(scene, entity) ? testSoftStiffness : 0;
+}
+static int32_t ExposedSetSoftBodyStiffness(uint64_t scene, uint64_t entity, float value)
+{
+    if (!Match(scene, entity) || value < 0 || value > 1) return 0;
+    testSoftStiffness = value;
+    return 1;
+}
+static float ExposedGetSoftBodyWobbleDamping(uint64_t scene, uint64_t entity)
+{
+    return Match(scene, entity) ? testSoftWobble : 0;
+}
+static int32_t ExposedSetSoftBodyWobbleDamping(uint64_t scene, uint64_t entity,
+                                              float value)
+{
+    if (!Match(scene, entity) || value < 0 || value > 20) return 0;
+    testSoftWobble = value;
+    return 1;
+}
+
 static float ExposedGetSoftBodyPressure(uint64_t scene, uint64_t entity) {
     return Match(scene, entity) ? physicsSoftPressure : 0;
 }
@@ -340,6 +408,28 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedVersion);
     // IDs are deterministic SHA-256 signature hashes emitted by BindingGen.
     // Exact SHA-256 signature IDs from the generator's physics manifest.
+    if (name == "CSharpApi_dd6b56714b85bea3")
+        return reinterpret_cast<void*>(&ExposedGetColliderCount);
+    if (name == "CSharpApi_82b7f344c3487d92")
+        return reinterpret_cast<void*>(&ExposedGetColliderKind);
+    if (name == "CSharpApi_4ba124751fd9c534")
+        return reinterpret_cast<void*>(&ExposedGetColliderCenter);
+    if (name == "CSharpApi_18fcbf882ca96311")
+        return reinterpret_cast<void*>(&ExposedGetColliderBoxSize);
+    if (name == "CSharpApi_bbc0365821f234a5")
+        return reinterpret_cast<void*>(&ExposedGetColliderSphereRadius);
+    if (name == "CSharpApi_4edb693c26b47349")
+        return reinterpret_cast<void*>(&ExposedGetColliderCapsuleRadius);
+    if (name == "CSharpApi_3a911e6fe7164103")
+        return reinterpret_cast<void*>(&ExposedGetColliderCapsuleHeight);
+    if (name == "CSharpApi_083c3f54b1fe9165")
+        return reinterpret_cast<void*>(&ExposedGetSoftBodyStiffness);
+    if (name == "CSharpApi_4e84ac47e4f849a1")
+        return reinterpret_cast<void*>(&ExposedSetSoftBodyStiffness);
+    if (name == "CSharpApi_0d6a12e85847fa8b")
+        return reinterpret_cast<void*>(&ExposedGetSoftBodyWobbleDamping);
+    if (name == "CSharpApi_cecb83b0a9c7bb44")
+        return reinterpret_cast<void*>(&ExposedSetSoftBodyWobbleDamping);
     if (name == "CSharpApi_4cfd0ac498dbf9b9")
         return reinterpret_cast<void*>(&ExposedHasRigidbody);
     if (name == "CSharpApi_ec09232b935b3c35")
@@ -593,6 +683,14 @@ int main(int argc, char** argv)
         return Failure("calling typed native Jolt result ABI from C#");
     if (!tn_csharp_detach(detailedApi))
         return Failure("detaching typed Jolt ABI test");
+
+    const int32_t colliderApi = tn_csharp_attach("Gameplay.ColliderAndSoftSettingsSmoke", 1, 1);
+    if (colliderApi < 1 || !tn_csharp_dispatch(colliderApi, TN_CSHARP_AWAKE, 0.0f))
+        return Failure("calling generated class collider and soft-body settings ABI");
+    if (!tn_csharp_detach(colliderApi) || colliderReads < 3 ||
+        std::fabs(testSoftStiffness - 0.75f) > 0.0001f ||
+        std::fabs(testSoftWobble - 4f) > 0.0001f)
+        return Failure("native indexed collider and SoftBody settings ABI mismatch");
 
     if (!tn_csharp_unload_game())
         return Failure("ending second Play session");

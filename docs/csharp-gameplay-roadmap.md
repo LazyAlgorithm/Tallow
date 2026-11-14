@@ -275,3 +275,5 @@ The native API also supports soft-body `Stiffness` (0–1) and
 `WobbleDamping` (0–20) getters/setters using `[CSharpExpose]`.
 Parameter updates require native `SoftBody.Rebuild()`, so they are intended
 for deliberate configuration, not for changing every physics tick.
+
+- A native-host ABI regression checks collider index order and per-shape dimensions (including invalid indexes), along with validated native soft-body stiffness and wobble-damping updates and rejection of invalid settings.
