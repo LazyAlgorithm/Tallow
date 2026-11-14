@@ -236,6 +236,41 @@ public sealed class CubeMover : Script
             Check("C# completion preserves genuine methods named get_*",
                 ordinaryGetterCompletions.Contains("completion\tget_Answer"));
 
+            // Preserve the original editor's network (purple) and performance
+            // (cyan) diagnostics when the gameplay language is C#.
+            string networkedTick = """
+                using Tallow;
+                [Component] public sealed class NetProbe : Script
+                {
+                    public override void Update(TickInput input, float deltaTime)
+                    {
+                        var nondeterministic = DateTime.UtcNow;
+                        var random = new System.Random();
+                        var allocation = new System.Text.StringBuilder();
+                        var vector = new Vector3(1, 2, 3);
+                    }
+                }
+                """;
+            string tickWarnings = RequestWithApi(service, "diagnostics",
+                networkedTick, networkedTick.Length);
+            Check("C# replay analysis uses the existing purple deterministic warning category",
+                tickWarnings.Contains("TAL-NET002") &&
+                tickWarnings.Contains("TAL-NET001") &&
+                tickWarnings.Contains("\twarning\tTAL-NET002") &&
+                tickWarnings.Contains("\tdeterminism"));
+            Check("C# hot-path analysis uses existing cyan optimization warning category",
+                tickWarnings.Contains("TAL-PERF001") &&
+                tickWarnings.Contains("\toptimization"));
+            Check("C# value-type Vector3 construction does not count as a heap allocation",
+                tickWarnings.Split("TAL-PERF001").Length == 2);
+            string notNetworked = networkedTick.Replace(
+                "public override void Update(TickInput input, float deltaTime)",
+                "public override void Start()");
+            string noTickWarnings = RequestWithApi(service, "diagnostics",
+                notNetworked, notNetworked.Length);
+            Check("C# engine warnings do not flag non-predicted Start methods",
+                !noTickWarnings.Contains("TAL-NET") && !noTickWarnings.Contains("TAL-PERF"));
+
             string memberSource = "class Player { public int Speed; }\n" +
                 "class Example { void Go() { Player player = new(); player.S";
             string completions = Request(service, "completion", memberSource, memberSource.Length);
