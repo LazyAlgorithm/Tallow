@@ -220,8 +220,31 @@ class LauncherApp : Application
 		return true;
 	}
 
-	/// Builds the project and starts its editor. Returns false with the compiler output on failure.
-	public static bool OpenProject(StringView path, String error, bool buildOnly = false)
+	/// C# project source files are compiled by the SDK, never by BeefBuild.
+	static bool HasManagedSources(StringView directory, int depth = 0)
+	{
+		if (depth > 32 || !Directory.Exists(directory))
+			return false;
+		for (let entry in Directory.EnumerateFiles(directory))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (name.EndsWith(".cs", .OrdinalIgnoreCase))
+				return true;
+		}
+		for (let entry in Directory.EnumerateDirectories(directory))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (!name.StartsWith('.') && HasManagedSources(scope $"{directory}/{name}", depth + 1))
+				return true;
+		}
+		return false;
+	}
+
+	/// Build gameplay or launch the reusable precompiled editor. Native compilation
+	/// is explicit (for engine authors) and never occurs on the managed path.
+	public static bool OpenProject(StringView path, String error, bool buildOnly = false, bool nativeBuild = false)
 	{
 		let project = scope Project();
 		if (!project.Load(path))
@@ -251,12 +274,33 @@ class LauncherApp : Application
 		// game script cannot prevent the editor from starting.
 		if (buildOnly)
 		{
-			// Legacy command-line native builds remain explicit for projects that
-			// still contain Beef gameplay; ordinary project opening never uses this.
-			if (!project.Build(false))
+			if (nativeBuild)
 			{
-				error.Set("The legacy native project did not compile:\n");
-				project.ReadBuildLog(error);
+				if (!project.Build(false))
+				{
+					error.Set("The legacy native project did not compile:\n");
+					project.ReadBuildLog(error);
+					return false;
+				}
+				return true;
+			}
+			if (!HasManagedSources(scope $"{project.Path}/src"))
+				return true; // Nothing to compile in an empty managed project.
+			Directory.CreateDirectory(scope $"{project.Path}/build").IgnoreError();
+			let logPath = scope $"{project.Path}/build/csharp-build.log";
+			let command = scope String("dotnet run --project ");
+			Terminal.Quote(scope $"{project.EngineRoot}/Managed/Tallow.Build/Tallow.Build.csproj", command);
+			command.Append(" -- --project ");
+			Terminal.Quote(project.Path, command);
+			command.Append(" --engine-root ");
+			Terminal.Quote(project.EngineRoot, command);
+			command.Append(" > ");
+			Terminal.Quote(logPath, command);
+			command.Append(" 2>&1");
+			if (Terminal.Run(command) != 0)
+			{
+				error.Set("C# gameplay compilation failed:\n");
+				File.ReadAllText(logPath, error).IgnoreError();
 				return false;
 			}
 			return true;
@@ -772,7 +816,7 @@ class Program
 #endif
 				return CreateFromCommandLine(args[i + 1], args);
 			}
-			if ((args[i] == "--open" || args[i] == "--build-project") && i + 1 < args.Count)
+			if ((args[i] == "--open" || args[i] == "--build-project" || args[i] == "--build-native-project") && i + 1 < args.Count)
 			{
 #if BF_PLATFORM_WINDOWS
 				UseCommandConsole();
@@ -780,7 +824,7 @@ class Program
 				Gfx.LocateEngineAssets();
 				let error = scope String();
 				if (!LauncherApp.PrepareProject(args[i + 1], args.Contains("--upgrade"), error) ||
-					!LauncherApp.OpenProject(args[i + 1], error, args[i] == "--build-project"))
+					!LauncherApp.OpenProject(args[i + 1], error, args[i] != "--open", args[i] == "--build-native-project"))
 				{
 					Console.WriteLine(error);
 					return 1;
