@@ -132,12 +132,37 @@ public readonly record struct PhysicsHit(
 }
 
 /// <summary>
+/// Generation-aware Flecs entity reference. Unlike GameObject, bare ECS
+/// entities do not require a scene GameObject or Transform.
+/// </summary>
+public readonly record struct EcsEntity(ulong SessionId, ulong Id)
+{
+    public bool IsAlive => Id != 0 && Ecs.IsAlive(SessionId, Id);
+}
+
+/// <summary>
 /// A reference to the active scene session. Its ID is checked by Beef for
 /// every operation, so stale handles cannot access a subsequently opened scene.
 /// </summary>
 public readonly record struct Scene(ulong SessionId)
 {
-    /// <summary>Create an empty scene object containing a Transform.</summary>
+    /// <summary>
+    /// Wrap a Flecs entity ID; it is not the same as GameObject.Id.
+    /// </summary>
+    public EcsEntity GetEcsEntity(ulong flecsEntityId) => new(SessionId, flecsEntityId);
+
+    /// <summary>Count enabled native Flecs Rigidbody data components.</summary>
+    public int RigidbodyEntityCount => Ecs.CountRigidbodies(SessionId);
+
+    /// <summary>
+    /// Copy one page of native Rigidbody masses in a single generated ABI
+    /// call. IDs are Flecs entities, not GameObjects. Copy capacity is the
+    /// shorter span; keep ECS structural membership stable between pages.
+    /// </summary>
+    public int CopyRigidbodyMasses(int offset, Span<ulong> entityIds,
+        Span<float> masses) =>
+        Ecs.CopyRigidbodyMasses(SessionId, offset, entityIds, masses);
+
     /// <summary>
     /// Full native Jolt ray hit: point, distance and collider GameObject.
     /// Normal is null until the native RaycastHit supplies a surface normal.

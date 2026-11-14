@@ -396,3 +396,15 @@ claim automatic replication of dynamically created joints.
   order on their existing path; a future ECS dispatcher must preserve those
   checks before grouping scripts. Avoid assuming batching improves throughput
   without benchmark results.
+
+### Scene-scoped, friendly C# Flecs handles (November 14, 2026)
+
+- Added `EcsEntity(SessionId, Id)`, whose `IsAlive` calls the annotated
+  native Flecs lookup, and `Scene.GetEcsEntity(flecsId)`. Flecs IDs are
+  generation-aware and deliberately not interchangeable with GameObject.Id.
+- `Scene.RigidbodyEntityCount` and `Scene.CopyRigidbodyMasses` provide
+  convenient access to the existing generated `Ecs` bulk API without
+  manually passing native session IDs. The gameplay host smoke now covers
+  these user-facing methods, including stale session safety.
+- These are managed convenience wrappers over generated opt-in methods;
+  they neither duplicate P/Invoke bindings nor expose native pointers.
