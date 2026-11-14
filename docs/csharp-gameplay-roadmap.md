@@ -905,3 +905,22 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
   are written to Flecs. Future component registrations must still validate
   sizeof/alignment/schema, scene session, authority and layout compatibility.
   `Span<byte>` is not an invitation to expose unrestricted native pointers.
+
+
+### Local-only C# Flecs component round-trip binding
+
+The existing World-level offline-only schema registration, opaque
+`Span<uint8>` transfer and component presence operations now have matching
+`[CSharpExpose]` fixture signatures, native-host ABI symbols and managed
+`Scene.RegisterLocalEcsData` / `EcsEntity.SetLocalData` /
+`EcsEntity.TryCopyLocalData` / `EcsEntity.HasLocalData` accessors.
+The native-host smoke exercises registration reuse, incompatible size/alignment,
+stale sessions, forbidden native-owned entity IDs, absent components, exact
+byte round trips, short buffers and deletion cleanup. The host is a controlled
+ABI double, not a real-Flecs correctness benchmark.
+
+These APIs are **experimental offline-only opaque data transport**, not
+authoring-friendly typed ECS, networked replication or a supported way to
+manually create native Jolt data. Source-generated C# field-layout validation
+and typed `[Component]` adapters are still required before general gameplay
+and NativeAOT player use. `[Sync]` does not yet replicate these fields.

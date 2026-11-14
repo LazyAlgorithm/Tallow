@@ -322,6 +322,26 @@ public readonly record struct EcsEntity(ulong SessionId, ulong Id)
     /// returns false if the scene has ended or the entity was already deleted.
     /// </summary>
     public bool DestroyLocal() => Id != 0 && Ecs.DeleteLocalEntity(SessionId, Id);
+
+    /// <summary>
+    /// Experimental offline-only opaque Flecs component write. Schema IDs
+    /// and exact binary layouts must match a preceding successful scene
+    /// registration. For gameplay use prefer generated typed data adapters
+    /// once those are available. Never supply managed object references.
+    /// </summary>
+    public bool SetLocalData(ulong schemaId, Span<byte> bytes) =>
+        Id != 0 && Ecs.SetLocalData(SessionId, Id, schemaId, bytes);
+
+    /// <summary>
+    /// Read an existing local-only opaque data component into the caller's
+    /// exact-sized buffer. Returns false for a missing component, stale
+    /// entity, invalid layout or networked scene.
+    /// </summary>
+    public bool TryCopyLocalData(ulong schemaId, Span<byte> destination) =>
+        Id != 0 && Ecs.CopyLocalData(SessionId, Id, schemaId, destination);
+
+    public bool HasLocalData(ulong schemaId) =>
+        Id != 0 && Ecs.HasLocalData(SessionId, Id, schemaId);
 }
 
 /// <summary>
@@ -355,6 +375,16 @@ public readonly record struct Scene(ulong SessionId)
     /// </summary>
     public int CreateLocalEcsEntities(Span<ulong> entityIds) =>
         Ecs.CreateLocalEntities(SessionId, entityIds);
+
+    /// <summary>
+    /// Experimental offline-only registration of opaque packed Flecs data.
+    /// A stable schema ID and matching field layout are required; native
+    /// code validates length, size, alignment, entity ownership and session.
+    /// Network sessions reject this API. True means the registration was
+    /// accepted (including a compatible previous registration).
+    /// </summary>
+    public bool RegisterLocalEcsData(ulong schemaId, int size, int alignment) =>
+        Ecs.RegisterLocalData(SessionId, schemaId, size, alignment) != 0;
 
     /// <summary>Count enabled native Flecs Rigidbody data components.</summary>
     public int RigidbodyEntityCount => Ecs.CountRigidbodies(SessionId);

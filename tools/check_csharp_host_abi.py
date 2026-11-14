@@ -85,6 +85,10 @@ def main() -> int:
         "Tallow.Ecs|CreateLocalEntity|ulong|ulong",
         "Tallow.Ecs|CreateLocalEntities|int|ulong|System.Span<ulong>",
         "Tallow.Ecs|DeleteLocalEntity|bool|ulong|ulong",
+        "Tallow.Ecs|RegisterLocalData|ulong|ulong|ulong|int|int",
+        "Tallow.Ecs|SetLocalData|bool|ulong|ulong|ulong|System.Span<byte>",
+        "Tallow.Ecs|CopyLocalData|bool|ulong|ulong|ulong|System.Span<byte>",
+        "Tallow.Ecs|HasLocalData|bool|ulong|ulong|ulong",
     ]
     for signature in required:
         if symbol_hash(signature) not in resolved:

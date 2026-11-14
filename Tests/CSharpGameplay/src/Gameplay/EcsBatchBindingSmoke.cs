@@ -53,6 +53,39 @@ public sealed class EcsBatchBindingSmoke : Script
             if (!scene.GetEcsEntity(id).DestroyLocal())
                 throw new InvalidOperationException("Bulk local Flecs cleanup failed.");
 
+        // Exact-size, opaque local data round trip across the real generated
+        // byte-span ABI. No C# references, pointers or unmanaged ownership
+        // are passed across the bridge.
+        const ulong validSchema = 0xBEEF1234UL;
+        if (!scene.RegisterLocalEcsData(validSchema, 8, 4) ||
+            !scene.RegisterLocalEcsData(validSchema, 8, 4) ||
+            scene.RegisterLocalEcsData(validSchema, 16, 4) ||
+            scene.RegisterLocalEcsData(validSchema, 8, 3) ||
+            scene.RegisterLocalEcsData(0, 8, 4) ||
+            new Scene(999).RegisterLocalEcsData(validSchema, 8, 4))
+            throw new InvalidOperationException("Local Flecs layout guards failed.");
+
+        var blob = scene.CreateLocalEcsEntity();
+        Span<byte> data = stackalloc byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        Span<byte> readback = stackalloc byte[8];
+        readback.Fill(0x7f);
+        if (blob.HasLocalData(validSchema) ||
+            blob.TryCopyLocalData(validSchema, readback) ||
+            !blob.SetLocalData(validSchema, data) ||
+            !blob.HasLocalData(validSchema) ||
+            !blob.TryCopyLocalData(validSchema, readback) ||
+            !data.SequenceEqual(readback) ||
+            blob.SetLocalData(validSchema, data[..7]) ||
+            blob.TryCopyLocalData(validSchema, readback[..7]) ||
+            scene.GetEcsEntity(11).SetLocalData(validSchema, data) ||
+            new Scene(999).GetEcsEntity(blob.Id).HasLocalData(validSchema) ||
+            new Scene(999).GetEcsEntity(blob.Id).TryCopyLocalData(validSchema, readback))
+            throw new InvalidOperationException("Local Flecs data transfer/ownership failed.");
+        if (!blob.DestroyLocal() || blob.HasLocalData(validSchema) ||
+            blob.TryCopyLocalData(validSchema, readback) ||
+            blob.SetLocalData(validSchema, data))
+            throw new InvalidOperationException("Flecs data survived entity deletion.");
+
         if (scene.CreateLocalEcsEntities(Span<ulong>.Empty) != 0 ||
             new Scene(999).CreateLocalEcsEntities(batch) != 0 ||
             scene.GetEcsEntity(11).DestroyLocal() ||

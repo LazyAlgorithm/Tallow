@@ -289,6 +289,9 @@ static float physicsSoftPressure = 10.0f;
 static int ecsQueries = 0;
 static uint64_t ecsNextLocalId = 1000;
 static std::unordered_set<uint64_t> ecsLocalEntities;
+struct EcsLocalSchema { int32_t size; int32_t alignment; uint64_t nativeId; };
+static std::unordered_map<uint64_t, EcsLocalSchema> ecsSchemas;
+static std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::vector<uint8_t>>> ecsLocalData;
 static int32_t ExposedEcsIsAlive(uint64_t scene, uint64_t entity)
 {
     return scene == 1 && (entity == 11 || entity == 22 || entity == 33 ||
@@ -312,7 +315,53 @@ static int32_t ExposedEcsCreateLocalEntities(uint64_t scene, uint64_t* ids,
 static int32_t ExposedEcsDeleteLocalEntity(uint64_t scene, uint64_t entity)
 {
     if (scene != 1) return 0;
+    ecsLocalData.erase(entity);
     return ecsLocalEntities.erase(entity) == 1 ? 1 : 0;
+}
+static uint64_t ExposedEcsRegisterLocalData(uint64_t scene, uint64_t schemaId,
+                                           int32_t size, int32_t alignment)
+{
+    if (scene != 1 || !schemaId || size <= 0 || size > 4096 ||
+        alignment <= 0 || alignment > 16 ||
+        (alignment & (alignment - 1)) != 0 || size % alignment != 0)
+        return 0;
+    if (auto found = ecsSchemas.find(schemaId); found != ecsSchemas.end())
+        return found->second.size == size && found->second.alignment == alignment
+            ? found->second.nativeId : 0;
+    const uint64_t nativeId = 20000 + ecsSchemas.size();
+    ecsSchemas.emplace(schemaId, EcsLocalSchema{size, alignment, nativeId});
+    return nativeId;
+}
+static int32_t ExposedEcsSetLocalData(uint64_t scene, uint64_t entity,
+                                     uint64_t schemaId, uint8_t* bytes, int32_t length)
+{
+    auto schema = ecsSchemas.find(schemaId);
+    if (scene != 1 || !ecsLocalEntities.count(entity) ||
+        schema == ecsSchemas.end() || length != schema->second.size || !bytes)
+        return 0;
+    ecsLocalData[entity][schemaId].assign(bytes, bytes + length);
+    return 1;
+}
+static int32_t ExposedEcsCopyLocalData(uint64_t scene, uint64_t entity,
+                                      uint64_t schemaId, uint8_t* bytes, int32_t length)
+{
+    auto schema = ecsSchemas.find(schemaId);
+    if (scene != 1 || !ecsLocalEntities.count(entity) ||
+        schema == ecsSchemas.end() || length != schema->second.size || !bytes)
+        return 0;
+    const auto entityData = ecsLocalData.find(entity);
+    if (entityData == ecsLocalData.end()) return 0;
+    const auto payload = entityData->second.find(schemaId);
+    if (payload == entityData->second.end()) return 0;
+    std::copy(payload->second.begin(), payload->second.end(), bytes);
+    return 1;
+}
+static int32_t ExposedEcsHasLocalData(uint64_t scene, uint64_t entity, uint64_t schemaId)
+{
+    if (scene != 1 || !ecsLocalEntities.count(entity)) return 0;
+    const auto existing = ecsLocalData.find(entity);
+    return existing != ecsLocalData.end() &&
+        existing->second.count(schemaId) != 0 ? 1 : 0;
 }
 static int32_t ExposedEcsCountRigidbodies(uint64_t scene)
 {
@@ -706,6 +755,14 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedEcsCreateLocalEntities);
     if (name == "CSharpApi_182113e6735aaf2d")
         return reinterpret_cast<void*>(&ExposedEcsDeleteLocalEntity);
+    if (name == "CSharpApi_0fcd16779bfbbf58")
+        return reinterpret_cast<void*>(&ExposedEcsRegisterLocalData);
+    if (name == "CSharpApi_b2ff841ab633505a")
+        return reinterpret_cast<void*>(&ExposedEcsSetLocalData);
+    if (name == "CSharpApi_2977333cab0785c7")
+        return reinterpret_cast<void*>(&ExposedEcsCopyLocalData);
+    if (name == "CSharpApi_75396de93083e3ac")
+        return reinterpret_cast<void*>(&ExposedEcsHasLocalData);
     if (name == "CSharpApi_8f34b0284d3b1041")
         return reinterpret_cast<void*>(&ExposedEcsCountRigidbodies);
     if (name == "CSharpApi_0fe31a78ec52861b")
@@ -1215,7 +1272,7 @@ int main(int argc, char** argv)
     const int32_t ecsApi = tn_csharp_attach("Gameplay.EcsBatchBindingSmoke", 1, 1);
     if (ecsApi < 1 || !tn_csharp_dispatch(ecsApi, TN_CSHARP_AWAKE, 0.0f) ||
         !tn_csharp_detach(ecsApi) || ecsQueries != 4 ||
-        !ecsLocalEntities.empty())
+        !ecsLocalEntities.empty() || !ecsLocalData.empty())
         return Failure("generated native Flecs batch span ABI");
 
     const int32_t characterApi = tn_csharp_attach("Gameplay.CharacterControllerBindingSmoke", 1, 1);
