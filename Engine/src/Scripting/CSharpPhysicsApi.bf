@@ -91,6 +91,157 @@ static class Physics
         return true;
     }
 
+
+    // Colliders intentionally remain *class* components. Tallow permits
+    // several colliders per GameObject, including repeated shape types; each
+    // index below addresses one component in its original attachment order.
+    // This is not a Flecs HandleData component.
+    static Collider ColliderAt(uint64 session, uint64 entity, int32 index)
+    {
+        if (index < 0)
+            return null;
+        let obj = LiveObject(session, entity);
+        if (obj == null)
+            return null;
+        int32 current = 0;
+        for (let component in obj.Components)
+        {
+            if (let collider = component as Collider)
+            {
+                if (current == index)
+                    return collider;
+                current++;
+            }
+        }
+        return null;
+    }
+
+    [CSharpExpose]
+    public static int32 GetColliderCount(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null)
+            return 0;
+        int32 count = 0;
+        for (let component in obj.Components)
+        {
+            if (component as Collider != null)
+                count++;
+        }
+        return count;
+    }
+
+    /// Returns -1 if the collider index is invalid; otherwise 0-5:
+    /// Box, Sphere, Capsule, Mesh, Compound, Convex.
+    [CSharpExpose]
+    public static int32 GetColliderKind(uint64 session, uint64 entity, int32 index)
+    {
+        let collider = ColliderAt(session, entity, index);
+        if (collider == null)
+            return -1;
+        let type = collider.GetType();
+        if (type == typeof(BoxCollider)) return 0;
+        if (type == typeof(SphereCollider)) return 1;
+        if (type == typeof(CapsuleCollider)) return 2;
+        if (type == typeof(MeshCollider)) return 3;
+        if (type == typeof(CompoundCollider)) return 4;
+        if (type == typeof(ConvexCollider)) return 5;
+        return -1;
+    }
+
+    [CSharpExpose]
+    public static Vector3 GetColliderCenter(uint64 session, uint64 entity, int32 index)
+    {
+        let collider = ColliderAt(session, entity, index);
+        if (collider == null)
+            return .Zero;
+        return collider.center;
+    }
+
+    [CSharpExpose]
+    public static Vector3 GetColliderBoxSize(uint64 session, uint64 entity, int32 index)
+    {
+        if (let box = ColliderAt(session, entity, index) as BoxCollider)
+            return box.size;
+        return .Zero;
+    }
+
+    [CSharpExpose]
+    public static float GetColliderSphereRadius(uint64 session, uint64 entity, int32 index)
+    {
+        if (let sphere = ColliderAt(session, entity, index) as SphereCollider)
+            return sphere.radius;
+        return -1;
+    }
+
+    [CSharpExpose]
+    public static float GetColliderCapsuleRadius(uint64 session, uint64 entity, int32 index)
+    {
+        if (let capsule = ColliderAt(session, entity, index) as CapsuleCollider)
+            return capsule.radius;
+        return -1;
+    }
+
+    [CSharpExpose]
+    public static float GetColliderCapsuleHeight(uint64 session, uint64 entity, int32 index)
+    {
+        if (let capsule = ColliderAt(session, entity, index) as CapsuleCollider)
+            return capsule.height;
+        return -1;
+    }
+
+    // A settings change is an explicit operation, not a per-tick hot path.
+    // Rebuild uses the existing SoftBody/Jolt lifecycle and preserves pose.
+    [CSharpExpose]
+    public static float GetSoftBodyStiffness(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        let soft = obj?.GetComponent<SoftBody>();
+        return soft != null ? soft.stiffness : 0;
+    }
+
+    [CSharpExpose]
+    public static bool SetSoftBodyStiffness(uint64 session, uint64 entity, float stiffness)
+    {
+        if (!stiffness.IsFinite || stiffness < 0 || stiffness > 1)
+            return false;
+        let obj = LiveObject(session, entity);
+        let soft = obj?.GetComponent<SoftBody>();
+        if (soft == null)
+            return false;
+        if (soft.stiffness == stiffness)
+            return true;
+        soft.stiffness = stiffness;
+        if (soft.HasBody)
+            soft.Rebuild();
+        return true;
+    }
+
+    [CSharpExpose]
+    public static float GetSoftBodyWobbleDamping(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        let soft = obj?.GetComponent<SoftBody>();
+        return soft != null ? soft.wobbleDamping : 0;
+    }
+
+    [CSharpExpose]
+    public static bool SetSoftBodyWobbleDamping(uint64 session, uint64 entity, float damping)
+    {
+        if (!damping.IsFinite || damping < 0 || damping > 20)
+            return false;
+        let obj = LiveObject(session, entity);
+        let soft = obj?.GetComponent<SoftBody>();
+        if (soft == null)
+            return false;
+        if (soft.wobbleDamping == damping)
+            return true;
+        soft.wobbleDamping = damping;
+        if (soft.HasBody)
+            soft.Rebuild();
+        return true;
+    }
+
     [CSharpExpose]
     public static bool HasSoftBody(uint64 session, uint64 entity)
     {

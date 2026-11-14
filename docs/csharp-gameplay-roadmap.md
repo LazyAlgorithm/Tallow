@@ -262,3 +262,16 @@ actual contact normal. The generator rejects arbitrary unmanaged structures
 and structured parameters until per-type reflection/layout validation exists.
 
 - The managed native-host smoke now checks 48-byte struct packing and real data/nullable flags: ray hits carry their collider entity but no invented normal, sphere hits carry the Jolt normal, penetration and body ID. Native CI also verifies both generated Beef symbols are actually callable.
+
+### Indexed collider inspection and soft-body tuning
+
+C# gameplay now sees the engine's original **class** colliders as
+`GameObject.ColliderCount` and nullable `GetCollider(index)` value handles,
+with box/sphere/capsule dimensions and local centers. The handles retain
+collider attachment order, including duplicate kinds stacked on one object,
+and only contain the session-scoped GameObject ID and an index. They do
+not turn class colliders into ECS handles or expose native pointers.
+The native API also supports soft-body `Stiffness` (0–1) and
+`WobbleDamping` (0–20) getters/setters using `[CSharpExpose]`.
+Parameter updates require native `SoftBody.Rebuild()`, so they are intended
+for deliberate configuration, not for changing every physics tick.

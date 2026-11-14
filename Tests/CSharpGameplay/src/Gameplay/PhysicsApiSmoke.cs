@@ -10,6 +10,15 @@ public sealed class PhysicsApiSmoke : Script
 {
     public override void OnLocalUpdate()
     {
+        // Native colliders are class components. Their indexes preserve
+        // stacked colliders on the same object, including repeated types.
+        for (int i = 0; i < ColliderCount; i++)
+        {
+            if (GetCollider(i) is { Kind: ColliderKind.Sphere } sphere)
+            {
+                float? radius = sphere.SphereRadius;
+            }
+        }
         // Use the existing ECS-backed native Rigidbody when present.
         if (GetRigidbody() is { } rigidbody && rigidbody.HasBody)
             rigidbody.AddForce(Vector3.UnitY * 5f);

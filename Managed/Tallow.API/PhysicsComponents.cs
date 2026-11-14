@@ -22,6 +22,55 @@ public readonly record struct Rigidbody(GameObject GameObject)
         Physics.AddRigidbodyImpulse(GameObject.SceneId, GameObject.Id, impulse);
 }
 
+
+public enum ColliderKind { Box, Sphere, Capsule, Mesh, Compound, Convex }
+
+/// <summary>
+/// Indexed handle to an existing native *class* collider. Multiple colliders
+/// of the same type may exist on one GameObject. No native pointer is held;
+/// all reads are validated against the active scene session and object ID.
+/// </summary>
+public readonly record struct ColliderHandle(GameObject GameObject, int Index)
+{
+    public ColliderKind? Kind
+    {
+        get
+        {
+            int type = Physics.GetColliderKind(GameObject.SceneId, GameObject.Id, Index);
+            return type is >= 0 and <= 5 ? (ColliderKind)type : null;
+        }
+    }
+
+    public bool IsValid => Kind.HasValue;
+    public Vector3 Center => Physics.GetColliderCenter(GameObject.SceneId, GameObject.Id, Index);
+    public Vector3? BoxSize => Kind == ColliderKind.Box ?
+        Physics.GetColliderBoxSize(GameObject.SceneId, GameObject.Id, Index) : null;
+    public float? SphereRadius
+    {
+        get
+        {
+            float r = Physics.GetColliderSphereRadius(GameObject.SceneId, GameObject.Id, Index);
+            return r >= 0 ? r : null;
+        }
+    }
+    public float? CapsuleRadius
+    {
+        get
+        {
+            float r = Physics.GetColliderCapsuleRadius(GameObject.SceneId, GameObject.Id, Index);
+            return r >= 0 ? r : null;
+        }
+    }
+    public float? CapsuleHeight
+    {
+        get
+        {
+            float h = Physics.GetColliderCapsuleHeight(GameObject.SceneId, GameObject.Id, Index);
+            return h >= 0 ? h : null;
+        }
+    }
+}
+
 /// <summary>
 /// Value handle to native SoftBody, including free cloth/jelly, dentable shells,
 /// and rigidbody-driven jelly. No soft-body vertex buffer crosses into .NET.
@@ -45,6 +94,28 @@ public readonly record struct SoftBody(GameObject GameObject)
     public int SimulatedVertexCount =>
         Physics.GetSoftBodyVertexCount(GameObject.SceneId, GameObject.Id);
     public bool CanApplyForces => Physics.CanForceSoftBody(GameObject.SceneId, GameObject.Id);
+
+    /// <summary>Stretch stiffness (0-1). Changing it rebuilds the native simulation.</summary>
+    public float Stiffness
+    {
+        get => Physics.GetSoftBodyStiffness(GameObject.SceneId, GameObject.Id);
+        set
+        {
+            if (!Physics.SetSoftBodyStiffness(GameObject.SceneId, GameObject.Id, value))
+                throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
+
+    /// <summary>Jelly wobble decay (0-20). Changing it rebuilds the native simulation.</summary>
+    public float WobbleDamping
+    {
+        get => Physics.GetSoftBodyWobbleDamping(GameObject.SceneId, GameObject.Id);
+        set
+        {
+            if (!Physics.SetSoftBodyWobbleDamping(GameObject.SceneId, GameObject.Id, value))
+                throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
     public Vector3 Velocity
     {
         get => Physics.GetSoftBodyVelocity(GameObject.SceneId, GameObject.Id);

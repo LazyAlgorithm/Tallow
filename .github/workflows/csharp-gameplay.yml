@@ -195,6 +195,12 @@ jobs:
           grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'RaycastDetails' | grep -F 'Tallow.PhysicsQueryHit'
           grep -F 'PhysicsQueryHit* result' Engine/src/Scripting/CSharpBindings.Generated.bf
           grep -F 'public static Tallow.PhysicsQueryHit SphereCastDetails(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'GetColliderCount'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Physics' | grep -F 'SetSoftBodyStiffness'
+          grep -F 'public static int GetColliderCount(ulong session, ulong entity)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetSoftBodyWobbleDamping(ulong session, ulong entity, float damping)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_dd6b56714b85bea3
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_4e84ac47e4f849a1
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_babf3ef4abb796e0
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_829130371d484610
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e

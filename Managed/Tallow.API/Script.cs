@@ -74,6 +74,17 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
         Engine.Bridge.GetManagedComponent(this, typeof(T)) as T;
     public void Destroy() => Engine.Bridge.Destroy(this);
 
+    /// <summary>Number of native class colliders attached to this object.</summary>
+    public int ColliderCount => Physics.GetColliderCount(SceneId, Id);
+
+    /// <summary>
+    /// Read a collider by attachment order, including stacked colliders
+    /// of the same type. Returns null for invalid indices.
+    /// </summary>
+    public ColliderHandle? GetCollider(int index = 0) =>
+        Physics.GetColliderKind(SceneId, Id, index) >= 0 ?
+            new ColliderHandle(this, index) : null;
+
     /// <summary>Retrieve the existing native ECS-backed Rigidbody handle.</summary>
     public Rigidbody? GetRigidbody() =>
         Physics.HasRigidbody(SceneId, Id) ? new Rigidbody(this) : null;
@@ -389,6 +400,8 @@ public abstract class Script
     /// <summary>Find another attached C# behaviour, as in native Beef scripts.</summary>
     public T? GetComponent<T>() where T : Script => GameObject.GetComponent<T>();
 
+    public ColliderHandle? GetCollider(int index = 0) => GameObject.GetCollider(index);
+    public int ColliderCount => GameObject.ColliderCount;
     public Rigidbody? GetRigidbody() => GameObject.GetRigidbody();
     public SoftBody? GetSoftBody() => GameObject.GetSoftBody();
 

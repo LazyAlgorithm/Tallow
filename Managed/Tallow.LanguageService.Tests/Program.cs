@@ -433,6 +433,41 @@ public sealed class CubeMover : Script
                     detailedDiagnostics);
             Check("structured Jolt hit C# facade compiles", true);
 
+            string colliderCode = """
+                using Tallow;
+                using System.Numerics;
+                [Component] class ColliderProbe : Script
+                {
+                    public override void Start()
+                    {
+                        int count = ColliderCount;
+                        for (int i = 0; i < count; i++)
+                        {
+                            ColliderHandle? collider = GetCollider(i);
+                            if (collider is { } c)
+                            {
+                                ColliderKind? kind = c.Kind;
+                                Vector3 center = c.Center;
+                                float? radius = c.SphereRadius;
+                                Vector3? size = c.BoxSize;
+                            }
+                        }
+                        if (GetSoftBody() is { } soft)
+                        {
+                            soft.Stiffness = 0.75f;
+                            soft.WobbleDamping = 4f;
+                        }
+                    }
+                }
+                """;
+            string colliderDiagnostics = RequestWithApi(service, "diagnostics",
+                colliderCode, colliderCode.Length);
+            if (colliderDiagnostics.Contains("diagnostic\t"))
+                throw new InvalidOperationException(
+                    "Generated collider and soft-body control API produced diagnostics:\n" +
+                    colliderDiagnostics);
+            Check("indexed native collider and soft-body parameter C# API compiles", true);
+
             string logCode = "using Tallow; class Demo { void Go() { Log.Info(\"hello\"); } }";
             string logDiagnostics = RequestWithApi(service, "diagnostics", logCode, logCode.Length);
             Check("generated Log.Info accepts managed C# strings",

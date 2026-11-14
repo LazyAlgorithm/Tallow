@@ -50,3 +50,14 @@ method	Tallow.Physics	GetSoftBodyMode	int	session:ulong	entity:ulong
 method	Tallow.Physics	GetSoftBodyVertexCount	int	session:ulong	entity:ulong
 method	Tallow.Physics	RaycastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
 method	Tallow.Physics	SphereCastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	GetColliderCount	int	session:ulong	entity:ulong
+method	Tallow.Physics	GetColliderKind	int	session:ulong	entity:ulong	index:int
+method	Tallow.Physics	GetColliderCenter	System.Numerics.Vector3	session:ulong	entity:ulong	index:int
+method	Tallow.Physics	GetColliderBoxSize	System.Numerics.Vector3	session:ulong	entity:ulong	index:int
+method	Tallow.Physics	GetColliderSphereRadius	float	session:ulong	entity:ulong	index:int
+method	Tallow.Physics	GetColliderCapsuleRadius	float	session:ulong	entity:ulong	index:int
+method	Tallow.Physics	GetColliderCapsuleHeight	float	session:ulong	entity:ulong	index:int
+method	Tallow.Physics	GetSoftBodyStiffness	float	session:ulong	entity:ulong
+method	Tallow.Physics	SetSoftBodyStiffness	bool	session:ulong	entity:ulong	stiffness:float
+method	Tallow.Physics	GetSoftBodyWobbleDamping	float	session:ulong	entity:ulong
+method	Tallow.Physics	SetSoftBodyWobbleDamping	bool	session:ulong	entity:ulong	damping:float
