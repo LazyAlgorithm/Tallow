@@ -730,7 +730,7 @@ class Program
 	{
 		// Precompiled editor: the native TallowLauncher binary already contains
 		// TallowEditor. C# projects no longer generate or compile an editor exe.
-		if (args.Contains("--editor"))
+		if (args.Contains("--editor") || args.Contains("--game"))
 			return EditorMain.Run(args);
 		for (int i < args.Count)
 		{
