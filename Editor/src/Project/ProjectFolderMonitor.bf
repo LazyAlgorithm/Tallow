@@ -42,14 +42,14 @@ class ProjectFolderMonitor
 		return notify;
 	}
 
-	static void Scan(StringView folder, List<String> files, int depth, bool scriptsOnly, StringView extension)
+	static void Scan(StringView folder, List<String> files, int depth, bool scriptsOnly, StringView scriptSuffix)
 	{
 		if (depth > 32) return; // Bound recursion if an asset folder contains a directory link cycle.
 		for (let entry in Directory.EnumerateFiles(folder))
 		{
 			let name = scope String();
 			entry.GetFileName(name);
-			if (name.StartsWith('.') || (scriptsOnly && !name.EndsWith(extension, .OrdinalIgnoreCase))) continue;
+			if (name.StartsWith('.') || (scriptsOnly && !name.EndsWith(scriptSuffix, .OrdinalIgnoreCase))) continue;
 			// Fetch time first: Beef's POSIX size accessor reads the cached stat record.
 			let modified = entry.GetLastWriteTimeUtc().Ticks;
 			files.Add(new String(scope $"{folder}/{name}|{entry.GetFileSize()}|{modified}"));
@@ -62,7 +62,7 @@ class ProjectFolderMonitor
 			let path = scope $"{folder}/{name}";
 			if (!scriptsOnly)
 				files.Add(new String(path));
-			Scan(path, files, depth + 1, scriptsOnly, extension);
+			Scan(path, files, depth + 1, scriptsOnly, scriptSuffix);
 		}
 	}
 }
