@@ -31,7 +31,9 @@ def main():
         parser.error('This entry point supports Linux and Windows; see docs/macos.md for macOS.')
     windows = os.name == 'nt'
     beef = os.environ.get('BEEFBUILD', 'BeefBuild')
-    required = [beef] + ([] if args.skip_native else ['cmake', 'ninja', 'clang-cl' if windows else 'c++'])
+    # A native engine build regenerates the curated C# API exactly once.
+    # Ordinary per-project C# builds do not invoke this script or BeefBuild.
+    required = [beef, 'dotnet'] + ([] if args.skip_native else ['cmake', 'ninja', 'clang-cl' if windows else 'c++'])
     missing = [tool for tool in required if not shutil.which(tool)]
     if missing:
         parser.error('Missing build tools: ' + ', '.join(missing) + '. See docs/building-from-source.md.')
@@ -61,9 +63,26 @@ def main():
     if executable.exists():
         executable.rename(previous)
     try:
+        # Avoid stale native wrappers referring to removed/renamed engine API
+        # members on the first pass. The first build emits the reflection
+        # manifest; the second compiles the generated C ABI entrypoints.
+        generated_beef = root / 'Engine/src/Scripting/CSharpBindings.Generated.bf'
+        generated_beef.unlink(missing_ok=True)
         run([beef, f'-workspace={root}', f'-config={args.config}', f'-platform={platform}', '-verbosity=minimal'])
         if not executable.is_file():
             raise RuntimeError('Compiler did not produce the launcher.')
+        manifest = root / 'build' / 'csharp-api-manifest.tsv'
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        run([executable, '--csharp-api-manifest', manifest])
+        run(['dotnet', 'run', '--project', root / 'Managed/Tallow.BindingGen/Tallow.BindingGen.csproj',
+             '--', '--manifest', manifest, '--engine-root', root])
+        if not generated_beef.is_file():
+            raise RuntimeError('Binding generator did not produce native wrappers.')
+        run([beef, f'-workspace={root}', f'-config={args.config}', f'-platform={platform}', '-verbosity=minimal'])
+        if not executable.is_file():
+            raise RuntimeError('Second native build did not produce the launcher.')
+        run(['dotnet', 'build', root / 'Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj',
+             '--configuration', args.config, '--nologo'])
     except BaseException:
         if previous.exists():
             executable.unlink(missing_ok=True)
