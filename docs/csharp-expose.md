@@ -1,6 +1,6 @@
 # Opt-in Beef → C# API bindings
 
-**State:** the Beef `[CSharpExpose]` marker is defined in `Engine/src/Scripting/CSharpExpose.bf`. **No binding generator consumes it yet**, so it does not make an annotated API callable from C# by itself. This document is the implementation contract for the generator. Existing manually bridged gameplay APIs remain unchanged.
+**State:** the Beef `[CSharpExpose]` marker is defined in `Engine/src/Scripting/CSharpExpose.bf`. The initial reflected-symbol extractor lives in `Engine/src/Scripting/CSharpBindingManifest.bf` and can emit a deterministic, strict stage-1 method manifest using `TallowLauncher --csharp-api-manifest PATH`. **This does not yet generate native call wrappers, managed C# wrappers, or a callable public API.** Existing manually bridged APIs remain unchanged while migration continues.
 
 ## Goal
 
@@ -63,3 +63,20 @@ Annotate one new *safe* native method, rebuild Tallow engine **once**, and verif
 `[CSharpExpose]` is a **public API design tool**, not a security sandbox. C# gameplay is trusted and runs within the same native process. Hiding internal symbols from the generated C# API does not by itself protect native memory against malicious code.
 
 Native Beef code changes still require a native engine rebuild. Routine C# gameplay edits do not.
+
+## Single source of truth and hot-path performance (decision 2026-11-13)
+
+The user requires **one authoring surface** for public gameplay APIs: approved Beef declarations annotated with `[CSharpExpose]`. Once migration is finished, do **not** maintain manually synchronized Beef and C# versions of the public API. Complex low-level adapters may exist behind the generated public API, but should not require independent public signatures or hand-written duplicate API documentation. The generator is responsible for public declarations, wrappers, versioning, and Roslyn discovery.
+
+Every native-backed C# property/method may cross the ABI boundary. This is an acceptable cost for occasional operations but not for 10,000+ entity component loops. The generated API must distinguish:
+- **Native entrypoints:** direct, statically typed, ABI-checked function pointers or C-callable wrappers; no generic reflection dispatch or boxing per call.
+- **Managed pure helpers:** math and local cached data that never need to cross the boundary.
+- **Bulk ECS operations:** native establishes a validated, short-lived typed batch view or copies a compact batch; C# runs an entire system/chunk locally and commits changes in one batch when required. No per-entity GetComponent/SetComponent callback loop as the only API. Test memory moves, lifetime, synchronization, cross-thread use and rollback; never expose persistent raw pointers to scene-owned storage.
+- **Bulk native commands:** physics queries, spawning and transforms can submit command/query batches when high-volume usage warrants it.
+
+Benchmark per-call boundary latency and chunk throughput alongside full-game frame time, allocations, GC pause percentiles, and deterministic network replay. Only call the migration 'near native' after measured Beef-vs-C# comparisons, not theoretical estimates. A C# compile/edit should never regenerate the native API or rebuild Beef.
+
+### Manifest prototype
+
+`TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv` runs a native reflection scan over compiled Beef types. It validates *annotated* stage-1 static method signatures (void/bool/int32/float and Vector2/3/4), rejects invalid annotated fields rather than silently omitting them, sorts signature records, and includes an annotated fixture `CSharpBindingFixture.Average` while excluding its unannotated `NativeOnly`. It is covered by a native Linux CI smoke check. **The manifest is only a foundation; it is not yet wired into the managed runtime or a native ABI wrapper generator**, and no existing hand-written public bridge was removed. The remaining generator work is tracked in the main roadmap.
+
