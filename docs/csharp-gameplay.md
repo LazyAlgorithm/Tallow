@@ -19,6 +19,19 @@ is complete.
 - `Engine/src/Scripting/CSharpBehaviour.bf` forwards native component callbacks and tick input.
 - The editor's Add Component > Scripts menu reads the compiled component catalog
   and adds managed classes through the native adapter.
+- Public C# float/int/bool/Vector2/3/4 fields are editable in the Inspector,
+  saved in scenes/prefabs, and applied before Awake. Numeric [Range] draws sliders.
+- Drag a compiled .cs file onto a scene object or its Inspector to attach its
+  managed component (with a type picker when a file declares multiple components).
+- The Launcher now opens the same precompiled Tallow editor/engine for all
+  C# projects. Opening projects or pressing Play does not rebuild native code.
+- Editor startup compiles gameplay on a worker thread. Compile errors appear
+  in the Console and block Play, not access to the editor and its script tabs.
+- C# completion and diagnostics use Roslyn, including SDK framework and
+  automatically discovered gameplay API symbols. A persistent worker eliminates
+  repeated .NET process launches; the C# 15 lexical colorizer is separate from Beef.
+- The precompiled launcher also supports a development game-runner mode that
+  loads trusted C# assemblies without building a separate native executable.
 - C# gameplay projects import System.Numerics globally: Vector3 addition,
   subtraction and multiplication work without an extra `using` directive.
 - The native host searches DOTNET_ROOT, the installed dotnet executable,
@@ -26,14 +39,14 @@ is complete.
 - `Tests/NativeCSharpHost` verifies C# movement, callbacks, and network button edges in native processes.
 
 This is **not a complete integration**. The managed API covers only a small
-subset of Tallow. The initial bridge and standalone native/managed lifecycle
-tests now exist, along with editor C# syntax and Roslyn requests. The
-editor has an initial Play/Stop managed runtime initialization and assembly
-unload path, and a native adapter for compiled C# components. The entire
-editor-side workflow is still experimental and requires local testing.
-Managed field editing and serialization, ECS systems/queries, physics,
-networking parity, export packaging, true hot reload, and C# visual-script
-generation remain incomplete. Do not ship on this basis.
+subset of Tallow. Native and managed lifecycle smoke tests pass on Linux and
+Windows; users have successfully opened the full Linux editor and run attached
+C# components, including saving Inspector values. The precompiled editor
+entrypoint and standalone game mode are newer and still require full local
+Beef editor builds and Play/Stop testing. ECS systems/queries, physics,
+networking parity, final game export packaging, persistent-state hot reload,
+C# visual-script generation, and compiler-accurate semantic syntax coloring
+remain incomplete. Do not ship production games on this basis.
 
 ## Gameplay parity requirement
 
@@ -77,11 +90,45 @@ Requires the .NET 11 SDK. Generated projects are local build artifacts under
 the game's `.tallow-csharp` directory. Automated Linux and Windows managed
 smoke tests are defined in `.github/workflows/csharp-gameplay.yml`.
 
-C# editor diagnostics and completion run Roslyn directly via `dotnet` without
-Python intermediaries. Some unrelated engine/build systems still depend on
-Python until separately migrated. The native C# runtime bridge has passed standalone hostfxr smoke tests on
-Linux and Windows. Normal editor Play startup, cross-assembly field reflection,
-full gameplay parity, and safe managed reload remain unfinished.
+C# editor diagnostics, symbols and completion use a persistent Roslyn/.NET
+process without Python intermediaries. The first C# language-service request
+builds the worker; later requests reuse it. Some native engine build tools,
+project-version tools, samples, and visual-script generation still use Beef
+or Python. Standalone hostfxr smoke tests and persistent Roslyn tests pass
+on Linux and Windows. Full C# gameplay parity and shipping export remain
+unfinished.
+
+## Precompiled editor and development player
+
+From an engine checkout, build Tallow **once** with `./build.sh --config Debug`.
+Subsequent managed game projects reuse the existing native binary:
+
+```bash
+# Open any C# project directly in the precompiled editor.
+./build/Debug_Linux64/TallowLauncher/TallowLauncher --open /path/to/MyGame
+
+# Compile only C# gameplay and assembly definitions (no BeefBuild).
+./build/Debug_Linux64/TallowLauncher/TallowLauncher --build-project /path/to/MyGame
+
+# Run a successfully compiled game in the same precompiled engine.
+./build/Debug_Linux64/TallowLauncher/TallowLauncher --game --project /path/to/MyGame
+
+# Only for developers who explicitly need the old native game build:
+./build/Debug_Linux64/TallowLauncher/TallowLauncher --build-native-project /path/to/MyGame
+```
+
+The launcher uses the precompiled `TallowLauncher` executable to host its
+editor and local game runtime. A game does **not** need its own Beef-built
+executable. The editor performs C# gameplay builds in the background, keeps
+the project open when compilation fails, and blocks Play until the build
+succeeds. SDK errors and compiler diagnostics go to the editor Console.
+C# changes made in external editors are detected by the source monitor.
+
+This is a **development runner**, not yet a finished independently
+redistributable game export. Release packaging still needs managed runtime
+staging, matching native artifacts, and platform verification. The old
+Voxel sandbox/showcase templates still contain native Beef scripts and have
+not been converted to C#; new projects default to the empty template.
 
 ## Local editor test (Linux)
 
