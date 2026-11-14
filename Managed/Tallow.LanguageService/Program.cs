@@ -179,6 +179,31 @@ internal static class Program
                 if (symbol.IsImplicitlyDeclared || !SyntaxFacts.IsValidIdentifier(symbol.Name) ||
                     symbol.Name.StartsWith("<", StringComparison.Ordinal))
                     return;
+
+                if (symbol is IMethodSymbol method)
+                {
+                    // A property/event is already a first-class C# symbol.
+                    // Never also suggest its compiler-generated accessor methods
+                    // (get_Position, set_Position, add_Changed, ...).
+                    if (method.AssociatedSymbol is IPropertySymbol or IEventSymbol ||
+                        method.MethodKind is MethodKind.PropertyGet or MethodKind.PropertySet or
+                            MethodKind.EventAdd or MethodKind.EventRemove or MethodKind.EventRaise)
+                        return;
+
+                    // Some imported native/metadata APIs represent accessors as
+                    // ordinary methods. Hide only those whose matching property
+                    // or event is actually present; preserve genuine get_* methods.
+                    string name = method.Name;
+                    int prefix = name.StartsWith("get_", StringComparison.Ordinal) ||
+                                 name.StartsWith("set_", StringComparison.Ordinal) ? 4 :
+                                 name.StartsWith("add_", StringComparison.Ordinal) ? 4 :
+                                 name.StartsWith("remove_", StringComparison.Ordinal) ? 7 : 0;
+                    if (prefix != 0 && name.Length > prefix && method.ContainingType is { } container &&
+                        container.GetMembers(name[prefix..]).Any(member =>
+                            member is IPropertySymbol or IEventSymbol))
+                        return;
+                }
+
                 names.TryAdd(symbol.Name, symbol.Kind.ToString());
             }
 
