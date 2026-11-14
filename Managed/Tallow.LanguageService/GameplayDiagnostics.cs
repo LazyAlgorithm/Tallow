@@ -29,7 +29,11 @@ internal static class GameplayDiagnostics
             foreach (MethodDeclarationSyntax method in root.DescendantNodes()
                 .OfType<MethodDeclarationSyntax>())
             {
-                if (!IsNetworkTick(method, semantic))
+                bool networkTick = IsNetworkTick(method, semantic);
+                // Allocation hints also matter in local frame callbacks and
+                // fixed physics ticks. Determinism warnings remain restricted
+                // to predicted input-tick methods.
+                if (!networkTick && !IsHotLifecycleCallback(method, semantic))
                     continue;
 
                 string context = method.Identifier.ValueText;
@@ -134,7 +138,8 @@ internal static class GameplayDiagnostics
                         category = "optimization";
                         message = "TAL-PERF001: Allocating an array each simulation tick can cause GC pressure; reuse a buffer when practical.";
                     }
-                    if (category is null || message is null)
+                    if (category is null || message is null ||
+                        category == "determinism" && !networkTick)
                         continue;
 
                     var pos = tree.GetLineSpan(location.Span).StartLinePosition;
@@ -172,6 +177,31 @@ internal static class GameplayDiagnostics
             symbol.ContainingType?.ToDisplayString() == type;
     }
 
+    private static bool IsHotLifecycleCallback(MethodDeclarationSyntax method,
+        SemanticModel semantic)
+    {
+        IMethodSymbol? symbol = semantic.GetDeclaredSymbol(method);
+        if (symbol is null || !symbol.ReturnsVoid || !IsGameplayScript(symbol))
+            return false;
+        return method.Identifier.ValueText switch
+        {
+            "FixedUpdate" or "LateUpdate" =>
+                symbol.Parameters.Length == 1 &&
+                symbol.Parameters[0].Type.SpecialType == SpecialType.System_Single,
+            "OnLocalUpdate" => symbol.Parameters.Length == 0,
+            _ => false
+        };
+    }
+
+    private static bool IsGameplayScript(IMethodSymbol symbol)
+    {
+        for (INamedTypeSymbol? current = symbol.ContainingType;
+            current is not null; current = current.BaseType)
+            if (current.ToDisplayString() is "Tallow.Script" or "Tallow.NetworkBehaviour")
+                return true;
+        return false;
+    }
+
     private static bool IsNetworkTick(MethodDeclarationSyntax method, SemanticModel semantic)
     {
         string name = method.Identifier.ValueText;
@@ -179,16 +209,13 @@ internal static class GameplayDiagnostics
             return false;
         IMethodSymbol? symbol = semantic.GetDeclaredSymbol(method);
         if (symbol is null || symbol.Parameters.Length == 0 ||
-            symbol.ReturnsVoid == false || symbol.ContainingType is not { } owner)
+            symbol.ReturnsVoid == false || symbol.ContainingType is null)
             return false;
         string input = symbol.Parameters[0].Type.Name;
         if (name == "Update" && input != "TickInput" ||
             name == "Simulate" && input != "NetInput")
             return false;
-        // Only script components participate in Tallow's predicted ticks.
-        for (INamedTypeSymbol? current = owner; current is not null; current = current.BaseType)
-            if (current.ToDisplayString() is "Tallow.Script" or "Tallow.NetworkBehaviour")
-                return true;
-        return false;
+        // Only actual gameplay script components run in predicted ticks.
+        return IsGameplayScript(symbol);
     }
 }
