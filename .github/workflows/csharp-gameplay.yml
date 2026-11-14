@@ -108,6 +108,34 @@ jobs:
                   !enumPublic || !enumPrivate || !enumHidden || invalid) exit 1
             }
           ' "$catalog"
+      - name: Verify serialized field IDs survive C# renames and reject collisions
+        shell: bash
+        run: |
+          # Never modify the actual test project or user project.
+          work="$(mktemp -d)"
+          trap 'rm -rf -- "$work"' EXIT
+          cp -R Tests/CSharpGameplay/src "$work/src"
+          original="$(awk -F '\t' '
+            $1 == "Gameplay.InspectorSerializationSmoke" && $3 == "movementMode" { print $2 }
+          ' Tests/CSharpGameplay/.tallow-csharp/fields-aot.tsv)"
+          test -n "$original"
+          sed -i 's/movementMode/movementRenamed/g' \
+            "$work/src/Gameplay/InspectorSerializationSmoke.cs"
+          dotnet run --project Managed/Tallow.Build/Tallow.Build.csproj -- \
+            --project "$work" --engine-root "$PWD"
+          renamed="$(awk -F '\t' '
+            $1 == "Gameplay.InspectorSerializationSmoke" && $3 == "movementRenamed" { print $2 }
+          ' "$work/.tallow-csharp/fields-aot.tsv")"
+          test -n "$renamed" && test "$original" = "$renamed"
+          # The compiler must reject duplicate explicit IDs in one component.
+          sed -i '/private InspectorMotion privateMode/i\    [SerializedFieldId("motion-state-v1")]' \
+            "$work/src/Gameplay/InspectorSerializationSmoke.cs"
+          if dotnet run --project Managed/Tallow.Build/Tallow.Build.csproj -- \
+              --project "$work" --engine-root "$PWD" > "$work/invalid.log" 2>&1; then
+            echo "Expected duplicate serialized field ID to fail" >&2
+            exit 1
+          fi
+          grep -F "Duplicate serialized field identity" "$work/invalid.log"
       - name: Smoke-test trusted assembly lifecycle
         run: dotnet run --project Managed/Tallow.ManagedHost/Tallow.ManagedHost.csproj -- Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
       - name: Build trusted managed runtime

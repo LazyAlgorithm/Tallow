@@ -741,3 +741,15 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
 - Added fixture [SerializedFieldId] usage and Linux/Windows build-step CI
   checks for the generated catalog. **Validation pending** actual managed CI,
   JIT Inspector regression, and later NativeAOT field delegate generation.
+
+
+### AOT serialized field identity tests (November 14, 2026)
+
+- The Linux/Windows managed build workflow now copies the C# Inspector
+  fixture into a disposable directory, renames an explicitly identified
+  enum field and re-builds it. The generated AOT ID must remain identical.
+- CI also applies the same explicit ID to a second field and requires a
+  descriptive duplicate-identity build failure.
+- These tests verify source-generation stability only. The existing JIT
+  scene serializer still uses field names and AOT factory/setter generation
+  is not yet implemented. Cross-runtime scene migration is still pending.
