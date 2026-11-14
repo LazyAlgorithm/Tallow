@@ -827,3 +827,26 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
   is still not built** and generated field setters, custom Flecs ECS
   layout registration, cross-platform real editor tests and benchmark
   parity remain pending.
+
+
+### C# ECS data schema discovery — bridge groundwork (November 14, 2026)
+
+- The normal C# game build now scans `[Component]` structs using Roslyn and
+  writes a build-only `.tallow-csharp/ecs-data.tsv` description: qualified
+  type, field name, scalar/vector kind, and whether a field uses `[Sync]`.
+  Each type has an explicit `@layout=candidate` or `unsupported` record.
+  Only non-generic unmanaged structs containing supported mutable scalar,
+  vector and quaternion fields qualify as candidates.
+- A candidate is **NOT YET a registered native Flecs component**. The
+  shipping/native C# bridge must still validate actual C# ABI layout,
+  alignment, field offsets, network marshaling and lifetime, then provide
+  typed reads/writes through the engine's existing Flecs World. This pass
+  does not write RigidbodyData behind Jolt's back or claim replication.
+- Added C# test structs with supported `[Sync] Vector3` and ordinary float
+  and int fields, plus a managed `string` reference that must be marked
+  unsupported. Linux/Windows CI checks the generated schema. The next
+  workstream is native layout registration and bounded bulk set/query
+  operations, then true synced C# data replication and deterministic replay.
+- All benchmarks requiring writable C# Flecs data (B12, related B18/B20)
+  remain **blocked**, and the new schema must never be shipped as
+  reflective gameplay source metadata in default NativeAOT packages.
