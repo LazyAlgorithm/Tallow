@@ -399,6 +399,39 @@ public sealed class CubeMover : Script
                     castDiagnostics);
             Check("raycast, sphere cast and native SoftBody metadata C# facade compile", true);
 
+            // The native hit payload must be truly blittable on both Windows
+            // and Linux; future generator changes may not alter the ABI.
+            Check("PhysicsQueryHit has a stable 48-byte C ABI",
+                System.Runtime.InteropServices.Marshal.SizeOf<PhysicsQueryHit>() == 48 &&
+                System.Runtime.InteropServices.Marshal.OffsetOf<PhysicsQueryHit>(
+                    nameof(PhysicsQueryHit.PointX)).ToInt32() == 8 &&
+                System.Runtime.InteropServices.Marshal.OffsetOf<PhysicsQueryHit>(
+                    nameof(PhysicsQueryHit.Flags)).ToInt32() == 44);
+            string detailedHit = """
+                using System.Numerics;
+                using Tallow;
+                [Component] class HitProbe : Script
+                {
+                    public override void Start()
+                    {
+                        PhysicsHit? ray = Scene.RaycastHit(Vector3.Zero, Vector3.UnitZ, 10);
+                        PhysicsHit? sphere = Scene.SphereCastHit(
+                            Vector3.Zero, 0.4f, Vector3.UnitZ, 10);
+                        if (sphere is { Normal: { } surfaceNormal })
+                        {
+                            Vector3 surface = surfaceNormal;
+                        }
+                    }
+                }
+                """;
+            string detailedDiagnostics = RequestWithApi(service, "diagnostics",
+                detailedHit, detailedHit.Length);
+            if (detailedDiagnostics.Contains("diagnostic\t"))
+                throw new InvalidOperationException(
+                    "Generated PhysicsQueryHit and PhysicsHit produced diagnostics:\n" +
+                    detailedDiagnostics);
+            Check("structured Jolt hit C# facade compiles", true);
+
             string logCode = "using Tallow; class Demo { void Go() { Log.Info(\"hello\"); } }";
             string logDiagnostics = RequestWithApi(service, "diagnostics", logCode, logCode.Length);
             Check("generated Log.Info accepts managed C# strings",

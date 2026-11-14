@@ -48,3 +48,5 @@ method	Tallow.Physics	IsRigidbodySleeping	bool	session:ulong	entity:ulong
 method	Tallow.Physics	IsSoftBodySleeping	bool	session:ulong	entity:ulong
 method	Tallow.Physics	GetSoftBodyMode	int	session:ulong	entity:ulong
 method	Tallow.Physics	GetSoftBodyVertexCount	int	session:ulong	entity:ulong
+method	Tallow.Physics	RaycastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	SphereCastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint

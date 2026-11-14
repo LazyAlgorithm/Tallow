@@ -28,11 +28,14 @@ internal static class Program
     private static string Hash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..16].ToLowerInvariant();
 
+    private const string HitRecordType = "Tallow.PhysicsQueryHit";
+    private static bool IsHitRecord(string type) => type == HitRecordType;
+
     private static bool IsType(string type, bool allowVoid = false) =>
         type is "bool" or "int" or "uint" or "long" or "ulong" or
             "float" or "double" or "string" or "System.Numerics.Vector2" or
             "System.Numerics.Vector3" or "System.Numerics.Vector4" or
-            "System.Numerics.Quaternion" ||
+            "System.Numerics.Quaternion" or "Tallow.PhysicsQueryHit" ||
         (allowVoid && type == "void");
 
     private static int Dimensions(string type) => type switch
@@ -84,7 +87,7 @@ internal static class Program
                 !Identifier.IsMatch(owner["Tallow.".Length..]) ||
                 !Identifier.IsMatch(name) || !IsType(result, allowVoid: !isField) ||
                 result == "string" ||
-                isField && name == owner["Tallow.".Length..])
+                isField && (name == owner["Tallow.".Length..] || IsHitRecord(result)))
                 throw new FormatException($"Manifest line {i + 1}: unsupported owner or return type: {owner}.{name}.");
             bool canWrite = isField && fields[4] == "getset";
             if (canWrite && Dimensions(result) != 0)
@@ -101,6 +104,8 @@ internal static class Program
                 if (!Identifier.IsMatch(paramName) || !IsType(type) ||
                     parameters.Any(p => p.Name == paramName))
                     throw new FormatException($"Manifest line {i + 1}: invalid parameter {fields[j]}.");
+                if (IsHitRecord(type))
+                    throw new FormatException($"Manifest line {i + 1}: struct ABI parameters are not supported; only generated struct results.");
                 parameters.Add(new(paramName, type));
             }
             string signature = string.Join("|",
@@ -148,7 +153,10 @@ internal static class Program
                 }
                 if (Dimensions(m.Result) > 0)
                     args.Add("float* result");
-                string returnType = Dimensions(m.Result) > 0 ? "void" : NativeType(m.Result);
+                else if (IsHitRecord(m.Result))
+                    args.Add("PhysicsQueryHit* result");
+                string returnType = Dimensions(m.Result) > 0 || IsHitRecord(m.Result) ?
+                    "void" : NativeType(m.Result);
                 text.AppendLine("\t[Export, CLink, Reflect, AlwaysInclude, CSharpApiExport]")
                     .AppendLine($"\tpublic static {returnType} {symbol}({string.Join(", ", args)})")
                     .AppendLine("\t{");
@@ -168,7 +176,7 @@ internal static class Program
                         text.AppendLine($"\t\t{name} v{i} = .({string.Join(", ", Enumerable.Range(0, count).Select(j => $"p{i}[{j}]"))});");
                     }
                 }
-                if (Dimensions(m.Result) > 0)
+                if (Dimensions(m.Result) > 0 || IsHitRecord(m.Result))
                     text.AppendLine("\t\tif (result == null) return;");
                 string call = m.IsField ? $"{m.Owner}.{m.Name}" :
                     $"{m.Owner}.{m.Name}({string.Join(", ", m.Parameters.Select(ArgumentExpression))})";
@@ -176,6 +184,8 @@ internal static class Program
                     text.AppendLine($"\t\t{call};");
                 else if (m.Result == "bool")
                     text.AppendLine($"\t\treturn {call} ? 1 : 0;");
+                else if (IsHitRecord(m.Result))
+                    text.AppendLine($"\t\tresult[0] = {call};");
                 else if (Dimensions(m.Result) > 0)
                 {
                     text.AppendLine($"\t\tlet value = {call};");
@@ -280,6 +290,8 @@ internal static class Program
                 }
                 if (Dimensions(m.Result) > 0)
                     text.AppendLine($"\t\tfloat* result = stackalloc float[{Dimensions(m.Result)}];");
+                else if (IsHitRecord(m.Result))
+                    text.AppendLine("\t\tPhysicsQueryHit result = default;");
                 List<string> nativeArgs = [];
                 foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
                 {
@@ -294,6 +306,8 @@ internal static class Program
                 }
                 if (Dimensions(m.Result) > 0)
                     nativeArgs.Add("result");
+                else if (IsHitRecord(m.Result))
+                    nativeArgs.Add("&result");
                 List<string> types = [];
                 foreach (Parameter p in m.Parameters)
                 {
@@ -307,7 +321,10 @@ internal static class Program
                 }
                 if (Dimensions(m.Result) > 0)
                     types.Add("float*");
-                types.Add(Dimensions(m.Result) > 0 ? "void" : CAbiType(m.Result));
+                else if (IsHitRecord(m.Result))
+                    types.Add("PhysicsQueryHit*");
+                types.Add(Dimensions(m.Result) > 0 || IsHitRecord(m.Result) ?
+                    "void" : CAbiType(m.Result));
                 string call = $"((delegate* unmanaged[Cdecl]<{string.Join(", ", types)}>)ptr)({string.Join(", ", nativeArgs)})";
                 // The UTF-8 arrays remain pinned for this single native call.
                 bool hasStrings = m.Parameters.Any(p => p.Type == "string");
@@ -323,6 +340,9 @@ internal static class Program
                 else if (Dimensions(m.Result) > 0)
                     text.AppendLine($"\t\t{call};")
                         .AppendLine($"\t\treturn new {CSharpType(m.Result)}({string.Join(", ", Enumerable.Range(0, Dimensions(m.Result)).Select(i => $"result[{i}]"))});");
+                else if (IsHitRecord(m.Result))
+                    text.AppendLine($"\t\t{call};")
+                        .AppendLine("\t\treturn result;");
                 else
                     text.AppendLine($"\t\treturn {call};");
                 if (hasStrings)
@@ -388,6 +408,17 @@ internal static class Program
             !managedQuaternion.Contains("return new System.Numerics.Quaternion(result[0], result[1], result[2], result[3]);") ||
             !managedQuaternion.Contains("float* p0 = stackalloc float[4] { rotation.X, rotation.Y, rotation.Z, rotation.W };"))
             throw new Exception("Quaternion ABI lowering failed.");
+        const string hitRecord = "TALLOW_CSHARP_API_V1\nmethod\tTallow.Physics\tRaycastDetails\tTallow.PhysicsQueryHit\tsession:ulong\torigin:System.Numerics.Vector3\tdirection:System.Numerics.Vector3\tmaxDistance:float\tlayerMask:uint\n";
+        List<Method> hitMethods = Parse(hitRecord);
+        string beefHit = EmitBeef(hitMethods, Hash(hitRecord));
+        string managedHit = EmitCSharp(hitMethods, Hash(hitRecord));
+        if (!beefHit.Contains("PhysicsQueryHit* result") ||
+            !beefHit.Contains("result[0] = Tallow.Physics.RaycastDetails(") ||
+            !managedHit.Contains("public static Tallow.PhysicsQueryHit RaycastDetails(") ||
+            !managedHit.Contains("PhysicsQueryHit result = default;") ||
+            !managedHit.Contains("delegate* unmanaged[Cdecl]<ulong, float*, float*, float, uint, PhysicsQueryHit*, void>") ||
+            !managedHit.Contains("return result;"))
+            throw new Exception("Structured hit return ABI lowering failed.");
         const string numeric = "TALLOW_CSHARP_API_V1\nmethod\tTallow.NumericChecks\tHash\tulong\tseed:uint\twide:long\tvalue:double\n";
         List<Method> numericMethods = Parse(numeric);
         string nativeNumeric = EmitBeef(numericMethods, Hash(numeric));
@@ -439,7 +470,9 @@ internal static class Program
             "TALLOW_CSHARP_API_V1\nfield\tTallow.Time\tNotSafe\tSystem.String\tget\n",
             "TALLOW_CSHARP_API_V1\nfield\tTallow.Time\tSomething\tfloat\tset\n",
             "TALLOW_CSHARP_API_V1\nmethod\tTallow.Bad\tGetText\tstring\n",
-            "TALLOW_CSHARP_API_V1\nfield\tTallow.Bad\tText\tstring\tget\n"
+            "TALLOW_CSHARP_API_V1\nfield\tTallow.Bad\tText\tstring\tget\n",
+            "TALLOW_CSHARP_API_V1\nfield\tTallow.Bad\tRaw\tTallow.PhysicsQueryHit\tget\n",
+            "TALLOW_CSHARP_API_V1\nmethod\tTallow.Physics\tEcho\tTallow.PhysicsQueryHit\tvalue:Tallow.PhysicsQueryHit\n"
         })
         {
             try { Parse(invalid); throw new Exception("Invalid manifest was accepted."); }

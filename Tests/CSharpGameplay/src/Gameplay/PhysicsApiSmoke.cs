@@ -25,6 +25,19 @@ public sealed class PhysicsApiSmoke : Script
             float hitDistance = contact.Distance;
         }
 
+        if (Scene.RaycastHit(Transform.Position, Transform.Forward, 60f) is { } rayHit)
+        {
+            GameObject? struckObject = rayHit.HitObject;
+            Vector3 worldPoint = rayHit.Point;
+        }
+
+        if (Scene.SphereCastHit(Transform.Position, 0.5f,
+            Transform.Forward, 30f) is { } sphereHit)
+        {
+            Vector3? surfaceNormal = sphereHit.Normal;
+            float penetration = sphereHit.PenetrationDepth;
+        }
+
         if (Scene.SphereCast(Transform.Position, 0.5f,
             Transform.Forward, 30f) is { } swept)
         {

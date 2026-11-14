@@ -2,6 +2,19 @@ using System;
 
 namespace Tallow;
 
+/// A stable 48-byte native/managed value record. Fields use primitive numeric
+/// types, never a native object pointer or a platform-dependent Vector3
+/// packing. C# declares the same sequential layout in PhysicsQueryHit.
+[CRepr]
+struct PhysicsQueryHit
+{
+    public uint64 entityId;
+    public float pointX, pointY, pointZ;
+    public float normalX, normalY, normalZ;
+    public float distance, penetrationDepth;
+    public uint32 bodyId, flags;
+}
+
 /// The C# ABI exposes *existing* scene, Flecs-backed Rigidbody and Jolt-backed
 /// SoftBody operations. Sessions and entity IDs are validated on every call.
 /// No native object pointer or Jolt body ID crosses the managed boundary.
@@ -201,6 +214,67 @@ static class Physics
     /// Closest Jolt ray contact, packed as point.xyz and distance.w.
     /// No managed solver or additional physics query is involved.
     /// A negative distance means no hit; object/normal support is separate.
+    /// Full contact data for a ray. The current native RaycastHit has no
+    /// surface normal; flags bit 2 remains unset rather than inventing one.
+    [CSharpExpose]
+    public static PhysicsQueryHit RaycastDetails(uint64 session, Vector3 origin,
+        Vector3 direction, float maxDistance, uint32 layerMask)
+    {
+        PhysicsQueryHit output = default;
+        let scene = LiveScene(session);
+        if (scene == null || scene.Physics == null || !maxDistance.IsFinite ||
+            maxDistance <= 0)
+            return output;
+        RaycastHit hit = default;
+        if (!scene.Physics.Raycast(origin, direction, maxDistance, out hit, layerMask))
+            return output;
+        output.flags = 1;
+        output.pointX = hit.point.x;
+        output.pointY = hit.point.y;
+        output.pointZ = hit.point.z;
+        output.distance = hit.distance;
+        output.bodyId = uint32.MaxValue; // Not provided by native RaycastHit.
+        if (hit.gameObject != null && !hit.gameObject.IsDestroyed)
+        {
+            output.entityId = (uint64)hit.gameObject.Id;
+            output.flags |= 4;
+        }
+        return output;
+    }
+
+    /// One Jolt sweep provides the point, surface normal, penetration,
+    /// collider GameObject and body id; no duplicate sweep is necessary.
+    [CSharpExpose]
+    public static PhysicsQueryHit SphereCastDetails(uint64 session, Vector3 origin,
+        float radius, Vector3 direction, float maxDistance, uint32 layerMask)
+    {
+        PhysicsQueryHit output = default;
+        let scene = LiveScene(session);
+        if (scene == null || scene.Physics == null || !radius.IsFinite ||
+            radius <= 0 || !maxDistance.IsFinite || maxDistance <= 0)
+            return output;
+        ShapeCastHit hit = default;
+        if (!scene.Physics.SphereCast(origin, radius, direction, maxDistance,
+            out hit, uint32.MaxValue, layerMask))
+            return output;
+        output.flags = 3;
+        output.pointX = hit.point.x;
+        output.pointY = hit.point.y;
+        output.pointZ = hit.point.z;
+        output.normalX = hit.normal.x;
+        output.normalY = hit.normal.y;
+        output.normalZ = hit.normal.z;
+        output.distance = hit.distance;
+        output.penetrationDepth = hit.penetrationDepth;
+        output.bodyId = hit.bodyId;
+        if (hit.gameObject != null && !hit.gameObject.IsDestroyed)
+        {
+            output.entityId = (uint64)hit.gameObject.Id;
+            output.flags |= 4;
+        }
+        return output;
+    }
+
     [CSharpExpose]
     public static Vector4 RaycastContact(uint64 session, Vector3 origin,
         Vector3 direction, float maxDistance, uint32 layerMask)

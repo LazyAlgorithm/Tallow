@@ -91,12 +91,52 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
 public readonly record struct PhysicsContact(Vector3 Point, float Distance);
 
 /// <summary>
+/// Full native collision contact. A null Normal means the native query did not
+/// supply a surface normal (currently true for raycasts, not sphere casts).
+/// HitObject is null for contacts without an associated live GameObject.
+/// </summary>
+public readonly record struct PhysicsHit(
+    Vector3 Point, Vector3? Normal, float Distance,
+    GameObject? HitObject, float PenetrationDepth, uint BodyId)
+{
+    internal static PhysicsHit? FromNative(ulong session, PhysicsQueryHit hit)
+    {
+        if ((hit.Flags & 1) == 0)
+            return null;
+        Vector3? normal = (hit.Flags & 2) != 0 ?
+            new Vector3(hit.NormalX, hit.NormalY, hit.NormalZ) : null;
+        GameObject? obj = (hit.Flags & 4) != 0 && hit.EntityId != 0 ?
+            new GameObject(session, hit.EntityId) : null;
+        return new PhysicsHit(new Vector3(hit.PointX, hit.PointY, hit.PointZ),
+            normal, hit.Distance, obj, hit.PenetrationDepth, hit.BodyId);
+    }
+}
+
+/// <summary>
 /// A reference to the active scene session. Its ID is checked by Beef for
 /// every operation, so stale handles cannot access a subsequently opened scene.
 /// </summary>
 public readonly record struct Scene(ulong SessionId)
 {
     /// <summary>Create an empty scene object containing a Transform.</summary>
+    /// <summary>
+    /// Full native Jolt ray hit: point, distance and collider GameObject.
+    /// Normal is null until the native RaycastHit supplies a surface normal.
+    /// </summary>
+    public PhysicsHit? RaycastHit(Vector3 origin, Vector3 direction,
+        float maxDistance, uint layerMask = uint.MaxValue) =>
+        PhysicsHit.FromNative(SessionId,
+            Physics.RaycastDetails(SessionId, origin, direction, maxDistance, layerMask));
+
+    /// <summary>
+    /// Full swept-sphere Jolt hit including normal, body ID and penetration.
+    /// </summary>
+    public PhysicsHit? SphereCastHit(Vector3 origin, float radius,
+        Vector3 direction, float maxDistance, uint layerMask = uint.MaxValue) =>
+        PhysicsHit.FromNative(SessionId,
+            Physics.SphereCastDetails(SessionId, origin, radius,
+                direction, maxDistance, layerMask));
+
     /// <summary>Closest Jolt ray contact, or null when nothing was hit.</summary>
     public PhysicsContact? Raycast(Vector3 origin, Vector3 direction,
         float maxDistance, uint layerMask = uint.MaxValue)

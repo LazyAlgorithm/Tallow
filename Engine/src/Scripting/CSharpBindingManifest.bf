@@ -40,6 +40,8 @@ static class CSharpBindingManifest
             name.Set("System.Numerics.Vector4");
         else if (type == typeof(Quaternion))
             name.Set("System.Numerics.Quaternion");
+        else if (type == typeof(PhysicsQueryHit))
+            name.Set("Tallow.PhysicsQueryHit");
         else
             return false;
         return true;

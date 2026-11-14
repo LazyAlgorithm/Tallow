@@ -246,3 +246,17 @@ accept layer masks. The C# SoftBody value handle also has read-only
 `Kind` (Cloth/Jelly/Shell/DrivenJelly), `SimulatedVertexCount`, and
 `IsSleeping` metadata. Native-host ABI checks cover contact component order
 and the soft-body mode/vertex data.
+
+### Structured native Jolt hit ABI
+
+`[CSharpExpose]` now supports **one explicitly approved, blittable result
+struct**: `PhysicsQueryHit` (48 bytes on both managed platforms). Generated
+Beef wrappers write the result by pointer; generated C# wrappers allocate it
+on the stack and return the value. No raw native pointers or owned objects
+cross into managed gameplay. The public `Scene.RaycastHit` and
+`Scene.SphereCastHit` facades decode it into nullable `PhysicsHit` values
+with position, distance, nullable hit `GameObject`, optional surface normal,
+penetration depth and body ID. **Ray normal is intentionally null** because
+the current Beef `RaycastHit` doesn't report one; sphere sweeps carry Jolt's
+actual contact normal. The generator rejects arbitrary unmanaged structures
+and structured parameters until per-type reflection/layout validation exists.
