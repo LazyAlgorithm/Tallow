@@ -158,26 +158,93 @@ internal static class Program
 
         if (request.Operation == "completion")
         {
-            var symbols = model.LookupSymbols(position);
             SyntaxNode? node = root.FullSpan.IsEmpty ? null :
                 root.FindToken(position > 0 ? position - 1 : position).Parent;
             MemberAccessExpressionSyntax? member = node?.AncestorsAndSelf()
                 .OfType<MemberAccessExpressionSyntax>().FirstOrDefault();
+
+            // The SDK compiler knows project types, members (including inherited
+            // ones), and all referenced framework assemblies. Do not maintain a
+            // second hand-written API list for C# completion.
+            var names = new Dictionary<string, string>(StringComparer.Ordinal);
+            void Add(ISymbol symbol)
+            {
+                if (symbol.IsImplicitlyDeclared || !SyntaxFacts.IsValidIdentifier(symbol.Name) ||
+                    symbol.Name.StartsWith("<", StringComparison.Ordinal))
+                    return;
+                names.TryAdd(symbol.Name, symbol.Kind.ToString());
+            }
+
             if (member != null)
             {
-                ITypeSymbol? type = model.GetTypeInfo(member.Expression).Type;
-                if (type != null)
-                    symbols = model.LookupSymbols(position, container: type);
+                SymbolInfo expression = model.GetSymbolInfo(member.Expression);
+                ISymbol? owner = expression.Symbol ?? expression.CandidateSymbols.FirstOrDefault();
+                ITypeSymbol? receiver = model.GetTypeInfo(member.Expression).Type ??
+                    (owner as IAliasSymbol)?.Target as ITypeSymbol ?? owner as ITypeSymbol;
+                bool staticContext = owner is INamedTypeSymbol ||
+                    owner is IAliasSymbol { Target: INamedTypeSymbol };
+
+                if (receiver is INamedTypeSymbol named)
+                {
+                    // LookupSymbols returns accessible members, including applicable
+                    // inherited members and extension methods. Explicitly visit base
+                    // types as a fallback for generic and incomplete expressions.
+                    foreach (ISymbol symbol in model.LookupSymbols(position, container: named))
+                        if (symbol is not IMethodSymbol { MethodKind: MethodKind.Constructor } &&
+                            (symbol.IsStatic == staticContext ||
+                             symbol is IMethodSymbol { IsExtensionMethod: true } && !staticContext))
+                            Add(symbol);
+                    for (INamedTypeSymbol? parent = named; parent != null; parent = parent.BaseType)
+                        foreach (ISymbol symbol in parent.GetMembers())
+                            if (symbol is not IMethodSymbol { MethodKind: MethodKind.Constructor } &&
+                                symbol.IsStatic == staticContext)
+                                Add(symbol);
+                    foreach (INamedTypeSymbol iface in named.AllInterfaces)
+                        foreach (ISymbol symbol in iface.GetMembers())
+                            if (!staticContext)
+                                Add(symbol);
+                }
+                else if (receiver != null)
+                {
+                    foreach (ISymbol symbol in model.LookupSymbols(position, container: receiver))
+                        Add(symbol);
+                }
+                else if (owner is INamespaceSymbol ns)
+                {
+                    foreach (ISymbol symbol in ns.GetMembers())
+                        Add(symbol);
+                }
             }
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (ISymbol symbol in symbols.OrderBy(s => s.Name).Take(2000))
+            else
             {
-                if (!string.IsNullOrEmpty(symbol.Name) && seen.Add(symbol.Name))
-                    output.Add(Line("completion", symbol.Name, symbol.Kind));
-                if (seen.Count >= 300)
-                    break;
+                foreach (ISymbol symbol in model.LookupSymbols(position))
+                    Add(symbol);
+                foreach (ISymbol symbol in model.LookupNamespacesAndTypes(position))
+                    Add(symbol);
+                // Compiler-defined contextual keywords are valid suggestions
+                // even where they do not have normal ISymbol representations.
+                foreach (string keyword in new[] {
+                    "async", "await", "base", "bool", "break", "case", "catch", "class",
+                    "const", "continue", "decimal", "default", "delegate", "do",
+                    "double", "else", "enum", "event", "explicit", "false", "field",
+                    "file", "finally", "fixed", "float", "for", "foreach", "get",
+                    "global", "goto", "if", "implicit", "in", "init", "int",
+                    "interface", "internal", "is", "lock", "long", "namespace",
+                    "new", "not", "null", "object", "operator", "out", "override",
+                    "params", "partial", "private", "protected", "public", "readonly",
+                    "record", "ref", "required", "return", "scoped", "sealed",
+                    "set", "short", "sizeof", "static", "string", "struct",
+                    "switch", "this", "throw", "true", "try", "typeof", "uint",
+                    "ulong", "unsafe", "using", "var", "virtual", "void", "when",
+                    "where", "while", "with", "yield", "nameof", "nint", "nuint" })
+                    names.TryAdd(keyword, "Keyword");
             }
-            // The existing code widget displays these in the completion popup header.
+            foreach ((string name, string kind) in names.OrderBy(pair => pair.Key,
+                StringComparer.OrdinalIgnoreCase).Take(1500))
+                output.Add(Line("completion", name, kind));
+
+            // The code widget displays the selected call's signature alongside
+            // the completion list; unlike its symbol list, overloads are distinct.
             InvocationExpressionSyntax? invocation = node?.AncestorsAndSelf()
                 .OfType<InvocationExpressionSyntax>().FirstOrDefault();
             if (invocation != null)
