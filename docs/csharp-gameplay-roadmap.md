@@ -290,3 +290,5 @@ both objects are in the same active scene and have Rigidbody handles. Joint
 creation is **local to the machine** in the current native engine;
 multiplayer games must coordinate creation explicitly. The C# API does not
 claim automatic replication of dynamically created joints.
+
+- The native-host Jolt joint binding smoke checks ECS JointData connection status, target Rigidbody entity, bounded swing-limit changes and a two-vector native Connect call. The C++ host validates exact vector component order and rejects self-joints; it does not imply automatic network replication.

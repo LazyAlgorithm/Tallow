@@ -366,6 +366,44 @@ static int32_t ExposedSetSoftBodyWobbleDamping(uint64_t scene, uint64_t entity,
     return 1;
 }
 
+// Native ECS JointData / Jolt constraint ABI smoke (no fake Jolt world).
+static float testJointSwingLimit = 30.0f;
+static int jointConnections = 0;
+static int32_t ExposedHasJoint(uint64_t session, uint64_t entity)
+{
+    return Match(session, entity) ? 1 : 0;
+}
+static int32_t ExposedIsJointConnected(uint64_t session, uint64_t entity)
+{
+    return Match(session, entity) ? 1 : 0;
+}
+static uint64_t ExposedGetJointConnectedEntity(uint64_t session, uint64_t entity)
+{
+    return Match(session, entity) ? 42 : 0;
+}
+static float ExposedGetJointSwingLimit(uint64_t session, uint64_t entity)
+{
+    return Match(session, entity) ? testJointSwingLimit : -1.0f;
+}
+static int32_t ExposedSetJointSwingLimit(uint64_t session, uint64_t entity,
+                                        float limit)
+{
+    if (!Match(session, entity) || limit < 0 || limit > 179) return 0;
+    testJointSwingLimit = limit;
+    return 1;
+}
+static int32_t ExposedConnectJoint(uint64_t session, uint64_t a, uint64_t b,
+                                  const float* anchor, const float* axis, float limit)
+{
+    if (session != 1 || a != 1 || b != 42 || !anchor || !axis ||
+        anchor[0] != 1 || anchor[1] != 2 || anchor[2] != 3 ||
+        axis[0] != 0 || axis[1] != 1 || axis[2] != 0 ||
+        limit != 15)
+        return 0;
+    ++jointConnections;
+    return 1;
+}
+
 static float ExposedGetSoftBodyPressure(uint64_t scene, uint64_t entity) {
     return Match(scene, entity) ? physicsSoftPressure : 0;
 }
@@ -430,6 +468,18 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedGetSoftBodyWobbleDamping);
     if (name == "CSharpApi_cecb83b0a9c7bb44")
         return reinterpret_cast<void*>(&ExposedSetSoftBodyWobbleDamping);
+    if (name == "CSharpApi_a87e0cfc19fd17ae")
+        return reinterpret_cast<void*>(&ExposedHasJoint);
+    if (name == "CSharpApi_531ba7e69ad2e7c4")
+        return reinterpret_cast<void*>(&ExposedIsJointConnected);
+    if (name == "CSharpApi_daea3381f97db07d")
+        return reinterpret_cast<void*>(&ExposedGetJointConnectedEntity);
+    if (name == "CSharpApi_565ccbb929dab414")
+        return reinterpret_cast<void*>(&ExposedGetJointSwingLimit);
+    if (name == "CSharpApi_d5ad99072a6d1d03")
+        return reinterpret_cast<void*>(&ExposedSetJointSwingLimit);
+    if (name == "CSharpApi_b40ba1380ed1e702")
+        return reinterpret_cast<void*>(&ExposedConnectJoint);
     if (name == "CSharpApi_4cfd0ac498dbf9b9")
         return reinterpret_cast<void*>(&ExposedHasRigidbody);
     if (name == "CSharpApi_ec09232b935b3c35")
@@ -691,6 +741,14 @@ int main(int argc, char** argv)
         std::fabs(testSoftStiffness - 0.75f) > 0.0001f ||
         std::fabs(testSoftWobble - 4.0f) > 0.0001f)
         return Failure("native indexed collider and SoftBody settings ABI mismatch");
+
+    const int32_t jointApi = tn_csharp_attach("Gameplay.JointBindingSmoke", 1, 1);
+    if (jointApi < 1 || !tn_csharp_dispatch(jointApi, TN_CSHARP_AWAKE, 0.0f))
+        return Failure("calling generated ECS JointData / Jolt constraint ABI");
+    if (!tn_csharp_detach(jointApi) ||
+        std::fabs(testJointSwingLimit - 45.0f) > 0.0001f ||
+        jointConnections != 1)
+        return Failure("native Joint swing limit or Connect callback mismatch");
 
     if (!tn_csharp_unload_game())
         return Failure("ending second Play session");

@@ -121,7 +121,8 @@ internal static class Program
                     "Gameplay.PhysicsBindingSmoke" or
                     "Gameplay.PhysicsContactSmoke" or
                     "Gameplay.PhysicsDetailedSmoke" or
-                    "Gameplay.ColliderAndSoftSettingsSmoke")
+                    "Gameplay.ColliderAndSoftSettingsSmoke" or
+                    "Gameplay.JointBindingSmoke")
                     continue;
                 if (type.IsAbstract || !typeof(Script).IsAssignableFrom(type) ||
                     !Attribute.IsDefined(type, typeof(ComponentAttribute)))
