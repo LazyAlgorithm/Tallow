@@ -15,6 +15,48 @@ static class Ecs
         return scene != null && entity != 0 && scene.World.IsAlive(.(entity));
     }
 
+    /// Local-only bare Flecs entities. Until the native networking authority
+    /// path can register generated C# [Sync] layouts, reject creation in
+    /// networked scenes rather than silently spawning unreplicated gameplay.
+    /// Generated C# bindings never expose Flecs pointers or GameObjects.
+    [CSharpExpose]
+    public static uint64 CreateLocalEntity(uint64 session)
+    {
+        let scene = CSharpRuntime.PhysicsScene(session);
+        if (scene == null || !scene.IsPlaying || scene.World.NativeNetwork != null)
+            return 0;
+        return scene.World.Create().id;
+    }
+
+    /// Fill an existing managed buffer with bare entity IDs in one ABI call.
+    /// Callers can batch in groups of up to 65536 to avoid unbounded work.
+    [CSharpExpose]
+    public static int32 CreateLocalEntities(uint64 session, Span<uint64> entityIds)
+    {
+        let scene = CSharpRuntime.PhysicsScene(session);
+        if (scene == null || !scene.IsPlaying || scene.World.NativeNetwork != null ||
+            entityIds.IsEmpty || entityIds.Length > 65536)
+            return 0;
+        for (int i < entityIds.Length)
+            entityIds[i] = scene.World.Create().id;
+        return (int32)entityIds.Length;
+    }
+
+    /// Delete only a bare entity in the active, non-networked scene.
+    /// An ECS entity that backs a GameObject must follow Scene.Destroy
+    /// for normal component, physics and hierarchy cleanup.
+    [CSharpExpose]
+    public static bool DeleteLocalEntity(uint64 session, uint64 entity)
+    {
+        let scene = CSharpRuntime.PhysicsScene(session);
+        if (scene == null || !scene.IsPlaying || scene.World.NativeNetwork != null ||
+            entity == 0 || !scene.World.IsAlive(.(entity)) ||
+            scene.World.IsSceneObject(.(entity)))
+            return false;
+        scene.World.Delete(.(entity));
+        return true;
+    }
+
     [CSharpExpose]
     public static int32 CountRigidbodies(uint64 session)
     {

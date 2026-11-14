@@ -315,6 +315,13 @@ public readonly record struct PhysicsHit(
 public readonly record struct EcsEntity(ulong SessionId, ulong Id)
 {
     public bool IsAlive => Id != 0 && Ecs.IsAlive(SessionId, Id);
+
+    /// <summary>
+    /// Delete only an unlinked local Flecs entity. Scene-backed GameObjects
+    /// and replicated entities are protected by the native engine. This
+    /// returns false if the scene has ended or the entity was already deleted.
+    /// </summary>
+    public bool DestroyLocal() => Id != 0 && Ecs.DeleteLocalEntity(SessionId, Id);
 }
 
 /// <summary>
@@ -327,6 +334,27 @@ public readonly record struct Scene(ulong SessionId)
     /// Wrap a Flecs entity ID; it is not the same as GameObject.Id.
     /// </summary>
     public EcsEntity GetEcsEntity(ulong flecsEntityId) => new(SessionId, flecsEntityId);
+
+    /// <summary>
+    /// Create a bare local-only Flecs entity through the native world.
+    /// Networked scenes do not permit this until generated [Sync] data and
+    /// server authority have a shared C#/Beef replication path.
+    /// </summary>
+    public EcsEntity CreateLocalEcsEntity()
+    {
+        ulong id = Ecs.CreateLocalEntity(SessionId);
+        return id != 0 ? new(SessionId, id) :
+            throw new InvalidOperationException(
+                "Cannot create a local ECS entity outside an active offline scene.");
+    }
+
+    /// <summary>
+    /// Bulk-create bare local-only ECS entities. Returned IDs are Flecs
+    /// entities, not GameObject IDs; wrap them using GetEcsEntity when needed.
+    /// The output buffer must be no larger than 65536 items.
+    /// </summary>
+    public int CreateLocalEcsEntities(Span<ulong> entityIds) =>
+        Ecs.CreateLocalEntities(SessionId, entityIds);
 
     /// <summary>Count enabled native Flecs Rigidbody data components.</summary>
     public int RigidbodyEntityCount => Ecs.CountRigidbodies(SessionId);

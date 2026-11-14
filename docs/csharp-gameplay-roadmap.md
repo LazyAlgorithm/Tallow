@@ -868,3 +868,27 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
 - Linux/Windows managed CI must confirm this output policy compiles
   consistently. Engine native builds and interactive editor performance
   remain separate acceptance tests.
+
+
+### Bounded local Flecs entity lifecycle from C# (November 14, 2026)
+
+- Added [CSharpExpose]-generated `Ecs.CreateLocalEntity`,
+  `Ecs.CreateLocalEntities` (one bounded native call with a caller-owned
+  Span<ulong>) and `Ecs.DeleteLocalEntity`. These operate directly on the
+  active scene's existing native Flecs World; no shadow C# ECS and no Jolt
+  state writes. The managed `Scene` and `EcsEntity` types expose familiar
+  `CreateLocalEcsEntity`, `CreateLocalEcsEntities` and `DestroyLocal`.
+- Native guards reject stale sessions, entity zero/dead IDs, deletion of
+  entities linked to a GameObject, and **networked scenes**. This is
+  deliberately a local-only bare-entity feature, not networked entity
+  spawning or an implementation of writable typed C# ECS columns.
+- Native host smoke covers single and bulk creation, generation-aware
+  is-alive lookup, deletion/duplicate cleanup, invalid session and forbidden
+  deletes. CSharpExpose manifest and ABI hash checks cover the new methods.
+  Managed CI and a full Beef Linux build are needed before treating this
+  increment as verified.
+- Future priority: full source-generated C# ECS layout/offset registration
+  with an exact-size/alignment handshake; typed batched writes through
+  Flecs's staged World; [Sync] replication and rollback across networked
+  scenes, and benchmark B12/B18/B20 validation. Never silently treat a
+  local-only entity as replicated gameplay.

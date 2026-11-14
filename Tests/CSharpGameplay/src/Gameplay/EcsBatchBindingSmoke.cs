@@ -35,5 +35,28 @@ public sealed class EcsBatchBindingSmoke : Script
         if (new Scene(999).CopyRigidbodyMasses(0, ids, masses) != 0 ||
             scene.CopyRigidbodyMasses(-1, ids, masses) != 0)
             throw new InvalidOperationException("Stale session or offset accepted.");
+
+        // Bare local ECS entity lifetime is managed by the same native
+        // Flecs World, not by creating a shadow C# entity dictionary.
+        var created = scene.CreateLocalEcsEntity();
+        if (!created.IsAlive || created.Id == 0 ||
+            created.SessionId != scene.SessionId ||
+            !created.DestroyLocal() || created.IsAlive || created.DestroyLocal())
+            throw new InvalidOperationException("Local Flecs entity lifetime failed.");
+
+        Span<ulong> batch = stackalloc ulong[3];
+        if (scene.CreateLocalEcsEntities(batch) != batch.Length ||
+            batch[0] == 0 || batch[0] == batch[1] || batch[1] == batch[2] ||
+            !scene.GetEcsEntity(batch[2]).IsAlive)
+            throw new InvalidOperationException("Bulk local Flecs creation failed.");
+        foreach (ulong id in batch)
+            if (!scene.GetEcsEntity(id).DestroyLocal())
+                throw new InvalidOperationException("Bulk local Flecs cleanup failed.");
+
+        if (scene.CreateLocalEcsEntities(Span<ulong>.Empty) != 0 ||
+            new Scene(999).CreateLocalEcsEntities(batch) != 0 ||
+            scene.GetEcsEntity(11).DestroyLocal() ||
+            new Scene(999).GetEcsEntity(12).DestroyLocal())
+            throw new InvalidOperationException("Local ECS lifetime/authority checks failed.");
     }
 }

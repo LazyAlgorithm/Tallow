@@ -11,6 +11,7 @@
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 static_assert(sizeof(tn_csharp_tick_batch_item) == 32 &&
@@ -286,9 +287,32 @@ static int physicsSleeps = 0;
 static int physicsSoftImpulses = 0;
 static float physicsSoftPressure = 10.0f;
 static int ecsQueries = 0;
+static uint64_t ecsNextLocalId = 1000;
+static std::unordered_set<uint64_t> ecsLocalEntities;
 static int32_t ExposedEcsIsAlive(uint64_t scene, uint64_t entity)
 {
-    return scene == 1 && (entity == 11 || entity == 22 || entity == 33) ? 1 : 0;
+    return scene == 1 && (entity == 11 || entity == 22 || entity == 33 ||
+        ecsLocalEntities.count(entity) != 0) ? 1 : 0;
+}
+static uint64_t ExposedEcsCreateLocalEntity(uint64_t scene)
+{
+    if (scene != 1) return 0;
+    const uint64_t id = ecsNextLocalId++;
+    ecsLocalEntities.insert(id);
+    return id;
+}
+static int32_t ExposedEcsCreateLocalEntities(uint64_t scene, uint64_t* ids,
+                                           int32_t count)
+{
+    if (scene != 1 || count <= 0 || count > 65536 || !ids) return 0;
+    for (int32_t i = 0; i < count; ++i)
+        ids[i] = ExposedEcsCreateLocalEntity(scene);
+    return count;
+}
+static int32_t ExposedEcsDeleteLocalEntity(uint64_t scene, uint64_t entity)
+{
+    if (scene != 1) return 0;
+    return ecsLocalEntities.erase(entity) == 1 ? 1 : 0;
 }
 static int32_t ExposedEcsCountRigidbodies(uint64_t scene)
 {
@@ -676,6 +700,12 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedSetEnabled);
     if (name == "CSharpApi_d87ccb801a5fd433")
         return reinterpret_cast<void*>(&ExposedEcsIsAlive);
+    if (name == "CSharpApi_287bb76c2e508ec8")
+        return reinterpret_cast<void*>(&ExposedEcsCreateLocalEntity);
+    if (name == "CSharpApi_0103d4ad949fc64c")
+        return reinterpret_cast<void*>(&ExposedEcsCreateLocalEntities);
+    if (name == "CSharpApi_182113e6735aaf2d")
+        return reinterpret_cast<void*>(&ExposedEcsDeleteLocalEntity);
     if (name == "CSharpApi_8f34b0284d3b1041")
         return reinterpret_cast<void*>(&ExposedEcsCountRigidbodies);
     if (name == "CSharpApi_0fe31a78ec52861b")
@@ -1184,7 +1214,8 @@ int main(int argc, char** argv)
 
     const int32_t ecsApi = tn_csharp_attach("Gameplay.EcsBatchBindingSmoke", 1, 1);
     if (ecsApi < 1 || !tn_csharp_dispatch(ecsApi, TN_CSHARP_AWAKE, 0.0f) ||
-        !tn_csharp_detach(ecsApi) || ecsQueries != 4)
+        !tn_csharp_detach(ecsApi) || ecsQueries != 4 ||
+        !ecsLocalEntities.empty())
         return Failure("generated native Flecs batch span ABI");
 
     const int32_t characterApi = tn_csharp_attach("Gameplay.CharacterControllerBindingSmoke", 1, 1);

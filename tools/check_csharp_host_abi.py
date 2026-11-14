@@ -82,6 +82,9 @@ def main() -> int:
         "Tallow.CSharpSceneObjects|ActiveHierarchyState|int|ulong|ulong",
         "Tallow.CSharpSceneObjects|SetActive|bool|ulong|ulong|bool",
         "Tallow.Ecs|CopyRigidbodyMasses|int|ulong|int|System.Span<ulong>|System.Span<float>",
+        "Tallow.Ecs|CreateLocalEntity|ulong|ulong",
+        "Tallow.Ecs|CreateLocalEntities|int|ulong|System.Span<ulong>",
+        "Tallow.Ecs|DeleteLocalEntity|bool|ulong|ulong",
     ]
     for signature in required:
         if symbol_hash(signature) not in resolved:
