@@ -299,7 +299,7 @@ public static unsafe class NativeEntrypoints
                 string value = line[(separator + 1)..];
                 FieldInfo? field = script.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public);
                 if (field is null || field.IsStatic || field.IsInitOnly || field.IsLiteral ||
-                    field.IsNotSerialized)
+                    (field.Attributes & FieldAttributes.NotSerialized) != 0)
                     continue; // Allow scripts to rename/remove fields without breaking old scenes.
                 object? parsed = ParseInspectorValue(field.FieldType, value);
                 if (parsed != null)
