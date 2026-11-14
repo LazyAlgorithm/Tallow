@@ -144,6 +144,10 @@ jobs:
           grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Fbm'
           grep -F 'public static float Perlin(float x, float y, float z, uint seed)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Read-only native statics should become C# properties, never get_/set_ methods.
+          grep -F 'field' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Time' | grep -F 'DeltaTime'
+          grep -F 'public static float DeltaTime => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static long FrameCount => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
             echo "Unmarked Beef method appeared in C# bindings" >&2
             exit 1

@@ -116,8 +116,25 @@ static class CSharpBindingManifest
             {
                 if (!(field.GetCustomAttribute<CSharpExposeAttribute>() case .Ok))
                     continue;
-                error.AppendF("[CSharpExpose] {}.{} is a field; stage 1 only supports static methods. It cannot be silently omitted.", owner, field.Name);
-                return false;
+                if (!exposedType)
+                {
+                    error.AppendF("[CSharpExpose] {}.{} is marked but its declaring type is not.", owner, field.Name);
+                    return false;
+                }
+                if (type.IsGenericType || !field.IsPublic || !field.IsStatic || field.IsConst)
+                {
+                    error.AppendF("[CSharpExpose] {}.{} must be a public, non-constant static field on a non-generic type.", owner, field.Name);
+                    return false;
+                }
+                let fieldType = scope String();
+                if (!MapValueType(field.FieldType, fieldType) || fieldType == "void")
+                {
+                    error.AppendF("[CSharpExpose] {}.{} has an unsupported field type. Expose a safe scalar or vector value.", owner, field.Name);
+                    return false;
+                }
+                // Read-only by default even when Beef permits modification.
+                // Runtime stats must not become mutable from managed gameplay.
+                records.Add(new String()..AppendF("field\t{}\t{}\t{}\tget", owner, field.Name, fieldType));
             }
         }
 

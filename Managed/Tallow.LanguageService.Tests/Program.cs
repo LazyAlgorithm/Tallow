@@ -265,6 +265,21 @@ public sealed class CubeMover : Script
             Check("C# completion preserves genuine methods named get_*",
                 ordinaryGetterCompletions.Contains("completion\tget_Answer"));
 
+            string timeCode = "using Tallow; " +
+                "[Component] public sealed class ClockProbe : Script " +
+                "{ public override void Start() { float step = Time.DeltaTime; " +
+                "long frames = Time.FrameCount; } }";
+            string timeDiagnostics = RequestWithApi(service, "diagnostics",
+                timeCode, timeCode.Length);
+            Check("generated C# Time fields appear as typed read-only properties",
+                !timeDiagnostics.Contains("diagnostic\t"));
+            string timeCompletion = RequestWithApi(service, "completion",
+                "using Tallow; class Probe { void Go() { var fps = Time.Smoo",
+                "using Tallow; class Probe { void Go() { var fps = Time.Smoo".Length);
+            Check("generated C# Time.SmoothedFps appears in Roslyn autocomplete",
+                timeCompletion.Contains("completion\tSmoothedFps") &&
+                !timeCompletion.Contains("completion\tget_SmoothedFps"));
+
             // Preserve the original editor's network (purple) and performance
             // (cyan) diagnostics when the gameplay language is C#.
             string networkedTick = """

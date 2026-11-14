@@ -93,3 +93,21 @@ generated pointer caches before the next call. The native-host smoke tests
 rebind the resolver in-process and verify subsequent calls reach the new
 function, not the old cached pointer. This is a lifecycle guard, not an
 untrusted-code sandbox.
+
+
+### Read-only static field exposure (stage 1.5)
+
+`[CSharpExpose]` on a public nonconstant **static Beef field** now emits a
+real **read-only C# property**. The manifest records `field<TAB>owner<TAB>name<TAB>type<TAB>get`;
+BindingGen emits a dedicated, typed C ABI getter and the managed
+`public static T Name { get; }`-style expression property. No `get_*`
+method appears in public C# completion. An unsafe pointer or managed object
+field is rejected at engine build time. Mutable native fields remain read-only
+to C# by default until explicit write authorization is implemented.
+
+The first consumer is the engine's `Time` runtime counters: `DeltaTime`,
+`UnscaledDeltaTime`, `RealTime`, `TimeScale`, `TickScale`, `FrameCount`,
+`Tick`, `InterpolationAlpha`, and `SmoothedFps`. `Time.Time` cannot be a
+C# member of the `Time` type (same name), so an alias scheme will be added
+before exposing that one. This is not yet instance-property/scene-handle
+support, and full parity is still pending native CI confirmation.

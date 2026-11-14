@@ -13,7 +13,7 @@ internal static class Program
 {
     private sealed record Parameter(string Name, string Type);
     private sealed record Method(string Owner, string Name, string Result,
-        IReadOnlyList<Parameter> Parameters, string Id);
+        IReadOnlyList<Parameter> Parameters, string Id, bool IsField);
     private static readonly Regex Identifier = new(
         @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
 
@@ -72,17 +72,20 @@ internal static class Program
             if (lines[i].Length == 0 && i == lines.Length - 1)
                 break;
             string[] fields = lines[i].Split('\t');
-            if (fields.Length < 4 || fields[0] != "method")
-                throw new FormatException($"Manifest line {i + 1}: expected annotated method.");
+            bool isField = fields[0] == "field";
+            if (fields.Length < 4 || fields[0] is not ("method" or "field") ||
+                isField && (fields.Length != 5 || fields[4] != "get"))
+                throw new FormatException($"Manifest line {i + 1}: expected annotated method or read-only field.");
             string owner = fields[1], name = fields[2], result = fields[3];
             // Stage 1 intentionally exposes only public Tallow-root static
             // classes. Nested types/properties/instance handles follow later.
             if (!owner.StartsWith("Tallow.", StringComparison.Ordinal) ||
                 !Identifier.IsMatch(owner["Tallow.".Length..]) ||
-                !Identifier.IsMatch(name) || !IsType(result, allowVoid: true))
+                !Identifier.IsMatch(name) || !IsType(result, allowVoid: !isField) ||
+                isField && name == owner["Tallow.".Length..])
                 throw new FormatException($"Manifest line {i + 1}: unsupported owner or return type: {owner}.{name}.");
             List<Parameter> parameters = [];
-            for (int j = 4; j < fields.Length; j++)
+            for (int j = 4; j < (isField ? 4 : fields.Length); j++)
             {
                 int colon = fields[j].IndexOf(':');
                 if (colon <= 0)
@@ -95,10 +98,12 @@ internal static class Program
             }
             string signature = string.Join("|",
                 new[] { owner, name, result }.Concat(parameters.Select(p => p.Type)));
+            if (isField)
+                signature = "field|" + signature;
             string id = Hash(signature);
             if (!signatures.Add(signature) || !ids.Add(id))
                 throw new FormatException($"Duplicate or colliding exposed method signature: {signature}.");
-            methods.Add(new(owner, name, result, parameters, id));
+            methods.Add(new(owner, name, result, parameters, id, isField));
         }
         return methods.OrderBy(m => m.Owner, StringComparer.Ordinal)
             .ThenBy(m => m.Name, StringComparer.Ordinal)
@@ -143,7 +148,8 @@ internal static class Program
                 }
                 if (Dimensions(m.Result) > 0)
                     text.AppendLine("\t\tif (result == null) return;");
-                string call = $"{m.Owner}.{m.Name}({string.Join(", ", m.Parameters.Select(ArgumentExpression))})";
+                string call = m.IsField ? $"{m.Owner}.{m.Name}" :
+                    $"{m.Owner}.{m.Name}({string.Join(", ", m.Parameters.Select(ArgumentExpression))})";
                 if (m.Result == "void")
                     text.AppendLine($"\t\t{call};");
                 else if (m.Result == "bool")
@@ -211,7 +217,9 @@ internal static class Program
                 string cache = $"s_Ptr_{m.Id}";
                 text.AppendLine($"\tprivate static nint {cache};");
                 string publicArgs = string.Join(", ", m.Parameters.Select(p => $"{CSharpType(p.Type)} {p.Name}"));
-                text.AppendLine($"\tpublic static {CSharpType(m.Result)} {m.Name}({publicArgs})")
+                if (m.IsField)
+                    text.AppendLine($"\tpublic static {CSharpType(m.Result)} {m.Name} => __TallowGet_{m.Id}();");
+                text.AppendLine($"\t{(m.IsField ? "private" : "public")} static {CSharpType(m.Result)} {(m.IsField ? $"__TallowGet_{m.Id}" : m.Name)}({publicArgs})")
                     .AppendLine("\t{")
                     .AppendLine($"\t\tnint ptr = {cache};")
                     .AppendLine($"\t\tif (ptr == 0) {cache} = ptr = GeneratedNativeApi.Resolve(\"{symbol}\");");
@@ -289,18 +297,32 @@ internal static class Program
             !managedNumeric.Contains("public static ulong Hash(uint seed, long wide, double value)") ||
             !managedNumeric.Contains("delegate* unmanaged[Cdecl]<uint, long, double, ulong>"))
             throw new Exception("Signed/unsigned 32/64-bit and double ABI lowering failed.");
+        const string fieldsManifest = "TALLOW_CSHARP_API_V1\nfield\tTallow.Time\tFrameCount\tlong\tget\nfield\tTallow.Time\tDeltaTime\tfloat\tget\n";
+        List<Method> fieldBindings = Parse(fieldsManifest);
+        string beefFields = EmitBeef(fieldBindings, Hash(fieldsManifest));
+        string csharpFields = EmitCSharp(fieldBindings, Hash(fieldsManifest));
+        if (fieldBindings.Count != 2 ||
+            !beefFields.Contains("return Tallow.Time.FrameCount;") ||
+            !beefFields.Contains("return Tallow.Time.DeltaTime;") ||
+            !csharpFields.Contains("public static long FrameCount => __TallowGet_") ||
+            !csharpFields.Contains("public static float DeltaTime => __TallowGet_") ||
+            csharpFields.Contains("public static long get_FrameCount"))
+            throw new Exception("Read-only static field/property lowering failed.");
         foreach (string invalid in new[]
         {
             "TALLOW_CSHARP_API_V1\nmethod\tTallow.Bad\tOops\tSystem.String\n",
             "TALLOW_CSHARP_API_V1\nmethod\tTallow.Bad\tOops\tfloat\tx:void\n",
             sample + sample.Split('\n')[1] + "\n",
-            "TALLOW_CSHARP_API_V1\nmethod\tOther.Bad\tOops\tfloat\n"
+            "TALLOW_CSHARP_API_V1\nmethod\tOther.Bad\tOops\tfloat\n",
+            "TALLOW_CSHARP_API_V1\nfield\tTallow.Bad\tBad\tfloat\tget\n",
+            "TALLOW_CSHARP_API_V1\nfield\tTallow.Time\tNotSafe\tSystem.String\tget\n",
+            "TALLOW_CSHARP_API_V1\nfield\tTallow.Time\tSomething\tfloat\tset\n"
         })
         {
             try { Parse(invalid); throw new Exception("Invalid manifest was accepted."); }
             catch (FormatException) { }
         }
-        Console.WriteLine("PASS: CSharpExpose deterministic, opt-in, scalar/vector, numeric ABI and invalid-manifest tests.");
+        Console.WriteLine("PASS: CSharpExpose deterministic, opt-in, static fields, scalar/vector and invalid-manifest tests.");
         return 0;
     }
 
