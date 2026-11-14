@@ -307,7 +307,7 @@ static class Physics
         int32 count = 0;
         for (let component in obj.Components)
         {
-            if (component as Collider != null)
+            if (let collider = component as Collider)
                 count++;
         }
         return count;
@@ -343,8 +343,8 @@ static class Physics
     [CSharpExpose]
     public static Vector3 GetColliderBoxSize(uint64 session, uint64 entity, int32 index)
     {
-        if (let box = ColliderAt(session, entity, index) as BoxCollider)
-            return box.size;
+        if (let boxCollider = ColliderAt(session, entity, index) as BoxCollider)
+            return boxCollider.size;
         return .Zero;
     }
 

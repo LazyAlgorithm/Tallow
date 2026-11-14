@@ -19,7 +19,9 @@ static class Ecs
     public static int32 CountRigidbodies(uint64 session)
     {
         let scene = CSharpRuntime.PhysicsScene(session);
-        return scene != null ? scene.World.EntitiesWith<RigidbodyData>().Count : 0;
+        if (scene == null)
+            return 0;
+        return (int32)scene.World.EntitiesWith<RigidbodyData>().Count;
     }
 
     /// Copy a stable query page with one native call. Output buffers are

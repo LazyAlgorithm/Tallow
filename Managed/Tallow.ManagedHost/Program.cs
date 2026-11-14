@@ -118,6 +118,8 @@ internal static class Program
                 if (type.FullName is "Gameplay.GeneratedBindingSmoke" or
                     "Gameplay.SceneApiSmoke" or "Gameplay.TransformParity" or
                     "Gameplay.PhysicsApiSmoke" or
+                    "Gameplay.CharacterControllerBindingSmoke" or
+                    "Gameplay.EcsBatchBindingSmoke" or
                     "Gameplay.PhysicsBindingSmoke" or
                     "Gameplay.PhysicsContactSmoke" or
                     "Gameplay.PhysicsDetailedSmoke" or

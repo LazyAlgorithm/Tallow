@@ -416,3 +416,17 @@ claim automatic replication of dynamically created joints.
   nested input and delta-time offsets. Managed configuration checks matching
   `sizeof` layouts before binding a native bridge. These fail fast if
   compiler/platform packing changes silently.
+
+### November 14 CI native compiler and managed smoke repairs
+
+- Run `43565593383` (HEAD `05f0d68`) exposed Beef errors:
+  invalid `as Collider != null` syntax, reserved local name `box` in a
+  collider pattern, and an implicit Flecs query count `int` to `int32`
+  conversion. Those three source problems have been corrected.
+- Generated C# bindings, managed gameplay compilation, and all 43 Roslyn
+  integration tests passed on Linux and Windows. The managed-only test host
+  then tried to run newly added native Jolt/Flecs smoke components without
+  a native symbol resolver. Those two tests are now handled exclusively
+  by the **in-process native-host** suite.
+- Full native editor compilation and native-host smoke still need CI
+  confirmation after these fixes; no unverified pass is claimed here.
