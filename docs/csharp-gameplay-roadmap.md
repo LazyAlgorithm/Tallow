@@ -1,6 +1,6 @@
 # C# gameplay migration — actionable roadmap and handoff
 
-Last updated: 2026-11-13. Source branch: **feature/csharp-gameplay** of [LazyAlgorithm/Tallow](https://github.com/LazyAlgorithm/Tallow). Keep changes on this branch, **not** `ecs`, until acceptance tests pass. Also read [C# architecture and current implementation](csharp-gameplay.md).
+Last updated: 2026-11-14. Source branch: **feature/csharp-gameplay** of [LazyAlgorithm/Tallow](https://github.com/LazyAlgorithm/Tallow). Keep changes on this branch, **not** `ecs`, until acceptance tests pass. Also read [C# architecture and current implementation](csharp-gameplay.md).
 
 ## For a future ChatGPT conversation
 
@@ -170,6 +170,24 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 - [ ] Package precompiled per-platform player/engine plus C# assemblies, runtimeconfig, .NET runtime/dependencies, shaders and assets into independently redistributable Windows/Linux exports. Verify on machines without BeefBuild.
 - [ ] Confirm no unsafe untrusted mod loading, directory escape, premature engine pointer exposure or unmanaged ownership errors.
 - [ ] Extend CI beyond managed/.NET host smoke tests to native Beef editor/launcher builds, precompiled player startup and real C# in-scene integration tests on Linux and Windows.
+
+## Migration benchmark backlog — run locally on Nobara
+
+The benchmark definitions, workloads, evidence format, and priority order are
+in [**C# migration benchmark plan**](csharp-benchmark-plan.md). **All cases
+B01–B23 are pending**, not measured. Run P0 cases B01–B10 first when back at
+the Linux machine, then P1 simulation and P2 networking/export cases after
+their API dependencies exist. Include real frame-time p50/p95/p99, CPU and Jolt
+costs, managed GC allocations, RSS, compile/edit-to-Play timings, and raw logs.
+Benchmark both C# and native Beef on the *same Flecs/Jolt scenes* rather than
+comparing unrelated scripts. Physics tests must record sleeping bodies. The
+native-host `--benchmark` is an interop microbenchmark, **not** an FPS claim.
+
+**Do not block migration coding on unavailable hardware:** implement and test
+each native/managed feature independently, then mark relevant benchmark cases
+complete after the user supplies full-editor or game results. Avoid destructive
+Git resets, edits to user projects, or claims that the complete conversion has
+passed until acceptance cases and cross-platform export/visual scripting pass.
 
 ## Required acceptance test before merging into ECS/main
 
