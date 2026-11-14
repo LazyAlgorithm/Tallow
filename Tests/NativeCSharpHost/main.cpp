@@ -115,7 +115,19 @@ static int32_t IsMine(void*, uint64_t scene, uint64_t object)
 // The standalone native-host test substitutes a tiny ABI-compatible
 // implementation for the generator's reflected Beef fixture. The real
 // launcher resolves the identical symbol IDs from emitted Beef methods.
-static float ExposedAverage(float a, float b) { return (a + b) * 0.5f; }
+static int firstAverageCalls = 0;
+static int secondAverageCalls = 0;
+static bool useSecondBinding = false;
+static float ExposedAverage(float a, float b)
+{
+    ++firstAverageCalls;
+    return (a + b) * 0.5f;
+}
+static float ExposedAverageRebound(float a, float b)
+{
+    ++secondAverageCalls;
+    return (a + b) * 0.5f;
+}
 static int32_t ExposedVersion() { return 1; }
 static void* ResolveApi(void*, const char* symbol)
 {
@@ -124,7 +136,8 @@ static void* ResolveApi(void*, const char* symbol)
     if (name.rfind("CSharpApiVersion_", 0) == 0)
         return reinterpret_cast<void*>(&ExposedVersion);
     if (name.rfind("CSharpApi_", 0) == 0)
-        return reinterpret_cast<void*>(&ExposedAverage);
+        return useSecondBinding ? reinterpret_cast<void*>(&ExposedAverageRebound) :
+                                  reinterpret_cast<void*>(&ExposedAverage);
     return nullptr;
 }
 
@@ -275,7 +288,24 @@ int main(int argc, char** argv)
         return Failure("calling generated Beef/C# binding");
     if (std::fabs(state.position[0] - 5.0f) > 0.0001f)
         return Failure("generated method did not execute native ABI");
-    if (!tn_csharp_detach(generated) || !tn_csharp_unload_game())
+    if (!tn_csharp_detach(generated))
+        return Failure("detaching generated binding test");
+    if (firstAverageCalls != 1 || secondAverageCalls != 0)
+        return Failure("initial native binding did not execute once");
+
+    // Rebind the native API in the SAME managed process. The generated C#
+    // wrappers must discard their cached pointers or they will silently keep
+    // calling a potentially unloaded native library after hot reload.
+    useSecondBinding = true;
+    if (!tn_csharp_set_callbacks(&callbacks))
+        return Failure("rebinding the native C# API resolver");
+    const int32_t rebound = tn_csharp_attach("Gameplay.GeneratedBindingSmoke", 1, 1);
+    if (rebound < 1 || !tn_csharp_dispatch(rebound, TN_CSHARP_AWAKE, 0.0f))
+        return Failure("using generated binding after native rebind");
+    if (!tn_csharp_detach(rebound) || firstAverageCalls != 1 || secondAverageCalls != 1)
+        return Failure("stale cached native function pointer survived rebind");
+
+    if (!tn_csharp_unload_game())
         return Failure("ending second Play session");
 
     tn_csharp_shutdown();

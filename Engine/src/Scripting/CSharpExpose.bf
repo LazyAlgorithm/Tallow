@@ -31,3 +31,11 @@ namespace Tallow;
 struct CSharpExposeAttribute : Attribute
 {
 }
+
+/// Engine-internal marker applied ONLY to generated ABI entrypoints.
+/// The native resolver must never hand C# a pointer to an unrelated public
+/// method merely because a name happens to begin with "CSharpApi_".
+[AttributeUsage(.Method, .ReflectAttribute | .AlwaysIncludeTarget)]
+struct CSharpApiExportAttribute : Attribute
+{
+}

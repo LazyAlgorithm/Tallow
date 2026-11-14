@@ -292,7 +292,8 @@ static class CSharpRuntime
 				continue;
 			for (let method in type.GetMethods(.Static | .Public | .DeclaredOnly))
 			{
-				if (method.Name == name)
+				if (method.Name == name &&
+					(method.GetCustomAttribute<CSharpApiExportAttribute>() case .Ok))
 					return method.Ptr;
 			}
 		}

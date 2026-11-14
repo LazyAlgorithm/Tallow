@@ -128,7 +128,7 @@ internal static class Program
                 if (Dimensions(m.Result) > 0)
                     args.Add("float* result");
                 string returnType = Dimensions(m.Result) > 0 ? "void" : NativeType(m.Result);
-                text.AppendLine("\t[Export, CLink, Reflect, AlwaysInclude]")
+                text.AppendLine("\t[Export, CLink, Reflect, AlwaysInclude, CSharpApiExport]")
                     .AppendLine($"\tpublic static {returnType} {symbol}({string.Join(", ", args)})")
                     .AppendLine("\t{");
                 foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
@@ -164,7 +164,7 @@ internal static class Program
         // A version entrypoint lets C# reject mismatched binaries before
         // invoking any methods. Names are stable for identical manifests.
         text.AppendLine("extension CSharpBindingManifest").AppendLine("{")
-            .AppendLine("\t[Export, CLink, Reflect, AlwaysInclude]")
+            .AppendLine("\t[Export, CLink, Reflect, AlwaysInclude, CSharpApiExport]")
             .AppendLine($"\tpublic static int32 CSharpApiVersion_{version}() => 1;")
             .AppendLine("}");
         return text.ToString();
@@ -178,7 +178,15 @@ internal static class Program
             .AppendLine().AppendLine("namespace Tallow;").AppendLine();
         text.AppendLine("internal static unsafe partial class GeneratedNativeApi")
             .AppendLine("{").AppendLine("\tprivate static bool sVerified;")
-            .AppendLine("\tstatic partial void ResetVersion() => sVerified = false;")
+            .AppendLine("\tstatic partial void ResetVersion()")
+            .AppendLine("\t{")
+            .AppendLine("\t\tsVerified = false;");
+        // Reset every cached unmanaged function pointer when the editor
+        // rebinds a scene or reloads the runtime. This is a one-time cost,
+        // not an extra lookup/branch in the per-frame gameplay hot path.
+        foreach (string owner in methods.Select(m => m.Owner).Distinct(StringComparer.Ordinal))
+            text.AppendLine($"\t\t{owner["Tallow.".Length..]}.__TallowResetGeneratedNativeBindings();");
+        text.AppendLine("\t}")
             .AppendLine("\tstatic partial void VerifyVersion()")
             .AppendLine("\t{")
             .AppendLine("\t\tif (sVerified) return;")
@@ -191,7 +199,12 @@ internal static class Program
         foreach (IGrouping<string, Method> group in methods.GroupBy(m => m.Owner))
         {
             text.AppendLine($"public static unsafe class {group.Key["Tallow.".Length..]}")
-                .AppendLine("{");
+                .AppendLine("{")
+                .AppendLine("\tinternal static void __TallowResetGeneratedNativeBindings()")
+                .AppendLine("\t{");
+            foreach (Method m in group)
+                text.AppendLine($"\t\ts_Ptr_{m.Id} = 0;");
+            text.AppendLine("\t}");
             foreach (Method m in group)
             {
                 string symbol = $"CSharpApi_{m.Id}";
@@ -257,6 +270,9 @@ internal static class Program
             !beef.Contains("CSharpApiVersion_") ||
             !csharp.Contains("public static float Average(float a, float b)") ||
             !csharp.Contains("delegate* unmanaged[Cdecl]<float, float, float>") ||
+            !csharp.Contains("__TallowResetGeneratedNativeBindings()") ||
+            !csharp.Contains("s_Ptr_17858942906a9c6f = 0;") ||
+            !beef.Contains("CSharpApiExport]") ||
             beef.Contains("NativeOnly") || csharp.Contains("NativeOnly"))
             throw new Exception("The fixture's native and managed exports differ.");
         string vectors = "TALLOW_CSHARP_API_V1\nmethod\tTallow.VectorChecks\tScale\tSystem.Numerics.Vector3\tvalue:System.Numerics.Vector3\tfactor:float\n";

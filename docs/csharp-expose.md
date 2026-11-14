@@ -81,3 +81,15 @@ Benchmark per-call boundary latency and chunk throughput alongside full-game fra
 
 `TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv` runs a native reflection scan over compiled Beef types. It validates *annotated* stage-1 static method signatures (void/bool/int32/float and Vector2/3/4), rejects invalid annotated fields rather than silently omitting them, sorts signature records, and includes an annotated fixture `CSharpBindingFixture.Average` while excluding its unannotated `NativeOnly`. It is covered by a native Linux CI smoke check. **The manifest is only a foundation; it is not yet wired into the managed runtime or a native ABI wrapper generator**, and no existing hand-written public bridge was removed. The remaining generator work is tracked in the main roadmap.
 
+
+
+### Native entrypoint integrity
+
+Every generated Beef entrypoint carries an internal `[CSharpApiExport]`
+attribute. The native resolver returns pointers **only** for methods with that
+marker as well as the expected symbol name. Generated C# wrappers cache
+pointers after a one-time ABI version check; reconfiguration clears all
+generated pointer caches before the next call. The native-host smoke tests
+rebind the resolver in-process and verify subsequent calls reach the new
+function, not the old cached pointer. This is a lifecycle guard, not an
+untrusted-code sandbox.
