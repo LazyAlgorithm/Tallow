@@ -41,13 +41,16 @@ internal static class Program
     private static int ToUtf8(string value, int utf16Offset) =>
         Encoding.UTF8.GetByteCount(value.AsSpan(0, Math.Clamp(utf16Offset, 0, value.Length)));
 
-    private static IEnumerable<MetadataReference> References()
+    // Loaded once for the lifetime of the long-running Roslyn service.
+    // Hundreds of framework references are expensive to rebuild per request.
+    private static readonly Lazy<MetadataReference[]> CachedReferences = new(() =>
     {
         string assemblies = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "";
-        foreach (string path in assemblies.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-            if (File.Exists(path))
-                yield return MetadataReference.CreateFromFile(path);
-    }
+        return assemblies.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Where(File.Exists).Select(MetadataReference.CreateFromFile).ToArray();
+    });
+
+    private static IEnumerable<MetadataReference> References() => CachedReferences.Value;
 
     private static ISymbol? SymbolAt(SemanticModel model, SyntaxNode root, int position)
     {
@@ -358,12 +361,69 @@ internal static class Program
         };
     }
 
+    /// <summary>
+    /// Long-running, trusted editor compiler. Requests are isolated in folders
+    /// created by the native editor. Responses use atomic rename, so the editor
+    /// never reads a partial result. The service never executes gameplay code.
+    /// A single Roslyn process amortizes SDK startup and reference loading.
+    /// </summary>
+    private static int Serve(string project, string engineRoot, string queue)
+    {
+        Directory.CreateDirectory(queue);
+        File.WriteAllText(Path.Combine(queue, "ready"), "ready");
+        DateTime lastActivity = DateTime.UtcNow;
+        while (!File.Exists(Path.Combine(queue, "stop")) &&
+               DateTime.UtcNow - lastActivity < TimeSpan.FromMinutes(30))
+        {
+            foreach (string folder in Directory.EnumerateDirectories(queue))
+            {
+                string requestFile = Path.Combine(folder, "request.tsv");
+                string responseFile = Path.Combine(folder, "response.tsv");
+                if (!File.Exists(requestFile) || File.Exists(responseFile))
+                    continue;
+
+                var response = new List<string>();
+                try
+                {
+                    LanguageRequest request = FromEditor(project, engineRoot, folder);
+                    Run(request, response);
+                }
+                catch (Exception ex)
+                {
+                    response.Clear();
+                    response.Add(Line("error", ex.Message));
+                }
+
+                // Atomic publication. The editor is free to delete a completed
+                // request folder after consuming its response.
+                try
+                {
+                    string temp = responseFile + ".tmp";
+                    File.WriteAllText(temp, string.Join("\n", response) + "\n");
+                    File.Move(temp, responseFile, overwrite: true);
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    // Closing a code tab can discard an obsolete request.
+                }
+                lastActivity = DateTime.UtcNow;
+            }
+            Thread.Sleep(15);
+        }
+        return 0;
+    }
+
     public static int Main(string[] args)
     {
         var response = new List<string>();
         string output;
         try
         {
+            if (args.Length == 7 && args[0] == "--serve" && args[2] == "--project" &&
+                args[4] == "--engine-root")
+                return Serve(Path.GetFullPath(args[3]), Path.GetFullPath(args[5]),
+                    Path.GetFullPath(args[1]));
+
             if (args.Length == 6 && args[0] == "--project" && args[2] == "--engine-root" &&
                 args[4] == "--request")
             {
@@ -383,7 +443,7 @@ internal static class Program
             }
             else
             {
-                Console.Error.WriteLine("Usage: Tallow.LanguageService --project <game> --engine-root <engine> --request <folder>");
+                Console.Error.WriteLine("Usage: Tallow.LanguageService --project <game> --engine-root <engine> --request <folder> (or --serve <queue> --project <game> --engine-root <engine>)");
                 return 2;
             }
         }
