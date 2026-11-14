@@ -215,3 +215,93 @@ if old in c:
 elif new not in c:
     raise AssertionError('TextEditor.cpp layout changed (signature header)')
 open(source, 'w', encoding='utf-8').write(c)
+
+
+# Hover hints should not cover code as soon as the mouse crosses a glyph.
+# Use a 450 ms stationary hover on the same symbol, and dismiss immediately
+# when the mouse leaves the text, moves to another symbol, or clicks/scrolls.
+# This patch intentionally leaves keyboard-triggered autocomplete untouched.
+h = open(header, encoding='utf-8').read()
+old = "\tImVec2 popupWindowPos;\n\tDocPos popupDocPos;"
+new = old + "\n\tdouble hoverStartTime = -1.0;\n\tDocPos hoverDocPos;\n\tbool hoverActive = false;"
+if new not in h:
+    assert h.count(old) == 1, 'TextEditor.h layout changed (hover state)'
+    h = h.replace(old, new, 1)
+    open(header, 'w', encoding='utf-8').write(h)
+
+c = open(source, encoding='utf-8').read()
+old = "\tconst auto overMiniMap = config.showMiniMap && absoluteMousePos.x > miniMapOffset;"
+new = old + r'''
+    
+    // A popup must not persist when the pointer leaves the hovered symbol.
+    // Use hover flags that allow non-interactive popup windows to overlap text.
+    hoverActive = false;
+    if (!textHoverCallback || !ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) ||
+        !overText || !IsMousePosOverGlyph(ImGui::GetMousePos()) ||
+        ImGui::IsAnyMouseDown() || io.MouseWheel != 0.0f || io.MouseWheelH != 0.0f)
+        hoverStartTime = -1.0;'''
+if 'hoverActive = false;\n    if (!textHoverCallback' not in c:
+    assert c.count(old) == 1, 'TextEditor.cpp layout changed (hover resets)'
+    c = c.replace(old, new, 1)
+
+old = r'''		} else if (textHoverCallback && IsMousePosOverGlyph(ImGui::GetMousePos())) {
+			// capture position for text hover popup
+			popupDocPos = document.findWordStart(glyphPos, true);
+			const auto vizPos = docPos2VisPos(popupDocPos);
+
+			popupWindowPos = ImVec2(
+				vizPos.column * glyphSize.x + textLeftOffset + cursorScreenPos.x,
+				vizPos.row * glyphSize.y + cursorScreenPos.y);
+
+			// only open popup if required
+			if (!ImGui::IsPopupOpen("TextHoverPopup")) {
+				ImGui::OpenPopup("TextHoverPopup");
+			}
+		}'''
+new = r'''		} else if (textHoverCallback && overText && IsMousePosOverGlyph(ImGui::GetMousePos())) {
+            const auto word = document.findWordStart(glyphPos, true);
+            // The timer restarts for each newly hovered word, or whenever
+            // the pointer is moving. No popup while quickly scanning code.
+            if (hoverStartTime < 0.0 || hoverDocPos != word ||
+                io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f) {
+                hoverDocPos = word;
+                hoverStartTime = ImGui::GetTime();
+            }
+            if (ImGui::GetTime() - hoverStartTime >= 0.45) {
+                hoverActive = true;
+                popupDocPos = word;
+                const auto vizPos = docPos2VisPos(popupDocPos);
+                popupWindowPos = ImVec2(
+                    vizPos.column * glyphSize.x + textLeftOffset + cursorScreenPos.x,
+                    vizPos.row * glyphSize.y + cursorScreenPos.y);
+                if (!ImGui::IsPopupOpen("TextHoverPopup"))
+                    ImGui::OpenPopup("TextHoverPopup");
+            }
+		}'''
+if 'hoverStartTime < 0.0 || hoverDocPos != word' not in c:
+    assert c.count(old) == 1, 'TextEditor.cpp layout changed (hover trigger)'
+    c = c.replace(old, new, 1)
+
+old = r'''		if (ImGui::BeginPopup("TextHoverPopup", ImGuiWindowFlags_NoFocusOnAppearing)) {
+			if (textHoverCallback) {
+				ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+				textHoverCallback(popupData);
+
+			} else {
+				ImGui::CloseCurrentPopup();
+			}
+
+			ImGui::EndPopup();
+		}'''
+new = r'''		if (ImGui::BeginPopup("TextHoverPopup",
+                ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs)) {
+            if (!hoverActive || !textHoverCallback)
+                ImGui::CloseCurrentPopup();
+            else
+                textHoverCallback(popupData);
+            ImGui::EndPopup();
+		}'''
+if 'if (!hoverActive || !textHoverCallback)' not in c:
+    assert c.count(old) == 1, 'TextEditor.cpp layout changed (hover dismiss)'
+    c = c.replace(old, new, 1)
+open(source, 'w', encoding='utf-8').write(c)
