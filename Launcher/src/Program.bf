@@ -26,7 +26,9 @@ class LauncherApp : Application
 	String mUpgradeTo = new .() ~ delete _;
 	bool mUpgradePrompt;
 	String mEngineRoot = new .() ~ delete _;
-	ProjectTemplate mTemplate = .Sample;
+	// New C# projects use the empty managed template by default. The older
+	// voxel showcase still contains legacy Beef scripts pending conversion.
+	ProjectTemplate mTemplate = .Empty;
 	/// Tools Tallow needs that were not found, when the launcher started.
 	List<String> mMissingTools = new .() ~ DeleteContainerAndItems!(_);
 	// The folder chosen in "Beef is already installed": SDL calls back on its own thread.
@@ -599,7 +601,7 @@ class LauncherApp : Application
 		ImGui.Text("Template");
 		if (ImGui.RadioButton("Empty", mTemplate == .Empty))
 			mTemplate = .Empty;
-		if (ImGui.RadioButton("Voxel sandbox", mTemplate == .Sample))
+		if (ImGui.RadioButton("Voxel sandbox (legacy scripts)", mTemplate == .Sample))
 			mTemplate = .Sample;
 		if (ImGui.RadioButton("Tallow Gallery (showcase of eight areas)", mTemplate == .Showcase))
 			mTemplate = .Showcase;
