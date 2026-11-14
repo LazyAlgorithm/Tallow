@@ -215,7 +215,14 @@ extension EditorApp
 					problem.column = (int32)SceneSerializer.ParseInt(fields[3]);
 					problem.isError = fields[4] == "error";
 					problem.message.Set(fields[5]);
-					if (!problem.isError && IsOptimizationWarning(problem.message))
+					// Roslyn emits optional exact Tallow categories in field 7.
+					// Preserve the editor's original cyan (performance), purple
+					// (network/determinism), red (errors), amber (compiler) colors.
+					if (!problem.isError && fields.Count >= 7 && fields[6] == "determinism")
+						problem.kind = .Determinism;
+					else if (!problem.isError && fields.Count >= 7 && fields[6] == "optimization")
+						problem.kind = .Optimization;
+					else if (!problem.isError && IsOptimizationWarning(problem.message))
 						problem.kind = .Optimization;
 					mProblems.Add(problem);
 				}
