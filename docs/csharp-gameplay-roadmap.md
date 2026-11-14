@@ -358,3 +358,14 @@ claim automatic replication of dynamically created joints.
   disable or destroy the next component during its update. The scheduler
   must preserve those existing per-callback checks and profiling behavior
   before grouping work. Current scheduling and networking are unchanged.
+
+### Prevent stale generated C# symbol IDs (2026-11-13)
+
+- Added `tools/check_csharp_host_abi.py`, run in both Linux and Windows
+  managed CI. It hashes the opt-in fixture using the same deterministic
+  signature format as BindingGen and rejects missing or stale native-host
+  `CSharpApi_*` resolver IDs. Covers methods and explicitly writable fields,
+  with known cases for the previously incorrect Rigidbody sleep symbol and
+  the new counted Flecs Span API.
+- Host test ABI verification runs before managed code generation/build,
+  so a copy-pasted outdated symbol ID is surfaced early.

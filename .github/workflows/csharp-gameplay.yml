@@ -16,6 +16,7 @@ on:
       - 'native/**'
       - 'tools/build.py'
       - 'tools/patch_textedit.py'
+      - 'tools/check_csharp_host_abi.py'
       - 'third_party/TextEdit/**'
 
 # Only the newest branch build is useful while iterating on this migration.
@@ -39,6 +40,8 @@ jobs:
           dotnet-version: '11.0.x'
       - name: Verify deterministic compiler-manifest binding generation
         run: dotnet run --project Managed/Tallow.BindingGen/Tallow.BindingGen.csproj -- --self-test
+      - name: Reject stale native-host generated binding IDs
+        run: python3 tools/check_csharp_host_abi.py
       - name: Generate managed bindings for native-host smoke fixture
         run: dotnet run --project Managed/Tallow.BindingGen/Tallow.BindingGen.csproj -- --manifest Tests/CSharpExpose/fixture.tsv --engine-root .
       - name: Enforce generated Mathf methods without handwritten duplicates
