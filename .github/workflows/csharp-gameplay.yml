@@ -118,3 +118,11 @@ jobs:
           export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
           python3 tools/build.py --config Debug --jobs 4 --skip-native
           test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
+      - name: Verify compiler-reflected opt-in C# manifest
+        run: |
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'CSharpBindingFixture' | grep -F 'Average'
+          if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
+            echo "Unannotated public method leaked into C# API manifest" >&2
+            exit 1
+          fi
