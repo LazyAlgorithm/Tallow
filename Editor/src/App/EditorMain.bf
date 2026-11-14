@@ -18,8 +18,10 @@ static class EditorMain
 {
 	public static int Run(String[] args)
 	{
-		// The compiler and Python that Tallow installed for itself, if it did (Toolchain).
-		Toolchain.Apply();
+		// Precompiled C# projects do not need native Beef/Python toolchain discovery.
+		// Developers can opt into the legacy Beef source workflow explicitly.
+		if (args.Contains("--legacy-native"))
+			Toolchain.Apply();
 		bool editor = false;
 		bool server = false;
 		String projectPath = scope .();
