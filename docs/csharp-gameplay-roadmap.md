@@ -66,6 +66,13 @@ Read this entire checklist, `docs/csharp-gameplay.md`, then inspect **current** 
 - [ ] Confirm compile-success toast clears after 1000 ms, but errors and newer status messages are never cleared by the timer.
 - [ ] Confirm old/native Beef authoring remains explicitly accessible for compatibility but is not required on the C# path.
 
+## November 13 follow-up: autocomplete and warning cleanup
+
+- **C# property completion:** filtered compiler-generated `get_*` and `set_*` method accessors, and event accessors, from Roslyn completion when the public property/event exists. Genuine methods with similar names remain available. Regression tests check `Transform.Position` and an actual `get_Answer()` method. Commits `bd4a496`, `fe219d1`.
+- **Beef property completion:** added the equivalent member-aware filter to the Beef language-service response, retaining real methods and preserving property entries; added a regression case. Commits `36833d5`, `6e82270`, `d6c4fec`.
+- **Managed warnings:** retained XML documentation output while suppressing existing CS1591 missing-comment noise (`8e1130f`). Replaced obsolete `FieldInfo.IsNotSerialized` with the equivalent `FieldAttributes.NotSerialized` flag in Inspector field loading (`427ba22`); no public API change or serialization behavior change intended.
+- **Verification:** GitHub Actions for these changes were queued when recorded. Do not claim native build or interactive autocomplete validated until relevant CI and local Nobara tests finish.
+
 ## P1 — C# code editor / Roslyn integration
 
 - [ ] Check that `Transform.Position += Vector3.UnitX * Speed * deltaTime` and other `Vector2/3/4` operations compile in-game **without false Roslyn editor errors**; align SDK global usings and actual `.tasmdef` references.
