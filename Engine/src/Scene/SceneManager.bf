@@ -16,6 +16,7 @@ namespace Tallow;
 ///   SceneManager.Load("Scenes/Credits.tscene");
 ///
 /// Paths are relative to the project's asset folder, like every other asset path.
+[CSharpExpose]
 static class SceneManager
 {
 	static String sPending = new .() ~ delete _;
@@ -79,6 +80,7 @@ static class SceneManager
 	/// Changes to another scene: at the start of the next frame the running scene is stopped and emptied, the file
 	/// is loaded in its place and play carries on in it. A network session in the old scene is closed. In the
 	/// editor this happens inside play mode only; stopping still brings back the scene that was being edited.
+	[CSharpExpose]
 	public static void Load(StringView path)
 	{
 		sPending.Set(path);

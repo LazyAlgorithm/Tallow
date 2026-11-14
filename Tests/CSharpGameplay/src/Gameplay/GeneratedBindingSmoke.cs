@@ -42,5 +42,7 @@ public sealed class GeneratedBindingSmoke : Script
         if (MathF.Abs(average - 5f) > 0.0001f)
             throw new InvalidOperationException("Generated [CSharpExpose] binding returned the wrong value.");
         Transform.Position = new Vector3(average, 0f, 0f);
+        // The engine queues this transition until the following frame.
+        SceneManager.Load("Scenes/TestScene.tscene");
     }
 }

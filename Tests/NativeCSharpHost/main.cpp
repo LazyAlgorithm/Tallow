@@ -150,6 +150,13 @@ static int secondAverageCalls = 0;
 static bool useSecondBinding = false;
 static float testTimeScale = 1.0f;
 static std::string lastLogInfo;
+static std::string lastRequestedScene;
+static void ExposedSceneLoad(const char* data, int32_t length)
+{
+    if (!data || length < 0) return;
+    lastRequestedScene.assign(data, static_cast<size_t>(length));
+}
+static void ExposedQuit() { /* Do not stop the standalone smoke host. */ }
 static void ExposedLogInfo(const char* text, int32_t length)
 {
     if (!text || length < 0) return;
@@ -206,6 +213,10 @@ static void* ResolveApi(void*, const char* symbol)
     if (name.rfind("CSharpApiVersion_", 0) == 0)
         return reinterpret_cast<void*>(&ExposedVersion);
     // IDs are deterministic SHA-256 signature hashes emitted by BindingGen.
+    if (name == "CSharpApi_21d00acac55a8847")
+        return reinterpret_cast<void*>(&ExposedSceneLoad);
+    if (name == "CSharpApi_e957075e951f3a8f")
+        return reinterpret_cast<void*>(&ExposedQuit);
     if (name == "CSharpApi_e2772af6e047fd0b")
         return reinterpret_cast<void*>(&ExposedLogInfo);
     if (name == "CSharpApi_00ab8c332afb3504")
@@ -382,6 +393,8 @@ int main(int argc, char** argv)
         return Failure("generated method did not execute native ABI");
     if (!tn_csharp_detach(generated))
         return Failure("detaching generated binding test");
+    if (lastRequestedScene != "Scenes/TestScene.tscene")
+        return Failure("generated SceneManager.Load did not reach native engine");
     if (lastLogInfo != "Tallow log \xC3\xA9")
         return Failure("generated UTF-8 Log.Info did not reach native callback");
     if (std::fabs(testTimeScale - 0.5f) > 0.0001f)

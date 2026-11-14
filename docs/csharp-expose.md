@@ -212,3 +212,7 @@ conventions. Standard quaternion operations available in `System.Numerics`
 should remain local C# operations. Quaternion support has generator self-tests
 and a native-host ABI smoke test; full linked-Beef CI verification remains
 required.
+
+### Scene switching and application shutdown
+
+Two more regular gameplay APIs use generated bindings directly: `SceneManager.Load(string path)` queues the native scene transition at the start of the next frame, and `Application.Quit()` invokes the engine's existing quit behavior (stop Play in editor, close a built player). Both use `[CSharpExpose]` on their existing Beef methods, with no mirrored C# implementations. `SceneManager.Load` uses counted UTF-8 input and retains the engine's existing networking and scene-switch lifetime rules. Managed tests cover both declarations; native-host integration checks the requested scene path, and native CI checks both reflected exports.

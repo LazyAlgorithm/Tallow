@@ -311,6 +311,13 @@ public sealed class CubeMover : Script
             Check("private user gameplay members still appear in their own class",
                 userResults.Contains("completion\tsecret\t"));
 
+            string sceneSwitch = "using Tallow; class Demo { void Go() { " +
+                "SceneManager.Load(\"Scenes/Example.tscene\"); Application.Quit(); } }";
+            string sceneSwitchDiagnostics = RequestWithApi(service, "diagnostics",
+                sceneSwitch, sceneSwitch.Length);
+            Check("generated SceneManager.Load and Application.Quit are valid C# APIs",
+                !sceneSwitchDiagnostics.Contains("diagnostic\t"));
+
             string logCode = "using Tallow; class Demo { void Go() { Log.Info(\"hello\"); } }";
             string logDiagnostics = RequestWithApi(service, "diagnostics", logCode, logCode.Length);
             Check("generated Log.Info accepts managed C# strings",

@@ -11,6 +11,7 @@ namespace Tallow;
 ///   --frames N                                         quit after N frames
 ///   --screenshot file.png                              save the last frame before quitting (with --frames)
 ///   --headless                                         no window or renderer (dedicated servers)
+[CSharpExpose]
 class Application
 {
 	/// The window's title.
@@ -70,6 +71,7 @@ class Application
 	public static Application Instance;
 
 	/// Quits the game: a built game closes; in the editor, Play stops.
+	[CSharpExpose]
 	public static void Quit()
 	{
 		if (Instance != null)
