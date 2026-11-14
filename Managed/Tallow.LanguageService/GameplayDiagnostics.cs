@@ -153,11 +153,8 @@ internal static class GameplayDiagnostics
     {
         // Only warn about real Tallow component lookups. An unrelated game
         // utility named GetComponent is not inherently an ECS hot spot.
-        for (INamedTypeSymbol? owner = method.ContainingType;
-            owner is not null; owner = owner.BaseType)
-            if (owner.ToDisplayString() is "Tallow.Script" or "Tallow.GameObject")
-                return true;
-        return false;
+        return method.OriginalDefinition.ContainingType?.ToDisplayString()
+            is "Tallow.Script" or "Tallow.GameObject";
     }
 
     private static bool IsLoop(SyntaxNode syntax) =>
