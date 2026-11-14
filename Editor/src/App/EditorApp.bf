@@ -554,6 +554,18 @@ class EditorApp : Application
 			StopPlay();
 		}
 		PollScriptReload();
+		// A successful managed compile is a brief status, not a persistent banner.
+		// Do not dismiss compiler failures or newer Play/compile messages.
+		if (mManagedCompileNoticePending)
+		{
+			if (mStatus != "C# assemblies compiled.")
+				mManagedCompileNoticePending = false;
+			else if (mManagedCompileNoticeClock.ElapsedMilliseconds >= 1000)
+			{
+				mStatus.Clear();
+				mManagedCompileNoticePending = false;
+			}
+		}
 		PollProjectFolders();
 		// A game changing scene: only while playing, so that the scene being edited is never replaced.
 		if (mPlay == .Playing)
