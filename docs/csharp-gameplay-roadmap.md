@@ -44,6 +44,13 @@ Read this entire checklist, `docs/csharp-gameplay.md`, then inspect **current** 
 - Existing Linux/Windows managed CI for C# gameplay remains green as of the previous completed runs; native CI's first completed run is the remaining verification gate.
 - **Do not mark P0 complete** until the new native CI build passes and the user tests the full editor on Nobara.
 
+## Latest work — reflection-driven C# API contract
+
+- **2026-11-13:** Managed host smoke-test CI on both operating systems failed because its `TestBridge` lacked `IEngineBridge.TransformPoint`. Fixed in `1d470fe`; managed GitHub CI for that revision passed on both Linux and Windows. This restores the existing bridge's test contract but does not complete C# API parity.
+- **2026-11-13:** First stage of `[CSharpExpose]` generator work: `Engine/src/Scripting/CSharpBindingManifest.bf` enumerates *compiled/reflected Beef symbols*, enforces type and method opt-in, validates a restricted static/value-only signature set, and emits a deterministically sorted manifest (`96ce894`). A headless launcher entrypoint `--csharp-api-manifest FILE` was added (`9878ea9`); native Linux CI has a positive/negative exposure test (`58afd98`). Full native CI validation is **still pending**.
+- **Design decision:** The annotated Beef API is the **single public contract**, not an additional manual C# API to maintain. Generated bindings should favor direct typed native calls for ordinary methods and bulk/chunk ECS access for near-native throughput, never mandatory per-entity managed/native calls. See `docs/csharp-expose.md` (updated in `b804555`). Keep specialized interop as private implementation detail.
+- **Still not implemented:** generated native entrypoints, generated managed wrappers, ABI compatibility/version checking, automatic Roslyn pickup of exposed APIs and the actual C# invocation test. The prototype manifest must **not** be represented as a working bridge yet.
+
 ## P0 — stabilize, compile, test full precompiled native editor
 
 - [ ] Pull current HEAD and run full Nobara Linux **BeefBuild** of Tallow native/editor/launcher. Fix all compiler errors introduced by migration; add CI native editor builds to catch these without depending on the user's testing.
