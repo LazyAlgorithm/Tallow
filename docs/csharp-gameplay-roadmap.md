@@ -51,6 +51,9 @@ Read this entire checklist, `docs/csharp-gameplay.md`, then inspect **current** 
 - **Design decision:** The annotated Beef API is the **single public contract**, not an additional manual C# API to maintain. Generated bindings should favor direct typed native calls for ordinary methods and bulk/chunk ECS access for near-native throughput, never mandatory per-entity managed/native calls. See `docs/csharp-expose.md` (updated in `b804555`). Keep specialized interop as private implementation detail.
 - **Still not implemented:** generated native entrypoints, generated managed wrappers, ABI compatibility/version checking, automatic Roslyn pickup of exposed APIs and the actual C# invocation test. The prototype manifest must **not** be represented as a working bridge yet.
 
+- **Native build failure found locally:** Beef rejected directly deferring a cleanup mixin in new `CSharpBindingManifest.bf`. Wrapped `ClearAndDeleteItems!(records)` in a `defer { ... }` block in `58cf1a3`. Await full native rebuild confirmation; no C# binding generator completion claimed.
+- **Performance increment:** Replaced O(all managed instances) `GetComponent<T>()` lookup in the .NET runtime with an entity-indexed list preserving attach order, maintaining the index across attach/detach/unload/shutdown (`44ebdef`). Existing native-host GetComponent integration test exercises this path; CI is pending.
+
 ## P0 — stabilize, compile, test full precompiled native editor
 
 - [ ] Pull current HEAD and run full Nobara Linux **BeefBuild** of Tallow native/editor/launcher. Fix all compiler errors introduced by migration; add CI native editor builds to catch these without depending on the user's testing.
