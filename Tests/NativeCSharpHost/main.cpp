@@ -221,7 +221,20 @@ int main(int argc, char** argv)
         std::fabs(state.local_euler[2] - 30.0f) > 0.0001f ||
         std::fabs(state.last_look_at[2] - 5.0f) > 0.0001f)
         return Failure("C# and native Transform properties differ");
-    if (!tn_csharp_detach(transformScript) || !tn_csharp_unload_game())
+    if (!tn_csharp_detach(transformScript))
+        return Failure("detaching native Transform parity script");
+
+    // Both GetComponent forms must resolve another script attached to the
+    // same native scene entity, without exposing an unsafe Beef object pointer.
+    const int32_t mover = tn_csharp_attach("Gameplay.MoveRight", 1, 1);
+    const int32_t lookup = tn_csharp_attach("Gameplay.ComponentLookup", 1, 1);
+    if (mover < 1 || lookup < 1 ||
+        !tn_csharp_dispatch(lookup, TN_CSHARP_AWAKE, 0.0f))
+        return Failure("resolving C# GetComponent on the same native object");
+    if (std::fabs(state.position[1] - 8.0f) > 0.0001f)
+        return Failure("managed GetComponent<T> did not resolve sibling C# script");
+    if (!tn_csharp_detach(lookup) || !tn_csharp_detach(mover) ||
+        !tn_csharp_unload_game())
         return Failure("ending second Play session");
 
     tn_csharp_shutdown();
