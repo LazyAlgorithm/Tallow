@@ -185,6 +185,10 @@ static void ExposedLookRotation(const float* forward, const float* up, float* re
 // The following native host doubles verify generated C# physics ABI
 // signatures and value marshalling. They do NOT attempt to simulate Jolt.
 static int physicsRigidbodyForces = 0;
+static float physicsAngularVelocity[3] = {1, 2, 3};
+static int physicsTorques = 0;
+static int physicsForcesAtPosition = 0;
+static int physicsSleeps = 0;
 static int physicsSoftImpulses = 0;
 static float physicsSoftPressure = 10.0f;
 static int32_t ExposedHasRigidbody(uint64_t scene, uint64_t entity) {
@@ -197,6 +201,47 @@ static int32_t ExposedAddRigidbodyForce(uint64_t scene, uint64_t entity, const f
     if (!Match(scene, entity) || !force || force[0] != 1 || force[1] != 2 || force[2] != 3)
         return 0;
     ++physicsRigidbodyForces;
+    return 1;
+}
+static void ExposedGetRigidbodyAngularVelocity(uint64_t scene, uint64_t entity, float* result)
+{
+    if (!Match(scene, entity) || !result) return;
+    for (int i = 0; i < 3; ++i) result[i] = physicsAngularVelocity[i];
+}
+static int32_t ExposedSetRigidbodyAngularVelocity(uint64_t scene, uint64_t entity, const float* velocity)
+{
+    if (!Match(scene, entity) || !velocity ||
+        velocity[0] != 4 || velocity[1] != 5 || velocity[2] != 6) return 0;
+    for (int i = 0; i < 3; ++i) physicsAngularVelocity[i] = velocity[i];
+    return 1;
+}
+static int32_t ExposedAddRigidbodyTorque(uint64_t scene, uint64_t entity, const float* torque)
+{
+    if (!Match(scene, entity) || !torque ||
+        torque[0] != 7 || torque[1] != 8 || torque[2] != 9) return 0;
+    ++physicsTorques;
+    return 1;
+}
+static int32_t ExposedAddRigidbodyForceAtPosition(uint64_t scene, uint64_t entity,
+                                                 const float* force, const float* point)
+{
+    if (!Match(scene, entity) || !force || !point ||
+        force[0] != 1 || force[1] != 2 || force[2] != 3 ||
+        point[0] != 10 || point[1] != 20 || point[2] != 30) return 0;
+    ++physicsForcesAtPosition;
+    return 1;
+}
+static void ExposedGetRigidbodyPointVelocity(uint64_t scene, uint64_t entity,
+                                            const float* point, float* result)
+{
+    if (!Match(scene, entity) || !point || !result ||
+        point[0] != 10 || point[1] != 20 || point[2] != 30) return;
+    result[0] = 2; result[1] = 3; result[2] = 4;
+}
+static int32_t ExposedSleepRigidbody(uint64_t scene, uint64_t entity)
+{
+    if (!Match(scene, entity)) return 0;
+    ++physicsSleeps;
     return 1;
 }
 static int32_t ExposedAddSoftBodyImpulse(uint64_t scene, uint64_t entity, const float* force) {
@@ -486,6 +531,18 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedHasSoftBody);
     if (name == "CSharpApi_1a89e5a6a268148e")
         return reinterpret_cast<void*>(&ExposedAddRigidbodyForce);
+    if (name == "CSharpApi_9186ecd4293e9b04")
+        return reinterpret_cast<void*>(&ExposedGetRigidbodyAngularVelocity);
+    if (name == "CSharpApi_18c424ca754a76b8")
+        return reinterpret_cast<void*>(&ExposedSetRigidbodyAngularVelocity);
+    if (name == "CSharpApi_9883f16ede034f18")
+        return reinterpret_cast<void*>(&ExposedAddRigidbodyTorque);
+    if (name == "CSharpApi_3a58fdae5a7a1b74")
+        return reinterpret_cast<void*>(&ExposedAddRigidbodyForceAtPosition);
+    if (name == "CSharpApi_5a64e6ecc959440f")
+        return reinterpret_cast<void*>(&ExposedGetRigidbodyPointVelocity);
+    if (name == "CSharpApi_9e37fa4f1b5124ae")
+        return reinterpret_cast<void*>(&ExposedSleepRigidbody);
     if (name == "CSharpApi_a6cee0af24fc98a6")
         return reinterpret_cast<void*>(&ExposedAddSoftBodyImpulse);
     if (name == "CSharpApi_babf3ef4abb796e0")
@@ -719,7 +776,12 @@ int main(int argc, char** argv)
     if (physicsApi < 1 || !tn_csharp_dispatch(physicsApi, TN_CSHARP_AWAKE, 0.0f))
         return Failure("calling generated rigidbody/soft-body physics from C#");
     if (!tn_csharp_detach(physicsApi) || physicsRigidbodyForces != 1 ||
-        physicsSoftImpulses != 1 || std::fabs(physicsSoftPressure - 12.0f) > 0.0001f)
+        physicsSoftImpulses != 1 || physicsTorques != 1 ||
+        physicsForcesAtPosition != 1 || physicsSleeps != 1 ||
+        std::fabs(physicsAngularVelocity[0] - 4.0f) > 0.0001f ||
+        std::fabs(physicsAngularVelocity[1] - 5.0f) > 0.0001f ||
+        std::fabs(physicsAngularVelocity[2] - 6.0f) > 0.0001f ||
+        std::fabs(physicsSoftPressure - 12.0f) > 0.0001f)
         return Failure("C# native physics ABI marshalling failed");
 
     const int32_t contactApi = tn_csharp_attach("Gameplay.PhysicsContactSmoke", 1, 1);

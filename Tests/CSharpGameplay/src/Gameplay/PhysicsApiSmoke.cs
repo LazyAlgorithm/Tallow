@@ -21,7 +21,13 @@ public sealed class PhysicsApiSmoke : Script
         }
         // Use the existing ECS-backed native Rigidbody when present.
         if (GetRigidbody() is { } rigidbody && rigidbody.HasBody)
+        {
             rigidbody.AddForce(Vector3.UnitY * 5f);
+            rigidbody.AddTorque(Vector3.UnitY * 0.5f);
+            rigidbody.AddForceAtPosition(Vector3.UnitZ, Transform.Position + Vector3.UnitX);
+            Vector3 angularVelocity = rigidbody.AngularVelocity;
+            Vector3 pointVelocity = rigidbody.GetPointVelocity(Transform.Position);
+        }
 
         // Jelly, cloth and shell all use the same native SoftBody component.
         if (GetSoftBody() is { } soft && soft.CanApplyForces)

@@ -30,6 +30,12 @@ method	Tallow.Physics	GetRigidbodyVelocity	System.Numerics.Vector3	session:ulong
 method	Tallow.Physics	SetRigidbodyVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
 method	Tallow.Physics	AddRigidbodyForce	bool	session:ulong	entity:ulong	force:System.Numerics.Vector3
 method	Tallow.Physics	AddRigidbodyImpulse	bool	session:ulong	entity:ulong	impulse:System.Numerics.Vector3
+method	Tallow.Physics	GetRigidbodyAngularVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
+method	Tallow.Physics	SetRigidbodyAngularVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
+method	Tallow.Physics	AddRigidbodyTorque	bool	session:ulong	entity:ulong	torque:System.Numerics.Vector3
+method	Tallow.Physics	AddRigidbodyForceAtPosition	bool	session:ulong	entity:ulong	force:System.Numerics.Vector3	worldPoint:System.Numerics.Vector3
+method	Tallow.Physics	GetRigidbodyPointVelocity	System.Numerics.Vector3	session:ulong	entity:ulong	worldPoint:System.Numerics.Vector3
+method	Tallow.Physics	SleepRigidbody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	HasSoftBody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	HasSoftBodySimulation	bool	session:ulong	entity:ulong
 method	Tallow.Physics	CanForceSoftBody	bool	session:ulong	entity:ulong

@@ -20,6 +20,32 @@ public readonly record struct Rigidbody(GameObject GameObject)
         Physics.AddRigidbodyForce(GameObject.SceneId, GameObject.Id, force);
     public bool AddImpulse(Vector3 impulse) =>
         Physics.AddRigidbodyImpulse(GameObject.SceneId, GameObject.Id, impulse);
+
+    /// <summary>World-space angular velocity in radians per second.</summary>
+    public Vector3 AngularVelocity
+    {
+        get => Physics.GetRigidbodyAngularVelocity(GameObject.SceneId, GameObject.Id);
+        set
+        {
+            if (!Physics.SetRigidbodyAngularVelocity(GameObject.SceneId, GameObject.Id, value))
+                throw new InvalidOperationException("Cannot set angular velocity on an inactive Rigidbody or with invalid values.");
+        }
+    }
+
+    /// <summary>Apply torque over the next native Jolt physics step.</summary>
+    public bool AddTorque(Vector3 torque) =>
+        Physics.AddRigidbodyTorque(GameObject.SceneId, GameObject.Id, torque);
+
+    /// <summary>Apply force at a world point, producing linear and angular motion.</summary>
+    public bool AddForceAtPosition(Vector3 force, Vector3 worldPoint) =>
+        Physics.AddRigidbodyForceAtPosition(GameObject.SceneId, GameObject.Id, force, worldPoint);
+
+    /// <summary>World-space velocity at a point, including rotational motion.</summary>
+    public Vector3 GetPointVelocity(Vector3 worldPoint) =>
+        Physics.GetRigidbodyPointVelocity(GameObject.SceneId, GameObject.Id, worldPoint);
+
+    /// <summary>Put a simulated Rigidbody to sleep until native physics wakes it.</summary>
+    public bool Sleep() => Physics.SleepRigidbody(GameObject.SceneId, GameObject.Id);
 }
 
 

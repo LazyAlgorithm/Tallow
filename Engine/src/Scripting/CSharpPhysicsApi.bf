@@ -92,6 +92,93 @@ static class Physics
     }
 
 
+    // Rigidbody is already an ECS-backed handle. Native Jolt owns its state;
+    // managed code receives only values and session-validated entity IDs.
+    static bool FiniteVector(Vector3 value) =>
+        value.x.IsFinite && value.y.IsFinite && value.z.IsFinite;
+
+    [CSharpExpose]
+    public static Vector3 GetRigidbodyAngularVelocity(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null)
+            return .Zero;
+        let body = obj.GetComponent<Rigidbody>();
+        return body.HasBody ? body.AngularVelocity : .Zero;
+    }
+
+    [CSharpExpose]
+    public static bool SetRigidbodyAngularVelocity(uint64 session, uint64 entity, Vector3 velocity)
+    {
+        if (!FiniteVector(velocity))
+            return false;
+        let obj = LiveObject(session, entity);
+        if (obj == null)
+            return false;
+        let body = obj.GetComponent<Rigidbody>();
+        if (!body.HasBody)
+            return false;
+        body.AngularVelocity = velocity;
+        return true;
+    }
+
+    [CSharpExpose]
+    public static bool AddRigidbodyTorque(uint64 session, uint64 entity, Vector3 torque)
+    {
+        if (!FiniteVector(torque))
+            return false;
+        let obj = LiveObject(session, entity);
+        if (obj == null)
+            return false;
+        let body = obj.GetComponent<Rigidbody>();
+        if (!body.HasBody)
+            return false;
+        body.AddTorque(torque);
+        return true;
+    }
+
+    [CSharpExpose]
+    public static bool AddRigidbodyForceAtPosition(uint64 session, uint64 entity,
+        Vector3 force, Vector3 worldPoint)
+    {
+        if (!FiniteVector(force) || !FiniteVector(worldPoint))
+            return false;
+        let obj = LiveObject(session, entity);
+        if (obj == null)
+            return false;
+        let body = obj.GetComponent<Rigidbody>();
+        if (!body.HasBody)
+            return false;
+        body.AddForceAtPosition(force, worldPoint);
+        return true;
+    }
+
+    [CSharpExpose]
+    public static Vector3 GetRigidbodyPointVelocity(uint64 session, uint64 entity,
+        Vector3 worldPoint)
+    {
+        if (!FiniteVector(worldPoint))
+            return .Zero;
+        let obj = LiveObject(session, entity);
+        if (obj == null)
+            return .Zero;
+        let body = obj.GetComponent<Rigidbody>();
+        return body.HasBody ? body.GetPointVelocity(worldPoint) : .Zero;
+    }
+
+    [CSharpExpose]
+    public static bool SleepRigidbody(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null)
+            return false;
+        let body = obj.GetComponent<Rigidbody>();
+        if (!body.HasBody)
+            return false;
+        body.Sleep();
+        return true;
+    }
+
     // Colliders intentionally remain *class* components. Tallow permits
     // several colliders per GameObject, including repeated shape types; each
     // index below addresses one component in its original attachment order.

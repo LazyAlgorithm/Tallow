@@ -13,6 +13,18 @@ public sealed class PhysicsBindingSmoke : Script
         if (GetRigidbody() is not { } rigid ||
             !rigid.AddForce(new Vector3(1, 2, 3)))
             throw new InvalidOperationException("Generated native Rigidbody force binding failed.");
+        if (rigid.AngularVelocity != new Vector3(1, 2, 3))
+            throw new InvalidOperationException("Native Rigidbody angular velocity getter failed.");
+        rigid.AngularVelocity = new Vector3(4, 5, 6);
+        if (rigid.AngularVelocity != new Vector3(4, 5, 6))
+            throw new InvalidOperationException("Native Rigidbody angular velocity setter failed.");
+        if (!rigid.AddTorque(new Vector3(7, 8, 9)) ||
+            !rigid.AddForceAtPosition(new Vector3(1, 2, 3), new Vector3(10, 20, 30)))
+            throw new InvalidOperationException("Native Rigidbody torque/force-at-position ABI failed.");
+        if (rigid.GetPointVelocity(new Vector3(10, 20, 30)) != new Vector3(2, 3, 4))
+            throw new InvalidOperationException("Native Rigidbody point velocity ABI failed.");
+        if (!rigid.Sleep())
+            throw new InvalidOperationException("Native Rigidbody sleep ABI failed.");
         if (GetSoftBody() is not { } soft ||
             !soft.AddImpulse(new Vector3(4, 5, 6)))
             throw new InvalidOperationException("Generated native SoftBody impulse binding failed.");

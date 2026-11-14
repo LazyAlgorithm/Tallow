@@ -292,3 +292,18 @@ multiplayer games must coordinate creation explicitly. The C# API does not
 claim automatic replication of dynamically created joints.
 
 - The native-host Jolt joint binding smoke checks ECS JointData connection status, target Rigidbody entity, bounded swing-limit changes and a two-vector native Connect call. The C++ host validates exact vector component order and rejects self-joints; it does not imply automatic network replication.
+
+### Native Rigidbody angular-motion parity (2026-11-13)
+
+- The existing ECS-backed Beef Rigidbody now supplies C# with world-space
+  angular velocity get/set, torque, force at a world point, velocity at a
+  world point (including spin), and Sleep. All six operations use explicitly
+  annotated `Tallow.Physics` methods and generated native/managed ABI,
+  never new handwritten P/Invoke bindings. Native code validates the active
+  Play session, entity, presence of a physics body, and finite vector inputs
+  for new mutations. The lightweight C# value handle never owns a Jolt pointer.
+- The fixed C# exposure fixture, managed gameplay integration smoke, and
+  C++ native-host dispatcher verify component order, vector argument order,
+  pointer-based vector return values, and effect counts. This is ABI smoke,
+  **not** a complete linked Jolt/Beef physics simulation test. Full native
+  CI and interactive Nobara verification remain required.
