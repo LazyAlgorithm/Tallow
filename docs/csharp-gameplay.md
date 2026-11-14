@@ -162,6 +162,17 @@ If the native runtime cannot find hostfxr, inspect the editor Console and
 `/usr/lib64/dotnet`. The branch now supports that location.
 
 
+## C# Inspector field convention
+
+Tallow does not use Unity-style `[SerializeField]`. Public instance fields
+of supported types automatically appear in the Inspector and persist.
+Private fields use `[ShowInInspector]` to display and persist or
+`[HideInInspector]` to persist without displaying. `[NonSerialized]`
+explicitly excludes a field; unannotated private fields are implementation
+state and are not persisted. `[SerializedFieldId]` is an optional advanced
+identity hint for field renames, **not** an opt-in to persistence and not
+needed for normal gameplay.
+
 ## Shipping code protection policy (planned, not implemented)
 
 Tallow's C# editor and iterative Play workflow stay .NET JIT for compilation,
