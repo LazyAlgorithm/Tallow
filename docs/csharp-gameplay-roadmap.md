@@ -784,3 +784,24 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
   unrepresentable separators, validates runtime application **before** it
   commits the new value, and reports success to dirty-state tracking rather
   than silently persisting bad data. User's native scene test remains needed.
+
+
+### Generated C# component factories across assembly definitions (November 14, 2026)
+
+- The C# project generator now parses trusted game and `.tasmdef` source
+  through Roslyn before compilation and creates one **direct constructor
+  factory per assembly**, plus a central `TallowGeneratedGameRegistry`
+  in the main game assembly. The main registry calls each assembly factory
+  explicitly, without scanning assemblies or dynamically constructing
+  types at call time. Factories support internal gameplay classes within
+  their own assemblies and fail early on unsupported inaccessible types
+  or missing accessible parameterless constructors.
+- Generated files live **only** under `.tallow-csharp/generated`, not in
+  the game source folder; no-op builds preserve generated timestamps.
+  Normal editor JIT hot reload and existing `[Component]` scene naming
+  continue unchanged. This is **NativeAOT registration groundwork**, not
+  a completed AOT export or a generic Flecs data component bridge.
+- The managed host smoke calls the generated main registry to instantiate
+  `Gameplay.MoveRight` defined in a referenced `.tasmdef` assembly and
+  confirms missing names return null. CI Linux/Windows compilation and
+  in-editor Nobara tests are still required.

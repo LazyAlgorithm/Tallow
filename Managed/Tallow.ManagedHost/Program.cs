@@ -102,6 +102,23 @@ internal static class Program
                 Assembly.Load(reference);
         }
 
+        // Direct factories are emitted into the game and its asmdef
+        // assemblies before compilation. Smoke-test that the GAME ROOT
+        // can construct a component from another assembly without
+        // runtime component scanning. The player will root this method
+        // directly for NativeAOT; only this dev smoke uses reflection.
+        Type registry = game.GetType("Tallow.Generated.TallowGeneratedGameRegistry",
+            throwOnError: true)!;
+        MethodInfo create = registry.GetMethod("Create",
+            BindingFlags.Public | BindingFlags.Static)!;
+        if (create is null ||
+            create.Invoke(null, ["Gameplay.MoveRight"]) is not Script registryInstance ||
+            registryInstance.GetType().FullName != "Gameplay.MoveRight" ||
+            create.Invoke(null, ["Gameplay.DoesNotExist"]) is not null)
+            throw new InvalidOperationException(
+                "Generated static C# component factories are missing or incomplete.");
+        Console.WriteLine("PASS generated static component registry across asmdefs");
+
         TestBridge bridge = new();
         Engine.Bind(bridge);
         int tested = 0;

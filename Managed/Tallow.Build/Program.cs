@@ -142,6 +142,153 @@ internal static class Program
             properties, includes, refs));
     }
 
+
+    /// <summary>
+    /// Generate direct C# factories in each trusted gameplay assembly, before
+    /// building that assembly. This preserves access to internal component
+    /// classes and provides an AOT-linkable root without reflection or IL DLL
+    /// discovery. The current editor keeps its collectible JIT loader.
+    /// </summary>
+    private static void WriteComponentFactories(
+        string engine, string generated, Dictionary<string, List<string>> filesByAssembly)
+    {
+        var parse = new CSharpParseOptions(LanguageVersion.CSharp15);
+        var treesByPath = filesByAssembly.Values.SelectMany(files => files)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(path => path,
+                path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), parse, path),
+                StringComparer.OrdinalIgnoreCase);
+        string apiDirectory = Path.Combine(engine, "Managed", "Tallow.API");
+        var apiTrees = Directory.EnumerateFiles(apiDirectory, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !Path.GetRelativePath(apiDirectory, path)
+                .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Any(segment => segment is "bin" or "obj"))
+            .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), parse, path));
+        string trusted = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "";
+        var refs = trusted.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Select(path => MetadataReference.CreateFromFile(path));
+        var compilation = CSharpCompilation.Create("Tallow.StaticComponentFactories",
+            treesByPath.Values.Cast<SyntaxTree>().Concat(apiTrees).Append(
+                CSharpSyntaxTree.ParseText("global using System.Numerics;", parse)),
+            refs, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+                allowUnsafe: true));
+
+        static string FactoryName(string assembly) =>
+            "ComponentFactory_" + Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(assembly)).AsSpan(0, 8));
+
+        var allTypes = new Dictionary<string, SortedDictionary<string, string>>(
+            StringComparer.Ordinal);
+        foreach (var (assembly, sourceFiles) in filesByAssembly)
+        {
+            var types = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            foreach (string sourceFile in sourceFiles)
+            {
+                SyntaxTree tree = treesByPath[sourceFile];
+                SemanticModel model = compilation.GetSemanticModel(tree);
+                foreach (ClassDeclarationSyntax node in tree.GetRoot().DescendantNodes()
+                    .OfType<ClassDeclarationSyntax>())
+                {
+                    if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol symbol ||
+                        !symbol.GetAttributes().Any(a =>
+                            a.AttributeClass?.ToDisplayString() == "Tallow.ComponentAttribute"))
+                        continue;
+                    bool isScript = false;
+                    for (INamedTypeSymbol? parent = symbol.BaseType; parent != null;
+                         parent = parent.BaseType)
+                        if (parent.ToDisplayString() == "Tallow.Script")
+                        {
+                            isScript = true;
+                            break;
+                        }
+                    if (!isScript)
+                        continue; // ECS struct/data will use a separate layout-safe registration path.
+                    if (symbol.IsAbstract || symbol.IsGenericType)
+                        continue;
+
+                    // A registry in the SAME assembly can create internal
+                    // classes, but not private nested classes.
+                    for (INamedTypeSymbol? scope = symbol; scope != null;
+                         scope = scope.ContainingType)
+                        if (scope.DeclaredAccessibility is not
+                            (Accessibility.Public or Accessibility.Internal))
+                            throw new InvalidOperationException(
+                                $"[Component] {symbol} is inaccessible to generated " +
+                                "registration. Make the component class internal or public.");
+
+                    if (!symbol.InstanceConstructors.Any(ctor =>
+                            ctor.Parameters.Length == 0 &&
+                            ctor.DeclaredAccessibility is
+                                (Accessibility.Public or Accessibility.Internal)))
+                        throw new InvalidOperationException(
+                            $"[Component] {symbol} needs a parameterless " +
+                            "constructor accessible to generated registration.");
+
+                    string name = symbol.ToDisplayString(
+                        SymbolDisplayFormat.CSharpErrorMessageFormat);
+                    types[name] = symbol.ToDisplayString(
+                        SymbolDisplayFormat.FullyQualifiedFormat);
+                }
+            }
+            allTypes.Add(assembly, types);
+        }
+
+        // Source is generated under .tallow-csharp, NEVER in the user's src.
+        // Avoid changing timestamps on no-op builds.
+        static void WriteIfDifferent(string path, string value)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            if (!File.Exists(path) || File.ReadAllText(path) != value)
+                File.WriteAllText(path, value);
+        }
+        foreach ((string assembly, SortedDictionary<string, string> types) in allTypes)
+        {
+            string className = FactoryName(assembly);
+            var source = new StringBuilder();
+            source.AppendLine("// Generated by Tallow.Build. Do not edit.")
+                .AppendLine("#nullable enable")
+                .AppendLine("namespace Tallow.Generated;")
+                .Append("public static class ").Append(className).AppendLine()
+                .AppendLine("{")
+                .AppendLine("    public static global::Tallow.Script? Create(string fullName) => fullName switch")
+                .AppendLine("    {");
+            foreach ((string typeName, string csharpName) in types)
+                source.Append("        ").Append(JsonSerializer.Serialize(typeName))
+                    .Append(" => new ").Append(csharpName).AppendLine("(),");
+            source.AppendLine("        _ => null")
+                .AppendLine("    };")
+                .AppendLine("}");
+            string output = Path.Combine(generated, assembly,
+                "Tallow.ComponentFactory.g.cs");
+            WriteIfDifferent(output, source.ToString());
+            filesByAssembly[assembly].Add(output);
+        }
+
+        // Game root references all assembly factories explicitly. A future
+        // NativeAOT player references THIS method to root constructors; the
+        // current JIT editor still uses reflection/ALC for hot reload.
+        var root = new StringBuilder();
+        root.AppendLine("// Generated by Tallow.Build. AOT root; no assembly scanning.")
+            .AppendLine("#nullable enable")
+            .AppendLine("namespace Tallow.Generated;")
+            .AppendLine("public static class TallowGeneratedGameRegistry")
+            .AppendLine("{")
+            .AppendLine("    public static global::Tallow.Script? Create(string fullName)")
+            .AppendLine("    {")
+            .AppendLine("        global::Tallow.Script? component;");
+        foreach (string assembly in allTypes.Keys.Order(StringComparer.Ordinal))
+            root.Append("        component = ").Append(FactoryName(assembly))
+                .AppendLine(".Create(fullName);")
+                .AppendLine("        if (component is not null) return component;");
+        root.AppendLine("        return null;")
+            .AppendLine("    }")
+            .AppendLine("}");
+        string rootPath = Path.Combine(generated, "Tallow.Game",
+            "Tallow.GameRegistry.g.cs");
+        WriteIfDifferent(rootPath, root.ToString());
+        filesByAssembly["Tallow.Game"].Add(rootPath);
+    }
+
     private static string Generate(string project, string engine)
     {
         string source = Path.Combine(project, "src");
@@ -174,6 +321,8 @@ internal static class Program
             }
             filesByAssembly[owner].Add(Path.GetFullPath(file));
         }
+
+        WriteComponentFactories(engine, generated, filesByAssembly);
 
         foreach ((string name, string path) in paths)
         {
