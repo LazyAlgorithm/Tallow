@@ -149,6 +149,16 @@ public static unsafe class NativeEntrypoints
         public uint Buttons, PreviousButtons;
     }
 
+    // Native/managed ABI: 4-byte instance, 24-byte current/previous
+    // TickInput, 4-byte deltaTime. No managed references or pointers.
+    [StructLayout(LayoutKind.Sequential)]
+    public struct NativeBatchInput
+    {
+        public int Instance;
+        public NativeInput Input;
+        public float DeltaTime;
+    }
+
     // These event IDs are shared with the native header and the Beef adapter.
     private enum ScriptEvent
     {
@@ -405,21 +415,57 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    private static void RunInputOne(int instance, NativeInput input, float deltaTime)
+    {
+        if (!sInstances.TryGetValue(instance, out Script? script))
+            throw new InvalidOperationException("Unknown managed gameplay instance.");
+        var tick = new TickInput(
+            new Vector2(input.MoveX, input.MoveZ),
+            new Vector2(input.Yaw, input.Pitch),
+            input.Buttons, input.PreviousButtons);
+        script.Update(tick, deltaTime);
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int UpdateInput(int instance, NativeInput* input, float deltaTime)
     {
         try
         {
-            if (!sInstances.TryGetValue(instance, out Script? script))
-                throw new InvalidOperationException("Unknown managed gameplay instance.");
             if (input == null)
                 throw new ArgumentNullException(nameof(input));
-            var tick = new TickInput(
-                new Vector2(input->MoveX, input->MoveZ),
-                new Vector2(input->Yaw, input->Pitch),
-                input->Buttons, input->PreviousButtons);
-            script.Update(tick, deltaTime);
+            RunInputOne(instance, *input, deltaTime);
             return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
+    /// <summary>
+    /// One transition for a native-ordered input batch. Every entry has its
+    /// own TickInput and previous buttons; no shared player input is assumed.
+    /// This is a scheduling primitive, not automatic rollback/prediction.
+    /// </summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int UpdateInputBatch(NativeBatchInput* items, int count)
+    {
+        try
+        {
+            if (count < 0 || count > 4096 || (count > 0 && items == null))
+                throw new ArgumentOutOfRangeException(nameof(count));
+            // Avoid partially dispatching a batch containing a stale instance.
+            for (int i = 0; i < count; i++)
+                if (!sInstances.ContainsKey(items[i].Instance))
+                    throw new InvalidOperationException("Unknown managed gameplay instance in input batch.");
+            for (int i = 0; i < count; i++)
+            {
+                // A prior Update could remove another script in the same
+                // batch; preserve lifecycle safety by skipping detached IDs.
+                if (sInstances.ContainsKey(items[i].Instance))
+                    RunInputOne(items[i].Instance, items[i].Input, items[i].DeltaTime);
+            }
+            return count;
         }
         catch (Exception exception)
         {

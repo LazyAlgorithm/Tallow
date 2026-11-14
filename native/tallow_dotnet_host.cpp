@@ -41,6 +41,7 @@ using tick_fn = int32_t (*)(int32_t, float);
 using dispatch_fn = int32_t (*)(int32_t, int32_t, float);
 using dispatch_batch_fn = int32_t (*)(const int32_t*, int32_t, int32_t, float);
 using update_input_fn = int32_t (*)(int32_t, const tn_csharp_tick_input*, float);
+using update_input_batch_fn = int32_t (*)(const tn_csharp_tick_batch_item*, int32_t);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
 using shutdown_fn = int32_t (*)();
@@ -57,6 +58,7 @@ tick_fn tick = nullptr;
 dispatch_fn dispatch = nullptr;
 dispatch_batch_fn dispatch_batch = nullptr;
 update_input_fn update_input = nullptr;
+update_input_batch_fn update_input_batch = nullptr;
 detach_fn detach = nullptr;
 last_error_fn last_error = nullptr;
 shutdown_fn shutdown_runtime = nullptr;
@@ -318,6 +320,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "Dispatch", dispatch) ||
             !find_entry(assembly.c_str(), "DispatchBatch", dispatch_batch) ||
             !find_entry(assembly.c_str(), "UpdateInput", update_input) ||
+            !find_entry(assembly.c_str(), "UpdateInputBatch", update_input_batch) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
             !find_entry(assembly.c_str(), "GetLastError", last_error) ||
             !find_entry(assembly.c_str(), "Shutdown", shutdown_runtime))
@@ -433,6 +436,18 @@ int32_t tn_csharp_update_input(int32_t script_instance,
     return result > 0;
 }
 
+int32_t tn_csharp_update_input_batch(
+    const tn_csharp_tick_batch_item* items, int32_t count)
+{
+    if (!started || !update_input_batch || count < 0 || count > 4096 ||
+        (count > 0 && !items))
+        return -1;
+    const int32_t result = update_input_batch(items, count);
+    if (result < 0)
+        managed_error("Updating a C# gameplay input batch");
+    return result;
+}
+
 int32_t tn_csharp_detach(int32_t script_instance)
 {
     if (!started || !detach)
@@ -457,6 +472,7 @@ void tn_csharp_shutdown(void)
     dispatch = nullptr;
     dispatch_batch = nullptr;
     update_input = nullptr;
+    update_input_batch = nullptr;
     detach = nullptr;
     last_error = nullptr;
     shutdown_runtime = nullptr;

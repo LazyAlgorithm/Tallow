@@ -378,3 +378,21 @@ claim automatic replication of dynamically created joints.
   its original correct ID is `9e37fa4f1b5124ae`. Restored that ID,
   fixed the new CI hash guard, and cross-checked every native-host
   symbol against the complete fixture.
+
+### Batched network-input update ABI (November 14, 2026)
+
+- A new `tn_csharp_update_input_batch` native/managed entrypoint dispatches
+  **distinct** `TickInput` (move, look, button state, previous buttons) and
+  delta time for each C# script in an ordered batch. This avoids accidentally
+  reusing one player's state for another. The 32-byte C/Beef/.NET record
+  remains value-only, with no pointers to native entities or Jolt objects.
+- The .NET dispatcher shares the same `RunInputOne` path as individual
+  `UpdateInput`, rejects stale initial batches before calling any script,
+  and skips an instance detached by an earlier callback in that same batch.
+  Native host smoke checks the independent input edge state and two different
+  delta times, plus empty, null, negative/oversized and stale cases.
+- This **does not enable automatic scheduling or prediction yet**. The native
+  Scene and NetworkManager keep checking ownership, enabled state and replay
+  order on their existing path; a future ECS dispatcher must preserve those
+  checks before grouping scripts. Avoid assuming batching improves throughput
+  without benchmark results.

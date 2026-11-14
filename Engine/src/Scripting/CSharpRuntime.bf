@@ -41,7 +41,7 @@ static class CSharpRuntime
 	}
 
 	[CRepr]
-	struct NativeTickInput
+	public struct NativeTickInput
 	{
 		public float moveX;
 		public float moveZ;
@@ -50,6 +50,16 @@ static class CSharpRuntime
 		public uint32 buttons;
 		public uint32 previousButtons;
 	}
+
+	/// Exactly the 32-byte layout of tn_csharp_tick_batch_item.
+    /// Only engine scheduling code creates this record.
+    [CRepr]
+    public struct NativeTickBatchItem
+    {
+        public int32 instance;
+        public NativeTickInput input;
+        public float deltaTime;
+    }
 
 	[CLink] static extern int32 tn_csharp_init(char8* runtimeConfig, char8* managedAssembly);
 	[CLink] static extern int32 tn_csharp_set_callbacks(Callbacks* callbacks);
@@ -61,6 +71,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_dispatch(int32 instance, int32 eventId, float deltaTime);
     [CLink] static extern int32 tn_csharp_dispatch_batch(int32* instances, int32 count, int32 eventId, float deltaTime);
 	[CLink] static extern int32 tn_csharp_update_input(int32 instance, NativeTickInput* input, float deltaTime);
+    [CLink] static extern int32 tn_csharp_update_input_batch(NativeTickBatchItem* items, int32 count);
 	[CLink] static extern int32 tn_csharp_detach(int32 instance);
 	[CLink] static extern void tn_csharp_shutdown();
 	[CLink] static extern char8* tn_csharp_error();
@@ -265,6 +276,24 @@ static class CSharpRuntime
 		Log.Warning(scope $"C# gameplay update failed: {StringView(tn_csharp_error())}");
 		return false;
 	}
+
+	/// Trusted engine-only batching primitive. The caller supplies one
+    /// session-validated, eligible script ID and corresponding network input
+    /// per entry; the managed host does not read local device input.
+    public static bool UpdateBatch(Span<NativeTickBatchItem> items)
+    {
+        if (!Ready)
+            return false;
+        if (items.Length == 0)
+            return true;
+        if (items.Length > 4096)
+            return false;
+        let result = tn_csharp_update_input_batch(items.Ptr, (int32)items.Length);
+        if (result == items.Length)
+            return true;
+        Log.Warning(scope $"C# network input batch failed: {StringView(tn_csharp_error())}");
+        return false;
+    }
 
 	/// Apply serialized public field overrides to a trusted script, including
 	/// while playing. The native component owns these settings for scene files.

@@ -41,6 +41,14 @@ typedef struct tn_csharp_tick_input {
     uint32_t previous_buttons;
 } tn_csharp_tick_input;
 
+// Fixed 32-byte C ABI record. Every managed script keeps its own current/
+// previous input, replay order and delta time; no ownership pointers cross.
+typedef struct tn_csharp_tick_batch_item {
+    int32_t instance;
+    tn_csharp_tick_input input;
+    float delta_time;
+} tn_csharp_tick_batch_item;
+
 enum tn_csharp_event_id {
     TN_CSHARP_AWAKE = 0,
     TN_CSHARP_ENABLE = 1,
@@ -68,6 +76,11 @@ int32_t tn_csharp_dispatch_batch(const int32_t* instances, int32_t count,
     int32_t event_id, float delta_time);
 int32_t tn_csharp_update_input(int32_t script_instance,
     const tn_csharp_tick_input* input, float delta_time);
+// Call Update(TickInput,float) for up to 4096 ordered native records with a
+// single native->CLR transition; -1 on invalid data, count on success.
+// Native scheduling/eligibility remains the caller's responsibility.
+int32_t tn_csharp_update_input_batch(
+    const tn_csharp_tick_batch_item* items, int32_t count);
 int32_t tn_csharp_detach(int32_t script_instance);
 void tn_csharp_shutdown(void);
 const char* tn_csharp_error(void);

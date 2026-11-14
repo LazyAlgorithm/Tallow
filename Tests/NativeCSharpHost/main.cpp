@@ -773,6 +773,35 @@ int main(int argc, char** argv)
         std::fabs(state.position[2] - 2.0f) > 0.0001f)
         return Failure("Jump was not edge-triggered");
 
+    // Native tick batching carries independent input/button-edge state
+    // for each script; the batch must not borrow another player's input.
+    const int32_t secondInput = tn_csharp_attach("Gameplay.InputEcho", 1, 1);
+    if (secondInput < 1)
+        return Failure("attaching second batched network-input script");
+    const float xBeforeBatch = state.position[0];
+    const float yBeforeBatch = state.position[1];
+    const float zBeforeBatch = state.position[2];
+    const tn_csharp_tick_batch_item inputBatch[] = {
+        {inputScript, {0, 1, 0, 0, 1, 1}, 0.25f},
+        {secondInput, {1, 0, 0, 0, 1, 0}, 0.5f}
+    };
+    if (tn_csharp_update_input_batch(inputBatch, 2) != 2 ||
+        std::fabs(state.position[0] - xBeforeBatch - 0.5f) > 0.0001f ||
+        std::fabs(state.position[1] - yBeforeBatch - 5.0f) > 0.0001f ||
+        std::fabs(state.position[2] - zBeforeBatch - 0.25f) > 0.0001f)
+        return Failure("batched TickInput position and button-edge parity");
+    if (tn_csharp_update_input_batch(nullptr, 0) != 0 ||
+        tn_csharp_update_input_batch(nullptr, 2) != -1 ||
+        tn_csharp_update_input_batch(inputBatch, -1) != -1 ||
+        tn_csharp_update_input_batch(inputBatch, 4097) != -1)
+        return Failure("batched TickInput pointer/count validation");
+    if (!tn_csharp_detach(secondInput))
+        return Failure("detaching second network-input batch component");
+    const float beforeRejectedBatch = state.position[2];
+    if (tn_csharp_update_input_batch(inputBatch, 2) != -1 ||
+        state.position[2] != beforeRejectedBatch)
+        return Failure("stale network-input batch dispatched a valid prefix");
+
     if (!tn_csharp_dispatch(inputScript, TN_CSHARP_LOCAL_UPDATE, 0.0f) ||
         !tn_csharp_dispatch(inputScript, TN_CSHARP_LATE_UPDATE, 1.0f) ||
         !tn_csharp_dispatch(inputScript, TN_CSHARP_DISABLE, 0.0f) ||
