@@ -65,10 +65,19 @@ static class CSharpBindingManifest
         for (int i < method.ParamCount)
         {
             let parameter = scope String();
-            if (method.GetParamFlags(i) != .None ||
-                !MapValueType(method.GetParamType(i), parameter) || parameter == "void")
+            let paramType = method.GetParamType(i);
+            let flags = method.GetParamFlags(i);
+            // Beef can mark StringView with the implicit/splat metadata used
+            // for its transparent value representation. Those flags are safe
+            // for our explicit byte-pointer + length ABI and must not reject
+            // ordinary StringView arguments. All other non-None flags,
+            // including Params/HasDefault/AppendIdx, remain unsupported.
+            bool stringViewFlags = paramType == typeof(StringView) &&
+                (flags == .Splat || flags == .Implicit || flags == (.Splat | .Implicit));
+            if ((!stringViewFlags && flags != .None) ||
+                !MapValueType(paramType, parameter) || parameter == "void")
             {
-                error.AppendF("[CSharpExpose] {} parameter {} has an unsupported type or modifier (no ref/out, defaults, pointers or generics).", signature, i + 1);
+                error.AppendF("[CSharpExpose] {} parameter {} has unsupported type {} or modifier {} (defaults, params and append are not supported).", signature, i + 1, paramType, flags);
                 delete record;
                 return false;
             }
