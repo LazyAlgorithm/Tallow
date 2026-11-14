@@ -328,7 +328,7 @@ static class CSharpRuntime
 		if (!ValidSceneName(session, name, length))
 			return 0;
 		let found = sScene.Find(.(name, length));
-		return found != null && !found.IsDestroyed ? found.Id : 0;
+		return (found != null && !found.IsDestroyed) ? (uint64)found.Id : 0;
 	}
 
 	static uint64 InstantiatePrefab(void* context, uint64 session, char8* path, int32 length)
@@ -337,7 +337,7 @@ static class CSharpRuntime
 			return 0;
 		// Prefab.Instantiate already enforces network authority and ownership.
 		let created = Prefab.Instantiate(sScene, .(path, length));
-		return created != null && !created.IsDestroyed ? created.Id : 0;
+		return (created != null && !created.IsDestroyed) ? (uint64)created.Id : 0;
 	}
 
 	/// Used by native engine-build CI to ensure generated wrappers really
