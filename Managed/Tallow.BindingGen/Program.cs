@@ -235,7 +235,7 @@ internal static class Program
             .AppendLine("}").AppendLine();
         foreach (IGrouping<string, Method> group in methods.GroupBy(m => m.Owner))
         {
-            text.AppendLine($"public static unsafe class {group.Key["Tallow.".Length..]}")
+            text.AppendLine($"public static unsafe partial class {group.Key["Tallow.".Length..]}")
                 .AppendLine("{")
                 .AppendLine("\tinternal static void __TallowResetGeneratedNativeBindings()")
                 .AppendLine("\t{");
@@ -361,6 +361,7 @@ internal static class Program
         string csharp = EmitCSharp(parsed, version);
         if (parsed.Count != 1 || !beef.Contains("CSharpBindingFixture.Average(p0, p1);") ||
             !beef.Contains("CSharpApiVersion_") ||
+            !csharp.Contains("public static unsafe partial class CSharpBindingFixture") ||
             !csharp.Contains("public static float Average(float a, float b)") ||
             !csharp.Contains("delegate* unmanaged[Cdecl]<float, float, float>") ||
             !csharp.Contains("__TallowResetGeneratedNativeBindings()") ||

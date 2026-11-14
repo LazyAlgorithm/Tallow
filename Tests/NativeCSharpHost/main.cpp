@@ -157,6 +157,10 @@ static void ExposedLogInfo(const char* text, int32_t length)
 }
 static float GetTestTimeScale() { return testTimeScale; }
 static void SetTestTimeScale(float value) { testTimeScale = value; }
+static float ExposedClamp(float value, float minimum, float maximum)
+{
+    return std::fmax(minimum, std::fmin(value, maximum));
+}
 static float ExposedAverage(float a, float b)
 {
     ++firstAverageCalls;
@@ -181,7 +185,11 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&GetTestTimeScale);
     if (name == "CSharpApi_d0d279519519c93c")
         return reinterpret_cast<void*>(&SetTestTimeScale);
-    if (name.rfind("CSharpApi_", 0) == 0)
+    // This method's public C# definition is generated exclusively from the
+    // annotated Beef Mathf.Clamp; there is no separate handwritten method.
+    if (name == "CSharpApi_b2b00815360bbf36")
+        return reinterpret_cast<void*>(&ExposedClamp);
+    if (name == "CSharpApi_17858942906a9c6f")
         return useSecondBinding ? reinterpret_cast<void*>(&ExposedAverageRebound) :
                                   reinterpret_cast<void*>(&ExposedAverage);
     return nullptr;

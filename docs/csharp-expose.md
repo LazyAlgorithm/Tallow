@@ -154,3 +154,27 @@ ownership are preserved, including the possibility of a null client-side
 return. A C++ native-host regression drives the C# facade and checks the
 original names and paths. This first bridge does not yet implement hierarchy
 parenting, full scene iteration, component querying, or all Unity-like APIs.
+
+
+### One public API definition per exposed method
+
+**Generated `[CSharpExpose]` wrappers are authoritative.** The old
+handwritten `Managed/Tallow.API/Mathf.cs` method implementations have been
+removed rather than shadowing/reimplementing the native engine math API.
+Only the four C# compile-time numeric constants remain in a
+`public static partial class Mathf`; the generator now emits
+`public static unsafe partial class Mathf` so the constants and **generated**
+methods share a single C# type.
+
+The native-host fixture maps generated `Mathf.Clamp` by its exact ABI hash
+and checks its result, instead of sending every unresolved generated symbol
+to the `CSharpBindingFixture.Average` stub.
+
+**Scope boundary:** `Script`, `GameObject`, `Scene`, and `Transform`
+currently contain compatibility facades and trusted runtime callback plumbing.
+Removing those before instance handles, lifecycle registration, property
+metadata and ownership are supported by the generator would break gameplay.
+The migration goal is to replace native-call bindings in those facades with
+generated methods, keeping high-level C# types as lightweight ergonomics rather
+than duplicating native implementations. Do not add new handwritten native
+method mirrors; put `[CSharpExpose]` on the Beef source instead.
