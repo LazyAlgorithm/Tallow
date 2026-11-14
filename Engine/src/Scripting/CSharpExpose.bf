@@ -30,6 +30,10 @@ namespace Tallow;
     AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 struct CSharpExposeAttribute : Attribute
 {
+    // Static fields are read-only in C# unless the engine author explicitly
+    // grants write access. A mutable native counter is not automatically
+    // writable by gameplay scripts.
+    public bool Writable;
 }
 
 /// Engine-internal marker applied ONLY to generated ABI entrypoints.

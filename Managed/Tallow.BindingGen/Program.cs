@@ -13,7 +13,7 @@ internal static class Program
 {
     private sealed record Parameter(string Name, string Type);
     private sealed record Method(string Owner, string Name, string Result,
-        IReadOnlyList<Parameter> Parameters, string Id, bool IsField);
+        IReadOnlyList<Parameter> Parameters, string Id, bool IsField, bool CanWrite);
     private static readonly Regex Identifier = new(
         @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
 
@@ -74,7 +74,7 @@ internal static class Program
             string[] fields = lines[i].Split('\t');
             bool isField = fields[0] == "field";
             if (fields.Length < 4 || fields[0] is not ("method" or "field") ||
-                isField && (fields.Length != 5 || fields[4] != "get"))
+                isField && (fields.Length != 5 || fields[4] is not ("get" or "getset")))
                 throw new FormatException($"Manifest line {i + 1}: expected annotated method or read-only field.");
             string owner = fields[1], name = fields[2], result = fields[3];
             // Stage 1 intentionally exposes only public Tallow-root static
@@ -84,6 +84,9 @@ internal static class Program
                 !Identifier.IsMatch(name) || !IsType(result, allowVoid: !isField) ||
                 isField && name == owner["Tallow.".Length..])
                 throw new FormatException($"Manifest line {i + 1}: unsupported owner or return type: {owner}.{name}.");
+            bool canWrite = isField && fields[4] == "getset";
+            if (canWrite && Dimensions(result) != 0)
+                throw new FormatException($"Manifest line {i + 1}: vector field setters are not supported yet.");
             List<Parameter> parameters = [];
             for (int j = 4; j < (isField ? 4 : fields.Length); j++)
             {
@@ -103,7 +106,7 @@ internal static class Program
             string id = Hash(signature);
             if (!signatures.Add(signature) || !ids.Add(id))
                 throw new FormatException($"Duplicate or colliding exposed method signature: {signature}.");
-            methods.Add(new(owner, name, result, parameters, id, isField));
+            methods.Add(new(owner, name, result, parameters, id, isField, canWrite));
         }
         return methods.OrderBy(m => m.Owner, StringComparer.Ordinal)
             .ThenBy(m => m.Name, StringComparer.Ordinal)
@@ -164,6 +167,16 @@ internal static class Program
                 else
                     text.AppendLine($"\t\treturn {call};");
                 text.AppendLine("\t}").AppendLine();
+                if (m.CanWrite)
+                {
+                    string setter = $"CSharpApi_{Hash("set|" + m.Id)}";
+                    string type = NativeType(m.Result);
+                    text.AppendLine("\t[Export, CLink, Reflect, AlwaysInclude, CSharpApiExport]")
+                        .AppendLine($"\tpublic static void {setter}({type} value)")
+                        .AppendLine("\t{")
+                        .AppendLine($"\t\t{m.Owner}.{m.Name} = {(m.Result == "bool" ? "(value != 0)" : "value")};")
+                        .AppendLine("\t}").AppendLine();
+                }
             }
             text.AppendLine("}").AppendLine();
         }
@@ -209,7 +222,11 @@ internal static class Program
                 .AppendLine("\tinternal static void __TallowResetGeneratedNativeBindings()")
                 .AppendLine("\t{");
             foreach (Method m in group)
+            {
                 text.AppendLine($"\t\ts_Ptr_{m.Id} = 0;");
+                if (m.CanWrite)
+                    text.AppendLine($"\t\ts_SetPtr_{m.Id} = 0;");
+            }
             text.AppendLine("\t}");
             foreach (Method m in group)
             {
@@ -218,7 +235,14 @@ internal static class Program
                 text.AppendLine($"\tprivate static nint {cache};");
                 string publicArgs = string.Join(", ", m.Parameters.Select(p => $"{CSharpType(p.Type)} {p.Name}"));
                 if (m.IsField)
-                    text.AppendLine($"\tpublic static {CSharpType(m.Result)} {m.Name} => __TallowGet_{m.Id}();");
+                {
+                    text.AppendLine($"\tpublic static {CSharpType(m.Result)} {m.Name}")
+                        .AppendLine("\t{")
+                        .AppendLine($"\t\tget => __TallowGet_{m.Id}();");
+                    if (m.CanWrite)
+                        text.AppendLine($"\t\tset => __TallowSet_{m.Id}(value);");
+                    text.AppendLine("\t}");
+                }
                 text.AppendLine($"\t{(m.IsField ? "private" : "public")} static {CSharpType(m.Result)} {(m.IsField ? $"__TallowGet_{m.Id}" : m.Name)}({publicArgs})")
                     .AppendLine("\t{")
                     .AppendLine($"\t\tnint ptr = {cache};")
@@ -253,6 +277,18 @@ internal static class Program
                 else
                     text.AppendLine($"\t\treturn {call};");
                 text.AppendLine("\t}").AppendLine();
+                if (m.CanWrite)
+                {
+                    string setter = $"CSharpApi_{Hash("set|" + m.Id)}";
+                    string abi = CAbiType(m.Result);
+                    text.AppendLine($"\tprivate static nint s_SetPtr_{m.Id};")
+                        .AppendLine($"\tprivate static void __TallowSet_{m.Id}({CSharpType(m.Result)} value)")
+                        .AppendLine("\t{")
+                        .AppendLine($"\t\tnint ptr = s_SetPtr_{m.Id};")
+                        .AppendLine($"\t\tif (ptr == 0) s_SetPtr_{m.Id} = ptr = GeneratedNativeApi.Resolve(\"{setter}\");")
+                        .AppendLine($"\t\t((delegate* unmanaged[Cdecl]<{abi}, void>)ptr)({(m.Result == "bool" ? "(value ? 1 : 0)" : "value")});")
+                        .AppendLine("\t}").AppendLine();
+                }
             }
             text.AppendLine("}").AppendLine();
         }
@@ -308,6 +344,15 @@ internal static class Program
             !csharpFields.Contains("public static float DeltaTime => __TallowGet_") ||
             csharpFields.Contains("public static long get_FrameCount"))
             throw new Exception("Read-only static field/property lowering failed.");
+        const string writableManifest = "TALLOW_CSHARP_API_V1\nfield\tTallow.Time\tTimeScale\tfloat\tgetset\n";
+        List<Method> writable = Parse(writableManifest);
+        string nativeWritable = EmitBeef(writable, Hash(writableManifest));
+        string managedWritable = EmitCSharp(writable, Hash(writableManifest));
+        if (!nativeWritable.Contains("Tallow.Time.TimeScale = value;") ||
+            !managedWritable.Contains("set => __TallowSet_") ||
+            !managedWritable.Contains("delegate* unmanaged[Cdecl]<float, void>") ||
+            !managedWritable.Contains("s_SetPtr_"))
+            throw new Exception("Explicitly writable field setter binding failed.");
         foreach (string invalid in new[]
         {
             "TALLOW_CSHARP_API_V1\nmethod\tTallow.Bad\tOops\tSystem.String\n",

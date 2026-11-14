@@ -29,7 +29,7 @@ static class Time
 	[CSharpExpose]
 	public static float RealTime;
 	/// How fast game time runs: 1 is normal, 0.5 slow motion, 0 paused.
-	[CSharpExpose]
+	[CSharpExpose(Writable = true)]
 	public static float TimeScale = 1.0f;
 	/// How fast simulation ticks come round compared with real time. A network client moves this a few percent
 	/// either side of 1 to stay in step with the server; each tick still simulates FixedDeltaTime.

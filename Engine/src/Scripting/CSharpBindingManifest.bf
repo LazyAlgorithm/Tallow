@@ -114,7 +114,7 @@ static class CSharpBindingManifest
 
             for (let field in type.GetFields(.Public | .NonPublic | .Static | .Instance | .DeclaredOnly))
             {
-                if (!(field.GetCustomAttribute<CSharpExposeAttribute>() case .Ok))
+                if (!(field.GetCustomAttribute<CSharpExposeAttribute>() case .Ok(let annotation)))
                     continue;
                 if (!exposedType)
                 {
@@ -132,9 +132,14 @@ static class CSharpBindingManifest
                     error.AppendF("[CSharpExpose] {}.{} has an unsupported field type. Expose a safe scalar or vector value.", owner, field.Name);
                     return false;
                 }
-                // Read-only by default even when Beef permits modification.
-                // Runtime stats must not become mutable from managed gameplay.
-                records.Add(new String()..AppendF("field\t{}\t{}\t{}\tget", owner, field.Name, fieldType));
+                if (annotation.Writable && (field.IsReadOnly || fieldType.StartsWith("System.Numerics.")))
+                {
+                    error.AppendF("[CSharpExpose] {}.{} cannot be writable: only mutable scalar fields support generated C# setters yet.", owner, field.Name);
+                    return false;
+                }
+                // A native field does not authorize C# writes unless expressly
+                // opted in by the engine author.
+                records.Add(new String()..AppendF("field\t{}\t{}\t{}\t{}", owner, field.Name, fieldType, annotation.Writable ? "getset" : "get"));
             }
         }
 

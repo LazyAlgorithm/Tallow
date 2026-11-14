@@ -5,3 +5,4 @@ method	Tallow.Noise	Perlin	float	x:float	y:float	z:float	seed:uint
 field	Tallow.Time	DeltaTime	float	get
 field	Tallow.Time	FrameCount	long	get
 field	Tallow.Time	SmoothedFps	float	get
+field	Tallow.Time	TimeScale	float	getset

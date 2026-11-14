@@ -12,6 +12,12 @@ public sealed class GeneratedBindingSmoke : Script
 {
     public override void Awake()
     {
+        // Safe read/write scalar binding generated from Beef's TimeScale
+        // declaration, not a manually duplicated C# API signature.
+        Time.TimeScale = 0.5f;
+        if (MathF.Abs(Time.TimeScale - 0.5f) > 0.0001f)
+            throw new InvalidOperationException("Generated writable TimeScale property failed.");
+
         float average = CSharpBindingFixture.Average(4f, 6f);
         if (MathF.Abs(average - 5f) > 0.0001f)
             throw new InvalidOperationException("Generated [CSharpExpose] binding returned the wrong value.");

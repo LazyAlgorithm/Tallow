@@ -111,3 +111,16 @@ The first consumer is the engine's `Time` runtime counters: `DeltaTime`,
 C# member of the `Time` type (same name), so an alias scheme will be added
 before exposing that one. This is not yet instance-property/scene-handle
 support, and full parity is still pending native CI confirmation.
+
+
+### Explicit field setters
+
+The public attribute now has `Writable` (default false). A mutable static
+scalar field annotated `[CSharpExpose(Writable = true)]` emits both native
+get/set C ABI entrypoints and a standard C# property with `get` and `set`.
+The first such field is `Time.TimeScale`. Compiler metadata validates that
+only a public, mutable, static, non-generic field can opt into writes; vector
+field setters are still deferred until their ownership/marshalling is tested.
+Unmarked or read-only counters remain inaccessible for assignment from C#.
+The standalone host integration asserts that assigning the generated C#
+property reaches the native setter.

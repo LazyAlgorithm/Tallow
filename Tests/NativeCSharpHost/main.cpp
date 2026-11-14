@@ -118,6 +118,9 @@ static int32_t IsMine(void*, uint64_t scene, uint64_t object)
 static int firstAverageCalls = 0;
 static int secondAverageCalls = 0;
 static bool useSecondBinding = false;
+static float testTimeScale = 1.0f;
+static float GetTestTimeScale() { return testTimeScale; }
+static void SetTestTimeScale(float value) { testTimeScale = value; }
 static float ExposedAverage(float a, float b)
 {
     ++firstAverageCalls;
@@ -135,6 +138,11 @@ static void* ResolveApi(void*, const char* symbol)
     const std::string name(symbol);
     if (name.rfind("CSharpApiVersion_", 0) == 0)
         return reinterpret_cast<void*>(&ExposedVersion);
+    // IDs are deterministic SHA-256 signature hashes emitted by BindingGen.
+    if (name == "CSharpApi_00ab8c332afb3504")
+        return reinterpret_cast<void*>(&GetTestTimeScale);
+    if (name == "CSharpApi_d0d279519519c93c")
+        return reinterpret_cast<void*>(&SetTestTimeScale);
     if (name.rfind("CSharpApi_", 0) == 0)
         return useSecondBinding ? reinterpret_cast<void*>(&ExposedAverageRebound) :
                                   reinterpret_cast<void*>(&ExposedAverage);
@@ -290,6 +298,8 @@ int main(int argc, char** argv)
         return Failure("generated method did not execute native ABI");
     if (!tn_csharp_detach(generated))
         return Failure("detaching generated binding test");
+    if (std::fabs(testTimeScale - 0.5f) > 0.0001f)
+        return Failure("native TimeScale setter was not reached");
     if (firstAverageCalls != 1 || secondAverageCalls != 0)
         return Failure("initial native binding did not execute once");
 
