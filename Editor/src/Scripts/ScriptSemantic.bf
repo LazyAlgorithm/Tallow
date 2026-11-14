@@ -40,6 +40,9 @@ class ScriptSemantic
 	// Always rebuild Roslyn once after launching the editor: a previously built
 	// DLL may be stale after the user pulls changes to the C# integration branch.
 	bool mCSharpWorkerBuilt;
+	bool mCSharpServerStarted;
+	String mCSharpQueue = new .() ~ delete _;
+	String mCSharpServiceCommand = new .() ~ delete _;
 	String mFolder = new .() ~ delete _;
 	String mCommand = new .() ~ delete _;
 	public bool running;
@@ -60,6 +63,8 @@ class ScriptSemantic
 		}
 		if (!mFolder.IsEmpty)
 			Directory.DelTree(mFolder).IgnoreError();
+		if (!mCSharpQueue.IsEmpty)
+			File.WriteAllText(scope $"{mCSharpQueue}/stop", "stop").IgnoreError();
 	}
 
 	public int Find(StringView file)
@@ -129,7 +134,16 @@ class ScriptSemantic
 		status.Set(isCSharp ? "C#: resolving..." : "Resolving...");
 		if (!mFolder.IsEmpty)
 			Directory.DelTree(mFolder).IgnoreError();
-		mFolder.Set(scope $"{Project.Current.Path}/.tallow-language/{SDL.SDL_GetTicksNS()}");
+		if (isCSharp)
+		{
+			if (mCSharpQueue.IsEmpty)
+				mCSharpQueue.Set(scope $"{Project.Current.Path}/.tallow-language/roslyn-{SDL.SDL_GetTicksNS()}");
+			if (Directory.CreateDirectory(mCSharpQueue) case .Err)
+				return false;
+			mFolder.Set(scope $"{mCSharpQueue}/request-{SDL.SDL_GetTicksNS()}");
+		}
+		else
+			mFolder.Set(scope $"{Project.Current.Path}/.tallow-language/{SDL.SDL_GetTicksNS()}");
 		if (Directory.CreateDirectory(mFolder) case .Err)
 			return false;
 		let manifest = scope $"operation\t{request}\nfile\t{path}\ncursor\t{byteOffset}\nnew_name\t{newName}\n";
@@ -148,21 +162,30 @@ class ScriptSemantic
 		mCommand.Clear();
 		if (isCSharp)
 		{
-			// Execute the managed compiler directly; gameplay scripting never invokes Python.
+			// Build Roslyn once, then leave the compiler running as an editor
+			// process. Each semantic query uses a lightweight queue request.
 			let service = scope $"{Project.Current.EngineRoot}/Managed/Tallow.LanguageService/Tallow.LanguageService.csproj";
 			let dll = scope $"{Project.Current.EngineRoot}/Managed/Tallow.LanguageService/bin/Debug/net11.0/Tallow.LanguageService.dll";
 			if (!mCSharpWorkerBuilt)
 			{
 				mCommand.Append("dotnet build ");
 				Terminal.Quote(service, mCommand);
-				mCommand.Append(" --configuration Debug --nologo --verbosity quiet && ");
+				mCommand.Append(" --configuration Debug --nologo --verbosity quiet > ");
+				Terminal.Quote(scope $"{mFolder}/worker.log", mCommand);
+				mCommand.Append(" 2>&1");
 			}
-			mCommand.Append("dotnet ");
-			Terminal.Quote(dll, mCommand);
-			mCommand.Append(" --project ");
-			Terminal.Quote(Project.Current.Path, mCommand);
-			mCommand.Append(" --engine-root ");
-			Terminal.Quote(Project.Current.EngineRoot, mCommand);
+			mCSharpServiceCommand.Clear();
+			mCSharpServiceCommand.Append("dotnet ");
+			Terminal.Quote(dll, mCSharpServiceCommand);
+			mCSharpServiceCommand.Append(" --serve ");
+			Terminal.Quote(mCSharpQueue, mCSharpServiceCommand);
+			mCSharpServiceCommand.Append(" --project ");
+			Terminal.Quote(Project.Current.Path, mCSharpServiceCommand);
+			mCSharpServiceCommand.Append(" --engine-root ");
+			Terminal.Quote(Project.Current.EngineRoot, mCSharpServiceCommand);
+			mCSharpServiceCommand.Append(" > ");
+			Terminal.Quote(scope $"{mCSharpQueue}/server.log", mCSharpServiceCommand);
+			mCSharpServiceCommand.Append(" 2>&1");
 		}
 		else
 		{
@@ -172,18 +195,45 @@ class ScriptSemantic
 			mCommand.Append(" --project ");
 			Terminal.Quote(Project.Current.Path, mCommand);
 		}
-		mCommand.Append(" --request ");
-		Terminal.Quote(mFolder, mCommand);
-		mCommand.Append(" > ");
-		Terminal.Quote(scope $"{mFolder}/worker.log", mCommand);
-		mCommand.Append(" 2>&1");
+		if (!isCSharp)
+		{
+			mCommand.Append(" --request ");
+			Terminal.Quote(mFolder, mCommand);
+			mCommand.Append(" > ");
+			Terminal.Quote(scope $"{mFolder}/worker.log", mCommand);
+			mCommand.Append(" 2>&1");
+		}
 		running = true;
 		mFinished = false;
 		mWorker = new Thread(new () =>
 			{
-				let exitCode = Terminal.Run(mCommand);
-				if (isCSharp && exitCode == 0)
-					mCSharpWorkerBuilt = true;
+				if (isCSharp)
+				{
+					if (!mCSharpWorkerBuilt)
+					{
+						if (Terminal.Run(mCommand) == 0)
+							mCSharpWorkerBuilt = true;
+					}
+					if (mCSharpWorkerBuilt)
+					{
+						if (!mCSharpServerStarted)
+						{
+							File.Delete(scope $"{mCSharpQueue}/ready").IgnoreError();
+							File.Delete(scope $"{mCSharpQueue}/stop").IgnoreError();
+							Terminal.RunDetached(mCSharpServiceCommand);
+							mCSharpServerStarted = true;
+						}
+						// The request is already written. Normally the warm worker
+						// responds in milliseconds, without starting a new runtime.
+						for (int tries = 0; tries < 500 &&
+							!File.Exists(scope $"{mFolder}/response.tsv"); tries++)
+							Thread.Sleep(20);
+						if (!File.Exists(scope $"{mFolder}/response.tsv"))
+							mCSharpServerStarted = false;
+					}
+				}
+				else
+					Terminal.Run(mCommand);
 				if (File.ReadAllText(scope $"{mFolder}/response.tsv" , result, true) case .Err)
 				{
 					// The .NET process may fail before it can write response.tsv
@@ -191,7 +241,8 @@ class ScriptSemantic
 					// useful error in the editor instead of a raw wait status.
 					let workerLog = scope String();
 					let detail = scope String();
-					if (File.ReadAllText(scope $"{mFolder}/worker.log", workerLog, true) case .Ok)
+					let logPath = isCSharp && mCSharpWorkerBuilt ? scope $"{mCSharpQueue}/server.log" : scope $"{mFolder}/worker.log";
+					if (File.ReadAllText(logPath, workerLog, true) case .Ok)
 					{
 						for (let line in workerLog.Split('\n'))
 						{
