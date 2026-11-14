@@ -30,7 +30,7 @@ public sealed class InspectorSerializationSmoke : Script
     [ShowInInspector]
     private bool privateEnabled = true;
 
-    [SerializeField]
+    [ShowInInspector]
     private int serializedCounter = 4;
 
     [HideInInspector]
@@ -39,13 +39,17 @@ public sealed class InspectorSerializationSmoke : Script
     [HideInInspector]
     private int hiddenPrivate = 6;
 
-    [SerializeField, HideInInspector]
+    [HideInInspector]
     private int hiddenSerialized = 11;
 
     [NonSerialized, ShowInInspector]
     private int skippedNonSerialized = 7;
 
     private int implementationOnly = 8;
+
+    // A stable ID alone must not opt a private field into serialization.
+    [SerializedFieldId("nonpersistent-private-state")]
+    private int privateIdOnly = 12;
 
     public override void Awake()
     {
@@ -56,7 +60,8 @@ public sealed class InspectorSerializationSmoke : Script
             movementMode != InspectorMotion.Jump ||
             privateMode != InspectorMotion.Hover ||
             hiddenMode != InspectorMotion.Idle ||
-            skippedNonSerialized != 7 || implementationOnly != 8)
+            skippedNonSerialized != 7 || implementationOnly != 8 ||
+            privateIdOnly != 12)
             throw new InvalidOperationException(
                 "C# private/hidden Inspector state was not restored or private internals were changed.");
     }
