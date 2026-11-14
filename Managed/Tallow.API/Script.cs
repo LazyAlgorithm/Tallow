@@ -70,14 +70,121 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
     public void Destroy() => Engine.Bridge.Destroy(this);
 }
 
-/// <summary>Reads and writes the ECS transform through the engine bridge.</summary>
+/// <summary>
+/// The native Transform channels. These are passed by value through the trusted
+/// host; gameplay scripts should use Transform properties instead.
+/// </summary>
+public enum TransformChannel
+{
+    LocalPosition = 1,
+    Rotation = 2,
+    LocalRotation = 3,
+    LocalScale = 4,
+    WorldScale = 5,
+    EulerAngles = 6,
+    LocalEulerAngles = 7,
+    Forward = 8,
+    Right = 9,
+    Up = 10,
+    LookAt = 11
+}
+
+/// <summary>
+/// The same world/local position, rotation, scale and directional properties as
+/// Beef's Transform. All hierarchy math is performed by the native engine.
+/// </summary>
 public sealed class Transform(GameObject gameObject)
 {
+    private Vector4 Read(TransformChannel channel) =>
+        Engine.Bridge.GetTransform(gameObject, channel);
+
+    private void Write(TransformChannel channel, Vector4 value) =>
+        Engine.Bridge.SetTransform(gameObject, channel, value);
+
+    private Vector3 ReadVector(TransformChannel channel)
+    {
+        Vector4 value = Read(channel);
+        return new Vector3(value.X, value.Y, value.Z);
+    }
+
+    private void WriteVector(TransformChannel channel, Vector3 value) =>
+        Write(channel, new Vector4(value, 0));
+
+    private Quaternion ReadQuaternion(TransformChannel channel)
+    {
+        Vector4 value = Read(channel);
+        return new Quaternion(value.X, value.Y, value.Z, value.W);
+    }
+
+    private void WriteQuaternion(TransformChannel channel, Quaternion value) =>
+        Write(channel, new Vector4(value.X, value.Y, value.Z, value.W));
+
     public Vector3 Position
     {
         get => Engine.Bridge.GetPosition(gameObject);
         set => Engine.Bridge.SetPosition(gameObject, value);
     }
+
+    public Vector3 LocalPosition
+    {
+        get => ReadVector(TransformChannel.LocalPosition);
+        set => WriteVector(TransformChannel.LocalPosition, value);
+    }
+
+    public Quaternion Rotation
+    {
+        get => ReadQuaternion(TransformChannel.Rotation);
+        set => WriteQuaternion(TransformChannel.Rotation, value);
+    }
+
+    public Quaternion LocalRotation
+    {
+        get => ReadQuaternion(TransformChannel.LocalRotation);
+        set => WriteQuaternion(TransformChannel.LocalRotation, value);
+    }
+
+    public Vector3 LocalScale
+    {
+        get => ReadVector(TransformChannel.LocalScale);
+        set => WriteVector(TransformChannel.LocalScale, value);
+    }
+
+    public Vector3 WorldScale => ReadVector(TransformChannel.WorldScale);
+
+    public Vector3 EulerAngles
+    {
+        get => ReadVector(TransformChannel.EulerAngles);
+        set => WriteVector(TransformChannel.EulerAngles, value);
+    }
+
+    public Vector3 LocalEulerAngles
+    {
+        get => ReadVector(TransformChannel.LocalEulerAngles);
+        set => WriteVector(TransformChannel.LocalEulerAngles, value);
+    }
+
+    public Vector3 Forward => ReadVector(TransformChannel.Forward);
+    public Vector3 Right => ReadVector(TransformChannel.Right);
+    public Vector3 Up => ReadVector(TransformChannel.Up);
+
+    public void SetPositionAndRotation(Vector3 position, Quaternion rotation)
+    {
+        Position = position;
+        Rotation = rotation;
+    }
+
+    public void Translate(Vector3 delta) => Position += delta;
+
+    /// <summary>Rotate in local space, with X/Y/Z angles in degrees.</summary>
+    public void Rotate(Vector3 eulerDegrees) =>
+        LocalRotation = Quaternion.Normalize(LocalRotation *
+            Quaternion.CreateFromYawPitchRoll(
+                eulerDegrees.Y * (MathF.PI / 180),
+                eulerDegrees.X * (MathF.PI / 180),
+                eulerDegrees.Z * (MathF.PI / 180)));
+
+    /// <summary>Face a world-space point using Tallow's native LookAt.</summary>
+    public void LookAt(Vector3 target) => WriteVector(TransformChannel.LookAt, target);
 }
 
 /// <summary>
@@ -90,6 +197,8 @@ public interface IEngineBridge
     bool IsAlive(GameObject gameObject);
     Vector3 GetPosition(GameObject gameObject);
     void SetPosition(GameObject gameObject, Vector3 position);
+    Vector4 GetTransform(GameObject gameObject, TransformChannel channel);
+    void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value);
     void Destroy(GameObject gameObject);
     bool IsMine(GameObject gameObject);
 }
@@ -104,6 +213,8 @@ public static class Engine
         public bool IsAlive(GameObject gameObject) => throw Missing();
         public Vector3 GetPosition(GameObject gameObject) => throw Missing();
         public void SetPosition(GameObject gameObject, Vector3 position) => throw Missing();
+        public Vector4 GetTransform(GameObject gameObject, TransformChannel channel) => throw Missing();
+        public void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value) => throw Missing();
         public void Destroy(GameObject gameObject) => throw Missing();
         public bool IsMine(GameObject gameObject) => throw Missing();
     }
