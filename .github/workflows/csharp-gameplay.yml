@@ -96,17 +96,21 @@ jobs:
               if ($2 == "hiddenPublic" && $7 == "1") hiddenPublic=1
               if ($2 == "hiddenPrivate" && $7 == "1") hiddenPrivate=1
               if ($2 == "hiddenSerialized" && $7 == "1") hiddenSerialized=1
+              if ($2 == "statusText" && $3 == "string" && $4 == "Idle" && $7 == "0") textPublic=1
+              if ($2 == "privateStatus" && $3 == "string" && $7 == "0") textPrivate=1
+              if ($2 == "hiddenStatus" && $3 == "string" && $7 == "1") textHidden=1
               if ($2 == "movementMode" && $3 == "enum" && $4 == "Hover" && $7 == "0" &&
                   index($8, "Idle") && index($8, "Hover") && index($8, "Jump")) enumPublic=1
               if ($2 == "privateMode" && $3 == "enum" && $7 == "0") enumPrivate=1
               if ($2 == "hiddenMode" && $3 == "enum" && $7 == "1") enumHidden=1
               if ($2 == "skippedNonSerialized" || $2 == "implementationOnly" ||
-                  $2 == "privateIdOnly") invalid=1
+                  $2 == "privateIdOnly" || $2 == "skippedString") invalid=1
             }
             END {
               if (!speed || !enabled || !serialized || !hiddenPublic || \
                   !hiddenPrivate || !hiddenSerialized ||
-                  !enumPublic || !enumPrivate || !enumHidden || invalid) exit 1
+                  !enumPublic || !enumPrivate || !enumHidden ||
+                  !textPublic || !textPrivate || !textHidden || invalid) exit 1
             }
           ' "$catalog"
       - name: Verify serialized field IDs survive C# renames and reject collisions
