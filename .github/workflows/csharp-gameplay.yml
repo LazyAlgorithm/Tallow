@@ -113,6 +113,24 @@ jobs:
                   !textPublic || !textPrivate || !textHidden || invalid) exit 1
             }
           ' "$catalog"
+      - name: Verify C# ECS data schema candidates and unsafe layouts
+        shell: bash
+        run: |
+          manifest=Tests/CSharpGameplay/.tallow-csharp/ecs-data.tsv
+          test -f "$manifest"
+          awk -F '\t' '
+            $1 == "Gameplay.VelocityData" {
+              if ($2 == "@layout" && $3 == "candidate") valid=1
+              if ($2 == "Velocity" && $3 == "Vector3" && $4 ~ /^1/) sync=1
+              if ($2 == "Drag" && $3 == "float" && $4 ~ /^0/) drag=1
+              if ($2 == "Owner" && $3 == "int" && $4 ~ /^0/) owner=1
+            }
+            $1 == "Gameplay.InvalidNativeLayout" {
+              if ($2 == "@layout" && $3 == "unsupported") unsafe=1
+              if ($2 == "Text" && $3 == "unsupported") managed=1
+            }
+            END { if (!valid || !sync || !drag || !owner || !unsafe || !managed) exit 1 }
+          ' "$manifest"
       - name: Verify serialized field IDs survive C# renames and reject collisions
         shell: bash
         run: |
