@@ -385,8 +385,7 @@ public static unsafe class NativeEntrypoints
                 // must agree on which fields have been opted into persistence.
                 if (!field.IsPublic &&
                     !field.IsDefined(typeof(ShowInInspectorAttribute), inherit: true) &&
-                    !field.IsDefined(typeof(HideInInspectorAttribute), inherit: true) &&
-                    !field.IsDefined(typeof(SerializeFieldAttribute), inherit: true))
+                    !field.IsDefined(typeof(HideInInspectorAttribute), inherit: true))
                     continue;
                 object? parsed = ParseInspectorValue(field.FieldType, value);
                 if (parsed != null)
