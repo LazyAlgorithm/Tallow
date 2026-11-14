@@ -67,6 +67,18 @@ Read this entire checklist, `docs/csharp-gameplay.md`, then inspect **current** 
 - [ ] Full diagnostics, warnings, source locations/underlines, click-through from Console; Go to Definition, Find References, Rename, and optionally integrated breakpoints/debugging.
 - [ ] Expand automated tests using actual Tallow.API/gameplay source, multi-assembly projects, inherited/static/extension completions and malformed mid-typing C#.
 
+## Binding generation decision — explicitly curated API
+
+**User preference confirmed:** Native Beef types/members should **not** all become C# APIs automatically. Only explicitly selected gameplay-safe surface is exported; keep engine internals invisible to normal C# authors. Keep hand-written adapters for systems that cannot be marshaled safely or efficiently.
+
+- [x] Define Beef `[CSharpExpose]` marker (type plus individual public member, with no "expose all" default). File: `Engine/src/Scripting/CSharpExpose.bf` (commit `8d903af`). **Attribute only; not wired to generation yet.**
+- [x] Record binding generator and marshalling rules in `docs/csharp-expose.md` (commit `f20bab4`).
+- [ ] Generate deterministic opt-in exposure manifest from actual Beef compiler/reflection symbols; validate signatures and emit actionable errors for unsupported attributes.
+- [ ] Generate ABI-stable native entrypoints and C# wrappers together from manifest, with no duplicate manual C# declarations, preserving existing handwritten adapters.
+- [ ] Verify an annotated method is callable from C#, appears in Roslyn, and a public unannotated member is omitted. Add CI tests for Windows/Linux.
+- [ ] Add safe automatic primitive/vector/enum mappings, checked GameObject/Transform handles and UTF-8 string lifetime handling. ECS/Jolt/networking require specialized safe adapters.
+- [ ] Run generation only with engine builds; normal project C# edits compile with dotnet only. Track generated API version to prevent mismatch with precompiled runtime.
+
 ## P2 — gameplay API parity (largest workstream)
 
 For every subsystem, expose a managed public API, safe native handle bridge, correct lifetime/serialization semantics, appropriate network/deterministic scheduling and automated tests. Work in small verified increments:
