@@ -774,6 +774,23 @@ class Program
 #endif
 	public static int Main(String[] args)
 	{
+		// Engine-build operation: inspect resolved Beef symbols and export the
+		// opted-in C# API contract without opening the editor or a game project.
+		// Normal C# edits never invoke this command.
+		for (int i < args.Count - 1)
+		{
+			if (args[i] == "--csharp-api-manifest")
+			{
+				let error = scope String();
+				if (!CSharpBindingManifest.Write(args[i + 1], error))
+				{
+					Console.WriteLine(error);
+					return 1;
+				}
+				Console.WriteLine(scope $"Generated [CSharpExpose] manifest: {args[i + 1]}");
+				return 0;
+			}
+		}
 		// Precompiled editor: the native TallowLauncher binary already contains
 		// TallowEditor. C# projects no longer generate or compile an editor exe.
 		if (args.Contains("--editor") || args.Contains("--game"))
