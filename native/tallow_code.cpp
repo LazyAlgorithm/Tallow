@@ -669,16 +669,10 @@ TN_API void tn_code_render(void* handle, const char* id, float width, float heig
 			}
 			if (!before.empty() && (before.back() == ')' || before.back() == ';')) document->signature.clear();
 		}
+		// Keep parameter signatures in the completion header, never as a
+		// permanent tooltip covering code under the caret. Symbol hover info
+		// uses the delayed, dismiss-on-leave text hover popup instead.
 		document->editor.SetAutoCompleteSignature(document->signature);
-		if (!document->signature.empty() && !document->editor.IsAutoCompleteActive())
-		{
-			ImVec2 position = document->editor.DocPos2ScreenPos(document->editor.GetMainCursorPosition());
-			position.y += document->editor.GetLineHeight();
-			ImGui::SetNextWindowPos(position);
-			ImGui::BeginTooltip();
-			ImGui::TextUnformatted(document->signature.c_str());
-			ImGui::EndTooltip();
-		}
 	}
 }
 
