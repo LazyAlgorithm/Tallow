@@ -9,6 +9,13 @@ on:
       - 'Managed/**'
       - 'Tests/CSharpGameplay/**'
       - '.github/workflows/csharp-gameplay.yml'
+      - 'Engine/**'
+      - 'Editor/**'
+      - 'Launcher/**'
+      - 'native/**'
+      - 'tools/build.py'
+      - 'tools/patch_textedit.py'
+      - 'third_party/TextEdit/**'
 
 jobs:
   managed-build:
@@ -48,3 +55,72 @@ jobs:
         shell: pwsh
         run: |
           & Tests/NativeCSharpHost/build/Release/tallow_native_csharp_smoke.exe Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll Tests/CSharpGameplay/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll
+
+
+  native-editor-linux:
+    name: Compile complete native Beef editor (Linux)
+    # Managed host tests do not compile Editor, Launcher or the full Beef Engine.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
+      LLVM_VERSION: '22'
+      NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install compiler and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake zip xz-utils curl \
+            libx11-dev libxext-dev libxi-dev libxfixes-dev libxcursor-dev libxrandr-dev \
+            libxss-dev libxrender-dev libgl-dev libegl-dev libasound2-dev \
+            libpulse-dev libwayland-dev libxkbcommon-dev \
+            libffi-dev zlib1g-dev libzstd-dev libxml2-dev libedit-dev
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "llvm-$LLVM_VERSION-dev" "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for tool in clang clang++ llvm-ar llvm-config; do
+            sudo ln -sf "/usr/lib/llvm-$LLVM_VERSION/bin/$tool" "/usr/local/bin/$tool"
+          done
+      - name: Cache pinned Beef compiler
+        id: beef-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/beef
+          key: tallow-native-beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+      - name: Build pinned Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          cd ~/beef/bin && ./build.sh
+      - name: Native dependency cache key
+        id: native-key
+        run: echo "key=$(.github/scripts/native-deps.sh key linux)" >> "$GITHUB_OUTPUT"
+      - name: Cache native dependency archives
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: build/native
+          key: ${{ steps.native-key.outputs.key }}
+      - name: Compile native dependencies
+        run: |
+          if [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ]; then
+            .github/scripts/native-deps.sh settle
+          fi
+          python3 tools/patch_textedit.py
+          if [ ! -f build/native/CMakeCache.txt ]; then
+            cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+          cmake --build build/native -j 4 --target $NATIVE_TARGETS
+      - name: Compile Tallow engine, editor and launcher
+        run: |
+          # Use the same full editor build as the author's local Nobara test.
+          # Native libraries above are already built; this step also builds
+          # engine shaders and catches native C++/Beef compile failures.
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          python3 tools/build.py --config Debug --jobs 4 --skip-native
+          test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
