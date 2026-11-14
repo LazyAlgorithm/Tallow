@@ -70,7 +70,7 @@ def main() -> int:
     # including parameter types, from accidental changes in this checker.
     if symbol_hash("Tallow.CSharpBindingFixture|Average|float|float|float") != "17858942906a9c6f":
         raise AssertionError("CSharpExpose fixture hash algorithm diverged")
-    if symbol_hash("Tallow.Physics|SleepRigidbody|bool|ulong|ulong") != "b08ed96d885c92a3":
+    if symbol_hash("Tallow.Physics|SleepRigidbody|bool|ulong|ulong") != "9e37fa4f1b5124ae":
         raise AssertionError("Rigidbody sleep signature hash diverged")
     required = [
         "Tallow.Physics|SleepRigidbody|bool|ulong|ulong",

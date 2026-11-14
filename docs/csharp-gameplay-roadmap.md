@@ -352,8 +352,8 @@ claim automatic replication of dynamically created joints.
   same event implementation as single-object `Dispatch`, and retains no pointers.
 - A native-host integration smoke checks two per-instance FixedUpdate and
   LateUpdate calls in one transition, empty and null buffers, detachment
-  and invalidated IDs. Also corrected the `SleepRigidbody` generated
-  symbol ID in the C++ test resolver (SHA-256 of its manifest signature).
+  and invalidated IDs. The `SleepRigidbody` resolver's original
+  two-parameter signature hash was verified and retained.
 - **Not yet connected to automatic Scene scheduling.** A component can
   disable or destroy the next component during its update. The scheduler
   must preserve those existing per-callback checks and profiling behavior
@@ -369,3 +369,12 @@ claim automatic replication of dynamically created joints.
   the new counted Flecs Span API.
 - Host test ABI verification runs before managed code generation/build,
   so a copy-pasted outdated symbol ID is surfaced early.
+
+### Correction: verified Rigidbody sleep ABI hash
+
+- An intermediate batching commit mistakenly changed the native-host
+  `SleepRigidbody` symbol ID after hashing a truncated signature. The
+  complete fixture includes both `session:ulong` and `entity:ulong`;
+  its original correct ID is `9e37fa4f1b5124ae`. Restored that ID,
+  fixed the new CI hash guard, and cross-checked every native-host
+  symbol against the complete fixture.

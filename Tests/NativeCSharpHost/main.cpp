@@ -623,7 +623,7 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedAddRigidbodyForceAtPosition);
     if (name == "CSharpApi_5a64e6ecc959440f")
         return reinterpret_cast<void*>(&ExposedGetRigidbodyPointVelocity);
-    if (name == "CSharpApi_b08ed96d885c92a3")
+    if (name == "CSharpApi_9e37fa4f1b5124ae")
         return reinterpret_cast<void*>(&ExposedSleepRigidbody);
     if (name == "CSharpApi_f50768d5aeefdfa7")
         return reinterpret_cast<void*>(&ExposedHasCharacterController);
