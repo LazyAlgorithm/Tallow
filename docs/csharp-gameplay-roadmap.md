@@ -231,3 +231,5 @@ CI: `.github/workflows/csharp-gameplay.yml`. Main implementation: `Managed/Tallo
   ECS batching and structured RaycastHit results still need generator support.
 - Added managed/Roslyn compile tests for the generated API and a gameplay
   sample. Linked native Beef CI verification remains necessary.
+
+- Added standalone native-host physics ABI validation for the generated Rigidbody force, free SoftBody impulse, pressure get/set and raycast-distance calls. It validates scene IDs, vector component order and native callback dispatch; it does not replace linked Jolt integration tests.

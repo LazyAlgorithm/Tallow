@@ -181,6 +181,47 @@ static void ExposedLookRotation(const float* forward, const float* up, float* re
     if (!forward || !up || !result) return;
     result[0] = 0; result[1] = 0; result[2] = 0; result[3] = 1;
 }
+// The following native host doubles verify generated C# physics ABI
+// signatures and value marshalling. They do NOT attempt to simulate Jolt.
+static int physicsRigidbodyForces = 0;
+static int physicsSoftImpulses = 0;
+static float physicsSoftPressure = 10.0f;
+static int32_t ExposedHasRigidbody(uint64_t scene, uint64_t entity) {
+    return Match(scene, entity) ? 1 : 0;
+}
+static int32_t ExposedHasSoftBody(uint64_t scene, uint64_t entity) {
+    return Match(scene, entity) ? 1 : 0;
+}
+static int32_t ExposedAddRigidbodyForce(uint64_t scene, uint64_t entity, const float* force) {
+    if (!Match(scene, entity) || !force || force[0] != 1 || force[1] != 2 || force[2] != 3)
+        return 0;
+    ++physicsRigidbodyForces;
+    return 1;
+}
+static int32_t ExposedAddSoftBodyImpulse(uint64_t scene, uint64_t entity, const float* force) {
+    if (!Match(scene, entity) || !force || force[0] != 4 || force[1] != 5 || force[2] != 6)
+        return 0;
+    ++physicsSoftImpulses;
+    return 1;
+}
+static float ExposedRaycastDistance(uint64_t scene, const float* origin,
+                                   const float* direction, float maxDistance,
+                                   uint32_t layerMask) {
+    if (scene != 1 || !origin || !direction ||
+        direction[0] != 0 || direction[1] != 0 || direction[2] != 1 ||
+        maxDistance != 10 || layerMask != UINT32_MAX)
+        return -1;
+    return 2.5f;
+}
+static float ExposedGetSoftBodyPressure(uint64_t scene, uint64_t entity) {
+    return Match(scene, entity) ? physicsSoftPressure : 0;
+}
+static int32_t ExposedSetSoftBodyPressure(uint64_t scene, uint64_t entity, float value) {
+    if (!Match(scene, entity) || value < 0) return 0;
+    physicsSoftPressure = value;
+    return 1;
+}
+
 static float ExposedClamp01(float value)
 {
     return std::fmax(0.0f, std::fmin(value, 1.0f));
@@ -213,6 +254,21 @@ static void* ResolveApi(void*, const char* symbol)
     if (name.rfind("CSharpApiVersion_", 0) == 0)
         return reinterpret_cast<void*>(&ExposedVersion);
     // IDs are deterministic SHA-256 signature hashes emitted by BindingGen.
+    // Exact SHA-256 signature IDs from the generator's physics manifest.
+    if (name == "CSharpApi_4cfd0ac498dbf9b9")
+        return reinterpret_cast<void*>(&ExposedHasRigidbody);
+    if (name == "CSharpApi_ec09232b935b3c35")
+        return reinterpret_cast<void*>(&ExposedHasSoftBody);
+    if (name == "CSharpApi_1a89e5a6a268148e")
+        return reinterpret_cast<void*>(&ExposedAddRigidbodyForce);
+    if (name == "CSharpApi_a6cee0af24fc98a6")
+        return reinterpret_cast<void*>(&ExposedAddSoftBodyImpulse);
+    if (name == "CSharpApi_ff872a3c0c88b759")
+        return reinterpret_cast<void*>(&ExposedRaycastDistance);
+    if (name == "CSharpApi_56cd5284bdc6bc18")
+        return reinterpret_cast<void*>(&ExposedGetSoftBodyPressure);
+    if (name == "CSharpApi_e575a2c6c882bfad")
+        return reinterpret_cast<void*>(&ExposedSetSoftBodyPressure);
     if (name == "CSharpApi_21d00acac55a8847")
         return reinterpret_cast<void*>(&ExposedSceneLoad);
     if (name == "CSharpApi_e957075e951f3a8f")
@@ -421,6 +477,13 @@ int main(int argc, char** argv)
         state.createdName != "From C#" ||
         state.prefabCount != 1 || state.prefabPath != "Prefabs/Box.tprefab")
         return Failure("C# scene API did not forward validated native scene arguments");
+
+    const int32_t physicsApi = tn_csharp_attach("Gameplay.PhysicsBindingSmoke", 1, 1);
+    if (physicsApi < 1 || !tn_csharp_dispatch(physicsApi, TN_CSHARP_AWAKE, 0.0f))
+        return Failure("calling generated rigidbody/soft-body physics from C#");
+    if (!tn_csharp_detach(physicsApi) || physicsRigidbodyForces != 1 ||
+        physicsSoftImpulses != 1 || std::fabs(physicsSoftPressure - 12.0f) > 0.0001f)
+        return Failure("C# native physics ABI marshalling failed");
 
     if (!tn_csharp_unload_game())
         return Failure("ending second Play session");

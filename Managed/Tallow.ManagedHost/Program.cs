@@ -117,7 +117,8 @@ internal static class Program
                 // managed-only host has no Beef function-pointer resolver.
                 if (type.FullName is "Gameplay.GeneratedBindingSmoke" or
                     "Gameplay.SceneApiSmoke" or "Gameplay.TransformParity" or
-                    "Gameplay.PhysicsApiSmoke")
+                    "Gameplay.PhysicsApiSmoke" or
+                    "Gameplay.PhysicsBindingSmoke")
                     continue;
                 if (type.IsAbstract || !typeof(Script).IsAssignableFrom(type) ||
                     !Attribute.IsDefined(type, typeof(ComponentAttribute)))
