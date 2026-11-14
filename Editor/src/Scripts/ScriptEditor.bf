@@ -475,7 +475,12 @@ extension EditorApp
 					}
 				}
 				if (!foundError)
-					Log.Error(mCheckLog.IsEmpty ? "C# compilation failed. Check the SDK and project configuration." : (StringView)mCheckLog);
+				{
+					if (mCheckLog.IsEmpty)
+						Log.Error("C# compilation failed. Check the SDK and project configuration.");
+					else
+						Log.Error(mCheckLog);
+				}
 			}
 			mManagedBuildReady = mCheckSucceeded && !mManagedRecheckQueued;
 			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled." : "C# compilation failed. See Console.");
