@@ -97,20 +97,14 @@ jobs:
           git clone https://github.com/beefytech/Beef ~/beef
           git -C ~/beef checkout "$BEEF_COMMIT"
           cd ~/beef/bin && ./build.sh
-      - name: Native dependency cache key
-        id: native-key
-        run: echo "key=$(.github/scripts/native-deps.sh key linux)" >> "$GITHUB_OUTPUT"
       - name: Cache native dependency archives
         id: native-cache
         uses: actions/cache@v4
         with:
           path: build/native
-          key: ${{ steps.native-key.outputs.key }}
+          key: native-linux-${{ hashFiles('native/**', 'third_party/**', '.github/scripts/native-deps.sh') }}
       - name: Compile native dependencies
         run: |
-          if [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ]; then
-            .github/scripts/native-deps.sh settle
-          fi
           python3 tools/patch_textedit.py
           if [ ! -f build/native/CMakeCache.txt ]; then
             cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
