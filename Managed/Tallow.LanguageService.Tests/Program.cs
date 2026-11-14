@@ -143,8 +143,10 @@ internal static class Program
                 string response = Path.Combine(folder, "response.tsv");
                 WaitFor(response, worker);
                 string result = File.ReadAllText(response);
-                Check($"persistent Roslyn request {i + 1} without restarting .NET",
-                    !result.Contains("diagnostic\t") && !result.Contains("error\t"));
+                if (result.Contains("diagnostic\t") || result.Contains("error\t"))
+                    throw new InvalidOperationException(
+                        $"FAIL: persistent Roslyn request {i + 1} returned:\n{result}");
+                Check($"persistent Roslyn request {i + 1} without restarting .NET", true);
             }
             File.WriteAllText(Path.Combine(queue, "stop"), "stop");
             Check("persistent Roslyn worker stops cleanly", worker.WaitForExit(5000) &&
