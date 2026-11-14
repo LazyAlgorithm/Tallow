@@ -89,7 +89,43 @@ namespace
 
 	const TextEditor::Language* BeefLanguage() { return &BeefLanguageMutable(); }
 
-	const TextEditor::Language* CSharpLanguage() { return TextEditor::Language::Cs(); }
+	const TextEditor::Language* CSharpLanguage()
+	{
+		// Keep C# independent of Beef's lexical index. The authoritative
+		// methods, inherited members and symbols come from Roslyn; this only
+		// supplies immediate local syntax colors while Roslyn is resolving.
+		static TextEditor::Language language = *TextEditor::Language::Cs();
+		static bool ready = false;
+		if (!ready)
+		{
+			language.name = "C#";
+			for (const char* word : {
+				"record", "required", "init", "file", "global", "scoped", "field",
+				"with", "when", "and", "or", "not", "is", "nameof", "nint", "nuint",
+				"unmanaged", "notnull", "allows", "extension", "partial", "async",
+				"await", "var", "dynamic", "yield", "where", "from", "select",
+				"join", "group", "into", "let", "orderby", "ascending", "descending",
+				"equals", "on", "by", "ref", "readonly", "stackalloc", "params",
+				"unsafe", "checked", "unchecked", "lock", "operator", "explicit",
+				"implicit", "interface", "delegate", "namespace", "base", "this",
+				"override", "virtual", "abstract", "sealed", "internal", "public",
+				"protected", "private", "static", "using", "get", "set", "add",
+				"remove", "event", "switch", "case", "default", "true", "false",
+				"null", "new", "sizeof", "typeof", "foreach", "try", "catch",
+				"finally", "throw", "return", "struct", "class", "enum" })
+				language.keywords.insert(word);
+			for (const char* word : {
+				"Script", "Component", "Sync", "Range", "GameObject", "Transform",
+				"Engine", "TickInput", "InputButton", "IEngineBridge", "Vector2",
+				"Vector3", "Vector4", "Quaternion", "Matrix3x2", "Matrix4x4",
+				"Plane", "MathF", "Math", "Task", "Span", "ReadOnlySpan",
+				"CancellationToken", "IEnumerable", "List", "Dictionary",
+				"HashSet", "Nullable", "Action", "Func", "Console" })
+				language.declarations.insert(word);
+			ready = true;
+		}
+		return &language;
+	}
 
 	bool IsWordChar(char c) { return isalnum((unsigned char)c) || c == '_'; }
 
@@ -611,7 +647,7 @@ TN_API void tn_code_render(void* handle, const char* id, float width, float heig
 		document->editor.DrawInlineText(document->editor.GetMainCursorPosition(), suffix.c_str(), ImGui::GetColorU32(ImGuiCol_TextDisabled));
 	ImGui::PopFont();
 	if (document->markup) CloseTypedTag(document);
-	if (document->editor.GetLanguageName() == "Beef")
+	if (document->editor.GetLanguageName() == "Beef" || document->editor.GetLanguageName() == "C#")
 	{
 		const size_t revision = document->editor.GetUndoIndex();
 		const int caret = (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
