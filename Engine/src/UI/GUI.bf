@@ -11,6 +11,7 @@ namespace Tallow;
 ///       GUI.Bar(20, 44, 200, 14, health / 100.0f, .Red);
 ///       if (GUI.Button(GUI.Width - 140, 20, 120, 32, "Respawn")) Respawn();
 ///   }
+[CSharpExpose]
 static class GUI
 {
 	static ImGui.Vec2 sOrigin;
@@ -18,7 +19,9 @@ static class GUI
 
 	/// Screen position of the game view's top-left corner.
 	public static ImGui.Vec2 Origin => sOrigin;
+	[CSharpExpose]
 	public static float Width;
+	[CSharpExpose]
 	public static float Height;
 	/// Logical UI units (SDL window points), independent of the physical render resolution.
 	public static float LogicalWidth => Width;
@@ -83,6 +86,7 @@ static class GUI
 			ImGui.DrawRectFilled(At(x + 2, y + 2), At(x + 2 + fill, y + height - 2), color, 2);
 	}
 
+	[CSharpExpose]
 	public static bool Button(float x, float y, float width, float height, StringView label)
 	{
 		ImGui.SetCursorScreenPos(At(x, y));

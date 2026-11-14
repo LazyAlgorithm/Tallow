@@ -21,3 +21,6 @@ method	Tallow.RotationMath	ToEulerDegrees	System.Numerics.Vector3	rotation:Syste
 method	Tallow.RotationMath	LookRotation	System.Numerics.Quaternion	forward:System.Numerics.Vector3	up:System.Numerics.Vector3
 method	Tallow.SceneManager	Load	void	path:string
 method	Tallow.Application	Quit	void
+field	Tallow.GUI	Width	float	get
+field	Tallow.GUI	Height	float	get
+method	Tallow.GUI	Button	bool	x:float	y:float	width:float	height:float	label:string

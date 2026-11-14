@@ -318,6 +318,14 @@ public sealed class CubeMover : Script
             Check("generated SceneManager.Load and Application.Quit are valid C# APIs",
                 !sceneSwitchDiagnostics.Contains("diagnostic\t"));
 
+            string guiSource = "using Tallow; [Component] class GuiExample : Script " +
+                "{ public override void OnGUI() { if (GUI.Button(GUI.Width - 120f, " +
+                "10f, 100f, 30f, \"Respawn\")) { } } }";
+            string guiDiagnostics = RequestWithApi(service, "diagnostics",
+                guiSource, guiSource.Length);
+            Check("generated GUI.Button and read-only viewport dimensions compile in C#",
+                !guiDiagnostics.Contains("diagnostic\t"));
+
             string logCode = "using Tallow; class Demo { void Go() { Log.Info(\"hello\"); } }";
             string logDiagnostics = RequestWithApi(service, "diagnostics", logCode, logCode.Length);
             Check("generated Log.Info accepts managed C# strings",

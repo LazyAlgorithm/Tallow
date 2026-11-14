@@ -176,6 +176,9 @@ jobs:
           grep -F 'public static void Quit()' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_21d00acac55a8847
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e957075e951f3a8f
+          grep -F 'public static bool Button(float x, float y, float width, float height, string label)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Width' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_594a271ff179d66e
           grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
           grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf

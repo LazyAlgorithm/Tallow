@@ -216,3 +216,7 @@ required.
 ### Scene switching and application shutdown
 
 Two more regular gameplay APIs use generated bindings directly: `SceneManager.Load(string path)` queues the native scene transition at the start of the next frame, and `Application.Quit()` invokes the engine's existing quit behavior (stop Play in editor, close a built player). Both use `[CSharpExpose]` on their existing Beef methods, with no mirrored C# implementations. `SceneManager.Load` uses counted UTF-8 input and retains the engine's existing networking and scene-switch lifetime rules. Managed tests cover both declarations; native-host integration checks the requested scene path, and native CI checks both reflected exports.
+
+### Basic native GUI in C#
+
+Gameplay can now use the generated `GUI.Button(x, y, width, height, label)` native method and the read-only generated `GUI.Width`/`GUI.Height` properties in `OnGUI()`. The call remains handled by Beef's existing GUI implementation. No handwritten managed GUI methods or native imports are required. Other widgets with `Color`, `ref/out` values and other unsupported ABI types are not exported yet; they will require an expanded generator contract.
