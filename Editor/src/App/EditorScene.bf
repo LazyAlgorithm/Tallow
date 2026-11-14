@@ -106,33 +106,10 @@ extension EditorApp
 	bool PrepareCSharpPlay()
 	{
 		let project = Project.Current;
-		let config = scope $"{project.EngineRoot}/Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.runtimeconfig.json";
-		let runtime = scope $"{project.EngineRoot}/Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll";
-		let game = scope $"{project.Path}/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll";
-		if (!File.Exists(config) || !File.Exists(runtime) || !File.Exists(game))
-		{
-			mStatus.Set("The managed gameplay runtime or game assembly is missing. Check C# errors.");
-			Log.Error(mStatus);
-			return false;
-		}
-		if (!CSharpRuntime.Initialize(config, runtime))
-		{
-			mStatus.Set("Could not initialize the managed runtime. See Console.");
-			return false;
-		}
-		if (!CSharpRuntime.BindScene(mScene))
-		{
-			mStatus.Set("Could not bind the managed scene. See Console.");
-			return false;
-		}
-		if (CSharpRuntime.LoadGame(game) < 0)
-		{
-			CSharpRuntime.UnloadGame();
-			CSharpRuntime.UnbindScene(mScene);
-			mStatus.Set("Could not load C# gameplay. See Console.");
-			return false;
-		}
-		return true;
+		if (CSharpRuntime.StartTrustedGame(mScene, project.EngineRoot, project.Path))
+			return true;
+		mStatus.Set("C# gameplay could not start. See Console for the detailed error.");
+		return false;
 	}
 
 	void StartPlay()
@@ -211,11 +188,7 @@ extension EditorApp
 		mScene.StopPlay();
 		// All CSharpBehaviour components have detached in StopPlay. Unload the game
 		// assembly before restoring the edit-time scene, so code can be rebuilt.
-		if (CSharpRuntime.Ready)
-		{
-			CSharpRuntime.UnloadGame();
-			CSharpRuntime.UnbindScene(mScene);
-		}
+		CSharpRuntime.EndTrustedGame(mScene);
 		// Data assets as the game left them are not the files: the next Play reads them afresh.
 		DataAsset.ClearCache();
 		if (mScene.Network != null)
