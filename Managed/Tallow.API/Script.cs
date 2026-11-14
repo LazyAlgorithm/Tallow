@@ -67,6 +67,9 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
 {
     public bool IsValid => Engine.Bridge.IsAlive(this);
     public Transform Transform => new(this);
+    /// <summary>Find an attached C# gameplay behaviour on this object.</summary>
+    public T? GetComponent<T>() where T : Script =>
+        Engine.Bridge.GetManagedComponent(this, typeof(T)) as T;
     public void Destroy() => Engine.Bridge.Destroy(this);
 }
 
@@ -199,6 +202,7 @@ public interface IEngineBridge
     void SetPosition(GameObject gameObject, Vector3 position);
     Vector4 GetTransform(GameObject gameObject, TransformChannel channel);
     void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value);
+    Script? GetManagedComponent(GameObject gameObject, Type scriptType);
     void Destroy(GameObject gameObject);
     bool IsMine(GameObject gameObject);
 }
@@ -215,6 +219,7 @@ public static class Engine
         public void SetPosition(GameObject gameObject, Vector3 position) => throw Missing();
         public Vector4 GetTransform(GameObject gameObject, TransformChannel channel) => throw Missing();
         public void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value) => throw Missing();
+        public Script? GetManagedComponent(GameObject gameObject, Type scriptType) => throw Missing();
         public void Destroy(GameObject gameObject) => throw Missing();
         public bool IsMine(GameObject gameObject) => throw Missing();
     }
@@ -236,6 +241,9 @@ public abstract class Script
     private Transform? _transform;
     public Transform Transform => _transform ??= new Transform(GameObject);
     public bool IsMine => Engine.Bridge.IsMine(GameObject);
+
+    /// <summary>Find another attached C# behaviour, as in native Beef scripts.</summary>
+    public T? GetComponent<T>() where T : Script => GameObject.GetComponent<T>();
 
     /// <summary>Called by Tallow's lifecycle dispatcher, not by gameplay scripts.</summary>
     public void Attach(GameObject gameObject)
