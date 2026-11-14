@@ -850,3 +850,21 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
 - All benchmarks requiring writable C# Flecs data (B12, related B18/B20)
   remain **blocked**, and the new schema must never be shipped as
   reflective gameplay source metadata in default NativeAOT packages.
+
+
+### Deterministic C# build outputs and no-op compile behavior (November 14, 2026)
+
+- The game/assembly-definition project generator no longer rewrites an
+  unchanged generated `.csproj`. It compares the deterministic in-memory
+  XML bytes before writing, preventing spurious MSBuild invalidation of
+  dependent C# assemblies.
+- The component, Inspector field, source-mapping, stable AOT field-ID and
+  ECS candidate manifests are now only atomically replaced when their
+  textual contents actually differ. This avoids triggering needless editor
+  catalog reloads during no-op game builds while preserving atomic updates.
+- The generated static C# factory source already preserves timestamps
+  when unchanged. Together these changes target benchmark B03 (no-op and
+  warm edit), but **no speedup is claimed until measured** on Nobara.
+- Linux/Windows managed CI must confirm this output policy compiles
+  consistently. Engine native builds and interactive editor performance
+  remain separate acceptance tests.
