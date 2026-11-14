@@ -21,6 +21,9 @@ typedef struct tn_csharp_callbacks {
     // Values are four floats: XYZ for vectors, XYZW for quaternions.
     int32_t (*get_transform)(void*, uint64_t scene, uint64_t entity, int32_t channel, float* xyzw);
     int32_t (*set_transform)(void*, uint64_t scene, uint64_t entity, int32_t channel, const float* xyzw);
+    // Resolve an engine-built [CSharpExpose] wrapper once at call-site startup.
+    // Only validated, generated C ABI entrypoints are returned.
+    void* (*resolve_api)(void*, const char* symbol);
 } tn_csharp_callbacks;
 
 // ABI mirror of Tallow's current and previous tick controls.
