@@ -323,6 +323,11 @@ extension EditorApp
 		{
 			Log.Info(scope $"Created C# script {path}.");
 			OpenScript(path);
+			mManagedBuildReady = false;
+			if (mCheckRunning)
+				mManagedRecheckQueued = true;
+			else if (mPlay == .Edit && Project.Current.ReloadMode != .Manual)
+				StartManagedErrorCheck();
 		}
 		else
 			Log.Error(scope $"Could not create C# script {path}.");
