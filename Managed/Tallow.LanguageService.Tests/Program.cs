@@ -214,6 +214,26 @@ public sealed class CubeMover : Script
             Check("gameplay Transform.Position += Vector3 * float operators",
                 !gameplayDiagnostics.Contains("diagnostic\t"));
 
+            // Beef and .NET implement getters/setters internally, but a
+            // gameplay author should see only the property in completion.
+            string transformCompletionSource = "using Tallow; " +
+                "[Component] public sealed class Probe : Script " +
+                "{ void Go() { Transform.Po";
+            string transformCompletions = RequestWithApi(service, "completion",
+                transformCompletionSource, transformCompletionSource.Length);
+            Check("C# completion shows Transform.Position as a property",
+                transformCompletions.Contains("completion\tPosition"));
+            Check("C# completion hides generated property accessor methods",
+                !transformCompletions.Contains("completion\tget_Position") &&
+                !transformCompletions.Contains("completion\tset_Position"));
+
+            string ordinaryGetter = "class Probe { public int get_Answer() => 42; " +
+                "void Go() { this.get_A";
+            string ordinaryGetterCompletions = Request(service, "completion",
+                ordinaryGetter, ordinaryGetter.Length);
+            Check("C# completion preserves genuine methods named get_*",
+                ordinaryGetterCompletions.Contains("completion\tget_Answer"));
+
             string memberSource = "class Player { public int Speed; }\n" +
                 "class Example { void Go() { Player player = new(); player.S";
             string completions = Request(service, "completion", memberSource, memberSource.Length);
