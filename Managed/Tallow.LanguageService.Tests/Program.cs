@@ -271,6 +271,40 @@ public sealed class CubeMover : Script
             Check("C# engine warnings do not flag non-predicted Start methods",
                 !noTickWarnings.Contains("TAL-NET") && !noTickWarnings.Contains("TAL-PERF"));
 
+            string componentLookup = """
+                using Tallow;
+                [Component] public sealed class LookupProbe : Script
+                {
+                    public override void Update(TickInput input, float deltaTime)
+                    {
+                        for (int i = 0; i < 10; i++)
+                            GameObject.GetComponent<LookupProbe>();
+                    }
+                }
+                """;
+            string componentWarnings = RequestWithApi(service, "diagnostics",
+                componentLookup, componentLookup.Length);
+            Check("C# analyzer warns about Tallow component lookups in hot loops",
+                componentWarnings.Contains("TAL-PERF002") &&
+                componentWarnings.Contains("\toptimization"));
+
+            string unrelatedLookup = """
+                using Tallow;
+                [Component] public sealed class LookupProbe : Script
+                {
+                    public int GetComponent() => 42;
+                    public override void Update(TickInput input, float deltaTime)
+                    {
+                        for (int i = 0; i < 10; i++)
+                            GetComponent();
+                    }
+                }
+                """;
+            string unrelatedWarnings = RequestWithApi(service, "diagnostics",
+                unrelatedLookup, unrelatedLookup.Length);
+            Check("C# analyzer ignores unrelated user methods named GetComponent",
+                !unrelatedWarnings.Contains("TAL-PERF002"));
+
             string memberSource = "class Player { public int Speed; }\n" +
                 "class Example { void Go() { Player player = new(); player.S";
             string completions = Request(service, "completion", memberSource, memberSource.Length);
