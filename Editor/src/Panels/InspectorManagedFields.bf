@@ -40,8 +40,8 @@ extension EditorApp
 				// initializer changes do not silently overwrite saved values.
 				if (columns.Count >= 7 && columns[6] == "1")
 				{
-					component.WriteEditorField(name, current);
-					changed = true;
+					if (component.WriteEditorField(name, current))
+						changed = true;
 				}
 			}
 			if (columns.Count >= 7 && columns[6] == "1")
@@ -127,8 +127,8 @@ extension EditorApp
 			}
 			if (edited)
 			{
-				component.WriteEditorField(name, newValue);
-				changed = true;
+				if (component.WriteEditorField(name, newValue))
+					changed = true;
 			}
 			ImGui.PopID();
 		}
