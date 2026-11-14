@@ -79,6 +79,12 @@ extension EditorApp
 				edited = ImGui.Checkbox("##value", ref value);
 				if (edited)
 					newValue.Set(value ? "true" : "false");
+			case "string":
+				// InputText is deliberately single-line: fieldOverrides stores
+				// one name/value per line and cannot represent embedded tabs or
+				// newlines until the scene serializer gains an escaped format.
+				newValue.Set(current);
+				edited = ImGui.InputText("##value", newValue);
 			case "enum":
 				// The catalog lists exactly the enum constants in source order.
 				if (columns.Count >= 8 && ImGui.BeginCombo("##value", current.CStr()))
