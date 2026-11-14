@@ -144,7 +144,11 @@ internal static class Program
             global using System.Numerics;
             """, parse, path: "Tallow.GameImplicitUsings.g.cs"));
         var compilation = CSharpCompilation.Create("Tallow.SemanticWorkspace", trees,
-            References(), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+            References(), // The workspace includes trusted Tallow.API source, whose generated
+            // native function-pointer wrappers use unsafe internally. Game
+            // project MSBuild still forbids unsafe gameplay code.
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+                allowUnsafe: true,
                 nullableContextOptions: NullableContextOptions.Enable));
         SyntaxTree selected = trees.First(tree =>
             string.Equals(tree.FilePath, Path.GetFullPath(request.File), StringComparison.OrdinalIgnoreCase));
