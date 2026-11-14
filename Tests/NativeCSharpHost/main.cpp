@@ -112,9 +112,21 @@ static int32_t IsMine(void*, uint64_t scene, uint64_t object)
     return Match(scene, object) ? 1 : 0;
 }
 
-// This host tests native callbacks without linking Beef generated exports.
-// The full editor test supplies the compiler-reflected symbol resolver.
-static void* ResolveApi(void*, const char*) { return nullptr; }
+// The standalone native-host test substitutes a tiny ABI-compatible
+// implementation for the generator's reflected Beef fixture. The real
+// launcher resolves the identical symbol IDs from emitted Beef methods.
+static float ExposedAverage(float a, float b) { return (a + b) * 0.5f; }
+static int32_t ExposedVersion() { return 1; }
+static void* ResolveApi(void*, const char* symbol)
+{
+    if (!symbol) return nullptr;
+    const std::string name(symbol);
+    if (name.rfind("CSharpApiVersion_", 0) == 0)
+        return reinterpret_cast<void*>(&ExposedVersion);
+    if (name.rfind("CSharpApi_", 0) == 0)
+        return reinterpret_cast<void*>(&ExposedAverage);
+    return nullptr;
+}
 
 static int Failure(const char* reason)
 {
@@ -252,8 +264,18 @@ int main(int argc, char** argv)
         return Failure("resolving C# GetComponent on the same native object");
     if (std::fabs(state.position[1] - 8.0f) > 0.0001f)
         return Failure("managed GetComponent<T> did not resolve sibling C# script");
-    if (!tn_csharp_detach(lookup) || !tn_csharp_detach(mover) ||
-        !tn_csharp_unload_game())
+    if (!tn_csharp_detach(lookup) || !tn_csharp_detach(mover))
+        return Failure("cleaning up component lookup");
+
+    // The method is declared *only* in annotated Beef and emitted for C#
+    // by BindingGen; call it through a cached unmanaged function pointer.
+    const int32_t generated = tn_csharp_attach("Gameplay.GeneratedBindingSmoke", 1, 1);
+    if (generated < 1 ||
+        !tn_csharp_dispatch(generated, TN_CSHARP_AWAKE, 0.0f))
+        return Failure("calling generated Beef/C# binding");
+    if (std::fabs(state.position[0] - 5.0f) > 0.0001f)
+        return Failure("generated method did not execute native ABI");
+    if (!tn_csharp_detach(generated) || !tn_csharp_unload_game())
         return Failure("ending second Play session");
 
     tn_csharp_shutdown();
