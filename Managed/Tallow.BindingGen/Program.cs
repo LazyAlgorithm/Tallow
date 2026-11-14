@@ -31,14 +31,15 @@ internal static class Program
     private static bool IsType(string type, bool allowVoid = false) =>
         type is "bool" or "int" or "uint" or "long" or "ulong" or
             "float" or "double" or "string" or "System.Numerics.Vector2" or
-            "System.Numerics.Vector3" or "System.Numerics.Vector4" ||
+            "System.Numerics.Vector3" or "System.Numerics.Vector4" or
+            "System.Numerics.Quaternion" ||
         (allowVoid && type == "void");
 
     private static int Dimensions(string type) => type switch
     {
         "System.Numerics.Vector2" => 2,
         "System.Numerics.Vector3" => 3,
-        "System.Numerics.Vector4" => 4,
+        "System.Numerics.Vector4" or "System.Numerics.Quaternion" => 4,
         _ => 0
     };
 
@@ -161,7 +162,8 @@ internal static class Program
                     }
                     if (count > 0)
                     {
-                        string name = $"Vector{count}";
+                        string name = p.Type == "System.Numerics.Quaternion" ?
+                            "Quaternion" : $"Vector{count}";
                         text.AppendLine($"\t\tif (p{i} == null) return{(returnType == "void" ? ";" : " default;")}");
                         text.AppendLine($"\t\t{name} v{i} = .({string.Join(", ", Enumerable.Range(0, count).Select(j => $"p{i}[{j}]"))});");
                     }
@@ -320,7 +322,7 @@ internal static class Program
                     text.AppendLine($"\t\treturn {call} != 0;");
                 else if (Dimensions(m.Result) > 0)
                     text.AppendLine($"\t\t{call};")
-                        .AppendLine($"\t\treturn new Vector{Dimensions(m.Result)}({string.Join(", ", Enumerable.Range(0, Dimensions(m.Result)).Select(i => $"result[{i}]"))});");
+                        .AppendLine($"\t\treturn new {CSharpType(m.Result)}({string.Join(", ", Enumerable.Range(0, Dimensions(m.Result)).Select(i => $"result[{i}]"))});");
                 else
                     text.AppendLine($"\t\treturn {call};");
                 if (hasStrings)
@@ -374,6 +376,18 @@ internal static class Program
         if (!EmitBeef(v, Hash(vectors)).Contains("result[2] = value.z;") ||
             !EmitCSharp(v, Hash(vectors)).Contains("float* result = stackalloc float[3];"))
             throw new Exception("Vector ABI lowering failed.");
+        const string quaternion = "TALLOW_CSHARP_API_V1\nmethod\tTallow.RotationMath\tEulerDegrees\tSystem.Numerics.Quaternion\tdegrees:System.Numerics.Vector3\nmethod\tTallow.RotationMath\tToEulerDegrees\tSystem.Numerics.Vector3\trotation:System.Numerics.Quaternion\n";
+        List<Method> quaternionMethods = Parse(quaternion);
+        string beefQuaternion = EmitBeef(quaternionMethods, Hash(quaternion));
+        string managedQuaternion = EmitCSharp(quaternionMethods, Hash(quaternion));
+        if (quaternionMethods.Count != 2 ||
+            !beefQuaternion.Contains("Quaternion v0 = .(p0[0], p0[1], p0[2], p0[3]);") ||
+            !beefQuaternion.Contains("result[3] = value.w;") ||
+            !managedQuaternion.Contains("public static System.Numerics.Quaternion EulerDegrees(System.Numerics.Vector3 degrees)") ||
+            !managedQuaternion.Contains("public static System.Numerics.Vector3 ToEulerDegrees(System.Numerics.Quaternion rotation)") ||
+            !managedQuaternion.Contains("return new System.Numerics.Quaternion(result[0], result[1], result[2], result[3]);") ||
+            !managedQuaternion.Contains("float* p0 = stackalloc float[4] { rotation.X, rotation.Y, rotation.Z, rotation.W };"))
+            throw new Exception("Quaternion ABI lowering failed.");
         const string numeric = "TALLOW_CSHARP_API_V1\nmethod\tTallow.NumericChecks\tHash\tulong\tseed:uint\twide:long\tvalue:double\n";
         List<Method> numericMethods = Parse(numeric);
         string nativeNumeric = EmitBeef(numericMethods, Hash(numeric));

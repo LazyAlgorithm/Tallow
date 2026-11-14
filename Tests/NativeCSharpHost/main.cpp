@@ -157,6 +157,23 @@ static void ExposedLogInfo(const char* text, int32_t length)
 }
 static float GetTestTimeScale() { return testTimeScale; }
 static void SetTestTimeScale(float value) { testTimeScale = value; }
+static void ExposedEulerDegrees(const float* degrees, float* result)
+{
+    if (!degrees || !result) return;
+    // Identity for zero Euler angles; nonzero values will be caught by a
+    // future full-engine integration test using Beef's rotation convention.
+    result[0] = 0; result[1] = 0; result[2] = 0; result[3] = 1;
+}
+static void ExposedToEulerDegrees(const float* rotation, float* result)
+{
+    if (!rotation || !result) return;
+    result[0] = 0; result[1] = 0; result[2] = 0;
+}
+static void ExposedLookRotation(const float* forward, const float* up, float* result)
+{
+    if (!forward || !up || !result) return;
+    result[0] = 0; result[1] = 0; result[2] = 0; result[3] = 1;
+}
 static float ExposedClamp01(float value)
 {
     return std::fmax(0.0f, std::fmin(value, 1.0f));
@@ -197,6 +214,12 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&SetTestTimeScale);
     // Only explicitly annotated gameplay helpers cross the native ABI.
     // Standard MathF and Math.Clamp are never registered as native methods.
+    if (name == "CSharpApi_dfe817f927635f11")
+        return reinterpret_cast<void*>(&ExposedEulerDegrees);
+    if (name == "CSharpApi_3d883aac8c5229bc")
+        return reinterpret_cast<void*>(&ExposedToEulerDegrees);
+    if (name == "CSharpApi_9b52f038cbeb3a52")
+        return reinterpret_cast<void*>(&ExposedLookRotation);
     if (name == "CSharpApi_3dd313f9deff72c1")
         return reinterpret_cast<void*>(&ExposedClamp01);
     if (name == "CSharpApi_65b3c87958d5c643")

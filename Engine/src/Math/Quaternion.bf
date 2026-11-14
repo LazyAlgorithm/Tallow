@@ -184,3 +184,24 @@ struct Quaternion
 		return q.Normalized;
 	}
 }
+
+ 
+/// Tallow's native Euler/LookRotation conventions, exposed to C# as
+/// System.Numerics.Quaternion values. Other standard quaternion operations
+/// should use System.Numerics directly without crossing the native ABI.
+[CSharpExpose]
+static class RotationMath
+{
+    /// Apply Tallow's Z-then-X-then-Y Euler angle convention (degrees).
+    [CSharpExpose]
+    public static Quaternion EulerDegrees(Vector3 degrees) => Quaternion.Euler(degrees);
+
+    /// Convert a native Tallow rotation back into Euler angles in degrees.
+    [CSharpExpose]
+    public static Vector3 ToEulerDegrees(Quaternion rotation) => rotation.EulerAngles;
+
+    /// Construct Tallow's native forward/up orientation.
+    [CSharpExpose]
+    public static Quaternion LookRotation(Vector3 forward, Vector3 up) =>
+        Quaternion.LookRotation(forward, up);
+}

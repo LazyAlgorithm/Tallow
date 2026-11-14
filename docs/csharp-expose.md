@@ -196,3 +196,19 @@ use `MathF.PI` for pi.
 The fixture and native-host smoke tests are deliberately limited to these
 approved annotations. CI rejects standard scalar math exports. This reduces
 unnecessary P/Invoke call overhead in hot gameplay loops.
+
+### Quaternion value ABI and native rotation conventions
+
+`[CSharpExpose]` methods can now pass and return Beef `Quaternion` as a
+`System.Numerics.Quaternion` using four counted IEEE-754 `float` components
+(`x,y,z,w` / `X,Y,Z,W`). Generated native wrappers reconstruct a **native
+Quaternion**, never a Vector4, and generated managed wrappers return a real
+`System.Numerics.Quaternion`. Input and output buffers are stack allocated;
+there is no unmanaged object pointer or managed heap object retained.
+
+The first rotation-specific owner is `RotationMath`, with `EulerDegrees`,
+`ToEulerDegrees`, and `LookRotation` for Tallow's native Euler and look
+conventions. Standard quaternion operations available in `System.Numerics`
+should remain local C# operations. Quaternion support has generator self-tests
+and a native-host ABI smoke test; full linked-Beef CI verification remains
+required.

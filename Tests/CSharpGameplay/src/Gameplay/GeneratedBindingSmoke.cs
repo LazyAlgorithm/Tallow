@@ -26,6 +26,18 @@ public sealed class GeneratedBindingSmoke : Script
         if (MathF.Abs(Math.Clamp(2.5f, 0f, 1f) - 1f) > 0.0001f)
             throw new InvalidOperationException("Standard .NET clamp failed.");
 
+        // Exercise both directions of the generated Quaternion ABI.
+        Quaternion euler = RotationMath.EulerDegrees(Vector3.Zero);
+        if (MathF.Abs(euler.W - 1f) > 0.0001f ||
+            MathF.Abs(euler.X) + MathF.Abs(euler.Y) + MathF.Abs(euler.Z) > 0.0001f)
+            throw new InvalidOperationException("Generated native quaternion return failed.");
+        Vector3 zeroAngles = RotationMath.ToEulerDegrees(Quaternion.Identity);
+        if (zeroAngles.LengthSquared() > 0.0001f)
+            throw new InvalidOperationException("Generated native quaternion input failed.");
+        Quaternion facing = RotationMath.LookRotation(Vector3.UnitZ, Vector3.UnitY);
+        if (MathF.Abs(facing.W - 1f) > 0.0001f)
+            throw new InvalidOperationException("Generated native LookRotation binding failed.");
+
         float average = CSharpBindingFixture.Average(4f, 6f);
         if (MathF.Abs(average - 5f) > 0.0001f)
             throw new InvalidOperationException("Generated [CSharpExpose] binding returned the wrong value.");

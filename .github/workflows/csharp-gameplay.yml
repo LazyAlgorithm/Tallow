@@ -163,10 +163,15 @@ jobs:
           grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           # Read-only native statics should become C# properties, never get_/set_ methods.
           grep -F 'field' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Time' | grep -F 'DeltaTime'
-          grep -F 'public static float DeltaTime => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float DeltaTime' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'get => __TallowGet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'public static long FrameCount' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'set => __TallowSet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'Tallow.Time.TimeScale = value;' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Quaternions use four floats, but must remain distinct from Vector4.
+          grep -F 'Tallow.RotationMath' /tmp/tallow-csharp-api.tsv | grep -F 'EulerDegrees'
+          grep -F 'public static System.Numerics.Quaternion EulerDegrees(' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Quaternion v0 = .(p0[0], p0[1], p0[2], p0[3]);' Engine/src/Scripting/CSharpBindings.Generated.bf
           grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
           grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf

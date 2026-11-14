@@ -16,3 +16,6 @@ field	Tallow.Time	TimeScale	float	getset
 method	Tallow.Log	Info	void	text:string
 method	Tallow.Log	Warning	void	text:string
 method	Tallow.Log	Error	void	text:string
+method	Tallow.RotationMath	EulerDegrees	System.Numerics.Quaternion	degrees:System.Numerics.Vector3
+method	Tallow.RotationMath	ToEulerDegrees	System.Numerics.Vector3	rotation:System.Numerics.Quaternion
+method	Tallow.RotationMath	LookRotation	System.Numerics.Quaternion	forward:System.Numerics.Vector3	up:System.Numerics.Vector3
