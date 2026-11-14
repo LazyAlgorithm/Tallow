@@ -73,6 +73,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
       - name: Install compiler and native dependencies
         run: |
           sudo apt-get update
@@ -124,6 +127,13 @@ jobs:
         run: |
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv
           grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'CSharpBindingFixture' | grep -F 'Average'
+          grep -F 'CSharpApi_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'public static float Average(float a, float b)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'CSharpApiVersion_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
+            echo "Unmarked Beef method appeared in C# bindings" >&2
+            exit 1
+          fi
           if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
             echo "Unannotated public method leaked into C# API manifest" >&2
             exit 1
