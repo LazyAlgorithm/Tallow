@@ -303,14 +303,25 @@ static class CSharpRuntime
 	{
 		if (values == null)
 			return;
-		values[0] = 0;
-		values[1] = 0;
-		values[2] = 0;
-		values[3] = 0;
 		let gameObject = Find(scene, entity);
 		if (gameObject == null)
 			return;
 		let transform = gameObject.Transform;
+		if (channel == 12 || channel == 13)
+		{
+			Vector3 point = .(values[0], values[1], values[2]);
+			Vector3 result = channel == 12 ?
+				transform.TransformPoint(point) : transform.InverseTransformPoint(point);
+			values[0] = result.x;
+			values[1] = result.y;
+			values[2] = result.z;
+			values[3] = 0;
+			return;
+		}
+		values[0] = 0;
+		values[1] = 0;
+		values[2] = 0;
+		values[3] = 0;
 		if (channel == 2 || channel == 3)
 		{
 			Quaternion q = channel == 2 ? transform.Rotation : transform.LocalRotation;
