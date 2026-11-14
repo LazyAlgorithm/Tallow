@@ -6,6 +6,17 @@ namespace Tallow;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
 public sealed class ComponentAttribute : Attribute { }
 
+/// <summary>
+/// Build-generated trusted C# component registration contract shared by the
+/// JIT editor and the future statically linked NativeAOT player. Scripts are
+/// created through direct constructors, not reflection over game assemblies.
+/// </summary>
+public interface IGameplayComponentRegistry
+{
+    global::System.Collections.Generic.IReadOnlyList<string> ComponentNames { get; }
+    Script? Create(string fullName);
+}
+
 /// <summary>Marks state the networking bridge must replicate.</summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class SyncAttribute : Attribute { }

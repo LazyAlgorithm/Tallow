@@ -805,3 +805,25 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
   `Gameplay.MoveRight` defined in a referenced `.tasmdef` assembly and
   confirms missing names return null. CI Linux/Windows compilation and
   in-editor Nobara tests are still required.
+
+
+### Shared JIT/NativeAOT C# component factory contract (November 14, 2026)
+
+- Introduced `IGameplayComponentRegistry` in Tallow.API. The Roslyn
+  prebuild generator emits a strongly typed, explicit component-name list
+  and direct factory methods across trusted gameplay `.tasmdef` assemblies.
+- The development `Tallow.ManagedRuntime` now binds the **one generated
+  registry** through the trusted game's assembly rather than calling
+  `Assembly.GetTypes` on every game dependency and `Activator.CreateInstance`
+  for every component. The JIT editor keeps its trusted collectible
+  `AssemblyLoadContext` for hot reload; native GameObject/scene
+  ownership and callback scheduling are unchanged.
+- On Play/Stop or failed game activation, runtime clears the generated
+  registry reference **before** unloading the JIT game assembly, preventing
+  an inadvertent long-lived ALC root. Old gameplay DLLs that predate
+  generated registries require a rebuild; the editor reports this.
+- The same interface/factory implementation is now a candidate to be
+  statically rooted by the future NativeAOT shipping player. **AOT export
+  is still not built** and generated field setters, custom Flecs ECS
+  layout registration, cross-platform real editor tests and benchmark
+  parity remain pending.

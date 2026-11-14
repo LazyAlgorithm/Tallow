@@ -150,7 +150,10 @@ public static unsafe class NativeEntrypoints
     // remain valid for the trusted host's lifetime.
     private static Callbacks sNativeCallbacks;
 
-    private static readonly Dictionary<string, Type> sTypes = new(StringComparer.Ordinal);
+    private static readonly HashSet<string> sTypes = new(StringComparer.Ordinal);
+    // Direct constructors shared with future AOT export. Clear this strong
+    // reference BEFORE unloading the collectible development game assembly.
+    private static IGameplayComponentRegistry? sRegistry;
     private static readonly Dictionary<int, Script> sInstances = [];
     // Preserve attach order for multiple components and subclass lookups.
     private static readonly Dictionary<GameObject, List<Script>> sByGameObject = [];
@@ -261,22 +264,33 @@ public static unsafe class NativeEntrypoints
                     context.LoadFromAssemblyName(dependency);
             }
 
-            // Only scan this game's assemblies, not assemblies loaded by the host.
-            foreach (Assembly assembly in context.Assemblies)
+            // Only the known generated registry is discovered from the
+            // trusted Tallow.Game assembly. No Assembly.GetTypes scan or
+            // arbitrary gameplay constructor reflection is needed.
+            Type registryType = game.GetType(
+                "Tallow.Generated.TallowGeneratedGameRegistry", throwOnError: false)
+                ?? throw new InvalidOperationException(
+                    "C# game has no generated component registry. Rebuild it with the current Tallow editor.");
+            if (Activator.CreateInstance(registryType) is not IGameplayComponentRegistry registry)
+                throw new InvalidOperationException("C# component registry ABI does not match Tallow.API.");
+            sRegistry = registry;
+            foreach (string typeName in registry.ComponentNames)
             {
-                foreach (Type type in assembly.GetTypes())
-                {
-                    if (type.IsAbstract || !typeof(Script).IsAssignableFrom(type) ||
-                        !type.IsDefined(typeof(ComponentAttribute), inherit: true) ||
-                        type.GetConstructor(Type.EmptyTypes) is null)
-                        continue;
-                    sTypes.Add(type.FullName!, type);
-                }
+                if (string.IsNullOrWhiteSpace(typeName) || !sTypes.Add(typeName))
+                    throw new InvalidOperationException(
+                        "Generated C# component registry contains a duplicate or invalid name.");
             }
             return sTypes.Count;
         }
         catch (Exception exception)
         {
+            // Failed assembly activation must not leave a collectible game
+            // context rooted or poison the next rebuild/Play attempt.
+            sRegistry = null;
+            sTypes.Clear();
+            GameAssemblyContext? failed = sGameContext;
+            sGameContext = null;
+            failed?.Unload();
             return Failure(exception);
         }
     }
@@ -287,9 +301,10 @@ public static unsafe class NativeEntrypoints
         try
         {
             string name = Marshal.PtrToStringUTF8((nint)className) ?? "";
-            if (!sTypes.TryGetValue(name, out Type? type))
+            if (!sTypes.Contains(name) || sRegistry is null)
                 throw new TypeLoadException("Unknown trusted C# gameplay script: " + name);
-            Script script = (Script)Activator.CreateInstance(type)!;
+            Script script = sRegistry.Create(name) ??
+                throw new TypeLoadException("Generated C# factory did not create: " + name);
             int instance = ++sNextInstance;
             script.AttachNative(new GameObject(sceneId, entityId), instance);
             sInstances.Add(instance, script);
@@ -655,6 +670,8 @@ public static unsafe class NativeEntrypoints
                     "Detach all managed components before unloading the gameplay assembly.");
             sEnabled.Clear();
             sByGameObject.Clear();
+            // Never retain a generated factory instance across ALC reloads.
+            sRegistry = null;
             sTypes.Clear();
             GameAssemblyContext? previous = sGameContext;
             sGameContext = null;
@@ -684,6 +701,8 @@ public static unsafe class NativeEntrypoints
             sEnabled.Clear();
             sInstances.Clear();
             sByGameObject.Clear();
+            // Never retain a generated factory instance across ALC reloads.
+            sRegistry = null;
             sTypes.Clear();
             GameAssemblyContext? previous = sGameContext;
             sGameContext = null;
