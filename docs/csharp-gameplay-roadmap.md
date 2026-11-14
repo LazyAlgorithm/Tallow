@@ -66,6 +66,24 @@ Read this entire checklist, `docs/csharp-gameplay.md`, then inspect **current** 
 - [ ] Confirm compile-success toast clears after 1000 ms, but errors and newer status messages are never cleared by the timer.
 - [ ] Confirm old/native Beef authoring remains explicitly accessible for compatibility but is not required on the C# path.
 
+## Native C# generated API verification
+
+- Initial end-to-end static-method binding stage passed full Linux native CI
+  in run `43543795657` (commit `c9bd094`), alongside managed Linux/Windows.
+- The generator now supports numeric scalar types, vectors, safe counted UTF-8
+  input strings and annotated public static fields as properties with opt-in
+  scalar setters. Real candidates: native `Noise`, `Log`, `Time`.
+- Managed C# gameplay now also has initial session-validated `Scene` and
+  `Prefab` facades for creation/lookup/instantiation, plus native-host tests.
+- New `--csharp-api-verify SYMBOL` native CLI checks that a generated
+  export is **actually resolvable in the linked Beef binary**, not merely
+  present in generated text; CI also rejects a fake/unapproved symbol.
+- **Not finished:** full instance-property bindings, string returns/ownership,
+  custom engine-owned resources, Jolt/renderer/audio/animation, ECS query
+  batches, network authority/prediction parity, all cross-platform builds.
+  Latest native CI still must be checked before calling these safe additions
+  production-ready.
+
 ## C# editor diagnostics: retain native visual warning categories
 
 The C# language service now emits compiler diagnostics and a conservative set of

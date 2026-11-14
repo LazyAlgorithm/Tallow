@@ -340,6 +340,14 @@ static class CSharpRuntime
 		return created != null && !created.IsDestroyed ? created.Id : 0;
 	}
 
+	/// Used by native engine-build CI to ensure generated wrappers really
+	/// exist in Beef reflection; mere source text/manifest presence is not enough.
+	public static bool HasGeneratedApi(StringView symbol)
+	{
+		let name = scope String(symbol);
+		return ResolveApi(null, name.CStr()) != null;
+	}
+
 	static int32 IsAlive(void* context, uint64 scene, uint64 entity) => Find(scene, entity) != null ? 1 : 0;
 
 	/// One native call per operation: each callback validates the live scene/entity

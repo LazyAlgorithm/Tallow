@@ -791,6 +791,22 @@ class Program
 				return 0;
 			}
 		}
+		// Probe actual native function pointers in the *relinked* engine.
+		// This catches generated wrappers missing from reflection or the export
+		// whitelist even if the manifest and generated source files exist.
+		for (int i < args.Count - 1)
+		{
+			if (args[i] == "--csharp-api-verify")
+			{
+				if (!CSharpRuntime.HasGeneratedApi(args[i + 1]))
+				{
+					Console.WriteLine(scope $"Missing generated C# API export: {args[i + 1]}");
+					return 1;
+				}
+				Console.WriteLine(scope $"Verified generated C# API export: {args[i + 1]}");
+				return 0;
+			}
+		}
 		// Precompiled editor: the native TallowLauncher binary already contains
 		// TallowEditor. C# projects no longer generate or compile an editor exe.
 		if (args.Contains("--editor") || args.Contains("--game"))

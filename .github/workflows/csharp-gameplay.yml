@@ -153,6 +153,14 @@ jobs:
           grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
           grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Source-grep alone cannot prove that Beef actually exported the
+          # wrapper function pointers. Check reflection on the relinked binary.
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_17858942906a9c6f
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_e2772af6e047fd0b
+          if build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_NotApproved; then
+            echo "Native resolver accepted an unapproved API symbol" >&2
+            exit 1
+          fi
           if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
             echo "Unmarked Beef method appeared in C# bindings" >&2
             exit 1
