@@ -12,6 +12,13 @@ struct TestScene
 {
     bool alive = true;
     float position[3] = {};
+    float local_position[3] = {};
+    float scale[3] = {1, 1, 1};
+    float rotation[4] = {0, 0, 0, 1};
+    float local_rotation[4] = {0, 0, 0, 1};
+    float local_euler[3] = {};
+    float euler[3] = {};
+    float last_look_at[3] = {};
 };
 
 static bool Match(uint64_t scene, uint64_t object)
@@ -34,6 +41,54 @@ static void SetPosition(void* context, uint64_t, uint64_t, const float* xyz)
 {
     auto* state = static_cast<TestScene*>(context);
     for (int i = 0; i < 3; ++i) state->position[i] = xyz[i];
+}
+
+// Mirrors the native engine's typed Transform bridge, including local
+// translation and rotation payloads. The full hierarchy behavior is tested
+// separately by the Beef native editor build.
+static void GetTransform(void* context, uint64_t scene, uint64_t object, int32_t channel, float* value)
+{
+    if (!Match(scene, object) || !value) return;
+    auto* state = static_cast<TestScene*>(context);
+    for (int i = 0; i < 4; ++i) value[i] = 0;
+    const float* from = nullptr;
+    int count = 3;
+    switch (channel)
+    {
+        case 1: from = state->local_position; break;
+        case 2: from = state->rotation; count = 4; break;
+        case 3: from = state->local_rotation; count = 4; break;
+        case 4: case 5: from = state->scale; break;
+        case 6: from = state->euler; break;
+        case 7: from = state->local_euler; break;
+        case 8: value[2] = 1; return;
+        case 9: value[0] = 1; return;
+        case 10: value[1] = 1; return;
+        default: return;
+    }
+    for (int i = 0; i < count; ++i) value[i] = from[i];
+}
+
+static void SetTransform(void* context, uint64_t scene, uint64_t object, int32_t channel, const float* value)
+{
+    if (!Match(scene, object) || !value) return;
+    auto* state = static_cast<TestScene*>(context);
+    float* target = nullptr;
+    int count = 3;
+    switch (channel)
+    {
+        case 1: target = state->local_position; break;
+        case 2: target = state->rotation; count = 4; break;
+        case 3: target = state->local_rotation; count = 4; break;
+        case 4: target = state->scale; break;
+        case 6: target = state->euler; break;
+        case 7: target = state->local_euler; break;
+        case 11: target = state->last_look_at; break;
+        default: return;
+    }
+    for (int i = 0; i < count; ++i) target[i] = value[i];
+    if (channel == 1)
+        for (int i = 0; i < 3; ++i) state->position[i] = value[i];
 }
 
 static void Destroy(void* context, uint64_t scene, uint64_t object)
@@ -72,7 +127,8 @@ int main(int argc, char** argv)
 
     TestScene state;
     tn_csharp_callbacks callbacks = {
-        &state, &Alive, &GetPosition, &SetPosition, &Destroy, &IsMine
+        &state, &Alive, &GetPosition, &SetPosition, &Destroy, &IsMine,
+        &GetTransform, &SetTransform
     };
     if (!tn_csharp_set_callbacks(&callbacks))
         return Failure("binding engine callbacks");
@@ -146,7 +202,26 @@ int main(int argc, char** argv)
         std::fabs(state.position[1] - 25.5f) > 0.0001f ||
         std::fabs(state.position[2] - 44.5f) > 0.0001f)
         return Failure("vector addition, multiplication or subtraction");
-    if (!tn_csharp_detach(vectorScript) || !tn_csharp_unload_game())
+    if (!tn_csharp_detach(vectorScript))
+        return Failure("detaching vector arithmetic script");
+
+    const int32_t transformScript = tn_csharp_attach("Gameplay.TransformParity", 1, 1);
+    if (transformScript < 1 ||
+        !tn_csharp_dispatch(transformScript, TN_CSHARP_AWAKE, 0.0f) ||
+        !tn_csharp_tick(transformScript, 1.0f))
+        return Failure("running native Transform parity C# behaviour");
+    if (std::fabs(state.position[0] - 6.0f) > 0.0001f ||
+        std::fabs(state.position[1] - 5.0f) > 0.0001f ||
+        std::fabs(state.position[2] - 6.0f) > 0.0001f ||
+        std::fabs(state.scale[0] - 2.0f) > 0.0001f ||
+        std::fabs(state.scale[1] - 3.0f) > 0.0001f ||
+        std::fabs(state.scale[2] - 4.0f) > 0.0001f ||
+        std::fabs(state.local_euler[0] - 10.0f) > 0.0001f ||
+        std::fabs(state.local_euler[1] - 20.0f) > 0.0001f ||
+        std::fabs(state.local_euler[2] - 30.0f) > 0.0001f ||
+        std::fabs(state.last_look_at[2] - 5.0f) > 0.0001f)
+        return Failure("C# and native Transform properties differ");
+    if (!tn_csharp_detach(transformScript) || !tn_csharp_unload_game())
         return Failure("ending second Play session");
 
     tn_csharp_shutdown();
