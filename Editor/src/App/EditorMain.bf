@@ -165,7 +165,8 @@ class PlayerApp : GameApp
 			// disabled when the game DLL has not yet been built.
 			for (let component in scene.Components)
 			{
-				if (component as CSharpBehaviour != null)
+				let managed = component as CSharpBehaviour;
+				if (managed != null)
 				{
 					Log.Error("This scene contains C# scripts, but the gameplay assembly is missing. Compile C# in the editor first.");
 					return false;
