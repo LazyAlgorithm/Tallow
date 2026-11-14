@@ -26,6 +26,15 @@ extension EditorApp
 {
 	void RebuildAndReload()
 	{
+		if (mManagedGameplay)
+		{
+			SaveAllScripts();
+			if (HasCSharpSources(scope $"{Project.Current.Path}/src"))
+				StartManagedErrorCheck();
+			else
+				mStatus.Set("No C# gameplay scripts to compile.");
+			return;
+		}
 		if (mReloadReady)
 		{
 			SaveAllScripts();
@@ -51,6 +60,13 @@ extension EditorApp
 
 	void FullRebuildAndRestart()
 	{
+		// Managed gameplay uses the already-compiled engine. Even an explicit
+		// rebuild in a C# project must not recompile the editor with Beef.
+		if (mManagedGameplay)
+		{
+			RebuildAndReload();
+			return;
+		}
 		if (mCheckRunning)
 		{
 			mStatus.Set("Wait for script compilation to finish before a full rebuild.");
