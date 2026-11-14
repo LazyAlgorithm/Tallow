@@ -18,6 +18,12 @@ on:
       - 'tools/patch_textedit.py'
       - 'third_party/TextEdit/**'
 
+# Only the newest branch build is useful while iterating on this migration.
+# Cancel superseded native editor builds rather than queuing every commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   managed-build:
     name: Build and smoke-test trusted C# assemblies
