@@ -20,8 +20,12 @@ namespace Tallow;
 /// not wired up yet: adding it alone does not create managed wrappers.
 /// Unsupported types, pointers and unsafe ownership patterns must be
 /// rejected at generation time, never silently marshalled.
+// The type must survive Beef's compile-on-demand elimination even when no
+// native code calls it yet. Include method metadata so the engine-build scanner
+// sees deliberately annotated members on otherwise-unused static classes.
 [AttributeUsage(.Class | .Struct | .Method | .Property | .Field,
-    .ReflectAttribute | .AlwaysIncludeTarget, ReflectUser = .Methods)]
+    .ReflectAttribute | .AlwaysIncludeTarget, ReflectUser = .All,
+    AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 struct CSharpExposeAttribute : Attribute
 {
 }
