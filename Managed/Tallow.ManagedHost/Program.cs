@@ -14,11 +14,42 @@ internal static class Program
     private sealed class TestBridge : IEngineBridge
     {
         private readonly Dictionary<GameObject, Vector3> _positions = [];
+        private readonly Dictionary<(GameObject, TransformChannel), Vector4> _transform = [];
 
         public bool IsAlive(GameObject gameObject) => _positions.ContainsKey(gameObject);
         public Vector3 GetPosition(GameObject gameObject) => _positions[gameObject];
         public void SetPosition(GameObject gameObject, Vector3 position) => _positions[gameObject] = position;
-        public void Destroy(GameObject gameObject) => _positions.Remove(gameObject);
+        public Vector4 GetTransform(GameObject gameObject, TransformChannel channel)
+        {
+            if (!IsAlive(gameObject))
+                throw new ObjectDisposedException(nameof(GameObject));
+            if (_transform.TryGetValue((gameObject, channel), out Vector4 value))
+                return value;
+            return channel switch
+            {
+                TransformChannel.LocalPosition => new Vector4(GetPosition(gameObject), 0),
+                TransformChannel.LocalScale or TransformChannel.WorldScale => new Vector4(1, 1, 1, 0),
+                TransformChannel.Rotation or TransformChannel.LocalRotation => new Vector4(0, 0, 0, 1),
+                TransformChannel.Forward => new Vector4(0, 0, 1, 0),
+                TransformChannel.Right => new Vector4(1, 0, 0, 0),
+                TransformChannel.Up => new Vector4(0, 1, 0, 0),
+                _ => Vector4.Zero
+            };
+        }
+        public void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value)
+        {
+            if (!IsAlive(gameObject))
+                throw new ObjectDisposedException(nameof(GameObject));
+            _transform[(gameObject, channel)] = value;
+            if (channel == TransformChannel.LocalPosition)
+                SetPosition(gameObject, new Vector3(value.X, value.Y, value.Z));
+        }
+        public void Destroy(GameObject gameObject)
+        {
+            _positions.Remove(gameObject);
+            foreach (var key in _transform.Keys.Where(key => key.Item1 == gameObject).ToArray())
+                _transform.Remove(key);
+        }
         public bool IsMine(GameObject gameObject) => IsAlive(gameObject);
         public GameObject Create(ulong id)
         {
