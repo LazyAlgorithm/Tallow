@@ -14,12 +14,12 @@ static class CSharpRuntime
 	{
 		public void* context;
 		public function int32(void*, uint64, uint64) isAlive;
-		public function void(void*, uint64, uint64, float*) getPosition;
-		public function void(void*, uint64, uint64, float*) setPosition;
+		public function int32(void*, uint64, uint64, float*) getPosition;
+		public function int32(void*, uint64, uint64, float*) setPosition;
 		public function void(void*, uint64, uint64) destroy;
 		public function int32(void*, uint64, uint64) isMine;
-		public function void(void*, uint64, uint64, int32, float*) getTransform;
-		public function void(void*, uint64, uint64, int32, float*) setTransform;
+		public function int32(void*, uint64, uint64, int32, float*) getTransform;
+		public function int32(void*, uint64, uint64, int32, float*) setTransform;
 	}
 
 	/// The engine drives all component callbacks, preserving native scheduling.
@@ -91,12 +91,12 @@ static class CSharpRuntime
 		if (sSession == 0)
 			sSession++;
 		function int32(void*, uint64, uint64) alive = => IsAlive;
-		function void(void*, uint64, uint64, float*) get = => GetPosition;
-		function void(void*, uint64, uint64, float*) set = => SetPosition;
+		function int32(void*, uint64, uint64, float*) get = => GetPosition;
+		function int32(void*, uint64, uint64, float*) set = => SetPosition;
 		function void(void*, uint64, uint64) destroy = => Destroy;
 		function int32(void*, uint64, uint64) mine = => IsMine;
-		function void(void*, uint64, uint64, int32, float*) getTransform = => GetTransform;
-		function void(void*, uint64, uint64, int32, float*) setTransform = => SetTransform;
+		function int32(void*, uint64, uint64, int32, float*) getTransform = => GetTransform;
+		function int32(void*, uint64, uint64, int32, float*) setTransform = => SetTransform;
 		Callbacks callbacks = .()
 		{
 			context = null,
@@ -275,37 +275,41 @@ static class CSharpRuntime
 
 	static int32 IsAlive(void* context, uint64 scene, uint64 entity) => Find(scene, entity) != null ? 1 : 0;
 
-	static void GetPosition(void* context, uint64 scene, uint64 entity, float* xyz)
+	/// One native call per operation: each callback validates the live scene/entity
+	/// handle and returns success, avoiding a separate isAlive round trip.
+	static int32 GetPosition(void* context, uint64 scene, uint64 entity, float* xyz)
 	{
 		if (xyz == null)
-			return;
+			return 0;
 		let gameObject = Find(scene, entity);
 		if (gameObject == null)
-			return;
+			return 0;
 		let position = gameObject.Transform.Position;
 		xyz[0] = position.x;
 		xyz[1] = position.y;
 		xyz[2] = position.z;
+		return 1;
 	}
 
-	static void SetPosition(void* context, uint64 scene, uint64 entity, float* xyz)
+	static int32 SetPosition(void* context, uint64 scene, uint64 entity, float* xyz)
 	{
 		if (xyz == null)
-			return;
-		let gameObject = Find(scene, entity);
-		if (gameObject != null)
-			gameObject.Transform.Position = .(xyz[0], xyz[1], xyz[2]);
-	}
-
-	/// Matches the C# TransformChannel values and delegates calculations to
-	/// Beef Transform, including parent-aware world/local conversions.
-	static void GetTransform(void* context, uint64 scene, uint64 entity, int32 channel, float* values)
-	{
-		if (values == null)
-			return;
+			return 0;
 		let gameObject = Find(scene, entity);
 		if (gameObject == null)
-			return;
+			return 0;
+		gameObject.Transform.Position = .(xyz[0], xyz[1], xyz[2]);
+		return 1;
+	}
+
+	/// Matches C# TransformChannel and uses Beef for parent-aware maths.
+	static int32 GetTransform(void* context, uint64 scene, uint64 entity, int32 channel, float* values)
+	{
+		if (values == null)
+			return 0;
+		let gameObject = Find(scene, entity);
+		if (gameObject == null)
+			return 0;
 		let transform = gameObject.Transform;
 		if (channel == 12 || channel == 13)
 		{
@@ -316,7 +320,7 @@ static class CSharpRuntime
 			values[1] = result.y;
 			values[2] = result.z;
 			values[3] = 0;
-			return;
+			return 1;
 		}
 		values[0] = 0;
 		values[1] = 0;
@@ -329,7 +333,7 @@ static class CSharpRuntime
 			values[1] = q.y;
 			values[2] = q.z;
 			values[3] = q.w;
-			return;
+			return 1;
 		}
 		Vector3 v = .Zero;
 		switch (channel)
@@ -342,20 +346,21 @@ static class CSharpRuntime
 		case 8: v = transform.Forward;
 		case 9: v = transform.Right;
 		case 10: v = transform.Up;
-		default: return;
+		default: return 0;
 		}
 		values[0] = v.x;
 		values[1] = v.y;
 		values[2] = v.z;
+		return 1;
 	}
 
-	static void SetTransform(void* context, uint64 scene, uint64 entity, int32 channel, float* values)
+	static int32 SetTransform(void* context, uint64 scene, uint64 entity, int32 channel, float* values)
 	{
 		if (values == null)
-			return;
+			return 0;
 		let gameObject = Find(scene, entity);
 		if (gameObject == null)
-			return;
+			return 0;
 		let transform = gameObject.Transform;
 		Vector3 v = .(values[0], values[1], values[2]);
 		Quaternion q = .(values[0], values[1], values[2], values[3]);
@@ -368,7 +373,9 @@ static class CSharpRuntime
 		case 6: transform.EulerAngles = v;
 		case 7: transform.LocalEulerAngles = v;
 		case 11: transform.LookAt(v);
+		default: return 0;
 		}
+		return 1;
 	}
 
 	static void Destroy(void* context, uint64 scene, uint64 entity)
