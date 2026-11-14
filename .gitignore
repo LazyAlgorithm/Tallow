@@ -14,3 +14,8 @@ website/
 
 # Generated identity for a local source build
 tallow-version.json
+
+# Rebuilt from compiler-reflected [CSharpExpose] declarations by tools/build.py.
+# Never hand-edit or commit the native/managed public API projection.
+Engine/src/Scripting/CSharpBindings.Generated.bf
+Managed/Tallow.API/Generated/CSharpBindings.g.cs
