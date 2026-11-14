@@ -187,6 +187,10 @@ jobs:
           grep -F 'public static bool AddRigidbodyTorque(ulong session, ulong entity, System.Numerics.Vector3 torque)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'public static bool AddRigidbodyForceAtPosition(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'public static bool SimpleMoveCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static int CopyRigidbodyMasses(ulong session, int offset, System.Span<ulong> entityIds, System.Span<float> masses)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'Span<uint64> s2 = .(p2, p2Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'Span<float> s3 = .(p3, p3Length);' Engine/src/Scripting/CSharpBindings.Generated.bf
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
           grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_1a89e5a6a268148e

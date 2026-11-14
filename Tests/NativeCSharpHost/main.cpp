@@ -2,6 +2,7 @@
 // inside a native process and mutate a validated engine-owned object.
 #include "../../native/tallow_dotnet_host.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -191,6 +192,32 @@ static int physicsForcesAtPosition = 0;
 static int physicsSleeps = 0;
 static int physicsSoftImpulses = 0;
 static float physicsSoftPressure = 10.0f;
+static int ecsQueries = 0;
+static int32_t ExposedEcsIsAlive(uint64_t scene, uint64_t entity)
+{
+    return scene == 1 && (entity == 11 || entity == 22 || entity == 33) ? 1 : 0;
+}
+static int32_t ExposedEcsCountRigidbodies(uint64_t scene)
+{
+    return scene == 1 ? 3 : 0;
+}
+static int32_t ExposedEcsCopyRigidbodyMasses(uint64_t scene, int32_t offset,
+    uint64_t* ids, int32_t idCount, float* masses, int32_t massCount)
+{
+    if (scene != 1 || offset < 0 || idCount < 0 || massCount < 0 ||
+        (idCount > 0 && !ids) || (massCount > 0 && !masses)) return 0;
+    const uint64_t nativeIds[3] = {11, 22, 33};
+    const float nativeMasses[3] = {1.5f, 2.5f, 3.5f};
+    const int32_t available = offset < 3 ? 3 - offset : 0;
+    const int32_t copied = std::min(std::min(idCount, massCount), available);
+    for (int i = 0; i < copied; ++i)
+    {
+        ids[i] = nativeIds[offset + i];
+        masses[i] = nativeMasses[offset + i];
+    }
+    ++ecsQueries;
+    return copied;
+}
 static int32_t ExposedHasRigidbody(uint64_t scene, uint64_t entity) {
     return Match(scene, entity) ? 1 : 0;
 }
@@ -539,7 +566,13 @@ static void* ResolveApi(void*, const char* symbol)
     if (name.rfind("CSharpApiVersion_", 0) == 0)
         return reinterpret_cast<void*>(&ExposedVersion);
     // IDs are deterministic SHA-256 signature hashes emitted by BindingGen.
-    // Exact SHA-256 signature IDs from the generator's physics manifest.
+    // Exact signature IDs from the generator's approved exposure manifest.
+    if (name == "CSharpApi_d87ccb801a5fd433")
+        return reinterpret_cast<void*>(&ExposedEcsIsAlive);
+    if (name == "CSharpApi_8f34b0284d3b1041")
+        return reinterpret_cast<void*>(&ExposedEcsCountRigidbodies);
+    if (name == "CSharpApi_0fe31a78ec52861b")
+        return reinterpret_cast<void*>(&ExposedEcsCopyRigidbodyMasses);
     if (name == "CSharpApi_dd6b56714b85bea3")
         return reinterpret_cast<void*>(&ExposedGetColliderCount);
     if (name == "CSharpApi_82b7f344c3487d92")
@@ -848,6 +881,11 @@ int main(int argc, char** argv)
         std::fabs(physicsAngularVelocity[2] - 6.0f) > 0.0001f ||
         std::fabs(physicsSoftPressure - 12.0f) > 0.0001f)
         return Failure("C# native physics ABI marshalling failed");
+
+    const int32_t ecsApi = tn_csharp_attach("Gameplay.EcsBatchBindingSmoke", 1, 1);
+    if (ecsApi < 1 || !tn_csharp_dispatch(ecsApi, TN_CSHARP_AWAKE, 0.0f) ||
+        !tn_csharp_detach(ecsApi) || ecsQueries != 4)
+        return Failure("generated native Flecs batch span ABI");
 
     const int32_t characterApi = tn_csharp_attach("Gameplay.CharacterControllerBindingSmoke", 1, 1);
     if (characterApi < 1 ||

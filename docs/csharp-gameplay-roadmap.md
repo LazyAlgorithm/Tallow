@@ -325,3 +325,21 @@ claim automatic replication of dynamically created joints.
   state reads, and each operation. These tests do **not** simulate real Jolt
   collision/step/gravity; full linked native and Nobara editor verification
   remain outstanding.
+
+### Generated ECS bulk read milestone (2026-11-13)
+
+- `[CSharpExpose] Tallow.Ecs` now provides `CountRigidbodies(session)`,
+  `IsAlive(session, flecsEntityId)`, and
+  `CopyRigidbodyMasses(session, offset, Span<ulong> ids, Span<float> masses)`.
+  The native source is a cached `World.EntitiesWith<RigidbodyData>()`
+  query over packed Flecs chunks, not a managed-per-entity bridge.
+- IDs are **Flecs entity IDs, not GameObject.Id**. Native pointers and Jolt
+  handles stay private. Copies are limited by the shorter destination buffer,
+  and stale sessions / negative offsets / empty buffers return zero.
+  Pagination can change if structural mutations happen between pages;
+  for large bulk reads prefer one count and one appropriately sized buffer.
+- Added generator span ABI tests, managed gameplay smoke and native host
+  tests for complete, partial, short, empty, stale-session and negative-offset
+  cases. This remains a **read-only, RigidbodyData-specific first step**,
+  not general C# ECS component registration or writable chunk systems.
+  Full Linux Beef/Jolt and interactive Nobara validation are outstanding.

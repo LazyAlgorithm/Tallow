@@ -24,6 +24,9 @@ method	Tallow.Application	Quit	void
 field	Tallow.GUI	Width	float	get
 field	Tallow.GUI	Height	float	get
 method	Tallow.GUI	Button	bool	x:float	y:float	width:float	height:float	label:string
+method	Tallow.Ecs	IsAlive	bool	session:ulong	entity:ulong
+method	Tallow.Ecs	CountRigidbodies	int	session:ulong
+method	Tallow.Ecs	CopyRigidbodyMasses	int	session:ulong	offset:int	entityIds:System.Span<ulong>	masses:System.Span<float>
 method	Tallow.Physics	HasRigidbody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	HasRigidbodyBody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	GetRigidbodyVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
