@@ -15,6 +15,10 @@ typedef struct tn_csharp_callbacks {
     void (*set_position)(void*, uint64_t scene, uint64_t entity, const float* xyz);
     void (*destroy)(void*, uint64_t scene, uint64_t entity);
     int32_t (*is_mine)(void*, uint64_t scene, uint64_t entity);
+    // Extended Transform channels match Tallow.API.TransformChannel.
+    // Values are four floats: XYZ for vectors, XYZW for quaternions.
+    void (*get_transform)(void*, uint64_t scene, uint64_t entity, int32_t channel, float* xyzw);
+    void (*set_transform)(void*, uint64_t scene, uint64_t entity, int32_t channel, const float* xyzw);
 } tn_csharp_callbacks;
 
 // ABI mirror of Tallow's current and previous tick controls.
