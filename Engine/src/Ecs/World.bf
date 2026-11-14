@@ -41,6 +41,94 @@ sealed class World
 	/// Assigned by the NetworkManager for this Scene while a session is active.
 	public NetworkManager NativeNetwork;
 
+	/// C# owns only bare local-only entities it explicitly creates; never let
+	/// a managed script delete an unrelated native entity or a GameObject.
+	HashSet<uint64> mManagedLocalEntities = new .() ~ delete _;
+
+	struct ManagedLocalSchema
+	{
+		public uint64 flecsId;
+		public int32 size;
+		public int32 alignment;
+	}
+
+	/// Per-world schema IDs are derived from trusted C# component declarations,
+	/// and never reused for a different binary layout in this Scene.
+	Dictionary<uint64, ManagedLocalSchema> mManagedLocalSchemas = new .() ~ delete _;
+
+	public Entity CreateManagedLocalEntity()
+	{
+		let entity = Create();
+		if (!entity.IsNull)
+			mManagedLocalEntities.Add(entity.id);
+		return entity;
+	}
+
+	public bool IsManagedLocalEntity(Entity entity) =>
+		!entity.IsNull && mManagedLocalEntities.Contains(entity.id) &&
+		IsAlive(entity) && !IsSceneObject(entity);
+
+	/// Register opaque, *local-only* packed data. No native Jolt or built-in
+	/// component can be registered through this path. A schema ID changes
+	/// when the generated C# layout changes. Limits bound unmanaged memory.
+	public uint64 RegisterManagedLocalSchema(uint64 schemaId, int32 size, int32 alignment)
+	{
+		if (schemaId == 0 || size <= 0 || size > 4096 ||
+			alignment <= 0 || alignment > 16 ||
+			(alignment & (alignment - 1)) != 0 || size % alignment != 0)
+			return 0;
+		if (mManagedLocalSchemas.TryGetValue(schemaId, let existing))
+			return existing.size == size && existing.alignment == alignment ?
+				existing.flecsId : 0;
+		if (mManagedLocalSchemas.Count >= 1024)
+			return 0;
+		let name = scope String()..AppendF("Tallow.CSharp.Local.{}", schemaId);
+		let component = Flecs.Component(mWorld, name.CStr(), size, alignment);
+		if (component == 0)
+			return 0;
+		mManagedLocalSchemas[schemaId] = .()
+		{
+			flecsId = component,
+			size = size,
+			alignment = alignment
+		};
+		return component;
+	}
+
+	/// A whole-value write through Flecs.Set. Never return a Flecs pointer
+	/// to .NET, and never let a short, stale or mismatched layout be copied.
+	public bool SetManagedLocalData(Entity entity, uint64 schemaId, Span<uint8> bytes)
+	{
+		if (!IsManagedLocalEntity(entity) ||
+			!mManagedLocalSchemas.TryGetValue(schemaId, let layout) ||
+			bytes.Length != layout.size)
+			return false;
+		Flecs.Set(Writer, entity.id, layout.flecsId, layout.size, &bytes[0]);
+		return true;
+	}
+
+	public bool CopyManagedLocalData(Entity entity, uint64 schemaId, Span<uint8> bytes)
+	{
+		if (!IsManagedLocalEntity(entity) ||
+			!mManagedLocalSchemas.TryGetValue(schemaId, let layout) ||
+			bytes.Length != layout.size)
+			return false;
+		let data = (uint8*)Flecs.Get(mWorld, entity.id, layout.flecsId);
+		if (data == null)
+			return false;
+		for (int i < layout.size)
+			bytes[i] = data[i];
+		return true;
+	}
+
+	public bool HasManagedLocalData(Entity entity, uint64 schemaId)
+	{
+		if (!IsManagedLocalEntity(entity) ||
+			!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+			return false;
+		return Flecs.Has(mWorld, entity.id, layout.flecsId);
+	}
+
 	/// Test the scene-object link without registering its component in a
 	/// standalone bulk ECS world merely to ask whether the entity is raw.
 	public bool IsSceneObject(Entity entity)
@@ -287,6 +375,7 @@ sealed class World
 
 	public void Delete(Entity entity)
 	{
+		mManagedLocalEntities.Remove(entity.id);
 		if (mNativeCandidates.Remove(entity.id))
 			NativeNetwork?.NativeCandidateRemoved(entity);
 		Flecs.Delete(Writer, entity.id);
