@@ -44,6 +44,15 @@ internal static class Program
             if (channel == TransformChannel.LocalPosition)
                 SetPosition(gameObject, new Vector3(value.X, value.Y, value.Z));
         }
+        // The smoke host has no hierarchy or rotation; model only translation.
+        // Production calls delegate to Beef Transform via the native bridge.
+        public Vector3 TransformPoint(GameObject gameObject, Vector3 point, bool inverse)
+        {
+            if (!IsAlive(gameObject))
+                throw new ObjectDisposedException(nameof(GameObject));
+            Vector3 position = GetPosition(gameObject);
+            return inverse ? point - position : point + position;
+        }
         public Script? GetManagedComponent(GameObject gameObject, Type scriptType) => null;
         public void Destroy(GameObject gameObject)
         {
