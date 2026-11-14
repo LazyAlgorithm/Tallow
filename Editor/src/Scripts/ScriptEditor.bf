@@ -87,6 +87,9 @@ extension EditorApp
 	bool mCheckManaged;
 	bool mManagedBuildReady;
 	bool mManagedRecheckQueued;
+	// Clear only the success toast after one second; build failures stay visible.
+	Stopwatch mManagedCompileNoticeClock = new .(true) ~ delete _;
+	bool mManagedCompileNoticePending;
 	String mCheckLog = new .() ~ delete _;
 
 	/// Opens a script in the Scripts tab (or switches to it if it is already open).
@@ -484,6 +487,9 @@ extension EditorApp
 			}
 			mManagedBuildReady = mCheckSucceeded && !mManagedRecheckQueued;
 			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled." : "C# compilation failed. See Console.");
+			mManagedCompileNoticePending = mCheckSucceeded && !mManagedRecheckQueued;
+			if (mManagedCompileNoticePending)
+				mManagedCompileNoticeClock.Restart();
 			mCheckManaged = false;
 			if (mManagedRecheckQueued)
 			{
