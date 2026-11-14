@@ -31,6 +31,19 @@ public sealed class HideInInspectorAttribute : Attribute { }
 [AttributeUsage(AttributeTargets.Field)]
 public sealed class SerializeFieldAttribute : Attribute { }
 
+/// <summary>
+/// Gives a persisted field a stable identity across C# member renames.
+/// Optional: the default identity is derived from the declaring component
+/// and field name. NativeAOT exporters will consume source-generated IDs,
+/// not use reflection to locate serialized fields at runtime.
+/// Keep this ID constant when renaming a field; use a new ID for a new field.
+/// </summary>
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class SerializedFieldIdAttribute(string id) : Attribute
+{
+    public string Id { get; } = id;
+}
+
 /// <summary>Controls a numeric field's Inspector range.</summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class RangeAttribute(float minimum, float maximum) : Attribute

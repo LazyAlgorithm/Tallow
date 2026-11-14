@@ -720,3 +720,24 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/
 https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/libraries
 https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
 
+
+
+### NativeAOT serialization groundwork — generated stable IDs (November 14, 2026)
+
+- Added optional `[SerializedFieldId("motion-state-v1")]` on C# fields.
+  During normal C# project compilation, Roslyn now emits a separate
+  `.tallow-csharp/fields-aot.tsv` **build-only** catalog containing a stable
+  128-bit field ID, component type name, source field name, data kind and hidden
+  marker. The ID is SHA-256 truncated to 128 bits over a versioned namespace,
+  component's qualified name and either the explicit attribute ID or original
+  field name. Explicit IDs preserve the identity on *field* renames within the
+  same component. Moving a field to another component changes its ID.
+- Duplicate/invalid IDs fail catalog generation. The JIT editor's existing
+  scene/prefab name-based overrides and `fields.tsv` are **unchanged**; this
+  is not yet AOT generated getter/setter registration. The shipping compiler
+  must consume the generated IDs and implement backward-compatible migration
+  from legacy names before enabling the new scene format. No text manifest
+  should ship with protected NativeAOT exports.
+- Added fixture [SerializedFieldId] usage and Linux/Windows build-step CI
+  checks for the generated catalog. **Validation pending** actual managed CI,
+  JIT Inspector regression, and later NativeAOT field delegate generation.

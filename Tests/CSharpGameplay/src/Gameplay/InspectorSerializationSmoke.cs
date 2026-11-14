@@ -15,6 +15,7 @@ public enum InspectorMotion
 [Component]
 public sealed class InspectorSerializationSmoke : Script
 {
+    [SerializedFieldId("motion-state-v1")]
     public InspectorMotion movementMode = InspectorMotion.Hover;
 
     [ShowInInspector]

@@ -76,7 +76,18 @@ jobs:
         shell: bash
         run: |
           catalog=Tests/CSharpGameplay/.tallow-csharp/fields.tsv
+          aot_catalog=Tests/CSharpGameplay/.tallow-csharp/fields-aot.tsv
           test -f "$catalog"
+          test -f "$aot_catalog"
+          # The stable ID is 128-bit uppercase hex, independent of the
+          # member's source identifier when SerializedFieldId is applied.
+          awk -F '\t' '
+            $1 == "Gameplay.InspectorSerializationSmoke" && $3 == "movementMode" {
+              if ($2 !~ /^[0-9A-F]{32}$/) exit 1
+              found=1
+            }
+            END { if (!found) exit 1 }
+          ' "$aot_catalog"
           awk -F '\t' '
             $1 == "Gameplay.InspectorSerializationSmoke" {
               if ($2 == "privateSpeed" && $3 == "float" && $7 == "0") speed=1

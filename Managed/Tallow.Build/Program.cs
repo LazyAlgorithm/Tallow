@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -19,6 +21,20 @@ internal static class Program
 
     private static readonly Regex AssemblyName = new(
         @"^[A-Za-z_][A-Za-z0-9_.]*$", RegexOptions.CultureInvariant);
+
+    // Identifiers can survive renames when explicitly supplied. Limit their
+    // alphabet so the generated source/scene manifest needs no escaping.
+    private static readonly Regex SerializedIdName = new(
+        @"^[A-Za-z0-9_.-]{1,64}$", RegexOptions.CultureInvariant);
+
+    private static string StableFieldId(string componentName, string identity)
+    {
+        byte[] value = SHA256.HashData(Encoding.UTF8.GetBytes(
+            "TALLOW_FIELD_V1:" + componentName + ":" + identity));
+        // 128 bits avoids accidental collisions without exposing field names
+        // in a later compiled release registration table.
+        return Convert.ToHexString(value.AsSpan(0, 16));
+    }
 
     private static string RequiredOption(string[] args, string option)
     {
@@ -202,6 +218,9 @@ internal static class Program
         var components = new SortedSet<string>(StringComparer.Ordinal);
         var sourceRows = new SortedSet<string>(StringComparer.Ordinal);
         var fieldRows = new SortedSet<string>(StringComparer.Ordinal);
+        // Build-only metadata for a future AOT static serializer. No new
+        // runtime reflection or scene format is introduced by this manifest.
+        var aotFieldRows = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (SyntaxTree tree in trees)
         {
@@ -231,6 +250,7 @@ internal static class Program
                 string className = type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
                 components.Add(className);
                 sourceRows.Add(tree.FilePath + "\t" + className);
+                var seenFieldIds = new HashSet<string>(StringComparer.Ordinal);
 
                 // Limit the first Inspector bridge to deterministic, supported
                 // value types. Managed objects/references need their own handles.
@@ -337,6 +357,21 @@ internal static class Program
                         row += "\t" + names;
                     }
                     fieldRows.Add(row);
+
+                    AttributeData? identityAttribute = field.GetAttributes().FirstOrDefault(a =>
+                        a.AttributeClass?.ToDisplayString() == "Tallow.SerializedFieldIdAttribute");
+                    string identity = identityAttribute is null ? field.Name :
+                        identityAttribute.ConstructorArguments.FirstOrDefault().Value as string ?? "";
+                    if (!SerializedIdName.IsMatch(identity))
+                        throw new InvalidOperationException(
+                            $"Invalid [SerializedFieldId] for {className}.{field.Name}: " +
+                            "use 1-64 letters, digits, '.', '_' or '-'.");
+                    string stableId = StableFieldId(className, identity);
+                    if (!seenFieldIds.Add(stableId))
+                        throw new InvalidOperationException(
+                            $"Duplicate serialized field identity on {className}: {identity}.");
+                    aotFieldRows.Add(string.Join("\t",
+                        className, stableId, field.Name, kind, hide ? "1" : "0"));
                 }
             }
         }
@@ -354,6 +389,7 @@ internal static class Program
         }
         Publish(Path.Combine(project, ".tallow-csharp", "component-sources.tsv"), sourceRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields.tsv"), fieldRows);
+        Publish(Path.Combine(project, ".tallow-csharp", "fields-aot.tsv"), aotFieldRows);
         Console.WriteLine($"Discovered {components.Count} managed gameplay components and {fieldRows.Count} editable fields.");
     }
 
