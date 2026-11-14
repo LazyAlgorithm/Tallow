@@ -249,9 +249,13 @@ extension EditorApp
 		else if (document.path.EndsWith(".cs") || document.path.EndsWith(".tasmdef"))
 		{
 			mManagedBuildReady = false;
+			// Saving while dotnet is compiling must invalidate the in-flight
+			// result. Rebuild the latest saved source before enabling Play.
+			if (mCheckRunning)
+				mManagedRecheckQueued = true;
 			if (mPlay != .Edit)
 				mStatus.Set("C# changed; stop and restart Play to load the new code.");
-			else if (Project.Current.ReloadMode != .Manual)
+			else if (Project.Current.ReloadMode != .Manual && !mCheckRunning)
 				StartManagedErrorCheck();
 		}
 		else
