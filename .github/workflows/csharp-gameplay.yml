@@ -35,6 +35,9 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
+      - name: Validate local C# benchmark script syntax
+        if: runner.os == 'Linux'
+        run: bash -n tools/benchmark_csharp_compiles.sh
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '11.0.x'
