@@ -157,9 +157,19 @@ static void ExposedLogInfo(const char* text, int32_t length)
 }
 static float GetTestTimeScale() { return testTimeScale; }
 static void SetTestTimeScale(float value) { testTimeScale = value; }
-static float ExposedClamp(float value, float minimum, float maximum)
+static float ExposedClamp01(float value)
 {
-    return std::fmax(minimum, std::fmin(value, maximum));
+    return std::fmax(0.0f, std::fmin(value, 1.0f));
+}
+static float ExposedLerp(float a, float b, float t)
+{
+    return a + (b - a) * t;
+}
+static float ExposedMoveTowards(float current, float target, float maxDelta)
+{
+    const float delta = target - current;
+    if (std::fabs(delta) <= maxDelta) return target;
+    return current + (delta < 0 ? -maxDelta : maxDelta);
 }
 static float ExposedAverage(float a, float b)
 {
@@ -185,10 +195,14 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&GetTestTimeScale);
     if (name == "CSharpApi_d0d279519519c93c")
         return reinterpret_cast<void*>(&SetTestTimeScale);
-    // This method's public C# definition is generated exclusively from the
-    // annotated Beef Mathf.Clamp; there is no separate handwritten method.
-    if (name == "CSharpApi_b2b00815360bbf36")
-        return reinterpret_cast<void*>(&ExposedClamp);
+    // Only explicitly annotated gameplay helpers cross the native ABI.
+    // Standard MathF and Math.Clamp are never registered as native methods.
+    if (name == "CSharpApi_3dd313f9deff72c1")
+        return reinterpret_cast<void*>(&ExposedClamp01);
+    if (name == "CSharpApi_65b3c87958d5c643")
+        return reinterpret_cast<void*>(&ExposedLerp);
+    if (name == "CSharpApi_161489ddf9f26a3d")
+        return reinterpret_cast<void*>(&ExposedMoveTowards);
     if (name == "CSharpApi_17858942906a9c6f")
         return useSecondBinding ? reinterpret_cast<void*>(&ExposedAverageRebound) :
                                   reinterpret_cast<void*>(&ExposedAverage);

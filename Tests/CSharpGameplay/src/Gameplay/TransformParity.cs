@@ -12,9 +12,9 @@ public sealed class TransformParity : Script
     public override void Awake()
     {
         Transform.LocalPosition = new Vector3(4, 5, 6);
-        // These helpers use the same names/semantics as the Beef Mathf API.
+        // Standard clamp uses .NET; the Tallow-specific helpers are generated from Beef.
         Transform.LocalScale = new Vector3(
-            Mathf.Clamp(2, 0, 3),
+            Math.Clamp(2f, 0f, 3f),
             Mathf.Lerp(2, 4, 0.5f),
             Mathf.MoveTowards(5, 4, 1));
         Transform.LocalEulerAngles = new Vector3(10, 20, 30);

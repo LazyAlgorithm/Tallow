@@ -1,17 +1,8 @@
 TALLOW_CSHARP_API_V1
 method	Tallow.CSharpBindingFixture	Average	float	a:float	b:float
-method	Tallow.Mathf	Min	float	a:float	b:float
-method	Tallow.Mathf	Max	float	a:float	b:float
-method	Tallow.Mathf	Clamp	float	v:float	lo:float	hi:float
 method	Tallow.Mathf	Clamp01	float	v:float
 method	Tallow.Mathf	Lerp	float	a:float	b:float	t:float
-method	Tallow.Mathf	Abs	float	v:float
 method	Tallow.Mathf	Sign	float	v:float
-method	Tallow.Mathf	Sqrt	float	v:float
-method	Tallow.Mathf	Sin	float	v:float
-method	Tallow.Mathf	Cos	float	v:float
-method	Tallow.Mathf	Tan	float	v:float
-method	Tallow.Mathf	Floor	float	v:float
 method	Tallow.Mathf	FloorToInt	int	v:float
 method	Tallow.Mathf	MoveTowards	float	current:float	target:float	maxDelta:float
 method	Tallow.Mathf	SmoothStep	float	a:float	b:float	t:float

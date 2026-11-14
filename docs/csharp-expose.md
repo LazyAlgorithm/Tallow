@@ -178,3 +178,21 @@ The migration goal is to replace native-call bindings in those facades with
 generated methods, keeping high-level C# types as lightweight ergonomics rather
 than duplicating native implementations. Do not add new handwritten native
 method mirrors; put `[CSharpExpose]` on the Beef source instead.
+
+### Curated C# math exposure
+
+C# uses `System.MathF` for conventional scalar math and `System.Math.Clamp`
+for ordinary clamping, instead of generating managed-to-native calls for
+`Min`, `Max`, `Clamp`, `Abs`, `Sqrt`, `Sin`, `Cos`, `Tan`, and `Floor`.
+The same methods remain fully available to native Beef gameplay.
+
+Only helpers with gameplay-specific API or semantics are annotated and
+generated in C#: `Mathf.Clamp01`, `Lerp`, `MoveTowards`, `SmoothStep`,
+`WrapAngle`, `FloorToInt`, and `Sign`. Beef's `Mathf.Sign(0) == +1`
+differs from `MathF.Sign(0) == 0`. Constants `Deg2Rad`, `Rad2Deg`,
+and the engine-specific tolerance `Epsilon` remain compile-time C# constants;
+use `MathF.PI` for pi.
+
+The fixture and native-host smoke tests are deliberately limited to these
+approved annotations. CI rejects standard scalar math exports. This reduces
+unnecessary P/Invoke call overhead in hot gameplay loops.

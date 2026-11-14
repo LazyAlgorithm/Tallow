@@ -48,7 +48,12 @@ jobs:
           # must come exclusively from the generated Beef manifest.
           grep -F 'public static partial class Mathf' Managed/Tallow.API/Mathf.cs
           grep -F 'public static unsafe partial class Mathf' Managed/Tallow.API/Generated/CSharpBindings.g.cs
-          grep -F 'public static float Clamp(float v, float lo, float hi)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Clamp01(float v)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          # Standard BCL math should never be exported via CSharpExpose.
+          if grep -Eq 'public static (float|int) (Min|Max|Clamp|Abs|Sqrt|Sin|Cos|Tan|Floor)\(' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
+            echo "Redundant native MathF/Math.Clamp API was exposed" >&2
+            exit 1
+          fi
           if grep -Eq 'public static (float|int|bool|double) [A-Za-z_][A-Za-z0-9_]*\(' Managed/Tallow.API/Mathf.cs; then
             echo "Handwritten Mathf methods duplicate the generated native API" >&2
             exit 1
