@@ -277,6 +277,7 @@ internal static class Program
                         SpecialType.System_Single => "float",
                         SpecialType.System_Int32 => "int",
                         SpecialType.System_Boolean => "bool",
+                        SpecialType.System_String => "string",
                         _ => field.Type.ToDisplayString() switch
                         {
                             "System.Numerics.Vector2" => "Vector2",
@@ -290,7 +291,7 @@ internal static class Program
 
                     string defaultValue = kind switch
                     {
-                        "bool" => "false", "Vector2" => "0,0",
+                        "bool" => "false", "string" => "", "Vector2" => "0,0",
                         "Vector3" => "0,0,0", "Vector4" => "0,0,0,0", _ => "0"
                     };
                     if (field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
@@ -299,9 +300,14 @@ internal static class Program
                         SemanticModel fieldModel = compilation.GetSemanticModel(variable.SyntaxTree);
                         var constant = fieldModel.GetConstantValue(variable.Initializer.Value);
                         if (constant.HasValue && constant.Value is not null &&
-                            kind is "bool" or "float" or "int" or "enum")
+                            kind is "bool" or "float" or "int" or "enum" or "string")
                         {
                             defaultValue = Convert.ToString(constant.Value, CultureInfo.InvariantCulture) ?? defaultValue;
+                            if (kind == "string" &&
+                                defaultValue.IndexOfAny(['\t', '\n', '\r', '\0']) >= 0)
+                                throw new InvalidOperationException(
+                                    $"Inspector string initializer for {className}.{field.Name} " +
+                                    "contains a tab, newline or NUL. Only single-line text is supported.");
                             if (kind == "enum" && field.Type is INamedTypeSymbol enumType)
                             {
                                 IFieldSymbol? memberName = enumType.GetMembers()
