@@ -12,7 +12,11 @@ public sealed class TransformParity : Script
     public override void Awake()
     {
         Transform.LocalPosition = new Vector3(4, 5, 6);
-        Transform.LocalScale = new Vector3(2, 3, 4);
+        // These helpers use the same names/semantics as the Beef Mathf API.
+        Transform.LocalScale = new Vector3(
+            Mathf.Clamp(2, 0, 3),
+            Mathf.Lerp(2, 4, 0.5f),
+            Mathf.MoveTowards(5, 4, 1));
         Transform.LocalEulerAngles = new Vector3(10, 20, 30);
         Transform.Rotation = Quaternion.Identity;
     }
