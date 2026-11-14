@@ -361,6 +361,30 @@ public sealed class CubeMover : Script
             Check("private user gameplay members still appear in their own class",
                 userResults.Contains("completion\tsecret\t"));
 
+            // The fallback member walk must follow the same Roslyn access
+            // rules as LookupSymbols, even when a partially typed receiver is
+            // derived from another class.
+            string inheritedAccess = "class Base { private int BaseSecret; " +
+                "protected int BaseProtected; public int BasePublic; } " +
+                "class Derived : Base { private int OwnSecret; " +
+                "void Go() { this.BaseP";
+            string inheritedAccessResults = Request(service, "completion",
+                inheritedAccess, inheritedAccess.Length);
+            Check("C# derived completion includes accessible inherited members",
+                inheritedAccessResults.Contains("completion\tBaseProtected\t") &&
+                inheritedAccessResults.Contains("completion\tBasePublic\t") &&
+                inheritedAccessResults.Contains("completion\tOwnSecret\t"));
+            Check("C# derived completion excludes private base members",
+                !inheritedAccessResults.Contains("completion\tBaseSecret\t"));
+
+            string otherInstance = "class Other { private int Hidden; public int Shown; } " +
+                "class Consumer { void Go(Other other) { other.Sho";
+            string otherResults = Request(service, "completion",
+                otherInstance, otherInstance.Length);
+            Check("C# completion does not expose private members of other classes",
+                otherResults.Contains("completion\tShown\t") &&
+                !otherResults.Contains("completion\tHidden\t"));
+
             string sceneSwitch = "using Tallow; class Demo { void Go() { " +
                 "SceneManager.Load(\"Scenes/Example.tscene\"); Application.Quit(); } }";
             string sceneSwitchDiagnostics = RequestWithApi(service, "diagnostics",

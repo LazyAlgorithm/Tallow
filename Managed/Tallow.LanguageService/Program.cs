@@ -243,6 +243,15 @@ internal static class Program
                     symbol.Name.StartsWith("<", StringComparison.Ordinal))
                     return;
 
+                // LookupSymbols checks C# access modifiers, but the inherited
+                // member fallback below walks GetMembers() directly. Enforce
+                // accessibility here too so another class's private members
+                // and a base class's private fields/methods never leak into
+                // completion. This preserves private user members when the
+                // current code is actually allowed to access them.
+                if (symbol is not INamespaceSymbol && !model.IsAccessible(position, symbol))
+                    return;
+
                 // The editor places engine API source and game source in one
                 // Roslyn compilation for fast completion. This makes private
                 // fields accessible to our naive GetMembers() fallback, and

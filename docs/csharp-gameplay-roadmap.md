@@ -604,3 +604,17 @@ claim automatic replication of dynamically created joints.
 - Regression tests cover direct and conditional Rigidbody completion,
   elimination of irrelevant global suggestions, and compiler-discovered
   native/user type symbols. Visual editor behavior needs manual testing.
+
+
+### C# completion accessibility tightening (November 14, 2026)
+
+- The Roslyn completion merge now checks symbol accessibility for every
+  suggestion, including inherited members found by the direct `GetMembers()`
+  fallback. This prevents private base/other-class fields and methods from
+  appearing, while preserving accessible protected and own-class private
+  gameplay members. It retains the existing explicit filter for private
+  engine-generated binding internals.
+- Added regression cases for protected/public inherited members, private base
+  exclusion, other-instance private exclusion, and existing own-private
+  completion. Managed CI and interactive Nobara validation are still needed;
+  do not infer runtime/editor success from this source change alone.
