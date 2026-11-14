@@ -671,7 +671,7 @@ class LauncherApp : Application
 	void OpenPendingProject()
 	{
 		let verdict = scope String();
-		Toolchain.Apply();
+		// Opening the precompiled editor never requires Beef toolchain discovery.
 		CheckProjectVersion(mPendingOpen, verdict, mUpgradeFrom, mUpgradeTo);
 		if (verdict == "upgrade")
 		{
