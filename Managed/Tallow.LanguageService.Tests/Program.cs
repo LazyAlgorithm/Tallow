@@ -154,9 +154,13 @@ internal static class Program
             // Confirm cached syntax is invalidated when a file changes,
             // while reusing the same compiler process and other API trees.
             string goodSource = File.ReadAllText(file);
-            File.WriteAllText(file, goodSource.Replace(
+            string changedSource = goodSource.Replace(
                 "Transform.Position += Vector3.UnitX * deltaTime;",
-                "Transform.Position = \"invalid\";"));
+                "Transform.Position = \"invalid\";");
+            if (changedSource == goodSource)
+                throw new InvalidOperationException(
+                    "Persistent Roslyn test fixture did not replace the original source.");
+            File.WriteAllText(file, changedSource);
             string invalidFolder = Path.Combine(queue, "request-2");
             Directory.CreateDirectory(invalidFolder);
             File.WriteAllText(Path.Combine(invalidFolder, "request.tsv"),
@@ -164,9 +168,13 @@ internal static class Program
             string invalidResponse = Path.Combine(invalidFolder, "response.tsv");
             WaitFor(invalidResponse, worker);
             string changedResult = File.ReadAllText(invalidResponse);
-            Check("persistent Roslyn invalidates changed game source",
-                changedResult.Contains("CS0029") &&
-                changedResult.Contains("diagnostic\t"));
+            if (!changedResult.Contains("CS0029") ||
+                !changedResult.Contains("diagnostic\t"))
+                throw new InvalidOperationException(
+                    "FAIL: persistent Roslyn invalidates changed game source." +
+                    "\nActual response:\n" + changedResult +
+                    "\nSource read from disk:\n" + File.ReadAllText(file));
+            Check("persistent Roslyn invalidates changed game source", true);
 
             File.WriteAllText(file, goodSource);
             string restoredFolder = Path.Combine(queue, "request-3");
