@@ -26,7 +26,7 @@ extension EditorApp
 	{
 		// Managed game projects use collectible .NET assemblies, not Beef's
 		// per-project source compiler or the legacy Python hot-reload utility.
-		if (HasCSharpSources(scope $"{Project.Current.Path}/src"))
+		if (mManagedGameplay)
 		{
 			mReloadReady = false;
 			return;
@@ -150,7 +150,7 @@ extension EditorApp
 		CollectCheckResults();
 		// C# source is checked by StartManagedErrorCheck and Play gating. Never
 		// queue a BeefBuild or Python script reload for managed gameplay.
-		if (HasCSharpSources(scope $"{Project.Current.Path}/src"))
+		if (mManagedGameplay)
 			return;
 		if (mScriptPollClock.ElapsedMilliseconds >= 500)
 		{
