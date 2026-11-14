@@ -464,3 +464,18 @@ claim automatic replication of dynamically created joints.
 - The C# server also retries Windows sharing/lock violations from older
   clients instead of confusing a temporary file race with a source error.
   Behavior for real compiler diagnostics is unchanged.
+
+### Batched C# callback lookup overhead (November 14, 2026)
+
+- The first Linux no-op microbenchmark measured 2.81 ms for 128,000
+  individually dispatched callbacks versus 3.53 ms for the same batch
+  count (ratio 0.79x). Batching was slower in this narrow test.
+- One cause was redundant dictionary work: initial validation, then
+  `ContainsKey` and a second `TryGetValue` for every callback. The
+  managed runtime now resolves each surviving script **once** per batch
+  element after the initial validation and passes it to the same shared
+  lifecycle/input handlers used by scalar dispatch.
+- This retains all-or-nothing validation for initially stale handles,
+  skips instances detached during a previous callback, and avoids raw
+  native pointers. Compare new CI timings, but do not infer improved
+  real-game FPS or turn on automatic Scene scheduling from this alone.

@@ -367,10 +367,9 @@ public static unsafe class NativeEntrypoints
         }
     }
 
-    private static void DispatchOne(int instance, ScriptEvent eventId, float deltaTime)
+    private static void DispatchScript(int instance, Script script,
+        ScriptEvent eventId, float deltaTime)
     {
-        if (!sInstances.TryGetValue(instance, out Script? script))
-            throw new InvalidOperationException("Unknown managed gameplay instance.");
         switch (eventId)
         {
             case ScriptEvent.Awake: script.Awake(); break;
@@ -390,6 +389,13 @@ public static unsafe class NativeEntrypoints
             default: throw new ArgumentOutOfRangeException(nameof(eventId), eventId,
                 "Unknown managed gameplay event.");
         }
+    }
+
+    private static void DispatchOne(int instance, ScriptEvent eventId, float deltaTime)
+    {
+        if (!sInstances.TryGetValue(instance, out Script? script))
+            throw new InvalidOperationException("Unknown managed gameplay instance.");
+        DispatchScript(instance, script, eventId, deltaTime);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -423,8 +429,8 @@ public static unsafe class NativeEntrypoints
                 // An earlier callback may destroy a later component. Mirror
                 // the input-batch path: only dispatch instances still attached
                 // at the moment their turn arrives.
-                if (sInstances.ContainsKey(instances[i]))
-                    DispatchOne(instances[i], (ScriptEvent)eventId, deltaTime);
+                if (sInstances.TryGetValue(instances[i], out Script? script))
+                    DispatchScript(instances[i], script, (ScriptEvent)eventId, deltaTime);
             }
             return count;
         }
@@ -434,15 +440,20 @@ public static unsafe class NativeEntrypoints
         }
     }
 
-    private static void RunInputOne(int instance, NativeInput input, float deltaTime)
+    private static void RunInputScript(Script script, NativeInput input, float deltaTime)
     {
-        if (!sInstances.TryGetValue(instance, out Script? script))
-            throw new InvalidOperationException("Unknown managed gameplay instance.");
         var tick = new TickInput(
             new Vector2(input.MoveX, input.MoveZ),
             new Vector2(input.Yaw, input.Pitch),
             input.Buttons, input.PreviousButtons);
         script.Update(tick, deltaTime);
+    }
+
+    private static void RunInputOne(int instance, NativeInput input, float deltaTime)
+    {
+        if (!sInstances.TryGetValue(instance, out Script? script))
+            throw new InvalidOperationException("Unknown managed gameplay instance.");
+        RunInputScript(script, input, deltaTime);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -481,8 +492,8 @@ public static unsafe class NativeEntrypoints
             {
                 // A prior Update could remove another script in the same
                 // batch; preserve lifecycle safety by skipping detached IDs.
-                if (sInstances.ContainsKey(items[i].Instance))
-                    RunInputOne(items[i].Instance, items[i].Input, items[i].DeltaTime);
+                if (sInstances.TryGetValue(items[i].Instance, out Script? script))
+                    RunInputScript(script, items[i].Input, items[i].DeltaTime);
             }
             return count;
         }
