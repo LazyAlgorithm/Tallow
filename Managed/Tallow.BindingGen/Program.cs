@@ -29,7 +29,8 @@ internal static class Program
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..16].ToLowerInvariant();
 
     private static bool IsType(string type, bool allowVoid = false) =>
-        type is "bool" or "int" or "float" or "System.Numerics.Vector2" or
+        type is "bool" or "int" or "uint" or "long" or "ulong" or
+            "float" or "double" or "System.Numerics.Vector2" or
             "System.Numerics.Vector3" or "System.Numerics.Vector4" ||
         (allowVoid && type == "void");
 
@@ -46,7 +47,14 @@ internal static class Program
             type : type;
 
     private static string NativeType(string type) =>
-        Dimensions(type) > 0 ? "float*" : type is "bool" or "int" ? "int32" : type;
+        Dimensions(type) > 0 ? "float*" : type switch
+        {
+            "bool" or "int" => "int32",
+            "uint" => "uint32",
+            "long" => "int64",
+            "ulong" => "uint64",
+            _ => type
+        };
 
     private static string CAbiType(string type) =>
         Dimensions(type) > 0 ? "float*" : type == "bool" ? "int" : type;
@@ -256,6 +264,15 @@ internal static class Program
         if (!EmitBeef(v, Hash(vectors)).Contains("result[2] = value.z;") ||
             !EmitCSharp(v, Hash(vectors)).Contains("float* result = stackalloc float[3];"))
             throw new Exception("Vector ABI lowering failed.");
+        const string numeric = "TALLOW_CSHARP_API_V1\nmethod\tTallow.NumericChecks\tHash\tulong\tseed:uint\twide:long\tvalue:double\n";
+        List<Method> numericMethods = Parse(numeric);
+        string nativeNumeric = EmitBeef(numericMethods, Hash(numeric));
+        string managedNumeric = EmitCSharp(numericMethods, Hash(numeric));
+        if (!nativeNumeric.Contains("public static uint64 CSharpApi_") ||
+            !nativeNumeric.Contains("uint32 p0, int64 p1, double p2") ||
+            !managedNumeric.Contains("public static ulong Hash(uint seed, long wide, double value)") ||
+            !managedNumeric.Contains("delegate* unmanaged[Cdecl]<uint, long, double, ulong>"))
+            throw new Exception("Signed/unsigned 32/64-bit and double ABI lowering failed.");
         foreach (string invalid in new[]
         {
             "TALLOW_CSHARP_API_V1\nmethod\tTallow.Bad\tOops\tSystem.String\n",
@@ -267,7 +284,7 @@ internal static class Program
             try { Parse(invalid); throw new Exception("Invalid manifest was accepted."); }
             catch (FormatException) { }
         }
-        Console.WriteLine("PASS: CSharpExpose deterministic, opt-in, scalar/vector and invalid-manifest tests.");
+        Console.WriteLine("PASS: CSharpExpose deterministic, opt-in, scalar/vector, numeric ABI and invalid-manifest tests.");
         return 0;
     }
 

@@ -139,6 +139,11 @@ jobs:
           grep -F 'CSharpApi_' Engine/src/Scripting/CSharpBindings.Generated.bf
           grep -F 'public static float Average(float a, float b)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'CSharpApiVersion_' Engine/src/Scripting/CSharpBindings.Generated.bf
+          # Prove a real engine API is included and uint32/int32 cross the ABI.
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Perlin'
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Noise' | grep -F 'Fbm'
+          grep -F 'public static float Perlin(float x, float y, float z, uint seed)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static float Fbm(float x, float y, float z, uint seed, int octaves)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
             echo "Unmarked Beef method appeared in C# bindings" >&2
             exit 1

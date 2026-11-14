@@ -4,6 +4,8 @@ using System.Collections;
 namespace Tallow;
 
 /// Gradient noise used for terrain generation. Deterministic for a given seed on every platform.
+/// Only Perlin/Fbm are exported to C#; low-level implementation stays in Beef.
+[CSharpExpose]
 static class Noise
 {
 	[Inline]
@@ -27,6 +29,7 @@ static class Noise
 	static float Fade(float t) => t * t * t * (t * (t * 6 - 15) + 10);
 
 	/// Perlin noise in roughly -1..1.
+	[CSharpExpose]
 	public static float Perlin(float x, float y, float z, uint32 seed)
 	{
 		let xi = (int32)Math.Floor(x);
@@ -56,7 +59,8 @@ static class Noise
 	}
 
 	/// Fractal sum of Perlin octaves.
-	public static float Fbm(float x, float y, float z, uint32 seed, int octaves)
+	[CSharpExpose]
+	public static float Fbm(float x, float y, float z, uint32 seed, int32 octaves)
 	{
 		float sum = 0;
 		float amplitude = 1;

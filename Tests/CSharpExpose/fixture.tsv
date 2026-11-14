@@ -1,2 +1,4 @@
 TALLOW_CSHARP_API_V1
 method	Tallow.CSharpBindingFixture	Average	float	a:float	b:float
+method	Tallow.Noise	Fbm	float	x:float	y:float	z:float	seed:uint	octaves:int
+method	Tallow.Noise	Perlin	float	x:float	y:float	z:float	seed:uint

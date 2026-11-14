@@ -1,6 +1,6 @@
 # Opt-in Beef → C# API bindings
 
-**State:** the Beef `[CSharpExpose]` marker is defined in `Engine/src/Scripting/CSharpExpose.bf`. The initial reflected-symbol extractor lives in `Engine/src/Scripting/CSharpBindingManifest.bf` and can emit a deterministic, strict stage-1 method manifest using `TallowLauncher --csharp-api-manifest PATH`. **This does not yet generate native call wrappers, managed C# wrappers, or a callable public API.** Existing manually bridged APIs remain unchanged while migration continues.
+**State (2026-11-13):** stage-1 `[CSharpExpose]` reflection and native/C# wrapper generation are wired into the full engine build. GitHub Linux native CI has confirmed the annotated `CSharpBindingFixture.Average` method appears in both wrappers while its unmarked `NativeOnly` method is not exposed. The generator also has managed Linux/Windows smoke coverage. The first real exposed engine APIs are deterministic `Noise.Perlin` and `Noise.Fbm` (pending native CI on their annotations). **Only a small, safe static-method subset is supported so far**; instance methods, properties, resource handles, advanced ECS and full engine API parity remain incomplete.
 
 ## Goal
 
@@ -49,8 +49,8 @@ Those C# declarations are *illustrative*, **not yet generated**. Even when a cla
 
 ### Rollout order
 
-- **Stage 0 (now):** declarative Beef attribute and this opt-in contract only, no change to public C# API.
-- **Stage 1:** emitter and manifest validator for static methods taking/returning primitive scalars and numeric vectors; generate native and C# sides from one set of annotated declarations. Add Linux/Windows native-host tests and compiler-backed diagnostics.
+- **Stage 0 (complete):** declarative Beef attribute and opt-in contract.
+- **Stage 1 (implemented, expanding):** deterministic compiler-reflected manifest and native/C# wrappers for public static methods using safe scalar and vector values; validated with Linux native editor and Linux/Windows managed tests. New real-world annotations still require native CI verification.
 - **Stage 2:** checked GameObject/Transform handles, instance methods, public properties, safe enums and UTF-8 strings. Reuse existing C# `IEngineBridge` and native callback conventions wherever possible.
 - **Stage 3:** more complex types and subsystem-specific hand-written adapters, generated documentation, signature/version compatibility, performance regression tests and automated binding coverage reports.
 

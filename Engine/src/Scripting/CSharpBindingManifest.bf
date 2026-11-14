@@ -20,8 +20,16 @@ static class CSharpBindingManifest
             name.Set("bool");
         else if (type == typeof(int32))
             name.Set("int");
+        else if (type == typeof(uint32))
+            name.Set("uint");
+        else if (type == typeof(int64))
+            name.Set("long");
+        else if (type == typeof(uint64))
+            name.Set("ulong");
         else if (type == typeof(float))
             name.Set("float");
+        else if (type == typeof(double))
+            name.Set("double");
         else if (type == typeof(Vector2))
             name.Set("System.Numerics.Vector2");
         else if (type == typeof(Vector3))
@@ -46,7 +54,7 @@ static class CSharpBindingManifest
         let resultType = scope String();
         if (!MapValueType(method.ReturnType, resultType))
         {
-            error.AppendF("[CSharpExpose] {} has an unsupported return type. Stage 1 accepts void, bool, int32, float and Vector2/3/4.", signature);
+            error.AppendF("[CSharpExpose] {} has an unsupported return type. Stage 1 accepts void, bool, int32/64, uint32/64, float/double and Vector2/3/4.", signature);
             return false;
         }
 

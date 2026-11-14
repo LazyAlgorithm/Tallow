@@ -16,8 +16,10 @@ namespace Tallow;
 ///         void MarkDirty() { ... } // stays native and invisible to C#
 ///     }
 ///
-/// This attribute describes the future binding contract. The generator is
-/// not wired up yet: adding it alone does not create managed wrappers.
+/// The stage-1 generator is wired into source builds. Marked public static
+/// methods with supported scalar/vector signatures generate native ABI wrappers
+/// and C# declarations automatically. Stage-2 properties, instance handles and
+/// resource ownership need additional generator support before annotation.
 /// Unsupported types, pointers and unsafe ownership patterns must be
 /// rejected at generation time, never silently marshalled.
 // The type must survive Beef's compile-on-demand elimination even when no
