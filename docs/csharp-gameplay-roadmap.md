@@ -892,3 +892,16 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
   Flecs's staged World; [Sync] replication and rollback across networked
   scenes, and benchmark B12/B18/B20 validation. Never silently treat a
   local-only entity as replicated gameplay.
+
+
+### Native-ABI byte spans for future typed ECS data (November 14, 2026)
+
+- The narrow, generated CSharpExpose ABI now accepts explicitly declared
+  `Span<uint8>` (`System.Span<byte>`) parameters. The binding generator
+  creates a counted `uint8*` native input/output buffer with guarded null/
+  negative lengths and a pinned C# `byte*` for one synchronous call.
+- A generator self-test verifies the Beef and C# signatures and ownership
+  rules. No new gameplay API uses this buffer yet, and no arbitrary C# structs
+  are written to Flecs. Future component registrations must still validate
+  sizeof/alignment/schema, scene session, authority and layout compatibility.
+  `Span<byte>` is not an invitation to expose unrestricted native pointers.

@@ -33,18 +33,28 @@ internal static class Program
     // Only these tightly scoped writable buffers cross the generated ABI.
     // Never expose generic spans, object pointers, references or span returns.
     private static bool IsSpan(string type) =>
-        type is "System.Span<ulong>" or "System.Span<float>";
-    private static string SpanElement(string type) =>
-        type == "System.Span<ulong>" ? "ulong" : "float";
-    private static string NativeSpanElement(string type) =>
-        type == "System.Span<ulong>" ? "uint64" : "float";
+        type is "System.Span<ulong>" or "System.Span<float>" or "System.Span<byte>";
+    private static string SpanElement(string type) => type switch
+    {
+        "System.Span<ulong>" => "ulong",
+        "System.Span<float>" => "float",
+        "System.Span<byte>" => "byte",
+        _ => throw new ArgumentOutOfRangeException(nameof(type))
+    };
+    private static string NativeSpanElement(string type) => type switch
+    {
+        "System.Span<ulong>" => "uint64",
+        "System.Span<float>" => "float",
+        "System.Span<byte>" => "uint8",
+        _ => throw new ArgumentOutOfRangeException(nameof(type))
+    };
 
     private static bool IsType(string type, bool allowVoid = false) =>
         type is "bool" or "int" or "uint" or "long" or "ulong" or
             "float" or "double" or "string" or "System.Numerics.Vector2" or
             "System.Numerics.Vector3" or "System.Numerics.Vector4" or
             "System.Numerics.Quaternion" or "Tallow.PhysicsQueryHit" or
-            "System.Span<ulong>" or "System.Span<float>" ||
+            "System.Span<ulong>" or "System.Span<float>" or "System.Span<byte>" ||
         (allowVoid && type == "void");
 
     private static int Dimensions(string type) => type switch
@@ -482,6 +492,16 @@ internal static class Program
             !managedSpan.Contains("fixed (float* p3 = masses)") ||
             !managedSpan.Contains("delegate* unmanaged[Cdecl]<ulong, int, ulong*, int, float*, int, int>"))
             throw new Exception("Pinned, counted ECS span ABI lowering failed.");
+        const string bytesManifest = "TALLOW_CSHARP_API_V1\nmethod\tTallow.Ecs\tSetLocalData\tbool\tsession:ulong\tdata:System.Span<byte>\n";
+        List<Method> byteMethods = Parse(bytesManifest);
+        string nativeBytes = EmitBeef(byteMethods, Hash(bytesManifest));
+        string managedBytes = EmitCSharp(byteMethods, Hash(bytesManifest));
+        if (!nativeBytes.Contains("uint8* p1, int32 p1Length") ||
+            !nativeBytes.Contains("Span<uint8> s1 = .(p1, p1Length);") ||
+            !managedBytes.Contains("System.Span<byte> data") ||
+            !managedBytes.Contains("fixed (byte* p1 = data)") ||
+            !managedBytes.Contains("delegate* unmanaged[Cdecl]<ulong, byte*, int, int>"))
+            throw new Exception("Pinned, counted ECS byte buffer ABI lowering failed.");
         const string writableManifest = "TALLOW_CSHARP_API_V1\nfield\tTallow.Time\tTimeScale\tfloat\tgetset\n";
         List<Method> writable = Parse(writableManifest);
         string nativeWritable = EmitBeef(writable, Hash(writableManifest));

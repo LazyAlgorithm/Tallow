@@ -46,6 +46,8 @@ static class CSharpBindingManifest
             name.Set("System.Span<ulong>");
         else if (type == typeof(Span<float>))
             name.Set("System.Span<float>");
+        else if (type == typeof(Span<uint8>))
+            name.Set("System.Span<byte>");
         else
             return false;
         return true;
@@ -81,7 +83,8 @@ static class CSharpBindingManifest
             // pointer plus validated element count and never keep the pointer
             // after this call. All other modifiers remain unsupported.
             bool splattedSafeValue = (paramType == typeof(StringView) ||
-                paramType == typeof(Span<uint64>) || paramType == typeof(Span<float>)) &&
+                paramType == typeof(Span<uint64>) || paramType == typeof(Span<float>) ||
+                paramType == typeof(Span<uint8>)) &&
                 (flags == .Splat || flags == .Implicit || flags == (.Splat | .Implicit));
             if ((!splattedSafeValue && flags != .None) ||
                 !MapValueType(paramType, parameter) || parameter == "void")
