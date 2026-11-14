@@ -295,8 +295,16 @@ def execute(project, folder):
     initial = query(executable, rows, folder, mode, path, cursor, 'query')
     info, diagnostics, raw_refs = initial
     output = []
-    for line in info.splitlines():
-        fields = line.split('\t')
+    # Beef's compiler can report synthesized get_*/set_* methods alongside
+    # their public properties. Only the property belongs in editor completion;
+    # keep genuine user methods when there is no matching property.
+    raw_completions = [line.split('\t') for line in info.splitlines()]
+    property_names = {
+        fields[1].partition('\x03')[0].partition('\x02')[0]
+        for fields in raw_completions
+        if len(fields) >= 2 and fields[0] == 'property'
+    }
+    for fields in raw_completions:
         kind = fields[0]
         if kind == 'defLoc' and len(fields) >= 4:
             output.append(['definition', *fields[1:4]])
@@ -313,6 +321,8 @@ def execute(project, folder):
         } and len(fields) >= 2:
             label, _, detail = fields[1].partition('\x03')
             label = label.partition('\x02')[0]
+            if kind == 'method' and label.startswith(('get_', 'set_')) and label[4:] in property_names:
+                continue
             output.append(['completion', clean(label), clean(detail or kind)])
         elif mode == 'symbol' and line:
             output.append(['signature', clean(line)])
