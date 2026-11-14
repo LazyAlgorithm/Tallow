@@ -972,7 +972,8 @@ int main(int argc, char** argv)
             "privateSpeed\t12.5\nprivateEnabled\tfalse\nserializedCounter\t19\n"
             "hiddenPublic\t8.5\nhiddenPrivate\t15\nhiddenSerialized\t25\n"
             "movementMode\tJump\nprivateMode\tHover\nhiddenMode\tIdle\n"
-            "skippedNonSerialized\t40\nimplementationOnly\t41\n") ||
+            "skippedNonSerialized\t40\nimplementationOnly\t41\n"
+            "privateIdOnly\t73\n") ||
         // A malformed trailing value must fail WITHOUT applying the earlier,
         // otherwise valid privateSpeed=99. Awake below asserts the full
         // previously saved field set remains intact.
