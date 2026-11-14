@@ -584,7 +584,7 @@ claim automatic replication of dynamically created joints.
 
 - C# gameplay now understands `[ShowInInspector]` on private fields,
   the compatibility spelling `[ShowInInspecter]`, `[HideInInspector]`
-  (public or private) and optional Unity-style `[SerializeField]`.
+  (public or private). Tallow does not use Unity-style `[SerializeField]`.
   A private annotated field is written to the managed field catalog and
   restored before `Awake` using reflection; arbitrary private fields
   are **not** deserialized. `[NonSerialized]` overrides all inclusion
@@ -670,7 +670,7 @@ claim automatic replication of dynamically created joints.
 ### Enum-valued C# Inspector fields (November 14, 2026)
 
 - The compiler-built C# field catalog now includes enum types for public,
-  [ShowInInspector], [HideInInspector] and [SerializeField] fields, with
+  [ShowInInspector] and [HideInInspector] fields, with
   declaration-order member names in optional column eight. The existing
   scalar/vector catalog format and hidden-field persistence remain intact.
 - The native Inspector renders an enum dropdown and persists a selected
@@ -699,7 +699,7 @@ claim automatic replication of dynamically created joints.
 
 ### Static registration, metadata and security
 
-- [ ] Replace runtime `Assembly.GetTypes`, `Activator.CreateInstance` and unrestricted `FieldInfo.SetValue` for AOT export with **build-generated component registration**, typed constructors/factories, field setter/getter delegates, `[ShowInInspector]`/`[HideInInspector]` and `[SerializeField]` metadata and stable serialized **field IDs**. Generate this from the same Roslyn semantic source and retain the JIT-path serialization contract; include migration/version handling for renames, IDs and old scene/prefab data.
+- [ ] Replace runtime `Assembly.GetTypes`, `Activator.CreateInstance` and unrestricted `FieldInfo.SetValue` for AOT export with **build-generated component registration**, typed constructors/factories, field setter/getter delegates and `[ShowInInspector]`/`[HideInInspector]` metadata and stable serialized **field IDs**. Generate this from the same Roslyn semantic source and retain the JIT-path serialization contract; include migration/version handling for renames, IDs and old scene/prefab data.
 - [ ] Do not discover arbitrary reflection metadata at runtime; make required remaining reflection explicit with source generation and trim/AOT annotations. Fail the export on actionable IL2026/IL207x/IL3050-style relevant trim/AOT diagnostics; add a tracked allowlist for justified third-party diagnostics only after review. No user-provided or arbitrary assembly/mod loader in the shipping runtime.
 - [ ] Use the existing curated `[CSharpExpose]` Beef reflection manifest for engine-to-managed APIs; generate bindings at engine build time, verify signature hashes and keep editor JIT/AOT exports on one public API contract. Avoid handwritten duplicated P/Invoke.
 - [ ] Enable Release + `PublishAot=true`, appropriate platform RID, native optimization and trimming. Validate each compiler/linker option on actual host OS; do **not** turn on `IlcInstructionSet` options that change supported hardware or fast-math flags that change deterministic physics/gameplay semantics.
