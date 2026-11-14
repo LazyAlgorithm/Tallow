@@ -218,6 +218,20 @@ internal static class Program
                     symbol.Name.StartsWith("<", StringComparison.Ordinal))
                     return;
 
+                // The editor places engine API source and game source in one
+                // Roslyn compilation for fast completion. This makes private
+                // fields accessible to our naive GetMembers() fallback, and
+                // makes internal engine helpers appear assembly-visible even
+                // though they are not part of the public gameplay API.
+                // Hide all nonpublic engine API declarations; keep private
+                // fields/methods in the user's own game source visible normally.
+                if (symbol.DeclaredAccessibility != Accessibility.Public &&
+                    symbol.Locations.Any(location =>
+                        location.IsInSource &&
+                        location.SourceTree?.FilePath.Replace('\\', '/').Contains(
+                            "/Managed/Tallow.API/", StringComparison.OrdinalIgnoreCase) == true))
+                    return;
+
                 if (symbol is IMethodSymbol method)
                 {
                     // A property/event is already a first-class C# symbol.
