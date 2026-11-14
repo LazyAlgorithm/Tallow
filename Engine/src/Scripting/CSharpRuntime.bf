@@ -18,6 +18,8 @@ static class CSharpRuntime
 		public function void(void*, uint64, uint64, float*) setPosition;
 		public function void(void*, uint64, uint64) destroy;
 		public function int32(void*, uint64, uint64) isMine;
+		public function void(void*, uint64, uint64, int32, float*) getTransform;
+		public function void(void*, uint64, uint64, int32, float*) setTransform;
 	}
 
 	/// The engine drives all component callbacks, preserving native scheduling.
@@ -93,6 +95,8 @@ static class CSharpRuntime
 		function void(void*, uint64, uint64, float*) set = => SetPosition;
 		function void(void*, uint64, uint64) destroy = => Destroy;
 		function int32(void*, uint64, uint64) mine = => IsMine;
+		function void(void*, uint64, uint64, int32, float*) getTransform = => GetTransform;
+		function void(void*, uint64, uint64, int32, float*) setTransform = => SetTransform;
 		Callbacks callbacks = .()
 		{
 			context = null,
@@ -100,7 +104,9 @@ static class CSharpRuntime
 			getPosition = get,
 			setPosition = set,
 			destroy = destroy,
-			isMine = mine
+			isMine = mine,
+			getTransform = getTransform,
+			setTransform = setTransform
 		};
 		if (tn_csharp_set_callbacks(&callbacks) == 0)
 		{
@@ -289,6 +295,69 @@ static class CSharpRuntime
 		let gameObject = Find(scene, entity);
 		if (gameObject != null)
 			gameObject.Transform.Position = .(xyz[0], xyz[1], xyz[2]);
+	}
+
+	/// Matches the C# TransformChannel values and delegates calculations to
+	/// Beef Transform, including parent-aware world/local conversions.
+	static void GetTransform(void* context, uint64 scene, uint64 entity, int32 channel, float* values)
+	{
+		if (values == null)
+			return;
+		values[0] = 0;
+		values[1] = 0;
+		values[2] = 0;
+		values[3] = 0;
+		let gameObject = Find(scene, entity);
+		if (gameObject == null)
+			return;
+		let transform = gameObject.Transform;
+		if (channel == 2 || channel == 3)
+		{
+			Quaternion q = channel == 2 ? transform.Rotation : transform.LocalRotation;
+			values[0] = q.x;
+			values[1] = q.y;
+			values[2] = q.z;
+			values[3] = q.w;
+			return;
+		}
+		Vector3 v = .Zero;
+		switch (channel)
+		{
+		case 1: v = transform.LocalPosition;
+		case 4: v = transform.LocalScale;
+		case 5: v = transform.WorldScale;
+		case 6: v = transform.EulerAngles;
+		case 7: v = transform.LocalEulerAngles;
+		case 8: v = transform.Forward;
+		case 9: v = transform.Right;
+		case 10: v = transform.Up;
+		default: return;
+		}
+		values[0] = v.x;
+		values[1] = v.y;
+		values[2] = v.z;
+	}
+
+	static void SetTransform(void* context, uint64 scene, uint64 entity, int32 channel, float* values)
+	{
+		if (values == null)
+			return;
+		let gameObject = Find(scene, entity);
+		if (gameObject == null)
+			return;
+		let transform = gameObject.Transform;
+		Vector3 v = .(values[0], values[1], values[2]);
+		Quaternion q = .(values[0], values[1], values[2], values[3]);
+		switch (channel)
+		{
+		case 1: transform.LocalPosition = v;
+		case 2: transform.Rotation = q.Normalized;
+		case 3: transform.LocalRotation = q.Normalized;
+		case 4: transform.LocalScale = v;
+		case 6: transform.EulerAngles = v;
+		case 7: transform.LocalEulerAngles = v;
+		case 11: transform.LookAt(v);
+		}
 	}
 
 	static void Destroy(void* context, uint64 scene, uint64 entity)
