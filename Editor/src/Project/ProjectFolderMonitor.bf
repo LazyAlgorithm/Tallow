@@ -10,6 +10,8 @@ class ProjectFolderMonitor
 	List<String> mSnapshot = new .() ~ DeleteContainerAndItems!(_);
 	bool mInitialized;
 	public bool ScriptsOnly;
+	/// Extension used by script-only scans: Beef by default, C# in managed projects.
+	public StringView ScriptExtension = ".bf";
 	public bool Poll(StringView root)
 	{
 		List<String> current = scope .();
@@ -18,7 +20,7 @@ class ProjectFolderMonitor
 			for (let item in current)
 				delete item;
 		}
-		Scan(root, current, 0, ScriptsOnly);
+		Scan(root, current, 0, ScriptsOnly, ScriptExtension);
 		current.Sort(scope (a, b) => String.Compare(a, b, false));
 		bool changed = current.Count != mSnapshot.Count;
 		if (!changed)
@@ -40,14 +42,14 @@ class ProjectFolderMonitor
 		return notify;
 	}
 
-	static void Scan(StringView folder, List<String> files, int depth, bool scriptsOnly)
+	static void Scan(StringView folder, List<String> files, int depth, bool scriptsOnly, StringView extension)
 	{
 		if (depth > 32) return; // Bound recursion if an asset folder contains a directory link cycle.
 		for (let entry in Directory.EnumerateFiles(folder))
 		{
 			let name = scope String();
 			entry.GetFileName(name);
-			if (name.StartsWith('.') || (scriptsOnly && !name.EndsWith(".bf", .OrdinalIgnoreCase))) continue;
+			if (name.StartsWith('.') || (scriptsOnly && !name.EndsWith(extension, .OrdinalIgnoreCase))) continue;
 			// Fetch time first: Beef's POSIX size accessor reads the cached stat record.
 			let modified = entry.GetLastWriteTimeUtc().Ticks;
 			files.Add(new String(scope $"{folder}/{name}|{entry.GetFileSize()}|{modified}"));
@@ -60,7 +62,7 @@ class ProjectFolderMonitor
 			let path = scope $"{folder}/{name}";
 			if (!scriptsOnly)
 				files.Add(new String(path));
-			Scan(path, files, depth + 1, scriptsOnly);
+			Scan(path, files, depth + 1, scriptsOnly, extension);
 		}
 	}
 }
