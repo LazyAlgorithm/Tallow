@@ -24,6 +24,13 @@ extension EditorApp
 
 	void InitializeScriptReload()
 	{
+		// Managed game projects use collectible .NET assemblies, not Beef's
+		// per-project source compiler or the legacy Python hot-reload utility.
+		if (HasCSharpSources(scope $"{Project.Current.Path}/src"))
+		{
+			mReloadReady = false;
+			return;
+		}
 #if (BF_PLATFORM_LINUX || BF_PLATFORM_WINDOWS) && BF_64_BIT
 		let project = Project.Current;
 		let session = scope $"{project.Path}/.tallow-reload/session-{DateTime.UtcNow.Ticks}";
@@ -141,6 +148,10 @@ extension EditorApp
 	void PollScriptReload()
 	{
 		CollectCheckResults();
+		// C# source is checked by StartManagedErrorCheck and Play gating. Never
+		// queue a BeefBuild or Python script reload for managed gameplay.
+		if (HasCSharpSources(scope $"{Project.Current.Path}/src"))
+			return;
 		if (mScriptPollClock.ElapsedMilliseconds >= 500)
 		{
 			mScriptPollClock.Restart();
