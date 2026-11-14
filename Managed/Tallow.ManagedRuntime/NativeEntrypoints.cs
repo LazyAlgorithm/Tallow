@@ -20,12 +20,12 @@ public static unsafe class NativeEntrypoints
     {
         public nint Context;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int> IsAlive;
-        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, float*, void> GetPosition;
-        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, float*, void> SetPosition;
+        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, float*, int> GetPosition;
+        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, float*, int> SetPosition;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, void> Destroy;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int> IsMine;
-        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, void> GetTransform;
-        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, void> SetTransform;
+        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, int> GetTransform;
+        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, int> SetTransform;
     }
 
     private sealed class NativeBridge(Callbacks callbacks) : IEngineBridge
@@ -35,50 +35,55 @@ public static unsafe class NativeEntrypoints
         public bool IsAlive(GameObject gameObject) =>
             _callbacks.IsAlive(_callbacks.Context, gameObject.SceneId, gameObject.Id) != 0;
 
+        // Validate handles inside each native operation. This halves the
+        // crossings for hot Transform reads/writes and avoids a TOCTOU check.
+        private static void ThrowStale()
+        {
+            throw new ObjectDisposedException(nameof(GameObject),
+                "The native scene entity was destroyed or its session ended.");
+        }
+
         public Vector3 GetPosition(GameObject gameObject)
         {
-            if (!IsAlive(gameObject))
-                throw new ObjectDisposedException(nameof(GameObject), "The native scene entity was destroyed.");
             float* xyz = stackalloc float[3];
-            _callbacks.GetPosition(_callbacks.Context, gameObject.SceneId, gameObject.Id, xyz);
+            if (_callbacks.GetPosition(_callbacks.Context,
+                    gameObject.SceneId, gameObject.Id, xyz) == 0)
+                ThrowStale();
             return new Vector3(xyz[0], xyz[1], xyz[2]);
         }
 
         public void SetPosition(GameObject gameObject, Vector3 position)
         {
-            if (!IsAlive(gameObject))
-                throw new ObjectDisposedException(nameof(GameObject), "The native scene entity was destroyed.");
             float* xyz = stackalloc float[3] { position.X, position.Y, position.Z };
-            _callbacks.SetPosition(_callbacks.Context, gameObject.SceneId, gameObject.Id, xyz);
+            if (_callbacks.SetPosition(_callbacks.Context,
+                    gameObject.SceneId, gameObject.Id, xyz) == 0)
+                ThrowStale();
         }
 
         public Vector4 GetTransform(GameObject gameObject, TransformChannel channel)
         {
-            if (!IsAlive(gameObject))
-                throw new ObjectDisposedException(nameof(GameObject), "The native scene entity was destroyed.");
             float* values = stackalloc float[4];
-            _callbacks.GetTransform(_callbacks.Context, gameObject.SceneId, gameObject.Id,
-                (int)channel, values);
+            if (_callbacks.GetTransform(_callbacks.Context,
+                    gameObject.SceneId, gameObject.Id, (int)channel, values) == 0)
+                ThrowStale();
             return new Vector4(values[0], values[1], values[2], values[3]);
         }
 
         public void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value)
         {
-            if (!IsAlive(gameObject))
-                throw new ObjectDisposedException(nameof(GameObject), "The native scene entity was destroyed.");
             float* values = stackalloc float[4] { value.X, value.Y, value.Z, value.W };
-            _callbacks.SetTransform(_callbacks.Context, gameObject.SceneId, gameObject.Id,
-                (int)channel, values);
+            if (_callbacks.SetTransform(_callbacks.Context,
+                    gameObject.SceneId, gameObject.Id, (int)channel, values) == 0)
+                ThrowStale();
         }
 
         public Vector3 TransformPoint(GameObject gameObject, Vector3 point, bool inverse)
         {
-            if (!IsAlive(gameObject))
-                throw new ObjectDisposedException(nameof(GameObject), "The native scene entity was destroyed.");
             float* values = stackalloc float[4] { point.X, point.Y, point.Z, 0 };
-            _callbacks.GetTransform(_callbacks.Context, gameObject.SceneId, gameObject.Id,
-                inverse ? (int)TransformChannel.InverseTransformPoint :
-                          (int)TransformChannel.TransformPoint, values);
+            if (_callbacks.GetTransform(_callbacks.Context, gameObject.SceneId, gameObject.Id,
+                    inverse ? (int)TransformChannel.InverseTransformPoint :
+                              (int)TransformChannel.TransformPoint, values) == 0)
+                ThrowStale();
             return new Vector3(values[0], values[1], values[2]);
         }
 
