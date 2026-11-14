@@ -160,3 +160,29 @@ Vector3 property needs a write-back to `Transform.Position`.
 If the native runtime cannot find hostfxr, inspect the editor Console and
 `dotnet --list-runtimes`. On Fedora/Nobara, the runtime is often under
 `/usr/lib64/dotnet`. The branch now supports that location.
+
+
+## Shipping code protection policy (planned, not implemented)
+
+Tallow's C# editor and iterative Play workflow stay .NET JIT for compilation,
+Roslyn diagnostics, managed hot reload and quick iteration. The **default
+shipping export** will be **NativeAOT** native machine code with platform Release
+optimizations and trimming, with a developer-selectable **JIT compatibility**
+export for debugging. AOT export failure must never silently create a managed
+IL release instead. Both modes must use identical gameplay source, native
+Flecs/Jolt engine and generated binding ABI.
+
+The current .NET gameplay host loads trusted game DLLs into a collectible
+AssemblyLoadContext, which NativeAOT cannot do. NativeAOT export needs a
+separate statically compiled game entrypoint and native-player host; do not
+set PublishAot on the existing runtime and call it complete. NativeAOT shared
+libraries cannot be unloaded; keep them alive until player process exit.
+AOT-facing registration, component factories and Inspector field serializers
+will be generated from Roslyn rather than runtime reflection.
+
+Public packages should have no gameplay IL, debug PDB/DBG or developer source
+files. Retain separate private matching crash symbols and ABI exports. JIT/AOT
+cross-runtime deterministic replay, mixed-client network tests, Inspector and
+ECS/Jolt parity, and Windows/Linux actual release exports are mandatory before
+claiming the shipping profile works. See [roadmap](csharp-gameplay-roadmap.md)
+and [benchmark cases B24–B30](csharp-benchmark-plan.md).

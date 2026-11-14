@@ -682,3 +682,41 @@ claim automatic replication of dynamically created joints.
   and catalog CI checks. **Pending** managed/Linux native builds and editor
   Play/Stop validation; strings, arrays, object references and general
   nested serialized types still need conversion.
+
+
+## P5 — NativeAOT shipping profile and source protection (default for release; November 14, 2026)
+
+**User-approved design and acceptance gate, NOT implemented yet.** This stage is last in implementation order, after gameplay parity, visual scripting conversion, portable players and the benchmark gates. "Export Game" must default to **NativeAOT**. An explicitly selected **JIT development/compatibility export** may remain for troubleshooting, but release exports must never silently fall back from AOT to distributable IL assemblies on failure.
+
+### Architecture: distinct development and shipping hosts
+
+- [ ] Keep today's precompiled Beef editor and .NET 11 JIT collectible `AssemblyLoadContext` for edit/compile/Play; no native compilation for ordinary script edits.
+- [ ] Build a **shipping-only** generated C# entrypoint that statically includes the game's trusted `.tasmdef` assemblies, `Tallow.API` and relevant managed runtime implementations, then `dotnet publish -c Release -r <RID> -p:PublishAot=true` as a **NativeAOT player executable or shared native module**, depending on the cross-platform engine linkage design. **Do not call the current `LoadGame` / `Assembly.LoadFile` ALC route** in NativeAOT: dynamic managed assembly loading is unsupported there.
+- [ ] Decide and test how the Beef native player binds a generated AOT artifact through the **same versioned, checked C ABI and callbacks** as JIT. An AOT native shared library can export `[UnmanagedCallersOnly(EntryPoint = "...")]` functions, but its unloading via `dlclose`/`FreeLibrary` is unsupported. Keep AOT libraries for the lifetime of the shipped process; use complete process restart to load different games. Do not initialize both independent CLR and NativeAOT runtimes for the same gameplay module.
+- [ ] The current hostfxr shim and collectible context stay editor/JIT-only. Add native AOT entry resolution, ABI version/handshake checks, failure diagnostics and correct native dependency staging **without creating a second engine gameplay implementation**.
+- [ ] Compile and validate Linux x64 and Windows x64 NativeAOT exports on matching build hosts (and each later supported RID on its supported toolchain). No source, gameplay `.dll`, portable IL or Roslyn compiler assets in the default shipped package; native engine binary/assets are packaged separately as required.
+- [ ] Preserve explicitly selectable JIT export with the exact same generated gameplay bindings and schedules. UI must show "NativeAOT (recommended, default)" and "JIT (compatibility/debug)" plus any failed AOT preflight issues; no implicit switching.
+
+### Static registration, metadata and security
+
+- [ ] Replace runtime `Assembly.GetTypes`, `Activator.CreateInstance` and unrestricted `FieldInfo.SetValue` for AOT export with **build-generated component registration**, typed constructors/factories, field setter/getter delegates, `[ShowInInspector]`/`[HideInInspector]` and `[SerializeField]` metadata and stable serialized **field IDs**. Generate this from the same Roslyn semantic source and retain the JIT-path serialization contract; include migration/version handling for renames, IDs and old scene/prefab data.
+- [ ] Do not discover arbitrary reflection metadata at runtime; make required remaining reflection explicit with source generation and trim/AOT annotations. Fail the export on actionable IL2026/IL207x/IL3050-style relevant trim/AOT diagnostics; add a tracked allowlist for justified third-party diagnostics only after review. No user-provided or arbitrary assembly/mod loader in the shipping runtime.
+- [ ] Use the existing curated `[CSharpExpose]` Beef reflection manifest for engine-to-managed APIs; generate bindings at engine build time, verify signature hashes and keep editor JIT/AOT exports on one public API contract. Avoid handwritten duplicated P/Invoke.
+- [ ] Enable Release + `PublishAot=true`, appropriate platform RID, native optimization and trimming. Validate each compiler/linker option on actual host OS; do **not** turn on `IlcInstructionSet` options that change supported hardware or fast-math flags that change deterministic physics/gameplay semantics.
+- [ ] Ship stripped binaries and retain matching **private** debug artifacts: Linux `.dbg`, Windows `.pdb` and exact build identifiers/map files, stored outside public download folders. Do not equate stripping symbols with complete tamper resistance: native code is harder to inspect than IL but still reverse-engineerable. Don't remove necessary exported ABI symbols or crash-unwinding data.
+- [ ] Ensure the release packaging excludes source maps, developer logs, managed game DLLs, API debug metadata and secrets. No embedded credentials; separate developer symbol archive not staged into release.
+
+### JIT versus AOT identical gameplay contract (must pass before release-default toggle)
+
+- [ ] Use the **same game source**, C# compiler/TFM, public generated binding signatures, serialized field contracts, native Flecs/Jolt/ENet engine, fixed-tick ordering and network input/authority paths for both profiles. Only deployment/runtime differs; do not maintain separate AOT gameplay scripts.
+- [ ] Validate default field values, construction/Awake/Start/Enable/Disable/Destroy, component ordering, script attach/detach, scene/prefab load, ECS updates, physics impulses/soft bodies and collision events under both runtimes.
+- [ ] Determinism replay: run fixed-seed input streams through JIT and AOT on the same CPU and platform, assert per-tick state hashes for integer/state-machine logic, compare float/vector/Jolt positions with documented tolerances, verify identical server-authoritative results and rollback/desync behavior. Repeat Windows/Linux; JIT/AOT or hardware may legitimately differ at floating-point/ordering edges: fix simulation nondeterminism and quantize where required, **never claim bit-identical floats without evidence**.
+- [ ] Ban unseeded RNG, wall-clock gameplay time, unordered parallel writes, locale-sensitive parsing and non-deterministic serialization for predicted network state; ensure pre-existing editor hints and release validators flag these.
+- [ ] Verify AOT and JIT callbacks use identical versioned structs, `UnmanagedCallersOnly` exports with strictly blittable types (not `bool`/managed strings), C calling conventions and resource ownership.
+- [ ] Run B24–B30 in [benchmark plan](csharp-benchmark-plan.md), including GC, startup, input replay, network peers, binaries, trim root stability and symbol retention. Ship NativeAOT by default **only after** both runtime profiles pass complete cross-platform tests; until then existing JIT development/play workflow stays functional.
+
+**Why a separate player:** Microsoft's NativeAOT compiler does not support dynamically loading managed assemblies, and a NativeAOT **shared library** cannot be unloaded. Neither is compatible with the editor's current JIT collectible AssemblyLoadContext. NativeAOT itself is not a security boundary against code reverse engineering or memory inspection. See Microsoft's NativeAOT deployment / native library / interop docs:
+https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/
+https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/libraries
+https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
+
