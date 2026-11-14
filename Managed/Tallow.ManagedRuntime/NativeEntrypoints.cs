@@ -283,8 +283,8 @@ public static unsafe class NativeEntrypoints
             if (!sTypes.TryGetValue(name, out Type? type))
                 throw new TypeLoadException("Unknown trusted C# gameplay script: " + name);
             Script script = (Script)Activator.CreateInstance(type)!;
-            script.Attach(new GameObject(sceneId, entityId));
             int instance = ++sNextInstance;
+            script.AttachNative(new GameObject(sceneId, entityId), instance);
             sInstances.Add(instance, script);
             if (!sByGameObject.TryGetValue(script.GameObject, out List<Script>? scripts))
             {
@@ -540,7 +540,11 @@ public static unsafe class NativeEntrypoints
                 if (sEnabled.Remove(instance))
                     script.OnDisable();
             }
-            finally { script.OnDestroy(); }
+            finally
+            {
+                try { script.OnDestroy(); }
+                finally { script.InvalidateNative(); }
+            }
             return 1;
         }
         catch (Exception exception)

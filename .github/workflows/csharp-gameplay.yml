@@ -197,6 +197,12 @@ jobs:
           # launcher and present in the generated C# API (not a test stub).
           grep -F 'public static int Add(ulong session, ulong entity, string managedType)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_5190df22123b013a
+          # C# component lifetime state must use annotated native adapters.
+          grep -F 'public static int EnabledState(ulong session, ulong entity, int instance)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'public static bool SetEnabled(ulong session, ulong entity, int instance, bool enabled)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_34a132d032e309a7
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_ef731dbf203aec09
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_7da78821e8213042
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_0fe31a78ec52861b
           grep -F 'public static bool TeleportCharacter(ulong session, ulong entity,' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-verify CSharpApi_a6cee0af24fc98a6

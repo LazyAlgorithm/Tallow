@@ -20,6 +20,10 @@ class CSharpBehaviour : Component
 	/// The managed component is owned by this native component, not the scene's ECS memory.
 	public bool IsLoaded => mInstance > 0 && CSharpRuntime.Ready;
 
+	/// Opaque managed component ID, used only for trusted native API
+	/// lookups; do not use GameObject.Id as a managed instance ID.
+	public int32 ManagedInstance => mInstance;
+
 	/// Used after GameObject.AddComponent registered a native adapter.
 	/// RegisterComponent may have called an empty Awake/OnEnable before the
 	/// scriptType was set; dispatch both once the trusted type is known.

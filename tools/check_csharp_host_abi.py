@@ -75,6 +75,9 @@ def main() -> int:
     required = [
         "Tallow.Physics|SleepRigidbody|bool|ulong|ulong",
         "Tallow.CSharpComponents|Add|int|ulong|ulong|string",
+        "Tallow.CSharpComponents|EnabledState|int|ulong|ulong|int",
+        "Tallow.CSharpComponents|ActiveState|int|ulong|ulong|int",
+        "Tallow.CSharpComponents|SetEnabled|bool|ulong|ulong|int|bool",
         "Tallow.Ecs|CopyRigidbodyMasses|int|ulong|int|System.Span<ulong>|System.Span<float>",
     ]
     for signature in required:

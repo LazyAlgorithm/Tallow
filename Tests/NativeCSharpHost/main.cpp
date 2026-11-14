@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 static_assert(sizeof(tn_csharp_tick_batch_item) == 32 &&
@@ -164,6 +165,31 @@ static uint64_t InstantiatePrefab(void* context, uint64_t session, const char* u
 // The standalone native-host test substitutes a tiny ABI-compatible
 // implementation for the generator's reflected Beef fixture. The real
 // launcher resolves the identical symbol IDs from emitted Beef methods.
+// The isolated host tracks per-adapter state as the Beef Scene would.
+static std::unordered_map<int32_t, bool> nativeComponentEnabled;
+static int32_t ExposedEnabledState(uint64_t session, uint64_t entity, int32_t instance)
+{
+    if (!Match(session, entity)) return -1;
+    auto it = nativeComponentEnabled.find(instance);
+    return it == nativeComponentEnabled.end() ? -1 : (it->second ? 1 : 0);
+}
+static int32_t ExposedActiveState(uint64_t session, uint64_t entity, int32_t instance)
+{
+    return ExposedEnabledState(session, entity, instance);
+}
+static int32_t ExposedSetEnabled(uint64_t session, uint64_t entity,
+    int32_t instance, int32_t enabled)
+{
+    if (!Match(session, entity)) return 0;
+    auto it = nativeComponentEnabled.find(instance);
+    if (it == nativeComponentEnabled.end()) return 0;
+    const bool next = enabled != 0;
+    if (it->second == next) return 1;
+    it->second = next;
+    return tn_csharp_dispatch(instance,
+        next ? TN_CSHARP_ENABLE : TN_CSHARP_DISABLE, 0.0f);
+}
+
 static std::vector<int32_t> addedManagedComponents;
 static int32_t ExposedAddManagedComponent(uint64_t session, uint64_t entity,
     const char* type, int32_t length)
@@ -599,6 +625,12 @@ static void* ResolveApi(void*, const char* symbol)
     // Exact signature IDs from the generator's approved exposure manifest.
     if (name == "CSharpApi_5190df22123b013a")
         return reinterpret_cast<void*>(&ExposedAddManagedComponent);
+    if (name == "CSharpApi_34a132d032e309a7")
+        return reinterpret_cast<void*>(&ExposedEnabledState);
+    if (name == "CSharpApi_ef731dbf203aec09")
+        return reinterpret_cast<void*>(&ExposedActiveState);
+    if (name == "CSharpApi_7da78821e8213042")
+        return reinterpret_cast<void*>(&ExposedSetEnabled);
     if (name == "CSharpApi_d87ccb801a5fd433")
         return reinterpret_cast<void*>(&ExposedEcsIsAlive);
     if (name == "CSharpApi_8f34b0284d3b1041")
@@ -912,6 +944,21 @@ int main(int argc, char** argv)
         if (!tn_csharp_detach(childId))
             return Failure("detaching managed components created at runtime");
     addedManagedComponents.clear();
+
+    // Native-owned Enabled state must have the same lifecycle behavior
+    // when modified by C# as the ordinary Beef Component.Enabled setter.
+    const int32_t enableScript = tn_csharp_attach("Gameplay.ComponentEnabledSmoke", 1, 1);
+    if (enableScript < 1)
+        return Failure("attaching C# native-enabled component smoke");
+    nativeComponentEnabled[enableScript] = true;
+    if (!tn_csharp_dispatch(enableScript, TN_CSHARP_AWAKE, 0.0f) ||
+        !tn_csharp_dispatch(enableScript, TN_CSHARP_ENABLE, 0.0f) ||
+        !tn_csharp_dispatch(enableScript, TN_CSHARP_START, 0.0f) ||
+        !nativeComponentEnabled[enableScript])
+        return Failure("C# Enabled property did not preserve native callbacks");
+    if (!tn_csharp_detach(enableScript))
+        return Failure("detaching C# enabled-state smoke");
+    nativeComponentEnabled.erase(enableScript);
 
     // Run two real managed behaviours through one ordered native/CLR entry.
     const int32_t batchA = tn_csharp_attach("Gameplay.BatchLifecycleSmoke", 1, 1);

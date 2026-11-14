@@ -449,10 +449,48 @@ public static class Engine
 public abstract class Script
 {
     public GameObject GameObject { get; private set; }
+
+    // The CLR ID of the specific native-owned component. It is NOT a Flecs
+    // entity ID or GameObject.Id and is intentionally not a user API.
+    internal int NativeInstanceId { get; private set; }
     private Transform? _transform;
     public Transform Transform => _transform ??= new Transform(GameObject);
     public bool IsMine => Engine.Bridge.IsMine(GameObject);
     public Scene Scene => GameObject.Scene;
+
+    private int RequireNativeInstance() =>
+        NativeInstanceId > 0 ? NativeInstanceId :
+            throw new InvalidOperationException(
+                "This Script is not attached to a live native Tallow component.");
+
+    private static bool CheckedState(int state)
+    {
+        if (state < 0)
+            throw new ObjectDisposedException(nameof(Script),
+                "The native C# component or its scene is no longer alive.");
+        return state != 0;
+    }
+
+    /// <summary>
+    /// Controls the native Component.Enabled flag. Switching it while playing
+    /// invokes the usual OnEnable/OnDisable and networking notifications.
+    /// </summary>
+    public bool Enabled
+    {
+        get => CheckedState(CSharpComponents.EnabledState(
+            GameObject.SceneId, GameObject.Id, RequireNativeInstance()));
+        set
+        {
+            if (!CSharpComponents.SetEnabled(
+                    GameObject.SceneId, GameObject.Id, RequireNativeInstance(), value))
+                throw new ObjectDisposedException(nameof(Script),
+                    "The native C# component or its scene is no longer alive.");
+        }
+    }
+
+    /// <summary>Native-enabled component on an active hierarchy object.</summary>
+    public bool IsActiveAndEnabled => CheckedState(CSharpComponents.ActiveState(
+        GameObject.SceneId, GameObject.Id, RequireNativeInstance()));
 
     /// <summary>Find another attached C# behaviour, as in native Beef scripts.</summary>
     public T? GetComponent<T>() where T : Script => GameObject.GetComponent<T>();
@@ -471,8 +509,17 @@ public abstract class Script
     public void Attach(GameObject gameObject)
     {
         GameObject = gameObject;
+        NativeInstanceId = 0;
         _transform = new Transform(gameObject);
     }
+
+    internal void AttachNative(GameObject gameObject, int instanceId)
+    {
+        Attach(gameObject);
+        NativeInstanceId = instanceId;
+    }
+
+    internal void InvalidateNative() => NativeInstanceId = 0;
 
     public virtual void Awake() { }
     public virtual void OnEnable() { }

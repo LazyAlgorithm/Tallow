@@ -487,3 +487,21 @@ claim automatic replication of dynamically created joints.
   **linked Beef launcher**, not only the C++ mock in hostfxr smoke.
   This catches the case where fixture bindings compile but real engine
   reflection omits the annotated native method.
+
+### Native-owned C# component enable/disable controls (November 14, 2026)
+
+- Gameplay `Script.Enabled` and `Script.IsActiveAndEnabled` now reflect
+  the **specific** native `CSharpBehaviour`, not a local managed flag.
+  Read state uses -1 for stale scene/adapter and raises a disposed error
+  instead of silently treating invalid handles as disabled.
+- The `[CSharpExpose]` `CSharpComponents.EnabledState`,
+  `ActiveState` and `SetEnabled` methods find the exact native adapter
+  by managed instance ID and validated session/object. Setting Enabled
+  uses `Component.Enabled`, preserving native OnEnable/OnDisable and
+  NetworkSync state notifications. No handwritten native C# binding.
+- The native host simulates native enabled-state callbacks and validates
+  initial enable, repeated disable idempotence, and re-enable. The actual
+  Linux editor build checks all three reflected native API symbols.
+- This is a lifecycle parity milestone; automatic managed callback batching
+  still requires ordered per-callback native eligibility/profiler checks,
+  reconciliation with network replay and performance validation.

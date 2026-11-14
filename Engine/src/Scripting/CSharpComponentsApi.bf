@@ -31,3 +31,55 @@ static class CSharpComponents
         return instance;
     }
 }
+
+    /// Resolve the particular native CSharpBehaviour adapter on this object,
+    /// not just the first attached script of its managed type.
+    static CSharpBehaviour Find(uint64 session, uint64 entity, int32 instance)
+    {
+        if (instance <= 0)
+            return null;
+        let obj = CSharpRuntime.PhysicsObject(session, entity);
+        if (obj == null)
+            return null;
+        for (let component in obj.Components)
+        {
+            if (let script = component as CSharpBehaviour)
+            {
+                if (script.ManagedInstance == instance && script.IsLoaded)
+                    return script;
+            }
+        }
+        return null;
+    }
+
+    /// -1 means stale/missing, 0 disabled, 1 enabled.
+    [CSharpExpose]
+    public static int32 EnabledState(uint64 session, uint64 entity, int32 instance)
+    {
+        let script = Find(session, entity, instance);
+        if (script == null)
+            return -1;
+        return script.Enabled ? 1 : 0;
+    }
+
+    /// -1 means stale/missing, 0 inactive/disabled, 1 active and enabled.
+    [CSharpExpose]
+    public static int32 ActiveState(uint64 session, uint64 entity, int32 instance)
+    {
+        let script = Find(session, entity, instance);
+        if (script == null)
+            return -1;
+        return script.IsActiveAndEnabled ? 1 : 0;
+    }
+
+    /// Uses Component.Enabled: OnEnable/OnDisable and network notifications
+    /// remain native Scene responsibilities, including prediction lifecycle.
+    [CSharpExpose]
+    public static bool SetEnabled(uint64 session, uint64 entity, int32 instance, bool enabled)
+    {
+        let script = Find(session, entity, instance);
+        if (script == null)
+            return false;
+        script.Enabled = enabled;
+        return true;
+    }
