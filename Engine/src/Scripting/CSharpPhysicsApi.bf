@@ -108,7 +108,9 @@ static class Physics
     {
         let obj = LiveObject(session, entity);
         let soft = obj?.GetComponent<SoftBody>();
-        return soft != null && soft.HasBody ? soft.Velocity : .Zero;
+        if (soft == null || !soft.HasBody)
+            return .Zero;
+        return soft.Velocity;
     }
 
     [CSharpExpose]
@@ -188,7 +190,9 @@ static class Physics
     {
         let obj = LiveObject(session, entity);
         let soft = obj?.GetComponent<SoftBody>();
-        return soft != null && soft.HasBody ? soft.DeepestDent() : 0;
+        if (soft == null || !soft.HasBody)
+            return 0;
+        return soft.DeepestDent();
     }
 
     /// -1 means no hit or an inactive scene. Jolt owns the actual query and
