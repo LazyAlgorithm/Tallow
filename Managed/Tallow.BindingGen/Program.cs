@@ -1,0 +1,298 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+
+namespace Tallow.BindingGen;
+
+/// <summary>
+/// Engine-build-only compiler manifest consumer. Generates the *same* approved
+/// public API as C ABI Beef wrappers and managed C# methods. No Beef source
+/// regexes, hand-maintained symbol lists, or per-game binding regeneration.
+/// </summary>
+internal static class Program
+{
+    private sealed record Parameter(string Name, string Type);
+    private sealed record Method(string Owner, string Name, string Result,
+        IReadOnlyList<Parameter> Parameters, string Id);
+    private static readonly Regex Identifier = new(
+        @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
+
+    private static string Required(string[] args, string option)
+    {
+        int i = Array.IndexOf(args, option);
+        if (i < 0 || i + 1 == args.Length || args[i + 1].StartsWith("--", StringComparison.Ordinal))
+            throw new ArgumentException($"Missing {option}.");
+        return args[i + 1];
+    }
+
+    private static string Hash(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..16].ToLowerInvariant();
+
+    private static bool IsType(string type, bool allowVoid = false) =>
+        type is "bool" or "int" or "float" or "System.Numerics.Vector2" or
+            "System.Numerics.Vector3" or "System.Numerics.Vector4" ||
+        (allowVoid && type == "void");
+
+    private static int Dimensions(string type) => type switch
+    {
+        "System.Numerics.Vector2" => 2,
+        "System.Numerics.Vector3" => 3,
+        "System.Numerics.Vector4" => 4,
+        _ => 0
+    };
+
+    private static string CSharpType(string type) => type == "int" ? "int" :
+        type.StartsWith("System.Numerics.Vector", StringComparison.Ordinal) ?
+            type : type;
+
+    private static string NativeType(string type) =>
+        Dimensions(type) > 0 ? "float*" : type is "bool" or "int" ? "int32" : type;
+
+    private static string CAbiType(string type) =>
+        Dimensions(type) > 0 ? "float*" : type == "bool" ? "int" : type;
+
+    private static List<Method> Parse(string manifest)
+    {
+        string[] lines = manifest.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        if (lines.Length < 1 || lines[0] != "TALLOW_CSHARP_API_V1")
+            throw new FormatException("Unknown C# exposure manifest version.");
+        List<Method> methods = [];
+        HashSet<string> signatures = new(StringComparer.Ordinal);
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        for (int i = 1; i < lines.Length; i++)
+        {
+            if (lines[i].Length == 0 && i == lines.Length - 1)
+                break;
+            string[] fields = lines[i].Split('\t');
+            if (fields.Length < 4 || fields[0] != "method")
+                throw new FormatException($"Manifest line {i + 1}: expected annotated method.");
+            string owner = fields[1], name = fields[2], result = fields[3];
+            // Stage 1 intentionally exposes only public Tallow-root static
+            // classes. Nested types/properties/instance handles follow later.
+            if (!owner.StartsWith("Tallow.", StringComparison.Ordinal) ||
+                !Identifier.IsMatch(owner["Tallow.".Length..]) ||
+                !Identifier.IsMatch(name) || !IsType(result, allowVoid: true))
+                throw new FormatException($"Manifest line {i + 1}: unsupported owner or return type: {owner}.{name}.");
+            List<Parameter> parameters = [];
+            for (int j = 4; j < fields.Length; j++)
+            {
+                int colon = fields[j].IndexOf(':');
+                if (colon <= 0)
+                    throw new FormatException($"Manifest line {i + 1}: malformed parameter {j - 3}.");
+                string paramName = fields[j][..colon], type = fields[j][(colon + 1)..];
+                if (!Identifier.IsMatch(paramName) || !IsType(type) ||
+                    parameters.Any(p => p.Name == paramName))
+                    throw new FormatException($"Manifest line {i + 1}: invalid parameter {fields[j]}.");
+                parameters.Add(new(paramName, type));
+            }
+            string signature = string.Join("|",
+                new[] { owner, name, result }.Concat(parameters.Select(p => p.Type)));
+            string id = Hash(signature);
+            if (!signatures.Add(signature) || !ids.Add(id))
+                throw new FormatException($"Duplicate or colliding exposed method signature: {signature}.");
+            methods.Add(new(owner, name, result, parameters, id));
+        }
+        return methods.OrderBy(m => m.Owner, StringComparer.Ordinal)
+            .ThenBy(m => m.Name, StringComparer.Ordinal)
+            .ThenBy(m => string.Join("|", m.Parameters.Select(p => p.Type)),
+                StringComparer.Ordinal).ToList();
+    }
+
+    private static string ArgumentExpression(Parameter p, int i) =>
+        p.Type == "bool" ? $"(p{i} != 0)" :
+        Dimensions(p.Type) != 0 ? $"v{i}" : $"p{i}";
+
+    private static string EmitBeef(IReadOnlyList<Method> methods, string version)
+    {
+        StringBuilder text = new();
+        text.AppendLine("// <auto-generated> CSharpExpose native ABI. Do not edit. </auto-generated>")
+            .AppendLine("using System;").AppendLine().AppendLine("namespace Tallow;")
+            .AppendLine();
+        foreach (IGrouping<string, Method> group in methods.GroupBy(m => m.Owner))
+        {
+            text.AppendLine($"extension {group.Key["Tallow.".Length..]}").AppendLine("{");
+            foreach (Method m in group)
+            {
+                string symbol = $"CSharpApi_{m.Id}";
+                List<string> args = [];
+                foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
+                    args.Add($"{NativeType(p.Type)} p{i}");
+                if (Dimensions(m.Result) > 0)
+                    args.Add("float* result");
+                string returnType = Dimensions(m.Result) > 0 ? "void" : NativeType(m.Result);
+                text.AppendLine("\t[Export, CLink, Reflect, AlwaysInclude]")
+                    .AppendLine($"\tpublic static {returnType} {symbol}({string.Join(", ", args)})")
+                    .AppendLine("\t{");
+                foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
+                {
+                    int count = Dimensions(p.Type);
+                    if (count > 0)
+                    {
+                        string name = $"Vector{count}";
+                        text.AppendLine($"\t\tif (p{i} == null) return{(returnType == "void" ? ";" : " default;")}");
+                        text.AppendLine($"\t\t{name} v{i} = .({string.Join(", ", Enumerable.Range(0, count).Select(j => $"p{i}[{j}]"))});");
+                    }
+                }
+                if (Dimensions(m.Result) > 0)
+                    text.AppendLine("\t\tif (result == null) return;");
+                string call = $"{m.Owner}.{m.Name}({string.Join(", ", m.Parameters.Select(ArgumentExpression))})";
+                if (m.Result == "void")
+                    text.AppendLine($"\t\t{call};");
+                else if (m.Result == "bool")
+                    text.AppendLine($"\t\treturn {call} ? 1 : 0;");
+                else if (Dimensions(m.Result) > 0)
+                {
+                    text.AppendLine($"\t\tlet value = {call};");
+                    string[] components = ["x", "y", "z", "w"];
+                    for (int i = 0; i < Dimensions(m.Result); i++)
+                        text.AppendLine($"\t\tresult[{i}] = value.{components[i]};");
+                }
+                else
+                    text.AppendLine($"\t\treturn {call};");
+                text.AppendLine("\t}").AppendLine();
+            }
+            text.AppendLine("}").AppendLine();
+        }
+        // A version entrypoint lets C# reject mismatched binaries before
+        // invoking any methods. Names are stable for identical manifests.
+        text.AppendLine("extension CSharpBindingManifest").AppendLine("{")
+            .AppendLine("\t[Export, CLink, Reflect, AlwaysInclude]")
+            .AppendLine($"\tpublic static int32 CSharpApiVersion_{version}() => 1;")
+            .AppendLine("}");
+        return text.ToString();
+    }
+
+    private static string EmitCSharp(IReadOnlyList<Method> methods, string version)
+    {
+        StringBuilder text = new();
+        text.AppendLine("// <auto-generated> CSharpExpose gameplay API. Do not edit. </auto-generated>")
+            .AppendLine("using System;").AppendLine("using System.Numerics;")
+            .AppendLine().AppendLine("namespace Tallow;").AppendLine();
+        text.AppendLine("internal static unsafe partial class GeneratedNativeApi")
+            .AppendLine("{").AppendLine("\tprivate static bool sVerified;")
+            .AppendLine("\tstatic partial void ResetVersion() => sVerified = false;")
+            .AppendLine("\tstatic partial void VerifyVersion()")
+            .AppendLine("\t{")
+            .AppendLine("\t\tif (sVerified) return;")
+            .AppendLine($"\t\tnint ptr = ResolveRaw(\"CSharpApiVersion_{version}\");")
+            .AppendLine("\t\tif (ptr == 0 || ((delegate* unmanaged[Cdecl]<int>)ptr)() != 1)")
+            .AppendLine("\t\t\tthrow new InvalidOperationException(\"The precompiled native Tallow C# API does not match its managed bindings.\");")
+            .AppendLine("\t\tsVerified = true;")
+            .AppendLine("\t}")
+            .AppendLine("}").AppendLine();
+        foreach (IGrouping<string, Method> group in methods.GroupBy(m => m.Owner))
+        {
+            text.AppendLine($"public static unsafe class {group.Key["Tallow.".Length..]}")
+                .AppendLine("{");
+            foreach (Method m in group)
+            {
+                string symbol = $"CSharpApi_{m.Id}";
+                string cache = $"s_Ptr_{m.Id}";
+                text.AppendLine($"\tprivate static nint {cache};");
+                string publicArgs = string.Join(", ", m.Parameters.Select(p => $"{CSharpType(p.Type)} {p.Name}"));
+                text.AppendLine($"\tpublic static {CSharpType(m.Result)} {m.Name}({publicArgs})")
+                    .AppendLine("\t{")
+                    .AppendLine($"\t\tnint ptr = {cache};")
+                    .AppendLine($"\t\tif (ptr == 0) {cache} = ptr = GeneratedNativeApi.Resolve(\"{symbol}\");");
+                foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
+                {
+                    int count = Dimensions(p.Type);
+                    if (count > 0)
+                    {
+                        string[] components = ["X", "Y", "Z", "W"];
+                        text.AppendLine($"\t\tfloat* p{i} = stackalloc float[{count}] {{ {string.Join(", ", components.Take(count).Select(c => p.Name + "." + c))} }};");
+                    }
+                }
+                if (Dimensions(m.Result) > 0)
+                    text.AppendLine($"\t\tfloat* result = stackalloc float[{Dimensions(m.Result)}];");
+                List<string> nativeArgs = m.Parameters.Select((p, i) => Dimensions(p.Type) > 0 ?
+                    $"p{i}" : p.Type == "bool" ? $"({p.Name} ? 1 : 0)" : p.Name).ToList();
+                if (Dimensions(m.Result) > 0)
+                    nativeArgs.Add("result");
+                List<string> types = m.Parameters.Select(p => CAbiType(p.Type)).ToList();
+                if (Dimensions(m.Result) > 0)
+                    types.Add("float*");
+                types.Add(Dimensions(m.Result) > 0 ? "void" : CAbiType(m.Result));
+                string call = $"((delegate* unmanaged[Cdecl]<{string.Join(", ", types)}>)ptr)({string.Join(", ", nativeArgs)})";
+                if (m.Result == "void")
+                    text.AppendLine($"\t\t{call};");
+                else if (m.Result == "bool")
+                    text.AppendLine($"\t\treturn {call} != 0;");
+                else if (Dimensions(m.Result) > 0)
+                    text.AppendLine($"\t\t{call};")
+                        .AppendLine($"\t\treturn new Vector{Dimensions(m.Result)}({string.Join(", ", Enumerable.Range(0, Dimensions(m.Result)).Select(i => $"result[{i}]"))});");
+                else
+                    text.AppendLine($"\t\treturn {call};");
+                text.AppendLine("\t}").AppendLine();
+            }
+            text.AppendLine("}").AppendLine();
+        }
+        return text.ToString();
+    }
+
+    private static void WriteIfChanged(string path, string data)
+    {
+        if (File.Exists(path) && File.ReadAllText(path) == data)
+            return;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, data, new UTF8Encoding(false));
+    }
+
+    private static int SelfTest()
+    {
+        const string sample = "TALLOW_CSHARP_API_V1\nmethod\tTallow.CSharpBindingFixture\tAverage\tfloat\ta:float\tb:float\n";
+        List<Method> parsed = Parse(sample);
+        string version = Hash(sample);
+        string beef = EmitBeef(parsed, version);
+        string csharp = EmitCSharp(parsed, version);
+        if (parsed.Count != 1 || !beef.Contains("CSharpBindingFixture.Average(p0, p1);") ||
+            !beef.Contains("CSharpApiVersion_") ||
+            !csharp.Contains("public static float Average(float a, float b)") ||
+            !csharp.Contains("delegate* unmanaged[Cdecl]<float, float, float>") ||
+            beef.Contains("NativeOnly") || csharp.Contains("NativeOnly"))
+            throw new Exception("The fixture's native and managed exports differ.");
+        string vectors = "TALLOW_CSHARP_API_V1\nmethod\tTallow.VectorChecks\tScale\tSystem.Numerics.Vector3\tvalue:System.Numerics.Vector3\tfactor:float\n";
+        List<Method> v = Parse(vectors);
+        if (!EmitBeef(v, Hash(vectors)).Contains("result[2] = value.z;") ||
+            !EmitCSharp(v, Hash(vectors)).Contains("float* result = stackalloc float[3];"))
+            throw new Exception("Vector ABI lowering failed.");
+        foreach (string invalid in new[]
+        {
+            "TALLOW_CSHARP_API_V1\nmethod\tTallow.Bad\tOops\tSystem.String\n",
+            "TALLOW_CSHARP_API_V1\nmethod\tTallow.Bad\tOops\tfloat\tx:void\n",
+            sample + sample.Split('\n')[1] + "\n",
+            "TALLOW_CSHARP_API_V1\nmethod\tOther.Bad\tOops\tfloat\n"
+        })
+        {
+            try { Parse(invalid); throw new Exception("Invalid manifest was accepted."); }
+            catch (FormatException) { }
+        }
+        Console.WriteLine("PASS: CSharpExpose deterministic, opt-in, scalar/vector and invalid-manifest tests.");
+        return 0;
+    }
+
+    public static int Main(string[] args)
+    {
+        try
+        {
+            if (args.Contains("--self-test"))
+                return SelfTest();
+            string manifest = File.ReadAllText(Required(args, "--manifest"));
+            string root = Path.GetFullPath(Required(args, "--engine-root"));
+            List<Method> methods = Parse(manifest);
+            string version = Hash(manifest.Replace("\r\n", "\n", StringComparison.Ordinal));
+            WriteIfChanged(Path.Combine(root, "Engine/src/Scripting/CSharpBindings.Generated.bf"),
+                EmitBeef(methods, version));
+            WriteIfChanged(Path.Combine(root, "Managed/Tallow.API/Generated/CSharpBindings.g.cs"),
+                EmitCSharp(methods, version));
+            Console.WriteLine($"Generated {methods.Count} native/C# bindings (ABI {version}).");
+            return 0;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or
+            ArgumentException or FormatException or InvalidOperationException)
+        {
+            Console.Error.WriteLine("CSharpExpose binding generation failed: " + e.Message);
+            return 1;
+        }
+    }
+}
