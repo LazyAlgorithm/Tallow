@@ -200,6 +200,9 @@ public static unsafe class NativeEntrypoints
         {
             if (callbacks == 0)
                 throw new ArgumentNullException(nameof(callbacks));
+            if (sizeof(NativeInput) != 24 || sizeof(NativeBatchInput) != 32)
+                throw new InvalidOperationException(
+                    "Native TickInput batch layout does not match the host ABI.");
             Callbacks* native = (Callbacks*)callbacks;
             if (native->IsAlive == null || native->GetPosition == null ||
                 native->SetPosition == null || native->Destroy == null || native->IsMine == null ||

@@ -4,6 +4,7 @@
 #include "tallow_dotnet_host.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
@@ -23,6 +24,15 @@ using library_handle = void*;
 static library_handle load_library(const std::filesystem::path& path) { return dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL); }
 static void* get_symbol(library_handle lib, const char* name) { return dlsym(lib, name); }
 #endif
+
+// All three runtimes (Beef, C++ and C#) must agree on this ABI.
+static_assert(sizeof(tn_csharp_tick_input) == 24,
+    "Native TickInput must remain six 32-bit values");
+static_assert(sizeof(tn_csharp_tick_batch_item) == 32,
+    "Native input batch entry must remain 32 bytes");
+static_assert(offsetof(tn_csharp_tick_batch_item, input) == 4 &&
+              offsetof(tn_csharp_tick_batch_item, delta_time) == 28,
+    "Native batch field offsets changed");
 
 namespace {
 using hostfxr_handle = void*;

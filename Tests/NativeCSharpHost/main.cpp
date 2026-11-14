@@ -10,6 +10,10 @@
 #include <iostream>
 #include <string>
 
+static_assert(sizeof(tn_csharp_tick_batch_item) == 32 &&
+              offsetof(tn_csharp_tick_batch_item, delta_time) == 28,
+    "Host test and engine input batch layouts differ");
+
 struct TestScene
 {
     bool alive = true;

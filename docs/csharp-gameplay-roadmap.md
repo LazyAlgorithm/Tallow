@@ -408,3 +408,11 @@ claim automatic replication of dynamically created joints.
   these user-facing methods, including stale session safety.
 - These are managed convenience wrappers over generated opt-in methods;
   they neither duplicate P/Invoke bindings nor expose native pointers.
+
+### Network batch ABI hardening
+
+- The native .NET host and C++ smoke now have compile-time layout
+  assertions for the 24-byte TickInput and 32-byte batch record, including
+  nested input and delta-time offsets. Managed configuration checks matching
+  `sizeof` layouts before binding a native bridge. These fail fast if
+  compiler/platform packing changes silently.
