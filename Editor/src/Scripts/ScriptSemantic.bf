@@ -241,7 +241,11 @@ class ScriptSemantic
 					// useful error in the editor instead of a raw wait status.
 					let workerLog = scope String();
 					let detail = scope String();
-					let logPath = isCSharp && mCSharpWorkerBuilt ? scope $"{mCSharpQueue}/server.log" : scope $"{mFolder}/worker.log";
+					let logPath = scope String();
+					if (isCSharp && mCSharpWorkerBuilt)
+						logPath.Set(scope $"{mCSharpQueue}/server.log");
+					else
+						logPath.Set(scope $"{mFolder}/worker.log");
 					if (File.ReadAllText(logPath, workerLog, true) case .Ok)
 					{
 						for (let line in workerLog.Split('\n'))
