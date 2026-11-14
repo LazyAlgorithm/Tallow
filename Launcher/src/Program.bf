@@ -107,8 +107,8 @@ class LauncherApp : Application
 		if (!mEngineRoot.IsEmpty)
 			SetWindowIcon(scope $"{mEngineRoot}/icon.png");
 		RecentProjects.Load();
-		Toolchain.Apply();
-		Toolchain.FindMissing(mMissingTools);
+		// C# gameplay uses the .NET SDK. Native build dependencies are
+		// checked explicitly, not while starting an already built editor.
 		let home = scope String();
 #if BF_PLATFORM_WINDOWS
 		Environment.GetEnvironmentVariable("USERPROFILE", home).IgnoreError();
@@ -223,7 +223,6 @@ class LauncherApp : Application
 	/// Builds the project and starts its editor. Returns false with the compiler output on failure.
 	public static bool OpenProject(StringView path, String error, bool buildOnly = false)
 	{
-		Toolchain.Apply();
 		let project = scope Project();
 		if (!project.Load(path))
 		{
@@ -306,9 +305,8 @@ class LauncherApp : Application
 		ImGui.TextDisabled("Projects");
 		ImGui.Separator();
 		ImGui.Spacing();
-		if (mMissingTools.Count > 0)
-			ImGui.BeginDisabled(true);
-
+		// Missing native build tools must never prevent opening a precompiled
+		// editor. The optional native toolchain setup lives behind explicit actions.
 		let busy = mOpenCountdown > 0;
 		ImGui.BeginDisabled(busy);
 		let total = ImGui.GetContentRegionAvail();
@@ -324,17 +322,12 @@ class LauncherApp : Application
 		ImGui.Spacing();
 		DrawProjectButtons();
 		ImGui.EndDisabled();
-		if (mMissingTools.Count > 0)
-			ImGui.EndDisabled();
 		if (!mMessage.IsEmpty)
 			DrawLauncherMessage();
 		ImGui.End();
 		// Open and render the modal from the same ImGui popup ID scope.
-		if (mMissingTools.Count > 0)
-		{
-			ImGui.OpenPopup("Development tools required");
-			DrawSetupDialog();
-		}
+		// Only the native engine development workflow needs Beef/Python.
+		// Do not show a blocking setup dialog to ordinary C# project authors.
 		if (mUpgradePrompt)
 		{
 			ImGui.OpenPopup("Project from another version");
