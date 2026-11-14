@@ -6,3 +6,6 @@ field	Tallow.Time	DeltaTime	float	get
 field	Tallow.Time	FrameCount	long	get
 field	Tallow.Time	SmoothedFps	float	get
 field	Tallow.Time	TimeScale	float	getset
+method	Tallow.Log	Info	void	text:string
+method	Tallow.Log	Warning	void	text:string
+method	Tallow.Log	Error	void	text:string

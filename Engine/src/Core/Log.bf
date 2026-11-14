@@ -13,6 +13,8 @@ enum LogLevel
 }
 
 /// Engine log. Entries are kept for the editor console and mirrored to stdout.
+/// Explicit UTF-8 input-only methods are available to C# gameplay.
+[CSharpExpose]
 static class Log
 {
 	/// One message: how serious it is, and its text.
@@ -78,11 +80,11 @@ static class Log
 	}
 
 	/// Logs a message.
-	public static void Info(StringView text) => Add(.Info, text);
+	[CSharpExpose] public static void Info(StringView text) => Add(.Info, text);
 	/// Logs a warning.
-	public static void Warning(StringView text) => Add(.Warning, text);
+	[CSharpExpose] public static void Warning(StringView text) => Add(.Warning, text);
 	/// Logs an error.
-	public static void Error(StringView text) => Add(.Error, text);
+	[CSharpExpose] public static void Error(StringView text) => Add(.Error, text);
 
 	/// Logs a message of a level.
 	public static void Add(LogLevel level, StringView text, StringView file = "", int32 line = -1)

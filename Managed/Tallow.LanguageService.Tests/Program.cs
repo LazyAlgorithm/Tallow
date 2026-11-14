@@ -285,6 +285,16 @@ public sealed class CubeMover : Script
                 timeCompletion.Contains("completion\tSmoothedFps") &&
                 !timeCompletion.Contains("completion\tget_SmoothedFps"));
 
+            string logCode = "using Tallow; class Demo { void Go() { Log.Info(\"hello\"); } }";
+            string logDiagnostics = RequestWithApi(service, "diagnostics", logCode, logCode.Length);
+            Check("generated Log.Info accepts managed C# strings",
+                !logDiagnostics.Contains("diagnostic\t"));
+            string logCompletion = RequestWithApi(service, "completion",
+                "using Tallow; class Demo { void Go() { Log.War",
+                "using Tallow; class Demo { void Go() { Log.War".Length);
+            Check("generated Log.Warning appears in Roslyn autocomplete",
+                logCompletion.Contains("completion\tWarning"));
+
             // Preserve the original editor's network (purple) and performance
             // (cyan) diagnostics when the gameplay language is C#.
             string networkedTick = """

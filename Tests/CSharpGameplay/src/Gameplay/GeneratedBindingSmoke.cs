@@ -14,6 +14,7 @@ public sealed class GeneratedBindingSmoke : Script
     {
         // Safe read/write scalar binding generated from Beef's TimeScale
         // declaration, not a manually duplicated C# API signature.
+        Log.Info("Tallow log é");
         Time.TimeScale = 0.5f;
         if (MathF.Abs(Time.TimeScale - 0.5f) > 0.0001f)
             throw new InvalidOperationException("Generated writable TimeScale property failed.");

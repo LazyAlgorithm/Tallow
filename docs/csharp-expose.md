@@ -124,3 +124,18 @@ field setters are still deferred until their ownership/marshalling is tested.
 Unmarked or read-only counters remain inaccessible for assignment from C#.
 The standalone host integration asserts that assigning the generated C#
 property reaches the native setter.
+
+
+### Safe UTF-8 input marshalling
+
+Selected Beef methods that accept `StringView` can now be annotated
+`[CSharpExpose]` and become normal C# `string` parameters. The generator
+lowers one native argument to a counted `char8*` plus `int32` byte length.
+C# converts with `Encoding.UTF8` and pins its temporary byte array only
+during the synchronous call; Beef sees a temporary `StringView`. The first
+real exposed examples are `Log.Info`, `Log.Warning`, and `Log.Error`,
+which copy messages into the engine's native Console.
+
+Returning native strings, retaining borrowed pointers, and async callbacks
+are deliberately unsupported until their ownership protocols are defined.
+The integration test checks a non-ASCII string arrives intact over the C ABI.

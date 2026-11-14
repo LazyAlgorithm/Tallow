@@ -119,6 +119,12 @@ static int firstAverageCalls = 0;
 static int secondAverageCalls = 0;
 static bool useSecondBinding = false;
 static float testTimeScale = 1.0f;
+static std::string lastLogInfo;
+static void ExposedLogInfo(const char* text, int32_t length)
+{
+    if (!text || length < 0) return;
+    lastLogInfo.assign(text, static_cast<size_t>(length));
+}
 static float GetTestTimeScale() { return testTimeScale; }
 static void SetTestTimeScale(float value) { testTimeScale = value; }
 static float ExposedAverage(float a, float b)
@@ -139,6 +145,8 @@ static void* ResolveApi(void*, const char* symbol)
     if (name.rfind("CSharpApiVersion_", 0) == 0)
         return reinterpret_cast<void*>(&ExposedVersion);
     // IDs are deterministic SHA-256 signature hashes emitted by BindingGen.
+    if (name == "CSharpApi_e2772af6e047fd0b")
+        return reinterpret_cast<void*>(&ExposedLogInfo);
     if (name == "CSharpApi_00ab8c332afb3504")
         return reinterpret_cast<void*>(&GetTestTimeScale);
     if (name == "CSharpApi_d0d279519519c93c")
@@ -298,6 +306,8 @@ int main(int argc, char** argv)
         return Failure("generated method did not execute native ABI");
     if (!tn_csharp_detach(generated))
         return Failure("detaching generated binding test");
+    if (lastLogInfo != "Tallow log \xC3\xA9")
+        return Failure("generated UTF-8 Log.Info did not reach native callback");
     if (std::fabs(testTimeScale - 0.5f) > 0.0001f)
         return Failure("native TimeScale setter was not reached");
     if (firstAverageCalls != 1 || secondAverageCalls != 0)

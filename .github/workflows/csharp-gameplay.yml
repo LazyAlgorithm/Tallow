@@ -150,6 +150,9 @@ jobs:
           grep -F 'public static long FrameCount' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'set => __TallowSet_' Managed/Tallow.API/Generated/CSharpBindings.g.cs
           grep -F 'Tallow.Time.TimeScale = value;' Engine/src/Scripting/CSharpBindings.Generated.bf
+          grep -F 'method' /tmp/tallow-csharp-api.tsv | grep -F 'Tallow.Log' | grep -F 'Info'
+          grep -F 'public static void Info(string text)' Managed/Tallow.API/Generated/CSharpBindings.g.cs
+          grep -F 'StringView s0 = .(p0, p0Length)' Engine/src/Scripting/CSharpBindings.Generated.bf
           if grep -F 'NativeOnly' Managed/Tallow.API/Generated/CSharpBindings.g.cs; then
             echo "Unmarked Beef method appeared in C# bindings" >&2
             exit 1

@@ -30,6 +30,8 @@ static class CSharpBindingManifest
             name.Set("float");
         else if (type == typeof(double))
             name.Set("double");
+        else if (type == typeof(StringView))
+            name.Set("string");
         else if (type == typeof(Vector2))
             name.Set("System.Numerics.Vector2");
         else if (type == typeof(Vector3))
@@ -52,7 +54,7 @@ static class CSharpBindingManifest
         }
 
         let resultType = scope String();
-        if (!MapValueType(method.ReturnType, resultType))
+        if (!MapValueType(method.ReturnType, resultType) || resultType == "string")
         {
             error.AppendF("[CSharpExpose] {} has an unsupported return type. Stage 1 accepts void, bool, int32/64, uint32/64, float/double and Vector2/3/4.", signature);
             return false;
@@ -127,7 +129,7 @@ static class CSharpBindingManifest
                     return false;
                 }
                 let fieldType = scope String();
-                if (!MapValueType(field.FieldType, fieldType) || fieldType == "void")
+                if (!MapValueType(field.FieldType, fieldType) || fieldType == "void" || fieldType == "string")
                 {
                     error.AppendF("[CSharpExpose] {}.{} has an unsupported field type. Expose a safe scalar or vector value.", owner, field.Name);
                     return false;
