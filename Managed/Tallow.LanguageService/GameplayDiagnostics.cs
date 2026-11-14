@@ -39,30 +39,37 @@ internal static class GameplayDiagnostics
                     string? message = null;
                     string? category = null;
                     SyntaxNode location = node;
-                    if (node is MemberAccessExpressionSyntax member &&
-                        node.Parent is not MemberAccessExpressionSyntax)
+                    if (node is MemberAccessExpressionSyntax member)
                     {
-                        string expression = member.ToString();
                         // Diagnostics are only about deterministic network replay,
                         // not about arbitrary local UI or editor code.
-                        if (IsBoundMember(semantic, member, "System.Random", "Shared") ||
-                            expression is "Random.Shared")
+                        if (IsBoundMember(semantic, member, "System.Random", "Shared"))
                         {
                             category = "determinism";
                             message = "TAL-NET001: Random.Shared varies by process; use a shared deterministic seed in networked " + context + ".";
                         }
-                        else if (IsBoundMember(semantic, member, "System.DateTime", "Now", "UtcNow") ||
-                            expression is "DateTime.Now" or "DateTime.UtcNow")
+                        else if (IsBoundMember(semantic, member, "System.DateTime", "Now", "UtcNow"))
                         {
                             category = "determinism";
                             message = "TAL-NET002: Wall-clock time differs across clients and replays; count simulation ticks instead.";
                         }
                         else if (IsBoundMember(semantic, member, "Tallow.Time",
-                            "DeltaTime", "RealTime", "Time", "FrameCount") ||
-                            expression is "Time.DeltaTime" or "Time.RealTime" or "Time.Time" or "Time.FrameCount")
+                            "DeltaTime", "RealTime", "Time", "FrameCount"))
                         {
                             category = "determinism";
                             message = "TAL-NET003: Local frame time/count differs across clients; use the supplied fixed tick values.";
+                        }
+                        else if (IsBoundMember(semantic, member, "Tallow.Input", "MousePosition",
+                            "MouseDelta", "MouseX", "MouseY"))
+                        {
+                            category = "determinism";
+                            message = "TAL-NET004: Local mouse polling cannot be replayed; use the tick's networked input.";
+                        }
+                        else if (IsBoundMember(semantic, member, "System.Environment",
+                            "TickCount", "TickCount64"))
+                        {
+                            category = "determinism";
+                            message = "TAL-NET005: Wall-clock or uptime values cannot be replayed; use deterministic tick state.";
                         }
                     }
                     else if (node is InvocationExpressionSyntax invocation)
