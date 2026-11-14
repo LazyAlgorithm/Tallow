@@ -66,6 +66,33 @@ Read this entire checklist, `docs/csharp-gameplay.md`, then inspect **current** 
 - [ ] Confirm compile-success toast clears after 1000 ms, but errors and newer status messages are never cleared by the timer.
 - [ ] Confirm old/native Beef authoring remains explicitly accessible for compatibility but is not required on the C# path.
 
+## C# editor diagnostics: retain native visual warning categories
+
+The C# language service now emits compiler diagnostics and a conservative set of
+Tallow-specific gameplay hints into the **same editor squiggle renderer used by Beef**.
+The optional 7th diagnostic field tags `optimization` and `determinism` without
+changing the original six-field wire format.
+
+- **Compiler error**: red; **ordinary compiler warning**: amber.
+- **Performance hint**: cyan; currently detects proven managed reference/array
+  allocations during networked ticks and repeated `GetComponent` inside loops.
+  Value types such as `Vector3` are not treated as heap allocations.
+- **Networking/determinism hint**: purple; currently detects unseeded
+  `System.Random`, `Random.Shared`, wall-clock time, process clocks, and
+  direct local input access during predicted `Update(TickInput, ...)` or
+  `Simulate(NetInput, ...)`.
+- Warning messages use `TAL-NET...` and `TAL-PERF...` identifiers, are advisory,
+  appear inline with hover explanations and never block Play on their own.
+- C# analysis uses Roslyn source symbols and syntax, so comments and quoted
+  strings do not generate false network or allocation warnings.
+- Native editor style, line squiggle colors, editor theme and legacy Beef
+  warning checks remain untouched. C# lexical colors still use the same
+  editor palette.
+- **Validation pending:** automated Roslyn tests have been added, but CI and
+  interactive Nobara editor verification are still required before considering
+  the C# warning parity finished. Extend checks to deterministic math, ECS job
+  scheduling, physics and managed allocation profiling as those APIs land.
+
 ## November 13 follow-up: autocomplete and warning cleanup
 
 - **C# property completion:** filtered compiler-generated `get_*` and `set_*` method accessors, and event accessors, from Roslyn completion when the public property/event exists. Genuine methods with similar names remain available. Regression tests check `Transform.Position` and an actual `get_Answer()` method. Commits `bd4a496`, `fe219d1`.
