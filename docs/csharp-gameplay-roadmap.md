@@ -36,6 +36,14 @@ Read this entire checklist, `docs/csharp-gameplay.md`, then inspect **current** 
 
 **Important:** The earlier Roslyn `Vector3` operator false errors and autocomplete slowness were reported by user before the latest changes, but the latest editor-side improvements have **not** been confirmed locally. Managed regression tests alone do not establish editor behavior.
 
+## Current stabilization progress (2026-11-13)
+
+- **2026-11-13: Native-editor Linux CI added** to `.github/workflows/csharp-gameplay.yml` (commit `2a19d7e`), using a pinned Beef compiler, native libraries and a full Debug_Linux64 engine/editor/launcher build. **Pending actual CI result**; managed CI alone did not catch previous Beef parser failures.
+- **2026-11-13: Script saves during an ongoing C# compile now queue a fresh build** before Play can activate, commit `2f3cf81`. This is a code-level race fix; requires Nobara integration test for save/edit/save during compile.
+- **2026-11-13: Code-editor hint usability:** removed persistent signature tooltip under caret (`12f5aa3`), added **450 ms stationary symbol-hover delay, immediate dismiss on pointer leave/click/move, non-interactive hint window** in the bundled TextEdit patch (`2ede07b`). Tooltip behavior needs local native build and interactive verification.
+- Existing Linux/Windows managed CI for C# gameplay remains green as of the previous completed runs; native CI's first completed run is the remaining verification gate.
+- **Do not mark P0 complete** until the new native CI build passes and the user tests the full editor on Nobara.
+
 ## P0 — stabilize, compile, test full precompiled native editor
 
 - [ ] Pull current HEAD and run full Nobara Linux **BeefBuild** of Tallow native/editor/launcher. Fix all compiler errors introduced by migration; add CI native editor builds to catch these without depending on the user's testing.
