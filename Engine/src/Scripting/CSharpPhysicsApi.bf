@@ -179,6 +179,101 @@ static class Physics
         return true;
     }
 
+    // CharacterController is a Flecs handle backed by Tallow's real Jolt
+    // virtual character. Movement executes in the existing native tick path.
+    // These calls never expose native Jolt pointers to managed gameplay.
+    [CSharpExpose]
+    public static bool HasCharacterController(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        return obj != null && obj.HasComponent<CharacterController>();
+    }
+
+    [CSharpExpose]
+    public static bool HasCharacterSimulation(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<CharacterController>())
+            return false;
+        return obj.GetComponent<CharacterController>().HasCharacter;
+    }
+
+    [CSharpExpose]
+    public static bool IsCharacterGrounded(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<CharacterController>())
+            return false;
+        return obj.GetComponent<CharacterController>().IsGrounded;
+    }
+
+    [CSharpExpose]
+    public static bool CanCharacterJump(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<CharacterController>())
+            return false;
+        return obj.GetComponent<CharacterController>().CanJump;
+    }
+
+    [CSharpExpose]
+    public static Vector3 GetCharacterVelocity(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<CharacterController>())
+            return .Zero;
+        return obj.GetComponent<CharacterController>().Velocity;
+    }
+
+    [CSharpExpose]
+    public static bool MoveCharacter(uint64 session, uint64 entity,
+        Vector3 velocity, float deltaTime)
+    {
+        if (!FiniteVector(velocity) || !deltaTime.IsFinite || deltaTime <= 0)
+            return false;
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<CharacterController>())
+            return false;
+        let controller = obj.GetComponent<CharacterController>();
+        if (!controller.HasCharacter)
+            return false;
+        controller.Move(velocity, deltaTime);
+        return true;
+    }
+
+    [CSharpExpose]
+    public static bool SimpleMoveCharacter(uint64 session, uint64 entity,
+        Vector3 horizontalVelocity, float deltaTime, float jumpSpeed)
+    {
+        if (!FiniteVector(horizontalVelocity) || !deltaTime.IsFinite || deltaTime <= 0 ||
+            !jumpSpeed.IsFinite || jumpSpeed < 0)
+            return false;
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<CharacterController>())
+            return false;
+        let controller = obj.GetComponent<CharacterController>();
+        if (!controller.HasCharacter)
+            return false;
+        controller.SimpleMove(horizontalVelocity, deltaTime, jumpSpeed);
+        return true;
+    }
+
+    [CSharpExpose]
+    public static bool TeleportCharacter(uint64 session, uint64 entity,
+        Vector3 position, Vector3 velocity)
+    {
+        if (!FiniteVector(position) || !FiniteVector(velocity))
+            return false;
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<CharacterController>())
+            return false;
+        let controller = obj.GetComponent<CharacterController>();
+        if (!controller.HasCharacter)
+            return false;
+        controller.Teleport(position, velocity);
+        return true;
+    }
+
     // Colliders intentionally remain *class* components. Tallow permits
     // several colliders per GameObject, including repeated shape types; each
     // index below addresses one component in its original attachment order.

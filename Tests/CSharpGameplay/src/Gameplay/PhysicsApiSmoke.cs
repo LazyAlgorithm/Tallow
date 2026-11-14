@@ -29,6 +29,14 @@ public sealed class PhysicsApiSmoke : Script
             Vector3 pointVelocity = rigidbody.GetPointVelocity(Transform.Position);
         }
 
+        // A Jolt virtual character is an ECS-backed handle, with native
+        // step, slope, and gravity handling. Move it during networked ticks.
+        if (GetCharacterController() is { HasCharacter: true } character)
+        {
+            bool canJump = character.CanJump;
+            Vector3 actualVelocity = character.Velocity;
+        }
+
         // Jelly, cloth and shell all use the same native SoftBody component.
         if (GetSoftBody() is { } soft && soft.CanApplyForces)
             soft.AddImpulse(Vector3.UnitZ);

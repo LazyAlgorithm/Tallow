@@ -307,3 +307,21 @@ claim automatic replication of dynamically created joints.
   pointer-based vector return values, and effect counts. This is ABI smoke,
   **not** a complete linked Jolt/Beef physics simulation test. Full native
   CI and interactive Nobara verification remain required.
+
+### Native Jolt character controller through C# (2026-11-13)
+
+- The original Flecs `CharacterController` handle and Jolt virtual character
+  can now be accessed through `GameObject.GetCharacterController()` and
+  `Script.GetCharacterController()`. A lightweight managed value handle exposes
+  valid/active state, grounded/jump conditions, velocity, `Move`, `SimpleMove`
+  (native gravity/steps/slopes/jump), and `Teleport` (respawn/network corrections).
+- All eight native operations are explicitly `[CSharpExpose]` and generated
+  from the Beef reflection manifest; native calls validate session, ECS
+  component and active simulation, and reject invalid time/NaN vectors.
+  Movement from `Update(TickInput, deltaTime)` shares the native networked
+  script scheduling, but **this does not establish C# rollback or network
+  authority parity**. Validate those paths separately.
+- A managed gameplay smoke and C++ host callback test cover vector arguments,
+  state reads, and each operation. These tests do **not** simulate real Jolt
+  collision/step/gravity; full linked native and Nobara editor verification
+  remain outstanding.

@@ -36,6 +36,14 @@ method	Tallow.Physics	AddRigidbodyTorque	bool	session:ulong	entity:ulong	torque:
 method	Tallow.Physics	AddRigidbodyForceAtPosition	bool	session:ulong	entity:ulong	force:System.Numerics.Vector3	worldPoint:System.Numerics.Vector3
 method	Tallow.Physics	GetRigidbodyPointVelocity	System.Numerics.Vector3	session:ulong	entity:ulong	worldPoint:System.Numerics.Vector3
 method	Tallow.Physics	SleepRigidbody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	HasCharacterController	bool	session:ulong	entity:ulong
+method	Tallow.Physics	HasCharacterSimulation	bool	session:ulong	entity:ulong
+method	Tallow.Physics	IsCharacterGrounded	bool	session:ulong	entity:ulong
+method	Tallow.Physics	CanCharacterJump	bool	session:ulong	entity:ulong
+method	Tallow.Physics	GetCharacterVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
+method	Tallow.Physics	MoveCharacter	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3	deltaTime:float
+method	Tallow.Physics	SimpleMoveCharacter	bool	session:ulong	entity:ulong	horizontalVelocity:System.Numerics.Vector3	deltaTime:float	jumpSpeed:float
+method	Tallow.Physics	TeleportCharacter	bool	session:ulong	entity:ulong	position:System.Numerics.Vector3	velocity:System.Numerics.Vector3
 method	Tallow.Physics	HasSoftBody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	HasSoftBodySimulation	bool	session:ulong	entity:ulong
 method	Tallow.Physics	CanForceSoftBody	bool	session:ulong	entity:ulong

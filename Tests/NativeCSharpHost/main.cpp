@@ -244,6 +244,55 @@ static int32_t ExposedSleepRigidbody(uint64_t scene, uint64_t entity)
     ++physicsSleeps;
     return 1;
 }
+static int characterMoves = 0;
+static int characterSimpleMoves = 0;
+static int characterTeleports = 0;
+static int32_t ExposedHasCharacterController(uint64_t session, uint64_t entity)
+{
+    return Match(session, entity) ? 1 : 0;
+}
+static int32_t ExposedHasCharacterSimulation(uint64_t session, uint64_t entity)
+{
+    return Match(session, entity) ? 1 : 0;
+}
+static int32_t ExposedIsCharacterGrounded(uint64_t session, uint64_t entity)
+{
+    return Match(session, entity) ? 1 : 0;
+}
+static int32_t ExposedCanCharacterJump(uint64_t session, uint64_t entity)
+{
+    return Match(session, entity) ? 1 : 0;
+}
+static void ExposedGetCharacterVelocity(uint64_t session, uint64_t entity, float* result)
+{
+    if (!Match(session, entity) || !result) return;
+    result[0] = 1; result[1] = 2; result[2] = 3;
+}
+static int32_t ExposedMoveCharacter(uint64_t session, uint64_t entity,
+                                    const float* velocity, float dt)
+{
+    if (!Match(session, entity) || !velocity || dt != 0.02f ||
+        velocity[0] != 4 || velocity[1] != 5 || velocity[2] != 6) return 0;
+    ++characterMoves;
+    return 1;
+}
+static int32_t ExposedSimpleMoveCharacter(uint64_t session, uint64_t entity,
+                                          const float* velocity, float dt, float jump)
+{
+    if (!Match(session, entity) || !velocity || dt != 0.02f || jump != 3 ||
+        velocity[0] != 7 || velocity[1] != 8 || velocity[2] != 9) return 0;
+    ++characterSimpleMoves;
+    return 1;
+}
+static int32_t ExposedTeleportCharacter(uint64_t session, uint64_t entity,
+                                        const float* position, const float* velocity)
+{
+    if (!Match(session, entity) || !position || !velocity ||
+        position[0] != 10 || position[1] != 11 || position[2] != 12 ||
+        velocity[0] != 0 || velocity[1] != 0 || velocity[2] != 0) return 0;
+    ++characterTeleports;
+    return 1;
+}
 static int32_t ExposedAddSoftBodyImpulse(uint64_t scene, uint64_t entity, const float* force) {
     if (!Match(scene, entity) || !force || force[0] != 4 || force[1] != 5 || force[2] != 6)
         return 0;
@@ -543,6 +592,22 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedGetRigidbodyPointVelocity);
     if (name == "CSharpApi_9e37fa4f1b5124ae")
         return reinterpret_cast<void*>(&ExposedSleepRigidbody);
+    if (name == "CSharpApi_f50768d5aeefdfa7")
+        return reinterpret_cast<void*>(&ExposedHasCharacterController);
+    if (name == "CSharpApi_95e7e18553c86618")
+        return reinterpret_cast<void*>(&ExposedHasCharacterSimulation);
+    if (name == "CSharpApi_fa4bf784c6473f0f")
+        return reinterpret_cast<void*>(&ExposedIsCharacterGrounded);
+    if (name == "CSharpApi_75166356b93394e7")
+        return reinterpret_cast<void*>(&ExposedCanCharacterJump);
+    if (name == "CSharpApi_074201f5d4e2eb26")
+        return reinterpret_cast<void*>(&ExposedGetCharacterVelocity);
+    if (name == "CSharpApi_971e0b3938ada737")
+        return reinterpret_cast<void*>(&ExposedMoveCharacter);
+    if (name == "CSharpApi_42b5294178e606fc")
+        return reinterpret_cast<void*>(&ExposedSimpleMoveCharacter);
+    if (name == "CSharpApi_40fbc6bf4a7263a0")
+        return reinterpret_cast<void*>(&ExposedTeleportCharacter);
     if (name == "CSharpApi_a6cee0af24fc98a6")
         return reinterpret_cast<void*>(&ExposedAddSoftBodyImpulse);
     if (name == "CSharpApi_babf3ef4abb796e0")
@@ -783,6 +848,13 @@ int main(int argc, char** argv)
         std::fabs(physicsAngularVelocity[2] - 6.0f) > 0.0001f ||
         std::fabs(physicsSoftPressure - 12.0f) > 0.0001f)
         return Failure("C# native physics ABI marshalling failed");
+
+    const int32_t characterApi = tn_csharp_attach("Gameplay.CharacterControllerBindingSmoke", 1, 1);
+    if (characterApi < 1 ||
+        !tn_csharp_dispatch(characterApi, TN_CSHARP_AWAKE, 0.0f) ||
+        !tn_csharp_detach(characterApi) ||
+        characterMoves != 1 || characterSimpleMoves != 1 || characterTeleports != 1)
+        return Failure("generated native ECS CharacterController movement ABI");
 
     const int32_t contactApi = tn_csharp_attach("Gameplay.PhysicsContactSmoke", 1, 1);
     if (contactApi < 1 || !tn_csharp_dispatch(contactApi, TN_CSHARP_AWAKE, 0.0f))

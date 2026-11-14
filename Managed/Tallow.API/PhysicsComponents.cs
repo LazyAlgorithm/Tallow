@@ -48,6 +48,38 @@ public readonly record struct Rigidbody(GameObject GameObject)
     public bool Sleep() => Physics.SleepRigidbody(GameObject.SceneId, GameObject.Id);
 }
 
+/// <summary>
+/// Session-safe value handle to Tallow's ECS-backed, native Jolt virtual
+/// character. Native physics performs all shape movement and collision.
+/// Use from Update(TickInput, deltaTime) for predicted network controls.
+/// </summary>
+public readonly record struct CharacterController(GameObject GameObject)
+{
+    public bool IsValid =>
+        Physics.HasCharacterController(GameObject.SceneId, GameObject.Id);
+    public bool HasCharacter =>
+        Physics.HasCharacterSimulation(GameObject.SceneId, GameObject.Id);
+    public bool IsGrounded =>
+        Physics.IsCharacterGrounded(GameObject.SceneId, GameObject.Id);
+    public bool CanJump =>
+        Physics.CanCharacterJump(GameObject.SceneId, GameObject.Id);
+    public Vector3 Velocity =>
+        Physics.GetCharacterVelocity(GameObject.SceneId, GameObject.Id);
+
+    /// <summary>Move at the specified velocity, without automatic gravity.</summary>
+    public bool Move(Vector3 velocity, float deltaTime) =>
+        Physics.MoveCharacter(GameObject.SceneId, GameObject.Id, velocity, deltaTime);
+
+    /// <summary>Walk with native gravity, slopes, steps and optional jump.</summary>
+    public bool SimpleMove(Vector3 horizontalVelocity, float deltaTime,
+        float jumpSpeed = 0) =>
+        Physics.SimpleMoveCharacter(GameObject.SceneId, GameObject.Id,
+            horizontalVelocity, deltaTime, jumpSpeed);
+
+    /// <summary>Reset the native character pose and velocity, e.g. on respawn.</summary>
+    public bool Teleport(Vector3 position, Vector3 velocity = default) =>
+        Physics.TeleportCharacter(GameObject.SceneId, GameObject.Id, position, velocity);
+}
 
 public enum ColliderKind { Box, Sphere, Capsule, Mesh, Compound, Convex }
 

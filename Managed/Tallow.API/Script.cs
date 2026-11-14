@@ -89,6 +89,10 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
     public Joint? GetJoint() =>
         Physics.HasJoint(SceneId, Id) ? new Joint(this) : null;
 
+    /// <summary>Retrieve the ECS-backed native Jolt character controller.</summary>
+    public CharacterController? GetCharacterController() =>
+        Physics.HasCharacterController(SceneId, Id) ? new CharacterController(this) : null;
+
     /// <summary>Retrieve the existing native ECS-backed Rigidbody handle.</summary>
     public Rigidbody? GetRigidbody() =>
         Physics.HasRigidbody(SceneId, Id) ? new Rigidbody(this) : null;
@@ -407,6 +411,7 @@ public abstract class Script
     public ColliderHandle? GetCollider(int index = 0) => GameObject.GetCollider(index);
     public int ColliderCount => GameObject.ColliderCount;
     public Joint? GetJoint() => GameObject.GetJoint();
+    public CharacterController? GetCharacterController() => GameObject.GetCharacterController();
     public Rigidbody? GetRigidbody() => GameObject.GetRigidbody();
     public SoftBody? GetSoftBody() => GameObject.GetSoftBody();
 
