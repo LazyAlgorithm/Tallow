@@ -459,6 +459,24 @@ extension EditorApp
 		{
 			ParseManagedDiagnostics(mCheckLog);
 			PublishScriptDiagnostics();
+			if (!mCheckSucceeded)
+			{
+				// Some SDK/assembly-definition failures have no source location,
+				// and therefore never enter the underlined-source diagnostic list.
+				// Always include the actual compiler error in the Console.
+				bool foundError = false;
+				for (let line in mCheckLog.Split('\n'))
+				{
+					if (line.Contains(": error ") || line.Contains("error NETSDK") ||
+						line.Contains("error MSB") || line.Contains("C# gameplay build failed:"))
+					{
+						Log.Error(line);
+						foundError = true;
+					}
+				}
+				if (!foundError)
+					Log.Error(mCheckLog.IsEmpty ? "C# compilation failed. Check the SDK and project configuration." : (StringView)mCheckLog);
+			}
 			mManagedBuildReady = mCheckSucceeded && !mManagedRecheckQueued;
 			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled." : "C# compilation failed. See Console.");
 			mCheckManaged = false;
