@@ -19,6 +19,10 @@ public sealed class GeneratedBindingSmoke : Script
         if (MathF.Abs(Time.TimeScale - 0.5f) > 0.0001f)
             throw new InvalidOperationException("Generated writable TimeScale property failed.");
 
+        float clamped = Mathf.Clamp(2.5f, 0f, 1f);
+        if (MathF.Abs(clamped - 1f) > 0.0001f)
+            throw new InvalidOperationException("Generated Mathf.Clamp native binding failed.");
+
         float average = CSharpBindingFixture.Average(4f, 6f);
         if (MathF.Abs(average - 5f) > 0.0001f)
             throw new InvalidOperationException("Generated [CSharpExpose] binding returned the wrong value.");
