@@ -444,8 +444,11 @@ static class CSharpRuntime
             if (let script = component as CSharpBehaviour)
             {
                 if (script.ManagedInstance == instance)
-                    return script.[Friend]mRegistered &&
-                        script.[Friend]mStarted && script.IsActiveAndEnabled ? 1 : 0;
+                {
+                    let eligible = script.[Friend]mRegistered &&
+                        script.[Friend]mStarted && script.IsActiveAndEnabled;
+                    return eligible ? 1 : 0;
+                }
             }
         }
         return 0;

@@ -30,7 +30,6 @@ static class CSharpComponents
             obj.RemoveComponent(behaviour);
         return instance;
     }
-}
 
     /// Resolve the particular native CSharpBehaviour adapter on this object,
     /// not just the first attached script of its managed type.
@@ -83,3 +82,4 @@ static class CSharpComponents
         script.Enabled = enabled;
         return true;
     }
+}
