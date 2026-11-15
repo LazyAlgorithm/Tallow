@@ -241,6 +241,7 @@ public class ApiChecks : CheckBase
         Check("graph On Update runs every frame with its delta time", graph.frames > 200 && graph.elapsed > 3f);
         Check("graph nodes read from Tallow.API set and read the Transform", graph.position == new Vector3(1, 2, 3));
         Check("graph node read from Tallow.API calls Mathf.Lerp", MathF.Abs(graph.lerped - 2.5f) < 1e-5f);
+        Check("a subgraph (Doubled.tgraph) compiles into the graph and returns its value", graph.doubled == 42f);
         // A graph's custom event is a public method C# can call.
         int before = graph.bumped;
         graph.Custom_Bump();

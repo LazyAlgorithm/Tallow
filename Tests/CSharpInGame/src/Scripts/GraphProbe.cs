@@ -17,6 +17,7 @@ public partial class GraphProbe : Script
 	public Vector3 position = new Vector3(0f, 0f, 0f);
 	public float lerped = 0f;
 	public int bumped = 0;
+	public float doubled = 0f;
 
 	public override void Start()
 	{
@@ -27,6 +28,7 @@ public partial class GraphProbe : Script
 		self = (Scene.Find("Graph") ?? default); // #10
 		{ var t18 = Transform; if (GraphRuntime.IsValid(t18)) t18.Position = new Vector3(1f, 2f, 3f); } // #18
 		lerped = Tallow.Mathf.Lerp(0f, 10f, 0.25f); // #22
+		doubled = Sub_Doubled(21f); // #28
 	}
 
 	public override void Update(TickInput input, float deltaTime)
@@ -39,6 +41,11 @@ public partial class GraphProbe : Script
 	public void Custom_Bump()
 	{
 		bumped = (bumped + 1); // #26
+	}
+
+	float Sub_Doubled(float amount)
+	{
+		return (amount * 2f);
 	}
 
 }

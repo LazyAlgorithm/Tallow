@@ -261,8 +261,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   `.cs`; the Project panel hides it; Convert to Script and View Generated Code use it. Headless:
   `TallowLauncher --graph-compile <graph> <namespace>`. Test: `Tests/CSharpInGame/src/Scripts/GraphProbe.tgraph`
   is compiled again by the in-engine test, compared with the checked-in `GraphProbe.cs`, and run (7 checks).
-  Graph object variables are Inspector reference fields (see below). Not yet: subgraphs in `--graph-compile`, and
-  For Each Data (ECS) nodes.
+  Graph object variables are Inspector reference fields (see below). `--graph-compile` finds the project's
+  subgraphs under `src/` as the editor does (GraphProbe calls `Doubled.tgraph`; a value subgraph that always
+  returns no longer gets an unreachable `return default;`; a graph outside any project no longer crashes the walk
+  up to `/`). Not yet: For Each Data (ECS) nodes.
 - [~] Automatic C# type/method node discovery (stage 2, November 15, 2026): after every build (also a failed one)
   Tallow.Build writes `.tallow-csharp/graph-nodes.tsv` (`GraphNodeCatalog`, from the Roslyn compilation of the
   game and Tallow.API): a node per public property, field and method of Tallow.API's gameplay static classes,

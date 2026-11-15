@@ -172,7 +172,7 @@ static class GraphCSharp
 	}
 
 	/// Compiles a graph file to C# beside it (Name.cs), without the editor: the launcher's --graph-compile switch,
-	/// for tests and build scripts. Subgraphs are not resolved here.
+	/// for tests and build scripts. The project's subgraphs are found as the editor finds them (under src/).
 	public static bool CompileFile(StringView graphPath, StringView namespaceName, String scriptPath, String error)
 	{
 		NodeLibrary.CSharp = true;
@@ -184,10 +184,16 @@ static class GraphCSharp
 			if (File.Exists(scope $"{folder}/project.tallow"))
 			{
 				NodeLibrary.RefreshCSharpScripts(folder);
+				// Subgraph nodes are named by their file under the project's assets (src/), and their methods are
+				// read from there when the graph is compiled.
+				if (Assets.ProjectPath.IsEmpty)
+					Assets.ProjectPath.Set(scope $"{folder}/src");
+				NodeLibrary.RefreshSubgraphs(Assets.ProjectPath);
 				break;
 			}
-			let parent = Path.GetDirectoryPath(folder, .. scope String());
-			if (parent.IsEmpty || parent == folder)
+			let parent = scope String();
+			// No project above it: compile with the built-in nodes only (the root has no parent).
+			if (Path.GetDirectoryPath(folder, parent) case .Err || parent.IsEmpty || parent == folder)
 				break;
 			folder.Set(parent);
 		}

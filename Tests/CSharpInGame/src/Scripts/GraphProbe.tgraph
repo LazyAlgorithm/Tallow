@@ -8,6 +8,7 @@ variable object:GameObject "self" ""
 variable vector "position" "0 0 0"
 variable float "lerped" "0"
 variable int "bumped" "0"
+variable float "doubled" "0"
 node 1 event.start 40 40
 node 2 math.qmul 40 200 "0 90 0" "0 0 1"
 node 3 var.set.vector 300 40 "" "turned" "0 0 0"
@@ -34,6 +35,8 @@ node 23 event.custom 40 1100 "Bump"
 node 24 var.get.int 40 1260 "bumped"
 node 25 math.iadd 300 1260 "0" "1"
 node 26 var.set.int 300 1100 "" "bumped" "0"
+node 27 sub:Scripts/Doubled.tgraph 1600 200 "21"
+node 28 var.set.float 1860 40 "" "doubled" "0"
 link 1 0 3 0
 link 2 0 3 2
 link 3 0 5 0
@@ -58,3 +61,5 @@ link 21 0 22 2
 link 23 0 26 0
 link 24 0 25 0
 link 25 0 26 2
+link 22 0 28 0
+link 27 0 28 2

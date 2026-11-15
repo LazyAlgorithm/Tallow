@@ -1532,8 +1532,15 @@ class NodeGraph
 		NodeLibrary.Identifier(name, method);
 		code.AppendF("\t{} {}({})\n\t{{\n", returnType == .Flow ? "void" : TypeName(returnType, csharp), method, parameters);
 		EmitLocals(code, 2);
-		EmitFrom(entry, 0, code, 2, 0);
-		if (returnType != .Flow)
+		let body = scope String();
+		EmitFrom(entry, 0, body, 2, 0);
+		code.Append(body);
+		// A value for paths that reach no Return node; none needed when the body always ends in one (C# warns
+		// about the unreachable line after it).
+		var last = StringView(body);
+		last.TrimEnd();
+		let lineStart = last.LastIndexOf('\n') + 1;
+		if (returnType != .Flow && !last.Substring(lineStart).StartsWith("\t\treturn "))
 			code.Append("\t\treturn default;\n");
 		code.Append("\t}\n\n");
 	}
