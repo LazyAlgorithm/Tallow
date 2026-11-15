@@ -59,7 +59,9 @@ static class CSharpRuntime
 		CollisionEnter,
 		CollisionExit,
 		TriggerEnter,
-		TriggerExit
+		TriggerExit,
+		CollisionStay,
+		TriggerStay
 	}
 
 	/// A running script's field values, for the editor during Play. allFields false: the Inspector's fields as

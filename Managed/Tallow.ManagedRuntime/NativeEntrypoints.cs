@@ -205,12 +205,15 @@ public static unsafe class NativeEntrypoints
             {
             case 0:
             case 1:
+            case 4:
                 var collision = new Collision(other,
                     new Vector3(value.PointX, value.PointY, value.PointZ),
                     new Vector3(value.NormalX, value.NormalY, value.NormalZ),
                     value.RelativeSpeed);
                 if (value.Kind == 0)
                     script.OnCollisionEnter(collision);
+                else if (value.Kind == 4)
+                    script.OnCollisionStay(collision);
                 else
                     script.OnCollisionExit(collision);
                 break;
@@ -219,6 +222,9 @@ public static unsafe class NativeEntrypoints
                 break;
             case 3:
                 script.OnTriggerExit(other);
+                break;
+            case 5:
+                script.OnTriggerStay(other);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(contact));

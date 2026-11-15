@@ -61,13 +61,17 @@ public class ApiChecks : CheckBase
             LocalState();
         else if (_tick == 43)
             PrefabsAndRpcs();
+        else if (_tick == 145)
+            _staysBeforeRest = Probe("Ball").CollisionStays;
         else if (_tick == 150)
             ContactsWhileResting();
         else if (_tick == 165)
             ContactsAfterLeaving();
         else if (_tick == 260)
-        {
             ContactsAfterLanding();
+        else if (_tick == 300)
+        {
+            GroundAsTrigger();
             Finish();
             Application.Quit();
         }
@@ -101,6 +105,8 @@ public class ApiChecks : CheckBase
         Check("Rpc refuses the wrong number or kind of arguments", badCount && badType);
     }
 
+    private int _staysBeforeRest;
+
     private ContactProbe Probe(string name) =>
         Scene.Find(name)!.Value.GetComponent<ContactProbe>()!;
 
@@ -118,6 +124,10 @@ public class ApiChecks : CheckBase
         Check("OnTriggerEnter on the trigger", zone.TriggerEnters == 1 && zone.LastTrigger.Name == "Ball");
         Check("a trigger is not a collision", zone.CollisionEnters == 0 && ball.CollisionEnters == 1);
         Check("a trigger ignores the static ground", zone.TriggerEnters == 1);
+        Check("OnCollisionStay while settling, with the ground and a normal",
+            ball.CollisionStays > 0 && ball.LastStay.GameObject.Name == "Ground" && ball.LastStay.Normal.Y > 0.9f);
+        Check("no OnCollisionStay while asleep", ball.CollisionStays == _staysBeforeRest);
+        Check("OnTriggerStay on both while falling through", ball.TriggerStays > 3 && zone.TriggerStays > 3);
         Scene.Find("Ball")!.Value.Transform.Position = new Vector3(15, 6, 15);
     }
 
@@ -127,10 +137,30 @@ public class ApiChecks : CheckBase
         ContactProbe zone = Probe("Zone");
         Check("OnCollisionExit after moving away", ball.CollisionExits == 1 && ball.LastExit.GameObject.Name == "Ground");
         Check("OnTriggerExit on both", ball.TriggerExits == 1 && zone.TriggerExits == 1);
+        Check("Stay only between Enter and Exit", !ball.StayOutsideEnterExit && !zone.StayOutsideEnterExit);
     }
 
-    private void ContactsAfterLanding() =>
+    private void ContactsAfterLanding()
+    {
         Check("OnCollisionEnter again after landing elsewhere", Probe("Ball").CollisionEnters == 2);
+        GameObject ground = Scene.Find("Ground")!.Value;
+        ColliderHandle collider = ground.GetCollider()!.Value;
+        Check("a collider is solid by default", !collider.IsTrigger);
+        collider.IsTrigger = true;
+        // Taking the ground away does not wake what sleeps on it.
+        Rigidbody body = Scene.Find("Ball")!.Value.GetRigidbody()!.Value;
+        body.Velocity = new Vector3(0, -0.1f, 0);
+    }
+
+    // Since tick 260 the ground has been a trigger.
+    private void GroundAsTrigger()
+    {
+        GameObject ground = Scene.Find("Ground")!.Value;
+        ContactProbe ball = Probe("Ball");
+        Check("IsTrigger set from C# reads back", ground.GetCollider()!.Value.IsTrigger);
+        Check("a solid made a trigger lets things through", Scene.Find("Ball")!.Value.Transform.Position.Y < -0.5f);
+        Check("and reports them as triggers", ball.TriggerEnters == 2 && ball.LastTrigger.Name == "Ground");
+    }
 
     private void SceneAndFields()
     {
@@ -251,8 +281,25 @@ public class ApiChecks : CheckBase
 public class ContactProbe : Script
 {
     public int CollisionEnters, CollisionExits, TriggerEnters, TriggerExits;
-    public Collision LastCollision, LastExit;
+    public int CollisionStays, TriggerStays;
+    public bool StayOutsideEnterExit;
+    public Collision LastCollision, LastExit, LastStay;
     public GameObject LastTrigger;
+
+    public override void OnCollisionStay(Collision collision)
+    {
+        CollisionStays++;
+        LastStay = collision;
+        if (CollisionEnters == CollisionExits)
+            StayOutsideEnterExit = true;
+    }
+
+    public override void OnTriggerStay(GameObject other)
+    {
+        TriggerStays++;
+        if (TriggerEnters == TriggerExits)
+            StayOutsideEnterExit = true;
+    }
 
     public override void OnCollisionEnter(Collision collision)
     {

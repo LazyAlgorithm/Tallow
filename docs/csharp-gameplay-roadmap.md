@@ -785,8 +785,11 @@ A full conversion also needs these. Ordered roughly by when they block users.
   desync it. A pair that stops reporting only because a body fell asleep stays entered
   while bounds overlap. `PhysicsWorld.ContactEvents = false` turns recording off.
   In-engine test: ball through a trigger onto the ground, asleep, teleported, landing
-  again (12 checks). Not done: OnCollisionStay/OnTriggerStay, character-controller
-  wall hits (Unity's OnControllerColliderHit), setting `isTrigger` from C#.
+  again (12 checks).
+- [x] `OnCollisionStay`/`OnTriggerStay` (every step while touching and awake; the native diff
+  now records every pair's manifold, not only new ones) and `ColliderHandle.IsTrigger`
+  get/set from C# (rebuilds the body; a Rigidbody keeps its state). 9 more in-engine checks.
+- [ ] Character-controller wall hits (an OnControllerColliderHit equivalent).
 - [x] `[Sync]` on **Script** fields: a running script's `[Sync]` fields (public or private;
   int, float, bool, string, enums, vectors) join the object's NetworkSync slots after the
   native ones, are read once per script per snapshot, sent when changed with the engine's

@@ -120,6 +120,26 @@ public readonly record struct ColliderHandle(GameObject GameObject, int Index) :
     }
 
     public bool IsValid => Kind.HasValue;
+
+    /// <summary>
+    /// A trigger stops nothing and reports <see cref="Script.OnTriggerEnter"/>/Stay/Exit instead of collisions.
+    /// Changing it rebuilds the object's physics body (a Rigidbody keeps its position and velocity). It is a local
+    /// change: on a networked object, set it on every machine (for example from an <see cref="RpcAttribute"/>).
+    /// </summary>
+    public bool IsTrigger
+    {
+        get
+        {
+            int value = Physics.GetColliderIsTrigger(GameObject.SceneId, GameObject.Id, Index);
+            return value >= 0 ? value == 1 : throw new InvalidOperationException("The collider is gone.");
+        }
+        set
+        {
+            if (!Physics.SetColliderIsTrigger(GameObject.SceneId, GameObject.Id, Index, value))
+                throw new InvalidOperationException("The collider is gone.");
+        }
+    }
+
     public Vector3 Center => Physics.GetColliderCenter(GameObject.SceneId, GameObject.Id, Index);
     public Vector3? BoxSize => Kind == ColliderKind.Box ?
         Physics.GetColliderBoxSize(GameObject.SceneId, GameObject.Id, Index) : null;

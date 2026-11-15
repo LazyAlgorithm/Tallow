@@ -287,8 +287,6 @@ public:
 		ContactRecord& record = records[index];
 		record.key = PairKey(one, two);
 		record.full = 0;
-		if (reported.find(record.key) != reported.end())
-			return; // Still touching: the pair is all collect needs.
 		record.objectA = one.GetUserData();
 		record.objectB = two.GetUserData();
 		record.sensor = sensor ? 1 : 0;
@@ -1902,7 +1900,7 @@ struct TnContactEvent
 {
 	uint32_t bodyA, bodyB;
 	uint64_t objectA, objectB;
-	int32_t kind;   // 0 began touching, 1 stopped
+	int32_t kind;   // 0 began touching, 1 stopped, 2 still touching (both awake)
 	int32_t sensor; // 1 when one of the two is a trigger
 	float point[3];
 	float normal[3]; // from A towards B
@@ -1970,20 +1968,22 @@ TN_API int32_t tn_contacts_collect(JPH_PhysicsSystem* world)
 	for (size_t i = 0; i < count; i++)
 	{
 		const Touches::ContactRecord& record = touches.records[i];
-		if (!seen.insert(record.key).second || !record.full || touches.reported.count(record.key))
+		if (!record.full || !seen.insert(record.key).second)
 			continue;
+		const bool touching = touches.reported.count(record.key) != 0;
 		TnContactEvent event = {};
 		event.bodyA = (uint32_t)(record.key >> 32);
 		event.bodyB = (uint32_t)record.key;
 		event.objectA = record.objectA;
 		event.objectB = record.objectB;
-		event.kind = 0;
+		event.kind = touching ? 2 : 0;
 		event.sensor = record.sensor;
 		std::memcpy(event.point, record.point, sizeof(event.point));
 		std::memcpy(event.normal, record.normal, sizeof(event.normal));
 		event.speed = record.speed;
 		gContactEvents.push_back(event);
-		touches.reported[record.key] = {record.objectA, record.objectB, record.sensor != 0};
+		if (!touching)
+			touches.reported[record.key] = {record.objectA, record.objectB, record.sensor != 0};
 	}
 	for (auto it = touches.reported.begin(); it != touches.reported.end();)
 	{

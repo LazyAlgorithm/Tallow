@@ -403,11 +403,15 @@ class PhysicsWorld
 					{
 						if (event.kind == 0)
 							component.OnTriggerEnter(other);
+						else if (event.kind == 2)
+							component.OnTriggerStay(other);
 						else
 							component.OnTriggerExit(other);
 					}
 					else if (event.kind == 0)
 						component.OnCollisionEnter(collision);
+					else if (event.kind == 2)
+						component.OnCollisionStay(collision);
 					else
 						component.OnCollisionExit(collision);
 				}

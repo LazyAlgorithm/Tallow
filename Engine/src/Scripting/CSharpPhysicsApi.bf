@@ -365,6 +365,40 @@ static class Physics
         return -1;
     }
 
+    /// -1 if the collider index is invalid, else 0 or 1.
+    [CSharpExpose]
+    public static int32 GetColliderIsTrigger(uint64 session, uint64 entity, int32 index)
+    {
+        let collider = ColliderAt(session, entity, index);
+        return collider == null ? -1 : (collider.isTrigger ? 1 : 0);
+    }
+
+    /// Makes a collider a trigger or solid again. The object's body is rebuilt (keeping a Rigidbody's position and
+    /// velocity), since a body is a sensor or not as a whole.
+    [CSharpExpose]
+    public static bool SetColliderIsTrigger(uint64 session, uint64 entity, int32 index, bool isTrigger)
+    {
+        let collider = ColliderAt(session, entity, index);
+        if (collider == null)
+            return false;
+        if (collider.isTrigger == isTrigger)
+            return true;
+        collider.isTrigger = isTrigger;
+        let obj = collider.GameObject;
+        let rigidbody = obj.GetComponent<Rigidbody>();
+        if (rigidbody.IsValid)
+            rigidbody.RebuildBody();
+        else
+        {
+            for (let component in obj.Components)
+            {
+                if (let other = component as Collider)
+                    other.Refresh();
+            }
+        }
+        return true;
+    }
+
     [CSharpExpose]
     public static Vector3 GetColliderCenter(uint64 session, uint64 entity, int32 index)
     {

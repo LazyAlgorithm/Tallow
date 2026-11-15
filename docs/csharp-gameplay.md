@@ -29,9 +29,11 @@ is complete.
   owns (its player), and an Everyone call then runs on it when the server sends it back.
   Parameters: int, float, bool, string, enums, Vector2/3/4, GameObject. Inside one,
   `RpcSender` is the caller's client id.
-- Physics callbacks: `OnCollisionEnter/Exit(Collision)` (other object, point, normal out of the
-  other object, closing speed) and `OnTriggerEnter/Exit(GameObject)` for colliders with
-  `isTrigger`. Once per pair of objects, after the tick's physics step, on every machine that
+- Physics callbacks: `OnCollisionEnter/Stay/Exit(Collision)` (other object, point, normal out
+  of the other object, closing speed) and `OnTriggerEnter/Stay/Exit(GameObject)` for colliders
+  with `isTrigger` (`GetCollider().IsTrigger` reads or switches it while playing; that is a
+  local change). Stay runs every physics step while the two touch and either is awake. Enter
+  and Exit run once per pair of objects, after the tick's physics step, on every machine that
   simulates the tick (check `Scene.IsServer` before changing authoritative state); never
   during prediction replays.
 - The editor's Add Component > Scripts menu reads the compiled component catalog

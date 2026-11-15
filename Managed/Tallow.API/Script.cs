@@ -974,10 +974,15 @@ public abstract class Script : IComponent
     /// pair of objects, on both. Runs on every machine that simulates the tick: check
     /// <see cref="Scene.IsServer"/> before changing authoritative state.</summary>
     public virtual void OnCollisionEnter(Collision collision) { }
+    /// <summary>Every physics step after <see cref="OnCollisionEnter"/> while the two still touch and either is
+    /// awake (not while both sleep).</summary>
+    public virtual void OnCollisionStay(Collision collision) { }
     /// <summary>The two stopped touching. <c>collision.GameObject</c> is not valid when the other was destroyed.</summary>
     public virtual void OnCollisionExit(Collision collision) { }
     /// <summary>Something entered this object's trigger collider, or this object entered another's trigger.</summary>
     public virtual void OnTriggerEnter(GameObject other) { }
+    /// <summary>Every physics step while <paramref name="other"/> is inside the trigger and awake.</summary>
+    public virtual void OnTriggerStay(GameObject other) { }
     /// <summary>It left the trigger. <paramref name="other"/> is not valid when it was destroyed.</summary>
     public virtual void OnTriggerExit(GameObject other) { }
 }
