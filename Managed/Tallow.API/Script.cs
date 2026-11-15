@@ -846,7 +846,9 @@ public enum TransformChannel
     Up = 10,
     LookAt = 11,
     TransformPoint = 12,
-    InverseTransformPoint = 13
+    InverseTransformPoint = 13,
+    /// <summary>Write only: rotate in local space by X/Y/Z degrees (one call instead of a read and a write).</summary>
+    Rotate = 14
 }
 
 /// <summary>
@@ -949,12 +951,7 @@ public sealed class Transform(GameObject gameObject) : IComponent
     public void Translate(Vector3 delta) => Position += delta;
 
     /// <summary>Rotate in local space, with X/Y/Z angles in degrees.</summary>
-    public void Rotate(Vector3 eulerDegrees) =>
-        LocalRotation = Quaternion.Normalize(LocalRotation *
-            Quaternion.CreateFromYawPitchRoll(
-                eulerDegrees.Y * (MathF.PI / 180),
-                eulerDegrees.X * (MathF.PI / 180),
-                eulerDegrees.Z * (MathF.PI / 180)));
+    public void Rotate(Vector3 eulerDegrees) => WriteVector(TransformChannel.Rotate, eulerDegrees);
 
     /// <summary>Face a world-space point using Tallow's native LookAt.</summary>
     public void LookAt(Vector3 target) => WriteVector(TransformChannel.LookAt, target);

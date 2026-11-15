@@ -972,6 +972,7 @@ static class CSharpRuntime
 		case 6: transform.EulerAngles = v;
 		case 7: transform.LocalEulerAngles = v;
 		case 11: transform.LookAt(v);
+		case 14: transform.Rotate(v);
 		default: return 0;
 		}
 		return 1;
