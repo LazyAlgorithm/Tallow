@@ -82,9 +82,25 @@ public class ApiChecks : CheckBase
             GroundAsTrigger();
             HooksAndSaves();
             AsyncChecks();
+            PackageChecks();
             Finish();
             Application.Quit();
         }
+    }
+
+    private void PackageChecks()
+    {
+        string result = "";
+        try
+        {
+            result = InGame.Json.JsonText.RoundTrip();
+        }
+        catch (Exception exception)
+        {
+            result = exception.GetType().Name + ": " + exception.Message;
+        }
+        Check("a NuGet package from an assembly definition loads and runs (" + result + ")",
+            result == "{\"Player\":\"Ada\",\"Points\":42}|Ada|42");
     }
 
     private void AsyncChecks()

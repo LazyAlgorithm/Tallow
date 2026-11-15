@@ -129,6 +129,10 @@ def stage_csharp(engine, project, staging, config, windows, bundle):
             shutil.copy2(file, target / file.name)
     shutil.copytree(project / 'build' / 'csharp' / config, staging / 'Managed' / 'Game',
                     ignore=shutil.ignore_patterns('*.pdb' if config == 'Release' else '__none__', '*.deps.json'))
+    # NuGet packages' licences (Tallow.Build writes them): beside the game, where players see them.
+    notices = staging / 'Managed' / 'Game' / 'THIRD-PARTY-NOTICES.txt'
+    if notices.exists():
+        shutil.move(notices, staging / 'THIRD-PARTY-NOTICES.txt')
     if not bundle:
         print(f'.NET not bundled: players need the .NET {DOTNET_MAJOR} runtime installed.')
         return

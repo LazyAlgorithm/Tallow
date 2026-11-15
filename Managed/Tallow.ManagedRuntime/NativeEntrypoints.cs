@@ -341,7 +341,18 @@ public static unsafe class NativeEntrypoints
             if (name.Name is null)
                 return null;
             string candidate = Path.Combine(root, name.Name, name.Name + ".dll");
-            return File.Exists(candidate) ? LoadCopy(candidate) : null;
+            if (File.Exists(candidate))
+                return LoadCopy(candidate);
+            // A NuGet package's assembly: copied beside the game assemblies that use it (Tallow.Game's first,
+            // which every assembly definition's packages reach).
+            foreach (string folder in new[] { Path.Combine(root, "Tallow.Game") }.Concat(
+                Directory.Exists(root) ? Directory.EnumerateDirectories(root).Order(StringComparer.Ordinal) : []))
+            {
+                string library = Path.Combine(folder, name.Name + ".dll");
+                if (File.Exists(library))
+                    return LoadCopy(library);
+            }
+            return null;
         }
 
         /// From a copy in memory, with its symbols: a file the runtime maps stays locked on Windows until the

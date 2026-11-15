@@ -380,4 +380,5 @@ jobs:
       - name: Share C# [Sync] fields between a real server and client
         run: python3 tools/test_csharp_network.py
       - name: Build a C# game for release (precompiled player, bundled .NET) and run it on its own
-        run: python3 tools/test_csharp_export.py
+        # The player is built here with the Beef compiler the editor was built with.
+        run: BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild" python3 tools/test_csharp_export.py

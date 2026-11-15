@@ -50,7 +50,30 @@ internal static class Program
             .Where(File.Exists).Select(path => (MetadataReference)MetadataReference.CreateFromFile(path)).ToArray();
     });
 
-    private static IEnumerable<MetadataReference> References() => CachedReferences.Value;
+    private static IEnumerable<MetadataReference> References() => CachedReferences.Value.Concat(PackageReferences());
+
+    // NuGet packages the game's assembly definitions use: listed by Tallow.Build after each build in
+    // .tallow-csharp/package-references.tsv. Reread when that file changes.
+    private static string sPackageList = "";
+    private static DateTime sPackageListTime;
+    private static MetadataReference[] sPackageReferences = [];
+
+    internal static void UsePackageList(string project) =>
+        sPackageList = Path.Combine(project, ".tallow-csharp", "package-references.tsv");
+
+    private static MetadataReference[] PackageReferences()
+    {
+        if (sPackageList.Length == 0 || !File.Exists(sPackageList))
+            return sPackageReferences = [];
+        DateTime time = File.GetLastWriteTimeUtc(sPackageList);
+        if (time == sPackageListTime)
+            return sPackageReferences;
+        sPackageListTime = time;
+        sPackageReferences = File.ReadAllLines(sPackageList)
+            .Where(line => line.Length > 0 && File.Exists(line))
+            .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path)).ToArray();
+        return sPackageReferences;
+    }
 
     // A stable tree for implicit imports: don't invalidate Roslyn on each query.
     private static readonly CSharpParseOptions CSharp15 = new(LanguageVersion.CSharp15);
@@ -519,6 +542,7 @@ internal static class Program
     /// </summary>
     private static LanguageRequest FromEditor(string project, string engineRoot, string folder)
     {
+        UsePackageList(project);
         string sourceDirectory = Path.GetFullPath(Path.Combine(project, "src"));
         string apiDirectory = Path.GetFullPath(Path.Combine(engineRoot, "Managed", "Tallow.API"));
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);

@@ -17,7 +17,14 @@ namespace Tallow.ManagedBuild;
 /// </summary>
 internal static class Program
 {
-    private sealed record Definition(string Name, string Folder, List<string> References, string RootNamespace);
+    private sealed record Definition(string Name, string Folder, List<string> References, string RootNamespace,
+        List<PackageRef> Packages);
+
+    /// <summary>A NuGet package an assembly definition uses, at one exact version.</summary>
+    private sealed record PackageRef(string Id, string Version);
+
+    private static readonly Regex PackageId = new(@"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$", RegexOptions.CultureInvariant);
+    private static readonly Regex PackageVersion = new(@"^\d+(\.\d+){1,3}(-[0-9A-Za-z.-]+)?$", RegexOptions.CultureInvariant);
 
     private static readonly Regex AssemblyName = new(
         @"^[A-Za-z_][A-Za-z0-9_.]*$", RegexOptions.CultureInvariant);
@@ -112,7 +119,31 @@ internal static class Program
                     rootNamespace = text;
                 }
             }
-            definitions.Add(name, new Definition(name, folder, references, rootNamespace));
+            // NuGet packages: [{ "id": "Newtonsoft.Json", "version": "13.0.4" }], exact versions only, so every
+            // build of the game gets the same code.
+            var packages = new List<PackageRef>();
+            if (root.TryGetProperty("packages", out JsonElement packageList))
+            {
+                if (packageList.ValueKind != JsonValueKind.Array)
+                    throw new InvalidOperationException($"Invalid packages in: {path}");
+                foreach (JsonElement package in packageList.EnumerateArray())
+                {
+                    if (package.ValueKind != JsonValueKind.Object ||
+                        !package.TryGetProperty("id", out JsonElement id) || id.ValueKind != JsonValueKind.String ||
+                        !package.TryGetProperty("version", out JsonElement version) || version.ValueKind != JsonValueKind.String)
+                        throw new InvalidOperationException($"A package in {path} needs an \"id\" and a \"version\".");
+                    string idText = id.GetString()!, versionText = version.GetString()!;
+                    if (!PackageId.IsMatch(idText))
+                        throw new InvalidOperationException($"Invalid package id '{idText}' in: {path}");
+                    if (!PackageVersion.IsMatch(versionText))
+                        throw new InvalidOperationException(
+                            $"Package {idText} in {path} needs one exact version (like 13.0.4), not '{versionText}'.");
+                    if (packages.Any(existing => string.Equals(existing.Id, idText, StringComparison.OrdinalIgnoreCase)))
+                        throw new InvalidOperationException($"Package {idText} is listed twice in: {path}");
+                    packages.Add(new PackageRef(idText, versionText));
+                }
+            }
+            definitions.Add(name, new Definition(name, folder, references, rootNamespace, packages));
         }
 
         foreach (Definition definition in definitions.Values)
@@ -150,7 +181,7 @@ internal static class Program
 
     private static XDocument CreateProject(
         string name, string rootNamespace, IEnumerable<string> files, IEnumerable<string> references,
-        string api, string output, string binRoot)
+        string api, string output, string binRoot, IReadOnlyList<PackageRef> packages)
     {
         var properties = new XElement("PropertyGroup",
             new XElement("TargetFramework", "net11.0"),
@@ -164,7 +195,9 @@ internal static class Program
             new XElement("Deterministic", "true"),
             new XElement("AppendTargetFrameworkToOutputPath", "false"),
             new XElement("AppendRuntimeIdentifierToOutputPath", "false"),
-            new XElement("OutputPath", output + Path.DirectorySeparatorChar));
+            new XElement("OutputPath", output + Path.DirectorySeparatorChar),
+            // A NuGet package's assemblies go beside the game's, where the runtime looks for them.
+            new XElement("CopyLocalLockFileAssemblies", "true"));
         properties.AddFirst(new XElement("TallowBinRoot",
             new XAttribute("Condition", "'$(TallowBinRoot)' == ''"),
             binRoot + Path.DirectorySeparatorChar));
@@ -179,6 +212,9 @@ internal static class Program
             new XElement("ProjectReference", new XAttribute("Include", api)));
         foreach (string reference in references)
             refs.Add(new XElement("ProjectReference", new XAttribute("Include", reference)));
+        foreach (PackageRef package in packages)
+            refs.Add(new XElement("PackageReference", new XAttribute("Include", package.Id),
+                new XAttribute("Version", "[" + package.Version + "]")));
         return new XDocument(new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"),
             properties, includes, refs));
     }
@@ -555,8 +591,9 @@ internal static class Program
             string outputFolder = "$(TallowBinRoot)" + name;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             string rootNamespace = name == "Tallow.Game" ? name : definitions[name].RootNamespace;
+            IReadOnlyList<PackageRef> packages = name == "Tallow.Game" ? [] : definitions[name].Packages;
             var csproj = CreateProject(name, rootNamespace, filesByAssembly[name].Order(), refPaths, api,
-                outputFolder, output);
+                outputFolder, output, packages);
             // MSBuild treats project file timestamps as inputs. Saving an
             // identical .csproj on every no-op build invalidates otherwise
             // reusable compilation state, including referenced asmdefs.
@@ -847,16 +884,6 @@ internal static class Program
         // Keep no-op catalog timestamps stable; the editor only needs a
         // metadata refresh when the actual field/type schema has changed.
         // Changed output is still published via an atomic rename.
-        static void Publish(string path, IEnumerable<string> rows)
-        {
-            string updated = string.Join(Environment.NewLine, rows);
-            if (updated.Length != 0)
-                updated += Environment.NewLine;
-            if (File.Exists(path) && File.ReadAllText(path) == updated)
-                return;
-            File.WriteAllText(path + ".tmp", updated);
-            File.Move(path + ".tmp", path, overwrite: true);
-        }
         Publish(catalog, components);
         Publish(Path.Combine(project, ".tallow-csharp", "component-sources.tsv"), sourceRows);
         Publish(Path.Combine(project, ".tallow-csharp", "former-names.tsv"), formerRows);
@@ -864,6 +891,106 @@ internal static class Program
         Publish(Path.Combine(project, ".tallow-csharp", "fields-aot.tsv"), aotFieldRows);
         Publish(Path.Combine(project, ".tallow-csharp", "ecs-data.tsv"), ecsDataRows);
         Console.WriteLine($"Discovered {components.Count} managed gameplay components and {fieldRows.Count} editable fields.");
+    }
+
+    /// <summary>
+    /// After a build: the NuGet packages the game uses (those its assembly definitions list and what they need),
+    /// from each project's restore. Writes .tallow-csharp/third-party.tsv (id, version, licence, project URL) and
+    /// package-references.tsv (the assemblies the editor's code service references), and for a game build
+    /// THIRD-PARTY-NOTICES.txt beside the assemblies. Package code runs with the game's full trust: Tallow's
+    /// script rules (no unsafe code) are not applied to it.
+    /// </summary>
+    private static void WritePackageLists(string project, string? outputRoot)
+    {
+        string generated = Path.Combine(project, ".tallow-csharp", "generated");
+        var packages = new SortedDictionary<string, (string Version, string Licence, string Url)>(StringComparer.OrdinalIgnoreCase);
+        var references = new SortedSet<string>(StringComparer.Ordinal);
+        if (Directory.Exists(generated))
+        {
+            foreach (string assets in Directory.EnumerateFiles(generated, "project.assets.json", SearchOption.AllDirectories))
+            {
+                using JsonDocument json = JsonDocument.Parse(File.ReadAllText(assets));
+                JsonElement root = json.RootElement;
+                var folders = new List<string>();
+                if (root.TryGetProperty("packageFolders", out JsonElement packageFolders))
+                    foreach (JsonProperty folder in packageFolders.EnumerateObject())
+                        folders.Add(folder.Name);
+                if (!root.TryGetProperty("libraries", out JsonElement libraries))
+                    continue;
+                foreach (JsonProperty library in libraries.EnumerateObject())
+                {
+                    if (!library.Value.TryGetProperty("type", out JsonElement type) || type.GetString() != "package")
+                        continue;
+                    string[] parts = library.Name.Split('/');
+                    if (parts.Length != 2 || !library.Value.TryGetProperty("path", out JsonElement relative))
+                        continue;
+                    string? home = folders.Select(folder => Path.Combine(folder, relative.GetString()!))
+                        .FirstOrDefault(Directory.Exists);
+                    if (home == null)
+                        continue;
+                    (string licence, string url) = ReadNuspec(home, parts[0]);
+                    packages[parts[0]] = (parts[1], licence, url);
+                    if (root.TryGetProperty("targets", out JsonElement targets))
+                    {
+                        foreach (JsonProperty target in targets.EnumerateObject())
+                        {
+                            if (!target.Value.TryGetProperty(library.Name, out JsonElement entry) ||
+                                !entry.TryGetProperty("compile", out JsonElement compile))
+                                continue;
+                            foreach (JsonProperty file in compile.EnumerateObject())
+                                if (file.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                                    references.Add(Path.GetFullPath(Path.Combine(home, file.Name)));
+                        }
+                    }
+                }
+            }
+        }
+        Publish(Path.Combine(project, ".tallow-csharp", "third-party.tsv"),
+            new SortedSet<string>(packages.Select(item =>
+                $"{item.Key}\t{item.Value.Version}\t{item.Value.Licence}\t{item.Value.Url}"), StringComparer.Ordinal));
+        Publish(Path.Combine(project, ".tallow-csharp", "package-references.tsv"), references);
+        if (packages.Count == 0)
+            return;
+        Console.WriteLine("Third-party packages (they run with the game's full trust; Tallow's script rules do not apply to them): " +
+            string.Join(", ", packages.Select(item => $"{item.Key} {item.Value.Version} ({item.Value.Licence})")));
+        if (outputRoot != null)
+        {
+            var notices = new StringBuilder("This game includes these third-party packages:\n\n");
+            foreach ((string id, (string version, string licence, string url)) in packages)
+                notices.Append($"{id} {version}\n  Licence: {licence}\n" + (url.Length > 0 ? $"  {url}\n" : "") + "\n");
+            File.WriteAllText(Path.Combine(outputRoot, "THIRD-PARTY-NOTICES.txt"), notices.ToString());
+        }
+    }
+
+    /// <summary>Writes rows (one a line) unless the file already holds exactly them, so its time only changes
+    /// with its content.</summary>
+    private static void Publish(string path, IEnumerable<string> rows)
+    {
+        string updated = string.Join(Environment.NewLine, rows);
+        if (updated.Length != 0)
+            updated += Environment.NewLine;
+        if (File.Exists(path) && File.ReadAllText(path) == updated)
+            return;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path + ".tmp", updated);
+        File.Move(path + ".tmp", path, overwrite: true);
+    }
+
+    /// <summary>A package's licence (an SPDX expression, a licence file's name, or its licence URL) and
+    /// project URL, from the .nuspec in its folder.</summary>
+    private static (string Licence, string Url) ReadNuspec(string folder, string id)
+    {
+        string? nuspec = Directory.EnumerateFiles(folder, "*.nuspec").FirstOrDefault();
+        if (nuspec == null)
+            return ("unknown", "");
+        XElement metadata = XDocument.Load(nuspec).Root?.Elements().FirstOrDefault(e => e.Name.LocalName == "metadata")
+            ?? new XElement("metadata");
+        string Value(string name) =>
+            metadata.Elements().FirstOrDefault(e => e.Name.LocalName == name)?.Value.Trim() ?? "";
+        string licence = Value("license");
+        if (licence.Length == 0)
+            licence = Value("licenseUrl");
+        return (licence.Length > 0 ? licence : "unknown", Value("projectUrl"));
     }
 
     public static int Main(string[] args)
@@ -895,6 +1022,8 @@ internal static class Program
             if (build == null)
                 throw new InvalidOperationException("Could not start the .NET SDK.");
             build.WaitForExit();
+            if (build.ExitCode == 0)
+                WritePackageLists(project, outputRoot);
             if (build.ExitCode == 0 && outputRoot == null)
                 WriteComponentCatalog(project, engine);
             return build.ExitCode;

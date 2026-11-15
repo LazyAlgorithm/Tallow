@@ -23,6 +23,10 @@ is complete.
 - `[Sync]` on a script field (public or private; numbers, bool, string, enums, vectors) shares
   the server's value with every client of a session when it changes, and with players who
   join later. Change it on the server; a client's own changes are overwritten.
+- NuGet packages: list them in a folder's `.tasmdef`, one exact version each:
+  `"packages": [{ "id": "Newtonsoft.Json", "version": "13.0.4" }]`. Scripts in that folder (and
+  the main game assembly) can use them; built games ship them with `THIRD-PARTY-NOTICES.txt`.
+  Package code is not checked by Tallow, so use packages you trust.
 - `await` works on the game thread: `await NextFrame();`, `await Wait(2f);` (game time),
   `await Task.Delay(ms, Destroyed)`. Code after an await runs once a frame after LateUpdate
   and may use the engine. Waits end when the script is destroyed; pass `Destroyed` to other

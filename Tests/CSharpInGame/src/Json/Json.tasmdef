@@ -1,0 +1,4 @@
+{
+  "name": "InGame.Json",
+  "packages": [ { "id": "Newtonsoft.Json", "version": "13.0.4" } ]
+}

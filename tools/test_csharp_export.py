@@ -73,7 +73,11 @@ def main() -> int:
             print(f"The built C# game failed (exit {run.returncode}, {passed} passed, {len(failed)} failed, "
                   f"bundled runtime {'used' if bundled else 'NOT used'}).", file=sys.stderr)
             return 1
-        print(f"The built C# game passed {passed} checks on its bundled .NET runtime.")
+        notices = output / "THIRD-PARTY-NOTICES.txt"
+        if not notices.exists() or "Newtonsoft.Json 13.0.4" not in notices.read_text():
+            print("The build lacks THIRD-PARTY-NOTICES.txt naming its NuGet package.", file=sys.stderr)
+            return 1
+        print(f"The built C# game passed {passed} checks on its bundled .NET runtime, with its third-party notices.")
         return 0
     finally:
         if args.keep:

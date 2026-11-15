@@ -889,8 +889,19 @@ A full conversion also needs these. Ordered roughly by when they block users.
   no longer need Python. Still Python: player export (`tools/build_player.py`), engine
   packaging (`tools/package_engine.py`), the web export preview server (`python3 -m
   http.server`), and the legacy Beef language service.
-- [ ] Third-party managed libraries/NuGet references in `.tasmdef`, with trust, licence
-  and trimming/AOT rules.
+- [~] Third-party managed libraries/NuGet references in `.tasmdef`:
+  `"packages": [{ "id": "Newtonsoft.Json", "version": "13.0.4" }]`, exact versions only
+  (`PackageReference` with `[v]`). Their assemblies are copied beside the game's and the
+  runtime resolves them there (editor and built games). After each build Tallow.Build
+  writes `.tallow-csharp/third-party.tsv` (id, version, licence, URL from the .nuspec,
+  transitive packages included) and `package-references.tsv`, which the editor's code
+  service references; game builds ship `THIRD-PARTY-NOTICES.txt` at the game's root.
+  Trust: packages run with the game's full trust; Tallow's script rules (no unsafe code)
+  are not applied to them, and the build says so. Tests: `Tests/CSharpInGame/src/Json`
+  (Newtonsoft round trip in the player, 106 checks), the export test checks the notices.
+  Not yet: native libraries inside packages (`runtimes/*/native`), an Inspector UI for the
+  list (edit the .tasmdef text; the page keeps the key), a code-service test with a
+  package, and trimming/AOT rules (with the NativeAOT work).
 - [x] Profiler: C# scripts are timed per class ("Game.Player.Update()", Scripts) instead of
   all sharing "CSharpBehaviour.Update()"; "C# await continuations" times the async pump;
   Memory counters "C# allocated this frame", "C# heap", "C# garbage collections this frame"
