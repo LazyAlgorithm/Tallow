@@ -798,9 +798,16 @@ A full conversion also needs these. Ordered roughly by when they block users.
   event, draw calls, save/load round trip, 95 checks), network (client event to the
   server and back, 12 checks). OnDrawGizmos and OnValidate have no automated test yet
   (they need editor Play).
-- [ ] Main-thread async: a tick-driven `SynchronizationContext` so `await` and timers
-  resume on the game thread, cancelled on Stop, scene unload and hot reload (or they
-  root the collectible ALC). Decide whether coroutines are offered as well.
+- [x] Main-thread async: `GameSynchronizationContext` (Tallow.API `GameThread.cs`) is set on
+  the game thread when a game loads and pumped once a frame after LateUpdate
+  (`Frame.CSharpAsync`, host entry `tn_csharp_pump`). Script gains `NextFrame()`,
+  `Wait(seconds)` on game time, and a `Destroyed` token that cancels both when the script
+  goes (object destroyed, scene unloaded, Play stopped). Unloading the game closes the
+  context and cancels game-time waits, so nothing from the old assembly runs again;
+  Task.Delay without the token still holds the old context until its timer fires.
+  `async void` exceptions are reported with their line; cancellations are not.
+  Decided: no coroutines; `async` covers them. Test: `AsyncProbe`/`AsyncDoomed` in
+  `Tests/CSharpInGame` (frame counts, thread, cancellation, exception report; 101 checks).
 - [x] Collision/trigger callbacks (engine-wide; there were none, for Beef either):
   `OnCollisionEnter/Exit(Collision)` and `OnTriggerEnter/Exit(GameObject)` on Beef
   `Component` and C# `Script`; `Collider.isTrigger` makes a Jolt sensor (kinematic when

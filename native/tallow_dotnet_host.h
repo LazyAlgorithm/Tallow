@@ -116,6 +116,8 @@ int32_t tn_csharp_read_fields(int32_t script_instance, int32_t mode, char* buffe
 int32_t tn_csharp_invoke_rpc(int32_t script_instance, const char* method, const char* arguments, int32_t target, int32_t sender);
 // Calls OnNetworkEvent(name, value) (Component.SendNetworkEvent arriving on this machine); 1 on success.
 int32_t tn_csharp_network_event(int32_t script_instance, const char* name, float value);
+// Once a frame after LateUpdate: finishes due game-time waits and runs await continuations; 1 on success.
+int32_t tn_csharp_pump(float delta_time);
 int32_t tn_csharp_detach(int32_t script_instance);
 void tn_csharp_shutdown(void);
 const char* tn_csharp_error(void);

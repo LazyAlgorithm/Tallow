@@ -65,6 +65,8 @@ public class ApiChecks : CheckBase
             LocalState();
         else if (_tick == 43)
             PrefabsAndRpcs();
+        else if (_tick == 44)
+            Scene.Find("AsyncDoomed")?.Destroy();
         else if (_tick == 145)
             _staysBeforeRest = Probe("Ball").CollisionStays;
         else if (_tick == 150)
@@ -79,9 +81,21 @@ public class ApiChecks : CheckBase
         {
             GroundAsTrigger();
             HooksAndSaves();
+            AsyncChecks();
             Finish();
             Application.Quit();
         }
+    }
+
+    private void AsyncChecks()
+    {
+        AsyncProbe? probe = Scene.Find("Async")?.GetComponent<AsyncProbe>();
+        Check("await NextFrame, Wait and Task.Delay all finish", probe is { Step: 4 });
+        Check("await NextFrame carries on in the next frame", probe?.FramesForNextFrame == 1);
+        // 0.5 s at the fixed 60 Hz step of this test: 30 frames.
+        Check("await Wait(0.5) waits half a second of game time", probe?.FramesForWait is >= 29 and <= 31);
+        Check("code after every await runs on the game thread", probe is { StayedOnGameThread: true });
+        Check("destroying a script cancels what it awaits", AsyncDoomed.Cancelled && !AsyncDoomed.RanOn);
     }
 
     private void HooksAndSaves()
@@ -376,6 +390,78 @@ public class ContactProbe : Script
     }
 
     public override void OnTriggerExit(GameObject other) => TriggerExits++;
+}
+
+/// await on the game thread: NextFrame, Wait (game time) and Task.Delay (real time, back on the game thread).
+public class AsyncProbe : Script
+{
+    public int Step;
+    public bool StayedOnGameThread = true;
+    public int FramesForNextFrame = -1, FramesForWait = -1;
+    private int _thread, _frames;
+
+    public override void OnLocalUpdate() => _frames++;
+
+    public override void Start()
+    {
+        _thread = Environment.CurrentManagedThreadId;
+        Run();
+        Boom();
+    }
+
+    private void Note()
+    {
+        if (Environment.CurrentManagedThreadId != _thread || SynchronizationContext.Current == null)
+            StayedOnGameThread = false;
+    }
+
+    private async void Run()
+    {
+        Step = 1;
+        await NextFrame(); // From Start: after the next frame's LateUpdate.
+        // From here (after this frame's LateUpdate) the next frame is one Update away.
+        int before = _frames;
+        await NextFrame();
+        FramesForNextFrame = _frames - before;
+        Note();
+        Step = 2;
+        before = _frames;
+        await Wait(0.5f);
+        FramesForWait = _frames - before;
+        Note();
+        Step = 3;
+        await Task.Delay(15, Destroyed);
+        Note();
+        Step = 4;
+    }
+
+    private async void Boom()
+    {
+        await NextFrame();
+        throw new InvalidOperationException("thrown on purpose by async code");
+    }
+}
+
+/// Destroyed while it waits: the wait ends as cancelled and nothing after it runs.
+public class AsyncDoomed : Script
+{
+    public static bool Cancelled, RanOn;
+
+    public override void Start() => Forever();
+
+    private async void Forever()
+    {
+        try
+        {
+            await Wait(1000f);
+            RanOn = true;
+        }
+        catch (OperationCanceledException)
+        {
+            Cancelled = true;
+            throw; // Ending by cancellation is normal: it is not reported.
+        }
+    }
 }
 
 /// OnFrame, OnNetworkEvent and the save hooks.

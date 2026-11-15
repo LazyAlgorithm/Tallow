@@ -23,6 +23,10 @@ is complete.
 - `[Sync]` on a script field (public or private; numbers, bool, string, enums, vectors) shares
   the server's value with every client of a session when it changes, and with players who
   join later. Change it on the server; a client's own changes are overwritten.
+- `await` works on the game thread: `await NextFrame();`, `await Wait(2f);` (game time),
+  `await Task.Delay(ms, Destroyed)`. Code after an await runs once a frame after LateUpdate
+  and may use the engine. Waits end when the script is destroyed; pass `Destroyed` to other
+  async calls. Avoid `ConfigureAwait(false)`: the engine must not be used off the game thread.
 - More callbacks: `OnFrame()`, `OnValidate()` (a field changed in the Inspector during Play),
   `OnDrawGizmos(bool selected)` (draw with `Gizmos.Line/Sphere/Box`; `DebugDraw` draws in the
   game too), `OnNetworkEvent(name, value)` with `SendNetworkEvent(name, value)`, and the save

@@ -180,6 +180,21 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    /// Once a frame after LateUpdate: game-time waits and await continuations (GameThread).
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int Pump(float deltaTime)
+    {
+        try
+        {
+            GameThread.Pump(deltaTime);
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int NetworkEvent(int instance, byte* name, float value)
     {
@@ -382,6 +397,7 @@ public static unsafe class NativeEntrypoints
             string root = Directory.GetParent(Path.GetDirectoryName(path)!)!.FullName;
             GameAssemblyContext context = new(root);
             sGameContext = context;
+            GameThread.Start();
             Assembly game = context.LoadCopy(path);
             foreach (AssemblyName dependency in game.GetReferencedAssemblies())
             {
@@ -984,6 +1000,8 @@ public static unsafe class NativeEntrypoints
             sRegistry = null;
             sTypes.Clear();
             sFormerNames.Clear();
+            // Continuations from the unloaded game must not run (they would also keep its context alive).
+            GameThread.Stop();
             GameAssemblyContext? previous = sGameContext;
             sGameContext = null;
             previous?.Unload();
@@ -1017,6 +1035,8 @@ public static unsafe class NativeEntrypoints
             sRegistry = null;
             sTypes.Clear();
             sFormerNames.Clear();
+            // Continuations from the unloaded game must not run (they would also keep its context alive).
+            GameThread.Stop();
             GameAssemblyContext? previous = sGameContext;
             sGameContext = null;
             previous?.Unload();

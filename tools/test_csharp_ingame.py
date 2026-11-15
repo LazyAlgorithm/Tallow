@@ -65,7 +65,7 @@ def main() -> int:
         passed = sum("INGAME PASS" in line for line in lines)
         # Thrower throws on purpose: allowed, but it must be logged once, naming the file and line it threw on.
         expected = "thrown on purpose by Thrower"
-        failed = [line for line in lines if "INGAME FAIL" in line or ("[Tallow C#]" in line and expected not in line)]
+        failed = [line for line in lines if "INGAME FAIL" in line or ("[Tallow C#]" in line and "thrown on purpose" not in line)]
         thrown = [line for line in output.splitlines() if line.startswith("[error] System.InvalidOperationException: " + expected)]
         source = (project / "src/Scripts/ApiChecks.cs").read_text().splitlines()
         throw_line = next(i + 1 for i, text in enumerate(source) if expected in text and "throw" in text)
@@ -74,6 +74,14 @@ def main() -> int:
             print("INGAME PASS a script exception is logged once with the game file and line it was thrown on")
         else:
             failed.append(f"INGAME FAIL script exception report: {thrown or 'not logged'}")
+            print(failed[-1])
+        boom = [line for line in output.splitlines()
+                if line.startswith("[error] System.InvalidOperationException: thrown on purpose by async code (in async code")]
+        if len(boom) == 1 and "AsyncProbe" in boom[0] and "ApiChecks.cs:" in boom[0]:
+            passed += 1
+            print("INGAME PASS an exception after an await is logged with its script's line")
+        else:
+            failed.append(f"INGAME FAIL async exception report: {boom or 'not logged'}")
             print(failed[-1])
         if run.returncode != 0 or failed or not any("INGAME DONE" in line for line in lines):
             if not lines:

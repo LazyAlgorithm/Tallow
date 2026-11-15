@@ -980,7 +980,38 @@ public abstract class Script : IComponent
         NativeInstanceId = instanceId;
     }
 
-    internal void InvalidateNative() => NativeInstanceId = 0;
+    internal void InvalidateNative()
+    {
+        NativeInstanceId = 0;
+        _destroyed?.Cancel();
+    }
+
+    private CancellationTokenSource? _destroyed;
+
+    /// <summary>Cancelled when this script is destroyed (its object destroyed, the scene unloaded, Play
+    /// stopped). <see cref="Wait"/> and <see cref="NextFrame"/> use it already; pass it to Task.Delay and other
+    /// async work so it ends with the script.</summary>
+    public CancellationToken Destroyed
+    {
+        get
+        {
+            if (_destroyed == null)
+            {
+                _destroyed = new CancellationTokenSource();
+                if (NativeInstanceId == 0)
+                    _destroyed.Cancel();
+            }
+            return _destroyed.Token;
+        }
+    }
+
+    /// <summary><c>await NextFrame();</c> carries on next frame, after LateUpdate. Ends (cancelled) if the
+    /// script is destroyed first.</summary>
+    protected Task NextFrame() => GameThread.Delay(0f, Destroyed);
+
+    /// <summary><c>await Wait(2f);</c> carries on after that many seconds of game time (slowed and paused with
+    /// it), after LateUpdate. Ends (cancelled) if the script is destroyed first. Task.Delay waits real time.</summary>
+    protected Task Wait(float seconds) => GameThread.Delay(seconds, Destroyed);
 
     public virtual void Awake() { }
     public virtual void OnEnable() { }

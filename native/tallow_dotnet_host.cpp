@@ -56,6 +56,7 @@ using contact_fn = int32_t (*)(int32_t, const tn_csharp_contact*);
 using read_fields_fn = int32_t (*)(int32_t, int32_t, char*, int32_t);
 using invoke_rpc_fn = int32_t (*)(int32_t, const char*, const char*, int32_t, int32_t);
 using network_event_fn = int32_t (*)(int32_t, const char*, float);
+using pump_fn = int32_t (*)(float);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
 using shutdown_fn = int32_t (*)();
@@ -78,6 +79,7 @@ contact_fn contact_event = nullptr;
 read_fields_fn read_fields = nullptr;
 invoke_rpc_fn invoke_rpc = nullptr;
 network_event_fn network_event = nullptr;
+pump_fn pump = nullptr;
 detach_fn detach = nullptr;
 last_error_fn last_error = nullptr;
 shutdown_fn shutdown_runtime = nullptr;
@@ -412,6 +414,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "ReadFields", read_fields) ||
             !find_entry(assembly.c_str(), "InvokeRpc", invoke_rpc) ||
             !find_entry(assembly.c_str(), "NetworkEvent", network_event) ||
+            !find_entry(assembly.c_str(), "Pump", pump) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
             !find_entry(assembly.c_str(), "GetLastError", last_error) ||
             !find_entry(assembly.c_str(), "Shutdown", shutdown_runtime))
@@ -580,6 +583,16 @@ int32_t tn_csharp_network_event(int32_t script_instance, const char* name, float
     return result > 0;
 }
 
+int32_t tn_csharp_pump(float delta_time)
+{
+    if (!started || !pump)
+        return 0;
+    const int32_t result = pump(delta_time);
+    if (result < 0)
+        managed_error("Running C# async code");
+    return result > 0;
+}
+
 int32_t tn_csharp_update_input_batch(
     const tn_csharp_tick_batch_item* items, int32_t count)
 {
@@ -622,6 +635,7 @@ void tn_csharp_shutdown(void)
     read_fields = nullptr;
     invoke_rpc = nullptr;
     network_event = nullptr;
+    pump = nullptr;
     detach = nullptr;
     last_error = nullptr;
     shutdown_runtime = nullptr;

@@ -76,3 +76,13 @@ transform 50 0 50 0 0 0 1 1 1 1
 component Tallow.CSharpBehaviour enabled 1
 field scriptType "InGame.HooksProbe"
 field fieldOverrides ""
+object 14 parent 0 active 1 name "Async"
+transform 60 0 60 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.AsyncProbe"
+field fieldOverrides ""
+object 15 parent 0 active 1 name "AsyncDoomed"
+transform 70 0 70 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.AsyncDoomed"
+field fieldOverrides ""

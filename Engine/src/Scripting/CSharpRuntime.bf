@@ -286,6 +286,16 @@ static class CSharpRuntime
 	[CLink] static extern void tn_csharp_shutdown();
 	[CLink] static extern char8* tn_csharp_error();
 	[CLink] static extern int32 tn_csharp_network_event(int32 instance, char8* name, float value);
+	[CLink] static extern int32 tn_csharp_pump(float deltaTime);
+
+	/// Once a frame while the scene plays, after LateUpdate: C# game-time waits and await continuations.
+	public static void Pump(Scene scene, float deltaTime)
+	{
+		if (!Ready || scene != sScene)
+			return;
+		if (tn_csharp_pump(deltaTime) <= 0)
+			ReportFailure("async code");
+	}
 
 	static Scene sScene;
 	static uint64 sSession;

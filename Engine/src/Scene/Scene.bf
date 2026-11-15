@@ -1542,6 +1542,12 @@ class Scene
 					NavigationAgent.FindQueuedPaths();
 			});
 		World.AddStep(mFramePipeline, "Frame.LateUpdate", .PostUpdate, new => RunLateUpdates);
+		// C# code after an await (and Wait / NextFrame) carries on here, once scripts have run for the frame.
+		World.AddStep(mFramePipeline, "Frame.CSharpAsync", .PostUpdate, new () =>
+			{
+				if (mPlaying)
+					CSharpRuntime.Pump(this, Time.DeltaTime);
+			});
 		// Viewmodels follow the camera once scripts have moved it in LateUpdate (ViewmodelPose.LateUpdate did).
 		World.AddStep(mFramePipeline, "Frame.Viewmodels", .PostUpdate, new () => ViewmodelPose.FrameAll(this));
 		// Inverse kinematics goes on top of whatever clips and scripts made of the pose this frame, and rigged models
