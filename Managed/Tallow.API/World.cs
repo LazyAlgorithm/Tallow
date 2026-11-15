@@ -31,6 +31,7 @@ public static partial class GUI
 }
 
 /// <summary>A destructible voxel object: carving cuts it, and pieces cut free break away.</summary>
+[NativeComponent("Tallow.VoxelObject")]
 public readonly record struct VoxelObject(GameObject GameObject) : IComponent
 {
     public bool IsValid => CSharpWorld.HasVoxelObject(GameObject.SceneId, GameObject.Id);
@@ -41,6 +42,7 @@ public readonly record struct VoxelObject(GameObject GameObject) : IComponent
 }
 
 /// <summary>Voxel terrain: dig and build with <see cref="ModifySphere"/>. <see cref="Find"/> gives the scene's.</summary>
+[NativeComponent("Tallow.VoxelTerrain")]
 public readonly record struct VoxelTerrain(GameObject GameObject) : IComponent
 {
     public static VoxelTerrain? Find(Scene scene)
@@ -61,6 +63,7 @@ public readonly record struct VoxelTerrain(GameObject GameObject) : IComponent
 }
 
 /// <summary>The built-in networked character motor (WASD, jump, look). Read where it is looking.</summary>
+[NativeComponent("Tallow.CharacterMotor")]
 public readonly record struct CharacterMotor(GameObject GameObject) : IComponent
 {
     public bool IsValid => CSharpWorld.HasCharacterMotor(GameObject.SceneId, GameObject.Id);

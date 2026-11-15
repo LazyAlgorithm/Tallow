@@ -636,10 +636,54 @@ public static unsafe class NativeEntrypoints
             field.IsDefined(typeof(HideInInspectorAttribute), inherit: true);
     }
 
+    /// <summary>A field the Inspector sets by dragging an object in: GameObject, Transform, a built-in
+    /// component handle or a C# script (each also as nullable). Written "#id" (the object's id), "" for none.</summary>
+    private static bool IsReferenceField(Type type)
+    {
+        Type inner = Nullable.GetUnderlyingType(type) ?? type;
+        return inner == typeof(GameObject) || inner == typeof(Transform) || typeof(Script).IsAssignableFrom(inner) ||
+            (inner.IsValueType && typeof(IComponent).IsAssignableFrom(inner));
+    }
+
+    // ParseInspectorValue's answer for a reference that is empty or names a missing object or component.
+    private static readonly object ClearReference = new();
+
+    private static object ParseReference(Type type, string encoded, ulong session)
+    {
+        if (encoded.Length == 0 || encoded == "#0")
+            return ClearReference;
+        if (encoded[0] != '#' || !ulong.TryParse(encoded.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out ulong id))
+            throw new FormatException("Inspector object references are written #id.");
+        var target = new GameObject(session, id);
+        if (!target.IsValid)
+            return ClearReference;
+        Type inner = Nullable.GetUnderlyingType(type) ?? type;
+        if (inner == typeof(GameObject))
+            return target;
+        if (inner == typeof(Transform))
+            return target.Transform;
+        // A component on that object, as GetComponent<T> finds it (a script, or a built-in handle).
+        MethodInfo tryGet = typeof(GameObject).GetMethod(nameof(GameObject.TryGetComponent))!.MakeGenericMethod(inner);
+        object?[] arguments = [null];
+        return tryGet.Invoke(target, arguments) is true && arguments[0] is { } component ? component : ClearReference;
+    }
+
+    private static string FormatReference(object? value) => value switch
+    {
+        null => "",
+        GameObject g => g == default ? "" : "#" + g.Id.ToString(CultureInfo.InvariantCulture),
+        Transform t => FormatReference(t.GameObject),
+        Script s => FormatReference(s.GameObject),
+        IComponent c => c.GetType().GetProperty("GameObject")?.GetValue(c) is GameObject g ? FormatReference(g) : "",
+        _ => ""
+    };
+
     // The inverse of ParseInspectorValue.
     private static string? FormatInspectorValue(Type type, object? value)
     {
         static string Number(float x) => x.ToString(CultureInfo.InvariantCulture);
+        if (IsReferenceField(type))
+            return FormatReference(value);
         return value switch
         {
             float x => Number(x),
@@ -702,8 +746,10 @@ public static unsafe class NativeEntrypoints
         return name + "<" + string.Join(", ", type.GetGenericArguments().Select(FriendlyTypeName)) + ">";
     }
 
-    private static object? ParseInspectorValue(Type type, string encoded)
+    private static object? ParseInspectorValue(Type type, string encoded, ulong session)
     {
+        if (IsReferenceField(type))
+            return ParseReference(type, encoded, session);
         if (type == typeof(float))
         {
             float number = float.Parse(encoded, CultureInfo.InvariantCulture);
@@ -794,12 +840,19 @@ public static unsafe class NativeEntrypoints
                     !field.IsDefined(typeof(SyncAttribute), inherit: true) &&
                     !field.IsDefined(typeof(SavedAttribute), inherit: true))
                     continue;
-                object? parsed = ParseInspectorValue(field.FieldType, value);
+                object? parsed = ParseInspectorValue(field.FieldType, value, script.GameObject.SceneId);
                 if (parsed != null)
                     updates.Add((field, parsed));
             }
             foreach ((FieldInfo field, object parsed) in updates)
-                field.SetValue(script, parsed);
+            {
+                // A cleared reference: null, or the empty handle for a non-nullable struct.
+                object? assigned = parsed == ClearReference
+                    ? (field.FieldType.IsValueType && Nullable.GetUnderlyingType(field.FieldType) is null
+                        ? Activator.CreateInstance(field.FieldType) : null)
+                    : parsed;
+                field.SetValue(script, assigned);
+            }
             return 1;
         }
         catch (Exception exception)

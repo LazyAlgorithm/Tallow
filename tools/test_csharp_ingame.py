@@ -101,6 +101,18 @@ def main() -> int:
             else:
                 failed.append("INGAME FAIL " + label)
                 print(failed[-1])
+        # The Inspector's field catalog: reference fields are kind "object" with what they take in column 8.
+        catalog = {tuple(row.split("\t")[:2]): row.split("\t") for row in
+                   (project / ".tallow-csharp/fields.tsv").read_text(encoding="utf-8").splitlines() if row}
+        for field, wanted in [("Target", "GameObject"), ("Lamp", "native:Tallow.Light"),
+                              ("Spot", "Transform"), ("Late", "script:InGame.LateHelper")]:
+            row = catalog.get(("InGame.RefProbe", field), [])
+            if len(row) >= 8 and row[2] == "object" and row[7] == wanted:
+                passed += 1
+                print(f"INGAME PASS the field catalog lists RefProbe.{field} as an object field taking {wanted}")
+            else:
+                failed.append(f"INGAME FAIL catalog row for RefProbe.{field}: {row}")
+                print(failed[-1])
         boom = [line for line in output.splitlines()
                 if line.startswith("[error] System.InvalidOperationException: thrown on purpose by async code (in async code")]
         if len(boom) == 1 and "AsyncProbe" in boom[0] and "ApiChecks.cs:" in boom[0]:

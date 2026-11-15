@@ -1085,7 +1085,12 @@ class Scene
 					*slot.field = null;
 			}
 			for (let entry in mReferenceLists)
+			{
+				// Left with its object in this batch: its fields may be gone already (the sweep drops the entry).
+				if (!entry.owner.[Friend]mRegistered)
+					continue;
 				FieldLists.ClearReferences(entry.field, scope (value) => OwnerOf(value) == gameObject);
+			}
 		}
 		gameObject.[Friend]mGoing = false;
 		let transform = gameObject.Transform;
@@ -1177,6 +1182,12 @@ class Scene
 				if (slot.owner == component)
 					mReferenceSlots.RemoveAtFast(i);
 			}
+		}
+		// Its list fields go with it too (even while clearing: nothing may read them once it is freed).
+		for (int i = mReferenceLists.Count - 1; i >= 0; i--)
+		{
+			if (mReferenceLists[i].owner == component)
+				mReferenceLists.RemoveAtFast(i);
 		}
 		component.OnUnregister();
 		component.[Friend]mRegistered = false;

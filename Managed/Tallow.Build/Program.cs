@@ -34,6 +34,29 @@ internal static class Program
     private static readonly Regex SerializedIdName = new(
         @"^[A-Za-z0-9_.-]{1,64}$", RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// For an Inspector reference field: "GameObject", "Transform", "native:Tallow.Light" (a built-in component handle,
+    /// named by its [NativeComponent] attribute) or "script:Namespace.Class" (a C# script); null for anything else.
+    /// </summary>
+    private static string? ReferenceDescriptor(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+        string name = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "");
+        if (name is "Tallow.GameObject" or "Tallow.Transform")
+            return name["Tallow.".Length..];
+        AttributeData? native = type.GetAttributes().FirstOrDefault(a =>
+            a.AttributeClass?.ToDisplayString() == "Tallow.NativeComponentAttribute");
+        if (native is { ConstructorArguments.Length: 1 } && native.ConstructorArguments[0].Value is string nativeName)
+            return "native:" + nativeName;
+        for (ITypeSymbol? baseType = type.BaseType; baseType != null; baseType = baseType.BaseType)
+        {
+            if (baseType.ToDisplayString() == "Tallow.Script")
+                return type is INamedTypeSymbol { IsAbstract: false, IsGenericType: false } ? "script:" + name : null;
+        }
+        return null;
+    }
+
     private static string StableFieldId(string componentName, string identity)
     {
         byte[] value = SHA256.HashData(Encoding.UTF8.GetBytes(
@@ -717,7 +740,11 @@ internal static class Program
                         field.IsImplicitlyDeclared ||
                         fieldAttributes.Contains("System.NonSerializedAttribute"))
                         continue;
-                    string? kind = field.Type.TypeKind == TypeKind.Enum ? "enum" :
+                    // Object references: a GameObject, its Transform, a built-in component handle or a C# script,
+                    // set in the Inspector by dragging an object in (column 8 says which).
+                    string? referenceType = ReferenceDescriptor(field.Type);
+                    string? kind = referenceType != null ? "object" :
+                        field.Type.TypeKind == TypeKind.Enum ? "enum" :
                         field.Type.SpecialType switch
                     {
                         SpecialType.System_Single => "float",
@@ -737,7 +764,7 @@ internal static class Program
 
                     string defaultValue = kind switch
                     {
-                        "bool" => "false", "string" => "", "Vector2" => "0,0",
+                        "bool" => "false", "string" => "", "object" => "", "Vector2" => "0,0",
                         "Vector3" => "0,0,0", "Vector4" => "0,0,0,0", _ => "0"
                     };
                     if (field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
@@ -811,6 +838,8 @@ internal static class Program
                             .Select(member => member.Name));
                         row += "\t" + names;
                     }
+                    else if (referenceType != null)
+                        row += "\t" + referenceType;
                     fieldRows.Add(row);
 
                     AttributeData? identityAttribute = field.GetAttributes().FirstOrDefault(a =>

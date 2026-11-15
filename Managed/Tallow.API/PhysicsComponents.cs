@@ -6,6 +6,7 @@ namespace Tallow;
 /// Value handle to the existing native ECS-backed Rigidbody. No managed Jolt
 /// simulation or native pointer is stored. Scene sessions are checked in Beef.
 /// </summary>
+[NativeComponent("Tallow.Rigidbody")]
 public readonly partial record struct Rigidbody(GameObject GameObject) : IComponent
 {
     public bool IsValid => Physics.HasRigidbody(GameObject.SceneId, GameObject.Id);
@@ -53,6 +54,7 @@ public readonly partial record struct Rigidbody(GameObject GameObject) : ICompon
 /// character. Native physics performs all shape movement and collision.
 /// Use from Update(TickInput, deltaTime) for predicted network controls.
 /// </summary>
+[NativeComponent("Tallow.CharacterController")]
 public readonly partial record struct CharacterController(GameObject GameObject) : IComponent
 {
     public bool IsValid =>

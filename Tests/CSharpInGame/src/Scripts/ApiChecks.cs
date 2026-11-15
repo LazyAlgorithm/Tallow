@@ -86,6 +86,7 @@ public class ApiChecks : CheckBase
             AnimatorChecks();
             UIChecks();
             NativeComponentChecks();
+            ReferenceFieldChecks();
             PackageChecks();
             Finish();
             Application.Quit();
@@ -117,6 +118,32 @@ public class ApiChecks : CheckBase
         Check("code after every await runs on the game thread", probe is { StayedOnGameThread: true });
         Check("destroying a script cancels what it awaits", AsyncDoomed.Cancelled && !AsyncDoomed.RanOn);
     }
+
+    private void ReferenceFieldChecks()
+    {
+        RefProbe? probe = Scene.Find("RefProbe")?.GetComponent<RefProbe>();
+        Check("a GameObject reference field is set from the scene", probe?.Target == Scene.Find("AnimRoot"));
+        Check("a built-in component reference field (Light)", probe is { Lamp.IsValid: true } && probe.Lamp.Intensity == 2);
+        Check("a Transform reference field", probe?.Spot?.GameObject == Scene.Find("Animated"));
+        Check("a reference to a missing object stays null", probe is { Gone: null });
+        Check("a script reference to a later object is set, and that script awake, by Awake",
+            probe is { LateSetInMyAwake: true, LateWasAwakeInMyAwake: true } && probe.Late?.GameObject == Scene.Find("LateHelper"));
+        GameObject? first = Scene.InstantiatePrefab("Prefabs/RefPair.tprefab");
+        GameObject? second = Scene.InstantiatePrefab("Prefabs/RefPair.tprefab");
+        PairProbe? a = first?.GetComponent<PairProbe>(), b = second?.GetComponent<PairProbe>();
+        Check("each prefab copy's reference points at its own child",
+            a != null && b != null && a.Partner == first!.Value.GetChild(0) && b.Partner == second!.Value.GetChild(0) && a.Partner != b.Partner);
+        first?.Destroy();
+        second?.Destroy();
+        foreach ((Type type, string native) in NativeTypes())
+            Check($"{type.Name} is marked [NativeComponent(\"{native}\")]",
+                type.GetCustomAttributes(typeof(NativeComponentAttribute), false) is [NativeComponentAttribute { TypeName: var named }] && named == native);
+    }
+
+    // Tallow.API's table of built-in handles (internal), read by reflection for the check above.
+    private static IEnumerable<(Type, string)> NativeTypes() =>
+        (IEnumerable<(Type, string)>)typeof(NativeComponentAttribute).Assembly.GetType("Tallow.NativeComponentTypes")!
+            .GetProperty("All")!.GetValue(null)!;
 
     private void NativeComponentChecks()
     {
@@ -684,4 +711,35 @@ public class MenuProbe : Script
     }
 
     public void Named(string id) => NamedId = id;
+}
+
+/// Reference fields set in the scene file (as the Inspector saves them): objects, a built-in component, a Transform,
+/// a C# script on an object that comes later in the scene, and a reference to an object that is not there.
+public class RefProbe : Script
+{
+    public GameObject Target;
+    public Light Lamp;
+    public Transform? Spot;
+    public LateHelper? Late;
+    public GameObject? Gone;
+    public bool LateWasAwakeInMyAwake;
+    public bool LateSetInMyAwake;
+
+    public override void Awake()
+    {
+        LateSetInMyAwake = Late != null;
+        LateWasAwakeInMyAwake = Late is { WasAwake: true };
+    }
+}
+
+public class LateHelper : Script
+{
+    public bool WasAwake;
+    public override void Awake() => WasAwake = true;
+}
+
+/// In Prefabs/RefPair.tprefab: points at its own child, whichever copy it is.
+public class PairProbe : Script
+{
+    public GameObject Partner;
 }

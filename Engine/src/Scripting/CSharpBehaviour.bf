@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 
 namespace Tallow;
 
@@ -16,6 +17,11 @@ class CSharpBehaviour : Component
 	/// Edited field values: one trusted field name + numeric value per line.
 	/// SharedString is handled by Tallow's existing scene/prefab serializer.
 	[HideInInspector] public SharedString fieldOverrides;
+	/// Object reference fields (a GameObject, Transform, built-in component or C# script, set by dragging an object
+	/// into the Inspector): the field names, separated by ';', and the objects, in the same order. A list of
+	/// objects is what the scene and prefab serializer keeps pointing at the right objects when ids change.
+	[HideInInspector] public SharedString referenceNames;
+	[HideInInspector] public List<GameObject> referenceTargets = new .() ~ delete _;
 
 	int32 mInstance = -1;
 
@@ -98,6 +104,94 @@ class CSharpBehaviour : Component
 		return CSharpRuntime.ApplyFields(mInstance, scope $"{name}\t{value}\n");
 	}
 
+	/// The object a reference field points at, or null.
+	public GameObject ReferenceTarget(StringView name)
+	{
+		int index = 0;
+		for (let entry in referenceNames.View.Split(';', .RemoveEmptyEntries))
+		{
+			if (entry == name)
+				return (index < referenceTargets.Count && referenceTargets[index] != null && !referenceTargets[index].IsDestroyed) ?
+					referenceTargets[index] : null;
+			index++;
+		}
+		return null;
+	}
+
+	/// Points a reference field at an object (null clears it). While the script runs, the field changes at once.
+	public bool SetReference(StringView name, GameObject target)
+	{
+		if (name.IsEmpty || name.Contains(';') || name.Contains('\t') || name.Contains('\n'))
+			return false;
+		let names = scope List<StringView>();
+		for (let entry in referenceNames.View.Split(';', .RemoveEmptyEntries))
+			names.Add(entry);
+		while (referenceTargets.Count < names.Count)
+			referenceTargets.Add(null);
+		int index = names.IndexOf(name);
+		if (target == null)
+		{
+			if (index < 0)
+				return true;
+			names.RemoveAt(index);
+			referenceTargets.RemoveAt(index);
+		}
+		else if (index < 0)
+		{
+			names.Add(name);
+			referenceTargets.Add(target);
+		}
+		else
+			referenceTargets[index] = target;
+		let joined = scope String();
+		for (let entry in names)
+		{
+			if (!joined.IsEmpty)
+				joined.Append(';');
+			joined.Append(entry);
+		}
+		referenceNames.Set(joined);
+		if (IsLoaded)
+			ApplyReference(name, target);
+		return true;
+	}
+
+	/// Gives one reference field its object ("#id", or "" for none). A field that is no longer a reference (the
+	/// script changed) is left alone.
+	void ApplyReference(StringView name, GameObject target)
+	{
+		let line = scope String()..AppendF("{}\t", name);
+		if (target != null && !target.IsDestroyed && target.Scene == GameObject.Scene)
+			line.AppendF("#{}", target.Id);
+		line.Append('\n');
+		if (!CSharpRuntime.ApplyFields(mInstance, line))
+			Log.Warning(scope $"'{GameObject.Name}': the C# field {name} could not be pointed at {(target != null ? (StringView)target.Name : "nothing")}.");
+	}
+
+	/// Gives every reference field its object. The C# scripts on the objects referred to are attached first (their
+	/// Awake runs early if it has not yet), so a reference to another script is set by this script's Awake.
+	void ApplyReferences()
+	{
+		int index = 0;
+		for (let name in referenceNames.View.Split(';', .RemoveEmptyEntries))
+		{
+			let target = index < referenceTargets.Count ? referenceTargets[index] : null;
+			index++;
+			if (target != null && !target.IsDestroyed && target != GameObject && target.ActiveInHierarchy)
+			{
+				for (let component in target.Components)
+				{
+					if (let script = component as CSharpBehaviour)
+					{
+						if (!script.IsLoaded)
+							script.Awake();
+					}
+				}
+			}
+			ApplyReference(name, target);
+		}
+	}
+
 	/// Read an Inspector override, falling back to the source's declared initializer.
 	public bool ReadEditorField(StringView name, String output)
 	{
@@ -147,7 +241,8 @@ class CSharpBehaviour : Component
 
 	public override void Awake()
 	{
-		if (scriptType.IsEmpty || !CSharpRuntime.Ready)
+		// Already attached: another script's references brought this one up early (ApplyReferences).
+		if (scriptType.IsEmpty || !CSharpRuntime.Ready || IsLoaded)
 			return;
 		mInstance = CSharpRuntime.Attach(scriptType, GameObject);
 		if (mInstance > 0)
@@ -160,6 +255,9 @@ class CSharpBehaviour : Component
 				ReleaseManaged();
 				return;
 			}
+			ApplyReferences();
+			if (!IsLoaded)
+				return;
 			// Found by a [FormerlyNamed] name: use the new one from now on (saved with the scene).
 			let registered = scope String();
 			if (CSharpRuntime.ReadScriptName(mInstance, registered) && !registered.IsEmpty && registered != scriptType)

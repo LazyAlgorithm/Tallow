@@ -102,6 +102,16 @@ public readonly record struct NativeComponent(GameObject GameObject, string Type
     }
 }
 
+/// <summary>
+/// Names the built-in (engine) component a C# handle stands for. The build reads it to let the Inspector offer
+/// objects that have one for a field of the handle's type.
+/// </summary>
+[AttributeUsage(AttributeTargets.Struct | AttributeTargets.Class, Inherited = false)]
+public sealed class NativeComponentAttribute(string typeName) : Attribute
+{
+    public string TypeName { get; } = typeName;
+}
+
 /// <summary>Built-in component handles that <see cref="GameObject.AddComponent{T}"/> can add, by native type name.</summary>
 internal static class NativeComponentTypes
 {
@@ -120,6 +130,9 @@ internal static class NativeComponentTypes
         [typeof(CharacterMotor)] = ("Tallow.CharacterMotor", o => new CharacterMotor(o)),
     };
 
+    /// <summary>Every handle type with its native name (the in-engine tests check them against their attributes).</summary>
+    public static IEnumerable<(Type Type, string Native)> All => Known.Select(entry => (entry.Key, entry.Value.Native));
+
     public static bool TryGet(Type type, out string native, out Func<GameObject, IComponent> make)
     {
         if (Known.TryGetValue(type, out var entry))
@@ -135,6 +148,7 @@ internal static class NativeComponentTypes
 public enum LightType { Directional, Point, Spot }
 
 /// <summary>A light: its type, color, intensity and range.</summary>
+[NativeComponent("Tallow.Light")]
 public readonly record struct Light(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Light");
@@ -148,6 +162,7 @@ public readonly record struct Light(GameObject GameObject) : IComponent
 }
 
 /// <summary>Draws a mesh ("builtin:cube", "builtin:sphere_smooth" or a model path) with a simple material.</summary>
+[NativeComponent("Tallow.MeshRenderer")]
 public readonly record struct MeshRenderer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.MeshRenderer");
@@ -163,6 +178,7 @@ public readonly record struct MeshRenderer(GameObject GameObject) : IComponent
     public bool CastShadows { get => Data.GetBool("castShadows"); set => Data.Set("castShadows", value); }
 }
 
+[NativeComponent("Tallow.SphereCollider")]
 public readonly record struct SphereCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SphereCollider");
@@ -171,6 +187,7 @@ public readonly record struct SphereCollider(GameObject GameObject) : IComponent
     public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
 }
 
+[NativeComponent("Tallow.BoxCollider")]
 public readonly record struct BoxCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.BoxCollider");
@@ -180,6 +197,7 @@ public readonly record struct BoxCollider(GameObject GameObject) : IComponent
 }
 
 /// <summary>Walks its object along the navigation mesh to a destination.</summary>
+[NativeComponent("Tallow.NavigationAgent")]
 public readonly record struct NavigationAgent(GameObject GameObject) : IComponent
 {
     public bool IsValid => CSharpNavigation.HasAgent(GameObject.SceneId, GameObject.Id);

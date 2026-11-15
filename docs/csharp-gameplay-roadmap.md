@@ -261,8 +261,8 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   `.cs`; the Project panel hides it; Convert to Script and View Generated Code use it. Headless:
   `TallowLauncher --graph-compile <graph> <namespace>`. Test: `Tests/CSharpInGame/src/Scripts/GraphProbe.tgraph`
   is compiled again by the in-engine test, compared with the checked-in `GraphProbe.cs`, and run (7 checks).
-  Not yet: graph object variables are not Inspector-editable in C# (the C# Inspector has no reference fields),
-  subgraphs in `--graph-compile`, and For Each Data (ECS) nodes.
+  Graph object variables are Inspector reference fields (see below). Not yet: subgraphs in `--graph-compile`, and
+  For Each Data (ECS) nodes.
 - [~] Automatic C# type/method node discovery (stage 2, November 15, 2026): after every build (also a failed one)
   Tallow.Build writes `.tallow-csharp/graph-nodes.tsv` (`GraphNodeCatalog`, from the Roslyn compilation of the
   game and Tallow.API): a node per public property, field and method of Tallow.API's gameplay static classes,
@@ -762,7 +762,16 @@ claim automatic replication of dynamically created joints.
 - Runtime changes to hidden fields are **not** automatically written back
   to authoring scene files during Play, matching the existing editor
   Play/Stop model. Automatic serialization of arbitrary managed object
-  graphs or private reference fields remains future work.
+  graphs and of collections remains future work.
+- [x] Inspector object reference fields (November 15, 2026): public `GameObject`, `Transform`, built-in component
+  handle (marked `[NativeComponent("Tallow.Light")]` etc.) and C# script fields are catalog kind `object`, with
+  column 8 `GameObject` / `Transform` / `native:<type>` / `script:<class>`. The Inspector draws an object slot (drag
+  from the Hierarchy, or **...** lists the objects that fit). `CSharpBehaviour` keeps them in `referenceNames` +
+  `referenceTargets` (a `List<GameObject>`), so the serializer remaps ids for scenes and prefab copies; they are
+  applied as `#id` after `fieldOverrides`, and referenced C# scripts are attached first. Engine fix found on the
+  way (the same code is on `ecs`): a component removed on its own left its `mReferenceLists` entries, and
+  `DestroyTree` read lists of components that had gone with their object — a crash once a common component had a
+  list of references. Tests: 9 in-engine checks + 4 catalog rows, 7 editor checks in `--script-files-test`.
 
 ### C# syntax highlighting and nullable completion (November 14, 2026)
 

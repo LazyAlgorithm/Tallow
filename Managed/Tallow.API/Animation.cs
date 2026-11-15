@@ -8,6 +8,7 @@ namespace Tallow;
 /// with GetComponent&lt;Animator&gt;() or GetComponentInChildren&lt;Animator&gt;(); on an object without an
 /// Animator it does nothing and reads zero.
 /// </summary>
+[NativeComponent("Tallow.Animator")]
 public readonly record struct Animator(GameObject GameObject) : IComponent
 {
     public bool IsValid => CSharpAnimation.HasAnimator(GameObject.SceneId, GameObject.Id);

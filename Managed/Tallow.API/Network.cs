@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Tallow;
 
 /// <summary>
-/// Network prefabs. A prefab file whose root has a Network Identity is shared: <see cref="Scene.Spawn"/> (or
+/// Network prefabs. A prefab file whose root has a Network Identity is shared: <c>Scene.Spawn</c> (or
 /// <see cref="Prefab.Instantiate(Scene, string)"/>) on the server makes it on every machine. Register a short name
 /// for a prefab file once at startup, with the same names on the server and clients.
 /// </summary>

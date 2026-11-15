@@ -110,3 +110,20 @@ field referenceWidth 0
 component Tallow.CSharpBehaviour enabled 1
 field scriptType "InGame.MenuProbe"
 field fieldOverrides ""
+object 21 parent 0 active 1 name "RefProbe"
+transform 110 0 110 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.RefProbe"
+field fieldOverrides ""
+field referenceNames "Target;Lamp;Spot;Late;Gone"
+field referenceTargets 5 17 -1 23 -1 18 -1 22 -1 9999 -1
+object 22 parent 0 active 1 name "LateHelper"
+transform 111 0 110 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.LateHelper"
+field fieldOverrides ""
+object 23 parent 0 active 1 name "RefLamp"
+transform 112 3 110 0 0 0 1 1 1 1
+component Tallow.Light enabled 1
+field type Point
+field intensity 2

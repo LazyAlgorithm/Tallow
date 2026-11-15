@@ -230,6 +230,40 @@ extension EditorApp
 			Directory.DelTree(catalogRoot).IgnoreError();
 		}
 
+		// C# reference fields (set by dragging an object into the Inspector) are kept by the scene file, follow the
+		// object when ids change on load, and clear when the object goes.
+		{
+			let holder = mScene.CreateGameObject("Ref Holder");
+			let behaviour = holder.AddComponent<CSharpBehaviour>();
+			behaviour.scriptType.Set("Game.Refs");
+			let target = mScene.CreateGameObject("Ref Target");
+			let lamp = mScene.CreateGameObject("Ref Lamp");
+			lamp.AddComponent<Light>();
+			Check(behaviour.SetReference("Target", target) && behaviour.SetReference("Lamp", lamp), "reference fields can be set");
+			Check(!behaviour.SetReference("Bad;Name", target), "a field name with ';' is refused");
+			Check(behaviour.ReferenceTarget("Target") == target && behaviour.ReferenceTarget("Lamp") == lamp, "reference fields read back");
+			Check(FitsManagedReference(lamp, "native:Tallow.Light") && !FitsManagedReference(target, "native:Tallow.Light"),
+				"only objects with a Light fit a Light field");
+			Check(FitsManagedReference(holder, "script:Game.Refs") && !FitsManagedReference(target, "script:Game.Refs"),
+				"only objects with that C# script fit a script field");
+			Check(behaviour.SetReference("Lamp", null) && behaviour.ReferenceTarget("Lamp") == null && behaviour.ReferenceTarget("Target") == target,
+				"clearing one reference keeps the others");
+			let saved = scope String();
+			SceneSerializer.Save(mScene, saved);
+			let copy = scope Scene();
+			// An object first, so ids on load differ from the saved ones.
+			copy.CreateGameObject("Taken");
+			SceneSerializer.Load(copy, saved);
+			let loadedHolder = copy.Find("Ref Holder");
+			let loaded = loadedHolder?.GetComponent<CSharpBehaviour>();
+			Check(loaded != null && loaded.ReferenceTarget("Target") == copy.Find("Ref Target") && loaded.ReferenceTarget("Target") != null,
+				"a reference field survives saving and loading the scene");
+			mScene.DestroyImmediate(target);
+			Check(behaviour.ReferenceTarget("Target") == null, "destroying the object clears the reference");
+			mScene.DestroyImmediate(holder);
+			mScene.DestroyImmediate(lamp);
+		}
+
 		// A compile error in a graph's generated C# points at the graph and the node whose code it is in.
 		{
 			let graphFile = scope $"{root}/MappedGraph.tgraph";

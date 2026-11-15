@@ -83,7 +83,7 @@ extension EditorApp
 				// drawing a visible Inspector widget, and later default
 				// initializer changes do not silently overwrite saved values.
 				// Never during Play: writing the default would also reset the running script's value.
-				if (columns.Count >= 7 && columns[6] == "1" && !component.IsLoaded)
+				if (columns.Count >= 7 && columns[6] == "1" && !component.IsLoaded && kind != "object")
 				{
 					if (component.WriteEditorField(name, current))
 						changed = true;
@@ -144,6 +144,17 @@ extension EditorApp
 					}
 					ImGui.EndCombo();
 				}
+			case "object":
+				// Kept in the component's reference list, not in fieldOverrides (see CSharpBehaviour.SetReference).
+				GameObject target = component.ReferenceTarget(name);
+				if (playing && current.StartsWith('#'))
+					target = mScene.FindById((uint32)SceneSerializer.ParseInt(current.Substring(1)));
+				let descriptor = columns.Count >= 8 ? columns[7] : StringView("GameObject");
+				if (DrawManagedReference(descriptor, target, var picked))
+				{
+					if (component.SetReference(name, picked))
+						changed = true;
+				}
 			case "Vector2", "Vector3", "Vector4":
 				let parts = scope List<StringView>();
 				for (let item in StringView(current).Split(','))
@@ -181,6 +192,99 @@ extension EditorApp
 			ImGui.EndTable();
 		if (component.IsLoaded)
 			DrawManagedDebugFields(component);
+		return changed;
+	}
+
+	/// Whether an object fits a C# reference field: "GameObject"/"Transform" take any; "native:Tallow.Light" one
+	/// with that built-in component; "script:Ns.Class" one with that C# script (or any C# script, when the class
+	/// might be a base class the catalog cannot see through).
+	static bool FitsManagedReference(GameObject go, StringView descriptor)
+	{
+		if (descriptor == "GameObject" || descriptor == "Transform")
+			return true;
+		if (descriptor.StartsWith("native:"))
+		{
+			let typeName = descriptor.Substring("native:".Length);
+			if (let handle = HandleComponents.Find(typeName))
+				return go.Scene != null && go.Scene.World.Has(go.Entity, handle.index);
+			let info = ComponentRegistry.Find(typeName);
+			if (info == null)
+				return false;
+			for (let component in go.Components)
+				if (component.GetType() == info.type)
+					return true;
+			return false;
+		}
+		if (descriptor.StartsWith("script:"))
+		{
+			let className = descriptor.Substring("script:".Length);
+			for (let component in go.Components)
+			{
+				if (let script = component as CSharpBehaviour)
+				{
+					if (script.scriptType == className)
+						return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/// An object slot for a C# reference field: shows the object's name, takes an object dragged from the
+	/// Hierarchy, and "..." lists the objects that fit. True when the choice changed (picked null clears it).
+	bool DrawManagedReference(StringView descriptor, GameObject current, out GameObject picked)
+	{
+		picked = null;
+		bool changed = false;
+		ImGui.SetNextItemWidth(-28);
+		let shown = scope String();
+		if (current == null)
+			shown.Append("None");
+		else
+		{
+			shown.Append(current.Name);
+			if (!FitsManagedReference(current, descriptor))
+				shown.Append(" (missing component)");
+		}
+		ImGui.InputText("##v", shown, ImGui.InputFlags.ReadOnly);
+		if (ImGui.BeginDragDropTarget())
+		{
+			let payload = ImGui.AcceptDragDropPayload("GAMEOBJECT");
+			if (payload != null && payload.dataSize == sizeof(uint32))
+			{
+				let go = mScene.FindById(*(uint32*)payload.data);
+				if (go != null)
+				{
+					picked = go;
+					changed = true;
+				}
+			}
+			ImGui.EndDragDropTarget();
+		}
+		ImGui.SameLine();
+		if (ImGui.Button("..."))
+			ImGui.OpenPopup("ManagedObjectPicker");
+		if (ImGui.BeginPopup("ManagedObjectPicker"))
+		{
+			if (ImGui.Selectable("None", current == null))
+			{
+				picked = null;
+				changed = true;
+			}
+			for (let go in mScene.Objects)
+			{
+				if (go.IsDestroyed || go.Transient || !FitsManagedReference(go, descriptor))
+					continue;
+				ImGui.PushID((int32)go.Id);
+				if (ImGui.Selectable(go.Name.CStr(), current == go))
+				{
+					picked = go;
+					changed = true;
+				}
+				ImGui.PopID();
+			}
+			ImGui.EndPopup();
+		}
 		return changed;
 	}
 

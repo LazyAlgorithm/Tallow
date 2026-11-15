@@ -7,6 +7,7 @@ namespace Tallow;
 /// onclick="Method", onchange and onload call that script's methods (taking nothing, a <see cref="UIElement"/> or
 /// the element's id), and bind="field" shows and edits its public fields.
 /// </summary>
+[NativeComponent("Tallow.UIDocument")]
 public readonly partial record struct UIDocument(GameObject GameObject) : IComponent
 {
     public bool IsValid => CSharpUI.HasDocument(GameObject.SceneId, GameObject.Id);

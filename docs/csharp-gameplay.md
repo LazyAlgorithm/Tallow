@@ -251,7 +251,35 @@ carriage returns and NUL cannot be represented by the current line-based
 `fieldOverrides` format: the catalog rejects such source initializer
 constants and the native Inspector rejects edits containing delimiters.
 A later escaped or binary format will be required for arbitrary strings.
-Unsupported complex references and collections are not yet serialized.
+Collections (arrays and lists) are not yet serialized.
+
+### Object reference fields
+
+A public field of type `GameObject`, `Transform`, a built-in component
+(`Light`, `Rigidbody`, `MeshRenderer`, `Animator`, `NavigationAgent`, ...)
+or another C# script shows an object slot in the Inspector. Drag an object
+from the Hierarchy onto it, or press **...** to pick from the objects that
+fit (for a `Light` field, the objects with a Light; for a script field, the
+objects with that script). Nullable fields (`GameObject?`, `Door?`) work the
+same way.
+
+```csharp
+public class DoorSwitch : Script
+{
+    public GameObject Door;
+    public Light Lamp;
+    public DoorSwitch? Next;
+}
+```
+
+References are saved as a list of objects on the component, so they keep
+pointing at the right object when a scene loads, and inside a prefab each
+copy points at its own objects. Before a script's `Awake` runs, its
+references are set; a referenced C# script whose object comes later in the
+scene is brought up first, so its own `Awake` has run too. A reference to an
+object that was deleted is null (or the empty handle, whose `IsValid` is
+false, for a built-in component field). Graph object variables are fields of
+these types, so they are set the same way.
 
 When field restoration fails, the native C# adapter no longer proceeds with
 `Awake`; when editing during Play, a failed field batch leaves the previous
