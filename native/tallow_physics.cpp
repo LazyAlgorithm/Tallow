@@ -306,6 +306,34 @@ extern "C" void tn_character_move(JPH_CharacterVirtual* character, JPH_PhysicsSy
     tn_character_get_state(character, state);
 }
 
+// What the character's last move ran into (ground, walls, bodies, other characters; not triggers).
+struct TnCharacterHit {
+    uint32_t body;     // 0xFFFFFFFF for another character
+    uint32_t reserved;
+    uint64_t userData; // the object id of what was hit
+    float point[3];
+    float normal[3];   // out of what was hit, towards the character
+};
+static_assert(sizeof(TnCharacterHit) == 40, "TnCharacterHit layout is shared with Jolt.bf");
+
+extern "C" int32_t tn_character_hits(JPH_CharacterVirtual* character, TnCharacterHit* hits, int32_t capacity) {
+    const uint32_t total = JPH_CharacterVirtual_GetNumActiveContacts(character);
+    int32_t count = 0;
+    for (uint32_t i = 0; i < total && count < capacity; ++i) {
+        JPH_CharacterContact contact;
+        JPH_CharacterVirtual_GetActiveContact(character, i, &contact);
+        if (!contact.hadCollision || contact.wasDiscarded || contact.isSensorB)
+            continue;
+        TnCharacterHit& hit = hits[count++];
+        hit.body = contact.characterB != nullptr ? 0xFFFFFFFFu : contact.bodyB;
+        hit.reserved = 0;
+        hit.userData = contact.userData;
+        hit.point[0] = (float)contact.position.x; hit.point[1] = (float)contact.position.y; hit.point[2] = (float)contact.position.z;
+        hit.normal[0] = contact.contactNormal.x; hit.normal[1] = contact.contactNormal.y; hit.normal[2] = contact.contactNormal.z;
+    }
+    return count;
+}
+
 // Teleports the character and rebuilds its contacts so ground state is correct before the next move.
 extern "C" void tn_character_set_state(JPH_CharacterVirtual* character, JPH_PhysicsSystem* system, uint32_t layer,
     const JPH_Vec3* position, const JPH_Quat* rotation, const JPH_Vec3* velocity, bool soft) {

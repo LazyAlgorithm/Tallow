@@ -181,6 +181,12 @@ class CSharpBehaviour : Component
 			CSharpRuntime.Contact(mInstance, .CollisionStay, collision.gameObject, collision.point, collision.normal, collision.relativeSpeed);
 	}
 
+	public override void OnControllerHit(ControllerHit hit)
+	{
+		if (IsLoaded)
+			CSharpRuntime.Contact(mInstance, .ControllerHit, hit.gameObject, hit.point, hit.normal, hit.moveVelocity.Length);
+	}
+
 	public override void OnTriggerStay(GameObject other)
 	{
 		if (IsLoaded)

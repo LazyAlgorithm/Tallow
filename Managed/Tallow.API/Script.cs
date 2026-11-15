@@ -981,6 +981,9 @@ public abstract class Script : IComponent
     public virtual void OnCollisionExit(Collision collision) { }
     /// <summary>Something entered this object's trigger collider, or this object entered another's trigger.</summary>
     public virtual void OnTriggerEnter(GameObject other) { }
+    /// <summary>This object's CharacterController ran into something while moving (the ground it walks on too),
+    /// once per thing per move. Not called during network prediction replays.</summary>
+    public virtual void OnControllerHit(ControllerHit hit) { }
     /// <summary>Every physics step while <paramref name="other"/> is inside the trigger and awake.</summary>
     public virtual void OnTriggerStay(GameObject other) { }
     /// <summary>It left the trigger. <paramref name="other"/> is not valid when it was destroyed.</summary>

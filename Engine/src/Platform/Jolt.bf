@@ -41,6 +41,18 @@ static class Jolt
 		public float penetrationDepth;
 	}
 
+	/// Mirrors TnCharacterHit in native/tallow_physics.cpp.
+	[CRepr] public struct CharacterHit
+	{
+		public uint32 body;
+		public uint32 reserved;
+		public uint64 userData;
+		public Vector3 point;
+		public Vector3 normal;
+	}
+
+	[CLink] public static extern int32 tn_character_hits(void* character, CharacterHit* hits, int32 capacity);
+
 	/// Mirrors TnCharacterState in native/tallow_physics.cpp.
 	[CRepr] public struct CharacterState
 	{

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 
 namespace Tallow;
 
@@ -368,6 +369,44 @@ class CharacterControllerState
 			mAirTime = 0;
 		else if (mAirTime < 1000)
 			mAirTime += deltaTime;
+		ReportHits(velocity);
+	}
+
+	/// OnControllerHit on this object's components, for what the move ran into. Replays re-run moves already
+	/// reported, so they report nothing.
+	void ReportHits(Vector3 velocity)
+	{
+		if (Scene.Network != null && Scene.Network.Replaying)
+			return;
+		Jolt.CharacterHit[16] hits = ?;
+		let count = Scene.Physics.CharacterHits(mCharacter, hits);
+		if (count == 0)
+			return;
+		let self = GameObject;
+		let components = scope List<Component>();
+		components.AddRange(self.Components);
+		uint64 previous = uint64.MaxValue;
+		for (int i < count)
+		{
+			let raw = hits[i];
+			// Several contacts with one body (a box's corner and face) are one hit.
+			let key = ((uint64)raw.body << 32) ^ raw.userData;
+			if (key == previous)
+				continue;
+			previous = key;
+			ControllerHit hit = .();
+			hit.gameObject = Scene.Physics.ContactObject(Scene, raw.userData, raw.body);
+			hit.point = raw.point;
+			hit.normal = raw.normal;
+			hit.moveVelocity = velocity;
+			for (let component in components)
+			{
+				// An earlier callback can remove a component or destroy the object.
+				if (self.Scene == null || !self.Components.Contains(component) || !component.Enabled)
+					continue;
+				component.OnControllerHit(hit);
+			}
+		}
 	}
 
 	/// Walks at the given horizontal velocity for one step. Falling speed and gravity are kept for you, the character

@@ -32,7 +32,9 @@ is complete.
 - Physics callbacks: `OnCollisionEnter/Stay/Exit(Collision)` (other object, point, normal out
   of the other object, closing speed) and `OnTriggerEnter/Stay/Exit(GameObject)` for colliders
   with `isTrigger` (`GetCollider().IsTrigger` reads or switches it while playing; that is a
-  local change). Stay runs every physics step while the two touch and either is awake. Enter
+  local change). `OnControllerHit(ControllerHit)` reports what this object's character
+  controller ran into on each move (ground too; not during prediction replays). Stay runs
+  every physics step while the two touch and either is awake. Enter
   and Exit run once per pair of objects, after the tick's physics step, on every machine that
   simulates the tick (check `Scene.IsServer` before changing authoritative state); never
   during prediction replays.

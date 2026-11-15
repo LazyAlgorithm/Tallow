@@ -419,8 +419,16 @@ class PhysicsWorld
 		}
 	}
 
+	/// What a character's last move ran into (not triggers), at most hits.Count. Returns how many.
+	public int CharacterHits(void* character, Span<Jolt.CharacterHit> hits)
+	{
+		if (!HasCharacter(character) || hits.Length == 0)
+			return 0;
+		return Jolt.tn_character_hits(character, hits.Ptr, (int32)hits.Length);
+	}
+
 	/// The object a contact names: by the body's user data (its object's id), else by the body.
-	GameObject ContactObject(Scene scene, uint64 id, uint32 bodyId)
+	public GameObject ContactObject(Scene scene, uint64 id, uint32 bodyId)
 	{
 		if (id != 0)
 		{

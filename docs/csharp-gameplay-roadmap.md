@@ -789,7 +789,10 @@ A full conversion also needs these. Ordered roughly by when they block users.
 - [x] `OnCollisionStay`/`OnTriggerStay` (every step while touching and awake; the native diff
   now records every pair's manifold, not only new ones) and `ColliderHandle.IsTrigger`
   get/set from C# (rebuilds the body; a Rigidbody keeps its state). 9 more in-engine checks.
-- [ ] Character-controller wall hits (an OnControllerColliderHit equivalent).
+- [x] Character-controller hits: `OnControllerHit(ControllerHit)` (object, point, normal
+  towards the character, move speed) on Beef components and C# scripts, from Jolt's active
+  character contacts after each Move (ground included, triggers not, one per body, never
+  during prediction replays). 4 in-engine checks with a character walking into a wall.
 - [x] `[Sync]` on **Script** fields: a running script's `[Sync]` fields (public or private;
   int, float, bool, string, enums, vectors) join the object's NetworkSync slots after the
   native ones, are read once per script per snapshot, sent when changed with the engine's

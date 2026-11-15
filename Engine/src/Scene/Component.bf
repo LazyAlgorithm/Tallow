@@ -173,6 +173,9 @@ abstract class Component
 	public virtual void OnCollisionExit(Collision collision) { }
 	/// Something entered this object's trigger collider, or this object entered another's trigger.
 	public virtual void OnTriggerEnter(GameObject other) { }
+	/// A CharacterController on this object ran into something while moving (the ground it walks on too), once per
+	/// thing per Move. Not during network prediction replays.
+	public virtual void OnControllerHit(ControllerHit hit) { }
 	/// Every physics step while it is inside and awake.
 	public virtual void OnTriggerStay(GameObject other) { }
 	/// It left (other is null when it was destroyed).

@@ -67,6 +67,8 @@ public class ApiChecks : CheckBase
             ContactsWhileResting();
         else if (_tick == 165)
             ContactsAfterLeaving();
+        else if (_tick == 200)
+            ControllerHits();
         else if (_tick == 260)
             ContactsAfterLanding();
         else if (_tick == 300)
@@ -138,6 +140,16 @@ public class ApiChecks : CheckBase
         Check("OnCollisionExit after moving away", ball.CollisionExits == 1 && ball.LastExit.GameObject.Name == "Ground");
         Check("OnTriggerExit on both", ball.TriggerExits == 1 && zone.TriggerExits == 1);
         Check("Stay only between Enter and Exit", !ball.StayOutsideEnterExit && !zone.StayOutsideEnterExit);
+    }
+
+    private void ControllerHits()
+    {
+        Walker walker = Scene.Find("Walker")!.Value.GetComponent<Walker>()!;
+        Check("OnControllerHit for the ground walked on", walker.GroundHits > 10);
+        Check("OnControllerHit for a wall walked into", walker.WallHits > 0);
+        Check("its normal points back at the character and the point is on the wall",
+            walker.LastWall.Normal.Z < -0.9f && MathF.Abs(walker.LastWall.Point.Z - 2.8f) < 0.1f && walker.LastWall.MoveSpeed > 2.9f);
+        Check("the wall stopped the character", Scene.Find("Walker")!.Value.Transform.Position.Z < 2.4f);
     }
 
     private void ContactsAfterLanding()
@@ -320,6 +332,30 @@ public class ContactProbe : Script
     }
 
     public override void OnTriggerExit(GameObject other) => TriggerExits++;
+}
+
+/// Walks into the Wall (towards +Z) and records what its CharacterController hits.
+public class Walker : Script
+{
+    public int GroundHits, WallHits, Steps;
+    public ControllerHit LastWall;
+
+    public override void FixedUpdate(float deltaTime)
+    {
+        if (++Steps <= 150)
+            GetCharacterController()!.Value.SimpleMove(new Vector3(0, 0, 3), deltaTime);
+    }
+
+    public override void OnControllerHit(ControllerHit hit)
+    {
+        if (hit.GameObject.Name == "Ground" && hit.Normal.Y > 0.9f)
+            GroundHits++;
+        else if (hit.GameObject.Name == "Wall")
+        {
+            WallHits++;
+            LastWall = hit;
+        }
+    }
 }
 
 public class SpawnedProbe : Script

@@ -226,6 +226,12 @@ public static unsafe class NativeEntrypoints
             case 5:
                 script.OnTriggerStay(other);
                 break;
+            case 6:
+                script.OnControllerHit(new ControllerHit(other,
+                    new Vector3(value.PointX, value.PointY, value.PointZ),
+                    new Vector3(value.NormalX, value.NormalY, value.NormalZ),
+                    value.RelativeSpeed));
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(contact));
             }
