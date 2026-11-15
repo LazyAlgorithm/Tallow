@@ -301,3 +301,71 @@ public readonly record struct SoftBody(GameObject GameObject) : IComponent
     public float DeepestDent => Physics.DeepestSoftBodyDent(GameObject.SceneId, GameObject.Id);
     public bool Repair() => Physics.RepairSoftBody(GameObject.SceneId, GameObject.Id);
 }
+
+/// <summary>
+/// A hinge between two rigidbodies, made with <see cref="Scene.CreateHinge"/>: a door, a wheel, an arm. It goes
+/// when either body does. Local to this machine: make the same one on every machine.
+/// </summary>
+public readonly record struct Hinge(ulong SessionId, ulong Id)
+{
+    public bool IsValid => Id != 0 && CSharpJoints.IsAlive(SessionId, Id, true);
+
+    /// <summary>Spins the hinge at <paramref name="speed"/> radians a second with up to <paramref name="torque"/> N·m.</summary>
+    public void SetMotorSpeed(float speed, float torque) => CSharpJoints.SetHingeMotor(SessionId, Id, speed, torque, 0, 1, 8, 3);
+
+    /// <summary>Turns the hinge to <paramref name="angle"/> radians, at up to <paramref name="maximumSpeed"/>,
+    /// faster the larger <paramref name="response"/> is.</summary>
+    public void SetMotorAngle(float angle, float torque, float response = 8f, float maximumSpeed = 3f) =>
+        CSharpJoints.SetHingeMotor(SessionId, Id, 0, torque, angle, 2, response, maximumSpeed);
+
+    /// <summary>Switches the motor off; the hinge swings freely.</summary>
+    public void StopMotor() => CSharpJoints.SetHingeMotor(SessionId, Id, 0, 0, 0, 0, 8, 3);
+
+    /// <summary>How far it has turned, in radians.</summary>
+    public float Angle => CSharpJoints.HingeAngle(SessionId, Id);
+
+    /// <summary>Removes it; nothing when it has already gone.</summary>
+    public void Destroy() => CSharpJoints.Destroy(SessionId, Id, true);
+}
+
+/// <summary>A slider with a spring between two rigidbodies, made with <see cref="Scene.CreateSuspension"/>: a wheel's suspension.</summary>
+public readonly record struct Suspension(ulong SessionId, ulong Id)
+{
+    public bool IsValid => Id != 0 && CSharpJoints.IsAlive(SessionId, Id, false);
+
+    /// <summary>Its spring, in newtons a metre and newton-seconds a metre.</summary>
+    public void SetSpring(float stiffness, float damping) => CSharpJoints.SetSuspensionSpring(SessionId, Id, stiffness, damping);
+
+    /// <summary>How far along its travel it is, in metres.</summary>
+    public float Position => CSharpJoints.SuspensionPosition(SessionId, Id);
+
+    public void Destroy() => CSharpJoints.Destroy(SessionId, Id, false);
+}
+
+public readonly partial record struct Scene
+{
+    /// <summary>
+    /// A hinge turning about <paramref name="axis"/> through <paramref name="anchor"/> (world space);
+    /// <paramref name="childAxis"/> and <paramref name="childNormal"/> fix how the second body sits on it. The two
+    /// bodies stop colliding with each other. Null when either has no body.
+    /// </summary>
+    public Hinge? CreateHinge(Rigidbody a, Rigidbody b, Vector3 anchor, Vector3 axis, Vector3 childAxis, Vector3 childNormal)
+    {
+        if (!a.HasBody || !b.HasBody)
+            return null;
+        ulong id = CSharpJoints.CreateHinge(SessionId, a.BodyId, b.BodyId, anchor, axis, childAxis, childNormal);
+        return id == 0 ? null : new Hinge(SessionId, id);
+    }
+
+    /// <summary>A slider along <paramref name="axis"/>, <paramref name="travel"/> metres either way. Give it a spring
+    /// with <see cref="Suspension.SetSpring"/>. Null when either has no body.</summary>
+    public Suspension? CreateSuspension(Rigidbody a, Rigidbody b, Vector3 anchor, Vector3 childAnchor, Vector3 axis,
+        Vector3 childAxis, Vector3 childNormal, float travel)
+    {
+        if (!a.HasBody || !b.HasBody)
+            return null;
+        ulong id = CSharpJoints.CreateSuspension(SessionId, a.BodyId, b.BodyId, anchor, childAnchor, axis, childAxis,
+            childNormal, travel);
+        return id == 0 ? null : new Suspension(SessionId, id);
+    }
+}

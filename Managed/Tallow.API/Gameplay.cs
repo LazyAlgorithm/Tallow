@@ -82,6 +82,14 @@ public readonly record struct AudioSource(GameObject GameObject) : IComponent
     public void Resume() => CSharpAudio.SourceControl(GameObject.SceneId, GameObject.Id, 1);
     public void Stop() => CSharpAudio.SourceControl(GameObject.SceneId, GameObject.Id, 2);
     public bool IsPlaying => CSharpAudio.SourceIsPlaying(GameObject.SceneId, GameObject.Id);
+    /// <summary>The clip's length in seconds (0 until it has been played once).</summary>
+    public float Length => CSharpAudio.SourceTime(GameObject.SceneId, GameObject.Id, 0);
+    /// <summary>The playback position in seconds; setting it seeks.</summary>
+    public float Time
+    {
+        get => CSharpAudio.SourceTime(GameObject.SceneId, GameObject.Id, 1);
+        set => CSharpAudio.SourceSeek(GameObject.SceneId, GameObject.Id, value);
+    }
 }
 
 /// <summary>The project's input actions (Project Settings > Input) on this machine. A networked script reads its

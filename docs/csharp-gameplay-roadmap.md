@@ -253,6 +253,13 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     client, ownership, despawn, client refusal). Fixed `NetworkManager.RegisterPrefabFile`, which built its factory
     from `Prefab.Instantiate` (shared the object a second time on the server and destroyed it on clients; the same
     code is on `ecs`).
+  - [x] Spawning, layers, world states, navigation queries and joints (November 15, 2026): `SpawnPoints`
+    (Next, Random, Place, TryGet, Count, StartWindow, BeginStart/EndStart, IsStartPhase), `GameObject.Team`,
+    `Layers.Named/Name/Mask`, `WorldStates.Named/Name`, `Scene.WorldState/SetWorldState`, `NavigationSurface`
+    (Find, SamplePosition, RandomPoint, Raycast, Rebuild), `Scene.CreateHinge/CreateSuspension` returning checked
+    `Hinge`/`Suspension` handles (native joints stay behind a number + generation table, `CSharpJoints`), and
+    `AudioSource` (Play, PlayOneShot, Pause/Resume/Stop, IsPlaying, Length, Time) with mixer settings and group
+    volumes. 15 in-engine checks. Not yet: a C# team chooser and a world-state-changed callback.
 - [ ] Inspector: add string, enum, arrays/lists, serializable nested types, asset/GameObject/component references, undo/redo, prefab overrides and validation. Current user-confirmed subset is numeric/bool/vectors and persistence.
 - [ ] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.
 

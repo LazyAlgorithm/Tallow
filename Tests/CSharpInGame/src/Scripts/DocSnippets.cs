@@ -32,6 +32,34 @@ public class DocSnippets : Script
         animator.SetLayerWeight(1, Aiming ? 1f : 0f);   // layer 1: the second in the controller's list
     }
 
+    // docs/audio.md
+    private void AudioSnippets(Vector3 position, bool headphones, float strengthSlider, float headSizeSlider, float trebleSlider)
+    {
+        var source = GetComponent<AudioSource>();
+        source.Play();                              // the Audio Clip
+        source.Play("Sounds/alarm.ogg");            // a different one
+        source.PlayOneShot("Sounds/step.wav");      // on top of whatever is playing; any number can overlap
+        source.Pause(); source.Resume(); source.Stop();
+        if (source.IsPlaying) { }
+        source.Time = source.Length / 2;
+
+        Audio.PlayOneShot("Sounds/explosion.wav", position);     // at a place in the world
+        Audio.PlayOneShot2D("Sounds/click.wav");                 // no position: interface sounds
+
+        Audio.Hrtf = true;       // headphone 3D; can be switched while sounds play
+        Audio.Hrtf = false;      // ordinary left-right panning (the default)
+
+        // In an options menu:
+        Audio.Hrtf = headphones;
+        Audio.HrtfStrength = strengthSlider;      // 0..1
+        Audio.HrtfHeadSize = headSizeSlider;      // 0.5..1.5
+        Audio.HrtfTreble = trebleSlider;          // -12..12
+
+        Audio.MasterVolume = 0.8f;
+        Audio.SetGroupVolume(AudioGroup.Music, 0.5f);
+        Audio.SetGroupVolume(AudioGroup.Effects, 1.0f);
+    }
+
     // docs/physics-queries.md
     private void PhysicsQueries()
     {

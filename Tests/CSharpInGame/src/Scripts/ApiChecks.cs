@@ -109,6 +109,7 @@ public class ApiChecks : CheckBase
             AnimatorChecks();
             UIChecks();
             NativeComponentChecks();
+            SpawnLayerJointChecks();
             ReferenceFieldChecks();
             PackageChecks();
             Finish();
@@ -210,6 +211,60 @@ public class ApiChecks : CheckBase
         Audio.SetGroupVolume(AudioGroup.Music, music);
         Audio.MasterVolume = master;
         lamp.Destroy();
+    }
+
+    private void SpawnLayerJointChecks()
+    {
+        Check("SpawnPoints.Count counts a team's points", SpawnPoints.Count(Scene, 1) == 1 && SpawnPoints.Count(Scene, 0) == 2);
+        GameObject? red = SpawnPoints.Next(Scene, 1);
+        Check("SpawnPoints.Next gives the team's own point", red?.Name == "SpawnRed");
+        GameObject mover = Scene.CreateGameObject("Spawned");
+        GameObject? used = SpawnPoints.Place(mover, 2);
+        Check("SpawnPoints.Place moves an object to the point (" + mover.Transform.Position + ")",
+            used?.Name == "SpawnBlue" && Vector3.Distance(mover.Transform.Position, new Vector3(125, 0, 120)) < 1e-3f);
+        bool got = SpawnPoints.TryGet(Scene, 1, false, out Vector3 position, out Quaternion rotation);
+        Check("SpawnPoints.TryGet gives the point's position and facing",
+            got && Vector3.Distance(position, new Vector3(120, 0, 120)) < 1e-3f && MathF.Abs(MathF.Abs(rotation.Y) - 0.7071068f) < 1e-3f);
+        float window = SpawnPoints.StartWindow;
+        SpawnPoints.StartWindow = 0;
+        SpawnPoints.BeginStart(Scene);
+        bool open = SpawnPoints.IsStartPhase(Scene);
+        SpawnPoints.EndStart(Scene);
+        Check("SpawnPoints start phase opens and closes", open && !SpawnPoints.IsStartPhase(Scene));
+        SpawnPoints.StartWindow = window;
+        Check("GameObject.Team is 0 without teams", mover.Team == 0);
+        mover.Destroy();
+
+        Check("Layers.Named/Name/Mask", Layers.Named("Default") == 0 && Layers.Name(0) == "Default"
+            && Layers.Mask("Default") == 1u && Layers.Mask("NoSuchLayer") == 0u);
+        Check("a ray with an empty layer mask hits nothing", Scene.RaycastHit(new Vector3(3, 10, 0), -Vector3.UnitY, 20f, 0u) == null
+            && Scene.RaycastHit(new Vector3(0, 10, 0), -Vector3.UnitY, 20f, Layers.Mask("Default")) != null);
+        Check("WorldStates and Scene.WorldState", WorldStates.Named("Default") == 0 && WorldStates.Name(0) == "Default"
+            && WorldStates.Name(99) == null && Scene.WorldState == 0 && !Scene.SetWorldState("NoSuchState") && Scene.SetWorldState("Default"));
+
+        NavigationSurface surface = NavigationSurface.Find(Scene);
+        Check("NavigationSurface.Find without a surface, and its queries say no",
+            !surface.IsValid && !surface.SamplePosition(Vector3.Zero, 2f, out _) && !surface.RandomPoint(Vector3.Zero, 5f, new Random(1), out _));
+
+        Rigidbody post = Scene.Find("HingePost")?.GetComponent<Rigidbody>() ?? default;
+        Rigidbody door = Scene.Find("HingeDoor")?.GetComponent<Rigidbody>() ?? default;
+        Hinge? hinge = Scene.CreateHinge(post, door, new Vector3(130, 5, 130), Vector3.UnitY, Vector3.UnitY, Vector3.UnitX);
+        Check("Scene.CreateHinge joins two bodies", hinge is { IsValid: true });
+        if (hinge is Hinge made)
+        {
+            made.SetMotorSpeed(3f, 100f);
+            float angle = made.Angle;
+            made.Destroy();
+            Check("a hinge reads its angle and is gone after Destroy", float.IsFinite(angle) && !made.IsValid);
+            made.SetMotorSpeed(1f, 1f); // a gone hinge does nothing
+        }
+        Check("a hinge is not made without bodies", Scene.CreateHinge(default, door, Vector3.Zero, Vector3.UnitY, Vector3.UnitY, Vector3.UnitX) == null);
+        Suspension? spring = Scene.CreateSuspension(post, door, new Vector3(130, 5, 130), new Vector3(130.6f, 5, 130), Vector3.UnitY,
+            Vector3.UnitY, Vector3.UnitX, 0.2f);
+        Check("Scene.CreateSuspension, its spring and position", spring is { IsValid: true }
+            && float.IsFinite(spring.Value.Position));
+        spring?.SetSpring(5000f, 300f);
+        spring?.Destroy();
     }
 
     private void UIChecks()

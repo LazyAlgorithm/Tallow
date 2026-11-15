@@ -127,3 +127,25 @@ transform 112 3 110 0 0 0 1 1 1 1
 component Tallow.Light enabled 1
 field type Point
 field intensity 2
+object 24 parent 0 active 1 name "SpawnRed"
+transform 120 0 120 0 0.7071068 0 0.7071068 1 1 1
+component Tallow.SpawnPoint enabled 1
+field team 1
+object 25 parent 0 active 1 name "SpawnBlue"
+transform 125 0 120 0 0 0 1 1 1 1
+component Tallow.SpawnPoint enabled 1
+field team 2
+object 26 parent 0 active 1 name "HingePost"
+transform 130 5 130 0 0 0 1 1 1 1
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 0.2 0.2 0.2
+component Tallow.Rigidbody enabled 1
+field isKinematic true
+object 27 parent 0 active 1 name "HingeDoor"
+transform 130.6 5 130 0 0 0 1 1 1 1
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 0.1
+component Tallow.Rigidbody enabled 1
+field useGravity false

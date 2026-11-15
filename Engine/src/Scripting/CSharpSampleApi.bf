@@ -191,6 +191,60 @@ static class CSharpNavigation
 
 	[CSharpExpose]
 	public static float RemainingDistance(uint64 session, uint64 entity) => Find(session, entity, let agent) ? agent.RemainingDistance : 0;
+
+	static NavigationData Surface(uint64 session, uint64 entity)
+	{
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		let surface = obj?.GetComponent<NavigationSurface>();
+		return surface?.Data;
+	}
+
+	static bool Finite(Vector3 v) => v.x.IsFinite && v.y.IsFinite && v.z.IsFinite;
+
+	[CSharpExpose]
+	public static bool HasSurface(uint64 session, uint64 entity) => Surface(session, entity) != null;
+
+	/// The object with the scene's first Navigation Surface, 0 without one.
+	[CSharpExpose]
+	public static uint64 FindSurface(uint64 session)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		let surface = scene?.FindComponent<NavigationSurface>();
+		return (surface != null && !surface.GameObject.IsDestroyed) ? (uint64)surface.GameObject.Id : 0;
+	}
+
+	/// 0 SamplePosition(a, distance), 1 RandomPoint(a, distance, seed), 2 Raycast(a to b): xyz the point found
+	/// (Raycast: where it is blocked), w 1 when SamplePosition/RandomPoint found one or the Raycast was clear.
+	[CSharpExpose]
+	public static Vector4 SurfaceQuery(uint64 session, uint64 entity, int32 kind, Vector3 a, Vector3 b, float distance, int32 seed)
+	{
+		let data = Surface(session, entity);
+		if (data == null || !Finite(a) || !Finite(b) || !distance.IsFinite)
+			return .(0, 0, 0, 0);
+		Vector3 found = default;
+		bool ok = false;
+		switch (kind)
+		{
+		case 0: ok = data.SamplePosition(a, distance, out found);
+		case 1:
+			let random = scope Random(seed);
+			ok = data.RandomPoint(a, distance, random, out found);
+		case 2: ok = data.Raycast(a, b, out found);
+		default:
+		}
+		return .(found.x, found.y, found.z, ok ? 1 : 0);
+	}
+
+	/// Rebuilds the part of the surface inside the box after geometry changed there.
+	[CSharpExpose]
+	public static bool SurfaceRebuild(uint64 session, uint64 entity, Vector3 min, Vector3 max)
+	{
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		let surface = obj?.GetComponent<NavigationSurface>();
+		if (surface == null || !Finite(min) || !Finite(max))
+			return false;
+		return surface.Rebuild(.(min, max));
+	}
 }
 
 /// The game's command line for C# scripts (test switches such as --view 3).

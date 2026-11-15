@@ -29,8 +29,8 @@ Add one with **GameObject > Audio Source**, or Add Component > Audio. Pick an **
 
 With the source selected, the Scene view shows its minimum and maximum distance as spheres.
 
-```beef
-let source = GetComponent<AudioSource>();
+```csharp
+var source = GetComponent<AudioSource>();
 source.Play();                              // the Audio Clip
 source.Play("Sounds/alarm.ogg");            // a different one
 source.PlayOneShot("Sounds/step.wav");      // on top of whatever is playing; any number can overlap
@@ -46,7 +46,7 @@ Put an **Audio Listener** on the camera or on the player's head. If the scene ha
 
 ## Sounds without an object
 
-```beef
+```csharp
 Audio.PlayOneShot("Sounds/explosion.wav", position);     // at a place in the world
 Audio.PlayOneShot2D("Sounds/click.wav");                 // no position: interface sounds
 ```
@@ -57,7 +57,7 @@ These play once and are freed when they finish.
 
 HRTF is off until you turn it on; until then direction is ordinary left-right panning. Turned on, each positioned sound is filtered through the responses measured at the two ears of a dummy head for the direction it comes from. That gives the brain what it uses to place a sound in real life: the sound reaches the nearer ear first (by up to about 0.7 milliseconds), is louder there, and is coloured differently depending on whether it is in front, behind, above or below. On headphones a sound behind you sounds behind you.
 
-```beef
+```csharp
 Audio.Hrtf = true;       // headphone 3D; can be switched while sounds play
 Audio.Hrtf = false;      // ordinary left-right panning (the default)
 ```
@@ -74,7 +74,7 @@ The measurements come from one standard head, and players' ears and headphones d
 | `Audio.HrtfHeadSize` | 0.5 to 1.5 | 1 | Scales the delay between the two ears. Raise it if sounds seem to sit too near the middle, lower it if they jump too far to the side. |
 | `Audio.HrtfTreble` | -12 to 12 dB | 0 | Brightens or dulls the HRTF sound. A few decibels up helps on headphones where it sounds muffled. |
 
-```beef
+```csharp
 // In an options menu:
 Audio.Hrtf = headphones;
 Audio.HrtfStrength = strengthSlider;      // 0..1
@@ -88,10 +88,10 @@ The measurements are the MIT Media Lab's KEMAR set (Gardner and Martin, 1994), w
 
 ## Volumes
 
-```beef
+```csharp
 Audio.MasterVolume = 0.8f;
-Audio.SetGroupVolume(.Music, 0.5f);
-Audio.SetGroupVolume(.Effects, 1.0f);
+Audio.SetGroupVolume(AudioGroup.Music, 0.5f);
+Audio.SetGroupVolume(AudioGroup.Effects, 1.0f);
 ```
 
 Every source plays into its group, and every group into the master, so an options menu is three sliders.

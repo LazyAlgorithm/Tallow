@@ -122,6 +122,7 @@ internal static class NativeComponentTypes
         [typeof(SphereCollider)] = ("Tallow.SphereCollider", o => new SphereCollider(o)),
         [typeof(BoxCollider)] = ("Tallow.BoxCollider", o => new BoxCollider(o)),
         [typeof(NavigationAgent)] = ("Tallow.NavigationAgent", o => new NavigationAgent(o)),
+        [typeof(NavigationSurface)] = ("Tallow.NavigationSurface", o => new NavigationSurface(o)),
         [typeof(Rigidbody)] = ("Tallow.Rigidbody", o => new Rigidbody(o)),
         [typeof(CharacterController)] = ("Tallow.CharacterController", o => new CharacterController(o)),
         [typeof(UIDocument)] = ("Tallow.UIDocument", o => new UIDocument(o)),
@@ -211,6 +212,45 @@ public readonly record struct NavigationAgent(GameObject GameObject) : IComponen
     /// <summary>Corners on the current path (0 with none).</summary>
     public int PathCornerCount => CSharpNavigation.PathCount(GameObject.SceneId, GameObject.Id);
     public float RemainingDistance => CSharpNavigation.RemainingDistance(GameObject.SceneId, GameObject.Id);
+}
+
+/// <summary>A baked navigation mesh agents walk on, with queries for choosing where to go.</summary>
+[NativeComponent("Tallow.NavigationSurface")]
+public readonly record struct NavigationSurface(GameObject GameObject) : IComponent
+{
+    public bool IsValid => CSharpNavigation.HasSurface(GameObject.SceneId, GameObject.Id);
+
+    /// <summary>The scene's first Navigation Surface (default when it has none).</summary>
+    public static NavigationSurface Find(Scene scene)
+    {
+        ulong id = CSharpNavigation.FindSurface(scene.SessionId);
+        return id == 0 ? default : new NavigationSurface(new GameObject(scene.SessionId, id));
+    }
+
+    /// <summary>The nearest usable point within <paramref name="maxDistance"/> of a point.</summary>
+    public bool SamplePosition(Vector3 point, float maxDistance, out Vector3 found) =>
+        Query(0, point, default, maxDistance, 0, out found);
+
+    /// <summary>A random usable point within a radius of a centre and reachable from it (for wandering). The same
+    /// <paramref name="random"/> sequence gives the same points on every machine.</summary>
+    public bool RandomPoint(Vector3 center, float radius, System.Random random, out Vector3 found) =>
+        Query(1, center, default, radius, random.Next(), out found);
+
+    /// <summary>True when an agent could walk straight from one point to the other; otherwise false, with
+    /// <paramref name="blocked"/> where it would stop.</summary>
+    public bool Raycast(Vector3 from, Vector3 to, out Vector3 blocked) => Query(2, from, to, 0, 0, out blocked);
+
+    /// <summary>Rebuilds the part inside a box after geometry changed there (include the old and new bounds of
+    /// anything moved). Agents plan again. Not saved by itself.</summary>
+    public bool Rebuild(Vector3 boundsMin, Vector3 boundsMax) =>
+        CSharpNavigation.SurfaceRebuild(GameObject.SceneId, GameObject.Id, boundsMin, boundsMax);
+
+    private bool Query(int kind, Vector3 a, Vector3 b, float distance, int seed, out Vector3 found)
+    {
+        Vector4 result = CSharpNavigation.SurfaceQuery(GameObject.SceneId, GameObject.Id, kind, a, b, distance, seed);
+        found = new Vector3(result.X, result.Y, result.Z);
+        return result.W != 0;
+    }
 }
 
 public readonly partial record struct Rigidbody

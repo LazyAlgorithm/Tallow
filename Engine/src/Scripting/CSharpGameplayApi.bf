@@ -65,6 +65,23 @@ static class CSharpAudio
 	[CSharpExpose]
 	public static bool SourceIsPlaying(uint64 session, uint64 entity) => FindSource(session, entity, let source) && source.IsPlaying;
 
+	/// 0 the clip's length, 1 the playback position (seconds); 0 with no clip loaded.
+	[CSharpExpose]
+	public static float SourceTime(uint64 session, uint64 entity, int32 which)
+	{
+		if (!FindSource(session, entity, let source))
+			return 0;
+		return which == 0 ? source.Length : source.Time;
+	}
+
+	/// Seeks the source's clip to a position in seconds.
+	[CSharpExpose]
+	public static void SourceSeek(uint64 session, uint64 entity, float seconds)
+	{
+		if (seconds.IsFinite && FindSource(session, entity, let source))
+			source.Time = Math.Max(seconds, 0);
+	}
+
 	/// The mixer's settings: 0 HRTF on (1) or off (0), 1 HRTF strength, 2 head size, 3 treble, 4 master volume.
 	[CSharpExpose]
 	public static float GetSetting(int32 which)
