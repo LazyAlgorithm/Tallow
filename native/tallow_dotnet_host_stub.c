@@ -50,6 +50,11 @@ int32_t tn_csharp_contact_event(int32_t script_instance, const tn_csharp_contact
     (void)script_instance; (void)contact;
     return 0;
 }
+int32_t tn_csharp_read_fields(int32_t script_instance, int32_t mode, char* buffer, int32_t capacity)
+{
+    (void)script_instance; (void)mode; (void)buffer; (void)capacity;
+    return -1;
+}
 int32_t tn_csharp_detach(int32_t script_instance)
 {
     (void)script_instance;

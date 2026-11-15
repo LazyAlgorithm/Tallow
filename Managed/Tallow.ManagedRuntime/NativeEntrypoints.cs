@@ -391,6 +391,136 @@ public static unsafe class NativeEntrypoints
 
     // Values come from trusted scene files; never evaluate expressions or
     // resolve arbitrary types while applying Inspector values.
+    /// <summary>
+    /// Live values for the editor during Play. Mode 0: the Inspector's fields
+    /// ("name\tvalue" lines, in the same text the scene stores, so the normal
+    /// widgets show them). Mode 1: every instance field of the script's own
+    /// classes, read-only ("name\ttype\tvalue"). Writes UTF-8 with a NUL when
+    /// it fits and returns the byte count needed (without the NUL).
+    /// </summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int ReadFields(int instance, int mode, byte* buffer, int capacity)
+    {
+        try
+        {
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            var text = new StringBuilder();
+            var seen = new HashSet<string>();
+            for (Type? owner = script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
+            {
+                foreach (FieldInfo field in owner.GetFields(BindingFlags.Instance | BindingFlags.Public |
+                    BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                {
+                    // A derived class's field hides a base field of the same name, as in ApplyFields.
+                    if (!seen.Add(field.Name) || field.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+                        continue;
+                    object? value = field.GetValue(script);
+                    if (mode == 0)
+                    {
+                        if (!IsInspectorField(field))
+                            continue;
+                        string? encoded = FormatInspectorValue(field.FieldType, value);
+                        if (encoded != null)
+                            text.Append(field.Name).Append('\t').Append(encoded).Append('\n');
+                    }
+                    else
+                    {
+                        text.Append(field.Name).Append('\t').Append(FriendlyTypeName(field.FieldType))
+                            .Append('\t').Append(SingleLine(DebugText(value))).Append('\n');
+                    }
+                }
+            }
+            byte[] bytes = Encoding.UTF8.GetBytes(text.ToString());
+            if (buffer != null && capacity > bytes.Length)
+            {
+                bytes.AsSpan().CopyTo(new Span<byte>(buffer, capacity));
+                buffer[bytes.Length] = 0;
+            }
+            return bytes.Length;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
+    // The fields scenes and the Inspector may set (the same rule ApplyFields applies).
+    private static bool IsInspectorField(FieldInfo field)
+    {
+        const FieldAttributes nonSerializedBit = (FieldAttributes)0x0080;
+        if (field.IsStatic || field.IsInitOnly || field.IsLiteral || (field.Attributes & nonSerializedBit) != 0)
+            return false;
+        return field.IsPublic || field.IsDefined(typeof(ShowInInspectorAttribute), inherit: true) ||
+            field.IsDefined(typeof(HideInInspectorAttribute), inherit: true);
+    }
+
+    // The inverse of ParseInspectorValue.
+    private static string? FormatInspectorValue(Type type, object? value)
+    {
+        static string Number(float x) => x.ToString(CultureInfo.InvariantCulture);
+        return value switch
+        {
+            float x => Number(x),
+            int x => x.ToString(CultureInfo.InvariantCulture),
+            bool x => x ? "true" : "false",
+            string x => SingleLine(x),
+            null when type == typeof(string) => "",
+            Enum x => x.ToString(),
+            Vector2 v => $"{Number(v.X)},{Number(v.Y)}",
+            Vector3 v => $"{Number(v.X)},{Number(v.Y)},{Number(v.Z)}",
+            Vector4 v => $"{Number(v.X)},{Number(v.Y)},{Number(v.Z)},{Number(v.W)}",
+            _ => null
+        };
+    }
+
+    private static string DebugText(object? value)
+    {
+        const int maxItems = 16;
+        switch (value)
+        {
+            case null: return "null";
+            case string text: return "\"" + text + "\"";
+            case float x: return x.ToString(CultureInfo.InvariantCulture);
+            case double x: return x.ToString(CultureInfo.InvariantCulture);
+            case System.Collections.ICollection items:
+            {
+                var parts = new List<string>();
+                foreach (object? item in items)
+                {
+                    if (parts.Count == maxItems) { parts.Add("..."); break; }
+                    parts.Add(item is System.Collections.ICollection ? "[...]" : DebugText(item));
+                }
+                return $"[{items.Count}] {string.Join(", ", parts)}";
+            }
+            default:
+                try { return Convert.ToString(value, CultureInfo.InvariantCulture) ?? ""; }
+                catch (Exception exception) { return "<" + exception.GetType().Name + ">"; }
+        }
+    }
+
+    private static string SingleLine(string text)
+    {
+        if (text.Length > 200)
+            text = text[..200] + "...";
+        return text.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ').Replace('\0', ' ');
+    }
+
+    private static string FriendlyTypeName(Type type)
+    {
+        if (Nullable.GetUnderlyingType(type) is { } inner)
+            return FriendlyTypeName(inner) + "?";
+        if (!type.IsGenericType)
+            return type.Name switch
+            {
+                "Single" => "float", "Int32" => "int", "Boolean" => "bool", "String" => "string",
+                "Double" => "double", "Int64" => "long", "UInt32" => "uint", "Byte" => "byte",
+                _ => type.Name
+            };
+        string name = type.Name[..type.Name.IndexOf('`')];
+        return name + "<" + string.Join(", ", type.GetGenericArguments().Select(FriendlyTypeName)) + ">";
+    }
+
     private static object? ParseInspectorValue(Type type, string encoded)
     {
         if (type == typeof(float))

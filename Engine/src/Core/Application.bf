@@ -55,6 +55,8 @@ class Application
 	bool mRunning = true;
 	int32 mRendererOverride = -1;
 	int64 mFrameLimit = -1;
+	/// --csharp-field-test: the frame on which CSharpRuntime.RunFieldTest reads a running script's fields.
+	int64 mCSharpFieldTestFrame = -1;
 	String mScreenshotPath = new .() ~ delete _;
 	/// --profile-save: where the profiler's recording is written when the program ends.
 	String mProfileSavePath = new .() ~ delete _;
@@ -175,6 +177,8 @@ class Application
 			Headless = true;
 		if (HasArg("--fixed-step"))
 			FixedStep = true;
+		if (HasArg("--csharp-field-test"))
+			mCSharpFieldTestFrame = 100;
 		// Either one overrides how the game was built to start.
 		if (HasArg("--fullscreen"))
 			GameWindow.StartsFullscreen = true;
@@ -404,6 +408,8 @@ class Application
 		// The GPU's times (bgfx's latest finished frame) and every module's counters go in with the frame.
 		Profiler.EndFrame(Headless ? 0 : ProfilerModules.ReadGpu());
 
+		if (mCSharpFieldTestFrame > 0 && Time.FrameCount == mCSharpFieldTestFrame)
+			CSharpRuntime.RunFieldTest(Scene.Active);
 		if (mFrameLimit > 0 && Time.FrameCount >= mFrameLimit)
 			Close();
 	}

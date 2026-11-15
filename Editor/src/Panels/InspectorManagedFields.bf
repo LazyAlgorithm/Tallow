@@ -59,6 +59,9 @@ extension EditorApp
 		let data = mManagedFieldCatalog;
 		bool changed = false;
 		bool tableOpen = false;
+		// During Play the widgets show the running script's values (edits still go to it, as before).
+		let live = scope String();
+		let playing = component.IsLoaded && CSharpRuntime.ReadFields(component.ManagedInstance, false, live);
 		for (let line in data.Split('\n', .RemoveEmptyEntries))
 		{
 			let columns = scope List<StringView>();
@@ -69,14 +72,18 @@ extension EditorApp
 			let name = columns[1];
 			let kind = columns[2];
 			let current = scope String();
-			if (!component.ReadEditorField(name, current))
+			if (playing && FindLiveField(live, name, current))
+			{
+			}
+			else if (!component.ReadEditorField(name, current))
 			{
 				current.Set(columns[3]);
 				// Snapshot hidden serialized defaults into the native
 				// scene/prefab fieldOverrides once. They are persisted without
 				// drawing a visible Inspector widget, and later default
 				// initializer changes do not silently overwrite saved values.
-				if (columns.Count >= 7 && columns[6] == "1")
+				// Never during Play: writing the default would also reset the running script's value.
+				if (columns.Count >= 7 && columns[6] == "1" && !component.IsLoaded)
 				{
 					if (component.WriteEditorField(name, current))
 						changed = true;
@@ -172,6 +179,63 @@ extension EditorApp
 		}
 		if (tableOpen)
 			ImGui.EndTable();
+		if (component.IsLoaded)
+			DrawManagedDebugFields(component);
 		return changed;
+	}
+
+	static bool FindLiveField(StringView live, StringView name, String output)
+	{
+		for (let line in live.Split('\n', .RemoveEmptyEntries))
+		{
+			let separator = line.IndexOf('\t');
+			if (separator > 0 && line.Substring(0, separator) == name)
+			{
+				output.Set(line.Substring(separator + 1));
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// Every field of the running script, private ones and collections included, read-only and refreshed each
+	/// frame: watching gameplay state without stopping the game at a breakpoint.
+	void DrawManagedDebugFields(CSharpBehaviour component)
+	{
+		if (!ImGui.CollapsingHeader("Debug: all fields (live)###csharpdebugfields"))
+			return;
+		let all = scope String();
+		if (!CSharpRuntime.ReadFields(component.ManagedInstance, true, all))
+		{
+			ImGui.TextDisabled("The script's fields could not be read.");
+			return;
+		}
+		if (all.IsEmpty)
+		{
+			ImGui.TextDisabled("This script has no fields.");
+			return;
+		}
+		if (!ImGui.BeginTable("csharpdebugfields", 3, ImGui.TableFlags.RowBg | ImGui.TableFlags.Resizable))
+			return;
+		ImGui.TableSetupColumn("Field");
+		ImGui.TableSetupColumn("Type");
+		ImGui.TableSetupColumn("Value");
+		for (let line in all.Split('\n', .RemoveEmptyEntries))
+		{
+			var parts = line.Split('\t');
+			let name = parts.GetNext() case .Ok(let a) ? a : "";
+			let type = parts.GetNext() case .Ok(let b) ? b : "";
+			let value = parts.GetNext() case .Ok(let c) ? c : "";
+			ImGui.TableNextRow();
+			ImGui.TableNextColumn();
+			ImGui.Text(name);
+			ImGui.TableNextColumn();
+			ImGui.TextDisabled(scope String(type).CStr());
+			ImGui.TableNextColumn();
+			ImGui.Text(value);
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip(scope String(value).CStr());
+		}
+		ImGui.EndTable();
 	}
 }

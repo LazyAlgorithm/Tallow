@@ -788,7 +788,11 @@ A full conversion also needs these. Ordered roughly by when they block users.
   again (12 checks). Not done: OnCollisionStay/OnTriggerStay, character-controller
   wall hits (Unity's OnControllerColliderHit), setting `isTrigger` from C#.
 - [ ] `[Sync]` on **Script** fields and an RPC attribute, not only on ECS structs.
-- [ ] Live Inspector values during Play (read managed fields back), not only overrides.
+- [x] Live Inspector values during Play: the Inspector's C# fields show the running
+  script's values (managed `ReadFields`, same text format as the scene), edits still go to
+  the running script, and a "Debug: all fields (live)" section lists every instance field
+  (private ones and collections included, with types) read-only, refreshed each frame.
+  Tested natively in the in-engine run (`--csharp-field-test`, 9 checks).
 - [ ] Script identity: scenes store `scriptType` by full name, so renaming a class or
   namespace silently drops it from scenes. Use the `.tmeta` asset ID of the source file
   plus a `[FormerlyNamed]` style attribute for moves.
@@ -814,8 +818,7 @@ A full conversion also needs these. Ordered roughly by when they block users.
   job (est. 2–3 weeks); the editor UI cannot draw while its own thread is stopped, so the
   debugger must run gameplay on a separate thread or the UI must pump from the DAP
   client's wait loop.
-- [ ] Live variable inspection without breakpoints: read managed fields back each frame
-  into the Inspector during Play (same item as "Live Inspector values" above).
+- [x] Live variable inspection without breakpoints: see "Live Inspector values" above.
 - [~] .NET SDK acquisition: the launcher now checks the SDK and runtime (major 11) as it
   starts, warns on a preview SDK, shows install commands and a download button, rebuilds
   a stale `Tallow.ManagedRuntime`, and `--check-dependencies [--fix]` does the same on the

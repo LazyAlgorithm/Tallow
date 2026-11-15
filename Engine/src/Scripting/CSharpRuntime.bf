@@ -62,6 +62,62 @@ static class CSharpRuntime
 		TriggerExit
 	}
 
+	/// A running script's field values, for the editor during Play. allFields false: the Inspector's fields as
+	/// "name\tvalue" lines in the scene's text; true: every instance field, "name\ttype\tvalue", read-only.
+	public static bool ReadFields(int32 instance, bool allFields, String output)
+	{
+		if (!Ready || instance <= 0)
+			return false;
+		char8[1024] small = ?;
+		var needed = tn_csharp_read_fields(instance, allFields ? 1 : 0, &small, small.Count);
+		if (needed < 0)
+			return false;
+		if (needed < small.Count)
+		{
+			output.Append(StringView(&small, needed));
+			return true;
+		}
+		let large = scope char8[needed + 1];
+		let again = tn_csharp_read_fields(instance, allFields ? 1 : 0, large.Ptr, (int32)large.Count);
+		if (again < 0 || again > needed)
+			return false;
+		output.Append(StringView(large.Ptr, again));
+		return true;
+	}
+
+	/// --csharp-field-test (tools/test_csharp_ingame.py): reads Tests/CSharpInGame's running ApiChecks script from
+	/// the native side, as the editor's Inspector does during Play, and logs INGAME PASS/FAIL lines.
+	public static void RunFieldTest(Scene scene)
+	{
+		void Check(bool ok, StringView what)
+		{
+			if (ok)
+				Log.Info(scope $"INGAME PASS {what}");
+			else
+				Log.Error(scope $"INGAME FAIL {what}");
+		}
+		let runner = scene?.Find("Runner");
+		let behaviour = runner?.GetComponent<CSharpBehaviour>();
+		Check(behaviour != null && behaviour.IsLoaded, "native side finds the running C# script");
+		if (behaviour == null || !behaviour.IsLoaded)
+			return;
+		let fields = scope String();
+		Check(ReadFields(behaviour.ManagedInstance, false, fields), "ReadFields (Inspector fields) succeeds");
+		Check(fields.Contains("Speed\t3\n") && fields.Contains("Label\tfrom scene\n") && fields.Contains("Flag\tfalse\n"),
+			"live Inspector values use the scene's text format");
+		Check(fields.Contains("baseSecret\t7\n"), "live values include base-class [ShowInInspector] fields");
+		Check(!fields.Contains("_tick\t"), "private unexposed fields stay out of the Inspector list");
+		let all = scope String();
+		Check(ReadFields(behaviour.ManagedInstance, true, all), "ReadFields (all fields) succeeds");
+		Check(all.Contains("_tick\tint\t") && all.Contains("_helper\tHelper\t") && all.Contains("Label\tstring\t\"from scene\""),
+			"the debug view lists private fields with types and values");
+		// Editing during Play changes only the running script.
+		Check(behaviour.WriteEditorField("Speed", "4.5"), "an Inspector edit applies during Play");
+		fields.Clear();
+		ReadFields(behaviour.ManagedInstance, false, fields);
+		Check(fields.Contains("Speed\t4.5\n"), "the edit reads back live");
+	}
+
 	/// A collision or trigger callback for one managed script. The other object must be in this session's scene.
 	public static bool Contact(int32 instance, ContactKind kind, GameObject other, Vector3 point = default, Vector3 normal = default, float relativeSpeed = 0)
 	{
@@ -114,6 +170,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_update_input(int32 instance, NativeTickInput* input, float deltaTime);
     [CLink] static extern int32 tn_csharp_update_input_batch(NativeTickBatchItem* items, int32 count);
 	[CLink] static extern int32 tn_csharp_contact_event(int32 instance, NativeContact* contact);
+	[CLink] static extern int32 tn_csharp_read_fields(int32 instance, int32 mode, char8* buffer, int32 capacity);
 	[CLink] static extern int32 tn_csharp_detach(int32 instance);
 	[CLink] static extern void tn_csharp_shutdown();
 	[CLink] static extern char8* tn_csharp_error();

@@ -57,7 +57,7 @@ def main() -> int:
                         "--configuration", "Debug", "--nologo", "--verbosity", "quiet"], check=True)
 
         run = subprocess.run(
-            [str(launcher), "--game", "--project", str(project), "--headless", "--fixed-step", "--frames", "600"],
+            [str(launcher), "--game", "--project", str(project), "--headless", "--fixed-step", "--csharp-field-test", "--frames", "600"],
             capture_output=True, text=True, timeout=180)
         output = run.stdout + run.stderr
         lines = [line for line in output.splitlines() if "INGAME" in line or "[Tallow C#]" in line]

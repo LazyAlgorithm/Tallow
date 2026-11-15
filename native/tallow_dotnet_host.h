@@ -105,6 +105,9 @@ int32_t tn_csharp_update_input_batch(
     const tn_csharp_tick_batch_item* items, int32_t count);
 // Calls OnCollisionEnter/Exit or OnTriggerEnter/Exit; 1 on success.
 int32_t tn_csharp_contact_event(int32_t script_instance, const tn_csharp_contact* contact);
+// Live field values for the editor (mode 0: Inspector fields, 1: all, read-only). Writes UTF-8 and a NUL when
+// it fits; returns the bytes needed without the NUL, or -1 on failure.
+int32_t tn_csharp_read_fields(int32_t script_instance, int32_t mode, char* buffer, int32_t capacity);
 int32_t tn_csharp_detach(int32_t script_instance);
 void tn_csharp_shutdown(void);
 const char* tn_csharp_error(void);
