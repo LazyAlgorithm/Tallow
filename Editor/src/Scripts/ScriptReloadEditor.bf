@@ -150,6 +150,7 @@ extension EditorApp
 	void PollScriptReload()
 	{
 		CollectCheckResults();
+		CheckOpenScriptsOnDisk();
 		// Managed projects are monitored for external source changes, but
 		// never enter the old Beef library reload pipeline.
 		if (mManagedGameplay)

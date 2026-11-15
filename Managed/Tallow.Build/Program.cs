@@ -17,7 +17,7 @@ namespace Tallow.ManagedBuild;
 /// </summary>
 internal static class Program
 {
-    private sealed record Definition(string Name, string Folder, List<string> References);
+    private sealed record Definition(string Name, string Folder, List<string> References, string RootNamespace);
 
     private static readonly Regex AssemblyName = new(
         @"^[A-Za-z_][A-Za-z0-9_.]*$", RegexOptions.CultureInvariant);
@@ -77,7 +77,21 @@ internal static class Program
                     references.Add(reference.GetString()!);
                 }
             }
-            definitions.Add(name, new Definition(name, folder, references));
+            // Optional, as in Unity: the namespace the editor gives new scripts in this assembly.
+            string rootNamespace = name;
+            if (root.TryGetProperty("rootNamespace", out JsonElement namespaceValue))
+            {
+                if (namespaceValue.ValueKind != JsonValueKind.String)
+                    throw new InvalidOperationException($"Invalid rootNamespace in: {path}");
+                string text = namespaceValue.GetString()!;
+                if (text.Length > 0)
+                {
+                    if (!text.Split('.').All(part => AssemblyName.IsMatch(part)))
+                        throw new InvalidOperationException($"Invalid rootNamespace '{text}' in: {path}");
+                    rootNamespace = text;
+                }
+            }
+            definitions.Add(name, new Definition(name, folder, references, rootNamespace));
         }
 
         foreach (Definition definition in definitions.Values)
@@ -114,14 +128,14 @@ internal static class Program
     }
 
     private static XDocument CreateProject(
-        string name, IEnumerable<string> files, IEnumerable<string> references, string api,
-        string output)
+        string name, string rootNamespace, IEnumerable<string> files, IEnumerable<string> references,
+        string api, string output)
     {
         var properties = new XElement("PropertyGroup",
             new XElement("TargetFramework", "net11.0"),
             new XElement("LangVersion", "15.0"),
             new XElement("AssemblyName", name),
-            new XElement("RootNamespace", name),
+            new XElement("RootNamespace", rootNamespace),
             new XElement("Nullable", "enable"),
             new XElement("ImplicitUsings", "enable"),
             new XElement("EnableDefaultCompileItems", "false"),
@@ -472,7 +486,9 @@ internal static class Program
             string[] refPaths = references.Select(reference => paths[reference]).ToArray();
             string outputFolder = Path.Combine(output, name);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var csproj = CreateProject(name, filesByAssembly[name].Order(), refPaths, api, outputFolder);
+            string rootNamespace = name == "Tallow.Game" ? name : definitions[name].RootNamespace;
+            var csproj = CreateProject(name, rootNamespace, filesByAssembly[name].Order(), refPaths, api,
+                outputFolder);
             // MSBuild treats project file timestamps as inputs. Saving an
             // identical .csproj on every no-op build invalidates otherwise
             // reusable compilation state, including referenced asmdefs.

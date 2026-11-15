@@ -10,7 +10,10 @@ is complete.
 - Target .NET 11, C# 15, nullable-enabled managed projects.
 - `Managed/Tallow.Build` generates `Tallow.Game` and assembly-definition projects.
 - `*.tasmdef` JSON files describe trusted gameplay assembly boundaries:
-  `{"name":"Gameplay","references":[]}`; nested definitions own their own trees.
+  `{"name":"Gameplay","rootNamespace":"MyGame.Gameplay","references":["Core"]}`;
+  `rootNamespace` is optional (default: the name) and is what new scripts in that folder
+  use. Nested definitions own their own trees. Click one in the Project panel to edit it
+  in the Inspector (references, checks, Apply/Revert).
 - `Managed/Tallow.API` contains initial managed game types and callbacks.
 - `Managed/Tallow.ManagedHost` and `Tests/CSharpGameplay` are managed smoke-test scaffolding.
 - `Managed/Tallow.ManagedRuntime` exports trusted C# script lifecycle functions to native code.

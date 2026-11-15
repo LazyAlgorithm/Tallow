@@ -415,23 +415,20 @@ static class ProjectGenerator
 
 		// Packaged engines carry immutable identity. New projects are pinned
 		// before the first build; source checkouts without a manifest stay legacy.
-		if (File.Exists(scope $"{engineRoot}/tallow-version.json"))
+		if (EngineVersions.HasManifest(engineRoot))
 		{
-			let command = scope String();
-			command.AppendF("{} ", Terminal.Python);
-			Terminal.Quote(scope $"{engineRoot}/tools/engine_versions.py" , command);
-			command.Append(" pin-new ");
-			Terminal.Quote(folder, command);
-			command.Append(" ");
-			Terminal.Quote(engineRoot, command);
-			if (Terminal.Run(command) != 0)
+			let detail = scope String();
+			if (!EngineVersions.PinNew(folder, engineRoot, detail))
 			{
-				error.Set("Could not pin the new project to this Tallow engine build.");
+				error.Set(scope $"Could not pin the new project to this Tallow engine build. {detail}");
 				return false;
 			}
 		}
 
-		project.WriteBuildFiles();
+		// BeefSpace/BeefProj are only for Beef gameplay; Project.Build writes them when a
+		// legacy native build is asked for, so a C# project starts without them.
+		if (template != .Empty)
+			project.WriteBuildFiles();
 
 		Write(scope $"{folder}/.gitignore" , "build/\nrecovery/\n.cache/\nPackages/Downloads/\nPackages/Exports/\nBeefSpace.toml\nBeefProj.toml\n");
 
@@ -451,7 +448,6 @@ static class ProjectGenerator
 				Directory.CreateDirectory(scope $"{folder}/src/{sub}").IgnoreError();
 			CopyTemplateFiles(scope $"{engineRoot}/Editor/templates/empty", scope $"{folder}/src", name);
 			Write(scope $"{folder}/.template" , "empty");
-			project.WriteBuildFiles();
 			return true;
 		}
 

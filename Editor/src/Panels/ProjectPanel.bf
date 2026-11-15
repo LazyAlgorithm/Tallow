@@ -312,7 +312,7 @@ extension EditorApp
 			{
 				mSelectedAsset.Set(entry.path);
 				// A material clicked here is what the Inspector shows, until an object is selected again.
-				mInspectAsset = entry.name.EndsWith(".tmat") || entry.name.EndsWith(".tdata");
+				mInspectAsset = entry.name.EndsWith(".tmat") || entry.name.EndsWith(".tdata") || entry.name.EndsWith(".tasmdef");
 			}
 			mProjectPressed.Clear();
 		}
@@ -921,9 +921,12 @@ extension EditorApp
 				break;
 			}
 			let assemblyText = scope String();
-			assemblyText.AppendF("{{\"name\":\"{}\",\"references\":[]}}", mNewItemName);
+			assemblyText.AppendF("{{\n  \"name\": \"{}\",\n  \"references\": []\n}}\n", mNewItemName);
 			File.WriteAllText(definition, assemblyText).IgnoreError();
 			Log.Info(scope $"Created {definition}.");
+			// Show it in the Inspector, as Unity does with a new asset.
+			mSelectedAsset.Set(definition);
+			mInspectAsset = true;
 		case 2:
 			if (!ProjectGenerator.IsValidName(mNewItemName))
 			{

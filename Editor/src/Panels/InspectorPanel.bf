@@ -147,6 +147,8 @@ extension EditorApp
 			}
 			else if (!locked && mInspectAsset && mSelectedAsset.EndsWith(".tdata"))
 				DrawDataAssetInspector(mSelectedAsset);
+			else if (!locked && mInspectAsset && mSelectedAsset.EndsWith(".tasmdef"))
+				DrawAssemblyDefinitionInspector(mSelectedAsset);
 			else if (!locked && mInspectAsset && Assets.IsConvertedModel(mSelectedAsset))
 				DrawModelImportInspector(mSelectedAsset);
 			else if (selected == null)

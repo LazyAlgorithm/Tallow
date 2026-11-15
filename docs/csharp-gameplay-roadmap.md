@@ -1,6 +1,6 @@
 # C# gameplay migration — actionable roadmap and handoff
 
-Last updated: 2026-11-14. Source branch: **feature/csharp-gameplay** of [LazyAlgorithm/Tallow](https://github.com/LazyAlgorithm/Tallow). Keep changes on this branch, **not** `ecs`, until acceptance tests pass. Also read [C# architecture and current implementation](csharp-gameplay.md).
+Last updated: 2026-11-14 (review section and P6 added). Source branch: **feature/csharp-gameplay** of [LazyAlgorithm/Tallow](https://github.com/LazyAlgorithm/Tallow). Keep changes on this branch, **not** `ecs`, until acceptance tests pass. Also read [C# architecture and current implementation](csharp-gameplay.md).
 
 ## For a future ChatGPT conversation
 
@@ -54,7 +54,84 @@ Read this entire checklist, `docs/csharp-gameplay.md`, then inspect **current** 
 - **Native build failure found locally:** Beef rejected directly deferring a cleanup mixin in new `CSharpBindingManifest.bf`. Wrapped `ClearAndDeleteItems!(records)` in a `defer { ... }` block in `58cf1a3`. Await full native rebuild confirmation; no C# binding generator completion claimed.
 - **Performance increment:** Replaced O(all managed instances) `GetComponent<T>()` lookup in the .NET runtime with an entity-indexed list preserving attach order, maintaining the index across attach/detach/unload/shutdown (`44ebdef`). Existing native-host GetComponent integration test exercises this path; CI is pending.
 
+## 2026-11-14 review of the branch against `ecs` (Claude)
+
+Reviewed `7a7b6ca1..c6c17898` (356 commits). Fixed in `044f4937`, `cfac557f` and the
+commit that adds this section; each fix was checked by a headless run of the real
+player unless noted.
+
+- Bool Inspector defaults: the catalog wrote `True`, the Inspector only read `true`/`1`.
+- Saving a `.bf`/text file in a C# project set `mScriptsNeedReload`, which then blocked
+  Play forever ("Script reload is unavailable") and started BeefBuild. Graph saves and
+  Check Errors also fell through to BeefBuild. C# projects now never run BeefBuild.
+- Adding a C# component from the Inspector **during Play** now calls `Configure`.
+- Editing one field during Play re-applied every saved override, undoing runtime state.
+- Bare C# ECS entities survived Stop; `SceneManager.Load` reused GameObject IDs within
+  one session (stale handles could alias new objects). Both fixed.
+- `.tasmdef` edits now trigger a compile; `fields.tsv` is cached instead of read per frame.
+- Private `[ShowInInspector]` fields on a base class were never catalogued/restored.
+- NaN/Inf ignored by Transform writes and the older Rigidbody calls; a script that throws
+  every tick is logged once then periodically; hostfxr reads env vars as UTF-16 on Windows
+  (CI-only verification); the explicit legacy native build applies the toolchain again;
+  source checkouts no longer run the Python version check on every open.
+- Code editor: `1f`/`2.5d`/`3m`/`4UL` suffixes colored as numbers; completion inside
+  `[ ]` lists attribute classes by short name (Tallow, framework and user attributes,
+  covered by Roslyn tests). Interactive editor confirmation still needed.
+- New empty projects ship `Scripts/FirstPersonCharacter.cs` (C#) instead of a graph
+  compiled to Beef, which the precompiled editor could not load.
+- `Tests/CSharpExpose/fixture.tsv` had drifted from the engine manifest; native CI now
+  fails when they differ.
+
+**New test:** `tools/test_csharp_ingame.py` builds `Tests/CSharpInGame` and runs 45 checks
+inside the real player with `--fixed-step` (new switch: one fixed tick per frame). Scene,
+Jolt and Flecs are the engine's own, not the C++ ABI double. Passes on Nobara; added to
+native Linux CI.
+
+**Not fixed, deliberately left to roadmap items:** release builds hardcode
+`Tallow.ManagedRuntime/bin/Debug` (P4 packaging); Windows may keep `Tallow.Game.dll`
+locked after unload (P4 hot reload: load from a stream/shadow copy); graphs still compile
+to Beef (P3).
+
+## 2026-11-14 later: launcher dependencies, version pins, external edits, assembly definitions
+
+- **Launcher dependency check** (`Editor/src/Project/DotNetCheck.bf`): runs on a worker
+  thread when the launcher opens. Red/amber lines above the project list for a missing or
+  old SDK, a missing runtime, a preview SDK, or a `Tallow.ManagedRuntime` older than its
+  sources, with Download .NET / Copy install command / Build C# runtime / Check again.
+  `--build-project` checks before compiling and rebuilds a stale runtime.
+  `TallowLauncher --check-dependencies [--fix]` exits 2 when something blocks. Tested:
+  healthy, stale (touched source), `--fix`, and no `dotnet` on PATH.
+- **Version pins without Python** (`Editor/src/Project/EngineVersions.bf`): same files
+  and verdicts as `tools/engine_versions.py`, tested against it with a temporary
+  `tallow-version.json`: pin on create, same, upgrade-needed, `--upgrade` (lock rewrite
+  and backup), newer project format refused, and a legacy `project.tessera` upgrade with
+  the namespace rename (`TesseraIntro` and prose left alone).
+- New empty projects no longer get `BeefSpace.toml`/`BeefProj.toml`; the legacy native
+  build writes them when asked.
+- **External script edits**: open documents check the file every 0.5 s. Unchanged here →
+  reloaded (caret line kept); unsaved changes here → one warning, and saving is a
+  deliberate overwrite. Before this, saving in Tallow silently overwrote an IDE's edit.
+- **Assembly definition Inspector** (`Editor/src/Tools/AssemblyDefinitionEditor.bf`):
+  click a `.tasmdef` in the Project panel. Name, Root Namespace, Assembly Definition
+  References (add from a list that greys out cycles; remove; click to jump), live checks
+  matching Tallow.Build (reserved/duplicate names, missing/self/duplicate references,
+  cycles, two definitions in one folder, bad namespace), Apply/Revert, Scripts it owns,
+  Referenced By. Renaming updates other definitions' references. Unknown keys are kept
+  verbatim. New `rootNamespace` key is honoured by Tallow.Build (csproj RootNamespace) and
+  by the editor's new-script templates. Not modelled yet (no compiler support): platform
+  include/exclude, define constraints, version defines, precompiled/NuGet references,
+  allow-unsafe (deliberately off).
+- **Test:** `--script-files-test` in the editor runs 25 checks of the above in a scratch
+  folder (`<config>/script-files-test`) and prints `SCRIPT FILES TEST PASSED`.
+
 ## P0 — stabilize, compile, test full precompiled native editor
+
+Headless evidence (2026-11-14, Nobara, launcher built from this branch; **not** an
+interactive editor test): `--create` makes a C# empty project; `--build-project` compiles
+it with the .NET SDK only (1.2 s warm, no BeefBuild); a project with a CS0029 error fails
+`--build-project` with the compiler message; `--game` before any build stops with
+"gameplay assembly is missing" and exit code 1; after a build `--game` runs; a project
+with no C# sources builds and runs with no false missing-DLL error.
 
 - [ ] Pull current HEAD and run full Nobara Linux **BeefBuild** of Tallow native/editor/launcher. Fix all compiler errors introduced by migration; add CI native editor builds to catch these without depending on the user's testing.
 - [ ] Test launcher opening **existing, empty, and broken C# game projects**. Confirm same precompiled editor opens each and no per-project BeefBuild or native toolchain discovery blocks opening.
@@ -683,6 +760,84 @@ claim automatic replication of dynamically created joints.
   Play/Stop validation; strings, arrays, object references and general
   nested serialized types still need conversion.
 
+
+## P6 — gaps the earlier phases did not cover (added 2026-11-14)
+
+A full conversion also needs these. Ordered roughly by when they block users.
+
+**Authoring basics (before calling P2 done)**
+- [ ] Script exception policy: log the first exception with a source-mapped, clickable
+  stack trace in the Console; decide whether a throwing component keeps running (Unity
+  does) or is disabled after N failures. Never let one script stop the scene.
+- [ ] Remaining `Component` callbacks for C#: `OnFrame`, `OnNetworkEvent`,
+  `OnDrawGizmos`, `OnValidate`, and the save hooks (`SaveFields`, `OnSaving`, `OnLoaded`).
+- [ ] Main-thread async: a tick-driven `SynchronizationContext` so `await` and timers
+  resume on the game thread, cancelled on Stop, scene unload and hot reload (or they
+  root the collectible ALC). Decide whether coroutines are offered as well.
+- [ ] Collision/trigger callbacks delivered to C# scripts (listed under P2 Jolt; it is the
+  most-used missing physics feature).
+- [ ] `[Sync]` on **Script** fields and an RPC attribute, not only on ECS structs.
+- [ ] Live Inspector values during Play (read managed fields back), not only overrides.
+- [ ] Script identity: scenes store `scriptType` by full name, so renaming a class or
+  namespace silently drops it from scenes. Use the `.tmeta` asset ID of the source file
+  plus a `[FormerlyNamed]` style attribute for moves.
+- [ ] Scene safety: unknown component blocks are dropped on load and lost on the next
+  save. Preserve them verbatim and warn, so opening a project in the wrong editor (or
+  with a broken build) cannot destroy data.
+
+**Tooling and environment**
+- [ ] External IDEs: generate a solution Rider/VS/VS Code open directly, with Tallow.API
+  docs. Open scripts already follow edits saved by another program (see below).
+- [ ] Debugging, in two steps. (1) Attach: Tallow.Game is built Debug with portable PDBs
+  and runs on CoreCLR inside the editor process, so VS Code (C# Dev Kit / netcoredbg),
+  Rider or Visual Studio can attach to the editor PID today with breakpoints, stepping and
+  locals. Needed: a "Debug > Attach C# debugger" item that prints/copies the PID, a
+  generated `.vscode/launch.json` attach config, `DOTNET_` settings that keep JIT
+  optimisation off in Play, and documentation. A breakpoint freezes the whole editor
+  (gameplay runs on the main thread), which is expected. (2) Built-in: breakpoints in
+  Tallow's own code editor need a DAP client talking to netcoredbg (MIT) as a child
+  process; gutter breakpoints, a paused-state toolbar and a locals/watch panel. Larger
+  job (est. 2–3 weeks); the editor UI cannot draw while its own thread is stopped, so the
+  debugger must run gameplay on a separate thread or the UI must pump from the DAP
+  client's wait loop.
+- [ ] Live variable inspection without breakpoints: read managed fields back each frame
+  into the Inspector during Play (same item as "Live Inspector values" above).
+- [~] .NET SDK acquisition: the launcher now checks the SDK and runtime (major 11) as it
+  starts, warns on a preview SDK, shows install commands and a download button, rebuilds
+  a stale `Tallow.ManagedRuntime`, and `--check-dependencies [--fix]` does the same on the
+  command line. Still open: Manager-side install of a pinned SDK, and a GA SDK (the branch
+  builds with **.NET 11 RC1**).
+- [~] Python-free ordinary use: version check, verify, pin and upgrade are Beef
+  (`Editor/src/Project/EngineVersions.bf`), so creating, opening and upgrading projects
+  no longer need Python. Still Python: player export (`tools/build_player.py`), engine
+  packaging (`tools/package_engine.py`), the web export preview server (`python3 -m
+  http.server`), and the legacy Beef language service.
+- [ ] Third-party managed libraries/NuGet references in `.tasmdef`, with trust, licence
+  and trimming/AOT rules.
+- [ ] Profiler: per-script C# timings in the existing Profiler window, GC allocation and
+  collection markers.
+- [ ] Packages (`.tpackage`) that carry C# source/assemblies.
+- [ ] Editor extensibility scope: decide whether C# can add custom inspectors, editor
+  windows and gizmo tools, or whether editor tooling stays Beef-only.
+
+**Platforms, content, migration**
+- [ ] macOS (hostfxr `.dylib` path exists, untested) and Web (currently a no-runtime stub):
+  decide support and the managed runtime for each.
+- [ ] Existing Beef games (Ringfall, Polystrike, Tumble Toys, Zombie Tag and others): decide
+  between indefinite legacy Beef gameplay in the same editor and a conversion tool or
+  guide. Today the precompiled editor drops their components (see Scene safety above).
+- [ ] Website documentation and tutorials still teach Beef gameplay; convert them with
+  the samples (P3).
+- [ ] Branch upkeep: merge `ecs` into this branch regularly so the final merge stays
+  reviewable.
+
+**Visual scripting decision (recorded for P3):** keep compiling graphs to source and
+retarget the existing graph compiler from Beef to C#, rather than writing a Beef-side
+interpreter. One execution model keeps graphs on the same scheduling, networked tick,
+prediction and NativeAOT path as hand-written C#; graphs can call user C# methods and
+be called from C# without a reflection bridge; Roslyn gives graph errors with source
+mapping. An interpreter's only clear advantage is editing a graph during Play without a
+compile; revisit that as an optional feature after P3 if the ~1 s compile is too slow.
 
 ## P5 — NativeAOT shipping profile and source protection (default for release; November 14, 2026)
 

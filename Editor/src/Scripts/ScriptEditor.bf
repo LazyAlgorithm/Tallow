@@ -27,6 +27,58 @@ extension EditorApp
 		public bool open = true;
 		/// Code generated from a graph: shown for reference, edited through the graph.
 		public bool readOnly;
+		/// The file's modification time when it was last read or saved here; a different time on disk
+		/// means another program (an external IDE, git) changed it.
+		public DateTime diskTime;
+		/// Changed both on disk and here: warned about once, until the next save or reload.
+		public bool diskConflict;
+	}
+
+	System.Diagnostics.Stopwatch mDiskCheckClock = new .(true) ~ delete _;
+
+	static DateTime ScriptDiskTime(StringView path)
+	{
+		if (File.GetLastWriteTimeUtc(path) case .Ok(let time))
+			return time;
+		return default;
+	}
+
+	/// Picks up edits made to open scripts by other programs. A document with no unsaved changes
+	/// here is reloaded; one with unsaved changes keeps them and gets a warning, so saving is a
+	/// deliberate choice to overwrite the other program's version.
+	void CheckOpenScriptsOnDisk(bool now = false)
+	{
+		if (!now && mDiskCheckClock.ElapsedMilliseconds < 500)
+			return;
+		mDiskCheckClock.Restart();
+		for (let document in mScripts)
+		{
+			let time = ScriptDiskTime(document.path);
+			if (time == default || time == document.diskTime)
+				continue;
+			let text = scope String();
+			if (File.ReadAllText(document.path, text, true) case .Err)
+				continue;
+			if (StringView(tn_code_get_text(document.handle)) == text)
+			{
+				document.diskTime = time; // Saved with identical text (formatter, git checkout of the same).
+				document.diskConflict = false;
+				continue;
+			}
+			if (!tn_code_is_dirty(document.handle))
+			{
+				tn_code_reload_text(document.handle, text.CStr());
+				document.diskTime = time;
+				document.diskConflict = false;
+				Log.Info(scope $"Reloaded {document.name}: it was changed outside the editor.");
+				RefreshScriptDiagnostics();
+			}
+			else if (!document.diskConflict)
+			{
+				document.diskConflict = true;
+				Log.Warning(scope $"{document.name} was changed outside the editor while it has unsaved changes here. Saving will replace the other version; close it without saving to load that one.");
+			}
+		}
 	}
 
 	class ScriptProblem
@@ -45,6 +97,7 @@ extension EditorApp
 	[CLink] static extern void tn_code_render(void* handle, char8* id, float width, float height);
 	[CLink] static extern bool tn_code_is_dirty(void* handle);
 	[CLink] static extern void tn_code_mark_saved(void* handle);
+	[CLink] static extern void tn_code_reload_text(void* handle, char8* text);
 	[CLink] static extern void tn_code_clear_diagnostics(void* handle);
 	[CLink] static extern void tn_code_add_diagnostic(void* handle, int32 line, int32 column, int32 kind, bool isError, char8* message);
 	[CLink] static extern void tn_code_set_read_only(void* handle, bool readOnly);
@@ -197,6 +250,7 @@ extension EditorApp
 			document.path.Set(path);
 			Path.GetFileName(path, document.name);
 			document.handle = tn_code_create(text.CStr(), path.EndsWith(".tui") ? 1 : (path.EndsWith(".tcss") ? 2 : ((path.EndsWith(".tshader") || path.EndsWith(".tcompute")) ? 3 : (path.EndsWith(".cs") ? 4 : (path.EndsWith(".tasmdef") ? 5 : 0)))));
+			document.diskTime = ScriptDiskTime(path);
 			document.readOnly = FindSourceGraph(path, scope String());
 			tn_code_set_read_only(document.handle, document.readOnly);
 			mScripts.Add(document);
@@ -237,6 +291,8 @@ extension EditorApp
 			return;
 		}
 		tn_code_mark_saved(document.handle);
+		document.diskTime = ScriptDiskTime(document.path);
+		document.diskConflict = false;
 		if (document.path.EndsWith(".tui") || document.path.EndsWith(".tcss"))
 			OnUiSourceSaved(document.path);
 		else if (document.path.EndsWith(".tshader") || document.path.EndsWith(".tcompute"))

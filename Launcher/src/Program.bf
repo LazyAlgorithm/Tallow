@@ -81,6 +81,15 @@ class LauncherApp : Application
 		SetMessage(mMissingTools.IsEmpty ? "Using the Beef compiler you chose." : "Using the Beef compiler you chose. Some tools are still missing.", !mMissingTools.IsEmpty);
 	}
 	bool mMessageIsError;
+	/// .NET SDK, runtime and managed-runtime check, run on a worker as the launcher starts.
+	DotNetCheck.Report mDependencies ~ delete _;
+	DotNetCheck.Report mPendingDependencies ~ delete _;
+	Thread mDependencyThread ~ { if (_ != null) { _.Join(); delete _; } };
+	bool mDependencyDone;
+	bool mDependencyRunning;
+	/// True while the worker rebuilds the managed runtime instead of only checking.
+	bool mDependencyRebuild;
+	String mDependencyLog = new .() ~ delete _;
 	bool mSetupPending;
 	bool mSetupFailed;
 	bool mSetupRunning;
@@ -109,8 +118,9 @@ class LauncherApp : Application
 		if (!mEngineRoot.IsEmpty)
 			SetWindowIcon(scope $"{mEngineRoot}/icon.png");
 		RecentProjects.Load();
-		// C# gameplay uses the .NET SDK. Native build dependencies are
-		// checked explicitly, not while starting an already built editor.
+		// C# gameplay needs the .NET SDK and an up-to-date managed runtime; check both
+		// without holding up the window. Native build tools are only checked on request.
+		StartDependencyCheck(false);
 		let home = scope String();
 #if BF_PLATFORM_WINDOWS
 		Environment.GetEnvironmentVariable("USERPROFILE", home).IgnoreError();
@@ -153,47 +163,21 @@ class LauncherApp : Application
 		SetMessage(scope $"Opening {path} ..." , false);
 	}
 
-	/// Asks the engine's version tool about a project: "same", or "upgrade"/"newer" with the two versions after it.
+	/// Asks about a project's engine pin: "same", or "upgrade"/"newer" with the two versions.
+	/// Source checkouts carry no version manifest, so every project is "same" with them.
 	static void CheckProjectVersion(StringView path, String verdict, String from, String to)
 	{
 		verdict.Set("same");
 		let root = scope String();
-		if (!ProjectGenerator.FindEngineRoot(root))
+		if (!ProjectGenerator.FindEngineRoot(root) || !EngineVersions.HasManifest(root))
 			return;
-		Directory.CreateDirectory(scope $"{path}/.tallow-reload").IgnoreError();
-		let output = scope $"{path}/.tallow-reload/version-check.txt";
-		if (RunVersionTool("check", path, root, output) != 0)
-			return;
-		let text = scope String();
-		if (File.ReadAllText(output, text) case .Err)
-			return;
-		text.Trim();
-		int part = 0;
-		for (let word in text.Split('\t'))
-		{
-			(part == 0 ? verdict : (part == 1 ? from : to)).Set(word);
-			part++;
-		}
-	}
-
-	static int RunVersionTool(StringView action, StringView path, StringView root, StringView output)
-	{
-		let command = scope String();
-		command.AppendF("{} ", Terminal.Python);
-		Terminal.Quote(scope $"{root}/tools/engine_versions.py", command);
-		command.AppendF(" {} ", action);
-		Terminal.Quote(path, command);
-		command.Append(" ");
-		Terminal.Quote(root, command);
-		command.Append(" > ");
-		Terminal.Quote(output, command);
-		return Terminal.Run(command);
+		if (!EngineVersions.Check(path, root, verdict, from, to))
+			verdict.Set("same");
 	}
 
 	/// The command-line version of the upgrade warning: --upgrade says yes to it.
 	public static bool PrepareProject(StringView path, bool upgrade, String error)
 	{
-		Toolchain.Apply();
 		let verdict = scope String();
 		let from = scope String();
 		let to = scope String();
@@ -212,11 +196,11 @@ class LauncherApp : Application
 	/// Moves a project to the engine this launcher belongs to.
 	public static bool UpgradeProject(StringView path, String error)
 	{
-		Toolchain.Apply();
 		let root = scope String();
-		if (!ProjectGenerator.FindEngineRoot(root) || RunVersionTool("upgrade", path, root, scope $"{path}/.tallow-reload/version-check.txt") != 0)
+		let detail = scope String();
+		if (!ProjectGenerator.FindEngineRoot(root) || !EngineVersions.Upgrade(path, root, detail))
 		{
-			error.Set(scope $"{path} could not be upgraded to this Tallow engine.");
+			error.Set(scope $"{path} could not be upgraded to this Tallow engine. {detail}");
 			return false;
 		}
 		return true;
@@ -255,21 +239,10 @@ class LauncherApp : Application
 			return false;
 		}
 		// Exact-version validation runs before any generated build files are changed.
-		let lockPath = scope $"{project.Path}/tallow-engine.lock.json";
-		if (File.Exists(lockPath))
+		if (!EngineVersions.Verify(project.Path, project.EngineRoot))
 		{
-			let command = scope String();
-			command.AppendF("{} ", Terminal.Python);
-			Terminal.Quote(scope $"{project.EngineRoot}/tools/engine_versions.py", command);
-			command.Append(" verify ");
-			Terminal.Quote(project.Path, command);
-			command.Append(" ");
-			Terminal.Quote(project.EngineRoot, command);
-			if (Terminal.Run(command) != 0)
-			{
-				error.Set("This project requires its pinned Tallow engine build. Open it with that version or install the missing version in Engine Manager.");
-				return false;
-			}
+			error.Set("This project requires its pinned Tallow engine build. Open it with that version or install the missing version in Engine Manager.");
+			return false;
 		}
 		// The Launcher already links TallowEditor and the native engine. Reuse
 		// that precompiled executable for every C# gameplay project. A broken
@@ -292,6 +265,28 @@ class LauncherApp : Application
 			if (!HasManagedSources(scope $"{project.Path}/src"))
 				return true; // Nothing to compile in an empty managed project.
 			Directory.CreateDirectory(scope $"{project.Path}/build").IgnoreError();
+			// Say what is missing up front rather than relaying a shell's "dotnet: not found".
+			let dependencies = scope DotNetCheck.Report();
+			DotNetCheck.Check(project.EngineRoot, scope $"{project.Path}/build", dependencies);
+			for (let problem in dependencies.problems)
+			{
+				if (problem.blocking && problem.kind != .StaleManagedRuntime)
+				{
+					error.Set(problem.message);
+					return false;
+				}
+			}
+			// Play and --game load the managed runtime; build it now when it is missing or old.
+			if (dependencies.Has(.StaleManagedRuntime))
+			{
+				let runtimeLog = scope String();
+				if (!DotNetCheck.BuildManagedRuntime(project.EngineRoot, scope $"{project.Path}/build", runtimeLog))
+				{
+					error.Set("Tallow's C# runtime did not build:\n");
+					error.Append(runtimeLog);
+					return false;
+				}
+			}
 			let logPath = scope $"{project.Path}/build/csharp-build.log";
 			let command = scope String("dotnet run --project ");
 			Terminal.Quote(scope $"{project.EngineRoot}/Managed/Tallow.Build/Tallow.Build.csproj", command);
@@ -354,6 +349,8 @@ class LauncherApp : Application
 		ImGui.TextDisabled("Projects");
 		ImGui.Separator();
 		ImGui.Spacing();
+		PollDependencyCheck();
+		DrawDependencies();
 		// Missing native build tools must never prevent opening a precompiled
 		// editor. The optional native toolchain setup lives behind explicit actions.
 		let busy = mOpenCountdown > 0;
@@ -646,6 +643,99 @@ class LauncherApp : Application
 	}
 
 	/// What happened last: a note, or an error with buttons to copy it and to open the build log.
+	void StartDependencyCheck(bool rebuildRuntime)
+	{
+		if (mDependencyRunning)
+			return;
+		if (mDependencyThread != null)
+		{
+			mDependencyThread.Join();
+			DeleteAndNullify!(mDependencyThread);
+		}
+		delete mPendingDependencies;
+		mPendingDependencies = new .();
+		mDependencyRunning = true;
+		mDependencyRebuild = rebuildRuntime;
+		mDependencyDone = false;
+		let root = scope String(mEngineRoot);
+		let scratch = scope String();
+		RecentProjects.GetConfigFolder(scratch);
+		let rootCopy = new String(root);
+		let scratchCopy = new String(scratch);
+		mDependencyThread = new Thread(new () =>
+			{
+				if (mDependencyRebuild)
+				{
+					mDependencyLog.Clear();
+					DotNetCheck.BuildManagedRuntime(rootCopy, scratchCopy, mDependencyLog);
+				}
+				DotNetCheck.Check(rootCopy, scratchCopy, mPendingDependencies);
+				delete rootCopy;
+				delete scratchCopy;
+				Interlocked.Store(ref mDependencyDone, true);
+			});
+		mDependencyThread.Start(false);
+	}
+
+	void PollDependencyCheck()
+	{
+		if (!mDependencyRunning || !Interlocked.Load(ref mDependencyDone))
+			return;
+		mDependencyThread.Join();
+		DeleteAndNullify!(mDependencyThread);
+		mDependencyRunning = false;
+		delete mDependencies;
+		mDependencies = mPendingDependencies;
+		mPendingDependencies = null;
+		if (mDependencyRebuild && mDependencies.Has(.StaleManagedRuntime))
+			SetMessage(scope $"Tallow's C# runtime did not build:\n{mDependencyLog}", true);
+	}
+
+	/// Problems with .NET above the project lists. They never stop a project opening (a project with a C#
+	/// problem must still open for repair), but compiling and Play need them fixed.
+	void DrawDependencies()
+	{
+		if (mDependencyRunning && mDependencyRebuild)
+		{
+			ImGui.TextDisabled("Building Tallow's C# runtime...");
+			return;
+		}
+		if (mDependencies == null || mDependencies.problems.IsEmpty)
+			return;
+		for (let problem in mDependencies.problems)
+		{
+			if (problem.blocking)
+				ImGui.TextColored(.(1.0f, 0.45f, 0.4f, 1), problem.message.CStr());
+			else
+				ImGui.TextColored(.(1.0f, 0.82f, 0.35f, 1), problem.message.CStr());
+		}
+		if (mDependencies.Has(.MissingSdk) || mDependencies.Has(.OldSdk) || mDependencies.Has(.MissingRuntime))
+		{
+			if (ImGui.Button("Download .NET"))
+				Terminal.Open(DotNetCheck.DownloadUrl);
+			ImGui.SameLine();
+			if (ImGui.Button("Copy install command"))
+			{
+				let hint = scope String();
+				DotNetCheck.InstallHint(hint);
+				ImGui.SetClipboardText(hint.CStr());
+			}
+			ImGui.SameLine();
+		}
+		else if (mDependencies.Has(.StaleManagedRuntime))
+		{
+			if (ImGui.Button("Build C# runtime"))
+				StartDependencyCheck(true);
+			ImGui.SameLine();
+		}
+		ImGui.BeginDisabled(mDependencyRunning);
+		if (ImGui.Button("Check again"))
+			StartDependencyCheck(false);
+		ImGui.EndDisabled();
+		ImGui.Separator();
+		ImGui.Spacing();
+	}
+
 	void DrawLauncherMessage()
 	{
 		if (mMessageIsError)
@@ -846,6 +936,38 @@ class Program
 				if (missing.IsEmpty)
 					Console.WriteLine("All development tools are installed.");
 				return missing.IsEmpty ? 0 : 2;
+			}
+			// --check-dependencies: what C# gameplay needs (.NET SDK and runtime, Tallow's managed runtime);
+			// exits 2 when something blocks compiling or playing. --fix also builds a stale managed runtime.
+			if (args[i] == "--check-dependencies")
+			{
+#if BF_PLATFORM_WINDOWS
+				UseCommandConsole();
+#endif
+				Gfx.LocateEngineAssets();
+				let root = scope String();
+				ProjectGenerator.FindEngineRoot(root);
+				let scratch = scope String();
+				RecentProjects.GetConfigFolder(scratch);
+				DotNetCheck.Report report = scope .();
+				DotNetCheck.Check(root, scratch, report);
+				if (report.Has(.StaleManagedRuntime) && args.Contains("--fix"))
+				{
+					let log = scope String();
+					if (DotNetCheck.BuildManagedRuntime(root, scratch, log))
+						Console.WriteLine("Built Tallow's C# runtime.");
+					else
+						Console.WriteLine(log);
+					report = scope:: .();
+					DotNetCheck.Check(root, scratch, report);
+				}
+				Console.WriteLine(scope $".NET SDK: {(report.sdkVersion.IsEmpty ? "not found" : report.sdkVersion)}");
+				Console.WriteLine(scope $".NET runtime: {(report.runtimeVersion.IsEmpty ? "not found" : report.runtimeVersion)}");
+				for (let problem in report.problems)
+					Console.WriteLine(scope $"{(problem.blocking ? "Problem" : "Warning")}: {problem.message}");
+				if (report.problems.IsEmpty)
+					Console.WriteLine("Everything C# gameplay needs is installed and up to date.");
+				return report.HasBlocking ? 2 : 0;
 			}
 			if (args[i] == "--create" && i + 1 < args.Count)
 			{

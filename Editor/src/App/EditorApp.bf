@@ -296,6 +296,8 @@ class EditorApp : Application
 			RunThemeTest();
 		if (HasArg("--visibility-test"))
 			RunVisibilityTest();
+		if (HasArg("--script-files-test"))
+			RunScriptFilesTest();
 		if (HasArg("--drag-test"))
 			StartDragTest();
 		if (HasArg("--model-import-test"))

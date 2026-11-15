@@ -155,6 +155,9 @@ extension EditorApp
 			Log.Error(scope $"{path} already exists.");
 			return;
 		}
+		// The namespace of the assembly the folder belongs to (its .tasmdef root namespace), else the project's.
+		let scriptNamespace = scope String();
+		ScriptNamespaceFor(mBrowsePath, scriptNamespace);
 		let text = scope String();
 		switch (template)
 		{
@@ -178,7 +181,7 @@ extension EditorApp
 			    {{
 			    }}
 			}}
-			""", project.Name, name);
+			""", scriptNamespace, name);
 		case .Movement:
 			text.AppendF("""
 			using System.Numerics;
@@ -196,7 +199,7 @@ extension EditorApp
 			        Transform.Position += Velocity * deltaTime;
 			    }}
 			}}
-			""", project.Name, name);
+			""", scriptNamespace, name);
 		case .Timer:
 			text.AppendF("""
 			using Tallow;
@@ -223,7 +226,7 @@ extension EditorApp
 			        // Repeated gameplay action.
 			    }}
 			}}
-			""", project.Name, name);
+			""", scriptNamespace, name);
 		case .Gui:
 			text.AppendF("""
 			using Tallow;
@@ -238,7 +241,7 @@ extension EditorApp
 			        // Managed HUD APIs are being integrated.
 			    }}
 			}}
-			""", project.Name, name);
+			""", scriptNamespace, name);
 		case .Networked:
 			text.AppendF("""
 			using Tallow;
@@ -261,7 +264,7 @@ extension EditorApp
 			            return;
 			    }}
 			}}
-			""", project.Name, name);
+			""", scriptNamespace, name);
 		case .EcsData, .EcsSynced:
 			text.AppendF("""
 			using System.Numerics;
@@ -275,7 +278,7 @@ extension EditorApp
 			    {2}public float Speed;
 			    public Vector3 Velocity;
 			}}
-			""", project.Name, name, template == .EcsSynced ? "[Sync] " : "");
+			""", scriptNamespace, name, template == .EcsSynced ? "[Sync] " : "");
 		case .EcsMixed:
 			text.AppendF("""
 			using Tallow;
@@ -296,7 +299,7 @@ extension EditorApp
 			        // ECS query/handle bindings are being implemented.
 			    }}
 			}}
-			""", project.Name, name);
+			""", scriptNamespace, name);
 		case .EcsQuery, .EcsBulk:
 			text.AppendF("""
 			using Tallow;
@@ -317,7 +320,7 @@ extension EditorApp
 			        // Native packed ECS query bridge is not available yet.
 			    }}
 			}}
-			""", project.Name, name);
+			""", scriptNamespace, name);
 		}
 		if (File.WriteAllText(path, text) case .Ok)
 		{

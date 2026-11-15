@@ -927,6 +927,21 @@ TN_API void tn_code_mark_saved(void* handle)
 	document->savedUndoIndex = document->editor.GetUndoIndex();
 }
 
+// Replace the whole text with the file's new contents after another program changed it,
+// keeping the caret on the same line where that line still exists. Undo history restarts:
+// it described edits to text that is no longer there.
+TN_API void tn_code_reload_text(void* handle, const char* text)
+{
+	Document* document = (Document*)handle;
+	TextEditor& editor = document->editor;
+	const TextEditor::DocPos cursor = editor.GetMainCursorPosition();
+	editor.SetText(std::string_view(text ? text : ""));
+	const size_t lines = editor.GetLineCount();
+	const size_t line = lines == 0 ? 0 : std::min(cursor.line, lines - 1);
+	editor.SetCursor(TextEditor::DocPos(line, 0));
+	document->savedUndoIndex = editor.GetUndoIndex();
+}
+
 TN_API void tn_code_set_read_only(void* handle, bool readOnly) { ((Document*)handle)->editor.SetReadOnlyEnabled(readOnly); }
 TN_API void tn_code_undo(void* handle) { ((Document*)handle)->editor.Undo(); }
 TN_API void tn_code_redo(void* handle) { ((Document*)handle)->editor.Redo(); }
