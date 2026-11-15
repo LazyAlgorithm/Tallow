@@ -673,6 +673,92 @@ public class ApiChecks : CheckBase
         Check("a struct that is not [Component] data is refused with a message", threw);
         a.DestroyLocal();
         b.DestroyLocal();
+        StructureDuringForEach();
+    }
+
+    /// ForEach works on the data in place; what scripts do inside it that changes structure must still work.
+    private void StructureDuringForEach()
+    {
+        var made = new List<EcsEntity>();
+        for (int i = 0; i < 40; i++)
+        {
+            EcsEntity entity = Scene.CreateLocalEcsEntity();
+            entity.Set(new Health { Value = i, Hits = 0 });
+            made.Add(entity);
+        }
+        GameObject victim = Scene.CreateGameObject("ForEachVictim");
+        victim.Entity.Set(new Health { Value = 1000, Hits = 0 });
+        int visited = 0, spawnedObjects = 0;
+        bool readsOld = true, sawNew = false;
+        var spawned = new List<EcsEntity>();
+        Scene.Query<Health>().ForEach((EcsEntity e, ref Health h) =>
+        {
+            visited++;
+            sawNew |= spawned.Contains(e);
+            h.Hits += 1;
+            if (h.Value == 3)
+            {
+                // A new bare entity with data, and a new GameObject that is moved and given data.
+                EcsEntity child = Scene.CreateLocalEcsEntity();
+                child.Set(new Health { Value = 500, Hits = 0 });
+                spawned.Add(child);
+                GameObject made3 = Scene.CreateGameObject("MadeInForEach");
+                made3.Transform.Position = new Vector3(1, 2, 3);
+                made3.Entity.Set(new Health { Value = 501, Hits = 0 });
+                spawnedObjects += made3.Transform.Position == new Vector3(1, 2, 3) ? 1 : 0;
+            }
+            if (h.Value == 5)
+            {
+                // New values for data an entity already has are written at once; adding data is queued.
+                made[6].Set(new Health { Value = 6, Hits = 77 });
+                readsOld &= made[6].Get<Health>().Hits == 77;
+                made[7].Set(new Motion { Drag = 4 });
+                readsOld &= !made[7].Has<Motion>();
+            }
+            if (h.Value == 7)
+                made[8].DestroyLocal();
+            if (h.Value == 9)
+                victim.Destroy();
+        });
+        Check("ForEach in place visits each entity there at the start once, not ones made during it",
+            visited == 41 && !sawNew);
+        Check("a GameObject made inside ForEach works at once (Transform) and its data arrives after",
+            spawnedObjects == 1 && Scene.Find("MadeInForEach")?.Entity.Get<Health>().Value == 501);
+        Check("inside ForEach a new value is seen at once and new data arrives when it ends",
+            readsOld && made[6].Get<Health>().Hits >= 77 && made[7].Get<Motion>().Drag == 4);
+        Check("an entity destroyed inside ForEach is gone after it, and a new one has its data",
+            !made[8].IsAlive && spawned.Count == 1 && spawned[0].Get<Health>().Value == 500);
+        int hits = 0;
+        Scene.Query<Health>().ForEach((EcsEntity e, ref Health h) => hits += h.Hits > 0 ? 1 : 0);
+        Check("writes through ForEach refs land in the data", hits >= 38);
+        // An action that throws ends the ForEach cleanly: the queue is applied and the next ForEach works.
+        bool caught = false;
+        try
+        {
+            Scene.Query<Health>().ForEach((EcsEntity e, ref Health h) =>
+            {
+                made[0].Set(new Health { Value = 0, Hits = 99 });
+                throw new InvalidOperationException("from ForEach");
+            });
+        }
+        catch (InvalidOperationException) { caught = true; }
+        int after = 0;
+        Scene.Query<Health>().ForEach((EcsEntity e, ref Health h) => after++);
+        Check("an exception in ForEach ends it: queued changes applied, later ForEach still works",
+            caught && made[0].Get<Health>().Hits == 99 && after > 0);
+        // Nested ForEach over the same data.
+        int pairs = 0;
+        Scene.Query<Health>().ForEach((EcsEntity e, ref Health h) =>
+        {
+            if (h.Value < 2)
+                Scene.Query<Health>().ForEach((EcsEntity inner, ref Health other) => pairs++);
+        });
+        Check("ForEach can run inside ForEach", pairs == 2 * Scene.Query<Health>().Count);
+        foreach (EcsEntity entity in made)
+            entity.DestroyLocal();
+        foreach (EcsEntity entity in spawned)
+            entity.DestroyLocal();
+        Scene.Find("MadeInForEach")?.Destroy();
     }
 
     private void LocalState()

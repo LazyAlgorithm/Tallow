@@ -160,31 +160,39 @@ static class Ecs
         return scene != null ? scene.World.CountManagedData(schemaIds) : 0;
     }
 
-    /// A page of the entities with every one of the C# data schemas: ids, and rows of their records in order.
+    /// Starts a ForEach that works on the data in place (see World.BeginManagedIteration): a handle, 0 when it
+    /// cannot. Always pair it with EndDataIteration.
     [CSharpExpose]
-    public static int32 CopyDataPage(uint64 session, Span<uint64> schemaIds, int32 offset,
-        Span<uint64> entityIds, Span<uint8> bytes)
+    public static int32 BeginDataIteration(uint64 session, Span<uint64> schemaIds)
     {
         let scene = OfflinePlaying(session);
-        return scene != null ? scene.World.CopyManagedDataPage(schemaIds, offset, entityIds, bytes) : 0;
+        return scene != null ? scene.World.BeginManagedIteration(schemaIds) : 0;
     }
 
-    /// Writes a page of rows back in the order CopyDataPage gave them from the same offset (straight into the
-    /// columns while each entity is still where it was; looked up otherwise).
+    /// The next matching table: its columns' addresses, its entity ids' address and its version counter's address;
+    /// how many rows (0 at the end).
+    /// The addresses hold until the next call or EndDataIteration.
     [CSharpExpose]
-    public static int32 WriteDataPageOrdered(uint64 session, Span<uint64> schemaIds, int32 offset, Span<uint64> entityIds,
-        Span<uint8> bytes)
+    public static int32 NextDataTable(uint64 session, int32 handle, Span<uint64> addresses)
     {
         let scene = OfflinePlaying(session);
-        return scene != null ? scene.World.WriteManagedDataPageOrdered(schemaIds, offset, entityIds, bytes) : 0;
+        return scene != null ? scene.World.NextManagedTable(handle, addresses) : 0;
     }
 
-    /// Writes rows (as CopyDataPage gives them) back; entities that have gone or lost a schema are skipped.
+    /// The current table again, after its version changed while being walked (rows moved); how many rows now.
     [CSharpExpose]
-    public static int32 WriteDataPage(uint64 session, Span<uint64> schemaIds, Span<uint64> entityIds, Span<uint8> bytes)
+    public static int32 RefreshDataTable(uint64 session, int32 handle, Span<uint64> addresses)
     {
         let scene = OfflinePlaying(session);
-        return scene != null ? scene.World.WriteManagedDataPage(schemaIds, entityIds, bytes) : 0;
+        return scene != null ? scene.World.RefreshManagedTable(handle, addresses) : 0;
+    }
+
+    /// Ends the ForEach and applies the changes made during it.
+    [CSharpExpose]
+    public static void EndDataIteration(uint64 session, int32 handle)
+    {
+        // Not OfflinePlaying: a ForEach whose action stopped play must still end, or changes stay queued.
+        CSharpRuntime.PhysicsScene(session)?.World.EndManagedIteration(handle);
     }
 
     [CSharpExpose]

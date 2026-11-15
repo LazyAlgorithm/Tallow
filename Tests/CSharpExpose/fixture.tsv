@@ -176,7 +176,7 @@ method	Tallow.CSharpWorld	TerrainPendingChunks	int	session:ulong	entity:ulong
 method	Tallow.CSharpWorld	UnloadAdditive	bool	session:ulong	group:ulong
 method	Tallow.Cursor	IsLocked	bool
 method	Tallow.Cursor	SetLocked	void	locked:bool
-method	Tallow.Ecs	CopyDataPage	int	session:ulong	schemaIds:System.Span<ulong>	offset:int	entityIds:System.Span<ulong>	bytes:System.Span<byte>
+method	Tallow.Ecs	BeginDataIteration	int	session:ulong	schemaIds:System.Span<ulong>
 method	Tallow.Ecs	CopyLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
 method	Tallow.Ecs	CopyLocalDataPage	int	session:ulong	schemaId:ulong	offset:int	entityIds:System.Span<ulong>	bytes:System.Span<byte>
 method	Tallow.Ecs	CopyRigidbodyMasses	int	session:ulong	offset:int	entityIds:System.Span<ulong>	masses:System.Span<float>
@@ -186,15 +186,16 @@ method	Tallow.Ecs	CountRigidbodies	int	session:ulong
 method	Tallow.Ecs	CreateLocalEntities	int	session:ulong	entityIds:System.Span<ulong>
 method	Tallow.Ecs	CreateLocalEntity	ulong	session:ulong
 method	Tallow.Ecs	DeleteLocalEntity	bool	session:ulong	entity:ulong
+method	Tallow.Ecs	EndDataIteration	void	session:ulong	handle:int
 method	Tallow.Ecs	EntityOfObject	ulong	session:ulong	objectId:ulong
 method	Tallow.Ecs	HasLocalData	bool	session:ulong	entity:ulong	schemaId:ulong
 method	Tallow.Ecs	IsAlive	bool	session:ulong	entity:ulong
+method	Tallow.Ecs	NextDataTable	int	session:ulong	handle:int	addresses:System.Span<ulong>
 method	Tallow.Ecs	ObjectOfEntity	ulong	session:ulong	entity:ulong
+method	Tallow.Ecs	RefreshDataTable	int	session:ulong	handle:int	addresses:System.Span<ulong>
 method	Tallow.Ecs	RegisterLocalData	ulong	session:ulong	schemaId:ulong	size:int	alignment:int
 method	Tallow.Ecs	RemoveLocalData	bool	session:ulong	entity:ulong	schemaId:ulong
 method	Tallow.Ecs	SetLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
-method	Tallow.Ecs	WriteDataPage	int	session:ulong	schemaIds:System.Span<ulong>	entityIds:System.Span<ulong>	bytes:System.Span<byte>
-method	Tallow.Ecs	WriteDataPageOrdered	int	session:ulong	schemaIds:System.Span<ulong>	offset:int	entityIds:System.Span<ulong>	bytes:System.Span<byte>
 method	Tallow.GUI	Button	bool	x:float	y:float	width:float	height:float	label:string
 method	Tallow.Input	GetAxis	float	name:string
 method	Tallow.Input	GetMouseDelta	System.Numerics.Vector2

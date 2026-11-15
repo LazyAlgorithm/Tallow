@@ -98,6 +98,18 @@ TALLOW_ECS_API ecs_world_t* tallow_ecs_stage(ecs_world_t* world, int32_t index)
 	return ecs_get_stage(world, index);
 }
 
+// A stage the world does not own: everything done through it is queued until tallow_ecs_merge(stage), and an
+// immediate change to the world does not flush it (as it does stage 0's queue).
+TALLOW_ECS_API ecs_world_t* tallow_ecs_stage_new(ecs_world_t* world)
+{
+	return ecs_stage_new(world);
+}
+
+TALLOW_ECS_API void tallow_ecs_stage_free(ecs_world_t* stage)
+{
+	ecs_stage_free(stage);
+}
+
 TALLOW_ECS_API bool tallow_ecs_readonly_begin(ecs_world_t* world, bool multi_threaded)
 {
 	return ecs_readonly_begin(world, multi_threaded);
@@ -375,6 +387,30 @@ TALLOW_ECS_API const uint64_t* tallow_ecs_iter_entities(const ecs_iter_t* it)
 TALLOW_ECS_API void* tallow_ecs_iter_field(const ecs_iter_t* it, int32_t index, int32_t size)
 {
 	return ecs_field_w_size(it, (size_t)size, (int8_t)index);
+}
+
+// The id of the table the iterator is on (for its version in tallow_ecs_table_versions), 0 when none.
+TALLOW_ECS_API uint64_t tallow_ecs_iter_table_id(const ecs_iter_t* it)
+{
+	return it->table ? it->table->id : 0;
+}
+
+// Reads the current table of an iterator afresh, after its rows changed while it was being iterated: each
+// component's column (null when the table no longer has it) into columns, its entities into *entities; returns
+// its row count. For a whole-table iterator (no offset), as Tallow's C# ForEach uses.
+TALLOW_ECS_API int32_t tallow_ecs_iter_table_columns(const ecs_world_t* world, const ecs_iter_t* it,
+	const uint64_t* ids, int32_t count, void** columns, const uint64_t** entities)
+{
+	ecs_table_t* table = it->table;
+	if (!table)
+		return 0;
+	for (int32_t i = 0; i < count; i++)
+	{
+		const int32_t column = ecs_table_get_column_index(world, table, ids[i]);
+		columns[i] = column < 0 ? NULL : ecs_table_get_column(table, column, 0);
+	}
+	*entities = ecs_table_entities(table);
+	return ecs_table_count(table);
 }
 
 // Whether the term's data is one shared value rather than a column (from a prefab or a parent).

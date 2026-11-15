@@ -1222,7 +1222,8 @@ https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/interop
   workstream is native layout registration and bounded bulk set/query
   operations, then true synced C# data replication and deterministic replay.
 - All benchmarks requiring writable C# Flecs data (B12, related B18/B20)
-  remain **blocked**, and the new schema must never be shipped as
+  remained **blocked** at the time (B12 is done since November 15, 2026:
+  in-place `ForEach` over Flecs columns), and the new schema must never be shipped as
   reflective gameplay source metadata in default NativeAOT packages.
 
 
@@ -1361,3 +1362,27 @@ and NativeAOT player use. `[Sync]` does not yet replicate these fields.
   spawning, rollback and true performance measurements are pending.
   The C++ test host verifies generated span marshalling and output sizes;
   full real-world Flecs behavior still needs editor-in-scene tests.
+
+
+### In-place C# ECS ForEach (November 15, 2026)
+
+- `Scene.Query<T1[,T2[,T3]]>().ForEach` no longer copies rows out and back:
+  `Ecs.BeginDataIteration` / `NextDataTable` / `RefreshDataTable` /
+  `EndDataIteration` hand C# each matching Flecs table's column addresses,
+  entity ids and table version, and the action gets `ref`s straight into the
+  columns (one native call per table). The page-copy exports
+  (`CopyDataPage`, `WriteDataPage`, `WriteDataPageOrdered`) are removed.
+- While a ForEach runs, C# structural changes (new data, `Remove`, creating
+  or deleting bare entities) go to a Flecs stage of their own
+  (`ecs_stage_new`; stage 0's queue is flushed by any immediate change) and
+  merge when the outermost ForEach ends, even when the action throws. Engine
+  work (GameObjects made, moved or destroyed in the action) stays immediate;
+  if it moves rows of the table being walked, the table version changes and
+  C# re-reads the columns. New values for data an entity already has are
+  written at once (Flecs's own deferred-set behaviour).
+- In-game checks cover visits, queued vs immediate writes, GameObjects made
+  and destroyed in the action, exceptions and nesting (216 pass).
+- 50k entities, Release: C# 2.08 ms vs Beef 1.53 ms (was 4.98 ms).
+- Next for scale: the GameObject Transform path (one native call per
+  get/set), the `TieredPGO` decision for the game runtime, then networked
+  [Sync] ECS data.

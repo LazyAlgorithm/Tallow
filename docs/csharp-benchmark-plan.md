@@ -27,7 +27,7 @@
 ## P1 — simulation throughput (run after API semantics pass)
 
 - [ ] **B11 — ECS data-only baseline.** 10k, 50k, 100k and 250k static/rotating entities; native Beef ECS system vs managed C# workload over the **same Flecs data**. Report ECS iteration/query time, frame times, allocations, memory and render draw-call limits. Do not present a renderer bottleneck as an ECS result.
-- [ ] **B12 — ECS writable chunk path.** Read and write the same 10k/100k position-like components with a bulk API; measure copy cost, boundary transitions and total tick. Mark *blocked* until C# writable typed Flecs queries/chunks are implemented; current Rigidbody-mass bridge is read-only.
+- [x] **B12 — ECS writable chunk path.** Read and write the same 10k/100k position-like components with a bulk API; measure copy cost, boundary transitions and total tick. Done for offline scenes (2026-11-15): `Scene.Query<...>().ForEach` gives refs straight into the Flecs columns, one native call per table, no copy; 50k ecs rows 2.08 ms C# vs 1.53 ms Beef (see results below). Networked [Sync] ECS data is still to do.
 - [ ] **B13 — physics sphere pile.** Spawn Jolt rigidbodies at fixed intervals until p95 frame time >16.67 ms, or max 10k. Record total, active/asleep counts, contact pairs, Jolt step milliseconds and memory. Repeat sleep ON/OFF; compare Beef vs C# control paths with identical native Jolt settings.
 - [ ] **B14 — character motion/physics queries.** 100, 1k and 5k Jolt CharacterController instances with the same navigation/input; raycasts and sphere casts at 1k/10k/100k queries per frame; measure exact hit agreement and latency separately.
 - [ ] **B15 — soft-body throughput.** Jelly, Cloth, Shell and DrivenJelly, 10/50/100/500 bodies, fixed vertex counts and settings. Record rebuild time, step time, active vertex count, memory and deformation correctness. Keep existing Jelly Golf-style free jelly as an acceptance case.
@@ -42,17 +42,20 @@ Medians of 3 runs × 600 frames. Raw data: `~/TallowBenchmarks/beef-vs-csharp-20
 
 | mode | objects | Beef script ms | C# script ms (first run) | C# script ms (now) | C# frame ms (first → now) | C# GC bytes/frame |
 |---|---:|---:|---:|---:|---:|---:|
-| gameobject | 1k | 0.028 | 0.142 | 0.115 | 1.24 → 1.18 | 163 |
-| gameobject | 10k | 0.295 | 0.978 | 0.847 | 2.32 → 1.91 | 163 |
-| gameobject | 50k | 1.590 | 5.048 | 4.173 | 10.15 → 5.25 | 150 |
-| ecs | 10k | 0.317 | 1.319 | 1.030 | 2.35 → 2.09 | 313 |
-| ecs | 50k | 1.525 | 6.168 | 4.978 | 7.34 → 6.05 | 313 |
+| gameobject | 1k | 0.026 | 0.142 | 0.117 | 1.24 → 1.18 | 149 |
+| gameobject | 10k | 0.288 | 0.978 | 0.859 | 2.32 → 1.93 | 163 |
+| gameobject | 50k | 1.696 | 5.048 | 4.368 | 10.15 → 5.45 | 150 |
+| ecs | 1k | 0.030 | — | 0.043 | — → 1.11 | 204 |
+| ecs | 10k | 0.307 | 1.319 | 0.423 | 2.35 → 1.49 | 204 |
+| ecs | 50k | 1.525 | 6.168 | 2.080 | 7.34 → 3.15 | 204 |
 
 No GC collections during measurement. What closed the gap so far: C# scripts leave the scene's per-frame lists for
 callbacks their class does not override; read-only transform callbacks skip the GC transition (setters keep
-it, as a host may call back into .NET from a write); ECS `ForEach` writes every-row
-changes back in query order instead of looking each entity up. Left: one native call per Transform get/set (a
-batched or cached transform path), and the ECS page copy itself (a direct column view would avoid it).
+it, as a host may call back into .NET from a write); ECS `ForEach` works on the Flecs columns in place (one native
+call per table, the action gets refs into the column; structural changes made in the action are queued on a Flecs
+stage of their own and applied when it ends), so there is no copy out or write back (`table-inplace.md`). Left: one
+native call per Transform get/set (a batched or cached transform path), and the JIT's code for the loop body
+(`DOTNET_TieredPGO=0` made the ECS loop ~1.6× faster in a probe; NativeAOT would settle it).
 
 ## P2 — networking, export, regression (cannot be substituted by a local microbenchmark)
 

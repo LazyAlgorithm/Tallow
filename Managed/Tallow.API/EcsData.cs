@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -98,11 +97,14 @@ public readonly partial record struct Scene
 }
 
 /// <summary>
-/// The entities that have every one of a query's data components. <c>ForEach</c> visits the ones that match when
-/// it starts, copying their data out in pages and writing back after it the rows whose data the action changed
-/// through its refs (a row left alone keeps whatever <see cref="EcsEntity.Set{T}"/> gave it meanwhile).
-/// The action may create and destroy entities and add or remove data: one that has gone or lost a component by the
-/// end is not written back, and new ones are visited next time.
+/// The entities that have every one of a query's data components. <c>ForEach</c> works on their data in place, table
+/// by table, as native ECS systems do: the refs it gives the action are the entity's own data, so writing through
+/// them is the whole cost of a change.
+/// <para>While it runs, <see cref="EcsEntity.Set{T}"/> of data an entity already has writes at once (as the ref
+/// does). Changes to which data entities have (<c>Set</c> of data an entity lacks, <see cref="EcsEntity.Remove{T}"/>,
+/// creating and destroying bare entities) are queued and happen when it ends, in the order made, so
+/// <see cref="EcsEntity.Has{T}"/> and <see cref="EcsEntity.Get{T}"/> do not see them until then. GameObjects made,
+/// changed or destroyed in it work at once. Entities made during it are visited next time.</para>
 /// </summary>
 public readonly record struct EcsQuery<T1>(ulong SessionId) where T1 : unmanaged
 {
@@ -115,21 +117,44 @@ public readonly record struct EcsQuery<T1>(ulong SessionId) where T1 : unmanaged
         }
     }
 
-    public void ForEach(EcsAction<T1> action)
+    public unsafe void ForEach(EcsAction<T1> action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        ulong[] schemas = [EcsSchema<T1>.Require()];
-        int size1 = Unsafe.SizeOf<T1>();
-        using EcsRows rows = EcsRows.Read(SessionId, schemas, size1);
-        for (int i = 0; i < rows.Count; i++)
+        Span<ulong> schemas = [EcsSchema<T1>.Require()];
+        int handle = Ecs.BeginDataIteration(SessionId, schemas);
+        if (handle <= 0)
+            return;
+        try
         {
-            ref byte row = ref rows.Row(i);
-            T1 a = Unsafe.ReadUnaligned<T1>(ref row);
-            action(new EcsEntity(SessionId, rows.Ids[i]), ref a);
-            if (EcsRows.Store(ref row, a))
-                rows.Changed(i);
+            Span<ulong> columns = stackalloc ulong[3];
+            int count;
+            while ((count = Ecs.NextDataTable(SessionId, handle, columns)) > 0)
+            {
+                T1* a = (T1*)columns[0];
+                ulong* ids = (ulong*)columns[1];
+                uint* version = (uint*)columns[2];
+                uint seen = *version;
+                for (int i = 0; i < count; i++)
+                {
+                    if (*version != seen)
+                    {
+                        // The engine moved rows of this table (an object destroyed or changed in the action).
+                        count = Ecs.RefreshDataTable(SessionId, handle, columns);
+                        if (i >= count)
+                            break;
+                        a = (T1*)columns[0];
+                        ids = (ulong*)columns[1];
+                        version = (uint*)columns[2];
+                        seen = *version;
+                    }
+                    action(new EcsEntity(SessionId, ids[i]), ref a[i]);
+                }
+            }
         }
-        rows.WriteBack();
+        finally
+        {
+            Ecs.EndDataIteration(SessionId, handle);
+        }
     }
 }
 
@@ -145,22 +170,46 @@ public readonly record struct EcsQuery<T1, T2>(ulong SessionId) where T1 : unman
         }
     }
 
-    public void ForEach(EcsAction<T1, T2> action)
+    public unsafe void ForEach(EcsAction<T1, T2> action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        ulong[] schemas = [EcsSchema<T1>.Require(), EcsSchema<T2>.Require()];
-        int size1 = Unsafe.SizeOf<T1>();
-        using EcsRows rows = EcsRows.Read(SessionId, schemas, size1 + Unsafe.SizeOf<T2>());
-        for (int i = 0; i < rows.Count; i++)
+        Span<ulong> schemas = [EcsSchema<T1>.Require(), EcsSchema<T2>.Require()];
+        int handle = Ecs.BeginDataIteration(SessionId, schemas);
+        if (handle <= 0)
+            return;
+        try
         {
-            ref byte row = ref rows.Row(i);
-            T1 a = Unsafe.ReadUnaligned<T1>(ref row);
-            T2 b = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref row, size1));
-            action(new EcsEntity(SessionId, rows.Ids[i]), ref a, ref b);
-            if (EcsRows.Store(ref row, a) | EcsRows.Store(ref Unsafe.Add(ref row, size1), b))
-                rows.Changed(i);
+            Span<ulong> columns = stackalloc ulong[4];
+            int count;
+            while ((count = Ecs.NextDataTable(SessionId, handle, columns)) > 0)
+            {
+                T1* a = (T1*)columns[0];
+                T2* b = (T2*)columns[1];
+                ulong* ids = (ulong*)columns[2];
+                uint* version = (uint*)columns[3];
+                uint seen = *version;
+                for (int i = 0; i < count; i++)
+                {
+                    if (*version != seen)
+                    {
+                        // The engine moved rows of this table (an object destroyed or changed in the action).
+                        count = Ecs.RefreshDataTable(SessionId, handle, columns);
+                        if (i >= count)
+                            break;
+                        a = (T1*)columns[0];
+                        b = (T2*)columns[1];
+                        ids = (ulong*)columns[2];
+                        version = (uint*)columns[3];
+                        seen = *version;
+                    }
+                    action(new EcsEntity(SessionId, ids[i]), ref a[i], ref b[i]);
+                }
+            }
         }
-        rows.WriteBack();
+        finally
+        {
+            Ecs.EndDataIteration(SessionId, handle);
+        }
     }
 }
 
@@ -177,119 +226,47 @@ public readonly record struct EcsQuery<T1, T2, T3>(ulong SessionId)
         }
     }
 
-    public void ForEach(EcsAction<T1, T2, T3> action)
+    public unsafe void ForEach(EcsAction<T1, T2, T3> action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        ulong[] schemas = [EcsSchema<T1>.Require(), EcsSchema<T2>.Require(), EcsSchema<T3>.Require()];
-        int size1 = Unsafe.SizeOf<T1>(), size2 = Unsafe.SizeOf<T2>();
-        using EcsRows rows = EcsRows.Read(SessionId, schemas, size1 + size2 + Unsafe.SizeOf<T3>());
-        for (int i = 0; i < rows.Count; i++)
-        {
-            ref byte row = ref rows.Row(i);
-            T1 a = Unsafe.ReadUnaligned<T1>(ref row);
-            T2 b = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref row, size1));
-            T3 c = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref row, size1 + size2));
-            action(new EcsEntity(SessionId, rows.Ids[i]), ref a, ref b, ref c);
-            if (EcsRows.Store(ref row, a) | EcsRows.Store(ref Unsafe.Add(ref row, size1), b) |
-                EcsRows.Store(ref Unsafe.Add(ref row, size1 + size2), c))
-                rows.Changed(i);
-        }
-        rows.WriteBack();
-    }
-}
-
-/// <summary>
-/// The matches of a query copied out of the native ECS: ids, and per entity one row of its records one after
-/// another. Pooled buffers; pages stay within the native limits (4096 entities, 4 MB).
-/// </summary>
-internal sealed class EcsRows : IDisposable
-{
-    private readonly ulong _session;
-    private readonly ulong[] _schemas;
-    private readonly int _rowSize;
-    private byte[] _bytes;
-    public ulong[] Ids { get; private set; }
-    public int Count { get; private set; }
-
-    private EcsRows(ulong session, ulong[] schemas, int rowSize, int capacity)
-    {
-        _session = session;
-        _schemas = schemas;
-        _rowSize = rowSize;
-        Ids = ArrayPool<ulong>.Shared.Rent(Math.Max(capacity, 1));
-        _bytes = ArrayPool<byte>.Shared.Rent(Math.Max(capacity * rowSize, 1));
-    }
-
-    private int PageRows => Math.Max(1, Math.Min(4096, 4 * 1024 * 1024 / _rowSize));
-
-    public static EcsRows Read(ulong session, ulong[] schemas, int rowSize)
-    {
-        int total = Ecs.CountData(session, schemas);
-        var rows = new EcsRows(session, schemas, rowSize, total);
-        while (rows.Count < total)
-        {
-            int want = Math.Min(rows.PageRows, total - rows.Count);
-            int got = Ecs.CopyDataPage(session, schemas, rows.Count, rows.Ids.AsSpan(rows.Count, want),
-                rows._bytes.AsSpan(rows.Count * rowSize, want * rowSize));
-            if (got <= 0)
-                break;
-            rows.Count += got;
-        }
-        return rows;
-    }
-
-    public ref byte Row(int index) => ref _bytes[index * _rowSize];
-
-    // Rows changed so far are moved to the front, in order: row Changed(i) goes to _changed (always <= i).
-    private int _changed;
-
-    public void Changed(int index)
-    {
-        if (index != _changed)
-        {
-            Ids[_changed] = Ids[index];
-            _bytes.AsSpan(index * _rowSize, _rowSize).CopyTo(_bytes.AsSpan(_changed * _rowSize, _rowSize));
-        }
-        _changed++;
-    }
-
-    /// <summary>Writes the value over the bytes at <paramref name="at"/>; true when they were different.</summary>
-    public static bool Store<T>(ref byte at, T value) where T : unmanaged
-    {
-        ReadOnlySpan<byte> now = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref value, 1));
-        if (now.SequenceEqual(MemoryMarshal.CreateReadOnlySpan(ref at, now.Length)))
-            return false;
-        Unsafe.WriteUnaligned(ref at, value);
-        return true;
-    }
-
-    /// <summary>Writes the changed rows back (call once, after the last row).</summary>
-    public void WriteBack()
-    {
-        // Every row changed (a system moving everything): write them back in query order, straight into the
-        // columns, instead of looking each entity up.
-        if (_changed == Count && Count > 0)
-        {
-            for (int at = 0; at < Count; at += PageRows)
-            {
-                int count = Math.Min(PageRows, Count - at);
-                Ecs.WriteDataPageOrdered(_session, _schemas, at, Ids.AsSpan(at, count), _bytes.AsSpan(at * _rowSize, count * _rowSize));
-            }
+        Span<ulong> schemas = [EcsSchema<T1>.Require(), EcsSchema<T2>.Require(), EcsSchema<T3>.Require()];
+        int handle = Ecs.BeginDataIteration(SessionId, schemas);
+        if (handle <= 0)
             return;
-        }
-        for (int at = 0; at < _changed; at += PageRows)
+        try
         {
-            int count = Math.Min(PageRows, _changed - at);
-            Ecs.WriteDataPage(_session, _schemas, Ids.AsSpan(at, count), _bytes.AsSpan(at * _rowSize, count * _rowSize));
+            Span<ulong> columns = stackalloc ulong[5];
+            int count;
+            while ((count = Ecs.NextDataTable(SessionId, handle, columns)) > 0)
+            {
+                T1* a = (T1*)columns[0];
+                T2* b = (T2*)columns[1];
+                T3* c = (T3*)columns[2];
+                ulong* ids = (ulong*)columns[3];
+                uint* version = (uint*)columns[4];
+                uint seen = *version;
+                for (int i = 0; i < count; i++)
+                {
+                    if (*version != seen)
+                    {
+                        // The engine moved rows of this table (an object destroyed or changed in the action).
+                        count = Ecs.RefreshDataTable(SessionId, handle, columns);
+                        if (i >= count)
+                            break;
+                        a = (T1*)columns[0];
+                        b = (T2*)columns[1];
+                        c = (T3*)columns[2];
+                        ids = (ulong*)columns[3];
+                        version = (uint*)columns[4];
+                        seen = *version;
+                    }
+                    action(new EcsEntity(SessionId, ids[i]), ref a[i], ref b[i], ref c[i]);
+                }
+            }
         }
-    }
-
-    public void Dispose()
-    {
-        ArrayPool<ulong>.Shared.Return(Ids);
-        ArrayPool<byte>.Shared.Return(_bytes);
-        Ids = [];
-        _bytes = [];
-        Count = 0;
+        finally
+        {
+            Ecs.EndDataIteration(SessionId, handle);
+        }
     }
 }

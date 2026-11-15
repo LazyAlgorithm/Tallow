@@ -79,6 +79,8 @@ static class Flecs
 	[LinkName("tallow_ecs_readonly_end")] public static extern void ReadonlyEnd(void* world);
 	/// Applies the changes queued on a stage (Flecs 4.2 queues changes on stages; the world itself never defers).
 	[LinkName("tallow_ecs_merge")] public static extern void Merge(void* stage);
+	[LinkName("tallow_ecs_stage_new")] public static extern void* StageNew(void* world);
+	[LinkName("tallow_ecs_stage_free")] public static extern void StageFree(void* stage);
 	[LinkName("tallow_ecs_is_stage")] public static extern bool IsStage(void* world);
 
 	// ---- Components ----
@@ -131,6 +133,8 @@ static class Flecs
 	[LinkName("tallow_ecs_iter_count")] public static extern int32 IterCount(void* iterator);
 	[LinkName("tallow_ecs_iter_entities")] public static extern uint64* IterEntities(void* iterator);
 	[LinkName("tallow_ecs_iter_field")] public static extern void* IterField(void* iterator, int32 index, int32 size);
+	[LinkName("tallow_ecs_iter_table_id")] public static extern uint64 IterTableId(void* iterator);
+	[LinkName("tallow_ecs_iter_table_columns")] public static extern int32 IterTableColumns(void* world, void* iterator, uint64* ids, int32 count, void** columns, uint64** entities);
 	[LinkName("tallow_ecs_iter_field_is_self")] public static extern bool IterFieldIsSelf(void* iterator, int32 index);
 	[LinkName("tallow_ecs_iter_delta_time")] public static extern float IterDeltaTime(void* iterator);
 	[LinkName("tallow_ecs_iter_ctx")] public static extern void* IterContext(void* iterator);

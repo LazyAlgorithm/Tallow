@@ -131,178 +131,148 @@ sealed class World
 		return query == null ? 0 : Flecs.QueryCount(query);
 	}
 
-	/// A page of the entities with every one of the C# schemas: their ids, and for each a row of their records one
-	/// after another in the order asked for (no padding between them). Starts after `offset` matches; the order
-	/// holds while no entity gains or loses one of them.
-	public int32 CopyManagedDataPage(Span<uint64> schemaIds, int32 offset, Span<uint64> entityIds, Span<uint8> bytes)
+	/// A C# ForEach walking Flecs storage in place (BeginManagedIteration).
+	class ManagedIteration
+	{
+		public Flecs.IterBuffer buffer;
+		public ManagedLocalSchema[MaxManagedQueryTerms] layouts;
+		public int32 terms;
+		public bool active;
+		public bool done;
+	}
+	List<ManagedIteration> mManagedIterations = new .() ~ DeleteContainerAndItems!(_);
+
+	/// While a C# ForEach runs (mManagedDeferDepth > 0), changes to C# data and bare C# entities (SetManagedLocalData,
+	/// RemoveManagedLocalData, CreateManagedLocalEntity, deleting a bare C# entity) go to mManagedStage, a stage of
+	/// their own (stage 0's queue is flushed by any immediate change), and are applied when the outermost one ends, so the tables it walks keep their rows. Everything else stays immediate: engine
+	/// objects (a GameObject made in a ForEach) must exist at once, and a new object has no C# data until a queued
+	/// Set gives it some, so it never lands in a table being walked. An engine change that does move a walked
+	/// entity (a built-in component added, a parent changed) bumps that table's version, and the ForEach re-reads
+	/// the table (RefreshManagedTable).
+	int32 mManagedDeferDepth;
+	void* mManagedStage;
+
+	/// Where C# data changes go: their own queue while a C# ForEach runs, else as other changes.
+	void* ManagedWriter => mManagedDeferDepth > 0 ? mManagedStage : Writer;
+
+	/// Starts a C# ForEach over the entities with every one of the schemas, in place: NextManagedTable gives it each
+	/// matching table's columns to read and write directly. Changes to C# data are queued until
+	/// EndManagedIteration (see mManagedDeferDepth); reads see the world as it was. Returns a handle (> 0), 0 when
+	/// the schemas are not registered.
+	public int32 BeginManagedIteration(Span<uint64> schemaIds)
 	{
 		ManagedLocalSchema[MaxManagedQueryTerms] layouts = ?;
-		if (offset < 0 || entityIds.IsEmpty || entityIds.Length > 4096 || bytes.Length > 4 * 1024 * 1024)
-			return 0;
-		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), let rowSize))
-			return 0;
-		int32 capacity = (int32)Math.Min(entityIds.Length, bytes.Length / rowSize);
-		if (capacity <= 0)
+		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), ?))
 			return 0;
 		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length));
 		if (query == null)
 			return 0;
-		Flecs.IterBuffer iterator = ?;
-		Flecs.QueryIter(mWorld, query, &iterator);
-		uint8*[MaxManagedQueryTerms] columns = ?;
-		int32 visited = 0;
-		int32 copied = 0;
-		while (Flecs.IterNext(&iterator))
+		int slot = -1;
+		for (int i < mManagedIterations.Count)
 		{
-			let ids = Flecs.IterEntities(&iterator);
-			bool present = ids != null;
-			for (int t < schemaIds.Length)
+			if (!mManagedIterations[i].active)
 			{
-				columns[t] = (uint8*)Flecs.IterField(&iterator, (int32)t, layouts[t].size);
-				present &= columns[t] != null;
+				slot = i;
+				break;
+			}
+		}
+		if (slot < 0)
+		{
+			if (mManagedIterations.Count >= 64)
+				return 0; // ForEach nested this deep is a runaway recursion.
+			slot = mManagedIterations.Count;
+			mManagedIterations.Add(new .());
+		}
+		let iteration = mManagedIterations[slot];
+		iteration.layouts = layouts;
+		iteration.terms = (int32)schemaIds.Length;
+		iteration.active = true;
+		iteration.done = false;
+		if (mManagedStage == null)
+			mManagedStage = Flecs.StageNew(mWorld);
+		mManagedDeferDepth++;
+		Flecs.QueryIter(mWorld, query, &iteration.buffer);
+		return (int32)slot + 1;
+	}
+
+	/// The next table of a BeginManagedIteration: addresses gets each schema's column, then the entity ids, then the
+	/// table's version counter (terms + 2 addresses); returns how many rows, 0 once every table has been given. When
+	/// the version changes while the table is walked, RefreshManagedTable gives its columns afresh.
+	public int32 NextManagedTable(int32 handle, Span<uint64> addresses)
+	{
+		if (handle <= 0 || handle > mManagedIterations.Count)
+			return 0;
+		let iteration = mManagedIterations[handle - 1];
+		if (!iteration.active || iteration.done || addresses.Length < iteration.terms + 2)
+			return 0;
+		while (Flecs.IterNext(&iteration.buffer))
+		{
+			let count = Flecs.IterCount(&iteration.buffer);
+			let ids = Flecs.IterEntities(&iteration.buffer);
+			if (count <= 0 || ids == null)
+				continue;
+			bool present = true;
+			for (int t < iteration.terms)
+			{
+				let column = Flecs.IterField(&iteration.buffer, (int32)t, iteration.layouts[t].size);
+				present &= column != null;
+				addresses[t] = (uint64)(int)column;
 			}
 			if (!present)
 				continue;
-			let count = Flecs.IterCount(&iterator);
-			if (visited + count <= offset)
-			{
-				visited += count;
-				continue;
-			}
-			for (int i < count)
-			{
-				if (visited++ < offset)
-					continue;
-				if (copied >= capacity)
-				{
-					Flecs.IterFini(&iterator);
-					return copied;
-				}
-				entityIds[copied] = ids[i];
-				int at = copied * rowSize;
-				for (int t < schemaIds.Length)
-				{
-					let size = layouts[t].size;
-					Internal.MemCpy(&bytes[at], columns[t] + i * size, size);
-					at += size;
-				}
-				copied++;
-			}
+			addresses[iteration.terms] = (uint64)(int)(void*)ids;
+			addresses[iteration.terms + 1] = (uint64)(int)(void*)&mTableVersions[Flecs.IterTableId(&iteration.buffer) & sTableVersionMask];
+			return count;
 		}
-		return copied;
+		iteration.done = true;
+		return 0;
 	}
 
-	/// Writes rows back in the order CopyManagedDataPage gave them, starting at the same offset: walks the query
-	/// again and copies each row straight into its columns while the entity there is the one the row came from.
-	/// A row whose entity is not where it was (one gained or lost a schema meanwhile) is written by looking it up
-	/// (WriteManagedDataPage), or skipped if it has gone. Returns how many were written.
-	public int32 WriteManagedDataPageOrdered(Span<uint64> schemaIds, int32 offset, Span<uint64> entityIds, Span<uint8> bytes)
+	/// The current table of a BeginManagedIteration read afresh (its rows moved while being walked), into addresses
+	/// as NextManagedTable gives them; how many rows it has now, 0 when it no longer has every schema.
+	public int32 RefreshManagedTable(int32 handle, Span<uint64> addresses)
 	{
-		ManagedLocalSchema[MaxManagedQueryTerms] layouts = ?;
-		if (offset < 0 || entityIds.IsEmpty || entityIds.Length > 4096)
+		if (handle <= 0 || handle > mManagedIterations.Count)
 			return 0;
-		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), let rowSize) || bytes.Length < entityIds.Length * rowSize)
+		let iteration = mManagedIterations[handle - 1];
+		if (!iteration.active || iteration.done || addresses.Length < iteration.terms + 2)
 			return 0;
-		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length));
-		if (query == null)
-			return 0;
-		Flecs.IterBuffer iterator = ?;
-		Flecs.QueryIter(mWorld, query, &iterator);
-		uint8*[MaxManagedQueryTerms] columns = ?;
-		int32 visited = 0;
-		int32 next = 0;
-		int32 written = 0;
-		let missed = scope List<int32>();
-		while (true)
+		uint64[MaxManagedQueryTerms] ids = ?;
+		void*[MaxManagedQueryTerms] columns = ?;
+		for (int t < iteration.terms)
+			ids[t] = iteration.layouts[t].flecsId;
+		uint64* entities = null;
+		let count = Flecs.IterTableColumns(mWorld, &iteration.buffer, &ids, iteration.terms, &columns, &entities);
+		for (int t < iteration.terms)
 		{
-			if (next >= entityIds.Length)
-			{
-				Flecs.IterFini(&iterator); // stopped before the end
-				break;
-			}
-			if (!Flecs.IterNext(&iterator))
-				break;
-			let ids = Flecs.IterEntities(&iterator);
-			bool present = ids != null;
-			for (int t < schemaIds.Length)
-			{
-				columns[t] = (uint8*)Flecs.IterField(&iterator, (int32)t, layouts[t].size);
-				present &= columns[t] != null;
-			}
-			if (!present)
-				continue;
-			let count = Flecs.IterCount(&iterator);
-			if (visited + count <= offset)
-			{
-				visited += count;
-				continue;
-			}
-			for (int i < count)
-			{
-				if (visited++ < offset)
-					continue;
-				if (next >= entityIds.Length)
-					break;
-				if (ids[i] != entityIds[next])
-				{
-					missed.Add(next++);
-					continue;
-				}
-				int at = next * rowSize;
-				for (int t < schemaIds.Length)
-				{
-					let size = layouts[t].size;
-					Internal.MemCpy(columns[t] + i * size, &bytes[at], size);
-					at += size;
-				}
-				next++;
-				written++;
-			}
+			if (columns[t] == null)
+				return 0;
+			addresses[t] = (uint64)(int)columns[t];
 		}
-		while (next < entityIds.Length)
-			missed.Add(next++);
-		for (let row in missed)
-			written += WriteManagedDataPage(schemaIds, .(&entityIds[row], 1), .(&bytes[row * rowSize], rowSize));
-		return written;
+		addresses[iteration.terms] = (uint64)(int)(void*)entities;
+		addresses[iteration.terms + 1] = (uint64)(int)(void*)&mTableVersions[Flecs.IterTableId(&iteration.buffer) & sTableVersionMask];
+		return count;
 	}
 
-	/// Writes rows laid out as CopyManagedDataPage gives them back to their entities. An entity that has gone, or
-	/// no longer has every schema, is skipped. Returns how many were written.
-	public int32 WriteManagedDataPage(Span<uint64> schemaIds, Span<uint64> entityIds, Span<uint8> bytes)
+	/// Ends a BeginManagedIteration (always, even when the C# action threw) and applies the queued changes.
+	public void EndManagedIteration(int32 handle)
 	{
-		ManagedLocalSchema[MaxManagedQueryTerms] layouts = ?;
-		if (entityIds.IsEmpty || entityIds.Length > 4096)
-			return 0;
-		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), let rowSize) || bytes.Length < entityIds.Length * rowSize)
-			return 0;
-		int32 written = 0;
-		for (int i < entityIds.Length)
-		{
-			let entity = Entity(entityIds[i]);
-			if (!CanHoldManagedData(entity))
-				continue;
-			bool all = true;
-			for (int t < schemaIds.Length)
-				all &= Flecs.Has(mWorld, entity.id, layouts[t].flecsId);
-			if (!all)
-				continue;
-			int at = i * rowSize;
-			for (int t < schemaIds.Length)
-			{
-				let size = layouts[t].size;
-				let target = (uint8*)Flecs.GetMut(mWorld, entity.id, layouts[t].flecsId);
-				if (target != null)
-					Internal.MemCpy(target, &bytes[at], size);
-				at += size;
-			}
-			written++;
-		}
-		return written;
+		if (handle <= 0 || handle > mManagedIterations.Count)
+			return;
+		let iteration = mManagedIterations[handle - 1];
+		if (!iteration.active)
+			return;
+		if (!iteration.done)
+			Flecs.IterFini(&iteration.buffer);
+		iteration.active = false;
+		iteration.done = true;
+		if (--mManagedDeferDepth == 0)
+			Flecs.Merge(mManagedStage);
 	}
 
 	public Entity CreateManagedLocalEntity()
 	{
-		let entity = Create();
+		let entity = Entity(Flecs.New(ManagedWriter));
 		if (!entity.IsNull)
 			mManagedLocalEntities.Add(entity.id);
 		return entity;
@@ -367,7 +337,7 @@ sealed class World
 			return false;
 		if (bytes.Length != layout.size)
 			return false;
-		Flecs.Set(Writer, entity.id, layout.flecsId, layout.size, &bytes[0]);
+		Flecs.Set(ManagedWriter, entity.id, layout.flecsId, layout.size, &bytes[0]);
 		return true;
 	}
 
@@ -395,7 +365,7 @@ sealed class World
 			return false;
 		if (!Flecs.Has(mWorld, entity.id, layout.flecsId))
 			return false;
-		Flecs.Remove(Writer, entity.id, layout.flecsId);
+		Flecs.Remove(ManagedWriter, entity.id, layout.flecsId);
 		return true;
 	}
 
@@ -529,6 +499,8 @@ sealed class World
 	public ~this()
 	{
 		StopExplorer();
+		if (mManagedStage != null)
+			Flecs.StageFree(mManagedStage);
 		for (let query in mManagedLocalQueries.Values)
 			Flecs.QueryFree(query);
 		mManagedLocalQueries.Clear();
@@ -717,10 +689,11 @@ sealed class World
 
 	public void Delete(Entity entity)
 	{
-		mManagedLocalEntities.Remove(entity.id);
+		// A bare C# entity deleted during a C# ForEach is queued with the other C# data changes.
+		let managed = mManagedLocalEntities.Remove(entity.id);
 		if (mNativeCandidates.Remove(entity.id))
 			NativeNetwork?.NativeCandidateRemoved(entity);
-		Flecs.Delete(Writer, entity.id);
+		Flecs.Delete(managed ? ManagedWriter : Writer, entity.id);
 	}
 
 	public bool IsAlive(Entity entity) => Flecs.IsAlive(mWorld, entity.id);
