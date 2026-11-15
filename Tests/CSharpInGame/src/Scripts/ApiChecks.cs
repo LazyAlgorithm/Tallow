@@ -59,6 +59,8 @@ public class ApiChecks : CheckBase
             EcsData();
         else if (_tick == 42)
             LocalState();
+        else if (_tick == 43)
+            PrefabsAndRpcs();
         else if (_tick == 150)
             ContactsWhileResting();
         else if (_tick == 165)
@@ -69,6 +71,34 @@ public class ApiChecks : CheckBase
             Finish();
             Application.Quit();
         }
+    }
+
+    private int _rpcValue;
+    private string _rpcText = "";
+    private int _rpcSender = -1;
+
+    [Rpc(RpcTarget.Everyone)]
+    private void Shout(int value, string text, Vector3 where)
+    {
+        _rpcValue = value + (int)where.X;
+        _rpcText = text;
+        _rpcSender = RpcSender;
+    }
+
+    private void PrefabsAndRpcs()
+    {
+        GameObject? spawned = Scene.InstantiatePrefab("Prefabs/Spawned.tprefab");
+        SpawnedProbe? probe = spawned?.GetComponent<SpawnedProbe>();
+        Check("a prefab made during play has its saved fields in Awake", probe?.PowerInAwake == 9 && probe.TitleInAwake == "from prefab");
+
+        Rpc(nameof(Shout), 40, "here", new Vector3(2, 0, 0));
+        Check("an RPC without a session runs at once", _rpcValue == 42 && _rpcText == "here" && _rpcSender == 0);
+        bool notRpc = false, badCount = false, badType = false;
+        try { Rpc(nameof(PrefabsAndRpcs)); } catch (ArgumentException) { notRpc = true; }
+        try { Rpc(nameof(Shout), 1); } catch (ArgumentException) { badCount = true; }
+        try { Rpc(nameof(Shout), "1", "x", Vector3.Zero); } catch (ArgumentException) { badType = true; }
+        Check("Rpc refuses a method without [Rpc]", notRpc);
+        Check("Rpc refuses the wrong number or kind of arguments", badCount && badType);
     }
 
     private ContactProbe Probe(string name) =>
@@ -243,6 +273,20 @@ public class ContactProbe : Script
     }
 
     public override void OnTriggerExit(GameObject other) => TriggerExits++;
+}
+
+public class SpawnedProbe : Script
+{
+    public int Power = 1;
+    public string Title = "default";
+    public int PowerInAwake;
+    public string TitleInAwake = "";
+
+    public override void Awake()
+    {
+        PowerInAwake = Power;
+        TitleInAwake = Title;
+    }
 }
 
 public class Helper : Script

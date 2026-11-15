@@ -123,6 +123,18 @@ static class CSharpRuntime
 		Check(fields.Contains("Speed\t4.5\n"), "the edit reads back live");
 	}
 
+	/// Runs a script's [Rpc] method received from the network. The managed side checks the method is an [Rpc] of
+	/// that target and parses the arguments for its parameters before calling it.
+	public static bool InvokeRpc(int32 instance, StringView method, StringView arguments, int32 target, int32 sender)
+	{
+		if (!Ready || instance <= 0)
+			return false;
+		if (tn_csharp_invoke_rpc(instance, scope String(method).CStr(), scope String(arguments).CStr(), target, sender) > 0)
+			return true;
+		Log.Warning(scope $"C# RPC {method} was refused: {StringView(tn_csharp_error())}");
+		return false;
+	}
+
 	/// A collision or trigger callback for one managed script. The other object must be in this session's scene.
 	public static bool Contact(int32 instance, ContactKind kind, GameObject other, Vector3 point = default, Vector3 normal = default, float relativeSpeed = 0)
 	{
@@ -176,6 +188,7 @@ static class CSharpRuntime
     [CLink] static extern int32 tn_csharp_update_input_batch(NativeTickBatchItem* items, int32 count);
 	[CLink] static extern int32 tn_csharp_contact_event(int32 instance, NativeContact* contact);
 	[CLink] static extern int32 tn_csharp_read_fields(int32 instance, int32 mode, char8* buffer, int32 capacity);
+	[CLink] static extern int32 tn_csharp_invoke_rpc(int32 instance, char8* method, char8* arguments, int32 target, int32 sender);
 	[CLink] static extern int32 tn_csharp_detach(int32 instance);
 	[CLink] static extern void tn_csharp_shutdown();
 	[CLink] static extern char8* tn_csharp_error();

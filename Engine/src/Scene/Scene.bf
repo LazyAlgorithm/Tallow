@@ -225,6 +225,27 @@ class Scene
 	}
 
 	List<Component> mPendingStart = new .() ~ delete _;
+	/// While objects are read from text during play (prefabs, additive loads), components wait here to wake until
+	/// their saved fields are in: Awake must see the prefab's values, not the class defaults.
+	int32 mWakeHold;
+	List<Component> mHeldWakes = new .() ~ delete _;
+
+	public void HoldWakes() => mWakeHold++;
+
+	/// Ends a HoldWakes; the outermost one wakes what was added meanwhile, in the order it was added.
+	public void ReleaseWakes()
+	{
+		if (mWakeHold <= 0 || --mWakeHold > 0)
+			return;
+		let held = scope List<Component>();
+		held.AddRange(mHeldWakes);
+		mHeldWakes.Clear();
+		for (let component in held)
+		{
+			if (component.[Friend]mRegistered && mPlaying)
+				WakeComponent(component);
+		}
+	}
 	List<GameObject> mDestroyQueue = new .() ~ delete _;
 	uint32 mNextId = 1;
 	/// How many objects are NetworkHidden (0: none, so nothing need look).
@@ -1111,7 +1132,12 @@ class Scene
 		AddReferenceSlots(component);
 		component.OnRegister();
 		if (mPlaying)
-			WakeComponent(component);
+		{
+			if (mWakeHold > 0)
+				mHeldWakes.Add(component);
+			else
+				WakeComponent(component);
+		}
 	}
 
 	/// `together`: part of a batch, whose Sweep takes it out of the scene's lists.
@@ -1168,6 +1194,7 @@ class Scene
 				mPendingStart.RemoveAt(pending);
 		}
 		mDeferredStart.Remove(component);
+		mHeldWakes.Remove(component);
 	}
 
 	/// A renderer leaving the scene.

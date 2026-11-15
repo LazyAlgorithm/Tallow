@@ -159,6 +159,24 @@ public static unsafe class NativeEntrypoints
     private static readonly Dictionary<GameObject, List<Script>> sByGameObject = [];
     private static readonly HashSet<int> sEnabled = [];
 
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int InvokeRpc(int instance, byte* method, byte* arguments, int target, int sender)
+    {
+        try
+        {
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            RpcMethods.RunFromNetwork(script,
+                Marshal.PtrToStringUTF8((nint)method) ?? "",
+                Marshal.PtrToStringUTF8((nint)arguments) ?? "", target, sender);
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     // Plain native layout, matching tn_csharp_contact (48 bytes).
     [StructLayout(LayoutKind.Sequential)]
     public struct NativeContact

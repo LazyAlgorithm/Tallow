@@ -23,6 +23,12 @@ is complete.
 - `[Sync]` on a script field (public or private; numbers, bool, string, enums, vectors) shares
   the server's value with every client of a session when it changes, and with players who
   join later. Change it on the server; a client's own changes are overwritten.
+- `[Rpc]` methods run across the network: `[Rpc(RpcTarget.Server)]` on the server only,
+  `[Rpc]` (Everyone) on the server and every client. Call them with
+  `Rpc(nameof(Fire), aim, power)`. The server may call any; a client only on an object it
+  owns (its player), and an Everyone call then runs on it when the server sends it back.
+  Parameters: int, float, bool, string, enums, Vector2/3/4, GameObject. Inside one,
+  `RpcSender` is the caller's client id.
 - Physics callbacks: `OnCollisionEnter/Exit(Collision)` (other object, point, normal out of the
   other object, closing speed) and `OnTriggerEnter/Exit(GameObject)` for colliders with
   `isTrigger`. Once per pair of objects, after the tick's physics step, on every machine that

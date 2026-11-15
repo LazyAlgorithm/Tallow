@@ -429,6 +429,9 @@ static class SceneSerializer
 
 	static GameObject LoadInternal(Scene scene, StringView text, bool clear, bool remap, List<GameObject> made = null)
 	{
+		// During play, nothing read here wakes until every field and reference is in.
+		scene.HoldWakes();
+		defer scene.ReleaseWakes();
 		if (clear)
 		{
 			scene.Clear();

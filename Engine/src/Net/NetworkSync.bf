@@ -784,6 +784,81 @@ static class NetworkSync
 			network.SendToServer(MsgEvent, payload);
 	}
 
+	// ---- C# script RPCs ([Rpc] methods) ----
+	// They travel in MsgEvent (every engine id is taken): the event name is the method name after a \x01 marker,
+	// followed by the target and the arguments as text. No ordinary event name starts with a control character.
+
+	public const int32 RpcTargetServer = 0;
+	public const int32 RpcTargetEveryone = 1;
+	const int MaxRpcArguments = 4000;
+
+	static void WriteScriptRpc(NetWriter payload, CSharpBehaviour behaviour, int32 target, StringView method, StringView arguments)
+	{
+		WriteComponent<Component>(payload, behaviour);
+		payload.WriteString(scope $"\x01{method}");
+		payload.Write(0.0f);
+		payload.Write<uint8>((uint8)target);
+		payload.WriteVarUInt((uint32)arguments.Length);
+		payload.Data.AddRange(Span<uint8>((uint8*)arguments.Ptr, arguments.Length));
+	}
+
+	/// A C# script calling one of its [Rpc] methods. Returns 1 when the caller runs it now (no session, or the
+	/// server: an Everyone call is also sent to every client), 0 when it was sent to the server (a client calling
+	/// on an object it owns; an Everyone call comes back to it from the server), -1 when it may not be sent.
+	public static int32 SendScriptRpc(CSharpBehaviour behaviour, int32 target, StringView method, StringView arguments)
+	{
+		let network = Active(behaviour.Scene);
+		if (network == null)
+			return 1;
+		if (method.IsEmpty || method.Length > 63 || arguments.Length > MaxRpcArguments ||
+			(target != RpcTargetServer && target != RpcTargetEveryone))
+			return -1;
+		let payload = scope NetWriter();
+		WriteScriptRpc(payload, behaviour, target, method, arguments);
+		if (network.IsServer)
+		{
+			if (target == RpcTargetEveryone)
+				Broadcast(network, MsgEvent, payload, false);
+			return 1;
+		}
+		let owner = Anchor(behaviour).GetComponent<NetworkIdentity>();
+		if (!owner.IsValid || owner.ownerId != network.LocalClientId)
+			return -1; // The server would refuse it: only the object's owner may call.
+		network.SendToServer(MsgEvent, payload);
+		return 0;
+	}
+
+	static void OnScriptRpc(NetworkManager network, int32 sender, Component component, StringView method, ref NetReader reader)
+	{
+		let target = (int32)reader.Read<uint8>();
+		let length = (int)reader.ReadVarUInt();
+		if (!reader.Ok || length > MaxRpcArguments)
+			return;
+		let arguments = scope String(length);
+		for (int i < length)
+			arguments.Append((char8)reader.Read<uint8>());
+		let behaviour = component as CSharpBehaviour;
+		if (!reader.Ok || behaviour == null || !behaviour.IsLoaded || (target != RpcTargetServer && target != RpcTargetEveryone))
+			return;
+		if (network.IsServer)
+		{
+			// As for events: a client may only call on an object it owns.
+			let owner = Anchor(component).GetComponent<NetworkIdentity>();
+			if (!owner.IsValid || owner.ownerId != sender)
+				return;
+			if (!CSharpRuntime.InvokeRpc(behaviour.ManagedInstance, method, arguments, target, sender))
+				return;
+			if (target == RpcTargetEveryone)
+			{
+				let payload = scope NetWriter();
+				WriteScriptRpc(payload, behaviour, target, method, arguments);
+				Broadcast(network, MsgEvent, payload, false);
+			}
+		}
+		else if (target == RpcTargetEveryone)
+			CSharpRuntime.InvokeRpc(behaviour.ManagedInstance, method, arguments, target, 0);
+	}
+
 	static void OnEvent(int32 sender, ref NetReader reader)
 	{
 		let network = Active(Scene.Active);
@@ -795,6 +870,11 @@ static class NetworkSync
 		let value = reader.Read<float>();
 		if (!reader.Ok || component == null || name.Length > 64 || !value.IsFinite)
 			return;
+		if (name.StartsWith('\x01'))
+		{
+			OnScriptRpc(network, sender, component, name.Substring(1), ref reader);
+			return;
+		}
 		if (network.IsServer)
 		{
 			let owner = Anchor(component).GetComponent<NetworkIdentity>();

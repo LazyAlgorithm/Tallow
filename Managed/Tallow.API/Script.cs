@@ -867,6 +867,30 @@ public abstract class Script : IComponent
     public bool IsMine => Engine.Bridge.IsMine(GameObject);
     public Scene Scene => GameObject.Scene;
 
+    /// <summary>
+    /// Calls one of this script's <see cref="RpcAttribute"/> methods: here and on every client
+    /// (<see cref="RpcTarget.Everyone"/>), or on the server (<see cref="RpcTarget.Server"/>). The server may call
+    /// any; a client only on an object it owns, and an Everyone call then runs on it when the server sends it
+    /// back. Without a session it runs here at once. Use <c>nameof(Method)</c>.
+    /// </summary>
+    protected void Rpc(string method, params object?[] arguments)
+    {
+        RpcMethods.Entry entry = RpcMethods.Find(GetType(), method) ??
+            throw new ArgumentException($"{GetType().Name}.{method} is not an [Rpc] method.", nameof(method));
+        string encoded = RpcMethods.Encode(entry, arguments ?? []);
+        int result = CSharpNetwork.SendRpc(GameObject.SceneId, GameObject.Id, RequireNativeInstance(),
+            (int)entry.Target, method, encoded);
+        if (result < 0)
+            throw new InvalidOperationException(
+                $"{method}: only the server, or the client that owns this object, can call its RPCs.");
+        if (result > 0)
+            RpcMethods.Run(this, entry, RpcMethods.Decode(entry, encoded, GameObject.SceneId), 0);
+    }
+
+    /// <summary>Inside an [Rpc] method: the client id of the machine that called it (0 for the server or this
+    /// machine without a session).</summary>
+    protected static int RpcSender => RpcMethods.CurrentSender;
+
     private int RequireNativeInstance() =>
         NativeInstanceId > 0 ? NativeInstanceId :
             throw new InvalidOperationException(

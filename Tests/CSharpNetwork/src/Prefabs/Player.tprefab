@@ -1,0 +1,6 @@
+object 1 parent 0 active 1 name "Player"
+transform 0 0 0 0 0 0 1 1 1 1
+component Tallow.NetworkIdentity enabled 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "NetGame.RpcProbe"
+field fieldOverrides ""

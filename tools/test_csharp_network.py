@@ -60,6 +60,7 @@ def main() -> int:
         client = subprocess.run(common + ["--connect", "127.0.0.1", "--frames", "100000"],
                                 capture_output=True, text=True, timeout=120)
         output = client.stdout + client.stderr
+        (work / "client.log").write_text(output, encoding="utf-8")
         lines = [line for line in output.splitlines() if "NETTEST" in line or "[Tallow C#]" in line]
         print("\n".join(lines))
         passed = sum("NETTEST PASS" in line for line in lines)

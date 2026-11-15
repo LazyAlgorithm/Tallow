@@ -54,6 +54,7 @@ using update_input_fn = int32_t (*)(int32_t, const tn_csharp_tick_input*, float)
 using update_input_batch_fn = int32_t (*)(const tn_csharp_tick_batch_item*, int32_t);
 using contact_fn = int32_t (*)(int32_t, const tn_csharp_contact*);
 using read_fields_fn = int32_t (*)(int32_t, int32_t, char*, int32_t);
+using invoke_rpc_fn = int32_t (*)(int32_t, const char*, const char*, int32_t, int32_t);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
 using shutdown_fn = int32_t (*)();
@@ -74,6 +75,7 @@ update_input_fn update_input = nullptr;
 update_input_batch_fn update_input_batch = nullptr;
 contact_fn contact_event = nullptr;
 read_fields_fn read_fields = nullptr;
+invoke_rpc_fn invoke_rpc = nullptr;
 detach_fn detach = nullptr;
 last_error_fn last_error = nullptr;
 shutdown_fn shutdown_runtime = nullptr;
@@ -366,6 +368,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "UpdateInputBatch", update_input_batch) ||
             !find_entry(assembly.c_str(), "Contact", contact_event) ||
             !find_entry(assembly.c_str(), "ReadFields", read_fields) ||
+            !find_entry(assembly.c_str(), "InvokeRpc", invoke_rpc) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
             !find_entry(assembly.c_str(), "GetLastError", last_error) ||
             !find_entry(assembly.c_str(), "Shutdown", shutdown_runtime))
@@ -514,6 +517,16 @@ int32_t tn_csharp_read_fields(int32_t script_instance, int32_t mode, char* buffe
     return result;
 }
 
+int32_t tn_csharp_invoke_rpc(int32_t script_instance, const char* method, const char* arguments, int32_t target, int32_t sender)
+{
+    if (!started || !invoke_rpc || !method || !arguments)
+        return 0;
+    const int32_t result = invoke_rpc(script_instance, method, arguments, target, sender);
+    if (result < 0)
+        managed_error("Running a C# RPC");
+    return result > 0;
+}
+
 int32_t tn_csharp_update_input_batch(
     const tn_csharp_tick_batch_item* items, int32_t count)
 {
@@ -554,6 +567,7 @@ void tn_csharp_shutdown(void)
     update_input_batch = nullptr;
     contact_event = nullptr;
     read_fields = nullptr;
+    invoke_rpc = nullptr;
     detach = nullptr;
     last_error = nullptr;
     shutdown_runtime = nullptr;

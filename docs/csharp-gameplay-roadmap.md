@@ -793,7 +793,15 @@ A full conversion also needs these. Ordered roughly by when they block users.
   field message, applied on clients through the validated managed loader, and sent whole to
   late joiners. `tools/test_csharp_network.py` runs a real headless server and client
   (5 checks; in native CI).
-- [ ] An RPC attribute for C# scripts (server→clients and owner→server calls).
+- [x] An RPC attribute for C# scripts: `[Rpc(RpcTarget.Server|Everyone)]` methods called with
+  `Rpc(nameof(Method), args…)`. Arguments are int, float, bool, string, enums, vectors and
+  GameObject; the target checks the method is an `[Rpc]` of that kind and parses them before
+  calling. Clients may only call on objects they own (checked on both sides); `RpcSender`
+  gives the caller's client id. Without a session it runs at once. They ride the engine's
+  event message. Covered by `tools/test_csharp_network.py` (10 checks) and the in-engine test.
+- [x] Engine fix found on the way: components of a prefab instantiated during play got Awake
+  before their saved fields were read (every component, Beef too). The loader now holds
+  their wake until the whole text is in.
 - [x] Live Inspector values during Play: the Inspector's C# fields show the running
   script's values (managed `ReadFields`, same text format as the scene), edits still go to
   the running script, and a "Debug: all fields (live)" section lists every instance field
