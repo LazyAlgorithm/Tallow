@@ -876,7 +876,7 @@ class Scene
 		if (ScriptCallbackIndex.Of(replacement.GetType()) == old.[Friend]mCallbacks)
 		{
 			replacement.[Friend]mCallbacks = old.[Friend]mCallbacks;
-			for (let list in scope List<Component>[](mFixedList, mFrameList, mLateList, mOnFrameList))
+			for (let list in scope List<Component>[](mFixedList, mEarlyList, mFrameList, mLateList, mOnFrameList))
 			{
 				let at = list.IndexOf(old);
 				if (at >= 0)
@@ -1056,6 +1056,7 @@ class Scene
 	{
 		Keep(mComponents);
 		Keep(mFixedList);
+		Keep(mEarlyList);
 		Keep(mFrameList);
 		Keep(mLateList);
 		Keep(mOnFrameList);
