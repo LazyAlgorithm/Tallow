@@ -266,6 +266,17 @@ internal sealed class EcsRows : IDisposable
     /// <summary>Writes the changed rows back (call once, after the last row).</summary>
     public void WriteBack()
     {
+        // Every row changed (a system moving everything): write them back in query order, straight into the
+        // columns, instead of looking each entity up.
+        if (_changed == Count && Count > 0)
+        {
+            for (int at = 0; at < Count; at += PageRows)
+            {
+                int count = Math.Min(PageRows, Count - at);
+                Ecs.WriteDataPageOrdered(_session, _schemas, at, Ids.AsSpan(at, count), _bytes.AsSpan(at * _rowSize, count * _rowSize));
+            }
+            return;
+        }
         for (int at = 0; at < _changed; at += PageRows)
         {
             int count = Math.Min(PageRows, _changed - at);

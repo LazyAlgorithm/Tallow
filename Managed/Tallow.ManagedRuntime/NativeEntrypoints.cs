@@ -19,13 +19,15 @@ public static unsafe class NativeEntrypoints
     private struct Callbacks
     {
         public nint Context;
-        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int> IsAlive;
-        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, float*, int> GetPosition;
-        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, float*, int> SetPosition;
+        // The handle and transform callbacks are short, never block and never call back into .NET (they read or
+        // write transform data and mark it dirty), so they skip the GC transition: about half the cost of a call.
+        public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, int> IsAlive;
+        public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, float*, int> GetPosition;
+        public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, float*, int> SetPosition;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, void> Destroy;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int> IsMine;
-        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, int> GetTransform;
-        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, int> SetTransform;
+        public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, int, float*, int> GetTransform;
+        public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, int, float*, int> SetTransform;
         public delegate* unmanaged[Cdecl]<nint, byte*, nint> ResolveApi;
         public delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> CreateSceneObject;
         public delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> FindSceneObject;
@@ -519,6 +521,8 @@ public static unsafe class NativeEntrypoints
             sRegistry = null;
             sTypes.Clear();
             sFormerNames.Clear();
+            lock (sCallbackMasks)
+                sCallbackMasks.Clear();
             GameAssemblyContext? failed = sGameContext;
             sGameContext = null;
             failed?.Unload();
@@ -901,11 +905,53 @@ public static unsafe class NativeEntrypoints
         DispatchScript(instance, script, eventId, deltaTime);
     }
 
+    /// <summary>Dispatch's event id that asks which per-frame callbacks an instance's class overrides.</summary>
+    private const int QueryCallbacks = 100;
+    /// <summary>The bit for Update in that answer (the others are 1 &lt;&lt; ScriptEvent).</summary>
+    private const int UpdateBit = 1 << 20;
+    private static readonly Dictionary<Type, int> sCallbackMasks = new();
+
+    /// <summary>
+    /// The per-frame callbacks a script class overrides: the engine skips the others, so a script with only
+    /// Update costs one call a frame rather than one for each of Update, LateUpdate, OnGUI, OnFrame, ....
+    /// Awake, OnEnable, Start, OnDisable and the rare callbacks are always sent.
+    /// </summary>
+    private static int CallbackMask(Type type)
+    {
+        lock (sCallbackMasks)
+        {
+            if (sCallbackMasks.TryGetValue(type, out int cached))
+                return cached;
+            int mask = 0;
+            void Check(string name, Type[] parameters, int bit)
+            {
+                MethodInfo? method = type.GetMethod(name, BindingFlags.Public | BindingFlags.Instance, parameters);
+                if (method == null || method.DeclaringType != typeof(Script))
+                    mask |= bit;
+            }
+            Check(nameof(Script.Update), [typeof(TickInput), typeof(float)], UpdateBit);
+            Check(nameof(Script.FixedUpdate), [typeof(float)], 1 << (int)ScriptEvent.FixedUpdate);
+            Check(nameof(Script.OnLocalUpdate), Type.EmptyTypes, 1 << (int)ScriptEvent.LocalUpdate);
+            Check(nameof(Script.LateUpdate), [typeof(float)], 1 << (int)ScriptEvent.LateUpdate);
+            Check(nameof(Script.OnGUI), Type.EmptyTypes, 1 << (int)ScriptEvent.Gui);
+            Check(nameof(Script.OnFrame), Type.EmptyTypes, 1 << (int)ScriptEvent.Frame);
+            sCallbackMasks[type] = mask;
+            return mask;
+        }
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int Dispatch(int instance, int eventId, float deltaTime)
     {
         try
         {
+            if (eventId == QueryCallbacks)
+            {
+                if (!sInstances.TryGetValue(instance, out Script? queried))
+                    throw new InvalidOperationException("Unknown managed gameplay instance.");
+                // 2 + mask: a host that reduces results to 1 for success then reads as "unknown".
+                return 2 + CallbackMask(queried.GetType());
+            }
             DispatchOne(instance, (ScriptEvent)eventId, deltaTime);
             return 1;
         }

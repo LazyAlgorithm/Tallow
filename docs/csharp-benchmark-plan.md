@@ -34,6 +34,25 @@
 - [ ] **B16 — engine resource/render throughput.** Static 100k objects, 10k changing transforms and streaming scene chunks, with GPU timings/draw calls separated from C# script CPU. Include shader graph and compute graph functionality regression.
 - [ ] **B17 — real managed allocations.** With 1k/10k/100k Script updates, record managed bytes/frame, collections (Gen0/1/2), pause time and peak RSS. Compare allocation-free value math, event allocation, GetComponent in loops and managed/native string calls.
 
+### Results so far (Linux, Release exported headless players)
+
+`tools/run_csharp_bench.py` runs `Samples/CSharpBench` (C#) against the same workload in Beef: every object moves and
+rotates each frame (`gameobject`: one Script per object using Transform; `ecs`: one `Query<Pose, Motion>().ForEach`).
+Medians of 3 runs × 600 frames. Raw data: `~/TallowBenchmarks/beef-vs-csharp-20261115/`.
+
+| mode | objects | Beef script ms | C# script ms (first run) | C# script ms (now) | C# frame ms (first → now) | C# GC bytes/frame |
+|---|---:|---:|---:|---:|---:|---:|
+| gameobject | 1k | 0.027 | 0.142 | 0.105 | 1.24 → 1.17 | 164 |
+| gameobject | 10k | 0.279 | 0.978 | 0.756 | 2.32 → 1.82 | 149 |
+| gameobject | 50k | 1.480 | 5.048 | 3.861 | 10.15 → 4.95 | 150 |
+| ecs | 10k | 0.304 | 1.319 | 0.975 | 2.35 → 2.03 | 313 |
+| ecs | 50k | 1.502 | 6.168 | 5.097 | 7.34 → 6.18 | 313 |
+
+No GC collections during measurement. What closed the gap so far: C# scripts leave the scene's per-frame lists for
+callbacks their class does not override; transform callbacks skip the GC transition; ECS `ForEach` writes every-row
+changes back in query order instead of looking each entity up. Left: one native call per Transform get/set (a
+batched or cached transform path), and the ECS page copy itself (a direct column view would avoid it).
+
 ## P2 — networking, export, regression (cannot be substituted by a local microbenchmark)
 
 - [ ] **B18 — multiplayer sync.** 2, 4, 8 and 16 peers (or maximum supported), 0/50/100/200 ms added RTT, 0/1/2/5% packet loss, 30/60/120 Hz where supported. Compare state divergence, input latency, server tick time, bandwidth per peer, desync recovery and replay hashes. Ensure C# TickInput produces the same authoritative behavior as Beef.

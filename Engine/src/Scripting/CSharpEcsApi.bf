@@ -169,6 +169,16 @@ static class Ecs
         return scene != null ? scene.World.CopyManagedDataPage(schemaIds, offset, entityIds, bytes) : 0;
     }
 
+    /// Writes a page of rows back in the order CopyDataPage gave them from the same offset (straight into the
+    /// columns while each entity is still where it was; looked up otherwise).
+    [CSharpExpose]
+    public static int32 WriteDataPageOrdered(uint64 session, Span<uint64> schemaIds, int32 offset, Span<uint64> entityIds,
+        Span<uint8> bytes)
+    {
+        let scene = OfflinePlaying(session);
+        return scene != null ? scene.World.WriteManagedDataPageOrdered(schemaIds, offset, entityIds, bytes) : 0;
+    }
+
     /// Writes rows (as CopyDataPage gives them) back; entities that have gone or lost a schema are skipped.
     [CSharpExpose]
     public static int32 WriteDataPage(uint64 session, Span<uint64> schemaIds, Span<uint64> entityIds, Span<uint8> bytes)

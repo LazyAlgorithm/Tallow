@@ -1,0 +1,3 @@
+name = CSharpBench
+startScene = Scenes/Bench.tscene
+engine = ../..

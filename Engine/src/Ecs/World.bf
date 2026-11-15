@@ -192,6 +192,80 @@ sealed class World
 		return copied;
 	}
 
+	/// Writes rows back in the order CopyManagedDataPage gave them, starting at the same offset: walks the query
+	/// again and copies each row straight into its columns while the entity there is the one the row came from.
+	/// A row whose entity is not where it was (one gained or lost a schema meanwhile) is written by looking it up
+	/// (WriteManagedDataPage), or skipped if it has gone. Returns how many were written.
+	public int32 WriteManagedDataPageOrdered(Span<uint64> schemaIds, int32 offset, Span<uint64> entityIds, Span<uint8> bytes)
+	{
+		ManagedLocalSchema[MaxManagedQueryTerms] layouts = ?;
+		if (offset < 0 || entityIds.IsEmpty || entityIds.Length > 4096)
+			return 0;
+		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), let rowSize) || bytes.Length < entityIds.Length * rowSize)
+			return 0;
+		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length));
+		if (query == null)
+			return 0;
+		Flecs.IterBuffer iterator = ?;
+		Flecs.QueryIter(mWorld, query, &iterator);
+		uint8*[MaxManagedQueryTerms] columns = ?;
+		int32 visited = 0;
+		int32 next = 0;
+		int32 written = 0;
+		let missed = scope List<int32>();
+		while (true)
+		{
+			if (next >= entityIds.Length)
+			{
+				Flecs.IterFini(&iterator); // stopped before the end
+				break;
+			}
+			if (!Flecs.IterNext(&iterator))
+				break;
+			let ids = Flecs.IterEntities(&iterator);
+			bool present = ids != null;
+			for (int t < schemaIds.Length)
+			{
+				columns[t] = (uint8*)Flecs.IterField(&iterator, (int32)t, layouts[t].size);
+				present &= columns[t] != null;
+			}
+			if (!present)
+				continue;
+			let count = Flecs.IterCount(&iterator);
+			if (visited + count <= offset)
+			{
+				visited += count;
+				continue;
+			}
+			for (int i < count)
+			{
+				if (visited++ < offset)
+					continue;
+				if (next >= entityIds.Length)
+					break;
+				if (ids[i] != entityIds[next])
+				{
+					missed.Add(next++);
+					continue;
+				}
+				int at = next * rowSize;
+				for (int t < schemaIds.Length)
+				{
+					let size = layouts[t].size;
+					Internal.MemCpy(columns[t] + i * size, &bytes[at], size);
+					at += size;
+				}
+				next++;
+				written++;
+			}
+		}
+		while (next < entityIds.Length)
+			missed.Add(next++);
+		for (let row in missed)
+			written += WriteManagedDataPage(schemaIds, .(&entityIds[row], 1), .(&bytes[row * rowSize], rowSize));
+		return written;
+	}
+
 	/// Writes rows laid out as CopyManagedDataPage gives them back to their entities. An entity that has gone, or
 	/// no longer has every schema, is skipped. Returns how many were written.
 	public int32 WriteManagedDataPage(Span<uint64> schemaIds, Span<uint64> entityIds, Span<uint8> bytes)

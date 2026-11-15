@@ -44,8 +44,13 @@ public static class TallowMathExtensions
 
     extension(Quaternion)
     {
-        /// <summary>A rotation from Euler angles in degrees, as the Inspector shows them.</summary>
-        public static Quaternion Euler(float x, float y, float z) => RotationMath.EulerDegrees(new Vector3(x, y, z));
+        /// <summary>A rotation from Euler angles in degrees, as the Inspector shows them: Z (roll) first, then X
+        /// (pitch), then Y (yaw), as the engine does. Computed in C#, with no native call.</summary>
+        public static Quaternion Euler(float x, float y, float z) =>
+            Quaternion.AngleAxis(y, Vector3.UnitY) * Quaternion.AngleAxis(x, Vector3.UnitX) * Quaternion.AngleAxis(z, Vector3.UnitZ);
+
+        /// <summary>A rotation from Euler angles in degrees (x, y, z).</summary>
+        public static Quaternion Euler(Vector3 degrees) => Quaternion.Euler(degrees.X, degrees.Y, degrees.Z);
 
         /// <summary>A turn of so many degrees about an axis.</summary>
         public static Quaternion AngleAxis(float degrees, Vector3 axis)

@@ -194,6 +194,7 @@ method	Tallow.Ecs	RegisterLocalData	ulong	session:ulong	schemaId:ulong	size:int	
 method	Tallow.Ecs	RemoveLocalData	bool	session:ulong	entity:ulong	schemaId:ulong
 method	Tallow.Ecs	SetLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
 method	Tallow.Ecs	WriteDataPage	int	session:ulong	schemaIds:System.Span<ulong>	entityIds:System.Span<ulong>	bytes:System.Span<byte>
+method	Tallow.Ecs	WriteDataPageOrdered	int	session:ulong	schemaIds:System.Span<ulong>	offset:int	entityIds:System.Span<ulong>	bytes:System.Span<byte>
 method	Tallow.GUI	Button	bool	x:float	y:float	width:float	height:float	label:string
 method	Tallow.Input	GetAxis	float	name:string
 method	Tallow.Input	GetMouseDelta	System.Numerics.Vector2

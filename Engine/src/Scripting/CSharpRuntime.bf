@@ -603,6 +603,20 @@ static class CSharpRuntime
 		return false;
 	}
 
+	/// Bit of CallbackMask for Update; the others are 1 << ManagedEvent.
+	public const int32 UpdateCallback = 1 << 20;
+
+	/// The per-frame callbacks (Update, FixedUpdate, OnLocalUpdate, LateUpdate, OnGUI, OnFrame) the instance's
+	/// class overrides, so the rest are not sent; -1 (all) when the runtime cannot say.
+	public static int32 CallbackMask(int32 instance)
+	{
+		if (!Ready || instance <= 0)
+			return -1;
+		// 2 + mask; 1 is an older host that reduces every success to 1, which cannot say.
+		let result = tn_csharp_dispatch(instance, 100, 0);
+		return result >= 2 ? result - 2 : -1;
+	}
+
 	/// Dispatch lifecycle callbacks when Scene invokes the corresponding Component callback.
 	public static bool Dispatch(int32 instance, ManagedEvent eventId, float deltaTime = 0)
 	{

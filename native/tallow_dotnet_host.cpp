@@ -508,7 +508,8 @@ int32_t tn_csharp_dispatch(int32_t script_instance, int32_t event_id, float delt
     const int32_t result = dispatch(script_instance, event_id, delta_time);
     if (result < 0)
         managed_error("Dispatching C# component event");
-    return result > 0;
+    // Positive results pass through: the callback-mask query (event 100) answers 2 + mask.
+    return result > 0 ? result : 0;
 }
 
 int32_t tn_csharp_dispatch_batch(const int32_t* instances, int32_t count,

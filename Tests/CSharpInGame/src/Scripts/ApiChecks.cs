@@ -235,6 +235,10 @@ public class ApiChecks : CheckBase
         Check("GameObject.Team is 0 without teams", mover.Team == 0);
         mover.Destroy();
 
+        var degrees = new Vector3(30f, -75f, 140f);
+        Quaternion managed = Quaternion.Euler(degrees), native = RotationMath.EulerDegrees(degrees);
+        Check("Quaternion.Euler in C# matches the engine's (" + managed + " / " + native + ")",
+            MathF.Abs(Quaternion.Dot(managed, native)) > 0.999999f && Quaternion.Euler(degrees.X, degrees.Y, degrees.Z) == managed);
         Check("Layers.Named/Name/Mask", Layers.Named("Default") == 0 && Layers.Name(0) == "Default"
             && Layers.Mask("Default") == 1u && Layers.Mask("NoSuchLayer") == 0u);
         Check("a ray with an empty layer mask hits nothing", Scene.RaycastHit(new Vector3(3, 10, 0), -Vector3.UnitY, 20f, 0u) == null

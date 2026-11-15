@@ -211,6 +211,38 @@ class Scene
 			mOnFrameList.Add(component);
 	}
 
+	/// Changes which per-frame callbacks a component gets, for a class that knows better than reflection (a C#
+	/// script, whose CSharpBehaviour overrides them all). A component taken out of a list is found from the end,
+	/// where one that has just been added is.
+	public void SetCallbacks(Component component, ScriptCallbacks callbacks)
+	{
+		let old = component.[Friend]mCallbacks;
+		if (old == callbacks || !component.[Friend]mRegistered || component.GameObject?.Scene != this)
+			return;
+		void Change(List<Component> list, bool had, bool has)
+		{
+			if (had && !has)
+			{
+				for (int i = list.Count - 1; i >= 0; i--)
+				{
+					if (list[i] == component)
+					{
+						list.RemoveAt(i);
+						break;
+					}
+				}
+			}
+			else if (has && !had)
+				list.Add(component);
+		}
+		Change(mFixedList, old.HasFlag(.FixedUpdate), callbacks.HasFlag(.FixedUpdate));
+		Change(mFrameList, old.HasFlag(.Update) || old.HasFlag(.OnLocalUpdate),
+			callbacks.HasFlag(.Update) || callbacks.HasFlag(.OnLocalUpdate));
+		Change(mLateList, old.HasFlag(.LateUpdate), callbacks.HasFlag(.LateUpdate));
+		Change(mOnFrameList, old.HasFlag(.OnFrame), callbacks.HasFlag(.OnFrame));
+		component.[Friend]mCallbacks = callbacks;
+	}
+
 	void RemoveFromCallbackLists(Component component)
 	{
 		let callbacks = component.[Friend]mCallbacks;

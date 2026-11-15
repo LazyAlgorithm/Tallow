@@ -24,6 +24,10 @@ class CSharpBehaviour : Component
 	[HideInInspector] public List<GameObject> referenceTargets = new .() ~ delete _;
 
 	int32 mInstance = -1;
+	/// The per-frame callbacks the script's class overrides (CSharpRuntime.CallbackMask); the others are not sent.
+	int32 mCallbacks = -1;
+
+	bool Wants(CSharpRuntime.ManagedEvent event) => (mCallbacks & (1 << (int32)event)) != 0;
 
 	/// The managed component is owned by this native component, not the scene's ECS memory.
 	public bool IsLoaded => mInstance > 0 && CSharpRuntime.Ready;
@@ -247,6 +251,16 @@ class CSharpBehaviour : Component
 		mInstance = CSharpRuntime.Attach(scriptType, GameObject);
 		if (mInstance > 0)
 		{
+			mCallbacks = CSharpRuntime.CallbackMask(mInstance);
+			// Leave the scene's per-frame lists for callbacks the script's class does not override, so they cost
+			// nothing at all (CSharpBehaviour itself overrides every one).
+			ScriptCallbacks wanted = .None;
+			if ((mCallbacks & CSharpRuntime.UpdateCallback) != 0) wanted |= .Update;
+			if (Wants(.FixedUpdate)) wanted |= .FixedUpdate;
+			if (Wants(.LateUpdate)) wanted |= .LateUpdate;
+			if (Wants(.Frame)) wanted |= .OnFrame;
+			if (Wants(.LocalUpdate)) wanted |= .OnLocalUpdate;
+			GameObject.Scene?.SetCallbacks(this, wanted);
 			// Never run Awake/OnEnable/Start when serialized state could not
 			// be restored. Otherwise a broken scene could silently initialize
 			// networked gameplay with the wrong field values.
@@ -285,31 +299,31 @@ class CSharpBehaviour : Component
 
 	public override void FixedUpdate()
 	{
-		if (IsLoaded)
+		if (IsLoaded && Wants(.FixedUpdate))
 			CSharpRuntime.Dispatch(mInstance, .FixedUpdate, Time.FixedDeltaTime);
 	}
 
 	public override void Update(TickInput input, float deltaTime)
 	{
-		if (IsLoaded)
+		if (IsLoaded && (mCallbacks & CSharpRuntime.UpdateCallback) != 0)
 			CSharpRuntime.Update(mInstance, input, deltaTime);
 	}
 
 	public override void OnLocalUpdate()
 	{
-		if (IsLoaded)
+		if (IsLoaded && Wants(.LocalUpdate))
 			CSharpRuntime.Dispatch(mInstance, .LocalUpdate);
 	}
 
 	public override void LateUpdate()
 	{
-		if (IsLoaded)
+		if (IsLoaded && Wants(.LateUpdate))
 			CSharpRuntime.Dispatch(mInstance, .LateUpdate, Time.DeltaTime);
 	}
 
 	public override void OnGUI()
 	{
-		if (IsLoaded)
+		if (IsLoaded && Wants(.Gui))
 			CSharpRuntime.Dispatch(mInstance, .Gui);
 	}
 
@@ -323,7 +337,7 @@ class CSharpBehaviour : Component
 	// not loaded outside Play.
 	public override void OnFrame()
 	{
-		if (IsLoaded)
+		if (IsLoaded && Wants(.Frame))
 			CSharpRuntime.Dispatch(mInstance, .Frame, Time.DeltaTime);
 	}
 
@@ -461,6 +475,7 @@ class CSharpBehaviour : Component
 			return;
 		CSharpRuntime.Detach(mInstance);
 		mInstance = -1;
+		mCallbacks = -1;
 		mHasSaved = -1;
 	}
 }
