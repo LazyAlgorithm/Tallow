@@ -125,6 +125,7 @@ class CSharpBehaviour : Component
 			{
 				Log.Warning(scope $"'{GameObject.Name}' names the script {scriptType}, which is now {registered} ([FormerlyNamed]). Save the scene to keep the new name.");
 				scriptType.Set(registered);
+				this.[Friend]mProfileSlot = -1; // The Profiler names it by its new name.
 			}
 			if (!CSharpRuntime.Dispatch(mInstance, .Awake))
 				ReleaseManaged();

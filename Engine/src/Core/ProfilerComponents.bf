@@ -19,6 +19,8 @@ static class ProfilerComponents
 
 	static StringView[5] sMethodNames = .(".FixedUpdate()", ".Update()", ".LateUpdate()", ".OnFrame()", ".OnLocalUpdate()");
 	static Dictionary<Type, int32> sSlots = new .() ~ delete _;
+	/// C# Script components share one Beef type: they get a slot per script class instead.
+	static Dictionary<String, int32> sScriptSlots = new .() ~ DeleteDictionaryAndKeys!(_);
 	static List<int32[5]> sMarkers = new .() ~ delete _;
 
 	/// Whether components are being timed one by one now.
@@ -27,6 +29,21 @@ static class ProfilerComponents
 	public static int32 MarkerFor(Component component, Method method)
 	{
 		var slot = component.[Friend]mProfileSlot;
+		if (slot < 0 && component is CSharpBehaviour && !((CSharpBehaviour)component).scriptType.IsEmpty)
+		{
+			// "Game.Player.Update()": the script's own name, in Scripts.
+			let name = (StringView)((CSharpBehaviour)component).scriptType;
+			if (!sScriptSlots.TryGetValueAlt(name, out slot))
+			{
+				int32[5] markers = default;
+				for (int i < markers.Count)
+					markers[i] = Profiler.Marker(scope String()..AppendF("{}{}", name, sMethodNames[i]), .Scripts);
+				slot = (int32)sMarkers.Count;
+				sMarkers.Add(markers);
+				sScriptSlots[new String(name)] = slot;
+			}
+			component.[Friend]mProfileSlot = slot;
+		}
 		if (slot < 0)
 		{
 			let type = component.GetType();

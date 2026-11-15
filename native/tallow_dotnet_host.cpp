@@ -56,7 +56,7 @@ using contact_fn = int32_t (*)(int32_t, const tn_csharp_contact*);
 using read_fields_fn = int32_t (*)(int32_t, int32_t, char*, int32_t);
 using invoke_rpc_fn = int32_t (*)(int32_t, const char*, const char*, int32_t, int32_t);
 using network_event_fn = int32_t (*)(int32_t, const char*, float);
-using pump_fn = int32_t (*)(float);
+using pump_fn = int32_t (*)(float, tn_csharp_gc_stats*);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
 using shutdown_fn = int32_t (*)();
@@ -583,11 +583,11 @@ int32_t tn_csharp_network_event(int32_t script_instance, const char* name, float
     return result > 0;
 }
 
-int32_t tn_csharp_pump(float delta_time)
+int32_t tn_csharp_pump(float delta_time, tn_csharp_gc_stats* stats)
 {
     if (!started || !pump)
         return 0;
-    const int32_t result = pump(delta_time);
+    const int32_t result = pump(delta_time, stats);
     if (result < 0)
         managed_error("Running C# async code");
     return result > 0;

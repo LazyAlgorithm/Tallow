@@ -891,8 +891,11 @@ A full conversion also needs these. Ordered roughly by when they block users.
   http.server`), and the legacy Beef language service.
 - [ ] Third-party managed libraries/NuGet references in `.tasmdef`, with trust, licence
   and trimming/AOT rules.
-- [ ] Profiler: per-script C# timings in the existing Profiler window, GC allocation and
-  collection markers.
+- [x] Profiler: C# scripts are timed per class ("Game.Player.Update()", Scripts) instead of
+  all sharing "CSharpBehaviour.Update()"; "C# await continuations" times the async pump;
+  Memory counters "C# allocated this frame", "C# heap", "C# garbage collections this frame"
+  and "C# GC pause this frame" come back from the pump (`tn_csharp_gc_stats`). Test: the
+  in-engine run writes `--profile-report` and checks the rows (105 checks).
 - [ ] Packages (`.tpackage`) that carry C# source/assemblies.
 - [ ] Editor extensibility scope: decide whether C# can add custom inspectors, editor
   windows and gizmo tools, or whether editor tooling stays Beef-only.

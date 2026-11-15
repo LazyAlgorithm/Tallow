@@ -182,11 +182,26 @@ public static unsafe class NativeEntrypoints
 
     /// Once a frame after LateUpdate: game-time waits and await continuations (GameThread).
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    public static int Pump(float deltaTime)
+    public static int Pump(float deltaTime, NativeGcStats* stats)
     {
         try
         {
-            GameThread.Pump(deltaTime);
+            try
+            {
+                GameThread.Pump(deltaTime);
+            }
+            finally
+            {
+                if (stats != null)
+                {
+                    stats->AllocatedBytes = GC.GetTotalAllocatedBytes();
+                    stats->HeapBytes = GC.GetTotalMemory(false);
+                    stats->Gen0 = GC.CollectionCount(0);
+                    stats->Gen1 = GC.CollectionCount(1);
+                    stats->Gen2 = GC.CollectionCount(2);
+                    stats->PauseNanoseconds = (long)(GC.GetTotalPauseDuration().Ticks * 100);
+                }
+            }
             return 1;
         }
         catch (Exception exception)
@@ -209,6 +224,15 @@ public static unsafe class NativeEntrypoints
         {
             return Failure(exception);
         }
+    }
+
+    // Plain native layout, matching tn_csharp_gc_stats (40 bytes).
+    [StructLayout(LayoutKind.Sequential)]
+    public struct NativeGcStats
+    {
+        public long AllocatedBytes, HeapBytes;
+        public int Gen0, Gen1, Gen2, Reserved;
+        public long PauseNanoseconds;
     }
 
     // Plain native layout, matching tn_csharp_contact (48 bytes).

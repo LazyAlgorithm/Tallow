@@ -286,15 +286,55 @@ static class CSharpRuntime
 	[CLink] static extern void tn_csharp_shutdown();
 	[CLink] static extern char8* tn_csharp_error();
 	[CLink] static extern int32 tn_csharp_network_event(int32 instance, char8* name, float value);
-	[CLink] static extern int32 tn_csharp_pump(float deltaTime);
+	[CRepr]
+	struct GcStats
+	{
+		public int64 allocatedBytes, heapBytes;
+		public int32 gen0, gen1, gen2, reserved;
+		public int64 pauseNs;
+	}
 
-	/// Once a frame while the scene plays, after LateUpdate: C# game-time waits and await continuations.
+	[CLink] static extern int32 tn_csharp_pump(float deltaTime, GcStats* stats);
+
+	static ProfilerMarker sAsyncMarker = .("C# await continuations", .Scripts);
+	static int32 sAllocatedCounter = -1, sHeapCounter = -1, sCollectionsCounter = -1, sPauseCounter = -1;
+	static GcStats sLastGc;
+	static bool sHaveGc;
+
+	/// Once a frame while the scene plays, after LateUpdate: C# game-time waits and await continuations. Also
+	/// reports the managed heap to the Profiler (Memory): bytes allocated this frame, heap size, collections and
+	/// time paused for them this frame.
 	public static void Pump(Scene scene, float deltaTime)
 	{
 		if (!Ready || scene != sScene)
 			return;
-		if (tn_csharp_pump(deltaTime) <= 0)
+		GcStats stats = default;
+		int32 result;
+		using (sAsyncMarker.Sample())
+			result = tn_csharp_pump(deltaTime, &stats);
+		if (result <= 0)
 			ReportFailure("async code");
+		if (!Profiler.Enabled)
+		{
+			sHaveGc = false;
+			return;
+		}
+		if (sAllocatedCounter < 0)
+		{
+			sAllocatedCounter = Profiler.Counter("C# allocated this frame", .Memory, "bytes");
+			sHeapCounter = Profiler.Counter("C# heap", .Memory, "bytes");
+			sCollectionsCounter = Profiler.Counter("C# garbage collections this frame", .Memory);
+			sPauseCounter = Profiler.Counter("C# GC pause this frame", .Memory, "ms");
+		}
+		if (sHaveGc)
+		{
+			Profiler.Set(sAllocatedCounter, (double)Math.Max(stats.allocatedBytes - sLastGc.allocatedBytes, 0));
+			Profiler.Set(sCollectionsCounter, (double)Math.Max(stats.gen0 - sLastGc.gen0, 0)); // Every collection counts gen 0.
+			Profiler.Set(sPauseCounter, (double)Math.Max(stats.pauseNs - sLastGc.pauseNs, 0) / 1000000.0);
+		}
+		Profiler.Set(sHeapCounter, (double)stats.heapBytes);
+		sLastGc = stats;
+		sHaveGc = true;
 	}
 
 	static Scene sScene;

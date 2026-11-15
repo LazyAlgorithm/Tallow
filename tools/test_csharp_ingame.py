@@ -57,7 +57,8 @@ def main() -> int:
                         "--configuration", "Debug", "--nologo", "--verbosity", "quiet"], check=True)
 
         run = subprocess.run(
-            [str(launcher), "--game", "--project", str(project), "--headless", "--fixed-step", "--csharp-field-test", "--frames", "600"],
+            [str(launcher), "--game", "--project", str(project), "--headless", "--fixed-step", "--csharp-field-test", "--frames", "600",
+             "--profile-report", str(work / "profile.txt")],
             capture_output=True, text=True, timeout=180)
         output = run.stdout + run.stderr
         lines = [line for line in output.splitlines() if "INGAME" in line or "[Tallow C#]" in line]
@@ -75,6 +76,17 @@ def main() -> int:
         else:
             failed.append(f"INGAME FAIL script exception report: {thrown or 'not logged'}")
             print(failed[-1])
+        report = (work / "profile.txt").read_text() if (work / "profile.txt").exists() else ""
+        for label, needle in [("the Profiler times each C# script class by name", "| InGame.ApiChecks.Update() | Scripts |"),
+                              ("the Profiler times C# await continuations", "| C# await continuations | Scripts |"),
+                              ("the Profiler counts C# allocations and heap size", "- C# allocated this frame in bytes:"),
+                              ("the Profiler counts C# garbage collections", "- C# garbage collections this frame:")]:
+            if needle in report:
+                passed += 1
+                print("INGAME PASS " + label)
+            else:
+                failed.append("INGAME FAIL " + label)
+                print(failed[-1])
         boom = [line for line in output.splitlines()
                 if line.startswith("[error] System.InvalidOperationException: thrown on purpose by async code (in async code")]
         if len(boom) == 1 and "AsyncProbe" in boom[0] and "ApiChecks.cs:" in boom[0]:

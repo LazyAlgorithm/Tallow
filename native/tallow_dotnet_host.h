@@ -116,8 +116,19 @@ int32_t tn_csharp_read_fields(int32_t script_instance, int32_t mode, char* buffe
 int32_t tn_csharp_invoke_rpc(int32_t script_instance, const char* method, const char* arguments, int32_t target, int32_t sender);
 // Calls OnNetworkEvent(name, value) (Component.SendNetworkEvent arriving on this machine); 1 on success.
 int32_t tn_csharp_network_event(int32_t script_instance, const char* name, float value);
-// Once a frame after LateUpdate: finishes due game-time waits and runs await continuations; 1 on success.
-int32_t tn_csharp_pump(float delta_time);
+// The managed heap after a pump, for the Profiler (40 bytes).
+typedef struct tn_csharp_gc_stats
+{
+    int64_t allocated_bytes; // Allocated since the runtime started (all threads).
+    int64_t heap_bytes;      // In use now.
+    int32_t gen0, gen1, gen2; // Collections since the runtime started.
+    int32_t reserved;
+    int64_t pause_ns;        // Total time paused for collections.
+} tn_csharp_gc_stats;
+
+// Once a frame after LateUpdate: finishes due game-time waits and runs await continuations, then fills stats
+// (optional); 1 on success.
+int32_t tn_csharp_pump(float delta_time, tn_csharp_gc_stats* stats);
 int32_t tn_csharp_detach(int32_t script_instance);
 void tn_csharp_shutdown(void);
 const char* tn_csharp_error(void);

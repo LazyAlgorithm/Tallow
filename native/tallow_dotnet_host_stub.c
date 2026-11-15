@@ -65,9 +65,9 @@ int32_t tn_csharp_read_fields(int32_t script_instance, int32_t mode, char* buffe
     (void)script_instance; (void)mode; (void)buffer; (void)capacity;
     return -1;
 }
-int32_t tn_csharp_pump(float delta_time)
+int32_t tn_csharp_pump(float delta_time, tn_csharp_gc_stats* stats)
 {
-    (void)delta_time;
+    (void)delta_time; (void)stats;
     return 0;
 }
 
