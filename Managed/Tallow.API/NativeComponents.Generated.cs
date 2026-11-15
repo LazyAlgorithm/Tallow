@@ -124,6 +124,38 @@ public readonly record struct Camera(GameObject GameObject) : IComponent
 }
 
 /// <summary>
+/// A capsule-shaped collider (a cylinder with rounded ends), standing along Y: the usual shape for characters.
+/// </summary>
+[NativeComponent("Tallow.CapsuleCollider")]
+public readonly record struct CapsuleCollider(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.CapsuleCollider");
+    public bool IsValid => Data.IsValid;
+    public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
+    /// <summary>
+    /// The capsule's radius.
+    /// </summary>
+    public float Radius { get => Data.GetFloat("radius"); set => Data.Set("radius", value); }
+    /// <summary>
+    /// The capsule's height from end to end, its rounded ends included.
+    /// </summary>
+    public float Height { get => Data.GetFloat("height"); set => Data.Set("height", value); }
+}
+
+/// <summary>
+/// Several boxes acting as one shape, so a whole construction can be a single rigid body.
+/// </summary>
+[NativeComponent("Tallow.CompoundCollider")]
+public readonly record struct CompoundCollider(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.CompoundCollider");
+    public bool IsValid => Data.IsValid;
+    public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
+}
+
+/// <summary>
 /// Runs a compute shader every frame and shows the result as the texture of this object's Mesh Renderer. No script
 /// needed: add it, pick a .tcompute file, press Play.
 /// </summary>
@@ -146,6 +178,22 @@ public readonly record struct ComputeEffect(GameObject GameObject) : IComponent
     /// Off: the shader runs only when Step is called.
     /// </summary>
     public bool EveryFrame { get => Data.GetBool("everyFrame"); set => Data.Set("everyFrame", value); }
+}
+
+/// <summary>
+/// Convex wrap of the MeshRenderer's mesh. Unlike MeshCollider it works on moving bodies.
+/// </summary>
+[NativeComponent("Tallow.ConvexCollider")]
+public readonly record struct ConvexCollider(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.ConvexCollider");
+    public bool IsValid => Data.IsValid;
+    public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
+    /// <summary>
+    /// Wrap the model hierarchy when the body is on a parent rather than the mesh object.
+    /// </summary>
+    public bool IncludeChildren { get => Data.GetBool("includeChildren"); set => Data.Set("includeChildren", value); }
 }
 
 /// <summary>
@@ -377,6 +425,86 @@ public readonly record struct FoliageBender(GameObject GameObject) : IComponent
 }
 
 /// <summary>
+/// Keeps a character's feet on the ground: on stairs, slopes and rubble each foot is set down on what is under it,
+/// the hips drop so that the lower foot can reach, and the feet tilt with the slope. Put it on the character's root
+/// (the object that moves over the ground) and name the two feet; the legs are the two bones above each foot.
+///
+/// It works on top of the clip: a foot the animation lifts for a step is still lifted, by the same amount, over
+/// whatever the ground is doing there. It looks for the ground with the physics world, so the ground needs colliders,
+/// and it only does anything while the game is playing. Set Ground Layer when the character's own collider would
+/// otherwise be found first. Worked out on each machine from the ground there; nothing is sent.
+/// </summary>
+[NativeComponent("Tallow.FootPlacement")]
+public readonly record struct FootPlacement(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.FootPlacement");
+    public bool IsValid => Data.IsValid;
+    public float Weight { get => Data.GetFloat("weight"); set => Data.Set("weight", value); }
+    /// <summary>
+    /// The highest step up a foot is put on, and the deepest step down it reaches for.
+    /// </summary>
+    public float StepUp { get => Data.GetFloat("stepUp"); set => Data.Set("stepUp", value); }
+    public float StepDown { get => Data.GetFloat("stepDown"); set => Data.Set("stepDown", value); }
+    /// <summary>
+    /// How quickly feet and hips settle on new ground; higher is snappier.
+    /// </summary>
+    public float Smooth { get => Data.GetFloat("smooth"); set => Data.Set("smooth", value); }
+    /// <summary>
+    /// Tilt the feet to the slope under them, by no more than Max Tilt degrees.
+    /// </summary>
+    public bool Tilt { get => Data.GetBool("tilt"); set => Data.Set("tilt", value); }
+    public float MaxTilt { get => Data.GetFloat("maxTilt"); set => Data.Set("maxTilt", value); }
+    public int GroundLayer { get => Data.GetInt("groundLayer"); set => Data.Set("groundLayer", value); }
+}
+
+/// <summary>
+/// Poses the fingers of a hand without animating fifteen bones: one slider for each finger (0 straight, 1 curled), one
+/// for how far they are spread, and ready-made shapes (Open, Fist, Grip, Trigger, Point, Pinch...). Put it on the hand
+/// bone, or name the hand in Hand.
+///
+/// The fingers are found by name among the hand's children (thumb, index, middle, ring, pinky or little; when none of
+/// the names match they are taken in order; a child named only "finger" takes the first free slot from the middle).
+/// Each finger is that child and the bones below it. If the fingers curl backwards on your model, tick Flip Curl; if
+/// only the thumb does, Flip Thumb.
+///
+/// It is a layer over the clip like the other IK components: Weight 0 leaves the fingers to their animation. Change
+/// shape from code with SetShape (blended over Blend Time, and followed on every machine when the object's owner
+/// calls it). To keep a pose in a clip, open the clip in the Animation window and press Key IK.
+/// </summary>
+[NativeComponent("Tallow.HandPose")]
+public readonly record struct HandPose(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.HandPose");
+    public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// A ready-made shape, or Custom to use the sliders as they are.
+    /// </summary>
+    public HandShape Shape { get => Data.GetEnum<HandShape>("shape"); set => Data.Set("shape", value); }
+    public float Thumb { get => Data.GetFloat("thumb"); set => Data.Set("thumb", value); }
+    public float Index { get => Data.GetFloat("index"); set => Data.Set("index", value); }
+    public float Middle { get => Data.GetFloat("middle"); set => Data.Set("middle", value); }
+    public float Ring { get => Data.GetFloat("ring"); set => Data.Set("ring", value); }
+    public float Pinky { get => Data.GetFloat("pinky"); set => Data.Set("pinky", value); }
+    public float Spread { get => Data.GetFloat("spread"); set => Data.Set("spread", value); }
+    public float Trigger { get => Data.GetFloat("trigger"); set => Data.Set("trigger", value); }
+    public float Weight { get => Data.GetFloat("weight"); set => Data.Set("weight", value); }
+    /// <summary>
+    /// Fans the fingers apart (above 0) or presses them together (below 0).
+    /// Squeezes the index finger a little further on top of its slider: animate it or set it from code as the trigger is pulled.
+    /// Seconds a change of shape takes while the game runs.
+    /// </summary>
+    public float BlendTime { get => Data.GetFloat("blendTime"); set => Data.Set("blendTime", value); }
+    /// <summary>
+    /// Tick when the fingers curl towards the back of the hand.
+    /// </summary>
+    public bool FlipCurl { get => Data.GetBool("flipCurl"); set => Data.Set("flipCurl", value); }
+    /// <summary>
+    /// Tick when the thumb bends the wrong way.
+    /// </summary>
+    public bool FlipThumb { get => Data.GetBool("flipThumb"); set => Data.Set("flipThumb", value); }
+}
+
+/// <summary>
 /// Levels of detail: far away, an object is drawn with fewer triangles, and when it is only a speck it is not drawn at
 /// all. The level is picked for each camera from how much of the screen's height the object covers. See docs/lod.md.
 /// </summary>
@@ -431,6 +559,41 @@ public readonly record struct LightProbeVolume(GameObject GameObject) : ICompone
     /// How far inside the box, in metres, its light fades in from the scene's probes round it.
     /// </summary>
     public float BlendDistance { get => Data.GetFloat("blendDistance"); set => Data.Set("blendDistance", value); }
+}
+
+/// <summary>
+/// Holds the end of an arm or a leg on a target: a hand on a weapon's grip, a hand on a door handle, a foot on a
+/// pedal. One component is one limb, so a character holding a rifle has two (one for each hand), and each can let go
+/// and take hold again by itself: LetGo on the left hand while it throws a grenade, Grab when it comes back.
+///
+/// Tip is the hand or foot. The two bones above it are bent to reach (Middle and Upper name them when they are not
+/// simply its parents). Target is any object: put empty objects on a weapon where the hands belong. Pole is an object
+/// the elbow or knee points towards; without one the limb keeps bending the way the clip bends it, and a humanoid's
+/// limb that is straight bends the natural way (elbows back, knees forward).
+///
+/// IK runs after the Animator and after every script's LateUpdate, so a clip plays underneath and the hands stay on a
+/// weapon that sways or recoils. Weight blends between the clip's pose (0) and the target (1). It is worked out on
+/// each machine; in multiplayer LetGo, Grab and FadeWeight called by the object's owner are followed everywhere, and
+/// a target moves on other machines if it is shared like any other object.
+/// </summary>
+[NativeComponent("Tallow.LimbIK")]
+public readonly record struct LimbIK(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.LimbIK");
+    public bool IsValid => Data.IsValid;
+    public float Weight { get => Data.GetFloat("weight"); set => Data.Set("weight", value); }
+    public float RotationWeight { get => Data.GetFloat("rotationWeight"); set => Data.Set("rotationWeight", value); }
+    /// <summary>
+    /// 0 leaves the limb to its animation, 1 puts the tip on the target.
+    /// How much the tip takes the target's rotation: 1 for a hand locked to a grip, 0 to leave the wrist to the clip.
+    /// Turns the tip relative to the target, in degrees, for a hand whose bone does not point the way the target does.
+    /// "Keep Hand's Rotation" in the Inspector fills it in from the pose in front of you.
+    /// </summary>
+    public Vector3 RotationOffset { get => Data.GetVector3("rotationOffset"); set => Data.Set("rotationOffset", value); }
+    /// <summary>
+    /// The point of the tip that lands on the target, in the tip's own space: the palm rather than the wrist.
+    /// </summary>
+    public Vector3 GripPoint { get => Data.GetVector3("gripPoint"); set => Data.Set("gripPoint", value); }
 }
 
 /// <summary>
@@ -506,6 +669,47 @@ public readonly record struct LineRenderer(GameObject GameObject) : IComponent
 }
 
 /// <summary>
+/// Turns a head towards a target, with the neck and spine sharing the turn when Bones is more than 1: a character
+/// who watches the player, or whose upper body follows where the camera aims.
+///
+/// Bone is the head (or the last bone that should face the target); Bones counts it and that many parents above it.
+/// The turn is kept within Max Angle of where the clip has the head facing, so nobody's head goes round backwards.
+/// Worked out on each machine; give the target a Network Identity, or call LookAt with the same point everywhere, for
+/// other players to see the same.
+/// </summary>
+[NativeComponent("Tallow.LookAtIK")]
+public readonly record struct LookAtIK(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.LookAtIK");
+    public bool IsValid => Data.IsValid;
+    public int Bones { get => Data.GetInt("bones"); set => Data.Set("bones", value); }
+    public float Weight { get => Data.GetFloat("weight"); set => Data.Set("weight", value); }
+    public float MaxAngle { get => Data.GetFloat("maxAngle"); set => Data.Set("maxAngle", value); }
+    /// <summary>
+    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine).
+    /// The furthest the head turns from where its animation has it, in degrees.
+    /// The direction of the bone, in its own space, that should point at the target (the way the face looks).
+    /// </summary>
+    public Vector3 Forward { get => Data.GetVector3("forward"); set => Data.Set("forward", value); }
+    /// <summary>
+    /// How quickly the gaze follows a moving target; 0 follows at once.
+    /// </summary>
+    public float Smooth { get => Data.GetFloat("smooth"); set => Data.Set("smooth", value); }
+}
+
+/// <summary>
+/// Triangle-accurate static collision using the mesh of the MeshRenderer on the same object.
+/// </summary>
+[NativeComponent("Tallow.MeshCollider")]
+public readonly record struct MeshCollider(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.MeshCollider");
+    public bool IsValid => Data.IsValid;
+    public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
+}
+
+/// <summary>
 /// A model built in the editor (docs/modeling.md): its faces are kept in the scene, inline, and drawn through the
 /// object's Mesh Renderer. Objects with the same model share one mesh, so copies of a whitebox piece are drawn
 /// together. Faces in material slot 0 use the Mesh Renderer's material; slots 1 and up use Materials.
@@ -524,6 +728,112 @@ public readonly record struct ModelMesh(GameObject GameObject) : IComponent
     /// Off: once a metre of the model's own space, stretching with the object.
     /// </summary>
     public bool WorldScaleUVs { get => Data.GetBool("worldScaleUVs"); set => Data.Set("worldScaleUVs", value); }
+}
+
+/// <summary>
+/// Part of a surface that costs more to cross (mud, water, a dangerous room) or that agents must not enter: agents
+/// go round it when the way round is not too much longer. See docs/navigation.md.
+/// </summary>
+[NativeComponent("Tallow.NavigationArea")]
+public readonly record struct NavigationArea(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.NavigationArea");
+    public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// The box's size in metres (whatever the object's scale), centred on the object.
+    /// </summary>
+    public Vector3 Size { get => Data.GetVector3("size"); set => Data.Set("size", value); }
+    /// <summary>
+    /// How much more crossing it costs than its length: 2 makes agents walk up to twice as far to avoid it.
+    /// </summary>
+    public float Cost { get => Data.GetFloat("cost"); set => Data.Set("cost", value); }
+    /// <summary>
+    /// Agents never enter it (as if it were not walkable at all).
+    /// </summary>
+    public bool Blocked { get => Data.GetBool("blocked"); set => Data.Set("blocked", value); }
+}
+
+/// <summary>
+/// A way across that the baked grid does not have: a gap to jump, a ledge to drop off, a ladder, a teleporter. It
+/// runs from this object to End (relative to the object). Agents use it when it is the shorter way, and the game
+/// hears when they start and finish crossing (NavigationAgent.OnLinkStarted / OnLinkFinished), to play a jump or climb
+/// animation. See docs/navigation.md.
+/// </summary>
+[NativeComponent("Tallow.NavigationLink")]
+public readonly record struct NavigationLink(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.NavigationLink");
+    public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// Where the link ends, relative to this object (turned with it).
+    /// </summary>
+    public Vector3 End { get => Data.GetVector3("end"); set => Data.Set("end", value); }
+    /// <summary>
+    /// Agents can cross it both ways. Off: only from this object to End (a drop they cannot climb back up).
+    /// </summary>
+    public bool Bidirectional { get => Data.GetBool("bidirectional"); set => Data.Set("bidirectional", value); }
+    public NavigationLinkKind Kind { get => Data.GetEnum<NavigationLinkKind>("kind"); set => Data.Set("kind", value); }
+    /// <summary>
+    /// Seconds to cross it (Teleport: none).
+    /// </summary>
+    public float Duration { get => Data.GetFloat("duration"); set => Data.Set("duration", value); }
+    /// <summary>
+    /// How high a Jump arcs above the higher end.
+    /// </summary>
+    public float JumpHeight { get => Data.GetFloat("jumpHeight"); set => Data.Set("jumpHeight", value); }
+    /// <summary>
+    /// What crossing it costs, as a multiple of its length: higher makes agents use it only when the way round is
+    /// much longer.
+    /// </summary>
+    public float CostMultiplier { get => Data.GetFloat("costMultiplier"); set => Data.Set("costMultiplier", value); }
+    /// <summary>
+    /// How far each end may be from a usable cell.
+    /// </summary>
+    public float SnapDistance { get => Data.GetFloat("snapDistance"); set => Data.Set("snapDistance", value); }
+}
+
+/// <summary>
+/// Something that moves around and that agents must keep out of: a crate, a car, a closing door. While it stands
+/// still (or always, with Carve Only Stationary off) it cuts its shape out of the grid so agents plan round it;
+/// while it moves, agents steer round it instead. See docs/navigation.md.
+/// </summary>
+[NativeComponent("Tallow.NavigationObstacle")]
+public readonly record struct NavigationObstacle(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.NavigationObstacle");
+    public bool IsValid => Data.IsValid;
+    public NavigationObstacleShape Shape { get => Data.GetEnum<NavigationObstacleShape>("shape"); set => Data.Set("shape", value); }
+    /// <summary>
+    /// Box: its size in metres (whatever the object's scale). Cylinder: x is its diameter, y its height.
+    /// </summary>
+    public Vector3 Size { get => Data.GetVector3("size"); set => Data.Set("size", value); }
+    /// <summary>
+    /// Offset of the shape's centre from the object.
+    /// </summary>
+    public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    /// <summary>
+    /// Cuts the shape out of the grid, so agents plan paths round it. Off: agents only steer round it.
+    /// </summary>
+    public bool Carve { get => Data.GetBool("carve"); set => Data.Set("carve", value); }
+    /// <summary>
+    /// Carves only once it has stood still for Stationary Time, so a moving obstacle does not make every agent plan
+    /// again each frame.
+    /// </summary>
+    public bool CarveOnlyStationary { get => Data.GetBool("carveOnlyStationary"); set => Data.Set("carveOnlyStationary", value); }
+    public float StationaryTime { get => Data.GetFloat("stationaryTime"); set => Data.Set("stationaryTime", value); }
+    /// <summary>
+    /// How far it must move to count as moving.
+    /// </summary>
+    public float MoveThreshold { get => Data.GetFloat("moveThreshold"); set => Data.Set("moveThreshold", value); }
+    /// <summary>
+    /// Where it was when it last carved; the grid is cut there until it carves again.
+    /// </summary>
+    public Vector3 CarvedPosition { get => Data.GetVector3("CarvedPosition"); set => Data.Set("CarvedPosition", value); }
+    public bool Carving { get => Data.GetBool("Carving"); set => Data.Set("Carving", value); }
+    /// <summary>
+    /// How fast it is moving (for agents steering round it).
+    /// </summary>
+    public Vector3 Velocity { get => Data.GetVector3("Velocity"); set => Data.Set("Velocity", value); }
 }
 
 /// <summary>
@@ -720,6 +1030,88 @@ public readonly record struct ReflectionProbe(GameObject GameObject) : IComponen
     /// changing time of day or moving things; each capture draws the scene six times, one face a frame.
     /// </summary>
     public float RefreshInterval { get => Data.GetFloat("refreshInterval"); set => Data.Set("refreshInterval", value); }
+}
+
+/// <summary>
+/// A rope (docs/soft-bodies.md "Ropes"): from the object in Start Attached To (this object if none) to the one in
+/// End Attached To, or hanging free. Tow or lift with it from code: `Rope.Attach(truck, trailer)`.
+/// It sags, swings, drapes over things and is pushed about by what moves through it, simulated as a chain of short
+/// stiff lengths that resist bending and twisting (Jolt's Cosserat rods).
+///
+/// Each end is held where it is on its object, and moves with it. An end on a dynamic Rigidbody also pulls on it:
+/// the two ends can get no further apart than the rope is long (it goes slack when they come closer), so a rope
+/// holds up a crate, swings it, and is pulled tight by it. The pull acts along the straight line between the ends,
+/// or, with Wraps Around on, round what the rope lies over (a rope over a beam works as a pulley). With a Break Force
+/// it snaps in two when pulled harder than that.
+///
+/// The rope draws itself as a tube with the Mesh Renderer on this object (added if there is none).
+///
+/// In a network session the server ties, changes and snaps ropes (Attach, AttachStart, AttachEnd, LayAlong, Snap
+/// and Break Force) on every machine; a client's call goes to the server, for a rope or object that player controls.
+/// Each machine simulates the rope itself, between the shared objects.
+/// </summary>
+[NativeComponent("Tallow.Rope")]
+public readonly record struct Rope(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.Rope");
+    public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// How long it is, in metres.
+    /// </summary>
+    public float Length { get => Data.GetFloat("length"); set => Data.Set("length", value); }
+    /// <summary>
+    /// How thick it is, in metres.
+    /// </summary>
+    public float Thickness { get => Data.GetFloat("thickness"); set => Data.Set("thickness", value); }
+    /// <summary>
+    /// The whole rope's weight in kilograms.
+    /// </summary>
+    public float Mass { get => Data.GetFloat("mass"); set => Data.Set("mass", value); }
+    /// <summary>
+    /// How many lengths it is made of: more bends more smoothly and costs more. 0 picks about one per 10 cm.
+    /// </summary>
+    public int Segments { get => Data.GetInt("segments"); set => Data.Set("segments", value); }
+    /// <summary>
+    /// How hard it resists bending: 0 a limp rope, 1 a stiff cable.
+    /// </summary>
+    public float BendStiffness { get => Data.GetFloat("bendStiffness"); set => Data.Set("bendStiffness", value); }
+    /// <summary>
+    /// How fast it loses speed, like moving through thick air.
+    /// </summary>
+    public float Damping { get => Data.GetFloat("damping"); set => Data.Set("damping", value); }
+    public float Friction { get => Data.GetFloat("friction"); set => Data.Set("friction", value); }
+    /// <summary>
+    /// With nothing in Start Attached To: whether this object holds the first end. Off: that end hangs free too.
+    /// </summary>
+    public bool HoldStart { get => Data.GetBool("holdStart"); set => Data.Set("holdStart", value); }
+    /// <summary>
+    /// Where it is tied on that object, relative to it. Zero: on its surface, where it faces along the rope (the top of
+    /// a crate hanging from it).
+    /// </summary>
+    public Vector3 StartOffset { get => Data.GetVector3("startOffset"); set => Data.Set("startOffset", value); }
+    /// <summary>
+    /// Where it is tied on that object, relative to it. Zero: on its surface, where it faces along the rope.
+    /// </summary>
+    public Vector3 EndOffset { get => Data.GetVector3("endOffset"); set => Data.Set("endOffset", value); }
+    /// <summary>
+    /// How firmly a body on the end is held turned to the rope, as a knot does: it tips back in line with the rope and
+    /// stops spinning about it. 0: it turns freely about where it is tied.
+    /// </summary>
+    public float KnotStiffness { get => Data.GetFloat("knotStiffness"); set => Data.Set("knotStiffness", value); }
+    /// <summary>
+    /// How much Wind Zones push it: 0 not at all.
+    /// </summary>
+    public float WindDrag { get => Data.GetFloat("windDrag"); set => Data.Set("windDrag", value); }
+    /// <summary>
+    /// Whether the pull goes round what the rope lies over (a beam, a branch, a post) instead of straight between
+    /// the ends: a rope over a beam is a pulley, and lifting one end lowers the other.
+    /// </summary>
+    public bool WrapsAround { get => Data.GetBool("wrapsAround"); set => Data.Set("wrapsAround", value); }
+    /// <summary>
+    /// How hard it can be pulled, in newtons, before it snaps in two (each half staying on its end). 0: never.
+    /// </summary>
+    public float BreakForce { get => Data.GetFloat("breakForce"); set => Data.Set("breakForce", value); }
+    public int Iterations { get => Data.GetInt("iterations"); set => Data.Set("iterations", value); }
 }
 
 /// <summary>
@@ -1228,6 +1620,20 @@ public readonly record struct WindZone(GameObject GameObject) : IComponent
     public float Radius { get => Data.GetFloat("radius"); set => Data.Set("radius", value); }
 }
 
+/// <summary>Values of Beef's Tallow.HandShape.</summary>
+public enum HandShape
+{
+    Custom = 0,
+    Open = 1,
+    Relaxed = 2,
+    Fist = 3,
+    Grip = 4,
+    Trigger = 5,
+    Point = 6,
+    Pinch = 7,
+    ThumbsUp = 8,
+}
+
 /// <summary>Values of Beef's Tallow.LODGroup.Source.</summary>
 public enum LODGroupSource
 {
@@ -1247,6 +1653,22 @@ public enum LineTextureMode
 {
     Stretch = 0,
     Tile = 1,
+}
+
+/// <summary>Values of Beef's Tallow.NavigationLinkKind.</summary>
+public enum NavigationLinkKind
+{
+    Jump = 0,
+    Climb = 1,
+    Teleport = 2,
+    Walk = 3,
+}
+
+/// <summary>Values of Beef's Tallow.NavigationObstacle.Shape.</summary>
+public enum NavigationObstacleShape
+{
+    Box = 0,
+    Cylinder = 1,
 }
 
 /// <summary>Values of Beef's Tallow.NetworkRelevance.</summary>
@@ -1297,19 +1719,31 @@ internal static partial class NativeComponentTypes
         Known[typeof(AudioReverbZone)] = ("Tallow.AudioReverbZone", o => new AudioReverbZone(o));
         Known[typeof(BehaviorTreeRunner)] = ("Tallow.BehaviorTreeRunner", o => new BehaviorTreeRunner(o));
         Known[typeof(Camera)] = ("Tallow.Camera", o => new Camera(o));
+        Known[typeof(CapsuleCollider)] = ("Tallow.CapsuleCollider", o => new CapsuleCollider(o));
+        Known[typeof(CompoundCollider)] = ("Tallow.CompoundCollider", o => new CompoundCollider(o));
         Known[typeof(ComputeEffect)] = ("Tallow.ComputeEffect", o => new ComputeEffect(o));
+        Known[typeof(ConvexCollider)] = ("Tallow.ConvexCollider", o => new ConvexCollider(o));
         Known[typeof(Decal)] = ("Tallow.Decal", o => new Decal(o));
         Known[typeof(DialogueRunner)] = ("Tallow.DialogueRunner", o => new DialogueRunner(o));
         Known[typeof(Floater)] = ("Tallow.Floater", o => new Floater(o));
         Known[typeof(Foliage)] = ("Tallow.Foliage", o => new Foliage(o));
         Known[typeof(FoliageBender)] = ("Tallow.FoliageBender", o => new FoliageBender(o));
+        Known[typeof(FootPlacement)] = ("Tallow.FootPlacement", o => new FootPlacement(o));
+        Known[typeof(HandPose)] = ("Tallow.HandPose", o => new HandPose(o));
         Known[typeof(LODGroup)] = ("Tallow.LODGroup", o => new LODGroup(o));
         Known[typeof(LightProbeVolume)] = ("Tallow.LightProbeVolume", o => new LightProbeVolume(o));
+        Known[typeof(LimbIK)] = ("Tallow.LimbIK", o => new LimbIK(o));
         Known[typeof(LineRenderer)] = ("Tallow.LineRenderer", o => new LineRenderer(o));
+        Known[typeof(LookAtIK)] = ("Tallow.LookAtIK", o => new LookAtIK(o));
+        Known[typeof(MeshCollider)] = ("Tallow.MeshCollider", o => new MeshCollider(o));
         Known[typeof(ModelMesh)] = ("Tallow.ModelMesh", o => new ModelMesh(o));
+        Known[typeof(NavigationArea)] = ("Tallow.NavigationArea", o => new NavigationArea(o));
+        Known[typeof(NavigationLink)] = ("Tallow.NavigationLink", o => new NavigationLink(o));
+        Known[typeof(NavigationObstacle)] = ("Tallow.NavigationObstacle", o => new NavigationObstacle(o));
         Known[typeof(NetworkIdentity)] = ("Tallow.NetworkIdentity", o => new NetworkIdentity(o));
         Known[typeof(ParticleSystem)] = ("Tallow.ParticleSystem", o => new ParticleSystem(o));
         Known[typeof(ReflectionProbe)] = ("Tallow.ReflectionProbe", o => new ReflectionProbe(o));
+        Known[typeof(Rope)] = ("Tallow.Rope", o => new Rope(o));
         Known[typeof(SavedTransform)] = ("Tallow.SavedTransform", o => new SavedTransform(o));
         Known[typeof(SceneLoader)] = ("Tallow.SceneLoader", o => new SceneLoader(o));
         Known[typeof(SequencePlayer)] = ("Tallow.SequencePlayer", o => new SequencePlayer(o));

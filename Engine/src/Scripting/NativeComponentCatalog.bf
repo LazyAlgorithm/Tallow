@@ -24,27 +24,18 @@ static class NativeComponentCatalog
 			let aligned = (void*)(((int)(void*)data.Ptr + 15) & ~15);
 			let fields = scope List<FieldRef>();
 			DataComponents.GetFields(info.dataType, aligned, fields);
-			for (let field in fields)
-			{
-				let type = scope String();
-				if (field.kind == .Enum && field.type != null)
-				{
-					field.type.GetFullName(type);
-					if (!enums.Contains(field.type))
-						enums.Add(field.type);
-				}
-				else if (field.kind == .List)
-					type.Append(field.elementKind.ToString(.. scope .()));
-				let flags = scope String();
-				if (field.hidden)
-					flags.Append("hidden ");
-				if (field.advanced)
-					flags.Append("advanced ");
-				if (field.sync)
-					flags.Append("sync ");
-				flags.TrimEnd();
-				text.AppendF("field\t{}\t{}\t{}\t{}\t{}\n", info.fullName, field.name, field.kind, type, flags);
-			}
+			AppendFields(text, info.fullName, fields, enums);
+		}
+		// Class components ([Component] classes such as Rope or NavigationObstacle): their fields from the type alone.
+		for (let info in ComponentRegistry.Types)
+		{
+			if (info.type == typeof(CSharpBehaviour) || !info.type.HasCustomAttribute<ComponentAttribute>() ||
+				!info.fullName.StartsWith("Tallow."))
+				continue;
+			text.AppendF("component\t{}\n", info.fullName);
+			let fields = scope List<FieldRef>();
+			ComponentRegistry.[Friend]BuildLayout(info.type, typeof(Component), false, fields);
+			AppendFields(text, info.fullName, fields, enums);
 		}
 		for (let type in enums)
 		{
@@ -63,5 +54,30 @@ static class NativeComponentCatalog
 			text.Append('\n');
 		}
 		return File.WriteAllText(path, text) case .Ok;
+	}
+
+	static void AppendFields(String text, StringView component, List<FieldRef> fields, List<Type> enums)
+	{
+		for (let field in fields)
+		{
+			let type = scope String();
+			if (field.kind == .Enum && field.type != null)
+			{
+				field.type.GetFullName(type);
+				if (!enums.Contains(field.type))
+					enums.Add(field.type);
+			}
+			else if (field.kind == .List)
+				type.Append(field.elementKind.ToString(.. scope .()));
+			let flags = scope String();
+			if (field.hidden)
+				flags.Append("hidden ");
+			if (field.advanced)
+				flags.Append("advanced ");
+			if (field.sync)
+				flags.Append("sync ");
+			flags.TrimEnd();
+			text.AppendF("field\t{}\t{}\t{}\t{}\t{}\n", component, field.name, field.kind, type, flags);
+		}
 	}
 }
