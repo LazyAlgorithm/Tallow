@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 
 namespace Tallow;
 
@@ -85,5 +86,40 @@ static class CSharpNetwork
 			return false;
 		scene.Network.Despawn(obj);
 		return true;
+	}
+
+	/// What the session shares, for tests and debugging (UTF-8 into buffer; returns the full length). The first line
+	/// is "offline" or "role=host|client connected=0|1 clients=N shared=N"; then a "NETPOS id x y z name" line per
+	/// shared object, the session's own description, and a "VOXEL id indices name" line per voxel object.
+	[CSharpExpose]
+	public static int32 CopyReport(uint64 session, Span<uint8> buffer)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		if (scene == null)
+			return 0;
+		let text = scope String();
+		let network = scene.Network;
+		if (network == null || network.Mode == .Offline)
+			text.Append("offline\n");
+		else
+		{
+			text.AppendF("role={} connected={} clients={} shared={}\n", network.IsServer ? "host" : "client",
+				network.IsConnected ? 1 : 0, network.ClientCount, network.Identities.Count);
+			for (let identity in network.Identities)
+			{
+				let at = identity.GameObject.Transform.Position;
+				text.AppendF("NETPOS {} {:0.000} {:0.000} {:0.000} {}\n", identity.NetId, at.x, at.y, at.z, identity.GameObject.Name);
+			}
+			network.Describe(text);
+		}
+		for (let voxels in scene.FindComponents<VoxelObject>(.. scope .()))
+		{
+			let mesh = voxels.GameObject.GetComponent<MeshRenderer>().RuntimeMesh;
+			text.AppendF("VOXEL {} {} {}\n", voxels.GameObject.Id, mesh != null ? mesh.Indices.Count : 0, voxels.GameObject.Name);
+		}
+		let count = Math.Min(text.Length, buffer.Length);
+		for (int i < count)
+			buffer[i] = (uint8)text[i];
+		return (int32)text.Length;
 	}
 }

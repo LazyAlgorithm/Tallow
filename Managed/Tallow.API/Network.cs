@@ -19,6 +19,23 @@ public static class Network
     }
 
     public static bool IsRegistered(string name) => !string.IsNullOrEmpty(name) && CSharpNetwork.IsPrefabRegistered(name);
+
+    /// <summary>
+    /// What a scene's session shares, for tests and debugging. The first line is "offline" or
+    /// "role=host|client connected=0|1 clients=N shared=N"; then "NETPOS id x y z name" per shared object, the
+    /// session's own description, and "VOXEL id indices name" per voxel object.
+    /// </summary>
+    public static string Report(Scene scene)
+    {
+        byte[] buffer = new byte[16384];
+        int length = CSharpNetwork.CopyReport(scene.SessionId, buffer);
+        if (length > buffer.Length)
+        {
+            buffer = new byte[length];
+            length = Math.Min(length, CSharpNetwork.CopyReport(scene.SessionId, buffer));
+        }
+        return System.Text.Encoding.UTF8.GetString(buffer, 0, Math.Max(length, 0));
+    }
 }
 
 public readonly partial record struct Scene

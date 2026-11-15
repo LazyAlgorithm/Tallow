@@ -248,4 +248,8 @@ static class CSharpSceneObjects
         if (let obj = CSharpRuntime.PhysicsObject(session, entity))
             obj.Transient = transient;
     }
+
+    /// Objects in the scene (as the Hierarchy counts them, transient ones included).
+    [CSharpExpose]
+    public static int32 ObjectCount(uint64 session) => (int32)(CSharpRuntime.PhysicsScene(session)?.Objects.Count ?? 0);
 }

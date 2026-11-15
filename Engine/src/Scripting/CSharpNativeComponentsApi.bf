@@ -119,4 +119,40 @@ static class CSharpNativeComponents
 		}
 		return -1;
 	}
+
+	/// How many objects in the scene have a built-in component of this type (switched on or off).
+	[CSharpExpose]
+	public static int32 Count(uint64 session, StringView typeName)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		if (scene == null || typeName.IsEmpty)
+			return 0;
+		int32 count = 0;
+		if (let handle = HandleComponents.Find(typeName))
+		{
+			for (let obj in scene.Objects)
+			{
+				if (!obj.IsDestroyed && scene.World.Has(obj.Entity, handle.index))
+					count++;
+			}
+			return count;
+		}
+		let info = ComponentRegistry.Find(typeName);
+		if (info == null)
+			return 0;
+		for (let obj in scene.Objects)
+		{
+			if (obj.IsDestroyed)
+				continue;
+			for (let component in obj.Components)
+			{
+				if (component.GetType() == info.type)
+				{
+					count++;
+					break;
+				}
+			}
+		}
+		return count;
+	}
 }

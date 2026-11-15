@@ -22,6 +22,8 @@ on:
       - 'tools/test_csharp_network.py'
       - 'tools/test_csharp_export.py'
       - 'tools/test_csharp_sample.py'
+      - 'tools/test_csharp_showcase.py'
+      - 'tools/validate_showcase.py'
       - 'tools/build_player.py'
       - 'Player/**'
       - 'Tests/CSharpInGame/**'
@@ -382,6 +384,8 @@ jobs:
         run: python3 tools/test_csharp_network.py
       - name: Create a Voxel sandbox project (all C#) and run its scripts
         run: python3 tools/test_csharp_sample.py
+      - name: Create the Tallow Gallery (all C#) and play it with its test switches
+        run: python3 tools/test_csharp_showcase.py
       - name: Build a C# game for release (precompiled player, bundled .NET) and run it on its own
         # The player is built here with the Beef compiler the editor was built with.
         run: BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild" python3 tools/test_csharp_export.py

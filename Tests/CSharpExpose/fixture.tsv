@@ -62,6 +62,7 @@ method	Tallow.CSharpInputActions	Value	float	name:string
 method	Tallow.CSharpInputActions	Vector	System.Numerics.Vector2	name:string
 method	Tallow.CSharpNativeComponents	Add	bool	session:ulong	entity:ulong	typeName:string
 method	Tallow.CSharpNativeComponents	CopyField	int	session:ulong	entity:ulong	typeName:string	field:string	buffer:System.Span<byte>
+method	Tallow.CSharpNativeComponents	Count	int	session:ulong	typeName:string
 method	Tallow.CSharpNativeComponents	Has	bool	session:ulong	entity:ulong	typeName:string
 method	Tallow.CSharpNativeComponents	SetField	bool	session:ulong	entity:ulong	typeName:string	field:string	value:string
 method	Tallow.CSharpNavigation	HasAgent	bool	session:ulong	entity:ulong
@@ -72,6 +73,7 @@ method	Tallow.CSharpNavigation	PathPending	bool	session:ulong	entity:ulong
 method	Tallow.CSharpNavigation	RemainingDistance	float	session:ulong	entity:ulong
 method	Tallow.CSharpNavigation	SetDestination	void	session:ulong	entity:ulong	point:System.Numerics.Vector3	speed:float	stoppingDistance:float
 method	Tallow.CSharpNavigation	StopMovement	void	session:ulong	entity:ulong
+method	Tallow.CSharpNetwork	CopyReport	int	session:ulong	buffer:System.Span<byte>
 method	Tallow.CSharpNetwork	Despawn	bool	session:ulong	entity:ulong
 method	Tallow.CSharpNetwork	IsPrefabRegistered	bool	name:string
 method	Tallow.CSharpNetwork	RegisterPrefabFile	bool	name:string	path:string
@@ -99,6 +101,7 @@ method	Tallow.CSharpSceneObjects	HasTag	bool	session:ulong	entity:ulong	tag:stri
 method	Tallow.CSharpSceneObjects	InstantiatePrefabAt	ulong	session:ulong	path:string	position:System.Numerics.Vector3	rotation:System.Numerics.Quaternion
 method	Tallow.CSharpSceneObjects	LocalClientId	int	session:ulong
 method	Tallow.CSharpSceneObjects	NetworkRole	int	session:ulong
+method	Tallow.CSharpSceneObjects	ObjectCount	int	session:ulong
 method	Tallow.CSharpSceneObjects	OwnerClientId	int	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	RemoveTag	bool	session:ulong	entity:ulong	tag:string
 method	Tallow.CSharpSceneObjects	SetActive	bool	session:ulong	entity:ulong	active:bool

@@ -13,8 +13,9 @@ env bloomThreshold 1
 env shadowDistance 130
 object 1 parent 0 active 1 name "Gallery"
 transform 0 0 0 0 0 0 1 1 1 1
-component {NAMESPACE}.Gallery enabled 1
-field built 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "{NAMESPACE}.Gallery"
+field fieldOverrides ""
 object 2 parent 0 active 1 name "Sun"
 transform 0 0 0 0.4030582 -0.272532 0.12708376 0.86436105 1 1 1
 component Tallow.Light enabled 1
@@ -10971,3 +10972,8 @@ field occluder 0
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
+object 367 parent 0 active 1 name "Network Session"
+transform 0 0 0 0 0 0 1 1 1 1
+component Tallow.NetworkSession enabled 1
+field mode Offline
+field playerPrefab ""

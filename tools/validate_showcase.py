@@ -41,19 +41,20 @@ def main():
     run([launcher, '--create', path(project), '--showcase'], 'create')
     source = project / 'src'
     scene = (source / 'Scenes/Gallery.tscene').read_text()
-    assert 'component RenamedGallery.Gallery enabled 1' in scene
+    assert 'field scriptType "RenamedGallery.Gallery"' in scene
     assert scene.count('component Tallow.ReflectionProbe enabled 1') == 2
     assert 'TallowShowcase.' not in scene and '{NAMESPACE}' not in scene
     assert 'startScene = Scenes/Gallery.tscene' in (project / 'project.tallow').read_text()
     for name in ['cloth16.glb', 'soft_box.glb', 'van_shell.glb', 'Person_Rigged.glb']:
         assert (source / 'Models' / name).is_file(), name
-    for file in source.rglob('*.bf'):
+    assert not list(source.rglob('*.bf')) and not (project / 'BeefProj.toml').exists(), 'The Gallery is C#: no Beef files'
+    for file in source.rglob('*.cs'):
         text = file.read_text()
-        assert '{NAMESPACE}' not in text and 'namespace TallowShowcase;' not in text, file
+        assert '{NAMESPACE}' not in text and 'namespace RenamedGallery;' in text, file
     # Confirm binary assets were copied without text conversion.
     template = package / 'Editor/templates/showcase/src'
     for file in template.rglob('*'):
-        if file.is_file() and file.suffix not in {'.bf', '.tscene', '.tprefab'}:
+        if file.is_file() and file.suffix not in {'.cs', '.bf', '.tscene', '.tprefab'}:
             assert file.read_bytes() == (source / file.relative_to(template)).read_bytes(), file
     # Packaged projects must pin the package's exact immutable identity.
     lock = project / 'tallow-engine.lock.json'
@@ -69,14 +70,14 @@ def main():
     for expected in ['windowWidth = 1600', 'windowHeight = 900', 'escapeQuits = 0']:
         assert expected in settings.read_text(), expected
     assert '/missing-showcase-engine' not in settings.read_text()
-    platform = 'Win64' if windows else 'Linux64'
-    player = project / f'build/Debug_{platform}/RenamedGallery' / ('RenamedGallery.exe' if windows else 'RenamedGallery')
-    assert player.is_file(), player
+    # C# gameplay: --build-project compiled the game's assembly; the package's precompiled player runs it.
+    game = project / '.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll'
+    assert game.is_file(), game
     if args.play:
-        log = run([player, '--project', path(project), '--self-test', '--frames', '1500'], 'play')
+        log = run([launcher, '--game', '--project', path(project), '--self-test', '--frames', '1500'], 'play')
         assert 'SHOWCASE_READY rooms=8 probes=2' in log
         assert '[error]' not in log.lower()
-    print(f'PASS: packaged Tallow Gallery creation, renamed scripts/scene, eight rooms, mesh/binary assets, compilation' + (' and all exhibit checks' if args.play else '') + f'; evidence: {work}')
+    print(f'PASS: packaged Tallow Gallery creation, renamed C# scripts/scene, eight rooms, mesh/binary assets, C# compilation' + (' and all exhibit checks' if args.play else '') + f'; evidence: {work}')
 
 
 if __name__ == '__main__':

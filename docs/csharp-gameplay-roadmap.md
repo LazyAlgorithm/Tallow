@@ -291,7 +291,16 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     `CommandLine`. 8 in-engine checks (137).
   - [x] A script that throws every frame is reported once even when other failures come in between (before, any
     other error made it print again; the log only merged identical neighbours).
-  - [ ] Tallow Gallery (showcase) template: still Beef (Gallery.bf and its helpers).
+  - [x] Tallow Gallery (showcase) template (November 15, 2026): its gameplay is C# (Scripts/Gallery.cs, Visitor.cs,
+    GalleryCrowd.cs); no Program.bf, GameSetup.bf or Beef project files. The scene's Network Session (Offline,
+    no player prefab; --host/--connect override it) replaces the hand-made session start. The test switches
+    (--view, --fire-test, --cut-test, --net-report, --self-test) are kept; `--author-scene` and the Beef scene
+    builder are gone (in history up to c488b75f). The crowd's "system" half is one C# script over a packed
+    array. New APIs: `Network.Report(scene)`, `Scene.ObjectCount`, `Scene.CountComponents(typeName)`,
+    `VoxelTerrain.ChunkCount/PendingChunks`. Checked locally: --self-test (SHOWCASE_READY rooms=8 probes=2),
+    the test switches, and a host plus a client sharing 43 objects. `tools/validate_showcase.py` (release
+    packages) now plays it in the packaged player; not run here, as it needs a package.
+    `tools/test_csharp_showcase.py` creates, compiles and plays it with the test switches (CI).
 - [ ] Keep shader graph/compute graph/rendering functionality intact; never confuse visual **gameplay** source generation with native shader compilation.
 
 ## P4 — performance, reload, shipping exports, hardening

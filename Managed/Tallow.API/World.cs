@@ -49,6 +49,12 @@ public readonly record struct VoxelTerrain(GameObject GameObject) : IComponent
         return id == 0 ? null : new VoxelTerrain(new GameObject(scene.SessionId, id));
     }
 
+    /// <summary>Chunks made so far; with <see cref="PendingChunks"/> at 0 the ground near the camera is ready.</summary>
+    public int ChunkCount => CSharpWorld.TerrainChunkCount(GameObject.SceneId, GameObject.Id);
+
+    /// <summary>Chunks still being made (streamed in).</summary>
+    public int PendingChunks => CSharpWorld.TerrainPendingChunks(GameObject.SceneId, GameObject.Id);
+
     /// <summary>Raises (amount &gt; 0) or digs (amount &lt; 0) the ground in a sphere.</summary>
     public bool ModifySphere(Vector3 worldCenter, float radius, float amount) =>
         CSharpWorld.ModifyTerrain(GameObject.SceneId, GameObject.Id, worldCenter, radius, amount);
@@ -68,4 +74,10 @@ public readonly partial record struct Scene
 {
     /// <summary>The network session's tick; 0 offline.</summary>
     public long NetworkTick => CSharpWorld.NetworkTick(SessionId);
+
+    /// <summary>Objects in the scene, transient ones included.</summary>
+    public int ObjectCount => CSharpSceneObjects.ObjectCount(SessionId);
+
+    /// <summary>How many objects have a built-in component of this type name ("Tallow.ReflectionProbe").</summary>
+    public int CountComponents(string nativeTypeName) => CSharpNativeComponents.Count(SessionId, nativeTypeName);
 }

@@ -15,6 +15,6 @@ Open `src/Scenes/Gallery.tscene` in the editor: every room is a set of ordinary 
 
 **Together:** run the built game with `--host` on one machine and `--connect <host address>` on another (`--port <n>` on both to change from 7777). The physics yard, the robots, the water and the voxels are shared, as the engine shares whatever moves by itself; each player walks round as their own visitor, and what they fire stays on their machine.
 
-`src/Scripts/Gallery.bf` holds what moves while playing, and the code that first built the scene: empty the scene down to the Gallery object and run with `--author-scene` to build and save it again.
+The gameplay is C#. `src/Scripts/Gallery.cs` is what moves while playing (the lights, the walking figure, the robots, firing, cutting and the room names); `Visitor.cs` walks and looks; `GalleryCrowd.cs` shows one script per object beside one script over packed data. The scene itself is ordinary saved objects. (The Beef code that first built it is in the engine's history, `Editor/templates/showcase/src/Scripts/Gallery.bf` up to commit c488b75f.)
 
 The rigged character is derived from Quaternius's CC0 asset; see `src/Models/LICENSE.txt`. Other assets are generated for this sample.

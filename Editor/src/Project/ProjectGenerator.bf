@@ -125,7 +125,7 @@ static class ProjectGenerator
 			entry.GetFileName(file);
 			let from = scope $"{source}/{file}";
 			let to = scope $"{destination}/{file}";
-			if (file.EndsWith(".bf") || file.EndsWith(".tscene") || file.EndsWith(".tprefab"))
+			if (file.EndsWith(".cs") || file.EndsWith(".bf") || file.EndsWith(".tscene") || file.EndsWith(".tprefab"))
 			{
 				let text = scope String();
 				if (File.ReadAllText(from, text) case .Err)
@@ -230,10 +230,7 @@ static class ProjectGenerator
 		}
 
 		// BeefSpace/BeefProj are only for Beef gameplay; Project.Build writes them when a
-		// legacy native build is asked for, so a C# project starts without them. The Gallery's gameplay is
-		// still Beef.
-		if (template == .Showcase)
-			project.WriteBuildFiles();
+		// legacy native build is asked for. Every template's gameplay is C#, so none starts with them.
 
 		Write(scope $"{folder}/.gitignore" , "build/\nrecovery/\n.cache/\n.tallow-csharp/\n*.slnx\nPackages/Downloads/\nPackages/Exports/\nBeefSpace.toml\nBeefProj.toml\n");
 
