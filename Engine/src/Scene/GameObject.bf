@@ -27,6 +27,23 @@ class GameObject
 	/// What this object was made from while the game ran: a prefab file, or the name of a registered network prefab.
 	/// Empty for objects that came with the scene. SaveSystem uses it to make the object again on loading.
 	public String SpawnedFrom ~ delete _;
+	/// Component and data blocks whose type this build does not have (a Beef script opened in the C# editor, a
+	/// script that failed to compile, a newer engine's component), kept as the scene file had them and written back
+	/// on save so that opening a scene can never destroy them. Null when there are none.
+	public List<String> MissingComponents ~ DeleteContainerAndItems!(_);
+
+	/// The type name a kept block was saved with ("component <type> ..." or "data <type>").
+	public static void MissingComponentType(StringView block, String output)
+	{
+		var line = block;
+		let end = line.IndexOf('\n');
+		if (end >= 0)
+			line = line.Substring(0, end);
+		var parts = line.Split(' ', .RemoveEmptyEntries);
+		parts.GetNext().IgnoreError();
+		if (parts.GetNext() case .Ok(let type))
+			output.Append(type);
+	}
 
 	Scene mScene;
 	Entity mEntity;

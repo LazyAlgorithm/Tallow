@@ -781,9 +781,12 @@ A full conversion also needs these. Ordered roughly by when they block users.
 - [ ] Script identity: scenes store `scriptType` by full name, so renaming a class or
   namespace silently drops it from scenes. Use the `.tmeta` asset ID of the source file
   plus a `[FormerlyNamed]` style attribute for moves.
-- [ ] Scene safety: unknown component blocks are dropped on load and lost on the next
-  save. Preserve them verbatim and warn, so opening a project in the wrong editor (or
-  with a broken build) cannot destroy data.
+- [x] Scene safety: unknown `component` and `data` blocks (and their `field` lines) are
+  kept verbatim on the object (`GameObject.MissingComponents`), written back on save,
+  copied with duplicates/prefabs, warned about once per type, and shown in the Inspector
+  as "Missing: <type>" with a Remove button. Opening an old Beef project in the C# editor,
+  or a scene whose script failed to compile, no longer loses data. Covered by
+  `--script-files-test` (load, save, reload, save again).
 
 **Tooling and environment**
 - [ ] External IDEs: generate a solution Rider/VS/VS Code open directly, with Tallow.API

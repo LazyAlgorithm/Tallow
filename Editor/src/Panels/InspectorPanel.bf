@@ -272,7 +272,40 @@ extension EditorApp
 		}
 		DrawHandleSections(gameObject, fields);
 		DrawDataSections(gameObject, fields);
+		DrawMissingComponents(gameObject);
 		DrawAddComponent(gameObject);
+	}
+
+	/// Components the scene names but this build does not have: kept as saved (SceneSerializer), shown so they
+	/// are not a surprise, and removable on purpose.
+	void DrawMissingComponents(GameObject gameObject)
+	{
+		if (gameObject.MissingComponents == null || gameObject.MissingComponents.IsEmpty)
+			return;
+		int remove = -1;
+		for (int i < gameObject.MissingComponents.Count)
+		{
+			let block = gameObject.MissingComponents[i];
+			let type = scope String();
+			GameObject.MissingComponentType(block, type);
+			ImGui.PushID(scope $"missing{i}".CStr());
+			ImGui.Dummy(.(0, 2));
+			ImGui.TextColored(.(1.0f, 0.62f, 0.3f, 1), scope $"Missing: {type}".CStr());
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip(block.CStr());
+			ImGui.SameLine();
+			if (ImGui.SmallButton("Remove"))
+				remove = i;
+			ImGui.TextDisabled("This build has no such component (a Beef script, a script that does not compile, or a newer engine's).");
+			ImGui.TextDisabled("Its saved values are kept and written back when the scene is saved.");
+			ImGui.PopID();
+		}
+		if (remove >= 0)
+		{
+			delete gameObject.MissingComponents[remove];
+			gameObject.MissingComponents.RemoveAt(remove);
+			MarkDirty();
+		}
 	}
 
 	// ---- Built-in components that are handles (Light..., HandleComponents) ----

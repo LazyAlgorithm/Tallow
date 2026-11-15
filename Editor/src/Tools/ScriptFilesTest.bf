@@ -141,6 +141,57 @@ extension EditorApp
 			document.open = false;
 		}
 
+		// A scene naming components this build does not have keeps them through load and save.
+		{
+			let sceneText = """
+				object 9001 parent 0 active 1 name "Old Beef Player"
+				transform 1 2 3 0 0 0 1 1 1 1
+				component MyOldGame.PlayerController enabled 1
+				field speed 4.5
+				field target 9002
+				data MyOldGame.Health
+				field current 75
+				component Tallow.Rigidbody enabled 1
+				field mass 3
+				object 9002 parent 9001 active 1 name "Child"
+				transform 0 0 0 0 0 0 1 1 1 1
+
+				""";
+			let made = scope List<GameObject>();
+			SceneSerializer.LoadObjects(mScene, sceneText, made);
+			GameObject old = null;
+			for (let object in made)
+				if (object.Name == "Old Beef Player")
+					old = object;
+			Check(old != null && old.MissingComponents != null && old.MissingComponents.Count == 2, "unknown component and data blocks are kept on load");
+			if (old != null && old.MissingComponents != null && old.MissingComponents.Count == 2)
+			{
+				Check(old.MissingComponents[0] == "component MyOldGame.PlayerController enabled 1\nfield speed 4.5\nfield target 9002\n", "the component block is kept line for line");
+				Check(old.MissingComponents[1] == "data MyOldGame.Health\nfield current 75\n", "the data block is kept line for line");
+				let type = scope String();
+				GameObject.MissingComponentType(old.MissingComponents[0], type);
+				Check(type == "MyOldGame.PlayerController", "the Inspector names the missing type");
+				let saved = scope String();
+				SceneSerializer.SaveObjectTree(old, saved);
+				Check(saved.Contains("component Tallow.Rigidbody enabled 1") && saved.Contains("field mass 3") &&
+					old.Transform.Children.Count == 1, "known components and children still load around them");
+				Check(saved.Contains("component MyOldGame.PlayerController enabled 1\nfield speed 4.5\nfield target 9002\n") &&
+					saved.Contains("data MyOldGame.Health\nfield current 75\n"), "saving writes the kept blocks back");
+				// And again: a second load and save is identical (nothing doubles up or drifts).
+				let again = scope List<GameObject>();
+				SceneSerializer.LoadObjects(mScene, saved, again);
+				let savedAgain = scope String();
+				if (!again.IsEmpty)
+					SceneSerializer.SaveObjectTree(again[0], savedAgain);
+				Check(!again.IsEmpty && again[0].MissingComponents?.Count == 2, "a reloaded copy keeps them too");
+				for (let object in again)
+					if (object.Transform.Parent == null)
+						mScene.Destroy(object);
+			}
+			if (old != null)
+				mScene.Destroy(old);
+		}
+
 		// Leave Gameplay's page in the Inspector, with one unapplied edit, so the frames that follow draw it
 		// (and --screenshot shows it). The scratch folder stays the scanned one for this run.
 		mSelectedAsset.Set(scope $"{root}/Gameplay/Gameplay.tasmdef");

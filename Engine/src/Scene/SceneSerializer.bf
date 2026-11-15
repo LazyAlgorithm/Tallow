@@ -143,6 +143,10 @@ static class SceneSerializer
 				text.Append('\n');
 			}
 		}
+		// Kept blocks of components this build does not have, as they were read.
+		if (gameObject.MissingComponents != null)
+			for (let block in gameObject.MissingComponents)
+				text.Append(block);
 		// Built-in components that are handles (Light...): the same lines as a script component.
 		let handles = scope List<HandleComponents.Info>();
 		HandleComponents.On(gameObject, handles);
@@ -449,6 +453,25 @@ static class SceneSerializer
 		List<Component> loaded = scope .();
 		let validateHandles = scope List<(GameObject, HandleComponents.Info)>();
 		List<(FieldRef field, uint32 id, int index)> references = scope .();
+		// The block of an unknown component being kept: its "component"/"data" line and the "field" lines after it.
+		String missing = null;
+		let missingTypes = scope HashSet<String>();
+		defer { ClearAndDeleteItems!(missingTypes); }
+		void KeepMissing(StringView kind, StringView type, StringView line)
+		{
+			if (current.MissingComponents == null)
+				current.MissingComponents = new .();
+			missing = new String();
+			missing.Append(line);
+			missing.TrimEnd();
+			missing.Append('\n');
+			current.MissingComponents.Add(missing);
+			if (!missingTypes.ContainsAlt(type))
+			{
+				missingTypes.Add(new .(type));
+				Log.Warning(scope $"Scene uses {kind} {type}, which this build does not have. It is kept as saved and shown as missing in the Inspector.");
+			}
+		}
 
 		for (let rawLine in text.Split('\n'))
 		{
@@ -457,6 +480,17 @@ static class SceneSerializer
 			if (tokens.Count == 0)
 				continue;
 			let key = tokens[0];
+			if (missing != null)
+			{
+				if (key == "field")
+				{
+					var line = rawLine;
+					line.Trim();
+					missing.AppendF("{}\n", line);
+					continue;
+				}
+				missing = null;
+			}
 			if (key == "scene" && tokens.Count >= 2 && clear)
 			{
 				scene.Name.Set(tokens[1]);
@@ -514,7 +548,11 @@ static class SceneSerializer
 					readingData = true;
 				}
 				else
-					Log.Warning(scope $"Scene references unknown data component {tokens[1]}; it was skipped.");
+				{
+					var line = rawLine;
+					line.Trim();
+					KeepMissing("data component", tokens[1], line);
+				}
 			}
 			else if (key == "component" && current != null && tokens.Count >= 4)
 			{
@@ -530,6 +568,14 @@ static class SceneSerializer
 					fields.Clear();
 					HandleComponents.GetFields(current, handle, fields);
 					readingData = true;
+					continue;
+				}
+				if (ComponentRegistry.Find(tokens[1]) == null)
+				{
+					component = null;
+					var line = rawLine;
+					line.Trim();
+					KeepMissing("component", tokens[1], line);
 					continue;
 				}
 				component = AddSavedComponent(current, tokens);
