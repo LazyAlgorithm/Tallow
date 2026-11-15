@@ -57,6 +57,47 @@ class CSharpBehaviour : Component
 		scriptType.Set(managedType);
 	}
 
+	/// Calls a UI document's handler (onclick="Name") on the script: a method of that name taking nothing, a
+	/// UIElement or the element's id. False when the script has no such method.
+	public bool InvokeUI(StringView method, StringView elementId)
+	{
+		if (!IsLoaded)
+			return false;
+		return CSharpRuntime.InvokeUI(mInstance, method, elementId) != 0;
+	}
+
+	/// A public field's value as text (for a UI document's bind="name"), while the script runs.
+	public bool ReadLiveField(StringView name, String output)
+	{
+		if (!IsLoaded)
+			return false;
+		let fields = scope String();
+		if (!CSharpRuntime.ReadFields(mInstance, false, fields))
+			return false;
+		for (let line in fields.Split('\n', .RemoveEmptyEntries))
+		{
+			let separator = line.IndexOf('\t');
+			if (separator > 0 && line.Substring(0, separator) == name)
+			{
+				output.Append(line.Substring(separator + 1));
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// Sets a public field from text (a UI input bound to it). False when the script has no such field or the
+	/// text does not fit it.
+	public bool WriteLiveField(StringView name, StringView value)
+	{
+		if (!IsLoaded || name.Contains('\t') || name.Contains('\n') || value.Contains('\t') || value.Contains('\n'))
+			return false;
+		let probe = scope String();
+		if (!ReadLiveField(name, probe))
+			return false;
+		return CSharpRuntime.ApplyFields(mInstance, scope $"{name}\t{value}\n");
+	}
+
 	/// Read an Inspector override, falling back to the source's declared initializer.
 	public bool ReadEditorField(StringView name, String output)
 	{

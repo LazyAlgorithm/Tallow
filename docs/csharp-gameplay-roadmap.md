@@ -233,6 +233,11 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     weights) over `CSharpAnimation` exposures; `GetAnimator()` and `GetComponentInChildren<T>()`. 7 in-engine
     checks; graph nodes come from the catalog.
 - [ ] Audio/voice, UI/GUI, asset management, navigation/behavior trees, world streaming/world states, persistence/save/load, gameplay time and platform APIs.
+  - [x] UI documents with C# code-behind (November 15, 2026): onclick/onchange/onload call a C# script's
+    method on the same object (taking nothing, a `UIElement` or the element's id; host entry
+    `tn_csharp_ui_invoke`), and bind="field" reads and writes its public fields. `UIDocument`/`UIElement`
+    handles (Find, Text, Visible, Value) over `CSharpUI` exposures. 6 in-engine checks (onload, headless).
+  - [x] Audio one-shots (`Audio.PlayOneShot`, `PlayOneShot2D`), `InputActions`, `NetRandom`, `Time.GameTime`.
 - [ ] Inspector: add string, enum, arrays/lists, serializable nested types, asset/GameObject/component references, undo/redo, prefab overrides and validation. Current user-confirmed subset is numeric/bool/vectors and persistence.
 - [ ] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.
 

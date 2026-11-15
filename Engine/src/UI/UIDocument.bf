@@ -173,6 +173,15 @@ class UIDocument : Component
 				return;
 			}
 		}
+		// C# code-behind: a C# script on this object with a method of that name.
+		for (let component in GameObject.Components)
+		{
+			if (let script = component as CSharpBehaviour)
+			{
+				if (script.InvokeUI(methodName, source?.attributes.Get("id") ?? ""))
+					return;
+			}
+		}
 		Log.Warning(scope $"UI handler '{methodName}' was not found on '{GameObject.Name}'. Add a component with a method of that name.");
 	}
 
@@ -219,7 +228,18 @@ class UIDocument : Component
 	{
 		FieldRef field;
 		if (!FindField(name, out field))
+		{
+			// A C# script's public field.
+			for (let component in GameObject.Components)
+			{
+				if (let script = component as CSharpBehaviour)
+				{
+					if (script.ReadLiveField(name, text))
+						return true;
+				}
+			}
 			return false;
+		}
 		if (field.kind == .String)
 		{
 			text.Append(StringFields.Get(field.ptr, field.type));
@@ -233,7 +253,17 @@ class UIDocument : Component
 	{
 		FieldRef field;
 		if (!FindField(name, out field))
+		{
+			for (let component in GameObject.Components)
+			{
+				if (let script = component as CSharpBehaviour)
+				{
+					if (script.WriteLiveField(name, text))
+						return;
+				}
+			}
 			return;
+		}
 		StringView[1] tokens = .(text);
 		SceneSerializer.ReadValue(field, tokens);
 	}

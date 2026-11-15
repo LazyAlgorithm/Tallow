@@ -27,6 +27,7 @@ public static class GraphRuntime
         SoftBody softBody => softBody.IsValid,
         Joint joint => joint.IsValid,
         Animator animator => animator.IsValid,
+        UIDocument document => document.IsValid,
         ColliderHandle collider => collider.IsValid,
         Script script => script.GameObject.IsValid,
         Transform transform => transform.GameObject.IsValid,

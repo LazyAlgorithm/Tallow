@@ -226,6 +226,46 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int UiInvoke(int instance, byte* method, byte* elementId)
+    {
+        try
+        {
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            string name = Marshal.PtrToStringUTF8((nint)method) ?? "";
+            string id = Marshal.PtrToStringUTF8((nint)elementId) ?? "";
+            for (Type? owner = script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
+            {
+                foreach (MethodInfo candidate in owner.GetMethods(BindingFlags.Instance | BindingFlags.Public |
+                    BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                {
+                    if (candidate.Name != name || candidate.IsGenericMethodDefinition)
+                        continue;
+                    ParameterInfo[] parameters = candidate.GetParameters();
+                    if (parameters.Length == 0)
+                        candidate.Invoke(script, null);
+                    else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(UIElement))
+                        candidate.Invoke(script, [new UIElement(script.GameObject, id)]);
+                    else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(string))
+                        candidate.Invoke(script, [id]);
+                    else
+                        continue;
+                    return 1;
+                }
+            }
+            return 0;
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException != null)
+        {
+            return Failure(exception.InnerException);
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     // Plain native layout, matching tn_csharp_gc_stats (40 bytes).
     [StructLayout(LayoutKind.Sequential)]
     public struct NativeGcStats

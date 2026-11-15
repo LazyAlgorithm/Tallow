@@ -80,6 +80,14 @@ method	Tallow.CSharpSceneObjects	SetActive	bool	session:ulong	entity:ulong	activ
 method	Tallow.CSharpSceneObjects	SetLayer	bool	session:ulong	entity:ulong	layer:int
 method	Tallow.CSharpSceneObjects	SetName	bool	session:ulong	entity:ulong	name:string
 method	Tallow.CSharpSceneObjects	SetParent	bool	session:ulong	entity:ulong	parent:ulong	keepWorldPose:bool
+method	Tallow.CSharpUI	CopyText	int	session:ulong	entity:ulong	id:string	buffer:System.Span<byte>
+method	Tallow.CSharpUI	GetValue	float	session:ulong	entity:ulong	id:string
+method	Tallow.CSharpUI	GetVisible	bool	session:ulong	entity:ulong	id:string
+method	Tallow.CSharpUI	HasDocument	bool	session:ulong	entity:ulong
+method	Tallow.CSharpUI	HasElement	bool	session:ulong	entity:ulong	id:string
+method	Tallow.CSharpUI	SetText	void	session:ulong	entity:ulong	id:string	text:string
+method	Tallow.CSharpUI	SetValue	void	session:ulong	entity:ulong	id:string	value:float
+method	Tallow.CSharpUI	SetVisible	void	session:ulong	entity:ulong	id:string	visible:bool
 method	Tallow.Cursor	IsLocked	bool
 method	Tallow.Cursor	SetLocked	void	locked:bool
 method	Tallow.Ecs	CopyLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>

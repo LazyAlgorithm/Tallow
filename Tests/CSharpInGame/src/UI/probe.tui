@@ -1,0 +1,5 @@
+<panel id="screen" onload="OnOpen">
+	<text id="status">Waiting...</text>
+	<text id="hidden">Hide me</text>
+	<text id="named" onload="Named">Named</text>
+</panel>

@@ -56,6 +56,7 @@ using contact_fn = int32_t (*)(int32_t, const tn_csharp_contact*);
 using read_fields_fn = int32_t (*)(int32_t, int32_t, char*, int32_t);
 using invoke_rpc_fn = int32_t (*)(int32_t, const char*, const char*, int32_t, int32_t);
 using network_event_fn = int32_t (*)(int32_t, const char*, float);
+using ui_invoke_fn = int32_t (*)(int32_t, const char*, const char*);
 using pump_fn = int32_t (*)(float, tn_csharp_gc_stats*);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
@@ -79,6 +80,7 @@ contact_fn contact_event = nullptr;
 read_fields_fn read_fields = nullptr;
 invoke_rpc_fn invoke_rpc = nullptr;
 network_event_fn network_event = nullptr;
+ui_invoke_fn ui_invoke = nullptr;
 pump_fn pump = nullptr;
 detach_fn detach = nullptr;
 last_error_fn last_error = nullptr;
@@ -414,6 +416,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "ReadFields", read_fields) ||
             !find_entry(assembly.c_str(), "InvokeRpc", invoke_rpc) ||
             !find_entry(assembly.c_str(), "NetworkEvent", network_event) ||
+            !find_entry(assembly.c_str(), "UiInvoke", ui_invoke) ||
             !find_entry(assembly.c_str(), "Pump", pump) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
             !find_entry(assembly.c_str(), "GetLastError", last_error) ||
@@ -583,6 +586,16 @@ int32_t tn_csharp_network_event(int32_t script_instance, const char* name, float
     return result > 0;
 }
 
+int32_t tn_csharp_ui_invoke(int32_t script_instance, const char* method, const char* element_id)
+{
+    if (!started || !ui_invoke || !method)
+        return 0;
+    const int32_t result = ui_invoke(script_instance, method, element_id ? element_id : "");
+    if (result < 0)
+        managed_error("Running a C# UI handler");
+    return result;
+}
+
 int32_t tn_csharp_pump(float delta_time, tn_csharp_gc_stats* stats)
 {
     if (!started || !pump)
@@ -635,6 +648,7 @@ void tn_csharp_shutdown(void)
     read_fields = nullptr;
     invoke_rpc = nullptr;
     network_event = nullptr;
+    ui_invoke = nullptr;
     pump = nullptr;
     detach = nullptr;
     last_error = nullptr;

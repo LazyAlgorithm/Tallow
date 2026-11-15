@@ -355,6 +355,15 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
                 return true;
             }
         }
+        else if (requested == typeof(UIDocument))
+        {
+            var document = new UIDocument(this);
+            if (document.IsValid)
+            {
+                component = (T)(object)document;
+                return true;
+            }
+        }
         else if (requested == typeof(Animator))
         {
             if (GetAnimator() is { } animator)

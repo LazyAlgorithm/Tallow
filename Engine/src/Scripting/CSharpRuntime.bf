@@ -86,6 +86,10 @@ static class CSharpRuntime
 	public static bool ReadSavedFields(int32 instance, String output) => ReadFields(instance, 4, output);
 
 	/// OnNetworkEvent on a running script.
+	/// A UI document handler on a script: 1 called, 0 no such method, -1 it threw (reported).
+	public static int32 InvokeUI(int32 instance, StringView method, StringView elementId) =>
+		tn_csharp_ui_invoke(instance, scope String(method).CStr(), scope String(elementId).CStr());
+
 	public static bool NetworkEvent(int32 instance, StringView name, float value)
 	{
 		if (!Ready || instance <= 0)
@@ -286,6 +290,7 @@ static class CSharpRuntime
 	[CLink] static extern void tn_csharp_shutdown();
 	[CLink] static extern char8* tn_csharp_error();
 	[CLink] static extern int32 tn_csharp_network_event(int32 instance, char8* name, float value);
+	[CLink] static extern int32 tn_csharp_ui_invoke(int32 instance, char8* method, char8* elementId);
 	[CRepr]
 	struct GcStats
 	{

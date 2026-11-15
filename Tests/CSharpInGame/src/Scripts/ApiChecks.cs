@@ -84,6 +84,7 @@ public class ApiChecks : CheckBase
             AsyncChecks();
             GraphChecks();
             AnimatorChecks();
+            UIChecks();
             PackageChecks();
             Finish();
             Application.Quit();
@@ -114,6 +115,19 @@ public class ApiChecks : CheckBase
         Check("await Wait(0.5) waits half a second of game time", probe?.FramesForWait is >= 29 and <= 31);
         Check("code after every await runs on the game thread", probe is { StayedOnGameThread: true });
         Check("destroying a script cancels what it awaits", AsyncDoomed.Cancelled && !AsyncDoomed.RanOn);
+    }
+
+    private void UIChecks()
+    {
+        GameObject? menu = Scene.Find("Menu");
+        MenuProbe? probe = menu?.GetComponent<MenuProbe>();
+        UIDocument document = menu?.GetComponent<UIDocument>() ?? default;
+        Check("a UI Document is found from C#", document.IsValid);
+        Check("onload calls the C# code-behind once, with its element", probe is { Opened: 1, OpenedFrom: "screen" });
+        Check("a handler can take the element's id", probe?.NamedId == "named");
+        Check("UIElement.SetText changes the element's text", document.Find("status")?.Text == "Hello Ada");
+        Check("UIElement.Visible hides an element", document.Find("hidden") is { Visible: false });
+        Check("Find gives null for a missing id", document.Find("nope") == null);
     }
 
     private void AnimatorChecks()
@@ -620,4 +634,24 @@ public struct Motion
 {
     public Vector3 Velocity;
     public float Drag;
+}
+
+/// <summary>Code-behind for UI/probe.tui: its onload handlers are this script's methods.</summary>
+public class MenuProbe : Script
+{
+    public string playerName = "Ada";
+    public int Opened;
+    public string OpenedFrom = "", NamedId = "";
+
+    private void OnOpen(UIElement element)
+    {
+        Opened++;
+        OpenedFrom = element.Id;
+        UIDocument document = GetComponent<UIDocument>();
+        document.Find("status")?.SetText("Hello " + playerName);
+        if (document.Find("hidden") is { } hidden)
+            hidden.Visible = false;
+    }
+
+    public void Named(string id) => NamedId = id;
 }

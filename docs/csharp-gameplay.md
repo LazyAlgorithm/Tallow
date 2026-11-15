@@ -257,6 +257,23 @@ When field restoration fails, the native C# adapter no longer proceeds with
 `Awake`; when editing during Play, a failed field batch leaves the previous
 saved override unchanged. This still requires full Nobara editor verification.
 
+## UI documents with C# code-behind
+
+Put a UI Document and a C# script on the same object. The document's `onclick="Method"`, `onchange` and
+`onload` call that script's method of the name (it can take nothing, a `UIElement`, or the element's id as a
+string), and `bind="field"` shows and edits the script's public field. From code, `GetComponent<UIDocument>()`
+gives the document; `Find("id")` an element, with `Text`, `Visible` and `Value`.
+
+```csharp
+public class MainMenu : Script
+{
+    public string playerName = "Player";
+
+    void OnPlay(UIElement button) =>
+        GetComponent<UIDocument>().Find("status")?.SetText($"Have fun, {playerName}!");
+}
+```
+
 ## Visual scripting graphs in C# projects
 
 A `.tgraph` in a C# project compiles to C#: Compile in the graph editor writes `Name.cs` beside the graph, a

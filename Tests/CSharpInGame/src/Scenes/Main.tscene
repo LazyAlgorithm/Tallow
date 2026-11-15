@@ -101,3 +101,12 @@ field defaultClip "Idle"
 field speed 1
 object 19 parent 18 active 1 name "Hips"
 transform 0 0.95 0 0 0 0 1 1 1 1
+object 20 parent 0 active 1 name "Menu"
+transform 100 0 100 0 0 0 1 1 1 1
+component Tallow.UIDocument enabled 1
+field document "UI/probe.tui"
+field referenceHeight 0
+field referenceWidth 0
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.MenuProbe"
+field fieldOverrides ""

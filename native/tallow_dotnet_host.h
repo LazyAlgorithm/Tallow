@@ -116,6 +116,9 @@ int32_t tn_csharp_read_fields(int32_t script_instance, int32_t mode, char* buffe
 int32_t tn_csharp_invoke_rpc(int32_t script_instance, const char* method, const char* arguments, int32_t target, int32_t sender);
 // Calls OnNetworkEvent(name, value) (Component.SendNetworkEvent arriving on this machine); 1 on success.
 int32_t tn_csharp_network_event(int32_t script_instance, const char* name, float value);
+// Calls a UI document handler (onclick="Method") on the script, with the element's id; 1 called, 0 no such
+// method, -1 it threw.
+int32_t tn_csharp_ui_invoke(int32_t script_instance, const char* method, const char* element_id);
 // The managed heap after a pump, for the Profiler (40 bytes).
 typedef struct tn_csharp_gc_stats
 {
