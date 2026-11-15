@@ -480,6 +480,51 @@ public class ApiChecks : CheckBase
             controller is { IsValid: true, HasCharacter: true, IsGrounded: true });
         Check("template character locked the cursor", Cursor.Locked);
         Check("character height", controller?.Height == 2f);
+        DocumentedApis(crate, body.Value, controller!.Value);
+    }
+
+    // The calls docs/physics-queries.md, character-controller.md, input.md, scenes.md and saving.md show in C#.
+    private void DocumentedApis(GameObject crate, Rigidbody body, CharacterController controller)
+    {
+        PhysicsHit? capsule = Scene.CapsuleCastHit(new Vector3(-10, 10.5f, -10), new Vector3(-10, 11.5f, -10), 0.5f,
+            -Vector3.UnitY, 50f);
+        Check("CapsuleCastHit reaches the ground", capsule is { Distance: > 9.5f and < 10.5f } &&
+            capsule.Value.HitObject?.Name == "Ground");
+        PhysicsHit? box = Scene.BoxCastHit(new Vector3(-10, 10, -10), Vector3.One, Quaternion.CreateFromYawPitchRoll(0.7f, 0, 0),
+            -Vector3.UnitY, 50f);
+        Check("BoxCastHit reaches the ground", box is { Distance: > 9f and < 10f } && box.Value.HitObject?.Name == "Ground");
+        Vector3 above = crate.Transform.Position + new Vector3(0, 5, 0);
+        Check("Rigidbody.BodyId", body.BodyId != uint.MaxValue);
+        Check("a sphere cast can leave out one body",
+            Scene.SphereCastHit(above, 0.25f, -Vector3.UnitY, 20f)?.HitObject == crate &&
+            Scene.SphereCastHit(above, 0.25f, -Vector3.UnitY, 20f, uint.MaxValue, body.BodyId)?.HitObject?.Name == "Ground");
+        Check("CheckSphere and OverlapSphere find the crate",
+            Scene.CheckSphere(crate.Transform.Position, 1f) && !Scene.CheckSphere(new Vector3(0, 30, 0), 1f) &&
+            Scene.OverlapSphere(crate.Transform.Position, 0.75f).Contains(crate) &&
+            Scene.CheckBox(crate.Transform.Position, Vector3.One, Quaternion.Identity) &&
+            Scene.CheckCapsule(crate.Transform.Position, crate.Transform.Position + Vector3.UnitY, 0.3f));
+        Check("a grounded character's AirTime, steepness and ground", controller.AirTime == 0 && !controller.IsOnSteepGround &&
+            controller.GroundNormal.Y > 0.9f && controller.GroundVelocity == Vector3.Zero);
+        float radius = controller.Radius;
+        Check("CharacterController.SetBox and back to SetCapsule",
+            controller.SetBox(new Vector3(0.8f, 1.8f, 0.8f)) && controller.SetCapsule(radius, 2f) && controller.Height == 2f);
+        Check("input bindings: no capture in a headless run, names, text round trip",
+            !InputActions.CaptureBinding("Jump", 0) && InputActions.BindingName("No Such Action", 0) is null &&
+            InputActions.ToText() is { } text && Roundtrip(text));
+        Check("InputActions.Describe names the standard Jump key", InputActions.Describe("Jump") == "Space" &&
+            !InputActions.FromGamepad("Jump"));
+        Check("GamePaths.PlayerData", GamePaths.PlayerData is { Length: > 1 } path && path.EndsWith('/'));
+        GameObject? extra = Scene.LoadAdditive("Scenes/Extra.tscene");
+        Check("LoadAdditive adds a scene's objects under one", extra is { } group && group.ChildCount == 2 &&
+            Scene.Find("ExtraThing") is { } thing && thing.Parent == group);
+        Check("Unload removes them", extra is { } added && Scene.Unload(added) && Scene.Find("ExtraThing") is null);
+        Check("LoadAdditive of a missing file is null", Scene.LoadAdditive("Scenes/Nowhere.tscene") is null);
+    }
+
+    private static bool Roundtrip(string text)
+    {
+        InputActions.LoadText(text);
+        return InputActions.ToText() == text;
     }
 
     private void EcsData()
@@ -823,6 +868,9 @@ public class RefProbe : Script
     public Transform? Spot;
     public LateHelper? Late;
     public GameObject? Gone;
+    // Not saved nor synced, though marked: an object id means nothing in another run or on another machine.
+    [Saved, Sync] public GameObject? NotKept;
+    [Saved] public int KeptNumber = 7;
     public bool LateWasAwakeInMyAwake;
     public bool LateSetInMyAwake;
 

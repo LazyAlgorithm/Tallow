@@ -593,6 +593,10 @@ public static unsafe class NativeEntrypoints
                         // SaveSystem keeps. In the same text.
                         if (mode == 0 ? !IsInspectorField(field) : mode == 2 ? !IsSyncField(field) : !IsSavedField(field))
                             continue;
+                        // An object reference is an id on this machine, in this run: never sent to others nor
+                        // kept in a save (an object made while playing gets a new id when the save is loaded).
+                        if (mode != 0 && IsReferenceField(field.FieldType))
+                            continue;
                         string? encoded = FormatInspectorValue(field.FieldType, value);
                         if (encoded != null)
                             text.Append(field.Name).Append('\t').Append(encoded).Append('\n');

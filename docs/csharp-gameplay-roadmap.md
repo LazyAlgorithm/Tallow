@@ -319,6 +319,15 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     button with the C# GUI API; the ECS templates use `GameObject.Entity` and `Scene.Query`.
     `TallowLauncher --write-script-templates <folder>` writes one script per template without a window (also
     the editor's `--script-templates-test`); tools/test_csharp_sample.py compiles them all with no warnings.
+  - [~] Docs (November 15, 2026): about 45 docs have Beef code. Converted so far, with every C# block kept compiling
+    in `Tests/CSharpInGame/src/Scripts/DocSnippets.cs`: animator, physics-queries, character-controller, input,
+    saving, scenes. APIs added for them: `Scene.CapsuleCastHit/BoxCastHit`, `SphereCastHit(..., ignoreBody)`,
+    `CheckSphere/CheckCapsule/CheckBox`, `OverlapSphere/OverlapCapsule/OverlapBox` (objects, each once),
+    `Rigidbody.BodyId`, `CharacterController.SetBox/SetCapsule/AirTime/IsOnSteepGround/GroundNormal/GroundVelocity`,
+    `InputActions.CaptureBinding/BindingName/ToText/LoadText/Describe/FromGamepad/SetMapEnabled`,
+    `Scene.LoadAdditive/Unload`, `GamePaths.PlayerData` (14 in-engine checks). Engine-only parts (physics capacity,
+    custom SaveStorage, DataAsset classes) stay Beef and say so. Fixed on the way: C# `[Saved]`/`[Sync]` reference
+    fields are no longer written (ids are local to a run and a machine). Website tutorials wait for the user.
 - [ ] Keep shader graph/compute graph/rendering functionality intact; never confuse visual **gameplay** source generation with native shader compilation.
 
 ## P4 — performance, reload, shipping exports, hardening

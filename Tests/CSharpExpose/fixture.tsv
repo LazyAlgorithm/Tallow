@@ -54,10 +54,17 @@ method	Tallow.CSharpGUI	Slider	float	x:float	y:float	width:float	label:string	va
 method	Tallow.CSharpGUI	Toggle	bool	x:float	y:float	label:string	value:bool
 method	Tallow.CSharpGameplay	GameTime	float
 method	Tallow.CSharpGameplay	NetRandomValue	float	session:ulong	entity:ulong	salt:int
+method	Tallow.CSharpInputActions	CaptureBinding	bool	action:string	index:int
+method	Tallow.CSharpInputActions	CopyBindingName	int	action:string	index:int	buffer:System.Span<byte>
+method	Tallow.CSharpInputActions	CopyDescription	int	action:string	buffer:System.Span<byte>
+method	Tallow.CSharpInputActions	CopyText	int	buffer:System.Span<byte>
 method	Tallow.CSharpInputActions	Delta	System.Numerics.Vector2	name:string
+method	Tallow.CSharpInputActions	FromGamepad	bool	action:string
 method	Tallow.CSharpInputActions	Held	bool	name:string
+method	Tallow.CSharpInputActions	LoadText	void	text:string
 method	Tallow.CSharpInputActions	Pressed	bool	name:string
 method	Tallow.CSharpInputActions	Released	bool	name:string
+method	Tallow.CSharpInputActions	SetMapEnabled	void	map:string	enabled:bool
 method	Tallow.CSharpInputActions	Value	float	name:string
 method	Tallow.CSharpInputActions	Vector	System.Numerics.Vector2	name:string
 method	Tallow.CSharpNativeComponents	Add	bool	session:ulong	entity:ulong	typeName:string
@@ -118,15 +125,18 @@ method	Tallow.CSharpUI	SetText	void	session:ulong	entity:ulong	id:string	text:st
 method	Tallow.CSharpUI	SetValue	void	session:ulong	entity:ulong	id:string	value:float
 method	Tallow.CSharpUI	SetVisible	void	session:ulong	entity:ulong	id:string	visible:bool
 method	Tallow.CSharpWorld	CarveVoxels	bool	session:ulong	entity:ulong	point:System.Numerics.Vector3	radius:float
+method	Tallow.CSharpWorld	CopyPlayerDataPath	int	buffer:System.Span<byte>
 method	Tallow.CSharpWorld	FindVoxelTerrain	ulong	session:ulong
 method	Tallow.CSharpWorld	HasCharacterMotor	bool	session:ulong	entity:ulong
 method	Tallow.CSharpWorld	HasVoxelObject	bool	session:ulong	entity:ulong
+method	Tallow.CSharpWorld	LoadAdditive	ulong	session:ulong	path:string	applyEnvironment:bool
 method	Tallow.CSharpWorld	ModifyTerrain	bool	session:ulong	entity:ulong	center:System.Numerics.Vector3	radius:float	amount:float
 method	Tallow.CSharpWorld	MotorPitch	float	session:ulong	entity:ulong
 method	Tallow.CSharpWorld	MotorYaw	float	session:ulong	entity:ulong
 method	Tallow.CSharpWorld	NetworkTick	long	session:ulong
 method	Tallow.CSharpWorld	TerrainChunkCount	int	session:ulong	entity:ulong
 method	Tallow.CSharpWorld	TerrainPendingChunks	int	session:ulong	entity:ulong
+method	Tallow.CSharpWorld	UnloadAdditive	bool	session:ulong	group:ulong
 method	Tallow.Cursor	IsLocked	bool
 method	Tallow.Cursor	SetLocked	void	locked:bool
 method	Tallow.Ecs	CopyDataPage	int	session:ulong	schemaIds:System.Span<ulong>	offset:int	entityIds:System.Span<ulong>	bytes:System.Span<byte>
@@ -177,8 +187,13 @@ method	Tallow.Physics	AddRigidbodyImpulse	bool	session:ulong	entity:ulong	impuls
 method	Tallow.Physics	AddRigidbodyTorque	bool	session:ulong	entity:ulong	torque:System.Numerics.Vector3
 method	Tallow.Physics	AddSoftBodyForce	bool	session:ulong	entity:ulong	force:System.Numerics.Vector3
 method	Tallow.Physics	AddSoftBodyImpulse	bool	session:ulong	entity:ulong	impulse:System.Numerics.Vector3
+method	Tallow.Physics	BoxCastDetails	Tallow.PhysicsQueryHit	session:ulong	center:System.Numerics.Vector3	size:System.Numerics.Vector3	orientation:System.Numerics.Quaternion	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint	ignoreBody:uint
 method	Tallow.Physics	CanCharacterJump	bool	session:ulong	entity:ulong
 method	Tallow.Physics	CanForceSoftBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	CapsuleCastDetails	Tallow.PhysicsQueryHit	session:ulong	point1:System.Numerics.Vector3	point2:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint	ignoreBody:uint
+method	Tallow.Physics	CharacterAirTime	float	session:ulong	entity:ulong
+method	Tallow.Physics	CharacterGround	System.Numerics.Vector3	session:ulong	entity:ulong	normal:bool
+method	Tallow.Physics	CheckShape	bool	session:ulong	shape:int	point1:System.Numerics.Vector3	point2:System.Numerics.Vector3	radius:float	size:System.Numerics.Vector3	orientation:System.Numerics.Quaternion	layerMask:uint	ignoreBody:uint
 method	Tallow.Physics	ConnectJoint	bool	session:ulong	a:ulong	b:ulong	anchor:System.Numerics.Vector3	axis:System.Numerics.Vector3	swingLimit:float
 method	Tallow.Physics	DeepestSoftBodyDent	float	session:ulong	entity:ulong
 method	Tallow.Physics	GetCharacterCrouchLift	float	session:ulong	entity:ulong
@@ -211,15 +226,19 @@ method	Tallow.Physics	HasRigidbodyBody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	HasSoftBody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	HasSoftBodySimulation	bool	session:ulong	entity:ulong
 method	Tallow.Physics	IsCharacterGrounded	bool	session:ulong	entity:ulong
+method	Tallow.Physics	IsCharacterOnSteepGround	bool	session:ulong	entity:ulong
 method	Tallow.Physics	IsJointConnected	bool	session:ulong	entity:ulong
 method	Tallow.Physics	IsRigidbodySleeping	bool	session:ulong	entity:ulong
 method	Tallow.Physics	IsSoftBodySleeping	bool	session:ulong	entity:ulong
 method	Tallow.Physics	MoveCharacter	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3	deltaTime:float
+method	Tallow.Physics	OverlapShape	int	session:ulong	shape:int	point1:System.Numerics.Vector3	point2:System.Numerics.Vector3	radius:float	size:System.Numerics.Vector3	orientation:System.Numerics.Quaternion	layerMask:uint	ignoreBody:uint	objectIds:System.Span<ulong>
 method	Tallow.Physics	RaycastContact	System.Numerics.Vector4	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
 method	Tallow.Physics	RaycastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
 method	Tallow.Physics	RaycastDistance	float	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
 method	Tallow.Physics	RepairSoftBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	RigidbodyBodyId	uint	session:ulong	entity:ulong
 method	Tallow.Physics	SetCharacterHeight	bool	session:ulong	entity:ulong	height:float	standingHeight:float
+method	Tallow.Physics	SetCharacterShape	bool	session:ulong	entity:ulong	asBox:bool	radius:float	height:float	size:System.Numerics.Vector3	edgeRadius:float	center:System.Numerics.Vector3
 method	Tallow.Physics	SetColliderIsTrigger	bool	session:ulong	entity:ulong	index:int	isTrigger:bool
 method	Tallow.Physics	SetJointSwingLimit	bool	session:ulong	entity:ulong	degrees:float
 method	Tallow.Physics	SetRigidbodyAngularVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
@@ -232,6 +251,7 @@ method	Tallow.Physics	SimpleMoveCharacter	bool	session:ulong	entity:ulong	horizo
 method	Tallow.Physics	SleepRigidbody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	SphereCastContact	System.Numerics.Vector4	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
 method	Tallow.Physics	SphereCastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	SphereCastIgnoring	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint	ignoreBody:uint
 method	Tallow.Physics	TeleportCharacter	bool	session:ulong	entity:ulong	position:System.Numerics.Vector3	velocity:System.Numerics.Vector3
 method	Tallow.RotationMath	EulerDegrees	System.Numerics.Quaternion	degrees:System.Numerics.Vector3
 method	Tallow.RotationMath	LookRotation	System.Numerics.Quaternion	forward:System.Numerics.Vector3	up:System.Numerics.Vector3

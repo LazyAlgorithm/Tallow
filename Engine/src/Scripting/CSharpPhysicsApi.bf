@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 
 namespace Tallow;
 
@@ -40,6 +41,14 @@ static class Physics
     {
         let obj = LiveObject(session, entity);
         return obj != null && obj.GetComponent<Rigidbody>().HasBody;
+    }
+
+    /// The Rigidbody's body id (for a cast to ignore), uint32.MaxValue when it has no body.
+    [CSharpExpose]
+    public static uint32 RigidbodyBodyId(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        return obj != null ? obj.GetComponent<Rigidbody>().BodyId : uint32.MaxValue;
     }
 
     [CSharpExpose]
@@ -207,6 +216,33 @@ static class Physics
         return obj.GetComponent<CharacterController>().IsGrounded;
     }
 
+    /// Seconds since the character was last on the ground (0 while it is).
+    [CSharpExpose]
+    public static float CharacterAirTime(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        return (obj != null && obj.HasComponent<CharacterController>()) ? obj.GetComponent<CharacterController>().AirTime : 0;
+    }
+
+    /// Standing on ground too steep to walk up (it slides).
+    [CSharpExpose]
+    public static bool IsCharacterOnSteepGround(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        return obj != null && obj.HasComponent<CharacterController>() && obj.GetComponent<CharacterController>().IsOnSteepGround;
+    }
+
+    /// The ground's surface normal (normal: true) or how the ground under it moves (a platform), zero in the air.
+    [CSharpExpose]
+    public static Vector3 CharacterGround(uint64 session, uint64 entity, bool normal)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<CharacterController>())
+            return .Zero;
+        let controller = obj.GetComponent<CharacterController>();
+        return normal ? controller.GroundNormal : controller.GroundVelocity;
+    }
+
     [CSharpExpose]
     public static bool CanCharacterJump(uint64 session, uint64 entity)
     {
@@ -256,6 +292,22 @@ static class Physics
             return false;
         controller.SimpleMove(horizontalVelocity, deltaTime, jumpSpeed);
         return true;
+    }
+
+    /// Changes the character's shape to a capsule or (with a size) a box. False when there is no room for it here.
+    [CSharpExpose]
+    public static bool SetCharacterShape(uint64 session, uint64 entity, bool asBox, float radius, float height,
+        Vector3 size, float edgeRadius, Vector3 center)
+    {
+        if (!radius.IsFinite || !height.IsFinite || !edgeRadius.IsFinite || !FiniteVector(size) || !FiniteVector(center))
+            return false;
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<CharacterController>())
+            return false;
+        let controller = obj.GetComponent<CharacterController>();
+        if (asBox)
+            return size.x > 0 && size.y > 0 && size.z > 0 && edgeRadius >= 0 && controller.SetBox(size, edgeRadius, center);
+        return radius > 0 && height > 0 && controller.SetCapsule(radius, height, center);
     }
 
     /// Crouching: the same capsule resize visual scripts use, including
@@ -720,6 +772,134 @@ static class Physics
             output.flags |= 4;
         }
         return output;
+    }
+
+    static PhysicsQueryHit ShapeHit(ShapeCastHit hit)
+    {
+        PhysicsQueryHit output = default;
+        output.flags = 3;
+        output.pointX = hit.point.x;
+        output.pointY = hit.point.y;
+        output.pointZ = hit.point.z;
+        output.normalX = hit.normal.x;
+        output.normalY = hit.normal.y;
+        output.normalZ = hit.normal.z;
+        output.distance = hit.distance;
+        output.penetrationDepth = hit.penetrationDepth;
+        output.bodyId = hit.bodyId;
+        if (hit.gameObject != null && !hit.gameObject.IsDestroyed)
+        {
+            output.entityId = (uint64)hit.gameObject.Id;
+            output.flags |= 4;
+        }
+        return output;
+    }
+
+    /// A sphere sweep that leaves one body out (a character's own), with the whole hit.
+    [CSharpExpose]
+    public static PhysicsQueryHit SphereCastIgnoring(uint64 session, Vector3 origin, float radius, Vector3 direction,
+        float maxDistance, uint32 layerMask, uint32 ignoreBody)
+    {
+        let scene = LiveScene(session);
+        if (scene == null || scene.Physics == null || !radius.IsFinite || radius <= 0 || !maxDistance.IsFinite ||
+            maxDistance <= 0 || !FiniteVector(origin) || !FiniteVector(direction))
+            return default;
+        ShapeCastHit hit = default;
+        return scene.Physics.SphereCast(origin, radius, direction, maxDistance, out hit, ignoreBody, layerMask) ?
+            ShapeHit(hit) : default;
+    }
+
+    static bool FiniteRotation(Quaternion q) => q.x.IsFinite && q.y.IsFinite && q.z.IsFinite && q.w.IsFinite;
+
+    /// Whether anything is inside the sphere, capsule (asCapsule: point2 and radius) or box (asBox: size and
+    /// orientation). Stops at the first body that counts.
+    [CSharpExpose]
+    public static bool CheckShape(uint64 session, int32 shape, Vector3 point1, Vector3 point2, float radius,
+        Vector3 size, Quaternion orientation, uint32 layerMask, uint32 ignoreBody)
+    {
+        let scene = LiveScene(session);
+        if (scene == null || scene.Physics == null || !FiniteVector(point1))
+            return false;
+        switch (shape)
+        {
+        case 0:
+            return radius.IsFinite && radius > 0 && scene.Physics.CheckSphere(point1, radius, ignoreBody, layerMask);
+        case 1:
+            return radius.IsFinite && radius > 0 && FiniteVector(point2) &&
+				scene.Physics.CheckCapsule(point1, point2, radius, ignoreBody, layerMask);
+        case 2:
+            return FiniteVector(size) && size.x > 0 && size.y > 0 && size.z > 0 && FiniteRotation(orientation) &&
+				scene.Physics.CheckBox(point1, size, orientation, ignoreBody, layerMask);
+        default:
+            return false;
+        }
+    }
+
+    /// The objects touching a sphere, capsule or box (as CheckShape), each once, into objectIds. Returns how many
+    /// there are (more than fit, when the buffer is short).
+    [CSharpExpose]
+    public static int32 OverlapShape(uint64 session, int32 shape, Vector3 point1, Vector3 point2, float radius,
+        Vector3 size, Quaternion orientation, uint32 layerMask, uint32 ignoreBody, Span<uint64> objectIds)
+    {
+        let scene = LiveScene(session);
+        if (scene == null || scene.Physics == null || !FiniteVector(point1))
+            return 0;
+        let hits = scope List<ShapeCastHit>();
+        switch (shape)
+        {
+        case 0:
+            if (!radius.IsFinite || radius <= 0) return 0;
+            scene.Physics.OverlapSphere(point1, radius, hits, ignoreBody, layerMask);
+        case 1:
+            if (!radius.IsFinite || radius <= 0 || !FiniteVector(point2)) return 0;
+            scene.Physics.OverlapCapsule(point1, point2, radius, hits, ignoreBody, layerMask);
+        case 2:
+            if (!FiniteVector(size) || size.x <= 0 || size.y <= 0 || size.z <= 0 || !FiniteRotation(orientation)) return 0;
+            scene.Physics.OverlapBox(point1, size, orientation, hits, ignoreBody, layerMask);
+        default:
+            return 0;
+        }
+        let seen = scope HashSet<uint32>();
+        int32 count = 0;
+        for (let hit in hits)
+        {
+            if (hit.gameObject == null || hit.gameObject.IsDestroyed || !seen.Add(hit.gameObject.Id))
+                continue;
+            if (count < objectIds.Length)
+                objectIds[count] = hit.gameObject.Id;
+            count++;
+        }
+        return count;
+    }
+
+    /// A capsule sweep: point1 and point2 are the centres of its two ends' half-spheres.
+    [CSharpExpose]
+    public static PhysicsQueryHit CapsuleCastDetails(uint64 session, Vector3 point1, Vector3 point2, float radius,
+        Vector3 direction, float maxDistance, uint32 layerMask, uint32 ignoreBody)
+    {
+        let scene = LiveScene(session);
+        if (scene == null || scene.Physics == null || !radius.IsFinite || radius <= 0 || !maxDistance.IsFinite ||
+            maxDistance <= 0 || !FiniteVector(point1) || !FiniteVector(point2) || !FiniteVector(direction))
+            return default;
+        ShapeCastHit hit = default;
+        return scene.Physics.CapsuleCast(point1, point2, radius, direction, maxDistance, out hit, ignoreBody, layerMask) ?
+            ShapeHit(hit) : default;
+    }
+
+    /// A box sweep: size is its full width, height and depth, turned by orientation.
+    [CSharpExpose]
+    public static PhysicsQueryHit BoxCastDetails(uint64 session, Vector3 center, Vector3 size, Quaternion orientation,
+        Vector3 direction, float maxDistance, uint32 layerMask, uint32 ignoreBody)
+    {
+        let scene = LiveScene(session);
+        if (scene == null || scene.Physics == null || !maxDistance.IsFinite || maxDistance <= 0 ||
+            !FiniteVector(center) || !FiniteVector(size) || size.x <= 0 || size.y <= 0 || size.z <= 0 ||
+            !FiniteVector(direction) || !orientation.x.IsFinite || !orientation.y.IsFinite ||
+            !orientation.z.IsFinite || !orientation.w.IsFinite)
+            return default;
+        ShapeCastHit hit = default;
+        return scene.Physics.BoxCast(center, size, orientation, direction, maxDistance, out hit, ignoreBody, layerMask) ?
+            ShapeHit(hit) : default;
     }
 
     /// One Jolt sweep provides the point, surface normal, penetration,

@@ -44,6 +44,41 @@ static class CSharpGUI
 [CSharpExpose]
 static class CSharpWorld
 {
+	static int32 Copy(StringView text, Span<uint8> buffer)
+	{
+		let count = Math.Min(text.Length, buffer.Length);
+		for (int i < count)
+			buffer[i] = (uint8)text[i];
+		return (int32)text.Length;
+	}
+
+	/// The player's folder for this game (GamePaths.PlayerData), ending in a slash.
+	[CSharpExpose]
+	public static int32 CopyPlayerDataPath(Span<uint8> buffer) => Copy(GamePaths.PlayerData, buffer);
+
+	/// Adds a scene file's contents to the playing scene under one new object (SceneManager.LoadAdditive); 0 when
+	/// the file cannot be read.
+	[CSharpExpose]
+	public static uint64 LoadAdditive(uint64 session, StringView path, bool applyEnvironment)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		if (scene == null)
+			return 0;
+		let group = SceneManager.LoadAdditive(scene, path, applyEnvironment);
+		return group != null ? group.Id : 0;
+	}
+
+	/// Removes what LoadAdditive added (that object and everything under it), at once.
+	[CSharpExpose]
+	public static bool UnloadAdditive(uint64 session, uint64 group)
+	{
+		let gameObject = CSharpRuntime.PhysicsObject(session, group);
+		if (gameObject == null)
+			return false;
+		SceneManager.Unload(gameObject);
+		return true;
+	}
+
 	/// Cuts a sphere out of an object's VoxelObject (shared in a network session). False without one.
 	[CSharpExpose]
 	public static bool CarveVoxels(uint64 session, uint64 entity, Vector3 point, float radius)

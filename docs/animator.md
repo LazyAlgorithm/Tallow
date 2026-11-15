@@ -74,9 +74,9 @@ Keys are offsets from the pose the object has in the scene, matched to children 
 
 ## From scripts
 
-```beef
-let animator = GetComponent<Animator>();
-animator.SetFloat("speed", velocity.Length);
+```csharp
+var animator = GetComponent<Animator>();
+animator.SetFloat("speed", velocity.Length());
 animator.SetBool("grounded", controller.IsGrounded);
 animator.SetInteger("lives", lives);
 animator.SetTrigger("jump");
@@ -86,7 +86,8 @@ animator.Play("Idle");            // jump straight to a state
 animator.CrossFade("Run", 0.3f);  // or fade to it
 ```
 
-Also `GetFloat`, `GetBool`, `GetInteger`, `ResetTrigger`, `IsInTransition`, `StateTime` and `CurrentStateIndex`. Setting a parameter the controller does not have is ignored.
+Also `GetFloat`, `GetBool`, `GetInteger`, `ResetTrigger`, `IsInTransition`, `StateTime`, `CurrentClip`, `Speed`
+and `IsFinished`. Setting a parameter the controller does not have is ignored.
 
 An Animator with **no controller** works as it always did: list clip files in **Clips**, and call `Play("Walk")`.
 
@@ -125,9 +126,8 @@ A layer only moves the bones its own clips move, so an upper-body layer with no 
 state) leaves the body to the layers below. Each layer starts in its default state (right-click > Set as Default
 State on that layer).
 
-```beef
-animator.SetLayerWeight("Upper Body", aiming ? 1 : 0);
-let reloading = animator.StateIndexOn(1);   // the state a layer is in
+```csharp
+animator.SetLayerWeight(1, aiming ? 1f : 0f);   // layer 1: the second in the controller's list
 ```
 
 ## Blend trees

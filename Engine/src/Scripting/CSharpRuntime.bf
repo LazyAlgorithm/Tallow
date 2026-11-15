@@ -169,6 +169,14 @@ static class CSharpRuntime
 		ReadFields(behaviour.ManagedInstance, true, all);
 		Check(all.Contains("_gizmosSelected\tint\t1\n") && all.Contains("_gizmosUnselected\tint\t2\n"),
 			"OnDrawGizmos runs with whether the object is selected, and can draw gizmos");
+		// Reference fields are left out of saves and network sync (ids are local to this run and machine).
+		let refProbe = scene.Find("RefProbe")?.GetComponent<CSharpBehaviour>();
+		let saved = scope String();
+		let synced = scope String();
+		Check(refProbe != null && refProbe.IsLoaded && ReadFields(refProbe.ManagedInstance, 4, saved) &&
+			ReadFields(refProbe.ManagedInstance, 2, synced) && saved.Contains("KeptNumber\t7\n") &&
+			!saved.Contains("NotKept") && !synced.Contains("NotKept"),
+			"object references are not saved or synced");
 	}
 
 	/// Runs a script's [Rpc] method received from the network. The managed side checks the method is an [Rpc] of

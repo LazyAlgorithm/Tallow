@@ -1,29 +1,29 @@
 # Shape casts and overlaps
 
-Tallow now exposes Jolt's swept sphere, capsule and box queries through `Scene.Physics`. Queries run on the scene thread. Distances are world units; direction is normalized internally.
+Tallow exposes Jolt's swept sphere, capsule and box queries to scripts through `Scene`. Queries run on the scene thread. Distances are world units; direction is normalized internally.
 
-```beef
-ShapeCastHit hit;
-if (Scene.Physics.SphereCast(Transform.Position, 0.5f, Vector3.Down, 5, out hit))
-    Log.Info(scope $"Hit {hit.gameObject.Name} after {hit.distance} meters");
+```csharp
+if (Scene.SphereCastHit(Transform.Position, 0.5f, -Vector3.UnitY, 5f) is PhysicsHit hit)
+    Log.Info($"Hit {hit.HitObject?.Name} after {hit.Distance} meters");
 
 // Ignore the player's own rigidbody when probing the ground.
-let body = GetComponent<Rigidbody>();
-if (body != null && body.HasBody)
-    Scene.Physics.SphereCast(Transform.Position, 0.25f, .Down, 2, out hit, body.BodyId);
+var body = GetComponent<Rigidbody>();
+if (body.HasBody)
+    Scene.SphereCastHit(Transform.Position, 0.25f, -Vector3.UnitY, 2f, uint.MaxValue, body.BodyId);
 
 // Endpoints are hemisphere centers, not the outer tips of the capsule.
-Scene.Physics.CapsuleCast(.(0, 0.5f, 0), .(0, 1.5f, 0), 0.5f, .Forward, 10, out hit);
+Scene.CapsuleCastHit(new Vector3(0, 0.5f, 0), new Vector3(0, 1.5f, 0), 0.5f, Vector3.UnitZ, 10f);
 
 // Size means full width/height/depth; rotation determines box orientation.
-Scene.Physics.BoxCast(Transform.Position, .(1, 2, 1), Quaternion.Euler(0, 45, 0), .Forward, 10, out hit);
+Scene.BoxCastHit(Transform.Position, new Vector3(1, 2, 1), Quaternion.Euler(0, 45, 0), Vector3.UnitZ, 10f);
 ```
 
-`ShapeCastHit` includes gameObject, bodyId, point, normal, distance and penetrationDepth. The contact point is on the target shape; the normal points outward from the target. Starting overlaps return zero travel and their penetration depth. Capsule casts with coincident endpoints act as sphere casts. Invalid sizes, non-finite input, zero directions and nonpositive cast distances return no hit. Empty worlds return no hit.
+A `PhysicsHit` has `HitObject`, `BodyId`, `Point`, `Normal`, `Distance` and `PenetrationDepth`; a miss is null. Each
+cast also takes a layer mask. The contact point is on the target shape; the normal points outward from the target. Starting overlaps return zero travel and their penetration depth. Capsule casts with coincident endpoints act as sphere casts. Invalid sizes, non-finite input, zero directions and nonpositive cast distances return no hit. Empty worlds return no hit.
 
-`OverlapSphere(origin, radius, hits)`, `OverlapCapsule(point1, point2, radius, hits)` and `OverlapBox(origin, size, orientation, hits)` accept `List<ShapeCastHit>`, clear it and return the number of contacts. They also accept optional `ignoreBody`. A mesh or compound may report multiple contacts for one object. These contacts are not guaranteed to be sorted or unique by body.
+`Scene.OverlapSphere(center, radius)`, `OverlapCapsule(point1, point2, radius)` and `OverlapBox(center, size, orientation)` return the objects touching the shape, each once (in no particular order). They also take an optional layer mask and a body to ignore. (Engine code gets every contact instead, through `Scene.Physics.OverlapSphere(..., List<ShapeCastHit>)`: a mesh or compound may report several for one object.)
 
-When only whether something is there matters, use `CheckSphere(origin, radius)`, `CheckCapsule(point1, point2, radius)` or `CheckBox(origin, size, orientation)` (as Unity's `Physics.CheckSphere`). They take the same optional `ignoreBody` and `layerMask`, return a bool rather than a contact list, and can stop at the first accepted hit. Their advantage depends on query geometry and the number of contacts. The navigation baker uses them for each cell's clearance.
+When only whether something is there matters, use `Scene.CheckSphere(center, radius)`, `CheckCapsule(point1, point2, radius)` or `CheckBox(center, size, orientation)`. They take the same optional layer mask and body to ignore, return a bool rather than a list, and can stop at the first accepted hit. Their advantage depends on query geometry and the number of contacts. The navigation baker uses them for each cell's clearance.
 
 Query shapes and overlap buffers are reused, avoiding native shape allocation for each repeated query with the same dimensions. Changing dimensions replaces that kind's cached query shape. The query tree is optimized once after bodies are added, including for queries before the first simulation tick. Existing transforms still follow Tallow's normal physics synchronization behavior: stepping flushes transform edits into Jolt; shape queries do not scan all transforms on each call.
 
@@ -39,7 +39,7 @@ Aligned box–box overlaps also use analytic contacts when both boxes share a fl
 
 ## Simulation capacity
 
-Configure native Jolt capacity before the world's first body or query creates it:
+Engine code (not game scripts) can configure native Jolt capacity before the world's first body or query creates it:
 
 ```beef
 bool configured = scene.Physics.ConfigureCapacity(16384, 262144, 131072);

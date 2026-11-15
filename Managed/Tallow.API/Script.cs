@@ -657,6 +657,70 @@ public readonly partial record struct Scene(ulong SessionId)
             Physics.SphereCastDetails(SessionId, origin, radius,
                 direction, maxDistance, layerMask));
 
+    /// <summary>A sphere sweep that leaves out one body (<see cref="Rigidbody.BodyId"/>, e.g. a character's own).</summary>
+    public PhysicsHit? SphereCastHit(Vector3 origin, float radius, Vector3 direction, float maxDistance,
+        uint layerMask, uint ignoreBody) =>
+        PhysicsHit.FromNative(SessionId,
+            Physics.SphereCastIgnoring(SessionId, origin, radius, direction, maxDistance, layerMask, ignoreBody));
+
+    /// <summary>
+    /// A capsule sweep. <paramref name="point1"/> and <paramref name="point2"/> are the centres of its end
+    /// half-spheres, not its outer tips.
+    /// </summary>
+    public PhysicsHit? CapsuleCastHit(Vector3 point1, Vector3 point2, float radius, Vector3 direction,
+        float maxDistance, uint layerMask = uint.MaxValue, uint ignoreBody = uint.MaxValue) =>
+        PhysicsHit.FromNative(SessionId,
+            Physics.CapsuleCastDetails(SessionId, point1, point2, radius, direction, maxDistance, layerMask, ignoreBody));
+
+    /// <summary>A box sweep. <paramref name="size"/> is its full width, height and depth.</summary>
+    public PhysicsHit? BoxCastHit(Vector3 center, Vector3 size, Quaternion orientation, Vector3 direction,
+        float maxDistance, uint layerMask = uint.MaxValue, uint ignoreBody = uint.MaxValue) =>
+        PhysicsHit.FromNative(SessionId,
+            Physics.BoxCastDetails(SessionId, center, size, orientation, direction, maxDistance, layerMask, ignoreBody));
+
+    /// <summary>Whether anything is inside the sphere (cheaper than listing what).</summary>
+    public bool CheckSphere(Vector3 center, float radius, uint layerMask = uint.MaxValue, uint ignoreBody = uint.MaxValue) =>
+        Physics.CheckShape(SessionId, 0, center, default, radius, default, Quaternion.Identity, layerMask, ignoreBody);
+
+    /// <summary>Whether anything is inside the capsule (its end half-spheres centred on the two points).</summary>
+    public bool CheckCapsule(Vector3 point1, Vector3 point2, float radius, uint layerMask = uint.MaxValue,
+        uint ignoreBody = uint.MaxValue) =>
+        Physics.CheckShape(SessionId, 1, point1, point2, radius, default, Quaternion.Identity, layerMask, ignoreBody);
+
+    /// <summary>Whether anything is inside the box (full size, turned by the orientation).</summary>
+    public bool CheckBox(Vector3 center, Vector3 size, Quaternion orientation, uint layerMask = uint.MaxValue,
+        uint ignoreBody = uint.MaxValue) =>
+        Physics.CheckShape(SessionId, 2, center, default, 0, size, orientation, layerMask, ignoreBody);
+
+    /// <summary>The objects touching the sphere, each once.</summary>
+    public GameObject[] OverlapSphere(Vector3 center, float radius, uint layerMask = uint.MaxValue,
+        uint ignoreBody = uint.MaxValue) => Overlap(0, center, default, radius, default, Quaternion.Identity, layerMask, ignoreBody);
+
+    /// <summary>The objects touching the capsule, each once.</summary>
+    public GameObject[] OverlapCapsule(Vector3 point1, Vector3 point2, float radius, uint layerMask = uint.MaxValue,
+        uint ignoreBody = uint.MaxValue) => Overlap(1, point1, point2, radius, default, Quaternion.Identity, layerMask, ignoreBody);
+
+    /// <summary>The objects touching the box, each once.</summary>
+    public GameObject[] OverlapBox(Vector3 center, Vector3 size, Quaternion orientation, uint layerMask = uint.MaxValue,
+        uint ignoreBody = uint.MaxValue) => Overlap(2, center, default, 0, size, orientation, layerMask, ignoreBody);
+
+    private GameObject[] Overlap(int shape, Vector3 point1, Vector3 point2, float radius, Vector3 size,
+        Quaternion orientation, uint layerMask, uint ignoreBody)
+    {
+        Span<ulong> ids = stackalloc ulong[64];
+        int count = Physics.OverlapShape(SessionId, shape, point1, point2, radius, size, orientation, layerMask, ignoreBody, ids);
+        if (count > ids.Length)
+        {
+            ids = new ulong[count];
+            count = Math.Min(count, Physics.OverlapShape(SessionId, shape, point1, point2, radius, size, orientation,
+                layerMask, ignoreBody, ids));
+        }
+        var objects = new GameObject[count];
+        for (int i = 0; i < count; i++)
+            objects[i] = new GameObject(SessionId, ids[i]);
+        return objects;
+    }
+
     /// <summary>Closest Jolt ray contact, or null when nothing was hit.</summary>
     public PhysicsContact? Raycast(Vector3 origin, Vector3 direction,
         float maxDistance, uint layerMask = uint.MaxValue)

@@ -11,6 +11,9 @@ public readonly partial record struct Rigidbody(GameObject GameObject) : ICompon
 {
     public bool IsValid => Physics.HasRigidbody(GameObject.SceneId, GameObject.Id);
     public bool HasBody => Physics.HasRigidbodyBody(GameObject.SceneId, GameObject.Id);
+
+    /// <summary>The body's id in the physics world (for a cast to ignore); uint.MaxValue when it has none.</summary>
+    public uint BodyId => Physics.RigidbodyBodyId(GameObject.SceneId, GameObject.Id);
     public bool IsSleeping => Physics.IsRigidbodySleeping(GameObject.SceneId, GameObject.Id);
     public Vector3 Velocity
     {
@@ -65,6 +68,14 @@ public readonly partial record struct CharacterController(GameObject GameObject)
         Physics.IsCharacterGrounded(GameObject.SceneId, GameObject.Id);
     public bool CanJump =>
         Physics.CanCharacterJump(GameObject.SceneId, GameObject.Id);
+    /// <summary>Seconds since it was last on the ground (0 while it is).</summary>
+    public float AirTime => Physics.CharacterAirTime(GameObject.SceneId, GameObject.Id);
+    /// <summary>On ground too steep to walk up: it slides down.</summary>
+    public bool IsOnSteepGround => Physics.IsCharacterOnSteepGround(GameObject.SceneId, GameObject.Id);
+    /// <summary>The surface normal of the ground it stands on; zero in the air.</summary>
+    public Vector3 GroundNormal => Physics.CharacterGround(GameObject.SceneId, GameObject.Id, true);
+    /// <summary>How the ground under it moves (a moving platform); zero in the air or on still ground.</summary>
+    public Vector3 GroundVelocity => Physics.CharacterGround(GameObject.SceneId, GameObject.Id, false);
     public Vector3 Velocity =>
         Physics.GetCharacterVelocity(GameObject.SceneId, GameObject.Id);
 
@@ -77,6 +88,14 @@ public readonly partial record struct CharacterController(GameObject GameObject)
         float jumpSpeed = 0) =>
         Physics.SimpleMoveCharacter(GameObject.SceneId, GameObject.Id,
             horizontalVelocity, deltaTime, jumpSpeed);
+
+    /// <summary>A capsule shape. False when there is no room for it where the character is.</summary>
+    public bool SetCapsule(float radius, float height, Vector3 center = default) =>
+        Physics.SetCharacterShape(GameObject.SceneId, GameObject.Id, false, radius, height, default, 0, center);
+
+    /// <summary>A box shape of this full size (rounded by <paramref name="edgeRadius"/>). False when it does not fit.</summary>
+    public bool SetBox(Vector3 size, float edgeRadius = 0.1f, Vector3 center = default) =>
+        Physics.SetCharacterShape(GameObject.SceneId, GameObject.Id, true, 0, 0, size, edgeRadius, center);
 
     /// <summary>Reset the native character pose and velocity, e.g. on respawn.</summary>
     public bool Teleport(Vector3 position, Vector3 velocity = default) =>

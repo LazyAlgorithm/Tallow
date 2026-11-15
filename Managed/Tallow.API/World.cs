@@ -75,6 +75,20 @@ public readonly record struct CharacterMotor(GameObject GameObject) : IComponent
 
 public readonly partial record struct Scene
 {
+    /// <summary>
+    /// Adds everything in a scene file to this scene, under one new object that is returned (the file's top-level
+    /// objects become its children); null when the file cannot be read. With <paramref name="applyEnvironment"/>
+    /// the file's sky, fog and ambient light replace this scene's. Not networked: every machine loads it itself.
+    /// </summary>
+    public GameObject? LoadAdditive(string path, bool applyEnvironment = false)
+    {
+        ulong id = CSharpWorld.LoadAdditive(SessionId, path, applyEnvironment);
+        return id != 0 ? new GameObject(SessionId, id) : null;
+    }
+
+    /// <summary>Removes what <see cref="LoadAdditive"/> added, at once.</summary>
+    public bool Unload(GameObject group) => CSharpWorld.UnloadAdditive(SessionId, group.Id);
+
     /// <summary>The network session's tick; 0 offline.</summary>
     public long NetworkTick => CSharpWorld.NetworkTick(SessionId);
 

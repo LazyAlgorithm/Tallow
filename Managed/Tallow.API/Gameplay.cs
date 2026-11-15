@@ -1,6 +1,34 @@
 using System.Numerics;
+using System.Text;
 
 namespace Tallow;
+
+/// <summary>Reads text a host entry copies into a buffer (returning its whole length, or a negative for none).</summary>
+internal static class NativeText
+{
+    internal delegate int Copier(Span<byte> buffer);
+
+    internal static string? Read(Copier copy)
+    {
+        Span<byte> buffer = stackalloc byte[256];
+        int length = copy(buffer);
+        if (length < 0)
+            return null;
+        if (length > buffer.Length)
+        {
+            buffer = new byte[length];
+            length = Math.Min(length, copy(buffer));
+        }
+        return Encoding.UTF8.GetString(buffer[..length]);
+    }
+}
+
+/// <summary>Where the game may write files on this machine.</summary>
+public static class GamePaths
+{
+    /// <summary>The player's folder for this game (saves, settings, screenshots), ending in a slash.</summary>
+    public static string PlayerData => NativeText.Read(CSharpWorld.CopyPlayerDataPath) ?? "";
+}
 
 /// <summary>Plays sounds.</summary>
 public static class Audio
@@ -23,6 +51,33 @@ public static class InputActions
     public static float Value(string action) => CSharpInputActions.Value(action);
     public static Vector2 Vector(string action) => CSharpInputActions.Vector(action);
     public static Vector2 Delta(string action) => CSharpInputActions.Delta(action);
+
+    /// <summary>
+    /// For a "press a key" prompt: on the frame a key, mouse button or controller button goes down, makes it
+    /// binding number <paramref name="index"/> of the action (0 is the first; past the end adds one) and returns
+    /// true. Works while input is switched off for a menu. Save the result with <see cref="ToText"/>.
+    /// </summary>
+    public static bool CaptureBinding(string action, int index) => CSharpInputActions.CaptureBinding(action, index);
+
+    /// <summary>What a binding is called ("Space", "Mouse 1"...), or null when the action has no such binding.</summary>
+    public static string? BindingName(string action, int index) =>
+        NativeText.Read(buffer => CSharpInputActions.CopyBindingName(action, index, buffer));
+
+    /// <summary>Every action's bindings as text, to keep with the player's settings.</summary>
+    public static string ToText() => NativeText.Read(CSharpInputActions.CopyText) ?? "";
+
+    /// <summary>Bindings saved with <see cref="ToText"/>, put back (when the game starts).</summary>
+    public static void LoadText(string text) => CSharpInputActions.LoadText(text);
+
+    /// <summary>Whether the action is being worked from a controller right now.</summary>
+    public static bool FromGamepad(string action) => CSharpInputActions.FromGamepad(action);
+
+    /// <summary>What to press for the action on the device in the player's hands ("E", or "B"): for prompts.</summary>
+    public static string Describe(string action) =>
+        NativeText.Read(buffer => CSharpInputActions.CopyDescription(action, buffer)) ?? "";
+
+    /// <summary>Switches a whole map of actions ("Player", "Vehicle", "Menu") on or off.</summary>
+    public static void SetMapEnabled(string map, bool enabled) => CSharpInputActions.SetMapEnabled(map, enabled);
 }
 
 /// <summary>Random numbers every machine agrees on, for networked scripts (System.Random is seeded differently

@@ -2,19 +2,23 @@
 
 Three layers, each usable alone:
 
-- **`Input`** reads the keyboard and mouse directly: `Input.GetKey(.Space)`, `Input.MouseDelta`.
-- **`Gamepad`** reads controllers directly: `Gamepad.GetButtonDown(.South)`, `Gamepad.LeftStick`.
+- **`Input`** reads the keyboard and mouse directly: `Input.GetKey(KeyCode.Space)`, `Input.MouseDelta`.
+- **`Gamepad`** reads controllers directly (engine code): `Gamepad.GetButtonDown(.South)`, `Gamepad.LeftStick`.
 - **`InputActions`** is the one to build a game on. The game asks for what the player *means* ("Jump", "Move"), and a list kept in the project says which keys, mouse buttons and controller buttons mean it. The same code then works from the keyboard and mouse and from any controller, and the controls are changed without touching code.
 
 ## Input actions
 
-```beef
+These read this machine's controls, for menus and for what only this player sees. A networked script reads the
+same actions from the `TickInput` its `Update(TickInput input, float deltaTime)` gets (`input.MoveDirection`,
+`input.Pressed(InputButton.Jump)`), so the server and every client agree.
+
+```csharp
 if (InputActions.Pressed("Jump"))
     Jump();
-let move = InputActions.Vector("Move");       // x right, y forward; no longer than 1
-let look = InputActions.Delta("Look");        // how far to turn this frame
-yaw += look.x * sensitivity;
-pitch -= look.y * sensitivity;
+Vector2 move = InputActions.Vector("Move");   // x right, y forward; no longer than 1
+Vector2 look = InputActions.Delta("Look");    // how far to turn this frame
+yaw += look.X * sensitivity;
+pitch -= look.Y * sensitivity;
 ```
 
 | Call | Gives |
@@ -24,7 +28,7 @@ pitch -= look.y * sensitivity;
 | `Vector(name)` | A direction from keys, sticks and the d-pad: x right, y up or forward, length at most 1. |
 | `Delta(name)` | How far to move or turn this frame: mouse movement as it comes, plus sticks and keys times their binding's Scale and the time the frame took. For looking around. |
 | `FromGamepad(name)` | Whether the action is being worked from a controller right now. |
-| `Describe(name, text)` | What to press for it on the device in the player's hands: "E", or "B" (or "Circle"). For on-screen prompts. |
+| `Describe(name)` | What to press for it on the device in the player's hands: "E", or "B" (or "Circle"). For on-screen prompts. |
 | `SetMapEnabled(map, on)` | Switches a whole map of actions on or off. |
 
 Directions use one convention everywhere: x is right and y is up or forward, also for mouse movement. An action that does not exist is simply never pressed.
@@ -57,23 +61,22 @@ A project with no `Input.tinput` has the engine's **standard actions**, and they
 | Talk (voice chat's push to talk) | V | D-pad down |
 | Submit, Cancel | Enter, Esc | South, East |
 
-A project action with **no bindings** of its own that has a standard action's name and kind (a `Jump` button, a `Move` direction) uses the standard bindings until you give it some; the window says so and offers **Copy The Standard Bindings**. `InputActions.SetBinding` on such an action copies the standard bindings in first, so rebinding one keeps the rest.
+A project action with **no bindings** of its own that has a standard action's name and kind (a `Jump` button, a `Move` direction) uses the standard bindings until you give it some; the window says so and offers **Copy The Standard Bindings**. `InputActions.CaptureBinding` on such an action copies the standard bindings in first, so rebinding one keeps the rest.
 
 `NetworkScript` and `CharacterMotor` read these for their built-in controls, so a networked player works with a controller with no code. **Start From The Standard Actions** in the window copies them into the project to change.
 
 ### Letting players change the controls
 
-```beef
-InputBinding binding;
-if (InputActions.Capture(out binding))                 // true on the frame a key or button goes down
-    InputActions.SetBinding("Jump", 0, binding);       // replace Jump's first binding
+```csharp
+if (InputActions.CaptureBinding("Jump", 0))           // true on the frame a key or button goes down
+    Log.Info($"Jump is now {InputActions.BindingName("Jump", 0)}");
 
-let text = scope String();
-InputActions.ToText(text);                             // save this with the player's settings...
-InputActions.LoadText(text);                           // ...and load it when the game starts
+string text = InputActions.ToText();                    // save this with the player's settings...
+InputActions.LoadText(text);                            // ...and load it when the game starts
 ```
 
-`Capture` works while `Input.Enabled` is false, so a menu can use it.
+`CaptureBinding` replaces the action's binding of that number (0 is the first; a number past the end adds one). It
+works while input is switched off for a menu.
 
 ### The file
 

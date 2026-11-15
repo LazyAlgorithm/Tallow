@@ -1,25 +1,36 @@
 # Saving
 
-Mark what to keep with `[Saved]`, then call `SaveSystem.Save()` and `SaveSystem.Load()`. Everything else is taken care of.
+Mark what to keep with `[Saved]`, then call `SaveGame.Save()` and `SaveGame.Load()`. Everything else is taken care of.
 
-```beef
-[Component]
-class Player : Component
+```csharp
+public class Player : Script
 {
-    [Saved] public int32 coins;
-    [Saved] public Vector3 checkpoint;
-    [Saved] public List<int32> unlockedLevels = new .() ~ delete _;
-    [Saved] public float[4] bestLaps;
-    [Saved("hp")] public float health;   // stored under "hp": rename the field later without breaking saves
-    public float speed;                   // not saved
-}
+    [Saved] public int Coins;
+    [Saved] public Vector3 Checkpoint;
+    [Saved] public float Health;
+    public float Speed;                  // not saved
 
-SaveSystem.Save();          // the "default" slot
-SaveSystem.Save("Castle");  // or any name a player types
-SaveSystem.Load("Castle");
+    public void SaveAndLoad()
+    {
+        SaveGame.Save();                          // the "default" slot
+        SaveGame.Save("Castle");                  // or any name a player types
+        SaveTask load = SaveGame.Load("Castle");
+        if (load.Done && !load.Found)
+            Log.Info("No save called Castle yet.");
+    }
+}
 ```
 
-## What can be saved
+`SaveGame.Exists(slot)` and `SaveGame.Delete(slot)` manage slots. A `SaveTask` says whether it is `Done`, whether it
+`Succeeded` and, for a load, whether the slot was `Found`; a save to the local disk is done at once.
+
+In a C# script, `[Saved]` fields can be `bool`, `int`, `float`, `string`, `Vector2/3/4` and enums, saved by name.
+References to objects (a `GameObject` or component field) are not saved: an object made while playing gets a new id
+when the save is loaded. Keep a name or a number of your own instead.
+
+## What engine components can save
+
+Engine (Beef) components have more:
 
 | Kind | Types |
 |---|---|
@@ -53,9 +64,9 @@ In a network session only the server saves and loads; what it loads reaches the 
 
 ## Slots and storage
 
-Slots are names: "default", "slot 2", "My Castle: v2". `SaveSystem.Exists(name)`, `Delete(name)` and `ListSlots(list)` manage them.
+Slots are names: "default", "slot 2", "My Castle: v2". `SaveGame.Exists(name)` and `SaveGame.Delete(name)` manage them (engine code also has `SaveSystem.ListSlots(list)`).
 
-`SaveSystem.Storage` decides where saves go. The default, `FileSaveStorage`, keeps one file per slot in `GamePaths.PlayerData + "saves/"`, writing to a temporary file first so a crash never leaves half a save, and turning any name into a file name it can turn back. `MemorySaveStorage` keeps them in memory. For a server, a cloud service or a platform's own saves, derive from `SaveStorage`:
+`SaveSystem.Storage` decides where saves go. The default, `FileSaveStorage`, keeps one file per slot in `GamePaths.PlayerData + "saves/"`, writing to a temporary file first so a crash never leaves half a save, and turning any name into a file name it can turn back. `MemorySaveStorage` keeps them in memory. For a server, a cloud service or a platform's own saves, engine code derives from `SaveStorage`:
 
 ```beef
 class ServerStorage : SaveStorage
@@ -76,13 +87,13 @@ class ServerStorage : SaveStorage
 SaveSystem.Storage = new ServerStorage();   // in GameSetup.Register
 ```
 
-`Save` and `Load` return a `SaveHandle` to ask about later (`Done`, `Succeeded`, `Found`, `Error(text)`), and the `SaveSystem.Saved` and `SaveSystem.Loaded` events fire when they finish.
+With such a storage a save or load finishes later: check the `SaveTask`'s `Done`. (Engine code gets a `SaveHandle`, which also has `Error(text)`, and the `SaveSystem.Saved` and `SaveSystem.Loaded` events.)
 
-To keep saves your own way, `SaveSystem.Capture()` returns the scene's saved state as a `SaveNode` tree and `SaveSystem.Apply(node)` puts one back. A tree turns into compact checksummed bytes (`ToBytes`, `FromBytes`: a changed or damaged save is refused) or readable JSON (`ToText`, `FromText`).
+To keep saves your own way, engine code can call `SaveSystem.Capture()`, which returns the scene's saved state as a `SaveNode` tree and `SaveSystem.Apply(node)` puts one back. A tree turns into compact checksummed bytes (`ToBytes`, `FromBytes`: a changed or damaged save is refused) or readable JSON (`ToText`, `FromText`).
 
 ## Loading at start
 
-Tick **Load Save At Start** in Project Settings (and choose the slot), or set `SaveSystem.LoadAtStart = true` in `GameSetup.Register`. The save is put back as the first scene starts: after its objects are made and before any script's `Awake`, so scripts only ever see loaded values. With a storage that answers later, the scene waits for it, up to `SaveSystem.StartTimeout` seconds, and starts with its defaults if it does not come.
+Tick **Load Save At Start** in Project Settings (and choose the slot), (engine code: `SaveSystem.LoadAtStart = true`). The save is put back as the first scene starts: after its objects are made and before any script's `Awake`, so scripts only ever see loaded values. With a storage that answers later, the scene waits for it, up to `SaveSystem.StartTimeout` seconds, and starts with its defaults if it does not come.
 
 ## The player's folder: GamePaths
 
@@ -95,15 +106,15 @@ Tick **Load Save At Start** in Project Settings (and choose the slot), or set `S
 | macOS | `~/Library/Application Support/Tallow/<Game>/` |
 | Web | the browser's storage for the page, kept between visits |
 
-```beef
-let path = scope $"{GamePaths.PlayerData}notes.txt";
+```csharp
+string path = $"{GamePaths.PlayerData}notes.txt";
 ```
 
 `<Game>` is the project's name; `company = ...` in the build's manifest replaces "Tallow". The game's own folder is for reading only.
 
 ## Data assets
 
-A data asset is a file of data every script shares: settings, a table of weapons, the levels in order. Write a class, make the file, fill it in, and read it from anywhere:
+A data asset is a file of data every script shares: settings, a table of weapons, the levels in order. Write a class, make the file, fill it in, and read it from anywhere. Data asset classes are engine (Beef) code for now:
 
 ```beef
 [DataAsset]

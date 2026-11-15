@@ -33,29 +33,34 @@ The box stays axis-aligned unless Turn Shape With Object is on. Rotation is not 
 
 ## Moving it
 
-The controller moves only when a script tells it to. Call one of these once per fixed tick, from `FixedUpdate` or from `NetworkBehaviour.Simulate`:
+The controller moves only when a script tells it to. Call one of these once per tick, from `Update` with the tick's
+input (the same on the server and every client in a network session):
 
-```beef
-let controller = GetComponent<CharacterController>();
+```csharp
+public override void Update(TickInput input, float deltaTime)
+{
+    var controller = GetComponent<CharacterController>();
 
-// Walking: you give the horizontal velocity; falling, gravity and jumping are handled.
-controller.SimpleMove(direction * speed, Time.FixedDeltaTime, jumpPressed ? 6.5f : 0);
+    // Walking: you give the horizontal velocity; falling, gravity and jumping are handled.
+    controller.SimpleMove(input.MoveDirection * speed, deltaTime, input.Pressed(InputButton.Jump) ? 6.5f : 0f);
 
-// Full control: exactly this velocity, no gravity added (flying, swimming, ladders).
-controller.Move(velocity, Time.FixedDeltaTime);
+    // Full control: exactly this velocity, no gravity added (flying, swimming, ladders).
+    controller.Move(velocity, deltaTime);
+}
 ```
 
 After a move, `IsGrounded`, `CanJump` (grounded, or within Jump Grace of it), `AirTime`, `IsOnSteepGround`, `Velocity` (already reduced by whatever it hit), `GroundNormal` and `GroundVelocity` describe the result. `Teleport(position, velocity)` places it somewhere; setting `Transform.Position` directly also works and is picked up on the next move.
 
 ## Changing shape at run time
 
-```beef
-if (!controller.SetBox(.(1.2f, 0.8f, 1.2f), 0.1f))
+```csharp
+if (!controller.SetBox(new Vector3(1.2f, 0.8f, 1.2f), 0.1f))
     Log.Info("Not enough room to become that here.");
 controller.SetCapsule(0.35f, 1.8f);
 ```
 
-`SetBox` and `SetCapsule` return false and change nothing when the new shape does not fit where the character stands. After editing the fields yourself, call `ApplyShape()`, which gives the same answer.
+`SetBox` and `SetCapsule` return false and change nothing when the new shape does not fit where the character
+stands. (Engine code that edits the component's fields itself calls `ApplyShape()`, which gives the same answer.)
 
 ## Characters meeting characters
 
