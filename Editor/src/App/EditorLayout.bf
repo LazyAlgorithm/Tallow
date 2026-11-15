@@ -71,6 +71,7 @@ extension EditorApp
 		DrawModelWindow();
 		DrawQualityWindow();
 		DrawProfilerWindow();
+		DrawCSharpDebugging();
 		DrawPackageWindows();
 		DrawNetworkWindow();
 		DrawWorldMapWindow();
@@ -358,6 +359,8 @@ extension EditorApp
 				mShowQuality = !mShowQuality;
 			if (ImGui.MenuItem("Profiler", null, mShowProfiler))
 				mShowProfiler = !mShowProfiler;
+			if (ImGui.MenuItem("C# Debugging", null, mShowCSharpDebugging))
+				mShowCSharpDebugging = !mShowCSharpDebugging;
 			if (ImGui.MenuItem("Package Manager", null, mShowPackageManager))
 			{
 				if (mShowPackageManager)

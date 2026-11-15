@@ -443,6 +443,27 @@ internal static class Program
         filesByAssembly["Tallow.Game"].Add(rootPath);
     }
 
+    /// <summary>
+    /// A solution at the project root listing every generated assembly, so
+    /// VS Code, Rider and Visual Studio open the game's C# directly (with
+    /// Tallow.API references and the trusted analyzers). Rewritten only when
+    /// the assembly list changes.
+    /// </summary>
+    private static void WriteSolution(string project, IEnumerable<string> csprojs)
+    {
+        string root = Path.GetFullPath(project).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string path = Path.Combine(root, Path.GetFileName(root) + ".slnx");
+        var text = new StringBuilder("<Solution>\n");
+        foreach (string csproj in csprojs.Order(StringComparer.Ordinal))
+            text.Append("  <Project Path=\"")
+                .Append(Path.GetRelativePath(root, csproj).Replace('\\', '/'))
+                .Append("\" />\n");
+        text.Append("</Solution>\n");
+        string value = text.ToString();
+        if (!File.Exists(path) || File.ReadAllText(path) != value)
+            File.WriteAllText(path, value);
+    }
+
     private static string Generate(string project, string engine)
     {
         string source = Path.Combine(project, "src");
@@ -498,6 +519,7 @@ internal static class Program
             if (!File.Exists(path) || !File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes))
                 File.WriteAllBytes(path, bytes);
         }
+        WriteSolution(project, paths.Values);
         Console.WriteLine($"Generated {paths.Count} C# assemblies; game: {paths["Tallow.Game"]}");
         return paths["Tallow.Game"];
     }

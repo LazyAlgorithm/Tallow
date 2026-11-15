@@ -296,6 +296,9 @@ class EditorApp : Application
 			RunThemeTest();
 		if (HasArg("--visibility-test"))
 			RunVisibilityTest();
+		// Window > C# Debugging, open from the start.
+		if (HasArg("--csharp-debugging"))
+			mShowCSharpDebugging = true;
 		if (HasArg("--script-files-test"))
 			RunScriptFilesTest();
 		if (HasArg("--drag-test"))

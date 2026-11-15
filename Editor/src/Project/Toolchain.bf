@@ -77,7 +77,7 @@ static class Toolchain
 	}
 
 	/// Finds a program on PATH.
-	static bool FindOnPath(StringView program, String outPath)
+	public static bool FindOnPath(StringView program, String outPath)
 	{
 		let path = scope String();
 		Environment.GetEnvironmentVariable("PATH", path).IgnoreError();

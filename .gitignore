@@ -25,3 +25,4 @@ Managed/*/bin/
 Managed/*/obj/
 Tests/CSharpGameplay/.tallow-csharp/
 Tests/NativeCSharpHost/build/
+Tests/**/*.slnx
