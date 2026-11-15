@@ -10,7 +10,27 @@ namespace Tallow.Editor;
 static class NodeLibrary
 {
 	static List<NodeDef> sDefs ~ DeleteContainerAndItems!(_);
+	/// Libraries replaced while a graph may still point at their nodes (a C# rebuild with a graph open). They are
+	/// freed by FreeRetired once no graph is open, or when the editor closes.
+	static List<List<NodeDef>> sRetired = new .() ~ { for (let defs in _) DeleteContainerAndItems!(defs); delete _; };
 	static bool sCSharp;
+
+	/// Drops the current library: it is built again on next use, and the old one is kept until FreeRetired.
+	static void Retire()
+	{
+		if (sDefs == null)
+			return;
+		sRetired.Add(sDefs);
+		sDefs = null;
+	}
+
+	/// Frees the libraries replaced earlier. Call only when no graph holds NodeDef pointers.
+	public static void FreeRetired()
+	{
+		for (let defs in sRetired)
+			DeleteContainerAndItems!(defs);
+		sRetired.Clear();
+	}
 	/// The project's C# scripts (full names), for Get Component and object variables in C# graphs.
 	static List<String> sCSharpScripts = new .() ~ DeleteContainerAndItems!(_);
 
@@ -24,14 +44,13 @@ static class NodeLibrary
 			if (value == sCSharp)
 				return;
 			sCSharp = value;
-			DeleteContainerAndItems!(sDefs);
-			sDefs = null;
+			Retire();
 		}
 	}
 
 	/// The component types C# scripts can get and hold: Tallow.API's own (IComponent).
 	public static readonly StringView[?] CSharpComponentTypes = .("Rigidbody", "CharacterController", "SoftBody", "Joint", "Animator", "Light",
-		"MeshRenderer", "NavigationAgent", "VoxelObject", "UIDocument");
+		"MeshRenderer", "NavigationAgent", "VoxelObject", "UIDocument", "AudioSource");
 
 	/// Whether a C# graph's object type is a struct (GameObject and the physics handles): no null, only default.
 	public static bool IsCSharpStruct(StringView typeName)
@@ -142,11 +161,8 @@ static class NodeLibrary
 		{
 			sCSharpNodes.Set(nodes);
 			sCSharpEcs.Set(ecs);
-			if (sCSharp && sDefs != null)
-			{
-				DeleteContainerAndItems!(sDefs);
-				sDefs = null;
-			}
+			if (sCSharp)
+				Retire();
 		}
 		let text = scope String();
 		File.ReadAllText(scope $"{projectPath}/.tallow-csharp/components.tsv", text).IgnoreError();
@@ -166,11 +182,8 @@ static class NodeLibrary
 		ClearAndDeleteItems!(sCSharpScripts);
 		for (let name in names)
 			sCSharpScripts.Add(new String(name));
-		if (sCSharp && sDefs != null)
-		{
-			DeleteContainerAndItems!(sDefs);
-			sDefs = null;
-		}
+		if (sCSharp)
+			Retire();
 	}
 
 	public static List<NodeDef> Defs

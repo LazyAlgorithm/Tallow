@@ -393,7 +393,7 @@ static class Physics
         int32 count = 0;
         for (let component in obj.Components)
         {
-            if (let collider = component as Collider)
+            if (component is Collider)
                 count++;
         }
         return count;

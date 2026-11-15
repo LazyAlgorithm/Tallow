@@ -194,6 +194,21 @@ public class ApiChecks : CheckBase
         lamp.Transient = true;
         Check("GameObject.Transient", lamp.Transient);
         Check("CommandLine reads switches", CommandLine.Has("--headless") && CommandLine.Get("--no-such-switch") == null);
+        AudioSource speaker = lamp.AddComponent<AudioSource>();
+        speaker.Stop();
+        speaker.Pause();
+        speaker.Resume();
+        GameObject silent = Scene.CreateGameObject("Silent");
+        Check("AddComponent<AudioSource>, and a source with no clip is silent", speaker.IsValid && !speaker.IsPlaying
+            && lamp.GetComponent<AudioSource>() == speaker && !silent.GetComponent<AudioSource>().IsValid);
+        silent.Destroy();
+        float music = Audio.GetGroupVolume(AudioGroup.Music), master = Audio.MasterVolume;
+        Audio.SetGroupVolume(AudioGroup.Music, 0.25f);
+        Audio.MasterVolume = 0.5f;
+        Check("Audio group and master volumes round-trip",
+            Audio.GetGroupVolume(AudioGroup.Music) == 0.25f && Audio.MasterVolume == 0.5f);
+        Audio.SetGroupVolume(AudioGroup.Music, music);
+        Audio.MasterVolume = master;
         lamp.Destroy();
     }
 

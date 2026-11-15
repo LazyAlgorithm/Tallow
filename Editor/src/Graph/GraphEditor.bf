@@ -121,6 +121,7 @@ extension EditorApp
 		mDockGraph = true;
 		delete mGraph;
 		mGraph = null;
+		NodeLibrary.FreeRetired();
 		if (mManagedGameplay)
 			NodeLibrary.RefreshCSharpScripts(Project.Current.Path);
 		NodeLibrary.RefreshSubgraphs(Assets.ProjectPath);

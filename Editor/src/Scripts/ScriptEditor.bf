@@ -691,10 +691,14 @@ extension EditorApp
 			// A class renamed in this build: point the open scene at its new name.
 			if (mCheckSucceeded && mPlay == .Edit && CSharpScriptIdentity.Repair(mScene, Project.Current.Path) > 0)
 				MarkDirty();
-			// An open graph holds NodeDef pointers. Rebuilding the C# node library here
-			// would free them while the canvas still uses them; refresh when it is opened again.
-			if (mCheckSucceeded && mGraph == null)
+			// Graphs can get and hold the game's scripts. An open graph keeps pointing at the replaced
+			// node library (NodeLibrary retires it); it is freed once no graph is open.
+			if (mCheckSucceeded)
+			{
 				NodeLibrary.RefreshCSharpScripts(Project.Current.Path);
+				if (mGraph == null)
+					NodeLibrary.FreeRetired();
+			}
 			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled." : "C# compilation failed. See Console.");
 			mManagedCompileNoticePending = mCheckSucceeded && !mManagedRecheckQueued;
 			if (mManagedCompileNoticePending)

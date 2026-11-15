@@ -537,7 +537,13 @@ static class AssetDatabase
 			for (let suffix in StringView[?](".cs", ".bf"))
 			{
 				let generated = scope $"{stem}{suffix}";
-				if (File.Exists(generated) && (Delete(generated) case .Err))
+				// Only a file the graph compiler wrote (its header names this graph); a hand-written script of
+				// the same name stays.
+				let header = scope String();
+				if (!File.Exists(generated) || (File.ReadAllText(generated, header, true) case .Err)
+					|| !header.StartsWith(scope $"// Generated from {Path.GetFileName(full, .. scope .())}"))
+					continue;
+				if (Delete(generated) case .Err)
 				{
 					Log.Error(scope $"Could not remove generated script {generated}");
 					generatedFailed = true;

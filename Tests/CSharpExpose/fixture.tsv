@@ -34,8 +34,17 @@ method	Tallow.CSharpAnimation	SetInteger	void	session:ulong	entity:ulong	name:st
 method	Tallow.CSharpAnimation	SetLayerWeight	void	session:ulong	entity:ulong	layer:int	weight:float
 method	Tallow.CSharpAnimation	SetSpeed	void	session:ulong	entity:ulong	speed:float
 method	Tallow.CSharpAnimation	SetTrigger	void	session:ulong	entity:ulong	name:string
+method	Tallow.CSharpAudio	GetGroupVolume	float	group:int
+method	Tallow.CSharpAudio	GetSetting	float	which:int
+method	Tallow.CSharpAudio	HasSource	bool	session:ulong	entity:ulong
 method	Tallow.CSharpAudio	PlayOneShot	void	clip:string	position:System.Numerics.Vector3	volume:float
 method	Tallow.CSharpAudio	PlayOneShot2D	void	clip:string	volume:float
+method	Tallow.CSharpAudio	SetGroupVolume	void	group:int	volume:float
+method	Tallow.CSharpAudio	SetSetting	void	which:int	value:float
+method	Tallow.CSharpAudio	SourceControl	void	session:ulong	entity:ulong	action:int
+method	Tallow.CSharpAudio	SourceIsPlaying	bool	session:ulong	entity:ulong
+method	Tallow.CSharpAudio	SourcePlay	void	session:ulong	entity:ulong	clip:string
+method	Tallow.CSharpAudio	SourcePlayOneShot	void	session:ulong	entity:ulong	clip:string	volumeScale:float
 method	Tallow.CSharpBindingFixture	Average	float	a:float	b:float
 method	Tallow.CSharpCommandLine	CopyArg	int	name:string	buffer:System.Span<byte>
 method	Tallow.CSharpCommandLine	HasArg	bool	name:string
