@@ -46,6 +46,19 @@ internal static class Program
 
     private static bool Flag(string[] args, string flag) => args.Contains(flag);
 
+    private const string ImplicitUsings =
+        "global using System; global using System.Collections.Generic; global using System.IO; " +
+        "global using System.Linq; global using System.Net.Http; global using System.Threading; " +
+        "global using System.Threading.Tasks; ";
+
+    /// The names in a script class's [FormerlyNamed("...")] attributes.
+    private static IEnumerable<string> FormerNamesOf(INamedTypeSymbol symbol) =>
+        symbol.GetAttributes()
+            .Where(a => a.AttributeClass?.ToDisplayString() == "Tallow.FormerlyNamedAttribute" &&
+                a.ConstructorArguments.Length == 1 && a.ConstructorArguments[0].Value is string)
+            .Select(a => ((string)a.ConstructorArguments[0].Value!).Trim())
+            .Where(name => name.Length > 0);
+
     private static string? OptionalOption(string[] args, string option)
     {
         for (int i = 0; i < args.Length - 1; i++)
@@ -195,9 +208,11 @@ internal static class Program
         string trusted = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "";
         var refs = trusted.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
             .Select(path => MetadataReference.CreateFromFile(path));
+        // The SDK's implicit usings (both Tallow.API and game projects enable them), so that attributes declared
+        // with plain "Attribute" bind and their arguments can be read.
         var compilation = CSharpCompilation.Create("Tallow.StaticComponentFactories",
             treesByPath.Values.Cast<SyntaxTree>().Concat(apiTrees).Append(
-                CSharpSyntaxTree.ParseText("global using System.Numerics;", parse)),
+                CSharpSyntaxTree.ParseText(ImplicitUsings + "global using System.Numerics;", parse)),
             refs, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
                 allowUnsafe: true));
 
@@ -207,6 +222,7 @@ internal static class Program
 
         var allTypes = new Dictionary<string, SortedDictionary<string, string>>(
             StringComparer.Ordinal);
+        var formerNames = new SortedDictionary<string, string>(StringComparer.Ordinal);
         // Each assembly gets its own typed local-data adapters. No gameplay
         // assembly scanning or reflection is needed after C# compilation.
         var allEcsTypes = new Dictionary<string,
@@ -263,6 +279,13 @@ internal static class Program
                         SymbolDisplayFormat.CSharpErrorMessageFormat);
                     types[name] = symbol.ToDisplayString(
                         SymbolDisplayFormat.FullyQualifiedFormat);
+                    foreach (string former in FormerNamesOf(symbol))
+                    {
+                        if (formerNames.TryGetValue(former, out string? other) && other != name)
+                            throw new InvalidOperationException(
+                                $"[FormerlyNamed(\"{former}\")] is on both {other} and {name}.");
+                        formerNames[former] = name;
+                    }
                 }
 
                 foreach (StructDeclarationSyntax node in tree.GetRoot().DescendantNodes()
@@ -437,6 +460,17 @@ internal static class Program
         foreach (string name in allTypes.Values.SelectMany(types => types.Keys)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
             root.Append("        ").Append(JsonSerializer.Serialize(name)).AppendLine(",");
+        foreach (string former in formerNames.Keys)
+            if (allTypes.Values.Any(types => types.ContainsKey(former)))
+                throw new InvalidOperationException(
+                    $"[FormerlyNamed(\"{former}\")] names a script that still exists.");
+        root.AppendLine("    };")
+            .AppendLine("    public global::System.Collections.Generic.IReadOnlyDictionary<string, string> FormerNames { get; } =")
+            .AppendLine("        new global::System.Collections.Generic.Dictionary<string, string>")
+            .AppendLine("    {");
+        foreach ((string former, string current) in formerNames)
+            root.Append("        [").Append(JsonSerializer.Serialize(former)).Append("] = ")
+                .Append(JsonSerializer.Serialize(current)).AppendLine(",");
         root.AppendLine("    };")
             .AppendLine("    public global::Tallow.Script? Create(string fullName)")
             .AppendLine("    {")
@@ -564,6 +598,8 @@ internal static class Program
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         var components = new SortedSet<string>(StringComparer.Ordinal);
         var sourceRows = new SortedSet<string>(StringComparer.Ordinal);
+        // Old script names and what they are now ([FormerlyNamed]); the editor updates scenes with them.
+        var formerRows = new SortedSet<string>(StringComparer.Ordinal);
         var fieldRows = new SortedSet<string>(StringComparer.Ordinal);
         // Build-only metadata for a future AOT static serializer. No new
         // runtime reflection or scene format is introduced by this manifest.
@@ -600,6 +636,8 @@ internal static class Program
                 string className = type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
                 components.Add(className);
                 sourceRows.Add(tree.FilePath + "\t" + className);
+                foreach (string former in FormerNamesOf(type))
+                    formerRows.Add(former + "\t" + className);
                 var seenFieldIds = new HashSet<string>(StringComparer.Ordinal);
 
                 // Limit the first Inspector bridge to deterministic, supported
@@ -821,6 +859,7 @@ internal static class Program
         }
         Publish(catalog, components);
         Publish(Path.Combine(project, ".tallow-csharp", "component-sources.tsv"), sourceRows);
+        Publish(Path.Combine(project, ".tallow-csharp", "former-names.tsv"), formerRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields.tsv"), fieldRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields-aot.tsv"), aotFieldRows);
         Publish(Path.Combine(project, ".tallow-csharp", "ecs-data.tsv"), ecsDataRows);

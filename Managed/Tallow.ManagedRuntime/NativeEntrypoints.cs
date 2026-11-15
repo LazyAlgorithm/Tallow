@@ -151,6 +151,9 @@ public static unsafe class NativeEntrypoints
     private static Callbacks sNativeCallbacks;
 
     private static readonly HashSet<string> sTypes = new(StringComparer.Ordinal);
+    // [FormerlyNamed] names of the loaded game's scripts, and each instance's registered name.
+    private static readonly Dictionary<string, string> sFormerNames = new(StringComparer.Ordinal);
+    private static readonly Dictionary<int, string> sNames = new();
     // Direct constructors shared with future AOT export. Clear this strong
     // reference BEFORE unloading the collectible development game assembly.
     private static IGameplayComponentRegistry? sRegistry;
@@ -377,6 +380,11 @@ public static unsafe class NativeEntrypoints
                     throw new InvalidOperationException(
                         "Generated C# component registry contains a duplicate or invalid name.");
             }
+            foreach ((string former, string current) in registry.FormerNames)
+            {
+                if (!sTypes.Contains(former) && sTypes.Contains(current))
+                    sFormerNames[former] = current;
+            }
             return sTypes.Count;
         }
         catch (Exception exception)
@@ -385,6 +393,7 @@ public static unsafe class NativeEntrypoints
             // context rooted or poison the next rebuild/Play attempt.
             sRegistry = null;
             sTypes.Clear();
+            sFormerNames.Clear();
             GameAssemblyContext? failed = sGameContext;
             sGameContext = null;
             failed?.Unload();
@@ -398,6 +407,9 @@ public static unsafe class NativeEntrypoints
         try
         {
             string name = Marshal.PtrToStringUTF8((nint)className) ?? "";
+            // A scene that names a script the way it was called before ([FormerlyNamed]).
+            if (!sTypes.Contains(name) && sFormerNames.TryGetValue(name, out string? current))
+                name = current;
             if (!sTypes.Contains(name) || sRegistry is null)
                 throw new TypeLoadException("Unknown trusted C# gameplay script: " + name);
             Script script = sRegistry.Create(name) ??
@@ -405,6 +417,7 @@ public static unsafe class NativeEntrypoints
             int instance = ++sNextInstance;
             script.AttachNative(new GameObject(sceneId, entityId), instance);
             sInstances.Add(instance, script);
+            sNames[instance] = name;
             if (!sByGameObject.TryGetValue(script.GameObject, out List<Script>? scripts))
             {
                 scripts = [];
@@ -437,7 +450,10 @@ public static unsafe class NativeEntrypoints
                 throw new InvalidOperationException("Unknown managed gameplay instance.");
             var text = new StringBuilder();
             var seen = new HashSet<string>();
-            for (Type? owner = script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
+            // Mode 3: the script's registered full name (differs from the scene's after a [FormerlyNamed] rename).
+            if (mode == 3)
+                text.Append(sNames.TryGetValue(instance, out string? registered) ? registered : "");
+            for (Type? owner = mode == 3 ? null : script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
             {
                 foreach (FieldInfo field in owner.GetFields(BindingFlags.Instance | BindingFlags.Public |
                     BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
@@ -862,6 +878,7 @@ public static unsafe class NativeEntrypoints
         {
             if (!sInstances.Remove(instance, out Script? script))
                 return 0;
+            sNames.Remove(instance);
             GameObject owner = script.GameObject;
             if (sByGameObject.TryGetValue(owner, out List<Script>? scripts))
             {
@@ -912,6 +929,7 @@ public static unsafe class NativeEntrypoints
             // Never retain a generated factory instance across ALC reloads.
             sRegistry = null;
             sTypes.Clear();
+            sFormerNames.Clear();
             GameAssemblyContext? previous = sGameContext;
             sGameContext = null;
             previous?.Unload();
@@ -939,10 +957,12 @@ public static unsafe class NativeEntrypoints
             }
             sEnabled.Clear();
             sInstances.Clear();
+            sNames.Clear();
             sByGameObject.Clear();
             // Never retain a generated factory instance across ALC reloads.
             sRegistry = null;
             sTypes.Clear();
+            sFormerNames.Clear();
             GameAssemblyContext? previous = sGameContext;
             sGameContext = null;
             previous?.Unload();

@@ -69,6 +69,9 @@ static class CSharpRuntime
 	/// "name\tvalue" lines in the scene's text; true: every instance field, "name\ttype\tvalue", read-only.
 	public static bool ReadFields(int32 instance, bool allFields, String output) => ReadFields(instance, allFields ? 1 : 0, output);
 
+	/// The full name a running script is registered under (after a [FormerlyNamed] rename, its new name).
+	public static bool ReadScriptName(int32 instance, String output) => ReadFields(instance, 3, output);
+
 	/// A running script's [Sync] fields as "name\tvalue" lines (NetworkSync shares them from the server).
 	public static bool ReadSyncFields(int32 instance, String output) => ReadFields(instance, 2, output);
 

@@ -41,6 +41,7 @@ extension EditorApp
 			if (component != null)
 			{
 				component.SetScriptType(mCSharpDropChoices[0]);
+				CSharpScriptIdentity.Stamp(component);
 				MarkDirty();
 			}
 		}
@@ -122,6 +123,7 @@ extension EditorApp
 						if (component != null)
 						{
 							component.SetScriptType(typeName);
+							CSharpScriptIdentity.Stamp(component);
 							MarkDirty();
 						}
 					}

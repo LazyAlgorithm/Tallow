@@ -11,6 +11,8 @@ class CSharpBehaviour : Component
 {
 	/// The fully qualified managed Script subclass in the game's trusted assemblies.
 	[HideInInspector] public SharedString scriptType;
+	/// The asset ID (.tmeta) of the C# file the class is in. The editor finds a class renamed in its file by it.
+	[HideInInspector] public SharedString scriptAsset;
 	/// Edited field values: one trusted field name + numeric value per line.
 	/// SharedString is handled by Tallow's existing scene/prefab serializer.
 	[HideInInspector] public SharedString fieldOverrides;
@@ -115,6 +117,13 @@ class CSharpBehaviour : Component
 			{
 				ReleaseManaged();
 				return;
+			}
+			// Found by a [FormerlyNamed] name: use the new one from now on (saved with the scene).
+			let registered = scope String();
+			if (CSharpRuntime.ReadScriptName(mInstance, registered) && !registered.IsEmpty && registered != scriptType)
+			{
+				Log.Warning(scope $"'{GameObject.Name}' names the script {scriptType}, which is now {registered} ([FormerlyNamed]). Save the scene to keep the new name.");
+				scriptType.Set(registered);
 			}
 			if (!CSharpRuntime.Dispatch(mInstance, .Awake))
 				ReleaseManaged();

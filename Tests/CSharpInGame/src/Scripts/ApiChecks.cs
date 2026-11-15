@@ -107,6 +107,9 @@ public class ApiChecks : CheckBase
         try { Rpc(nameof(PrefabsAndRpcs)); } catch (ArgumentException) { notRpc = true; }
         try { Rpc(nameof(Shout), 1); } catch (ArgumentException) { badCount = true; }
         try { Rpc(nameof(Shout), "1", "x", Vector3.Zero); } catch (ArgumentException) { badType = true; }
+        RenamedProbe? renamed = Scene.Find("Renamed")?.GetComponent<RenamedProbe>();
+        Check("a scene naming a script's [FormerlyNamed] name gets the renamed class, fields and all",
+            renamed is { Awoke: true, Power: 4 });
         Check("Rpc refuses a method without [Rpc]", notRpc);
         Check("Rpc refuses the wrong number or kind of arguments", badCount && badType);
     }
@@ -360,6 +363,16 @@ public class Walker : Script
             LastWall = hit;
         }
     }
+}
+
+/// The scene still names this class InGame.OldProbeName.
+[FormerlyNamed("InGame.OldProbeName")]
+public class RenamedProbe : Script
+{
+    public int Power = 1;
+    public bool Awoke;
+
+    public override void Awake() => Awoke = true;
 }
 
 public class SpawnedProbe : Script

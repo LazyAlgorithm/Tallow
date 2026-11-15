@@ -557,6 +557,9 @@ extension EditorApp
 				}
 			}
 			mManagedBuildReady = mCheckSucceeded && !mManagedRecheckQueued;
+			// A class renamed in this build: point the open scene at its new name.
+			if (mCheckSucceeded && mPlay == .Edit && CSharpScriptIdentity.Repair(mScene, Project.Current.Path) > 0)
+				MarkDirty();
 			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled." : "C# compilation failed. See Console.");
 			mManagedCompileNoticePending = mCheckSucceeded && !mManagedRecheckQueued;
 			if (mManagedCompileNoticePending)

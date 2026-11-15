@@ -23,6 +23,9 @@ is complete.
 - `[Sync]` on a script field (public or private; numbers, bool, string, enums, vectors) shares
   the server's value with every client of a session when it changes, and with players who
   join later. Change it on the server; a client's own changes are overwritten.
+- Renaming a script class: the editor follows a class renamed inside its file by the file's
+  `.tmeta` ID. When moving it to another file or namespace, add
+  `[FormerlyNamed("OldNamespace.OldName")]` so scenes, prefabs and built games still find it.
 - `[Rpc]` methods run across the network: `[Rpc(RpcTarget.Server)]` on the server only,
   `[Rpc]` (Everyone) on the server and every client. Call them with
   `Rpc(nameof(Fire), aim, power)`. The server may call any; a client only on an object it

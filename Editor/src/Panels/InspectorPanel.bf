@@ -744,6 +744,7 @@ extension EditorApp
 				if (component != null)
 				{
 					component.SetScriptType(fullName);
+					CSharpScriptIdentity.Stamp(component);
 					MarkDirty();
 				}
 				ImGui.CloseCurrentPopup();

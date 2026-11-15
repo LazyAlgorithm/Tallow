@@ -192,6 +192,44 @@ extension EditorApp
 				mScene.Destroy(old);
 		}
 
+		// Script identity: scenes follow renamed C# classes by [FormerlyNamed] or by the file's .tmeta ID.
+		{
+			let probeFile = scope $"{Assets.ProjectPath}/IdentityProbe.cs";
+			File.WriteAllText(probeFile, "public class Renamed {}\n").IgnoreError();
+			AssetDatabase.Refresh(false);
+			let probeId = scope String();
+			Check(AssetDatabase.GetId("IdentityProbe.cs", probeId), "a new C# file gets an asset ID");
+			let catalogRoot = scope $"{config}identity-test";
+			Directory.CreateDirectory(scope $"{catalogRoot}/.tallow-csharp").IgnoreError();
+			File.WriteAllText(scope $"{catalogRoot}/.tallow-csharp/components.tsv", "Game.NewName\nGame.Other\n").IgnoreError();
+			File.WriteAllText(scope $"{catalogRoot}/.tallow-csharp/former-names.tsv", "Game.OldFormer\tGame.Other\n").IgnoreError();
+			File.WriteAllText(scope $"{catalogRoot}/.tallow-csharp/component-sources.tsv",
+				scope $"{probeFile}\tGame.NewName\n{catalogRoot}/Other.cs\tGame.Other\n").IgnoreError();
+			CSharpBehaviour Make(StringView name, StringView type, StringView asset)
+			{
+				let object = mScene.CreateGameObject(name);
+				let behaviour = object.AddComponent<CSharpBehaviour>();
+				behaviour.scriptType.Set(type);
+				behaviour.scriptAsset.Set(asset);
+				return behaviour;
+			}
+			let inFile = Make("Renamed In File", "Game.OldName", probeId);
+			let former = Make("Formerly Named", "Game.OldFormer", "");
+			let gone = Make("Gone", "Game.Gone", "");
+			let current = Make("Current", "Game.NewName", "");
+			Check(CSharpScriptIdentity.Repair(mScene, catalogRoot) == 2, "two renamed scripts are repaired");
+			Check(inFile.scriptType == "Game.NewName", "a class renamed in its file is found by the file's asset ID");
+			Check(former.scriptType == "Game.Other", "a [FormerlyNamed] class is found by its old name");
+			Check(gone.scriptType == "Game.Gone", "a script that is really gone keeps its name (shown as missing)");
+			Check(current.scriptAsset == probeId, "a current script gets its file's asset ID recorded");
+			for (let behaviour in CSharpBehaviour[?](inFile, former, gone, current))
+				mScene.Destroy(behaviour.GameObject);
+			File.Delete(probeFile).IgnoreError();
+			File.Delete(scope $"{probeFile}{AssetDatabase.MetaSuffix}").IgnoreError();
+			AssetDatabase.Refresh(false);
+			Directory.DelTree(catalogRoot).IgnoreError();
+		}
+
 		// Leave Gameplay's page in the Inspector, with one unapplied edit, so the frames that follow draw it
 		// (and --screenshot shows it). The scratch folder stays the scanned one for this run.
 		mSelectedAsset.Set(scope $"{root}/Gameplay/Gameplay.tasmdef");

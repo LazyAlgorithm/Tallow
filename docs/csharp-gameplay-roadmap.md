@@ -823,9 +823,14 @@ A full conversion also needs these. Ordered roughly by when they block users.
   the running script, and a "Debug: all fields (live)" section lists every instance field
   (private ones and collections included, with types) read-only, refreshed each frame.
   Tested natively in the in-engine run (`--csharp-field-test`, 9 checks).
-- [ ] Script identity: scenes store `scriptType` by full name, so renaming a class or
-  namespace silently drops it from scenes. Use the `.tmeta` asset ID of the source file
-  plus a `[FormerlyNamed]` style attribute for moves.
+- [x] Script identity: C# Script components also store `scriptAsset`, the `.tmeta` ID of
+  the class's file (recorded when added, filled in for older scenes). `[FormerlyNamed("Old.Name")]`
+  on a class maps old names in the generated registry, so scenes, prefabs and built games
+  still get the class (fields restored; the Beef side takes the new name and warns to save).
+  The editor repairs open scenes after each compile and on open: a former name, or else the
+  only script left in the recorded file (a class renamed without the attribute). Tests: one
+  in-engine check, six in `--script-files-test`. Fixed on the way: the registry generator's
+  Roslyn compilation lacked the SDK's implicit usings, so attribute arguments did not bind.
 - [x] Scene safety: unknown `component` and `data` blocks (and their `field` lines) are
   kept verbatim on the object (`GameObject.MissingComponents`), written back on save,
   copied with duplicates/prefabs, warned about once per type, and shown in the Inspector

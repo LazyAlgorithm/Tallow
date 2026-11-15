@@ -61,3 +61,8 @@ transform -10 1 3 0 0 0 1 1 1 1
 component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 4 2 0.4
+object 11 parent 0 active 1 name "Renamed"
+transform 30 0 30 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.OldProbeName"
+field fieldOverrides "Power	4\n"

@@ -19,6 +19,20 @@ public interface IGameplayComponentRegistry
 {
     global::System.Collections.Generic.IReadOnlyList<string> ComponentNames { get; }
     Script? Create(string fullName);
+    /// <summary>Former full names ([FormerlyNamed]) and the script each now names.</summary>
+    global::System.Collections.Generic.IReadOnlyDictionary<string, string> FormerNames =>
+        new global::System.Collections.Generic.Dictionary<string, string>();
+}
+
+/// <summary>
+/// The full name (namespace and class) this script had before it was renamed or moved to another namespace.
+/// Scenes, prefabs and built games that still name it the old way get this class, and the editor updates the
+/// scenes it opens. Repeat it for each earlier name.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
+public sealed class FormerlyNamedAttribute(string fullName) : Attribute
+{
+    public string FullName { get; } = fullName;
 }
 
 /// <summary>Marks state the networking bridge must replicate.</summary>
