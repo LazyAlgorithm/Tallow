@@ -161,7 +161,7 @@ public static unsafe class NativeEntrypoints
     // Direct constructors shared with future AOT export. Clear this strong
     // reference BEFORE unloading the collectible development game assembly.
     private static IGameplayComponentRegistry? sRegistry;
-    private static readonly Dictionary<int, Script> sInstances = [];
+    private static readonly ScriptTable sInstances = new();
     // Preserve attach order for multiple components and subclass lookups.
     private static readonly Dictionary<GameObject, List<Script>> sByGameObject = [];
     private static readonly HashSet<int> sEnabled = [];
@@ -370,7 +370,6 @@ public static unsafe class NativeEntrypoints
         Awake, Enable, Start, FixedUpdate, LocalUpdate, LocalLateUpdate, Disable, Gui,
         LocalEarlyUpdate, Validate, DrawGizmos, Saving, Loaded
     }
-    private static int sNextInstance;
     // Trusted development gameplay gets a separate collectible context. The engine's
     // Tallow.API types stay in the host context so class inheritance works correctly.
     // AssemblyLoadContext does not sandbox third-party code; only engine-built game
@@ -545,7 +544,7 @@ public static unsafe class NativeEntrypoints
                 throw new TypeLoadException("Unknown trusted C# gameplay script: " + name);
             Script script = sRegistry.Create(name) ??
                 throw new TypeLoadException("Generated C# factory did not create: " + name);
-            int instance = ++sNextInstance;
+            int instance = sInstances.NextId();
             script.AttachNative(new GameObject(sceneId, entityId), instance);
             sInstances.Add(instance, script);
             sNames[instance] = name;
@@ -1239,7 +1238,7 @@ public static unsafe class NativeEntrypoints
     {
         try
         {
-            foreach ((int instance, Script script) in sInstances)
+            foreach ((int instance, Script script) in sInstances.All().ToList())
             {
                 try
                 {

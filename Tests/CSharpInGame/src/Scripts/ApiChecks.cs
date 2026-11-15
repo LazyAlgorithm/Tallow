@@ -90,6 +90,10 @@ public class ApiChecks : CheckBase
             PrefabsAndRpcs();
         else if (_tick == 44)
             Scene.Find("AsyncDoomed")?.Destroy();
+        else if (_tick == 45)
+            UpdateOrderSetup();
+        else if (_tick == 50)
+            UpdateOrderChecks();
         else if (_tick == 145)
             _staysBeforeRest = Probe("Ball").CollisionStays;
         else if (_tick == 150)
@@ -761,6 +765,34 @@ public class ApiChecks : CheckBase
         Scene.Find("MadeInForEach")?.Destroy();
     }
 
+    private readonly List<UpdateStep> _steps = [];
+
+    /// Each script's Update is checked just before it runs: an earlier one may have disabled it or its object.
+    private void UpdateOrderSetup()
+    {
+        for (int i = 0; i < 6; i++)
+        {
+            GameObject step = Scene.CreateGameObject("UpdateStep" + i);
+            UpdateStep script = step.AddComponent<UpdateStep>();
+            script.Index = i;
+            script.Steps = _steps;
+            _steps.Add(script);
+        }
+    }
+
+    private void UpdateOrderChecks()
+    {
+        // 0 disables 1 and deactivates 3's object on its first Update; 2 throws every time; 4 and 5 run after it.
+        int runs = _steps[0].Updates;
+        Check("a script disabled by an earlier one in the same frame does not run", _steps[1].Updates == 0);
+        Check("a script whose object an earlier one deactivated does not run", _steps[3].Updates == 0);
+        Check("a script throwing in Update does not stop the scripts after it",
+            runs >= 3 && _steps[2].Updates == runs && _steps[4].Updates == runs && _steps[5].Updates == runs);
+        Check("scripts in a row run in the scene's order", _steps[5].SawBefore == 3); // 0, 2 and 4 ran first
+        foreach (UpdateStep step in _steps)
+            step.GameObject.Destroy();
+    }
+
     private void LocalState()
     {
         Check("no keys are held in a headless run", !Input.GetKey(KeyCode.W) &&
@@ -958,6 +990,28 @@ public class Walker : Script
             WallHits++;
             LastWall = hit;
         }
+    }
+}
+
+/// One of a row of scripts for ApiChecks.UpdateOrderChecks.
+public class UpdateStep : Script
+{
+    public int Index, Updates, SawBefore;
+    public List<UpdateStep>? Steps;
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        Updates++;
+        SawBefore = 0;
+        for (int i = 0; i < Index; i++)
+            SawBefore += Steps![i].Updates >= Updates ? 1 : 0;
+        if (Index == 0 && Updates == 1)
+        {
+            Steps![1].Enabled = false;
+            Steps[3].GameObject.SetActive(false);
+        }
+        if (Index == 2)
+            throw new InvalidOperationException("thrown on purpose by UpdateStep");
     }
 }
 
