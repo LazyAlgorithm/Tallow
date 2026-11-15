@@ -78,6 +78,10 @@ public readonly record struct NativeComponent(GameObject GameObject, string Type
     public float GetFloat(string field) => Tokens(field) is [var x, ..] ? Parse(x) : 0f;
     public int GetInt(string field) => Tokens(field) is [var x, ..] && int.TryParse(x, CultureInfo.InvariantCulture, out int v) ? v : 0;
     public bool GetBool(string field) => Tokens(field) is ["1", ..];
+    public Vector2 GetVector2(string field) =>
+        Tokens(field) is [var x, var y, ..] ? new Vector2(Parse(x), Parse(y)) : default;
+    public Vector4 GetVector4(string field) =>
+        Tokens(field) is [var x, var y, var z, var w, ..] ? new Vector4(Parse(x), Parse(y), Parse(z), Parse(w)) : default;
     public Vector3 GetVector3(string field) =>
         Tokens(field) is [var x, var y, var z, ..] ? new Vector3(Parse(x), Parse(y), Parse(z)) : default;
     public Color GetColor(string field) =>
@@ -113,8 +117,13 @@ public sealed class NativeComponentAttribute(string typeName) : Attribute
 }
 
 /// <summary>Built-in component handles that <see cref="GameObject.AddComponent{T}"/> can add, by native type name.</summary>
-internal static class NativeComponentTypes
+internal static partial class NativeComponentTypes
 {
+    static NativeComponentTypes() => AddGenerated();
+
+    /// <summary>The generated handles (NativeComponents.Generated.cs).</summary>
+    static partial void AddGenerated();
+
     private static readonly Dictionary<Type, (string Native, Func<GameObject, IComponent> Make)> Known = new()
     {
         [typeof(Light)] = ("Tallow.Light", o => new Light(o)),

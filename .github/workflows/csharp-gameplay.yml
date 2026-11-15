@@ -381,6 +381,10 @@ jobs:
             echo "Copy the engine manifest to Tests/CSharpExpose/fixture.tsv after changing [CSharpExpose] APIs." >&2
             exit 1
           fi
+      - name: Keep the generated C# component handles in step with the engine's components
+        run: |
+          build/Debug_Linux64/TallowLauncher/TallowLauncher --write-component-catalog /tmp/tallow-component-catalog.tsv
+          python3 tools/gen_csharp_components.py /tmp/tallow-component-catalog.tsv --check
       - name: Run C# gameplay inside the real engine (scene, Jolt, Flecs)
         run: python3 tools/test_csharp_ingame.py
       - name: Share C# [Sync] fields between a real server and client

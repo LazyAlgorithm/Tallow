@@ -80,6 +80,8 @@ public class ApiChecks : CheckBase
             Hierarchy();
         else if (_tick == 7)
             Components();
+        else if (_tick == 8)
+            EveryNativeHandle(); // Its objects go at the end of the frame, so it has a frame of its own.
         else if (_tick == 40)
             Physics();
         else if (_tick == 41)
@@ -172,6 +174,57 @@ public class ApiChecks : CheckBase
     private static IEnumerable<(Type, string)> NativeTypes() =>
         (IEnumerable<(Type, string)>)typeof(NativeComponentAttribute).Assembly.GetType("Tallow.NativeComponentTypes")!
             .GetProperty("All")!.GetValue(null)!;
+
+    private static readonly HashSet<string> HandWritten = ["Light", "MeshRenderer", "SphereCollider", "BoxCollider",
+        "NavigationAgent", "NavigationSurface", "Rigidbody", "CharacterController", "UIDocument", "Animator",
+        "VoxelObject", "VoxelTerrain", "CharacterMotor", "AudioSource"];
+
+    /// Every built-in component handle (the generated ones too) can be added, and each of its fields reads back what
+    /// is written to it.
+    private void EveryNativeHandle()
+    {
+        var problems = new List<string>();
+        int handles = 0, fields = 0;
+        foreach ((Type type, string native) in NativeTypes())
+        {
+            GameObject holder = Scene.CreateGameObject("Handle " + type.Name);
+            object handle = typeof(GameObject).GetMethod(nameof(GameObject.AddComponent))!.MakeGenericMethod(type)
+                .Invoke(holder, null)!;
+            handles++;
+            // A NavigationSurface is valid once it has baked data, which a new one does not.
+            if (type.Name != "NavigationSurface" && type.GetProperty("IsValid")?.GetValue(handle) is not true)
+            {
+                problems.Add(type.Name + " was not added");
+                holder.Destroy();
+                continue;
+            }
+            // Hand-written handles also carry live state (a Rigidbody's velocity...); generated ones are all fields.
+            bool generated = !HandWritten.Contains(type.Name);
+            foreach (var property in type.GetProperties())
+            {
+                if (!generated || !property.CanWrite || property.Name is "IsValid" or "GameObject")
+                    continue;
+                object? value = property.GetValue(handle);
+                property.SetValue(handle, value);
+                object? again = property.GetValue(handle);
+                fields++;
+                if (!Equals(value, again))
+                    problems.Add($"{type.Name}.{property.Name}: {value} became {again}");
+            }
+            holder.Destroy();
+        }
+        Check($"every built-in component handle ({handles}) adds, and its {fields} fields read back what is written",
+            problems.Count == 0 && handles >= 40);
+        foreach (string problem in problems.Take(10))
+            Log.Info("INGAME NOTE " + problem);
+        GameObject eye = Scene.CreateGameObject("CameraProbe");
+        Camera camera = eye.AddComponent<Camera>();
+        camera.FieldOfView = 72.5f;
+        camera.Orthographic = true;
+        Check("a generated handle (Camera) writes the engine's component", camera.FieldOfView == 72.5f &&
+            new NativeComponent(eye, "Tallow.Camera").GetFloat("fieldOfView") == 72.5f && camera.Orthographic);
+        eye.Destroy();
+    }
 
     private void NativeComponentChecks()
     {
@@ -795,6 +848,17 @@ public class ApiChecks : CheckBase
 
     private void LocalState()
     {
+        GameObject spun = Scene.CreateGameObject("RotateProbe");
+        Quaternion start = Quaternion.Normalize(new Quaternion(0.1f, 0.7f, -0.2f, 0.6f));
+        spun.Transform.LocalRotation = start;
+        var degrees = new Vector3(30, -45, 10);
+        spun.Transform.Rotate(degrees);
+        Quaternion expected = Quaternion.Normalize(start * Quaternion.CreateFromYawPitchRoll(
+            degrees.Y * (MathF.PI / 180), degrees.X * (MathF.PI / 180), degrees.Z * (MathF.PI / 180)));
+        Quaternion got = spun.Transform.LocalRotation;
+        Check("Transform.Rotate turns in local space by X/Y/Z degrees (Y, then X, then Z)",
+            MathF.Abs(Quaternion.Dot(got, expected)) > 0.9999f);
+        spun.Destroy();
         Check("no keys are held in a headless run", !Input.GetKey(KeyCode.W) &&
             Input.GetAxis("Horizontal") == 0f && !Input.GetMouseButton(MouseButton.Left));
         Check("Mathf and RotationMath bindings", Mathf.Clamp01(2f) == 1f &&

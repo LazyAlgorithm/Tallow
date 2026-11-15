@@ -906,6 +906,12 @@ class Program
 			if (args[i] == "--write-script-templates")
 				return EditorApp.WriteScriptTemplates(args[i + 1]) > 0 ? 0 : 1;
 		}
+		// --write-component-catalog <file>: the built-in components' fields, for tools/gen_csharp_components.py.
+		for (int i < args.Count - 1)
+		{
+			if (args[i] == "--write-component-catalog")
+				return NativeComponentCatalog.Write(args[i + 1]) ? 0 : 1;
+		}
 		// --graph-compile <graph.tgraph> <namespace>: compiles a visual script graph to C# beside it, without a window.
 		for (int i < args.Count - 2)
 		{
