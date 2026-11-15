@@ -85,11 +85,11 @@ class NodeGraph
 	{
 		switch (type)
 		{
-		case .Vector3, .Quaternion: return "0 0 0";
+		case .Vector3,.Quaternion: return "0 0 0";
 		case .Vector2: return "0 0";
 		case .Color: return "1 1 1 1";
 		case .Bool: return "false";
-		case .Float, .Int: return "0";
+		case .Float,.Int: return "0";
 		default: return "";
 		}
 	}
@@ -362,7 +362,7 @@ class NodeGraph
 		for (let version in versions)
 		{
 			let pins = input ? version.inputs : version.outputs;
-			if (pin >= pins.Count)
+			if (pin < 0 || pin >= pins.Count)
 				continue;
 			int score = input ? Fit(other, pins[pin]) : Fit(pins[pin], other);
 			for (let link in links)
@@ -372,14 +372,16 @@ class NodeGraph
 					let from = Find(link.fromNode);
 					if (from == null)
 						continue;
-					score += link.toPin < version.inputs.Count ? Fit(from.def.outputs[link.fromPin], version.inputs[link.toPin]) : -1000;
+					score += link.fromPin >= 0 && link.fromPin < from.def.outputs.Count && link.toPin >= 0 && link.toPin < version.inputs.Count
+						? Fit(from.def.outputs[link.fromPin], version.inputs[link.toPin]) : -1000;
 				}
 				else if (link.fromNode == node.id)
 				{
 					let to = Find(link.toNode);
 					if (to == null)
 						continue;
-					score += link.fromPin < version.outputs.Count ? Fit(version.outputs[link.fromPin], to.def.inputs[link.toPin]) : -1000;
+					score += link.fromPin >= 0 && link.fromPin < version.outputs.Count && link.toPin >= 0 && link.toPin < to.def.inputs.Count
+						? Fit(version.outputs[link.fromPin], to.def.inputs[link.toPin]) : -1000;
 				}
 			}
 			if (version == node.def)
@@ -482,7 +484,8 @@ class NodeGraph
 		{
 			let from = Find(links[i].fromNode);
 			let to = Find(links[i].toNode);
-			if (from == null || to == null || links[i].fromPin >= from.def.outputs.Count || links[i].toPin >= to.def.inputs.Count
+			if (from == null || to == null || links[i].fromPin < 0 || links[i].toPin < 0
+				|| links[i].fromPin >= from.def.outputs.Count || links[i].toPin >= to.def.inputs.Count
 				|| !Links(from.def.outputs[links[i].fromPin], to.def.inputs[links[i].toPin]))
 				links.RemoveAt(i);
 		}
@@ -602,7 +605,8 @@ class NodeGraph
 				link.toPin = SceneSerializer.ParseInt(tokens[4]);
 				let from = Find(link.fromNode);
 				let to = Find(link.toNode);
-				if (from != null && to != null && link.fromPin < from.def.outputs.Count && link.toPin < to.def.inputs.Count)
+				if (from != null && to != null && link.fromPin >= 0 && link.toPin >= 0
+					&& link.fromPin < from.def.outputs.Count && link.toPin < to.def.inputs.Count)
 					links.Add(link);
 			}
 		}
@@ -1061,7 +1065,10 @@ class NodeGraph
 		let n = scope String()..AppendF("{}", node.id);
 		let entry = FlowInputIndex(node, inputPin);
 		let pieces = scope List<String>();
-		defer { ClearAndDeleteItems!(pieces); }
+		defer
+		{
+			ClearAndDeleteItems!(pieces);
+		}
 		StringView Input(int32 pin)
 		{
 			let piece = new String();
@@ -1241,7 +1248,7 @@ class NodeGraph
 					continue;
 				let literal = scope String();
 				Literal(node.def.inputs[i], node.values[i], literal);
-				text.Replace(scope $"{{{data}}}", literal);
+				text.Replace(scope $"{{{data}}}" , literal);
 				data++;
 			}
 			for (let line in text.Split('\n', .RemoveEmptyEntries))
@@ -1336,7 +1343,10 @@ class NodeGraph
 		let baseClass = scope String();
 		BaseClass(baseClass);
 		sCSharpLiterals = csharp;
-		defer { sCSharpLiterals = false; }
+		defer
+		{
+			sCSharpLiterals = false;
+		}
 		if (csharp)
 			code.AppendF("using System;\nusing System.Numerics;\nusing Tallow;\n\nnamespace {};\n\npublic partial class {} : Script\n{{\n", namespaceName, className);
 		else

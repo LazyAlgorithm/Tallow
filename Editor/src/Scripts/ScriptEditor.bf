@@ -432,7 +432,7 @@ extension EditorApp
 				Directory.CreateDirectory(scope $"{project.Path}/build").IgnoreError();
 				let logFile = scope $"{project.Path}/build/csharp-build.log";
 				let command = scope String("dotnet run --project ");
-				Terminal.Quote(scope $"{project.EngineRoot}/Managed/Tallow.Build/Tallow.Build.csproj", command);
+				Terminal.Quote(scope $"{project.EngineRoot}/Managed/Tallow.Build/Tallow.Build.csproj" , command);
 				command.Append(" -- --project ");
 				Terminal.Quote(project.Path, command);
 				command.Append(" --engine-root ");
@@ -444,7 +444,7 @@ extension EditorApp
 				if (mCheckSucceeded)
 				{
 					let runtime = scope String("dotnet build ");
-					Terminal.Quote(scope $"{project.EngineRoot}/Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj", runtime);
+					Terminal.Quote(scope $"{project.EngineRoot}/Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj" , runtime);
 					runtime.Append(" --configuration Debug --nologo --verbosity minimal >> ");
 					Terminal.Quote(logFile, runtime);
 					runtime.Append(" 2>&1");
@@ -591,8 +591,9 @@ extension EditorApp
 			// A class renamed in this build: point the open scene at its new name.
 			if (mCheckSucceeded && mPlay == .Edit && CSharpScriptIdentity.Repair(mScene, Project.Current.Path) > 0)
 				MarkDirty();
-			// Graphs can get and hold the game's scripts.
-			if (mCheckSucceeded)
+			// An open graph holds NodeDef pointers. Rebuilding the C# node library here
+			// would free them while the canvas still uses them; refresh when it is opened again.
+			if (mCheckSucceeded && mGraph == null)
 				NodeLibrary.RefreshCSharpScripts(Project.Current.Path);
 			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled." : "C# compilation failed. See Console.");
 			mManagedCompileNoticePending = mCheckSucceeded && !mManagedRecheckQueued;
