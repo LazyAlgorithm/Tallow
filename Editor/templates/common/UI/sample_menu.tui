@@ -1,7 +1,7 @@
 <panel id="screen" onload="OnOpen">
 	<panel class="card">
 		<text class="title">Sample Menu</text>
-		<text class="hint">Built from UI/sample_menu.tui. Buttons call methods on SampleMenu.bf.</text>
+		<text class="hint">Built from UI/sample_menu.tui. Buttons call methods on Scripts/SampleMenu.cs.</text>
 		<panel class="row">
 			<text>Name</text>
 			<input bind="playerName" style="flex-grow: 1" />

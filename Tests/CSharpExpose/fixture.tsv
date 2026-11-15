@@ -44,6 +44,12 @@ method	Tallow.CSharpComponents	SetEnabled	bool	session:ulong	entity:ulong	instan
 method	Tallow.CSharpDraw	Box	void	layer:int	center:System.Numerics.Vector3	size:System.Numerics.Vector3	color:System.Numerics.Vector4
 method	Tallow.CSharpDraw	Line	void	layer:int	a:System.Numerics.Vector3	b:System.Numerics.Vector3	color:System.Numerics.Vector4
 method	Tallow.CSharpDraw	Sphere	void	layer:int	center:System.Numerics.Vector3	radius:float	color:System.Numerics.Vector4
+method	Tallow.CSharpGUI	Bar	void	x:float	y:float	width:float	height:float	fraction:float	color:System.Numerics.Vector4
+method	Tallow.CSharpGUI	Box	void	x:float	y:float	width:float	height:float	color:System.Numerics.Vector4
+method	Tallow.CSharpGUI	Label	void	x:float	y:float	text:string	color:System.Numerics.Vector4
+method	Tallow.CSharpGUI	MouseOverControl	bool
+method	Tallow.CSharpGUI	Slider	float	x:float	y:float	width:float	label:string	value:float	min:float	max:float
+method	Tallow.CSharpGUI	Toggle	bool	x:float	y:float	label:string	value:bool
 method	Tallow.CSharpGameplay	GameTime	float
 method	Tallow.CSharpGameplay	NetRandomValue	float	session:ulong	entity:ulong	salt:int
 method	Tallow.CSharpInputActions	Delta	System.Numerics.Vector2	name:string
@@ -92,6 +98,14 @@ method	Tallow.CSharpUI	HasElement	bool	session:ulong	entity:ulong	id:string
 method	Tallow.CSharpUI	SetText	void	session:ulong	entity:ulong	id:string	text:string
 method	Tallow.CSharpUI	SetValue	void	session:ulong	entity:ulong	id:string	value:float
 method	Tallow.CSharpUI	SetVisible	void	session:ulong	entity:ulong	id:string	visible:bool
+method	Tallow.CSharpWorld	CarveVoxels	bool	session:ulong	entity:ulong	point:System.Numerics.Vector3	radius:float
+method	Tallow.CSharpWorld	FindVoxelTerrain	ulong	session:ulong
+method	Tallow.CSharpWorld	HasCharacterMotor	bool	session:ulong	entity:ulong
+method	Tallow.CSharpWorld	HasVoxelObject	bool	session:ulong	entity:ulong
+method	Tallow.CSharpWorld	ModifyTerrain	bool	session:ulong	entity:ulong	center:System.Numerics.Vector3	radius:float	amount:float
+method	Tallow.CSharpWorld	MotorPitch	float	session:ulong	entity:ulong
+method	Tallow.CSharpWorld	MotorYaw	float	session:ulong	entity:ulong
+method	Tallow.CSharpWorld	NetworkTick	long	session:ulong
 method	Tallow.Cursor	IsLocked	bool
 method	Tallow.Cursor	SetLocked	void	locked:bool
 method	Tallow.Ecs	CopyLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>

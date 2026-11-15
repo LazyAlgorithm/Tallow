@@ -277,6 +277,13 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   Network-Safe Random) compile to the Tallow.API equivalents. Still to do: managed ECS (For Each Data) nodes.
 - [~] Permit graph-to-C# calls, C#-to-graph events/operations, automatic C# type/method node discovery, managed ECS & networking nodes, and correct graph errors/source mapping. All but managed ECS nodes done (see above).
 - [ ] Convert the legacy starter projects, sample/voxel sandbox/showcase content, tutorial code and code-generation templates; newly created projects should not expose Beef to normal C# authors.
+  - [x] Voxel sandbox template (November 15, 2026): its scripts are C# (Editor/templates/common/Scripts:
+    Spinner, FollowCamera, Digger, Hud, CharacterAnimation, SampleMenu); no Program.bf, GameSetup.bf or
+    BeefProj. The player is a prefab (Prefabs/Player.tprefab, written by the first open, set as the Network
+    Session's player prefab) instead of a code factory. New C# APIs for it: `GUI.Label/Box/Bar/Toggle/Slider`,
+    `GUI.MouseOverControl`, `VoxelObject.Carve`, `VoxelTerrain.Find/ModifySphere`, `CharacterMotor.Yaw/Pitch`,
+    `Scene.NetworkTick`. `tools/test_csharp_sample.py` creates the project and checks 10 things in play (CI).
+  - [ ] Tallow Gallery (showcase) template: still Beef (Gallery.bf and its helpers).
 - [ ] Keep shader graph/compute graph/rendering functionality intact; never confuse visual **gameplay** source generation with native shader compilation.
 
 ## P4 — performance, reload, shipping exports, hardening

@@ -66,13 +66,60 @@ static class SceneTemplates
 			player.AddComponent(character.type);
 	}
 
+	/// Adds a template script: the project's C# Scripts/{typeName}.cs (run by the managed adapter component), or a
+	/// Beef component of that name in a legacy native project.
 	static void AddByName(GameObject gameObject, StringView projectName, StringView typeName)
 	{
 		let info = ComponentRegistry.Find(scope $"{projectName}.{typeName}");
 		if (info != null)
+		{
 			gameObject.AddComponent(info.type);
+			return;
+		}
+		if (Project.Current != null && System.IO.File.Exists(scope $"{Project.Current.Path}/src/Scripts/{typeName}.cs"))
+		{
+			let script = gameObject.AddComponent<CSharpBehaviour>();
+			if (script != null)
+				script.scriptType.Set(scope $"{projectName}.{typeName}");
+			return;
+		}
+		Log.Warning(scope $"Template script {typeName} was not found in the project.");
+	}
+
+	public const StringView SamplePlayerPrefab = "Prefabs/Player.tprefab";
+
+	/// The sample's networked player, saved as a prefab for the Network Session to spawn for each player: the
+	/// animated character on a Character Controller, moved by the built-in Character Motor, with the C# follow camera
+	/// and animation scripts.
+	static void SaveSamplePlayer(Scene scene, StringView projectName)
+	{
+		let player = scene.CreateGameObject("Player");
+		// The visible body is the sample animated character; a plain capsule stands in if it is missing.
+		let model = Prefab.Create(scene, "Prefabs/character.tprefab");
+		if (model != null)
+		{
+			model.Transform.SetParent(player.Transform, false);
+			model.Transform.LocalPosition = .(0, -1, 0);
+		}
 		else
-			Log.Warning(scope $"Template script {typeName} was not found in the project.");
+		{
+			let renderer = player.AddComponent<MeshRenderer>();
+			renderer.mesh.Set("builtin:capsule");
+			renderer.color = .FromBytes(235, 140, 60);
+		}
+		// A character controller walks up steps and stays on slopes, which a capsule rigid body cannot.
+		let controller = player.AddComponent<CharacterController>();
+		controller.radius = 0.5f;
+		controller.height = 2;
+		player.AddComponent<NetworkIdentity>();
+		player.AddComponent<CharacterMotor>();
+		AddByName(player, projectName, "FollowCamera");
+		AddByName(player, projectName, "CharacterAnimation");
+		let path = scope String();
+		Assets.ResolvePath(SamplePlayerPrefab, path);
+		if (!Prefab.Save(player, path))
+			Log.Warning(scope $"Could not write the sample player prefab {path}.");
+		scene.DestroyImmediate(player);
 	}
 
 	/// Voxel world with a spawn platform, pushable networked crates and a hosted session.
@@ -85,11 +132,7 @@ static class SceneTemplates
 
 		let camera = scene.Find("Main Camera");
 		for (let script in StringView[?]("Digger", "Hud"))
-		{
-			let info = ComponentRegistry.Find(scope $"{projectName}.{script}");
-			if (info != null)
-				camera.AddComponent(info.type);
-		}
+			AddByName(camera, projectName, script);
 
 		let terrain = scene.CreateGameObject("Terrain");
 		// This sample is an open world to roam and dig in, so it uses generated terrain without end.
@@ -162,7 +205,10 @@ static class SceneTemplates
 		AddByName(menu, projectName, "SampleMenu");
 		menu.SetActive(false);
 
+		SaveSamplePlayer(scene, projectName);
 		let session = scene.CreateGameObject("Network Session");
-		session.AddComponent<NetworkSession>();
+		let network = session.AddComponent<NetworkSession>();
+		if (network != null)
+			network.playerPrefab.Set(SamplePlayerPrefab);
 	}
 }

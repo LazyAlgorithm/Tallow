@@ -355,6 +355,22 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
                 return true;
             }
         }
+        else if (requested == typeof(VoxelObject) || requested == typeof(CharacterMotor) || requested == typeof(VoxelTerrain))
+        {
+            object handle = requested == typeof(VoxelObject) ? new VoxelObject(this)
+                : requested == typeof(CharacterMotor) ? new CharacterMotor(this) : new VoxelTerrain(this);
+            bool valid = handle switch
+            {
+                VoxelObject voxels => voxels.IsValid,
+                CharacterMotor motor => motor.IsValid,
+                _ => VoxelTerrain.Find(new Scene(SceneId)) is { } terrain && terrain.GameObject == this,
+            };
+            if (valid)
+            {
+                component = (T)handle;
+                return true;
+            }
+        }
         else if (requested == typeof(UIDocument))
         {
             var document = new UIDocument(this);

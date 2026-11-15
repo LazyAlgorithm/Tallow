@@ -108,202 +108,6 @@ static class ProjectGenerator
 		return true;
 	}
 
-	/// The scripts every new project starts with: Program.bf (plumbing, hidden in the editor), GameSetup.bf where
-	/// the game's start-up code goes, and the sample's Spinner, FollowCamera, Digger and Hud.
-	static void WriteStarterScripts(StringView folder, StringView name)
-	{
-		Write(scope $"{folder}/src/Program.bf" , scope String()..AppendF("""
-			using System;
-			using Tallow.Editor;
-
-			namespace {0};
-
-			class Program
-			{{
-				public static int Main(String[] args)
-				{{
-					GameSetup.Register();
-					// Opens the editor when started with --editor, otherwise runs the game.
-					return EditorMain.Run(args);
-				}}
-			}}
-
-			""", name));
-
-		Write(scope $"{folder}/src/Scripts/GameSetup.bf" , scope String()..AppendF("""
-			using System;
-			using Tallow;
-
-			namespace {0};
-
-			/// Runs once when the game or editor starts, before any scene loads.
-			/// Keep this class and its Register method; put one-time setup here.
-			static class GameSetup
-			{{
-				public static void Register()
-				{{
-					// Network prefabs must be registered identically on the server and every client.
-					NetworkManager.RegisterPrefab("Player", new => CreatePlayer);
-				}}
-
-				static GameObject CreatePlayer(Scene scene)
-				{{
-					let player = scene.CreateGameObject("Player");
-					// The visible body is the sample animated character; a plain capsule stands in if it is missing.
-					let model = Prefab.Instantiate(scene, "Prefabs/character.tprefab");
-					if (model != null)
-					{{
-						model.Transform.SetParent(player.Transform, false);
-						model.Transform.LocalPosition = .(0, -1, 0);
-					}}
-					else
-					{{
-						let renderer = player.AddComponent<MeshRenderer>();
-						renderer.mesh.Set("builtin:capsule");
-						renderer.color = .FromBytes(235, 140, 60);
-					}}
-					// A character controller walks up steps and stays on slopes, which a capsule rigid body cannot.
-					let controller = player.AddComponent<CharacterController>();
-					controller.radius = 0.5f;
-					controller.height = 2;
-					player.AddComponent<NetworkIdentity>();
-					player.AddComponent<CharacterMotor>();
-					player.AddComponent<FollowCamera>();
-					player.AddComponent<CharacterAnimation>();
-					return player;
-				}}
-			}}
-
-			""", name));
-
-		Write(scope $"{folder}/src/Scripts/Spinner.bf" , scope String()..AppendF("""
-			using System;
-			using Tallow;
-
-			namespace {0};
-
-			/// Example component: rotates its object. Public fields show up in the Inspector.
-			[Component]
-			class Spinner : Script
-			{{
-				public Vector3 degreesPerSecond = .(0, 45, 0);
-
-				public override void Update(TickInput input, float deltaTime)
-				{{
-					Transform.Rotate(degreesPerSecond * deltaTime);
-				}}
-			}}
-
-			""", name));
-
-		Write(scope $"{folder}/src/Scripts/FollowCamera.bf" , scope String()..AppendF("""
-			using System;
-			using Tallow;
-
-			namespace {0};
-
-			/// Third-person camera behind the player this machine controls.
-			[Component]
-			class FollowCamera : Script
-			{{
-				public float distance = 7.0f;
-				public float height = 2.5f;
-
-				public override void LateUpdate()
-				{{
-					if (!IsMine)
-						return;
-					let camera = Scene.FindComponent<Camera>();
-					let motor = GetComponent<CharacterMotor>();
-					if (!camera.IsValid)
-						return;
-					let yaw = motor != null ? motor.Yaw : 0;
-					let pitch = motor != null ? motor.Pitch : 0;
-					let rotation = Quaternion.Euler(pitch + 15, yaw, 0);
-					let target = Transform.Position + Vector3(0, height * 0.5f, 0);
-					camera.Transform.Position = target - rotation * Vector3.Forward * distance;
-					camera.Transform.Rotation = rotation;
-				}}
-			}}
-
-			""", name));
-
-		Write(scope $"{folder}/src/Scripts/Digger.bf" , scope String()..AppendF("""
-			using System;
-			using Tallow;
-
-			namespace {0};
-
-			/// Left click digs, middle click builds, aimed with the main camera. Works on voxel terrain
-			/// and on destructible VoxelObjects (which break apart when cut through).
-			[Component]
-			class Digger : Script
-			{{
-				public float radius = 3.0f;
-				public float strength = 1.5f;
-
-				// Local camera tool; this callback is not replayed as predicted simulation.
-				public override void OnLocalUpdate()
-				{{
-					let dig = Input.GetMouseButton(0);
-					let build = Input.GetMouseButton(2);
-					if (!dig && !build)
-						return;
-					let camera = Scene.FindComponent<Camera>();
-					if (!camera.IsValid)
-						return;
-					RaycastHit hit;
-					if (!Scene.Physics.Raycast(camera.Transform.Position, camera.Transform.Forward, 200, out hit))
-						return;
-					let voxels = hit.gameObject != null ? hit.gameObject.GetComponent<VoxelObject>() : VoxelObject();
-					if (voxels.IsValid)
-					{{
-						if (dig)
-							voxels.Carve(hit.point, radius * 0.3f);
-						return;
-					}}
-					let terrain = Scene.FindComponent<VoxelTerrain>();
-					if (terrain != null)
-						terrain.ModifySphere(hit.point, radius, (dig ? -strength : strength) * Time.DeltaTime * 4);
-				}}
-			}}
-
-			""", name));
-
-		Write(scope $"{folder}/src/Scripts/Hud.bf" , scope String()..AppendF("""
-			using System;
-			using Tallow;
-
-			namespace {0};
-
-			/// Example in-game interface drawn with the GUI class.
-			[Component]
-			class Hud : Script
-			{{
-				bool mShowHelp = true;
-
-				public override void OnGUI()
-				{{
-					GUI.Box(12, 12, 250, mShowHelp ? 118 : 34, .(0, 0, 0, 0.45f));
-					GUI.LabelFormat(22, 20, "{{}} fps", (int)Time.SmoothedFps);
-					if (GUI.Button(170, 16, 82, 24, mShowHelp ? "Hide help" : "Help"))
-						mShowHelp = !mShowHelp;
-					if (mShowHelp)
-					{{
-						GUI.Label(22, 48, "WASD move, Space jump");
-						GUI.Label(22, 66, "Hold right mouse to look");
-						GUI.Label(22, 84, "Left mouse digs, middle builds");
-						GUI.Label(22, 102, "Dig through the boulder to break it");
-					}}
-					let network = Scene.Network;
-					if (network != null && network.Mode != .Offline)
-						GUI.LabelFormat(GUI.Width - 220, 20, "{{}}  tick {{}}", network.Mode, network.Tick);
-				}}
-			}}
-
-			""", name));
-	}
-
 	/// Copy saved assets recursively, including terrain sidecars; substitute only text assets.
 	static bool CopyShowcase(StringView source, StringView destination, StringView name, String error)
 	{
@@ -426,8 +230,9 @@ static class ProjectGenerator
 		}
 
 		// BeefSpace/BeefProj are only for Beef gameplay; Project.Build writes them when a
-		// legacy native build is asked for, so a C# project starts without them.
-		if (template != .Empty)
+		// legacy native build is asked for, so a C# project starts without them. The Gallery's gameplay is
+		// still Beef.
+		if (template == .Showcase)
 			project.WriteBuildFiles();
 
 		Write(scope $"{folder}/.gitignore" , "build/\nrecovery/\n.cache/\n.tallow-csharp/\n*.slnx\nPackages/Downloads/\nPackages/Exports/\nBeefSpace.toml\nBeefProj.toml\n");
@@ -451,10 +256,8 @@ static class ProjectGenerator
 			return true;
 		}
 
-		WriteStarterScripts(folder, name);
-
-		// The first scene is built by the editor the first time the project opens.
-		// Shared sample content: the animated character, its clips and the script that drives them.
+		// The first scene (and Prefabs/Player.tprefab) is built by the editor the first time the project opens.
+		// Shared sample content: the C# starter scripts, the animated character, its clips and the menu.
 		let common = scope $"{engineRoot}/Editor/templates/common";
 		for (let sub in StringView[?]("Scripts", "Prefabs", "Animations", "Models", "UI", "Materials", "Shaders", "Textures"))
 		{

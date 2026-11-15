@@ -28,6 +28,8 @@ public static class GraphRuntime
         Joint joint => joint.IsValid,
         Animator animator => animator.IsValid,
         UIDocument document => document.IsValid,
+        VoxelObject voxels => voxels.IsValid,
+        CharacterMotor motor => motor.IsValid,
         ColliderHandle collider => collider.IsValid,
         Script script => script.GameObject.IsValid,
         Transform transform => transform.GameObject.IsValid,

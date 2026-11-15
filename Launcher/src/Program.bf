@@ -601,7 +601,7 @@ class LauncherApp : Application
 		ImGui.Text("Template");
 		if (ImGui.RadioButton("Empty", mTemplate == .Empty))
 			mTemplate = .Empty;
-		if (ImGui.RadioButton("Voxel sandbox (legacy scripts)", mTemplate == .Sample))
+		if (ImGui.RadioButton("Voxel sandbox", mTemplate == .Sample))
 			mTemplate = .Sample;
 		if (ImGui.RadioButton("Tallow Gallery (showcase of eight areas)", mTemplate == .Showcase))
 			mTemplate = .Showcase;
