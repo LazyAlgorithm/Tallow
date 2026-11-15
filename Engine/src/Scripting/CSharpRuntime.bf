@@ -153,6 +153,22 @@ static class CSharpRuntime
 		fields.Clear();
 		ReadFields(behaviour.ManagedInstance, false, fields);
 		Check(fields.Contains("Speed\t4.5\n"), "the edit reads back live");
+		all.Clear();
+		ReadFields(behaviour.ManagedInstance, true, all);
+		Check(all.Contains("_validations\tint\t1\n") && all.Contains("_speedWhenValidated\tfloat\t4.5\n"),
+			"OnValidate runs once after an Inspector edit, with the new value set");
+		Check(!behaviour.WriteEditorField("Speed", "not a number"), "a bad Inspector edit is refused");
+		all.Clear();
+		ReadFields(behaviour.ManagedInstance, true, all);
+		Check(all.Contains("_validations\tint\t1\n"), "a refused edit does not run OnValidate");
+		// The Scene view's gizmo pass (SceneView draws every component's gizmos, saying whether it is selected).
+		behaviour.OnDrawGizmos(true);
+		behaviour.OnDrawGizmos(false);
+		behaviour.OnDrawGizmos(false);
+		all.Clear();
+		ReadFields(behaviour.ManagedInstance, true, all);
+		Check(all.Contains("_gizmosSelected\tint\t1\n") && all.Contains("_gizmosUnselected\tint\t2\n"),
+			"OnDrawGizmos runs with whether the object is selected, and can draw gizmos");
 	}
 
 	/// Runs a script's [Rpc] method received from the network. The managed side checks the method is an [Rpc] of

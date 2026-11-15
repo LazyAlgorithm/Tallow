@@ -36,6 +36,29 @@ public class ApiChecks : CheckBase
     private int _fixedTicks;
     private bool _started;
     private Helper? _helper;
+    // Read by the native side (CSharpRuntime.RunFieldTest), which makes the editor's calls: an Inspector edit, and
+    // the Scene view's gizmo pass for a selected and an unselected object.
+    private int _validations;
+    private float _speedWhenValidated;
+    private int _gizmosSelected;
+    private int _gizmosUnselected;
+
+    public override void OnValidate()
+    {
+        _validations++;
+        _speedWhenValidated = Speed;
+    }
+
+    public override void OnDrawGizmos(bool selected)
+    {
+        if (selected)
+            _gizmosSelected++;
+        else
+            _gizmosUnselected++;
+        Gizmos.Line(Transform.Position, Transform.Position + Vector3.UnitY, Color.Red);
+        Gizmos.Sphere(Transform.Position, 0.5f, Color.White, onTop: selected);
+        Gizmos.Box(Transform.Position, Vector3.One, Color.Black);
+    }
 
     public override void Awake()
     {

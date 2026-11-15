@@ -80,7 +80,9 @@ def main() -> int:
         passed = sum("INGAME PASS" in line for line in lines)
         # Thrower throws on purpose: allowed, but it must be logged once, naming the file and line it threw on.
         expected = "thrown on purpose by Thrower"
-        failed = [line for line in lines if "INGAME FAIL" in line or ("[Tallow C#]" in line and "thrown on purpose" not in line)]
+        failed = [line for line in lines if "INGAME FAIL" in line or ("[Tallow C#]" in line and "thrown on purpose" not in line
+                   # RunFieldTest's refused Inspector edit, logged as the editor would show it.
+                   and "'not a number' was not in a correct format" not in line)]
         thrown = [line for line in output.splitlines() if line.startswith("[error] System.InvalidOperationException: " + expected)]
         source = (project / "src/Scripts/ApiChecks.cs").read_text().splitlines()
         throw_line = next(i + 1 for i, text in enumerate(source) if expected in text and "throw" in text)

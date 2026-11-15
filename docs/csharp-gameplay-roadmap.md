@@ -873,8 +873,10 @@ A full conversion also needs these. Ordered roughly by when they block users.
   `Color` struct. Edit-mode limits: C# scripts are only loaded during Play, so OnFrame,
   OnDrawGizmos and OnValidate reach them only then. Tests: in-engine (OnFrame, offline
   event, draw calls, save/load round trip, 95 checks), network (client event to the
-  server and back, 12 checks). OnDrawGizmos and OnValidate have no automated test yet
-  (they need editor Play).
+  server and back, 12 checks). OnValidate and OnDrawGizmos are tested by `RunFieldTest`
+  (`--csharp-field-test`), which makes the editor's calls on the running script: OnValidate
+  once after an Inspector edit with the new value set, not after a refused edit, and
+  OnDrawGizmos with the selected flag while drawing lines, spheres and boxes (4 checks).
 - [x] Main-thread async: `GameSynchronizationContext` (Tallow.API `GameThread.cs`) is set on
   the game thread when a game loads and pumped once a frame after LateUpdate
   (`Frame.CSharpAsync`, host entry `tn_csharp_pump`). Script gains `NextFrame()`,
