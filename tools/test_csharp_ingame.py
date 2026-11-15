@@ -45,6 +45,17 @@ def main() -> int:
         (project / "project.tallow").write_text(
             f"name = InGame\nstartScene = Scenes/Main.tscene\nengine = {ROOT.as_posix()}\n", encoding="utf-8")
 
+        # GraphProbe.cs is what the graph compiler makes of GraphProbe.tgraph: compile the graph again with this
+        # engine, so the run tests the compiler as it is now, and say so when the checked-in copy is out of date.
+        graph = project / "src/Scripts/GraphProbe.tgraph"
+        committed = (project / "src/Scripts/GraphProbe.cs").read_text(encoding="utf-8")
+        compiled = subprocess.run([str(launcher), "--graph-compile", str(graph), "InGame"], capture_output=True, text=True)
+        if compiled.returncode != 0:
+            print(compiled.stdout + compiled.stderr)
+            print("The graph compiler failed on GraphProbe.tgraph.", file=sys.stderr)
+            return 1
+        graph_drift = (project / "src/Scripts/GraphProbe.cs").read_text(encoding="utf-8") != committed
+
         build = subprocess.run(
             ["dotnet", "run", "--project", str(ROOT / "Managed/Tallow.Build/Tallow.Build.csproj"),
              "--", "--project", str(project), "--engine-root", str(ROOT)],
@@ -95,6 +106,13 @@ def main() -> int:
         else:
             failed.append(f"INGAME FAIL async exception report: {boom or 'not logged'}")
             print(failed[-1])
+        if graph_drift:
+            failed.append("INGAME FAIL Tests/CSharpInGame/src/Scripts/GraphProbe.cs is not what the graph compiler makes "
+                          "now: run TallowLauncher --graph-compile on GraphProbe.tgraph (namespace InGame) and commit it")
+            print(failed[-1])
+        else:
+            passed += 1
+            print("INGAME PASS the checked-in GraphProbe.cs matches what the graph compiler makes of GraphProbe.tgraph")
         if run.returncode != 0 or failed or not any("INGAME DONE" in line for line in lines):
             if not lines:
                 print(output[-4000:])

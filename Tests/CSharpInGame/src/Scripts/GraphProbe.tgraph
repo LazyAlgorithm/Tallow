@@ -1,0 +1,40 @@
+graph "GraphProbe"
+variable int "frames" "0"
+variable float "elapsed" "0"
+variable vector "turned" "0 0 0"
+variable float "length" "0"
+variable text "label" ""
+variable object:GameObject "self" ""
+node 1 event.start 40 40
+node 2 math.qmul 40 200 "0 90 0" "0 0 1"
+node 3 var.set.vector 300 40 "" "turned" "0 0 0"
+node 4 math.vlength 300 200 "3 4 0"
+node 5 var.set.float 560 40 "" "length" "0"
+node 6 text.int 560 200 "7"
+node 7 text.append 560 320 "graph " ""
+node 8 var.set.text 820 40 "" "label" ""
+node 9 game.find 820 200 "Graph"
+node 10 var.set.object 1080 40 "" "self" ""
+node 11 event.update 40 500
+node 12 var.get.int 40 700 "frames"
+node 13 math.iadd 300 700 "0" "1"
+node 14 var.set.int 300 500 "" "frames" "0"
+node 15 var.get.float 560 700 "elapsed"
+node 16 math.add 820 700 "0" "0"
+node 17 var.set.float 560 500 "" "elapsed" "0"
+link 1 0 3 0
+link 2 0 3 2
+link 3 0 5 0
+link 4 0 5 2
+link 5 0 8 0
+link 6 0 7 1
+link 7 0 8 2
+link 8 0 10 0
+link 9 0 10 2
+link 11 0 14 0
+link 12 0 13 0
+link 13 0 14 2
+link 14 0 17 0
+link 15 0 16 0
+link 11 1 16 1
+link 16 0 17 2

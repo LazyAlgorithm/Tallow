@@ -257,6 +257,22 @@ When field restoration fails, the native C# adapter no longer proceeds with
 `Awake`; when editing during Play, a failed field batch leaves the previous
 saved override unchanged. This still requires full Nobara editor verification.
 
+## Visual scripting graphs in C# projects
+
+A `.tgraph` in a C# project compiles to C#: Compile in the graph editor writes `Name.cs` beside the graph, a
+`public partial class Name : Script` in the namespace a new C# script in that folder would get. Drop the graph on
+an object to add it (its compiled script is what runs); the generated file is hidden in the Project panel and
+travels with the graph in packages. Do not edit it: compile the graph again instead, or use Convert to Script to
+keep the code and drop the graph. Because the class is `partial`, a hand-written `partial class Name` in another
+file can add methods the graph's nodes cannot express.
+
+The node list in a C# project leaves out nodes that only exist for Beef (the engine's Beef API, Beef
+`[GraphNode]` methods, ECS For Each Data). Object variables of GameObject and physics handle types are handles
+(never null): Is Valid asks whether the object still exists.
+
+To compile a graph without the editor (tests, build scripts):
+`TallowLauncher --graph-compile path/Name.tgraph GameNamespace`.
+
 ## Shipping a C# game
 
 `python3 tools/build_player.py <project> --output <folder>` (or File > Build) builds a C#

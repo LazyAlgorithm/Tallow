@@ -10,6 +10,67 @@ namespace Tallow.Editor;
 static class NodeLibrary
 {
 	static List<NodeDef> sDefs ~ DeleteContainerAndItems!(_);
+	static bool sCSharp;
+	/// The project's C# scripts (full names), for Get Component and object variables in C# graphs.
+	static List<String> sCSharpScripts = new .() ~ DeleteContainerAndItems!(_);
+
+	/// Graphs compile to C# (a C# project): only nodes that have C# behind them are offered. Changing it builds
+	/// the library again.
+	public static bool CSharp
+	{
+		get => sCSharp;
+		set
+		{
+			if (value == sCSharp)
+				return;
+			sCSharp = value;
+			DeleteContainerAndItems!(sDefs);
+			sDefs = null;
+		}
+	}
+
+	/// The component types C# scripts can get and hold: Tallow.API's own (IComponent).
+	public static readonly StringView[?] CSharpComponentTypes = .("Rigidbody", "CharacterController", "SoftBody", "Joint");
+
+	/// Whether a C# graph's object type is a struct (GameObject and the physics handles): no null, only default.
+	public static bool IsCSharpStruct(StringView typeName)
+	{
+		if (typeName.IsEmpty || typeName == "GameObject")
+			return true;
+		for (let type in CSharpComponentTypes)
+			if (type == typeName)
+				return true;
+		return false;
+	}
+
+	/// Reads the project's compiled C# scripts (.tallow-csharp/components.tsv) for C# graphs; rebuilds the library
+	/// when they changed.
+	public static void RefreshCSharpScripts(StringView projectPath)
+	{
+		let text = scope String();
+		File.ReadAllText(scope $"{projectPath}/.tallow-csharp/components.tsv", text).IgnoreError();
+		let names = scope List<String>();
+		defer { ClearAndDeleteItems!(names); }
+		for (var line in text.Split('\n', .RemoveEmptyEntries))
+		{
+			line.Trim();
+			if (!line.IsEmpty && !line.StartsWith("GraphNodeTest"))
+				names.Add(new String(line));
+		}
+		bool same = names.Count == sCSharpScripts.Count;
+		for (int i < names.Count)
+			same &= same && names[i] == sCSharpScripts[i];
+		if (same)
+			return;
+		ClearAndDeleteItems!(sCSharpScripts);
+		for (let name in names)
+			sCSharpScripts.Add(new String(name));
+		if (sCSharp && sDefs != null)
+		{
+			DeleteContainerAndItems!(sDefs);
+			sDefs = null;
+		}
+	}
 
 	public static List<NodeDef> Defs
 	{
@@ -87,6 +148,8 @@ static class NodeLibrary
 	/// Whether a type is a struct (a built-in component handle): it has no null, only default.
 	static bool IsStructType(StringView typeName)
 	{
+		if (sCSharp)
+			return IsCSharpStruct(typeName);
 		let entry = ApiIndex.Find(typeName);
 		return entry != null && entry.isStruct;
 	}
@@ -97,6 +160,14 @@ static class NodeLibrary
 	{
 		output.Add(new .("GameObject"));
 		output.Add(new .("Transform"));
+		if (sCSharp)
+		{
+			for (let type in CSharpComponentTypes)
+				output.Add(new .(type));
+			for (let script in sCSharpScripts)
+				output.Add(new .(script));
+			return;
+		}
 		ApiIndex.Ensure();
 		let types = ApiIndex.AllTypes(.. scope .());
 		let names = scope List<String>();
@@ -125,7 +196,10 @@ static class NodeLibrary
 			if (Find(key) != null)
 				continue;
 			let code = scope String();
-			if (IsStructType(type))
+			// A C# GameObject is a handle: GetComponent on one that is gone gives null (or default).
+			if (sCSharp)
+				code.AppendF("{{0}}.GetComponent<{0}>()", type);
+			else if (IsStructType(type))
 				code.AppendF("({{0}} != null ? {{0}}.GetComponent<{0}>() : default({0}))", type);
 			else
 				code.AppendF("({{0}} != null ? {{0}}.GetComponent<{0}>() : null)", type);
@@ -160,10 +234,15 @@ static class NodeLibrary
 		AddBasicNodes();
 		AddSubgraphNodes();
 		AddShaderNodes();
-		AddCodeNodes();
-		AddApiNodes();
+		// The engine's Beef API, the game's Beef [GraphNode] methods and ECS data are Beef: not in C# graphs.
+		if (!sCSharp)
+		{
+			AddCodeNodes();
+			AddApiNodes();
+		}
 		AddGetComponentNodes();
-		AddEcsNodes();
+		if (!sCSharp)
+			AddEcsNodes();
 		AddOverloads();
 	}
 
@@ -376,7 +455,7 @@ static class NodeLibrary
 		Add("math.vmul", "Math|Vector", "Multiply (Vector * Vector)", .Value, "({0} * {1})").In("A", .Vector3).In("B", .Vector3).Default("1 1 1").Out("", .Vector3).Also("*");
 		Add("math.vdiv", "Math|Vector", "Divide (Vector / Float)", .Value, "({1} != 0 ? {0} / {1} : Vector3.Zero)").In("Vector", .Vector3).In("Divisor", .Float).Default("1").Out("", .Vector3).Also("/");
 		Add("math.vneg", "Math|Vector", "Negate (Vector)", .Value, "(-{0})").In("Vector", .Vector3).Out("", .Vector3);
-		Add("math.vlength", "Math|Vector", "Vector Length", .Value, "{0}.Length").In("Vector", .Vector3).Out("", .Float).Also("VSize Magnitude");
+		Add("math.vlength", "Math|Vector", "Vector Length", .Value, "{0}.Length").Cs("{0}.Length()").In("Vector", .Vector3).Out("", .Float).Also("VSize Magnitude");
 		Add("math.vnormal", "Math|Vector", "Normalize", .Value, "{0}.Normalized").In("Vector", .Vector3).Out("", .Vector3).Also("Unit");
 		Add("math.vdistance", "Math|Vector", "Distance (Vector)", .Value, "Vector3.Distance({0}, {1})").In("A", .Vector3).In("B", .Vector3).Out("", .Float).Also("Distance");
 		Add("math.vdot", "Math|Vector", "Dot Product", .Value, "Vector3.Dot({0}, {1})").In("A", .Vector3).In("B", .Vector3).Out("", .Float).Also("Dot");
@@ -385,14 +464,14 @@ static class NodeLibrary
 		Add("math.vequal", "Math|Vector", "Equal (Vector)", .Value, "(Vector3.Distance({0}, {1}) <= {2})").In("A", .Vector3).In("B", .Vector3).In("Tolerance", .Float).Default("0.0001").Out("", .Bool).Also("==");
 		Add("math.vlerp", "Math|Vector", "Lerp (Vector)", .Value, "Vector3.Lerp({0}, {1}, {2})").In("A", .Vector3).In("B", .Vector3).In("Alpha", .Float).Out("", .Vector3);
 		Add("math.qmul", "Math|Vector", "Rotate Vector", .Value, "({0} * {1})").In("Rotation", .Quaternion).In("Vector", .Vector3).Out("", .Vector3);
-		Add("math.vunrotate", "Math|Vector", "Unrotate Vector", .Value, "({0}.Conjugate * {1})").In("Rotation", .Quaternion).In("Vector", .Vector3).Out("", .Vector3).Also("Inverse Transform Direction");
+		Add("math.vunrotate", "Math|Vector", "Unrotate Vector", .Value, "({0}.Conjugate * {1})").Cs("Vector3.Transform({1}, Quaternion.Inverse({0}))").In("Rotation", .Quaternion).In("Vector", .Vector3).Out("", .Vector3).Also("Inverse Transform Direction");
 		Add("math.vaxis", "Math|Vector", "Rotate Vector Around Axis", .Value, "(Quaternion.AngleAxis({1}, {2}) * {0})").In("Vector", .Vector3).In("Angle", .Float).In("Axis", .Vector3).Default("0 1 0").Out("", .Vector3);
 		Add("math.vup", "Math|Vector", "Up Vector", .Value, "Vector3.Up").Out("", .Vector3).Also("Constant");
 		Add("math.vforward", "Math|Vector", "Forward Vector", .Value, "Vector3.Forward").Out("", .Vector3).Also("Constant");
 		Add("math.vright", "Math|Vector", "Right Vector", .Value, "Vector3.Right").Out("", .Vector3).Also("Constant");
 		Add("math.vector2", "Math|Vector 2D", "Make Vector 2D", .Value, "Vector2({0}, {1})").In("X", .Float).In("Y", .Float).Out("", .Vector2).Also("Vector2");
 		Add("math.v2break", "Math|Vector 2D", "Split Vector 2D", .Value, "{0}").In("Vector", .Vector2).Out("X", .Float, "", "{0}.x").Out("Y", .Float, "", "{0}.y").Also("Break Vector2 Split");
-		Add("math.v2length", "Math|Vector 2D", "Vector 2D Length", .Value, "{0}.Length").In("Vector", .Vector2).Out("", .Float);
+		Add("math.v2length", "Math|Vector 2D", "Vector 2D Length", .Value, "{0}.Length").Cs("{0}.Length()").In("Vector", .Vector2).Out("", .Float);
 		Add("math.v2to3", "Math|Vector 2D", "To Vector (X, 0, Y)", .Value, "Vector3({0}.x, 0, {0}.y)").In("Vector", .Vector2).Out("", .Vector3).Also("Convert Ground");
 
 		// Rotation.
@@ -401,7 +480,7 @@ static class NodeLibrary
 		Add("math.rbreak", "Math|Rotation", "Split Rotation", .Value, "{0}").In("Rotation", .Quaternion).Out("Pitch (X)", .Float, "", "{0}.EulerAngles.x").Out("Yaw (Y)", .Float, "", "{0}.EulerAngles.y")
 			.Out("Roll (Z)", .Float, "", "{0}.EulerAngles.z").Also("Break Rotator Euler");
 		Add("math.qq", "Math|Rotation", "Combine Rotations", .Value, "({0} * {1})").In("A", .Quaternion).In("B", .Quaternion).Out("", .Quaternion).Also("Compose Rotators");
-		Add("math.rinverse", "Math|Rotation", "Invert Rotation", .Value, "{0}.Conjugate").In("Rotation", .Quaternion).Out("", .Quaternion).Also("Negate Rotator");
+		Add("math.rinverse", "Math|Rotation", "Invert Rotation", .Value, "{0}.Conjugate").Cs("Quaternion.Inverse({0})").In("Rotation", .Quaternion).Out("", .Quaternion).Also("Negate Rotator");
 		Add("math.rlookat", "Math|Rotation", "Find Look at Rotation", .Value, "Quaternion.LookRotation(({1} - {0}).Normalized, Vector3.Up)").In("Start", .Vector3).In("Target", .Vector3).Default("0 0 1").Out("", .Quaternion).Also("Look At");
 		Add("math.rfromdir", "Math|Rotation", "Rotation From Direction", .Value, "Quaternion.LookRotation({0}.Normalized, Vector3.Up)").In("Direction", .Vector3).Default("0 0 1").Out("", .Quaternion).Also("Make Rot From X");
 		Add("math.raxis", "Math|Rotation", "Rotation Around Axis", .Value, "Quaternion.AngleAxis({0}, {1})").In("Angle", .Float).In("Axis", .Vector3).Default("0 1 0").Out("", .Quaternion).Also("Angle Axis");
@@ -448,15 +527,15 @@ static class NodeLibrary
 		Add("math.crgba", "Math|Color", "Make Color From RGBA", .Value, "Color({0}, {1}, {2}, {3})").In("R", .Float).In("G", .Float).In("B", .Float).In("A", .Float).Default("1").Out("", .Color);
 
 		// Text.
-		Add("text.append", "Utilities|String", "Append", .Value, "scope:: String()..Append({0})..Append({1})").In("A", .String).In("B", .String).Out("", .String).Also("Concatenate Join + String");
-		Add("text.float", "Utilities|String", "To String (Float)", .Value, "scope:: String()..AppendF(\"{}\", {0})").In("Value", .Float).Out("", .String).Also("Convert Text Number");
-		Add("text.int", "Utilities|String", "To String (Integer)", .Value, "scope:: String()..AppendF(\"{}\", {0})").In("Value", .Int).Out("", .String).Also("Convert Text");
+		Add("text.append", "Utilities|String", "Append", .Value, "scope:: String()..Append({0})..Append({1})").Cs("({0} + {1})").In("A", .String).In("B", .String).Out("", .String).Also("Concatenate Join + String");
+		Add("text.float", "Utilities|String", "To String (Float)", .Value, "scope:: String()..AppendF(\"{}\", {0})").Cs("GraphRuntime.Text({0})").In("Value", .Float).Out("", .String).Also("Convert Text Number");
+		Add("text.int", "Utilities|String", "To String (Integer)", .Value, "scope:: String()..AppendF(\"{}\", {0})").Cs("GraphRuntime.Text({0})").In("Value", .Int).Out("", .String).Also("Convert Text");
 		Add("text.bool", "Utilities|String", "To String (Boolean)", .Value, "({0} ? \"true\" : \"false\")").In("Value", .Bool).Out("", .String).Also("Convert Text");
-		Add("text.vector", "Utilities|String", "To String (Vector)", .Value, "scope:: String()..AppendF(\"X={:0.###} Y={:0.###} Z={:0.###}\", {0}.x, {0}.y, {0}.z)").In("Value", .Vector3).Out("", .String).Also("Convert Text");
+		Add("text.vector", "Utilities|String", "To String (Vector)", .Value, "scope:: String()..AppendF(\"X={:0.###} Y={:0.###} Z={:0.###}\", {0}.x, {0}.y, {0}.z)").Cs("GraphRuntime.Text({0})").In("Value", .Vector3).Out("", .String).Also("Convert Text");
 		Add("text.length", "Utilities|String", "Length (String)", .Value, "(int32)StringView({0}).Length").In("Text", .String).Out("", .Int).Also("Len");
 		Add("text.contains", "Utilities|String", "Contains (String)", .Value, "StringView({0}).Contains({1})").In("Text", .String).In("Substring", .String).Out("", .Bool).Also("Find");
 		Add("logic.textequal", "Utilities|String", "Equal (String)", .Value, "(StringView({0}) == StringView({1}))").In("A", .String).In("B", .String).Out("", .Bool).Also("Text Equal ==");
-		Add("text.empty", "Utilities|String", "Is Empty (String)", .Value, "StringView({0}).IsEmpty").In("Text", .String).Out("", .Bool);
+		Add("text.empty", "Utilities|String", "Is Empty (String)", .Value, "StringView({0}).IsEmpty").Cs("string.IsNullOrEmpty({0})").In("Text", .String).Out("", .Bool);
 
 		// Keys, mouse and input actions.
 		Add("input.key", "Input|Keyboard", "Key Held", .Value, "Input.GetKey({0})").In("Key", .Enum, "KeyCode").Out("", .Bool).Also("Is Input Key Down");
@@ -470,7 +549,7 @@ static class NodeLibrary
 		Add("input.actiondelta", "Input|Actions", "Input Action Delta", .Value, "InputActions.Delta({0})").In("Action", .String).Default("Look").Out("", .Vector2).Also("Look Mouse Turn Enhanced Input");
 		Add("input.gamepad", "Input", "Using Gamepad", .Value, "Input.UsingGamepad").Out("", .Bool).Also("Controller");
 		Add("debug.log", "Debug", "Print String", .Action, "Log.Info({0});").In("Text", .String).Default("Hello").Also("Log");
-		Add("debug.lognumber", "Debug", "Print Number", .Action, "Log.Info(scope String()..AppendF(\"{}: {}\", {0}, {1}));").In("Label", .String).In("Value", .Float).Also("Log Number Float");
+		Add("debug.lognumber", "Debug", "Print Number", .Action, "Log.Info(scope String()..AppendF(\"{}: {}\", {0}, {1}));").Cs("Log.Info({0} + \": \" + GraphRuntime.Text({1}));").In("Label", .String).In("Value", .Float).Also("Log Number Float");
 		Add("debug.line", "Debug", "Draw Debug Line", .Action, "DebugDraw.Line({0}, {1}, {2});").In("Start", .Vector3).In("End", .Vector3).Default("0 1 0").In("Color", .Color).Default("1 0 0 1").Also("Gizmo");
 		Add("debug.sphere", "Debug", "Draw Debug Sphere", .Action, "DebugDraw.Sphere({0}, {1}, {2});").In("Center", .Vector3).In("Radius", .Float).Default("0.5").In("Color", .Color).Default("0 1 0 1").Also("Gizmo");
 	}
@@ -497,7 +576,7 @@ static class NodeLibrary
 		Add("math.v2mul", "Math|Vector 2D", "Multiply (Vector 2D * Vector 2D)", .Value, "Vector2({0}.x * {1}.x, {0}.y * {1}.y)").In("A", .Vector2).In("B", .Vector2).Default("1 1").Out("", .Vector2).Also("*");
 		Add("math.v2div", "Math|Vector 2D", "Divide (Vector 2D / Float)", .Value, "({1} != 0 ? {0} / {1} : Vector2.Zero)").In("Vector", .Vector2).In("Divisor", .Float).Default("1").Out("", .Vector2).Also("/");
 		Add("math.v2normal", "Math|Vector 2D", "Normalize (Vector 2D)", .Value, "{0}.Normalized").In("Vector", .Vector2).Out("", .Vector2);
-		Add("math.v2distance", "Math|Vector 2D", "Distance (Vector 2D)", .Value, "({0} - {1}).Length").In("A", .Vector2).In("B", .Vector2).Out("", .Float);
+		Add("math.v2distance", "Math|Vector 2D", "Distance (Vector 2D)", .Value, "({0} - {1}).Length").Cs("Vector2.Distance({0}, {1})").In("A", .Vector2).In("B", .Vector2).Out("", .Float);
 		Add("math.v2dot", "Math|Vector 2D", "Dot Product (Vector 2D)", .Value, "Vector2.Dot({0}, {1})").In("A", .Vector2).In("B", .Vector2).Out("", .Float);
 		Add("math.v2lerp", "Math|Vector 2D", "Lerp (Vector 2D)", .Value, "Vector2.Lerp({0}, {1}, {2})").In("A", .Vector2).In("B", .Vector2).In("Alpha", .Float).Out("", .Vector2);
 		Add("math.v2equal", "Math|Vector 2D", "Equal (Vector 2D)", .Value, "({0} == {1})").In("A", .Vector2).In("B", .Vector2).Out("", .Bool).Also("==");
@@ -531,9 +610,9 @@ static class NodeLibrary
 			let suffix = NodeGraph.TypeSuffix(type);
 			let label = TypeLabel(type);
 			if (Find(scope $"debug.print.{suffix}") == null)
-				Add(scope $"debug.print.{suffix}", "Debug", scope $"Print ({label})", .Action, "Log.Info(GraphRuntime.Text({0}, .. scope String()));").In("Value", type).Also("Print String Log");
+				Add(scope $"debug.print.{suffix}", "Debug", scope $"Print ({label})", .Action, "Log.Info(GraphRuntime.Text({0}, .. scope String()));").Cs("Log.Info(GraphRuntime.Text({0}));").In("Value", type).Also("Print String Log");
 			if (type != .Float && type != .Int && type != .Bool && type != .Vector3)
-				Add(scope $"text.{suffix}", "Utilities|String", scope $"To String ({label})", .Value, "GraphRuntime.Text({0}, .. scope:: String())").In("Value", type).Out("", .String).Also("Convert Text");
+				Add(scope $"text.{suffix}", "Utilities|String", scope $"To String ({label})", .Value, "GraphRuntime.Text({0}, .. scope:: String())").Cs("GraphRuntime.Text({0})").In("Value", type).Out("", .String).Also("Convert Text");
 		}
 
 		Overload("add", "math.any.add", "math.add", "math.iadd", "math.vadd", "math.v2add", "math.cadd");
@@ -617,11 +696,11 @@ static class NodeLibrary
 		// Game: objects, spawning, time and the application.
 		Add("object.setactive", "Game", "Set Active", .Action, "GameObject.SetActive({0});").In("Active", .Bool).Default("true").Also("Set Actor Hidden In Game Enable");
 		Add("object.destroy", "Game", "Destroy Self", .Action, "Scene.Destroy(GameObject);").Also("DestroyActor");
-		Add("game.destroy", "Game", "Destroy Object", .Action, "if ({0} != null) Scene.Destroy({0});").In("Target", .Object, "GameObject").Also("DestroyActor Target");
-		Add("game.spawn", "Game", "Spawn Prefab", .Action, "r$N = Prefab.Instantiate(Scene, {0}, {1}, {2});").In("Prefab", .String).In("Location", .Vector3).In("Rotation", .Quaternion)
+		Add("game.destroy", "Game", "Destroy Object", .Action, "if ({0} != null) Scene.Destroy({0});").Cs("GraphRuntime.Destroy({0});").In("Target", .Object, "GameObject").Also("DestroyActor Target");
+		Add("game.spawn", "Game", "Spawn Prefab", .Action, "r$N = Prefab.Instantiate(Scene, {0}, {1}, {2});").Cs("r$N = Prefab.Instantiate(Scene, {0}, {1}, {2}) ?? default;").In("Prefab", .String).In("Location", .Vector3).In("Rotation", .Quaternion)
 			.Out("Spawned", .Object, "GameObject", "r$N").Also("SpawnActor Spawn Actor from Class Instantiate").locals.Set("GameObject r$N = null;");
-		Add("game.find", "Game", "Find Object By Name", .Value, "Scene.Find({0})").In("Name", .String).Out("", .Object, "GameObject").Also("Get Actor Of Class");
-		Add("game.findtag", "Game", "Find Object With Tag", .Value, "Scene.FindWithTag({0})").In("Tag", .String).Out("", .Object, "GameObject").Also("Get All Actors With Tag");
+		Add("game.find", "Game", "Find Object By Name", .Value, "Scene.Find({0})").Cs("(Scene.Find({0}) ?? default)").In("Name", .String).Out("", .Object, "GameObject").Also("Get Actor Of Class");
+		Add("game.findtag", "Game", "Find Object With Tag", .Value, "Scene.FindWithTag({0})").Cs("(Scene.FindWithTag({0}) ?? default)").In("Tag", .String).Out("", .Object, "GameObject").Also("Get All Actors With Tag");
 		Add("game.hastag", "Game", "Has Tag", .Value, "({0} != null && {0}.HasTag({1}))").In("Target", .Object, "GameObject", "GameObject").In("Tag", .String).Out("", .Bool).Also("Actor Has Tag");
 		Add("game.name", "Game", "Get Name", .Value, "({0} != null ? (StringView){0}.Name : \"\")").In("Target", .Object, "GameObject", "GameObject").Out("", .String).Also("Get Display Name Object Name");
 		Add("game.quit", "Game", "Quit Game", .Action, "Application.Quit();").Also("Exit");
@@ -632,29 +711,29 @@ static class NodeLibrary
 		Add("time.timescale", "Game|Time", "Get Global Time Dilation", .Value, "Time.TimeScale").Out("", .Float).Also("Time Scale");
 
 		// Physics and collision.
-		Add("physics.trace", "Collision", "Line Trace By Channel", .Action, "r$N = Scene.Physics.Raycast({0}, ({1} - {0}).Normalized, ({1} - {0}).Length, out hit$N);")
+		Add("physics.trace", "Collision", "Line Trace By Channel", .Action, "r$N = Scene.Physics.Raycast({0}, ({1} - {0}).Normalized, ({1} - {0}).Length, out hit$N);").Cs("r$N = GraphRuntime.Raycast(Scene, {0}, ({1} - {0}).Normalized, ({1} - {0}).Length(), out hit$N);")
 			.In("Start", .Vector3).In("End", .Vector3).Default("0 0 10").Out("Return Value", .Bool, "bool", "r$N").Out("Hit Object", .Object, "GameObject", "hit$N.gameObject")
 			.Out("Hit Location", .Vector3, "Vector3", "hit$N.point").Out("Distance", .Float, "float", "hit$N.distance").Also("Raycast LineTrace Ray").locals.Set("bool r$N = false;\nRaycastHit hit$N = default;");
 		Add("physics.raycast", "Collision", "Raycast (Direction)", .Action, "r$N = Scene.Physics.Raycast({0}, {1}.Normalized, {2}, out hit$N);")
 			.In("Origin", .Vector3).In("Direction", .Vector3).Default("0 0 1").In("Max Distance", .Float).Default("100").Out("Hit", .Bool, "bool", "r$N").Out("Hit Object", .Object, "GameObject", "hit$N.gameObject")
 			.Out("Hit Location", .Vector3, "Vector3", "hit$N.point").Out("Distance", .Float, "float", "hit$N.distance").Also("Line Trace").locals.Set("bool r$N = false;\nRaycastHit hit$N = default;");
-		Add("physics.spheretrace", "Collision", "Sphere Trace", .Action, "r$N = Scene.Physics.SphereCast({0}, {2}, ({1} - {0}).Normalized, ({1} - {0}).Length, out hit$N);")
+		Add("physics.spheretrace", "Collision", "Sphere Trace", .Action, "r$N = Scene.Physics.SphereCast({0}, {2}, ({1} - {0}).Normalized, ({1} - {0}).Length, out hit$N);").Cs("r$N = GraphRuntime.SphereCast(Scene, {0}, {2}, ({1} - {0}).Normalized, ({1} - {0}).Length(), out hit$N);")
 			.In("Start", .Vector3).In("End", .Vector3).Default("0 0 10").In("Radius", .Float).Default("0.5").Out("Return Value", .Bool, "bool", "r$N").Out("Hit Object", .Object, "GameObject", "hit$N.gameObject")
 			.Out("Hit Location", .Vector3, "Vector3", "hit$N.point").Out("Hit Normal", .Vector3, "Vector3", "hit$N.normal").Also("SphereTrace Shape Cast").locals.Set("bool r$N = false;\nShapeCastHit hit$N = default;");
-		Add("physics.addforce", "Physics", "Add Force", .Action, "if ({0} != null && {0}.HasComponent<Rigidbody>()) {0}.GetComponent<Rigidbody>().AddForce({1});")
+		Add("physics.addforce", "Physics", "Add Force", .Action, "if ({0} != null && {0}.HasComponent<Rigidbody>()) {0}.GetComponent<Rigidbody>().AddForce({1});").Cs("{0}.GetRigidbody()?.AddForce({1});")
 			.In("Target", .Object, "GameObject", "GameObject").In("Force", .Vector3).Also("Push");
-		Add("physics.addimpulse", "Physics", "Add Impulse", .Action, "if ({0} != null && {0}.HasComponent<Rigidbody>()) {0}.GetComponent<Rigidbody>().AddImpulse({1});")
+		Add("physics.addimpulse", "Physics", "Add Impulse", .Action, "if ({0} != null && {0}.HasComponent<Rigidbody>()) {0}.GetComponent<Rigidbody>().AddImpulse({1});").Cs("{0}.GetRigidbody()?.AddImpulse({1});")
 			.In("Target", .Object, "GameObject", "GameObject").In("Impulse", .Vector3).Also("Launch Knock Back");
-		Add("physics.addtorque", "Physics", "Add Torque", .Action, "if ({0} != null && {0}.HasComponent<Rigidbody>()) {0}.GetComponent<Rigidbody>().AddTorque({1});")
+		Add("physics.addtorque", "Physics", "Add Torque", .Action, "if ({0} != null && {0}.HasComponent<Rigidbody>()) {0}.GetComponent<Rigidbody>().AddTorque({1});").Cs("{0}.GetRigidbody()?.AddTorque({1});")
 			.In("Target", .Object, "GameObject", "GameObject").In("Torque", .Vector3).Also("Spin");
-		Add("physics.setvelocity", "Physics", "Set Physics Linear Velocity", .Action, "if ({0} != null && {0}.HasComponent<Rigidbody>()) {0}.GetComponent<Rigidbody>().Velocity = {1};")
+		Add("physics.setvelocity", "Physics", "Set Physics Linear Velocity", .Action, "if ({0} != null && {0}.HasComponent<Rigidbody>()) {0}.GetComponent<Rigidbody>().Velocity = {1};").Cs("if ({0}.GetRigidbody() is Rigidbody body$N) body$N.Velocity = {1};")
 			.In("Target", .Object, "GameObject", "GameObject").In("Velocity", .Vector3).Also("Set Velocity");
-		Add("physics.velocity", "Physics", "Get Physics Linear Velocity", .Value, "(({0} != null && {0}.HasComponent<Rigidbody>()) ? {0}.GetComponent<Rigidbody>().Velocity : Vector3.Zero)")
+		Add("physics.velocity", "Physics", "Get Physics Linear Velocity", .Value, "(({0} != null && {0}.HasComponent<Rigidbody>()) ? {0}.GetComponent<Rigidbody>().Velocity : Vector3.Zero)").Cs("({0}.GetRigidbody()?.Velocity ?? Vector3.Zero)")
 			.In("Target", .Object, "GameObject", "GameObject").Out("", .Vector3).Also("Get Velocity Speed");
 
 		// Characters (a Character Controller on the object).
 		Add("physics.charmove", "Physics|Character", "Move Character", .Action,
-			"if ({0} != null && {0}.HasComponent<CharacterController>()) {0}.GetComponent<CharacterController>().SimpleMove({1}, {2}, {3});")
+			"if ({0} != null && {0}.HasComponent<CharacterController>()) {0}.GetComponent<CharacterController>().SimpleMove({1}, {2}, {3});").Cs("{0}.GetCharacterController()?.SimpleMove({1}, {2}, {3});")
 			.In("Target", .Object, "GameObject", "GameObject").In("Velocity", .Vector3).In("Delta Time", .Float).In("Jump Speed", .Float)
 			.Also("Add Movement Input Character Movement Walk SimpleMove Jump Launch Character");
 		Add("physics.charheight", "Physics|Character", "Set Character Height", .Action, "GraphRuntime.SetCharacterHeight({0}, {1}, {2});")
@@ -664,7 +743,7 @@ static class NodeLibrary
 			.In("Target", .Object, "GameObject", "GameObject").Out("", .Float).Also("Is Crouched Capsule Half Height");
 		Add("physics.crouchlift", "Physics|Character", "Crouch Lift", .Value, "GraphRuntime.CrouchLift({0})")
 			.In("Target", .Object, "GameObject", "GameObject").Out("", .Float).Also("Crouch Jump Air Crouch");
-		Add("physics.grounded", "Physics|Character", "Is On Ground", .Value, "(({0} != null && {0}.HasComponent<CharacterController>()) ? {0}.GetComponent<CharacterController>().IsGrounded : false)")
+		Add("physics.grounded", "Physics|Character", "Is On Ground", .Value, "(({0} != null && {0}.HasComponent<CharacterController>()) ? {0}.GetComponent<CharacterController>().IsGrounded : false)").Cs("({0}.GetCharacterController()?.IsGrounded ?? false)")
 			.In("Target", .Object, "GameObject", "GameObject").Out("", .Bool).Also("Is Moving On Ground Grounded Falling");
 
 		// Audio.
@@ -701,13 +780,15 @@ static class NodeLibrary
 	/// kinds are left alone, because open graphs point at them.
 	public static void RefreshCodeNodes()
 	{
-		if (sDefs != null)
+		if (sDefs != null && !sCSharp)
 		{
 			AddCodeNodes();
 			AddApiNodes();
 			AddGetComponentNodes();
 			AddEcsNodes();
 		}
+		else if (sDefs != null)
+			AddGetComponentNodes();
 	}
 
 	// ---- shader graph nodes ----

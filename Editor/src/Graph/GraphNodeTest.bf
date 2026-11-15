@@ -38,6 +38,7 @@ extension EditorApp
 			if ((all ? def.fromApi : !def.title.Contains(text, true)) || def.kind == .Event || def.isShader || def.kind == .Param || def.kind == .Return)
 				continue;
 			let graph = scope NodeGraph();
+			graph.csharp = mManagedGameplay;
 			let name = scope $"GraphNodeTest{count++}";
 			graph.name.Set(name);
 			let update = graph.AddNode(NodeLibrary.Find("event.update"), .(40, 60));
@@ -77,7 +78,7 @@ extension EditorApp
 			}
 			let code = scope String();
 			graph.Compile(Project.Current.Name, name, "test", code);
-			File.WriteAllText(scope $"{folder}/{name}.bf", code).IgnoreError();
+			File.WriteAllText(scope $"{folder}/{name}{mManagedGameplay ? ".cs" : ".bf"}", code).IgnoreError();
 			let body = scope String(code);
 			body.Replace('\n', ' ');
 			Log.Info(scope $"GRAPH-NODE-TEST {name} key={def.key} title={def.title}: {body}");
@@ -94,6 +95,7 @@ extension EditorApp
 	void FlowTestGraph(StringView folder)
 	{
 		let graph = scope NodeGraph();
+		graph.csharp = mManagedGameplay;
 		graph.name.Set("GraphFlowTest");
 		GraphNode Node(StringView key, params Span<StringView> values)
 		{
@@ -153,7 +155,7 @@ extension EditorApp
 		}
 		let code = scope String();
 		graph.Compile(Project.Current.Name, "GraphFlowTest", "test", code);
-		File.WriteAllText(scope $"{folder}/GraphFlowTest.bf", code).IgnoreError();
+		File.WriteAllText(scope $"{folder}/GraphFlowTest{mManagedGameplay ? ".cs" : ".bf"}", code).IgnoreError();
 		graph.Save(scope $"{folder}/GraphFlowTest.tgraph");
 	}
 
@@ -162,6 +164,7 @@ extension EditorApp
 	void OverloadTestGraph(StringView folder)
 	{
 		let graph = scope NodeGraph();
+		graph.csharp = mManagedGameplay;
 		graph.name.Set("GraphOverloadTest");
 		let update = graph.AddNode(NodeLibrary.Find("event.update"), .(0, 0));
 		var last = update;
@@ -298,7 +301,7 @@ extension EditorApp
 		Log.Info(scope $"GRAPH-OVERLOAD DONE failures={failures}");
 		let code = scope String();
 		graph.Compile(Project.Current.Name, "GraphOverloadTest", "test", code);
-		File.WriteAllText(scope $"{folder}/GraphOverloadTest.bf", code).IgnoreError();
+		File.WriteAllText(scope $"{folder}/GraphOverloadTest{mManagedGameplay ? ".cs" : ".bf"}", code).IgnoreError();
 		graph.Save(scope $"{folder}/GraphOverloadTest.tgraph");
 	}
 
@@ -321,9 +324,11 @@ extension EditorApp
 			Path.GetFileNameWithoutExtension(file, graph.name);
 			graph.Load(file);
 			let code = scope String();
-			graph.Compile(Project.Current.Name, graph.name, scope String()..Append(Path.GetFileName(file, .. scope .())), code);
-			File.WriteAllText(scope $"{file}.test.bf", code).IgnoreError();
-			Log.Info(scope $"GRAPH-COMPILE-TEST wrote {file}.test.bf");
+			graph.csharp = mManagedGameplay;
+			graph.Compile(GraphNamespace(file, .. scope .()), graph.name, scope String()..Append(Path.GetFileName(file, .. scope .())), code);
+			let written = scope $"{file}.test{mManagedGameplay ? ".cs" : ".bf"}";
+			File.WriteAllText(written, code).IgnoreError();
+			Log.Info(scope $"GRAPH-COMPILE-TEST wrote {written}");
 			return;
 		}
 		let path = GetArg("--graph-menu-test", .. scope String());

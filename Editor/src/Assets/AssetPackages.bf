@@ -184,8 +184,8 @@ static class AssetPackages
 			let path = scope String(queue[next++]);
 			let full = scope $"{root}/{path}";
 			// A graph's generated script and a shader graph's generated shader go with it.
-			StringView[?] generatedFrom = .(".tgraph", ".tsgraph", ".tsgraph");
-			StringView[?] generatedAs = .(".bf", ".tshader", ".tcompute");
+			StringView[?] generatedFrom = .(".tgraph", ".tgraph", ".tsgraph", ".tsgraph");
+			StringView[?] generatedAs = .(".bf", ".cs", ".tshader", ".tcompute");
 			for (int g < generatedFrom.Count)
 			{
 				if (path.EndsWith(generatedFrom[g]))

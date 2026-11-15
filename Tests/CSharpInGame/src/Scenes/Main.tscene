@@ -86,3 +86,8 @@ transform 70 0 70 0 0 0 1 1 1 1
 component Tallow.CSharpBehaviour enabled 1
 field scriptType "InGame.AsyncDoomed"
 field fieldOverrides ""
+object 16 parent 0 active 1 name "Graph"
+transform 80 0 80 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.GraphProbe"
+field fieldOverrides ""

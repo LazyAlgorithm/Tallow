@@ -900,6 +900,22 @@ class Program
 				return 0;
 			}
 		}
+		// --graph-compile <graph.tgraph> <namespace>: compiles a visual script graph to C# beside it, without a window.
+		for (int i < args.Count - 2)
+		{
+			if (args[i] == "--graph-compile")
+			{
+				let script = scope String();
+				let error = scope String();
+				if (!GraphCSharp.CompileFile(args[i + 1], args[i + 2], script, error))
+				{
+					Console.WriteLine(error);
+					return 1;
+				}
+				Console.WriteLine(scope $"Compiled {args[i + 1]} to {script}");
+				return 0;
+			}
+		}
 		// Precompiled editor: the native TallowLauncher binary already contains
 		// TallowEditor. C# projects no longer generate or compile an editor exe.
 		if (args.Contains("--editor") || args.Contains("--game"))

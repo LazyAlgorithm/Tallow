@@ -53,6 +53,8 @@ class NodeDef
 	public List<PinDef> outputs = new .() ~ { ClearPins(_); delete _; };
 	/// Code with {0}, {1}... standing for the data inputs. For events it is the method name.
 	public String code = new .() ~ delete _;
+	/// The same in C#, for graphs in C# projects, when GraphCSharp cannot turn the Beef code over by itself.
+	public String cs = new .() ~ delete _;
 	/// Events: the whole method declaration when it is not simply "public override void Name()".
 	public String signature = new .() ~ delete _;
 	/// Events: a condition (with {0}... for the inputs) the event's flow runs under, for events that share a method.
@@ -94,6 +96,13 @@ class NodeDef
 	public NodeDef In(StringView name, PinType type, StringView typeName = "", StringView fallback = "")
 	{
 		inputs.Add(Pin(name, type, typeName, fallback));
+		return this;
+	}
+
+	/// The node's C# code (see cs).
+	public NodeDef Cs(StringView code)
+	{
+		cs.Set(code);
 		return this;
 	}
 

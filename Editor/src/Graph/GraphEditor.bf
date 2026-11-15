@@ -232,6 +232,28 @@ extension EditorApp
 		OpenGraph(path);
 	}
 
+	/// The script a graph compiles to, beside it: Name.cs in a C# project, Name.bf otherwise.
+	void GraphScriptPath(StringView graphPath, String output)
+	{
+		output.Append(graphPath.Substring(0, graphPath.Length - ".tgraph".Length));
+		output.Append(mManagedGameplay ? ".cs" : ".bf");
+	}
+
+	/// The namespace a graph's class goes in: a C# graph's is the one a new C# script in its folder gets.
+	void GraphNamespace(StringView graphPath, String output)
+	{
+		if (!mManagedGameplay)
+		{
+			output.Set(Project.Current.Name);
+			return;
+		}
+		let folder = scope String();
+		Path.GetDirectoryPath(graphPath, folder).IgnoreError();
+		let space = ScriptNamespaceFor(folder, .. scope .());
+		output.Clear();
+		NodeLibrary.Identifier(space, output);
+	}
+
 	void CompileGraph()
 	{
 		if (mGraph == null)
@@ -254,8 +276,9 @@ extension EditorApp
 		let fileName = scope String();
 		Path.GetFileName(mGraphPath, fileName);
 		let code = scope String();
-		mGraph.Compile(Project.Current.Name, mGraph.name, fileName, code);
-		let target = scope $"{folder}/{mGraph.name}.bf";
+		mGraph.csharp = mManagedGameplay;
+		mGraph.Compile(GraphNamespace(mGraphPath, .. scope .()), mGraph.name, fileName, code);
+		let target = scope $"{folder}/{mGraph.name}{mManagedGameplay ? ".cs" : ".bf"}";
 		if (File.WriteAllText(target, code) case .Ok)
 		{
 			mGraphStatus.Set("Saved and compiled.");

@@ -12,7 +12,10 @@ namespace Tallow;
 static class NetRandom
 {
 	/// A number from 0 up to (not including) 1.
-	public static float Value(Component component, int salt = 0)
+	public static float Value(Component component, int salt = 0) => Value(component.GameObject, salt);
+
+	/// The same for an object (C# scripts reach it through this).
+	public static float Value(GameObject gameObject, int salt = 0)
 	{
 		uint64 hash = 14695981039346656037;
 		void Add(void* data, int length)
@@ -25,10 +28,10 @@ static class NetRandom
 			}
 		}
 		var id = (uint32)0;
-		if (component.GameObject.HasComponent<NetworkIdentity>())
-			id = component.GameObject.GetComponent<NetworkIdentity>().NetId;
-		var position = component.Transform.Position;
-		var rotation = component.Transform.Rotation;
+		if (gameObject.HasComponent<NetworkIdentity>())
+			id = gameObject.GetComponent<NetworkIdentity>().NetId;
+		var position = gameObject.Transform.Position;
+		var rotation = gameObject.Transform.Rotation;
 		var s = (int64)salt;
 		Add(&id, 4);
 		Add(&position, sizeof(Vector3));

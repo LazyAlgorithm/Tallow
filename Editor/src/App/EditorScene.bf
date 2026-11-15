@@ -60,6 +60,8 @@ extension EditorApp
 			// Scripts renamed since the scene was saved.
 			if (Project.Current != null && CSharpScriptIdentity.Repair(mScene, Project.Current.Path) > 0)
 				mDirty = true;
+			if (Project.Current != null)
+				NodeLibrary.RefreshCSharpScripts(Project.Current.Path);
 			AlignSceneCameraToGameCamera();
 			// A streamed world: only the cells round the view (docs/world-streaming.md).
 			LoadStreamedCellsAroundView();

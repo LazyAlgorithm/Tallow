@@ -191,6 +191,19 @@ extension EditorApp
 			Expect(script != null && script.isScript, "a C# component's script collected, as a script");
 			Expect(hasDefinition, "the C# script's assembly definition collected");
 			Expect(csItems.Count == 3, scope $"prefab, script and assembly definition only (got {csItems.Count})");
+			// A C# graph brings the script it compiles to.
+			File.WriteAllText(scope $"{folder}/Code/Sub/PkgGraph.tgraph", "graph \"PkgGraph\"\n").IgnoreError();
+			File.WriteAllText(scope $"{folder}/Code/Sub/PkgGraph.cs", "namespace PkgTest;\n\npublic partial class PkgGraph : Tallow.Script\n{\n}\n").IgnoreError();
+			RefreshAssetIds();
+			let graphItems = scope List<AssetPackages.ExportItem>();
+			defer { ClearAndDeleteItems!(graphItems); }
+			let graphPicked = scope List<StringView>();
+			graphPicked.Add(scope $"{t}/Code/Sub/PkgGraph.tgraph");
+			AssetPackages.CollectExport(graphPicked, true, graphItems);
+			bool graphScript = false;
+			for (let item in graphItems)
+				graphScript |= item.path == scope $"{t}/Code/Sub/PkgGraph.cs" && item.isScript;
+			Expect(graphScript, "a graph's generated C# script collected with it");
 			Directory.DelTree(scope $"{folder}/Code").IgnoreError();
 			File.Delete(scope $"{folder}/Prefabs/c.tprefab").IgnoreError();
 			File.Delete(scope $"{folder}/Prefabs/c.tprefab{AssetDatabase.MetaSuffix}").IgnoreError();

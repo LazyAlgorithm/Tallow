@@ -82,6 +82,7 @@ public class ApiChecks : CheckBase
             GroundAsTrigger();
             HooksAndSaves();
             AsyncChecks();
+            GraphChecks();
             PackageChecks();
             Finish();
             Application.Quit();
@@ -112,6 +113,21 @@ public class ApiChecks : CheckBase
         Check("await Wait(0.5) waits half a second of game time", probe?.FramesForWait is >= 29 and <= 31);
         Check("code after every await runs on the game thread", probe is { StayedOnGameThread: true });
         Check("destroying a script cancels what it awaits", AsyncDoomed.Cancelled && !AsyncDoomed.RanOn);
+    }
+
+    private void GraphChecks()
+    {
+        // GraphProbe.cs is GraphProbe.tgraph compiled by the editor's graph compiler (the test compiles it again).
+        GraphProbe? graph = Scene.Find("Graph")?.GetComponent<GraphProbe>();
+        Check("a visual script graph compiled to C# runs as a script", graph != null);
+        if (graph == null)
+            return;
+        Vector3 expected = Vector3.Transform(Vector3.UnitZ, RotationMath.EulerDegrees(new Vector3(0, 90, 0)));
+        Check("graph Rotate Vector turns a vector as the engine does", Vector3.Distance(graph.turned, expected) < 1e-4f);
+        Check("graph Vector Length", MathF.Abs(graph.length - 5f) < 1e-5f);
+        Check("graph text nodes build text (" + graph.label + ")", graph.label == "graph 7");
+        Check("graph Find Object By Name gives the object", graph.self == graph.GameObject);
+        Check("graph On Update runs every frame with its delta time", graph.frames > 200 && graph.elapsed > 3f);
     }
 
     private void HooksAndSaves()

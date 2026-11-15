@@ -8,6 +8,7 @@ namespace Tallow;
 /// </summary>
 public static partial class Mathf
 {
+    public const float PI = MathF.PI;
     public const float Deg2Rad = MathF.PI / 180f;
     public const float Rad2Deg = 180f / MathF.PI;
     public const float Epsilon = 1.0e-6f;

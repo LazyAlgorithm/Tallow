@@ -150,7 +150,7 @@ extension EditorApp
 	/// Path of the graph a script was generated from, if that graph exists.
 	static bool FindSourceGraph(StringView scriptPath, String graphPath)
 	{
-		if (!scriptPath.EndsWith(".bf"))
+		if (!scriptPath.EndsWith(".bf") && !scriptPath.EndsWith(".cs"))
 			return false;
 		graphPath.Append(scriptPath.Substring(0, scriptPath.Length - 3));
 		graphPath.Append(".tgraph");
@@ -160,8 +160,7 @@ extension EditorApp
 	/// Turns a graph into an ordinary script: the generated code stays, the graph is removed.
 	void ConvertGraphToScript(StringView graphPath)
 	{
-		let scriptPath = scope String(graphPath.Substring(0, graphPath.Length - 7));
-		scriptPath.Append(".bf");
+		let scriptPath = GraphScriptPath(graphPath, .. scope String());
 		if (!File.Exists(scriptPath))
 		{
 			let graph = scope NodeGraph();
@@ -171,7 +170,8 @@ extension EditorApp
 			let fileName = scope String();
 			Path.GetFileName(graphPath, fileName);
 			let generated = scope String();
-			graph.Compile(Project.Current.Name, graph.name, fileName, generated);
+			graph.csharp = mManagedGameplay;
+			graph.Compile(GraphNamespace(graphPath, .. scope .()), graph.name, fileName, generated);
 			File.WriteAllText(scriptPath, generated).IgnoreError();
 		}
 		// Drop the "generated, do not edit" header: from here on the script is the source.
@@ -218,9 +218,7 @@ extension EditorApp
 	{
 		OpenGraph(graphPath);
 		CompileGraph();
-		let scriptPath = scope String(graphPath.Substring(0, graphPath.Length - 7));
-		scriptPath.Append(".bf");
-		OpenScript(scriptPath);
+		OpenScript(GraphScriptPath(graphPath, .. scope String()));
 	}
 
 	void OpenScript(StringView sourcePath, int32 line = -1)
@@ -392,6 +390,7 @@ extension EditorApp
 		}
 		mCheckManaged = true;
 		mManagedGameplay = true;
+		NodeLibrary.CSharp = true;
 		mManagedBuildReady = false;
 		mCheckWasReload = false;
 		mCheckRunning = true;
@@ -560,6 +559,9 @@ extension EditorApp
 			// A class renamed in this build: point the open scene at its new name.
 			if (mCheckSucceeded && mPlay == .Edit && CSharpScriptIdentity.Repair(mScene, Project.Current.Path) > 0)
 				MarkDirty();
+			// Graphs can get and hold the game's scripts.
+			if (mCheckSucceeded)
+				NodeLibrary.RefreshCSharpScripts(Project.Current.Path);
 			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled." : "C# compilation failed. See Console.");
 			mManagedCompileNoticePending = mCheckSucceeded && !mManagedRecheckQueued;
 			if (mManagedCompileNoticePending)

@@ -234,7 +234,22 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 
 ## P3 — convert visual scripting and sample content
 
-- [ ] Preserve existing visual graphs and nodes while generating C# instead of native Beef gameplay code.
+- [x] Preserve existing visual graphs and nodes while generating C# instead of native Beef gameplay code
+  (November 15, 2026, stage 1). In a C# project the graph compiler writes `Name.cs` beside `Name.tgraph`
+  (a `public partial class Name : Script` in the folder's script namespace). `GraphCSharp.FromBeef` turns the
+  Beef node code over (types, `let`, `.(`, `scope`, vector/colour members, float maths, enum shorthand, null
+  handles); nodes it cannot handle carry their own C# with `NodeDef.Cs(...)`. All 294 hand-written gameplay
+  nodes plus the flow and overload test graphs compile with no errors or warnings (`--graph-node-test "*"` in a
+  C# project, then Tallow.Build). New Tallow.API pieces for graph code (and games): `GraphRuntime`, `GraphHit`,
+  `Audio`, `InputActions`, `NetRandom`, `Time.GameTime`, `Mathf.PI`, and C# 14 extension members
+  (`Vector3.Up/Forward/Right...`, `.Normalized`, `Quaternion.Euler/AngleAxis/LookRotation`, `.EulerAngles`,
+  `Quaternion * Vector3`). Dropping a graph on an object attaches its C# script; package export brings the
+  `.cs`; the Project panel hides it; Convert to Script and View Generated Code use it. Headless:
+  `TallowLauncher --graph-compile <graph> <namespace>`. Test: `Tests/CSharpInGame/src/Scripts/GraphProbe.tgraph`
+  is compiled again by the in-engine test, compared with the checked-in `GraphProbe.cs`, and run (7 checks).
+  Not yet: graph object variables are not Inspector-editable in C# (the C# Inspector has no reference fields),
+  subgraphs in `--graph-compile`, For Each Data (ECS) nodes, and Beef API/[GraphNode] nodes (hidden in C#
+  projects until stage 2 discovers nodes from Tallow.API and the game's C#).
 - [ ] Permit graph-to-C# calls, C#-to-graph events/operations, automatic C# type/method node discovery, managed ECS & networking nodes, and correct graph errors/source mapping.
 - [ ] Convert the legacy starter projects, sample/voxel sandbox/showcase content, tutorial code and code-generation templates; newly created projects should not expose Beef to normal C# authors.
 - [ ] Keep shader graph/compute graph/rendering functionality intact; never confuse visual **gameplay** source generation with native shader compilation.

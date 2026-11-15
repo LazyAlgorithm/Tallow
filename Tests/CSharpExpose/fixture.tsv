@@ -11,6 +11,8 @@ field	Tallow.Time	TickScale	float	get
 field	Tallow.Time	TimeScale	float	getset
 field	Tallow.Time	UnscaledDeltaTime	float	get
 method	Tallow.Application	Quit	void
+method	Tallow.CSharpAudio	PlayOneShot	void	clip:string	position:System.Numerics.Vector3	volume:float
+method	Tallow.CSharpAudio	PlayOneShot2D	void	clip:string	volume:float
 method	Tallow.CSharpBindingFixture	Average	float	a:float	b:float
 method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:string
@@ -19,6 +21,14 @@ method	Tallow.CSharpComponents	SetEnabled	bool	session:ulong	entity:ulong	instan
 method	Tallow.CSharpDraw	Box	void	layer:int	center:System.Numerics.Vector3	size:System.Numerics.Vector3	color:System.Numerics.Vector4
 method	Tallow.CSharpDraw	Line	void	layer:int	a:System.Numerics.Vector3	b:System.Numerics.Vector3	color:System.Numerics.Vector4
 method	Tallow.CSharpDraw	Sphere	void	layer:int	center:System.Numerics.Vector3	radius:float	color:System.Numerics.Vector4
+method	Tallow.CSharpGameplay	GameTime	float
+method	Tallow.CSharpGameplay	NetRandomValue	float	session:ulong	entity:ulong	salt:int
+method	Tallow.CSharpInputActions	Delta	System.Numerics.Vector2	name:string
+method	Tallow.CSharpInputActions	Held	bool	name:string
+method	Tallow.CSharpInputActions	Pressed	bool	name:string
+method	Tallow.CSharpInputActions	Released	bool	name:string
+method	Tallow.CSharpInputActions	Value	float	name:string
+method	Tallow.CSharpInputActions	Vector	System.Numerics.Vector2	name:string
 method	Tallow.CSharpNetwork	SendEvent	int	session:ulong	entity:ulong	instance:int	name:string	value:float
 method	Tallow.CSharpNetwork	SendRpc	int	session:ulong	entity:ulong	instance:int	target:int	method:string	arguments:string
 method	Tallow.CSharpSaves	Delete	void	slot:string

@@ -18,6 +18,17 @@ class NodeGraph
 	/// A shader graph (.tsgraph): its nodes are GLSL and it compiles to a .tshader file, not a component.
 	public bool isShader;
 	int32 mNextId = 1;
+	/// Compile to C# (a C# project's graph) rather than Beef.
+	public bool csharp;
+
+	/// Node code (written in Beef) as this graph compiles it.
+	void Code(StringView beef, String output)
+	{
+		if (csharp)
+			GraphCSharp.FromBeef(beef, output);
+		else
+			output.Append(beef);
+	}
 
 	public static StringView TypeSuffix(PinType type)
 	{
@@ -640,7 +651,20 @@ class NodeGraph
 		if (pin.type == .Object)
 		{
 			// Nothing connected: the pin's own stand-in (this object's component of that type, usually).
-			code.Append(pin.code != null ? (StringView)pin.code : "null");
+			if (pin.code == null && sCSharpLiterals)
+			{
+				let typeName = (pin.typeName != null) ? (StringView)pin.typeName : "GameObject";
+				if (NodeLibrary.IsCSharpStruct(typeName))
+					code.AppendF("default({})", typeName);
+				else
+					code.Append("null");
+			}
+			else if (pin.code == null)
+				code.Append("null");
+			else if (sCSharpLiterals)
+				GraphCSharp.FromBeef(pin.code, code);
+			else
+				code.Append(pin.code);
 			return;
 		}
 		if (pin.type == .Enum)
@@ -656,6 +680,9 @@ class NodeGraph
 				code.Append("default");
 			else
 			{
+				// C# names the enum: "KeyCode.Space" for Beef's ".Space".
+				if (sCSharpLiterals && pin.typeName != null)
+					code.Append(pin.typeName);
 				code.Append('.');
 				NodeLibrary.Identifier(name, code);
 			}
@@ -663,6 +690,9 @@ class NodeGraph
 		}
 		Literal(pin.type, value, code);
 	}
+
+	/// Set while a C# graph compiles: the static literal writers follow it.
+	[ThreadStatic] static bool sCSharpLiterals;
 
 	static void Literal(PinType type, StringView value, String code)
 	{
@@ -682,16 +712,16 @@ class NodeGraph
 			code.AppendF("{}", (int32)SceneSerializer.ParseFloat(value));
 		case .Vector2:
 			Parts(2);
-			code.AppendF("Vector2({}f, {}f)", v[0], v[1]);
+			code.AppendF("{}Vector2({}f, {}f)", sCSharpLiterals ? "new " : "", v[0], v[1]);
 		case .Quaternion:
 			Parts(3);
-			code.AppendF("Quaternion.Euler({}f, {}f, {}f)", v[0], v[1], v[2]);
+			code.AppendF("{}({}f, {}f, {}f)", sCSharpLiterals ? "GraphRuntime.Euler" : "Quaternion.Euler", v[0], v[1], v[2]);
 		case .Color:
 			v = .(1, 1, 1, 1);
 			Parts(4);
-			code.AppendF("Color({}f, {}f, {}f, {}f)", v[0], v[1], v[2], v[3]);
+			code.AppendF("{}Color({}f, {}f, {}f, {}f)", sCSharpLiterals ? "new " : "", v[0], v[1], v[2], v[3]);
 		case .Object:
-			code.Append("null");
+			code.Append(sCSharpLiterals ? "default" : "null");
 		case .Enum:
 			code.Append("default");
 		case .Float:
@@ -701,7 +731,7 @@ class NodeGraph
 			code.Append((value == "true" || value == "1") ? "true" : "false");
 		case .Vector3:
 			Parts(3);
-			code.AppendF("Vector3({}f, {}f, {}f)", v[0], v[1], v[2]);
+			code.AppendF("{}Vector3({}f, {}f, {}f)", sCSharpLiterals ? "new " : "", v[0], v[1], v[2]);
 		case .String:
 			SceneSerializer.Quote(value, code);
 		case .Flow:
@@ -723,7 +753,7 @@ class NodeGraph
 				if (from.type == .Int && to.type == .Float)
 					code.Append("(float)(");
 				else if (from.type == .Float && to.type == .Int)
-					code.Append("(int32)(");
+					code.Append(csharp ? "(int)(" : "(int32)(");
 				else if (to.type == .Object && to.typeName != null && from.typeName != null && from.typeName != to.typeName && ApiIndex.IsA(to.typeName, from.typeName))
 				{
 					code.Append("((");
@@ -761,7 +791,7 @@ class NodeGraph
 			id.AppendF("{}", node.id);
 			let expression = scope String(node.def.outputs[outputPin].code);
 			expression.Replace("$N", id);
-			code.Append(expression);
+			Code(expression, code);
 			return;
 		}
 		if (node.def.kind == .Event)
@@ -784,7 +814,7 @@ class NodeGraph
 	}
 
 	/// Substitutes {n} in a node's code with its data inputs, in order.
-	void Fill(GraphNode node, String code, int depth) => Fill(node, node.def.code, code, depth);
+	void Fill(GraphNode node, String code, int depth) => Fill(node, csharp && !node.def.cs.IsEmpty ? node.def.cs : node.def.code, code, depth);
 
 	void Fill(GraphNode node, StringView templateIn, String code, int depth)
 	{
@@ -796,7 +826,12 @@ class NodeGraph
 		}
 		let id = scope String();
 		id.AppendF("{}", node.id);
-		let template = scope String(templateIn);
+		let template = scope String();
+		// The template is translated before the inputs go in: they are C# already.
+		if (csharp && templateIn != (StringView)node.def.cs)
+			GraphCSharp.FromBeef(templateIn, template);
+		else
+			template.Append(templateIn);
 		template.Replace("$N", id);
 		int i = 0;
 		while (i < template.Length)
@@ -859,7 +894,7 @@ class NodeGraph
 				if (node.def.kind == .Loop)
 				{
 					// Counts from First to Last inclusive.
-					code.AppendF("for (int32 i{0} = ", node.id);
+					code.AppendF("for ({1} i{0} = ", node.id, csharp ? "int" : "int32");
 					InputCode(node, 1, code, 0);
 					code.AppendF(", last{0} = ", node.id);
 					InputCode(node, 2, code, 0);
@@ -868,7 +903,7 @@ class NodeGraph
 				else
 				{
 					// A guard so that a condition that never turns false cannot hang the game.
-					code.AppendF("for (int32 guard{0} = 0; guard{0} < 100000 && (", node.id);
+					code.AppendF("for ({1} guard{0} = 0; guard{0} < 100000 && (", node.id, csharp ? "int" : "int32");
 					InputCode(node, 1, code, 0);
 					code.AppendF("); guard{0}++)\n", node.id);
 				}
@@ -878,6 +913,12 @@ class NodeGraph
 				code.Append('\t', indent);
 				code.Append("}\n");
 				node = FollowFlow(node, node.def.kind == .Loop ? 2 : 1, out entry);
+				continue;
+			}
+			if (node.def.kind == .EcsEach && csharp)
+			{
+				code.Append("// For Each Data is not in C# graphs yet: use a C# script.\n");
+				node = FollowFlow(node, (int32)node.def.outputs.Count - 1, out entry);
 				continue;
 			}
 			if (node.def.kind == .EcsEach)
@@ -929,9 +970,10 @@ class NodeGraph
 			{
 				// Text variables own their String, so they copy the new text instead of taking the reference.
 				NodeLibrary.Identifier(VariableName(node), code);
-				code.Append(node.def.inputs[2].type == .String ? ".Set(" : " = ");
+				let copies = node.def.inputs[2].type == .String && !csharp;
+				code.Append(copies ? ".Set(" : " = ");
 				InputCode(node, 2, code, 0);
-				code.Append(node.def.inputs[2].type == .String ? ");\n" : ";\n");
+				code.Append(copies ? ");\n" : ";\n");
 				node = FollowFlow(node, 0, out entry);
 				continue;
 			}
@@ -943,8 +985,12 @@ class NodeGraph
 			// An action that hands something back keeps it in a local the nodes after it read.
 			for (let pin in node.def.outputs)
 			{
-				if (pin.type != .Flow && pin.code != null && pin.code.StartsWith("r$N"))
+				// (Unless its code stores it already.)
+				if (pin.type != .Flow && pin.code != null && pin.code.StartsWith("r$N") && !node.def.code.StartsWith("r$N"))
+				{
 					code.AppendF("r{} = ", node.id);
+					break;
+				}
 			}
 			Fill(node, code, 0);
 			code.Append('\n');
@@ -1068,9 +1114,13 @@ class NodeGraph
 					continue;
 				Line(code, indent, scope $"case {i}:");
 				EmitThen(node, i, code, indent + 1, depth);
+				if (csharp)
+					Line(code, indent + 1, "break;");
 			}
 			Line(code, indent, "default:");
 			EmitThen(node, cases, code, indent + 1, depth);
+			if (csharp)
+				Line(code, indent + 1, "break;");
 			Line(code, indent, "}");
 		case "flow.switchstring":
 			let selection = Input(1);
@@ -1080,7 +1130,10 @@ class NodeGraph
 			{
 				if (FollowFlow(node, i) == null)
 					continue;
-				Line(code, indent, scope $"{first ? "" : "else "}if (StringView({selection}) == StringView({Input(2 + i)}))");
+				if (csharp)
+					Line(code, indent, scope $"{first ? "" : "else "}if ({selection} == {Input(2 + i)})");
+				else
+					Line(code, indent, scope $"{first ? "" : "else "}if (StringView({selection}) == StringView({Input(2 + i)}))");
 				EmitBlock(node, i, code, indent, depth);
 				first = false;
 			}
@@ -1096,7 +1149,7 @@ class NodeGraph
 				Line(code, indent, "break;");
 				return;
 			}
-			Line(code, indent, scope $"for (int32 i{n} = {Input(2)}, last{n} = {Input(3)}; i{n} <= last{n}; i{n}++)");
+			Line(code, indent, scope $"for ({csharp ? "int" : "int32"} i{n} = {Input(2)}, last{n} = {Input(3)}; i{n} <= last{n}; i{n}++)");
 			EmitBlock(node, 0, code, indent, depth);
 			EmitThen(node, 2, code, indent, depth);
 		case "flow.isvalid":
@@ -1157,7 +1210,7 @@ class NodeGraph
 		{
 			if (node.def.fields.IsEmpty)
 				continue;
-			let text = scope String(node.def.fields);
+			let text = Code(node.def.fields, .. scope String());
 			text.Replace("$N", scope $"{node.id}");
 			int data = 0;
 			for (int32 i < (int32)node.def.inputs.Count)
@@ -1184,7 +1237,7 @@ class NodeGraph
 		{
 			if (!node.def.locals.IsEmpty)
 			{
-				let text = scope String(node.def.locals);
+				let text = Code(node.def.locals, .. scope String());
 				text.Replace("$N", scope $"{node.id}");
 				for (let line in text.Split('\n', .RemoveEmptyEntries))
 				{
@@ -1202,7 +1255,8 @@ class NodeGraph
 				let local = scope String(pin.code);
 				local.Replace("$N", scope $"{node.id}");
 				code.Append('\t', indent);
-				code.AppendF("{} {} = default;\n", pin.typeName, local);
+				let typeName = Code(pin.typeName, .. scope String());
+				code.AppendF("{} {} = default;\n", typeName, local);
 			}
 		}
 	}
@@ -1259,7 +1313,12 @@ class NodeGraph
 		code.AppendF("// Generated from {} by the Tallow graph compiler.\n// Edit the graph and compile it again; changes made here are overwritten.\n", sourceFile);
 		let baseClass = scope String();
 		BaseClass(baseClass);
-		code.AppendF("using System;\nusing Tallow;\n\nnamespace {};\n\n[Component]\nclass {} : {}\n{{\n", namespaceName, className, baseClass);
+		sCSharpLiterals = csharp;
+		defer { sCSharpLiterals = false; }
+		if (csharp)
+			code.AppendF("using System;\nusing System.Numerics;\nusing Tallow;\n\nnamespace {};\n\npublic partial class {} : Script\n{{\n", namespaceName, className);
+		else
+			code.AppendF("using System;\nusing Tallow;\n\nnamespace {};\n\n[Component]\nclass {} : {}\n{{\n", namespaceName, className, baseClass);
 		List<String> fields = scope .();
 		defer
 		{
@@ -1304,7 +1363,7 @@ class NodeGraph
 				if (node.def.key == "event.custom")
 					signature.Set(scope $"public void {method}()");
 				else
-					signature.Set(node.def.signature);
+					signature.Set(Code(node.def.signature, .. scope String()));
 				let first = FollowFlow(node, 0, let pin);
 				if (node.def.guard.IsEmpty)
 					EmitFlow(first, body, 2, 0, pin);
@@ -1323,7 +1382,9 @@ class NodeGraph
 				continue;
 			let locals = scope String();
 			EmitLocals(locals, 2);
-			if (signature.IsEmpty)
+			if (signature.IsEmpty && csharp)
+				code.AppendF("\t{0}\n\t{{\n\t\t{1}\n{2}{3}\t}}\n\n", GraphCSharp.Signature(method, .. scope .()), GraphCSharp.BaseCall(method, .. scope .()), locals, body);
+			else if (signature.IsEmpty)
 				code.AppendF("\tpublic override void {0}()\n\t{{\n\t\tbase.{0}();\n{1}{2}\t}}\n\n", method, locals, body);
 			else
 				code.AppendF("\t{}\n\t{{\n{}{}\t}}\n\n", signature, locals, body);
@@ -1358,6 +1419,7 @@ class NodeGraph
 				continue;
 			let baseName = scope String();
 			Path.GetFileNameWithoutExtension(path, baseName);
+			sub.csharp = csharp;
 			sub.EmitSubMethod(baseName, code);
 			sub.EmitFields(fields, code);
 			sub.CollectSubgraphs(pending);
@@ -1384,12 +1446,15 @@ class NodeGraph
 			if (type == .Object)
 			{
 				// A reference: picked per object in the Inspector (another object, or a component on one).
-				code.AppendF("\tpublic {} {};\n", typeName.IsEmpty ? "GameObject" : typeName, identifier);
+				let orNull = csharp && !NodeLibrary.IsCSharpStruct(typeName);
+				code.AppendF(orNull ? "\tpublic {}? {};\n" : "\tpublic {} {};\n", typeName.IsEmpty ? "GameObject" : typeName, identifier);
 			}
+			else if (type == .String && csharp)
+				code.AppendF("\t{}public string {} = {};\n", networked ? "[Sync] " : "", identifier, literal);
 			else if (type == .String)
 				code.AppendF("\t{}public String {} = new .({}) ~ delete _;\n", networked ? "[Sync] " : "", identifier, literal);
 			else
-				code.AppendF("\t{}public {} {} = {};\n", networked ? "[Sync] " : "", TypeName(type), identifier, literal);
+				code.AppendF("\t{}public {} {} = {};\n", networked ? "[Sync] " : "", TypeName(type, csharp), identifier, literal);
 		}
 		let before = declared.Count;
 		for (let variable in variables)
@@ -1415,14 +1480,14 @@ class NodeGraph
 		}
 	}
 
-	static StringView TypeName(PinType type)
+	static StringView TypeName(PinType type, bool csharp = false)
 	{
 		switch (type)
 		{
 		case .Bool: return "bool";
 		case .Vector3: return "Vector3";
-		case .String: return "String";
-		case .Int: return "int32";
+		case .String: return csharp ? "string" : "String";
+		case .Int: return csharp ? "int" : "int32";
 		case .Vector2: return "Vector2";
 		case .Quaternion: return "Quaternion";
 		case .Color: return "Color";
@@ -1446,7 +1511,7 @@ class NodeGraph
 			{
 				if (!parameters.IsEmpty)
 					parameters.Append(", ");
-				parameters.AppendF("{} ", TypeName(node.def.outputs[0].type));
+				parameters.AppendF("{} ", TypeName(node.def.outputs[0].type, csharp));
 				NodeLibrary.Identifier(node.values[0].IsEmpty ? (StringView)"value" : node.values[0], parameters);
 			}
 		}
@@ -1454,7 +1519,7 @@ class NodeGraph
 			return;
 		let method = scope String("Sub_");
 		NodeLibrary.Identifier(name, method);
-		code.AppendF("\t{} {}({})\n\t{{\n", returnType == .Flow ? "void" : TypeName(returnType), method, parameters);
+		code.AppendF("\t{} {}({})\n\t{{\n", returnType == .Flow ? "void" : TypeName(returnType, csharp), method, parameters);
 		EmitLocals(code, 2);
 		EmitFrom(entry, 0, code, 2, 0);
 		if (returnType != .Flow)

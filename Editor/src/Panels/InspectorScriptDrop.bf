@@ -80,6 +80,18 @@ extension EditorApp
 						{
 							AttachManagedScriptAsset(target, full);
 						}
+						else if (mManagedGameplay && full.EndsWith(".tgraph", .OrdinalIgnoreCase))
+						{
+							// A C# project's graph is the C# script it compiles to.
+							let script = GraphScriptPath(full, .. scope String());
+							if (File.Exists(script))
+								AttachManagedScriptAsset(target, script);
+							else
+							{
+								mStatus.Set("Compile the graph first (Compile in the graph editor), then drop it again.");
+								Log.Warning(mStatus);
+							}
+						}
 						else
 						{
 						ScriptAssetResolver.Find(full, Project.Current.Name, mScriptDropChoices);

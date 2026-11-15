@@ -139,7 +139,7 @@ extension EditorApp
 			if (IsHidden(name))
 				continue;
 			// A graph's generated script is an implementation detail; the graph stands for it.
-			if (name.EndsWith(".bf") && File.Exists(scope $"{folder}/{name.Substring(0, name.Length - 3)}.tgraph"))
+			if ((name.EndsWith(".bf") || name.EndsWith(".cs")) && File.Exists(scope $"{folder}/{name.Substring(0, name.Length - 3)}.tgraph"))
 				continue;
 			// The same for the shader a shader graph generates.
 			if (name.EndsWith(".tshader") && File.Exists(scope $"{folder}/{name.Substring(0, name.Length - 8)}.tsgraph"))

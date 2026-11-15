@@ -130,6 +130,7 @@ class EditorApp : Application
 		// including empty projects before the first C# script is created.
 		// Legacy native Beef authoring remains opt-in via --legacy-native.
 		mManagedGameplay = !HasArg("--legacy-native");
+		NodeLibrary.CSharp = mManagedGameplay;
 		InitializeScriptReload();
 		mSceneView = new RenderView(10);
 		mSceneView.DrawGizmos = true;
