@@ -78,9 +78,44 @@ public class ApiChecks : CheckBase
         else if (_tick == 300)
         {
             GroundAsTrigger();
+            HooksAndSaves();
             Finish();
             Application.Quit();
         }
+    }
+
+    private void HooksAndSaves()
+    {
+        HooksProbe? hooks = Scene.Find("Hooks")?.GetComponent<HooksProbe>();
+        Check("the hooks probe is attached", hooks != null);
+        if (hooks == null)
+            return;
+        Check("OnFrame runs every frame during Play", hooks.Frames > 200);
+        hooks.SendNetworkEvent("ping", 2.5f);
+        Check("SendNetworkEvent without a session calls OnNetworkEvent here", hooks.LastEvent == "ping:2.5");
+        // DebugDraw and Gizmos reach the engine's line batches (nothing to see headless; must not throw).
+        DebugDraw.Line(Vector3.Zero, Vector3.UnitY, Color.Red);
+        Gizmos.Sphere(Vector3.Zero, 1f, Color.Cyan, onTop: true);
+        Gizmos.Box(Vector3.Zero, Vector3.One, new Color(0.5f, 0.5f, 0.5f, 0.3f));
+
+        const string slot = "csharp-ingame-test";
+        hooks.Coins = 7;
+        hooks.SetSecret(1.25f);
+        hooks.Unsaved = 3;
+        SaveTask saved = SaveGame.Save(slot);
+        Check("SaveGame.Save writes a slot", saved.Done && saved.Succeeded && SaveGame.Exists(slot));
+        Check("OnSaving runs before the save reads [Saved] fields", hooks.Savings == 1);
+        hooks.Coins = 0;
+        hooks.SetSecret(0f);
+        hooks.Unsaved = 9;
+        SaveTask loaded = SaveGame.Load(slot);
+        Check("SaveGame.Load finds the slot", loaded.Done && loaded.Found);
+        Check("[Saved] fields come back from the save, private ones too",
+            hooks.Coins == 7 && hooks.Secret == 1.25f);
+        Check("fields without [Saved] are not in saves", hooks.Unsaved == 9);
+        Check("OnLoaded runs after the fields are back", hooks.Loads == 1 && hooks.CoinsWhenLoaded == 7);
+        SaveGame.Delete(slot);
+        Check("SaveGame.Delete removes the slot", !SaveGame.Exists(slot));
     }
 
     private int _rpcValue;
@@ -341,6 +376,29 @@ public class ContactProbe : Script
     }
 
     public override void OnTriggerExit(GameObject other) => TriggerExits++;
+}
+
+/// OnFrame, OnNetworkEvent and the save hooks.
+public class HooksProbe : Script
+{
+    [Saved] public int Coins;
+    [Saved] private float secret;
+    public int Unsaved;
+    public int Frames, Savings, Loads, CoinsWhenLoaded = -1;
+    public string LastEvent = "";
+
+    public float Secret => secret;
+    public void SetSecret(float value) => secret = value;
+
+    public override void OnFrame() => Frames++;
+    public override void OnNetworkEvent(string name, float value) =>
+        LastEvent = name + ":" + value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    public override void OnSaving() => Savings++;
+    public override void OnLoaded()
+    {
+        Loads++;
+        CoinsWhenLoaded = Coins;
+    }
 }
 
 /// Walks into the Wall (towards +Z) and records what its CharacterController hits.

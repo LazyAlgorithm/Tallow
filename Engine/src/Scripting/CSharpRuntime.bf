@@ -38,7 +38,14 @@ static class CSharpRuntime
 		LocalUpdate,
 		LateUpdate,
 		Disable,
-		Gui
+		Gui,
+		/// OnFrame (deltaTime: the frame's).
+		Frame,
+		Validate,
+		/// OnDrawGizmos (deltaTime: 1 when the object is selected).
+		DrawGizmos,
+		Saving,
+		Loaded
 	}
 
 	/// Exactly the 48-byte layout of tn_csharp_contact.
@@ -74,6 +81,20 @@ static class CSharpRuntime
 
 	/// A running script's [Sync] fields as "name\tvalue" lines (NetworkSync shares them from the server).
 	public static bool ReadSyncFields(int32 instance, String output) => ReadFields(instance, 2, output);
+
+	/// A running script's [Saved] fields as "name\tvalue" lines (SaveSystem keeps them in saves).
+	public static bool ReadSavedFields(int32 instance, String output) => ReadFields(instance, 4, output);
+
+	/// OnNetworkEvent on a running script.
+	public static bool NetworkEvent(int32 instance, StringView name, float value)
+	{
+		if (!Ready || instance <= 0)
+			return false;
+		if (tn_csharp_network_event(instance, scope String(name).CStr(), value) > 0)
+			return true;
+		ReportFailure(scope $"OnNetworkEvent {name}");
+		return false;
+	}
 
 	static bool ReadFields(int32 instance, int32 mode, String output)
 	{
@@ -264,6 +285,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_detach(int32 instance);
 	[CLink] static extern void tn_csharp_shutdown();
 	[CLink] static extern char8* tn_csharp_error();
+	[CLink] static extern int32 tn_csharp_network_event(int32 instance, char8* name, float value);
 
 	static Scene sScene;
 	static uint64 sSession;

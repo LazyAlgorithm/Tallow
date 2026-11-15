@@ -787,8 +787,17 @@ A full conversion also needs these. Ordered roughly by when they block users.
   Batched dispatch (lifecycle, checked and input batches) now runs every script in the
   batch and reports the first failure after, instead of stopping at the throwing one.
   Test: `Thrower` in `Tests/CSharpInGame` (keeps updating; logged once with its line).
-- [ ] Remaining `Component` callbacks for C#: `OnFrame`, `OnNetworkEvent`,
-  `OnDrawGizmos`, `OnValidate`, and the save hooks (`SaveFields`, `OnSaving`, `OnLoaded`).
+- [x] Remaining `Component` callbacks for C#: `OnFrame`, `OnNetworkEvent` (with
+  `Script.SendNetworkEvent`, host entry `tn_csharp_network_event`), `OnDrawGizmos(selected)`,
+  `OnValidate` (also after an Inspector edit during Play), `OnSaving`/`OnLoaded`, and
+  `[Saved]` fields: `CSharpBehaviour.SaveFields` keeps each under its own name (ReadFields
+  mode 4, applied back through ApplyFields). New C# APIs to use them: `SaveGame`
+  (Save/Load/Exists/Delete, `SaveTask`), `DebugDraw` and `Gizmos` (Line/Sphere/Box) with a
+  `Color` struct. Edit-mode limits: C# scripts are only loaded during Play, so OnFrame,
+  OnDrawGizmos and OnValidate reach them only then. Tests: in-engine (OnFrame, offline
+  event, draw calls, save/load round trip, 95 checks), network (client event to the
+  server and back, 12 checks). OnDrawGizmos and OnValidate have no automated test yet
+  (they need editor Play).
 - [ ] Main-thread async: a tick-driven `SynchronizationContext` so `await` and timers
   resume on the game thread, cancelled on Stop, scene unload and hot reload (or they
   root the collectible ALC). Decide whether coroutines are offered as well.

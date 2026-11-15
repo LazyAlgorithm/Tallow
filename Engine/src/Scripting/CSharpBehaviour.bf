@@ -99,6 +99,7 @@ class CSharpBehaviour : Component
 		if (IsLoaded && !CSharpRuntime.ApplyFields(mInstance, scope $"{name}\t{value}\n"))
 			return false;
 		fieldOverrides.Set(updated);
+		OnValidate();
 		return true;
 	}
 
@@ -178,6 +179,89 @@ class CSharpBehaviour : Component
 			CSharpRuntime.Dispatch(mInstance, .Disable);
 	}
 
+	// The callbacks below reach a script only while it runs (Play, or a built game): in the editor C# scripts are
+	// not loaded outside Play.
+	public override void OnFrame()
+	{
+		if (IsLoaded)
+			CSharpRuntime.Dispatch(mInstance, .Frame, Time.DeltaTime);
+	}
+
+	public override void OnValidate()
+	{
+		if (IsLoaded)
+			CSharpRuntime.Dispatch(mInstance, .Validate);
+	}
+
+	public override void OnDrawGizmos(bool selected)
+	{
+		if (IsLoaded)
+			CSharpRuntime.Dispatch(mInstance, .DrawGizmos, selected ? 1 : 0);
+	}
+
+	public override void OnNetworkEvent(StringView name, float value)
+	{
+		if (IsLoaded)
+			CSharpRuntime.NetworkEvent(mInstance, name, value);
+	}
+
+	// ---- [Saved] fields (SaveSystem) ----
+	/// Whether the running script has [Saved] fields: read once, as the class cannot change while it runs.
+	int8 mHasSaved = -1;
+
+	public override bool HasSavedFields
+	{
+		get
+		{
+			if (!IsLoaded)
+				return false;
+			if (mHasSaved < 0)
+			{
+				let saved = scope String();
+				mHasSaved = CSharpRuntime.ReadSavedFields(mInstance, saved) && !saved.IsEmpty ? 1 : 0;
+			}
+			return mHasSaved > 0;
+		}
+	}
+
+	/// Each [Saved] field under its own name, as its Inspector text: a renamed or removed field is skipped on load.
+	public override void SaveFields(SaveIO io)
+	{
+		if (!IsLoaded)
+			return;
+		let current = scope String();
+		if (!CSharpRuntime.ReadSavedFields(mInstance, current))
+			return;
+		let loaded = scope String();
+		for (let line in current.Split('\n', .RemoveEmptyEntries))
+		{
+			let tab = line.IndexOf('\t');
+			if (tab <= 0)
+				continue;
+			let name = line.Substring(0, tab);
+			String value = scope String(line.Substring(tab + 1));
+			if (!io.Key(name))
+				continue;
+			io.Value(ref value);
+			if (io.Reading && value != null)
+				loaded.AppendF("{}\t{}\n", name, value);
+		}
+		if (io.Reading && !loaded.IsEmpty)
+			CSharpRuntime.ApplyFields(mInstance, loaded);
+	}
+
+	public override void OnSaving()
+	{
+		if (IsLoaded)
+			CSharpRuntime.Dispatch(mInstance, .Saving);
+	}
+
+	public override void OnLoaded()
+	{
+		if (IsLoaded)
+			CSharpRuntime.Dispatch(mInstance, .Loaded);
+	}
+
 	public override void OnCollisionEnter(Collision collision)
 	{
 		if (IsLoaded)
@@ -237,5 +321,6 @@ class CSharpBehaviour : Component
 			return;
 		CSharpRuntime.Detach(mInstance);
 		mInstance = -1;
+		mHasSaved = -1;
 	}
 }

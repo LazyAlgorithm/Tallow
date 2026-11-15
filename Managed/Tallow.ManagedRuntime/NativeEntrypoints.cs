@@ -180,6 +180,22 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int NetworkEvent(int instance, byte* name, float value)
+    {
+        try
+        {
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            script.OnNetworkEvent(Marshal.PtrToStringUTF8((nint)name) ?? "", value);
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     // Plain native layout, matching tn_csharp_contact (48 bytes).
     [StructLayout(LayoutKind.Sequential)]
     public struct NativeContact
@@ -267,7 +283,9 @@ public static unsafe class NativeEntrypoints
     // These event IDs are shared with the native header and the Beef adapter.
     private enum ScriptEvent
     {
-        Awake, Enable, Start, FixedUpdate, LocalUpdate, LateUpdate, Disable, Gui
+        // The same numbers as CSharpRuntime.ManagedEvent in the engine.
+        Awake, Enable, Start, FixedUpdate, LocalUpdate, LateUpdate, Disable, Gui,
+        Frame, Validate, DrawGizmos, Saving, Loaded
     }
     private static int sNextInstance;
     // Trusted development gameplay gets a separate collectible context. The engine's
@@ -472,10 +490,11 @@ public static unsafe class NativeEntrypoints
                     if (!seen.Add(field.Name) || field.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
                         continue;
                     object? value = field.GetValue(script);
-                    if (mode == 0 || mode == 2)
+                    if (mode == 0 || mode == 2 || mode == 4)
                     {
-                        // Mode 2: the [Sync] fields the server shares (NetworkSync), in the same text.
-                        if (mode == 0 ? !IsInspectorField(field) : !IsSyncField(field))
+                        // Mode 2: the [Sync] fields the server shares (NetworkSync); mode 4: the [Saved] fields
+                        // SaveSystem keeps. In the same text.
+                        if (mode == 0 ? !IsInspectorField(field) : mode == 2 ? !IsSyncField(field) : !IsSavedField(field))
                             continue;
                         string? encoded = FormatInspectorValue(field.FieldType, value);
                         if (encoded != null)
@@ -501,6 +520,10 @@ public static unsafe class NativeEntrypoints
             return Failure(exception);
         }
     }
+
+    private static bool IsSavedField(FieldInfo field) =>
+        !field.IsStatic && !field.IsInitOnly && !field.IsLiteral &&
+        field.IsDefined(typeof(SavedAttribute), inherit: true);
 
     private static bool IsSyncField(FieldInfo field) =>
         !field.IsStatic && !field.IsInitOnly && !field.IsLiteral &&
@@ -671,7 +694,8 @@ public static unsafe class NativeEntrypoints
                 if (!field.IsPublic &&
                     !field.IsDefined(typeof(ShowInInspectorAttribute), inherit: true) &&
                     !field.IsDefined(typeof(HideInInspectorAttribute), inherit: true) &&
-                    !field.IsDefined(typeof(SyncAttribute), inherit: true))
+                    !field.IsDefined(typeof(SyncAttribute), inherit: true) &&
+                    !field.IsDefined(typeof(SavedAttribute), inherit: true))
                     continue;
                 object? parsed = ParseInspectorValue(field.FieldType, value);
                 if (parsed != null)
@@ -706,6 +730,11 @@ public static unsafe class NativeEntrypoints
                     script.OnDisable();
                 break;
             case ScriptEvent.Gui: script.OnGUI(); break;
+            case ScriptEvent.Frame: script.OnFrame(); break;
+            case ScriptEvent.Validate: script.OnValidate(); break;
+            case ScriptEvent.DrawGizmos: script.OnDrawGizmos(deltaTime != 0); break;
+            case ScriptEvent.Saving: script.OnSaving(); break;
+            case ScriptEvent.Loaded: script.OnLoaded(); break;
             default: throw new ArgumentOutOfRangeException(nameof(eventId), eventId,
                 "Unknown managed gameplay event.");
         }

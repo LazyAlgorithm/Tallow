@@ -35,6 +35,14 @@ public sealed class FormerlyNamedAttribute(string fullName) : Attribute
     public string FullName { get; } = fullName;
 }
 
+/// <summary>
+/// Kept in save games: SaveSystem writes the field's value when the game saves and puts it back when that save
+/// is loaded (then <see cref="Script.OnLoaded"/> runs). Saved under the field's name, so a renamed field starts
+/// from its default. Types: those the Inspector shows (numbers, bool, string, enums, vectors, references).
+/// </summary>
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class SavedAttribute : Attribute { }
+
 /// <summary>Marks state the networking bridge must replicate.</summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class SyncAttribute : Attribute { }
@@ -1002,4 +1010,31 @@ public abstract class Script : IComponent
     public virtual void OnTriggerStay(GameObject other) { }
     /// <summary>It left the trigger. <paramref name="other"/> is not valid when it was destroyed.</summary>
     public virtual void OnTriggerExit(GameObject other) { }
+    /// <summary>Once a frame, after the scene's frame work (streaming, effects): on this machine only.</summary>
+    public virtual void OnFrame() { }
+    /// <summary>A field was changed in the Inspector during Play (or by the scene loader).</summary>
+    public virtual void OnValidate() { }
+    /// <summary>Draw helpers in the editor's Scene view with <see cref="Gizmos"/>, every frame during Play.
+    /// <paramref name="selected"/> is true when this object is selected.</summary>
+    public virtual void OnDrawGizmos(bool selected) { }
+    /// <summary>The game is about to be saved: bring <see cref="SavedAttribute"/> fields up to date.</summary>
+    public virtual void OnSaving() { }
+    /// <summary>A save was just loaded and the <see cref="SavedAttribute"/> fields were put back: rebuild
+    /// anything made from them.</summary>
+    public virtual void OnLoaded() { }
+    /// <summary>Called on every machine when <see cref="SendNetworkEvent"/> is used on this script.</summary>
+    public virtual void OnNetworkEvent(string name, float value) { }
+
+    /// <summary>
+    /// Tells this script on every machine that something happened (a sound, an effect): calls
+    /// <see cref="OnNetworkEvent"/> there. Allowed from the server, or from the client that owns the object;
+    /// without a session it simply calls it here. The name is at most 64 characters. For calls with
+    /// arguments, use an <see cref="RpcAttribute"/> method.
+    /// </summary>
+    public void SendNetworkEvent(string name, float value = 0f)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (CSharpNetwork.SendEvent(GameObject.SceneId, GameObject.Id, RequireNativeInstance(), name, value) < 0)
+            throw new InvalidOperationException($"SendNetworkEvent({name}): this script is not running.");
+    }
 }

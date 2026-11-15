@@ -16,7 +16,16 @@ method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instan
 method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:string
 method	Tallow.CSharpComponents	EnabledState	int	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpComponents	SetEnabled	bool	session:ulong	entity:ulong	instance:int	enabled:bool
+method	Tallow.CSharpDraw	Box	void	layer:int	center:System.Numerics.Vector3	size:System.Numerics.Vector3	color:System.Numerics.Vector4
+method	Tallow.CSharpDraw	Line	void	layer:int	a:System.Numerics.Vector3	b:System.Numerics.Vector3	color:System.Numerics.Vector4
+method	Tallow.CSharpDraw	Sphere	void	layer:int	center:System.Numerics.Vector3	radius:float	color:System.Numerics.Vector4
+method	Tallow.CSharpNetwork	SendEvent	int	session:ulong	entity:ulong	instance:int	name:string	value:float
 method	Tallow.CSharpNetwork	SendRpc	int	session:ulong	entity:ulong	instance:int	target:int	method:string	arguments:string
+method	Tallow.CSharpSaves	Delete	void	slot:string
+method	Tallow.CSharpSaves	Exists	bool	slot:string
+method	Tallow.CSharpSaves	Load	int	slot:string
+method	Tallow.CSharpSaves	Save	int	slot:string
+method	Tallow.CSharpSaves	Status	int	task:int
 method	Tallow.CSharpSceneObjects	ActiveHierarchyState	int	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	ActiveSelfState	int	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	AddTag	bool	session:ulong	entity:ulong	tag:string

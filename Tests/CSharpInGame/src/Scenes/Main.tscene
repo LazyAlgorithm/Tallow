@@ -71,3 +71,8 @@ transform 40 0 40 0 0 0 1 1 1 1
 component Tallow.CSharpBehaviour enabled 1
 field scriptType "InGame.Thrower"
 field fieldOverrides ""
+object 13 parent 0 active 1 name "Hooks"
+transform 50 0 50 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.HooksProbe"
+field fieldOverrides ""

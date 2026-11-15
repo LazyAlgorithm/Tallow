@@ -12,6 +12,25 @@ public class RpcProbe : Script
     private bool _done;
     private int _answer;
     private bool _echoed;
+    private float _event;
+    private bool _serverHeard;
+
+    public override void OnNetworkEvent(string name, float value)
+    {
+        if (name != "hello")
+            return;
+        if (Scene.IsServer)
+        {
+            // The server hears it first and relays it; a client ran it only when it came back.
+            _serverHeard = true;
+            Rpc(nameof(Heard), true);
+        }
+        else
+            _event = value;
+    }
+
+    [Rpc(RpcTarget.Everyone)]
+    private void Heard(bool heard) => _serverHeard = heard;
 
     [Rpc(RpcTarget.Server)]
     private void Ask(int value, string text, Vector3 where, Mood mood, GameObject self)
@@ -48,9 +67,12 @@ public class RpcProbe : Script
             Rpc(nameof(Ask), 21, "a\u001fb\\c", new Vector3(4, 5, 6), Mood.Loud, GameObject);
             Rpc(nameof(Echo), true);
             SyncProbe.Check("an owner's Everyone RPC waits for the server", !_echoed);
+            SendNetworkEvent("hello", 3.5f);
+            SyncProbe.Check("an owner's network event waits for the server", _event == 0f);
         }
-        if (_answer != 0 && _echoed)
+        if (_answer != 0 && _echoed && _event != 0f && _serverHeard)
         {
+            SyncProbe.Check("SendNetworkEvent from a client runs OnNetworkEvent on the server and comes back", _event == 3.5f);
             _done = true;
             SyncProbe.Check("client RPC to the server, answered to everyone (all argument kinds)", _answer == 42);
             SyncProbe.Check("owner's Everyone RPC comes back from the server", _echoed);
@@ -59,7 +81,7 @@ public class RpcProbe : Script
         else if (_ticks == 60 * 20)
         {
             _done = true;
-            Log.Error($"NETTEST FAIL RPCs never came back (answer {_answer}, echoed {_echoed})");
+            Log.Error($"NETTEST FAIL RPCs never came back (answer {_answer}, echoed {_echoed}, event {_event}, server heard {_serverHeard})");
             SyncProbe.Finished();
         }
     }
