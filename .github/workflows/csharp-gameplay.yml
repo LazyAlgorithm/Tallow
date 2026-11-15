@@ -17,6 +17,10 @@ on:
       - 'tools/build.py'
       - 'tools/patch_textedit.py'
       - 'tools/check_csharp_host_abi.py'
+      - 'tools/check_csharp_enums.py'
+      - 'tools/test_csharp_ingame.py'
+      - 'Tests/CSharpInGame/**'
+      - 'Editor/templates/**'
       - 'third_party/TextEdit/**'
 
 # Only the newest branch build is useful while iterating on this migration.
@@ -45,6 +49,8 @@ jobs:
         run: dotnet run --project Managed/Tallow.BindingGen/Tallow.BindingGen.csproj -- --self-test
       - name: Reject stale native-host generated binding IDs
         run: python3 tools/check_csharp_host_abi.py
+      - name: Keep C# ABI enums identical to the native ones
+        run: python3 tools/check_csharp_enums.py
       - name: Generate managed bindings for native-host smoke fixture
         run: dotnet run --project Managed/Tallow.BindingGen/Tallow.BindingGen.csproj -- --manifest Tests/CSharpExpose/fixture.tsv --engine-root .
       - name: Enforce generated Mathf methods without handwritten duplicates
@@ -357,4 +363,11 @@ jobs:
           if grep -F 'NativeOnly' /tmp/tallow-csharp-api.tsv; then
             echo "Unannotated public method leaked into C# API manifest" >&2
             exit 1
+          fi      - name: Keep the CSharpExpose test fixture identical to the engine manifest
+        run: |
+          if ! diff -u Tests/CSharpExpose/fixture.tsv /tmp/tallow-csharp-api.tsv; then
+            echo "Copy the engine manifest to Tests/CSharpExpose/fixture.tsv after changing [CSharpExpose] APIs." >&2
+            exit 1
           fi
+      - name: Run C# gameplay inside the real engine (scene, Jolt, Flecs)
+        run: python3 tools/test_csharp_ingame.py

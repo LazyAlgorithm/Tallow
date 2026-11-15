@@ -23,6 +23,8 @@ enum KeyCode : int32
 }
 
 /// Polled input. In the editor, game input is only delivered while the Game view has focus.
+/// C# gameplay reaches the keyboard and mouse through the int-keyed methods at the end.
+[CSharpExpose]
 static class Input
 {
 	const int KeyCount = 512;
@@ -121,7 +123,21 @@ static class Input
 	/// Whether a mouse button came up this frame.
 	public static bool GetMouseButtonUp(int button) => Enabled && (sButtons & ButtonMask(button)) == 0 && (sPrevButtons & ButtonMask(button)) != 0;
 
+	// C# bindings: key codes cross the ABI as their KeyCode number.
+	static bool ValidKey(int32 key) => key > 0 && key < KeyCount;
+	[CSharpExpose] public static bool KeyHeld(int32 key) => ValidKey(key) && GetKey((KeyCode)key);
+	[CSharpExpose] public static bool KeyPressed(int32 key) => ValidKey(key) && GetKeyDown((KeyCode)key);
+	[CSharpExpose] public static bool KeyReleased(int32 key) => ValidKey(key) && GetKeyUp((KeyCode)key);
+	[CSharpExpose] public static bool MouseHeld(int32 button) => button >= 0 && button <= 2 && GetMouseButton(button);
+	[CSharpExpose] public static bool MousePressed(int32 button) => button >= 0 && button <= 2 && GetMouseButtonDown(button);
+	[CSharpExpose] public static bool MouseReleased(int32 button) => button >= 0 && button <= 2 && GetMouseButtonUp(button);
+	[CSharpExpose] public static Vector2 GetMousePosition() => MousePosition;
+	[CSharpExpose] public static Vector2 GetMouseDelta() => MouseDelta;
+	[CSharpExpose] public static float GetMouseWheel() => MouseWheel;
+	[CSharpExpose] public static bool IsUsingGamepad() => UsingGamepad;
+
 	/// "Horizontal" (A/D, arrows) and "Vertical" (W/S, arrows), each -1..1.
+	[CSharpExpose]
 	public static float GetAxis(StringView name)
 	{
 		if (name == "Horizontal")

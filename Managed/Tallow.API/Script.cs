@@ -145,6 +145,126 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
     public Transform Transform => new(this);
     /// <summary>The scene session containing this object; no native pointer is held.</summary>
     public Scene Scene => new(SceneId);
+
+    private static ObjectDisposedException Stale() =>
+        new(nameof(GameObject), "The native scene GameObject is no longer alive.");
+
+    /// <summary>The object's name, as shown in the Hierarchy.</summary>
+    public string Name
+    {
+        get
+        {
+            Span<byte> buffer = stackalloc byte[256];
+            int length = CSharpSceneObjects.CopyName(SceneId, Id, buffer);
+            if (length < 0)
+                throw Stale();
+            if (length > buffer.Length)
+            {
+                buffer = new byte[length];
+                length = Math.Min(length, CSharpSceneObjects.CopyName(SceneId, Id, buffer));
+                if (length < 0)
+                    throw Stale();
+            }
+            return global::System.Text.Encoding.UTF8.GetString(buffer[..length]);
+        }
+    }
+
+    /// <summary>
+    /// Renames the object. (GameObject is a value handle, so this is a method:
+    /// C# does not allow assigning a property through another property.)
+    /// </summary>
+    public void SetName(string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        if (!CSharpSceneObjects.SetName(SceneId, Id, name))
+            throw IsValid ? new ArgumentException(
+                "Names are at most 256 bytes of single-line text.", nameof(name)) : Stale();
+    }
+
+    /// <summary>The object this one is under in the hierarchy, or null at the top.</summary>
+    public GameObject? Parent
+    {
+        get
+        {
+            ulong parent = CSharpSceneObjects.GetParent(SceneId, Id);
+            return parent != 0 ? new GameObject(SceneId, parent) : null;
+        }
+    }
+
+    /// <summary>
+    /// Moves this object under another, or to the top of the scene with
+    /// null. Returns false when that would make it its own descendant.
+    /// </summary>
+    public bool SetParent(GameObject? parent, bool keepWorldPose = true)
+    {
+        if (parent is { } target && target.SceneId != SceneId)
+            return false;
+        return CSharpSceneObjects.SetParent(SceneId, Id, parent?.Id ?? 0, keepWorldPose);
+    }
+
+    /// <summary>How many objects are directly under this one.</summary>
+    public int ChildCount
+    {
+        get
+        {
+            int count = CSharpSceneObjects.GetChildCount(SceneId, Id);
+            return count >= 0 ? count : throw Stale();
+        }
+    }
+
+    /// <summary>The child at an index, in Hierarchy order; null when out of range.</summary>
+    public GameObject? GetChild(int index)
+    {
+        ulong child = CSharpSceneObjects.GetChild(SceneId, Id, index);
+        return child != 0 ? new GameObject(SceneId, child) : null;
+    }
+
+    /// <summary>The first direct child with that name, or null.</summary>
+    public GameObject? FindChild(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        for (int i = 0; GetChild(i) is { } child; i++)
+            if (child.Name == name)
+                return child;
+        return null;
+    }
+
+    public bool HasTag(string tag) => CSharpSceneObjects.HasTag(SceneId, Id, tag);
+    public bool AddTag(string tag) => CSharpSceneObjects.AddTag(SceneId, Id, tag);
+    public bool RemoveTag(string tag) => CSharpSceneObjects.RemoveTag(SceneId, Id, tag);
+
+    /// <summary>The physics layer, 0 to 31 (named in Project Settings).</summary>
+    public int Layer
+    {
+        get
+        {
+            int layer = CSharpSceneObjects.GetLayer(SceneId, Id);
+            return layer >= 0 ? layer : throw Stale();
+        }
+    }
+
+    /// <summary>Moves the object to another physics layer, 0 to 31.</summary>
+    public void SetLayer(int layer)
+    {
+        if (!CSharpSceneObjects.SetLayer(SceneId, Id, layer))
+            throw IsValid ? new ArgumentOutOfRangeException(nameof(layer)) : Stale();
+    }
+
+    /// <summary>Whether the object has a Network Identity (is replicated).</summary>
+    public bool IsNetworked => CSharpSceneObjects.HasNetworkIdentity(SceneId, Id);
+
+    /// <summary>
+    /// The client that owns this networked object; 0 is the server (and
+    /// every object without a Network Identity).
+    /// </summary>
+    public int OwnerClientId
+    {
+        get
+        {
+            int owner = CSharpSceneObjects.OwnerClientId(SceneId, Id);
+            return owner >= 0 ? owner : throw Stale();
+        }
+    }
     /// <summary>
     /// Resolve a C# behaviour or a supported native/ECS-backed component
     /// through one API. Native value handles remain lightweight and validate
@@ -485,6 +605,48 @@ public readonly record struct Scene(ulong SessionId)
         ulong id = Engine.Bridge.InstantiatePrefab(SessionId, path);
         return id == 0 ? null : new GameObject(SessionId, id);
     }
+
+    /// <summary>Instantiates a prefab at a world position and rotation.</summary>
+    public GameObject? InstantiatePrefab(string path, Vector3 position, Quaternion rotation)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ulong id = CSharpSceneObjects.InstantiatePrefabAt(SessionId, path, position, rotation);
+        return id == 0 ? null : new GameObject(SessionId, id);
+    }
+
+    /// <summary>The first active object with that tag, or null.</summary>
+    public GameObject? FindWithTag(string tag)
+    {
+        ArgumentNullException.ThrowIfNull(tag);
+        ulong id = CSharpSceneObjects.FindWithTag(SessionId, tag);
+        return id == 0 ? null : new GameObject(SessionId, id);
+    }
+
+    /// <summary>Every object with that tag, active or not.</summary>
+    public GameObject[] FindAllWithTag(string tag)
+    {
+        ArgumentNullException.ThrowIfNull(tag);
+        Span<ulong> ids = stackalloc ulong[64];
+        int count = CSharpSceneObjects.FindAllWithTag(SessionId, tag, ids);
+        if (count > ids.Length)
+        {
+            ids = new ulong[count];
+            count = Math.Min(count, CSharpSceneObjects.FindAllWithTag(SessionId, tag, ids));
+        }
+        var found = new GameObject[Math.Max(count, 0)];
+        for (int i = 0; i < found.Length; i++)
+            found[i] = new GameObject(SessionId, ids[i]);
+        return found;
+    }
+
+    /// <summary>Whether a network session (hosting or joined) is running.</summary>
+    public bool IsNetworked => CSharpSceneObjects.NetworkRole(SessionId) != 0;
+    /// <summary>True on the server or host, and in a game with no network session.</summary>
+    public bool IsServer => CSharpSceneObjects.NetworkRole(SessionId) != 2;
+    /// <summary>True on a machine that joined someone else's session.</summary>
+    public bool IsClient => CSharpSceneObjects.NetworkRole(SessionId) == 2;
+    /// <summary>This machine's client id in the session; 0 on the server or offline.</summary>
+    public int LocalClientId => CSharpSceneObjects.LocalClientId(SessionId);
 }
 
 /// <summary>Native prefab instantiation; networking authority remains in Beef.</summary>
@@ -492,6 +654,10 @@ public static class Prefab
 {
     public static GameObject? Instantiate(Scene scene, string path) =>
         scene.InstantiatePrefab(path);
+
+    public static GameObject? Instantiate(Scene scene, string path,
+        Vector3 position, Quaternion rotation) =>
+        scene.InstantiatePrefab(path, position, rotation);
 }
 
 /// <summary>
@@ -521,6 +687,19 @@ public enum TransformChannel
 /// </summary>
 public sealed class Transform(GameObject gameObject) : IComponent
 {
+    /// <summary>The object this transform belongs to.</summary>
+    public GameObject GameObject => gameObject;
+
+    /// <summary>The parent's transform, or null at the top of the scene.</summary>
+    public Transform? Parent => gameObject.Parent?.Transform;
+
+    public bool SetParent(Transform? parent, bool keepWorldPose = true) =>
+        gameObject.SetParent(parent?.GameObject, keepWorldPose);
+
+    public int ChildCount => gameObject.ChildCount;
+
+    public Transform? GetChild(int index) => gameObject.GetChild(index)?.Transform;
+
     private Vector4 Read(TransformChannel channel) =>
         Engine.Bridge.GetTransform(gameObject, channel);
 

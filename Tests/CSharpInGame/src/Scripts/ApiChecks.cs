@@ -1,0 +1,199 @@
+using Tallow;
+
+namespace InGame;
+
+/// Base class: its fields must be catalogued and restored for derived scripts.
+public abstract class CheckBase : Script
+{
+    [ShowInInspector] private float baseSecret = 2f;
+    public bool Flag = true;
+    protected float BaseSecret => baseSecret;
+
+    private int _failures;
+
+    protected void Check(string label, bool condition)
+    {
+        if (condition)
+            Log.Info("INGAME PASS " + label);
+        else
+        {
+            _failures++;
+            Log.Error("INGAME FAIL " + label);
+        }
+    }
+
+    protected void Finish() => Log.Info(_failures == 0 ? "INGAME DONE" : $"INGAME FAILED {_failures}");
+}
+
+/// Runs inside the real engine (tools/test_csharp_ingame.py): exercises the
+/// C# gameplay API against the native scene, physics and ECS.
+public class ApiChecks : CheckBase
+{
+    public float Speed = 1f;
+    public string Label = "default";
+
+    private int _tick;
+    private int _fixedTicks;
+    private bool _started;
+    private Helper? _helper;
+
+    public override void Awake() =>
+        Check("fields are restored before Awake", Speed == 3f && Label == "from scene");
+
+    public override void Start() => _started = true;
+
+    public override void FixedUpdate(float deltaTime) => _fixedTicks++;
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        _tick++;
+        if (_tick == 5)
+            SceneAndFields();
+        else if (_tick == 6)
+            Hierarchy();
+        else if (_tick == 7)
+            Components();
+        else if (_tick == 40)
+            Physics();
+        else if (_tick == 41)
+            EcsData();
+        else if (_tick == 42)
+        {
+            LocalState();
+            Finish();
+            Application.Quit();
+        }
+    }
+
+    private void SceneAndFields()
+    {
+        Check("Start ran before Update", _started);
+        Check("base-class private [ShowInInspector] field restored", BaseSecret == 7f);
+        Check("bool override restored", Flag == false);
+        Check("FixedUpdate runs", _fixedTicks > 0);
+        Check("Transform.Position reads the scene", Transform.Position == new Vector3(1, 2, 3));
+        Transform.Position = new Vector3(float.NaN, 0, 0);
+        Check("non-finite positions are ignored", Transform.Position == new Vector3(1, 2, 3));
+        Check("offline scene acts as server", Scene.IsServer && !Scene.IsClient && !Scene.IsNetworked);
+        Check("offline objects are mine", IsMine && GameObject.OwnerClientId == 0 && !GameObject.IsNetworked);
+        Check("Time.Tick advances", Time.Tick > 0);
+    }
+
+    private void Hierarchy()
+    {
+        Check("GameObject.Name", GameObject.Name == "Runner");
+        GameObject.SetName("Renamed");
+        Check("renaming is visible to Scene.Find",
+            Scene.Find("Renamed") == GameObject && Scene.Find("Runner") is null);
+        GameObject.SetName("Runner");
+
+        Check("ChildCount and GetChild", GameObject.ChildCount == 1 &&
+            GameObject.GetChild(0)?.Name == "Child" && GameObject.GetChild(1) is null);
+        GameObject child = GameObject.FindChild("Child")!.Value;
+        Check("child Parent", child.Parent == GameObject && GameObject.Parent is null);
+        Check("child world position follows its parent",
+            Vector3.Distance(child.Transform.Position, new Vector3(1, 3, 3)) < 0.001f);
+
+        Check("an object cannot be parented under its own child", !GameObject.SetParent(child));
+        Check("unparenting keeps the world pose", child.SetParent(null) &&
+            child.Parent is null && GameObject.ChildCount == 0 &&
+            Vector3.Distance(child.Transform.Position, new Vector3(1, 3, 3)) < 0.001f);
+        Check("re-parenting", child.SetParent(GameObject) && child.Parent == GameObject);
+
+        Check("tags from the scene file", GameObject.HasTag("checks") &&
+            Scene.FindWithTag("checks") == GameObject);
+        Check("AddTag and FindAllWithTag", child.AddTag("checks") &&
+            Scene.FindAllWithTag("checks").Length == 2);
+        Check("RemoveTag", child.RemoveTag("checks") && !child.HasTag("checks") &&
+            Scene.FindAllWithTag("checks").Length == 1);
+
+        GameObject.SetLayer(3);
+        Check("Layer", GameObject.Layer == 3);
+        GameObject.SetLayer(0);
+
+        GameObject made = Scene.CreateGameObject("Made");
+        Check("CreateGameObject", made.IsValid && made.Name == "Made");
+        made.SetActive(false);
+        Check("SetActive", !made.ActiveSelf && !made.ActiveInHierarchy);
+        made.Destroy();
+    }
+
+    private void Components()
+    {
+        Check("destroyed objects stop resolving", Scene.Find("Made") is null);
+        _helper = AddComponent<Helper>();
+        Check("AddComponent attaches and runs Awake", _helper.Awoke &&
+            GetComponent<Helper>() == _helper);
+        _helper.Enabled = false;
+        Check("disabling a component calls OnDisable", !_helper.Enabled && _helper.Disables == 1);
+        _helper.Enabled = true;
+        Check("GetComponent<Transform>", TryGetComponent<Transform>(out _));
+        Check("missing native handle", !TryGetComponent<Rigidbody>(out _));
+    }
+
+    private void Physics()
+    {
+        Check("added component received Update", _helper!.Updates > 0);
+        GameObject crate = Scene.Find("Crate")!.Value;
+        Rigidbody? body = crate.GetRigidbody();
+        Check("Rigidbody handle", body is { IsValid: true, HasBody: true });
+        Check("the crate fell onto the ground", crate.Transform.Position.Y < 4.9f);
+        Check("NaN impulses are rejected", body!.Value.AddImpulse(new Vector3(float.NaN, 0, 0)) == false);
+        Check("box collider handle", crate.GetCollider()?.Kind == ColliderKind.Box &&
+            crate.GetCollider()?.BoxSize == new Vector3(1, 1, 1));
+
+        PhysicsHit? hit = Scene.RaycastHit(new Vector3(-10, 10, -10), -Vector3.UnitY, 50f);
+        Check("raycast hits the ground", hit is { Distance: > 9.5f and < 10.5f } &&
+            hit.Value.HitObject?.Name == "Ground");
+        Check("raycast misses the sky", Scene.RaycastHit(new Vector3(0, 10, 0), Vector3.UnitY, 50f) is null);
+
+        GameObject player = Scene.Find("Player")!.Value;
+        CharacterController? controller = player.GetCharacterController();
+        Check("character controller is simulated and grounded",
+            controller is { IsValid: true, HasCharacter: true, IsGrounded: true });
+        Check("template character locked the cursor", Cursor.Locked);
+        Check("character height", controller?.Height == 2f);
+    }
+
+    private void EcsData()
+    {
+        EcsEntity entity = Scene.CreateLocalEcsEntity();
+        Check("local ECS entity", entity.IsAlive);
+        Check("typed local data round trip",
+            entity.SetLocalData(new Motion { Velocity = new Vector3(1, 2, 3), Drag = 0.5f }) &&
+            entity.TryGetLocalData(out Motion read) &&
+            read.Velocity == new Vector3(1, 2, 3) && read.Drag == 0.5f);
+        Span<ulong> ids = stackalloc ulong[4];
+        Span<Motion> values = stackalloc Motion[4];
+        Check("local data query page", Scene.CopyLocalDataPage(0, ids, values) == 1 &&
+            ids[0] == entity.Id && values[0].Drag == 0.5f);
+        Check("DestroyLocal", entity.DestroyLocal() && !entity.IsAlive);
+    }
+
+    private void LocalState()
+    {
+        Check("no keys are held in a headless run", !Input.GetKey(KeyCode.W) &&
+            Input.GetAxis("Horizontal") == 0f && !Input.GetMouseButton(MouseButton.Left));
+        Check("Mathf and RotationMath bindings", Mathf.Clamp01(2f) == 1f &&
+            Vector3.Distance(RotationMath.ToEulerDegrees(
+                RotationMath.EulerDegrees(new Vector3(0, 90, 0))), new Vector3(0, 90, 0)) < 0.01f);
+    }
+}
+
+public class Helper : Script
+{
+    public bool Awoke;
+    public int Disables;
+    public int Updates;
+
+    public override void Awake() => Awoke = true;
+    public override void OnDisable() => Disables++;
+    public override void Update(TickInput input, float deltaTime) => Updates++;
+}
+
+[Component]
+public struct Motion
+{
+    public Vector3 Velocity;
+    public float Drag;
+}

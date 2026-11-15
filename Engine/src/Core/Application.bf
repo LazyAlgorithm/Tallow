@@ -11,6 +11,8 @@ namespace Tallow;
 ///   --frames N                                         quit after N frames
 ///   --screenshot file.png                              save the last frame before quitting (with --frames)
 ///   --headless                                         no window or renderer (dedicated servers)
+///   --fixed-step                                       every frame advances exactly one fixed tick, however
+///                                                      long it took (automated tests, replays, benchmarks)
 [CSharpExpose]
 class Application
 {
@@ -43,6 +45,8 @@ class Application
 
 	/// Running with no window and no graphics (a dedicated server).
 	public bool Headless;
+	/// Simulated time instead of the wall clock: each frame is one FixedDeltaTime (--fixed-step).
+	public bool FixedStep;
 	/// Opens the window maximized.
 	public bool StartMaximized;
 	/// The command line, without the program's name.
@@ -169,6 +173,8 @@ class Application
 			GpuSkinning.Enabled = false;
 		if (HasArg("--headless"))
 			Headless = true;
+		if (HasArg("--fixed-step"))
+			FixedStep = true;
 		// Either one overrides how the game was built to start.
 		if (HasArg("--fullscreen"))
 			GameWindow.StartsFullscreen = true;
@@ -335,6 +341,9 @@ class Application
 		mLastTicks = now;
 		if (delta > 0.25)
 			delta = 0.25;
+		// One tick of simulated time a frame, so a run of N frames is N ticks on any machine.
+		if (FixedStep)
+			delta = (double)Time.FixedDeltaTime / Math.Clamp(Time.TickScale, 0.5f, 2.0f);
 		Time.UnscaledDeltaTime = (float)delta;
 		// Added up in a double: a float stops gaining short frames after a day or so.
 		mRealTime += delta;

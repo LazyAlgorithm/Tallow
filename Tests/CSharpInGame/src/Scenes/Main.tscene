@@ -1,0 +1,32 @@
+scene "Main"
+object 1 parent 0 active 1 name "Ground"
+transform 0 0 0 0 0 0 1 1 1 1
+component Tallow.BoxCollider enabled 1
+field center 0 -0.1 0
+field size 40 0.2 40
+object 2 parent 0 active 1 name "Runner"
+transform 1 2 3 0 0 0 1 1 1 1
+tags "checks"
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.ApiChecks"
+field fieldOverrides "Speed	3\nbaseSecret	7\nFlag	false\nLabel	from scene\n"
+object 3 parent 2 active 1 name "Child"
+transform 0 1 0 0 0 0 1 1 1 1
+object 4 parent 0 active 1 name "Player"
+transform 0 1.1 -4 0 0 0 1 1 1 1
+component Tallow.CharacterController enabled 1
+field shape Capsule
+field radius 0.5
+field height 2
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.FirstPersonCharacter"
+field fieldOverrides ""
+object 5 parent 0 active 1 name "Main Camera"
+transform 0 3 -9 0 0 0 1 1 1 1
+component Tallow.Camera enabled 1
+object 6 parent 0 active 1 name "Crate"
+transform 3 5 0 0 0 0 1 1 1 1
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 1 1 1
+component Tallow.Rigidbody enabled 1

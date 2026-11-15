@@ -18,7 +18,25 @@ method	Tallow.CSharpComponents	EnabledState	int	session:ulong	entity:ulong	insta
 method	Tallow.CSharpComponents	SetEnabled	bool	session:ulong	entity:ulong	instance:int	enabled:bool
 method	Tallow.CSharpSceneObjects	ActiveHierarchyState	int	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	ActiveSelfState	int	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	AddTag	bool	session:ulong	entity:ulong	tag:string
+method	Tallow.CSharpSceneObjects	CopyName	int	session:ulong	entity:ulong	buffer:System.Span<byte>
+method	Tallow.CSharpSceneObjects	FindAllWithTag	int	session:ulong	tag:string	ids:System.Span<ulong>
+method	Tallow.CSharpSceneObjects	FindWithTag	ulong	session:ulong	tag:string
+method	Tallow.CSharpSceneObjects	GetChild	ulong	session:ulong	entity:ulong	index:int
+method	Tallow.CSharpSceneObjects	GetChildCount	int	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	GetLayer	int	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	GetParent	ulong	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	HasNetworkIdentity	bool	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	HasTag	bool	session:ulong	entity:ulong	tag:string
+method	Tallow.CSharpSceneObjects	InstantiatePrefabAt	ulong	session:ulong	path:string	position:System.Numerics.Vector3	rotation:System.Numerics.Quaternion
+method	Tallow.CSharpSceneObjects	LocalClientId	int	session:ulong
+method	Tallow.CSharpSceneObjects	NetworkRole	int	session:ulong
+method	Tallow.CSharpSceneObjects	OwnerClientId	int	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	RemoveTag	bool	session:ulong	entity:ulong	tag:string
 method	Tallow.CSharpSceneObjects	SetActive	bool	session:ulong	entity:ulong	active:bool
+method	Tallow.CSharpSceneObjects	SetLayer	bool	session:ulong	entity:ulong	layer:int
+method	Tallow.CSharpSceneObjects	SetName	bool	session:ulong	entity:ulong	name:string
+method	Tallow.CSharpSceneObjects	SetParent	bool	session:ulong	entity:ulong	parent:ulong	keepWorldPose:bool
 method	Tallow.Cursor	IsLocked	bool
 method	Tallow.Cursor	SetLocked	void	locked:bool
 method	Tallow.Ecs	CopyLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
@@ -34,6 +52,17 @@ method	Tallow.Ecs	IsAlive	bool	session:ulong	entity:ulong
 method	Tallow.Ecs	RegisterLocalData	ulong	session:ulong	schemaId:ulong	size:int	alignment:int
 method	Tallow.Ecs	SetLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
 method	Tallow.GUI	Button	bool	x:float	y:float	width:float	height:float	label:string
+method	Tallow.Input	GetAxis	float	name:string
+method	Tallow.Input	GetMouseDelta	System.Numerics.Vector2
+method	Tallow.Input	GetMousePosition	System.Numerics.Vector2
+method	Tallow.Input	GetMouseWheel	float
+method	Tallow.Input	IsUsingGamepad	bool
+method	Tallow.Input	KeyHeld	bool	key:int
+method	Tallow.Input	KeyPressed	bool	key:int
+method	Tallow.Input	KeyReleased	bool	key:int
+method	Tallow.Input	MouseHeld	bool	button:int
+method	Tallow.Input	MousePressed	bool	button:int
+method	Tallow.Input	MouseReleased	bool	button:int
 method	Tallow.Log	Error	void	text:string
 method	Tallow.Log	Info	void	text:string
 method	Tallow.Log	Warning	void	text:string
