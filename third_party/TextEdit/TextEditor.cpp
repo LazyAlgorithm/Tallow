@@ -1117,16 +1117,13 @@ void TextEditor::renderPopups() {
 	if (ImGui::IsPopupOpen("TextHoverPopup")) {
 		ImGui::SetNextWindowPos(popupWindowPos, ImGuiCond_Always, ImVec2(0.0f, 1.0f));
 
-		if (ImGui::BeginPopup("TextHoverPopup", ImGuiWindowFlags_NoFocusOnAppearing)) {
-			if (textHoverCallback) {
-				ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
-				textHoverCallback(popupData);
-
-			} else {
-				ImGui::CloseCurrentPopup();
-			}
-
-			ImGui::EndPopup();
+		if (ImGui::BeginPopup("TextHoverPopup",
+                ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs)) {
+            if (!hoverActive || !textHoverCallback)
+                ImGui::CloseCurrentPopup();
+            else
+                textHoverCallback(popupData);
+            ImGui::EndPopup();
 		}
 	}
 
@@ -1432,6 +1429,14 @@ void TextEditor::handleMouseInteractions() {
 
 	const auto overMiniMap = config.showMiniMap && absoluteMousePos.x > miniMapOffset;
 
+    // A popup must not persist when the pointer leaves the hovered symbol.
+    // Use hover flags that allow non-interactive popup windows to overlap text.
+    hoverActive = false;
+    if (!textHoverCallback || !ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) ||
+        !overText || !IsMousePosOverGlyph(ImGui::GetMousePos()) ||
+        ImGui::IsAnyMouseDown() || io.MouseWheel != 0.0f || io.MouseWheelH != 0.0f)
+        hoverStartTime = -1.0;
+
 	DocPos glyphPos;
 	DocPos cursorPos;
 
@@ -1662,19 +1667,25 @@ void TextEditor::handleMouseInteractions() {
 				}
 			}
 
-		} else if (textHoverCallback && IsMousePosOverGlyph(ImGui::GetMousePos())) {
-			// capture position for text hover popup
-			popupDocPos = document.findWordStart(glyphPos, true);
-			const auto vizPos = docPos2VisPos(popupDocPos);
-
-			popupWindowPos = ImVec2(
-				vizPos.column * glyphSize.x + textLeftOffset + cursorScreenPos.x,
-				vizPos.row * glyphSize.y + cursorScreenPos.y);
-
-			// only open popup if required
-			if (!ImGui::IsPopupOpen("TextHoverPopup")) {
-				ImGui::OpenPopup("TextHoverPopup");
-			}
+		} else if (textHoverCallback && overText && IsMousePosOverGlyph(ImGui::GetMousePos())) {
+            const auto word = document.findWordStart(glyphPos, true);
+            // The timer restarts for each newly hovered word, or whenever
+            // the pointer is moving. No popup while quickly scanning code.
+            if (hoverStartTime < 0.0 || hoverDocPos != word ||
+                io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f) {
+                hoverDocPos = word;
+                hoverStartTime = ImGui::GetTime();
+            }
+            if (ImGui::GetTime() - hoverStartTime >= 0.45) {
+                hoverActive = true;
+                popupDocPos = word;
+                const auto vizPos = docPos2VisPos(popupDocPos);
+                popupWindowPos = ImVec2(
+                    vizPos.column * glyphSize.x + textLeftOffset + cursorScreenPos.x,
+                    vizPos.row * glyphSize.y + cursorScreenPos.y);
+                if (!ImGui::IsPopupOpen("TextHoverPopup"))
+                    ImGui::OpenPopup("TextHoverPopup");
+            }
 		}
 
 		// update cursors and reset vertical navigation if any button was pressed

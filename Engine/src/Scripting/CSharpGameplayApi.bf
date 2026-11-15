@@ -13,6 +13,99 @@ static class CSharpAudio
 	/// Plays a sound once, not placed in the world (Interface group).
 	[CSharpExpose]
 	public static void PlayOneShot2D(StringView clip, float volume) => Audio.PlayOneShot2D(clip, volume);
+
+	static bool FindSource(uint64 session, uint64 entity, out AudioSource source)
+	{
+		source = default;
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		if (obj == null || !obj.HasComponent<AudioSource>())
+			return false;
+		source = obj.GetComponent<AudioSource>();
+		return true;
+	}
+
+	[CSharpExpose]
+	public static bool HasSource(uint64 session, uint64 entity) => FindSource(session, entity, ?);
+
+	/// Plays the source's Audio Clip, or (non-empty) another clip in its place.
+	[CSharpExpose]
+	public static void SourcePlay(uint64 session, uint64 entity, StringView clip)
+	{
+		if (!FindSource(session, entity, let source))
+			return;
+		if (clip.IsEmpty)
+			source.Play();
+		else
+			source.Play(clip);
+	}
+
+	/// A sound on top of whatever the source is playing; any number overlap.
+	[CSharpExpose]
+	public static void SourcePlayOneShot(uint64 session, uint64 entity, StringView clip, float volumeScale)
+	{
+		if (volumeScale.IsFinite && FindSource(session, entity, let source))
+			source.PlayOneShot(clip, volumeScale);
+	}
+
+	/// 0 pauses, 1 resumes, 2 stops.
+	[CSharpExpose]
+	public static void SourceControl(uint64 session, uint64 entity, int32 action)
+	{
+		if (!FindSource(session, entity, let source))
+			return;
+		switch (action)
+		{
+		case 0: source.Pause();
+		case 1: source.Resume();
+		case 2: source.Stop();
+		default:
+		}
+	}
+
+	[CSharpExpose]
+	public static bool SourceIsPlaying(uint64 session, uint64 entity) => FindSource(session, entity, let source) && source.IsPlaying;
+
+	/// The mixer's settings: 0 HRTF on (1) or off (0), 1 HRTF strength, 2 head size, 3 treble, 4 master volume.
+	[CSharpExpose]
+	public static float GetSetting(int32 which)
+	{
+		switch (which)
+		{
+		case 0: return Audio.Hrtf ? 1 : 0;
+		case 1: return Audio.HrtfStrength;
+		case 2: return Audio.HrtfHeadSize;
+		case 3: return Audio.HrtfTreble;
+		case 4: return Audio.MasterVolume;
+		default: return 0;
+		}
+	}
+
+	[CSharpExpose]
+	public static void SetSetting(int32 which, float value)
+	{
+		if (!value.IsFinite)
+			return;
+		switch (which)
+		{
+		case 0: Audio.Hrtf = value != 0;
+		case 1: Audio.HrtfStrength = value;
+		case 2: Audio.HrtfHeadSize = value;
+		case 3: Audio.HrtfTreble = value;
+		case 4: Audio.MasterVolume = value;
+		default:
+		}
+	}
+
+	[CSharpExpose]
+	public static float GetGroupVolume(int32 group) =>
+		(group >= 0 && group <= (int32)AudioGroup.Other) ? Audio.GetGroupVolume((AudioGroup)group) : 0;
+
+	[CSharpExpose]
+	public static void SetGroupVolume(int32 group, float volume)
+	{
+		if (group >= 0 && group <= (int32)AudioGroup.Other && volume.IsFinite)
+			Audio.SetGroupVolume((AudioGroup)group, volume);
+	}
 }
 
 /// The project's input actions for C# scripts (Tallow.API's InputActions). These read this machine's devices: a

@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PAIRS = [
     ("Engine/src/Core/Input.bf", r"enum KeyCode : int32\s*\{(.*?)\n\}",
      "Managed/Tallow.API/Input.cs", r"public enum KeyCode\s*\{(.*?)\n\}"),
+    ("Engine/src/Audio/Audio.bf", r"enum AudioGroup : int32\s*\{(.*?)\n\}",
+     "Managed/Tallow.API/Gameplay.cs", r"public enum AudioGroup\s*\{(.*?)\n\}"),
 ]
 
 

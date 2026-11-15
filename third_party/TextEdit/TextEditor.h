@@ -2089,6 +2089,9 @@ protected:
 	std::function<void(PopupData& data)> textHoverCallback;
 	ImVec2 popupWindowPos;
 	DocPos popupDocPos;
+	double hoverStartTime = -1.0;
+	DocPos hoverDocPos;
+	bool hoverActive = false;
 
 	// find and replace context
 	std::string findButtonLabel = "Find";

@@ -128,6 +128,7 @@ internal static class NativeComponentTypes
         [typeof(Animator)] = ("Tallow.Animator", o => new Animator(o)),
         [typeof(VoxelObject)] = ("Tallow.VoxelObject", o => new VoxelObject(o)),
         [typeof(CharacterMotor)] = ("Tallow.CharacterMotor", o => new CharacterMotor(o)),
+        [typeof(AudioSource)] = ("Tallow.AudioSource", o => new AudioSource(o)),
     };
 
     /// <summary>Every handle type with its native name (the in-engine tests check them against their attributes).</summary>

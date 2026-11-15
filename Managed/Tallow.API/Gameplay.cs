@@ -39,6 +39,49 @@ public static class Audio
 
     /// <summary>Plays a sound once, not placed in the world (Interface group): menus and UI.</summary>
     public static void PlayOneShot2D(string clip, float volume = 1f) => CSharpAudio.PlayOneShot2D(clip, volume);
+
+    /// <summary>Headphone 3D (head-related transfer function) instead of plain left-right panning.</summary>
+    public static bool Hrtf { get => CSharpAudio.GetSetting(0) != 0; set => CSharpAudio.SetSetting(0, value ? 1 : 0); }
+    /// <summary>How strongly HRTF shapes sounds, 0..1.</summary>
+    public static float HrtfStrength { get => CSharpAudio.GetSetting(1); set => CSharpAudio.SetSetting(1, value); }
+    /// <summary>The listener's head size for HRTF, 0.5..1.5.</summary>
+    public static float HrtfHeadSize { get => CSharpAudio.GetSetting(2); set => CSharpAudio.SetSetting(2, value); }
+    /// <summary>HRTF treble in decibels, -12..12.</summary>
+    public static float HrtfTreble { get => CSharpAudio.GetSetting(3); set => CSharpAudio.SetSetting(3, value); }
+    /// <summary>Every sound's volume, 0..1.</summary>
+    public static float MasterVolume { get => CSharpAudio.GetSetting(4); set => CSharpAudio.SetSetting(4, value); }
+
+    public static float GetGroupVolume(AudioGroup group) => CSharpAudio.GetGroupVolume((int)group);
+    public static void SetGroupVolume(AudioGroup group, float volume) => CSharpAudio.SetGroupVolume((int)group, volume);
+}
+
+/// <summary>The mixer groups each sound plays in, each with its own volume (Audio.SetGroupVolume).</summary>
+public enum AudioGroup
+{
+    Effects,
+    Music,
+    Voice,
+    Ambience,
+    Interface,
+    Other
+}
+
+/// <summary>Something that makes sound from its object: a radio, an engine, footsteps.</summary>
+[NativeComponent("Tallow.AudioSource")]
+public readonly record struct AudioSource(GameObject GameObject) : IComponent
+{
+    public bool IsValid => CSharpAudio.HasSource(GameObject.SceneId, GameObject.Id);
+    /// <summary>Plays its Audio Clip (set in the Inspector).</summary>
+    public void Play() => CSharpAudio.SourcePlay(GameObject.SceneId, GameObject.Id, "");
+    /// <summary>Plays another clip in its place.</summary>
+    public void Play(string clip) => CSharpAudio.SourcePlay(GameObject.SceneId, GameObject.Id, clip);
+    /// <summary>A sound on top of whatever is playing, from the same place; any number can overlap.</summary>
+    public void PlayOneShot(string clip, float volumeScale = 1f) =>
+        CSharpAudio.SourcePlayOneShot(GameObject.SceneId, GameObject.Id, clip, volumeScale);
+    public void Pause() => CSharpAudio.SourceControl(GameObject.SceneId, GameObject.Id, 0);
+    public void Resume() => CSharpAudio.SourceControl(GameObject.SceneId, GameObject.Id, 1);
+    public void Stop() => CSharpAudio.SourceControl(GameObject.SceneId, GameObject.Id, 2);
+    public bool IsPlaying => CSharpAudio.SourceIsPlaying(GameObject.SceneId, GameObject.Id);
 }
 
 /// <summary>The project's input actions (Project Settings > Input) on this machine. A networked script reads its
