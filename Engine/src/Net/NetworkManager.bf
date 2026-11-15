@@ -786,7 +786,9 @@ class NetworkManager
 	public static void RegisterPrefabFile(StringView name, StringView projectRelativePath)
 	{
 		let path = new String(projectRelativePath);
-		RegisterPrefab(name, new [=path] (scene) => Prefab.Instantiate(scene, path) ~ delete path);
+		// Create, not Instantiate: the session shares what the factory makes. Instantiate would share it again (a
+		// second copy at the origin on the server) and, on a client, destroy the copy the server's spawn made.
+		RegisterPrefab(name, new [=path] (scene) => Prefab.Create(scene, path) ~ delete path);
 	}
 
 	/// Starts serving on a port. With hostAlsoPlays this machine is a host, a player as well. False if the port could

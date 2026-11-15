@@ -80,10 +80,10 @@ public class SyncProbe : Script
 
     private static int sFinished;
 
-    /// Both probes (this and RpcProbe on the client's player) report before the client quits.
+    /// The probes (this, RpcProbe on the client's player and SpawnProbe) report before the client quits.
     public static void Finished()
     {
-        if (++sFinished < 2)
+        if (++sFinished < 3)
             return;
         Log.Info("NETTEST DONE");
         Application.Quit();

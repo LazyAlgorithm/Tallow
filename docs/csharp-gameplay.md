@@ -257,6 +257,25 @@ When field restoration fails, the native C# adapter no longer proceeds with
 `Awake`; when editing during Play, a failed field batch leaves the previous
 saved override unchanged. This still requires full Nobara editor verification.
 
+## Spawning networked objects
+
+A prefab whose root has a Network Identity is shared. On the server, `Scene.Spawn` makes it on every machine and
+can hand it to a player; `Scene.Despawn` removes it everywhere. Give prefab files short names once at startup,
+with the same names on the server and the clients.
+
+```csharp
+public override void Start() => Network.RegisterPrefab("crate", "Prefabs/Crate.tprefab");
+
+void DropCrateFor(GameObject player)
+{
+    if (Scene.IsServer)
+        Scene.Spawn("crate", player.Transform.Position + new Vector3(0, 2, 0), player.OwnerClientId);
+}
+```
+
+A despawned object reads as gone straight away (`IsValid` is false); its scripts' `OnDestroy` runs at the end
+of the frame.
+
 ## UI documents with C# code-behind
 
 Put a UI Document and a C# script on the same object. The document's `onclick="Method"`, `onchange` and

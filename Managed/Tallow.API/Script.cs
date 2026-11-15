@@ -532,7 +532,7 @@ public readonly record struct EcsEntity(ulong SessionId, ulong Id)
 /// A reference to the active scene session. Its ID is checked by Beef for
 /// every operation, so stale handles cannot access a subsequently opened scene.
 /// </summary>
-public readonly record struct Scene(ulong SessionId)
+public readonly partial record struct Scene(ulong SessionId)
 {
     /// <summary>
     /// Wrap a Flecs entity ID; it is not the same as GameObject.Id.

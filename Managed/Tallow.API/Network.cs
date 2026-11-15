@@ -1,0 +1,42 @@
+using System.Numerics;
+
+namespace Tallow;
+
+/// <summary>
+/// Network prefabs. A prefab file whose root has a Network Identity is shared: <see cref="Scene.Spawn"/> (or
+/// <see cref="Prefab.Instantiate(Scene, string)"/>) on the server makes it on every machine. Register a short name
+/// for a prefab file once at startup, with the same names on the server and clients.
+/// </summary>
+public static class Network
+{
+    /// <summary>Names a prefab file for Spawn and for a Network Session's player prefab.</summary>
+    public static void RegisterPrefab(string name, string prefabPath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(prefabPath);
+        if (!CSharpNetwork.RegisterPrefabFile(name, prefabPath))
+            throw new ArgumentException("A network prefab name or path is too long.");
+    }
+
+    public static bool IsRegistered(string name) => !string.IsNullOrEmpty(name) && CSharpNetwork.IsPrefabRegistered(name);
+}
+
+public readonly partial record struct Scene
+{
+    /// <summary>
+    /// Server only: makes a network prefab (a registered name or a .tprefab path) on every machine, owned by a
+    /// client (0, the default, is the server). Null on a client or when it could not be made.
+    /// </summary>
+    public GameObject? Spawn(string prefab, Vector3 position, Quaternion rotation, int ownerClientId = 0)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(prefab);
+        ulong id = CSharpNetwork.Spawn(SessionId, prefab, position, rotation, ownerClientId);
+        return id == 0 ? null : new GameObject(SessionId, id);
+    }
+
+    public GameObject? Spawn(string prefab, Vector3 position, int ownerClientId = 0) =>
+        Spawn(prefab, position, Quaternion.Identity, ownerClientId);
+
+    /// <summary>Server only: removes a networked object on every machine. False on a client.</summary>
+    public bool Despawn(GameObject gameObject) => CSharpNetwork.Despawn(SessionId, gameObject.Id);
+}

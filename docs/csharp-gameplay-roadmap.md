@@ -238,6 +238,11 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     `tn_csharp_ui_invoke`), and bind="field" reads and writes its public fields. `UIDocument`/`UIElement`
     handles (Find, Text, Visible, Value) over `CSharpUI` exposures. 6 in-engine checks (onload, headless).
   - [x] Audio one-shots (`Audio.PlayOneShot`, `PlayOneShot2D`), `InputActions`, `NetRandom`, `Time.GameTime`.
+  - [x] Network prefabs (November 15, 2026): `Network.RegisterPrefab(name, path)`, `Scene.Spawn(prefab, position,
+    rotation, ownerClientId)` and `Scene.Despawn` over `CSharpNetwork` exposures; 5 network checks (spawn for a
+    client, ownership, despawn, client refusal). Fixed `NetworkManager.RegisterPrefabFile`, which built its factory
+    from `Prefab.Instantiate` (shared the object a second time on the server and destroyed it on clients; the same
+    code is on `ecs`).
 - [ ] Inspector: add string, enum, arrays/lists, serializable nested types, asset/GameObject/component references, undo/redo, prefab overrides and validation. Current user-confirmed subset is numeric/bool/vectors and persistence.
 - [ ] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.
 

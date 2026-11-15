@@ -52,8 +52,12 @@ method	Tallow.CSharpInputActions	Pressed	bool	name:string
 method	Tallow.CSharpInputActions	Released	bool	name:string
 method	Tallow.CSharpInputActions	Value	float	name:string
 method	Tallow.CSharpInputActions	Vector	System.Numerics.Vector2	name:string
+method	Tallow.CSharpNetwork	Despawn	bool	session:ulong	entity:ulong
+method	Tallow.CSharpNetwork	IsPrefabRegistered	bool	name:string
+method	Tallow.CSharpNetwork	RegisterPrefabFile	bool	name:string	path:string
 method	Tallow.CSharpNetwork	SendEvent	int	session:ulong	entity:ulong	instance:int	name:string	value:float
 method	Tallow.CSharpNetwork	SendRpc	int	session:ulong	entity:ulong	instance:int	target:int	method:string	arguments:string
+method	Tallow.CSharpNetwork	Spawn	ulong	session:ulong	prefab:string	position:System.Numerics.Vector3	rotation:System.Numerics.Quaternion	ownerId:int
 method	Tallow.CSharpSaves	Delete	void	slot:string
 method	Tallow.CSharpSaves	Exists	bool	slot:string
 method	Tallow.CSharpSaves	Load	int	slot:string

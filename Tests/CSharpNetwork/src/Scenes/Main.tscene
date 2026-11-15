@@ -13,3 +13,8 @@ component Tallow.NetworkIdentity enabled 1
 component Tallow.CSharpBehaviour enabled 1
 field scriptType "NetGame.SyncProbe"
 field fieldOverrides ""
+object 3 parent 0 active 1 name "Spawner"
+transform 0 0 0 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "NetGame.SpawnProbe"
+field fieldOverrides ""
