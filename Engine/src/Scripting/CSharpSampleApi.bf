@@ -81,6 +81,15 @@ static class CSharpWorld
 		return true;
 	}
 
+	/// The terrain's chunks made so far, and those still being made (streamed in).
+	[CSharpExpose]
+	public static int32 TerrainChunkCount(uint64 session, uint64 entity) =>
+		CSharpRuntime.PhysicsObject(session, entity)?.GetComponent<VoxelTerrain>()?.ChunkCount ?? 0;
+
+	[CSharpExpose]
+	public static int32 TerrainPendingChunks(uint64 session, uint64 entity) =>
+		CSharpRuntime.PhysicsObject(session, entity)?.GetComponent<VoxelTerrain>()?.PendingChunks ?? 0;
+
 	[CSharpExpose]
 	public static bool HasCharacterMotor(uint64 session, uint64 entity) => CSharpRuntime.PhysicsObject(session, entity)?.GetComponent<CharacterMotor>() != null;
 
@@ -97,5 +106,75 @@ static class CSharpWorld
 	{
 		let scene = CSharpRuntime.PhysicsScene(session);
 		return (scene?.Network != null && scene.Network.Mode != .Offline) ? (int64)scene.Network.Tick : 0;
+	}
+}
+
+/// NavigationAgent for C# scripts. A missing object or agent does nothing and reads as zero.
+[CSharpExpose]
+static class CSharpNavigation
+{
+	static bool Find(uint64 session, uint64 entity, out NavigationAgent agent)
+	{
+		agent = default;
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		if (obj == null || !obj.HasComponent<NavigationAgent>())
+			return false;
+		agent = obj.GetComponent<NavigationAgent>();
+		return true;
+	}
+
+	[CSharpExpose]
+	public static bool HasAgent(uint64 session, uint64 entity) => Find(session, entity, ?);
+
+	[CSharpExpose]
+	public static void SetDestination(uint64 session, uint64 entity, Vector3 point, float speed, float stoppingDistance)
+	{
+		if (point.x.IsFinite && point.y.IsFinite && point.z.IsFinite && speed.IsFinite && stoppingDistance.IsFinite &&
+			Find(session, entity, let agent))
+			agent.SetDestination(point, speed, stoppingDistance);
+	}
+
+	[CSharpExpose]
+	public static void StopMovement(uint64 session, uint64 entity)
+	{
+		if (Find(session, entity, let agent))
+			agent.StopMovement();
+	}
+
+	[CSharpExpose]
+	public static bool PathPending(uint64 session, uint64 entity) => Find(session, entity, let agent) && agent.PathPending;
+
+	[CSharpExpose]
+	public static bool PathFailed(uint64 session, uint64 entity) => Find(session, entity, let agent) && agent.PathFailed;
+
+	[CSharpExpose]
+	public static bool HasArrived(uint64 session, uint64 entity) => Find(session, entity, let agent) && agent.HasArrived;
+
+	[CSharpExpose]
+	public static int32 PathCount(uint64 session, uint64 entity) =>
+		(Find(session, entity, let agent) && agent.Path != null) ? (int32)agent.Path.Count : 0;
+
+	[CSharpExpose]
+	public static float RemainingDistance(uint64 session, uint64 entity) => Find(session, entity, let agent) ? agent.RemainingDistance : 0;
+}
+
+/// The game's command line for C# scripts (test switches such as --view 3).
+[CSharpExpose]
+static class CSharpCommandLine
+{
+	[CSharpExpose]
+	public static bool HasArg(StringView name) => Application.Instance != null && Application.Instance.HasArg(name);
+
+	/// The value after a switch (UTF-8 into buffer); returns its full length, -1 when the switch is not there.
+	[CSharpExpose]
+	public static int32 CopyArg(StringView name, Span<uint8> buffer)
+	{
+		let value = scope String();
+		if (Application.Instance == null || !Application.Instance.GetArg(name, value))
+			return -1;
+		let count = Math.Min(value.Length, buffer.Length);
+		for (int i < count)
+			buffer[i] = (uint8)value[i];
+		return (int32)value.Length;
 	}
 }

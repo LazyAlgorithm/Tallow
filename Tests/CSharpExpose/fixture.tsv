@@ -37,6 +37,8 @@ method	Tallow.CSharpAnimation	SetTrigger	void	session:ulong	entity:ulong	name:st
 method	Tallow.CSharpAudio	PlayOneShot	void	clip:string	position:System.Numerics.Vector3	volume:float
 method	Tallow.CSharpAudio	PlayOneShot2D	void	clip:string	volume:float
 method	Tallow.CSharpBindingFixture	Average	float	a:float	b:float
+method	Tallow.CSharpCommandLine	CopyArg	int	name:string	buffer:System.Span<byte>
+method	Tallow.CSharpCommandLine	HasArg	bool	name:string
 method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:string
 method	Tallow.CSharpComponents	EnabledState	int	session:ulong	entity:ulong	instance:int
@@ -58,6 +60,18 @@ method	Tallow.CSharpInputActions	Pressed	bool	name:string
 method	Tallow.CSharpInputActions	Released	bool	name:string
 method	Tallow.CSharpInputActions	Value	float	name:string
 method	Tallow.CSharpInputActions	Vector	System.Numerics.Vector2	name:string
+method	Tallow.CSharpNativeComponents	Add	bool	session:ulong	entity:ulong	typeName:string
+method	Tallow.CSharpNativeComponents	CopyField	int	session:ulong	entity:ulong	typeName:string	field:string	buffer:System.Span<byte>
+method	Tallow.CSharpNativeComponents	Has	bool	session:ulong	entity:ulong	typeName:string
+method	Tallow.CSharpNativeComponents	SetField	bool	session:ulong	entity:ulong	typeName:string	field:string	value:string
+method	Tallow.CSharpNavigation	HasAgent	bool	session:ulong	entity:ulong
+method	Tallow.CSharpNavigation	HasArrived	bool	session:ulong	entity:ulong
+method	Tallow.CSharpNavigation	PathCount	int	session:ulong	entity:ulong
+method	Tallow.CSharpNavigation	PathFailed	bool	session:ulong	entity:ulong
+method	Tallow.CSharpNavigation	PathPending	bool	session:ulong	entity:ulong
+method	Tallow.CSharpNavigation	RemainingDistance	float	session:ulong	entity:ulong
+method	Tallow.CSharpNavigation	SetDestination	void	session:ulong	entity:ulong	point:System.Numerics.Vector3	speed:float	stoppingDistance:float
+method	Tallow.CSharpNavigation	StopMovement	void	session:ulong	entity:ulong
 method	Tallow.CSharpNetwork	Despawn	bool	session:ulong	entity:ulong
 method	Tallow.CSharpNetwork	IsPrefabRegistered	bool	name:string
 method	Tallow.CSharpNetwork	RegisterPrefabFile	bool	name:string	path:string
@@ -79,6 +93,7 @@ method	Tallow.CSharpSceneObjects	GetChild	ulong	session:ulong	entity:ulong	index
 method	Tallow.CSharpSceneObjects	GetChildCount	int	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	GetLayer	int	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	GetParent	ulong	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	GetTransient	bool	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	HasNetworkIdentity	bool	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	HasTag	bool	session:ulong	entity:ulong	tag:string
 method	Tallow.CSharpSceneObjects	InstantiatePrefabAt	ulong	session:ulong	path:string	position:System.Numerics.Vector3	rotation:System.Numerics.Quaternion
@@ -90,6 +105,7 @@ method	Tallow.CSharpSceneObjects	SetActive	bool	session:ulong	entity:ulong	activ
 method	Tallow.CSharpSceneObjects	SetLayer	bool	session:ulong	entity:ulong	layer:int
 method	Tallow.CSharpSceneObjects	SetName	bool	session:ulong	entity:ulong	name:string
 method	Tallow.CSharpSceneObjects	SetParent	bool	session:ulong	entity:ulong	parent:ulong	keepWorldPose:bool
+method	Tallow.CSharpSceneObjects	SetTransient	void	session:ulong	entity:ulong	transient:bool
 method	Tallow.CSharpUI	CopyText	int	session:ulong	entity:ulong	id:string	buffer:System.Span<byte>
 method	Tallow.CSharpUI	GetValue	float	session:ulong	entity:ulong	id:string
 method	Tallow.CSharpUI	GetVisible	bool	session:ulong	entity:ulong	id:string
@@ -106,6 +122,8 @@ method	Tallow.CSharpWorld	ModifyTerrain	bool	session:ulong	entity:ulong	center:S
 method	Tallow.CSharpWorld	MotorPitch	float	session:ulong	entity:ulong
 method	Tallow.CSharpWorld	MotorYaw	float	session:ulong	entity:ulong
 method	Tallow.CSharpWorld	NetworkTick	long	session:ulong
+method	Tallow.CSharpWorld	TerrainChunkCount	int	session:ulong	entity:ulong
+method	Tallow.CSharpWorld	TerrainPendingChunks	int	session:ulong	entity:ulong
 method	Tallow.Cursor	IsLocked	bool
 method	Tallow.Cursor	SetLocked	void	locked:bool
 method	Tallow.Ecs	CopyLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>

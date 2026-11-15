@@ -398,6 +398,14 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
                 return true;
             }
         }
+        else if (NativeComponentTypes.TryGet(requested, out string native, out var make))
+        {
+            if (CSharpNativeComponents.Has(SceneId, Id, native))
+            {
+                component = (T)make(this);
+                return true;
+            }
+        }
         else
         {
             throw new NotSupportedException(
@@ -411,10 +419,20 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
     /// Attach a new trusted C# behaviour through Tallow's native scene and
     /// return precisely that new instance, even if siblings share its type.
     /// The Scene manages Awake/OnEnable/Start and eventual destruction.
+    /// A built-in component handle (Light, MeshRenderer, Rigidbody...) is
+    /// added with its default values, or the one already there is returned.
     /// </summary>
-    public T AddComponent<T>() where T : Script
+    public T AddComponent<T>() where T : IComponent
     {
         Type type = typeof(T);
+        if (!typeof(Script).IsAssignableFrom(type))
+        {
+            if (!NativeComponentTypes.TryGet(type, out string native, out var make))
+                throw new NotSupportedException($"{type.FullName} cannot be added from C#.");
+            if (!CSharpNativeComponents.Add(SceneId, Id, native))
+                throw new InvalidOperationException($"Tallow could not add {native} to {this}.");
+            return (T)make(this);
+        }
         if (type.IsAbstract || type.ContainsGenericParameters ||
             type.FullName is not string fullName)
             throw new ArgumentException("C# components must be concrete, non-generic Script types.");
@@ -423,7 +441,7 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
         if (instance <= 0)
             throw new InvalidOperationException(
                 $"Tallow could not add {fullName} to the native scene object.");
-        return Engine.Bridge.GetManagedInstance(this, instance) as T ??
+        return Engine.Bridge.GetManagedInstance(this, instance) is T added ? added :
             throw new InvalidOperationException(
                 $"Tallow failed to resolve newly attached C# component {fullName}.");
     }
@@ -456,6 +474,16 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
                 return inChild;
         }
         return default;
+    }
+
+    /// <summary>
+    /// A transient object is not saved with the scene or shared by a
+    /// network session (fired balls, effects).
+    /// </summary>
+    public bool Transient
+    {
+        get => CSharpSceneObjects.GetTransient(SceneId, Id);
+        set => CSharpSceneObjects.SetTransient(SceneId, Id, value);
     }
 
     public ColliderHandle? GetCollider(int index = 0) =>
@@ -1011,7 +1039,7 @@ public abstract class Script : IComponent
         GameObject.TryGetComponent(out component);
 
     /// <summary>Add and return another managed gameplay component.</summary>
-    public T AddComponent<T>() where T : Script => GameObject.AddComponent<T>();
+    public T AddComponent<T>() where T : IComponent => GameObject.AddComponent<T>();
 
     public ColliderHandle? GetCollider(int index = 0) => GameObject.GetCollider(index);
     public T? GetComponentInChildren<T>() where T : IComponent => GameObject.GetComponentInChildren<T>();

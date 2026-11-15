@@ -36,6 +36,11 @@ internal static class GraphNodeCatalog
         ["SoftBody"] = "GameObject.GetComponent<SoftBody>()",
         ["Joint"] = "GameObject.GetComponent<Joint>()",
         ["Animator"] = "GameObject.GetComponentInChildren<Animator>()",
+        ["Light"] = "GameObject.GetComponent<Light>()",
+        ["MeshRenderer"] = "GameObject.GetComponent<MeshRenderer>()",
+        ["NavigationAgent"] = "GameObject.GetComponent<NavigationAgent>()",
+        ["VoxelObject"] = "GameObject.GetComponent<VoxelObject>()",
+        ["UIDocument"] = "GameObject.GetComponent<UIDocument>()",
     };
 
     /// <summary>Script methods the engine calls; a node for one would make no sense.</summary>

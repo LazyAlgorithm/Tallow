@@ -85,6 +85,7 @@ public class ApiChecks : CheckBase
             GraphChecks();
             AnimatorChecks();
             UIChecks();
+            NativeComponentChecks();
             PackageChecks();
             Finish();
             Application.Quit();
@@ -115,6 +116,35 @@ public class ApiChecks : CheckBase
         Check("await Wait(0.5) waits half a second of game time", probe?.FramesForWait is >= 29 and <= 31);
         Check("code after every await runs on the game thread", probe is { StayedOnGameThread: true });
         Check("destroying a script cancels what it awaits", AsyncDoomed.Cancelled && !AsyncDoomed.RanOn);
+    }
+
+    private void NativeComponentChecks()
+    {
+        GameObject lamp = Scene.CreateGameObject("Native component probe");
+        Light light = lamp.AddComponent<Light>();
+        light.Type = LightType.Point;
+        light.Intensity = 7.5f;
+        light.Color = new Color(1f, 0.5f, 0.25f, 1f);
+        Check("AddComponent<Light> adds a native light, and its fields round-trip",
+            light.IsValid && light.Type == LightType.Point && light.Intensity == 7.5f && light.Color == new Color(1f, 0.5f, 0.25f, 1f));
+        Check("GetComponent<Light> finds it", lamp.GetComponent<Light>() == light && lamp.AddComponent<Light>() == light);
+        MeshRenderer renderer = lamp.AddComponent<MeshRenderer>();
+        renderer.Mesh = "builtin:sphere_smooth";
+        renderer.Roughness = 0.3f;
+        Check("MeshRenderer string and float fields", renderer.Mesh == "builtin:sphere_smooth" && MathF.Abs(renderer.Roughness - 0.3f) < 1e-6f);
+        lamp.AddComponent<SphereCollider>().Radius = 0.25f;
+        Rigidbody body = lamp.AddComponent<Rigidbody>();
+        body.Mass = 55f;
+        Check("Rigidbody and SphereCollider fields", body.Mass == 55f && lamp.GetComponent<SphereCollider>().Radius == 0.25f);
+        bool refused = false;
+        try { new NativeComponent(lamp, "Tallow.Light").Set("noSuchField", 1f); }
+        catch (ArgumentException) { refused = true; }
+        Check("setting a field that does not exist throws", refused);
+        Check("a missing built-in component reads as absent", !lamp.GetComponent<NavigationAgent>().IsValid && lamp.GetComponent<NavigationAgent>() == default);
+        lamp.Transient = true;
+        Check("GameObject.Transient", lamp.Transient);
+        Check("CommandLine reads switches", CommandLine.Has("--headless") && CommandLine.Get("--no-such-switch") == null);
+        lamp.Destroy();
     }
 
     private void UIChecks()

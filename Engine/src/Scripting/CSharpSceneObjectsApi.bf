@@ -238,4 +238,14 @@ static class CSharpSceneObjects
         let obj = CSharpRuntime.PhysicsObject(session, entity);
         return obj != null && obj.HasComponent<NetworkIdentity>();
     }
+
+    [CSharpExpose]
+    public static bool GetTransient(uint64 session, uint64 entity) => CSharpRuntime.PhysicsObject(session, entity)?.Transient ?? false;
+
+    [CSharpExpose]
+    public static void SetTransient(uint64 session, uint64 entity, bool transient)
+    {
+        if (let obj = CSharpRuntime.PhysicsObject(session, entity))
+            obj.Transient = transient;
+    }
 }

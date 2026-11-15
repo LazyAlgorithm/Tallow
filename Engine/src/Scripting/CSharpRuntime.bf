@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.IO;
 using System.Reflection;
 
@@ -177,9 +178,36 @@ static class CSharpRuntime
 		return -1;
 	}
 
+	/// How often each distinct failure (by action and full text) has been reported.
+	static Dictionary<String, int> sFailureCounts = new .() ~ DeleteDictionaryAndKeys!(_);
+
+	/// Logs a managed failure. A script that throws every frame is reported in full once and then only as a
+	/// periodic reminder, even when other failures come in between (the log merges only identical neighbours).
 	static void ReportFailure(StringView action)
 	{
 		let text = StringView(tn_csharp_error());
+		let key = scope String()..AppendF("{}\n{}", action, text);
+		if (sFailureCounts.TryGetValueAlt(key, var count))
+		{
+			count++;
+			sFailureCounts[key] = count;
+			if (count % 600 == 0)
+			{
+				var first = text;
+				let end = text.IndexOf('\n');
+				if (end >= 0)
+					first = text.Substring(0, end);
+				Log.Warning(scope $"C# failure repeated {count} times (in {action}): {first}");
+			}
+			return;
+		}
+		if (sFailureCounts.Count >= 512)
+		{
+			for (let entry in sFailureCounts)
+				delete entry.key;
+			sFailureCounts.Clear();
+		}
+		sFailureCounts[new String(key)] = 1;
 		var firstLine = text;
 		let lineEnd = text.IndexOf('\n');
 		if (lineEnd >= 0)
@@ -370,6 +398,10 @@ static class CSharpRuntime
 		if (!sStarted || scene == null)
 			return false;
 		sScene = scene;
+		// A new play session reports its failures afresh.
+		for (let entry in sFailureCounts)
+			delete entry.key;
+		sFailureCounts.Clear();
 		sSession++;
 		if (sSession == 0)
 			sSession++;

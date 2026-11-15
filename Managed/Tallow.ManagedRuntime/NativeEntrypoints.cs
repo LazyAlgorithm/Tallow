@@ -409,23 +409,29 @@ public static unsafe class NativeEntrypoints
     private static GameAssemblyContext? sGameContext;
     private static string sLastError = "";
 
-    private static int sRepeatedErrors;
+    // How often each distinct failure has happened, by its full text.
+    private static readonly Dictionary<string, int> sErrorCounts = [];
 
-    // A script that throws in Update fails every tick. Report the first
-    // failure in full, then only a periodic reminder of identical ones.
+    // A script that throws in Update fails every tick. Report each distinct
+    // failure in full once, then only a periodic reminder of it, even when
+    // other failures come in between.
     private static int Failure(Exception exception)
     {
         string text = exception.ToString();
-        if (text == sLastError)
+        sLastError = text;
+        if (sErrorCounts.TryGetValue(text, out int count))
         {
-            if (++sRepeatedErrors % 600 == 0)
+            sErrorCounts[text] = ++count;
+            if (count % 600 == 0)
                 Console.Error.WriteLine(
-                    $"[Tallow C#] (repeated {sRepeatedErrors} times) {exception.GetType().Name}: {exception.Message}");
+                    $"[Tallow C#] (repeated {count} times) {exception.GetType().Name}: {exception.Message}");
             return -1;
         }
-        sRepeatedErrors = 0;
-        sLastError = text;
-        Console.Error.WriteLine("[Tallow C#] " + sLastError);
+        // Bounded: a game producing endless different errors still reports them.
+        if (sErrorCounts.Count >= 512)
+            sErrorCounts.Clear();
+        sErrorCounts[text] = 1;
+        Console.Error.WriteLine("[Tallow C#] " + text);
         return -1;
     }
 

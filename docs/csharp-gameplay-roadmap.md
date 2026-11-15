@@ -283,6 +283,14 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     Session's player prefab) instead of a code factory. New C# APIs for it: `GUI.Label/Box/Bar/Toggle/Slider`,
     `GUI.MouseOverControl`, `VoxelObject.Carve`, `VoxelTerrain.Find/ModifySphere`, `CharacterMotor.Yaw/Pitch`,
     `Scene.NetworkTick`. `tools/test_csharp_sample.py` creates the project and checks 10 things in play (CI).
+  - [x] Built-in components from C# (November 15, 2026): `NativeComponent(gameObject, "Tallow.Light")` reads and
+    writes any Inspector field by name as scene-file text (`CSharpNativeComponents`; references and lists
+    excepted), and `AddComponent<T>()` now takes built-in handles as well as scripts. Typed handles on it:
+    `Light`, `MeshRenderer`, `SphereCollider`, `BoxCollider`, Rigidbody `Mass`/`UseGravity`/..., CharacterController
+    `Radius`/`PushStrength`, `UIDocument.Document`; plus `NavigationAgent`, `GameObject.Transient` and
+    `CommandLine`. 8 in-engine checks (137).
+  - [x] A script that throws every frame is reported once even when other failures come in between (before, any
+    other error made it print again; the log only merged identical neighbours).
   - [ ] Tallow Gallery (showcase) template: still Beef (Gallery.bf and its helpers).
 - [ ] Keep shader graph/compute graph/rendering functionality intact; never confuse visual **gameplay** source generation with native shader compilation.
 
