@@ -41,6 +41,45 @@ static class CSharpRuntime
 		Gui
 	}
 
+	/// Exactly the 48-byte layout of tn_csharp_contact.
+	[CRepr]
+	public struct NativeContact
+	{
+		public int32 kind;
+		public int32 hasOther;
+		public uint64 other;
+		public Vector3 point;
+		public Vector3 normal;
+		public float relativeSpeed;
+		public float reserved;
+	}
+
+	public enum ContactKind : int32
+	{
+		CollisionEnter,
+		CollisionExit,
+		TriggerEnter,
+		TriggerExit
+	}
+
+	/// A collision or trigger callback for one managed script. The other object must be in this session's scene.
+	public static bool Contact(int32 instance, ContactKind kind, GameObject other, Vector3 point = default, Vector3 normal = default, float relativeSpeed = 0)
+	{
+		if (!Ready || instance <= 0)
+			return false;
+		NativeContact contact = .();
+		contact.kind = (int32)kind;
+		contact.hasOther = (other != null && other.Scene == sScene) ? 1 : 0;
+		contact.other = contact.hasOther != 0 ? other.Id : 0;
+		contact.point = point;
+		contact.normal = normal;
+		contact.relativeSpeed = relativeSpeed;
+		if (tn_csharp_contact_event(instance, &contact) > 0)
+			return true;
+		Log.Warning(scope $"C# collision callback failed: {StringView(tn_csharp_error())}");
+		return false;
+	}
+
 	[CRepr]
 	public struct NativeTickInput
 	{
@@ -74,6 +113,7 @@ static class CSharpRuntime
     [CLink] static extern int32 tn_csharp_dispatch_checked_batch(int32* instances, int32 count, int32 eventId, float deltaTime);
 	[CLink] static extern int32 tn_csharp_update_input(int32 instance, NativeTickInput* input, float deltaTime);
     [CLink] static extern int32 tn_csharp_update_input_batch(NativeTickBatchItem* items, int32 count);
+	[CLink] static extern int32 tn_csharp_contact_event(int32 instance, NativeContact* contact);
 	[CLink] static extern int32 tn_csharp_detach(int32 instance);
 	[CLink] static extern void tn_csharp_shutdown();
 	[CLink] static extern char8* tn_csharp_error();

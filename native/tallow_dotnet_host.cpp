@@ -52,6 +52,7 @@ using dispatch_fn = int32_t (*)(int32_t, int32_t, float);
 using dispatch_batch_fn = int32_t (*)(const int32_t*, int32_t, int32_t, float);
 using update_input_fn = int32_t (*)(int32_t, const tn_csharp_tick_input*, float);
 using update_input_batch_fn = int32_t (*)(const tn_csharp_tick_batch_item*, int32_t);
+using contact_fn = int32_t (*)(int32_t, const tn_csharp_contact*);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
 using shutdown_fn = int32_t (*)();
@@ -70,6 +71,7 @@ dispatch_batch_fn dispatch_batch = nullptr;
 dispatch_batch_fn dispatch_checked_batch = nullptr;
 update_input_fn update_input = nullptr;
 update_input_batch_fn update_input_batch = nullptr;
+contact_fn contact_event = nullptr;
 detach_fn detach = nullptr;
 last_error_fn last_error = nullptr;
 shutdown_fn shutdown_runtime = nullptr;
@@ -360,6 +362,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "DispatchCheckedBatch", dispatch_checked_batch) ||
             !find_entry(assembly.c_str(), "UpdateInput", update_input) ||
             !find_entry(assembly.c_str(), "UpdateInputBatch", update_input_batch) ||
+            !find_entry(assembly.c_str(), "Contact", contact_event) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
             !find_entry(assembly.c_str(), "GetLastError", last_error) ||
             !find_entry(assembly.c_str(), "Shutdown", shutdown_runtime))
@@ -488,6 +491,16 @@ int32_t tn_csharp_update_input(int32_t script_instance,
     return result > 0;
 }
 
+int32_t tn_csharp_contact_event(int32_t script_instance, const tn_csharp_contact* contact)
+{
+    if (!started || !contact_event || !contact)
+        return 0;
+    const int32_t result = contact_event(script_instance, contact);
+    if (result < 0)
+        managed_error("Calling a C# collision or trigger callback");
+    return result > 0;
+}
+
 int32_t tn_csharp_update_input_batch(
     const tn_csharp_tick_batch_item* items, int32_t count)
 {
@@ -526,6 +539,7 @@ void tn_csharp_shutdown(void)
     dispatch_checked_batch = nullptr;
     update_input = nullptr;
     update_input_batch = nullptr;
+    contact_event = nullptr;
     detach = nullptr;
     last_error = nullptr;
     shutdown_runtime = nullptr;

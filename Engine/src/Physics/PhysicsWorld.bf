@@ -355,6 +355,77 @@ class PhysicsWorld
 		mSystem = Jolt.JPH_PhysicsSystem_Create(&settings);
 		Jolt.tn_physics_scale_tolerances(mSystem, mLengthScale);
 		mBodyInterface = Jolt.JPH_PhysicsSystem_GetBodyInterface(mSystem);
+		Jolt.tn_contacts_enable(mSystem, ContactEvents);
+	}
+
+	/// Collision and trigger callbacks (Component.OnCollisionEnter/Exit, OnTriggerEnter/Exit). Set before the world
+	/// makes its first body; off costs nothing per contact.
+	public bool ContactEvents = true;
+
+	/// After a real tick's Step (never a replayed one): calls the collision and trigger callbacks of the objects
+	/// that began or stopped touching in it. Enter and exit are per pair of objects, not per contact point;
+	/// objects that rest against each other stay entered while asleep.
+	public void DispatchContacts(Scene scene)
+	{
+		if (mSystem == null || !ContactEvents)
+			return;
+		let count = Jolt.tn_contacts_collect(mSystem);
+		if (count <= 0)
+			return;
+		// The callbacks can make and destroy bodies, which a later collect would overwrite: copy them first.
+		let events = scope List<Jolt.ContactEvent>(count);
+		events.AddRange(Span<Jolt.ContactEvent>(Jolt.tn_contacts_events(), count));
+		let components = scope List<Component>();
+		for (let event in events)
+		{
+			for (int side < 2)
+			{
+				let selfId = side == 0 ? event.objectA : event.objectB;
+				let otherId = side == 0 ? event.objectB : event.objectA;
+				let self = ContactObject(scene, selfId, side == 0 ? event.bodyA : event.bodyB);
+				if (self == null || !self.ActiveInHierarchy)
+					continue;
+				let other = ContactObject(scene, otherId, side == 0 ? event.bodyB : event.bodyA);
+				Collision collision = .();
+				collision.gameObject = other;
+				collision.point = event.point;
+				// Out of the other object, towards this one.
+				collision.normal = side == 0 ? -event.normal : event.normal;
+				collision.relativeSpeed = event.speed;
+				components.Clear();
+				components.AddRange(self.Components);
+				for (let component in components)
+				{
+					// An earlier callback can remove a component or destroy the object.
+					if (scene.FindById((uint32)selfId) != self || !self.Components.Contains(component) || !component.Enabled)
+						continue;
+					if (event.sensor != 0)
+					{
+						if (event.kind == 0)
+							component.OnTriggerEnter(other);
+						else
+							component.OnTriggerExit(other);
+					}
+					else if (event.kind == 0)
+						component.OnCollisionEnter(collision);
+					else
+						component.OnCollisionExit(collision);
+				}
+			}
+		}
+	}
+
+	/// The object a contact names: by the body's user data (its object's id), else by the body.
+	GameObject ContactObject(Scene scene, uint64 id, uint32 bodyId)
+	{
+		if (id != 0)
+		{
+			if (let found = scene.FindById((uint32)id))
+				return found;
+		}
+		if (mByBody.TryGetValue(bodyId, let entry) && entry.transform != null)
+			return entry.transform.GameObject;
+		return null;
 	}
 
 	/// Removes every body, joint and character.
@@ -515,11 +586,26 @@ class PhysicsWorld
 		if (desc.kind == .Mesh && motion == Jolt.MotionDynamic)
 			motion = Jolt.MotionStatic;
 		let debris = rigidbody != null && rigidbody.debris && motion != Jolt.MotionStatic;
+		// A trigger collider is a sensor: it reports what passes through and stops nothing. Without a Rigidbody it is
+		// kinematic (and active), so it also notices character controllers and bodies that have gone to sleep.
+		bool trigger = false;
+		for (let component in transform.GameObject.Components)
+		{
+			if (let collider = component as Collider)
+				trigger |= collider.isTrigger;
+		}
+		if (trigger && motion == Jolt.MotionStatic)
+			motion = Jolt.MotionKinematic;
 
 		// Keep the inertia eigensolve away from Jolt's absolute near-zero fallback in miniature worlds.
 		let massScale = Math.Min(100000000.0f, Math.Max(1.0f, 1.0f / (LengthScale * LengthScale)));
 		let settings = Jolt.JPH_BodyCreationSettings_Create3(shape, &position, &rotation, motion, ObjectLayer(motion == Jolt.MotionStatic ? LayerStatic : (debris ? LayerDebris : LayerMoving), transform));
 		Jolt.JPH_BodyCreationSettings_SetUserData(settings, (uint64)transform.GameObject.Id);
+		if (trigger)
+		{
+			Jolt.JPH_BodyCreationSettings_SetIsSensor(settings, true);
+			Jolt.JPH_BodyCreationSettings_SetCollideKinematicVsNonDynamic(settings, true);
+		}
 		if (rigidbody != null)
 		{
 			Jolt.JPH_BodyCreationSettings_SetFriction(settings, rigidbody.friction);
@@ -1134,6 +1220,7 @@ class PhysicsWorld
 			rope.[Friend]BeforeStep(deltaTime);
 		SoftBody.[Friend]UpdateProxies(this, mSoftBodies, mRopes);
 
+		Jolt.tn_contacts_begin_step(mSystem);
 		LastStepError = Jolt.JPH_PhysicsSystem_Update(mSystem, deltaTime, 1, sJobSystem);
 		if (LastStepError != 0 && (mReportedStepErrors & LastStepError) != LastStepError)
 		{

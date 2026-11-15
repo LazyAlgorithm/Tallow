@@ -1422,6 +1422,8 @@ class Scene
 				{
 					Water.Simulate(this, Time.FixedDeltaTime);
 					Physics.Step(Time.FixedDeltaTime);
+					// Replayed steps (NetworkManager.ReplayPhysics) never report: only the real tick does.
+					Physics.DispatchContacts(this);
 					if (Network != null && Network.DesyncDebugger)
 						Network.[Friend]DesyncNotePhysics();
 				}

@@ -774,8 +774,19 @@ A full conversion also needs these. Ordered roughly by when they block users.
 - [ ] Main-thread async: a tick-driven `SynchronizationContext` so `await` and timers
   resume on the game thread, cancelled on Stop, scene unload and hot reload (or they
   root the collectible ALC). Decide whether coroutines are offered as well.
-- [ ] Collision/trigger callbacks delivered to C# scripts (listed under P2 Jolt; it is the
-  most-used missing physics feature).
+- [x] Collision/trigger callbacks (engine-wide; there were none, for Beef either):
+  `OnCollisionEnter/Exit(Collision)` and `OnTriggerEnter/Exit(GameObject)` on Beef
+  `Component` and C# `Script`; `Collider.isTrigger` makes a Jolt sensor (kinematic when
+  there is no Rigidbody, so it sees character controllers and sleeping bodies; it ignores
+  static scenery). Per pair of objects, not per sub-shape/contact point. Each step lists
+  touching pairs from added+persisted contacts (lock-free append from job threads);
+  after the real tick the list is compared with the pairs last reported, so prediction
+  replays never fire callbacks and a rollback restoring Jolt's contact cache cannot
+  desync it. A pair that stops reporting only because a body fell asleep stays entered
+  while bounds overlap. `PhysicsWorld.ContactEvents = false` turns recording off.
+  In-engine test: ball through a trigger onto the ground, asleep, teleported, landing
+  again (12 checks). Not done: OnCollisionStay/OnTriggerStay, character-controller
+  wall hits (Unity's OnControllerColliderHit), setting `isTrigger` from C#.
 - [ ] `[Sync]` on **Script** fields and an RPC attribute, not only on ECS structs.
 - [ ] Live Inspector values during Play (read managed fields back), not only overrides.
 - [ ] Script identity: scenes store `scriptType` by full name, so renaming a class or

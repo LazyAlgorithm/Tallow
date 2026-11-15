@@ -54,6 +54,17 @@ typedef struct tn_csharp_tick_batch_item {
     float delta_time;
 } tn_csharp_tick_batch_item;
 
+// Fixed 48-byte C ABI record for a collision or trigger callback.
+typedef struct tn_csharp_contact {
+    int32_t kind;      // 0 collision enter, 1 collision exit, 2 trigger enter, 3 trigger exit
+    int32_t has_other; // 0 when the other object is gone
+    uint64_t other;    // the other object's id in the current session
+    float point[3];
+    float normal[3];   // out of the other object, towards this one
+    float relative_speed;
+    float reserved;
+} tn_csharp_contact;
+
 enum tn_csharp_event_id {
     TN_CSHARP_AWAKE = 0,
     TN_CSHARP_ENABLE = 1,
@@ -92,6 +103,8 @@ int32_t tn_csharp_update_input(int32_t script_instance,
 // Native scheduling/eligibility remains the caller's responsibility.
 int32_t tn_csharp_update_input_batch(
     const tn_csharp_tick_batch_item* items, int32_t count);
+// Calls OnCollisionEnter/Exit or OnTriggerEnter/Exit; 1 on success.
+int32_t tn_csharp_contact_event(int32_t script_instance, const tn_csharp_contact* contact);
 int32_t tn_csharp_detach(int32_t script_instance);
 void tn_csharp_shutdown(void);
 const char* tn_csharp_error(void);

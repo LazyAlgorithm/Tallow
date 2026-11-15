@@ -165,6 +165,14 @@ abstract class Component
 	public virtual void OnFrame() { }
 	/// Draw in-game interface with the GUI class. Called every frame while playing.
 	public virtual void OnGUI() { }
+	/// This object's body began touching another's (after the physics step of a tick). Once per pair of objects.
+	public virtual void OnCollisionEnter(Collision collision) { }
+	/// The two stopped touching. collision.gameObject is null when the other object is gone.
+	public virtual void OnCollisionExit(Collision collision) { }
+	/// Something entered this object's trigger collider, or this object entered another's trigger.
+	public virtual void OnTriggerEnter(GameObject other) { }
+	/// It left (other is null when it was destroyed).
+	public virtual void OnTriggerExit(GameObject other) { }
 	/// Called on every machine when SendNetworkEvent is used on this component (and at once, with no session).
 	public virtual void OnNetworkEvent(StringView name, float value) { }
 	/// Tells this component on every machine that something happened. Allowed from the server, or from the

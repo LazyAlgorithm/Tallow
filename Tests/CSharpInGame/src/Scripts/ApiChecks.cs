@@ -58,12 +58,49 @@ public class ApiChecks : CheckBase
         else if (_tick == 41)
             EcsData();
         else if (_tick == 42)
-        {
             LocalState();
+        else if (_tick == 150)
+            ContactsWhileResting();
+        else if (_tick == 165)
+            ContactsAfterLeaving();
+        else if (_tick == 260)
+        {
+            ContactsAfterLanding();
             Finish();
             Application.Quit();
         }
     }
+
+    private ContactProbe Probe(string name) =>
+        Scene.Find(name)!.Value.GetComponent<ContactProbe>()!;
+
+    // The ball fell from y=3 through the trigger zone onto the ground, and has been asleep on it for a while.
+    private void ContactsWhileResting()
+    {
+        ContactProbe ball = Probe("Ball");
+        ContactProbe zone = Probe("Zone");
+        Check("OnCollisionEnter once with the ground", ball.CollisionEnters == 1 && ball.LastCollision.GameObject.Name == "Ground");
+        Check("collision normal points out of the ground", ball.LastCollision.Normal.Y > 0.9f);
+        Check("collision point and closing speed", MathF.Abs(ball.LastCollision.Point.Y) < 0.1f && ball.LastCollision.RelativeSpeed > 3f);
+        Check("the ball is asleep on the ground", Scene.Find("Ball")!.Value.GetRigidbody()?.IsSleeping == true);
+        Check("no OnCollisionExit while resting (asleep)", ball.CollisionExits == 0);
+        Check("OnTriggerEnter on the object entering", ball.TriggerEnters == 1 && ball.LastTrigger.Name == "Zone");
+        Check("OnTriggerEnter on the trigger", zone.TriggerEnters == 1 && zone.LastTrigger.Name == "Ball");
+        Check("a trigger is not a collision", zone.CollisionEnters == 0 && ball.CollisionEnters == 1);
+        Check("a trigger ignores the static ground", zone.TriggerEnters == 1);
+        Scene.Find("Ball")!.Value.Transform.Position = new Vector3(15, 6, 15);
+    }
+
+    private void ContactsAfterLeaving()
+    {
+        ContactProbe ball = Probe("Ball");
+        ContactProbe zone = Probe("Zone");
+        Check("OnCollisionExit after moving away", ball.CollisionExits == 1 && ball.LastExit.GameObject.Name == "Ground");
+        Check("OnTriggerExit on both", ball.TriggerExits == 1 && zone.TriggerExits == 1);
+    }
+
+    private void ContactsAfterLanding() =>
+        Check("OnCollisionEnter again after landing elsewhere", Probe("Ball").CollisionEnters == 2);
 
     private void SceneAndFields()
     {
@@ -178,6 +215,34 @@ public class ApiChecks : CheckBase
             Vector3.Distance(RotationMath.ToEulerDegrees(
                 RotationMath.EulerDegrees(new Vector3(0, 90, 0))), new Vector3(0, 90, 0)) < 0.01f);
     }
+}
+
+/// Counts collision and trigger callbacks for ApiChecks.
+public class ContactProbe : Script
+{
+    public int CollisionEnters, CollisionExits, TriggerEnters, TriggerExits;
+    public Collision LastCollision, LastExit;
+    public GameObject LastTrigger;
+
+    public override void OnCollisionEnter(Collision collision)
+    {
+        CollisionEnters++;
+        LastCollision = collision;
+    }
+
+    public override void OnCollisionExit(Collision collision)
+    {
+        CollisionExits++;
+        LastExit = collision;
+    }
+
+    public override void OnTriggerEnter(GameObject other)
+    {
+        TriggerEnters++;
+        LastTrigger = other;
+    }
+
+    public override void OnTriggerExit(GameObject other) => TriggerExits++;
 }
 
 public class Helper : Script

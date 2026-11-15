@@ -9,6 +9,8 @@ abstract class Collider : Component
 {
 	/// Where the shape's centre is, relative to the object.
 	public Vector3 center = .Zero;
+	/// A trigger stops nothing: objects pass through it, and both get OnTriggerEnter and OnTriggerExit.
+	public bool isTrigger;
 
 	uint32 mStaticBody = uint32.MaxValue;
 

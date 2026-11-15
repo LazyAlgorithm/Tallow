@@ -169,6 +169,30 @@ class CSharpBehaviour : Component
 			CSharpRuntime.Dispatch(mInstance, .Disable);
 	}
 
+	public override void OnCollisionEnter(Collision collision)
+	{
+		if (IsLoaded)
+			CSharpRuntime.Contact(mInstance, .CollisionEnter, collision.gameObject, collision.point, collision.normal, collision.relativeSpeed);
+	}
+
+	public override void OnCollisionExit(Collision collision)
+	{
+		if (IsLoaded)
+			CSharpRuntime.Contact(mInstance, .CollisionExit, collision.gameObject);
+	}
+
+	public override void OnTriggerEnter(GameObject other)
+	{
+		if (IsLoaded)
+			CSharpRuntime.Contact(mInstance, .TriggerEnter, other);
+	}
+
+	public override void OnTriggerExit(GameObject other)
+	{
+		if (IsLoaded)
+			CSharpRuntime.Contact(mInstance, .TriggerExit, other);
+	}
+
 	public override void OnDestroy()
 	{
 		ReleaseManaged();

@@ -20,6 +20,11 @@ is complete.
 - `native/tallow_dotnet_host.cpp` hosts .NET with hostfxr on desktop; WebAssembly has a no-runtime stub.
 - `Engine/src/Scripting/CSharpRuntime.bf` provides a validated scene/entity-handle bridge.
 - `Engine/src/Scripting/CSharpBehaviour.bf` forwards native component callbacks and tick input.
+- Physics callbacks: `OnCollisionEnter/Exit(Collision)` (other object, point, normal out of the
+  other object, closing speed) and `OnTriggerEnter/Exit(GameObject)` for colliders with
+  `isTrigger`. Once per pair of objects, after the tick's physics step, on every machine that
+  simulates the tick (check `Scene.IsServer` before changing authoritative state); never
+  during prediction replays.
 - The editor's Add Component > Scripts menu reads the compiled component catalog
   and adds managed classes through the native adapter.
 - Public C# float/int/bool/Vector2/3/4 fields are editable in the Inspector,

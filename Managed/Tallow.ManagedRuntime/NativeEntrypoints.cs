@@ -159,6 +159,60 @@ public static unsafe class NativeEntrypoints
     private static readonly Dictionary<GameObject, List<Script>> sByGameObject = [];
     private static readonly HashSet<int> sEnabled = [];
 
+    // Plain native layout, matching tn_csharp_contact (48 bytes).
+    [StructLayout(LayoutKind.Sequential)]
+    public struct NativeContact
+    {
+        public int Kind, HasOther;
+        public ulong Other;
+        public float PointX, PointY, PointZ;
+        public float NormalX, NormalY, NormalZ;
+        public float RelativeSpeed, Reserved;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int Contact(int instance, NativeContact* contact)
+    {
+        try
+        {
+            if (contact == null)
+                throw new ArgumentNullException(nameof(contact));
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            NativeContact value = *contact;
+            GameObject other = value.HasOther != 0
+                ? new GameObject(script.GameObject.SceneId, value.Other)
+                : default;
+            switch (value.Kind)
+            {
+            case 0:
+            case 1:
+                var collision = new Collision(other,
+                    new Vector3(value.PointX, value.PointY, value.PointZ),
+                    new Vector3(value.NormalX, value.NormalY, value.NormalZ),
+                    value.RelativeSpeed);
+                if (value.Kind == 0)
+                    script.OnCollisionEnter(collision);
+                else
+                    script.OnCollisionExit(collision);
+                break;
+            case 2:
+                script.OnTriggerEnter(other);
+                break;
+            case 3:
+                script.OnTriggerExit(other);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(contact));
+            }
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     // Plain native layout, matching tn_csharp_tick_input.
     [StructLayout(LayoutKind.Sequential)]
     public struct NativeInput

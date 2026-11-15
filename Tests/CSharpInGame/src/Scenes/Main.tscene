@@ -30,3 +30,20 @@ component Tallow.BoxCollider enabled 1
 field center 0 0 0
 field size 1 1 1
 component Tallow.Rigidbody enabled 1
+object 7 parent 0 active 1 name "Ball"
+transform 10 3 0 0 0 0 1 1 1 1
+component Tallow.SphereCollider enabled 1
+field radius 0.25
+component Tallow.Rigidbody enabled 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.ContactProbe"
+field fieldOverrides ""
+object 8 parent 0 active 1 name "Zone"
+transform 10 1 0 0 0 0 1 1 1 1
+component Tallow.BoxCollider enabled 1
+field center 0 0 0
+field size 2 2 2
+field isTrigger true
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.ContactProbe"
+field fieldOverrides ""

@@ -159,6 +159,28 @@ static class Jolt
 	[CLink] public static extern void JPH_BodyCreationSettings_SetAllowSleeping(void* settings, bool value);
 	[CLink] public static extern void JPH_BodyCreationSettings_SetMotionQuality(void* settings, int32 value);
 	[CLink] public static extern void JPH_BodyCreationSettings_SetIsSensor(void* settings, bool value);
+	[CLink] public static extern void JPH_BodyCreationSettings_SetCollideKinematicVsNonDynamic(void* settings, bool value);
+
+	/// One pair of bodies beginning or ending contact (native/tallow_softbody.cpp, tn_contacts_collect).
+	[CRepr]
+	public struct ContactEvent
+	{
+		public uint32 bodyA, bodyB;
+		public uint64 objectA, objectB;
+		/// 0: began touching; 1: stopped.
+		public int32 kind;
+		/// 1 when one of the two is a trigger.
+		public int32 sensor;
+		public Vector3 point;
+		/// From A towards B.
+		public Vector3 normal;
+		public float speed;
+		public float reserved;
+	}
+	[CLink] public static extern void tn_contacts_enable(void* world, bool enabled);
+	[CLink] public static extern void tn_contacts_begin_step(void* world);
+	[CLink] public static extern int32 tn_contacts_collect(void* world);
+	[CLink] public static extern ContactEvent* tn_contacts_events();
 	[CLink] public static extern void JPH_BodyCreationSettings_SetOverrideMassProperties(void* settings, int32 value);
 	[CLink] public static extern void JPH_BodyCreationSettings_SetMassPropertiesOverride(void* settings, MassProperties* properties);
 	[CLink] public static extern uint32 JPH_BodyInterface_CreateAndAddBody(void* bodyInterface, void* settings, int32 activation);

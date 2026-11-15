@@ -25,6 +25,7 @@
 #include "joltc.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cfloat>
 #include <cmath>
 #include <cstdint>
@@ -230,10 +231,89 @@ public:
 		}
 	}
 
+	// --- Collision and trigger events for gameplay (tn_contacts_*) ---------------------------------------
+	// Every step lists the body pairs touching in it (added or persisted contacts), appended without a lock
+	// from the job threads. After a real tick, tn_contacts_collect compares that list with the pairs last
+	// reported: new pairs begin, missing pairs end. This holds up when a network rollback restores Jolt's
+	// contact cache (nothing is counted incrementally), and replayed steps are simply never collected.
+
+	struct ContactRecord
+	{
+		uint64_t key;
+		uint64_t objectA, objectB;
+		float point[3];
+		float normal[3];
+		float speed;
+		uint8_t sensor;
+		uint8_t full;
+	};
+	struct ReportedPair
+	{
+		uint64_t objectA, objectB;
+		bool sensor;
+	};
+	bool contactsEnabled = false;
+	std::vector<ContactRecord> records;
+	std::atomic<size_t> recordCount{0};
+	std::atomic<bool> recordOverflow{false};
+	// Pairs reported as touching. Changed only by tn_contacts_collect on the main thread; the job threads read it.
+	std::unordered_map<uint64_t, ReportedPair> reported;
+
+	static uint64_t PairKey(const JPH::Body& one, const JPH::Body& two)
+	{
+		return ((uint64_t)one.GetID().GetIndexAndSequenceNumber() << 32) | two.GetID().GetIndexAndSequenceNumber();
+	}
+
+	void RecordContact(const JPH::Body& one, const JPH::Body& two, const JPH::ContactManifold& manifold)
+	{
+		if (!contactsEnabled || one.IsSoftBody() || two.IsSoftBody())
+			return;
+		const bool sensor = one.IsSensor() || two.IsSensor();
+		if (sensor)
+		{
+			// Triggers report what moves through them, not the ground they sit on or other triggers.
+			if (one.IsSensor() && two.IsSensor())
+				return;
+			const JPH::Body& other = one.IsSensor() ? two : one;
+			if (other.IsStatic())
+				return;
+		}
+		const size_t index = recordCount.fetch_add(1, std::memory_order_relaxed);
+		if (index >= records.size())
+		{
+			recordOverflow.store(true, std::memory_order_relaxed);
+			return;
+		}
+		ContactRecord& record = records[index];
+		record.key = PairKey(one, two);
+		record.full = 0;
+		if (reported.find(record.key) != reported.end())
+			return; // Still touching: the pair is all collect needs.
+		record.objectA = one.GetUserData();
+		record.objectB = two.GetUserData();
+		record.sensor = sensor ? 1 : 0;
+		// The manifold's normal points from the first body to the second.
+		const JPH::Vec3 normal = manifold.mWorldSpaceNormal;
+		JPH::Vec3 point = JPH::Vec3(one.GetCenterOfMassPosition() + two.GetCenterOfMassPosition()) * 0.5f;
+		if (!manifold.mRelativeContactPointsOn1.empty())
+			point = JPH::Vec3(manifold.GetWorldSpaceContactPointOn1(0));
+		const JPH::RVec3 at(point);
+		record.speed = std::fabs((two.GetPointVelocity(at) - one.GetPointVelocity(at)).Dot(normal));
+		record.point[0] = point.GetX(); record.point[1] = point.GetY(); record.point[2] = point.GetZ();
+		record.normal[0] = normal.GetX(); record.normal[1] = normal.GetY(); record.normal[2] = normal.GetZ();
+		record.full = 1;
+	}
+
+	void OnContactPersisted(const JPH::Body& one, const JPH::Body& two, const JPH::ContactManifold& manifold, JPH::ContactSettings&) override
+	{
+		RecordContact(one, two, manifold);
+	}
+
 	/// Rigid bodies meeting: a hit on a shell's object, by something static or dynamic (not a character or a moving
 	/// platform), at the shell's Dent Speed or faster, is kept for its next tn_soft_skin.
 	void OnContactAdded(const JPH::Body& one, const JPH::Body& two, const JPH::ContactManifold& manifold, JPH::ContactSettings&) override
 	{
+		RecordContact(one, two, manifold);
 		std::lock_guard<std::mutex> guard(mutex);
 		for (int side = 0; side < 2; side++)
 		{
@@ -1815,3 +1895,119 @@ extern "C" void* tn_physics_state_from(const uint8_t* data, size_t size)
 	return recorder;
 }
 
+
+// ---- Collision and trigger events (PhysicsWorld.Step / DispatchContacts) ----
+
+struct TnContactEvent
+{
+	uint32_t bodyA, bodyB;
+	uint64_t objectA, objectB;
+	int32_t kind;   // 0 began touching, 1 stopped
+	int32_t sensor; // 1 when one of the two is a trigger
+	float point[3];
+	float normal[3]; // from A towards B
+	float speed;     // closing speed along the normal when they began
+	float reserved;
+};
+static_assert(sizeof(TnContactEvent) == 64, "TnContactEvent layout is shared with PhysicsWorld.bf");
+
+static std::vector<TnContactEvent> gContactEvents;
+
+/// Turns collision and trigger events on for a world (off: no recording cost at all).
+TN_API void tn_contacts_enable(JPH_PhysicsSystem* world, bool enabled)
+{
+	Touches& touches = TouchesOf(world);
+	touches.contactsEnabled = enabled;
+	if (enabled && touches.records.empty())
+		touches.records.resize(16384);
+	if (!enabled)
+		touches.reported.clear();
+}
+
+/// Before every PhysicsSystem::Update, real or replayed: the step's list starts empty.
+TN_API void tn_contacts_begin_step(JPH_PhysicsSystem* world)
+{
+	auto* system = reinterpret_cast<JoltcSystem*>(world)->physicsSystem;
+	auto found = gTouches.find(system);
+	if (found == gTouches.end())
+		return;
+	found->second->recordCount.store(0, std::memory_order_relaxed);
+	found->second->recordOverflow.store(false, std::memory_order_relaxed);
+}
+
+/// A pair that stopped reporting contacts only because one of them fell asleep (Jolt drops a sleeping body's
+/// contacts) is still touching while their bounds overlap.
+static bool StillTouchingAsleep(JPH::PhysicsSystem* system, uint32_t a, uint32_t b)
+{
+	JPH::BodyID ids[2] = {JPH::BodyID(a), JPH::BodyID(b)};
+	JPH::BodyLockMultiRead lock(system->GetBodyLockInterface(), ids, 2);
+	const JPH::Body* one = lock.GetBody(0);
+	const JPH::Body* two = lock.GetBody(1);
+	if (one == nullptr || two == nullptr)
+		return false;
+	const bool asleep = (!one->IsStatic() && !one->IsActive()) || (!two->IsStatic() && !two->IsActive());
+	if (!asleep)
+		return false;
+	JPH::AABox bounds = one->GetWorldSpaceBounds();
+	bounds.ExpandBy(JPH::Vec3::sReplicate(0.02f));
+	return bounds.Overlaps(two->GetWorldSpaceBounds());
+}
+
+/// After a real (not replayed) step: what began and stopped touching in it. Returns the number of events,
+/// read with tn_contacts_events until the next collect.
+TN_API int32_t tn_contacts_collect(JPH_PhysicsSystem* world)
+{
+	gContactEvents.clear();
+	auto* system = reinterpret_cast<JoltcSystem*>(world)->physicsSystem;
+	auto found = gTouches.find(system);
+	if (found == gTouches.end() || !found->second->contactsEnabled)
+		return 0;
+	Touches& touches = *found->second;
+	const size_t count = std::min(touches.recordCount.load(), touches.records.size());
+	const bool overflow = touches.recordOverflow.load();
+	std::unordered_set<uint64_t> seen;
+	seen.reserve(count);
+	for (size_t i = 0; i < count; i++)
+	{
+		const Touches::ContactRecord& record = touches.records[i];
+		if (!seen.insert(record.key).second || !record.full || touches.reported.count(record.key))
+			continue;
+		TnContactEvent event = {};
+		event.bodyA = (uint32_t)(record.key >> 32);
+		event.bodyB = (uint32_t)record.key;
+		event.objectA = record.objectA;
+		event.objectB = record.objectB;
+		event.kind = 0;
+		event.sensor = record.sensor;
+		std::memcpy(event.point, record.point, sizeof(event.point));
+		std::memcpy(event.normal, record.normal, sizeof(event.normal));
+		event.speed = record.speed;
+		gContactEvents.push_back(event);
+		touches.reported[record.key] = {record.objectA, record.objectB, record.sensor != 0};
+	}
+	for (auto it = touches.reported.begin(); it != touches.reported.end();)
+	{
+		const uint32_t a = (uint32_t)(it->first >> 32), b = (uint32_t)it->first;
+		// An overflowing step did not list every pair: end nothing on its word.
+		if (seen.count(it->first) || overflow || StillTouchingAsleep(system, a, b))
+		{
+			++it;
+			continue;
+		}
+		TnContactEvent event = {};
+		event.bodyA = a;
+		event.bodyB = b;
+		event.objectA = it->second.objectA;
+		event.objectB = it->second.objectB;
+		event.kind = 1;
+		event.sensor = it->second.sensor ? 1 : 0;
+		gContactEvents.push_back(event);
+		it = touches.reported.erase(it);
+	}
+	// Make room for the next busy step.
+	if (overflow)
+		touches.records.resize(touches.records.size() * 2);
+	return (int32_t)gContactEvents.size();
+}
+
+TN_API const TnContactEvent* tn_contacts_events() { return gContactEvents.data(); }
