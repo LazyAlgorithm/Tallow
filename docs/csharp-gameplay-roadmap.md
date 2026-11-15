@@ -896,7 +896,12 @@ A full conversion also needs these. Ordered roughly by when they block users.
   Memory counters "C# allocated this frame", "C# heap", "C# garbage collections this frame"
   and "C# GC pause this frame" come back from the pump (`tn_csharp_gc_stats`). Test: the
   in-engine run writes `--profile-report` and checks the rows (105 checks).
-- [ ] Packages (`.tpackage`) that carry C# source/assemblies.
+- [~] Packages (`.tpackage`) that carry C# source: `.cs` files count as scripts (import
+  and removal recompile), a scene or prefab's C# component (`field scriptType`) brings its
+  `.cs` file, and a `.cs` file brings its folder's nearest `.tasmdef`. `.cs` files keep their
+  `.tmeta` IDs, so an import finds them where they were moved. Test: `--packages-test`
+  step 6. Not yet: prebuilt managed assemblies in packages (with the NuGet/third-party
+  library item, which needs the trust rules first).
 - [ ] Editor extensibility scope: decide whether C# can add custom inspectors, editor
   windows and gizmo tools, or whether editor tooling stays Beef-only.
 

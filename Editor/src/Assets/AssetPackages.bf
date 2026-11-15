@@ -50,6 +50,9 @@ static class AssetPackages
 		public int64 size;
 	}
 
+	/// Gameplay source the project compiles: Beef (.bf) or C# (.cs). Importing or removing one recompiles.
+	public static bool IsScript(StringView path) => path.EndsWith(".bf") || path.EndsWith(".cs");
+
 	/// The package's name made safe for a file name: "Forest Props" -> "Forest_Props".
 	public static void FileNameOf(StringView name, String outName)
 	{
@@ -118,9 +121,37 @@ static class AssetPackages
 			let item = new ExportItem();
 			item.path.Set(path);
 			item.reason.Set(reason);
-			item.isScript = path.EndsWith(".bf");
+			item.isScript = IsScript(path);
 			outItems.Add(item);
 			queue.Add(new String(path));
+			// A C# script compiles into the assembly its folder's nearest .tasmdef defines: that goes too.
+			if (path.EndsWith(".cs"))
+			{
+				var folder = Path.GetDirectoryPath(path, .. scope .());
+				while (true)
+				{
+					let full = folder.IsEmpty ? scope String(root) : scope $"{root}/{folder}";
+					String definition = null;
+					if (Directory.Exists(full))
+					{
+						for (let entry in Directory.EnumerateFiles(full, "*.tasmdef"))
+						{
+							let name = entry.GetFileName(.. scope .());
+							definition = folder.IsEmpty ? scope:: String(name) : scope:: $"{folder}/{name}";
+							break;
+						}
+					}
+					if (definition != null)
+					{
+						Add(definition, scope $"the assembly definition of {path}");
+						break;
+					}
+					if (folder.IsEmpty)
+						break;
+					let parent = Path.GetDirectoryPath(folder, .. scope .());
+					folder.Set(parent);
+				}
+			}
 		}
 
 		for (let path in picked)
@@ -198,6 +229,14 @@ static class AssetPackages
 						typeName = line.Substring(10);
 					else if (line.StartsWith("data "))
 						typeName = line.Substring(5);
+					else if (line.StartsWith("field scriptType \""))
+					{
+						// A C# Script component names its class here ("Game.Player").
+						typeName = line.Substring(18);
+						let quote = typeName.IndexOf('"');
+						if (quote >= 0)
+							typeName = typeName.Substring(0, quote);
+					}
 					else
 						continue;
 					let space = typeName.IndexOf(' ');
@@ -263,7 +302,7 @@ static class AssetPackages
 		ListFiles(Assets.ProjectPath, files, 0);
 		for (let file in files)
 		{
-			if (!file.EndsWith(".bf") || file.EndsWith("/Program.bf"))
+			if (!IsScript(file) || file.EndsWith("/Program.bf"))
 				continue;
 			let text = scope String();
 			if (File.ReadAllText(file, text) case .Err)
@@ -513,7 +552,7 @@ static class AssetPackages
 				continue;
 			let item = new ImportItem();
 			item.entry = entry;
-			item.isScript = entry.path.EndsWith(".bf");
+			item.isScript = IsScript(entry.path);
 			let existing = scope String();
 			if (!entry.id.IsEmpty && AssetDatabase.GetPath(entry.id, existing))
 				item.target.Set(existing);

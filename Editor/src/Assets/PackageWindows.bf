@@ -485,7 +485,7 @@ extension EditorApp
 						if (other.name != mRemovePackage)
 							continue;
 						for (let file in other.files)
-							hadScripts |= file.path.EndsWith(".bf");
+							hadScripts |= AssetPackages.IsScript(file.path);
 					}
 					let removed = AssetPackages.Remove(mRemovePackage, kept);
 					// Its scripts are gone: the project is compiled without them.

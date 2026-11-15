@@ -167,7 +167,37 @@ extension EditorApp
 			stillThere |= package.name == "Package Test";
 		Expect(!stillThere, "the record goes");
 
-		// 6. Catalogs.
+		// 6. C# scripts: a prefab's C# component brings its .cs file and the .tasmdef of its assembly.
+		{
+			Directory.CreateDirectory(scope $"{folder}/Code/Sub").IgnoreError();
+			Directory.CreateDirectory(scope $"{folder}/Prefabs").IgnoreError();
+			File.WriteAllText(scope $"{folder}/Code/PkgCode.tasmdef", "{\"name\":\"PkgCode\"}").IgnoreError();
+			File.WriteAllText(scope $"{folder}/Code/Sub/PkgProbe.cs", "namespace PkgTest;\n\npublic class PkgProbe : Tallow.Script\n{\n}\n").IgnoreError();
+			File.WriteAllText(scope $"{folder}/Prefabs/c.tprefab", "object 1 parent 0 active 1 name \"C\"\ncomponent Tallow.CSharpBehaviour enabled 1\nfield scriptType \"PkgTest.PkgProbe\"\nfield fieldOverrides \"\"\n").IgnoreError();
+			RefreshAssetIds();
+			let csItems = scope List<AssetPackages.ExportItem>();
+			defer { ClearAndDeleteItems!(csItems); }
+			let csPicked = scope List<StringView>();
+			csPicked.Add(scope $"{t}/Prefabs/c.tprefab");
+			AssetPackages.CollectExport(csPicked, true, csItems);
+			AssetPackages.ExportItem script = null;
+			bool hasDefinition = false;
+			for (let item in csItems)
+			{
+				if (item.path == scope $"{t}/Code/Sub/PkgProbe.cs")
+					script = item;
+				hasDefinition |= item.path == scope $"{t}/Code/PkgCode.tasmdef";
+			}
+			Expect(script != null && script.isScript, "a C# component's script collected, as a script");
+			Expect(hasDefinition, "the C# script's assembly definition collected");
+			Expect(csItems.Count == 3, scope $"prefab, script and assembly definition only (got {csItems.Count})");
+			Directory.DelTree(scope $"{folder}/Code").IgnoreError();
+			File.Delete(scope $"{folder}/Prefabs/c.tprefab").IgnoreError();
+			File.Delete(scope $"{folder}/Prefabs/c.tprefab{AssetDatabase.MetaSuffix}").IgnoreError();
+			RefreshAssetIds();
+		}
+
+		// 7. Catalogs.
 		let entries = scope List<PackageCatalog.Entry>();
 		defer { ClearAndDeleteItems!(entries); }
 		PackageCatalog.Parse("tallowcatalog 1\npackage \"A\" version \"1.9.2\" url \"a-1.9.2.tpackage\"\npackage \"A\" version \"1.10.0\" url \"https://x.test/a.tpackage\" sha256 \"ab\"\npackage \"B\" version \"1\" url \"ftp://x\"\n", entries);
