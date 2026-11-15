@@ -302,6 +302,11 @@ class EditorApp : Application
 			mShowCSharpDebugging = true;
 		if (HasArg("--script-files-test"))
 			RunScriptFilesTest();
+		{
+			let folder = scope String();
+			if (GetArg("--script-templates-test", folder))
+				RunScriptTemplatesTest(folder);
+		}
 		if (HasArg("--drag-test"))
 			StartDragTest();
 		if (HasArg("--model-import-test"))

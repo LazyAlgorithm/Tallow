@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The Voxel sandbox template, all C#: creates a project from it, lets the first run build its scene and player
-prefab, adds a probe script, and runs it headless. Passes when the probe logs "SAMPLE DONE" with no failures.
+prefab, adds a probe script and a script from every Create > C# Script template, compiles them (no warnings), and
+runs it headless. Passes when the probe logs "SAMPLE DONE" with no failures.
 
     python3 tools/test_csharp_sample.py [--config Debug] [--keep]
 """
@@ -114,6 +115,15 @@ def main() -> int:
                   'field fieldOverrides ""\n')
         scene_path.write_text(scene, encoding="utf-8")
         (project / "src/Scripts/SampleProbe.cs").write_text(PROBE, encoding="utf-8")
+        templates = project / "src/Scripts/Templates"
+        written = subprocess.run([str(launcher), "--editor", "--project", str(project), "--script-templates-test",
+                                  str(templates), "--frames", "5"], capture_output=True, text=True, timeout=300)
+        count = len(list(templates.glob("*.cs")))
+        if "SCRIPT TEMPLATES WRITTEN" not in written.stdout or count < 10:
+            print(written.stdout[-3000:] + written.stderr[-2000:])
+            print(f"The editor wrote {count} script templates.", file=sys.stderr)
+            return 1
+        print(f"SAMPLE PASS the editor's {count} C# script templates are written (compiled below)")
         if not build():
             return 1
         run = subprocess.run(game + ["--frames", "2000"], capture_output=True, text=True, timeout=300)

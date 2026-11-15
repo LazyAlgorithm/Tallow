@@ -301,6 +301,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     the test switches, and a host plus a client sharing 43 objects. `tools/validate_showcase.py` (release
     packages) now plays it in the packaged player; not run here, as it needs a package.
     `tools/test_csharp_showcase.py` creates, compiles and plays it with the test switches (CI).
+  - [x] Create > C# Script templates (November 15, 2026): the GUI / HUD template draws a working health bar and
+    button with the C# GUI API; the ECS templates say plainly that their struct is registered as ECS data and
+    typed C# queries wait for the managed ECS bridge. `--script-templates-test <folder>` writes one script per
+    template; tools/test_csharp_sample.py compiles them all with no warnings.
 - [ ] Keep shader graph/compute graph/rendering functionality intact; never confuse visual **gameplay** source generation with native shader compilation.
 
 ## P4 — performance, reload, shipping exports, hardening

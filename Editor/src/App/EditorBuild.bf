@@ -159,6 +159,24 @@ extension EditorApp
 		let scriptNamespace = scope String();
 		ScriptNamespaceFor(mBrowsePath, scriptNamespace);
 		let text = scope String();
+		ScriptTemplateText(template, scriptNamespace, name, text);
+		if (File.WriteAllText(path, text) case .Ok)
+		{
+			Log.Info(scope $"Created C# script {path}.");
+			OpenScript(path);
+			mManagedBuildReady = false;
+			if (mCheckRunning)
+				mManagedRecheckQueued = true;
+			else if (mPlay == .Edit && Project.Current.ReloadMode != .Manual)
+				StartManagedErrorCheck();
+		}
+		else
+			Log.Error(scope $"Could not create C# script {path}.");
+	}
+
+	/// The text of a new C# script made from a template (the Project panel's Create > C# Script menu).
+	public static void ScriptTemplateText(ScriptTemplateKind template, StringView scriptNamespace, StringView name, String text)
+	{
 		switch (template)
 		{
 		case .Basic:
@@ -233,12 +251,19 @@ extension EditorApp
 
 			namespace {0};
 
-			[Component]
+			/// <summary>A heads-up display drawn every frame: pixels from the game view's top-left.</summary>
 			public class {1} : Script
 			{{
+			    public float Health = 75;
+			    public float MaxHealth = 100;
+
 			    public override void OnGUI()
 			    {{
-			        // Managed HUD APIs are being integrated.
+			        GUI.Box(12, 12, 220, 52, new Color(0, 0, 0, 0.45f));
+			        GUI.Label(22, 18, $"Health {{Health:0}} / {{MaxHealth:0}}");
+			        GUI.Bar(22, 40, 200, 14, Health / MaxHealth, new Color(0.85f, 0.2f, 0.2f));
+			        if (GUI.Button(GUI.Width - 132, 12, 120, 28, "Heal"))
+			            Health = MathF.Min(Health + 10, MaxHealth);
 			    }}
 			}}
 			""", scriptNamespace, name);
@@ -296,7 +321,8 @@ extension EditorApp
 			{{
 			    public override void Update(TickInput input, float deltaTime)
 			    {{
-			        // ECS query/handle bindings are being implemented.
+			        // {1}Data is registered as ECS data. Typed C# queries over it come with the managed ECS
+			        // bridge (docs/csharp-gameplay-roadmap.md); until then, keep per-object state in this script.
 			    }}
 			}}
 			""", scriptNamespace, name);
@@ -317,22 +343,31 @@ extension EditorApp
 			{{
 			    public override void Update(TickInput input, float deltaTime)
 			    {{
-			        // Native packed ECS query bridge is not available yet.
+			        // {1}Data is registered as ECS data. Typed C# queries over it come with the managed ECS
+			        // bridge (docs/csharp-gameplay-roadmap.md); for many objects today, one script updating an
+			        // array of structs (as the Gallery's crowd does) is the fast path.
 			    }}
 			}}
 			""", scriptNamespace, name);
 		}
-		if (File.WriteAllText(path, text) case .Ok)
+	}
+
+	/// --script-templates-test <folder>: writes a script from every template there (namespace TemplateTest), for
+	/// tools/test_csharp_sample.py to compile.
+	void RunScriptTemplatesTest(StringView folder)
+	{
+		Directory.CreateDirectory(folder).IgnoreError();
+		int written = 0;
+		for (let template in Enum.GetValues<ScriptTemplateKind>())
 		{
-			Log.Info(scope $"Created C# script {path}.");
-			OpenScript(path);
-			mManagedBuildReady = false;
-			if (mCheckRunning)
-				mManagedRecheckQueued = true;
-			else if (mPlay == .Edit && Project.Current.ReloadMode != .Manual)
-				StartManagedErrorCheck();
+			let name = scope String();
+			template.ToString(name);
+			name.Append("Template");
+			let text = scope String();
+			ScriptTemplateText(template, "TemplateTest", name, text);
+			if (File.WriteAllText(scope $"{folder}/{name}.cs", text) case .Ok)
+				written++;
 		}
-		else
-			Log.Error(scope $"Could not create C# script {path}.");
+		Console.WriteLine(scope $"SCRIPT TEMPLATES WRITTEN {written}");
 	}
 }
