@@ -966,3 +966,24 @@ and NativeAOT player use. `[Sync]` does not yet replicate these fields.
 - Smoke tests use unannotated `Gameplay.MoveRight` and
   `Gameplay.AddComponentSmoke` to cover cross-assembly static
   registry discovery, Inspector catalog and runtime component attachment.
+
+
+### Cached native Flecs query pages for offline C# data (November 14, 2026)
+
+- The existing opaque C# schema registry now owns cached read-only Flecs
+  queries that are released before the native World. The new
+  `Ecs.CountLocalData` and `Ecs.CopyLocalDataPage` exports iterate
+  actual Flecs tables to copy contiguous native column data and Flecs entity
+  IDs into bounded, caller-owned buffers in one interop call per page.
+- Native limits: 4096 entity IDs and 4 MiB of bytes per call; negative
+  page offsets and missing schema IDs are rejected. A partially consumed
+  Flecs iterator is explicitly finalized on early exit.
+- Source-generated
+  `Scene.CopyLocalDataPage(offset, Span<ulong>, Span<T>)`
+  helpers provide type-safe, allocation-free page reads for eligible
+  unmanaged [Component] structs. Page order can change after ECS structural
+  mutations; callers must not assume stable offsets across such changes.
+- This remains offline-only; networked [Sync] data, authoritative
+  spawning, rollback and true performance measurements are pending.
+  The C++ test host verifies generated span marshalling and output sizes;
+  full real-world Flecs behavior still needs editor-in-scene tests.

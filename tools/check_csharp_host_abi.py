@@ -89,6 +89,8 @@ def main() -> int:
         "Tallow.Ecs|SetLocalData|bool|ulong|ulong|ulong|System.Span<byte>",
         "Tallow.Ecs|CopyLocalData|bool|ulong|ulong|ulong|System.Span<byte>",
         "Tallow.Ecs|HasLocalData|bool|ulong|ulong|ulong",
+        "Tallow.Ecs|CountLocalData|int|ulong|ulong",
+        "Tallow.Ecs|CopyLocalDataPage|int|ulong|ulong|int|System.Span<ulong>|System.Span<byte>",
     ]
     for signature in required:
         if symbol_hash(signature) not in resolved:

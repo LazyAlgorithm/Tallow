@@ -39,6 +39,8 @@ method	Tallow.Ecs	RegisterLocalData	ulong	session:ulong	schemaId:ulong	size:int	
 method	Tallow.Ecs	SetLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
 method	Tallow.Ecs	CopyLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
 method	Tallow.Ecs	HasLocalData	bool	session:ulong	entity:ulong	schemaId:ulong
+method	Tallow.Ecs	CountLocalData	int	session:ulong	schemaId:ulong
+method	Tallow.Ecs	CopyLocalDataPage	int	session:ulong	schemaId:ulong	offset:int	entityIds:System.Span<ulong>	bytes:System.Span<byte>
 method	Tallow.Ecs	CountRigidbodies	int	session:ulong
 method	Tallow.Ecs	CopyRigidbodyMasses	int	session:ulong	offset:int	entityIds:System.Span<ulong>	masses:System.Span<float>
 method	Tallow.Physics	HasRigidbody	bool	session:ulong	entity:ulong

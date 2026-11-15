@@ -363,6 +363,45 @@ static int32_t ExposedEcsHasLocalData(uint64_t scene, uint64_t entity, uint64_t 
     return existing != ecsLocalData.end() &&
         existing->second.count(schemaId) != 0 ? 1 : 0;
 }
+static int32_t ExposedEcsCountLocalData(uint64_t scene, uint64_t schemaId)
+{
+    if (scene != 1 || ecsSchemas.find(schemaId) == ecsSchemas.end())
+        return 0;
+    int32_t count = 0;
+    for (const auto& [entity, components] : ecsLocalData)
+        if (ecsLocalEntities.count(entity) && components.count(schemaId))
+            ++count;
+    return count;
+}
+static int32_t ExposedEcsCopyLocalDataPage(uint64_t scene, uint64_t schemaId,
+    int32_t offset, uint64_t* ids, int32_t idsCount, uint8_t* bytes, int32_t bytesCount)
+{
+    auto schema = ecsSchemas.find(schemaId);
+    if (scene != 1 || schema == ecsSchemas.end() || offset < 0 ||
+        idsCount <= 0 || idsCount > 4096 || bytesCount <= 0 ||
+        bytesCount > 4 * 1024 * 1024 || !ids || !bytes)
+        return 0;
+    const int32_t size = schema->second.size;
+    const int32_t capacity = std::min(idsCount, bytesCount / size);
+    if (capacity <= 0) return 0;
+    std::vector<uint64_t> matches;
+    for (const auto& [entity, components] : ecsLocalData)
+        if (ecsLocalEntities.count(entity) && components.count(schemaId))
+            matches.push_back(entity);
+    // Stable ordering only in this standalone host double, not in Flecs.
+    std::sort(matches.begin(), matches.end());
+    int32_t copied = 0;
+    for (size_t i = static_cast<size_t>(offset);
+         i < matches.size() && copied < capacity; ++i)
+    {
+        const uint64_t entity = matches[i];
+        ids[copied] = entity;
+        const auto& payload = ecsLocalData.at(entity).at(schemaId);
+        std::copy(payload.begin(), payload.end(), bytes + copied * size);
+        ++copied;
+    }
+    return copied;
+}
 static int32_t ExposedEcsCountRigidbodies(uint64_t scene)
 {
     return scene == 1 ? 3 : 0;
@@ -763,6 +802,10 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedEcsCopyLocalData);
     if (name == "CSharpApi_75396de93083e3ac")
         return reinterpret_cast<void*>(&ExposedEcsHasLocalData);
+    if (name == "CSharpApi_113fc5353990e1ee")
+        return reinterpret_cast<void*>(&ExposedEcsCountLocalData);
+    if (name == "CSharpApi_0f7b12e60ad15c13")
+        return reinterpret_cast<void*>(&ExposedEcsCopyLocalDataPage);
     if (name == "CSharpApi_8f34b0284d3b1041")
         return reinterpret_cast<void*>(&ExposedEcsCountRigidbodies);
     if (name == "CSharpApi_0fe31a78ec52861b")

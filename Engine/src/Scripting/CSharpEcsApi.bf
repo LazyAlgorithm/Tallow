@@ -98,6 +98,28 @@ static class Ecs
             scene.World.HasManagedLocalData(.(entity), schemaId);
     }
 
+    /// Cached Flecs query count for a registered offline C# data schema.
+    [CSharpExpose]
+    public static int32 CountLocalData(uint64 session, uint64 schemaId)
+    {
+        let scene = CSharpRuntime.PhysicsScene(session);
+        if (scene == null || !scene.IsPlaying || scene.World.NativeNetwork != null)
+            return 0;
+        return scene.World.CountManagedLocalData(schemaId);
+    }
+
+    /// Bounded native ECS query page. The bytes span is a sequence of
+    /// registered-size records. Entity order can change after mutations.
+    [CSharpExpose]
+    public static int32 CopyLocalDataPage(uint64 session, uint64 schemaId, int32 offset,
+        Span<uint64> entityIds, Span<uint8> bytes)
+    {
+        let scene = CSharpRuntime.PhysicsScene(session);
+        if (scene == null || !scene.IsPlaying || scene.World.NativeNetwork != null)
+            return 0;
+        return scene.World.CopyManagedLocalDataPage(schemaId, offset, entityIds, bytes);
+    }
+
     [CSharpExpose]
     public static int32 CountRigidbodies(uint64 session)
     {

@@ -101,10 +101,38 @@ public sealed class EcsBatchBindingSmoke : Script
             !typed.TryGetLocalData(out VelocityData restored) ||
             restored.Velocity != velocity.Velocity ||
             restored.Drag != velocity.Drag ||
-            restored.Owner != velocity.Owner ||
-            !typed.DestroyLocal() ||
-            typed.TryGetLocalData(out restored))
+            restored.Owner != velocity.Owner)
             throw new InvalidOperationException("Generated typed ECS data bridge failed.");
+
+        var typed2 = scene.CreateLocalEcsEntity();
+        VelocityData velocity2 = new()
+        {
+            Velocity = new System.Numerics.Vector3(6, 7, 8),
+            Drag = 0.75f,
+            Owner = 29
+        };
+        if (!typed2.SetLocalData(in velocity2))
+            throw new InvalidOperationException("Second typed ECS entity rejected.");
+
+        Span<ulong> queryIds = stackalloc ulong[2];
+        Span<VelocityData> queryData = stackalloc VelocityData[2];
+        if (scene.CountLocalEcsData(validSchema) != 0 ||
+            scene.CopyLocalDataPage(0, queryIds, queryData) != 2 ||
+            queryIds[0] == queryIds[1] ||
+            !((queryIds[0] == typed.Id && queryData[0].Owner == velocity.Owner &&
+               queryIds[1] == typed2.Id && queryData[1].Owner == velocity2.Owner) ||
+              (queryIds[1] == typed.Id && queryData[1].Owner == velocity.Owner &&
+               queryIds[0] == typed2.Id && queryData[0].Owner == velocity2.Owner)) ||
+            scene.CopyLocalDataPage(1, queryIds, queryData) != 1 ||
+            scene.CopyLocalDataPage(-1, queryIds, queryData) != 0 ||
+            new Scene(999).CopyLocalDataPage(0, queryIds, queryData) != 0 ||
+            scene.CopyLocalDataPage(0, queryIds, Span<VelocityData>.Empty) != 0)
+            throw new InvalidOperationException("Native Flecs typed query page failed.");
+
+        if (!typed.DestroyLocal() || !typed2.DestroyLocal() ||
+            typed.TryGetLocalData(out restored) ||
+            scene.CopyLocalDataPage(0, queryIds, queryData) != 0)
+            throw new InvalidOperationException("Flecs query retained deleted data.");
 
         if (scene.CreateLocalEcsEntities(Span<ulong>.Empty) != 0 ||
             new Scene(999).CreateLocalEcsEntities(batch) != 0 ||

@@ -378,6 +378,18 @@ internal static class Program
                     .Append("        return entity.TryCopyLocalData(").Append(id)
                     .AppendLine(", global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(")
                     .AppendLine("            global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref result, 1)));")
+                    .AppendLine("    }")
+                    .Append("    /// <summary>Copy a page of native ").Append(typeName)
+                    .AppendLine(" data without per-entity calls.</summary>")
+                    .Append("    public static int CopyLocalDataPage(this global::Tallow.Scene scene, int offset, ")
+                    .Append("global::System.Span<ulong> entityIds, global::System.Span<")
+                    .Append(type).AppendLine("> values)")
+                    .AppendLine("    {")
+                    .AppendLine("        int capacity = global::System.Math.Min(entityIds.Length, values.Length);")
+                    .AppendLine("        if (capacity <= 0) return 0;")
+                    .Append("        return scene.CopyLocalEcsDataPage(").Append(id)
+                    .AppendLine(", offset, entityIds[..capacity],")
+                    .AppendLine("            global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(values[..capacity]));")
                     .AppendLine("    }");
             }
             generatedEcs.AppendLine("}");

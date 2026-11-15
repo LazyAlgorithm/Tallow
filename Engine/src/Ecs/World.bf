@@ -55,6 +55,20 @@ sealed class World
 	/// Per-world schema IDs are derived from trusted C# component declarations,
 	/// and never reused for a different binary layout in this Scene.
 	Dictionary<uint64, ManagedLocalSchema> mManagedLocalSchemas = new .() ~ delete _;
+	/// Cached read-only Flecs table queries for local C# component schemas.
+	Dictionary<uint64, void*> mManagedLocalQueries = new .() ~ delete _;
+
+	void* ManagedLocalQuery(uint64 schemaId, uint64 component)
+	{
+		if (mManagedLocalQueries.TryGetValue(schemaId, let existing))
+			return existing;
+		uint64 componentId = component;
+		Flecs.TermAccess access = .Read;
+		let query = Flecs.QueryNew(mWorld, &componentId, &access, 1);
+		if (query != null)
+			mManagedLocalQueries[schemaId] = query;
+		return query;
+	}
 
 	public Entity CreateManagedLocalEntity()
 	{
@@ -134,6 +148,66 @@ sealed class World
 		return Flecs.Has(mWorld, entity.id, layout.flecsId);
 	}
 
+	/// Count native Flecs query matches, not a managed list of entities.
+	public int32 CountManagedLocalData(uint64 schemaId)
+	{
+		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+			return 0;
+		let query = ManagedLocalQuery(schemaId, layout.flecsId);
+		return query == null ? 0 : Flecs.QueryCount(query);
+	}
+
+	/// Copy real Flecs table columns. Values contain size-byte records,
+	/// and IDs refer to Flecs entities, never GameObject IDs. Do not change
+	/// ECS membership between offset-based query pages.
+	public int32 CopyManagedLocalDataPage(uint64 schemaId, int32 offset,
+		Span<uint64> entityIds, Span<uint8> bytes)
+	{
+		if (offset < 0 || entityIds.IsEmpty || bytes.IsEmpty ||
+			entityIds.Length > 4096 || bytes.Length > 4 * 1024 * 1024)
+			return 0;
+		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+			return 0;
+		int32 capacity = (int32)Math.Min(entityIds.Length, bytes.Length / layout.size);
+		if (capacity <= 0)
+			return 0;
+		let query = ManagedLocalQuery(schemaId, layout.flecsId);
+		if (query == null)
+			return 0;
+
+		Flecs.IterBuffer iterator = ?;
+		Flecs.QueryIter(mWorld, query, &iterator);
+		int32 visited = 0;
+		int32 copied = 0;
+		while (Flecs.IterNext(&iterator))
+		{
+			let ids = Flecs.IterEntities(&iterator);
+			let values = (uint8*)Flecs.IterField(&iterator, 0, layout.size);
+			if (ids == null || values == null)
+				continue;
+			for (int i < Flecs.IterCount(&iterator))
+			{
+				// Private C# schemas may only enumerate local C# entities.
+				if (!mManagedLocalEntities.Contains(ids[i]))
+					continue;
+				if (visited++ < offset)
+					continue;
+				if (copied >= capacity)
+				{
+					Flecs.IterFini(&iterator);
+					return copied;
+				}
+				entityIds[copied] = ids[i];
+				int source = (int)i * layout.size;
+				int target = copied * layout.size;
+				for (int b < layout.size)
+					bytes[target + b] = values[source + b];
+				copied++;
+			}
+		}
+		return copied;
+	}
+
 	/// Test the scene-object link without registering its component in a
 	/// standalone bulk ECS world merely to ask whether the entity is raw.
 	public bool IsSceneObject(Entity entity)
@@ -195,6 +269,9 @@ sealed class World
 	public ~this()
 	{
 		StopExplorer();
+		for (let query in mManagedLocalQueries.Values)
+			Flecs.QueryFree(query);
+		mManagedLocalQueries.Clear();
 		// Native queries must be released before their Flecs world.
 		for (let query in mObjectQueries.Values)
 			delete query;

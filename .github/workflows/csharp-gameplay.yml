@@ -139,6 +139,7 @@ jobs:
           grep -q 'VelocityData value' "$typed"
           grep -q 'out global::Gameplay.VelocityData result' "$typed"
           grep -q 'Unsafe.SizeOf<global::Gameplay.VelocityData>()' "$typed"
+          grep -q 'System.Span<global::Gameplay.VelocityData> values' "$typed"
           if grep -q 'InvalidNativeLayout' "$typed"; then
             echo "Unsafe managed ECS type leaked into generated native storage API"
             exit 1

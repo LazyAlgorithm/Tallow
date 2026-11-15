@@ -390,6 +390,19 @@ public readonly record struct Scene(ulong SessionId)
     public bool RegisterLocalEcsData(ulong schemaId, int size, int alignment) =>
         Ecs.RegisterLocalData(SessionId, schemaId, size, alignment) != 0;
 
+    /// <summary>Count offline-only Flecs entities with this registered schema.</summary>
+    public int CountLocalEcsData(ulong schemaId) =>
+        Ecs.CountLocalData(SessionId, schemaId);
+
+    /// <summary>
+    /// Copy a page of packed native ECS data in one call. Bytes hold whole,
+    /// sequential records of the registered component's size. Query ordering
+    /// can change following ECS structural modifications.
+    /// </summary>
+    public int CopyLocalEcsDataPage(ulong schemaId, int offset,
+        Span<ulong> entityIds, Span<byte> bytes) =>
+        Ecs.CopyLocalDataPage(SessionId, schemaId, offset, entityIds, bytes);
+
     /// <summary>Count enabled native Flecs Rigidbody data components.</summary>
     public int RigidbodyEntityCount => Ecs.CountRigidbodies(SessionId);
 
