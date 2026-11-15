@@ -37,6 +37,10 @@ node 25 math.iadd 300 1260 "0" "1"
 node 26 var.set.int 300 1100 "" "bumped" "0"
 node 27 sub:Scripts/Doubled.tgraph 1600 200 "21"
 node 28 var.set.float 1860 40 "" "doubled" "0"
+node 29 event.custom 40 1500 "Heal"
+node 30 ecs:InGame.Health.each 300 1500 ""
+node 31 math.add 560 1660 "0" "1"
+node 32 ecs:InGame.Health.Value.set 820 1500 "" "" "0"
 link 1 0 3 0
 link 2 0 3 2
 link 3 0 5 0
@@ -63,3 +67,8 @@ link 24 0 25 0
 link 25 0 26 2
 link 22 0 28 0
 link 27 0 28 2
+link 29 0 30 0
+link 30 0 32 0
+link 30 1 32 1
+link 30 2 31 0
+link 31 0 32 2

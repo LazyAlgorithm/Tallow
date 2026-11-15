@@ -900,6 +900,12 @@ class Program
 				return 0;
 			}
 		}
+		// --write-script-templates <folder>: writes a C# script from every template there, without a window.
+		for (int i < args.Count - 1)
+		{
+			if (args[i] == "--write-script-templates")
+				return EditorApp.WriteScriptTemplates(args[i + 1]) > 0 ? 0 : 1;
+		}
 		// --graph-compile <graph.tgraph> <namespace>: compiles a visual script graph to C# beside it, without a window.
 		for (int i < args.Count - 2)
 		{

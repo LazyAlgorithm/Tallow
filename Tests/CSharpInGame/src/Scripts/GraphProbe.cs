@@ -43,6 +43,15 @@ public partial class GraphProbe : Script
 		bumped = (bumped + 1); // #26
 	}
 
+	public void Custom_Heal()
+	{
+		Scene.Query<InGame.Health>().ForEach((EcsEntity ecsEntity30, ref InGame.Health ecsData30) => // #30
+		{
+			if (ecsEntity30.GameObject is not GameObject ecsObject30 || !ecsObject30.ActiveInHierarchy) return;
+			{ var ecsEntity32 = ecsObject30.Entity; if (ecsEntity32.TryGet(out InGame.Health ecsSet32)) { ecsSet32.Value = (ecsData30.Value + 1f); ecsEntity32.Set(ecsSet32); } } // #32
+		});
+	}
+
 	float Sub_Doubled(float amount)
 	{
 		return (amount * 2f);

@@ -116,8 +116,9 @@ def main() -> int:
         scene_path.write_text(scene, encoding="utf-8")
         (project / "src/Scripts/SampleProbe.cs").write_text(PROBE, encoding="utf-8")
         templates = project / "src/Scripts/Templates"
-        written = subprocess.run([str(launcher), "--editor", "--project", str(project), "--script-templates-test",
-                                  str(templates), "--frames", "5"], capture_output=True, text=True, timeout=300)
+        # The editor's own template text, written without a window (CI has no display).
+        written = subprocess.run([str(launcher), "--write-script-templates", str(templates)],
+                                 capture_output=True, text=True, timeout=300)
         count = len(list(templates.glob("*.cs")))
         if "SCRIPT TEMPLATES WRITTEN" not in written.stdout or count < 10:
             print(written.stdout[-3000:] + written.stderr[-2000:])

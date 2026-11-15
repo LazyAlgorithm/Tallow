@@ -46,6 +46,9 @@ static class NodeLibrary
 
 	/// The nodes the project's C# code and Tallow.API offer (.tallow-csharp/graph-nodes.tsv, written by Tallow.Build).
 	static String sCSharpNodes = new .() ~ delete _;
+	/// The project's C# ECS data components (.tallow-csharp/ecs-data.tsv, written by Tallow.Build): per type an
+	/// "@layout" row (candidate or unsupported), then "Type<tab>field<tab>kind<tab>synced" for each field in order.
+	static String sCSharpEcs = new .() ~ delete _;
 	/// Enum types C# pins use, with their members.
 	static Dictionary<String, List<String>> sCSharpEnums = new .() ~ DeleteDictionaryAndKeysAndValues!(_);
 
@@ -133,9 +136,12 @@ static class NodeLibrary
 	{
 		let nodes = scope String();
 		File.ReadAllText(scope $"{projectPath}/.tallow-csharp/graph-nodes.tsv", nodes).IgnoreError();
-		if (nodes != sCSharpNodes)
+		let ecs = scope String();
+		File.ReadAllText(scope $"{projectPath}/.tallow-csharp/ecs-data.tsv", ecs).IgnoreError();
+		if (nodes != sCSharpNodes || ecs != sCSharpEcs)
 		{
 			sCSharpNodes.Set(nodes);
+			sCSharpEcs.Set(ecs);
 			if (sCSharp && sDefs != null)
 			{
 				DeleteContainerAndItems!(sDefs);
@@ -339,7 +345,10 @@ static class NodeLibrary
 		if (!sCSharp)
 			AddEcsNodes();
 		else
+		{
 			AddCSharpCodeNodes();
+			AddCSharpEcsNodes();
+		}
 		AddOverloads();
 	}
 
@@ -1499,6 +1508,96 @@ scope $"({{0}} != null && {{0}}.GetComponent<{typeName}>() != null ? {{0}}.GetCo
 					Add(set, scope $"ECS|{info.name}", scope $"{info.name}: Set {field.Name}" , .Action,
 scope $"if ({{0}} != null && {{0}}.GetComponent<{typeName}>() != null) {{0}}.GetComponent<{typeName}>().{field.Name} = {{1}};")
 						.In("Object", .Object, "GameObject", "GameObject").In("Value", pin);
+			}
+		}
+	}
+
+	/// The pin for a field of a C# ECS data component (its kind in ecs-data.tsv), false for one graphs cannot
+	/// show (uint, long, ulong, double, Vector4).
+	static bool CSharpEcsPin(StringView kind, out PinType pin)
+	{
+		pin = .Float;
+		switch (kind)
+		{
+		case "float": pin = .Float;
+		case "int": pin = .Int;
+		case "bool": pin = .Bool;
+		case "Vector2": pin = .Vector2;
+		case "Vector3": pin = .Vector3;
+		case "Quaternion": pin = .Quaternion;
+		default: return false;
+		}
+		return true;
+	}
+
+	/// The ECS nodes for the C# [Component] structs of a C# project: the same kinds (and keys) as AddEcsNodes, in
+	/// C# over EcsEntity (GameObject.Entity) and Scene.Query.
+	static void AddCSharpEcsNodes()
+	{
+		// Only the types whose layout can be ECS data (the build gives those their schema).
+		let types = scope List<StringView>();
+		for (var line in sCSharpEcs.Split('\n', .RemoveEmptyEntries))
+		{
+			line.TrimEnd();
+			let tab = line.IndexOf('\t');
+			if (tab > 0 && line.Substring(tab + 1).StartsWith("@layout\tcandidate"))
+				types.Add(line.Substring(0, tab));
+		}
+		NodeDef Def(StringView key, StringView category, StringView title, NodeKind kind, StringView code)
+		{
+			let def = Add(key, category, title, kind, code);
+			def.cs.Set(code);
+			def.fromGame = true;
+			return def;
+		}
+		for (let typeName in types)
+		{
+			let dot = typeName.LastIndexOf('.');
+			let name = dot >= 0 ? typeName.Substring(dot + 1) : typeName;
+			let category = scope $"ECS|{name}";
+			let fields = scope List<(StringView name, PinType pin)>();
+			for (let line in sCSharpEcs.Split('\n', .RemoveEmptyEntries))
+			{
+				let parts = scope List<StringView>();
+				for (var part in line.Split('\t'))
+				{
+					part.TrimEnd(); // Written with Windows line ends on Windows.
+					parts.Add(part);
+				}
+				if (parts.Count >= 3 && parts[0] == typeName && CSharpEcsPin(parts[2], let pin))
+					fields.Add((parts[1], pin));
+			}
+			if (Find(scope $"ecs:{typeName}.has") == null)
+				Def(scope $"ecs:{typeName}.has", category, scope $"{name}: Has Component", .Value, scope $"{{0}}.Entity.Has<{typeName}>()")
+					.In("Object", .Object, "GameObject", "GameObject").Out("Has", .Bool);
+			if (Find(scope $"ecs:{typeName}.add") == null)
+				Def(scope $"ecs:{typeName}.add", category, scope $"{name}: Add Component", .Action,
+					scope $"if (!{{0}}.Entity.Has<{typeName}>()) {{0}}.Entity.Set(new {typeName}());")
+					.In("Object", .Object, "GameObject", "GameObject");
+			if (Find(scope $"ecs:{typeName}.remove") == null)
+				Def(scope $"ecs:{typeName}.remove", category, scope $"{name}: Remove Component", .Action,
+					scope $"{{0}}.Entity.Remove<{typeName}>();")
+					.In("Object", .Object, "GameObject", "GameObject");
+			if (Find(scope $"ecs:{typeName}.each") == null)
+			{
+				// NodeGraph writes the loop (Scene.Query<T>().ForEach); the fields read the row it is on.
+				let loop = Def(scope $"ecs:{typeName}.each", category, scope $"{name}: For Each", .EcsEach, typeName)
+					.In("", .Flow).Out("Body", .Flow)
+					.Out("Object", .Object, "GameObject", "ecsObject$N");
+				for (let field in fields)
+					loop.Out(field.name, field.pin, "", scope $"ecsData$N.{field.name}");
+				loop.Out("Done", .Flow);
+			}
+			for (let field in fields)
+			{
+				if (Find(scope $"ecs:{typeName}.{field.name}.get") == null)
+					Def(scope $"ecs:{typeName}.{field.name}.get", category, scope $"{name}: Get {field.name}", .Value,
+						scope $"GraphRuntime.Data<{typeName}>({{0}}).{field.name}")
+						.In("Object", .Object, "GameObject", "GameObject").Out("Value", field.pin);
+				if (Find(scope $"ecs:{typeName}.{field.name}.set") == null)
+					Def(scope $"ecs:{typeName}.{field.name}.set", category, scope $"{name}: Set {field.name}", .Action,
+						scope $"{{ var ecsEntity$N = {{0}}.Entity; if (ecsEntity$N.TryGet(out {typeName} ecsSet$N)) {{ ecsSet$N.{field.name} = {{1}}; ecsEntity$N.Set(ecsSet$N); }} }}")
+						.In("Object", .Object, "GameObject", "GameObject").In("Value", field.pin);
 			}
 		}
 	}

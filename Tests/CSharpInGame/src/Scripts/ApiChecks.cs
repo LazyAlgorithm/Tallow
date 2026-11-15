@@ -242,6 +242,15 @@ public class ApiChecks : CheckBase
         Check("graph nodes read from Tallow.API set and read the Transform", graph.position == new Vector3(1, 2, 3));
         Check("graph node read from Tallow.API calls Mathf.Lerp", MathF.Abs(graph.lerped - 2.5f) < 1e-5f);
         Check("a subgraph (Doubled.tgraph) compiles into the graph and returns its value", graph.doubled == 42f);
+        // The graph's Heal event: For Each Health (GameObjects only) sets Value to Value + 1.
+        EcsEntity healed = GameObject.Entity, bare = Scene.CreateLocalEcsEntity();
+        healed.Set(new Health { Value = 5 });
+        bare.Set(new Health { Value = 5 });
+        graph.Custom_Heal();
+        Check($"a graph's For Each and Set nodes change C# ECS data on GameObjects, not bare entities ({healed.Get<Health>().Value}, {bare.Get<Health>().Value}, {Scene.Query<Health>().Count})",
+            healed.Get<Health>().Value == 6 && bare.Get<Health>().Value == 5);
+        healed.Remove<Health>();
+        bare.DestroyLocal();
         // A graph's custom event is a public method C# can call.
         int before = graph.bumped;
         graph.Custom_Bump();
@@ -486,6 +495,62 @@ public class ApiChecks : CheckBase
         Check("local data query page", Scene.CopyLocalDataPage(0, ids, values) == 1 &&
             ids[0] == entity.Id && values[0].Drag == 0.5f);
         Check("DestroyLocal", entity.DestroyLocal() && !entity.IsAlive);
+        TypedQueries();
+    }
+
+    private void TypedQueries()
+    {
+        EcsEntity a = Scene.CreateLocalEcsEntity(), b = Scene.CreateLocalEcsEntity(), c = Scene.CreateLocalEcsEntity();
+        Check("generic Set/Get", a.Set(new Motion { Velocity = Vector3.UnitX, Drag = 1 }) && a.Get<Motion>().Drag == 1);
+        b.Set(new Motion { Velocity = Vector3.UnitY, Drag = 2 });
+        b.Set(new Health { Value = 10, Hits = 0 });
+        c.Set(new Health { Value = 5, Hits = 0 });
+        Check("Has<T> and TryGet of missing data", a.Has<Motion>() && !a.Has<Health>() && !a.TryGet(out Health _));
+        GameObject holder = Scene.Find("Runner")!.Value;
+        EcsEntity onObject = holder.Entity;
+        Check("a GameObject's entity takes C# data", onObject.Set(new Health { Value = 1, Hits = 0 }) &&
+            onObject.GameObject == holder && a.GameObject is null);
+        Check("Query<T>.Count counts bare entities and GameObjects",
+            Scene.Query<Motion>().Count == 2 && Scene.Query<Health>().Count == 3 && Scene.Query<Motion, Health>().Count == 1);
+        int visited = 0;
+        Scene.Query<Health>().ForEach((EcsEntity e, ref Health h) =>
+        {
+            h.Hits++;
+            h.Value *= 2;
+            visited++;
+        });
+        Check("ForEach visits every match and writes changes back",
+            visited == 3 && b.Get<Health>().Value == 20 && c.Get<Health>().Hits == 1 && onObject.Get<Health>().Value == 2);
+        Scene.Query<Motion, Health>().ForEach((EcsEntity e, ref Motion m, ref Health h) =>
+        {
+            m.Velocity *= h.Value;
+            h.Hits += 10;
+        });
+        Check("a two-component query reads and writes both", b.Get<Motion>().Velocity == new Vector3(0, 20, 0) &&
+            b.Get<Health>().Hits == 11 && a.Get<Motion>().Velocity == Vector3.UnitX);
+        Scene.Query<Health>().ForEach((EcsEntity e, ref Health h) =>
+        {
+            if (e == onObject)
+                e.Set(new Health { Value = 99, Hits = h.Hits });
+        });
+        Check("Set during ForEach is kept when the row is left alone", onObject.Get<Health>().Value == 99);
+        // Destroying and removing during ForEach: the gone are not written back (nor resurrected).
+        Scene.Query<Health>().ForEach((EcsEntity e, ref Health h) =>
+        {
+            h.Value = -1;
+            if (e == c)
+                c.DestroyLocal();
+            if (e == b)
+                b.Remove<Health>();
+        });
+        Check("ForEach skips writing to entities destroyed or changed during it",
+            !c.IsAlive && !b.Has<Health>() && onObject.Get<Health>().Value == -1 && Scene.Query<Health>().Count == 1);
+        Check("Remove<T> on a GameObject", onObject.Remove<Health>() && !onObject.Has<Health>() && !onObject.Remove<Health>());
+        bool threw = false;
+        try { a.Set(new NotData()); } catch (InvalidOperationException) { threw = true; }
+        Check("a struct that is not [Component] data is refused with a message", threw);
+        a.DestroyLocal();
+        b.DestroyLocal();
     }
 
     private void LocalState()
@@ -715,6 +780,18 @@ public struct Motion
 {
     public Vector3 Velocity;
     public float Drag;
+}
+
+[Component]
+public struct Health
+{
+    public float Value;
+    public int Hits;
+}
+
+public struct NotData
+{
+    public int X;
 }
 
 /// <summary>Code-behind for UI/probe.tui: its onload handlers are this script's methods.</summary>

@@ -70,6 +70,162 @@ sealed class World
 		return query;
 	}
 
+	/// Whether C# data components may go on an entity: a bare entity C# made, or a scene object's (its data is
+	/// deleted with it). Built-in components are never reachable this way: each C# schema is its own Flecs id.
+	public bool CanHoldManagedData(Entity entity) =>
+		IsManagedLocalEntity(entity) || (!entity.IsNull && IsAlive(entity) && IsSceneObject(entity));
+
+	/// The most C# data components one query can ask for.
+	public const int32 MaxManagedQueryTerms = 4;
+	/// Cached Flecs queries over several C# schemas, by their ids ("a,b,").
+	Dictionary<String, void*> mManagedDataQueries = new .() ~ DeleteDictionaryAndKeys!(_);
+
+	/// The layouts of registered schemas, in order; false when one is not registered (or too many are asked for).
+	bool ManagedLayouts(Span<uint64> schemaIds, Span<ManagedLocalSchema> layouts, out int32 rowSize)
+	{
+		rowSize = 0;
+		if (schemaIds.IsEmpty || schemaIds.Length > MaxManagedQueryTerms)
+			return false;
+		for (int i < schemaIds.Length)
+		{
+			for (int j < i)
+			{
+				if (schemaIds[j] == schemaIds[i])
+					return false; // The same data twice would be written back twice.
+			}
+			if (!mManagedLocalSchemas.TryGetValue(schemaIds[i], let layout))
+				return false;
+			layouts[i] = layout;
+			rowSize += layout.size;
+		}
+		return true;
+	}
+
+	void* ManagedDataQuery(Span<uint64> schemaIds, Span<ManagedLocalSchema> layouts)
+	{
+		let key = scope String();
+		for (let id in schemaIds)
+			key.AppendF("{},", id);
+		if (mManagedDataQueries.TryGetValue(key, let existing))
+			return existing;
+		uint64[MaxManagedQueryTerms] ids = ?;
+		Flecs.TermAccess[MaxManagedQueryTerms] access = ?;
+		for (int i < schemaIds.Length)
+		{
+			ids[i] = layouts[i].flecsId;
+			access[i] = .ReadWrite;
+		}
+		let query = Flecs.QueryNew(mWorld, &ids, &access, (int32)schemaIds.Length);
+		if (query != null)
+			mManagedDataQueries[new String(key)] = query;
+		return query;
+	}
+
+	/// Entities with every one of the C# schemas (bare entities and scene objects alike).
+	public int32 CountManagedData(Span<uint64> schemaIds)
+	{
+		ManagedLocalSchema[MaxManagedQueryTerms] layouts = ?;
+		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), ?))
+			return 0;
+		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length));
+		return query == null ? 0 : Flecs.QueryCount(query);
+	}
+
+	/// A page of the entities with every one of the C# schemas: their ids, and for each a row of their records one
+	/// after another in the order asked for (no padding between them). Starts after `offset` matches; the order
+	/// holds while no entity gains or loses one of them.
+	public int32 CopyManagedDataPage(Span<uint64> schemaIds, int32 offset, Span<uint64> entityIds, Span<uint8> bytes)
+	{
+		ManagedLocalSchema[MaxManagedQueryTerms] layouts = ?;
+		if (offset < 0 || entityIds.IsEmpty || entityIds.Length > 4096 || bytes.Length > 4 * 1024 * 1024)
+			return 0;
+		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), let rowSize))
+			return 0;
+		int32 capacity = (int32)Math.Min(entityIds.Length, bytes.Length / rowSize);
+		if (capacity <= 0)
+			return 0;
+		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length));
+		if (query == null)
+			return 0;
+		Flecs.IterBuffer iterator = ?;
+		Flecs.QueryIter(mWorld, query, &iterator);
+		uint8*[MaxManagedQueryTerms] columns = ?;
+		int32 visited = 0;
+		int32 copied = 0;
+		while (Flecs.IterNext(&iterator))
+		{
+			let ids = Flecs.IterEntities(&iterator);
+			bool present = ids != null;
+			for (int t < schemaIds.Length)
+			{
+				columns[t] = (uint8*)Flecs.IterField(&iterator, (int32)t, layouts[t].size);
+				present &= columns[t] != null;
+			}
+			if (!present)
+				continue;
+			let count = Flecs.IterCount(&iterator);
+			if (visited + count <= offset)
+			{
+				visited += count;
+				continue;
+			}
+			for (int i < count)
+			{
+				if (visited++ < offset)
+					continue;
+				if (copied >= capacity)
+				{
+					Flecs.IterFini(&iterator);
+					return copied;
+				}
+				entityIds[copied] = ids[i];
+				int at = copied * rowSize;
+				for (int t < schemaIds.Length)
+				{
+					let size = layouts[t].size;
+					Internal.MemCpy(&bytes[at], columns[t] + i * size, size);
+					at += size;
+				}
+				copied++;
+			}
+		}
+		return copied;
+	}
+
+	/// Writes rows laid out as CopyManagedDataPage gives them back to their entities. An entity that has gone, or
+	/// no longer has every schema, is skipped. Returns how many were written.
+	public int32 WriteManagedDataPage(Span<uint64> schemaIds, Span<uint64> entityIds, Span<uint8> bytes)
+	{
+		ManagedLocalSchema[MaxManagedQueryTerms] layouts = ?;
+		if (entityIds.IsEmpty || entityIds.Length > 4096)
+			return 0;
+		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), let rowSize) || bytes.Length < entityIds.Length * rowSize)
+			return 0;
+		int32 written = 0;
+		for (int i < entityIds.Length)
+		{
+			let entity = Entity(entityIds[i]);
+			if (!CanHoldManagedData(entity))
+				continue;
+			bool all = true;
+			for (int t < schemaIds.Length)
+				all &= Flecs.Has(mWorld, entity.id, layouts[t].flecsId);
+			if (!all)
+				continue;
+			int at = i * rowSize;
+			for (int t < schemaIds.Length)
+			{
+				let size = layouts[t].size;
+				let target = (uint8*)Flecs.GetMut(mWorld, entity.id, layouts[t].flecsId);
+				if (target != null)
+					Internal.MemCpy(target, &bytes[at], size);
+				at += size;
+			}
+			written++;
+		}
+		return written;
+	}
+
 	public Entity CreateManagedLocalEntity()
 	{
 		let entity = Create();
@@ -131,7 +287,7 @@ sealed class World
 	/// to .NET, and never let a short, stale or mismatched layout be copied.
 	public bool SetManagedLocalData(Entity entity, uint64 schemaId, Span<uint8> bytes)
 	{
-		if (!IsManagedLocalEntity(entity))
+		if (!CanHoldManagedData(entity))
 			return false;
 		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
 			return false;
@@ -143,7 +299,7 @@ sealed class World
 
 	public bool CopyManagedLocalData(Entity entity, uint64 schemaId, Span<uint8> bytes)
 	{
-		if (!IsManagedLocalEntity(entity))
+		if (!CanHoldManagedData(entity))
 			return false;
 		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
 			return false;
@@ -157,9 +313,21 @@ sealed class World
 		return true;
 	}
 
+	public bool RemoveManagedLocalData(Entity entity, uint64 schemaId)
+	{
+		if (!CanHoldManagedData(entity))
+			return false;
+		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+			return false;
+		if (!Flecs.Has(mWorld, entity.id, layout.flecsId))
+			return false;
+		Flecs.Remove(Writer, entity.id, layout.flecsId);
+		return true;
+	}
+
 	public bool HasManagedLocalData(Entity entity, uint64 schemaId)
 	{
-		if (!IsManagedLocalEntity(entity))
+		if (!CanHoldManagedData(entity))
 			return false;
 		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
 			return false;
@@ -205,8 +373,8 @@ sealed class World
 				continue;
 			for (int i < Flecs.IterCount(&iterator))
 			{
-				// Private C# schemas may only enumerate local C# entities.
-				if (!mManagedLocalEntities.Contains(ids[i]))
+				// Only entities C# may give data to (Set refuses the rest).
+				if (!mManagedLocalEntities.Contains(ids[i]) && !IsSceneObject(.(ids[i])))
 					continue;
 				if (visited++ < offset)
 					continue;

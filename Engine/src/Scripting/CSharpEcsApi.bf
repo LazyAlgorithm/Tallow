@@ -120,6 +120,63 @@ static class Ecs
         return scene.World.CopyManagedLocalDataPage(schemaId, offset, entityIds, bytes);
     }
 
+    static Scene OfflinePlaying(uint64 session)
+    {
+        let scene = CSharpRuntime.PhysicsScene(session);
+        return (scene != null && scene.IsPlaying && scene.World.NativeNetwork == null) ? scene : null;
+    }
+
+    [CSharpExpose]
+    public static bool RemoveLocalData(uint64 session, uint64 entity, uint64 schemaId)
+    {
+        let scene = OfflinePlaying(session);
+        return scene != null && scene.World.RemoveManagedLocalData(.(entity), schemaId);
+    }
+
+    /// The Flecs entity of a GameObject (C# data components can go on it), 0 when there is none.
+    [CSharpExpose]
+    public static uint64 EntityOfObject(uint64 session, uint64 objectId)
+    {
+        let gameObject = CSharpRuntime.PhysicsObject(session, objectId);
+        return gameObject != null ? gameObject.Entity.id : 0;
+    }
+
+    /// The GameObject an entity belongs to (its id), 0 for a bare entity.
+    [CSharpExpose]
+    public static uint64 ObjectOfEntity(uint64 session, uint64 entity)
+    {
+        let scene = CSharpRuntime.PhysicsScene(session);
+        if (scene == null || entity == 0 || !scene.World.IsAlive(.(entity)) || !scene.World.IsSceneObject(.(entity)))
+            return 0;
+        let link = scene.World.Get<ObjectLink>(.(entity));
+        return (link != null && link.gameObject != null && !link.gameObject.IsDestroyed) ? link.gameObject.Id : 0;
+    }
+
+    /// How many entities have every one of the C# data schemas (at most 4).
+    [CSharpExpose]
+    public static int32 CountData(uint64 session, Span<uint64> schemaIds)
+    {
+        let scene = OfflinePlaying(session);
+        return scene != null ? scene.World.CountManagedData(schemaIds) : 0;
+    }
+
+    /// A page of the entities with every one of the C# data schemas: ids, and rows of their records in order.
+    [CSharpExpose]
+    public static int32 CopyDataPage(uint64 session, Span<uint64> schemaIds, int32 offset,
+        Span<uint64> entityIds, Span<uint8> bytes)
+    {
+        let scene = OfflinePlaying(session);
+        return scene != null ? scene.World.CopyManagedDataPage(schemaIds, offset, entityIds, bytes) : 0;
+    }
+
+    /// Writes rows (as CopyDataPage gives them) back; entities that have gone or lost a schema are skipped.
+    [CSharpExpose]
+    public static int32 WriteDataPage(uint64 session, Span<uint64> schemaIds, Span<uint64> entityIds, Span<uint8> bytes)
+    {
+        let scene = OfflinePlaying(session);
+        return scene != null ? scene.World.WriteManagedDataPage(schemaIds, entityIds, bytes) : 0;
+    }
+
     [CSharpExpose]
     public static int32 CountRigidbodies(uint64 session)
     {

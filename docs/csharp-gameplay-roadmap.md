@@ -224,7 +224,17 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 
 - [ ] Core GameObject/Transform parenting, rotation/scale, scene/object creation/destruction, asset/prefab loading, lifecycle and event callbacks.
 - [ ] Component discovery and access: `GetComponent<T>`, `AddComponent<T>`, fields/properties, object/component references, multiple components, enabling/disabling.
-- [ ] Flecs ECS: managed data components, filters, typed queries, iteration, systems, group/tags, efficient bulk update, lifetime and thread safety while hiding complexity from typical gameplay.
+- [~] Flecs ECS: managed data components, filters, typed queries, iteration, systems, group/tags, efficient bulk update, lifetime and thread safety while hiding complexity from typical gameplay.
+  - [x] Typed queries (November 15, 2026): `EcsEntity.Set/Get/TryGet/Has/Remove<T>`, `GameObject.Entity`,
+    `EcsEntity.GameObject`, `Scene.Query<A[,B[,C]]>()` with `Count` and `ForEach((entity, ref a, ...) => ...)`
+    (`Managed/Tallow.API/EcsData.cs`). The build's generated adapters register each struct's schema id with a
+    module initializer (`EcsSchemas.Register<T>`). Native: `World.CanHoldManagedData` (bare C# entities and
+    scene objects), `CountManagedData` / `CopyManagedDataPage` / `WriteManagedDataPage` over up to 4 schemas
+    (rows packed in order, cached Flecs queries; host entries `Ecs.CountData/CopyDataPage/WriteDataPage`,
+    `RemoveLocalData`, `EntityOfObject`, `ObjectOfEntity`). ForEach writes back only rows whose bytes changed,
+    and skips entities that went or lost a schema meanwhile. `ecs-data.tsv` keeps fields in declaration order.
+    Tests: 10 in-engine checks. Still offline-only and not saved with scenes; not yet: [Sync] replication of
+    C# ECS data, filters/tags/Without terms, systems scheduled by phase.
 - [ ] Jolt physics: rigid bodies, forces, collision/trigger callbacks, raycasts/shape casts, character controls, constraints/joints and physics queries.
 - [ ] Native network features surfaced to C#: networked TickInput/actions, authority/ownership, spawning, replication, prediction/reconciliation, rollback, RPCs, lag compensation, relevancy and state sync, working by default.
 - [ ] Rendering, materials, shaders/compute graphs, cameras, lighting, mesh/voxel/terrain, animation/IK, sequencer and modeling tools.
@@ -276,8 +286,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   selected (`--script-files-test` checks the mapping). C#-to-graph: a graph's custom events and variables are
   public members of its partial class, so C# calls them (`graph.Custom_Bump()`, checked in-engine) and other
   graphs get them as catalog nodes. Networking nodes (Is Owner, Is Server, In Session, Send Network Event,
-  Network-Safe Random) compile to the Tallow.API equivalents. Still to do: managed ECS (For Each Data) nodes.
-- [~] Permit graph-to-C# calls, C#-to-graph events/operations, automatic C# type/method node discovery, managed ECS & networking nodes, and correct graph errors/source mapping. All but managed ECS nodes done (see above).
+  Network-Safe Random) compile to the Tallow.API equivalents. ECS nodes for C# `[Component]` structs (from
+  `ecs-data.tsv`, same keys as the Beef ones): Has/Add/Remove Component, Get/Set per field, and For Each, which
+  compiles to `Scene.Query<T>().ForEach` over active GameObjects (GraphProbe's Heal event is tested).
+- [x] Permit graph-to-C# calls, C#-to-graph events/operations, automatic C# type/method node discovery, managed ECS & networking nodes, and correct graph errors/source mapping.
 - [ ] Convert the legacy starter projects, sample/voxel sandbox/showcase content, tutorial code and code-generation templates; newly created projects should not expose Beef to normal C# authors.
   - [x] Voxel sandbox template (November 15, 2026): its scripts are C# (Editor/templates/common/Scripts:
     Spinner, FollowCamera, Digger, Hud, CharacterAnimation, SampleMenu); no Program.bf, GameSetup.bf or
@@ -304,9 +316,9 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     packages) now plays it in the packaged player; not run here, as it needs a package.
     `tools/test_csharp_showcase.py` creates, compiles and plays it with the test switches (CI).
   - [x] Create > C# Script templates (November 15, 2026): the GUI / HUD template draws a working health bar and
-    button with the C# GUI API; the ECS templates say plainly that their struct is registered as ECS data and
-    typed C# queries wait for the managed ECS bridge. `--script-templates-test <folder>` writes one script per
-    template; tools/test_csharp_sample.py compiles them all with no warnings.
+    button with the C# GUI API; the ECS templates use `GameObject.Entity` and `Scene.Query`.
+    `TallowLauncher --write-script-templates <folder>` writes one script per template without a window (also
+    the editor's `--script-templates-test`); tools/test_csharp_sample.py compiles them all with no warnings.
 - [ ] Keep shader graph/compute graph/rendering functionality intact; never confuse visual **gameplay** source generation with native shader compilation.
 
 ## P4 — performance, reload, shipping exports, hardening

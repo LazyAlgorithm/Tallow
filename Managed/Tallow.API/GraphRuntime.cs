@@ -17,6 +17,10 @@ public static class GraphRuntime
     /// <summary>Whether an object still exists.</summary>
     public static bool IsValid(GameObject value) => value.IsValid;
 
+    /// <summary>A graph's Get node for C# ECS data: the object's data of type T, or default when it has none.</summary>
+    public static T Data<T>(GameObject value) where T : unmanaged =>
+        value.IsValid && value.Entity.TryGet(out T data) ? data : default;
+
     /// <summary>Whether a reference points at something that still exists.</summary>
     public static bool IsValid(object? value) => value switch
     {

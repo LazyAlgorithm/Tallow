@@ -285,6 +285,55 @@ When field restoration fails, the native C# adapter no longer proceeds with
 `Awake`; when editing during Play, a failed field batch leaves the previous
 saved override unchanged. This still requires full Nobara editor verification.
 
+## ECS data and queries
+
+A `[Component]` **struct** is ECS data: it lives in the engine's Flecs world,
+packed with every other entity's, instead of in a script per object. Its
+fields can be `bool`, `int`, `uint`, `long`, `ulong`, `float`, `double`,
+`Vector2/3/4` or `Quaternion`.
+
+```csharp
+[Component]
+public struct Mover
+{
+    public Vector3 Velocity;
+    public float Drag;
+}
+
+public class Movers : Script
+{
+    public override void Start()
+    {
+        // On a GameObject's entity, or on a bare entity with no GameObject at all.
+        GameObject.Entity.Set(new Mover { Velocity = Vector3.UnitX, Drag = 0.1f });
+        Scene.CreateLocalEcsEntity().Set(new Mover { Velocity = Vector3.UnitZ });
+    }
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        Scene.Query<Mover>().ForEach((EcsEntity entity, ref Mover mover) =>
+            mover.Velocity *= 1f - mover.Drag * deltaTime);
+    }
+}
+```
+
+- `EcsEntity.Set`, `Get`, `TryGet`, `Has` and `Remove` work on one entity;
+  `GameObject.Entity` is an object's entity and `EcsEntity.GameObject` the
+  other way (null for a bare entity).
+- `Scene.Query<A>()`, `Query<A, B>()` and `Query<A, B, C>()` give the
+  entities with all of them: `Count`, and `ForEach` with a `ref` to each. The
+  data is copied out in pages and the rows the action changed are written back
+  after it, so it costs a few calls per thousand entities, not one per entity.
+- In `ForEach` you may create and destroy entities and add or remove data. An
+  entity that has gone (or lost one of the components) by the end is not
+  written back, and entities made during it are visited next time.
+- ECS data is for offline play for now: it is not saved with the scene and not
+  replicated (`[Sync]` on its fields is not sent yet). Bare entities are
+  deleted when Play stops.
+- Visual script graphs get the same nodes for each struct: Has, Add and Remove
+  Component, Get and Set of each field, and **For Each**, which visits the
+  active GameObjects that have it.
+
 ## Spawning networked objects
 
 A prefab whose root has a Network Identity is shared. On the server, `Scene.Spawn` makes it on every machine and

@@ -306,6 +306,7 @@ extension EditorApp
 			""", scriptNamespace, name, template == .EcsSynced ? "[Sync] " : "");
 		case .EcsMixed:
 			text.AppendF("""
+			using System.Numerics;
 			using Tallow;
 
 			namespace {0};
@@ -319,14 +320,20 @@ extension EditorApp
 			[Component]
 			public class {1} : Script
 			{{
+			    public override void Start()
+			    {{
+			        // Data on this object's ECS entity: Scene.Query<{1}Data>() finds it with all the others.
+			        GameObject.Entity.Set(new {1}Data {{ Speed = 1f }});
+			    }}
+
 			    public override void Update(TickInput input, float deltaTime)
 			    {{
-			        // {1}Data is registered as ECS data. Typed C# queries over it come with the managed ECS
-			        // bridge (docs/csharp-gameplay-roadmap.md); until then, keep per-object state in this script.
+			        if (GameObject.Entity.TryGet(out {1}Data data))
+			            Transform.Position += Vector3.UnitY * data.Speed * deltaTime;
 			    }}
 			}}
 			""", scriptNamespace, name);
-		case .EcsQuery, .EcsBulk:
+		case .EcsQuery:
 			text.AppendF("""
 			using Tallow;
 
@@ -341,11 +348,50 @@ extension EditorApp
 			[Component]
 			public class {1} : Script
 			{{
+			    public override void Start()
+			    {{
+			        // Any GameObject's entity (or a bare one from Scene.CreateLocalEcsEntity) can have the data.
+			        GameObject.Entity.Set(new {1}Data());
+			    }}
+
 			    public override void Update(TickInput input, float deltaTime)
 			    {{
-			        // {1}Data is registered as ECS data. Typed C# queries over it come with the managed ECS
-			        // bridge (docs/csharp-gameplay-roadmap.md); for many objects today, one script updating an
-			        // array of structs (as the Gallery's crowd does) is the fast path.
+			        // Every entity with the data. What the action changes through the ref is written back.
+			        Scene.Query<{1}Data>().ForEach((EcsEntity entity, ref {1}Data data) => data.Elapsed += deltaTime);
+			    }}
+			}}
+			""", scriptNamespace, name);
+		case .EcsBulk:
+			text.AppendF("""
+			using System.Numerics;
+			using Tallow;
+
+			namespace {0};
+
+			[Component]
+			public struct {1}Data
+			{{
+			    public Vector3 Position;
+			    public Vector3 Velocity;
+			}}
+
+			[Component]
+			public class {1} : Script
+			{{
+			    public int Count = 1000;
+
+			    public override void Start()
+			    {{
+			        // Bare entities: just data, no GameObject or Transform. They go when Play stops.
+			        for (int i = 0; i < Count; i++)
+			            Scene.CreateLocalEcsEntity().Set(new {1}Data {{ Velocity = new Vector3(i % 10, 0f, i / 10) * 0.1f }});
+			    }}
+
+			    public override void Update(TickInput input, float deltaTime)
+			    {{
+			        // One query moves them all; the data is copied out and back in pages, not one call per entity.
+			        Scene.Query<{1}Data>().ForEach((EcsEntity entity, ref {1}Data data) =>
+			            data.Position += data.Velocity * deltaTime);
 			    }}
 			}}
 			""", scriptNamespace, name);
@@ -353,8 +399,10 @@ extension EditorApp
 	}
 
 	/// --script-templates-test <folder>: writes a script from every template there (namespace TemplateTest), for
-	/// tools/test_csharp_sample.py to compile.
-	void RunScriptTemplatesTest(StringView folder)
+	/// tools/test_csharp_sample.py to compile. The launcher's --write-script-templates does it without a window.
+	void RunScriptTemplatesTest(StringView folder) => WriteScriptTemplates(folder);
+
+	public static int WriteScriptTemplates(StringView folder)
 	{
 		Directory.CreateDirectory(folder).IgnoreError();
 		int written = 0;
@@ -369,5 +417,6 @@ extension EditorApp
 				written++;
 		}
 		Console.WriteLine(scope $"SCRIPT TEMPLATES WRITTEN {written}");
+		return written;
 	}
 }

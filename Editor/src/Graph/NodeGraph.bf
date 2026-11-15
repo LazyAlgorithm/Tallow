@@ -925,7 +925,18 @@ class NodeGraph
 			}
 			if (node.def.kind == .EcsEach && csharp)
 			{
-				code.Append("// For Each Data is not in C# graphs yet: use a C# script.\n");
+				// One packed query per run (Scene.Query): its rows are copied out in pages and what the body changes
+				// is written back. As in Beef graphs, only active GameObjects are visited (not bare entities).
+				code.AppendF("Scene.Query<{1}>().ForEach((EcsEntity ecsEntity{0}, ref {1} ecsData{0}) =>", node.id, node.def.code);
+				NodeMark(node, code);
+				code.Append('\n');
+				code.Append('\t', indent);
+				code.Append("{\n");
+				code.Append('\t', indent + 1);
+				code.AppendF("if (ecsEntity{0}.GameObject is not GameObject ecsObject{0} || !ecsObject{0}.ActiveInHierarchy) return;\n", node.id);
+				EmitFrom(node, 0, code, indent + 1, depth + 1);
+				code.Append('\t', indent);
+				code.Append("});\n");
 				node = FollowFlow(node, (int32)node.def.outputs.Count - 1, out entry);
 				continue;
 			}

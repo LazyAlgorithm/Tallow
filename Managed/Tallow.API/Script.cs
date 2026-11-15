@@ -133,7 +133,7 @@ public readonly record struct TickInput(
 public interface IComponent { }
 
 /// <summary>A validated reference to an engine-owned scene entity, not a native pointer.</summary>
-public readonly record struct GameObject(ulong SceneId, ulong Id)
+public readonly partial record struct GameObject(ulong SceneId, ulong Id)
 {
     public bool IsValid => Engine.Bridge.IsAlive(this);
 
@@ -540,7 +540,7 @@ public readonly record struct PhysicsHit(
 /// Generation-aware Flecs entity reference. Unlike GameObject, bare ECS
 /// entities do not require a scene GameObject or Transform.
 /// </summary>
-public readonly record struct EcsEntity(ulong SessionId, ulong Id)
+public readonly partial record struct EcsEntity(ulong SessionId, ulong Id)
 {
     public bool IsAlive => Id != 0 && Ecs.IsAlive(SessionId, Id);
 

@@ -458,6 +458,16 @@ internal static class Program
                 .Append("public static class EcsLocalData_")
                 .Append(FactoryName(assembly)).AppendLine()
                 .AppendLine("{");
+            // Ties each struct to its schema id for the generic API (EcsEntity.Set<T>, Scene.Query<T>...).
+            generatedEcs.AppendLine("#pragma warning disable CA2255 // A game assembly: its schemas must be known before any script runs.")
+                .AppendLine("    [global::System.Runtime.CompilerServices.ModuleInitializer]")
+                .AppendLine("    internal static void RegisterSchemas()")
+                .AppendLine("    {");
+            foreach ((string _, var schema) in ecsTypes)
+                generatedEcs.Append("        global::Tallow.EcsSchemas.Register<").Append(schema.CSharpType)
+                    .Append(">(0x").Append(schema.SchemaId).AppendLine("UL);");
+            generatedEcs.AppendLine("    }")
+                .AppendLine("#pragma warning restore CA2255");
             foreach ((string typeName, var schema) in ecsTypes)
             {
                 string type = schema.CSharpType;
@@ -675,7 +685,9 @@ internal static class Program
         // A schema-only preview of user-defined C# Flecs data structs.
         // A future native bridge must validate sizeof/alignment and Sync
         // layouts before allowing writes or network replication.
-        var ecsDataRows = new SortedSet<string>(StringComparer.Ordinal);
+        // By type name; each type's @layout row, then its fields in declaration order (the graph editor's ECS
+        // nodes number their pins in that order).
+        var ecsDataRows = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
 
         foreach (SyntaxTree tree in trees)
         {
@@ -909,10 +921,9 @@ internal static class Program
                 }
                 // Explicit status prevents the shipping exporter from
                 // misinterpreting an incomplete source layout as compatible.
-                ecsDataRows.Add(string.Join("\t", componentName, "@layout",
+                rows.Insert(0, string.Join("\t", componentName, "@layout",
                     allSupported ? "candidate" : "unsupported", "0"));
-                foreach (string row in rows)
-                    ecsDataRows.Add(row);
+                ecsDataRows[componentName] = rows;
             }
         }
 
@@ -926,7 +937,7 @@ internal static class Program
         Publish(Path.Combine(project, ".tallow-csharp", "former-names.tsv"), formerRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields.tsv"), fieldRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields-aot.tsv"), aotFieldRows);
-        Publish(Path.Combine(project, ".tallow-csharp", "ecs-data.tsv"), ecsDataRows);
+        Publish(Path.Combine(project, ".tallow-csharp", "ecs-data.tsv"), ecsDataRows.Values.SelectMany(rows => rows));
         GraphNodeCatalog.Write(compilation, trees, GraphNodesPath(project));
         Console.WriteLine($"Discovered {components.Count} managed gameplay components and {fieldRows.Count} editable fields.");
     }

@@ -62,8 +62,11 @@ extension EditorApp
 		// During Play the widgets show the running script's values (edits still go to it, as before).
 		let live = scope String();
 		let playing = component.IsLoaded && CSharpRuntime.ReadFields(component.ManagedInstance, false, live);
-		for (let line in data.Split('\n', .RemoveEmptyEntries))
+		for (var line in data.Split('\n', .RemoveEmptyEntries))
 		{
+			// fields.tsv has Windows line ends on Windows: the last column (hidden flag, enum names, reference
+			// type) must not keep the '\r'.
+			line.TrimEnd();
 			let columns = scope List<StringView>();
 			for (let part in line.Split('\t'))
 				columns.Add(part);
