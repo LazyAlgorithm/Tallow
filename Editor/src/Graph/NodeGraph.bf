@@ -21,6 +21,14 @@ class NodeGraph
 	/// Compile to C# (a C# project's graph) rather than Beef.
 	public bool csharp;
 
+	/// C# graphs end each node's statement with "// #id": a compile error on that line (or below it, inside what
+	/// the node started) is then shown on the node (see GraphCSharp.NodeAt).
+	void NodeMark(GraphNode node, String code)
+	{
+		if (csharp)
+			code.AppendF(" // #{}", node.id);
+	}
+
 	/// Node code (written in Beef) as this graph compiles it.
 	void Code(StringView beef, String output)
 	{
@@ -973,7 +981,9 @@ class NodeGraph
 				let copies = node.def.inputs[2].type == .String && !csharp;
 				code.Append(copies ? ".Set(" : " = ");
 				InputCode(node, 2, code, 0);
-				code.Append(copies ? ");\n" : ";\n");
+				code.Append(copies ? ");" : ";");
+				NodeMark(node, code);
+				code.Append('\n');
 				node = FollowFlow(node, 0, out entry);
 				continue;
 			}
@@ -993,6 +1003,7 @@ class NodeGraph
 				}
 			}
 			Fill(node, code, 0);
+			NodeMark(node, code);
 			code.Append('\n');
 			node = FollowFlow(node, 0, out entry);
 		}

@@ -77,6 +77,12 @@ extension EditorApp
 	/// Opens the structured source location carried by a compiler or determinism diagnostic.
 	bool OpenConsoleDiagnostic(Log.Entry entry)
 	{
+		// A compile error in a graph's C#: the graph, at the node (line is the node's id there).
+		if (entry.file != null && entry.file.EndsWith(".tgraph") && File.Exists(entry.file))
+		{
+			OpenGraphAtNode(entry.file, entry.line);
+			return true;
+		}
 		if (entry.file == null || entry.line < 0 || !File.Exists(entry.file))
 			return false;
 		OpenScript(entry.file, entry.line);

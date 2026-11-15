@@ -230,6 +230,29 @@ extension EditorApp
 			Directory.DelTree(catalogRoot).IgnoreError();
 		}
 
+		// A compile error in a graph's generated C# points at the graph and the node whose code it is in.
+		{
+			let graphFile = scope $"{root}/MappedGraph.tgraph";
+			File.WriteAllText(graphFile, "graph \"MappedGraph\"\nnode 1 event.start 0 0\nnode 3 debug.log 0 0 \"\" \"hi\"\nlink 1 0 3 0\n").IgnoreError();
+			let script = scope $"{root}/MappedGraph.cs";
+			File.WriteAllText(script, "public partial class MappedGraph : Tallow.Script\n{\n\tpublic override void Start()\n\t{\n\t\tbase.Start();\n\t\tLog.Info(\"hi\"); // #3\n\t\tif (x)\n\t\t{\n\t\t}\n\t}\n}\n").IgnoreError();
+			let problem = scope ScriptProblem();
+			problem.file.Set(script);
+			problem.line = 7;
+			problem.isError = true;
+			problem.message.Set("error CS0103: The name 'x' does not exist");
+			MapToGraph(problem);
+			Check(problem.inGraph && problem.file == graphFile && problem.line == 3, scope $"a graph's C# error points at its node (got {problem.file}:{problem.line})");
+			Check(problem.message.Contains("Print String"), scope $"the error names the node ({problem.message})");
+			problem.file.Set(script);
+			problem.line = 1;
+			problem.inGraph = false;
+			MapToGraph(problem);
+			Check(problem.inGraph && problem.line == 0, "an error outside any node's code points at the graph");
+			File.Delete(graphFile).IgnoreError();
+			File.Delete(script).IgnoreError();
+		}
+
 		// Leave Gameplay's page in the Inspector, with one unapplied edit, so the frames that follow draw it
 		// (and --screenshot shows it). The scratch folder stays the scanned one for this run.
 		mSelectedAsset.Set(scope $"{root}/Gameplay/Gameplay.tasmdef");

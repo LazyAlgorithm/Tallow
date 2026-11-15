@@ -144,7 +144,8 @@ extension EditorApp
 		{
 			if (!problem.isError)
 				continue;
-			let message = problem.line < 0 ? scope String(problem.message) : scope String()..AppendF("{}({}): {}", problem.file, problem.line + 1, problem.message);
+			let message = problem.inGraph ? scope String()..AppendF("{}: {}", problem.file, problem.message) :
+				problem.line < 0 ? scope String(problem.message) : scope String()..AppendF("{}({}): {}", problem.file, problem.line + 1, problem.message);
 			let key = scope $"error {message}";
 			if (active.Contains(key))
 				continue;

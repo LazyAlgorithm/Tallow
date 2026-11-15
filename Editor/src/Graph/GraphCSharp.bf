@@ -211,6 +211,30 @@ static class GraphCSharp
 		return true;
 	}
 
+	/// The graph node a line of a generated C# file belongs to: the "// #id" mark on it, or on the nearest line
+	/// above it in the same method. -1 when there is none (a field, or a line before any node).
+	public static int32 NodeAt(StringView code, int32 line)
+	{
+		let lines = scope List<StringView>();
+		for (let text in code.Split('\n'))
+			lines.Add(text);
+		for (int i = Math.Min(line, (int32)lines.Count - 1); i >= 0; i--)
+		{
+			var text = lines[i];
+			text.TrimEnd();
+			let mark = text.IndexOf("// #");
+			if (mark >= 0)
+			{
+				if (int32.Parse(text.Substring(mark + 4)) case .Ok(let id))
+					return id;
+			}
+			// A method's start: what is above it is another method's.
+			if (text.StartsWith("\tpublic ") || text == "\t{")
+				break;
+		}
+		return -1;
+	}
+
 	/// The C# for an event's method when the node does not give its whole declaration.
 	public static void Signature(StringView method, String output)
 	{

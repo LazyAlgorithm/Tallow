@@ -89,6 +89,37 @@ extension EditorApp
 		public int32 column;
 		public bool isError;
 		public ScriptProblemKind kind;
+		/// For a problem in a graph's generated C#: file is the graph and line the node's id (or -1 for the graph).
+		public bool inGraph;
+	}
+
+	/// Points a problem in a graph's generated C# at the graph, and the node whose code it is in.
+	static void MapToGraph(ScriptProblem problem)
+	{
+		let graphPath = scope String();
+		if (!problem.file.EndsWith(".cs") || !FindSourceGraph(problem.file, graphPath))
+			return;
+		let code = scope String();
+		if (File.ReadAllText(problem.file, code) case .Err)
+			return;
+		let node = GraphCSharp.NodeAt(code, problem.line);
+		let place = scope String();
+		if (node >= 0)
+		{
+			let graph = scope NodeGraph();
+			if (graph.Load(graphPath))
+			{
+				let found = graph.Find(node);
+				if (found != null)
+					place.AppendF(" (node \"{}\")", found.def.title);
+			}
+		}
+		problem.message.Insert(0, scope $"graph{place}: ");
+		problem.file.Set(graphPath);
+		// Node ids start at 1: 0 means the graph itself (the Console only opens entries with a line).
+		problem.line = Math.Max(node, 0);
+		problem.column = 0;
+		problem.inGraph = true;
 	}
 
 	[CLink] static extern void* tn_code_create(char8* text, int32 language);
@@ -461,6 +492,7 @@ extension EditorApp
 				problem.message.Remove(projectSuffix, problem.message.Length - projectSuffix);
 			if (!isError && IsOptimizationWarning(problem.message))
 				problem.kind = .Optimization;
+			MapToGraph(problem);
 			mProblems.Add(problem);
 		}
 	}

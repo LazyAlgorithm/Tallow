@@ -254,6 +254,19 @@ extension EditorApp
 		NodeLibrary.Identifier(space, output);
 	}
 
+	/// Opens a graph with a node selected and in view (node 0: just the graph).
+	void OpenGraphAtNode(StringView path, int32 node)
+	{
+		OpenGraph(path);
+		if (mGraph == null || node <= 0)
+			return;
+		let found = mGraph.Find(node);
+		if (found == null)
+			return;
+		mGraphSelected = node;
+		mGraphPan = Vector2(240, 160) - found.position * mGraphZoom;
+	}
+
 	void CompileGraph()
 	{
 		if (mGraph == null)

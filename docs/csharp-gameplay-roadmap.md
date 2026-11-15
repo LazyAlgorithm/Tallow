@@ -254,8 +254,11 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   game and Tallow.API): a node per public property, field and method of Tallow.API's gameplay static classes,
   GameObject, Transform, Scene, Script, the physics handles and the game's own public types, with enum pins
   (members listed in the catalog). The editor loads it in C# projects; `--graph-node-test @api` sweeps them (236
-  in the scratch project, all compile). The probe graph uses two of them at run time. Still to do: C#-to-graph
-  events/operations, managed ECS nodes, graph error source mapping from Roslyn diagnostics.
+  in the scratch project, all compile). The probe graph uses two of them at run time. Graph error source mapping: C# graphs end each node's
+  statement with `// #<node id>`; a compile error in a graph's generated `.cs` is reported on the graph and node
+  ("graph (node \"Print String\"): error CS..."), and clicking it in the Console opens the graph with that node
+  selected (`--script-files-test` checks the mapping). Still to do: C#-to-graph events/operations and managed
+  ECS nodes.
 - [ ] Permit graph-to-C# calls, C#-to-graph events/operations, automatic C# type/method node discovery, managed ECS & networking nodes, and correct graph errors/source mapping.
 - [ ] Convert the legacy starter projects, sample/voxel sandbox/showcase content, tutorial code and code-generation templates; newly created projects should not expose Beef to normal C# authors.
 - [ ] Keep shader graph/compute graph/rendering functionality intact; never confuse visual **gameplay** source generation with native shader compilation.
