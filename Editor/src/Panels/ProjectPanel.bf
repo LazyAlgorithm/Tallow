@@ -33,6 +33,8 @@ extension EditorApp
 	String mNewDataType = new .() ~ delete _;
 	String mPendingMoveFrom = new .() ~ delete _;
 	String mPendingMoveTo = new .() ~ delete _;
+	String mPendingViewGraph = new .() ~ delete _;
+	String mPendingConvertGraph = new .() ~ delete _;
 	uint32 mPendingPrefabId;
 	String mPendingPrefabFolder = new .() ~ delete _;
 	int32 mNewItemKind = -1; // 0 folder, 1 script, 2 scene
@@ -173,6 +175,11 @@ extension EditorApp
 			DrawProjectHeader();
 			ImGui.BeginChild("folders", .(210, 0), ImGui.ChildBorders);
 			DrawProjectFolders(Assets.ProjectPath);
+			if (ImGui.BeginPopupContextWindow("foldercreate", 1 | (1 << 8)))
+			{
+				DrawProjectCreateMenu();
+				ImGui.EndPopup();
+			}
 			ImGui.EndChild();
 			ImGui.SameLine();
 			ImGui.BeginChild("grid");
@@ -188,6 +195,16 @@ extension EditorApp
 		{
 			MoveAsset(mPendingMoveFrom, mPendingMoveTo);
 			mPendingMoveFrom.Clear();
+		}
+		if (!mPendingViewGraph.IsEmpty)
+		{
+			ViewGraphCode(mPendingViewGraph);
+			mPendingViewGraph.Clear();
+		}
+		if (!mPendingConvertGraph.IsEmpty)
+		{
+			ConvertGraphToScript(mPendingConvertGraph);
+			mPendingConvertGraph.Clear();
 		}
 		// Defer new asset creation until the grid is finished: saving a
 		// prefab refreshes the list and must not invalidate its iteration.
@@ -246,6 +263,7 @@ extension EditorApp
 	AssetEntry DrawAssetGrid()
 	{
 		AssetEntry activate = null;
+		bool rightClickOnTile = false;
 		let avail = ImGui.GetContentRegionAvail();
 		let cell = mTileSize + 14;
 		let columns = Math.Max(1, (int)(avail.x / cell));
@@ -255,7 +273,7 @@ extension EditorApp
 			if (i % columns != 0)
 				ImGui.SameLine(0, 6);
 			ImGui.PushID((int32)i);
-			if (DrawAssetTile(mAssetEntries[i], labelHeight))
+			if (DrawAssetTile(mAssetEntries[i], labelHeight, ref rightClickOnTile))
 				activate = mAssetEntries[i];
 			ImGui.PopID();
 		}
@@ -268,7 +286,11 @@ extension EditorApp
 		if (ImGui.IsItemClicked(0))
 			mSelectedAsset.Clear();
 		AcceptMoveInto(mBrowsePath);
-		if (ImGui.BeginPopupContextItem("gridmenu"))
+		// Open only over empty grid space, including gutters between tiles. The
+		// window context helper can replace a tile menu on mouse release.
+		if (ImGui.IsWindowHovered() && ImGui.IsMouseReleased(1) && !rightClickOnTile)
+			ImGui.OpenPopup("gridmenu");
+		if (ImGui.BeginPopup("gridmenu"))
 		{
 			DrawProjectCreateMenu();
 			ImGui.Separator();
@@ -294,13 +316,17 @@ extension EditorApp
 
 	/// One asset's tile: its icon and name, selected by a click, dragged to move it or drop it on an object. True
 	/// when it is to be opened (double-clicked, or Open from its menu).
-	bool DrawAssetTile(AssetEntry entry, float labelHeight)
+	bool DrawAssetTile(AssetEntry entry, float labelHeight, ref bool rightClickOnTile)
 	{
 		bool activate = false;
 		let tileMin = ImGui.GetCursorScreenPos();
 		ImGui.InvisibleButton("tile", .(mTileSize + 8, mTileSize + labelHeight));
+		if (ImGui.IsItemClicked(1))
+			ImGui.OpenPopup("tilemenu");
 		NoteTestRect(scope $"asset:{entry.path}");
 		let hovered = ImGui.IsItemHovered();
+		if (hovered && ImGui.IsMouseReleased(1))
+			rightClickOnTile = true;
 		let selected = mSelectedAsset == entry.path;
 		// Selected when the click is let go over it, so dragging a material into an object's field leaves the
 		// Inspector on the object.
@@ -342,7 +368,7 @@ extension EditorApp
 	/// The menu on an asset's tile. True when Open was chosen.
 	bool DrawAssetMenu(AssetEntry entry)
 	{
-		if (!ImGui.BeginPopupContextItem("tilemenu"))
+		if (!ImGui.BeginPopup("tilemenu"))
 			return false;
 		bool open = false;
 		mSelectedAsset.Set(entry.path);
@@ -351,9 +377,9 @@ extension EditorApp
 		if (entry.name.EndsWith(".tgraph"))
 		{
 			if (ImGui.MenuItem("View Generated Code"))
-				ViewGraphCode(entry.path);
+				mPendingViewGraph.Set(entry.path);
 			if (ImGui.MenuItem("Convert to Script"))
-				ConvertGraphToScript(entry.path);
+				mPendingConvertGraph.Set(entry.path);
 		}
 		else if (entry.name.EndsWith(".cs") || entry.name.EndsWith(".bf") || entry.name.EndsWith(".tasmdef") || entry.name.EndsWith(".tui") || entry.name.EndsWith(".tcss") || entry.name.EndsWith(".tshader") || entry.name.EndsWith(".tcompute"))
 		{
@@ -863,7 +889,14 @@ extension EditorApp
 					user.Set(shown);
 				}
 				// A folder's own files naming each other do not count.
-				mDeleteUsers.RemoveAll(scope (user) => { let inside = user.StartsWith(relative) && user.Length > relative.Length && user[relative.Length] == '/'; if (inside) delete user; return inside; });
+				mDeleteUsers.RemoveAll(scope (user) =>
+					{
+						let inside = user.StartsWith(relative) && user.Length > relative.Length && user[relative.Length] == '/';
+						if (inside)
+							delete user;
+						return inside;
+					}
+					);
 			}
 		}
 		if (ImGui.BeginPopupModal("Delete Asset", null, ImGui.WindowFlags.AlwaysAutoResize))
@@ -885,6 +918,8 @@ extension EditorApp
 				bool ok = AssetDatabase.Delete(mDeletePath) case .Ok;
 				if (!ok)
 					Log.Error(scope $"Could not delete {name}.");
+				else if (mDeletePath.EndsWith(".tgraph", .OrdinalIgnoreCase))
+					CloseDeletedGraph(mDeletePath);
 				mSelectedAsset.Clear();
 				RefreshAssetList();
 				ImGui.CloseCurrentPopup();

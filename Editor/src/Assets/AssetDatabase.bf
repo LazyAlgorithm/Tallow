@@ -512,6 +512,8 @@ static class AssetDatabase
 	/// Deletes a file or folder of the Assets folder with its side files.
 	public static Result<void> Delete(StringView full)
 	{
+		let isGraph = full.EndsWith(".tgraph", .OrdinalIgnoreCase);
+		bool generatedFailed = false;
 		if (Directory.Exists(full))
 		{
 			if (Directory.DelTree(full) case .Err)
@@ -527,6 +529,21 @@ static class AssetDatabase
 			for (let companion in companions)
 				File.Delete(companion).IgnoreError();
 		}
+		// A graph owns its generated script. Conversion removes the graph first, so a
+		// converted script is no longer reached by this path.
+		if (isGraph)
+		{
+			let stem = full.Substring(0, full.Length - ".tgraph".Length);
+			for (let suffix in StringView[?](".cs", ".bf"))
+			{
+				let generated = scope $"{stem}{suffix}";
+				if (File.Exists(generated) && (Delete(generated) case .Err))
+				{
+					Log.Error(scope $"Could not remove generated script {generated}");
+					generatedFailed = true;
+				}
+			}
+		}
 		let relative = scope String();
 		if (ToRelative(full, relative))
 		{
@@ -541,7 +558,7 @@ static class AssetDatabase
 				Forget(path);
 			SaveCache();
 		}
-		return .Ok;
+		return generatedFailed ? .Err : .Ok;
 	}
 
 	public static bool ToRelative(StringView full, String outRelative)

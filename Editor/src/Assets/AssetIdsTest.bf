@@ -124,6 +124,27 @@ extension EditorApp
 		Expect(AssetDatabase.Delete(scope $"{folder}/wood2.tmat") case .Ok, "delete");
 		Expect(!File.Exists(scope $"{folder}/wood2.tmat.tmeta") && !AssetDatabase.GetPath(copyId, path..Clear()), "delete takes the .tmeta and the ID");
 
+		// A graph owns the script it generated, including that script's asset ID.
+		File.WriteAllText(scope $"{folder}/move.tgraph", "graph \"Move\"\n").IgnoreError();
+		File.WriteAllText(scope $"{folder}/move.cs", "// Generated from move.tgraph\nclass Move {}\n").IgnoreError();
+		RefreshAssetIds();
+		let generatedId = scope String();
+		AssetDatabase.GetId(scope $"{t}/move.cs", generatedId);
+		Expect(!generatedId.IsEmpty, "generated C# script has an ID");
+		OpenScript(scope $"{folder}/move.cs");
+		let generatedDocument = FindScript(scope $"{folder}/move.cs");
+		Expect(generatedDocument != null && generatedDocument.readOnly, "the in-editor generated C# tab is read-only");
+		if (generatedDocument != null)
+		{
+			tn_code_replace_text(generatedDocument.handle, "class Edited {}");
+			Expect(StringView(tn_code_get_text(generatedDocument.handle)).Contains("class Move {}"), "read-only generated code rejects replacement");
+		}
+		Expect(AssetDatabase.Delete(scope $"{folder}/move.tgraph") case .Ok, "delete graph");
+		CloseDeletedGraph(scope $"{folder}/move.tgraph");
+		Expect(!File.Exists(scope $"{folder}/move.tgraph") && !File.Exists(scope $"{folder}/move.tgraph.tmeta")
+			&& !File.Exists(scope $"{folder}/move.cs") && !File.Exists(scope $"{folder}/move.cs.tmeta")
+			&& !AssetDatabase.GetPath(generatedId, path..Clear()), "deleting a graph takes its generated C# script and IDs");
+
 		mScene.Destroy(probe);
 		Directory.DelTree(folder).IgnoreError();
 		RefreshAssetIds();

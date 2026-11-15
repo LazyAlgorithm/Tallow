@@ -297,6 +297,7 @@ extension EditorApp
 		let target = scope $"{folder}/{mGraph.name}{mManagedGameplay ? ".cs" : ".bf"}";
 		if (File.WriteAllText(target, code) case .Ok)
 		{
+			ReloadGeneratedScript(target);
 			mGraphStatus.Set("Saved and compiled.");
 			Log.Info(scope $"Graph compiled to {target}");
 			RefreshAssetList();

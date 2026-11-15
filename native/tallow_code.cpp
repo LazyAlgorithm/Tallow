@@ -532,8 +532,8 @@ TN_API void* tn_code_create(const char* text, int language)
 		TextEditor& code = document->editor;
 		const bool editable = !code.IsReadOnlyEnabled();
 		const bool selected = code.AnyCursorHasSelection();
-		if (ImGui::MenuItem("Undo", "Ctrl+Z", false, code.CanUndo())) code.Undo();
-		if (ImGui::MenuItem("Redo", "Ctrl+Y", false, code.CanRedo())) code.Redo();
+		if (ImGui::MenuItem("Undo", "Ctrl+Z", false, editable && code.CanUndo())) code.Undo();
+		if (ImGui::MenuItem("Redo", "Ctrl+Y", false, editable && code.CanRedo())) code.Redo();
 		ImGui::Separator();
 		if (ImGui::MenuItem("Cut", "Ctrl+X", false, editable && selected)) code.Cut();
 		if (ImGui::MenuItem("Copy", "Ctrl+C", false, selected)) code.Copy();
@@ -909,6 +909,7 @@ TN_API void tn_code_goto_byte(void* handle, int offset)
 TN_API void tn_code_replace_text(void* handle, const char* text)
 {
 	Document* document = (Document*)handle;
+	if (document->editor.IsReadOnlyEnabled()) return;
 	const std::string previous = document->editor.GetText();
 	const auto cursor = document->editor.GetMainCursorPosition();
 	document->editor.ReplaceSectionText(TextEditor::DocPos(0, 0), BytePosition(previous, previous.size()), text ? text : "");

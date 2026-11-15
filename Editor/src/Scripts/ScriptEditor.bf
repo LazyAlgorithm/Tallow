@@ -203,26 +203,48 @@ extension EditorApp
 			let generated = scope String();
 			graph.csharp = mManagedGameplay;
 			graph.Compile(GraphNamespace(graphPath, .. scope .()), graph.name, fileName, generated);
-			File.WriteAllText(scriptPath, generated).IgnoreError();
+			if (File.WriteAllText(scriptPath, generated) case .Err)
+			{
+				Log.Error(scope $"Could not write {scriptPath}");
+				return;
+			}
 		}
 		// Drop the "generated, do not edit" header: from here on the script is the source.
 		let code = scope String();
-		if (File.ReadAllText(scriptPath, code, true) case .Ok)
+		if (File.ReadAllText(scriptPath, code, true) case .Err)
 		{
-			while (code.StartsWith("//"))
-			{
-				let lineEnd = code.IndexOf('\n');
-				if (lineEnd < 0)
-					break;
-				code.Remove(0, lineEnd + 1);
-			}
-			File.WriteAllText(scriptPath, code).IgnoreError();
+			Log.Error(scope $"Could not read {scriptPath}");
+			return;
+		}
+		while (code.StartsWith("//"))
+		{
+			let lineEnd = code.IndexOf('\n');
+			if (lineEnd < 0)
+				break;
+			code.Remove(0, lineEnd + 1);
+		}
+		if (File.WriteAllText(scriptPath, code) case .Err)
+		{
+			Log.Error(scope $"Could not write {scriptPath}");
+			return;
 		}
 		if (File.Delete(graphPath) case .Err)
 		{
 			Log.Error(scope $"Could not remove {graphPath}");
 			return;
 		}
+		let companions = scope List<String>();
+		defer
+		{
+			ClearAndDeleteItems!(companions);
+		}
+		AssetDatabase.GetCompanions(graphPath, companions);
+		for (let companion in companions)
+		{
+			if (File.Delete(companion) case .Err)
+				Log.Warning(scope $"Could not remove {companion}");
+		}
+		AssetDatabase.Refresh();
 		if (mGraph != null && mGraphPath == graphPath)
 		{
 			delete mGraph;
@@ -244,12 +266,81 @@ extension EditorApp
 
 	String mPendingOpenScript = new .() ~ delete _;
 
+	/// Closes the graph and generated-code tabs after their files are deleted from Project.
+	void CloseDeletedGraph(StringView graphPath)
+	{
+		let stem = graphPath.Substring(0, graphPath.Length - ".tgraph".Length);
+		if (mPendingOpenScript == scope $"{stem}.cs" || mPendingOpenScript == scope $"{stem}.bf")
+			mPendingOpenScript.Clear();
+		for (int i = mScripts.Count - 1; i >= 0; i--)
+		{
+			let document = mScripts[i];
+			if (document.path != scope $"{stem}.cs" && document.path != scope $"{stem}.bf")
+				continue;
+			if (mActiveScript == document)
+				mActiveScript = null;
+			if (mSelectScript == document)
+				mSelectScript = null;
+			mScripts.RemoveAt(i);
+			tn_code_destroy(document.handle);
+			delete document;
+		}
+		if (mGraph != null && mGraphPath == graphPath)
+		{
+			delete mGraph;
+			mGraph = null;
+			mGraphPath.Clear();
+			mShowGraph = false;
+			mGraphFocus = false;
+		}
+	}
+
 	/// Shows the code a graph compiles to, read-only.
 	void ViewGraphCode(StringView graphPath)
 	{
-		OpenGraph(graphPath);
-		CompileGraph();
-		OpenScript(GraphScriptPath(graphPath, .. scope String()));
+		let graph = scope NodeGraph();
+		if (!graph.Load(graphPath))
+		{
+			Log.Error(scope $"Could not read {graphPath}");
+			return;
+		}
+		Path.GetFileNameWithoutExtension(graphPath, graph.name..Clear());
+		graph.csharp = mManagedGameplay;
+		graph.Validate();
+		if (graph.IsSubgraph)
+		{
+			Log.Warning("A subgraph has no script of its own; view the generated code of a graph that uses it.");
+			return;
+		}
+		let code = scope String();
+		graph.Compile(GraphNamespace(graphPath, .. scope .()), graph.name, Path.GetFileName(graphPath, .. scope .()), code);
+		let scriptPath = GraphScriptPath(graphPath, .. scope String());
+		if (File.WriteAllText(scriptPath, code) case .Err)
+		{
+			Log.Error(scope $"Could not write {scriptPath}");
+			return;
+		}
+		ReloadGeneratedScript(scriptPath);
+		OpenScript(scriptPath);
+		mGraphFocus = false;
+		StartErrorCheck();
+	}
+
+	/// The graph is the source of this file; replace any open editor buffer with its new output.
+	void ReloadGeneratedScript(StringView path)
+	{
+		let document = FindScript(path);
+		if (document == null)
+			return;
+		let code = scope String();
+		if (File.ReadAllText(path, code, true) case .Err)
+			return;
+		document.readOnly = true;
+		tn_code_set_read_only(document.handle, true);
+		tn_code_reload_text(document.handle, code.CStr());
+		document.diskTime = ScriptDiskTime(path);
+		document.diskConflict = false;
+		RefreshScriptDiagnostics();
 	}
 
 	void OpenScript(StringView sourcePath, int32 line = -1)
@@ -285,6 +376,15 @@ extension EditorApp
 			mScripts.Add(document);
 			RefreshScriptDiagnostics();
 		}
+		else
+		{
+			let readOnly = FindSourceGraph(path, scope String());
+			if (document.readOnly != readOnly)
+			{
+				document.readOnly = readOnly;
+				tn_code_set_read_only(document.handle, readOnly);
+			}
+		}
 		mSelectScript = document;
 		mFocusScripts = true;
 		if (line >= 0)
@@ -311,7 +411,7 @@ extension EditorApp
 
 	void SaveScript(ScriptDocument document)
 	{
-		if (document.readOnly || !tn_code_is_dirty(document.handle))
+		if (document.readOnly || FindSourceGraph(document.path, scope String()) || !tn_code_is_dirty(document.handle))
 			return;
 		let text = StringView(tn_code_get_text(document.handle));
 		if (File.WriteAllText(document.path, text) case .Err)

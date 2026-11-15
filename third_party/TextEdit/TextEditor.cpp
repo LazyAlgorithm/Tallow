@@ -1128,7 +1128,7 @@ void TextEditor::renderPopups() {
 	}
 
 	// render autocomplete popup
-	if (autocomplete.render(document, cursors, typeSetter, config.language, textLeftOffset, glyphSize)) {
+	if (autocomplete.render(document, cursors, typeSetter, config.language, textLeftOffset, glyphSize) && !config.readOnly) {
 		// user picked a suggestion so insert it
 		const auto start = autocomplete.getStart();
 		const auto end = document.findWordEnd(start, true);
@@ -1278,8 +1278,8 @@ void TextEditor::handleKeyboardInputs() {
 		else if (cursors.currentCursorHasSelection() && ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Alt | ImGuiMod_Shift | ImGuiKey_D)) { selectAllOccurrences(true); }
 
 		// clipboard operations
-		else if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_X)) { cut(); }
-		else if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Delete)) { cut(); }
+		else if (!config.readOnly && ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_X)) { cut(); }
+		else if (!config.readOnly && ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Delete)) { cut(); }
 
 		else if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C)) { copy(); }
 		else if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Insert)) { copy(); }
@@ -1881,6 +1881,7 @@ void TextEditor::shrinkSelections() {
 //
 
 void TextEditor::cut() {
+	if (config.readOnly) return;
 	// copy selections to clipboard and remove them
 	copy();
 	const auto transaction = startTransaction();
@@ -1928,6 +1929,7 @@ void TextEditor::copy() const {
 //
 
 void TextEditor::paste() {
+	if (config.readOnly) return;
 	// ignore non-text clipboard content
 	auto clipboard = ImGui::GetClipboardText();
 
@@ -1944,6 +1946,7 @@ void TextEditor::paste() {
 //
 
 void TextEditor::undo() {
+	if (config.readOnly) return;
 	if (transactions.canUndo()) {
 		transactions.undo(config, document, cursors);
 		makeCursorVisible();
@@ -1956,6 +1959,7 @@ void TextEditor::undo() {
 //
 
 void TextEditor::redo() {
+	if (config.readOnly) return;
 	if (transactions.canRedo()) {
 		transactions.redo(config, document, cursors);
 		makeCursorVisible();
