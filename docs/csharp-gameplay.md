@@ -20,6 +20,9 @@ is complete.
 - `native/tallow_dotnet_host.cpp` hosts .NET with hostfxr on desktop; WebAssembly has a no-runtime stub.
 - `Engine/src/Scripting/CSharpRuntime.bf` provides a validated scene/entity-handle bridge.
 - `Engine/src/Scripting/CSharpBehaviour.bf` forwards native component callbacks and tick input.
+- `[Sync]` on a script field (public or private; numbers, bool, string, enums, vectors) shares
+  the server's value with every client of a session when it changes, and with players who
+  join later. Change it on the server; a client's own changes are overwritten.
 - Physics callbacks: `OnCollisionEnter/Exit(Collision)` (other object, point, normal out of the
   other object, closing speed) and `OnTriggerEnter/Exit(GameObject)` for colliders with
   `isTrigger`. Once per pair of objects, after the tick's physics step, on every machine that

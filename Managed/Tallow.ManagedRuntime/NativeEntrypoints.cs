@@ -416,9 +416,10 @@ public static unsafe class NativeEntrypoints
                     if (!seen.Add(field.Name) || field.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
                         continue;
                     object? value = field.GetValue(script);
-                    if (mode == 0)
+                    if (mode == 0 || mode == 2)
                     {
-                        if (!IsInspectorField(field))
+                        // Mode 2: the [Sync] fields the server shares (NetworkSync), in the same text.
+                        if (mode == 0 ? !IsInspectorField(field) : !IsSyncField(field))
                             continue;
                         string? encoded = FormatInspectorValue(field.FieldType, value);
                         if (encoded != null)
@@ -444,6 +445,10 @@ public static unsafe class NativeEntrypoints
             return Failure(exception);
         }
     }
+
+    private static bool IsSyncField(FieldInfo field) =>
+        !field.IsStatic && !field.IsInitOnly && !field.IsLiteral &&
+        field.IsDefined(typeof(SyncAttribute), inherit: true);
 
     // The fields scenes and the Inspector may set (the same rule ApplyFields applies).
     private static bool IsInspectorField(FieldInfo field)
@@ -606,9 +611,11 @@ public static unsafe class NativeEntrypoints
                 // Do not allow a scene/prefab file to change arbitrary private
                 // implementation state. The Roslyn catalog and managed loader
                 // must agree on which fields have been opted into persistence.
+                // [Sync] fields are opted in too: clients receive the server's values this way.
                 if (!field.IsPublic &&
                     !field.IsDefined(typeof(ShowInInspectorAttribute), inherit: true) &&
-                    !field.IsDefined(typeof(HideInInspectorAttribute), inherit: true))
+                    !field.IsDefined(typeof(HideInInspectorAttribute), inherit: true) &&
+                    !field.IsDefined(typeof(SyncAttribute), inherit: true))
                     continue;
                 object? parsed = ParseInspectorValue(field.FieldType, value);
                 if (parsed != null)

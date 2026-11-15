@@ -861,6 +861,10 @@ static class NetworkSync
 		/// A String field's type: String or SharedString.
 		public Type type;
 		public List<uint8> last = new .() ~ delete _;
+		/// A C# script's [Sync] field: read from and written to the managed script as text, not memory.
+		public CSharpBehaviour managed;
+		public String managedName ~ delete _;
+		public List<uint8> managedValue ~ delete _;
 
 		/// The field now, or null if its component has gone.
 		public void* Ptr
@@ -927,6 +931,12 @@ static class NetworkSync
 		dataComponents.Sort(scope (a, b) => a.fullName.CompareTo(b.fullName));
 		for (let info in dataComponents)
 			signature = signature * 31 + info.index + 1;
+		// A C# script's fields exist once its managed instance does (and change with a script reload).
+		for (let component in identity.GameObject.Components)
+		{
+			if (let behaviour = component as CSharpBehaviour)
+				signature = signature * 31 + (behaviour.IsLoaded ? behaviour.ManagedInstance : 0);
+		}
 		bool everHadSyncedData = false;
 		if (sSlots.TryGetValue(identity, let existing))
 		{
@@ -1020,6 +1030,34 @@ static class NetworkSync
 			if (hasSyncedFields)
 				list.syncedDataTypes.Add(new String(info.fullName));
 		}
+		// Last, C# scripts' [Sync] fields (by component, then name), so the slots before them keep their indices
+		// on a machine whose scripts have not loaded yet.
+		for (let component in identity.GameObject.Components)
+		{
+			let behaviour = component as CSharpBehaviour;
+			if (behaviour == null || !behaviour.IsLoaded)
+				continue;
+			let text = scope String();
+			if (!CSharpRuntime.ReadSyncFields(behaviour.ManagedInstance, text))
+				continue;
+			let names = scope List<StringView>();
+			for (let line in text.Split('\n', .RemoveEmptyEntries))
+			{
+				let tab = line.IndexOf('\t');
+				if (tab > 0)
+					names.Add(line.Substring(0, tab));
+			}
+			names.Sort(scope (a, b) => a.CompareTo(b));
+			for (let name in names)
+			{
+				let slot = new Slot();
+				slot.owner = identity.GameObject;
+				slot.managed = behaviour;
+				slot.managedName = new String(name);
+				slot.managedValue = new List<uint8>();
+				list.slots.Add(slot);
+			}
+		}
 		if (!list.syncedDataTypes.IsEmpty)
 			list.everHadSyncedData = true;
 		// Ordinary network objects with no synchronized ECS data must not each
@@ -1036,8 +1074,40 @@ static class NetworkSync
 			delete pair.value;
 	}
 
+	/// Reads the C# [Sync] values of a slot list, once per script (one call into C# each).
+	static void RefreshManaged(SlotList list)
+	{
+		CSharpBehaviour read = null;
+		let text = scope String();
+		for (let slot in list.slots)
+		{
+			if (slot.managed == null)
+				continue;
+			if (slot.managed != read)
+			{
+				read = slot.managed;
+				text.Clear();
+				if (!read.IsLoaded || !CSharpRuntime.ReadSyncFields(read.ManagedInstance, text))
+					text.Clear();
+			}
+			slot.managedValue.Clear();
+			for (let line in text.Split('\n', .RemoveEmptyEntries))
+			{
+				let tab = line.IndexOf('\t');
+				if (tab > 0 && line.Substring(0, tab) == slot.managedName)
+				{
+					let value = line.Substring(tab + 1);
+					slot.managedValue.AddRange(Span<uint8>((uint8*)value.Ptr, value.Length));
+					break;
+				}
+			}
+		}
+	}
+
 	static Span<uint8> Bytes(Slot slot)
 	{
+		if (slot.managed != null)
+			return slot.managedValue;
 		let ptr = slot.Ptr;
 		if (ptr == null)
 			return default;
@@ -1147,6 +1217,7 @@ static class NetworkSync
 		for (let identity in network.Identities)
 		{
 			let list = Slots(identity);
+			RefreshManaged(list);
 			if (!list.structureSent)
 			{
 				payload.Clear();
@@ -1174,6 +1245,7 @@ static class NetworkSync
 	public static void SendFieldsTo(NetworkManager network, NetworkIdentity identity, int32 clientId)
 	{
 		let list = Slots(identity);
+		RefreshManaged(list);
 		let payload = scope NetWriter();
 		if (list.everHadSyncedData)
 		{
@@ -1215,6 +1287,17 @@ static class NetworkSync
 		if (index >= list.slots.Count)
 			return;
 		let slot = list.slots[index];
+		if (slot.managed != null)
+		{
+			// Through the managed loader, which parses and validates the text before changing the script.
+			if (slot.managed.IsLoaded)
+			{
+				let line = scope String();
+				line.AppendF("{}\t{}\n", slot.managedName, StringView((char8*)&data[0], length));
+				CSharpRuntime.ApplyFields(slot.managed.ManagedInstance, line);
+			}
+			return;
+		}
 		let ptr = slot.Ptr;
 		if (ptr == null)
 			return;
@@ -1501,6 +1584,7 @@ static class NetworkSync
 				network.SendToClient(clientId, MsgCharacterShape, payload);
 			}
 			let list = Slots(identity);
+			RefreshManaged(list);
 			payload.Clear();
 			if (list.everHadSyncedData)
 			{

@@ -787,7 +787,13 @@ A full conversion also needs these. Ordered roughly by when they block users.
   In-engine test: ball through a trigger onto the ground, asleep, teleported, landing
   again (12 checks). Not done: OnCollisionStay/OnTriggerStay, character-controller
   wall hits (Unity's OnControllerColliderHit), setting `isTrigger` from C#.
-- [ ] `[Sync]` on **Script** fields and an RPC attribute, not only on ECS structs.
+- [x] `[Sync]` on **Script** fields: a running script's `[Sync]` fields (public or private;
+  int, float, bool, string, enums, vectors) join the object's NetworkSync slots after the
+  native ones, are read once per script per snapshot, sent when changed with the engine's
+  field message, applied on clients through the validated managed loader, and sent whole to
+  late joiners. `tools/test_csharp_network.py` runs a real headless server and client
+  (5 checks; in native CI).
+- [ ] An RPC attribute for C# scripts (server→clients and owner→server calls).
 - [x] Live Inspector values during Play: the Inspector's C# fields show the running
   script's values (managed `ReadFields`, same text format as the scene), edits still go to
   the running script, and a "Debug: all fields (live)" section lists every instance field

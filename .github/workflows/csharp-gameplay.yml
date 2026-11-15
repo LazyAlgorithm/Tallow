@@ -19,7 +19,9 @@ on:
       - 'tools/check_csharp_host_abi.py'
       - 'tools/check_csharp_enums.py'
       - 'tools/test_csharp_ingame.py'
+      - 'tools/test_csharp_network.py'
       - 'Tests/CSharpInGame/**'
+      - 'Tests/CSharpNetwork/**'
       - 'Editor/templates/**'
       - 'third_party/TextEdit/**'
 
@@ -372,3 +374,5 @@ jobs:
           fi
       - name: Run C# gameplay inside the real engine (scene, Jolt, Flecs)
         run: python3 tools/test_csharp_ingame.py
+      - name: Share C# [Sync] fields between a real server and client
+        run: python3 tools/test_csharp_network.py

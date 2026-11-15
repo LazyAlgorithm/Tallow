@@ -64,12 +64,17 @@ static class CSharpRuntime
 
 	/// A running script's field values, for the editor during Play. allFields false: the Inspector's fields as
 	/// "name\tvalue" lines in the scene's text; true: every instance field, "name\ttype\tvalue", read-only.
-	public static bool ReadFields(int32 instance, bool allFields, String output)
+	public static bool ReadFields(int32 instance, bool allFields, String output) => ReadFields(instance, allFields ? 1 : 0, output);
+
+	/// A running script's [Sync] fields as "name\tvalue" lines (NetworkSync shares them from the server).
+	public static bool ReadSyncFields(int32 instance, String output) => ReadFields(instance, 2, output);
+
+	static bool ReadFields(int32 instance, int32 mode, String output)
 	{
 		if (!Ready || instance <= 0)
 			return false;
 		char8[1024] small = ?;
-		var needed = tn_csharp_read_fields(instance, allFields ? 1 : 0, &small, small.Count);
+		var needed = tn_csharp_read_fields(instance, mode, &small, small.Count);
 		if (needed < 0)
 			return false;
 		if (needed < small.Count)
@@ -78,7 +83,7 @@ static class CSharpRuntime
 			return true;
 		}
 		let large = scope char8[needed + 1];
-		let again = tn_csharp_read_fields(instance, allFields ? 1 : 0, large.Ptr, (int32)large.Count);
+		let again = tn_csharp_read_fields(instance, mode, large.Ptr, (int32)large.Count);
 		if (again < 0 || again > needed)
 			return false;
 		output.Append(StringView(large.Ptr, again));
