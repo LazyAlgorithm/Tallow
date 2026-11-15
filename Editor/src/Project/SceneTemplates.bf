@@ -41,8 +41,12 @@ static class SceneTemplates
 		// A new empty project's first-person character (a visual script: Scripts/FirstPersonCharacter.tgraph).
 		if (!withPlayer)
 			return;
+		// C# projects: the template's Scripts/FirstPersonCharacter.cs, run by the
+		// managed adapter component. A legacy native project has a Beef class.
 		let character = ComponentRegistry.Find(scope $"{Project.Current?.Name}.{FirstPersonTemplate.GraphName}");
-		if (character == null)
+		let managedSource = scope $"{Project.Current?.Path}/src/Scripts/{FirstPersonTemplate.GraphName}.cs";
+		let managed = character == null && Project.Current != null && System.IO.File.Exists(managedSource);
+		if (character == null && !managed)
 			return;
 		let player = scene.CreateGameObject("Player");
 		player.Transform.Position = .(0, 1.1f, -4);
@@ -52,7 +56,14 @@ static class SceneTemplates
 		let controller = player.AddComponent<CharacterController>();
 		controller.radius = 0.5f;
 		controller.height = 2;
-		player.AddComponent(character.type);
+		if (managed)
+		{
+			let script = player.AddComponent<CSharpBehaviour>();
+			if (script != null)
+				script.scriptType.Set(scope $"{Project.Current.Name}.{FirstPersonTemplate.GraphName}");
+		}
+		else
+			player.AddComponent(character.type);
 	}
 
 	static void AddByName(GameObject gameObject, StringView projectName, StringView typeName)

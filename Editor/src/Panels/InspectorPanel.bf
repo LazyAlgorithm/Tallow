@@ -708,7 +708,7 @@ extension EditorApp
 				let component = gameObject.AddComponent<CSharpBehaviour>();
 				if (component != null)
 				{
-					component.scriptType.Set(fullName);
+					component.SetScriptType(fullName);
 					MarkDirty();
 				}
 				ImGui.CloseCurrentPopup();

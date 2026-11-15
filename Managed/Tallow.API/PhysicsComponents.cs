@@ -79,6 +79,26 @@ public readonly record struct CharacterController(GameObject GameObject) : IComp
     /// <summary>Reset the native character pose and velocity, e.g. on respawn.</summary>
     public bool Teleport(Vector3 position, Vector3 velocity = default) =>
         Physics.TeleportCharacter(GameObject.SceneId, GameObject.Id, position, velocity);
+
+    /// <summary>The capsule height now; 0 when the component is missing.</summary>
+    public float Height =>
+        Physics.GetCharacterHeight(GameObject.SceneId, GameObject.Id);
+
+    /// <summary>
+    /// Crouch or stand: resizes the capsule to <paramref name="height"/>,
+    /// keeping the feet of a <paramref name="standingHeight"/> capsule. In
+    /// the air the head stays still instead. Standing up is refused while
+    /// something is in the way, so check <see cref="Height"/> afterwards.
+    /// </summary>
+    public bool SetHeight(float height, float standingHeight) =>
+        Physics.SetCharacterHeight(GameObject.SceneId, GameObject.Id, height, standingHeight);
+
+    /// <summary>
+    /// How far <see cref="SetHeight"/> moved the character this frame to keep
+    /// its head still in the air. Subtract it from a smoothed camera height.
+    /// </summary>
+    public float CrouchLift =>
+        Physics.GetCharacterCrouchLift(GameObject.SceneId, GameObject.Id);
 }
 
 public enum ColliderKind { Box, Sphere, Capsule, Mesh, Compound, Convex }

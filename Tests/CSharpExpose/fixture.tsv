@@ -1,102 +1,112 @@
 TALLOW_CSHARP_API_V1
+field	Tallow.GUI	Height	float	get
+field	Tallow.GUI	Width	float	get
+field	Tallow.Time	DeltaTime	float	get
+field	Tallow.Time	FrameCount	long	get
+field	Tallow.Time	InterpolationAlpha	float	get
+field	Tallow.Time	RealTime	float	get
+field	Tallow.Time	SmoothedFps	float	get
+field	Tallow.Time	Tick	int	get
+field	Tallow.Time	TickScale	float	get
+field	Tallow.Time	TimeScale	float	getset
+field	Tallow.Time	UnscaledDeltaTime	float	get
+method	Tallow.Application	Quit	void
 method	Tallow.CSharpBindingFixture	Average	float	a:float	b:float
+method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instance:int
+method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:string
+method	Tallow.CSharpComponents	EnabledState	int	session:ulong	entity:ulong	instance:int
+method	Tallow.CSharpComponents	SetEnabled	bool	session:ulong	entity:ulong	instance:int	enabled:bool
+method	Tallow.CSharpSceneObjects	ActiveHierarchyState	int	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	ActiveSelfState	int	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	SetActive	bool	session:ulong	entity:ulong	active:bool
+method	Tallow.Cursor	IsLocked	bool
+method	Tallow.Cursor	SetLocked	void	locked:bool
+method	Tallow.Ecs	CopyLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
+method	Tallow.Ecs	CopyLocalDataPage	int	session:ulong	schemaId:ulong	offset:int	entityIds:System.Span<ulong>	bytes:System.Span<byte>
+method	Tallow.Ecs	CopyRigidbodyMasses	int	session:ulong	offset:int	entityIds:System.Span<ulong>	masses:System.Span<float>
+method	Tallow.Ecs	CountLocalData	int	session:ulong	schemaId:ulong
+method	Tallow.Ecs	CountRigidbodies	int	session:ulong
+method	Tallow.Ecs	CreateLocalEntities	int	session:ulong	entityIds:System.Span<ulong>
+method	Tallow.Ecs	CreateLocalEntity	ulong	session:ulong
+method	Tallow.Ecs	DeleteLocalEntity	bool	session:ulong	entity:ulong
+method	Tallow.Ecs	HasLocalData	bool	session:ulong	entity:ulong	schemaId:ulong
+method	Tallow.Ecs	IsAlive	bool	session:ulong	entity:ulong
+method	Tallow.Ecs	RegisterLocalData	ulong	session:ulong	schemaId:ulong	size:int	alignment:int
+method	Tallow.Ecs	SetLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
+method	Tallow.GUI	Button	bool	x:float	y:float	width:float	height:float	label:string
+method	Tallow.Log	Error	void	text:string
+method	Tallow.Log	Info	void	text:string
+method	Tallow.Log	Warning	void	text:string
 method	Tallow.Mathf	Clamp01	float	v:float
-method	Tallow.Mathf	Lerp	float	a:float	b:float	t:float
-method	Tallow.Mathf	Sign	float	v:float
 method	Tallow.Mathf	FloorToInt	int	v:float
+method	Tallow.Mathf	Lerp	float	a:float	b:float	t:float
 method	Tallow.Mathf	MoveTowards	float	current:float	target:float	maxDelta:float
+method	Tallow.Mathf	Sign	float	v:float
 method	Tallow.Mathf	SmoothStep	float	a:float	b:float	t:float
 method	Tallow.Mathf	WrapAngle	float	degrees:float
 method	Tallow.Noise	Fbm	float	x:float	y:float	z:float	seed:uint	octaves:int
 method	Tallow.Noise	Perlin	float	x:float	y:float	z:float	seed:uint
-field	Tallow.Time	DeltaTime	float	get
-field	Tallow.Time	FrameCount	long	get
-field	Tallow.Time	SmoothedFps	float	get
-field	Tallow.Time	TimeScale	float	getset
-method	Tallow.Log	Info	void	text:string
-method	Tallow.Log	Warning	void	text:string
-method	Tallow.Log	Error	void	text:string
-method	Tallow.RotationMath	EulerDegrees	System.Numerics.Quaternion	degrees:System.Numerics.Vector3
-method	Tallow.RotationMath	ToEulerDegrees	System.Numerics.Vector3	rotation:System.Numerics.Quaternion
-method	Tallow.RotationMath	LookRotation	System.Numerics.Quaternion	forward:System.Numerics.Vector3	up:System.Numerics.Vector3
-method	Tallow.SceneManager	Load	void	path:string
-method	Tallow.Application	Quit	void
-field	Tallow.GUI	Width	float	get
-field	Tallow.GUI	Height	float	get
-method	Tallow.GUI	Button	bool	x:float	y:float	width:float	height:float	label:string
-method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:string
-method	Tallow.CSharpComponents	EnabledState	int	session:ulong	entity:ulong	instance:int
-method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instance:int
-method	Tallow.CSharpComponents	SetEnabled	bool	session:ulong	entity:ulong	instance:int	enabled:bool
-method	Tallow.CSharpSceneObjects	ActiveSelfState	int	session:ulong	entity:ulong
-method	Tallow.CSharpSceneObjects	ActiveHierarchyState	int	session:ulong	entity:ulong
-method	Tallow.CSharpSceneObjects	SetActive	bool	session:ulong	entity:ulong	active:bool
-method	Tallow.Ecs	IsAlive	bool	session:ulong	entity:ulong
-method	Tallow.Ecs	CreateLocalEntity	ulong	session:ulong
-method	Tallow.Ecs	CreateLocalEntities	int	session:ulong	entityIds:System.Span<ulong>
-method	Tallow.Ecs	DeleteLocalEntity	bool	session:ulong	entity:ulong
-method	Tallow.Ecs	RegisterLocalData	ulong	session:ulong	schemaId:ulong	size:int	alignment:int
-method	Tallow.Ecs	SetLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
-method	Tallow.Ecs	CopyLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
-method	Tallow.Ecs	HasLocalData	bool	session:ulong	entity:ulong	schemaId:ulong
-method	Tallow.Ecs	CountLocalData	int	session:ulong	schemaId:ulong
-method	Tallow.Ecs	CopyLocalDataPage	int	session:ulong	schemaId:ulong	offset:int	entityIds:System.Span<ulong>	bytes:System.Span<byte>
-method	Tallow.Ecs	CountRigidbodies	int	session:ulong
-method	Tallow.Ecs	CopyRigidbodyMasses	int	session:ulong	offset:int	entityIds:System.Span<ulong>	masses:System.Span<float>
-method	Tallow.Physics	HasRigidbody	bool	session:ulong	entity:ulong
-method	Tallow.Physics	HasRigidbodyBody	bool	session:ulong	entity:ulong
-method	Tallow.Physics	GetRigidbodyVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
-method	Tallow.Physics	SetRigidbodyVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
 method	Tallow.Physics	AddRigidbodyForce	bool	session:ulong	entity:ulong	force:System.Numerics.Vector3
-method	Tallow.Physics	AddRigidbodyImpulse	bool	session:ulong	entity:ulong	impulse:System.Numerics.Vector3
-method	Tallow.Physics	GetRigidbodyAngularVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
-method	Tallow.Physics	SetRigidbodyAngularVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
-method	Tallow.Physics	AddRigidbodyTorque	bool	session:ulong	entity:ulong	torque:System.Numerics.Vector3
 method	Tallow.Physics	AddRigidbodyForceAtPosition	bool	session:ulong	entity:ulong	force:System.Numerics.Vector3	worldPoint:System.Numerics.Vector3
-method	Tallow.Physics	GetRigidbodyPointVelocity	System.Numerics.Vector3	session:ulong	entity:ulong	worldPoint:System.Numerics.Vector3
-method	Tallow.Physics	SleepRigidbody	bool	session:ulong	entity:ulong
-method	Tallow.Physics	HasCharacterController	bool	session:ulong	entity:ulong
-method	Tallow.Physics	HasCharacterSimulation	bool	session:ulong	entity:ulong
-method	Tallow.Physics	IsCharacterGrounded	bool	session:ulong	entity:ulong
-method	Tallow.Physics	CanCharacterJump	bool	session:ulong	entity:ulong
-method	Tallow.Physics	GetCharacterVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
-method	Tallow.Physics	MoveCharacter	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3	deltaTime:float
-method	Tallow.Physics	SimpleMoveCharacter	bool	session:ulong	entity:ulong	horizontalVelocity:System.Numerics.Vector3	deltaTime:float	jumpSpeed:float
-method	Tallow.Physics	TeleportCharacter	bool	session:ulong	entity:ulong	position:System.Numerics.Vector3	velocity:System.Numerics.Vector3
-method	Tallow.Physics	HasSoftBody	bool	session:ulong	entity:ulong
-method	Tallow.Physics	HasSoftBodySimulation	bool	session:ulong	entity:ulong
-method	Tallow.Physics	CanForceSoftBody	bool	session:ulong	entity:ulong
-method	Tallow.Physics	GetSoftBodyVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
-method	Tallow.Physics	SetSoftBodyVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
-method	Tallow.Physics	AddSoftBodyImpulse	bool	session:ulong	entity:ulong	impulse:System.Numerics.Vector3
+method	Tallow.Physics	AddRigidbodyImpulse	bool	session:ulong	entity:ulong	impulse:System.Numerics.Vector3
+method	Tallow.Physics	AddRigidbodyTorque	bool	session:ulong	entity:ulong	torque:System.Numerics.Vector3
 method	Tallow.Physics	AddSoftBodyForce	bool	session:ulong	entity:ulong	force:System.Numerics.Vector3
-method	Tallow.Physics	GetSoftBodyPressure	float	session:ulong	entity:ulong
-method	Tallow.Physics	SetSoftBodyPressure	bool	session:ulong	entity:ulong	pressure:float
-method	Tallow.Physics	RepairSoftBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	AddSoftBodyImpulse	bool	session:ulong	entity:ulong	impulse:System.Numerics.Vector3
+method	Tallow.Physics	CanCharacterJump	bool	session:ulong	entity:ulong
+method	Tallow.Physics	CanForceSoftBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	ConnectJoint	bool	session:ulong	a:ulong	b:ulong	anchor:System.Numerics.Vector3	axis:System.Numerics.Vector3	swingLimit:float
 method	Tallow.Physics	DeepestSoftBodyDent	float	session:ulong	entity:ulong
-method	Tallow.Physics	RaycastDistance	float	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
-method	Tallow.Physics	RaycastContact	System.Numerics.Vector4	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
-method	Tallow.Physics	SphereCastContact	System.Numerics.Vector4	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
-method	Tallow.Physics	IsRigidbodySleeping	bool	session:ulong	entity:ulong
-method	Tallow.Physics	IsSoftBodySleeping	bool	session:ulong	entity:ulong
-method	Tallow.Physics	GetSoftBodyMode	int	session:ulong	entity:ulong
-method	Tallow.Physics	GetSoftBodyVertexCount	int	session:ulong	entity:ulong
-method	Tallow.Physics	RaycastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
-method	Tallow.Physics	SphereCastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	GetCharacterCrouchLift	float	session:ulong	entity:ulong
+method	Tallow.Physics	GetCharacterHeight	float	session:ulong	entity:ulong
+method	Tallow.Physics	GetCharacterVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
+method	Tallow.Physics	GetColliderBoxSize	System.Numerics.Vector3	session:ulong	entity:ulong	index:int
+method	Tallow.Physics	GetColliderCapsuleHeight	float	session:ulong	entity:ulong	index:int
+method	Tallow.Physics	GetColliderCapsuleRadius	float	session:ulong	entity:ulong	index:int
+method	Tallow.Physics	GetColliderCenter	System.Numerics.Vector3	session:ulong	entity:ulong	index:int
 method	Tallow.Physics	GetColliderCount	int	session:ulong	entity:ulong
 method	Tallow.Physics	GetColliderKind	int	session:ulong	entity:ulong	index:int
-method	Tallow.Physics	GetColliderCenter	System.Numerics.Vector3	session:ulong	entity:ulong	index:int
-method	Tallow.Physics	GetColliderBoxSize	System.Numerics.Vector3	session:ulong	entity:ulong	index:int
 method	Tallow.Physics	GetColliderSphereRadius	float	session:ulong	entity:ulong	index:int
-method	Tallow.Physics	GetColliderCapsuleRadius	float	session:ulong	entity:ulong	index:int
-method	Tallow.Physics	GetColliderCapsuleHeight	float	session:ulong	entity:ulong	index:int
-method	Tallow.Physics	GetSoftBodyStiffness	float	session:ulong	entity:ulong
-method	Tallow.Physics	SetSoftBodyStiffness	bool	session:ulong	entity:ulong	stiffness:float
-method	Tallow.Physics	GetSoftBodyWobbleDamping	float	session:ulong	entity:ulong
-method	Tallow.Physics	SetSoftBodyWobbleDamping	bool	session:ulong	entity:ulong	damping:float
-method	Tallow.Physics	HasJoint	bool	session:ulong	entity:ulong
-method	Tallow.Physics	IsJointConnected	bool	session:ulong	entity:ulong
 method	Tallow.Physics	GetJointConnectedEntity	ulong	session:ulong	entity:ulong
 method	Tallow.Physics	GetJointSwingLimit	float	session:ulong	entity:ulong
+method	Tallow.Physics	GetRigidbodyAngularVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
+method	Tallow.Physics	GetRigidbodyPointVelocity	System.Numerics.Vector3	session:ulong	entity:ulong	worldPoint:System.Numerics.Vector3
+method	Tallow.Physics	GetRigidbodyVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
+method	Tallow.Physics	GetSoftBodyMode	int	session:ulong	entity:ulong
+method	Tallow.Physics	GetSoftBodyPressure	float	session:ulong	entity:ulong
+method	Tallow.Physics	GetSoftBodyStiffness	float	session:ulong	entity:ulong
+method	Tallow.Physics	GetSoftBodyVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
+method	Tallow.Physics	GetSoftBodyVertexCount	int	session:ulong	entity:ulong
+method	Tallow.Physics	GetSoftBodyWobbleDamping	float	session:ulong	entity:ulong
+method	Tallow.Physics	HasCharacterController	bool	session:ulong	entity:ulong
+method	Tallow.Physics	HasCharacterSimulation	bool	session:ulong	entity:ulong
+method	Tallow.Physics	HasJoint	bool	session:ulong	entity:ulong
+method	Tallow.Physics	HasRigidbody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	HasRigidbodyBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	HasSoftBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	HasSoftBodySimulation	bool	session:ulong	entity:ulong
+method	Tallow.Physics	IsCharacterGrounded	bool	session:ulong	entity:ulong
+method	Tallow.Physics	IsJointConnected	bool	session:ulong	entity:ulong
+method	Tallow.Physics	IsRigidbodySleeping	bool	session:ulong	entity:ulong
+method	Tallow.Physics	IsSoftBodySleeping	bool	session:ulong	entity:ulong
+method	Tallow.Physics	MoveCharacter	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3	deltaTime:float
+method	Tallow.Physics	RaycastContact	System.Numerics.Vector4	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	RaycastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	RaycastDistance	float	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	RepairSoftBody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	SetCharacterHeight	bool	session:ulong	entity:ulong	height:float	standingHeight:float
 method	Tallow.Physics	SetJointSwingLimit	bool	session:ulong	entity:ulong	degrees:float
-method	Tallow.Physics	ConnectJoint	bool	session:ulong	a:ulong	b:ulong	anchor:System.Numerics.Vector3	axis:System.Numerics.Vector3	swingLimit:float
+method	Tallow.Physics	SetRigidbodyAngularVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
+method	Tallow.Physics	SetRigidbodyVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
+method	Tallow.Physics	SetSoftBodyPressure	bool	session:ulong	entity:ulong	pressure:float
+method	Tallow.Physics	SetSoftBodyStiffness	bool	session:ulong	entity:ulong	stiffness:float
+method	Tallow.Physics	SetSoftBodyVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
+method	Tallow.Physics	SetSoftBodyWobbleDamping	bool	session:ulong	entity:ulong	damping:float
+method	Tallow.Physics	SimpleMoveCharacter	bool	session:ulong	entity:ulong	horizontalVelocity:System.Numerics.Vector3	deltaTime:float	jumpSpeed:float
+method	Tallow.Physics	SleepRigidbody	bool	session:ulong	entity:ulong
+method	Tallow.Physics	SphereCastContact	System.Numerics.Vector4	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	SphereCastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
+method	Tallow.Physics	TeleportCharacter	bool	session:ulong	entity:ulong	position:System.Numerics.Vector3	velocity:System.Numerics.Vector3
+method	Tallow.RotationMath	EulerDegrees	System.Numerics.Quaternion	degrees:System.Numerics.Vector3
+method	Tallow.RotationMath	LookRotation	System.Numerics.Quaternion	forward:System.Numerics.Vector3	up:System.Numerics.Vector3
+method	Tallow.RotationMath	ToEulerDegrees	System.Numerics.Vector3	rotation:System.Numerics.Quaternion
+method	Tallow.SceneManager	Load	void	path:string

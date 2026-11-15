@@ -56,7 +56,7 @@ static class Physics
     public static bool SetRigidbodyVelocity(uint64 session, uint64 entity, Vector3 velocity)
     {
         let obj = LiveObject(session, entity);
-        if (obj == null)
+        if (obj == null || !FiniteVector(velocity))
             return false;
         let body = obj.GetComponent<Rigidbody>();
         if (!body.HasBody)
@@ -69,7 +69,7 @@ static class Physics
     public static bool AddRigidbodyForce(uint64 session, uint64 entity, Vector3 force)
     {
         let obj = LiveObject(session, entity);
-        if (obj == null)
+        if (obj == null || !FiniteVector(force))
             return false;
         let body = obj.GetComponent<Rigidbody>();
         if (!body.HasBody)
@@ -82,7 +82,7 @@ static class Physics
     public static bool AddRigidbodyImpulse(uint64 session, uint64 entity, Vector3 impulse)
     {
         let obj = LiveObject(session, entity);
-        if (obj == null)
+        if (obj == null || !FiniteVector(impulse))
             return false;
         let body = obj.GetComponent<Rigidbody>();
         if (!body.HasBody)
@@ -256,6 +256,40 @@ static class Physics
             return false;
         controller.SimpleMove(horizontalVelocity, deltaTime, jumpSpeed);
         return true;
+    }
+
+    /// Crouching: the same capsule resize visual scripts use, including
+    /// keeping the head still when crouching or standing up in the air and
+    /// refusing to stand up into an obstacle.
+    [CSharpExpose]
+    public static bool SetCharacterHeight(uint64 session, uint64 entity,
+        float height, float standingHeight)
+    {
+        if (!height.IsFinite || !standingHeight.IsFinite || height <= 0 ||
+            standingHeight <= 0 || height > 100 || standingHeight > 100)
+            return false;
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<CharacterController>())
+            return false;
+        GraphRuntime.SetCharacterHeight(obj, height, standingHeight);
+        return true;
+    }
+
+    /// The capsule height now; 0 without a Character Controller.
+    [CSharpExpose]
+    public static float GetCharacterHeight(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        return obj == null ? 0 : GraphRuntime.CharacterHeight(obj);
+    }
+
+    /// How far SetCharacterHeight moved the character this frame to keep
+    /// its head still in the air. Subtract it from a smoothed eye height.
+    [CSharpExpose]
+    public static float GetCharacterCrouchLift(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        return obj == null ? 0 : GraphRuntime.CrouchLift(obj);
     }
 
     [CSharpExpose]

@@ -19,3 +19,9 @@ tallow-version.json
 # Never hand-edit or commit the native/managed public API projection.
 Engine/src/Scripting/CSharpBindings.Generated.bf
 Managed/Tallow.API/Generated/CSharpBindings.g.cs
+
+# .NET build output of the managed C# gameplay projects
+Managed/*/bin/
+Managed/*/obj/
+Tests/CSharpGameplay/.tallow-csharp/
+Tests/NativeCSharpHost/build/

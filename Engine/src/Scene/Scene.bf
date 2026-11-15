@@ -637,6 +637,8 @@ class Scene
 		mDestroyQueue.Clear();
 		mPendingStart.Clear();
 		mNextId = 1;
+		// Object ids start again, so C# handles to the old objects must stop resolving.
+		CSharpRuntime.SceneCleared(this);
 		Decals.Clear(this);
 	}
 
@@ -1236,6 +1238,8 @@ class Scene
 				HandleComponents.NotifySwitched(mObjects[i], false);
 		}
 		mPlaying = false;
+		// Bare ECS entities made by C# gameplay belong to this run of the game only.
+		World.ClearManagedLocalEntities();
 		// Built-in components' bodies leave the physics world as the class components' did in OnDisable.
 		Rigidbody.SyncAll(this);
 		Animator.StopAll(this);

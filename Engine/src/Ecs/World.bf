@@ -78,6 +78,24 @@ sealed class World
 		return entity;
 	}
 
+	/// Deletes every bare entity C# gameplay created. Called when Play stops:
+	/// the scene restores its GameObjects itself, but nothing else owns these.
+	public void ClearManagedLocalEntities()
+	{
+		if (mManagedLocalEntities.Count == 0)
+			return;
+		let ids = scope List<uint64>(mManagedLocalEntities.Count);
+		for (let id in mManagedLocalEntities)
+			ids.Add(id);
+		mManagedLocalEntities.Clear();
+		for (let id in ids)
+		{
+			let entity = Entity(id);
+			if (IsAlive(entity) && !IsSceneObject(entity))
+				Delete(entity);
+		}
+	}
+
 	public bool IsManagedLocalEntity(Entity entity) =>
 		!entity.IsNull && mManagedLocalEntities.Contains(entity.id) &&
 		IsAlive(entity) && !IsSceneObject(entity);

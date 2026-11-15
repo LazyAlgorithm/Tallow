@@ -275,11 +275,54 @@ internal static class Program
             // ones), and all referenced framework assemblies. Do not maintain a
             // second hand-written API list for C# completion.
             var names = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            // Inside [ ... ] (but not an attribute's argument list) C# only
+            // accepts attribute classes, written without the "Attribute"
+            // suffix: suggest HideInInspector, not HideInInspectorAttribute.
+            SyntaxToken caretToken = root.FullSpan.IsEmpty ? default :
+                root.FindToken(position > 0 ? position - 1 : position);
+            bool attributeContext =
+                (caretToken.Parent is AttributeListSyntax &&
+                    (caretToken.IsKind(SyntaxKind.OpenBracketToken) ||
+                     caretToken.IsKind(SyntaxKind.CommaToken))) ||
+                (node?.AncestorsAndSelf().OfType<AttributeSyntax>().Any() == true &&
+                 node?.AncestorsAndSelf().OfType<AttributeArgumentListSyntax>().Any() != true);
+            INamedTypeSymbol? attributeBase = attributeContext ?
+                compilation.GetTypeByMetadataName("System.Attribute") : null;
+
             void Add(ISymbol symbol)
             {
                 if (symbol.IsImplicitlyDeclared || !SyntaxFacts.IsValidIdentifier(symbol.Name) ||
                     symbol.Name.StartsWith("<", StringComparison.Ordinal))
                     return;
+
+                if (attributeContext)
+                {
+                    if (symbol is INamespaceSymbol)
+                    {
+                        names.TryAdd(symbol.Name, symbol.Kind.ToString());
+                        return;
+                    }
+                    if (symbol is not INamedTypeSymbol { IsAbstract: false } candidate ||
+                        attributeBase is null)
+                        return;
+                    bool isAttribute = false;
+                    for (INamedTypeSymbol? parent = candidate.BaseType; parent != null;
+                         parent = parent.BaseType)
+                        if (SymbolEqualityComparer.Default.Equals(parent, attributeBase))
+                        {
+                            isAttribute = true;
+                            break;
+                        }
+                    if (!isAttribute || !model.IsAccessible(accessPosition, symbol))
+                        return;
+                    const string suffix = "Attribute";
+                    string shortName = symbol.Name.Length > suffix.Length &&
+                        symbol.Name.EndsWith(suffix, StringComparison.Ordinal) ?
+                        symbol.Name[..^suffix.Length] : symbol.Name;
+                    names.TryAdd(shortName, symbol.Kind.ToString());
+                    return;
+                }
 
                 // LookupSymbols checks C# access modifiers, but the inherited
                 // member fallback below walks GetMembers() directly. Enforce
@@ -403,7 +446,8 @@ internal static class Program
                     "switch", "this", "throw", "true", "try", "typeof", "uint",
                     "ulong", "unsafe", "using", "var", "virtual", "void", "when",
                     "where", "while", "with", "yield", "nameof", "nint", "nuint" })
-                    names.TryAdd(keyword, "Keyword");
+                    if (!attributeContext)
+                        names.TryAdd(keyword, "Keyword");
             }
             foreach ((string name, string kind) in names.OrderBy(pair => pair.Key,
                 StringComparer.OrdinalIgnoreCase).Take(1500))

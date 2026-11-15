@@ -553,8 +553,21 @@ internal static class Program
 
                 // Limit the first Inspector bridge to deterministic, supported
                 // value types. Managed objects/references need their own handles.
-                foreach (IFieldSymbol field in type.GetMembers().OfType<IFieldSymbol>())
+                // Fields declared on user base classes belong to the component
+                // too: list them base-first, as the runtime restores them.
+                var fieldOwners = new List<INamedTypeSymbol>();
+                for (INamedTypeSymbol? owner = type; owner != null &&
+                     owner.ToDisplayString() != "Tallow.Script" &&
+                     owner.SpecialType != SpecialType.System_Object; owner = owner.BaseType)
+                    fieldOwners.Insert(0, owner);
+                var seenFieldNames = new HashSet<string>(StringComparer.Ordinal);
+                foreach (IFieldSymbol field in fieldOwners.SelectMany(
+                    owner => owner.GetMembers().OfType<IFieldSymbol>()))
                 {
+                    // A derived field hiding a base field of the same name
+                    // cannot be told apart in the name-keyed scene format.
+                    if (!seenFieldNames.Add(field.Name))
+                        continue;
                     // Match native Beef's Show/Hide semantics: public fields
                     // serialize by default, while private ones require an
                     // explicit serialization marker. Hide means persisted
@@ -602,6 +615,10 @@ internal static class Program
                             kind is "bool" or "float" or "int" or "enum" or "string")
                         {
                             defaultValue = Convert.ToString(constant.Value, CultureInfo.InvariantCulture) ?? defaultValue;
+                            // The Inspector and scene files spell booleans in
+                            // lower case; Convert.ToString gives "True".
+                            if (kind == "bool")
+                                defaultValue = constant.Value is true ? "true" : "false";
                             if (kind == "string" &&
                                 defaultValue.IndexOfAny(['\t', '\n', '\r', '\0']) >= 0)
                                 throw new InvalidOperationException(

@@ -386,6 +386,39 @@ public sealed class CubeMover : Script
             Check("private user gameplay members still appear in their own class",
                 userResults.Contains("completion\tsecret\t"));
 
+            // Attribute lists take attribute classes by their short names:
+            // Tallow's, the framework's and the game's own.
+            string attributeSource = "using Tallow; class MineAttribute : System.Attribute { } " +
+                "class Demo : Script { [";
+            string attributeResults = RequestWithApi(service, "completion",
+                attributeSource, attributeSource.Length);
+            foreach (string expected in new[] { "HideInInspector", "ShowInInspector", "Sync",
+                "Range", "Component", "SerializedFieldId", "Obsolete", "Flags",
+                "NonSerialized", "Mine" })
+                Check("attribute completion suggests " + expected,
+                    attributeResults.Contains("completion\t" + expected + "\t"));
+            Check("attribute completion never shows the Attribute suffix",
+                !attributeResults.Split('\n').Any(line =>
+                    line.StartsWith("completion\t", StringComparison.Ordinal) &&
+                    line.Split('\t')[1].EndsWith("Attribute", StringComparison.Ordinal) &&
+                    line.Split('\t')[1] != "Attribute"));
+            Check("attribute completion offers only attribute classes",
+                !attributeResults.Contains("completion\tScript\t") &&
+                !attributeResults.Contains("completion\tDemo\t") &&
+                !attributeResults.Contains("completion\tclass\t"));
+            string typedAttribute = "using Tallow; class Demo : Script { [Hide";
+            Check("attribute completion works while typing a name",
+                RequestWithApi(service, "completion", typedAttribute, typedAttribute.Length)
+                    .Contains("completion\tHideInInspector\t"));
+            string secondAttribute = "using Tallow; class Demo : Script { [Sync, ";
+            Check("attribute completion works after a comma",
+                RequestWithApi(service, "completion", secondAttribute, secondAttribute.Length)
+                    .Contains("completion\tHideInInspector\t"));
+            string attributeArgument = "using Tallow; class Demo : Script { [Range(Math";
+            Check("attribute arguments keep ordinary completion",
+                RequestWithApi(service, "completion", attributeArgument, attributeArgument.Length)
+                    .Contains("completion\tMathf\t"));
+
             // The fallback member walk must follow the same Roslyn access
             // rules as LookupSymbols, even when a partially typed receiver is
             // derived from another class.

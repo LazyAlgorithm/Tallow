@@ -49,7 +49,10 @@ class ProjectFolderMonitor
 		{
 			let name = scope String();
 			entry.GetFileName(name);
-			if (name.StartsWith('.') || (scriptsOnly && !name.EndsWith(scriptSuffix, .OrdinalIgnoreCase))) continue;
+			// A C# project's assembly definitions decide which assembly each
+			// source belongs to, so they count as script changes too.
+			if (name.StartsWith('.') || (scriptsOnly && !name.EndsWith(scriptSuffix, .OrdinalIgnoreCase) &&
+				!(scriptSuffix == ".cs" && name.EndsWith(".tasmdef", .OrdinalIgnoreCase)))) continue;
 			// Fetch time first: Beef's POSIX size accessor reads the cached stat record.
 			let modified = entry.GetLastWriteTimeUtc().Ticks;
 			files.Add(new String(scope $"{folder}/{name}|{entry.GetFileSize()}|{modified}"));

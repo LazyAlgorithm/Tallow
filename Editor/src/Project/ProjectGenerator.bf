@@ -445,9 +445,8 @@ static class ProjectGenerator
 
 		if (template == .Empty)
 		{
-			// No scripts: the scene's first-person character is a visual script (Scripts/FirstPersonCharacter.tgraph,
-			// with the code it compiles to beside it, hidden in the editor). The project starts through the editor's
-			// DefaultProgram, so there is no Program.bf either.
+			// One C# script: the scene's first-person character (Scripts/FirstPersonCharacter.cs). The project runs
+			// in the precompiled editor and player, so there is no Program.bf and nothing for BeefBuild to compile.
 			for (let sub in StringView[?]("Scripts", "Prefabs", "Materials", "Textures", "Models", "Scenes"))
 				Directory.CreateDirectory(scope $"{folder}/src/{sub}").IgnoreError();
 			CopyTemplateFiles(scope $"{engineRoot}/Editor/templates/empty", scope $"{folder}/src", name);

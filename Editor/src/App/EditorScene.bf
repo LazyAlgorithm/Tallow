@@ -120,6 +120,9 @@ extension EditorApp
 		SaveAllScripts();
 		// Manual mode also needs to recognize harmless formatting changes.
 		// Do not queue a build for a script revision equivalent to the host.
+		// The native reload pipeline does not exist in a C# project.
+		if (mManagedGameplay)
+			mScriptsNeedReload = false;
 		if (mScriptsNeedReload && !mCheckRunning && !mReloadQueued && CheckScriptChanges() == 0)
 			mScriptsNeedReload = false;
 		if (mCheckRunning || mReloadQueued)

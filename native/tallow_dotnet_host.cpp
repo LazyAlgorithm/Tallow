@@ -104,10 +104,38 @@ void add_root(std::vector<std::filesystem::path>& roots, const std::filesystem::
         roots.push_back(root);
 }
 
+// Environment text as UTF-8. On Windows getenv returns the ANSI code page,
+// which mangles a .NET install or PATH entry under a non-ASCII user folder.
+std::string environment_utf8(const char* name)
+{
+#ifdef _WIN32
+    const std::wstring wide_name = platform_string(name);
+    const DWORD size = GetEnvironmentVariableW(wide_name.c_str(), nullptr, 0);
+    if (size == 0)
+        return {};
+    std::wstring wide(size, L'\0');
+    const DWORD written = GetEnvironmentVariableW(wide_name.c_str(), wide.data(), size);
+    if (written == 0 || written >= size)
+        return {};
+    wide.resize(written);
+    const int count = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(),
+        static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
+    if (count <= 0)
+        return {};
+    std::string utf8(static_cast<size_t>(count), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()),
+        utf8.data(), count, nullptr, nullptr);
+    return utf8;
+#else
+    const char* value = std::getenv(name);
+    return value ? std::string(value) : std::string();
+#endif
+}
+
 void add_root_from_env(std::vector<std::filesystem::path>& roots, const char* name)
 {
-    if (const char* value = std::getenv(name); value && *value)
-        add_root(roots, std::filesystem::path(platform_string(value)));
+    if (const std::string value = environment_utf8(name); !value.empty())
+        add_root(roots, std::filesystem::path(platform_string(value.c_str())));
 }
 
 void add_root_from_executable(std::vector<std::filesystem::path>& roots,
@@ -131,9 +159,8 @@ std::vector<std::filesystem::path> dotnet_roots()
     add_root_from_env(roots, "DOTNET_ROOT_ARM64");
 #endif
     // Find the dotnet CLI that the user actually runs, following symlinks.
-    if (const char* search = std::getenv("PATH"); search && *search)
+    if (const std::string value = environment_utf8("PATH"); !value.empty())
     {
-        const std::string value(search);
 #ifdef _WIN32
         constexpr char separator = ';';
         constexpr const char* executable = "dotnet.exe";
@@ -155,8 +182,8 @@ std::vector<std::filesystem::path> dotnet_roots()
         }
     }
 #ifdef _WIN32
-    if (const char* files = std::getenv("ProgramFiles"); files && *files)
-        add_root(roots, std::filesystem::path(platform_string(files)) / L"dotnet");
+    if (const std::string files = environment_utf8("ProgramFiles"); !files.empty())
+        add_root(roots, std::filesystem::path(platform_string(files.c_str())) / L"dotnet");
     add_root(roots, L"C:\\Program Files\\dotnet");
 #else
     add_root_from_executable(roots, "/usr/bin/dotnet");

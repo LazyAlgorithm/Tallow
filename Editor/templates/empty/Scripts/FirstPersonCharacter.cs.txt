@@ -1,0 +1,52 @@
+using System.Numerics;
+using Tallow;
+
+namespace {NAMESPACE};
+
+/// <summary>
+/// A first-person character: walk, sprint, crouch and jump, with the camera
+/// at eye height. It needs a Character Controller on the same object.
+/// </summary>
+public class FirstPersonCharacter : Script
+{
+    public float WalkSpeed = 5f;
+    public float SprintSpeed = 9f;
+    public float CrouchSpeed = 2.5f;
+    public float JumpSpeed = 6f;
+    public float StandHeight = 2f;
+    public float CrouchHeight = 1.2f;
+    public float EyeHeight = 0.7f;
+    public string CameraName = "Main Camera";
+
+    private GameObject? _camera;
+    private float _eyeNow;
+
+    public override void Start()
+    {
+        Cursor.Locked = true;
+        _camera = Scene.Find(CameraName);
+        _eyeNow = EyeHeight;
+    }
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        if (GetCharacterController() is { } controller)
+        {
+            float speed = input.Crouch ? CrouchSpeed : input.Sprint ? SprintSpeed : WalkSpeed;
+            controller.SimpleMove(input.MoveDirection * speed, deltaTime,
+                input.Pressed(InputButton.Jump) ? JumpSpeed : 0f);
+            controller.SetHeight(input.Crouch ? CrouchHeight : StandHeight, StandHeight);
+            // Ease the eyes down when crouching rather than snapping.
+            float target = EyeHeight - (StandHeight - controller.Height);
+            _eyeNow = Mathf.Lerp(_eyeNow - controller.CrouchLift, target,
+                Mathf.Clamp01(deltaTime * 12f));
+        }
+
+        Transform.Rotation = RotationMath.EulerDegrees(new Vector3(0f, input.Yaw, 0f));
+        if (_camera is { } camera && camera.IsValid)
+        {
+            camera.Transform.Position = Transform.Position + new Vector3(0f, _eyeNow, 0f);
+            camera.Transform.Rotation = input.LookRotation;
+        }
+    }
+}

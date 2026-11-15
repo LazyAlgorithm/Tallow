@@ -204,9 +204,22 @@ public static unsafe class NativeEntrypoints
     private static GameAssemblyContext? sGameContext;
     private static string sLastError = "";
 
+    private static int sRepeatedErrors;
+
+    // A script that throws in Update fails every tick. Report the first
+    // failure in full, then only a periodic reminder of identical ones.
     private static int Failure(Exception exception)
     {
-        sLastError = exception.ToString();
+        string text = exception.ToString();
+        if (text == sLastError)
+        {
+            if (++sRepeatedErrors % 600 == 0)
+                Console.Error.WriteLine(
+                    $"[Tallow C#] (repeated {sRepeatedErrors} times) {exception.GetType().Name}: {exception.Message}");
+            return -1;
+        }
+        sRepeatedErrors = 0;
+        sLastError = text;
         Console.Error.WriteLine("[Tallow C#] " + sLastError);
         return -1;
     }
@@ -336,7 +349,7 @@ public static unsafe class NativeEntrypoints
         if (type == typeof(int))
             return int.Parse(encoded, CultureInfo.InvariantCulture);
         if (type == typeof(bool))
-            return bool.Parse(encoded);
+            return encoded == "1" || (encoded != "0" && bool.Parse(encoded));
         if (type == typeof(string))
         {
             if (encoded.IndexOfAny(['\t', '\r', '\n', '\0']) >= 0)
@@ -391,8 +404,13 @@ public static unsafe class NativeEntrypoints
                     continue;
                 string name = line[..separator];
                 string value = line[(separator + 1)..];
-                FieldInfo? field = script.GetType().GetField(name,
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                // Type.GetField does not return private fields declared on a
+                // base class, so walk the user's class chain explicitly.
+                FieldInfo? field = null;
+                for (Type? owner = script.GetType(); field is null && owner != null &&
+                     owner != typeof(Script); owner = owner.BaseType)
+                    field = owner.GetField(name, BindingFlags.Instance | BindingFlags.Public |
+                        BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
                 // ECMA-335 FieldAttributes.NotSerialized is the 0x0080 metadata bit.
                 // Both FieldInfo.IsNotSerialized and the named enum member are
                 // obsolete in .NET 11; keep the existing Inspector exclusion rule

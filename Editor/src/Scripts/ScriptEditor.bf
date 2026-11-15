@@ -258,6 +258,13 @@ extension EditorApp
 			else if (Project.Current.ReloadMode != .Manual && !mCheckRunning)
 				StartManagedErrorCheck();
 		}
+		else if (mManagedGameplay)
+		{
+			// The precompiled editor cannot load Beef gameplay, so a saved
+			// .bf or text file neither needs a native reload nor may block
+			// Play waiting for one. Keep the graph-source index current.
+			ApiIndex.RefreshProject();
+		}
 		else
 		{
 			// Refresh the native graph-source index used by the legacy visual compiler.
@@ -280,9 +287,12 @@ extension EditorApp
 	/// Compiles the project on a worker thread so typing is never blocked.
 	void StartErrorCheck()
 	{
-		if (mActiveScript != null && (mActiveScript.path.EndsWith(".cs") || mActiveScript.path.EndsWith(".tasmdef")))
+		// C# projects are checked by the .NET SDK whatever file is in front
+		// (a graph, a .tui...). BeefBuild never runs for them.
+		if (mManagedGameplay)
 		{
-			StartManagedErrorCheck();
+			if (HasCSharpSources(scope $"{Project.Current.Path}/src"))
+				StartManagedErrorCheck();
 			return;
 		}
 		if (mReloadReady && Project.Current.ReloadMode != .Manual)

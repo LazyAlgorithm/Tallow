@@ -95,6 +95,70 @@ namespace
 
 	const TextEditor::Language* BeefLanguage() { return &BeefLanguageMutable(); }
 
+	// C# numeric literals, including the type suffixes (1f, 2.5d, 3m, 4UL),
+	// digit separators, exponents, hexadecimal and binary forms. TextEdit's
+	// bundled C# number pattern stops before the suffix, which left the "f"
+	// of "1f" in the default text color.
+	TextEditor::Iterator CSharpNumber(TextEditor::Iterator start, TextEditor::Iterator end)
+	{
+		auto digit = [](ImWchar c) { return c >= '0' && c <= '9'; };
+		auto hex = [&](ImWchar c) { return digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); };
+		auto lower = [](ImWchar c) { return (c >= 'A' && c <= 'Z') ? static_cast<ImWchar>(c + 32) : c; };
+		auto integerSuffix = [&](TextEditor::Iterator i) {
+			// u, l, ul or lu in any letter case.
+			if (i != end && lower(*i) == 'u') { ++i; if (i != end && lower(*i) == 'l') ++i; }
+			else if (i != end && lower(*i) == 'l') { ++i; if (i != end && lower(*i) == 'u') ++i; }
+			return i;
+		};
+		auto i = start;
+		if (i == end)
+			return start;
+		if (*i == '0')
+		{
+			auto next = i; ++next;
+			if (next != end && (lower(*next) == 'x' || lower(*next) == 'b'))
+			{
+				const bool isHex = lower(*next) == 'x';
+				auto body = next; ++body;
+				auto j = body;
+				while (j != end && (*j == '_' || (isHex ? hex(*j) : (*j == '0' || *j == '1')))) ++j;
+				if (j != body)
+					return integerSuffix(j);
+			}
+		}
+		bool digits = false;
+		while (i != end && (digit(*i) || (digits && *i == '_'))) { digits = true; ++i; }
+		bool real = false;
+		if (i != end && *i == '.')
+		{
+			// "1.ToString()" and "list.Count" are member access, not a fraction.
+			auto fraction = i; ++fraction;
+			if (fraction != end && digit(*fraction))
+			{
+				i = fraction;
+				while (i != end && (digit(*i) || *i == '_')) ++i;
+				digits = true;
+				real = true;
+			}
+		}
+		if (!digits)
+			return start;
+		if (i != end && lower(*i) == 'e')
+		{
+			auto exponent = i; ++exponent;
+			if (exponent != end && (*exponent == '+' || *exponent == '-')) ++exponent;
+			if (exponent != end && digit(*exponent))
+			{
+				i = exponent;
+				while (i != end && (digit(*i) || *i == '_')) ++i;
+				real = true;
+			}
+		}
+		if (i != end && (lower(*i) == 'f' || lower(*i) == 'd' || lower(*i) == 'm'))
+			return ++i;
+		return real ? i : integerSuffix(i);
+	}
+
 	const TextEditor::Language* CSharpLanguage()
 	{
 		// Keep C# independent of Beef's lexical index. The authoritative
@@ -105,6 +169,7 @@ namespace
 		if (!ready)
 		{
 			language.name = "C#";
+			language.getNumber = CSharpNumber;
 			for (const char* word : {
 				"record", "required", "init", "file", "global", "scoped", "field",
 				"with", "when", "and", "or", "not", "is", "nameof", "nint", "nuint",

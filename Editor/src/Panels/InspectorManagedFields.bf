@@ -10,15 +10,53 @@ namespace Tallow.Editor;
 /// native scene component and use the normal scene and prefab serializer.
 extension EditorApp
 {
-	bool DrawManagedFields(CSharpBehaviour component)
+	/// The compiler's field catalog, re-read only when the file changes. The
+	/// Inspector draws every frame; the catalog changes once per compile.
+	String mManagedFieldCatalog = new .() ~ delete _;
+	String mManagedFieldCatalogPath = new .() ~ delete _;
+	DateTime mManagedFieldCatalogTime;
+	bool mManagedFieldCatalogLoaded;
+	System.Diagnostics.Stopwatch mManagedFieldCatalogClock = new .(true) ~ delete _;
+
+	bool LoadManagedFieldCatalog()
 	{
 		let catalog = scope $"{Project.Current.Path}/.tallow-csharp/fields.tsv";
-		let data = scope String();
-		if (File.ReadAllText(catalog, data) case .Err)
+		if (mManagedFieldCatalogLoaded && catalog == mManagedFieldCatalogPath &&
+			mManagedFieldCatalogClock.ElapsedMilliseconds < 250)
+			return true;
+		mManagedFieldCatalogClock.Restart();
+		DateTime modified;
+		switch (File.GetLastWriteTimeUtc(catalog))
+		{
+		case .Ok(let value):
+			modified = value;
+		case .Err:
+			mManagedFieldCatalogLoaded = false;
+			return false;
+		}
+		if (mManagedFieldCatalogLoaded && catalog == mManagedFieldCatalogPath &&
+			modified == mManagedFieldCatalogTime)
+			return true;
+		mManagedFieldCatalog.Clear();
+		if (File.ReadAllText(catalog, mManagedFieldCatalog) case .Err)
+		{
+			mManagedFieldCatalogLoaded = false;
+			return false;
+		}
+		mManagedFieldCatalogPath.Set(catalog);
+		mManagedFieldCatalogTime = modified;
+		mManagedFieldCatalogLoaded = true;
+		return true;
+	}
+
+	bool DrawManagedFields(CSharpBehaviour component)
+	{
+		if (!LoadManagedFieldCatalog())
 		{
 			ImGui.TextDisabled("Compile the C# project to inspect public fields.");
 			return false;
 		}
+		let data = mManagedFieldCatalog;
 		bool changed = false;
 		bool tableOpen = false;
 		for (let line in data.Split('\n', .RemoveEmptyEntries))
@@ -75,7 +113,7 @@ extension EditorApp
 				if (edited)
 					newValue.AppendF("{}", value);
 			case "bool":
-				var value = current == "true" || current == "1";
+				var value = current.Equals("true", .OrdinalIgnoreCase) || current == "1";
 				edited = ImGui.Checkbox("##value", ref value);
 				if (edited)
 					newValue.Set(value ? "true" : "false");

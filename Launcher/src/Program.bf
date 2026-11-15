@@ -278,6 +278,9 @@ class LauncherApp : Application
 		{
 			if (nativeBuild)
 			{
+				// The explicit legacy route still needs the Beef compiler and
+				// Python that Tallow may have installed for itself.
+				Toolchain.Apply();
 				if (!project.Build(false))
 				{
 					error.Set("The legacy native project did not compile:\n");

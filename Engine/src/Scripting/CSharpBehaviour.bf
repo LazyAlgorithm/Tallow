@@ -41,6 +41,20 @@ class CSharpBehaviour : Component
 		return mInstance;
 	}
 
+	/// Editor entry point for choosing the managed class. In Edit mode this
+	/// only records the type; while playing it also creates and starts the
+	/// managed script, as a component added by gameplay code would be.
+	public void SetScriptType(StringView managedType)
+	{
+		if (scriptType.IsEmpty && Scene != null && Scene.IsPlaying && CSharpRuntime.Ready)
+		{
+			if (Configure(managedType) > 0)
+				return;
+			// Keep the type on a failed attach so the Inspector still names it.
+		}
+		scriptType.Set(managedType);
+	}
+
 	/// Read an Inspector override, falling back to the source's declared initializer.
 	public bool ReadEditorField(StringView name, String output)
 	{
@@ -77,9 +91,10 @@ class CSharpBehaviour : Component
 			}
 		}
 		updated.AppendF("{}\t{}\n", name, value);
-		// The managed loader validates the whole override batch before
-		// mutating the live script. Only persist a value if it succeeded.
-		if (IsLoaded && !CSharpRuntime.ApplyFields(mInstance, updated))
+		// Apply only the edited field to a live script: re-sending every
+		// saved override would undo values the game changed while playing.
+		// The managed loader validates before mutating; persist on success.
+		if (IsLoaded && !CSharpRuntime.ApplyFields(mInstance, scope $"{name}\t{value}\n"))
 			return false;
 		fieldOverrides.Set(updated);
 		return true;

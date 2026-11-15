@@ -40,7 +40,7 @@ extension EditorApp
 			let component = target.AddComponent<CSharpBehaviour>();
 			if (component != null)
 			{
-				component.scriptType.Set(mCSharpDropChoices[0]);
+				component.SetScriptType(mCSharpDropChoices[0]);
 				MarkDirty();
 			}
 		}
@@ -121,7 +121,7 @@ extension EditorApp
 						let component = owner.AddComponent<CSharpBehaviour>();
 						if (component != null)
 						{
-							component.scriptType.Set(typeName);
+							component.SetScriptType(typeName);
 							MarkDirty();
 						}
 					}

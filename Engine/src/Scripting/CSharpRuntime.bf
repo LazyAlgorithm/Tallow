@@ -154,6 +154,19 @@ static class CSharpRuntime
 		sSession++;
 	}
 
+	/// The bound scene was emptied (SceneManager.Load during Play) and will
+	/// hand out GameObject ids from 1 again. Start a new session so managed
+	/// handles to the previous objects fail instead of aliasing new ones.
+	/// Every managed script was detached by StopPlay before objects went.
+	public static void SceneCleared(Scene scene)
+	{
+		if (sScene != scene || scene == null)
+			return;
+		sSession++;
+		if (sSession == 0)
+			sSession++;
+	}
+
 	public static int32 LoadGame(StringView trustedGameAssembly)
 	{
 		if (!Ready)
@@ -479,6 +492,9 @@ static class CSharpRuntime
 		let gameObject = Find(scene, entity);
 		if (gameObject == null)
 			return 0;
+		// A NaN position poisons the transform hierarchy and the physics body.
+		if (!xyz[0].IsFinite || !xyz[1].IsFinite || !xyz[2].IsFinite)
+			return 1;
 		gameObject.Transform.Position = .(xyz[0], xyz[1], xyz[2]);
 		return 1;
 	}
@@ -545,6 +561,13 @@ static class CSharpRuntime
 		let transform = gameObject.Transform;
 		Vector3 v = .(values[0], values[1], values[2]);
 		Quaternion q = .(values[0], values[1], values[2], values[3]);
+		// Ignore non-finite values and zero-length rotations rather than
+		// store NaN in the transform (Normalized of a zero quaternion is NaN).
+		if (!v.x.IsFinite || !v.y.IsFinite || !v.z.IsFinite)
+			return 1;
+		if ((channel == 2 || channel == 3) &&
+			(!q.w.IsFinite || q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w < 1.0e-12f))
+			return 1;
 		switch (channel)
 		{
 		case 1: transform.LocalPosition = v;
