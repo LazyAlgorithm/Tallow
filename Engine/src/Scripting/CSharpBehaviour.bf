@@ -256,10 +256,12 @@ class CSharpBehaviour : Component
 			// nothing at all (CSharpBehaviour itself overrides every one).
 			ScriptCallbacks wanted = .None;
 			if ((mCallbacks & CSharpRuntime.UpdateCallback) != 0) wanted |= .Update;
+			if ((mCallbacks & CSharpRuntime.EarlyUpdateCallback) != 0) wanted |= .EarlyUpdate;
+			if ((mCallbacks & CSharpRuntime.LateUpdateCallback) != 0) wanted |= .LateUpdate;
 			if (Wants(.FixedUpdate)) wanted |= .FixedUpdate;
-			if (Wants(.LateUpdate)) wanted |= .LateUpdate;
-			if (Wants(.Frame)) wanted |= .OnFrame;
-			if (Wants(.LocalUpdate)) wanted |= .OnLocalUpdate;
+			if (Wants(.LocalEarlyUpdate)) wanted |= .LocalEarlyUpdate;
+			if (Wants(.LocalUpdate)) wanted |= .LocalUpdate;
+			if (Wants(.LocalLateUpdate)) wanted |= .LocalLateUpdate;
 			GameObject.Scene?.SetCallbacks(this, wanted);
 			// Never run Awake/OnEnable/Start when serialized state could not
 			// be restored. Otherwise a broken scene could silently initialize
@@ -309,16 +311,34 @@ class CSharpBehaviour : Component
 			CSharpRuntime.Update(mInstance, input, deltaTime);
 	}
 
-	public override void OnLocalUpdate()
+	public override void EarlyUpdate(TickInput input, float deltaTime)
 	{
-		if (IsLoaded && Wants(.LocalUpdate))
-			CSharpRuntime.Dispatch(mInstance, .LocalUpdate);
+		if (IsLoaded && (mCallbacks & CSharpRuntime.EarlyUpdateCallback) != 0)
+			CSharpRuntime.TickPhase(mInstance, 0, input, deltaTime);
 	}
 
-	public override void LateUpdate()
+	public override void LateUpdate(TickInput input, float deltaTime)
 	{
-		if (IsLoaded && Wants(.LateUpdate))
-			CSharpRuntime.Dispatch(mInstance, .LateUpdate, Time.DeltaTime);
+		if (IsLoaded && (mCallbacks & CSharpRuntime.LateUpdateCallback) != 0)
+			CSharpRuntime.TickPhase(mInstance, 2, input, deltaTime);
+	}
+
+	public override void LocalEarlyUpdate()
+	{
+		if (IsLoaded && Wants(.LocalEarlyUpdate))
+			CSharpRuntime.Dispatch(mInstance, .LocalEarlyUpdate, Time.DeltaTime);
+	}
+
+	public override void LocalUpdate()
+	{
+		if (IsLoaded && Wants(.LocalUpdate))
+			CSharpRuntime.Dispatch(mInstance, .LocalUpdate, Time.DeltaTime);
+	}
+
+	public override void LocalLateUpdate()
+	{
+		if (IsLoaded && Wants(.LocalLateUpdate))
+			CSharpRuntime.Dispatch(mInstance, .LocalLateUpdate, Time.DeltaTime);
 	}
 
 	public override void OnGUI()
@@ -335,12 +355,6 @@ class CSharpBehaviour : Component
 
 	// The callbacks below reach a script only while it runs (Play, or a built game): in the editor C# scripts are
 	// not loaded outside Play.
-	public override void OnFrame()
-	{
-		if (IsLoaded && Wants(.Frame))
-			CSharpRuntime.Dispatch(mInstance, .Frame, Time.DeltaTime);
-	}
-
 	public override void OnValidate()
 	{
 		if (IsLoaded)

@@ -1164,10 +1164,28 @@ public abstract class Script : IComponent
     public virtual void Awake() { }
     public virtual void OnEnable() { }
     public virtual void Start() { }
+    /// <summary>At the fixed tick rate, with physics: the place for forces.</summary>
     public virtual void FixedUpdate(float deltaTime) { }
+    /// <summary>Runs before <see cref="Update"/>, when it does and with the same controls: once per network tick on
+    /// an object with a Network Identity (before any of its scripts' Update, and again when a correction replays
+    /// the tick), otherwise once a frame before every Update.</summary>
+    public virtual void EarlyUpdate(TickInput input, float deltaTime) { }
+    /// <summary>The object's gameplay step. On an object with a Network Identity: once per network tick, with the
+    /// controls of the player who controls it, on the server and (predicted, replayed after corrections) on that
+    /// player's machine. Everywhere else: once a frame, with this machine's controls.</summary>
     public virtual void Update(TickInput input, float deltaTime) { }
-    public virtual void OnLocalUpdate() { }
-    public virtual void LateUpdate(float deltaTime) { }
+    /// <summary>Runs after <see cref="Update"/>, when it does and with the same controls: once per network tick on
+    /// an object with a Network Identity (after all of its scripts' Update, and again when a correction replays the
+    /// tick), otherwise once a frame after every Update.</summary>
+    public virtual void LateUpdate(TickInput input, float deltaTime) { }
+    /// <summary>Once a frame before every Update, on this machine only: never networked, never replayed.</summary>
+    public virtual void LocalEarlyUpdate(float deltaTime) { }
+    /// <summary>Once a frame, on this machine only: never networked, never replayed. For effects, UI and anything
+    /// only the local player sees.</summary>
+    public virtual void LocalUpdate(float deltaTime) { }
+    /// <summary>Once a frame after every Update and LateUpdate, on this machine only: the place for a camera that
+    /// follows something (it follows where things are drawn, every frame).</summary>
+    public virtual void LocalLateUpdate(float deltaTime) { }
     public virtual void OnDisable() { }
     public virtual void OnDestroy() { }
     public virtual void OnGUI() { }
@@ -1189,8 +1207,6 @@ public abstract class Script : IComponent
     public virtual void OnTriggerStay(GameObject other) { }
     /// <summary>It left the trigger. <paramref name="other"/> is not valid when it was destroyed.</summary>
     public virtual void OnTriggerExit(GameObject other) { }
-    /// <summary>Once a frame, after the scene's frame work (streaming, effects): on this machine only.</summary>
-    public virtual void OnFrame() { }
     /// <summary>A field was changed in the Inspector during Play (or by the scene loader).</summary>
     public virtual void OnValidate() { }
     /// <summary>Draw helpers in the editor's Scene view with <see cref="Gizmos"/>, every frame during Play.

@@ -14,14 +14,19 @@ static class ProfilerComponents
 		Update,
 		LateUpdate,
 		OnFrame,
-		OnLocalUpdate,
+		LocalUpdate,
+		EarlyUpdate,
+		LocalEarlyUpdate,
+		LocalLateUpdate,
 	}
 
-	static StringView[5] sMethodNames = .(".FixedUpdate()", ".Update()", ".LateUpdate()", ".OnFrame()", ".OnLocalUpdate()");
+	const int MethodCount = 8;
+	static StringView[MethodCount] sMethodNames = .(".FixedUpdate()", ".Update()", ".LateUpdate()", ".OnFrame()", ".LocalUpdate()",
+		".EarlyUpdate()", ".LocalEarlyUpdate()", ".LocalLateUpdate()");
 	static Dictionary<Type, int32> sSlots = new .() ~ delete _;
 	/// C# Script components share one Beef type: they get a slot per script class instead.
 	static Dictionary<String, int32> sScriptSlots = new .() ~ DeleteDictionaryAndKeys!(_);
-	static List<int32[5]> sMarkers = new .() ~ delete _;
+	static List<int32[MethodCount]> sMarkers = new .() ~ delete _;
 
 	/// Whether components are being timed one by one now.
 	public static bool Timing => Profiler.Enabled && Profiler.ComponentSamples;
@@ -35,7 +40,7 @@ static class ProfilerComponents
 			let name = (StringView)((CSharpBehaviour)component).scriptType;
 			if (!sScriptSlots.TryGetValueAlt(name, out slot))
 			{
-				int32[5] markers = default;
+				int32[MethodCount] markers = default;
 				for (int i < markers.Count)
 					markers[i] = Profiler.Marker(scope String()..AppendF("{}{}", name, sMethodNames[i]), .Scripts);
 				slot = (int32)sMarkers.Count;
@@ -52,7 +57,7 @@ static class ProfilerComponents
 				let name = scope String();
 				type.GetName(name);
 				let category = CategoryOf(type, name);
-				int32[5] markers = default;
+				int32[MethodCount] markers = default;
 				for (int i < markers.Count)
 					markers[i] = Profiler.Marker(scope String()..AppendF("{}{}", name, sMethodNames[i]), category);
 				slot = (int32)sMarkers.Count;

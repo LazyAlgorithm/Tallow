@@ -33,7 +33,7 @@ public enum MouseButton
 
 /// <summary>
 /// This machine's keyboard and mouse, for menus, cameras and other local
-/// presentation (OnLocalUpdate, LateUpdate, OnGUI). Networked gameplay in
+/// presentation (LocalUpdate, LocalLateUpdate, OnGUI). Networked gameplay in
 /// Update(TickInput, ...) must read its <see cref="TickInput"/> instead, so
 /// that the server and prediction see the same controls.
 /// </summary>

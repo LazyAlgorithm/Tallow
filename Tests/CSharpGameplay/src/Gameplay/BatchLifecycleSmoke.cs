@@ -9,6 +9,6 @@ public sealed class BatchLifecycleSmoke : Script
     public override void FixedUpdate(float deltaTime) =>
         Transform.Position += Vector3.UnitX * deltaTime;
 
-    public override void LateUpdate(float deltaTime) =>
+    public override void LocalLateUpdate(float deltaTime) =>
         Transform.Position += Vector3.UnitY * deltaTime;
 }

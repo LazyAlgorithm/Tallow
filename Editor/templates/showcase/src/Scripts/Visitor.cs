@@ -36,7 +36,7 @@ public class Visitor : Script
         GetComponent<CharacterController>().SimpleMove(move, Time.DeltaTime, Input.GetKey(KeyCode.Space) ? JumpSpeed : 0);
     }
 
-    public override void LateUpdate(float deltaTime)
+    public override void LocalLateUpdate(float deltaTime)
     {
         if (View is not { } view)
             return;

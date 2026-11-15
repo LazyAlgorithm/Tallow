@@ -192,8 +192,11 @@ class Scene
 	/// The components whose class overrides each per-frame callback (ScriptCallbacks), in the order they joined.
 	/// The update loops go through these only.
 	List<Component> mFixedList = new .() ~ delete _;
-	/// Update or OnLocalUpdate.
+	/// EarlyUpdate or LocalEarlyUpdate.
+	List<Component> mEarlyList = new .() ~ delete _;
+	/// Update or LocalUpdate.
 	List<Component> mFrameList = new .() ~ delete _;
+	/// LateUpdate or LocalLateUpdate.
 	List<Component> mLateList = new .() ~ delete _;
 	List<Component> mOnFrameList = new .() ~ delete _;
 
@@ -203,9 +206,11 @@ class Scene
 		component.[Friend]mCallbacks = callbacks;
 		if (callbacks.HasFlag(.FixedUpdate))
 			mFixedList.Add(component);
-		if (callbacks.HasFlag(.Update) || callbacks.HasFlag(.OnLocalUpdate))
+		if (callbacks & (.EarlyUpdate | .LocalEarlyUpdate) != 0)
+			mEarlyList.Add(component);
+		if (callbacks & (.Update | .LocalUpdate) != 0)
 			mFrameList.Add(component);
-		if (callbacks.HasFlag(.LateUpdate))
+		if (callbacks & (.LateUpdate | .LocalLateUpdate) != 0)
 			mLateList.Add(component);
 		if (callbacks.HasFlag(.OnFrame))
 			mOnFrameList.Add(component);
@@ -236,9 +241,9 @@ class Scene
 				list.Add(component);
 		}
 		Change(mFixedList, old.HasFlag(.FixedUpdate), callbacks.HasFlag(.FixedUpdate));
-		Change(mFrameList, old.HasFlag(.Update) || old.HasFlag(.OnLocalUpdate),
-			callbacks.HasFlag(.Update) || callbacks.HasFlag(.OnLocalUpdate));
-		Change(mLateList, old.HasFlag(.LateUpdate), callbacks.HasFlag(.LateUpdate));
+		Change(mEarlyList, old & (.EarlyUpdate | .LocalEarlyUpdate) != 0, callbacks & (.EarlyUpdate | .LocalEarlyUpdate) != 0);
+		Change(mFrameList, old & (.Update | .LocalUpdate) != 0, callbacks & (.Update | .LocalUpdate) != 0);
+		Change(mLateList, old & (.LateUpdate | .LocalLateUpdate) != 0, callbacks & (.LateUpdate | .LocalLateUpdate) != 0);
 		Change(mOnFrameList, old.HasFlag(.OnFrame), callbacks.HasFlag(.OnFrame));
 		component.[Friend]mCallbacks = callbacks;
 	}
@@ -248,9 +253,11 @@ class Scene
 		let callbacks = component.[Friend]mCallbacks;
 		if (callbacks.HasFlag(.FixedUpdate))
 			mFixedList.Remove(component);
-		if (callbacks.HasFlag(.Update) || callbacks.HasFlag(.OnLocalUpdate))
+		if (callbacks & (.EarlyUpdate | .LocalEarlyUpdate) != 0)
+			mEarlyList.Remove(component);
+		if (callbacks & (.Update | .LocalUpdate) != 0)
 			mFrameList.Remove(component);
-		if (callbacks.HasFlag(.LateUpdate))
+		if (callbacks & (.LateUpdate | .LocalLateUpdate) != 0)
 			mLateList.Remove(component);
 		if (callbacks.HasFlag(.OnFrame))
 			mOnFrameList.Remove(component);
@@ -1360,9 +1367,10 @@ class Scene
 	static ProfilerMarker sPostTickMarker = .("Network Post-Tick", .Networking);
 	static ProfilerMarker sPhysicsMarker = .("Physics.Step", .Physics);
 	static ProfilerMarker sFrameComponentsMarker = .("OnFrame (every component)", .Scripts);
-	static ProfilerMarker sUpdateMarker = .("Update and OnLocalUpdate (every component)", .Scripts);
+	static ProfilerMarker sEarlyMarker = .("EarlyUpdate and LocalEarlyUpdate (every component)", .Scripts);
+	static ProfilerMarker sUpdateMarker = .("Update and LocalUpdate (every component)", .Scripts);
 	static ProfilerMarker sTickUpdateMarker = .("Update (networked objects, offline)", .Scripts);
-	static ProfilerMarker sLateMarker = .("LateUpdate (every component)", .Scripts);
+	static ProfilerMarker sLateMarker = .("LateUpdate and LocalLateUpdate (every component)", .Scripts);
 	static ProfilerMarker sFixedMarker = .("FixedUpdate (every component)", .Scripts);
 	static ProfilerMarker sVoiceMarker = .("VoiceChat.Update", .Audio);
 	static ProfilerMarker sAudioMarker = .("Audio.Update", .Audio);
@@ -1387,24 +1395,33 @@ class Scene
 		{
 		case .FixedUpdate: component.FixedUpdate();
 		case .Update: component.Update(mFrameInput, Time.DeltaTime);
-		case .LateUpdate: component.LateUpdate();
+		case .EarlyUpdate: component.EarlyUpdate(mFrameInput, Time.DeltaTime);
+		case .LateUpdate: component.LateUpdate(mFrameInput, Time.DeltaTime);
 		case .OnFrame: component.OnFrame();
-		case .OnLocalUpdate: component.OnLocalUpdate();
+		case .LocalUpdate: component.LocalUpdate();
+		case .LocalEarlyUpdate: component.LocalEarlyUpdate();
+		case .LocalLateUpdate: component.LocalLateUpdate();
 		}
 		if (timed)
 			Profiler.End();
 		Watchdog.Running = null;
 	}
 
-	/// Calls Component.Update with the given controls (a network tick's, or this frame's).
+	/// Calls Component.Update (or EarlyUpdate / LateUpdate) with the given controls (a network tick's, or this
+	/// frame's).
 	[Inline]
-	void RunUpdate(Component component, TickInput input, float deltaTime)
+	void RunUpdate(Component component, TickInput input, float deltaTime, ProfilerComponents.Method method = .Update)
 	{
 		Watchdog.Running = component;
 		let timed = ProfilerComponents.Timing;
 		if (timed)
-			Profiler.Begin(ProfilerComponents.MarkerFor(component, .Update));
-		component.Update(input, deltaTime);
+			Profiler.Begin(ProfilerComponents.MarkerFor(component, method));
+		switch (method)
+		{
+		case .EarlyUpdate: component.EarlyUpdate(input, deltaTime);
+		case .LateUpdate: component.LateUpdate(input, deltaTime);
+		default: component.Update(input, deltaTime);
+		}
 		if (timed)
 			Profiler.End();
 		Watchdog.Running = null;
@@ -1538,13 +1555,15 @@ class Scene
 			});
 		// Physics ticks have already finished. Free soft bodies carry their
 		// GameObject position when their vertices are read back; do this
-		// before any gameplay Update or camera LateUpdate, independent of
+		// before any gameplay Update or camera LocalLateUpdate, independent of
 		// GameObject registration order.
 		World.AddStep(mFramePipeline, "Frame.SoftBodies", .PreUpdate, new () =>
 			{
 				if (mPlaying)
 					Physics.[Friend]SyncSoftBodiesForFrame();
 			});
+		// This frame's controls are read here; EarlyUpdate and LocalEarlyUpdate run before every Update.
+		World.AddStep(mFramePipeline, "Frame.EarlyUpdate", .PreUpdate, new => RunEarlyUpdates);
 		World.AddStep(mFramePipeline, "Frame.Update", .OnUpdate, new => RunFrameUpdates);
 		// Conversations move on after the scripts' Update (DialogueRunner.OnLocalUpdate did, in component order).
 		World.AddStep(mFramePipeline, "Frame.Dialogue", .OnUpdate, new () => DialogueRunner.FrameAll(this));
@@ -1650,8 +1669,8 @@ class Scene
 	public int64 UpdateCount { get; private set; }
 
 	/// Runs one frame through the Frame pipeline: OnFrame on every component (in the editor too), audio, then while
-	/// playing the pending Starts, Update and OnLocalUpdate, queued paths and LateUpdate, and always IK, skinning and
-	/// the destroy queue.
+	/// playing the pending Starts, EarlyUpdate, Update, queued paths and LateUpdate (with their Local versions), and
+	/// always IK, skinning and the destroy queue.
 	public void Update()
 	{
 		Active = this;
@@ -1704,13 +1723,42 @@ class Scene
 		Profiler.End();
 	}
 
-	void RunFrameUpdates()
+	/// LocalEarlyUpdate, then EarlyUpdate for objects without a Network Identity (theirs runs per tick), on each
+	/// component in turn. Reads this frame's controls first.
+	void RunEarlyUpdates()
 	{
 		if (!mPlaying)
 			return;
 		mFrameInput.previous = mFrameInput.raw;
 		mFrameInput.raw = default;
 		LocalControls.Read(ref mFrameInput.raw);
+		if (mEarlyList.Count == 0)
+			return;
+		let deltaTime = Time.DeltaTime;
+		sEarlyMarker.Begin();
+		for (int i = 0; i < mEarlyList.Count; i++)
+		{
+			let component = mEarlyList[i];
+			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
+			{
+				let callbacks = component.[Friend]mCallbacks;
+				if (callbacks.HasFlag(.LocalEarlyUpdate))
+				{
+					Run(component, .LocalEarlyUpdate);
+					if (!component.IsActiveAndEnabled)
+						continue;
+				}
+				if (callbacks.HasFlag(.EarlyUpdate) && !TicksUpdate(component.GameObject))
+					RunUpdate(component, mFrameInput, deltaTime, .EarlyUpdate);
+			}
+		}
+		Profiler.End();
+	}
+
+	void RunFrameUpdates()
+	{
+		if (!mPlaying)
+			return;
 		let deltaTime = Time.DeltaTime;
 		sUpdateMarker.Begin();
 		for (int i = 0; i < mFrameList.Count; i++)
@@ -1719,9 +1767,9 @@ class Scene
 			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
 			{
 				let callbacks = component.[Friend]mCallbacks;
-				if (callbacks.HasFlag(.OnLocalUpdate))
+				if (callbacks.HasFlag(.LocalUpdate))
 				{
-					Run(component, .OnLocalUpdate);
+					Run(component, .LocalUpdate);
 					// Local callbacks can disable this component or its hierarchy before Update.
 					if (!component.IsActiveAndEnabled)
 						continue;
@@ -1734,16 +1782,33 @@ class Scene
 		Profiler.End();
 	}
 
+	/// LateUpdate for objects without a Network Identity (theirs runs per tick), then LocalLateUpdate on every
+	/// component, so that a camera following something sees where everything ended up.
 	void RunLateUpdates()
 	{
 		if (!mPlaying)
 			return;
+		let deltaTime = Time.DeltaTime;
 		sLateMarker.Begin();
+		bool anyLocal = false;
 		for (int i = 0; i < mLateList.Count; i++)
 		{
 			let component = mLateList[i];
-			if (component.[Friend]mStarted && component.IsActiveAndEnabled)
-				Run(component, .LateUpdate);
+			let callbacks = component.[Friend]mCallbacks;
+			anyLocal |= callbacks.HasFlag(.LocalLateUpdate);
+			if (callbacks.HasFlag(.LateUpdate) && component.[Friend]mStarted && component.IsActiveAndEnabled &&
+				!TicksUpdate(component.GameObject))
+				RunUpdate(component, mFrameInput, deltaTime, .LateUpdate);
+		}
+		if (anyLocal)
+		{
+			for (int i = 0; i < mLateList.Count; i++)
+			{
+				let component = mLateList[i];
+				if (component.[Friend]mCallbacks.HasFlag(.LocalLateUpdate) && component.[Friend]mStarted &&
+					component.IsActiveAndEnabled)
+					Run(component, .LocalLateUpdate);
+			}
 		}
 		// Lines and trails follow what the scripts moved.
 		LineRenderer.LateAll(this);

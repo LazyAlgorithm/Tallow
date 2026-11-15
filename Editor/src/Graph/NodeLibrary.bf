@@ -411,7 +411,11 @@ static class NodeLibrary
 		Add("event.start", "Add Event", "On Start", .Event, "Start").Also("Event BeginPlay Begin Play");
 		TickOutputs(Add("event.update", "Add Event", "On Update", .Event, "Update")).Also("Event Tick");
 		Add("event.fixed", "Add Event", "On Fixed Update", .Event, "FixedUpdate").Also("Physics Tick");
-		Add("event.late", "Add Event", "On Late Update", .Event, "LateUpdate").Also("Post Update Tick");
+		TickOutputs(Add("event.early", "Add Event", "On Early Update", .Event, "EarlyUpdate")).Also("Pre Update Tick Before");
+		TickOutputs(Add("event.late", "Add Event", "On Late Update", .Event, "LateUpdate")).Also("Post Update Tick After");
+		Add("event.localearly", "Add Event", "On Local Early Update", .Event, "LocalEarlyUpdate").Also("Frame Local Only Before");
+		Add("event.local", "Add Event", "On Local Update", .Event, "LocalUpdate").Also("Frame Local Only Effects UI");
+		Add("event.locallate", "Add Event", "On Local Late Update", .Event, "LocalLateUpdate").Also("Camera Follow Frame Local Only After");
 		Add("event.awake", "Add Event", "On Awake", .Event, "Awake").Also("Construction Script Initialize");
 		Add("event.enable", "Add Event", "On Enable", .Event, "OnEnable");
 		Add("event.disable", "Add Event", "On Disable", .Event, "OnDisable");
@@ -470,9 +474,10 @@ static class NodeLibrary
 	static NodeDef Control(StringView key, StringView title) => Add(key, "Flow Control", title, .Control, "");
 
 	/// Update's signature and outputs: the delta time and the controls (Component.Update).
+	/// Update, EarlyUpdate and LateUpdate: the tick's controls and delta time.
 	static NodeDef TickOutputs(NodeDef def)
 	{
-		def.signature.Set(NodeGraph.UpdateSignature);
+		def.signature.Set(scope $"public override void {def.code}(TickInput input, float deltaTime)");
 		def.Out("Delta Time", .Float, "float", "deltaTime").Out("Move", .Vector2, "Vector2", "input.Move").Out("Move Direction", .Vector3, "Vector3", "input.MoveDirection")
 			.Out("Yaw", .Float, "float", "input.Yaw").Out("Pitch", .Float, "float", "input.Pitch").Out("Look Rotation", .Quaternion, "Quaternion", "input.LookRotation")
 			.Out("Jump", .Bool, "bool", "input.Jump").Out("Jump Pressed", .Bool, "bool", "input.Pressed(.Jump)").Out("Sprint", .Bool, "bool", "input.Sprint")
@@ -1186,7 +1191,7 @@ static class NodeLibrary
 		switch (name)
 		{
 		case "Awake","Start","Update","FixedUpdate","LateUpdate","OnEnable","OnDisable","OnDestroy","OnRegister","OnUnregister","OnFrame","OnGUI",
-			"OnBeforeSave","SaveFields","OnSaving","OnLoaded","OnValidate","OnDrawGizmos","Simulate","GatherInput","OnLocalUpdate","ReadInput","OnNetworkEvent","ToString","GetHashCode","Dispose":
+			"OnBeforeSave","SaveFields","OnSaving","OnLoaded","OnValidate","OnDrawGizmos","Simulate","GatherInput","EarlyUpdate","LocalEarlyUpdate","LocalUpdate","LocalLateUpdate","ReadInput","OnNetworkEvent","ToString","GetHashCode","Dispose":
 			return true;
 		}
 		return false;
@@ -1686,7 +1691,7 @@ scope $"if ({{0}} != null && {{0}}.GetComponent<{typeName}>() != null) {{0}}.Get
 	public static bool IsReservedName(StringView name)
 	{
 		for (let reserved in StringView[?]("GameObject", "Transform", "Scene", "IsAwake", "Enabled", "IsActiveAndEnabled", "GetComponent", "Awake", "OnEnable", "Start",
-			"FixedUpdate", "Update", "OnLocalUpdate", "LateUpdate", "OnDisable", "OnDestroy", "OnRegister", "OnUnregister", "OnFrame", "OnGUI", "OnBeforeSave", "SaveFields", "OnSaving", "OnLoaded", "OnValidate", "OnDrawGizmos",
+			"FixedUpdate", "Update", "EarlyUpdate", "LateUpdate", "LocalEarlyUpdate", "LocalUpdate", "LocalLateUpdate", "OnDisable", "OnDestroy", "OnRegister", "OnUnregister", "OnFrame", "OnGUI", "OnBeforeSave", "SaveFields", "OnSaving", "OnLoaded", "OnValidate", "OnDrawGizmos",
 			"this", "base", "float", "bool", "int", "String", "Vector3", "true", "false", "null", "var", "let", "if", "else", "for", "while", "return", "class", "public", "delete", "new", "scope"))
 		{
 			if (name == reserved)

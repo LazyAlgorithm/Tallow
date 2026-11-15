@@ -14,8 +14,11 @@ enum ScriptCallbacks : uint8
 	Update = 2,
 	LateUpdate = 4,
 	OnFrame = 8,
-	OnLocalUpdate = 16,
-	All = 31,
+	LocalUpdate = 16,
+	EarlyUpdate = 32,
+	LocalEarlyUpdate = 64,
+	LocalLateUpdate = 128,
+	All = 255,
 }
 
 static class ScriptCallbackIndex
@@ -41,15 +44,24 @@ static class ScriptCallbackIndex
 				{
 					if (name == "FixedUpdate")
 						found |= .FixedUpdate;
-					else if (name == "LateUpdate")
-						found |= .LateUpdate;
 					else if (name == "OnFrame")
 						found |= .OnFrame;
-					else if (name == "OnLocalUpdate")
-						found |= .OnLocalUpdate;
+					else if (name == "LocalEarlyUpdate")
+						found |= .LocalEarlyUpdate;
+					else if (name == "LocalUpdate")
+						found |= .LocalUpdate;
+					else if (name == "LocalLateUpdate")
+						found |= .LocalLateUpdate;
 				}
-				else if (parameters == 2 && name == "Update")
-					found |= .Update;
+				else if (parameters == 2)
+				{
+					if (name == "Update")
+						found |= .Update;
+					else if (name == "EarlyUpdate")
+						found |= .EarlyUpdate;
+					else if (name == "LateUpdate")
+						found |= .LateUpdate;
+				}
 			}
 			// No methods visible at all: reflection was left out for this class, so assume everything.
 			if (methods == 0 && at != typeof(Script))

@@ -55,6 +55,13 @@ int32_t tn_csharp_update_input(int32_t script_instance,
     (void)script_instance; (void)input; (void)delta_time;
     return 0;
 }
+
+int32_t tn_csharp_tick_phase(int32_t script_instance, int32_t phase,
+    const tn_csharp_tick_input* input, float delta_time)
+{
+    (void)script_instance; (void)phase; (void)input; (void)delta_time;
+    return 0;
+}
 int32_t tn_csharp_contact_event(int32_t script_instance, const tn_csharp_contact* contact)
 {
     (void)script_instance; (void)contact;

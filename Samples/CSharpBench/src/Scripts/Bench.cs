@@ -139,7 +139,7 @@ public class Bench : Script
         }
     }
 
-    public override void LateUpdate(float deltaTime)
+    public override void LocalLateUpdate(float deltaTime)
     {
         if (_frame > WarmupFrames)
             _updateTimes.Add(Stopwatch.GetElapsedTime(_updateStart).TotalMilliseconds);

@@ -10,7 +10,7 @@ class FollowCamera : Script
 	public float distance = 7.0f;
 	public float height = 2.5f;
 
-	public override void LateUpdate()
+	public override void LocalLateUpdate()
 	{
 		let identity = GetComponent<NetworkIdentity>();
 		if (identity.IsValid && Scene.Network != null && !identity.IsOwner)

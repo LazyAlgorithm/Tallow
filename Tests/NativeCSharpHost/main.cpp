@@ -65,7 +65,7 @@ static int32_t CanDispatch(void*, uint64_t session, uint64_t entity,
     int32_t instance, int32_t eventId)
 {
     if (!Match(session, entity) ||
-        (eventId != TN_CSHARP_FIXED_UPDATE && eventId != TN_CSHARP_LATE_UPDATE))
+        (eventId != TN_CSHARP_FIXED_UPDATE && eventId != TN_CSHARP_LOCAL_LATE_UPDATE))
         return 0;
     const auto it = checkedBatchEligibility.find(instance);
     return it != checkedBatchEligibility.end() && it->second ? 1 : 0;
@@ -1049,7 +1049,7 @@ int main(int argc, char** argv)
     state.position[2] = zBeforeBatch;
 
     if (!tn_csharp_dispatch(inputScript, TN_CSHARP_LOCAL_UPDATE, 0.0f) ||
-        !tn_csharp_dispatch(inputScript, TN_CSHARP_LATE_UPDATE, 1.0f) ||
+        !tn_csharp_dispatch(inputScript, TN_CSHARP_LOCAL_LATE_UPDATE, 1.0f) ||
         !tn_csharp_dispatch(inputScript, TN_CSHARP_DISABLE, 0.0f) ||
         !tn_csharp_detach(inputScript))
         return Failure("managed C# cleanup and scene callbacks");
@@ -1191,7 +1191,7 @@ int main(int argc, char** argv)
     const float startX = state.position[0], startY = state.position[1];
     if (tn_csharp_dispatch_batch(batchIds, 2, TN_CSHARP_FIXED_UPDATE, 0.5f) != 2 ||
         std::fabs(state.position[0] - startX - 1.0f) > 0.0001f ||
-        tn_csharp_dispatch_batch(batchIds, 2, TN_CSHARP_LATE_UPDATE, 0.25f) != 2 ||
+        tn_csharp_dispatch_batch(batchIds, 2, TN_CSHARP_LOCAL_LATE_UPDATE, 0.25f) != 2 ||
         std::fabs(state.position[1] - startY - 0.5f) > 0.0001f)
         return Failure("ordered batched Fixed/LateUpdate");
     if (tn_csharp_dispatch_batch(nullptr, 0, TN_CSHARP_FIXED_UPDATE, 0.5f) != 0 ||
@@ -1242,7 +1242,7 @@ int main(int argc, char** argv)
     checkedBatchEligibility[checkedB] = true;
     const float checkedStartY = state.position[1];
     if (tn_csharp_dispatch_checked_batch(checkedIds, 2,
-            TN_CSHARP_LATE_UPDATE, 0.5f) != 2 ||
+            TN_CSHARP_LOCAL_LATE_UPDATE, 0.5f) != 2 ||
         std::fabs(state.position[1] - checkedStartY - 1.0f) > 0.0001f)
         return Failure("checked batch did not preserve ordered eligible callbacks");
     if (tn_csharp_dispatch_checked_batch(nullptr, 0,

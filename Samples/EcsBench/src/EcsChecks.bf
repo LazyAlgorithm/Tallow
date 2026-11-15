@@ -68,7 +68,7 @@ class LocalUpdateGate : Component
 	public int updates;
 	public int localUpdates;
 
-	public override void OnLocalUpdate()
+	public override void LocalUpdate()
 	{
 		localUpdates++;
 		if (disableParent)
@@ -261,9 +261,9 @@ static class EcsChecks
 		let target = scene.CreateGameObject("Target").AddComponent<UpdateCounter>();
 		targetGate.target = target;
 		scene.Update();
-		Expect(selfGate.localUpdates == 1 && selfGate.updates == 0, "OnLocalUpdate disabling itself skips Update");
-		Expect(parentGate.localUpdates == 1 && parentGate.updates == 0, "OnLocalUpdate disabling its parent skips Update");
-		Expect(targetGate.localUpdates == 1 && targetGate.updates == 1 && target.frames == 0, "OnLocalUpdate disabling a later script preserves registration order");
+		Expect(selfGate.localUpdates == 1 && selfGate.updates == 0, "LocalUpdate disabling itself skips Update");
+		Expect(parentGate.localUpdates == 1 && parentGate.updates == 0, "LocalUpdate disabling its parent skips Update");
+		Expect(targetGate.localUpdates == 1 && targetGate.updates == 1 && target.frames == 0, "LocalUpdate disabling a later script preserves registration order");
 		targetGate.Enabled = false;
 		target.Enabled = true;
 		scene.Update();

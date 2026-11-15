@@ -183,7 +183,7 @@ class Bench : Component
 		}
 	}
 
-	public override void LateUpdate()
+	public override void LocalLateUpdate()
 	{
 		if (mFrame > WarmupFrames)
 			mUpdateTimes.Add((SDL.SDL_GetTicksNS() - mUpdateStart) / 1e6);

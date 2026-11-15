@@ -338,7 +338,10 @@ public class ApiChecks : CheckBase
         Check("the hooks probe is attached", hooks != null);
         if (hooks == null)
             return;
-        Check("OnFrame runs every frame during Play", hooks.Frames > 200);
+        Check("LocalEarlyUpdate runs every frame during Play", hooks.Frames > 200);
+        Check($"a frame runs LocalEarlyUpdate, EarlyUpdate, LocalUpdate, Update, LateUpdate, LocalLateUpdate in order ({hooks.Order})",
+            hooks.Order == "local-early early local update late local-late ");
+        Check("each frame callback runs once a frame with the frame's delta time", hooks.SameCounts && hooks.FrameDelta);
         hooks.SendNetworkEvent("ping", 2.5f);
         Check("SendNetworkEvent without a session calls OnNetworkEvent here", hooks.LastEvent == "ping:2.5");
         // DebugDraw and Gizmos reach the engine's line batches (nothing to see headless; must not throw).
@@ -735,7 +738,7 @@ public class AsyncProbe : Script
     public int FramesForNextFrame = -1, FramesForWait = -1;
     private int _thread, _frames;
 
-    public override void OnLocalUpdate() => _frames++;
+    public override void LocalUpdate(float deltaTime) => _frames++;
 
     public override void Start()
     {
@@ -799,7 +802,7 @@ public class AsyncDoomed : Script
     }
 }
 
-/// OnFrame, OnNetworkEvent and the save hooks.
+/// The frame callbacks, OnNetworkEvent and the save hooks.
 public class HooksProbe : Script
 {
     [Saved] public int Coins;
@@ -811,7 +814,33 @@ public class HooksProbe : Script
     public float Secret => secret;
     public void SetSecret(float value) => secret = value;
 
-    public override void OnFrame() => Frames++;
+    public string Order = "";
+    private int _early, _local, _update, _late, _localLate;
+
+    // Checked as each frame starts (the checks read it partway through one): every callback ran once a frame.
+    private bool _countsDiffered;
+    public bool SameCounts => Frames > 10 && !_countsDiffered;
+    public bool FrameDelta { get; private set; } = true;
+
+    // One frame (the tenth) records the order the callbacks ran in.
+    private void Note(string name, float deltaTime)
+    {
+        FrameDelta &= deltaTime == Time.DeltaTime;
+        if (Frames == 10)
+            Order += name + " ";
+    }
+
+    public override void LocalEarlyUpdate(float deltaTime)
+    {
+        _countsDiffered |= _early != Frames || _local != Frames || _update != Frames || _late != Frames || _localLate != Frames;
+        Frames++;
+        Note("local-early", deltaTime);
+    }
+    public override void EarlyUpdate(TickInput input, float deltaTime) { _early++; Note("early", deltaTime); }
+    public override void LocalUpdate(float deltaTime) { _local++; Note("local", deltaTime); }
+    public override void Update(TickInput input, float deltaTime) { _update++; Note("update", deltaTime); }
+    public override void LateUpdate(TickInput input, float deltaTime) { _late++; Note("late", deltaTime); }
+    public override void LocalLateUpdate(float deltaTime) { _localLate++; Note("local-late", deltaTime); }
     public override void OnNetworkEvent(string name, float value) =>
         LastEvent = name + ":" + value.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public override void OnSaving() => Savings++;

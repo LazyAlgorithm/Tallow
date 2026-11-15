@@ -46,9 +46,9 @@ internal static class GraphNodeCatalog
     /// <summary>Script methods the engine calls; a node for one would make no sense.</summary>
     private static readonly HashSet<string> Lifecycle = new(StringComparer.Ordinal)
     {
-        "Awake", "OnEnable", "Start", "FixedUpdate", "Update", "OnLocalUpdate", "LateUpdate", "OnDisable", "OnDestroy",
+        "Awake", "OnEnable", "Start", "FixedUpdate", "EarlyUpdate", "Update", "LateUpdate", "LocalEarlyUpdate", "LocalUpdate", "LocalLateUpdate", "OnDisable", "OnDestroy",
         "OnGUI", "OnCollisionEnter", "OnCollisionStay", "OnCollisionExit", "OnTriggerEnter", "OnTriggerStay",
-        "OnTriggerExit", "OnControllerHit", "OnFrame", "OnValidate", "OnDrawGizmos", "OnSaving", "OnLoaded",
+        "OnTriggerExit", "OnControllerHit", "OnValidate", "OnDrawGizmos", "OnSaving", "OnLoaded",
         "OnNetworkEvent", "Attach", "Equals", "GetHashCode", "ToString", "Deconstruct", "PrintMembers", "GetType",
         "NextFrame", "Wait"
     };

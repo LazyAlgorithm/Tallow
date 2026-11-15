@@ -186,10 +186,10 @@ internal static class GameplayDiagnostics
             return false;
         return method.Identifier.ValueText switch
         {
-            "FixedUpdate" or "LateUpdate" =>
+            "FixedUpdate" or "LocalEarlyUpdate" or "LocalUpdate" or "LocalLateUpdate" =>
                 symbol.Parameters.Length == 1 &&
                 symbol.Parameters[0].Type.SpecialType == SpecialType.System_Single,
-            "OnLocalUpdate" => symbol.Parameters.Length == 0,
+            "EarlyUpdate" or "LateUpdate" => symbol.Parameters.Length == 2,
             _ => false
         };
     }
@@ -206,14 +206,14 @@ internal static class GameplayDiagnostics
     private static bool IsNetworkTick(MethodDeclarationSyntax method, SemanticModel semantic)
     {
         string name = method.Identifier.ValueText;
-        if (name is not ("Update" or "Simulate"))
+        if (name is not ("Update" or "EarlyUpdate" or "LateUpdate" or "Simulate"))
             return false;
         IMethodSymbol? symbol = semantic.GetDeclaredSymbol(method);
         if (symbol is null || !symbol.IsOverride || symbol.Parameters.Length == 0 ||
             symbol.ReturnsVoid == false || symbol.ContainingType is null)
             return false;
         string input = symbol.Parameters[0].Type.ToDisplayString();
-        if (name == "Update" && input != "Tallow.TickInput" ||
+        if (name != "Simulate" && input != "Tallow.TickInput" ||
             name == "Simulate" && input != "Tallow.NetInput")
             return false;
         // Only actual gameplay script components run in predicted ticks.

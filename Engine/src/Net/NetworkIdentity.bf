@@ -410,7 +410,8 @@ class NetworkIdentityState
 		return any;
 	}
 
-	/// Runs one tick of Update on every running component of this object (Component.Update).
+	/// Runs one tick of this object's components: EarlyUpdate on each, then Update on each, then LateUpdate on each,
+	/// all with the same controls.
 	public void TickUpdate(NetInput input, float deltaTime)
 	{
 		TickInput tick;
@@ -419,13 +420,27 @@ class NetworkIdentityState
 		LastInput = tick.raw;
 		let scene = GameObject.Scene;
 		let components = GameObject.Components;
+		ScriptCallbacks any = .None;
+		for (int i = 0; i < components.Count; i++)
+			any |= components[i].[Friend]mCallbacks;
+		if (any.HasFlag(.EarlyUpdate))
+			TickPhase(scene, tick, deltaTime, .EarlyUpdate);
+		TickPhase(scene, tick, deltaTime, .Update);
+		if (any.HasFlag(.LateUpdate))
+			TickPhase(scene, tick, deltaTime, .LateUpdate);
+	}
+
+	void TickPhase(Scene scene, TickInput tick, float deltaTime, ProfilerComponents.Method method)
+	{
+		ScriptCallbacks flag = method == .EarlyUpdate ? .EarlyUpdate : (method == .LateUpdate ? .LateUpdate : .Update);
+		let components = GameObject.Components;
 		for (int i = 0; i < components.Count; i++)
 		{
 			let component = components[i];
-			if (component.[Friend]mCallbacks.HasFlag(.Update) && component.[Friend]mStarted && component.IsActiveAndEnabled)
+			if (component.[Friend]mCallbacks.HasFlag(flag) && component.[Friend]mStarted && component.IsActiveAndEnabled)
 			{
-				scene.[Friend]RunUpdate(component, tick, deltaTime);
-				if (scene.Network != null && scene.Network.DesyncDebugger)
+				scene.[Friend]RunUpdate(component, tick, deltaTime, method);
+				if (method == .Update && scene.Network != null && scene.Network.DesyncDebugger)
 					scene.Network.[Friend]DesyncNoteScript(Handle, component, false);
 			}
 		}

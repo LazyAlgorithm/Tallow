@@ -71,9 +71,17 @@ enum tn_csharp_event_id {
     TN_CSHARP_START = 2,
     TN_CSHARP_FIXED_UPDATE = 3,
     TN_CSHARP_LOCAL_UPDATE = 4,
-    TN_CSHARP_LATE_UPDATE = 5,
+    TN_CSHARP_LOCAL_LATE_UPDATE = 5,
     TN_CSHARP_DISABLE = 6,
-    TN_CSHARP_GUI = 7
+    TN_CSHARP_GUI = 7,
+    TN_CSHARP_LOCAL_EARLY_UPDATE = 8
+};
+
+// tn_csharp_tick_phase: which input callback.
+enum tn_csharp_tick_phase_id {
+    TN_CSHARP_PHASE_EARLY_UPDATE = 0,
+    TN_CSHARP_PHASE_UPDATE = 1,
+    TN_CSHARP_PHASE_LATE_UPDATE = 2
 };
 
 // Initialize the .NET runtime within this native process. These paths come
@@ -94,13 +102,16 @@ int32_t tn_csharp_dispatch(int32_t script_instance, int32_t event_id, float delt
 // CLR transition. Returns count on success, -1 on failure; pointers not retained.
 int32_t tn_csharp_dispatch_batch(const int32_t* instances, int32_t count,
     int32_t event_id, float delta_time);
-// Checked variant for native Scene scheduling of FixedUpdate/LateUpdate.
+// Checked variant for native Scene scheduling of FixedUpdate/LocalLateUpdate.
 // Each script is checked immediately before invocation, not just at batch
 // construction time. It returns accepted snapshot size (skipped entries
 // included), or -1 on invalid input/managed failure.
 int32_t tn_csharp_dispatch_checked_batch(const int32_t* instances,
     int32_t count, int32_t event_id, float delta_time);
 int32_t tn_csharp_update_input(int32_t script_instance,
+    const tn_csharp_tick_input* input, float delta_time);
+// EarlyUpdate, Update or LateUpdate(TickInput, float) (tn_csharp_tick_phase_id); 1 on success.
+int32_t tn_csharp_tick_phase(int32_t script_instance, int32_t phase,
     const tn_csharp_tick_input* input, float delta_time);
 // Call Update(TickInput,float) for up to 4096 ordered native records with a
 // single native->CLR transition; -1 on invalid data, count on success.

@@ -19,15 +19,17 @@ public static unsafe class NativeEntrypoints
     private struct Callbacks
     {
         public nint Context;
-        // The handle and transform callbacks are short, never block and never call back into .NET (they read or
-        // write transform data and mark it dirty), so they skip the GC transition: about half the cost of a call.
+        // The read-only handle and transform callbacks are short, never block and never call back into .NET, so they
+        // skip the GC transition (about half the cost of a call). The setters keep it: a host may call back into
+        // .NET from a transform write (Tests/NativeCSharpHost detaches a script there), which a suppressed
+        // transition turns into a fatal error.
         public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, int> IsAlive;
         public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, float*, int> GetPosition;
-        public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, float*, int> SetPosition;
+        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, float*, int> SetPosition;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, void> Destroy;
         public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int> IsMine;
         public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, int, float*, int> GetTransform;
-        public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, int, float*, int> SetTransform;
+        public delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, float*, int> SetTransform;
         public delegate* unmanaged[Cdecl]<nint, byte*, nint> ResolveApi;
         public delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> CreateSceneObject;
         public delegate* unmanaged[Cdecl]<nint, ulong, byte*, int, ulong> FindSceneObject;
@@ -365,8 +367,8 @@ public static unsafe class NativeEntrypoints
     private enum ScriptEvent
     {
         // The same numbers as CSharpRuntime.ManagedEvent in the engine.
-        Awake, Enable, Start, FixedUpdate, LocalUpdate, LateUpdate, Disable, Gui,
-        Frame, Validate, DrawGizmos, Saving, Loaded
+        Awake, Enable, Start, FixedUpdate, LocalUpdate, LocalLateUpdate, Disable, Gui,
+        LocalEarlyUpdate, Validate, DrawGizmos, Saving, Loaded
     }
     private static int sNextInstance;
     // Trusted development gameplay gets a separate collectible context. The engine's
@@ -881,14 +883,14 @@ public static unsafe class NativeEntrypoints
                 break;
             case ScriptEvent.Start: script.Start(); break;
             case ScriptEvent.FixedUpdate: script.FixedUpdate(deltaTime); break;
-            case ScriptEvent.LocalUpdate: script.OnLocalUpdate(); break;
-            case ScriptEvent.LateUpdate: script.LateUpdate(deltaTime); break;
+            case ScriptEvent.LocalUpdate: script.LocalUpdate(deltaTime); break;
+            case ScriptEvent.LocalLateUpdate: script.LocalLateUpdate(deltaTime); break;
+            case ScriptEvent.LocalEarlyUpdate: script.LocalEarlyUpdate(deltaTime); break;
             case ScriptEvent.Disable:
                 if (sEnabled.Remove(instance))
                     script.OnDisable();
                 break;
             case ScriptEvent.Gui: script.OnGUI(); break;
-            case ScriptEvent.Frame: script.OnFrame(); break;
             case ScriptEvent.Validate: script.OnValidate(); break;
             case ScriptEvent.DrawGizmos: script.OnDrawGizmos(deltaTime != 0); break;
             case ScriptEvent.Saving: script.OnSaving(); break;
@@ -907,13 +909,13 @@ public static unsafe class NativeEntrypoints
 
     /// <summary>Dispatch's event id that asks which per-frame callbacks an instance's class overrides.</summary>
     private const int QueryCallbacks = 100;
-    /// <summary>The bit for Update in that answer (the others are 1 &lt;&lt; ScriptEvent).</summary>
-    private const int UpdateBit = 1 << 20;
+    /// <summary>The bits for Update, EarlyUpdate and LateUpdate in that answer (the others are 1 &lt;&lt; ScriptEvent).</summary>
+    private const int UpdateBit = 1 << 20, EarlyUpdateBit = 1 << 21, LateUpdateBit = 1 << 22;
     private static readonly Dictionary<Type, int> sCallbackMasks = new();
 
     /// <summary>
     /// The per-frame callbacks a script class overrides: the engine skips the others, so a script with only
-    /// Update costs one call a frame rather than one for each of Update, LateUpdate, OnGUI, OnFrame, ....
+    /// Update costs one call a frame rather than one for each of EarlyUpdate, Update, LateUpdate, OnGUI, ....
     /// Awake, OnEnable, Start, OnDisable and the rare callbacks are always sent.
     /// </summary>
     private static int CallbackMask(Type type)
@@ -929,12 +931,14 @@ public static unsafe class NativeEntrypoints
                 if (method == null || method.DeclaringType != typeof(Script))
                     mask |= bit;
             }
+            Check(nameof(Script.EarlyUpdate), [typeof(TickInput), typeof(float)], EarlyUpdateBit);
             Check(nameof(Script.Update), [typeof(TickInput), typeof(float)], UpdateBit);
+            Check(nameof(Script.LateUpdate), [typeof(TickInput), typeof(float)], LateUpdateBit);
             Check(nameof(Script.FixedUpdate), [typeof(float)], 1 << (int)ScriptEvent.FixedUpdate);
-            Check(nameof(Script.OnLocalUpdate), Type.EmptyTypes, 1 << (int)ScriptEvent.LocalUpdate);
-            Check(nameof(Script.LateUpdate), [typeof(float)], 1 << (int)ScriptEvent.LateUpdate);
+            Check(nameof(Script.LocalEarlyUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalEarlyUpdate);
+            Check(nameof(Script.LocalUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalUpdate);
+            Check(nameof(Script.LocalLateUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalLateUpdate);
             Check(nameof(Script.OnGUI), Type.EmptyTypes, 1 << (int)ScriptEvent.Gui);
-            Check(nameof(Script.OnFrame), Type.EmptyTypes, 1 << (int)ScriptEvent.Frame);
             sCallbackMasks[type] = mask;
             return mask;
         }
@@ -1011,9 +1015,9 @@ public static unsafe class NativeEntrypoints
             if (count < 0 || count > 4096 || (count > 0 && instances == null))
                 throw new ArgumentOutOfRangeException(nameof(count));
             ScriptEvent phase = (ScriptEvent)eventId;
-            if (phase is not (ScriptEvent.FixedUpdate or ScriptEvent.LateUpdate))
+            if (phase is not (ScriptEvent.FixedUpdate or ScriptEvent.LocalLateUpdate))
                 throw new ArgumentOutOfRangeException(nameof(eventId),
-                    "Checked batches only support native scene FixedUpdate/LateUpdate.");
+                    "Checked batches only support native scene FixedUpdate/LocalLateUpdate.");
             if (sNativeCallbacks.CanDispatch == null)
                 throw new InvalidOperationException("The native scheduler has not been bound.");
             for (int i = 0; i < count; i++)
@@ -1046,6 +1050,35 @@ public static unsafe class NativeEntrypoints
             new Vector2(input.Yaw, input.Pitch),
             input.Buttons, input.PreviousButtons);
         script.Update(tick, deltaTime);
+    }
+
+    /// <summary>EarlyUpdate (0), Update (1) or LateUpdate (2) with a tick's controls.</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int TickPhase(int instance, int phase, NativeInput* input, float deltaTime)
+    {
+        try
+        {
+            if (input == null)
+                throw new ArgumentNullException(nameof(input));
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            var tick = new TickInput(
+                new Vector2(input->MoveX, input->MoveZ),
+                new Vector2(input->Yaw, input->Pitch),
+                input->Buttons, input->PreviousButtons);
+            switch (phase)
+            {
+                case 0: script.EarlyUpdate(tick, deltaTime); break;
+                case 1: script.Update(tick, deltaTime); break;
+                case 2: script.LateUpdate(tick, deltaTime); break;
+                default: throw new ArgumentOutOfRangeException(nameof(phase));
+            }
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
     }
 
     private static void RunInputOne(int instance, NativeInput input, float deltaTime)
@@ -1114,9 +1147,13 @@ public static unsafe class NativeEntrypoints
         {
             if (!sInstances.TryGetValue(instance, out Script? script))
                 throw new InvalidOperationException("Unknown C# component instance.");
-            script.Update(new TickInput(Vector2.Zero, Vector2.Zero, 0), deltaTime);
-            script.OnLocalUpdate();
-            script.LateUpdate(deltaTime);
+            var none = new TickInput(Vector2.Zero, Vector2.Zero, 0);
+            script.LocalEarlyUpdate(deltaTime);
+            script.EarlyUpdate(none, deltaTime);
+            script.LocalUpdate(deltaTime);
+            script.Update(none, deltaTime);
+            script.LateUpdate(none, deltaTime);
+            script.LocalLateUpdate(deltaTime);
             return 1;
         }
         catch (Exception exception)

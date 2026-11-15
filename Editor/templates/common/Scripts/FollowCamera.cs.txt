@@ -10,7 +10,7 @@ public class FollowCamera : Script
     public float Height = 2.5f;
     public string CameraName = "Main Camera";
 
-    public override void LateUpdate(float deltaTime)
+    public override void LocalLateUpdate(float deltaTime)
     {
         if (!IsMine || Scene.Find(CameraName) is not { } camera)
             return;

@@ -141,7 +141,7 @@ static class LocalControls
 ///   Other fields are not rewound; mark ones clients need to see with [Sync] and change them on the server.
 /// - Update may run several times for one tick on the controlling machine. Things that must happen once, such as
 ///   playing a sound or spawning something, belong in an `if (IsServer)` or `if (!IsReplaying)` block, or in
-///   OnLocalUpdate.
+///   LocalUpdate.
 [Component]
 abstract class NetworkScript : NetworkBehaviour
 {

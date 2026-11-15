@@ -158,9 +158,13 @@ internal static class Program
                 script.Awake();
                 script.OnEnable();
                 script.Start();
-                script.Update(new TickInput(Vector2.Zero, Vector2.Zero, 0), 1f / 60);
-                script.OnLocalUpdate();
-                script.LateUpdate(1f / 60);
+                var none = new TickInput(Vector2.Zero, Vector2.Zero, 0);
+                script.LocalEarlyUpdate(1f / 60);
+                script.EarlyUpdate(none, 1f / 60);
+                script.LocalUpdate(1f / 60);
+                script.Update(none, 1f / 60);
+                script.LateUpdate(none, 1f / 60);
+                script.LocalLateUpdate(1f / 60);
                 script.OnDisable();
                 script.OnDestroy();
                 if (!gameObject.IsValid)

@@ -12,7 +12,7 @@ public class Digger : Script
     public float Strength = 1.5f;
 
     // A local camera tool: this callback is not replayed as predicted simulation.
-    public override void OnLocalUpdate()
+    public override void LocalUpdate(float deltaTime)
     {
         bool dig = Input.GetMouseButton(MouseButton.Left);
         bool build = Input.GetMouseButton(MouseButton.Middle);

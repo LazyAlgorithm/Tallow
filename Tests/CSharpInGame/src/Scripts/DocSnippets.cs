@@ -106,7 +106,7 @@ public class DocSnippets : Script
     private void Jump() { }
 
     // docs/input.md
-    public override void OnFrame()
+    public override void LocalUpdate(float deltaTime)
     {
         if (InputActions.Pressed("Jump"))
             Jump();

@@ -283,7 +283,7 @@ extension EditorApp
 			        // Predicted gameplay. Use TickInput for controls.
 			    }}
 
-			    public override void OnLocalUpdate()
+			    public override void LocalUpdate(float deltaTime)
 			    {{
 			        if (!IsMine)
 			            return;

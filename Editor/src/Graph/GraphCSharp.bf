@@ -246,8 +246,9 @@ static class GraphCSharp
 	{
 		switch (method)
 		{
-		case "FixedUpdate": output.Append("public override void FixedUpdate(float deltaTime)");
-		case "LateUpdate": output.Append("public override void LateUpdate(float deltaTime)");
+		case "FixedUpdate", "LocalEarlyUpdate", "LocalUpdate", "LocalLateUpdate":
+			output.AppendF("public override void {}(float deltaTime)", method);
+		case "EarlyUpdate", "LateUpdate": output.AppendF("public override void {}(TickInput input, float deltaTime)", method);
 		default: output.AppendF("public override void {}()", method);
 		}
 	}
@@ -257,7 +258,8 @@ static class GraphCSharp
 	{
 		switch (method)
 		{
-		case "FixedUpdate", "LateUpdate": output.AppendF("base.{}(deltaTime);", method);
+		case "FixedUpdate", "LocalEarlyUpdate", "LocalUpdate", "LocalLateUpdate": output.AppendF("base.{}(deltaTime);", method);
+		case "EarlyUpdate", "LateUpdate": output.AppendF("base.{}(input, deltaTime);", method);
 		default: output.AppendF("base.{}();", method);
 		}
 	}

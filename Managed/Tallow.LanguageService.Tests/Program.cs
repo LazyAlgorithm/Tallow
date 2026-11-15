@@ -343,7 +343,8 @@ public sealed class CubeMover : Script
             Check("override completion offers Update with its signature and body",
                 overrideCompletions.Contains("completion\tUpdate(TickInput input, float deltaTime)\x1Fvoid Update(TickInput input, float deltaTime)\x1D    {\x1D        \x1E\x1D    }"));
             Check("override completion leaves out callbacks already overridden, and ordinary members",
-                !overrideCompletions.Contains("completion\tStart(") && overrideCompletions.Contains("completion\tLateUpdate(float deltaTime)")
+                !overrideCompletions.Contains("completion\tStart(") && overrideCompletions.Contains("completion\tLateUpdate(TickInput input, float deltaTime)")
+                && overrideCompletions.Contains("completion\tLocalLateUpdate(float deltaTime)")
                 && !overrideCompletions.Contains("completion\tGetComponent") && !overrideCompletions.Contains("completion\tTransform"));
             string overridePartial = overrideSource + "OnCol";
             Check("override completion still answers while the name is being typed",
@@ -681,11 +682,28 @@ public sealed class CubeMover : Script
             Check("C# engine warnings do not flag non-predicted Start methods",
                 !noTickWarnings.Contains("TAL-NET") && !noTickWarnings.Contains("TAL-PERF"));
 
+            string earlyLate = """
+                using Tallow;
+                [Component] public sealed class PhaseProbe : Script
+                {
+                    public override void EarlyUpdate(TickInput input, float deltaTime)
+                    {
+                        var nondeterministic = DateTime.UtcNow;
+                    }
+                    public override void LateUpdate(TickInput input, float deltaTime)
+                    {
+                        var random = new System.Random();
+                    }
+                }
+                """;
+            Check("EarlyUpdate and LateUpdate get the network replay warnings Update gets",
+                RequestWithApi(service, "diagnostics", earlyLate, earlyLate.Length).Split("TAL-NET").Length >= 3);
+
             string localFrame = """
                 using Tallow;
                 [Component] public sealed class FrameProbe : Script
                 {
-                    public override void LateUpdate(float deltaTime)
+                    public override void LocalLateUpdate(float deltaTime)
                     {
                         var message = new System.Text.StringBuilder();
                         var time = DateTime.UtcNow;
@@ -694,7 +712,7 @@ public sealed class CubeMover : Script
                     {
                         var values = new float[32];
                     }
-                    public override void OnLocalUpdate()
+                    public override void LocalUpdate(float deltaTime)
                     {
                         var values = new int[8];
                     }
@@ -702,7 +720,7 @@ public sealed class CubeMover : Script
                 """;
             string frameWarnings = RequestWithApi(service, "diagnostics",
                 localFrame, localFrame.Length);
-            Check("C# performance hints include LateUpdate, FixedUpdate and OnLocalUpdate",
+            Check("C# performance hints include LocalLateUpdate, FixedUpdate and LocalUpdate",
                 frameWarnings.Split("TAL-PERF001").Length == 4);
             Check("local frame callbacks do not get misleading network replay warnings",
                 !frameWarnings.Contains("TAL-NET"));

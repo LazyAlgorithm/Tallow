@@ -37,11 +37,10 @@ static class CSharpRuntime
 		Start,
 		FixedUpdate,
 		LocalUpdate,
-		LateUpdate,
+		LocalLateUpdate,
 		Disable,
 		Gui,
-		/// OnFrame (deltaTime: the frame's).
-		Frame,
+		LocalEarlyUpdate,
 		Validate,
 		/// OnDrawGizmos (deltaTime: 1 when the object is selected).
 		DrawGizmos,
@@ -334,6 +333,7 @@ static class CSharpRuntime
     [CLink] static extern int32 tn_csharp_dispatch_batch(int32* instances, int32 count, int32 eventId, float deltaTime);
     [CLink] static extern int32 tn_csharp_dispatch_checked_batch(int32* instances, int32 count, int32 eventId, float deltaTime);
 	[CLink] static extern int32 tn_csharp_update_input(int32 instance, NativeTickInput* input, float deltaTime);
+	[CLink] static extern int32 tn_csharp_tick_phase(int32 instance, int32 phase, NativeTickInput* input, float deltaTime);
     [CLink] static extern int32 tn_csharp_update_input_batch(NativeTickBatchItem* items, int32 count);
 	[CLink] static extern int32 tn_csharp_contact_event(int32 instance, NativeContact* contact);
 	[CLink] static extern int32 tn_csharp_read_fields(int32 instance, int32 mode, char8* buffer, int32 capacity);
@@ -603,10 +603,12 @@ static class CSharpRuntime
 		return false;
 	}
 
-	/// Bit of CallbackMask for Update; the others are 1 << ManagedEvent.
+	/// Bits of CallbackMask for EarlyUpdate, Update and LateUpdate; the others are 1 << ManagedEvent.
 	public const int32 UpdateCallback = 1 << 20;
+	public const int32 EarlyUpdateCallback = 1 << 21;
+	public const int32 LateUpdateCallback = 1 << 22;
 
-	/// The per-frame callbacks (Update, FixedUpdate, OnLocalUpdate, LateUpdate, OnGUI, OnFrame) the instance's
+	/// The per-frame callbacks (EarlyUpdate, Update, LateUpdate, their Local versions, FixedUpdate, OnGUI) the instance's
 	/// class overrides, so the rest are not sent; -1 (all) when the runtime cannot say.
 	public static int32 CallbackMask(int32 instance)
 	{
@@ -652,7 +654,7 @@ static class CSharpRuntime
     public static bool DispatchCheckedBatch(Span<int32> instances,
         ManagedEvent eventId, float deltaTime)
     {
-        if (!Ready || (eventId != .FixedUpdate && eventId != .LateUpdate))
+        if (!Ready || (eventId != .FixedUpdate && eventId != .LocalLateUpdate))
             return false;
         if (instances.Length == 0)
             return true;
@@ -665,6 +667,26 @@ static class CSharpRuntime
         ReportFailure("callback");
         return false;
     }
+
+	/// EarlyUpdate (phase 0), Update (1) or LateUpdate (2) with the tick's controls.
+	public static bool TickPhase(int32 instance, int32 phase, TickInput input, float deltaTime)
+	{
+		if (!Ready || instance <= 0)
+			return false;
+		NativeTickInput native = .()
+		{
+			moveX = input.raw.moveX,
+			moveZ = input.raw.moveZ,
+			yaw = input.raw.yaw,
+			pitch = input.raw.pitch,
+			buttons = input.raw.buttons,
+			previousButtons = input.previous.buttons
+		};
+		if (tn_csharp_tick_phase(instance, phase, &native, deltaTime) > 0)
+			return true;
+		ReportFailure(phase == 0 ? "EarlyUpdate" : "LateUpdate");
+		return false;
+	}
 
     /// Send the exact networked TickInput, including previous button state for Pressed/Released.
 	public static bool Update(int32 instance, TickInput input, float deltaTime)
@@ -820,7 +842,7 @@ static class CSharpRuntime
         int32 instance, int32 eventId)
     {
         if (!Ready || (eventId != (int32)ManagedEvent.FixedUpdate &&
-                       eventId != (int32)ManagedEvent.LateUpdate))
+                       eventId != (int32)ManagedEvent.LocalLateUpdate))
             return 0;
         let obj = Find(session, entity);
         if (obj == null)

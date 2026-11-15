@@ -712,7 +712,7 @@ class Rope : Component
 		return mLetGo;
 	}
 
-	public override void LateUpdate()
+	public override void LocalLateUpdate()
 	{
 		if (LetsGo())
 		{

@@ -8,7 +8,7 @@ namespace Gameplay;
 [Component]
 public sealed class PhysicsApiSmoke : Script
 {
-    public override void OnLocalUpdate()
+    public override void LocalUpdate(float deltaTime)
     {
         // Native colliders are class components. Their indexes preserve
         // stacked colliders on the same object, including repeated types.

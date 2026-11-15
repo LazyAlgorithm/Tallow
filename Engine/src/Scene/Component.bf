@@ -64,7 +64,8 @@ struct RangeAttribute : Attribute
 /// Base class for everything attached to a GameObject.
 ///
 /// Lifecycle while the scene is playing: Awake, OnEnable, Start (before the first Update),
-/// then FixedUpdate at Time.TickRate, Update and LateUpdate per frame, and OnDisable / OnDestroy.
+/// then FixedUpdate at Time.TickRate, EarlyUpdate, Update and LateUpdate (per frame, or per network tick on an
+/// object with a Network Identity), the Local versions of those per frame, and OnDisable / OnDestroy.
 /// Public fields of supported types are saved with the scene and shown in the Inspector.
 [Component]
 abstract class Component
@@ -144,12 +145,23 @@ abstract class Component
 	/// - Everywhere else: once a frame (deltaTime is Time.DeltaTime), with this machine's controls.
 	/// Take controls from input rather than Input, and the script works the same in both.
 	public virtual void Update(TickInput input, float deltaTime) { }
+	/// Runs before Update, when Update does and with the same controls: once per network tick on an object with a
+	/// Network Identity (before any of its components' Update, replayed with it), otherwise once a frame before
+	/// every Update.
+	public virtual void EarlyUpdate(TickInput input, float deltaTime) { }
+	/// Runs after Update, when Update does and with the same controls: once per network tick on an object with a
+	/// Network Identity (after all of its components' Update, replayed with it), otherwise once a frame after every
+	/// Update.
+	public virtual void LateUpdate(TickInput input, float deltaTime) { }
+	/// Called once a frame while playing before every Update, on this machine only: never networked, never replayed.
+	public virtual void LocalEarlyUpdate() { }
 	/// Called once a frame while playing, on this machine only: never networked, never replayed. Engine components do
 	/// their per-frame work here; game scripts put gameplay in Script.Update and keep this for effects, UI and other
 	/// work that is only for the local player.
-	public virtual void OnLocalUpdate() { }
-	/// Called once a frame after every Update: the place for cameras that follow something.
-	public virtual void LateUpdate() { }
+	public virtual void LocalUpdate() { }
+	/// Called once a frame while playing after every Update and LateUpdate, on this machine only: the place for
+	/// cameras that follow something (they then follow the drawn position, not each tick).
+	public virtual void LocalLateUpdate() { }
 	/// Called when the component stops running: switched off, its object switched off, or before OnDestroy.
 	public virtual void OnDisable() { }
 	/// Called when the component or its object is destroyed while playing.
@@ -161,7 +173,8 @@ abstract class Component
 	public virtual void OnRegister() { }
 	/// Called when the component leaves a scene, including in the editor: the counterpart of OnRegister.
 	public virtual void OnUnregister() { }
-	/// Called every frame in edit and play mode (streaming, procedural generation).
+	/// Engine hook: called at the very start of every frame in edit and play mode (streaming, procedural
+	/// generation). Gameplay uses EarlyUpdate or LocalEarlyUpdate.
 	public virtual void OnFrame() { }
 	/// Draw in-game interface with the GUI class. Called every frame while playing.
 	public virtual void OnGUI() { }

@@ -51,6 +51,7 @@ using tick_fn = int32_t (*)(int32_t, float);
 using dispatch_fn = int32_t (*)(int32_t, int32_t, float);
 using dispatch_batch_fn = int32_t (*)(const int32_t*, int32_t, int32_t, float);
 using update_input_fn = int32_t (*)(int32_t, const tn_csharp_tick_input*, float);
+using tick_phase_fn = int32_t (*)(int32_t, int32_t, const tn_csharp_tick_input*, float);
 using update_input_batch_fn = int32_t (*)(const tn_csharp_tick_batch_item*, int32_t);
 using contact_fn = int32_t (*)(int32_t, const tn_csharp_contact*);
 using read_fields_fn = int32_t (*)(int32_t, int32_t, char*, int32_t);
@@ -75,6 +76,7 @@ dispatch_fn dispatch = nullptr;
 dispatch_batch_fn dispatch_batch = nullptr;
 dispatch_batch_fn dispatch_checked_batch = nullptr;
 update_input_fn update_input = nullptr;
+tick_phase_fn tick_phase = nullptr;
 update_input_batch_fn update_input_batch = nullptr;
 contact_fn contact_event = nullptr;
 read_fields_fn read_fields = nullptr;
@@ -411,6 +413,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "DispatchBatch", dispatch_batch) ||
             !find_entry(assembly.c_str(), "DispatchCheckedBatch", dispatch_checked_batch) ||
             !find_entry(assembly.c_str(), "UpdateInput", update_input) ||
+            !find_entry(assembly.c_str(), "TickPhase", tick_phase) ||
             !find_entry(assembly.c_str(), "UpdateInputBatch", update_input_batch) ||
             !find_entry(assembly.c_str(), "Contact", contact_event) ||
             !find_entry(assembly.c_str(), "ReadFields", read_fields) ||
@@ -547,6 +550,17 @@ int32_t tn_csharp_update_input(int32_t script_instance,
     return result > 0;
 }
 
+int32_t tn_csharp_tick_phase(int32_t script_instance, int32_t phase,
+    const tn_csharp_tick_input* input, float delta_time)
+{
+    if (!started || !tick_phase || !input)
+        return 0;
+    const int32_t result = tick_phase(script_instance, phase, input, delta_time);
+    if (result < 0)
+        managed_error("Updating C# component with network input");
+    return result > 0;
+}
+
 int32_t tn_csharp_contact_event(int32_t script_instance, const tn_csharp_contact* contact)
 {
     if (!started || !contact_event || !contact)
@@ -644,6 +658,7 @@ void tn_csharp_shutdown(void)
     dispatch_batch = nullptr;
     dispatch_checked_batch = nullptr;
     update_input = nullptr;
+    tick_phase = nullptr;
     update_input_batch = nullptr;
     contact_event = nullptr;
     read_fields = nullptr;

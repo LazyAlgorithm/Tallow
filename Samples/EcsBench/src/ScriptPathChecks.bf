@@ -38,7 +38,7 @@ class ScriptPathProbe : Script
 	public override void OnEnable() => Note(2);
 	public override void Start() => Note(3);
 	public override void FixedUpdate() => Note(4);
-	public override void LateUpdate() => Note(6);
+	public override void LateUpdate(TickInput input, float deltaTime) => Note(6);
 	public override void OnDisable() => Note(7);
 	public override void OnDestroy() => Note(8);
 
