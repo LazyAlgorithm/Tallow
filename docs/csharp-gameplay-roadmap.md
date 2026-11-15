@@ -986,6 +986,20 @@ A full conversion also needs these. Ordered roughly by when they block users.
   a stale `Tallow.ManagedRuntime`, and `--check-dependencies [--fix]` does the same on the
   command line. Still open: Manager-side install of a pinned SDK, and a GA SDK (the branch
   builds with **.NET 11 RC1**).
+  - [ ] Install a pinned, released .NET 11 SDK into a Tallow-owned per-user folder shared by
+    engine versions (for example `~/.local/share/Tallow/dotnet` on Linux or
+    `%LOCALAPPDATA%\\Tallow\\dotnet` on Windows). Detect a compatible cached version on
+    startup; otherwise download and verify the platform/architecture-specific SDK,
+    stage it atomically, and report progress and actionable errors. No administrator
+    privileges or global `dotnet` installation should be required.
+  - [ ] Route every ordinary C# editor, language-service, project-build and game-export
+    invocation through the selected SDK executable and runtime root. Pin/roll forward
+    deliberately so multiple Tallow versions can share the cache without silently
+    switching a project to an incompatible SDK. Test first-run download, offline reuse,
+    interrupted download, corrupt archive, update and clean Linux/Windows machines.
+  - [ ] Offer an offline engine package with the same SDK pre-staged for users who want
+    one download and no first-run network access. Keep the default engine download
+    smaller by using the shared per-user cache.
 - [~] Python-free ordinary use: version check, verify, pin and upgrade are Beef
   (`Editor/src/Project/EngineVersions.bf`), so creating, opening and upgrading projects
   no longer need Python. Still Python: player export (`tools/build_player.py`), engine
