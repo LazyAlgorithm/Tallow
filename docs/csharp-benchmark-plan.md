@@ -42,14 +42,15 @@ Medians of 3 runs × 600 frames. Raw data: `~/TallowBenchmarks/beef-vs-csharp-20
 
 | mode | objects | Beef script ms | C# script ms (first run) | C# script ms (now) | C# frame ms (first → now) | C# GC bytes/frame |
 |---|---:|---:|---:|---:|---:|---:|
-| gameobject | 1k | 0.027 | 0.142 | 0.105 | 1.24 → 1.17 | 164 |
-| gameobject | 10k | 0.279 | 0.978 | 0.756 | 2.32 → 1.82 | 149 |
-| gameobject | 50k | 1.480 | 5.048 | 3.861 | 10.15 → 4.95 | 150 |
-| ecs | 10k | 0.304 | 1.319 | 0.975 | 2.35 → 2.03 | 313 |
-| ecs | 50k | 1.502 | 6.168 | 5.097 | 7.34 → 6.18 | 313 |
+| gameobject | 1k | 0.028 | 0.142 | 0.115 | 1.24 → 1.18 | 163 |
+| gameobject | 10k | 0.295 | 0.978 | 0.847 | 2.32 → 1.91 | 163 |
+| gameobject | 50k | 1.590 | 5.048 | 4.173 | 10.15 → 5.25 | 150 |
+| ecs | 10k | 0.317 | 1.319 | 1.030 | 2.35 → 2.09 | 313 |
+| ecs | 50k | 1.525 | 6.168 | 4.978 | 7.34 → 6.05 | 313 |
 
 No GC collections during measurement. What closed the gap so far: C# scripts leave the scene's per-frame lists for
-callbacks their class does not override; transform callbacks skip the GC transition; ECS `ForEach` writes every-row
+callbacks their class does not override; read-only transform callbacks skip the GC transition (setters keep
+it, as a host may call back into .NET from a write); ECS `ForEach` writes every-row
 changes back in query order instead of looking each entity up. Left: one native call per Transform get/set (a
 batched or cached transform path), and the ECS page copy itself (a direct column view would avoid it).
 
