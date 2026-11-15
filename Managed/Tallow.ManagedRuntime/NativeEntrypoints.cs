@@ -284,7 +284,17 @@ public static unsafe class NativeEntrypoints
             if (name.Name is null)
                 return null;
             string candidate = Path.Combine(root, name.Name, name.Name + ".dll");
-            return File.Exists(candidate) ? LoadFromAssemblyPath(candidate) : null;
+            return File.Exists(candidate) ? LoadCopy(candidate) : null;
+        }
+
+        /// From a copy in memory, with its symbols: a file the runtime maps stays locked on Windows until the
+        /// context is collected, and the next compile could not replace it.
+        public Assembly LoadCopy(string path)
+        {
+            using var image = new MemoryStream(File.ReadAllBytes(path));
+            string pdb = Path.ChangeExtension(path, ".pdb");
+            using MemoryStream? symbols = File.Exists(pdb) ? new MemoryStream(File.ReadAllBytes(pdb)) : null;
+            return LoadFromStream(image, symbols);
         }
     }
 
@@ -354,7 +364,7 @@ public static unsafe class NativeEntrypoints
             string root = Directory.GetParent(Path.GetDirectoryName(path)!)!.FullName;
             GameAssemblyContext context = new(root);
             sGameContext = context;
-            Assembly game = context.LoadFromAssemblyPath(path);
+            Assembly game = context.LoadCopy(path);
             foreach (AssemblyName dependency in game.GetReferencedAssemblies())
             {
                 if (dependency.Name is null)
