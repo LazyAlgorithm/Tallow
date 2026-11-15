@@ -336,6 +336,20 @@ public sealed class CubeMover : Script
                 !transformCompletions.Contains("completion\tget_Position") &&
                 !transformCompletions.Contains("completion\tset_Position"));
 
+            // "override " lists the Script callbacks not overridden yet; each inserts the whole method.
+            string overrideSource = "using Tallow;\npublic class Probe : Script\n{\n    public override void Start() { }\n    public override ";
+            string overrideCompletions = RequestWithApi(service, "completion", overrideSource,
+                System.Text.Encoding.UTF8.GetByteCount(overrideSource));
+            Check("override completion offers Update with its signature and body",
+                overrideCompletions.Contains("completion\tUpdate(TickInput input, float deltaTime)\x1Fvoid Update(TickInput input, float deltaTime)\x1D    {\x1D        \x1E\x1D    }"));
+            Check("override completion leaves out callbacks already overridden, and ordinary members",
+                !overrideCompletions.Contains("completion\tStart(") && overrideCompletions.Contains("completion\tLateUpdate(float deltaTime)")
+                && !overrideCompletions.Contains("completion\tGetComponent") && !overrideCompletions.Contains("completion\tTransform"));
+            string overridePartial = overrideSource + "OnCol";
+            Check("override completion still answers while the name is being typed",
+                RequestWithApi(service, "completion", overridePartial, System.Text.Encoding.UTF8.GetByteCount(overridePartial))
+                    .Contains("completion\tOnCollisionEnter(Collision collision)"));
+
             string ordinaryGetter = "class Probe { public int get_Answer() => 42; " +
                 "void Go() { this.get_A";
             string ordinaryGetterCompletions = Request(service, "completion",

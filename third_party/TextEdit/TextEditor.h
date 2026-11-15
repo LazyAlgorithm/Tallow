@@ -827,7 +827,7 @@ public:
 	// provide autocomplete suggestions asynchronously (in case a callback takes to long and lookup is handled in a separate thread/process)
 	// this call is not threadsafe and must be called from the rendering thread (you must synchronize with your lookup thread yourself)
 	inline void SetAutoCompleteSuggestions(const std::vector<std::string>& suggestions) { autocomplete.setSuggestions(suggestions); }
-	inline std::string GetAutoCompletePreview() { return autocomplete.isActive() ? autocomplete.getReplacement() : ""; }
+	inline std::string GetAutoCompletePreview() { return autocomplete.isActive() ? autocomplete.getPreview() : ""; }
 	inline DocPos GetAutoCompleteStart() const { return autocomplete.getStart(); }
 	inline bool IsAutoCompleteActive() const { return autocomplete.isActive(); }
 	inline void SetAutoCompleteSignature(const std::string& signature) { autocomplete.setSignature(signature); }
@@ -1840,7 +1840,26 @@ protected:
 		static bool isSpecialKeyPressed();
 		inline ImGuiKeyChord getTriggerShortcut() const { return configuration.triggerShortcut; }
 		inline DocPos getStart() const { return startLocation; }
-		inline std::string getReplacement() { return currentSelection < state.suggestions.size() ? state.suggestions[currentSelection] : ""; }
+		// A suggestion is either plain text, or "display\x1Finsert": the list shows the first part and accepting it
+		// inserts the second, where \x1C stands for a tab, \x1D for a line break, and \x1E marks where the cursor goes.
+		static inline std::string_view displayPart(const std::string& suggestion) {
+			const auto split = suggestion.find('\x1F');
+			return split == std::string::npos ? std::string_view(suggestion) : std::string_view(suggestion).substr(0, split);
+		}
+		inline std::string getReplacement() {
+			if (currentSelection >= state.suggestions.size()) return "";
+			const auto& suggestion = state.suggestions[currentSelection];
+			const auto split = suggestion.find('\x1F');
+			std::string text = split == std::string::npos ? suggestion : suggestion.substr(split + 1);
+			for (auto& ch : text) { if (ch == '\x1D') ch = '\n'; else if (ch == '\x1C') ch = '\t'; }
+			return text;
+		}
+		// What typing on would complete to, for an inline preview: nothing for an item that inserts something else.
+		inline std::string getPreview() {
+			if (currentSelection >= state.suggestions.size()) return "";
+			const auto& suggestion = state.suggestions[currentSelection];
+			return suggestion.find('\x1F') == std::string::npos ? suggestion : "";
+		}
 
 	private:
 		// properties
@@ -1983,6 +2002,7 @@ protected:
 	// add/delete characters
 	void handleCharacter(ImWchar character);
 	void handleBackspace(bool wordMode);
+	void acceptAutoComplete();
 	void handleDelete(bool wordMode);
 
 	// add/delete lines

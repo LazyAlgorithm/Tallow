@@ -1130,10 +1130,34 @@ void TextEditor::renderPopups() {
 	// render autocomplete popup
 	if (autocomplete.render(document, cursors, typeSetter, config.language, textLeftOffset, glyphSize) && !config.readOnly) {
 		// user picked a suggestion so insert it
-		const auto start = autocomplete.getStart();
-		const auto end = document.findWordEnd(start, true);
-		const auto replacement = autocomplete.getReplacement();
+		acceptAutoComplete();
+	}
+}
+
+
+//
+//	TextEditor::acceptAutoComplete
+//
+
+void TextEditor::acceptAutoComplete() {
+	const auto start = autocomplete.getStart();
+	const auto end = document.findWordEnd(start, true);
+	auto replacement = autocomplete.getReplacement();
+	const auto mark = replacement.find('\x1E');
+	if (mark == std::string::npos) {
 		replaceSectionText(start, end, replacement);
+	} else {
+		// Put the cursor where the suggestion marks it (inside an inserted method body).
+		const auto before = replacement.substr(0, mark);
+		replacement.erase(mark, 1);
+		replaceSectionText(start, end, replacement);
+		auto cursor = start;
+		for (size_t i = 0; i < before.size(); i++) {
+			if (before[i] == '\n') { cursor.line++; cursor.index = 0; }
+			else if ((static_cast<unsigned char>(before[i]) & 0xC0) != 0x80) cursor.index++;
+		}
+		cursors.getMain().update(cursor, cursor);
+		makeCursorVisible();
 	}
 }
 
@@ -2620,6 +2644,20 @@ void TextEditor::handleCharacter(ImWchar character) {
 		if (!cursors.hasMultiple() && autocomplete.startTyping(cursors)) {
 			makeCursorVisible();
 		}
+
+	} else if (character == ' ' && !cursors.hasMultiple()) {
+		// "override " lists the members that can be overridden straight away, as IDEs do.
+		const auto at = cursors.getCurrent().getSelectionEnd();
+		static constexpr const char* keyword = "override ";
+		const size_t length = 9;
+		if (at.line < document.size() && at.index >= length) {
+			bool matches = at.index == length || !CodePoint::isWord(document[at.line][at.index - length - 1].codepoint);
+			for (size_t i = 0; matches && i < length; i++)
+				matches = document[at.line][at.index - length + i].codepoint == static_cast<ImWchar>(keyword[i]);
+			if (matches && autocomplete.startTyping(cursors)) {
+				makeCursorVisible();
+			}
+		}
 	}
 }
 
@@ -2632,9 +2670,21 @@ void TextEditor::handleBackspace(bool wordMode) {
 	const auto transaction = startTransaction(false);
 
 	// remove selections or characters to the left of the cursor
+	completePairCloser = 0;
 	for (auto cursor = cursors.begin(); cursor < cursors.end(); cursor++) {
 		const auto start = cursor->hasSelection() ? cursor->getSelectionStart() : document.getLeft(cursor->getSelectionStart(), wordMode);
-		const auto end = cursor->getSelectionEnd();
+		auto end = cursor->getSelectionEnd();
+
+		// Backspace between an empty pair, as in "(|)" or "\"|\"", removes the closer too (as most IDEs do).
+		if (!wordMode && !cursor->hasSelection() && config.completePairedGlyphs && !config.overwrite) {
+			const auto at = cursor->getSelectionEnd();
+			if (at.index > 0 && at.line < document.size() && at.index < document[at.line].size()) {
+				const auto before = document[at.line][at.index - 1].codepoint;
+				const auto after = document[at.line][at.index].codepoint;
+				if (CodePoint::isPairOpener(before) && after == CodePoint::toPairCloser(before))
+					end = document.getRight(at);
+			}
+		}
 		deleteText(transaction, start, end);
 		cursor->update(start, false);
 		cursors.adjustForDelete(cursor, start, end);
@@ -8817,7 +8867,7 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 						ImGui::SetScrollHereY(0.5f);
 					}
 
-					if (renderSuggestion(state.suggestions[i].c_str(), state.searchTerm, ImGui::GetContentRegionAvail().x, selected)) {
+					if (renderSuggestion(displayPart(state.suggestions[i]), state.searchTerm, ImGui::GetContentRegionAvail().x, selected)) {
 						// user clicked on a suggestion, use it
 						currentSelection = i;
 						requestDeactivation = true;

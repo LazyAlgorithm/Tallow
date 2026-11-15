@@ -222,6 +222,88 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// After "override " in a class body: the base classes' overridable methods and properties this class has not
+    /// overridden yet. Each item shows "Name(parameters)" and inserts the whole member (return type, signature and
+    /// a body with the cursor inside), in the editor's "display\x1Finsert" form (\x1C a tab, \x1D a line break, \x1E
+    /// the cursor).
+    /// </summary>
+    private static bool OverrideCompletions(SemanticModel model, string text, int position, List<string> output)
+    {
+        int wordStart = position;
+        while (wordStart > 0 && (char.IsLetterOrDigit(text[wordStart - 1]) || text[wordStart - 1] == '_'))
+            wordStart--;
+        int lineStart = text.LastIndexOf('\n', Math.Max(wordStart - 1, 0)) + 1;
+        string before = text[lineStart..wordStart];
+        if (!System.Text.RegularExpressions.Regex.IsMatch(before,
+                @"^\s*(?:(?:public|protected|internal|private|sealed|async|unsafe|new|extern)\s+)*override\s+$"))
+            return false;
+        INamedTypeSymbol? type = model.GetEnclosingSymbol(Math.Max(lineStart - 1, 0)) switch
+        {
+            INamedTypeSymbol named => named,
+            ISymbol other => other.ContainingType,
+            null => null
+        };
+        if (type is null || type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
+            return true;
+
+        string indent = before[..(before.Length - before.TrimStart().Length)];
+        string inner = indent + (indent.Contains('\t') ? "\t" : "    ");
+        var done = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        foreach (ISymbol member in type.GetMembers())
+        {
+            if (member is IMethodSymbol { IsOverride: true, OverriddenMethod: { } overridden })
+                done.Add(overridden.OriginalDefinition);
+            else if (member is IPropertySymbol { IsOverride: true, OverriddenProperty: { } property })
+                done.Add(property.OriginalDefinition);
+        }
+        var format = SymbolDisplayFormat.MinimallyQualifiedFormat;
+        var items = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (INamedTypeSymbol? parent = type.BaseType; parent != null; parent = parent.BaseType)
+        {
+            foreach (ISymbol member in parent.GetMembers())
+            {
+                if (!(member.IsVirtual || member.IsAbstract || member.IsOverride) || member.IsSealed || member.IsStatic ||
+                    member.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Protected or
+                        Accessibility.ProtectedOrInternal) ||
+                    !done.Add(member.OriginalDefinition))
+                    continue;
+                // An override of an override hides the one further down.
+                if (member is IMethodSymbol { OverriddenMethod: { } deeper })
+                    done.Add(deeper.OriginalDefinition);
+                if (member is IPropertySymbol { OverriddenProperty: { } deeperProperty })
+                    done.Add(deeperProperty.OriginalDefinition);
+                if (member is IMethodSymbol { MethodKind: MethodKind.Ordinary } method)
+                {
+                    string parameters = string.Join(", ", method.Parameters.Select(p =>
+                        (p.RefKind switch { RefKind.Ref => "ref ", RefKind.Out => "out ", RefKind.In => "in ", _ => "" }) +
+                        p.Type.ToDisplayString(format) + " " + p.Name));
+                    string display = $"{method.Name}({parameters})";
+                    string returns = method.ReturnsVoid ? "void" : method.ReturnType.ToDisplayString(format);
+                    string body = method.IsAbstract || method.ReturnsVoid ? "\x1E" :
+                        $"return base.{method.Name}({string.Join(", ", method.Parameters.Select(p =>
+                            (p.RefKind switch { RefKind.Ref => "ref ", RefKind.Out => "out ", RefKind.In => "in ", _ => "" }) + p.Name))});\x1E";
+                    // The modifiers typed before ("public override") stay as written.
+                    items.TryAdd(display, $"{returns} {display}\x1D{indent}{{\x1D{inner}{body}\x1D{indent}}}");
+                }
+                else if (member is IPropertySymbol property && !property.IsIndexer)
+                {
+                    string display = property.Name;
+                    string accessors = (property.GetMethod != null ? $"get => base.{property.Name};" : "") +
+                        (property.SetMethod != null ? (property.GetMethod != null ? " " : "") + $"set => base.{property.Name} = value;" : "");
+                    if (property.IsAbstract)
+                        accessors = (property.GetMethod != null ? "get => \x1Edefault!;" : "") +
+                            (property.SetMethod != null ? " set { }" : "");
+                    items.TryAdd(display, $"{property.Type.ToDisplayString(format)} {property.Name} {{ {accessors} }}");
+                }
+            }
+        }
+        // Tabs and line breaks cannot cross the line-based result: \x1C and \x1D stand for them.
+        foreach ((string display, string insert) in items)
+            output.Add(Line("completion", display + "\x1F" + insert.Replace('\t', '\x1C'), "Override"));
+        return true;
+    }
+
     private static void Run(LanguageRequest request, List<string> output)
     {
         var sourceByPath = new Dictionary<string, SourceFile>(StringComparer.OrdinalIgnoreCase);
@@ -271,6 +353,8 @@ internal static class Program
 
         if (request.Operation == "completion")
         {
+            if (OverrideCompletions(model, active.Text, position, output))
+                return;
             SyntaxNode? node = root.FullSpan.IsEmpty ? null :
                 root.FindToken(position > 0 ? position - 1 : position).Parent;
             MemberAccessExpressionSyntax? member = node?.AncestorsAndSelf()
