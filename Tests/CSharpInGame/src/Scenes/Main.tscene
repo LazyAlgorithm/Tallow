@@ -91,3 +91,13 @@ transform 80 0 80 0 0 0 1 1 1 1
 component Tallow.CSharpBehaviour enabled 1
 field scriptType "InGame.GraphProbe"
 field fieldOverrides ""
+object 17 parent 0 active 1 name "AnimRoot"
+transform 90 0 90 0 0 0 1 1 1 1
+object 18 parent 17 active 1 name "Animated"
+transform 0 0 0 0 0 0 1 1 1 1
+component Tallow.Animator enabled 1
+field clips "Animations/idle.tanim;Animations/walk.tanim"
+field defaultClip "Idle"
+field speed 1
+object 19 parent 18 active 1 name "Hips"
+transform 0 0.95 0 0 0 0 1 1 1 1

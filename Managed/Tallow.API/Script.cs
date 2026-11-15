@@ -355,6 +355,14 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
                 return true;
             }
         }
+        else if (requested == typeof(Animator))
+        {
+            if (GetAnimator() is { } animator)
+            {
+                component = (T)(object)animator;
+                return true;
+            }
+        }
         else if (requested == typeof(ColliderHandle))
         {
             // One collider for GetComponent; indexed GetCollider(index) is
@@ -404,6 +412,27 @@ public readonly record struct GameObject(ulong SceneId, ulong Id)
     /// Read a collider by attachment order, including stacked colliders
     /// of the same type. Returns null for invalid indices.
     /// </summary>
+    /// <summary>This object's Animator, or null.</summary>
+    public Animator? GetAnimator()
+    {
+        var animator = new Animator(this);
+        return animator.IsValid ? animator : null;
+    }
+
+    /// <summary>The component on this object or the nearest one below it (depth first), or null/default.</summary>
+    public T? GetComponentInChildren<T>() where T : IComponent
+    {
+        if (TryGetComponent(out T found))
+            return found;
+        for (int i = 0; i < ChildCount; i++)
+        {
+            if (GetChild(i) is { } child && child.GetComponentInChildren<T>() is { } inChild &&
+                !EqualityComparer<T>.Default.Equals(inChild, default!))
+                return inChild;
+        }
+        return default;
+    }
+
     public ColliderHandle? GetCollider(int index = 0) =>
         Physics.GetColliderKind(SceneId, Id, index) >= 0 ?
             new ColliderHandle(this, index) : null;
@@ -960,6 +989,8 @@ public abstract class Script : IComponent
     public T AddComponent<T>() where T : Script => GameObject.AddComponent<T>();
 
     public ColliderHandle? GetCollider(int index = 0) => GameObject.GetCollider(index);
+    public T? GetComponentInChildren<T>() where T : IComponent => GameObject.GetComponentInChildren<T>();
+    public Animator? GetAnimator() => GameObject.GetAnimator();
     public int ColliderCount => GameObject.ColliderCount;
     public Joint? GetJoint() => GameObject.GetJoint();
     public CharacterController? GetCharacterController() => GameObject.GetCharacterController();

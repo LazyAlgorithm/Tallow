@@ -228,6 +228,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 - [ ] Jolt physics: rigid bodies, forces, collision/trigger callbacks, raycasts/shape casts, character controls, constraints/joints and physics queries.
 - [ ] Native network features surfaced to C#: networked TickInput/actions, authority/ownership, spawning, replication, prediction/reconciliation, rollback, RPCs, lag compensation, relevancy and state sync, working by default.
 - [ ] Rendering, materials, shaders/compute graphs, cameras, lighting, mesh/voxel/terrain, animation/IK, sequencer and modeling tools.
+  - [x] Animator (November 15, 2026): `Animator` value handle (Play, CrossFade, HasClip, CurrentClip,
+    CurrentState, IsFinished, IsInTransition, NormalizedTime, StateTime, Speed, controller parameters and layer
+    weights) over `CSharpAnimation` exposures; `GetAnimator()` and `GetComponentInChildren<T>()`. 7 in-engine
+    checks; graph nodes come from the catalog.
 - [ ] Audio/voice, UI/GUI, asset management, navigation/behavior trees, world streaming/world states, persistence/save/load, gameplay time and platform APIs.
 - [ ] Inspector: add string, enum, arrays/lists, serializable nested types, asset/GameObject/component references, undo/redo, prefab overrides and validation. Current user-confirmed subset is numeric/bool/vectors and persistence.
 - [ ] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.

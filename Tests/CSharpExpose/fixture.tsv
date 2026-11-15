@@ -11,6 +11,29 @@ field	Tallow.Time	TickScale	float	get
 field	Tallow.Time	TimeScale	float	getset
 field	Tallow.Time	UnscaledDeltaTime	float	get
 method	Tallow.Application	Quit	void
+method	Tallow.CSharpAnimation	CopyCurrentClip	int	session:ulong	entity:ulong	buffer:System.Span<byte>
+method	Tallow.CSharpAnimation	CopyCurrentState	int	session:ulong	entity:ulong	buffer:System.Span<byte>
+method	Tallow.CSharpAnimation	CrossFade	void	session:ulong	entity:ulong	state:string	fadeSeconds:float
+method	Tallow.CSharpAnimation	GetBool	bool	session:ulong	entity:ulong	name:string
+method	Tallow.CSharpAnimation	GetFloat	float	session:ulong	entity:ulong	name:string
+method	Tallow.CSharpAnimation	GetInteger	int	session:ulong	entity:ulong	name:string
+method	Tallow.CSharpAnimation	GetLayerCount	int	session:ulong	entity:ulong
+method	Tallow.CSharpAnimation	GetLayerWeight	float	session:ulong	entity:ulong	layer:int
+method	Tallow.CSharpAnimation	GetNormalizedTime	float	session:ulong	entity:ulong
+method	Tallow.CSharpAnimation	GetSpeed	float	session:ulong	entity:ulong
+method	Tallow.CSharpAnimation	GetStateTime	float	session:ulong	entity:ulong
+method	Tallow.CSharpAnimation	HasAnimator	bool	session:ulong	entity:ulong
+method	Tallow.CSharpAnimation	HasClip	bool	session:ulong	entity:ulong	clip:string
+method	Tallow.CSharpAnimation	IsFinished	bool	session:ulong	entity:ulong
+method	Tallow.CSharpAnimation	IsInTransition	bool	session:ulong	entity:ulong
+method	Tallow.CSharpAnimation	Play	void	session:ulong	entity:ulong	clip:string	fadeSeconds:float
+method	Tallow.CSharpAnimation	ResetTrigger	void	session:ulong	entity:ulong	name:string
+method	Tallow.CSharpAnimation	SetBool	void	session:ulong	entity:ulong	name:string	value:bool
+method	Tallow.CSharpAnimation	SetFloat	void	session:ulong	entity:ulong	name:string	value:float
+method	Tallow.CSharpAnimation	SetInteger	void	session:ulong	entity:ulong	name:string	value:int
+method	Tallow.CSharpAnimation	SetLayerWeight	void	session:ulong	entity:ulong	layer:int	weight:float
+method	Tallow.CSharpAnimation	SetSpeed	void	session:ulong	entity:ulong	speed:float
+method	Tallow.CSharpAnimation	SetTrigger	void	session:ulong	entity:ulong	name:string
 method	Tallow.CSharpAudio	PlayOneShot	void	clip:string	position:System.Numerics.Vector3	volume:float
 method	Tallow.CSharpAudio	PlayOneShot2D	void	clip:string	volume:float
 method	Tallow.CSharpBindingFixture	Average	float	a:float	b:float

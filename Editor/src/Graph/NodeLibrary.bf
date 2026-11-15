@@ -30,7 +30,7 @@ static class NodeLibrary
 	}
 
 	/// The component types C# scripts can get and hold: Tallow.API's own (IComponent).
-	public static readonly StringView[?] CSharpComponentTypes = .("Rigidbody", "CharacterController", "SoftBody", "Joint");
+	public static readonly StringView[?] CSharpComponentTypes = .("Rigidbody", "CharacterController", "SoftBody", "Joint", "Animator");
 
 	/// Whether a C# graph's object type is a struct (GameObject and the physics handles): no null, only default.
 	public static bool IsCSharpStruct(StringView typeName)

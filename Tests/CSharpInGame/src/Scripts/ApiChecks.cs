@@ -83,6 +83,7 @@ public class ApiChecks : CheckBase
             HooksAndSaves();
             AsyncChecks();
             GraphChecks();
+            AnimatorChecks();
             PackageChecks();
             Finish();
             Application.Quit();
@@ -113,6 +114,22 @@ public class ApiChecks : CheckBase
         Check("await Wait(0.5) waits half a second of game time", probe?.FramesForWait is >= 29 and <= 31);
         Check("code after every await runs on the game thread", probe is { StayedOnGameThread: true });
         Check("destroying a script cancels what it awaits", AsyncDoomed.Cancelled && !AsyncDoomed.RanOn);
+    }
+
+    private void AnimatorChecks()
+    {
+        GameObject? root = Scene.Find("AnimRoot");
+        GameObject? animated = Scene.Find("Animated");
+        Animator animator = root?.GetComponentInChildren<Animator>() ?? default;
+        Check("GetComponentInChildren finds an Animator below the object", animator.IsValid && animator.GameObject == animated);
+        Check("an object without an Animator has none", root?.GetAnimator() == null);
+        Check("the Animator starts its default clip (" + animator.CurrentClip + ")", animator.CurrentClip == "Idle");
+        Check("Animator.HasClip", animator.HasClip("Walk") && !animator.HasClip("Nope"));
+        animator.Play("Walk", 0f);
+        Check("Animator.Play switches the clip (" + animator.CurrentClip + ")", animator.CurrentClip == "Walk");
+        animator.Speed = 1.5f;
+        Check("Animator.Speed is set and read back", MathF.Abs(animator.Speed - 1.5f) < 1e-6f);
+        Check("a missing Animator reads empty", new Animator(root ?? default).CurrentClip == "");
     }
 
     private void GraphChecks()
