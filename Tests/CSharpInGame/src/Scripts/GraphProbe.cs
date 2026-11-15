@@ -16,6 +16,7 @@ public partial class GraphProbe : Script
 	public GameObject self;
 	public Vector3 position = new Vector3(0f, 0f, 0f);
 	public float lerped = 0f;
+	public int bumped = 0;
 
 	public override void Start()
 	{
@@ -33,6 +34,11 @@ public partial class GraphProbe : Script
 		frames = (frames + 1); // #14
 		elapsed = (elapsed + deltaTime); // #17
 		position = (Transform?.Position ?? default); // #20
+	}
+
+	public void Custom_Bump()
+	{
+		bumped = (bumped + 1); // #26
 	}
 
 }
