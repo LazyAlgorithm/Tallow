@@ -47,6 +47,9 @@ def main() -> int:
 
         # GraphProbe.cs is what the graph compiler makes of GraphProbe.tgraph: compile the graph again with this
         # engine, so the run tests the compiler as it is now, and say so when the checked-in copy is out of date.
+        # The graph uses nodes read from C# (.tallow-csharp/graph-nodes.tsv), which a build writes: build first.
+        subprocess.run(["dotnet", "run", "--project", str(ROOT / "Managed/Tallow.Build/Tallow.Build.csproj"),
+                        "--", "--project", str(project), "--engine-root", str(ROOT)], capture_output=True, text=True)
         graph = project / "src/Scripts/GraphProbe.tgraph"
         committed = (project / "src/Scripts/GraphProbe.cs").read_text(encoding="utf-8")
         compiled = subprocess.run([str(launcher), "--graph-compile", str(graph), "InGame"], capture_output=True, text=True)

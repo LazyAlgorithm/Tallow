@@ -267,7 +267,11 @@ keep the code and drop the graph. Because the class is `partial`, a hand-written
 file can add methods the graph's nodes cannot express.
 
 The node list in a C# project leaves out nodes that only exist for Beef (the engine's Beef API, Beef
-`[GraphNode]` methods, ECS For Each Data). Object variables of GameObject and physics handle types are handles
+`[GraphNode]` methods, ECS For Each Data). In their place, every public property, field and method of
+Tallow.API's gameplay types and of your own public C# types becomes a node (under Engine and My Scripts), as
+long as a pin can carry its parameters and result: numbers, bools, text, vectors, rotations, colours, enums,
+GameObject, Transform, the physics handles and your scripts. The build writes the list
+(`.tallow-csharp/graph-nodes.tsv`) even when the game does not compile, so a graph can be finished first. Object variables of GameObject and physics handle types are handles
 (never null): Is Valid asks whether the object still exists.
 
 To compile a graph without the editor (tests, build scripts):

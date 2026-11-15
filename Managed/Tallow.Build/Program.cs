@@ -613,14 +613,15 @@ internal static class Program
     /// compiled successfully. Roslyn checks inheritance and attributes, rather
     /// than guessing classes from file names or executing the user's game.
     /// </summary>
-    private static void WriteComponentCatalog(string project, string engine)
+    /// <summary>The game's sources and Tallow.API's in one Roslyn compilation, for the catalogs.</summary>
+    private static CSharpCompilation CatalogCompilation(string project, string engine, out SyntaxTree[] trees)
     {
         string source = Path.Combine(project, "src");
         string api = Path.Combine(engine, "Managed", "Tallow.API");
         var parse = new CSharpParseOptions(LanguageVersion.CSharp15);
         var sources = Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
             .Order(StringComparer.Ordinal).ToArray();
-        var trees = sources.Select(path => CSharpSyntaxTree.ParseText(
+        trees = sources.Select(path => CSharpSyntaxTree.ParseText(
             File.ReadAllText(path), parse, path: Path.GetFullPath(path))).ToArray();
         var apiTrees = Directory.EnumerateFiles(api, "*.cs", SearchOption.AllDirectories)
             .Select(path => CSharpSyntaxTree.ParseText(
@@ -630,9 +631,16 @@ internal static class Program
             .Select(path => MetadataReference.CreateFromFile(path));
         var globalNumerics = CSharpSyntaxTree.ParseText(
             "global using System.Numerics;", parse, path: "Tallow.GlobalNumerics.g.cs");
-        var compilation = CSharpCompilation.Create("Tallow.ComponentCatalog",
+        return CSharpCompilation.Create("Tallow.ComponentCatalog",
             trees.Concat(apiTrees).Append(globalNumerics), references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    }
+
+    private static string GraphNodesPath(string project) => Path.Combine(project, ".tallow-csharp", "graph-nodes.tsv");
+
+    private static void WriteComponentCatalog(string project, string engine)
+    {
+        var compilation = CatalogCompilation(project, engine, out SyntaxTree[] trees);
         var components = new SortedSet<string>(StringComparer.Ordinal);
         var sourceRows = new SortedSet<string>(StringComparer.Ordinal);
         // Old script names and what they are now ([FormerlyNamed]); the editor updates scenes with them.
@@ -890,6 +898,7 @@ internal static class Program
         Publish(Path.Combine(project, ".tallow-csharp", "fields.tsv"), fieldRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields-aot.tsv"), aotFieldRows);
         Publish(Path.Combine(project, ".tallow-csharp", "ecs-data.tsv"), ecsDataRows);
+        GraphNodeCatalog.Write(compilation, trees, GraphNodesPath(project));
         Console.WriteLine($"Discovered {components.Count} managed gameplay components and {fieldRows.Count} editable fields.");
     }
 
@@ -1026,6 +1035,9 @@ internal static class Program
                 WritePackageLists(project, outputRoot);
             if (build.ExitCode == 0 && outputRoot == null)
                 WriteComponentCatalog(project, engine);
+            // A graph can still be worked on while the game does not compile: its nodes come from the sources.
+            else if (outputRoot == null)
+                GraphNodeCatalog.Write(CatalogCompilation(project, engine, out SyntaxTree[] trees), trees, GraphNodesPath(project));
             return build.ExitCode;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or

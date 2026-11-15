@@ -176,6 +176,21 @@ static class GraphCSharp
 	public static bool CompileFile(StringView graphPath, StringView namespaceName, String scriptPath, String error)
 	{
 		NodeLibrary.CSharp = true;
+		// The project's C# nodes (.tallow-csharp/graph-nodes.tsv, from its last build), from the folder above with
+		// project.tallow in it.
+		let folder = Path.GetDirectoryPath(graphPath, .. scope String());
+		for (int depth < 32)
+		{
+			if (File.Exists(scope $"{folder}/project.tallow"))
+			{
+				NodeLibrary.RefreshCSharpScripts(folder);
+				break;
+			}
+			let parent = Path.GetDirectoryPath(folder, .. scope String());
+			if (parent.IsEmpty || parent == folder)
+				break;
+			folder.Set(parent);
+		}
 		let graph = scope NodeGraph();
 		if (!graph.Load(graphPath))
 		{

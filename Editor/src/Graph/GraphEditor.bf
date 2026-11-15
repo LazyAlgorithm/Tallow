@@ -1351,14 +1351,21 @@ extension EditorApp
 			if (ImGui.InputInt("##v", ref number))
 				value..Clear().AppendF("{}", number);
 		case .Enum:
-			let entry = pin.typeName != null ? ApiIndex.Find(pin.typeName) : null;
-			if (value.IsEmpty && entry != null && entry.members.Count > 0)
-				value.Set(entry.members[0]);
+			// A C# project's enums come from its C# (the same names as the engine's for Tallow's own).
+			var members = (pin.typeName != null && NodeLibrary.CSharp) ? NodeLibrary.CSharpEnumMembers(pin.typeName) : null;
+			if (members == null)
+			{
+				let entry = pin.typeName != null ? ApiIndex.Find(pin.typeName) : null;
+				if (entry != null)
+					members = entry.members;
+			}
+			if (value.IsEmpty && members != null && members.Count > 0)
+				value.Set(members[0]);
 			if (ImGui.BeginCombo("##v", value.CStr()))
 			{
-				if (entry != null)
+				if (members != null)
 				{
-					for (let name in entry.members)
+					for (let name in members)
 					{
 						if (ImGui.Selectable(name.CStr(), name == value))
 							value.Set(name);

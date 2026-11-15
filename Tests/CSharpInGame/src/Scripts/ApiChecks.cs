@@ -128,6 +128,8 @@ public class ApiChecks : CheckBase
         Check("graph text nodes build text (" + graph.label + ")", graph.label == "graph 7");
         Check("graph Find Object By Name gives the object", graph.self == graph.GameObject);
         Check("graph On Update runs every frame with its delta time", graph.frames > 200 && graph.elapsed > 3f);
+        Check("graph nodes read from Tallow.API set and read the Transform", graph.position == new Vector3(1, 2, 3));
+        Check("graph node read from Tallow.API calls Mathf.Lerp", MathF.Abs(graph.lerped - 2.5f) < 1e-5f);
     }
 
     private void HooksAndSaves()

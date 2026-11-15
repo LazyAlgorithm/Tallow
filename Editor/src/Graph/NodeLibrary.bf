@@ -43,10 +43,104 @@ static class NodeLibrary
 		return false;
 	}
 
-	/// Reads the project's compiled C# scripts (.tallow-csharp/components.tsv) for C# graphs; rebuilds the library
-	/// when they changed.
+	/// The nodes the project's C# code and Tallow.API offer (.tallow-csharp/graph-nodes.tsv, written by Tallow.Build).
+	static String sCSharpNodes = new .() ~ delete _;
+	/// Enum types C# pins use, with their members.
+	static Dictionary<String, List<String>> sCSharpEnums = new .() ~ DeleteDictionaryAndKeysAndValues!(_);
+
+	/// The members of an enum a C# graph pin uses, or null.
+	public static List<String> CSharpEnumMembers(StringView typeName)
+	{
+		if (sCSharpEnums.TryGetAlt(typeName, ?, let members))
+			return members;
+		return null;
+	}
+
+	static PinType? ParsePin(StringView name)
+	{
+		switch (name)
+		{
+		case "Float": return .Float;
+		case "Int": return .Int;
+		case "Bool": return .Bool;
+		case "String": return .String;
+		case "Vector2": return .Vector2;
+		case "Vector3": return .Vector3;
+		case "Quaternion": return .Quaternion;
+		case "Color": return .Color;
+		case "Object": return .Object;
+		case "Enum": return .Enum;
+		default: return null;
+		}
+	}
+
+	/// Nodes for the members of Tallow.API and of the game's C# types (see Tallow.Build's GraphNodeCatalog).
+	static void AddCSharpCodeNodes()
+	{
+		NodeDef def = null;
+		bool skip = false;
+		for (let line in sCSharpNodes.Split('\n', .RemoveEmptyEntries))
+		{
+			let parts = scope List<StringView>();
+			for (let part in line.Split('\t'))
+				parts.Add(part);
+			if (parts[0] == "enum" && parts.Count >= 2)
+			{
+				let members = new List<String>();
+				for (int i = 2; i < parts.Count; i++)
+					members.Add(new String(parts[i]));
+				if (sCSharpEnums.TryAddAlt(parts[1], let key, let value))
+				{
+					*key = new String(parts[1]);
+					*value = members;
+				}
+				else
+					DeleteContainerAndItems!(members);
+				continue;
+			}
+			if (parts[0] == "node" && parts.Count >= 7)
+			{
+				def = null;
+				skip = Find(parts[1]) != null;
+				if (skip)
+					continue;
+				def = Add(parts[1], parts[2], parts[3], parts[4] == "Value" ? .Value : .Action, parts[5]);
+				def.cs.Set(parts[5]);
+				def.fromApi = true;
+				def.fromGame = parts[6] == "1";
+				continue;
+			}
+			if (def == null || skip || parts.Count < 5)
+				continue;
+			let pin = ParsePin(parts[2]);
+			if (pin == null)
+				continue;
+			if (parts[0] == "in")
+			{
+				def.In(parts[1], pin.Value, parts[3], parts[4]);
+				if (parts.Count > 5 && !parts[5].IsEmpty)
+					def.Default(parts[5]);
+			}
+			else if (parts[0] == "out")
+				def.Out(parts[1], pin.Value, parts[3], parts[4]);
+		}
+	}
+
+	/// Reads the project's compiled C# scripts (.tallow-csharp/components.tsv) and the nodes its C# offers
+	/// (graph-nodes.tsv) for C# graphs; rebuilds the library when they changed.
 	public static void RefreshCSharpScripts(StringView projectPath)
 	{
+		let nodes = scope String();
+		File.ReadAllText(scope $"{projectPath}/.tallow-csharp/graph-nodes.tsv", nodes).IgnoreError();
+		if (nodes != sCSharpNodes)
+		{
+			sCSharpNodes.Set(nodes);
+			if (sCSharp && sDefs != null)
+			{
+				DeleteContainerAndItems!(sDefs);
+				sDefs = null;
+			}
+		}
 		let text = scope String();
 		File.ReadAllText(scope $"{projectPath}/.tallow-csharp/components.tsv", text).IgnoreError();
 		let names = scope List<String>();
@@ -243,6 +337,8 @@ static class NodeLibrary
 		AddGetComponentNodes();
 		if (!sCSharp)
 			AddEcsNodes();
+		else
+			AddCSharpCodeNodes();
 		AddOverloads();
 	}
 
@@ -788,7 +884,10 @@ static class NodeLibrary
 			AddEcsNodes();
 		}
 		else if (sDefs != null)
+		{
 			AddGetComponentNodes();
+			AddCSharpCodeNodes();
+		}
 	}
 
 	// ---- shader graph nodes ----

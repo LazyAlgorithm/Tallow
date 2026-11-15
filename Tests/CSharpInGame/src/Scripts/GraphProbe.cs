@@ -14,6 +14,8 @@ public partial class GraphProbe : Script
 	public float length = 0f;
 	public string label = "";
 	public GameObject self;
+	public Vector3 position = new Vector3(0f, 0f, 0f);
+	public float lerped = 0f;
 
 	public override void Start()
 	{
@@ -22,12 +24,15 @@ public partial class GraphProbe : Script
 		length = new Vector3(3f, 4f, 0f).Length();
 		label = ("graph " + GraphRuntime.Text(7));
 		self = (Scene.Find("Graph") ?? default);
+		{ var t18 = Transform; if (GraphRuntime.IsValid(t18)) t18.Position = new Vector3(1f, 2f, 3f); }
+		lerped = Tallow.Mathf.Lerp(0f, 10f, 0.25f);
 	}
 
 	public override void Update(TickInput input, float deltaTime)
 	{
 		frames = (frames + 1);
 		elapsed = (elapsed + deltaTime);
+		position = (Transform?.Position ?? default);
 	}
 
 }

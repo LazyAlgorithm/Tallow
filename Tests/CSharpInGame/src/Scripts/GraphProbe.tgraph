@@ -5,6 +5,8 @@ variable vector "turned" "0 0 0"
 variable float "length" "0"
 variable text "label" ""
 variable object:GameObject "self" ""
+variable vector "position" "0 0 0"
+variable float "lerped" "0"
 node 1 event.start 40 40
 node 2 math.qmul 40 200 "0 90 0" "0 0 1"
 node 3 var.set.vector 300 40 "" "turned" "0 0 0"
@@ -22,6 +24,11 @@ node 14 var.set.int 300 500 "" "frames" "0"
 node 15 var.get.float 560 700 "elapsed"
 node 16 math.add 820 700 "0" "0"
 node 17 var.set.float 560 500 "" "elapsed" "0"
+node 18 api:Transform.Position= 1340 40 "" "" "1 2 3"
+node 19 api:Transform.Position 820 860 ""
+node 20 var.set.vector 820 500 "" "position" "0 0 0"
+node 21 api:Mathf.Lerp/3 1340 200 "0" "10" "0.25"
+node 22 var.set.float 1600 40 "" "lerped" "0"
 link 1 0 3 0
 link 2 0 3 2
 link 3 0 5 0
@@ -38,3 +45,8 @@ link 14 0 17 0
 link 15 0 16 0
 link 11 1 16 1
 link 16 0 17 2
+link 10 0 18 0
+link 17 0 20 0
+link 19 0 20 2
+link 18 0 22 0
+link 21 0 22 2

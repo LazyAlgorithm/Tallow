@@ -27,6 +27,9 @@ extension EditorApp
 
 	void RunGraphNodeTest()
 	{
+		if (mManagedGameplay)
+			NodeLibrary.RefreshCSharpScripts(Project.Current.Path);
+		Log.Info(scope $"GRAPH-NODE-TEST csharp={NodeLibrary.CSharp} nodes={NodeLibrary.Defs.Count} fromCode={NodeLibrary.ApiNodeCount}");
 		let text = scope String();
 		GetArg("--graph-node-test", text);
 		let folder = scope $"{Assets.ProjectPath}/GraphNodeTest";
@@ -35,7 +38,9 @@ extension EditorApp
 		for (let def in NodeLibrary.Defs)
 		{
 			let all = text == "*";
-			if ((all ? def.fromApi : !def.title.Contains(text, true)) || def.kind == .Event || def.isShader || def.kind == .Param || def.kind == .Return)
+			// "@api": only the nodes read from code (the engine's API, or Tallow.API's and the game's in C#).
+			let api = text == "@api";
+			if ((all ? def.fromApi : api ? !def.fromApi : !def.title.Contains(text, true)) || def.kind == .Event || def.isShader || def.kind == .Param || def.kind == .Return)
 				continue;
 			let graph = scope NodeGraph();
 			graph.csharp = mManagedGameplay;
