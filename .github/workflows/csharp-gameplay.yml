@@ -20,6 +20,9 @@ on:
       - 'tools/check_csharp_enums.py'
       - 'tools/test_csharp_ingame.py'
       - 'tools/test_csharp_network.py'
+      - 'tools/test_csharp_export.py'
+      - 'tools/build_player.py'
+      - 'Player/**'
       - 'Tests/CSharpInGame/**'
       - 'Tests/CSharpNetwork/**'
       - 'Editor/templates/**'
@@ -376,3 +379,5 @@ jobs:
         run: python3 tools/test_csharp_ingame.py
       - name: Share C# [Sync] fields between a real server and client
         run: python3 tools/test_csharp_network.py
+      - name: Build a C# game for release (precompiled player, bundled .NET) and run it on its own
+        run: python3 tools/test_csharp_export.py

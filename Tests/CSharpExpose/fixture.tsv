@@ -16,6 +16,7 @@ method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instan
 method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:string
 method	Tallow.CSharpComponents	EnabledState	int	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpComponents	SetEnabled	bool	session:ulong	entity:ulong	instance:int	enabled:bool
+method	Tallow.CSharpNetwork	SendRpc	int	session:ulong	entity:ulong	instance:int	target:int	method:string	arguments:string
 method	Tallow.CSharpSceneObjects	ActiveHierarchyState	int	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	ActiveSelfState	int	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	AddTag	bool	session:ulong	entity:ulong	tag:string
@@ -93,6 +94,7 @@ method	Tallow.Physics	GetColliderCapsuleHeight	float	session:ulong	entity:ulong	
 method	Tallow.Physics	GetColliderCapsuleRadius	float	session:ulong	entity:ulong	index:int
 method	Tallow.Physics	GetColliderCenter	System.Numerics.Vector3	session:ulong	entity:ulong	index:int
 method	Tallow.Physics	GetColliderCount	int	session:ulong	entity:ulong
+method	Tallow.Physics	GetColliderIsTrigger	int	session:ulong	entity:ulong	index:int
 method	Tallow.Physics	GetColliderKind	int	session:ulong	entity:ulong	index:int
 method	Tallow.Physics	GetColliderSphereRadius	float	session:ulong	entity:ulong	index:int
 method	Tallow.Physics	GetJointConnectedEntity	ulong	session:ulong	entity:ulong
@@ -123,6 +125,7 @@ method	Tallow.Physics	RaycastDetails	Tallow.PhysicsQueryHit	session:ulong	origin
 method	Tallow.Physics	RaycastDistance	float	session:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
 method	Tallow.Physics	RepairSoftBody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	SetCharacterHeight	bool	session:ulong	entity:ulong	height:float	standingHeight:float
+method	Tallow.Physics	SetColliderIsTrigger	bool	session:ulong	entity:ulong	index:int	isTrigger:bool
 method	Tallow.Physics	SetJointSwingLimit	bool	session:ulong	entity:ulong	degrees:float
 method	Tallow.Physics	SetRigidbodyAngularVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
 method	Tallow.Physics	SetRigidbodyVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3

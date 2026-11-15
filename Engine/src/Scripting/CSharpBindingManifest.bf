@@ -8,6 +8,9 @@ namespace Tallow;
 /// Extracts the explicitly approved C# gameplay surface from *resolved Beef
 /// symbols*. This is an engine-side build artifact, not a gameplay-time scanner.
 /// Stage 1 supports only stateless static methods over a small, safe value ABI.
+/// Always included: its generated extension carries the API version stamp, which a program that never calls the
+/// manifest writer (the precompiled player) must still export.
+[AlwaysInclude]
 static class CSharpBindingManifest
 {
     const StringView Header = "TALLOW_CSHARP_API_V1";

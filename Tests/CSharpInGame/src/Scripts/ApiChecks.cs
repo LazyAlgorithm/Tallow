@@ -37,8 +37,12 @@ public class ApiChecks : CheckBase
     private bool _started;
     private Helper? _helper;
 
-    public override void Awake() =>
+    public override void Awake()
+    {
         Check("fields are restored before Awake", Speed == 3f && Label == "from scene");
+        // tools/test_csharp_export.py checks a built game runs on the .NET it ships with.
+        Log.Info("INGAME RUNTIME " + System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory());
+    }
 
     public override void Start() => _started = true;
 

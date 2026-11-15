@@ -78,6 +78,10 @@ enum tn_csharp_event_id {
 
 // Initialize the .NET runtime within this native process. These paths come
 // from the engine, never from third-party mod manifests.
+// An exported symbol of the running program (the precompiled player exports its generated C# API entrypoints).
+void* tn_csharp_find_export(const char* name);
+// Before tn_csharp_init: use only the .NET runtime in this folder (a shipped game's bundled copy).
+int32_t tn_csharp_use_dotnet_root(const char* root);
 int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly);
 int32_t tn_csharp_set_callbacks(const tn_csharp_callbacks* callbacks);
 int32_t tn_csharp_load_game(const char* trusted_game_dll);

@@ -8,6 +8,9 @@ class GameApp : Application
 {
 	public String GameName = new .("Tallow") ~ delete _;
 	public String StartScene = new .("Scenes/Main.tscene") ~ delete _;
+	/// A built C# game's folder (CSharpRuntime.StartPackagedGame), or empty.
+	public String ManagedGameFolder = new .() ~ delete _;
+	bool mManagedStarted;
 	Scene mScene ~ delete _;
 	RenderView mView ~ delete _;
 	bool mGui;
@@ -54,6 +57,12 @@ class GameApp : Application
 			return false;
 		}
 		SceneSerializer.LoadFromFile(scene, path);
+		if (!ManagedGameFolder.IsEmpty && !mManagedStarted)
+		{
+			if (!CSharpRuntime.StartPackagedGame(scene, ManagedGameFolder))
+				return false;
+			mManagedStarted = true;
+		}
 		return true;
 	}
 
@@ -138,6 +147,11 @@ class GameApp : Application
 	{
 		if (mScene != null)
 			mScene.StopPlay();
+		if (mManagedStarted)
+		{
+			CSharpRuntime.EndTrustedGame(mScene);
+			mManagedStarted = false;
+		}
 		if (mGui && Gfx.Initialized)
 			ImGui.tn_imgui_shutdown();
 	}

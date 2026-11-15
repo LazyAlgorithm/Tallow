@@ -1,0 +1,11 @@
+FileVersion = 1
+Projects = {TallowPlayer = {Path = "."}, Tallow = {Path = "../Engine"}}
+
+[Workspace]
+StartupProject = "TallowPlayer"
+
+[Configs.Debug.Win64]
+Toolset = "LLVM"
+
+[Configs.Release.Win64]
+Toolset = "LLVM"

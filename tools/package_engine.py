@@ -79,6 +79,18 @@ def main():
         previous.unlink(missing_ok=True)
     if not launcher.is_file():
         parser.error(f'Launcher is not built: {launcher}')
+    # The precompiled player C# games ship as their executable (tools/build_player.py), in Release; and Tallow's
+    # managed runtime, built, so that C# works without first compiling the engine's own C#.
+    player = root / 'Player' / 'build' / f'Release_{target}' / 'TallowPlayer' / ('TallowPlayer.exe' if windows else 'TallowPlayer')
+    if not args.skip_build and not macos:
+        if windows and os.name != 'nt':
+            player_command = ['wine', str(toolchain / 'beef/bin/BeefBuild.exe'), '-workspace=Player', '-config=Release', '-platform=Win64', '-verbosity=minimal']
+        else:
+            player_command = [os.environ.get('BEEFBUILD', 'BeefBuild'), '-workspace=Player', '-config=Release', f'-platform={target}', '-verbosity=minimal']
+        player.unlink(missing_ok=True)  # Beef does not notice changed native archives
+        subprocess.run(player_command, cwd=root, env=environment, check=True)
+        subprocess.run(['dotnet', 'build', str(root / 'Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj'),
+                        '--configuration', 'Debug', '--nologo', '--verbosity', 'minimal'], check=True)
     language_worker = root / 'build/tools/beef-language-service' / args.platform
     if not macos:
         worker = language_worker / ('beef-language-service.exe' if windows else 'beef-language-service')
@@ -89,12 +101,27 @@ def main():
     stage = Path(tempfile.mkdtemp(prefix='.tallow-package-', dir=output.parent))
     try:
         ignore = shutil.ignore_patterns('build', '__pycache__', '*.pyc', 'recovery', '.reload', 'imgui.ini')
-        for name in ('Engine', 'Editor', 'Launcher'):
+        for name in ('Engine', 'Editor', 'Launcher', 'Player'):
             shutil.copytree(root / name, stage / name, ignore=ignore)
+        if player.is_file():
+            destination = stage / player.relative_to(root)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(player, destination)
+        # C# gameplay: the API and runtime projects games compile against, the build tool, and the runtime built.
+        managed_ignore = shutil.ignore_patterns('bin', 'obj', '__pycache__')
+        for name in ('Tallow.API', 'Tallow.ManagedRuntime', 'Tallow.Build', 'Tallow.Analyzers'):
+            if (root / 'Managed' / name).is_dir():
+                shutil.copytree(root / 'Managed' / name, stage / 'Managed' / name, ignore=managed_ignore)
+        built_runtime = root / 'Managed/Tallow.ManagedRuntime/bin/Debug'
+        if built_runtime.is_dir():
+            shutil.copytree(built_runtime, stage / 'Managed/Tallow.ManagedRuntime/bin/Debug')
+        for name in ('Directory.Build.props', 'Directory.Packages.props', 'global.json'):
+            if (root / 'Managed' / name).is_file():
+                shutil.copy2(root / 'Managed' / name, stage / 'Managed' / name)
         for name in ('BeefSpace.toml', 'icon.png', 'LICENSE', 'THIRD_PARTY_LICENSES.txt'):
             shutil.copy2(root / name, stage / name)
         (stage / 'tools').mkdir()
-        for name in ('build_player.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'toolchain.txt', 'setup_dependencies.ps1', 'setup_dependencies.sh'):
+        for name in ('build_player.py', 'test_csharp_export.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'toolchain.txt', 'setup_dependencies.ps1', 'setup_dependencies.sh'):
             shutil.copy2(root / 'tools' / name, stage / 'tools' / name)
         shutil.copy2(root / 'tools/beef_language_service.py', stage / 'tools/beef_language_service.py')
         # Script reloads compile with the Beef compiler kept loaded (built on first use from the sources of the user's

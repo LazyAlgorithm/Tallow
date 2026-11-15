@@ -238,3 +238,11 @@ Unsupported complex references and collections are not yet serialized.
 When field restoration fails, the native C# adapter no longer proceeds with
 `Awake`; when editing during Play, a failed field batch leaves the previous
 saved override unchanged. This still requires full Nobara editor verification.
+
+## Shipping a C# game
+
+`python3 tools/build_player.py <project> --output <folder>` (or File > Build) builds a C#
+project into a folder that runs on its own: the engine's precompiled player renamed to the
+game, `game.tpak`, `Managed/` (Tallow's runtime and the game's Release assemblies) and
+`dotnet/`, a copy of the .NET runtime, so players need not install .NET. Pass
+`--no-bundle-dotnet` for a smaller build that needs .NET installed. Linux only so far.

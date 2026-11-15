@@ -180,6 +180,8 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_init(char8* runtimeConfig, char8* managedAssembly);
 	[CLink] static extern int32 tn_csharp_set_callbacks(Callbacks* callbacks);
 	[CLink] static extern int32 tn_csharp_load_game(char8* gameAssembly);
+	[CLink] static extern int32 tn_csharp_use_dotnet_root(char8* root);
+	[CLink] static extern void* tn_csharp_find_export(char8* name);
 	[CLink] static extern int32 tn_csharp_unload_game();
 	[CLink] static extern int32 tn_csharp_attach(char8* typeName, uint64 scene, uint64 entity);
 	[CLink] static extern int32 tn_csharp_apply_fields(int32 instance, char8* values);
@@ -331,6 +333,43 @@ static class CSharpRuntime
 		}
 		return true;
 	}
+
+	/// A built game: Managed/Runtime holds Tallow's managed runtime, Managed/Game the game's assemblies (one folder
+	/// each), and dotnet/ beside them, when present, the .NET runtime the game ships with.
+	public static bool StartPackagedGame(Scene scene, StringView gameFolder)
+	{
+		let bundled = scope $"{gameFolder}/dotnet";
+		if (Directory.Exists(bundled))
+			tn_csharp_use_dotnet_root(bundled.CStr());
+		let config = scope $"{gameFolder}/Managed/Runtime/Tallow.ManagedRuntime.runtimeconfig.json";
+		let runtime = scope $"{gameFolder}/Managed/Runtime/Tallow.ManagedRuntime.dll";
+		let game = scope $"{gameFolder}/Managed/Game/Tallow.Game/Tallow.Game.dll";
+		if (!File.Exists(config) || !File.Exists(runtime) || !File.Exists(game))
+		{
+			Log.Error("This game's C# files are missing from its Managed folder. Build it again.");
+			return false;
+		}
+		if (!Initialize(config, runtime))
+		{
+			if (!Directory.Exists(bundled))
+				Log.Error(scope $"This game needs the .NET {RequiredDotNetMajor} runtime: https://dotnet.microsoft.com/download/dotnet/{RequiredDotNetMajor}.0");
+			return false;
+		}
+		if (!BindScene(scene))
+			return false;
+		if (LoadGame(game) < 0)
+		{
+			UnloadGame();
+			UnbindScene(scene);
+			return false;
+		}
+		return true;
+	}
+
+	/// A built game ships its C# in a Managed folder beside it.
+	public static bool IsPackagedGame(StringView gameFolder) => File.Exists(scope $"{gameFolder}/Managed/Game/Tallow.Game/Tallow.Game.dll");
+
+	public const int RequiredDotNetMajor = 11;
 
 	/// Call after Scene.StopPlay: all managed components must be detached first.
 	public static void EndTrustedGame(Scene scene)
@@ -516,7 +555,9 @@ static class CSharpRuntime
 					return method.Ptr;
 			}
 		}
-		return null;
+		// The precompiled player (Player/) does not reflect the generated wrappers' types, but exports exactly
+		// these symbols (its link flags name the CSharpApi prefix).
+		return tn_csharp_find_export(symbol);
 	}
 
 	// Scene calls never expose native object pointers. The session token

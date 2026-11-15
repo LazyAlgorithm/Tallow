@@ -244,7 +244,17 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 - [ ] Measure cold compile, warm single-file edit, no-op compile, incremental assembly build and edit-to-Play. Compare with legacy Beef workflow and relevant older/current Unity baselines without promising a specific speed.
 - [ ] Incremental C# per-`.tasmdef` builds with correct dependency invalidation, diagnostics and simultaneous builds; avoid unnecessary full-game builds on every edit.
 - [ ] Implement reliable collectible AssemblyLoadContext hot reload, cleanup of managed tasks/timers/events and native handles, Inspector field/state preservation, resource unload and no editor crash; test multiplayer determinism.
-- [ ] Package precompiled per-platform player/engine plus C# assemblies, runtimeconfig, .NET runtime/dependencies, shaders and assets into independently redistributable Windows/Linux exports. Verify on machines without BeefBuild.
+- [~] Package precompiled per-platform player/engine plus C# assemblies, runtimeconfig, .NET runtime/dependencies, shaders and assets into independently redistributable Windows/Linux exports. Verify on machines without BeefBuild.
+  Linux done: `Player/` is the engine without the editor (its own Beef workspace, since one
+  workspace shares generic code with the editor), exporting its generated API symbols.
+  `tools/build_player.py` builds a C# project (no BeefProj) with it: Release assemblies via
+  `Tallow.Build --configuration Release --output`, `Managed/Runtime` + `Managed/Game`, and the
+  .NET runtime bundled in `dotnet/` (73 MB; `--no-bundle-dotnet` to skip), which the host then
+  uses exclusively. Engine packages carry the prebuilt player and the built managed runtime;
+  a game exported from a package with no BeefBuild on PATH passed all 82 in-engine checks.
+  `tools/test_csharp_export.py` (CI) checks the CLR came from the bundle. Fixed on the way:
+  hostfxr folders with pre-release names were skipped. Not done: Windows (needs the Windows
+  .NET runtime to bundle and a Windows run), macOS/web, trimming the bundled runtime.
 - [ ] Confirm no unsafe untrusted mod loading, directory escape, premature engine pointer exposure or unmanaged ownership errors.
 - [ ] Extend CI beyond managed/.NET host smoke tests to native Beef editor/launcher builds, precompiled player startup and real C# in-scene integration tests on Linux and Windows.
 

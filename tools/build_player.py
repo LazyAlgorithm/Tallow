@@ -67,6 +67,88 @@ def write_web_page(engine, project, name, staging):
     (staging / '.nojekyll').write_text('')
 
 
+DOTNET_MAJOR = 11
+
+
+def build_csharp_game(engine, project, config):
+    """Compiles a C# project's assemblies, optimised, into its build folder (not the editor's .tallow-csharp/bin)."""
+    out = project / 'build' / 'csharp' / config
+    if out.exists():
+        shutil.rmtree(out)
+    built = subprocess.run(['dotnet', 'run', '--project', str(engine / 'Managed/Tallow.Build/Tallow.Build.csproj'), '--',
+                            '--project', str(project), '--engine-root', str(engine), '--configuration', config, '--output', str(out)])
+    if built.returncode != 0 or not (out / 'Tallow.Game' / 'Tallow.Game.dll').is_file():
+        raise SystemExit('The C# scripts did not compile; fix the errors above and build again.')
+    runtime = subprocess.run(['dotnet', 'build', str(engine / 'Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj'),
+                              '--configuration', config, '--nologo', '--verbosity', 'minimal'])
+    if runtime.returncode != 0:
+        raise SystemExit("Tallow's C# runtime did not build.")
+
+
+def build_csharp_player(engine, config, windows, cross, toolchain):
+    """The engine's player without the editor (Player/), compiled once per engine and configuration. A packaged
+    engine ships it precompiled, so no Beef compiler is needed then."""
+    platform = 'Win64' if windows else 'Linux64'
+    executable = engine / 'Player' / 'build' / f'{config}_{platform}' / 'TallowPlayer' / ('TallowPlayer.exe' if windows else 'TallowPlayer')
+    beef = os.environ.get('BEEFBUILD', 'BeefBuild')
+    if cross and toolchain is not None and (toolchain / 'beef/bin/BeefBuild.exe').is_file():
+        environment = dict(os.environ, WINEPREFIX=str(toolchain / 'wine'), WINEDEBUG='-all', WINEDLLOVERRIDES='mscoree,mshtml=')
+        subprocess.run(['wine', str(toolchain / 'beef/bin/BeefBuild.exe'), f'-workspace={wine_path(engine / "Player", "/")}', f'-config={config}',
+                        '-platform=Win64', '-verbosity=minimal'], env=environment, check=True)
+    elif not cross and shutil.which(beef) and (engine / 'Player' / 'src').is_dir():
+        subprocess.run([beef, f'-workspace={engine / "Player"}', f'-config={config}', f'-platform={platform}', '-verbosity=minimal'], check=True)
+    if not executable.is_file():
+        raise SystemExit(f'The precompiled player is missing ({executable}), and there is no Beef compiler here to build it.')
+    return executable
+
+
+def dotnet_root():
+    """The folder of the dotnet that is on PATH (its host/ and shared/ are what a game bundles)."""
+    found = shutil.which('dotnet')
+    if not found:
+        return None
+    return Path(os.path.realpath(found)).parent
+
+
+def newest(folder, major):
+    versions = [entry for entry in folder.iterdir() if entry.is_dir() and entry.name.split('.')[0] == str(major)] if folder.is_dir() else []
+    def key(entry):
+        core, _, pre = entry.name.partition('-')
+        return ([int(part) if part.isdigit() else 0 for part in core.split('.')], pre == '', pre)
+    return max(versions, key=key) if versions else None
+
+
+def stage_csharp(engine, project, staging, config, windows, bundle):
+    """Managed/Runtime (Tallow's runtime and API), Managed/Game (the game's assemblies, a folder each) and, unless told
+    not to, dotnet/: the .NET runtime itself, so that players need not install it."""
+    runtime = engine / 'Managed' / 'Tallow.ManagedRuntime' / 'bin' / config / f'net{DOTNET_MAJOR}.0'
+    target = staging / 'Managed' / 'Runtime'
+    target.mkdir(parents=True)
+    for file in runtime.iterdir():
+        if file.is_file() and file.suffix in ('.dll', '.json') and not file.name.endswith('.dev.json'):
+            shutil.copy2(file, target / file.name)
+    shutil.copytree(project / 'build' / 'csharp' / config, staging / 'Managed' / 'Game',
+                    ignore=shutil.ignore_patterns('*.pdb' if config == 'Release' else '__none__', '*.deps.json'))
+    if not bundle:
+        print(f'.NET not bundled: players need the .NET {DOTNET_MAJOR} runtime installed.')
+        return
+    if windows and os.name != 'nt':
+        print(f'Note: the Windows .NET runtime is not bundled when building on Linux; players need .NET {DOTNET_MAJOR} installed.')
+        return
+    root = dotnet_root()
+    fxr = newest(root / 'host' / 'fxr', DOTNET_MAJOR) if root else None
+    framework = newest(root / 'shared' / 'Microsoft.NETCore.App', DOTNET_MAJOR) if root else None
+    if fxr is None or framework is None:
+        raise SystemExit(f'The .NET {DOTNET_MAJOR} runtime to bundle was not found beside dotnet; install it or pass --no-bundle-dotnet.')
+    bundled = staging / 'dotnet'
+    shutil.copytree(fxr, bundled / 'host' / 'fxr' / fxr.name)
+    shutil.copytree(framework, bundled / 'shared' / 'Microsoft.NETCore.App' / framework.name)
+    for notice in ('LICENSE.txt', 'ThirdPartyNotices.txt'):
+        if (root / notice).is_file():
+            shutil.copy2(root / notice, bundled / notice)
+    print(f'.NET {framework.name} bundled ({sum(f.stat().st_size for f in bundled.rglob("*") if f.is_file()) // (1024 * 1024)} MB)')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('project', type=Path)
@@ -83,6 +165,7 @@ def main():
     parser.add_argument('--loose', action='store_true', help='Leave the assets as loose files instead of packing them into game.tpak')
     parser.add_argument('--console', action='store_true', help='Windows: keep a console window for log output (a dedicated server wants one)')
     parser.add_argument('--bootstrap', help='Static registration method, e.g. Sandbox.GameSetup.Register')
+    parser.add_argument('--no-bundle-dotnet', action='store_true', help='C# games: do not ship the .NET runtime; players must install it')
     args = parser.parse_args()
     project = args.project.resolve()
     output = args.output.resolve()
@@ -144,8 +227,14 @@ def main():
     scene_path = (project / 'src' / scene).resolve()
     if not scene_path.is_relative_to(project / 'src') or not scene_path.is_file():
         parser.error('Start scene must exist inside the project src folder. Save it in the editor first.')
-    proj = tomllib.loads((project / 'BeefProj.toml').read_text())
-    space = tomllib.loads((project / 'BeefSpace.toml').read_text())
+    # A C# project has no Beef of its own: it ships the engine's precompiled player and its compiled assemblies.
+    csharp = not (project / 'BeefProj.toml').is_file()
+    if csharp:
+        if web or macos:
+            parser.error('C# games build for Linux and Windows so far.')
+        build_csharp_game(engine, project, args.config)
+    proj = tomllib.loads((engine / 'Player' / 'BeefProj.toml').read_text()) if csharp else tomllib.loads((project / 'BeefProj.toml').read_text())
+    space = {} if csharp else tomllib.loads((project / 'BeefSpace.toml').read_text())
     dependencies = {key: value for key, value in proj['Dependencies'].items() if key != 'TallowEditor'}
     dependencies.setdefault('Tallow', '*')
     # A project with no Program.bf of its own starts through the editor's DefaultProgram.
@@ -163,73 +252,78 @@ def main():
         parser.error('Invalid bootstrap method name.')
     with tempfile.TemporaryDirectory(prefix='tallow-player-') as temporary:
         workspace = Path(temporary)
-        source = workspace / 'src'
-        source.mkdir()
-        for file in (project / 'src').rglob('*.bf'):
-            if file == project / 'src' / 'Program.bf':
-                continue
-            if re.search(r'\bTallow\.Editor\b', file.read_text()):
-                parser.error(f'Runtime script references the editor: {file}')
-            target = source / file.relative_to(project / 'src')
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(file, target)
-        (source / 'Program.bf').write_text('using System;\nusing Tallow;\n' + '\n'.join(imports) + '\nnamespace ' + name + ';\nclass Program { public static int Main(String[] args) {\n' + (f'{bootstrap}();\n' if bootstrap else '') + 'return GameMain.Run(args);\n} }\n')
-        q = json.dumps
-        # Beef under Wine is given forward-slash Z: paths for projects and backslash ones on the link line.
-        located = (lambda path: wine_path(path, '/')) if cross else (lambda path: str(path).replace('\\', '/'))
-        project_entries = [f'{name} = {{Path = "."}}', f'Tallow = {{Path = {q(located(engine / "Engine"))}}}']
-        for dependency in dependencies:
-            if dependency in ('corlib', 'Tallow'):
-                continue
-            location = (project / space['Projects'][dependency]['Path']).resolve()
-            project_entries.append(f'{dependency} = {{Path = {q(located(location))}}}')
-        (workspace / 'BeefSpace.toml').write_text('FileVersion = 1\nProjects = {' + ', '.join(project_entries) + '}\n[Workspace]\nStartupProject = ' + q(name) + '\n'
-                                               + (f'[Configs.{args.config}.Win64]\nToolset = "LLVM"\n' if windows else '')
-                                               # Emscripten is a GNU-style toolchain. Debug info would stop its optimiser.
-                                               + (f'[Configs.{args.config}.wasm32]\nToolset = "GNU"\n' + ('EmitDebugInfo = "No"\n' if args.config == 'Release' else '') if web else ''))
-        if windows:
-            # The project's own settings are for Linux; a Windows player links the same libraries as built for Windows.
-            config = {'OtherLinkFlags': '$(LinkFlags) ' + ' '.join([f'"{wine_path(natives / lib) if cross else natives / lib}"' for lib in WINDOWS_NATIVE_LIBS] + [lib + '.lib' for lib in WINDOWS_SYSTEM_LIBS])}
-        elif web:
-            config = {'OtherLinkFlags': '$(LinkFlags) ' + ' '.join([str(natives / lib) for lib in WEB_NATIVE_LIBS] + list(WEB_LINK_FLAGS))}
-        elif macos:
-            # The project's own settings are for Linux; a Mac links the same libraries as built for macOS.
-            config = {'OtherLinkFlags': macos_link.flags(str(engine / 'build' / 'native'))}
+        if csharp:
+            player = build_csharp_player(engine, args.config, windows, cross, toolchain if windows else None)
         else:
-            config = proj['Configs'][args.config]['Linux64']
-        target_type = 'BeefGUIApplication' if windows and not args.console else 'BeefConsoleApplication'
-        beef_platform = 'Win64' if windows else 'wasm32' if web else 'macOS' if macos else 'Linux64'
-        lines = ['FileVersion = 1', 'Dependencies = {' + ', '.join(f'{key} = {q(value)}' for key, value in dependencies.items()) + '}', '[Project]', f'Name = {q(name)}', f'TargetType = {q(target_type)}', f'StartupObject = {q(name + ".Program")}', f'[Configs.{args.config}.{beef_platform}]']
-        for key, value in config.items():
-            if not windows and not web and not macos and isinstance(value, str):
-                if recorded_engine and not Path(recorded_engine).is_absolute():
-                    value = value.replace('$(WorkspaceDir)/' + recorded_engine, str(engine))
-                value = value.replace('$(WorkspaceDir)', str(project))
-                if recorded_engine and Path(recorded_engine).is_absolute() and str(engine) != recorded_engine:
-                    value = value.replace(recorded_engine, str(engine))
-            lines.append(f'{key} = {q(value)}')
-        (workspace / 'BeefProj.toml').write_text('\n'.join(lines) + '\n')
-        if cross:
-            environment = dict(os.environ, WINEPREFIX=str(toolchain / 'wine'), WINEDEBUG='-all', WINEDLLOVERRIDES='mscoree,mshtml=')
-            built = subprocess.run(['wine', str(toolchain / 'beef/bin/BeefBuild.exe'), '-workspace=.', f'-config={args.config}', '-platform=Win64', '-verbosity=minimal'],
-                                   cwd=workspace, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            # Wine's own chatter about graphics drivers is noise here; the compiler's messages are not.
-            print('\n'.join(line for line in built.stdout.splitlines() if 'MESA' not in line and 'pci id' not in line))
-            if built.returncode != 0:
-                raise SystemExit('The Windows build failed.')
-        else:
-            subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}', f'-config={args.config}', '-verbosity=minimal'] + (['-platform=Win64'] if windows else ['-platform=wasm32'] if web else ['-platform=macOS'] if macos else []), check=True)
+            source = workspace / 'src'
+            source.mkdir()
+            for file in (project / 'src').rglob('*.bf'):
+                if file == project / 'src' / 'Program.bf':
+                    continue
+                if re.search(r'\bTallow\.Editor\b', file.read_text()):
+                    parser.error(f'Runtime script references the editor: {file}')
+                target = source / file.relative_to(project / 'src')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(file, target)
+            (source / 'Program.bf').write_text('using System;\nusing Tallow;\n' + '\n'.join(imports) + '\nnamespace ' + name + ';\nclass Program { public static int Main(String[] args) {\n' + (f'{bootstrap}();\n' if bootstrap else '') + 'return GameMain.Run(args);\n} }\n')
+            q = json.dumps
+            # Beef under Wine is given forward-slash Z: paths for projects and backslash ones on the link line.
+            located = (lambda path: wine_path(path, '/')) if cross else (lambda path: str(path).replace('\\', '/'))
+            project_entries = [f'{name} = {{Path = "."}}', f'Tallow = {{Path = {q(located(engine / "Engine"))}}}']
+            for dependency in dependencies:
+                if dependency in ('corlib', 'Tallow'):
+                    continue
+                location = (project / space['Projects'][dependency]['Path']).resolve()
+                project_entries.append(f'{dependency} = {{Path = {q(located(location))}}}')
+            (workspace / 'BeefSpace.toml').write_text('FileVersion = 1\nProjects = {' + ', '.join(project_entries) + '}\n[Workspace]\nStartupProject = ' + q(name) + '\n'
+                                                   + (f'[Configs.{args.config}.Win64]\nToolset = "LLVM"\n' if windows else '')
+                                                   # Emscripten is a GNU-style toolchain. Debug info would stop its optimiser.
+                                                   + (f'[Configs.{args.config}.wasm32]\nToolset = "GNU"\n' + ('EmitDebugInfo = "No"\n' if args.config == 'Release' else '') if web else ''))
+            if windows:
+                # The project's own settings are for Linux; a Windows player links the same libraries as built for Windows.
+                config = {'OtherLinkFlags': '$(LinkFlags) ' + ' '.join([f'"{wine_path(natives / lib) if cross else natives / lib}"' for lib in WINDOWS_NATIVE_LIBS] + [lib + '.lib' for lib in WINDOWS_SYSTEM_LIBS])}
+            elif web:
+                config = {'OtherLinkFlags': '$(LinkFlags) ' + ' '.join([str(natives / lib) for lib in WEB_NATIVE_LIBS] + list(WEB_LINK_FLAGS))}
+            elif macos:
+                # The project's own settings are for Linux; a Mac links the same libraries as built for macOS.
+                config = {'OtherLinkFlags': macos_link.flags(str(engine / 'build' / 'native'))}
+            else:
+                config = proj['Configs'][args.config]['Linux64']
+            target_type = 'BeefGUIApplication' if windows and not args.console else 'BeefConsoleApplication'
+            beef_platform = 'Win64' if windows else 'wasm32' if web else 'macOS' if macos else 'Linux64'
+            lines = ['FileVersion = 1', 'Dependencies = {' + ', '.join(f'{key} = {q(value)}' for key, value in dependencies.items()) + '}', '[Project]', f'Name = {q(name)}', f'TargetType = {q(target_type)}', f'StartupObject = {q(name + ".Program")}', f'[Configs.{args.config}.{beef_platform}]']
+            for key, value in config.items():
+                if not windows and not web and not macos and isinstance(value, str):
+                    if recorded_engine and not Path(recorded_engine).is_absolute():
+                        value = value.replace('$(WorkspaceDir)/' + recorded_engine, str(engine))
+                    value = value.replace('$(WorkspaceDir)', str(project))
+                    if recorded_engine and Path(recorded_engine).is_absolute() and str(engine) != recorded_engine:
+                        value = value.replace(recorded_engine, str(engine))
+                lines.append(f'{key} = {q(value)}')
+            (workspace / 'BeefProj.toml').write_text('\n'.join(lines) + '\n')
+            if cross:
+                environment = dict(os.environ, WINEPREFIX=str(toolchain / 'wine'), WINEDEBUG='-all', WINEDLLOVERRIDES='mscoree,mshtml=')
+                built = subprocess.run(['wine', str(toolchain / 'beef/bin/BeefBuild.exe'), '-workspace=.', f'-config={args.config}', '-platform=Win64', '-verbosity=minimal'],
+                                       cwd=workspace, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                # Wine's own chatter about graphics drivers is noise here; the compiler's messages are not.
+                print('\n'.join(line for line in built.stdout.splitlines() if 'MESA' not in line and 'pci id' not in line))
+                if built.returncode != 0:
+                    raise SystemExit('The Windows build failed.')
+            else:
+                subprocess.run([os.environ.get('BEEFBUILD', 'BeefBuild'), f'-workspace={workspace}', f'-config={args.config}', '-verbosity=minimal'] + (['-platform=Win64'] if windows else ['-platform=wasm32'] if web else ['-platform=macOS'] if macos else []), check=True)
         output.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix=output.name + '-', dir=output.parent))
         try:
-            built_folder = workspace / 'build' / f'{args.config}_{beef_platform}' / name
+            built_folder = None if csharp else workspace / 'build' / f'{args.config}_{beef_platform}' / name
             if web:
                 # The program is a script and its WebAssembly; the page that runs them comes from tools/web/shell.
                 for suffix in ('.js', '.wasm'):
                     shutil.copy2(built_folder / (name + suffix), staging / (name + suffix))
             else:
                 executable = name + ('.exe' if windows else '')
-                shutil.copy2(built_folder / executable, staging / executable)
+                shutil.copy2(player if csharp else built_folder / executable, staging / executable)
+            if csharp:
+                stage_csharp(engine, project, staging, args.config, windows, not args.no_bundle_dotnet)
             # Of the engine's files a game reads only the compiled shaders, and only those of the graphics backends
             # it can start on this system: Vulkan, plus OpenGL as the fallback on Linux; WebGL 2 in a browser.
             # Metal on a Mac.
@@ -244,7 +338,7 @@ def main():
             if (engine / 'THIRD_PARTY_LICENSES.txt').exists():
                 shutil.copy2(engine / 'THIRD_PARTY_LICENSES.txt', staging / 'THIRD_PARTY_LICENSES.txt')
             for file in (project / 'src').rglob('*'):
-                if not file.is_file() or file.suffix in ('.bf', '.tgraph', '.py', '.sh', '.tmeta') or any(part.startswith('.') for part in file.relative_to(project / 'src').parts):
+                if not file.is_file() or file.suffix in ('.bf', '.tgraph', '.py', '.sh', '.tmeta', '.cs', '.csproj', '.tasmdef') or any(part.startswith('.') for part in file.relative_to(project / 'src').parts):
                     continue
                 # FBX, OBJ, ... and their import settings: the game gets the converted .glb instead (below).
                 if convert_models.is_converted(file.name) or (file.name.endswith('.import') and convert_models.is_converted(file.name[:-7])):
@@ -300,7 +394,7 @@ def main():
                 extra = []
                 if not args.single_pack and settings.get('packSplit', '1') != '0':
                     assets = {file.relative_to(staging / 'Assets').as_posix(): str(file) for file in (staging / 'Assets').rglob('*') if file.is_file()}
-                    code = [file.read_text(errors='replace') for file in (project / 'src').rglob('*') if file.is_file() and file.suffix in ('.bf', '.tgraph')]
+                    code = [file.read_text(errors='replace') for file in (project / 'src').rglob('*') if file.is_file() and file.suffix in ('.bf', '.tgraph', '.cs')]
                     patterns = [pattern.strip() for pattern in settings.get('packShared', '').split(';')]
                     scene_packs, served = pack_assets.plan_split(assets, code, scene, patterns)
                     inside = set()

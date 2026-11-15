@@ -46,6 +46,14 @@ internal static class Program
 
     private static bool Flag(string[] args, string flag) => args.Contains(flag);
 
+    private static string? OptionalOption(string[] args, string option)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+            if (args[i] == option && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                return args[i + 1];
+        return null;
+    }
+
     private static Dictionary<string, Definition> ReadDefinitions(string source)
     {
         var definitions = new Dictionary<string, Definition>(StringComparer.Ordinal);
@@ -129,7 +137,7 @@ internal static class Program
 
     private static XDocument CreateProject(
         string name, string rootNamespace, IEnumerable<string> files, IEnumerable<string> references,
-        string api, string output)
+        string api, string output, string binRoot)
     {
         var properties = new XElement("PropertyGroup",
             new XElement("TargetFramework", "net11.0"),
@@ -144,6 +152,9 @@ internal static class Program
             new XElement("AppendTargetFrameworkToOutputPath", "false"),
             new XElement("AppendRuntimeIdentifierToOutputPath", "false"),
             new XElement("OutputPath", output + Path.DirectorySeparatorChar));
+        properties.AddFirst(new XElement("TallowBinRoot",
+            new XAttribute("Condition", "'$(TallowBinRoot)' == ''"),
+            binRoot + Path.DirectorySeparatorChar));
         var includes = new XElement("ItemGroup",
             // Using is an MSBuild item, not a PropertyGroup property.
             new XElement("Using", new XAttribute("Include", "System.Numerics")),
@@ -505,11 +516,13 @@ internal static class Program
                 ? definitions.Keys.ToArray()
                 : definitions[name].References.ToArray();
             string[] refPaths = references.Select(reference => paths[reference]).ToArray();
-            string outputFolder = Path.Combine(output, name);
+            // $(TallowBinRoot) lets a game build (tools/build_player.py) put every assembly elsewhere, each in its own
+            // folder as the runtime loads them, without touching the editor's build.
+            string outputFolder = "$(TallowBinRoot)" + name;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             string rootNamespace = name == "Tallow.Game" ? name : definitions[name].RootNamespace;
             var csproj = CreateProject(name, rootNamespace, filesByAssembly[name].Order(), refPaths, api,
-                outputFolder);
+                outputFolder, output);
             // MSBuild treats project file timestamps as inputs. Saving an
             // identical .csproj on every no-op build invalidates otherwise
             // reusable compilation state, including referenced asmdefs.
@@ -828,14 +841,22 @@ internal static class Program
             {
                 UseShellExecute = false
             };
-            foreach (string part in new[] { "build", game, "--configuration", "Debug",
+            // --configuration Release --output DIR: an optimised build of every assembly into DIR/<name>/ (a game
+            // build), leaving the editor's .tallow-csharp/bin alone.
+            string configuration = OptionalOption(args, "--configuration") ?? "Debug";
+            if (configuration is not ("Debug" or "Release"))
+                throw new ArgumentException("--configuration is Debug or Release.");
+            string? outputRoot = OptionalOption(args, "--output");
+            foreach (string part in new[] { "build", game, "--configuration", configuration,
                 "--nologo", "--verbosity", "minimal" })
                 process.ArgumentList.Add(part);
+            if (outputRoot != null)
+                process.ArgumentList.Add("-p:TallowBinRoot=" + Path.GetFullPath(outputRoot).TrimEnd('/', '\\') + Path.DirectorySeparatorChar);
             using Process? build = Process.Start(process);
             if (build == null)
                 throw new InvalidOperationException("Could not start the .NET SDK.");
             build.WaitForExit();
-            if (build.ExitCode == 0)
+            if (build.ExitCode == 0 && outputRoot == null)
                 WriteComponentCatalog(project, engine);
             return build.ExitCode;
         }

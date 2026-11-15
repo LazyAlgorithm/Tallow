@@ -155,9 +155,17 @@ void add_root_from_executable(std::vector<std::filesystem::path>& roots,
         add_root(roots, resolved.parent_path());
 }
 
+// A shipped game's own copy of the runtime (tn_csharp_use_dotnet_root): then nothing installed is used.
+std::filesystem::path bundled_root;
+
 std::vector<std::filesystem::path> dotnet_roots()
 {
     std::vector<std::filesystem::path> roots;
+    if (!bundled_root.empty())
+    {
+        roots.push_back(bundled_root);
+        return roots;
+    }
     add_root_from_env(roots, "DOTNET_ROOT");
 #if defined(_WIN64) || defined(__x86_64__)
     add_root_from_env(roots, "DOTNET_ROOT_X64");
@@ -206,7 +214,10 @@ std::vector<std::filesystem::path> dotnet_roots()
 std::vector<int> version_parts(const std::filesystem::path& version)
 {
     std::vector<int> result;
-    const auto name = version.filename().string();
+    // A pre-release ("11.0.0-rc.1.26425.128") counts by its numbers before the dash.
+    auto name = version.filename().string();
+    if (const size_t dash = name.find('-'); dash != std::string::npos)
+        name.resize(dash);
     size_t start = 0;
     while (start < name.size() && result.size() < 3)
     {
@@ -298,6 +309,25 @@ extern "C" {
 
 const char* tn_csharp_error(void) { return error.c_str(); }
 
+void* tn_csharp_find_export(const char* name)
+{
+    if (!name)
+        return nullptr;
+#ifdef _WIN32
+    return reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(nullptr), name));
+#else
+    return dlsym(RTLD_DEFAULT, name);
+#endif
+}
+
+int32_t tn_csharp_use_dotnet_root(const char* root)
+{
+    if (started || !root)
+        return 0;
+    bundled_root = std::filesystem::path(platform_string(root));
+    return 1;
+}
+
 int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
 {
     if (started) return 1;
@@ -338,7 +368,17 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
 
         const auto config = platform_string(runtime_config);
         hostfxr_handle handle = nullptr;
-        int32_t result = initialize(config.c_str(), nullptr, &handle);
+        // With a bundled runtime, frameworks are resolved from it as well, not from an installed .NET.
+        struct
+        {
+            size_t size;
+            const host_char* host_path;
+            const host_char* dotnet_root;
+        } parameters{sizeof(parameters), nullptr, nullptr};
+        const auto root_text = bundled_root.native();
+        if (!bundled_root.empty())
+            parameters.dotnet_root = root_text.c_str();
+        int32_t result = initialize(config.c_str(), bundled_root.empty() ? nullptr : &parameters, &handle);
         if (result < 0 || !handle)
         {
             error = "hostfxr could not initialize the .NET runtime configuration.";

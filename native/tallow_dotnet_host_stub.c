@@ -2,6 +2,16 @@
 // Keep the native API linkable without creating a loader for untrusted mods.
 #include "tallow_dotnet_host.h"
 
+void* tn_csharp_find_export(const char* name)
+{
+    (void)name;
+    return 0;
+}
+int32_t tn_csharp_use_dotnet_root(const char* root)
+{
+    (void)root;
+    return 0;
+}
 int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
 {
     (void)runtime_config;

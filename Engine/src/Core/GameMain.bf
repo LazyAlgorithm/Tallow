@@ -33,6 +33,8 @@ static class GameMain
 		OpenLog();
 		Watchdog.Start();
 		ReadManifest(manifest, app);
+		if (CSharpRuntime.IsPackagedGame(root))
+			app.ManagedGameFolder.Set(root);
 		Assets.ProjectPath.Set(scope $"{root}/Assets");
 		GamePaths.SetGameFolder(root);
 		// Physics layers, tags and world states.
