@@ -66,3 +66,8 @@ transform 30 0 30 0 0 0 1 1 1 1
 component Tallow.CSharpBehaviour enabled 1
 field scriptType "InGame.OldProbeName"
 field fieldOverrides "Power	4\n"
+object 12 parent 0 active 1 name "Thrower"
+transform 40 0 40 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "InGame.Thrower"
+field fieldOverrides ""

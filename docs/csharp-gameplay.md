@@ -23,6 +23,8 @@ is complete.
 - `[Sync]` on a script field (public or private; numbers, bool, string, enums, vectors) shares
   the server's value with every client of a session when it changes, and with players who
   join later. Change it on the server; a client's own changes are overwritten.
+- An exception in a script is logged once in the Console (repeats count up), with the file
+  and line it was thrown on; click it to open the script there. The script keeps running.
 - Renaming a script class: the editor follows a class renamed inside its file by the file's
   `.tmeta` ID. When moving it to another file or namespace, add
   `[FormerlyNamed("OldNamespace.OldName")]` so scenes, prefabs and built games still find it.

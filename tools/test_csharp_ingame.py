@@ -63,7 +63,18 @@ def main() -> int:
         lines = [line for line in output.splitlines() if "INGAME" in line or "[Tallow C#]" in line]
         print("\n".join(lines))
         passed = sum("INGAME PASS" in line for line in lines)
-        failed = [line for line in lines if "INGAME FAIL" in line or "[Tallow C#]" in line]
+        # Thrower throws on purpose: allowed, but it must be logged once, naming the file and line it threw on.
+        expected = "thrown on purpose by Thrower"
+        failed = [line for line in lines if "INGAME FAIL" in line or ("[Tallow C#]" in line and expected not in line)]
+        thrown = [line for line in output.splitlines() if line.startswith("[error] System.InvalidOperationException: " + expected)]
+        source = (project / "src/Scripts/ApiChecks.cs").read_text().splitlines()
+        throw_line = next(i + 1 for i, text in enumerate(source) if expected in text and "throw" in text)
+        if len(thrown) == 1 and f"InGame.Thrower.Update" in thrown[0] and f"at ApiChecks.cs:{throw_line})" in thrown[0]:
+            passed += 1
+            print("INGAME PASS a script exception is logged once with the game file and line it was thrown on")
+        else:
+            failed.append(f"INGAME FAIL script exception report: {thrown or 'not logged'}")
+            print(failed[-1])
         if run.returncode != 0 or failed or not any("INGAME DONE" in line for line in lines):
             if not lines:
                 print(output[-4000:])

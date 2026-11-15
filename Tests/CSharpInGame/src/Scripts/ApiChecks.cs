@@ -107,6 +107,8 @@ public class ApiChecks : CheckBase
         try { Rpc(nameof(PrefabsAndRpcs)); } catch (ArgumentException) { notRpc = true; }
         try { Rpc(nameof(Shout), 1); } catch (ArgumentException) { badCount = true; }
         try { Rpc(nameof(Shout), "1", "x", Vector3.Zero); } catch (ArgumentException) { badType = true; }
+        Thrower? thrower = Scene.Find("Thrower")?.GetComponent<Thrower>();
+        Check("a script that throws in Update keeps being updated", thrower is { Updates: > 30 });
         RenamedProbe? renamed = Scene.Find("Renamed")?.GetComponent<RenamedProbe>();
         Check("a scene naming a script's [FormerlyNamed] name gets the renamed class, fields and all",
             renamed is { Awoke: true, Power: 4 });
@@ -362,6 +364,19 @@ public class Walker : Script
             WallHits++;
             LastWall = hit;
         }
+    }
+}
+
+/// Throws in every Update. The engine logs it once (tools/test_csharp_ingame.py checks the file and line)
+/// and keeps calling it.
+public class Thrower : Script
+{
+    public int Updates;
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        Updates++;
+        throw new InvalidOperationException("thrown on purpose by Thrower");
     }
 }
 

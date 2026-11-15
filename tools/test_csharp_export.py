@@ -62,7 +62,7 @@ def main() -> int:
         text = run.stdout + run.stderr
         lines = [line for line in text.splitlines() if "INGAME" in line or "[Tallow C#]" in line]
         passed = sum("INGAME PASS" in line for line in lines)
-        failed = [line for line in lines if "INGAME FAIL" in line or "[Tallow C#]" in line]
+        failed = [line for line in lines if "INGAME FAIL" in line or ("[Tallow C#]" in line and "thrown on purpose by Thrower" not in line)]
         runtime = next((line.split("INGAME RUNTIME ", 1)[1].strip() for line in lines if "INGAME RUNTIME " in line), "")
         bundled = runtime.startswith(str(output / "dotnet"))
         print("\n".join(failed))

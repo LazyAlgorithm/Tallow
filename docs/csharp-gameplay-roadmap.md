@@ -779,9 +779,14 @@ claim automatic replication of dynamically created joints.
 A full conversion also needs these. Ordered roughly by when they block users.
 
 **Authoring basics (before calling P2 done)**
-- [ ] Script exception policy: log the first exception with a source-mapped, clickable
-  stack trace in the Console; decide whether a throwing component keeps running (Unity
-  does) or is disabled after N failures. Never let one script stop the scene.
+- [x] Script exception policy: a throwing script keeps running (decided: the same failure
+  every frame is still one Console entry, counting up, rather than a silently disabled
+  component). The entry reads "System.X: message (in Update, Game.Player.Update(...) at
+  Player.cs:12)", carries the whole trace under "Stack traces / details", and clicking it
+  opens the game's file at that line (the first frame outside Tallow's own assemblies).
+  Batched dispatch (lifecycle, checked and input batches) now runs every script in the
+  batch and reports the first failure after, instead of stopping at the throwing one.
+  Test: `Thrower` in `Tests/CSharpInGame` (keeps updating; logged once with its line).
 - [ ] Remaining `Component` callbacks for C#: `OnFrame`, `OnNetworkEvent`,
   `OnDrawGizmos`, `OnValidate`, and the save hooks (`SaveFields`, `OnSaving`, `OnLoaded`).
 - [ ] Main-thread async: a tick-driven `SynchronizationContext` so `await` and timers

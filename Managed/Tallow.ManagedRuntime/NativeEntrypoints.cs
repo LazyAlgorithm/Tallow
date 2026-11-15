@@ -739,6 +739,8 @@ public static unsafe class NativeEntrypoints
     {
         try
         {
+            // One script throwing must not stop the rest: each runs, the first failure is reported after.
+            Exception? failure = null;
             if (count < 0 || count > 4096 || (count > 0 && instances == null))
                 throw new ArgumentOutOfRangeException(nameof(count));
             for (int i = 0; i < count; i++)
@@ -750,9 +752,12 @@ public static unsafe class NativeEntrypoints
                 // the input-batch path: only dispatch instances still attached
                 // at the moment their turn arrives.
                 if (sInstances.TryGetValue(instances[i], out Script? script))
-                    DispatchScript(instances[i], script, (ScriptEvent)eventId, deltaTime);
+                {
+                    try { DispatchScript(instances[i], script, (ScriptEvent)eventId, deltaTime); }
+                    catch (Exception exception) { failure ??= exception; }
+                }
             }
-            return count;
+            return failure is null ? count : Failure(failure);
         }
         catch (Exception exception)
         {
@@ -772,6 +777,8 @@ public static unsafe class NativeEntrypoints
     {
         try
         {
+            // One script throwing must not stop the rest: each runs, the first failure is reported after.
+            Exception? failure = null;
             if (count < 0 || count > 4096 || (count > 0 && instances == null))
                 throw new ArgumentOutOfRangeException(nameof(count));
             ScriptEvent phase = (ScriptEvent)eventId;
@@ -790,9 +797,12 @@ public static unsafe class NativeEntrypoints
                 GameObject owner = script.GameObject;
                 if (sNativeCallbacks.CanDispatch(sNativeCallbacks.Context,
                         owner.SceneId, owner.Id, instances[i], eventId) > 0)
-                    DispatchScript(instances[i], script, phase, deltaTime);
+                {
+                    try { DispatchScript(instances[i], script, phase, deltaTime); }
+                    catch (Exception exception) { failure ??= exception; }
+                }
             }
-            return count;
+            return failure is null ? count : Failure(failure);
         }
         catch (Exception exception)
         {
@@ -842,6 +852,8 @@ public static unsafe class NativeEntrypoints
     {
         try
         {
+            // One script throwing must not stop the rest: each runs, the first failure is reported after.
+            Exception? failure = null;
             if (count < 0 || count > 4096 || (count > 0 && items == null))
                 throw new ArgumentOutOfRangeException(nameof(count));
             // Avoid partially dispatching a batch containing a stale instance.
@@ -853,9 +865,12 @@ public static unsafe class NativeEntrypoints
                 // A prior Update could remove another script in the same
                 // batch; preserve lifecycle safety by skipping detached IDs.
                 if (sInstances.TryGetValue(items[i].Instance, out Script? script))
-                    RunInputScript(script, items[i].Input, items[i].DeltaTime);
+                {
+                    try { RunInputScript(script, items[i].Input, items[i].DeltaTime); }
+                    catch (Exception exception) { failure ??= exception; }
+                }
             }
-            return count;
+            return failure is null ? count : Failure(failure);
         }
         catch (Exception exception)
         {

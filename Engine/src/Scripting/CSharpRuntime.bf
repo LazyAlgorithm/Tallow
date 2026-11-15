@@ -137,8 +137,72 @@ static class CSharpRuntime
 			return false;
 		if (tn_csharp_invoke_rpc(instance, scope String(method).CStr(), scope String(arguments).CStr(), target, sender) > 0)
 			return true;
-		Log.Warning(scope $"C# RPC {method} was refused: {StringView(tn_csharp_error())}");
+		ReportFailure(scope $"RPC {method}");
 		return false;
+	}
+
+	/// A script threw (or a call into it failed). One Console error names the exception, where it was thrown and
+	/// the line of the game's C# it came from (click it to open the file there), with the whole trace beneath.
+	/// The same failure again only counts up on that entry. The script keeps running, as every other one does.
+	static int LastIndexOf(StringView text, StringView find)
+	{
+		for (int i = text.Length - find.Length; i >= 0; i--)
+			if (text.Substring(i, find.Length) == find)
+				return i;
+		return -1;
+	}
+
+	static void ReportFailure(StringView action)
+	{
+		let text = StringView(tn_csharp_error());
+		var firstLine = text;
+		let lineEnd = text.IndexOf('\n');
+		if (lineEnd >= 0)
+			firstLine = text.Substring(0, lineEnd);
+		firstLine.TrimEnd();
+		// "Dispatching C# component event: System.InvalidOperationException: message": from the exception's type on.
+		var header = firstLine;
+		let marker = firstLine.IndexOf("Exception: ");
+		if (marker > 0)
+		{
+			var start = marker;
+			while (start > 0 && firstLine[start - 1] != ' ' && firstLine[start - 1] != ':')
+				start--;
+			header = firstLine.Substring(start);
+		}
+		// The first frame in the game's own code: "   at Game.Player.Update() in /path/Player.cs:line 12".
+		StringView frame = default;
+		StringView file = default;
+		int32 line = -1;
+		for (var candidate in text.Split('\n'))
+		{
+			candidate.Trim();
+			if (!candidate.StartsWith("at "))
+				continue;
+			let inAt = LastIndexOf(candidate, " in ");
+			let lineAt = LastIndexOf(candidate, ":line ");
+			if (inAt < 0 || lineAt < inAt)
+				continue;
+			let path = candidate.Substring(inAt + 4, lineAt - inAt - 4);
+			if (!path.EndsWith(".cs") || path.Contains("/Managed/Tallow.") || path.Contains("\\Managed\\Tallow."))
+				continue;
+			frame = candidate.Substring(3, inAt - 3);
+			file = path;
+			line = (int32)SceneSerializer.ParseInt(candidate.Substring(lineAt + 6)) - 1;
+			break;
+		}
+		let message = scope String();
+		message.Append(header.IsEmpty ? (StringView)"C# script failed" : header);
+		message.AppendF(" (in {}", action);
+		if (!frame.IsEmpty)
+		{
+			let slash = Math.Max(file.LastIndexOf('/'), file.LastIndexOf('\\'));
+			message.AppendF(", {} at {}:{}", frame, file.Substring(slash + 1), line + 1);
+		}
+		message.Append(')');
+		message.Append('\n');
+		message.Append(text);
+		Log.Add(.Error, message, file, line);
 	}
 
 	/// A collision or trigger callback for one managed script. The other object must be in this session's scene.
@@ -155,7 +219,7 @@ static class CSharpRuntime
 		contact.relativeSpeed = relativeSpeed;
 		if (tn_csharp_contact_event(instance, &contact) > 0)
 			return true;
-		Log.Warning(scope $"C# collision callback failed: {StringView(tn_csharp_error())}");
+		ReportFailure("collision callback");
 		return false;
 	}
 
@@ -402,7 +466,7 @@ static class CSharpRuntime
 			return false;
 		if (tn_csharp_tick(instance, deltaTime) != 0)
 			return true;
-		Log.Warning(scope $"C# gameplay update failed: {StringView(tn_csharp_error())}");
+		ReportFailure("Update");
 		return false;
 	}
 
@@ -413,7 +477,7 @@ static class CSharpRuntime
 			return false;
 		if (tn_csharp_dispatch(instance, (int32)eventId, deltaTime) > 0)
 			return true;
-		Log.Warning(scope $"C# component callback failed: {StringView(tn_csharp_error())}");
+		ReportFailure("callback");
 		return false;
 	}
 
@@ -430,7 +494,7 @@ static class CSharpRuntime
         int32 result = tn_csharp_dispatch_batch(instances.Ptr, (int32)instances.Length, (int32)eventId, deltaTime);
         if (result == instances.Length)
             return true;
-        Log.Warning(scope $"C# batch callback failed: {StringView(tn_csharp_error())}");
+        ReportFailure("callback");
         return false;
     }
 
@@ -451,7 +515,7 @@ static class CSharpRuntime
             (int32)instances.Length, (int32)eventId, deltaTime);
         if (result == instances.Length)
             return true;
-        Log.Warning(scope $"Checked C# scene batch failed: {StringView(tn_csharp_error())}");
+        ReportFailure("callback");
         return false;
     }
 
@@ -471,7 +535,7 @@ static class CSharpRuntime
 		};
 		if (tn_csharp_update_input(instance, &native, deltaTime) > 0)
 			return true;
-		Log.Warning(scope $"C# gameplay update failed: {StringView(tn_csharp_error())}");
+		ReportFailure("Update");
 		return false;
 	}
 
@@ -489,7 +553,7 @@ static class CSharpRuntime
         let result = tn_csharp_update_input_batch(items.Ptr, (int32)items.Length);
         if (result == items.Length)
             return true;
-        Log.Warning(scope $"C# network input batch failed: {StringView(tn_csharp_error())}");
+        ReportFailure("Update");
         return false;
     }
 
