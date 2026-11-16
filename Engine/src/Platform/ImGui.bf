@@ -294,6 +294,8 @@ static class ImGui
 	[CLink] public static extern bool tn_imgui_viewports_active();
 	/// F11: the focused window (main or dragged out) full screen on its monitor, or back.
 	[CLink] public static extern bool tn_imgui_toggle_fullscreen();
+	/// Copies the main window's icon (an SDL surface) for windows dragged out of it.
+	[CLink] public static extern void tn_imgui_set_window_icon(void* icon);
 	[CLink] public static extern void tn_imgui_viewport_status(int32* windows, int32* drawn);
 	[CLink] public static extern bool tn_imgui_init(void* window, char8* iniPath, float uiScale);
 	[CLink] public static extern void tn_imgui_shutdown();

@@ -109,6 +109,9 @@ class Application
 		// SDL copies the pixels, so the image can be released straight away.
 		let surface = SDL.SDL_CreateSurfaceFrom(width, height, SDL.PIXELFORMAT_RGBA32, pixels, width * 4);
 		let ok = surface != null && SDL.SDL_SetWindowIcon(Window, surface);
+		// Editor windows dragged out of this one get the same icon.
+		if (ok)
+			ImGui.tn_imgui_set_window_icon(surface);
 		if (surface != null)
 			SDL.SDL_DestroySurface(surface);
 		Native.tn_image_free(pixels);

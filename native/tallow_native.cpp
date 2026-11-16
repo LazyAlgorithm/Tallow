@@ -386,6 +386,8 @@ namespace
 		int width = 0, height = 0;
 	};
 	void ViewportCreate(ImGuiViewport* viewport);
+	// The main window's icon (tn_imgui_set_window_icon), given to every dragged-out window too.
+	SDL_Surface* s_windowIcon = nullptr;
 	void ViewportDestroy(ImGuiViewport* viewport);
 	void ViewportSetSize(ImGuiViewport* viewport, ImVec2 size);
 	void ViewportRender(ImGuiViewport* viewport, void*);
@@ -546,6 +548,14 @@ TN_API void tn_imgui_shutdown()
 	if (bgfx::isValid(s_texUniform)) bgfx::destroy(s_texUniform);
 }
 
+// Keeps a copy of the main window's icon (an SDL surface) for windows dragged out of it; null forgets it.
+TN_API void tn_imgui_set_window_icon(SDL_Surface* icon)
+{
+	if (s_windowIcon != nullptr)
+		SDL_DestroySurface(s_windowIcon);
+	s_windowIcon = icon != nullptr ? SDL_DuplicateSurface(icon) : nullptr;
+}
+
 TN_API bool tn_imgui_event(const SDL_Event* event)
 {
 	// A dragged-out window's OS window goes away as it merges back into the editor (and a new one appears as it
@@ -690,6 +700,9 @@ namespace
 			}
 		}
 		viewport->RendererUserData = data;
+		if (s_windowIcon != nullptr)
+			if (SDL_Window* window = ViewportWindow(viewport))
+				SDL_SetWindowIcon(window, s_windowIcon);
 	}
 
 	void ViewportDestroy(ImGuiViewport* viewport)
