@@ -309,6 +309,8 @@ class EditorApp : Application
 			RunCSharpInspectorTest();
 		if (HasArg("--play-cycle-test"))
 			StartPlayCycleTest();
+		if (HasArg("--stale-build-test"))
+			StartStaleBuildTest();
 		{
 			let folder = scope String();
 			if (GetArg("--script-templates-test", folder))

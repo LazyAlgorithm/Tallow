@@ -127,7 +127,18 @@ extension EditorApp
 		// Do not queue a build for a script revision equivalent to the host.
 		// The native reload pipeline does not exist in a C# project.
 		if (mManagedGameplay)
+		{
 			mScriptsNeedReload = false;
+			// Look at the disk now: a script saved by another program since the last poll (every 0.5 s) must not
+			// let Play start on the build from before it.
+			mScriptPollClock.Restart();
+			if (mScriptMonitor.Poll(Assets.ProjectPath))
+			{
+				mManagedBuildReady = false;
+				if (mCheckRunning)
+					mManagedRecheckQueued = true;
+			}
+		}
 		if (mScriptsNeedReload && !mCheckRunning && !mReloadQueued && CheckScriptChanges() == 0)
 			mScriptsNeedReload = false;
 		if (mCheckRunning || mReloadQueued)

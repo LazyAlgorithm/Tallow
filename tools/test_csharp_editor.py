@@ -7,7 +7,9 @@ Opens the precompiled editor (TallowLauncher --editor) on copies of projects wit
      detaches every script each Stop and no unloaded game assembly stays in memory; time to usable is reported;
   2. a new project (--create) whose scripts were deleted: opens and plays with no C# build error;
   3. the C# project with a syntax error: opens, the error is logged with its file and line, Play stays off;
-  4. the same project after the error is fixed: plays again.
+  4. the same project after the error is fixed: plays again;
+  5. Play always runs the C# on disk (--stale-build-test): a file saved elsewhere just before Play, an edit while a
+     build runs, a moved file and a deleted file.
 Run: python3 tools/test_csharp_editor.py [--cycles 20]
 """
 import argparse
@@ -123,6 +125,12 @@ def main() -> int:
         target.write_text(original, encoding="utf-8")
         output, ready, _ = open_editor(broken, "--play-cycle-test", "2")
         check(f"after the fix it plays: {result(output)}", "PLAY CYCLE TEST PASS" in result(output), output)
+
+        # 5. No stale builds.
+        output, _, _ = open_editor(broken, "--stale-build-test")
+        found = [line for line in output.splitlines() if "STALE BUILD TEST" in line]
+        check(f"Play runs the C# on disk: {found[-1] if found else 'no result'}",
+              bool(found) and "STALE BUILD TEST PASS" in found[-1], output)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     if failed:
