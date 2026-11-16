@@ -623,6 +623,17 @@ public class ApiChecks : CheckBase
             renderer.Material == "Materials/Glow.tmat" && renderer.BackFaceCulling && renderer.Texture == "");
         Check("MeshRenderer.IsVisible is false with nothing drawing (headless)", Screen.Width > 0 || !renderer.IsVisible);
         renderer.Material = "";
+        // A 2 x 1 quad built in code, one metre above the lamp.
+        renderer.SetMesh([new(-1, 1, 0), new(1, 1, 0), new(1, 2, 0), new(-1, 2, 0)], [0, 2, 1, 0, 3, 2]);
+        bool built = renderer.TryGetWorldBounds(out Vector3 qLow, out Vector3 qHigh);
+        bool badIndex = false;
+        try { renderer.SetMesh([Vector3.Zero, Vector3.One, Vector3.UnitX], [0, 1, 3]); }
+        catch (ArgumentOutOfRangeException) { badIndex = true; }
+        bool cleared = renderer.ClearMesh() && !renderer.ClearMesh();
+        renderer.TryGetWorldBounds(out Vector3 sLow, out Vector3 sHigh);
+        Check($"MeshRenderer.SetMesh draws a built quad ({qLow} {qHigh}); bad indices throw; ClearMesh goes back",
+            built && MathF.Abs(qHigh.X - qLow.X - 2) < 0.01f && MathF.Abs(qHigh.Y - qLow.Y - 1) < 0.01f &&
+            MathF.Abs(qLow.Y - 21) < 0.01f && badIndex && cleared && sHigh.X - sLow.X < 1.01f);
         lamp.AddComponent<SphereCollider>().Radius = 0.25f;
         Rigidbody body = lamp.AddComponent<Rigidbody>();
         body.Mass = 55f;

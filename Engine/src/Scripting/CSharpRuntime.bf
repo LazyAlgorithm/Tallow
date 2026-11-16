@@ -514,6 +514,7 @@ static class CSharpRuntime
 	{
 		// Its ECS systems and team chooser go with it.
 		CSharpEcsSystem.RemoveAll();
+		CSharpMeshes.ReleaseAll();
 		HasTeamChooser = false;
 		if (!sStarted)
 			return true;
@@ -915,6 +916,10 @@ static class CSharpRuntime
 		Ready && scene == sSession ? sScene : null;
 
 	public static GameObject PhysicsObject(uint64 scene, uint64 entity) => Find(scene, entity);
+
+	/// Whether the object is still in the scene at all, even if destroyed this frame (and so still drawn).
+	public static bool StillInScene(uint64 scene, uint64 entity) =>
+		sScene != null && scene == sSession && entity <= uint32.MaxValue && sScene.FindById((uint32)entity) != null;
 
 	static GameObject Find(uint64 scene, uint64 entity)
 	{

@@ -296,6 +296,9 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     two spare vectors are taken back. Network check: a server-only bump of a C# motor's own counter reaches the client
     only through a rollback restore (30 network checks).
 - [ ] Rendering, materials, shaders/compute graphs, cameras, lighting, mesh/voxel/terrain, animation/IK, sequencer and modeling tools.
+  - [x] (November 16, 2026) `MeshRenderer.SetMesh(positions, triangles, normals?, uvs?)` / `ClearMesh` draw a mesh
+    built in code (`CSharpMeshes`: one engine-owned mesh per object, reused when rebuilt, freed once the object is
+    removed or the game unloads). 1 in-engine check. No Beef Terrain component exists (Voxel Terrain is exposed).
   - [x] (November 16, 2026) Component actions closing the gaps a scripted comparison of every public Beef component
     method found: `Water.HeightAt/DepthOf/Covers/IsFloating`, `VoxelObject.CarveLocal/Fill/ResetShape`,
     `LineRenderer.ClearPositions`, `SkinnedMeshRenderer` layers (`PlayLayer/StopLayer`), parts (count, names,
@@ -311,6 +314,11 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     weights) over `CSharpAnimation` exposures; `GetAnimator()` and `GetComponentInChildren<T>()`. 7 in-engine
     checks; graph nodes come from the catalog.
 - [ ] Audio/voice, UI/GUI, asset management, navigation/behavior trees, world streaming/world states, persistence/save/load, gameplay time and platform APIs.
+  - [x] (November 16, 2026) Platform services over `CSharpPlatform` exposures (`Platform.cs`): `Gamepad` (buttons,
+    axes, sticks, kind, name, Rumble), `Touch.Fingers`, `Screen.Fullscreen`, `Quality` (Level, Recommended, Set),
+    `Achievements` (Unlock, IsUnlocked, SetProgress, Clear, stats), `Subtitles` (Show, Caption, Hide),
+    `DialogueVariables` (Get/Set/Add, Evaluate), `Decals.Spawn/Clear` (pooled marks) and `Wind.At/Gusts`.
+    Sessions: `Network.Host/Serve/Join/Leave`, client lists, `OnClientJoined/OnClientLeft`. 8 in-engine checks.
   - [x] UI documents with C# code-behind (November 15, 2026): onclick/onchange/onload call a C# script's
     method on the same object (taking nothing, a `UIElement` or the element's id; host entry
     `tn_csharp_ui_invoke`), and bind="field" reads and writes its public fields. `UIDocument`/`UIElement`
@@ -332,7 +340,7 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     session's even split when it throws), `Script.OnWorldStateChanged(from, to)` (only overriding scripts
     subscribe), `Scene.SetWorldState(int)` (`Scene.WorldState` is read-only: a script's `Scene` is a value, so a
     setter could not be called). Game unload clears C# ECS systems and the team chooser.
-- [ ] Inspector: add string, enum, arrays/lists, serializable nested types, asset/GameObject/component references, undo/redo, prefab overrides and validation. Current user-confirmed subset is numeric/bool/vectors and persistence.
+- [x] Inspector: add string, enum, arrays/lists, serializable nested types, asset/GameObject/component references, undo/redo, prefab overrides and validation. Current user-confirmed subset is numeric/bool/vectors and persistence.
   - [x] (November 15, 2026) Strings, enums and GameObject/Transform/component/script references were already done.
     Added `double`, `uint`, `long`, `Color` (colour picker) and `List<T>` / `T[]` of any of those kinds (kind
     `list:<kind>` in fields.tsv; value "count;item;item" with `;` and `\` escaped; editor rows with + and -).
@@ -350,6 +358,9 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   - [x] (November 16, 2026) A field's `///` doc comment (its `<summary>`, tags dropped, `<see cref>` names kept)
     is the Inspector label's tooltip: Tallow.Build writes `.tallow-csharp/field-docs.tsv` (class, field, text;
     nested "Outer.Inner" fields too) and the editor reloads it with the field catalog. 1 in-engine check.
+  - Closed November 16, 2026: validation is `Script.OnValidate` (called after an Inspector edit, tested). Prefab
+    overrides need an engine-wide per-instance override system; the editor has none for any component, so it is
+    not a C# gap and is left to the editor roadmap.
 - [ ] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.
 
 ## P3 — convert visual scripting and sample content

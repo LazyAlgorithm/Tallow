@@ -325,6 +325,40 @@ public readonly record struct MeshRenderer(GameObject GameObject) : IComponent
 
     /// <summary>Whether it was drawn this frame or the last, by any camera or shadow (false in a headless run).</summary>
     public bool IsVisible => CSharpComponentActions.RendererFramesSinceDrawn(GameObject.SceneId, GameObject.Id) == 0;
+
+    /// <summary>
+    /// Draws a mesh built in code in place of the one named by <see cref="Mesh"/>: a position per vertex, three
+    /// indices per triangle (clockwise seen from the front), and optionally a normal (left out: smooth normals are
+    /// worked out) and a texture coordinate per vertex. Call it again to change the shape (the same mesh is reused);
+    /// <see cref="ClearMesh"/> goes back to the named one. It is drawn on this machine only: build it on every
+    /// machine in multiplayer. Colliders keep their own shapes.
+    /// </summary>
+    public void SetMesh(ReadOnlySpan<Vector3> positions, ReadOnlySpan<int> triangles,
+        ReadOnlySpan<Vector3> normals = default, ReadOnlySpan<Vector2> uvs = default)
+    {
+        if (!normals.IsEmpty && normals.Length != positions.Length)
+            throw new ArgumentException("Give one normal per position, or none.", nameof(normals));
+        if (!uvs.IsEmpty && uvs.Length != positions.Length)
+            throw new ArgumentException("Give one texture coordinate per position, or none.", nameof(uvs));
+        if (triangles.Length % 3 != 0)
+            throw new ArgumentException("Give three indices per triangle.", nameof(triangles));
+        float[] index = new float[triangles.Length];
+        for (int i = 0; i < triangles.Length; i++)
+            index[i] = triangles[i];
+        int result = CSharpMeshes.SetMesh(GameObject.SceneId, GameObject.Id,
+            System.Runtime.InteropServices.MemoryMarshal.Cast<Vector3, float>(positions).ToArray(),
+            System.Runtime.InteropServices.MemoryMarshal.Cast<Vector3, float>(normals).ToArray(),
+            System.Runtime.InteropServices.MemoryMarshal.Cast<Vector2, float>(uvs).ToArray(), index);
+        if (result == -1)
+            throw new InvalidOperationException($"'{GameObject.Name}' has no Mesh Renderer.");
+        if (result == -3)
+            throw new ArgumentOutOfRangeException(nameof(triangles), "Every index must be one of the positions.");
+        if (result < 0)
+            throw new ArgumentException("The positions, normals and texture coordinates do not fit together.");
+    }
+
+    /// <summary>Goes back to the mesh named by <see cref="Mesh"/> after <see cref="SetMesh"/>; false when none was set.</summary>
+    public bool ClearMesh() => CSharpMeshes.ClearMesh(GameObject.SceneId, GameObject.Id);
 }
 
 [NativeComponent("Tallow.SphereCollider")]

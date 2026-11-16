@@ -119,6 +119,8 @@ method	Tallow.CSharpJoints	IsAlive	bool	session:ulong	id:ulong	hinge:bool
 method	Tallow.CSharpJoints	SetHingeMotor	void	session:ulong	id:ulong	speed:float	torque:float	angle:float	mode:int	response:float	maximumSpeed:float
 method	Tallow.CSharpJoints	SetSuspensionSpring	void	session:ulong	id:ulong	stiffness:float	damping:float
 method	Tallow.CSharpJoints	SuspensionPosition	float	session:ulong	id:ulong
+method	Tallow.CSharpMeshes	ClearMesh	bool	session:ulong	entity:ulong
+method	Tallow.CSharpMeshes	SetMesh	int	session:ulong	entity:ulong	positions:System.Span<float>	normals:System.Span<float>	uvs:System.Span<float>	indices:System.Span<float>
 method	Tallow.CSharpNativeComponents	Add	bool	session:ulong	entity:ulong	typeName:string
 method	Tallow.CSharpNativeComponents	CopyField	int	session:ulong	entity:ulong	typeName:string	field:string	buffer:System.Span<byte>
 method	Tallow.CSharpNativeComponents	Count	int	session:ulong	typeName:string
