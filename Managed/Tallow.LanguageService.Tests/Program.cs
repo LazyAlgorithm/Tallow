@@ -782,6 +782,28 @@ public sealed class CubeMover : Script
                 signatureSource.IndexOf("Move(1)", StringComparison.Ordinal) + "Move(".Length);
             Check("parameter hints in completion popup", completionSignature.Contains("signature\t"));
 
+            // Overloads, best fit first, with the argument the caret is on marked \x01 ... \x02.
+            string overloadSource = "class Example { void Move(float speed) {} void Move(float speed, int steps) {} " +
+                "void Go() { Move(1, 2); } }";
+            string overloads = Request(service, "signature", overloadSource,
+                overloadSource.IndexOf("Move(1, 2)", StringComparison.Ordinal) + "Move(1, ".Length);
+            string[] overloadLines = overloads.Split('\n').Where(line => line.StartsWith("signature\t")).ToArray();
+            Check("signature help lists every overload, the resolved one first with its active parameter",
+                overloadLines.Length == 2 && overloadLines[0].Contains("Move(float speed, \x01int steps\x02)") &&
+                overloadLines[1].Contains("Move(float speed)"));
+
+            // While typing: no closing parenthesis yet.
+            string typingSource = "class Example { void Move(float speed, int steps) {} void Go() { Move(1, ";
+            string typing = Request(service, "signature", typingSource, typingSource.Length);
+            Check("signature help works mid-call before the closing parenthesis",
+                typing.Contains("Move(float speed, \x01int steps\x02)"));
+
+            string creationSource = "class Thing { public Thing(string name, float size) {} } " +
+                "class Example { void Go() { var t = new Thing(\"a\", 1); } }";
+            string creation = Request(service, "signature", creationSource,
+                creationSource.IndexOf("new Thing(", StringComparison.Ordinal) + "new Thing(".Length);
+            Check("signature help for a constructor", creation.Contains("new Thing(\x01string name\x02, float size)"));
+
             string unicodeSource = "class 猫 { int 数; void Go() { 数 = 1; } }";
             int unicodeCursor = unicodeSource.LastIndexOf('数') + 1;
             string unicodeReferences = Request(service, "references", unicodeSource, unicodeCursor);

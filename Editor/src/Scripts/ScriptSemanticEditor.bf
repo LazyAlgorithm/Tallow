@@ -207,7 +207,10 @@ extension EditorApp
 			case "signature","info":
 				if (mSemantic.operation == "symbol" && mSemanticHint.Length < 4000)
 					mSemanticHint.AppendF("{}\n", fields[1]);
-				if (fields[0] == "signature" && mSemantic.operation == "completion" && signatures.Length < 4000)
+				// A completion list shows the call's signature in its header; typing "(" or "," asks for it alone
+				// (every overload, the argument at the caret marked), drawn above the line.
+				if (fields[0] == "signature" && (mSemantic.operation == "completion" || mSemantic.operation == "signature") &&
+					signatures.Length < 4000)
 					signatures.AppendF("{}\n", fields[1]);
 			case "definition":
 				if (fields.Count >= 4 && mSemantic.operation == "definition")

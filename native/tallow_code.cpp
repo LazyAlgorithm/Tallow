@@ -696,6 +696,69 @@ TN_API const char* tn_code_get_text(void* handle)
 
 // The selected completion's remaining suffix is presentation only. Tab/Enter and Escape use TextEdit's
 // normal acceptance/dismissal, preserving its selection, undo history and multi-choice popup.
+// Signature help text is one overload per line, the best first, the parameter at the caret between \x01 and \x02.
+// The completion popup's header takes the first line without the marks.
+static std::string SignatureHeader(const std::string& signature)
+{
+	std::string first = signature.substr(0, signature.find('\n'));
+	first.erase(std::remove_if(first.begin(), first.end(), [](char c) { return c == '\x01' || c == '\x02'; }), first.end());
+	return first;
+}
+
+// Signature help above the caret's line while no completion list is open: the best overload with the argument
+// being typed highlighted, then how many other overloads there are.
+static void DrawSignatureHelp(Document* document)
+{
+	if (document->signature.empty() || document->editor.IsAutoCompleteActive() ||
+		!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
+		return;
+	const std::string& all = document->signature;
+	const size_t end = all.find('\n');
+	const std::string first = all.substr(0, end);
+	int others = 0;
+	for (size_t at = end; at != std::string::npos && at + 1 < all.size(); at = all.find('\n', at + 1))
+		others++;
+	const ImVec2 caret = document->editor.DocPos2ScreenPos(document->editor.GetMainCursorPosition());
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const float height = ImGui::GetTextLineHeight() + style.WindowPadding.y * 2;
+	ImGui::SetNextWindowPos(ImVec2(caret.x, caret.y - height - 2));
+	ImGui::SetNextWindowBgAlpha(0.95f);
+	const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+		ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_Tooltip;
+	if (ImGui::Begin("##signatureHelp", nullptr, flags))
+	{
+		const ImVec4 active = ImGui::GetStyleColorVec4(ImGuiCol_PlotHistogram);
+		size_t at = 0;
+		bool sameLine = false;
+		while (at < first.size())
+		{
+			const size_t open = first.find('\x01', at);
+			const size_t stop = open == std::string::npos ? first.size() : open;
+			if (stop > at)
+			{
+				if (sameLine) ImGui::SameLine(0, 0);
+				ImGui::TextUnformatted(first.c_str() + at, first.c_str() + stop);
+				sameLine = true;
+			}
+			if (open == std::string::npos)
+				break;
+			const size_t close = first.find('\x02', open);
+			const size_t last = close == std::string::npos ? first.size() : close;
+			if (sameLine) ImGui::SameLine(0, 0);
+			ImGui::TextColored(active, "%.*s", (int)(last - open - 1), first.c_str() + open + 1);
+			sameLine = true;
+			at = close == std::string::npos ? first.size() : close + 1;
+		}
+		if (others > 0)
+		{
+			ImGui::SameLine();
+			ImGui::TextDisabled("(+%d overload%s)", others, others == 1 ? "" : "s");
+		}
+	}
+	ImGui::End();
+}
+
 static std::string InlineSuffix(Document* document)
 {
 	const std::string selected = document->editor.GetAutoCompletePreview();
@@ -717,9 +780,10 @@ TN_API void tn_code_render(void* handle, const char* id, float width, float heig
 	}
 	// Display parameter signatures inside the suggestion popup when it is open,
 	// instead of creating a second tooltip at exactly the same caret position.
-	document->editor.SetAutoCompleteSignature(document->signature);
+	document->editor.SetAutoCompleteSignature(SignatureHeader(document->signature));
 	tn_imgui_push_mono_font();
 	document->editor.Render(id, ImVec2(width, height));
+	DrawSignatureHelp(document);
 	const std::string suffix = InlineSuffix(document);
 	if (!suffix.empty() && ImGui::IsItemVisible())
 		document->editor.DrawInlineText(document->editor.GetMainCursorPosition(), suffix.c_str(), ImGui::GetColorU32(ImGuiCol_TextDisabled));
@@ -747,10 +811,8 @@ TN_API void tn_code_render(void* handle, const char* id, float width, float heig
 			}
 			if (!before.empty() && (before.back() == ')' || before.back() == ';')) document->signature.clear();
 		}
-		// Keep parameter signatures in the completion header, never as a
-		// permanent tooltip covering code under the caret. Symbol hover info
-		// uses the delayed, dismiss-on-leave text hover popup instead.
-		document->editor.SetAutoCompleteSignature(document->signature);
+		// The completion header shows the best overload; DrawSignatureHelp shows them all when no list is open.
+		document->editor.SetAutoCompleteSignature(SignatureHeader(document->signature));
 	}
 }
 
@@ -814,7 +876,7 @@ TN_API void tn_code_semantic_signature(void* handle, const char* signature)
 {
 	Document* document = (Document*)handle;
 	document->signature = signature ? signature : "";
-	document->editor.SetAutoCompleteSignature(document->signature);
+	document->editor.SetAutoCompleteSignature(SignatureHeader(document->signature));
 	document->signatureCursor = (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
 }
 

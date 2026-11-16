@@ -304,6 +304,77 @@ internal static class Program
         return true;
     }
 
+    /// <summary>
+    /// Signature help for the call the caret is inside (its argument list): one "signature" line per overload, the
+    /// best fit first, with the parameter the caret is on wrapped in \x01 ... \x02 for the editor to highlight.
+    /// </summary>
+    internal static void SignatureHelp(SemanticModel model, SyntaxNode root, int position, List<string> output)
+    {
+        if (root.FullSpan.IsEmpty)
+            return;
+        SyntaxNode? node = root.FindToken(position > 0 ? position - 1 : position).Parent;
+        // The innermost argument list holding the caret (after its "(", before its ")").
+        ArgumentListSyntax? arguments = node?.AncestorsAndSelf().OfType<ArgumentListSyntax>().FirstOrDefault(list =>
+            position > list.OpenParenToken.SpanStart &&
+            (list.CloseParenToken.IsMissing || position <= list.CloseParenToken.SpanStart));
+        if (arguments?.Parent is not ExpressionSyntax call)
+            return;
+        int active = arguments.Arguments.GetSeparators().Count(separator => separator.SpanStart < position);
+        // The named argument the caret is in ("speed: 1") picks its parameter by name.
+        string? named = arguments.Arguments.FirstOrDefault(argument => argument.Span.Contains(position) ||
+            argument.Span.End == position)?.NameColon?.Name.Identifier.ValueText;
+
+        var overloads = new List<IMethodSymbol>();
+        ISymbol? best = model.GetSymbolInfo(call).Symbol;
+        switch (call)
+        {
+            case InvocationExpressionSyntax invocation:
+                overloads.AddRange(model.GetMemberGroup(invocation.Expression).OfType<IMethodSymbol>());
+                break;
+            case BaseObjectCreationExpressionSyntax creation:
+                if (model.GetTypeInfo(creation).Type is INamedTypeSymbol created)
+                    overloads.AddRange(created.InstanceConstructors.Where(constructor =>
+                        model.IsAccessible(position, constructor)));
+                break;
+        }
+        if (overloads.Count == 0 && best is IMethodSymbol only)
+            overloads.Add(only);
+        if (overloads.Count == 0)
+            return;
+        // The resolved overload first; otherwise the first with room for the argument the caret is on.
+        IMethodSymbol first = best as IMethodSymbol ?? overloads.FirstOrDefault(method =>
+            method.Parameters.Length > active || method.Parameters.LastOrDefault()?.IsParams == true) ?? overloads[0];
+        foreach (IMethodSymbol method in overloads.OrderBy(method => SymbolEqualityComparer.Default.Equals(
+                     method.OriginalDefinition, first.OriginalDefinition) ? 0 : 1).ThenBy(method => method.Parameters.Length).Take(20))
+        {
+            var text = new StringBuilder();
+            if (method.MethodKind == MethodKind.Constructor)
+                text.Append("new ").Append(method.ContainingType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
+            else
+                text.Append(method.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat))
+                    .Append(' ').Append(method.Name);
+            text.Append('(');
+            int highlight = named != null
+                ? method.Parameters.IndexOf(method.Parameters.FirstOrDefault(parameter => parameter.Name == named)!)
+                : Math.Min(active, method.Parameters.Length - 1);
+            if (named == null && active >= method.Parameters.Length && method.Parameters.LastOrDefault()?.IsParams != true)
+                highlight = -1;
+            for (int i = 0; i < method.Parameters.Length; i++)
+            {
+                IParameterSymbol parameter = method.Parameters[i];
+                if (i > 0)
+                    text.Append(", ");
+                if (i == highlight)
+                    text.Append('\x01');
+                text.Append(parameter.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
+                if (i == highlight)
+                    text.Append('\x02');
+            }
+            text.Append(')');
+            output.Add(Line("signature", text.ToString()));
+        }
+    }
+
     private static void Run(LanguageRequest request, List<string> output)
     {
         var sourceByPath = new Dictionary<string, SourceFile>(StringComparer.OrdinalIgnoreCase);
@@ -579,14 +650,7 @@ internal static class Program
         ISymbol? target = SymbolAt(model, root, position);
         if (request.Operation == "signature")
         {
-            var node = root.FullSpan.IsEmpty ? null :
-                root.FindToken(position > 0 ? position - 1 : position).Parent;
-            InvocationExpressionSyntax? call = node?.AncestorsAndSelf()
-                .OfType<InvocationExpressionSyntax>().FirstOrDefault();
-            var candidate = call == null ? null : model.GetSymbolInfo(call).Symbol ??
-                model.GetSymbolInfo(call.Expression).Symbol;
-            if (candidate != null)
-                output.Add(Line("signature", candidate.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            SignatureHelp(model, root, position, output);
             return;
         }
 
