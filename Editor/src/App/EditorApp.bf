@@ -305,6 +305,8 @@ class EditorApp : Application
 			mShowCSharpDebugging = true;
 		if (HasArg("--script-files-test"))
 			RunScriptFilesTest();
+		if (HasArg("--csharp-inspector-test"))
+			RunCSharpInspectorTest();
 		{
 			let folder = scope String();
 			if (GetArg("--script-templates-test", folder))

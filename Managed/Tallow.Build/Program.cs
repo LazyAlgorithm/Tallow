@@ -843,8 +843,12 @@ internal static class Program
                 }
 
                 // One Inspector field's rows (a nested [Serializable] type's fields as "Outer.Inner").
-                void EmitField(IFieldSymbol field, string prefix, bool hide, int depth)
+                // given: the value an enclosing field's initializer sets this nested field to
+                // (`Stats = new() { Health = 10 }`), which wins over the field's own initializer.
+                void EmitField(IFieldSymbol field, string prefix, bool hide, int depth, ExpressionSyntax? given = null)
                 {
+                    ExpressionSyntax? initializer = given ?? (field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+                        is VariableDeclaratorSyntax { Initializer: { } declared } ? declared.Value : null);
                     // Object references: a GameObject, its Transform, a built-in component handle or a C# script,
                     // set in the Inspector by dragging an object in (column 8 says which).
                     string? referenceType = ReferenceDescriptor(field.Type);
@@ -865,6 +869,19 @@ internal static class Program
                     {
                         // A [Serializable] struct or class of the game's: its own fields, as "Field.Inner" rows.
                         if (depth < 4 && IsNestedInspectorType(field.Type))
+                        {
+                            // What this field's own initializer sets its fields to: `new() { Health = 10 }`.
+                            InitializerExpressionSyntax? members = initializer switch
+                            {
+                                ObjectCreationExpressionSyntax created => created.Initializer,
+                                ImplicitObjectCreationExpressionSyntax created => created.Initializer,
+                                _ => null
+                            };
+                            var set = new Dictionary<string, ExpressionSyntax>(StringComparer.Ordinal);
+                            foreach (AssignmentExpressionSyntax assignment in members?.Expressions
+                                .OfType<AssignmentExpressionSyntax>() ?? [])
+                                if (assignment.Left is IdentifierNameSyntax member)
+                                    set[member.Identifier.Text] = assignment.Right;
                             foreach (IFieldSymbol inner in field.Type.GetMembers().OfType<IFieldSymbol>())
                             {
                                 var innerAttributes = inner.GetAttributes()
@@ -876,8 +893,10 @@ internal static class Program
                                     inner.IsStatic || inner.IsConst || inner.IsReadOnly || inner.IsImplicitlyDeclared ||
                                     innerAttributes.Contains("System.NonSerializedAttribute"))
                                     continue;
-                                EmitField(inner, prefix + field.Name + ".", hide || innerHide, depth + 1);
+                                EmitField(inner, prefix + field.Name + ".", hide || innerHide, depth + 1,
+                                    set.GetValueOrDefault(inner.Name));
                             }
+                        }
                         return;
                     }
                     ITypeSymbol valueType = element ?? field.Type;
@@ -887,11 +906,10 @@ internal static class Program
                         "bool" => "false", "string" => "", "object" => "", "Vector2" => "0,0",
                         "Vector3" => "0,0,0", "Vector4" => "0,0,0,0", "Color" => "1,1,1,1", _ => "0"
                     };
-                    if (field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
-                        is VariableDeclaratorSyntax variable && variable.Initializer != null)
+                    if (initializer != null)
                     {
-                        SemanticModel fieldModel = compilation.GetSemanticModel(variable.SyntaxTree);
-                        var constant = fieldModel.GetConstantValue(variable.Initializer.Value);
+                        SemanticModel fieldModel = compilation.GetSemanticModel(initializer.SyntaxTree);
+                        var constant = fieldModel.GetConstantValue(initializer);
                         if (constant.HasValue && constant.Value is not null &&
                             kind is "bool" or "float" or "int" or "enum" or "string" or "double" or "uint" or "long")
                         {
@@ -917,7 +935,7 @@ internal static class Program
                         }
                         else if (kind.StartsWith("Vector", StringComparison.Ordinal))
                         {
-                            ArgumentListSyntax? args = variable.Initializer.Value switch
+                            ArgumentListSyntax? args = initializer switch
                             {
                                 ObjectCreationExpressionSyntax v => v.ArgumentList,
                                 ImplicitObjectCreationExpressionSyntax v => v.ArgumentList,

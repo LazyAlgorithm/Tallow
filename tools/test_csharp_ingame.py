@@ -25,6 +25,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="Debug")
     parser.add_argument("--keep", action="store_true", help="keep the temporary project")
+    parser.add_argument("--editor", action="store_true",
+                        help="also open the editor on the project for its C# Inspector checks (needs a display: never in CI)")
     args = parser.parse_args()
 
     windows = platform.system() == "Windows"
@@ -125,6 +127,15 @@ def main() -> int:
         else:
             failed.append(f"INGAME FAIL nested catalog rows: {nested}")
             print(failed[-1])
+        # Defaults: an enclosing initializer's `new() { Health = 10 }` wins over the type's own initializers.
+        defaults = {name: (catalog.get(("InGame.ApiChecks", name)) or [""] * 4)[3]
+                    for name in ("Stats.Health", "NoOverrides.Health", "Stats.Limits.Max")}
+        if defaults == {"Stats.Health": "10", "NoOverrides.Health": "0", "Stats.Limits.Max": "5"}:
+            passed += 1
+            print("INGAME PASS nested field defaults come from the enclosing initializer, then the type's own")
+        else:
+            failed.append(f"INGAME FAIL nested field defaults: {defaults}")
+            print(failed[-1])
         # [Asset(kind)] strings and string lists carry "asset:<kind>" in column 8 (the Inspector's asset picker).
         assets = {name: (catalog.get(("InGame.ApiChecks", name)) or [""] * 8)[2::5] for name in ("EnemyPrefab", "Sounds")}
         if assets == {"EnemyPrefab": ["string", "asset:prefab"], "Sounds": ["list:string", "asset:audioClip"]}:
@@ -148,6 +159,17 @@ def main() -> int:
         else:
             passed += 1
             print("INGAME PASS the checked-in GraphProbe.cs matches what the graph compiler makes of GraphProbe.tgraph")
+        if args.editor:
+            # Inspector edits of C# fields (plain, nested, [Asset]) go through undo and redo.
+            editor = subprocess.run([str(launcher), "--editor", "--project", str(project), "--csharp-inspector-test",
+                                     "--frames", "30"], capture_output=True, text=True, timeout=180)
+            result = [line for line in (editor.stdout + editor.stderr).splitlines() if "CSHARP INSPECTOR TEST" in line]
+            if result and "CSHARP INSPECTOR TEST PASS" in result[0]:
+                passed += 1
+                print("INGAME PASS (editor) " + result[0])
+            else:
+                failed.append(f"INGAME FAIL (editor) {result or 'no result: ' + (editor.stdout + editor.stderr)[-1500:]}")
+                print(failed[-1])
         if run.returncode != 0 or failed or not any("INGAME DONE" in line for line in lines):
             if not lines:
                 print(output[-4000:])

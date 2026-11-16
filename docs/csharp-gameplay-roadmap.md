@@ -275,12 +275,20 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     (Find, SamplePosition, RandomPoint, Raycast, Rebuild), `Scene.CreateHinge/CreateSuspension` returning checked
     `Hinge`/`Suspension` handles (native joints stay behind a number + generation table, `CSharpJoints`), and
     `AudioSource` (Play, PlayOneShot, Pause/Resume/Stop, IsPlaying, Length, Time) with mixer settings and group
-    volumes. 15 in-engine checks. Not yet: a C# team chooser and a world-state-changed callback.
+    volumes. 15 in-engine checks.
+  - [x] (November 15, 2026) `Network.ChooseTeam` (server; host entry `tn_csharp_choose_team`, falls back to the
+    session's even split when it throws), `Script.OnWorldStateChanged(from, to)` (only overriding scripts
+    subscribe), `Scene.SetWorldState(int)` (`Scene.WorldState` is read-only: a script's `Scene` is a value, so a
+    setter could not be called). Game unload clears C# ECS systems and the team chooser.
 - [ ] Inspector: add string, enum, arrays/lists, serializable nested types, asset/GameObject/component references, undo/redo, prefab overrides and validation. Current user-confirmed subset is numeric/bool/vectors and persistence.
   - [x] (November 15, 2026) Strings, enums and GameObject/Transform/component/script references were already done.
     Added `double`, `uint`, `long`, `Color` (colour picker) and `List<T>` / `T[]` of any of those kinds (kind
     `list:<kind>` in fields.tsv; value "count;item;item" with `;` and `\` escaped; editor rows with + and -).
-    Not yet: nested serializable types, asset references, per-field undo, prefab-override markers.
+  - [x] (November 15, 2026) Nested `[Serializable]` structs and classes of the game's own ("Outer.Inner" rows,
+    four levels, defaults from an enclosing `new() { X = 1 }` first), `[Asset(AssetKind.Prefab)]` string/list
+    fields (the Beef asset picker; column 8 "asset:<kind>"), and undo/redo of C# field edits (already covered by
+    scene-snapshot undo; `--csharp-inspector-test`, run by `tools/test_csharp_ingame.py --editor`, needs a display).
+    Not yet: lists of nested types, prefab-override markers (the editor has none for Beef components either).
 - [ ] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.
 
 ## P3 — convert visual scripting and sample content
