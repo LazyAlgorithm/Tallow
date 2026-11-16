@@ -705,8 +705,74 @@ public static unsafe class NativeEntrypoints
             Vector2 v => $"{Number(v.X)},{Number(v.Y)}",
             Vector3 v => $"{Number(v.X)},{Number(v.Y)},{Number(v.Z)}",
             Vector4 v => $"{Number(v.X)},{Number(v.Y)},{Number(v.Z)},{Number(v.W)}",
+            double x => x.ToString("R", CultureInfo.InvariantCulture),
+            uint x => x.ToString(CultureInfo.InvariantCulture),
+            long x => x.ToString(CultureInfo.InvariantCulture),
+            Color c => $"{Number(c.R)},{Number(c.G)},{Number(c.B)},{Number(c.A)}",
+            null when InspectorElementType(type) != null => "0",
+            System.Collections.IList items when InspectorElementType(type) is { } element => FormatList(element, items),
             _ => null
         };
+    }
+
+    /// <summary>The element type of a list or array field the Inspector edits (List&lt;T&gt; or T[] of a value
+    /// kind), or null.</summary>
+    private static Type? InspectorElementType(Type type)
+    {
+        Type? element = type.IsArray && type.GetArrayRank() == 1 ? type.GetElementType() :
+            type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>) ? type.GetGenericArguments()[0] : null;
+        return element != null && !IsReferenceField(element) && InspectorElementType(element) == null &&
+            FormatInspectorValue(element, element.IsValueType ? Activator.CreateInstance(element) : "") != null
+            ? element : null;
+    }
+
+    /// <summary>"count;item;item...": ';' and '\' in an item are escaped with '\'.</summary>
+    private static string FormatList(Type element, System.Collections.IList items)
+    {
+        var text = new StringBuilder(items.Count.ToString(CultureInfo.InvariantCulture));
+        foreach (object? item in items)
+        {
+            text.Append(';');
+            foreach (char c in FormatInspectorValue(element, item) ?? "")
+            {
+                if (c is ';' or '\\')
+                    text.Append('\\');
+                text.Append(c);
+            }
+        }
+        return text.ToString();
+    }
+
+    private static object ParseList(Type type, Type element, string encoded, ulong session)
+    {
+        var parts = new List<string>();
+        var current = new StringBuilder();
+        for (int i = 0; i < encoded.Length; i++)
+        {
+            char c = encoded[i];
+            if (c == '\\' && i + 1 < encoded.Length)
+                current.Append(encoded[++i]);
+            else if (c == ';')
+            {
+                parts.Add(current.ToString());
+                current.Clear();
+            }
+            else
+                current.Append(c);
+        }
+        parts.Add(current.ToString());
+        int count = int.Parse(parts[0], CultureInfo.InvariantCulture);
+        if (count < 0 || count != parts.Count - 1 || count > 100_000)
+            throw new FormatException("The list's item count does not match its items.");
+        var list = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(element))!;
+        for (int i = 0; i < count; i++)
+            list.Add(ParseInspectorValue(element, parts[i + 1], session)
+                ?? throw new FormatException("Unsupported list item."));
+        if (!type.IsArray)
+            return list;
+        Array array = Array.CreateInstance(element, count);
+        list.CopyTo(array, 0);
+        return array;
     }
 
     private static string DebugText(object? value)
@@ -784,6 +850,26 @@ public static unsafe class NativeEntrypoints
                 !type.IsDefined(typeof(FlagsAttribute), inherit: false))
                 throw new FormatException("Undefined C# Inspector enum value.");
             return parsed;
+        }
+        if (InspectorElementType(type) is { } element)
+            return ParseList(type, element, encoded, session);
+        if (type == typeof(double))
+        {
+            double number = double.Parse(encoded, CultureInfo.InvariantCulture);
+            if (!double.IsFinite(number))
+                throw new FormatException("Inspector double fields must be finite.");
+            return number;
+        }
+        if (type == typeof(uint))
+            return uint.Parse(encoded, CultureInfo.InvariantCulture);
+        if (type == typeof(long))
+            return long.Parse(encoded, CultureInfo.InvariantCulture);
+        if (type == typeof(Color))
+        {
+            float[] parts = encoded.Split(',').Select(value => float.Parse(value, CultureInfo.InvariantCulture)).ToArray();
+            if (parts.Length is < 3 or > 4 || parts.Any(x => !float.IsFinite(x)))
+                throw new FormatException("Colour fields need 3 or 4 finite numbers.");
+            return new Color(parts[0], parts[1], parts[2], parts.Length == 4 ? parts[3] : 1f);
         }
         if (type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4))
         {

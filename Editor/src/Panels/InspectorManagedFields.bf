@@ -49,6 +49,166 @@ extension EditorApp
 		return true;
 	}
 
+	/// One C# value's widget (fields.tsv kind; options: an enum's names): true and newValue set when it was edited.
+	bool DrawManagedValue(StringView kind, StringView current, StringView options, StringView rangeMin,
+		StringView rangeMax, String newValue)
+	{
+		bool edited = false;
+		switch (kind)
+		{
+		case "float":
+			var value = SceneSerializer.ParseFloat(current);
+			if (!rangeMin.IsEmpty && !rangeMax.IsEmpty)
+				edited = ImGui.SliderFloat("##value", ref value, SceneSerializer.ParseFloat(rangeMin), SceneSerializer.ParseFloat(rangeMax));
+			else
+				edited = ImGui.DragFloat("##value", ref value, 0.05f);
+			if (edited)
+				newValue.AppendF("{}", value);
+		case "double":
+			// Edited at float precision; the text keeps what was typed when untouched.
+			double parsed = 0;
+			if (double.Parse(current) case .Ok(let d))
+				parsed = d;
+			var value = (float)parsed;
+			edited = ImGui.DragFloat("##value", ref value, 0.05f);
+			if (edited)
+				newValue.AppendF("{}", value);
+		case "int", "uint", "long":
+			var value = SceneSerializer.ParseInt(current);
+			edited = ImGui.DragInt("##value", ref value, 0.1f);
+			if (kind == "uint" && value < 0)
+				value = 0;
+			if (edited)
+				newValue.AppendF("{}", value);
+		case "bool":
+			var value = StringView.Compare(current, "true", true) == 0 || current == "1";
+			edited = ImGui.Checkbox("##value", ref value);
+			if (edited)
+				newValue.Set(value ? "true" : "false");
+		case "string":
+			// InputText is deliberately single-line: fieldOverrides stores
+			// one name/value per line and cannot represent embedded tabs or
+			// newlines until the scene serializer gains an escaped format.
+			newValue.Set(current);
+			edited = ImGui.InputText("##value", newValue);
+		case "enum":
+			// The catalog lists exactly the enum constants in source order.
+			if (!options.IsEmpty && ImGui.BeginCombo("##value", scope String(current).CStr()))
+			{
+				for (let option in options.Split('|', .RemoveEmptyEntries))
+				{
+					if (ImGui.Selectable(scope String(option).CStr(), current == option))
+					{
+						newValue.Set(option);
+						edited = true;
+					}
+				}
+				ImGui.EndCombo();
+			}
+		case "Vector2", "Vector3", "Vector4", "Color":
+			float[4] parts = .(0, 0, 0, 1);
+			int count = 0;
+			for (let item in current.Split(','))
+			{
+				if (count < 4)
+					parts[count] = SceneSerializer.ParseFloat(item);
+				count++;
+			}
+			switch (kind)
+			{
+			case "Vector2": edited = count == 2 && ImGui.DragFloat2("##value", &parts[0], 0.05f);
+			case "Vector3": edited = count == 3 && ImGui.DragFloat3("##value", ref *(Vector3*)&parts[0], 0.05f);
+			case "Vector4": edited = count == 4 && ImGui.DragFloat4("##value", &parts[0], 0.05f);
+			default: edited = (count == 3 || count == 4) && ImGui.ColorEdit4("##value", ref *(Color*)&parts[0]);
+			}
+			if (edited)
+			{
+				let dimensions = kind == "Vector2" ? 2 : kind == "Vector3" ? 3 : 4;
+				for (int i < dimensions)
+					newValue.AppendF(i == 0 ? "{}" : ",{}", parts[i]);
+			}
+		}
+		return edited;
+	}
+
+	/// A C# list or array field ("count;item;item...", ';' and '\\' escaped with '\\'): its items, each with
+	/// DrawManagedValue, with + and - buttons.
+	bool DrawManagedList(StringView kind, StringView current, StringView options, String newValue)
+	{
+		let items = scope List<String>();
+		defer { ClearAndDeleteItems!(items); }
+		let item = scope String();
+		bool first = true;
+		for (int i < current.Length)
+		{
+			let c = current[i];
+			if (c == '\\' && i + 1 < current.Length)
+				item.Append(current[++i]);
+			else if (c == ';')
+			{
+				if (!first)
+					items.Add(new String(item));
+				first = false;
+				item.Clear();
+			}
+			else
+				item.Append(c);
+		}
+		if (!first)
+			items.Add(new String(item));
+		bool edited = false;
+		int remove = -1;
+		ImGui.TextDisabled(scope $"{items.Count} items");
+		for (int i < items.Count)
+		{
+			ImGui.PushID((int32)i);
+			if (ImGui.SmallButton("-"))
+				remove = i;
+			ImGui.SameLine();
+			let changed = scope String();
+			if (DrawManagedValue(kind, items[i], options, default, default, changed))
+			{
+				items[i].Set(changed);
+				edited = true;
+			}
+			ImGui.PopID();
+		}
+		if (remove >= 0)
+		{
+			delete items[remove];
+			items.RemoveAt(remove);
+			edited = true;
+		}
+		if (ImGui.SmallButton("+"))
+		{
+			// A copy of the last item, or the kind's zero.
+			let added = new String();
+			if (!items.IsEmpty)
+				added.Set(items.Back);
+			else
+				added.Set(kind == "bool" ? "false" : kind == "string" ? "" : kind == "Vector2" ? "0,0" :
+					kind == "Vector3" ? "0,0,0" : kind == "Vector4" ? "0,0,0,0" : kind == "Color" ? "1,1,1,1" :
+					kind == "enum" ? (options.Split('|').GetNext() case .Ok(let name) ? name : "") : "0");
+			items.Add(added);
+			edited = true;
+		}
+		if (edited)
+		{
+			newValue.AppendF("{}", items.Count);
+			for (let text in items)
+			{
+				newValue.Append(';');
+				for (let c in text.RawChars)
+				{
+					if (c == ';' || c == '\\')
+						newValue.Append('\\');
+					newValue.Append(c);
+				}
+			}
+		}
+		return edited;
+	}
+
 	bool DrawManagedFields(CSharpBehaviour component)
 	{
 		if (!LoadManagedFieldCatalog())
@@ -106,47 +266,11 @@ extension EditorApp
 			BeginProperty(label.CStr());
 			bool edited = false;
 			let newValue = scope String();
+			let options = columns.Count >= 8 ? columns[7] : StringView();
+			let rangeMin = columns.Count >= 6 ? columns[4] : StringView();
+			let rangeMax = columns.Count >= 6 ? columns[5] : StringView();
 			switch (kind)
 			{
-			case "float":
-				var value = SceneSerializer.ParseFloat(current);
-				if (columns.Count >= 6 && !columns[4].IsEmpty && !columns[5].IsEmpty)
-					edited = ImGui.SliderFloat("##value", ref value,
-						SceneSerializer.ParseFloat(columns[4]), SceneSerializer.ParseFloat(columns[5]));
-				else
-					edited = ImGui.DragFloat("##value", ref value, 0.05f);
-				if (edited)
-					newValue.AppendF("{}", value);
-			case "int":
-				var value = SceneSerializer.ParseInt(current);
-				edited = ImGui.DragInt("##value", ref value, 0.1f);
-				if (edited)
-					newValue.AppendF("{}", value);
-			case "bool":
-				var value = current.Equals("true", .OrdinalIgnoreCase) || current == "1";
-				edited = ImGui.Checkbox("##value", ref value);
-				if (edited)
-					newValue.Set(value ? "true" : "false");
-			case "string":
-				// InputText is deliberately single-line: fieldOverrides stores
-				// one name/value per line and cannot represent embedded tabs or
-				// newlines until the scene serializer gains an escaped format.
-				newValue.Set(current);
-				edited = ImGui.InputText("##value", newValue);
-			case "enum":
-				// The catalog lists exactly the enum constants in source order.
-				if (columns.Count >= 8 && ImGui.BeginCombo("##value", current.CStr()))
-				{
-					for (let option in columns[7].Split('|', .RemoveEmptyEntries))
-					{
-						if (ImGui.Selectable(scope String(option).CStr(), current == option))
-						{
-							newValue.Set(option);
-							edited = true;
-						}
-					}
-					ImGui.EndCombo();
-				}
 			case "object":
 				// Kept in the component's reference list, not in fieldOverrides (see CSharpBehaviour.SetReference).
 				GameObject target = component.ReferenceTarget(name);
@@ -158,31 +282,11 @@ extension EditorApp
 					if (component.SetReference(name, picked))
 						changed = true;
 				}
-			case "Vector2", "Vector3", "Vector4":
-				let parts = scope List<StringView>();
-				for (let item in StringView(current).Split(','))
-					parts.Add(item);
-				if (kind == "Vector2" && parts.Count == 2)
-				{
-					Vector2 value = .(SceneSerializer.ParseFloat(parts[0]), SceneSerializer.ParseFloat(parts[1]));
-					edited = ImGui.DragFloat2("##value", &value.x, 0.05f);
-					if (edited)
-						newValue.AppendF("{},{}", value.x, value.y);
-				}
-				else if (kind == "Vector3" && parts.Count == 3)
-				{
-					Vector3 value = .(SceneSerializer.ParseFloat(parts[0]), SceneSerializer.ParseFloat(parts[1]), SceneSerializer.ParseFloat(parts[2]));
-					edited = ImGui.DragFloat3("##value", ref value, 0.05f);
-					if (edited)
-						newValue.AppendF("{},{},{}", value.x, value.y, value.z);
-				}
-				else if (kind == "Vector4" && parts.Count == 4)
-				{
-					Vector4 value = .(SceneSerializer.ParseFloat(parts[0]), SceneSerializer.ParseFloat(parts[1]), SceneSerializer.ParseFloat(parts[2]), SceneSerializer.ParseFloat(parts[3]));
-					edited = ImGui.DragFloat4("##value", &value.x, 0.05f);
-					if (edited)
-						newValue.AppendF("{},{},{},{}", value.x, value.y, value.z, value.w);
-				}
+			default:
+				if (kind.StartsWith("list:"))
+					edited = DrawManagedList(kind.Substring(5), current, options, newValue);
+				else
+					edited = DrawManagedValue(kind, current, options, rangeMin, rangeMax, newValue);
 			}
 			if (edited)
 			{

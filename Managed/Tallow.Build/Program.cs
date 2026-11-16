@@ -34,6 +34,27 @@ internal static class Program
     private static readonly Regex SerializedIdName = new(
         @"^[A-Za-z0-9_.-]{1,64}$", RegexOptions.CultureInvariant);
 
+    // What the Inspector edits a value of this type as (fields.tsv kinds), or null when it cannot.
+    private static string? InspectorScalarKind(ITypeSymbol type) =>
+        type.TypeKind == TypeKind.Enum ? "enum" : type.SpecialType switch
+        {
+            SpecialType.System_Single => "float",
+            SpecialType.System_Double => "double",
+            SpecialType.System_Int32 => "int",
+            SpecialType.System_UInt32 => "uint",
+            SpecialType.System_Int64 => "long",
+            SpecialType.System_Boolean => "bool",
+            SpecialType.System_String => "string",
+            _ => type.ToDisplayString() switch
+            {
+                "System.Numerics.Vector2" => "Vector2",
+                "System.Numerics.Vector3" => "Vector3",
+                "System.Numerics.Vector4" => "Vector4",
+                "Tallow.Color" => "Color",
+                _ => null
+            }
+        };
+
     /// <summary>
     /// For an Inspector reference field: "GameObject", "Transform", "native:Tallow.Light" (a built-in component handle,
     /// named by its [NativeComponent] attribute) or "script:Namespace.Class" (a C# script); null for anything else.
@@ -806,29 +827,27 @@ internal static class Program
                     // Object references: a GameObject, its Transform, a built-in component handle or a C# script,
                     // set in the Inspector by dragging an object in (column 8 says which).
                     string? referenceType = ReferenceDescriptor(field.Type);
-                    string? kind = referenceType != null ? "object" :
-                        field.Type.TypeKind == TypeKind.Enum ? "enum" :
-                        field.Type.SpecialType switch
+                    // A list or array of a value kind is "list:<kind>" (column 8: the element enum's names).
+                    ITypeSymbol? element = field.Type switch
                     {
-                        SpecialType.System_Single => "float",
-                        SpecialType.System_Int32 => "int",
-                        SpecialType.System_Boolean => "bool",
-                        SpecialType.System_String => "string",
-                        _ => field.Type.ToDisplayString() switch
-                        {
-                            "System.Numerics.Vector2" => "Vector2",
-                            "System.Numerics.Vector3" => "Vector3",
-                            "System.Numerics.Vector4" => "Vector4",
-                            _ => null
-                        }
+                        IArrayTypeSymbol { Rank: 1 } array => array.ElementType,
+                        INamedTypeSymbol { IsGenericType: true } named when
+                            named.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" =>
+                            named.TypeArguments[0],
+                        _ => null
                     };
+                    string? elementKind = element != null ? InspectorScalarKind(element) : null;
+                    string? kind = referenceType != null ? "object" :
+                        element != null ? (elementKind != null ? "list:" + elementKind : null) :
+                        InspectorScalarKind(field.Type);
                     if (kind is null)
                         continue;
+                    ITypeSymbol valueType = element ?? field.Type;
 
                     string defaultValue = kind switch
                     {
                         "bool" => "false", "string" => "", "object" => "", "Vector2" => "0,0",
-                        "Vector3" => "0,0,0", "Vector4" => "0,0,0,0", _ => "0"
+                        "Vector3" => "0,0,0", "Vector4" => "0,0,0,0", "Color" => "1,1,1,1", _ => "0"
                     };
                     if (field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
                         is VariableDeclaratorSyntax variable && variable.Initializer != null)
@@ -836,7 +855,7 @@ internal static class Program
                         SemanticModel fieldModel = compilation.GetSemanticModel(variable.SyntaxTree);
                         var constant = fieldModel.GetConstantValue(variable.Initializer.Value);
                         if (constant.HasValue && constant.Value is not null &&
-                            kind is "bool" or "float" or "int" or "enum" or "string")
+                            kind is "bool" or "float" or "int" or "enum" or "string" or "double" or "uint" or "long")
                         {
                             defaultValue = Convert.ToString(constant.Value, CultureInfo.InvariantCulture) ?? defaultValue;
                             // The Inspector and scene files spell booleans in
@@ -893,7 +912,7 @@ internal static class Program
                     // choices without breaking the existing seven columns.
                     string row = string.Join("\t", className, field.Name, kind,
                         defaultValue, rangeMin, rangeMax, hide ? "1" : "0");
-                    if (kind == "enum" && field.Type is INamedTypeSymbol enumDeclaration)
+                    if ((kind == "enum" || kind == "list:enum") && valueType is INamedTypeSymbol enumDeclaration)
                     {
                         string names = string.Join("|", enumDeclaration.GetMembers()
                             .OfType<IFieldSymbol>()

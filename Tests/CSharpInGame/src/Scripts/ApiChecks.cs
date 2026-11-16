@@ -31,6 +31,12 @@ public class ApiChecks : CheckBase
 {
     public float Speed = 1f;
     public string Label = "default";
+    public List<int> Numbers = new();
+    public System.Numerics.Vector3[] Points = [];
+    public Color Tint = new(1, 1, 1);
+    public double Precise;
+    public string[] Words = [];
+    public List<CheckKind> Kinds = new();
 
     private int _tick;
     private int _fixedTicks;
@@ -63,6 +69,10 @@ public class ApiChecks : CheckBase
     public override void Awake()
     {
         Check("fields are restored before Awake", Speed == 3f && Label == "from scene");
+        Check($"list, array, Color and double fields come from the scene ({string.Join(",", Numbers)}; {Points.Length}; {Tint}; {Precise}; {string.Join("|", Words)}; {string.Join(",", Kinds)})",
+            Numbers.SequenceEqual([1, 2, 3]) && Points.Length == 2 && Points[1] == new System.Numerics.Vector3(4, 5, 6) &&
+            Tint == new Color(0.5f, 0.25f, 1, 1) && Precise == 0.1 && Words.Length == 2 && Words[0] == "a;b" &&
+            Words[1] == "c\\d" && Kinds.Count == 2 && Kinds[0] == CheckKind.Second);
         // tools/test_csharp_export.py checks a built game runs on the .NET it ships with.
         Log.Info("INGAME RUNTIME " + System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory());
     }
@@ -1282,6 +1292,8 @@ public class SpinSystem : EcsSystem<Spin>
         spin.Angle += spin.Speed;
     }
 }
+
+public enum CheckKind { First, Second }
 
 /// A tag: no fields, only there or not.
 [Component]

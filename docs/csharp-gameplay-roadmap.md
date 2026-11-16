@@ -277,6 +277,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     `AudioSource` (Play, PlayOneShot, Pause/Resume/Stop, IsPlaying, Length, Time) with mixer settings and group
     volumes. 15 in-engine checks. Not yet: a C# team chooser and a world-state-changed callback.
 - [ ] Inspector: add string, enum, arrays/lists, serializable nested types, asset/GameObject/component references, undo/redo, prefab overrides and validation. Current user-confirmed subset is numeric/bool/vectors and persistence.
+  - [x] (November 15, 2026) Strings, enums and GameObject/Transform/component/script references were already done.
+    Added `double`, `uint`, `long`, `Color` (colour picker) and `List<T>` / `T[]` of any of those kinds (kind
+    `list:<kind>` in fields.tsv; value "count;item;item" with `;` and `\` escaped; editor rows with + and -).
+    Not yet: nested serializable types, asset references, per-field undo, prefab-override markers.
 - [ ] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.
 
 ## P3 — convert visual scripting and sample content
