@@ -50,6 +50,8 @@ sealed class World
 		public uint64 flecsId;
 		public int32 size;
 		public int32 alignment;
+		/// Its place in ComponentTypes (so a [Sync] one replicates: DataComponents.DescribeManaged).
+		public int32 index;
 	}
 
 	/// Per-world schema IDs are derived from trusted C# component declarations,
@@ -73,7 +75,8 @@ sealed class World
 	/// Whether C# data components may go on an entity: a bare entity C# made, or a scene object's (its data is
 	/// deleted with it). Built-in components are never reachable this way: each C# schema is its own Flecs id.
 	public bool CanHoldManagedData(Entity entity) =>
-		IsManagedLocalEntity(entity) || (!entity.IsNull && IsAlive(entity) && IsSceneObject(entity));
+		IsManagedLocalEntity(entity) || (!entity.IsNull && IsAlive(entity) &&
+		(IsSceneObject(entity) || (NativeNetwork != null && NativeNetwork.IsNativeReplica(entity))));
 
 	/// The most C# data components one query can ask for.
 	public const int32 MaxManagedQueryTerms = 4;
@@ -93,7 +96,7 @@ sealed class World
 				if (schemaIds[j] == schemaIds[i])
 					return false; // The same data twice would be written back twice.
 			}
-			if (!mManagedLocalSchemas.TryGetValue(schemaIds[i], let layout))
+			if (!ManagedSchema(schemaIds[i], let layout))
 				return false;
 			layouts[i] = layout;
 			rowSize += layout.size;
@@ -296,6 +299,18 @@ sealed class World
 		}
 	}
 
+	/// A schema's layout in this world, registering it here when its assembly described it (DataComponents) but C#
+	/// has not set it yet.
+	bool ManagedSchema(uint64 schemaId, out ManagedLocalSchema layout)
+	{
+		if (mManagedLocalSchemas.TryGetValue(schemaId, out layout))
+			return true;
+		if (!DataComponents.ManagedLayout(schemaId, let size, let alignment) ||
+			RegisterManagedLocalSchema(schemaId, size, alignment) == 0)
+			return false;
+		return mManagedLocalSchemas.TryGetValue(schemaId, out layout);
+	}
+
 	public bool IsManagedLocalEntity(Entity entity) =>
 		!entity.IsNull && mManagedLocalEntities.Contains(entity.id) &&
 		IsAlive(entity) && !IsSceneObject(entity);
@@ -314,15 +329,21 @@ sealed class World
 				existing.flecsId : 0;
 		if (mManagedLocalSchemas.Count >= 1024)
 			return 0;
+		// The same ComponentTypes entry the assembly described (DataComponents.DescribeManaged), so the network
+		// finds [Sync] data by index.
 		let name = scope String()..AppendF("Tallow.CSharp.Local.{}", schemaId);
-		let component = Flecs.Component(mWorld, name.CStr(), size, alignment);
+		let index = ComponentTypes.AddNamed(name, size, alignment);
+		if (index < 0)
+			return 0;
+		let component = IdOf(index);
 		if (component == 0)
 			return 0;
 		mManagedLocalSchemas[schemaId] = .()
 		{
 			flecsId = component,
 			size = size,
-			alignment = alignment
+			alignment = alignment,
+			index = index
 		};
 		return component;
 	}
@@ -333,11 +354,12 @@ sealed class World
 	{
 		if (!CanHoldManagedData(entity))
 			return false;
-		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+		if (!ManagedSchema(schemaId, let layout))
 			return false;
 		if (bytes.Length != layout.size)
 			return false;
 		Flecs.Set(ManagedWriter, entity.id, layout.flecsId, layout.size, &bytes[0]);
+		TrackNativeCandidate(entity, layout.index);
 		return true;
 	}
 
@@ -345,7 +367,7 @@ sealed class World
 	{
 		if (!CanHoldManagedData(entity))
 			return false;
-		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+		if (!ManagedSchema(schemaId, let layout))
 			return false;
 		if (bytes.Length != layout.size)
 			return false;
@@ -361,7 +383,7 @@ sealed class World
 	{
 		if (!CanHoldManagedData(entity))
 			return false;
-		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+		if (!ManagedSchema(schemaId, let layout))
 			return false;
 		if (!Flecs.Has(mWorld, entity.id, layout.flecsId))
 			return false;
@@ -373,7 +395,7 @@ sealed class World
 	{
 		if (!CanHoldManagedData(entity))
 			return false;
-		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+		if (!ManagedSchema(schemaId, let layout))
 			return false;
 		return Flecs.Has(mWorld, entity.id, layout.flecsId);
 	}
@@ -381,7 +403,7 @@ sealed class World
 	/// Count native Flecs query matches, not a managed list of entities.
 	public int32 CountManagedLocalData(uint64 schemaId)
 	{
-		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+		if (!ManagedSchema(schemaId, let layout))
 			return 0;
 		let query = ManagedLocalQuery(schemaId, layout.flecsId);
 		return query == null ? 0 : Flecs.QueryCount(query);
@@ -396,7 +418,7 @@ sealed class World
 		if (offset < 0 || entityIds.IsEmpty || bytes.IsEmpty ||
 			entityIds.Length > 4096 || bytes.Length > 4 * 1024 * 1024)
 			return 0;
-		if (!mManagedLocalSchemas.TryGetValue(schemaId, let layout))
+		if (!ManagedSchema(schemaId, let layout))
 			return 0;
 		int32 capacity = (int32)Math.Min(entityIds.Length, bytes.Length / layout.size);
 		if (capacity <= 0)

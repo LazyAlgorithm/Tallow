@@ -266,6 +266,9 @@ extension NetworkManager
 
 	// ---- server ----
 
+	/// Client: a bare entity this machine holds for the server's (C# may read and write its data).
+	public bool IsNativeReplica(Entity entity) => mNative != null && mNative.remoteIds.ContainsKey(entity.id);
+
 	/// A bare entity was made or given synced data (World.CreateMany, Add, Ensure or Set).
 	public void NativeCandidateAdded(Entity entity)
 	{
@@ -1115,7 +1118,7 @@ extension NetworkManager
 		}
 		let type = new NativeType();
 		type.fullName.Set(name);
-		let info = DataComponents.Find(name);
+		let info = DataComponents.FindSynced(name);
 		if (info != null && info.synced)
 			type.index = info.index;
 		let fieldName = scope String();

@@ -372,7 +372,7 @@ extension NetworkManager
 		{
 			let index = *(int32*)(from.Ptr + at);
 			at += 4;
-			let info = DataComponents.Find(index);
+			let info = DataComponents.FindSynced(index);
 			if (info == null)
 				return;
 			present.Add(index);

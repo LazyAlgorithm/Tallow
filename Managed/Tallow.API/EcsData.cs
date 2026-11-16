@@ -10,6 +10,14 @@ namespace Tallow;
 public static class EcsSchemas
 {
     public static void Register<T>(ulong schemaId) where T : unmanaged => EcsSchema<T>.Id = schemaId;
+
+    /// <summary>Generated: ties T to its schema and tells the engine its [Sync] fields ("name:offset:size;" each),
+    /// so that a server sends them to clients.</summary>
+    public static void Register<T>(ulong schemaId, string name, string syncFields) where T : unmanaged
+    {
+        EcsSchema<T>.Id = schemaId;
+        Ecs.DescribeData(schemaId, name, Unsafe.SizeOf<T>(), 1, syncFields);
+    }
 }
 
 internal static class EcsSchema<T> where T : unmanaged
@@ -20,7 +28,7 @@ internal static class EcsSchema<T> where T : unmanaged
         $"{typeof(T).Name} is not an ECS data component. Mark the struct [Component] (fields of bool, int, uint, " +
         "long, ulong, float, double, Vector2/3/4 or Quaternion), and build.");
 
-    /// <summary>Registers the layout in the scene (once per scene; false outside an offline game).</summary>
+    /// <summary>Registers the layout in the scene (once per scene; false outside a playing game).</summary>
     internal static bool Ensure(ulong session) =>
         Ecs.RegisterLocalData(session, Require(), Unsafe.SizeOf<T>(), 1) != 0;
 }
@@ -30,7 +38,7 @@ public readonly partial record struct EcsEntity
     /// <summary>
     /// Gives this entity a C# <c>[Component]</c> struct's data (or replaces it). Works on bare entities
     /// (<see cref="Scene.CreateLocalEcsEntity"/>) and on GameObjects (<see cref="GameObject.Entity"/>), in an
-    /// offline game. False when the entity has gone.
+    /// playing scene. False when the entity has gone.
     /// </summary>
     public bool Set<T>(in T value) where T : unmanaged
     {

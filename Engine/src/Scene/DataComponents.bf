@@ -137,8 +137,115 @@ static class DataComponents
 				sSynced.Add(info);
 			}
 		}
+		// C# [Component] structs with [Sync] fields replicate like Beef ones; they are not in Types (no Beef type for
+		// the Inspector or scene files), only in the network's lists.
+		for (let info in sManaged)
+		{
+			if (!info.synced)
+				continue;
+			while (sSyncedByIndex.Count <= info.index)
+				sSyncedByIndex.Add(false);
+			sSyncedByIndex[info.index] = true;
+			sSynced.Add(info);
+		}
 		sInfos.Sort(scope (a, b) => a.name.CompareTo(b.name));
 		sSynced.Sort(scope (a, b) => a.fullName.CompareTo(b.fullName));
+	}
+
+	/// C# data components described by the game's assemblies (DescribeManaged), latest per name.
+	static List<Info> sManaged = new .() ~ DeleteContainerAndItems!(_);
+	/// Every described C# schema's size and alignment, so a scene can take it before C# sets any (a client's query
+	/// of data only the server makes).
+	static Dictionary<uint64, (int32 size, int32 alignment)> sManagedLayouts = new .() ~ delete _;
+
+	public static bool ManagedLayout(uint64 schemaId, out int32 size, out int32 alignment)
+	{
+		size = 0;
+		alignment = 0;
+		if (!sManagedLayouts.TryGetValue(schemaId, let layout))
+			return false;
+		size = layout.size;
+		alignment = layout.alignment;
+		return true;
+	}
+
+	/// A C# [Component] struct's layout and [Sync] fields ("name:offset:size;" each), told when its assembly loads.
+	/// Its ComponentTypes index (Flecs name Tallow.CSharp.Local.<schema id>), or -1 when the description is bad.
+	public static int32 DescribeManaged(uint64 schemaId, StringView fullName, int32 size, int32 alignment,
+		StringView syncFields)
+	{
+		if (schemaId == 0 || fullName.IsEmpty || fullName.Length > 256 || size <= 0 || size > 4096)
+			return -1;
+		let flecsName = scope String()..AppendF("Tallow.CSharp.Local.{}", schemaId);
+		let index = ComponentTypes.AddNamed(flecsName, size, alignment);
+		if (index < 0)
+			return -1;
+		sManagedLayouts[schemaId] = (size, alignment);
+		let info = new Info();
+		info.fullName.AppendF("CSharp:{}", fullName);
+		info.name.Set(fullName);
+		info.index = index;
+		for (let entry in syncFields.Split(';', .RemoveEmptyEntries))
+		{
+			var parts = entry.Split(':');
+			let name = parts.GetNext().GetValueOrDefault();
+			let offset = int32.Parse(parts.GetNext().GetValueOrDefault()) case .Ok(let o) ? o : -1;
+			let fieldSize = int32.Parse(parts.GetNext().GetValueOrDefault()) case .Ok(let z) ? z : 0;
+			if (name.IsEmpty || offset < 0 || fieldSize <= 0 || offset + fieldSize > size)
+			{
+				delete info;
+				return -1;
+			}
+			let field = new SyncedField();
+			field.name.Set(name);
+			field.offset = offset;
+			field.size = fieldSize;
+			info.syncedFields.Add(field);
+		}
+		info.syncedFields.Sort(scope (a, b) => a.name.CompareTo(b.name));
+		info.synced = !info.syncedFields.IsEmpty;
+		for (let existing in sManaged)
+		{
+			if (existing.fullName == info.fullName)
+			{
+				if (existing.index == index)
+				{
+					delete info;
+					return index;
+				}
+				// The struct changed (hot reload): the new layout replaces the old for the network.
+				delete existing;
+				sManaged.RemoveAt(@existing.Index);
+				break;
+			}
+		}
+		sManaged.Add(info);
+		Refresh();
+		return index;
+	}
+
+	/// A synced data component by index, Beef or C# (the network's view; Find gives only Beef ones).
+	public static Info FindSynced(int32 index)
+	{
+		if (let info = Find(index))
+			return info;
+		for (let info in sManaged)
+		{
+			if (info.index == index)
+				return info;
+		}
+		return null;
+	}
+
+	/// A synced data component by full name ("CSharp:Game.Health" for C# ones).
+	public static Info FindSynced(StringView fullName)
+	{
+		for (let info in SyncedTypes)
+		{
+			if (info.fullName == fullName)
+				return info;
+		}
+		return Find(fullName);
 	}
 
 	/// Scripts were reloaded: the types may have changed.

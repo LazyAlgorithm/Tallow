@@ -203,6 +203,7 @@ method	Tallow.Ecs	CountRigidbodies	int	session:ulong
 method	Tallow.Ecs	CreateLocalEntities	int	session:ulong	entityIds:System.Span<ulong>
 method	Tallow.Ecs	CreateLocalEntity	ulong	session:ulong
 method	Tallow.Ecs	DeleteLocalEntity	bool	session:ulong	entity:ulong
+method	Tallow.Ecs	DescribeData	bool	schemaId:ulong	fullName:string	size:int	alignment:int	syncFields:string
 method	Tallow.Ecs	EndDataIteration	void	session:ulong	handle:int
 method	Tallow.Ecs	EntityOfObject	ulong	session:ulong	objectId:ulong
 method	Tallow.Ecs	HasLocalData	bool	session:ulong	entity:ulong	schemaId:ulong

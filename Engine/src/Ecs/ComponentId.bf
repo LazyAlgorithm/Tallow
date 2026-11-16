@@ -53,6 +53,22 @@ static class ComponentTypes
 			return (int32)sTypes.Count - 1;
 		}
 	}
+
+	/// A type with no Beef struct behind it (a C# [Component] struct): by its Flecs name. -1 when the name is
+	/// taken by a different layout.
+	public static int32 AddNamed(StringView name, int size, int alignment)
+	{
+		using (sLock.Enter())
+		{
+			for (let info in sTypes)
+			{
+				if (info.name == name)
+					return (info.type == null && info.size == size && info.alignment == alignment) ? (int32)@info.Index : -1;
+			}
+			sTypes.Add(.() { type = null, size = (int32)size, alignment = (int32)alignment, name = new String(name) });
+			return (int32)sTypes.Count - 1;
+		}
+	}
 }
 
 /// A data component type's index in ComponentTypes, given out the first time the type is used. Data components

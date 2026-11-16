@@ -566,7 +566,7 @@ public readonly partial record struct EcsEntity(ulong SessionId, ulong Id)
     public bool DestroyLocal() => Id != 0 && Ecs.DeleteLocalEntity(SessionId, Id);
 
     /// <summary>
-    /// Experimental offline-only opaque Flecs component write. Schema IDs
+    /// Opaque Flecs component write. Schema IDs
     /// and exact binary layouts must match a preceding successful scene
     /// registration. For gameplay use prefer generated typed data adapters
     /// once those are available. Never supply managed object references.
@@ -598,16 +598,16 @@ public readonly partial record struct Scene(ulong SessionId)
     public EcsEntity GetEcsEntity(ulong flecsEntityId) => new(SessionId, flecsEntityId);
 
     /// <summary>
-    /// Create a bare local-only Flecs entity through the native world.
-    /// Networked scenes do not permit this until generated [Sync] data and
-    /// server authority have a shared C#/Beef replication path.
+    /// Create a bare Flecs entity (no GameObject). On a server, one given <c>[Component]</c> data with
+    /// <c>[Sync]</c> fields is sent to every client, which gets an entity of its own with the same data and
+    /// keeps it up to date; deleting it on the server deletes it there. A client's own stay on that client.
     /// </summary>
     public EcsEntity CreateLocalEcsEntity()
     {
         ulong id = Ecs.CreateLocalEntity(SessionId);
         return id != 0 ? new(SessionId, id) :
             throw new InvalidOperationException(
-                "Cannot create a local ECS entity outside an active offline scene.");
+                "Cannot create an ECS entity outside a playing scene.");
     }
 
     /// <summary>
@@ -619,16 +619,15 @@ public readonly partial record struct Scene(ulong SessionId)
         Ecs.CreateLocalEntities(SessionId, entityIds);
 
     /// <summary>
-    /// Experimental offline-only registration of opaque packed Flecs data.
+    /// Registration of opaque packed Flecs data (EcsEntity.Set does this for you).
     /// A stable schema ID and matching field layout are required; native
     /// code validates length, size, alignment, entity ownership and session.
-    /// Network sessions reject this API. True means the registration was
-    /// accepted (including a compatible previous registration).
+    /// True means the registration was accepted (including a compatible previous registration).
     /// </summary>
     public bool RegisterLocalEcsData(ulong schemaId, int size, int alignment) =>
         Ecs.RegisterLocalData(SessionId, schemaId, size, alignment) != 0;
 
-    /// <summary>Count offline-only Flecs entities with this registered schema.</summary>
+    /// <summary>Count Flecs entities with this registered schema.</summary>
     public int CountLocalEcsData(ulong schemaId) =>
         Ecs.CountLocalData(SessionId, schemaId);
 

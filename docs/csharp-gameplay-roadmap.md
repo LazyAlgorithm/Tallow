@@ -233,8 +233,15 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     (rows packed in order, cached Flecs queries; host entries `Ecs.CountData/CopyDataPage/WriteDataPage`,
     `RemoveLocalData`, `EntityOfObject`, `ObjectOfEntity`). ForEach writes back only rows whose bytes changed,
     and skips entities that went or lost a schema meanwhile. `ecs-data.tsv` keeps fields in declaration order.
-    Tests: 10 in-engine checks. Still offline-only and not saved with scenes; not yet: [Sync] replication of
-    C# ECS data, filters/tags/Without terms, systems scheduled by phase.
+    Tests: 10 in-engine checks. Not saved with scenes; not yet: filters/tags/Without terms, systems scheduled by
+    phase, client ownership/prediction and [SyncPosition] relevance for C# data.
+  - [x] [Sync] replication of C# ECS data (November 15, 2026): C# ECS works in network sessions. Each game
+    assembly describes its `[Component]` structs when it loads (`EcsSchemas.Register<T>(id, name, syncFields)` →
+    `Ecs.DescribeData` → `DataComponents.DescribeManaged`, offsets measured with `Unsafe.ByteOffset`), so a C#
+    struct with `[Sync]` fields joins `DataComponents.SyncedTypes` as `CSharp:<full name>` and the native ECS
+    replication (NetworkManagerEcs.bf) sends it like a Beef one: bare entities the server makes arrive on clients,
+    changes (ForEach in place included) follow, deletes go. A scene registers a described schema on first use, so
+    a client can query data only the server sets; clients may read and write replicas' C# data. 4 network checks.
 - [ ] Jolt physics: rigid bodies, forces, collision/trigger callbacks, raycasts/shape casts, character controls, constraints/joints and physics queries.
 - [ ] Native network features surfaced to C#: networked TickInput/actions, authority/ownership, spawning, replication, prediction/reconciliation, rollback, RPCs, lag compensation, relevancy and state sync, working by default.
 - [ ] Rendering, materials, shaders/compute graphs, cameras, lighting, mesh/voxel/terrain, animation/IK, sequencer and modeling tools.
