@@ -199,7 +199,17 @@ changing the original six-field wire format.
 
 - [x] Check that `Transform.Position += Vector3.UnitX * Speed * deltaTime` and other `Vector2/3/4` operations compile in-game **without false Roslyn editor errors**; align SDK global usings and actual `.tasmdef` references.
   (Covered by the language-service tests: "gameplay Transform.Position += Vector3 * float operators".)
-- [ ] Complete semantic token coloring (classes, methods, fields, types, namespaces, attributes, generics, strings/interpolation, comments, keywords), rather than relying solely on lexical C# highlighting.
+- [x] Complete semantic token coloring (classes, methods, fields, types, namespaces, attributes, generics, strings/interpolation, comments, keywords), rather than relying solely on lexical C# highlighting.
+  Done November 16, 2026: the language service sends a `token` line (line, code-point column, kind, name) for every
+  name the compiler places in the open file: type (attributes and constructors too), type parameter, method, member
+  (field/property/event), variable (parameter/local), namespace, constant (const/enum member); `var` stays a keyword.
+  Tokens are cached per member by its text, so typing in a method re-classifies that method only (body edit 74 ms
+  p50 with tokens vs 83 ms before them). TextEdit draws them over its lexical colours at draw time, only where the
+  glyphs still spell the name outside strings/comments, so stale spans after an edit fall back to lexical colours.
+  Six new theme code colours (Method, Member, Variable, Namespace, Constant, TypeParameter), derived from a theme's
+  syntax colours when a file does not list them; in Preferences. Strings, comments and keywords stay lexical.
+  Tests: 3 Roslyn token tests (columns after an emoji), 3 TextEdit overlay checks, theme test for older files;
+  seen in the editor and the themes checked by hand.
 - [ ] Completion from the compiler for ALL relevant accessible classes, methods, fields, properties, overloads, inherited/interface members, extension methods, generics, enums, namespaces, symbols in project assemblies and installed referenced libraries.
 - [ ] Add accurate completion context/ranking, insertion text, auto imports, braces/parentheses, parameter/return type display and XML documentation. Do not suggest private/inaccessible or irrelevant static/instance members.
 - [ ] Implement robust overload-aware signature help and active argument highlighting; no overlapping code editor popups.

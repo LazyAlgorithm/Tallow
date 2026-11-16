@@ -563,6 +563,13 @@ public:
 		currentLineNumber,
 		currentLineHighlight,
 		currentLineHighlightBorder,
+		// Tallow: semantic colours a language service gives names (SetSemanticSpans)
+		semanticMethod,
+		semanticMember,
+		semanticVariable,
+		semanticNamespace,
+		semanticConstant,
+		semanticTypeParameter,
 		count
 	};
 
@@ -736,6 +743,18 @@ public:
 	};
 
 	void SetLanguage(const Language* language);
+
+	// Tallow: semantic colouring from a language service. Each span colours one name (its code points, on a line from
+	// a glyph index) and is drawn only while the glyphs there still spell that name and are not inside a string or
+	// comment, so spans left over from before an edit fall back to the language's own colours.
+	struct SemanticSpan {
+		int line = 0;
+		int index = 0;
+		Color color = Color::identifier;
+		std::vector<ImWchar> name;
+	};
+	void SetSemanticSpans(std::vector<SemanticSpan>&& spans);
+	inline void ClearSemanticSpans() { semanticSpans.clear(); semanticLines.clear(); }
 	inline const Language* GetLanguage() const { return config.language; };
 	inline bool HasLanguage() const { return config.language != nullptr; }
 	inline std::string GetLanguageName() const { return config.language == nullptr ? "None" : config.language->name; }
@@ -1894,6 +1913,12 @@ protected:
 	void renderMatchingBracketLines();
 	void renderSquiggles();
 	void renderText();
+	// Tallow: semantic spans, sorted by line then glyph index.
+	std::vector<SemanticSpan> semanticSpans;
+	std::vector<std::pair<int, size_t>> semanticLines; // (line, first span), sorted by line
+	struct SemanticRowSpan { size_t start; size_t end; Color color; };
+	std::vector<SemanticRowSpan> semanticRow; // the row being drawn
+	void semanticSpansForLine(size_t line);
 	void renderCursorCarets();
 	void renderLineNumberMarkers();
 	void renderLineNumbers();

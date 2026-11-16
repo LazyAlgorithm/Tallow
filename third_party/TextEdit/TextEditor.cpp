@@ -583,6 +583,40 @@ void TextEditor::renderSquiggles() {
 
 
 //
+//	TextEditor::semanticSpansForLine (Tallow)
+//
+
+void TextEditor::semanticSpansForLine(size_t lineIndex) {
+	// this line's semantic spans that still match its text: (start, end, colour) by glyph index
+	const auto& line = document[lineIndex];
+	semanticRow.clear();
+	const auto lineSpans = std::lower_bound(semanticLines.begin(), semanticLines.end(), std::make_pair((int) lineIndex, (size_t) 0));
+	if (lineSpans == semanticLines.end() || lineSpans->first != (int) lineIndex) {
+		return;
+	}
+	for (size_t s = lineSpans->second; s < semanticSpans.size() && semanticSpans[s].line == lineSpans->first; s++) {
+		const auto& span = semanticSpans[s];
+		const size_t start = (size_t) span.index;
+		const size_t end = start + span.name.size();
+		if (span.index < 0 || end > line.size()) {
+			continue;
+		}
+		bool matches = true;
+		for (size_t g = start; matches && g < end; g++) {
+			const auto color = line[g].color;
+			matches = line[g].codepoint == span.name[g - start] &&
+				color != Color::string && color != Color::comment && color != Color::keyword;
+		}
+		// a whole name only, not the start or end of a longer one
+		const auto partOfName = [&](size_t g) { return CodePoint::isXidContinue(line[g].codepoint); };
+		if (matches && (start == 0 || !partOfName(start - 1)) && (end == line.size() || !partOfName(end))) {
+			semanticRow.push_back({start, end, span.color});
+		}
+	}
+}
+
+
+//
 //	TextEditor::renderText
 //
 
@@ -597,6 +631,9 @@ void TextEditor::renderText() {
 		size_t index;
 		size_t column;
 		size_t endColumn;
+
+		semanticSpansForLine(typeSetter[i].line);
+		size_t semanticNext = 0;
 
 		if (config.wordWrap && line.sections) {
 			const auto& section = line.sections->at(typeSetter[i].section);
@@ -645,7 +682,16 @@ void TextEditor::renderText() {
 			// handle regular glyphs
 			} else {
 				if (column >= firstRenderableColumn) {
-					font->RenderChar(drawList, fontSize, glyphPos, palette.get(glyph.color), codepoint);
+					// Tallow: a semantic span's colour over the language's own
+					auto color = glyph.color;
+					const size_t at = index - 1;
+					while (semanticNext < semanticRow.size() && semanticRow[semanticNext].end <= at) {
+						semanticNext++;
+					}
+					if (semanticNext < semanticRow.size() && semanticRow[semanticNext].start <= at) {
+						color = semanticRow[semanticNext].color;
+					}
+					font->RenderChar(drawList, fontSize, glyphPos, palette.get(color), codepoint);
 				}
 			}
 
@@ -3365,6 +3411,24 @@ void TextEditor::deleteText(std::shared_ptr<Transaction> transaction, DocPos sta
 	makeCursorVisible();
 	resetCursorAnimationTimer();
 	deletesHappened = true;
+}
+
+
+//
+//	TextEditor::SetLanguage
+//
+
+void TextEditor::SetSemanticSpans(std::vector<SemanticSpan>&& spans) {
+	semanticSpans = std::move(spans);
+	std::sort(semanticSpans.begin(), semanticSpans.end(), [](const SemanticSpan& a, const SemanticSpan& b) {
+		return a.line != b.line ? a.line < b.line : a.index < b.index;
+	});
+	semanticLines.clear();
+	for (size_t i = 0; i < semanticSpans.size(); i++) {
+		if (i == 0 || semanticSpans[i].line != semanticSpans[i - 1].line) {
+			semanticLines.emplace_back(semanticSpans[i].line, i);
+		}
+	}
 }
 
 
@@ -10882,7 +10946,13 @@ const TextEditor::Palette& TextEditor::GetDarkPalette() {
 		IM_COL32(128, 128, 144, 255),	// line number
 		IM_COL32(224, 224, 240, 255),	// current line number
 		IM_COL32(255, 255, 255,   8),	// current line highlight
-		IM_COL32(255, 255, 255,  16)	// current line highlight border
+		IM_COL32(255, 255, 255,  16),	// current line highlight border
+		IM_COL32(220, 220, 170, 255),	// semantic method
+		IM_COL32(156, 220, 254, 255),	// semantic member
+		IM_COL32(156, 220, 254, 255),	// semantic variable
+		IM_COL32( 90, 179, 155, 255),	// semantic namespace
+		IM_COL32( 79, 193, 255, 255),	// semantic constant
+		IM_COL32( 90, 179, 155, 255)	// semantic type parameter
 	}};
 
 	return palette;
@@ -10913,7 +10983,13 @@ const TextEditor::Palette& TextEditor::GetLightPalette() {
 		IM_COL32(  0,  80,  80, 255),	// line number
 		IM_COL32(  0,   0,   0, 255),	// current line number
 		IM_COL32(  0,   0,   0,   8),	// current line highlight
-		IM_COL32(  0,   0,   0,  16)	// current line highlight border
+		IM_COL32(  0,   0,   0,  16),	// current line highlight border
+		IM_COL32(121,  94,  38, 255),	// semantic method
+		IM_COL32(  0,  16, 128, 255),	// semantic member
+		IM_COL32(  0,  16, 128, 255),	// semantic variable
+		IM_COL32( 65,   0, 255, 255),	// semantic namespace
+		IM_COL32(  0, 112, 193, 255),	// semantic constant
+		IM_COL32( 65,   0, 255, 255)	// semantic type parameter
 	}};
 
 	return palette;

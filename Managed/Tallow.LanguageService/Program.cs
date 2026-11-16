@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Tallow.LanguageService;
 
@@ -235,6 +236,9 @@ internal static class Program
     private static readonly Dictionary<string, (SyntaxTree Tree, int Epoch, List<string> Lines)> FileDiagnostics =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The semantic model the last file checked was bound in (reused for its tokens).</summary>
+    private static SemanticModel? LastModel;
+
     /// <summary>How many files the last diagnostics request worked out again (the rest came from the cache).</summary>
     internal static int LastDiagnosed;
 
@@ -256,7 +260,9 @@ internal static class Program
             {
                 var lines = new List<string>();
                 var one = new Dictionary<string, SourceFile>(StringComparer.OrdinalIgnoreCase) { [tree.FilePath] = source };
-                FileProblems(compilation.GetSemanticModel(tree).GetDiagnostics(), one, lines);
+                SemanticModel fileModel = compilation.GetSemanticModel(tree);
+                LastModel = fileModel;
+                FileProblems(fileModel.GetDiagnostics(), one, lines);
                 foreach (GameplayDiagnostics.Warning warning in GameplayDiagnostics.Analyze(compilation, one))
                     lines.Add(Line("diagnostic", warning.Path, warning.Line,
                         warning.Utf8Column, "warning", warning.Message, warning.Category));
@@ -268,6 +274,117 @@ internal static class Program
         }
         foreach (string gone in FileDiagnostics.Keys.Where(path => !ParsedSources.ContainsKey(path)).ToArray())
             FileDiagnostics.Remove(gone);
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<SyntaxTree, Tuple<int, List<string>>>
+        TokenCache = new();
+
+    /// <summary>A name's colour within a member: its line from the member's first line, its column, kind and text.</summary>
+    private readonly record struct MemberToken(int Line, int Column, string Kind, string Name);
+
+    /// <summary>Per file: the declaration epoch and each member's tokens by the member's text (and start column).</summary>
+    private static readonly Dictionary<string, (int Epoch, Dictionary<string, MemberToken[]> Members)> MemberTokens =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A member that holds no other members (a method, property, field, enum member...).</summary>
+    private static bool LeafMember(SyntaxNode node) =>
+        node is MemberDeclarationSyntax and not BaseTypeDeclarationSyntax and not BaseNamespaceDeclarationSyntax;
+
+    /// <summary>
+    /// "token\tline\tcolumn\tkind\tname" for each name in a file that the compiler knows, column in code points (the
+    /// code editor's glyphs): kind is type, typeparam, method, member, variable, namespace or constant. Members whose
+    /// text is unchanged keep their tokens (moved to where the member now starts), so typing in one method classifies
+    /// that method only; a change other files could see classifies everything again.
+    /// </summary>
+    internal static List<string> SemanticTokens(CSharpCompilation compilation, SyntaxTree tree)
+    {
+        if (TokenCache.TryGetValue(tree, out var cached) && cached.Item1 == DeclarationEpoch)
+            return cached.Item2;
+        SemanticModel? model = null;
+        SemanticModel Model() => model ??= LastModel is { } last && last.SyntaxTree == tree && last.Compilation == compilation
+            ? last : compilation.GetSemanticModel(tree);
+        SourceText text = tree.GetText();
+        if (!MemberTokens.TryGetValue(tree.FilePath, out var file) || file.Epoch != DeclarationEpoch)
+            file = (DeclarationEpoch, new Dictionary<string, MemberToken[]>(StringComparer.Ordinal));
+        var members = new Dictionary<string, MemberToken[]>(StringComparer.Ordinal);
+        var lines = new List<string>();
+        SyntaxNode root = tree.GetRoot();
+
+        (int Line, int Column) Where(int position)
+        {
+            var at = text.Lines.GetLinePosition(position);
+            TextLine line = text.Lines[at.Line];
+            // Code points before the position on its line (a surrogate pair is one glyph).
+            int column = 0;
+            for (int i = line.Start; i < position; i++)
+                if (!char.IsLowSurrogate(text[i]))
+                    column++;
+            return (at.Line, column);
+        }
+
+        foreach (SyntaxNode member in root.DescendantNodes(node => !LeafMember(node)).Where(LeafMember))
+        {
+            var start = Where(member.FullSpan.Start);
+            string key = start.Column + "\n" + member.ToFullString();
+            if (!file.Members.TryGetValue(key, out MemberToken[]? tokens) && !members.TryGetValue(key, out tokens))
+            {
+                var found = new List<MemberToken>();
+                foreach (SyntaxToken token in member.DescendantTokens())
+                    if (Classify(Model(), token) is { } kind)
+                    {
+                        var at = Where(token.SpanStart);
+                        found.Add(new MemberToken(at.Line - start.Line, at.Column, kind, token.ValueText));
+                    }
+                tokens = found.ToArray();
+            }
+            members[key] = tokens;
+            foreach (MemberToken token in tokens)
+                lines.Add(Line("token", start.Line + token.Line, token.Column, token.Kind, token.Name));
+        }
+        // Names outside members: usings, namespaces, type headers, base lists, type attributes.
+        foreach (SyntaxToken token in root.DescendantTokens(node => !LeafMember(node)))
+            if (token.Parent is { } parent && !LeafMember(parent) && !parent.Ancestors().Any(LeafMember) &&
+                Classify(Model(), token) is { } kind)
+            {
+                var at = Where(token.SpanStart);
+                lines.Add(Line("token", at.Line, at.Column, kind, token.ValueText));
+            }
+        MemberTokens[tree.FilePath] = (DeclarationEpoch, members);
+        TokenCache.AddOrUpdate(tree, Tuple.Create(DeclarationEpoch, lines));
+        return lines;
+    }
+
+    /// <summary>What a name is, for colouring: null for keywords, punctuation and names the compiler cannot place.</summary>
+    private static string? Classify(SemanticModel model, SyntaxToken token)
+    {
+        if (!token.IsKind(SyntaxKind.IdentifierToken) || token.Parent is not { } parent)
+            return null;
+        // var is a keyword to the reader, though it names a type.
+        if (parent is IdentifierNameSyntax { IsVar: true })
+            return null;
+        ISymbol? symbol;
+        if (parent is SimpleNameSyntax)
+        {
+            SymbolInfo info = model.GetSymbolInfo(parent);
+            symbol = info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
+        }
+        else
+            symbol = model.GetDeclaredSymbol(parent);
+        if (symbol is IAliasSymbol alias)
+            symbol = alias.Target;
+        return symbol switch
+        {
+            ITypeParameterSymbol => "typeparam",
+            ITypeSymbol => "type",
+            IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor or MethodKind.Destructor } => "type",
+            IMethodSymbol => "method",
+            IFieldSymbol { IsConst: true } or IFieldSymbol { ContainingType.TypeKind: TypeKind.Enum } => "constant",
+            IFieldSymbol or IPropertySymbol or IEventSymbol => "member",
+            ILocalSymbol { IsConst: true } => "constant",
+            IParameterSymbol or ILocalSymbol or IRangeVariableSymbol => "variable",
+            INamespaceSymbol => "namespace",
+            _ => null,
+        };
     }
 
     private static void FileProblems(IEnumerable<Diagnostic> problems,
@@ -516,6 +633,8 @@ internal static class Program
             // optional; older consumers still understand the first six fields).
             Diagnostics(compilation, sourceByPath, output);
             output.Add(Line("checked", LastDiagnosed));
+            // The open file's names coloured by what they are, for the code editor.
+            output.AddRange(SemanticTokens(compilation, selected));
             return;
         }
 

@@ -420,6 +420,29 @@ public sealed class CubeMover : Script
                 throw new InvalidOperationException(
                     "Generated C# Time properties produced diagnostics:\n" + timeDiagnostics);
             Check("generated C# Time fields appear as typed read-only properties", true);
+            // Semantic colouring: every name in the open file with what it is, column in code points.
+            string tokenCode = "using System.Collections.Generic;\nusing Tallow;\n" +
+                "public enum Mode { Calm, Loud }\n" +
+                "public sealed class Painter<T> : Script\n{\n" +
+                "    public const int Limit = 3;\n    public float Speed;\n" +
+                "    public override void Update(TickInput input, float deltaTime)\n    {\n" +
+                "        var list = new List<T>(); Mode mode = Mode.Loud; int n = Limit;\n" +
+                "        Transform.Position += Vector3.UnitX * Speed * deltaTime; Paint(\"😀\", mode);\n    }\n" +
+                "    private void Paint(string what, Mode how) { }\n}\n";
+            string tokenResult = RequestWithApi(service, "diagnostics", tokenCode, 0);
+            var tokens = tokenResult.Split('\n').Where(line => line.StartsWith("token\t"))
+                .Select(line => line.Split('\t')).ToList();
+            bool Token(int line, int column, string kind, string name) => tokens.Any(t =>
+                t[1] == line.ToString() && t[2] == column.ToString() && t[3] == kind && t[4] == name);
+            Check("semantic tokens: namespaces, types, type parameters and enum types",
+                Token(0, 6, "namespace", "System") && Token(1, 6, "namespace", "Tallow") && Token(3, 20, "type", "Painter") &&
+                Token(3, 28, "typeparam", "T") && Token(3, 33, "type", "Script") && Token(2, 12, "type", "Mode"));
+            Check("semantic tokens: methods, members, variables and constants",
+                Token(7, 25, "method", "Update") && Token(7, 32, "type", "TickInput") && Token(7, 42, "variable", "input") &&
+                Token(6, 17, "member", "Speed") && Token(5, 21, "constant", "Limit") && Token(2, 19, "constant", "Calm") &&
+                Token(10, 8, "member", "Transform") && Token(10, 18, "member", "Position") && Token(10, 54, "variable", "deltaTime"));
+            Check("semantic tokens: var is left to the keyword colour; names after an emoji count it as one glyph",
+                !tokens.Any(t => t[4] == "var") && Token(9, 12, "variable", "list") && Token(10, 76, "variable", "mode"));
             string timeCompletion = RequestWithApi(service, "completion",
                 "using Tallow; class Probe { void Go() { var fps = Time.Smoo",
                 "using Tallow; class Probe { void Go() { var fps = Time.Smoo".Length);

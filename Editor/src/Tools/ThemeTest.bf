@@ -106,6 +106,22 @@ extension EditorApp
 		EditorTheme.Delete(EditorTheme.Find("Rose Garden"));
 		Expect(EditorTheme.CodeTheme.IsEmpty && CodeIs(EditorTheme.Current), "deleting the theme the code editor uses goes back to matching the editor theme");
 
+		// An older theme file, written before the semantic code colours: they follow its own syntax colours.
+		let older = scope Theme();
+		let olderProblems = scope String();
+		let olderText = """
+			name "Older"
+			base light
+			code Identifier 0.1 0.2 0.3
+			code KnownIdentifier 0.4 0.3 0.2
+			code Declaration 0.0 0.5 0.6
+			code Method 0.9 0.1 0.1
+			""";
+		Expect(EditorTheme.Parse(olderText, older, olderProblems) && olderProblems.IsEmpty && Near(older.code[(int)CodeColor.Method], .(0.9f, 0.1f, 0.1f, 1)) &&
+			Near(older.code[(int)CodeColor.Member], .(0.1f, 0.2f, 0.3f, 1)) && Near(older.code[(int)CodeColor.Variable], .(0.1f, 0.2f, 0.3f, 1)) &&
+			Near(older.code[(int)CodeColor.Namespace], .(0.0f, 0.5f, 0.6f, 1)) && Near(older.code[(int)CodeColor.TypeParameter], .(0.0f, 0.5f, 0.6f, 1)),
+			"a theme file without the semantic code colours takes them from its own colours (and keeps those it gives)");
+
 		// The user's own theme back.
 		Directory.DelTree(folder).IgnoreError();
 		EditorTheme.ConfigOverride.Clear();

@@ -59,7 +59,17 @@ enum CodeColor
 	LineNumber,
 	CurrentLineNumber,
 	CurrentLine,
-	CurrentLineBorder
+	CurrentLineBorder,
+	// What the C# compiler says a name is (the code editor's semantic colouring); type names use Declaration.
+	Method,
+	/// Fields, properties and events.
+	Member,
+	/// Parameters and local variables.
+	Variable,
+	Namespace,
+	/// Constants and enum members.
+	Constant,
+	TypeParameter
 }
 
 /// One editor theme (docs/themes.md): whether it starts from ImGui's dark or light colours, the interface's colours
@@ -172,10 +182,13 @@ static class EditorTheme
 {
 	public const int ExtraCount = 12;
 	public static readonly StringView[ExtraCount] ExtraNames = .("Accent", "Canvas", "CanvasText", "CodeBackground", "Warning", "Error", "Good", "Info", "Prefab", "Folder", "Object", "Component");
-	public const int CodeCount = 24;
+	public const int CodeCount = 30;
+	/// The first of the semantic colours (Method ... TypeParameter), which older theme files do not list.
+	const int FirstSemantic = (int)CodeColor.Method;
 	public static readonly StringView[CodeCount] CodeNames = .("Text", "Keyword", "Declaration", "Number", "String", "Punctuation", "Preprocessor", "Identifier", "KnownIdentifier", "Comment",
 		"Background", "Cursor", "Selection", "Whitespace", "BracketBackground", "BracketActive", "Bracket1", "Bracket2", "Bracket3", "BracketError",
-		"LineNumber", "CurrentLineNumber", "CurrentLine", "CurrentLineBorder");
+		"LineNumber", "CurrentLineNumber", "CurrentLine", "CurrentLineBorder", "Method", "Member", "Variable", "Namespace", "Constant",
+		"TypeParameter");
 	/// The theme whose code colours the code editor uses, by name; empty to match the editor's theme.
 	public static String CodeTheme = new .() ~ delete _;
 
@@ -435,7 +448,21 @@ static class EditorTheme
 		c[(int)CodeColor.CurrentLineNumber] = text;
 		c[(int)CodeColor.CurrentLine] = Mix(background, text, 0.06f);
 		c[(int)CodeColor.CurrentLineBorder] = Mix(background, text, 0.12f);
+		Semantic(ref c);
 		return c;
+	}
+
+	/// The semantic colours from a set's syntax colours: methods as known names, members and variables as
+	/// identifiers, namespaces and type parameters as types, constants between identifiers and types.
+	static void Semantic(ref Color[CodeCount] c)
+	{
+		Color Mix(Color a, Color b, float t) => .(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1);
+		c[(int)CodeColor.Method] = c[(int)CodeColor.KnownIdentifier];
+		c[(int)CodeColor.Member] = c[(int)CodeColor.Identifier];
+		c[(int)CodeColor.Variable] = c[(int)CodeColor.Identifier];
+		c[(int)CodeColor.Namespace] = c[(int)CodeColor.Declaration];
+		c[(int)CodeColor.Constant] = Mix(c[(int)CodeColor.Identifier], c[(int)CodeColor.Declaration], 0.5f);
+		c[(int)CodeColor.TypeParameter] = c[(int)CodeColor.Declaration];
 	}
 
 	static Color Rgb(int r, int g, int b) => .(r / 255.0f, g / 255.0f, b / 255.0f, 1);
@@ -444,13 +471,15 @@ static class EditorTheme
 	public static Color[CodeCount] VisualStudioDark() => .(Rgb(212, 212, 212), Rgb(86, 156, 214), Rgb(78, 201, 176), Rgb(181, 206, 168), Rgb(206, 145, 120),
 		Rgb(212, 212, 212), Rgb(197, 134, 192), Rgb(156, 220, 254), Rgb(220, 220, 170), Rgb(106, 153, 85), Rgb(30, 30, 30), Rgb(174, 175, 173), Rgb(38, 79, 120),
 		Rgb(64, 64, 64), Rgb(62, 62, 66), Rgb(255, 215, 0), Rgb(255, 215, 0), Rgb(218, 112, 214), Rgb(23, 159, 255), Rgb(244, 71, 71), Rgb(133, 133, 133),
-		Rgb(198, 198, 198), Rgb(42, 42, 44), Rgb(54, 54, 58));
+		Rgb(198, 198, 198), Rgb(42, 42, 44), Rgb(54, 54, 58), Rgb(220, 220, 170), Rgb(156, 220, 254), Rgb(156, 220, 254), Rgb(78, 201, 176),
+		Rgb(79, 193, 255), Rgb(78, 201, 176));
 
 	/// Visual Studio's light code colours (type names and numbers a little darker, to read on the current line).
 	public static Color[CodeCount] VisualStudioLight() => .(Rgb(30, 30, 30), Rgb(0, 0, 255), Rgb(29, 108, 130), Rgb(9, 115, 75), Rgb(163, 21, 21),
 		Rgb(30, 30, 30), Rgb(175, 0, 219), Rgb(0, 16, 128), Rgb(121, 94, 38), Rgb(0, 128, 0), Rgb(255, 255, 255), Rgb(0, 0, 0), Rgb(173, 214, 255),
 		Rgb(200, 200, 200), Rgb(220, 220, 220), Rgb(180, 120, 0), Rgb(4, 49, 250), Rgb(49, 147, 49), Rgb(123, 56, 20), Rgb(205, 49, 49), Rgb(35, 120, 147),
-		Rgb(11, 33, 108), Rgb(238, 238, 238), Rgb(220, 220, 220));
+		Rgb(11, 33, 108), Rgb(238, 238, 238), Rgb(220, 220, 220), Rgb(121, 94, 38), Rgb(0, 16, 128), Rgb(0, 16, 128), Rgb(38, 127, 153),
+		Rgb(0, 112, 193), Rgb(38, 127, 153));
 
 	/// Mossy greens with a leaf-green accent.
 	/// Its code: leaf-green keywords, teal types, wheat strings.
@@ -595,6 +624,9 @@ static class EditorTheme
 		into.CopyFrom(dark);
 		into.builtIn = false;
 		into.name.Set("Untitled");
+		// Unset until a line gives them: older files have no semantic colours, which then follow the file's own.
+		for (int i = FirstSemantic; i < CodeCount; i++)
+			into.code[i] = .(0, 0, 0, -1);
 		int lineNumber = 0;
 		for (var line in text.Split('\n'))
 		{
@@ -636,6 +668,11 @@ static class EditorTheme
 				problems.AppendF("line {}: '{}' is not name, base, code, color or editor\n", lineNumber, word);
 			}
 		}
+		var derived = into.code;
+		Semantic(ref derived);
+		for (int i = FirstSemantic; i < CodeCount; i++)
+			if (into.code[i].a < 0)
+				into.code[i] = derived[i];
 		return problems.IsEmpty;
 	}
 

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -444,6 +445,12 @@ namespace
 			set(TextEditor::Color::currentLineNumber, 198, 198, 198);
 			set(TextEditor::Color::currentLineHighlight, 42, 42, 44);
 			set(TextEditor::Color::currentLineHighlightBorder, 54, 54, 58);
+			set(TextEditor::Color::semanticMethod, 220, 220, 170);
+			set(TextEditor::Color::semanticMember, 156, 220, 254);
+			set(TextEditor::Color::semanticVariable, 156, 220, 254);
+			set(TextEditor::Color::semanticNamespace, 78, 201, 176);
+			set(TextEditor::Color::semanticConstant, 79, 193, 255);
+			set(TextEditor::Color::semanticTypeParameter, 78, 201, 176);
 			ready = true;
 		}
 		return palette;
@@ -925,6 +932,55 @@ TN_API void tn_code_semantic_types(void* handle, const char* names)
 	document->semanticTypes = incoming;
 	document->csharpLanguageSlot = 1 - document->csharpLanguageSlot;
 	document->editor.SetLanguage(&next);
+}
+
+// Colours names by what the C# compiler says they are: one "line\tcolumn\tkind\tname" per line (line from 0,
+// column in code points; kind type, typeparam, method, member, variable, namespace or constant). Replaces the last set.
+TN_API void tn_code_semantic_tokens(void* handle, const char* tokens)
+{
+	Document* document = (Document*)handle;
+	if (!document || !document->isCSharp)
+		return;
+	std::vector<TextEditor::SemanticSpan> spans;
+	std::string_view text = tokens ? tokens : "";
+	while (!text.empty())
+	{
+		const size_t newline = text.find('\n');
+		std::string_view line = text.substr(0, newline);
+		text = newline == std::string_view::npos ? std::string_view() : text.substr(newline + 1);
+		std::string_view fields[4];
+		size_t count = 0;
+		while (count < 4)
+		{
+			const size_t tab = line.find('\t');
+			fields[count++] = line.substr(0, tab);
+			if (tab == std::string_view::npos)
+				break;
+			line = line.substr(tab + 1);
+		}
+		if (count < 4 || fields[3].empty())
+			continue;
+		TextEditor::SemanticSpan span;
+		span.line = std::atoi(std::string(fields[0]).c_str());
+		span.index = std::atoi(std::string(fields[1]).c_str());
+		const std::string_view kind = fields[2];
+		if (kind == "type") span.color = TextEditor::Color::declaration;
+		else if (kind == "typeparam") span.color = TextEditor::Color::semanticTypeParameter;
+		else if (kind == "method") span.color = TextEditor::Color::semanticMethod;
+		else if (kind == "member") span.color = TextEditor::Color::semanticMember;
+		else if (kind == "variable") span.color = TextEditor::Color::semanticVariable;
+		else if (kind == "namespace") span.color = TextEditor::Color::semanticNamespace;
+		else if (kind == "constant") span.color = TextEditor::Color::semanticConstant;
+		else continue;
+		for (auto i = fields[3].begin(); i < fields[3].end();)
+		{
+			ImWchar codepoint;
+			i = TextEditor::CodePoint::read(i, fields[3].end(), &codepoint);
+			span.name.push_back(codepoint);
+		}
+		spans.push_back(std::move(span));
+	}
+	document->editor.SetSemanticSpans(std::move(spans));
 }
 
 TN_API void tn_code_semantic_results(void* handle, const char* words)

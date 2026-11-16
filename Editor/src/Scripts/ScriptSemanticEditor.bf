@@ -13,6 +13,7 @@ extension EditorApp
 	[CLink] static extern void tn_code_discard_semantic_results(void* handle, bool retry);
 	[CLink] static extern void tn_code_semantic_signature(void* handle, char8* signature);
 	[CLink] static extern void tn_code_semantic_types(void* handle, char8* types);
+	[CLink] static extern void tn_code_semantic_tokens(void* handle, char8* tokens);
 	[CLink] static extern void tn_code_semantic_hint(void* handle, int32 cursor, char8* hint);
 	[CLink] static extern int32 tn_code_cursor_byte(void* handle);
 	[CLink] static extern void tn_code_semantic_results(void* handle, char8* words);
@@ -174,6 +175,7 @@ extension EditorApp
 		let suggestions = scope String();
 		let signatures = scope String();
 		let types = scope String();
+		let tokens = scope String();
 		if (mSemantic.operation == "symbol")
 			mSemanticHint.Clear();
 		mSymbolReferences.Clear();
@@ -204,6 +206,10 @@ extension EditorApp
 			case "type":
 				types.Append(fields[1]);
 				types.Append('\n');
+			case "token":
+				// The open file's names coloured by what they are: line, column, kind, name.
+				if (fields.Count >= 5)
+					tokens.AppendF("{}\t{}\t{}\t{}\n", fields[1], fields[2], fields[3], fields[4]);
 			case "signature","info":
 				if (mSemantic.operation == "symbol" && mSemanticHint.Length < 4000)
 					mSemanticHint.AppendF("{}\n", fields[1]);
@@ -259,6 +265,8 @@ extension EditorApp
 					tn_code_semantic_types(openScript.handle, types.CStr());
 			}
 		}
+		if (!failed && document != null && mSemantic.operation == "diagnostics")
+			tn_code_semantic_tokens(document.handle, tokens.CStr());
 		if (mSemantic.operation == "diagnostics")
 			AddSnapshotDeterminismWarnings();
 		PublishScriptDiagnostics(mSemantic.operation == "diagnostics");

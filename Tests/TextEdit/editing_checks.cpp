@@ -114,6 +114,41 @@ int main() {
 	check("a plain item inserts as before", txt(e) == "Position" && e.GetMainCursorPosition() == TextEditor::DocPos(0, 8));
 
 	ImGui::DestroyContext();
+	// Semantic colouring (SetSemanticSpans): a span colours a name only while the glyphs still spell it outside strings
+	// and comments, and only as a whole word.
+	{
+		TextEditor c;
+		c.SetLanguage(TextEditor::Language::Cs());
+		c.SetText("Speed = Move(speed); // Move\nvar s = \"Move\";");
+		c.colorizer.update(c.config, c.document);
+		auto span = [](int line, int index, TextEditor::Color color, const char* name) {
+			TextEditor::SemanticSpan s; s.line = line; s.index = index; s.color = color;
+			for (const char* p = name; *p; p++) s.name.push_back((ImWchar)*p);
+			return s;
+		};
+		std::vector<TextEditor::SemanticSpan> spans;
+		spans.push_back(span(0, 8, TextEditor::Color::semanticMethod, "Move"));        // a call: coloured
+		spans.push_back(span(0, 0, TextEditor::Color::semanticMember, "Speed"));       // a field: coloured
+		spans.push_back(span(0, 13, TextEditor::Color::semanticVariable, "spee"));     // part of a longer name: no
+		spans.push_back(span(0, 24, TextEditor::Color::semanticMethod, "Move"));       // inside a comment: no
+		spans.push_back(span(1, 9, TextEditor::Color::semanticMethod, "Move"));        // inside a string: no
+		spans.push_back(span(1, 4, TextEditor::Color::semanticVariable, "t"));         // the text moved on: no
+		spans.push_back(span(5, 0, TextEditor::Color::semanticVariable, "x"));         // past the end: no
+		c.SetSemanticSpans(std::move(spans));
+		c.semanticSpansForLine(0);
+		bool first = c.semanticRow.size() == 2 && c.semanticRow[0].start == 0 && c.semanticRow[0].end == 5 &&
+			c.semanticRow[0].color == TextEditor::Color::semanticMember && c.semanticRow[1].start == 8 &&
+			c.semanticRow[1].color == TextEditor::Color::semanticMethod;
+		check("semantic spans colour whole names, not part of one or inside a comment", first);
+		c.semanticSpansForLine(1);
+		check("semantic spans skip strings and text that changed", c.semanticRow.empty());
+		// After an edit that moves the name, the old span no longer matches.
+		c.SetText("  Speed = Move(speed);");
+		c.colorizer.update(c.config, c.document);
+		c.semanticSpansForLine(0);
+		check("a span left over from before an edit is not drawn on other text", c.semanticRow.empty());
+	}
+
 	printf(failures ? "%d failed\n" : "all passed\n", failures);
 	return failures ? 1 : 0;
 }
