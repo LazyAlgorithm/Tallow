@@ -361,11 +361,36 @@ class Project
 		File.WriteAllText(scope $"{Path}/BeefProj.toml" , proj).IgnoreError();
 	}
 
+	/// Whether a folder (and those in it, not hidden ones) holds Beef source: a legacy Beef gameplay project.
+	public static bool HasBeefSources(StringView folder, int depth)
+	{
+		if (depth > 32 || !Directory.Exists(folder))
+			return false;
+		for (let entry in Directory.EnumerateFiles(folder))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (name.EndsWith(".bf", .OrdinalIgnoreCase))
+				return true;
+		}
+		for (let entry in Directory.EnumerateDirectories(folder))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (!name.StartsWith('.') && HasBeefSources(scope $"{folder}/{name}", depth + 1))
+				return true;
+		}
+		return false;
+	}
+
 	/// Stages a shipping executable built against Tallow only, plus its runtime assets.
 	/// outputPath is the game's own folder; an earlier build of a game found there is replaced.
 	public bool BuildPlayer(StringView outputPath, BuildTarget target)
 	{
-		WriteBuildFiles();
+		// Only a legacy Beef project gets Beef build files: tools/build_player.py takes a project with them for one,
+		// and a C# game ships the precompiled player instead.
+		if (HasBeefSources(scope $"{Path}/src", 0))
+			WriteBuildFiles();
 		Directory.CreateDirectory(scope $"{Path}/build").IgnoreError();
 		let command = scope String(Terminal.Python)..Append(' ');
 		Terminal.Quote(scope $"{EngineRoot}/tools/build_player.py" , command);

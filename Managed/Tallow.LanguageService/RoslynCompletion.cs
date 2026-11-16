@@ -36,6 +36,27 @@ internal static class RoslynCompletion
     private static readonly Dictionary<string, (DocumentId Id, SourceText Text)> sDocuments = new(StringComparer.OrdinalIgnoreCase);
     private static MetadataReference[] sReferences = [];
 
+    /// <summary>Roslyn's services, from the types of its assemblies that load. The SDK's copy of Roslyn's Features
+    /// (dotnet-format's) differs between SDK builds in what else it needs; a type that needs an assembly that is
+    /// not here (one we do not use, such as a package search index) is left out instead of failing the whole
+    /// container, as <c>MefHostServices.Create(assemblies)</c> would.</summary>
+    private static System.Composition.CompositionContext Composition()
+    {
+        var types = new List<Type>();
+        foreach (var assembly in MefHostServices.DefaultAssemblies)
+        {
+            try
+            {
+                types.AddRange(assembly.GetTypes());
+            }
+            catch (System.Reflection.ReflectionTypeLoadException partial)
+            {
+                types.AddRange(partial.Types.Where(type => type != null)!);
+            }
+        }
+        return new System.Composition.Hosting.ContainerConfiguration().WithParts(types).CreateContainer();
+    }
+
     /// <summary>Whether a tree is engine API source (its own project, so its internals stay hidden).</summary>
     private static bool IsApi(string path) =>
         path.Replace('\\', '/').Contains("/Managed/Tallow.API/", StringComparison.OrdinalIgnoreCase);
@@ -45,7 +66,7 @@ internal static class RoslynCompletion
     {
         if (sWorkspace == null)
         {
-            sWorkspace = new AdhocWorkspace(MefHostServices.Create(MefHostServices.DefaultAssemblies));
+            sWorkspace = new AdhocWorkspace(MefHostServices.Create(Composition()));
             var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
                 nullableContextOptions: NullableContextOptions.Enable);
             sApi = ProjectId.CreateNewId("Tallow.API");
@@ -115,7 +136,12 @@ internal static class RoslynCompletion
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine($"Roslyn completion unavailable, using symbol lookup: {exception.Message}");
+            // A type that cannot load names the assembly it lacks only in its loader exceptions.
+            string detail = exception is System.Reflection.ReflectionTypeLoadException load
+                ? string.Join("; ", load.LoaderExceptions.Where(e => e != null).Select(e => e!.Message).Distinct().Take(3))
+                : "";
+            Console.Error.WriteLine($"Roslyn completion unavailable, using symbol lookup: {exception.Message}"
+                + (detail.Length > 0 ? $" ({detail})" : ""));
             // Start again from nothing next time; a half-synchronised workspace would give wrong answers.
             sWorkspace = null;
             sDocuments.Clear();

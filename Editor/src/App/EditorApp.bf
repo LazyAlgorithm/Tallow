@@ -430,8 +430,7 @@ class EditorApp : Application
 		if (GetArg("--build-now", folder))
 		{
 			mBuildFolder.Set(folder);
-			mWantBuildGame = true;
-			mBusyFrames = 3;
+			mBuildNowPending = true;
 		}
 	}
 

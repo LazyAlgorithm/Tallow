@@ -28,6 +28,8 @@ extension EditorApp
 	/// Build the editor itself (a copy of Tallow for another machine) instead of the game.
 	bool mBuildEditor;
 	bool mBuildSucceeded;
+	/// A build asked for (Build, or --build-now) while the script error check runs: it starts when the check ends.
+	bool mBuildNowPending;
 	String mBuildFolder = new .() ~ delete _;
 	String mBuildMessage = new .() ~ delete _;
 
@@ -93,6 +95,11 @@ extension EditorApp
 #if BF_PLATFORM_WINDOWS
 		return true;
 #else
+		// A C# game ships the engine's precompiled player: with the Windows one at hand (engine packages carry it),
+		// tools/build_player.py needs no Windows toolchain, only the Windows .NET runtime it downloads.
+		if (!mBuildEditor && !File.Exists(scope $"{Project.Current.Path}/BeefProj.toml")
+			&& File.Exists(scope $"{Project.Current.EngineRoot}/Player/build/Release_Win64/TallowPlayer/TallowPlayer.exe"))
+			return true;
 		let toolchain = scope String();
 		if (!(Environment.GetEnvironmentVariable("TALLOW_WIN", toolchain) case .Ok) || toolchain.IsEmpty)
 		{
@@ -113,6 +120,12 @@ extension EditorApp
 				sPickReady = false;
 				mBuildMessage.Clear();
 			}
+		}
+		if (mBuildNowPending && !mCheckRunning && mBusyFrames == 0)
+		{
+			mBuildNowPending = false;
+			mWantBuildGame = true;
+			mBusyFrames = 3;
 		}
 		if (!mShowBuild)
 			return;

@@ -103,10 +103,16 @@ def main():
         ignore = shutil.ignore_patterns('build', '__pycache__', '*.pyc', 'recovery', '.reload', 'imgui.ini')
         for name in ('Engine', 'Editor', 'Launcher', 'Player'):
             shutil.copytree(root / name, stage / name, ignore=ignore)
-        if player.is_file():
-            destination = stage / player.relative_to(root)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(player, destination)
+        # The Windows player too, when it was built (tools/windows/setup.sh, then this script with --platform windows
+        # or tools/build_player.py --platform windows): then the package makes Windows C# games without Wine or Beef.
+        windows_player = root / 'Player' / 'build' / 'Release_Win64' / 'TallowPlayer' / 'TallowPlayer.exe'
+        for built in dict.fromkeys([player] + ([windows_player] if not windows else [])):
+            if built.is_file():
+                destination = stage / built.relative_to(root)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(built, destination)
+        if not windows and not windows_player.is_file():
+            print('Note: no Windows player built, so this package makes Linux C# games only.')
         # C# gameplay: the API and runtime projects games compile against, the build tool, and the runtime built.
         managed_ignore = shutil.ignore_patterns('bin', 'obj', '__pycache__')
         for name in ('Tallow.API', 'Tallow.ManagedRuntime', 'Tallow.Build', 'Tallow.Analyzers'):

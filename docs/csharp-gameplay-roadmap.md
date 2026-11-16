@@ -522,8 +522,21 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   uses exclusively. Engine packages carry the prebuilt player and the built managed runtime;
   a game exported from a package with no BeefBuild on PATH passed all 82 in-engine checks.
   `tools/test_csharp_export.py` (CI) checks the CLR came from the bundle. Fixed on the way:
-  hostfxr folders with pre-release names were skipped. Not done: Windows (needs the Windows
-  .NET runtime to bundle and a Windows run), macOS/web, trimming the bundled runtime.
+  hostfxr folders with pre-release names were skipped.
+  - [x] (November 16, 2026) Windows export. Built on Linux, `build_player.py --platform windows`
+    bundles Microsoft's Windows x64 .NET runtime of exactly the version the game compiled
+    against (from the official release list, SHA-512 checked, cached once in
+    `~/.cache/tallow/dotnet-runtime/`; 82 MB). A C# game needs only the precompiled
+    `TallowPlayer.exe`: with it present (Linux engine packages now carry it when it was built)
+    no Wine, Windows Beef or native-win libraries are needed, and the editor's Build window
+    offers Windows for C# games. `test_csharp_export.py --platform windows` builds it and runs
+    it under Wine: 311 checks pass on the bundled runtime, as on Linux; the editor's Build
+    window (`--build-window --build-windows --build-now`) made the same build. Fixed on the way:
+    the editor's Build wrote Beef build files into C# projects first, so `build_player.py`
+    took them for Beef projects (a project is now Beef only with `.bf` sources); a build asked
+    for during the opening script check now starts when the check ends instead of being
+    dropped. Not done: a run on a real Windows machine (only Wine so far), a Windows export
+    in CI (needs the Windows player built there), macOS/web, trimming the bundled runtime.
 - [ ] Confirm no unsafe untrusted mod loading, directory escape, premature engine pointer exposure or unmanaged ownership errors.
   - [x] (November 15, 2026) Review. Fine as it was: only `Tallow.Game.dll` is loaded by name, from the editor's
     build folder or a built game's Managed folder (no mod loader); the native resolver and function pointers are

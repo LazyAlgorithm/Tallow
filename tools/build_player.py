@@ -9,6 +9,7 @@ A web player is a folder to put on any web server (GitHub Pages, itch.io): index
 asset pack. Beef compiles it through Emscripten and links the native libraries in build/native-web; tools/web/setup.sh
 sets that up, once."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,8 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+import urllib.request
+import zipfile
 
 import compress_textures
 import convert_models
@@ -70,6 +73,14 @@ def write_web_page(engine, project, name, staging):
 DOTNET_MAJOR = 11
 
 
+def beef_project(project):
+    """A legacy Beef gameplay project: Beef build files and Beef source. (Older editors wrote BeefProj.toml into C#
+    projects too when building, so the file alone does not make one.)"""
+    source = project / 'src'
+    return (project / 'BeefProj.toml').is_file() and any(
+        not any(part.startswith('.') for part in file.relative_to(source).parts) for file in source.rglob('*.bf'))
+
+
 def build_csharp_game(engine, project, config):
     """Compiles a C# project's assemblies, optimised, into its build folder (not the editor's .tallow-csharp/bin)."""
     out = project / 'build' / 'csharp' / config
@@ -118,6 +129,51 @@ def newest(folder, major):
     return max(versions, key=key) if versions else None
 
 
+def windows_runtime(version):
+    """Microsoft's .NET runtime for 64-bit Windows, `version` exactly, unpacked into a per-user cache (downloaded once,
+    checked against the SHA-512 in Microsoft's release list). Returns the folder holding its host/ and shared/."""
+    cache = Path(os.environ.get('XDG_CACHE_HOME', Path.home() / '.cache')) / 'tallow' / 'dotnet-runtime' / f'{version}-win-x64'
+    if (cache / 'host' / 'fxr').is_dir() and (cache / 'shared' / 'Microsoft.NETCore.App' / version).is_dir():
+        return cache
+    major_minor = '.'.join(version.split('-')[0].split('.')[:2])
+    index = f'https://builds.dotnet.microsoft.com/dotnet/release-metadata/{major_minor}/releases.json'
+    try:
+        with urllib.request.urlopen(index, timeout=60) as response:
+            releases = json.load(response)['releases']
+    except (OSError, ValueError, KeyError) as error:
+        raise SystemExit(f'Could not read the list of .NET releases ({index}): {error}. Pass --no-bundle-dotnet to build '
+                         f'without the runtime (players then install .NET {DOTNET_MAJOR}).')
+    files = [file for release in releases if (release.get('runtime') or {}).get('version') == version
+             for file in release['runtime'].get('files', []) if file.get('rid') == 'win-x64' and file.get('name') == 'dotnet-runtime-win-x64.zip']
+    if not files:
+        raise SystemExit(f'Microsoft lists no Windows x64 .NET runtime {version}; pass --no-bundle-dotnet.')
+    url, expected = files[0]['url'], files[0]['hash'].lower()
+    print(f'Downloading the Windows .NET runtime {version} (once; kept in {cache.parent})...')
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='dotnet-win-', dir=cache.parent) as temporary:
+        archive = Path(temporary) / 'runtime.zip'
+        digest = hashlib.sha512()
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response, open(archive, 'wb') as out:
+                while chunk := response.read(1 << 20):
+                    digest.update(chunk)
+                    out.write(chunk)
+        except OSError as error:
+            raise SystemExit(f'Could not download {url}: {error}')
+        if digest.hexdigest() != expected:
+            raise SystemExit(f'The download of {url} does not match the SHA-512 Microsoft lists for it; not used.')
+        unpacked = Path(temporary) / 'runtime'
+        with zipfile.ZipFile(archive) as zipped:
+            for member in zipped.namelist():
+                if member.startswith(('/', '\\')) or '..' in Path(member).parts:
+                    raise SystemExit(f'{url} holds an unsafe path ({member}); not used.')
+            zipped.extractall(unpacked)
+        if cache.exists():
+            shutil.rmtree(cache)
+        unpacked.rename(cache)
+    return cache
+
+
 def stage_csharp(engine, project, staging, config, windows, bundle):
     """Managed/Runtime (Tallow's runtime and API), Managed/Game (the game's assemblies, a folder each) and, unless told
     not to, dotnet/: the .NET runtime itself, so that players need not install it."""
@@ -136,12 +192,13 @@ def stage_csharp(engine, project, staging, config, windows, bundle):
     if not bundle:
         print(f'.NET not bundled: players need the .NET {DOTNET_MAJOR} runtime installed.')
         return
-    if windows and os.name != 'nt':
-        print(f'Note: the Windows .NET runtime is not bundled when building on Linux; players need .NET {DOTNET_MAJOR} installed.')
-        return
     root = dotnet_root()
-    fxr = newest(root / 'host' / 'fxr', DOTNET_MAJOR) if root else None
     framework = newest(root / 'shared' / 'Microsoft.NETCore.App', DOTNET_MAJOR) if root else None
+    if windows and os.name != 'nt' and framework is not None:
+        # Built on Linux: the Windows runtime of the same version as the one the game was compiled against.
+        root = windows_runtime(framework.name)
+        framework = newest(root / 'shared' / 'Microsoft.NETCore.App', DOTNET_MAJOR)
+    fxr = newest(root / 'host' / 'fxr', DOTNET_MAJOR) if root else None
     if fxr is None or framework is None:
         raise SystemExit(f'The .NET {DOTNET_MAJOR} runtime to bundle was not found beside dotnet; install it or pass --no-bundle-dotnet.')
     bundled = staging / 'dotnet'
@@ -213,11 +270,14 @@ def main():
         natives = engine / 'build' / 'native-win'
         if args.config != 'Release':
             parser.error('Windows players are built in the Release configuration only.')
-        if cross and not shutil.which('wine'):
+        # A C# game ships the precompiled player, so an engine package that carries the Windows one needs no
+        # Windows toolchain (no Wine, no Beef) to make Windows games.
+        prebuilt = (engine / 'Player' / 'build' / 'Release_Win64' / 'TallowPlayer' / 'TallowPlayer.exe').is_file() and not beef_project(project)
+        if cross and not prebuilt and not shutil.which('wine'):
             parser.error('Building for Windows needs Wine (it runs the Windows Beef compiler).')
-        if cross and (not (toolchain / 'beef/bin/BeefBuild.exe').is_file() or not (natives / 'tallow_native.lib').is_file()):
+        if cross and not prebuilt and (not (toolchain / 'beef/bin/BeefBuild.exe').is_file() or not (natives / 'tallow_native.lib').is_file()):
             parser.error(f'The Windows toolchain is not set up. Run {engine / "tools/windows/setup.sh"} once.')
-        if not cross and not (natives / 'tallow_native.lib').is_file():
+        if not cross and not prebuilt and not (natives / 'tallow_native.lib').is_file():
             parser.error(f'The native libraries for Windows are missing from {natives}.')
     if web:
         natives = engine / 'build' / 'native-web'
@@ -232,7 +292,7 @@ def main():
     if not scene_path.is_relative_to(project / 'src') or not scene_path.is_file():
         parser.error('Start scene must exist inside the project src folder. Save it in the editor first.')
     # A C# project has no Beef of its own: it ships the engine's precompiled player and its compiled assemblies.
-    csharp = not (project / 'BeefProj.toml').is_file()
+    csharp = not beef_project(project)
     if csharp:
         if web or macos:
             parser.error('C# games build for Linux and Windows so far.')

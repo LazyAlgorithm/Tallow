@@ -46,6 +46,11 @@
       <Reference Include="$(RoslynFeatures)/System.Composition.TypedParts.dll" />
       <Reference Include="$(RoslynFeatures)/Humanizer.dll" />
     </ItemGroup>
+    <!-- Assemblies some SDK builds' Features need for parts we do not use; copied when that SDK has them. -->
+    <ItemGroup Condition="'$(_RoslynFirst)' == '$(_RoslynSecond)'">
+      <None Include="$(RoslynFeatures)/Microsoft.CodeAnalysis.Elfie.dll;$(RoslynFeatures)/Microsoft.DiaSymReader.dll"
+            Condition="Exists('%(FullPath)')" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    </ItemGroup>
     <Warning Condition="'$(_RoslynFirst)' != '$(_RoslynSecond)'"
              Text="The SDK's dotnet-format Roslyn differs from its compiler; C# completion uses the simpler symbol lookup." />
   </Target>

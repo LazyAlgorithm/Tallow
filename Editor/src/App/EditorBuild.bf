@@ -109,7 +109,9 @@ extension EditorApp
 		let project = Project.Current;
 		if (mCheckRunning)
 		{
-			mStatus.Set("Wait for the script error check to finish, then build again.");
+			// Built once the check is done (DrawBuildWindow), rather than asking for another click.
+			mStatus.Set("The build starts when the script error check finishes.");
+			mBuildNowPending = true;
 			return;
 		}
 		SaveAllScripts();
