@@ -23,6 +23,9 @@ internal static unsafe partial class GeneratedNativeApi
         ResetVersion();
     }
 
+    /// <summary>Whether an engine is attached (a pure-managed host, such as the lifecycle smoke test, has none).</summary>
+    internal static bool IsBound => sResolver != null;
+
     internal static nint ResolveRaw(string symbol)
     {
         if (sResolver == null)

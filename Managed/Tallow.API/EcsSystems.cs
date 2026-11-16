@@ -72,7 +72,8 @@ public static class EcsSystems
     {
         ArgumentNullException.ThrowIfNull(system);
         sSystems.Add(system);
-        Ecs.DescribeSystem(sSystems.Count - 1, name, system.Order, system.SchemaId);
+        if (GeneratedNativeApi.IsBound)
+            Ecs.DescribeSystem(sSystems.Count - 1, name, system.Order, system.SchemaId);
     }
 
     internal static void Run(int index, ulong session, ulong entity, TickInput input, float deltaTime)
