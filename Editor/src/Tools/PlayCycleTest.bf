@@ -74,7 +74,10 @@ extension EditorApp
 		if (mPlayCycleExpectBlocked)
 		{
 			// Play asks for a build first; once it has failed, Play must not have started.
-			if (mCheckRunning || mReloadQueued || ++mPlayCycleWait < 30)
+			if (mPlayCycleWait == 0)
+				mPlayCycleClock.Restart();
+			// 1.5 s: past the success notice's 1 s, which must never clear a failure.
+			if (mCheckRunning || mReloadQueued || ++mPlayCycleWait < 30 || mPlayCycleClock.ElapsedMilliseconds < 1500)
 			{
 				if (mPlay != .Edit)
 					PlayCycleFail("Play started although the C# does not compile");
@@ -84,12 +87,24 @@ extension EditorApp
 				PlayCycleFail("Play started although the C# does not compile");
 			if (mManagedBuildReady)
 				PlayCycleFail("the build was reported ready");
+			if (mStatus.IsEmpty)
+				PlayCycleFail("the failure message was cleared");
 			if (mPlayCyclePass)
 				mPlayCycleReport.Append("Play stayed off after the failed build");
 			FinishPlayCycleTest();
 			return;
 		}
 
+		if (mPlayCycleDone == 0 && mPlay == .Edit && !mPlayAfterCompile && mPlayStartMs.IsEmpty)
+		{
+			if (mPlayCycleWait == 0)
+				mPlayCycleClock.Restart();
+			mPlayCycleWait++;
+			if (mPlayCycleClock.ElapsedMilliseconds < 1500)
+				return;
+			if (mStatus == "C# assemblies compiled.")
+				PlayCycleFail("the compile notice was still showing 1.5 s after the build");
+		}
 		if (mPlay == .Edit && !mPlayAfterCompile)
 		{
 			if (mPlayCycleDone >= mPlayCycleTarget)
