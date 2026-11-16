@@ -179,6 +179,9 @@ public readonly partial record struct LineRenderer
             throw ActionText.Missing(GameObject, "Line Renderer");
     }
 
+    /// <summary>Removes every point.</summary>
+    public void ClearPositions() => SetPositions(ReadOnlySpan<Vector3>.Empty);
+
     public int PositionCount => Math.Max(
         CSharpComponentActions.LineGetPositions(GameObject.SceneId, GameObject.Id, Span<float>.Empty), 0);
 }
@@ -247,6 +250,26 @@ public readonly partial record struct Water
         return false;
     }
 
+    /// <summary>Whether a point's X and Z are over this water (endless water is everywhere).</summary>
+    public bool Covers(Vector3 point) => TryGetSurface(point, out _);
+
+    /// <summary>The surface's height over a point (the still level where the point is not over this water).</summary>
+    public float HeightAt(Vector3 point)
+    {
+        float height = CSharpComponentActions.WaterHeight(GameObject.SceneId, GameObject.Id, point);
+        return float.IsNaN(height) ? throw ActionText.Missing(GameObject, "Water") : height;
+    }
+
+    /// <summary>How far below the surface a point is (negative above it); float.MinValue when not over this water.</summary>
+    public float DepthOf(Vector3 point) => TryGetSurface(point, out WaterSurface surface) ? surface.Height - point.Y : float.MinValue;
+
+    /// <summary>Whether an object's Rigidbody (or soft body) was in this water at the last physics step.</summary>
+    public bool IsFloating(GameObject body) =>
+        CSharpComponentActions.WaterFloating(GameObject.SceneId, GameObject.Id, body.Id) > 0;
+
+    /// <summary>Whether a Rigidbody was in this water at the last physics step.</summary>
+    public bool IsFloating(Rigidbody body) => IsFloating(body.GameObject);
+
     /// <summary>The water whose area holds a point (not valid when none).</summary>
     public static Water At(Scene scene, Vector3 point)
     {
@@ -285,4 +308,84 @@ public readonly partial record struct Camera
                           : ActionText.Missing(GameObject, "Camera");
         return new Vector3(values[0], values[1], values[2]);
     }
+}
+
+public readonly partial record struct SkinnedMeshRenderer
+{
+    /// <summary>Plays a clip on some bones over the base animation (bones: a bone name; it and those below it).</summary>
+    public void PlayLayer(string clip, string bones, float fadeSeconds = 0.15f)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(clip);
+        if (!CSharpComponentActions.SkinnedLayer(GameObject.SceneId, GameObject.Id, clip, bones ?? "", fadeSeconds))
+            throw ActionText.Missing(GameObject, "Skinned Mesh Renderer");
+    }
+
+    /// <summary>Fades the layer out.</summary>
+    public void StopLayer(float fadeSeconds = 0.15f)
+    {
+        if (!CSharpComponentActions.SkinnedLayer(GameObject.SceneId, GameObject.Id, "", "", fadeSeconds))
+            throw ActionText.Missing(GameObject, "Skinned Mesh Renderer");
+    }
+
+    /// <summary>How many parts (meshes with their own materials) the model has.</summary>
+    public int PartCount => Math.Max(CSharpComponentActions.SkinnedPartCount(GameObject.SceneId, GameObject.Id), 0);
+
+    /// <summary>A part's name, 0 to PartCount - 1.</summary>
+    public string PartName(int index)
+    {
+        SkinnedMeshRenderer self = this;
+        return ActionText.Read(buffer => CSharpComponentActions.SkinnedPartText(self.GameObject.SceneId, self.GameObject.Id, 0, index, "", buffer))
+            ?? throw new ArgumentOutOfRangeException(nameof(index));
+    }
+
+    /// <summary>The material a part uses (its own, or the model's).</summary>
+    public string GetPartMaterial(string part)
+    {
+        SkinnedMeshRenderer self = this;
+        return ActionText.Read(buffer => CSharpComponentActions.SkinnedPartText(self.GameObject.SceneId, self.GameObject.Id, 1, 0, part ?? "", buffer)) ?? "";
+    }
+
+    /// <summary>Gives a part (by index) its own material, a .tmat path; empty for the model's.</summary>
+    public void SetPartMaterial(int index, string materialPath)
+    {
+        if (!CSharpComponentActions.SkinnedPartMaterial(GameObject.SceneId, GameObject.Id, index, materialPath ?? ""))
+            throw new ArgumentOutOfRangeException(nameof(index), $"{GameObject} has no Skinned Mesh Renderer part {index}.");
+    }
+
+    /// <summary>Tints a part.</summary>
+    public void SetPartColor(string part, Color color) => Part(part, 0, new Vector4(color.R, color.G, color.B, color.A));
+
+    /// <summary>Hides or shows a part.</summary>
+    public void SetPartHidden(string part, bool hidden) => Part(part, 1, new Vector4(hidden ? 1 : 0, 0, 0, 0));
+
+    /// <summary>Draws a part only into shadows (a first-person body's head).</summary>
+    public void SetPartShadowOnly(string part, bool shadowOnly) => Part(part, 2, new Vector4(shadowOnly ? 1 : 0, 0, 0, 0));
+
+    private void Part(string part, int what, Vector4 value)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(part);
+        if (!CSharpComponentActions.SkinnedPart(GameObject.SceneId, GameObject.Id, part, what, value))
+            throw ActionText.Missing(GameObject, "Skinned Mesh Renderer");
+    }
+
+    /// <summary>The object of a bone (when the renderer exposes its bones as objects), or null.</summary>
+    public GameObject? BoneAt(int joint)
+    {
+        ulong id = CSharpComponentActions.SkinnedBone(GameObject.SceneId, GameObject.Id, joint);
+        return id == 0 ? null : new GameObject(GameObject.SceneId, id);
+    }
+}
+
+public readonly partial record struct ComputeEffect
+{
+    /// <summary>Sets a vector input of the effect's compute graph by name.</summary>
+    public void SetVector(string name, Vector4 value)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        if (!CSharpComponentActions.ComputeSetVector(GameObject.SceneId, GameObject.Id, name, value))
+            throw ActionText.Missing(GameObject, "Compute Effect");
+    }
+
+    /// <summary>Sets a colour input of the effect's compute graph by name.</summary>
+    public void SetColor(string name, Color value) => SetVector(name, new Vector4(value.R, value.G, value.B, value.A));
 }

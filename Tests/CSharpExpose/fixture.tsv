@@ -53,6 +53,8 @@ method	Tallow.CSharpCommandLine	HasArg	bool	name:string
 method	Tallow.CSharpComponentActions	BehaviorTreeEvent	bool	session:ulong	entity:ulong	name:string
 method	Tallow.CSharpComponentActions	CameraScreenRay	bool	session:ulong	entity:ulong	x:float	y:float	width:float	height:float	values:System.Span<float>
 method	Tallow.CSharpComponentActions	CameraWorldToScreen	bool	session:ulong	entity:ulong	point:System.Numerics.Vector3	width:float	height:float	values:System.Span<float>
+method	Tallow.CSharpComponentActions	CharacterSwim	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3	deltaTime:float	jumpSpeed:float
+method	Tallow.CSharpComponentActions	ComputeSetVector	bool	session:ulong	entity:ulong	name:string	value:System.Numerics.Vector4
 method	Tallow.CSharpComponentActions	DialogueControl	bool	session:ulong	entity:ulong	action:int	index:int
 method	Tallow.CSharpComponentActions	DialoguePlay	bool	session:ulong	entity:ulong	node:string
 method	Tallow.CSharpComponentActions	DialogueState	int	session:ulong	entity:ulong
@@ -68,8 +70,18 @@ method	Tallow.CSharpComponentActions	SceneLoaderControl	bool	session:ulong	entit
 method	Tallow.CSharpComponentActions	ScreenSize	void	size:System.Span<float>
 method	Tallow.CSharpComponentActions	SequenceControl	bool	session:ulong	entity:ulong	action:int	time:float
 method	Tallow.CSharpComponentActions	SequenceTime	float	session:ulong	entity:ulong
+method	Tallow.CSharpComponentActions	SkinnedBone	ulong	session:ulong	entity:ulong	joint:int
+method	Tallow.CSharpComponentActions	SkinnedLayer	bool	session:ulong	entity:ulong	name:string	bones:string	fadeSeconds:float
+method	Tallow.CSharpComponentActions	SkinnedPart	bool	session:ulong	entity:ulong	part:string	what:int	value:System.Numerics.Vector4
+method	Tallow.CSharpComponentActions	SkinnedPartCount	int	session:ulong	entity:ulong
+method	Tallow.CSharpComponentActions	SkinnedPartMaterial	bool	session:ulong	entity:ulong	index:int	path:string
+method	Tallow.CSharpComponentActions	SkinnedPartText	int	session:ulong	entity:ulong	which:int	index:int	part:string	buffer:System.Span<byte>
 method	Tallow.CSharpComponentActions	TrailClear	bool	session:ulong	entity:ulong
+method	Tallow.CSharpComponentActions	VoxelCarveLocal	int	session:ulong	entity:ulong	objectPoint:System.Numerics.Vector3	radius:float
+method	Tallow.CSharpComponentActions	VoxelControl	bool	session:ulong	entity:ulong	action:int
 method	Tallow.CSharpComponentActions	WaterAt	ulong	session:ulong	point:System.Numerics.Vector3
+method	Tallow.CSharpComponentActions	WaterFloating	int	session:ulong	entity:ulong	body:ulong
+method	Tallow.CSharpComponentActions	WaterHeight	float	session:ulong	entity:ulong	point:System.Numerics.Vector3
 method	Tallow.CSharpComponentActions	WaterSurface	bool	session:ulong	entity:ulong	point:System.Numerics.Vector3	values:System.Span<float>
 method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:string

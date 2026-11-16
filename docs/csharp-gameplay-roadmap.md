@@ -271,6 +271,12 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     2 network checks (active in the client's player tick on the server, ends; does nothing on a client).
     Not yet: custom prediction-state hooks (Beef `CapturePredictionState` / `RestorePredictionState`) for C# motors.
 - [ ] Rendering, materials, shaders/compute graphs, cameras, lighting, mesh/voxel/terrain, animation/IK, sequencer and modeling tools.
+  - [x] (November 16, 2026) Component actions closing the gaps a scripted comparison of every public Beef component
+    method found: `Water.HeightAt/DepthOf/Covers/IsFloating`, `VoxelObject.CarveLocal/Fill/ResetShape`,
+    `LineRenderer.ClearPositions`, `SkinnedMeshRenderer` layers (`PlayLayer/StopLayer`), parts (count, names,
+    materials, colour, hidden, shadow-only) and `BoneAt`, `ComputeEffect.SetVector/SetColor`,
+    `CharacterController.Swim`. 8 in-engine checks. Left out on purpose: editor/network internals
+    (NetworkIdentity ticks, ApplyRemote, Refresh, ReflectionProbe capture hooks).
   - [x] (November 15, 2026) `MeshRenderer.Material` (networked switch), `SetMaterialValue/Float/Color` on the
     object's own copy, `TryGetWorldBounds`, `IsVisible`, `BackFaceCulling`, `Texture`. Script callbacks
     `OnSequenceEvent`, `OnDialogueEvent`, `OnTreeEvent` for the same object's runners (host entry

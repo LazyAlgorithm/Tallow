@@ -98,6 +98,16 @@ public readonly partial record struct CharacterController(GameObject GameObject)
         Physics.SetCharacterShape(GameObject.SceneId, GameObject.Id, true, 0, 0, size, edgeRadius, center);
 
     /// <summary>Reset the native character pose and velocity, e.g. on respawn.</summary>
+    /// <summary>
+    /// Moves the character as a swimmer this tick: no gravity, velocity in any direction; jumpSpeed (above 0) lifts it
+    /// out of the water at the surface. Use instead of Move while it is in water.
+    /// </summary>
+    public void Swim(Vector3 velocity, float deltaTime, float jumpSpeed = 0)
+    {
+        if (!CSharpComponentActions.CharacterSwim(GameObject.SceneId, GameObject.Id, velocity, deltaTime, jumpSpeed))
+            throw new InvalidOperationException($"{GameObject} has no CharacterController.");
+    }
+
     public bool Teleport(Vector3 position, Vector3 velocity = default) =>
         Physics.TeleportCharacter(GameObject.SceneId, GameObject.Id, position, velocity);
 

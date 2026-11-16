@@ -391,4 +391,152 @@ static class CSharpComponentActions
 		values[2] = depth;
 		return true;
 	}
+
+	/// The water's surface height over point (its still level where the point is not over it); NaN without Water.
+	[CSharpExpose]
+	public static float WaterHeight(uint64 session, uint64 entity, Vector3 point)
+	{
+		let water = Get<Water>(Object(session, entity));
+		return water ? water.HeightAt(point) : float.NaN;
+	}
+
+	/// Whether body's Rigidbody (or soft body) was in this water at the last physics step: 1 yes, 0 no, -1 when
+	/// the object has no Water or body has neither.
+	[CSharpExpose]
+	public static int32 WaterFloating(uint64 session, uint64 entity, uint64 body)
+	{
+		let water = Get<Water>(Object(session, entity));
+		let other = Object(session, body);
+		if (!water || other == null)
+			return -1;
+		let rigidbody = other.GetComponent<Rigidbody>();
+		if (rigidbody.IsValid)
+			return water.IsFloating(rigidbody) ? 1 : 0;
+		if (let soft = other.GetComponent<SoftBody>())
+			return water.IsFloating(soft) ? 1 : 0;
+		return -1;
+	}
+
+	/// Plays an animation layer over some bones (empty name: stops the layer). False without a Skinned Mesh Renderer.
+	[CSharpExpose]
+	public static bool SkinnedLayer(uint64 session, uint64 entity, StringView name, StringView bones, float fadeSeconds)
+	{
+		let skinned = Get<SkinnedMeshRenderer>(Object(session, entity));
+		if (!skinned)
+			return false;
+		if (name.IsEmpty)
+			skinned.StopLayer(fadeSeconds);
+		else
+			skinned.PlayLayer(name, bones, fadeSeconds);
+		return true;
+	}
+
+	/// Changes a model part: what 0 colour (value rgba), 1 hidden (value.x > 0.5), 2 shadow only (value.x > 0.5).
+	[CSharpExpose]
+	public static bool SkinnedPart(uint64 session, uint64 entity, StringView part, int32 what, Vector4 value)
+	{
+		let skinned = Get<SkinnedMeshRenderer>(Object(session, entity));
+		if (!skinned || part.IsEmpty)
+			return false;
+		switch (what)
+		{
+		case 0: skinned.SetPartColor(part, .(value.x, value.y, value.z, value.w));
+		case 1: skinned.SetPartHidden(part, value.x > 0.5f);
+		case 2: skinned.SetPartShadowOnly(part, value.x > 0.5f);
+		default: return false;
+		}
+		return true;
+	}
+
+	/// Gives model part index its own material (a .tmat path; empty: the model's own).
+	[CSharpExpose]
+	public static bool SkinnedPartMaterial(uint64 session, uint64 entity, int32 index, StringView path)
+	{
+		let skinned = Get<SkinnedMeshRenderer>(Object(session, entity));
+		if (!skinned || index < 0 || index >= skinned.PartCount)
+			return false;
+		skinned.SetPartMaterial(index, path);
+		return true;
+	}
+
+	/// How many parts the model has (-1 without a Skinned Mesh Renderer).
+	[CSharpExpose]
+	public static int32 SkinnedPartCount(uint64 session, uint64 entity)
+	{
+		let skinned = Get<SkinnedMeshRenderer>(Object(session, entity));
+		return skinned ? (int32)skinned.PartCount : -1;
+	}
+
+	/// which 0: part index's name; 1: the material part (by name) uses. UTF-8 into buffer; the full length, -1 for none.
+	[CSharpExpose]
+	public static int32 SkinnedPartText(uint64 session, uint64 entity, int32 which, int32 index, StringView part, Span<uint8> buffer)
+	{
+		let skinned = Get<SkinnedMeshRenderer>(Object(session, entity));
+		if (!skinned)
+			return -1;
+		if (which == 0)
+			return index >= 0 && index < skinned.PartCount ? Copy(skinned.PartName(index), buffer) : -1;
+		let path = scope String();
+		skinned.GetPartMaterial(part, path);
+		return Copy(path, buffer);
+	}
+
+	/// The object of bone joint (when the renderer exposes its bones as objects); 0 when none.
+	[CSharpExpose]
+	public static uint64 SkinnedBone(uint64 session, uint64 entity, int32 joint)
+	{
+		let skinned = Get<SkinnedMeshRenderer>(Object(session, entity));
+		if (!skinned)
+			return 0;
+		let bone = skinned.BoneAt(joint);
+		return bone != null && bone.GameObject != null ? (uint64)bone.GameObject.Id : 0;
+	}
+
+	/// Moves a character as a swimmer (no gravity; jumpSpeed lifts it out at the surface). False without one.
+	[CSharpExpose]
+	public static bool CharacterSwim(uint64 session, uint64 entity, Vector3 velocity, float deltaTime, float jumpSpeed)
+	{
+		let controller = Get<CharacterController>(Object(session, entity));
+		if (!controller.IsValid)
+			return false;
+		controller.Swim(velocity, deltaTime, jumpSpeed);
+		return true;
+	}
+
+	/// Sets a compute effect's vector (or colour) input by name. False without a Compute Effect.
+	[CSharpExpose]
+	public static bool ComputeSetVector(uint64 session, uint64 entity, StringView name, Vector4 value)
+	{
+		let effect = Get<ComputeEffect>(Object(session, entity));
+		if (!effect || name.IsEmpty)
+			return false;
+		effect.SetVector(name, value);
+		return true;
+	}
+
+	/// 0 ResetShape, 1 Fill. False without a Voxel Object.
+	[CSharpExpose]
+	public static bool VoxelControl(uint64 session, uint64 entity, int32 action)
+	{
+		let voxels = Get<VoxelObject>(Object(session, entity));
+		if (!voxels)
+			return false;
+		if (action == 0)
+			voxels.ResetShape();
+		else if (action == 1)
+			voxels.Fill();
+		else
+			return false;
+		return true;
+	}
+
+	/// Carves a ball out at a point in the object's own space: 1 something went, 0 nothing did, -1 no Voxel Object.
+	[CSharpExpose]
+	public static int32 VoxelCarveLocal(uint64 session, uint64 entity, Vector3 objectPoint, float radius)
+	{
+		let voxels = Get<VoxelObject>(Object(session, entity));
+		if (!voxels)
+			return -1;
+		return voxels.CarveLocal(objectPoint, radius) ? 1 : 0;
+	}
 }

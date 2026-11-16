@@ -184,7 +184,10 @@ public class ApiChecks : CheckBase
         else if (_tick == 260)
             ContactsAfterLanding();
         else if (_tick == 280)
+        {
             ComponentAccessSetup();
+            ComponentActionsSetup();
+        }
         else if (_tick == 300)
         {
             GroundAsTrigger();
@@ -199,6 +202,7 @@ public class ApiChecks : CheckBase
             ReferenceFieldChecks();
             PackageChecks();
             ComponentAccessChecks();
+            ComponentActionsChecks();
             Finish();
             Application.Quit();
         }
@@ -256,6 +260,71 @@ public class ApiChecks : CheckBase
         Check("RemoveComponent<Light> took the light off", !_accessGrandchild.GetComponent<Light>().IsValid
             && _accessRoot.GetComponent<Light>().IsValid);
         Check("removing a script that is gone is refused", _removedHelper is { } gone && !_accessRoot.RemoveComponent(gone));
+    }
+
+    private GameObject _pool, _floater, _swimmer;
+
+    /// Water, voxel, line, skinned-renderer, compute and swimming actions (water floating checked at 300).
+    private void ComponentActionsSetup()
+    {
+        _pool = Scene.CreateGameObject("Pool");
+        _pool.Transform.Position = new Vector3(300, 0, 300);
+        Water water = _pool.AddComponent<Water>();
+        Vector3 over = new(300, -1, 300), away = new(900, -1, 900);
+        float height = water.HeightAt(over);
+        Check($"Water.HeightAt, DepthOf and Covers ({height}, {water.DepthOf(over)})",
+            water.Covers(over) && !water.Covers(away) && MathF.Abs(water.DepthOf(over) - (height + 1)) < 1e-3f
+            && water.DepthOf(away) == float.MinValue);
+        _floater = Scene.CreateGameObject("Floater");
+        _floater.Transform.Position = new Vector3(300, 0.2f, 300);
+        _floater.AddComponent<SphereCollider>();
+        _floater.AddComponent<Rigidbody>();
+
+        GameObject block = Scene.CreateGameObject("Voxel block");
+        block.Transform.Position = new Vector3(-300, 0, -300);
+        VoxelObject voxels = block.AddComponent<VoxelObject>();
+        voxels.Fill();
+        bool carved = voxels.CarveLocal(Vector3.Zero, 0.6f);
+        voxels.ResetShape();
+        Check("VoxelObject.Fill, CarveLocal and ResetShape", carved);
+
+        GameObject line = Scene.CreateGameObject("Line");
+        LineRenderer lineRenderer = line.AddComponent<LineRenderer>();
+        lineRenderer.SetPositions([Vector3.Zero, Vector3.One]);
+        lineRenderer.ClearPositions();
+        Check("LineRenderer.ClearPositions", lineRenderer.PositionCount == 0);
+
+        GameObject body = Scene.CreateGameObject("Skinned");
+        SkinnedMeshRenderer skinned = body.AddComponent<SkinnedMeshRenderer>();
+        skinned.SetPartHidden("Head", true);
+        skinned.SetPartColor("Body", new Color(1, 0, 0));
+        Check("SkinnedMeshRenderer part calls work without a model (no parts, no bones)",
+            skinned.PartCount == 0 && skinned.BoneAt(0) == null && skinned.GetPartMaterial("Body") == "");
+
+        GameObject effect = Scene.CreateGameObject("Effect");
+        ComputeEffect compute = effect.AddComponent<ComputeEffect>();
+        bool set = true;
+        try { compute.SetColor("tint", new Color(0, 1, 0)); } catch (InvalidOperationException) { set = false; }
+        Check("ComputeEffect.SetColor reaches the effect", set);
+
+        // Deep in the pool: Swim moves as a swimmer there (out of deep water it walks). Its character is made by the
+        // next physics step, so it swims at 300.
+        _swimmer = Scene.CreateGameObject("Swimmer");
+        _swimmer.Transform.Position = new Vector3(303, -4, 303);
+        _swimmer.AddComponent<CharacterController>();
+    }
+
+    private void ComponentActionsChecks()
+    {
+        Water water = _pool.GetComponent<Water>();
+        Check("Water.IsFloating sees a Rigidbody in it", water.IsFloating(_floater.GetComponent<Rigidbody>())
+            && !water.IsFloating(_pool));
+        CharacterController character = _swimmer.GetComponent<CharacterController>();
+        float before = _swimmer.Transform.Position.Y;
+        for (int i = 0; i < 5; i++)
+            character.Swim(new Vector3(0, 2, 0), 0.1f);
+        Check($"CharacterController.Swim swims up through deep water ({before} -> {_swimmer.Transform.Position.Y})",
+            _swimmer.Transform.Position.Y > before + 0.3f);
     }
 
     private void PackageChecks()

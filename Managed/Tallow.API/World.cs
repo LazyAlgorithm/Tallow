@@ -39,6 +39,28 @@ public readonly record struct VoxelObject(GameObject GameObject) : IComponent
     /// <summary>Cuts a sphere out (shared in a network session). False without a VoxelObject.</summary>
     public bool Carve(Vector3 worldPoint, float radius) =>
         CSharpWorld.CarveVoxels(GameObject.SceneId, GameObject.Id, worldPoint, radius);
+
+    /// <summary>Cuts a sphere out at a point in the object's own space; true when anything went.</summary>
+    public bool CarveLocal(Vector3 objectPoint, float radius) =>
+        CSharpComponentActions.VoxelCarveLocal(GameObject.SceneId, GameObject.Id, objectPoint, radius) switch
+        {
+            < 0 => throw ActionText.Missing(GameObject, "Voxel Object"),
+            var carved => carved > 0,
+        };
+
+    /// <summary>Puts the shape back as its settings make it (undoing carving).</summary>
+    public void ResetShape()
+    {
+        if (!CSharpComponentActions.VoxelControl(GameObject.SceneId, GameObject.Id, 0))
+            throw ActionText.Missing(GameObject, "Voxel Object");
+    }
+
+    /// <summary>Fills the whole grid solid.</summary>
+    public void Fill()
+    {
+        if (!CSharpComponentActions.VoxelControl(GameObject.SceneId, GameObject.Id, 1))
+            throw ActionText.Missing(GameObject, "Voxel Object");
+    }
 }
 
 /// <summary>Voxel terrain: dig and build with <see cref="ModifySphere"/>. <see cref="Find"/> gives the scene's.</summary>
