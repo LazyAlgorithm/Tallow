@@ -40,6 +40,19 @@ extension EditorApp
 		}
 
 		let script = FindInspectorTestScript();
+		// Field labels, as Unity shows them.
+		bool Label(StringView field, StringView expected)
+		{
+			let label = scope String();
+			NiceName(field, label);
+			if (label != expected)
+				report.AppendF("[{} -> \"{}\"] ", field, label);
+			return label == expected;
+		}
+		Check(Label("_testParam", "Test Param") && Label("m_MoveSpeed", "Move Speed") && Label("kMaxHealth", "Max Health") &&
+			Label("speed", "Speed") && Label("jump_height", "Jump Height") && Label("HTTPServer", "HTTP Server") &&
+			Label("player2Score", "Player 2 Score") && Label("isOnGround", "Is On Ground") && Label("UIScale", "UI Scale") &&
+			Label("kind", "Kind") && Label("__private", "Private"), "field labels drop _ and m_ and split camel case");
 		Check(script != null, "the scene has an ApiChecks script");
 		if (script != null)
 		{

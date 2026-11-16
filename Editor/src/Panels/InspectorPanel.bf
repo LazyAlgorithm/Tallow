@@ -61,20 +61,46 @@ extension EditorApp
 	}
 
 	/// Turns "moveSpeed" into "Move Speed" for display.
-	static void NiceName(StringView name, String outText)
+	/// A field's name as the Inspector shows it, as Unity does: a leading "_", "m_" or "k" before a capital is
+	/// dropped, other underscores become spaces, words split before capitals (an acronym stays together: "HTTPServer"
+	/// is "HTTP Server") and before numbers, and each word starts with a capital. "_testParam" is "Test Param".
+	public static void NiceName(StringView name, String outText)
 	{
+		var name;
+		if (name.StartsWith("m_"))
+			name = name.Substring(2);
+		else if (name.Length > 1 && name[0] == 'k' && name[1].IsUpper)
+			name = name.Substring(1);
+		while (name.StartsWith('_'))
+			name = name.Substring(1);
+		let start = outText.Length;
+		bool wordStart = true;
 		for (int i < name.Length)
 		{
 			let c = name[i];
-			if (i == 0)
-				outText.Append(c.ToUpper);
-			else
+			if (c == '_')
 			{
-				if (c.IsUpper && !name[i - 1].IsUpper)
-					outText.Append(' ');
-				outText.Append(c);
+				wordStart = true;
+				continue;
 			}
+			if (i > 0 && !wordStart)
+			{
+				let previous = name[i - 1];
+				let next = (i + 1 < name.Length) ? name[i + 1] : '\0';
+				// lower -> Upper, a digit after a letter, a letter after a digit, or the last capital of an acronym
+				// before a lower-case letter.
+				if ((c.IsUpper && (previous.IsLower || previous.IsDigit)) || (c.IsDigit && previous.IsLetter) ||
+					(c.IsLetter && previous.IsDigit) || (c.IsUpper && previous.IsUpper && next.IsLower))
+					wordStart = true;
+			}
+			if (wordStart && outText.Length > start)
+				outText.Append(' ');
+			outText.Append(wordStart ? c.ToUpper : c);
+			wordStart = false;
 		}
+		// A name of underscores alone.
+		if (outText.Length == start)
+			outText.Append(name);
 	}
 
 	// The object the Inspector is locked to (0: it follows the selection), and its name when locked, so that opening
