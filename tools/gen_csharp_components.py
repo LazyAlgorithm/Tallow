@@ -130,7 +130,10 @@ def existing_types() -> set[str]:
     for path in API.glob("*.cs"):
         if path == OUTPUT:
             continue
-        names |= set(re.findall(r"\b(?:class|struct|enum|interface)\s+(\w+)", path.read_text(encoding="utf-8")))
+        text = path.read_text(encoding="utf-8")
+        # A partial declaration adds to a generated handle (NativeComponentActions.cs); it does not replace it.
+        names |= set(re.findall(r"(?<!partial record )\b(?:class|struct|enum|interface)\s+(\w+)", text))
+        names -= set(re.findall(r"\bpartial\s+record\s+struct\s+(\w+)", text))
     return names
 
 
@@ -201,7 +204,7 @@ def generate(catalog: str) -> str:
                     field_docs[match.group(1)] = doc_before(body, match.start())
         out += summary(docs or [f"The built-in {name} component."], "")
         out.append(f'[NativeComponent("{native}")]')
-        out.append(f"public readonly record struct {name}(GameObject GameObject) : IComponent")
+        out.append(f"public readonly partial record struct {name}(GameObject GameObject) : IComponent")
         out.append("{")
         out.append(f'    private NativeComponent Data => new(GameObject, "{native}");')
         out.append("    public bool IsValid => Data.IsValid;")

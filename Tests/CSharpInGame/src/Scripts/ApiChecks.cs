@@ -82,6 +82,8 @@ public class ApiChecks : CheckBase
             Components();
         else if (_tick == 8)
             EveryNativeHandle(); // Its objects go at the end of the frame, so it has a frame of its own.
+        else if (_tick == 9)
+            ComponentActions();
         else if (_tick == 40)
             Physics();
         else if (_tick == 41)
@@ -224,6 +226,57 @@ public class ApiChecks : CheckBase
         Check("a generated handle (Camera) writes the engine's component", camera.FieldOfView == 72.5f &&
             new NativeComponent(eye, "Tallow.Camera").GetFloat("fieldOfView") == 72.5f && camera.Orthographic);
         eye.Destroy();
+    }
+
+    /// What C# can do with built-in components beyond their fields (NativeComponentActions.cs).
+    private void ComponentActions()
+    {
+        GameObject eye = Scene.CreateGameObject("ActionCamera");
+        eye.Transform.Position = new Vector3(1, 2, 3);
+        Camera camera = eye.AddComponent<Camera>();
+        camera.FieldOfView = 60;
+        var screen = new Vector2(1600, 900);
+        Ray middle = camera.ScreenPointToRay(screen / 2, screen);
+        Check("Camera.ScreenPointToRay through the middle of the screen goes where the camera looks",
+            Vector3.Distance(middle.Origin, eye.Transform.Position) < 1e-4f &&
+            Vector3.Distance(middle.Direction, eye.Transform.Forward) < 1e-4f);
+        var target = new Vector2(1200, 250);
+        Ray ray = camera.ScreenPointToRay(target, screen);
+        Vector3 back = camera.WorldToScreenPoint(ray.GetPoint(7), screen);
+        Check("WorldToScreenPoint undoes ScreenPointToRay (pixels and distance in front)",
+            MathF.Abs(back.X - target.X) < 0.05f && MathF.Abs(back.Y - target.Y) < 0.05f && back.Z > 0);
+        camera.Orthographic = true;
+        camera.OrthographicSize = 5;
+        Ray flat = camera.ScreenPointToRay(new Vector2(1600, 0), screen);
+        Vector3 corner = camera.WorldToScreenPoint(flat.GetPoint(3), screen);
+        Check("an orthographic camera's rays are parallel and still map back to the screen",
+            Vector3.Distance(flat.Direction, eye.Transform.Forward) < 1e-4f &&
+            MathF.Abs(corner.X - 1600) < 0.05f && MathF.Abs(corner.Y) < 0.05f);
+        bool headless = false;
+        try { camera.ScreenPointToRay(Vector2.Zero); } catch (InvalidOperationException) { headless = Screen.Width == 0; }
+        Check("ScreenPointToRay without a screen asks for its size", headless || Screen.Width > 0);
+
+        LineRenderer line = eye.AddComponent<LineRenderer>();
+        line.SetPositions([new Vector3(0, 0, 0), new Vector3(1, 2, 3), new Vector3(-4, 5, 6)]);
+        Vector3[] points = line.GetPositions();
+        Check("LineRenderer.SetPositions and GetPositions", line.PositionCount == 3 && points.Length == 3 &&
+            points[2] == new Vector3(-4, 5, 6));
+        eye.AddComponent<TrailRenderer>().Clear();
+        eye.AddComponent<ParticleSystem>().Play();
+        Check("TrailRenderer.Clear and ParticleSystem.Play run", true);
+        SequencePlayer sequence = eye.AddComponent<SequencePlayer>();
+        Check("a Sequence Player with no sequence does not play", !sequence.Play() && !sequence.IsPlaying);
+        DialogueRunner dialogue = eye.AddComponent<DialogueRunner>();
+        Check("a Dialogue Runner with no conversation does not play",
+            !dialogue.Play() && !dialogue.IsPlaying && dialogue.View == DialogueView.None && dialogue.Line == null &&
+            dialogue.Choices.Count == 0);
+        Check("Water.At finds no water where there is none", !Water.At(Scene, new Vector3(0, -50, 0)).IsValid);
+        bool missing = false;
+        try { new ParticleSystem(Scene.CreateGameObject("NoParticles")).Play(); }
+        catch (InvalidOperationException error) { missing = error.Message.Contains("\"NoParticles\"") && error.Message.Contains("Particle System"); }
+        Check("an action on a component the object lacks throws, naming it", missing);
+        eye.Destroy();
+        Scene.Find("NoParticles")?.Destroy();
     }
 
     private void NativeComponentChecks()

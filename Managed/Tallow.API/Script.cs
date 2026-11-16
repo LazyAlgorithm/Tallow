@@ -191,6 +191,20 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
         }
     }
 
+    /// <summary>"Name" (#id), or "#id (gone)" once the object has been destroyed. Never lists the properties as a
+    /// record's ToString would: those lead back to the object (Entity.GameObject...) without end.</summary>
+    public override string ToString()
+    {
+        if (SceneId == 0 || Id == 0)
+            return "no GameObject";
+        Span<byte> buffer = stackalloc byte[256];
+        int length = CSharpSceneObjects.CopyName(SceneId, Id, buffer);
+        if (length < 0)
+            return $"#{Id} (gone)";
+        string name = global::System.Text.Encoding.UTF8.GetString(buffer[..Math.Min(length, buffer.Length)]);
+        return $"\"{name}\" (#{Id})";
+    }
+
     /// <summary>
     /// Renames the object. (GameObject is a value handle, so this is a method:
     /// C# does not allow assigning a property through another property.)

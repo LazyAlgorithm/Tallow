@@ -50,6 +50,23 @@ method	Tallow.CSharpAudio	SourceTime	float	session:ulong	entity:ulong	which:int
 method	Tallow.CSharpBindingFixture	Average	float	a:float	b:float
 method	Tallow.CSharpCommandLine	CopyArg	int	name:string	buffer:System.Span<byte>
 method	Tallow.CSharpCommandLine	HasArg	bool	name:string
+method	Tallow.CSharpComponentActions	BehaviorTreeEvent	bool	session:ulong	entity:ulong	name:string
+method	Tallow.CSharpComponentActions	CameraScreenRay	bool	session:ulong	entity:ulong	x:float	y:float	width:float	height:float	values:System.Span<float>
+method	Tallow.CSharpComponentActions	CameraWorldToScreen	bool	session:ulong	entity:ulong	point:System.Numerics.Vector3	width:float	height:float	values:System.Span<float>
+method	Tallow.CSharpComponentActions	DialogueControl	bool	session:ulong	entity:ulong	action:int	index:int
+method	Tallow.CSharpComponentActions	DialoguePlay	bool	session:ulong	entity:ulong	node:string
+method	Tallow.CSharpComponentActions	DialogueState	int	session:ulong	entity:ulong
+method	Tallow.CSharpComponentActions	DialogueText	int	session:ulong	entity:ulong	which:int	index:int	buffer:System.Span<byte>
+method	Tallow.CSharpComponentActions	LineGetPositions	int	session:ulong	entity:ulong	xyz:System.Span<float>
+method	Tallow.CSharpComponentActions	LineSetPositions	bool	session:ulong	entity:ulong	xyz:System.Span<float>
+method	Tallow.CSharpComponentActions	ParticlePlay	bool	session:ulong	entity:ulong
+method	Tallow.CSharpComponentActions	SceneLoaderControl	bool	session:ulong	entity:ulong	action:int
+method	Tallow.CSharpComponentActions	ScreenSize	void	size:System.Span<float>
+method	Tallow.CSharpComponentActions	SequenceControl	bool	session:ulong	entity:ulong	action:int	time:float
+method	Tallow.CSharpComponentActions	SequenceTime	float	session:ulong	entity:ulong
+method	Tallow.CSharpComponentActions	TrailClear	bool	session:ulong	entity:ulong
+method	Tallow.CSharpComponentActions	WaterAt	ulong	session:ulong	point:System.Numerics.Vector3
+method	Tallow.CSharpComponentActions	WaterSurface	bool	session:ulong	entity:ulong	point:System.Numerics.Vector3	values:System.Span<float>
 method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:string
 method	Tallow.CSharpComponents	EnabledState	int	session:ulong	entity:ulong	instance:int

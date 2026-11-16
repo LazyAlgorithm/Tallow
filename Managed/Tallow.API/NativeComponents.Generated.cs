@@ -9,7 +9,7 @@ namespace Tallow;
 /// the object faces. With none in the scene the first Camera is used, so a simple game needs nothing.
 /// </summary>
 [NativeComponent("Tallow.AudioListener")]
-public readonly record struct AudioListener(GameObject GameObject) : IComponent
+public readonly partial record struct AudioListener(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.AudioListener");
     public bool IsValid => Data.IsValid;
@@ -20,7 +20,7 @@ public readonly record struct AudioListener(GameObject GameObject) : IComponent
 /// across the outer part of the sphere so walking in and out is smooth.
 /// </summary>
 [NativeComponent("Tallow.AudioReverbZone")]
-public readonly record struct AudioReverbZone(GameObject GameObject) : IComponent
+public readonly partial record struct AudioReverbZone(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.AudioReverbZone");
     public bool IsValid => Data.IsValid;
@@ -42,7 +42,7 @@ public readonly record struct AudioReverbZone(GameObject GameObject) : IComponen
 /// The Behavior tab in the editor shows the tree of the selected object live while the game plays.
 /// </summary>
 [NativeComponent("Tallow.BehaviorTreeRunner")]
-public readonly record struct BehaviorTreeRunner(GameObject GameObject) : IComponent
+public readonly partial record struct BehaviorTreeRunner(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.BehaviorTreeRunner");
     public bool IsValid => Data.IsValid;
@@ -74,7 +74,7 @@ public readonly record struct BehaviorTreeRunner(GameObject GameObject) : ICompo
 /// wide the world's field of view is set. See docs/viewmodel.md.
 /// </summary>
 [NativeComponent("Tallow.Camera")]
-public readonly record struct Camera(GameObject GameObject) : IComponent
+public readonly partial record struct Camera(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Camera");
     public bool IsValid => Data.IsValid;
@@ -127,7 +127,7 @@ public readonly record struct Camera(GameObject GameObject) : IComponent
 /// A capsule-shaped collider (a cylinder with rounded ends), standing along Y: the usual shape for characters.
 /// </summary>
 [NativeComponent("Tallow.CapsuleCollider")]
-public readonly record struct CapsuleCollider(GameObject GameObject) : IComponent
+public readonly partial record struct CapsuleCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.CapsuleCollider");
     public bool IsValid => Data.IsValid;
@@ -147,7 +147,7 @@ public readonly record struct CapsuleCollider(GameObject GameObject) : IComponen
 /// Several boxes acting as one shape, so a whole construction can be a single rigid body.
 /// </summary>
 [NativeComponent("Tallow.CompoundCollider")]
-public readonly record struct CompoundCollider(GameObject GameObject) : IComponent
+public readonly partial record struct CompoundCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.CompoundCollider");
     public bool IsValid => Data.IsValid;
@@ -160,7 +160,7 @@ public readonly record struct CompoundCollider(GameObject GameObject) : ICompone
 /// needed: add it, pick a .tcompute file, press Play.
 /// </summary>
 [NativeComponent("Tallow.ComputeEffect")]
-public readonly record struct ComputeEffect(GameObject GameObject) : IComponent
+public readonly partial record struct ComputeEffect(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ComputeEffect");
     public bool IsValid => Data.IsValid;
@@ -184,7 +184,7 @@ public readonly record struct ComputeEffect(GameObject GameObject) : IComponent
 /// Convex wrap of the MeshRenderer's mesh. Unlike MeshCollider it works on moving bodies.
 /// </summary>
 [NativeComponent("Tallow.ConvexCollider")]
-public readonly record struct ConvexCollider(GameObject GameObject) : IComponent
+public readonly partial record struct ConvexCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ConvexCollider");
     public bool IsValid => Data.IsValid;
@@ -203,7 +203,7 @@ public readonly record struct ConvexCollider(GameObject GameObject) : IComponent
 /// carry it along. For many short-lived marks (bullet holes, footprints), use Decals.Spawn instead.
 /// </summary>
 [NativeComponent("Tallow.Decal")]
-public readonly record struct Decal(GameObject GameObject) : IComponent
+public readonly partial record struct Decal(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Decal");
     public bool IsValid => Data.IsValid;
@@ -259,7 +259,7 @@ public readonly record struct Decal(GameObject GameObject) : IComponent
 /// any player (or, with Only Owner Chooses, the object's owner) can move it on. Otherwise each machine runs its own.
 /// </summary>
 [NativeComponent("Tallow.DialogueRunner")]
-public readonly record struct DialogueRunner(GameObject GameObject) : IComponent
+public readonly partial record struct DialogueRunner(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.DialogueRunner");
     public bool IsValid => Data.IsValid;
@@ -314,7 +314,7 @@ public readonly record struct DialogueRunner(GameObject GameObject) : IComponent
 /// for Rigidbodies: soft bodies and ropes are slowed vertex by vertex.)
 /// </summary>
 [NativeComponent("Tallow.Floater")]
-public readonly record struct Floater(GameObject GameObject) : IComponent
+public readonly partial record struct Floater(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Floater");
     public bool IsValid => Data.IsValid;
@@ -348,7 +348,7 @@ public readonly record struct Floater(GameObject GameObject) : IComponent
 /// rather than stopping at a line).
 /// </summary>
 [NativeComponent("Tallow.Foliage")]
-public readonly record struct Foliage(GameObject GameObject) : IComponent
+public readonly partial record struct Foliage(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Foliage");
     public bool IsValid => Data.IsValid;
@@ -406,7 +406,7 @@ public readonly record struct Foliage(GameObject GameObject) : IComponent
 /// part.
 /// </summary>
 [NativeComponent("Tallow.FoliageBender")]
-public readonly record struct FoliageBender(GameObject GameObject) : IComponent
+public readonly partial record struct FoliageBender(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.FoliageBender");
     public bool IsValid => Data.IsValid;
@@ -435,7 +435,7 @@ public readonly record struct FoliageBender(GameObject GameObject) : IComponent
 /// otherwise be found first. Worked out on each machine from the ground there; nothing is sent.
 /// </summary>
 [NativeComponent("Tallow.FootPlacement")]
-public readonly record struct FootPlacement(GameObject GameObject) : IComponent
+public readonly partial record struct FootPlacement(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.FootPlacement");
     public bool IsValid => Data.IsValid;
@@ -472,7 +472,7 @@ public readonly record struct FootPlacement(GameObject GameObject) : IComponent
 /// calls it). To keep a pose in a clip, open the clip in the Animation window and press Key IK.
 /// </summary>
 [NativeComponent("Tallow.HandPose")]
-public readonly record struct HandPose(GameObject GameObject) : IComponent
+public readonly partial record struct HandPose(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.HandPose");
     public bool IsValid => Data.IsValid;
@@ -509,7 +509,7 @@ public readonly record struct HandPose(GameObject GameObject) : IComponent
 /// all. The level is picked for each camera from how much of the screen's height the object covers. See docs/lod.md.
 /// </summary>
 [NativeComponent("Tallow.LODGroup")]
-public readonly record struct LODGroup(GameObject GameObject) : IComponent
+public readonly partial record struct LODGroup(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.LODGroup");
     public bool IsValid => Data.IsValid;
@@ -543,7 +543,7 @@ public readonly record struct LODGroup(GameObject GameObject) : IComponent
 /// inside its edges. The smallest box wins where boxes overlap. Bake again after changing one.
 /// </summary>
 [NativeComponent("Tallow.LightProbeVolume")]
-public readonly record struct LightProbeVolume(GameObject GameObject) : IComponent
+public readonly partial record struct LightProbeVolume(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.LightProbeVolume");
     public bool IsValid => Data.IsValid;
@@ -577,7 +577,7 @@ public readonly record struct LightProbeVolume(GameObject GameObject) : ICompone
 /// a target moves on other machines if it is shared like any other object.
 /// </summary>
 [NativeComponent("Tallow.LimbIK")]
-public readonly record struct LimbIK(GameObject GameObject) : IComponent
+public readonly partial record struct LimbIK(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.LimbIK");
     public bool IsValid => Data.IsValid;
@@ -603,7 +603,7 @@ public readonly record struct LimbIK(GameObject GameObject) : IComponent
 /// is its own (colours, Material, Texture, Glow), drawn through a hidden child object.
 /// </summary>
 [NativeComponent("Tallow.LineRenderer")]
-public readonly record struct LineRenderer(GameObject GameObject) : IComponent
+public readonly partial record struct LineRenderer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.LineRenderer");
     public bool IsValid => Data.IsValid;
@@ -678,7 +678,7 @@ public readonly record struct LineRenderer(GameObject GameObject) : IComponent
 /// other players to see the same.
 /// </summary>
 [NativeComponent("Tallow.LookAtIK")]
-public readonly record struct LookAtIK(GameObject GameObject) : IComponent
+public readonly partial record struct LookAtIK(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.LookAtIK");
     public bool IsValid => Data.IsValid;
@@ -701,7 +701,7 @@ public readonly record struct LookAtIK(GameObject GameObject) : IComponent
 /// Triangle-accurate static collision using the mesh of the MeshRenderer on the same object.
 /// </summary>
 [NativeComponent("Tallow.MeshCollider")]
-public readonly record struct MeshCollider(GameObject GameObject) : IComponent
+public readonly partial record struct MeshCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.MeshCollider");
     public bool IsValid => Data.IsValid;
@@ -715,7 +715,7 @@ public readonly record struct MeshCollider(GameObject GameObject) : IComponent
 /// together. Faces in material slot 0 use the Mesh Renderer's material; slots 1 and up use Materials.
 /// </summary>
 [NativeComponent("Tallow.ModelMesh")]
-public readonly record struct ModelMesh(GameObject GameObject) : IComponent
+public readonly partial record struct ModelMesh(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ModelMesh");
     public bool IsValid => Data.IsValid;
@@ -735,7 +735,7 @@ public readonly record struct ModelMesh(GameObject GameObject) : IComponent
 /// go round it when the way round is not too much longer. See docs/navigation.md.
 /// </summary>
 [NativeComponent("Tallow.NavigationArea")]
-public readonly record struct NavigationArea(GameObject GameObject) : IComponent
+public readonly partial record struct NavigationArea(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.NavigationArea");
     public bool IsValid => Data.IsValid;
@@ -760,7 +760,7 @@ public readonly record struct NavigationArea(GameObject GameObject) : IComponent
 /// animation. See docs/navigation.md.
 /// </summary>
 [NativeComponent("Tallow.NavigationLink")]
-public readonly record struct NavigationLink(GameObject GameObject) : IComponent
+public readonly partial record struct NavigationLink(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.NavigationLink");
     public bool IsValid => Data.IsValid;
@@ -798,7 +798,7 @@ public readonly record struct NavigationLink(GameObject GameObject) : IComponent
 /// while it moves, agents steer round it instead. See docs/navigation.md.
 /// </summary>
 [NativeComponent("Tallow.NavigationObstacle")]
-public readonly record struct NavigationObstacle(GameObject GameObject) : IComponent
+public readonly partial record struct NavigationObstacle(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.NavigationObstacle");
     public bool IsValid => Data.IsValid;
@@ -840,7 +840,7 @@ public readonly record struct NavigationObstacle(GameObject GameObject) : ICompo
 /// Marks an object as replicated. The server owns its state; clients predict it locally and are corrected.
 /// </summary>
 [NativeComponent("Tallow.NetworkIdentity")]
-public readonly record struct NetworkIdentity(GameObject GameObject) : IComponent
+public readonly partial record struct NetworkIdentity(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.NetworkIdentity");
     public bool IsValid => Data.IsValid;
@@ -905,7 +905,7 @@ public readonly record struct NetworkIdentity(GameObject GameObject) : IComponen
 /// A whole system is drawn as one instanced call. It previews in the editor without pressing Play.
 /// </summary>
 [NativeComponent("Tallow.ParticleSystem")]
-public readonly record struct ParticleSystem(GameObject GameObject) : IComponent
+public readonly partial record struct ParticleSystem(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ParticleSystem");
     public bool IsValid => Data.IsValid;
@@ -991,7 +991,7 @@ public readonly record struct ParticleSystem(GameObject GameObject) : IComponent
 /// next probe over blendDistance from its edges.
 /// </summary>
 [NativeComponent("Tallow.ReflectionProbe")]
-public readonly record struct ReflectionProbe(GameObject GameObject) : IComponent
+public readonly partial record struct ReflectionProbe(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ReflectionProbe");
     public bool IsValid => Data.IsValid;
@@ -1051,7 +1051,7 @@ public readonly record struct ReflectionProbe(GameObject GameObject) : IComponen
 /// Each machine simulates the rope itself, between the shared objects.
 /// </summary>
 [NativeComponent("Tallow.Rope")]
-public readonly record struct Rope(GameObject GameObject) : IComponent
+public readonly partial record struct Rope(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Rope");
     public bool IsValid => Data.IsValid;
@@ -1124,7 +1124,7 @@ public readonly record struct Rope(GameObject GameObject) : IComponent
 /// made again when a save is loaded, so dropped and placed things come back where they were.
 /// </summary>
 [NativeComponent("Tallow.SavedTransform")]
-public readonly record struct SavedTransform(GameObject GameObject) : IComponent
+public readonly partial record struct SavedTransform(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SavedTransform");
     public bool IsValid => Data.IsValid;
@@ -1155,7 +1155,7 @@ public readonly record struct SavedTransform(GameObject GameObject) : IComponent
 /// Every machine loads scenes for itself, as it does its start scene: nothing about loading is sent.
 /// </summary>
 [NativeComponent("Tallow.SceneLoader")]
-public readonly record struct SceneLoader(GameObject GameObject) : IComponent
+public readonly partial record struct SceneLoader(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SceneLoader");
     public bool IsValid => Data.IsValid;
@@ -1189,7 +1189,7 @@ public readonly record struct SceneLoader(GameObject GameObject) : IComponent
 /// cutscene.Play();
 /// </summary>
 [NativeComponent("Tallow.SequencePlayer")]
-public readonly record struct SequencePlayer(GameObject GameObject) : IComponent
+public readonly partial record struct SequencePlayer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SequencePlayer");
     public bool IsValid => Data.IsValid;
@@ -1233,7 +1233,7 @@ public readonly record struct SequencePlayer(GameObject GameObject) : IComponent
 /// The built-in SkinnedMeshRenderer component.
 /// </summary>
 [NativeComponent("Tallow.SkinnedMeshRenderer")]
-public readonly record struct SkinnedMeshRenderer(GameObject GameObject) : IComponent
+public readonly partial record struct SkinnedMeshRenderer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SkinnedMeshRenderer");
     public bool IsValid => Data.IsValid;
@@ -1285,7 +1285,7 @@ public readonly record struct SkinnedMeshRenderer(GameObject GameObject) : IComp
 /// one; the object's position is where to appear and its rotation is which way to face.
 /// </summary>
 [NativeComponent("Tallow.SpawnPoint")]
-public readonly record struct SpawnPoint(GameObject GameObject) : IComponent
+public readonly partial record struct SpawnPoint(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SpawnPoint");
     public bool IsValid => Data.IsValid;
@@ -1310,7 +1310,7 @@ public readonly record struct SpawnPoint(GameObject GameObject) : IComponent
 /// world streams round the scene's cameras.
 /// </summary>
 [NativeComponent("Tallow.StreamingSource")]
-public readonly record struct StreamingSource(GameObject GameObject) : IComponent
+public readonly partial record struct StreamingSource(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.StreamingSource");
     public bool IsValid => Data.IsValid;
@@ -1328,7 +1328,7 @@ public readonly record struct StreamingSource(GameObject GameObject) : IComponen
 /// object included.
 /// </summary>
 [NativeComponent("Tallow.TrailRenderer")]
-public readonly record struct TrailRenderer(GameObject GameObject) : IComponent
+public readonly partial record struct TrailRenderer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.TrailRenderer");
     public bool IsValid => Data.IsValid;
@@ -1407,7 +1407,7 @@ public readonly record struct TrailRenderer(GameObject GameObject) : IComponent
 /// the object's current place as the hip or the aim pose: move it until it looks right in the Game view, then press.
 /// </summary>
 [NativeComponent("Tallow.ViewmodelPose")]
-public readonly record struct ViewmodelPose(GameObject GameObject) : IComponent
+public readonly partial record struct ViewmodelPose(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ViewmodelPose");
     public bool IsValid => Data.IsValid;
@@ -1467,7 +1467,7 @@ public readonly record struct ViewmodelPose(GameObject GameObject) : IComponent
 /// The built-in Water component.
 /// </summary>
 [NativeComponent("Tallow.Water")]
-public readonly record struct Water(GameObject GameObject) : IComponent
+public readonly partial record struct Water(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Water");
     public bool IsValid => Data.IsValid;
@@ -1601,7 +1601,7 @@ public readonly record struct Water(GameObject GameObject) : IComponent
 /// are (zones in a scene are; one moved by a script moves on other machines if its object is shared).
 /// </summary>
 [NativeComponent("Tallow.WindZone")]
-public readonly record struct WindZone(GameObject GameObject) : IComponent
+public readonly partial record struct WindZone(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.WindZone");
     public bool IsValid => Data.IsValid;
