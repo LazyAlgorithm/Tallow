@@ -90,7 +90,11 @@ extension EditorApp
 			// one name/value per line and cannot represent embedded tabs or
 			// newlines until the scene serializer gains an escaped format.
 			newValue.Set(current);
-			edited = ImGui.InputText("##value", newValue);
+			// [Asset(kind)]: a path picked from the project (drop target and browse list).
+			if (options.StartsWith("asset:"))
+				edited = DrawAssetPicker(newValue, options.Substring("asset:".Length));
+			else
+				edited = ImGui.InputText("##value", newValue);
 		case "enum":
 			// The catalog lists exactly the enum constants in source order.
 			if (!options.IsEmpty && ImGui.BeginCombo("##value", scope String(current).CStr()))

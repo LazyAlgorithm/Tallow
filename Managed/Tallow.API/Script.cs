@@ -82,6 +82,46 @@ public sealed class RangeAttribute(float minimum, float maximum) : Attribute
     public float Maximum { get; } = maximum;
 }
 
+/// <summary>
+/// Makes a string field (or a list or array of strings) an asset path the Inspector picks: a drop target for the
+/// Project panel and a list of the project's files of that kind. <c>[Asset(AssetKind.Prefab)] public string Enemy;</c>
+/// </summary>
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class AssetAttribute(string kind) : Attribute
+{
+    /// <summary>One of <see cref="AssetKind"/>'s names.</summary>
+    public string Kind { get; } = kind;
+}
+
+/// <summary>The kinds of asset an <see cref="AssetAttribute"/> field takes.</summary>
+public static class AssetKind
+{
+    /// <summary>A .tprefab.</summary>
+    public const string Prefab = "prefab";
+    /// <summary>A model file (or a built-in mesh such as "cube").</summary>
+    public const string Mesh = "mesh";
+    /// <summary>A model file (glTF, FBX, OBJ...).</summary>
+    public const string Model = "model";
+    /// <summary>An image.</summary>
+    public const string Texture = "texture";
+    /// <summary>A sound (WAV, OGG, MP3...).</summary>
+    public const string AudioClip = "audioClip";
+    /// <summary>A .tmat.</summary>
+    public const string Material = "material";
+    /// <summary>A .tscene.</summary>
+    public const string Scene = "scene";
+    /// <summary>A .tui document.</summary>
+    public const string Document = "document";
+    /// <summary>A .tdialogue.</summary>
+    public const string Dialogue = "dialogue";
+    /// <summary>A .tsequence.</summary>
+    public const string Sequence = "sequence";
+    /// <summary>A .tbt behaviour tree.</summary>
+    public const string BehaviorTree = "tree";
+    /// <summary>A .tcontroller animation controller.</summary>
+    public const string AnimationController = "controller";
+}
+
 /// <summary>Buttons automatically collected and transmitted by the network input system.</summary>
 public enum InputButton
 {

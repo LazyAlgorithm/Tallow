@@ -125,6 +125,14 @@ def main() -> int:
         else:
             failed.append(f"INGAME FAIL nested catalog rows: {nested}")
             print(failed[-1])
+        # [Asset(kind)] strings and string lists carry "asset:<kind>" in column 8 (the Inspector's asset picker).
+        assets = {name: (catalog.get(("InGame.ApiChecks", name)) or [""] * 8)[2::5] for name in ("EnemyPrefab", "Sounds")}
+        if assets == {"EnemyPrefab": ["string", "asset:prefab"], "Sounds": ["list:string", "asset:audioClip"]}:
+            passed += 1
+            print("INGAME PASS [Asset] string fields and lists are asset paths in the field catalog")
+        else:
+            failed.append(f"INGAME FAIL [Asset] catalog rows: {assets}")
+            print(failed[-1])
         boom = [line for line in output.splitlines()
                 if line.startswith("[error] System.InvalidOperationException: thrown on purpose by async code (in async code")]
         if len(boom) == 1 and "AsyncProbe" in boom[0] and "ApiChecks.cs:" in boom[0]:

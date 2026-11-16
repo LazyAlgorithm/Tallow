@@ -60,6 +60,8 @@ public class ApiChecks : CheckBase
     public List<CheckKind> Kinds = new();
     public Stats Stats = new() { Health = 10 };
     public Stats NoOverrides;
+    [Asset(AssetKind.Prefab)] public string EnemyPrefab = "";
+    [Asset(AssetKind.AudioClip)] public List<string> Sounds = new();
 
     private int _tick;
     private int _fixedTicks;

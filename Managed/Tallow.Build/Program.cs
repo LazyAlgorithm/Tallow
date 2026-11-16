@@ -960,6 +960,11 @@ internal static class Program
                     }
                     else if (referenceType != null)
                         row += "\t" + referenceType;
+                    else if ((kind == "string" || kind == "list:string") && field.GetAttributes().FirstOrDefault(a =>
+                        a.AttributeClass?.ToDisplayString() == "Tallow.AssetAttribute") is { ConstructorArguments.Length: 1 } asset &&
+                        asset.ConstructorArguments[0].Value is string assetKind && SerializedIdName.IsMatch(assetKind))
+                        // Column 8 of a string: "asset:<kind>", an asset path the Inspector picks.
+                        row += "\t" + "asset:" + assetKind;
                     fieldRows.Add(row);
 
                     AttributeData? identityAttribute = field.GetAttributes().FirstOrDefault(a =>
