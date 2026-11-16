@@ -239,6 +239,35 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    /// <summary>A script's prediction state hook: mode 0 CapturePredictionState (values are written back), 1
+    /// PreparePredictionState, 2 RestorePredictionState; values are the 22 floats of PredictionState.</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int PredictionState(int instance, int mode, float* values)
+    {
+        try
+        {
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            var span = new Span<float>(values, 22);
+            Tallow.PredictionState state = Tallow.PredictionState.Read(span);
+            switch (mode)
+            {
+                case 0:
+                    script.CapturePredictionState(ref state);
+                    state.Write(span);
+                    break;
+                case 1: script.PreparePredictionState(in state); break;
+                case 2: script.RestorePredictionState(in state); break;
+                default: throw new ArgumentOutOfRangeException(nameof(mode));
+            }
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     /// <summary>A component's named event on a script of the same object: kind 0 OnSequenceEvent, 1 OnDialogueEvent,
     /// 2 OnTreeEvent.</summary>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -1383,6 +1412,8 @@ public static unsafe class NativeEntrypoints
     private const int UpdateBit = 1 << 20, EarlyUpdateBit = 1 << 21, LateUpdateBit = 1 << 22;
     /// <summary>The bits for OnSequenceEvent, OnDialogueEvent and OnTreeEvent (ComponentEvent's kinds 0, 1, 2).</summary>
     private const int SequenceEventBit = 1 << 23, DialogueEventBit = 1 << 24, TreeEventBit = 1 << 25;
+    /// <summary>The bit for the prediction state hooks (any of Capture, Prepare, Restore).</summary>
+    private const int PredictionBit = 1 << 26;
     private static readonly Dictionary<Type, int> sCallbackMasks = new();
 
     /// <summary>
@@ -1415,6 +1446,10 @@ public static unsafe class NativeEntrypoints
             Check(nameof(Script.OnSequenceEvent), [typeof(string), typeof(float)], SequenceEventBit);
             Check(nameof(Script.OnDialogueEvent), [typeof(string), typeof(float)], DialogueEventBit);
             Check(nameof(Script.OnTreeEvent), [typeof(string)], TreeEventBit);
+            Type byRef = typeof(PredictionState).MakeByRefType();
+            Check(nameof(Script.CapturePredictionState), [byRef], PredictionBit);
+            Check(nameof(Script.PreparePredictionState), [byRef], PredictionBit);
+            Check(nameof(Script.RestorePredictionState), [byRef], PredictionBit);
             sCallbackMasks[type] = mask;
             return mask;
         }

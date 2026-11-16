@@ -89,7 +89,8 @@ public class RpcProbe : Script
             SendNetworkEvent("hello", 3.5f);
             SyncProbe.Check("an owner's network event waits for the server", _event == 0f);
         }
-        if (_answer != 0 && _echoed && _event != 0f && _serverHeard && LagReport.Length > 0)
+        if (_answer != 0 && _echoed && _event != 0f && _serverHeard && LagReport.Length > 0 &&
+            GameObject.GetComponent<MotorProbe>() is { Done: true })
         {
             SyncProbe.Check($"lag compensation runs on the server in the client's player tick and ends ({LagReport})",
                 LagReport == "True True -1");

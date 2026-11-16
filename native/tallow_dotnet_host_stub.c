@@ -99,3 +99,70 @@ const char* tn_csharp_error(void)
 {
     return "Managed C# gameplay is unavailable on this target.";
 }
+int32_t tn_csharp_reload_game(const char* trusted_game_dll)
+{
+    (void)trusted_game_dll;
+    return -1;
+}
+int32_t tn_csharp_dispatch_batch(const int32_t* instances, int32_t count,
+    int32_t event_id, float delta_time)
+{
+    (void)instances;
+    (void)count;
+    (void)event_id;
+    (void)delta_time;
+    return 0;
+}
+int32_t tn_csharp_dispatch_checked_batch(const int32_t* instances,
+    int32_t count, int32_t event_id, float delta_time)
+{
+    (void)instances;
+    (void)count;
+    (void)event_id;
+    (void)delta_time;
+    return 0;
+}
+int32_t tn_csharp_run_system(int32_t index, uint64_t session, uint64_t entity,
+    const tn_csharp_tick_input* input, float delta_time)
+{
+    (void)index;
+    (void)session;
+    (void)entity;
+    (void)input;
+    (void)delta_time;
+    return 0;
+}
+int32_t tn_csharp_update_input_batch(
+    const tn_csharp_tick_batch_item* items, int32_t count)
+{
+    (void)items;
+    (void)count;
+    return 0;
+}
+int32_t tn_csharp_ui_invoke(int32_t script_instance, const char* method, const char* element_id)
+{
+    (void)script_instance;
+    (void)method;
+    (void)element_id;
+    return -1;
+}
+int32_t tn_csharp_choose_team(int32_t client_id)
+{
+    (void)client_id;
+    return -1;
+}
+int32_t tn_csharp_component_event(int32_t script_instance, int32_t kind, const char* name, float value)
+{
+    (void)script_instance;
+    (void)kind;
+    (void)name;
+    (void)value;
+    return 0;
+}
+int32_t tn_csharp_prediction_state(int32_t script_instance, int32_t mode, float* values)
+{
+    (void)script_instance;
+    (void)mode;
+    (void)values;
+    return 0;
+}

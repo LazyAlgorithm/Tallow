@@ -776,6 +776,7 @@ class NetworkIdentityState
 				if (let behaviour = component as NetworkBehaviour)
 					behaviour.CaptureBodyPredictionState(ref bodyState);
 			}
+			CSharpRuntime.PredictionState(GameObject, 0, ref bodyState, true);
 			return bodyState;
 		}
 		BodyState state = default;
@@ -794,6 +795,7 @@ class NetworkIdentityState
 			if (let behaviour = component as NetworkBehaviour)
 				behaviour.CapturePredictionState(ref state);
 		}
+		CSharpRuntime.PredictionState(GameObject, 0, ref state);
 		return state;
 	}
 
@@ -805,6 +807,8 @@ class NetworkIdentityState
 			if (let behaviour = component as NetworkBehaviour)
 				behaviour.PreparePredictionState(state);
 		}
+		var scripted = state;
+		CSharpRuntime.PredictionState(GameObject, 1, ref scripted);
 		let body = GetComponent<Rigidbody>();
 		if (body.IsValid && body.HasBody)
 			body.SetState(state);
@@ -818,5 +822,6 @@ class NetworkIdentityState
 			if (let behaviour = component as NetworkBehaviour)
 				behaviour.RestorePredictionState(state);
 		}
+		CSharpRuntime.PredictionState(GameObject, 2, ref scripted);
 	}
 }

@@ -269,7 +269,11 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   - [x] (November 16, 2026) Lag compensation: `Script.BeginLagCompensation()` / `EndLagCompensation()`,
     `using (LagCompensated()) { ... }` and `LagCompensationTick` (Beef `NetworkManager.BeginLagCompensation`).
     2 network checks (active in the client's player tick on the server, ends; does nothing on a client).
-    Not yet: custom prediction-state hooks (Beef `CapturePredictionState` / `RestorePredictionState`) for C# motors.
+  - [x] (November 16, 2026) Prediction state hooks: `Script.CapturePredictionState(ref PredictionState)`,
+    `PreparePredictionState` and `RestorePredictionState` (Beef NetworkBehaviour's), through a new host entry point
+    `PredictionState` and a callback-mask bit so only scripts that override them are called. Over a Rigidbody only the
+    two spare vectors are taken back. Network check: a server-only bump of a C# motor's own counter reaches the client
+    only through a rollback restore (30 network checks).
 - [ ] Rendering, materials, shaders/compute graphs, cameras, lighting, mesh/voxel/terrain, animation/IK, sequencer and modeling tools.
   - [x] (November 16, 2026) Component actions closing the gaps a scripted comparison of every public Beef component
     method found: `Water.HeightAt/DepthOf/Covers/IsFloating`, `VoxelObject.CarveLocal/Fill/ResetShape`,

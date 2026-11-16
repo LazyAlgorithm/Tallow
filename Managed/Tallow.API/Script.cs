@@ -1158,6 +1158,47 @@ public readonly struct LagCompensationScope(ulong session, bool active) : IDispo
     }
 }
 
+/// <summary>
+/// An object's state for one tick of client prediction (see <see cref="Script.CapturePredictionState"/>): where it
+/// is, how it moves, and two spare vectors for a script's own simulation state.
+/// </summary>
+public struct PredictionState
+{
+    public Vector3 Position;
+    public Quaternion Rotation;
+    public Vector3 LinearVelocity;
+    /// <summary>A Rigidbody's spin; a CharacterController keeps its time in the air in X.</summary>
+    public Vector3 AngularVelocity;
+    /// <summary>Spare: for a script's own state.</summary>
+    public Vector4 Extra0;
+    /// <summary>Spare: for a script's own state.</summary>
+    public Vector4 Extra1;
+    /// <summary>Whether a Rigidbody gave the position and velocities (its velocities are then real).</summary>
+    public bool FromBody;
+
+    /// <summary>The 22-float layout the engine passes.</summary>
+    internal static PredictionState Read(ReadOnlySpan<float> v) => new()
+    {
+        Position = new Vector3(v[0], v[1], v[2]),
+        Rotation = new Quaternion(v[3], v[4], v[5], v[6]),
+        LinearVelocity = new Vector3(v[7], v[8], v[9]),
+        AngularVelocity = new Vector3(v[10], v[11], v[12]),
+        Extra0 = new Vector4(v[13], v[14], v[15], v[16]),
+        Extra1 = new Vector4(v[17], v[18], v[19], v[20]),
+        FromBody = v[21] != 0,
+    };
+
+    internal readonly void Write(Span<float> v)
+    {
+        v[0] = Position.X; v[1] = Position.Y; v[2] = Position.Z;
+        v[3] = Rotation.X; v[4] = Rotation.Y; v[5] = Rotation.Z; v[6] = Rotation.W;
+        v[7] = LinearVelocity.X; v[8] = LinearVelocity.Y; v[9] = LinearVelocity.Z;
+        v[10] = AngularVelocity.X; v[11] = AngularVelocity.Y; v[12] = AngularVelocity.Z;
+        v[13] = Extra0.X; v[14] = Extra0.Y; v[15] = Extra0.Z; v[16] = Extra0.W;
+        v[17] = Extra1.X; v[18] = Extra1.Y; v[19] = Extra1.Z; v[20] = Extra1.W;
+    }
+}
+
 public static class Engine
 {
     private sealed class UnboundBridge : IEngineBridge
@@ -1411,6 +1452,19 @@ public abstract class Script : IComponent
     public virtual void OnLoaded() { }
     /// <summary>Called on every machine when <see cref="SendNetworkEvent"/> is used on this script.</summary>
     public virtual void OnNetworkEvent(string name, float value) { }
+
+    /// <summary>
+    /// Client prediction: the object's state is being saved for a tick (to compare with the server and to rewind to).
+    /// A script that moves its object itself and keeps simulation state of its own (a dash timer, a mode) stores it
+    /// in <see cref="PredictionState.Extra0"/> / <see cref="PredictionState.Extra1"/>, and puts it back in
+    /// <see cref="RestorePredictionState"/>. Leave the other fields to a Rigidbody or CharacterController on the
+    /// object (<see cref="PredictionState.FromBody"/> says when a Rigidbody filled them).
+    /// </summary>
+    public virtual void CapturePredictionState(ref PredictionState state) { }
+    /// <summary>Before a saved state is put back (rewinding to replay): switch modes the state needs first.</summary>
+    public virtual void PreparePredictionState(in PredictionState state) { }
+    /// <summary>After a saved state was put back (rewinding to replay): restore what Capture stored.</summary>
+    public virtual void RestorePredictionState(in PredictionState state) { }
 
     /// <summary>An Event key of a sequence playing on this object's Sequence Player (its name and value).</summary>
     public virtual void OnSequenceEvent(string name, float value) { }

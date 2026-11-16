@@ -142,6 +142,9 @@ int32_t tn_csharp_choose_team(int32_t client_id);
 // A component's named event on a script of the same object (kind 0 sequence, 1 dialogue, 2 behaviour tree); 1 on
 // success.
 int32_t tn_csharp_component_event(int32_t script_instance, int32_t kind, const char* name, float value);
+// A script's prediction state hook (mode 0 capture, 1 prepare, 2 restore) over a body state's 22 floats: position,
+// rotation, linear and angular velocity, two spare vectors, and whether it came from a Rigidbody; 1 on success.
+int32_t tn_csharp_prediction_state(int32_t script_instance, int32_t mode, float* values);
 // The managed heap after a pump, for the Profiler (40 bytes).
 typedef struct tn_csharp_gc_stats
 {

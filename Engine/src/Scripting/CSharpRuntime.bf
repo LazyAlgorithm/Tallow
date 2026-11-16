@@ -352,6 +352,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_ui_invoke(int32 instance, char8* method, char8* elementId);
 	[CLink] static extern int32 tn_csharp_choose_team(int32 clientId);
 	[CLink] static extern int32 tn_csharp_component_event(int32 instance, int32 kind, char8* name, float value);
+	[CLink] static extern int32 tn_csharp_prediction_state(int32 instance, int32 mode, float* values);
 	[CRepr]
 	struct GcStats
 	{
@@ -725,6 +726,46 @@ static class CSharpRuntime
 				text = scope:: String(name);
 			if (tn_csharp_component_event(script.ManagedInstance, kind, text.CStr(), value) <= 0)
 				ReportFailure(kind == 0 ? "OnSequenceEvent" : kind == 1 ? "OnDialogueEvent" : "OnTreeEvent");
+		}
+	}
+
+	/// CallbackMask bit for the prediction state hooks (Capture/Prepare/RestorePredictionState).
+	public const int32 PredictionCallback = 1 << 26;
+
+	/// The C# scripts' prediction state hooks on an object (mode 0 capture, 1 prepare, 2 restore), as NetworkIdentity
+	/// calls NetworkBehaviour's. A capture over a Rigidbody's state (fromBody) keeps only the two spare vectors the
+	/// scripts write, so the body's real velocities stay.
+	public static void PredictionState(GameObject gameObject, int32 mode, ref BodyState state, bool fromBody = false)
+	{
+		if (!Ready || gameObject == null)
+			return;
+		for (let component in gameObject.Components)
+		{
+			let script = component as CSharpBehaviour;
+			if (script == null || !script.IsLoaded || (script.[Friend]mCallbacks & PredictionCallback) == 0)
+				continue;
+			float[22] values = .(state.position.x, state.position.y, state.position.z,
+				state.rotation.x, state.rotation.y, state.rotation.z, state.rotation.w,
+				state.linearVelocity.x, state.linearVelocity.y, state.linearVelocity.z,
+				state.angularVelocity.x, state.angularVelocity.y, state.angularVelocity.z,
+				state.prediction0.x, state.prediction0.y, state.prediction0.z, state.prediction0.w,
+				state.prediction1.x, state.prediction1.y, state.prediction1.z, state.prediction1.w, fromBody ? 1 : 0);
+			if (tn_csharp_prediction_state(script.ManagedInstance, mode, &values) <= 0)
+			{
+				ReportFailure(mode == 0 ? "CapturePredictionState" : mode == 1 ? "PreparePredictionState" : "RestorePredictionState");
+				continue;
+			}
+			if (mode != 0)
+				continue;
+			if (!fromBody)
+			{
+				state.position = .(values[0], values[1], values[2]);
+				state.rotation = .(values[3], values[4], values[5], values[6]);
+				state.linearVelocity = .(values[7], values[8], values[9]);
+				state.angularVelocity = .(values[10], values[11], values[12]);
+			}
+			state.prediction0 = .(values[13], values[14], values[15], values[16]);
+			state.prediction1 = .(values[17], values[18], values[19], values[20]);
 		}
 	}
 
