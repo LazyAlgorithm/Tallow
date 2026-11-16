@@ -11,7 +11,9 @@ Opens the precompiled editor (TallowLauncher --editor) on copies of projects wit
   5. Play always runs the C# on disk (--stale-build-test): a file saved elsewhere just before Play, an edit while a
      build runs, a moved file and a deleted file;
   6. hot reload through the editor (--hot-reload-test): Tests/CSharpReload plays, v2/Scripts is typed into the code
-     editor and saved during Play; the save compiles and reloads, version 2's RELOAD checks pass, the old code unloads.
+     editor and saved during Play; the save compiles and reloads, version 2's RELOAD checks pass, the old code unloads;
+  7. C# completion through the editor (--completion-test): an unimported type with its using, described members, and a
+     long list marked as cut short.
 Run: python3 tools/test_csharp_editor.py [--cycles 20]
 """
 import argparse
@@ -150,6 +152,12 @@ def main() -> int:
               f"{found[-1] if found else 'no result'}", bool(found) and "HOT RELOAD TEST PASS" in found[-1], output)
         check(f"the reloaded game keeps its state ({passes} RELOAD checks)", passes == 25 and not reload_failures,
               "\n".join(reload_failures) or output)
+
+        # 7. Completion through the editor and the language service.
+        output, _, _ = open_editor(game, "--completion-test")
+        found = [line for line in output.splitlines() if "COMPLETION TEST" in line]
+        check(f"C# completion in the editor: {found[-1] if found else 'no result'}",
+              bool(found) and "COMPLETION TEST PASS" in found[-1], output)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     if failed:

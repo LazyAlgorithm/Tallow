@@ -1223,6 +1223,60 @@ void TextEditor::acceptAutoComplete() {
 	const auto end = document.findWordEnd(start, true);
 	auto replacement = autocomplete.getReplacement();
 	const auto mark = replacement.find('\x1E');
+	const auto edits = autocomplete.getEdits();
+	if (!edits.empty()) {
+		// Tallow: the item also changes other places (a using directive, "async" on the method). The edits name byte
+		// offsets in the text as it is now; applied from the last to the first, each offset is still valid. One undo.
+		struct Edit { size_t offset; size_t length; std::string text; };
+		auto bytePos = [](const std::string& text, size_t offset) {
+			DocPos pos(0, 0);
+			for (size_t i = 0; i < std::min(offset, text.size()); i++) {
+				if (text[i] == '\n') { pos.line++; pos.index = 0; }
+				else if ((static_cast<unsigned char>(text[i]) & 0xC0) != 0x80) pos.index++;
+			}
+			return pos;
+		};
+		std::string word = replacement;
+		if (mark != std::string::npos) word.erase(mark, 1);
+		const size_t wordStart = GetSectionText(DocPos(0, 0), start).size();
+		const size_t wordEnd = GetSectionText(DocPos(0, 0), end).size();
+		std::vector<Edit> ops;
+		ptrdiff_t shift = 0;
+		std::string_view rest(edits);
+		while (!rest.empty()) {
+			const auto split = rest.find('\x1A');
+			const auto one = rest.substr(0, split);
+			rest = split == std::string_view::npos ? std::string_view() : rest.substr(split + 1);
+			const auto a = one.find('\x1B');
+			const auto b = a == std::string_view::npos ? a : one.find('\x1B', a + 1);
+			if (b == std::string_view::npos) continue;
+			Edit edit{ std::strtoull(std::string(one.substr(0, a)).c_str(), nullptr, 10),
+				std::strtoull(std::string(one.substr(a + 1, b - a - 1)).c_str(), nullptr, 10),
+				AutoComplete::unescape(one.substr(b + 1)) };
+			// Edits never overlap the word being completed.
+			if (edit.offset < wordEnd && edit.offset + edit.length > wordStart) continue;
+			if (edit.offset + edit.length <= wordStart) shift += (ptrdiff_t)edit.text.size() - (ptrdiff_t)edit.length;
+			ops.push_back(std::move(edit));
+		}
+		ops.push_back({ wordStart, wordEnd - wordStart, word });
+		std::stable_sort(ops.begin(), ops.end(), [](const Edit& x, const Edit& y) { return x.offset < y.offset; });
+		const auto transaction = startTransaction();
+		for (auto op = ops.rbegin(); op != ops.rend(); ++op) {
+			const std::string current = GetText();
+			if (op->offset + op->length > current.size()) continue;
+			const auto from = bytePos(current, op->offset);
+			const auto to = bytePos(current, op->offset + op->length);
+			if (from != to) deleteText(transaction, from, to);
+			if (!op->text.empty()) insertText(transaction, from, op->text);
+		}
+		endTransaction(transaction);
+		const size_t caret = (size_t)((ptrdiff_t)wordStart + shift) + (mark == std::string::npos ? word.size() : mark);
+		const auto cursor = bytePos(GetText(), caret);
+		cursors.clearAdditional();
+		cursors.getMain().update(cursor, cursor);
+		makeCursorVisible();
+		return;
+	}
 	if (mark == std::string::npos) {
 		replaceSectionText(start, end, replacement);
 	} else {
@@ -8748,7 +8802,7 @@ void TextEditor::AutoComplete::cancel() {
 //	renderSuggestion
 //
 
-static bool renderSuggestion(const std::string_view& suggestion, const std::string_view& searchTerm, float width, bool selected) {
+static bool renderSuggestion(const std::string_view& suggestion, const std::string_view& searchTerm, float width, bool selected, const std::string_view& detail = {}) {
 	// custom widget to render an autocomplete suggestion in the style of Visual Studio Code
 	auto glyphPos = ImGui::GetCursorScreenPos();
 	const auto size = ImVec2(width, ImGui::GetFrameHeightWithSpacing());
@@ -8792,6 +8846,16 @@ static bool renderSuggestion(const std::string_view& suggestion, const std::stri
 		// render the glyph
 		font->RenderChar(drawList, fontSize, glyphPos, color, codepoint);
 		glyphPos.x += glyphWidth;
+	}
+
+	// Tallow: a dimmed note at the right (the namespace a type is imported from), when there is room for it.
+	if (!detail.empty()) {
+		const auto right = ImGui::GetItemRectMax().x - ImGui::GetStyle().FramePadding.x;
+		const auto textWidth = ImGui::CalcTextSize(detail.data(), detail.data() + detail.size()).x;
+		if (right - textWidth > glyphPos.x + glyphWidth * 2) {
+			drawList->AddText(ImVec2(right - textWidth, glyphPos.y), ImGui::GetColorU32(ImGuiCol_TextDisabled),
+				detail.data(), detail.data() + detail.size());
+		}
 	}
 
 	return clicked;
@@ -8889,8 +8953,16 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 	const auto visibleSuggestions = (suggestions == 0) ? 1 : std::min(static_cast<size_t>(signature.empty() ? 10 : 8), suggestions);
 	const auto& style = ImGui::GetStyle();
 	const float signatureHeight = signature.empty() ? 0.0f : ImGui::GetTextLineHeightWithSpacing() * 3.0f;
-	const auto height = ImGui::GetFrameHeightWithSpacing() * visibleSuggestions + style.WindowPadding.y * 2.0f +
-		(signature.empty() ? 0.0f : signatureHeight + style.ItemSpacing.y + 1.0f);
+	// Tallow: room under the list for the selected item's signature and summary, when the items have them.
+	bool described = false;
+	for (const auto& suggestion : state.suggestions) {
+		if (!suggestionField(suggestion, 4).empty()) { described = true; break; }
+	}
+	const float descriptionHeight = described ? ImGui::GetTextLineHeightWithSpacing() * 4.0f : 0.0f;
+	const float listHeight = ImGui::GetFrameHeightWithSpacing() * visibleSuggestions;
+	const auto height = listHeight + style.WindowPadding.y * 2.0f +
+		(signature.empty() ? 0.0f : signatureHeight + style.ItemSpacing.y + 1.0f) +
+		(described ? descriptionHeight + style.ItemSpacing.y + 1.0f : 0.0f);
 	ImGui::SetNextWindowSize(ImVec2(configuration.suggestionWidth * glyphSize.x, height));
 
 	const ImGuiWindowFlags flags =
@@ -8952,7 +9024,8 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 					result = true;
 				}
 
-				// render suggestions
+				// render suggestions (in their own scrolling area, so a description below stays in place)
+				ImGui::BeginChild("##suggestions", ImVec2(0.0f, listHeight), false, ImGuiWindowFlags_NoNav);
 				for (size_t i = 0; i < items; i++) {
 					// ensure unique ID
 					ImGui::PushID(static_cast<int>(i));
@@ -8964,7 +9037,8 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 						ImGui::SetScrollHereY(0.5f);
 					}
 
-					if (renderSuggestion(displayPart(state.suggestions[i]), state.searchTerm, ImGui::GetContentRegionAvail().x, selected)) {
+					if (renderSuggestion(displayPart(state.suggestions[i]), state.searchTerm, ImGui::GetContentRegionAvail().x, selected,
+							suggestionField(state.suggestions[i], 2))) {
 						// user clicked on a suggestion, use it
 						currentSelection = i;
 						requestDeactivation = true;
@@ -8972,6 +9046,18 @@ bool TextEditor::AutoComplete::render(Document& document, Cursors& cursors, Type
 					}
 
 					ImGui::PopID();
+				}
+				ImGui::EndChild();
+				if (described) {
+					ImGui::Separator();
+					ImGui::BeginChild("##description", ImVec2(0.0f, descriptionHeight), false, ImGuiWindowFlags_NoNav);
+					if (currentSelection < items) {
+						const auto about = unescape(suggestionField(state.suggestions[currentSelection], 4));
+						ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImGuiCol_TextDisabled));
+						ImGui::TextWrapped("%s", about.c_str());
+						ImGui::PopStyleColor();
+					}
+					ImGui::EndChild();
 				}
 
 			} else {

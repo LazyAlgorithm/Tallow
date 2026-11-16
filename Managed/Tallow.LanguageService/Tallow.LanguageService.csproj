@@ -15,4 +15,38 @@
       <HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <!-- Roslyn's own completion (ranking, unimported types with their using, extension methods, keywords in context):
+       the Workspaces/Features assemblies of the same SDK, shipped with its dotnet-format tool. Used only when that
+       tool's Roslyn is byte-identical to the compiler's (another build would not load together with it); otherwise
+       the service uses its own symbol lookup (RoslynCompletion.cs is compiled out). -->
+  <PropertyGroup>
+    <RoslynFeatures>$(MSBuildSDKsPath)/../DotnetTools/dotnet-format</RoslynFeatures>
+    <RoslynCompiler>$(MSBuildSDKsPath)/../Roslyn/bincore</RoslynCompiler>
+  </PropertyGroup>
+  <Target Name="TallowRoslynFeatures" BeforeTargets="ResolveAssemblyReferences"
+          Condition="Exists('$(RoslynFeatures)/Microsoft.CodeAnalysis.CSharp.Features.dll')">
+    <GetFileHash Files="$(RoslynCompiler)/Microsoft.CodeAnalysis.dll;$(RoslynFeatures)/Microsoft.CodeAnalysis.dll">
+      <Output TaskParameter="Items" ItemName="_RoslynHash" />
+    </GetFileHash>
+    <PropertyGroup>
+      <_RoslynHashes>@(_RoslynHash->'%(FileHash)')</_RoslynHashes>
+      <_RoslynFirst>$(_RoslynHashes.Split(';')[0])</_RoslynFirst>
+      <_RoslynSecond>$(_RoslynHashes.Split(';')[1])</_RoslynSecond>
+      <DefineConstants Condition="'$(_RoslynFirst)' == '$(_RoslynSecond)'">$(DefineConstants);ROSLYN_FEATURES</DefineConstants>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(_RoslynFirst)' == '$(_RoslynSecond)'">
+      <Reference Include="$(RoslynFeatures)/Microsoft.CodeAnalysis.Workspaces.dll" />
+      <Reference Include="$(RoslynFeatures)/Microsoft.CodeAnalysis.CSharp.Workspaces.dll" />
+      <Reference Include="$(RoslynFeatures)/Microsoft.CodeAnalysis.Features.dll" />
+      <Reference Include="$(RoslynFeatures)/Microsoft.CodeAnalysis.CSharp.Features.dll" />
+      <Reference Include="$(RoslynFeatures)/System.Composition.AttributedModel.dll" />
+      <Reference Include="$(RoslynFeatures)/System.Composition.Convention.dll" />
+      <Reference Include="$(RoslynFeatures)/System.Composition.Hosting.dll" />
+      <Reference Include="$(RoslynFeatures)/System.Composition.Runtime.dll" />
+      <Reference Include="$(RoslynFeatures)/System.Composition.TypedParts.dll" />
+      <Reference Include="$(RoslynFeatures)/Humanizer.dll" />
+    </ItemGroup>
+    <Warning Condition="'$(_RoslynFirst)' != '$(_RoslynSecond)'"
+             Text="The SDK's dotnet-format Roslyn differs from its compiler; C# completion uses the simpler symbol lookup." />
+  </Target>
 </Project>

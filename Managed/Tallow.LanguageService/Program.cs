@@ -49,9 +49,14 @@ internal static class Program
     // Hundreds of framework references are expensive to rebuild per request.
     private static readonly Lazy<MetadataReference[]> CachedReferences = new(() =>
     {
+        // The shared framework only, as a game build sees it: not this service's own assemblies (Roslyn, its
+        // completion host), which a game cannot use.
         string assemblies = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "";
+        string framework = Path.GetDirectoryName(typeof(object).Assembly.Location) ?? "";
         return assemblies.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Where(File.Exists).Select(path => (MetadataReference)MetadataReference.CreateFromFile(path)).ToArray();
+            .Where(path => File.Exists(path) && string.Equals(Path.GetDirectoryName(path), framework,
+                StringComparison.OrdinalIgnoreCase))
+            .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path)).ToArray();
     });
 
     private static IEnumerable<MetadataReference> References() => CachedReferences.Value.Concat(PackageReferences());
@@ -650,6 +655,12 @@ internal static class Program
         {
             if (OverrideCompletions(model, active.Text, position, output))
                 return;
+#if ROSLYN_FEATURES
+            bool roslyn = Environment.GetEnvironmentVariable("TALLOW_LS_SYMBOL_COMPLETION") != "1" &&
+                RoslynCompletion.TryComplete(trees, selected, position, References().ToArray(), CSharp15, output);
+#else
+            const bool roslyn = false;
+#endif
             SyntaxNode? node = root.FullSpan.IsEmpty ? null :
                 root.FindToken(position > 0 ? position - 1 : position).Parent;
             MemberAccessExpressionSyntax? member = node?.AncestorsAndSelf()
@@ -781,7 +792,11 @@ internal static class Program
                 names.TryAdd(symbol.Name, symbol.Kind.ToString());
             }
 
-            if (receiverExpression != null)
+            if (roslyn)
+            {
+                // Roslyn's CompletionService answered (RoslynCompletion).
+            }
+            else if (receiverExpression != null)
             {
                 SymbolInfo expression = model.GetSymbolInfo(receiverExpression);
                 ISymbol? owner = expression.Symbol ?? expression.CandidateSymbols.FirstOrDefault();
@@ -851,7 +866,7 @@ internal static class Program
                     if (!attributeContext)
                         names.TryAdd(keyword, "Keyword");
             }
-            foreach ((string name, string kind) in names.OrderBy(pair => pair.Key,
+            foreach ((string name, string kind) in roslyn ? [] : names.OrderBy(pair => pair.Key,
                 StringComparer.OrdinalIgnoreCase).Take(1500))
                 output.Add(Line("completion", name, kind));
 

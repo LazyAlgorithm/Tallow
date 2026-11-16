@@ -210,8 +210,25 @@ changing the original six-field wire format.
   syntax colours when a file does not list them; in Preferences. Strings, comments and keywords stay lexical.
   Tests: 3 Roslyn token tests (columns after an emoji), 3 TextEdit overlay checks, theme test for older files;
   seen in the editor and the themes checked by hand.
-- [ ] Completion from the compiler for ALL relevant accessible classes, methods, fields, properties, overloads, inherited/interface members, extension methods, generics, enums, namespaces, symbols in project assemblies and installed referenced libraries.
+- [x] Completion from the compiler for ALL relevant accessible classes, methods, fields, properties, overloads, inherited/interface members, extension methods, generics, enums, namespaces, symbols in project assemblies and installed referenced libraries.
+  Done November 16, 2026: the language service uses Roslyn's own `CompletionService` (`RoslynCompletion.cs`) from
+  the Workspaces/Features assemblies the SDK already ships with dotnet-format; used only when they are byte-identical
+  to the compiler's Roslyn (checked by hash in the .csproj), otherwise the old symbol lookup. Tallow.API is its own
+  workspace project referenced by the game, so engine internals are hidden by the compiler, not by path filters.
+  Context-aware keywords, named arguments, object initializer members, extension methods, attributes by short name,
+  types from namespaces not imported (accepting adds the using). `[NonSerialized]` is added in attribute lists (.NET
+  hides it). The service now compiles against the shared framework only (it offered its own Roslyn assemblies before).
 - [ ] Add accurate completion context/ranking, insertion text, auto imports, braces/parentheses, parameter/return type display and XML documentation. Do not suggest private/inaccessible or irrelevant static/instance members.
+  - [x] (November 16, 2026) Ranking: exact-case prefix, any-case prefix, CamelCase humps (`gc` -> GetComponent), then
+    Roslyn's priority/sort (preselects the expected enum type); up to 300 items, then `completion-more` and the
+    editor asks again as the word grows. Items carry insert text, a dimmed detail (the namespace of an import), extra
+    edits applied with the word as one undo (the using, `async Task` for `await`), and a description shown under
+    the list for the selected item: signature with overload count and the XML `<summary>` (made from the semantic
+    model; Roslyn's description service costs ~4 ms an item). Snippets are left out (no tab stops). Completion ~33 ms
+    p50 after an edit (was 21 with the hand-written lookup; Roslyn's own list+encode ~7 ms, the rest the service's
+    per-request work); service peak 458 MB (was 327: a second compilation for the workspace). Tests: 11 Roslyn
+    tests, 12 TextEdit checks, editor `--completion-test` (step 7 of test_csharp_editor.py). Still open: methods
+    do not insert `()`; the diagnostics compilation and the workspace could share one compilation.
 - [ ] Implement robust overload-aware signature help and active argument highlighting; no overlapping code editor popups.
   - [x] (November 15, 2026) Roslyn answers `signature` with every overload (resolved first; constructors;
     before the closing parenthesis) and marks the parameter at the caret (\x01..\x02, by position or name);

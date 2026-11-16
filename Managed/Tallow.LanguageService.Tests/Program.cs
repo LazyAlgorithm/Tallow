@@ -10,6 +10,25 @@ internal static class Program
 {
     private static int _passed;
 
+    /// <summary>Raw response text of the last request (Roslyn completion items keep all their fields).</summary>
+    private static string _raw = "";
+
+    /// <summary>Completion items from Roslyn carry display \x1F insert \x1F detail \x1F edits \x1F description;
+    /// most checks only ask whether a name is offered, so those become "completion\tdisplay\tkind" (the raw
+    /// text stays in _raw). Override items (display \x1F insert) are kept as they are.</summary>
+    private static string Names(string response)
+    {
+        _raw = response;
+        return string.Join('\n', response.Split('\n').Select(line =>
+        {
+            string[] fields = line.Split('\t');
+            if (fields.Length < 2 || fields[0] != "completion")
+                return line;
+            string[] parts = fields[1].Split('\x1F');
+            return parts.Length == 5 ? string.Join('\t', [fields[0], parts[0], .. fields[2..]]) : line;
+        }));
+    }
+
     private static string Request(string service, string operation, string code, int cursor)
     {
         string temporary = Path.Combine(Path.GetTempPath(), "tallow-csharp-semantic-" + Guid.NewGuid());
@@ -36,7 +55,7 @@ internal static class Program
             process.WaitForExit();
             if (process.ExitCode != 0)
                 throw new InvalidOperationException($"Roslyn worker failed: {File.ReadAllText(response)}");
-            return File.ReadAllText(response);
+            return Names(File.ReadAllText(response));
         }
         finally
         {
@@ -85,7 +104,7 @@ internal static class Program
             if (process.ExitCode != 0)
                 throw new InvalidOperationException(
                     $"Roslyn gameplay API worker failed: {File.ReadAllText(response)}");
-            return File.ReadAllText(response);
+            return Names(File.ReadAllText(response));
         }
         finally
         {
@@ -250,7 +269,7 @@ internal static class Program
                 PublishRequest(folder, $"operation\tdiagnostics\nfile\t{file}\ncursor\t0\n");
                 string response = Path.Combine(folder, "response.tsv");
                 WaitFor(response, worker);
-                return File.ReadAllText(response);
+                return Names(File.ReadAllText(response));
             }
             static int Checked(string result) => result.Split('\n').Where(line => line.StartsWith("checked\t"))
                 .Select(line => int.Parse(line.Split('\t')[1])).FirstOrDefault(-1);
@@ -544,7 +563,7 @@ public sealed class CubeMover : Script
             string inheritedAccess = "class Base { private int BaseSecret; " +
                 "protected int BaseProtected; public int BasePublic; } " +
                 "class Derived : Base { private int OwnSecret; " +
-                "void Go() { this.BaseP";
+                "void Go() { this.";
             string inheritedAccessResults = Request(service, "completion",
                 inheritedAccess, inheritedAccess.Length);
             Check("C# derived completion includes accessible inherited members",
@@ -561,6 +580,66 @@ public sealed class CubeMover : Script
             Check("C# completion does not expose private members of other classes",
                 otherResults.Contains("completion\tShown\t") &&
                 !otherResults.Contains("completion\tHidden\t"));
+
+            // Roslyn's CompletionService (RoslynCompletion): items are display \x1F insert \x1F detail \x1F edits
+            // \x1F description.
+            string Item(string name) => _raw.Split('\n').FirstOrDefault(line =>
+                line.StartsWith("completion\t" + name + "\x1F", StringComparison.Ordinal)) ?? "";
+            string[] Fields(string name) => Item(name).Split('\t').ElementAtOrDefault(1)?.Split('\x1F') ?? [];
+
+            string unimported = "class Demo { void Go() { var b = new StringBui";
+            Request(service, "completion", unimported, unimported.Length);
+            string[] builder = Fields("StringBuilder");
+            Check("a type from a namespace not imported is offered with its namespace",
+                builder.Length == 5 && builder[2] == "System.Text");
+            Check("accepting it adds the using directive (an edit at the top)",
+                builder.Length == 5 && builder[3].StartsWith("0\x1B" + "0\x1Busing System.Text;", StringComparison.Ordinal));
+
+            string humps = "using Tallow; class Demo : Script { void Go() { GeCo";
+            RequestWithApi(service, "completion", humps, humps.Length);
+            Check("CamelCase humps find GetComponent from GeCo", Item("GetComponent<>").Length > 0);
+
+            string extension = "class Demo { void Go(List<int> list) { list.Wh";
+            Request(service, "completion", extension, extension.Length);
+            string[] where = Fields("Where<>");
+            Check("extension methods are offered; a generic one inserts its plain name",
+                where.Length == 5 && where[1] == "Where" && where[4].Contains("(extension)"));
+
+            string described = "using Tallow; class Demo : Script { void Go() { Transform.Posi";
+            RequestWithApi(service, "completion", described, described.Length);
+            string[] position = Fields("Position");
+            Check("an item describes its type and declaration",
+                position.Length == 5 && position[4].Contains("Vector3 Transform.Position"));
+
+            // The editor closes the bracket as it is typed.
+            string named = "class Demo { void Move(float speed, bool run) {} void Go() { Move(1, ru); } }";
+            Request(service, "completion", named, named.IndexOf("ru)", StringComparison.Ordinal) + 2);
+            Check("named arguments are offered", Item("run:").Length > 0);
+
+            string initializer = "class Pickup { public int Amount; public string Label = \"\"; } " +
+                "class Demo { void Go() { var p = new Pickup {  }; } }";
+            Request(service, "completion", initializer, initializer.IndexOf("{  }", StringComparison.Ordinal) + 2);
+            Check("object initializers offer the members not yet set",
+                Item("Amount").Length > 0 && Item("Label").Length > 0 && !_raw.Contains("completion\tclass"));
+
+            string awaiting = "class Demo { void Go() { awa";
+            Request(service, "completion", awaiting, awaiting.Length);
+            string[] await = Fields("await");
+            Check("await in a void method makes it async Task",
+                await.Length == 5 && await[3].Contains("async ") && await[3].Contains("Task"));
+
+            string statement = "class Demo { void Go() { ";
+            string many = Request(service, "completion", statement, statement.Length);
+            Check("a long list says more items exist so the editor asks again",
+                many.Contains("completion-more") && many.Split("\ncompletion\t").Length <= 302);
+
+            string nonSerialized = "class Demo { [NonS";
+            Check("[NonSerialized] is offered although .NET hides it",
+                Request(service, "completion", nonSerialized, nonSerialized.Length).Contains("completion\tNonSerialized"));
+
+            string roslynHost = "class Demo { void Go() { var t = typeof(Microsoft.CodeAnalysis.";
+            Check("the service's own assemblies (Roslyn) are not offered to game code",
+                !Request(service, "completion", roslynHost, roslynHost.Length).Contains("completion\tSyntaxTree"));
 
             string sceneSwitch = "using Tallow; class Demo { void Go() { " +
                 "SceneManager.Load(\"Scenes/Example.tscene\"); Application.Quit(); } }";

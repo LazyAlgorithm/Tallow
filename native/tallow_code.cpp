@@ -47,6 +47,8 @@ namespace
 		std::vector<std::string> cachedCompletions;
 		std::string completionBefore, completionAfter, completionPrefix;
 		int completionStart = 0;
+		// The service sent its first items only (completion-more): narrowing must ask again.
+		bool completionTruncated = false;
 		std::string selectedName;
 		int selectedEnd = -1;
 		size_t selectedUndoIndex = 0;
@@ -206,6 +208,49 @@ namespace
 	}
 
 	bool IsWordChar(char c) { return isalnum((unsigned char)c) || c == '_'; }
+
+	// Each typed letter continues the current word of the name or starts a later one (CamelCase, after '_' or
+	// a digit); the first must start the name. Matches the language service (RoslynCompletion.Humps).
+	bool Humps(const std::string& typed, size_t t, std::string_view name, size_t c)
+	{
+		if (t == typed.size()) return true;
+		for (size_t j = c; j < name.size(); j++)
+		{
+			const unsigned char ch = name[j], previous = j ? name[j - 1] : 0;
+			const bool start = j == 0 || (std::isupper(ch) && !std::isupper(previous)) || !std::isalnum(previous) ||
+				(bool)std::isdigit(previous) != (bool)std::isdigit(ch);
+			if ((start || (j == c && t > 0)) && std::toupper(ch) == std::toupper((unsigned char)typed[t]) &&
+				Humps(typed, t + 1, name, j + 1))
+				return true;
+			if (t == 0) return false;
+		}
+		return false;
+	}
+
+	// -1: no match; 0 exact-case prefix; 1 prefix ignoring case; 2 CamelCase humps ("gc" -> GetComponent).
+	int CompletionMatch(const std::string& suggestion, const std::string& typed)
+	{
+		std::string_view name(suggestion);
+		name = name.substr(0, name.find('\x1F'));
+		if (typed.empty() || name.compare(0, typed.size(), typed) == 0) return 0;
+		if (name.size() >= typed.size() && std::equal(typed.begin(), typed.end(), name.begin(),
+			[](char a, char b) { return std::tolower((unsigned char)a) == std::tolower((unsigned char)b); }))
+			return 1;
+		return Humps(typed, 0, name, 0) ? 2 : -1;
+	}
+
+	// The items matching what is typed, best match kind first, otherwise in the service's order.
+	std::vector<std::string> NarrowCompletions(const std::vector<std::string>& items, const std::string& typed)
+	{
+		std::vector<std::string> ranked[3];
+		for (const auto& item : items)
+		{
+			const int rank = CompletionMatch(item, typed);
+			if (rank >= 0) ranked[rank].push_back(item);
+		}
+		for (int i = 1; i < 3; i++) ranked[0].insert(ranked[0].end(), ranked[i].begin(), ranked[i].end());
+		return ranked[0];
+	}
 
 	bool StartsWithNoCase(const std::string& word, const std::string& prefix)
 	{
@@ -580,7 +625,7 @@ TN_API void* tn_code_create(const char* text, int language)
 	if (language == 0 || language == 4)
 	{
 		TextEditor::AutoCompleteConfig config;
-		config.suggestionWidth = 40;
+		config.suggestionWidth = 64;
 		config.callback = [document](TextEditor::AutoCompleteState& state)
 		{
 			state.suggestions.clear();
@@ -589,11 +634,11 @@ TN_API void* tn_code_create(const char* text, int language)
 			const size_t end = document->editor.GetSectionText(TextEditor::DocPos(0, 0), state.searchTermEnd).size();
 			const std::string prefix = source.substr(start, end - start);
 			// Reuse only a narrower prefix on the identical receiver and unchanged surrounding source.
-			if (!document->cachedCompletions.empty() && source.substr(0, start) == document->completionBefore &&
+			if (!document->cachedCompletions.empty() && !document->completionTruncated &&
+				source.substr(0, start) == document->completionBefore &&
 				source.substr(end) == document->completionAfter && prefix.rfind(document->completionPrefix, 0) == 0)
 			{
-				for (const auto& word : document->cachedCompletions)
-					if (StartsWithNoCase(word, prefix)) state.suggestions.push_back(word);
+				state.suggestions = NarrowCompletions(document->cachedCompletions, prefix);
 				state.suggestionsPromise = false;
 				document->semanticRequest = 0;
 				return;
@@ -988,6 +1033,33 @@ TN_API int tn_code_cursor_byte(void* handle)
 	return (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
 }
 
+// Tests (--completion-test): ask for completion of the bytes [start, end) as typing would, and read the list back
+// ("\x01more" last when the service sent only its first items). Returns the length needed.
+TN_API void tn_code_test_request_completion(void* handle, int start, int end)
+{
+	Document* document = (Document*)handle;
+	document->cachedCompletions.clear();
+	document->completionTruncated = false;
+	document->completionStart = start;
+	document->semanticCursor = end;
+	document->semanticRequest = 1;
+}
+
+TN_API int tn_code_test_completions(void* handle, char* buffer, int capacity)
+{
+	Document* document = (Document*)handle;
+	std::string joined;
+	for (const auto& item : document->cachedCompletions) { joined += item; joined += '\n'; }
+	if (document->completionTruncated) joined += "\x01more\n";
+	if (buffer && capacity > 0)
+	{
+		const size_t count = std::min(joined.size(), (size_t)capacity - 1);
+		std::memcpy(buffer, joined.data(), count);
+		buffer[count] = 0;
+	}
+	return (int)joined.size();
+}
+
 // A short pause avoids starting a compiler lookup for every intermediate drag position.
 TN_API int tn_code_take_reference_request(void* handle)
 {
@@ -1114,20 +1186,23 @@ TN_API void tn_code_semantic_tokens(void* handle, const char* tokens)
 TN_API void tn_code_semantic_results(void* handle, const char* words)
 {
 	std::vector<std::string> suggestions;
+	Document* document = (Document*)handle;
+	document->completionTruncated = false;
 	const char* at = words ? words : "";
 	while (*at)
 	{
 		const char* end = strchr(at, '\n');
 		const size_t length = end ? (size_t)(end - at) : strlen(at);
-		if (length) suggestions.emplace_back(at, length);
+		if (length == 5 && std::strncmp(at, "\x01more", 5) == 0) document->completionTruncated = true;
+		else if (length) suggestions.emplace_back(at, length);
 		if (!end) break;
 		at = end + 1;
 	}
-	Document* document = (Document*)handle;
-	document->editor.SetAutoCompleteSuggestions(suggestions);
 	const std::string source = document->editor.GetText();
 	const size_t end = document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
 	const size_t start = std::min((size_t)std::max(document->completionStart, 0), end);
+	// Letters typed while the service was answering narrow its list at once.
+	document->editor.SetAutoCompleteSuggestions(NarrowCompletions(suggestions, source.substr(start, end - start)));
 	document->cachedCompletions = suggestions;
 	document->completionBefore = source.substr(0, start);
 	document->completionAfter = source.substr(end);

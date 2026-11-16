@@ -206,7 +206,7 @@ old = "\tconst auto visibleSuggestions = (suggestions == 0) ? 1 : std::min(stati
 new = "\t// Parameter help is a header within the completion window, not another popup on\n\t// top of it. A bounded, scrollable header keeps long overload lists from hiding suggestions.\n\tconst auto visibleSuggestions = (suggestions == 0) ? 1 : std::min(static_cast<size_t>(signature.empty() ? 10 : 8), suggestions);\n\tconst auto& style = ImGui::GetStyle();\n\tconst float signatureHeight = signature.empty() ? 0.0f : ImGui::GetTextLineHeightWithSpacing() * 3.0f;\n\tconst auto height = ImGui::GetFrameHeightWithSpacing() * visibleSuggestions + style.WindowPadding.y * 2.0f +\n\t\t(signature.empty() ? 0.0f : signatureHeight + style.ItemSpacing.y + 1.0f);\n\tImGui::SetNextWindowSize(ImVec2(configuration.suggestionWidth * glyphSize.x, height));"
 if old in c:
     c = c.replace(old, new, 1)
-elif new not in c:
+elif 'const float signatureHeight' not in c:  # later Tallow edits (description area) reshape these lines
     raise AssertionError('TextEditor.cpp layout changed (signature popup sizing)')
 old = "\t\t} else {\n\t\t\t// do we have any suggestions\n\t\t\tif (suggestions) {"
 new = "\t\t} else {\n\t\t\tif (!signature.empty())\n\t\t\t{\n\t\t\t\tImGui::BeginChild(\"##signatureHelp\", ImVec2(0.0f, signatureHeight), false, ImGuiWindowFlags_NoNav);\n\t\t\t\tImGui::TextWrapped(\"%s\", signature.c_str());\n\t\t\t\tImGui::EndChild();\n\t\t\t\tImGui::Separator();\n\t\t\t}\n\t\t\t// do we have any suggestions\n\t\t\tif (suggestions) {"

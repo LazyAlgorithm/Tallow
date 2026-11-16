@@ -216,6 +216,9 @@ extension EditorApp
 			case "completion":
 				suggestions.Append(fields[1]);
 				suggestions.Append('\n');
+			case "completion-more":
+				// The service sent only its best items; the code widget asks again as the word grows.
+				suggestions.Append("\x01more\n");
 			case "type":
 				types.Append(fields[1]);
 				types.Append('\n');

@@ -19,6 +19,7 @@ Prints p50/p95/p99 and slowest milliseconds per phase, and the service's CPU tim
 """
 import argparse
 import os
+import re
 import shutil
 import statistics
 import subprocess
@@ -148,7 +149,7 @@ public class Filler{k} : Script
             completions = []
             for i in range(args.runs):
                 elapsed, answer = request("completion", edited(i, "Transform."), f"var n{i} = {i}; Transform.")
-                if "completion\tPosition\t" not in answer:
+                if not re.search(r"completion\tPosition[\t\x1f]", answer):
                     sys.exit("completion after Transform. did not offer Position:\n" + answer[:500])
                 completions.append(elapsed)
             results["completion"] = completions
@@ -156,7 +157,7 @@ public class Filler{k} : Script
             for i in range(args.runs):
                 elapsed, answer = request("completion", edited(i, "GetComponent<Rigidbody>()?."),
                                           f"var n{i} = {i}; GetComponent<Rigidbody>()?.")
-                if "completion\tMass\t" not in answer:
+                if not re.search(r"completion\tMass[\t\x1f]", answer):
                     sys.exit("completion after GetComponent<Rigidbody>()?. did not offer Mass:\n" + answer[:500])
                 nullable.append(elapsed)
             results["nullable completion"] = nullable

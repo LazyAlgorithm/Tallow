@@ -1865,25 +1865,43 @@ protected:
 		static bool isSpecialKeyPressed();
 		inline ImGuiKeyChord getTriggerShortcut() const { return configuration.triggerShortcut; }
 		inline DocPos getStart() const { return startLocation; }
-		// A suggestion is either plain text, or "display\x1Finsert": the list shows the first part and accepting it
-		// inserts the second, where \x1C stands for a tab, \x1D for a line break, and \x1E marks where the cursor goes.
-		static inline std::string_view displayPart(const std::string& suggestion) {
-			const auto split = suggestion.find('\x1F');
-			return split == std::string::npos ? std::string_view(suggestion) : std::string_view(suggestion).substr(0, split);
+		// A suggestion is plain text, or fields joined by \x1F (Tallow): display, insert (empty: the display text),
+		// detail (drawn dimmed beside it), edits elsewhere ("byte offset\x1Blength\x1Btext" joined by \x1A) and a
+		// description of the selected item. In the text fields \x1C stands for a tab, \x1D for a line break, and
+		// \x1E marks where the cursor goes.
+		static inline std::string_view suggestionField(const std::string& suggestion, size_t index) {
+			std::string_view rest(suggestion);
+			for (size_t i = 0; i < index; i++) {
+				const auto split = rest.find('\x1F');
+				if (split == std::string_view::npos) return {};
+				rest = rest.substr(split + 1);
+			}
+			const auto end = rest.find('\x1F');
+			return end == std::string_view::npos ? rest : rest.substr(0, end);
+		}
+		static inline std::string_view displayPart(const std::string& suggestion) { return suggestionField(suggestion, 0); }
+		static inline std::string unescape(std::string_view value) {
+			std::string text(value);
+			for (auto& ch : text) { if (ch == '\x1D') ch = '\n'; else if (ch == '\x1C') ch = '\t'; }
+			return text;
 		}
 		inline std::string getReplacement() {
 			if (currentSelection >= state.suggestions.size()) return "";
 			const auto& suggestion = state.suggestions[currentSelection];
-			const auto split = suggestion.find('\x1F');
-			std::string text = split == std::string::npos ? suggestion : suggestion.substr(split + 1);
-			for (auto& ch : text) { if (ch == '\x1D') ch = '\n'; else if (ch == '\x1C') ch = '\t'; }
-			return text;
+			const auto insert = suggestionField(suggestion, 1);
+			return unescape(insert.empty() ? displayPart(suggestion) : insert);
+		}
+		inline std::string getEdits() {
+			if (currentSelection >= state.suggestions.size()) return "";
+			return std::string(suggestionField(state.suggestions[currentSelection], 3));
 		}
 		// What typing on would complete to, for an inline preview: nothing for an item that inserts something else.
 		inline std::string getPreview() {
 			if (currentSelection >= state.suggestions.size()) return "";
 			const auto& suggestion = state.suggestions[currentSelection];
-			return suggestion.find('\x1F') == std::string::npos ? suggestion : "";
+			if (suggestion.find('\x1F') == std::string::npos) return suggestion;
+			return suggestionField(suggestion, 1).empty() && suggestionField(suggestion, 3).empty()
+				? std::string(displayPart(suggestion)) : "";
 		}
 
 	private:

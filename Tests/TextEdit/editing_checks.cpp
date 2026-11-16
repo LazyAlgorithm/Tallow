@@ -113,6 +113,53 @@ int main() {
 	e.acceptAutoComplete();
 	check("a plain item inserts as before", txt(e) == "Position" && e.GetMainCursorPosition() == TextEditor::DocPos(0, 8));
 
+	// Compiler completion items: display \x1F insert \x1F detail \x1F edits \x1F description.
+	{
+		using AC = TextEditor::AutoComplete;
+		const std::string item("StringBuilder\x1F\x1FSystem.Text\x1F" "0\x1B" "0\x1Busing System.Text;\x1D\x1D\x1F" "class System.Text.StringBuilder");
+		check("fields: display", AC::displayPart(item) == "StringBuilder");
+		check("fields: detail", AC::suggestionField(item, 2) == "System.Text");
+		check("fields: description", AC::suggestionField(item, 4) == "class System.Text.StringBuilder");
+		check("fields: a missing field is empty", AC::suggestionField("Position", 3).empty());
+
+		// An unimported type: the word is completed and its using added at the top, as one undo step.
+		e.SetText("class A { void M() { var b = new StringBu } }"); e.SetCursor(TextEditor::DocPos(0, 41));
+		e.autocomplete.startLocation = e.document.findWordStart(TextEditor::DocPos(0, 41), true);
+		e.autocomplete.state.suggestions = { item }; e.autocomplete.currentSelection = 0;
+		check("an item with edits has no inline preview", e.GetAutoCompletePreview().empty());
+		e.acceptAutoComplete();
+		check(("the using is added and the word completed: " + show(txt(e))).c_str(),
+			txt(e) == "using System.Text;\n\nclass A { void M() { var b = new StringBuilder } }");
+		check("the cursor ends after the completed word", e.GetMainCursorPosition() == TextEditor::DocPos(2, 46));
+		e.Undo();
+		check("one undo takes back the word and the using", txt(e) == "class A { void M() { var b = new StringBu } }");
+
+		// "await" in a void method: several edits before the word (one at the same offset as another).
+		e.SetText("class A { void M() { awa } }"); e.SetCursor(TextEditor::DocPos(0, 24));
+		e.autocomplete.startLocation = e.document.findWordStart(TextEditor::DocPos(0, 24), true);
+		e.autocomplete.state.suggestions = { std::string("await\x1F\x1F\x1F" "10\x1B" "0\x1B" "async \x1A" "10\x1B" "4\x1BTask\x1F" "await Keyword") };
+		e.autocomplete.currentSelection = 0;
+		e.acceptAutoComplete();
+		check(("edits at one offset apply in order: " + show(txt(e))).c_str(), txt(e) == "class A { async Task M() { await } }");
+		check("the cursor follows the shifted word", e.GetMainCursorPosition() == TextEditor::DocPos(0, 32));
+
+		// A description alone keeps the inline preview; an insert text differing from the display is used.
+		e.SetText("l.Wh"); e.SetCursor(TextEditor::DocPos(0, 4));
+		e.autocomplete.startLocation = TextEditor::DocPos(0, 2);
+		e.autocomplete.state.suggestions = { std::string("Where<>\x1FWhere\x1F\x1F\x1F(extension) IEnumerable<int> Where") };
+		e.autocomplete.currentSelection = 0;
+		check("an item with another insert text has no inline preview", e.GetAutoCompletePreview().empty());
+		e.acceptAutoComplete();
+		check("the insert text is used, not the display", txt(e) == "l.Where");
+		e.SetText("Pos"); e.SetCursor(TextEditor::DocPos(0, 3));
+		e.autocomplete.startLocation = TextEditor::DocPos(0, 0);
+		e.autocomplete.state.suggestions = { std::string("Position\x1F\x1F\x1F\x1FVector3 Transform.Position { get; set; }") };
+		e.autocomplete.currentSelection = 0;
+		check("an item with only a description previews its name", e.GetAutoCompletePreview() == "Position");
+		e.acceptAutoComplete();
+		check("an item with only a description inserts its name", txt(e) == "Position");
+	}
+
 	ImGui::DestroyContext();
 	// Semantic colouring (SetSemanticSpans): a span colours a name only while the glyphs still spell it outside strings
 	// and comments, and only as a whole word.

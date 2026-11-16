@@ -311,6 +311,8 @@ class EditorApp : Application
 			StartPlayCycleTest();
 		if (HasArg("--hot-reload-test"))
 			StartHotReloadTest();
+		if (HasArg("--completion-test"))
+			StartCompletionTest();
 		if (HasArg("--stale-build-test"))
 			StartStaleBuildTest();
 		{
