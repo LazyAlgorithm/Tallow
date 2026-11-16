@@ -183,8 +183,9 @@ bool TextEditor::render(const char* title, const ImVec2& size, ImGuiChildFlags c
 		// render parts in the text area
 		renderCurrentLineHighlight();
 		renderActiveBracketBackground();
-		renderSelections();
 		renderTextMarkers();
+		renderReferenceHighlights();
+		renderSelections();
 		renderMatchingBracketLines();
 		renderSquiggles();
 		renderText();
@@ -325,6 +326,38 @@ void TextEditor::renderActiveBracketBackground() {
 
 
 //
+//	TextEditor::renderReferenceHighlights (Tallow)
+//
+
+void TextEditor::renderReferenceHighlights() {
+	const ImU32 color = (palette.get(Color::selection) & IM_COL32(255, 255, 255, 0)) | IM_COL32(0, 0, 0, 100);
+	for (const DocSelection& span : referenceHighlights) {
+		if (span.start.line != span.end.line || span.start.line >= document.size()) continue;
+		const auto& line = document[span.start.line];
+		if (line.foldingState == FoldingState::hidden || span.end.index > line.size()) continue;
+		const auto x = cursorScreenPos.x + textLeftOffset;
+		if (line.rows == 1) {
+			if (line.row < firstVisibleRow || line.row > lastVisibleRow) continue;
+			const auto left = docPos2VisPos(span.start);
+			const auto right = docPos2VisPos(span.end);
+			const auto y = cursorScreenPos.y + line.row * glyphSize.y;
+			drawList->AddRectFilled(ImVec2(x + left.column * glyphSize.x, y),
+				ImVec2(x + right.column * glyphSize.x, y + glyphSize.y), color);
+		} else {
+			for (size_t j = 0; j < line.sections->size(); j++) {
+				const auto& section = line.sections->at(j);
+				const auto row = line.row + j;
+				if (row < firstVisibleRow || row > lastVisibleRow || span.start.index >= section.endIndex || span.end.index <= section.startIndex) continue;
+				const auto left = span.start.index <= section.startIndex ? VisPos(row, 0) : docPos2VisPos(span.start);
+				const auto right = span.end.index >= section.endIndex ? VisPos(row, section.columns) : docPos2VisPos(span.end);
+				const auto y = cursorScreenPos.y + row * glyphSize.y;
+				drawList->AddRectFilled(ImVec2(x + left.column * glyphSize.x, y),
+					ImVec2(x + right.column * glyphSize.x, y + glyphSize.y), color);
+			}
+		}
+	}
+}
+
 //	TextEditor::renderSelections
 //
 

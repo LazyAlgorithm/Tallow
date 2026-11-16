@@ -161,6 +161,23 @@ internal static class Program
                         $"FAIL: persistent Roslyn request {i + 1} returned:\n{result}");
                 Check($"persistent Roslyn request {i + 1} without restarting .NET", true);
             }
+            string apiFile = Path.Combine(engine, "Managed", "Tallow.API", "Script.cs");
+            string apiText = File.ReadAllText(apiFile);
+            int apiCursor = apiText.IndexOf("class Script", StringComparison.Ordinal) + "class Script".Length;
+            string apiFolder = Path.Combine(queue, "request-engine-definition");
+            Directory.CreateDirectory(apiFolder);
+            PublishRequest(apiFolder, $"operation\tdefinition\nfile\t{apiFile}\ncursor\t{apiCursor}\n");
+            string apiResponse = Path.Combine(apiFolder, "response.tsv");
+            WaitFor(apiResponse, worker);
+            Check("read-only engine API source supports go to definition",
+                File.ReadAllText(apiResponse).Contains($"definition\t{apiFile}\t"));
+            string apiRenameFolder = Path.Combine(queue, "request-engine-rename");
+            Directory.CreateDirectory(apiRenameFolder);
+            PublishRequest(apiRenameFolder, $"operation\trename\nfile\t{apiFile}\ncursor\t{apiCursor}\n");
+            string apiRenameResponse = Path.Combine(apiRenameFolder, "response.tsv");
+            WaitFor(apiRenameResponse, worker);
+            Check("engine API source rejects editing requests",
+                File.ReadAllText(apiRenameResponse).Contains("error\t"));
             // Confirm cached syntax is invalidated when a file changes,
             // while reusing the same compiler process and other API trees.
             string goodSource = File.ReadAllText(file);
@@ -855,9 +872,20 @@ public sealed class CubeMover : Script
             int cursor = source.LastIndexOf("count", StringComparison.Ordinal) + "count".Length;
             string definition = Request(service, "definition", source, cursor);
             Check("go to definition", definition.Contains("definition\t"));
+            string engineUse = "using Tallow; class Player : Script {}";
+            string engineDefinition = RequestWithApi(service, "definition", engineUse,
+                engineUse.IndexOf("Script", StringComparison.Ordinal) + "Script".Length);
+            Check("project script resolves engine API definition",
+                engineDefinition.Contains("Tallow.API") && engineDefinition.Contains("Script.cs"));
 
             string references = Request(service, "references", source, cursor);
             Check("compiler symbol references", references.Split("reference\t").Length - 1 >= 2);
+            string sameName = "class First { void Go() { int value = 0; value++; } }\n" +
+                "class Second { void Go() { int value = 0; value++; } }";
+            int selectedEnd = sameName.IndexOf("value", StringComparison.Ordinal) + "value".Length;
+            string highlights = Request(service, "highlight", sameName, selectedEnd);
+            Check("selected symbol highlights only its own declarations and references",
+                highlights.Split("reference\t").Length - 1 == 2);
 
             string signatureSource = "class Example { void Move(float speed) {} " +
                 "void Go() { Move(1); } }";

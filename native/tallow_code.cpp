@@ -41,11 +41,17 @@ namespace
 		TextEditor::Language csharpLanguages[2];
 		int csharpLanguageSlot = 0;
 		bool isCSharp = false;
+		bool semanticNavigation = false;
 		std::string semanticTypes;
 		size_t semanticUndoIndex = 0;
 		std::vector<std::string> cachedCompletions;
 		std::string completionBefore, completionAfter, completionPrefix;
 		int completionStart = 0;
+		std::string selectedName;
+		int selectedEnd = -1;
+		size_t selectedUndoIndex = 0;
+		bool referencePending = false;
+		double selectionChangedAt = 0;
 	};
 
 	// The code colours every document uses, set by the editor's theme (tn_code_set_palette); version 0 is the
@@ -550,7 +556,7 @@ TN_API void* tn_code_create(const char* text, int language)
 		if (ImGui::MenuItem("Copy", "Ctrl+C", false, selected)) code.Copy();
 		if (ImGui::MenuItem("Paste", "Ctrl+V", false, editable)) code.Paste();
 		if (ImGui::MenuItem("Select All", "Ctrl+A")) code.SelectAll();
-		if (code.GetLanguageName() == "Beef" || code.GetLanguageName() == "C#")
+		if (document->semanticNavigation && (code.GetLanguageName() == "Beef" || code.GetLanguageName() == "C#"))
 		{
 			ImGui::Separator();
 			const int cursor = (int)code.GetSectionText(TextEditor::DocPos(0, 0), data.pos).size();
@@ -564,7 +570,7 @@ TN_API void* tn_code_create(const char* text, int language)
 				document->semanticRequest = 5;
 				document->semanticCursor = cursor;
 			}
-			if (ImGui::MenuItem("Rename Symbol", "F2"))
+			if (ImGui::MenuItem("Rename Symbol", "F2", false, editable))
 			{
 				document->semanticRequest = 6;
 				document->semanticCursor = cursor;
@@ -781,6 +787,81 @@ static std::string InlineSuffix(Document* document)
 	return selected.substr(prefix.size());
 }
 
+static bool IdentifierByte(unsigned char c)
+{
+	return std::isalnum(c) || c == '_' || c >= 0x80;
+}
+
+static void SetReferenceOffsets(Document* document, std::vector<std::pair<size_t, size_t>> offsets)
+{
+	const std::string source = document->editor.GetText();
+	std::sort(offsets.begin(), offsets.end());
+	std::vector<TextEditor::DocSelection> highlights;
+	TextEditor::DocPos pos(0, 0);
+	size_t byte = 0;
+	auto advance = [&](size_t end)
+	{
+		while (byte < end)
+		{
+			if (source[byte] == '\n') { pos.line++; pos.index = 0; }
+			else if (((unsigned char)source[byte] & 0xc0) != 0x80) pos.index++;
+			byte++;
+		}
+		return pos;
+	};
+	for (const auto& [start, length] : offsets)
+	{
+		if (start < byte || length == 0 || start > source.size() || length > source.size() - start ||
+			source.compare(start, length, document->selectedName) != 0) continue;
+		const auto from = advance(start);
+		const auto to = advance(start + length);
+		if (from.line == to.line) highlights.emplace_back(from, to);
+	}
+	document->editor.SetReferenceHighlights(std::move(highlights));
+}
+
+static void UpdateReferenceSelection(Document* document)
+{
+	TextEditor& editor = document->editor;
+	std::string name;
+	int end = -1;
+	if (editor.MainCursorHasSelection())
+	{
+		const auto selection = editor.GetMainCursorSelection();
+		if (selection.start.line == selection.end.line)
+		{
+			name = editor.GetSectionText(selection);
+			if (!name.empty() && name.size() <= 128 &&
+				std::all_of(name.begin(), name.end(), [](unsigned char c) { return IdentifierByte(c); }))
+			{
+				const std::string source = editor.GetText();
+				const size_t start = editor.GetSectionText(TextEditor::DocPos(0, 0), selection.start).size();
+				const size_t finish = start + name.size();
+				if ((start == 0 || !IdentifierByte((unsigned char)source[start - 1])) &&
+					(finish == source.size() || !IdentifierByte((unsigned char)source[finish])))
+					end = (int)finish;
+			}
+		}
+	}
+	if (end < 0) name.clear();
+	if (document->selectedName == name && document->selectedEnd == end && document->selectedUndoIndex == editor.GetUndoIndex()) return;
+	document->selectedName = name;
+	document->selectedEnd = end;
+	document->selectedUndoIndex = editor.GetUndoIndex();
+	document->referencePending = document->isCSharp && end >= 0;
+	document->selectionChangedAt = ImGui::GetTime();
+	std::vector<std::pair<size_t, size_t>> matches;
+	if (end >= 0)
+	{
+		const std::string source = editor.GetText();
+		for (size_t at = 0; (at = source.find(name, at)) != std::string::npos; at += name.size())
+			if ((at == 0 || !IdentifierByte((unsigned char)source[at - 1])) &&
+				(at + name.size() == source.size() || !IdentifierByte((unsigned char)source[at + name.size()])))
+				matches.emplace_back(at, name.size());
+	}
+	SetReferenceOffsets(document, std::move(matches));
+}
+
 TN_API void tn_code_render(void* handle, const char* id, float width, float height)
 {
 	Document* document = (Document*)handle;
@@ -794,6 +875,7 @@ TN_API void tn_code_render(void* handle, const char* id, float width, float heig
 	document->editor.SetAutoCompleteSignature(SignatureHeader(document->signature));
 	tn_imgui_push_mono_font();
 	document->editor.Render(id, ImVec2(width, height));
+	UpdateReferenceSelection(document);
 	DrawSignatureHelp(document);
 	const std::string suffix = InlineSuffix(document);
 	if (!suffix.empty() && ImGui::IsItemVisible())
@@ -863,6 +945,7 @@ TN_API void tn_code_invalidate_semantics(void* handle)
 	document->cachedCompletions.clear();
 	document->hintSource.clear();
 	document->signature.clear();
+	document->referencePending = !document->selectedName.empty();
 	document->editor.SetAutoCompleteSignature("");
 }
 
@@ -903,6 +986,43 @@ TN_API int tn_code_cursor_byte(void* handle)
 {
 	Document* document = (Document*)handle;
 	return (int)document->editor.GetSectionText(TextEditor::DocPos(0, 0), document->editor.GetMainCursorPosition()).size();
+}
+
+// A short pause avoids starting a compiler lookup for every intermediate drag position.
+TN_API int tn_code_take_reference_request(void* handle)
+{
+	Document* document = (Document*)handle;
+	if (!document->referencePending || ImGui::GetTime() - document->selectionChangedAt < 0.2) return -1;
+	document->referencePending = false;
+	return document->selectedEnd;
+}
+
+TN_API void tn_code_retry_reference_request(void* handle, int selectedEnd)
+{
+	Document* document = (Document*)handle;
+	if (document->selectedEnd == selectedEnd && !document->selectedName.empty())
+		document->referencePending = true;
+}
+
+TN_API void tn_code_reference_highlights(void* handle, int selectedEnd, const char* references)
+{
+	Document* document = (Document*)handle;
+	if (document->selectedEnd != selectedEnd || document->selectedName.empty() ||
+		document->selectedUndoIndex != document->editor.GetUndoIndex()) return;
+	std::vector<std::pair<size_t, size_t>> offsets;
+	const char* at = references ? references : "";
+	while (*at)
+	{
+		char* next = nullptr;
+		const unsigned long start = std::strtoul(at, &next, 10);
+		if (next == at || *next != '\t') break;
+		at = next + 1;
+		const unsigned long length = std::strtoul(at, &next, 10);
+		if (next == at || (*next != '\n' && *next != '\0')) break;
+		offsets.emplace_back(start, length);
+		at = *next ? next + 1 : next;
+	}
+	SetReferenceOffsets(document, std::move(offsets));
 }
 
 // Recolor using types found by the real C# compiler. The widget does not
@@ -1070,6 +1190,7 @@ TN_API void tn_code_reload_text(void* handle, const char* text)
 }
 
 TN_API void tn_code_set_read_only(void* handle, bool readOnly) { ((Document*)handle)->editor.SetReadOnlyEnabled(readOnly); }
+TN_API void tn_code_set_semantic_navigation(void* handle, bool enabled) { ((Document*)handle)->semanticNavigation = enabled; }
 TN_API void tn_code_undo(void* handle) { ((Document*)handle)->editor.Undo(); }
 TN_API void tn_code_redo(void* handle) { ((Document*)handle)->editor.Redo(); }
 TN_API void tn_code_cut(void* handle) { ((Document*)handle)->editor.Cut(); }

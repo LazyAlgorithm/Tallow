@@ -16,6 +16,9 @@ extension EditorApp
 	[CLink] static extern void tn_code_semantic_tokens(void* handle, char8* tokens);
 	[CLink] static extern void tn_code_semantic_hint(void* handle, int32 cursor, char8* hint);
 	[CLink] static extern int32 tn_code_cursor_byte(void* handle);
+	[CLink] static extern int32 tn_code_take_reference_request(void* handle);
+	[CLink] static extern void tn_code_reference_highlights(void* handle, int32 selectedEnd, char8* references);
+	[CLink] static extern void tn_code_retry_reference_request(void* handle, int32 selectedEnd);
 	[CLink] static extern void tn_code_semantic_results(void* handle, char8* words);
 	[CLink] static extern void tn_code_goto_byte(void* handle, int32 offset);
 	[CLink] static extern void tn_code_replace_text(void* handle, char8* text);
@@ -78,6 +81,12 @@ extension EditorApp
 	{
 		if (document == null || (!document.path.EndsWith(".cs") && !document.path.EndsWith(".bf")) || mSemantic.running)
 			return;
+		let projectSource = ScriptMayEdit(document.path) && ScriptInside(document.path, scope $"{Project.Current.Path}/src");
+		let engineSource = EngineApiSource(document.path) || EngineBeefSource(document.path);
+		if (!projectSource && !engineSource)
+			return;
+		if (engineSource && operation != "definition" && operation != "symbol" && operation != "highlight")
+			return;
 		ClearAndDeleteItems!(mSemantic.sources);
 		if (operation == "rename" && !mSemantic.AddFolder(scope $"{Project.Current.Path}/src", document.path.EndsWith(".cs") ? ".cs" : ".bf"))
 		{
@@ -86,7 +95,8 @@ extension EditorApp
 		}
 		for (let open in mScripts)
 		{
-			if (open.path.EndsWith(document.path.EndsWith(".cs") ? ".cs" : ".bf"))
+			if (open.path.EndsWith(document.path.EndsWith(".cs") ? ".cs" : ".bf") &&
+				ScriptInside(open.path, scope $"{Project.Current.Path}/src"))
 				mSemantic.Add(open.path, StringView(tn_code_get_text(open.handle)));
 		}
 		if (!mSemantic.Start(operation, document.path, cursor < 0 ? tn_code_cursor_byte(document.handle) : cursor, mSymbolNewName))
@@ -168,6 +178,8 @@ extension EditorApp
 		{
 			if (document != null && mSemantic.operation == "completion")
 				tn_code_discard_semantic_results(document.handle, document == mActiveScript);
+			if (document != null && mSemantic.operation == "highlight")
+				tn_code_retry_reference_request(document.handle, (int32)mSemantic.cursor);
 			mSemantic.status.Set("Source changed; requesting fresh diagnostics.");
 			mSemanticNeedsCheck = true;
 			return;
@@ -176,6 +188,7 @@ extension EditorApp
 		let signatures = scope String();
 		let types = scope String();
 		let tokens = scope String();
+		let highlighted = scope String();
 		if (mSemantic.operation == "symbol")
 			mSemanticHint.Clear();
 		mSymbolReferences.Clear();
@@ -244,13 +257,27 @@ extension EditorApp
 			case "reference":
 				if (fields.Count >= 5)
 				{
-					let index = mSemantic.Find(fields[1]);
 					let start = SceneSerializer.ParseInt(fields[2]);
 					let length = SceneSerializer.ParseInt(fields[3]);
-					if (index < 0 || start < 0 || length <= 0 || start + length > mSemantic.sources[index].text.Length || mSemantic.sources[index].text.Substring(start, length) != fields[4])
-						failed = true;
+					if (mSemantic.operation == "highlight")
+					{
+						if (document != null && Path.Equals(fields[1], document.path, .Lenient))
+						{
+							let source = StringView(tn_code_get_text(document.handle));
+							if (start < 0 || length <= 0 || start + length > source.Length || source.Substring(start, length) != fields[4])
+								failed = true;
+							else
+								highlighted.AppendF("{}\t{}\n", start, length);
+						}
+					}
 					else
-						mSymbolReferences.Add(.() { file = index, start = start, length = length });
+					{
+						let index = mSemantic.Find(fields[1]);
+						if (index < 0 || start < 0 || length <= 0 || start + length > mSemantic.sources[index].text.Length || mSemantic.sources[index].text.Substring(start, length) != fields[4])
+							failed = true;
+						else
+							mSymbolReferences.Add(.() { file = index, start = start, length = length });
+					}
 				}
 			}
 		}
@@ -285,6 +312,8 @@ extension EditorApp
 			mSymbolInfoOpen = mSymbolInfoRequested;
 			mSymbolInfoRequested = false;
 		}
+		if (!failed && document != null && mSemantic.operation == "highlight")
+			tn_code_reference_highlights(document.handle, (int32)mSemantic.cursor, highlighted.CStr());
 		if (mSemantic.operation == "rename")
 		{
 			mRenamePreview = !failed && !mSymbolReferences.IsEmpty && mSymbolNewName == mSemantic.renameName;
@@ -297,6 +326,8 @@ extension EditorApp
 	void UpdateSemantic(ScriptDocument document)
 	{
 		if (!document.path.EndsWith(".cs") && !document.path.EndsWith(".bf"))
+			return;
+		if (!ScriptMayResolve(document.path))
 			return;
 		if (mSemanticApiRevision != ApiIndex.Revision)
 		{
@@ -326,7 +357,7 @@ extension EditorApp
 			return;
 		int32 cursor = 0;
 		let request = tn_code_take_semantic_request(document.handle, &cursor);
-		if (request == 6)
+		if (request == 6 && !document.readOnly)
 			BeginScriptSymbolRename();
 		else if (request == 5)
 		{
@@ -335,8 +366,14 @@ extension EditorApp
 		}
 		else if (request != 0)
 			RequestSemantic(document, request == 4 ? "definition" : (request == 2 ? "symbol" : (request == 3 ? "signature" : "completion")), cursor);
-		else if (mSemanticNeedsCheck && Time.RealTime - mSemanticChangedAt > 1.5f)
-			RequestSemantic(document, "diagnostics");
+		else
+		{
+			let selectedEnd = tn_code_take_reference_request(document.handle);
+			if (selectedEnd >= 0)
+				RequestSemantic(document, "highlight", selectedEnd);
+			else if (mSemanticNeedsCheck && ScriptMayEdit(document.path) && Time.RealTime - mSemanticChangedAt > 1.5f)
+				RequestSemantic(document, "diagnostics");
+		}
 	}
 
 	void BeginScriptSymbolRename()
@@ -352,10 +389,10 @@ extension EditorApp
 	/// same semantic request path.
 	void DrawSemanticTools(ScriptDocument document)
 	{
-		bool ready = document != null && (document.path.EndsWith(".cs") || document.path.EndsWith(".bf")) && !mSemantic.running;
+		bool ready = document != null && ScriptMayResolve(document.path) && !mSemantic.running;
 		if (ready && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F12))
 			RequestSemantic(document, "definition");
-		if (ready && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F2))
+		if (ready && !document.readOnly && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F2))
 			BeginScriptSymbolRename();
 		if (mOpenSymbolRenamePopup)
 		{

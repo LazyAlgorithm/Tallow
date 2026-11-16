@@ -232,6 +232,10 @@ changing the original six-field wire format.
     per tree); peak ~290 MB. It also checks an error typed in is reported and nothing from Tallow.API is. In CI
     (3 runs). Windows numbers not taken yet.
 - [ ] Full diagnostics, warnings, source locations/underlines, click-through from Console; Go to Definition, Find References, Rename, and optionally integrated breakpoints/debugging.
+  - [x] (November 16, 2026) Go to Definition into engine API source opens it read-only (also any file outside the
+    project; engine Beef sources only for Beef projects); rename/save/edit are refused there and the language service
+    only answers definition/symbol/highlight for `Managed/Tallow.API`. Selecting a name highlights its other uses,
+    first by text, then narrowed by the compiler to the same symbol in that file (`highlight` operation).
 - [ ] Expand automated tests using actual Tallow.API/gameplay source, multi-assembly projects, inherited/static/extension completions and malformed mid-typing C#.
 
 ## Binding generation decision — explicitly curated API

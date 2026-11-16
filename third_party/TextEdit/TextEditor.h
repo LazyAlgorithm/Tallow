@@ -759,6 +759,8 @@ public:
 	};
 	void SetSemanticSpans(std::vector<SemanticSpan>&& spans);
 	inline void ClearSemanticSpans() { semanticSpans.clear(); semanticLines.clear(); }
+	// Occurrences of the manually selected name, drawn beneath the real selection.
+	void SetReferenceHighlights(std::vector<DocSelection>&& spans) { referenceHighlights = std::move(spans); }
 	inline const Language* GetLanguage() const { return config.language; };
 	inline bool HasLanguage() const { return config.language != nullptr; }
 	inline std::string GetLanguageName() const { return config.language == nullptr ? "None" : config.language->name; }
@@ -1913,10 +1915,12 @@ protected:
 	void renderCurrentLineHighlight();
 	void renderActiveBracketBackground();
 	void renderSelections();
+	void renderReferenceHighlights();
 	void renderTextMarkers();
 	void renderMatchingBracketLines();
 	void renderSquiggles();
 	void renderText();
+	std::vector<DocSelection> referenceHighlights;
 	// Tallow: semantic spans, sorted by line then glyph index.
 	std::vector<SemanticSpan> semanticSpans;
 	std::vector<std::pair<int, size_t>> semanticLines; // (line, first span), sorted by line

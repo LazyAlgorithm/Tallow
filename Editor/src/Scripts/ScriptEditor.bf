@@ -132,6 +132,7 @@ extension EditorApp
 	[CLink] static extern void tn_code_clear_diagnostics(void* handle);
 	[CLink] static extern void tn_code_add_diagnostic(void* handle, int32 line, int32 column, int32 kind, bool isError, char8* message);
 	[CLink] static extern void tn_code_set_read_only(void* handle, bool readOnly);
+	[CLink] static extern void tn_code_set_semantic_navigation(void* handle, bool enabled);
 	[CLink] static extern void tn_code_undo(void* handle);
 	[CLink] static extern void tn_code_redo(void* handle);
 	[CLink] static extern void tn_code_cut(void* handle);
@@ -188,6 +189,56 @@ extension EditorApp
 		graphPath.Append(scriptPath.Substring(0, scriptPath.Length - 3));
 		graphPath.Append(".tgraph");
 		return File.Exists(graphPath);
+	}
+
+	/// Canonical paths keep symlinks from making an engine or external file look like a project file.
+	static bool ScriptInside(StringView path, StringView folder)
+	{
+		let root = scope String();
+		ScriptSemantic.CanonicalPath(folder, root);
+		if (!root.EndsWith('/'))
+			root.Append('/');
+#if BF_PLATFORM_WINDOWS
+		return path.StartsWith(root, .OrdinalIgnoreCase);
+#else
+		return path.StartsWith(root);
+#endif
+	}
+
+	bool ScriptMayEdit(StringView path)
+	{
+		if (Project.Current == null)
+			return false;
+		let canonical = scope String();
+		ScriptSemantic.CanonicalPath(path, canonical);
+		if (!ScriptInside(canonical, Project.Current.Path))
+			return false;
+		// An engine checkout can sit inside a project, or a project can sit inside the engine checkout.
+		// In the first case the engine subtree stays read-only; in the second the project remains editable.
+		let engine = scope String();
+		ScriptSemantic.CanonicalPath(Project.Current.EngineRoot, engine);
+		return !ScriptInside(engine, Project.Current.Path) || !ScriptInside(canonical, engine);
+	}
+
+	bool EngineApiSource(StringView path)
+	{
+		return Project.Current != null && path.EndsWith(".cs", .OrdinalIgnoreCase) &&
+			ScriptInside(path, scope $"{Project.Current.EngineRoot}/Managed/Tallow.API");
+	}
+
+	bool EngineBeefSource(StringView path)
+	{
+		return Project.Current != null && path.EndsWith(".bf", .OrdinalIgnoreCase) &&
+			File.Exists(scope $"{Project.Current.Path}/BeefSpace.toml") &&
+			(ScriptInside(path, scope $"{Project.Current.EngineRoot}/Engine/src") ||
+			 ScriptInside(path, scope $"{Project.Current.EngineRoot}/Editor/src"));
+	}
+
+	bool ScriptMayResolve(StringView path)
+	{
+		return Project.Current != null && (path.EndsWith(".cs") || path.EndsWith(".bf")) &&
+			(ScriptMayEdit(path) && ScriptInside(path, scope $"{Project.Current.Path}/src") ||
+			 EngineApiSource(path) || EngineBeefSource(path));
 	}
 
 	/// Turns a graph into an ordinary script: the generated code stays, the graph is removed.
@@ -373,19 +424,21 @@ extension EditorApp
 			Path.GetFileName(path, document.name);
 			document.handle = tn_code_create(text.CStr(), path.EndsWith(".tui") ? 1 : (path.EndsWith(".tcss") ? 2 : ((path.EndsWith(".tshader") || path.EndsWith(".tcompute")) ? 3 : (path.EndsWith(".cs") ? 4 : (path.EndsWith(".tasmdef") ? 5 : 0)))));
 			document.diskTime = ScriptDiskTime(path);
-			document.readOnly = FindSourceGraph(path, scope String());
+			document.readOnly = !ScriptMayEdit(path) || FindSourceGraph(path, scope String());
 			tn_code_set_read_only(document.handle, document.readOnly);
+			tn_code_set_semantic_navigation(document.handle, ScriptMayResolve(path));
 			mScripts.Add(document);
 			RefreshScriptDiagnostics();
 		}
 		else
 		{
-			let readOnly = FindSourceGraph(path, scope String());
+			let readOnly = !ScriptMayEdit(path) || FindSourceGraph(path, scope String());
 			if (document.readOnly != readOnly)
 			{
 				document.readOnly = readOnly;
 				tn_code_set_read_only(document.handle, readOnly);
 			}
+			tn_code_set_semantic_navigation(document.handle, ScriptMayResolve(path));
 		}
 		mSelectScript = document;
 		mFocusScripts = true;
@@ -413,7 +466,7 @@ extension EditorApp
 
 	void SaveScript(ScriptDocument document)
 	{
-		if (document.readOnly || FindSourceGraph(document.path, scope String()) || !tn_code_is_dirty(document.handle))
+		if (document.readOnly || !ScriptMayEdit(document.path) || FindSourceGraph(document.path, scope String()) || !tn_code_is_dirty(document.handle))
 			return;
 		let text = StringView(tn_code_get_text(document.handle));
 		if (File.WriteAllText(document.path, text) case .Err)
@@ -901,7 +954,7 @@ extension EditorApp
 			return;
 		if (ImGui.BeginMenu("File"))
 		{
-			if (ImGui.MenuItem("Save Script", "Ctrl+S", false, active != null && !active.readOnly))
+			if (ImGui.MenuItem("Save Script", "Ctrl+S", false, active != null && !active.readOnly && ScriptMayEdit(active.path)))
 				SaveScript(active);
 			if (ImGui.MenuItem("Save All Scripts", null, false, mScripts.Count > 0))
 				SaveAllScripts();
@@ -922,7 +975,7 @@ extension EditorApp
 		}
 		if (ImGui.BeginMenu("Edit"))
 		{
-			bool editable = active != null && !active.readOnly;
+			bool editable = active != null && !active.readOnly && ScriptMayEdit(active.path);
 			bool selected = active != null && tn_code_has_selection(active.handle);
 			if (ImGui.MenuItem("Undo", "Ctrl+Z", false, editable && tn_code_can_undo(active.handle)))
 				tn_code_undo(active.handle);
@@ -941,7 +994,7 @@ extension EditorApp
 		}
 		if (ImGui.BeginMenu("Navigate"))
 		{
-			bool ready = active != null && (active.path.EndsWith(".cs") || active.path.EndsWith(".bf")) && !mSemantic.running;
+			bool ready = active != null && ScriptMayResolve(active.path) && !mSemantic.running;
 			if (ImGui.MenuItem("Go to Definition", "F12", false, ready))
 				RequestSemantic(active, "definition");
 			if (ImGui.MenuItem("Symbol / Parameters", null, false, ready))
@@ -949,7 +1002,7 @@ extension EditorApp
 				mSymbolInfoRequested = true;
 				RequestSemantic(active, "symbol");
 			}
-			if (ImGui.MenuItem("Rename Symbol", "F2", false, ready))
+			if (ImGui.MenuItem("Rename Symbol", "F2", false, ready && !active.readOnly && ScriptMayEdit(active.path)))
 				BeginScriptSymbolRename();
 			if (ImGui.MenuItem("Undo Symbol Rename", null, false, !mRenameUndo.IsEmpty))
 				UndoSymbolRename();
@@ -963,21 +1016,23 @@ extension EditorApp
 		ImGui.EndMenuBar();
 	}
 
-	/// One tab per open file, each a code editor. A script made from a
-	/// graph is read-only, with a button to turn it into an ordinary script.
+	/// One tab per open file. Generated code and files outside the project are read-only.
 	void DrawScriptTabs(ScriptDocument active)
 	{
 		if (active != null && active.readOnly)
 		{
 			ImGui.SetCursorPosX(6);
-			ImGui.TextColored(EditorTheme.Warning, "Generated from a graph: read-only. Edit the graph, or");
-			ImGui.SameLine();
-			if (ImGui.SmallButton("Convert to Script"))
+			let graphPath = scope String();
+			if (FindSourceGraph(active.path, graphPath))
 			{
-				let graphPath = scope String();
-				if (FindSourceGraph(active.path, graphPath))
+				ImGui.TextColored(EditorTheme.Warning, "Generated from a graph: read-only. Edit the graph, or");
+				ImGui.SameLine();
+				if (ImGui.SmallButton("Convert to Script") && ScriptMayEdit(active.path))
 					ConvertGraphToScript(graphPath);
 			}
+			else
+				ImGui.TextColored(EditorTheme.Warning, EngineApiSource(active.path) || ScriptInside(active.path, Project.Current.EngineRoot) ?
+					"Engine source: read-only." : "Outside the project: read-only.");
 		}
 		ScriptDocument close = null;
 		if (igBeginTabBar("##scripts", 1 | 4 | 64))

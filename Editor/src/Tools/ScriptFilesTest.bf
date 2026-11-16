@@ -122,12 +122,14 @@ extension EditorApp
 		// An open script follows edits made by another program.
 		let external = scope $"{root}/External.cs";
 		File.WriteAllText(external, "class Before {}\n").IgnoreError();
+		Check(!ScriptMayEdit(external) && ScriptMayEdit(scope $"{Project.Current.Path}/src/Editable.cs"),
+			"only files inside the project can be edited");
 		OpenScript(external);
 		ScriptDocument document = null;
 		for (let open in mScripts)
 			if (open.path.EndsWith("External.cs"))
 				document = open;
-		Check(document != null, "the script opens");
+		Check(document != null && document.readOnly, "outside-project source opens read-only");
 		if (document != null)
 		{
 			System.Threading.Thread.Sleep(20);
@@ -139,6 +141,19 @@ extension EditorApp
 			Check(!tn_code_is_dirty(document.handle), "a reloaded script has nothing to save");
 			Check(document.diskTime == (File.GetLastWriteTimeUtc(external) case .Ok(let time) ? time : default), "the reload records the file's time");
 			document.open = false;
+		}
+		let engineFile = scope $"{Project.Current.EngineRoot}/Managed/Tallow.API/Script.cs";
+		OpenScript(engineFile);
+		let engineDocument = FindScript(engineFile);
+		Check(engineDocument != null && engineDocument.readOnly, "engine definition opens read-only");
+		if (engineDocument != null)
+		{
+			let original = scope String(tn_code_get_text(engineDocument.handle));
+			let replacement = scope String("// edit should be refused");
+			tn_code_replace_text(engineDocument.handle, replacement.CStr());
+			Check(StringView(tn_code_get_text(engineDocument.handle)) == original && !tn_code_is_dirty(engineDocument.handle),
+				"read-only engine source ignores replacement edits");
+			engineDocument.open = false;
 		}
 
 		// A scene naming components this build does not have keeps them through load and save.

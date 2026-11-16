@@ -418,10 +418,12 @@ internal static class Program
     }
 
     private static void References(CSharpCompilation compilation,
-        ISymbol symbol, List<string> output)
+        ISymbol symbol, List<string> output, SyntaxTree? onlyTree = null)
     {
         foreach (SyntaxTree tree in compilation.SyntaxTrees)
         {
+            if (onlyTree is not null && tree != onlyTree)
+                continue;
             SemanticModel model = compilation.GetSemanticModel(tree);
             SyntaxNode root = tree.GetRoot();
             string source = tree.GetText().ToString();
@@ -869,6 +871,15 @@ internal static class Program
             return;
         }
 
+        if (request.Operation == "highlight")
+        {
+            if (root.FullSpan.IsEmpty)
+                return;
+            SyntaxToken selectedToken = root.FindToken(Math.Max(0, position - 1));
+            if (!selectedToken.IsKind(SyntaxKind.IdentifierToken) || selectedToken.Span.End != position ||
+                selectedToken.Parent is IdentifierNameSyntax { IsVar: true })
+                return;
+        }
         ISymbol? target = SymbolAt(model, root, position);
         if (request.Operation == "signature")
         {
@@ -897,10 +908,10 @@ internal static class Program
             return;
         }
 
-        if (request.Operation is "references" or "rename")
+        if (request.Operation is "references" or "rename" or "highlight")
         {
             // The editor handles rename as a preview; it never silently changes files.
-            References(compilation, target, output);
+            References(compilation, target, output, request.Operation == "highlight" ? selected : null);
             return;
         }
         throw new InvalidOperationException($"Unknown semantic operation: {request.Operation}");
@@ -930,10 +941,15 @@ internal static class Program
         }
 
         string active = Path.GetFullPath(fields["file"]);
-        if (!File.Exists(Path.Combine(apiDirectory, "Tallow.API.csproj")) ||
-            !(active.StartsWith(sourceDirectory + Path.DirectorySeparatorChar,
-                StringComparison.OrdinalIgnoreCase) && active.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidOperationException("C# source is outside the trusted game project.");
+        bool gameSource = active.StartsWith(sourceDirectory + Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase) && active.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
+        bool apiSource = active.StartsWith(apiDirectory + Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase) && active.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) &&
+            !Path.GetRelativePath(apiDirectory, active).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Any(part => part is "obj" or "bin");
+        bool readOnlyApiRequest = apiSource && fields["operation"] is ("definition" or "symbol" or "highlight");
+        if (!File.Exists(Path.Combine(apiDirectory, "Tallow.API.csproj")) || !(gameSource || readOnlyApiRequest))
+            throw new InvalidOperationException("C# source is outside the trusted game project or read-only engine API.");
 
         var snapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (string file in Directory.EnumerateFiles(sourceDirectory, "*.cs", SearchOption.AllDirectories))
