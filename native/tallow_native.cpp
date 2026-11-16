@@ -10,6 +10,7 @@
 
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
+#include "imgui_internal.h"
 #include "ImGuizmo.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -593,10 +594,32 @@ TN_API bool tn_imgui_event(const SDL_Event* event)
 	return ImGui_ImplSDL3_ProcessEvent(event);
 }
 
+// While a panel is dragged with the mouse inside the editor, keep it wholly inside: ImGui gives a panel its own OS
+// window as soon as any part pokes out, so dragging one toward an edge to dock it there made a window instead. It
+// leaves (and gets its own window) only when the mouse does.
+static void KeepDraggedPanelInside()
+{
+	ImGuiContext& g = *GImGui;
+	if (!(g.IO.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) || g.MovingWindow == nullptr)
+		return;
+	ImGuiWindow* window = g.MovingWindow->RootWindowDockTree;
+	ImGuiViewport* main = ImGui::GetMainViewport();
+	const ImVec2 mouse = g.IO.MousePos;
+	const ImVec2 min = main->Pos, max = ImVec2(main->Pos.x + main->Size.x, main->Pos.y + main->Size.y);
+	if (window == nullptr || mouse.x < min.x || mouse.y < min.y || mouse.x >= max.x || mouse.y >= max.y)
+		return;
+	ImVec2 pos = window->Pos;
+	pos.x = ImMax(min.x, ImMin(pos.x, max.x - window->Size.x));
+	pos.y = ImMax(min.y, ImMin(pos.y, max.y - window->Size.y));
+	if (pos.x != window->Pos.x || pos.y != window->Pos.y)
+		ImGui::SetWindowPos(window, pos, ImGuiCond_Always);
+}
+
 TN_API void tn_imgui_new_frame()
 {
 	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
+	KeepDraggedPanelInside();
 	ImGuizmo::BeginFrame();
 }
 
