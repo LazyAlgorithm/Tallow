@@ -202,6 +202,10 @@ changing the original six-field wire format.
 - [ ] Completion from the compiler for ALL relevant accessible classes, methods, fields, properties, overloads, inherited/interface members, extension methods, generics, enums, namespaces, symbols in project assemblies and installed referenced libraries.
 - [ ] Add accurate completion context/ranking, insertion text, auto imports, braces/parentheses, parameter/return type display and XML documentation. Do not suggest private/inaccessible or irrelevant static/instance members.
 - [ ] Implement robust overload-aware signature help and active argument highlighting; no overlapping code editor popups.
+  - [x] (November 15, 2026) Roslyn answers `signature` with every overload (resolved first; constructors;
+    before the closing parenthesis) and marks the parameter at the caret (\x01..\x02, by position or name);
+    the code widget draws it above the caret line when no completion list is open. Waiting for the user to try
+    it in the editor. Semantic colouring beyond type names needs range colours in TextEdit (not started).
 - [ ] Build persistent incremental Roslyn project state instead of recreating a compilation per request. Measure warm/cold latency and memory/CPU on Nobara/Windows; properly cancel stale requests, debounce typing, restart failed workers, and handle multiple files.
 - [ ] Full diagnostics, warnings, source locations/underlines, click-through from Console; Go to Definition, Find References, Rename, and optionally integrated breakpoints/debugging.
 - [ ] Expand automated tests using actual Tallow.API/gameplay source, multi-assembly projects, inherited/static/extension completions and malformed mid-typing C#.
@@ -233,8 +237,9 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     (rows packed in order, cached Flecs queries; host entries `Ecs.CountData/CopyDataPage/WriteDataPage`,
     `RemoveLocalData`, `EntityOfObject`, `ObjectOfEntity`). ForEach writes back only rows whose bytes changed,
     and skips entities that went or lost a schema meanwhile. `ecs-data.tsv` keeps fields in declaration order.
-    Tests: 10 in-engine checks. Not saved with scenes; not yet: [SyncPosition] relevance for C# data, systems over
-    several data types, systems in phases other than the fixed tick.
+    Tests: 10 in-engine checks. Not saved with scenes. Done since (November 15, 2026): `[SyncPosition]` on a
+    Vector3 of C# data (relevance, schema field "name:offset:size:p"; network check) and `EcsSystem<T1, T2>`
+    (ownership by T1). Not yet: systems in phases other than the fixed tick, three or more data types.
   - [x] C# ECS systems, ownership and prediction (November 15, 2026): `class X : EcsSystem<T>` (found by the
     build, registered by the generated module initializer through `Ecs.DescribeSystem`) runs like a Beef
     `NativeSystem<T>`: a Beef `CSharpEcsSystem` adapter in the native system list calls the managed `RunSystem`
@@ -254,6 +259,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 - [ ] Jolt physics: rigid bodies, forces, collision/trigger callbacks, raycasts/shape casts, character controls, constraints/joints and physics queries.
 - [ ] Native network features surfaced to C#: networked TickInput/actions, authority/ownership, spawning, replication, prediction/reconciliation, rollback, RPCs, lag compensation, relevancy and state sync, working by default.
 - [ ] Rendering, materials, shaders/compute graphs, cameras, lighting, mesh/voxel/terrain, animation/IK, sequencer and modeling tools.
+  - [x] (November 15, 2026) `MeshRenderer.Material` (networked switch), `SetMaterialValue/Float/Color` on the
+    object's own copy, `TryGetWorldBounds`, `IsVisible`, `BackFaceCulling`, `Texture`. Script callbacks
+    `OnSequenceEvent`, `OnDialogueEvent`, `OnTreeEvent` for the same object's runners (host entry
+    `tn_csharp_component_event`, callback-mask bits 23-25).
   - [x] Animator (November 15, 2026): `Animator` value handle (Play, CrossFade, HasClip, CurrentClip,
     CurrentState, IsFinished, IsInTransition, NormalizedTime, StateTime, Speed, controller parameters and layer
     weights) over `CSharpAnimation` exposures; `GetAnimator()` and `GetComponentInChildren<T>()`. 7 in-engine
