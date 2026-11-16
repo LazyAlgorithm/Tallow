@@ -548,6 +548,38 @@ TN_API void tn_imgui_shutdown()
 
 TN_API bool tn_imgui_event(const SDL_Event* event)
 {
+	// A dragged-out window's OS window goes away as it merges back into the editor (and a new one appears as it
+	// leaves), with the drag still held. The backend drops events for a window it no longer has, so the mouse
+	// release (or a click) queued for it was lost and the drag stuck. Send buttons and the wheel to the main window
+	// instead; the pointer's position comes from the desktop every frame, so its moves are not needed.
+	if (ImGui::GetCurrentContext() != nullptr && (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable))
+	{
+		ImGuiViewport* main = ImGui::GetMainViewport();
+		const SDL_WindowID mainId = (SDL_WindowID)(intptr_t)main->PlatformHandle;
+		auto unknown = [](SDL_WindowID id) { return id != 0 && ImGui::FindViewportByPlatformHandle((void*)(intptr_t)id) == nullptr; };
+		if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN || event->type == SDL_EVENT_MOUSE_BUTTON_UP)
+		{
+			if (unknown(event->button.windowID))
+			{
+				SDL_Event moved = *event;
+				moved.button.windowID = mainId;
+				float x = 0, y = 0;
+				SDL_GetGlobalMouseState(&x, &y);
+				moved.button.x = x - main->Pos.x;
+				moved.button.y = y - main->Pos.y;
+				return ImGui_ImplSDL3_ProcessEvent(&moved);
+			}
+		}
+		else if (event->type == SDL_EVENT_MOUSE_WHEEL)
+		{
+			if (unknown(event->wheel.windowID))
+			{
+				SDL_Event moved = *event;
+				moved.wheel.windowID = mainId;
+				return ImGui_ImplSDL3_ProcessEvent(&moved);
+			}
+		}
+	}
 	return ImGui_ImplSDL3_ProcessEvent(event);
 }
 
