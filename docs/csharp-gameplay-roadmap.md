@@ -538,7 +538,8 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     round trip). `TALLOW_RELOAD_UNLOAD_CHECK=1` checks the old code unloads. Editor path automated:
     `--hot-reload-test FOLDER` (types v2 into the code editor and saves during Play; ~2.1 s save-to-reload here),
     step 6 of `tools/test_csharp_editor.py`. Reload test now 27 checks. Still open: pending awaits are dropped,
-    networked sessions reload only this machine.
+    networked sessions reload only this machine (it now warns so in the Console when other players are
+    connected, November 16, 2026).
 - [~] Package precompiled per-platform player/engine plus C# assemblies, runtimeconfig, .NET runtime/dependencies, shaders and assets into independently redistributable Windows/Linux exports. Verify on machines without BeefBuild.
   Linux done: `Player/` is the engine without the editor (its own Beef workspace, since one
   workspace shares generic code with the editor), exporting its generated API symbols.

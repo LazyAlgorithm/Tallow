@@ -542,6 +542,9 @@ static class CSharpRuntime
 		let kept = tn_csharp_reload_game(game.CStr());
 		if (kept < 0)
 			Log.Error(scope $"C# hot reload failed; the old code keeps running: {StringView(tn_csharp_error())}");
+		else if (sScene?.Network != null && sScene.Network.IsConnected && (sScene.Network.IsClient || sScene.Network.ClientCount > 0))
+			// Every machine in a session must run the same code: a reload only reaches this one.
+			Log.Warning("C# hot reload changed the code on this machine only; the other players in the session still run the old code and may go out of sync. Restart the session to share the change.");
 		for (let component in sScene.Components)
 			if (let script = component as CSharpBehaviour)
 				script.Reloaded();
