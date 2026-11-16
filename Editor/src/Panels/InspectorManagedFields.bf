@@ -14,6 +14,8 @@ extension EditorApp
 	/// Inspector draws every frame; the catalog changes once per compile.
 	String mManagedFieldCatalog = new .() ~ delete _;
 	String mManagedFieldCatalogPath = new .() ~ delete _;
+	/// field-docs.tsv: "Class\tField" -> the field's /// summary, the Inspector label's tooltip.
+	Dictionary<String, String> mManagedFieldDocs = new .() ~ DeleteDictionaryAndKeysAndValues!(_);
 	DateTime mManagedFieldCatalogTime;
 	bool mManagedFieldCatalogLoaded;
 	System.Diagnostics.Stopwatch mManagedFieldCatalogClock = new .(true) ~ delete _;
@@ -34,6 +36,10 @@ extension EditorApp
 			mManagedFieldCatalogLoaded = false;
 			return false;
 		}
+		// A doc-comment edit changes only field-docs.tsv (unchanged catalogs are not rewritten).
+		if (File.GetLastWriteTimeUtc(scope $"{Project.Current.Path}/.tallow-csharp/field-docs.tsv") case .Ok(let docsTime) &&
+			docsTime > modified)
+			modified = docsTime;
 		if (mManagedFieldCatalogLoaded && catalog == mManagedFieldCatalogPath &&
 			modified == mManagedFieldCatalogTime)
 			return true;
@@ -42,6 +48,24 @@ extension EditorApp
 		{
 			mManagedFieldCatalogLoaded = false;
 			return false;
+		}
+		for (let pair in mManagedFieldDocs)
+		{
+			delete pair.key;
+			delete pair.value;
+		}
+		mManagedFieldDocs.Clear();
+		let docs = scope String();
+		if (File.ReadAllText(scope $"{Project.Current.Path}/.tallow-csharp/field-docs.tsv", docs) case .Ok)
+		{
+			for (var line in docs.Split('\n', .RemoveEmptyEntries))
+			{
+				line.TrimEnd();
+				let second = line.IndexOf('\t');
+				let third = second < 0 ? -1 : line.IndexOf('\t', second + 1);
+				if (third > 0 && mManagedFieldDocs.TryAdd(new String(line.Substring(0, third)), let key, let value))
+					*value = new String(line.Substring(third + 1));
+			}
 		}
 		mManagedFieldCatalogPath.Set(catalog);
 		mManagedFieldCatalogTime = modified;
@@ -403,6 +427,9 @@ extension EditorApp
 			label.Append(' ', depth * 3);
 			NiceName(dot > 0 ? name.Substring(dot + 1) : name, label);
 			BeginProperty(label.CStr());
+			if (mManagedFieldDocs.TryGetAlt(scope $"{component.scriptType}\t{name}", ?, let documentation)  &&
+				ImGui.IsItemHovered()) // The label: BeginProperty's last item.
+				ImGui.SetTooltip(documentation.CStr());
 			bool edited = false;
 			let newValue = scope String();
 			let options = columns.Count >= 8 ? columns[7] : StringView();

@@ -127,6 +127,17 @@ def main() -> int:
         else:
             failed.append(f"INGAME FAIL nested catalog rows: {nested}")
             print(failed[-1])
+        # A field's /// comment is its Inspector tooltip (field-docs.tsv: class, field, one line of text).
+        docs = {tuple(row.split("\t")[:2]): row.split("\t")[2] for row in
+                (project / ".tallow-csharp/field-docs.tsv").read_text(encoding="utf-8").splitlines() if row}
+        wanted_docs = {("InGame.ApiChecks", "Speed"): "How fast it moves, in metres a second (see Stats) & more.",
+                       ("InGame.ApiChecks", "Stats.Health"): "Hit points."}
+        if all(docs.get(key) == text for key, text in wanted_docs.items()) and ("InGame.ApiChecks", "Label") not in docs:
+            passed += 1
+            print("INGAME PASS a C# field's doc comment is written for the Inspector's tooltip")
+        else:
+            failed.append(f"INGAME FAIL field docs: {[docs.get(key) for key in wanted_docs]}")
+            print(failed[-1])
         # A list of a [Serializable] type is "list:record"; column 8 lists the item's fields (name~kind~default~options).
         waves = catalog.get(("InGame.ApiChecks", "Waves"), [])
         points = catalog.get(("InGame.ApiChecks", "Waypoints"), [])

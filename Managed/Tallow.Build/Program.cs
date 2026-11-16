@@ -108,6 +108,32 @@ internal static class Program
         return entries.Count == 0 ? null : string.Join("|", entries);
     }
 
+    /// <summary>A field's /// comment as one line of plain text: the &lt;summary&gt; when there is one, tags
+    /// dropped (a &lt;see cref="X"/&gt; keeps its name), whitespace collapsed; "" when it has none.</summary>
+    private static string FieldDocumentation(IFieldSymbol field)
+    {
+        if (field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is not VariableDeclaratorSyntax declarator ||
+            declarator.Parent?.Parent is not FieldDeclarationSyntax declaration)
+            return "";
+        var text = new StringBuilder();
+        foreach (SyntaxTrivia trivia in declaration.GetLeadingTrivia())
+            foreach (string line in trivia.ToFullString().Split('\n'))
+            {
+                string trimmed = line.Trim();
+                if (trimmed.StartsWith("///", StringComparison.Ordinal))
+                    text.Append(trimmed[3..]).Append(' ');
+            }
+        string xml = text.ToString();
+        Match summary = Regex.Match(xml, "<summary>(.*?)</summary>", RegexOptions.Singleline);
+        if (summary.Success)
+            xml = summary.Groups[1].Value;
+        xml = Regex.Replace(xml, "<(?:see|seealso|paramref|typeparamref)\\s+\\w+=\"(?:[A-Z]:)?([^\"]*)\"\\s*/>", "$1");
+        xml = Regex.Replace(xml, "<[^>]*>", "");
+        xml = System.Net.WebUtility.HtmlDecode(xml);
+        xml = Regex.Replace(xml, "\\s+", " ").Trim();
+        return xml.Length > 400 ? xml[..400] + "..." : xml;
+    }
+
     // What the Inspector edits a value of this type as (fields.tsv kinds), or null when it cannot.
     private static string? InspectorScalarKind(ITypeSymbol type) =>
         type.TypeKind == TypeKind.Enum ? "enum" : type.SpecialType switch
@@ -829,6 +855,7 @@ internal static class Program
         // Old script names and what they are now ([FormerlyNamed]); the editor updates scenes with them.
         var formerRows = new SortedSet<string>(StringComparer.Ordinal);
         var fieldRows = new SortedSet<string>(StringComparer.Ordinal);
+        var fieldDocRows = new SortedSet<string>(StringComparer.Ordinal);
         // Build-only metadata for a future AOT static serializer. No new
         // runtime reflection or scene format is introduced by this manifest.
         var aotFieldRows = new SortedSet<string>(StringComparer.Ordinal);
@@ -1054,6 +1081,9 @@ internal static class Program
                         // Column 8 of a string: "asset:<kind>", an asset path the Inspector picks.
                         row += "\t" + "asset:" + assetKind;
                     fieldRows.Add(row);
+                    // The field's /// <summary> is its Inspector tooltip.
+                    if (FieldDocumentation(field) is { Length: > 0 } documentation)
+                        fieldDocRows.Add(string.Join("\t", className, prefix + field.Name, documentation));
 
                     AttributeData? identityAttribute = field.GetAttributes().FirstOrDefault(a =>
                         a.AttributeClass?.ToDisplayString() == "Tallow.SerializedFieldIdAttribute");
@@ -1138,6 +1168,7 @@ internal static class Program
         Publish(Path.Combine(project, ".tallow-csharp", "former-names.tsv"), formerRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields.tsv"), fieldRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields-aot.tsv"), aotFieldRows);
+        Publish(Path.Combine(project, ".tallow-csharp", "field-docs.tsv"), fieldDocRows);
         Publish(Path.Combine(project, ".tallow-csharp", "ecs-data.tsv"), ecsDataRows.Values.SelectMany(rows => rows));
         GraphNodeCatalog.Write(compilation, trees, GraphNodesPath(project));
         Console.WriteLine($"Discovered {components.Count} managed gameplay components and {fieldRows.Count} editable fields.");

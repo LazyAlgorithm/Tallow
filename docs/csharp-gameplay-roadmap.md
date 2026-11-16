@@ -304,6 +304,9 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     fields fall back to their defaults. The Inspector draws each item's fields with a label; + copies the last
     item (or the defaults). 3 in-engine checks (scene → fields, live read-back, catalog). Item fields that are
     themselves nested types, lists or references are not shown yet. The editor drawing is not visually checked.
+  - [x] (November 16, 2026) A field's `///` doc comment (its `<summary>`, tags dropped, `<see cref>` names kept)
+    is the Inspector label's tooltip: Tallow.Build writes `.tallow-csharp/field-docs.tsv` (class, field, text;
+    nested "Outer.Inner" fields too) and the editor reloads it with the field catalog. 1 in-engine check.
 - [ ] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.
 
 ## P3 — convert visual scripting and sample content

@@ -31,6 +31,7 @@ public abstract class CheckBase : Script
 [Serializable]
 public struct Stats
 {
+    /// Hit points.
     public int Health;
     public float Speed;
     public Limits? Limits;
@@ -67,6 +68,9 @@ public class ApiChecks : CheckBase
 
     public override void OnWorldStateChanged(int from, int to) => mWorldStateChanges.Add($"{from}>{to}");
 
+    /// <summary>
+    /// How fast it moves, in metres a second (see <see cref="Stats"/>) &amp; more.
+    /// </summary>
     public float Speed = 1f;
     public string Label = "default";
     public List<int> Numbers = new();
