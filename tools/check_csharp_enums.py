@@ -16,6 +16,14 @@ PAIRS = [
      "Managed/Tallow.API/Input.cs", r"public enum KeyCode\s*\{(.*?)\n\}"),
     ("Engine/src/Audio/Audio.bf", r"enum AudioGroup : int32\s*\{(.*?)\n\}",
      "Managed/Tallow.API/Gameplay.cs", r"public enum AudioGroup\s*\{(.*?)\n\}"),
+    ("Engine/src/Core/Gamepad.bf", r"enum GamepadButton : int32\s*\{(.*?)\n\}",
+     "Managed/Tallow.API/Platform.cs", r"public enum GamepadButton\s*\{(.*?)\n\}"),
+    ("Engine/src/Core/Gamepad.bf", r"enum GamepadAxis : int32\s*\{(.*?)\n\}",
+     "Managed/Tallow.API/Platform.cs", r"public enum GamepadAxis\s*\{(.*?)\n\}"),
+    ("Engine/src/Core/Gamepad.bf", r"enum GamepadKind : int32\s*\{(.*?)\n\}",
+     "Managed/Tallow.API/Platform.cs", r"public enum GamepadKind\s*\{(.*?)\n\}"),
+    ("Engine/src/Render/Quality.bf", r"enum QualityLevel\s*\{(.*?)\n\}",
+     "Managed/Tallow.API/Platform.cs", r"public enum QualityLevel\s*\{(.*?)\n\}"),
 ]
 
 

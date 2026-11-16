@@ -18,6 +18,13 @@ public static class Screen
     /// <summary>Height in pixels (0 in a headless run).</summary>
     public static float Height => Size.Y;
 
+    /// <summary>Whether the window fills the screen (borderless, at the desktop's resolution); set it to switch.</summary>
+    public static bool Fullscreen
+    {
+        get => CSharpPlatform.WindowFullscreen();
+        set => CSharpPlatform.SetWindowFullscreen(value);
+    }
+
     /// <summary>Width and height in pixels.</summary>
     public static Vector2 Size
     {

@@ -322,12 +322,58 @@ public class ApiChecks : CheckBase
         Check("offline: no session, nothing to leave, no clients",
             !Network.InSession(Scene) && !Network.IsConnected(Scene) && !Network.Leave(Scene) && Network.ClientIds(Scene).Length == 0
             && Network.PlayerObject(Scene, 0) == null);
+        PlatformChecks();
         CharacterController character = _swimmer.GetComponent<CharacterController>();
         float before = _swimmer.Transform.Position.Y;
         for (int i = 0; i < 5; i++)
             character.Swim(new Vector3(0, 2, 0), 0.1f);
         Check($"CharacterController.Swim swims up through deep water ({before} -> {_swimmer.Transform.Position.Y})",
             _swimmer.Transform.Position.Y > before + 0.3f);
+    }
+
+    /// Engine services that are not components (headless: no pads, fingers or window).
+    private void PlatformChecks()
+    {
+        Check("Gamepad: none connected headless, nothing held",
+            !Gamepad.IsConnected() && !Gamepad.GetButton(GamepadButton.South) && Gamepad.GetAxis(GamepadAxis.LeftX) == 0 &&
+            Gamepad.Name() == "" && Touch.Count == 0 && Touch.Fingers.Length == 0);
+        Gamepad.Rumble(0.5f, 0.5f, 0.1f);
+        DialogueVariables.Set("gold", 12);
+        DialogueVariables.Add("gold", 3);
+        DialogueVariables.Set("metGuard", true);
+        Check($"DialogueVariables Set/Add/Get and Evaluate ({DialogueVariables.Get("gold")})",
+            DialogueVariables.Get("gold") == 15 && DialogueVariables.Evaluate("gold >= 10 && metGuard") &&
+            !DialogueVariables.Evaluate("gold > 100"));
+        DialogueVariables.Clear();
+        int line = Subtitles.Show("Guard", "Halt!", 5);
+        int caption = Subtitles.Caption("[door creaks]");
+        bool shown = Subtitles.IsShowing(line) && Subtitles.IsShowing(caption);
+        Subtitles.Hide(line);
+        Check("Subtitles Show, Caption, IsShowing and Hide", shown && !Subtitles.IsShowing(line) && Subtitles.IsShowing(caption));
+        Subtitles.Clear();
+        int before = Achievements.GetStat("csharpProbe", true);
+        int after = Achievements.AddStat("csharpProbe", 2, true);
+        Achievements.SetStat("csharpProbe", before, true);
+        Check($"Achievements stats add and set locally ({before} -> {after})", after == before + 2 &&
+            Achievements.GetStat("csharpProbe", true) == before);
+        Achievements.Clear("csharpProbeAchievement");
+        bool unlocked = Achievements.Unlock("csharpProbeAchievement") && Achievements.IsUnlocked("csharpProbeAchievement")
+            && !Achievements.Unlock("csharpProbeAchievement");
+        Achievements.Clear("csharpProbeAchievement");
+        Check("Achievements Unlock once, IsUnlocked, Clear", unlocked && !Achievements.IsUnlocked("csharpProbeAchievement"));
+        Decals.Spawn(Scene, new Vector3(0, 0.01f, 0), Vector3.UnitY, "Textures/decal.png", 1, 5);
+        Decals.Clear(Scene);
+        Vector3 wind = Wind.At(Scene, Vector3.Zero);
+        float gusts = Wind.Gusts(Scene);
+        Check($"Wind.At and Gusts read the scene's wind ({wind}, {gusts})", float.IsFinite(wind.X) && gusts >= 0 && gusts <= 1);
+        QualityLevel level = Quality.Level;
+        Quality.Set(QualityLevel.Low, save: false);
+        bool low = Quality.Level == QualityLevel.Low;
+        Quality.Set(level == QualityLevel.Custom ? QualityLevel.High : level, save: false);
+        Check($"Quality.Set applies a preset (was {level}, recommended {Quality.Recommended})", low);
+        bool full = Screen.Fullscreen;
+        Screen.Fullscreen = full;
+        Check("Screen.Fullscreen reads and keeps its value", Screen.Fullscreen == full);
     }
 
     private void PackageChecks()
