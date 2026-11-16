@@ -352,7 +352,7 @@ internal static class Program
                             isScript = true;
                             break;
                         }
-                        if (parent.OriginalDefinition.ToDisplayString() == "Tallow.EcsSystem<T>")
+                        if (parent.OriginalDefinition.ToDisplayString() is "Tallow.EcsSystem<T>" or "Tallow.EcsSystem<T1, T2>")
                         {
                             isSystem = true;
                             break;

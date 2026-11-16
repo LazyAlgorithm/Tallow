@@ -274,7 +274,7 @@ public class ApiChecks : CheckBase
         eye.Destroy();
     }
 
-    private EcsEntity _spinBare;
+    private EcsEntity _spinBare, _paired, _chargeOnly;
     private GameObject _spinObject;
     private int _systemTick;
 
@@ -285,6 +285,11 @@ public class ApiChecks : CheckBase
         _spinBare.Set(new Spin { Speed = 2 });
         _spinObject = Scene.CreateGameObject("SpinObject");
         _spinObject.Entity.Set(new Spin { Speed = 2 });
+        _paired = Scene.CreateLocalEcsEntity();
+        _paired.Set(new Charge());
+        _paired.Set(new Drain());
+        _chargeOnly = Scene.CreateLocalEcsEntity();
+        _chargeOnly.Set(new Charge());
         _systemTick = _fixedTicks;
     }
 
@@ -296,7 +301,13 @@ public class ApiChecks : CheckBase
             bare.Ticks > 0 && Math.Abs(bare.Ticks - ticks) <= 1 && bare.Angle == bare.Ticks * 2);
         Check("an EcsSystem leaves GameObjects' entities alone", onObject.Ticks == 0);
         Check("offline, a bare entity is this machine's", _spinBare.IsMine && _spinBare.OwnerClientId == 0 && !_spinBare.SetOwner(1));
+        Charge paired = _paired.Get<Charge>(), alone = _chargeOnly.Get<Charge>();
+        Drain drained = _paired.Get<Drain>();
+        Check($"an EcsSystem<T1, T2> runs on entities with both data ({paired.Count}, {drained.Count}) and not one ({alone.Count})",
+            paired.Count > 0 && Math.Abs(paired.Count - ticks) <= 1 && drained.Count == -paired.Count && alone.Count == 0);
         _spinBare.DestroyLocal();
+        _paired.DestroyLocal();
+        _chargeOnly.DestroyLocal();
         _spinObject.Destroy();
     }
 
@@ -1360,6 +1371,28 @@ public class SpinSystem : EcsSystem<Spin>
     {
         spin.Ticks++;
         spin.Angle += spin.Speed;
+    }
+}
+
+[Component]
+public struct Charge
+{
+    public int Count;
+}
+
+[Component]
+public struct Drain
+{
+    public int Count;
+}
+
+/// Runs on bare entities with both Charge and Drain.
+public class ChargeDrainSystem : EcsSystem<Charge, Drain>
+{
+    public override void Update(EcsEntity entity, ref Charge charge, ref Drain drain, TickInput input, float deltaTime)
+    {
+        charge.Count++;
+        drain.Count--;
     }
 }
 

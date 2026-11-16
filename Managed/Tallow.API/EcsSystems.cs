@@ -34,20 +34,52 @@ public abstract class EcsSystem<T> : EcsSystemBase where T : unmanaged
             one.Set(data);
             return;
         }
-        // Entities clients own run with their owners' controls, one at a time.
-        Span<ulong> owned = stackalloc ulong[64];
-        int ownedCount = Ecs.ClientOwned(session, owned);
-        if (ownedCount > owned.Length)
-        {
-            owned = new ulong[ownedCount];
-            ownedCount = Math.Min(ownedCount, Ecs.ClientOwned(session, owned));
-        }
-        ulong[]? skip = ownedCount == 0 ? null : owned[..ownedCount].ToArray();
+        ulong[]? skip = ClientOwned(session);
         new EcsQuery<T>(session) { BareOnly = true }.ForEach((EcsEntity e, ref T data) =>
         {
             if (skip != null && Array.IndexOf(skip, e.Id) >= 0)
                 return;
             Update(e, ref data, input, deltaTime);
+        });
+    }
+}
+
+/// <summary>
+/// As <see cref="EcsSystem{T}"/>, for bare entities with both <typeparamref name="T1"/> and <typeparamref name="T2"/>
+/// data (entities with only one are left alone). Ownership and prediction go by <typeparamref name="T1"/>, so give it
+/// the <c>[Sync]</c> fields.
+/// </summary>
+public abstract class EcsSystem<T1, T2> : EcsSystemBase where T1 : unmanaged where T2 : unmanaged
+{
+    public abstract void Update(EcsEntity entity, ref T1 a, ref T2 b, TickInput input, float deltaTime);
+
+    internal override ulong SchemaId
+    {
+        get
+        {
+            EcsSchema<T2>.Require();
+            return EcsSchema<T1>.Require();
+        }
+    }
+
+    internal override void Run(ulong session, ulong entity, TickInput input, float deltaTime)
+    {
+        if (entity != 0)
+        {
+            var one = new EcsEntity(session, entity);
+            if (!one.TryGet(out T1 a) || !one.TryGet(out T2 b))
+                return;
+            Update(one, ref a, ref b, input, deltaTime);
+            one.Set(a);
+            one.Set(b);
+            return;
+        }
+        ulong[]? skip = ClientOwned(session);
+        new EcsQuery<T1, T2>(session) { BareOnly = true }.ForEach((EcsEntity e, ref T1 a, ref T2 b) =>
+        {
+            if (skip != null && Array.IndexOf(skip, e.Id) >= 0)
+                return;
+            Update(e, ref a, ref b, input, deltaTime);
         });
     }
 }
@@ -60,6 +92,19 @@ public abstract class EcsSystemBase
 
     internal abstract ulong SchemaId { get; }
     internal abstract void Run(ulong session, ulong entity, TickInput input, float deltaTime);
+
+    /// <summary>The entities clients own (they run with their owners' controls, one at a time), or null for none.</summary>
+    private protected static ulong[]? ClientOwned(ulong session)
+    {
+        Span<ulong> owned = stackalloc ulong[64];
+        int count = Ecs.ClientOwned(session, owned);
+        if (count > owned.Length)
+        {
+            owned = new ulong[count];
+            count = Math.Min(count, Ecs.ClientOwned(session, owned));
+        }
+        return count == 0 ? null : owned[..count].ToArray();
+    }
 }
 
 /// <summary>The game's systems, registered by generated code when its assembly loads.</summary>
