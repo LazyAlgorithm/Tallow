@@ -21,6 +21,41 @@ static class Terminal
 	public const String Null = "/dev/null";
 #endif
 
+	/// Appends how to start Tallow.Build, ending in "--" (its own options follow): its built DLL when that is newer
+	/// than every source of it (skipping `dotnet run`'s up-to-date check, about half a second a compile), otherwise
+	/// `dotnet run --project`, which builds it first.
+	public static void AppendBuildTool(StringView engineRoot, String command)
+	{
+		let folder = scope $"{engineRoot}/Managed/Tallow.Build";
+		let dll = scope $"{folder}/bin/Debug/net11.0/Tallow.Build.dll";
+		bool current = File.Exists(dll);
+		if (current && File.GetLastWriteTimeUtc(dll) case .Ok(let built))
+		{
+			for (let entry in Directory.EnumerateFiles(folder))
+			{
+				let name = scope String();
+				entry.GetFileName(name);
+				if ((name.EndsWith(".cs") || name.EndsWith(".csproj")) && entry.GetLastWriteTimeUtc() > built)
+				{
+					current = false;
+					break;
+				}
+			}
+		}
+		else
+			current = false;
+		if (current)
+		{
+			command.Append("dotnet ");
+			Quote(dll, command);
+			command.Append(" --");
+			return;
+		}
+		command.Append("dotnet run --project ");
+		Quote(scope $"{folder}/Tallow.Build.csproj", command);
+		command.Append(" --");
+	}
+
 	/// Runs a command and waits for it. Returns the exit status (0 on success).
 	public static int32 Run(StringView command)
 	{

@@ -288,9 +288,9 @@ class LauncherApp : Application
 				}
 			}
 			let logPath = scope $"{project.Path}/build/csharp-build.log";
-			let command = scope String("dotnet run --project ");
-			Terminal.Quote(scope $"{project.EngineRoot}/Managed/Tallow.Build/Tallow.Build.csproj", command);
-			command.Append(" -- --project ");
+			let command = scope String();
+			Terminal.AppendBuildTool(project.EngineRoot, command);
+			command.Append(" --project ");
 			Terminal.Quote(project.Path, command);
 			command.Append(" --engine-root ");
 			Terminal.Quote(project.EngineRoot, command);

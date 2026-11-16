@@ -93,6 +93,26 @@ for (( i=1; i<=REPEATS; i++ )); do
     measure warm-edit "$i" dotnet run --no-build -c Debug \
         --project "$ROOT/Managed/Tallow.Build/Tallow.Build.csproj" \
         -- --project "$project" --engine-root "$ROOT"
+    # Per-assembly builds: an edit inside Gameplay.tasmdef rebuilds only Gameplay.dll; a new public type there
+    # also rebuilds Tallow.Game.dll, which references it.
+    rebuilt() { find "$project/.tallow-csharp/bin" -name '*.dll' -newer "$WORK/marker-$i" -printf '%f\n' | sort -u | tr '\n' ' '; }
+    touch "$WORK/marker-$i"; sleep 1
+    printf '\n// Tallow benchmark edit %s\n' "$i" >> "$project/src/Gameplay/MoveRight.cs"
+    measure leaf-edit "$i" dotnet run --no-build -c Debug \
+        --project "$ROOT/Managed/Tallow.Build/Tallow.Build.csproj" \
+        -- --project "$project" --engine-root "$ROOT"
+    if [[ "$(rebuilt)" != "Gameplay.dll " ]]; then
+        echo "leaf-edit rebuilt: $(rebuilt) (expected only Gameplay.dll)" >&2; exit 1
+    fi
+    touch "$WORK/marker-$i"; sleep 1
+    printf 'namespace Gameplay;\npublic static class BenchmarkApi%s { public static int Value() => 1; }\n' "$i" \
+        > "$project/src/Gameplay/BenchmarkApi.cs"
+    measure api-edit "$i" dotnet run --no-build -c Debug \
+        --project "$ROOT/Managed/Tallow.Build/Tallow.Build.csproj" \
+        -- --project "$project" --engine-root "$ROOT"
+    if [[ "$(rebuilt)" != "Gameplay.dll Tallow.Game.dll " ]]; then
+        echo "api-edit rebuilt: $(rebuilt) (expected Gameplay.dll and Tallow.Game.dll)" >&2; exit 1
+    fi
 done
 
 echo

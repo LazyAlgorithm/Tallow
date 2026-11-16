@@ -378,6 +378,13 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 
 - [ ] Measure cold compile, warm single-file edit, no-op compile, incremental assembly build and edit-to-Play. Compare with legacy Beef workflow and relevant older/current Unity baselines without promising a specific speed.
 - [ ] Incremental C# per-`.tasmdef` builds with correct dependency invalidation, diagnostics and simultaneous builds; avoid unnecessary full-game builds on every edit.
+  - [x] (November 15, 2026) Verified: each `.tasmdef` is its own MSBuild project, so an edit inside one rebuilds
+    only its DLL, and a public API change also rebuilds the assemblies referencing it (reference assemblies).
+    `tools/benchmark_csharp_compiles.sh` now has `leaf-edit` and `api-edit` phases that fail if other DLLs are
+    rebuilt. Fixed overhead dominated (every phase ~1.2 s on the test fixture): the editor and launcher ran
+    `dotnet run --project Tallow.Build.csproj`, re-checking the tool each compile; they now start its built DLL
+    when it is newer than its sources (`Terminal.AppendBuildTool`): a launcher build went from ~1.6 s to 0.85 s
+    (Tallow.Build: ~0.35 s generating, ~0.25 s `dotnet build`, the rest the catalogs).
 - [~] Game assemblies (and their .pdb symbols) load from in-memory copies, so Windows no
   longer holds `Tallow.Game.dll` and asmdef DLLs locked after Play and the next compile can
   replace them. Not yet run on Windows.
