@@ -319,6 +319,9 @@ public class ApiChecks : CheckBase
         Water water = _pool.GetComponent<Water>();
         Check("Water.IsFloating sees a Rigidbody in it", water.IsFloating(_floater.GetComponent<Rigidbody>())
             && !water.IsFloating(_pool));
+        Check("offline: no session, nothing to leave, no clients",
+            !Network.InSession(Scene) && !Network.IsConnected(Scene) && !Network.Leave(Scene) && Network.ClientIds(Scene).Length == 0
+            && Network.PlayerObject(Scene, 0) == null);
         CharacterController character = _swimmer.GetComponent<CharacterController>();
         float before = _swimmer.Transform.Position.Y;
         for (int i = 0; i < 5; i++)

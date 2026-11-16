@@ -36,6 +36,7 @@ extension NetworkManager
 		NativeClientJoined(client.id);
 		if (OnClientJoined != null)
 			OnClientJoined(client.id);
+		CSharpRuntime.ClientEvent(mScene, 3, client.id);
 		Log.Info(scope $"Client {client.id} connected.");
 	}
 
@@ -74,6 +75,7 @@ extension NetworkManager
 		AntiCheat.ClientLeft(this, client.id);
 		MapSharing.ClientLeft(client.id);
 		NativeClientLeft(client.id);
+		CSharpRuntime.ClientEvent(mScene, 4, client.id);
 		Log.Info(scope $"Client {client.id} disconnected.");
 		mClients.Remove(client);
 		delete client;

@@ -281,7 +281,12 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     changes (ForEach in place included) follow, deletes go. A scene registers a described schema on first use, so
     a client can query data only the server sets; clients may read and write replicas' C# data. 4 network checks.
 - [x] Jolt physics: rigid bodies, forces, collision/trigger callbacks, raycasts/shape casts, character controls, constraints/joints and physics queries. Done (verified November 16, 2026): Rigidbody fields (mass, gravity, kinematic, friction, bounciness, damping, freeze rotation, continuous collision, sleeping) and forces/torque/impulses, collision/trigger/stay/controller-hit callbacks, every Beef query (ray, sphere/capsule/box casts, overlaps, CheckSphere/CheckBox), CharacterController, hinge/suspension joints and `Joint.Connect`, soft bodies. Benchmarked in B13.
-- [ ] Native network features surfaced to C#: networked TickInput/actions, authority/ownership, spawning, replication, prediction/reconciliation, rollback, RPCs, lag compensation, relevancy and state sync, working by default.
+- [x] Native network features surfaced to C#: networked TickInput/actions, authority/ownership, spawning, replication, prediction/reconciliation, rollback, RPCs, lag compensation, relevancy and state sync, working by default.
+  Done November 16, 2026, with sessions: `Network.Host/Serve/Join(address)` (how the next scene's Network Session
+  starts), `Network.Leave`, `InSession`, `IsConnected`, `ClientIds`, `PlayerObject`, `IsRelevantTo`, and
+  `Script.OnClientJoined/OnClientLeft` (ComponentEvent kinds 3-4, mask bits 27-28). 3 more network checks (32),
+  1 offline check. Not surfaced on purpose: raw game messages (RPCs and network events cover them) and engine
+  internals; ping does not exist in Beef either.
   - [x] (November 16, 2026) Lag compensation: `Script.BeginLagCompensation()` / `EndLagCompensation()`,
     `using (LagCompensated()) { ... }` and `LagCompensationTick` (Beef `NetworkManager.BeginLagCompensation`).
     2 network checks (active in the client's player tick on the server, ends; does nothing on a client).

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Numerics;
 using Tallow;
 
@@ -16,10 +17,23 @@ public class RpcProbe : Script
     private bool _serverHeard;
     /// The server's lag compensation inside this player's tick: "active tickDuring tickAfter".
     [Sync] public string LagReport = "";
+    /// The server's view of this player's client: "joined listed player connected".
+    [Sync] public string SessionReport = "";
+    private static int _joined = -1;
+
+    public override void OnClientJoined(int clientId)
+    {
+        if (Scene.IsServer)
+            _joined = clientId;
+    }
     private int _serverTicks;
 
     public override void Update(TickInput input, float deltaTime)
     {
+        if (Scene.IsServer && GameObject.OwnerClientId > 0 && SessionReport.Length == 0 && _joined > 0)
+            SessionReport = $"{_joined == GameObject.OwnerClientId} {Network.ClientIds(Scene).Contains(GameObject.OwnerClientId)} " +
+                $"{Network.PlayerObject(Scene, GameObject.OwnerClientId) == GameObject} {Network.IsConnected(Scene)} " +
+                $"{Network.IsRelevantTo(GameObject, GameObject.OwnerClientId)}";
         if (!Scene.IsServer || GameObject.OwnerClientId <= 0 || LagReport.Length > 0)
             return;
         double during;
@@ -89,11 +103,16 @@ public class RpcProbe : Script
             SendNetworkEvent("hello", 3.5f);
             SyncProbe.Check("an owner's network event waits for the server", _event == 0f);
         }
-        if (_answer != 0 && _echoed && _event != 0f && _serverHeard && LagReport.Length > 0 &&
+        if (_answer != 0 && _echoed && _event != 0f && _serverHeard && LagReport.Length > 0 && SessionReport.Length > 0 &&
             GameObject.GetComponent<MotorProbe>() is { Done: true })
         {
             SyncProbe.Check($"lag compensation runs on the server in the client's player tick and ends ({LagReport})",
                 LagReport == "True True -1");
+            SyncProbe.Check($"server: OnClientJoined, Network.ClientIds, PlayerObject, IsConnected and IsRelevantTo ({SessionReport})",
+                SessionReport == "True True True True True");
+            SyncProbe.Check("client: in a connected session, with no client list of its own",
+                Network.InSession(Scene) && Network.IsConnected(Scene) && Network.ClientIds(Scene).Length == 0 &&
+                Network.PlayerObject(Scene, Scene.LocalClientId) == GameObject && !Network.IsRelevantTo(GameObject, 1));
             SyncProbe.Check("lag compensation does nothing on a client", !BeginLagCompensation() && LagCompensationTick == -1);
             SyncProbe.Check("SendNetworkEvent from a client runs OnNetworkEvent on the server and comes back", _event == 3.5f);
             _done = true;

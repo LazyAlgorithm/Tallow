@@ -769,6 +769,26 @@ static class CSharpRuntime
 		}
 	}
 
+	/// CallbackMask bits for OnClientJoined and OnClientLeft (ComponentEvent kinds 3 and 4).
+	public const int32 ClientJoinedCallback = 1 << 27, ClientLeftCallback = 1 << 28;
+
+	/// Server: a client joined or left (kind 3 or 4); every C# script in the scene that overrides the callback hears it.
+	public static void ClientEvent(Scene scene, int32 kind, int32 clientId)
+	{
+		if (!Ready || scene == null)
+			return;
+		let bit = kind == 3 ? ClientJoinedCallback : ClientLeftCallback;
+		let scripts = scope List<CSharpBehaviour>();
+		for (let component in scene.Components)
+			if (let script = component as CSharpBehaviour)
+				if (script.IsLoaded && (script.[Friend]mCallbacks & bit) != 0)
+					scripts.Add(script);
+		// Collected first: a script may spawn or destroy objects while handling it.
+		for (let script in scripts)
+			if (script.IsLoaded && tn_csharp_component_event(script.ManagedInstance, kind, "", clientId) <= 0)
+				ReportFailure(kind == 3 ? "OnClientJoined" : "OnClientLeft");
+	}
+
 	/// C# set Network.ChooseTeam.
 	public static bool HasTeamChooser;
 

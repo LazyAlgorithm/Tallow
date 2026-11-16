@@ -147,4 +147,74 @@ static class CSharpNetwork
 			buffer[i] = (uint8)text[i];
 		return (int32)text.Length;
 	}
+
+	/// How the next scene's Network Session starts: mode 0 as the scene says, 1 server, 2 host, 3 client (to
+	/// address); port 0 keeps the scene's. Takes effect when a scene with a Network Session loads.
+	[CSharpExpose]
+	public static void SetSession(int32 mode, StringView address, int32 port)
+	{
+		NetworkSession.ModeOverride = mode == 1 ? .Server : mode == 2 ? .Host : mode == 3 ? .Client : .Offline;
+		NetworkSession.AddressOverride.Set(mode == 3 ? address : "");
+		NetworkSession.PortOverride = Math.Max(port, 0);
+	}
+
+	/// Ends this scene's session (the scene plays on offline). False when there was none.
+	[CSharpExpose]
+	public static bool StopSession(uint64 session)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		if (scene?.Network == null)
+			return false;
+		scene.Network.Stop();
+		delete scene.Network;
+		scene.Network = null;
+		return true;
+	}
+
+	/// 1 connected (a server always is), 0 not yet or no longer, -1 no session.
+	[CSharpExpose]
+	public static int32 Connected(uint64 session)
+	{
+		let network = CSharpRuntime.PhysicsScene(session)?.Network;
+		return network == null ? -1 : (network.IsServer || network.IsConnected) ? 1 : 0;
+	}
+
+	/// Server: the connected clients' ids into ids (as numbers; spans of int32 are not a binding type) (the host's own player, 0, is not one); how many there are
+	/// (more than ids holds: call again with room). -1 on a client or without a session.
+	[CSharpExpose]
+	public static int32 ClientIds(uint64 session, Span<float> ids)
+	{
+		let network = CSharpRuntime.PhysicsScene(session)?.Network;
+		if (network == null || !network.IsServer)
+			return -1;
+		let list = scope List<int32>();
+		network.GetClientIds(list);
+		for (int i < Math.Min(list.Count, ids.Length))
+			ids[i] = list[i]; // exact: client ids are small
+		return (int32)list.Count;
+	}
+
+	/// The object spawned as a client's player (0: the host's own); 0 when it has none.
+	[CSharpExpose]
+	public static uint64 PlayerObject(uint64 session, int32 clientId)
+	{
+		let player = CSharpRuntime.PhysicsScene(session)?.Network?.PlayerObject(clientId);
+		return player != null ? (uint64)player.Id : 0;
+	}
+
+	/// Server: 1 when a client is told about an object (it is in that client's area: NetworkIdentity relevance),
+	/// 0 when not, -1 on a client, without a session or for an object without a Network Identity.
+	[CSharpExpose]
+	public static int32 RelevantTo(uint64 session, uint64 entity, int32 clientId)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		let network = scene?.Network;
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		if (network == null || !network.IsServer || obj == null)
+			return -1;
+		let identity = obj.GetComponent<NetworkIdentity>();
+		if (!identity.IsValid)
+			return -1;
+		return network.IsRelevantTo(clientId, identity.NetId) ? 1 : 0;
+	}
 }

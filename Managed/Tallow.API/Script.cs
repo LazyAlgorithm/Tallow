@@ -1452,6 +1452,11 @@ public abstract class Script : IComponent
     public virtual void OnLoaded() { }
     /// <summary>Called on every machine when <see cref="SendNetworkEvent"/> is used on this script.</summary>
     public virtual void OnNetworkEvent(string name, float value) { }
+    /// <summary>Server: a client connected (its player, if the session spawns one, already exists:
+    /// <see cref="Network.PlayerObject"/>).</summary>
+    public virtual void OnClientJoined(int clientId) { }
+    /// <summary>Server: a client disconnected (the objects it owned are gone).</summary>
+    public virtual void OnClientLeft(int clientId) { }
 
     /// <summary>
     /// Client prediction: the object's state is being saved for a tick (to compare with the server and to rewind to).

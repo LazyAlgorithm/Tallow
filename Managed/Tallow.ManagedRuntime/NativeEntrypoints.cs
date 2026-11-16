@@ -283,6 +283,8 @@ public static unsafe class NativeEntrypoints
                 case 0: script.OnSequenceEvent(text, value); break;
                 case 1: script.OnDialogueEvent(text, value); break;
                 case 2: script.OnTreeEvent(text); break;
+                case 3: script.OnClientJoined((int)value); break;
+                case 4: script.OnClientLeft((int)value); break;
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
             }
             return 1;
@@ -1414,6 +1416,8 @@ public static unsafe class NativeEntrypoints
     private const int SequenceEventBit = 1 << 23, DialogueEventBit = 1 << 24, TreeEventBit = 1 << 25;
     /// <summary>The bit for the prediction state hooks (any of Capture, Prepare, Restore).</summary>
     private const int PredictionBit = 1 << 26;
+    /// <summary>The bits for OnClientJoined and OnClientLeft (ComponentEvent kinds 3 and 4).</summary>
+    private const int ClientJoinedBit = 1 << 27, ClientLeftBit = 1 << 28;
     private static readonly Dictionary<Type, int> sCallbackMasks = new();
 
     /// <summary>
@@ -1446,6 +1450,8 @@ public static unsafe class NativeEntrypoints
             Check(nameof(Script.OnSequenceEvent), [typeof(string), typeof(float)], SequenceEventBit);
             Check(nameof(Script.OnDialogueEvent), [typeof(string), typeof(float)], DialogueEventBit);
             Check(nameof(Script.OnTreeEvent), [typeof(string)], TreeEventBit);
+            Check(nameof(Script.OnClientJoined), [typeof(int)], ClientJoinedBit);
+            Check(nameof(Script.OnClientLeft), [typeof(int)], ClientLeftBit);
             Type byRef = typeof(PredictionState).MakeByRefType();
             Check(nameof(Script.CapturePredictionState), [byRef], PredictionBit);
             Check(nameof(Script.PreparePredictionState), [byRef], PredictionBit);

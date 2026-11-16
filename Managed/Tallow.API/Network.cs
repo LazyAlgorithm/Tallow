@@ -3,12 +3,75 @@ using System.Numerics;
 namespace Tallow;
 
 /// <summary>
-/// Network prefabs. A prefab file whose root has a Network Identity is shared: <c>Scene.Spawn</c> (or
+/// Sessions and network prefabs. <see cref="Host"/>, <see cref="Join"/> and <see cref="Serve"/> say how the next
+/// scene with a Network Session starts (load it after); <see cref="Leave"/> ends one. A prefab file whose root has a Network Identity is shared: <c>Scene.Spawn</c> (or
 /// <see cref="Prefab.Instantiate(Scene, string)"/>) on the server makes it on every machine. Register a short name
 /// for a prefab file once at startup, with the same names on the server and clients.
 /// </summary>
 public static class Network
 {
+    /// <summary>
+    /// Hosts a game (a server that also plays) from the next scene with a Network Session, on its port or this one:
+    /// <c>Network.Host(); SceneManager.Load("Scenes/Arena.tscene");</c>
+    /// </summary>
+    public static void Host(int port = 0) => CSharpNetwork.SetSession(2, "", port);
+
+    /// <summary>Runs a dedicated server (no local player) from the next scene with a Network Session.</summary>
+    public static void Serve(int port = 0) => CSharpNetwork.SetSession(1, "", port);
+
+    /// <summary>Joins the game at an address from the next scene with a Network Session.</summary>
+    public static void Join(string address, int port = 0)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(address);
+        CSharpNetwork.SetSession(3, address, port);
+    }
+
+    /// <summary>
+    /// Ends the scene's session (it plays on offline) and lets later scenes start as they say again. False when it
+    /// had none.
+    /// </summary>
+    public static bool Leave(Scene scene)
+    {
+        CSharpNetwork.SetSession(0, "", 0);
+        return CSharpNetwork.StopSession(scene.SessionId);
+    }
+
+    /// <summary>Whether the scene has a session that is connected (a server always is).</summary>
+    public static bool IsConnected(Scene scene) => CSharpNetwork.Connected(scene.SessionId) > 0;
+
+    /// <summary>Whether the scene has a network session at all.</summary>
+    public static bool InSession(Scene scene) => CSharpNetwork.Connected(scene.SessionId) >= 0;
+
+    /// <summary>Server: the connected clients' ids (the host's own player, 0, is not one). Empty on a client.</summary>
+    public static int[] ClientIds(Scene scene)
+    {
+        Span<float> some = stackalloc float[32];
+        int count = CSharpNetwork.ClientIds(scene.SessionId, some);
+        if (count <= 0)
+            return [];
+        Span<float> all = count <= some.Length ? some : new float[count];
+        if (count > some.Length)
+            count = Math.Min(count, CSharpNetwork.ClientIds(scene.SessionId, all));
+        var ids = new int[count];
+        for (int i = 0; i < count; i++)
+            ids[i] = (int)all[i];
+        return ids;
+    }
+
+    /// <summary>
+    /// Server: whether a client is told about an object (it is in that client's area; set by the object's
+    /// <c>NetworkIdentity.Relevance</c> and the session's relevance radius). False on a client.
+    /// </summary>
+    public static bool IsRelevantTo(GameObject gameObject, int clientId) =>
+        CSharpNetwork.RelevantTo(gameObject.SceneId, gameObject.Id, clientId) > 0;
+
+    /// <summary>The object spawned as a client's player (0: the host's own), or null.</summary>
+    public static GameObject? PlayerObject(Scene scene, int clientId)
+    {
+        ulong id = CSharpNetwork.PlayerObject(scene.SessionId, clientId);
+        return id == 0 ? null : new GameObject(scene.SessionId, id);
+    }
+
     /// <summary>Names a prefab file for Spawn and for a Network Session's player prefab.</summary>
     public static void RegisterPrefab(string name, string prefabPath)
     {
