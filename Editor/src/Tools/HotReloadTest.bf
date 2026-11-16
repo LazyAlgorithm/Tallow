@@ -10,7 +10,9 @@ namespace Tallow.Editor;
 /// Play, lets the game run 2 s, then deletes the scripts in src/Scripts that FOLDER does not have, puts each of
 /// FOLDER's files into the code editor (as if typed) and saves them with Save All; the save compiles and reloads the
 /// running game. Logs "HOT RELOAD TEST PASS: ..." once the reload happened and the game stopped Play itself (or
-/// "... FAIL: ..."), then quits. tools/test_csharp_editor.py runs it on Tests/CSharpReload with v2/Scripts.
+/// "... FAIL: ..."), then quits. tools/test_csharp_editor.py runs it on Tests/CSharpReload with v2/Scripts. With
+/// --hot-reload-manual the project's reload mode is Manual for the run, so the save only compiles nothing, and
+/// File > Reload Scripts (RequestRebuild) is what reloads.
 extension EditorApp
 {
 	String mHotReloadTestFolder ~ delete _;
@@ -93,7 +95,20 @@ extension EditorApp
 				edited++;
 			}
 			mHotReloadsDone = 0;
+			let manual = HasArg("--hot-reload-manual");
+			if (manual)
+				Project.Current.ReloadMode = .Manual;
 			SaveAllScripts();
+			if (manual)
+			{
+				if (mHotReloadAfterCompile)
+				{
+					FinishHotReloadTest(false, "a save in Manual reload mode asked for a reload");
+					return;
+				}
+				// File > Reload Scripts (Ctrl+R).
+				RequestRebuild();
+			}
 			mHotReloadSavedAt = mHotReloadTestClock.Elapsed.TotalSeconds;
 			Log.Info(scope $"HOT RELOAD TEST saved {edited} scripts during Play");
 			mHotReloadTestStage = 2;

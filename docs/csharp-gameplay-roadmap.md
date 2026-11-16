@@ -545,6 +545,9 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     fields call the new code; `Network.ChooseTeam` is kept the same way. Lambdas and local functions still start
     again (their compiler-made names can move to another lambda between versions; a chooser lambda warns to set
     it again). Reload test 29 checks (editor path 27).
+  - [x] (November 16, 2026) File > Reload Scripts (Ctrl+R) and the code editor's Compile & Reload now hot-reload a
+    C# game during Play (they only compiled before; the menu said "Native C# Play integration is in progress"),
+    also with the reload mode Manual, where a save only compiles. Editor step 6b (`--hot-reload-manual`).
 - [~] Package precompiled per-platform player/engine plus C# assemblies, runtimeconfig, .NET runtime/dependencies, shaders and assets into independently redistributable Windows/Linux exports. Verify on machines without BeefBuild.
   Linux done: `Player/` is the engine without the editor (its own Beef workspace, since one
   workspace shares generic code with the editor), exporting its generated API symbols.

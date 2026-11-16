@@ -496,7 +496,7 @@ extension EditorApp
 			if (mPlay != .Edit)
 			{
 				if (Project.Current.ReloadMode == .Manual)
-					mStatus.Set("C# changed; stop and restart Play to load the new code.");
+					mStatus.Set("C# changed: File > Reload Scripts (Ctrl+R) loads it into Play.");
 				else
 				{
 					// Hot reload: compile now, swap the code in between frames when it built.
@@ -966,9 +966,8 @@ extension EditorApp
 				SaveAllScripts();
 				StartErrorCheck();
 			}
-			if (active != null && active.path.EndsWith(".cs"))
-				ImGui.TextDisabled("Native C# Play integration is in progress.");
-			else if (ImGui.MenuItem("Rebuild & Reload"))
+			bool csharp = active != null && active.path.EndsWith(".cs");
+			if (ImGui.MenuItem(csharp ? "Compile & Reload" : "Rebuild & Reload", "Ctrl+R"))
 			{
 				SaveAllScripts();
 				RequestRebuild();

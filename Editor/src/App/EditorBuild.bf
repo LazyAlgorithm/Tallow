@@ -30,7 +30,12 @@ extension EditorApp
 		{
 			SaveAllScripts();
 			if (HasCSharpSources(scope $"{Project.Current.Path}/src"))
+			{
+				// During Play the running game moves to the new code once it compiles, as after a save.
+				if (mPlay != .Edit)
+					mHotReloadAfterCompile = true;
 				StartManagedErrorCheck();
+			}
 			else
 				mStatus.Set("No C# gameplay scripts to compile.");
 			return;

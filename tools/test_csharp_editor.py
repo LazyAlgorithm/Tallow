@@ -12,6 +12,7 @@ Opens the precompiled editor (TallowLauncher --editor) on copies of projects wit
      build runs, a moved file and a deleted file;
   6. hot reload through the editor (--hot-reload-test): Tests/CSharpReload plays, v2/Scripts is typed into the code
      editor and saved during Play; the save compiles and reloads, version 2's RELOAD checks pass, the old code unloads;
+     again with the reload mode Manual, where File > Reload Scripts (Ctrl+R) reloads instead of the save;
   7. C# completion through the editor (--completion-test): an unimported type with its using, described members, and a
      long list marked as cut short;
   8. Find All References through the editor (--references-test): a field's uses in an open and an unopened file,
@@ -154,6 +155,18 @@ def main() -> int:
               f"{found[-1] if found else 'no result'}", bool(found) and "HOT RELOAD TEST PASS" in found[-1], output)
         check(f"the reloaded game keeps its state ({passes} RELOAD checks)", passes == 27 and not reload_failures,
               "\n".join(reload_failures) or output)
+
+        # 6b. The same with the reload mode Manual: File > Reload Scripts (Ctrl+R) reloads during Play.
+        shutil.rmtree(reload)
+        shutil.copytree(ROOT / "Tests/CSharpReload", reload, ignore=shutil.ignore_patterns(".tallow-*", "v2", "bin", "obj"))
+        (reload / "project.tallow").write_text(
+            f"name = Reload\nstartScene = Scenes/Main.tscene\nengine = {ROOT.as_posix()}\n", encoding="utf-8")
+        output, _, _ = open_editor(reload, "--hot-reload-test", str(ROOT / "Tests/CSharpReload/v2/Scripts"),
+                                   "--hot-reload-manual", env={"TALLOW_RELOAD_UNLOAD_CHECK": "1"})
+        found = [line for line in output.splitlines() if "HOT RELOAD TEST" in line]
+        passes = sum("RELOAD PASS" in line for line in output.splitlines())
+        check(f"Reload Scripts reloads C# during Play in Manual mode: {found[-1] if found else 'no result'}",
+              bool(found) and "HOT RELOAD TEST PASS" in found[-1] and passes == 27, output)
 
         # 7. Completion through the editor and the language service.
         output, _, _ = open_editor(game, "--completion-test")
