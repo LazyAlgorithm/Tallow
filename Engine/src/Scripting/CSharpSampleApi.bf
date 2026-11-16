@@ -186,6 +186,19 @@ static class CSharpNavigation
 	public static bool HasArrived(uint64 session, uint64 entity) => Find(session, entity, let agent) && agent.HasArrived;
 
 	[CSharpExpose]
+	public static bool IsCrossingLink(uint64 session, uint64 entity) => Find(session, entity, let agent) && agent.IsCrossingLink;
+
+	/// A noise behaviour trees' Heard Noise nodes pick up (AINoise.Make); source 0 for none.
+	[CSharpExpose]
+	public static void MakeNoise(uint64 session, Vector3 position, float radius, uint64 source)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		if (scene == null || !position.x.IsFinite || !position.y.IsFinite || !position.z.IsFinite || !radius.IsFinite || radius <= 0)
+			return;
+		AINoise.Make(scene, position, radius, source != 0 ? CSharpRuntime.PhysicsObject(session, source) : null);
+	}
+
+	[CSharpExpose]
 	public static int32 PathCount(uint64 session, uint64 entity) =>
 		(Find(session, entity, let agent) && agent.Path != null) ? (int32)agent.Path.Count : 0;
 

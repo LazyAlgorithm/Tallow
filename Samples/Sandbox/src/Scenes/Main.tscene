@@ -24,10 +24,12 @@ field viewmodelFieldOfView 55
 field viewmodelNearClip 0.01
 field viewmodelCastsShadows 0
 field occlusionCulling 0
-component Sandbox.Digger enabled 1
-field radius 3
-field strength 1.5
-component Sandbox.Hud enabled 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "Sandbox.Digger"
+field fieldOverrides "Radius	3\nStrength	1.5\n"
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "Sandbox.Hud"
+field fieldOverrides ""
 object 2 parent 0 active 1 name "Directional Light"
 transform 0 6 0 0.4082179 -0.23456971 0.10938165 0.87542605 1 1 1
 component Tallow.Light enabled 1
@@ -540,7 +542,7 @@ field transport Direct
 field steamAppId 0
 field address "127.0.0.1"
 field port 7777
-field playerPrefab "Player"
+field playerPrefab "Prefabs/Player.tprefab"
 field snapshotInterval 3
 field optimizeSnapshots 0
 field snapshotPacketBytes 1100
@@ -556,17 +558,9 @@ component Tallow.UIDocument enabled 1
 field document "UI/sample_menu.tui"
 field referenceHeight 0
 field referenceWidth 0
-component Sandbox.SampleMenu enabled 1
-field playerName "Player"
-field volume 0.6
-object 1089 parent 0 active 1 name "New Folder"
-folder
-transform 0 0 0 0 0 0 1 1 1 1
-object 1090 parent 1089 active 1 name "GameObject"
-transform 0 0 0 0 0 0 1 1 1 1
-component Sandbox.Test enabled 1
-field speed 1
-field particalSystem 15 0
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "Sandbox.SampleMenu"
+field fieldOverrides "playerName	Player\nvolume	0.6\n"
 object 1100 parent 0 active 1 name "Decals"
 folder
 transform 0 0 0 0 0 0 1 1 1 1

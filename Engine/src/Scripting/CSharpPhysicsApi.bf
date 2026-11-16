@@ -68,6 +68,9 @@ static class Physics
         if (obj == null || !FiniteVector(velocity))
             return false;
         let body = obj.GetComponent<Rigidbody>();
+        // One added this frame has no physics body until the next step: make it now, so it starts moving at once.
+        if (!body.HasBody && body.IsValid && obj.Scene != null && obj.Scene.IsPlaying)
+            body.EnsureBody();
         if (!body.HasBody)
             return false;
         body.Velocity = velocity;

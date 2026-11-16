@@ -1,0 +1,583 @@
+object 18 parent 0 active 1 name "Player"
+transform 0 0 0 0 0 0 1 1 1 1
+component Tallow.CharacterMotor enabled 1
+field moveSpeed 6
+field sprintSpeed 9
+field jumpSpeed 6.5
+field acceleration 40
+field airControl 0.35
+field mouseSensitivity 0.15
+field faceLookDirection 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "Sandbox.FollowCamera"
+field scriptAsset ""
+field fieldOverrides ""
+field referenceNames ""
+field referenceTargets 0
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "Sandbox.CharacterAnimation"
+field scriptAsset ""
+field fieldOverrides ""
+field referenceNames ""
+field referenceTargets 0
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "Sandbox.BallLauncher"
+field scriptAsset ""
+field fieldOverrides ""
+field referenceNames ""
+field referenceTargets 0
+component Tallow.NetworkIdentity enabled 1
+field automatic 1
+field fullPrecision 0
+field remoteFormat 0
+field remoteIntervalTicks 0
+field dormantWhenSleeping 0
+field distanceFiltered 0
+field relevance Auto
+field snapshotPriority 0
+field physicsPrediction Auto
+field playerControlled 1
+field ownerId 0
+field team 0
+field correctionSmoothing 12
+component Tallow.CharacterController enabled 1
+field shape Capsule
+field radius 0.5
+field height 2
+field boxSize 0.8 1 0.8
+field edgeRadius 0.1
+field center 0 0 0
+field stepHeight 0.4
+field maxSlope 50
+field mass 70
+field pushStrength 100
+field gravityScale 1
+field turnShapeWithObject 0
+field jumpGrace 0.12
+field softCharacterContact 1
+field separationSpeed 8
+field canSwim 1
+field swimDepth 1.2
+field swimSpeed 0.6
+object 19 parent 18 active 1 name "Character"
+transform 0 -1 0 0 0 0 1 1 1 1
+component Tallow.Animator enabled 1
+field clips "Animations/idle.tanim;Animations/walk.tanim;Animations/run.tanim;Animations/jump.tanim"
+field defaultClip "Idle"
+field speed 1
+field controller ""
+object 20 parent 19 active 1 name "Hips"
+transform 0 0.95 0 0 0 0 1 1 1 1
+object 21 parent 20 active 1 name "mesh"
+transform 0 0.05 0 0 0 0 1 0.34 0.2 0.2
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.2275 0.2588 0.3608 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 22 parent 20 active 1 name "Chest"
+transform 0 0.18 0 0 0 0 1 1 1 1
+object 23 parent 22 active 1 name "mesh"
+transform 0 0.21 0 0 0 0 1 0.42 0.42 0.24
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.251 0.5176 0.7843 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 24 parent 22 active 1 name "Head"
+transform 0 0.46 0 0 0 0 1 1 1 1
+object 25 parent 24 active 1 name "mesh"
+transform 0 0.16 0 0 0 0 1 0.26 0.28 0.26
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.9137 0.7451 0.5882 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 26 parent 24 active 1 name "mesh"
+transform 0 0.31 -0.02 0 0 0 1 0.28 0.08 0.3
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.3373 0.2275 0.149 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 27 parent 24 active 1 name "mesh"
+transform 0 0.2 -0.13 0 0 0 1 0.28 0.2 0.06
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.3373 0.2275 0.149 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 28 parent 22 active 1 name "UpperArm.L"
+transform -0.27 0.38 0 0 0 0 1 1 1 1
+object 29 parent 28 active 1 name "mesh"
+transform 0 -0.15 0 0 0 0 1 0.12 0.3 0.12
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.251 0.5176 0.7843 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 30 parent 28 active 1 name "LowerArm.L"
+transform 0 -0.3 0 0 0 0 1 1 1 1
+object 31 parent 30 active 1 name "mesh"
+transform 0 -0.13 0 0 0 0 1 0.1 0.26 0.1
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.9137 0.7451 0.5882 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 32 parent 30 active 1 name "mesh"
+transform 0 -0.3 0 0 0 0 1 0.11 0.1 0.11
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.9137 0.7451 0.5882 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 38 parent 22 active 1 name "UpperArm.R"
+transform 0.27 0.38 0 0 0 0 1 1 1 1
+object 39 parent 38 active 1 name "mesh"
+transform 0 -0.15 0 0 0 0 1 0.12 0.3 0.12
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.251 0.5176 0.7843 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 40 parent 38 active 1 name "LowerArm.R"
+transform 0 -0.3 0 0 0 0 1 1 1 1
+object 41 parent 40 active 1 name "mesh"
+transform 0 -0.13 0 0 0 0 1 0.1 0.26 0.1
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.9137 0.7451 0.5882 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 42 parent 40 active 1 name "mesh"
+transform 0 -0.3 0 0 0 0 1 0.11 0.1 0.11
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.9137 0.7451 0.5882 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 33 parent 20 active 1 name "UpperLeg.L"
+transform -0.1 -0.03 0 0 0 0 1 1 1 1
+object 34 parent 33 active 1 name "mesh"
+transform 0 -0.22 0 0 0 0 1 0.15 0.44 0.15
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.2275 0.2588 0.3608 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 35 parent 33 active 1 name "LowerLeg.L"
+transform 0 -0.44 0 0 0 0 1 1 1 1
+object 36 parent 35 active 1 name "mesh"
+transform 0 -0.2 0 0 0 0 1 0.13 0.4 0.13
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.2275 0.2588 0.3608 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 37 parent 35 active 1 name "mesh"
+transform 0 -0.42 0.05 0 0 0 1 0.14 0.08 0.25
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.1569 0.1569 0.1804 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 43 parent 20 active 1 name "UpperLeg.R"
+transform 0.1 -0.03 0 0 0 0 1 1 1 1
+object 44 parent 43 active 1 name "mesh"
+transform 0 -0.22 0 0 0 0 1 0.15 0.44 0.15
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.2275 0.2588 0.3608 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 45 parent 43 active 1 name "LowerLeg.R"
+transform 0 -0.44 0 0 0 0 1 1 1 1
+object 46 parent 45 active 1 name "mesh"
+transform 0 -0.2 0 0 0 0 1 0.13 0.4 0.13
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.2275 0.2588 0.3608 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0
+object 47 parent 45 active 1 name "mesh"
+transform 0 -0.42 0.05 0 0 0 1 0.14 0.08 0.25
+component Tallow.MeshRenderer enabled 1
+field mesh "builtin:cube"
+field color 0.1569 0.1569 0.1804 1
+field metallic 0
+field roughness 0.9
+field emissive 0 0 0 1
+field emissiveIntensity 0
+field emissiveFromColor 0
+field flatShading 1
+field unlit 0
+field castShadows 1
+field backFaceCulling 1
+field lightmap ""
+field lightmapDirection ""
+field lightmapShadowmask ""
+field lightmapScaleOffset 1 1 0 0
+field lightmapDecode 1 0 0 0
+field windSway 0
+field shadowOnly 0
+field bakedLighting 0
+field screenReflections 0
+field inReflectionProbes 1
+field planarReflection 0
+field texture ""
+field material ""
+field useModelMaterials 1
+field occluder 0

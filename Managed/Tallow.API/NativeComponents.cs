@@ -268,9 +268,20 @@ public readonly record struct NavigationAgent(GameObject GameObject) : IComponen
     public bool PathPending => CSharpNavigation.PathPending(GameObject.SceneId, GameObject.Id);
     public bool PathFailed => CSharpNavigation.PathFailed(GameObject.SceneId, GameObject.Id);
     public bool HasArrived => CSharpNavigation.HasArrived(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether it is going over a navigation link (a jump, a ladder) just now.</summary>
+    public bool IsCrossingLink => CSharpNavigation.IsCrossingLink(GameObject.SceneId, GameObject.Id);
     /// <summary>Corners on the current path (0 with none).</summary>
     public int PathCornerCount => CSharpNavigation.PathCount(GameObject.SceneId, GameObject.Id);
     public float RemainingDistance => CSharpNavigation.RemainingDistance(GameObject.SceneId, GameObject.Id);
+}
+
+/// <summary>Sounds the AI hears (gunshots, footsteps, a thrown bottle): behaviour trees' Heard Noise nodes pick them up.</summary>
+public static class AINoise
+{
+    /// <summary>A noise at a point, heard within <paramref name="radius"/> metres. Its source (who made it) is
+    /// remembered by those who hear it, and does not hear itself.</summary>
+    public static void Make(Scene scene, Vector3 position, float radius, GameObject? source = null) =>
+        CSharpNavigation.MakeNoise(scene.SessionId, position, radius, source?.Id ?? 0);
 }
 
 /// <summary>A baked navigation mesh agents walk on, with queries for choosing where to go.</summary>
@@ -320,6 +331,8 @@ public readonly partial record struct Rigidbody
     public bool IsKinematic { get => Data.GetBool("isKinematic"); set => Data.Set("isKinematic", value); }
     public float Friction { get => Data.GetFloat("friction"); set => Data.Set("friction", value); }
     public float Bounciness { get => Data.GetFloat("bounciness"); set => Data.Set("bounciness", value); }
+    /// <summary>Checked along its path each step, so a fast small body does not pass through thin things.</summary>
+    public bool ContinuousCollision { get => Data.GetBool("continuousCollision"); set => Data.Set("continuousCollision", value); }
 }
 
 public readonly partial record struct CharacterController

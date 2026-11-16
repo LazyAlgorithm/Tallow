@@ -363,6 +363,14 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     button with the C# GUI API; the ECS templates use `GameObject.Entity` and `Scene.Query`.
     `TallowLauncher --write-script-templates <folder>` writes one script per template without a window (also
     the editor's `--script-templates-test`); tools/test_csharp_sample.py compiles them all with no warnings.
+  - [x] `Samples/Sandbox` (November 16, 2026): its Beef scripts (Program.bf, GameSetup.bf and 11 scripts) are
+    gone; the template's C# scripts plus C# `Wanderer`, `NoiseMaker` and `BallLauncher`; scene components became
+    C# script components with the same values; the player is `Prefabs/Player.tprefab` (Network Session player
+    prefab), as in a new sample project. A leftover scratch `Test` object was removed. New APIs for it:
+    `NavigationAgent.IsCrossingLink`, `AINoise.Make`, `Rigidbody.ContinuousCollision`; setting a new
+    rigid body's `Velocity` makes its physics body at once (before, it was ignored until the next step). All 11
+    scenes play headless with no errors (not looked at in a window). `Samples/EcsBench` stays Beef on purpose:
+    it is the Beef side of the Beef-versus-C# benchmark.
   - [~] Docs (November 15, 2026): about 45 docs have Beef code. Converted so far, with every C# block kept compiling
     in `Tests/CSharpInGame/src/Scripts/DocSnippets.cs`: animator, physics-queries, character-controller, input,
     saving, scenes. APIs added for them: `Scene.CapsuleCastHit/BoxCastHit`, `SphereCastHit(..., ignoreBody)`,

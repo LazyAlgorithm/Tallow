@@ -116,6 +116,8 @@ method	Tallow.CSharpNavigation	FindSurface	ulong	session:ulong
 method	Tallow.CSharpNavigation	HasAgent	bool	session:ulong	entity:ulong
 method	Tallow.CSharpNavigation	HasArrived	bool	session:ulong	entity:ulong
 method	Tallow.CSharpNavigation	HasSurface	bool	session:ulong	entity:ulong
+method	Tallow.CSharpNavigation	IsCrossingLink	bool	session:ulong	entity:ulong
+method	Tallow.CSharpNavigation	MakeNoise	void	session:ulong	position:System.Numerics.Vector3	radius:float	source:ulong
 method	Tallow.CSharpNavigation	PathCount	int	session:ulong	entity:ulong
 method	Tallow.CSharpNavigation	PathFailed	bool	session:ulong	entity:ulong
 method	Tallow.CSharpNavigation	PathPending	bool	session:ulong	entity:ulong
