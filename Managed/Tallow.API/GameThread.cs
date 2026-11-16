@@ -112,6 +112,7 @@ internal static class GameThread
             waiter.Done.TrySetCanceled();
         }
         sWaiters.Clear();
+        sFinished.Clear();
         if (SynchronizationContext.Current == sContext)
             SynchronizationContext.SetSynchronizationContext(null);
         sContext = null;

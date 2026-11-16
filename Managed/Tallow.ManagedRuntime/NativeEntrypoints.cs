@@ -518,6 +518,7 @@ public static unsafe class NativeEntrypoints
             if (trustedPath == null || sGameContext != null || sTypes.Count != 0 || sInstances.Count != 0)
                 throw new InvalidOperationException("A trusted game is already loaded, or no game path was provided.");
             string path = Path.GetFullPath(Marshal.PtrToStringUTF8((nint)trustedPath) ?? "");
+            ReportRetainedGames();
             GameThread.Start();
             sGameContext = OpenGame(path, out IGameplayComponentRegistry registry);
             sRegistry = registry;
@@ -541,6 +542,32 @@ public static unsafe class NativeEntrypoints
             return Failure(exception);
         }
     }
+
+    // Game contexts unloaded at Stop or a reload. A collectible context goes once nothing references its code; one
+    // still alive at the next load means something (a static event, a native callback, a thread) holds the old game.
+    private static readonly List<WeakReference> sUnloadedContexts = [];
+    private static bool sReportedRetained;
+
+    private static void ReportRetainedGames()
+    {
+        if (sUnloadedContexts.Count == 0)
+            return;
+        sUnloadedContexts.RemoveAll(weak => !weak.IsAlive);
+        for (int pass = 0; pass < 3 && sUnloadedContexts.Count > 0; pass++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            sUnloadedContexts.RemoveAll(weak => !weak.IsAlive);
+        }
+        // Retained across a Play or two is normal while a frame still unwinds; more is a leak.
+        if (sUnloadedContexts.Count > 1 && (!sReportedRetained || Environment.GetEnvironmentVariable("TALLOW_TRACE_UNLOAD") == "1"))
+        {
+            sReportedRetained = true;
+            Console.Error.WriteLine($"[Tallow C#] warning: {sUnloadedContexts.Count} unloaded game assemblies are still in "
+                + "memory: something still references their code (a static event, a running thread or timer).");
+        }
+    }
+
 
     /// <summary>A new context holding Tallow.Game (at path) and the assemblies it references, and its generated
     /// registry. Creating the registry runs the assembly's module initializer (its ECS schemas and systems).
@@ -649,6 +676,7 @@ public static unsafe class NativeEntrypoints
                 sFormerNames[old] = current;
             lock (sCallbackMasks)
                 sCallbackMasks.Clear();
+            RpcMethods.Forget();
             sByGameObject.Clear();
 
             var moved = new List<(Script Script, string State)>(saved.Count);
@@ -706,6 +734,7 @@ public static unsafe class NativeEntrypoints
                     Failure(exception);
                 }
             }
+            sUnloadedContexts.Add(new WeakReference(previous));
             previous.Unload();
             return moved.Count;
         }
@@ -1685,8 +1714,14 @@ public static unsafe class NativeEntrypoints
             Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).
             GameThread.Stop();
+            // Caches keyed by the game's types would keep its context loaded.
+            RpcMethods.Forget();
+            lock (sCallbackMasks)
+                sCallbackMasks.Clear();
             GameAssemblyContext? previous = sGameContext;
             sGameContext = null;
+            if (previous != null)
+                sUnloadedContexts.Add(new WeakReference(previous));
             previous?.Unload();
             return 1;
         }
@@ -1723,8 +1758,14 @@ public static unsafe class NativeEntrypoints
             Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).
             GameThread.Stop();
+            // Caches keyed by the game's types would keep its context loaded.
+            RpcMethods.Forget();
+            lock (sCallbackMasks)
+                sCallbackMasks.Clear();
             GameAssemblyContext? previous = sGameContext;
             sGameContext = null;
+            if (previous != null)
+                sUnloadedContexts.Add(new WeakReference(previous));
             previous?.Unload();
             return 1;
         }

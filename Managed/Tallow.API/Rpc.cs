@@ -35,6 +35,9 @@ internal static class RpcMethods
     private static readonly ConcurrentDictionary<(Type, string), Entry?> Cache = new();
     private const char Separator = '\u001f';
 
+    /// <summary>Forgets every game type (keys hold them): the runtime calls this when the game unloads.</summary>
+    internal static void Forget() => Cache.Clear();
+
     /// <summary>Client id of the machine that called the RPC now running (0: the server or this machine).</summary>
     [ThreadStatic] internal static int CurrentSender;
 

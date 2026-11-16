@@ -34,7 +34,7 @@ def main():
     args = parser.parse_args()
     subprocess.run(["dotnet", "build", str(ROOT / "Managed/Tallow.LanguageService/Tallow.LanguageService.csproj"),
                     "-c", "Debug", "--nologo", "--verbosity", "quiet"], check=True)
-    work = Path(tempfile.mkdtemp(prefix="tallow-ls-bench-"))
+    work = Path(tempfile.mkdtemp(prefix="tallow-ls-bench-")).resolve()
     try:
         project = work / "Game"
         shutil.copytree(ROOT / "Tests/CSharpInGame", project,
@@ -94,7 +94,8 @@ def main():
             # Correctness: an error typed into the game file is reported there; nothing from Tallow.API's sources.
             _, answer = request("diagnostics", edited(99, "int broken = ;"), marker)
             problems = [line.split("\t") for line in answer.splitlines() if line.startswith("diagnostic\t")]
-            same = lambda a, b: os.path.normcase(a) == os.path.normcase(str(b))
+            # realpath: Windows temp folders can come as 8.3 short names (RUNNER~1) on one side only.
+            same = lambda a, b: os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(str(b)))
             if not any(same(fields[1], source) and fields[4] == "error" for fields in problems):
                 sys.exit(f"an error typed into {source} was not reported; {len(problems)} diagnostics:\n"
                          + "\n".join("\t".join(fields) for fields in problems[:20]))
