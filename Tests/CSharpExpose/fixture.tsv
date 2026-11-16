@@ -111,6 +111,7 @@ method	Tallow.CSharpNativeComponents	Add	bool	session:ulong	entity:ulong	typeNam
 method	Tallow.CSharpNativeComponents	CopyField	int	session:ulong	entity:ulong	typeName:string	field:string	buffer:System.Span<byte>
 method	Tallow.CSharpNativeComponents	Count	int	session:ulong	typeName:string
 method	Tallow.CSharpNativeComponents	Has	bool	session:ulong	entity:ulong	typeName:string
+method	Tallow.CSharpNativeComponents	Remove	bool	session:ulong	entity:ulong	typeName:string
 method	Tallow.CSharpNativeComponents	SetField	bool	session:ulong	entity:ulong	typeName:string	field:string	value:string
 method	Tallow.CSharpNavigation	FindSurface	ulong	session:ulong
 method	Tallow.CSharpNavigation	HasAgent	bool	session:ulong	entity:ulong
@@ -157,6 +158,7 @@ method	Tallow.CSharpSceneObjects	LocalClientId	int	session:ulong
 method	Tallow.CSharpSceneObjects	NetworkRole	int	session:ulong
 method	Tallow.CSharpSceneObjects	ObjectCount	int	session:ulong
 method	Tallow.CSharpSceneObjects	OwnerClientId	int	session:ulong	entity:ulong
+method	Tallow.CSharpSceneObjects	RemoveScript	bool	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpSceneObjects	RemoveTag	bool	session:ulong	entity:ulong	tag:string
 method	Tallow.CSharpSceneObjects	SetActive	bool	session:ulong	entity:ulong	active:bool
 method	Tallow.CSharpSceneObjects	SetLayer	bool	session:ulong	entity:ulong	layer:int

@@ -183,6 +183,8 @@ public class ApiChecks : CheckBase
             ControllerHits();
         else if (_tick == 260)
             ContactsAfterLanding();
+        else if (_tick == 280)
+            ComponentAccessSetup();
         else if (_tick == 300)
         {
             GroundAsTrigger();
@@ -196,9 +198,64 @@ public class ApiChecks : CheckBase
             SpawnLayerJointChecks();
             ReferenceFieldChecks();
             PackageChecks();
+            ComponentAccessChecks();
             Finish();
             Application.Quit();
         }
+    }
+
+    private GameObject _accessRoot, _accessChild, _accessGrandchild;
+    private Helper? _removedHelper;
+
+    /// GetComponents / InParent / InChildren, RemoveComponent (checked frames later, at 300) and Transform directions.
+    private void ComponentAccessSetup()
+    {
+        _accessRoot = Scene.CreateGameObject("Access root");
+        _accessChild = Scene.CreateGameObject("Access child");
+        _accessGrandchild = Scene.CreateGameObject("Access grandchild");
+        _accessChild.SetParent(_accessRoot);
+        _accessGrandchild.SetParent(_accessChild);
+        Helper first = _accessRoot.AddComponent<Helper>();
+        Helper second = _accessRoot.AddComponent<Helper>();
+        _accessGrandchild.AddComponent<Helper>();
+        _accessRoot.AddComponent<Light>();
+        _accessGrandchild.AddComponent<Light>();
+        Check("GetComponents<T> finds both scripts of a type, in order",
+            _accessRoot.GetComponents<Helper>() is [var a, var b] && ReferenceEquals(a, first) && ReferenceEquals(b, second));
+        Check("GetComponents<T> of a built-in component finds the one", _accessRoot.GetComponents<Light>().Length == 1);
+        Check("GetComponentInParent<T> finds the nearest one up the hierarchy",
+            ReferenceEquals(_accessChild.GetComponentInParent<Helper>(), first)
+            && _accessGrandchild.GetComponentInParent<Helper>() is { } own && own.GameObject == _accessGrandchild);
+        Check("GetComponentsInChildren<T> finds this object's and every descendant's",
+            _accessRoot.GetComponentsInChildren<Helper>().Length == 3 && _accessRoot.GetComponentsInChildren<Light>().Length == 2
+            && _accessChild.GetComponentsInChildren<Helper>().Length == 1);
+        // Removed at the end of the frame: still there now.
+        _removedHelper = second;
+        bool scriptQueued = _accessRoot.RemoveComponent(second);
+        bool lightQueued = _accessGrandchild.RemoveComponent<Light>();
+        Check("RemoveComponent of a script and a built-in component is accepted", scriptQueued && lightQueued);
+        Check("RemoveComponent<T> with nothing to remove says so", !_accessChild.RemoveComponent<Light>());
+
+        _accessChild.Transform.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI / 2);
+        Vector3 worldForward = _accessChild.Transform.TransformDirection(Vector3.UnitZ);
+        Vector3 back = _accessChild.Transform.InverseTransformDirection(worldForward);
+        Check($"TransformDirection rotates and InverseTransformDirection undoes it ({worldForward})",
+            Vector3.Distance(worldForward, Vector3.UnitX) < 1e-4f && Vector3.Distance(back, Vector3.UnitZ) < 1e-4f);
+        _accessRoot.Transform.Position = new Vector3(2, 0, 0);
+        _accessRoot.Transform.Rotation = Quaternion.Identity;
+        _accessRoot.Transform.RotateAround(Vector3.Zero, Vector3.UnitY, 90);
+        Check($"RotateAround moves and turns the object about a point ({_accessRoot.Transform.Position})",
+            Vector3.Distance(_accessRoot.Transform.Position, new Vector3(0, 0, -2)) < 1e-3f
+            && Vector3.Distance(_accessRoot.Transform.Forward, Vector3.Transform(Vector3.UnitZ, Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI / 2))) < 1e-3f);
+    }
+
+    private void ComponentAccessChecks()
+    {
+        Check("RemoveComponent took the script off by the next frame (its OnDestroy ran)",
+            _accessRoot.GetComponents<Helper>().Length == 1 && _removedHelper is { DestroyRan: true });
+        Check("RemoveComponent<Light> took the light off", !_accessGrandchild.GetComponent<Light>().IsValid
+            && _accessRoot.GetComponent<Light>().IsValid);
+        Check("removing a script that is gone is refused", _removedHelper is { } gone && !_accessRoot.RemoveComponent(gone));
     }
 
     private void PackageChecks()
@@ -1382,6 +1439,8 @@ public class Helper : Script
     public override void Awake() => Awoke = true;
     public override void OnDisable() => Disables++;
     public override void Update(TickInput input, float deltaTime) => Updates++;
+    public bool DestroyRan;
+    public override void OnDestroy() => DestroyRan = true;
 }
 
 [Component]

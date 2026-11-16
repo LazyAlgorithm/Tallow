@@ -65,6 +65,35 @@ static class CSharpNativeComponents
 		return obj.AddComponent(info.type) != null;
 	}
 
+	/// Takes a built-in component off (data components at once, as Beef's RemoveComponent; class components at the
+	/// end of the frame). False when it is not there or the type is unknown.
+	[CSharpExpose]
+	public static bool Remove(uint64 session, uint64 entity, StringView typeName)
+	{
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		if (obj == null || typeName.IsEmpty)
+			return false;
+		if (let handle = HandleComponents.Find(typeName))
+		{
+			if (!obj.Scene.World.Has(obj.Entity, handle.index))
+				return false;
+			obj.Scene.World.Remove(obj.Entity, handle.index);
+			return true;
+		}
+		let info = ComponentRegistry.Find(typeName);
+		if (info == null || info.type == typeof(CSharpBehaviour))
+			return false;
+		for (let candidate in obj.Components)
+		{
+			if (candidate.GetType() == info.type)
+			{
+				obj.Scene.RemoveComponentLater(candidate);
+				return true;
+			}
+		}
+		return false;
+	}
+
 	[CSharpExpose]
 	public static bool Has(uint64 session, uint64 entity, StringView typeName)
 	{

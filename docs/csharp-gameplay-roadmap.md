@@ -224,18 +224,18 @@ changing the original six-field wire format.
 
 - [x] Define Beef `[CSharpExpose]` marker (type plus individual public member, with no "expose all" default). File: `Engine/src/Scripting/CSharpExpose.bf` (commit `8d903af`). **Attribute only; not wired to generation yet.**
 - [x] Record binding generator and marshalling rules in `docs/csharp-expose.md` (commit `f20bab4`).
-- [ ] Generate deterministic opt-in exposure manifest from actual Beef compiler/reflection symbols; validate signatures and emit actionable errors for unsupported attributes.
-- [ ] Generate ABI-stable native entrypoints and C# wrappers together from manifest, with no duplicate manual C# declarations, preserving existing handwritten adapters.
-- [ ] Verify an annotated method is callable from C#, appears in Roslyn, and a public unannotated member is omitted. Add CI tests for Windows/Linux.
-- [ ] Add safe automatic primitive/vector/enum mappings, checked GameObject/Transform handles and UTF-8 string lifetime handling. ECS/Jolt/networking require specialized safe adapters.
-- [ ] Run generation only with engine builds; normal project C# edits compile with dotnet only. Track generated API version to prevent mismatch with precompiled runtime.
+- [x] Generate deterministic opt-in exposure manifest from actual Beef compiler/reflection symbols; validate signatures and emit actionable errors for unsupported attributes. Done (verified November 16, 2026): `TallowLauncher --csharp-api-manifest` writes it from Beef reflection over `[CSharpExpose]` members; Tallow.BindingGen rejects unsupported signatures (self-test: invalid-manifest cases).
+- [x] Generate ABI-stable native entrypoints and C# wrappers together from manifest, with no duplicate manual C# declarations, preserving existing handwritten adapters. Done: one BindingGen run writes `CSharpBindings.Generated.bf` and `CSharpBindings.g.cs` with hashed `CSharpApi_<id>` symbols; handwritten adapters stay separate.
+- [x] Verify an annotated method is callable from C#, appears in Roslyn, and a public unannotated member is omitted. Add CI tests for Windows/Linux. Done: BindingGen `--self-test` (deterministic, opt-in: unannotated members are not emitted) and `tools/check_csharp_host_abi.py` run in CI on Linux and Windows; every in-engine check calls generated wrappers.
+- [x] Add safe automatic primitive/vector/enum mappings, checked GameObject/Transform handles and UTF-8 string lifetime handling. ECS/Jolt/networking require specialized safe adapters. Done: scalars, bool, Vector2-4/Quaternion/Color, enums, spans, hit records and UTF-8 strings (pinned per call; since November 16 encoded on the stack up to 128 characters).
+- [x] Run generation only with engine builds; normal project C# edits compile with dotnet only. Track generated API version to prevent mismatch with precompiled runtime. Done: `tools/build.py` regenerates between its two native passes; game builds only run dotnet. The generated ABI hash is checked on first use (`GeneratedNativeApi.VerifyVersion`), so a game built against another engine fails loudly.
 
 ## P2 — gameplay API parity (largest workstream)
 
 For every subsystem, expose a managed public API, safe native handle bridge, correct lifetime/serialization semantics, appropriate network/deterministic scheduling and automated tests. Work in small verified increments:
 
-- [ ] Core GameObject/Transform parenting, rotation/scale, scene/object creation/destruction, asset/prefab loading, lifecycle and event callbacks.
-- [ ] Component discovery and access: `GetComponent<T>`, `AddComponent<T>`, fields/properties, object/component references, multiple components, enabling/disabling.
+- [x] Core GameObject/Transform parenting, rotation/scale, scene/object creation/destruction, asset/prefab loading, lifecycle and event callbacks. Done (November 16, 2026): parenting, children, names, tags, layers, active state, create/find/destroy, prefabs and lifecycle callbacks were in place; added `Transform.TransformDirection`, `InverseTransformDirection` and `RotateAround`.
+- [x] Component discovery and access: `GetComponent<T>`, `AddComponent<T>`, fields/properties, object/component references, multiple components, enabling/disabling. Done (November 16, 2026): added `GetComponents<T>` (every script of a type, or the built-in one; also a no-allocation `List<T>` overload), `GetComponentInParent<T>`, `GetComponentsInChildren<T>` and `RemoveComponent<T>()` / `RemoveComponent(script)`. Scripts and class components go at the end of the frame (`Scene.RemoveComponentLater`, so a script can remove itself safely), data components (Rigidbody, colliders) at once as in Beef. 11 in-engine checks.
 - [~] Flecs ECS: managed data components, filters, typed queries, iteration, systems, group/tags, efficient bulk update, lifetime and thread safety while hiding complexity from typical gameplay.
   - [x] Typed queries (November 15, 2026): `EcsEntity.Set/Get/TryGet/Has/Remove<T>`, `GameObject.Entity`,
     `EcsEntity.GameObject`, `Scene.Query<A[,B[,C]]>()` with `Count` and `ForEach((entity, ref a, ...) => ...)`

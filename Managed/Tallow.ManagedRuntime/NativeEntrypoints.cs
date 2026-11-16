@@ -111,6 +111,15 @@ public static unsafe class NativeEntrypoints
             return null;
         }
 
+        public void GetManagedComponents(GameObject gameObject, Type scriptType, List<Script> output)
+        {
+            if (!IsAlive(gameObject) || !sByGameObject.TryGetValue(gameObject, out List<Script>? scripts))
+                return;
+            foreach (Script script in scripts)
+                if (scriptType.IsInstanceOfType(script))
+                    output.Add(script);
+        }
+
         public Script? GetManagedInstance(GameObject gameObject, int instanceId)
         {
             // A script ID is only an opaque handle; it must match the current

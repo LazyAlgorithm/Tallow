@@ -539,6 +539,80 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
     }
 
     /// <summary>
+    /// Every component of type T on this object, in the order they were added: all its scripts of that type (or
+    /// deriving from it), or the one built-in component. Empty when there is none.
+    /// </summary>
+    public T[] GetComponents<T>() where T : IComponent
+    {
+        var found = new List<T>();
+        GetComponents(found);
+        return found.ToArray();
+    }
+
+    /// <summary>Adds every component of type T on this object to results (no array made).</summary>
+    public void GetComponents<T>(List<T> results) where T : IComponent
+    {
+        if (ComponentLookup<T>.IsScript)
+        {
+            var scripts = new List<Script>();
+            Engine.Bridge.GetManagedComponents(this, typeof(T), scripts);
+            foreach (Script script in scripts)
+                if (script is T typed)
+                    results.Add(typed);
+        }
+        else if (TryGetComponent(out T one))
+            results.Add(one);
+    }
+
+    /// <summary>The component on this object or the nearest parent that has one, or null/default.</summary>
+    public T? GetComponentInParent<T>() where T : IComponent
+    {
+        for (GameObject? at = this; at is { } current; at = current.Parent)
+            if (current.TryGetComponent(out T found))
+                return found;
+        return default;
+    }
+
+    /// <summary>Every component of type T on this object and all below it (depth first).</summary>
+    public T[] GetComponentsInChildren<T>() where T : IComponent
+    {
+        var found = new List<T>();
+        AddComponentsInChildren(found);
+        return found.ToArray();
+    }
+
+    private void AddComponentsInChildren<T>(List<T> results) where T : IComponent
+    {
+        GetComponents(results);
+        for (int i = 0; i < ChildCount; i++)
+            GetChild(i)?.AddComponentsInChildren(results);
+    }
+
+    /// <summary>
+    /// Takes the first component of type T off this object. A script (OnDisable and OnDestroy run) or a component
+    /// such as a Light or MeshRenderer goes at the end of the frame, as Destroy does; physics and other data
+    /// components (Rigidbody, colliders) go at once. False when there is none. The Transform cannot be removed.
+    /// </summary>
+    public bool RemoveComponent<T>() where T : IComponent
+    {
+        if (ComponentLookup<T>.IsScript)
+            return GetComponent<T>() is Script script && RemoveComponent(script);
+        if (typeof(T) == typeof(Transform))
+            throw new InvalidOperationException("An object's Transform cannot be removed.");
+        if (!NativeComponentTypes.TryGet(typeof(T), out string native, out _))
+            throw new NotSupportedException($"{typeof(T).FullName} cannot be removed from C#.");
+        return CSharpNativeComponents.Remove(SceneId, Id, native);
+    }
+
+    /// <summary>Takes this script off this object at the end of the frame (OnDisable and OnDestroy run then).</summary>
+    public bool RemoveComponent(Script script)
+    {
+        ArgumentNullException.ThrowIfNull(script);
+        return script.GameObject == this && script.NativeInstanceId > 0 &&
+            CSharpSceneObjects.RemoveScript(SceneId, Id, script.NativeInstanceId);
+    }
+
+    /// <summary>
     /// A transient object is not saved with the scene or shared by a
     /// network session (fired balls, effects).
     /// </summary>
@@ -1024,6 +1098,23 @@ public sealed class Transform(GameObject gameObject) : IComponent
     /// <summary>Convert a world-space point back into this object's local space.</summary>
     public Vector3 InverseTransformPoint(Vector3 worldPoint) =>
         Engine.Bridge.TransformPoint(gameObject, worldPoint, inverse: true);
+
+    /// <summary>A direction in local space turned into world space (rotation only: scale and position do not apply).</summary>
+    public Vector3 TransformDirection(Vector3 localDirection) => Vector3.Transform(localDirection, Rotation);
+
+    /// <summary>A world-space direction turned into this object's local space (rotation only).</summary>
+    public Vector3 InverseTransformDirection(Vector3 worldDirection) =>
+        Vector3.Transform(worldDirection, Quaternion.Conjugate(Rotation));
+
+    /// <summary>Turns the object by degrees about an axis through a world point (its position and rotation both change).</summary>
+    public void RotateAround(Vector3 point, Vector3 axis, float degrees)
+    {
+        if (axis.LengthSquared() < 1e-12f)
+            return;
+        Quaternion turn = Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), degrees * (MathF.PI / 180f));
+        Position = point + Vector3.Transform(Position - point, turn);
+        Rotation = Quaternion.Normalize(turn * Rotation);
+    }
 }
 
 /// <summary>
@@ -1040,6 +1131,12 @@ public interface IEngineBridge
     void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value);
     Vector3 TransformPoint(GameObject gameObject, Vector3 point, bool inverse);
     Script? GetManagedComponent(GameObject gameObject, Type scriptType);
+    /// <summary>Every script of scriptType (or deriving from it) on the object, in the order they were added.</summary>
+    void GetManagedComponents(GameObject gameObject, Type scriptType, List<Script> output)
+    {
+        if (GetManagedComponent(gameObject, scriptType) is { } one)
+            output.Add(one);
+    }
     Script? GetManagedInstance(GameObject gameObject, int instanceId);
     void Destroy(GameObject gameObject);
     bool IsMine(GameObject gameObject);
@@ -1166,6 +1263,10 @@ public abstract class Script : IComponent
 
     public ColliderHandle? GetCollider(int index = 0) => GameObject.GetCollider(index);
     public T? GetComponentInChildren<T>() where T : IComponent => GameObject.GetComponentInChildren<T>();
+    public T[] GetComponents<T>() where T : IComponent => GameObject.GetComponents<T>();
+    public T? GetComponentInParent<T>() where T : IComponent => GameObject.GetComponentInParent<T>();
+    public T[] GetComponentsInChildren<T>() where T : IComponent => GameObject.GetComponentsInChildren<T>();
+    public bool RemoveComponent<T>() where T : IComponent => GameObject.RemoveComponent<T>();
     public Animator? GetAnimator() => GameObject.GetAnimator();
     public int ColliderCount => GameObject.ColliderCount;
     public Joint? GetJoint() => GameObject.GetJoint();

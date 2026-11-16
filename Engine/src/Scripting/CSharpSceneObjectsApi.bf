@@ -252,4 +252,25 @@ static class CSharpSceneObjects
     /// Objects in the scene (as the Hierarchy counts them, transient ones included).
     [CSharpExpose]
     public static int32 ObjectCount(uint64 session) => (int32)(CSharpRuntime.PhysicsScene(session)?.Objects.Count ?? 0);
+
+    /// Takes a C# script (by its managed instance) off its object at the end of the frame. False when it is not on it.
+    [CSharpExpose]
+    public static bool RemoveScript(uint64 session, uint64 entity, int32 instance)
+    {
+        let obj = CSharpRuntime.PhysicsObject(session, entity);
+        if (obj == null || instance <= 0)
+            return false;
+        for (let component in obj.Components)
+        {
+            if (let script = component as CSharpBehaviour)
+            {
+                if (script.ManagedInstance == instance)
+                {
+                    obj.Scene.RemoveComponentLater(script);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 }

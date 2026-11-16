@@ -286,6 +286,9 @@ class Scene
 		}
 	}
 	List<GameObject> mDestroyQueue = new .() ~ delete _;
+	/// Components to take off at the end of the frame (RemoveComponentLater): the object's id and the component,
+	/// which is only compared, never used, until it is found still on that object.
+	List<(uint32 id, Component component)> mRemoveQueue = new .() ~ delete _;
 	uint32 mNextId = 1;
 	/// How many objects are NetworkHidden (0: none, so nothing need look).
 	int32 mNetworkHiddenCount;
@@ -695,6 +698,7 @@ class Scene
 		while (mRoots.Count > 0)
 			DestroyTogether(scope List<GameObject>()..AddRange(mRoots));
 		mDestroyQueue.Clear();
+		mRemoveQueue.Clear();
 		mPendingStart.Clear();
 		mNextId = 1;
 		// Object ids start again, so C# handles to the old objects must stop resolving.
@@ -1817,8 +1821,34 @@ class Scene
 		Profiler.End();
 	}
 
+	/// Takes a component off its object at the end of the frame, as Destroy does for objects, so the component (a
+	/// script removing itself, say) is not freed while its own code runs. OnDisable/OnDestroy run then.
+	public void RemoveComponentLater(Component component)
+	{
+		if (component == null || component.GameObject == null)
+			return;
+		for (let queued in mRemoveQueue)
+			if (queued.component == component)
+				return;
+		mRemoveQueue.Add((component.GameObject.Id, component));
+	}
+
+	void RunRemoveQueue()
+	{
+		while (mRemoveQueue.Count > 0)
+		{
+			let (id, component) = mRemoveQueue.PopFront();
+			// The object may have gone (and freed the component) meanwhile: look it up by id and only use the
+			// component if it is still one of that object's.
+			let gameObject = FindById(id);
+			if (gameObject != null && gameObject.Components.Contains(component))
+				gameObject.RemoveComponent(component);
+		}
+	}
+
 	void RunDestroyQueue()
 	{
+		RunRemoveQueue();
 		sDestroyMarker.Begin();
 		while (mDestroyQueue.Count > 0)
 		{
