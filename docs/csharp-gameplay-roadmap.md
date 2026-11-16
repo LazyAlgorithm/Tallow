@@ -233,8 +233,14 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     (rows packed in order, cached Flecs queries; host entries `Ecs.CountData/CopyDataPage/WriteDataPage`,
     `RemoveLocalData`, `EntityOfObject`, `ObjectOfEntity`). ForEach writes back only rows whose bytes changed,
     and skips entities that went or lost a schema meanwhile. `ecs-data.tsv` keeps fields in declaration order.
-    Tests: 10 in-engine checks. Not saved with scenes; not yet: systems scheduled by phase, client
-    ownership/prediction and [SyncPosition] relevance for C# data.
+    Tests: 10 in-engine checks. Not saved with scenes; not yet: [SyncPosition] relevance for C# data, systems over
+    several data types, systems in phases other than the fixed tick.
+  - [x] C# ECS systems, ownership and prediction (November 15, 2026): `class X : EcsSystem<T>` (found by the
+    build, registered by the generated module initializer through `Ecs.DescribeSystem`) runs like a Beef
+    `NativeSystem<T>`: a Beef `CSharpEcsSystem` adapter in the native system list calls the managed `RunSystem`
+    entry (`tn_csharp_run_system`) once for all bare entities (in place, GameObjects' and client-owned ones
+    skipped) or for one entity (owned/predicted/replayed). `EcsEntity.SetOwner`, `OwnerClientId`, `IsMine`.
+    Unloading the game removes its systems. 3 in-engine and 3 network checks.
   - [x] Query filters and tags (November 15, 2026): `Query<...>().With<F>()` / `.Without<F>()` (up to 4 terms,
     kept in an allocation-free `EcsFilter`; Flecs Filter/Without terms on the cached query), and `[Component]`
     structs with no fields as tags. 4 in-engine checks.

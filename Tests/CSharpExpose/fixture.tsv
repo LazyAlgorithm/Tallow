@@ -193,7 +193,8 @@ method	Tallow.CSharpWorld	TerrainPendingChunks	int	session:ulong	entity:ulong
 method	Tallow.CSharpWorld	UnloadAdditive	bool	session:ulong	group:ulong
 method	Tallow.Cursor	IsLocked	bool
 method	Tallow.Cursor	SetLocked	void	locked:bool
-method	Tallow.Ecs	BeginDataIteration	int	session:ulong	schemaIds:System.Span<ulong>	with:System.Span<ulong>	without:System.Span<ulong>
+method	Tallow.Ecs	BeginDataIteration	int	session:ulong	schemaIds:System.Span<ulong>	with:System.Span<ulong>	without:System.Span<ulong>	flags:int
+method	Tallow.Ecs	ClientOwned	int	session:ulong	ids:System.Span<ulong>
 method	Tallow.Ecs	CopyLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
 method	Tallow.Ecs	CopyLocalDataPage	int	session:ulong	schemaId:ulong	offset:int	entityIds:System.Span<ulong>	bytes:System.Span<byte>
 method	Tallow.Ecs	CopyRigidbodyMasses	int	session:ulong	offset:int	entityIds:System.Span<ulong>	masses:System.Span<float>
@@ -204,16 +205,19 @@ method	Tallow.Ecs	CreateLocalEntities	int	session:ulong	entityIds:System.Span<ul
 method	Tallow.Ecs	CreateLocalEntity	ulong	session:ulong
 method	Tallow.Ecs	DeleteLocalEntity	bool	session:ulong	entity:ulong
 method	Tallow.Ecs	DescribeData	bool	schemaId:ulong	fullName:string	size:int	alignment:int	syncFields:string
+method	Tallow.Ecs	DescribeSystem	bool	index:int	name:string	order:int	schemaId:ulong
 method	Tallow.Ecs	EndDataIteration	void	session:ulong	handle:int
 method	Tallow.Ecs	EntityOfObject	ulong	session:ulong	objectId:ulong
 method	Tallow.Ecs	HasLocalData	bool	session:ulong	entity:ulong	schemaId:ulong
 method	Tallow.Ecs	IsAlive	bool	session:ulong	entity:ulong
 method	Tallow.Ecs	NextDataTable	int	session:ulong	handle:int	addresses:System.Span<ulong>
 method	Tallow.Ecs	ObjectOfEntity	ulong	session:ulong	entity:ulong
+method	Tallow.Ecs	OwnerOf	int	session:ulong	entity:ulong
 method	Tallow.Ecs	RefreshDataTable	int	session:ulong	handle:int	addresses:System.Span<ulong>
 method	Tallow.Ecs	RegisterLocalData	ulong	session:ulong	schemaId:ulong	size:int	alignment:int
 method	Tallow.Ecs	RemoveLocalData	bool	session:ulong	entity:ulong	schemaId:ulong
 method	Tallow.Ecs	SetLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
+method	Tallow.Ecs	SetOwner	bool	session:ulong	entity:ulong	clientId:int
 method	Tallow.GUI	Button	bool	x:float	y:float	width:float	height:float	label:string
 method	Tallow.Input	GetAxis	float	name:string
 method	Tallow.Input	GetMouseDelta	System.Numerics.Vector2

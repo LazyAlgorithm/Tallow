@@ -287,11 +287,15 @@ internal static class Program
         var allEcsTypes = new Dictionary<string,
             SortedDictionary<string, (string CSharpType, string SchemaId, string Describe)>>(
                 StringComparer.Ordinal);
+        // EcsSystem<T> classes by assembly: display name -> fully qualified type.
+        var allSystems = new Dictionary<string, SortedDictionary<string, string>>(StringComparer.Ordinal);
         foreach (var (assembly, sourceFiles) in filesByAssembly)
         {
             var types = new SortedDictionary<string, string>(StringComparer.Ordinal);
             var ecsTypes = new SortedDictionary<string, (string CSharpType, string SchemaId, string Describe)>(
                 StringComparer.Ordinal);
+            var systems = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            allSystems[assembly] = systems;
             foreach (string sourceFile in sourceFiles)
             {
                 SyntaxTree tree = treesByPath[sourceFile];
@@ -303,14 +307,28 @@ internal static class Program
                         continue;
                     // Deriving from Script identifies a gameplay behaviour;
                     // [Component] is reserved for explicit ECS data structs.
-                    bool isScript = false;
+                    bool isScript = false, isSystem = false;
                     for (INamedTypeSymbol? parent = symbol.BaseType; parent != null;
                          parent = parent.BaseType)
+                    {
                         if (parent.ToDisplayString() == "Tallow.Script")
                         {
                             isScript = true;
                             break;
                         }
+                        if (parent.OriginalDefinition.ToDisplayString() == "Tallow.EcsSystem<T>")
+                        {
+                            isSystem = true;
+                            break;
+                        }
+                    }
+                    // An ECS system: made and registered when the assembly loads (EcsSystems.Register).
+                    if (isSystem && !symbol.IsAbstract && !symbol.IsGenericType &&
+                        symbol.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal &&
+                        symbol.InstanceConstructors.Any(ctor => ctor.Parameters.Length == 0 &&
+                            ctor.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal))
+                        systems[symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)] =
+                            symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     if (!isScript)
                         continue; // ECS struct/data will use a separate layout-safe registration path.
                     if (symbol.IsAbstract || symbol.IsGenericType)
@@ -495,6 +513,10 @@ internal static class Program
                     .Append(">(0x").Append(schema.SchemaId).Append("UL, \"").Append(typeName).Append("\", ")
                     .Append(schema.Describe).AppendLine(");")
                     .AppendLine("        }");
+            if (allSystems.TryGetValue(assembly, out var systemsOf))
+                foreach ((string systemName, string systemType) in systemsOf)
+                    generatedEcs.Append("        global::Tallow.EcsSystems.Register(new ").Append(systemType)
+                        .Append("(), \"").Append(systemName).AppendLine("\");");
             generatedEcs.AppendLine("    }")
                 .AppendLine("#pragma warning restore CA2255");
             foreach ((string typeName, var schema) in ecsTypes)

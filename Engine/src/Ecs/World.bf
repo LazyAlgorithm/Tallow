@@ -110,11 +110,13 @@ sealed class World
 	/// A cached Flecs query: the data schemas (read and written), then entities must have with and lack without.
 	/// Null when a filter schema is unknown or there are too many.
 	void* ManagedDataQuery(Span<uint64> schemaIds, Span<ManagedLocalSchema> layouts, Span<uint64> with = default,
-		Span<uint64> without = default)
+		Span<uint64> without = default, bool bareOnly = false)
 	{
 		if (with.Length + without.Length > MaxManagedQueryFilters)
 			return null;
 		let key = scope String();
+		if (bareOnly)
+			key.Append("bare,");
 		for (let id in schemaIds)
 			key.AppendF("{},", id);
 		for (let id in with)
@@ -123,8 +125,8 @@ sealed class World
 			key.AppendF("-{},", id);
 		if (mManagedDataQueries.TryGetValue(key, let existing))
 			return existing;
-		uint64[MaxManagedQueryTerms + MaxManagedQueryFilters] ids = ?;
-		Flecs.TermAccess[MaxManagedQueryTerms + MaxManagedQueryFilters] access = ?;
+		uint64[MaxManagedQueryTerms + MaxManagedQueryFilters + 1] ids = ?;
+		Flecs.TermAccess[MaxManagedQueryTerms + MaxManagedQueryFilters + 1] access = ?;
 		int count = 0;
 		for (int i < schemaIds.Length)
 		{
@@ -140,6 +142,11 @@ sealed class World
 				ids[count] = layout.flecsId;
 				access[count++] = pass == 0 ? .Filter : .Without;
 			}
+		}
+		if (bareOnly)
+		{
+			ids[count] = IdOf(ComponentId<ObjectLink>.Index);
+			access[count++] = .Without;
 		}
 		let query = Flecs.QueryNew(mWorld, &ids, &access, (int32)count);
 		if (query != null)
@@ -185,12 +192,13 @@ sealed class World
 	/// matching table's columns to read and write directly. Changes to C# data are queued until
 	/// EndManagedIteration (see mManagedDeferDepth); reads see the world as it was. Returns a handle (> 0), 0 when
 	/// the schemas are not registered.
-	public int32 BeginManagedIteration(Span<uint64> schemaIds, Span<uint64> with = default, Span<uint64> without = default)
+	public int32 BeginManagedIteration(Span<uint64> schemaIds, Span<uint64> with = default, Span<uint64> without = default,
+		bool bareOnly = false)
 	{
 		ManagedLocalSchema[MaxManagedQueryTerms] layouts = ?;
 		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), ?))
 			return 0;
-		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length), with, without);
+		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length), with, without, bareOnly);
 		if (query == null)
 			return 0;
 		int slot = -1;

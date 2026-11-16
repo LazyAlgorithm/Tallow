@@ -84,6 +84,10 @@ public class ApiChecks : CheckBase
             EveryNativeHandle(); // Its objects go at the end of the frame, so it has a frame of its own.
         else if (_tick == 9)
             ComponentActions();
+        else if (_tick == 10)
+            SystemsBegin();
+        else if (_tick == 20)
+            SystemsCheck();
         else if (_tick == 40)
             Physics();
         else if (_tick == 41)
@@ -226,6 +230,32 @@ public class ApiChecks : CheckBase
         Check("a generated handle (Camera) writes the engine's component", camera.FieldOfView == 72.5f &&
             new NativeComponent(eye, "Tallow.Camera").GetFloat("fieldOfView") == 72.5f && camera.Orthographic);
         eye.Destroy();
+    }
+
+    private EcsEntity _spinBare;
+    private GameObject _spinObject;
+    private int _systemTick;
+
+    /// An EcsSystem (SpinSystem) runs every fixed tick on bare entities with its data, not on GameObjects'.
+    private void SystemsBegin()
+    {
+        _spinBare = Scene.CreateLocalEcsEntity();
+        _spinBare.Set(new Spin { Speed = 2 });
+        _spinObject = Scene.CreateGameObject("SpinObject");
+        _spinObject.Entity.Set(new Spin { Speed = 2 });
+        _systemTick = _fixedTicks;
+    }
+
+    private void SystemsCheck()
+    {
+        Spin bare = _spinBare.Get<Spin>(), onObject = _spinObject.Entity.Get<Spin>();
+        int ticks = _fixedTicks - _systemTick;
+        Check($"an EcsSystem runs each fixed tick on bare entities ({bare.Ticks} of {ticks} ticks, angle {bare.Angle})",
+            bare.Ticks > 0 && Math.Abs(bare.Ticks - ticks) <= 1 && bare.Angle == bare.Ticks * 2);
+        Check("an EcsSystem leaves GameObjects' entities alone", onObject.Ticks == 0);
+        Check("offline, a bare entity is this machine's", _spinBare.IsMine && _spinBare.OwnerClientId == 0 && !_spinBare.SetOwner(1));
+        _spinBare.DestroyLocal();
+        _spinObject.Destroy();
     }
 
     /// What C# can do with built-in components beyond their fields (NativeComponentActions.cs).
@@ -1235,6 +1265,22 @@ public struct Health
 {
     public float Value;
     public int Hits;
+}
+
+[Component]
+public struct Spin
+{
+    public float Speed, Angle;
+    public int Ticks;
+}
+
+public class SpinSystem : EcsSystem<Spin>
+{
+    public override void Update(EcsEntity entity, ref Spin spin, TickInput input, float deltaTime)
+    {
+        spin.Ticks++;
+        spin.Angle += spin.Speed;
+    }
 }
 
 /// A tag: no fields, only there or not.

@@ -266,6 +266,16 @@ extension NetworkManager
 
 	// ---- server ----
 
+	/// Server: the bare entities clients own; how many, with as many ids as fit.
+	public int32 NativeClientOwned(Span<uint64> ids)
+	{
+		if (mNative == null || !IsServer)
+			return 0;
+		for (int i < Math.Min(ids.Length, mNative.owned.Count))
+			ids[i] = mNative.owned[i].entity.id;
+		return (int32)mNative.owned.Count;
+	}
+
 	/// Client: a bare entity this machine holds for the server's (C# may read and write its data).
 	public bool IsNativeReplica(Entity entity) => mNative != null && mNative.remoteIds.ContainsKey(entity.id);
 

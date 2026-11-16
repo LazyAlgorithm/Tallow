@@ -150,6 +150,30 @@ extension NetworkManager
 		sNativeSystems.Insert(at, entry);
 	}
 
+	/// A system added from outside Beef (a C# EcsSystem): after the other added ones, by order then name, before
+	/// the [NativeSystem] classes.
+	static void AddNativeSystemEntry(NativeSystemBase system)
+	{
+		int at = 0;
+		while (at < sNativeSystems.Count && !sNativeSystems[at].found &&
+			(!(sNativeSystems[at] is CSharpEcsSystem) || sNativeSystems[at].order < system.order ||
+			(sNativeSystems[at].order == system.order && sNativeSystems[at].name.CompareTo(system.name) < 0)))
+			at++;
+		sNativeSystems.Insert(at, system);
+	}
+
+	static void RemoveNativeSystemsWhere(delegate bool(NativeSystemBase system) match)
+	{
+		for (int i = sNativeSystems.Count - 1; i >= 0; i--)
+		{
+			if (match(sNativeSystems[i]))
+			{
+				delete sNativeSystems[i];
+				sNativeSystems.RemoveAt(i);
+			}
+		}
+	}
+
 	public static void RemoveNativeSystem(StringView name)
 	{
 		for (int i < sNativeSystems.Count)

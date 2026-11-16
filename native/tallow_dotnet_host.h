@@ -110,6 +110,10 @@ int32_t tn_csharp_dispatch_checked_batch(const int32_t* instances,
     int32_t count, int32_t event_id, float delta_time);
 int32_t tn_csharp_update_input(int32_t script_instance,
     const tn_csharp_tick_input* input, float delta_time);
+// Runs a game's C# EcsSystem (index in its EcsSystems list) on entity, or (0) on every bare entity with its data
+// that no client owns; 1 on success.
+int32_t tn_csharp_run_system(int32_t index, uint64_t session, uint64_t entity,
+    const tn_csharp_tick_input* input, float delta_time);
 // EarlyUpdate, Update or LateUpdate(TickInput, float) (tn_csharp_tick_phase_id); 1 on success.
 int32_t tn_csharp_tick_phase(int32_t script_instance, int32_t phase,
     const tn_csharp_tick_input* input, float delta_time);

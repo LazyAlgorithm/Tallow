@@ -67,6 +67,49 @@ static class Ecs
         return DataComponents.DescribeManaged(schemaId, fullName, size, alignment, syncFields) >= 0;
     }
 
+    /// A game assembly's EcsSystem<T> (index in its EcsSystems list), when it loads: run each tick like a Beef
+    /// NativeSystem<T> (NetworkManagerEcsPrediction.bf), on bare entities with schemaId's data.
+    [CSharpExpose]
+    public static bool DescribeSystem(int32 index, StringView name, int32 order, uint64 schemaId)
+    {
+        if (index < 0 || name.IsEmpty || schemaId == 0)
+            return false;
+        CSharpEcsSystem.Add(index, name, order, schemaId);
+        return true;
+    }
+
+    /// Server: gives a bare synced entity to a client (0: back to the server); its systems then run on that client,
+    /// which predicts it, and on the server with that client's controls.
+    [CSharpExpose]
+    public static bool SetOwner(uint64 session, uint64 entity, int32 clientId)
+    {
+        let scene = Playing(session);
+        let network = scene?.World.NativeNetwork;
+        if (network == null || !network.IsServer || entity == 0 || !scene.World.IsManagedLocalEntity(.(entity)))
+            return false;
+        network.NativeSetOwner(.(entity), clientId);
+        return network.NativeOwner(.(entity)) == clientId;
+    }
+
+    /// The client whose controls run a bare synced entity, 0 for the server's (or offline).
+    [CSharpExpose]
+    public static int32 OwnerOf(uint64 session, uint64 entity)
+    {
+        let scene = Playing(session);
+        let network = scene?.World.NativeNetwork;
+        return network != null && entity != 0 ? network.NativeOwner(.(entity)) : 0;
+    }
+
+    /// Server: the bare entities clients own (systems' server runs pass over them: their owners' controls run them).
+    /// How many there are; ids gets as many as fit.
+    [CSharpExpose]
+    public static int32 ClientOwned(uint64 session, Span<uint64> ids)
+    {
+        let scene = Playing(session);
+        let network = scene?.World.NativeNetwork;
+        return network != null ? network.NativeClientOwned(ids) : 0;
+    }
+
     [CSharpExpose]
     public static uint64 RegisterLocalData(uint64 session, uint64 schemaId,
         int32 size, int32 alignment)
@@ -171,11 +214,12 @@ static class Ecs
     /// Starts a ForEach that works on the data in place (see World.BeginManagedIteration): a handle, 0 when it
     /// cannot. Always pair it with EndDataIteration.
     [CSharpExpose]
+    /// flags 1: bare entities only (no GameObject's), as systems run.
     public static int32 BeginDataIteration(uint64 session, Span<uint64> schemaIds, Span<uint64> with,
-        Span<uint64> without)
+        Span<uint64> without, int32 flags)
     {
         let scene = Playing(session);
-        return scene != null ? scene.World.BeginManagedIteration(schemaIds, with, without) : 0;
+        return scene != null ? scene.World.BeginManagedIteration(schemaIds, with, without, (flags & 1) != 0) : 0;
     }
 
     /// The next matching table: its columns' addresses, its entity ids' address and its version counter's address;

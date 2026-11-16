@@ -23,3 +23,8 @@ transform 0 0 0 0 0 0 1 1 1 1
 component Tallow.CSharpBehaviour enabled 1
 field scriptType "NetGame.EcsProbe"
 field fieldOverrides ""
+object 5 parent 0 active 1 name "Pilots"
+transform 0 0 0 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "NetGame.PilotProbe"
+field fieldOverrides ""

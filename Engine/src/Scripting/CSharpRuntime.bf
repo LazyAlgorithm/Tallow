@@ -333,6 +333,7 @@ static class CSharpRuntime
     [CLink] static extern int32 tn_csharp_dispatch_batch(int32* instances, int32 count, int32 eventId, float deltaTime);
     [CLink] static extern int32 tn_csharp_dispatch_checked_batch(int32* instances, int32 count, int32 eventId, float deltaTime);
 	[CLink] static extern int32 tn_csharp_update_input(int32 instance, NativeTickInput* input, float deltaTime);
+	[CLink] static extern int32 tn_csharp_run_system(int32 index, uint64 session, uint64 entity, NativeTickInput* input, float deltaTime);
 	[CLink] static extern int32 tn_csharp_tick_phase(int32 instance, int32 phase, NativeTickInput* input, float deltaTime);
     [CLink] static extern int32 tn_csharp_update_input_batch(NativeTickBatchItem* items, int32 count);
 	[CLink] static extern int32 tn_csharp_contact_event(int32 instance, NativeContact* contact);
@@ -502,6 +503,8 @@ static class CSharpRuntime
 	/// Native CSharpBehaviour instances must have been detached first.
 	public static bool UnloadGame()
 	{
+		// Its ECS systems go with it.
+		CSharpEcsSystem.RemoveAll();
 		if (!sStarted)
 			return true;
 		if (tn_csharp_unload_game() != 0)
@@ -667,6 +670,26 @@ static class CSharpRuntime
         ReportFailure("callback");
         return false;
     }
+
+	/// Runs a C# EcsSystem (CSharpEcsSystem): on entity, or (0) on every bare entity with its data no client owns.
+	public static bool RunSystem(int32 index, uint64 session, uint64 entity, TickInput input, float deltaTime)
+	{
+		if (!Ready)
+			return false;
+		NativeTickInput native = .()
+		{
+			moveX = input.raw.moveX,
+			moveZ = input.raw.moveZ,
+			yaw = input.raw.yaw,
+			pitch = input.raw.pitch,
+			buttons = input.raw.buttons,
+			previousButtons = input.previous.buttons
+		};
+		if (tn_csharp_run_system(index, session, entity, &native, deltaTime) > 0)
+			return true;
+		ReportFailure("an ECS system");
+		return false;
+	}
 
 	/// EarlyUpdate (phase 0), Update (1) or LateUpdate (2) with the tick's controls.
 	public static bool TickPhase(int32 instance, int32 phase, TickInput input, float deltaTime)

@@ -520,6 +520,7 @@ public static unsafe class NativeEntrypoints
             // Failed assembly activation must not leave a collectible game
             // context rooted or poison the next rebuild/Play attempt.
             sRegistry = null;
+            EcsSystems.Clear();
             sTypes.Clear();
             sFormerNames.Clear();
             lock (sCallbackMasks)
@@ -1049,6 +1050,27 @@ public static unsafe class NativeEntrypoints
             new Vector2(input.Yaw, input.Pitch),
             input.Buttons, input.PreviousButtons);
         script.Update(tick, deltaTime);
+    }
+
+    /// <summary>A game's EcsSystem on one bare entity, or (entity 0) on every one with its data no client owns.</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int RunSystem(int index, ulong session, ulong entity, NativeInput* input, float deltaTime)
+    {
+        try
+        {
+            if (input == null)
+                throw new ArgumentNullException(nameof(input));
+            var tick = new TickInput(
+                new Vector2(input->MoveX, input->MoveZ),
+                new Vector2(input->Yaw, input->Pitch),
+                input->Buttons, input->PreviousButtons);
+            EcsSystems.Run(index, session, entity, tick, deltaTime);
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
     }
 
     /// <summary>EarlyUpdate (0), Update (1) or LateUpdate (2) with a tick's controls.</summary>

@@ -165,6 +165,9 @@ public readonly record struct EcsQuery<T1>(ulong SessionId) where T1 : unmanaged
     /// <summary>The <see cref="With{F}"/> and <see cref="Without{F}"/> terms so far.</summary>
     public EcsFilter Filter { get; init; }
 
+    /// <summary>Only bare entities, not GameObjects' (what systems run on).</summary>
+    internal bool BareOnly { get; init; }
+
     public int Count
     {
         get
@@ -182,7 +185,7 @@ public readonly record struct EcsQuery<T1>(ulong SessionId) where T1 : unmanaged
         Span<ulong> schemas = [EcsSchema<T1>.Require()];
         Span<ulong> filters = stackalloc ulong[EcsFilter.Capacity];
         Filter.Split(filters, out Span<ulong> with, out Span<ulong> without);
-        int handle = Ecs.BeginDataIteration(SessionId, schemas, with, without);
+        int handle = Ecs.BeginDataIteration(SessionId, schemas, with, without, BareOnly ? 1 : 0);
         if (handle <= 0)
             return;
         try
@@ -231,6 +234,9 @@ public readonly record struct EcsQuery<T1, T2>(ulong SessionId) where T1 : unman
     /// <summary>The <see cref="With{F}"/> and <see cref="Without{F}"/> terms so far.</summary>
     public EcsFilter Filter { get; init; }
 
+    /// <summary>Only bare entities, not GameObjects' (what systems run on).</summary>
+    internal bool BareOnly { get; init; }
+
     public int Count
     {
         get
@@ -248,7 +254,7 @@ public readonly record struct EcsQuery<T1, T2>(ulong SessionId) where T1 : unman
         Span<ulong> schemas = [EcsSchema<T1>.Require(), EcsSchema<T2>.Require()];
         Span<ulong> filters = stackalloc ulong[EcsFilter.Capacity];
         Filter.Split(filters, out Span<ulong> with, out Span<ulong> without);
-        int handle = Ecs.BeginDataIteration(SessionId, schemas, with, without);
+        int handle = Ecs.BeginDataIteration(SessionId, schemas, with, without, BareOnly ? 1 : 0);
         if (handle <= 0)
             return;
         try
@@ -300,6 +306,9 @@ public readonly record struct EcsQuery<T1, T2, T3>(ulong SessionId)
     /// <summary>The <see cref="With{F}"/> and <see cref="Without{F}"/> terms so far.</summary>
     public EcsFilter Filter { get; init; }
 
+    /// <summary>Only bare entities, not GameObjects' (what systems run on).</summary>
+    internal bool BareOnly { get; init; }
+
     public int Count
     {
         get
@@ -317,7 +326,7 @@ public readonly record struct EcsQuery<T1, T2, T3>(ulong SessionId)
         Span<ulong> schemas = [EcsSchema<T1>.Require(), EcsSchema<T2>.Require(), EcsSchema<T3>.Require()];
         Span<ulong> filters = stackalloc ulong[EcsFilter.Capacity];
         Filter.Split(filters, out Span<ulong> with, out Span<ulong> without);
-        int handle = Ecs.BeginDataIteration(SessionId, schemas, with, without);
+        int handle = Ecs.BeginDataIteration(SessionId, schemas, with, without, BareOnly ? 1 : 0);
         if (handle <= 0)
             return;
         try
