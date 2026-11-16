@@ -1145,6 +1145,19 @@ public interface IEngineBridge
     ulong InstantiatePrefab(ulong sceneSession, string path);
 }
 
+/// <summary>Ends lag compensation when disposed (<see cref="Script.LagCompensated"/>).</summary>
+public readonly struct LagCompensationScope(ulong session, bool active) : IDisposable
+{
+    /// <summary>Whether anything was put back (false with no session, on a client, for the host's own player).</summary>
+    public bool Active => active;
+
+    public void Dispose()
+    {
+        if (active)
+            CSharpNetwork.EndLagCompensation(session);
+    }
+}
+
 public static class Engine
 {
     private sealed class UnboundBridge : IEngineBridge
@@ -1190,6 +1203,25 @@ public abstract class Script : IComponent
     public Transform Transform => _transform ??= new Transform(GameObject);
     public bool IsMine => Engine.Bridge.IsMine(GameObject);
     public Scene Scene => GameObject.Scene;
+
+    /// <summary>
+    /// Server, inside Update(TickInput, ...) of a player's object: until <see cref="EndLagCompensation"/>, every
+    /// other networked object is put back where this player saw it when they gave these controls, so a ray cast for
+    /// a shot is judged against what they aimed at. Find out what was hit, end, then deal the damage. False (nothing
+    /// done) with no session, on a client and for the host's own player. Prefer <see cref="LagCompensated"/>.
+    /// </summary>
+    public bool BeginLagCompensation() => CSharpNetwork.BeginLagCompensation(GameObject.SceneId, GameObject.Id);
+
+    /// <summary>Puts everything back where it really is. Safe when nothing was moved.</summary>
+    public void EndLagCompensation() => CSharpNetwork.EndLagCompensation(GameObject.SceneId);
+
+    /// <summary>
+    /// Lag compensation for a using block: <c>using (LagCompensated()) { hit = Scene.RaycastHit(...); }</c>.
+    /// </summary>
+    public LagCompensationScope LagCompensated() => new(GameObject.SceneId, BeginLagCompensation());
+
+    /// <summary>The server tick lag compensation went back to, or -1 when it is not in effect.</summary>
+    public double LagCompensationTick => CSharpNetwork.LagCompensationTick(GameObject.SceneId);
 
     /// <summary>
     /// Calls one of this script's <see cref="RpcAttribute"/> methods: here and on every client

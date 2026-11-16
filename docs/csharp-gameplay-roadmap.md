@@ -264,8 +264,12 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     replication (NetworkManagerEcs.bf) sends it like a Beef one: bare entities the server makes arrive on clients,
     changes (ForEach in place included) follow, deletes go. A scene registers a described schema on first use, so
     a client can query data only the server sets; clients may read and write replicas' C# data. 4 network checks.
-- [ ] Jolt physics: rigid bodies, forces, collision/trigger callbacks, raycasts/shape casts, character controls, constraints/joints and physics queries.
+- [x] Jolt physics: rigid bodies, forces, collision/trigger callbacks, raycasts/shape casts, character controls, constraints/joints and physics queries. Done (verified November 16, 2026): Rigidbody fields (mass, gravity, kinematic, friction, bounciness, damping, freeze rotation, continuous collision, sleeping) and forces/torque/impulses, collision/trigger/stay/controller-hit callbacks, every Beef query (ray, sphere/capsule/box casts, overlaps, CheckSphere/CheckBox), CharacterController, hinge/suspension joints and `Joint.Connect`, soft bodies. Benchmarked in B13.
 - [ ] Native network features surfaced to C#: networked TickInput/actions, authority/ownership, spawning, replication, prediction/reconciliation, rollback, RPCs, lag compensation, relevancy and state sync, working by default.
+  - [x] (November 16, 2026) Lag compensation: `Script.BeginLagCompensation()` / `EndLagCompensation()`,
+    `using (LagCompensated()) { ... }` and `LagCompensationTick` (Beef `NetworkManager.BeginLagCompensation`).
+    2 network checks (active in the client's player tick on the server, ends; does nothing on a client).
+    Not yet: custom prediction-state hooks (Beef `CapturePredictionState` / `RestorePredictionState`) for C# motors.
 - [ ] Rendering, materials, shaders/compute graphs, cameras, lighting, mesh/voxel/terrain, animation/IK, sequencer and modeling tools.
   - [x] (November 15, 2026) `MeshRenderer.Material` (networked switch), `SetMaterialValue/Float/Color` on the
     object's own copy, `TryGetWorldBounds`, `IsVisible`, `BackFaceCulling`, `Texture`. Script callbacks

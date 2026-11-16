@@ -127,9 +127,12 @@ method	Tallow.CSharpNavigation	SetDestination	void	session:ulong	entity:ulong	po
 method	Tallow.CSharpNavigation	StopMovement	void	session:ulong	entity:ulong
 method	Tallow.CSharpNavigation	SurfaceQuery	System.Numerics.Vector4	session:ulong	entity:ulong	kind:int	a:System.Numerics.Vector3	b:System.Numerics.Vector3	distance:float	seed:int
 method	Tallow.CSharpNavigation	SurfaceRebuild	bool	session:ulong	entity:ulong	min:System.Numerics.Vector3	max:System.Numerics.Vector3
+method	Tallow.CSharpNetwork	BeginLagCompensation	bool	session:ulong	entity:ulong
 method	Tallow.CSharpNetwork	CopyReport	int	session:ulong	buffer:System.Span<byte>
 method	Tallow.CSharpNetwork	Despawn	bool	session:ulong	entity:ulong
+method	Tallow.CSharpNetwork	EndLagCompensation	void	session:ulong
 method	Tallow.CSharpNetwork	IsPrefabRegistered	bool	name:string
+method	Tallow.CSharpNetwork	LagCompensationTick	double	session:ulong
 method	Tallow.CSharpNetwork	RegisterPrefabFile	bool	name:string	path:string
 method	Tallow.CSharpNetwork	SendEvent	int	session:ulong	entity:ulong	instance:int	name:string	value:float
 method	Tallow.CSharpNetwork	SendRpc	int	session:ulong	entity:ulong	instance:int	target:int	method:string	arguments:string

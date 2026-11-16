@@ -92,6 +92,27 @@ static class CSharpNetwork
 		return true;
 	}
 
+	/// Server, while the object's player's tick runs: puts every other networked object back where that player saw
+	/// it (NetworkManager.BeginLagCompensation). False, doing nothing, where it does not apply.
+	[CSharpExpose]
+	public static bool BeginLagCompensation(uint64 session, uint64 entity)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		if (scene == null || scene.Network == null || obj == null)
+			return false;
+		let identity = obj.GetComponent<NetworkIdentity>();
+		return identity.IsValid && scene.Network.BeginLagCompensation(identity);
+	}
+
+	/// Puts everything back where it really is. Safe when nothing was moved.
+	[CSharpExpose]
+	public static void EndLagCompensation(uint64 session) => CSharpRuntime.PhysicsScene(session)?.Network?.EndLagCompensation();
+
+	/// The server tick lag compensation went back to, or -1 when it is not in effect.
+	[CSharpExpose]
+	public static double LagCompensationTick(uint64 session) => CSharpRuntime.PhysicsScene(session)?.Network?.LagCompensationTick ?? -1;
+
 	/// What the session shares, for tests and debugging (UTF-8 into buffer; returns the full length). The first line
 	/// is "offline" or "role=host|client connected=0|1 clients=N shared=N"; then a "NETPOS id x y z name" line per
 	/// shared object, the session's own description, and a "VOXEL id indices name" line per voxel object.

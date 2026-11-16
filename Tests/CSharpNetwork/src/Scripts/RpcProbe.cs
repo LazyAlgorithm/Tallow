@@ -14,6 +14,25 @@ public class RpcProbe : Script
     private bool _echoed;
     private float _event;
     private bool _serverHeard;
+    /// The server's lag compensation inside this player's tick: "active tickDuring tickAfter".
+    [Sync] public string LagReport = "";
+    private int _serverTicks;
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        if (!Scene.IsServer || GameObject.OwnerClientId <= 0 || LagReport.Length > 0)
+            return;
+        double during;
+        bool active;
+        using (LagCompensationScope lag = LagCompensated())
+        {
+            active = lag.Active;
+            during = LagCompensationTick;
+        }
+        // The client's view runs behind the server, so this becomes active once it has seen a few snapshots.
+        if (active || ++_serverTicks == 600)
+            LagReport = $"{active} {during >= 0} {LagCompensationTick}";
+    }
 
     public override void OnNetworkEvent(string name, float value)
     {
@@ -70,8 +89,11 @@ public class RpcProbe : Script
             SendNetworkEvent("hello", 3.5f);
             SyncProbe.Check("an owner's network event waits for the server", _event == 0f);
         }
-        if (_answer != 0 && _echoed && _event != 0f && _serverHeard)
+        if (_answer != 0 && _echoed && _event != 0f && _serverHeard && LagReport.Length > 0)
         {
+            SyncProbe.Check($"lag compensation runs on the server in the client's player tick and ends ({LagReport})",
+                LagReport == "True True -1");
+            SyncProbe.Check("lag compensation does nothing on a client", !BeginLagCompensation() && LagCompensationTick == -1);
             SyncProbe.Check("SendNetworkEvent from a client runs OnNetworkEvent on the server and comes back", _event == 3.5f);
             _done = true;
             SyncProbe.Check("client RPC to the server, answered to everyone (all argument kinds)", _answer == 42);
@@ -81,7 +103,7 @@ public class RpcProbe : Script
         else if (_ticks == 60 * 20)
         {
             _done = true;
-            Log.Error($"NETTEST FAIL RPCs never came back (answer {_answer}, echoed {_echoed}, event {_event}, server heard {_serverHeard})");
+            Log.Error($"NETTEST FAIL RPCs never came back (answer {_answer}, echoed {_echoed}, event {_event}, server heard {_serverHeard}, lag \"{LagReport}\")");
             SyncProbe.Finished();
         }
     }
