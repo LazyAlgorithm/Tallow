@@ -347,6 +347,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_network_event(int32 instance, char8* name, float value);
 	[CLink] static extern int32 tn_csharp_ui_invoke(int32 instance, char8* method, char8* elementId);
 	[CLink] static extern int32 tn_csharp_choose_team(int32 clientId);
+	[CLink] static extern int32 tn_csharp_component_event(int32 instance, int32 kind, char8* name, float value);
 	[CRepr]
 	struct GcStats
 	{
@@ -674,6 +675,30 @@ static class CSharpRuntime
         ReportFailure("callback");
         return false;
     }
+
+	/// CallbackMask bits for OnSequenceEvent, OnDialogueEvent and OnTreeEvent (ComponentEvent kind 0, 1, 2).
+	public const int32 SequenceEventCallback = 1 << 23, DialogueEventCallback = 1 << 24, TreeEventCallback = 1 << 25;
+
+	/// A Sequence Player's, Dialogue Runner's or Behavior Tree Runner's named event (kind 0, 1, 2) on the C# scripts
+	/// of the same object that override its callback.
+	public static void ComponentEvent(GameObject gameObject, int32 kind, StringView name, float value = 0)
+	{
+		if (!Ready || gameObject == null)
+			return;
+		let bit = kind == 0 ? SequenceEventCallback : kind == 1 ? DialogueEventCallback : TreeEventCallback;
+		String text = null;
+		// By index: a script may add a component while handling the event.
+		for (int i = 0; i < gameObject.Components.Count; i++)
+		{
+			let script = gameObject.Components[i] as CSharpBehaviour;
+			if (script == null || !script.IsLoaded || (script.[Friend]mCallbacks & bit) == 0)
+				continue;
+			if (text == null)
+				text = scope:: String(name);
+			if (tn_csharp_component_event(script.ManagedInstance, kind, text.CStr(), value) <= 0)
+				ReportFailure(kind == 0 ? "OnSequenceEvent" : kind == 1 ? "OnDialogueEvent" : "OnTreeEvent");
+		}
+	}
 
 	/// C# set Network.ChooseTeam.
 	public static bool HasTeamChooser;

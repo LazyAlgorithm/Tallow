@@ -230,6 +230,31 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    /// <summary>A component's named event on a script of the same object: kind 0 OnSequenceEvent, 1 OnDialogueEvent,
+    /// 2 OnTreeEvent.</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int ComponentEvent(int instance, int kind, byte* name, float value)
+    {
+        try
+        {
+            if (!sInstances.TryGetValue(instance, out Script? script))
+                throw new InvalidOperationException("Unknown managed gameplay instance.");
+            string text = Marshal.PtrToStringUTF8((nint)name) ?? "";
+            switch (kind)
+            {
+                case 0: script.OnSequenceEvent(text, value); break;
+                case 1: script.OnDialogueEvent(text, value); break;
+                case 2: script.OnTreeEvent(text); break;
+                default: throw new ArgumentOutOfRangeException(nameof(kind));
+            }
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     /// <summary>The team for a joining player from <see cref="Network.ChooseTeam"/>: the team (0 or more), or -1
     /// when there is no chooser or it threw (reported; the engine then shares players out itself).</summary>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -1083,6 +1108,8 @@ public static unsafe class NativeEntrypoints
     private const int QueryCallbacks = 100;
     /// <summary>The bits for Update, EarlyUpdate and LateUpdate in that answer (the others are 1 &lt;&lt; ScriptEvent).</summary>
     private const int UpdateBit = 1 << 20, EarlyUpdateBit = 1 << 21, LateUpdateBit = 1 << 22;
+    /// <summary>The bits for OnSequenceEvent, OnDialogueEvent and OnTreeEvent (ComponentEvent's kinds 0, 1, 2).</summary>
+    private const int SequenceEventBit = 1 << 23, DialogueEventBit = 1 << 24, TreeEventBit = 1 << 25;
     private static readonly Dictionary<Type, int> sCallbackMasks = new();
 
     /// <summary>
@@ -1112,6 +1139,9 @@ public static unsafe class NativeEntrypoints
             Check(nameof(Script.LocalLateUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalLateUpdate);
             Check(nameof(Script.OnGUI), Type.EmptyTypes, 1 << (int)ScriptEvent.Gui);
             Check(nameof(Script.OnWorldStateChanged), [typeof(int), typeof(int)], 1 << (int)ScriptEvent.WorldStateChanged);
+            Check(nameof(Script.OnSequenceEvent), [typeof(string), typeof(float)], SequenceEventBit);
+            Check(nameof(Script.OnDialogueEvent), [typeof(string), typeof(float)], DialogueEventBit);
+            Check(nameof(Script.OnTreeEvent), [typeof(string)], TreeEventBit);
             sCallbackMasks[type] = mask;
             return mask;
         }

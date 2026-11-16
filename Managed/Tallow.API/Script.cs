@@ -1270,6 +1270,15 @@ public abstract class Script : IComponent
     /// <summary>Called on every machine when <see cref="SendNetworkEvent"/> is used on this script.</summary>
     public virtual void OnNetworkEvent(string name, float value) { }
 
+    /// <summary>An Event key of a sequence playing on this object's Sequence Player (its name and value).</summary>
+    public virtual void OnSequenceEvent(string name, float value) { }
+
+    /// <summary>An event step of the conversation on this object's Dialogue Runner (its name and value).</summary>
+    public virtual void OnDialogueEvent(string name, float value) { }
+
+    /// <summary>A Send Event node of the tree on this object's Behavior Tree Runner.</summary>
+    public virtual void OnTreeEvent(string name) { }
+
     /// <summary>
     /// The scene's world state changed (<see cref="Scene.SetWorldState(int)"/> or by name):
     /// the state before and the state now, as indexes (<see cref="WorldStates.Name(int)"/> gives their names). World

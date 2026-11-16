@@ -125,6 +125,8 @@ public class ApiChecks : CheckBase
             ComponentActions();
         else if (_tick == 10)
             SystemsBegin();
+        else if (_tick == 11)
+            EventsBegin();
         else if (_tick == 20)
             SystemsCheck();
         else if (_tick == 40)
@@ -160,6 +162,7 @@ public class ApiChecks : CheckBase
             AnimatorChecks();
             UIChecks();
             NativeComponentChecks();
+            EventChecks();
             SpawnLayerJointChecks();
             ReferenceFieldChecks();
             PackageChecks();
@@ -346,6 +349,27 @@ public class ApiChecks : CheckBase
         Check("an action on a component the object lacks throws, naming it", missing);
         eye.Destroy();
         Scene.Find("NoParticles")?.Destroy();
+    }
+
+    // A sequence, a conversation and a tree that each send a "Ping" event, on an object with an EventProbe script.
+    private void EventsBegin()
+    {
+        GameObject talker = Scene.CreateGameObject("Event probe");
+        talker.AddComponent<EventProbe>();
+        talker.AddComponent<SequencePlayer>().Sequence = "Sequences/Ping.tsequence";
+        talker.AddComponent<DialogueRunner>().Dialogue = "Dialogue/Ping.tdialogue";
+        talker.AddComponent<BehaviorTreeRunner>().Tree = "AI/Ping.tbt";
+        talker.GetComponent<SequencePlayer>().Play();
+        talker.GetComponent<DialogueRunner>().Play();
+    }
+
+    private void EventChecks()
+    {
+        string heard = string.Join(",", EventProbe.Heard.Distinct());
+        Check($"OnSequenceEvent, OnDialogueEvent and OnTreeEvent reach a script on the same object ({heard})",
+            EventProbe.Heard.Contains("sequence Ping 3") && EventProbe.Heard.Contains("dialogue Ping 2") &&
+            EventProbe.Heard.Contains("tree Ping"));
+        Scene.Find("Event probe")?.Destroy();
     }
 
     private void NativeComponentChecks()
@@ -1393,4 +1417,14 @@ public class LateHelper : Script
 public class PairProbe : Script
 {
     public GameObject Partner;
+}
+
+/// Hears the Sequence Player's, Dialogue Runner's and Behavior Tree Runner's events on its object.
+public class EventProbe : Script
+{
+    public static readonly List<string> Heard = [];
+
+    public override void OnSequenceEvent(string name, float value) => Heard.Add($"sequence {name} {value}");
+    public override void OnDialogueEvent(string name, float value) => Heard.Add($"dialogue {name} {value}");
+    public override void OnTreeEvent(string name) => Heard.Add($"tree {name}");
 }

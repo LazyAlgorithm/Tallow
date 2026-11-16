@@ -309,7 +309,11 @@ class DialogueRunnerState
 		}
 	}
 
-	void ConversationEvent(StringView name, float value) => OnEvent(name, value);
+	void ConversationEvent(StringView name, float value)
+	{
+		OnEvent(name, value);
+		CSharpRuntime.ComponentEvent(mGameObject, 1, name, value);
+	}
 
 	/// After the conversation moved: what it shows is written for the other machines and shown here.
 	void Changed()

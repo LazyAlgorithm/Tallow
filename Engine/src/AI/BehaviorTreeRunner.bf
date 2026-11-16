@@ -470,6 +470,7 @@ class BehaviorTreeRunnerState
 	public void RaiseTreeEvent(StringView name)
 	{
 		OnTreeEvent(name);
+		CSharpRuntime.ComponentEvent(mGameObject, 2, name);
 	}
 
 	/// What OnDisable did.

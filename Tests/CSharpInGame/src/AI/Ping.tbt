@@ -1,0 +1,4 @@
+tree "Ping"
+node 1 root 0 0
+node 2 event.send 0 110 "Ping"
+link 1 2

@@ -241,7 +241,11 @@ class SequencePlayerState
 	/// True where this sequence is decided: always unless it is shared in a session, then on the server.
 	bool Mine => !shared || !NetworkSync.InSession(Scene) || (Scene.Network != null && Scene.Network.IsServer);
 
-	void EvaluatorEvent(StringView name, float value) => OnEvent(name, value);
+	void EvaluatorEvent(StringView name, float value)
+	{
+		OnEvent(name, value);
+		CSharpRuntime.ComponentEvent(mGameObject, 0, name, value);
+	}
 
 	/// Reads the file and finds its objects.
 	bool Bind()

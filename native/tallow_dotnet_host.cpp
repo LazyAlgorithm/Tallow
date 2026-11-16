@@ -60,6 +60,7 @@ using invoke_rpc_fn = int32_t (*)(int32_t, const char*, const char*, int32_t, in
 using network_event_fn = int32_t (*)(int32_t, const char*, float);
 using ui_invoke_fn = int32_t (*)(int32_t, const char*, const char*);
 using choose_team_fn = int32_t (*)(int32_t);
+using component_event_fn = int32_t (*)(int32_t, int32_t, const char*, float);
 using pump_fn = int32_t (*)(float, tn_csharp_gc_stats*);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
@@ -87,6 +88,7 @@ invoke_rpc_fn invoke_rpc = nullptr;
 network_event_fn network_event = nullptr;
 ui_invoke_fn ui_invoke = nullptr;
 choose_team_fn choose_team = nullptr;
+component_event_fn component_event = nullptr;
 pump_fn pump = nullptr;
 detach_fn detach = nullptr;
 last_error_fn last_error = nullptr;
@@ -426,6 +428,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "NetworkEvent", network_event) ||
             !find_entry(assembly.c_str(), "UiInvoke", ui_invoke) ||
             !find_entry(assembly.c_str(), "ChooseTeam", choose_team) ||
+            !find_entry(assembly.c_str(), "ComponentEvent", component_event) ||
             !find_entry(assembly.c_str(), "Pump", pump) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
             !find_entry(assembly.c_str(), "GetLastError", last_error) ||
@@ -628,6 +631,16 @@ int32_t tn_csharp_ui_invoke(int32_t script_instance, const char* method, const c
     return result;
 }
 
+int32_t tn_csharp_component_event(int32_t script_instance, int32_t kind, const char* name, float value)
+{
+    if (!started || !component_event || !name)
+        return 0;
+    const int32_t result = component_event(script_instance, kind, name, value);
+    if (result < 0)
+        managed_error("Running a C# sequence, dialogue or tree event");
+    return result > 0;
+}
+
 int32_t tn_csharp_choose_team(int32_t client_id)
 {
     if (!started || !choose_team)
@@ -694,6 +707,7 @@ void tn_csharp_shutdown(void)
     network_event = nullptr;
     ui_invoke = nullptr;
     choose_team = nullptr;
+    component_event = nullptr;
     pump = nullptr;
     detach = nullptr;
     last_error = nullptr;
