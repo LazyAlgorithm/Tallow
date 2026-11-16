@@ -11,7 +11,7 @@ namespace Tallow.Editor;
 /// FOLDER's files into the code editor (as if typed) and saves them with Save All; the save compiles and reloads the
 /// running game. Logs "HOT RELOAD TEST PASS: ..." once the reload happened and the game stopped Play itself (or
 /// "... FAIL: ..."), then quits. tools/test_csharp_editor.py runs it on Tests/CSharpReload with v2/Scripts. With
-/// --hot-reload-manual the project's reload mode is Manual for the run, so the save only compiles nothing, and
+/// --hot-reload-manual the project's reload mode is Manual for the run, so the save does not reload, and
 /// File > Reload Scripts (RequestRebuild) is what reloads.
 extension EditorApp
 {
