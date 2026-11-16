@@ -115,6 +115,16 @@ def main() -> int:
             else:
                 failed.append(f"INGAME FAIL catalog row for RefProbe.{field}: {row}")
                 print(failed[-1])
+        # A [Serializable] struct field's fields are rows of their own, "Outer.Inner", nested types included.
+        nested = {name: catalog.get(("InGame.ApiChecks", name), [None, None, None])[2]
+                  for name in ("Stats.Health", "Stats.Speed", "Stats.Limits.Max", "Stats.Limits.Tag", "Stats.Ignored", "Stats")}
+        if nested == {"Stats.Health": "int", "Stats.Speed": "float", "Stats.Limits.Max": "float",
+                      "Stats.Limits.Tag": "string", "Stats.Ignored": None, "Stats": None}:
+            passed += 1
+            print("INGAME PASS the field catalog lists a nested [Serializable] type's fields as Outer.Inner rows")
+        else:
+            failed.append(f"INGAME FAIL nested catalog rows: {nested}")
+            print(failed[-1])
         boom = [line for line in output.splitlines()
                 if line.startswith("[error] System.InvalidOperationException: thrown on purpose by async code (in async code")]
         if len(boom) == 1 and "AsyncProbe" in boom[0] and "ApiChecks.cs:" in boom[0]:

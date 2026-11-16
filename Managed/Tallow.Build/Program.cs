@@ -34,6 +34,21 @@ internal static class Program
     private static readonly Regex SerializedIdName = new(
         @"^[A-Za-z0-9_.-]{1,64}$", RegexOptions.CultureInvariant);
 
+    // A struct or class of the game's own marked [Serializable]: the Inspector shows its fields under it.
+    private static bool IsNestedInspectorType(ITypeSymbol type) =>
+        type is INamedTypeSymbol { TypeKind: TypeKind.Struct or TypeKind.Class } named &&
+        named.Locations.Any(location => location.IsInSource) &&
+        named.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "System.SerializableAttribute") &&
+        !InheritsScript(named);
+
+    private static bool InheritsScript(INamedTypeSymbol type)
+    {
+        for (INamedTypeSymbol? owner = type; owner != null; owner = owner.BaseType)
+            if (owner.ToDisplayString() == "Tallow.Script")
+                return true;
+        return false;
+    }
+
     // What the Inspector edits a value of this type as (fields.tsv kinds), or null when it cannot.
     private static string? InspectorScalarKind(ITypeSymbol type) =>
         type.TypeKind == TypeKind.Enum ? "enum" : type.SpecialType switch
@@ -824,6 +839,12 @@ internal static class Program
                         field.IsImplicitlyDeclared ||
                         fieldAttributes.Contains("System.NonSerializedAttribute"))
                         continue;
+                    EmitField(field, "", hide, 0);
+                }
+
+                // One Inspector field's rows (a nested [Serializable] type's fields as "Outer.Inner").
+                void EmitField(IFieldSymbol field, string prefix, bool hide, int depth)
+                {
                     // Object references: a GameObject, its Transform, a built-in component handle or a C# script,
                     // set in the Inspector by dragging an object in (column 8 says which).
                     string? referenceType = ReferenceDescriptor(field.Type);
@@ -841,7 +862,24 @@ internal static class Program
                         element != null ? (elementKind != null ? "list:" + elementKind : null) :
                         InspectorScalarKind(field.Type);
                     if (kind is null)
-                        continue;
+                    {
+                        // A [Serializable] struct or class of the game's: its own fields, as "Field.Inner" rows.
+                        if (depth < 4 && IsNestedInspectorType(field.Type))
+                            foreach (IFieldSymbol inner in field.Type.GetMembers().OfType<IFieldSymbol>())
+                            {
+                                var innerAttributes = inner.GetAttributes()
+                                    .Select(a => a.AttributeClass?.ToDisplayString())
+                                    .ToHashSet(StringComparer.Ordinal);
+                                bool innerHide = innerAttributes.Contains("Tallow.HideInInspectorAttribute");
+                                bool innerShown = innerHide || innerAttributes.Contains("Tallow.ShowInInspectorAttribute");
+                                if ((inner.DeclaredAccessibility != Accessibility.Public && !innerShown) ||
+                                    inner.IsStatic || inner.IsConst || inner.IsReadOnly || inner.IsImplicitlyDeclared ||
+                                    innerAttributes.Contains("System.NonSerializedAttribute"))
+                                    continue;
+                                EmitField(inner, prefix + field.Name + ".", hide || innerHide, depth + 1);
+                            }
+                        return;
+                    }
                     ITypeSymbol valueType = element ?? field.Type;
 
                     string defaultValue = kind switch
@@ -910,7 +948,7 @@ internal static class Program
                     // therefore remain visible by default in the editor.
                     // Optional eighth field lists compiler-discovered enum
                     // choices without breaking the existing seven columns.
-                    string row = string.Join("\t", className, field.Name, kind,
+                    string row = string.Join("\t", className, prefix + field.Name, kind,
                         defaultValue, rangeMin, rangeMax, hide ? "1" : "0");
                     if ((kind == "enum" || kind == "list:enum") && valueType is INamedTypeSymbol enumDeclaration)
                     {
@@ -926,8 +964,8 @@ internal static class Program
 
                     AttributeData? identityAttribute = field.GetAttributes().FirstOrDefault(a =>
                         a.AttributeClass?.ToDisplayString() == "Tallow.SerializedFieldIdAttribute");
-                    string identity = identityAttribute is null ? field.Name :
-                        identityAttribute.ConstructorArguments.FirstOrDefault().Value as string ?? "";
+                    string identity = prefix + (identityAttribute is null ? field.Name :
+                        identityAttribute.ConstructorArguments.FirstOrDefault().Value as string ?? "");
                     if (!SerializedIdName.IsMatch(identity))
                         throw new InvalidOperationException(
                             $"Invalid [SerializedFieldId] for {className}.{field.Name}: " +
@@ -937,7 +975,7 @@ internal static class Program
                         throw new InvalidOperationException(
                             $"Duplicate serialized field identity on {className}: {identity}.");
                     aotFieldRows.Add(string.Join("\t",
-                        className, stableId, field.Name, kind, hide ? "1" : "0"));
+                        className, stableId, prefix + field.Name, kind, hide ? "1" : "0"));
                 }
             }
         }

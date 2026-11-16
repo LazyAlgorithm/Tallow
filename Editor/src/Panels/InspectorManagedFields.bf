@@ -222,6 +222,8 @@ extension EditorApp
 		// During Play the widgets show the running script's values (edits still go to it, as before).
 		let live = scope String();
 		let playing = component.IsLoaded && CSharpRuntime.ReadFields(component.ManagedInstance, false, live);
+		// The nested group ("Stats", "Stats.Limits") the last row was in: a heading row starts each new one.
+		let group = scope String();
 		for (var line in data.Split('\n', .RemoveEmptyEntries))
 		{
 			// fields.tsv has Windows line ends on Windows: the last column (hidden flag, enum names, reference
@@ -260,9 +262,44 @@ extension EditorApp
 					return changed;
 				tableOpen = true;
 			}
+			// A [Serializable] struct or class field's own fields are "Outer.Inner": under a heading, indented.
+			let dot = name.LastIndexOf('.');
+			let rowGroup = dot > 0 ? name.Substring(0, dot) : StringView();
+			int depth = 0;
+			if (rowGroup != group)
+			{
+				// Headings for each part of the new group the previous row was not already inside.
+				int shared = 0;
+				let previousParts = scope List<StringView>(group.Split('.'));
+				let parts = scope List<StringView>();
+				if (!rowGroup.IsEmpty)
+					for (let part in rowGroup.Split('.'))
+						parts.Add(part);
+				while (shared < parts.Count && shared < previousParts.Count && !group.IsEmpty && parts[shared] == previousParts[shared])
+					shared++;
+				for (int i = shared; i < parts.Count; i++)
+				{
+					let heading = scope String();
+					heading.Append(' ', i * 3);
+					NiceName(parts[i], heading);
+					ImGui.TableNextRow();
+					ImGui.TableNextColumn();
+					ImGui.AlignTextToFramePadding();
+					ImGui.TextDisabled(heading.CStr());
+					ImGui.TableNextColumn();
+				}
+				group.Set(rowGroup);
+			}
+			if (!rowGroup.IsEmpty)
+				for (let c in rowGroup.RawChars)
+					if (c == '.')
+						depth++;
+			if (!rowGroup.IsEmpty)
+				depth++;
 			ImGui.PushID(scope String(name).CStr());
 			let label = scope String();
-			NiceName(name, label);
+			label.Append(' ', depth * 3);
+			NiceName(dot > 0 ? name.Substring(dot + 1) : name, label);
 			BeginProperty(label.CStr());
 			bool edited = false;
 			let newValue = scope String();

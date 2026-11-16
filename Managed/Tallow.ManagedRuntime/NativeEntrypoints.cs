@@ -623,6 +623,8 @@ public static unsafe class NativeEntrypoints
                         string? encoded = FormatInspectorValue(field.FieldType, value);
                         if (encoded != null)
                             text.Append(field.Name).Append('\t').Append(encoded).Append('\n');
+                        else if (value != null && IsNestedType(field.FieldType))
+                            AppendNested(text, field.Name, value, 1);
                     }
                     else
                     {
@@ -642,6 +644,63 @@ public static unsafe class NativeEntrypoints
         catch (Exception exception)
         {
             return Failure(exception);
+        }
+    }
+
+    /// <summary>A struct or class marked [Serializable] (not a script): the Inspector shows and scenes keep its
+    /// fields as "Field.Inner" rows.</summary>
+    private static bool IsNestedType(Type type) =>
+        (type.Attributes & TypeAttributes.Serializable) != 0 && !type.IsPrimitive && !type.IsEnum &&
+        !typeof(Script).IsAssignableFrom(type) && type.Assembly != typeof(object).Assembly &&
+        type.Assembly != typeof(Script).Assembly && (type.IsValueType || type.GetConstructor(Type.EmptyTypes) != null);
+
+    /// <summary>The fields from top along "Outer.Inner..." (path[0] is top's name), or null when a step is not a
+    /// nested Inspector field.</summary>
+    private static FieldInfo[]? NestedPath(FieldInfo top, string[] path)
+    {
+        var chain = new FieldInfo[path.Length];
+        chain[0] = top;
+        for (int i = 1; i < path.Length; i++)
+        {
+            Type owner = chain[i - 1].FieldType;
+            if (i > 4 || !IsNestedType(owner))
+                return null;
+            FieldInfo? inner = owner.GetField(path[i], BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (inner is null || !IsInspectorField(inner))
+                return null;
+            chain[i] = inner;
+        }
+        return chain;
+    }
+
+    /// <summary>Sets the last field of a path, making a missing class on the way and writing each struct back.</summary>
+    private static void SetPath(object owner, FieldInfo[] chain, int index, object? value)
+    {
+        FieldInfo field = chain[index];
+        if (index == chain.Length - 1)
+        {
+            field.SetValue(owner, value);
+            return;
+        }
+        // A struct comes back boxed: change the box, then store it again.
+        object child = field.GetValue(owner) ?? Activator.CreateInstance(field.FieldType)!;
+        SetPath(child, chain, index + 1, value);
+        field.SetValue(owner, child);
+    }
+
+    /// <summary>A nested value's fields as "prefix.Inner\tvalue" lines.</summary>
+    private static void AppendNested(StringBuilder text, string prefix, object value, int depth)
+    {
+        foreach (FieldInfo inner in value.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+        {
+            if (!IsInspectorField(inner) || inner.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+                continue;
+            object? innerValue = inner.GetValue(value);
+            string? encoded = FormatInspectorValue(inner.FieldType, innerValue);
+            if (encoded != null)
+                text.Append(prefix).Append('.').Append(inner.Name).Append('\t').Append(encoded).Append('\n');
+            else if (innerValue != null && depth < 4 && IsNestedType(inner.FieldType))
+                AppendNested(text, prefix + "." + inner.Name, innerValue, depth + 1);
         }
     }
 
@@ -920,13 +979,15 @@ public static unsafe class NativeEntrypoints
             // Validate and parse the whole scene/prefab override set before
             // mutating the managed instance. A corrupt later field must not
             // partially apply earlier values before Awake or hot updates.
-            var updates = new List<(FieldInfo Field, object Value)>();
+            var updates = new List<(FieldInfo[] Path, object Value)>();
             foreach (string line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 int separator = line.IndexOf('\t');
                 if (separator < 1)
                     continue;
-                string name = line[..separator];
+                // "Outer.Inner": a field of a [Serializable] struct or class field (the Inspector's nested rows).
+                string[] path = line[..separator].Split('.');
+                string name = path[0];
                 string value = line[(separator + 1)..];
                 // Type.GetField does not return private fields declared on a
                 // base class, so walk the user's class chain explicitly.
@@ -953,18 +1014,23 @@ public static unsafe class NativeEntrypoints
                     !field.IsDefined(typeof(SyncAttribute), inherit: true) &&
                     !field.IsDefined(typeof(SavedAttribute), inherit: true))
                     continue;
-                object? parsed = ParseInspectorValue(field.FieldType, value, script.GameObject.SceneId);
+                FieldInfo[]? chain = NestedPath(field, path);
+                if (chain is null)
+                    continue;
+                FieldInfo target = chain[^1];
+                object? parsed = ParseInspectorValue(target.FieldType, value, script.GameObject.SceneId);
                 if (parsed != null)
-                    updates.Add((field, parsed));
+                    updates.Add((chain, parsed));
             }
-            foreach ((FieldInfo field, object parsed) in updates)
+            foreach ((FieldInfo[] chain, object parsed) in updates)
             {
+                FieldInfo target = chain[^1];
                 // A cleared reference: null, or the empty handle for a non-nullable struct.
                 object? assigned = parsed == ClearReference
-                    ? (field.FieldType.IsValueType && Nullable.GetUnderlyingType(field.FieldType) is null
-                        ? Activator.CreateInstance(field.FieldType) : null)
+                    ? (target.FieldType.IsValueType && Nullable.GetUnderlyingType(target.FieldType) is null
+                        ? Activator.CreateInstance(target.FieldType) : null)
                     : parsed;
-                field.SetValue(script, assigned);
+                SetPath(script, chain, 0, assigned);
             }
             return 1;
         }

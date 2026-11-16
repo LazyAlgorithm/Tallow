@@ -27,6 +27,23 @@ public abstract class CheckBase : Script
 
 /// Runs inside the real engine (tools/test_csharp_ingame.py): exercises the
 /// C# gameplay API against the native scene, physics and ECS.
+/// <summary>A nested Inspector value: its fields show under the field's name.</summary>
+[Serializable]
+public struct Stats
+{
+    public int Health;
+    public float Speed;
+    public Limits? Limits;
+    [NonSerialized] public int Ignored;
+}
+
+[Serializable]
+public class Limits
+{
+    public float Max = 5;
+    public string Tag = "";
+}
+
 public class ApiChecks : CheckBase
 {
     private readonly List<string> mWorldStateChanges = new();
@@ -41,6 +58,8 @@ public class ApiChecks : CheckBase
     public double Precise;
     public string[] Words = [];
     public List<CheckKind> Kinds = new();
+    public Stats Stats = new() { Health = 10 };
+    public Stats NoOverrides;
 
     private int _tick;
     private int _fixedTicks;
@@ -77,6 +96,10 @@ public class ApiChecks : CheckBase
             Numbers.SequenceEqual([1, 2, 3]) && Points.Length == 2 && Points[1] == new System.Numerics.Vector3(4, 5, 6) &&
             Tint == new Color(0.5f, 0.25f, 1, 1) && Precise == 0.1 && Words.Length == 2 && Words[0] == "a;b" &&
             Words[1] == "c\\d" && Kinds.Count == 2 && Kinds[0] == CheckKind.Second);
+        Check($"nested [Serializable] struct and class fields come from the scene ({Stats.Health}, {Stats.Speed}, "
+            + $"{Stats.Limits?.Max}, {Stats.Limits?.Tag}, {NoOverrides.Limits?.Max})",
+            Stats.Health == 42 && Stats.Speed == 1.5f && Stats.Limits is { Max: 9, Tag: "edge" } &&
+            NoOverrides.Health == 0 && NoOverrides.Limits is null);
         // tools/test_csharp_export.py checks a built game runs on the .NET it ships with.
         Log.Info("INGAME RUNTIME " + System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory());
     }
