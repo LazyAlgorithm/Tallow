@@ -402,6 +402,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 ## P4 — performance, reload, shipping exports, hardening
 
 - [ ] Measure cold compile, warm single-file edit, no-op compile, incremental assembly build and edit-to-Play. Compare with legacy Beef workflow and relevant older/current Unity baselines without promising a specific speed.
+  - [x] (November 16, 2026) Benchmarks B02/B03/B08 measured, B06/B13 first pass (results and fixes in
+    `docs/csharp-benchmark-plan.md`): `GetComponent<T>` 10× faster and allocation-free (generated bindings encode
+    strings on the stack, native `Has` and type-name lookups no longer scan), built-in component field reads
+    allocation-free. New `CSharpBench`/`EcsBench` modes: getcomponent, physics, lifecycle.
 - [ ] Incremental C# per-`.tasmdef` builds with correct dependency invalidation, diagnostics and simultaneous builds; avoid unnecessary full-game builds on every edit.
   - [x] (November 15, 2026) Verified: each `.tasmdef` is its own MSBuild project, so an edit inside one rebuilds
     only its DLL, and a public API change also rebuilds the assemblies referencing it (reference assemblies).

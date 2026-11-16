@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
@@ -75,17 +77,82 @@ public readonly record struct NativeComponent(GameObject GameObject, string Type
         SetText(field, quoted.Append('"').ToString());
     }
 
-    public float GetFloat(string field) => Tokens(field) is [var x, ..] ? Parse(x) : 0f;
-    public int GetInt(string field) => Tokens(field) is [var x, ..] && int.TryParse(x, CultureInfo.InvariantCulture, out int v) ? v : 0;
-    public bool GetBool(string field) => Tokens(field) is ["1", ..];
-    public Vector2 GetVector2(string field) =>
-        Tokens(field) is [var x, var y, ..] ? new Vector2(Parse(x), Parse(y)) : default;
-    public Vector4 GetVector4(string field) =>
-        Tokens(field) is [var x, var y, var z, var w, ..] ? new Vector4(Parse(x), Parse(y), Parse(z), Parse(w)) : default;
-    public Vector3 GetVector3(string field) =>
-        Tokens(field) is [var x, var y, var z, ..] ? new Vector3(Parse(x), Parse(y), Parse(z)) : default;
-    public Color GetColor(string field) =>
-        Tokens(field) is [var r, var g, var b, var a, ..] ? new Color(Parse(r), Parse(g), Parse(b), Parse(a)) : default;
+    public float GetFloat(string field)
+    {
+        Span<float> v = stackalloc float[1];
+        return Numbers(field, v) >= 1 ? v[0] : 0f;
+    }
+    public int GetInt(string field)
+    {
+        Span<byte> buffer = stackalloc byte[256];
+        ReadOnlySpan<byte> text = FieldUtf8(field, ref buffer);
+        return int.TryParse(NextToken(ref text), NumberStyles.Integer, CultureInfo.InvariantCulture, out int v) ? v : 0;
+    }
+    public bool GetBool(string field)
+    {
+        Span<byte> buffer = stackalloc byte[256];
+        ReadOnlySpan<byte> text = FieldUtf8(field, ref buffer);
+        return NextToken(ref text) is [(byte)'1'];
+    }
+    public Vector2 GetVector2(string field)
+    {
+        Span<float> v = stackalloc float[2];
+        return Numbers(field, v) == 2 ? new Vector2(v[0], v[1]) : default;
+    }
+    public Vector4 GetVector4(string field)
+    {
+        Span<float> v = stackalloc float[4];
+        return Numbers(field, v) == 4 ? new Vector4(v[0], v[1], v[2], v[3]) : default;
+    }
+    public Vector3 GetVector3(string field)
+    {
+        Span<float> v = stackalloc float[3];
+        return Numbers(field, v) == 3 ? new Vector3(v[0], v[1], v[2]) : default;
+    }
+    public Color GetColor(string field)
+    {
+        Span<float> v = stackalloc float[4];
+        return Numbers(field, v) == 4 ? new Color(v[0], v[1], v[2], v[3]) : default;
+    }
+
+    /// <summary>The field's text as UTF-8 in buffer (grown when it does not fit); empty when it is missing.</summary>
+    private ReadOnlySpan<byte> FieldUtf8(string field, ref Span<byte> buffer)
+    {
+        int length = CSharpNativeComponents.CopyField(GameObject.SceneId, GameObject.Id, TypeName, field, buffer);
+        if (length < 0)
+            return default;
+        if (length > buffer.Length)
+        {
+            buffer = new byte[length];
+            length = Math.Clamp(CSharpNativeComponents.CopyField(GameObject.SceneId, GameObject.Id, TypeName, field, buffer), 0, length);
+        }
+        return buffer[..length];
+    }
+
+    private static ReadOnlySpan<byte> NextToken(ref ReadOnlySpan<byte> text)
+    {
+        text = text.TrimStart((byte)' ');
+        int end = text.IndexOf((byte)' ');
+        ReadOnlySpan<byte> token = end < 0 ? text : text[..end];
+        text = end < 0 ? default : text[(end + 1)..];
+        return token;
+    }
+
+    /// <summary>Reads up to values.Length space-separated numbers without allocating; returns how many there were.</summary>
+    private int Numbers(string field, Span<float> values)
+    {
+        Span<byte> buffer = stackalloc byte[256];
+        ReadOnlySpan<byte> text = FieldUtf8(field, ref buffer);
+        int count = 0;
+        while (count < values.Length)
+        {
+            ReadOnlySpan<byte> token = NextToken(ref text);
+            if (token.IsEmpty)
+                break;
+            values[count++] = float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) ? value : 0f;
+        }
+        return count;
+    }
     public TEnum GetEnum<TEnum>(string field) where TEnum : struct, Enum =>
         Tokens(field) is [var x, ..] && Enum.TryParse(x, out TEnum v) ? v : default;
 
@@ -153,6 +220,27 @@ internal static partial class NativeComponentTypes
         }
         (native, make) = ("", null!);
         return false;
+    }
+}
+
+/// <summary>
+/// What <see cref="GameObject.TryGetComponent{T}"/> works out once per type: whether it is a script, and for a
+/// built-in handle that is just its GameObject (every generated one), a way to make it without boxing.
+/// </summary>
+internal static class ComponentLookup<T> where T : IComponent
+{
+    public static readonly bool IsScript = typeof(Script).IsAssignableFrom(typeof(T));
+
+    private static readonly bool HandleIsGameObject = typeof(T).IsValueType
+        && Unsafe.SizeOf<T>() == Unsafe.SizeOf<GameObject>()
+        && typeof(T).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) is [{ } field]
+        && field.FieldType == typeof(GameObject);
+
+    public static T Make(GameObject gameObject, Func<GameObject, IComponent> make)
+    {
+        if (HandleIsGameObject)
+            return Unsafe.As<GameObject, T>(ref gameObject);
+        return (T)make(gameObject);
     }
 }
 

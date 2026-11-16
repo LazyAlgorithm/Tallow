@@ -73,6 +73,8 @@ static class ComponentRegistry
 	}
 
 	static List<Info> sInfos ~ DeleteContainerAndItems!(_);
+	/// Types by full name (keys are views of each Info's fullName); GetComponent<T> from C# looks up by name.
+	static Dictionary<StringView, Info> sByName ~ delete _;
 
 	/// All concrete component types in the program, engine and game alike, sorted by name.
 	public static List<Info> Types
@@ -102,6 +104,11 @@ static class ComponentRegistry
 			sInfos.Add(info);
 		}
 		sInfos.Sort(scope (a, b) => a.name.CompareTo(b.name));
+		if (sByName == null)
+			sByName = new .();
+		sByName.Clear();
+		for (let info in sInfos)
+			sByName.TryAdd(info.fullName, info);
 	}
 
 	public static void Refresh()
@@ -119,12 +126,9 @@ static class ComponentRegistry
 
 	public static Info Find(StringView fullName)
 	{
-		for (let info in Types)
-		{
-			if (info.fullName == fullName)
-				return info;
-		}
-		return null;
+		if (sInfos == null)
+			Build();
+		return sByName.TryGetValue(fullName, let info) ? info : null;
 	}
 
 	public static Info Find(Type type)

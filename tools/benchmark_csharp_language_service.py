@@ -96,7 +96,8 @@ def main():
             problems = [line.split("\t") for line in answer.splitlines() if line.startswith("diagnostic\t")]
             same = lambda a, b: os.path.normcase(a) == os.path.normcase(str(b))
             if not any(same(fields[1], source) and fields[4] == "error" for fields in problems):
-                sys.exit("an error typed into ApiChecks.cs was not reported:\n" + answer[:800])
+                sys.exit(f"an error typed into {source} was not reported; {len(problems)} diagnostics:\n"
+                         + "\n".join("\t".join(fields) for fields in problems[:20]))
             if any(not os.path.normcase(fields[1]).startswith(os.path.normcase(str(project))) for fields in problems):
                 sys.exit("diagnostics were reported outside the game's sources:\n" + answer[:800])
             completions = []

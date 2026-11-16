@@ -66,8 +66,24 @@ static class CSharpNativeComponents
 	}
 
 	[CSharpExpose]
-	public static bool Has(uint64 session, uint64 entity, StringView typeName) =>
-		Fields(session, entity, typeName, scope .(), ?, ?, ?);
+	public static bool Has(uint64 session, uint64 entity, StringView typeName)
+	{
+		// GetComponent<T> calls this for every built-in handle: only look, do not gather the fields.
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		if (obj == null || typeName.IsEmpty)
+			return false;
+		if (let handle = HandleComponents.Find(typeName))
+			return obj.Scene.World.Has(obj.Entity, handle.index);
+		let info = ComponentRegistry.Find(typeName);
+		if (info == null || info.type == typeof(CSharpBehaviour))
+			return false;
+		for (let candidate in obj.Components)
+		{
+			if (candidate.GetType() == info.type)
+				return true;
+		}
+		return false;
+	}
 
 	/// Sets a field from scene-file text ("0.5", "1 2 3", "Point", "\"text\""). False when the object, component
 	/// or field is missing, the field is a reference or a list, or the text does not parse.

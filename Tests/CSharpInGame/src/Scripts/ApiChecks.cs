@@ -427,6 +427,16 @@ public class ApiChecks : CheckBase
         renderer.Mesh = "builtin:sphere_smooth";
         renderer.Roughness = 0.3f;
         Check("MeshRenderer string and float fields", renderer.Mesh == "builtin:sphere_smooth" && MathF.Abs(renderer.Roughness - 0.3f) < 1e-6f);
+        // Warm up (static caches, JIT), then a lookup and a by-name field read must not allocate.
+        _ = lamp.GetComponent<MeshRenderer>().Roughness;
+        _ = lamp.GetComponent<Animator>().IsValid;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        bool found = true;
+        for (int i = 0; i < 100; i++)
+            found &= lamp.GetComponent<MeshRenderer>().IsValid && !lamp.GetComponent<Animator>().IsValid
+                && renderer.Roughness > 0;
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Check($"GetComponent<built-in> and a field read by name allocate nothing ({allocated} bytes for 100)", found && allocated == 0);
         lamp.Transform.Position = new Vector3(10, 20, 30);
         bool bounded = renderer.TryGetWorldBounds(out Vector3 low, out Vector3 high);
         Check($"MeshRenderer.TryGetWorldBounds is the sphere's box where it stands ({low} {high})",

@@ -304,7 +304,12 @@ internal static class Program
                 {
                     int count = Dimensions(p.Type);
                     if (p.Type == "string")
-                        text.AppendLine($"\t\tbyte[] p{i}Utf8 = Encoding.UTF8.GetBytes({p.Name} ?? string.Empty);");
+                    {
+                        // Short strings (names, fields, paths) encode on the stack: a call allocates nothing.
+                        text.AppendLine($"\t\tstring p{i}Text = {p.Name} ?? string.Empty;")
+                            .AppendLine($"\t\tSpan<byte> p{i}Utf8 = p{i}Text.Length <= 128 ? stackalloc byte[384] : new byte[Encoding.UTF8.GetMaxByteCount(p{i}Text.Length)];")
+                            .AppendLine($"\t\tint p{i}Length = Encoding.UTF8.GetBytes(p{i}Text, p{i}Utf8);");
+                    }
                     if (count > 0)
                     {
                         string[] components = ["X", "Y", "Z", "W"];
@@ -321,7 +326,7 @@ internal static class Program
                     if (p.Type == "string" || IsSpan(p.Type))
                     {
                         nativeArgs.Add($"p{i}");
-                        nativeArgs.Add(p.Type == "string" ? $"p{i}Utf8.Length" : $"{p.Name}.Length");
+                        nativeArgs.Add(p.Type == "string" ? $"p{i}Length" : $"{p.Name}.Length");
                     }
                     else
                         nativeArgs.Add(Dimensions(p.Type) > 0 ? $"p{i}" :
@@ -475,7 +480,9 @@ internal static class Program
         if (!beefString.Contains("char8* p0, int32 p0Length") ||
             !beefString.Contains("StringView s0 = .(p0, p0Length);") ||
             !csharpString.Contains("public static void Info(string text)") ||
-            !csharpString.Contains("Encoding.UTF8.GetBytes(text ?? string.Empty)") ||
+            !csharpString.Contains("string p0Text = text ?? string.Empty;") ||
+            !csharpString.Contains("stackalloc byte[384]") ||
+            !csharpString.Contains("int p0Length = Encoding.UTF8.GetBytes(p0Text, p0Utf8);") ||
             !csharpString.Contains("fixed (byte* p0 = p0Utf8)") ||
             !csharpString.Contains("delegate* unmanaged[Cdecl]<byte*, int, void>"))
             throw new Exception("UTF-8 StringView parameter lowering failed.");

@@ -20,7 +20,7 @@ import statistics
 import subprocess
 import sys
 
-MODES = {"gameobject": ("gameobject", "gameobject"), "ecs": ("ecs", "ecs")}
+MODES = {m: (m, m) for m in ("gameobject", "ecs", "getcomponent", "physics", "lifecycle")}
 FIELDS = ["script_only_avg_ms", "script_only_p99_ms", "frame_avg_ms", "frame_p99_ms", "spawn_ms", "gc_bytes_per_frame"]
 
 

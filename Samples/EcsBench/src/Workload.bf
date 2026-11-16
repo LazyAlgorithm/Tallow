@@ -9,6 +9,44 @@ static class Workload
 {
 	public const float CubeScale = 0.5f;
 
+	public const float DampAbove = 0.5f;
+	public const float Damping = 0.2f;
+
+	/// Half the inside width of the physics mode's box (CSharpBench's Workload, line for line).
+	public static float PhysicsHalfSize(int count) => Math.Max(3, Math.Sqrt(count / 10f) * 0.6f);
+
+	public static void PhysicsBox(float half, out Vector3 position, out Vector3 size)
+	{
+		position = .(0, -0.5f, 0);
+		size = .(half * 2 + 2, 1, half * 2 + 2);
+	}
+
+	/// Wall 0-3: +X, -X, +Z, -Z, tall enough to hold every layer.
+	public static void PhysicsWall(float half, int side, out Vector3 position, out Vector3 size)
+	{
+		let height = 40f;
+		let offset = half + 0.5f;
+		switch (side)
+		{
+		case 0: position = .(offset, height / 2, 0);
+		case 1: position = .(-offset, height / 2, 0);
+		case 2: position = .(0, height / 2, offset);
+		default: position = .(0, height / 2, -offset);
+		}
+		size = side < 2 ? .(1, height, half * 2 + 2) : .(half * 2 + 2, height, 1);
+	}
+
+	/// Balls (radius 0.5) in a grid 1.1 m apart, layer above layer, with a small offset per layer.
+	public static Vector3 PhysicsStart(int index, float half)
+	{
+		let side = Math.Max(1, (int)((half * 2 - 1) / 1.1f));
+		let x = index % side;
+		let z = index / side % side;
+		let y = index / (side * side);
+		let jitter = (y % 2) * 0.3f;
+		return .(-half + 0.55f + x * 1.1f + jitter, 1 + y * 1.1f, -half + 0.55f + z * 1.1f + jitter);
+	}
+
 	/// Half the box's width for count cubes, so the box is about as crowded at every count.
 	public static float HalfSize(int count) => Math.Max(4, Math.Pow((float)count, 1 / 3.0f) * 1.5f);
 

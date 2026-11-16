@@ -9,7 +9,8 @@ namespace EcsBench;
 /// environment variables:
 ///   TALLOW_BENCH_MODE   gameobject (Mover components), mixed (prefabs with physics/AI/network identities), ai (a crowd
 ///                       with a behaviour tree and navigation agent on every object, BenchAI.bf), ecs (one thread),
-///                       ecs-mt (every Jobs thread), or check
+///                       ecs-mt (every Jobs thread), getcomponent, physics, lifecycle (as CSharpBench; BenchModes.bf),
+///                       or check
 ///                       (runs EcsChecks and exits with 1 if any fail)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
@@ -76,6 +77,12 @@ class Bench : Component
 			SpawnMixed();
 		else if (mMode == "ai")
 			SpawnAICrowd();
+		else if (mMode == "getcomponent")
+			GameObject.AddComponent<MeshRenderer>();
+		else if (mMode == "physics")
+			SpawnPhysics();
+		else if (mMode == "lifecycle")
+			{}
 		else
 			SpawnEntities();
 		mSpawnMs = (SDL.SDL_GetTicksNS() - start) / 1e6;
@@ -170,6 +177,10 @@ class Bench : Component
 		mUpdateStart = SDL.SDL_GetTicksNS();
 		if (mMode == "ai")
 			MoveAIObstacles(deltaTime);
+		else if (mMode == "getcomponent")
+			StepGetComponent();
+		else if (mMode == "lifecycle")
+			StepLifecycle();
 		if (mWorld != null)
 		{
 			let halfSize = mHalfSize;
@@ -208,6 +219,7 @@ class Bench : Component
 		FinishCounters(line);
 		if (mMode == "ai")
 			FinishAI(line);
+		FinishModes(line);
 		line.AppendF("\"spawn_ms\": {:F1}, \"memory_before\": {}, \"memory_after\": {}}}", mSpawnMs, mMemoryBefore, mMemoryAfter);
 		Console.WriteLine(line);
 		if (!mOutput.IsEmpty)

@@ -13,7 +13,10 @@ namespace CSharpBench;
 /// scripts or a C# ECS query. tools/run_csharp_bench.py runs both and prints them side by side. Set by environment
 /// variables, as EcsBench is:
 ///   TALLOW_BENCH_MODE   gameobject (a Mover script per cube), ecs (a Scene.Query over bare entities, not drawn),
-///                       getcomponent (TALLOW_BENCH_COUNT GetComponent calls a frame: native and script, hit and miss)
+///                       getcomponent (TALLOW_BENCH_COUNT GetComponent calls a frame: native and script, hit and miss),
+///                       physics (TALLOW_BENCH_COUNT Jolt spheres falling into a walled box, each with a Ball script
+///                       reading its velocity and damping it), lifecycle (every other frame TALLOW_BENCH_COUNT objects
+///                       with a Lifer script are made, the frame after they are destroyed; counts Awake/OnDestroy)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
 ///   TALLOW_BENCH_OUT    file a JSON line of results is added to
@@ -63,6 +66,10 @@ public class Bench : Script
             SpawnEntities();
         else if (_mode == "getcomponent")
             GameObject.AddComponent<MeshRenderer>();
+        else if (_mode == "physics")
+            SpawnPhysics();
+        else if (_mode == "lifecycle")
+            _lifecycleMemoryStart = GC.GetTotalMemory(true);
         else
             throw new ArgumentException($"Unknown TALLOW_BENCH_MODE {_mode}");
         _spawnMs = watch.Elapsed.TotalMilliseconds;
@@ -94,6 +101,64 @@ public class Bench : Script
             EcsEntity entity = Scene.CreateLocalEcsEntity();
             entity.Set(new Pose { Position = position, Rotation = Quaternion.Identity });
             entity.Set(new Motion { Velocity = velocity, Spin = spin });
+        }
+    }
+
+    private readonly List<Rigidbody> _bodies = new();
+    private readonly List<GameObject> _lifers = new();
+    private readonly List<double> _createTimes = new();
+    private readonly List<double> _destroyTimes = new();
+    private long _lifecycleMemoryStart;
+
+    private void SpawnPhysics()
+    {
+        float half = Workload.PhysicsHalfSize(_count);
+        Workload.PhysicsBox(half, out Vector3 floorPosition, out Vector3 floorSize);
+        AddWall(floorPosition, floorSize);
+        for (int side = 0; side < 4; side++)
+        {
+            Workload.PhysicsWall(half, side, out Vector3 position, out Vector3 size);
+            AddWall(position, size);
+        }
+        for (int i = 0; i < _count; i++)
+        {
+            GameObject ball = Scene.CreateGameObject("Ball");
+            ball.Transform.LocalPosition = Workload.PhysicsStart(i, half);
+            ball.AddComponent<SphereCollider>();
+            Rigidbody body = ball.AddComponent<Rigidbody>();
+            ball.AddComponent<Ball>();
+            _bodies.Add(body);
+        }
+    }
+
+    private void AddWall(Vector3 position, Vector3 size)
+    {
+        GameObject wall = Scene.CreateGameObject("Wall");
+        wall.Transform.LocalPosition = position;
+        wall.AddComponent<BoxCollider>().Size = size;
+    }
+
+    private void StepLifecycle()
+    {
+        var watch = Stopwatch.StartNew();
+        if (_lifers.Count == 0)
+        {
+            for (int i = 0; i < _count; i++)
+            {
+                GameObject made = Scene.CreateGameObject("Lifer");
+                made.AddComponent<Lifer>();
+                _lifers.Add(made);
+            }
+            if (_frame > WarmupFrames)
+                _createTimes.Add(watch.Elapsed.TotalMilliseconds);
+        }
+        else
+        {
+            foreach (GameObject made in _lifers)
+                made.Destroy();
+            _lifers.Clear();
+            if (_frame > WarmupFrames)
+                _destroyTimes.Add(watch.Elapsed.TotalMilliseconds);
         }
     }
 
@@ -137,6 +202,8 @@ public class Bench : Script
             }
             _checksum += found;
         }
+        else if (_mode == "lifecycle")
+            StepLifecycle();
     }
 
     public override void LocalLateUpdate(float deltaTime)
@@ -169,6 +236,23 @@ public class Bench : Script
         line.Append($"\"gc_gen2\": {GC.CollectionCount(2) - _gen2Start}, ");
         line.Append(Inv($"\"gc_pause_ms\": {(GC.GetTotalPauseDuration() - _pauseStart).TotalMilliseconds:F3}, "));
         line.Append(Inv($"\"spawn_ms\": {_spawnMs:F1}, \"memory_before\": {_memoryBefore}, \"memory_after\": {_memoryAfter}, "));
+        if (_mode == "physics")
+        {
+            int sleeping = 0;
+            foreach (Rigidbody body in _bodies)
+                if (body.IsSleeping) sleeping++;
+            line.Append($"\"bodies\": {_bodies.Count}, \"sleeping\": {sleeping}, ");
+        }
+        if (_mode == "lifecycle")
+        {
+            // Destroyed objects' OnDestroy runs at frame end: what is still alive is the last batch made (or none).
+            line.Append(Inv($"\"create_avg_ms\": {Average(_createTimes):F3}, \"destroy_avg_ms\": {Average(_destroyTimes):F3}, "));
+            line.Append($"\"cycles\": {_destroyTimes.Count}, \"awakes\": {Lifer.Awakes}, \"destroys\": {Lifer.Destroys}, ");
+            line.Append($"\"alive\": {Lifer.Alive}, \"expected_alive\": {_lifers.Count}, ");
+            _lifers.Clear();
+            line.Append($"\"managed_growth_bytes\": {GC.GetTotalMemory(true) - _lifecycleMemoryStart}, ");
+        }
+        line.Append($"\"memory_end\": {Environment.WorkingSet}, ");
         line.Append($"\"checksum\": {_checksum}}}");
         string text = line.ToString();
         Console.WriteLine(text);
@@ -225,6 +309,39 @@ public class Mover : Script
     }
 }
 
+/// <summary>The physics mode's control path: read the body's velocity and damp it while it moves.</summary>
+public class Ball : Script
+{
+    private Rigidbody _body;
+
+    public override void Start() => _body = GetComponent<Rigidbody>();
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        Vector3 velocity = _body.Velocity;
+        if (velocity.LengthSquared() > Workload.DampAbove * Workload.DampAbove)
+            _body.AddForce(velocity * -Workload.Damping);
+    }
+}
+
+/// <summary>The lifecycle mode's object: counts Awake and OnDestroy calls.</summary>
+public class Lifer : Script
+{
+    public static int Awakes, Destroys, Alive;
+
+    public override void Awake()
+    {
+        Awakes++;
+        Alive++;
+    }
+
+    public override void OnDestroy()
+    {
+        Destroys++;
+        Alive--;
+    }
+}
+
 [Component]
 public struct Pose
 {
@@ -243,6 +360,42 @@ public struct Motion
 public static class Workload
 {
     public const float CubeScale = 0.5f;
+
+    public const float DampAbove = 0.5f;
+    public const float Damping = 0.2f;
+
+    /// <summary>Half the inside width of the physics mode's box: about 0.8 m² of floor per ball, ten layers deep.</summary>
+    public static float PhysicsHalfSize(int count) => MathF.Max(3, MathF.Sqrt(count / 10f) * 0.6f);
+
+    public static void PhysicsBox(float half, out Vector3 position, out Vector3 size)
+    {
+        position = new Vector3(0, -0.5f, 0);
+        size = new Vector3(half * 2 + 2, 1, half * 2 + 2);
+    }
+
+    /// <summary>Wall 0-3: +X, -X, +Z, -Z, tall enough to hold every layer.</summary>
+    public static void PhysicsWall(float half, int side, out Vector3 position, out Vector3 size)
+    {
+        float height = 40;
+        float offset = half + 0.5f;
+        position = side switch
+        {
+            0 => new Vector3(offset, height / 2, 0),
+            1 => new Vector3(-offset, height / 2, 0),
+            2 => new Vector3(0, height / 2, offset),
+            _ => new Vector3(0, height / 2, -offset),
+        };
+        size = side < 2 ? new Vector3(1, height, half * 2 + 2) : new Vector3(half * 2 + 2, height, 1);
+    }
+
+    /// <summary>Balls (radius 0.5) in a grid 1.1 m apart, layer above layer, with a small offset per layer.</summary>
+    public static Vector3 PhysicsStart(int index, float half)
+    {
+        int side = Math.Max(1, (int)((half * 2 - 1) / 1.1f));
+        int x = index % side, z = index / side % side, y = index / (side * side);
+        float jitter = (y % 2) * 0.3f;
+        return new Vector3(-half + 0.55f + x * 1.1f + jitter, 1 + y * 1.1f, -half + 0.55f + z * 1.1f + jitter);
+    }
 
     public static float HalfSize(int count) => MathF.Max(4, MathF.Pow(count, 1 / 3.0f) * 1.5f);
 

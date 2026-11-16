@@ -14,13 +14,13 @@
 ## P0 — run first (build/editor/interop correctness)
 
 - [ ] **B01 — precompiled editor cold start.** From launcher executable, record wall time and peak RSS until scene is usable for an empty C# project; repeat for a populated C# project. Repeat with and without a valid gameplay DLL. Opening a project must not invoke BeefBuild.
-- [ ] **B02 — game C# cold compile.** Remove the generated `.tallow-csharp` folder **only from a disposable copy of `Tests/CSharpGameplay`**, compile with `TallowLauncher --build-project PATH`, log elapsed time and errors; repeat x5.
-- [ ] **B03 — warm/no-op compile.** Rebuild the same untouched disposable game five times; separately edit one C# script body (add a harmless comment) and rebuild five times. Record time from Save to compilation banner disappearance and from Save to first permitted Play.
+- [x] **B02 — game C# cold compile.** Remove the generated `.tallow-csharp` folder **only from a disposable copy of `Tests/CSharpGameplay`**, compile with `TallowLauncher --build-project PATH`, log elapsed time and errors; repeat x5. Done (2026-11-16, `tools/benchmark_csharp_compiles.sh`, 5 runs): cold build of a disposable copy 1.25 s median, peak RSS ~300 MB. Raw: `~/TallowBenchmarks/compile-20261116/`.
+- [x] **B03 — warm/no-op compile.** Rebuild the same untouched disposable game five times; separately edit one C# script body (add a harmless comment) and rebuild five times. Record time from Save to compilation banner disappearance and from Save to first permitted Play. Done for the command-line build (2026-11-16): no-op 1.19 s, one-file edit 1.21 s, leaf-assembly edit 1.23 s, public API edit 1.23 s (medians of 5; fixed process/MSBuild overhead dominates). Save-to-Play in the editor still needs a display.
 - [ ] **B04 — invalid C# recovery.** Open intentionally invalid source; measure editor launch/diagnostics latency, Play disabled, recovery after fixing source, and whether the next successful edit is used. Include two rapid saves while a build is in progress.
 - [ ] **B05 — semantic editor latency.** Measure initial Roslyn worker startup, 100 steady-state completions, 100 diagnostics, nullable `Rigidbody?.` completion, type coloring and rename/definition queries in a small vs large (100+ file) source project. Record p50/p95/p99 response time and CPU/memory.
 - [ ] **B06 — managed runtime bootstrap and lifecycle.** Measure Play entry/exit for 0, 100, 1,000 and 10,000 lightweight C# Script instances. Run 100 Play/Stop cycles; check memory growth, duplicate callbacks, invalid handles and retained managed instances.
 - [ ] **B07 — scalar versus batched managed callbacks.** Run existing `Tests/NativeCSharpHost` `--benchmark` on matching builds; record raw per-callback cost and batch sizes 1, 16, 128, 512, 4096, separately for no-op Fixed/Late and distinct TickInput. **Do not switch the Scene scheduler automatically based only on mock-host speed.** Require real-editor profiler data, callback order, detach/disable and network replay equivalence.
-- [ ] **B08 — component access latency.** Compare `GetComponent<T>()` and `TryGetComponent<T>()` for native Rigidbody/Transform vs managed Script, hit and miss, using 100k–1M calls after warm-up. Verify disabled and destroyed handles fail safely.
+- [x] **B08 — component access latency.** Compare `GetComponent<T>()` and `TryGetComponent<T>()` for native Rigidbody/Transform vs managed Script, hit and miss, using 100k–1M calls after warm-up. Verify disabled and destroyed handles fail safely. Done (2026-11-16, `getcomponent` mode, 100k calls/frame, a quarter each native hit, script hit, native miss, script miss): C# 3.04 ms vs Beef 0.30 ms per 100k (10×), no allocations. Before the fixes below C# took 30.6 ms and allocated ~33 bytes per call.
 - [ ] **B09 — Inspector scene/prefab save.** With 1,000/10,000 managed field instances: attach, edit public/private/hidden fields, save/reopen, enter Play and measure time plus serialized file sizes. Verify fields applied before Awake and prefab inheritance intact. Test failure with invalid persisted values.
 - [ ] **B10 — native ABI/CI parity.** Run generated binding manifest verification and the managed/native host smoke tests; save pass/fail and exact SHA on Linux and Windows. Confirm the linked engine exposes only annotated CSharpExpose members.
 
@@ -33,6 +33,16 @@
 - [ ] **B15 — soft-body throughput.** Jelly, Cloth, Shell and DrivenJelly, 10/50/100/500 bodies, fixed vertex counts and settings. Record rebuild time, step time, active vertex count, memory and deformation correctness. Keep existing Jelly Golf-style free jelly as an acceptance case.
 - [ ] **B16 — engine resource/render throughput.** Static 100k objects, 10k changing transforms and streaming scene chunks, with GPU timings/draw calls separated from C# script CPU. Include shader graph and compute graph functionality regression.
 - [ ] **B17 — real managed allocations.** With 1k/10k/100k Script updates, record managed bytes/frame, collections (Gen0/1/2), pause time and peak RSS. Compare allocation-free value math, event allocation, GetComponent in loops and managed/native string calls.
+
+- B06 (player part, 2026-11-16): `lifecycle` mode makes N scripted objects one frame and destroys them the next, 150+ cycles. Every Awake has its OnDestroy (C# and Beef counts identical), nothing is left alive, and managed memory after a full collection does not grow across cycles (only the last live batch, ~430 bytes per script). Create cost per object: C# 1.4 µs (1k) / 0.86 µs (10k) vs Beef 0.27 µs. Editor Play/Stop ×100 still needs a display.
+- B13 (first pass, 2026-11-16): `physics` mode, N Jolt spheres falling into a walled box, each with a script that reads its velocity and damps it (AddForce) — the control path is the C# part. Script time C# 0.15 / 0.55 / 1.12 ms vs Beef 0.07 / 0.30 / 0.58 ms at 1k / 5k / 10k (~2×). Frame time is Jolt's: 1.29 vs 1.19 ms at 1k, 2.63 vs 2.62 at 5k; the 10k pile is chaotic (p99 77–131 ms in both while it collapses), so its frame numbers are not a C# result. Sleep counts not yet split ON/OFF.
+
+### Fixes from these runs (2026-11-16)
+
+- Generated bindings encoded every string argument into a new `byte[]` per call (component names in `GetComponent`, field names in every built-in component property, animation state names...). Strings up to 128 characters now encode on the stack.
+- `CSharpNativeComponents.Has` gathered the component's whole field list just to say it exists; `ComponentRegistry.Find` / `HandleComponents.Find` scanned every type comparing names. Now a direct check and name dictionaries.
+- `GetComponent<T>` boxed built-in handles and asked `IsAssignableFrom` per call; now cached per type, handles made without boxing.
+- Built-in component number/vector/colour/bool reads (`Light.Intensity`, `SphereCollider.Radius`...) parse from a stack buffer instead of splitting strings (in-engine check: lookups and reads allocate 0 bytes). Setters still format text.
 
 ### Results so far (Linux, Release exported headless players)
 
@@ -48,6 +58,8 @@ Medians of 3 runs × 600 frames. Raw data: `~/TallowBenchmarks/beef-vs-csharp-20
 | ecs | 1k | 0.030 | — | 0.043 | — → 1.11 | 204 |
 | ecs | 10k | 0.307 | 1.319 | 0.423 | 2.35 → 1.49 | 204 |
 | ecs | 50k | 1.525 | 6.168 | 2.080 | 7.34 → 3.15 | 204 |
+
+Re-run 2026-11-16 on the same machine (`~/TallowBenchmarks/beef-vs-csharp-20261116/`, 100k added): gameobject C#/Beef 2.8× (1k) → 2.1× (100k; 8.1 vs 3.8 ms); ecs 1.7× at every size (100k: 5.1 vs 3.0 ms). C# spawn of scripted objects is ~3.7× Beef (100k: 258 vs 70 ms).
 
 No GC collections during measurement. What closed the gap so far: C# scripts leave the scene's per-frame lists for
 callbacks their class does not override; read-only transform callbacks skip the GC transition (setters keep

@@ -369,7 +369,7 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
     public bool TryGetComponent<T>(out T component) where T : IComponent
     {
         Type requested = typeof(T);
-        if (typeof(Script).IsAssignableFrom(requested))
+        if (ComponentLookup<T>.IsScript)
         {
             if (Engine.Bridge.GetManagedComponent(this, requested) is T script)
             {
@@ -464,7 +464,7 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
         {
             if (CSharpNativeComponents.Has(SceneId, Id, native))
             {
-                component = (T)make(this);
+                component = ComponentLookup<T>.Make(this, make);
                 return true;
             }
         }

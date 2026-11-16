@@ -354,6 +354,8 @@ static class HandleComponents
 	static List<Info> sInfos ~ DeleteContainerAndItems!(_);
 	static Dictionary<Type, Info> sByHandle ~ delete _;
 	static Dictionary<int32, Info> sByIndex ~ delete _;
+	/// Handles by full name (keys are views of each Info's fullName).
+	static Dictionary<StringView, Info> sByName ~ delete _;
 
 	public static List<Info> Types
 	{
@@ -434,6 +436,9 @@ static class HandleComponents
 			sByIndex[info.index] = info;
 		}
 		sInfos.Sort(scope (a, b) => a.name.CompareTo(b.name));
+		sByName = new .();
+		for (let info in sInfos)
+			sByName.TryAdd(info.fullName, info);
 	}
 
 	/// The data type behind a handle type, or null if type is not a handle.
@@ -456,12 +461,9 @@ static class HandleComponents
 
 	public static Info Find(StringView fullName)
 	{
-		for (let info in Types)
-		{
-			if (info.fullName == fullName)
-				return info;
-		}
-		return null;
+		if (sInfos == null)
+			Build();
+		return sByName.TryGetValue(fullName, let info) ? info : null;
 	}
 
 	/// The handle whose data has ComponentTypes index index, or null.
