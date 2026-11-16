@@ -45,6 +45,7 @@ using get_managed_function = int32_t (*)(
 using configure_fn = int32_t (*)(void*);
 using load_game_fn = int32_t (*)(const char*);
 using unload_game_fn = int32_t (*)();
+using reload_game_fn = int32_t (*)(const char*);
 using attach_fn = int32_t (*)(const char*, uint64_t, uint64_t);
 using apply_fields_fn = int32_t (*)(int32_t, const char*);
 using tick_fn = int32_t (*)(int32_t, float);
@@ -72,6 +73,7 @@ get_managed_function load_function = nullptr;
 configure_fn configure = nullptr;
 load_game_fn load_game = nullptr;
 unload_game_fn unload_game = nullptr;
+reload_game_fn reload_game = nullptr;
 attach_fn attach = nullptr;
 apply_fields_fn apply_fields = nullptr;
 tick_fn tick = nullptr;
@@ -412,6 +414,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
         if (!find_entry(assembly.c_str(), "Configure", configure) ||
             !find_entry(assembly.c_str(), "LoadGame", load_game) ||
             !find_entry(assembly.c_str(), "UnloadGame", unload_game) ||
+            !find_entry(assembly.c_str(), "ReloadGame", reload_game) ||
             !find_entry(assembly.c_str(), "Attach", attach) ||
             !find_entry(assembly.c_str(), "ApplyFields", apply_fields) ||
             !find_entry(assembly.c_str(), "Tick", tick) ||
@@ -481,6 +484,16 @@ int32_t tn_csharp_unload_game(void)
     if (result < 0)
         managed_error("Unloading trusted C# game assembly");
     return result > 0;
+}
+
+int32_t tn_csharp_reload_game(const char* trusted_game_dll)
+{
+    if (!started || !reload_game || !trusted_game_dll)
+        return -1;
+    const int32_t result = reload_game(trusted_game_dll);
+    if (result < 0)
+        managed_error("Hot reloading the C# game");
+    return result;
 }
 
 int32_t tn_csharp_attach(const char* managed_type, uint64_t scene, uint64_t entity)
@@ -691,6 +704,7 @@ void tn_csharp_shutdown(void)
     configure = nullptr;
     load_game = nullptr;
     unload_game = nullptr;
+    reload_game = nullptr;
     attach = nullptr;
     apply_fields = nullptr;
     tick = nullptr;

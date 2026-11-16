@@ -389,6 +389,19 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   longer holds `Tallow.Game.dll` and asmdef DLLs locked after Play and the next compile can
   replace them. Not yet run on Windows.
 - [ ] Implement reliable collectible AssemblyLoadContext hot reload, cleanup of managed tasks/timers/events and native handles, Inspector field/state preservation, resource unload and no editor crash; test multiplayer determinism.
+  - [x] (November 15, 2026) Hot reload while playing: saving a C# file during Play (reload mode not Manual)
+    compiles, then between frames `CSharpRuntime.ReloadGame` loads the new Tallow.Game in a new collectible context
+    first (the old keeps running if that fails), moves each running script to its class in the new code under the
+    same instance ID (`ScriptTable.Replace`), restores every field the Inspector format can carry (private and
+    auto-property fields too; not `[NonSerialized]`/readonly; new fields keep their initializers; references to
+    scripts point at the new instances), and unloads the old context. Awake/Start do not run again; callback
+    lists are rebuilt (a newly overridden Update runs); ECS systems are made again by the new assembly (same data);
+    a script whose class is gone gets OnDisable/OnDestroy in the old code and stops (warning names it). Host entry
+    `tn_csharp_reload_game`. Test: `tools/test_csharp_reload.py` (Tests/CSharpReload v1 -> v2/Scripts, 13
+    checks, in CI). Not yet: the team chooser and pending awaits are dropped (set again after a reload), fields of
+    types the Inspector cannot write (dictionaries, arbitrary classes) restart at their initializers, a reload
+    only changes this machine's code in a networked session, the editor path (save -> compile -> reload) is not
+    automated (needs a display).
 - [~] Package precompiled per-platform player/engine plus C# assemblies, runtimeconfig, .NET runtime/dependencies, shaders and assets into independently redistributable Windows/Linux exports. Verify on machines without BeefBuild.
   Linux done: `Player/` is the engine without the editor (its own Beef workspace, since one
   workspace shares generic code with the editor), exporting its generated API symbols.

@@ -1,0 +1,16 @@
+scene "Main"
+object 1 parent 0 active 1 name "A"
+transform 0 0 0 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "Reload.Counter"
+field fieldOverrides "Speed	5\n"
+object 2 parent 0 active 1 name "B"
+transform 0 0 0 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "Reload.Partner"
+field fieldOverrides ""
+object 3 parent 0 active 1 name "C"
+transform 0 0 0 0 0 0 1 1 1 1
+component Tallow.CSharpBehaviour enabled 1
+field scriptType "Reload.Gone"
+field fieldOverrides ""

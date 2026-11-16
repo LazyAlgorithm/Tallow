@@ -516,44 +516,10 @@ public static unsafe class NativeEntrypoints
             if (trustedPath == null || sGameContext != null || sTypes.Count != 0 || sInstances.Count != 0)
                 throw new InvalidOperationException("A trusted game is already loaded, or no game path was provided.");
             string path = Path.GetFullPath(Marshal.PtrToStringUTF8((nint)trustedPath) ?? "");
-            if (Path.GetFileName(path) != "Tallow.Game.dll" || !File.Exists(path))
-                throw new FileNotFoundException("Only the trusted Tallow.Game assembly can be loaded.", path);
-
-            string root = Directory.GetParent(Path.GetDirectoryName(path)!)!.FullName;
-            GameAssemblyContext context = new(root);
-            sGameContext = context;
             GameThread.Start();
-            Assembly game = context.LoadCopy(path);
-            foreach (AssemblyName dependency in game.GetReferencedAssemblies())
-            {
-                if (dependency.Name is null)
-                    continue;
-                string candidate = Path.Combine(root, dependency.Name, dependency.Name + ".dll");
-                if (File.Exists(candidate))
-                    context.LoadFromAssemblyName(dependency);
-            }
-
-            // Only the known generated registry is discovered from the
-            // trusted Tallow.Game assembly. No Assembly.GetTypes scan or
-            // arbitrary gameplay constructor reflection is needed.
-            Type registryType = game.GetType(
-                "Tallow.Generated.TallowGeneratedGameRegistry", throwOnError: false)
-                ?? throw new InvalidOperationException(
-                    "C# game has no generated component registry. Rebuild it with the current Tallow editor.");
-            if (Activator.CreateInstance(registryType) is not IGameplayComponentRegistry registry)
-                throw new InvalidOperationException("C# component registry ABI does not match Tallow.API.");
+            sGameContext = OpenGame(path, out IGameplayComponentRegistry registry);
             sRegistry = registry;
-            foreach (string typeName in registry.ComponentNames)
-            {
-                if (string.IsNullOrWhiteSpace(typeName) || !sTypes.Add(typeName))
-                    throw new InvalidOperationException(
-                        "Generated C# component registry contains a duplicate or invalid name.");
-            }
-            foreach ((string former, string current) in registry.FormerNames)
-            {
-                if (!sTypes.Contains(former) && sTypes.Contains(current))
-                    sFormerNames[former] = current;
-            }
+            AddTypes(registry, sTypes, sFormerNames);
             return sTypes.Count;
         }
         catch (Exception exception)
@@ -573,6 +539,208 @@ public static unsafe class NativeEntrypoints
             return Failure(exception);
         }
     }
+
+    /// <summary>A new context holding Tallow.Game (at path) and the assemblies it references, and its generated
+    /// registry. Creating the registry runs the assembly's module initializer (its ECS schemas and systems).
+    /// On failure the context is unloaded and the exception rethrown.</summary>
+    private static GameAssemblyContext OpenGame(string path, out IGameplayComponentRegistry registry)
+    {
+        if (Path.GetFileName(path) != "Tallow.Game.dll" || !File.Exists(path))
+            throw new FileNotFoundException("Only the trusted Tallow.Game assembly can be loaded.", path);
+        string root = Directory.GetParent(Path.GetDirectoryName(path)!)!.FullName;
+        GameAssemblyContext context = new(root);
+        try
+        {
+            Assembly game = context.LoadCopy(path);
+            foreach (AssemblyName dependency in game.GetReferencedAssemblies())
+            {
+                if (dependency.Name is null)
+                    continue;
+                string candidate = Path.Combine(root, dependency.Name, dependency.Name + ".dll");
+                if (File.Exists(candidate))
+                    context.LoadFromAssemblyName(dependency);
+            }
+
+            // Only the known generated registry is discovered from the
+            // trusted Tallow.Game assembly. No Assembly.GetTypes scan or
+            // arbitrary gameplay constructor reflection is needed.
+            Type registryType = game.GetType(
+                "Tallow.Generated.TallowGeneratedGameRegistry", throwOnError: false)
+                ?? throw new InvalidOperationException(
+                    "C# game has no generated component registry. Rebuild it with the current Tallow editor.");
+            if (Activator.CreateInstance(registryType) is not IGameplayComponentRegistry made)
+                throw new InvalidOperationException("C# component registry ABI does not match Tallow.API.");
+            registry = made;
+            return context;
+        }
+        catch
+        {
+            context.Unload();
+            throw;
+        }
+    }
+
+    private static void AddTypes(IGameplayComponentRegistry registry, HashSet<string> types, Dictionary<string, string> former)
+    {
+        foreach (string typeName in registry.ComponentNames)
+        {
+            if (string.IsNullOrWhiteSpace(typeName) || !types.Add(typeName))
+                throw new InvalidOperationException(
+                    "Generated C# component registry contains a duplicate or invalid name.");
+        }
+        foreach ((string old, string current) in registry.FormerNames)
+        {
+            if (!types.Contains(old) && types.Contains(current))
+                former[old] = current;
+        }
+    }
+
+    /// <summary>
+    /// Hot reload while playing: loads the newly built Tallow.Game beside the running one and, only when that
+    /// worked, moves every running script to its class in the new code under the same instance ID (natives keep
+    /// pointing at it), with its field values: every field whose type the Inspector can write (numbers, text,
+    /// vectors, enums, lists of them, object references, [Serializable] types), private ones too, except
+    /// [NonSerialized] and readonly fields. Awake/OnEnable/Start do not run again. A script whose class is gone
+    /// (and is not a [FormerlyNamed] one) is dropped (OnDisable/OnDestroy run, in the old code). The old context is
+    /// then unloaded: ECS systems are made again by the new assembly, the team chooser and pending awaits go.
+    /// Returns how many scripts were kept, or -1 (the old code keeps running; its ECS systems were stopped).
+    /// </summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int ReloadGame(byte* trustedPath)
+    {
+        try
+        {
+            if (trustedPath == null || sGameContext == null || sRegistry == null)
+                throw new InvalidOperationException("No C# game is running to reload.");
+            string path = Path.GetFullPath(Marshal.PtrToStringUTF8((nint)trustedPath) ?? "");
+            var running = sInstances.All().ToList();
+            var saved = new List<(int Id, Script Old, string State)>(running.Count);
+            foreach ((int id, Script script) in running)
+                saved.Add((id, script, ReloadState(script)));
+
+            // The new assembly's module initializer registers its systems; the old ones must be gone first (the
+            // native side removed its copies), as the chooser and the old code's awaits.
+            EcsSystems.Clear();
+            Network.ClearTeamChooser();
+            GameThread.Stop();
+            GameThread.Start();
+            GameAssemblyContext context = OpenGame(path, out IGameplayComponentRegistry registry);
+            var types = new HashSet<string>();
+            var former = new Dictionary<string, string>();
+            try
+            {
+                AddTypes(registry, types, former);
+            }
+            catch
+            {
+                context.Unload();
+                throw;
+            }
+
+            GameAssemblyContext previous = sGameContext;
+            sGameContext = context;
+            sRegistry = registry;
+            sTypes.Clear();
+            sTypes.UnionWith(types);
+            sFormerNames.Clear();
+            foreach ((string old, string current) in former)
+                sFormerNames[old] = current;
+            lock (sCallbackMasks)
+                sCallbackMasks.Clear();
+            sByGameObject.Clear();
+
+            var moved = new List<(Script Script, string State)>(saved.Count);
+            foreach ((int id, Script old, string state) in saved)
+            {
+                string name = sNames.TryGetValue(id, out string? registered) ? registered : old.GetType().FullName ?? "";
+                if (!types.Contains(name) && former.TryGetValue(name, out string? renamed))
+                    name = renamed;
+                Script? script = null;
+                try
+                {
+                    script = types.Contains(name) ? registry.Create(name) : null;
+                }
+                catch (Exception exception)
+                {
+                    Failure(exception);
+                }
+                if (script == null)
+                {
+                    sInstances.Remove(id, out _);
+                    // Its class is gone: it ends as a destroyed script would, in the code it was made by.
+                    sNames.Remove(id);
+                    try
+                    {
+                        if (sEnabled.Remove(id))
+                            old.OnDisable();
+                        old.OnDestroy();
+                    }
+                    catch (Exception exception)
+                    {
+                        Failure(exception);
+                    }
+                    finally { old.InvalidateNative(); }
+                    continue;
+                }
+                GameObject owner = old.GameObject;
+                old.InvalidateNative();
+                script.AttachNative(owner, id);
+                sInstances.Replace(id, script);
+                sNames[id] = name;
+                if (!sByGameObject.TryGetValue(owner, out List<Script>? scripts))
+                    sByGameObject.Add(owner, scripts = []);
+                scripts.Add(script);
+                moved.Add((script, state));
+            }
+            // After every script exists again, so references between them find the new ones.
+            foreach ((Script script, string state) in moved)
+            {
+                try
+                {
+                    ApplyText(script, state, everything: true);
+                }
+                catch (Exception exception)
+                {
+                    Failure(exception);
+                }
+            }
+            previous.Unload();
+            return moved.Count;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
+    /// <summary>The fields hot reload carries over, as "name\tvalue" lines.</summary>
+    private static string ReloadState(Script script)
+    {
+        var text = new StringBuilder();
+        var seen = new HashSet<string>();
+        for (Type? owner = script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
+        {
+            foreach (FieldInfo field in owner.GetFields(BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+            {
+                if (!seen.Add(field.Name) || !IsReloadField(field))
+                    continue;
+                object? value = field.GetValue(script);
+                string? encoded = FormatInspectorValue(field.FieldType, value);
+                if (encoded != null)
+                    text.Append(field.Name).Append('\t').Append(encoded).Append('\n');
+                else if (value != null && IsNestedType(field.FieldType))
+                    AppendNested(text, field.Name, value, 1);
+            }
+        }
+        return text.ToString();
+    }
+
+    // ECMA-335 FieldAttributes.NotSerialized is the 0x0080 metadata bit (FieldInfo.IsNotSerialized is obsolete).
+    private const FieldAttributes NonSerializedBit = (FieldAttributes)0x0080;
+
+    private static bool IsReloadField(FieldInfo field) =>
+        !field.IsStatic && !field.IsInitOnly && !field.IsLiteral && (field.Attributes & NonSerializedBit) == 0;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int Attach(byte* className, ulong sceneId, ulong entityId)
@@ -619,8 +787,9 @@ public static unsafe class NativeEntrypoints
     {
         try
         {
+            // Mode 3 for an instance that is gone (hot reload dropped it): no name, and no error.
             if (!sInstances.TryGetValue(instance, out Script? script))
-                throw new InvalidOperationException("Unknown managed gameplay instance.");
+                return mode == 3 ? 0 : throw new InvalidOperationException("Unknown managed gameplay instance.");
             var text = new StringBuilder();
             var seen = new HashSet<string>();
             // Mode 3: the script's registered full name (differs from the scene's after a [FormerlyNamed] rename).
@@ -1000,7 +1169,20 @@ public static unsafe class NativeEntrypoints
                 throw new InvalidOperationException("Unknown managed gameplay instance.");
             if (values == null)
                 return 1;
-            string text = Marshal.PtrToStringUTF8((nint)values) ?? "";
+            ApplyText(script, Marshal.PtrToStringUTF8((nint)values) ?? "", everything: false);
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
+    /// <summary>Sets fields from "name\tvalue" lines. Scene and prefab text (everything false) reaches only the
+    /// fields opted in to it; hot reload's own snapshot (true) every field it saved.</summary>
+    private static void ApplyText(Script script, string text, bool everything)
+    {
+        {
             // Validate and parse the whole scene/prefab override set before
             // mutating the managed instance. A corrupt later field must not
             // partially apply earlier values before Awake or hot updates.
@@ -1021,19 +1203,13 @@ public static unsafe class NativeEntrypoints
                      owner != typeof(Script); owner = owner.BaseType)
                     field = owner.GetField(name, BindingFlags.Instance | BindingFlags.Public |
                         BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-                // ECMA-335 FieldAttributes.NotSerialized is the 0x0080 metadata bit.
-                // Both FieldInfo.IsNotSerialized and the named enum member are
-                // obsolete in .NET 11; keep the existing Inspector exclusion rule
-                // without depending on formatter-based serialization APIs.
-                const FieldAttributes nonSerializedBit = (FieldAttributes)0x0080;
-                if (field is null || field.IsStatic || field.IsInitOnly || field.IsLiteral ||
-                    (field.Attributes & nonSerializedBit) != 0)
+                if (field is null || !IsReloadField(field))
                     continue; // Allow scripts to rename/remove fields without breaking old scenes.
                 // Do not allow a scene/prefab file to change arbitrary private
                 // implementation state. The Roslyn catalog and managed loader
                 // must agree on which fields have been opted into persistence.
                 // [Sync] fields are opted in too: clients receive the server's values this way.
-                if (!field.IsPublic &&
+                if (!everything && !field.IsPublic &&
                     !field.IsDefined(typeof(ShowInInspectorAttribute), inherit: true) &&
                     !field.IsDefined(typeof(HideInInspectorAttribute), inherit: true) &&
                     !field.IsDefined(typeof(SyncAttribute), inherit: true) &&
@@ -1057,11 +1233,6 @@ public static unsafe class NativeEntrypoints
                     : parsed;
                 SetPath(script, chain, 0, assigned);
             }
-            return 1;
-        }
-        catch (Exception exception)
-        {
-            return Failure(exception);
         }
     }
 

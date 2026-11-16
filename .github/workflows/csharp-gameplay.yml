@@ -20,6 +20,7 @@ on:
       - 'tools/check_csharp_enums.py'
       - 'tools/test_csharp_ingame.py'
       - 'tools/test_csharp_network.py'
+      - 'tools/test_csharp_reload.py'
       - 'tools/test_csharp_export.py'
       - 'tools/test_csharp_sample.py'
       - 'tools/test_csharp_showcase.py'
@@ -28,6 +29,7 @@ on:
       - 'Player/**'
       - 'Tests/CSharpInGame/**'
       - 'Tests/CSharpNetwork/**'
+      - 'Tests/CSharpReload/**'
       - 'Editor/templates/**'
       - 'third_party/TextEdit/**'
 
@@ -389,6 +391,8 @@ jobs:
         run: python3 tools/test_csharp_ingame.py
       - name: Share C# [Sync] fields between a real server and client
         run: python3 tools/test_csharp_network.py
+      - name: C# hot reload while playing
+        run: python3 tools/test_csharp_reload.py
       - name: Create a Voxel sandbox project (all C#) and run its scripts
         run: python3 tools/test_csharp_sample.py
       - name: Create the Tallow Gallery (all C#) and play it with its test switches

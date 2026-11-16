@@ -328,6 +328,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_use_dotnet_root(char8* root);
 	[CLink] static extern void* tn_csharp_find_export(char8* name);
 	[CLink] static extern int32 tn_csharp_unload_game();
+	[CLink] static extern int32 tn_csharp_reload_game(char8* trustedGameDll);
 	[CLink] static extern int32 tn_csharp_attach(char8* typeName, uint64 scene, uint64 entity);
 	[CLink] static extern int32 tn_csharp_apply_fields(int32 instance, char8* values);
 	[CLink] static extern int32 tn_csharp_tick(int32 instance, float deltaTime);
@@ -516,6 +517,30 @@ static class CSharpRuntime
 			return true;
 		Log.Warning(scope $"C# game unload failed: {StringView(tn_csharp_error())}");
 		return false;
+	}
+
+	/// Hot reload while playing, between frames: the running scripts move to the newly built game at projectPath
+	/// with their field values (see the managed ReloadGame); Awake and Start do not run again. ECS systems are made
+	/// again; the team chooser is cleared (set it again after a reload). Returns how many scripts were kept, or -1
+	/// when the new code could not load (the old keeps running, without its ECS systems).
+	public static int32 ReloadGame(StringView projectPath) =>
+		ReloadAssembly(scope $"{projectPath}/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll");
+
+	/// ReloadGame from a Tallow.Game.dll anywhere (its assemblies in folders beside its own).
+	public static int32 ReloadAssembly(StringView gameDll)
+	{
+		if (!Ready)
+			return -1;
+		let game = scope String(gameDll);
+		CSharpEcsSystem.RemoveAll();
+		HasTeamChooser = false;
+		let kept = tn_csharp_reload_game(game.CStr());
+		if (kept < 0)
+			Log.Error(scope $"C# hot reload failed; the old code keeps running: {StringView(tn_csharp_error())}");
+		for (let component in sScene.Components)
+			if (let script = component as CSharpBehaviour)
+				script.Reloaded();
+		return kept;
 	}
 
 	/// Start an already-built trusted game inside a precompiled native engine.

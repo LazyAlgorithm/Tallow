@@ -255,28 +255,7 @@ class CSharpBehaviour : Component
 		mInstance = CSharpRuntime.Attach(scriptType, GameObject);
 		if (mInstance > 0)
 		{
-			mCallbacks = CSharpRuntime.CallbackMask(mInstance);
-			// Leave the scene's per-frame lists for callbacks the script's class does not override, so they cost
-			// nothing at all (CSharpBehaviour itself overrides every one).
-			ScriptCallbacks wanted = .None;
-			if ((mCallbacks & CSharpRuntime.UpdateCallback) != 0) wanted |= .Update;
-			if ((mCallbacks & CSharpRuntime.EarlyUpdateCallback) != 0) wanted |= .EarlyUpdate;
-			if ((mCallbacks & CSharpRuntime.LateUpdateCallback) != 0) wanted |= .LateUpdate;
-			if (Wants(.FixedUpdate)) wanted |= .FixedUpdate;
-			if (Wants(.LocalEarlyUpdate)) wanted |= .LocalEarlyUpdate;
-			if (Wants(.LocalUpdate)) wanted |= .LocalUpdate;
-			if (Wants(.LocalLateUpdate)) wanted |= .LocalLateUpdate;
-			GameObject.Scene?.SetCallbacks(this, wanted);
-			if (Wants(.WorldStateChanged) && GameObject.Scene != null)
-			{
-				mWorldStateScene = GameObject.Scene;
-				mWorldStateHandler = new (from, to) =>
-					{
-						if (IsLoaded)
-							CSharpRuntime.Dispatch(mInstance, .WorldStateChanged, from * 64 + to);
-					};
-				mWorldStateScene.WorldStateChanged.Add(mWorldStateHandler);
-			}
+			UseCallbacks();
 			// Never run Awake/OnEnable/Start when serialized state could not
 			// be restored. Otherwise a broken scene could silently initialize
 			// networked gameplay with the wrong field values.
@@ -299,6 +278,66 @@ class CSharpBehaviour : Component
 			if (!CSharpRuntime.Dispatch(mInstance, .Awake))
 				ReleaseManaged();
 		}
+	}
+
+	/// Asks the script's class which callbacks it overrides and joins only those per-frame lists, so the others
+	/// cost nothing at all (CSharpBehaviour itself overrides every one).
+	void UseCallbacks()
+	{
+		mCallbacks = CSharpRuntime.CallbackMask(mInstance);
+		ScriptCallbacks wanted = .None;
+		if ((mCallbacks & CSharpRuntime.UpdateCallback) != 0) wanted |= .Update;
+		if ((mCallbacks & CSharpRuntime.EarlyUpdateCallback) != 0) wanted |= .EarlyUpdate;
+		if ((mCallbacks & CSharpRuntime.LateUpdateCallback) != 0) wanted |= .LateUpdate;
+		if (Wants(.FixedUpdate)) wanted |= .FixedUpdate;
+		if (Wants(.LocalEarlyUpdate)) wanted |= .LocalEarlyUpdate;
+		if (Wants(.LocalUpdate)) wanted |= .LocalUpdate;
+		if (Wants(.LocalLateUpdate)) wanted |= .LocalLateUpdate;
+		GameObject.Scene?.SetCallbacks(this, wanted);
+		StopWorldStateEvents();
+		if (Wants(.WorldStateChanged) && GameObject.Scene != null)
+		{
+			mWorldStateScene = GameObject.Scene;
+			mWorldStateHandler = new (from, to) =>
+				{
+					if (IsLoaded)
+						CSharpRuntime.Dispatch(mInstance, .WorldStateChanged, from * 64 + to);
+				};
+			mWorldStateScene.WorldStateChanged.Add(mWorldStateHandler);
+		}
+	}
+
+	void StopWorldStateEvents()
+	{
+		if (mWorldStateHandler != null)
+		{
+			mWorldStateScene.WorldStateChanged.Remove(mWorldStateHandler, true);
+			mWorldStateHandler = null;
+			mWorldStateScene = null;
+		}
+	}
+
+	/// After a hot reload (CSharpRuntime.ReloadGame): the script runs the new code under the same instance, or
+	/// was dropped when its class went. Its class may override other callbacks now.
+	public void Reloaded()
+	{
+		if (mInstance <= 0)
+			return;
+		let name = scope String();
+		if (!CSharpRuntime.ReadScriptName(mInstance, name) || name.IsEmpty)
+		{
+			Log.Warning(scope $"'{GameObject.Name}': the C# class {scriptType} is gone after the reload; its script stopped.");
+			StopWorldStateEvents();
+			mInstance = -1;
+			mCallbacks = -1;
+			mHasSaved = -1;
+			GameObject.Scene?.SetCallbacks(this, .None);
+			return;
+		}
+		if (name != scriptType)
+			scriptType.Set(name);
+		mHasSaved = -1;
+		UseCallbacks();
 	}
 
 	public override void OnEnable()
@@ -499,12 +538,7 @@ class CSharpBehaviour : Component
 
 	void ReleaseManaged()
 	{
-		if (mWorldStateHandler != null)
-		{
-			mWorldStateScene.WorldStateChanged.Remove(mWorldStateHandler, true);
-			mWorldStateHandler = null;
-			mWorldStateScene = null;
-		}
+		StopWorldStateEvents();
 		if (mInstance <= 0)
 			return;
 		CSharpRuntime.Detach(mInstance);

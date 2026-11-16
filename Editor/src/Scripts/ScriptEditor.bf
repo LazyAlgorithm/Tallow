@@ -172,6 +172,8 @@ extension EditorApp
 	bool mCheckManaged;
 	bool mManagedBuildReady;
 	bool mManagedRecheckQueued;
+	/// A C# file was saved while playing: once it compiles, the running scripts move to the new code.
+	bool mHotReloadAfterCompile;
 	// Clear only the success toast after one second; build failures stay visible.
 	Stopwatch mManagedCompileNoticeClock = new .(true) ~ delete _;
 	bool mManagedCompileNoticePending;
@@ -439,7 +441,18 @@ extension EditorApp
 			if (mCheckRunning)
 				mManagedRecheckQueued = true;
 			if (mPlay != .Edit)
-				mStatus.Set("C# changed; stop and restart Play to load the new code.");
+			{
+				if (Project.Current.ReloadMode == .Manual)
+					mStatus.Set("C# changed; stop and restart Play to load the new code.");
+				else
+				{
+					// Hot reload: compile now, swap the code in between frames when it built.
+					mHotReloadAfterCompile = true;
+					mStatus.Set("Compiling C# to reload it into Play...");
+					if (!mCheckRunning)
+						StartManagedErrorCheck();
+				}
+			}
 			else if (Project.Current.ReloadMode != .Manual && !mCheckRunning)
 				StartManagedErrorCheck();
 		}
@@ -467,6 +480,19 @@ extension EditorApp
 			if (tn_code_is_dirty(document.handle))
 				SaveScript(document);
 		}
+	}
+
+	/// Moves the running C# scripts to the code just compiled (CSharpRuntime.ReloadGame), between frames.
+	void HotReloadCSharp()
+	{
+		let kept = CSharpRuntime.ReloadGame(Project.Current.Path);
+		if (kept < 0)
+		{
+			mStatus.Set("C# hot reload failed. See Console.");
+			return;
+		}
+		Log.Info(scope $"C# reloaded into Play: {kept} script{(kept == 1 ? "" : "s")} kept their fields.");
+		mStatus.Set("C# reloaded into Play.");
 	}
 
 	/// Compiles the project on a worker thread so typing is never blocked.
@@ -717,6 +743,14 @@ extension EditorApp
 				mPlayAfterCompile = false;
 				if (mCheckSucceeded)
 					StartPlay();
+			}
+			if (mHotReloadAfterCompile)
+			{
+				mHotReloadAfterCompile = false;
+				if (mCheckSucceeded && mPlay != .Edit)
+					HotReloadCSharp();
+				else if (mPlay != .Edit)
+					mStatus.Set("C# did not compile; the game keeps running the code it started with.");
 			}
 			return;
 		}

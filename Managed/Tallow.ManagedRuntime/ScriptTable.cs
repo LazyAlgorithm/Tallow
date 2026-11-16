@@ -78,6 +78,14 @@ internal sealed class ScriptTable
 
     public bool ContainsKey(int id) => TryGetValue(id, out _);
 
+    /// <summary>Puts another script under an id in use (hot reload: the same script in the new code).</summary>
+    public void Replace(int id, Script script)
+    {
+        if (!TryGetValue(id, out _))
+            throw new InvalidOperationException("Only a script id in use can be given another script.");
+        _entries[id & SlotMask].Script = script;
+    }
+
     public bool Remove(int id, [NotNullWhen(true)] out Script? script)
     {
         if (!TryGetValue(id, out script))

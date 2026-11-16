@@ -94,6 +94,9 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
 int32_t tn_csharp_set_callbacks(const tn_csharp_callbacks* callbacks);
 int32_t tn_csharp_load_game(const char* trusted_game_dll);
 int32_t tn_csharp_unload_game(void);
+/* Hot reload while playing: running scripts move to the newly built game under the same instance IDs, with
+   their field values. Returns how many were kept (a script whose class is gone is dropped), or -1. */
+int32_t tn_csharp_reload_game(const char* trusted_game_dll);
 int32_t tn_csharp_attach(const char* managed_type, uint64_t scene, uint64_t entity);
 int32_t tn_csharp_apply_fields(int32_t script_instance, const char* fields);
 int32_t tn_csharp_tick(int32_t script_instance, float delta_time);
