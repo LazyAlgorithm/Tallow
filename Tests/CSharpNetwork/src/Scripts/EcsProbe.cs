@@ -13,6 +13,14 @@ public struct Beacon
     public float ServerOnly;
 }
 
+/// <summary>Bare ECS data with a place: the server sends it only to clients whose player is near.</summary>
+[Component]
+public struct Marker
+{
+    [SyncPosition] public Vector3 At;
+    [Sync] public int Number;
+}
+
 /// The server makes three bare entities with C# [Component] data, changes one and deletes another; the client checks
 /// each step arrives (and that the field without [Sync] does not).
 public class EcsProbe : Script
@@ -38,6 +46,9 @@ public class EcsProbe : Script
                     if (i == 0) _changed = entity;
                     if (i == 2) _deleted = entity;
                 }
+                // One marker beside the client's player (it starts near the origin), one far beyond the 100 m radius.
+                Scene.CreateLocalEcsEntity().Set(new Marker { At = new Vector3(5, 0, 5), Number = 1 });
+                Scene.CreateLocalEcsEntity().Set(new Marker { At = new Vector3(5000, 0, 5), Number = 2 });
             }
             // Once the client has them (a player object of its own is there), change one and delete another.
             if (_step == 0 && Scene.Find("Player") is { } player && player.OwnerClientId != 0)
@@ -81,6 +92,14 @@ public class EcsProbe : Script
             Scene.Query<Beacon>().ForEach((EcsEntity entity, ref Beacon beacon) => lit |= beacon.Lit && beacon.Score == 99);
             SyncProbe.Check("a change the server's ForEach makes reaches the client", lit);
             SyncProbe.Check("a bare entity the server deletes goes on the client", true);
+            int near = 0, far = 0;
+            Scene.Query<Marker>().ForEach((EcsEntity entity, ref Marker marker) =>
+            {
+                if (marker.Number == 1 && marker.At == new Vector3(5, 0, 5)) near++;
+                if (marker.Number == 2) far++;
+            });
+            SyncProbe.Check($"[SyncPosition] C# data reaches a client near it and not one far away ({near} near, {far} far)",
+                near == 1 && far == 0);
             SyncProbe.Finished();
         }
         else if (_ticks == 60 * 20 && _step < 2)

@@ -7,6 +7,7 @@ field transport Direct
 field address "127.0.0.1"
 field port 7777
 field playerPrefab "Prefabs/Player.tprefab"
+field snapshotRelevanceRadius 100
 object 2 parent 0 active 1 name "Counter"
 transform 0 0 0 0 0 0 1 1 1 1
 component Tallow.NetworkIdentity enabled 1

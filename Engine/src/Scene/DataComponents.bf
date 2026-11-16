@@ -196,6 +196,9 @@ static class DataComponents
 				delete info;
 				return -1;
 			}
+			// "p": the [SyncPosition] Vector3, where the entity is (relevance: only clients near it are sent it).
+			if (parts.GetNext().GetValueOrDefault() == "p" && fieldSize == sizeof(Vector3) && info.positionOffset < 0)
+				info.positionOffset = offset;
 			let field = new SyncedField();
 			field.name.Set(name);
 			field.offset = offset;

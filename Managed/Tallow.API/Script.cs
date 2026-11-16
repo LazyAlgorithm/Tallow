@@ -48,6 +48,14 @@ public sealed class SavedAttribute : Attribute { }
 public sealed class SyncAttribute : Attribute { }
 
 /// <summary>
+/// On a <c>Vector3</c> field of ECS data (a <c>[Component]</c> struct): where a bare entity is. It is shared as
+/// <see cref="SyncAttribute"/> is, and the server sends the entity only to clients whose player is near it (and to its
+/// owner). One per struct.
+/// </summary>
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class SyncPositionAttribute : Attribute { }
+
+/// <summary>
 /// Save a private gameplay field and show it in the Inspector. Public fields
 /// are serialized and displayed by default. Values are applied before Awake.
 /// </summary>

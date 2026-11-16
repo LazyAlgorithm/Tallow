@@ -464,7 +464,10 @@ internal static class Program
                     var describe = new StringBuilder("\"\"");
                     foreach (IFieldSymbol field in fields)
                     {
-                        if (!field.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "Tallow.SyncAttribute") ||
+                        // [SyncPosition] (a Vector3: where the entity is, for relevance) is shared as [Sync] is.
+                        bool position = field.Type.ToDisplayString() == "System.Numerics.Vector3" &&
+                            field.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "Tallow.SyncPositionAttribute");
+                        if ((!position && !field.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "Tallow.SyncAttribute")) ||
                             field.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
                             continue;
                         int size = field.Type.SpecialType switch
@@ -481,7 +484,8 @@ internal static class Program
                         };
                         string fieldType = field.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                         describe.Append(" + \"").Append(field.Name).Append(":\" + (int)global::System.Runtime.CompilerServices.Unsafe.ByteOffset(ref b, ref global::System.Runtime.CompilerServices.Unsafe.As<")
-                            .Append(fieldType).Append(", byte>(ref s.").Append(field.Name).Append(")) + \":").Append(size).Append(";\"");
+                            .Append(fieldType).Append(", byte>(ref s.").Append(field.Name).Append(")) + \":").Append(size)
+                            .Append(position ? ":p" : "").Append(";\"");
                     }
                     ecsTypes[name] = (csType, schemaId, describe.ToString());
                 }
