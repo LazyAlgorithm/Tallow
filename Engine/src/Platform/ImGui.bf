@@ -286,6 +286,12 @@ static class ImGui
 	public const int32 SliderAlwaysClamp = 1536;
 
 	// ---- backend (native/tallow_native.cpp) ----
+	/// Before tn_imgui_init: lets windows be dragged out of the main one into OS windows of their own (where the
+	/// platform can: X11, Windows, macOS).
+	[CLink] public static extern void tn_imgui_enable_viewports(bool enable);
+	/// Whether windows can be dragged out now (enabled, and the platform can make them).
+	[CLink] public static extern bool tn_imgui_viewports_active();
+	[CLink] public static extern void tn_imgui_viewport_status(int32* windows, int32* drawn);
 	[CLink] public static extern bool tn_imgui_init(void* window, char8* iniPath, float uiScale);
 	[CLink] public static extern void tn_imgui_shutdown();
 	[CLink] public static extern bool tn_imgui_event(void* event);

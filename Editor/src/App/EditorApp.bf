@@ -115,6 +115,7 @@ class EditorApp : Application
 		RecentProjects.GetConfigFolder(mIniPath);
 		mIniPath.AppendF("layout5_{}.ini", project.Name);
 		mLayoutBuilt = File.Exists(mIniPath);
+		ImGui.tn_imgui_enable_viewports(DetachableWindows);
 		if (!ImGui.tn_imgui_init(Window, mIniPath.CStr(), 1.0f))
 			return false;
 		LoadOpenWindows();
@@ -295,6 +296,8 @@ class EditorApp : Application
 		ApplyRiggerSwitches();
 		if (HasArg("--theme-test"))
 			RunThemeTest();
+		if (HasArg("--viewport-test"))
+			mViewportTestFrame = 0;
 		if (HasArg("--visibility-test"))
 			RunVisibilityTest();
 		// Window > C# Debugging, open from the start.

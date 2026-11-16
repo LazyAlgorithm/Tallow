@@ -309,12 +309,20 @@ class Application
 			{
 				switch (event.type)
 				{
-				case SDL.EVENT_QUIT,SDL.EVENT_WINDOW_CLOSE_REQUESTED:
+				case SDL.EVENT_QUIT:
 					Close();
+				// Editor windows dragged out of the main one are windows too: only the main window's own events
+				// close the program or resize the frame (ImGui handles the others).
+				case SDL.EVENT_WINDOW_CLOSE_REQUESTED:
+					if (event.WindowId == SDL.SDL_GetWindowID(Window))
+						Close();
 				case SDL.EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-					Width = event.WindowData1;
-					Height = event.WindowData2;
-					Gfx.Resize(Width, Height);
+					if (event.WindowId == SDL.SDL_GetWindowID(Window))
+					{
+						Width = event.WindowData1;
+						Height = event.WindowData2;
+						Gfx.Resize(Width, Height);
+					}
 				case SDL.EVENT_MOUSE_WHEEL:
 					Input.OnWheel(event.WheelY);
 				case SDL.EVENT_GAMEPAD_ADDED,SDL.EVENT_GAMEPAD_REMOVED:

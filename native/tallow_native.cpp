@@ -376,6 +376,48 @@ namespace
 	}
 }
 
+namespace
+{
+	struct ImGuiViewportData
+	{
+		bgfx::FrameBufferHandle frameBuffer = BGFX_INVALID_HANDLE;
+		uint16_t view = 0;
+	};
+	void ViewportCreate(ImGuiViewport* viewport);
+	void ViewportDestroy(ImGuiViewport* viewport);
+	void ViewportSetSize(ImGuiViewport* viewport, ImVec2 size);
+	void ViewportRender(ImGuiViewport* viewport, void*);
+	// Whether tn_imgui_init lets windows be dragged out (the editor turns it on; a game's ImGui stays in its window).
+	bool s_imguiViewports = false;
+}
+
+// Call before tn_imgui_init.
+TN_API void tn_imgui_enable_viewports(bool enable)
+{
+	s_imguiViewports = enable;
+}
+
+// Windows ImGui has now (the main one included), and how many of the others have a frame buffer to draw into.
+TN_API void tn_imgui_viewport_status(int* windows, int* drawn)
+{
+	*windows = 0;
+	*drawn = 0;
+	if (ImGui::GetCurrentContext() == nullptr) return;
+	ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
+	*windows = platformIO.Viewports.Size;
+	for (ImGuiViewport* viewport : platformIO.Viewports)
+	{
+		ImGuiViewportData* data = (ImGuiViewportData*)viewport->RendererUserData;
+		if (data != nullptr && bgfx::isValid(data->frameBuffer))
+			(*drawn)++;
+	}
+}
+
+TN_API bool tn_imgui_viewports_active()
+{
+	return ImGui::GetCurrentContext() != nullptr && (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0;
+}
+
 TN_API bool tn_imgui_init(SDL_Window* window, const char* iniPath, float uiScale)
 {
 	IMGUI_CHECKVERSION();
@@ -408,6 +450,18 @@ TN_API bool tn_imgui_init(SDL_Window* window, const char* iniPath, float uiScale
 	s_monoFont = io.Fonts->AddFontFromMemoryTTF((void*)s_robotoMonoRegularTtf, sizeof(s_robotoMonoRegularTtf), 14.0f * scale, &config);
 
 	if (!ImGui_ImplSDL3_InitForOther(window)) return false;
+	// Windows can be dragged out of the main one into OS windows of their own where the platform can make them
+	// (the SDL3 backend says so: X11, Windows and macOS; not native Wayland).
+	if (s_imguiViewports && (io.BackendFlags & ImGuiBackendFlags_PlatformHasViewports))
+	{
+		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+		io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;
+		ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
+		platformIO.Renderer_CreateWindow = ViewportCreate;
+		platformIO.Renderer_DestroyWindow = ViewportDestroy;
+		platformIO.Renderer_SetWindowSize = ViewportSetSize;
+		platformIO.Renderer_RenderWindow = ViewportRender;
+	}
 
 	s_imguiLayout.begin()
 		.add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float)
@@ -470,6 +524,7 @@ TN_API void tn_imgui_shutdown()
 			texture->SetStatus(ImTextureStatus_Destroyed);
 		}
 	}
+	ImGui::DestroyPlatformWindows();
 	ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext();
 	if (bgfx::isValid(s_imguiProgram)) bgfx::destroy(s_imguiProgram);
@@ -534,10 +589,101 @@ TN_API int tn_imgui_capture_flags()
 	return (io.WantCaptureMouse ? 1 : 0) | (io.WantCaptureKeyboard ? 2 : 0) | (io.WantTextInput ? 4 : 0);
 }
 
+static void RenderImGuiDrawData(ImDrawData* drawData, uint16_t viewId, bgfx::FrameBufferHandle frameBuffer, bool clear);
+
+// ---- ImGui windows dragged out of the main one (multi-viewport) ----
+// Each extra OS window (made by the SDL3 backend) gets a bgfx frame buffer of its own and a view to draw into; bgfx
+// presents them all on bgfx::frame.
+namespace
+{
+	// Views after every scene view, so a window shows the scene textures rendered this frame.
+	constexpr uint16_t kViewportViewBase = 3900;
+	constexpr int kMaxViewports = 128;
+	bool s_viewportViews[kMaxViewports] = {};
+
+	SDL_Window* ViewportWindow(ImGuiViewport* viewport)
+	{
+		return SDL_GetWindowFromID((SDL_WindowID)(intptr_t)viewport->PlatformHandle);
+	}
+
+	void ViewportFrameBuffer(ImGuiViewport* viewport, ImGuiViewportData* data)
+	{
+		if (bgfx::isValid(data->frameBuffer))
+			bgfx::destroy(data->frameBuffer);
+		data->frameBuffer = BGFX_INVALID_HANDLE;
+		SDL_Window* window = ViewportWindow(viewport);
+		if (window == nullptr) return;
+		int width = 0, height = 0;
+		SDL_GetWindowSizeInPixels(window, &width, &height);
+		if (width <= 0 || height <= 0) return;
+		bgfx::SwapChain swapChain{};
+		bgfx::PlatformData platform{};
+		FillSwapChain(swapChain, platform, window, width, height);
+		if (swapChain.nwh != nullptr)
+			data->frameBuffer = bgfx::createFrameBuffer(swapChain);
+	}
+
+	void ViewportCreate(ImGuiViewport* viewport)
+	{
+		ImGuiViewportData* data = IM_NEW(ImGuiViewportData)();
+		for (int i = 0; i < kMaxViewports; i++)
+		{
+			if (!s_viewportViews[i])
+			{
+				s_viewportViews[i] = true;
+				data->view = (uint16_t)(kViewportViewBase + i);
+				break;
+			}
+		}
+		viewport->RendererUserData = data;
+		ViewportFrameBuffer(viewport, data);
+	}
+
+	void ViewportDestroy(ImGuiViewport* viewport)
+	{
+		ImGuiViewportData* data = (ImGuiViewportData*)viewport->RendererUserData;
+		if (data != nullptr)
+		{
+			if (bgfx::isValid(data->frameBuffer))
+				bgfx::destroy(data->frameBuffer);
+			if (data->view >= kViewportViewBase)
+				s_viewportViews[data->view - kViewportViewBase] = false;
+			// Nothing more is drawn into its view until a window takes it again.
+			if (data->view != 0)
+				bgfx::resetView(data->view);
+			IM_DELETE(data);
+		}
+		viewport->RendererUserData = nullptr;
+	}
+
+	void ViewportSetSize(ImGuiViewport* viewport, ImVec2)
+	{
+		if (ImGuiViewportData* data = (ImGuiViewportData*)viewport->RendererUserData)
+			ViewportFrameBuffer(viewport, data);
+	}
+
+	void ViewportRender(ImGuiViewport* viewport, void*)
+	{
+		ImGuiViewportData* data = (ImGuiViewportData*)viewport->RendererUserData;
+		if (data == nullptr || data->view == 0 || !bgfx::isValid(data->frameBuffer)) return;
+		RenderImGuiDrawData(viewport->DrawData, data->view, data->frameBuffer, !(viewport->Flags & ImGuiViewportFlags_NoRendererClear));
+	}
+}
+
 TN_API void tn_imgui_render(uint16_t viewId)
 {
 	ImGui::Render();
-	ImDrawData* drawData = ImGui::GetDrawData();
+	RenderImGuiDrawData(ImGui::GetDrawData(), viewId, BGFX_INVALID_HANDLE, false);
+	// Windows dragged out of the main one: their OS windows follow, then each is drawn into its own frame buffer.
+	if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+	}
+}
+
+static void RenderImGuiDrawData(ImDrawData* drawData, uint16_t viewId, bgfx::FrameBufferHandle frameBuffer, bool clear)
+{
 	const int fbWidth = int(drawData->DisplaySize.x * drawData->FramebufferScale.x);
 	const int fbHeight = int(drawData->DisplaySize.y * drawData->FramebufferScale.y);
 	if (drawData->Textures != nullptr)
@@ -551,8 +697,10 @@ TN_API void tn_imgui_render(uint16_t viewId)
 
 	bgfx::setViewName(viewId, "ImGui");
 	bgfx::setViewMode(viewId, bgfx::ViewMode::Sequential);
-	bgfx::setViewFrameBuffer(viewId, BGFX_INVALID_HANDLE);
-	bgfx::setViewClear(viewId, BGFX_CLEAR_NONE);
+	bgfx::setViewFrameBuffer(viewId, frameBuffer);
+	bgfx::setViewClear(viewId, clear ? BGFX_CLEAR_COLOR : BGFX_CLEAR_NONE, 0x1e1e1eff);
+	if (clear)
+		bgfx::touch(viewId);
 
 	const bgfx::Caps* caps = bgfx::getCaps();
 	float ortho[16];

@@ -72,8 +72,47 @@ extension EditorApp
 		mThemeMessageBad = bad;
 	}
 
+	/// Whether editor windows can be dragged out of the main window into windows of their own (kept in
+	/// windows.cfg; read when the editor starts).
+	public static bool DetachableWindows
+	{
+		get
+		{
+			let file = scope String();
+			RecentProjects.GetConfigFolder(file);
+			file.Append("windows.cfg");
+			let text = scope String();
+			if (File.ReadAllText(file, text) case .Err)
+				return true;
+			return !text.Contains("detachable 0");
+		}
+		set
+		{
+			let file = scope String();
+			RecentProjects.GetConfigFolder(file);
+			file.Append("windows.cfg");
+			File.WriteAllText(file, value ? "detachable 1\n" : "detachable 0\n").IgnoreError();
+		}
+	}
+
+	void DrawWindowsSection()
+	{
+		ImGui.SeparatorText("Windows");
+		var detachable = DetachableWindows;
+		if (ImGui.Checkbox("Windows can be dragged out of the main window", ref detachable))
+			DetachableWindows = detachable;
+		let active = ImGui.tn_imgui_viewports_active();
+		if (active != detachable)
+			ImGui.TextDisabled("Takes effect when the editor next starts.");
+		else if (active)
+			ImGui.TextDisabled("Drag a window's tab or title bar outside the editor to give it a window of its own; drag it back in to dock it.");
+		else if (detachable)
+			ImGui.TextDisabled("This desktop cannot make the windows (native Wayland).");
+	}
+
 	void DrawThemePage()
 	{
+		DrawWindowsSection();
 		let current = EditorTheme.Current;
 		let source = EditorTheme.Find(current.name);
 		let changed = source == null || !source.SameColors(current);

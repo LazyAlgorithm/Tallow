@@ -14,6 +14,7 @@ extension EditorApp
 	void DrawUI()
 	{
 		UpdateProfiler();
+		UpdateViewportTest();
 		sUIMarker.Begin();
 		defer Profiler.End();
 		// Outside play mode the Scene view's camera is the listener, so sounds can be auditioned where you look from.

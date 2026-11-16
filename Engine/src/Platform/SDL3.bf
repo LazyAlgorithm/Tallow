@@ -43,6 +43,8 @@ static class SDL
 		public float ReadFloat(int offset) mut => *(float*)((uint8*)&this + offset);
 
 		/// Window events: new width/height. Offsets follow SDL_WindowEvent.
+		/// Window, mouse and keyboard events: the window it happened in.
+		public uint32 WindowId mut => (uint32)ReadInt32(16);
 		public int32 WindowData1 mut => ReadInt32(20);
 		public int32 WindowData2 mut => ReadInt32(24);
 		/// Keyboard events: SDL_KeyboardEvent.scancode.
@@ -66,6 +68,7 @@ static class SDL
 	[CLink] public static extern bool SDL_SetWindowIcon(void* window, void* icon);
 	[CLink] public static extern bool SDL_GetWindowSizeInPixels(void* window, int32* w, int32* h);
 	[CLink] public static extern bool SDL_GetWindowSize(void* window, int32* w, int32* h);
+	[CLink] public static extern uint32 SDL_GetWindowID(void* window);
 	[CLink] public static extern bool SDL_MaximizeWindow(void* window);
 	/// Borderless at the desktop's resolution, or back to a window.
 	[CLink] public static extern bool SDL_SetWindowFullscreen(void* window, bool fullscreen);
