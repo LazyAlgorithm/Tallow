@@ -25,6 +25,10 @@ internal sealed class LanguageRequest
     /// <summary>The game's source folder: diagnostics are only reported (and only computed) for files in it, not
     /// for the Tallow.API sources compiled alongside. Empty: every file.</summary>
     public string GameDirectory { get; set; } = "";
+    /// <summary>The game's assembly definitions (JSON requests); the editor's requests read them from src/.</summary>
+    public List<GameAssemblyInfo> Assemblies { get; set; } = [];
+    [System.Text.Json.Serialization.JsonIgnore]
+    public AssemblyLayout? Layout { get; set; }
 }
 
 internal static class Program
@@ -97,25 +101,87 @@ internal static class Program
         global using System.Numerics;
         """, CSharp15, path: "Tallow.GameImplicitUsings.g.cs");
 
-    // Immutable Roslyn compilation reused within the single-threaded worker.
-    // Replacing only changed trees retains semantic state for unchanged files.
-    private static CSharpCompilation? CachedCompilation;
+    // One immutable Roslyn compilation per assembly (Tallow.API, each .tasmdef, Tallow.Game), reused within the
+    // single-threaded worker: replacing only changed trees keeps semantic state for unchanged files, and a game
+    // edit leaves Tallow.API's compilation (and every assembly it does not reach) as it was.
+    private static readonly Dictionary<string, (CSharpCompilation Compilation, object[] Inputs)> Compilations =
+        new(StringComparer.Ordinal);
+    private static string CompiledLayout = "";
 
-    private static CSharpCompilation CompilationFor(IReadOnlyList<SyntaxTree> currentTrees)
+    /// <summary>The compilation of each assembly for these trees (a tree without a folder, the implicit usings, is
+    /// in every one). Tallow.API allows unsafe code; game assemblies do not, as their real projects.</summary>
+    private static Dictionary<string, CSharpCompilation> CompilationsFor(IReadOnlyList<SyntaxTree> currentTrees,
+        AssemblyLayout layout)
     {
-        if (CachedCompilation is null)
+        if (CompiledLayout != layout.Key)
         {
-            CachedCompilation = CSharpCompilation.Create("Tallow.SemanticWorkspace",
-                currentTrees, References(),
-                // Engine API wrappers use unsafe pointers, but generated game
-                // projects continue forbidding unsafe gameplay code.
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
-                    allowUnsafe: true,
-                    nullableContextOptions: NullableContextOptions.Enable));
-            return CachedCompilation;
+            Compilations.Clear();
+            CompiledLayout = layout.Key;
+            DeclarationEpoch++;
         }
+        var shared = new List<SyntaxTree>();
+        var owned = new Dictionary<string, List<SyntaxTree>>(StringComparer.Ordinal);
+        foreach (SyntaxTree tree in currentTrees)
+        {
+            if (Path.GetDirectoryName(tree.FilePath) is null or "")
+                shared.Add(tree);
+            else
+            {
+                string owner = layout.Owner(tree.FilePath);
+                if (!owned.TryGetValue(owner, out List<SyntaxTree>? list))
+                    owned[owner] = list = [];
+                list.Add(tree);
+            }
+        }
+        MetadataReference[] framework = References().ToArray();
+        var result = new Dictionary<string, CSharpCompilation>(StringComparer.Ordinal);
+        IEnumerable<string> order = owned.ContainsKey(AssemblyLayout.Api)
+            ? layout.GameAssemblies.Prepend(AssemblyLayout.Api) : layout.GameAssemblies;
+        foreach (string name in order)
+        {
+            List<SyntaxTree> trees = [.. owned.GetValueOrDefault(name) ?? [], .. shared];
+            // What the compilation references: framework and package assemblies, then the compilations of
+            // Tallow.API and the game assemblies it lists (compared by identity to know when to rebind).
+            var inputs = new List<object>(framework);
+            if (name != AssemblyLayout.Api && result.TryGetValue(AssemblyLayout.Api, out CSharpCompilation? api))
+                inputs.Add(api);
+            foreach (string reference in layout.ReferencesOf(name))
+                inputs.Add(result[reference]);
+            MetadataReference[] Refs() => inputs.Select(input => input as MetadataReference ??
+                ((CSharpCompilation)input).ToMetadataReference()).ToArray();
 
-        CSharpCompilation compilation = CachedCompilation;
+            CSharpCompilation compilation;
+            if (!Compilations.TryGetValue(name, out var cached))
+            {
+                compilation = CSharpCompilation.Create(name, trees, Refs(),
+                    new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+                        allowUnsafe: name == AssemblyLayout.Api,
+                        nullableContextOptions: NullableContextOptions.Enable));
+                DeclarationEpoch++;
+            }
+            else
+            {
+                compilation = WithTrees(cached.Compilation, trees);
+                if (!cached.Inputs.SequenceEqual(inputs, ReferenceEqualityComparer.Instance))
+                {
+                    // A package added or removed changes what every file can see; a referenced assembly's own
+                    // edits already moved the epoch when they could.
+                    if (!cached.Inputs.OfType<MetadataReference>().SequenceEqual(framework))
+                        DeclarationEpoch++;
+                    compilation = compilation.WithReferences(Refs());
+                }
+            }
+            Compilations[name] = (compilation, inputs.ToArray());
+            result[name] = compilation;
+        }
+        foreach (string gone in Compilations.Keys.Where(name => !result.ContainsKey(name)).ToArray())
+            Compilations.Remove(gone);
+        return result;
+    }
+
+    /// <summary>A compilation with exactly these trees, changing only the ones that differ.</summary>
+    private static CSharpCompilation WithTrees(CSharpCompilation compilation, IReadOnlyList<SyntaxTree> currentTrees)
+    {
         var previous = compilation.SyntaxTrees.ToDictionary(
             tree => tree.FilePath, tree => tree, StringComparer.OrdinalIgnoreCase);
         var current = currentTrees.ToDictionary(
@@ -141,7 +207,6 @@ internal static class Program
                     DeclarationEpoch++;
             }
         }
-        CachedCompilation = compilation;
         return compilation;
     }
 
@@ -252,10 +317,11 @@ internal static class Program
     /// were last checked (or all, after a change another file could see), so an edit inside a method body checks
     /// one file however large the project.
     /// </summary>
-    private static void Diagnostics(CSharpCompilation compilation,
+    private static void Diagnostics(IEnumerable<CSharpCompilation> compilations,
         Dictionary<string, SourceFile> sourceByPath, List<string> output)
     {
         LastDiagnosed = 0;
+        foreach (CSharpCompilation compilation in compilations)
         foreach (SyntaxTree tree in compilation.SyntaxTrees)
         {
             if (!sourceByPath.TryGetValue(tree.FilePath, out SourceFile? source))
@@ -422,17 +488,18 @@ internal static class Program
         }
     }
 
-    private static void References(CSharpCompilation compilation,
+    private static void References(IEnumerable<CSharpCompilation> compilations,
         ISymbol symbol, List<string> output, SyntaxTree? onlyTree = null)
     {
-        static bool Api(string path) =>
-            path.Replace('\\', '/').Contains("/Managed/Tallow.API/", StringComparison.OrdinalIgnoreCase);
+        static bool Api(string path) => AssemblyLayout.IsApi(path);
         // Engine API source cannot use a game's symbols: only search it for symbols the engine declares.
         bool engineSymbol = symbol.Locations.Any(location => location.IsInSource && Api(location.SourceTree!.FilePath)) ||
             symbol.Locations.All(location => !location.IsInSource);
+        var searched = new HashSet<SyntaxTree>();
+        foreach (CSharpCompilation compilation in compilations)
         foreach (SyntaxTree tree in compilation.SyntaxTrees)
         {
-            if (onlyTree is not null && tree != onlyTree)
+            if (onlyTree is not null && tree != onlyTree || !searched.Add(tree))
                 continue;
             if (onlyTree is null && !engineSymbol && Api(tree.FilePath))
                 continue;
@@ -618,9 +685,11 @@ internal static class Program
 
         List<SyntaxTree> trees = ParseSnapshots(sourceByPath, CSharp15);
         trees.Add(GlobalUsings);
-        CSharpCompilation compilation = CompilationFor(trees);
+        AssemblyLayout layout = request.Layout ?? AssemblyLayout.From(request.Assemblies);
+        Dictionary<string, CSharpCompilation> compilations = CompilationsFor(trees, layout);
         SyntaxTree selected = trees.First(tree =>
             string.Equals(tree.FilePath, Path.GetFullPath(request.File), StringComparison.OrdinalIgnoreCase));
+        CSharpCompilation compilation = compilations[layout.Owner(selected.FilePath)];
         SemanticModel model = compilation.GetSemanticModel(selected);
         SyntaxNode root = selected.GetRoot();
         int position = ToUtf16(active.Text, request.Cursor);
@@ -651,7 +720,7 @@ internal static class Program
             sourceByPath = reported;
             // Compiler problems, then Tallow's cyan performance / purple network warnings (their category column is
             // optional; older consumers still understand the first six fields).
-            Diagnostics(compilation, sourceByPath, output);
+            Diagnostics(compilations.Values, sourceByPath, output);
             output.Add(Line("checked", LastDiagnosed));
             // The open file's names coloured by what they are, for the code editor.
             output.AddRange(SemanticTokens(compilation, selected));
@@ -664,7 +733,7 @@ internal static class Program
                 return;
 #if ROSLYN_FEATURES
             bool roslyn = Environment.GetEnvironmentVariable("TALLOW_LS_SYMBOL_COMPLETION") != "1" &&
-                RoslynCompletion.TryComplete(trees, selected, position, References().ToArray(), CSharp15, output);
+                RoslynCompletion.TryComplete(trees, selected, position, References().ToArray(), CSharp15, layout, output);
 #else
             const bool roslyn = false;
 #endif
@@ -933,7 +1002,8 @@ internal static class Program
         if (request.Operation is "references" or "rename" or "highlight")
         {
             // The editor handles rename as a preview; it never silently changes files.
-            References(compilation, target, output, request.Operation == "highlight" ? selected : null);
+            References(request.Operation == "highlight" ? [compilation] : compilations.Values, target, output,
+                request.Operation == "highlight" ? selected : null);
             return;
         }
         throw new InvalidOperationException($"Unknown semantic operation: {request.Operation}");
@@ -989,6 +1059,25 @@ internal static class Program
             snapshot[Path.GetFullPath(file)] = File.ReadAllText(file);
         }
 
+        // Each assembly's code generated by the last build (typed ECS data extensions, component factories) in
+        // that assembly, as the build compiles it, with the project's `global using Tallow.Generated`.
+        AssemblyLayout layout = AssemblyLayout.Read(sourceDirectory, Path.Combine(project, ".tallow-csharp", "generated"));
+        foreach (string assembly in layout.GameAssemblies)
+        {
+            string generated = Path.Combine(layout.GeneratedDirectory, assembly);
+            if (!Directory.Exists(generated))
+                continue;
+            bool any = false;
+            foreach (string file in Directory.EnumerateFiles(generated, "*.g.cs", SearchOption.TopDirectoryOnly))
+            {
+                snapshot[Path.GetFullPath(file)] = File.ReadAllText(file);
+                any = true;
+            }
+            if (any)
+                snapshot[Path.GetFullPath(Path.Combine(generated, "Tallow.GeneratedUsings.editor.g.cs"))] =
+                    "global using Tallow.Generated;\n";
+        }
+
         foreach ((string original, string copy) in overlays)
         {
             if (!original.StartsWith(sourceDirectory + Path.DirectorySeparatorChar,
@@ -1007,6 +1096,7 @@ internal static class Program
             Cursor = int.Parse(fields["cursor"]),
             NewName = fields.GetValueOrDefault("new_name", ""),
             GameDirectory = sourceDirectory,
+            Layout = layout,
             Sources = snapshot.Select(pair => new SourceFile { Path = pair.Key, Text = pair.Value }).ToList()
         };
     }

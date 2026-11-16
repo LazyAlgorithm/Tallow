@@ -32,7 +32,8 @@ internal static class RoslynCompletion
     private const int MaxServiceDescriptions = 4;
 
     private static AdhocWorkspace? sWorkspace;
-    private static ProjectId? sApi, sGame;
+    private static string sLayout = "";
+    private static readonly Dictionary<string, ProjectId> sProjects = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, (DocumentId Id, SourceText Text)> sDocuments = new(StringComparer.OrdinalIgnoreCase);
     private static MetadataReference[] sReferences = [];
 
@@ -57,47 +58,55 @@ internal static class RoslynCompletion
         return new System.Composition.Hosting.ContainerConfiguration().WithParts(types).CreateContainer();
     }
 
-    /// <summary>Whether a tree is engine API source (its own project, so its internals stay hidden).</summary>
-    private static bool IsApi(string path) =>
-        path.Replace('\\', '/').Contains("/Managed/Tallow.API/", StringComparison.OrdinalIgnoreCase);
-
     private static Document Sync(IReadOnlyList<SyntaxTree> trees, SyntaxTree active, MetadataReference[] references,
-        CSharpParseOptions parse)
+        CSharpParseOptions parse, AssemblyLayout layout)
     {
+        if (sWorkspace != null && sLayout != layout.Key)
+        {
+            sWorkspace = null;
+            sDocuments.Clear();
+        }
         if (sWorkspace == null)
         {
+            // One project per assembly, as the game builds: Tallow.API, each .tasmdef, Tallow.Game.
             sWorkspace = new AdhocWorkspace(MefHostServices.Create(Composition()));
+            sLayout = layout.Key;
+            sProjects.Clear();
             var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
                 nullableContextOptions: NullableContextOptions.Enable);
-            sApi = ProjectId.CreateNewId("Tallow.API");
-            sGame = ProjectId.CreateNewId("Tallow.Game");
-            Solution created = sWorkspace.CurrentSolution
-                .AddProject(ProjectInfo.Create(sApi, VersionStamp.Create(), "Tallow.API", "Tallow.API", LanguageNames.CSharp,
-                    compilationOptions: options, parseOptions: parse, metadataReferences: references))
-                .AddProject(ProjectInfo.Create(sGame, VersionStamp.Create(), "Tallow.Game", "Tallow.Game", LanguageNames.CSharp,
-                    compilationOptions: options.WithAllowUnsafe(false), parseOptions: parse, metadataReferences: references,
-                    projectReferences: [new ProjectReference(sApi)]));
+            Solution created = sWorkspace.CurrentSolution;
+            foreach (string name in layout.GameAssemblies.Prepend(AssemblyLayout.Api))
+            {
+                ProjectId id = ProjectId.CreateNewId(name);
+                sProjects[name] = id;
+                var projectReferences = name == AssemblyLayout.Api ? [] :
+                    layout.ReferencesOf(name).Prepend(AssemblyLayout.Api).Select(reference => new ProjectReference(sProjects[reference]));
+                created = created.AddProject(ProjectInfo.Create(id, VersionStamp.Create(), name, name, LanguageNames.CSharp,
+                    compilationOptions: options.WithAllowUnsafe(name == AssemblyLayout.Api), parseOptions: parse,
+                    metadataReferences: references, projectReferences: projectReferences));
+            }
             sWorkspace.TryApplyChanges(created);
             sReferences = references;
         }
         Solution solution = sWorkspace.CurrentSolution;
         if (!ReferenceEquals(sReferences, references) && !sReferences.SequenceEqual(references))
         {
-            solution = solution.WithProjectMetadataReferences(sApi!, references).WithProjectMetadataReferences(sGame!, references);
+            foreach (ProjectId project in sProjects.Values)
+                solution = solution.WithProjectMetadataReferences(project, references);
             sReferences = references;
         }
         var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        // A tree without a folder (the implicit global usings) belongs to both projects, as both real builds have it.
+        // A tree without a folder (the implicit global usings) belongs to every project, as every real build has it.
         var entries = new List<(string Key, ProjectId Project, SyntaxTree Tree)>();
         foreach (SyntaxTree tree in trees)
         {
             if (Path.GetDirectoryName(tree.FilePath) is null or "")
             {
-                entries.Add(("api:" + tree.FilePath, sApi!, tree));
-                entries.Add((tree.FilePath, sGame!, tree));
+                foreach ((string name, ProjectId project) in sProjects)
+                    entries.Add((name == AssemblyLayout.Game ? tree.FilePath : name + ":" + tree.FilePath, project, tree));
             }
             else
-                entries.Add((tree.FilePath, IsApi(tree.FilePath) ? sApi! : sGame!, tree));
+                entries.Add((tree.FilePath, sProjects[layout.Owner(tree.FilePath)], tree));
         }
         foreach ((string path, ProjectId project, SyntaxTree tree) in entries)
         {
@@ -127,11 +136,11 @@ internal static class RoslynCompletion
     }
 
     public static bool TryComplete(IReadOnlyList<SyntaxTree> trees, SyntaxTree active, int position,
-        MetadataReference[] references, CSharpParseOptions parse, List<string> output)
+        MetadataReference[] references, CSharpParseOptions parse, AssemblyLayout layout, List<string> output)
     {
         try
         {
-            Complete(trees, active, position, references, parse, output);
+            Complete(trees, active, position, references, parse, layout, output);
             return true;
         }
         catch (Exception exception)
@@ -150,12 +159,12 @@ internal static class RoslynCompletion
     }
 
     private static void Complete(IReadOnlyList<SyntaxTree> trees, SyntaxTree active, int position,
-        MetadataReference[] references, CSharpParseOptions parse, List<string> output)
+        MetadataReference[] references, CSharpParseOptions parse, AssemblyLayout layout, List<string> output)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
         // TALLOW_LS_TRACE=<file>: one timing line per completion (workspace sync, Roslyn's list, encoding).
         string? trace = Environment.GetEnvironmentVariable("TALLOW_LS_TRACE");
-        Document document = Sync(trees, active, references, parse);
+        Document document = Sync(trees, active, references, parse, layout);
         long synced = clock.ElapsedTicks;
         CompletionService service = CompletionService.GetService(document) ??
             throw new InvalidOperationException("No C# completion service.");
@@ -213,14 +222,18 @@ internal static class RoslynCompletion
             }
             string display = item.DisplayTextPrefix + item.DisplayText + item.DisplayTextSuffix;
             string description = "";
+            List<ISymbol>? symbols = null;
             if (written < MaxDescriptions && model != null)
-                description = Describe(model, receiver, list.Span.Start, item);
+            {
+                symbols = Symbols(model, receiver, list.Span.Start, item);
+                description = Describe(symbols, item);
+            }
             if (description.Length == 0 && serviceDescriptions < MaxServiceDescriptions && written < MaxDescriptions)
             {
                 serviceDescriptions++;
                 description = service.GetDescriptionAsync(document, item).GetAwaiter().GetResult()?.Text.Trim() ?? "";
             }
-            string? parens = parensAllowed && model != null ? Parentheses(model, receiver, list.Span.Start, item) : null;
+            string? parens = parensAllowed ? Parentheses(symbols, item) : null;
             if (!Encode(service, document, text, source, list.Span, item, description, parens, out string encoded) ||
                 !seen.Add(encoded))
                 continue;
@@ -264,23 +277,17 @@ internal static class RoslynCompletion
         return !previous.IsKind(SyntaxKind.PlusEqualsToken) && !previous.IsKind(SyntaxKind.MinusEqualsToken);
     }
 
-    /// <summary>"()" for a method whose overloads all take no arguments, "(\x1E)" when one takes some; null for
-    /// anything that is not a method.</summary>
-    private static string? Parentheses(SemanticModel model, ITypeSymbol? receiver, int position, CompletionItem item)
+    /// <summary>"()" for a method whose overloads all take no arguments, "(\x1E)" when one takes some (or the
+    /// overloads were not looked up: items far down the list); null for anything that is not a method.</summary>
+    private static string? Parentheses(List<ISymbol>? symbols, CompletionItem item)
     {
         if (!item.Tags.Contains(WellKnownTags.Method) && !item.Tags.Contains(WellKnownTags.ExtensionMethod))
             return null;
-        // Generic methods ("GetComponent<>") need their type argument first; a declaration being overridden is not a call.
-        if (item.DisplayText.EndsWith(">") || item.DisplayTextSuffix.Contains('<') ||
-            !item.Properties.TryGetValue("SymbolName", out string? name))
+        // Generic methods ("GetComponent<>") need their type argument first.
+        if (item.DisplayText.EndsWith('>') || item.DisplayTextSuffix.Contains('<') || !item.Properties.ContainsKey("SymbolName"))
             return null;
-        var methods = (receiver != null
-                ? model.LookupSymbols(position, receiver, name, includeReducedExtensionMethods: true)
-                : model.LookupSymbols(position, name: name))
-            .OfType<IMethodSymbol>().ToList();
-        if (methods.Count == 0)
-            return null;
-        return methods.All(method => method.Parameters.Length == 0) ? "()" : "(\x1E)";
+        var methods = symbols?.OfType<IMethodSymbol>().ToList();
+        return methods is { Count: > 0 } && methods.All(method => method.Parameters.Length == 0) ? "()" : "(\x1E)";
     }
 
     /// <summary>The type whose members are being completed ("Transform." / "body?."), or null.</summary>
@@ -311,13 +318,12 @@ internal static class RoslynCompletion
             SymbolDisplayParameterOptions.IncludeDefaultValue | SymbolDisplayParameterOptions.IncludeParamsRefOut)
         .WithKindOptions(SymbolDisplayKindOptions.IncludeTypeKeyword);
 
-    /// <summary>"void Rigidbody.AddForce(Vector3 force) (+ 1 overload)" and the XML summary, from the symbol the item
-    /// names; empty when it is not a symbol found at the caret.</summary>
-    private static string Describe(SemanticModel model, ITypeSymbol? receiver, int position, CompletionItem item)
+    /// <summary>The symbols an item names at the caret (its overloads), or null when it names none there.</summary>
+    private static List<ISymbol>? Symbols(SemanticModel model, ITypeSymbol? receiver, int position, CompletionItem item)
     {
         if (!item.Properties.TryGetValue("SymbolName", out string? name) || item.InlineDescription.Length > 0)
-            return "";
-        var symbols = (receiver != null
+            return null;
+        return (receiver != null
                 ? model.LookupSymbols(position, receiver, name, includeReducedExtensionMethods: true)
                 : model.LookupSymbols(position, name: name))
             .Where(symbol => !item.Properties.TryGetValue("SymbolKind", out string? kind) ||
@@ -326,7 +332,13 @@ internal static class RoslynCompletion
             .Where(symbol => item.Tags.Contains(WellKnownTags.ExtensionMethod) ==
                 symbol is IMethodSymbol { ReducedFrom: not null } or IMethodSymbol { IsExtensionMethod: true })
             .ToList();
-        if (symbols.Count == 0)
+    }
+
+    /// <summary>"void Rigidbody.AddForce(Vector3 force) (+ 1 overload)" and the XML summary, from the symbols the item
+    /// names; empty when it names none.</summary>
+    private static string Describe(List<ISymbol>? symbols, CompletionItem item)
+    {
+        if (symbols is not { Count: > 0 })
             return "";
         ISymbol first = symbols[0];
         string prefix = first switch

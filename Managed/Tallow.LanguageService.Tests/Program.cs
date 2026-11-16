@@ -311,6 +311,75 @@ internal static class Program
             File.Delete(helper);
             File.WriteAllText(file, goodSource);
 
+            // Assembly definitions: each .tasmdef is its own compilation, as Tallow.Build makes them. An assembly sees
+            // only what it references, internals stay inside their assembly (Tallow.API's too), and game code may
+            // not be unsafe; completion and references follow the same boundaries.
+            string Ask(string operation, string path, int cursor)
+            {
+                string folder = Path.Combine(queue, $"request-{next++}");
+                Directory.CreateDirectory(folder);
+                PublishRequest(folder, $"operation\t{operation}\nfile\t{path}\ncursor\t{cursor}\n");
+                string response = Path.Combine(folder, "response.tsv");
+                WaitFor(response, worker);
+                return Names(File.ReadAllText(response));
+            }
+            string core = Path.Combine(source, "Core"), ui = Path.Combine(source, "Ui");
+            Directory.CreateDirectory(core);
+            Directory.CreateDirectory(ui);
+            File.WriteAllText(Path.Combine(core, "Core.tasmdef"), "{ \"name\": \"Game.Core\" }");
+            File.WriteAllText(Path.Combine(ui, "Ui.tasmdef"), "{ \"name\": \"Game.Ui\" }");
+            string health = Path.Combine(core, "Health.cs");
+            File.WriteAllText(health, "namespace Game.Core;\npublic class Health { public int Value; internal int Secret; }\n");
+            string bar = Path.Combine(ui, "Bar.cs");
+            string barSource = "namespace Game.Ui;\npublic class Bar { public int Show(Game.Core.Health health) => health.Value; }\n";
+            File.WriteAllText(bar, barSource);
+            string userSource = goodSource.Replace("{ Transform.Position += Vector3.UnitX * deltaTime; }",
+                "{ Game.Core.Health h = null!; Transform.Position += Vector3.UnitX * h.Value; }");
+            File.WriteAllText(file, userSource);
+            string unreferenced = Diagnose();
+            Check("assemblies: a .tasmdef that does not reference another cannot use its types",
+                unreferenced.Split('\n').Any(line => line.StartsWith("diagnostic\t" + bar) && line.Contains("CS0234")));
+            Check("assemblies: Tallow.Game sees every assembly definition",
+                !unreferenced.Split('\n').Any(line => line.StartsWith("diagnostic\t" + file)));
+            File.WriteAllText(Path.Combine(ui, "Ui.tasmdef"), "{ \"name\": \"Game.Ui\", \"references\": [\"Game.Core\"] }");
+            Check("assemblies: adding the reference to the .tasmdef clears the error", !Diagnose().Contains("diagnostic\t"));
+            File.WriteAllText(file, userSource.Replace("* h.Value;", "* h.Secret;"));
+            Check("assemblies: another assembly's internal member is an error",
+                Diagnose().Split('\n').Any(line => line.StartsWith("diagnostic\t" + file) && line.Contains("CS0122")));
+            File.WriteAllText(file, userSource.Replace("Game.Core.Health h", "Engine.Bind(null!); Game.Core.Health h"));
+            Check("assemblies: an internal Tallow.API member is an error in game code",
+                Diagnose().Split('\n').Any(line => line.StartsWith("diagnostic\t" + file) && line.Contains("CS0122")));
+            File.WriteAllText(file, userSource.Replace("Game.Core.Health h", "unsafe { int* p = null; } Game.Core.Health h"));
+            Check("assemblies: game code may not be unsafe (as its project)", Diagnose().Contains("CS0227"));
+            File.WriteAllText(file, userSource.Replace("* h.Value;", "* h.Va;"));
+            string members = Ask("completion", file, Encoding.UTF8.GetByteCount(userSource[..(userSource.IndexOf("h.Value", StringComparison.Ordinal) + 4)]));
+            Check("assemblies: completion offers another assembly's public members, not its internal ones",
+                members.Contains("completion\tValue\t") && !members.Contains("completion\tSecret\t"));
+            File.WriteAllText(file, userSource);
+            string uses = Ask("references", health, Encoding.UTF8.GetByteCount("namespace Game.Core;\npublic class Health { public int Val"));
+            Check("assemblies: references reach every assembly that uses a member",
+                uses.Contains("reference\t" + health) && uses.Contains("reference\t" + bar) && uses.Contains("reference\t" + file));
+            // Code the last build generated for each assembly is part of that assembly, with `using Tallow.Generated`
+            // implied; the same generated class name in two assemblies does not clash.
+            string generatedRoot = Path.Combine(project, ".tallow-csharp", "generated");
+            foreach (string assembly in new[] { "Tallow.Game", "Game.Core" })
+            {
+                Directory.CreateDirectory(Path.Combine(generatedRoot, assembly));
+                File.WriteAllText(Path.Combine(generatedRoot, assembly, "Tallow.Extra.g.cs"),
+                    "namespace Tallow.Generated;\ninternal static class Generated { public static int Seven => 7; }\n");
+            }
+            File.WriteAllText(file, userSource.Replace("* h.Value;", "* (h.Value + Generated.Seven);"));
+            string generatedUse = Diagnose();
+            Check("assemblies: generated code of the last build is in its assembly, Tallow.Generated imported",
+                !generatedUse.Contains("\terror\t"));
+            Directory.Delete(generatedRoot, recursive: true);
+            Check("assemblies: without the generated code its use is an error again", Diagnose().Contains("CS0103"));
+            File.WriteAllText(file, userSource);
+            Directory.Delete(core, recursive: true);
+            Directory.Delete(ui, recursive: true);
+            File.WriteAllText(file, goodSource);
+            Check("assemblies: removing the assembly definitions goes back to one game assembly", !Diagnose().Contains("diagnostic\t"));
+
             File.WriteAllText(Path.Combine(queue, "stop"), "stop");
             Check("persistent Roslyn worker stops cleanly", worker.WaitForExit(5000) &&
                 worker.ExitCode == 0);
