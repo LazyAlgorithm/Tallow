@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <string>
 #include <unordered_map>
@@ -1368,60 +1369,93 @@ int main(int argc, char** argv)
     if (benchmark)
     {
         // Only a *microbenchmark*: measures hostfxr dispatch overhead, not
-        // Flecs scheduling, Jolt physics, allocation or real gameplay.
-        constexpr int batchSize = 128;
-        constexpr int iterations = 1000;
+        // Flecs scheduling, Jolt physics, allocation or real gameplay (B07).
+        // Per batch size: no-op FixedUpdate and LocalLateUpdate one call per
+        // script versus one batch call, and per-script TickInput batches.
+        constexpr int maxBatch = 4096;
         std::vector<int32_t> probes;
-        probes.reserve(batchSize);
-        for (int i = 0; i < batchSize; ++i)
+        probes.reserve(maxBatch);
+        for (int i = 0; i < maxBatch; ++i)
         {
             const int32_t id = tn_csharp_attach("Gameplay.BatchNoopSmoke", 1, 1);
             if (id < 1)
                 return Failure("attaching the optional C# dispatch benchmark");
             probes.push_back(id);
         }
-
-        const auto singles = [&]() -> bool
+        std::vector<tn_csharp_tick_batch_item> inputs(maxBatch);
+        for (int i = 0; i < maxBatch; ++i)
         {
-            for (int id : probes)
-                if (!tn_csharp_dispatch(id, TN_CSHARP_FIXED_UPDATE, 0.016f))
-                    return false;
-            return true;
-        };
-        const auto grouped = [&]() -> bool
-        {
-            return tn_csharp_dispatch_batch(probes.data(), batchSize,
-                TN_CSHARP_FIXED_UPDATE, 0.016f) == batchSize;
-        };
-
-        // Exercise both paths before timing to keep CLR JIT warmup out.
-        for (int i = 0; i < 32; ++i)
-            if (!singles() || !grouped())
-                return Failure("warming optional C# dispatch benchmark");
-
-        const auto measure = [&](auto&& action) -> double
+            // Distinct input per script, as players' ticks are.
+            inputs[i].instance = probes[i];
+            inputs[i].input = tn_csharp_tick_input{static_cast<float>(i % 3) - 1.0f, 1.0f, 0.0f, 0.0f,
+                static_cast<uint32_t>(i & 7), static_cast<uint32_t>(i & 1)};
+            inputs[i].delta_time = 0.016f;
+        }
+        const auto measure = [&](int iterations, auto&& action) -> double
         {
             const auto start = std::chrono::steady_clock::now();
             for (int i = 0; i < iterations; ++i)
                 if (!action())
                     return -1.0;
             const auto end = std::chrono::steady_clock::now();
-            return std::chrono::duration<double, std::milli>(end - start).count();
+            return std::chrono::duration<double, std::nano>(end - start).count();
         };
-        // Do both orders to reduce first/second pass effects. Report average.
-        const double scalar1 = measure(singles);
-        const double batch1 = measure(grouped);
-        const double batch2 = measure(grouped);
-        const double scalar2 = measure(singles);
-        if (scalar1 <= 0 || batch1 <= 0 || batch2 <= 0 || scalar2 <= 0)
-            return Failure("timing optional C# dispatch benchmark");
-        const double scalarMs = (scalar1 + scalar2) / 2.0;
-        const double batchedMs = (batch1 + batch2) / 2.0;
-        std::cout << "C# dispatch microbenchmark: " << batchSize * iterations
-                  << " callbacks/run, scalar " << scalarMs
-                  << " ms, batched " << batchedMs
-                  << " ms, ratio " << scalarMs / batchedMs
-                  << "x (host overhead only, not engine FPS)\n";
+        std::cout << "C# dispatch microbenchmark (ns per callback, host overhead only, not engine FPS)\n"
+                  << "batch | Fixed scalar | Fixed batched | Late scalar | Late batched | TickInput scalar | TickInput batched\n";
+        for (int size : {1, 16, 128, 512, 4096})
+        {
+            const int iterations = std::max(64, 262144 / size);
+            const auto scalar = [&](int32_t event) {
+                return [&, event]() -> bool {
+                    for (int i = 0; i < size; ++i)
+                        if (!tn_csharp_dispatch(probes[i], event, 0.016f))
+                            return false;
+                    return true;
+                };
+            };
+            const auto batched = [&](int32_t event) {
+                return [&, event]() -> bool {
+                    return tn_csharp_dispatch_batch(probes.data(), size, event, 0.016f) == size;
+                };
+            };
+            const auto inputScalar = [&]() -> bool {
+                for (int i = 0; i < size; ++i)
+                    if (!tn_csharp_update_input(inputs[i].instance, &inputs[i].input, inputs[i].delta_time))
+                        return false;
+                return true;
+            };
+            const auto inputBatched = [&]() -> bool {
+                return tn_csharp_update_input_batch(inputs.data(), size) == size;
+            };
+            double results[6];
+            int column = 0;
+            for (int32_t event : {TN_CSHARP_FIXED_UPDATE, TN_CSHARP_LOCAL_LATE_UPDATE})
+            {
+                auto one = scalar(event);
+                auto many = batched(event);
+                // Warm both paths (JIT), then time each twice in both orders and keep the better.
+                measure(32, one);
+                measure(32, many);
+                const double s1 = measure(iterations, one), b1 = measure(iterations, many);
+                const double b2 = measure(iterations, many), s2 = measure(iterations, one);
+                if (s1 < 0 || s2 < 0 || b1 < 0 || b2 < 0)
+                    return Failure("timing optional C# dispatch benchmark");
+                results[column++] = std::min(s1, s2) / (static_cast<double>(iterations) * size);
+                results[column++] = std::min(b1, b2) / (static_cast<double>(iterations) * size);
+            }
+            measure(32, inputScalar);
+            measure(32, inputBatched);
+            const double i1 = measure(iterations, inputScalar), j1 = measure(iterations, inputBatched);
+            const double j2 = measure(iterations, inputBatched), i2 = measure(iterations, inputScalar);
+            if (i1 < 0 || i2 < 0 || j1 < 0 || j2 < 0)
+                return Failure("timing optional C# TickInput benchmark");
+            results[4] = std::min(i1, i2) / (static_cast<double>(iterations) * size);
+            results[5] = std::min(j1, j2) / (static_cast<double>(iterations) * size);
+            std::cout << size;
+            for (double value : results)
+                std::cout << " | " << std::fixed << std::setprecision(1) << value;
+            std::cout << "\n";
+        }
         for (int id : probes)
             if (!tn_csharp_detach(id))
                 return Failure("detaching optional C# benchmark components");

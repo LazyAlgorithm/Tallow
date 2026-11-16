@@ -10,4 +10,6 @@ namespace Gameplay;
 public sealed class BatchNoopSmoke : Script
 {
     public override void FixedUpdate(float deltaTime) { }
+    public override void LocalLateUpdate(float deltaTime) { }
+    public override void Update(TickInput input, float deltaTime) { }
 }
