@@ -127,6 +127,17 @@ def main() -> int:
         else:
             failed.append(f"INGAME FAIL nested catalog rows: {nested}")
             print(failed[-1])
+        # A list of a [Serializable] type is "list:record"; column 8 lists the item's fields (name~kind~default~options).
+        waves = catalog.get(("InGame.ApiChecks", "Waves"), [])
+        points = catalog.get(("InGame.ApiChecks", "Waypoints"), [])
+        if (len(waves) >= 8 and waves[2] == "list:record" and
+                waves[7] == "Count~int~3~|Delay~float~0~|Kind~enum~First~First/Second|Name~string~~" and
+                len(points) >= 8 and points[2] == "list:record" and points[7] == "At~Vector3~0,0,0~|Wait~bool~false~"):
+            passed += 1
+            print("INGAME PASS the field catalog lists a list of [Serializable] items with the item's fields")
+        else:
+            failed.append(f"INGAME FAIL list:record catalog rows: {waves} {points}")
+            print(failed[-1])
         # Defaults: an enclosing initializer's `new() { Health = 10 }` wins over the type's own initializers.
         defaults = {name: (catalog.get(("InGame.ApiChecks", name)) or [""] * 4)[3]
                     for name in ("Stats.Health", "NoOverrides.Health", "Stats.Limits.Max")}

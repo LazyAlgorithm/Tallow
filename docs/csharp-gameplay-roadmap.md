@@ -297,7 +297,13 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     four levels, defaults from an enclosing `new() { X = 1 }` first), `[Asset(AssetKind.Prefab)]` string/list
     fields (the Beef asset picker; column 8 "asset:<kind>"), and undo/redo of C# field edits (already covered by
     scene-snapshot undo; `--csharp-inspector-test`, run by `tools/test_csharp_ingame.py --editor`, needs a display).
-    Not yet: lists of nested types, prefab-override markers (the editor has none for Beef components either).
+    Not yet: prefab-override markers (the editor has none for Beef components either).
+  - [x] (November 16, 2026) Lists and arrays of `[Serializable]` classes and structs: kind `list:record`, column 8
+    the item's value-kind fields ("Name~kind~default~options" joined by '|', enum names by '/'); each item is
+    "Name=value" parts joined by ';' and escaped again inside the list's own format, so renamed or missing item
+    fields fall back to their defaults. The Inspector draws each item's fields with a label; + copies the last
+    item (or the defaults). 3 in-engine checks (scene → fields, live read-back, catalog). Item fields that are
+    themselves nested types, lists or references are not shown yet. The editor drawing is not visually checked.
 - [ ] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.
 
 ## P3 — convert visual scripting and sample content

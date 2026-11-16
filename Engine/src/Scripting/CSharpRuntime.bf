@@ -144,6 +144,9 @@ static class CSharpRuntime
 		Check(fields.Contains("Speed\t3\n") && fields.Contains("Label\tfrom scene\n") && fields.Contains("Flag\tfalse\n"),
 			"live Inspector values use the scene's text format");
 		Check(fields.Contains("baseSecret\t7\n"), "live values include base-class [ShowInInspector] fields");
+		// A list of [Serializable] items reads back item by item, "Name=value" parts escaped inside the list's own.
+		Check(fields.Contains(@"Waves	2;Count=5\;Delay=0\;Kind=Second\;Name=x\\\;y;Count=3\;Delay=0.5\;Kind=First\;Name=" + "\n") &&
+			fields.Contains(@"Waypoints	1;At=1,2,3\;Wait=true" + "\n"), "lists of [Serializable] items read back in the scene's format");
 		Check(!fields.Contains("_tick\t"), "private unexposed fields stay out of the Inspector list");
 		let all = scope String();
 		Check(ReadFields(behaviour.ManagedInstance, true, all), "ReadFields (all fields) succeeds");

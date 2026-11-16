@@ -44,6 +44,23 @@ public class Limits
     public string Tag = "";
 }
 
+/// <summary>A list item with fields of its own: the Inspector draws each item's fields.</summary>
+[Serializable]
+public class Wave
+{
+    public int Count = 3;
+    public float Delay;
+    public CheckKind Kind;
+    public string Name = "";
+}
+
+[Serializable]
+public struct Waypoint
+{
+    public System.Numerics.Vector3 At;
+    public bool Wait;
+}
+
 public class ApiChecks : CheckBase
 {
     private readonly List<string> mWorldStateChanges = new();
@@ -62,6 +79,8 @@ public class ApiChecks : CheckBase
     public Stats NoOverrides;
     [Asset(AssetKind.Prefab)] public string EnemyPrefab = "";
     [Asset(AssetKind.AudioClip)] public List<string> Sounds = new();
+    public List<Wave> Waves = new();
+    public Waypoint[] Waypoints = [];
 
     private int _tick;
     private int _fixedTicks;
@@ -105,6 +124,10 @@ public class ApiChecks : CheckBase
             + $"{Stats.Limits?.Max}, {Stats.Limits?.Tag}, {NoOverrides.Limits?.Max})",
             Stats.Health == 42 && Stats.Speed == 1.5f && Stats.Limits is { Max: 9, Tag: "edge" } &&
             NoOverrides.Health == 0 && NoOverrides.Limits is null);
+        Check($"lists of [Serializable] classes and structs come from the scene ({Waves.Count}; {Waypoints.Length})",
+            Waves.Count == 2 && Waves[0] is { Count: 5, Kind: CheckKind.Second, Name: "x;y", Delay: 0 } &&
+            Waves[1] is { Count: 3, Delay: 0.5f, Kind: CheckKind.First, Name: "" } && Waypoints.Length == 1 &&
+            Waypoints[0].At == new System.Numerics.Vector3(1, 2, 3) && Waypoints[0].Wait);
         // tools/test_csharp_export.py checks a built game runs on the .NET it ships with.
         Log.Info("INGAME RUNTIME " + System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory());
     }

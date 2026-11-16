@@ -170,7 +170,8 @@ extension EditorApp
 				remove = i;
 			ImGui.SameLine();
 			let changed = scope String();
-			if (DrawManagedValue(kind, items[i], options, default, default, changed))
+			if (kind == "record" ? DrawManagedRecord(options, items[i], changed) :
+				DrawManagedValue(kind, items[i], options, default, default, changed))
 			{
 				items[i].Set(changed);
 				edited = true;
@@ -189,6 +190,8 @@ extension EditorApp
 			let added = new String();
 			if (!items.IsEmpty)
 				added.Set(items.Back);
+			else if (kind == "record")
+				RecordDefaults(options, added);
 			else
 				added.Set(kind == "bool" ? "false" : kind == "string" ? "" : kind == "Vector2" ? "0,0" :
 					kind == "Vector3" ? "0,0,0" : kind == "Vector4" ? "0,0,0,0" : kind == "Color" ? "1,1,1,1" :
@@ -202,12 +205,107 @@ extension EditorApp
 			for (let text in items)
 			{
 				newValue.Append(';');
-				for (let c in text.RawChars)
-				{
-					if (c == ';' || c == '\\')
-						newValue.Append('\\');
-					newValue.Append(c);
-				}
+				AppendEscaped(newValue, text);
+			}
+		}
+		return edited;
+	}
+
+	/// Splits "a;b\\;c" on unescaped ';' (the list and record item format).
+	static void SplitEscaped(StringView text, List<String> parts)
+	{
+		var part = new String();
+		for (int i < text.Length)
+		{
+			let c = text[i];
+			if (c == '\\' && i + 1 < text.Length)
+				part.Append(text[++i]);
+			else if (c == ';')
+			{
+				parts.Add(part);
+				part = new String();
+			}
+			else
+				part.Append(c);
+		}
+		parts.Add(part);
+	}
+
+	static void AppendEscaped(String output, StringView text)
+	{
+		for (let c in text.RawChars)
+		{
+			if (c == ';' || c == '\\')
+				output.Append('\\');
+			output.Append(c);
+		}
+	}
+
+	/// A new list:record item: each schema field's default ("Name~kind~default~options" entries joined by '|').
+	static void RecordDefaults(StringView schema, String output)
+	{
+		for (let entry in schema.Split('|', .RemoveEmptyEntries))
+		{
+			var parts = entry.Split('~');
+			let name = parts.GetNext() case .Ok(let n) ? n : "";
+			parts.GetNext();
+			let value = parts.GetNext() case .Ok(let v) ? v : "";
+			if (!output.IsEmpty)
+				output.Append(';');
+			AppendEscaped(output, scope $"{name}={value}");
+		}
+	}
+
+	/// One list:record item ("Name=value" parts joined by ';'): a labelled widget per schema field. Fields the
+	/// item text lacks show their default; the whole item is written back when one changes.
+	bool DrawManagedRecord(StringView schema, StringView current, String newValue)
+	{
+		let parts = scope List<String>();
+		defer { ClearAndDeleteItems!(parts); }
+		SplitEscaped(current, parts);
+		let names = scope List<StringView>();
+		let values = scope List<String>();
+		defer { ClearAndDeleteItems!(values); }
+		bool edited = false;
+		ImGui.BeginGroup();
+		for (let entry in schema.Split('|', .RemoveEmptyEntries))
+		{
+			var columns = entry.Split('~');
+			let name = columns.GetNext() case .Ok(let n) ? n : "";
+			let kind = columns.GetNext() case .Ok(let k) ? k : "";
+			let fallback = columns.GetNext() case .Ok(let d) ? d : "";
+			let options = columns.GetNext() case .Ok(let o) ? o : "";
+			let value = new String(fallback);
+			for (let part in parts)
+				if (part.StartsWith(name) && part.Length > name.Length && part[name.Length] == '=')
+					value.Set(part.Substring(name.Length + 1));
+			names.Add(name);
+			values.Add(value);
+			ImGui.PushID(scope String(name).CStr());
+			let label = scope String();
+			NiceName(name, label);
+			ImGui.TextDisabled(label.CStr());
+			ImGui.SameLine(90);
+			ImGui.SetNextItemWidth(-1);
+			// Enum names are '/'-separated in the schema (its '|' separates fields).
+			let enumNames = scope String(options);
+			enumNames.Replace('/', '|');
+			let changed = scope String();
+			if (DrawManagedValue(kind, value, enumNames, default, default, changed))
+			{
+				value.Set(changed);
+				edited = true;
+			}
+			ImGui.PopID();
+		}
+		ImGui.EndGroup();
+		if (edited)
+		{
+			for (int i < names.Count)
+			{
+				if (i > 0)
+					newValue.Append(';');
+				AppendEscaped(newValue, scope $"{names[i]}={values[i]}");
 			}
 		}
 		return edited;

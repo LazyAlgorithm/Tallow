@@ -994,28 +994,70 @@ public static unsafe class NativeEntrypoints
         Type? element = type.IsArray && type.GetArrayRank() == 1 ? type.GetElementType() :
             type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>) ? type.GetGenericArguments()[0] : null;
         return element != null && !IsReferenceField(element) && InspectorElementType(element) == null &&
-            FormatInspectorValue(element, element.IsValueType ? Activator.CreateInstance(element) : "") != null
+            (IsNestedType(element) ||
+             FormatInspectorValue(element, element.IsValueType ? Activator.CreateInstance(element) : "") != null)
             ? element : null;
     }
 
-    /// <summary>"count;item;item...": ';' and '\' in an item are escaped with '\'.</summary>
-    private static string FormatList(Type element, System.Collections.IList items)
+    /// <summary>A list item: its own value, or for a [Serializable] item type its value-kind fields as
+    /// "Name=value" parts joined by ';' (';' and '\' escaped), the Inspector's "list:record" items.</summary>
+    private static string FormatItem(Type element, object? item)
     {
-        var text = new StringBuilder(items.Count.ToString(CultureInfo.InvariantCulture));
-        foreach (object? item in items)
+        if (!IsNestedType(element))
+            return FormatInspectorValue(element, item) ?? "";
+        var text = new StringBuilder();
+        if (item is null)
+            return "";
+        foreach (FieldInfo inner in RecordFields(element))
         {
-            text.Append(';');
-            foreach (char c in FormatInspectorValue(element, item) ?? "")
-            {
-                if (c is ';' or '\\')
-                    text.Append('\\');
-                text.Append(c);
-            }
+            string? encoded = FormatInspectorValue(inner.FieldType, inner.GetValue(item));
+            if (encoded is null)
+                continue;
+            if (text.Length > 0)
+                text.Append(';');
+            Escape(text, inner.Name + "=" + encoded);
         }
         return text.ToString();
     }
 
-    private static object ParseList(Type type, Type element, string encoded, ulong session)
+    private static object? ParseItem(Type element, string encoded, ulong session)
+    {
+        if (!IsNestedType(element))
+            return ParseInspectorValue(element, encoded, session);
+        object item = Activator.CreateInstance(element)!;
+        foreach (string part in SplitEscaped(encoded))
+        {
+            int equals = part.IndexOf('=');
+            if (equals < 1)
+                continue;
+            FieldInfo? inner = element.GetField(part[..equals], BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (inner is null || !IsInspectorField(inner) || IsNestedType(inner.FieldType))
+                continue; // A field renamed or removed since the scene was saved.
+            object? parsed = ParseInspectorValue(inner.FieldType, part[(equals + 1)..], session);
+            if (parsed == ClearReference)
+                parsed = inner.FieldType.IsValueType && Nullable.GetUnderlyingType(inner.FieldType) is null
+                    ? Activator.CreateInstance(inner.FieldType) : null;
+            inner.SetValue(item, parsed);
+        }
+        return item;
+    }
+
+    private static IEnumerable<FieldInfo> RecordFields(Type element) =>
+        element.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Where(inner =>
+            IsInspectorField(inner) && !inner.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false));
+
+    private static void Escape(StringBuilder text, string value)
+    {
+        foreach (char c in value)
+        {
+            if (c is ';' or '\\')
+                text.Append('\\');
+            text.Append(c);
+        }
+    }
+
+    /// <summary>Splits on ';', undoing Escape.</summary>
+    private static List<string> SplitEscaped(string encoded)
     {
         var parts = new List<string>();
         var current = new StringBuilder();
@@ -1033,13 +1075,33 @@ public static unsafe class NativeEntrypoints
                 current.Append(c);
         }
         parts.Add(current.ToString());
+        return parts;
+    }
+
+    /// <summary>"count;item;item...": ';' and '\' in an item are escaped with '\'.</summary>
+    private static string FormatList(Type element, System.Collections.IList items)
+    {
+        var text = new StringBuilder(items.Count.ToString(CultureInfo.InvariantCulture));
+        foreach (object? item in items)
+        {
+            text.Append(';');
+            Escape(text, FormatItem(element, item));
+        }
+        return text.ToString();
+    }
+
+    private static object ParseList(Type type, Type element, string encoded, ulong session)
+    {
+        List<string> parts = SplitEscaped(encoded);
         int count = int.Parse(parts[0], CultureInfo.InvariantCulture);
         if (count < 0 || count != parts.Count - 1 || count > 100_000)
             throw new FormatException("The list's item count does not match its items.");
         var list = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(element))!;
         for (int i = 0; i < count; i++)
-            list.Add(ParseInspectorValue(element, parts[i + 1], session)
-                ?? throw new FormatException("Unsupported list item."));
+        {
+            object? item = ParseItem(element, parts[i + 1], session) ?? throw new FormatException("Unsupported list item.");
+            list.Add(item == ClearReference ? null : item);
+        }
         if (!type.IsArray)
             return list;
         Array array = Array.CreateInstance(element, count);

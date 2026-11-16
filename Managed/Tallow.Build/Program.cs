@@ -49,6 +49,65 @@ internal static class Program
         return false;
     }
 
+    /// <summary>A list item type's fields for the Inspector (fields.tsv column 8 of a "list:record" row):
+    /// "Name~kind~default~options" joined by '|', options being an enum's names joined by '/'. Only fields of
+    /// value kinds; null when there are none.</summary>
+    private static string? RecordSchema(ITypeSymbol type)
+    {
+        var entries = new List<string>();
+        foreach (IFieldSymbol inner in type.GetMembers().OfType<IFieldSymbol>())
+        {
+            var attributes = inner.GetAttributes().Select(a => a.AttributeClass?.ToDisplayString())
+                .ToHashSet(StringComparer.Ordinal);
+            bool shown = attributes.Contains("Tallow.ShowInInspectorAttribute") ||
+                attributes.Contains("Tallow.HideInInspectorAttribute");
+            if ((inner.DeclaredAccessibility != Accessibility.Public && !shown) || inner.IsStatic || inner.IsConst ||
+                inner.IsReadOnly || inner.IsImplicitlyDeclared || attributes.Contains("System.NonSerializedAttribute") ||
+                attributes.Contains("Tallow.HideInInspectorAttribute"))
+                continue;
+            string? kind = InspectorScalarKind(inner.Type);
+            if (kind is null)
+                continue;
+            string value = kind switch
+            {
+                "bool" => "false", "string" => "", "Vector2" => "0,0", "Vector3" => "0,0,0",
+                "Vector4" => "0,0,0,0", "Color" => "1,1,1,1", _ => "0"
+            };
+            string options = "";
+            if (inner.Type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType)
+            {
+                var names = enumType.GetMembers().OfType<IFieldSymbol>()
+                    .Where(member => member.HasConstantValue && !member.IsImplicitlyDeclared).ToList();
+                options = string.Join("/", names.Select(member => member.Name));
+                value = names.FirstOrDefault()?.Name ?? "0";
+            }
+            // A constant initializer (`public int Count = 3;`) is the new item's value.
+            if (inner.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is VariableDeclaratorSyntax
+                { Initializer.Value: { } initializer })
+            {
+                object? constant = (initializer as LiteralExpressionSyntax)?.Token.Value;
+                if (initializer is PrefixUnaryExpressionSyntax { RawKind: (int)SyntaxKind.UnaryMinusExpression,
+                        Operand: LiteralExpressionSyntax negated })
+                    constant = negated.Token.Value switch
+                    {
+                        int x => -x, float x => -x, double x => -x, long x => -x, _ => null
+                    };
+                else if (initializer is MemberAccessExpressionSyntax member && kind == "enum")
+                    constant = member.Name.Identifier.Text;
+                if (constant is bool flag)
+                    value = flag ? "true" : "false";
+                else if (constant is string text && kind is "string" or "enum")
+                    value = text;
+                else if (constant is IFormattable number && kind is not ("bool" or "string" or "enum"))
+                    value = number.ToString(null, CultureInfo.InvariantCulture);
+            }
+            if (value.IndexOfAny(['|', '~', '\t', '\n', '\r']) >= 0)
+                value = "";
+            entries.Add(string.Join("~", inner.Name, kind, value, options));
+        }
+        return entries.Count == 0 ? null : string.Join("|", entries);
+    }
+
     // What the Inspector edits a value of this type as (fields.tsv kinds), or null when it cannot.
     private static string? InspectorScalarKind(ITypeSymbol type) =>
         type.TypeKind == TypeKind.Enum ? "enum" : type.SpecialType switch
@@ -866,6 +925,11 @@ internal static class Program
                         _ => null
                     };
                     string? elementKind = element != null ? InspectorScalarKind(element) : null;
+                    // A list of a [Serializable] struct/class of the game's: "list:record", column 8 its fields.
+                    string? recordSchema = element != null && elementKind == null && IsNestedInspectorType(element)
+                        ? RecordSchema(element) : null;
+                    if (recordSchema != null)
+                        elementKind = "record";
                     string? kind = referenceType != null ? "object" :
                         element != null ? (elementKind != null ? "list:" + elementKind : null) :
                         InspectorScalarKind(field.Type);
@@ -980,6 +1044,8 @@ internal static class Program
                             .Select(member => member.Name));
                         row += "\t" + names;
                     }
+                    else if (recordSchema != null)
+                        row += "\t" + recordSchema;
                     else if (referenceType != null)
                         row += "\t" + referenceType;
                     else if ((kind == "string" || kind == "list:string") && field.GetAttributes().FirstOrDefault(a =>
