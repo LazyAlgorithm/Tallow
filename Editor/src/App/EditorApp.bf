@@ -309,6 +309,8 @@ class EditorApp : Application
 			RunCSharpInspectorTest();
 		if (HasArg("--play-cycle-test"))
 			StartPlayCycleTest();
+		if (HasArg("--hot-reload-test"))
+			StartHotReloadTest();
 		if (HasArg("--stale-build-test"))
 			StartStaleBuildTest();
 		{

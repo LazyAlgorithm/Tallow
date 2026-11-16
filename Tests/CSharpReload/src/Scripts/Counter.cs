@@ -17,6 +17,22 @@ public struct Tick
     public int N;
 }
 
+public enum Mode { Walk, Run, Swim }
+
+/// Game classes held in collections: copied to the new code's classes field by field.
+public class Item
+{
+    public int Count;
+    public Item? Next;
+    public Mode Mode;
+}
+
+public struct Cell
+{
+    public int X;
+    public Settings? Owner;
+}
+
 /// Version 1 of the code: tools/test_csharp_reload.py swaps in v2/Scripts while it plays.
 public class TickSystem : EcsSystem<Tick>
 {
@@ -34,6 +50,23 @@ public class Counter : Script
     private int _awakes;
     private string _label = "v1";
     private List<int> _history = new();
+    private Dictionary<string, int> _scores = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _seen = new();
+    private Queue<int> _queue = new();
+    private Stack<int> _stack = new();
+    private readonly List<int> _readonlyList = new();
+    private Dictionary<string, Item> _items = new();
+    private Item?[] _array = new Item?[2];
+    private Cell _cell;
+    private Mode _mode = Mode.Walk;
+    private List<Partner?> _partners = new();
+    private object? _removed;
+    private int _score;
+    private string _kind = "x";
+    private Action? _callback;
+    private (string, object?) _pair;
+
+    private static object MakeRemoved() => new OnlyInVersion1();
 
     public override void Awake() => _awakes++;
 
@@ -54,6 +87,27 @@ public class Counter : Script
             Transient = 50;
             AutoProp = 7;
             _history.Add(4);
+            _scores["Alpha"] = 3;
+            _seen.Add("a");
+            _seen.Add("b");
+            _queue.Enqueue(1);
+            _queue.Enqueue(2);
+            _stack.Push(1);
+            _stack.Push(2);
+            _readonlyList.Add(8);
+            var loop = new Item { Count = 5, Mode = Mode.Swim };
+            loop.Next = loop;
+            _items["loop"] = loop;
+            _array[0] = loop;
+            _array[1] = new Item { Count = 6 };
+            _cell = new Cell { X = 4, Owner = Settings };
+            _mode = Mode.Run;
+            _partners.Add(Friend);
+            _removed = MakeRemoved();
+            _score = 42;
+            _kind = "y";
+            _callback = () => _ticks += 0;
+            _pair = ("p", loop);
         }
     }
 }

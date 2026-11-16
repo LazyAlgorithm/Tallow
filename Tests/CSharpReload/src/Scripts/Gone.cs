@@ -7,3 +7,9 @@ public class Gone : Script
 {
     public override void OnDestroy() => Log.Info("RELOAD PASS a script whose class is gone ends with OnDestroy (old code)");
 }
+
+/// A class only in version 1: a field holding one starts again at its initializer after the reload.
+public class OnlyInVersion1
+{
+    public int Value = 1;
+}

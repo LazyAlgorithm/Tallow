@@ -8,6 +8,7 @@ src/Scripts into another folder, plays version 1 headless and reloads version 2 
 from __future__ import annotations
 
 import argparse
+import os
 import platform
 import shutil
 import subprocess
@@ -16,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED = 13
+EXPECTED = 27
 
 
 def build(project: Path, *extra: str) -> bool:
@@ -55,14 +56,20 @@ def main() -> int:
                         "--configuration", "Debug", "--nologo", "--verbosity", "quiet"], check=True)
         run = subprocess.run([str(launcher), "--game", "--project", str(project), "--headless", "--fixed-step",
                               "--csharp-reload-test", str(work / "v2bin/Tallow.Game/Tallow.Game.dll"), "--frames", "400"],
-                             capture_output=True, text=True, timeout=180)
+                             capture_output=True, text=True, timeout=180,
+                             env={**os.environ, "TALLOW_RELOAD_UNLOAD_CHECK": "1"})
         output = run.stdout + run.stderr
-        lines = [line for line in output.splitlines() if "RELOAD" in line or "[Tallow C#]" in line or "is gone after" in line]
+        lines = [line for line in output.splitlines() if "RELOAD" in line or "[Tallow C#]" in line or "is gone after" in line
+                 or "Hot reload:" in line]
         print("\n".join(lines))
         passed = sum("RELOAD PASS" in line for line in lines)
         if any("is gone after the reload" in line for line in lines):
             passed += 1
             print("RELOAD PASS the editor is told which script stopped")
+        dropped = next((line for line in lines if "Hot reload:" in line), "")
+        if "Counter._kind" in dropped and "Counter._removed" in dropped and "_callback" not in dropped:
+            passed += 1
+            print("RELOAD PASS the warning names the fields that started again (not delegates)")
         failed = [line for line in lines if "RELOAD FAIL" in line or "[Tallow C#]" in line]
         if "RELOAD kept 2 scripts" not in output:
             failed.append("RELOAD FAIL two of three scripts kept")

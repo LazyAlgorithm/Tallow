@@ -486,6 +486,16 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     types the Inspector cannot write (dictionaries, arbitrary classes) restart at their initializers, a reload
     only changes this machine's code in a networked session, the editor path (save -> compile -> reload) is not
     automated (needs a display).
+  - [x] (November 16, 2026) Fields are carried as objects, not Inspector text (`ReloadMigrator`): dictionaries
+    (with a system comparer), sets, queues, stacks, arrays, readonly collections, tuples, game classes and structs
+    matched by full name in the new assemblies field by field (a new field keeps its initializer, the new
+    constructor runs), shared objects and cycles copied once, enums by member name, int <-> float conversions,
+    lists of scripts pointing at the new instances. Delegates, tasks and timers of the old code start again quietly;
+    a field whose type changed or was removed starts again and a warning names it. Floats are now exact (no text
+    round trip). `TALLOW_RELOAD_UNLOAD_CHECK=1` checks the old code unloads. Editor path automated:
+    `--hot-reload-test FOLDER` (types v2 into the code editor and saves during Play; ~2.1 s save-to-reload here),
+    step 6 of `tools/test_csharp_editor.py`. Reload test now 27 checks. Still open: pending awaits are dropped,
+    networked sessions reload only this machine.
 - [~] Package precompiled per-platform player/engine plus C# assemblies, runtimeconfig, .NET runtime/dependencies, shaders and assets into independently redistributable Windows/Linux exports. Verify on machines without BeefBuild.
   Linux done: `Player/` is the engine without the editor (its own Beef workspace, since one
   workspace shares generic code with the editor), exporting its generated API symbols.

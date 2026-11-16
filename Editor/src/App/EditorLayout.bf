@@ -16,6 +16,7 @@ extension EditorApp
 		UpdateProfiler();
 		UpdateViewportTest();
 		UpdatePlayCycleTest();
+		UpdateHotReloadTest();
 		UpdateStaleBuildTest();
 		sUIMarker.Begin();
 		defer Profiler.End();

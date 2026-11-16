@@ -667,9 +667,9 @@ public static unsafe class NativeEntrypoints
     /// <summary>
     /// Hot reload while playing: loads the newly built Tallow.Game beside the running one and, only when that
     /// worked, moves every running script to its class in the new code under the same instance ID (natives keep
-    /// pointing at it), with its field values: every field whose type the Inspector can write (numbers, text,
-    /// vectors, enums, lists of them, object references, [Serializable] types), private ones too, except
-    /// [NonSerialized] and readonly fields. Awake/OnEnable/Start do not run again. A script whose class is gone
+    /// pointing at it), with its field values copied as objects (ReloadMigrator): private, readonly and auto-property
+    /// fields, collections, nested game classes and references to other scripts; not [NonSerialized] fields, nor
+    /// delegates, tasks and timers of the old code. Awake/OnEnable/Start do not run again. A script whose class is gone
     /// (and is not a [FormerlyNamed] one) is dropped (OnDisable/OnDestroy run, in the old code). The old context is
     /// then unloaded: ECS systems are made again by the new assembly, the team chooser and pending awaits go.
     /// Returns how many scripts were kept, or -1 (the old code keeps running; its ECS systems were stopped).
@@ -677,15 +677,34 @@ public static unsafe class NativeEntrypoints
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int ReloadGame(byte* trustedPath)
     {
+        int kept = ReloadGameCore(trustedPath, out WeakReference? previous);
+        // Tests (TALLOW_RELOAD_UNLOAD_CHECK=1): the old code must be collectable once the reload returns.
+        if (previous != null && Environment.GetEnvironmentVariable("TALLOW_RELOAD_UNLOAD_CHECK") == "1")
+        {
+            for (int pass = 0; pass < 10 && previous.IsAlive; pass++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+            Console.WriteLine(previous.IsAlive ? "RELOAD FAIL the old code is still in memory after the reload"
+                : "RELOAD PASS the old code unloads after the reload");
+        }
+        return kept;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int ReloadGameCore(byte* trustedPath, out WeakReference? unloaded)
+    {
+        unloaded = null;
         try
         {
             if (trustedPath == null || sGameContext == null || sRegistry == null)
                 throw new InvalidOperationException("No C# game is running to reload.");
             string path = Path.GetFullPath(Marshal.PtrToStringUTF8((nint)trustedPath) ?? "");
             var running = sInstances.All().ToList();
-            var saved = new List<(int Id, Script Old, string State)>(running.Count);
+            var saved = new List<(int Id, Script Old)>(running.Count);
             foreach ((int id, Script script) in running)
-                saved.Add((id, script, ReloadState(script)));
+                saved.Add((id, script));
 
             // The new assembly's module initializer registers its systems; the old ones must be gone first (the
             // native side removed its copies), as the chooser and the old code's awaits.
@@ -719,8 +738,8 @@ public static unsafe class NativeEntrypoints
             RpcMethods.Forget();
             sByGameObject.Clear();
 
-            var moved = new List<(Script Script, string State)>(saved.Count);
-            foreach ((int id, Script old, string state) in saved)
+            var moved = new List<(Script Old, Script Script)>(saved.Count);
+            foreach ((int id, Script old) in saved)
             {
                 string name = sNames.TryGetValue(id, out string? registered) ? registered : old.GetType().FullName ?? "";
                 if (!types.Contains(name) && former.TryGetValue(name, out string? renamed))
@@ -753,28 +772,35 @@ public static unsafe class NativeEntrypoints
                     continue;
                 }
                 GameObject owner = old.GameObject;
-                old.InvalidateNative();
                 script.AttachNative(owner, id);
                 sInstances.Replace(id, script);
                 sNames[id] = name;
                 if (!sByGameObject.TryGetValue(owner, out List<Script>? scripts))
                     sByGameObject.Add(owner, scripts = []);
                 scripts.Add(script);
-                moved.Add((script, state));
+                moved.Add((old, script));
             }
             // After every script exists again, so references between them find the new ones.
-            foreach ((Script script, string state) in moved)
+            var migrator = new ReloadMigrator(previous, context, moved.ToDictionary(pair => pair.Old, pair => pair.Script,
+                (IEqualityComparer<Script>)ReferenceEqualityComparer.Instance));
+            foreach ((Script old, Script script) in moved)
             {
                 try
                 {
-                    ApplyText(script, state, everything: true);
+                    migrator.CopyScript(old, script);
                 }
                 catch (Exception exception)
                 {
                     Failure(exception);
                 }
+                old.InvalidateNative();
             }
-            sUnloadedContexts.Add(new WeakReference(previous));
+            if (migrator.Dropped.Count > 0)
+                Log.Warning($"Hot reload: {migrator.Dropped.Count} field(s) started again at their initializers " +
+                    $"(type changed or removed): {string.Join(", ", migrator.Dropped.Take(8))}" +
+                    (migrator.Dropped.Count > 8 ? ", ..." : ""));
+            unloaded = new WeakReference(previous);
+            sUnloadedContexts.Add(unloaded);
             previous.Unload();
             return moved.Count;
         }
@@ -782,29 +808,6 @@ public static unsafe class NativeEntrypoints
         {
             return Failure(exception);
         }
-    }
-
-    /// <summary>The fields hot reload carries over, as "name\tvalue" lines.</summary>
-    private static string ReloadState(Script script)
-    {
-        var text = new StringBuilder();
-        var seen = new HashSet<string>();
-        for (Type? owner = script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
-        {
-            foreach (FieldInfo field in owner.GetFields(BindingFlags.Instance | BindingFlags.Public |
-                BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
-            {
-                if (!seen.Add(field.Name) || !IsReloadField(field))
-                    continue;
-                object? value = field.GetValue(script);
-                string? encoded = FormatInspectorValue(field.FieldType, value);
-                if (encoded != null)
-                    text.Append(field.Name).Append('\t').Append(encoded).Append('\n');
-                else if (value != null && IsNestedType(field.FieldType))
-                    AppendNested(text, field.Name, value, 1);
-            }
-        }
-        return text.ToString();
     }
 
     // ECMA-335 FieldAttributes.NotSerialized is the 0x0080 metadata bit (FieldInfo.IsNotSerialized is obsolete).

@@ -9,7 +9,9 @@ Opens the precompiled editor (TallowLauncher --editor) on copies of projects wit
   3. the C# project with a syntax error: opens, the error is logged with its file and line, Play stays off;
   4. the same project after the error is fixed: plays again;
   5. Play always runs the C# on disk (--stale-build-test): a file saved elsewhere just before Play, an edit while a
-     build runs, a moved file and a deleted file.
+     build runs, a moved file and a deleted file;
+  6. hot reload through the editor (--hot-reload-test): Tests/CSharpReload plays, v2/Scripts is typed into the code
+     editor and saved during Play; the save compiles and reloads, version 2's RELOAD checks pass, the old code unloads.
 Run: python3 tools/test_csharp_editor.py [--cycles 20]
 """
 import argparse
@@ -26,11 +28,12 @@ ROOT = Path(__file__).resolve().parent.parent
 LAUNCHER = ROOT / "build/Debug_Linux64/TallowLauncher/TallowLauncher"
 
 
-def open_editor(project: Path, *switches: str, timeout: int = 600):
+def open_editor(project: Path, *switches: str, timeout: int = 600, env: dict | None = None):
     """Runs the editor on project; returns (output, seconds until PLAY CYCLE READY, total seconds)."""
     started = time.perf_counter()
     process = subprocess.Popen([str(LAUNCHER), "--editor", "--project", str(project), *switches],
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace",
+                               env={**os.environ, **(env or {})})
     lines, ready = [], None
     try:
         for line in process.stdout:
@@ -131,6 +134,22 @@ def main() -> int:
         found = [line for line in output.splitlines() if "STALE BUILD TEST" in line]
         check(f"Play runs the C# on disk: {found[-1] if found else 'no result'}",
               bool(found) and "STALE BUILD TEST PASS" in found[-1], output)
+
+        # 6. Hot reload through the editor: save during Play.
+        reload = work / "Reload"
+        shutil.copytree(ROOT / "Tests/CSharpReload", reload, ignore=shutil.ignore_patterns(".tallow-*", "v2", "bin", "obj"))
+        (reload / "project.tallow").write_text(
+            f"name = Reload\nstartScene = Scenes/Main.tscene\nengine = {ROOT.as_posix()}\n", encoding="utf-8")
+        output, _, _ = open_editor(reload, "--hot-reload-test", str(ROOT / "Tests/CSharpReload/v2/Scripts"),
+                                   env={"TALLOW_RELOAD_UNLOAD_CHECK": "1"})
+        found = [line for line in output.splitlines() if "HOT RELOAD TEST" in line]
+        passes = sum("RELOAD PASS" in line for line in output.splitlines())
+        reload_failures = [line for line in output.splitlines() if "RELOAD FAIL" in line or "[Tallow C#]" in line]
+        took = next((line for line in found if "reloaded" in line), "")
+        check(f"saving C# during Play reloads it ({took.split('TEST ')[-1] if took else 'no reload'}): "
+              f"{found[-1] if found else 'no result'}", bool(found) and "HOT RELOAD TEST PASS" in found[-1], output)
+        check(f"the reloaded game keeps its state ({passes} RELOAD checks)", passes == 25 and not reload_failures,
+              "\n".join(reload_failures) or output)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     if failed:
