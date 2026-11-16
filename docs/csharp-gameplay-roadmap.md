@@ -1220,20 +1220,37 @@ A full conversion also needs these. Ordered roughly by when they block users.
   a stale `Tallow.ManagedRuntime`, and `--check-dependencies [--fix]` does the same on the
   command line. Still open: Manager-side install of a pinned SDK, and a GA SDK (the branch
   builds with **.NET 11 RC1**).
-  - [ ] Install a pinned, released .NET 11 SDK into a Tallow-owned per-user folder shared by
+  - [x] Install a pinned, released .NET 11 SDK into a Tallow-owned per-user folder shared by
     engine versions (for example `~/.local/share/Tallow/dotnet` on Linux or
     `%LOCALAPPDATA%\\Tallow\\dotnet` on Windows). Detect a compatible cached version on
     startup; otherwise download and verify the platform/architecture-specific SDK,
     stage it atomically, and report progress and actionable errors. No administrator
     privileges or global `dotnet` installation should be required.
-  - [ ] Route every ordinary C# editor, language-service, project-build and game-export
+    Done November 16, 2026 (`Editor/src/Project/DotNetSdk.bf`): SDK 11.0.100 pinned with the SHA-512 of
+    Microsoft's archive for linux/win/osx x64 and arm64 (from the official release metadata). Each version is a
+    complete dotnet root in `<data>/Tallow/dotnet/<version>` (`~/.local/share`, `%LOCALAPPDATA%`,
+    `~/Library/Application Support`; `TALLOW_DOTNET_HOME` overrides), downloaded with curl, checked with the
+    system's sha512sum/shasum/certutil, unpacked with tar into a staging folder beside it and renamed into place;
+    a killed install's staging folder is cleared later. Launcher: an "Install .NET 11.0.100 for Tallow" button
+    beside the download/copy buttons (shown for a missing, old or preview SDK; not clicked by hand yet) and
+    `TallowLauncher --install-dotnet [--from-archive FILE]`. `tools/test_dotnet_install.py` (5 checks, local only:
+    it downloads; ~10 s here).
+  - [~] Route every ordinary C# editor, language-service, project-build and game-export
     invocation through the selected SDK executable and runtime root. Pin/roll forward
     deliberately so multiple Tallow versions can share the cache without silently
     switching a project to an incompatible SDK. Test first-run download, offline reuse,
     interrupted download, corrupt archive, update and clean Linux/Windows machines.
-  - [ ] Offer an offline engine package with the same SDK pre-staged for users who want
+    (November 16, 2026) When the pinned SDK is installed, the launcher and editor put its root first on PATH and in
+    DOTNET_ROOT as they start (`DotNetSdk.Apply`), so every `dotnet` they or the export scripts start, and the
+    editor's hosted runtime (the host reads DOTNET_ROOT first), use it; otherwise the SDK on PATH as before. Checked:
+    `--check-dependencies` reports 11.0.100 instead of the machine's RC1, and `test_csharp_sample.py` (create,
+    compile, play) passes through it. Tested: corrupt archive, interrupted install, reuse. Not yet: clean
+    Windows/macOS machines, an SDK update path (a new pin installs beside the old one).
+  - [~] Offer an offline engine package with the same SDK pre-staged for users who want
     one download and no first-run network access. Keep the default engine download
     smaller by using the shared per-user cache.
+    (November 16, 2026) The install side exists: `--install-dotnet --from-archive FILE` installs from a copy of
+    the same archive (same SHA-512 check). Packaging that archive into an offline engine download is not done.
 - [~] Python-free ordinary use: version check, verify, pin and upgrade are Beef
   (`Editor/src/Project/EngineVersions.bf`), so creating, opening and upgrading projects
   no longer need Python. Still Python: player export (`tools/build_player.py`), engine

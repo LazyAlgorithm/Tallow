@@ -22,6 +22,8 @@ static class EditorMain
 		// Developers can opt into the legacy Beef source workflow explicitly.
 		if (args.Contains("--legacy-native"))
 			Toolchain.Apply();
+		// Tallow's own .NET SDK, when installed, for every build and the hosted runtime.
+		DotNetSdk.Apply();
 		bool editor = false;
 		bool server = false;
 		String projectPath = scope .();

@@ -89,6 +89,10 @@ class LauncherApp : Application
 	bool mDependencyRunning;
 	/// True while the worker rebuilds the managed runtime instead of only checking.
 	bool mDependencyRebuild;
+	/// Installing Tallow's own .NET SDK on the dependency thread (mDependencyLog gets its progress).
+	bool mDependencyInstall;
+	bool mDependencyInstallFailed;
+	Monitor mDependencyLogLock = new .() ~ delete _;
 	String mDependencyLog = new .() ~ delete _;
 	bool mSetupPending;
 	bool mSetupFailed;
@@ -643,7 +647,7 @@ class LauncherApp : Application
 	}
 
 	/// What happened last: a note, or an error with buttons to copy it and to open the build log.
-	void StartDependencyCheck(bool rebuildRuntime)
+	void StartDependencyCheck(bool rebuildRuntime, bool installSdk = false)
 	{
 		if (mDependencyRunning)
 			return;
@@ -656,7 +660,11 @@ class LauncherApp : Application
 		mPendingDependencies = new .();
 		mDependencyRunning = true;
 		mDependencyRebuild = rebuildRuntime;
+		mDependencyInstall = installSdk;
+		mDependencyInstallFailed = false;
 		mDependencyDone = false;
+		if (installSdk)
+			mDependencyLog.Clear();
 		let root = scope String(mEngineRoot);
 		let scratch = scope String();
 		RecentProjects.GetConfigFolder(scratch);
@@ -664,6 +672,25 @@ class LauncherApp : Application
 		let scratchCopy = new String(scratch);
 		mDependencyThread = new Thread(new () =>
 			{
+				if (mDependencyInstall)
+				{
+					let error = scope String();
+					if (!DotNetSdk.Install("", scope (line) =>
+						{
+							using (mDependencyLogLock.Enter())
+								mDependencyLog.Set(line);
+						}, error))
+					{
+						using (mDependencyLogLock.Enter())
+							mDependencyLog.Set(error);
+						mDependencyInstallFailed = true;
+					}
+					// PATH and DOTNET_ROOT change on the UI thread (PollDependencyCheck), then it checks again.
+					Interlocked.Store(ref mDependencyDone, true);
+					delete rootCopy;
+					delete scratchCopy;
+					return;
+				}
 				if (mDependencyRebuild)
 				{
 					mDependencyLog.Clear();
@@ -684,6 +711,19 @@ class LauncherApp : Application
 		mDependencyThread.Join();
 		DeleteAndNullify!(mDependencyThread);
 		mDependencyRunning = false;
+		if (mDependencyInstall)
+		{
+			mDependencyInstall = false;
+			if (mDependencyInstallFailed)
+				SetMessage(scope $"Installing .NET failed: {mDependencyLog}", true);
+			else
+			{
+				DotNetSdk.Apply();
+				SetMessage(scope $".NET SDK {DotNetSdk.PinnedVersion} is installed for Tallow.", false);
+			}
+			StartDependencyCheck(false);
+			return;
+		}
 		delete mDependencies;
 		mDependencies = mPendingDependencies;
 		mPendingDependencies = null;
@@ -700,6 +740,12 @@ class LauncherApp : Application
 			ImGui.TextDisabled("Building Tallow's C# runtime...");
 			return;
 		}
+		if (mDependencyRunning && mDependencyInstall)
+		{
+			using (mDependencyLogLock.Enter())
+				ImGui.TextDisabled(mDependencyLog.IsEmpty ? "Installing .NET..." : mDependencyLog.CStr());
+			return;
+		}
 		if (mDependencies == null || mDependencies.problems.IsEmpty)
 			return;
 		for (let problem in mDependencies.problems)
@@ -709,8 +755,15 @@ class LauncherApp : Application
 			else
 				ImGui.TextColored(.(1.0f, 0.82f, 0.35f, 1), problem.message.CStr());
 		}
-		if (mDependencies.Has(.MissingSdk) || mDependencies.Has(.OldSdk) || mDependencies.Has(.MissingRuntime))
+		if (mDependencies.Has(.MissingSdk) || mDependencies.Has(.OldSdk) || mDependencies.Has(.MissingRuntime) ||
+			mDependencies.Has(.PreviewSdk))
 		{
+			// Into Tallow's own folder: no administrator rights, nothing changed for other programs.
+			if (ImGui.Button(scope $"Install .NET {DotNetSdk.PinnedVersion} for Tallow"))
+				StartDependencyCheck(false, true);
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip(scope $"Downloads Microsoft's .NET SDK (about 230 MB) into a folder of your own that every Tallow version shares. No administrator rights; other programs keep the .NET they use.");
+			ImGui.SameLine();
 			if (ImGui.Button("Download .NET"))
 				Terminal.Open(DotNetCheck.DownloadUrl);
 			ImGui.SameLine();
@@ -867,6 +920,30 @@ class Program
 #endif
 	public static int Main(String[] args)
 	{
+		// Tallow's own .NET SDK, when installed, for the checks and everything the launcher starts.
+		DotNetSdk.Apply();
+		// --install-dotnet [--from-archive FILE]: installs Tallow's pinned .NET SDK for this user (downloaded, or
+		// from an offline package's archive), then quits. Exit 0 when it is installed.
+		for (int i < args.Count)
+		{
+			if (args[i] != "--install-dotnet")
+				continue;
+#if BF_PLATFORM_WINDOWS
+			UseCommandConsole();
+#endif
+			let archive = scope String();
+			for (int j < args.Count - 1)
+				if (args[j] == "--from-archive")
+					archive.Set(args[j + 1]);
+			let error = scope String();
+			if (!DotNetSdk.Install(archive, scope (line) => Console.WriteLine(line), error))
+			{
+				Console.WriteLine(scope $"Error: {error}");
+				return 1;
+			}
+			DotNetSdk.Apply();
+			return 0;
+		}
 		// Engine-build operation: inspect resolved Beef symbols and export the
 		// opted-in C# API contract without opening the editor or a game project.
 		// Normal C# edits never invoke this command.
