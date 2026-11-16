@@ -256,6 +256,62 @@ static class CSharpComponentActions
 		return water ? (uint64)water.GameObject.Id : 0;
 	}
 
+	/// Switches a Mesh Renderer's material (a .tmat path; empty for none). In a session, on the server or the owner's
+	/// machine, every machine follows.
+	[CSharpExpose]
+	public static bool RendererSetMaterial(uint64 session, uint64 entity, StringView path)
+	{
+		let renderer = Get<MeshRenderer>(Object(session, entity));
+		if (!renderer)
+			return false;
+		renderer.SetMaterial(path);
+		return true;
+	}
+
+	/// Sets a property of a Mesh Renderer's own copy of its material (a custom shader property, or "color",
+	/// "emissive", "metallic", "roughness", "emissiveIntensity", "cutoff", "tiling", "offset"). Networked as above.
+	[CSharpExpose]
+	public static bool RendererMaterialValue(uint64 session, uint64 entity, StringView name, Vector4 value)
+	{
+		let renderer = Get<MeshRenderer>(Object(session, entity));
+		if (!renderer || name.IsEmpty)
+			return false;
+		renderer.SetMaterialValue(name, value);
+		return true;
+	}
+
+	/// A Mesh Renderer's box in the world: values gets min (xyz) and max (xyz). False without one or with nothing
+	/// to draw.
+	[CSharpExpose]
+	public static bool RendererBounds(uint64 session, uint64 entity, Span<float> values)
+	{
+		let renderer = Get<MeshRenderer>(Object(session, entity));
+		if (!renderer || values.Length < 6 || renderer.ActiveMesh == null)
+			return false;
+		let bounds = renderer.WorldBounds;
+		values[0] = bounds.min.x;
+		values[1] = bounds.min.y;
+		values[2] = bounds.min.z;
+		values[3] = bounds.max.x;
+		values[4] = bounds.max.y;
+		values[5] = bounds.max.z;
+		return true;
+	}
+
+	/// How many frames ago a Mesh Renderer was last drawn (in any view or shadow map): 0 this frame or the last,
+	/// -1 never, -2 without a renderer.
+	[CSharpExpose]
+	public static int64 RendererFramesSinceDrawn(uint64 session, uint64 entity)
+	{
+		let renderer = Get<MeshRenderer>(Object(session, entity));
+		if (!renderer)
+			return -2;
+		let drawn = renderer.LastDrawnFrame;
+		if (drawn < 0)
+			return -1;
+		return Math.Max(Time.FrameCount - 1 - drawn, 0);
+	}
+
 	/// The size the game draws at (0, 0 in a headless run).
 	[CSharpExpose]
 	public static void ScreenSize(Span<float> size)

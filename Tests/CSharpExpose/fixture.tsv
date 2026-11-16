@@ -60,6 +60,10 @@ method	Tallow.CSharpComponentActions	DialogueText	int	session:ulong	entity:ulong
 method	Tallow.CSharpComponentActions	LineGetPositions	int	session:ulong	entity:ulong	xyz:System.Span<float>
 method	Tallow.CSharpComponentActions	LineSetPositions	bool	session:ulong	entity:ulong	xyz:System.Span<float>
 method	Tallow.CSharpComponentActions	ParticlePlay	bool	session:ulong	entity:ulong
+method	Tallow.CSharpComponentActions	RendererBounds	bool	session:ulong	entity:ulong	values:System.Span<float>
+method	Tallow.CSharpComponentActions	RendererFramesSinceDrawn	long	session:ulong	entity:ulong
+method	Tallow.CSharpComponentActions	RendererMaterialValue	bool	session:ulong	entity:ulong	name:string	value:System.Numerics.Vector4
+method	Tallow.CSharpComponentActions	RendererSetMaterial	bool	session:ulong	entity:ulong	path:string
 method	Tallow.CSharpComponentActions	SceneLoaderControl	bool	session:ulong	entity:ulong	action:int
 method	Tallow.CSharpComponentActions	ScreenSize	void	size:System.Span<float>
 method	Tallow.CSharpComponentActions	SequenceControl	bool	session:ulong	entity:ulong	action:int	time:float

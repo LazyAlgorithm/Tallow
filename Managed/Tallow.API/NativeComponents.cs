@@ -187,6 +187,56 @@ public readonly record struct MeshRenderer(GameObject GameObject) : IComponent
     public bool FlatShading { get => Data.GetBool("flatShading"); set => Data.Set("flatShading", value); }
     public bool Unlit { get => Data.GetBool("unlit"); set => Data.Set("unlit", value); }
     public bool CastShadows { get => Data.GetBool("castShadows"); set => Data.Set("castShadows", value); }
+    /// <summary>Whether a mesh's back faces are hidden (off for thin, two-sided things such as leaves).</summary>
+    public bool BackFaceCulling { get => Data.GetBool("backFaceCulling"); set => Data.Set("backFaceCulling", value); }
+    /// <summary>An image drawn on the mesh when it has no material ("" for none).</summary>
+    public string Texture { get => Data.GetString("texture"); set => Data.Set("texture", value); }
+
+    /// <summary>
+    /// The material (a .tmat path, "" for none). Setting it switches this object's material; in a network session,
+    /// set on the server or the owner's machine, every machine follows.
+    /// </summary>
+    public string Material
+    {
+        get => Data.GetString("material");
+        set
+        {
+            if (!CSharpComponentActions.RendererSetMaterial(GameObject.SceneId, GameObject.Id, value ?? ""))
+                throw new InvalidOperationException($"{GameObject} has no Mesh Renderer.");
+        }
+    }
+
+    /// <summary>
+    /// Sets a property of this object's own copy of its material (made the first time, so objects sharing the
+    /// material are not changed): a custom shader property by name, or "color", "emissive", "metallic",
+    /// "roughness", "emissiveIntensity", "cutoff", "tiling" or "offset". Networked like <see cref="Material"/>.
+    /// Nothing changes while it has no material (set <see cref="Color"/> and the other fields instead).
+    /// </summary>
+    public void SetMaterialValue(string name, Vector4 value)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        if (!CSharpComponentActions.RendererMaterialValue(GameObject.SceneId, GameObject.Id, name, value))
+            throw new InvalidOperationException($"{GameObject} has no Mesh Renderer.");
+    }
+
+    /// <summary>A number of this object's own material (see <see cref="SetMaterialValue"/>).</summary>
+    public void SetMaterialFloat(string name, float value) => SetMaterialValue(name, new Vector4(value, 0, 0, 0));
+
+    /// <summary>A colour of this object's own material (see <see cref="SetMaterialValue"/>).</summary>
+    public void SetMaterialColor(string name, Color value) => SetMaterialValue(name, new Vector4(value.R, value.G, value.B, value.A));
+
+    /// <summary>The box the drawn mesh fills in the world; false when there is nothing to draw.</summary>
+    public bool TryGetWorldBounds(out Vector3 min, out Vector3 max)
+    {
+        Span<float> values = stackalloc float[6];
+        bool ok = CSharpComponentActions.RendererBounds(GameObject.SceneId, GameObject.Id, values);
+        min = ok ? new Vector3(values[0], values[1], values[2]) : default;
+        max = ok ? new Vector3(values[3], values[4], values[5]) : default;
+        return ok;
+    }
+
+    /// <summary>Whether it was drawn this frame or the last, by any camera or shadow (false in a headless run).</summary>
+    public bool IsVisible => CSharpComponentActions.RendererFramesSinceDrawn(GameObject.SceneId, GameObject.Id) == 0;
 }
 
 [NativeComponent("Tallow.SphereCollider")]

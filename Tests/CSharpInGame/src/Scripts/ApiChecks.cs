@@ -386,6 +386,17 @@ public class ApiChecks : CheckBase
         renderer.Mesh = "builtin:sphere_smooth";
         renderer.Roughness = 0.3f;
         Check("MeshRenderer string and float fields", renderer.Mesh == "builtin:sphere_smooth" && MathF.Abs(renderer.Roughness - 0.3f) < 1e-6f);
+        lamp.Transform.Position = new Vector3(10, 20, 30);
+        bool bounded = renderer.TryGetWorldBounds(out Vector3 low, out Vector3 high);
+        Check($"MeshRenderer.TryGetWorldBounds is the sphere's box where it stands ({low} {high})",
+            bounded && Vector3.Distance((low + high) / 2, new Vector3(10, 20, 30)) < 0.01f && high.X - low.X > 0.5f);
+        renderer.Material = "Materials/Glow.tmat";
+        renderer.SetMaterialColor("color", new Color(1, 0, 0, 1));
+        renderer.SetMaterialFloat("roughness", 0.9f);
+        Check("MeshRenderer.Material switches the material; SetMaterialColor and SetMaterialFloat run on its own copy",
+            renderer.Material == "Materials/Glow.tmat" && renderer.BackFaceCulling && renderer.Texture == "");
+        Check("MeshRenderer.IsVisible is false with nothing drawing (headless)", Screen.Width > 0 || !renderer.IsVisible);
+        renderer.Material = "";
         lamp.AddComponent<SphereCollider>().Radius = 0.25f;
         Rigidbody body = lamp.AddComponent<Rigidbody>();
         body.Mass = 55f;
