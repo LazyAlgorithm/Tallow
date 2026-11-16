@@ -453,13 +453,15 @@ static class EditorTheme
 	}
 
 	/// The semantic colours from a set's syntax colours: methods as known names, members and variables as
-	/// identifiers, namespaces and type parameters as types, constants between identifiers and types.
+	/// identifiers (variables a little closer to plain text), namespaces and type parameters as types, constants between
+	/// identifiers and types.
 	static void Semantic(ref Color[CodeCount] c)
 	{
 		Color Mix(Color a, Color b, float t) => .(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1);
 		c[(int)CodeColor.Method] = c[(int)CodeColor.KnownIdentifier];
 		c[(int)CodeColor.Member] = c[(int)CodeColor.Identifier];
-		c[(int)CodeColor.Variable] = c[(int)CodeColor.Identifier];
+		// Parameters and locals: the members' colour a third of the way to plain text, so the two read apart.
+		c[(int)CodeColor.Variable] = Mix(c[(int)CodeColor.Identifier], c[(int)CodeColor.Text], 0.35f);
 		c[(int)CodeColor.Namespace] = c[(int)CodeColor.Declaration];
 		c[(int)CodeColor.Constant] = Mix(c[(int)CodeColor.Identifier], c[(int)CodeColor.Declaration], 0.5f);
 		c[(int)CodeColor.TypeParameter] = c[(int)CodeColor.Declaration];
@@ -471,14 +473,14 @@ static class EditorTheme
 	public static Color[CodeCount] VisualStudioDark() => .(Rgb(212, 212, 212), Rgb(86, 156, 214), Rgb(78, 201, 176), Rgb(181, 206, 168), Rgb(206, 145, 120),
 		Rgb(212, 212, 212), Rgb(197, 134, 192), Rgb(156, 220, 254), Rgb(220, 220, 170), Rgb(106, 153, 85), Rgb(30, 30, 30), Rgb(174, 175, 173), Rgb(38, 79, 120),
 		Rgb(64, 64, 64), Rgb(62, 62, 66), Rgb(255, 215, 0), Rgb(255, 215, 0), Rgb(218, 112, 214), Rgb(23, 159, 255), Rgb(244, 71, 71), Rgb(133, 133, 133),
-		Rgb(198, 198, 198), Rgb(42, 42, 44), Rgb(54, 54, 58), Rgb(220, 220, 170), Rgb(156, 220, 254), Rgb(156, 220, 254), Rgb(78, 201, 176),
+		Rgb(198, 198, 198), Rgb(42, 42, 44), Rgb(54, 54, 58), Rgb(220, 220, 170), Rgb(156, 220, 254), Rgb(176, 217, 239), Rgb(78, 201, 176),
 		Rgb(79, 193, 255), Rgb(78, 201, 176));
 
 	/// Visual Studio's light code colours (type names and numbers a little darker, to read on the current line).
 	public static Color[CodeCount] VisualStudioLight() => .(Rgb(30, 30, 30), Rgb(0, 0, 255), Rgb(29, 108, 130), Rgb(9, 115, 75), Rgb(163, 21, 21),
 		Rgb(30, 30, 30), Rgb(175, 0, 219), Rgb(0, 16, 128), Rgb(121, 94, 38), Rgb(0, 128, 0), Rgb(255, 255, 255), Rgb(0, 0, 0), Rgb(173, 214, 255),
 		Rgb(200, 200, 200), Rgb(220, 220, 220), Rgb(180, 120, 0), Rgb(4, 49, 250), Rgb(49, 147, 49), Rgb(123, 56, 20), Rgb(205, 49, 49), Rgb(35, 120, 147),
-		Rgb(11, 33, 108), Rgb(238, 238, 238), Rgb(220, 220, 220), Rgb(121, 94, 38), Rgb(0, 16, 128), Rgb(0, 16, 128), Rgb(38, 127, 153),
+		Rgb(11, 33, 108), Rgb(238, 238, 238), Rgb(220, 220, 220), Rgb(121, 94, 38), Rgb(0, 16, 128), Rgb(10, 21, 94), Rgb(38, 127, 153),
 		Rgb(0, 112, 193), Rgb(38, 127, 153));
 
 	/// Mossy greens with a leaf-green accent.

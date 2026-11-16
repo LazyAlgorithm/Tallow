@@ -447,7 +447,7 @@ namespace
 			set(TextEditor::Color::currentLineHighlightBorder, 54, 54, 58);
 			set(TextEditor::Color::semanticMethod, 220, 220, 170);
 			set(TextEditor::Color::semanticMember, 156, 220, 254);
-			set(TextEditor::Color::semanticVariable, 156, 220, 254);
+			set(TextEditor::Color::semanticVariable, 176, 217, 239);
 			set(TextEditor::Color::semanticNamespace, 78, 201, 176);
 			set(TextEditor::Color::semanticConstant, 79, 193, 255);
 			set(TextEditor::Color::semanticTypeParameter, 78, 201, 176);

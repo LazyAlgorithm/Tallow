@@ -118,7 +118,7 @@ extension EditorApp
 			code Method 0.9 0.1 0.1
 			""";
 		Expect(EditorTheme.Parse(olderText, older, olderProblems) && olderProblems.IsEmpty && Near(older.code[(int)CodeColor.Method], .(0.9f, 0.1f, 0.1f, 1)) &&
-			Near(older.code[(int)CodeColor.Member], .(0.1f, 0.2f, 0.3f, 1)) && Near(older.code[(int)CodeColor.Variable], .(0.1f, 0.2f, 0.3f, 1)) &&
+			Near(older.code[(int)CodeColor.Member], .(0.1f, 0.2f, 0.3f, 1)) && !Near(older.code[(int)CodeColor.Variable], older.code[(int)CodeColor.Member]) &&
 			Near(older.code[(int)CodeColor.Namespace], .(0.0f, 0.5f, 0.6f, 1)) && Near(older.code[(int)CodeColor.TypeParameter], .(0.0f, 0.5f, 0.6f, 1)),
 			"a theme file without the semantic code colours takes them from its own colours (and keeps those it gives)");
 

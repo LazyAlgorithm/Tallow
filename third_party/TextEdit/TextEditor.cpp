@@ -10949,7 +10949,7 @@ const TextEditor::Palette& TextEditor::GetDarkPalette() {
 		IM_COL32(255, 255, 255,  16),	// current line highlight border
 		IM_COL32(220, 220, 170, 255),	// semantic method
 		IM_COL32(156, 220, 254, 255),	// semantic member
-		IM_COL32(156, 220, 254, 255),	// semantic variable
+		IM_COL32(176, 217, 239, 255),	// semantic variable
 		IM_COL32( 90, 179, 155, 255),	// semantic namespace
 		IM_COL32( 79, 193, 255, 255),	// semantic constant
 		IM_COL32( 90, 179, 155, 255)	// semantic type parameter
@@ -10986,7 +10986,7 @@ const TextEditor::Palette& TextEditor::GetLightPalette() {
 		IM_COL32(  0,   0,   0,  16),	// current line highlight border
 		IM_COL32(121,  94,  38, 255),	// semantic method
 		IM_COL32(  0,  16, 128, 255),	// semantic member
-		IM_COL32(  0,  16, 128, 255),	// semantic variable
+		IM_COL32( 10,  21,  94, 255),	// semantic variable
 		IM_COL32( 65,   0, 255, 255),	// semantic namespace
 		IM_COL32(  0, 112, 193, 255),	// semantic constant
 		IM_COL32( 65,   0, 255, 255)	// semantic type parameter
