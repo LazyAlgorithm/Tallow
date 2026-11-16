@@ -152,7 +152,7 @@ def main() -> int:
         took = next((line for line in found if "reloaded" in line), "")
         check(f"saving C# during Play reloads it ({took.split('TEST ')[-1] if took else 'no reload'}): "
               f"{found[-1] if found else 'no result'}", bool(found) and "HOT RELOAD TEST PASS" in found[-1], output)
-        check(f"the reloaded game keeps its state ({passes} RELOAD checks)", passes == 25 and not reload_failures,
+        check(f"the reloaded game keeps its state ({passes} RELOAD checks)", passes == 27 and not reload_failures,
               "\n".join(reload_failures) or output)
 
         # 7. Completion through the editor and the language service.

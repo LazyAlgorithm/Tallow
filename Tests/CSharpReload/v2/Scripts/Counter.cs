@@ -66,7 +66,13 @@ public class Counter : Script
     private float _score;
     private int _kind = 5;
     private Action? _callback;
+    private Action? _named;
+    private int _pings;
     private (string, object?) _pair;
+
+    // Changed in version 2: a delegate and the team chooser carried over call this code.
+    private void Ping() => _pings += 10;
+    private int PickTeam(int clientId) => 7;
     // New in version 2: starts at its initializer.
     public int Added = 11;
     private int _v2Ticks, _updates;
@@ -115,7 +121,10 @@ public class Counter : Script
             Check(_partners.Count == 1 && ReferenceEquals(_partners[0], Friend) && Friend != null, "a list of scripts points at the new instances");
             Check(_score == 42f, $"an int field that became a float keeps its number ({_score})");
             Check(_kind == 5 && _removed == null, $"a field whose type changed or was removed starts again ({_kind}, {_removed})");
-            Check(_callback == null && ReferenceEquals(_pair.Item2, loop), "a delegate of the old code is dropped; a tuple keeps its object");
+            Check(_callback == null && ReferenceEquals(_pair.Item2, loop), "a lambda of the old code is dropped; a tuple keeps its object");
+            _named?.Invoke();
+            Check(_pings == 10, $"a delegate to a named method calls it in the new code, on the new instance ({_pings})");
+            Check(Network.ChooseTeam?.Invoke(1) == 7, "the team chooser is kept and runs the new code");
         }
         if (_v2Ticks == 30)
         {
@@ -154,6 +163,8 @@ public class Counter : Script
             _score = 42;
             _kind = 6;
             _callback = () => _ticks += 0;
+            _named = Ping;
+            Network.ChooseTeam = PickTeam;
             _pair = ("p", loop);
         }
     }

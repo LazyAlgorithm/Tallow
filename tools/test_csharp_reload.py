@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED = 27
+EXPECTED = 29
 
 
 def build(project: Path, *extra: str) -> bool:

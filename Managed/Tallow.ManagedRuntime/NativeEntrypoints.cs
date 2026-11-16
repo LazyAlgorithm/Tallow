@@ -707,7 +707,9 @@ public static unsafe class NativeEntrypoints
                 saved.Add((id, script));
 
             // The new assembly's module initializer registers its systems; the old ones must be gone first (the
-            // native side removed its copies), as the chooser and the old code's awaits.
+            // native side removed its copies), as the chooser and the old code's awaits. The chooser comes back
+            // below when it is a named method.
+            Func<int, int>? chooser = Network.ChooseTeam;
             EcsSystems.Clear();
             Network.ClearTeamChooser();
             GameThread.Stop();
@@ -794,6 +796,14 @@ public static unsafe class NativeEntrypoints
                     Failure(exception);
                 }
                 old.InvalidateNative();
+            }
+            if (chooser != null)
+            {
+                if (migrator.Rebind(chooser, typeof(Func<int, int>)) is Func<int, int> rebound)
+                    Network.ChooseTeam = rebound;
+                else
+                    Log.Warning("Hot reload: Network.ChooseTeam was a lambda or its method is gone; set it again " +
+                        "(a named method is kept across reloads).");
             }
             if (migrator.Dropped.Count > 0)
                 Log.Warning($"Hot reload: {migrator.Dropped.Count} field(s) started again at their initializers " +

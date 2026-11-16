@@ -526,7 +526,7 @@ static class CSharpRuntime
 
 	/// Hot reload while playing, between frames: the running scripts move to the newly built game at projectPath
 	/// with their field values (see the managed ReloadGame); Awake and Start do not run again. ECS systems are made
-	/// again; the team chooser is cleared (set it again after a reload). Returns how many scripts were kept, or -1
+	/// again; the team chooser is kept when it is a named method (a lambda is cleared: set it again). Returns how many scripts were kept, or -1
 	/// when the new code could not load (the old keeps running, without its ECS systems).
 	public static int32 ReloadGame(StringView projectPath) =>
 		ReloadAssembly(scope $"{projectPath}/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll");

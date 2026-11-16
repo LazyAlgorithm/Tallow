@@ -64,7 +64,12 @@ public class Counter : Script
     private int _score;
     private string _kind = "x";
     private Action? _callback;
+    private Action? _named;
+    private int _pings;
     private (string, object?) _pair;
+
+    private void Ping() => _pings += 1;
+    private int PickTeam(int clientId) => clientId % 2;
 
     private static object MakeRemoved() => new OnlyInVersion1();
 
@@ -107,6 +112,8 @@ public class Counter : Script
             _score = 42;
             _kind = "y";
             _callback = () => _ticks += 0;
+            _named = Ping;
+            Network.ChooseTeam = PickTeam;
             _pair = ("p", loop);
         }
     }

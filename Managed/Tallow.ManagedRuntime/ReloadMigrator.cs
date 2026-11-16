@@ -10,9 +10,9 @@ namespace Tallow.ManagedRuntime;
 /// Hot reload: copies a running script's fields from the old game code to the new, as objects rather than text, so
 /// anything a script keeps comes across: dictionaries, sets, queues, arrays, nested classes and structs of the game's
 /// own types (matched by full name in the new assemblies, field by field), shared objects and cycles (one copy each).
-/// Script references point at the new instances. A value that cannot be carried (a delegate or task made by the old
-/// code, a type the new code removed, a field whose type changed beyond a number conversion) leaves the new field at
-/// its initializer. Nothing in the result references the old context, so it can be unloaded.
+/// Script references point at the new instances; a delegate to named methods calls the same methods in the new code.
+/// A value that cannot be carried (a lambda, a task made by the old code, a type the new code removed, a field whose
+/// type changed beyond a number conversion) leaves the new field at its initializer. Nothing in the result references the old context, so it can be unloaded.
 /// </summary>
 internal sealed class ReloadMigrator(AssemblyLoadContext oldContext, AssemblyLoadContext newContext,
     IReadOnlyDictionary<Script, Script> scripts)
@@ -122,8 +122,12 @@ internal sealed class ReloadMigrator(AssemblyLoadContext oldContext, AssemblyLoa
         }
         if (!(Nullable.GetUnderlyingType(declared) ?? declared).IsAssignableFrom(mapped))
             return Skip;
+        // A delegate to named methods points at the same methods in the new code (on the new instances); a lambda's
+        // compiler-made name can move to another lambda between versions, so it starts again like running work.
+        if (value is Delegate callback)
+            return Rebind(callback, mapped, depth) ?? Restart;
         // Running work of the old code: the new field starts at its initializer (scripts start their timers again).
-        if (value is Delegate || value is Task || value is MemberInfo || value is Assembly || value is Thread ||
+        if (value is Task || value is MemberInfo || value is Assembly || value is Thread ||
             value is Timer || value is System.Timers.Timer || value is CancellationTokenSource || value is IAsyncResult)
             return Restart;
 
@@ -312,6 +316,51 @@ internal sealed class ReloadMigrator(AssemblyLoadContext oldContext, AssemblyLoa
     }
 
     /// <summary>The same type in the new code (by assembly and full name), or null when the new code removed it.</summary>
+    /// <summary>The same delegate in the new code, typed <paramref name="type"/>: each method it calls found by name
+    /// and parameter types in the new version of its class, on the new instance of its target; null when one is a
+    /// lambda or local function, was removed, or its target was not carried over.</summary>
+    public Delegate? Rebind(Delegate value, Type type, int depth = 0)
+    {
+        if (!typeof(Delegate).IsAssignableFrom(type) || depth > MaxDepth)
+            return null;
+        var parts = new List<Delegate>();
+        foreach (Delegate part in value.GetInvocationList())
+        {
+            MethodInfo method = part.Method;
+            if (method.Name.Contains('<') || method.IsGenericMethod || method.DeclaringType is not { } declaring ||
+                declaring.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+                return null;
+            object? target = null;
+            if (part.Target is { } old)
+            {
+                target = old is Script script ? (scripts.TryGetValue(script, out Script? moved) ? moved : null)
+                    : Convert(old, typeof(object), depth + 1);
+                if (target == null || ReferenceEquals(target, Skip) || ReferenceEquals(target, Restart))
+                    return null;
+            }
+            Type? owner = target?.GetType() ?? MapType(declaring);
+            Type?[] parameters = method.GetParameters().Select(parameter => MapType(parameter.ParameterType)).ToArray();
+            if (owner == null || parameters.Any(parameter => parameter == null))
+                return null;
+            BindingFlags flags = (method.IsStatic ? BindingFlags.Static : BindingFlags.Instance) |
+                BindingFlags.Public | BindingFlags.NonPublic;
+            MethodInfo? next = null;
+            for (Type? search = owner; search != null && next == null; search = search.BaseType)
+                next = search.GetMethod(method.Name, flags | BindingFlags.DeclaredOnly, null, parameters!, null);
+            if (next == null)
+                return null;
+            try
+            {
+                parts.Add(target == null ? Delegate.CreateDelegate(type, next) : Delegate.CreateDelegate(type, target, next));
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+        }
+        return Delegate.Combine([.. parts]);
+    }
+
     private Type? MapType(Type type)
     {
         if (_types.TryGetValue(type, out Type? known))

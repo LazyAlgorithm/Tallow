@@ -540,6 +540,11 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     step 6 of `tools/test_csharp_editor.py`. Reload test now 27 checks. Still open: pending awaits are dropped,
     networked sessions reload only this machine (it now warns so in the Console when other players are
     connected, November 16, 2026).
+  - [x] (November 16, 2026) Delegates to named methods carry over: each method is found by name and parameter
+    types in the new code, bound to the new instance (`ReloadMigrator.Rebind`), so events and callbacks kept in
+    fields call the new code; `Network.ChooseTeam` is kept the same way. Lambdas and local functions still start
+    again (their compiler-made names can move to another lambda between versions; a chooser lambda warns to set
+    it again). Reload test 29 checks (editor path 27).
 - [~] Package precompiled per-platform player/engine plus C# assemblies, runtimeconfig, .NET runtime/dependencies, shaders and assets into independently redistributable Windows/Linux exports. Verify on machines without BeefBuild.
   Linux done: `Player/` is the engine without the editor (its own Beef workspace, since one
   workspace shares generic code with the editor), exporting its generated API symbols.
