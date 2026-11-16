@@ -263,7 +263,7 @@ changing the original six-field wire format.
     an engine API symbol in the engine's own C# source are listed and open read-only; a game symbol skips the engine
     source (it cannot use it). Rename already used the same answer. 2 Roslyn tests; editor `--references-test`
     (step 8 of test_csharp_editor.py).
-- [ ] Expand automated tests using actual Tallow.API/gameplay source, multi-assembly projects, inherited/static/extension completions and malformed mid-typing C#.
+- [x] Expand automated tests using actual Tallow.API/gameplay source, multi-assembly projects, inherited/static/extension completions and malformed mid-typing C#.
   - [x] (November 16, 2026) Multi-assembly projects: the language service now compiles each assembly as the build
     does (`GameAssemblies.cs`): Tallow.API on its own, each `.tasmdef` seeing Tallow.API and the assemblies it
     lists, Tallow.Game seeing all of them, the Roslyn completion workspace with the same projects. Errors the editor
@@ -275,6 +275,11 @@ changing the original six-field wire format.
     benchmark is the same or faster (body edit 68 ms p50, was 77). 11 tests on a real project folder (an
     unreferenced assembly, adding the reference, internals, unsafe, completion and references across assemblies,
     generated code, removing the definitions).
+  - [x] (November 16, 2026) Static members on a type name only, instance members on an instance only, members
+    inherited from `Script` on `this.`, protected members on `base.`; half-typed code (open parentheses, generics,
+    lambdas, initializers, strings and comments left open, a class without a name, an empty file): completion,
+    diagnostics and signature help all answer; nothing is offered inside comments or strings; a member is still
+    offered while another line has a syntax error. 8 tests (126 in all).
 
 ## Binding generation decision — explicitly curated API
 

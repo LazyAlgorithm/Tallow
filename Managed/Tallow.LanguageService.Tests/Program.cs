@@ -721,6 +721,57 @@ public sealed class CubeMover : Script
             Request(service, "completion", inNameof, inNameof.Length);
             Check("no () inside nameof", NoParens("Fire"));
 
+            // Static, instance and inherited members with Roslyn's completion.
+            string statics = "class Counter { public static int Total; public int Mine; public static void Reset() {} } " +
+                "class Demo { void Go() { Counter.";
+            Request(service, "completion", statics, statics.Length);
+            Check("a type name offers its static members only",
+                Item("Total").Length + Item("Reset").Length > 0 && !NoParens("Mine") && Item("Mine").Length == 0);
+            string instance = "class Counter { public static int Total; public int Mine; } class Demo { void Go(Counter c) { c.";
+            Request(service, "completion", instance, instance.Length);
+            Check("an instance offers its instance members only",
+                (Item("Mine").Length > 0 || NoParens("Mine")) && Item("Total").Length == 0 && !NoParens("Total"));
+            string fromScript = "using Tallow; class Enemy : Script { void Go() { this.GetCompo";
+            RequestWithApi(service, "completion", fromScript, fromScript.Length);
+            Check("members inherited from Script are offered on this", Item("GetComponent<>").Length > 0);
+            string baseOnly = "class Animal { protected virtual void Speak() {} } class Dog : Animal { protected override void Speak() { base.Sp";
+            Request(service, "completion", baseOnly, baseOnly.Length);
+            Check("base. offers the base class's protected members", _raw.Contains("completion\tSpeak"));
+
+            // Half-typed code: the service still answers (no exception), with what makes sense at the caret.
+            string[] broken =
+            [
+                "class Demo { void Go() { if (",
+                "class Demo { void Go() { var x = new List<",
+                "class Demo { void Go() { foreach (var item in ",
+                "class Demo { int Field = ; void Go() { Fie",
+                "class Demo { void Go() { \"unterminated string ",
+                "class Demo { void Go() { /* open comment ",
+                "class Demo { void Go() { x => x.",
+                "class Demo { void Go() { int[] a = { 1, 2, ",
+                "namespace A { class B { void C() { D(",
+                "class { void Go() { this.",
+                "",
+            ];
+            int answered = 0;
+            foreach (string code in broken)
+            {
+                string result = Request(service, "completion", code, code.Length);
+                Request(service, "diagnostics", code, code.Length);
+                Request(service, "signature", code, code.Length);
+                if (!result.Contains("error\t"))
+                    answered++;
+            }
+            Check($"half-typed code: completion, diagnostics and signature answer every case ({answered}/{broken.Length})",
+                answered == broken.Length);
+            string inComment = "class Demo { void Go() { /* Tra";
+            Check("no completion items inside a comment", !Request(service, "completion", inComment, inComment.Length).Contains("completion\t"));
+            string inString = "class Demo { void Go() { var s = \"Tra";
+            Check("no completion items inside a string", !Request(service, "completion", inString, inString.Length).Contains("completion\t"));
+            string fieldSoFar = "class Demo { int Field = ; void Go() { Fie";
+            Request(service, "completion", fieldSoFar, fieldSoFar.Length);
+            Check("a member is still offered while another line has a syntax error", _raw.Contains("completion\tField"));
+
             string nonSerialized = "class Demo { [NonS";
             Check("[NonSerialized] is offered although .NET hides it",
                 Request(service, "completion", nonSerialized, nonSerialized.Length).Contains("completion\tNonSerialized"));
