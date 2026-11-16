@@ -464,7 +464,8 @@ class CSharpBehaviour : Component
 			if (!io.Key(name))
 				continue;
 			io.Value(ref value);
-			if (io.Reading && value != null)
+			// A line break in a value (a changed save file) would make lines for fields that are not [Saved].
+			if (io.Reading && value != null && !value.Contains('\n') && !value.Contains('\r'))
 				loaded.AppendF("{}\t{}\n", name, value);
 		}
 		if (io.Reading && !loaded.IsEmpty)

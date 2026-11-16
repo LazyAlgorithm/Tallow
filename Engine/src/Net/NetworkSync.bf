@@ -1370,10 +1370,12 @@ static class NetworkSync
 		if (slot.managed != null)
 		{
 			// Through the managed loader, which parses and validates the text before changing the script.
-			if (slot.managed.IsLoaded)
+			// One value: a line break in it would make more "name\tvalue" lines, setting fields that are not [Sync].
+			let value = StringView((char8*)&data[0], length);
+			if (slot.managed.IsLoaded && !value.Contains('\n') && !value.Contains('\r'))
 			{
 				let line = scope String();
-				line.AppendF("{}\t{}\n", slot.managedName, StringView((char8*)&data[0], length));
+				line.AppendF("{}\t{}\n", slot.managedName, value);
 				CSharpRuntime.ApplyFields(slot.managed.ManagedInstance, line);
 			}
 			return;

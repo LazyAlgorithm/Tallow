@@ -422,7 +422,9 @@ public static unsafe class NativeEntrypoints
         {
             if (name.Name == typeof(Script).Assembly.GetName().Name)
                 return typeof(Script).Assembly;
-            if (name.Name is null)
+            // A reference names an assembly, never a path: nothing outside the game's own folders is loaded.
+            if (name.Name is null || name.Name.Length == 0 || name.Name.Contains('/') || name.Name.Contains('\\') ||
+                name.Name.Contains("..") || Path.IsPathRooted(name.Name) || name.Name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
                 return null;
             string candidate = Path.Combine(root, name.Name, name.Name + ".dll");
             if (File.Exists(candidate))

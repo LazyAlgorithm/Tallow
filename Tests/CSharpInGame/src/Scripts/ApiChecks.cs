@@ -94,6 +94,9 @@ public class ApiChecks : CheckBase
     public override void Awake()
     {
         Check("fields are restored before Awake", Speed == 3f && Label == "from scene");
+        // A game script cannot put itself between other scripts and the engine.
+        Check("Engine.Bind is not open to game code",
+            typeof(Engine).GetMethod("Bind", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static) == null);
         Check($"list, array, Color and double fields come from the scene ({string.Join(",", Numbers)}; {Points.Length}; {Tint}; {Precise}; {string.Join("|", Words)}; {string.Join(",", Kinds)})",
             Numbers.SequenceEqual([1, 2, 3]) && Points.Length == 2 && Points[1] == new System.Numerics.Vector3(4, 5, 6) &&
             Tint == new Color(0.5f, 0.25f, 1, 1) && Precise == 0.1 && Words.Length == 2 && Words[0] == "a;b" &&

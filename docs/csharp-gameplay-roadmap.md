@@ -414,6 +414,17 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   hostfxr folders with pre-release names were skipped. Not done: Windows (needs the Windows
   .NET runtime to bundle and a Windows run), macOS/web, trimming the bundled runtime.
 - [ ] Confirm no unsafe untrusted mod loading, directory escape, premature engine pointer exposure or unmanaged ownership errors.
+  - [x] (November 15, 2026) Review. Fine as it was: only `Tallow.Game.dll` is loaded by name, from the editor's
+    build folder or a built game's Managed folder (no mod loader); the native resolver and function pointers are
+    internal (Tallow.API grants internals to Tallow.ManagedRuntime only); every native call that fills a C# buffer
+    clamps to the span's length and returns the full length; ECS byte copies require the schema's exact size and
+    pages are capped; save slot names become file names with separators and leading dots escaped; Tallow.Build
+    checks .tasmdef names, package ids/versions and that sources stay inside their folder. Fixed: `Engine.Bind`
+    was public (a script could replace the engine bridge for every other script; now internal, in-game check);
+    assembly references are only resolved for plain names (never a path); a [Sync] value received from the server
+    or a [Saved] value read from a save that holds a line break is refused (it would have become extra
+    "name\tvalue" lines setting fields that are not [Sync]/[Saved]). Game C# itself is trusted, full-trust .NET:
+    a script can use System.IO; nothing here is a sandbox.
 - [ ] Extend CI beyond managed/.NET host smoke tests to native Beef editor/launcher builds, precompiled player startup and real C# in-scene integration tests on Linux and Windows.
 
 ## Migration benchmark backlog — run locally on Nobara

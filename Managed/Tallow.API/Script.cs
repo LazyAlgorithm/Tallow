@@ -1072,8 +1072,9 @@ public static class Engine
 
     public static IEngineBridge Bridge { get; private set; } = new UnboundBridge();
 
-    /// <summary>For the trusted native host and integration tests only.</summary>
-    public static void Bind(IEngineBridge bridge) =>
+    /// <summary>For the trusted native host and integration tests only: internal, so a game script cannot put
+    /// itself between every other script and the engine.</summary>
+    internal static void Bind(IEngineBridge bridge) =>
         Bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
 }
 
