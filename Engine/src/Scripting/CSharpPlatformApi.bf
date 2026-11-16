@@ -205,4 +205,90 @@ static class CSharpPlatform
 		let scene = CSharpRuntime.PhysicsScene(session);
 		return scene != null ? Wind.Gusts(scene) : 0;
 	}
+
+	// ---- save games ([Saved] fields and the objects SaveSystem keeps)
+
+	/// Starts saving (load false) or loading a slot; the handle's id.
+	[CSharpExpose]
+	public static int32 SaveStart(StringView slot, bool load) =>
+		(load ? SaveSystem.Load(slot.IsEmpty ? "default" : slot) : SaveSystem.Save(slot.IsEmpty ? "default" : slot)).id;
+
+	/// How a save or load is doing: bit 1 done, 2 succeeded, 4 found (loading: the slot held a save).
+	[CSharpExpose]
+	public static int32 SaveProgress(int32 id)
+	{
+		let handle = SaveHandle(id);
+		return (handle.Done ? 1 : 0) | (handle.Succeeded ? 2 : 0) | (handle.Found ? 4 : 0);
+	}
+
+	[CSharpExpose]
+	public static int32 SaveError(int32 id, Span<uint8> buffer) => Copy(SaveHandle(id).Error(.. scope .()), buffer);
+
+	[CSharpExpose]
+	public static bool SaveExists(StringView slot) => SaveSystem.Exists(slot.IsEmpty ? "default" : slot);
+
+	[CSharpExpose]
+	public static void SaveDelete(StringView slot) => SaveSystem.Delete(slot.IsEmpty ? "default" : slot);
+
+	/// The save slots, one a line.
+	[CSharpExpose]
+	public static int32 SaveSlots(Span<uint8> buffer)
+	{
+		let slots = scope List<String>();
+		SaveSystem.ListSlots(slots);
+		let text = scope String();
+		for (let slot in slots)
+			text.Append(slot, "\n");
+		ClearAndDeleteItems(slots);
+		return Copy(text, buffer);
+	}
+
+	// ---- voice chat
+
+	/// 1 a microphone exists, 2 it is open, 4 this machine is sending its voice now.
+	[CSharpExpose]
+	public static int32 VoiceState() =>
+		(VoiceChat.HasMicrophone ? 1 : 0) | (VoiceChat.MicrophoneOpen ? 2 : 0) | (VoiceChat.IsTransmitting ? 4 : 0);
+
+	[CSharpExpose]
+	public static float VoiceMicrophoneLevel() => VoiceChat.MicrophoneLevel;
+
+	/// Talks from code (an open-mic toggle, say) as if the push-to-talk key were held.
+	[CSharpExpose]
+	public static void VoiceSetTalk(bool on) => VoiceChat.Talk = on;
+
+	[CSharpExpose]
+	public static bool VoiceTalk() => VoiceChat.Talk;
+
+	[CSharpExpose]
+	public static bool VoiceSpeaking(int32 clientId) => VoiceChat.IsSpeaking(clientId);
+
+	[CSharpExpose]
+	public static void VoiceMute(int32 clientId, bool muted) => VoiceChat.Mute(clientId, muted);
+
+	[CSharpExpose]
+	public static bool VoiceMuted(int32 clientId) => VoiceChat.IsMuted(clientId);
+
+	[CSharpExpose]
+	public static void VoiceSetVolume(int32 clientId, float volume) => VoiceChat.SetPlayerVolume(clientId, volume);
+
+	[CSharpExpose]
+	public static float VoiceVolume(int32 clientId) => VoiceChat.GetPlayerVolume(clientId);
+
+	// ---- the game's asset files (in the project, or packed in a built game)
+
+	[CSharpExpose]
+	public static bool AssetExists(StringView path) => !path.IsEmpty && Assets.FileExists(path);
+
+	/// The file's bytes into buffer; its length (more than the buffer: call again with room), or -1 when missing.
+	[CSharpExpose]
+	public static int32 AssetRead(StringView path, Span<uint8> buffer)
+	{
+		let data = scope List<uint8>();
+		if (path.IsEmpty || !Assets.ReadBytes(path, data))
+			return -1;
+		for (int i < Math.Min(data.Count, buffer.Length))
+			buffer[i] = data[i];
+		return (int32)data.Count;
+	}
 }

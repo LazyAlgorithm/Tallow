@@ -162,6 +162,8 @@ method	Tallow.CSharpPlatform	AchievementClear	void	id:string
 method	Tallow.CSharpPlatform	AchievementProgress	void	id:string	current:int	max:int
 method	Tallow.CSharpPlatform	AchievementUnlock	bool	id:string
 method	Tallow.CSharpPlatform	AchievementUnlocked	bool	id:string
+method	Tallow.CSharpPlatform	AssetExists	bool	path:string
+method	Tallow.CSharpPlatform	AssetRead	int	path:string	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	DecalSpawn	bool	session:ulong	position:System.Numerics.Vector3	normal:System.Numerics.Vector3	texture:string	size:float	lifetime:float	color:System.Numerics.Vector4	spin:float
 method	Tallow.CSharpPlatform	DecalsClear	void	session:ulong
 method	Tallow.CSharpPlatform	DialogueCondition	bool	condition:string
@@ -176,6 +178,12 @@ method	Tallow.CSharpPlatform	GamepadRumble	void	low:float	high:float	seconds:flo
 method	Tallow.CSharpPlatform	QualityCurrent	int
 method	Tallow.CSharpPlatform	QualityRecommended	int
 method	Tallow.CSharpPlatform	QualitySet	bool	level:int	save:bool
+method	Tallow.CSharpPlatform	SaveDelete	void	slot:string
+method	Tallow.CSharpPlatform	SaveError	int	id:int	buffer:System.Span<byte>
+method	Tallow.CSharpPlatform	SaveExists	bool	slot:string
+method	Tallow.CSharpPlatform	SaveProgress	int	id:int
+method	Tallow.CSharpPlatform	SaveSlots	int	buffer:System.Span<byte>
+method	Tallow.CSharpPlatform	SaveStart	int	slot:string	load:bool
 method	Tallow.CSharpPlatform	SetDialogueVariable	void	name:string	value:float
 method	Tallow.CSharpPlatform	SetWindowFullscreen	void	on:bool
 method	Tallow.CSharpPlatform	StatAdd	int	name:string	amount:int	localOnly:bool
@@ -188,6 +196,15 @@ method	Tallow.CSharpPlatform	SubtitleShowing	bool	id:int
 method	Tallow.CSharpPlatform	SubtitlesClear	void
 method	Tallow.CSharpPlatform	TouchCount	int
 method	Tallow.CSharpPlatform	TouchFinger	bool	index:int	values:System.Span<float>
+method	Tallow.CSharpPlatform	VoiceMicrophoneLevel	float
+method	Tallow.CSharpPlatform	VoiceMute	void	clientId:int	muted:bool
+method	Tallow.CSharpPlatform	VoiceMuted	bool	clientId:int
+method	Tallow.CSharpPlatform	VoiceSetTalk	void	on:bool
+method	Tallow.CSharpPlatform	VoiceSetVolume	void	clientId:int	volume:float
+method	Tallow.CSharpPlatform	VoiceSpeaking	bool	clientId:int
+method	Tallow.CSharpPlatform	VoiceState	int
+method	Tallow.CSharpPlatform	VoiceTalk	bool
+method	Tallow.CSharpPlatform	VoiceVolume	float	clientId:int
 method	Tallow.CSharpPlatform	WindAt	System.Numerics.Vector3	session:ulong	position:System.Numerics.Vector3
 method	Tallow.CSharpPlatform	WindGusts	float	session:ulong
 method	Tallow.CSharpPlatform	WindowFullscreen	bool

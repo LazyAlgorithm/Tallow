@@ -196,3 +196,87 @@ public static class Wind
     /// <summary>How gusty it is now, 0 to 1.</summary>
     public static float Gusts(Scene scene) => CSharpPlatform.WindGusts(scene.SessionId);
 }
+
+/// <summary>A save or load on its way (it may finish later, for a save kept on a server).</summary>
+public readonly record struct SaveHandle(int Id)
+{
+    private int Progress => CSharpPlatform.SaveProgress(Id);
+    /// <summary>Whether it has finished, well or not.</summary>
+    public bool Done => (Progress & 1) != 0;
+    /// <summary>Whether it finished and worked.</summary>
+    public bool Succeeded => (Progress & 2) != 0;
+    /// <summary>Loading: whether the slot held a save.</summary>
+    public bool Found => (Progress & 4) != 0;
+    /// <summary>Why it did not work (empty if it did).</summary>
+    public string Error
+    {
+        get
+        {
+            int id = Id;
+            return ActionText.Read(buffer => CSharpPlatform.SaveError(id, buffer)) ?? "";
+        }
+    }
+}
+
+/// <summary>
+/// Save games. Saving keeps every <see cref="SavedAttribute">[Saved]</see> field and the objects the scene's save
+/// settings name; loading puts them back (then <see cref="Script.OnLoaded"/> runs). Slots are names ("default",
+/// "slot2", "autosave").
+/// </summary>
+public static class SaveSystem
+{
+    public static SaveHandle Save(string slot = "default") => new(CSharpPlatform.SaveStart(slot ?? "", false));
+    public static SaveHandle Load(string slot = "default") => new(CSharpPlatform.SaveStart(slot ?? "", true));
+    public static bool Exists(string slot = "default") => CSharpPlatform.SaveExists(slot ?? "");
+    public static void Delete(string slot = "default") => CSharpPlatform.SaveDelete(slot ?? "");
+    /// <summary>The slots that hold a save.</summary>
+    public static string[] Slots =>
+        (ActionText.Read(CSharpPlatform.SaveSlots) ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+}
+
+/// <summary>Voice chat in a network session (push-to-talk or open mic, set up on the scene's Voice Chat settings).</summary>
+public static class VoiceChat
+{
+    public static bool HasMicrophone => (CSharpPlatform.VoiceState() & 1) != 0;
+    public static bool MicrophoneOpen => (CSharpPlatform.VoiceState() & 2) != 0;
+    /// <summary>Whether this machine is sending its voice now.</summary>
+    public static bool IsTransmitting => (CSharpPlatform.VoiceState() & 4) != 0;
+    /// <summary>How loud the microphone is, 0 to 1 (for a level meter).</summary>
+    public static float MicrophoneLevel => CSharpPlatform.VoiceMicrophoneLevel();
+    /// <summary>Talks as if the push-to-talk key were held (an open-mic toggle, a talk button on a touch screen).</summary>
+    public static bool Talk
+    {
+        get => CSharpPlatform.VoiceTalk();
+        set => CSharpPlatform.VoiceSetTalk(value);
+    }
+    public static bool IsSpeaking(int clientId) => CSharpPlatform.VoiceSpeaking(clientId);
+    public static void Mute(int clientId, bool muted = true) => CSharpPlatform.VoiceMute(clientId, muted);
+    public static bool IsMuted(int clientId) => CSharpPlatform.VoiceMuted(clientId);
+    /// <summary>How loud one player is heard here, 0 to 2 (1 as they are).</summary>
+    public static void SetPlayerVolume(int clientId, float volume) => CSharpPlatform.VoiceSetVolume(clientId, volume);
+    public static float GetPlayerVolume(int clientId) => CSharpPlatform.VoiceVolume(clientId);
+}
+
+/// <summary>
+/// The game's own files by asset path ("Data/levels.json"): in the project while making it, packed inside a built
+/// game. Read-only; use <see cref="SaveSystem"/> or a <c>[Saved]</c> field for what the player changes.
+/// </summary>
+public static class Assets
+{
+    public static bool Exists(string path) => CSharpPlatform.AssetExists(path ?? "");
+
+    /// <summary>The file's bytes, or null when there is no such file.</summary>
+    public static byte[]? ReadBytes(string path)
+    {
+        int length = CSharpPlatform.AssetRead(path ?? "", Span<byte>.Empty);
+        if (length < 0)
+            return null;
+        var data = new byte[length];
+        length = CSharpPlatform.AssetRead(path!, data);
+        return length < 0 ? null : data[..Math.Min(length, data.Length)];
+    }
+
+    /// <summary>The file as UTF-8 text, or null when there is no such file.</summary>
+    public static string? ReadText(string path) =>
+        ReadBytes(path) is { } data ? System.Text.Encoding.UTF8.GetString(data) : null;
+}

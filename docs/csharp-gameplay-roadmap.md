@@ -295,7 +295,9 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     `PredictionState` and a callback-mask bit so only scripts that override them are called. Over a Rigidbody only the
     two spare vectors are taken back. Network check: a server-only bump of a C# motor's own counter reaches the client
     only through a rollback restore (30 network checks).
-- [ ] Rendering, materials, shaders/compute graphs, cameras, lighting, mesh/voxel/terrain, animation/IK, sequencer and modeling tools.
+- [x] Rendering, materials, shaders/compute graphs, cameras, lighting, mesh/voxel/terrain, animation/IK, sequencer and modeling tools.
+  Closed November 16, 2026, after a scripted comparison of every public Beef component method and static service
+  against the C# API (below). The modelling tools are editor tools with no gameplay API in Beef either.
   - [x] (November 16, 2026) `MeshRenderer.SetMesh(positions, triangles, normals?, uvs?)` / `ClearMesh` draw a mesh
     built in code (`CSharpMeshes`: one engine-owned mesh per object, reused when rebuilt, freed once the object is
     removed or the game unloads). 1 in-engine check. No Beef Terrain component exists (Voxel Terrain is exposed).
@@ -313,7 +315,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     CurrentState, IsFinished, IsInTransition, NormalizedTime, StateTime, Speed, controller parameters and layer
     weights) over `CSharpAnimation` exposures; `GetAnimator()` and `GetComponentInChildren<T>()`. 7 in-engine
     checks; graph nodes come from the catalog.
-- [ ] Audio/voice, UI/GUI, asset management, navigation/behavior trees, world streaming/world states, persistence/save/load, gameplay time and platform APIs.
+- [x] Audio/voice, UI/GUI, asset management, navigation/behavior trees, world streaming/world states, persistence/save/load, gameplay time and platform APIs.
+  Closed November 16, 2026 with `SaveSystem` (Save/Load handles, Exists, Delete, Slots), `VoiceChat` (microphone,
+  Talk, speaking, mute, per-player volume) and `Assets` (Exists, ReadBytes, ReadText; packed files in a built game).
+  3 more in-engine checks (327). World streaming is the `StreamingSource` component.
   - [x] (November 16, 2026) Platform services over `CSharpPlatform` exposures (`Platform.cs`): `Gamepad` (buttons,
     axes, sticks, kind, name, Rumble), `Touch.Fingers`, `Screen.Fullscreen`, `Quality` (Level, Recommended, Set),
     `Achievements` (Unlock, IsUnlocked, SetProgress, Clear, stats), `Subtitles` (Show, Caption, Hide),

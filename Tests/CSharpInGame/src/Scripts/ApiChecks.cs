@@ -1,3 +1,4 @@
+using System.Linq;
 using Tallow;
 
 namespace InGame;
@@ -371,6 +372,22 @@ public class ApiChecks : CheckBase
         bool low = Quality.Level == QualityLevel.Low;
         Quality.Set(level == QualityLevel.Custom ? QualityLevel.High : level, save: false);
         Check($"Quality.Set applies a preset (was {level}, recommended {Quality.Recommended})", low);
+        string? sceneText = Assets.ReadText("Scenes/Main.tscene");
+        Check($"Assets.Exists/ReadText read the game's own files ({sceneText?.Length ?? -1} chars); missing ones are null",
+            Assets.Exists("Scenes/Main.tscene") && sceneText is { Length: > 0 } && !Assets.Exists("No/Such.file") &&
+            Assets.ReadBytes("No/Such.file") == null);
+        SaveHandle saved = SaveSystem.Save("csharpProbe");
+        bool savedOk = saved.Done && saved.Succeeded && saved.Error == "" && SaveSystem.Exists("csharpProbe") &&
+            SaveSystem.Slots.Contains("csharpProbe");
+        SaveHandle loaded = SaveSystem.Load("csharpProbe");
+        bool loadedOk = loaded.Done && loaded.Succeeded && loaded.Found;
+        SaveSystem.Delete("csharpProbe");
+        SaveHandle missing = SaveSystem.Load("csharpProbe");
+        Check($"SaveSystem Save, Exists, Slots, Load, Delete ({saved.Error}{loaded.Error})",
+            savedOk && loadedOk && !SaveSystem.Exists("csharpProbe") && missing.Done && !missing.Found);
+        Check("VoiceChat offline: not sending; Talk is settable; nobody is speaking",
+            !VoiceChat.IsTransmitting && !VoiceChat.IsSpeaking(1) && !VoiceChat.IsMuted(1) && VoiceChat.GetPlayerVolume(1) == 1 &&
+            ((VoiceChat.Talk = true) && VoiceChat.Talk) && !(VoiceChat.Talk = false));
         bool full = Screen.Fullscreen;
         Screen.Fullscreen = full;
         Check("Screen.Fullscreen reads and keeps its value", Screen.Fullscreen == full);
