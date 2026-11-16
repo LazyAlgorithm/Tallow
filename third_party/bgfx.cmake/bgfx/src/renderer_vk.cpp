@@ -3265,7 +3265,8 @@ VK_IMPORT_DEVICE
 
 				for (uint16_t ii = 0; ii < m_numWindows; ++ii)
 				{
-					getFrameBuffer(m_windows[ii]).m_swapChain.m_vsync = vsync;
+					SwapChainVK& swapChain = getFrameBuffer(m_windows[ii]).m_swapChain;
+					swapChain.m_vsync = vsync && !(swapChain.m_desc.flags & BGFX_SWAP_CHAIN_NO_VSYNC);
 				}
 
 				maskFlags &= ~BGFX_RESET_VSYNC;
@@ -8169,7 +8170,7 @@ VK_DESTROY
 
 		m_nwh   = _nwh;
 		m_desc  = _desc;
-		m_vsync = !!(s_renderVK->m_reset & BGFX_RESET_VSYNC);
+		m_vsync = !!(s_renderVK->m_reset & BGFX_RESET_VSYNC) && !(_desc.flags & BGFX_SWAP_CHAIN_NO_VSYNC);
 
 		m_queue = s_renderVK->m_globalQueue;
 
@@ -8297,7 +8298,7 @@ VK_DESTROY
 		const uint64_t recreateSwapchainMask   = BGFX_SWAP_CHAIN_SRGB_BACKBUFFER;
 		const uint64_t recreateAttachmentsMask = BGFX_SWAP_CHAIN_MSAA_MASK;
 
-		const bool vsync = !!(s_renderVK->m_reset & BGFX_RESET_VSYNC);
+		const bool vsync = !!(s_renderVK->m_reset & BGFX_RESET_VSYNC) && !(_desc.flags & BGFX_SWAP_CHAIN_NO_VSYNC);
 		const bool vsyncChanged = false
 			|| (m_vsync != vsync && !s_renderVK->m_swapchainMaintenance1Supported)
 			;

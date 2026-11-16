@@ -63,6 +63,9 @@ extension EditorApp
 
 	void HandleShortcuts()
 	{
+		// F11: the window with focus (the editor, or one dragged out of it) full screen on its monitor, or back.
+		if (ImGui.IsKeyPressed(ImGui.Key.F11, false))
+			ImGui.tn_imgui_toggle_fullscreen();
 		// While the code editor has focus, keys belong to it; only saving is handled here.
 		if (mScriptsFocused)
 		{

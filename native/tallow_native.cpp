@@ -382,6 +382,8 @@ namespace
 	{
 		bgfx::FrameBufferHandle frameBuffer = BGFX_INVALID_HANDLE;
 		uint16_t view = 0;
+		// The pixel size its frame buffer was made for: moving the window (every frame of a drag) keeps it.
+		int width = 0, height = 0;
 	};
 	void ViewportCreate(ImGuiViewport* viewport);
 	void ViewportDestroy(ImGuiViewport* viewport);
@@ -411,6 +413,17 @@ TN_API void tn_imgui_viewport_status(int* windows, int* drawn)
 		if (data != nullptr && bgfx::isValid(data->frameBuffer))
 			(*drawn)++;
 	}
+}
+
+// The OS window under keyboard focus (the main one or one dragged out of it) goes full screen on its monitor, or
+// back. Returns whether it is full screen now.
+TN_API bool tn_imgui_toggle_fullscreen()
+{
+	SDL_Window* window = SDL_GetKeyboardFocus();
+	if (window == nullptr) return false;
+	const bool full = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) == 0;
+	SDL_SetWindowFullscreen(window, full);
+	return full;
 }
 
 TN_API bool tn_imgui_viewports_active()
@@ -456,6 +469,8 @@ TN_API bool tn_imgui_init(SDL_Window* window, const char* iniPath, float uiScale
 	{
 		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 		io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;
+		// Real title bars: the desktop can maximize the window, make it full screen or move it to another monitor.
+		io.ConfigViewportsNoDecoration = false;
 		ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
 		platformIO.Renderer_CreateWindow = ViewportCreate;
 		platformIO.Renderer_DestroyWindow = ViewportDestroy;
@@ -606,19 +621,26 @@ namespace
 		return SDL_GetWindowFromID((SDL_WindowID)(intptr_t)viewport->PlatformHandle);
 	}
 
+	// (Re)makes the window's frame buffer when it is shown and its pixel size changed. Not before it is shown: a
+	// Vulkan swap chain on a window the desktop has not mapped yet can block the frame.
 	void ViewportFrameBuffer(ImGuiViewport* viewport, ImGuiViewportData* data)
 	{
-		if (bgfx::isValid(data->frameBuffer))
-			bgfx::destroy(data->frameBuffer);
-		data->frameBuffer = BGFX_INVALID_HANDLE;
 		SDL_Window* window = ViewportWindow(viewport);
-		if (window == nullptr) return;
+		if (window == nullptr || (SDL_GetWindowFlags(window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED)) != 0) return;
 		int width = 0, height = 0;
 		SDL_GetWindowSizeInPixels(window, &width, &height);
 		if (width <= 0 || height <= 0) return;
+		if (bgfx::isValid(data->frameBuffer) && width == data->width && height == data->height) return;
+		if (bgfx::isValid(data->frameBuffer))
+			bgfx::destroy(data->frameBuffer);
+		data->frameBuffer = BGFX_INVALID_HANDLE;
+		data->width = width;
+		data->height = height;
 		bgfx::SwapChain swapChain{};
 		bgfx::PlatformData platform{};
 		FillSwapChain(swapChain, platform, window, width, height);
+		// Only the main window waits for vertical sync; each extra window waiting too would cost a refresh apiece.
+		swapChain.flags |= BGFX_SWAP_CHAIN_NO_VSYNC;
 		if (swapChain.nwh != nullptr)
 			data->frameBuffer = bgfx::createFrameBuffer(swapChain);
 	}
@@ -636,7 +658,6 @@ namespace
 			}
 		}
 		viewport->RendererUserData = data;
-		ViewportFrameBuffer(viewport, data);
 	}
 
 	void ViewportDestroy(ImGuiViewport* viewport)
@@ -665,7 +686,9 @@ namespace
 	void ViewportRender(ImGuiViewport* viewport, void*)
 	{
 		ImGuiViewportData* data = (ImGuiViewportData*)viewport->RendererUserData;
-		if (data == nullptr || data->view == 0 || !bgfx::isValid(data->frameBuffer)) return;
+		if (data == nullptr || data->view == 0) return;
+		ViewportFrameBuffer(viewport, data);
+		if (!bgfx::isValid(data->frameBuffer)) return;
 		RenderImGuiDrawData(viewport->DrawData, data->view, data->frameBuffer, !(viewport->Flags & ImGuiViewportFlags_NoRendererClear));
 	}
 }

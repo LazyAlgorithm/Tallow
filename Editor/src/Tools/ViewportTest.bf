@@ -12,6 +12,8 @@ extension EditorApp
 	int mViewportTestFrame = -1;
 	String mViewportTestReport = new .() ~ delete _;
 	bool mViewportTestPass = true;
+	System.Diagnostics.Stopwatch mViewportTestClock = new .() ~ delete _;
+	double mViewportTestSlowest;
 
 	void ViewportTestExpect(bool condition, StringView what)
 	{
@@ -29,6 +31,10 @@ extension EditorApp
 		ImGui.tn_imgui_viewport_status(&windows, &drawn);
 		if (mViewportTestFrame == 2)
 			ViewportTestExpect(ImGui.tn_imgui_viewports_active(), "windows can be dragged out on this desktop");
+		// The slowest frame while the extra window is up: it must not hold the editor up.
+		if (mViewportTestFrame > 10 && mViewportTestFrame <= 40)
+			mViewportTestSlowest = Math.Max(mViewportTestSlowest, mViewportTestClock.Elapsed.TotalMilliseconds);
+		mViewportTestClock.Restart();
 		if (mViewportTestFrame >= 3 && mViewportTestFrame < 40)
 		{
 			let main = ImGui.GetMainViewport();
@@ -41,6 +47,8 @@ extension EditorApp
 		}
 		if (mViewportTestFrame == 30)
 			ViewportTestExpect(windows >= 2 && drawn >= 1, scope $"a window outside the editor gets an OS window and a frame buffer ({windows} windows, {drawn} drawn)");
+		if (mViewportTestFrame == 41)
+			ViewportTestExpect(mViewportTestSlowest < 100, scope $"no frame stalls with it up (slowest {mViewportTestSlowest:F1} ms)");
 		if (mViewportTestFrame == 60)
 		{
 			ViewportTestExpect(windows == 1 && drawn == 0, scope $"closing it removes its OS window ({windows} windows)");

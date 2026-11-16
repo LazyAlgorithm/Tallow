@@ -260,6 +260,7 @@ static class ImGui
 		public const int32 Z = 571;
 		public const int32 F1 = 572;
 		public const int32 F2 = 573;
+		public const int32 F11 = 582;
 		public const int32 F12 = 583;
 		public const int32 F5 = 576;
 		public const int32 Minus = 598;
@@ -291,6 +292,8 @@ static class ImGui
 	[CLink] public static extern void tn_imgui_enable_viewports(bool enable);
 	/// Whether windows can be dragged out now (enabled, and the platform can make them).
 	[CLink] public static extern bool tn_imgui_viewports_active();
+	/// F11: the focused window (main or dragged out) full screen on its monitor, or back.
+	[CLink] public static extern bool tn_imgui_toggle_fullscreen();
 	[CLink] public static extern void tn_imgui_viewport_status(int32* windows, int32* drawn);
 	[CLink] public static extern bool tn_imgui_init(void* window, char8* iniPath, float uiScale);
 	[CLink] public static extern void tn_imgui_shutdown();

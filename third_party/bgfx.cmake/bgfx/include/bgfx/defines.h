@@ -470,6 +470,7 @@
 #define BGFX_SWAP_CHAIN_SRGB_BACKBUFFER           UINT32_C(0x00008000) //!< Enable sRGB backbuffer.
 #define BGFX_SWAP_CHAIN_HDR10                     UINT32_C(0x00010000) //!< Enable HDR10 rendering.
 #define BGFX_SWAP_CHAIN_HIDPI                     UINT32_C(0x00020000) //!< Enable HiDPI rendering.
+#define BGFX_SWAP_CHAIN_NO_VSYNC                  UINT32_C(0x00040000) //!< Never wait for vertical sync on this swap chain (Tallow: extra windows, paced by the main one).
 #define BGFX_SWAP_CHAIN_TRANSPARENT_BACKBUFFER    UINT32_C(0x00100000) //!< Transparent backbuffer. Availability depends on: `BGFX_CAPS_TRANSPARENT_BACKBUFFER`.
 
 #define BGFX_SWAP_CHAIN_FULLSCREEN_SHIFT          0
