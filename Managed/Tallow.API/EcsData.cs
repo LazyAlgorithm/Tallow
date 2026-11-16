@@ -87,6 +87,46 @@ public readonly partial record struct GameObject
     public EcsEntity Entity => new(SceneId, IsValid ? Ecs.EntityOfObject(SceneId, Id) : 0);
 }
 
+/// <summary>A query's With and Without terms (up to <see cref="Capacity"/>), kept without allocating.</summary>
+public readonly record struct EcsFilter
+{
+    public const int Capacity = 4;
+    private readonly ulong _a, _b, _c, _d;
+    private readonly int _with, _without;
+
+    private EcsFilter(ulong a, ulong b, ulong c, ulong d, int with, int without) =>
+        (_a, _b, _c, _d, _with, _without) = (a, b, c, d, with, without);
+
+    public int Count => _with + _without;
+
+    internal EcsFilter Add(ulong schema, bool with)
+    {
+        if (Count == Capacity)
+            throw new InvalidOperationException($"A query can have at most {Capacity} With and Without terms.");
+        Span<ulong> ids = [_a, _b, _c, _d];
+        // With terms first, then Without.
+        if (with)
+        {
+            for (int i = Count; i > _with; i--)
+                ids[i] = ids[i - 1];
+            ids[_with] = schema;
+        }
+        else
+            ids[Count] = schema;
+        return new EcsFilter(ids[0], ids[1], ids[2], ids[3], _with + (with ? 1 : 0), _without + (with ? 0 : 1));
+    }
+
+    internal void Split(Span<ulong> buffer, out Span<ulong> with, out Span<ulong> without)
+    {
+        buffer[0] = _a;
+        buffer[1] = _b;
+        buffer[2] = _c;
+        buffer[3] = _d;
+        with = buffer[.._with];
+        without = buffer.Slice(_with, _without);
+    }
+}
+
 public delegate void EcsAction<T1>(EcsEntity entity, ref T1 a);
 public delegate void EcsAction<T1, T2>(EcsEntity entity, ref T1 a, ref T2 b);
 public delegate void EcsAction<T1, T2, T3>(EcsEntity entity, ref T1 a, ref T2 b, ref T3 c);
@@ -116,12 +156,23 @@ public readonly partial record struct Scene
 /// </summary>
 public readonly record struct EcsQuery<T1>(ulong SessionId) where T1 : unmanaged
 {
+    /// <summary>Only entities that also have F's data (not read or written).</summary>
+    public EcsQuery<T1> With<F>() where F : unmanaged => this with { Filter = Filter.Add(EcsSchema<F>.Require(), true) };
+
+    /// <summary>Only entities without F's data.</summary>
+    public EcsQuery<T1> Without<F>() where F : unmanaged => this with { Filter = Filter.Add(EcsSchema<F>.Require(), false) };
+
+    /// <summary>The <see cref="With{F}"/> and <see cref="Without{F}"/> terms so far.</summary>
+    public EcsFilter Filter { get; init; }
+
     public int Count
     {
         get
         {
             Span<ulong> schemas = [EcsSchema<T1>.Require()];
-            return Ecs.CountData(SessionId, schemas);
+            Span<ulong> filters = stackalloc ulong[EcsFilter.Capacity];
+            Filter.Split(filters, out Span<ulong> with, out Span<ulong> without);
+            return Ecs.CountData(SessionId, schemas, with, without);
         }
     }
 
@@ -129,7 +180,9 @@ public readonly record struct EcsQuery<T1>(ulong SessionId) where T1 : unmanaged
     {
         ArgumentNullException.ThrowIfNull(action);
         Span<ulong> schemas = [EcsSchema<T1>.Require()];
-        int handle = Ecs.BeginDataIteration(SessionId, schemas);
+        Span<ulong> filters = stackalloc ulong[EcsFilter.Capacity];
+        Filter.Split(filters, out Span<ulong> with, out Span<ulong> without);
+        int handle = Ecs.BeginDataIteration(SessionId, schemas, with, without);
         if (handle <= 0)
             return;
         try
@@ -169,12 +222,23 @@ public readonly record struct EcsQuery<T1>(ulong SessionId) where T1 : unmanaged
 /// <inheritdoc cref="EcsQuery{T1}"/>
 public readonly record struct EcsQuery<T1, T2>(ulong SessionId) where T1 : unmanaged where T2 : unmanaged
 {
+    /// <summary>Only entities that also have F's data (not read or written).</summary>
+    public EcsQuery<T1, T2> With<F>() where F : unmanaged => this with { Filter = Filter.Add(EcsSchema<F>.Require(), true) };
+
+    /// <summary>Only entities without F's data.</summary>
+    public EcsQuery<T1, T2> Without<F>() where F : unmanaged => this with { Filter = Filter.Add(EcsSchema<F>.Require(), false) };
+
+    /// <summary>The <see cref="With{F}"/> and <see cref="Without{F}"/> terms so far.</summary>
+    public EcsFilter Filter { get; init; }
+
     public int Count
     {
         get
         {
             Span<ulong> schemas = [EcsSchema<T1>.Require(), EcsSchema<T2>.Require()];
-            return Ecs.CountData(SessionId, schemas);
+            Span<ulong> filters = stackalloc ulong[EcsFilter.Capacity];
+            Filter.Split(filters, out Span<ulong> with, out Span<ulong> without);
+            return Ecs.CountData(SessionId, schemas, with, without);
         }
     }
 
@@ -182,7 +246,9 @@ public readonly record struct EcsQuery<T1, T2>(ulong SessionId) where T1 : unman
     {
         ArgumentNullException.ThrowIfNull(action);
         Span<ulong> schemas = [EcsSchema<T1>.Require(), EcsSchema<T2>.Require()];
-        int handle = Ecs.BeginDataIteration(SessionId, schemas);
+        Span<ulong> filters = stackalloc ulong[EcsFilter.Capacity];
+        Filter.Split(filters, out Span<ulong> with, out Span<ulong> without);
+        int handle = Ecs.BeginDataIteration(SessionId, schemas, with, without);
         if (handle <= 0)
             return;
         try
@@ -225,12 +291,23 @@ public readonly record struct EcsQuery<T1, T2>(ulong SessionId) where T1 : unman
 public readonly record struct EcsQuery<T1, T2, T3>(ulong SessionId)
     where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged
 {
+    /// <summary>Only entities that also have F's data (not read or written).</summary>
+    public EcsQuery<T1, T2, T3> With<F>() where F : unmanaged => this with { Filter = Filter.Add(EcsSchema<F>.Require(), true) };
+
+    /// <summary>Only entities without F's data.</summary>
+    public EcsQuery<T1, T2, T3> Without<F>() where F : unmanaged => this with { Filter = Filter.Add(EcsSchema<F>.Require(), false) };
+
+    /// <summary>The <see cref="With{F}"/> and <see cref="Without{F}"/> terms so far.</summary>
+    public EcsFilter Filter { get; init; }
+
     public int Count
     {
         get
         {
             Span<ulong> schemas = [EcsSchema<T1>.Require(), EcsSchema<T2>.Require(), EcsSchema<T3>.Require()];
-            return Ecs.CountData(SessionId, schemas);
+            Span<ulong> filters = stackalloc ulong[EcsFilter.Capacity];
+            Filter.Split(filters, out Span<ulong> with, out Span<ulong> without);
+            return Ecs.CountData(SessionId, schemas, with, without);
         }
     }
 
@@ -238,7 +315,9 @@ public readonly record struct EcsQuery<T1, T2, T3>(ulong SessionId)
     {
         ArgumentNullException.ThrowIfNull(action);
         Span<ulong> schemas = [EcsSchema<T1>.Require(), EcsSchema<T2>.Require(), EcsSchema<T3>.Require()];
-        int handle = Ecs.BeginDataIteration(SessionId, schemas);
+        Span<ulong> filters = stackalloc ulong[EcsFilter.Capacity];
+        Filter.Split(filters, out Span<ulong> with, out Span<ulong> without);
+        int handle = Ecs.BeginDataIteration(SessionId, schemas, with, without);
         if (handle <= 0)
             return;
         try

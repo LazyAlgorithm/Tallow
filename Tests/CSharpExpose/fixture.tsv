@@ -193,11 +193,11 @@ method	Tallow.CSharpWorld	TerrainPendingChunks	int	session:ulong	entity:ulong
 method	Tallow.CSharpWorld	UnloadAdditive	bool	session:ulong	group:ulong
 method	Tallow.Cursor	IsLocked	bool
 method	Tallow.Cursor	SetLocked	void	locked:bool
-method	Tallow.Ecs	BeginDataIteration	int	session:ulong	schemaIds:System.Span<ulong>
+method	Tallow.Ecs	BeginDataIteration	int	session:ulong	schemaIds:System.Span<ulong>	with:System.Span<ulong>	without:System.Span<ulong>
 method	Tallow.Ecs	CopyLocalData	bool	session:ulong	entity:ulong	schemaId:ulong	bytes:System.Span<byte>
 method	Tallow.Ecs	CopyLocalDataPage	int	session:ulong	schemaId:ulong	offset:int	entityIds:System.Span<ulong>	bytes:System.Span<byte>
 method	Tallow.Ecs	CopyRigidbodyMasses	int	session:ulong	offset:int	entityIds:System.Span<ulong>	masses:System.Span<float>
-method	Tallow.Ecs	CountData	int	session:ulong	schemaIds:System.Span<ulong>
+method	Tallow.Ecs	CountData	int	session:ulong	schemaIds:System.Span<ulong>	with:System.Span<ulong>	without:System.Span<ulong>
 method	Tallow.Ecs	CountLocalData	int	session:ulong	schemaId:ulong
 method	Tallow.Ecs	CountRigidbodies	int	session:ulong
 method	Tallow.Ecs	CreateLocalEntities	int	session:ulong	entityIds:System.Span<ulong>

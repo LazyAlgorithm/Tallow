@@ -161,19 +161,21 @@ static class Ecs
 
     /// How many entities have every one of the C# data schemas (at most 4).
     [CSharpExpose]
-    public static int32 CountData(uint64 session, Span<uint64> schemaIds)
+    /// Entities with every one of schemaIds and of with, and none of without (C# schemas).
+    public static int32 CountData(uint64 session, Span<uint64> schemaIds, Span<uint64> with, Span<uint64> without)
     {
         let scene = Playing(session);
-        return scene != null ? scene.World.CountManagedData(schemaIds) : 0;
+        return scene != null ? scene.World.CountManagedData(schemaIds, with, without) : 0;
     }
 
     /// Starts a ForEach that works on the data in place (see World.BeginManagedIteration): a handle, 0 when it
     /// cannot. Always pair it with EndDataIteration.
     [CSharpExpose]
-    public static int32 BeginDataIteration(uint64 session, Span<uint64> schemaIds)
+    public static int32 BeginDataIteration(uint64 session, Span<uint64> schemaIds, Span<uint64> with,
+        Span<uint64> without)
     {
         let scene = Playing(session);
-        return scene != null ? scene.World.BeginManagedIteration(schemaIds) : 0;
+        return scene != null ? scene.World.BeginManagedIteration(schemaIds, with, without) : 0;
     }
 
     /// The next matching table: its columns' addresses, its entity ids' address and its version counter's address;

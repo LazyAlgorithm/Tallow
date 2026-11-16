@@ -784,6 +784,49 @@ public class ApiChecks : CheckBase
         a.DestroyLocal();
         b.DestroyLocal();
         StructureDuringForEach();
+        QueryFilters();
+    }
+
+    /// Query With/Without terms, and a tag (a [Component] struct with no fields).
+    private void QueryFilters()
+    {
+        // Earlier checks leave Health on a few objects (none Frozen): count from them.
+        int before = Scene.Query<Health>().Count;
+        var made = new List<EcsEntity>();
+        for (int i = 0; i < 6; i++)
+        {
+            EcsEntity entity = Scene.CreateLocalEcsEntity();
+            entity.Set(new Health { Value = i });
+            if (i % 2 == 0)
+                entity.Set(new Frozen());
+            if (i < 2)
+                entity.Set(new Motion { Drag = 1 });
+            made.Add(entity);
+        }
+        int all = Scene.Query<Health>().Count;
+        int frozen = Scene.Query<Health>().With<Frozen>().Count;
+        int thawed = Scene.Query<Health>().Without<Frozen>().Count;
+        Check($"Query With/Without a tag ({all - before}, {frozen}, {thawed - before})",
+            all - before == 6 && frozen == 3 && thawed - before == 3);
+        float sum = 0;
+        Scene.Query<Health>().Without<Frozen>().Without<Motion>().ForEach((EcsEntity e, ref Health h) =>
+        {
+            if (!made.Contains(e))
+                return;
+            sum += h.Value;
+            h.Hits = 7;
+        });
+        Check($"ForEach with two Without terms visits and writes only those ({sum})",
+            sum == 3 + 5 && made[3].Get<Health>().Hits == 7 && made[2].Get<Health>().Hits == 0);
+        Check("With and Without together, and on a two-data query",
+            Scene.Query<Health>().With<Frozen>().Without<Motion>().Count == 2 &&
+            Scene.Query<Health, Motion>().With<Frozen>().Count == 1);
+        bool threw = false;
+        try { Scene.Query<Health>().With<Frozen>().With<Motion>().Without<Frozen>().Without<Motion>().With<Frozen>(); }
+        catch (InvalidOperationException) { threw = true; }
+        Check("a query takes at most four With/Without terms", threw);
+        foreach (EcsEntity entity in made)
+            entity.DestroyLocal();
     }
 
     /// ForEach works on the data in place; what scripts do inside it that changes structure must still work.
@@ -1192,6 +1235,12 @@ public struct Health
 {
     public float Value;
     public int Hits;
+}
+
+/// A tag: no fields, only there or not.
+[Component]
+public struct Frozen
+{
 }
 
 public struct NotData

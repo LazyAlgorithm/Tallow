@@ -369,7 +369,8 @@ internal static class Program
                     IFieldSymbol[] fields = symbol.GetMembers().OfType<IFieldSymbol>()
                         .Where(field => !field.IsStatic && !field.IsConst &&
                             !field.IsImplicitlyDeclared).ToArray();
-                    bool supported = fields.Length > 0 && fields.Length <= 128;
+                    // No fields: a tag (one byte in Flecs), for With/Without filters.
+                    bool supported = fields.Length <= 128;
                     foreach (IFieldSymbol field in fields)
                     {
                         string kind = field.Type.ToDisplayString();

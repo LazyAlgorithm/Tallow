@@ -233,8 +233,11 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     (rows packed in order, cached Flecs queries; host entries `Ecs.CountData/CopyDataPage/WriteDataPage`,
     `RemoveLocalData`, `EntityOfObject`, `ObjectOfEntity`). ForEach writes back only rows whose bytes changed,
     and skips entities that went or lost a schema meanwhile. `ecs-data.tsv` keeps fields in declaration order.
-    Tests: 10 in-engine checks. Not saved with scenes; not yet: filters/tags/Without terms, systems scheduled by
-    phase, client ownership/prediction and [SyncPosition] relevance for C# data.
+    Tests: 10 in-engine checks. Not saved with scenes; not yet: systems scheduled by phase, client
+    ownership/prediction and [SyncPosition] relevance for C# data.
+  - [x] Query filters and tags (November 15, 2026): `Query<...>().With<F>()` / `.Without<F>()` (up to 4 terms,
+    kept in an allocation-free `EcsFilter`; Flecs Filter/Without terms on the cached query), and `[Component]`
+    structs with no fields as tags. 4 in-engine checks.
   - [x] [Sync] replication of C# ECS data (November 15, 2026): C# ECS works in network sessions. Each game
     assembly describes its `[Component]` structs when it loads (`EcsSchemas.Register<T>(id, name, syncFields)` →
     `Ecs.DescribeData` → `DataComponents.DescribeManaged`, offsets measured with `Unsafe.ByteOffset`), so a C#

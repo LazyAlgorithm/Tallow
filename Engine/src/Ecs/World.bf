@@ -104,33 +104,56 @@ sealed class World
 		return true;
 	}
 
-	void* ManagedDataQuery(Span<uint64> schemaIds, Span<ManagedLocalSchema> layouts)
+	/// The most C# schemas one query can filter on (With and Without together).
+	public const int32 MaxManagedQueryFilters = 4;
+
+	/// A cached Flecs query: the data schemas (read and written), then entities must have with and lack without.
+	/// Null when a filter schema is unknown or there are too many.
+	void* ManagedDataQuery(Span<uint64> schemaIds, Span<ManagedLocalSchema> layouts, Span<uint64> with = default,
+		Span<uint64> without = default)
 	{
+		if (with.Length + without.Length > MaxManagedQueryFilters)
+			return null;
 		let key = scope String();
 		for (let id in schemaIds)
 			key.AppendF("{},", id);
+		for (let id in with)
+			key.AppendF("+{},", id);
+		for (let id in without)
+			key.AppendF("-{},", id);
 		if (mManagedDataQueries.TryGetValue(key, let existing))
 			return existing;
-		uint64[MaxManagedQueryTerms] ids = ?;
-		Flecs.TermAccess[MaxManagedQueryTerms] access = ?;
+		uint64[MaxManagedQueryTerms + MaxManagedQueryFilters] ids = ?;
+		Flecs.TermAccess[MaxManagedQueryTerms + MaxManagedQueryFilters] access = ?;
+		int count = 0;
 		for (int i < schemaIds.Length)
 		{
-			ids[i] = layouts[i].flecsId;
-			access[i] = .ReadWrite;
+			ids[count] = layouts[i].flecsId;
+			access[count++] = .ReadWrite;
 		}
-		let query = Flecs.QueryNew(mWorld, &ids, &access, (int32)schemaIds.Length);
+		for (int pass < 2)
+		{
+			for (let id in (pass == 0 ? with : without))
+			{
+				if (!ManagedSchema(id, let layout))
+					return null;
+				ids[count] = layout.flecsId;
+				access[count++] = pass == 0 ? .Filter : .Without;
+			}
+		}
+		let query = Flecs.QueryNew(mWorld, &ids, &access, (int32)count);
 		if (query != null)
 			mManagedDataQueries[new String(key)] = query;
 		return query;
 	}
 
 	/// Entities with every one of the C# schemas (bare entities and scene objects alike).
-	public int32 CountManagedData(Span<uint64> schemaIds)
+	public int32 CountManagedData(Span<uint64> schemaIds, Span<uint64> with = default, Span<uint64> without = default)
 	{
 		ManagedLocalSchema[MaxManagedQueryTerms] layouts = ?;
 		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), ?))
 			return 0;
-		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length));
+		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length), with, without);
 		return query == null ? 0 : Flecs.QueryCount(query);
 	}
 
@@ -162,12 +185,12 @@ sealed class World
 	/// matching table's columns to read and write directly. Changes to C# data are queued until
 	/// EndManagedIteration (see mManagedDeferDepth); reads see the world as it was. Returns a handle (> 0), 0 when
 	/// the schemas are not registered.
-	public int32 BeginManagedIteration(Span<uint64> schemaIds)
+	public int32 BeginManagedIteration(Span<uint64> schemaIds, Span<uint64> with = default, Span<uint64> without = default)
 	{
 		ManagedLocalSchema[MaxManagedQueryTerms] layouts = ?;
 		if (!ManagedLayouts(schemaIds, .(&layouts, schemaIds.Length), ?))
 			return 0;
-		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length));
+		let query = ManagedDataQuery(schemaIds, .(&layouts, schemaIds.Length), with, without);
 		if (query == null)
 			return 0;
 		int slot = -1;

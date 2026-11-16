@@ -292,6 +292,16 @@ static std::unordered_set<uint64_t> ecsLocalEntities;
 struct EcsLocalSchema { int32_t size; int32_t alignment; uint64_t nativeId; };
 static std::unordered_map<uint64_t, EcsLocalSchema> ecsSchemas;
 static std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::vector<uint8_t>>> ecsLocalData;
+// Ecs.DescribeData: a game assembly's [Component] structs, told by its module initializer when it loads.
+static int32_t describedSchemas = 0;
+static int32_t ExposedEcsDescribeData(uint64_t schemaId, const uint8_t*, int32_t nameLength, int32_t size,
+    int32_t, const uint8_t*, int32_t)
+{
+    if (schemaId == 0 || nameLength <= 0 || size <= 0)
+        return 0;
+    ++describedSchemas;
+    return 1;
+}
 static int32_t ExposedEcsIsAlive(uint64_t scene, uint64_t entity)
 {
     return scene == 1 && (entity == 11 || entity == 22 || entity == 33 ||
@@ -786,6 +796,8 @@ static void* ResolveApi(void*, const char* symbol)
         return reinterpret_cast<void*>(&ExposedActiveState);
     if (name == "CSharpApi_7da78821e8213042")
         return reinterpret_cast<void*>(&ExposedSetEnabled);
+    if (name == "CSharpApi_717f608d712e0446")
+        return reinterpret_cast<void*>(&ExposedEcsDescribeData);
     if (name == "CSharpApi_d87ccb801a5fd433")
         return reinterpret_cast<void*>(&ExposedEcsIsAlive);
     if (name == "CSharpApi_287bb76c2e508ec8")
