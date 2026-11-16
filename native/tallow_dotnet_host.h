@@ -134,6 +134,8 @@ int32_t tn_csharp_network_event(int32_t script_instance, const char* name, float
 // Calls a UI document handler (onclick="Method") on the script, with the element's id; 1 called, 0 no such
 // method, -1 it threw.
 int32_t tn_csharp_ui_invoke(int32_t script_instance, const char* method, const char* element_id);
+// C#'s Network.ChooseTeam for a joining player: the team (0 or more), -1 without one or when it threw.
+int32_t tn_csharp_choose_team(int32_t client_id);
 // The managed heap after a pump, for the Profiler (40 bytes).
 typedef struct tn_csharp_gc_stats
 {

@@ -95,13 +95,14 @@ public readonly partial record struct Scene
 {
     /// <summary>
     /// The active world state (<see cref="WorldStates"/>). Objects outside it are not drawn, do not collide, are not
-    /// heard and are not walked on; setting it switches all of that at once.
+    /// heard and are not walked on. Change it with <see cref="SetWorldState(int)"/> (a script's <c>Scene</c> is a
+    /// value, so it has no setter: <c>Scene.WorldState = 1</c> would not compile).
     /// </summary>
-    public int WorldState
-    {
-        get => CSharpSpawning.GetWorldState(SessionId);
-        set => CSharpSpawning.SetWorldState(SessionId, value);
-    }
+    public int WorldState => CSharpSpawning.GetWorldState(SessionId);
+
+    /// <summary>Switches the world state (an index, 0 to 31): everything outside it hides, stops colliding and goes
+    /// quiet at once. Scripts' <see cref="Script.OnWorldStateChanged"/> hear it.</summary>
+    public void SetWorldState(int state) => CSharpSpawning.SetWorldState(SessionId, state);
 
     /// <summary>The same by name; false when the project has no world state of that name.</summary>
     public bool SetWorldState(string name)
@@ -109,7 +110,7 @@ public readonly partial record struct Scene
         int state = WorldStates.Named(name);
         if (state < 0)
             return false;
-        WorldState = state;
+        SetWorldState(state);
         return true;
     }
 }

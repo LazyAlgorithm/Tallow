@@ -45,7 +45,9 @@ static class CSharpRuntime
 		/// OnDrawGizmos (deltaTime: 1 when the object is selected).
 		DrawGizmos,
 		Saving,
-		Loaded
+		Loaded,
+		/// OnWorldStateChanged (deltaTime: from * 64 + to).
+		WorldStateChanged
 	}
 
 	/// Exactly the 48-byte layout of tn_csharp_contact.
@@ -344,6 +346,7 @@ static class CSharpRuntime
 	[CLink] static extern char8* tn_csharp_error();
 	[CLink] static extern int32 tn_csharp_network_event(int32 instance, char8* name, float value);
 	[CLink] static extern int32 tn_csharp_ui_invoke(int32 instance, char8* method, char8* elementId);
+	[CLink] static extern int32 tn_csharp_choose_team(int32 clientId);
 	[CRepr]
 	struct GcStats
 	{
@@ -503,8 +506,9 @@ static class CSharpRuntime
 	/// Native CSharpBehaviour instances must have been detached first.
 	public static bool UnloadGame()
 	{
-		// Its ECS systems go with it.
+		// Its ECS systems and team chooser go with it.
 		CSharpEcsSystem.RemoveAll();
+		HasTeamChooser = false;
 		if (!sStarted)
 			return true;
 		if (tn_csharp_unload_game() != 0)
@@ -670,6 +674,20 @@ static class CSharpRuntime
         ReportFailure("callback");
         return false;
     }
+
+	/// C# set Network.ChooseTeam.
+	public static bool HasTeamChooser;
+
+	/// A joining player's team from C#'s Network.ChooseTeam, -1 when there is none or it threw (reported).
+	public static int32 ChooseTeam(int32 clientId)
+	{
+		if (!Ready || !HasTeamChooser)
+			return -1;
+		let team = tn_csharp_choose_team(clientId);
+		if (team < 0)
+			ReportFailure("Network.ChooseTeam");
+		return team;
+	}
 
 	/// Runs a C# EcsSystem (CSharpEcsSystem): on entity, or (0) on every bare entity with its data no client owns.
 	public static bool RunSystem(int32 index, uint64 session, uint64 entity, TickInput input, float deltaTime)

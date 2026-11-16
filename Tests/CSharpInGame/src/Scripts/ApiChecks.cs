@@ -29,6 +29,10 @@ public abstract class CheckBase : Script
 /// C# gameplay API against the native scene, physics and ECS.
 public class ApiChecks : CheckBase
 {
+    private readonly List<string> mWorldStateChanges = new();
+
+    public override void OnWorldStateChanged(int from, int to) => mWorldStateChanges.Add($"{from}>{to}");
+
     public float Speed = 1f;
     public string Label = "default";
     public List<int> Numbers = new();
@@ -395,6 +399,12 @@ public class ApiChecks : CheckBase
             && Scene.RaycastHit(new Vector3(0, 10, 0), -Vector3.UnitY, 20f, Layers.Mask("Default")) != null);
         Check("WorldStates and Scene.WorldState", WorldStates.Named("Default") == 0 && WorldStates.Name(0) == "Default"
             && WorldStates.Name(99) == null && Scene.WorldState == 0 && !Scene.SetWorldState("NoSuchState") && Scene.SetWorldState("Default"));
+        mWorldStateChanges.Clear();
+        Scene.SetWorldState(1);
+        Scene.SetWorldState(1); // No change: no call.
+        Scene.SetWorldState(0);
+        Check("OnWorldStateChanged hears each change with the states before and after ("
+            + string.Join(",", mWorldStateChanges) + ")", string.Join(",", mWorldStateChanges) == "0>1,1>0");
 
         NavigationSurface surface = NavigationSurface.Find(Scene);
         Check("NavigationSurface.Find without a surface, and its queries say no",

@@ -230,6 +230,22 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    /// <summary>The team for a joining player from <see cref="Network.ChooseTeam"/>: the team (0 or more), or -1
+    /// when there is no chooser or it threw (reported; the engine then shares players out itself).</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int ChooseTeam(int clientId)
+    {
+        try
+        {
+            return Network.InvokeTeamChooser(clientId);
+        }
+        catch (Exception exception)
+        {
+            Failure(exception);
+            return -1;
+        }
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int UiInvoke(int instance, byte* method, byte* elementId)
     {
@@ -368,7 +384,7 @@ public static unsafe class NativeEntrypoints
     {
         // The same numbers as CSharpRuntime.ManagedEvent in the engine.
         Awake, Enable, Start, FixedUpdate, LocalUpdate, LocalLateUpdate, Disable, Gui,
-        LocalEarlyUpdate, Validate, DrawGizmos, Saving, Loaded
+        LocalEarlyUpdate, Validate, DrawGizmos, Saving, Loaded, WorldStateChanged
     }
     // Trusted development gameplay gets a separate collectible context. The engine's
     // Tallow.API types stay in the host context so class inheritance works correctly.
@@ -521,6 +537,7 @@ public static unsafe class NativeEntrypoints
             // context rooted or poison the next rebuild/Play attempt.
             sRegistry = null;
             EcsSystems.Clear();
+            Network.ClearTeamChooser();
             sTypes.Clear();
             sFormerNames.Clear();
             lock (sCallbackMasks)
@@ -981,6 +998,9 @@ public static unsafe class NativeEntrypoints
             case ScriptEvent.DrawGizmos: script.OnDrawGizmos(deltaTime != 0); break;
             case ScriptEvent.Saving: script.OnSaving(); break;
             case ScriptEvent.Loaded: script.OnLoaded(); break;
+            case ScriptEvent.WorldStateChanged:
+                script.OnWorldStateChanged((int)deltaTime / 64, (int)deltaTime % 64);
+                break;
             default: throw new ArgumentOutOfRangeException(nameof(eventId), eventId,
                 "Unknown managed gameplay event.");
         }
@@ -1025,6 +1045,7 @@ public static unsafe class NativeEntrypoints
             Check(nameof(Script.LocalUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalUpdate);
             Check(nameof(Script.LocalLateUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalLateUpdate);
             Check(nameof(Script.OnGUI), Type.EmptyTypes, 1 << (int)ScriptEvent.Gui);
+            Check(nameof(Script.OnWorldStateChanged), [typeof(int), typeof(int)], 1 << (int)ScriptEvent.WorldStateChanged);
             sCallbackMasks[type] = mask;
             return mask;
         }
@@ -1328,6 +1349,9 @@ public static unsafe class NativeEntrypoints
             sRegistry = null;
             sTypes.Clear();
             sFormerNames.Clear();
+            // Systems and the team chooser are the game's code: keeping them would run old code and keep the context.
+            EcsSystems.Clear();
+            Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).
             GameThread.Stop();
             GameAssemblyContext? previous = sGameContext;
@@ -1363,6 +1387,9 @@ public static unsafe class NativeEntrypoints
             sRegistry = null;
             sTypes.Clear();
             sFormerNames.Clear();
+            // Systems and the team chooser are the game's code: keeping them would run old code and keep the context.
+            EcsSystems.Clear();
+            Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).
             GameThread.Stop();
             GameAssemblyContext? previous = sGameContext;

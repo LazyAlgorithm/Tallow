@@ -18,6 +18,35 @@ public static class Network
             throw new ArgumentException("A network prefab name or path is too long.");
     }
 
+    private static Func<int, int>? sChooseTeam;
+
+    /// <summary>
+    /// Server only: picks a joining player's team from their client id (0 or more), instead of the Network Session's
+    /// team count sharing players out evenly. Null (the default) leaves that to the session. Set it once at startup,
+    /// for example in a game manager's Awake.
+    /// </summary>
+    public static Func<int, int>? ChooseTeam
+    {
+        get => sChooseTeam;
+        set
+        {
+            sChooseTeam = value;
+            CSharpNetwork.SetTeamChooser(value != null);
+        }
+    }
+
+    internal static int InvokeTeamChooser(int clientId)
+    {
+        if (sChooseTeam == null)
+            return -1;
+        int team = sChooseTeam(clientId);
+        if (team < 0)
+            throw new InvalidOperationException($"Network.ChooseTeam gave team {team} for client {clientId}; teams are 0 or more.");
+        return team;
+    }
+
+    internal static void ClearTeamChooser() => sChooseTeam = null;
+
     public static bool IsRegistered(string name) => !string.IsNullOrEmpty(name) && CSharpNetwork.IsPrefabRegistered(name);
 
     /// <summary>

@@ -57,6 +57,10 @@ static class CSharpNetwork
 		return true;
 	}
 
+	/// Whether C# set Network.ChooseTeam (NetworkManager then asks it for each joining player's team).
+	[CSharpExpose]
+	public static void SetTeamChooser(bool on) => CSharpRuntime.HasTeamChooser = on;
+
 	[CSharpExpose]
 	public static bool IsPrefabRegistered(StringView name) => NetworkManager.IsRegistered(name);
 

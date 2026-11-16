@@ -27,6 +27,10 @@ class CSharpBehaviour : Component
 	/// The per-frame callbacks the script's class overrides (CSharpRuntime.CallbackMask); the others are not sent.
 	int32 mCallbacks = -1;
 
+	// The scene whose world state changes the script hears (only when its class overrides OnWorldStateChanged).
+	Scene mWorldStateScene;
+	delegate void(int32, int32) mWorldStateHandler;
+
 	bool Wants(CSharpRuntime.ManagedEvent event) => (mCallbacks & (1 << (int32)event)) != 0;
 
 	/// The managed component is owned by this native component, not the scene's ECS memory.
@@ -263,6 +267,16 @@ class CSharpBehaviour : Component
 			if (Wants(.LocalUpdate)) wanted |= .LocalUpdate;
 			if (Wants(.LocalLateUpdate)) wanted |= .LocalLateUpdate;
 			GameObject.Scene?.SetCallbacks(this, wanted);
+			if (Wants(.WorldStateChanged) && GameObject.Scene != null)
+			{
+				mWorldStateScene = GameObject.Scene;
+				mWorldStateHandler = new (from, to) =>
+					{
+						if (IsLoaded)
+							CSharpRuntime.Dispatch(mInstance, .WorldStateChanged, from * 64 + to);
+					};
+				mWorldStateScene.WorldStateChanged.Add(mWorldStateHandler);
+			}
 			// Never run Awake/OnEnable/Start when serialized state could not
 			// be restored. Otherwise a broken scene could silently initialize
 			// networked gameplay with the wrong field values.
@@ -485,6 +499,12 @@ class CSharpBehaviour : Component
 
 	void ReleaseManaged()
 	{
+		if (mWorldStateHandler != null)
+		{
+			mWorldStateScene.WorldStateChanged.Remove(mWorldStateHandler, true);
+			mWorldStateHandler = null;
+			mWorldStateScene = null;
+		}
 		if (mInstance <= 0)
 			return;
 		CSharpRuntime.Detach(mInstance);

@@ -1231,6 +1231,13 @@ public abstract class Script : IComponent
     public virtual void OnNetworkEvent(string name, float value) { }
 
     /// <summary>
+    /// The scene's world state changed (<see cref="Scene.SetWorldState(int)"/> or by name):
+    /// the state before and the state now, as indexes (<see cref="WorldStates.Name(int)"/> gives their names). World
+    /// states are not shared over the network: in multiplayer, change them on every peer (an RPC to all).
+    /// </summary>
+    public virtual void OnWorldStateChanged(int from, int to) { }
+
+    /// <summary>
     /// Tells this script on every machine that something happened (a sound, an effect): calls
     /// <see cref="OnNetworkEvent"/> there. Allowed from the server, or from the client that owns the object;
     /// without a session it simply calls it here. The name is at most 64 characters. For calls with

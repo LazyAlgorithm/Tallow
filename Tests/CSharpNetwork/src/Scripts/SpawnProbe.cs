@@ -12,6 +12,13 @@ public class SpawnProbe : Script
     private bool _spawned, _despawned, _done;
     private GameObject? _gone;
 
+    public override void Awake()
+    {
+        // Before the client joins: its player's team comes from here (the server only asks on the server).
+        if (Scene.IsServer)
+            Network.ChooseTeam = clientId => 7;
+    }
+
     public override void Start() => Network.RegisterPrefab("crate", "Prefabs/Crate.tprefab");
 
     public override void FixedUpdate(float deltaTime)
@@ -52,6 +59,8 @@ public class SpawnProbe : Script
             SyncProbe.Check("Scene.Spawn gives the object to the client it names", kept.IsMine && kept.GameObject.OwnerClientId == Scene.LocalClientId);
             SyncProbe.Check("Scene.Despawn removes it on the client", true);
             SyncProbe.Check("Scene.Spawn on a client gives null", Scene.Spawn("crate", Vector3.Zero) == null);
+            int team = Scene.Find("Player") is { } mine ? mine.Team : -1;
+            SyncProbe.Check($"Network.ChooseTeam on the server picks the joining player's team ({team})", team == 7);
             SyncProbe.Finished();
         }
         else if (_ticks == 60 * 20)

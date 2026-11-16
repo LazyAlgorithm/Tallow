@@ -927,6 +927,12 @@ class NetworkManager
 	{
 		if (ChooseTeam != null)
 			return ChooseTeam(clientId);
+		if (CSharpRuntime.HasTeamChooser)
+		{
+			let team = CSharpRuntime.ChooseTeam(clientId);
+			if (team >= 0)
+				return team;
+		}
 		if (TeamCount <= 0)
 			return 0;
 		// Join the team with the fewest players; the lowest number wins a tie.
