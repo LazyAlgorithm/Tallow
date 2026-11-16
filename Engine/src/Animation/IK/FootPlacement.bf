@@ -18,6 +18,7 @@ class FootPlacement : IKComponent
 	public Transform rightFoot;
 	/// The hips or pelvis bone, lowered when one foot has further to reach. Empty: the hips are left alone.
 	public Transform hips;
+	/// How much the feet are placed: 0 the animation as it is, 1 fully on the ground.
 	[Range(0, 1)] public float weight = 1;
 	/// The highest step up a foot is put on, and the deepest step down it reaches for.
 	public float stepUp = 0.4f;

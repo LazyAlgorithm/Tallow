@@ -36,6 +36,7 @@ struct TrailRendererData
 	public SharedString texture = default;
 	/// Whether it is drawn in its own colours, unlit by the scene's lights.
 	public bool unlit = true;
+	/// Whether the trail casts a shadow.
 	public bool castShadows = false;
 	/// How strongly it glows in its own colours (through bloom): 0 not at all.
 	[Range(0, 10)]

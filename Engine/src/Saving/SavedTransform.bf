@@ -155,10 +155,13 @@ struct SavedTransform : ComponentHandle<SavedTransformData>
 [Component, HandleData]
 struct SavedTransformData
 {
+	/// Which parts of its place are kept in a save: the position on each axis, the rotation and the scale.
 	public bool positionX = true;
 	public bool positionY = true;
 	public bool positionZ = true;
+	/// Keeps its rotation in a save.
 	public bool rotation = true;
+	/// Keeps its scale in a save.
 	public bool scale = false;
 	/// With a Rigidbody or Character Controller: its speed and direction.
 	public bool velocity = true;

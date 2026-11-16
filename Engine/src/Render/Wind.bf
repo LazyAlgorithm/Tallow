@@ -57,6 +57,7 @@ struct WindZone : ComponentHandle<WindZoneData>
 [Component, HandleData]
 struct WindZoneData
 {
+	/// Where it blows: everywhere (Global) or within a sphere round the object.
 	public WindShape shape = .Global;
 	/// How hard it blows: 0 still air, 1 a breeze, 3 a strong wind, 6 a gale.
 	public float strength = 1;

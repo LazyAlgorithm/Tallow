@@ -23,6 +23,7 @@ struct SequencePlayerData
 	public bool playOnStart = false;
 	/// Starts again from the beginning when it ends.
 	public bool loop = false;
+	/// How fast it plays: 1 as made, 2 twice as fast.
 	[Range(0, 4)]
 	public float speed = 1;
 	/// The player can skip it (Enter, a controller's Start button, or the project's "Sequence Skip" input action).

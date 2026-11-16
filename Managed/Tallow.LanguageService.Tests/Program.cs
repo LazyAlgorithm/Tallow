@@ -438,11 +438,23 @@ public sealed class CubeMover : Script
                 Token(0, 6, "namespace", "System") && Token(1, 6, "namespace", "Tallow") && Token(3, 20, "type", "Painter") &&
                 Token(3, 28, "typeparam", "T") && Token(3, 33, "type", "Script") && Token(2, 12, "type", "Mode"));
             Check("semantic tokens: methods, members, variables and constants",
-                Token(7, 25, "method", "Update") && Token(7, 32, "type", "TickInput") && Token(7, 42, "variable", "input") &&
+                Token(7, 25, "method", "Update") && Token(7, 32, "type", "TickInput") && Token(7, 42, "parameter", "input") &&
                 Token(6, 17, "member", "Speed") && Token(5, 21, "constant", "Limit") && Token(2, 19, "constant", "Calm") &&
-                Token(10, 8, "member", "Transform") && Token(10, 18, "member", "Position") && Token(10, 54, "variable", "deltaTime"));
+                Token(10, 8, "member", "Transform") && Token(10, 18, "member", "Position") && Token(10, 54, "parameter", "deltaTime"));
             Check("semantic tokens: var is left to the keyword colour; names after an emoji count it as one glyph",
                 !tokens.Any(t => t[4] == "var") && Token(9, 12, "variable", "list") && Token(10, 76, "variable", "mode"));
+            string scopeCode = "class ColorProbe { public int Visible; private int Hidden; " +
+                "public static int Shared; private static int Secret; " +
+                "public static int Level { get; set; } private static int Cache { get; set; } " +
+                "void Check() { int local = Visible + Hidden + Shared + Secret + Level + Cache; local++; } }";
+            var scopeTokens = RequestWithApi(service, "diagnostics", scopeCode, 0).Split('\n')
+                .Where(line => line.StartsWith("token\t")).Select(line => line.Split('\t')).ToList();
+            bool ScopeToken(string kind, string name) => scopeTokens.Count(t => t[3] == kind && t[4] == name) == 2;
+            Check("semantic tokens: instance and static fields and properties retain visibility at declarations and references",
+                ScopeToken("member", "Visible") && ScopeToken("privatemember", "Hidden") &&
+                ScopeToken("staticmember", "Shared") && ScopeToken("privatestaticmember", "Secret") &&
+                ScopeToken("staticmember", "Level") && ScopeToken("privatestaticmember", "Cache") &&
+                ScopeToken("variable", "local"));
             string timeCompletion = RequestWithApi(service, "completion",
                 "using Tallow; class Probe { void Go() { var fps = Time.Smoo",
                 "using Tallow; class Probe { void Go() { var fps = Time.Smoo".Length);

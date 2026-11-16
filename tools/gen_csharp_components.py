@@ -50,6 +50,41 @@ def beef_sources() -> str:
     return "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in sorted(ENGINE.rglob("*.bf")))
 
 
+def same_stem(a: str, b: str) -> bool:
+    """Whether two field names share a stem of four letters or more at either end (startWidth/endWidth,
+    positionX/positionY)."""
+    a, b = a.lower(), b.lower()
+    prefix = len(__import__("os").path.commonprefix([a, b]))
+    suffix = len(__import__("os").path.commonprefix([a[::-1], b[::-1]]))
+    return max(prefix, suffix) >= 4
+
+
+def enum_docs(source: str, full: str) -> tuple[list[str], dict[str, list[str]]]:
+    """An enum's own documentation and each case's."""
+    short = full.split(".")[-1]
+    match = re.search(r"\benum\s+" + re.escape(short) + r"\b[^{]*\{", source)
+    if not match:
+        return [], {}
+    body = struct_body(source, match.start())
+    cases = {}
+    for case in re.finditer(r"^\s*(?:\[[^\]\n]*\]\s*)*([A-Za-z_]\w*)\s*(?:=[^,\n]*)?,?\s*(?://.*)?$", body, re.M):
+        cases[case.group(1)] = doc_before(body, case.start())
+    return doc_before(source, match.start()), cases
+
+
+def inherited_doc(source: str, field: str) -> list[str]:
+    """The documentation of a field a component inherits (Collider's center and isTrigger): the field as declared in
+    an abstract base class."""
+    for base in re.finditer(r"\babstract\s+class\s+\w+\s*:\s*\w+", source):
+        body = struct_body(source, base.start())
+        match = re.search(r"^\s*(?:\[[^\]\n]*\]\s*)*public\s+[\w.<>\[\]]+\s+" + re.escape(field) + r"\s*(=|;)", body, re.M)
+        if match:
+            docs = doc_before(body, match.start())
+            if docs:
+                return docs
+    return []
+
+
 def doc_before(text: str, index: int) -> list[str]:
     """The /// lines right above a declaration, without the slashes."""
     lines = text[:index].splitlines()
@@ -200,13 +235,24 @@ def generate(catalog: str) -> str:
                     if decl.groups() else decl)
             if data:
                 body = struct_body(source, data.start())
-                for match in re.finditer(r"^\s*public\s+[\w.<>\[\]]+\s+(\w+)\s*(=|;)", body, re.M):
-                    field_docs[match.group(1)] = doc_before(body, match.start())
+                previous = None
+                for match in re.finditer(r"^\s*(?:\[[^\]\n]*\]\s*)*public\s+[\w.<>\[\]]+\s+(\w+)\s*(=|;)", body, re.M):
+                    own = doc_before(body, match.start())
+                    # One comment over a run of related fields ("width at the start and end" over startWidth and
+                    # endWidth): a field right below a documented one, with a name sharing its stem, shares it.
+                    if not own and previous and same_stem(previous[0], match.group(1)) and \
+                            body[previous[1]:match.start()].count("\n") <= 1:
+                        own = field_docs.get(previous[0], [])
+                    if own or match.group(1) not in field_docs:  # a nested struct's same name keeps the component's doc
+                        field_docs[match.group(1)] = own
+                    line_end = body.find("\n", match.end())
+                    previous = (match.group(1), line_end if line_end >= 0 else len(body))
         out += summary(docs or [f"The built-in {name} component."], "")
         out.append(f'[NativeComponent("{native}")]')
         out.append(f"public readonly partial record struct {name}(GameObject GameObject) : IComponent")
         out.append("{")
         out.append(f'    private NativeComponent Data => new(GameObject, "{native}");')
+        out.append("    /// <summary>Whether the object still exists and has this component.</summary>")
         out.append("    public bool IsValid => Data.IsValid;")
         taken = {"IsValid", "GameObject", "Data", name}
         for entry in fields:
@@ -230,7 +276,8 @@ def generate(catalog: str) -> str:
             else:
                 continue
             taken.add(prop)
-            out += summary(field_docs.get(field, []), "    ")
+            docs_for = field_docs.get(field) or inherited_doc(source, field)
+            out += summary(docs_for, "    ")
             out.append(f"    public {cs_type} {prop} {{ get => {getter}; set => Data.Set(\"{field}\", value); }}")
         out.append("}")
         out.append("")
@@ -239,10 +286,13 @@ def generate(catalog: str) -> str:
         cs = enum_name(full)
         if cs in have_enums:
             continue
-        out.append(f"/// <summary>Values of Beef's {full}.</summary>")
+        own, case_docs = enum_docs(source, full)
+        out += summary(own or [f"Values of the engine's {full.split('.')[-1]}."], "")
         out.append(f"public enum {cs}")
         out.append("{")
-        out += [f"    {case} = {value}," for case, value in enums[full]]
+        for case, value in enums[full]:
+            out += summary(case_docs.get(case, []), "    ")
+            out.append(f"    {case} = {value},")
         out.append("}")
         out.append("")
     out.append("internal static partial class NativeComponentTypes")

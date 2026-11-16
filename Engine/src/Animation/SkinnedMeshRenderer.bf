@@ -22,7 +22,9 @@ struct SkinnedMeshRendererData
 	/// Rigged .glb files whose clips this model can play too, separated by ';': a file of animations made for the
 	/// same skeleton (bones are matched by name), such as the Basic Motions asset pack for POLYGON characters.
 	public SharedString clipLibrary = default;
+	/// How fast the clip plays: 1 as made.
 	public float speed = 1.0f;
+	/// Plays the clip again from the start when it ends.
 	public bool loop = true;
 	/// Makes an object for every bone of the skeleton, under this one, and bends the mesh from those objects: then
 	/// things can be parented to a bone (a weapon in a hand), the IK components can work on the skeleton, an Animator

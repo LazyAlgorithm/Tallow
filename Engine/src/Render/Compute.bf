@@ -110,7 +110,9 @@ struct ComputeEffectData
 {
 	/// The compute shader (.tcompute).
 	public String shader = new .();
+	/// The size of the texture it writes, in pixels.
 	public int32 width = 256;
+	/// The size of the texture it writes, in pixels.
 	public int32 height = 256;
 	/// How many steps to run each frame. More makes a simulation move faster.
 	public int32 stepsPerFrame = 1;

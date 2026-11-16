@@ -97,6 +97,7 @@ struct WaterData
 	[Sync]
 	public float shoreFoam = 0.6f;
 	[Sync]
+	/// The colour of the foam where the water meets the shore and objects.
 	public Color foamColor = .White;
 	/// The bright lines that light makes through moving water, on what is under it.
 	[Sync]

@@ -10949,10 +10949,14 @@ const TextEditor::Palette& TextEditor::GetDarkPalette() {
 		IM_COL32(255, 255, 255,  16),	// current line highlight border
 		IM_COL32(220, 220, 170, 255),	// semantic method
 		IM_COL32(156, 220, 254, 255),	// semantic member
-		IM_COL32(176, 217, 239, 255),	// semantic variable
+		IM_COL32(204, 213, 218, 255),	// semantic variable
 		IM_COL32( 90, 179, 155, 255),	// semantic namespace
 		IM_COL32( 79, 193, 255, 255),	// semantic constant
-		IM_COL32( 90, 179, 155, 255)	// semantic type parameter
+		IM_COL32( 90, 179, 155, 255),	// semantic type parameter
+		IM_COL32(191, 159, 206, 255),	// semantic parameter
+		IM_COL32( 97, 166, 220, 255),	// semantic private member
+		IM_COL32(176, 209, 185, 255),	// semantic static member
+		IM_COL32(157, 154, 165, 255)	// semantic private static member
 	}};
 
 	return palette;
@@ -10986,10 +10990,14 @@ const TextEditor::Palette& TextEditor::GetLightPalette() {
 		IM_COL32(  0,   0,   0,  16),	// current line highlight border
 		IM_COL32(121,  94,  38, 255),	// semantic method
 		IM_COL32(  0,  16, 128, 255),	// semantic member
-		IM_COL32( 10,  21,  94, 255),	// semantic variable
+		IM_COL32( 26,  28,  45, 255),	// semantic variable
 		IM_COL32( 65,   0, 255, 255),	// semantic namespace
 		IM_COL32(  0, 112, 193, 255),	// semantic constant
-		IM_COL32( 65,   0, 255, 255)	// semantic type parameter
+		IM_COL32( 65,   0, 255, 255),	// semantic type parameter
+		IM_COL32(126,   6, 182, 255),	// semantic parameter
+		IM_COL32(  0,   2, 236, 255),	// semantic private member
+		IM_COL32(  8,  95,  86, 255),	// semantic static member
+		IM_COL32( 90,  12, 118, 255)	// semantic private static member
 	}};
 
 	return palette;

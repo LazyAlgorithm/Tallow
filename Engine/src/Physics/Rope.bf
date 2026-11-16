@@ -37,6 +37,7 @@ class Rope : Component
 	/// How fast it loses speed, like moving through thick air.
 	[Range(0, 5)]
 	public float damping = 0.2f;
+	/// How much it grips what it lies on or wraps round: 0 slides freely.
 	public float friction = 0.6f;
 	/// What its first end is tied to. None: this object holds it (or nothing, with Hold Start off).
 	public Transform startAttachedTo;

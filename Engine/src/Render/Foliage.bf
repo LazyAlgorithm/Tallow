@@ -12,6 +12,7 @@ struct FoliageData
 	public SharedString mesh = "builtin:grass";
 	/// A material (.tmat) for the plants. Empty: the model's own colours, two-sided, smoothly shaded.
 	public SharedString material = default;
+	/// Tints every plant.
 	public Color color = .White;
 	/// How much plants differ in shade from one to the next.
 	[Range(0, 1)]

@@ -161,7 +161,7 @@ public static class DialogueVariables
     }
     public static void Set(string name, bool value) => Set(name, value ? 1 : 0);
     public static void Add(string name, float amount) => Set(name, Get(name) + amount);
-    /// <summary>Whether a dialogue condition holds now ("gold >= 10 && metGuard").</summary>
+    /// <summary>Whether a dialogue condition holds now ("gold &gt;= 10 &amp;&amp; metGuard").</summary>
     public static bool Evaluate(string condition) => CSharpPlatform.DialogueCondition(condition ?? "");
     public static void Clear() => CSharpPlatform.DialogueVariablesClear();
 }

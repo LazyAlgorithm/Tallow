@@ -12,6 +12,7 @@ struct SceneLoaderData
 	public bool additive = false;
 	/// With Additive: take its sky, fog and ambient light too.
 	public bool applyEnvironment = false;
+	/// Loads the scene when this one starts. Off: call Load from code.
 	public bool loadOnStart = true;
 	/// Off: wait at 0.9 until Activate is called.
 	public bool activateWhenReady = true;

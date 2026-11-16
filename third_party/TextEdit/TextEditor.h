@@ -570,6 +570,10 @@ public:
 		semanticNamespace,
 		semanticConstant,
 		semanticTypeParameter,
+		semanticParameter,
+		semanticPrivateMember,
+		semanticStaticMember,
+		semanticPrivateStaticMember,
 		count
 	};
 

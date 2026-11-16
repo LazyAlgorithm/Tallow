@@ -9,15 +9,21 @@ enum HandShape : int32
 {
 	/// The five sliders are set by hand.
 	Custom,
+	/// Fingers straight and apart.
 	Open,
+	/// Gently curled, as a hand at rest.
 	Relaxed,
+	/// Every finger closed.
 	Fist,
 	/// Wrapped round a handle or a weapon's grip.
 	Grip,
 	/// A grip with the index finger out on a trigger.
 	Trigger,
+	/// The index finger out, the rest closed.
 	Point,
+	/// Thumb and index finger together.
 	Pinch,
+	/// A fist with the thumb up.
 	ThumbsUp
 }
 
@@ -40,10 +46,15 @@ class HandPose : IKComponent
 	public Transform hand;
 	/// A ready-made shape, or Custom to use the sliders as they are.
 	public HandShape shape = .Custom;
+	/// How far the thumb curls: 0 straight, 1 closed.
 	[Range(0, 1)] public float thumb = 0;
+	/// How far the index curls: 0 straight, 1 closed.
 	[Range(0, 1)] public float index = 0;
+	/// How far the middle curls: 0 straight, 1 closed.
 	[Range(0, 1)] public float middle = 0;
+	/// How far the ring curls: 0 straight, 1 closed.
 	[Range(0, 1)] public float ring = 0;
+	/// How far the pinky curls: 0 straight, 1 closed.
 	[Range(0, 1)] public float pinky = 0;
 	/// Fans the fingers apart (above 0) or presses them together (below 0).
 	[Range(-1, 1)] public float spread = 0;

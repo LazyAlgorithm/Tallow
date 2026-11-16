@@ -12,6 +12,7 @@ namespace Tallow;
 public readonly partial record struct AudioListener(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.AudioListener");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
 }
 
@@ -23,6 +24,7 @@ public readonly partial record struct AudioListener(GameObject GameObject) : ICo
 public readonly partial record struct AudioReverbZone(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.AudioReverbZone");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// How far the zone reaches.
@@ -32,8 +34,20 @@ public readonly partial record struct AudioReverbZone(GameObject GameObject) : I
     /// Width of the band at the edge over which the reverb fades in.
     /// </summary>
     public float Fade { get => Data.GetFloat("fade"); set => Data.Set("fade", value); }
+    /// <summary>
+    /// How much reverb at full strength, 0 to 1.
+    /// </summary>
     public float Amount { get => Data.GetFloat("amount"); set => Data.Set("amount", value); }
+    /// <summary>
+    /// How much reverb at full strength, 0 to 1.
+    /// Small room to large hall.
+    /// </summary>
     public float RoomSize { get => Data.GetFloat("roomSize"); set => Data.Set("roomSize", value); }
+    /// <summary>
+    /// How much reverb at full strength, 0 to 1.
+    /// Small room to large hall.
+    /// How quickly high frequencies die in the echo: 0 bright and ringing, 1 dull and soft.
+    /// </summary>
     public float Damping { get => Data.GetFloat("damping"); set => Data.Set("damping", value); }
 }
 
@@ -45,6 +59,7 @@ public readonly partial record struct AudioReverbZone(GameObject GameObject) : I
 public readonly partial record struct BehaviorTreeRunner(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.BehaviorTreeRunner");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// Tree file, relative to the project's asset folder.
@@ -77,6 +92,7 @@ public readonly partial record struct BehaviorTreeRunner(GameObject GameObject) 
 public readonly partial record struct Camera(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Camera");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// How much the camera sees from top to bottom, in degrees.
@@ -130,8 +146,15 @@ public readonly partial record struct Camera(GameObject GameObject) : IComponent
 public readonly partial record struct CapsuleCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.CapsuleCollider");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// Where the shape's centre is, relative to the object.
+    /// </summary>
     public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    /// <summary>
+    /// A trigger stops nothing: objects pass through it, and both get OnTriggerEnter and OnTriggerExit.
+    /// </summary>
     public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
     /// <summary>
     /// The capsule's radius.
@@ -150,8 +173,15 @@ public readonly partial record struct CapsuleCollider(GameObject GameObject) : I
 public readonly partial record struct CompoundCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.CompoundCollider");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// Where the shape's centre is, relative to the object.
+    /// </summary>
     public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    /// <summary>
+    /// A trigger stops nothing: objects pass through it, and both get OnTriggerEnter and OnTriggerExit.
+    /// </summary>
     public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
 }
 
@@ -163,12 +193,19 @@ public readonly partial record struct CompoundCollider(GameObject GameObject) : 
 public readonly partial record struct ComputeEffect(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ComputeEffect");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// The compute shader (.tcompute).
     /// </summary>
     public string Shader { get => Data.GetString("shader"); set => Data.Set("shader", value); }
+    /// <summary>
+    /// The size of the texture it writes, in pixels.
+    /// </summary>
     public int Width { get => Data.GetInt("width"); set => Data.Set("width", value); }
+    /// <summary>
+    /// The size of the texture it writes, in pixels.
+    /// </summary>
     public int Height { get => Data.GetInt("height"); set => Data.Set("height", value); }
     /// <summary>
     /// How many steps to run each frame. More makes a simulation move faster.
@@ -187,8 +224,15 @@ public readonly partial record struct ComputeEffect(GameObject GameObject) : ICo
 public readonly partial record struct ConvexCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ConvexCollider");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// Where the shape's centre is, relative to the object.
+    /// </summary>
     public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    /// <summary>
+    /// A trigger stops nothing: objects pass through it, and both get OnTriggerEnter and OnTriggerExit.
+    /// </summary>
     public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
     /// <summary>
     /// Wrap the model hierarchy when the body is on a parent rather than the mesh object.
@@ -206,6 +250,7 @@ public readonly partial record struct ConvexCollider(GameObject GameObject) : IC
 public readonly partial record struct Decal(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Decal");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// The picture. Its alpha decides where the decal shows; none draws a solid rectangle in the colour.
@@ -262,6 +307,7 @@ public readonly partial record struct Decal(GameObject GameObject) : IComponent
 public readonly partial record struct DialogueRunner(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.DialogueRunner");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// The dialogue file.
@@ -317,6 +363,7 @@ public readonly partial record struct DialogueRunner(GameObject GameObject) : IC
 public readonly partial record struct Floater(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Floater");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// How strongly it floats: 1 neither floats nor sinks, more floats higher (a cork), less sinks (a stone).
@@ -351,6 +398,7 @@ public readonly partial record struct Floater(GameObject GameObject) : IComponen
 public readonly partial record struct Foliage(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Foliage");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// The plant's model: "builtin:grass", "builtin:bush", "builtin:tree", "builtin:pine", or a model in the project.
@@ -360,6 +408,9 @@ public readonly partial record struct Foliage(GameObject GameObject) : IComponen
     /// A material (.tmat) for the plants. Empty: the model's own colours, two-sided, smoothly shaded.
     /// </summary>
     public string Material { get => Data.GetString("material"); set => Data.Set("material", value); }
+    /// <summary>
+    /// Tints every plant.
+    /// </summary>
     public Color Color { get => Data.GetColor("color"); set => Data.Set("color", value); }
     /// <summary>
     /// How much plants differ in shade from one to the next.
@@ -369,6 +420,9 @@ public readonly partial record struct Foliage(GameObject GameObject) : IComponen
     /// Each plant's size is somewhere between these.
     /// </summary>
     public float MinScale { get => Data.GetFloat("minScale"); set => Data.Set("minScale", value); }
+    /// <summary>
+    /// Each plant's size is somewhere between these.
+    /// </summary>
     public float MaxScale { get => Data.GetFloat("maxScale"); set => Data.Set("maxScale", value); }
     /// <summary>
     /// How far plants bend in the wind: 1 for grass, less for stiff bushes and trees, 0 for rocks.
@@ -409,6 +463,7 @@ public readonly partial record struct Foliage(GameObject GameObject) : IComponen
 public readonly partial record struct FoliageBender(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.FoliageBender");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// How far from the object plants are pushed.
@@ -438,12 +493,21 @@ public readonly partial record struct FoliageBender(GameObject GameObject) : ICo
 public readonly partial record struct FootPlacement(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.FootPlacement");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// How much the feet are placed: 0 the animation as it is, 1 fully on the ground.
+    /// </summary>
     public float Weight { get => Data.GetFloat("weight"); set => Data.Set("weight", value); }
     /// <summary>
+    /// How much the feet are placed: 0 the animation as it is, 1 fully on the ground.
     /// The highest step up a foot is put on, and the deepest step down it reaches for.
     /// </summary>
     public float StepUp { get => Data.GetFloat("stepUp"); set => Data.Set("stepUp", value); }
+    /// <summary>
+    /// How much the feet are placed: 0 the animation as it is, 1 fully on the ground.
+    /// The highest step up a foot is put on, and the deepest step down it reaches for.
+    /// </summary>
     public float StepDown { get => Data.GetFloat("stepDown"); set => Data.Set("stepDown", value); }
     /// <summary>
     /// How quickly feet and hips settle on new ground; higher is snappier.
@@ -453,7 +517,13 @@ public readonly partial record struct FootPlacement(GameObject GameObject) : ICo
     /// Tilt the feet to the slope under them, by no more than Max Tilt degrees.
     /// </summary>
     public bool Tilt { get => Data.GetBool("tilt"); set => Data.Set("tilt", value); }
+    /// <summary>
+    /// Tilt the feet to the slope under them, by no more than Max Tilt degrees.
+    /// </summary>
     public float MaxTilt { get => Data.GetFloat("maxTilt"); set => Data.Set("maxTilt", value); }
+    /// <summary>
+    /// Only colliders on this layer count as ground. None: everything except this character.
+    /// </summary>
     public int GroundLayer { get => Data.GetInt("groundLayer"); set => Data.Set("groundLayer", value); }
 }
 
@@ -475,20 +545,77 @@ public readonly partial record struct FootPlacement(GameObject GameObject) : ICo
 public readonly partial record struct HandPose(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.HandPose");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// A ready-made shape, or Custom to use the sliders as they are.
     /// </summary>
     public HandShape Shape { get => Data.GetEnum<HandShape>("shape"); set => Data.Set("shape", value); }
+    /// <summary>
+    /// How far the thumb curls: 0 straight, 1 closed.
+    /// </summary>
     public float Thumb { get => Data.GetFloat("thumb"); set => Data.Set("thumb", value); }
+    /// <summary>
+    /// How far the thumb curls: 0 straight, 1 closed.
+    /// How far the index curls: 0 straight, 1 closed.
+    /// </summary>
     public float Index { get => Data.GetFloat("index"); set => Data.Set("index", value); }
+    /// <summary>
+    /// How far the thumb curls: 0 straight, 1 closed.
+    /// How far the index curls: 0 straight, 1 closed.
+    /// How far the middle curls: 0 straight, 1 closed.
+    /// </summary>
     public float Middle { get => Data.GetFloat("middle"); set => Data.Set("middle", value); }
+    /// <summary>
+    /// How far the thumb curls: 0 straight, 1 closed.
+    /// How far the index curls: 0 straight, 1 closed.
+    /// How far the middle curls: 0 straight, 1 closed.
+    /// How far the ring curls: 0 straight, 1 closed.
+    /// </summary>
     public float Ring { get => Data.GetFloat("ring"); set => Data.Set("ring", value); }
+    /// <summary>
+    /// How far the thumb curls: 0 straight, 1 closed.
+    /// How far the index curls: 0 straight, 1 closed.
+    /// How far the middle curls: 0 straight, 1 closed.
+    /// How far the ring curls: 0 straight, 1 closed.
+    /// How far the pinky curls: 0 straight, 1 closed.
+    /// </summary>
     public float Pinky { get => Data.GetFloat("pinky"); set => Data.Set("pinky", value); }
+    /// <summary>
+    /// How far the thumb curls: 0 straight, 1 closed.
+    /// How far the index curls: 0 straight, 1 closed.
+    /// How far the middle curls: 0 straight, 1 closed.
+    /// How far the ring curls: 0 straight, 1 closed.
+    /// How far the pinky curls: 0 straight, 1 closed.
+    /// Fans the fingers apart (above 0) or presses them together (below 0).
+    /// </summary>
     public float Spread { get => Data.GetFloat("spread"); set => Data.Set("spread", value); }
+    /// <summary>
+    /// How far the thumb curls: 0 straight, 1 closed.
+    /// How far the index curls: 0 straight, 1 closed.
+    /// How far the middle curls: 0 straight, 1 closed.
+    /// How far the ring curls: 0 straight, 1 closed.
+    /// How far the pinky curls: 0 straight, 1 closed.
+    /// Fans the fingers apart (above 0) or presses them together (below 0).
+    /// Squeezes the index finger a little further on top of its slider: animate it or set it from code as the trigger is pulled.
+    /// </summary>
     public float Trigger { get => Data.GetFloat("trigger"); set => Data.Set("trigger", value); }
+    /// <summary>
+    /// How far the thumb curls: 0 straight, 1 closed.
+    /// How far the index curls: 0 straight, 1 closed.
+    /// How far the middle curls: 0 straight, 1 closed.
+    /// How far the ring curls: 0 straight, 1 closed.
+    /// How far the pinky curls: 0 straight, 1 closed.
+    /// Fans the fingers apart (above 0) or presses them together (below 0).
+    /// Squeezes the index finger a little further on top of its slider: animate it or set it from code as the trigger is pulled.
+    /// </summary>
     public float Weight { get => Data.GetFloat("weight"); set => Data.Set("weight", value); }
     /// <summary>
+    /// How far the thumb curls: 0 straight, 1 closed.
+    /// How far the index curls: 0 straight, 1 closed.
+    /// How far the middle curls: 0 straight, 1 closed.
+    /// How far the ring curls: 0 straight, 1 closed.
+    /// How far the pinky curls: 0 straight, 1 closed.
     /// Fans the fingers apart (above 0) or presses them together (below 0).
     /// Squeezes the index finger a little further on top of its slider: animate it or set it from code as the trigger is pulled.
     /// Seconds a change of shape takes while the game runs.
@@ -512,13 +639,23 @@ public readonly partial record struct HandPose(GameObject GameObject) : ICompone
 public readonly partial record struct LODGroup(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.LODGroup");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// Where the levels come from: children named _LOD0 to _LOD3, or simplified copies made when the scene loads.
+    /// </summary>
     public LODGroupSource Source { get => Data.GetEnum<LODGroupSource>("source"); set => Data.Set("source", value); }
     /// <summary>
     /// Below this share of the screen's height, level 1 is drawn instead of level 0.
     /// </summary>
     public float Level1Below { get => Data.GetFloat("level1Below"); set => Data.Set("level1Below", value); }
+    /// <summary>
+    /// Below this share of the screen's height, level 1 is drawn instead of level 0.
+    /// </summary>
     public float Level2Below { get => Data.GetFloat("level2Below"); set => Data.Set("level2Below", value); }
+    /// <summary>
+    /// Below this share of the screen's height, level 1 is drawn instead of level 0.
+    /// </summary>
     public float Level3Below { get => Data.GetFloat("level3Below"); set => Data.Set("level3Below", value); }
     /// <summary>
     /// Below this share of the screen's height nothing is drawn (0: always drawn).
@@ -532,7 +669,13 @@ public readonly partial record struct LODGroup(GameObject GameObject) : ICompone
     /// Generated: the share of its triangles each lower level keeps.
     /// </summary>
     public float Level1Triangles { get => Data.GetFloat("level1Triangles"); set => Data.Set("level1Triangles", value); }
+    /// <summary>
+    /// Generated: the share of its triangles each lower level keeps.
+    /// </summary>
     public float Level2Triangles { get => Data.GetFloat("level2Triangles"); set => Data.Set("level2Triangles", value); }
+    /// <summary>
+    /// Generated: the share of its triangles each lower level keeps.
+    /// </summary>
     public float Level3Triangles { get => Data.GetFloat("level3Triangles"); set => Data.Set("level3Triangles", value); }
 }
 
@@ -546,6 +689,7 @@ public readonly partial record struct LODGroup(GameObject GameObject) : ICompone
 public readonly partial record struct LightProbeVolume(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.LightProbeVolume");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// The box it covers, in metres around the object (scaled with it, not turned with it).
@@ -580,8 +724,16 @@ public readonly partial record struct LightProbeVolume(GameObject GameObject) : 
 public readonly partial record struct LimbIK(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.LimbIK");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// 0 leaves the limb to its animation, 1 puts the tip on the target.
+    /// </summary>
     public float Weight { get => Data.GetFloat("weight"); set => Data.Set("weight", value); }
+    /// <summary>
+    /// 0 leaves the limb to its animation, 1 puts the tip on the target.
+    /// How much the tip takes the target's rotation: 1 for a hand locked to a grip, 0 to leave the wrist to the clip.
+    /// </summary>
     public float RotationWeight { get => Data.GetFloat("rotationWeight"); set => Data.Set("rotationWeight", value); }
     /// <summary>
     /// 0 leaves the limb to its animation, 1 puts the tip on the target.
@@ -606,6 +758,7 @@ public readonly partial record struct LimbIK(GameObject GameObject) : IComponent
 public readonly partial record struct LineRenderer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.LineRenderer");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// Whether the points are in the world (on) or relative to this object (off: the line moves with it).
@@ -619,11 +772,17 @@ public readonly partial record struct LineRenderer(GameObject GameObject) : ICom
     /// The line's width at its first point and its last, in metres.
     /// </summary>
     public float StartWidth { get => Data.GetFloat("startWidth"); set => Data.Set("startWidth", value); }
+    /// <summary>
+    /// The line's width at its first point and its last, in metres.
+    /// </summary>
     public float EndWidth { get => Data.GetFloat("endWidth"); set => Data.Set("endWidth", value); }
     /// <summary>
     /// Its colour at the first point and the last, blended between. An alpha below 1 makes it see-through.
     /// </summary>
     public Color StartColor { get => Data.GetColor("startColor"); set => Data.Set("startColor", value); }
+    /// <summary>
+    /// Its colour at the first point and the last, blended between. An alpha below 1 makes it see-through.
+    /// </summary>
     public Color EndColor { get => Data.GetColor("endColor"); set => Data.Set("endColor", value); }
     /// <summary>
     /// View: turned to face the camera. Transform Z: flat, facing along this object's forward axis.
@@ -642,6 +801,10 @@ public readonly partial record struct LineRenderer(GameObject GameObject) : ICom
     /// width make square dots.
     /// </summary>
     public float DashLength { get => Data.GetFloat("dashLength"); set => Data.Set("dashLength", value); }
+    /// <summary>
+    /// Draws it in dashes this long, in metres, with Gap Length between: 0 for a solid line. Dashes as long as the
+    /// width make square dots.
+    /// </summary>
     public float GapLength { get => Data.GetFloat("gapLength"); set => Data.Set("gapLength", value); }
     /// <summary>
     /// A material (.tmat) to draw it with, for a see-through or additive one; empty draws it in its colours.
@@ -656,6 +819,9 @@ public readonly partial record struct LineRenderer(GameObject GameObject) : ICom
     /// Whether it is drawn in its own colours, unlit by the scene's lights.
     /// </summary>
     public bool Unlit { get => Data.GetBool("unlit"); set => Data.Set("unlit", value); }
+    /// <summary>
+    /// Whether the line casts a shadow.
+    /// </summary>
     public bool CastShadows { get => Data.GetBool("castShadows"); set => Data.Set("castShadows", value); }
     /// <summary>
     /// How strongly it glows in its own colours (through bloom): 0 not at all.
@@ -681,9 +847,20 @@ public readonly partial record struct LineRenderer(GameObject GameObject) : ICom
 public readonly partial record struct LookAtIK(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.LookAtIK");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine).
+    /// </summary>
     public int Bones { get => Data.GetInt("bones"); set => Data.Set("bones", value); }
+    /// <summary>
+    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine).
+    /// </summary>
     public float Weight { get => Data.GetFloat("weight"); set => Data.Set("weight", value); }
+    /// <summary>
+    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine).
+    /// The furthest the head turns from where its animation has it, in degrees.
+    /// </summary>
     public float MaxAngle { get => Data.GetFloat("maxAngle"); set => Data.Set("maxAngle", value); }
     /// <summary>
     /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine).
@@ -704,8 +881,15 @@ public readonly partial record struct LookAtIK(GameObject GameObject) : ICompone
 public readonly partial record struct MeshCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.MeshCollider");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// Where the shape's centre is, relative to the object.
+    /// </summary>
     public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    /// <summary>
+    /// A trigger stops nothing: objects pass through it, and both get OnTriggerEnter and OnTriggerExit.
+    /// </summary>
     public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
 }
 
@@ -718,6 +902,7 @@ public readonly partial record struct MeshCollider(GameObject GameObject) : ICom
 public readonly partial record struct ModelMesh(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ModelMesh");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// Materials (.tmat) for slots 1, 2, ... separated by ';'. Slot 0 is the Mesh Renderer's material.
@@ -738,6 +923,7 @@ public readonly partial record struct ModelMesh(GameObject GameObject) : ICompon
 public readonly partial record struct NavigationArea(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.NavigationArea");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// The box's size in metres (whatever the object's scale), centred on the object.
@@ -763,6 +949,7 @@ public readonly partial record struct NavigationArea(GameObject GameObject) : IC
 public readonly partial record struct NavigationLink(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.NavigationLink");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// Where the link ends, relative to this object (turned with it).
@@ -772,6 +959,9 @@ public readonly partial record struct NavigationLink(GameObject GameObject) : IC
     /// Agents can cross it both ways. Off: only from this object to End (a drop they cannot climb back up).
     /// </summary>
     public bool Bidirectional { get => Data.GetBool("bidirectional"); set => Data.Set("bidirectional", value); }
+    /// <summary>
+    /// How agents cross it: Jump, Climb, Teleport or Walk (each moves them differently along the link).
+    /// </summary>
     public NavigationLinkKind Kind { get => Data.GetEnum<NavigationLinkKind>("kind"); set => Data.Set("kind", value); }
     /// <summary>
     /// Seconds to cross it (Teleport: none).
@@ -801,7 +991,11 @@ public readonly partial record struct NavigationLink(GameObject GameObject) : IC
 public readonly partial record struct NavigationObstacle(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.NavigationObstacle");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// The shape agents keep out of.
+    /// </summary>
     public NavigationObstacleShape Shape { get => Data.GetEnum<NavigationObstacleShape>("shape"); set => Data.Set("shape", value); }
     /// <summary>
     /// Box: its size in metres (whatever the object's scale). Cylinder: x is its diameter, y its height.
@@ -820,6 +1014,9 @@ public readonly partial record struct NavigationObstacle(GameObject GameObject) 
     /// again each frame.
     /// </summary>
     public bool CarveOnlyStationary { get => Data.GetBool("carveOnlyStationary"); set => Data.Set("carveOnlyStationary", value); }
+    /// <summary>
+    /// Seconds the obstacle must stand still before it carves (with Carve Only Stationary).
+    /// </summary>
     public float StationaryTime { get => Data.GetFloat("stationaryTime"); set => Data.Set("stationaryTime", value); }
     /// <summary>
     /// How far it must move to count as moving.
@@ -829,6 +1026,9 @@ public readonly partial record struct NavigationObstacle(GameObject GameObject) 
     /// Where it was when it last carved; the grid is cut there until it carves again.
     /// </summary>
     public Vector3 CarvedPosition { get => Data.GetVector3("CarvedPosition"); set => Data.Set("CarvedPosition", value); }
+    /// <summary>
+    /// Where it was when it last carved; the grid is cut there until it carves again.
+    /// </summary>
     public bool Carving { get => Data.GetBool("Carving"); set => Data.Set("Carving", value); }
     /// <summary>
     /// How fast it is moving (for agents steering round it).
@@ -843,6 +1043,7 @@ public readonly partial record struct NavigationObstacle(GameObject GameObject) 
 public readonly partial record struct NetworkIdentity(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.NetworkIdentity");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// On: the engine chooses the format, dormancy, relevance and priority below from what is on the object (a
@@ -908,6 +1109,7 @@ public readonly partial record struct NetworkIdentity(GameObject GameObject) : I
 public readonly partial record struct ParticleSystem(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ParticleSystem");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// The mesh each particle is drawn with.
@@ -994,6 +1196,7 @@ public readonly partial record struct ParticleSystem(GameObject GameObject) : IC
 public readonly partial record struct ReflectionProbe(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ReflectionProbe");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// The box it covers, in metres around the object (scaled with it, not turned with it).
@@ -1054,6 +1257,7 @@ public readonly partial record struct ReflectionProbe(GameObject GameObject) : I
 public readonly partial record struct Rope(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Rope");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// How long it is, in metres.
@@ -1079,6 +1283,9 @@ public readonly partial record struct Rope(GameObject GameObject) : IComponent
     /// How fast it loses speed, like moving through thick air.
     /// </summary>
     public float Damping { get => Data.GetFloat("damping"); set => Data.Set("damping", value); }
+    /// <summary>
+    /// How much it grips what it lies on or wraps round: 0 slides freely.
+    /// </summary>
     public float Friction { get => Data.GetFloat("friction"); set => Data.Set("friction", value); }
     /// <summary>
     /// With nothing in Start Attached To: whether this object holds the first end. Off: that end hangs free too.
@@ -1111,6 +1318,9 @@ public readonly partial record struct Rope(GameObject GameObject) : IComponent
     /// How hard it can be pulled, in newtons, before it snaps in two (each half staying on its end). 0: never.
     /// </summary>
     public float BreakForce { get => Data.GetFloat("breakForce"); set => Data.Set("breakForce", value); }
+    /// <summary>
+    /// Solver passes each step: more is firmer and costs more.
+    /// </summary>
     public int Iterations { get => Data.GetInt("iterations"); set => Data.Set("iterations", value); }
 }
 
@@ -1127,11 +1337,27 @@ public readonly partial record struct Rope(GameObject GameObject) : IComponent
 public readonly partial record struct SavedTransform(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SavedTransform");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// Which parts of its place are kept in a save: the position on each axis, the rotation and the scale.
+    /// </summary>
     public bool PositionX { get => Data.GetBool("positionX"); set => Data.Set("positionX", value); }
+    /// <summary>
+    /// Which parts of its place are kept in a save: the position on each axis, the rotation and the scale.
+    /// </summary>
     public bool PositionY { get => Data.GetBool("positionY"); set => Data.Set("positionY", value); }
+    /// <summary>
+    /// Which parts of its place are kept in a save: the position on each axis, the rotation and the scale.
+    /// </summary>
     public bool PositionZ { get => Data.GetBool("positionZ"); set => Data.Set("positionZ", value); }
+    /// <summary>
+    /// Keeps its rotation in a save.
+    /// </summary>
     public bool Rotation { get => Data.GetBool("rotation"); set => Data.Set("rotation", value); }
+    /// <summary>
+    /// Keeps its scale in a save.
+    /// </summary>
     public bool Scale { get => Data.GetBool("scale"); set => Data.Set("scale", value); }
     /// <summary>
     /// With a Rigidbody or Character Controller: its speed and direction.
@@ -1158,6 +1384,7 @@ public readonly partial record struct SavedTransform(GameObject GameObject) : IC
 public readonly partial record struct SceneLoader(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SceneLoader");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// The scene file to load.
@@ -1171,6 +1398,9 @@ public readonly partial record struct SceneLoader(GameObject GameObject) : IComp
     /// With Additive: take its sky, fog and ambient light too.
     /// </summary>
     public bool ApplyEnvironment { get => Data.GetBool("applyEnvironment"); set => Data.Set("applyEnvironment", value); }
+    /// <summary>
+    /// Loads the scene when this one starts. Off: call Load from code.
+    /// </summary>
     public bool LoadOnStart { get => Data.GetBool("loadOnStart"); set => Data.Set("loadOnStart", value); }
     /// <summary>
     /// Off: wait at 0.9 until Activate is called.
@@ -1192,6 +1422,7 @@ public readonly partial record struct SceneLoader(GameObject GameObject) : IComp
 public readonly partial record struct SequencePlayer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SequencePlayer");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// The sequence (.tsequence file).
@@ -1205,6 +1436,9 @@ public readonly partial record struct SequencePlayer(GameObject GameObject) : IC
     /// Starts again from the beginning when it ends.
     /// </summary>
     public bool Loop { get => Data.GetBool("loop"); set => Data.Set("loop", value); }
+    /// <summary>
+    /// How fast it plays: 1 as made, 2 twice as fast.
+    /// </summary>
     public float Speed { get => Data.GetFloat("speed"); set => Data.Set("speed", value); }
     /// <summary>
     /// The player can skip it (Enter, a controller's Start button, or the project's "Sequence Skip" input action).
@@ -1236,6 +1470,7 @@ public readonly partial record struct SequencePlayer(GameObject GameObject) : IC
 public readonly partial record struct SkinnedMeshRenderer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SkinnedMeshRenderer");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// Rigged .glb / .gltf file relative to the project's asset folder.
@@ -1250,7 +1485,13 @@ public readonly partial record struct SkinnedMeshRenderer(GameObject GameObject)
     /// same skeleton (bones are matched by name), such as the Basic Motions asset pack for POLYGON characters.
     /// </summary>
     public string ClipLibrary { get => Data.GetString("clipLibrary"); set => Data.Set("clipLibrary", value); }
+    /// <summary>
+    /// How fast the clip plays: 1 as made.
+    /// </summary>
     public float Speed { get => Data.GetFloat("speed"); set => Data.Set("speed", value); }
+    /// <summary>
+    /// Plays the clip again from the start when it ends.
+    /// </summary>
     public bool Loop { get => Data.GetBool("loop"); set => Data.Set("loop", value); }
     /// <summary>
     /// Makes an object for every bone of the skeleton, under this one, and bends the mesh from those objects: then
@@ -1288,6 +1529,7 @@ public readonly partial record struct SkinnedMeshRenderer(GameObject GameObject)
 public readonly partial record struct SpawnPoint(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SpawnPoint");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// Which team may use this point. 0 means any team.
@@ -1313,6 +1555,7 @@ public readonly partial record struct SpawnPoint(GameObject GameObject) : ICompo
 public readonly partial record struct StreamingSource(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.StreamingSource");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// Added to the scene's Load Radius for this source: a fast vehicle may want more of the world ahead of it.
@@ -1331,6 +1574,7 @@ public readonly partial record struct StreamingSource(GameObject GameObject) : I
 public readonly partial record struct TrailRenderer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.TrailRenderer");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// How long a point stays in the trail, in seconds.
@@ -1344,11 +1588,17 @@ public readonly partial record struct TrailRenderer(GameObject GameObject) : ICo
     /// Its width at the object and at the tail, in metres.
     /// </summary>
     public float StartWidth { get => Data.GetFloat("startWidth"); set => Data.Set("startWidth", value); }
+    /// <summary>
+    /// Its width at the object and at the tail, in metres.
+    /// </summary>
     public float EndWidth { get => Data.GetFloat("endWidth"); set => Data.Set("endWidth", value); }
     /// <summary>
     /// Its colour at the object and at the tail, blended between. An alpha below 1 makes it see-through.
     /// </summary>
     public Color StartColor { get => Data.GetColor("startColor"); set => Data.Set("startColor", value); }
+    /// <summary>
+    /// Its colour at the object and at the tail, blended between. An alpha below 1 makes it see-through.
+    /// </summary>
     public Color EndColor { get => Data.GetColor("endColor"); set => Data.Set("endColor", value); }
     /// <summary>
     /// Whether it is adding points. Off: what is there fades away, and starts again when it is turned back on.
@@ -1371,6 +1621,10 @@ public readonly partial record struct TrailRenderer(GameObject GameObject) : ICo
     /// width make square dots.
     /// </summary>
     public float DashLength { get => Data.GetFloat("dashLength"); set => Data.Set("dashLength", value); }
+    /// <summary>
+    /// Draws it in dashes this long, in metres, with Gap Length between: 0 for a solid line. Dashes as long as the
+    /// width make square dots.
+    /// </summary>
     public float GapLength { get => Data.GetFloat("gapLength"); set => Data.Set("gapLength", value); }
     /// <summary>
     /// A material (.tmat) to draw it with, for a see-through or additive one; empty draws it in its colours.
@@ -1385,6 +1639,9 @@ public readonly partial record struct TrailRenderer(GameObject GameObject) : ICo
     /// Whether it is drawn in its own colours, unlit by the scene's lights.
     /// </summary>
     public bool Unlit { get => Data.GetBool("unlit"); set => Data.Set("unlit", value); }
+    /// <summary>
+    /// Whether the trail casts a shadow.
+    /// </summary>
     public bool CastShadows { get => Data.GetBool("castShadows"); set => Data.Set("castShadows", value); }
     /// <summary>
     /// How strongly it glows in its own colours (through bloom): 0 not at all.
@@ -1410,16 +1667,23 @@ public readonly partial record struct TrailRenderer(GameObject GameObject) : ICo
 public readonly partial record struct ViewmodelPose(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.ViewmodelPose");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// Where the weapon rests (the object's local position and rotation, in degrees, under the camera).
     /// </summary>
     public Vector3 HipPosition { get => Data.GetVector3("hipPosition"); set => Data.Set("hipPosition", value); }
+    /// <summary>
+    /// Where the weapon rests (the object's local position and rotation, in degrees, under the camera).
+    /// </summary>
     public Vector3 HipRotation { get => Data.GetVector3("hipRotation"); set => Data.Set("hipRotation", value); }
     /// <summary>
     /// Where it is when aiming down the sights: in the middle, low enough that the sights meet the crosshair.
     /// </summary>
     public Vector3 AimPosition { get => Data.GetVector3("aimPosition"); set => Data.Set("aimPosition", value); }
+    /// <summary>
+    /// Where it is when aiming down the sights: in the middle, low enough that the sights meet the crosshair.
+    /// </summary>
     public Vector3 AimRotation { get => Data.GetVector3("aimRotation"); set => Data.Set("aimRotation", value); }
     /// <summary>
     /// Set by the game while the player aims down the sights.
@@ -1445,6 +1709,9 @@ public readonly partial record struct ViewmodelPose(GameObject GameObject) : ICo
     /// Sway: degrees the weapon lags behind for each 100 degrees a second the view turns, up to Sway Limit.
     /// </summary>
     public float Sway { get => Data.GetFloat("sway"); set => Data.Set("sway", value); }
+    /// <summary>
+    /// Sway: degrees the weapon lags behind for each 100 degrees a second the view turns, up to Sway Limit.
+    /// </summary>
     public float SwayLimit { get => Data.GetFloat("swayLimit"); set => Data.Set("swayLimit", value); }
     /// <summary>
     /// How much of the bob and sway aiming takes away (1: all of it).
@@ -1455,7 +1722,15 @@ public readonly partial record struct ViewmodelPose(GameObject GameObject) : ICo
     /// quickly it recovers (the whole way in 1 / Recoil Recovery seconds).
     /// </summary>
     public float RecoilBack { get => Data.GetFloat("recoilBack"); set => Data.Set("recoilBack", value); }
+    /// <summary>
+    /// Recoil from Kick: how far one kick pushes the weapon back (metres) and tips its muzzle up (degrees), and how
+    /// quickly it recovers (the whole way in 1 / Recoil Recovery seconds).
+    /// </summary>
     public float RecoilPitch { get => Data.GetFloat("recoilPitch"); set => Data.Set("recoilPitch", value); }
+    /// <summary>
+    /// Recoil from Kick: how far one kick pushes the weapon back (metres) and tips its muzzle up (degrees), and how
+    /// quickly it recovers (the whole way in 1 / Recoil Recovery seconds).
+    /// </summary>
     public float RecoilRecovery { get => Data.GetFloat("recoilRecovery"); set => Data.Set("recoilRecovery", value); }
     /// <summary>
     /// Edit mode only: shows the pose this far from hip (0) to aim (1), to line the two up in the Game view.
@@ -1470,6 +1745,7 @@ public readonly partial record struct ViewmodelPose(GameObject GameObject) : ICo
 public readonly partial record struct Water(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Water");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
     /// How it is drawn. Choosing one in the GameObject menu also sets the colours and grid to suit it (UseLook).
@@ -1549,6 +1825,9 @@ public readonly partial record struct Water(GameObject GameObject) : IComponent
     /// How far out from the shore foam reaches, in metres of water depth.
     /// </summary>
     public float ShoreFoam { get => Data.GetFloat("shoreFoam"); set => Data.Set("shoreFoam", value); }
+    /// <summary>
+    /// The colour of the foam where the water meets the shore and objects.
+    /// </summary>
     public Color FoamColor { get => Data.GetColor("foamColor"); set => Data.Set("foamColor", value); }
     /// <summary>
     /// The bright lines that light makes through moving water, on what is under it.
@@ -1604,7 +1883,11 @@ public readonly partial record struct Water(GameObject GameObject) : IComponent
 public readonly partial record struct WindZone(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.WindZone");
+    /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// Where it blows: everywhere (Global) or within a sphere round the object.
+    /// </summary>
     public WindShape Shape { get => Data.GetEnum<WindShape>("shape"); set => Data.Set("shape", value); }
     /// <summary>
     /// How hard it blows: 0 still air, 1 a breeze, 3 a strong wind, 6 a gale.
@@ -1620,94 +1903,229 @@ public readonly partial record struct WindZone(GameObject GameObject) : ICompone
     public float Radius { get => Data.GetFloat("radius"); set => Data.Set("radius", value); }
 }
 
-/// <summary>Values of Beef's Tallow.HandShape.</summary>
+/// <summary>
+/// The ready-made hand shapes of a Hand Pose.
+/// </summary>
 public enum HandShape
 {
+    /// <summary>
+    /// The five sliders are set by hand.
+    /// </summary>
     Custom = 0,
+    /// <summary>
+    /// Fingers straight and apart.
+    /// </summary>
     Open = 1,
+    /// <summary>
+    /// Gently curled, as a hand at rest.
+    /// </summary>
     Relaxed = 2,
+    /// <summary>
+    /// Every finger closed.
+    /// </summary>
     Fist = 3,
+    /// <summary>
+    /// Wrapped round a handle or a weapon's grip.
+    /// </summary>
     Grip = 4,
+    /// <summary>
+    /// A grip with the index finger out on a trigger.
+    /// </summary>
     Trigger = 5,
+    /// <summary>
+    /// The index finger out, the rest closed.
+    /// </summary>
     Point = 6,
+    /// <summary>
+    /// Thumb and index finger together.
+    /// </summary>
     Pinch = 7,
+    /// <summary>
+    /// A fist with the thumb up.
+    /// </summary>
     ThumbsUp = 8,
 }
 
-/// <summary>Values of Beef's Tallow.LODGroup.Source.</summary>
+/// <summary>
+/// Values of the engine's Source.
+/// </summary>
 public enum LODGroupSource
 {
+    /// <summary>
+    /// The children (or deeper objects) named `..._LOD0`, `..._LOD1`, `..._LOD2`, `..._LOD3` are the levels, as model
+    /// files from most tools name them. Renderers without such a name are drawn at every level, except the
+    /// group's own when there is no `_LOD0`: that is level 0.
+    /// </summary>
     Children = 0,
+    /// <summary>
+    /// Every renderer under the object is simplified when the scene loads to make the lower levels.
+    /// </summary>
     Generated = 1,
 }
 
-/// <summary>Values of Beef's Tallow.LineAlignment.</summary>
+/// <summary>
+/// Which way a line's or trail's ribbon faces.
+/// </summary>
 public enum LineAlignment
 {
+    /// <summary>
+    /// Turned round its own length to face the viewer, so it always looks its full width.
+    /// </summary>
     View = 0,
+    /// <summary>
+    /// Facing along its object's forward (Z) axis: lies flat in the object's XY plane, like a strip painted on it.
+    /// </summary>
     TransformZ = 1,
 }
 
-/// <summary>Values of Beef's Tallow.LineTextureMode.</summary>
+/// <summary>
+/// How a texture is laid along a line or trail.
+/// </summary>
 public enum LineTextureMode
 {
+    /// <summary>
+    /// Once along its whole length.
+    /// </summary>
     Stretch = 0,
+    /// <summary>
+    /// Again every metre (with the renderer's tiling), so dashes and arrows keep their size as it grows.
+    /// </summary>
     Tile = 1,
 }
 
-/// <summary>Values of Beef's Tallow.NavigationLinkKind.</summary>
+/// <summary>
+/// How an agent crosses a Navigation Link.
+/// </summary>
 public enum NavigationLinkKind
 {
+    /// <summary>
+    /// Jumps across in an arc (a gap, a ledge up or down).
+    /// </summary>
     Jump = 0,
+    /// <summary>
+    /// Goes straight there at a steady pace (a ladder, a rope, a vent).
+    /// </summary>
     Climb = 1,
+    /// <summary>
+    /// Is there at once (a teleporter, a door to another room).
+    /// </summary>
     Teleport = 2,
+    /// <summary>
+    /// Walks there along the ground (a door the grid treats as shut, a narrow plank).
+    /// </summary>
     Walk = 3,
 }
 
-/// <summary>Values of Beef's Tallow.NavigationObstacle.Shape.</summary>
+/// <summary>
+/// Values of the engine's Shape.
+/// </summary>
 public enum NavigationObstacleShape
 {
+    /// <summary>
+    /// A box the object's size.
+    /// </summary>
     Box = 0,
+    /// <summary>
+    /// An upright cylinder.
+    /// </summary>
     Cylinder = 1,
 }
 
-/// <summary>Values of Beef's Tallow.NetworkRelevance.</summary>
+/// <summary>
+/// Which clients hear about an object (NetworkIdentityData.relevance).
+/// </summary>
 public enum NetworkRelevance
 {
+    /// <summary>
+    /// Chosen with the rest (automatic): bodies and moving things near players only, players to everyone.
+    /// </summary>
     Auto = 0,
+    /// <summary>
+    /// Every client, however far.
+    /// </summary>
     Everyone = 1,
+    /// <summary>
+    /// Clients whose player is within the session's relevance radius (NetworkManager.SnapshotRelevanceRadius).
+    /// </summary>
     Nearby = 2,
+    /// <summary>
+    /// Only the client that owns it (and the server).
+    /// </summary>
     OwnerOnly = 3,
 }
 
-/// <summary>Values of Beef's Tallow.PhysicsPrediction.</summary>
+/// <summary>
+/// Whether clients simulate a physics body themselves rather than showing it a moment in the past.
+/// </summary>
 public enum PhysicsPrediction
 {
+    /// <summary>
+    /// Predicted if it is a server-owned dynamic Rigidbody with no Network Behaviour on it (a script that moves it
+    /// on the server alone would make every prediction wrong).
+    /// </summary>
     Auto = 0,
+    /// <summary>
+    /// Predicted whenever it is a server-owned dynamic Rigidbody.
+    /// </summary>
     On = 1,
+    /// <summary>
+    /// Never predicted: shown a moment in the past, as other players are.
+    /// </summary>
     Off = 2,
 }
 
-/// <summary>Values of Beef's Tallow.RemoteSnapshotFormat.</summary>
+/// <summary>
+/// Values of the engine's RemoteSnapshotFormat.
+/// </summary>
 public enum RemoteSnapshotFormat
 {
+    /// <summary>
+    /// The packed transform (2 mm steps, two bytes of turn while upright): the smallest record for most things, and
+    /// what Automatic uses for players and moving objects.
+    /// </summary>
     Legacy = 0,
+    /// <summary>
+    /// Exact floats.
+    /// </summary>
     ExactTransform = 1,
+    /// <summary>
+    /// Finer steps (0.1 mm) and a full rotation.
+    /// </summary>
     QuantizedTransform = 2,
+    /// <summary>
+    /// A physics body shown in the past, with how it is moving: a finely packed position and rotation plus both
+    /// velocities, about a third of the size of a full record. For many small bodies clients only watch.
+    /// </summary>
     QuantizedBody = 3,
 }
 
-/// <summary>Values of Beef's Tallow.WaterLook.</summary>
+/// <summary>
+/// How a Water surface is drawn (docs/water.md).
+/// </summary>
 public enum WaterLook
 {
+    /// <summary>
+    /// Rolling waves with fine ripples, refraction, reflections of the sky and the scene, foam and caustics.
+    /// </summary>
     Realistic = 0,
+    /// <summary>
+    /// Faceted waves in flat colours, with crisp bands of foam: for stylized low-poly games.
+    /// </summary>
     LowPoly = 1,
 }
 
-/// <summary>Values of Beef's Tallow.WindShape.</summary>
+/// <summary>
+/// Values of the engine's WindShape.
+/// </summary>
 public enum WindShape
 {
+    /// <summary>
+    /// Blows over the whole scene.
+    /// </summary>
     Global = 0,
+    /// <summary>
+    /// Blows inside a sphere round the object, strongest in the middle and fading to nothing at Radius.
+    /// </summary>
     Sphere = 1,
 }
 

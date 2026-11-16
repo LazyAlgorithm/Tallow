@@ -7,6 +7,7 @@ namespace Tallow;
 [Component, HandleData]
 struct LODGroupData
 {
+	/// Where the levels come from: children named _LOD0 to _LOD3, or simplified copies made when the scene loads.
 	public LODGroup.Source source = .Children;
 	/// Below this share of the screen's height, level 1 is drawn instead of level 0.
 	[Range(0, 1)]

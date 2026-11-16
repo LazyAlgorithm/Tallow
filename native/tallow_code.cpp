@@ -447,10 +447,14 @@ namespace
 			set(TextEditor::Color::currentLineHighlightBorder, 54, 54, 58);
 			set(TextEditor::Color::semanticMethod, 220, 220, 170);
 			set(TextEditor::Color::semanticMember, 156, 220, 254);
-			set(TextEditor::Color::semanticVariable, 176, 217, 239);
+			set(TextEditor::Color::semanticVariable, 204, 213, 218);
 			set(TextEditor::Color::semanticNamespace, 78, 201, 176);
 			set(TextEditor::Color::semanticConstant, 79, 193, 255);
 			set(TextEditor::Color::semanticTypeParameter, 78, 201, 176);
+			set(TextEditor::Color::semanticParameter, 191, 159, 206);
+			set(TextEditor::Color::semanticPrivateMember, 97, 166, 220);
+			set(TextEditor::Color::semanticStaticMember, 176, 209, 185);
+			set(TextEditor::Color::semanticPrivateStaticMember, 157, 154, 165);
 			ready = true;
 		}
 		return palette;
@@ -969,6 +973,10 @@ TN_API void tn_code_semantic_tokens(void* handle, const char* tokens)
 		else if (kind == "method") span.color = TextEditor::Color::semanticMethod;
 		else if (kind == "member") span.color = TextEditor::Color::semanticMember;
 		else if (kind == "variable") span.color = TextEditor::Color::semanticVariable;
+		else if (kind == "parameter") span.color = TextEditor::Color::semanticParameter;
+		else if (kind == "privatemember") span.color = TextEditor::Color::semanticPrivateMember;
+		else if (kind == "staticmember") span.color = TextEditor::Color::semanticStaticMember;
+		else if (kind == "privatestaticmember") span.color = TextEditor::Color::semanticPrivateStaticMember;
 		else if (kind == "namespace") span.color = TextEditor::Color::semanticNamespace;
 		else if (kind == "constant") span.color = TextEditor::Color::semanticConstant;
 		else continue;

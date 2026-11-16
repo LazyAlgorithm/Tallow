@@ -28,6 +28,7 @@ class NavigationLink : Component
 	public Vector3 end = .(0, 0, 3);
 	/// Agents can cross it both ways. Off: only from this object to End (a drop they cannot climb back up).
 	public bool bidirectional = true;
+	/// How agents cross it: Jump, Climb, Teleport or Walk (each moves them differently along the link).
 	public NavigationLinkKind kind = .Jump;
 	/// Seconds to cross it (Teleport: none).
 	[Range(0, 10)]
@@ -102,10 +103,13 @@ class NavigationObstacle : Component
 	[Reflect(.All)]
 	public enum Shape
 	{
+		/// A box the object's size.
 		Box,
+		/// An upright cylinder.
 		Cylinder
 	}
 
+	/// The shape agents keep out of.
 	public Shape shape = .Box;
 	/// Box: its size in metres (whatever the object's scale). Cylinder: x is its diameter, y its height.
 	public Vector3 size = .(1, 1, 1);
@@ -116,6 +120,7 @@ class NavigationObstacle : Component
 	/// Carves only once it has stood still for Stationary Time, so a moving obstacle does not make every agent plan
 	/// again each frame.
 	public bool carveOnlyStationary = true;
+	/// Seconds the obstacle must stand still before it carves (with Carve Only Stationary).
 	public float stationaryTime = 0.5f;
 	/// How far it must move to count as moving.
 	public float moveThreshold = 0.1f;

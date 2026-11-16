@@ -292,7 +292,7 @@ internal static class Program
 
     /// <summary>
     /// "token\tline\tcolumn\tkind\tname" for each name in a file that the compiler knows, column in code points (the
-    /// code editor's glyphs): kind is type, typeparam, method, member, variable, namespace or constant. Members whose
+    /// code editor's glyphs): kind includes types, methods, locals, parameters, and instance or static members. Members whose
     /// text is unchanged keep their tokens (moved to where the member now starts), so typing in one method classifies
     /// that method only; a change other files could see classifies everything again.
     /// </summary>
@@ -379,9 +379,15 @@ internal static class Program
             IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor or MethodKind.Destructor } => "type",
             IMethodSymbol => "method",
             IFieldSymbol { IsConst: true } or IFieldSymbol { ContainingType.TypeKind: TypeKind.Enum } => "constant",
-            IFieldSymbol or IPropertySymbol or IEventSymbol => "member",
+            // Static fields, properties and events use their own colours, including at references.
+            IFieldSymbol or IPropertySymbol or IEventSymbol when symbol.IsStatic =>
+                symbol.DeclaredAccessibility == Accessibility.Public ? "staticmember" : "privatestaticmember",
+            // Public instance members in one colour, the rest (private, protected, internal) another.
+            IFieldSymbol or IPropertySymbol or IEventSymbol =>
+                symbol.DeclaredAccessibility == Accessibility.Public ? "member" : "privatemember",
             ILocalSymbol { IsConst: true } => "constant",
-            IParameterSymbol or ILocalSymbol or IRangeVariableSymbol => "variable",
+            IParameterSymbol => "parameter",
+            ILocalSymbol or IRangeVariableSymbol => "variable",
             INamespaceSymbol => "namespace",
             _ => null,
         };

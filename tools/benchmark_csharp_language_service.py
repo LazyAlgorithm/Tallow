@@ -105,7 +105,15 @@ public class Filler{k} : Script
                     time.sleep(0.001)
                 elapsed = (time.perf_counter() - begin) * 1000
                 answer = response.read_text(encoding="utf-8")
-                shutil.rmtree(folder)
+                # The service may still be closing its own files in the folder for a moment (seen on CI): retry.
+                for attempt in range(200):
+                    try:
+                        shutil.rmtree(folder)
+                        break
+                    except OSError:
+                        if attempt == 199:
+                            raise
+                        time.sleep(0.005)
                 if answer.startswith("error\t"):
                     sys.exit(f"{operation} failed: {answer.strip()}")
                 return elapsed, answer

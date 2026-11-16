@@ -21,8 +21,9 @@ extension EditorApp
 
 	static readonly StringView[EditorTheme.CodeCount] sCodeLabels = .("Text", "Keywords", "Types", "Numbers", "Strings", "Punctuation", "Preprocessor", "Names", "Known names (engine, project)", "Comments",
 		"Background", "Cursor", "Selection", "Whitespace", "Bracket background", "Matching bracket", "Brackets, level 1", "Brackets, level 2", "Brackets, level 3", "Unmatched bracket",
-		"Line numbers", "Current line number", "Current line", "Current line border", "Methods (C#)", "Fields and properties (C#)",
-		"Parameters and locals (C#)", "Namespaces (C#)", "Constants and enum values (C#)", "Type parameters (C#)");
+		"Line numbers", "Current line number", "Current line", "Current line border", "Methods (C#)", "Public instance fields, properties and events (C#)",
+		"Locals (C#)", "Namespaces (C#)", "Constants and enum values (C#)", "Type parameters (C#)",
+		"Parameters (C#)", "Nonpublic instance fields, properties and events (C#)", "Public static fields, properties and events (C#)", "Nonpublic static fields, properties and events (C#)");
 	static readonly StringView[EditorTheme.ExtraCount] sExtraLabels = .("Accent (toggled buttons)", "Node canvas", "Text on a canvas", "Code background", "Warnings", "Errors", "Success", "Links and notes", "Prefab bar", "Folder icons", "Object icons", "Component icons");
 
 	void DrawPreferencesWindow()
