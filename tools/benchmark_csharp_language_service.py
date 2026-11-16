@@ -59,7 +59,8 @@ def main():
                 folder = queue / f"r{counter[0]}"
                 folder.mkdir()
                 overlay = folder / "overlay.cs"
-                overlay.write_text(body, encoding="utf-8")
+                # newline="": as given, so the byte cursor matches the overlay (Windows would write \r\n).
+                overlay.write_text(body, encoding="utf-8", newline="")
                 index = body.index(needle) + (len(needle) if after else 0)
                 cursor = len(body[:index].encode("utf-8"))
                 pending = folder / "request.tsv.tmp"
@@ -103,14 +104,14 @@ def main():
                 sys.exit("diagnostics were reported outside the game's sources:\n" + answer[:800])
             completions = []
             for i in range(args.runs):
-                elapsed, answer = request("completion", edited(i, "Transform."), "Transform.")
+                elapsed, answer = request("completion", edited(i, "Transform."), f"var n{i} = {i}; Transform.")
                 if "completion\tPosition\t" not in answer:
                     sys.exit("completion after Transform. did not offer Position:\n" + answer[:500])
                 completions.append(elapsed)
             results["completion"] = completions
             signatures = []
             for i in range(args.runs):
-                elapsed, answer = request("signature", edited(i, 'Log.Info("x");'), 'Log.Info(')
+                elapsed, answer = request("signature", edited(i, 'Log.Info("x");'), f'var n{i} = {i}; Log.Info(')
                 if "signature\t" not in answer:
                     sys.exit("signature help inside Log.Info( found nothing:\n" + answer[:500])
                 signatures.append(elapsed)
