@@ -315,6 +315,11 @@ class EditorApp : Application
 			StartCompletionTest();
 		if (HasArg("--references-test"))
 			StartReferencesTest();
+		{
+			let count = scope String();
+			if (GetArg("--inspector-scale-test", count))
+				StartInspectorScaleTest(int.Parse(count) case .Ok(let n) ? n : 1000);
+		}
 		if (HasArg("--stale-build-test"))
 			StartStaleBuildTest();
 		{

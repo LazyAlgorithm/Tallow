@@ -38,7 +38,7 @@
 - [ ] **B06 — managed runtime bootstrap and lifecycle.** Measure Play entry/exit for 0, 100, 1,000 and 10,000 lightweight C# Script instances. Run 100 Play/Stop cycles; check memory growth, duplicate callbacks, invalid handles and retained managed instances.
 - [x] **B07 — scalar versus batched managed callbacks.** Run existing `Tests/NativeCSharpHost` `--benchmark` on matching builds; record raw per-callback cost and batch sizes 1, 16, 128, 512, 4096, separately for no-op Fixed/Late and distinct TickInput. **Do not switch the Scene scheduler automatically based only on mock-host speed.** Require real-editor profiler data, callback order, detach/disable and network replay equivalence.
 - [x] **B08 — component access latency.** Compare `GetComponent<T>()` and `TryGetComponent<T>()` for native Rigidbody/Transform vs managed Script, hit and miss, using 100k–1M calls after warm-up. Verify disabled and destroyed handles fail safely. Done (2026-11-16, `getcomponent` mode, 100k calls/frame, a quarter each native hit, script hit, native miss, script miss): C# 3.04 ms vs Beef 0.30 ms per 100k (10×), no allocations. Before the fixes below C# took 30.6 ms and allocated ~33 bytes per call.
-- [ ] **B09 — Inspector scene/prefab save.** With 1,000/10,000 managed field instances: attach, edit public/private/hidden fields, save/reopen, enter Play and measure time plus serialized file sizes. Verify fields applied before Awake and prefab inheritance intact. Test failure with invalid persisted values.
+- [x] **B09 — Inspector scene/prefab save.** With 1,000/10,000 managed field instances: attach, edit public/private/hidden fields, save/reopen, enter Play and measure time plus serialized file sizes. Verify fields applied before Awake and prefab inheritance intact. Test failure with invalid persisted values.
 - [x] **B10 — native ABI/CI parity.** Run generated binding manifest verification and the managed/native host smoke tests; save pass/fail and exact SHA on Linux and Windows. Confirm the linked engine exposes only annotated CSharpExpose members.
 
 ## P1 — simulation throughput (run after API semantics pass)
@@ -79,6 +79,20 @@
   host symbols) and `check_csharp_enums.py` pass. CI runs the binding self-test, manifest fixture check, managed
   host smoke and in-process native host test on Linux and Windows for every push (green at 1900257b, run
   43977949095).
+
+- B09 (2026-11-16, `tools/benchmark_inspector_scale.py`, Debug editor, Nobara): N objects each with a C# script
+  holding a public, a private `[ShowInInspector]` and a `[HideInInspector]` field; two fields edited per script as
+  the Inspector does, the scene saved, opened again and played. Every Awake already sees the saved values; the
+  hidden field keeps its default.
+
+  | scripts | make + edit | save | scene size | open | enter Play | stop |
+  |---:|---:|---:|---:|---:|---:|---:|
+  | 1,000 | 19 ms | 3 ms | 291 KB (298 B a script) | 11 ms | 77 ms | 10 ms |
+  | 10,000 | 185 ms | 31 ms | 2.9 MB (299 B a script) | 105 ms | 607 ms | 85 ms |
+
+  Linear throughout. A probe saved as a prefab and stamped again keeps its edited values and plays. A script whose
+  saved value cannot be read (`count = banana`) does not start, and the log now names the object and script
+  (before, only the parse exception, with no object); the other scripts play.
 
 ### Fixes from these runs (2026-11-16)
 

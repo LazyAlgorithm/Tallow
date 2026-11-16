@@ -19,6 +19,7 @@ extension EditorApp
 		UpdateHotReloadTest();
 		UpdateCompletionTest();
 		UpdateReferencesTest();
+		UpdateInspectorScaleTest();
 		UpdateStaleBuildTest();
 		sUIMarker.Begin();
 		defer Profiler.End();

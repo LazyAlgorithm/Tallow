@@ -261,6 +261,7 @@ class CSharpBehaviour : Component
 			// networked gameplay with the wrong field values.
 			if (!CSharpRuntime.ApplyFields(mInstance, fieldOverrides))
 			{
+				Log.Error(scope $"'{GameObject.Name}': a saved field of {scriptType} could not be read (see the error above), so the script does not run. Fix the value in the Inspector and save.");
 				ReleaseManaged();
 				return;
 			}
