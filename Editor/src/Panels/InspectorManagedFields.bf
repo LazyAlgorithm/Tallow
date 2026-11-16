@@ -99,7 +99,12 @@ extension EditorApp
 				newValue.AppendF("{}", value);
 		case "int", "uint", "long":
 			var value = SceneSerializer.ParseInt(current);
-			edited = ImGui.DragInt("##value", ref value, 0.1f);
+			if (!rangeMin.IsEmpty && !rangeMax.IsEmpty)
+				// [Range]: dragging stays inside it.
+				edited = ImGui.DragInt("##value", ref value, 0.1f, (int32)SceneSerializer.ParseFloat(rangeMin),
+					(int32)SceneSerializer.ParseFloat(rangeMax));
+			else
+				edited = ImGui.DragInt("##value", ref value, 0.1f);
 			if (kind == "uint" && value < 0)
 				value = 0;
 			if (edited)
