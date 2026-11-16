@@ -1241,8 +1241,9 @@ A full conversion also needs these. Ordered roughly by when they block users.
   are not applied to them, and the build says so. Tests: `Tests/CSharpInGame/src/Json`
   (Newtonsoft round trip in the player, 106 checks), the export test checks the notices.
   Not yet: native libraries inside packages (`runtimes/*/native`), an Inspector UI for the
-  list (edit the .tasmdef text; the page keeps the key), a code-service test with a
-  package, and trimming/AOT rules (with the NativeAOT work).
+  list (edit the .tasmdef text; the page keeps the key), and trimming/AOT rules (with the
+  NativeAOT work). Code-service test with a package done (November 16, 2026): unknown before
+  `package-references.tsv` lists it, known (diagnostics and completion) once listed, 3 tests.
 - [x] Profiler: C# scripts are timed per class ("Game.Player.Update()", Scripts) instead of
   all sharing "CSharpBehaviour.Update()"; "C# await continuations" times the async pump;
   Memory counters "C# allocated this frame", "C# heap", "C# garbage collections this frame"

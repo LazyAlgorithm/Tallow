@@ -375,6 +375,22 @@ internal static class Program
             Directory.Delete(generatedRoot, recursive: true);
             Check("assemblies: without the generated code its use is an error again", Diagnose().Contains("CS0103"));
             File.WriteAllText(file, userSource);
+            // NuGet packages: Tallow.Build lists their assemblies in .tallow-csharp/package-references.tsv after a
+            // build; the service references them (re-read when the file changes). Any assembly not in the shared
+            // framework stands in for a package here: Roslyn's, beside the service.
+            string packageList = Path.Combine(project, ".tallow-csharp", "package-references.tsv");
+            string packageUse = userSource.Replace("Game.Core.Health h = null!;",
+                "Microsoft.CodeAnalysis.SyntaxTree? tree = null; Game.Core.Health h = null!;");
+            File.WriteAllText(file, packageUse);
+            Check("packages: a package's type is an error before it is listed", Diagnose().Contains("CS0246") || _raw.Contains("CS0234"));
+            Directory.CreateDirectory(Path.GetDirectoryName(packageList)!);
+            File.WriteAllText(packageList, Path.Combine(Path.GetDirectoryName(Path.GetFullPath(service))!, "Microsoft.CodeAnalysis.dll") + "\n");
+            Check("packages: once listed, its types are known", !Diagnose().Contains("\terror\t"));
+            string packageCompletion = Ask("completion", file,
+                Encoding.UTF8.GetByteCount(packageUse[..(packageUse.IndexOf("SyntaxTree?", StringComparison.Ordinal) + 6)]));
+            Check("packages: completion offers the package's types", _raw.Contains("completion\tSyntaxTree"));
+            File.Delete(packageList);
+            File.WriteAllText(file, userSource);
             Directory.Delete(core, recursive: true);
             Directory.Delete(ui, recursive: true);
             File.WriteAllText(file, goodSource);
