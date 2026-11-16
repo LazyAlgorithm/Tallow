@@ -21,6 +21,9 @@ internal sealed class LanguageRequest
     public int Cursor { get; set; }
     public string NewName { get; set; } = "";
     public List<SourceFile> Sources { get; set; } = [];
+    /// <summary>The game's source folder: diagnostics are only reported (and only computed) for files in it, not
+    /// for the Tallow.API sources compiled alongside. Empty: every file.</summary>
+    public string GameDirectory { get; set; } = "";
 }
 
 internal static class Program
@@ -131,6 +134,8 @@ internal static class Program
     // game + public API on every keystroke. A changed overlay replaces its
     // tree immediately; closed/deleted files are evicted below.
     private sealed record CachedSyntax(string Text, SyntaxTree Tree);
+    // The type names each parsed tree declares (trees are reused while their text is unchanged).
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<SyntaxTree, string[]> DeclaredTypeNames = new();
     private static readonly Dictionary<string, CachedSyntax> ParsedSources =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -177,7 +182,11 @@ internal static class Program
     private static void Diagnostics(CSharpCompilation compilation,
         Dictionary<string, SourceFile> sourceByPath, List<string> output)
     {
-        foreach (Diagnostic problem in compilation.GetDiagnostics())
+        // Per file, so that after an edit only the game's files are bound again, not the whole engine API.
+        IEnumerable<Diagnostic> problems = sourceByPath.Count == 0 ? [] : compilation.SyntaxTrees
+            .Where(tree => sourceByPath.ContainsKey(tree.FilePath))
+            .SelectMany(tree => compilation.GetSemanticModel(tree).GetDiagnostics());
+        foreach (Diagnostic problem in problems)
         {
             if (problem.Severity is not (DiagnosticSeverity.Error or DiagnosticSeverity.Warning) ||
                 !problem.Location.IsInSource)
@@ -398,19 +407,24 @@ internal static class Program
         // color those names without maintaining a handwritten engine list.
         var declaredTypes = new SortedSet<string>(StringComparer.Ordinal);
         foreach (SyntaxTree tree in trees)
-        {
-            foreach (BaseTypeDeclarationSyntax declaration in tree.GetRoot()
-                .DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
-                declaredTypes.Add(declaration.Identifier.ValueText);
-            foreach (DelegateDeclarationSyntax declaration in tree.GetRoot()
-                .DescendantNodes().OfType<DelegateDeclarationSyntax>())
-                declaredTypes.Add(declaration.Identifier.ValueText);
-        }
+            declaredTypes.UnionWith(DeclaredTypeNames.GetValue(tree, static tree => tree.GetRoot().DescendantNodes()
+                .Select(node => node switch
+                {
+                    BaseTypeDeclarationSyntax type => type.Identifier.ValueText,
+                    DelegateDeclarationSyntax type => type.Identifier.ValueText,
+                    _ => null
+                }).OfType<string>().ToArray()));
         foreach (string name in declaredTypes)
             output.Add(Line("type", name));
 
         if (request.Operation == "diagnostics")
         {
+            // Problems are reported for the game's files only (when the request says where they are).
+            var reported = request.GameDirectory.Length == 0 ? sourceByPath : sourceByPath
+                .Where(pair => pair.Key.StartsWith(Path.GetFullPath(request.GameDirectory) + Path.DirectorySeparatorChar,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+            sourceByPath = reported;
             Diagnostics(compilation, sourceByPath, output);
             // Keep Tallow's established cyan performance / purple network
             // underlines. New category column is optional; older consumers
@@ -746,6 +760,7 @@ internal static class Program
             File = active,
             Cursor = int.Parse(fields["cursor"]),
             NewName = fields.GetValueOrDefault("new_name", ""),
+            GameDirectory = sourceDirectory,
             Sources = snapshot.Select(pair => new SourceFile { Path = pair.Key, Text = pair.Value }).ToList()
         };
     }

@@ -197,7 +197,8 @@ changing the original six-field wire format.
 
 ## P1 — C# code editor / Roslyn integration
 
-- [ ] Check that `Transform.Position += Vector3.UnitX * Speed * deltaTime` and other `Vector2/3/4` operations compile in-game **without false Roslyn editor errors**; align SDK global usings and actual `.tasmdef` references.
+- [x] Check that `Transform.Position += Vector3.UnitX * Speed * deltaTime` and other `Vector2/3/4` operations compile in-game **without false Roslyn editor errors**; align SDK global usings and actual `.tasmdef` references.
+  (Covered by the language-service tests: "gameplay Transform.Position += Vector3 * float operators".)
 - [ ] Complete semantic token coloring (classes, methods, fields, types, namespaces, attributes, generics, strings/interpolation, comments, keywords), rather than relying solely on lexical C# highlighting.
 - [ ] Completion from the compiler for ALL relevant accessible classes, methods, fields, properties, overloads, inherited/interface members, extension methods, generics, enums, namespaces, symbols in project assemblies and installed referenced libraries.
 - [ ] Add accurate completion context/ranking, insertion text, auto imports, braces/parentheses, parameter/return type display and XML documentation. Do not suggest private/inaccessible or irrelevant static/instance members.
@@ -207,6 +208,13 @@ changing the original six-field wire format.
     the code widget draws it above the caret line when no completion list is open. Waiting for the user to try
     it in the editor. Semantic colouring beyond type names needs range colours in TextEdit (not started).
 - [ ] Build persistent incremental Roslyn project state instead of recreating a compilation per request. Measure warm/cold latency and memory/CPU on Nobara/Windows; properly cancel stale requests, debounce typing, restart failed workers, and handle multiple files.
+  - [x] (November 16, 2026) Measured: `tools/benchmark_csharp_language_service.py` drives the `--serve` process
+    as the editor does on a copy of Tests/CSharpInGame (ApiChecks.cs, 1,500 lines): cold first request ~650 ms;
+    completion, signature help and Go to Definition ~25-30 ms after an edit; diagnostics ~23 ms unchanged and
+    ~210 ms after an edit (were 84 and 350 ms: problems were computed for every Tallow.API source too, and every
+    tree was walked for type names on each request; now only the game's files are checked and names are cached
+    per tree); peak ~290 MB. It also checks an error typed in is reported and nothing from Tallow.API is. In CI
+    (3 runs). Windows numbers not taken yet.
 - [ ] Full diagnostics, warnings, source locations/underlines, click-through from Console; Go to Definition, Find References, Rename, and optionally integrated breakpoints/debugging.
 - [ ] Expand automated tests using actual Tallow.API/gameplay source, multi-assembly projects, inherited/static/extension completions and malformed mid-typing C#.
 

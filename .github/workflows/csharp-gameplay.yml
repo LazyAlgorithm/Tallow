@@ -86,6 +86,8 @@ jobs:
         run: dotnet build Managed/Tallow.LanguageService/Tallow.LanguageService.csproj -c Debug --nologo
       - name: Verify Roslyn editor features and UTF-8 offsets
         run: dotnet run --project Managed/Tallow.LanguageService.Tests/Tallow.LanguageService.Tests.csproj -- Managed/Tallow.LanguageService/bin/Debug/net11.0/Tallow.LanguageService.dll
+      - name: Time the C# code editor's Roslyn service (and check it reports game errors only)
+        run: python3 tools/benchmark_csharp_language_service.py --runs 3
       - name: Check the code editor's pair deletion and override completion (headless)
         if: runner.os == 'Linux'
         run: python3 tools/test_textedit.py
