@@ -199,6 +199,7 @@ internal static class RoslynCompletion
             output.Add("completion\tNonSerialized\x1F\x1F\x1F\x1F" +
                 Field("class System.NonSerializedAttribute\nThis field is not saved: not in scenes, saves or hot reload.") +
                 "\t" + WellKnownTags.Class);
+        bool parensAllowed = ParenthesesAllowed(root, source, list.Span);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         int written = 0;
         foreach ((CompletionItem item, _) in ranked)
@@ -219,7 +220,8 @@ internal static class RoslynCompletion
                 serviceDescriptions++;
                 description = service.GetDescriptionAsync(document, item).GetAwaiter().GetResult()?.Text.Trim() ?? "";
             }
-            if (!Encode(service, document, text, source, list.Span, item, description, out string encoded) ||
+            string? parens = parensAllowed && model != null ? Parentheses(model, receiver, list.Span.Start, item) : null;
+            if (!Encode(service, document, text, source, list.Span, item, description, parens, out string encoded) ||
                 !seen.Add(encoded))
                 continue;
             output.Add("completion\t" + encoded + "\t" + Kind(item));
@@ -229,6 +231,56 @@ internal static class RoslynCompletion
             File.AppendAllText(trace, $"completion: sync {synced * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F1} ms, " +
                 $"list {(listed - synced) * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F1} ms ({list.ItemsList.Count}), " +
                 $"encode {(clock.ElapsedTicks - listed) * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F1} ms ({written})\n");
+    }
+
+    /// <summary>Whether a method accepted here is a call that wants "()": not when "(" or "<" already follows the
+    /// word, inside nameof(...), a using directive or doc comment, or where a method group is likely meant (the
+    /// right of "+=", "-=" or "=" and an argument, as with delegates and events).</summary>
+    internal static bool ParenthesesAllowed(SyntaxNode root, string source, TextSpan span)
+    {
+        int next = span.End;
+        while (next < source.Length && (source[next] == ' ' || source[next] == '\t'))
+            next++;
+        if (next < source.Length && (source[next] == '(' || source[next] == '<'))
+            return false;
+        SyntaxToken token = root.FindToken(Math.Max(0, span.Start - 1), findInsideTrivia: true);
+        if (token.Parent?.FirstAncestorOrSelf<DocumentationCommentTriviaSyntax>(ascendOutOfTrivia: false) != null ||
+            token.Parent?.FirstAncestorOrSelf<UsingDirectiveSyntax>() != null)
+            return false;
+        for (SyntaxNode? node = token.Parent; node != null; node = node.Parent)
+        {
+            if (node is InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" } })
+                return false;
+            if (node is StatementSyntax or MemberDeclarationSyntax)
+                break;
+        }
+        // The token before the word (or before "x." when completing a member) decides delegate/event contexts.
+        SyntaxToken previous = root.FindToken(Math.Max(0, span.Start - 1));
+        if (previous.Span.End > span.Start)
+            previous = previous.GetPreviousToken();
+        while (previous.IsKind(SyntaxKind.DotToken) || previous.IsKind(SyntaxKind.IdentifierToken) &&
+               previous.GetNextToken().IsKind(SyntaxKind.DotToken) && previous.GetNextToken().Span.End <= span.Start)
+            previous = previous.GetPreviousToken();
+        return !previous.IsKind(SyntaxKind.PlusEqualsToken) && !previous.IsKind(SyntaxKind.MinusEqualsToken);
+    }
+
+    /// <summary>"()" for a method whose overloads all take no arguments, "(\x1E)" when one takes some; null for
+    /// anything that is not a method.</summary>
+    private static string? Parentheses(SemanticModel model, ITypeSymbol? receiver, int position, CompletionItem item)
+    {
+        if (!item.Tags.Contains(WellKnownTags.Method) && !item.Tags.Contains(WellKnownTags.ExtensionMethod))
+            return null;
+        // Generic methods ("GetComponent<>") need their type argument first; a declaration being overridden is not a call.
+        if (item.DisplayText.EndsWith(">") || item.DisplayTextSuffix.Contains('<') ||
+            !item.Properties.TryGetValue("SymbolName", out string? name))
+            return null;
+        var methods = (receiver != null
+                ? model.LookupSymbols(position, receiver, name, includeReducedExtensionMethods: true)
+                : model.LookupSymbols(position, name: name))
+            .OfType<IMethodSymbol>().ToList();
+        if (methods.Count == 0)
+            return null;
+        return methods.All(method => method.Parameters.Length == 0) ? "()" : "(\x1E)";
     }
 
     /// <summary>The type whose members are being completed ("Transform." / "body?."), or null.</summary>
@@ -368,7 +420,7 @@ internal static class RoslynCompletion
     /// <summary>The item as the editor applies it: the word replaced, plus edits elsewhere. False when the change
     /// cannot be expressed that way (it rewrites the word's surroundings).</summary>
     private static bool Encode(CompletionService service, Document document, SourceText text, string source,
-        TextSpan span, CompletionItem item, string description, out string encoded)
+        TextSpan span, CompletionItem item, string description, string? parens, out string encoded)
     {
         encoded = "";
         string display = item.DisplayTextPrefix + item.DisplayText + item.DisplayTextSuffix;
@@ -421,6 +473,9 @@ internal static class RoslynCompletion
         }
         if (caret is int at && at - span.Start >= 0 && at - span.Start < insert.Length)
             insert = insert.Insert(at - span.Start, "\x1E");
+        // A method call: "()" after the name, the caret inside when an overload takes arguments.
+        if (parens != null && insert == item.DisplayText)
+            insert += parens;
 
         string detail = item.InlineDescription;
         var edited = string.Join('\x1A', extra.Select(edit =>

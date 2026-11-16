@@ -13,7 +13,9 @@ Opens the precompiled editor (TallowLauncher --editor) on copies of projects wit
   6. hot reload through the editor (--hot-reload-test): Tests/CSharpReload plays, v2/Scripts is typed into the code
      editor and saved during Play; the save compiles and reloads, version 2's RELOAD checks pass, the old code unloads;
   7. C# completion through the editor (--completion-test): an unimported type with its using, described members, and a
-     long list marked as cut short.
+     long list marked as cut short;
+  8. Find All References through the editor (--references-test): a field's uses in an open and an unopened file,
+     and opening one puts the caret on it.
 Run: python3 tools/test_csharp_editor.py [--cycles 20]
 """
 import argparse
@@ -158,6 +160,12 @@ def main() -> int:
         found = [line for line in output.splitlines() if "COMPLETION TEST" in line]
         check(f"C# completion in the editor: {found[-1] if found else 'no result'}",
               bool(found) and "COMPLETION TEST PASS" in found[-1], output)
+
+        # 8. Find All References through the editor and the language service.
+        output, _, _ = open_editor(game, "--references-test")
+        found = [line for line in output.splitlines() if "REFERENCES TEST" in line]
+        check(f"C# Find All References in the editor: {found[-1] if found else 'no result'}",
+              bool(found) and "REFERENCES TEST PASS" in found[-1], output)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     if failed:

@@ -610,6 +610,11 @@ TN_API void* tn_code_create(const char* text, int language)
 				document->semanticRequest = 4;
 				document->semanticCursor = cursor;
 			}
+			if (ImGui::MenuItem("Find All References", "Shift+F12"))
+			{
+				document->semanticRequest = 7;
+				document->semanticCursor = cursor;
+			}
 			if (ImGui::MenuItem("Symbol / Parameters"))
 			{
 				document->semanticRequest = 5;

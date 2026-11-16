@@ -633,6 +633,25 @@ public sealed class CubeMover : Script
             Check("a long list says more items exist so the editor asks again",
                 many.Contains("completion-more") && many.Split("\ncompletion\t").Length <= 302);
 
+            bool NoParens(string name) => _raw.Contains("completion\t" + name + "\t") ||
+                Item(name).Length > 0 && Fields(name).ElementAtOrDefault(1) == "";
+            string calls = "class Demo { void Fire() {} void Move(float speed) {} void Move() {} " +
+                "event System.Action? Done; void Go() { Fi";
+            Request(service, "completion", calls, calls.Length);
+            Check("a method without parameters inserts Name()", Fields("Fire").ElementAtOrDefault(1) == "Fire()");
+            Request(service, "completion", calls + "re(); Mo", calls.Length + 8);
+            Check("a method with an overload taking arguments puts the caret inside ()",
+                Fields("Move").ElementAtOrDefault(1) == "Move(\x1E)");
+            string followed = calls + "re(); Mo(1f); } }";
+            Request(service, "completion", followed, calls.Length + 8);
+            Check("no () when ( already follows the name", NoParens("Move"));
+            string subscribed = calls + "re(); Done += Fi";
+            Request(service, "completion", subscribed, subscribed.Length);
+            Check("no () for a method group after +=", NoParens("Fire"));
+            string inNameof = calls + "re(); var n = nameof(Fi";
+            Request(service, "completion", inNameof, inNameof.Length);
+            Check("no () inside nameof", NoParens("Fire"));
+
             string nonSerialized = "class Demo { [NonS";
             Check("[NonSerialized] is offered although .NET hides it",
                 Request(service, "completion", nonSerialized, nonSerialized.Length).Contains("completion\tNonSerialized"));
@@ -959,6 +978,14 @@ public sealed class CubeMover : Script
 
             string references = Request(service, "references", source, cursor);
             Check("compiler symbol references", references.Split("reference\t").Length - 1 >= 2);
+            string gameRefs = "using Tallow; class Player : Script { int lives; void Hit() { lives--; if (lives < 0) lives = 3; } }";
+            string gameRefsResult = RequestWithApi(service, "references", gameRefs, gameRefs.IndexOf("lives", StringComparison.Ordinal) + 2);
+            Check("references to a game field: declaration and every use, nothing from engine source",
+                gameRefsResult.Split("reference\t").Length - 1 == 4 && !gameRefsResult.Contains("Tallow.API"));
+            string apiRefs = "using Tallow; class Player : Script { void Go() { var a = Transform; var b = Transform; } }";
+            string apiRefsResult = RequestWithApi(service, "references", apiRefs, apiRefs.IndexOf("Transform", StringComparison.Ordinal) + 3);
+            Check("references to an engine API member include the game's uses",
+                apiRefsResult.Split('\n').Count(line => line.StartsWith("reference\t") && line.Contains("VectorOperator.cs")) == 2);
             string sameName = "class First { void Go() { int value = 0; value++; } }\n" +
                 "class Second { void Go() { int value = 0; value++; } }";
             int selectedEnd = sameName.IndexOf("value", StringComparison.Ordinal) + "value".Length;

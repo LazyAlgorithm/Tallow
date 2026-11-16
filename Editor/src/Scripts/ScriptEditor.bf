@@ -945,6 +945,7 @@ extension EditorApp
 			}
 		}
 		ImGui.End();
+		DrawFoundReferences();
 	}
 
 	/// Compact editor-local menu. The main application menu remains available
@@ -998,6 +999,8 @@ extension EditorApp
 			bool ready = active != null && ScriptMayResolve(active.path) && !mSemantic.running;
 			if (ImGui.MenuItem("Go to Definition", "F12", false, ready))
 				RequestSemantic(active, "definition");
+			if (ImGui.MenuItem("Find All References", "Shift+F12", false, ready))
+				FindScriptReferences(active);
 			if (ImGui.MenuItem("Symbol / Parameters", null, false, ready))
 			{
 				mSymbolInfoRequested = true;

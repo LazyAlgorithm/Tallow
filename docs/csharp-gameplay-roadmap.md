@@ -227,8 +227,12 @@ changing the original six-field wire format.
     model; Roslyn's description service costs ~4 ms an item). Snippets are left out (no tab stops). Completion ~33 ms
     p50 after an edit (was 21 with the hand-written lookup; Roslyn's own list+encode ~7 ms, the rest the service's
     per-request work); service peak 458 MB (was 327: a second compilation for the workspace). Tests: 11 Roslyn
-    tests, 12 TextEdit checks, editor `--completion-test` (step 7 of test_csharp_editor.py). Still open: methods
-    do not insert `()`; the diagnostics compilation and the workspace could share one compilation.
+    tests, 12 TextEdit checks, editor `--completion-test` (step 7 of test_csharp_editor.py). Still open: the
+    diagnostics compilation and the workspace could share one compilation.
+  - [x] (November 16, 2026) Accepting a method inserts `Name()` (caret after it when every overload is
+    parameterless, inside otherwise); not when `(` or `<` already follows, after `+=`/`-=` (events, delegates),
+    inside `nameof(...)`, using directives or doc comments, nor for generic methods (type argument first). Typing
+    `)` steps over the inserted one. 5 Roslyn tests.
 - [ ] Implement robust overload-aware signature help and active argument highlighting; no overlapping code editor popups.
   - [x] (November 15, 2026) Roslyn answers `signature` with every overload (resolved first; constructors;
     before the closing parenthesis) and marks the parameter at the caret (\x01..\x02, by position or name);
@@ -253,6 +257,12 @@ changing the original six-field wire format.
     project; engine Beef sources only for Beef projects); rename/save/edit are refused there and the language service
     only answers definition/symbol/highlight for `Managed/Tallow.API`. Selecting a name highlights its other uses,
     first by text, then narrowed by the compiler to the same symbol in that file (`highlight` operation).
+  - [x] (November 16, 2026) Find All References: Shift+F12, Navigate menu and the code widget's right-click menu.
+    Every use across the project's scripts (unsaved edits included, unopened files too) in a References window,
+    grouped by file with line:column and the line's text; clicking one opens it with the caret on the name. Uses of
+    an engine API symbol in the engine's own C# source are listed and open read-only; a game symbol skips the engine
+    source (it cannot use it). Rename already used the same answer. 2 Roslyn tests; editor `--references-test`
+    (step 8 of test_csharp_editor.py).
 - [ ] Expand automated tests using actual Tallow.API/gameplay source, multi-assembly projects, inherited/static/extension completions and malformed mid-typing C#.
 
 ## Binding generation decision — explicitly curated API

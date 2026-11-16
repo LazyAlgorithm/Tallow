@@ -88,7 +88,7 @@ extension EditorApp
 		if (engineSource && operation != "definition" && operation != "symbol" && operation != "highlight")
 			return;
 		ClearAndDeleteItems!(mSemantic.sources);
-		if (operation == "rename" && !mSemantic.AddFolder(scope $"{Project.Current.Path}/src", document.path.EndsWith(".cs") ? ".cs" : ".bf"))
+		if ((operation == "rename" || operation == "references") && !mSemantic.AddFolder(scope $"{Project.Current.Path}/src", document.path.EndsWith(".cs") ? ".cs" : ".bf"))
 		{
 			mSemantic.status.Set("Could not snapshot all project scripts for rename.");
 			return;
@@ -262,7 +262,9 @@ extension EditorApp
 				{
 					let start = SceneSerializer.ParseInt(fields[2]);
 					let length = SceneSerializer.ParseInt(fields[3]);
-					if (mSemantic.operation == "highlight")
+					if (mSemantic.operation == "references")
+						AddFoundReference(fields[1], start, length, fields[4]);
+					else if (mSemantic.operation == "highlight")
 					{
 						if (document != null && Path.Equals(fields[1], document.path, .Lenient))
 						{
@@ -317,6 +319,8 @@ extension EditorApp
 		}
 		if (!failed && document != null && mSemantic.operation == "highlight")
 			tn_code_reference_highlights(document.handle, (int32)mSemantic.cursor, highlighted.CStr());
+		if (mSemantic.operation == "references")
+			FinishFoundReferences(failed);
 		if (mSemantic.operation == "rename")
 		{
 			mRenamePreview = !failed && !mSymbolReferences.IsEmpty && mSymbolNewName == mSemantic.renameName;
@@ -362,6 +366,8 @@ extension EditorApp
 		let request = tn_code_take_semantic_request(document.handle, &cursor);
 		if (request == 6 && !document.readOnly)
 			BeginScriptSymbolRename();
+		else if (request == 7)
+			FindScriptReferences(document, cursor);
 		else if (request == 5)
 		{
 			mSymbolInfoRequested = true;
@@ -394,7 +400,12 @@ extension EditorApp
 	{
 		bool ready = document != null && ScriptMayResolve(document.path) && !mSemantic.running;
 		if (ready && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F12))
-			RequestSemantic(document, "definition");
+		{
+			if (ImGui.IsKeyDown(ImGui.Key.LeftShift) || ImGui.IsKeyDown(532)) // 532: right shift
+				FindScriptReferences(document);
+			else
+				RequestSemantic(document, "definition");
+		}
 		if (ready && !document.readOnly && mScriptsFocused && ImGui.IsKeyPressed(ImGui.Key.F2))
 			BeginScriptSymbolRename();
 		if (mOpenSymbolRenamePopup)

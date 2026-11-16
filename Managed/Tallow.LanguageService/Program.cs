@@ -425,9 +425,16 @@ internal static class Program
     private static void References(CSharpCompilation compilation,
         ISymbol symbol, List<string> output, SyntaxTree? onlyTree = null)
     {
+        static bool Api(string path) =>
+            path.Replace('\\', '/').Contains("/Managed/Tallow.API/", StringComparison.OrdinalIgnoreCase);
+        // Engine API source cannot use a game's symbols: only search it for symbols the engine declares.
+        bool engineSymbol = symbol.Locations.Any(location => location.IsInSource && Api(location.SourceTree!.FilePath)) ||
+            symbol.Locations.All(location => !location.IsInSource);
         foreach (SyntaxTree tree in compilation.SyntaxTrees)
         {
             if (onlyTree is not null && tree != onlyTree)
+                continue;
+            if (onlyTree is null && !engineSymbol && Api(tree.FilePath))
                 continue;
             SemanticModel model = compilation.GetSemanticModel(tree);
             SyntaxNode root = tree.GetRoot();

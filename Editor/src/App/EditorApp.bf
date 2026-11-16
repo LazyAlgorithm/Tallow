@@ -313,6 +313,8 @@ class EditorApp : Application
 			StartHotReloadTest();
 		if (HasArg("--completion-test"))
 			StartCompletionTest();
+		if (HasArg("--references-test"))
+			StartReferencesTest();
 		if (HasArg("--stale-build-test"))
 			StartStaleBuildTest();
 		{
