@@ -117,16 +117,68 @@ internal static class Program
 
         foreach (SyntaxTree oldTree in previous.Values)
             if (!current.ContainsKey(oldTree.FilePath))
+            {
                 compilation = compilation.RemoveSyntaxTrees(oldTree);
+                DeclarationEpoch++;
+            }
         foreach (SyntaxTree newTree in currentTrees)
         {
             if (!previous.TryGetValue(newTree.FilePath, out SyntaxTree? oldTree))
+            {
                 compilation = compilation.AddSyntaxTrees(newTree);
+                DeclarationEpoch++;
+            }
             else if (!ReferenceEquals(oldTree, newTree))
+            {
                 compilation = compilation.ReplaceSyntaxTree(oldTree, newTree);
+                if (!BodyOnlyEdit(oldTree, newTree))
+                    DeclarationEpoch++;
+            }
         }
         CachedCompilation = compilation;
         return compilation;
+    }
+
+    /// <summary>
+    /// Bumped by any change another file could see (a file added or removed, a declaration, a constant, a field
+    /// initializer); per-file diagnostics from an older epoch are worked out again.
+    /// </summary>
+    private static int DeclarationEpoch;
+
+    /// <summary>
+    /// Whether everything that differs between two versions of a file lies inside one method, accessor, constructor,
+    /// operator or local function body in both: then nothing outside the file can bind differently.
+    /// </summary>
+    internal static bool BodyOnlyEdit(SyntaxTree before, SyntaxTree after)
+    {
+        string a = before.GetText().ToString(), b = after.GetText().ToString();
+        int prefix = 0, limit = Math.Min(a.Length, b.Length);
+        while (prefix < limit && a[prefix] == b[prefix])
+            prefix++;
+        int suffix = 0;
+        while (suffix < limit - prefix && a[a.Length - 1 - suffix] == b[b.Length - 1 - suffix])
+            suffix++;
+        return InsideBody(before, prefix, a.Length - suffix) && InsideBody(after, prefix, b.Length - suffix);
+    }
+
+    /// <summary>Whether [start, end) is strictly inside the braces (or after the =>) of a member body.</summary>
+    private static bool InsideBody(SyntaxTree tree, int start, int end)
+    {
+        SyntaxNode root = tree.GetRoot();
+        SyntaxNode? node = root.FindToken(Math.Min(start, Math.Max(0, root.FullSpan.End - 1))).Parent;
+        for (; node != null; node = node.Parent)
+        {
+            bool body = node.Parent is BaseMethodDeclarationSyntax or AccessorDeclarationSyntax or LocalFunctionStatementSyntax
+                && node is BlockSyntax or ArrowExpressionClauseSyntax;
+            if (!body)
+                continue;
+            // Inside a block's braces, or after an arrow's =>, and before its end.
+            int inner = node is BlockSyntax block ? block.OpenBraceToken.Span.End : ((ArrowExpressionClauseSyntax)node).ArrowToken.Span.End;
+            int innerEnd = node is BlockSyntax closing ? closing.CloseBraceToken.SpanStart : node.Span.End;
+            if (start >= inner && end <= innerEnd)
+                return true;
+        }
+        return false;
     }
 
     // The editor holds one Roslyn process for many requests. Reuse immutable
@@ -179,13 +231,48 @@ internal static class Program
         return null;
     }
 
+    /// <summary>Each game file's diagnostic lines, kept while its tree and the declaration epoch are unchanged.</summary>
+    private static readonly Dictionary<string, (SyntaxTree Tree, int Epoch, List<string> Lines)> FileDiagnostics =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>How many files the last diagnostics request worked out again (the rest came from the cache).</summary>
+    internal static int LastDiagnosed;
+
+    /// <summary>
+    /// The game files' problems and gameplay warnings. Per file, and only for files whose text changed since they
+    /// were last checked (or all, after a change another file could see), so an edit inside a method body checks
+    /// one file however large the project.
+    /// </summary>
     private static void Diagnostics(CSharpCompilation compilation,
         Dictionary<string, SourceFile> sourceByPath, List<string> output)
     {
-        // Per file, so that after an edit only the game's files are bound again, not the whole engine API.
-        IEnumerable<Diagnostic> problems = sourceByPath.Count == 0 ? [] : compilation.SyntaxTrees
-            .Where(tree => sourceByPath.ContainsKey(tree.FilePath))
-            .SelectMany(tree => compilation.GetSemanticModel(tree).GetDiagnostics());
+        LastDiagnosed = 0;
+        foreach (SyntaxTree tree in compilation.SyntaxTrees)
+        {
+            if (!sourceByPath.TryGetValue(tree.FilePath, out SourceFile? source))
+                continue;
+            if (!FileDiagnostics.TryGetValue(tree.FilePath, out var cached) || !ReferenceEquals(cached.Tree, tree) ||
+                cached.Epoch != DeclarationEpoch)
+            {
+                var lines = new List<string>();
+                var one = new Dictionary<string, SourceFile>(StringComparer.OrdinalIgnoreCase) { [tree.FilePath] = source };
+                FileProblems(compilation.GetSemanticModel(tree).GetDiagnostics(), one, lines);
+                foreach (GameplayDiagnostics.Warning warning in GameplayDiagnostics.Analyze(compilation, one))
+                    lines.Add(Line("diagnostic", warning.Path, warning.Line,
+                        warning.Utf8Column, "warning", warning.Message, warning.Category));
+                cached = (tree, DeclarationEpoch, lines);
+                FileDiagnostics[tree.FilePath] = cached;
+                LastDiagnosed++;
+            }
+            output.AddRange(cached.Lines);
+        }
+        foreach (string gone in FileDiagnostics.Keys.Where(path => !ParsedSources.ContainsKey(path)).ToArray())
+            FileDiagnostics.Remove(gone);
+    }
+
+    private static void FileProblems(IEnumerable<Diagnostic> problems,
+        Dictionary<string, SourceFile> sourceByPath, List<string> output)
+    {
         foreach (Diagnostic problem in problems)
         {
             if (problem.Severity is not (DiagnosticSeverity.Error or DiagnosticSeverity.Warning) ||
@@ -425,14 +512,10 @@ internal static class Program
                     StringComparison.OrdinalIgnoreCase))
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
             sourceByPath = reported;
+            // Compiler problems, then Tallow's cyan performance / purple network warnings (their category column is
+            // optional; older consumers still understand the first six fields).
             Diagnostics(compilation, sourceByPath, output);
-            // Keep Tallow's established cyan performance / purple network
-            // underlines. New category column is optional; older consumers
-            // still understand the first six fields.
-            foreach (GameplayDiagnostics.Warning warning in GameplayDiagnostics.Analyze(
-                compilation, sourceByPath))
-                output.Add(Line("diagnostic", warning.Path, warning.Line,
-                    warning.Utf8Column, "warning", warning.Message, warning.Category));
+            output.Add(Line("checked", LastDiagnosed));
             return;
         }
 

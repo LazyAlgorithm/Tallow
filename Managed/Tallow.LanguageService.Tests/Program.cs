@@ -223,6 +223,58 @@ internal static class Program
                 !removedResult.Contains("diagnostic\t") &&
                 !removedResult.Contains("error\t"));
 
+            // Per-file diagnostics cache: an edit inside a method body checks that file only; a change another file
+            // can see (a renamed method, a constant) checks them all again.
+            int next = 6;
+            string Diagnose()
+            {
+                string folder = Path.Combine(queue, $"request-{next++}");
+                Directory.CreateDirectory(folder);
+                PublishRequest(folder, $"operation\tdiagnostics\nfile\t{file}\ncursor\t0\n");
+                string response = Path.Combine(folder, "response.tsv");
+                WaitFor(response, worker);
+                return File.ReadAllText(response);
+            }
+            static int Checked(string result) => result.Split('\n').Where(line => line.StartsWith("checked\t"))
+                .Select(line => int.Parse(line.Split('\t')[1])).FirstOrDefault(-1);
+            string helper = Path.Combine(source, "Helper.cs");
+            string helperSource = """
+                public static class Helper
+                {
+                    public const int Limit = 1;
+                    public static int Value() { return 1; }
+                }
+                """;
+            File.WriteAllText(helper, helperSource);
+            File.WriteAllText(file, goodSource.Replace("{ Transform.Position += Vector3.UnitX * deltaTime; }",
+                "{ Transform.Position += Vector3.UnitX * Helper.Value(); switch (input.Buttons) { case Helper.Limit: case 2: break; } }"));
+            string first = Diagnose();
+            Check("diagnostics cache: a file using another file's method and constant is clean (" + Checked(first) + " checked)",
+                !first.Contains("diagnostic\t") && Checked(first) == 2);
+            string unchanged = Diagnose();
+            Check("diagnostics cache: nothing changed, nothing checked again (" + Checked(unchanged) + ")",
+                !unchanged.Contains("diagnostic\t") && Checked(unchanged) == 0);
+            File.WriteAllText(helper, helperSource.Replace("return 1;", "return 2;"));
+            string body = Diagnose();
+            Check("diagnostics cache: an edit inside a method body checks only that file (" + Checked(body) + ")",
+                !body.Contains("diagnostic\t") && Checked(body) == 1);
+            File.WriteAllText(helper, helperSource.Replace("return 1;", "return ;"));
+            string bodyError = Diagnose();
+            Check("diagnostics cache: an error typed into a body is reported", bodyError.Contains("CS0126"));
+            File.WriteAllText(helper, helperSource.Replace("Value()", "Other()"));
+            string renamed = Diagnose();
+            Check("diagnostics cache: renaming a method reports its use in the other file (" + Checked(renamed) + ")",
+                renamed.Contains("CS0117") && renamed.Contains("Mover.cs"));
+            File.WriteAllText(helper, helperSource.Replace("Limit = 1", "Limit = 2"));
+            string constant = Diagnose();
+            Check("diagnostics cache: changing a constant reports the clash in the other file",
+                constant.Contains("CS0152") && constant.Contains("Mover.cs"));
+            File.WriteAllText(helper, helperSource);
+            string back = Diagnose();
+            Check("diagnostics cache: putting it back clears the other file's errors", !back.Contains("diagnostic\t"));
+            File.Delete(helper);
+            File.WriteAllText(file, goodSource);
+
             File.WriteAllText(Path.Combine(queue, "stop"), "stop");
             Check("persistent Roslyn worker stops cleanly", worker.WaitForExit(5000) &&
                 worker.ExitCode == 0);

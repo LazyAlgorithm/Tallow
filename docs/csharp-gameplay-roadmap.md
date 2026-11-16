@@ -207,7 +207,13 @@ changing the original six-field wire format.
     before the closing parenthesis) and marks the parameter at the caret (\x01..\x02, by position or name);
     the code widget draws it above the caret line when no completion list is open. Waiting for the user to try
     it in the editor. Semantic colouring beyond type names needs range colours in TextEdit (not started).
-- [ ] Build persistent incremental Roslyn project state instead of recreating a compilation per request. Measure warm/cold latency and memory/CPU on Nobara/Windows; properly cancel stale requests, debounce typing, restart failed workers, and handle multiple files.
+- [x] Build persistent incremental Roslyn project state instead of recreating a compilation per request. Measure warm/cold latency and memory/CPU on Nobara/Windows; properly cancel stale requests, debounce typing, restart failed workers, and handle multiple files.
+  Done November 16, 2026: one incremental compilation (November 14) plus per-file diagnostics kept while a file's
+  tree is unchanged; an edit inside one method body checks only that file, any change another file could see
+  (declarations, constants, field initializers, added/removed files) checks all again. The editor debounces
+  diagnostics 1.5 s after typing, keeps one request in flight (superseded edits never queue), sends every open file
+  as an overlay, backs off 10 s after a failed start and restarts a worker that stops answering. Benchmarked in B05
+  (Nobara; Windows runs the same script in CI). 7 cross-file cache tests (81 Roslyn tests).
   - [x] (November 16, 2026) Measured: `tools/benchmark_csharp_language_service.py` drives the `--serve` process
     as the editor does on a copy of Tests/CSharpInGame (ApiChecks.cs, 1,500 lines): cold first request ~650 ms;
     completion, signature help and Go to Definition ~25-30 ms after an edit; diagnostics ~23 ms unchanged and
@@ -970,8 +976,8 @@ claim automatic replication of dynamically created joints.
 - Persistent-service tests now add a broken C# file and then delete it to
   verify diagnostics correctly invalidate, in addition to existing
   changed-source/recovery tests.
-- **Pending tests:** .NET 11 Linux/Windows CI, benchmark B05 p50/p95/p99
-  completions and memory on Nobara, and full interactive editor verification.
+- **Pending tests:** full interactive editor verification. (B05 measured November 16, 2026; Linux/Windows CI run
+  the Roslyn tests and the latency script.)
   Project-level assembly-definition semantics remain future work.
 
 

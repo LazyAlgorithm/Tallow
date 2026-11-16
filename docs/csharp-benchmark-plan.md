@@ -17,7 +17,24 @@
 - [x] **B02 — game C# cold compile.** Remove the generated `.tallow-csharp` folder **only from a disposable copy of `Tests/CSharpGameplay`**, compile with `TallowLauncher --build-project PATH`, log elapsed time and errors; repeat x5. Done (2026-11-16, `tools/benchmark_csharp_compiles.sh`, 5 runs): cold build of a disposable copy 1.25 s median, peak RSS ~300 MB. Raw: `~/TallowBenchmarks/compile-20261116/`.
 - [x] **B03 — warm/no-op compile.** Rebuild the same untouched disposable game five times; separately edit one C# script body (add a harmless comment) and rebuild five times. Record time from Save to compilation banner disappearance and from Save to first permitted Play. Done for the command-line build (2026-11-16): no-op 1.19 s, one-file edit 1.21 s, leaf-assembly edit 1.23 s, public API edit 1.23 s (medians of 5; fixed process/MSBuild overhead dominates). Save-to-Play in the editor still needs a display.
 - [ ] **B04 — invalid C# recovery.** Open intentionally invalid source; measure editor launch/diagnostics latency, Play disabled, recovery after fixing source, and whether the next successful edit is used. Include two rapid saves while a build is in progress.
-- [ ] **B05 — semantic editor latency.** Measure initial Roslyn worker startup, 100 steady-state completions, 100 diagnostics, nullable `Rigidbody?.` completion, type coloring and rename/definition queries in a small vs large (100+ file) source project. Record p50/p95/p99 response time and CPU/memory.
+- [x] **B05 — semantic editor latency.** Measure initial Roslyn worker startup, 100 steady-state completions, 100 diagnostics, nullable `Rigidbody?.` completion, type coloring and rename/definition queries in a small vs large (100+ file) source project. Record p50/p95/p99 response time and CPU/memory.
+  - Measured November 16, 2026 on Nobara (`tools/benchmark_csharp_language_service.py --runs 100 [--extra-files 120]`;
+    raw output in `~/TallowBenchmarks/language-service-20261116/`). Service start 16 ms; cold first request 0.66 s
+    (5 files) / 1.04 s (125 files); peak memory 335–344 MB; 39–46 s CPU over ~800 requests.
+
+    | ms, p50 / p95 / p99 | 5 files | 125 files |
+    |---|---|---|
+    | diagnostics, nothing changed | 15.9 / 17.0 / 29.6 | 17.0 / 18.1 / 23.2 |
+    | diagnostics, typing in a method body | 82.6 / 98.5 / 112.6 | 67.9 / 82.5 / 200.3 |
+    | diagnostics, a new method added | 219.6 / 305.7 / 312.1 | 233.8 / 794.9 / 815.2 |
+    | completion after `Transform.` | 22.2 / 31.8 / 55.0 | 23.3 / 34.0 / 58.3 |
+    | completion after `GetComponent<Rigidbody>()?.` | 22.3 / 31.8 / 39.2 | 22.2 / 31.7 / 42.3 |
+    | signature help | 22.2 / 30.8 / 36.0 | 22.2 / 30.7 / 39.0 |
+    | Go to Definition | 18.0 / 19.1 / 31.7 | 18.0 / 21.2 / 33.9 |
+
+    Before the per-file diagnostics cache (125 files, 30 runs): nothing changed 292 ms p50, typing in a body 223 ms
+    p50. The cost of a declaration change is dominated by the 1,642-line file being edited. Type colouring is part of
+    every response (the `type` lines); rename is not timed here.
 - [ ] **B06 — managed runtime bootstrap and lifecycle.** Measure Play entry/exit for 0, 100, 1,000 and 10,000 lightweight C# Script instances. Run 100 Play/Stop cycles; check memory growth, duplicate callbacks, invalid handles and retained managed instances.
 - [ ] **B07 — scalar versus batched managed callbacks.** Run existing `Tests/NativeCSharpHost` `--benchmark` on matching builds; record raw per-callback cost and batch sizes 1, 16, 128, 512, 4096, separately for no-op Fixed/Late and distinct TickInput. **Do not switch the Scene scheduler automatically based only on mock-host speed.** Require real-editor profiler data, callback order, detach/disable and network replay equivalence.
 - [x] **B08 — component access latency.** Compare `GetComponent<T>()` and `TryGetComponent<T>()` for native Rigidbody/Transform vs managed Script, hit and miss, using 100k–1M calls after warm-up. Verify disabled and destroyed handles fail safely. Done (2026-11-16, `getcomponent` mode, 100k calls/frame, a quarter each native hit, script hit, native miss, script miss): C# 3.04 ms vs Beef 0.30 ms per 100k (10×), no allocations. Before the fixes below C# took 30.6 ms and allocated ~33 bytes per call.
