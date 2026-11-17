@@ -647,6 +647,75 @@ class Material
 	/// Tells the renderer something changed. Call it after setting the plain fields (color, metallic...) from code.
 	public void Changed() => Revision++;
 
+	/// Sets a value by name: "color", "emissive", "metallic", "roughness", "emissiveIntensity", "cutoff", "tiling",
+	/// "offset", "normalStrength", "occlusionStrength", "dissolve", "flatShading", "unlit", "doubleSided" or "blend"
+	/// (0 opaque, 1 cutout, 2 transparent), otherwise a property of the custom shader. Numbers use x.
+	public void SetNamedValue(StringView name, Vector4 value)
+	{
+		switch (name)
+		{
+		case "color": color = .(value.x, value.y, value.z, value.w);
+		case "emissive": emissive = .(value.x, value.y, value.z, value.w);
+		case "metallic": metallic = Mathf.Clamp01(value.x);
+		case "roughness": roughness = Mathf.Clamp01(value.x);
+		case "emissiveIntensity": emissiveIntensity = Math.Max(value.x, 0);
+		case "cutoff": cutoff = Mathf.Clamp01(value.x);
+		case "tiling": tiling = .(value.x, value.y);
+		case "offset": offset = .(value.x, value.y);
+		case "normalStrength": normalStrength = Math.Max(value.x, 0);
+		case "occlusionStrength": occlusionStrength = Mathf.Clamp01(value.x);
+		case "dissolve": dissolve = Mathf.Clamp01(value.x);
+		case "flatShading": flatShading = value.x != 0;
+		case "unlit": unlit = value.x != 0;
+		case "doubleSided": doubleSided = value.x != 0;
+		case "blend": blend = (MaterialBlend)Math.Clamp((int32)value.x, 0, 2);
+		default:
+			SetVector(name, value);
+		}
+		Changed();
+	}
+
+	/// A value by name, as SetNamedValue takes it (true and false read 1 and 0).
+	public Vector4 GetNamedValue(StringView name)
+	{
+		switch (name)
+		{
+		case "color": return .(color.r, color.g, color.b, color.a);
+		case "emissive": return .(emissive.r, emissive.g, emissive.b, emissive.a);
+		case "metallic": return .(metallic, 0, 0, 0);
+		case "roughness": return .(roughness, 0, 0, 0);
+		case "emissiveIntensity": return .(emissiveIntensity, 0, 0, 0);
+		case "cutoff": return .(cutoff, 0, 0, 0);
+		case "tiling": return .(tiling.x, tiling.y, 0, 0);
+		case "offset": return .(offset.x, offset.y, 0, 0);
+		case "normalStrength": return .(normalStrength, 0, 0, 0);
+		case "occlusionStrength": return .(occlusionStrength, 0, 0, 0);
+		case "dissolve": return .(dissolve, 0, 0, 0);
+		case "flatShading": return .(flatShading ? 1 : 0, 0, 0, 0);
+		case "unlit": return .(unlit ? 1 : 0, 0, 0, 0);
+		case "doubleSided": return .(doubleSided ? 1 : 0, 0, 0, 0);
+		case "blend": return .((int32)blend, 0, 0, 0);
+		default: return GetVector(name);
+		}
+	}
+
+	/// The text field named ("shader", "texture", "normalMap", "metallicRoughnessMap", "occlusionMap",
+	/// "emissiveMap", "palette"), or null for another name.
+	public String NamedText(StringView name)
+	{
+		switch (name)
+		{
+		case "shader": return shader;
+		case "texture": return texture;
+		case "normalMap": return normalMap;
+		case "metallicRoughnessMap": return metallicRoughnessMap;
+		case "occlusionMap": return occlusionMap;
+		case "emissiveMap": return emissiveMap;
+		case "palette": return palette;
+		default: return null;
+		}
+	}
+
 	/// A separate copy, for changing one object without changing the others that share the material.
 	public Material Clone()
 	{

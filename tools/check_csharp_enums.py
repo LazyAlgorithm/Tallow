@@ -24,6 +24,8 @@ PAIRS = [
      "Managed/Tallow.API/Platform.cs", r"public enum GamepadKind\s*\{(.*?)\n\}"),
     ("Engine/src/Render/Quality.bf", r"enum QualityLevel\s*\{(.*?)\n\}",
      "Managed/Tallow.API/Platform.cs", r"public enum QualityLevel\s*\{(.*?)\n\}"),
+    ("Engine/src/Render/Material.bf", r"enum MaterialBlend : int32\s*\{(.*?)\n\}",
+     "Managed/Tallow.API/Materials.cs", r"public enum MaterialBlend\s*\{(.*?)\n\}"),
 ]
 
 

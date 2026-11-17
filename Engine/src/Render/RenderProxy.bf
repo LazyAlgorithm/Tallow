@@ -86,20 +86,7 @@ class RenderProxy
 		let own = Material;
 		if (own == null)
 			return false;
-		switch (name)
-		{
-		case "color": own.color = .(value.x, value.y, value.z, value.w);
-		case "emissive": own.emissive = .(value.x, value.y, value.z, value.w);
-		case "metallic": own.metallic = Mathf.Clamp01(value.x);
-		case "roughness": own.roughness = Mathf.Clamp01(value.x);
-		case "emissiveIntensity": own.emissiveIntensity = Math.Max(value.x, 0);
-		case "cutoff": own.cutoff = Mathf.Clamp01(value.x);
-		case "tiling": own.tiling = .(value.x, value.y);
-		case "offset": own.offset = .(value.x, value.y);
-		default:
-			own.SetVector(name, value);
-		}
-		own.Changed();
+		own.SetNamedValue(name, value);
 		return true;
 	}
 

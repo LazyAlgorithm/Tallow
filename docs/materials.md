@@ -93,7 +93,22 @@ renderer.SetMaterialFloat("roughness", 0.2f);
 renderer.SetMaterialFloat("speed", 4);                  // a custom shader's property
 ```
 
-Changing the shared material itself (every object using it changes), and `Material.Load(path)`, `Clone()` and `Save(fullPath)`, are engine (Beef) code for tools for now: in Beef, `renderer.SharedMaterial` is the shared one, and after setting its plain fields call `Changed()`.
+To change the material itself, so that every object using it changes at once, use a `Material`:
+
+```csharp
+var brass = Material.Load("Materials/brass.tmat")!;    // null if there is no such file; or renderer.SharedMaterial
+brass.Metallic = 0.6f;
+brass.Color = new Color(0.9f, 0.7f, 0.3f, 1);
+brass.SetFloat("speed", 4);                             // a custom shader's property
+
+// A material made in code, starting as a copy of another; give it to renderers by name.
+var hot = Material.Create("Runtime/HotBrass", "Materials/brass.tmat");
+hot.Emissive = new Color(1, 0.4f, 0.1f, 1);
+hot.EmissiveIntensity = 3;
+renderer.Material = "Runtime/HotBrass";
+```
+
+A `Material` has every field the Inspector shows (`Color`, `Metallic`, `Roughness`, `Emissive`, `Tiling`, `Blend`, `Texture`, `NormalMap`...) and `SetFloat`, `SetColor`, `SetVector` and `SetTexture` for a custom shader's properties. Changes last until the game stops; the file is not changed. Materials made in code that nothing uses are freed after a while once there are many, so keep them on renderers rather than only in a variable. Saving a material to a file (`Save`) is editor (Beef) code.
 
 ## Writing a shader
 

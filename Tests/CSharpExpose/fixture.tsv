@@ -194,6 +194,12 @@ method	Tallow.CSharpMaps	SharingText	int	which:int	buffer:System.Span<byte>
 method	Tallow.CSharpMaps	State	int
 method	Tallow.CSharpMaps	TotalBytes	int
 method	Tallow.CSharpMaps	Unmount	void	file:string
+method	Tallow.CSharpMaterials	Create	bool	path:string	from:string
+method	Tallow.CSharpMaterials	Exists	bool	path:string	made:bool
+method	Tallow.CSharpMaterials	GetText	int	path:string	made:bool	name:string	buffer:System.Span<byte>
+method	Tallow.CSharpMaterials	GetValue	bool	path:string	made:bool	name:string	values:System.Span<float>
+method	Tallow.CSharpMaterials	SetText	bool	path:string	made:bool	name:string	value:string
+method	Tallow.CSharpMaterials	SetValue	bool	path:string	made:bool	name:string	value:System.Numerics.Vector4
 method	Tallow.CSharpMeshes	ClearMesh	bool	session:ulong	entity:ulong
 method	Tallow.CSharpMeshes	SetMesh	int	session:ulong	entity:ulong	positions:System.Span<float>	normals:System.Span<float>	uvs:System.Span<float>	indices:System.Span<float>
 method	Tallow.CSharpNativeComponents	Add	bool	session:ulong	entity:ulong	typeName:string

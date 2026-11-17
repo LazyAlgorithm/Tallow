@@ -248,6 +248,37 @@ public class ApiChecks : CheckBase
     private Helper? _removedHelper;
 
     /// GetComponents / InParent / InChildren, RemoveComponent (checked frames later, at 300) and Transform directions.
+    private void CheckSharedMaterials(MeshRenderer renderer)
+    {
+        var glow = Material.Load("Materials/Glow.tmat");
+        Check("Material.Load reads a material file's values",
+            glow != null && Math.Abs(glow.Color.G - 0.3f) < 0.001f && glow.Roughness == 0.5f && glow.Texture == "");
+        Check("MeshRenderer.SharedMaterial is the material it names", renderer.SharedMaterial == glow);
+        glow!.Metallic = 0.7f;
+        Check("a change to a shared material is seen through every handle to it",
+            Math.Abs(Material.Load("Materials/Glow.tmat")!.Metallic - 0.7f) < 0.001f
+            && Math.Abs(renderer.SharedMaterial!.Metallic - 0.7f) < 0.001f);
+        glow.Metallic = 0;
+
+        var made = Material.Create("Runtime/RedGlow", "Materials/Glow.tmat");
+        Check("Material.Create copies another material", Math.Abs(made.Color.B - 0.4f) < 0.001f && made.EmissiveIntensity == 1);
+        made.Color = new Color(1, 0, 0, 1);
+        made.Blend = MaterialBlend.Transparent;
+        made.Tiling = new Vector2(2, 3);
+        made.Texture = "Textures/Missing.png";
+        made.SetFloat("wobble", 0.25f);
+        made.SetTexture("detail", "Textures/Detail.png");
+        Check("a made material's values, text fields and shader properties read back",
+            made.Color == new Color(1, 0, 0, 1) && made.Blend == MaterialBlend.Transparent && made.Tiling == new Vector2(2, 3)
+            && made.Texture == "Textures/Missing.png" && made.GetFloat("wobble") == 0.25f && made.GetTexture("detail") == "Textures/Detail.png");
+        Check("Material.Create of a name in use returns that material unchanged",
+            Material.Create("Runtime/RedGlow").Color == new Color(1, 0, 0, 1) && Material.Load("Runtime/RedGlow") == made);
+        Check("the copied-from material is unchanged", Math.Abs(glow.Color.R - 0.25f) < 0.001f && glow.Blend == MaterialBlend.Opaque);
+        bool refused = false;
+        try { Material.Create("Runtime/Other", "Materials/NotThere.tmat"); } catch (ArgumentException) { refused = true; }
+        Check("Material.Create refuses to copy a material that is not there", refused);
+    }
+
     private void ComponentAccessSetup()
     {
         _accessRoot = Scene.CreateGameObject("Access root");
@@ -977,6 +1008,7 @@ public class ApiChecks : CheckBase
         Check("MeshRenderer.Material switches the material; SetMaterialColor and SetMaterialFloat run on its own copy",
             renderer.Material == "Materials/Glow.tmat" && renderer.BackFaceCulling && renderer.Texture == "");
         Check("MeshRenderer.IsVisible is false with nothing drawing (headless)", Screen.Width > 0 || !renderer.IsVisible);
+        CheckSharedMaterials(renderer);
         renderer.Material = "";
         // A 2 x 1 quad built in code, one metre above the lamp.
         renderer.SetMesh([new(-1, 1, 0), new(1, 1, 0), new(1, 2, 0), new(-1, 2, 0)], [0, 2, 1, 0, 3, 2]);

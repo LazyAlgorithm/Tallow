@@ -779,6 +779,14 @@ public class DocMoreSnippets : Script
         renderer.Material = "Materials/brass.tmat";
         renderer.SetMaterialColor("color", new Color(1, 0, 0, 1));
         renderer.SetMaterialFloat("roughness", 0.2f);
+        var brass = Material.Load("Materials/brass.tmat")!;
+        brass.Metallic = 0.6f;
+        brass.Color = new Color(0.9f, 0.7f, 0.3f, 1);
+        brass.SetFloat("speed", 4);
+        var hot = Material.Create("Runtime/HotBrass", "Materials/brass.tmat");
+        hot.Emissive = new Color(1, 0.4f, 0.1f, 1);
+        hot.EmissiveIntensity = 3;
+        renderer.Material = "Runtime/HotBrass";
         renderer.Emissive = new Color(1, 1, 1);
         renderer.EmissiveFromColor = true;
         renderer.EmissiveIntensity = 2;

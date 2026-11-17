@@ -335,6 +335,19 @@ public readonly partial record struct MeshRenderer(GameObject GameObject) : ICom
     }
 
     /// <summary>
+    /// The material this object names, shared with every other object that names it: changing it changes them all.
+    /// Null with no material set.
+    /// </summary>
+    public Tallow.Material? SharedMaterial
+    {
+        get
+        {
+            var path = Data.GetString("material");
+            return string.IsNullOrEmpty(path) ? null : Tallow.Material.Load(path);
+        }
+    }
+
+    /// <summary>
     /// Sets a property of this object's own copy of its material (made the first time, so objects sharing the
     /// material are not changed): a custom shader property by name, or "color", "emissive", "metallic",
     /// "roughness", "emissiveIntensity", "cutoff", "tiling" or "offset". Networked like <see cref="Material"/>.

@@ -1373,6 +1373,13 @@ A full conversion also needs these. Ordered roughly by when they block users.
 - [x] CI repair (November 17, 2026): the three pushes since the Steam/anti-cheat work failed because
   `Tests/CSharpExpose/fixture.tsv` lagged behind the engine manifest (148 new API lines), so the managed job lacked
   `CSharpSteam`/`CSharpAntiCheat` and the native job's drift check failed. Fixture refreshed.
+- [x] Shared materials from C# (November 17, 2026): `Material` (`Managed/Tallow.API/Materials.cs`) names a .tmat
+  by path: `Material.Load`, `Material.Create(name, copyOf)`, `MeshRenderer.SharedMaterial`; every Inspector field
+  as a property, `MaterialBlend`, and `SetFloat/SetColor/SetVector/SetTexture` for custom shader properties.
+  Changes are local and affect every object using the material. Host: `CSharpMaterials`
+  (`Engine/src/Scripting/CSharpMaterialsApi.bf`) over the new `Material.SetNamedValue/GetNamedValue/NamedText`,
+  which `RenderProxy.ApplyMaterialValue` now uses too. 8 in-game checks (378); docs/materials.md converted.
+  Saving a material to a file stays editor code.
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is
