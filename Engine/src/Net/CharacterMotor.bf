@@ -13,10 +13,12 @@ namespace Tallow;
 [Component]
 class CharacterMotor : NetworkBehaviour
 {
+	/// Walking speed, in metres a second.
 	public float moveSpeed = 6.0f;
 	/// Speed while Shift is held; set it to Move Speed to turn sprinting off.
 	public float sprintSpeed = 9.0f;
 	public float jumpSpeed = 6.5f;
+	/// How quickly it reaches its speed and stops, in metres a second per second.
 	public float acceleration = 40.0f;
 	/// Share of Acceleration available while in the air: 0 keeps the take-off velocity, 1 steers as on the ground.
 	[Range(0, 1)] public float airControl = 0.35f;

@@ -64,11 +64,13 @@ class SoftBody : Component
 	/// as a whole. 0 wobbles on, 10 settles at once.
 	[Range(0, 20)]
 	public float wobbleDamping = 3;
+	/// How much it grips what it slides on, 0 to 1.
 	public float friction = 0.4f;
 	/// How much it bounces when it lands, as on a Rigidbody: 0 lands with a squash and a wobble but no hop, 1 bounces
 	/// back up as fast as it came down (a jelly: its whole body; cloth: where it touches).
 	[Range(0, 1)]
 	public float bounciness = 0;
+	/// Multiplies gravity on it (0: it floats).
 	public float gravityScale = 1;
 	/// How far from its surface it keeps other things (its thickness), in metres.
 	public float thickness = 0.02f;

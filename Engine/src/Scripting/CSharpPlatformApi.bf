@@ -308,10 +308,100 @@ static class CSharpPlatform
 	[CSharpExpose]
 	public static float VoiceVolume(int32 clientId) => VoiceChat.GetPlayerVolume(clientId);
 
+	/// A voice chat setting by number (bools as 0 or 1): 0 Enabled, 1 PushToTalk, 2 PushToTalkKey, 3 Activation,
+	/// 4 ReleaseTime, 5 MicrophoneVolume, 6 Volume, 7 AutoLevel, 8 Muted, 9 Deafened, 10 Proximity, 11 MinDistance,
+	/// 12 MaxDistance, 13 TeamOnly, 14 Loopback, 15 Bitrate.
+	[CSharpExpose]
+	public static float VoiceSetting(int32 which)
+	{
+		switch (which)
+		{
+		case 0: return VoiceChat.Enabled ? 1 : 0;
+		case 1: return VoiceChat.PushToTalk ? 1 : 0;
+		case 2: return (float)(int32)VoiceChat.PushToTalkKey;
+		case 3: return VoiceChat.Activation;
+		case 4: return VoiceChat.ReleaseTime;
+		case 5: return VoiceChat.MicrophoneVolume;
+		case 6: return VoiceChat.Volume;
+		case 7: return VoiceChat.AutoLevel ? 1 : 0;
+		case 8: return VoiceChat.Muted ? 1 : 0;
+		case 9: return VoiceChat.Deafened ? 1 : 0;
+		case 10: return VoiceChat.Proximity ? 1 : 0;
+		case 11: return VoiceChat.MinDistance;
+		case 12: return VoiceChat.MaxDistance;
+		case 13: return VoiceChat.TeamOnly ? 1 : 0;
+		case 14: return VoiceChat.Loopback ? 1 : 0;
+		case 15: return VoiceChat.Bitrate;
+		default: return 0;
+		}
+	}
+
+	[CSharpExpose]
+	public static void SetVoiceSetting(int32 which, float value)
+	{
+		let on = value != 0;
+		switch (which)
+		{
+		case 0: VoiceChat.Enabled = on;
+		case 1: VoiceChat.PushToTalk = on;
+		case 2: VoiceChat.PushToTalkKey = (KeyCode)(int32)value;
+		case 3: VoiceChat.Activation = Math.Clamp(value, 0, 1);
+		case 4: VoiceChat.ReleaseTime = Math.Max(value, 0);
+		case 5: VoiceChat.MicrophoneVolume = Math.Max(value, 0);
+		case 6: VoiceChat.Volume = Math.Max(value, 0);
+		case 7: VoiceChat.AutoLevel = on;
+		case 8: VoiceChat.Muted = on;
+		case 9: VoiceChat.Deafened = on;
+		case 10: VoiceChat.Proximity = on;
+		case 11: VoiceChat.MinDistance = Math.Max(value, 0);
+		case 12: VoiceChat.MaxDistance = Math.Max(value, 0);
+		case 13: VoiceChat.TeamOnly = on;
+		case 14: VoiceChat.Loopback = on;
+		case 15: VoiceChat.Bitrate = (int32)Math.Clamp(value, 6000, 128000);
+		default:
+		}
+	}
+
+	[CSharpExpose]
+	public static int32 VoicePushToTalkAction(Span<uint8> buffer) => Copy(VoiceChat.PushToTalkAction, buffer);
+
+	[CSharpExpose]
+	public static void SetVoicePushToTalkAction(StringView action) => VoiceChat.PushToTalkAction.Set(action);
+
+	static List<int64> sSpeakingChanges = new .() ~ delete _;
+	static bool sWatchingSpeaking;
+
+	/// The next player who started or stopped being heard (client id in the low 32 bits, bit 32 set when they
+	/// started), or -1 when there is none. The first call starts collecting them.
+	[CSharpExpose]
+	public static int64 VoiceTakeSpeakingChange()
+	{
+		if (!sWatchingSpeaking)
+		{
+			sWatchingSpeaking = true;
+			VoiceChat.OnSpeakingChanged.Add(new (clientId, speaking) =>
+				{
+					if (sSpeakingChanges.Count < 1024)
+						sSpeakingChanges.Add((int64)(uint32)clientId | (speaking ? (1L << 32) : 0));
+				});
+		}
+		if (sSpeakingChanges.IsEmpty)
+			return -1;
+		return sSpeakingChanges.PopFront();
+	}
+
 	// ---- the game's asset files (in the project, or packed in a built game)
 
 	[CSharpExpose]
 	public static bool AssetExists(StringView path) => !path.IsEmpty && Assets.FileExists(path);
+
+	/// Makes a folder's files loadable by their path inside it, ahead of the game's own (mods, Workshop items).
+	[CSharpExpose]
+	public static void AssetsAddSearchPath(StringView folder)
+	{
+		if (!folder.IsEmpty)
+			Assets.AddSearchPath(folder);
+	}
 
 	/// The file's bytes into buffer; its length (more than the buffer: call again with room), or -1 when missing.
 	[CSharpExpose]

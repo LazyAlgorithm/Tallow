@@ -7,9 +7,13 @@ namespace Tallow;
 /// </summary>
 public static class SaveGame
 {
+    /// <summary>Starts saving to a slot (the server only, in a network session).</summary>
     public static SaveTask Save(string slot = "default") => new(CSharpSaves.Save(slot));
+    /// <summary>Starts loading a slot.</summary>
     public static SaveTask Load(string slot = "default") => new(CSharpSaves.Load(slot));
+    /// <summary>Whether the slot holds a save.</summary>
     public static bool Exists(string slot = "default") => CSharpSaves.Exists(slot);
+    /// <summary>Deletes the slot's save.</summary>
     public static void Delete(string slot = "default") => CSharpSaves.Delete(slot);
 }
 

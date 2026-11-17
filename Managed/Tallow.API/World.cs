@@ -34,6 +34,7 @@ public static partial class GUI
 [NativeComponent("Tallow.VoxelObject")]
 public readonly partial record struct VoxelObject(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has a Voxel Object.</summary>
     public bool IsValid => CSharpWorld.HasVoxelObject(GameObject.SceneId, GameObject.Id);
 
     /// <summary>Cuts a sphere out (shared in a network session). False without a VoxelObject.</summary>
@@ -67,6 +68,7 @@ public readonly partial record struct VoxelObject(GameObject GameObject) : IComp
 [NativeComponent("Tallow.VoxelTerrain")]
 public readonly partial record struct VoxelTerrain(GameObject GameObject) : IComponent
 {
+    /// <summary>The scene's voxel terrain, or null when it has none.</summary>
     public static VoxelTerrain? Find(Scene scene)
     {
         ulong id = CSharpWorld.FindVoxelTerrain(scene.SessionId);
@@ -88,6 +90,7 @@ public readonly partial record struct VoxelTerrain(GameObject GameObject) : ICom
 [NativeComponent("Tallow.CharacterMotor")]
 public readonly partial record struct CharacterMotor(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has a Character Motor.</summary>
     public bool IsValid => CSharpWorld.HasCharacterMotor(GameObject.SceneId, GameObject.Id);
     /// <summary>Degrees around the up axis.</summary>
     public float Yaw => CSharpWorld.MotorYaw(GameObject.SceneId, GameObject.Id);

@@ -10,15 +10,15 @@ A game with voice chat off never opens a microphone. A game with no network sess
 |---|---|---|
 | `VoiceChat.Enabled` | off | Master switch. |
 | `VoiceChat.PushToTalk` | off | Off: you are heard whenever you speak. On: only while the key is held. |
-| `VoiceChat.PushToTalkKey` | `.V` | The key to hold. Any `KeyCode`. |
-| `VoiceChat.PushToTalkAction` | `"Talk"` | An input action that is held to talk as well, so that the key can be changed in Window > Input Actions and a controller button works: the standard Talk action is V and d-pad down. Set `PushToTalkKey = .None` to use only the action. |
+| `VoiceChat.PushToTalkKey` | `KeyCode.V` | The key to hold. Any `KeyCode`. |
+| `VoiceChat.PushToTalkAction` | `"Talk"` | An input action that is held to talk as well, so that the key can be changed in Window > Input Actions and a controller button works: the standard Talk action is V and d-pad down. Set `PushToTalkKey = KeyCode.None` to use only the action. |
 | `VoiceChat.Talk` | false | Set it true from your own code to talk without the key: a gamepad button, a touch button. |
 | `VoiceChat.Activation` | 0.02 | Open microphone only: how loud you must be before sending starts (0 to 1). |
 | `VoiceChat.ReleaseTime` | 0.5 s | Open microphone only: how long sending continues after you fall quiet. |
 
 The first three are also in Project Settings (Voice Chat, Push To Talk, Push To Talk Key), which is what a new game starts with. All of them can be changed while the game runs, so an options menu can let each player choose:
 
-```beef
+```csharp
 VoiceChat.PushToTalk = pushToTalkBox;
 VoiceChat.PushToTalkKey = chosenKey;        // for example from a "press a key" prompt
 VoiceChat.Activation = sensitivitySlider;   // show VoiceChat.MicrophoneLevel beside it
@@ -38,28 +38,28 @@ Team and distance are decided by the **server**: speech is simply not sent to pl
 
 ## Volume, muting and who is talking
 
-```beef
-VoiceChat.AutoLevel = true;             // default: even out quiet and loud microphones
-VoiceChat.SetPlayerVolume(clientId, 2); // boost one player locally (0 to 4; 1 is normal)
+```csharp
+VoiceChat.AutoLevel = true;              // default: even out quiet and loud microphones
+VoiceChat.SetPlayerVolume(clientId, 2);  // boost one player locally (0 to 4; 1 is normal)
 VoiceChat.Volume = 0.8f;                 // other players' voices
 VoiceChat.MicrophoneVolume = 1.5f;       // your microphone, before it is sent
 VoiceChat.Muted = true;                  // stop sending without turning voice chat off
 VoiceChat.Deafened = true;               // stop hearing others
 VoiceChat.Mute(clientId, true);          // silence one player, on this machine only
-Audio.SetGroupVolume(.Voice, 0.5f);      // the Voice mixer group applies as well
+Audio.SetGroupVolume(AudioGroup.Voice, 0.5f);  // the Voice mixer group applies as well
 
 if (VoiceChat.IsSpeaking(clientId)) { /* draw a speaker icon over their head */ }
 if (VoiceChat.IsTransmitting) { /* draw a microphone icon for yourself */ }
-VoiceChat.OnSpeakingChanged.Add(new (clientId, speaking) => { /* update a player list */ });
+VoiceChat.OnSpeakingChanged += (clientId, speaking) => { /* update a player list */ };
 ```
 
 Received voices are automatically leveled independently toward a common speech volume, with up to 8× boost and a peak ceiling before the mixer. Silence does not increase the gain. Leveling happens before proximity attenuation, so distance still makes voices quieter. `VoiceChat.AutoLevel = false` disables leveling; the peak ceiling remains. Individual volumes last for the session; games can expose these controls in their options or player list. Manual volume boosts and the combined mixer can still exceed the peak ceiling. Very faint speech below the open microphone activation threshold needs a lower `Activation` or higher `MicrophoneVolume` to be transmitted.
 
-A player's client id is `ownerId` on their Network Identity; the host's own player is 0.
+A player's client id is their object's `OwnerClientId` (the owner on its Network Identity); the host's own player is 0.
 
 ## A microphone test for the options menu
 
-```beef
+```csharp
 VoiceChat.Enabled = true;
 VoiceChat.Loopback = true;               // you hear yourself; works without a session
 float level = VoiceChat.MicrophoneLevel; // 0 to about 1, for a meter

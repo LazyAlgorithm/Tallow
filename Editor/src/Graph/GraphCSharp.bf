@@ -173,9 +173,11 @@ static class GraphCSharp
 
 	/// Compiles a graph file to C# beside it (Name.cs), without the editor: the launcher's --graph-compile switch,
 	/// for tests and build scripts. The project's subgraphs are found as the editor finds them (under src/).
-	public static bool CompileFile(StringView graphPath, StringView namespaceName, String scriptPath, String error)
+	/// With csharp false (--graph-compile-beef) it writes Beef (Name.bf) as a Beef project's editor does: B21
+	/// compares the two from one graph.
+	public static bool CompileFile(StringView graphPath, StringView namespaceName, String scriptPath, String error, bool csharp = true)
 	{
-		NodeLibrary.CSharp = true;
+		NodeLibrary.CSharp = csharp;
 		// The project's C# nodes (.tallow-csharp/graph-nodes.tsv, from its last build), from the folder above with
 		// project.tallow in it.
 		let folder = Path.GetDirectoryPath(graphPath, .. scope String());
@@ -183,7 +185,8 @@ static class GraphCSharp
 		{
 			if (File.Exists(scope $"{folder}/project.tallow"))
 			{
-				NodeLibrary.RefreshCSharpScripts(folder);
+				if (csharp)
+					NodeLibrary.RefreshCSharpScripts(folder);
 				// Subgraph nodes are named by their file under the project's assets (src/), and their methods are
 				// read from there when the graph is compiled.
 				if (Assets.ProjectPath.IsEmpty)
@@ -204,11 +207,11 @@ static class GraphCSharp
 			return false;
 		}
 		Path.GetFileNameWithoutExtension(graphPath, graph.name..Clear());
-		graph.csharp = true;
+		graph.csharp = csharp;
 		let code = scope String();
 		graph.Compile(namespaceName, graph.name, Path.GetFileName(graphPath, .. scope .()), code);
 		scriptPath.Append(graphPath.Substring(0, graphPath.Length - Path.GetExtension(graphPath, .. scope .()).Length));
-		scriptPath.Append(".cs");
+		scriptPath.Append(csharp ? ".cs" : ".bf");
 		if (File.WriteAllText(scriptPath, code) case .Err)
 		{
 			error.AppendF("Could not write {}", scriptPath);

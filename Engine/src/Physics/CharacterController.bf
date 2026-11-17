@@ -14,6 +14,7 @@ enum CharacterShape : int32
 [Component, HandleData]
 struct CharacterControllerData
 {
+	/// The character's shape: a capsule (people, animals) or a box.
 	public CharacterShape shape = .Capsule;
 	/// Capsule: radius and total height, tips included.
 	public float radius = 0.35f;
@@ -28,6 +29,7 @@ struct CharacterControllerData
 	public float stepHeight = 0.4f;
 	/// Steepest slope, in degrees, it can stand and walk on.
 	public float maxSlope = 50;
+	/// The character's mass in kilograms: how hard it pushes, and is pushed by, rigid bodies.
 	public float mass = 70;
 	/// Force, in newtons, it can push dynamic bodies with.
 	public float pushStrength = 100;

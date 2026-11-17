@@ -22,6 +22,7 @@ public static class SpawnPoints
     /// <summary>Closes the start phase now; from here only ordinary points are given out.</summary>
     public static void EndStart(Scene scene) => CSharpSpawning.StartPhase(scene.SessionId, 1);
 
+    /// <summary>Whether the scene is in its start phase, when start-only spawn points are given out.</summary>
     public static bool IsStartPhase(Scene scene) => CSharpSpawning.IsStartPhase(scene.SessionId);
 
     /// <summary>How many points a team could be given (its own and any-team ones), not counting start-only ones.</summary>
@@ -100,6 +101,23 @@ public readonly partial record struct Scene
     /// </summary>
     public int WorldState => CSharpSpawning.GetWorldState(SessionId);
 
+    /// <summary>The world states ray casts, shape casts and overlaps see, one bit each (all of them by default). Set
+    /// it to the shooter's <see cref="GameObject.WorldStates"/> around that player's queries, and back after:
+    /// <c>using (Scene.QueryInWorldStates(shooter.WorldStates)) { ... }</c>.</summary>
+    public uint QueryWorldStates
+    {
+        get => CSharpSpawning.GetQueryWorldStates(SessionId);
+        set => CSharpSpawning.SetQueryWorldStates(SessionId, value);
+    }
+
+    /// <summary>Queries see only these world states until the result is disposed, then all again.</summary>
+    public WorldStateQueryScope QueryInWorldStates(uint states)
+    {
+        uint before = QueryWorldStates;
+        QueryWorldStates = states;
+        return new WorldStateQueryScope(SessionId, before);
+    }
+
     /// <summary>Switches the world state (an index, 0 to 31): everything outside it hides, stops colliding and goes
     /// quiet at once. Scripts' <see cref="Script.OnWorldStateChanged"/> hear it.</summary>
     public void SetWorldState(int state) => CSharpSpawning.SetWorldState(SessionId, state);
@@ -115,8 +133,24 @@ public readonly partial record struct Scene
     }
 }
 
+/// <summary>Puts the scene's QueryWorldStates back when disposed (<see cref="Scene.QueryInWorldStates"/>).</summary>
+public readonly struct WorldStateQueryScope(ulong session, uint before) : IDisposable
+{
+    /// <summary>Puts QueryWorldStates back as it was.</summary>
+    public void Dispose() => CSharpSpawning.SetQueryWorldStates(session, before);
+}
+
 public readonly partial record struct GameObject
 {
     /// <summary>The team of its Network Identity, set by the server: 1, 2, ... or 0 without teams.</summary>
     public int Team => CSharpSpawning.Team(SceneId, Id);
+
+    /// <summary>The world states the object is part of, one bit per state in Project Settings (all by default).
+    /// Outside the scene's active state it is not drawn, does not collide, is not heard and is not walked on; its
+    /// bodies move between states at once.</summary>
+    public uint WorldStates
+    {
+        get => CSharpSpawning.GetObjectWorldStates(SceneId, Id);
+        set => CSharpSpawning.SetObjectWorldStates(SceneId, Id, value);
+    }
 }

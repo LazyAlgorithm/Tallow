@@ -1451,10 +1451,14 @@ class Scene
 	static ProfilerMarker sSkinMarker = .("Skinning", .Animation);
 	static ProfilerMarker sDestroyMarker = .("Destroy", .Scripts);
 
-	/// Calls one component method, timed under its type's marker when the Profiler times components.
+	/// Calls one component method, timed under its type's marker when the Profiler times components. Not on an
+	/// object destroyed earlier in the frame: it reads as gone at once, so its scripts get no more updates (their
+	/// OnDestroy still runs at the frame's end).
 	[Inline]
 	void Run(Component component, ProfilerComponents.Method method)
 	{
+		if (component.[Friend]mGameObject.IsDestroyed)
+			return;
 		Watchdog.Running = component;
 		let timed = ProfilerComponents.Timing;
 		if (timed)
@@ -1480,6 +1484,9 @@ class Scene
 	[Inline]
 	void RunUpdate(Component component, TickInput input, float deltaTime, ProfilerComponents.Method method = .Update)
 	{
+		// As Run: none for an object destroyed earlier in the frame.
+		if (component.[Friend]mGameObject.IsDestroyed)
+			return;
 		Watchdog.Running = component;
 		let timed = ProfilerComponents.Timing;
 		if (timed)

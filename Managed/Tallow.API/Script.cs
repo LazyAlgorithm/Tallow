@@ -32,6 +32,7 @@ public interface IGameplayComponentRegistry
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
 public sealed class FormerlyNamedAttribute(string fullName) : Attribute
 {
+    /// <summary>The earlier full name (namespace and class).</summary>
     public string FullName { get; } = fullName;
 }
 
@@ -79,6 +80,7 @@ public sealed class HideInInspectorAttribute : Attribute { }
 [AttributeUsage(AttributeTargets.Field)]
 public sealed class SerializedFieldIdAttribute(string id) : Attribute
 {
+    /// <summary>The field's lasting ID, written in scenes and prefabs instead of its name.</summary>
     public string Id { get; } = id;
 }
 
@@ -86,7 +88,9 @@ public sealed class SerializedFieldIdAttribute(string id) : Attribute
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class RangeAttribute(float minimum, float maximum) : Attribute
 {
+    /// <summary>The smallest value the Inspector allows.</summary>
     public float Minimum { get; } = minimum;
+    /// <summary>The largest value the Inspector allows.</summary>
     public float Maximum { get; } = maximum;
 }
 
@@ -144,21 +148,32 @@ public enum InputButton
 public readonly record struct TickInput(
     Vector2 Move, Vector2 Look, uint Buttons, uint PreviousButtons = 0)
 {
+    /// <summary>Where the player looks, left and right, in degrees (Look.X).</summary>
     public float Yaw => Look.X;
+    /// <summary>Where the player looks, up and down, in degrees (Look.Y).</summary>
     public float Pitch => Look.Y;
 
+    /// <summary>Whether the button is down this tick.</summary>
     public bool Held(InputButton button) => (Buttons & (1u << (int)button)) != 0;
+    /// <summary>Whether the button went down this tick (it was up the tick before).</summary>
     public bool Pressed(InputButton button) =>
         (Buttons & (1u << (int)button)) != 0 && (PreviousButtons & (1u << (int)button)) == 0;
+    /// <summary>Whether the button came up this tick (it was down the tick before).</summary>
     public bool Released(InputButton button) =>
         (Buttons & (1u << (int)button)) == 0 && (PreviousButtons & (1u << (int)button)) != 0;
 
+    /// <summary>Whether Jump is held.</summary>
     public bool Jump => Held(InputButton.Jump);
+    /// <summary>Whether Sprint is held.</summary>
     public bool Sprint => Held(InputButton.Sprint);
+    /// <summary>Whether Crouch is held.</summary>
     public bool Crouch => Held(InputButton.Crouch);
+    /// <summary>Whether Fire is held.</summary>
     public bool Fire => Held(InputButton.Fire);
+    /// <summary>Whether Use is held.</summary>
     public bool Use => Held(InputButton.Use);
 
+    /// <summary>The rotation of where the player looks (yaw, then pitch; no roll).</summary>
     public Quaternion LookRotation =>
         Quaternion.CreateFromYawPitchRoll(Yaw * (MathF.PI / 180), Pitch * (MathF.PI / 180), 0);
 
@@ -183,6 +198,8 @@ public interface IComponent { }
 /// <summary>A validated reference to an engine-owned scene entity, not a native pointer.</summary>
 public readonly partial record struct GameObject(ulong SceneId, ulong Id)
 {
+    /// <summary>Whether the object still exists. False once it is destroyed (at once, though its OnDestroy runs at
+    /// the end of the frame) or its scene is unloaded.</summary>
     public bool IsValid => Engine.Bridge.IsAlive(this);
 
     private static bool CheckedActiveState(int state)
@@ -212,6 +229,7 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
                 "The native scene GameObject is no longer alive.");
     }
 
+    /// <summary>The object's position, rotation, scale and parent.</summary>
     public Transform Transform => new(this);
     /// <summary>The scene session containing this object; no native pointer is held.</summary>
     public Scene Scene => new(SceneId);
@@ -313,8 +331,11 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
         return null;
     }
 
+    /// <summary>Whether the object has the tag.</summary>
     public bool HasTag(string tag) => CSharpSceneObjects.HasTag(SceneId, Id, tag);
+    /// <summary>Adds a tag to the object. False if it already had it.</summary>
     public bool AddTag(string tag) => CSharpSceneObjects.AddTag(SceneId, Id, tag);
+    /// <summary>Removes a tag from the object. False if it did not have it.</summary>
     public bool RemoveTag(string tag) => CSharpSceneObjects.RemoveTag(SceneId, Id, tag);
 
     /// <summary>The physics layer, 0 to 31 (named in Project Settings).</summary>
@@ -508,6 +529,8 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
                 $"Tallow failed to resolve newly attached C# component {fullName}.");
     }
 
+    /// <summary>Destroys the object, its components and its children. It is invalid at once; OnDisable and
+    /// OnDestroy run at the end of the frame, and it gets no more updates in this one.</summary>
     public void Destroy() => Engine.Bridge.Destroy(this);
 
     /// <summary>Number of native class colliders attached to this object.</summary>
@@ -622,6 +645,7 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
         set => CSharpSceneObjects.SetTransient(SceneId, Id, value);
     }
 
+    /// <summary>The object's collider at that index (an object can have several), or null when there is none.</summary>
     public ColliderHandle? GetCollider(int index = 0) =>
         Physics.GetColliderKind(SceneId, Id, index) >= 0 ?
             new ColliderHandle(this, index) : null;
@@ -678,6 +702,7 @@ public readonly record struct PhysicsHit(
 /// </summary>
 public readonly partial record struct EcsEntity(ulong SessionId, ulong Id)
 {
+    /// <summary>Whether the entity still exists in its scene's ECS world.</summary>
     public bool IsAlive => Id != 0 && Ecs.IsAlive(SessionId, Id);
 
     /// <summary>
@@ -704,6 +729,7 @@ public readonly partial record struct EcsEntity(ulong SessionId, ulong Id)
     public bool TryCopyLocalData(ulong schemaId, Span<byte> destination) =>
         Id != 0 && Ecs.CopyLocalData(SessionId, Id, schemaId, destination);
 
+    /// <summary>Whether the entity has the local-only data component with that schema ID.</summary>
     public bool HasLocalData(ulong schemaId) =>
         Id != 0 && Ecs.HasLocalData(SessionId, Id, schemaId);
 }
@@ -881,6 +907,7 @@ public readonly partial record struct Scene(ulong SessionId)
         float maxDistance, uint layerMask = uint.MaxValue) =>
         Physics.RaycastDistance(SessionId, origin, direction, maxDistance, layerMask);
 
+    /// <summary>Makes an empty object (a Transform only) at the origin of this scene.</summary>
     public GameObject CreateGameObject(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -946,6 +973,11 @@ public readonly partial record struct Scene(ulong SessionId)
     public bool IsNetworked => CSharpSceneObjects.NetworkRole(SessionId) != 0;
     /// <summary>True on the server or host, and in a game with no network session.</summary>
     public bool IsServer => CSharpSceneObjects.NetworkRole(SessionId) != 2;
+
+    /// <summary>True while ticks are being run again after a correction from the server: an <c>Update</c> can run
+    /// more than once for one tick on the player's machine, so do one-off things (sounds, spawning) inside
+    /// <c>if (Scene.IsServer)</c> or <c>if (!Scene.IsReplaying)</c>.</summary>
+    public bool IsReplaying => CSharpSceneObjects.NetworkReplaying(SessionId);
     /// <summary>True on a machine that joined someone else's session.</summary>
     public bool IsClient => CSharpSceneObjects.NetworkRole(SessionId) == 2;
     /// <summary>This machine's client id in the session; 0 on the server or offline.</summary>
@@ -955,9 +987,13 @@ public readonly partial record struct Scene(ulong SessionId)
 /// <summary>Native prefab instantiation; networking authority remains in Beef.</summary>
 public static class Prefab
 {
+    /// <summary>Makes a copy of the prefab at path (relative to the project's src folder) in the scene, where the
+    /// prefab placed it. Null if the prefab cannot be loaded.</summary>
     public static GameObject? Instantiate(Scene scene, string path) =>
         scene.InstantiatePrefab(path);
 
+    /// <summary>Makes a copy of the prefab at path (relative to the project's src folder) in the scene, at the
+    /// given position and rotation. Null if the prefab cannot be loaded.</summary>
     public static GameObject? Instantiate(Scene scene, string path,
         Vector3 position, Quaternion rotation) =>
         scene.InstantiatePrefab(path, position, rotation);
@@ -998,11 +1034,16 @@ public sealed class Transform(GameObject gameObject) : IComponent
     /// <summary>The parent's transform, or null at the top of the scene.</summary>
     public Transform? Parent => gameObject.Parent?.Transform;
 
+    /// <summary>Makes this transform a child of parent (null: no parent). With keepWorldPose the object stays where
+    /// it is in the world; without it its local position, rotation and scale are kept. False if that would make a
+    /// loop.</summary>
     public bool SetParent(Transform? parent, bool keepWorldPose = true) =>
         gameObject.SetParent(parent?.GameObject, keepWorldPose);
 
+    /// <summary>How many children this transform has.</summary>
     public int ChildCount => gameObject.ChildCount;
 
+    /// <summary>The child at index (0 to ChildCount - 1), or null.</summary>
     public Transform? GetChild(int index) => gameObject.GetChild(index)?.Transform;
 
     private Vector4 Read(TransformChannel channel) =>
@@ -1059,6 +1100,7 @@ public sealed class Transform(GameObject gameObject) : IComponent
         set => WriteVector(TransformChannel.LocalScale, value);
     }
 
+    /// <summary>The object's scale in the world, its parents' scale included.</summary>
     public Vector3 WorldScale => ReadVector(TransformChannel.WorldScale);
 
     public Vector3 EulerAngles
@@ -1073,16 +1115,21 @@ public sealed class Transform(GameObject gameObject) : IComponent
         set => WriteVector(TransformChannel.LocalEulerAngles, value);
     }
 
+    /// <summary>The object's forward direction (local +Z) in the world.</summary>
     public Vector3 Forward => ReadVector(TransformChannel.Forward);
+    /// <summary>The object's right direction (local +X) in the world.</summary>
     public Vector3 Right => ReadVector(TransformChannel.Right);
+    /// <summary>The object's up direction (local +Y) in the world.</summary>
     public Vector3 Up => ReadVector(TransformChannel.Up);
 
+    /// <summary>Sets the world position and rotation together.</summary>
     public void SetPositionAndRotation(Vector3 position, Quaternion rotation)
     {
         Position = position;
         Rotation = rotation;
     }
 
+    /// <summary>Moves the object by delta, in world space.</summary>
     public void Translate(Vector3 delta) => Position += delta;
 
     /// <summary>Rotate in local space, with X/Y/Z angles in degrees.</summary>
@@ -1151,6 +1198,7 @@ public readonly struct LagCompensationScope(ulong session, bool active) : IDispo
     /// <summary>Whether anything was put back (false with no session, on a client, for the host's own player).</summary>
     public bool Active => active;
 
+    /// <summary>Puts the other objects back where they are now.</summary>
     public void Dispose()
     {
         if (active)
@@ -1164,8 +1212,11 @@ public readonly struct LagCompensationScope(ulong session, bool active) : IDispo
 /// </summary>
 public struct PredictionState
 {
+    /// <summary>Where the object is (world space).</summary>
     public Vector3 Position;
+    /// <summary>Which way the object faces (world space).</summary>
     public Quaternion Rotation;
+    /// <summary>A Rigidbody's or CharacterController's velocity.</summary>
     public Vector3 LinearVelocity;
     /// <summary>A Rigidbody's spin; a CharacterController keeps its time in the air in X.</summary>
     public Vector3 AngularVelocity;
@@ -1199,6 +1250,8 @@ public struct PredictionState
     }
 }
 
+/// <summary>The bridge every Tallow.API call goes through to the native engine. Games use the API types
+/// (GameObject, Scene, Script...), not this.</summary>
 public static class Engine
 {
     private sealed class UnboundBridge : IEngineBridge
@@ -1221,6 +1274,7 @@ public static class Engine
         public ulong InstantiatePrefab(ulong sceneSession, string path) => throw Missing();
     }
 
+    /// <summary>The engine bridge the host set up (one that throws before then).</summary>
     public static IEngineBridge Bridge { get; private set; } = new UnboundBridge();
 
     /// <summary>For the trusted native host and integration tests only: internal, so a game script cannot put
@@ -1235,14 +1289,19 @@ public static class Engine
 /// </summary>
 public abstract class Script : IComponent
 {
+    /// <summary>The object this script is on.</summary>
     public GameObject GameObject { get; private set; }
 
     // The CLR ID of the specific native-owned component. It is NOT a Flecs
     // entity ID or GameObject.Id and is intentionally not a user API.
     internal int NativeInstanceId { get; private set; }
     private Transform? _transform;
+    /// <summary>The object's position, rotation, scale and parent.</summary>
     public Transform Transform => _transform ??= new Transform(GameObject);
+    /// <summary>Whether this machine controls the object: always offline; in a network session, the machine of the
+    /// player who owns it (the server for objects nobody owns).</summary>
     public bool IsMine => Engine.Bridge.IsMine(GameObject);
+    /// <summary>The scene the object is in.</summary>
     public Scene Scene => GameObject.Scene;
 
     /// <summary>
@@ -1334,17 +1393,30 @@ public abstract class Script : IComponent
     /// <summary>Add and return another managed gameplay component.</summary>
     public T AddComponent<T>() where T : IComponent => GameObject.AddComponent<T>();
 
+    /// <summary>The object's collider at that index, or null.</summary>
     public ColliderHandle? GetCollider(int index = 0) => GameObject.GetCollider(index);
+    /// <summary>The first component of type T on this object or any of its children (depth first), or null.</summary>
     public T? GetComponentInChildren<T>() where T : IComponent => GameObject.GetComponentInChildren<T>();
+    /// <summary>Every component of type T on this object.</summary>
     public T[] GetComponents<T>() where T : IComponent => GameObject.GetComponents<T>();
+    /// <summary>The first component of type T on this object or a parent of it, nearest first, or null.</summary>
     public T? GetComponentInParent<T>() where T : IComponent => GameObject.GetComponentInParent<T>();
+    /// <summary>Every component of type T on this object and all its children.</summary>
     public T[] GetComponentsInChildren<T>() where T : IComponent => GameObject.GetComponentsInChildren<T>();
+    /// <summary>Removes the object's first component of type T (a script at the end of the frame, a built-in one at
+    /// once). False if it has none.</summary>
     public bool RemoveComponent<T>() where T : IComponent => GameObject.RemoveComponent<T>();
+    /// <summary>The object's Animator, or null.</summary>
     public Animator? GetAnimator() => GameObject.GetAnimator();
+    /// <summary>How many colliders the object has.</summary>
     public int ColliderCount => GameObject.ColliderCount;
+    /// <summary>The object's joint, or null.</summary>
     public Joint? GetJoint() => GameObject.GetJoint();
+    /// <summary>The object's CharacterController, or null.</summary>
     public CharacterController? GetCharacterController() => GameObject.GetCharacterController();
+    /// <summary>The object's Rigidbody, or null.</summary>
     public Rigidbody? GetRigidbody() => GameObject.GetRigidbody();
+    /// <summary>The object's soft body, or null.</summary>
     public SoftBody? GetSoftBody() => GameObject.GetSoftBody();
 
     /// <summary>Called by Tallow's lifecycle dispatcher, not by gameplay scripts.</summary>
@@ -1394,8 +1466,14 @@ public abstract class Script : IComponent
     /// it), after LateUpdate. Ends (cancelled) if the script is destroyed first. Task.Delay waits real time.</summary>
     protected Task Wait(float seconds) => GameThread.Delay(seconds, Destroyed);
 
+    /// <summary>Once, when the script comes to life: after its object is made or its scene loads, with its
+    /// Inspector fields already set, before OnEnable and Start. Other scripts on the object exist but may not have
+    /// had their Awake yet.</summary>
     public virtual void Awake() { }
+    /// <summary>When the script becomes active: after Awake, and each time it or its object is enabled again.</summary>
     public virtual void OnEnable() { }
+    /// <summary>Once, before the script's first update. Every script loaded with it (the same scene or prefab)
+    /// has had Awake by then, so it is the place to find other objects and components.</summary>
     public virtual void Start() { }
     /// <summary>At the fixed tick rate, with physics: the place for forces.</summary>
     public virtual void FixedUpdate(float deltaTime) { }
@@ -1419,8 +1497,12 @@ public abstract class Script : IComponent
     /// <summary>Once a frame after every Update and LateUpdate, on this machine only: the place for a camera that
     /// follows something (it follows where things are drawn, every frame).</summary>
     public virtual void LocalLateUpdate(float deltaTime) { }
+    /// <summary>When the script stops being active: disabled, its object deactivated, or before OnDestroy.</summary>
     public virtual void OnDisable() { }
+    /// <summary>Once, at the end of the frame its object (or the script) was destroyed, or when its scene unloads
+    /// or Play stops.</summary>
     public virtual void OnDestroy() { }
+    /// <summary>Once a frame, on this machine only, to draw immediate-mode UI with the GUI class.</summary>
     public virtual void OnGUI() { }
     /// <summary>This object's body began touching another's, after the physics step of a tick. Called once per
     /// pair of objects, on both. Runs on every machine that simulates the tick: check

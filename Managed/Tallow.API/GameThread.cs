@@ -92,6 +92,10 @@ internal static class GameThread
 
     public static bool Running => sContext != null;
 
+    /// <summary>Runs once a frame from <see cref="Pump"/>, before the continuations: API pieces that poll the
+    /// engine for news (AntiCheat.OnViolation) hook in here. Cleared when the game stops.</summary>
+    public static event Action? EachFrame;
+
     /// <summary>Called on the game thread when a game loads.</summary>
     public static void Start()
     {
@@ -113,6 +117,7 @@ internal static class GameThread
         }
         sWaiters.Clear();
         sFinished.Clear();
+        EachFrame = null;
         if (SynchronizationContext.Current == sContext)
             SynchronizationContext.SetSynchronizationContext(null);
         sContext = null;
@@ -166,7 +171,16 @@ internal static class GameThread
             // Continuations captured the context, so they are posted to it and run just below.
             waiter.Done.TrySetResult();
         }
-        Exception? failure = sContext.Run();
+        Exception? failure = null;
+        try
+        {
+            EachFrame?.Invoke();
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+        }
+        failure = sContext.Run() ?? failure;
         sFrame++;
         if (failure != null)
             ExceptionDispatchInfo.Capture(failure).Throw();

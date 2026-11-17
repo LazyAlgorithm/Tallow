@@ -18,16 +18,21 @@ struct BuildingData
 	/// From one floor to the next, in metres.
 	[Range(2, 12)]
 	public float storeyHeight = 3;
+	/// How thick walls are, in metres.
 	[Range(0.05f, 1)]
 	public float wallThickness = 0.2f;
 	/// Floors, ceilings and the roof, in metres.
 	[Range(0.02f, 1)]
 	public float floorThickness = 0.2f;
+	/// The walls' colour.
 	public Color wallColor = .(0.88f, 0.87f, 0.84f);
+	/// The ceilings' colour.
 	public Color ceilingColor = .(0.96f, 0.96f, 0.95f);
+	/// The roof's colour, where nothing is built above.
 	public Color roofColor = .(0.55f, 0.56f, 0.6f);
 	/// Each room's floor takes the room's own colour, so the plan is easy to read. Off: Floor Color everywhere.
 	public bool roomColors = true;
+	/// The floors' colour when rooms do not have their own (Room Colors off).
 	public Color floorColor = .(0.62f, 0.6f, 0.56f);
 
 	public this() { }

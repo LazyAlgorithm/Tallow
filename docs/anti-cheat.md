@@ -34,11 +34,11 @@ On each **player's machine**, reported to the server:
 
 A built game with the anti-cheat on also **closes its memory to other programs** when it starts (`AntiCheat.Harden()`): on Linux other programs of the same user can no longer attach to it or open its memory, and on Windows opening the process to read, write or start threads in it is denied. That is how memory editors, trainers and injectors get in, so the common ones simply fail. (To look into your own built game with a debugger, start it with `TALLOW_HARDEN=off` in its environment.) The library and code checks above run in built games only; the editor loads and patches code on purpose when it reloads scripts.
 
-"Removed" means the player is told why, disconnected, and everyone can be told (`OnViolation`). "Logged" is for things honest players also trip: developers run debuggers, tools preload libraries, clocks hiccup, and some people really do aim that well. Change any of them:
+"Removed" means the player is told why, disconnected, and the server's game hears of it (`OnViolation`, raised once a frame after LateUpdate). "Logged" is for things honest players also trip: developers run debuggers, tools preload libraries, clocks hiccup, and some people really do aim that well. Change any of them:
 
-```beef
-AntiCheat.SetAction(.Debugger, .Kick);        // a competitive game might
-AntiCheat.SetAction(.SuspiciousAim, .Ignore);
+```csharp
+AntiCheat.SetAction(CheatKind.Debugger, CheatAction.Kick);        // a competitive game might
+AntiCheat.SetAction(CheatKind.SuspiciousAim, CheatAction.Ignore);
 ```
 
 ## Game files
@@ -52,26 +52,26 @@ A built game's assets are in an asset pack (see [Building a standalone game](sta
 
 The aim check needs to know when a player fires and hits. On the server:
 
-```beef
-AntiCheat.ReportShot(clientId);                 // every pull of the trigger
-AntiCheat.ReportHit(clientId, headshot);        // when it hit another player
+```csharp
+AntiCheat.ReportShot(Scene, clientId);                 // every pull of the trigger
+AntiCheat.ReportHit(Scene, clientId, headshot);        // when it hit another player
 ```
 
-`AntiCheat.AimStats(clientId, out shots, out hits, out headshots, out snapHits)` gives the numbers behind it. Report what your own server code catches the same way, and the same rules apply:
+`AntiCheat.AimStats(Scene, clientId)` gives the numbers behind it (`Shots`, `Hits`, `Headshots`, `SnapHits`). Report what your own server code catches the same way, and the same rules apply:
 
-```beef
-if (price > player.money)
-    AntiCheat.Report(clientId, .MemoryTampering, "bought something with no money");
+```csharp
+if (price > player.Money)
+    AntiCheat.Report(Scene, clientId, CheatKind.MemoryTampering, "bought something with no money");
 ```
 
 ## Guarded values
 
 For numbers a player's machine is trusted with (in a single-player game, or where the server does not decide them):
 
-```beef
+```csharp
 GuardedInt coins = 100;
 coins += 5;
-int32 shown = coins;
+int shown = coins;
 GuardedFloat health = 100;
 ```
 
@@ -79,17 +79,17 @@ The number is kept scrambled, so a memory editor does not find it by searching f
 
 ## What was found, and bans
 
-```beef
-AntiCheat.OnViolation.Add(new (clientId, kind, detail) =>
-    {
-        // Show it, save it, or ban: clientId is the session's number for the player.
-    });
-for (let violation in AntiCheat.Violations) { /* the last 256, newest last */ }
+```csharp
+AntiCheat.OnViolation += violation =>
+{
+    // Show it, save it, or ban: violation.ClientId is the session's number for the player.
+};
+foreach (CheatViolation violation in AntiCheat.Violations) { /* the last 256, newest last */ }
 ```
 
 On a removed player's machine `AntiCheat.KickReason` says why; show it instead of "connection lost".
 
-Bans are kept by whatever your game knows a player by (a Steam ID, an account name, an address): `AntiCheat.Ban(key)`, `IsBanned(key)`, `Unban(key)`, and `BansToText` / `BansFromText` to keep the list in a file. Ask `IsBanned` when someone joins and `Kick` them (see [Networking](networking)).
+Bans are kept by whatever your game knows a player by (a Steam ID, an account name, an address): `AntiCheat.Ban(key)`, `IsBanned(key)`, `Unban(key)`, and `BansToText` / `BansFromText` to keep the list in a file. Ask `IsBanned` when someone joins and remove them with `Network.Kick(Scene, clientId)` (see [Networking](networking)).
 
 ## What it cannot do
 

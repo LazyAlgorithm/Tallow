@@ -9,19 +9,26 @@ namespace Tallow;
 [NativeComponent("Tallow.Rigidbody")]
 public readonly partial record struct Rigidbody(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has a Rigidbody.</summary>
     public bool IsValid => Physics.HasRigidbody(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether its physics body has been made (in the first physics step after it is added).</summary>
     public bool HasBody => Physics.HasRigidbodyBody(GameObject.SceneId, GameObject.Id);
 
     /// <summary>The body's id in the physics world (for a cast to ignore); uint.MaxValue when it has none.</summary>
     public uint BodyId => Physics.RigidbodyBodyId(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether it lies still and is not being simulated until something touches it.</summary>
     public bool IsSleeping => Physics.IsRigidbodySleeping(GameObject.SceneId, GameObject.Id);
     public Vector3 Velocity
     {
         get => Physics.GetRigidbodyVelocity(GameObject.SceneId, GameObject.Id);
         set => Physics.SetRigidbodyVelocity(GameObject.SceneId, GameObject.Id, value);
     }
+    /// <summary>Pushes it for this step (newtons, world space): call it every tick to keep pushing. False with no
+    /// body.</summary>
     public bool AddForce(Vector3 force) =>
         Physics.AddRigidbodyForce(GameObject.SceneId, GameObject.Id, force);
+    /// <summary>Gives it a sudden push (newton-seconds, world space): a hit, an explosion, a jump. False with no
+    /// body.</summary>
     public bool AddImpulse(Vector3 impulse) =>
         Physics.AddRigidbodyImpulse(GameObject.SceneId, GameObject.Id, impulse);
 
@@ -60,12 +67,16 @@ public readonly partial record struct Rigidbody(GameObject GameObject) : ICompon
 [NativeComponent("Tallow.CharacterController")]
 public readonly partial record struct CharacterController(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has a CharacterController.</summary>
     public bool IsValid =>
         Physics.HasCharacterController(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether its physics character has been made (in the first physics step after it is added).</summary>
     public bool HasCharacter =>
         Physics.HasCharacterSimulation(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether it stands on walkable ground.</summary>
     public bool IsGrounded =>
         Physics.IsCharacterGrounded(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether a jump would start now: on the ground, or just left it (the coyote time).</summary>
     public bool CanJump =>
         Physics.CanCharacterJump(GameObject.SceneId, GameObject.Id);
     /// <summary>Seconds since it was last on the ground (0 while it is).</summary>
@@ -76,6 +87,7 @@ public readonly partial record struct CharacterController(GameObject GameObject)
     public Vector3 GroundNormal => Physics.CharacterGround(GameObject.SceneId, GameObject.Id, true);
     /// <summary>How the ground under it moves (a moving platform); zero in the air or on still ground.</summary>
     public Vector3 GroundVelocity => Physics.CharacterGround(GameObject.SceneId, GameObject.Id, false);
+    /// <summary>How it is moving, in metres a second.</summary>
     public Vector3 Velocity =>
         Physics.GetCharacterVelocity(GameObject.SceneId, GameObject.Id);
 
@@ -108,6 +120,8 @@ public readonly partial record struct CharacterController(GameObject GameObject)
             throw new InvalidOperationException($"{GameObject} has no CharacterController.");
     }
 
+    /// <summary>Puts it at position at once, with velocity, without sweeping through what is in between. False with
+    /// no character.</summary>
     public bool Teleport(Vector3 position, Vector3 velocity = default) =>
         Physics.TeleportCharacter(GameObject.SceneId, GameObject.Id, position, velocity);
 
@@ -132,6 +146,7 @@ public readonly partial record struct CharacterController(GameObject GameObject)
         Physics.GetCharacterCrouchLift(GameObject.SceneId, GameObject.Id);
 }
 
+/// <summary>A collider's shape.</summary>
 public enum ColliderKind { Box, Sphere, Capsule, Mesh, Compound, Convex }
 
 /// <summary>
@@ -150,6 +165,7 @@ public readonly record struct ColliderHandle(GameObject GameObject, int Index) :
         }
     }
 
+    /// <summary>Whether the collider still exists.</summary>
     public bool IsValid => Kind.HasValue;
 
     /// <summary>
@@ -171,7 +187,9 @@ public readonly record struct ColliderHandle(GameObject GameObject, int Index) :
         }
     }
 
+    /// <summary>Where the collider is, relative to its object.</summary>
     public Vector3 Center => Physics.GetColliderCenter(GameObject.SceneId, GameObject.Id, Index);
+    /// <summary>A box's full size; null for other shapes.</summary>
     public Vector3? BoxSize => Kind == ColliderKind.Box ?
         Physics.GetColliderBoxSize(GameObject.SceneId, GameObject.Id, Index) : null;
     public float? SphereRadius
@@ -208,7 +226,9 @@ public readonly record struct ColliderHandle(GameObject GameObject, int Index) :
 /// </summary>
 public readonly record struct Joint(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has a joint.</summary>
     public bool IsValid => Physics.HasJoint(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether the joint is attached to another body (and holding).</summary>
     public bool IsConnected => Physics.IsJointConnected(GameObject.SceneId, GameObject.Id);
     public Rigidbody? ConnectedTo
     {
@@ -252,11 +272,15 @@ public readonly record struct Joint(GameObject GameObject) : IComponent
 /// <summary>Matches the native SoftBodyKind modes, including Jelly Golf.</summary>
 public enum SoftBodyKind { Cloth, Jelly, Shell, DrivenJelly }
 
+/// <summary>A soft body: cloth, jelly, a dentable shell or jelly driven by a skeleton, simulated with Jolt.</summary>
 [NativeComponent("Tallow.SoftBody")]
 public readonly partial record struct SoftBody(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has a SoftBody.</summary>
     public bool IsValid => Physics.HasSoftBody(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether its simulation has been made (in the first physics step after it is added).</summary>
     public bool HasBody => Physics.HasSoftBodySimulation(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether it lies still and is not being simulated until something touches it.</summary>
     public bool IsSleeping => Physics.IsSoftBodySleeping(GameObject.SceneId, GameObject.Id);
     /// <summary>Cloth, jelly, shell or driven jelly; null when there is no soft body. Like its other settings
     /// (Mass, Iterations...), set it in the frame the SoftBody is added: the simulation is made from them.</summary>
@@ -270,8 +294,11 @@ public readonly partial record struct SoftBody(GameObject GameObject) : ICompone
         set => new NativeComponent(GameObject, "Tallow.SoftBody").Set("kind",
             value ?? throw new ArgumentNullException(nameof(value)));
     }
+    /// <summary>How many vertices the simulation moves.</summary>
     public int SimulatedVertexCount =>
         Physics.GetSoftBodyVertexCount(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether AddForce and AddImpulse work on it: cloth and jelly once simulated. A shell or driven
+    /// jelly is moved by its Rigidbody, so push that instead.</summary>
     public bool CanApplyForces => Physics.CanForceSoftBody(GameObject.SceneId, GameObject.Id);
 
     /// <summary>Stretch stiffness (0-1). Changing it rebuilds the native simulation.</summary>
@@ -309,11 +336,16 @@ public readonly partial record struct SoftBody(GameObject GameObject) : ICompone
                 throw new InvalidOperationException("Cannot set soft-body pressure on this object.");
         }
     }
+    /// <summary>Pushes every vertex for this step (newtons in all, world space). False when it cannot be pushed.</summary>
     public bool AddForce(Vector3 force) =>
         Physics.AddSoftBodyForce(GameObject.SceneId, GameObject.Id, force);
+    /// <summary>Gives every vertex a sudden push (newton-seconds in all, world space). False when it cannot be
+    /// pushed.</summary>
     public bool AddImpulse(Vector3 impulse) =>
         Physics.AddSoftBodyImpulse(GameObject.SceneId, GameObject.Id, impulse);
+    /// <summary>A shell's deepest dent now, in metres (0 for other kinds or when undented).</summary>
     public float DeepestDent => Physics.DeepestSoftBodyDent(GameObject.SceneId, GameObject.Id);
+    /// <summary>Takes the shell's dents out, back to its made shape. False when it is not a shell.</summary>
     public bool Repair() => Physics.RepairSoftBody(GameObject.SceneId, GameObject.Id);
 }
 
@@ -323,6 +355,7 @@ public readonly partial record struct SoftBody(GameObject GameObject) : ICompone
 /// </summary>
 public readonly record struct Hinge(ulong SessionId, ulong Id)
 {
+    /// <summary>Whether the hinge still exists.</summary>
     public bool IsValid => Id != 0 && CSharpJoints.IsAlive(SessionId, Id, true);
 
     /// <summary>Spins the hinge at <paramref name="speed"/> radians a second with up to <paramref name="torque"/> N·m.</summary>
@@ -346,6 +379,7 @@ public readonly record struct Hinge(ulong SessionId, ulong Id)
 /// <summary>A slider with a spring between two rigidbodies, made with <see cref="Scene.CreateSuspension"/>: a wheel's suspension.</summary>
 public readonly record struct Suspension(ulong SessionId, ulong Id)
 {
+    /// <summary>Whether the suspension still exists.</summary>
     public bool IsValid => Id != 0 && CSharpJoints.IsAlive(SessionId, Id, false);
 
     /// <summary>Its spring, in newtons a metre and newton-seconds a metre.</summary>
@@ -354,6 +388,7 @@ public readonly record struct Suspension(ulong SessionId, ulong Id)
     /// <summary>How far along its travel it is, in metres.</summary>
     public float Position => CSharpJoints.SuspensionPosition(SessionId, Id);
 
+    /// <summary>Removes it; nothing when it has already gone.</summary>
     public void Destroy() => CSharpJoints.Destroy(SessionId, Id, false);
 }
 

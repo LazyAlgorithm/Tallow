@@ -24,6 +24,7 @@ public enum RpcTarget
 [AttributeUsage(AttributeTargets.Method, Inherited = true)]
 public sealed class RpcAttribute(RpcTarget target = RpcTarget.Everyone) : Attribute
 {
+    /// <summary>Where the method runs: on the server only, or on the server and every client.</summary>
     public RpcTarget Target { get; } = target;
 }
 

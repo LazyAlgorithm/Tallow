@@ -218,7 +218,7 @@ changing the original six-field wire format.
   Context-aware keywords, named arguments, object initializer members, extension methods, attributes by short name,
   types from namespaces not imported (accepting adds the using). `[NonSerialized]` is added in attribute lists (.NET
   hides it). The service now compiles against the shared framework only (it offered its own Roslyn assemblies before).
-- [ ] Add accurate completion context/ranking, insertion text, auto imports, braces/parentheses, parameter/return type display and XML documentation. Do not suggest private/inaccessible or irrelevant static/instance members.
+- [x] Add accurate completion context/ranking, insertion text, auto imports, braces/parentheses, parameter/return type display and XML documentation. Do not suggest private/inaccessible or irrelevant static/instance members.
   - [x] (November 16, 2026) Ranking: exact-case prefix, any-case prefix, CamelCase humps (`gc` -> GetComponent), then
     Roslyn's priority/sort (preselects the expected enum type); up to 300 items, then `completion-more` and the
     editor asks again as the word grows. Items carry insert text, a dimmed detail (the namespace of an import), extra
@@ -229,15 +229,19 @@ changing the original six-field wire format.
     per-request work); service peak 458 MB (was 327: a second compilation for the workspace). Tests: 11 Roslyn
     tests, 12 TextEdit checks, editor `--completion-test` (step 7 of test_csharp_editor.py). Still open: the
     diagnostics compilation and the workspace could share one compilation.
+  - Closed November 17, 2026: every part of the item is in (the two entries below and above). Sharing one
+    compilation between diagnostics and the completion workspace is an optimisation, not a missing feature.
   - [x] (November 16, 2026) Accepting a method inserts `Name()` (caret after it when every overload is
     parameterless, inside otherwise); not when `(` or `<` already follows, after `+=`/`-=` (events, delegates),
     inside `nameof(...)`, using directives or doc comments, nor for generic methods (type argument first). Typing
     `)` steps over the inserted one. 5 Roslyn tests.
-- [ ] Implement robust overload-aware signature help and active argument highlighting; no overlapping code editor popups.
+- [x] Implement robust overload-aware signature help and active argument highlighting; no overlapping code editor popups.
   - [x] (November 15, 2026) Roslyn answers `signature` with every overload (resolved first; constructors;
     before the closing parenthesis) and marks the parameter at the caret (\x01..\x02, by position or name);
     the code widget draws it above the caret line when no completion list is open. Waiting for the user to try
-    it in the editor. Semantic colouring beyond type names needs range colours in TextEdit (not started).
+    it in the editor. Semantic colouring beyond type names was done since (November 16, above).
+  - Closed November 17, 2026: signature help and the completion list never draw together (the list wins), and
+    the completion description sits under the list, so popups no longer overlap.
 - [x] Build persistent incremental Roslyn project state instead of recreating a compilation per request. Measure warm/cold latency and memory/CPU on Nobara/Windows; properly cancel stale requests, debounce typing, restart failed workers, and handle multiple files.
   Done November 16, 2026: one incremental compilation (November 14) plus per-file diagnostics kept while a file's
   tree is unchanged; an edit inside one method body checks only that file, any change another file could see
@@ -252,7 +256,10 @@ changing the original six-field wire format.
     tree was walked for type names on each request; now only the game's files are checked and names are cached
     per tree); peak ~290 MB. It also checks an error typed in is reported and nothing from Tallow.API is. In CI
     (3 runs). Windows numbers not taken yet.
-- [ ] Full diagnostics, warnings, source locations/underlines, click-through from Console; Go to Definition, Find References, Rename, and optionally integrated breakpoints/debugging.
+- [x] Full diagnostics, warnings, source locations/underlines, click-through from Console; Go to Definition, Find References, Rename, and optionally integrated breakpoints/debugging.
+  Closed November 17, 2026: diagnostics with underlines and Console click-through, Go to Definition, Find
+  References and Rename are in (below and in P0). Breakpoints were optional: attaching an IDE debugger works
+  (Tooling: Debugging); breakpoints in Tallow's own code editor stay a separate item there.
   - [x] (November 16, 2026) Go to Definition into engine API source opens it read-only (also any file outside the
     project; engine Beef sources only for Beef projects); rename/save/edit are refused there and the language service
     only answers definition/symbol/highlight for `Managed/Tallow.API`. Selecting a name highlights its other uses,
@@ -299,7 +306,11 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 
 - [x] Core GameObject/Transform parenting, rotation/scale, scene/object creation/destruction, asset/prefab loading, lifecycle and event callbacks. Done (November 16, 2026): parenting, children, names, tags, layers, active state, create/find/destroy, prefabs and lifecycle callbacks were in place; added `Transform.TransformDirection`, `InverseTransformDirection` and `RotateAround`.
 - [x] Component discovery and access: `GetComponent<T>`, `AddComponent<T>`, fields/properties, object/component references, multiple components, enabling/disabling. Done (November 16, 2026): added `GetComponents<T>` (every script of a type, or the built-in one; also a no-allocation `List<T>` overload), `GetComponentInParent<T>`, `GetComponentsInChildren<T>` and `RemoveComponent<T>()` / `RemoveComponent(script)`. Scripts and class components go at the end of the frame (`Scene.RemoveComponentLater`, so a script can remove itself safely), data components (Rigidbody, colliders) at once as in Beef. 11 in-engine checks.
-- [~] Flecs ECS: managed data components, filters, typed queries, iteration, systems, group/tags, efficient bulk update, lifetime and thread safety while hiding complexity from typical gameplay.
+- [x] Flecs ECS: managed data components, filters, typed queries, iteration, systems, group/tags, efficient bulk update, lifetime and thread safety while hiding complexity from typical gameplay.
+  - [x] Closed November 17, 2026: `EcsSystem<T1, T2, T3>` (three data types; ownership by T1, as for two; 1
+    in-engine check with a system over Charge, Drain and Spark). Systems in other phases are not a C# gap: Beef's
+    `NativeSystem<T>` also runs only at the fixed tick, and per-frame ECS work is a `Scene.Query` from a script's
+    LocalUpdate in both languages (B11/B12 measured it that way).
   - [x] Typed queries (November 15, 2026): `EcsEntity.Set/Get/TryGet/Has/Remove<T>`, `GameObject.Entity`,
     `EcsEntity.GameObject`, `Scene.Query<A[,B[,C]]>()` with `Count` and `ForEach((entity, ref a, ...) => ...)`
     (`Managed/Tallow.API/EcsData.cs`). The build's generated adapters register each struct's schema id with a
@@ -310,7 +321,7 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     and skips entities that went or lost a schema meanwhile. `ecs-data.tsv` keeps fields in declaration order.
     Tests: 10 in-engine checks. Not saved with scenes. Done since (November 15, 2026): `[SyncPosition]` on a
     Vector3 of C# data (relevance, schema field "name:offset:size:p"; network check) and `EcsSystem<T1, T2>`
-    (ownership by T1). Not yet: systems in phases other than the fixed tick, three or more data types.
+    (ownership by T1). Since: three data types (below).
   - [x] C# ECS systems, ownership and prediction (November 15, 2026): `class X : EcsSystem<T>` (found by the
     build, registered by the generated module initializer through `Ecs.DescribeSystem`) runs like a Beef
     `NativeSystem<T>`: a Beef `CSharpEcsSystem` adapter in the native system list calls the managed `RunSystem`
@@ -434,8 +445,8 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   Graph object variables are Inspector reference fields (see below). `--graph-compile` finds the project's
   subgraphs under `src/` as the editor does (GraphProbe calls `Doubled.tgraph`; a value subgraph that always
   returns no longer gets an unreachable `return default;`; a graph outside any project no longer crashes the walk
-  up to `/`). Not yet: For Each Data (ECS) nodes.
-- [~] Automatic C# type/method node discovery (stage 2, November 15, 2026): after every build (also a failed one)
+  up to `/`). For Each Data (ECS) nodes came in stage 2 (below).
+- [x] Automatic C# type/method node discovery (stage 2, November 15, 2026): after every build (also a failed one)
   Tallow.Build writes `.tallow-csharp/graph-nodes.tsv` (`GraphNodeCatalog`, from the Roslyn compilation of the
   game and Tallow.API): a node per public property, field and method of Tallow.API's gameplay static classes,
   GameObject, Transform, Scene, Script, the physics handles and the game's own public types, with enum pins
@@ -496,7 +507,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     `Scene.LoadAdditive/Unload`, `GamePaths.PlayerData` (14 in-engine checks). Engine-only parts (physics capacity,
     custom SaveStorage, DataAsset classes) stay Beef and say so. Fixed on the way: C# `[Saved]`/`[Sync]` reference
     fields are no longer written (ids are local to a run and a machine). Website tutorials wait for the user.
-- [ ] Keep shader graph/compute graph/rendering functionality intact; never confuse visual **gameplay** source generation with native shader compilation.
+- [x] Keep shader graph/compute graph/rendering functionality intact; never confuse visual **gameplay** source generation with native shader compilation.
+  Closed November 17, 2026: shader and compute graphs are generated by `Editor/src/Graph/ShaderGraphCode.bf`, which
+  the C# work never touched (only the gameplay graph compiler, `NodeGraph.Compile`, gained C# output). B16 measured
+  shader-graph materials and the ripple compute graph set up from C#: the same draws and dispatches as from Beef.
 
 ## P4 — performance, reload, shipping exports, hardening
 
@@ -590,10 +604,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 ## Migration benchmark backlog — run locally on Nobara
 
 The benchmark definitions, workloads, evidence format, and priority order are
-in [**C# migration benchmark plan**](csharp-benchmark-plan.md). **All cases
-B01–B23 are pending**, not measured. Run P0 cases B01–B10 first when back at
-the Linux machine, then P1 simulation and P2 networking/export cases after
-their API dependencies exist. Include real frame-time p50/p95/p99, CPU and Jolt
+in [**C# migration benchmark plan**](csharp-benchmark-plan.md). B01–B05 and
+B07–B17 and B23 (a 45-minute host/client soak: flat memory, no leaks, no errors) are measured (November 16–17,
+2026); B06 has a first pass; B18–B22 are the ones left (the plan lists what each needs). B24–B30 belong to the parked
+NativeAOT stage (P5). Include real frame-time p50/p95/p99, CPU and Jolt
 costs, managed GC allocations, RSS, compile/edit-to-Play timings, and raw logs.
 Benchmark both C# and native Beef on the *same Flecs/Jolt scenes* rather than
 comparing unrelated scripts. Physics tests must record sleeping bodies. The
@@ -1352,7 +1366,7 @@ A full conversion also needs these. Ordered roughly by when they block users.
 - [ ] Website documentation and tutorials still teach Beef gameplay; convert them with
   the samples (P3).
 - [ ] Branch upkeep: merge `ecs` into this branch regularly so the final merge stays
-  reviewable.
+  reviewable. (Checked November 17, 2026: `ecs` has no commits this branch lacks; it last merged at 7a7b6ca1.)
 
 **Visual scripting decision (recorded for P3):** keep compiling graphs to source and
 retarget the existing graph compiler from Beef to C#, rather than writing a Beef-side

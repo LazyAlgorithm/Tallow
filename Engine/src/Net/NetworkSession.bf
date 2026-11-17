@@ -62,6 +62,11 @@ class NetworkSession : Component
 	/// a Network Identity added by hand.
 	[Advanced]
 	public bool autoReplicate = true;
+	/// Keep the session going when its host leaves: another player takes over (docs/networking.md, Host migration).
+	/// Every machine needs the same setting.
+	public bool hostMigration;
+	/// Set from code (C#'s Network.HostMigration) to turn host migration on for sessions started from now on.
+	public static bool HostMigrationOverride;
 
 	/// Set by the application from the command line; .Offline means "use the component's mode".
 	public static NetworkMode ModeOverride = .Offline;
@@ -94,6 +99,7 @@ class NetworkSession : Component
 		network.Transport = transport;
 		SteamTransport.AppId = (uint32)Math.Max(steamAppId, 0);
 		network.AutoReplicate = autoReplicate;
+		network.HostMigration = hostMigration || HostMigrationOverride;
 		network.BotInput = BotOverride;
 		delete Scene.Network;
 		Scene.Network = network;

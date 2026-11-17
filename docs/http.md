@@ -1,6 +1,44 @@
 # Downloads and zip files
 
-For launchers, updaters and games that fetch content. Nothing extra is needed: Windows' own WinHTTP and, elsewhere, the system's libcurl (part of macOS and practically every Linux) are loaded the first time a download starts, so a game that never downloads does not depend on them.
+For games that fetch content (news, level packs, leaderboards), launchers and updaters.
+
+C# scripts use .NET's own `HttpClient` (`System.Net.Http` is imported in every script) and
+`System.IO.Compression.ZipFile`. An `await` carries on on the game thread, so the result can be used on objects
+straight away:
+
+```csharp
+using System.IO.Compression;
+
+static readonly HttpClient Client = new() { DefaultRequestHeaders = { { "User-Agent", "MyGame" } } };
+
+string releases = await Client.GetStringAsync("https://api.github.com/repos/owner/repo/releases");
+
+// A file, with progress:
+using (HttpResponseMessage response = await Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
+{
+    response.EnsureSuccessStatusCode();
+    long total = response.Content.Headers.ContentLength ?? -1;
+    await using Stream input = await response.Content.ReadAsStreamAsync();
+    await using FileStream output = File.Create(path + ".part");
+    var buffer = new byte[81920];
+    long done = 0;
+    for (int read; (read = await input.ReadAsync(buffer)) > 0; done += read)
+    {
+        await output.WriteAsync(buffer.AsMemory(0, read));
+        progress = total > 0 ? (float)done / total : -1;
+    }
+}
+File.Move(path + ".part", path, overwrite: true);
+
+ZipFile.ExtractToDirectory(zipPath, folder, overwriteFiles: true);
+```
+
+Write downloads under `GamePaths.PlayerData`, not beside the game (which may not be writable). In a web build
+`HttpClient` goes through the browser's `fetch`, so the server must allow the page's origin (CORS).
+
+## The engine's own downloader
+
+The launcher and the Tallow Manager are Beef, and use the engine's `Http` and `ZipFile`. Nothing extra is needed: Windows' own WinHTTP and, elsewhere, the system's libcurl (part of macOS and practically every Linux) are loaded the first time a download starts, so a program that never downloads does not depend on them.
 
 ```beef
 let text = scope String();

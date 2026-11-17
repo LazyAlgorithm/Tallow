@@ -19,6 +19,7 @@ namespace Tallow;
 /// </summary>
 public abstract class EcsSystem<T> : EcsSystemBase where T : unmanaged
 {
+    /// <summary>One tick of one entity: change data in place (it is written back).</summary>
     public abstract void Update(EcsEntity entity, ref T data, TickInput input, float deltaTime);
 
     internal override ulong SchemaId => EcsSchema<T>.Require();
@@ -51,6 +52,7 @@ public abstract class EcsSystem<T> : EcsSystemBase where T : unmanaged
 /// </summary>
 public abstract class EcsSystem<T1, T2> : EcsSystemBase where T1 : unmanaged where T2 : unmanaged
 {
+    /// <summary>One tick of one entity: change a and b in place (they are written back).</summary>
     public abstract void Update(EcsEntity entity, ref T1 a, ref T2 b, TickInput input, float deltaTime);
 
     internal override ulong SchemaId
@@ -80,6 +82,48 @@ public abstract class EcsSystem<T1, T2> : EcsSystemBase where T1 : unmanaged whe
             if (skip != null && Array.IndexOf(skip, e.Id) >= 0)
                 return;
             Update(e, ref a, ref b, input, deltaTime);
+        });
+    }
+}
+
+/// <summary>
+/// As <see cref="EcsSystem{T}"/>, for bare entities with all three of <typeparamref name="T1"/>,
+/// <typeparamref name="T2"/> and <typeparamref name="T3"/>. Ownership and prediction go by <typeparamref name="T1"/>.
+/// </summary>
+public abstract class EcsSystem<T1, T2, T3> : EcsSystemBase where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged
+{
+    /// <summary>One tick of one entity: change a, b and c in place (they are written back).</summary>
+    public abstract void Update(EcsEntity entity, ref T1 a, ref T2 b, ref T3 c, TickInput input, float deltaTime);
+
+    internal override ulong SchemaId
+    {
+        get
+        {
+            EcsSchema<T2>.Require();
+            EcsSchema<T3>.Require();
+            return EcsSchema<T1>.Require();
+        }
+    }
+
+    internal override void Run(ulong session, ulong entity, TickInput input, float deltaTime)
+    {
+        if (entity != 0)
+        {
+            var one = new EcsEntity(session, entity);
+            if (!one.TryGet(out T1 a) || !one.TryGet(out T2 b) || !one.TryGet(out T3 c))
+                return;
+            Update(one, ref a, ref b, ref c, input, deltaTime);
+            one.Set(a);
+            one.Set(b);
+            one.Set(c);
+            return;
+        }
+        ulong[]? skip = ClientOwned(session);
+        new EcsQuery<T1, T2, T3>(session) { BareOnly = true }.ForEach((EcsEntity e, ref T1 a, ref T2 b, ref T3 c) =>
+        {
+            if (skip != null && Array.IndexOf(skip, e.Id) >= 0)
+                return;
+            Update(e, ref a, ref b, ref c, input, deltaTime);
         });
     }
 }

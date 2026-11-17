@@ -40,27 +40,25 @@ On a client, calls that the server must decide (`Brush`, `Carve`) are sent to th
 ## ECS data and ordinary scripts on one networked object
 
 You can add a normal `Script`, built-in components, and a project-defined
-`[Component]` struct to the **same** GameObject, including on a network prefab.
+`[Component]` struct (data on the object's entity: `GameObject.Entity.Set(new FlightData())`) to the **same** GameObject, including on a network prefab.
 Their data is stored in that GameObject's Flecs entity, so scripts, the Inspector,
 visual scripting and ECS queries all access the same values.
 
-```beef
+```csharp
 [Component]
-struct FlightData
+public struct FlightData
 {
-    [Sync] public Vector3 velocity;
-    [Sync] public float fuel;
-    public int32 localEffect; // not sent
+    [Sync] public Vector3 Velocity;
+    [Sync] public float Fuel;
+    public int LocalEffect; // not sent
 }
 
-[Component]
-class FlightController : Script
+public class FlightController : Script
 {
     public override void Update(TickInput input, float deltaTime)
     {
-        let flight = GetComponent<FlightData>();
-        if (flight != null)
-            Transform.Position += flight.velocity * deltaTime;
+        if (GameObject.Entity.TryGet(out FlightData flight))
+            Transform.Position += flight.Velocity * deltaTime;
     }
 }
 ```
@@ -73,52 +71,51 @@ can add or remove the same data type. Its other fields are local.
 
 Visual graphs have an **ECS** category: component Has/Add/Remove, primitive
 Get/Set, and a **For Each** loop that walks packed ECS data with one graph
-script. `Scene.World.ObjectsWith<FlightData>()` provides the equivalent
-cached query in code for scene GameObjects, each of which has an `ObjectLink`.
+script. `Scene.Query<FlightData>()` is the same query in code; `EcsEntity.GameObject` is the object an entity
+belongs to.
 
 This automatic bridge applies to **scene GameObjects with a NetworkIdentity**.
-Bare `World.CreateMany<T>` entities with `[Sync]` data are replicated by the
+Bare entities (`Scene.CreateLocalEcsEntity()`) with `[Sync]` data are replicated by the
 server with no GameObject, filtered by distance with a `[SyncPosition]` field,
-and run by native systems that the owning client predicts (see
+and run by ECS systems (`EcsSystem<T>`) that the owning client predicts (see
 docs/unified-ecs-networking.md, *Bare Flecs entities*). The ordinary network-prediction rules still apply to
 code or graphs that update shared ECS data: authoritative writes, fixed-tick
 inputs, reproducible ordering and replay safety matter.
 
-## Writing a player: NetworkScript
+## Writing a player
 
-Derive from `NetworkScript` and write what happens in one tick. The engine reads the controls, sends them, runs your code on the server and on the player's own machine, and corrects the player's machine when the two disagree.
+Write what happens in one tick in a script's `Update(TickInput input, float deltaTime)`. The engine reads the controls, sends them, runs your code on the server and on the player's own machine, and corrects the player's machine when the two disagree.
 
-```beef
-[Component]
-class Hover : NetworkScript
+```csharp
+public class Hover : Script
 {
-    public float speed = 5;
-    [Sync] public int32 score;
+    public float Speed = 5;
+    [Sync] public int Score;
 
     public override void Update(TickInput input, float deltaTime)
     {
-        Transform.Position += input.MoveDirection * speed * deltaTime;
-        if (input.Pressed(.Jump))
-            Transform.Position += .(0, 1, 0);
-        if (IsServer && input.Pressed(.Use))
-            score++;
+        Transform.Position += input.MoveDirection * Speed * deltaTime;
+        if (input.Pressed(InputButton.Jump))
+            Transform.Position += new Vector3(0, 1, 0);
+        if (Scene.IsServer && input.Pressed(InputButton.Use))
+            Score++;
     }
 }
 ```
 
-`TickInput` gives `Move` (WASD or arrows), `MoveDirection` (Move turned to face where the player looks), `Yaw`, `Pitch`, and buttons: `Held`, `Pressed` and `Released` for `.Jump` (Space), `.Sprint` (Shift), `.Crouch` (Ctrl), `.Fire` (left mouse), `.Use` (E), `.Reload` (R), `.Ability1` (Q), `.Ability2` (F) and `.Custom1` to `.Custom8`. Override `ReadInput` to fill the custom ones.
+`TickInput` gives `Move` (WASD or arrows), `MoveDirection` (Move turned to face where the player looks), `Yaw`, `Pitch`, `LookRotation`, and buttons: `Held`, `Pressed` and `Released` for `InputButton.Jump` (Space), `Sprint` (Shift), `Crouch` (Ctrl), `Fire` (left mouse), `Use` (E), `Reload` (R), `Ability1` (Q), `Ability2` (F) and `Custom1` to `Custom8`. The custom ones follow input actions of the same names: add an action called `Custom1` in **Window > Input Actions** and bind it to a key or button.
 
 Three rules keep prediction working:
 
 - Take controls only from the `TickInput`, never from `Input`. `Update` also runs on the server for another player's controls, and runs again after a correction.
 - Move the object through its Transform, Rigidbody or Character Controller. Those are what get corrected. Other fields are not rewound; mark the ones clients need with `[Sync]` and change them on the server.
-- `Update` can run more than once for the same tick on the player's machine. Do one-off things (sounds, spawning) inside `if (IsServer)` or `if (!IsReplaying)`.
+- `Update` can run more than once for the same tick on the player's machine. Do one-off things (sounds, spawning) inside `if (Scene.IsServer)` or `if (!Scene.IsReplaying)`.
 
-Any script's `Update(TickInput input, float deltaTime)` works this way once its object has a Network Identity; `NetworkScript` adds one for you and gives the object its own mouse-look settings and `ReadInput`. On objects without an identity, `Update` runs once a frame with the local controls instead. Objects no player controls (untick **Player Controlled** on the Network Identity; objects spawned with `Adopt` start unticked) get empty controls, so NPCs never act on the host's keys. For per-frame work that is only for this machine (effects, UI), override `OnLocalUpdate()`.
+Any script's `Update(TickInput input, float deltaTime)` works this way once its object has a Network Identity (the player prefab has one). On objects without an identity, `Update` runs once a frame with the local controls instead. Objects no player controls (untick **Player Controlled** on the Network Identity; objects spawned with `Adopt` start unticked) get empty controls, so NPCs never act on the host's keys. For per-frame work that is only for this machine (effects, UI), override `LocalUpdate(float deltaTime)`.
 
 With no session the same script runs every tick with the local controls. Put the script on the player prefab named in the session's **Player Prefab**; one is spawned for each player, at the scene's Spawn Points (see the spawn points page). **Team Count** on the session shares players out among teams.
 
-`CharacterMotor` is a ready-made player built the same way on a Character Controller. `NetworkBehaviour` is the lower-level base class if you want to fill the input yourself.
+`CharacterMotor` is a ready-made player built the same way on a Character Controller: add it in the Inspector.
 
 ## How it stays smooth
 
@@ -126,7 +123,7 @@ None of this needs setting up; it is what the session does with every object tha
 
 - **Your own objects are predicted.** They move on your machine the tick you press a key. The server sends back where it had them for that tick, and only if that differs from what your machine predicted does it go back and run the ticks since again. The difference is then eased away on screen rather than shown as a jump.
 - **The server's physics bodies are predicted too.** A crate, a barrel, a ball or a dropped piece of rock is simulated on your machine, in step with your own player, so a crate you walk into moves the tick you touch it, and a crate falling or tumbling on its own is where the server will have it. The physics is deterministic, so a body that only physics moves needs no correction at all. When something your machine could not know about moves one (another player shoves it, a script on the server pushes it), the server's word is checked against what your machine had for that tick, and the bodies and your player go back and run the ticks since again, as for a wrong guess about your own player. See *Predicting physics* below.
-- **Everything else is shown a moment in the past.** Other players and AI cannot be predicted, because your machine does not have their controls. They are drawn about two snapshots behind the newest news (a tenth of a second at the usual rate), moving evenly from one thing the server said to the next, so they glide however unevenly the news arrives. If a snapshot is lost they carry on as they were going for a few ticks. `InterpolationTicks` on `Scene.Network` changes how far behind; less is more up to date and less forgiving of a poor connection.
+- **Everything else is shown a moment in the past.** Other players and AI cannot be predicted, because your machine does not have their controls. They are drawn about two snapshots behind the newest news (a tenth of a second at the usual rate), moving evenly from one thing the server said to the next, so they glide however unevenly the news arrives. If a snapshot is lost they carry on as they were going for a few ticks. `Network.SetInterpolationTicks(Scene, ticks)` changes how far behind; less is more up to date and less forgiving of a poor connection.
 - **The client's clock follows the server.** A client runs its ticks a fraction faster or slower (never more than 5%) so that the server always has a tick or two of its controls in hand. That absorbs an uneven connection without adding more delay than the connection needs, and it adapts: a rough connection gets a deeper cushion, a clean one a thin one.
 - **A moment's jitter loses nothing.** The transport (ENet) would normally start dropping unsent snapshots and voice at random when a round trip is suddenly slower than usual, as on Wi-Fi or a busy machine; Tallow turns that off for every connection, since the steps above already deal with late and lost news, and dropping it made other players stutter.
 - **Between ticks, drawing is smoothed.** Mesh Renderers on an object another machine controls are drawn gliding from one tick to the next. For a camera or anything else you place yourself, `NetworkIdentity.VisualPosition` is where the object is drawn this frame.
@@ -143,7 +140,7 @@ A body is predicted when the server owns it and it is a dynamic Rigidbody (not k
 
 When a player takes an object over (`SetOwner`), it becomes theirs to predict, and everyone else shows it in the past until it is the server's again.
 
-`PredictPhysics` on the session (`Scene.Network`, on by default) turns it all off. Set on the server, it decides for every client. Set on a client, that client shows the bodies in the past whatever the server sends.
+`Network.SetPredictPhysics(Scene, false)` (on by default) turns it all off. Set on the server, it decides for every client. Set on a client, that client shows the bodies in the past whatever the server sends.
 
 What it changes:
 
@@ -161,23 +158,20 @@ A player aims at what they see, and what they see of everyone else is the past: 
 
 So when the server runs a player's tick, it knows what moment that player was looking at. Wrap the ray cast in the pair below and, for its length, every other networked object is back where that player saw it:
 
-```beef
+```csharp
 public override void Update(TickInput input, float deltaTime)
 {
-    if (IsServer && input.Pressed(.Fire))
+    if (Scene.IsServer && input.Pressed(InputButton.Fire))
     {
-        let rewound = BeginLagCompensation();
-        RaycastHit hit;
-        let struck = Scene.Physics.Raycast(Transform.Position, input.LookRotation * Vector3.Forward, 100, out hit);
-        if (rewound)
-            EndLagCompensation();
-        if (struck)
-            hit.gameObject.GetComponent<Health>()?.Hurt(25);   // after ending: everything is back in its place
+        PhysicsHit? hit;
+        using (LagCompensated())
+            hit = Scene.RaycastHit(Transform.Position, Vector3.Transform(Vector3.Forward, input.LookRotation), 100);
+        hit?.HitObject?.GetComponent<Health>()?.Hurt(25);   // after the block: everything is back in its place
     }
 }
 ```
 
-It returns false and does nothing where it does not apply: with no session, for the host's own player and for the server's own objects, who see things as they are. Physics bodies clients predict are not moved back either: the player saw them where they are now. It never looks back further than `MaxRewindTicks` (24 ticks, 0.4 seconds).
+It returns false and does nothing where it does not apply: with no session, for the host's own player and for the server's own objects, who see things as they are. Physics bodies clients predict are not moved back either: the player saw them where they are now. It never looks back further than `Network.GetMaxRewindTicks(Scene)` (24 ticks, 0.4 seconds).
 
 ### What is sent
 
@@ -191,12 +185,13 @@ A still scene costs about 0.3 kB a second per client; a five-player firefight a 
 
 ## Shared values
 
-```beef
-[Component]
-class Health : Component
+```csharp
+public class Health : Script
 {
-    [Sync] public int32 health = 100;
-    [Sync] public String title = new .("Rookie") ~ delete _;
+    [Sync] public int Value = 100;
+    [Sync] public string Title = "Rookie";
+
+    public void Hurt(int amount) => Value -= amount;
 }
 ```
 
@@ -204,7 +199,7 @@ class Health : Component
 
 ## Game events
 
-For anything else, send a message. See the chat example in the networking tutorial: `NetworkManager.RegisterMessage`, then `SendToServer`, `SendToAll` or `SendToClient`. Message ids from 240 up are kept for the engine.
+For anything else, call a method across the network. Mark it `[Rpc(RpcTarget.Server)]` to run it on the server, or `[Rpc]` to run it on the server and every client, and call it with `Rpc(nameof(Fire), aim, power)`. The server may call any; a client only on an object it owns (its player). Inside one, `RpcSender` is the caller's client id. Arguments can be numbers, bool, string, enums, vectors and GameObjects. For a single named number, `SendNetworkEvent(name, value)` reaches `OnNetworkEvent` on every machine.
 
 ## Running a session
 
@@ -234,16 +229,16 @@ The session's **Transport** chooses how machines reach each other: **Direct** (U
 
 ## Deciding who may play
 
-The server can send a client away: `Scene.Network.Kick(clientId)`. Their objects go as if they had left, and on their machine the session reports that it is no longer connected. Use it for private matches (check who joined in `OnClientJoined`, or when they send their name) and for removing a player. To tell them why, send your own message a moment before: what is sent in the same instant may not arrive.
+The server can send a client away: `Network.Kick(Scene, clientId)`. Their objects go as if they had left, and on their machine the session reports that it is no longer connected. Use it for private matches (check who joined in a script's `OnClientJoined(int clientId)`, or when they send their name) and for removing a player. To tell them why, send an RPC a moment before: what is sent in the same instant may not arrive.
 
 ## Host migration
 
-Set `HostMigration = true` on the `NetworkManager` (on every machine, before starting) and a session survives its host leaving. The server keeps every client up to date with a roster. When the host goes, every machine reads the same roster: the first player on it who can be reached becomes the host and keeps the scene, and the others reconnect and take back their client ids and objects. The departed host's own player object is removed; bots and the rest of the world stay.
+Set `Network.HostMigration = true` (on every machine, before starting), or tick **Host Migration** on the Network Session, and a session survives its host leaving. The server keeps every client up to date with a roster. When the host goes, every machine reads the same roster: the first player on it who can be reached becomes the host and keeps the scene, and the others reconnect and take back their client ids and objects. The departed host's own player object is removed; bots and the rest of the world stay.
 
 It is off by default because a game has to rebuild whatever only its server held:
 
-- `OnBecameHost` runs on the machine that took over. Recreate server-only state there: timers, callbacks such as `OnClientJoined`, AI that only ran on the server.
-- `OnHostChanged(address)` runs on every remaining machine, with the new host's Steam ID or address (empty on the new host).
-- `IsMigrating` is true from losing the host until play resumes. `IsConnected` stays true meanwhile; if nobody can take over it goes false, so handle that as a lost connection.
+- `Network.OnBecameHost(Scene, handler)` runs on the machine that took over. Recreate server-only state there: timers, callbacks such as `OnClientJoined`, AI that only ran on the server.
+- `Network.OnHostChanged(Scene, address => ...)` runs on every remaining machine, with the new host's Steam ID or address (empty on the new host).
+- `Network.IsMigrating(Scene)` is true from losing the host until play resumes. `Network.IsConnected(Scene)` stays true meanwhile; if nobody can take over it goes false, so handle that as a lost connection.
 
 Over Steam this needs nothing further. Over Direct, the new host opens the same port, so players other than the new host can only return if that port is reachable: on a LAN, or forwarded. Each candidate gets six seconds before the next is tried. States a late joiner would normally be sent (`NetworkSync` replays) are not carried over to the new host.

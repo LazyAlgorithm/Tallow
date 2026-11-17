@@ -46,8 +46,11 @@ public static partial class Input
     /// <summary>True only on the frame the key came up.</summary>
     public static bool GetKeyUp(KeyCode key) => KeyReleased((int)key);
 
+    /// <summary>Whether the mouse button is down.</summary>
     public static bool GetMouseButton(MouseButton button) => MouseHeld((int)button);
+    /// <summary>True only on the frame the mouse button went down.</summary>
     public static bool GetMouseButtonDown(MouseButton button) => MousePressed((int)button);
+    /// <summary>True only on the frame the mouse button came up.</summary>
     public static bool GetMouseButtonUp(MouseButton button) => MouseReleased((int)button);
 
     /// <summary>Pointer position in window points.</summary>

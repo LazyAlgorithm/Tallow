@@ -51,7 +51,9 @@ public static class Audio
     /// <summary>Every sound's volume, 0..1.</summary>
     public static float MasterVolume { get => CSharpAudio.GetSetting(4); set => CSharpAudio.SetSetting(4, value); }
 
+    /// <summary>A mixer group's volume, 0 to 1.</summary>
     public static float GetGroupVolume(AudioGroup group) => CSharpAudio.GetGroupVolume((int)group);
+    /// <summary>Sets a mixer group's volume, 0 to 1 (music, voices, effects... each on its own).</summary>
     public static void SetGroupVolume(AudioGroup group, float volume) => CSharpAudio.SetGroupVolume((int)group, volume);
 }
 
@@ -70,6 +72,7 @@ public enum AudioGroup
 [NativeComponent("Tallow.AudioSource")]
 public readonly partial record struct AudioSource(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has an Audio Source.</summary>
     public bool IsValid => CSharpAudio.HasSource(GameObject.SceneId, GameObject.Id);
     /// <summary>Plays its Audio Clip (set in the Inspector).</summary>
     public void Play() => CSharpAudio.SourcePlay(GameObject.SceneId, GameObject.Id, "");
@@ -78,9 +81,13 @@ public readonly partial record struct AudioSource(GameObject GameObject) : IComp
     /// <summary>A sound on top of whatever is playing, from the same place; any number can overlap.</summary>
     public void PlayOneShot(string clip, float volumeScale = 1f) =>
         CSharpAudio.SourcePlayOneShot(GameObject.SceneId, GameObject.Id, clip, volumeScale);
+    /// <summary>Holds the sound where it is.</summary>
     public void Pause() => CSharpAudio.SourceControl(GameObject.SceneId, GameObject.Id, 0);
+    /// <summary>Goes on after a Pause.</summary>
     public void Resume() => CSharpAudio.SourceControl(GameObject.SceneId, GameObject.Id, 1);
+    /// <summary>Stops the sound (Play starts it from the beginning).</summary>
     public void Stop() => CSharpAudio.SourceControl(GameObject.SceneId, GameObject.Id, 2);
+    /// <summary>Whether it is playing now.</summary>
     public bool IsPlaying => CSharpAudio.SourceIsPlaying(GameObject.SceneId, GameObject.Id);
     /// <summary>The clip's length in seconds (0 until it has been played once).</summary>
     public float Length => CSharpAudio.SourceTime(GameObject.SceneId, GameObject.Id, 0);
@@ -96,11 +103,17 @@ public readonly partial record struct AudioSource(GameObject GameObject) : IComp
 /// <see cref="TickInput"/> in Update instead, so the server and every client agree.</summary>
 public static class InputActions
 {
+    /// <summary>Whether the action's button or key is down now.</summary>
     public static bool Held(string action) => CSharpInputActions.Held(action);
+    /// <summary>Whether the action went down this frame.</summary>
     public static bool Pressed(string action) => CSharpInputActions.Pressed(action);
+    /// <summary>Whether the action came up this frame.</summary>
     public static bool Released(string action) => CSharpInputActions.Released(action);
+    /// <summary>A one-axis action's value (-1 to 1; a trigger 0 to 1).</summary>
     public static float Value(string action) => CSharpInputActions.Value(action);
+    /// <summary>A two-axis action's value, such as Move (each axis -1 to 1).</summary>
     public static Vector2 Vector(string action) => CSharpInputActions.Vector(action);
+    /// <summary>How far a pointer-like action (Look with a mouse) moved this frame.</summary>
     public static Vector2 Delta(string action) => CSharpInputActions.Delta(action);
 
     /// <summary>
@@ -139,6 +152,7 @@ public static class NetRandom
     /// <summary>A number from 0 up to (not including) 1.</summary>
     public static float Value(Script script, int salt = 0) => Value(script.GameObject, salt);
 
+    /// <summary>A number from 0 up to (not including) 1, the same on every machine for this object, tick and salt.</summary>
     public static float Value(GameObject gameObject, int salt = 0) =>
         CSharpGameplay.NetRandomValue(gameObject.SceneId, gameObject.Id, salt);
 
@@ -151,6 +165,7 @@ public static class NetRandom
         max <= min ? min : min + Math.Min((int)(Value(script, salt) * (max - min)), max - min - 1);
 }
 
+/// <summary>Game time and the frame clock.</summary>
 public static partial class Time
 {
     /// <summary>Seconds of game time since play started. It follows TimeScale and stands still when that is 0.</summary>

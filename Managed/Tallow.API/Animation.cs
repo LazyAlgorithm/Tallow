@@ -11,6 +11,7 @@ namespace Tallow;
 [NativeComponent("Tallow.Animator")]
 public readonly partial record struct Animator(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has an Animator.</summary>
     public bool IsValid => CSharpAnimation.HasAnimator(GameObject.SceneId, GameObject.Id);
 
     /// <summary>Plays a clip by name, fading from the one playing.</summary>
@@ -21,6 +22,7 @@ public readonly partial record struct Animator(GameObject GameObject) : ICompone
     public void CrossFade(string state, float fadeSeconds = 0.15f) =>
         CSharpAnimation.CrossFade(GameObject.SceneId, GameObject.Id, state, fadeSeconds);
 
+    /// <summary>Whether the model has a clip of that name.</summary>
     public bool HasClip(string clip) => CSharpAnimation.HasClip(GameObject.SceneId, GameObject.Id, clip);
 
     /// <summary>The clip playing ("" without an Animator).</summary>
@@ -29,9 +31,14 @@ public readonly partial record struct Animator(GameObject GameObject) : ICompone
     /// <summary>The controller state playing ("" without one).</summary>
     public string CurrentState => Read(static (scene, id, buffer) => CSharpAnimation.CopyCurrentState(scene, id, buffer));
 
+    /// <summary>Whether a clip that does not loop has reached its end.</summary>
     public bool IsFinished => CSharpAnimation.IsFinished(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether one state's clip is still fading into the next.</summary>
     public bool IsInTransition => CSharpAnimation.IsInTransition(GameObject.SceneId, GameObject.Id);
+    /// <summary>How far through its clip the current state is: 0 at the start, 1 at the end, more than 1 once it
+    /// has looped.</summary>
     public float NormalizedTime => CSharpAnimation.GetNormalizedTime(GameObject.SceneId, GameObject.Id);
+    /// <summary>Seconds spent in the current state, scaled by the state's speed.</summary>
     public float StateTime => CSharpAnimation.GetStateTime(GameObject.SceneId, GameObject.Id);
 
     /// <summary>Playback speed (1 is normal).</summary>
@@ -41,16 +48,27 @@ public readonly partial record struct Animator(GameObject GameObject) : ICompone
         set => CSharpAnimation.SetSpeed(GameObject.SceneId, GameObject.Id, value);
     }
 
+    /// <summary>Sets a controller parameter that transitions and blend trees read.</summary>
     public void SetFloat(string name, float value) => CSharpAnimation.SetFloat(GameObject.SceneId, GameObject.Id, name, value);
+    /// <summary>Sets a whole-number controller parameter.</summary>
     public void SetInteger(string name, int value) => CSharpAnimation.SetInteger(GameObject.SceneId, GameObject.Id, name, value);
+    /// <summary>Sets a true/false controller parameter.</summary>
     public void SetBool(string name, bool value) => CSharpAnimation.SetBool(GameObject.SceneId, GameObject.Id, name, value);
+    /// <summary>Sets a trigger: it stays set until a transition uses it (or ResetTrigger).</summary>
     public void SetTrigger(string name) => CSharpAnimation.SetTrigger(GameObject.SceneId, GameObject.Id, name);
+    /// <summary>Clears a trigger no transition has used yet.</summary>
     public void ResetTrigger(string name) => CSharpAnimation.ResetTrigger(GameObject.SceneId, GameObject.Id, name);
+    /// <summary>A controller parameter's value.</summary>
     public float GetFloat(string name) => CSharpAnimation.GetFloat(GameObject.SceneId, GameObject.Id, name);
+    /// <summary>A whole-number controller parameter's value.</summary>
     public int GetInteger(string name) => CSharpAnimation.GetInteger(GameObject.SceneId, GameObject.Id, name);
+    /// <summary>A true/false controller parameter's value.</summary>
     public bool GetBool(string name) => CSharpAnimation.GetBool(GameObject.SceneId, GameObject.Id, name);
+    /// <summary>How many layers the controller has (1 without layers).</summary>
     public int LayerCount => CSharpAnimation.GetLayerCount(GameObject.SceneId, GameObject.Id);
+    /// <summary>How much a layer counts, 0 to 1 (layer 0 is the base).</summary>
     public void SetLayerWeight(int layer, float weight) => CSharpAnimation.SetLayerWeight(GameObject.SceneId, GameObject.Id, layer, weight);
+    /// <summary>A layer's weight, 0 to 1.</summary>
     public float GetLayerWeight(int layer) => CSharpAnimation.GetLayerWeight(GameObject.SceneId, GameObject.Id, layer);
 
     private delegate int Copier(ulong scene, ulong id, Span<byte> buffer);

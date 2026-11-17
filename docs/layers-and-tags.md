@@ -4,27 +4,27 @@ Three project-wide lists, set up in **Project Settings** and kept in `ProjectCon
 
 ## Physics layers
 
-Name up to 32 layers. Each object is on one, chosen at the top of the Inspector (`gameObject.Layer` in code). The table under the layer names says which layers collide: untick a pair and bodies on those layers pass through each other, rigid bodies and character controllers alike. The table is read when a scene starts playing.
+Name up to 32 layers. Each object is on one, chosen at the top of the Inspector (`GameObject.Layer` in code). The table under the layer names says which layers collide: untick a pair and bodies on those layers pass through each other, rigid bodies and character controllers alike. The table is read when a scene starts playing.
 
 Ray and shape queries see every layer unless given a mask, one bit per layer:
 
-```beef
-let mask = ProjectConfig.Mask("Default", "Enemies");
-if (Scene.Physics.Raycast(eye, forward, 100, out hit, mask)) ...
-Scene.Physics.SphereCast(origin, 0.3f, direction, 20, out shapeHit, uint32.MaxValue, mask);
-Scene.Physics.OverlapSphere(point, 2, hits, uint32.MaxValue, mask);
+```csharp
+uint mask = Layers.Mask("Default", "Enemies");
+if (Scene.RaycastHit(eye, forward, 100, mask) is PhysicsHit hit) ...
+PhysicsHit? shapeHit = Scene.SphereCastHit(origin, 0.3f, direction, 20, mask);
+GameObject[] near = Scene.OverlapSphere(point, 2, mask);
 ```
 
-Changing `gameObject.Layer` while playing moves its bodies to the new layer at once. Debris (Rigidbody's Debris) is separate and still passes through everything that moves.
+Changing `GameObject.Layer` while playing moves its bodies to the new layer at once. Debris (Rigidbody's Debris) is separate and still passes through everything that moves.
 
 ## Tags
 
 Labels for objects, listed in Project Settings and given to objects in the Inspector (the **+** under Layer). Any number per object.
 
-```beef
-let player = Scene.FindWithTag("Player");            // the first active one
-Scene.FindAllWithTag("Cover", list);                  // all of them, active or not
-gameObject.AddTag("Searched"); gameObject.RemoveTag("Searched"); gameObject.HasTag("Enemy");
+```csharp
+GameObject? player = Scene.FindWithTag("Player");      // the first active one
+GameObject[] cover = Scene.FindAllWithTag("Cover");    // all of them, active or not
+GameObject.AddTag("Searched"); GameObject.RemoveTag("Searched"); GameObject.HasTag("Enemy");
 ```
 
 Tagged objects are kept in lists by tag, so finding them does not look at every object.
@@ -33,9 +33,11 @@ Tagged objects are kept in lists by tag, so finding them does not look at every 
 
 Versions of the same place that a game switches between: a past and a present, the real world and a dream, a powered and an unpowered station. List them in Project Settings. Every object is in all of them until the Inspector's **World States** ticks say otherwise; a parent left out of a state takes its children with it.
 
-```beef
-Scene.WorldState = ProjectConfig.WorldStateNamed("Echo");   // or Scene.SetWorldState("Echo")
-Scene.WorldStateChanged.Add(new (from, to) => { ... });
+```csharp
+Scene.SetWorldState("Echo");          // or Scene.SetWorldState(WorldStates.Named("Echo"))
+
+// In any script, when it changes:
+public override void OnWorldStateChanged(int from, int to) { ... }
 ```
 
 Everything switches in that one call, in the same frame. An object outside the active state:
@@ -51,19 +53,20 @@ Everything switches in that one call, in the same frame. An object outside the a
 
 For games where players are in different states of one map at the same time (two realities of one arena, say),
 tick **Each object in its own world states** under World States in Project Settings (`separateworldstates 1` in the
-file; `ProjectConfig.SeparateWorldStates` in code). Then:
+file). Then:
 
 - **Collision follows each object's own states.** Two bodies collide only when they share a world state. An object in
   every state (the default) meets everything, so shared floors, walls and pillars are made once and stay in memory
   once; only what differs between states needs ticking. A player is put in a state by setting its World States, and
-  shifting is setting them again: its bodies move at once.
-- **Queries** see every state unless `Scene.Physics.QueryWorldStates` says otherwise. Set it to the shooter's states
+  shifting is setting them again (`GameObject.WorldStates` in code): its bodies move at once.
+- **Queries** see every state unless `Scene.QueryWorldStates` says otherwise. Set it to the shooter's states
   around that player's rays and shape casts:
 
-  ```beef
-  Scene.Physics.QueryWorldStates = shooter.WorldStates;
-  defer { Scene.Physics.QueryWorldStates = uint32.MaxValue; }
-  if (Scene.Physics.SphereCast(eye, 0.05f, forward, 200, out hit)) ...
+  ```csharp
+  using (Scene.QueryInWorldStates(shooter.WorldStates))
+  {
+      if (Scene.SphereCastHit(eye, 0.05f, forward, 200) is PhysicsHit hit) ...
+  }
   ```
 - **Water** floats and lets swim only things sharing one of its states.
 - **Navigation agents** use a surface baked for one of their own states, and obstacles, areas and links change the

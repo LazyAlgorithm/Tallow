@@ -8,11 +8,17 @@ public static class TallowMathExtensions
 {
     extension(Vector3)
     {
+        /// <summary>(0, 1, 0).</summary>
         public static Vector3 Up => Vector3.UnitY;
+        /// <summary>(0, -1, 0).</summary>
         public static Vector3 Down => -Vector3.UnitY;
+        /// <summary>(1, 0, 0).</summary>
         public static Vector3 Right => Vector3.UnitX;
+        /// <summary>(-1, 0, 0).</summary>
         public static Vector3 Left => -Vector3.UnitX;
+        /// <summary>(0, 0, 1): Tallow's forward.</summary>
         public static Vector3 Forward => Vector3.UnitZ;
+        /// <summary>(0, 0, -1).</summary>
         public static Vector3 Back => -Vector3.UnitZ;
     }
 

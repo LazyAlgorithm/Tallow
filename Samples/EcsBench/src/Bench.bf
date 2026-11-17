@@ -10,7 +10,8 @@ namespace EcsBench;
 ///   TALLOW_BENCH_MODE   gameobject (Mover components), mixed (prefabs with physics/AI/network identities), ai (a crowd
 ///                       with a behaviour tree and navigation agent on every object, BenchAI.bf), ecs (one thread),
 ///                       ecs-mt (every Jobs thread), getcomponent, physics, lifecycle (as CSharpBench; BenchModes.bf),
-///                       or check
+///                       graph (B21: cubes running the Bobber visual script, Graphs/Bobber.tgraph),
+///                       netsync / nethash (B18, multiplayer sync: NetSync.bf and tools/run_net_bench.py), or check
 ///                       (runs EcsChecks and exits with 1 if any fail)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
@@ -68,6 +69,13 @@ class Bench : Component
 		Transform.Position = .(0, mHalfSize * 0.6f, -mHalfSize * 3.2f);
 		Transform.LookAt(.Zero);
 
+		// B18: the networked workload runs in its own scene (NetSync.bf).
+		if (mMode == "netsync" || mMode == "nethash")
+		{
+			SceneManager.Load("Scenes/NetSync.tscene");
+			mMode.Set("idle");
+			return;
+		}
 		if (mMode == "check")
 		{
 			let failures = EcsChecks.Run();
@@ -98,6 +106,8 @@ class Bench : Component
 			SpawnSoftBodies();
 		else if (mMode == "render")
 			SpawnRender();
+		else if (mMode == "graph")
+			SpawnGraphs();
 		else
 			SpawnEntities();
 		mSpawnMs = (SDL.SDL_GetTicksNS() - start) / 1e6;
@@ -132,6 +142,23 @@ class Bench : Component
 			mover.spin = spin;
 			mover.halfSize = mHalfSize;
 		}
+	}
+
+	/// B21: cubes each running the Bobber visual script (Graphs/Bobber.tgraph, 10 nodes), compiled to Beef;
+	/// CSharpBench compiles the same graph to C#. One more object runs GraphOrder, which logs its events' order.
+	void SpawnGraphs()
+	{
+		for (int i < mCount)
+		{
+			Workload.Start(i, mHalfSize, let position, ?, ?);
+			let cube = Scene.CreateGameObject("Cube");
+			mSpawned.Add(cube);
+			cube.Transform.LocalPosition = position;
+			cube.Transform.LocalScale = .(Workload.CubeScale, Workload.CubeScale, Workload.CubeScale);
+			cube.AddComponent<MeshRenderer>();
+			cube.AddComponent<Graphs.Bobber>();
+		}
+		Scene.CreateGameObject("Order").AddComponent<Graphs.GraphOrder>();
 	}
 
 	void SpawnEntities()
@@ -174,6 +201,8 @@ class Bench : Component
 
 	public override void Update(TickInput input, float deltaTime)
 	{
+		if (mMode == "idle")
+			return;
 		let now = SDL.SDL_GetTicksNS();
 		if (mLastFrame != 0 && mFrame == 1)
 			mFirstFrameMs = (now - mLastFrame) / 1e6;
@@ -219,6 +248,8 @@ class Bench : Component
 
 	public override void LocalLateUpdate()
 	{
+		if (mMode == "idle")
+			return;
 		if (mFrame > WarmupFrames)
 			mUpdateTimes.Add((SDL.SDL_GetTicksNS() - mUpdateStart) / 1e6);
 		if (mFrameTimes.Count >= mFrames)

@@ -98,6 +98,30 @@ static class CSharpSpawning
 		return (state >= 0 && state < states.Count) ? Copy(states[state], buffer) : -1;
 	}
 
+	/// The world states an object is part of, one bit each (all by default).
+	[CSharpExpose]
+	public static uint32 GetObjectWorldStates(uint64 session, uint64 entity) => CSharpRuntime.PhysicsObject(session, entity)?.WorldStates ?? uint32.MaxValue;
+
+	[CSharpExpose]
+	public static void SetObjectWorldStates(uint64 session, uint64 entity, uint32 states)
+	{
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		if (obj != null)
+			obj.WorldStates = states;
+	}
+
+	/// The world states physics queries see (all by default).
+	[CSharpExpose]
+	public static uint32 GetQueryWorldStates(uint64 session) => CSharpRuntime.PhysicsScene(session)?.Physics?.QueryWorldStates ?? uint32.MaxValue;
+
+	[CSharpExpose]
+	public static void SetQueryWorldStates(uint64 session, uint32 states)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		if (scene?.Physics != null)
+			scene.Physics.QueryWorldStates = states;
+	}
+
 	[CSharpExpose]
 	public static int32 GetWorldState(uint64 session) => CSharpRuntime.PhysicsScene(session)?.WorldState ?? 0;
 

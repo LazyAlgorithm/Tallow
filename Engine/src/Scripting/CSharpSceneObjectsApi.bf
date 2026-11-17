@@ -212,6 +212,10 @@ static class CSharpSceneObjects
         return scene.Network.IsServer ? 1 : (scene.Network.IsClient ? 2 : 0);
     }
 
+    /// True while ticks are being run again after a correction from the server.
+    [CSharpExpose]
+    public static bool NetworkReplaying(uint64 session) => CSharpRuntime.PhysicsScene(session)?.Network?.Replaying ?? false;
+
     /// This machine's client id in the session (0 on the server or offline).
     [CSharpExpose]
     public static int32 LocalClientId(uint64 session)

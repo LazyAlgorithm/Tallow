@@ -9,6 +9,7 @@ namespace Tallow;
 /// </summary>
 public static class EcsSchemas
 {
+    /// <summary>Generated: ties T to its schema ID.</summary>
     public static void Register<T>(ulong schemaId) where T : unmanaged => EcsSchema<T>.Id = schemaId;
 
     /// <summary>Generated: ties T to its schema and tells the engine its [Sync] fields ("name:offset:size;" each),
@@ -63,6 +64,7 @@ public readonly partial record struct EcsEntity
     public T Get<T>() where T : unmanaged => TryGet(out T value) ? value :
         throw new InvalidOperationException($"The entity has no {typeof(T).Name}.");
 
+    /// <summary>Whether this entity has data of type T.</summary>
     public bool Has<T>() where T : unmanaged => Id != 0 && Ecs.HasLocalData(SessionId, Id, EcsSchema<T>.Require());
 
     /// <summary>Takes this entity's data of type T away; false when it had none.</summary>
@@ -92,6 +94,7 @@ public readonly partial record struct GameObject
 /// <summary>A query's With and Without terms (up to <see cref="Capacity"/>), kept without allocating.</summary>
 public readonly record struct EcsFilter
 {
+    /// <summary>How many With and Without terms a query can have together.</summary>
     public const int Capacity = 4;
     private readonly ulong _a, _b, _c, _d;
     private readonly int _with, _without;
@@ -99,6 +102,7 @@ public readonly record struct EcsFilter
     private EcsFilter(ulong a, ulong b, ulong c, ulong d, int with, int without) =>
         (_a, _b, _c, _d, _with, _without) = (a, b, c, d, with, without);
 
+    /// <summary>How many terms the filter has.</summary>
     public int Count => _with + _without;
 
     internal EcsFilter Add(ulong schema, bool with)
@@ -129,8 +133,11 @@ public readonly record struct EcsFilter
     }
 }
 
+/// <summary>What Query.ForEach calls for each entity, with a reference to its data: change it in place.</summary>
 public delegate void EcsAction<T1>(EcsEntity entity, ref T1 a);
+/// <summary>What Query.ForEach calls for each entity, with references to its two data types.</summary>
 public delegate void EcsAction<T1, T2>(EcsEntity entity, ref T1 a, ref T2 b);
+/// <summary>What Query.ForEach calls for each entity, with references to its three data types.</summary>
 public delegate void EcsAction<T1, T2, T3>(EcsEntity entity, ref T1 a, ref T2 b, ref T3 c);
 
 public readonly partial record struct Scene
@@ -181,6 +188,8 @@ public readonly record struct EcsQuery<T1>(ulong SessionId) where T1 : unmanaged
         }
     }
 
+    /// <summary>Calls action for every matching entity with a reference to its data; what it changes is written
+    /// back (only rows that changed). Entities removed meanwhile are skipped.</summary>
     public unsafe void ForEach(EcsAction<T1> action)
     {
         ArgumentNullException.ThrowIfNull(action);
@@ -250,6 +259,7 @@ public readonly record struct EcsQuery<T1, T2>(ulong SessionId) where T1 : unman
         }
     }
 
+    /// <summary>Calls action for every matching entity with references to its data; changes are written back.</summary>
     public unsafe void ForEach(EcsAction<T1, T2> action)
     {
         ArgumentNullException.ThrowIfNull(action);
@@ -322,6 +332,7 @@ public readonly record struct EcsQuery<T1, T2, T3>(ulong SessionId)
         }
     }
 
+    /// <summary>Calls action for every matching entity with references to its data; changes are written back.</summary>
     public unsafe void ForEach(EcsAction<T1, T2, T3> action)
     {
         ArgumentNullException.ThrowIfNull(action);

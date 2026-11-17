@@ -8,9 +8,9 @@ Steam support is built in and optional. The Steamworks library is loaded only wh
 2. Have the Steam client running and signed in.
 3. For a release, put the `libsteam_api` file from the Steamworks SDK beside the game's executable. During development the engine also finds the copy inside a local Steam installation.
 
-```beef
+```csharp
 if (Steam.Start())                              // connects with the project's App ID; false if Steam is not there
-    Log.Info(scope $"Signed in as {Steam.UserName} ({Steam.UserId})");
+    Log.Info($"Signed in as {Steam.UserName} ({Steam.UserId})");
 ```
 
 `Steam.Start()` is safe to call any time; the engine calls it for you when achievements or the Steam transport are used. `Steam.Error` says why it failed.
@@ -19,7 +19,7 @@ if (Steam.Start())                              // connects with the project's A
 
 One call unlocks an achievement:
 
-```beef
+```csharp
 Achievements.Unlock("FIRST_WIN");
 ```
 
@@ -81,33 +81,30 @@ For "play with a friend" without typing numbers. All of these do nothing, and re
 | `Steam.FriendName(id, name)`, `Steam.FriendOnline(id)` | A friend's name, and whether they are signed in. |
 | `Steam.IsFriend(id)` | Whether a Steam ID is one of the player's friends: for a friends-only match. |
 | `Steam.SetPresence(key, value)` | Publishes a piece of text about what this player is doing. Friends running the same game can read it. Steam itself shows the `status` key in the friends list and offers a Join button when `connect` is set. |
-| `Steam.FriendPresence(id, key, value)` | Reads what a friend published. Empty when they are not in this game. |
+| `Steam.FriendPresence(id, key)` | Reads what a friend published. Empty when they are not in this game. |
 | `Steam.ClearPresence()` | Removes everything this player published (also done at shutdown). |
 | `Steam.Invite(friend, connect)` | Sends a Steam invitation. `connect` is handed to the friend's game when they accept: use the host's Steam ID. |
-| `Steam.TakeJoinRequest(connect)` | True once after the player accepted an invitation, or pressed Join in the friends list, while the game was running. |
+| `Steam.TakeJoinRequest(out connect)` | True once after the player accepted an invitation, or pressed Join in the friends list, while the game was running. |
 
 A host that publishes its Steam ID lets friends find and join its match:
 
-```beef
+```csharp
 // Host, every couple of seconds:
-Steam.SetPresence("connect", scope $"{Steam.UserId}");
+Steam.SetPresence("connect", Steam.UserId.ToString());
 Steam.SetPresence("status", "Deathmatch on Foundry");
 
 // Friend, on the Join screen:
-for (int i < Steam.FriendCount)
+foreach (ulong friend in Steam.Friends)
 {
-    let friend = Steam.FriendAt(i);
-    let host = scope String();
-    Steam.FriendPresence(friend, "connect", host);
-    if (!host.IsEmpty) { /* list this friend; to join, start a client with the address set to host */ }
+    string host = Steam.FriendPresence(friend, "connect");
+    if (host != "") { /* list this friend; to join, start a client with the address set to host */ }
 }
 
 // Either, every frame:
-let host = scope String();
-if (Steam.TakeJoinRequest(host)) { /* join host */ }
+if (Steam.TakeJoinRequest(out string join)) { /* join it */ }
 ```
 
-Call `Steam.Update()` once a frame while no network session is running, so that Steam can deliver the request.
+Call `Steam.Update()` once a frame while no network session is running, so that Steam can deliver the request (a session on the Steam transport does it for you).
 
 Two things to know about invitations while a game uses the test App ID 480: Steam calls the game "Spacewar", and a friend who accepts an invitation without the game already open is offered Spacewar by Steam, not your game. So have the friend start the game first. Reading friends' presence does not have that problem, which is why the example above lists friends' games in the game itself. With your own App ID, Steam starts your game for them.
 
@@ -121,38 +118,36 @@ A Workshop item is a folder of files a player publishes: scenes, prefabs, models
 
 **Using what players subscribed to.** One call at start-up makes every installed item's files loadable like the game's own:
 
-```beef
-let count = Workshop.MountInstalled();
-Log.Info(scope $"{count} Workshop item(s) loaded.");
+```csharp
+int count = Workshop.MountInstalled();
+Log.Info($"{count} Workshop item(s) loaded.");
 ```
 
 After that, an item containing `Scenes/Arena.tscene` can be opened as `"Scenes/Arena.tscene"`, and a file with the same path as one of the game's replaces it. `Workshop.Mounted` lists the folders, for games that want to show what each item adds. Call `MountInstalled` again after the player subscribes to something.
 
 Underneath, this uses `Assets.AddSearchPath(folder)`, which works for any folder, so a `Mods` directory beside the game can be supported the same way without Steam.
 
-**Browsing and subscribing.** Results arrive a moment later, on the main thread:
+**Browsing and subscribing.** `Browse` is awaited; Steam answers a moment later, and the script carries on on the game thread:
 
-```beef
-Workshop.Browse(.Popular, 1, "", new (items, ok) =>
-{
-    for (let item in items)
-        Log.Info(scope $"{item.title} ({item.id})");
-});
+```csharp
+foreach (WorkshopItem item in await Workshop.Browse(WorkshopSort.Popular))
+    Log.Info($"{item.Title} ({item.Id})");
 
-Workshop.Subscribe(item.id);        // Steam downloads it in the background
-if (Workshop.IsInstalled(item.id)) Workshop.MountInstalled();
+Workshop.Subscribe(item.Id);        // Steam downloads it in the background
+if (Workshop.IsInstalled(item.Id)) Workshop.MountInstalled();
 ```
 
-`Browse` takes `.Popular`, `.Newest`, `.Trending` or `.Search` with search text, and returns 50 items a page. Each item has an `id`, `title`, `description`, `tags`, `previewUrl` and `owner`. `BrowseMine` lists what the signed-in player has published. `IsSubscribed`, `IsInstalled`, `IsDownloading`, `NeedsUpdate`, `GetFolder`, `Download` and `Unsubscribe` cover the rest.
+`Browse` takes `WorkshopSort.Popular`, `Newest`, `Trending` or `Search` with search text and a page (from 1), and gives 50 items a page (none when Steam could not answer). Each item has an `Id`, `Title`, `Description`, `Tags`, `PreviewUrl` and `Owner`. `BrowseMine` lists what the signed-in player has published. `IsSubscribed`, `IsInstalled`, `IsDownloading`, `NeedsUpdate`, `Folder`, `Subscribed`, `Download` and `Unsubscribe` cover the rest.
 
 **Publishing.** Give it a folder:
 
-```beef
-Workshop.Publish(folder, "My arena", "A small arena for four players.", previewPng, "level,arena", .Public, 0,
-    new (id, ok, message) => Log.Info(ok ? scope $"Published as {id}" : message));
+```csharp
+WorkshopPublishResult result = await Workshop.Publish(folder, "My arena", "A small arena for four players.", previewPng,
+    "level,arena", WorkshopVisibility.Public);
+Log.Info(result.Succeeded ? $"Published as {result.Id}" : result.Message);
 ```
 
-Pass the id from an earlier publish instead of `0` to update that item. `Workshop.PublishProgress` (0 to 1) and `IsPublishing` are there for a progress bar. Visibility is `.Public`, `.FriendsOnly`, `.Private` or `.Unlisted`.
+Pass the id from an earlier publish as `existingId` to update that item. `Workshop.PublishProgress` (0 to 1) and `IsPublishing` are there for a progress bar. Visibility is `Public`, `FriendsOnly`, `Private` or `Unlisted`.
 
 What to know:
 

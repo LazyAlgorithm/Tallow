@@ -235,18 +235,33 @@ public readonly partial record struct Building(GameObject GameObject) : ICompone
     /// From one floor to the next, in metres.
     /// </summary>
     public float StoreyHeight { get => Data.GetFloat("storeyHeight"); set => Data.Set("storeyHeight", value); }
+    /// <summary>
+    /// How thick walls are, in metres.
+    /// </summary>
     public float WallThickness { get => Data.GetFloat("wallThickness"); set => Data.Set("wallThickness", value); }
     /// <summary>
     /// Floors, ceilings and the roof, in metres.
     /// </summary>
     public float FloorThickness { get => Data.GetFloat("floorThickness"); set => Data.Set("floorThickness", value); }
+    /// <summary>
+    /// The walls' colour.
+    /// </summary>
     public Color WallColor { get => Data.GetColor("wallColor"); set => Data.Set("wallColor", value); }
+    /// <summary>
+    /// The ceilings' colour.
+    /// </summary>
     public Color CeilingColor { get => Data.GetColor("ceilingColor"); set => Data.Set("ceilingColor", value); }
+    /// <summary>
+    /// The roof's colour, where nothing is built above.
+    /// </summary>
     public Color RoofColor { get => Data.GetColor("roofColor"); set => Data.Set("roofColor", value); }
     /// <summary>
     /// Each room's floor takes the room's own colour, so the plan is easy to read. Off: Floor Color everywhere.
     /// </summary>
     public bool RoomColors { get => Data.GetBool("roomColors"); set => Data.Set("roomColors", value); }
+    /// <summary>
+    /// The floors' colour when rooms do not have their own (Room Colors off).
+    /// </summary>
     public Color FloorColor { get => Data.GetColor("floorColor"); set => Data.Set("floorColor", value); }
 }
 
@@ -340,6 +355,9 @@ public readonly partial record struct CapsuleCollider(GameObject GameObject) : I
 public readonly partial record struct CharacterController
 {
     private NativeComponent Fields => new(GameObject, "Tallow.CharacterController");
+    /// <summary>
+    /// The character's shape: a capsule (people, animals) or a box.
+    /// </summary>
     public CharacterShape Shape { get => Fields.GetEnum<CharacterShape>("shape"); set => Fields.Set("shape", value); }
     /// <summary>
     /// Box: full width, height and depth.
@@ -357,6 +375,9 @@ public readonly partial record struct CharacterController
     /// Steepest slope, in degrees, it can stand and walk on.
     /// </summary>
     public float MaxSlope { get => Fields.GetFloat("maxSlope"); set => Fields.Set("maxSlope", value); }
+    /// <summary>
+    /// The character's mass in kilograms: how hard it pushes, and is pushed by, rigid bodies.
+    /// </summary>
     public float Mass { get => Fields.GetFloat("mass"); set => Fields.Set("mass", value); }
     /// <summary>
     /// Multiplies the scene's gravity in SimpleMove.
@@ -399,6 +420,9 @@ public readonly partial record struct CharacterController
 public readonly partial record struct CharacterMotor
 {
     private NativeComponent Fields => new(GameObject, "Tallow.CharacterMotor");
+    /// <summary>
+    /// Walking speed, in metres a second.
+    /// </summary>
     public float MoveSpeed { get => Fields.GetFloat("moveSpeed"); set => Fields.Set("moveSpeed", value); }
     /// <summary>
     /// Speed while Shift is held; set it to Move Speed to turn sprinting off.
@@ -408,6 +432,9 @@ public readonly partial record struct CharacterMotor
     /// Speed while Shift is held; set it to Move Speed to turn sprinting off.
     /// </summary>
     public float JumpSpeed { get => Fields.GetFloat("jumpSpeed"); set => Fields.Set("jumpSpeed", value); }
+    /// <summary>
+    /// How quickly it reaches its speed and stops, in metres a second per second.
+    /// </summary>
     public float Acceleration { get => Fields.GetFloat("acceleration"); set => Fields.Set("acceleration", value); }
     /// <summary>
     /// Share of Acceleration available while in the air: 0 keeps the take-off velocity, 1 steers as on the ground.
@@ -1293,6 +1320,9 @@ public readonly partial record struct NavigationAgent
     /// or the agent was pushed off its path.
     /// </summary>
     public float RepathInterval { get => Fields.GetFloat("repathInterval"); set => Fields.Set("repathInterval", value); }
+    /// <summary>
+    /// Turns the object to face the way it walks.
+    /// </summary>
     public bool FaceMovement { get => Fields.GetBool("faceMovement"); set => Fields.Set("faceMovement", value); }
     /// <summary>
     /// Degrees per second when turning to face movement; 0 turns instantly.
@@ -2011,12 +2041,18 @@ public readonly partial record struct SoftBody
     /// How fast it loses speed, like moving through thick air.
     /// </summary>
     public float Damping { get => Fields.GetFloat("damping"); set => Fields.Set("damping", value); }
+    /// <summary>
+    /// How much it grips what it slides on, 0 to 1.
+    /// </summary>
     public float Friction { get => Fields.GetFloat("friction"); set => Fields.Set("friction", value); }
     /// <summary>
     /// How much it bounces when it lands, as on a Rigidbody: 0 lands with a squash and a wobble but no hop, 1 bounces
     /// back up as fast as it came down (a jelly: its whole body; cloth: where it touches).
     /// </summary>
     public float Bounciness { get => Fields.GetFloat("bounciness"); set => Fields.Set("bounciness", value); }
+    /// <summary>
+    /// Multiplies gravity on it (0: it floats).
+    /// </summary>
     public float GravityScale { get => Fields.GetFloat("gravityScale"); set => Fields.Set("gravityScale", value); }
     /// <summary>
     /// How far from its surface it keeps other things (its thickness), in metres.
@@ -2306,6 +2342,9 @@ public readonly partial record struct ViewmodelPose(GameObject GameObject) : ICo
 public readonly partial record struct VoxelObject
 {
     private NativeComponent Fields => new(GameObject, "Tallow.VoxelObject");
+    /// <summary>
+    /// The starting shape, carved and built on afterwards.
+    /// </summary>
     public VoxelShape Shape { get => Fields.GetEnum<VoxelShape>("shape"); set => Fields.Set("shape", value); }
     /// <summary>
     /// Shape Mesh: the model to make destructible. It keeps its own size; Size is not used.
@@ -2324,6 +2363,9 @@ public readonly partial record struct VoxelObject
     /// grid then covers the longest side, so a thin side gets fewer cells: Resolution counts along the longest.
     /// </summary>
     public Vector3 BoxSize { get => Fields.GetVector3("boxSize"); set => Fields.Set("boxSize", value); }
+    /// <summary>
+    /// The voxels' colour.
+    /// </summary>
     public Color Color { get => Fields.GetColor("color"); set => Fields.Set("color", value); }
     /// <summary>
     /// Color of surfaces exposed by carving. With an inside made from the outside's material, its tint.

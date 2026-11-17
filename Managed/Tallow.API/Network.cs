@@ -81,6 +81,73 @@ public static class Network
             throw new ArgumentException("A network prefab name or path is too long.");
     }
 
+    /// <summary>How far in the past, in ticks, a client shows objects it does not control (0: two snapshots'
+    /// worth, the default). Less is more up to date and less forgiving of a poor connection.</summary>
+    public static int GetInterpolationTicks(Scene scene) => Math.Max(CSharpNetwork.Setting(scene.SessionId, 0), 0);
+    /// <summary>Sets <see cref="GetInterpolationTicks"/> for the running session.</summary>
+    public static void SetInterpolationTicks(Scene scene, int ticks) => CSharpNetwork.SetSetting(scene.SessionId, 0, ticks);
+
+    /// <summary>Whether clients predict the server's physics bodies (on by default). Set on the server it decides
+    /// for every client; set off on a client, that client shows them in the past.</summary>
+    public static bool GetPredictPhysics(Scene scene) => CSharpNetwork.Setting(scene.SessionId, 1) == 1;
+    /// <summary>Sets <see cref="GetPredictPhysics"/> for the running session.</summary>
+    public static void SetPredictPhysics(Scene scene, bool on) => CSharpNetwork.SetSetting(scene.SessionId, 1, on ? 1 : 0);
+
+    /// <summary>How far back, in ticks, lag compensation may look (24, 0.4 seconds, by default).</summary>
+    public static int GetMaxRewindTicks(Scene scene) => Math.Max(CSharpNetwork.Setting(scene.SessionId, 2), 0);
+    /// <summary>Sets <see cref="GetMaxRewindTicks"/> for the running session.</summary>
+    public static void SetMaxRewindTicks(Scene scene, int ticks) => CSharpNetwork.SetSetting(scene.SessionId, 2, ticks);
+
+    /// <summary>Keeps sessions going when their host leaves: another player takes over. Set it on every machine
+    /// before the session starts (or tick Host Migration on the Network Session). Off by default.</summary>
+    public static bool HostMigration
+    {
+        get => CSharpNetwork.Setting(0, 3) == 1;
+        set => CSharpNetwork.SetSetting(0, 3, value ? 1 : 0);
+    }
+
+    /// <summary>True from losing the host until play resumes under the new one.</summary>
+    public static bool IsMigrating(Scene scene) => CSharpNetwork.Setting(scene.SessionId, 4) == 1;
+
+    private static Action<string>? sOnHostChanged;
+    private static Action? sOnBecameHost;
+    private static ulong sHostScene;
+
+    /// <summary>Raised on every remaining machine after a host migration, with the new host's Steam ID or address
+    /// (empty on the new host itself). Raised once a frame, after LateUpdate, for the scene the handler was added
+    /// in.</summary>
+    public static void OnHostChanged(Scene scene, Action<string> handler)
+    {
+        WatchHost(scene);
+        sOnHostChanged += handler;
+    }
+
+    /// <summary>Raised on the machine that took over as host. Recreate server-only state there: timers, AI that only
+    /// ran on the server.</summary>
+    public static void OnBecameHost(Scene scene, Action handler)
+    {
+        WatchHost(scene);
+        sOnBecameHost += handler;
+    }
+
+    private static void WatchHost(Scene scene)
+    {
+        // Hooked again each time: a game that stopped dropped the hook (GameThread.Stop).
+        GameThread.EachFrame -= RaiseHostChanges;
+        GameThread.EachFrame += RaiseHostChanges;
+        sHostScene = scene.SessionId;
+    }
+
+    private static void RaiseHostChanges()
+    {
+        for (string? address; (address = ActionText.Read(buffer => CSharpNetwork.TakeHostChange(sHostScene, buffer))) != null;)
+        {
+            if (address.Length == 0)
+                sOnBecameHost?.Invoke();
+            sOnHostChanged?.Invoke(address);
+        }
+    }
+
     private static Func<int, int>? sChooseTeam;
 
     /// <summary>
@@ -108,8 +175,22 @@ public static class Network
         return team;
     }
 
-    internal static void ClearTeamChooser() => sChooseTeam = null;
+    /// <summary>A game is unloading: drop its handlers, so nothing keeps its assembly alive.</summary>
+    internal static void ClearTeamChooser()
+    {
+        sChooseTeam = null;
+        GameThread.EachFrame -= RaiseHostChanges;
+        sOnHostChanged = null;
+        sOnBecameHost = null;
+        AntiCheat.ClearHandlers();
+        VoiceChat.ClearHandlers();
+    }
 
+    /// <summary>Server: removes a player from the session (a banned player, a cheater). False on a client, without
+    /// a session, or for an id that is not connected.</summary>
+    public static bool Kick(Scene scene, int clientId) => CSharpAntiCheat.Kick(scene.SessionId, clientId);
+
+    /// <summary>Whether a networked prefab is registered under that name.</summary>
     public static bool IsRegistered(string name) => !string.IsNullOrEmpty(name) && CSharpNetwork.IsPrefabRegistered(name);
 
     /// <summary>
@@ -143,6 +224,8 @@ public readonly partial record struct Scene
         return id == 0 ? null : new GameObject(SessionId, id);
     }
 
+    /// <summary>Spawns a registered networked prefab on every machine, unrotated (server only); null when it could
+    /// not.</summary>
     public GameObject? Spawn(string prefab, Vector3 position, int ownerClientId = 0) =>
         Spawn(prefab, position, Quaternion.Identity, ownerClientId);
 

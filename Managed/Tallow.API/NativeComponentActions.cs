@@ -79,8 +79,11 @@ public readonly partial record struct SequencePlayer
 
     /// <summary>Plays the sequence from the start; false when it could not start (no sequence asset).</summary>
     public bool Play() => Control(0);
+    /// <summary>Holds it where it is.</summary>
     public void Pause() => Control(1);
+    /// <summary>Goes on after a Pause.</summary>
     public void Resume() => Control(2);
+    /// <summary>Ends it where it is: its sounds and subtitles go and the camera goes back (Skip applies the end instead).</summary>
     public void Stop() => Control(3);
     /// <summary>Jumps to the end, applying what the sequence leaves behind.</summary>
     public void Skip() => Control(4);
@@ -117,10 +120,12 @@ public readonly partial record struct DialogueRunner
     public void Advance() => Control(0);
     /// <summary>Picks one of the <see cref="Choices"/>.</summary>
     public void Choose(int index) => Control(1, index);
+    /// <summary>Ends the conversation.</summary>
     public void Stop() => Control(2);
 
     private int State => CSharpComponentActions.DialogueState(GameObject.SceneId, GameObject.Id);
 
+    /// <summary>Whether a conversation is going on.</summary>
     public bool IsPlaying => State > 0;
 
     /// <summary>Whether a line or choices are shown.</summary>
@@ -189,6 +194,7 @@ public readonly partial record struct LineRenderer
     /// <summary>Removes every point.</summary>
     public void ClearPositions() => SetPositions(ReadOnlySpan<Vector3>.Empty);
 
+    /// <summary>How many points the line has.</summary>
     public int PositionCount => Math.Max(
         CSharpComponentActions.LineGetPositions(GameObject.SceneId, GameObject.Id, Span<float>.Empty), 0);
 }

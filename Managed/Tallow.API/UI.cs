@@ -10,6 +10,7 @@ namespace Tallow;
 [NativeComponent("Tallow.UIDocument")]
 public readonly partial record struct UIDocument(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has a UI Document.</summary>
     public bool IsValid => CSharpUI.HasDocument(GameObject.SceneId, GameObject.Id);
 
     /// <summary>The element with id="...", or null.</summary>
@@ -23,8 +24,10 @@ public readonly partial record struct UIDocument(GameObject GameObject) : ICompo
 /// <summary>An element of a UI document, by its id. Setting things on one that is gone does nothing.</summary>
 public readonly record struct UIElement(GameObject GameObject, string Id)
 {
+    /// <summary>Whether the document has an element with this id.</summary>
     public bool Exists => !string.IsNullOrEmpty(Id) && CSharpUI.HasElement(GameObject.SceneId, GameObject.Id, Id);
 
+    /// <summary>The document the element is in.</summary>
     public UIDocument Document => new(GameObject);
 
     public string Text
@@ -45,6 +48,7 @@ public readonly record struct UIElement(GameObject GameObject, string Id)
         set => CSharpUI.SetText(GameObject.SceneId, GameObject.Id, Id, value ?? "");
     }
 
+    /// <summary>Sets the element's text (the same as setting Text).</summary>
     public void SetText(string text) => Text = text;
 
     public bool Visible

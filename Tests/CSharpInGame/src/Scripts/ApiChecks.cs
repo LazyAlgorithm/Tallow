@@ -174,6 +174,30 @@ public class ApiChecks : CheckBase
             UpdateOrderSetup();
         else if (_tick == 50)
             UpdateOrderChecks();
+        else if (_tick == 60)
+            _victim = Scene.CreateGameObject("Victim").AddComponent<UpdateCounter>();
+        else if (_tick == 63)
+        {
+            // Destroyed before its own Update this frame (it was made after this script): it gets no more.
+            _victimUpdatesAtDestroy = _victim!.Updates;
+            _victim.GameObject.Destroy();
+        }
+        else if (_tick == 65)
+            Check("an object destroyed earlier in the frame gets no more Updates",
+                _victim!.Updates == _victimUpdatesAtDestroy && _victimUpdatesAtDestroy > 0);
+        else if (_tick == 66)
+            ServiceChecks();
+        else if (_tick == 70)
+            Check($"Workshop.Browse without Steam finishes with no items ({_browse?.Status})",
+                _browse is { IsCompletedSuccessfully: true } && _browse.Result.Length == 0);
+        else if (_tick == 100)
+        {
+            // LetGo(0.05f) fades over 0.05 s of game time; this is well after.
+            Limb[] limbs = IK.Limbs(_ikRig);
+            Check($"Limb.LetGo fades one Limb IK's weight to 0 and leaves the other ({limbs.Length}: {string.Join(", ", limbs.Select(l => l.Weight))})",
+                limbs.Length == 2 && limbs[0].Weight < 0.01f && limbs[1].Weight > 0.99f);
+            _ikRig.Destroy();
+        }
         else if (_tick == 145)
             _staysBeforeRest = Probe("Ball").CollisionStays;
         else if (_tick == 150)
@@ -208,6 +232,9 @@ public class ApiChecks : CheckBase
             Application.Quit();
         }
     }
+
+    private UpdateCounter? _victim;
+    private int _victimUpdatesAtDestroy;
 
     private GameObject _accessRoot, _accessChild, _accessGrandchild;
     private Helper? _removedHelper;
@@ -538,7 +565,71 @@ public class ApiChecks : CheckBase
         eye.Destroy();
     }
 
-    private EcsEntity _spinBare, _paired, _chargeOnly;
+    private EcsEntity _spinBare, _paired, _chargeOnly, _triple;
+    private Task<WorkshopItem[]>? _browse;
+    private GameObject _ikRig;
+
+    /// Steam, the Workshop and the anti-cheat in an offline run with no Steam App ID.
+    private void ServiceChecks()
+    {
+        Check($"Steam.Start is false without an App ID ({Steam.Error})", !Steam.Start() && !Steam.IsReady && Steam.UserId == 0 &&
+            Steam.FriendCount == 0 && Steam.Friends.Length == 0 && Steam.FriendPresence(1, "connect") == "");
+        Check("Steam.TakeJoinRequest is false with none waiting", !Steam.TakeJoinRequest(out string connect) && connect == "");
+        Check("the Workshop is unavailable without Steam", !Workshop.Available && !Workshop.IsInstalled(1) &&
+            Workshop.Folder(1) == null && Workshop.Subscribed.Length == 0 && Workshop.MountInstalled() == 0);
+        _browse = Workshop.Browse(WorkshopSort.Popular);
+
+        CheatAction was = AntiCheat.GetAction(CheatKind.Debugger);
+        AntiCheat.SetAction(CheatKind.Debugger, CheatAction.Kick);
+        Check("AntiCheat.SetAction and GetAction", AntiCheat.GetAction(CheatKind.Debugger) == CheatAction.Kick &&
+            AntiCheat.GetAction(CheatKind.InvalidInput) == CheatAction.Kick);
+        AntiCheat.SetAction(CheatKind.Debugger, was);
+        AntiCheat.Ban("steam:123");
+        bool banned = AntiCheat.IsBanned("steam:123") && AntiCheat.BansToText().Contains("steam:123");
+        AntiCheat.Unban("steam:123");
+        Check("AntiCheat bans: Ban, IsBanned, BansToText, Unban", banned && !AntiCheat.IsBanned("steam:123"));
+        Check("Network.Kick is false offline", !Network.Kick(Scene, 1));
+        Check("AntiCheat.KickReason is empty when nobody removed us", AntiCheat.KickReason == "");
+
+        var settings = (VoiceChat.Proximity, VoiceChat.MaxDistance, VoiceChat.Bitrate, VoiceChat.PushToTalkKey, VoiceChat.PushToTalkAction);
+        VoiceChat.Proximity = true;
+        VoiceChat.MaxDistance = 42;
+        VoiceChat.Bitrate = 16000;
+        VoiceChat.PushToTalkKey = KeyCode.G;
+        VoiceChat.PushToTalkAction = "";
+        Check("VoiceChat settings round-trip", VoiceChat.Proximity && VoiceChat.MaxDistance == 42 && VoiceChat.Bitrate == 16000 &&
+            VoiceChat.PushToTalkKey == KeyCode.G && VoiceChat.PushToTalkAction == "");
+        (VoiceChat.Proximity, VoiceChat.MaxDistance, VoiceChat.Bitrate, VoiceChat.PushToTalkKey, VoiceChat.PushToTalkAction) = settings;
+
+        GameObject shifter = Scene.CreateGameObject("Shifter");
+        uint before = shifter.WorldStates;
+        shifter.WorldStates = 2;
+        bool objectStates = shifter.WorldStates == 2;
+        shifter.Destroy();
+        bool queryInside;
+        using (Scene.QueryInWorldStates(1))
+            queryInside = Scene.QueryWorldStates == 1;
+        Check($"world-state masks: GameObject.WorldStates ({before:X}) and Scene.QueryInWorldStates",
+            before == uint.MaxValue && objectStates && queryInside && Scene.QueryWorldStates == uint.MaxValue);
+        Check("Network settings read as off without a session", !Scene.IsReplaying && !Network.IsMigrating(Scene) &&
+            Network.GetMaxRewindTicks(Scene) == 0 && !Network.HostMigration);
+
+        Quaternion turn = IK.FromTo(Vector3.UnitZ, Vector3.UnitX);
+        Check("IK.FromTo turns one direction onto another", Vector3.Distance(Vector3.Transform(Vector3.UnitZ, turn), Vector3.UnitX) < 1e-4f);
+        _ikRig = Scene.CreateGameObject("IKRig");
+        _ikRig.AddComponent<LimbIK>();
+        IK.AddLimb(_ikRig);
+        IK.Limbs(_ikRig)[0].LetGo(0.05f);
+        Check("IK.Limb finds no limb by a tip it does not have", IK.Limb(_ikRig, "RightHand") == null);
+
+        GuardedInt coins = 100;
+        coins += 5;
+        int shown = coins;
+        GuardedFloat health = 100;
+        health -= 12.5f;
+        Check($"GuardedInt and GuardedFloat keep their values ({shown}, {health})", shown == 105 && coins.Intact &&
+            health.Value == 87.5f && health.Intact && default(GuardedInt).Value == 0);
+    }
     private GameObject _spinObject;
     private int _systemTick;
 
@@ -554,6 +645,10 @@ public class ApiChecks : CheckBase
         _paired.Set(new Drain());
         _chargeOnly = Scene.CreateLocalEcsEntity();
         _chargeOnly.Set(new Charge());
+        _triple = Scene.CreateLocalEcsEntity();
+        _triple.Set(new Charge());
+        _triple.Set(new Drain());
+        _triple.Set(new Spark());
         _systemTick = _fixedTicks;
     }
 
@@ -569,6 +664,11 @@ public class ApiChecks : CheckBase
         Drain drained = _paired.Get<Drain>();
         Check($"an EcsSystem<T1, T2> runs on entities with both data ({paired.Count}, {drained.Count}) and not one ({alone.Count})",
             paired.Count > 0 && Math.Abs(paired.Count - ticks) <= 1 && drained.Count == -paired.Count && alone.Count == 0);
+        Spark spark = _triple.Get<Spark>();
+        Charge tripleCharge = _triple.Get<Charge>();
+        Check($"an EcsSystem<T1, T2, T3> runs on entities with all three ({spark.Count} of {ticks}; charge {tripleCharge.Count}) and not two ({_paired.Has<Spark>()})",
+            spark.Count > 0 && Math.Abs(spark.Count - ticks) <= 1 && tripleCharge.Count == spark.Count * 11 && !_paired.Has<Spark>());
+        _triple.DestroyLocal();
         _spinBare.DestroyLocal();
         _paired.DestroyLocal();
         _chargeOnly.DestroyLocal();
@@ -1593,6 +1693,14 @@ public class UpdateStep : Script
     }
 }
 
+/// Counts its Updates (an object destroyed during a frame must get no more).
+public class UpdateCounter : Script
+{
+    public int Updates;
+
+    public override void Update(TickInput input, float deltaTime) => Updates++;
+}
+
 /// Throws in every Update. The engine logs it once (tools/test_csharp_ingame.py checks the file and line)
 /// and keeps calling it.
 public class Thrower : Script
@@ -1683,6 +1791,22 @@ public struct Charge
 public struct Drain
 {
     public int Count;
+}
+
+[Component]
+public struct Spark
+{
+    public int Count;
+}
+
+/// Runs on bare entities with Charge, Drain and Spark (ChargeDrainSystem runs on them too: Charge gains 1 + 10 a tick).
+public class ChargeDrainSparkSystem : EcsSystem<Charge, Drain, Spark>
+{
+    public override void Update(EcsEntity entity, ref Charge charge, ref Drain drain, ref Spark spark, TickInput input, float deltaTime)
+    {
+        spark.Count++;
+        charge.Count += 10;
+    }
 }
 
 /// Runs on bare entities with both Charge and Drain.

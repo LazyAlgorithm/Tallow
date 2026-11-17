@@ -32,6 +32,9 @@ namespace CSharpBench;
 ///                       render (B16, run in a window with --profile-report: TALLOW_BENCH_COUNT static cubes with no
 ///                       script, TALLOW_BENCH_MOVING of them moved by Mover scripts, and with TALLOW_BENCH_CHUNKS=1 a
 ///                       chunk of Workload.ChunkSize cubes destroyed and another made every Workload.ChunkFrames)
+///                       graph (B21: cubes running the Bobber visual script, Graphs/Bobber.tgraph)
+///                       soak (B23: the stability soak, Soak.cs and tools/run_csharp_soak.py)
+///                       netsync / nethash (B18: multiplayer sync, NetSync.cs and tools/run_net_bench.py)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
 ///   TALLOW_BENCH_OUT    file a JSON line of results is added to
@@ -72,6 +75,20 @@ public class Bench : Script
         if (int.TryParse(Environment.GetEnvironmentVariable("TALLOW_BENCH_FRAMES"), out int frames))
             _frames = frames;
         _output = Environment.GetEnvironmentVariable("TALLOW_BENCH_OUT") ?? "";
+        if (_mode is "netsync" or "nethash")
+        {
+            // B18: the networked workload runs in its own scene (NetSync.cs).
+            SceneManager.Load("Scenes/NetSync.tscene");
+            _mode = "soak";
+            return;
+        }
+        if (_mode == "soak")
+        {
+            // B23: the soak runs in its own scene (Soak.cs), reloaded over and over.
+            SoakRun.Begin();
+            SoakRun.Load();
+            return;
+        }
         _halfSize = Workload.HalfSize(_count);
         // As EcsBench: frames as fast as they go, not at the screen's refresh.
         Quality.VSync = false;
@@ -102,6 +119,8 @@ public class Bench : Script
             SpawnSoftBodies();
         else if (_mode == "render")
             SpawnRender();
+        else if (_mode == "graph")
+            SpawnGraphs();
         else
             throw new ArgumentException($"Unknown TALLOW_BENCH_MODE {_mode}");
         _spawnMs = watch.Elapsed.TotalMilliseconds;
@@ -123,6 +142,22 @@ public class Bench : Script
             mover.Spin = spin;
             mover.HalfSize = _halfSize;
         }
+    }
+
+    /// <summary>B21: cubes each running the Bobber visual script (Graphs/Bobber.tgraph, 10 nodes), compiled to C#;
+    /// EcsBench compiles the same graph to Beef. One more object runs GraphOrder, which logs its events' order.</summary>
+    private void SpawnGraphs()
+    {
+        for (int i = 0; i < _count; i++)
+        {
+            Workload.Start(i, _halfSize, out Vector3 position, out _, out _);
+            GameObject cube = Scene.CreateGameObject("Cube");
+            cube.Transform.LocalPosition = position;
+            cube.Transform.LocalScale = new Vector3(Workload.CubeScale);
+            cube.AddComponent<MeshRenderer>();
+            cube.AddComponent<Graphs.Bobber>();
+        }
+        Scene.CreateGameObject("Order").AddComponent<Graphs.GraphOrder>();
     }
 
     private void SpawnEntities()
@@ -426,6 +461,8 @@ public class Bench : Script
 
     public override void Update(TickInput input, float deltaTime)
     {
+        if (_mode == "soak")
+            return;
         long now = Stopwatch.GetTimestamp();
         if (_lastFrame != 0 && _frame == 1)
             _firstFrameMs = Stopwatch.GetElapsedTime(_lastFrame, now).TotalMilliseconds;
@@ -478,6 +515,8 @@ public class Bench : Script
 
     public override void LocalLateUpdate(float deltaTime)
     {
+        if (_mode == "soak")
+            return;
         if (_frame > WarmupFrames)
             _updateTimes.Add(Stopwatch.GetElapsedTime(_updateStart).TotalMilliseconds);
         if (_frameTimes.Count >= _frames)

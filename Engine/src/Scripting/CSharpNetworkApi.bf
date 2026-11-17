@@ -7,6 +7,69 @@ namespace Tallow;
 [CSharpExpose]
 static class CSharpNetwork
 {
+    /// A session setting by number: 0 InterpolationTicks, 1 PredictPhysics, 2 MaxRewindTicks, 3 HostMigration,
+    /// 4 IsMigrating (read only). Bools are 0 or 1; -1 without a session (3 then gives the setting for the next one).
+    [CSharpExpose]
+    public static int32 Setting(uint64 session, int32 which)
+    {
+        let network = CSharpRuntime.PhysicsScene(session)?.Network;
+        if (network == null)
+            return which == 3 ? (NetworkSession.HostMigrationOverride ? 1 : 0) : -1;
+        switch (which)
+        {
+        case 0: return network.InterpolationTicks;
+        case 1: return network.PredictPhysics ? 1 : 0;
+        case 2: return network.MaxRewindTicks;
+        case 3: return network.HostMigration ? 1 : 0;
+        case 4: return network.IsMigrating ? 1 : 0;
+        default: return -1;
+        }
+    }
+
+    [CSharpExpose]
+    public static void SetSetting(uint64 session, int32 which, int32 value)
+    {
+        if (which == 3)
+            NetworkSession.HostMigrationOverride = value != 0;
+        let network = CSharpRuntime.PhysicsScene(session)?.Network;
+        if (network == null)
+            return;
+        switch (which)
+        {
+        case 0: network.InterpolationTicks = Math.Clamp(value, 0, 60);
+        case 1: network.PredictPhysics = value != 0;
+        case 2: network.MaxRewindTicks = Math.Clamp(value, 0, 120);
+        case 3: network.HostMigration = value != 0;
+        default:
+        }
+    }
+
+    static List<String> sHostChanges = new .() ~ DeleteContainerAndItems!(_);
+
+    /// The next host change seen on this machine: the new host's Steam ID or address, empty when this machine
+    /// became the host; -1 when there is none. The first call for a session starts watching it.
+    [CSharpExpose]
+    public static int32 TakeHostChange(uint64 session, Span<uint8> buffer)
+    {
+        let network = CSharpRuntime.PhysicsScene(session)?.Network;
+        if (network != null && network.OnHostChanged == null)
+        {
+            network.OnHostChanged = new (address) => { if (sHostChanges.Count < 64) sHostChanges.Add(new String(address)); };
+        }
+        if (sHostChanges.IsEmpty)
+            return -1;
+        let first = sHostChanges[0];
+        let length = (int32)first.Length;
+        for (int i < Math.Min(first.Length, buffer.Length))
+            buffer[i] = (uint8)first[i];
+        if (length <= buffer.Length)
+        {
+            sHostChanges.RemoveAt(0);
+            delete first;
+        }
+        return length;
+    }
+
     /// Sends a script's [Rpc] call. 1: run it here now; 0: sent to the server; -1: not allowed or stale.
     /// target: 0 server, 1 everyone. arguments: the encoded argument text (Tallow.API RpcMethods).
     [CSharpExpose]

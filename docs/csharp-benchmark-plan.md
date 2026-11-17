@@ -281,7 +281,17 @@ native call per Transform get/set (a batched or cached transform path), and the 
 - [ ] **B20 — prediction/rollback determinism.** Fixed-seed input replay for 10k ticks, repeated 3 times; record final state hashes, divergences, rollback duration and worst catch-up frame, C# vs native. Mark blocked until rollback C# parity is implemented; do not infer from compile tests.
 - [ ] **B21 — visual scripting parity.** Existing graphs vs generated C# on equivalent 1k/10k node updates; check event ordering, networking, serialization and graph regeneration time. Mark blocked until C# visual-graph backend is functional.
 - [ ] **B22 — game export portability.** Release build on Windows/Linux **without Beef installed** on target machine; record packaged size, cold start, .NET runtime/bootstrap diagnostics, crash frequency and whether the editor/player ever tries to compile native engine code. Verify exports against older Beef samples too.
-- [ ] **B23 — stability soak.** 30–60 minute automated gameplay loop; scene reload, prefab spawn/destroy, networking reconnect, soft-body world teardown. Track median/p95/p99 frame time over time, managed/native RSS slope, GPU memory and native-handle leaks.
+- [x] **B23 — stability soak.** 30–60 minute automated gameplay loop; scene reload, prefab spawn/destroy, networking reconnect, soft-body world teardown. Track median/p95/p99 frame time over time, managed/native RSS slope, GPU memory and native-handle leaks.
+  Measured November 17, 2026 (9a41220c, `tools/run_csharp_soak.py --minutes 45 --cycle 25 --warmup 180`, results in
+  ~/TallowBenchmarks/soak-20261117): an exported C# player (Samples/CSharpBench, Scenes/Soak.tscene) as host and a
+  second as client over loopback, each reloading its scene every 25 s (108 loads, median 7.2 ms, p95 7.9 ms), the
+  client leaving and rejoining the host's session each cycle (107 reconnects, 0 failed joins), 2,400 prefab crates
+  spawned and destroyed per cycle with a soft body and a script on each (32.7 million Awake/OnDestroy pairs, the 100
+  left over being the last cycle's live ones). Over 45 minutes on each side: frame median 1.31–1.32 ms, p95 1.62–1.68,
+  p99 1.77–1.87, worst 4.0–6.3 ms (the first five minutes); RSS 93.4–93.9 MB, slope 0.2–0.4 MB/h measured from
+  /proc after the warm-up; managed heap 9.2–9.9 MB (0.2–0.38 MB/h, collector noise); open files 49 and threads
+  10–11 throughout; 0 errors or exceptions. Pass. GPU memory is not measured: the players run headless (no GPU), so
+  render-side leaks are covered by the editor Play/Stop cycle test (B06) instead.
 
 ## Automated local compile timing helper
 

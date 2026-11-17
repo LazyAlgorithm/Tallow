@@ -61,7 +61,7 @@ already are, for limbs that are not following a weapon.
 
 Each arm is its own component, so each can be released by itself:
 
-```beef
+```csharp
 // The left hand leaves the rifle to throw a grenade; the right hand stays on the grip.
 leftArm.LetGo(0.15f);
 animator.SetTrigger("Throw");
@@ -74,11 +74,15 @@ doing; `Grab` fades it back. `FadeWeight(value, seconds)` goes to any weight. `S
 hand to another target without a jump, for changing weapons. `IsHolding` and `Reach` (above 1: the target is out of
 reach and the arm is straight) are there to read.
 
-Keep the two arms in public `LimbIK` fields on your own component and drag each one in from the Inspector:
+Both Limb IKs are on the character, so in code each is found by the hand it moves: keep the hand bones in public
+fields on your own script, drag them in from the Inspector, and ask `IK.Limb` for the arm (`IK.Limbs(character)`
+lists them all; `IK.AddLimb(character)` adds another from code, since `AddComponent<LimbIK>()` gives back the
+one already there):
 
-```beef
-public LimbIK leftArm;
-public LimbIK rightArm;
+```csharp
+public GameObject LeftHand, RightHand;      // drag the hand bones in
+
+Limb leftArm => IK.Limb(GameObject, LeftHand) ?? throw new InvalidOperationException("no Limb IK for the left hand");
 ```
 
 ## Fingers
@@ -110,11 +114,12 @@ Straight**.
 
 From code:
 
-```beef
-hand.SetShape(.Grip);          // blended over Blend Time
-hand.SetShape(.Open, 0.3f);    // or over the seconds given
-hand.trigger = pull;           // 0 to 1, every frame
-hand.Curl(1, 0.5f);            // one finger: 0 thumb ... 4 pinky
+```csharp
+var hand = LeftHand.GetComponent<HandPose>();
+hand.SetShape(HandShape.Grip);          // blended over Blend Time
+hand.SetShape(HandShape.Open, 0.3f);    // or over the seconds given
+hand.Trigger = pull;                    // 0 to 1, every frame
+hand.Curl(1, 0.5f);                     // one finger: 0 thumb ... 4 pinky
 ```
 
 ## Looking
@@ -159,16 +164,16 @@ click. **Hands** opens Hand Posing for the fingers. Both are described in `docs/
 
 ## From code
 
-The solver functions are in `IKSolver`, for anything the components do not cover. Call them from `LateUpdate`:
+The solver functions are in `IK`, for anything the components do not cover. Bones are the bone objects, root first. Call them from `LateUpdate`:
 
-```beef
-IKSolver.TwoBone(upper, middle, tip, targetPoint, usePole, polePoint);   // an arm or a leg
-IKSolver.Chain(bones, tip, targetPoint);                                // a tail, a tentacle, a finger
-IKSolver.LookAt(bones, localForward, targetPoint, weight, maxDegrees);  // a head and spine
-IKSolver.FromTo(directionA, directionB);                                // the turn from one direction to another
+```csharp
+IK.TwoBone(upper, middle, tip, targetPoint, usePole, polePoint);   // an arm or a leg
+IK.Chain(bones, tip, targetPoint);                                // a tail, a tentacle, a finger
+IK.LookAt(bones, localForward, targetPoint, weight, maxDegrees);  // a head and spine
+IK.FromTo(directionA, directionB);                                // the turn from one direction to another
 ```
 
-`IKSystem.Solve(scene)` runs every IK component at once, if you need the result earlier than the end of the frame.
+`IK.Solve(Scene)` runs every IK component at once, if you need the result earlier than the end of the frame.
 
 ## Multiplayer
 
@@ -178,13 +183,13 @@ IK is worked out on each machine from what that machine has; no bones are sent.
   when called on the server or by the player who owns the object.
 - A target moves on other machines if it is shared like any other object (a Network Identity on it or above it). A
   grip that is a child of a weapon follows the weapon.
-- `SetTarget`, `LookAt(point)`, the finger sliders and `trigger` are not sent: set them on every machine, from state
+- `SetTarget`, `LookAt(point)`, the finger sliders and `Trigger` are not sent: set them on every machine, from state
   that is already shared (which weapon is equipped, where the player is aiming).
 - Foot Placement uses the ground on each machine and needs nothing sent.
 
 ## Limits
 
-- Limbs are two bones. Longer chains use `IKSolver.Chain` from code; there is no component for them yet.
+- Limbs are two bones. Longer chains use `IK.Chain` from code; there is no component for them yet.
 - Limbs do not stretch, and bones have no joint limits: an elbow can be bent any way a target asks. Use a Pole to
   keep it sensible.
 - Foot Placement does not plant feet against sliding, and the slope under a foot is estimated from three points.

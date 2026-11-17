@@ -50,6 +50,7 @@ public static class GraphRuntime
             target.Destroy();
     }
 
+    /// <summary>The graph Raycast node: the first thing a ray hits within maxDistance.</summary>
     public static bool Raycast(Scene scene, Vector3 origin, Vector3 direction, float maxDistance, out GraphHit hit)
     {
         PhysicsHit? found = scene.RaycastHit(origin, direction, maxDistance);
@@ -57,6 +58,7 @@ public static class GraphRuntime
         return found.HasValue;
     }
 
+    /// <summary>The graph Sphere Trace node: the first thing a moving sphere hits within maxDistance.</summary>
     public static bool SphereCast(Scene scene, Vector3 origin, float radius, Vector3 direction, float maxDistance, out GraphHit hit)
     {
         PhysicsHit? found = scene.SphereCastHit(origin, radius, direction, maxDistance);
@@ -72,13 +74,16 @@ public static class GraphRuntime
     public static void SetCharacterHeight(GameObject target, float height, float standingHeight) =>
         target.GetCharacterController()?.SetHeight(height, standingHeight);
 
+    /// <summary>The character's capsule height now (0 without a CharacterController).</summary>
     public static float CharacterHeight(GameObject target) => target.GetCharacterController()?.Height ?? 0f;
 
+    /// <summary>How far a crouching character's capsule has been lowered (0 standing).</summary>
     public static float CrouchLift(GameObject target) => target.GetCharacterController()?.CrouchLift ?? 0f;
 
     /// <summary>The graph random nodes' numbers (not the same on every machine: see NetRandom).</summary>
     public static class Random
     {
+        /// <summary>From 0 up to (not including) 1.</summary>
         public static double NextDouble() => System.Random.Shared.NextDouble();
         /// <summary>From -1 up to 1.</summary>
         public static double NextDoubleSigned() => System.Random.Shared.NextDouble() * 2 - 1;
@@ -86,21 +91,31 @@ public static class GraphRuntime
         public static int Next(int min, int max) => max <= min ? min : System.Random.Shared.Next(min, max);
     }
 
+    /// <summary>The graph To String nodes: the value as text, the same on every machine (no locale).</summary>
     public static string Text(float value) => value.ToString(CultureInfo.InvariantCulture);
+    /// <summary>A whole number as text.</summary>
     public static string Text(int value) => value.ToString(CultureInfo.InvariantCulture);
+    /// <summary>"true" or "false".</summary>
     public static string Text(bool value) => value ? "true" : "false";
+    /// <summary>The text, or empty for null.</summary>
     public static string Text(string? value) => value ?? "";
+    /// <summary>"X=1 Y=2".</summary>
     public static string Text(Vector2 value) => string.Create(CultureInfo.InvariantCulture, $"X={value.X:0.###} Y={value.Y:0.###}");
+    /// <summary>"X=1 Y=2 Z=3".</summary>
     public static string Text(Vector3 value) =>
         string.Create(CultureInfo.InvariantCulture, $"X={value.X:0.###} Y={value.Y:0.###} Z={value.Z:0.###}");
+    /// <summary>"R=1 G=0.5 B=0 A=1".</summary>
     public static string Text(Color value) =>
         string.Create(CultureInfo.InvariantCulture, $"R={value.R:0.###} G={value.G:0.###} B={value.B:0.###} A={value.A:0.###}");
+    /// <summary>The rotation as angles in degrees, "X=0 Y=90 Z=0".</summary>
     public static string Text(Quaternion value)
     {
         Vector3 euler = RotationMath.ToEulerDegrees(value);
         return string.Create(CultureInfo.InvariantCulture, $"X={euler.X:0.#} Y={euler.Y:0.#} Z={euler.Z:0.#}");
     }
+    /// <summary>The object's name, or "None".</summary>
     public static string Text(GameObject value) => value.IsValid ? value.Name : "None";
+    /// <summary>An object's or script's name, "None" for nothing, otherwise ToString.</summary>
     public static string Text(object? value) => value switch
     {
         null => "None",

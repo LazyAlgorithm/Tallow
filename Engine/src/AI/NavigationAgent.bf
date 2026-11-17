@@ -16,6 +16,7 @@ struct NavigationAgentData
 	/// Shortest time between two path searches. A search runs only when the destination or the navigation data changed,
 	/// or the agent was pushed off its path.
 	public float repathInterval = 0.3f;
+	/// Turns the object to face the way it walks.
 	public bool faceMovement = true;
 	/// Degrees per second when turning to face movement; 0 turns instantly.
 	public float turnSpeed = 720;

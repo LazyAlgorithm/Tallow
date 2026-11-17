@@ -13,6 +13,7 @@ namespace Tallow;
 /// </summary>
 public readonly record struct NativeComponent(GameObject GameObject, string TypeName) : IComponent
 {
+    /// <summary>Whether the object still has a component of this type.</summary>
     public bool IsValid => CSharpNativeComponents.Has(GameObject.SceneId, GameObject.Id, TypeName);
 
     /// <summary>Sets a field from its scene-file text ("0.5", "1 2 3", "Point"). False when it does not exist or parse.</summary>
@@ -49,19 +50,29 @@ public readonly record struct NativeComponent(GameObject GameObject, string Type
     private static float Parse(string text) =>
         float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) ? value : 0f;
 
+    /// <summary>Sets a number field. Throws when the component or field does not exist (TrySetText does not).</summary>
     public void Set(string field, float value) => SetText(field, Number(value));
+    /// <summary>Sets a whole-number field.</summary>
     public void Set(string field, int value) => SetText(field, value.ToString(CultureInfo.InvariantCulture));
+    /// <summary>Sets a tick-box field.</summary>
     public void Set(string field, bool value) => SetText(field, value ? "1" : "0");
+    /// <summary>Sets a two-number field.</summary>
     public void Set(string field, Vector2 value) => SetText(field, $"{Number(value.X)} {Number(value.Y)}");
+    /// <summary>Sets a vector field.</summary>
     public void Set(string field, Vector3 value) => SetText(field, $"{Number(value.X)} {Number(value.Y)} {Number(value.Z)}");
+    /// <summary>Sets a four-number field.</summary>
     public void Set(string field, Vector4 value) =>
         SetText(field, $"{Number(value.X)} {Number(value.Y)} {Number(value.Z)} {Number(value.W)}");
+    /// <summary>Sets a rotation field.</summary>
     public void Set(string field, Quaternion value) =>
         SetText(field, $"{Number(value.X)} {Number(value.Y)} {Number(value.Z)} {Number(value.W)}");
+    /// <summary>Sets a colour field.</summary>
     public void Set(string field, Color value) =>
         SetText(field, $"{Number(value.R)} {Number(value.G)} {Number(value.B)} {Number(value.A)}");
+    /// <summary>Sets a choice field by its member's name.</summary>
     public void Set<TEnum>(string field, TEnum value) where TEnum : struct, Enum => SetText(field, value.ToString());
 
+    /// <summary>Sets a text or asset-path field.</summary>
     public void Set(string field, string value)
     {
         var quoted = new StringBuilder("\"");
@@ -77,38 +88,45 @@ public readonly record struct NativeComponent(GameObject GameObject, string Type
         SetText(field, quoted.Append('"').ToString());
     }
 
+    /// <summary>Reads a number field (0 when it cannot be read).</summary>
     public float GetFloat(string field)
     {
         Span<float> v = stackalloc float[1];
         return Numbers(field, v) >= 1 ? v[0] : 0f;
     }
+    /// <summary>Reads a whole-number field.</summary>
     public int GetInt(string field)
     {
         Span<byte> buffer = stackalloc byte[256];
         ReadOnlySpan<byte> text = FieldUtf8(field, ref buffer);
         return int.TryParse(NextToken(ref text), NumberStyles.Integer, CultureInfo.InvariantCulture, out int v) ? v : 0;
     }
+    /// <summary>Reads a tick-box field.</summary>
     public bool GetBool(string field)
     {
         Span<byte> buffer = stackalloc byte[256];
         ReadOnlySpan<byte> text = FieldUtf8(field, ref buffer);
         return NextToken(ref text) is [(byte)'1'];
     }
+    /// <summary>Reads a two-number field.</summary>
     public Vector2 GetVector2(string field)
     {
         Span<float> v = stackalloc float[2];
         return Numbers(field, v) == 2 ? new Vector2(v[0], v[1]) : default;
     }
+    /// <summary>Reads a four-number field.</summary>
     public Vector4 GetVector4(string field)
     {
         Span<float> v = stackalloc float[4];
         return Numbers(field, v) == 4 ? new Vector4(v[0], v[1], v[2], v[3]) : default;
     }
+    /// <summary>Reads a vector field.</summary>
     public Vector3 GetVector3(string field)
     {
         Span<float> v = stackalloc float[3];
         return Numbers(field, v) == 3 ? new Vector3(v[0], v[1], v[2]) : default;
     }
+    /// <summary>Reads a colour field.</summary>
     public Color GetColor(string field)
     {
         Span<float> v = stackalloc float[4];
@@ -153,9 +171,11 @@ public readonly record struct NativeComponent(GameObject GameObject, string Type
         }
         return count;
     }
+    /// <summary>Reads a choice field as the enum member of that name (default when there is none).</summary>
     public TEnum GetEnum<TEnum>(string field) where TEnum : struct, Enum =>
         Tokens(field) is [var x, ..] && Enum.TryParse(x, out TEnum v) ? v : default;
 
+    /// <summary>Reads a text or asset-path field (empty when it cannot be read).</summary>
     public string GetString(string field)
     {
         string? text = GetText(field);
@@ -180,6 +200,7 @@ public readonly record struct NativeComponent(GameObject GameObject, string Type
 [AttributeUsage(AttributeTargets.Struct | AttributeTargets.Class, Inherited = false)]
 public sealed class NativeComponentAttribute(string typeName) : Attribute
 {
+    /// <summary>The engine's component type name ("Tallow.Light").</summary>
     public string TypeName { get; } = typeName;
 }
 
@@ -245,6 +266,7 @@ internal static class ComponentLookup<T> where T : IComponent
     }
 }
 
+/// <summary>What a light shines like: everywhere one way (the sun), out from a point, or in a cone.</summary>
 public enum LightType { Directional, Point, Spot }
 
 /// <summary>A light: its type, color, intensity and range.</summary>
@@ -252,12 +274,19 @@ public enum LightType { Directional, Point, Spot }
 public readonly partial record struct Light(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Light");
+    /// <summary>Whether the object still has a Light.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>Directional, Point or Spot.</summary>
     public LightType Type { get => Data.GetEnum<LightType>("type"); set => Data.Set("type", value); }
+    /// <summary>The light's colour.</summary>
     public Color Color { get => Data.GetColor("color"); set => Data.Set("color", value); }
+    /// <summary>How bright it is (1 is normal).</summary>
     public float Intensity { get => Data.GetFloat("intensity"); set => Data.Set("intensity", value); }
+    /// <summary>How far a point or spot light reaches, in metres.</summary>
     public float Range { get => Data.GetFloat("range"); set => Data.Set("range", value); }
+    /// <summary>A spot light's cone, in degrees.</summary>
     public float SpotAngle { get => Data.GetFloat("spotAngle"); set => Data.Set("spotAngle", value); }
+    /// <summary>Whether it casts shadows.</summary>
     public bool CastShadows { get => Data.GetBool("castShadows"); set => Data.Set("castShadows", value); }
 }
 
@@ -266,15 +295,25 @@ public readonly partial record struct Light(GameObject GameObject) : IComponent
 public readonly partial record struct MeshRenderer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.MeshRenderer");
+    /// <summary>Whether the object still has a Mesh Renderer.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>The mesh drawn: an asset path or a built-in one ("builtin:cube").</summary>
     public string Mesh { get => Data.GetString("mesh"); set => Data.Set("mesh", value); }
+    /// <summary>The surface colour (multiplied with its texture).</summary>
     public Color Color { get => Data.GetColor("color"); set => Data.Set("color", value); }
+    /// <summary>How metallic the surface is, 0 to 1.</summary>
     public float Metallic { get => Data.GetFloat("metallic"); set => Data.Set("metallic", value); }
+    /// <summary>How rough it is, 0 (mirror) to 1 (matte).</summary>
     public float Roughness { get => Data.GetFloat("roughness"); set => Data.Set("roughness", value); }
+    /// <summary>Light the surface gives off by itself.</summary>
     public Color Emissive { get => Data.GetColor("emissive"); set => Data.Set("emissive", value); }
+    /// <summary>How strong the emissive colour is.</summary>
     public float EmissiveIntensity { get => Data.GetFloat("emissiveIntensity"); set => Data.Set("emissiveIntensity", value); }
+    /// <summary>One normal per face: hard, faceted edges.</summary>
     public bool FlatShading { get => Data.GetBool("flatShading"); set => Data.Set("flatShading", value); }
+    /// <summary>Drawn in its own colour, with no lighting.</summary>
     public bool Unlit { get => Data.GetBool("unlit"); set => Data.Set("unlit", value); }
+    /// <summary>Whether it casts shadows.</summary>
     public bool CastShadows { get => Data.GetBool("castShadows"); set => Data.Set("castShadows", value); }
     /// <summary>Whether a mesh's back faces are hidden (off for thin, two-sided things such as leaves).</summary>
     public bool BackFaceCulling { get => Data.GetBool("backFaceCulling"); set => Data.Set("backFaceCulling", value); }
@@ -362,21 +401,29 @@ public readonly partial record struct MeshRenderer(GameObject GameObject) : ICom
     public bool ClearMesh() => CSharpMeshes.ClearMesh(GameObject.SceneId, GameObject.Id);
 }
 
+/// <summary>A sphere-shaped collider.</summary>
 [NativeComponent("Tallow.SphereCollider")]
 public readonly partial record struct SphereCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SphereCollider");
+    /// <summary>Whether the object still has a Sphere Collider.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>The sphere's radius, in metres (before the object's scale).</summary>
     public float Radius { get => Data.GetFloat("radius"); set => Data.Set("radius", value); }
+    /// <summary>Where the sphere is, relative to the object.</summary>
     public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
 }
 
+/// <summary>A box-shaped collider.</summary>
 [NativeComponent("Tallow.BoxCollider")]
 public readonly partial record struct BoxCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.BoxCollider");
+    /// <summary>Whether the object still has a Box Collider.</summary>
     public bool IsValid => Data.IsValid;
+    /// <summary>The box's full size, in metres (before the object's scale).</summary>
     public Vector3 Size { get => Data.GetVector3("size"); set => Data.Set("size", value); }
+    /// <summary>Where the box is, relative to the object.</summary>
     public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
 }
 
@@ -384,17 +431,24 @@ public readonly partial record struct BoxCollider(GameObject GameObject) : IComp
 [NativeComponent("Tallow.NavigationAgent")]
 public readonly partial record struct NavigationAgent(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has a Navigation Agent.</summary>
     public bool IsValid => CSharpNavigation.HasAgent(GameObject.SceneId, GameObject.Id);
+    /// <summary>Finds a path to point and walks it at speed metres a second, stopping within stoppingDistance.</summary>
     public void SetDestination(Vector3 point, float speed, float stoppingDistance = 0.2f) =>
         CSharpNavigation.SetDestination(GameObject.SceneId, GameObject.Id, point, speed, stoppingDistance);
+    /// <summary>Stops where it is and forgets its path.</summary>
     public void StopMovement() => CSharpNavigation.StopMovement(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether its path is still being worked out.</summary>
     public bool PathPending => CSharpNavigation.PathPending(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether no path to the destination was found.</summary>
     public bool PathFailed => CSharpNavigation.PathFailed(GameObject.SceneId, GameObject.Id);
+    /// <summary>Whether it reached its destination (within the stopping distance).</summary>
     public bool HasArrived => CSharpNavigation.HasArrived(GameObject.SceneId, GameObject.Id);
     /// <summary>Whether it is going over a navigation link (a jump, a ladder) just now.</summary>
     public bool IsCrossingLink => CSharpNavigation.IsCrossingLink(GameObject.SceneId, GameObject.Id);
     /// <summary>Corners on the current path (0 with none).</summary>
     public int PathCornerCount => CSharpNavigation.PathCount(GameObject.SceneId, GameObject.Id);
+    /// <summary>How far it still has to go along its path, in metres.</summary>
     public float RemainingDistance => CSharpNavigation.RemainingDistance(GameObject.SceneId, GameObject.Id);
 }
 
@@ -411,6 +465,7 @@ public static class AINoise
 [NativeComponent("Tallow.NavigationSurface")]
 public readonly partial record struct NavigationSurface(GameObject GameObject) : IComponent
 {
+    /// <summary>Whether the object still has a Navigation Surface.</summary>
     public bool IsValid => CSharpNavigation.HasSurface(GameObject.SceneId, GameObject.Id);
 
     /// <summary>The scene's first Navigation Surface (default when it has none).</summary>
@@ -449,10 +504,15 @@ public readonly partial record struct NavigationSurface(GameObject GameObject) :
 public readonly partial record struct Rigidbody
 {
     private NativeComponent Data => new(GameObject, "Tallow.Rigidbody");
+    /// <summary>The body's mass, in kilograms.</summary>
     public float Mass { get => Data.GetFloat("mass"); set => Data.Set("mass", value); }
+    /// <summary>Whether gravity pulls it.</summary>
     public bool UseGravity { get => Data.GetBool("useGravity"); set => Data.Set("useGravity", value); }
+    /// <summary>Moved only by its Transform (scripts, animation), not by forces; it still pushes other bodies.</summary>
     public bool IsKinematic { get => Data.GetBool("isKinematic"); set => Data.Set("isKinematic", value); }
+    /// <summary>How much it grips what it slides on, 0 to 1.</summary>
     public float Friction { get => Data.GetFloat("friction"); set => Data.Set("friction", value); }
+    /// <summary>How much it bounces, 0 (none) to 1.</summary>
     public float Bounciness { get => Data.GetFloat("bounciness"); set => Data.Set("bounciness", value); }
     /// <summary>Checked along its path each step, so a fast small body does not pass through thin things.</summary>
     public bool ContinuousCollision { get => Data.GetBool("continuousCollision"); set => Data.Set("continuousCollision", value); }
@@ -473,6 +533,7 @@ public readonly partial record struct Rigidbody
 public readonly partial record struct CharacterController
 {
     private NativeComponent Data => new(GameObject, "Tallow.CharacterController");
+    /// <summary>The capsule's radius, in metres.</summary>
     public float Radius { get => Data.GetFloat("radius"); set => Data.Set("radius", value); }
     /// <summary>How hard walking into rigid bodies pushes them.</summary>
     public float PushStrength { get => Data.GetFloat("pushStrength"); set => Data.Set("pushStrength", value); }

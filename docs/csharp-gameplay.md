@@ -327,9 +327,10 @@ public class Movers : Script
 - In `ForEach` you may create and destroy entities and add or remove data. An
   entity that has gone (or lost one of the components) by the end is not
   written back, and entities made during it are visited next time.
-- ECS data is for offline play for now: it is not saved with the scene and not
-  replicated (`[Sync]` on its fields is not sent yet). Bare entities are
-  deleted when Play stops.
+- ECS data is not saved with the scene. In a network session, a `[Component]`
+  struct's `[Sync]` fields are replicated like a Beef one's: entities the server
+  makes arrive on clients and changes follow (docs/networking.md). Bare entities
+  are deleted when Play stops.
 - Visual script graphs get the same nodes for each struct: Has, Add and Remove
   Component, Get and Set of each field, and **For Each**, which visits the
   active GameObjects that have it.

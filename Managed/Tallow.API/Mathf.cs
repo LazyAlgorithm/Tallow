@@ -8,8 +8,12 @@ namespace Tallow;
 /// </summary>
 public static partial class Mathf
 {
+    /// <summary>Pi, 3.14159...</summary>
     public const float PI = MathF.PI;
+    /// <summary>Multiplies degrees into radians.</summary>
     public const float Deg2Rad = MathF.PI / 180f;
+    /// <summary>Multiplies radians into degrees.</summary>
     public const float Rad2Deg = 180f / MathF.PI;
+    /// <summary>A very small number, for comparing floats.</summary>
     public const float Epsilon = 1.0e-6f;
 }

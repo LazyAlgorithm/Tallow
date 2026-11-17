@@ -990,13 +990,14 @@ class Program
 				return NativeComponentCatalog.Write(args[i + 1]) ? 0 : 1;
 		}
 		// --graph-compile <graph.tgraph> <namespace>: compiles a visual script graph to C# beside it, without a window.
+		// --graph-compile-beef: the same to Beef (Name.bf), as a Beef project's editor would.
 		for (int i < args.Count - 2)
 		{
-			if (args[i] == "--graph-compile")
+			if (args[i] == "--graph-compile" || args[i] == "--graph-compile-beef")
 			{
 				let script = scope String();
 				let error = scope String();
-				if (!GraphCSharp.CompileFile(args[i + 1], args[i + 2], script, error))
+				if (!GraphCSharp.CompileFile(args[i + 1], args[i + 2], script, error, args[i] == "--graph-compile"))
 				{
 					Console.WriteLine(error);
 					return 1;

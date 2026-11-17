@@ -17,6 +17,7 @@ enum VoxelShape : int32
 [Component, HandleData]
 struct VoxelObjectData
 {
+	/// The starting shape, carved and built on afterwards.
 	public VoxelShape shape = .Sphere;
 	/// Shape Mesh: the model to make destructible. It keeps its own size; Size is not used.
 	public String mesh = new .();
@@ -27,6 +28,7 @@ struct VoxelObjectData
 	/// Shape Box: its width, height and depth (a wall, a slab, a block), in local units. Zero: a cube of Size. The
 	/// grid then covers the longest side, so a thin side gets fewer cells: Resolution counts along the longest.
 	public Vector3 boxSize = default;
+	/// The voxels' colour.
 	public Color color = .FromBytes(150, 146, 140);
 	/// Color of surfaces exposed by carving. With an inside made from the outside's material, its tint.
 	public Color interiorColor = .FromBytes(96, 82, 70);

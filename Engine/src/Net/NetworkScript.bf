@@ -111,7 +111,17 @@ static class LocalControls
 		input.SetButton((int)InputButton.Reload, InputActions.Held("Reload"));
 		input.SetButton((int)InputButton.Ability1, InputActions.Held("Ability1"));
 		input.SetButton((int)InputButton.Ability2, InputActions.Held("Ability2"));
+		// The free buttons follow input actions of the same names when the project has them (Window > Input
+		// Actions), so a game in any language gets its own controls without code; ReadInput can still set them.
+		for (int i < 8)
+		{
+			let name = sCustomNames[i];
+			if (InputActions.Held(name))
+				input.SetButton((int)InputButton.Custom1 + i, true);
+		}
 	}
+
+	static StringView[8] sCustomNames = .("Custom1", "Custom2", "Custom3", "Custom4", "Custom5", "Custom6", "Custom7", "Custom8");
 }
 
 /// Base class for anything a player controls, with its own mouse-look settings and extra controls (ReadInput).

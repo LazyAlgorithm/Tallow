@@ -14,10 +14,10 @@ Choose **GameObject > Spawn Point**, or add the **Spawn Point** component (World
 
 ## Asking for one
 
-```beef
-let point = SpawnPoints.Next(Scene);              // the one used longest ago
-let point = SpawnPoints.Random(Scene, team);      // a random one for a team
-SpawnPoints.Place(player, team);                  // move an object there, facing the point's way
+```csharp
+GameObject? point = SpawnPoints.Next(Scene);           // the one used longest ago
+GameObject? random = SpawnPoints.Random(Scene, team);  // a random one for a team
+SpawnPoints.Place(player, team);                       // move an object there, facing the point's way
 ```
 
 `Next` goes round the points in turn. `Random` picks among the ones that qualify. Both return null when the scene has no spawn points, and asking counts as using the point. `Place` works for an object with a Character Controller, a Rigidbody or neither, and returns the point it used. `TryGet(scene, team, random, out position, out rotation)` gives just the numbers.
@@ -37,7 +37,7 @@ The start phase opens when the scene starts playing and closes by itself after `
 
 For a game with rounds, control it yourself:
 
-```beef
+```csharp
 SpawnPoints.StartWindow = 0;          // never closes by itself
 SpawnPoints.BeginStart(Scene);        // new round: start points can be used again, once each
 // ... place everyone ...
@@ -50,27 +50,26 @@ If there are more players than start-only points, the rest go to ordinary points
 
 A network session uses the scene's spawn points by itself: each player who joins is created at the next point for their team, facing the point's way. Nothing needs to be written for that. Scenes with no Spawn Point components keep the older behaviour of spawning beside an object named `SpawnPoint`.
 
-Set **Team Count** on the Network Session to share players out among teams as they join, each going to the smallest team. A player's team is the `team` field of their Network Identity, set by the server and known on every machine:
+Set **Team Count** on the Network Session to share players out among teams as they join, each going to the smallest team. A player's team is the Team of their Network Identity, set by the server and known on every machine:
 
-```beef
-let team = GetComponent<NetworkIdentity>().team;      // 1, 2, ... or 0 when there are no teams
+```csharp
+int team = GameObject.Team;           // 1, 2, ... or 0 when there are no teams
 ```
 
-To decide teams yourself, set `Scene.Network.ChooseTeam` on the server to a function that takes a client id and returns a team.
+To decide teams yourself, set `Network.ChooseTeam` on the server to a function that takes a client id and returns a team.
 
 To respawn a player, call `Place` on the server; the move reaches every machine through the usual sync:
 
-```beef
-if (IsServer)
-    SpawnPoints.Place(GameObject, Identity.team, true);
+```csharp
+if (Scene.IsServer)
+    SpawnPoints.Place(GameObject, GameObject.Team, random: true);
 ```
 
-To spawn something of your own at a point from `GameSetup` or any server code:
+To spawn something of your own at a point from any server code (a registered networked prefab):
 
-```beef
-Vector3 position; Quaternion rotation;
-if (SpawnPoints.TryGet(scene, team, false, out position, out rotation))
-    scene.Network.Spawn("Guard", position, rotation, 0);
+```csharp
+if (SpawnPoints.TryGet(Scene, team, false, out Vector3 position, out Quaternion rotation))
+    Scene.Spawn("Guard", position, rotation);
 ```
 
 ## Limits
