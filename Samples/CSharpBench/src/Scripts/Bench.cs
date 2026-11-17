@@ -16,7 +16,11 @@ namespace CSharpBench;
 ///                       getcomponent (TALLOW_BENCH_COUNT GetComponent calls a frame: native and script, hit and miss),
 ///                       physics (TALLOW_BENCH_COUNT Jolt spheres falling into a walled box, each with a Ball script
 ///                       reading its velocity and damping it), lifecycle (every other frame TALLOW_BENCH_COUNT objects
-///                       with a Lifer script are made, the frame after they are destroyed; counts Awake/OnDestroy)
+///                       with a Lifer script are made, the frame after they are destroyed; counts Awake/OnDestroy),
+///                       alloc (TALLOW_BENCH_COUNT objects with an Allocator script running one pattern a frame,
+///                       TALLOW_BENCH_ALLOC: math (Vector3/Quaternion value math), event (a C# event with a class
+///                       argument and a capturing lambda), getcomponent (three GetComponent calls), string (the
+///                       object's Name from the engine and a formatted string); managed bytes and GCs per frame)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
 ///   TALLOW_BENCH_OUT    file a JSON line of results is added to
@@ -70,6 +74,8 @@ public class Bench : Script
             SpawnPhysics();
         else if (_mode == "lifecycle")
             _lifecycleMemoryStart = GC.GetTotalMemory(true);
+        else if (_mode == "alloc")
+            SpawnAllocators();
         else
             throw new ArgumentException($"Unknown TALLOW_BENCH_MODE {_mode}");
         _spawnMs = watch.Elapsed.TotalMilliseconds;
@@ -130,6 +136,23 @@ public class Bench : Script
             _bodies.Add(body);
         }
     }
+
+    private void SpawnAllocators()
+    {
+        Allocator.Pattern = Environment.GetEnvironmentVariable("TALLOW_BENCH_ALLOC") switch
+        {
+            "event" => 1, "getcomponent" => 2, "string" => 3, _ => 0,
+        };
+        _allocPattern = Environment.GetEnvironmentVariable("TALLOW_BENCH_ALLOC") is { Length: > 0 } name ? name : "math";
+        for (int i = 0; i < _count; i++)
+        {
+            GameObject made = Scene.CreateGameObject($"Allocator {i}");
+            made.AddComponent<MeshRenderer>();
+            made.AddComponent<Allocator>();
+        }
+    }
+
+    private string _allocPattern = "";
 
     private void AddWall(Vector3 position, Vector3 size)
     {
@@ -252,6 +275,9 @@ public class Bench : Script
             _lifers.Clear();
             line.Append($"\"managed_growth_bytes\": {GC.GetTotalMemory(true) - _lifecycleMemoryStart}, ");
         }
+        if (_mode == "alloc")
+            line.Append($"\"pattern\": \"{_allocPattern}\", \"allocator_checksum\": {Allocator.Checksum}, ");
+        line.Append($"\"memory_peak\": {Process.GetCurrentProcess().PeakWorkingSet64}, ");
         line.Append($"\"memory_end\": {Environment.WorkingSet}, ");
         line.Append($"\"checksum\": {_checksum}}}");
         string text = line.ToString();
@@ -321,6 +347,60 @@ public class Ball : Script
         Vector3 velocity = _body.Velocity;
         if (velocity.LengthSquared() > Workload.DampAbove * Workload.DampAbove)
             _body.AddForce(velocity * -Workload.Damping);
+    }
+}
+
+/// <summary>The alloc mode's object: one allocation pattern each Update (Allocator.Pattern).</summary>
+public class Allocator : Script
+{
+    public static int Pattern;
+    public static long Checksum;
+
+    public sealed class Hit : EventArgs
+    {
+        public float Damage;
+        public Hit(float damage) => Damage = damage;
+    }
+
+    public event EventHandler<Hit>? Hurt;
+    private Vector3 _value = Vector3.One;
+    private Quaternion _turn = Quaternion.Identity;
+    private int _frame;
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        _frame++;
+        switch (Pattern)
+        {
+            case 0:
+                _turn = Quaternion.Normalize(_turn * Quaternion.Euler(new Vector3(1, 2, 3) * deltaTime));
+                _value = Vector3.Transform(_value, _turn) * 0.999f + Vector3.UnitY * deltaTime;
+                if (_value.Y > 1e6f) Checksum++;
+                break;
+            case 1:
+                RaiseEvent();
+                break;
+            case 2:
+                if (GetComponent<MeshRenderer>().IsValid) Checksum++;
+                if (GetComponent<Allocator>() != null) Checksum++;
+                if (GetComponent<Rigidbody>().IsValid) Checksum++;
+                break;
+            case 3:
+                string name = GameObject.Name;
+                string label = $"{name} {_frame}";
+                Checksum += label.Length;
+                break;
+        }
+    }
+
+    // A method of its own: a lambda's captured local makes C# allocate its closure where the local's scope starts,
+    // and a switch is one scope, so in Update every pattern would pay for it.
+    private void RaiseEvent()
+    {
+        int frame = _frame;
+        Hurt += (sender, hit) => Checksum += (long)hit.Damage + frame;
+        Hurt?.Invoke(this, new Hit(1));
+        Hurt = null;
     }
 }
 

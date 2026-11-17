@@ -49,7 +49,7 @@
 - [ ] **B14 — character motion/physics queries.** 100, 1k and 5k Jolt CharacterController instances with the same navigation/input; raycasts and sphere casts at 1k/10k/100k queries per frame; measure exact hit agreement and latency separately.
 - [ ] **B15 — soft-body throughput.** Jelly, Cloth, Shell and DrivenJelly, 10/50/100/500 bodies, fixed vertex counts and settings. Record rebuild time, step time, active vertex count, memory and deformation correctness. Keep existing Jelly Golf-style free jelly as an acceptance case.
 - [ ] **B16 — engine resource/render throughput.** Static 100k objects, 10k changing transforms and streaming scene chunks, with GPU timings/draw calls separated from C# script CPU. Include shader graph and compute graph functionality regression.
-- [ ] **B17 — real managed allocations.** With 1k/10k/100k Script updates, record managed bytes/frame, collections (Gen0/1/2), pause time and peak RSS. Compare allocation-free value math, event allocation, GetComponent in loops and managed/native string calls.
+- [x] **B17 — real managed allocations.** With 1k/10k/100k Script updates, record managed bytes/frame, collections (Gen0/1/2), pause time and peak RSS. Compare allocation-free value math, event allocation, GetComponent in loops and managed/native string calls.
 
 - B06 (editor part, 2026-11-16): 20 editor Play/Stop cycles (`--play-cycle-test`), 6 scripts each: no script left attached, no unloaded game kept (after fixing the leak that kept every game), memory +7 MB over 20 cycles.
 - B04 (done 2026-11-16): a broken project opens, logs the error with file and line, keeps Play off, and plays once fixed (`tools/test_csharp_editor.py` steps 3-4). A second save while the first one's build is running: `--stale-build-test` case 2 saves again mid-build and presses Play at once; Play runs the second version (the in-flight build is invalidated and the newest source rebuilt first).
@@ -93,6 +93,24 @@
   Linear throughout. A probe saved as a prefab and stamped again keeps its edited values and plays. A script whose
   saved value cannot be read (`count = banana`) does not start, and the log now names the object and script
   (before, only the parse exception, with no object); the other scripts play.
+
+- B17 (2026-11-16, `tools/benchmark_csharp_alloc.py`, Release headless player, medians of 3 x 600 frames; raw data
+  `~/TallowBenchmarks/alloc-20261116/`): N objects, each script running one pattern every Update.
+
+  | pattern | scripts | script ms | managed bytes/frame | Gen0/1/2 (600 frames) | GC pause ms total | peak RSS MB |
+  |---|---:|---:|---:|---|---:|---:|
+  | value math (Vector3/Quaternion) | 1k / 10k / 100k | 0.06 / 0.64 / 7.2 | 149 / 163 / 150 | 0 / 0 / 0 | 0 | 57 / 75 / 215 |
+  | GetComponent x3 | 1k / 10k / 100k | 0.13 / 1.19 / 13.5 | 149 / 163 / 136 | 0 / 0 / 0 | 0 | 57 / 75 / 217 |
+  | event + capturing lambda + class arg | 1k / 10k / 100k | 0.04 / 0.36 / 8.4 | 104 B a script | 4 / 38 / 375 gen0 | 1.5 / 11.6 / 1037 | 73 / 88 / 224 |
+  | Name from the engine + `$"..."` | 1k / 10k / 100k | 0.15 / 0.91 / 9.6 | 108-121 B a script | 4 / 44 / 432 gen0 | 1.4 / 2.4 / 30 | 73 / 89 / 226 |
+
+  Engine calls allocate nothing (the ~150 bytes a frame are the benchmark's own timing lists). Allocation comes only
+  from what scripts do themselves. Strings cost their size; gen0 collections are cheap. Events are the expensive
+  case at scale: each `+=` writes a new young object into 100,000 old scripts, so every gen0 collection scans those
+  cards (2.8 ms each, ~1.7 ms a frame on average). While writing it, a captured local in one `case` made C# allocate
+  the closure at the top of Update for every case (24 B a script a frame, even for the math pattern). The editor now
+  warns about this: **TAL-PERF003**, for a lambda in a tick callback that captures locals, parameters or `this`.
+  Static lambdas, capture-free lambdas and lambdas passed straight to a Tallow API (`Query.ForEach`) are not flagged.
 
 ### Fixes from these runs (2026-11-16)
 

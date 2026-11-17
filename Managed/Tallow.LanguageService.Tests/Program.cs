@@ -1063,6 +1063,33 @@ public sealed class CubeMover : Script
             Check("local frame callbacks do not get misleading network replay warnings",
                 !frameWarnings.Contains("TAL-NET"));
 
+            string closures = """
+                using System;
+                using Tallow;
+                [Component] public sealed class ClosureProbe : Script
+                {
+                    public event Action<int>? Hurt;
+                    int total;
+                    public override void Update(TickInput input, float deltaTime)
+                    {
+                        int frame = 3;
+                        Hurt += damage => total += damage + frame;
+                        Hurt += static damage => Console.WriteLine(damage);
+                        Hurt += damage => Console.WriteLine(damage);
+                        Func<int, int> twice = n => { int m = n * 2; return m; };
+                        Scene.Query<Spot>().ForEach((EcsEntity entity, ref Spot spot) => spot.X += deltaTime);
+                    }
+                }
+                [Component] public struct Spot { public float X; }
+                """;
+            string closureWarnings = RequestWithApi(service, "diagnostics", closures, closures.Length);
+            Check("a lambda capturing locals or this in a tick callback gets TAL-PERF003, naming what it captures",
+                closureWarnings.Split("TAL-PERF003").Length == 2 && closureWarnings.Contains("'frame'") &&
+                closureWarnings.Contains("this"));
+            Check("static, capture-free and Tallow-API (ForEach) lambdas get no TAL-PERF003",
+                !closureWarnings.Contains("'deltaTime'") && !closureWarnings.Contains("'m'") &&
+                !closureWarnings.Contains("'n'"));
+
             string componentLookup = """
                 using Tallow;
                 [Component] public sealed class LookupProbe : Script

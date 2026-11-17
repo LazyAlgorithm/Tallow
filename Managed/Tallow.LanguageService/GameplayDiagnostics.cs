@@ -138,6 +138,12 @@ internal static class GameplayDiagnostics
                         category = "optimization";
                         message = "TAL-PERF001: Allocating an array each simulation tick can cause GC pressure; reuse a buffer when practical.";
                     }
+                    else if (node is AnonymousFunctionExpressionSyntax lambda && AllocatesEachCall(lambda, semantic))
+                    {
+                        category = "optimization";
+                        message = "TAL-PERF003: This lambda uses " + CapturedNames(lambda, semantic) +
+                            " from around it, so a new closure and delegate are made each tick; use a method, or a static lambda, made once.";
+                    }
                     if (category is null || message is null ||
                         category == "determinism" && !networkTick)
                         continue;
@@ -153,6 +159,34 @@ internal static class GameplayDiagnostics
             }
         }
     }
+
+    /// <summary>A lambda that captures locals, parameters or this allocates a closure and delegate on every call of
+    /// the method around it (C# caches only lambdas that capture nothing). One handed straight to a Tallow API (a
+    /// query's ForEach) runs for the whole call, once a tick, so that one is left alone.</summary>
+    private static bool AllocatesEachCall(AnonymousFunctionExpressionSyntax lambda, SemanticModel semantic)
+    {
+        if (lambda.Modifiers.Any(SyntaxKind.StaticKeyword))
+            return false;
+        if (lambda.Parent is ArgumentSyntax { Parent: ArgumentListSyntax { Parent: InvocationExpressionSyntax call } } &&
+            semantic.GetSymbolInfo(call).Symbol is IMethodSymbol { ContainingNamespace: var space } &&
+            space?.ToDisplayString().StartsWith("Tallow", StringComparison.Ordinal) == true)
+            return false;
+        return Captured(lambda, semantic).Any();
+    }
+
+    private static IEnumerable<ISymbol> Captured(AnonymousFunctionExpressionSyntax lambda, SemanticModel semantic)
+    {
+        DataFlowAnalysis? flow = semantic.AnalyzeDataFlow(lambda);
+        if (flow is null || !flow.Succeeded)
+            return Enumerable.Empty<ISymbol>();
+        // Symbols declared inside the lambda (its own parameters and locals) are not captured from outside.
+        return flow.CapturedInside.Where(symbol => !symbol.Locations.Any(location => lambda.Span.Contains(location.SourceSpan)) ||
+            symbol is IParameterSymbol { IsThis: true });
+    }
+
+    private static string CapturedNames(AnonymousFunctionExpressionSyntax lambda, SemanticModel semantic) =>
+        string.Join(", ", Captured(lambda, semantic).Select(symbol =>
+            symbol is IParameterSymbol { IsThis: true } ? "this" : "'" + symbol.Name + "'").Distinct().Take(3));
 
     private static bool IsGameObjectComponentLookup(IMethodSymbol method)
     {
