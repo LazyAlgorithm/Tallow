@@ -92,7 +92,7 @@ extension EditorApp
 	const int32 InAll = 7;
 
 	static (ModelCommand command, StringView name, StringView keys, int32 modes, StringView group)[?] sModelCommands = .(
-		(.Grab, "Grab", "G", InAll, "Transform"),
+		(.Grab, "Move (Grab)", "G", InAll, "Transform"),
 		(.Rotate, "Rotate", "R", InAll, "Transform"),
 		(.Scale, "Scale", "S", InAll, "Transform"),
 		(.Extrude, "Extrude", "E", InAll, "Build"),
@@ -530,8 +530,7 @@ extension EditorApp
 			ImGui.Separator();
 			if (ImGui.MenuItem("Draw a Shape in the Scene..."))
 			{
-				mShowModel = true;
-				mModelDraw = .Waiting;
+				StartShapeDrawing();
 			}
 		}
 		ImGui.EndPopup();
@@ -582,47 +581,6 @@ extension EditorApp
 		let s = scope String(text);
 		ImGui.DrawText(.(at.x + 1, at.y + 1), .(0, 0, 0, 0.75f), s.CStr());
 		ImGui.DrawText(at, color, s.CStr());
-	}
-
-	/// Top left of the Scene view: the mode, what is selected, the tool running and the options on.
-	void DrawModelHud(EditMesh mesh)
-	{
-		let origin = mSceneOrigin;
-		var y = origin.y + 30;
-		let x = origin.x + 10;
-		let modeName = mModelMode == .Vertex ? "Vertices" : (mModelMode == .Edge ? "Edges" : "Faces");
-		let line = scope String();
-		line.AppendF("EDIT MODE  {}  {} selected   ({} faces, {} vertices)", modeName, ModelSelectionCount, mesh.faces.Count, mesh.positions.Count);
-		if (mModelAnyHidden)
-			line.Append("  some hidden (Alt+H)");
-		let chipWidth = ImGui.CalcTextSize("EDIT MODE").x + 10;
-		ImGui.DrawRectFilled(.(x - 4, y - 2), .(x - 4 + chipWidth, y + 16), .(ModelSelectColor.r, ModelSelectColor.g, ModelSelectColor.b, 0.85f), 3);
-		ShadowText(.(x, y), .(1, 1, 1, 0.92f), line);
-		y += 20;
-		if (ModelToolActive)
-		{
-			let status = scope String();
-			ModelToolStatus(status);
-			ShadowText(.(x, y), .(1, 0.86f, 0.4f, 1), status);
-			y += 18;
-			let help = mModelTool == .LoopCut || mModelTool == .Knife ? "Esc or right-click: stop" : "Click or Enter: keep   Esc or right-click: cancel   X Y Z: axis (Shift: plane)   type a number";
-			ShadowText(.(x, y), .(1, 1, 1, 0.6f), help);
-			y += 18;
-		}
-		else
-		{
-			ShadowText(.(x, y), .(1, 1, 1, 0.55f), scope String()..AppendF("Right-click: tools   {}: find a tool   {}: shortcuts   {}: leave   {}: show others", ModelShortcutText(ShortcutSearch), ModelKeys(.Help), ModelShortcutText(ShortcutEditMode), ModelShortcutText(ShortcutShowOnly)));
-			y += 18;
-		}
-		let options = scope String();
-		if (mModelProportional)
-			options.AppendF("Proportional {:0.##} m   ", mModelPropRadius);
-		if (mModelSymmetry[0] || mModelSymmetry[1] || mModelSymmetry[2])
-			options.AppendF("Mirror edits {}{}{}   ", mModelSymmetry[0] ? "X" : "", mModelSymmetry[1] ? "Y" : "", mModelSymmetry[2] ? "Z" : "");
-		if (mModelXRay)
-			options.Append("X-ray");
-		if (!options.IsEmpty)
-			ShadowText(.(x, y), .(0.45f, 0.82f, 1, 0.9f), options);
 	}
 
 	/// F1: every shortcut, in a window of its own (it can be moved off the Scene view).

@@ -1305,6 +1305,29 @@ A full conversion also needs these. Ordered roughly by when they block users.
   templates. Not yet: scene editing from editor scripts in Edit mode (Tallow.API is bound to a scene only during
   Play), gizmo and Scene view tools, and custom inspectors for built-in components.
 
+**Editor tools (Beef editor work done on this branch alongside the migration)**
+- [x] Editor windows can be dragged out of the main window (ImGui viewports, November 15, 2026; 23bcff1e,
+  5b90c1e0). Extra windows use `BGFX_SWAP_CHAIN_NO_VSYNC` (per-window FIFO froze the editor under XWayland); OS
+  title bars, F11 fullscreens the focused window, a Preferences toggle (windows.cfg). Display test
+  `--viewport-test`. Left (the user wants it fixed later): lag and dropped input while a window crosses the main
+  window's edge. Global `ConfigViewportsNoAutoMerge` was tried and rejected (every floating panel became an OS
+  window); it needs NoAutoMerge per window, only for windows dragged out.
+- [x] Modeller made easier to use (November 16, 2026; the user asked for it to be "way more user friendly": fast
+  whiteboxing first, the full toolset for complex models). The Model window has five tabs in the order a model is
+  made (Blockout, Edit, Paint, Texture, Model; `Editor/src/Modeling/ModelWindow.bf`). Edit shows Essentials or All
+  Tools, with search and Exact amounts. Every button has its key and a tooltip, and is greyed out with the reason
+  when it cannot run. Keep drawing and Cut a Hole are on the Blockout tab. A bar over the Scene view and Model
+  Views (`ModelToolbar.bf`) has the same tools, with a hint line at the bottom of the view. Drawn shapes snap to
+  other objects' corners, edges and edge middles (`ModelSnap.bf`; Alt draws freely). This applies to drawing only,
+  not to the edit-mode tools or the object gizmo. The ImGui binding gained tab bars, `BeginTooltip` and
+  `DrawString`. Screenshots: `--model-test --model-window --model-tab <name> [--model-all-tools] [--model-idle]`
+  with `XDG_DATA_HOME=<scratch>`. Not tried by hand yet: clicking the Scene view bar.
+- [ ] Architect (building) system, queued November 17, 2026 at the user's request: a very easy way to block out
+  buildings with interiors. Drag out rooms on a grid and walls build themselves (shared walls between rooms,
+  floors and ceilings, several storeys). Doors and windows are placed on a wall and cut out of it automatically.
+  Planned: a `Building` component that keeps the plan and generates its walls into a Model Mesh, and a Building
+  tab and Scene view bar with Draw Room, Erase, Door, Window and storey picking.
+
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is
   relinked with the engine and the precompiled player (`tools/web/csharp_web.py`; `setup` once).

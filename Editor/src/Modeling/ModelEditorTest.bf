@@ -13,12 +13,28 @@ namespace Tallow.Editor;
 extension EditorApp
 {
 	int32 mModelTestFrames;
+	int32 mModelShotFrames;
 	bool mModelMenuRequest;
 
 	void ApplyModelSwitches()
 	{
 		if (HasArg("--model-window"))
 			mShowModel = true;
+		// --model-tab blockout|edit|paint|texture|model: the Model window's tab; --model-all-tools: every tool on Edit.
+		let tab = scope String();
+		if (GetArg("--model-tab", tab))
+		{
+			for (int k < sModelTabNames.Count)
+			{
+				if (StringView.Compare(tab, StringView(sModelTabNames[k]), true) == 0)
+					mModelTabRequest = k;
+			}
+		}
+		if (HasArg("--model-all-tools"))
+		{
+			mModelWindowLoaded = true;
+			mModelAllTools = true;
+		}
 		if (HasArg("--uv-editor"))
 			mShowUVEditor = true;
 		// Waits for the Scene view to be laid out, since the test picks faces on screen.
@@ -30,6 +46,15 @@ extension EditorApp
 	{
 		if (mModelTestFrames > 0 && --mModelTestFrames == 0)
 			RunModelTest();
+		// For the screenshot: the Scene view and the Model window in front, once the test's selecting has settled.
+		if (mModelShotFrames > 0)
+		{
+			mModelShotFrames--;
+			if (mModelShotFrames == 4 && !HasArg("--model-views"))
+				mShowScene = true;
+			if (mModelShotFrames == 0)
+				mModelFocus = HasArg("--model-window");
+		}
 	}
 
 	void RunModelTest()
@@ -49,6 +74,28 @@ extension EditorApp
 		mCamYaw = 0;
 		mCamPitch = 20;
 		UpdateSceneCamera(mSceneSize.x / Math.Max(mSceneSize.y, 1));
+
+		// Cut a Hole: a shape drawn through a model is cut out of it, and the model stays selected.
+		{
+			mModelDrawKeep = false;
+			mModelCutTarget = 0;
+			mModelDrawKind = (int32)MeshShapes.Kind.Box;
+			mModelDraw = .Height;
+			mModelDrawFrom = .(20, 0, -0.25f);
+			mModelDrawTo = .(24, 0, 0.25f);
+			mModelDrawHeight = 3;
+			FinishShape();
+			let wall = Selected;
+			StartShapeDrawing(wall.Id);
+			mModelDraw = .Height;
+			mModelDrawFrom = .(21.5f, 0, -1);
+			mModelDrawTo = .(22.5f, 0, 1);
+			mModelDrawHeight = 2;
+			FinishShape();
+			let cut = wall.GetComponent<ModelMesh>().Edit;
+			Expect(Selected == wall && cut.faces.Count > 6 && cut.IsClosed() && mModelCutTarget == 0 && mModelDraw == .Off, scope $"Cut a Hole cuts the drawn shape out of the model ({cut.faces.Count} faces)");
+			mScene.DestroyImmediate(wall);
+		}
 
 		// A block drawn as the Scene view's shape tool makes it: base dragged from (-1, 0, -1) to (1, 0, 1), 1 high.
 		mModelDrawKind = (int32)MeshShapes.Kind.Box;
@@ -141,6 +188,20 @@ extension EditorApp
 			picked = mModelFaces.Count == 1 && mModelFaces.Contains(top);
 		}
 		Expect(picked, "clicking the top face picks it");
+		// Snapping to objects: the pointer near a corner takes the corner, near an edge a point of that edge.
+		{
+			let corner = world.TransformPoint(.(1, 1, -1));
+			ModelSnapHit hit = default;
+			bool onCorner = false, onEdge = false, away = false;
+			if (SceneToScreen(corner, mSceneOrigin, mSceneSize, let cornerScreen))
+				onCorner = FindObjectSnap(.(cornerScreen.x + 3, cornerScreen.y - 2), mSceneOrigin, mSceneSize, out hit) && hit.kind == .Vertex && (hit.point - corner).Length < 0.001f;
+			let onTheEdge = world.TransformPoint(.(0.4f, 1, -1));
+			if (SceneToScreen(onTheEdge, mSceneOrigin, mSceneSize, let edgeScreen))
+				onEdge = FindObjectSnap(.(edgeScreen.x, edgeScreen.y + 2), mSceneOrigin, mSceneSize, out hit) && hit.kind == .Edge && Math.Abs(hit.point.y - onTheEdge.y) < 0.001f && Math.Abs(hit.point.z - onTheEdge.z) < 0.001f && Math.Abs(hit.point.x - onTheEdge.x) < 0.1f;
+			if (SceneToScreen(topCenter, mSceneOrigin, mSceneSize, let middleScreen))
+				away = !FindObjectSnap(middleScreen, mSceneOrigin, mSceneSize, out hit);
+			Expect(onCorner && onEdge && away, scope $"drawing snaps to another object's corner and edge, not to the middle of a face ({onCorner} {onEdge} {away})");
+		}
 		mModelFaces.Clear();
 		mModelFaces.Add(top);
 
@@ -368,6 +429,10 @@ extension EditorApp
 		Expect(IsolatedObject == block.Id || !mModelShowOnly, "only the edited model's gizmos are drawn");
 		mModelShowHelp = HasArg("--model-help");
 		mModelMenuRequest = HasArg("--model-menu");
+		// The Model window in front for the screenshot (selecting objects brought the Inspector up).
+		mModelShotFrames = 12;
+		if (HasArg("--model-idle"))
+			mModelEditing = false;
 		mCamPosition = .(1.6f, 4.2f, -3.6f);
 		mCamYaw = -22;
 		mCamPitch = 38;

@@ -196,6 +196,8 @@ static class ImGui
 		public const int32 RootWindow = 1 << 1;
 		public const int32 AllowWhenBlockedByActiveItem = 1 << 7;
 		public const int32 AllowWhenDisabled = 1 << 10;
+		/// After the pointer has rested on the item a moment, as tooltips want.
+		public const int32 ForTooltip = 1 << 12;
 	}
 
 	public static class DockFlags
@@ -280,6 +282,21 @@ static class ImGui
 		public const int32 KeypadEnter = 627;
 		public const int32 ModCtrl = 4096;
 		public const int32 ModShift = 8192;
+	}
+
+	public static class TabBarFlags
+	{
+		public const int32 None = 0;
+		public const int32 Reorderable = 1 << 0;
+		public const int32 FittingPolicyShrink = 1 << 8;
+		public const int32 FittingPolicyScroll = 1 << 9;
+	}
+
+	public static class TabItemFlags
+	{
+		public const int32 None = 0;
+		/// Makes this the tab shown (for one frame: pass it when the program picks the tab).
+		public const int32 SetSelected = 1 << 1;
 	}
 
 	public const int32 PopupMouseButtonRight = 2 << 2;
@@ -814,4 +831,24 @@ static class ImGui
 	public static void PopClipRect() => ImDrawList_PopClipRect(igGetWindowDrawList());
 	public static void SetScrollY(float y) => igSetScrollY_Float(y);
 	public static void DrawText(Vec2 pos, Color color, char8* text) => ImDrawList_AddText_Vec2(igGetWindowDrawList(), pos, color.ToABGR(), text, null);
+
+	// Tab bars: BeginTabBar, then BeginTabItem / EndTabItem for each tab (its contents only when it returns true),
+	// then EndTabBar (only when BeginTabBar returned true).
+	[CLink] static extern bool igBeginTabBar(char8* id, int32 flags);
+	[CLink] static extern void igEndTabBar();
+	[CLink] static extern bool igBeginTabItem(char8* label, bool* open, int32 flags);
+	[CLink] static extern void igEndTabItem();
+	public static bool BeginTabBar(char8* id, int32 flags = 0) => igBeginTabBar(id, flags);
+	public static void EndTabBar() => igEndTabBar();
+	public static bool BeginTabItem(char8* label, bool* open = null, int32 flags = 0) => igBeginTabItem(label, open, flags);
+	public static void EndTabItem() => igEndTabItem();
+
+	// A tooltip with more than one line of plain text: any widgets between BeginTooltip (when true) and EndTooltip.
+	[CLink] static extern bool igBeginTooltip();
+	[CLink] static extern void igEndTooltip();
+	public static bool BeginTooltip() => igBeginTooltip();
+	public static void EndTooltip() => igEndTooltip();
+	/// Text that need not end in a zero: its size, and drawing it.
+	public static Vec2 CalcStringSize(StringView text) => igCalcTextSize(text.Ptr, text.Ptr + text.Length, false, -1);
+	public static void DrawString(Vec2 pos, Color color, StringView text) => ImDrawList_AddText_Vec2(igGetWindowDrawList(), pos, color.ToABGR(), text.Ptr, text.Ptr + text.Length);
 }

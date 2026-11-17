@@ -223,10 +223,15 @@ extension EditorApp
 			mModelTool = .None;
 			return false;
 		}
+		// The pointer over the view's model bar is not over the scene: its clicks pick and draw nothing.
+		let viewHovered = mSceneHovered;
+		let barHovered = ModelBarHovered && !ModelToolActive && !mModelDragging && !mModelBoxing && mModelDraw != .Base;
+		if (barHovered)
+			mSceneHovered = false;
 		if (mModelDraw != .Off)
 			return UpdateShapeDrawing(origin, size);
 		let typing = (ImGui.tn_imgui_capture_flags() & 4) != 0;
-		let keysFree = mSceneHovered && !typing && !mFlying;
+		let keysFree = viewHovered && !typing && !mFlying;
 		// Tab over the Scene view goes in and out of edit mode on a selected model.
 		if (keysFree && !ModelToolActive && ModelShortcutPressed(ShortcutEditMode))
 		{
@@ -243,6 +248,7 @@ extension EditorApp
 			if (keysFree && ModelShortcutPressed(ModelCommandShortcut(.AddShape)))
 				ImGui.OpenPopup("##modeladd");
 			DrawModelAddPopup(default, null);
+			DrawModelIdleBar(selected, origin, size);
 			return false;
 		}
 		let mesh = model.Edit;
@@ -256,19 +262,26 @@ extension EditorApp
 			mModelMenuRequest = false;
 			ImGui.OpenPopup("##modelmenu");
 		}
+		if (mModelSearchRequest)
+		{
+			mModelSearchRequest = false;
+			mModelSearch.Clear();
+			mModelSearchFocus = true;
+			ImGui.OpenPopup("##modelsearch");
+		}
 		if (keysFree && !ModelToolActive && !mModelDragging && !mModelPainting)
 		{
 			HandleModelKeys(model, mesh);
 			if (!mModelEditing)
 				return false;
 		}
+		DrawModelBar(model, mesh, origin, size);
 		DrawModelPopups(model, mesh);
 		if (!mModelEditing || !EditedModel.IsValid)
 			return false;
 		ValidateModelSelection(mesh);
 		DrawModelSelection(mesh, world, toLocal);
 		DrawModelKnife(world);
-		DrawModelHud(mesh);
 		if (ModelToolActive)
 		{
 			mModelHover = -1;
@@ -285,7 +298,7 @@ extension EditorApp
 		bool overGizmo = false;
 		let verts = scope HashSet<int32>();
 		ModelSelectedVerts(mesh, verts);
-		if (!verts.IsEmpty && !mModelBoxing)
+		if (!verts.IsEmpty && !mModelBoxing && (!barHovered || mModelDragging))
 		{
 			if (!mModelDragging)
 			{
@@ -600,9 +613,12 @@ extension EditorApp
 	{
 		if (ImGui.IsKeyPressed(ImGui.Key.Escape))
 		{
-			mModelDraw = .Off;
+			StopShapeDrawing();
 			return false;
 		}
+		DrawModelDrawBar(origin, size);
+		if (mModelDraw == .Off)
+			return false;
 		if (!mSceneHovered && mModelDraw == .Waiting)
 			return true;
 		if (mFlying)
@@ -610,13 +626,21 @@ extension EditorApp
 		let mouse = ImGui.GetMousePos();
 		let ray = mSceneCamera.ViewportPointToRay((mouse.x - origin.x) / size.x, (mouse.y - origin.y) / size.y);
 		let flat = (MeshShapes.Kind)mModelDrawKind == .Plane;
+		// A corner or edge of another object under the pointer, which the shape snaps to (Alt: not this time).
+		ModelSnapHit snap = default;
+		var snapped = mModelSnapObjects && !ImGui.IsKeyDown(ImGui.Key.LeftAlt) && FindObjectSnap(mouse, origin, size, out snap);
 		switch (mModelDraw)
 		{
 		case .Waiting:
 			mModelDrawHit = RaycastScene(ray, var point, ?);
+			if (snapped)
+			{
+				mModelDrawHit = true;
+				point = snap.point;
+			}
 			if (mModelDrawHit)
 			{
-				if (SnapActive)
+				if (SnapActive && !snapped)
 				{
 					point.x = SnapValue(point.x, mSnapMove);
 					point.z = SnapValue(point.z, mSnapMove);
@@ -635,7 +659,12 @@ extension EditorApp
 				if (t > 0)
 				{
 					var point = ray.GetPoint(t);
-					if (SnapActive)
+					if (snapped)
+					{
+						point.x = snap.point.x;
+						point.z = snap.point.z;
+					}
+					else if (SnapActive)
 					{
 						point.x = SnapValue(point.x, mSnapMove);
 						point.z = SnapValue(point.z, mSnapMove);
@@ -683,11 +712,17 @@ extension EditorApp
 					}
 				}
 			}
+			// Up (or down) to the corner or edge under the pointer.
+			snapped = snapped && Math.Abs(snap.point.y - mModelDrawFrom.y) > 0.01f;
+			if (snapped)
+				mModelDrawHeight = snap.point.y - mModelDrawFrom.y;
 			ImGui.DrawText(.(mouse.x + 16, mouse.y + 12), .(1, 0.85f, 0.4f, 0.95f), scope $"{mModelDrawHeight:0.00} m high (click to finish)" .CStr());
 			if (ImGui.IsMouseClicked(0))
 				FinishShape();
 		default:
 		}
+		if (snapped)
+			DrawObjectSnap(snap, origin, size);
 		return true;
 	}
 
@@ -703,10 +738,36 @@ extension EditorApp
 		// Drawn downwards: the shape hangs below the base instead.
 		if (mModelDrawHeight < 0 && kind != .Plane)
 			basePoint.y -= height;
-		mModelDraw = ImGui.IsKeyDown(ImGui.Key.LeftShift) ? .Waiting : .Off;
+		GameObject cutTarget = mModelCutTarget != 0 ? mScene.FindById(mModelCutTarget) : null;
+		if (cutTarget != null && kind != .Plane)
+		{
+			// A cutter goes a little through the surface it was started on, so no skin of it is left.
+			settings.size.y += 0.01f;
+			if (mModelDrawHeight >= 0)
+				basePoint.y -= 0.01f;
+		}
+		mModelDraw = (mModelDrawKeep || ImGui.IsKeyDown(ImGui.Key.LeftShift)) ? .Waiting : .Off;
 		let shape = MeshShapes.Create(kind, settings);
 		defer delete shape;
-		CreateModelObject(MeshShapes.Names[mModelDrawKind], shape, basePoint);
+		let made = CreateModelObject(MeshShapes.Names[mModelDrawKind], shape, basePoint);
+		// Cut a Hole: the shape is cut out of the model instead of staying.
+		if (cutTarget != null)
+		{
+			let target = cutTarget.GetComponent<ModelMesh>();
+			if (target.IsValid)
+			{
+				let op = mModelBooleanOp;
+				let keep = mModelBooleanKeep;
+				mModelBooleanOp = 1;
+				mModelBooleanKeep = false;
+				ModelBoolean(target, made);
+				mModelBooleanOp = op;
+				mModelBooleanKeep = keep;
+				mSelectedId = cutTarget.Id;
+			}
+		}
+		if (mModelDraw == .Off)
+			mModelCutTarget = 0;
 	}
 
 	/// A new object holding a model, placed with its origin at a point.
@@ -1025,7 +1086,7 @@ extension EditorApp
 	/// The Model window's Origin section: where the object's origin (the point it turns and scales about) is.
 	void DrawModelOrigin(ModelMesh model, EditMesh mesh)
 	{
-		ImGui.SeparatorText("Origin (what it turns about)");
+		ModelNote("The origin is the point the object turns and scales about, and where its position is. These move it without moving the model.");
 		if (HalfButton("To Geometry"))
 			RunModelCommand(model, mesh, .OriginToGeometry);
 		if (ImGui.IsItemHovered())
@@ -1144,203 +1205,7 @@ extension EditorApp
 		MarkDirty();
 	}
 
-	// ------------------------------------------------------------------ the Model window
-
-	void DrawModelWindow()
-	{
-		TickModelTest();
-		TickModelSelectBench();
-		TickGraphNodeTest();
-		TickGraphMenuTest();
-		TickFirstPersonTemplate();
-		DrawModelHelp();
-		if (!mShowModel)
-		{
-			if (mModelDraw != .Off)
-				mModelDraw = .Off;
-			return;
-		}
-		let viewport = ImGui.GetMainViewport();
-		ImGui.SetNextWindowPos(.(viewport.workPos.x + viewport.workSize.x - 700, viewport.workPos.y + 80), 4);
-		ImGui.SetNextWindowSize(.(330, 720), 4);
-		// A tab beside the Inspector the first time; it can be moved from there.
-		if (mDockModel && mInspectorDock != 0)
-		{
-			ImGui.SetNextWindowDockID(mInspectorDock);
-			mDockModel = false;
-			mModelFocus = true;
-		}
-		else if (mModelFocus)
-		{
-			ImGui.SetNextWindowFocus();
-			mModelFocus = false;
-		}
-		if (ImGui.Begin("Model", &mShowModel))
-		{
-			DrawModelShapes();
-			let selected = Selected;
-			let model = GameObject.ComponentOn<ModelMesh>(selected);
-			if (selected != null && !model.IsValid && selected.HasComponent<MeshRenderer>() && mPlay == .Edit)
-			{
-				ImGui.SeparatorText("Selected object");
-				if (ImGui.Button("Make Editable Model", .(-1, 0)))
-					ConvertToModel(selected);
-				ImGui.TextDisabled("Turns its mesh into faces the model tools can change.");
-			}
-			if (model.IsValid && mPlay == .Edit)
-				DrawModelTools(model);
-			if (mPlay == .Edit)
-			{
-				ImGui.Spacing();
-				DrawModelReferences();
-				if (ImGui.Button(mShowModelViews ? "Close Model Views" : "Open Model Views (four views)", .(-1, 0)))
-					mShowModelViews = mFocusModelViews = !mShowModelViews;
-			}
-		}
-		ImGui.End();
-		DrawUVEditor();
-	}
-
-	void DrawModelShapes()
-	{
-		ImGui.SeparatorText("New shape");
-		ImGui.SetNextItemWidth(-1);
-		if (ImGui.BeginCombo("##shape", scope String(MeshShapes.Names[mModelDrawKind]).CStr()))
-		{
-			for (int32 k < (int32)MeshShapes.Names.Count)
-			{
-				if (ImGui.Selectable(scope String(MeshShapes.Names[k]).CStr(), k == mModelDrawKind))
-					mModelDrawKind = k;
-			}
-			ImGui.EndCombo();
-		}
-		let kind = (MeshShapes.Kind)mModelDrawKind;
-		ModelVector3("Size", ref mModelShape.size);
-		if (kind == .Cylinder || kind == .Cone || kind == .Sphere || kind == .Torus || kind == .Arch || kind == .Pipe)
-		{
-			ImGui.SetNextItemWidth(-90);
-			ImGui.DragInt("Sides", ref mModelShape.sides, 0.2f, 3, 64);
-		}
-		if (kind == .Stairs || kind == .Sphere || kind == .Torus)
-		{
-			ImGui.SetNextItemWidth(-90);
-			ImGui.DragInt(kind == .Stairs ? "Steps" : "Rings", ref mModelShape.steps, 0.2f, 1, 64);
-		}
-		if (kind == .Torus || kind == .Arch || kind == .Pipe || kind == .Corner)
-		{
-			ImGui.SetNextItemWidth(-90);
-			ImGui.DragFloat("Thickness", ref mModelShape.thickness, 0.01f, 0.01f, 100);
-		}
-		if (kind == .Cylinder || kind == .Cone || kind == .Sphere || kind == .Torus || kind == .Pipe)
-			ImGui.Checkbox("Smooth", ref mModelShape.smooth);
-		let drawing = mModelDraw != .Off;
-		if (ImGui.Button(drawing ? "Stop Drawing (Esc)" : "Draw in Scene", .(ImGui.GetContentRegionAvail().x * 0.5f - 4, 0)))
-		{
-			mModelDraw = drawing ? .Off : .Waiting;
-			mModelEditing = false;
-		}
-		ImGui.SameLine();
-		if (ImGui.Button("Add in View", .(-1, 0)))
-			AddShapeInView(kind);
-		if (drawing)
-			ImGui.TextDisabled("Drag the base, move up for height, click. Shift-click keeps drawing.");
-	}
-
-	void DrawModelTools(ModelMesh model)
-	{
-		let mesh = model.Edit;
-		ImGui.SeparatorText("Edit");
-		if (ImGui.Checkbox(ModelLabel("Edit Model", ShortcutEditMode), ref mModelEditing))
-		{
-			if (mModelEditing)
-				StartModelEditing(model.GameObject);
-		}
-		ImGui.SameLine();
-		ImGui.TextDisabled(scope $"{mesh.faces.Count} faces, {mesh.positions.Count} vertices" .CStr());
-		LoadModelShowOnly();
-		var showOnly = mModelShowOnly;
-		let showOnlyLabel = scope String()..AppendF("Show only this model while editing ({})###showonly", ModelShortcutText(ShortcutShowOnly));
-		if (ImGui.Checkbox(showOnlyLabel.CStr(), ref showOnly))
-			SetModelShowOnly(showOnly);
-		if (ImGui.IsItemHovered())
-			ImGui.SetTooltip("In edit mode, hide every other object's mesh so this one is easy to see and pick.\nRemembered; the key is in Edit > Preferences > Modelling.");
-		if (!mModelEditing)
-		{
-			DrawModelObjectTools(model, mesh);
-			return;
-		}
-		ImGui.Checkbox("Paint", ref mModelPainting);
-		ImGui.SameLine();
-		if (ImGui.RadioButton("Vertex colours", !mModelPaintTexture))
-			mModelPaintTexture = false;
-		ImGui.SameLine();
-		if (ImGui.RadioButton("Texture", mModelPaintTexture))
-		{
-			mModelPaintTexture = true;
-			mModelPainting = true;
-		}
-		if (mModelPainting)
-		{
-			ImGui.ColorEdit4("Colour", ref mModelColor);
-			ImGui.SetNextItemWidth(-90);
-			ImGui.DragFloat("Radius", ref mModelPaintRadius, 0.01f, 0.01f, 50);
-			ImGui.SetNextItemWidth(-90);
-			ImGui.SliderFloat("Strength", ref mModelPaintStrength, 0.05f, 1);
-			if (mModelPaintTexture)
-				DrawTexturePaintSettings(model, mesh);
-			else
-				ImGui.TextDisabled("Drag to paint. Shift paints whole faces flat.");
-			return;
-		}
-		for (let mode in ModelSelectMode[3](.Vertex, .Edge, .Face))
-		{
-			let label = mode == .Vertex ? ModelLabel("Vertices", ShortcutVertexMode) : (mode == .Edge ? ModelLabel("Edges", ShortcutEdgeMode) : ModelLabel("Faces", ShortcutFaceMode));
-			if (ImGui.RadioButton(label, mModelMode == mode))
-				SetModelMode(mode, mesh);
-			if (mode != .Face)
-				ImGui.SameLine();
-		}
-		ImGui.Checkbox("Pick hidden too (x-ray)", ref mModelXRay);
-		ImGui.Checkbox(ModelLabel("Proportional", ModelCommandShortcut(.Proportional)), ref mModelProportional);
-		if (mModelProportional)
-		{
-			ImGui.SameLine();
-			ImGui.SetNextItemWidth(-1);
-			ImGui.DragFloat("##propradius", ref mModelPropRadius, 0.01f, 0.01f, 1000, "radius %.2f m");
-		}
-		ImGui.TextDisabled("Mirror edits");
-		for (int axis < 3)
-		{
-			ImGui.SameLine();
-			ImGui.Checkbox(axis == 0 ? "X##sym" : (axis == 1 ? "Y##sym" : "Z##sym"), ref mModelSymmetry[axis]);
-		}
-		ImGui.TextDisabled("Click, Shift-click, drag a box (Ctrl takes away).");
-		ImGui.TextDisabled("Alt+click a loop, Ctrl+click a path.");
-		ImGui.TextDisabled("Right-click in the Scene view for every tool.");
-		if (ImGui.Button(mModelShowHelp ? "Hide Shortcuts (F1)" : "Show Shortcuts (F1)", .(-1, 0)))
-			mModelShowHelp = !mModelShowHelp;
-		ImGui.SeparatorText("Drag tools (start in the Scene view)");
-		if (HalfButton(ModelLabel("Grab", ModelCommandShortcut(.Grab))))
-			RunModelCommand(model, mesh, .Grab);
-		if (HalfButton(ModelLabel("Rotate", ModelCommandShortcut(.Rotate)), true))
-			RunModelCommand(model, mesh, .Rotate);
-		if (HalfButton(ModelLabel("Scale", ModelCommandShortcut(.Scale))))
-			RunModelCommand(model, mesh, .Scale);
-		if (HalfButton(ModelLabel("Knife", ModelCommandShortcut(.Knife)), true))
-			RunModelCommand(model, mesh, .Knife);
-		if (HalfButton(ModelLabel("Loop Cut", ModelCommandShortcut(.LoopCut))))
-			RunModelCommand(model, mesh, .LoopCut);
-		if (HalfButton(ModelLabel("Bevel", ModelCommandShortcut(.Bevel)), true))
-			RunModelCommand(model, mesh, .Bevel);
-		ImGui.TextDisabled("Move the pointer, then click or Enter; Esc cancels.");
-		switch (mModelMode)
-		{
-		case .Face: DrawFaceTools(model, mesh);
-		case .Edge: DrawEdgeTools(model, mesh);
-		case .Vertex: DrawVertexTools(model, mesh);
-		}
-		DrawModelObjectTools(model, mesh);
-	}
+	// ------------------------------------------------------------------ the Model window's helpers (ModelWindow.bf)
 
 	/// A labelled row of three numbers.
 	static bool ModelVector3(char8* label, ref Vector3 value)
@@ -1386,76 +1251,6 @@ extension EditorApp
 		return ImGui.Button(label, .(right ? -1 : ImGui.GetContentRegionAvail().x * 0.5f - 4, 0));
 	}
 
-	void DrawFaceTools(ModelMesh model, EditMesh mesh)
-	{
-		ImGui.SeparatorText(scope $"Faces ({mModelFaces.Count} selected)" .CStr());
-		ImGui.TextDisabled("E extrudes and I insets with the pointer; Shift-drag the move arrows to extrude.");
-		ImGui.SetNextItemWidth(-90);
-		ImGui.DragFloat("Distance", ref mModelExtrude, 0.01f, -100, 100);
-		if (HalfButton("Extrude"))
-			ModelFaceAction(model, mesh, .Extrude);
-		if (HalfButton("Extrude Each", true))
-			ModelFaceAction(model, mesh, .ExtrudeEach);
-		ImGui.SetNextItemWidth(-90);
-		ImGui.DragFloat("Inset", ref mModelInset, 0.005f, 0.001f, 100);
-		if (HalfButton("Inset Each"))
-			ModelFaceAction(model, mesh, .Inset);
-		if (HalfButton("Inset Together", true))
-			ModelFaceAction(model, mesh, .InsetRegion);
-		if (HalfButton("Subdivide"))
-			ModelFaceAction(model, mesh, .Subdivide);
-		if (HalfButton("Smooth Subdivide", true))
-			ModelFaceAction(model, mesh, .SmoothSubdivide);
-		if (HalfButton("Poke"))
-			ModelFaceAction(model, mesh, .Poke);
-		if (HalfButton(ModelLabel("Triangulate", ModelCommandShortcut(.Triangulate)), true))
-			ModelFaceAction(model, mesh, .Triangulate);
-		if (HalfButton(ModelLabel("Tris to Quads", ModelCommandShortcut(.TrianglesToQuads))))
-			ModelFaceAction(model, mesh, .TrianglesToQuads);
-		if (HalfButton(ModelLabel("Flip", ModelCommandShortcut(.Flip)), true))
-			ModelFaceAction(model, mesh, .Flip);
-		ImGui.SetNextItemWidth(-140);
-		ImGui.DragFloat("Thickness", ref mModelSolidify, 0.005f, -100, 100);
-		ImGui.SameLine();
-		if (ImGui.Button("Solidify", .(-1, 0)))
-			ModelFaceAction(model, mesh, .Solidify);
-		if (HalfButton("Detach"))
-			ModelFaceAction(model, mesh, .Detach);
-		if (HalfButton(ModelLabel("Collapse", ModelCommandShortcut(.Collapse)), true))
-			RunModelCommand(model, mesh, .Collapse);
-		if (HalfButton(ModelLabel("Duplicate", ModelCommandShortcut(.Duplicate))))
-			RunModelCommand(model, mesh, .Duplicate);
-		if (HalfButton(ModelLabel("Delete", ModelCommandShortcut(.Delete)), true))
-			ModelFaceAction(model, mesh, .Delete);
-		if (HalfButton("Smooth Shading"))
-			ModelFaceAction(model, mesh, .Smooth);
-		if (HalfButton("Flat Shading", true))
-			ModelFaceAction(model, mesh, .Flat);
-		if (ImGui.Button(ModelLabel("Make Separate Object", ModelCommandShortcut(.Separate)), .(-1, 0)))
-			ModelFaceAction(model, mesh, .NewObject);
-		if (HalfButton(ModelLabel("Grow", ModelCommandShortcut(.Grow))))
-			GrowModelSelection(mesh, true);
-		if (HalfButton(ModelLabel("Shrink", ModelCommandShortcut(.Shrink)), true))
-			GrowModelSelection(mesh, false);
-		if (HalfButton(ModelLabel("Select Linked", ModelCommandShortcut(.Linked))))
-			SelectModelLinked(mesh);
-		if (HalfButton("Same Material", true))
-			SelectModelSameSlot(mesh);
-		ImGui.SeparatorText("Look");
-		ImGui.SetNextItemWidth(-140);
-		ImGui.DragInt("Material slot", ref mModelSlot, 0.1f, 0, 15);
-		ImGui.SameLine();
-		if (ImGui.Button("Set##slot", .(-1, 0)))
-			ModelFaceAction(model, mesh, .Slot);
-		ImGui.TextDisabled("Slot 0 uses the Mesh Renderer's material; 1 and up use Model Mesh > Materials.");
-		ImGui.ColorEdit4("##facecolour", ref mModelColor);
-		ImGui.SameLine();
-		if (ImGui.Button("Colour Faces", .(-1, 0)))
-			ModelFaceAction(model, mesh, .Color);
-		DrawPaletteFaces(model, mesh);
-		DrawFaceUVSettings(model, mesh);
-	}
-
 	/// Auto texture settings of the selected faces (scale, offset, turn), taken from the first and given to all.
 	void DrawFaceUVSettings(ModelMesh model, EditMesh mesh)
 	{
@@ -1468,7 +1263,7 @@ extension EditorApp
 			break;
 		}
 		let face = mesh.faces[first];
-		ImGui.SeparatorText("Texture on these faces");
+		ImGui.SeparatorText("Auto texture on the picked faces");
 		var scale = face.uvScale;
 		var offset = face.uvOffset;
 		var rotation = face.uvRotation;
@@ -1509,178 +1304,6 @@ extension EditorApp
 	}
 
 	bool mModelUVPending;
-
-	void DrawEdgeTools(ModelMesh model, EditMesh mesh)
-	{
-		ImGui.SeparatorText(scope $"Edges ({mModelEdges.Count} selected)" .CStr());
-		ImGui.TextDisabled("E pulls edges out with the pointer, as Shift-dragging the move arrows does.");
-		ImGui.SetNextItemWidth(-90);
-		ImGui.DragFloat("Width", ref mModelBevel, 0.005f, 0.001f, 100);
-		ImGui.SetNextItemWidth(-90);
-		ImGui.DragInt("Segments", ref mModelBevelSegments, 0.1f, 1, 32);
-		if (ImGui.Button("Bevel", .(-1, 0)))
-			ModelEdgeAction(model, mesh, .Bevel);
-		if (ImGui.Button("Slide (G G)", .(-1, 0)))
-			RunModelCommand(model, mesh, .Slide);
-		ImGui.SetNextItemWidth(-90);
-		ImGui.DragInt("Cuts", ref mModelCuts, 0.1f, 1, 32);
-		if (ImGui.Button("Loop Cut", .(-1, 0)))
-			ModelEdgeAction(model, mesh, .LoopCut);
-		if (HalfButton("Select Loop"))
-			ModelEdgeAction(model, mesh, .SelectLoop);
-		if (HalfButton("Select Ring", true))
-			ModelEdgeAction(model, mesh, .SelectRing);
-		if (HalfButton("Bridge"))
-			ModelEdgeAction(model, mesh, .Bridge);
-		if (HalfButton(ModelLabel("Fill Hole", ModelCommandShortcut(.MakeFace)), true))
-			ModelEdgeAction(model, mesh, .Fill);
-		if (HalfButton("Split in Middle"))
-			ModelEdgeAction(model, mesh, .Split);
-		if (HalfButton("Dissolve", true))
-			ModelEdgeAction(model, mesh, .Dissolve);
-		if (HalfButton(ModelLabel("Collapse", ModelCommandShortcut(.Collapse))))
-			RunModelCommand(model, mesh, .Collapse);
-		if (HalfButton("Smooth", true))
-			RunModelCommand(model, mesh, .SmoothVertices);
-		if (HalfButton("Mark Seam"))
-			ModelEdgeAction(model, mesh, .Seam);
-		if (HalfButton("Clear Seam", true))
-			ModelEdgeAction(model, mesh, .ClearSeam);
-		if (HalfButton("Hard Edge"))
-			ModelEdgeAction(model, mesh, .Hard);
-		if (HalfButton("Soft Edge", true))
-			ModelEdgeAction(model, mesh, .Soft);
-		if (ImGui.Button(ModelLabel("Delete", ModelCommandShortcut(.Delete)), .(-1, 0)))
-			ModelEdgeAction(model, mesh, .Delete);
-		if (HalfButton("Select Open Edges"))
-			RunModelCommand(model, mesh, .SelectOpen);
-		if (HalfButton("Select Sharp", true))
-			SelectModelSharp(mesh);
-		ImGui.SetNextItemWidth(-90);
-		ImGui.DragFloat("Sharp angle", ref mModelSharpAngle, 0.5f, 1, 179);
-	}
-
-	void DrawVertexTools(ModelMesh model, EditMesh mesh)
-	{
-		ImGui.SeparatorText(scope $"Vertices ({mModelVerts.Count} selected)" .CStr());
-		if (HalfButton(ModelLabel("Merge at Centre", ModelCommandShortcut(.Merge))))
-			ModelVertexAction(model, mesh, .Merge);
-		if (HalfButton(ModelLabel("Connect", ModelCommandShortcut(.Connect)), true))
-			ModelVertexAction(model, mesh, .Connect);
-		if (HalfButton(ModelLabel("Make Face", ModelCommandShortcut(.MakeFace))))
-			ModelVertexAction(model, mesh, .MakeFace);
-		if (HalfButton("Smooth", true))
-			RunModelCommand(model, mesh, .SmoothVertices);
-		if (ImGui.Button(ModelLabel("Slide", ModelCommandShortcut(.VertexSlide)), .(-1, 0)))
-			RunModelCommand(model, mesh, .VertexSlide);
-		ImGui.SetNextItemWidth(-140);
-		ImGui.DragFloat("Weld distance", ref mModelWeld, 0.001f, 0.0001f, 10);
-		ImGui.SameLine();
-		if (ImGui.Button("Weld", .(-1, 0)))
-			ModelVertexAction(model, mesh, .Weld);
-		if (ImGui.Button(ModelLabel("Delete", ModelCommandShortcut(.Delete)), .(-1, 0)))
-			ModelVertexAction(model, mesh, .Delete);
-		if (mModelVerts.Count == 1)
-		{
-			var only = 0;
-			for (let v in mModelVerts)
-				only = v;
-			if (ImGui.Button("Put Object Origin Here", .(-1, 0)))
-				SetModelOrigin(model, mesh.positions[only]);
-		}
-	}
-
-	void DrawModelObjectTools(ModelMesh model, EditMesh mesh)
-	{
-		ImGui.SeparatorText("Whole model");
-		if (ImGui.Button("Mirror X", .(ImGui.GetContentRegionAvail().x / 3 - 4, 0)))
-			RunModelCommand(model, mesh, .MirrorX);
-		ImGui.SameLine();
-		if (ImGui.Button("Mirror Y", .(ImGui.GetContentRegionAvail().x / 2 - 4, 0)))
-			RunModelCommand(model, mesh, .MirrorY);
-		ImGui.SameLine();
-		if (ImGui.Button("Mirror Z", .(-1, 0)))
-			RunModelCommand(model, mesh, .MirrorZ);
-		ImGui.TextDisabled("Mirror copies the model across its origin and joins the halves.");
-		ImGui.SetNextItemWidth(-90);
-		ImGui.DragInt("Copies", ref mModelArrayCount, 0.1f, 2, 100);
-		ModelVector3("Step", ref mModelArrayOffset);
-		if (ImGui.Button("Array", .(-1, 0)))
-		{
-			MeshOps.Array(mesh, mModelArrayCount, mModelArrayOffset);
-			ClearModelSelection();
-			CommitModel(model);
-		}
-		if (HalfButton(ModelLabel("Fix Normals", ModelCommandShortcut(.FixNormals))))
-			RunModelCommand(model, mesh, .FixNormals);
-		if (HalfButton("Weld All", true))
-			RunModelCommand(model, mesh, .WeldAll);
-		if (HalfButton("Join Flat Faces"))
-		{
-			let joined = mesh.MergeFlatNeighbours();
-			ClearModelSelection();
-			Log.Info(scope $"Joined {joined} faces.");
-			CommitModel(model);
-		}
-		if (HalfButton("Clean Up", true))
-			RunModelCommand(model, mesh, .CleanUp);
-		if (!mesh.IsClosed())
-			ImGui.TextColored(EditorTheme.Warning, "Not closed: it has holes (Booleans need closed models).");
-
-		DrawModelOrigin(model, mesh);
-
-		ImGui.SeparatorText("Boolean with another object");
-		let other = mModelBooleanOther != 0 ? mScene.FindById(mModelBooleanOther) : null;
-		ImGui.SetNextItemWidth(-1);
-		if (ImGui.BeginCombo("##booleanother", other != null ? other.Name.CStr() : "Pick an object"))
-		{
-			for (let renderer in mScene.Renderers)
-			{
-				let go = renderer.GameObject;
-				if (go == model.GameObject || go.Transient || renderer.ActiveMesh == null)
-					continue;
-				if (ImGui.Selectable(scope $"{go.Name}##{go.Id}" .CStr(), go.Id == mModelBooleanOther))
-					mModelBooleanOther = go.Id;
-			}
-			ImGui.EndCombo();
-		}
-		if (ImGui.RadioButton("Join", mModelBooleanOp == 0))
-			mModelBooleanOp = 0;
-		ImGui.SameLine();
-		if (ImGui.RadioButton("Cut out", mModelBooleanOp == 1))
-			mModelBooleanOp = 1;
-		ImGui.SameLine();
-		if (ImGui.RadioButton("Overlap", mModelBooleanOp == 2))
-			mModelBooleanOp = 2;
-		ImGui.Checkbox("Keep the other object", ref mModelBooleanKeep);
-		ImGui.BeginDisabled(other == null);
-		if (ImGui.Button("Apply Boolean", .(-1, 0)) && other != null)
-			ModelBoolean(model, other);
-		ImGui.EndDisabled();
-
-		DrawModelUVTools(model, mesh);
-
-		ImGui.SeparatorText("Levels of detail");
-		ImGui.SetNextItemWidth(-140);
-		ImGui.DragInt("Levels", ref mModelLodLevels, 0.05f, 2, 4);
-		for (int32 level = 1; level < mModelLodLevels; level++)
-		{
-			ImGui.SetNextItemWidth(-140);
-			ImGui.SliderFloat(scope $"Level {level} keeps" .CStr(), ref mModelLodShares[level], 0.02f, 1, "%.2f");
-		}
-		if (ImGui.Button("Make Levels of Detail", .(-1, 0)))
-			MakeModelLods(model);
-		ImGui.TextDisabled("Simpler copies as children, picked by distance with a LOD Group. Make them again after editing.");
-
-		ImGui.SeparatorText("Save as a file");
-		if (mModelExportPath.IsEmpty)
-			mModelExportPath.AppendF("Models/{}.glb", model.GameObject.Name);
-		ImGui.SetNextItemWidth(-1);
-		ImGui.InputText("##modelexport", mModelExportPath, 0, "Models/Name.glb or .tmesh");
-		if (ImGui.Button("Export", .(-1, 0)))
-			ExportModel(model);
-		ImGui.TextDisabled(".glb opens in Blender and other tools; .tmesh is the engine's own and keeps everything.");
-	}
 
 	int32 mModelLodLevels = 3;
 	float[4] mModelLodShares = .(1, 0.5f, 0.2f, 0.08f);
@@ -1763,60 +1386,6 @@ extension EditorApp
 	}
 
 	// ------------------------------------------------------------------ texture coordinates
-
-	void DrawModelUVTools(ModelMesh model, EditMesh mesh)
-	{
-		ImGui.SeparatorText("Texture coordinates");
-		let faces = scope List<int32>();
-		ModelUVFaces(mesh, faces);
-		ImGui.TextDisabled((mModelEditing && mModelMode == .Face && !mModelFaces.IsEmpty) ? "On the selected faces." : "On every face (select faces to do some).");
-		if (HalfButton("Auto (world)"))
-		{
-			for (let f in faces)
-				mesh.faces[f].uvMode = .Auto;
-			CommitModel(model);
-		}
-		if (HalfButton("Box", true))
-		{
-			MeshUV.Box(mesh, faces);
-			CommitModel(model);
-		}
-		if (HalfButton("Planar"))
-		{
-			MeshUV.Planar(mesh, faces);
-			CommitModel(model);
-		}
-		if (HalfButton("Cylinder", true))
-		{
-			MeshUV.Cylinder(mesh, faces);
-			CommitModel(model);
-		}
-		if (HalfButton("Sphere"))
-		{
-			MeshUV.Sphere(mesh, faces);
-			CommitModel(model);
-		}
-		if (HalfButton("Unwrap at Seams", true))
-		{
-			MeshUV.Unwrap(mesh, faces);
-			CommitModel(model);
-		}
-		ImGui.SetNextItemWidth(-140);
-		ImGui.DragFloat("Angle limit", ref mModelSmartAngle, 0.5f, 1, 89);
-		ImGui.SameLine();
-		if (ImGui.Button("Smart Unwrap", .(-1, 0)))
-		{
-			MeshUV.SmartUnwrap(mesh, faces, mModelSmartAngle);
-			CommitModel(model);
-		}
-		if (HalfButton("Pack"))
-		{
-			MeshUV.Pack(mesh, faces);
-			CommitModel(model);
-		}
-		if (HalfButton("UV Editor", true))
-			mShowUVEditor = true;
-	}
 
 	bool mShowUVEditor;
 	bool mUVDragging;

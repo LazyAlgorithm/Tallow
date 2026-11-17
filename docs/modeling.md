@@ -7,27 +7,59 @@ tools.
 
 Open **Window > Model** (or **GameObject > Model...**). It opens as a tab beside the Inspector; drag the tab to move it.
 
+## Finding your way
+
+The modeller is in two places that show the same tools, with the same names, keys and tooltips:
+
+- **The bar over the Scene view** (and over the Model View the pointer is in). With a model selected it offers
+  **Edit Model**, **Draw** a shape (the arrow beside it picks which) and **Cut a Hole**. While a shape is drawn it shows
+  what is being drawn, **Keep Drawing**, **Snap** and **Stop**. In edit mode it has **Done**, **Vertices / Edges /
+  Faces**, the options (X-Ray, Proportional, Mirror X/Y/Z, Only This), **All Tools** (the menu a right-click opens),
+  search and the shortcut sheet, and down the left the tools used most: Move, Rotate, Scale, Extrude, Inset, Bevel,
+  Loop Cut, Knife and Delete. A line at the bottom of the view says what the mouse and keys do at that moment.
+- **The Model window**, in five tabs, in the order a model is made: **Blockout** (shapes), **Edit** (edit mode's
+  tools), **Paint**, **Texture** and **Model** (the whole model: mirror, repeat, clean up, origin, booleans, levels of
+  detail, saving as a file).
+
+Every tool button shows its key. Point at one to read what it does; one that cannot run now is greyed out and says
+why (nothing picked, wrong kind of thing picked, another tool running).
+
+The Edit tab starts on **Essentials**: the few tools most models need, which is enough for blocking out a map.
+**All Tools** shows every tool in groups, with a box to find one by name and **Exact amounts** for running a tool by
+a typed number. The choice is remembered.
+
 ## Drawing shapes
 
-Pick a shape at the top of the Model window: Box, Ramp, Stairs, Cylinder, Cone, Sphere, Torus, Arch, Plane, Prism,
-Pipe or Corner Wall. Some take extra settings (sides, steps or rings, wall thickness, smooth).
+On the **Blockout** tab pick a shape: Box, Ramp, Stairs, Cylinder, Cone, Sphere, Torus, Arch, Plane, Prism, Pipe or
+Corner Wall. Some take extra settings (sides, steps or rings, wall thickness, smooth).
 
-- **Draw in Scene**: click on the ground or a surface and drag out the base, let go, move the pointer up for the
-  height and click. A click without a drag puts down a shape of the Size in the window. Snapping (the toolbar's Snap,
-  or Ctrl held) snaps the base and the height to the move step. Hold Shift on the last click to keep drawing; Escape
-  stops.
-- **Add in View** puts one of the window's Size where the Scene view is looking.
+- **Draw in Scene** (or **Draw** on the Scene view's bar): click on the ground or a surface and drag out the base,
+  let go, move the pointer up for the height and click. A click without a drag puts down a shape of the **Fixed
+  size**. **Snap** (the toolbar's, or Ctrl held) snaps the base and the height to the step. With **Keep drawing** on,
+  shapes are drawn one after another until Escape; off, hold Shift on the last click for one more.
+- **Snap to other objects** (on unless turned off; **Snap to Objects** on the bar while drawing): the pointer near a
+  corner, an edge or the middle of an edge of any other object takes that point, for the base's corners and for the
+  height. The edge lights up and the point is ringed and named (corner, middle, edge). A ramp's top goes exactly on
+  the edge of the platform it leads to: drag the base up to the platform's foot, then move the pointer onto its top
+  edge for the height. It wins over the grid step; hold **Alt** to draw freely for a moment.
+- **Cut a Hole** (with a model selected): the shape drawn next is cut out of that model instead of staying, for
+  doors, windows, pits and trenches. Draw it right through the model. With Keep drawing on, cut one after another.
+- **Add One in View** puts one of the Fixed size where the Scene view is looking.
 
 A drawn shape is an object with a **Mesh Renderer**, a **Model Mesh** (which holds the model) and a **Mesh
 Collider**, so it is solid at once. Its origin is in the middle of its base.
 
 Any object with an ordinary mesh can be turned into a model with **Make Editable Model** in the Model window.
 
+Blocking out a map quickly: draw boxes with Snap and Keep drawing on, cut doorways with Cut a Hole, and where a block
+needs shaping press Tab, click a face and **E** to pull it out (or **G** to move it).
+
 ## Edit mode
 
-Select a model and press **Tab** over the Scene view (or tick **Edit Model**). The model's edges are drawn over it
-(seams red, hard edges blue), and clicking picks parts of it instead of objects. The top left of the Scene view says
-what is picked and which tool is running.
+Select a model and press **Tab** over the Scene view (or **Edit Model** on the view's bar or the Edit tab). The
+model's edges are drawn over it (seams red, hard edges blue), and clicking picks parts of it instead of objects. The
+bottom left of the Scene view says what is picked, which tool is running and what the keys do. **Done** (or Tab)
+leaves edit mode.
 
 Almost everything has a key, and nothing needs the Model window:
 
@@ -226,8 +258,8 @@ joins neighbouring faces that lie flat together. The window warns when a model i
 
 ### Booleans
 
-Pick another object under **Boolean with another object**, then **Join**, **Cut out** or **Overlap** and **Apply
-Boolean**. Cut out is how doors and windows go into walls: draw a box where the opening should be and cut it out of
+On the **Model** tab, under **Combine with another object**, pick the other object, then **Join**, **Cut Out** or
+**Overlap** and **Apply**. (To draw the cut straight in, use **Cut a Hole**.) Cut out is how doors and windows go into walls: draw a box where the opening should be and cut it out of
 the wall. The other object is removed unless **Keep the other object** is ticked. Both should be closed solids. The
 other object can be any mesh, not only a model.
 
@@ -236,8 +268,8 @@ other object can be any mesh, not only a model.
 Every face has a material slot. Slot 0 uses the Mesh Renderer's material; slots 1, 2 and up use the materials listed
 in **Model Mesh > Materials**, separated by `;`. Pick faces, set **Material slot** and press **Set**.
 
-Faces have vertex colours, which multiply the material's colour and texture. **Colour Faces** colours the picked
-faces. **Paint vertex colours** turns the pointer into a brush: drag over the model to paint (Radius and Strength set
+Faces have vertex colours, which multiply the material's colour and texture. **Colour Faces** (Paint tab) colours the picked
+faces. The **Vertex Colours** brush turns the pointer into a brush: drag over the model to paint (Radius and Strength set
 the brush); Shift paints whole faces flat.
 
 ### Palette faces
@@ -289,7 +321,7 @@ the Scene view) and **Ctrl+click** a cell: their coordinates go into it. **fill*
 
 ## Painting textures
 
-Tick **Paint** and pick **Texture** to paint the model's picture straight onto it in the Scene view. A model without a
+On the **Paint** tab pick the **Texture** brush to paint the model's picture straight onto it in the Scene view. A model without a
 texture gets one from **New Paint Texture** (`Textures/<object>_paint.png`, white, of the size given), and is unwrapped
 first if its faces share parts of the picture (paint would show in two places). Then:
 
@@ -342,6 +374,11 @@ booleans, `MeshUV` the unwrapping, pins, stitching and palette cells, `TexturePa
 `GlbWriter` the export. Faces wind clockwise seen from the front (as everywhere in the engine).
 
 ## Tests
+
+`--model-test` (editor) builds models as the window does and checks the results, the tools, undo and Cut a Hole; it
+logs `MODEL-TEST PASS` or `FAIL`. For screenshots add `--model-window`, `--model-tab blockout|edit|paint|texture|model`,
+`--model-all-tools` (the Edit tab's full list) and `--model-idle` (leave edit mode at the end).
+
 
 `--palette-test` (editor) writes two palettes and reads them back exactly, saves a palette material with a second
 state's palette, splits a box's faces into sections by their flags, and saves `PaletteTest/Palette.tscene` for

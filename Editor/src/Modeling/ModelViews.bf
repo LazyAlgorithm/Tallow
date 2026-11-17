@@ -341,7 +341,7 @@ extension EditorApp
 					let selected = Selected;
 					var toolActive = UpdateModelTools(selected, viewport.origin, viewport.size);
 					toolActive = ObjectGizmo(selected, viewport.origin, viewport.size, toolActive);
-					if (viewport.hovered && ImGui.IsMouseClicked(0) && !toolActive && !mFlying)
+					if (mSceneHovered && ImGui.IsMouseClicked(0) && !toolActive && !mFlying)
 					{
 						let mouse = ImGui.GetMousePos();
 						Pick((mouse.x - viewport.origin.x) / viewport.size.x, (mouse.y - viewport.origin.y) / viewport.size.y);
