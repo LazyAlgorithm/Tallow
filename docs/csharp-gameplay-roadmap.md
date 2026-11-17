@@ -1432,6 +1432,12 @@ A full conversion also needs these. Ordered roughly by when they block users.
   engine's `SceneLoad` hands its final state to `CSharpScenes` when SceneManager deletes it, so C# reads Done/Failed
   and Group after the engine is finished with it. 9 in-game checks (430; 411 exported), enum check for the stage.
   docs/loading.md converted. This closes the C# feature gaps listed on November 17.
+- [x] C# modelling at run time (November 17, 2026): `EditMesh` (Shape with `MeshShape`, empty, From an object, FromText/
+  ToText, vertices and faces, FacesFacing, Extrude/Inset/Subdivide/Triangulate/Poke/Solidify/Flip/Delete/Duplicate,
+  Mirror, Repeat, MoveOrigin, Append, `Combine` with `MeshBoolean`, face colour/material/smooth, ApplyTo) over the
+  new `CSharpModeling` API (meshes by handle, freed when the game stops). 9 in-game checks (439; 420 exported). docs/modeling.md
+  converted; the Beef blocks left in docs are editor and engine tooling (HTTP for the launcher, physics capacity,
+  asset IDs, baking, rigging, themes, the Beef reload page).
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is

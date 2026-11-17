@@ -236,6 +236,7 @@ public class ApiChecks : CheckBase
         {
             TerrainChecks();
             LoadingChecks();
+            ModelingChecks();
         }
         else if (_tick == 280)
         {
@@ -1460,6 +1461,53 @@ public class ApiChecks : CheckBase
         Check("ApplyGenerator of a tile there is not is false", !_terrain.ApplyGenerator(new RaisedGenerator(), 999));
         _terrain.SetGenerator(null);
         _terrain.GameObject.Destroy();
+    }
+
+    private void ModelingChecks()
+    {
+        using var box = EditMesh.Shape(MeshShape.Box, new Vector3(2, 1, 2));
+        Check($"EditMesh.Shape makes the modeller's box ({box.VertexCount} vertices, {box.FaceCount} faces, volume {box.Volume})",
+            box.VertexCount == 8 && box.FaceCount == 6 && Math.Abs(box.Volume - 4) < 0.01f);
+        int[] top = box.FacesFacing(Vector3.UnitY);
+        Check($"FacesFacing finds the top ({string.Join(",", top)}: {(top.Length == 1 ? box.FaceCenter(top[0]) : default)})",
+            top.Length == 1 && Math.Abs(box.FaceCenter(top[0]).Y - 1) < 0.001f && Math.Abs(box.FaceArea(top[0]) - 4) < 0.001f);
+        int[] made = box.ExtrudeFaces(top, 0.5f);
+        Check($"ExtrudeFaces pulls the top up and says what it made ({made.Length} faces, volume {box.Volume})",
+            made.Length >= 4 && box.FaceCount == 10 && Math.Abs(box.Volume - 6) < 0.01f);
+
+        using var tri = new EditMesh();
+        int a = tri.AddVertex(new Vector3(0, 0, 0)), b = tri.AddVertex(new Vector3(0, 0, 1)), c = tri.AddVertex(new Vector3(1, 0, 0));
+        int face = tri.AddFace(a, b, c);
+        tri.SetVertex(c, new Vector3(2, 0, 0));
+        Check($"AddVertex, AddFace, SetVertex and FaceVertices ({string.Join(",", tri.FaceVertices(face))}, normal {tri.FaceNormal(face)})",
+            face == 0 && tri.FaceVertices(face).SequenceEqual(new[] { a, b, c }) && tri.GetVertex(c).X == 2 &&
+            Math.Abs(Math.Abs(tri.FaceNormal(face).Y) - 1) < 0.001f);
+        bool refused = false;
+        try { tri.AddFace(a, b); } catch (ArgumentException) { refused = true; }
+        Check("AddFace refuses fewer than three vertices", refused);
+
+        using var cutter = EditMesh.Shape(MeshShape.Box, new Vector3(1, 3, 1));
+        using var holed = EditMesh.Combine(box, cutter, MeshBoolean.Subtract, new Vector3(0, -0.5f, 0));
+        Check($"Combine subtracts one mesh from another (volume {holed.Volume})",
+            Math.Abs(holed.Volume - 4.5f) < 0.05f);
+
+        string text = box.ToText();
+        using var read = EditMesh.FromText(text);
+        Check($"ToText and FromText round-trip ({text.Length} characters)", read != null && read.FaceCount == box.FaceCount &&
+            EditMesh.FromText("not a mesh") == null);
+
+        GameObject holder = Scene.CreateGameObject("CodeModel");
+        box.SetFaceColor(top[0], new Color(1, 0, 0, 1));
+        box.ApplyTo(holder);
+        using var back = EditMesh.From(holder);
+        Check($"ApplyTo gives an object the model, and From reads it back ({back?.FaceCount} faces)",
+            back != null && back.FaceCount == box.FaceCount && holder.TryGetComponent<MeshRenderer>(out _));
+        holder.Destroy();
+
+        box.Dispose();
+        bool gone = false;
+        try { _ = box.FaceCount; } catch (ObjectDisposedException) { gone = true; }
+        Check("a disposed EditMesh is refused", gone);
     }
 
     private int _rpcValue;

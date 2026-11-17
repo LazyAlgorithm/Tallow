@@ -32,6 +32,10 @@ PAIRS = [
      "Managed/Tallow.API/Textures.cs", r"public enum TextureKind\s*\{(.*?)\n\}"),
     ("Engine/src/Scene/SceneManager.bf", r"public enum Stage\s*\{(.*?)\n\t\}",
      "Managed/Tallow.API/SceneLoading.cs", r"public enum SceneLoadStage\s*\{(.*?)\n\}"),
+    ("Engine/src/Modeling/MeshShapes.bf", r"public enum Kind\s*\{(.*?)\n\t\}",
+     "Managed/Tallow.API/Modeling.cs", r"public enum MeshShape\s*\{(.*?)\n\}"),
+    ("Engine/src/Modeling/MeshCsg.bf", r"public enum Op\s*\{(.*?)\n\t\}",
+     "Managed/Tallow.API/Modeling.cs", r"public enum MeshBoolean\s*\{(.*?)\n\}"),
 ]
 
 

@@ -218,6 +218,30 @@ method	Tallow.CSharpMaterials	SetText	bool	path:string	made:bool	name:string	val
 method	Tallow.CSharpMaterials	SetValue	bool	path:string	made:bool	name:string	value:System.Numerics.Vector4
 method	Tallow.CSharpMeshes	ClearMesh	bool	session:ulong	entity:ulong
 method	Tallow.CSharpMeshes	SetMesh	int	session:ulong	entity:ulong	positions:System.Span<float>	normals:System.Span<float>	uvs:System.Span<float>	indices:System.Span<float>
+method	Tallow.CSharpModeling	AddFace	int	id:int	verts:System.Span<byte>
+method	Tallow.CSharpModeling	AddVertex	int	id:int	position:System.Numerics.Vector3
+method	Tallow.CSharpModeling	Append	bool	id:int	other:int	position:System.Numerics.Vector3	rotation:System.Numerics.Quaternion	scale:System.Numerics.Vector3
+method	Tallow.CSharpModeling	ApplyTo	bool	id:int	session:ulong	entity:ulong
+method	Tallow.CSharpModeling	Clone	int	id:int
+method	Tallow.CSharpModeling	Combine	int	a:int	b:int	position:System.Numerics.Vector3	rotation:System.Numerics.Quaternion	scale:System.Numerics.Vector3	op:int
+method	Tallow.CSharpModeling	Create	int
+method	Tallow.CSharpModeling	EditFaces	int	id:int	op:int	faces:System.Span<byte>	amount:float	flag:bool	added:System.Span<byte>
+method	Tallow.CSharpModeling	FaceCount	int	id:int
+method	Tallow.CSharpModeling	FaceInfo	bool	id:int	face:int	values:System.Span<float>
+method	Tallow.CSharpModeling	FaceVertices	int	id:int	face:int	buffer:System.Span<byte>
+method	Tallow.CSharpModeling	FromText	int	text:string
+method	Tallow.CSharpModeling	GetVertex	System.Numerics.Vector3	id:int	index:int
+method	Tallow.CSharpModeling	Mirror	void	id:int	axis:int	weld:float
+method	Tallow.CSharpModeling	MoveOrigin	void	id:int	newOrigin:System.Numerics.Vector3
+method	Tallow.CSharpModeling	ReadFrom	int	session:ulong	entity:ulong
+method	Tallow.CSharpModeling	Release	void	id:int
+method	Tallow.CSharpModeling	Repeat	void	id:int	count:int	offset:System.Numerics.Vector3	turn:System.Numerics.Quaternion	weld:bool
+method	Tallow.CSharpModeling	SetFace	bool	id:int	face:int	r:float	g:float	b:float	a:float	setColor:bool	material:int	smooth:int
+method	Tallow.CSharpModeling	SetVertex	bool	id:int	index:int	position:System.Numerics.Vector3
+method	Tallow.CSharpModeling	Shape	int	kind:int	size:System.Numerics.Vector3	sides:int	steps:int	thickness:float	smooth:bool
+method	Tallow.CSharpModeling	ToText	int	id:int	buffer:System.Span<byte>
+method	Tallow.CSharpModeling	VertexCount	int	id:int
+method	Tallow.CSharpModeling	Volume	float	id:int
 method	Tallow.CSharpNativeComponents	Add	bool	session:ulong	entity:ulong	typeName:string
 method	Tallow.CSharpNativeComponents	CopyField	int	session:ulong	entity:ulong	typeName:string	field:string	buffer:System.Span<byte>
 method	Tallow.CSharpNativeComponents	Count	int	session:ulong	typeName:string

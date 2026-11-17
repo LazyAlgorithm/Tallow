@@ -361,21 +361,34 @@ it. Objects with the same model share one mesh and are drawn together.
 
 ## From code
 
-The modeller's core is in the engine (`Engine/src/Modeling`), so games can build models while running:
+Games can build models while running, with the modeller's shapes and edits (`EditMesh` in C#):
 
-```beef
-let shape = MeshShapes.Create(.Stairs, .() { size = .(2, 1.5f, 3), steps = 8 });
-defer delete shape;
-var top = 0;  // pick faces by index, e.g. the one facing up
-MeshOps.ExtrudeFaces(shape, .(&top, 1), 0.5f);
-gameObject.AddComponent<MeshRenderer>().mesh.Clear();
-gameObject.AddComponent<ModelMesh>().Set(shape);
+```csharp
+using EditMesh stairs = EditMesh.Shape(MeshShape.Stairs, new Vector3(2, 1.5f, 3), steps: 8);
+int[] top = stairs.FacesFacing(Vector3.UnitY);      // pick faces: here the ones facing up
+stairs.ExtrudeFaces(top, 0.5f);
+foreach (int face in top)
+    stairs.SetFaceColor(face, new Color(0.8f, 0.6f, 0.3f, 1));
+
+// Booleans: a wall with a doorway cut out of it
+using EditMesh doorway = EditMesh.Shape(MeshShape.Box, new Vector3(0.8f, 2, 1));
+using EditMesh wall = EditMesh.Shape(MeshShape.Box, new Vector3(4, 3, 0.2f));
+using EditMesh withDoor = EditMesh.Combine(wall, doorway, MeshBoolean.Subtract);
+
+stairs.Append(withDoor, new Vector3(0, 0, 3));
+stairs.ApplyTo(gameObject);   // its Model Mesh, adding a Mesh Renderer and Model Mesh when it has none
 ```
 
-`EditMesh` holds the faces, `MeshOps` the edits (and `MeshTools.bf` more of them: triangulate, poke, solidify,
-smooth, collapse, make face, knife; `MeshSlide.bf` sliding; `MeshDecimate.bf` taking faces away), `MeshCsg` the
-booleans, `MeshUV` the unwrapping, pins, stitching and palette cells, `TexturePaint` painting pictures,
-`GlbWriter` the export. Faces wind clockwise seen from the front (as everywhere in the engine).
+An `EditMesh` can also start empty (`AddVertex`, `AddFace`, `SetVertex`), from an object's Model Mesh
+(`EditMesh.From(gameObject)`) or from `.tmesh` text (`FromText`, `ToText`). Its edits: `ExtrudeFaces`, `InsetFaces`,
+`Subdivide`, `Triangulate`, `Poke`, `Solidify`, `FlipFaces`, `DeleteFaces`, `DuplicateFaces`, `Mirror`, `Repeat`,
+`MoveOrigin`; faces take a colour, material slot and smooth shading. Each edit that makes faces returns them, so they
+can be edited next. Faces wind clockwise seen from the front (as everywhere in the engine). Dispose meshes when done
+(`using`); any left are freed when the game stops.
+
+The modeller itself is engine code (`Engine/src/Modeling`): `MeshOps` and `MeshTools.bf` hold the edits (also
+knife, bevel, loop cut, bridge and others the editor uses), `MeshCsg` the booleans, `MeshUV` unwrapping,
+`TexturePaint` painting pictures and `GlbWriter` the export.
 
 ## Tests
 

@@ -1027,3 +1027,23 @@ public class LoadingSnippet : Script
         bool ready = batch.IsDone;
     }
 }
+
+// docs/modeling.md: building models in code.
+public class ModelingSnippet : Script
+{
+    public void Build()
+    {
+        using EditMesh stairs = EditMesh.Shape(MeshShape.Stairs, new Vector3(2, 1.5f, 3), steps: 8);
+        int[] top = stairs.FacesFacing(Vector3.UnitY);
+        stairs.ExtrudeFaces(top, 0.5f);
+        foreach (int face in top)
+            stairs.SetFaceColor(face, new Color(0.8f, 0.6f, 0.3f, 1));
+
+        using EditMesh doorway = EditMesh.Shape(MeshShape.Box, new Vector3(0.8f, 2, 1));
+        using EditMesh wall = EditMesh.Shape(MeshShape.Box, new Vector3(4, 3, 0.2f));
+        using EditMesh withDoor = EditMesh.Combine(wall, doorway, MeshBoolean.Subtract);
+
+        stairs.Append(withDoor, new Vector3(0, 0, 3));
+        stairs.ApplyTo(GameObject);
+    }
+}
