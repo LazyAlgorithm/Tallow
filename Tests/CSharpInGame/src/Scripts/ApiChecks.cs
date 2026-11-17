@@ -655,6 +655,18 @@ public class ApiChecks : CheckBase
         Rigidbody body = lamp.AddComponent<Rigidbody>();
         body.Mass = 55f;
         Check("Rigidbody and SphereCollider fields", body.Mass == 55f && lamp.GetComponent<SphereCollider>().Radius == 0.25f);
+        Check("Rigidbody defaults match the Inspector's (damping 0.05, sleeping allowed, not debris)",
+            body.LinearDamping == 0.05f && body.AngularDamping == 0.05f && body.AllowSleeping && !body.FreezeRotation && !body.Debris);
+        body.LinearDamping = 0.5f;
+        body.AngularDamping = 0.25f;
+        body.FreezeRotation = true;
+        body.AllowSleeping = false;
+        body.Debris = true;
+        Check("Rigidbody damping, freeze rotation, sleeping and debris fields",
+            body.LinearDamping == 0.5f && body.AngularDamping == 0.25f && body.FreezeRotation && !body.AllowSleeping && body.Debris);
+        body.LinearDamping = body.AngularDamping = 0.05f;
+        body.FreezeRotation = body.Debris = false;
+        body.AllowSleeping = true;
         bool refused = false;
         try { new NativeComponent(lamp, "Tallow.Light").Set("noSuchField", 1f); }
         catch (ArgumentException) { refused = true; }

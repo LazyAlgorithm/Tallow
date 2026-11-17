@@ -45,7 +45,7 @@
 
 - [x] **B11 — ECS data-only baseline.** 10k, 50k, 100k and 250k static/rotating entities; native Beef ECS system vs managed C# workload over the **same Flecs data**. Report ECS iteration/query time, frame times, allocations, memory and render draw-call limits. Do not present a renderer bottleneck as an ECS result.
 - [x] **B12 — ECS writable chunk path.** Read and write the same 10k/100k position-like components with a bulk API; measure copy cost, boundary transitions and total tick. Done for offline scenes (2026-11-15): `Scene.Query<...>().ForEach` gives refs straight into the Flecs columns, one native call per table, no copy; 50k ecs rows 2.08 ms C# vs 1.53 ms Beef (see results below). Networked [Sync] ECS data is still to do.
-- [ ] **B13 — physics sphere pile.** Spawn Jolt rigidbodies at fixed intervals until p95 frame time >16.67 ms, or max 10k. Record total, active/asleep counts, contact pairs, Jolt step milliseconds and memory. Repeat sleep ON/OFF; compare Beef vs C# control paths with identical native Jolt settings.
+- [x] **B13 — physics sphere pile.** Spawn Jolt rigidbodies at fixed intervals until p95 frame time >16.67 ms, or max 10k. Record total, active/asleep counts, contact pairs, Jolt step milliseconds and memory. Repeat sleep ON/OFF; compare Beef vs C# control paths with identical native Jolt settings.
 - [x] **B14 — character motion/physics queries.** 100, 1k and 5k Jolt CharacterController instances with the same navigation/input; raycasts and sphere casts at 1k/10k/100k queries per frame; measure exact hit agreement and latency separately.
 - [ ] **B15 — soft-body throughput.** Jelly, Cloth, Shell and DrivenJelly, 10/50/100/500 bodies, fixed vertex counts and settings. Record rebuild time, step time, active vertex count, memory and deformation correctness. Keep existing Jelly Golf-style free jelly as an acceptance case.
 - [ ] **B16 — engine resource/render throughput.** Static 100k objects, 10k changing transforms and streaming scene chunks, with GPU timings/draw calls separated from C# script CPU. Include shader graph and compute graph functionality regression.
@@ -157,6 +157,24 @@
   15% slower, GetComponent 17% and lifecycle 8%, so it is not the default. Loading shipped games non-collectible
   (tiering and PGO on) was tried and measured neutral (GetComponent 8% faster, ECS 2% slower, everything else and
   start-up unchanged), so it was not kept. NativeAOT (P3) remains the way to settle code generation.
+
+- B13 (done 2026-11-16; raw data `~/TallowBenchmarks/pile-20261116/`). **Ramp** (`--modes pile`, 3 runs each):
+  from an empty walled box, 250 balls (each with a velocity-damping script) are dropped every 60 frames until a
+  window's p95 frame time passes 16.67 ms or 10,000 are in.
+
+  | | balls when p95 > 16.67 ms (median) | ball scripts ms (avg over the ramp) | frame ms avg | Jolt step at the end | process MB |
+  |---|---:|---:|---:|---:|---:|
+  | Beef, sleep on / off | 9,500 / 9,500 | 0.20 / 0.20 | 3.24 / 3.38 | 7.7-9.0 ms | 58 / 60 |
+  | C#, sleep on / off | 8,500 / 8,500 | 0.35 / 0.34 | 3.53 / 3.25 | (same engine) | 104 / 102 |
+
+  The limit is Jolt's: at 8,500-9,500 balls a step takes ~8 ms, and a frame that runs two fixed steps passes
+  16.67 ms. C#'s extra 0.15 ms of script time tips that over about 1,000 balls sooner. Sleep makes no difference
+  while balls keep landing on the pile (nothing gets to sleep). **Settled pile** (`--modes physics`, spawned at
+  once, ~20 s): 1,000 balls with sleeping on all go to sleep and Jolt's step falls from 1.13 ms to 0.002 ms (Beef
+  and C# alike; scripts 0.035 vs 0.075 ms); 5,000 balls (ten layers) are still settling after 20 s in both, step
+  6.7 ms. Contact pair counts are not exposed by the engine's Jolt binding and are not reported.
+  `PhysicsWorld.LastStepMilliseconds` (new) times Jolt's own step. Found on the way: C#'s Rigidbody was missing
+  LinearDamping, AngularDamping, FreezeRotation, AllowSleeping and Debris (now added, with in-game checks).
 
 ### Fixes from these runs (2026-11-16)
 

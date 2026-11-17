@@ -87,6 +87,8 @@ class Bench : Component
 			SpawnQueryField();
 		else if (mMode == "character")
 			SpawnWalkers();
+		else if (mMode == "pile")
+			StartPile();
 		else
 			SpawnEntities();
 		mSpawnMs = (SDL.SDL_GetTicksNS() - start) / 1e6;
@@ -187,6 +189,8 @@ class Bench : Component
 			StepLifecycle();
 		else if (mMode == "raycast" || mMode == "spherecast")
 			StepQueries();
+		else if (mMode == "pile" && mFrame > WarmupFrames && !mFrameTimes.IsEmpty)
+			StepPile(mFrameTimes.Back);
 		if (mWorld != null)
 		{
 			let halfSize = mHalfSize;

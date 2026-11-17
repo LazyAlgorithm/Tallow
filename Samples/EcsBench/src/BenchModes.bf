@@ -44,7 +44,10 @@ extension Bench
 			let ball = Scene.CreateGameObject("Ball");
 			ball.Transform.LocalPosition = Workload.PhysicsStart(i, half);
 			ball.AddComponent<SphereCollider>();
-			mBalls.Add(ball.AddComponent<Rigidbody>());
+			var body = ball.AddComponent<Rigidbody>();
+			let sleep = scope String();
+			body.allowSleeping = !(ReadSetting("TALLOW_BENCH_SLEEP", sleep) && sleep == "0");
+			mBalls.Add(body);
 			ball.AddComponent<Ball>();
 		}
 	}
@@ -96,6 +99,74 @@ extension Bench
 		mChecksum = checksum;
 	}
 
+	float mPileHalf;
+	bool mPileSleep = true;
+	bool mPileDone;
+	List<double> mPileWindow = new .() ~ delete _;
+	List<double> mStepTimes = new .() ~ delete _;
+	int mPileWindows, mPileReached;
+	double mPileStopP95;
+	String mPileStop = new .() ~ delete _;
+	GameObject mPileEnd;
+
+	void StartPile()
+	{
+		let sleep = scope String();
+		mPileSleep = !(ReadSetting("TALLOW_BENCH_SLEEP", sleep) && sleep == "0");
+		mPileHalf = Workload.PhysicsHalfSize(mCount);
+		Workload.PhysicsBox(mPileHalf, let floorPosition, let floorSize);
+		AddWall(floorPosition, floorSize);
+		for (int side < 4)
+		{
+			Workload.PhysicsWall(mPileHalf, side, let position, let size);
+			AddWall(position, size);
+		}
+		mFrames = int.MaxValue; // the pile ends the run itself
+	}
+
+	/// CSharpBench's StepPile: a batch of balls at the start of each window; at its end, stop if the window's p95 frame
+	/// time was over 16.67 ms or every ball is in. Also keeps Jolt's own step time.
+	void StepPile(double frameMs)
+	{
+		if (mPileDone)
+			return;
+		mStepTimes.Add(Scene.Physics.LastStepMilliseconds);
+		if (mPileWindow.IsEmpty)
+		{
+			for (int i < Workload.PileBatch)
+			{
+				if (mBalls.Count >= mCount)
+					break;
+				let ball = Scene.CreateGameObject("Ball");
+				ball.Transform.LocalPosition = Workload.PileStart(mBalls.Count, mPileHalf);
+				ball.AddComponent<SphereCollider>();
+				var body = ball.AddComponent<Rigidbody>();
+				body.allowSleeping = mPileSleep;
+				ball.AddComponent<Ball>();
+				mBalls.Add(body);
+			}
+			// The end marker goes after the new balls, so their Updates are inside the timed span.
+			if (mPileEnd != null)
+				Scene.Destroy(mPileEnd);
+			mPileEnd = Scene.CreateGameObject("Bench End");
+			mPileEnd.AddComponent<BenchEndUpdate>().owner = this;
+		}
+		mPileWindow.Add(frameMs);
+		if (mPileWindow.Count < Workload.PileWindow)
+			return;
+		let p95 = Percentile(mPileWindow, 0.95);
+		mPileWindow.Clear();
+		mPileWindows++;
+		if (p95 > 16.67 || mBalls.Count >= mCount)
+		{
+			mPileDone = true;
+			mPileReached = mBalls.Count;
+			mPileStopP95 = p95;
+			mPileStop.Set(p95 > 16.67 ? "p95" : "count");
+			Finish();
+		}
+	}
+
 	void SpawnWalkers()
 	{
 		let half = Workload.WalkerHalfSize(mCount);
@@ -137,6 +208,20 @@ extension Bench
 	void FinishModes(String line)
 	{
 		if (mMode == "physics")
+		{
+			let step = Scene.Physics.LastStepMilliseconds;
+			line.AppendF("\"jolt_step_last_ms\": {:F3}, ", step);
+		}
+		if (mMode == "pile")
+		{
+			line.AppendF("\"sleep\": {}, \"reached\": {}, \"stop\": \"{}\", \"stop_p95_ms\": {:F3}, \"windows\": {}, ", mPileSleep ? 1 : 0, mPileReached, mPileStop, mPileStopP95, mPileWindows);
+			// Jolt's step over the last window, and the whole run.
+			let last = scope List<double>();
+			for (int i = Math.Max(0, mStepTimes.Count - Workload.PileWindow); i < mStepTimes.Count; i++)
+				last.Add(mStepTimes[i]);
+			line.AppendF("\"jolt_step_last_window_ms\": {:F3}, \"jolt_step_max_ms\": {:F3}, ", Average(last), Percentile(mStepTimes, 1.0));
+		}
+		if (mMode == "physics" || mMode == "pile")
 		{
 			int sleeping = 0;
 			for (let body in mBalls)

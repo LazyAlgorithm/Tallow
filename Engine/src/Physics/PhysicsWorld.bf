@@ -126,6 +126,8 @@ class PhysicsWorld
 	/// What ran out in the last Step, as Jolt's bits (0 when nothing did): 1 the contact cache, 2 the body pairs, 4 the
 	/// contacts. Contacts are missing from that step.
 	public int32 LastStepError { get; private set; }
+	/// How long Jolt's own step (collision and solving, not Tallow's work round it) took last time.
+	public float LastStepMilliseconds { get; private set; }
 
 	/// Sets the capacities, before the world's first body (or query) creates it. False when it already exists or a
 	/// number is not positive.
@@ -1238,7 +1240,9 @@ class PhysicsWorld
 		SoftBody.[Friend]UpdateProxies(this, mSoftBodies, mRopes);
 
 		Jolt.tn_contacts_begin_step(mSystem);
+		let stepStart = Internal.GetTickCountMicro();
 		LastStepError = Jolt.JPH_PhysicsSystem_Update(mSystem, deltaTime, 1, sJobSystem);
+		LastStepMilliseconds = (Internal.GetTickCountMicro() - stepStart) / 1000.0f;
 		if (LastStepError != 0 && (mReportedStepErrors & LastStepError) != LastStepError)
 		{
 			Log.Error(scope $"[Physics] Solver capacity exceeded (error mask {LastStepError}); contacts may be missing. ConfigureCapacity before creating the world. Current bodies/pairs/contacts: {mBodyCapacity}/{mBodyPairCapacity}/{mContactCapacity}.");

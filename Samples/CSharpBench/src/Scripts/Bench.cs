@@ -24,6 +24,9 @@ namespace CSharpBench;
 ///                       raycast / spherecast (TALLOW_BENCH_COUNT Jolt queries a frame over a field of 400 boxes;
 ///                       hits and a checksum of their distances must equal Beef's), character (TALLOW_BENCH_COUNT
 ///                       CharacterControllers, each walked by a Walker script every tick)
+///                       pile (B13: from empty, Workload.PileBatch Ball spheres dropped every Workload.PileWindow
+///                       frames until a window's p95 frame time passes 16.67 ms or TALLOW_BENCH_COUNT are in;
+///                       TALLOW_BENCH_SLEEP=0 keeps them from sleeping)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
 ///   TALLOW_BENCH_OUT    file a JSON line of results is added to
@@ -83,6 +86,8 @@ public class Bench : Script
             SpawnQueryField();
         else if (_mode == "character")
             SpawnWalkers();
+        else if (_mode == "pile")
+            StartPile();
         else
             throw new ArgumentException($"Unknown TALLOW_BENCH_MODE {_mode}");
         _spawnMs = watch.Elapsed.TotalMilliseconds;
@@ -139,6 +144,7 @@ public class Bench : Script
             ball.Transform.LocalPosition = Workload.PhysicsStart(i, half);
             ball.AddComponent<SphereCollider>();
             Rigidbody body = ball.AddComponent<Rigidbody>();
+            body.AllowSleeping = Environment.GetEnvironmentVariable("TALLOW_BENCH_SLEEP") != "0";
             ball.AddComponent<Ball>();
             _bodies.Add(body);
         }
@@ -193,6 +199,66 @@ public class Bench : Script
         }
         _hits = hits;
         _checksum = checksum;
+    }
+
+    private float _pileHalf;
+    private bool _pileSleep = true;
+    private readonly List<double> _pileWindow = new();
+    private int _pileWindows, _pileReached;
+    private double _pileStopP95;
+    private string _pileStop = "";
+    private GameObject? _pileEnd;
+
+    private void StartPile()
+    {
+        _pileSleep = Environment.GetEnvironmentVariable("TALLOW_BENCH_SLEEP") != "0";
+        _pileHalf = Workload.PhysicsHalfSize(_count);
+        Workload.PhysicsBox(_pileHalf, out Vector3 floorPosition, out Vector3 floorSize);
+        AddWall(floorPosition, floorSize);
+        for (int side = 0; side < 4; side++)
+        {
+            Workload.PhysicsWall(_pileHalf, side, out Vector3 position, out Vector3 size);
+            AddWall(position, size);
+        }
+        _frames = int.MaxValue; // the pile ends the run itself
+    }
+
+    /// <summary>Called each measured frame: a batch of balls at the start of each window; at its end, stop if the
+    /// window's p95 frame time was over 16.67 ms or every ball is in.</summary>
+    private void StepPile(double frameMs)
+    {
+        if (_pileStop.Length > 0)
+            return;
+        if (_pileWindow.Count == 0)
+        {
+            for (int i = 0; i < Workload.PileBatch && _bodies.Count < _count; i++)
+            {
+                GameObject ball = Scene.CreateGameObject("Ball");
+                ball.Transform.LocalPosition = Workload.PileStart(_bodies.Count, _pileHalf);
+                ball.AddComponent<SphereCollider>();
+                Rigidbody body = ball.AddComponent<Rigidbody>();
+                body.AllowSleeping = _pileSleep;
+                ball.AddComponent<Ball>();
+                _bodies.Add(body);
+            }
+            // The end marker goes after the new balls, so their Updates are inside the timed span.
+            _pileEnd?.Destroy();
+            _pileEnd = Scene.CreateGameObject("Bench End");
+            _pileEnd.Value.AddComponent<BenchEnd>().Owner = this;
+        }
+        _pileWindow.Add(frameMs);
+        if (_pileWindow.Count < Workload.PileWindow)
+            return;
+        double p95 = Percentile(_pileWindow, 0.95);
+        _pileWindow.Clear();
+        _pileWindows++;
+        if (p95 > 16.67 || _bodies.Count >= _count)
+        {
+            _pileReached = _bodies.Count;
+            _pileStopP95 = p95;
+            _pileStop = p95 > 16.67 ? "p95" : "count";
+            Finish();
+        }
     }
 
     private void SpawnWalkers()
@@ -284,6 +350,8 @@ public class Bench : Script
             StepLifecycle();
         else if (_mode == "raycast" || _mode == "spherecast")
             StepQueries();
+        else if (_mode == "pile" && _frame > WarmupFrames && _frameTimes.Count > 0)
+            StepPile(_frameTimes[^1]);
     }
 
     public override void LocalLateUpdate(float deltaTime)
@@ -316,7 +384,9 @@ public class Bench : Script
         line.Append($"\"gc_gen2\": {GC.CollectionCount(2) - _gen2Start}, ");
         line.Append(Inv($"\"gc_pause_ms\": {(GC.GetTotalPauseDuration() - _pauseStart).TotalMilliseconds:F3}, "));
         line.Append(Inv($"\"spawn_ms\": {_spawnMs:F1}, \"memory_before\": {_memoryBefore}, \"memory_after\": {_memoryAfter}, "));
-        if (_mode == "physics")
+        if (_mode == "pile")
+            line.Append(Inv($"\"sleep\": {(_pileSleep ? 1 : 0)}, \"reached\": {_pileReached}, \"stop\": \"{_pileStop}\", \"stop_p95_ms\": {_pileStopP95:F3}, \"windows\": {_pileWindows}, "));
+        if (_mode == "physics" || _mode == "pile")
         {
             int sleeping = 0;
             foreach (Rigidbody body in _bodies)
@@ -557,6 +627,20 @@ public static class Workload
             _ => new Vector3(0, height / 2, -offset),
         };
         size = side < 2 ? new Vector3(1, height, half * 2 + 2) : new Vector3(half * 2 + 2, height, 1);
+    }
+
+    /// <summary>The pile mode: balls dropped per batch, frames per batch.</summary>
+    public const int PileBatch = 250;
+    public const int PileWindow = 60;
+
+    /// <summary>Pile ball i: a batch is one layer near the top of the walls, dropped onto what is already there.</summary>
+    public static Vector3 PileStart(int index, float half)
+    {
+        int side = Math.Max(1, (int)((half * 2 - 1) / 1.1f));
+        int slot = index % PileBatch;
+        int x = slot % side, z = slot / side % side, y = slot / (side * side);
+        float jitter = (index / PileBatch % 2) * 0.3f;
+        return new Vector3(-half + 0.55f + x * 1.1f + jitter, 30 + y * 1.1f, -half + 0.55f + z * 1.1f + jitter);
     }
 
     /// <summary>Balls (radius 0.5) in a grid 1.1 m apart, layer above layer, with a small offset per layer.</summary>

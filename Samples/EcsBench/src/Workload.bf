@@ -36,7 +36,23 @@ static class Workload
 		size = side < 2 ? .(1, height, half * 2 + 2) : .(half * 2 + 2, height, 1);
 	}
 
-	/// Balls (radius 0.5) in a grid 1.1 m apart, layer above layer, with a small offset per layer.
+	/// The pile mode: balls dropped per batch, frames per batch (CSharpBench's Workload).
+	public const int PileBatch = 250;
+	public const int PileWindow = 60;
+
+	/// Pile ball i: a batch is a layer (or a few) near the top of the walls, dropped onto what is already there.
+	public static Vector3 PileStart(int index, float half)
+	{
+		let side = Math.Max(1, (int)((half * 2 - 1) / 1.1f));
+		let slot = index % PileBatch;
+		let x = slot % side;
+		let z = slot / side % side;
+		let y = slot / (side * side);
+		let jitter = (index / PileBatch % 2) * 0.3f;
+		return .(-half + 0.55f + x * 1.1f + jitter, 30 + y * 1.1f, -half + 0.55f + z * 1.1f + jitter);
+	}
+
+		/// Balls (radius 0.5) in a grid 1.1 m apart, layer above layer, with a small offset per layer.
 	public static Vector3 PhysicsStart(int index, float half)
 	{
 		let side = Math.Max(1, (int)((half * 2 - 1) / 1.1f));

@@ -455,6 +455,18 @@ public readonly partial record struct Rigidbody
     public float Bounciness { get => Data.GetFloat("bounciness"); set => Data.Set("bounciness", value); }
     /// <summary>Checked along its path each step, so a fast small body does not pass through thin things.</summary>
     public bool ContinuousCollision { get => Data.GetBool("continuousCollision"); set => Data.Set("continuousCollision", value); }
+    /// <summary>How quickly it slows down by itself, moving (LinearDamping) and turning (AngularDamping).</summary>
+    public float LinearDamping { get => Data.GetFloat("linearDamping"); set => Data.Set("linearDamping", value); }
+    /// <inheritdoc cref="LinearDamping"/>
+    public float AngularDamping { get => Data.GetFloat("angularDamping"); set => Data.Set("angularDamping", value); }
+    /// <summary>Keeps the body from turning (characters that should stay upright).</summary>
+    public bool FreezeRotation { get => Data.GetBool("freezeRotation"); set => Data.Set("freezeRotation", value); }
+    /// <summary>Lets the body stop being simulated while it lies still, until something touches it.</summary>
+    public bool AllowSleeping { get => Data.GetBool("allowSleeping"); set => Data.Set("allowSleeping", value); }
+    /// <summary>Rests on scenery, but nothing that moves is stopped by it, and queries ignore it (corpses, rubble).</summary>
+    public bool Debris { get => Data.GetBool("debris"); set => Data.Set("debris", value); }
+    // Like the Inspector's fields (and Mass, Friction...), these are read when the body is made: set them in the
+    // frame the Rigidbody is added, before it plays.
 }
 
 public readonly partial record struct CharacterController
