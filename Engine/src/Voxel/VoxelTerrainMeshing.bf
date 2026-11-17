@@ -16,7 +16,12 @@ extension VoxelTerrain
 		public int8[] far = new int8[6 * FaceCount] ~ delete _;
 		/// Per column of the chunk: inside the tiles.
 		public bool[] inside = new bool[FaceCount] ~ delete _;
-		public int8[] center;
+		/// The chunk's own samples and paint, copied as the build starts: the main thread may sculpt the chunk while a
+		/// worker meshes it, and a mesh made from half-old, half-new samples has cracks in it.
+		public int8[] center = new int8[SampleCount] ~ delete _;
+		public uint8[] paintCopy = new uint8[SampleCount] ~ delete _;
+		/// paintCopy when the chunk has paint, else null.
+		public uint8[] paint;
 		/// Contoured style: the chunk's samples at the step being built, with two more on every side (taken from the
 		/// chunks around it, the edge of the tiles applied), and the point made for each cell.
 		public int8[] padded = new int8[PaddedSide * PaddedSide * PaddedSide] ~ delete _;
@@ -220,7 +225,17 @@ extension VoxelTerrain
 		if (!mLodOn)
 			work.lod = 0;
 		let step = (int32)1 << Math.Clamp(work.lod, 0, 3);
-		work.center = chunk.density;
+		using (mMonitor.Enter())
+		{
+			chunk.density.CopyTo(work.center);
+			if (chunk.paint != null)
+			{
+				chunk.paint.CopyTo(work.paintCopy);
+				work.paint = work.paintCopy;
+			}
+			else
+				work.paint = null;
+		}
 		work.size = snap.voxelSize;
 		work.origin = Vector3(chunk.coord.x, chunk.coord.y, chunk.coord.z) * (ChunkCells * work.size);
 		work.masked = snap.mode == .Fixed;
@@ -348,9 +363,9 @@ extension VoxelTerrain
 							let position = origin + local * size;
 							vertexIndex = (int32)vertices.Count;
 							var color = SurfaceColor(position.y, normal.y);
-							if (chunk.paint != null)
+							if (work.paint != null)
 							{
-								let layer = chunk.paint[t < 0.5f ? SampleIndex(ax, ay, az) : SampleIndex(bx, by, bz)];
+								let layer = work.paint[t < 0.5f ? SampleIndex(ax, ay, az) : SampleIndex(bx, by, bz)];
 								if (layer != 0)
 									color = LayerColor(layer);
 							}
@@ -622,9 +637,9 @@ extension VoxelTerrain
 					let normal = SafeNormal(fit.facing);
 					let position = work.origin + (Vector3(cx, cy, cz) + point) * (step * work.size);
 					var color = SurfaceColor(position.y, normal.y);
-					if (chunk.paint != null)
+					if (work.paint != null)
 					{
-						let layer = chunk.paint[NearestSolidSample(cx, cy, cz, step, solid, point)];
+						let layer = work.paint[NearestSolidSample(cx, cy, cz, step, solid, point)];
 						if (layer != 0)
 							color = LayerColor(layer);
 					}
@@ -825,9 +840,9 @@ extension VoxelTerrain
 						let normal = solid ? n : -n;
 						let cellY = solid ? p.y : p.y + (axis == 1 ? size : 0);
 						var faceColor = SurfaceColor(cellY, normal.y > 0.5f ? 1.0f : (normal.y < -0.5f ? 0.0f : 0.4f));
-						if (chunk.paint != null)
+						if (work.paint != null)
 						{
-							let layer = chunk.paint[solid ? SampleIndex(x, y, z) : SampleIndex(nx, ny, nz)];
+							let layer = work.paint[solid ? SampleIndex(x, y, z) : SampleIndex(nx, ny, nz)];
 							if (layer != 0)
 								faceColor = LayerColor(layer);
 						}

@@ -1363,6 +1363,16 @@ A full conversion also needs these. Ordered roughly by when they block users.
   windows, floors, roofs, stairs holes, cut-away, undo, erase and plan text round trip; `--building-storey N`
   `--building-cutaway 0-2` for screenshots). Not yet: walls at angles other than 90 degrees, roof shapes other than
   flat, railings, and clicking through the tools by hand.
+- [x] Terrain cracks while digging (November 17, 2026; the user saw wrong triangles "esp when digging"). Mesh
+  workers read a chunk's own samples and paint while the brush wrote them on the main thread, so a mesh could mix
+  old and new samples (cracks in Smooth meshes mid-stroke, until the next rebuild) and paint could be freed under a
+  worker. Workers now copy them under `mMonitor`; `ApplyStroke` and `TakeSharedEdges` write under it. Checked by
+  dumping every chunk build during a scripted dig: cracked builds 4 → 0 over three runs, and the stitched terrain
+  is watertight in both styles. Still open: in endless terrain with caves about 0.1% of triangles face against
+  their vertex normals, on rock about a voxel thick.
+- [x] CI repair (November 17, 2026): the three pushes since the Steam/anti-cheat work failed because
+  `Tests/CSharpExpose/fixture.tsv` lagged behind the engine manifest (148 new API lines), so the managed job lacked
+  `CSharpSteam`/`CSharpAntiCheat` and the native job's drift check failed. Fixture refreshed.
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is

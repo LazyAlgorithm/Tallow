@@ -170,56 +170,60 @@ extension VoxelTerrain
 		if (x0 > x1 || y0 > y1 || z0 > z1)
 			return;
 		Record(chunk.coord);
-		if (mode == .Paint && chunk.paint == null)
-			chunk.paint = new uint8[SampleCount];
-		let density = chunk.density;
 		bool changed = false;
-		for (int z = z0; z <= z1; z++)
+		// Workers copy the samples they mesh under the same lock, so they never see a stroke half applied.
+		using (mMonitor.Enter())
 		{
-			for (int y = y0; y <= y1; y++)
+			if (mode == .Paint && chunk.paint == null)
+				chunk.paint = new uint8[SampleCount];
+			let density = chunk.density;
+			for (int z = z0; z <= z1; z++)
 			{
-				for (int x = x0; x <= x1; x++)
+				for (int y = y0; y <= y1; y++)
 				{
-					let p = origin + Vector3(x, y, z) * size;
-					let falloff = 1.0f - (p - center).Length / radius;
-					if (falloff <= 0)
-						continue;
-					let index = SampleIndex(x, y, z);
-					var value = (float)density[index];
-					switch (mode)
+					for (int x = x0; x <= x1; x++)
 					{
-					case .Raise: value += strength * falloff * 48.0f;
-					case .Lower: value -= strength * falloff * 48.0f;
-					case .Flatten:
-						let target = Mathf.Clamp((stroke.flattenLocal - p.y) / size * 24.0f, -127, 127);
-						value = Mathf.Lerp(value, target, Math.Min(1.0f, strength * falloff));
-					case .Smooth:
-						float average;
-						if (before != null)
+						let p = origin + Vector3(x, y, z) * size;
+						let falloff = 1.0f - (p - center).Length / radius;
+						if (falloff <= 0)
+							continue;
+						let index = SampleIndex(x, y, z);
+						var value = (float)density[index];
+						switch (mode)
 						{
-							let c = chunk.coord;
-							value = Before(before, c, density, x, y, z);
-							average = ((float)Before(before, c, density, x - 1, y, z) + Before(before, c, density, x + 1, y, z)
-								+ Before(before, c, density, x, y - 1, z) + Before(before, c, density, x, y + 1, z)
-								+ Before(before, c, density, x, y, z - 1) + Before(before, c, density, x, y, z + 1)) / 6.0f;
+						case .Raise: value += strength * falloff * 48.0f;
+						case .Lower: value -= strength * falloff * 48.0f;
+						case .Flatten:
+							let target = Mathf.Clamp((stroke.flattenLocal - p.y) / size * 24.0f, -127, 127);
+							value = Mathf.Lerp(value, target, Math.Min(1.0f, strength * falloff));
+						case .Smooth:
+							float average;
+							if (before != null)
+							{
+								let c = chunk.coord;
+								value = Before(before, c, density, x, y, z);
+								average = ((float)Before(before, c, density, x - 1, y, z) + Before(before, c, density, x + 1, y, z)
+									+ Before(before, c, density, x, y - 1, z) + Before(before, c, density, x, y + 1, z)
+									+ Before(before, c, density, x, y, z - 1) + Before(before, c, density, x, y, z + 1)) / 6.0f;
+							}
+							else
+							{
+								int sum = 0;
+								sum += density[SampleIndex(Math.Max(x - 1, 0), y, z)];
+								sum += density[SampleIndex(Math.Min(x + 1, (int)ChunkCells), y, z)];
+								sum += density[SampleIndex(x, Math.Max(y - 1, 0), z)];
+								sum += density[SampleIndex(x, Math.Min(y + 1, (int)ChunkCells), z)];
+								sum += density[SampleIndex(x, y, Math.Max(z - 1, 0))];
+								sum += density[SampleIndex(x, y, Math.Min(z + 1, (int)ChunkCells))];
+								average = sum / 6.0f;
+							}
+							value = Mathf.Lerp(value, average, Math.Min(1.0f, strength * falloff));
+						case .Paint:
+							chunk.paint[index] = (uint8)stroke.paintLayer;
 						}
-						else
-						{
-							int sum = 0;
-							sum += density[SampleIndex(Math.Max(x - 1, 0), y, z)];
-							sum += density[SampleIndex(Math.Min(x + 1, (int)ChunkCells), y, z)];
-							sum += density[SampleIndex(x, Math.Max(y - 1, 0), z)];
-							sum += density[SampleIndex(x, Math.Min(y + 1, (int)ChunkCells), z)];
-							sum += density[SampleIndex(x, y, Math.Max(z - 1, 0))];
-							sum += density[SampleIndex(x, y, Math.Min(z + 1, (int)ChunkCells))];
-							average = sum / 6.0f;
-						}
-						value = Mathf.Lerp(value, average, Math.Min(1.0f, strength * falloff));
-					case .Paint:
-						chunk.paint[index] = (uint8)stroke.paintLayer;
+						density[index] = (int8)Mathf.Clamp(value, -127, 127);
+						changed = true;
 					}
-					density[index] = (int8)Mathf.Clamp(value, -127, 127);
-					changed = true;
 				}
 			}
 		}

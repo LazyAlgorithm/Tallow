@@ -166,9 +166,13 @@ extension VoxelTerrain
 						if (!touched)
 							Record(chunk.coord);
 						painted.TryGetValue(other, let paint);
-						if (paint != null && chunk.paint == null)
-							chunk.paint = new uint8[SampleCount];
-						CopyShared(chunk.density, chunk.paint, density, paint, dx, dy, dz);
+						// Held while writing samples, as mesh workers copy them under it (see BuildChunk).
+						using (mMonitor.Enter())
+						{
+							if (paint != null && chunk.paint == null)
+								chunk.paint = new uint8[SampleCount];
+							CopyShared(chunk.density, chunk.paint, density, paint, dx, dy, dz);
+						}
 						touched = true;
 					}
 				}
