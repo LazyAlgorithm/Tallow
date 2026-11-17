@@ -1,0 +1,5 @@
+dataasset InGame.TuningData
+field Gravity	12.5
+field Title	From the file
+field Volume	0.6
+field Levels	3;3;4;5

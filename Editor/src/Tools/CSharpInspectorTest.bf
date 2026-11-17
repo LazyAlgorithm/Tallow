@@ -77,6 +77,18 @@ extension EditorApp
 				"redo puts both back");
 			mDirty = false;
 		}
+		// C# data assets: the compiler's list, a new file's text, and an edit's.
+		Check(IsManagedDataAssetClass("InGame.TuningData") && IsManagedDataAssetClass("InGame.HardTuning") &&
+			IsManagedDataAssetClass("InGame.TuningData", true) && !IsManagedDataAssetClass("InGame.UnfiledData", true) &&
+			!IsManagedDataAssetClass("InGame.ApiChecks"), "C# data asset classes are listed, with [Saved] ones marked");
+		let made = scope String();
+		ManagedDataText("InGame.UnfiledData", "", "", "", made);
+		Check(made == "dataasset InGame.UnfiledData\nfield Speed\t4\n", scope $"a new C# data asset file has the code's values ({made})");
+		let edited = scope String();
+		ManagedDataText("InGame.TuningData", "dataasset InGame.TuningData\nfield Title\tFrom the file\n", "Gravity", "7", edited);
+		Check(edited.Contains("field Gravity\t7\n") && edited.Contains("field Title\tFrom the file\n") &&
+			edited.Contains("field Volume\t0.8\n") && !edited.Contains("Loads"),
+			"an edit keeps the file's other values and fills the rest with defaults");
 		if (pass)
 			Log.Info(scope $"CSHARP INSPECTOR TEST PASS: {report}");
 		else

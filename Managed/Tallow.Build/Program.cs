@@ -943,6 +943,8 @@ internal static class Program
         // Old script names and what they are now ([FormerlyNamed]); the editor updates scenes with them.
         var formerRows = new SortedSet<string>(StringComparer.Ordinal);
         var fieldRows = new SortedSet<string>(StringComparer.Ordinal);
+        // C# DataAsset classes (Project window: + > Data Asset); their fields are in fieldRows as a script's are.
+        var dataAssetRows = new SortedSet<string>(StringComparer.Ordinal);
         var fieldDocRows = new SortedSet<string>(StringComparer.Ordinal);
         // Build-only metadata for a future AOT static serializer. No new
         // runtime reflection or scene format is introduced by this manifest.
@@ -965,7 +967,7 @@ internal static class Program
                 // A concrete Script subclass is already a component.
                 // Keep [Component] only for ECS structs, where inheritance
                 // cannot distinguish data from an ordinary value type.
-                bool script = false;
+                bool script = false, dataAsset = false;
                 for (INamedTypeSymbol? parent = type.BaseType; parent != null;
                     parent = parent.BaseType)
                 {
@@ -974,15 +976,33 @@ internal static class Program
                         script = true;
                         break;
                     }
+                    if (parent.ToDisplayString() == "Tallow.DataAsset")
+                    {
+                        dataAsset = true;
+                        break;
+                    }
                 }
-                if (!script)
+                if (!script && !dataAsset)
                     continue;
 
                 string className = type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
-                components.Add(className);
-                sourceRows.Add(tree.FilePath + "\t" + className);
-                foreach (string former in FormerNamesOf(type))
-                    formerRows.Add(former + "\t" + className);
+                if (dataAsset)
+                {
+                    // Column 2: "saved" when it has [Saved] fields (the Inspector offers to forget the player's copy).
+                    bool hasSaved = false;
+                    for (INamedTypeSymbol? owner = type; owner != null && owner.ToDisplayString() != "Tallow.DataAsset";
+                         owner = owner.BaseType)
+                        hasSaved |= owner.GetMembers().OfType<IFieldSymbol>().Any(f => f.GetAttributes()
+                            .Any(a => a.AttributeClass?.ToDisplayString() == "Tallow.SavedAttribute"));
+                    dataAssetRows.Add(hasSaved ? className + "\tsaved" : className);
+                }
+                else
+                {
+                    components.Add(className);
+                    sourceRows.Add(tree.FilePath + "\t" + className);
+                    foreach (string former in FormerNamesOf(type))
+                        formerRows.Add(former + "\t" + className);
+                }
                 var seenFieldIds = new HashSet<string>(StringComparer.Ordinal);
 
                 // Limit the first Inspector bridge to deterministic, supported
@@ -991,7 +1011,7 @@ internal static class Program
                 // too: list them base-first, as the runtime restores them.
                 var fieldOwners = new List<INamedTypeSymbol>();
                 for (INamedTypeSymbol? owner = type; owner != null &&
-                     owner.ToDisplayString() != "Tallow.Script" &&
+                     owner.ToDisplayString() is not ("Tallow.Script" or "Tallow.DataAsset") &&
                      owner.SpecialType != SpecialType.System_Object; owner = owner.BaseType)
                     fieldOwners.Insert(0, owner);
                 var seenFieldNames = new HashSet<string>(StringComparer.Ordinal);
@@ -1030,6 +1050,9 @@ internal static class Program
                     // Object references: a GameObject, its Transform, a built-in component handle or a C# script,
                     // set in the Inspector by dragging an object in (column 8 says which).
                     string? referenceType = ReferenceDescriptor(field.Type);
+                    // A data asset is not in a scene: it has no objects to point at.
+                    if (dataAsset && referenceType != null)
+                        return;
                     // A list or array of a value kind is "list:<kind>" (column 8: the element enum's names).
                     ITypeSymbol? element = field.Type switch
                     {
@@ -1255,6 +1278,7 @@ internal static class Program
         Publish(Path.Combine(project, ".tallow-csharp", "component-sources.tsv"), sourceRows);
         Publish(Path.Combine(project, ".tallow-csharp", "former-names.tsv"), formerRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields.tsv"), fieldRows);
+        Publish(Path.Combine(project, ".tallow-csharp", "data-assets.tsv"), dataAssetRows);
         Publish(Path.Combine(project, ".tallow-csharp", "fields-aot.tsv"), aotFieldRows);
         Publish(Path.Combine(project, ".tallow-csharp", "field-docs.tsv"), fieldDocRows);
         Publish(Path.Combine(project, ".tallow-csharp", "ecs-data.tsv"), ecsDataRows.Values.SelectMany(rows => rows));

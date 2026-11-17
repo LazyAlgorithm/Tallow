@@ -905,3 +905,22 @@ static class SaveSetupSnippet
     // Not [GameStart] here: the in-game checks keep file saves.
     static void Begin() => SaveGame.Storage = new ServerStorage();
 }
+
+// docs/saving.md: data assets.
+public class GameSettings : DataAsset
+{
+    public float MaxFieldOfView = 95;
+    public List<string> Levels = ["Docks"];
+    [Saved] public float Volume = 0.8f;
+    [Saved] public string PlayerName = "Player";
+}
+
+static class DataAssetSnippet
+{
+    static void Use()
+    {
+        var settings = DataAsset.Get<GameSettings>();
+        settings.Volume = 0.5f;
+        settings.Save();
+    }
+}

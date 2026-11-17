@@ -609,6 +609,8 @@ public static unsafe class NativeEntrypoints
             sRegistry = registry;
             AddTypes(registry, sTypes, sFormerNames);
             BehaviorNodes.Publish();
+            FieldCodec.Reader ??= (target, saved) => FieldText(target, typeof(DataAsset), saved);
+            FieldCodec.Applier ??= (target, text) => ApplyText(target, typeof(DataAsset), 0, text, everything: false);
             RunGameStarts();
             return sTypes.Count;
         }
@@ -620,6 +622,7 @@ public static unsafe class NativeEntrypoints
             EcsSystems.Clear();
             BehaviorNodes.Clear();
             GameStarts.Clear();
+            DataAsset.ClearCache();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             sTypes.Clear();
@@ -778,6 +781,7 @@ public static unsafe class NativeEntrypoints
             EcsSystems.Clear();
             BehaviorNodes.Forget();
             GameStarts.Clear();
+            DataAsset.ClearCache();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             GameThread.Stop();
@@ -993,6 +997,31 @@ public static unsafe class NativeEntrypoints
         {
             return Failure(exception);
         }
+    }
+
+    /// <summary>"name\tvalue" lines of an object's Inspector fields (saved false) or [Saved] fields (true), up to
+    /// <paramref name="stop"/>: what a data asset's file and the player's copy hold. No object references.</summary>
+    internal static string FieldText(object target, Type stop, bool saved)
+    {
+        var text = new StringBuilder();
+        var seen = new HashSet<string>();
+        for (Type? owner = target.GetType(); owner != null && owner != stop; owner = owner.BaseType)
+        {
+            foreach (FieldInfo field in owner.GetFields(BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+            {
+                if (!seen.Add(field.Name) || field.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false) ||
+                    (saved ? !IsSavedField(field) : !IsInspectorField(field)) || IsReferenceField(field.FieldType))
+                    continue;
+                object? value = field.GetValue(target);
+                string? encoded = FormatInspectorValue(field.FieldType, value);
+                if (encoded != null)
+                    text.Append(field.Name).Append('\t').Append(encoded).Append('\n');
+                else if (value != null && IsNestedType(field.FieldType))
+                    AppendNested(text, field.Name, value, 1);
+            }
+        }
+        return text.ToString();
     }
 
     /// <summary>A struct or class marked [Serializable] (not a script): the Inspector shows and scenes keep its
@@ -1396,7 +1425,12 @@ public static unsafe class NativeEntrypoints
 
     /// <summary>Sets fields from "name\tvalue" lines. Scene and prefab text (everything false) reaches only the
     /// fields opted in to it; hot reload's own snapshot (true) every field it saved.</summary>
-    private static void ApplyText(Script script, string text, bool everything)
+    private static void ApplyText(Script script, string text, bool everything) =>
+        ApplyText(script, typeof(Script), script.GameObject.SceneId, text, everything);
+
+    /// <summary>ApplyText for any object whose fields the Inspector edits (a script, a data asset), up to
+    /// <paramref name="stop"/>; references resolve in <paramref name="sceneId"/>.</summary>
+    internal static void ApplyText(object script, Type stop, ulong sceneId, string text, bool everything)
     {
         {
             // Validate and parse the whole scene/prefab override set before
@@ -1416,7 +1450,7 @@ public static unsafe class NativeEntrypoints
                 // base class, so walk the user's class chain explicitly.
                 FieldInfo? field = null;
                 for (Type? owner = script.GetType(); field is null && owner != null &&
-                     owner != typeof(Script); owner = owner.BaseType)
+                     owner != stop; owner = owner.BaseType)
                     field = owner.GetField(name, BindingFlags.Instance | BindingFlags.Public |
                         BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
                 if (field is null || !IsReloadField(field))
@@ -1435,7 +1469,7 @@ public static unsafe class NativeEntrypoints
                 if (chain is null)
                     continue;
                 FieldInfo target = chain[^1];
-                object? parsed = ParseInspectorValue(target.FieldType, value, script.GameObject.SceneId);
+                object? parsed = ParseInspectorValue(target.FieldType, value, sceneId);
                 if (parsed != null)
                     updates.Add((chain, parsed));
             }
@@ -1874,6 +1908,7 @@ public static unsafe class NativeEntrypoints
             EcsSystems.Clear();
             BehaviorNodes.Clear();
             GameStarts.Clear();
+            DataAsset.ClearCache();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).
@@ -1922,6 +1957,7 @@ public static unsafe class NativeEntrypoints
             EcsSystems.Clear();
             BehaviorNodes.Clear();
             GameStarts.Clear();
+            DataAsset.ClearCache();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).

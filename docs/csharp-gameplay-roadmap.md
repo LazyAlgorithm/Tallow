@@ -1396,6 +1396,16 @@ A full conversion also needs these. Ordered roughly by when they block users.
   initializers of every referenced game assembly at load (their systems, nodes and starts were registered only on
   first use). 10 in-game checks (393). docs/saving.md and docs/csharp-gameplay.md. Not tried: Load Save At Start
   with a C# storage that answers later.
+- [x] C# data assets (November 17, 2026): `DataAsset` classes in C# (`Get<T>()`, `Get<T>(path)` making a derived
+  class from its file, `FilesOf<T>()`, `[Saved]` fields with `Save`/`Revert`/`OnLoaded`, `ToFileText`,
+  `ClearCache`, `Rescan`). The .tdata file is `dataasset <Class>` plus `field Name\tvalue` lines in the Inspector's
+  text, read and written by the runtime's field codec (now usable on any object, not only scripts); players' copies
+  go through the engine's `DataAsset.Storage` (new `CSharpDataAssets` API, `DataAsset.FilesOfName`/`ForgetIndex`).
+  Tallow.Build lists the classes in `.tallow-csharp/data-assets.tsv` (with a "saved" mark) and their fields in
+  fields.tsv (object references left out); the Project panel's **+ > Data Asset** offers them and the Inspector edits
+  their files from the catalog. Loaded assets are dropped at unload and hot reload. 10 in-game checks (403; 386 in
+  the exported game) and 3 editor checks. docs/saving.md converted. Not done: C# code cannot set the data asset
+  storage (players' copies are files, or whatever engine code sets).
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is

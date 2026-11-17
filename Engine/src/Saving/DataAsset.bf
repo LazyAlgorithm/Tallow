@@ -85,10 +85,12 @@ abstract class DataAsset
 	}
 
 	/// Every asset file of a class, for a game with several (one per level, say).
-	public static void FilesOf(Type type, List<String> paths)
+	public static void FilesOf(Type type, List<String> paths) => FilesOfName(type.GetFullName(.. scope .()), paths);
+
+	/// Every asset file of the class with this full name (a C# class's too).
+	public static void FilesOfName(StringView name, List<String> paths)
 	{
 		Index();
-		let name = type.GetFullName(.. scope .());
 		for (let entry in sFileOfType)
 		{
 			if (entry.value == name)
@@ -344,6 +346,14 @@ abstract class DataAsset
 	/// Drops every loaded asset and the file index (the editor calls this after scripts reload or play stops).
 	/// Goes up each time ClearCache drops the loaded assets: code that keeps an asset can tell it must Get it again.
 	public static int CacheVersion { get; private set; }
+
+	/// Looks for the .tdata files again next time (one was made, moved or deleted); loaded assets stay.
+	public static void ForgetIndex()
+	{
+		if (sFileOfType != null)
+			DeleteDictionaryAndKeysAndValues!(sFileOfType);
+		sFileOfType = null;
+	}
 
 	public static void ClearCache()
 	{

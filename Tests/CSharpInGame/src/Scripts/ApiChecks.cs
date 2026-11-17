@@ -1034,6 +1034,7 @@ public class ApiChecks : CheckBase
         Check("MeshRenderer.IsVisible is false with nothing drawing (headless)", Screen.Width > 0 || !renderer.IsVisible);
         CheckSharedMaterials(renderer);
         CheckCompute(renderer);
+        CheckDataAssets();
         renderer.Material = "";
         // A 2 x 1 quad built in code, one metre above the lamp.
         renderer.SetMesh([new(-1, 1, 0), new(1, 1, 0), new(1, 2, 0), new(-1, 2, 0)], [0, 2, 1, 0, 3, 2]);
@@ -1282,6 +1283,45 @@ public class ApiChecks : CheckBase
         SaveGame.Storage = null;
         Check("SaveGame.Storage = null goes back to files", !SaveGame.Exists("later") && SaveGame.Storage == null);
         Check("[GameStart] methods ran once, before the first Awake", GameStartProbe.Runs == 1 && GameStartProbe.BeforeAwake);
+    }
+
+    private void CheckDataAssets()
+    {
+        string[] files = DataAsset.FilesOf<TuningData>();
+        Check($"DataAsset.FilesOf finds a class's .tdata files, its subclasses' not ({string.Join(",", files)})",
+            files.SequenceEqual(["Data/Tuning.tdata"]));
+        var tuning = DataAsset.Get<TuningData>();
+        tuning.Revert(); // a copy kept by an earlier run
+        Check($"DataAsset.Get<T> reads the class's file ({tuning.Gravity}, {tuning.Title}, {string.Join(",", tuning.Levels)})",
+            tuning.Gravity == 12.5f && tuning.Title == "From the file" && tuning.Levels.SequenceEqual([3, 4, 5]) &&
+            tuning.AssetPath == "Data/Tuning.tdata");
+        Check("DataAsset.Get<T> shares one asset", ReferenceEquals(tuning, DataAsset.Get<TuningData>()) &&
+            ReferenceEquals(tuning, DataAsset.Get<TuningData>("Data/Tuning.tdata")));
+        var hard = DataAsset.Get<TuningData>("Data/Hard.tdata");
+        Check("a file of a derived class makes that class", hard is HardTuning { Hard: true } && hard.Gravity == 30f &&
+            hard.Title == "Default title");
+        var none = DataAsset.Get<UnfiledData>();
+        Check("a class with no file gets the code's values", none.Speed == 4f && none.AssetPath == "InGame.UnfiledData");
+        bool wrongClass = false;
+        try { DataAsset.Get<UnfiledData>("Data/Tuning.tdata"); } catch (InvalidCastException) { wrongClass = true; }
+        Check("Get of a file of another class throws InvalidCastException", wrongClass);
+
+        tuning.Volume = 0.25f;
+        tuning.Gravity = 99f;
+        Check("DataAsset.Save keeps the [Saved] fields", tuning.Save());
+        DataAsset.ClearCache();
+        var again = DataAsset.Get<TuningData>();
+        Check($"the next Get puts the player's [Saved] fields over the file's, not the others ({again.Volume}, {again.Gravity})",
+            !ReferenceEquals(again, tuning) && again.Volume == 0.25f && again.Gravity == 12.5f && again.Loads == 1);
+        again.Revert();
+        DataAsset.ClearCache();
+        var reverted = DataAsset.Get<TuningData>();
+        Check($"Revert goes back to the file's values and forgets the copy ({again.Volume}, {reverted.Volume})",
+            again.Volume == 0.6f && reverted.Volume == 0.6f && reverted.Loads == 0);
+        string text = DataAsset.ToFileText(reverted);
+        Check("DataAsset.ToFileText writes the class and its fields",
+            text.StartsWith("dataasset InGame.TuningData\n") && text.Contains("field Gravity\t12.5\n") &&
+            text.Contains("field Title\tFrom the file\n"));
     }
 
     private int _rpcValue;
@@ -1807,6 +1847,27 @@ public static class GameStartProbe
         Runs++;
         BeforeAwake = !ApiChecks.Awoken;
     }
+}
+
+public class TuningData : DataAsset
+{
+    public float Gravity = 9.8f;
+    public string Title = "Default title";
+    public List<int> Levels = [1];
+    [Saved] public float Volume = 0.8f;
+    [NonSerialized] public int Loads;
+
+    public override void OnLoaded() => Loads++;
+}
+
+public class HardTuning : TuningData
+{
+    public bool Hard;
+}
+
+public class UnfiledData : DataAsset
+{
+    public float Speed = 4f;
 }
 
 public class ContactProbe : Script

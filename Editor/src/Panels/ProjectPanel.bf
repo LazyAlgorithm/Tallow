@@ -744,14 +744,30 @@ extension EditorApp
 		{
 			let types = scope List<Type>();
 			DataAsset.Types(types);
-			if (types.IsEmpty)
-				ImGui.TextDisabled("No data asset classes yet: write one with [DataAsset] (see the Saving page).");
+			let managed = scope List<String>();
+			ManagedDataAssetClasses(managed);
+			defer { ClearAndDeleteItems!(managed); }
+			if (types.IsEmpty && managed.IsEmpty)
+				ImGui.TextDisabled("No data asset classes yet: write a class that derives from DataAsset (see the Saving page).");
 			for (let type in types)
 			{
 				let name = type.GetName(.. scope .());
 				if (ImGui.MenuItem(name))
 				{
 					mNewDataType.Set(type.GetFullName(.. scope .()));
+					BeginNewItem(13, name);
+				}
+			}
+			// C# classes (the compiler's list).
+			for (let className in managed)
+			{
+				let name = scope String(className);
+				let dot = name.LastIndexOf('.');
+				if (dot >= 0)
+					name.Remove(0, dot + 1);
+				if (ImGui.MenuItem(name))
+				{
+					mNewDataType.Set(className);
 					BeginNewItem(13, name);
 				}
 			}
@@ -1038,15 +1054,20 @@ extension EditorApp
 				Log.Error(scope $"{path} already exists.");
 				break;
 			}
+			let text = scope String();
 			let asset = DataAsset.Create(DataAsset.TypeNamed(mNewDataType));
-			if (asset == null)
+			if (asset != null)
+			{
+				asset.WriteText(text);
+				delete asset;
+			}
+			else if (IsManagedDataAssetClass(mNewDataType))
+				ManagedDataText(mNewDataType, "", "", "", text);
+			else
 			{
 				Log.Error("That data asset class could not be made.");
 				break;
 			}
-			let text = scope String();
-			asset.WriteText(text);
-			delete asset;
 			File.WriteAllText(path, text).IgnoreError();
 			DataAsset.ClearCache();
 		case 14:

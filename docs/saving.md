@@ -121,26 +121,29 @@ string path = $"{GamePaths.PlayerData}notes.txt";
 
 ## Data assets
 
-A data asset is a file of data every script shares: settings, a table of weapons, the levels in order. Write a class, make the file, fill it in, and read it from anywhere. Data asset classes are engine (Beef) code for now:
+A data asset is a file of data every script shares: settings, a table of weapons, the levels in order. Write a class that derives from `DataAsset`, make the file, fill it in, and read it from anywhere:
 
-```beef
-[DataAsset]
-class GameSettings : DataAsset
+```csharp
+public class GameSettings : DataAsset
 {
-    public float maxFieldOfView = 95;           // set in the Inspector: the same for every player
-    [Saved] public float volume = 0.8f;           // each player's own
-    [Saved] public String name = new .("Player") ~ delete _;
+    public float MaxFieldOfView = 95;          // set in the Inspector: the same for every player
+    public List<string> Levels = ["Docks"];
+    [Saved] public float Volume = 0.8f;        // each player's own
+    [Saved] public string PlayerName = "Player";
 }
 
-let settings = DataAsset.Get<GameSettings>();   // loaded once, shared by every script
-settings.volume = 0.5f;
-settings.Save();                                // keeps this player's [Saved] fields
+var settings = DataAsset.Get<GameSettings>();  // loaded once, shared by every script
+settings.Volume = 0.5f;
+settings.Save();                               // keeps this player's [Saved] fields
 ```
 
-- **Making one:** Project panel, **+ > Data Asset**, choose the class. Click the `.tdata` file to edit it in the Inspector; changes are written to the file at once.
-- **Finding it:** `DataAsset.Get<T>()` returns the project's asset of that class (the first file made from it); `Get<T>(path)` a particular one; `DataAsset.FilesOf(type, list)` all of them. A class with no file still works, with the values written in the code.
-- **The player's copy:** fields marked `[Saved]` are the player's to change. `Save()` keeps them in `GamePaths.PlayerData + "data/"` (or `DataAsset.Storage`), and the next `Get` puts them over the file's values and calls `OnLoaded()`. `Revert()` forgets them and goes back to the file. The Inspector's **Forget my saved copy** does the same on your machine.
-- **In the editor:** stopping play and reloading scripts drop loaded assets, so the next Play reads the files afresh. `DataAsset.CacheVersion` changes when that happens, for code that keeps an asset.
+- **Making one:** Project panel, **+ > Data Asset**, choose the class (it is listed once the scripts compile). Click the `.tdata` file to edit it in the Inspector; changes are written to the file at once.
+- **What it holds:** the fields the Inspector shows on a script (public, or `[ShowInInspector]`; numbers, text, enums, colours, vectors, lists and `[Serializable]` types). Object references are left out: an asset is not in a scene.
+- **Finding it:** `DataAsset.Get<T>()` returns the project's asset of that class (the first file made from it); `Get<T>(path)` a particular one (a file of a derived class makes that class); `DataAsset.FilesOf<T>()` all of them. A class with no file still works, with the values written in the code.
+- **The player's copy:** fields marked `[Saved]` are the player's to change. `Save()` keeps them in `GamePaths.PlayerData + "data/"`, and the next `Get` puts them over the file's values and calls `OnLoaded()`. `Revert()` forgets them and goes back to the file. The Inspector's **Forget my saved copy** does the same on your machine.
+- **In the editor:** stopping play and reloading scripts drop loaded assets, so the next Play reads the files afresh; `DataAsset.ClearCache()` does the same while playing.
+
+(Engine code writes Beef classes marked `[DataAsset]` the same way, with `DataAsset.Storage` to keep players' copies elsewhere and `DataAsset.CacheVersion` for code that keeps an asset.)
 
 Data assets are kept apart from `SaveSystem` saves on purpose: loading an old save does not undo a player's settings.
 

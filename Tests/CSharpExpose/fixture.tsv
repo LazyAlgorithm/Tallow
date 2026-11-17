@@ -131,6 +131,12 @@ method	Tallow.CSharpCompute	SetShaderValue	bool	id:int	name:string	value:System.
 method	Tallow.CSharpCompute	ShaderHighPrecision	bool	id:int
 method	Tallow.CSharpCompute	ShowTexture	bool	id:int	session:ulong	entity:ulong	show:bool
 method	Tallow.CSharpCompute	Supported	bool
+method	Tallow.CSharpDataAssets	DeleteCopy	void	path:string
+method	Tallow.CSharpDataAssets	FilesOf	int	typeName:string	buffer:System.Span<byte>
+method	Tallow.CSharpDataAssets	ReadCopy	int	path:string	buffer:System.Span<byte>
+method	Tallow.CSharpDataAssets	ReadFile	int	path:string	buffer:System.Span<byte>
+method	Tallow.CSharpDataAssets	Rescan	void
+method	Tallow.CSharpDataAssets	WriteCopy	bool	path:string	fields:string
 method	Tallow.CSharpDraw	Box	void	layer:int	center:System.Numerics.Vector3	size:System.Numerics.Vector3	color:System.Numerics.Vector4
 method	Tallow.CSharpDraw	Line	void	layer:int	a:System.Numerics.Vector3	b:System.Numerics.Vector3	color:System.Numerics.Vector4
 method	Tallow.CSharpDraw	Sphere	void	layer:int	center:System.Numerics.Vector3	radius:float	color:System.Numerics.Vector4
