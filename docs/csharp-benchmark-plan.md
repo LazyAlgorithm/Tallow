@@ -43,7 +43,7 @@
 
 ## P1 — simulation throughput (run after API semantics pass)
 
-- [ ] **B11 — ECS data-only baseline.** 10k, 50k, 100k and 250k static/rotating entities; native Beef ECS system vs managed C# workload over the **same Flecs data**. Report ECS iteration/query time, frame times, allocations, memory and render draw-call limits. Do not present a renderer bottleneck as an ECS result.
+- [x] **B11 — ECS data-only baseline.** 10k, 50k, 100k and 250k static/rotating entities; native Beef ECS system vs managed C# workload over the **same Flecs data**. Report ECS iteration/query time, frame times, allocations, memory and render draw-call limits. Do not present a renderer bottleneck as an ECS result.
 - [x] **B12 — ECS writable chunk path.** Read and write the same 10k/100k position-like components with a bulk API; measure copy cost, boundary transitions and total tick. Done for offline scenes (2026-11-15): `Scene.Query<...>().ForEach` gives refs straight into the Flecs columns, one native call per table, no copy; 50k ecs rows 2.08 ms C# vs 1.53 ms Beef (see results below). Networked [Sync] ECS data is still to do.
 - [ ] **B13 — physics sphere pile.** Spawn Jolt rigidbodies at fixed intervals until p95 frame time >16.67 ms, or max 10k. Record total, active/asleep counts, contact pairs, Jolt step milliseconds and memory. Repeat sleep ON/OFF; compare Beef vs C# control paths with identical native Jolt settings.
 - [x] **B14 — character motion/physics queries.** 100, 1k and 5k Jolt CharacterController instances with the same navigation/input; raycasts and sphere casts at 1k/10k/100k queries per frame; measure exact hit agreement and latency separately.
@@ -135,6 +135,28 @@
   teleported, or move more than 0.5 m from where it saw them). It visits neighbours in the same order as before, so
   the push is the same to the bit. EcsBench's checks compare the two for 300 characters standing, walking, teleported
   and moved by their Transform. 1,000 walkers now take 1.8 ms a tick (78x faster), and 5,000 take 13.7 ms.
+
+- B11 (2026-11-16, `run_csharp_bench.py --modes ecs`, Release headless players, medians of 3 x 600 frames; raw data
+  `~/TallowBenchmarks/ecs-20261116/`): entities with Pose + Motion moving and spinning, one query over the same Flecs
+  data (Beef: `MoveSystem` over chunks; C#: `Scene.Query<Pose, Motion>().ForEach` in place).
+
+  | entities | Beef query ms | C# query ms | C#/Beef | Beef frame ms (p99) | C# frame ms (p99) | spawn Beef / C# ms |
+  |---:|---:|---:|---:|---:|---:|---:|
+  | 10,000 | 0.30 | 0.52 | 1.76x | 1.36 (1.46) | 1.59 (1.72) | 2.4 / 3.8 |
+  | 50,000 | 1.49 | 2.57 | 1.73x | 2.55 (2.78) | 3.63 (3.86) | 10.1 / 12.7 |
+  | 100,000 | 2.97 | 5.05 | 1.70x | 4.05 (4.31) | 6.12 (6.50) | 19.1 / 25.0 |
+  | 250,000 | 7.12 | 12.45 | 1.75x | 8.20 (8.56) | 13.53 (14.23) | 45.1 / 56.0 |
+
+  Linear, a steady 1.7x, 217 managed bytes a frame and no collections at any size; the C# process is ~35-45 MB
+  larger (the .NET runtime). These entities are data only and not drawn: render and draw-call limits are B16's.
+
+  Why 1.7x: game code is loaded in a collectible context (for hot reload), and .NET compiles collectible code once,
+  fully optimised, without tiering or dynamic PGO (`DOTNET_JitDisasmSummary` shows FullOpts for every game
+  method). The process-wide `TieredPGO` setting still changes the inliner: with `DOTNET_TieredPGO=0` the ECS lambda
+  stops inlining `Workload.Step` and runs 2x faster (2.6 ms at 100k, faster than Beef), but GameObject scripts get
+  15% slower, GetComponent 17% and lifecycle 8%, so it is not the default. Loading shipped games non-collectible
+  (tiering and PGO on) was tried and measured neutral (GetComponent 8% faster, ECS 2% slower, everything else and
+  start-up unchanged), so it was not kept. NativeAOT (P3) remains the way to settle code generation.
 
 ### Fixes from these runs (2026-11-16)
 
