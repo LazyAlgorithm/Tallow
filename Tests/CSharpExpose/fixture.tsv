@@ -324,6 +324,14 @@ method	Tallow.CSharpPlatform	VoiceVolume	float	clientId:int
 method	Tallow.CSharpPlatform	WindAt	System.Numerics.Vector3	session:ulong	position:System.Numerics.Vector3
 method	Tallow.CSharpPlatform	WindGusts	float	session:ulong
 method	Tallow.CSharpPlatform	WindowFullscreen	bool
+method	Tallow.CSharpProfiler	AddCounter	void	counter:int	amount:double
+method	Tallow.CSharpProfiler	Begin	void	marker:int
+method	Tallow.CSharpProfiler	Counter	int	name:string	category:int	unit:string
+method	Tallow.CSharpProfiler	Enabled	bool
+method	Tallow.CSharpProfiler	End	void
+method	Tallow.CSharpProfiler	Marker	int	name:string	category:int
+method	Tallow.CSharpProfiler	NameThread	void	name:string
+method	Tallow.CSharpProfiler	SetCounter	void	counter:int	value:double
 method	Tallow.CSharpRopes	Attach	ulong	session:ulong	from:ulong	to:ulong	fromOffset:System.Numerics.Vector3	toOffset:System.Numerics.Vector3	length:float	thickness:float
 method	Tallow.CSharpRopes	Rebuild	bool	session:ulong	entity:ulong	kind:int
 method	Tallow.CSharpRopes	RopeLayAlong	bool	session:ulong	entity:ulong	path:System.Span<float>

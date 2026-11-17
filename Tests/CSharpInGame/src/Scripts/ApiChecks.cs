@@ -144,9 +144,16 @@ public class ApiChecks : CheckBase
 
     public override void FixedUpdate(float deltaTime) => _fixedTicks++;
 
+    private static readonly ProfilerMarker TickMarker = new("InGame tick work", ProfilerCategory.AI);
+    private static readonly ProfilerCounter TickCounter = new("InGame ticks", ProfilerCategory.Scripts, "ticks");
+
     public override void Update(TickInput input, float deltaTime)
     {
         _tick++;
+        using (TickMarker.Auto())
+            TickCounter.Set(_tick);
+        TickMarker.Begin();
+        TickMarker.End();
         if (_tick == 5)
             SceneAndFields();
         else if (_tick == 6)

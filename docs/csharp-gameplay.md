@@ -81,9 +81,9 @@ Status (November 17, 2026): C# covers gameplay scripting, physics, networking wi
 systems, UI code-behind, visual-script compilation, editor scripts, hot reload that keeps field values, and game
 export, all checked by the in-game, network, reload, showcase and export tests. The benchmark plan
 (docs/csharp-benchmark-plan.md) records how it measures against Beef. C# behaviour tree nodes (`BehaviorNode`) arrived
-the same day. What C# does not have yet: editing a shared material (as opposed to one object's copy), compute shaders run without a Compute Effect,
-custom save storage and data assets, profiler markers, terrain generators, texture creation, and async scene loading
-beyond the Scene Loader component. The docs mark these places as engine (Beef) code. NativeAOT export is parked.
+the same day. Shared materials, compute shaders without the component, custom save storage, `[GameStart]`, data assets and
+profiler markers followed on November 17. What C# does not have yet: terrain generators, texture creation, and async
+scene loading beyond the Scene Loader component. The docs mark these places as engine (Beef) code. NativeAOT export is parked.
 
 ## Gameplay parity requirement
 

@@ -924,3 +924,26 @@ static class DataAssetSnippet
         settings.Save();
     }
 }
+
+// docs/profiler.md: markers and counters.
+public class ProfilerSnippet : Script
+{
+    static readonly ProfilerMarker Pathfinding = new("Enemy Pathfinding", ProfilerCategory.AI);
+    static readonly ProfilerCounter Enemies = new("Enemies Alive", ProfilerCategory.Scripts, "enemies");
+    readonly List<int> enemies = [];
+
+    void FindPaths() { }
+    void FindMorePaths() { }
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        using (Pathfinding.Auto())
+            FindPaths();
+
+        Pathfinding.Begin();
+        FindMorePaths();
+        Pathfinding.End();
+
+        Enemies.Set(enemies.Count);
+    }
+}

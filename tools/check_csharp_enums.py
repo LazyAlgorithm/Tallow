@@ -26,6 +26,8 @@ PAIRS = [
      "Managed/Tallow.API/Platform.cs", r"public enum QualityLevel\s*\{(.*?)\n\}"),
     ("Engine/src/Render/Material.bf", r"enum MaterialBlend : int32\s*\{(.*?)\n\}",
      "Managed/Tallow.API/Materials.cs", r"public enum MaterialBlend\s*\{(.*?)\n\}"),
+    ("Engine/src/Core/Profiler.bf", r"enum ProfilerCategory : uint8\s*\{(.*?)\n\}",
+     "Managed/Tallow.API/Profiling.cs", r"public enum ProfilerCategory : byte\s*\{(.*?)\n\}"),
 ]
 
 

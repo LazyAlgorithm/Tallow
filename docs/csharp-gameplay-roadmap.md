@@ -1406,6 +1406,10 @@ A full conversion also needs these. Ordered roughly by when they block users.
   their files from the catalog. Loaded assets are dropped at unload and hot reload. 10 in-game checks (403; 386 in
   the exported game) and 3 editor checks. docs/saving.md converted. Not done: C# code cannot set the data asset
   storage (players' copies are files, or whatever engine code sets).
+- [x] C# profiler markers and counters (November 17, 2026): `ProfilerMarker` (Begin/End, `Auto()` scope),
+  `ProfilerCounter` (Set/Add, unit), `ProfilerCategory` (enum check), `Profiler.Enabled`/`NameThread`, over the new
+  `CSharpProfiler` API; names register on first use. The in-game run's profile report must show the test's marker
+  under AI and its counter with its unit (405 checks). docs/profiler.md converted.
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is

@@ -98,7 +98,9 @@ def main() -> int:
         for label, needle in [("the Profiler times each C# script class by name", "| InGame.ApiChecks.Update() | Scripts |"),
                               ("the Profiler times C# await continuations", "| C# await continuations | Scripts |"),
                               ("the Profiler counts C# allocations and heap size", "- C# allocated this frame in bytes:"),
-                              ("the Profiler counts C# garbage collections", "- C# garbage collections this frame:")]:
+                              ("the Profiler counts C# garbage collections", "- C# garbage collections this frame:"),
+                              ("a C# ProfilerMarker is timed under its category", "| InGame tick work | AI |"),
+                              ("a C# ProfilerCounter is shown with its unit", "- InGame ticks in ticks:")]:
             if needle in report:
                 passed += 1
                 print("INGAME PASS " + label)

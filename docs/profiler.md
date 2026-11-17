@@ -42,26 +42,26 @@ The window keeps the last 300 frames (`Profiler.Local.limit`).
 
 ## Markers and counters in game code
 
-Markers and counters are engine (Beef) code for now. C# scripts' time is counted under **Scripts** in the CPU Usage graph.
+C# scripts' time is counted under **Scripts** in the CPU Usage graph, one row per script class. To time a part of your own, or show a number each frame, keep a marker or counter in a static field:
 
-```beef
-static ProfilerMarker sPathfinding = .("Enemy Pathfinding", .AI);
-static ProfilerCounter sEnemies = .("Enemies Alive", .Scripts);
+```csharp
+static readonly ProfilerMarker Pathfinding = new("Enemy Pathfinding", ProfilerCategory.AI);
+static readonly ProfilerCounter Enemies = new("Enemies Alive", ProfilerCategory.Scripts, "enemies");
 
-public override void Update()
+public override void Update(TickInput input, float deltaTime)
 {
-	sPathfinding.Begin();
-	FindPaths();
-	Profiler.End();
+    using (Pathfinding.Auto())     // timed until the block's end
+        FindPaths();
 
-	using (sPathfinding.Sample())   // the same, ended at the block's end
-		FindMorePaths();
+    Pathfinding.Begin();           // the same, by hand
+    FindMorePaths();
+    Pathfinding.End();
 
-	sEnemies.Set(enemies.Count);    // Set keeps the last value in a frame; Add sums
+    Enemies.Set(enemies.Count);    // Set keeps the last value in a frame; Add sums
 }
 ```
 
-A marker or counter registers its name on first use, so the fields cost nothing until then. Recording works from any thread: a thread you start yourself can be named with `Profiler.NameThread("Loader")`. `Profiler.Marker(name, category)`, `Profiler.Begin(id)` and `Profiler.Counter(name, category, unit)` are the plain forms. Units are free text, and units starting with "bytes" are shown as KB, MB and GB.
+A marker or counter registers its name on first use, and costs next to nothing while the profiler is not recording (`Profiler.Enabled`). Begin and End pair up on the same thread, and markers nest. Recording works from any thread: a thread you start yourself can be named with `Profiler.NameThread("Loader")`. Units are free text, and units starting with "bytes" are shown as KB, MB and GB. (Engine code has the same in Beef: `ProfilerMarker`, `ProfilerCounter`, `Profiler.Marker(name, category)` and `Profiler.Begin(id)`.)
 
 A sample still open when a frame ends is cut there and continues in the next frame, so long work on another thread shows in every frame it spans.
 
