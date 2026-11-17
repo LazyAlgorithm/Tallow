@@ -9,16 +9,24 @@ namespace Tallow.Editor;
 /// Script templates offered by Project > Create > Script.
 enum ScriptTemplateKind
 {
-	Basic,
-	Movement,
-	Timer,
-	Gui,
-	Networked,
-	EcsData,
-	EcsSynced,
-	EcsMixed,
-	EcsQuery,
-	EcsBulk
+	case Basic;
+	case Movement;
+	case Timer;
+	case Gui;
+	case Networked;
+	case EcsData;
+	case EcsSynced;
+	case EcsMixed;
+	case EcsQuery;
+	case EcsBulk;
+	// Editor scripts: made in a folder named Editor, which game builds leave out.
+	case EditorInspector;
+	case EditorWindow;
+	case EditorMenu;
+	case EditorPreferences;
+
+	/// An editor script's template (the file goes in an Editor folder).
+	public bool IsEditor => (int)this >= (int)ScriptTemplateKind.EditorInspector;
 }
 
 /// Building: script rebuilds, restarts and game builds.
@@ -126,12 +134,12 @@ extension EditorApp
 		CompileStaleShaders();
 		let output = scope String();
 		BuildOutputFolder(output);
-		Log.Info(scope $"Building the {(mBuildEditor ? "editor" : "game")} for {(mBuildTarget == .Web ? "the web" : mBuildTarget.ToString(.. scope .()))}...");
-		mBuildSucceeded = mBuildEditor ? project.PackageEngine(output, mBuildTarget) : project.BuildPlayer(output, mBuildTarget);
+		Log.Info(scope $"Building the game for {(mBuildTarget == .Web ? "the web" : mBuildTarget.ToString(.. scope .()))}...");
+		mBuildSucceeded = project.BuildPlayer(output, mBuildTarget);
 		if (mBuildSucceeded)
 		{
-			Log.Info(scope $"{(mBuildEditor ? "Editor" : "Game")} packaged at {output}");
-			mBuildMessage.Set(scope $"Built. The {(mBuildEditor ? "editor" : "game")} is in {output}");
+			Log.Info(scope $"Game packaged at {output}");
+			mBuildMessage.Set(scope $"Built. The game is in {output}");
 		}
 		else
 		{
@@ -156,7 +164,14 @@ extension EditorApp
 			Log.Error("Script names use letters, digits and underscores, and start with a letter.");
 			return;
 		}
-		let path = scope $"{mBrowsePath}/{name}.cs";
+		// An editor script goes in an Editor folder (made here when the folder shown is not in one).
+		let folder = scope String(mBrowsePath);
+		if (template.IsEditor && !InEditorFolder(folder))
+		{
+			folder.Append("/Editor");
+			Directory.CreateDirectory(folder).IgnoreError();
+		}
+		let path = scope $"{folder}/{name}.cs";
 		if (File.Exists(path))
 		{
 			Log.Error(scope $"{path} already exists.");
@@ -164,7 +179,7 @@ extension EditorApp
 		}
 		// The namespace of the assembly the folder belongs to (its .tasmdef root namespace), else the project's.
 		let scriptNamespace = scope String();
-		ScriptNamespaceFor(mBrowsePath, scriptNamespace);
+		ScriptNamespaceFor(folder, scriptNamespace);
 		let text = scope String();
 		ScriptTemplateText(template, scriptNamespace, name, text);
 		if (File.WriteAllText(path, text) case .Ok)
@@ -181,11 +196,113 @@ extension EditorApp
 			Log.Error(scope $"Could not create C# script {path}.");
 	}
 
-	/// The text of a new C# script made from a template (the Project panel's Create > C# Script menu).
-	public static void ScriptTemplateText(ScriptTemplateKind template, StringView scriptNamespace, StringView name, String text)
+	/// Whether a folder is, or is inside, one named Editor (where Tallow.Build takes editor scripts from).
+	static bool InEditorFolder(StringView folder)
+	{
+		for (let part in folder.Split('/', '\\'))
+			if (part == "Editor")
+				return true;
+		return false;
+	}
+
+	/// The text of a new C# script made from a template (the Project panel's Create > C# Script menu). target: the
+	/// script class a custom Inspector draws (default: its name without "Inspector").
+	public static void ScriptTemplateText(ScriptTemplateKind template, StringView scriptNamespace, StringView name, String text, StringView target = default)
 	{
 		switch (template)
 		{
+		case .EditorInspector:
+			var script = target;
+			if (script.IsEmpty)
+				script = name.EndsWith("Inspector") && name.Length > "Inspector".Length ? name.Substring(0, name.Length - "Inspector".Length) : name;
+			text.AppendF("""
+			using Tallow;
+			using Tallow.Editor;
+
+			namespace {0};
+
+			/// <summary>Draws {2}'s part of the Inspector, in place of its plain field list. Editor scripts (any
+			/// folder named Editor) run only in the editor: a game build leaves them out.</summary>
+			[CustomInspector(typeof({2}))]
+			public class {1} : Inspector
+			{{
+			    public override void OnInspectorGUI()
+			    {{
+			        EditorGUI.HelpBox($"{{Target.ScriptName}} on {{Target.ObjectName}}");
+
+			        // Every field, as the Inspector draws them. Or draw some by name: Field("Speed");
+			        DrawDefaultInspector();
+
+			        // Saved values can be read and set by field name; undo, saving and Play are taken care of:
+			        // if (EditorGUI.Button("Double the speed"))
+			        //     Target.SetFloat("Speed", Target.GetFloat("Speed") * 2);
+			    }}
+			}}
+			""", scriptNamespace, name, script);
+		case .EditorWindow:
+			text.AppendF("""
+			using Tallow;
+			using Tallow.Editor;
+
+			namespace {0};
+
+			/// <summary>A window of the editor: Tools > {1} opens it, and it docks like the others. Editor scripts (any
+			/// folder named Editor) run only in the editor: a game build leaves them out.</summary>
+			[EditorWindow("{1}")]
+			public class {1} : EditorWindow
+			{{
+			    private int _clicks;
+
+			    public override void OnGUI()
+			    {{
+			        EditorGUI.Heading("{1}");
+			        string selected = EditorApplication.SelectedObjectName;
+			        EditorGUI.Label(selected.Length > 0 ? $"Selected: {{selected}}" : "Nothing is selected.");
+
+			        if (EditorGUI.Button("Click me"))
+			            _clicks++;
+			        EditorGUI.Label($"Clicked {{_clicks}} times");
+			    }}
+			}}
+			""", scriptNamespace, name);
+		case .EditorMenu:
+			text.AppendF("""
+			using Tallow;
+			using Tallow.Editor;
+
+			namespace {0};
+
+			/// <summary>Commands in the editor's Tools menu: each static method with [MenuItem] runs when it is chosen.
+			/// Editor scripts (any folder named Editor) run only in the editor: a game build leaves them out.</summary>
+			public static class {1}
+			{{
+			    [MenuItem("{1}/Say Hello")]
+			    private static void SayHello()
+			    {{
+			        EditorApplication.Log($"Hello from {{EditorApplication.ProjectPath}}");
+			    }}
+			}}
+			""", scriptNamespace, name);
+		case .EditorPreferences:
+			text.AppendF("""
+			using Tallow;
+			using Tallow.Editor;
+
+			namespace {0};
+
+			/// <summary>Settings with their own tab in Edit > Preferences: the tab shows these public fields, and every
+			/// change is saved for this user. Read them from any editor script:
+			/// <c>float grid = EditorPrefs.Get&lt;{1}&gt;().GridSize;</c>
+			/// (ProjectPrefs keeps settings in the project instead, for everybody working on it.) Editor scripts (any
+			/// folder named Editor) run only in the editor: a game build leaves them out.</summary>
+			[PreferencesPage("{1}")]
+			public class {1}
+			{{
+			    public float GridSize = 1;
+			    public bool SnapToGrid = true;
+			    public string Author = "";
+			}}
+			""", scriptNamespace, name);
 		case .Basic:
 			text.AppendF("""
 			using System.Numerics;
@@ -419,8 +536,11 @@ extension EditorApp
 			template.ToString(name);
 			name.Append("Template");
 			let text = scope String();
-			ScriptTemplateText(template, "TemplateTest", name, text);
-			if (File.WriteAllText(scope $"{folder}/{name}.cs", text) case .Ok)
+			// Editor scripts in an Editor folder, as Create makes them; the Inspector draws the Basic template's script.
+			ScriptTemplateText(template, "TemplateTest", name, text, "BasicTemplate");
+			let into = template.IsEditor ? scope $"{folder}/Editor" : scope String(folder);
+			Directory.CreateDirectory(into).IgnoreError();
+			if (File.WriteAllText(scope $"{into}/{name}.cs", text) case .Ok)
 				written++;
 		}
 		Console.WriteLine(scope $"SCRIPT TEMPLATES WRITTEN {written}");

@@ -233,7 +233,7 @@ internal static class Program
 
             string name = nameValue.GetString()!;
             string folder = Path.GetDirectoryName(Path.GetFullPath(path))!;
-            if (!AssemblyName.IsMatch(name) || name is "Tallow.Game" or "Tallow.API" ||
+            if (!AssemblyName.IsMatch(name) || name is "Tallow.Game" or "Tallow.API" or "Tallow.Editor" or EditorAssembly ||
                 definitions.ContainsKey(name) || !folders.Add(folder))
                 throw new InvalidOperationException($"Invalid or duplicate assembly definition: {path}");
 
@@ -315,6 +315,17 @@ internal static class Program
             Visit(name);
         return definitions;
     }
+
+    /// <summary>The assembly of a game's editor scripts: every .cs file in a folder named Editor (at any depth under
+    /// src/, as in Unity). It references the game's assemblies and Tallow.Editor; nothing references it, so a game
+    /// build never has it.</summary>
+    internal const string EditorAssembly = "Tallow.Game.Editor";
+
+    internal static bool IsEditorFile(string source, string file) =>
+        Path.GetRelativePath(source, Path.GetFullPath(file))
+            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .SkipLast(1)
+            .Any(folder => folder == "Editor");
 
     private static bool IsInFolder(string file, string folder)
     {
@@ -754,7 +765,10 @@ internal static class Program
             File.WriteAllText(path, value);
     }
 
-    private static string Generate(string project, string engine)
+    private static string Generate(string project, string engine) => Generate(project, engine, out _);
+
+    /// <summary>editorProject: the editor scripts' project, or null when the game has none.</summary>
+    private static string Generate(string project, string engine, out string? editorProject)
     {
         string source = Path.Combine(project, "src");
         string api = Path.Combine(engine, "Managed", "Tallow.API", "Tallow.API.csproj");
@@ -772,8 +786,14 @@ internal static class Program
             paths.Add(name, Path.Combine(generated, name, name + ".csproj"));
 
         var filesByAssembly = paths.Keys.ToDictionary(name => name, _ => new List<string>());
+        var editorFiles = new List<string>();
         foreach (string file in Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories))
         {
+            if (IsEditorFile(source, file))
+            {
+                editorFiles.Add(Path.GetFullPath(file));
+                continue;
+            }
             string owner = "Tallow.Game";
             int depth = -1;
             foreach (Definition definition in definitions.Values)
@@ -812,8 +832,29 @@ internal static class Program
             if (!File.Exists(path) || !File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes))
                 File.WriteAllBytes(path, bytes);
         }
-        WriteSolution(project, paths.Values);
-        Console.WriteLine($"Generated {paths.Count} C# assemblies; game: {paths["Tallow.Game"]}");
+        editorProject = null;
+        string editorBin = Path.Combine(output, EditorAssembly);
+        if (editorFiles.Count > 0)
+        {
+            string editorApi = Path.Combine(engine, "Managed", "Tallow.Editor", "Tallow.Editor.csproj");
+            if (!File.Exists(editorApi))
+                throw new FileNotFoundException("The engine's Managed/Tallow.Editor is missing.", editorApi);
+            editorProject = Path.Combine(generated, EditorAssembly, EditorAssembly + ".csproj");
+            Directory.CreateDirectory(Path.GetDirectoryName(editorProject)!);
+            string[] gameProjects = paths.Values.Append(editorApi).ToArray();
+            var csproj = CreateProject(EditorAssembly, "Tallow.Game", editorFiles.Order(), gameProjects, api,
+                "$(TallowBinRoot)" + EditorAssembly, output, []);
+            using var xml = new MemoryStream();
+            csproj.Save(xml);
+            byte[] bytes = xml.ToArray();
+            if (!File.Exists(editorProject) || !File.ReadAllBytes(editorProject).AsSpan().SequenceEqual(bytes))
+                File.WriteAllBytes(editorProject, bytes);
+        }
+        // Editor scripts all removed: the editor must not keep loading the last ones built.
+        else if (Directory.Exists(editorBin))
+            Directory.Delete(editorBin, true);
+        WriteSolution(project, editorProject == null ? paths.Values : paths.Values.Append(editorProject));
+        Console.WriteLine($"Generated {paths.Count + (editorProject == null ? 0 : 1)} C# assemblies; game: {paths["Tallow.Game"]}");
         return paths["Tallow.Game"];
     }
 
@@ -828,7 +869,9 @@ internal static class Program
         string source = Path.Combine(project, "src");
         string api = Path.Combine(engine, "Managed", "Tallow.API");
         var parse = new CSharpParseOptions(LanguageVersion.CSharp15);
+        // The editor scripts are not part of the game: no components, graph nodes or fields of theirs.
         var sources = Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !IsEditorFile(source, path))
             .Order(StringComparer.Ordinal).ToArray();
         trees = sources.Select(path => CSharpSyntaxTree.ParseText(
             File.ReadAllText(path), parse, path: Path.GetFullPath(path))).ToArray();
@@ -1280,7 +1323,7 @@ internal static class Program
         {
             string project = Path.GetFullPath(RequiredOption(args, "--project"));
             string engine = Path.GetFullPath(RequiredOption(args, "--engine-root"));
-            string game = Generate(project, engine);
+            string game = Generate(project, engine, out string? editorProject);
             if (Flag(args, "--generate-only"))
                 return 0;
 
@@ -1294,7 +1337,10 @@ internal static class Program
             if (configuration is not ("Debug" or "Release"))
                 throw new ArgumentException("--configuration is Debug or Release.");
             string? outputRoot = OptionalOption(args, "--output");
-            foreach (string part in new[] { "build", game, "--configuration", configuration,
+            // The editor's build is of the editor scripts when there are some: they reference every game assembly, so
+            // building them builds the game too. A game build (--output) never has them.
+            string target = outputRoot == null && editorProject != null ? editorProject : game;
+            foreach (string part in new[] { "build", target, "--configuration", configuration,
                 "--nologo", "--verbosity", "minimal" })
                 process.ArgumentList.Add(part);
             if (outputRoot != null)

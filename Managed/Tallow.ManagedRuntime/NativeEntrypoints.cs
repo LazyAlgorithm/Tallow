@@ -1754,6 +1754,29 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    /// <summary>The editor only: loads Tallow.Editor (the API of a game's editor scripts) from editorDll into this
+    /// context, beside Tallow.API, and swaps function tables with it (Tallow.Editor.EditorHost.Configure). Reflection,
+    /// so that a game never needs that assembly. 1 on success.</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int EditorConfigure(byte* editorDll, nint hostTable, nint managedTable)
+    {
+        try
+        {
+            string path = Path.GetFullPath(Marshal.PtrToStringUTF8((nint)editorDll) ?? "");
+            AssemblyLoadContext context = AssemblyLoadContext.GetLoadContext(typeof(Script).Assembly) ?? AssemblyLoadContext.Default;
+            Assembly editor = context.Assemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Tallow.Editor")
+                ?? context.LoadFromAssemblyPath(path);
+            MethodInfo configure = editor.GetType("Tallow.Editor.EditorHost", true)!
+                .GetMethod("Configure", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException("Tallow.Editor.EditorHost.Configure");
+            return (int)configure.Invoke(null, [hostTable, managedTable])!;
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int GetLastError(byte* buffer, int length)
     {

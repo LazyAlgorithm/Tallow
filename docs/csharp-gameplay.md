@@ -390,10 +390,60 @@ GameObject, Transform, the physics handles and your scripts. The build writes th
 To compile a graph without the editor (tests, build scripts):
 `TallowLauncher --graph-compile path/Name.tgraph GameNamespace`.
 
+## Editor scripts: custom Inspectors, windows, menu commands and Preferences
+
+C# in any folder named `Editor` under `src/` is an editor script, as in Unity. Tallow.Build compiles those files
+into an assembly of their own, `Tallow.Game.Editor`, which sees the game's assemblies and `Tallow.Editor`
+(`Managed/Tallow.Editor`). Nothing in the game references it, so a game build never contains it or Tallow.Editor.
+Game code that uses `Tallow.Editor` does not compile, and the code editor marks it. Project > Create > C# Script >
+Editor makes each kind below with the boilerplate written, and puts the file in an `Editor` folder (made when the
+folder shown is not in one).
+
+The editor loads the editor scripts after every successful compile, apart from a running game, so they work in Edit
+mode and during Play. A recompile replaces them. Windows that were open stay open, and the windows open when the
+editor closed open again next time. An exception in an editor script is reported once in the Console. The editor
+carries on, and a failed Inspector falls back to the plain field list.
+
+- **Custom Inspector:** `[CustomInspector(typeof(Door))] class DoorInspector : Inspector` overrides
+  `OnInspectorGUI()` and draws Door's section, and also the section of scripts deriving from Door that have none of
+  their own. `DrawDefaultInspector()` draws every field as the Inspector would, and `Field("openAngle")` draws one.
+  `Target.GetFloat/SetFloat("openAngle", ...)` (and `Get`/`Set` as text, bool, int, Vector3, enum) read and change
+  the saved values. Changes go through undo, are saved with the scene, call `OnValidate`, and reach the running
+  script during Play.
+- **Editor window:** `[EditorWindow("Level/Statistics")] class Stats : EditorWindow` appears in the Tools menu
+  under Level > Statistics, and its `OnGUI()` draws it. It docks like any other window, and `Close()` closes it.
+- **Menu command:** `[MenuItem("Level/Rename Lights")] static void Rename()` runs when chosen from Tools.
+- **Preferences tab:** `[PreferencesPage("Level Tools")]` on a plain settings class (public fields with defaults)
+  gives it a tab in Edit > Preferences. The tab shows the fields and saves every change. Read the settings anywhere
+  with `EditorPrefs.Get<LevelToolSettings>()`. On a class deriving from `PreferencesPage`, the attribute adds a tab
+  that the class draws itself with `OnGUI()`.
+- **Settings:** `EditorPrefs` holds this user's settings for every project on this machine, in
+  `editor-prefs.json` in the editor's config folder. `ProjectPrefs` holds the project's settings for everybody
+  working on it, in `ProjectSettings/EditorPrefs.json`. Both offer `Get<T>()`/`Save(settings)` for settings
+  objects (public fields, as JSON) and `GetFloat/SetFloat`, `GetInt`, `GetBool`, `GetString` by key. A change is
+  written at once.
+
+Widgets are `EditorGUI` calls, drawn top to bottom each frame. Each returns its value, the new one when it was
+edited:
+- text: `Label`, `Heading`, `HelpBox`;
+- buttons and fields: `Button`, `Toggle`, `FloatField`, `Slider`, `IntField`, `Vector3Field`, `ColorField`,
+  `TextField`, `Popup`, `EnumPopup`, `Fields(object)`;
+- layout: `Foldout`, `ProgressBar`, `Tooltip`, `Separator`, `SameLine`, and `using` scopes `Disabled()`,
+  `Indented()`, `Id(n)`.
+
+Labels sit on the left as in the Inspector. Two widgets with the same label in one window need a `##` suffix
+(`"Speed##front"`) or an `Id` scope. `EditorApplication` gives `IsPlaying`, `ProjectPath`, `SelectedObjectName` and
+`Log`/`LogWarning`/`LogError` to the Console.
+
+Not yet: editing the scene from editor scripts (creating or moving objects with Tallow.API in Edit mode), gizmo and
+Scene view tools, and inspectors for built-in components. Test: `tools/test_csharp_editor_extensions.py` needs a
+display.
+
 ## Shipping a C# game
 
 `python3 tools/build_player.py <project> --output <folder>` (or File > Build) builds a C#
 project into a folder that runs on its own: the engine's precompiled player renamed to the
 game, `game.tpak`, `Managed/` (Tallow's runtime and the game's Release assemblies) and
 `dotnet/`, a copy of the .NET runtime, so players need not install .NET. Pass
-`--no-bundle-dotnet` for a smaller build that needs .NET installed. Linux only so far.
+`--no-bundle-dotnet` (or untick Include .NET in File > Build, saved as `bundleDotNet = 0` in project.tallow) for a
+smaller build that needs .NET installed. Editor scripts are never in a game build.

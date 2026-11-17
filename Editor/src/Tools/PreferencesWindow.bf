@@ -10,7 +10,7 @@ namespace Tallow.Editor;
 extension EditorApp
 {
 	bool mShowPreferences;
-	/// The page shown: 0 Theme, 1 Modelling (its shortcuts).
+	/// The page shown: 0 Theme, 1 Modelling (its shortcuts), 100 on the game's editor scripts' tabs.
 	int mPreferencesPage;
 	String mThemeName = new .() ~ delete _;
 	String mThemeFilter = new .() ~ delete _;
@@ -41,12 +41,18 @@ extension EditorApp
 					mPreferencesPage = 0;
 				if (ImGui.Selectable("Modelling", mPreferencesPage == 1))
 					mPreferencesPage = 1;
+				// The game's editor scripts' tabs ([PreferencesPage]), from 100.
+				for (int i < mExtensionPages.Count)
+					if (ImGui.Selectable(scope $"{mExtensionPages[i]}###csharppage{i}".CStr(), mPreferencesPage == 100 + i))
+						mPreferencesPage = 100 + i;
 			}
 			ImGui.EndChild();
 			ImGui.SameLine();
 			if (ImGui.BeginChild("page", .(0, 0)))
 			{
-				if (mPreferencesPage == 1)
+				if (mPreferencesPage >= 100 && mPreferencesPage - 100 < mExtensionPages.Count)
+					DrawExtensionPage(mPreferencesPage - 100);
+				else if (mPreferencesPage == 1)
 					DrawModelShortcutsPage();
 				else
 					DrawThemePage();

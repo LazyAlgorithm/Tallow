@@ -1282,8 +1282,28 @@ A full conversion also needs these. Ordered roughly by when they block users.
   `.tmeta` IDs, so an import finds them where they were moved. Test: `--packages-test`
   step 6. Not yet: prebuilt managed assemblies in packages (with the NuGet/third-party
   library item, which needs the trust rules first).
-- [ ] Editor extensibility scope: decide whether C# can add custom inspectors, editor
-  windows and gizmo tools, or whether editor tooling stays Beef-only.
+- [x] Editor extensibility (November 17, 2026; the user wants custom inspectors and editor windows): editor
+  scripts are any `.cs` in a folder named `Editor` under src/, compiled by Tallow.Build into `Tallow.Game.Editor`.
+  That assembly references the game's assemblies and `Managed/Tallow.Editor`, and nothing references it, so game
+  builds leave it out. The editor loads it after each successful compile into its own collectible context, apart
+  from Play's game context. Tallow.Editor is loaded beside Tallow.API through `NativeEntrypoints.EditorConfigure`,
+  found by reflection on first use (`tn_csharp_editor_configure`), so games never load it. What is in:
+  - `[CustomInspector(typeof(T))] : Inspector`: `Field`, `DrawDefaultInspector`, `Target.Get/Set*` go through the
+    Inspector's own field path, so undo, saving, OnValidate and Play behave as they do there.
+  - `[EditorWindow("Path")] : EditorWindow` in a Tools menu; its open state is kept across reloads and restarts.
+  - `[MenuItem("Path")]` static commands.
+  - `[PreferencesPage("Title")]` Preferences tabs: a settings class drawn from its fields, or a `PreferencesPage`
+    that draws itself.
+  - `EditorPrefs` (per user) and `ProjectPrefs` (ProjectSettings/EditorPrefs.json) as JSON.
+  - `EditorGUI` widgets drawn with the editor's ImGui. Scopes left open or an exception unwind safely, and a
+    failure is reported once.
+  - Create > C# Script > Editor templates (Custom Inspector, Editor Window, Tools Menu Command, Preferences Page).
+  - The language service compiles editor folders as their own assembly against Tallow.Editor.
+
+  Tests: `tools/test_csharp_editor_extensions.py`, a display test with 20 checks, which includes a broken window, a
+  reload and a game build with no editor scripts; LS tests (133); the template test compiles the four editor
+  templates. Not yet: scene editing from editor scripts in Edit mode (Tallow.API is bound to a scene only during
+  Play), gizmo and Scene view tools, and custom inspectors for built-in components.
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is

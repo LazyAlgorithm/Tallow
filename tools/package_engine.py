@@ -89,8 +89,9 @@ def main():
             player_command = [os.environ.get('BEEFBUILD', 'BeefBuild'), '-workspace=Player', '-config=Release', f'-platform={target}', '-verbosity=minimal']
         player.unlink(missing_ok=True)  # Beef does not notice changed native archives
         subprocess.run(player_command, cwd=root, env=environment, check=True)
-        subprocess.run(['dotnet', 'build', str(root / 'Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj'),
-                        '--configuration', 'Debug', '--nologo', '--verbosity', 'minimal'], check=True)
+        for project in ('Tallow.ManagedRuntime', 'Tallow.Editor'):
+            subprocess.run(['dotnet', 'build', str(root / f'Managed/{project}/{project}.csproj'),
+                            '--configuration', 'Debug', '--nologo', '--verbosity', 'minimal'], check=True)
     language_worker = root / 'build/tools/beef-language-service' / args.platform
     if not macos:
         worker = language_worker / ('beef-language-service.exe' if windows else 'beef-language-service')
@@ -113,14 +114,16 @@ def main():
                 shutil.copy2(built, destination)
         if not windows and not windows_player.is_file():
             print('Note: no Windows player built, so this package makes Linux C# games only.')
-        # C# gameplay: the API and runtime projects games compile against, the build tool, and the runtime built.
+        # C# gameplay: the API and runtime projects games compile against, the build tool, the editor scripts' API
+        # (Tallow.Editor), and the runtime and editor API built.
         managed_ignore = shutil.ignore_patterns('bin', 'obj', '__pycache__')
-        for name in ('Tallow.API', 'Tallow.ManagedRuntime', 'Tallow.Build', 'Tallow.Analyzers'):
+        for name in ('Tallow.API', 'Tallow.ManagedRuntime', 'Tallow.Editor', 'Tallow.Build', 'Tallow.Analyzers'):
             if (root / 'Managed' / name).is_dir():
                 shutil.copytree(root / 'Managed' / name, stage / 'Managed' / name, ignore=managed_ignore)
-        built_runtime = root / 'Managed/Tallow.ManagedRuntime/bin/Debug'
-        if built_runtime.is_dir():
-            shutil.copytree(built_runtime, stage / 'Managed/Tallow.ManagedRuntime/bin/Debug')
+        for name in ('Tallow.ManagedRuntime', 'Tallow.Editor'):
+            built = root / 'Managed' / name / 'bin/Debug'
+            if built.is_dir():
+                shutil.copytree(built, stage / 'Managed' / name / 'bin/Debug')
         for name in ('Directory.Build.props', 'Directory.Packages.props', 'global.json'):
             if (root / 'Managed' / name).is_file():
                 shutil.copy2(root / 'Managed' / name, stage / 'Managed' / name)

@@ -119,8 +119,10 @@ def main() -> int:
         # The editor's own template text, written without a window (CI has no display).
         written = subprocess.run([str(launcher), "--write-script-templates", str(templates)],
                                  capture_output=True, text=True, timeout=300)
-        count = len(list(templates.glob("*.cs")))
-        if "SCRIPT TEMPLATES WRITTEN" not in written.stdout or count < 10:
+        # Editor-script templates go in Templates/Editor (their own assembly, with Tallow.Editor), as Create puts them.
+        count = len(list(templates.rglob("*.cs")))
+        editor_count = len(list((templates / "Editor").glob("*.cs")))
+        if "SCRIPT TEMPLATES WRITTEN" not in written.stdout or count < 14 or editor_count < 4:
             print(written.stdout[-3000:] + written.stderr[-2000:])
             print(f"The editor wrote {count} script templates.", file=sys.stderr)
             return 1

@@ -390,6 +390,20 @@ internal static class Program
                 Encoding.UTF8.GetByteCount(packageUse[..(packageUse.IndexOf("SyntaxTree?", StringComparison.Ordinal) + 6)]));
             Check("packages: completion offers the package's types", _raw.Contains("completion\tSyntaxTree"));
             File.Delete(packageList);
+            // Editor scripts (any folder named Editor) are Tallow.Game.Editor: they see Tallow.Editor and the game's
+            // assemblies; the game does not see Tallow.Editor.
+            string toolFolder = Path.Combine(source, "Tools", "Editor");
+            Directory.CreateDirectory(toolFolder);
+            string tool = Path.Combine(toolFolder, "HealthWindow.cs");
+            File.WriteAllText(tool, "using Tallow.Editor;\nnamespace Game.Tools;\n[EditorWindow(\"Health\")]\n" +
+                "public class HealthWindow : EditorWindow\n{\n    public override void OnGUI() => EditorGUI.Label(new Game.Core.Health().Value.ToString());\n}\n");
+            File.WriteAllText(file, userSource);
+            Check("editor scripts: a file in an Editor folder sees Tallow.Editor and the game's assemblies",
+                !Diagnose().Split('\n').Any(line => line.StartsWith("diagnostic\t" + tool)));
+            File.WriteAllText(file, userSource.Replace("Game.Core.Health h = null!;", "Tallow.Editor.EditorGUI.Label(\"x\"); Game.Core.Health h = null!;"));
+            Check("editor scripts: game code cannot use Tallow.Editor",
+                Diagnose().Split('\n').Any(line => line.StartsWith("diagnostic\t" + file) && line.Contains("\terror\t")));
+            Directory.Delete(Path.Combine(source, "Tools"), recursive: true);
             File.WriteAllText(file, userSource);
             Directory.Delete(core, recursive: true);
             Directory.Delete(ui, recursive: true);

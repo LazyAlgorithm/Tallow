@@ -21,6 +21,7 @@ extension EditorApp
 		UpdateReferencesTest();
 		UpdateInspectorScaleTest();
 		UpdateStaleBuildTest();
+		UpdateEditorExtensionsTest();
 		sUIMarker.Begin();
 		defer Profiler.End();
 		// Outside play mode the Scene view's camera is the listener, so sounds can be auditioned where you look from.
@@ -85,6 +86,7 @@ extension EditorApp
 		DrawPreferencesWindow();
 		DrawLightingWindow();
 		DrawRigWindow();
+		DrawExtensionWindows();
 		CommitUndoWhenIdle();
 		if (mShowScene)
 		{
@@ -187,6 +189,7 @@ extension EditorApp
 				}
 				*OpenWindowFlag(i) = open;
 			}
+			ReadOpenExtensionWindows(text);
 		}
 		else
 		{
@@ -202,15 +205,17 @@ extension EditorApp
 	void SaveOpenWindows()
 	{
 		let mask = OpenWindowsMask();
-		if (mask == mOpenWindowsSaved)
+		if (mask == mOpenWindowsSaved && !mExtensionWindowsChanged)
 			return;
 		mOpenWindowsSaved = mask;
+		mExtensionWindowsChanged = false;
 		let text = scope String();
 		for (int i < sOpenWindowNames.Count)
 		{
 			if ((mask & (1 << i)) != 0)
 				text.AppendF("{}\n", sOpenWindowNames[i]);
 		}
+		AppendOpenExtensionWindows(text);
 		File.WriteAllText(OpenWindowsFile(.. scope .()), text).IgnoreError();
 	}
 
@@ -396,6 +401,7 @@ extension EditorApp
 				mShowOcclusionPicture = !mShowOcclusionPicture;
 			ImGui.EndMenu();
 		}
+		DrawExtensionsMenu();
 		let label = scope String();
 		label.AppendF("{}{}  |  {:0} fps", mScene.Name, mDirty ? "*" : "", Time.SmoothedFps);
 		let width = ImGui.CalcTextSize(label.CStr()).x;

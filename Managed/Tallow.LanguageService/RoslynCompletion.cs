@@ -82,7 +82,7 @@ internal static class RoslynCompletion
                 var projectReferences = name == AssemblyLayout.Api ? [] :
                     layout.ReferencesOf(name).Prepend(AssemblyLayout.Api).Select(reference => new ProjectReference(sProjects[reference]));
                 created = created.AddProject(ProjectInfo.Create(id, VersionStamp.Create(), name, name, LanguageNames.CSharp,
-                    compilationOptions: options.WithAllowUnsafe(name == AssemblyLayout.Api), parseOptions: parse,
+                    compilationOptions: options.WithAllowUnsafe(AssemblyLayout.AllowsUnsafe(name)), parseOptions: parse,
                     metadataReferences: references, projectReferences: projectReferences));
             }
             sWorkspace.TryApplyChanges(created);

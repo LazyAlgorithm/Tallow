@@ -340,7 +340,50 @@ extension EditorApp
 		return edited;
 	}
 
-	bool DrawManagedFields(CSharpBehaviour component)
+	/// The catalog row (columns) of one of a script's fields; false when it has none by that name.
+	bool FindManagedField(CSharpBehaviour component, StringView name, List<StringView> columns)
+	{
+		if (!LoadManagedFieldCatalog())
+			return false;
+		for (var line in mManagedFieldCatalog.Split('\n', .RemoveEmptyEntries))
+		{
+			line.TrimEnd();
+			columns.Clear();
+			for (let part in line.Split('\t'))
+				columns.Add(part);
+			if (columns.Count >= 4 && columns[0] == (StringView)component.scriptType && columns[1] == name)
+				return true;
+		}
+		return false;
+	}
+
+	bool HasManagedField(CSharpBehaviour component, StringView name) => FindManagedField(component, name, scope .());
+
+	/// A field's value as the Inspector shows it: the running script's during Play, else the scene's, else the
+	/// default. False when the script has no such field.
+	bool ReadManagedField(CSharpBehaviour component, StringView name, String output)
+	{
+		let columns = scope List<StringView>();
+		if (!FindManagedField(component, name, columns))
+			return false;
+		output.Clear();
+		let live = scope String();
+		if (component.IsLoaded && CSharpRuntime.ReadFields(component.ManagedInstance, false, live) && FindLiveField(live, name, output))
+			return true;
+		if (columns[2] == "object")
+		{
+			// A reference: the name of the object it points at.
+			if (let target = component.ReferenceTarget(name))
+				output.Set(target.Name);
+			return true;
+		}
+		if (!component.ReadEditorField(name, output))
+			output.Set(columns[3]);
+		return true;
+	}
+
+	/// only: just that field (and a [Serializable] field's own fields under it), for a C# Inspector's Field().
+	bool DrawManagedFields(CSharpBehaviour component, StringView only = default)
 	{
 		if (!LoadManagedFieldCatalog())
 		{
@@ -366,6 +409,8 @@ extension EditorApp
 			if (columns.Count < 4 || columns[0] != (StringView)component.scriptType)
 				continue;
 			let name = columns[1];
+			if (!only.IsEmpty && name != only && !(name.StartsWith(only) && name.Length > only.Length && name[only.Length] == '.'))
+				continue;
 			let kind = columns[2];
 			let current = scope String();
 			if (playing && FindLiveField(live, name, current))
@@ -389,7 +434,7 @@ extension EditorApp
 				continue;
 			if (!tableOpen)
 			{
-				if (!BeginPropertyTable("managedCSharpFields"))
+				if (!BeginPropertyTable(only.IsEmpty ? "managedCSharpFields" : scope $"managedCSharpField_{only}".CStr()))
 					return changed;
 				tableOpen = true;
 			}
@@ -468,7 +513,7 @@ extension EditorApp
 		}
 		if (tableOpen)
 			ImGui.EndTable();
-		if (component.IsLoaded)
+		if (component.IsLoaded && only.IsEmpty)
 			DrawManagedDebugFields(component);
 		return changed;
 	}

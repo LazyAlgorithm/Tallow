@@ -697,6 +697,19 @@ extension EditorApp
 					BeginNewScriptTemplate(.EcsBulk, "BulkProcessor");
 				ImGui.EndMenu();
 			}
+			// Editor scripts: put in an Editor folder, left out of game builds.
+			if (ImGui.BeginMenu("Editor"))
+			{
+				if (ImGui.MenuItem("Custom Inspector"))
+					BeginNewScriptTemplate(.EditorInspector, SelectedScriptInspectorName(.. scope .()));
+				if (ImGui.MenuItem("Editor Window"))
+					BeginNewScriptTemplate(.EditorWindow, "MyToolWindow");
+				if (ImGui.MenuItem("Tools Menu Command"))
+					BeginNewScriptTemplate(.EditorMenu, "MyToolCommands");
+				if (ImGui.MenuItem("Preferences Page (settings)"))
+					BeginNewScriptTemplate(.EditorPreferences, "MyToolSettings");
+				ImGui.EndMenu();
+			}
 			ImGui.EndMenu();
 		}
 		if (ImGui.MenuItem("Assembly Definition"))
@@ -744,6 +757,22 @@ extension EditorApp
 			}
 			ImGui.EndMenu();
 		}
+	}
+
+	/// A custom Inspector's suggested name: for the C# script selected in the Project panel or on the selected
+	/// object ("PlayerInspector" for Player), which it then draws.
+	void SelectedScriptInspectorName(String output)
+	{
+		if (let selected = Selected)
+			for (let component in selected.Components)
+				if (let script = component as CSharpBehaviour)
+				{
+					let full = (StringView)script.scriptType;
+					let dot = full.LastIndexOf('.');
+					output.AppendF("{}Inspector", dot >= 0 ? full.Substring(dot + 1) : full);
+					return;
+				}
+		output.Append("NewScriptInspector");
 	}
 
 	void BeginNewScriptTemplate(ScriptTemplateKind template, StringView defaultName)

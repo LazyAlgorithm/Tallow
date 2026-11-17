@@ -166,3 +166,11 @@ int32_t tn_csharp_prediction_state(int32_t script_instance, int32_t mode, float*
     (void)values;
     return 0;
 }
+
+int32_t tn_csharp_editor_configure(const char* editor_assembly, void* host_table, void* managed_table)
+{
+    (void)editor_assembly;
+    (void)host_table;
+    (void)managed_table;
+    return 0;
+}

@@ -228,7 +228,7 @@ def main():
     parser.add_argument('--loose', action='store_true', help='Leave the assets as loose files instead of packing them into game.tpak')
     parser.add_argument('--console', action='store_true', help='Windows: keep a console window for log output (a dedicated server wants one)')
     parser.add_argument('--bootstrap', help='Static registration method, e.g. Sandbox.GameSetup.Register')
-    parser.add_argument('--no-bundle-dotnet', action='store_true', help='C# games: do not ship the .NET runtime; players must install it')
+    parser.add_argument('--no-bundle-dotnet', action='store_true', help='C# games: do not ship the .NET runtime; players must install it (also bundleDotNet = 0 in project.tallow)')
     args = parser.parse_args()
     project = args.project.resolve()
     output = args.output.resolve()
@@ -397,7 +397,8 @@ def main():
                 executable = name + ('.exe' if windows else '')
                 shutil.copy2(player if csharp else built_folder / executable, staging / executable)
             if csharp and not web:
-                stage_csharp(engine, project, staging, args.config, windows, not args.no_bundle_dotnet)
+                stage_csharp(engine, project, staging, args.config, windows,
+                             not args.no_bundle_dotnet and settings.get('bundleDotNet', '1') != '0')
             # Of the engine's files a game reads only the compiled shaders, and only those of the graphics backends
             # it can start on this system: Vulkan, plus OpenGL as the fallback on Linux; WebGL 2 in a browser.
             # Metal on a Mac.

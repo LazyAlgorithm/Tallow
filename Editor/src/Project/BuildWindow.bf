@@ -25,8 +25,6 @@ extension EditorApp
 	BuildTarget mBuildTarget;
 	/// The local web server started by Play in Browser, so a second press does not start another.
 	bool mWebServerStarted;
-	/// Build the editor itself (a copy of Tallow for another machine) instead of the game.
-	bool mBuildEditor;
 	bool mBuildSucceeded;
 	/// A build asked for (Build, or --build-now) while the script error check runs: it starts when the check ends.
 	bool mBuildNowPending;
@@ -80,7 +78,7 @@ extension EditorApp
 		outPath.Append(mBuildFolder);
 		while (outPath.Length > 1 && (outPath.EndsWith('/') || outPath.EndsWith('\\')))
 			outPath.RemoveFromEnd(1);
-		outPath.AppendF("/{}-{}", mBuildEditor ? "Tallow" : Project.Current.Name, mBuildTarget);
+		outPath.AppendF("/{}-{}", Project.Current.Name, mBuildTarget);
 	}
 
 	/// A C# project (no Beef of its own): its web build links the engine with .NET (tools/web/csharp_web.py).
@@ -102,7 +100,7 @@ extension EditorApp
 #else
 		// A C# game ships the engine's precompiled player: with the Windows one at hand (engine packages carry it),
 		// tools/build_player.py needs no Windows toolchain, only the Windows .NET runtime it downloads.
-		if (!mBuildEditor && !File.Exists(scope $"{Project.Current.Path}/BeefProj.toml")
+		if (!File.Exists(scope $"{Project.Current.Path}/BeefProj.toml")
 			&& File.Exists(scope $"{Project.Current.EngineRoot}/Player/build/Release_Win64/TallowPlayer/TallowPlayer.exe"))
 			return true;
 		let toolchain = scope String();
@@ -141,8 +139,7 @@ extension EditorApp
 		if (ImGui.Begin("Build", &mShowBuild, ImGui.WindowFlags.NoDocking | ImGui.WindowFlags.NoCollapse))
 		{
 			DrawBuildTarget();
-			if (!mBuildEditor)
-				DrawGameBuildOptions(Project.Current);
+			DrawGameBuildOptions(Project.Current);
 			let ready = mBuildTarget == .Linux || mBuildTarget == .MacOS || (mBuildTarget == .Windows ? WindowsBuildReady() : WebBuildReady());
 			if (!ready)
 				DrawBuildSetupHint();
@@ -153,44 +150,17 @@ extension EditorApp
 		ImGui.End();
 	}
 
-	/// The system this editor runs on, which it can always build for.
-#if BF_PLATFORM_MACOS
-	static BuildTarget NativeTarget => .MacOS;
-#else
-	static BuildTarget NativeTarget => .Linux;
-#endif
-
-	/// What is built (the game or the editor) and for which system. A Windows machine builds Windows games, a Mac
+	/// Which system the game is built for. A Windows machine builds Windows games, a Mac
 	/// macOS and web ones; the other choices need Linux.
 	void DrawBuildTarget()
 	{
 #if BF_PLATFORM_WINDOWS
 		mBuildTarget = .Windows;
-		mBuildEditor = false;
 #else
 	#if BF_PLATFORM_MACOS
 		if (mBuildTarget == .Linux || mBuildTarget == .Windows)
 			mBuildTarget = .MacOS;
 	#endif
-		ImGui.SeparatorText("Build");
-		if (ImGui.RadioButton("Game", !mBuildEditor))
-		{
-			mBuildEditor = false;
-			mBuildMessage.Clear();
-		}
-		ImGui.SameLine();
-		if (ImGui.RadioButton("Editor", mBuildEditor))
-		{
-			mBuildEditor = true;
-			mBuildMessage.Clear();
-			if (mBuildTarget == .Web)
-				mBuildTarget = NativeTarget;
-		}
-		if (mBuildEditor)
-		{
-			ImGui.SameLine();
-			ImGui.TextDisabled("Tallow itself, to use on another machine");
-		}
 		ImGui.SeparatorText("For");
 	#if BF_PLATFORM_MACOS
 		// A Mac builds for itself and the web.
@@ -212,15 +182,12 @@ extension EditorApp
 			mBuildMessage.Clear();
 		}
 	#endif
-		// The editor itself does not run in a browser; only games do.
-		ImGui.BeginDisabled(mBuildEditor);
 		ImGui.SameLine();
 		if (ImGui.RadioButton("Web", mBuildTarget == .Web))
 		{
 			mBuildTarget = .Web;
 			mBuildMessage.Clear();
 		}
-		ImGui.EndDisabled();
 		if (mBuildTarget == .Web)
 		{
 			ImGui.SameLine();
@@ -240,6 +207,15 @@ extension EditorApp
 				project.Save();
 			ImGui.SameLine();
 			ImGui.TextDisabled(project.Fullscreen ? "The game fills the screen when it starts" : "The game starts in a window");
+		}
+		// A C# game runs on .NET. A web build always has it inside the page.
+		if (IsCSharpProject && mBuildTarget != .Web)
+		{
+			ImGui.SeparatorText(".NET");
+			if (ImGui.Checkbox("Include .NET", ref project.BundleDotNet))
+				project.Save();
+			ImGui.SameLine();
+			ImGui.TextDisabled(project.BundleDotNet ? "Players need nothing installed (about 70 MB more)" : scope $"Smaller, but players must install .NET {CSharpRuntime.RequiredDotNetMajor}");
 		}
 		ImGui.SeparatorText("Assets");
 		ImGui.BeginDisabled(mBuildTarget == .Web);
@@ -304,9 +280,7 @@ extension EditorApp
 			SDL.SDL_ShowOpenFolderDialog( => OnFolderPicked, null, Window, mBuildFolder.IsEmpty ? null : mBuildFolder.CStr(), false);
 		BuildOutputFolder(output);
 		ImGui.PushTextWrapPos(0);
-		if (mBuildEditor)
-			ImGui.TextDisabled(scope $"The editor is put in {output}. That folder holds the launcher, the editor and the engine, and nothing else: move it anywhere, or copy it to another machine. That machine needs the Beef compiler; the folder's tallow-package.txt says what else. An earlier copy there is replaced.");
-		else if (mBuildTarget == .Web)
+		if (mBuildTarget == .Web)
 			ImGui.TextDisabled(scope $"The game is put in {output}: a web page (index.html) with the game and its assets. Put that folder on any web server, such as GitHub Pages or itch.io, and share the address. Play in Browser tries it on this machine. An earlier build of the game there is replaced.");
 		else
 			ImGui.TextDisabled(scope $"The game is put in {output}. That folder holds everything the game needs and nothing else: move it anywhere, or send it to somebody. An earlier build of the game there is replaced.");
@@ -333,7 +307,7 @@ extension EditorApp
 			ImGui.SameLine();
 			if (ImGui.Button("Show Folder"))
 				ShowInFileManager(output);
-			if (mBuildTarget == .Web && !mBuildEditor)
+			if (mBuildTarget == .Web)
 			{
 				ImGui.SameLine();
 				if (ImGui.Button("Play in Browser"))

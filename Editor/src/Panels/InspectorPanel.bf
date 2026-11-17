@@ -651,7 +651,7 @@ extension EditorApp
 		bool changed = false;
 		changed |= DrawFieldList(fields, "fields");
 		if (let managed = component as CSharpBehaviour)
-			changed |= DrawManagedFields(managed);
+			changed |= DrawManagedSection(managed);
 		if (changed)
 		{
 			component.OnValidate();

@@ -97,6 +97,8 @@ class Project
 	/// Each scene's own files go into a pack of their own beside game.tpak, so that an update to one map rewrites one
 	/// small file, and a web build can start before every map has downloaded.
 	public bool PackSplit = true;
+	/// A C# game's desktop build carries the .NET runtime (a dotnet folder beside it), so players install nothing.
+	public bool BundleDotNet = true;
 	/// SaveSystem.LoadAtStart for this game: put the save in SaveSlot back as the first scene starts.
 	public bool LoadSaveAtStart;
 	public String SaveSlot = new .("default") ~ delete _;
@@ -155,6 +157,7 @@ class Project
 			case "packCompress": PackCompress = value != "0";
 			case "compressTextures": CompressTextures = value != "0";
 			case "packSplit": PackSplit = value != "0";
+			case "bundleDotNet": BundleDotNet = value != "0";
 			case "loadSaveAtStart": LoadSaveAtStart = value == "1";
 			case "saveSlot": if (!value.IsEmpty) SaveSlot.Set(value);
 			case "packShared": PackShared.Set(value);
@@ -203,6 +206,8 @@ class Project
 			text.Append("compressTextures = 0\n");
 		if (!PackSplit)
 			text.Append("packSplit = 0\n");
+		if (!BundleDotNet)
+			text.Append("bundleDotNet = 0\n");
 		if (LoadSaveAtStart)
 			text.Append("loadSaveAtStart = 1\n");
 		if (SaveSlot != "default")
@@ -398,6 +403,8 @@ class Project
 		Terminal.Quote(Path, command);
 		command.AppendF(" --platform {} --replace --output ", target.ToString(.. scope .())..ToLower());
 		Terminal.Quote(outputPath, command);
+		if (!BundleDotNet)
+			command.Append(" --no-bundle-dotnet");
 		command.Append(" > ");
 		Terminal.Quote(scope $"{Path}/build/build.log" , command);
 		command.Append(" 2>&1");

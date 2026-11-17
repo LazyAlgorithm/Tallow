@@ -20,6 +20,16 @@ internal sealed class AssemblyLayout
 {
     public const string Game = "Tallow.Game";
     public const string Api = "Tallow.API";
+    /// <summary>The editor scripts' API (engine source, like Tallow.API) and the game's editor scripts: every file
+    /// in a folder named Editor under src/, which sees Tallow.Editor and every game assembly.</summary>
+    public const string EditorApi = "Tallow.Editor";
+    public const string GameEditor = "Tallow.Game.Editor";
+
+    /// <summary>The game's src folder when the layout was read from it (editor folders are found there).</summary>
+    public string SourceDirectory { get; private set; } = "";
+
+    /// <summary>Whether src/ has editor scripts: Tallow.Editor and Tallow.Game.Editor are then assemblies too.</summary>
+    public bool HasEditor { get; private set; }
 
     private readonly List<GameAssemblyInfo> _definitions;
 
@@ -32,10 +42,24 @@ internal sealed class AssemblyLayout
     /// <summary>Assembly definitions in build order (each after the ones it references).</summary>
     public IReadOnlyList<GameAssemblyInfo> Definitions => _definitions;
 
-    private AssemblyLayout(List<GameAssemblyInfo> definitions)
+    private AssemblyLayout(List<GameAssemblyInfo> definitions, string sourceDirectory = "", bool hasEditor = false)
     {
         _definitions = definitions;
-        Key = string.Join("|", definitions.Select(d => d.Name + ">" + d.Folder + ">" + string.Join(",", d.References)));
+        SourceDirectory = sourceDirectory;
+        HasEditor = hasEditor;
+        Key = string.Join("|", definitions.Select(d => d.Name + ">" + d.Folder + ">" + string.Join(",", d.References))) +
+            (hasEditor ? "|editor>" + sourceDirectory : "");
+    }
+
+    /// <summary>A file in a folder named Editor under src/ (as Tallow.Build decides).</summary>
+    public static bool IsEditorScript(string sourceDirectory, string path)
+    {
+        if (sourceDirectory.Length == 0)
+            return false;
+        string relative = Path.GetRelativePath(sourceDirectory, path);
+        if (relative == ".." || Path.IsPathRooted(relative) || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            return false;
+        return relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).SkipLast(1).Any(folder => folder == "Editor");
     }
 
     public static readonly AssemblyLayout Single = new([]);
@@ -80,8 +104,10 @@ internal sealed class AssemblyLayout
     public static AssemblyLayout Read(string sourceDirectory, string generatedDirectory)
     {
         AssemblyLayout layout = Read(sourceDirectory);
-        if (layout == Single)
-            layout = new AssemblyLayout([]);
+        string source = Path.GetFullPath(sourceDirectory);
+        bool hasEditor = Directory.Exists(source) && Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
+            .Any(file => IsEditorScript(source, file));
+        layout = new AssemblyLayout(layout == Single ? [] : layout._definitions, source, hasEditor);
         layout.GeneratedDirectory = Path.GetFullPath(generatedDirectory);
         return layout;
     }
@@ -117,11 +143,24 @@ internal sealed class AssemblyLayout
     internal static bool IsApi(string path) =>
         path.Replace('\\', '/').Contains("/Managed/Tallow.API/", StringComparison.OrdinalIgnoreCase);
 
+    internal static bool IsEditorApi(string path) =>
+        path.Replace('\\', '/').Contains("/Managed/Tallow.Editor/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Engine source (Tallow.API, Tallow.Editor): read-only, and allowed unsafe code.</summary>
+    internal static bool IsEngine(string path) => IsApi(path) || IsEditorApi(path);
+
+    /// <summary>Whether an assembly may use unsafe code (the engine's may; the game's may not).</summary>
+    public static bool AllowsUnsafe(string name) => name is Api or EditorApi;
+
     /// <summary>The assembly a source file is compiled into: the deepest assembly definition folder holding it.</summary>
     public string Owner(string path)
     {
         if (IsApi(path))
             return Api;
+        if (IsEditorApi(path))
+            return EditorApi;
+        if (HasEditor && IsEditorScript(SourceDirectory, path))
+            return GameEditor;
         // Generated code: the assembly is the folder's name.
         if (GeneratedDirectory.Length > 0 && Path.GetDirectoryName(path) is { } folder &&
             string.Equals(Path.GetDirectoryName(folder), GeneratedDirectory, StringComparison.OrdinalIgnoreCase))
@@ -149,9 +188,13 @@ internal sealed class AssemblyLayout
 
     /// <summary>The game assemblies an assembly references (Tallow.API is referenced by all of them).</summary>
     public IEnumerable<string> ReferencesOf(string name) =>
-        name == Api ? [] : name == Game ? _definitions.Select(d => d.Name) :
+        name is Api or EditorApi ? [] : name == Game ? _definitions.Select(d => d.Name) :
+        name == GameEditor ? _definitions.Select(d => d.Name).Append(Game).Append(EditorApi) :
         _definitions.First(d => d.Name == name).References;
 
-    /// <summary>Every game assembly in build order, Tallow.Game last.</summary>
-    public IEnumerable<string> GameAssemblies => _definitions.Select(d => d.Name).Append(Game);
+    /// <summary>Every game assembly in build order, Tallow.Game after the assembly definitions (then, with editor
+    /// scripts, Tallow.Editor and Tallow.Game.Editor).</summary>
+    public IEnumerable<string> GameAssemblies => HasEditor
+        ? _definitions.Select(d => d.Name).Append(Game).Append(EditorApi).Append(GameEditor)
+        : _definitions.Select(d => d.Name).Append(Game);
 }

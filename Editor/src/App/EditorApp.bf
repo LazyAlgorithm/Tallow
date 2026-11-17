@@ -322,6 +322,8 @@ class EditorApp : Application
 		}
 		if (HasArg("--stale-build-test"))
 			StartStaleBuildTest();
+		if (HasArg("--editor-extensions-test"))
+			StartEditorExtensionsTest();
 		{
 			let folder = scope String();
 			if (GetArg("--script-templates-test", folder))
@@ -422,7 +424,7 @@ class EditorApp : Application
 		}
 	}
 
-	/// --build-window, with --build-windows, --build-web or --build-editor choosing what is built, and --build-now
+	/// --build-window, with --build-windows or --build-web choosing the system, and --build-now
 	/// <folder> building it straight away (for automated checks).
 	void ApplyBuildSwitches()
 	{
@@ -431,8 +433,6 @@ class EditorApp : Application
 			mBuildTarget = .Windows;
 		if (HasArg("--build-web"))
 			mBuildTarget = .Web;
-		if (HasArg("--build-editor"))
-			mBuildEditor = true;
 		let folder = scope String();
 		if (GetArg("--build-now", folder))
 		{

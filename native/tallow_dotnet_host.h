@@ -142,6 +142,9 @@ int32_t tn_csharp_network_event(int32_t script_instance, const char* name, float
 // Calls a UI document handler (onclick="Method") on the script, with the element's id; 1 called, 0 no such
 // method, -1 it threw.
 int32_t tn_csharp_ui_invoke(int32_t script_instance, const char* method, const char* element_id);
+// The editor only: loads Tallow.Editor (editor_assembly) and swaps function tables with it (see
+// Editor/src/Scripts/CSharpEditorExtensions.bf); 1 on success.
+int32_t tn_csharp_editor_configure(const char* editor_assembly, void* host_table, void* managed_table);
 // C#'s Network.ChooseTeam for a joining player: the team (0 or more), -1 without one or when it threw.
 int32_t tn_csharp_choose_team(int32_t client_id);
 // A component's named event on a script of the same object (kind 0 sequence, 1 dialogue, 2 behaviour tree); 1 on

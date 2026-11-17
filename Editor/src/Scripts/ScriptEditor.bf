@@ -775,6 +775,7 @@ extension EditorApp
 			// node library (NodeLibrary retires it); it is freed once no graph is open.
 			if (mCheckSucceeded)
 			{
+				ReloadEditorExtensions();
 				NodeLibrary.RefreshCSharpScripts(Project.Current.Path);
 				if (mGraph == null)
 					NodeLibrary.FreeRetired();

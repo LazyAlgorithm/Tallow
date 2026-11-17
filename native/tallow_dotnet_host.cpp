@@ -73,6 +73,7 @@ using prediction_state_fn = int32_t (*)(int32_t, int32_t, float*);
 using pump_fn = int32_t (*)(float, tn_csharp_gc_stats*);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
+using editor_configure_fn = int32_t (*)(const char*, void*, void*);
 using shutdown_fn = int32_t (*)();
 
 std::string error;
@@ -103,6 +104,9 @@ prediction_state_fn prediction_state = nullptr;
 pump_fn pump = nullptr;
 detach_fn detach = nullptr;
 last_error_fn last_error = nullptr;
+editor_configure_fn editor_configure = nullptr;
+// Tallow.ManagedRuntime's path, for the entry points bound later (the editor's).
+std::string runtime_assembly;
 shutdown_fn shutdown_runtime = nullptr;
 tn_csharp_callbacks engine_callbacks = {};
 bool started = false;
@@ -465,6 +469,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             return 0;
         }
 #endif
+        runtime_assembly = managed_assembly;
         const auto assembly = platform_string(managed_assembly);
         if (!find_entry(assembly.c_str(), "Configure", configure) ||
             !find_entry(assembly.c_str(), "LoadGame", load_game) ||
@@ -690,6 +695,27 @@ int32_t tn_csharp_network_event(int32_t script_instance, const char* name, float
     return result > 0;
 }
 
+int32_t tn_csharp_editor_configure(const char* editor_assembly, void* host_table, void* managed_table)
+{
+    if (!started || !editor_assembly || !host_table || !managed_table)
+        return 0;
+#if defined(__EMSCRIPTEN__)
+    error = "The editor does not run in a browser.";
+    return 0;
+#else
+    if (!editor_configure)
+    {
+        const auto assembly = platform_string(runtime_assembly.c_str());
+        if (!find_entry(assembly.c_str(), "EditorConfigure", editor_configure))
+            return 0;
+    }
+    const int32_t result = editor_configure(editor_assembly, host_table, managed_table);
+    if (result < 0)
+        managed_error("Loading the C# editor extensions");
+    return result > 0;
+#endif
+}
+
 int32_t tn_csharp_ui_invoke(int32_t script_instance, const char* method, const char* element_id)
 {
     if (!started || !ui_invoke || !method)
@@ -786,6 +812,7 @@ void tn_csharp_shutdown(void)
     invoke_rpc = nullptr;
     network_event = nullptr;
     ui_invoke = nullptr;
+    editor_configure = nullptr;
     choose_team = nullptr;
     component_event = nullptr;
     prediction_state = nullptr;
