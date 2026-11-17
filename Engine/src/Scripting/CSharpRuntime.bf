@@ -516,6 +516,7 @@ static class CSharpRuntime
 		// Its ECS systems and team chooser go with it.
 		CSharpEcsSystem.RemoveAll();
 		CSharpMeshes.ReleaseAll();
+		CSharpCompute.ReleaseAll();
 		HasTeamChooser = false;
 		if (!sStarted)
 			return true;

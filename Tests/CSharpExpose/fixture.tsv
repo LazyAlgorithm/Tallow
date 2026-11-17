@@ -122,6 +122,15 @@ method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instan
 method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:string
 method	Tallow.CSharpComponents	EnabledState	int	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpComponents	SetEnabled	bool	session:ulong	entity:ulong	instance:int	enabled:bool
+method	Tallow.CSharpCompute	CreateShader	int	path:string
+method	Tallow.CSharpCompute	CreateTexture	int	width:int	height:int	highPrecision:bool
+method	Tallow.CSharpCompute	ReleaseShader	void	id:int
+method	Tallow.CSharpCompute	ReleaseTexture	void	id:int
+method	Tallow.CSharpCompute	Run	bool	shaderId:int	textureId:int	steps:int
+method	Tallow.CSharpCompute	SetShaderValue	bool	id:int	name:string	value:System.Numerics.Vector4
+method	Tallow.CSharpCompute	ShaderHighPrecision	bool	id:int
+method	Tallow.CSharpCompute	ShowTexture	bool	id:int	session:ulong	entity:ulong	show:bool
+method	Tallow.CSharpCompute	Supported	bool
 method	Tallow.CSharpDraw	Box	void	layer:int	center:System.Numerics.Vector3	size:System.Numerics.Vector3	color:System.Numerics.Vector4
 method	Tallow.CSharpDraw	Line	void	layer:int	a:System.Numerics.Vector3	b:System.Numerics.Vector3	color:System.Numerics.Vector4
 method	Tallow.CSharpDraw	Sphere	void	layer:int	center:System.Numerics.Vector3	radius:float	color:System.Numerics.Vector4

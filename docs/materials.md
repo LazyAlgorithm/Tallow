@@ -225,7 +225,17 @@ effect.EveryFrame = false;
 effect.Step();                         // run it once, when you choose
 ```
 
-Running a compute shader without the component (`Compute.Run(shader, texture)` on a `ComputeTexture`) is engine (Beef) code for now. `Compute.Supported` is false on a dedicated server and on graphics cards without compute shaders; `Run` and `Step` then do nothing and return false.
+**Without the component**, a script makes the texture and the shader itself, and runs it when it chooses:
+
+```csharp
+var ripple = new ComputeShader("Shaders/ripple.tcompute");
+var water = new ComputeTexture(256, 256, ripple.HighPrecision);
+water.ShowOn(GetComponent<MeshRenderer>());   // drawn in place of the renderer's own texture
+ripple.SetFloat("speed", 3);
+ripple.Run(water);                            // one step (Run(water, 4) for four)
+```
+
+One texture can be shown on many renderers, and one shader run over many textures. Dispose them when done (`ComputeTexture.StopShowing(renderer)` puts a renderer back to its own texture); any left are freed when the game stops. `Compute.Supported` is false on a dedicated server and on graphics cards without compute shaders; `Run` and `Step` then do nothing and return false.
 
 ### Compute graphs
 

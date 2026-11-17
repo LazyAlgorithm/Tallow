@@ -796,6 +796,11 @@ public class DocMoreSnippets : Script
         effect.SetColor("ink", new Color(1, 0.3f, 0.1f, 1));
         effect.EveryFrame = false;
         effect.Step();
+        var ripple = new ComputeShader("Shaders/ripple.tcompute");
+        var water = new ComputeTexture(256, 256, ripple.HighPrecision);
+        water.ShowOn(GetComponent<MeshRenderer>());
+        ripple.SetFloat("speed", 3);
+        ripple.Run(water);
     }
 
     public void OnFullscreen(UIElement source)

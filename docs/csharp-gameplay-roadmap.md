@@ -1380,6 +1380,12 @@ A full conversion also needs these. Ordered roughly by when they block users.
   (`Engine/src/Scripting/CSharpMaterialsApi.bf`) over the new `Material.SetNamedValue/GetNamedValue/NamedText`,
   which `RenderProxy.ApplyMaterialValue` now uses too. 8 in-game checks (378); docs/materials.md converted.
   Saving a material to a file stays editor code.
+- [x] Compute without the component (November 17, 2026): `ComputeShader` (path, `SetFloat/SetColor/SetVector`,
+  `HighPrecision`, `Run(texture, steps)`), `ComputeTexture` (`ShowOn(renderer)`, which keeps the renderer on the
+  newest image as steps swap them; `StopShowing`; `Dispose`) and `Compute.Supported`
+  (`Managed/Tallow.API/Compute.cs`). Host: `CSharpCompute` keeps them by number and frees what is left at game
+  unload. 5 headless checks (383); run for real in a window on a scratch Sandbox (150 of 150 steps, ripple drawn on
+  a crate). docs/materials.md converted.
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is

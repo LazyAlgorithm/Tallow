@@ -1,0 +1,13 @@
+// A compute shader: this code runs for every pixel of a texture, every step.
+// Read: pixel, size, uv (0 to 1), time, previous(uv) (the texture before this step).
+// Write: result (starts as this pixel's previous value).
+// Add a Compute Effect component to an object with a Mesh Renderer and pick this file.
+property float speed = 1
+property color ink = 0.2 0.6 1 1
+
+compute {
+	// Fade what was there, and draw a ring that grows from the middle.
+	float ring = abs(distance(uv, vec2(0.5, 0.5)) - fract(time * speed * 0.2) * 0.7);
+	result = result * 0.96 + ink * smoothstep(0.02, 0.0, ring);
+	result.a = 1.0;
+}

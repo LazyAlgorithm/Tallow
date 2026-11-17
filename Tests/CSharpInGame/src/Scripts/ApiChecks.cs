@@ -248,6 +248,27 @@ public class ApiChecks : CheckBase
     private Helper? _removedHelper;
 
     /// GetComponents / InParent / InChildren, RemoveComponent (checked frames later, at 300) and Transform directions.
+    private void CheckCompute(MeshRenderer renderer)
+    {
+        using var ripple = new ComputeShader("Shaders/ripple.tcompute");
+        Check("ComputeShader sets the properties its file declares and refuses others",
+            ripple.SetFloat("speed", 3) && ripple.SetColor("ink", new Color(1, 0, 0, 1)) && !ripple.SetFloat("nope", 1)
+            && !ripple.HighPrecision);
+        bool missing = false, notCompute = false;
+        try { new ComputeShader("Shaders/none.tcompute"); } catch (ArgumentException) { missing = true; }
+        try { new ComputeShader("Shaders/glow.tshader"); } catch (ArgumentException) { notCompute = true; }
+        Check("ComputeShader refuses a missing file and a surface shader", missing && notCompute);
+        using var texture = new ComputeTexture(5000, 64);
+        Check("ComputeTexture sizes are kept within 1 to 4096", texture.Width == 4096 && texture.Height == 64);
+        texture.ShowOn(renderer);
+        ComputeTexture.StopShowing(renderer);
+        bool ran = ripple.Run(texture, 2);
+        Check($"compute runs only where it is supported (supported {Compute.Supported}, ran {ran})",
+            ran == Compute.Supported && texture.IsValid == Compute.Supported);
+        texture.Dispose();
+        Check("a disposed ComputeTexture does not run", !texture.IsValid && !ripple.Run(texture));
+    }
+
     private void CheckSharedMaterials(MeshRenderer renderer)
     {
         var glow = Material.Load("Materials/Glow.tmat");
@@ -1009,6 +1030,7 @@ public class ApiChecks : CheckBase
             renderer.Material == "Materials/Glow.tmat" && renderer.BackFaceCulling && renderer.Texture == "");
         Check("MeshRenderer.IsVisible is false with nothing drawing (headless)", Screen.Width > 0 || !renderer.IsVisible);
         CheckSharedMaterials(renderer);
+        CheckCompute(renderer);
         renderer.Material = "";
         // A 2 x 1 quad built in code, one metre above the lamp.
         renderer.SetMesh([new(-1, 1, 0), new(1, 1, 0), new(1, 2, 0), new(-1, 2, 0)], [0, 2, 1, 0, 3, 2]);
