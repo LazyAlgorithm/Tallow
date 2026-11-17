@@ -48,7 +48,7 @@
 - [x] **B13 — physics sphere pile.** Spawn Jolt rigidbodies at fixed intervals until p95 frame time >16.67 ms, or max 10k. Record total, active/asleep counts, contact pairs, Jolt step milliseconds and memory. Repeat sleep ON/OFF; compare Beef vs C# control paths with identical native Jolt settings.
 - [x] **B14 — character motion/physics queries.** 100, 1k and 5k Jolt CharacterController instances with the same navigation/input; raycasts and sphere casts at 1k/10k/100k queries per frame; measure exact hit agreement and latency separately.
 - [x] **B15 — soft-body throughput.** Jelly, Cloth, Shell and DrivenJelly, 10/50/100/500 bodies, fixed vertex counts and settings. Record rebuild time, step time, active vertex count, memory and deformation correctness. Keep existing Jelly Golf-style free jelly as an acceptance case.
-- [ ] **B16 — engine resource/render throughput.** Static 100k objects, 10k changing transforms and streaming scene chunks, with GPU timings/draw calls separated from C# script CPU. Include shader graph and compute graph functionality regression.
+- [x] **B16 — engine resource/render throughput.** Static 100k objects, 10k changing transforms and streaming scene chunks, with GPU timings/draw calls separated from C# script CPU. Include shader graph and compute graph functionality regression.
 - [x] **B17 — real managed allocations.** With 1k/10k/100k Script updates, record managed bytes/frame, collections (Gen0/1/2), pause time and peak RSS. Compare allocation-free value math, event allocation, GetComponent in loops and managed/native string calls.
 
 - B06 (editor part, 2026-11-16): 20 editor Play/Stop cycles (`--play-cycle-test`), 6 scripts each: no script left attached, no unloaded game kept (after fixing the leak that kept every game), memory +7 MB over 20 cycles.
@@ -199,6 +199,30 @@
   (mass, iterations, the shell dent settings...). All three are fixed, with in-game checks. Not covered: Jelly
   Golf-style acceptance (the scene is Beef-only), and rebuild time on a setting change (the C# setters that
   rebuild — Stiffness, WobbleDamping — are the same native call as Beef's).
+
+- B16 (done 2026-11-16; raw data `~/TallowBenchmarks/render-20261116/`, `tools/benchmark_csharp_render.py`, `render`
+  mode in a 1920×1080 window on this machine's GPU, vsync off in both, `--profile-report` per run, 600 frames, median
+  of 3). A case is static:moving:chunks:effects: static cubes with no script, cubes moved by Mover scripts, a
+  1,000-cube chunk destroyed and another made every 30 frames, and N quads running the ripple compute graph with every
+  10th static cube on the glow shader-graph material.
+
+  | case | frame avg ms Beef / C# | p99 | GPU ms | rendering CPU ms | scripts ms | draws | visible | compute dispatches |
+  |---|---|---|---|---|---|---|---|---|
+  | 10k:0:0 | 0.89 / 0.89 | 0.92 / 0.91 | 0.32 / 0.32 | 0.72 / 0.71 | 0.01 / 0.05 | 1 / 1 | 9,216 / 9,216 | 0 / 0 |
+  | 10k:0:0:8 | 0.98 / 0.97 | 1.03 / 1.01 | 0.36 / 0.38 | 0.74 / 0.73 | 0.06 / 0.10 | 10 / 10 | 9,224 / 9,224 | 8 / 8 |
+  | 100k:0:0 | 10.23 / 10.20 | 11.12 / 10.79 | 2.37 / 2.21 | 9.49 / 9.48 | 0.04 / 0.09 | 1 / 1 | 72,062 / 72,062 | 0 / 0 |
+  | 100k:10k:0 | 13.61 / 14.25 | 14.72 / 15.41 | 3.90 / 4.13 | 10.72 / 10.79 | 0.79 / 1.36 | 1 / 1 | 82,062 / 82,062 | 0 / 0 |
+  | 100k:10k:1 | 14.42 / 15.15 | 17.66 / 19.36 | 4.16 / 4.24 | 11.43 / 11.50 | 0.84 / 1.43 | 1 / 1 | 86,062 / 86,062 | 0 / 0 |
+  | 100k:10k:1:8 | 15.53 / 16.17 | 19.04 / 20.27 | 5.18 / 5.31 | 11.62 / 11.73 | 1.70 / 2.28 | 8 / 7 | 86,070 / 86,070 | 8 / 8 |
+
+  Rendering CPU, GPU time, draws, visible renderers and compute dispatches are the same in both languages; the whole
+  difference is the scripts row (10,000 Movers: C# 1.36 ms vs Beef 0.79 ms, the B03/B05 ratio). Shader-graph
+  materials and compute graphs set up from C# draw and dispatch exactly as from Beef. **Engine finding (not C#):**
+  culling is single-threaded at ~70 ns a renderer, 7.1 ms of the 9.5 ms rendering CPU at 100k static cubes, so a
+  100k-object scene is CPU-bound at ~10 ms before any script runs. A parallel gather or a static-object BVH would
+  be the fix (engine work, not part of the C# roadmap). Found on the way: the C# bench never turned vsync off (C#
+  had no way to, only quality presets) and never pointed its camera at the scene. `Quality.VSync`, `RenderScale`,
+  `Shadows`, `ShadowMapSize`... (all 17 quality settings, plus `Quality.Save()`) are now in C#, with an in-game check.
 
 ### Fixes from these runs (2026-11-16)
 

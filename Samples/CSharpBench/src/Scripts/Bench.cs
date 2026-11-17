@@ -29,6 +29,9 @@ namespace CSharpBench;
 ///                       TALLOW_BENCH_SLEEP=0 keeps them from sleeping)
 ///                       softbody (B15: TALLOW_BENCH_COUNT soft bodies of TALLOW_BENCH_SOFT jelly / cloth / shell /
 ///                       driven on a floor, each with a Squish script reading its velocity)
+///                       render (B16, run in a window with --profile-report: TALLOW_BENCH_COUNT static cubes with no
+///                       script, TALLOW_BENCH_MOVING of them moved by Mover scripts, and with TALLOW_BENCH_CHUNKS=1 a
+///                       chunk of Workload.ChunkSize cubes destroyed and another made every Workload.ChunkFrames)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
 ///   TALLOW_BENCH_OUT    file a JSON line of results is added to
@@ -70,7 +73,10 @@ public class Bench : Script
             _frames = frames;
         _output = Environment.GetEnvironmentVariable("TALLOW_BENCH_OUT") ?? "";
         _halfSize = Workload.HalfSize(_count);
+        // As EcsBench: frames as fast as they go, not at the screen's refresh.
+        Quality.VSync = false;
         Transform.Position = new Vector3(0, _halfSize * 0.6f, -_halfSize * 3.2f);
+        Transform.LookAt(Vector3.Zero);
 
         _memoryBefore = Environment.WorkingSet;
         var watch = Stopwatch.StartNew();
@@ -94,6 +100,8 @@ public class Bench : Script
             StartPile();
         else if (_mode == "softbody")
             SpawnSoftBodies();
+        else if (_mode == "render")
+            SpawnRender();
         else
             throw new ArgumentException($"Unknown TALLOW_BENCH_MODE {_mode}");
         _spawnMs = watch.Elapsed.TotalMilliseconds;
@@ -296,6 +304,81 @@ public class Bench : Script
         }
     }
 
+    private int _moving;
+    private bool _chunks;
+    private readonly Queue<List<GameObject>> _chunkQueue = new();
+    private int _chunkIndex, _chunksMade;
+
+    private void SpawnRender()
+    {
+        _ = int.TryParse(Environment.GetEnvironmentVariable("TALLOW_BENCH_MOVING"), out _moving);
+        _chunks = Environment.GetEnvironmentVariable("TALLOW_BENCH_CHUNKS") == "1";
+        _ = int.TryParse(Environment.GetEnvironmentVariable("TALLOW_BENCH_EFFECTS"), out _effects);
+        for (int i = 0; i < _count; i++)
+        {
+            GameObject cube = Scene.CreateGameObject("Static");
+            cube.Transform.LocalPosition = Workload.StaticAt(i, _count);
+            cube.Transform.LocalScale = new Vector3(Workload.CubeScale);
+            MeshRenderer renderer = cube.AddComponent<MeshRenderer>();
+            if (_effects > 0 && i % 10 == 0)
+                renderer.Material = "Materials/glow.tmat";
+        }
+        for (int i = 0; i < _moving; i++)
+        {
+            Workload.Start(i, _halfSize, out Vector3 position, out Vector3 velocity, out Vector3 spin);
+            GameObject cube = Scene.CreateGameObject("Cube");
+            cube.Transform.LocalPosition = position;
+            cube.Transform.LocalScale = new Vector3(Workload.CubeScale);
+            cube.AddComponent<MeshRenderer>();
+            Mover mover = cube.AddComponent<Mover>();
+            mover.Velocity = velocity;
+            mover.Spin = spin;
+            mover.HalfSize = _halfSize;
+        }
+        if (_chunks)
+            for (int c = 0; c < Workload.ChunksLive; c++)
+                MakeChunk();
+        // TALLOW_BENCH_EFFECTS=N: N quads running the ripple compute graph, and every 10th static cube on the glow
+        // shader's material (shader and compute graph regression: the profile report counts their dispatches).
+        for (int i = 0; i < _effects; i++)
+        {
+            GameObject screen = Scene.CreateGameObject("Ripple");
+            screen.Transform.LocalPosition = Workload.EffectAt(i, _halfSize);
+            screen.Transform.LocalScale = new Vector3(4);
+            screen.AddComponent<MeshRenderer>().Mesh = "builtin:quad";
+            ComputeEffect effect = screen.AddComponent<ComputeEffect>();
+            effect.Shader = "Shaders/ripple.tcompute";
+            effect.Width = effect.Height = 256;
+        }
+    }
+
+    private int _effects;
+
+    private void MakeChunk()
+    {
+        var chunk = new List<GameObject>(Workload.ChunkSize);
+        for (int i = 0; i < Workload.ChunkSize; i++)
+        {
+            GameObject cube = Scene.CreateGameObject("Chunk");
+            cube.Transform.LocalPosition = Workload.ChunkAt(_chunkIndex, i, _halfSize);
+            cube.Transform.LocalScale = new Vector3(Workload.CubeScale);
+            cube.AddComponent<MeshRenderer>();
+            chunk.Add(cube);
+        }
+        _chunkIndex++;
+        _chunksMade++;
+        _chunkQueue.Enqueue(chunk);
+    }
+
+    private void StepChunks()
+    {
+        if (!_chunks || _frame % Workload.ChunkFrames != 0)
+            return;
+        foreach (GameObject cube in _chunkQueue.Dequeue())
+            cube.Destroy();
+        MakeChunk();
+    }
+
     private void SpawnWalkers()
     {
         float half = Workload.WalkerHalfSize(_count);
@@ -389,6 +472,8 @@ public class Bench : Script
             StepQueries();
         else if (_mode == "pile" && _frame > WarmupFrames && _frameTimes.Count > 0)
             StepPile(_frameTimes[^1]);
+        else if (_mode == "render")
+            StepChunks();
     }
 
     public override void LocalLateUpdate(float deltaTime)
@@ -421,6 +506,8 @@ public class Bench : Script
         line.Append($"\"gc_gen2\": {GC.CollectionCount(2) - _gen2Start}, ");
         line.Append(Inv($"\"gc_pause_ms\": {(GC.GetTotalPauseDuration() - _pauseStart).TotalMilliseconds:F3}, "));
         line.Append(Inv($"\"spawn_ms\": {_spawnMs:F1}, \"memory_before\": {_memoryBefore}, \"memory_after\": {_memoryAfter}, "));
+        if (_mode == "render")
+            line.Append($"\"static\": {_count}, \"moving\": {_moving}, \"chunks_made\": {_chunksMade}, \"effects\": {_effects}, ");
         if (_mode == "softbody")
         {
             int bodies = 0, vertices = 0, sleeping = 0;
@@ -693,6 +780,26 @@ public static class Workload
             _ => new Vector3(0, height / 2, -offset),
         };
         size = side < 2 ? new Vector3(1, height, half * 2 + 2) : new Vector3(half * 2 + 2, height, 1);
+    }
+
+    /// <summary>The render mode: static cubes on a flat square grid 1.5 m apart, under the moving ones.</summary>
+    public static Vector3 StaticAt(int index, int count)
+    {
+        int side = (int)MathF.Ceiling(MathF.Sqrt(count));
+        return new Vector3(-side * 0.75f + (index % side) * 1.5f, -2, -side * 0.75f + (index / side) * 1.5f);
+    }
+
+    /// <summary>The render mode's compute-effect quads: a row in front of the camera.</summary>
+    public static Vector3 EffectAt(int index, float halfSize) => new Vector3(-halfSize * 0.5f + index * 5, halfSize * 0.3f, -halfSize);
+
+    /// <summary>The render mode's streamed chunks: ChunkSize cubes in a 10 m block, blocks round a ring.</summary>
+    public const int ChunkSize = 1000, ChunkFrames = 30, ChunksLive = 4;
+
+    public static Vector3 ChunkAt(int chunk, int index, float halfSize)
+    {
+        float angle = chunk * 0.7f;
+        Vector3 center = new Vector3(MathF.Cos(angle) * halfSize * 1.5f, 0, MathF.Sin(angle) * halfSize * 1.5f);
+        return center + new Vector3(index % 10, index / 100, index / 10 % 10);
     }
 
     /// <summary>The softbody mode: bodies 3 m apart in a square, 3 m up (cloth drops flat).</summary>

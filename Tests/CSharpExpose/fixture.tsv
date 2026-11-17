@@ -178,6 +178,8 @@ method	Tallow.CSharpPlatform	GamepadRumble	void	low:float	high:float	seconds:flo
 method	Tallow.CSharpPlatform	QualityCurrent	int
 method	Tallow.CSharpPlatform	QualityRecommended	int
 method	Tallow.CSharpPlatform	QualitySet	bool	level:int	save:bool
+method	Tallow.CSharpPlatform	QualitySetValue	bool	name:string	value:string	save:bool
+method	Tallow.CSharpPlatform	QualityValueText	int	name:string	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	SaveDelete	void	slot:string
 method	Tallow.CSharpPlatform	SaveError	int	id:int	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	SaveExists	bool	slot:string

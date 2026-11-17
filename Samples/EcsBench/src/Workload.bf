@@ -36,6 +36,26 @@ static class Workload
 		size = side < 2 ? .(1, height, half * 2 + 2) : .(half * 2 + 2, height, 1);
 	}
 
+	/// The render mode: static cubes on a flat square grid 1.5 m apart, under the moving ones.
+	public static Vector3 StaticAt(int index, int count)
+	{
+		let side = (int)Math.Ceiling(Math.Sqrt((float)count));
+		return .(-side * 0.75f + (index % side) * 1.5f, -2, -side * 0.75f + (index / side) * 1.5f);
+	}
+
+	/// The render mode's compute-effect quads: a row in front of the camera.
+	public static Vector3 EffectAt(int index, float halfSize) => .(-halfSize * 0.5f + index * 5, halfSize * 0.3f, -halfSize);
+
+	/// The render mode's streamed chunks: ChunkSize cubes in a 10 m block, blocks round a ring.
+	public const int ChunkSize = 1000, ChunkFrames = 30, ChunksLive = 4;
+
+	public static Vector3 ChunkAt(int chunk, int index, float halfSize)
+	{
+		let angle = chunk * 0.7f;
+		let center = Vector3(Math.Cos(angle) * halfSize * 1.5f, 0, Math.Sin(angle) * halfSize * 1.5f);
+		return center + Vector3(index % 10, index / 100, index / 10 % 10);
+	}
+
 	/// The softbody mode: bodies 3 m apart in a square, 3 m up (cloth drops flat).
 	public static float SoftHalfSize(int count) => Math.Ceiling(Math.Sqrt((float)count)) * 1.5f;
 

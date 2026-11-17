@@ -197,6 +197,88 @@ extension Bench
 		}
 	}
 
+	int mMoving, mEffects;
+	bool mChunks;
+	List<List<GameObject>> mChunkQueue = new .() ~ DeleteContainerAndItems!(_);
+	int mChunkIndex, mChunksMade;
+
+	/// CSharpBench's SpawnRender (B16).
+	void SpawnRender()
+	{
+		let text = scope String();
+		if (ReadSetting("TALLOW_BENCH_MOVING", text) && int.Parse(text) case .Ok(let moving))
+			mMoving = moving;
+		mChunks = ReadSetting("TALLOW_BENCH_CHUNKS", text..Clear()) && text == "1";
+		if (ReadSetting("TALLOW_BENCH_EFFECTS", text..Clear()) && int.Parse(text) case .Ok(let effects))
+			mEffects = effects;
+		let scale = Vector3(Workload.CubeScale, Workload.CubeScale, Workload.CubeScale);
+		for (int i < mCount)
+		{
+			let cube = Scene.CreateGameObject("Static");
+			cube.Transform.LocalPosition = Workload.StaticAt(i, mCount);
+			cube.Transform.LocalScale = scale;
+			let renderer = cube.AddComponent<MeshRenderer>();
+			if (mEffects > 0 && i % 10 == 0)
+				renderer.SetMaterial("Materials/glow.tmat");
+		}
+		for (int i < mMoving)
+		{
+			Workload.Start(i, mHalfSize, let position, let velocity, let spin);
+			let cube = Scene.CreateGameObject("Cube");
+			cube.Transform.LocalPosition = position;
+			cube.Transform.LocalScale = scale;
+			cube.AddComponent<MeshRenderer>();
+			let mover = cube.AddComponent<Mover>();
+			mover.velocity = velocity;
+			mover.spin = spin;
+			mover.halfSize = mHalfSize;
+		}
+		if (mChunks)
+		{
+			for (int c < Workload.ChunksLive)
+				MakeChunk();
+		}
+		// CSharpBench's compute-effect quads.
+		for (int i < mEffects)
+		{
+			let screen = Scene.CreateGameObject("Ripple");
+			screen.Transform.LocalPosition = Workload.EffectAt(i, mHalfSize);
+			screen.Transform.LocalScale = .(4, 4, 4);
+			screen.AddComponent<MeshRenderer>().mesh = "builtin:quad";
+			let effect = screen.AddComponent<ComputeEffect>();
+			effect.shader.Set("Shaders/ripple.tcompute");
+			effect.width = effect.height = 256;
+		}
+	}
+
+	void MakeChunk()
+	{
+		let chunk = new List<GameObject>(Workload.ChunkSize);
+		let scale = Vector3(Workload.CubeScale, Workload.CubeScale, Workload.CubeScale);
+		for (int i < Workload.ChunkSize)
+		{
+			let cube = Scene.CreateGameObject("Chunk");
+			cube.Transform.LocalPosition = Workload.ChunkAt(mChunkIndex, i, mHalfSize);
+			cube.Transform.LocalScale = scale;
+			cube.AddComponent<MeshRenderer>();
+			chunk.Add(cube);
+		}
+		mChunkIndex++;
+		mChunksMade++;
+		mChunkQueue.Add(chunk);
+	}
+
+	void StepChunks()
+	{
+		if (!mChunks || mFrame % Workload.ChunkFrames != 0)
+			return;
+		let oldest = mChunkQueue.PopFront();
+		for (let cube in oldest)
+			Scene.Destroy(cube);
+		delete oldest;
+		MakeChunk();
+	}
+
 	void SpawnWalkers()
 	{
 		let half = Workload.WalkerHalfSize(mCount);
@@ -242,6 +324,8 @@ extension Bench
 			let step = Scene.Physics.LastStepMilliseconds;
 			line.AppendF("\"jolt_step_last_ms\": {:F3}, ", step);
 		}
+		if (mMode == "render")
+			line.AppendF("\"static\": {}, \"moving\": {}, \"chunks_made\": {}, \"effects\": {}, ", mCount, mMoving, mChunksMade, mEffects);
 		if (mMode == "softbody")
 		{
 			int bodies = 0, vertices = 0, sleeping = 0;

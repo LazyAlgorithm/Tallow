@@ -93,6 +93,8 @@ class Bench : Component
 			StartPile();
 		else if (mMode == "softbody")
 			SpawnSoftBodies();
+		else if (mMode == "render")
+			SpawnRender();
 		else
 			SpawnEntities();
 		mSpawnMs = (SDL.SDL_GetTicksNS() - start) / 1e6;
@@ -197,6 +199,8 @@ class Bench : Component
 			StepQueries();
 		else if (mMode == "pile" && mFrame > WarmupFrames && !mFrameTimes.IsEmpty)
 			StepPile(mFrameTimes.Back);
+		else if (mMode == "render")
+			StepChunks();
 		if (mWorld != null)
 		{
 			let halfSize = mHalfSize;

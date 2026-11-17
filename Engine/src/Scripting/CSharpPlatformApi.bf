@@ -105,6 +105,39 @@ static class CSharpPlatform
 		return true;
 	}
 
+	/// One quality setting's value as text (Quality.Write's names: vsync, renderScale, shadows...), its length; -1 for
+	/// a name that is not one.
+	[CSharpExpose]
+	public static int32 QualityValueText(StringView name, Span<uint8> buffer)
+	{
+		let all = scope String();
+		Quality.Write(Quality.Current, all);
+		for (let line in all.Split('\n'))
+		{
+			let equals = line.IndexOf('=');
+			if (equals > 0 && line.Substring(0, equals) == name)
+				return Copy(line.Substring(equals + 1), buffer);
+		}
+		return -1;
+	}
+
+	/// Changes one quality setting and applies it (the level becomes Custom unless the values match a preset); save:
+	/// kept for the next start. False for a name that is not a setting.
+	[CSharpExpose]
+	public static bool QualitySetValue(StringView name, StringView value, bool save)
+	{
+		let all = scope String();
+		Quality.Write(Quality.Current, all);
+		if (!all.StartsWith(scope $"{name}=") && !all.Contains(scope $"\n{name}="))
+			return false;
+		Quality.Current = Quality.Read(scope $"{name}={value}", Quality.Current);
+		Quality.Level = Quality.LevelOf(Quality.Current);
+		Quality.Apply();
+		if (save)
+			Quality.Save();
+		return true;
+	}
+
 	// ---- achievements and stats (Steam when the game runs there, else saved locally)
 
 	[CSharpExpose]

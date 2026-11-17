@@ -101,6 +101,60 @@ public static class Quality
         if (!CSharpPlatform.QualitySet((int)level, save))
             throw new ArgumentOutOfRangeException(nameof(level), "Choose Low, Medium, High or Ultra.");
     }
+
+    // One setting at a time, as a settings menu changes them: each applies at once and makes the level Custom (unless
+    // the values then match a preset). Call Save() to keep them for the next start.
+
+    /// <summary>Wait for the screen's refresh before showing a frame (no tearing; caps the frame rate to the screen's).</summary>
+    public static bool VSync { get => Flag("vsync"); set => Change("vsync", value ? "1" : "0"); }
+    /// <summary>The 3D image's resolution as a fraction of the window's (0.25-1).</summary>
+    public static float RenderScale { get => Number("renderScale"); set => Change("renderScale", Text(value)); }
+    public static bool Antialias { get => Flag("antialias"); set => Change("antialias", value ? "1" : "0"); }
+    public static bool Shadows { get => Flag("shadows"); set => Change("shadows", value ? "1" : "0"); }
+    /// <summary>How many point and spot lights may cast shadows at once.</summary>
+    public static int ShadowedLights { get => (int)Number("shadowedLights"); set => Change("shadowedLights", Text(value)); }
+    /// <summary>The sun's shadow map size in pixels (256-8192).</summary>
+    public static int ShadowMapSize { get => (int)Number("shadowMapSize"); set => Change("shadowMapSize", Text(value)); }
+    /// <summary>Multiplies how far shadows reach (0.05-4).</summary>
+    public static float ShadowDistance { get => Number("shadowDistance"); set => Change("shadowDistance", Text(value)); }
+    public static bool AmbientOcclusion { get => Flag("ambientOcclusion"); set => Change("ambientOcclusion", value ? "1" : "0"); }
+    public static bool DepthOfField { get => Flag("depthOfField"); set => Change("depthOfField", value ? "1" : "0"); }
+    public static bool MotionBlur { get => Flag("motionBlur"); set => Change("motionBlur", value ? "1" : "0"); }
+    /// <summary>Multiplies the distances at which models switch to simpler LODs (0.05-4).</summary>
+    public static float LodBias { get => Number("lodBias"); set => Change("lodBias", Text(value)); }
+    /// <summary>Multiplies how far grass and foliage are drawn (0.05-4).</summary>
+    public static float FoliageDistance { get => Number("foliageDistance"); set => Change("foliageDistance", Text(value)); }
+    public static bool GpuSkinning { get => Flag("gpuSkinning"); set => Change("gpuSkinning", value ? "1" : "0"); }
+    /// <summary>Mip levels dropped from textures: 0 full detail ... 3 the lowest.</summary>
+    public static int TextureDetail { get => (int)Number("textureDetail"); set => Change("textureDetail", Text(value)); }
+    public static bool Anisotropic { get => Flag("anisotropic"); set => Change("anisotropic", value ? "1" : "0"); }
+    public static bool ReflectionProbes { get => Flag("reflectionProbes"); set => Change("reflectionProbes", value ? "1" : "0"); }
+    /// <summary>Reflection probe resolution in pixels (32-512).</summary>
+    public static int ReflectionSize { get => (int)Number("reflectionSize"); set => Change("reflectionSize", Text(value)); }
+
+    /// <summary>Keeps the current settings for the next start.</summary>
+    public static void Save()
+    {
+        // Rewriting a value as it is saves everything.
+        CSharpPlatform.QualitySetValue("vsync", VSync ? "1" : "0", true);
+    }
+
+    private static string Value(string name) =>
+        ActionText.Read(buffer => CSharpPlatform.QualityValueText(name, buffer)) ?? "";
+
+    private static bool Flag(string name) => Value(name) == "1";
+
+    private static float Number(string name) =>
+        float.TryParse(Value(name), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out float value) ? value : 0f;
+
+    private static string Text(float value) => value.ToString("0.#########", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static void Change(string name, string value)
+    {
+        if (!CSharpPlatform.QualitySetValue(name, value, false))
+            throw new InvalidOperationException($"{name} is not a quality setting.");
+    }
 }
 
 /// <summary>

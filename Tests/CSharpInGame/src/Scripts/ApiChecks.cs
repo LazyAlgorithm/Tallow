@@ -372,6 +372,18 @@ public class ApiChecks : CheckBase
         bool low = Quality.Level == QualityLevel.Low;
         Quality.Set(level == QualityLevel.Custom ? QualityLevel.High : level, save: false);
         Check($"Quality.Set applies a preset (was {level}, recommended {Quality.Recommended})", low);
+        Quality.Set(QualityLevel.High, save: false);
+        bool vsync = Quality.VSync;
+        Quality.VSync = !vsync;
+        Quality.ShadowMapSize = 1024;
+        Quality.RenderScale = 0.8f;
+        bool changed = Quality.VSync == !vsync && Quality.ShadowMapSize == 1024 && MathF.Abs(Quality.RenderScale - 0.8f) < 1e-5f
+            && Quality.Level == QualityLevel.Custom;
+        Quality.ShadowMapSize = 99999;
+        bool clamped = Quality.ShadowMapSize == 8192;
+        Quality.Set(level == QualityLevel.Custom ? QualityLevel.High : level, save: false);
+        Check("Quality's single settings (VSync, ShadowMapSize, RenderScale) apply, clamp and make the level Custom",
+            changed && clamped && Quality.VSync == vsync);
         string? sceneText = Assets.ReadText("Scenes/Main.tscene");
         Check($"Assets.Exists/ReadText read the game's own files ({sceneText?.Length ?? -1} chars); missing ones are null",
             Assets.Exists("Scenes/Main.tscene") && sceneText is { Length: > 0 } && !Assets.Exists("No/Such.file") &&
