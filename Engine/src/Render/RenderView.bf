@@ -161,6 +161,8 @@ class RenderView
 	static ProfilerMarker sRenderMarker = .("RenderView.Render", .Rendering);
 	static ProfilerMarker sCullMarker = .("Culling", .Rendering);
 	static ProfilerMarker sSortMarker = .("Sorting", .Rendering);
+	static ProfilerMarker sGatherMarker = .("Gather renderers", .Rendering);
+	static ProfilerMarker sGatherJoinMarker = .("Join gathered ranges", .Rendering);
 	static ProfilerMarker sShadowMarker = .("Shadows", .Rendering);
 	static ProfilerMarker sOpaqueMarker = .("Opaque", .Rendering);
 	static ProfilerMarker sDecalMarker = .("Decals", .Rendering);
@@ -391,7 +393,8 @@ class RenderView
 			Occluders = mOcclusion.Occluders;
 			OccluderTriangles = mOcclusion.OccluderTriangles;
 		}
-		GatherRenderers(scene, camera, frustum, castShadows || mHasLocalShadows, shadowRange);
+		using (sGatherMarker.Sample())
+			GatherRenderers(scene, camera, frustum, castShadows || mHasLocalShadows, shadowRange);
 		if (mOcclusionOn)
 			OcclusionCulled = mOcclusion.Culled;
 		GatherFoliage(scene, camera, frustum, castShadows || mHasLocalShadows, shadowRange);
@@ -523,93 +526,293 @@ class RenderView
 		mMirrorItems.Clear();
 	}
 
+	/// The lists one gather fills (the view's own, or a range's on a job thread).
+	class GatherBucket
+	{
+		public List<RenderItem> items, shadows, transparent, viewmodel, viewmodelTransparent, mirror;
+		public bool owned;
+		/// A job thread met a renderer it could not gather: the range is gathered again on the main thread.
+		public bool serial;
+
+		public this() { }
+
+		public this(bool own)
+		{
+			owned = own;
+			items = new .(); shadows = new .(); transparent = new .(); viewmodel = new .(); viewmodelTransparent = new .(); mirror = new .();
+		}
+
+		public ~this()
+		{
+			if (owned)
+			{
+				delete items; delete shadows; delete transparent; delete viewmodel; delete viewmodelTransparent; delete mirror;
+			}
+		}
+
+		public void Clear()
+		{
+			items.Clear(); shadows.Clear(); transparent.Clear(); viewmodel.Clear(); viewmodelTransparent.Clear(); mirror.Clear();
+			serial = false;
+		}
+
+		/// Room for a whole range in every list (a simple renderer adds at most one item to each), and a cursor that
+		/// writes into them without touching the lists themselves: those of neighbouring ranges sit side by side in
+		/// memory, and writing their counts from different threads would make the threads wait on each other.
+		public GatherCursor Begin()
+		{
+			Clear();
+			List<RenderItem>[6] lists = .(items, shadows, transparent, viewmodel, viewmodelTransparent, mirror);
+			for (let list in lists)
+				if (list.Capacity < GatherRange)
+					list.Capacity = GatherRange;
+			return .() { items = items.Ptr, shadows = shadows.Ptr, transparent = transparent.Ptr, viewmodel = viewmodel.Ptr, viewmodelTransparent = viewmodelTransparent.Ptr, mirror = mirror.Ptr };
+		}
+
+		/// The counts the cursor reached, set once.
+		public void End(GatherCursor cursor)
+		{
+			items.[Friend]mSize = cursor.nItems; shadows.[Friend]mSize = cursor.nShadows; transparent.[Friend]mSize = cursor.nTransparent;
+			viewmodel.[Friend]mSize = cursor.nViewmodel; viewmodelTransparent.[Friend]mSize = cursor.nViewmodelTransparent; mirror.[Friend]mSize = cursor.nMirror;
+		}
+	}
+
+	/// Where a job thread's gather writes (GatherBucket.Begin): straight into the range's lists.
+	struct GatherCursor
+	{
+		public RenderItem* items, shadows, transparent, viewmodel, viewmodelTransparent, mirror;
+		public int32 nItems, nShadows, nTransparent, nViewmodel, nViewmodelTransparent, nMirror;
+	}
+
+	/// From how many renderers the gather runs on the job threads, and how many each range holds.
+	const int ParallelGather = 8192, GatherRange = 2048;
+	List<GatherBucket> mGatherBuckets = new .() ~ DeleteContainerAndItems!(_);
+	GatherBucket mViewBucket ~ delete _;
+
 	/// Sorts every renderer's meshes into the lists drawn this frame: solid, see-through, viewmodel and shadows.
+	/// Large scenes are gathered on the job threads, a range of renderers each, into lists that are joined in order
+	/// after, so the result is the same as gathering them one by one here. A range with a renderer that only the
+	/// main thread may work out (GatherSimple says which) is gathered here.
 	void GatherRenderers(Scene scene, CameraData camera, Frustum frustum, bool castShadows, float shadowRange)
 	{
-		for (let renderer in scene.Renderers)
+		if (mViewBucket == null)
+			mViewBucket = new .();
+		let view = mViewBucket;
+		view.items = mItems; view.shadows = mShadowItems; view.transparent = mTransparentItems;
+		view.viewmodel = mViewmodelItems; view.viewmodelTransparent = mViewmodelTransparent; view.mirror = mMirrorItems;
+		let renderers = scene.Renderers;
+		let count = renderers.Count;
+		if (count < ParallelGather || ParallelGatherOff)
 		{
-			// Outside the scene's world state: not drawn and casts no shadow.
-			if (!renderer.IsActiveAndEnabled || !renderer.GameObject.InActiveWorld)
-				continue;
-			if (hideRenderers || HidesHere(renderer.GameObject) || (HiddenObjects.Count > 0 && HiddenObjects.Contains(renderer.GameObject.Id)) || (onlyObject != 0 && renderer.GameObject.Id != onlyObject && !EditorOnlyObjects.Contains(renderer.GameObject.Id)))
-				continue;
-			if (!drawEditorOnly && EditorOnlyObjects.Count > 0 && EditorOnlyObjects.Contains(renderer.GameObject.Id))
-				continue;
-			// A renderer with parts draws each with its own material; otherwise its one mesh (a "part" of its own).
-			let parts = renderer.DrawnParts;
-			let hasParts = parts != null && parts.Count > 0;
-			let partCount = hasParts ? parts.Count : 1;
-			// Baked lighting: the meshes with lightmap coordinates, made the first time (LightmapUV).
-			let lightmapped = renderer.HasLightmap && UseBakedLighting && LightmapUV.MeshesFor(renderer, mLightmapMeshes) && mLightmapMeshes.Count == partCount;
-			// Levels of detail (docs/lod.md): the group picks one level for this camera, and too small is not drawn.
-			let lodGroup = renderer.LodGroup;
-			let lodLevel = lodGroup != null ? lodGroup.LevelFor(camera) : 0;
-			if (lodLevel < 0)
+			for (let renderer in renderers)
+				GatherOne(renderer, camera, frustum, castShadows, shadowRange, view);
+			return;
+		}
+		// The probes' boxes come from their transforms: worked out here, so the job threads only read them.
+		for (let probe in Reflections.Ready)
+			probe.Transform.Settle();
+		let ranges = (count + GatherRange - 1) / GatherRange;
+		while (mGatherBuckets.Count < ranges)
+			mGatherBuckets.Add(new .(true));
+		Jobs.For(ranges, scope [&] (range) =>
+		{
+			let bucket = mGatherBuckets[range];
+			var cursor = bucket.Begin();
+			let end = Math.Min((range + 1) * GatherRange, count);
+			let list = renderers.Ptr;
+			for (int i = range * GatherRange; i < end; i++)
 			{
-				LodCulled++;
+				if (!GatherSimple(list[i], camera, frustum, castShadows, shadowRange, ref cursor))
+				{
+					bucket.serial = true;
+					return;
+				}
+			}
+			bucket.End(cursor);
+		});
+		sGatherJoinMarker.Begin();
+		defer Profiler.End();
+		for (int range < ranges)
+		{
+			let bucket = mGatherBuckets[range];
+			if (bucket.serial)
+			{
+				SerialGatherRanges++;
+				// Gathered here as a whole, so the order stays that of the renderers.
+				let end = Math.Min((range + 1) * GatherRange, count);
+				for (int i = range * GatherRange; i < end; i++)
+					GatherOne(renderers[i], camera, frustum, castShadows, shadowRange, view);
 				continue;
 			}
-			for (int partIndex < partCount)
+			mItems.AddRange(bucket.items);
+			mShadowItems.AddRange(bucket.shadows);
+			mTransparentItems.AddRange(bucket.transparent);
+			mViewmodelItems.AddRange(bucket.viewmodel);
+			mViewmodelTransparent.AddRange(bucket.viewmodelTransparent);
+			mMirrorItems.AddRange(bucket.mirror);
+		}
+	}
+
+	/// Tests can switch the job-thread gather off, to compare.
+	public static bool ParallelGatherOff;
+	/// Ranges of renderers gathered on the main thread after a job thread met one it could not (all views, all frames).
+	public static int SerialGatherRanges;
+
+	/// GatherOne for a renderer that drawing only reads (one mesh, one material, a settled transform or a root one):
+	/// safe on a job thread. False, having added nothing, for one that needs the main thread.
+	bool GatherSimple(RenderProxy renderer, CameraData camera, Frustum frustum, bool castShadows, float shadowRange, ref GatherCursor output)
+	{
+		if (!renderer.IsActiveAndEnabled || !renderer.GameObject.InActiveWorld)
+			return true;
+		if (hideRenderers || HidesHere(renderer.GameObject) || (HiddenObjects.Count > 0 && HiddenObjects.Contains(renderer.GameObject.Id)) || (onlyObject != 0 && renderer.GameObject.Id != onlyObject && !EditorOnlyObjects.Contains(renderer.GameObject.Id)))
+			return true;
+		if (!drawEditorOnly && EditorOnlyObjects.Count > 0 && EditorOnlyObjects.Contains(renderer.GameObject.Id))
+			return true;
+		if (!renderer.ReadyToGather || renderer.DrawnParts != null)
+			return false;
+		let mesh = renderer.ActiveMesh;
+		if (mesh == null || !mesh.HasGpuData)
+			return true;
+		let material = renderer.ActiveMaterial;
+		if (material != null && (material.stateMaterials.Count > 0 || material.IsPalette))
+			return false;
+		Matrix4 world;
+		if (!renderer.TryRenderMatrix(out world))
+			return false;
+		let shadowOnly = renderer.shadowOnly || (Capture && !PlanarPass && !renderer.inReflectionProbes);
+		RenderItem item;
+		item.tint = .White;
+		item.mesh = mesh;
+		item.renderer = renderer;
+		item.material = material;
+		item.world = world;
+		let bounds = mesh.Bounds.Transformed(item.world);
+		item.center = bounds.Center;
+		item.radius = bounds.Extents.Length;
+		let transparent = IsTransparent(renderer, item.material);
+		let viewmodel = DrawsAsViewmodel(camera, renderer.GameObject);
+		let drawn = !shadowOnly && (viewmodel || (frustum.Intersects(bounds) && (!mOcclusionOn || mOcclusion.IsVisible(bounds))));
+		let shadowAllowed = !viewmodel || camera.viewmodelCastsShadows;
+		let shadow = !transparent && castShadows && renderer.castShadows && shadowAllowed && (item.center - camera.position).Length - item.radius < shadowRange;
+		if (!drawn && !shadow)
+			return true;
+		// MakeKey reads ActiveTexture for a renderer without a material.
+		if (item.material == null && !renderer.TextureReady)
+			return false;
+		item.probe = Reflections.Pick(item.center, item.radius);
+		item.lightGrid = LightGridAt(item.center);
+		item.key = ProbeKey(MakeKey(renderer, item.mesh, item.material), item.probe, item.lightGrid) * 2 + (Mirrored(item.world) ? 1u : 0u);
+		if (drawn)
+		{
+			if (viewmodel)
 			{
-				var mesh = hasParts ? parts[partIndex].mesh : renderer.ActiveMesh;
-				if (lightmapped)
-					mesh = mLightmapMeshes[partIndex];
-				if (lodGroup != null)
-					mesh = lodGroup.MeshAt(renderer, mesh, lodLevel);
-				if (mesh == null || !mesh.HasGpuData || (hasParts && parts[partIndex].hidden))
+				if (transparent)
+					output.viewmodelTransparent[output.nViewmodelTransparent++] = item;
+				else
+					output.viewmodel[output.nViewmodel++] = item;
+			}
+			else
+			{
+				if (transparent)
+					output.transparent[output.nTransparent++] = item;
+				else
+					output.items[output.nItems++] = item;
+				if (!transparent && (renderer.screenReflections || renderer.planarReflection))
+					output.mirror[output.nMirror++] = item;
+			}
+		}
+		if (shadow)
+			output.shadows[output.nShadows++] = item;
+		// Written only when it changes: a renderer's neighbours in memory belong to the same range, but not always.
+		if (renderer.LastDrawnFrame != Time.FrameCount)
+			renderer.LastDrawnFrame = Time.FrameCount;
+		return true;
+	}
+
+	/// One renderer's meshes into the lists (the main-thread gather: it may resolve meshes, materials and LODs).
+	void GatherOne(RenderProxy renderer, CameraData camera, Frustum frustum, bool castShadows, float shadowRange, GatherBucket output)
+	{
+		// Outside the scene's world state: not drawn and casts no shadow.
+		if (!renderer.IsActiveAndEnabled || !renderer.GameObject.InActiveWorld)
+			return;
+		if (hideRenderers || HidesHere(renderer.GameObject) || (HiddenObjects.Count > 0 && HiddenObjects.Contains(renderer.GameObject.Id)) || (onlyObject != 0 && renderer.GameObject.Id != onlyObject && !EditorOnlyObjects.Contains(renderer.GameObject.Id)))
+			return;
+		if (!drawEditorOnly && EditorOnlyObjects.Count > 0 && EditorOnlyObjects.Contains(renderer.GameObject.Id))
+			return;
+		// A renderer with parts draws each with its own material; otherwise its one mesh (a "part" of its own).
+		let parts = renderer.DrawnParts;
+		let hasParts = parts != null && parts.Count > 0;
+		let partCount = hasParts ? parts.Count : 1;
+		// Baked lighting: the meshes with lightmap coordinates, made the first time (LightmapUV).
+		let lightmapped = renderer.HasLightmap && UseBakedLighting && LightmapUV.MeshesFor(renderer, mLightmapMeshes) && mLightmapMeshes.Count == partCount;
+		// Levels of detail (docs/lod.md): the group picks one level for this camera, and too small is not drawn.
+		let lodGroup = renderer.LodGroup;
+		let lodLevel = lodGroup != null ? lodGroup.LevelFor(camera) : 0;
+		if (lodLevel < 0)
+		{
+			LodCulled++;
+			return;
+		}
+		for (int partIndex < partCount)
+		{
+			var mesh = hasParts ? parts[partIndex].mesh : renderer.ActiveMesh;
+			if (lightmapped)
+				mesh = mLightmapMeshes[partIndex];
+			if (lodGroup != null)
+				mesh = lodGroup.MeshAt(renderer, mesh, lodLevel);
+			if (mesh == null || !mesh.HasGpuData || (hasParts && parts[partIndex].hidden))
+				continue;
+			// A reflection capture leaves out what is kept out of the probes, but not its shadow.
+			let shadowOnly = renderer.shadowOnly || (hasParts && parts[partIndex].shadowOnly) || (Capture && !PlanarPass && !renderer.inReflectionProbes);
+			var partMaterial = (hasParts && parts[partIndex].material != null) ? parts[partIndex].material : renderer.ActiveMaterial;
+			// A material can name another to draw with in the world state this machine shows (State Materials).
+			if (partMaterial != null && partMaterial.stateMaterials.Count > 0)
+				partMaterial = partMaterial.ForState(renderer.Scene != null ? renderer.Scene.WorldState : 0);
+			// Palette mode: faces flagged double sided or see-through are drawn apart (Mesh.PaletteSection), each
+			// kind with its own culling and blending.
+			let sectioned = partMaterial != null && partMaterial.IsPalette && mesh.HasPaletteSections;
+			for (int section < (sectioned ? Mesh.PaletteSectionCount : 1))
+			{
+				let sectionMesh = sectioned ? mesh.PaletteSection(section) : mesh;
+				if (sectionMesh == null)
 					continue;
-				// A reflection capture leaves out what is kept out of the probes, but not its shadow.
-				let shadowOnly = renderer.shadowOnly || (hasParts && parts[partIndex].shadowOnly) || (Capture && !PlanarPass && !renderer.inReflectionProbes);
-				var partMaterial = (hasParts && parts[partIndex].material != null) ? parts[partIndex].material : renderer.ActiveMaterial;
-				// A material can name another to draw with in the world state this machine shows (State Materials).
-				if (partMaterial != null && partMaterial.stateMaterials.Count > 0)
-					partMaterial = partMaterial.ForState(renderer.Scene != null ? renderer.Scene.WorldState : 0);
-				// Palette mode: faces flagged double sided or see-through are drawn apart (Mesh.PaletteSection), each
-				// kind with its own culling and blending.
-				let sectioned = partMaterial != null && partMaterial.IsPalette && mesh.HasPaletteSections;
-				for (int section < (sectioned ? Mesh.PaletteSectionCount : 1))
+				RenderItem item;
+				item.tint = hasParts ? parts[partIndex].tint : .White;
+				item.mesh = sectionMesh;
+				item.renderer = renderer;
+				item.material = sectioned ? partMaterial.PaletteVariant(section) : partMaterial;
+				item.world = renderer.RenderMatrix;
+				let bounds = mesh.Bounds.Transformed(item.world);
+				item.center = bounds.Center;
+				item.radius = bounds.Extents.Length;
+				let transparent = IsTransparent(renderer, item.material);
+				// The viewmodel: drawn in a pass of its own after the world (no culling: it is a few things at the eye).
+				let viewmodel = DrawsAsViewmodel(camera, renderer.GameObject);
+				let drawn = !shadowOnly && (viewmodel || (frustum.Intersects(bounds) && (!mOcclusionOn || mOcclusion.IsVisible(bounds))));
+				let shadowAllowed = !viewmodel || camera.viewmodelCastsShadows;
+				let shadow = !transparent && castShadows && renderer.castShadows && shadowAllowed && (item.center - camera.position).Length - item.radius < shadowRange;
+				// Out of view and casting no shadow here: nothing more to work out.
+				if (!drawn && !shadow)
+					continue;
+				item.probe = Reflections.Pick(item.center, item.radius);
+				item.lightGrid = LightGridAt(item.center);
+				item.key = ProbeKey(MakeKey(renderer, item.mesh, item.material), item.probe, item.lightGrid) * 2 + (Mirrored(item.world) ? 1u : 0u);
+				if (drawn)
 				{
-					let sectionMesh = sectioned ? mesh.PaletteSection(section) : mesh;
-					if (sectionMesh == null)
-						continue;
-					RenderItem item;
-					item.tint = hasParts ? parts[partIndex].tint : .White;
-					item.mesh = sectionMesh;
-					item.renderer = renderer;
-					item.material = sectioned ? partMaterial.PaletteVariant(section) : partMaterial;
-					item.world = renderer.RenderMatrix;
-					let bounds = mesh.Bounds.Transformed(item.world);
-					item.center = bounds.Center;
-					item.radius = bounds.Extents.Length;
-					let transparent = IsTransparent(renderer, item.material);
-					// The viewmodel: drawn in a pass of its own after the world (no culling: it is a few things at the eye).
-					let viewmodel = DrawsAsViewmodel(camera, renderer.GameObject);
-					let drawn = !shadowOnly && (viewmodel || (frustum.Intersects(bounds) && (!mOcclusionOn || mOcclusion.IsVisible(bounds))));
-					let shadowAllowed = !viewmodel || camera.viewmodelCastsShadows;
-					let shadow = !transparent && castShadows && renderer.castShadows && shadowAllowed && (item.center - camera.position).Length - item.radius < shadowRange;
-					// Out of view and casting no shadow here: nothing more to work out.
-					if (!drawn && !shadow)
-						continue;
-					item.probe = Reflections.Pick(item.center, item.radius);
-					item.lightGrid = LightGridAt(item.center);
-					item.key = ProbeKey(MakeKey(renderer, item.mesh, item.material), item.probe, item.lightGrid) * 2 + (Mirrored(item.world) ? 1u : 0u);
-					if (drawn)
+					if (viewmodel)
+						(transparent ? output.viewmodelTransparent : output.viewmodel).Add(item);
+					else
 					{
-						if (viewmodel)
-							(transparent ? mViewmodelTransparent : mViewmodelItems).Add(item);
-						else
-						{
-							(transparent ? mTransparentItems : mItems).Add(item);
-							if (!transparent && (renderer.screenReflections || renderer.planarReflection))
-								mMirrorItems.Add(item);
-						}
-						renderer.LastDrawnFrame = Time.FrameCount;
+						(transparent ? output.transparent : output.items).Add(item);
+						if (!transparent && (renderer.screenReflections || renderer.planarReflection))
+							output.mirror.Add(item);
 					}
-					if (shadow)
-					{
-						mShadowItems.Add(item);
-						renderer.LastDrawnFrame = Time.FrameCount;
-					}
+					renderer.LastDrawnFrame = Time.FrameCount;
+				}
+				if (shadow)
+				{
+					output.shadows.Add(item);
+					renderer.LastDrawnFrame = Time.FrameCount;
 				}
 			}
 		}

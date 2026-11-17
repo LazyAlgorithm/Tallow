@@ -199,7 +199,7 @@ class OcclusionBuffer
 				}
 			}
 		}
-		Culled++;
+		System.Threading.Interlocked.Increment(ref Culled);
 		return false;
 	}
 

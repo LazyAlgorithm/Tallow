@@ -219,10 +219,28 @@
   difference is the scripts row (10,000 Movers: C# 1.36 ms vs Beef 0.79 ms, the B03/B05 ratio). Shader-graph
   materials and compute graphs set up from C# draw and dispatch exactly as from Beef. **Engine finding (not C#):**
   culling is single-threaded at ~70 ns a renderer, 7.1 ms of the 9.5 ms rendering CPU at 100k static cubes, so a
-  100k-object scene is CPU-bound at ~10 ms before any script runs. A parallel gather or a static-object BVH would
-  be the fix (engine work, not part of the C# roadmap). Found on the way: the C# bench never turned vsync off (C#
+  100k-object scene is CPU-bound at ~10 ms before any script runs. **Fixed 2026-11-17** (below). Found on the way: the C# bench never turned vsync off (C#
   had no way to, only quality presets) and never pointed its camera at the scene. `Quality.VSync`, `RenderScale`,
   `Shadows`, `ShadowMapSize`... (all 17 quality settings, plus `Quality.Save()`) are now in C#, with an in-game check.
+
+- Culling fix (2026-11-17; raw data `~/TallowBenchmarks/render-culling-20261117/`, same B16 runs): the renderer list
+  (`Scene.Renderers`) is filled and the renderers are gathered (`RenderView.GatherRenderers`) on the job threads in
+  ranges of 2,048 from 8,192 renderers. A range holding a renderer only the main thread may work out (an unresolved
+  mesh, material or texture, a LOD group, a lightmap, model parts, palette or state materials, a dirty transform
+  under a parent) is gathered on the main thread, and ranges are joined in order, so the lists are the same as
+  before: `tools/test_parallel_gather.py` compares screenshots of both, pixel for pixel. Found on the way: List's
+  indexer writes a version count on every set, which threads filling one list would all be writing.
+
+  | case | rendering CPU ms before → after (Beef) | frame avg ms before → after, Beef / C# |
+  |---|---|---|
+  | 10k:0:0 | 0.72 → 0.13 | 0.89 / 0.89 → 0.45 / 0.62 |
+  | 100k:0:0 | 9.49 → 2.34 | 10.23 / 10.20 → 5.66 / 5.69 |
+  | 100k:10k:0 | 10.72 → 2.61 | 13.61 / 14.25 → 8.56 / 9.51 |
+  | 100k:10k:1 | 11.43 → 2.71 | 14.42 / 15.15 → 9.36 / 9.99 |
+  | 100k:10k:1:8 | 11.62 → 2.90 | 15.53 / 16.17 → 9.84 / 10.49 |
+
+  The rest is memory: each view copies every renderer's settings into its proxy each frame (~64 MB at 100k), which
+  bounds how well the list fill scales; sorting (1.0 ms) and submitting (1.1 ms) stay on the main thread.
 
 ### Fixes from these runs (2026-11-16)
 

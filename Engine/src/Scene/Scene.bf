@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections;
 
 namespace Tallow;
@@ -362,25 +363,87 @@ class Scene
 	List<RenderProxy> mRenderers = new .() ~ delete _;
 	/// What the renderer draws: every switched-on Mesh Renderer's RenderProxy, its settings copied in from the
 	/// entity as the list is made. Rebuilt each time it is read (once per view); keep it only for the frame.
+	static ProfilerMarker sRendererListMarker = .("Renderer list", .Rendering);
+	/// From how many renderers the list is filled on the job threads, and how many each takes at a time.
+	const int ParallelRenderers = 8192, RendererRange = 2048;
+	struct RendererSpan
+	{
+		public MeshRendererData* settings;
+		public ObjectLink* links;
+		public Entity* entities;
+		public int32 start, count;
+	}
+	List<RendererSpan> mRendererSpans = new .() ~ delete _;
+	int32 mRendererMissing;
+
+	[Inline]
+	static RenderProxy FillProxy(RenderProxy proxy, RendererSpan span, int at)
+	{
+		proxy.[Friend]mGameObject = span.links[at].gameObject;
+		proxy.data = span.settings[at];
+		return proxy;
+	}
 	public List<RenderProxy> Renderers
 	{
 		get
 		{
+			sRendererListMarker.Begin();
+			defer Profiler.End();
 			mRenderers.Clear();
+			mRendererSpans.Clear();
 			if (mRendererQuery == null)
 				mRendererQuery = new .(World, .Read, .Read);
+			int total = 0;
 			for (var chunk in mRendererQuery)
 			{
-				let settings = chunk.Read<MeshRendererData>();
-				let links = chunk.Read<ObjectLink>();
-				let entities = chunk.Entities;
-				for (int i < chunk.Count)
+				mRendererSpans.Add(.() { settings = chunk.Read<MeshRendererData>().Ptr, links = chunk.Read<ObjectLink>().Ptr, entities = chunk.Entities.Ptr, start = (int32)total, count = (int32)chunk.Count });
+				total += chunk.Count;
+			}
+			mRenderers.Count = total;
+			if (total < ParallelRenderers || RenderView.ParallelGatherOff)
+			{
+				for (let span in mRendererSpans)
+					for (int i < span.count)
+						mRenderers[span.start + i] = FillProxy(ComponentState<RenderProxy>.Make(World, span.entities[i]), span, i);
+				return mRenderers;
+			}
+			// Large scenes: the proxies are filled on the job threads (their copies of the settings are most of the
+			// work), a range at a time; one an entity has not had yet is made here afterwards (that adds to a shared
+			// table).
+			let world = World;
+			mRendererMissing = 0;
+			// Written through the pointer: List's indexer counts every write in the list itself, which every thread
+			// would then be writing.
+			let output = mRenderers.Ptr;
+			Jobs.For((total + RendererRange - 1) / RendererRange, scope [&] (range) =>
+			{
+				let first = range * RendererRange;
+				let end = Math.Min(first + RendererRange, total);
+				int spanIndex = 0;
+				while (mRendererSpans[spanIndex].start + mRendererSpans[spanIndex].count <= first)
+					spanIndex++;
+				for (int index = first; index < end; index++)
 				{
-					let proxy = ComponentState<RenderProxy>.Make(World, entities[i]);
-					proxy.[Friend]mGameObject = links[i].gameObject;
-					proxy.data = settings[i];
-					mRenderers.Add(proxy);
+					while (index >= mRendererSpans[spanIndex].start + mRendererSpans[spanIndex].count)
+						spanIndex++;
+					let span = mRendererSpans[spanIndex];
+					let at = index - span.start;
+					let proxy = ComponentState<RenderProxy>.Get(world, span.entities[at]);
+					if (proxy == null)
+					{
+						output[index] = null;
+						Interlocked.Increment(ref mRendererMissing);
+						continue;
+					}
+					output[index] = FillProxy(proxy, span, at);
 				}
+			});
+			if (mRendererMissing > 0)
+			{
+				for (let span in mRendererSpans)
+					for (int i < span.count)
+						if (mRenderers[span.start + i] == null)
+							mRenderers[span.start + i] = FillProxy(ComponentState<RenderProxy>.Make(world, span.entities[i]), span, i);
 			}
 			return mRenderers;
 		}

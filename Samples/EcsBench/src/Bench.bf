@@ -60,6 +60,9 @@ class Bench : Component
 		if (ReadSetting("TALLOW_BENCH_EXPLORER", text..Clear()) && text == "1")
 			Console.WriteLine(Scene.World.StartExplorer() ? "EcsBench: Flecs Explorer on port 27750" : "EcsBench: Flecs Explorer unavailable");
 		Gfx.SetVsync(false);
+		// TALLOW_SERIAL_GATHER=1: the renderer gather on the main thread alone, to compare.
+		if (ReadSetting("TALLOW_SERIAL_GATHER", text..Clear()) && text == "1")
+			RenderView.ParallelGatherOff = true;
 		mHalfSize = Workload.HalfSize(mCount);
 		// Far enough back to see the whole box.
 		Transform.Position = .(0, mHalfSize * 0.6f, -mHalfSize * 3.2f);

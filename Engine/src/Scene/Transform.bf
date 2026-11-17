@@ -190,6 +190,35 @@ class Transform
 		}
 	}
 
+	/// Works out LocalToWorld now (and caches it), so later reads only read.
+	public void Settle()
+	{
+		if (D().dirty)
+		{
+			let world = LocalToWorld;
+			D().world = world;
+		}
+	}
+
+	/// LocalToWorld without filling its cache, for job threads (RenderView's parallel gather): false when it would
+	/// need a parent's matrix worked out first (then ask LocalToWorld on the main thread).
+	public bool TryLocalToWorld(out Matrix4 world)
+	{
+		ref TransformData data = ref D();
+		if (!data.dirty)
+		{
+			world = data.world;
+			return true;
+		}
+		if (mParent == null)
+		{
+			world = Matrix4.TRS(data.localPosition, data.localRotation, data.localScale);
+			return true;
+		}
+		world = default;
+		return false;
+	}
+
 	/// The matrix from the world to this object's own space.
 	public Matrix4 WorldToLocal => LocalToWorld.Inverse;
 

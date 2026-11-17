@@ -325,7 +325,7 @@ extension Bench
 			line.AppendF("\"jolt_step_last_ms\": {:F3}, ", step);
 		}
 		if (mMode == "render")
-			line.AppendF("\"static\": {}, \"moving\": {}, \"chunks_made\": {}, \"effects\": {}, ", mCount, mMoving, mChunksMade, mEffects);
+			line.AppendF("\"static\": {}, \"moving\": {}, \"chunks_made\": {}, \"effects\": {}, \"serial_gather_ranges\": {}, ", mCount, mMoving, mChunksMade, mEffects, RenderView.SerialGatherRanges);
 		if (mMode == "softbody")
 		{
 			int bodies = 0, vertices = 0, sleeping = 0;

@@ -130,6 +130,44 @@ class RenderProxy
 		}
 	}
 
+	/// RenderMatrix without filling any cache (TryLocalToWorld), for job threads; false when it needs the main thread.
+	public bool TryRenderMatrix(out Matrix4 world)
+	{
+		world = .Identity;
+		if (mGameObject != null && !Transform.TryLocalToWorld(out world))
+			return false;
+		if (UseVisualCorrection)
+			world = VisualCorrection * world;
+		world.m[12] += VisualOffset.x;
+		world.m[13] += VisualOffset.y;
+		world.m[14] += VisualOffset.z;
+		return true;
+	}
+
+	/// Whether drawing this renderer this frame only reads it: its mesh, material, model parts and texture are already
+	/// worked out for the assets as they are now, and it has nothing drawn only from the main thread (runtime parts,
+	/// model parts, a lightmap, a LOD group). Such a renderer can be gathered on a job thread (RenderView), which
+	/// also needs TextureReady for one it draws.
+	public bool ReadyToGather
+	{
+		get
+		{
+			if (RuntimeParts != null && RuntimeParts.Count > 0)
+				return false;
+			if (mRuntimeMesh == null && (!mResolved || mMeshVersion != Assets.MeshVersion || Differs(mResolvedPath, mesh)))
+				return false;
+			if (Differs(mResolvedMaterial, material))
+				return false;
+			if (useModelMaterials && mRuntimeMesh == null && !HasText(material) && !HasText(texture) &&
+				(mModelPartsVersion != Assets.MeshVersion || Differs(mModelPartsPath, mesh) || (mModelParts != null && mModelParts.Count > 0)))
+				return false;
+			return !HasLightmap && LodGroup == null;
+		}
+	}
+
+	/// Whether ActiveTexture is worked out for the textures as they are now (reading it then changes nothing).
+	public bool TextureReady => mTexture.Valid && mTextureVersion == Assets.TextureVersion && !Differs(mResolvedTexture, texture);
+
 	/// A texture made at run time (a Compute Texture, say) to draw with instead of the one named by the
 	/// material or the Texture field. Set it invalid again to go back.
 	[NonSerialized]
