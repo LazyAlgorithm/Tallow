@@ -252,11 +252,14 @@ public readonly record struct Joint(GameObject GameObject) : IComponent
 /// <summary>Matches the native SoftBodyKind modes, including Jelly Golf.</summary>
 public enum SoftBodyKind { Cloth, Jelly, Shell, DrivenJelly }
 
-public readonly record struct SoftBody(GameObject GameObject) : IComponent
+[NativeComponent("Tallow.SoftBody")]
+public readonly partial record struct SoftBody(GameObject GameObject) : IComponent
 {
     public bool IsValid => Physics.HasSoftBody(GameObject.SceneId, GameObject.Id);
     public bool HasBody => Physics.HasSoftBodySimulation(GameObject.SceneId, GameObject.Id);
     public bool IsSleeping => Physics.IsSoftBodySleeping(GameObject.SceneId, GameObject.Id);
+    /// <summary>Cloth, jelly, shell or driven jelly; null when there is no soft body. Like its other settings
+    /// (Mass, Iterations...), set it in the frame the SoftBody is added: the simulation is made from them.</summary>
     public SoftBodyKind? Kind
     {
         get
@@ -264,6 +267,8 @@ public readonly record struct SoftBody(GameObject GameObject) : IComponent
             int value = Physics.GetSoftBodyMode(GameObject.SceneId, GameObject.Id);
             return value is >= 0 and <= 3 ? (SoftBodyKind)value : null;
         }
+        set => new NativeComponent(GameObject, "Tallow.SoftBody").Set("kind",
+            value ?? throw new ArgumentNullException(nameof(value)));
     }
     public int SimulatedVertexCount =>
         Physics.GetSoftBodyVertexCount(GameObject.SceneId, GameObject.Id);

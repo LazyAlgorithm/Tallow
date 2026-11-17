@@ -474,7 +474,7 @@ public class ApiChecks : CheckBase
 
     private static readonly HashSet<string> HandWritten = ["Light", "MeshRenderer", "SphereCollider", "BoxCollider",
         "NavigationAgent", "NavigationSurface", "Rigidbody", "CharacterController", "UIDocument", "Animator",
-        "VoxelObject", "VoxelTerrain", "CharacterMotor", "AudioSource"];
+        "VoxelObject", "VoxelTerrain", "CharacterMotor", "AudioSource", "SoftBody"];
 
     /// Every built-in component handle (the generated ones too) can be added, and each of its fields reads back what
     /// is written to it.

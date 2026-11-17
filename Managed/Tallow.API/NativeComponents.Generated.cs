@@ -1960,6 +1960,81 @@ public readonly partial record struct SkinnedMeshRenderer(GameObject GameObject)
     public string PartColors { get => Data.GetString("partColors"); set => Data.Set("partColors", value); }
 }
 
+// Fields of Tallow.SoftBody its hand-written handle does not cover.
+public readonly partial record struct SoftBody
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.SoftBody");
+    /// <summary>
+    /// The whole body's weight in kilograms, shared by the vertices that are not pinned.
+    /// </summary>
+    public float Mass { get => Fields.GetFloat("mass"); set => Fields.Set("mass", value); }
+    /// <summary>
+    /// How hard it resists bending: 0 folds freely (silk), 1 holds its shape (leather, rubber).
+    /// </summary>
+    public float BendStiffness { get => Fields.GetFloat("bendStiffness"); set => Fields.Set("bendStiffness", value); }
+    /// <summary>
+    /// How fast it loses speed, like moving through thick air.
+    /// </summary>
+    public float Damping { get => Fields.GetFloat("damping"); set => Fields.Set("damping", value); }
+    public float Friction { get => Fields.GetFloat("friction"); set => Fields.Set("friction", value); }
+    /// <summary>
+    /// How much it bounces when it lands, as on a Rigidbody: 0 lands with a squash and a wobble but no hop, 1 bounces
+    /// back up as fast as it came down (a jelly: its whole body; cloth: where it touches).
+    /// </summary>
+    public float Bounciness { get => Fields.GetFloat("bounciness"); set => Fields.Set("bounciness", value); }
+    public float GravityScale { get => Fields.GetFloat("gravityScale"); set => Fields.Set("gravityScale", value); }
+    /// <summary>
+    /// How far from its surface it keeps other things (its thickness), in metres.
+    /// </summary>
+    public float Thickness { get => Fields.GetFloat("thickness"); set => Fields.Set("thickness", value); }
+    /// <summary>
+    /// How much Wind Zones push it (cloth and jelly; a shell rides its object): 0 not at all. A flag is a cloth plane
+    /// pinned along one edge, with a Global Wind Zone in the scene.
+    /// </summary>
+    public float WindDrag { get => Fields.GetFloat("windDrag"); set => Fields.Set("windDrag", value); }
+    /// <summary>
+    /// Solver passes each step: more is stiffer and costs more.
+    /// </summary>
+    public int Iterations { get => Fields.GetInt("iterations"); set => Fields.Set("iterations", value); }
+    /// <summary>
+    /// Shell: what dents it: hits on its object's collider, or things pushing on the shell itself.
+    /// </summary>
+    public ShellDentMode DentMode { get => Fields.GetEnum<ShellDentMode>("dentMode"); set => Fields.Set("dentMode", value); }
+    /// <summary>
+    /// Shell: how far one impact can push the surface in, in metres.
+    /// </summary>
+    public float DentDepth { get => Fields.GetFloat("dentDepth"); set => Fields.Set("dentDepth", value); }
+    /// <summary>
+    /// Shell: how far the surface springs back from, in metres. Pushed further than this, it stays dented.
+    /// </summary>
+    public float SpringBack { get => Fields.GetFloat("springBack"); set => Fields.Set("springBack", value); }
+    /// <summary>
+    /// Shell: how fast something must hit it to dent it, in metres a second (3 is about 11 km/h). Slower knocks,
+    /// leaning on it and loads resting on it spring back however hard they press.
+    /// </summary>
+    public float DentSpeed { get => Fields.GetFloat("dentSpeed"); set => Fields.Set("dentSpeed", value); }
+    /// <summary>
+    /// DrivenJelly: maximum distance in metres the mesh can lag behind its Rigidbody's reference surface.
+    /// </summary>
+    public float DrivenFlex { get => Fields.GetFloat("drivenFlex"); set => Fields.Set("drivenFlex", value); }
+    /// <summary>
+    /// DrivenJelly: spring-back factor per fixed step (0..1); higher returns to the reference shape faster.
+    /// </summary>
+    public float DrivenSpring { get => Fields.GetFloat("drivenSpring"); set => Fields.Set("drivenSpring", value); }
+    /// <summary>
+    /// DrivenJelly: how much relative vertex velocity persists each fixed step (0..1); lower settles sooner.
+    /// </summary>
+    public float DrivenDamping { get => Fields.GetFloat("drivenDamping"); set => Fields.Set("drivenDamping", value); }
+    /// <summary>
+    /// The vertices held in place, by number ("0-12 40 41"): Paint Pins in the editor writes these.
+    /// </summary>
+    public string Pins { get => Fields.GetString("pins"); set => Fields.Set("pins", value); }
+    /// <summary>
+    /// Where it is softer than Stiffness says, by vertex ("12=0.5 13=0.25"): painted in the editor.
+    /// </summary>
+    public string StiffnessMap { get => Fields.GetString("stiffnessMap"); set => Fields.Set("stiffnessMap", value); }
+}
+
 /// <summary>
 /// A place where players or other objects may appear. Put as many in the scene as you like and ask SpawnPoints for
 /// one; the object's position is where to appear and its rotation is which way to face.
@@ -2781,6 +2856,24 @@ public enum RemoteSnapshotFormat
 }
 
 /// <summary>
+/// Values of the engine's ShellDentMode.
+/// </summary>
+public enum ShellDentMode
+{
+    /// <summary>
+    /// The object's collider takes every hit, so nothing passes into the shell (make the collider the shape of the
+    /// mesh); a hit at Dent Speed or faster presses the shell in around where it landed. The shell itself only
+    /// follows its object.
+    /// </summary>
+    FromImpacts = 0,
+    /// <summary>
+    /// The shell meets things itself and is pushed in where it touches them (it can fold round a post), so the
+    /// collider sits a little inside the mesh (by about Dent Depth). Things can press into the shell that far.
+    /// </summary>
+    FromSurface = 1,
+}
+
+/// <summary>
 /// How a terrain decides where it has ground.
 /// </summary>
 public enum TerrainMode
@@ -2874,6 +2967,7 @@ internal static partial class NativeComponentTypes
         [typeof(NavigationAgent)] = ["SnapDistance", "BaseOffset", "RepathInterval", "FaceMovement", "TurnSpeed", "SmoothPath", "AvoidOthers", "Radius", "AvoidancePriority", "UseLinks"],
         [typeof(NavigationSurface)] = ["BakedData", "Size", "CellSize", "AgentRadius", "AgentHeight", "MaxStep", "MaxSlope", "ChunkSize", "Flying", "Backend", "IncludeRenderMeshes", "RebuildOnStart", "DrawNavigation"],
         [typeof(Rigidbody)] = ["GravityScale"],
+        [typeof(SoftBody)] = ["Mass", "BendStiffness", "Damping", "Friction", "Bounciness", "GravityScale", "Thickness", "WindDrag", "Iterations", "DentMode", "DentDepth", "SpringBack", "DentSpeed", "DrivenFlex", "DrivenSpring", "DrivenDamping", "Pins", "StiffnessMap"],
         [typeof(UIDocument)] = ["ReferenceHeight", "ReferenceWidth"],
         [typeof(VoxelObject)] = ["Shape", "Mesh", "Resolution", "Size", "BoxSize", "Color", "InteriorColor", "InteriorMaterial", "InteriorTiling", "BreakOffPieces", "MinimumPieceSize", "Anchored", "DebrisPieces", "PaletteEntry", "InteriorPaletteEntry", "PieceLifetime"],
         [typeof(VoxelTerrain)] = ["Mode", "TileSize", "FlatHeight", "StreamTiles", "Style", "ContourSharpness", "FlatShading", "VoxelSize", "ViewDistance", "MinChunkY", "MaxChunkY", "LodDistance", "TerrainHeight", "SeaLevel", "GrassColor", "RockColor", "SandColor", "SnowColor", "DirtColor", "GenerateColliders", "UploadsPerFrame"],

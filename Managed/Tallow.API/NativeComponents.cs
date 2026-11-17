@@ -206,6 +206,7 @@ internal static partial class NativeComponentTypes
         [typeof(VoxelObject)] = ("Tallow.VoxelObject", o => new VoxelObject(o)),
         [typeof(CharacterMotor)] = ("Tallow.CharacterMotor", o => new CharacterMotor(o)),
         [typeof(AudioSource)] = ("Tallow.AudioSource", o => new AudioSource(o)),
+        [typeof(SoftBody)] = ("Tallow.SoftBody", o => new SoftBody(o)),
     };
 
     /// <summary>Every handle type with its native name (the in-engine tests check them against their attributes).</summary>
