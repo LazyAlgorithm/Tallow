@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// A stable 48-byte native/managed value record. Fields use primitive numeric
+/// A stable 56-byte native/managed value record. Fields use primitive numeric
 /// types, never a native object pointer or a platform-dependent Vector3
 /// packing. C# declares the same sequential layout in PhysicsQueryHit.
 [CRepr]
@@ -14,6 +14,8 @@ struct PhysicsQueryHit
     public float normalX, normalY, normalZ;
     public float distance, penetrationDepth;
     public uint32 bodyId, flags;
+    /// Which part of a Compound Collider, and which triangle of a Mesh Collider, was hit; -1 for none.
+    public int32 part, triangle;
 }
 
 /// The C# ABI exposes *existing* scene, Flecs-backed Rigidbody and Jolt-backed
@@ -798,8 +800,7 @@ static class Physics
     /// Closest Jolt ray contact, packed as point.xyz and distance.w.
     /// No managed solver or additional physics query is involved.
     /// A negative distance means no hit; object/normal support is separate.
-    /// Full contact data for a ray. The current native RaycastHit has no
-    /// surface normal; flags bit 2 remains unset rather than inventing one.
+    /// Full contact data for a ray: point, distance, surface normal, body, object, compound part and triangle.
     [CSharpExpose]
     public static PhysicsQueryHit RaycastDetails(uint64 session, Vector3 origin,
         Vector3 direction, float maxDistance, uint32 layerMask)
@@ -812,12 +813,23 @@ static class Physics
         RaycastHit hit = default;
         if (!scene.Physics.Raycast(origin, direction, maxDistance, out hit, layerMask))
             return output;
-        output.flags = 1;
+        return RayHit(hit);
+    }
+
+    public static PhysicsQueryHit RayHit(RaycastHit hit)
+    {
+        PhysicsQueryHit output = default;
+        output.flags = hit.normal.LengthSquared > 0.5f ? 3 : 1;
         output.pointX = hit.point.x;
         output.pointY = hit.point.y;
         output.pointZ = hit.point.z;
+        output.normalX = hit.normal.x;
+        output.normalY = hit.normal.y;
+        output.normalZ = hit.normal.z;
         output.distance = hit.distance;
-        output.bodyId = uint32.MaxValue; // Not provided by native RaycastHit.
+        output.bodyId = hit.bodyId;
+        output.part = hit.part;
+        output.triangle = hit.triangle;
         if (hit.gameObject != null && !hit.gameObject.IsDestroyed)
         {
             output.entityId = (uint64)hit.gameObject.Id;
@@ -826,10 +838,12 @@ static class Physics
         return output;
     }
 
-    static PhysicsQueryHit ShapeHit(ShapeCastHit hit)
+    public static PhysicsQueryHit ShapeHit(ShapeCastHit hit)
     {
         PhysicsQueryHit output = default;
         output.flags = 3;
+        output.part = hit.part;
+        output.triangle = hit.triangle;
         output.pointX = hit.point.x;
         output.pointY = hit.point.y;
         output.pointZ = hit.point.z;
@@ -979,6 +993,8 @@ static class Physics
         output.distance = hit.distance;
         output.penetrationDepth = hit.penetrationDepth;
         output.bodyId = hit.bodyId;
+        output.part = hit.part;
+        output.triangle = hit.triangle;
         if (hit.gameObject != null && !hit.gameObject.IsDestroyed)
         {
             output.entityId = (uint64)hit.gameObject.Id;

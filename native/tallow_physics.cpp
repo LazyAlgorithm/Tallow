@@ -50,6 +50,8 @@ struct TnShapeHit {
     JPH_Vec3 point;
     JPH_Vec3 normal;
     float penetrationDepth;
+    // Which part of the body's shape was hit (tn_physics_hit_detail reads the compound part and triangle from it).
+    uint32_t subShapeId;
 };
 
 static JPH_Vec3 outwardNormal(const JPH_Vec3& axis) {
@@ -69,7 +71,7 @@ static float collectCast(void* user, const JPH_ShapeCastResult* result) {
     auto& hit = *context.hit;
     if (hit.bodyId == UINT32_MAX || result->fraction < hit.fraction) {
         hit = {result->bodyID2, result->fraction, result->contactPointOn2,
-               outwardNormal(result->penetrationAxis), result->penetrationDepth};
+               outwardNormal(result->penetrationAxis), result->penetrationDepth, result->subShapeID2};
     }
     return hit.fraction;
 }
@@ -77,7 +79,7 @@ static float collectCast(void* user, const JPH_ShapeCastResult* result) {
 extern "C" bool tn_physics_cast_shape(const JPH_NarrowPhaseQuery* query,
     const JPH_Shape* shape, const JPH_RVec3* origin, const JPH_Quat* rotation,
     const JPH_Vec3* displacement, uint32_t ignoreBody, TnShapeHit* hit, uint32_t layerMask) {
-    *hit = {UINT32_MAX, 1, {0, 0, 0}, {0, 0, 0}, 0};
+    *hit = {UINT32_MAX, 1, {0, 0, 0}, {0, 0, 0}, 0, 0};
     JPH_RMat4 transform;
     #ifdef JPH_DOUBLE_PRECISION
     JPH_RMat4_RotationTranslation(&transform, rotation, origin);
@@ -93,6 +95,143 @@ extern "C" bool tn_physics_cast_shape(const JPH_NarrowPhaseQuery* query,
     JPH_NarrowPhaseQuery_CastShape(query, shape, &transform, displacement, &settings,
         &baseOffset, collectCast, &context, nullptr, tn_physics_layer_filter(layerMask), nullptr, nullptr);
     return hit->bodyId != UINT32_MAX;
+}
+
+// Every body a shape sweep touches (not only the closest), sorted nearest first, each body once (its first
+// contact). Returns how many there are; only capacity are written.
+struct CastAllContext {
+    uint32_t ignoreBody;
+    std::vector<TnShapeHit>* hits;
+};
+
+static float collectCastAll(void* user, const JPH_ShapeCastResult* result) {
+    auto& context = *static_cast<CastAllContext*>(user);
+    if (result->bodyID2 != context.ignoreBody && !gDebris.count(result->bodyID2))
+        context.hits->push_back({result->bodyID2, result->fraction, result->contactPointOn2,
+            outwardNormal(result->penetrationAxis), result->penetrationDepth, result->subShapeID2});
+    return 1.0f;
+}
+
+static void sortedByBody(std::vector<TnShapeHit>& hits) {
+    std::stable_sort(hits.begin(), hits.end(), [](const TnShapeHit& a, const TnShapeHit& b) { return a.fraction < b.fraction; });
+    std::unordered_set<uint32_t> seen;
+    size_t kept = 0;
+    for (const auto& hit : hits)
+        if (seen.insert(hit.bodyId).second) hits[kept++] = hit;
+    hits.resize(kept);
+}
+
+extern "C" int tn_physics_cast_shape_all(const JPH_NarrowPhaseQuery* query,
+    const JPH_Shape* shape, const JPH_RVec3* origin, const JPH_Quat* rotation,
+    const JPH_Vec3* displacement, uint32_t ignoreBody, TnShapeHit* hits, int capacity, uint32_t layerMask) {
+    JPH_RMat4 transform;
+#ifdef JPH_DOUBLE_PRECISION
+    JPH_RMat4_RotationTranslation(&transform, rotation, origin);
+#else
+    JPH_Mat4_RotationTranslation(&transform, rotation, origin);
+#endif
+    JPH_ShapeCastSettings settings;
+    JPH_ShapeCastSettings_Init(&settings);
+    settings.returnDeepestPoint = true;
+    settings.backFaceModeConvex = JPH_BackFaceMode_CollideWithBackFaces;
+    JPH_RVec3 baseOffset{0, 0, 0};
+    std::vector<TnShapeHit> found;
+    CastAllContext context{ignoreBody, &found};
+    JPH_NarrowPhaseQuery_CastShape(query, shape, &transform, displacement, &settings,
+        &baseOffset, collectCastAll, &context, nullptr, tn_physics_layer_filter(layerMask), nullptr, nullptr);
+    sortedByBody(found);
+    for (int i = 0; i < (int)found.size() && i < capacity; ++i) hits[i] = found[i];
+    return (int)found.size();
+}
+
+// One ray hit: the body, how far along (0 to 1 of the ray) and the part of its shape.
+struct TnRayHit {
+    uint32_t bodyId;
+    float fraction;
+    uint32_t subShapeId;
+};
+
+struct RayAllContext {
+    uint32_t ignoreBody;
+    std::vector<TnRayHit>* hits;
+};
+
+static float collectRayAll(void* user, const JPH_RayCastResult* result) {
+    auto& context = *static_cast<RayAllContext*>(user);
+    if (result->bodyID != context.ignoreBody && !gDebris.count(result->bodyID))
+        context.hits->push_back({result->bodyID, result->fraction, result->subShapeID2});
+    return 1.0f;
+}
+
+// Every body a ray passes through, nearest first, each body once (where the ray enters it). Debris and ignoreBody
+// are left out. Returns how many there are; only capacity are written.
+extern "C" int tn_physics_cast_ray_all(const JPH_NarrowPhaseQuery* query, const JPH_RVec3* origin,
+    const JPH_Vec3* delta, uint32_t ignoreBody, TnRayHit* hits, int capacity, uint32_t layerMask) {
+    JPH_RayCastSettings settings{};
+    settings.backFaceModeTriangles = JPH_BackFaceMode_IgnoreBackFaces;
+    settings.backFaceModeConvex = JPH_BackFaceMode_IgnoreBackFaces;
+    settings.treatConvexAsSolid = true;
+    std::vector<TnRayHit> found;
+    RayAllContext context{ignoreBody, &found};
+    JPH_NarrowPhaseQuery_CastRay2(query, origin, delta, &settings, collectRayAll, &context,
+        nullptr, tn_physics_layer_filter(layerMask), nullptr, nullptr);
+    std::stable_sort(found.begin(), found.end(), [](const TnRayHit& a, const TnRayHit& b) { return a.fraction < b.fraction; });
+    std::unordered_set<uint32_t> seen;
+    int count = 0;
+    for (const auto& hit : found) {
+        if (!seen.insert(hit.bodyId).second) continue;
+        if (count < capacity) hits[count] = hit;
+        ++count;
+    }
+    return count;
+}
+
+// What a hit's sub-shape id says: the surface normal at the point (world space), which part of a compound
+// (its index as added; -1 for none) and which triangle of a mesh (its index in the mesh; -1 for none).
+struct TnHitDetail {
+    JPH_Vec3 normal;
+    int32_t part;
+    int32_t triangle;
+};
+
+extern "C" bool tn_physics_hit_detail(const JPH_PhysicsSystem* system, uint32_t bodyId, uint32_t subShapeId,
+    const JPH_RVec3* point, TnHitDetail* detail) {
+    *detail = {{0, 0, 0}, -1, -1};
+    const JPH_BodyLockInterface* locks = JPH_PhysicsSystem_GetBodyLockInterface(system);
+    JPH_BodyLockRead lock{};
+    JPH_BodyLockInterface_LockRead(locks, bodyId, &lock);
+    if (lock.body == nullptr) {
+        JPH_BodyLockInterface_UnlockRead(locks, &lock);
+        return false;
+    }
+    JPH_Body_GetWorldSpaceSurfaceNormal(lock.body, subShapeId, point, &detail->normal);
+    const JPH_Shape* shape = JPH_Body_GetShape(const_cast<JPH_Body*>(lock.body));
+    JPH_SubShapeID id = subShapeId;
+    for (int depth = 0; shape != nullptr && depth < 8; ++depth) {
+        const JPH_ShapeType type = JPH_Shape_GetType(shape);
+        if (type == JPH_ShapeType_Decorated) {
+            shape = JPH_DecoratedShape_GetInnerShape(reinterpret_cast<const JPH_DecoratedShape*>(shape));
+        } else if (type == JPH_ShapeType_Compound) {
+            auto compound = reinterpret_cast<const JPH_CompoundShape*>(shape);
+            JPH_SubShapeID remainder = 0;
+            const uint32_t index = JPH_CompoundShape_GetSubShapeIndexFromID(compound, id, &remainder);
+            if (index >= JPH_CompoundShape_GetNumSubShapes(compound)) break;
+            const JPH_Shape* child = nullptr;
+            JPH_Vec3 position;
+            JPH_Quat rotation;
+            uint32_t userData = index;
+            JPH_CompoundShape_GetSubShape(compound, index, &child, &position, &rotation, &userData);
+            if (detail->part < 0) detail->part = (int32_t)userData;
+            shape = child;
+            id = remainder;
+        } else {
+            if (JPH_Shape_GetSubType(shape) == JPH_ShapeSubType_Mesh)
+                detail->triangle = (int32_t)JPH_MeshShape_GetTriangleUserData(reinterpret_cast<const JPH_MeshShape*>(shape), id);
+            break;
+        }
+    }
+    JPH_BodyLockInterface_UnlockRead(locks, &lock);
+    return true;
 }
 
 extern "C" bool tn_physics_overlap_contacts(bool enabled);
@@ -116,7 +255,7 @@ static float collectOverlap(void* user, const JPH_CollideShapeResult* result) {
     if (result->bodyID2 == context.ignoreBody || gDebris.count(result->bodyID2)) return std::numeric_limits<float>::max();
     if (context.count < context.capacity) {
         context.hits[context.count] = {result->bodyID2, 0, result->contactPointOn2,
-            outwardNormal(result->penetrationAxis), result->penetrationDepth};
+            outwardNormal(result->penetrationAxis), result->penetrationDepth, result->subShapeID2};
     }
     ++context.count;
     // Keep every contact, without a temporary all-hit array in JoltC.

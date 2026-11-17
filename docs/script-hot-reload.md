@@ -1,5 +1,7 @@
 # Automatic script library reload
 
+This page is about Beef scripts. C# scripts reload too, keeping their fields: see docs/csharp-gameplay.md.
+
 Linux and Windows x86-64 Debug editors watch project `.bf` files, including additions, removals and graph-generated scripts.
 
 **Project Settings > Scripting > Script Reload** offers:

@@ -190,6 +190,10 @@ public class ApiChecks : CheckBase
         else if (_tick == 70)
             Check($"Workshop.Browse without Steam finishes with no items ({_browse?.Status})",
                 _browse is { IsCompletedSuccessfully: true } && _browse.Result.Length == 0);
+        else if (_tick == 80)
+            QueryTargetsSetup();
+        else if (_tick == 83)
+            QueryChecks();
         else if (_tick == 100)
         {
             // LetGo(0.05f) fades over 0.05 s of game time; this is well after.
@@ -570,6 +574,89 @@ public class ApiChecks : CheckBase
     private GameObject _ikRig;
 
     /// Steam, the Workshop and the anti-cheat in an offline run with no Steam App ID.
+    private GameObject _metalWall, _woodWall, _compound, _meshCube;
+
+    /// <summary>Two walls and a two-box compound far above the test scene, for the physics query checks.</summary>
+    private void QueryTargetsSetup()
+    {
+        GameObject Wall(string name, float x, string surface)
+        {
+            GameObject wall = Scene.CreateGameObject(name);
+            wall.Transform.Position = new Vector3(x, 500, 0);
+            var box = wall.AddComponent<BoxCollider>();
+            box.Size = new Vector3(0.5f, 4, 4);
+            box.Surface = surface;
+            return wall;
+        }
+        _metalWall = Wall("Metal Wall", 100, "Metal");
+        _woodWall = Wall("Wood Wall", 103, "Wood");
+        _compound = Scene.CreateGameObject("Two Boxes");
+        _compound.Transform.Position = new Vector3(100, 510, 0);
+        var parts = _compound.AddComponent<CompoundCollider>();
+        parts.AddBox(new Vector3(0, 0, -1), new Vector3(1, 1, 1));
+        parts.AddBox(new Vector3(0, 0, 1), new Vector3(1, 1, 1));
+        _compound.RefreshColliders();
+        _meshCube = Scene.CreateGameObject("Mesh Cube");
+        _meshCube.Transform.Position = new Vector3(100, 520, 0);
+        _meshCube.AddComponent<MeshRenderer>().Mesh = "builtin:cube";
+        _meshCube.AddComponent<MeshCollider>().Surface = "Stone";
+    }
+
+    private void QueryChecks()
+    {
+        Vector3 from = new(95, 500, 0);
+        PhysicsHit? first = Scene.RaycastHit(from, Vector3.UnitX, 20);
+        Check($"RaycastHit gives the surface normal, body and Surface ({first?.Normal}, {first?.Surface})",
+            first is { Normal: Vector3 n, HitObject: GameObject hitObject } hit && Vector3.Distance(n, -Vector3.UnitX) < 1e-3f &&
+            hitObject == _metalWall && hit.Surface == "Metal" && hit.BodyId != uint.MaxValue && MathF.Abs(hit.Distance - 4.75f) < 1e-3f);
+
+        PhysicsHit[] all = Scene.RaycastAll(from, Vector3.UnitX, 20);
+        Check($"RaycastAll gives every wall, nearest first, with normals ({all.Length})",
+            all.Length == 2 && all[0].HitObject == _metalWall && all[1].HitObject == _woodWall &&
+            all[0].Distance < all[1].Distance && all[1].Surface == "Wood" && all[1].Normal is Vector3);
+
+        PhysicsHit[] swept = Scene.SphereCastAll(from, 0.25f, Vector3.UnitX, 20);
+        Check($"SphereCastAll gives every wall ({swept.Length})",
+            swept.Length == 2 && swept[0].HitObject == _metalWall && swept[1].HitObject == _woodWall);
+
+        PhysicsHit? left = Scene.RaycastHit(new Vector3(100, 515, -1), -Vector3.UnitY, 10);
+        PhysicsHit? right = Scene.RaycastHit(new Vector3(100, 515, 1), -Vector3.UnitY, 10);
+        Check($"a ray hit says which Compound Collider part it struck ({left?.Part}, {right?.Part}) and no triangle",
+            left is { Part: 0, Triangle: -1 } && right is { Part: 1 } && left.Value.Normal is Vector3 up && up.Y > 0.99f);
+
+        PhysicsHit[] contacts = Scene.OverlapSphereContacts(new Vector3(100.4f, 500, 0), 0.3f);
+        Check($"OverlapSphereContacts gives the contact, normal and depth ({contacts.Length})",
+            contacts.Length >= 1 && contacts[0].HitObject == _metalWall && contacts[0].PenetrationDepth > 0 &&
+            contacts[0].Normal is Vector3 && contacts[0].Surface == "Metal");
+
+        RayQuery[] rays = [new(from, Vector3.UnitX, 20), new(from, -Vector3.UnitX, 20), new(new Vector3(100, 515, 1), -Vector3.UnitY, 10)];
+        var results = new PhysicsHit?[rays.Length];
+        Scene.RaycastBatch(rays, results);
+        SphereQuery[] spheres = [new(from, 0.25f, Vector3.UnitX, 20)];
+        var sphereResults = new PhysicsHit?[1];
+        Scene.SphereCastBatch(spheres, sphereResults);
+        Check("RaycastBatch and SphereCastBatch give each query's closest hit, or null",
+            results[0]?.HitObject == _metalWall && results[1] == null && results[2]?.Part == 1 &&
+            sphereResults[0]?.HitObject == _metalWall);
+
+        _woodWall.GetComponent<BoxCollider>().Size = new Vector3(0.5f, 0.5f, 0.5f);
+        _woodWall.RefreshColliders();
+        PhysicsHit[] afterRefresh = Scene.RaycastAll(new Vector3(95, 501.5f, 0), Vector3.UnitX, 20);
+        Check($"RefreshColliders rebuilds a resized collider ({afterRefresh.Length})",
+            afterRefresh.Length == 1 && afterRefresh[0].HitObject == _metalWall);
+
+        PhysicsHit? top = Scene.RaycastHit(new Vector3(100.1f, 525, 0.2f), -Vector3.UnitY, 10);
+        PhysicsHit? side = Scene.RaycastHit(new Vector3(95, 520.1f, 0.2f), Vector3.UnitX, 10);
+        Check($"a ray hit says which Mesh Collider triangle it struck ({top?.Triangle}, {side?.Triangle}, {top?.Normal})",
+            top is { Triangle: >= 0, Part: -1, Normal: Vector3 topNormal } && topNormal.Y > 0.99f && top.Value.Surface == "Stone" &&
+            side is { Triangle: >= 0 } && side.Value.Triangle != top.Value.Triangle);
+
+        _metalWall.Destroy();
+        _meshCube.Destroy();
+        _woodWall.Destroy();
+        _compound.Destroy();
+    }
+
     private void ServiceChecks()
     {
         Check($"Steam.Start is false without an App ID ({Steam.Error})", !Steam.Start() && !Steam.IsReady && Steam.UserId == 0 &&

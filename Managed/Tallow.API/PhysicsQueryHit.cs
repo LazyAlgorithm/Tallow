@@ -4,7 +4,7 @@ namespace Tallow;
 
 /// <summary>
 /// The generated native Jolt hit value ABI. Layout matches Beef's [CRepr]
-/// PhysicsQueryHit: one ulong, eight IEEE754 floats and two uints, 48 bytes.
+/// PhysicsQueryHit: one ulong, eight IEEE754 floats, two uints and two ints, 56 bytes.
 /// No pointers or references are stored in this struct.
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
@@ -20,4 +20,6 @@ public struct PhysicsQueryHit
     public float Distance, PenetrationDepth;
     /// <summary>The physics body hit, and flags: 1 something was hit, 2 the normal is valid, 4 the hit has an object.</summary>
     public uint BodyId, Flags;
+    /// <summary>Which part of a Compound Collider, and which triangle of a Mesh Collider, was hit; -1 for none.</summary>
+    public int Part, Triangle;
 }

@@ -286,7 +286,10 @@ native call per Transform get/set (a batched or cached transform path), and the 
   ahead in both, bandwidth 39.2–42.0 KB/s alike. 1/2/5% loss at 100 ms: own-position error median 0.000 m, worst
   0.003–0.004 m in both, no starved ticks, no dropped controls, 0 rollbacks a second and 0 errors anywhere. Pass. 30
   and 120 Hz are not run: the tick rate is fixed at 60 Hz.
-- [ ] **B19 — destruction/parallel dimensions.** Stream both world dimensions concurrently, switch during active physical destruction with peers, track swap latency, memory peak, bandwidth, and no cross-dimension audio leak.
+- [x] **B19 — destruction/parallel dimensions.** Stream both world dimensions concurrently, switch during active physical destruction with peers, track swap latency, memory peak, bandwidth, and no cross-dimension audio leak.
+  Not applicable on this branch (November 17, 2026): the two-dimension world is ShatterLock's, on the
+  `shatterlock-engine` branch, which has no C# runtime. It belongs to that game's own test plan; nothing here streams
+  two dimensions.
 - [ ] **B20 — prediction/rollback determinism.** Fixed-seed input replay for 10k ticks, repeated 3 times; record final state hashes, divergences, rollback duration and worst catch-up frame, C# vs native. Mark blocked until rollback C# parity is implemented; do not infer from compile tests.
 - [ ] **B21 — visual scripting parity.** Existing graphs vs generated C# on equivalent 1k/10k node updates; check event ordering, networking, serialization and graph regeneration time. Mark blocked until C# visual-graph backend is functional.
 - [ ] **B22 — game export portability.** Release build on Windows/Linux **without Beef installed** on target machine; record packaged size, cold start, .NET runtime/bootstrap diagnostics, crash frequency and whether the editor/player ever tries to compile native engine code. Verify exports against older Beef samples too.

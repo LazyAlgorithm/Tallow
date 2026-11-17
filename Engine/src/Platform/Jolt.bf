@@ -39,6 +39,23 @@ static class Jolt
 		public Vector3 point;
 		public Vector3 normal;
 		public float penetrationDepth;
+		public uint32 subShapeId;
+	}
+
+	/// One ray hit of tn_physics_cast_ray_all.
+	[CRepr] public struct RayHit
+	{
+		public uint32 bodyId;
+		public float fraction;
+		public uint32 subShapeId;
+	}
+
+	/// What tn_physics_hit_detail reads from a hit's sub-shape id.
+	[CRepr] public struct HitDetail
+	{
+		public Vector3 normal;
+		public int32 part;
+		public int32 triangle;
 	}
 
 	/// Mirrors TnCharacterHit in native/tallow_physics.cpp.
@@ -157,6 +174,10 @@ static class Jolt
 	[CLink] public static extern void* JPH_ConvexHullShapeSettings_Create(Vector3* points, uint32 pointCount, float maxConvexRadius);
 	[CLink] public static extern void* JPH_ConvexHullShapeSettings_CreateShape(void* settings);
 	[CLink] public static extern void* JPH_MeshShapeSettings_Create2(Vector3* vertices, uint32 vertexCount, IndexedTriangle* triangles, uint32 triangleCount);
+	[CLink] public static extern void JPH_MeshShapeSettings_SetPerTriangleUserData(void* settings, bool value);
+	[CLink] public static extern int32 tn_physics_cast_ray_all(void* query, Vector3* origin, Vector3* delta, uint32 ignoreBody, RayHit* hits, int32 capacity, uint32 layerMask);
+	[CLink] public static extern int32 tn_physics_cast_shape_all(void* query, void* shape, Vector3* origin, Quaternion* rotation, Vector3* displacement, uint32 ignoreBody, ShapeHit* hits, int32 capacity, uint32 layerMask);
+	[CLink] public static extern bool tn_physics_hit_detail(void* system, uint32 bodyId, uint32 subShapeId, Vector3* point, HitDetail* detail);
 	[CLink] public static extern void* JPH_MeshShapeSettings_CreateShape(void* settings);
 	[CLink] public static extern void* JPH_RotatedTranslatedShape_Create(Vector3* position, Quaternion* rotation, void* shape);
 	[CLink] public static extern void* JPH_BodyCreationSettings_Create3(void* shape, Vector3* position, Quaternion* rotation, int32 motionType, uint32 objectLayer);

@@ -28,6 +28,16 @@ struct RaycastHit
 	public Vector3 point;
 	/// How far along the ray the hit is.
 	public float distance;
+	/// Which way the surface faces where it was hit.
+	public Vector3 normal;
+	/// The physics body hit.
+	public uint32 bodyId;
+	/// Which part of a Compound Collider was hit (its boxes, then cylinders, then hulls, in the order added); -1
+	/// for other shapes.
+	public int32 part;
+	/// Which triangle of a Mesh Collider's mesh was hit (its index: the triangle's first index is 3 times it); -1
+	/// for other shapes.
+	public int32 triangle;
 }
 
 /// Closest swept-volume contact. Distance measures travel of the shape's center,
@@ -46,6 +56,10 @@ struct ShapeCastHit
 	public float penetrationDepth;
 	/// The physics body hit.
 	public uint32 bodyId;
+	/// Which part of a Compound Collider was touched; -1 for other shapes.
+	public int32 part;
+	/// Which triangle of a Mesh Collider's mesh was touched; -1 for other shapes.
+	public int32 triangle;
 }
 
 /// Description used to build a collision shape. Sizes are already scaled to world units.
@@ -569,9 +583,11 @@ class PhysicsWorld
 				triangles[i].i2 = mesh.Indices[i * 3 + 1];
 				triangles[i].i3 = mesh.Indices[i * 3 + 2];
 				triangles[i].materialIndex = 0;
-				triangles[i].userData = 0;
+				// Jolt reorders triangles; the original index comes back with a hit (RaycastHit.triangle).
+				triangles[i].userData = (uint32)i;
 			}
 			let settings = Jolt.JPH_MeshShapeSettings_Create2(vertices.Ptr, (uint32)vertices.Count, triangles.Ptr, (uint32)triangleCount);
+			Jolt.JPH_MeshShapeSettings_SetPerTriangleUserData(settings, true);
 			shape = Jolt.JPH_MeshShapeSettings_CreateShape(settings);
 			Jolt.JPH_ShapeSettings_Destroy(settings);
 		}
@@ -1537,10 +1553,114 @@ class PhysicsWorld
 		hit.normal = nativeHit.normal;
 		hit.distance = Math.Max(nativeHit.fraction, 0) * maxDistance;
 		hit.penetrationDepth = nativeHit.penetrationDepth;
+		hit.part = -1;
+		hit.triangle = -1;
 		if (mByBody.TryGetValue(nativeHit.bodyId, let entry))
 			hit.gameObject = entry.transform.GameObject;
+		var point = nativeHit.point;
+		Jolt.HitDetail detail = default;
+		if (mSystem != null && Jolt.tn_physics_hit_detail(mSystem, nativeHit.bodyId, nativeHit.subShapeId, &point, &detail))
+		{
+			hit.part = detail.part;
+			hit.triangle = detail.triangle;
+		}
 		return hit;
 	}
+
+	/// Fills a ray hit's normal, part and triangle from Jolt's sub-shape id.
+	void AddRayDetail(ref RaycastHit hit, uint32 bodyId, uint32 subShapeId)
+	{
+		hit.bodyId = bodyId;
+		hit.part = -1;
+		hit.triangle = -1;
+		var point = hit.point;
+		Jolt.HitDetail detail = default;
+		if (mSystem != null && Jolt.tn_physics_hit_detail(mSystem, bodyId, subShapeId, &point, &detail))
+		{
+			hit.normal = detail.normal;
+			hit.part = detail.part;
+			hit.triangle = detail.triangle;
+		}
+	}
+
+	/// Every body a ray passes through within maxDistance, nearest first, each once (where the ray enters it), with
+	/// normals. Debris is passed through. Clears hits first; returns how many there are.
+	public int RaycastAll(Vector3 origin, Vector3 direction, float maxDistance, List<RaycastHit> hits, uint32 layerMask = uint32.MaxValue, uint32 ignoreBody = uint32.MaxValue)
+	{
+		hits.Clear();
+		if (mSystem == null || !Finite(origin) || !Finite(direction) || direction.LengthSquared < 1.0e-12f || !maxDistance.IsFinite || maxDistance <= 0)
+			return 0;
+		let query = PrepareQuery();
+		if (query == null)
+			return 0;
+		let unit = direction.Normalized;
+		var from = origin;
+		var delta = unit * maxDistance;
+		Jolt.RayHit[32] local = default;
+		Jolt.RayHit* buffer = &local;
+		int32 count = Jolt.tn_physics_cast_ray_all(query, &from, &delta, ignoreBody, buffer, 32, layerMask);
+		Jolt.RayHit[] large = null;
+		defer { delete large; }
+		if (count > 32)
+		{
+			large = new .[count];
+			buffer = large.Ptr;
+			count = Math.Min(count, Jolt.tn_physics_cast_ray_all(query, &from, &delta, ignoreBody, buffer, count, layerMask));
+		}
+		for (int i < count)
+		{
+			RaycastHit hit = default;
+			hit.distance = buffer[i].fraction * maxDistance;
+			hit.point = origin + unit * hit.distance;
+			if (mByBody.TryGetValue(buffer[i].bodyId, let entry))
+				hit.gameObject = entry.transform.GameObject;
+			AddRayDetail(ref hit, buffer[i].bodyId, buffer[i].subShapeId);
+			hits.Add(hit);
+		}
+		return hits.Count;
+	}
+
+	int CastAllQuery(void* shape, Vector3 origin, Quaternion orientation, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody, uint32 layerMask)
+	{
+		hits.Clear();
+		if (shape == null || !Finite(origin) || !Finite(direction) || direction.LengthSquared < 1.0e-12f || !maxDistance.IsFinite || maxDistance <= 0 || !ValidRotation(orientation)) return 0;
+		let query = PrepareQuery();
+		if (query == null) return 0;
+		var from = origin;
+		var rotation = orientation.Normalized;
+		var displacement = direction.Normalized * maxDistance;
+		if (mOverlapHits.Count < 64)
+			mOverlapHits.Resize(64);
+		int32 count = Jolt.tn_physics_cast_shape_all(query, shape, &from, &rotation, &displacement, ignoreBody, mOverlapHits.Ptr, (int32)mOverlapHits.Count, layerMask);
+		if (count > mOverlapHits.Count)
+		{
+			mOverlapHits.Resize(count);
+			count = Math.Min(count, Jolt.tn_physics_cast_shape_all(query, shape, &from, &rotation, &displacement, ignoreBody, mOverlapHits.Ptr, (int32)mOverlapHits.Count, layerMask));
+		}
+		for (int i < count)
+			hits.Add(MakeShapeHit(mOverlapHits[i], maxDistance));
+		return hits.Count;
+	}
+
+	/// Every body a sphere sweep touches, nearest first, each once. Clears hits first; returns how many there are.
+	public int SphereCastAll(Vector3 origin, float radius, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
+		=> CastAllQuery(SphereQueryShape(radius), origin, .Identity, direction, maxDistance, hits, ignoreBody, layerMask);
+
+	/// Every body a capsule sweep touches (point1 and point2 its half-spheres' centres), nearest first, each once.
+	public int CapsuleCastAll(Vector3 point1, Vector3 point2, float radius, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
+	{
+		hits.Clear();
+		if (!Finite(point1) || !Finite(point2)) return 0;
+		let axis = point2 - point1;
+		let length = axis.Length;
+		if (!length.IsFinite) return 0;
+		let rotation = length < 1.0e-6f ? Quaternion.Identity : CapsuleRotation(axis);
+		return CastAllQuery(CapsuleQueryShape(length * 0.5f, radius), (point1 + point2) * 0.5f, rotation, direction, maxDistance, hits, ignoreBody, layerMask);
+	}
+
+	/// Every body a box sweep (size: full width, height and depth) touches, nearest first, each once.
+	public int BoxCastAll(Vector3 origin, Vector3 size, Quaternion orientation, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
+		=> CastAllQuery(BoxQueryShape(size), origin, orientation, direction, maxDistance, hits, ignoreBody, layerMask);
 
 	bool CastQuery(void* shape, Vector3 origin, Quaternion orientation, Vector3 direction, float maxDistance, out ShapeCastHit hit, uint32 ignoreBody, uint32 layerMask)
 	{
@@ -1704,6 +1824,7 @@ class PhysicsWorld
 			hit.point = origin + unit * distance;
 			if (mByBody.TryGetValue(result.bodyId, let entry))
 				hit.gameObject = entry.transform.GameObject;
+			AddRayDetail(ref hit, result.bodyId, result.subShapeId);
 			return true;
 		}
 		return false;

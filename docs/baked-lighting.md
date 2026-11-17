@@ -60,11 +60,14 @@ A lightmap needs a second set of texture coordinates in which no two triangles o
 
 ## In code
 
-```beef
-renderer.bakedLighting = true;          // take part in the next bake
-light.bakedOnly = true;                 // its direct light goes into lightmaps
+```csharp
+renderer.BakedLighting = true;          // take part in the next bake
+light.BakedOnly = true;                 // its direct light goes into lightmaps
+```
 
-// Baking from code, as the editor does (the editor's Lighting window is the usual way):
+Baking from code, as the editor does, is engine (Beef) code for tools; the editor's Lighting window is the usual way:
+
+```beef
 let settings = scope BakeSettings();
 settings.FromScene(scene.Environment);
 let baker = scope LightBaker(scene, settings);   // on the main thread

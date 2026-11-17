@@ -675,14 +675,27 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
 public readonly record struct PhysicsContact(Vector3 Point, float Distance);
 
 /// <summary>
-/// Full native collision contact. A null Normal means the native query did not
-/// supply a surface normal (currently true for raycasts, not sphere casts).
-/// HitObject is null for contacts without an associated live GameObject.
+/// A full physics hit: where, the surface's normal there, how far along the query, the object and body, and for
+/// overlaps how deep. HitObject is null for a body without a live GameObject; Normal is null only when the surface
+/// had none to give (a degenerate triangle).
 /// </summary>
 public readonly record struct PhysicsHit(
     Vector3 Point, Vector3? Normal, float Distance,
     GameObject? HitObject, float PenetrationDepth, uint BodyId)
 {
+    /// <summary>Which part of a Compound Collider was hit (its boxes, then cylinders, then hulls, in the order added);
+    /// -1 for other shapes.</summary>
+    public int Part { get; init; } = -1;
+
+    /// <summary>Which triangle of a Mesh Collider's mesh was hit (its first index is 3 times this); -1 for other
+    /// shapes.</summary>
+    public int Triangle { get; init; } = -1;
+
+    /// <summary>What the hit object is made of: the Surface its collider names ("Metal", "Wood"), or "" when it names
+    /// none. For footsteps, bullet holes and impact sounds.</summary>
+    public string Surface => HitObject is GameObject obj ?
+        ActionText.Read(buffer => CSharpPhysicsQueries.Surface(obj.SceneId, obj.Id, buffer)) ?? "" : "";
+
     internal static PhysicsHit? FromNative(ulong session, PhysicsQueryHit hit)
     {
         if ((hit.Flags & 1) == 0)
@@ -692,7 +705,7 @@ public readonly record struct PhysicsHit(
         GameObject? obj = (hit.Flags & 4) != 0 && hit.EntityId != 0 ?
             new GameObject(session, hit.EntityId) : null;
         return new PhysicsHit(new Vector3(hit.PointX, hit.PointY, hit.PointZ),
-            normal, hit.Distance, obj, hit.PenetrationDepth, hit.BodyId);
+            normal, hit.Distance, obj, hit.PenetrationDepth, hit.BodyId) { Part = hit.Part, Triangle = hit.Triangle };
     }
 }
 
@@ -801,8 +814,7 @@ public readonly partial record struct Scene(ulong SessionId)
         Ecs.CopyRigidbodyMasses(SessionId, offset, entityIds, masses);
 
     /// <summary>
-    /// Full native Jolt ray hit: point, distance and collider GameObject.
-    /// Normal is null until the native RaycastHit supplies a surface normal.
+    /// Full native Jolt ray hit: point, surface normal, distance, object, body, compound part and mesh triangle.
     /// </summary>
     public PhysicsHit? RaycastHit(Vector3 origin, Vector3 direction,
         float maxDistance, uint layerMask = uint.MaxValue) =>

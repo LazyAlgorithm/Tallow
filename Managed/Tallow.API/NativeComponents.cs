@@ -412,6 +412,8 @@ public readonly partial record struct SphereCollider(GameObject GameObject) : IC
     public float Radius { get => Data.GetFloat("radius"); set => Data.Set("radius", value); }
     /// <summary>Where the sphere is, relative to the object.</summary>
     public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    /// <summary>What it is made of ("Metal", "Wood"), reported by hits (<see cref="PhysicsHit.Surface"/>).</summary>
+    public string Surface { get => Data.GetString("surface"); set => Data.Set("surface", value); }
 }
 
 /// <summary>A box-shaped collider.</summary>
@@ -425,6 +427,8 @@ public readonly partial record struct BoxCollider(GameObject GameObject) : IComp
     public Vector3 Size { get => Data.GetVector3("size"); set => Data.Set("size", value); }
     /// <summary>Where the box is, relative to the object.</summary>
     public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
+    /// <summary>What it is made of ("Metal", "Wood"), reported by hits (<see cref="PhysicsHit.Surface"/>).</summary>
+    public string Surface { get => Data.GetString("surface"); set => Data.Set("surface", value); }
 }
 
 /// <summary>Walks its object along the navigation mesh to a destination.</summary>

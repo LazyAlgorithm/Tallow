@@ -11,6 +11,21 @@ abstract class Collider : Component
 	public Vector3 center = .Zero;
 	/// A trigger stops nothing: objects pass through it, and both get OnTriggerEnter and OnTriggerExit.
 	public bool isTrigger;
+	/// What it is made of, for the game to choose footsteps, bullet holes and impact sounds ("Metal", "Wood", "Glass").
+	/// A ray or shape hit reports it (empty: nothing said).
+	public String surface = new .() ~ delete _;
+
+	/// The surface of the first collider on an object that names one (empty when none does).
+	public static StringView SurfaceOf(GameObject obj)
+	{
+		if (obj == null || obj.IsDestroyed)
+			return "";
+		for (let component in obj.Components)
+			if (let collider = component as Collider)
+				if (!collider.surface.IsEmpty)
+					return collider.surface;
+		return "";
+	}
 
 	uint32 mStaticBody = uint32.MaxValue;
 

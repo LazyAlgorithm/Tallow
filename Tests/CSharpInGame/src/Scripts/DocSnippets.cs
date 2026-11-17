@@ -790,3 +790,35 @@ public class DocSoftSnippets : Script
         tow?.GameObject.Destroy();
     }
 }
+
+// docs/baked-lighting.md
+public class DocBakeSnippets : Script
+{
+    private void Snippets(MeshRenderer renderer, Light light)
+    {
+        renderer.BakedLighting = true;
+        light.BakedOnly = true;
+    }
+}
+
+// docs/physics-queries.md
+public class DocQuerySnippets : Script
+{
+    private static Vector3 Spread(Vector3 aim, int i) => Vector3.Normalize(aim + new Vector3(i * 0.01f, 0, 0));
+
+    private void Snippets(Vector3 muzzle, Vector3 aim)
+    {
+        foreach (PhysicsHit hit in Scene.RaycastAll(muzzle, aim, 200))
+        {
+            Decals.Spawn(Scene, hit.Point, hit.Normal ?? -aim, $"Textures/hole_{hit.Surface}.png", 0.1f, 30);
+            if (hit.Surface == "Metal") break;
+        }
+        RayQuery[] pellets = new RayQuery[12];
+        for (int i = 0; i < pellets.Length; i++)
+            pellets[i] = new RayQuery(muzzle, Spread(aim, i), 60);
+        var hits = new PhysicsHit?[pellets.Length];
+        Scene.RaycastBatch(pellets, hits);
+        PhysicsHit[] contacts = Scene.OverlapSphereContacts(muzzle, 1);
+        GameObject.RefreshColliders();
+    }
+}

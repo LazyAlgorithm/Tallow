@@ -54,6 +54,8 @@ beside each asset.
 
 ## From code (editor)
 
+Editor (Beef) code, for tools:
+
 ```beef
 AssetDatabase.GetId("Models/crate.glb", id);     // the ID of an asset
 AssetDatabase.GetPath(id, path);                 // where it is now

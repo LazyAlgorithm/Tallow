@@ -1,6 +1,6 @@
-# Shape casts and overlaps
+# Rays, shape casts and overlaps
 
-Tallow exposes Jolt's swept sphere, capsule and box queries to scripts through `Scene`. Queries run on the scene thread. Distances are world units; direction is normalized internally.
+Tallow exposes Jolt's rays and swept sphere, capsule and box queries to scripts through `Scene`. Queries run on the scene thread. Distances are world units; direction is normalized internally.
 
 ```csharp
 if (Scene.SphereCastHit(Transform.Position, 0.5f, -Vector3.UnitY, 5f) is PhysicsHit hit)
@@ -18,10 +18,38 @@ Scene.CapsuleCastHit(new Vector3(0, 0.5f, 0), new Vector3(0, 1.5f, 0), 0.5f, Vec
 Scene.BoxCastHit(Transform.Position, new Vector3(1, 2, 1), Quaternion.Euler(0, 45, 0), Vector3.UnitZ, 10f);
 ```
 
-A `PhysicsHit` has `HitObject`, `BodyId`, `Point`, `Normal`, `Distance` and `PenetrationDepth`; a miss is null. Each
-cast also takes a layer mask. The contact point is on the target shape; the normal points outward from the target. Starting overlaps return zero travel and their penetration depth. Capsule casts with coincident endpoints act as sphere casts. Invalid sizes, non-finite input, zero directions and nonpositive cast distances return no hit. Empty worlds return no hit.
+A `PhysicsHit` has `HitObject`, `BodyId`, `Point`, `Normal`, `Distance` and `PenetrationDepth`; a miss is null.
+`Scene.RaycastHit(origin, direction, maxDistance)` gives the same for a ray, with the surface's normal where it hit.
+Each cast also takes a layer mask. The contact point is on the target shape; the normal points outward from the target. Starting overlaps return zero travel and their penetration depth. Capsule casts with coincident endpoints act as sphere casts. Invalid sizes, non-finite input, zero directions and nonpositive cast distances return no hit. Empty worlds return no hit.
 
-`Scene.OverlapSphere(center, radius)`, `OverlapCapsule(point1, point2, radius)` and `OverlapBox(center, size, orientation)` return the objects touching the shape, each once (in no particular order). They also take an optional layer mask and a body to ignore. (Engine code gets every contact instead, through `Scene.Physics.OverlapSphere(..., List<ShapeCastHit>)`: a mesh or compound may report several for one object.)
+`Scene.OverlapSphere(center, radius)`, `OverlapCapsule(point1, point2, radius)` and `OverlapBox(center, size, orientation)` return the objects touching the shape, each once (in no particular order). They also take an optional layer mask and a body to ignore. `OverlapSphereContacts`, `OverlapCapsuleContacts` and `OverlapBoxContacts` take the same arguments and give every contact as a `PhysicsHit` instead: where it touches, the surface's normal, how deep it goes, and the part or triangle. A mesh or compound may give several for one object.
+
+## Every hit, and what was hit
+
+```csharp
+// A bullet that goes through thin walls: every object along the ray, nearest first, each once.
+foreach (PhysicsHit hit in Scene.RaycastAll(muzzle, aim, 200))
+{
+    Decals.Spawn(Scene, hit.Point, hit.Normal ?? -aim, $"Textures/hole_{hit.Surface}.png", 0.1f, 30);
+    if (hit.Surface == "Metal") break;          // metal stops it
+}
+
+// A shotgun: twelve pellets in one call, each its closest hit or null.
+RayQuery[] pellets = new RayQuery[12];
+for (int i = 0; i < pellets.Length; i++)
+    pellets[i] = new RayQuery(muzzle, Spread(aim, i), 60);
+var hits = new PhysicsHit?[pellets.Length];
+Scene.RaycastBatch(pellets, hits);
+```
+
+- `RaycastAll`, `SphereCastAll`, `CapsuleCastAll` and `BoxCastAll` give every object along the query, nearest first, each once (where the query first touches it). Debris is passed through, as with the closest-hit queries.
+- `RaycastBatch(rays, results)` and `SphereCastBatch(spheres, results)` run many closest-hit queries in one call (pellets, an AI's sight lines, sensors), cheaper than one call each from C#.
+- `hit.Surface` is what the object is made of: the **Surface** a collider names in the Inspector ("Metal", "Wood", "Glass"; empty when it names none), for footsteps, bullet holes and impact sounds.
+- `hit.Part` says which part of a Compound Collider was hit (its boxes, then cylinders, then hulls, in the order added) and `hit.Triangle` which triangle of a Mesh Collider's mesh (its first index is 3 times it), so a game can tell a car's door from its roof or look up its own data per triangle. Both are -1 for other shapes.
+
+After changing a collider's shape from code (a Mesh Collider's mesh edited or replaced, a box resized), `GameObject.RefreshColliders()` (or `MeshCollider.Refresh()`) builds its collision again, and its Rigidbody's body if it has one.
+
+Engine (Beef) code has the same through `Scene.Physics`: `RaycastAll`, `SphereCastAll`, `CapsuleCastAll` and `BoxCastAll` into a list, `RaycastHit.normal`, `part` and `triangle` (and `ShapeCastHit.part` and `triangle`), `Collider.surface` and `Collider.SurfaceOf(gameObject)`, and `Collider.Refresh()`.
 
 When only whether something is there matters, use `Scene.CheckSphere(center, radius)`, `CheckCapsule(point1, point2, radius)` or `CheckBox(center, size, orientation)`. They take the same optional layer mask and body to ignore, return a bool rather than a list, and can stop at the first accepted hit. Their advantage depends on query geometry and the number of contacts. The navigation baker uses them for each cell's clearance.
 

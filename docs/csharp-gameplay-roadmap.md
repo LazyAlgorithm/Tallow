@@ -519,7 +519,7 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     `docs/csharp-benchmark-plan.md`): `GetComponent<T>` 10× faster and allocation-free (generated bindings encode
     strings on the stack, native `Has` and type-name lookups no longer scan), built-in component field reads
     allocation-free. New `CSharpBench`/`EcsBench` modes: getcomponent, physics, lifecycle.
-- [ ] Incremental C# per-`.tasmdef` builds with correct dependency invalidation, diagnostics and simultaneous builds; avoid unnecessary full-game builds on every edit.
+- [x] Incremental C# per-`.tasmdef` builds with correct dependency invalidation, diagnostics and simultaneous builds; avoid unnecessary full-game builds on every edit.
   - [x] (November 15, 2026) Verified: each `.tasmdef` is its own MSBuild project, so an edit inside one rebuilds
     only its DLL, and a public API change also rebuilds the assemblies referencing it (reference assemblies).
     `tools/benchmark_csharp_compiles.sh` now has `leaf-edit` and `api-edit` phases that fail if other DLLs are
@@ -527,6 +527,10 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     `dotnet run --project Tallow.Build.csproj`, re-checking the tool each compile; they now start its built DLL
     when it is newer than its sources (`Terminal.AppendBuildTool`): a launcher build went from ~1.6 s to 0.85 s
     (Tallow.Build: ~0.35 s generating, ~0.25 s `dotnet build`, the rest the catalogs).
+  - [x] (November 17, 2026) Simultaneous builds: Tallow.Build holds `.tallow-csharp/build.lock` (exclusive) for a
+    build, so the editor, the launcher and a command line building the same project at once take turns instead of
+    writing the same generated projects and obj folders together (the second prints that it is waiting, up to five
+    minutes). The lock goes with the process if it dies.
 - [~] Game assemblies (and their .pdb symbols) load from in-memory copies, so Windows no
   longer holds `Tallow.Game.dll` and asmdef DLLs locked after Play and the next compile can
   replace them. Not yet run on Windows.
@@ -587,7 +591,7 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     for during the opening script check now starts when the check ends instead of being
     dropped. Not done: a run on a real Windows machine (only Wine so far), a Windows export
     in CI (needs the Windows player built there), macOS/web, trimming the bundled runtime.
-- [ ] Confirm no unsafe untrusted mod loading, directory escape, premature engine pointer exposure or unmanaged ownership errors.
+- [x] Confirm no unsafe untrusted mod loading, directory escape, premature engine pointer exposure or unmanaged ownership errors.
   - [x] (November 15, 2026) Review. Fine as it was: only `Tallow.Game.dll` is loaded by name, from the editor's
     build folder or a built game's Managed folder (no mod loader); the native resolver and function pointers are
     internal (Tallow.API grants internals to Tallow.ManagedRuntime only); every native call that fills a C# buffer

@@ -892,8 +892,8 @@ public sealed class CubeMover : Script
 
             // The native hit payload must be truly blittable on both Windows
             // and Linux; future generator changes may not alter the ABI.
-            Check("PhysicsQueryHit has a stable 48-byte C ABI",
-                System.Runtime.InteropServices.Marshal.SizeOf<PhysicsQueryHit>() == 48 &&
+            Check("PhysicsQueryHit has a stable 56-byte C ABI",
+                System.Runtime.InteropServices.Marshal.SizeOf<PhysicsQueryHit>() == 56 &&
                 System.Runtime.InteropServices.Marshal.OffsetOf<PhysicsQueryHit>(
                     nameof(PhysicsQueryHit.PointX)).ToInt32() == 8 &&
                 System.Runtime.InteropServices.Marshal.OffsetOf<PhysicsQueryHit>(

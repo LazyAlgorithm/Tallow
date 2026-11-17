@@ -1318,12 +1318,42 @@ internal static class Program
         return (licence.Length > 0 ? licence : "unknown", Value("projectUrl"));
     }
 
+    /// <summary>Holds .tallow-csharp/build.lock open (no sharing) for the build, waiting up to five minutes for a build
+    /// of the same project already running. The operating system lets go of it if the process dies.</summary>
+    private static FileStream LockProject(string project)
+    {
+        string folder = Path.Combine(project, ".tallow-csharp");
+        Directory.CreateDirectory(folder);
+        string path = Path.Combine(folder, "build.lock");
+        var waited = Stopwatch.StartNew();
+        bool told = false;
+        while (true)
+        {
+            try
+            {
+                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException) when (waited.Elapsed < TimeSpan.FromMinutes(5))
+            {
+                if (!told)
+                {
+                    Console.WriteLine("Another build of this project is running; waiting for it.");
+                    told = true;
+                }
+                Thread.Sleep(100);
+            }
+        }
+    }
+
     public static int Main(string[] args)
     {
         try
         {
             string project = Path.GetFullPath(RequiredOption(args, "--project"));
             string engine = Path.GetFullPath(RequiredOption(args, "--engine-root"));
+            // One build of a project at a time: the editor, the launcher and a command line can all start one, and two
+            // writing the same generated projects and obj folders would break each other. The next waits its turn.
+            using FileStream buildLock = LockProject(project);
             string game = Generate(project, engine, out string? editorProject);
             if (Flag(args, "--generate-only"))
                 return 0;

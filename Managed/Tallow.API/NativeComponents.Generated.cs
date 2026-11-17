@@ -342,6 +342,11 @@ public readonly partial record struct CapsuleCollider(GameObject GameObject) : I
     /// </summary>
     public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
     /// <summary>
+    /// What it is made of, for the game to choose footsteps, bullet holes and impact sounds ("Metal", "Wood", "Glass").
+    /// A ray or shape hit reports it (empty: nothing said).
+    /// </summary>
+    public string Surface { get => Data.GetString("surface"); set => Data.Set("surface", value); }
+    /// <summary>
     /// The capsule's radius.
     /// </summary>
     public float Radius { get => Data.GetFloat("radius"); set => Data.Set("radius", value); }
@@ -467,6 +472,11 @@ public readonly partial record struct CompoundCollider(GameObject GameObject) : 
     /// A trigger stops nothing: objects pass through it, and both get OnTriggerEnter and OnTriggerExit.
     /// </summary>
     public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
+    /// <summary>
+    /// What it is made of, for the game to choose footsteps, bullet holes and impact sounds ("Metal", "Wood", "Glass").
+    /// A ray or shape hit reports it (empty: nothing said).
+    /// </summary>
+    public string Surface { get => Data.GetString("surface"); set => Data.Set("surface", value); }
 }
 
 /// <summary>
@@ -518,6 +528,11 @@ public readonly partial record struct ConvexCollider(GameObject GameObject) : IC
     /// A trigger stops nothing: objects pass through it, and both get OnTriggerEnter and OnTriggerExit.
     /// </summary>
     public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
+    /// <summary>
+    /// What it is made of, for the game to choose footsteps, bullet holes and impact sounds ("Metal", "Wood", "Glass").
+    /// A ray or shape hit reports it (empty: nothing said).
+    /// </summary>
+    public string Surface { get => Data.GetString("surface"); set => Data.Set("surface", value); }
     /// <summary>
     /// Wrap the model hierarchy when the body is on a parent rather than the mesh object.
     /// </summary>
@@ -1201,6 +1216,11 @@ public readonly partial record struct MeshCollider(GameObject GameObject) : ICom
     /// A trigger stops nothing: objects pass through it, and both get OnTriggerEnter and OnTriggerExit.
     /// </summary>
     public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
+    /// <summary>
+    /// What it is made of, for the game to choose footsteps, bullet holes and impact sounds ("Metal", "Wood", "Glass").
+    /// A ray or shape hit reports it (empty: nothing said).
+    /// </summary>
+    public string Surface { get => Data.GetString("surface"); set => Data.Set("surface", value); }
 }
 
 // Fields of Tallow.MeshRenderer its hand-written handle does not cover.
