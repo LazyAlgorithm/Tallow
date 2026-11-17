@@ -404,3 +404,89 @@ jobs:
       - name: Build a C# game for release (precompiled player, bundled .NET) and run it on its own
         # The player is built here with the Beef compiler the editor was built with.
         run: BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild" python3 tools/test_csharp_export.py
+
+  native-editor-windows:
+    name: Compile native Beef editor and run C# in it (Windows)
+    # The same in-engine C# suites as Linux, on a native Windows build (as the release workflow builds it).
+    runs-on: windows-2022
+    timeout-minutes: 120
+    env:
+      PYTHONUTF8: '1'
+      NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+    defaults:
+      run:
+        shell: bash tallow/.github/scripts/step.sh {0}
+    steps:
+      - name: Line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          path: tallow
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+      - name: Visual Studio environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Install build tools
+        run: |
+          python -m pip install --quiet ninja
+          clang-cl --version | head -1
+      - name: Cache the Beef compiler
+        id: beef-cache
+        uses: actions/cache@v4
+        with:
+          path: beef-win
+          key: beef-win-v1
+      - name: Get the Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -sL -o BeefSetup.exe http://nightly.beeflang.org/BeefSetup.exe
+          mkdir -p beef-win && (cd beef-win && 7z x -y ../BeefSetup.exe > /dev/null)
+          rm -f BeefSetup.exe
+      - name: Native library cache key
+        id: native-key
+        run: echo "key=$(tallow/.github/scripts/native-deps.sh key windows)" >> "$GITHUB_OUTPUT"
+      - name: Cache the native libraries
+        id: native-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: tallow/build/native-win
+          key: ${{ steps.native-key.outputs.key }}
+      - name: Native libraries
+        run: |
+          [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ] && tallow/.github/scripts/native-deps.sh settle
+          cd tallow
+          python tools/patch_textedit.py
+          [ -f build/native-win/CMakeCache.txt ] || cmake -S native -B build/native-win -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl \
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+          cmake --build build/native-win -j "$NUMBER_OF_PROCESSORS" --target $NATIVE_TARGETS
+      - name: Keep the native libraries
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: tallow/build/native-win
+          key: ${{ steps.native-key.outputs.key }}
+      - name: Compile Tallow engine, editor and launcher
+        run: |
+          printf 'Version = 1\nUnversionedLibDirs = ["../BeefLibs"]\n' > beef-win/bin/BeefConfig.toml
+          export BEEFBUILD="$(cygpath -w "$PWD/beef-win/bin/BeefBuild.exe")"
+          cd tallow
+          python tools/build.py --config Debug --skip-native
+          test -f build/Debug_Win64/TallowLauncher/TallowLauncher.exe
+      - name: Run C# gameplay inside the real engine (scene, Jolt, Flecs)
+        run: cd tallow && python tools/test_csharp_ingame.py
+      - name: Share C# [Sync] fields between a real server and client
+        run: cd tallow && python tools/test_csharp_network.py
+      - name: C# hot reload while playing (game DLLs are not held locked)
+        run: cd tallow && python tools/test_csharp_reload.py
+      - name: Create a Voxel sandbox project (all C#) and run its scripts
+        run: cd tallow && python tools/test_csharp_sample.py
+      - name: Create the Tallow Gallery (all C#) and play it with its test switches
+        run: cd tallow && python tools/test_csharp_showcase.py

@@ -620,7 +620,13 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     or a [Saved] value read from a save that holds a line break is refused (it would have become extra
     "name\tvalue" lines setting fields that are not [Sync]/[Saved]). Game C# itself is trusted, full-trust .NET:
     a script can use System.IO; nothing here is a sandbox.
-- [ ] Extend CI beyond managed/.NET host smoke tests to native Beef editor/launcher builds, precompiled player startup and real C# in-scene integration tests on Linux and Windows.
+- [~] Extend CI beyond managed/.NET host smoke tests to native Beef editor/launcher builds, precompiled player startup and real C# in-scene integration tests on Linux and Windows.
+  - [x] Linux: the native-editor-linux job compiles the engine, editor and launcher with the pinned Beef compiler
+    and runs the in-engine suites (in-game, network, hot reload, sample, Gallery) and a release export played on its
+    own bundled .NET.
+  - [~] Windows (November 17, 2026): native-editor-windows builds natively as the release workflow does (clang-cl,
+    Beef's Windows build) and runs the same in-engine suites, including hot reload (game DLLs loaded from memory, so
+    not held locked). First run pending.
 
 ## Migration benchmark backlog — run locally on Nobara
 
