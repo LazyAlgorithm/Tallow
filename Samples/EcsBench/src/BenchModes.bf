@@ -56,6 +56,60 @@ extension Bench
 		wall.AddComponent<BoxCollider>().size = size;
 	}
 
+	int64 mHits;
+	List<GameObject> mWalkers = new .() ~ delete _;
+
+	void SpawnQueryField()
+	{
+		AddWall(.(0, -0.5f, 0), .(102, 1, 102));
+		for (int i < Workload.QueryObstacles)
+		{
+			Workload.QueryObstacle(i, let position, let size);
+			AddWall(position, size);
+		}
+	}
+
+	/// Every query of the frame; the last frame's hits and distances (to the millimetre) are reported.
+	void StepQueries()
+	{
+		let physics = Scene.Physics;
+		let sphere = mMode == "spherecast";
+		int64 hits = 0, checksum = 0;
+		for (int i < mCount)
+		{
+			Workload.QueryRay(i, let origin, let direction);
+			float distance = -1;
+			if (sphere)
+			{
+				if (physics.SphereCast(origin, Workload.QueryRadius, direction, Workload.QueryMaxDistance, let hit))
+					distance = hit.distance;
+			}
+			else if (physics.Raycast(origin, direction, Workload.QueryMaxDistance, let hit))
+				distance = hit.distance;
+			if (distance >= 0)
+			{
+				hits++;
+				checksum += (int64)(distance * 1000);
+			}
+		}
+		mHits = hits;
+		mChecksum = checksum;
+	}
+
+	void SpawnWalkers()
+	{
+		let half = Workload.WalkerHalfSize(mCount);
+		AddWall(.(0, -0.5f, 0), .(half * 2, 1, half * 2));
+		for (int i < mCount)
+		{
+			let walker = Scene.CreateGameObject("Walker");
+			walker.Transform.LocalPosition = Workload.WalkerStart(i, mCount);
+			walker.AddComponent<CharacterController>();
+			walker.AddComponent<Walker>().index = i;
+			mWalkers.Add(walker);
+		}
+	}
+
 	void StepLifecycle()
 	{
 		let start = SDL.SDL_GetTicksNS();
@@ -97,6 +151,13 @@ extension Bench
 			line.AppendF("\"alive\": {}, \"expected_alive\": {}, ", Lifer.sAlive, mLifers.Count);
 			mLifers.Clear();
 		}
+		if (mMode == "raycast" || mMode == "spherecast")
+			line.AppendF("\"hits\": {}, ", mHits);
+		if (mMode == "character")
+		{
+			mChecksum = Walker.sChecksum;
+			line.AppendF("\"walkers\": {}, \"checked\": {}, \"grounded\": {}, ", mWalkers.Count, Walker.sChecked, Walker.sGrounded);
+		}
 		line.AppendF("\"memory_end\": {}, \"checksum\": {}, ", ProfilerModules.ProcessMemory(), mChecksum);
 	}
 }
@@ -126,4 +187,32 @@ class Lifer : Script
 	public override void Awake() { sAwakes++; sAlive++; }
 
 	public override void OnDestroy() { sDestroys++; sAlive--; }
+}
+
+/// The character mode's walker: one SimpleMove a tick (CSharpBench's Walker).
+[Component]
+class Walker : Script
+{
+	public int index;
+	CharacterController mController;
+	int mTick;
+
+	public override void Start() { mController = GetComponent<CharacterController>(); }
+
+	/// Where every walker stood after exactly CheckTick ticks, to the centimetre (frames hold a varying number of ticks).
+	public static int64 sChecksum;
+	public static int sGrounded, sChecked;
+
+	public override void Update(TickInput input, float deltaTime)
+	{
+		mController.SimpleMove(Workload.WalkerVelocity(index, mTick++), deltaTime);
+		if (mTick == Workload.WalkerCheckTick)
+		{
+			let p = Transform.Position;
+			sChecksum += (int64)(p.x * 100) + (int64)(p.y * 100) * 7 + (int64)(p.z * 100) * 13;
+			sChecked++;
+			if (mController.IsGrounded)
+				sGrounded++;
+		}
+	}
 }

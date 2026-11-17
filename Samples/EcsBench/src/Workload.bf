@@ -87,4 +87,51 @@ static class Workload
 		velocity = .(Next() * 4, Next() * 4, Next() * 4);
 		spin = .(Next() * 90, Next() * 90, Next() * 90);
 	}
+
+	/// The query modes' field (B14): a 102 m floor with 400 boxes of five heights on a 5 m grid.
+	public const int QueryObstacles = 400;
+	public const float QueryMaxDistance = 40;
+	public const float QueryRadius = 0.3f;
+
+	public static void QueryObstacle(int index, out Vector3 position, out Vector3 size)
+	{
+		let height = 1f + index % 5;
+		position = .(-47.5f + (index % 20) * 5, height / 2, -47.5f + (index / 20) * 5);
+		size = .(2, height, 2);
+	}
+
+	/// Query i: from 12 m up somewhere over the field, down at a slant (not normalised: both languages pass the same
+	/// vector to the same physics call).
+	public static void QueryRay(int index, out Vector3 origin, out Vector3 direction)
+	{
+		var seed = (uint32)index * 2654435761U + 777;
+		float Next()
+		{
+			seed ^= seed << 13;
+			seed ^= seed >> 17;
+			seed ^= seed << 5;
+			return (seed & 0xFFFFFF) / (float)0xFFFFFF * 2 - 1;
+		}
+		origin = .(Next() * 48, 12, Next() * 48);
+		direction = .(Next() * 0.5f, -1, Next() * 0.5f);
+	}
+
+	/// The character mode: walkers 2 m apart on a floor with room round them.
+	public static float WalkerHalfSize(int count) => Math.Ceiling(Math.Sqrt((float)count)) + 4;
+
+	public static Vector3 WalkerStart(int index, int count)
+	{
+		let side = (int)Math.Ceiling(Math.Sqrt((float)count));
+		return .(-side + 1 + (index % side) * 2, 1.2f, -side + 1 + (index / side) * 2);
+	}
+
+	/// The tick at which each walker's position goes into the checksum.
+	public const int WalkerCheckTick = 300;
+
+	/// Walking in a slowly turning direction, each walker its own phase.
+	public static Vector3 WalkerVelocity(int index, int tick)
+	{
+		let angle = index * 0.7f + tick * 0.05f;
+		return .(Math.Cos(angle) * 2, 0, Math.Sin(angle) * 2);
+	}
 }

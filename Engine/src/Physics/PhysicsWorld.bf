@@ -240,6 +240,9 @@ class PhysicsWorld
 	List<void*> mCharacters = new .() ~ delete _;
 	/// Every live character controller in this world, for the soft push between characters.
 	public List<CharacterControllerState> Controllers = new .() ~ delete _;
+	/// Changes whenever Controllers or a controller's shape changes (SoftCharacterGrid rebuilds then).
+	public int ControllersVersion;
+	public SoftCharacterGrid SoftCharacters = new .() ~ delete _;
 	Dictionary<uint32, Entry> mByBody = new .() ~ delete _;
 	bool mBroadPhaseDirty;
 	int64 mNextOptimize;
@@ -449,6 +452,7 @@ class PhysicsWorld
 		mCharacters.Clear();
 		mCharacterOwners.Clear();
 		Controllers.Clear();
+		ControllersVersion++;
 		for (let entry in mEntries)
 		{
 			if (entry.external)
@@ -1142,7 +1146,8 @@ class PhysicsWorld
 	}
 
 	/// Whether a character controller's body is still in the world.
-	public bool HasCharacter(void* character) => character != null && mCharacters.Contains(character);
+	/// A dictionary lookup: every character asks this several times a tick (a list scan made 1,000 walkers O(n²)).
+	public bool HasCharacter(void* character) => character != null && mCharacterOwners.ContainsKey(character);
 
 	/// Where a character is, how fast it moves and what it stands on.
 	public Jolt.CharacterState GetCharacterState(void* character)

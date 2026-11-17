@@ -21,6 +21,9 @@ namespace CSharpBench;
 ///                       TALLOW_BENCH_ALLOC: math (Vector3/Quaternion value math), event (a C# event with a class
 ///                       argument and a capturing lambda), getcomponent (three GetComponent calls), string (the
 ///                       object's Name from the engine and a formatted string); managed bytes and GCs per frame)
+///                       raycast / spherecast (TALLOW_BENCH_COUNT Jolt queries a frame over a field of 400 boxes;
+///                       hits and a checksum of their distances must equal Beef's), character (TALLOW_BENCH_COUNT
+///                       CharacterControllers, each walked by a Walker script every tick)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
 ///   TALLOW_BENCH_OUT    file a JSON line of results is added to
@@ -76,6 +79,10 @@ public class Bench : Script
             _lifecycleMemoryStart = GC.GetTotalMemory(true);
         else if (_mode == "alloc")
             SpawnAllocators();
+        else if (_mode == "raycast" || _mode == "spherecast")
+            SpawnQueryField();
+        else if (_mode == "character")
+            SpawnWalkers();
         else
             throw new ArgumentException($"Unknown TALLOW_BENCH_MODE {_mode}");
         _spawnMs = watch.Elapsed.TotalMilliseconds;
@@ -153,6 +160,54 @@ public class Bench : Script
     }
 
     private string _allocPattern = "";
+    private long _hits;
+    private readonly List<GameObject> _walkers = new();
+
+    private void SpawnQueryField()
+    {
+        AddWall(new Vector3(0, -0.5f, 0), new Vector3(102, 1, 102));
+        for (int i = 0; i < Workload.QueryObstacles; i++)
+        {
+            Workload.QueryObstacle(i, out Vector3 position, out Vector3 size);
+            AddWall(position, size);
+        }
+    }
+
+    /// <summary>Every query of the frame; the last frame's hits and distances (to the millimetre) are reported.</summary>
+    private void StepQueries()
+    {
+        Scene scene = Scene;
+        bool sphere = _mode == "spherecast";
+        long hits = 0, checksum = 0;
+        for (int i = 0; i < _count; i++)
+        {
+            Workload.QueryRay(i, out Vector3 origin, out Vector3 direction);
+            PhysicsContact? contact = sphere
+                ? scene.SphereCast(origin, Workload.QueryRadius, direction, Workload.QueryMaxDistance)
+                : scene.Raycast(origin, direction, Workload.QueryMaxDistance);
+            if (contact is { } hit)
+            {
+                hits++;
+                checksum += (long)(hit.Distance * 1000);
+            }
+        }
+        _hits = hits;
+        _checksum = checksum;
+    }
+
+    private void SpawnWalkers()
+    {
+        float half = Workload.WalkerHalfSize(_count);
+        AddWall(new Vector3(0, -0.5f, 0), new Vector3(half * 2, 1, half * 2));
+        for (int i = 0; i < _count; i++)
+        {
+            GameObject walker = Scene.CreateGameObject("Walker");
+            walker.Transform.LocalPosition = Workload.WalkerStart(i, _count);
+            walker.AddComponent<CharacterController>();
+            walker.AddComponent<Walker>().Index = i;
+            _walkers.Add(walker);
+        }
+    }
 
     private void AddWall(Vector3 position, Vector3 size)
     {
@@ -227,6 +282,8 @@ public class Bench : Script
         }
         else if (_mode == "lifecycle")
             StepLifecycle();
+        else if (_mode == "raycast" || _mode == "spherecast")
+            StepQueries();
     }
 
     public override void LocalLateUpdate(float deltaTime)
@@ -274,6 +331,13 @@ public class Bench : Script
             line.Append($"\"alive\": {Lifer.Alive}, \"expected_alive\": {_lifers.Count}, ");
             _lifers.Clear();
             line.Append($"\"managed_growth_bytes\": {GC.GetTotalMemory(true) - _lifecycleMemoryStart}, ");
+        }
+        if (_mode == "raycast" || _mode == "spherecast")
+            line.Append($"\"hits\": {_hits}, ");
+        if (_mode == "character")
+        {
+            _checksum = Walker.Checksum;
+            line.Append($"\"walkers\": {_walkers.Count}, \"checked\": {Walker.Checked}, \"grounded\": {Walker.Grounded}, ");
         }
         if (_mode == "alloc")
             line.Append($"\"pattern\": \"{_allocPattern}\", \"allocator_checksum\": {Allocator.Checksum}, ");
@@ -347,6 +411,33 @@ public class Ball : Script
         Vector3 velocity = _body.Velocity;
         if (velocity.LengthSquared() > Workload.DampAbove * Workload.DampAbove)
             _body.AddForce(velocity * -Workload.Damping);
+    }
+}
+
+/// <summary>The character mode's walker: one SimpleMove a tick.</summary>
+public class Walker : Script
+{
+    public int Index;
+    private CharacterController _controller;
+    private int _tick;
+
+    public override void Start() => _controller = GetComponent<CharacterController>();
+
+    /// <summary>Where every walker stood after exactly WalkerCheckTick ticks, to the centimetre (frames hold a
+    /// varying number of ticks).</summary>
+    public static long Checksum;
+    public static int Grounded, Checked;
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        _controller.SimpleMove(Workload.WalkerVelocity(Index, _tick++), deltaTime);
+        if (_tick == Workload.WalkerCheckTick)
+        {
+            Vector3 p = Transform.Position;
+            Checksum += (long)(p.X * 100) + (long)(p.Y * 100) * 7 + (long)(p.Z * 100) * 13;
+            Checked++;
+            if (_controller.IsGrounded) Grounded++;
+        }
     }
 }
 
@@ -512,5 +603,52 @@ public static class Workload
         position = new Vector3(Next() * halfSize, Next() * halfSize, Next() * halfSize);
         velocity = new Vector3(Next() * 4, Next() * 4, Next() * 4);
         spin = new Vector3(Next() * 90, Next() * 90, Next() * 90);
+    }
+
+    /// <summary>The query modes' field (B14): a 102 m floor with 400 boxes of five heights on a 5 m grid.</summary>
+    public const int QueryObstacles = 400;
+    public const float QueryMaxDistance = 40;
+    public const float QueryRadius = 0.3f;
+
+    public static void QueryObstacle(int index, out Vector3 position, out Vector3 size)
+    {
+        float height = 1f + index % 5;
+        position = new Vector3(-47.5f + (index % 20) * 5, height / 2, -47.5f + (index / 20) * 5);
+        size = new Vector3(2, height, 2);
+    }
+
+    /// <summary>Query i: from 12 m up somewhere over the field, down at a slant (not normalised: both languages pass
+    /// the same vector to the same physics call).</summary>
+    public static void QueryRay(int index, out Vector3 origin, out Vector3 direction)
+    {
+        uint seed = (uint)index * 2654435761U + 777;
+        float Next()
+        {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            return (seed & 0xFFFFFF) / (float)0xFFFFFF * 2 - 1;
+        }
+        origin = new Vector3(Next() * 48, 12, Next() * 48);
+        direction = new Vector3(Next() * 0.5f, -1, Next() * 0.5f);
+    }
+
+    /// <summary>The character mode: walkers 2 m apart on a floor with room round them.</summary>
+    public static float WalkerHalfSize(int count) => MathF.Ceiling(MathF.Sqrt(count)) + 4;
+
+    public static Vector3 WalkerStart(int index, int count)
+    {
+        int side = (int)MathF.Ceiling(MathF.Sqrt(count));
+        return new Vector3(-side + 1 + (index % side) * 2, 1.2f, -side + 1 + (index / side) * 2);
+    }
+
+    /// <summary>The tick at which each walker's position goes into the checksum.</summary>
+    public const int WalkerCheckTick = 300;
+
+    /// <summary>Walking in a slowly turning direction, each walker its own phase.</summary>
+    public static Vector3 WalkerVelocity(int index, int tick)
+    {
+        float angle = index * 0.7f + tick * 0.05f;
+        return new Vector3(MathF.Cos(angle) * 2, 0, MathF.Sin(angle) * 2);
     }
 }

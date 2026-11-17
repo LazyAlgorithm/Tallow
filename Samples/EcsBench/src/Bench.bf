@@ -83,6 +83,10 @@ class Bench : Component
 			SpawnPhysics();
 		else if (mMode == "lifecycle")
 			{}
+		else if (mMode == "raycast" || mMode == "spherecast")
+			SpawnQueryField();
+		else if (mMode == "character")
+			SpawnWalkers();
 		else
 			SpawnEntities();
 		mSpawnMs = (SDL.SDL_GetTicksNS() - start) / 1e6;
@@ -181,6 +185,8 @@ class Bench : Component
 			StepGetComponent();
 		else if (mMode == "lifecycle")
 			StepLifecycle();
+		else if (mMode == "raycast" || mMode == "spherecast")
+			StepQueries();
 		if (mWorld != null)
 		{
 			let halfSize = mHalfSize;

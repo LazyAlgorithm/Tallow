@@ -781,6 +781,59 @@ static class EcsChecks
 			walker.RemoveComponent<CharacterController>();
 			Expect(ComponentState<CharacterControllerState>.Count == before, "RemoveComponent frees its state");
 		}
+		{
+			// Many soft characters: the push apart found through the neighbour grid (SoftCharacterGrid) is the push the
+			// full loop finds, to the bit, for crowded, spread out and teleported characters.
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let ground = scene.CreateGameObject("Ground");
+			ground.Transform.Position = .(0, -0.5f, 0);
+			ground.AddComponent<BoxCollider>().size = .(200, 1, 200);
+			let crowd = scope List<CharacterController>();
+			for (int i < 300)
+			{
+				let person = scene.CreateGameObject("Person");
+				// A tight crowd in the middle, a looser one round it, and some far off on their own.
+				let ring = i < 150 ? 0.25f : (i < 270 ? 1.0f : 30.0f);
+				let angle = i * 2.399963f;
+				let reach = ring * Math.Sqrt((float)(i % 150 + 1));
+				person.Transform.Position = .(Math.Cos(angle) * reach, 1.0f, Math.Sin(angle) * reach);
+				crowd.Add(person.AddComponent<CharacterController>());
+			}
+			scene.StartPlay();
+			scene.Update();
+			bool Same(StringView stage)
+			{
+				int different = 0, pushed = 0;
+				for (let person in crowd)
+				{
+					let state = person.Runtime;
+					let grid = state.[Friend]Separation();
+					let full = state.[Friend]Separation(true);
+					if (grid != full)
+						different++;
+					if (full != .Zero)
+						pushed++;
+				}
+				Expect(different == 0 && pushed > 100, scope $"the neighbour grid finds the same push as every character ({stage}: {different} differ, {pushed} pushed)");
+				return different == 0;
+			}
+			Same("standing");
+			for (int i < 20)
+			{
+				for (let person in crowd)
+					person.SimpleMove(.(1, 0, 0.5f), Time.FixedDeltaTime);
+				scene.FixedUpdate();
+			}
+			Same("after walking");
+			crowd[0].Teleport(crowd[200].GameObject.Transform.Position + .(0.1f, 0, 0));
+			Same("after a teleport");
+			// Set from outside: from the next tick (or its own next Move).
+			crowd[1].GameObject.Transform.Position = crowd[201].GameObject.Transform.Position + .(0, 0, 0.1f);
+			scene.FixedUpdate();
+			Same("after its Transform was set");
+			scene.StopPlay();
+		}
 		Scene.Active = previous;
 		Expect(ComponentState<CharacterControllerState>.Count == before, "characters are freed with their scene");
 	}

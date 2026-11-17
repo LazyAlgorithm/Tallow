@@ -199,6 +199,8 @@ class CharacterControllerState
 	float mPushRadius, mHalfHeight;
 	Vector3 mShapeCenter;
 	bool mSoft;
+	// Where SoftCharacterGrid last saw this character (shape centre).
+	Vector3 mGridAt;
 	float mAirTime;
 	bool mSwimming;
 	int32 mSwimTick = int32.MinValue / 2;
@@ -247,7 +249,7 @@ class CharacterControllerState
 		let scale = WorldScale;
 		ShapeDesc desc = default;
 		desc.center = center * scale;
-		float halfHeight, rounding;
+		float halfHeight, rounding, pushRadius;
 		if (shape == .Box)
 		{
 			desc.kind = .Box;
@@ -256,7 +258,7 @@ class CharacterControllerState
 			rounding = Mathf.Clamp(edgeRadius, 0.005f, smallest);
 			desc.convexRadius = rounding;
 			halfHeight = desc.halfExtents.y;
-			mPushRadius = (desc.halfExtents.x + desc.halfExtents.z) * 0.5f;
+			pushRadius = (desc.halfExtents.x + desc.halfExtents.z) * 0.5f;
 		}
 		else
 		{
@@ -265,12 +267,16 @@ class CharacterControllerState
 			halfHeight = Math.Max(height * scale.y * 0.5f, rounding + 0.01f);
 			desc.radius = rounding;
 			desc.halfHeight = halfHeight - rounding;
-			mPushRadius = rounding;
+			pushRadius = rounding;
 		}
 		// Anything touching the rounded part of the bottom supports the character. That includes the edge of a step it
 		// has half climbed, which is what lets it keep stepping instead of dropping back.
 		supportHeight = desc.center.y - halfHeight + Math.Max(rounding, 0.05f);
 		mStepReach = rounding;
+		// The push between characters reads these (and SoftCharacterGrid sizes its cells by them).
+		if ((mHalfHeight != halfHeight || mShapeCenter != desc.center || mPushRadius != pushRadius) && mGameObject?.Scene?.Physics != null)
+			mGameObject.Scene.Physics.ControllersVersion++;
+		mPushRadius = pushRadius;
 		mHalfHeight = halfHeight;
 		mShapeCenter = desc.center;
 		return desc;
@@ -291,6 +297,7 @@ class CharacterControllerState
 			return false;
 		}
 		Scene.Physics.Controllers.Add(this);
+		Scene.Physics.ControllersVersion++;
 		if (velocity != .Zero)
 			Scene.Physics.SetCharacterState(mCharacter, Transform.Position, ShapeRotation, velocity, mSoft);
 		mState = Scene.Physics.GetCharacterState(mCharacter);
@@ -305,6 +312,7 @@ class CharacterControllerState
 		if (mCharacter != null)
 		{
 			Scene.Physics.Controllers.Remove(this);
+			Scene.Physics.ControllersVersion++;
 			Scene.Physics.DestroyCharacter(mCharacter);
 		}
 		mCharacter = null;
@@ -321,17 +329,40 @@ class CharacterControllerState
 		mState = Scene.Physics.GetCharacterState(mCharacter);
 		mLastPosition = Transform.Position;
 		mLastRotation = rotation;
+		// Moved from outside (its Transform set): other characters' neighbour lookups must see where it is now.
+		if (mSoft)
+			Scene.Physics.SoftCharacters.Dirty = true;
 	}
 
 	/// Velocity that eases this character out of other soft characters it overlaps. The heavier one moves less.
-	Vector3 Separation()
+	/// everyone: look at every character instead of the neighbour grid (EcsBench's checks compare the two).
+	Vector3 Separation(bool everyone = false)
 	{
 		var push = Vector3.Zero;
 		if (!mSoft)
 			return push;
 		let mine = Transform.Position + mShapeCenter;
-		for (let other in Scene.Physics.Controllers)
+		let physics = Scene.Physics;
+		let controllers = physics.Controllers;
+		// A few characters: look at each. More: only those in the grid cells round this one (the same ones, in the
+		// same order, so the same push).
+		let near = scope List<int32>();
+		if (controllers.Count > 32 && !everyone)
 		{
+			let grid = physics.SoftCharacters;
+			if ((mine - mGridAt).LengthSquared > SoftCharacterGrid.Margin * SoftCharacterGrid.Margin * 0.25f)
+				grid.Dirty = true;
+			grid.Prepare(controllers, physics.ControllersVersion);
+			grid.Near(mine, near);
+		}
+		else
+		{
+			for (int32 i < (int32)controllers.Count)
+				near.Add(i);
+		}
+		for (let index in near)
+		{
+			let other = controllers[index];
 			if (other == this || !other.mSoft || !other.HasCharacter || !Scene.Physics.ShareWorld(GameObject, other.GameObject))
 				continue;
 			let theirs = other.Transform.Position + other.mShapeCenter;
@@ -365,6 +396,9 @@ class CharacterControllerState
 		mState.velocity -= push;
 		Transform.Position = mState.position;
 		mLastPosition = Transform.Position;
+		// Moved further than the neighbour grid allows for: it is rebuilt before the next lookup.
+		if (mSoft && (mState.position + mShapeCenter - mGridAt).LengthSquared > SoftCharacterGrid.Margin * SoftCharacterGrid.Margin * 0.25f)
+			Scene.Physics.SoftCharacters.Dirty = true;
 		if (mState.groundState == 0)
 			mAirTime = 0;
 		else if (mAirTime < 1000)
@@ -507,6 +541,9 @@ class CharacterControllerState
 		mState = Scene.Physics.GetCharacterState(mCharacter);
 		mLastPosition = Transform.Position;
 		mLastRotation = ShapeRotation;
+		// Rollback puts characters back this way, possibly within a tick the neighbour grid was built for.
+		if (mSoft)
+			Scene.Physics.SoftCharacters.Dirty = true;
 		mAirTime = airTime >= 0 ? airTime : (mState.groundState == 0 ? 0 : float.MaxValue);
 	}
 

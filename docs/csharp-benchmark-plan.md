@@ -46,7 +46,7 @@
 - [ ] **B11 — ECS data-only baseline.** 10k, 50k, 100k and 250k static/rotating entities; native Beef ECS system vs managed C# workload over the **same Flecs data**. Report ECS iteration/query time, frame times, allocations, memory and render draw-call limits. Do not present a renderer bottleneck as an ECS result.
 - [x] **B12 — ECS writable chunk path.** Read and write the same 10k/100k position-like components with a bulk API; measure copy cost, boundary transitions and total tick. Done for offline scenes (2026-11-15): `Scene.Query<...>().ForEach` gives refs straight into the Flecs columns, one native call per table, no copy; 50k ecs rows 2.08 ms C# vs 1.53 ms Beef (see results below). Networked [Sync] ECS data is still to do.
 - [ ] **B13 — physics sphere pile.** Spawn Jolt rigidbodies at fixed intervals until p95 frame time >16.67 ms, or max 10k. Record total, active/asleep counts, contact pairs, Jolt step milliseconds and memory. Repeat sleep ON/OFF; compare Beef vs C# control paths with identical native Jolt settings.
-- [ ] **B14 — character motion/physics queries.** 100, 1k and 5k Jolt CharacterController instances with the same navigation/input; raycasts and sphere casts at 1k/10k/100k queries per frame; measure exact hit agreement and latency separately.
+- [x] **B14 — character motion/physics queries.** 100, 1k and 5k Jolt CharacterController instances with the same navigation/input; raycasts and sphere casts at 1k/10k/100k queries per frame; measure exact hit agreement and latency separately.
 - [ ] **B15 — soft-body throughput.** Jelly, Cloth, Shell and DrivenJelly, 10/50/100/500 bodies, fixed vertex counts and settings. Record rebuild time, step time, active vertex count, memory and deformation correctness. Keep existing Jelly Golf-style free jelly as an acceptance case.
 - [ ] **B16 — engine resource/render throughput.** Static 100k objects, 10k changing transforms and streaming scene chunks, with GPU timings/draw calls separated from C# script CPU. Include shader graph and compute graph functionality regression.
 - [x] **B17 — real managed allocations.** With 1k/10k/100k Script updates, record managed bytes/frame, collections (Gen0/1/2), pause time and peak RSS. Compare allocation-free value math, event allocation, GetComponent in loops and managed/native string calls.
@@ -94,8 +94,8 @@
   saved value cannot be read (`count = banana`) does not start, and the log now names the object and script
   (before, only the parse exception, with no object); the other scripts play.
 
-- B17 (2026-11-16, `tools/benchmark_csharp_alloc.py`, Release headless player, medians of 3 x 600 frames; raw data
-  `~/TallowBenchmarks/alloc-20261116/`): N objects, each script running one pattern every Update.
+- B17 (2026-11-16, `tools/benchmark_csharp_alloc.py`, Release headless player on the system's .NET 11.0.0-rc.1
+  runtime, medians of 3 x 600 frames; raw data `~/TallowBenchmarks/alloc-20261116/`): N objects, each script running one pattern every Update.
 
   | pattern | scripts | script ms | managed bytes/frame | Gen0/1/2 (600 frames) | GC pause ms total | peak RSS MB |
   |---|---:|---:|---:|---|---:|---:|
@@ -111,6 +111,30 @@
   the closure at the top of Update for every case (24 B a script a frame, even for the math pattern). The editor now
   warns about this: **TAL-PERF003**, for a lambda in a tick callback that captures locals, parameters or `this`.
   Static lambdas, capture-free lambdas and lambdas passed straight to a Tallow API (`Query.ForEach`) are not flagged.
+
+- B14 (2026-11-16, `tools/run_csharp_bench.py --modes raycast,spherecast,character`, Release headless players,
+  medians of 3 x 600 frames; raw data `~/TallowBenchmarks/queries-20261116/`). Queries: N rays or sphere casts
+  (radius 0.3) a frame from fixed points over a field of 400 boxes; characters: N CharacterControllers on a floor,
+  each walked by a script with SimpleMove every tick.
+
+  | mode | count | Beef script ms | C# script ms | C#/Beef | µs per query / walker (C#) |
+  |---|---:|---:|---:|---:|---:|
+  | raycast | 1k / 10k / 100k | 0.26 / 2.54 / 25.1 | 0.27 / 2.82 / 27.1 | 1.06 / 1.11 / 1.08x | 0.27 |
+  | spherecast | 1k / 10k / 100k | 0.69 / 6.91 / 68.2 | 0.77 / 7.23 / 70.3 | 1.12 / 1.05 / 1.03x | 0.70 |
+  | character | 100 / 1k / 5k | 0.14 / 1.76 / 13.7 | 0.16 / 1.86 / 14.4 | 1.14 / 1.05 / 1.05x | 1.6-2.9 |
+
+  Hit agreement is exact: the same hit count and the same sum of hit distances (to the millimetre) in Beef and C#,
+  in every run, at every count. Walker end positions cannot be compared exactly; the walk is not repeatable from run
+  to run in either language (ticks follow wall time), which is older physics behaviour, not C#.
+
+  **Fixed on the way (engine, both languages):** character controllers were O(n²) a tick. 1,000 walkers took
+  140 ms a tick (120-179 µs each; 3.4 µs each at 100). Two causes: `PhysicsWorld.HasCharacter` scanned a list of
+  every character, and each character asks it several times a move; and each soft character's push apart
+  (`Separation`) looked at every other character. Now `HasCharacter` is a dictionary lookup, and the push uses
+  `SoftCharacterGrid`, a neighbour grid built once a tick (rebuilt when characters are added, removed, reshaped,
+  teleported, or move more than 0.5 m from where it saw them). It visits neighbours in the same order as before, so
+  the push is the same to the bit. EcsBench's checks compare the two for 300 characters standing, walking, teleported
+  and moved by their Transform. 1,000 walkers now take 1.8 ms a tick (78x faster), and 5,000 take 13.7 ms.
 
 ### Fixes from these runs (2026-11-16)
 
