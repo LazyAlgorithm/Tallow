@@ -1386,6 +1386,16 @@ A full conversion also needs these. Ordered roughly by when they block users.
   (`Managed/Tallow.API/Compute.cs`). Host: `CSharpCompute` keeps them by number and frees what is left at game
   unload. 5 headless checks (383); run for real in a window on a scratch Sandbox (150 of 150 steps, ripple drawn on
   a crate). docs/materials.md converted.
+- [x] Save storage of the game's own, and `[GameStart]` (November 17, 2026): C# `SaveStorage` (Write/Read with a
+  `SaveRequest` finished once from any thread; optional Exists/Delete/List), `SaveGame.Storage` (null: files) and
+  `SaveGame.Slots()`. Host: `CSharpSaveStorage` forwards through the new host entry `tn_csharp_save_storage` (op
+  0-4; managed `NativeEntrypoints.SaveStorage`, WebHost registration, stub), tasks kept by number in
+  `CSharpSaves` until `FinishTask`; at unload or hot reload saves go back to files and pending ones fail.
+  `[GameStart]` static methods are registered by Tallow.Build in each assembly's module initializer and run after
+  the game loads (before the first scene and any Awake; again after a reload); the runtime now runs the module
+  initializers of every referenced game assembly at load (their systems, nodes and starts were registered only on
+  first use). 10 in-game checks (393). docs/saving.md and docs/csharp-gameplay.md. Not tried: Load Save At Start
+  with a C# storage that answers later.
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is

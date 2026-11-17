@@ -877,3 +877,31 @@ public class DocQuerySnippets : Script
         GameObject.RefreshColliders();
     }
 }
+
+// docs/saving.md: a storage of the game's own (Upload and Download stand for a game's own web calls).
+class ServerStorage : SaveStorage
+{
+    static System.Threading.Tasks.Task Upload(string slot, byte[] data) => System.Threading.Tasks.Task.CompletedTask;
+    static System.Threading.Tasks.Task<byte[]?> Download(string slot) => System.Threading.Tasks.Task.FromResult<byte[]?>(null);
+
+    public override async void Write(SaveRequest request)
+    {
+        try
+        {
+            await Upload(request.Slot, request.Data);
+            request.Finish();
+        }
+        catch (Exception e) { request.Fail(e.Message); }
+    }
+
+    public override async void Read(SaveRequest request) =>
+        request.Finish(await Download(request.Slot));
+
+    public override bool Exists(string slot) => false;
+}
+
+static class SaveSetupSnippet
+{
+    // Not [GameStart] here: the in-game checks keep file saves.
+    static void Begin() => SaveGame.Storage = new ServerStorage();
+}

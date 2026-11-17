@@ -154,6 +154,10 @@ int32_t tn_csharp_component_event(int32_t script_instance, int32_t kind, const c
    3 failure; below 0 when the managed code failed. */
 int32_t tn_csharp_behavior_node(int32_t handle, int32_t phase, const char* class_name, uint64_t session, uint64_t entity,
     const char* values, float delta_time);
+/* The game's C# SaveStorage: op 0 write (data: the save), 1 read, 2 exists, 3 delete, 4 list (it answers through
+   CSharpSaves.ListSlot). Write and read finish later through CSharpSaves.FinishTask(task, ...). Exists: 1 yes, 0 no;
+   the others 0; below 0 when the managed code failed. */
+int32_t tn_csharp_save_storage(int32_t op, int32_t task, const char* slot, const uint8_t* data, int32_t length);
 // A script's prediction state hook (mode 0 capture, 1 prepare, 2 restore) over a body state's 22 floats: position,
 // rotation, linear and angular velocity, two spare vectors, and whether it came from a Rigidbody; 1 on success.
 int32_t tn_csharp_prediction_state(int32_t script_instance, int32_t mode, float* values);

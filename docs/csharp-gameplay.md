@@ -333,6 +333,24 @@ public class Movers : Script
   Component, Get and Set of each field, and **For Each**, which visits the
   active GameObjects that have it.
 
+## Code that runs when the game starts: [GameStart]
+
+A static method with no parameters marked `[GameStart]` runs once when the game's code loads: before the first
+scene starts and before any script's `Awake` (and again after a hot reload, with the new code). It is the place
+for game-wide settings, such as where saves go (docs/saving.md):
+
+```csharp
+static class Setup
+{
+    [GameStart]
+    internal static void Begin() => SaveGame.Storage = new ServerStorage();
+}
+```
+
+It may be in any class, public or internal, in any of the game's assemblies. A method that throws is reported in
+the Console with its stack, and the others still run. The build refuses a `[GameStart]` method that is not static,
+takes parameters, returns a value, or is private.
+
 ## Spawning networked objects
 
 A prefab whose root has a Network Identity is shared. On the server, `Scene.Spawn` makes it on every machine and

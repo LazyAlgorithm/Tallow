@@ -312,6 +312,22 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    /// <summary>The game's <see cref="SaveStorage"/> (SaveGame.Storage): op 0 write, 1 read, 2 exists, 3 delete,
+    /// 4 list. Exists answers 1 or 0, the others 0; -1 when the storage threw (reported).</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int SaveStorage(int op, int task, byte* slot, byte* data, int length)
+    {
+        try
+        {
+            return SaveGame.Dispatch(op, task, Marshal.PtrToStringUTF8((nint)slot) ?? "",
+                data == null ? ReadOnlySpan<byte>.Empty : new ReadOnlySpan<byte>(data, length));
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     /// <summary>The team for a joining player from <see cref="Network.ChooseTeam"/>: the team (0 or more), or -1
     /// when there is no chooser or it threw (reported; the engine then shares players out itself).</summary>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -593,6 +609,7 @@ public static unsafe class NativeEntrypoints
             sRegistry = registry;
             AddTypes(registry, sTypes, sFormerNames);
             BehaviorNodes.Publish();
+            RunGameStarts();
             return sTypes.Count;
         }
         catch (Exception exception)
@@ -602,6 +619,8 @@ public static unsafe class NativeEntrypoints
             sRegistry = null;
             EcsSystems.Clear();
             BehaviorNodes.Clear();
+            GameStarts.Clear();
+            SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             sTypes.Clear();
             sFormerNames.Clear();
@@ -618,6 +637,13 @@ public static unsafe class NativeEntrypoints
     // still alive at the next load means something (a static event, a native callback, a thread) holds the old game.
     private static readonly List<WeakReference> sUnloadedContexts = [];
     private static bool sReportedRetained;
+
+    /// <summary>The game's [GameStart] methods, once each; one that throws is logged and the rest still run.</summary>
+    private static void RunGameStarts()
+    {
+        foreach ((string name, Exception error) in GameStarts.RunAll())
+            Log.Error($"[GameStart] {name} threw {error.GetType().Name}: {error.Message}\n{error.StackTrace}");
+    }
 
     private static void ReportRetainedGames()
     {
@@ -657,8 +683,12 @@ public static unsafe class NativeEntrypoints
                 if (dependency.Name is null)
                     continue;
                 string candidate = Path.Combine(root, dependency.Name, dependency.Name + ".dll");
-                if (File.Exists(candidate))
-                    context.LoadFromAssemblyName(dependency);
+                if (!File.Exists(candidate))
+                    continue;
+                // Its generated module initializer registers its ECS systems, behaviour nodes and [GameStart]
+                // methods: run it now, not whenever one of its types is first used.
+                Assembly loaded = context.LoadFromAssemblyName(dependency);
+                System.Runtime.CompilerServices.RuntimeHelpers.RunModuleConstructor(loaded.ManifestModule.ModuleHandle);
             }
 
             registry = CreateRegistry(game);
@@ -747,6 +777,8 @@ public static unsafe class NativeEntrypoints
             Func<int, int>? chooser = Network.ChooseTeam;
             EcsSystems.Clear();
             BehaviorNodes.Forget();
+            GameStarts.Clear();
+            SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             GameThread.Stop();
             GameThread.Start();
@@ -849,6 +881,7 @@ public static unsafe class NativeEntrypoints
             sUnloadedContexts.Add(unloaded);
             previous.Unload();
             BehaviorNodes.Publish();
+            RunGameStarts();
             return moved.Count;
         }
         catch (Exception exception)
@@ -1840,6 +1873,8 @@ public static unsafe class NativeEntrypoints
             // keep the context.
             EcsSystems.Clear();
             BehaviorNodes.Clear();
+            GameStarts.Clear();
+            SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).
             GameThread.Stop();
@@ -1886,6 +1921,8 @@ public static unsafe class NativeEntrypoints
             // keep the context.
             EcsSystems.Clear();
             BehaviorNodes.Clear();
+            GameStarts.Clear();
+            SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).
             GameThread.Stop();

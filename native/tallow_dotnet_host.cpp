@@ -71,6 +71,7 @@ using choose_team_fn = int32_t (*)(int32_t);
 using component_event_fn = int32_t (*)(int32_t, int32_t, const char*, float);
 using behavior_node_fn = int32_t (*)(int32_t, int32_t, const char*, uint64_t, uint64_t, const char*, float);
 using prediction_state_fn = int32_t (*)(int32_t, int32_t, float*);
+using save_storage_fn = int32_t (*)(int32_t, int32_t, const char*, const uint8_t*, int32_t);
 using pump_fn = int32_t (*)(float, tn_csharp_gc_stats*);
 using detach_fn = int32_t (*)(int32_t);
 using last_error_fn = int32_t (*)(char*, int32_t);
@@ -103,6 +104,7 @@ choose_team_fn choose_team = nullptr;
 component_event_fn component_event = nullptr;
 behavior_node_fn behavior_node = nullptr;
 prediction_state_fn prediction_state = nullptr;
+save_storage_fn save_storage = nullptr;
 pump_fn pump = nullptr;
 detach_fn detach = nullptr;
 last_error_fn last_error = nullptr;
@@ -496,6 +498,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "ComponentEvent", component_event) ||
             !find_entry(assembly.c_str(), "BehaviorNode", behavior_node) ||
             !find_entry(assembly.c_str(), "PredictionState", prediction_state) ||
+            !find_entry(assembly.c_str(), "SaveStorage", save_storage) ||
             !find_entry(assembly.c_str(), "Pump", pump) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
             !find_entry(assembly.c_str(), "GetLastError", last_error) ||
@@ -750,6 +753,16 @@ int32_t tn_csharp_behavior_node(int32_t handle, int32_t phase, const char* class
     return result;
 }
 
+int32_t tn_csharp_save_storage(int32_t op, int32_t task, const char* slot, const uint8_t* data, int32_t length)
+{
+    if (!started || !save_storage || !slot)
+        return -1;
+    const int32_t result = save_storage(op, task, slot, data, data ? length : 0);
+    if (result < 0)
+        managed_error("Running the C# save storage");
+    return result;
+}
+
 int32_t tn_csharp_prediction_state(int32_t script_instance, int32_t mode, float* values)
 {
     if (!started || !prediction_state || !values)
@@ -831,6 +844,7 @@ void tn_csharp_shutdown(void)
     component_event = nullptr;
     behavior_node = nullptr;
     prediction_state = nullptr;
+    save_storage = nullptr;
     pump = nullptr;
     detach = nullptr;
     last_error = nullptr;

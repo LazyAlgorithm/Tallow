@@ -115,8 +115,11 @@ public class ApiChecks : CheckBase
         Gizmos.Box(Transform.Position, Vector3.One, Color.Black);
     }
 
+    public static bool Awoken;
+
     public override void Awake()
     {
+        Awoken = true;
         Check("fields are restored before Awake", Speed == 3f && Label == "from scene");
         // A game script cannot put itself between other scripts and the engine.
         Check("Engine.Bind is not open to game code",
@@ -1245,6 +1248,40 @@ public class ApiChecks : CheckBase
         Check("OnLoaded runs after the fields are back", hooks.Loads == 1 && hooks.CoinsWhenLoaded == 7);
         SaveGame.Delete(slot);
         Check("SaveGame.Delete removes the slot", !SaveGame.Exists(slot));
+
+        // A storage of the game's own.
+        var memory = new MemoryStorage();
+        SaveGame.Storage = memory;
+        hooks.Coins = 11;
+        saved = SaveGame.Save("mem");
+        Check("a C# SaveStorage is handed the save's bytes and finishes it",
+            saved.Done && saved.Succeeded && memory.Slots.TryGetValue("mem", out byte[]? bytes) && bytes.Length > 0);
+        Check("SaveGame.Exists and Slots ask the C# storage",
+            SaveGame.Exists("mem") && !SaveGame.Exists("other") && SaveGame.Slots().SequenceEqual(["mem"]));
+        hooks.Coins = 0;
+        loaded = SaveGame.Load("mem");
+        Check("a load through the C# storage puts the fields back", loaded.Done && loaded.Found && hooks.Coins == 11);
+        loaded = SaveGame.Load("empty");
+        Check("a load of a slot the storage does not have finds nothing", loaded.Done && loaded.Succeeded && !loaded.Found);
+        memory.Hold = true;
+        saved = SaveGame.Save("later");
+        bool waiting = !saved.Done;
+        var finisher = new System.Threading.Thread(() => memory.Held!.Finish());
+        finisher.Start();
+        finisher.Join();
+        Check("a C# storage may finish a save later, from another thread", waiting && saved.Done && saved.Succeeded);
+        bool twice = false;
+        try { memory.Held!.Finish(); } catch (InvalidOperationException) { twice = true; }
+        Check("a save request cannot be finished twice", twice);
+        memory.Hold = false;
+        memory.FailNext = true;
+        saved = SaveGame.Save("broken");
+        Check("SaveRequest.Fail fails the save", saved.Done && !saved.Succeeded);
+        SaveGame.Delete("mem");
+        Check("SaveGame.Delete goes to the C# storage", !memory.Slots.ContainsKey("mem"));
+        SaveGame.Storage = null;
+        Check("SaveGame.Storage = null goes back to files", !SaveGame.Exists("later") && SaveGame.Storage == null);
+        Check("[GameStart] methods ran once, before the first Awake", GameStartProbe.Runs == 1 && GameStartProbe.BeforeAwake);
     }
 
     private int _rpcValue;
@@ -1732,6 +1769,46 @@ public class ApiChecks : CheckBase
 }
 
 /// Counts collision and trigger callbacks for ApiChecks.
+public class MemoryStorage : SaveStorage
+{
+    public readonly Dictionary<string, byte[]> Slots = [];
+    public bool Hold, FailNext;
+    public SaveRequest? Held;
+
+    public override void Write(SaveRequest request)
+    {
+        if (FailNext)
+        {
+            FailNext = false;
+            request.Fail("no room");
+            return;
+        }
+        Slots[request.Slot] = request.Data;
+        if (Hold)
+            Held = request;
+        else
+            request.Finish();
+    }
+
+    public override void Read(SaveRequest request) => request.Finish(Slots.GetValueOrDefault(request.Slot));
+    public override bool Exists(string slot) => Slots.ContainsKey(slot);
+    public override void Delete(string slot) => Slots.Remove(slot);
+    public override IEnumerable<string> List() => Slots.Keys.Where(k => k == "mem");
+}
+
+public static class GameStartProbe
+{
+    public static int Runs;
+    public static bool BeforeAwake;
+
+    [GameStart]
+    internal static void Begin()
+    {
+        Runs++;
+        BeforeAwake = !ApiChecks.Awoken;
+    }
+}
+
 public class ContactProbe : Script
 {
     public int CollisionEnters, CollisionExits, TriggerEnters, TriggerExits;

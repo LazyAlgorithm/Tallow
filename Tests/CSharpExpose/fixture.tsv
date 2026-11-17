@@ -329,9 +329,13 @@ method	Tallow.CSharpRopes	SoftPoints	int	session:ulong	entity:ulong	what:int	buf
 method	Tallow.CSharpRopes	Touching	int	session:ulong	entity:ulong	buffer:System.Span<ulong>
 method	Tallow.CSharpSaves	Delete	void	slot:string
 method	Tallow.CSharpSaves	Exists	bool	slot:string
+method	Tallow.CSharpSaves	FinishTask	bool	task:int	outcome:int	data:System.Span<byte>	error:string
+method	Tallow.CSharpSaves	ListSlot	void	slot:string
+method	Tallow.CSharpSaves	ListSlots	int	buffer:System.Span<byte>
 method	Tallow.CSharpSaves	Load	int	slot:string
 method	Tallow.CSharpSaves	Save	int	slot:string
 method	Tallow.CSharpSaves	Status	int	task:int
+method	Tallow.CSharpSaves	UseStorage	void	on:bool
 method	Tallow.CSharpSceneObjects	ActiveHierarchyState	int	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	ActiveSelfState	int	session:ulong	entity:ulong
 method	Tallow.CSharpSceneObjects	AddTag	bool	session:ulong	entity:ulong	tag:string

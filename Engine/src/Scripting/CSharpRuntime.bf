@@ -354,6 +354,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_component_event(int32 instance, int32 kind, char8* name, float value);
 	[CLink] static extern int32 tn_csharp_behavior_node(int32 handle, int32 phase, char8* className, uint64 session, uint64 entity, char8* values, float deltaTime);
 	[CLink] static extern int32 tn_csharp_prediction_state(int32 instance, int32 mode, float* values);
+	[CLink] static extern int32 tn_csharp_save_storage(int32 op, int32 task, char8* slot, uint8* data, int32 length);
 	[CRepr]
 	struct GcStats
 	{
@@ -517,6 +518,7 @@ static class CSharpRuntime
 		CSharpEcsSystem.RemoveAll();
 		CSharpMeshes.ReleaseAll();
 		CSharpCompute.ReleaseAll();
+		CSharpSaves.UseStorage(false);
 		HasTeamChooser = false;
 		if (!sStarted)
 			return true;
@@ -773,6 +775,17 @@ static class CSharpRuntime
 				ReportFailure(kind == 0 ? "OnSequenceEvent" : kind == 1 ? "OnDialogueEvent" : kind == 5 ? "OnDialogueEnded" :
 					kind == 6 ? "OnSequenceFinished" : "OnTreeEvent");
 		}
+	}
+
+	/// The game's C# SaveStorage (see tn_csharp_save_storage for op): below 0 when it is not there or threw.
+	public static int32 SaveStorageCall(int32 op, int32 task, StringView slot, Span<uint8> data)
+	{
+		if (!Ready)
+			return -1;
+		let result = tn_csharp_save_storage(op, task, scope String(slot).CStr(), data.Ptr, (int32)data.Length);
+		if (result < 0)
+			ReportFailure("SaveStorage");
+		return result;
 	}
 
 	/// CallbackMask bit for the prediction state hooks (Capture/Prepare/RestorePredictionState).

@@ -171,6 +171,16 @@ int32_t tn_csharp_component_event(int32_t script_instance, int32_t kind, const c
     (void)value;
     return 0;
 }
+int32_t tn_csharp_save_storage(int32_t op, int32_t task, const char* slot, const uint8_t* data, int32_t length)
+{
+    (void)op;
+    (void)task;
+    (void)slot;
+    (void)data;
+    (void)length;
+    return -1;
+}
+
 int32_t tn_csharp_prediction_state(int32_t script_instance, int32_t mode, float* values)
 {
     (void)script_instance;

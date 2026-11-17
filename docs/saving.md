@@ -64,30 +64,37 @@ In a network session only the server saves and loads; what it loads reaches the 
 
 ## Slots and storage
 
-Slots are names: "default", "slot 2", "My Castle: v2". `SaveGame.Exists(name)` and `SaveGame.Delete(name)` manage them (engine code also has `SaveSystem.ListSlots(list)`).
+Slots are names: "default", "slot 2", "My Castle: v2". `SaveGame.Exists(name)`, `SaveGame.Delete(name)` and `SaveGame.Slots()` manage them.
 
-`SaveSystem.Storage` decides where saves go. The default, `FileSaveStorage`, keeps one file per slot in `GamePaths.PlayerData + "saves/"`, writing to a temporary file first so a crash never leaves half a save, and turning any name into a file name it can turn back. `MemorySaveStorage` keeps them in memory. For a server, a cloud service or a platform's own saves, engine code derives from `SaveStorage`:
+`SaveGame.Storage` decides where saves go. Left null, saves are files in `GamePaths.PlayerData + "saves/"`, one per slot, each written to a temporary file first so a crash never leaves half a save. For a server, a cloud service or a platform's own saves, derive from `SaveStorage` and set it in a `[GameStart]` method, which runs once when the game's code loads, before the first scene starts:
 
-```beef
+```csharp
 class ServerStorage : SaveStorage
 {
-    public override void Write(SaveTask task)
+    public override async void Write(SaveRequest request)
     {
-        // Send task.data (bytes) under task.slot, then, from any thread:
-        task.Finish(true);          // or task.Fail("why")
+        try
+        {
+            await Upload(request.Slot, request.Data);   // keep the bytes exactly as they are
+            request.Finish();
+        }
+        catch (Exception e) { request.Fail(e.Message); }
     }
 
-    public override void Read(SaveTask task)
-    {
-        // Fetch into task.data, then:
-        task.Finish(true, true);   // succeeded, and the slot had a save
-    }
+    public override async void Read(SaveRequest request) =>
+        request.Finish(await Download(request.Slot));   // null when the slot is empty
+
+    public override bool Exists(string slot) => false;  // optional: false when you cannot tell at once
 }
 
-SaveSystem.Storage = new ServerStorage();   // in GameSetup.Register
+static class Setup
+{
+    [GameStart]
+    internal static void Begin() => SaveGame.Storage = new ServerStorage();
+}
 ```
 
-With such a storage a save or load finishes later: check the `SaveTask`'s `Done`. (Engine code gets a `SaveHandle`, which also has `Error(text)`, and the `SaveSystem.Saved` and `SaveSystem.Loaded` events.)
+Finish (or Fail) each request once, at once or later, from any thread. With such a storage a save or load finishes later: check the `SaveTask`'s `Done`. `Exists`, `Delete` and `List` (behind `SaveGame.Exists`, `Delete` and `Slots()`) are optional. Setting `SaveGame.Storage = null` goes back to files; when the game's code stops (or is hot reloaded) saves go back to files too, and anything still on its way fails. (Engine code derives from the Beef `SaveStorage` and sets `SaveSystem.Storage`; it also gets a `SaveHandle` with `Error(text)`, and the `SaveSystem.Saved` and `SaveSystem.Loaded` events.)
 
 To keep saves your own way, engine code can call `SaveSystem.Capture()`, which returns the scene's saved state as a `SaveNode` tree and `SaveSystem.Apply(node)` puts one back. A tree turns into compact checksummed bytes (`ToBytes`, `FromBytes`: a changed or damaged save is refused) or readable JSON (`ToText`, `FromText`).
 

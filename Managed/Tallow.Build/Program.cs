@@ -423,6 +423,8 @@ internal static class Program
         var allSystems = new Dictionary<string, SortedDictionary<string, string>>(StringComparer.Ordinal);
         // BehaviorNode classes by assembly (fully qualified types): registered when the assembly loads.
         var allBehaviorNodes = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        // [GameStart] methods by assembly (fully qualified): run once each time the game's code loads.
+        var allGameStarts = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
         foreach (var (assembly, sourceFiles) in filesByAssembly)
         {
             var types = new SortedDictionary<string, string>(StringComparer.Ordinal);
@@ -432,6 +434,8 @@ internal static class Program
             allSystems[assembly] = systems;
             var behaviorNodes = new SortedSet<string>(StringComparer.Ordinal);
             allBehaviorNodes[assembly] = behaviorNodes;
+            var gameStarts = new SortedSet<string>(StringComparer.Ordinal);
+            allGameStarts[assembly] = gameStarts;
             foreach (string sourceFile in sourceFiles)
             {
                 SyntaxTree tree = treesByPath[sourceFile];
@@ -441,6 +445,23 @@ internal static class Program
                 {
                     if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol symbol)
                         continue;
+                    foreach (IMethodSymbol method in symbol.GetMembers().OfType<IMethodSymbol>())
+                    {
+                        if (!method.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "Tallow.GameStartAttribute"))
+                            continue;
+                        bool reachable = true;
+                        for (ISymbol? at = method; at is not null and not INamespaceSymbol; at = at.ContainingSymbol)
+                            reachable &= at.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal;
+                        if (!method.IsStatic || method.Parameters.Length != 0 || method.IsGenericMethod ||
+                            !method.ReturnsVoid || !reachable || symbol.IsGenericType)
+                        {
+                            var at = method.Locations.FirstOrDefault()?.GetLineSpan();
+                            throw new InvalidOperationException(
+                                $"{at?.Path}({(at?.StartLinePosition.Line ?? 0) + 1}): [GameStart] {method.Name} must be a " +
+                                "static void method with no parameters, public or internal, in a public or internal class.");
+                        }
+                        gameStarts.Add(symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "." + method.Name);
+                    }
                     // Deriving from Script identifies a gameplay behaviour;
                     // [Component] is reserved for explicit ECS data structs.
                     bool isScript = false, isSystem = false, isBehaviorNode = false;
@@ -669,6 +690,10 @@ internal static class Program
                 foreach ((string systemName, string systemType) in systemsOf)
                     generatedEcs.Append("        global::Tallow.EcsSystems.Register(new ").Append(systemType)
                         .Append("(), \"").Append(systemName).AppendLine("\");");
+            if (allGameStarts.TryGetValue(assembly, out var startsOf))
+                foreach (string start in startsOf)
+                    generatedEcs.Append("        global::Tallow.GameStarts.Register(").Append(start).Append(", \"")
+                        .Append(start.Replace("global::", "")).AppendLine("\");");
             if (allBehaviorNodes.TryGetValue(assembly, out var nodesOf))
                 foreach (string nodeType in nodesOf)
                     generatedEcs.Append("        global::Tallow.BehaviorNodes.Register(() => new ").Append(nodeType)
