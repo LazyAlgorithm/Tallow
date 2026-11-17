@@ -1032,6 +1032,18 @@ class NodeGraph
 			EmitFlow(next, code, indent, depth, pin);
 	}
 
+	/// Every node a flow chain from `start` can run (through all of their flow outputs).
+	void CollectFlow(GraphNode start, HashSet<int32> nodes)
+	{
+		if (start == null || !nodes.Add(start.id))
+			return;
+		for (int32 i < (int32)start.def.outputs.Count)
+		{
+			if (start.def.outputs[i].type == .Flow)
+				CollectFlow(FollowFlow(start, i), nodes);
+		}
+	}
+
 	/// A flow output's chain, in braces of its own.
 	void EmitBlock(GraphNode node, int32 output, String code, int indent, int depth)
 	{
@@ -1079,10 +1091,41 @@ class NodeGraph
 		switch (node.def.key)
 		{
 		case "flow.sequence":
+			// C# runs statements top to bottom already, so the steps follow one another as they are. Only steps
+			// whose chains meet (reach the same node, which is then written in both) get braces of their own, so
+			// that node's locals are declared once in each.
+			let reached = scope List<HashSet<int32>>();
+			defer { ClearAndDeleteItems!(reached); }
 			for (int32 i < (int32)node.def.outputs.Count)
 			{
-				if (FollowFlow(node, i) != null)
+				let nodes = new HashSet<int32>();
+				CollectFlow(FollowFlow(node, i), nodes);
+				reached.Add(nodes);
+			}
+			for (int32 i < (int32)node.def.outputs.Count)
+			{
+				if (FollowFlow(node, i) == null)
+					continue;
+				bool shared = false;
+				for (int j < reached.Count)
+				{
+					if (j == i)
+						continue;
+					for (let id in reached[i])
+					{
+						if (reached[j].Contains(id))
+						{
+							shared = true;
+							break;
+						}
+					}
+					if (shared)
+						break;
+				}
+				if (shared)
 					EmitBlock(node, i, code, indent, depth);
+				else
+					EmitFrom(node, i, code, indent, depth + 1);
 			}
 		case "flow.doonce":
 			if (entry == 1)
