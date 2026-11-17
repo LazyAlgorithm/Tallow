@@ -52,6 +52,9 @@ struct ModelMesh : ComponentHandle<ModelMeshData>
 	public void Preview() => Runtime.Preview();
 	public void Rebuild() => Runtime.Rebuild();
 	public bool Export(StringView path) => Runtime.Export(path);
+	public bool Previewing => Runtime.Previewing;
+	public void ShowInstead(EditMesh other) => Runtime.ShowInstead(other);
+	public void EndShowInstead() => Runtime.EndShowInstead();
 
 	/// What OnFrame did, in edit mode as well as play (from Scene.RunOnFrames). One not built yet (just added, copied
 	/// or made from a prefab) is built whether or not it is switched on, as OnRegister built it.
@@ -249,6 +252,45 @@ class ModelMeshState
 		Release();
 		MakeParts(slots > 1 ? mPreviewSlots : null);
 		Attach();
+	}
+
+	/// Whether a preview (Preview or ShowInstead) is drawn instead of the saved model.
+	public bool Previewing => mPreview != null;
+
+	/// Draws another mesh in place of the model, without changing the model or its text: a building's cut-away
+	/// while it is worked on. Saving the model, or EndShowInstead, draws the model again.
+	public void ShowInstead(EditMesh other)
+	{
+		if (mPreview == null)
+			mPreview = new Mesh();
+		let slots = other.MaterialCount;
+		other.Build(mPreview, UVScale, -1, true);
+		mPreview.Upload();
+		while (mPreviewSlots.Count > (slots > 1 ? slots : 0))
+			delete mPreviewSlots.PopBack();
+		if (slots > 1)
+		{
+			while (mPreviewSlots.Count < slots)
+				mPreviewSlots.Add(new Mesh());
+			for (int32 s < (int32)slots)
+			{
+				other.Build(mPreviewSlots[s], UVScale, s, true);
+				mPreviewSlots[s].Upload();
+			}
+		}
+		Release();
+		MakeParts(slots > 1 ? mPreviewSlots : null);
+		Attach();
+	}
+
+	/// Draws the saved model again after ShowInstead (or a Preview that was never saved).
+	public void EndShowInstead()
+	{
+		if (mPreview == null)
+			return;
+		DeleteAndNullify!(mPreview);
+		ClearAndDeleteItems(mPreviewSlots);
+		Rebuild();
 	}
 
 	/// Builds (or finds) the shared mesh for the text and hands it to the renderer.

@@ -40,6 +40,8 @@ extension EditorApp
 		// Waits for the Scene view to be laid out, since the test picks faces on screen.
 		if (HasArg("--model-test"))
 			mModelTestFrames = 20;
+		if (HasArg("--building-test"))
+			mBuildTestFrames = 20;
 	}
 
 	void TickModelTest()

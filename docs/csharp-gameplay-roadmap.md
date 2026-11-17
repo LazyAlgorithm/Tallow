@@ -1322,11 +1322,21 @@ A full conversion also needs these. Ordered roughly by when they block users.
   not to the edit-mode tools or the object gizmo. The ImGui binding gained tab bars, `BeginTooltip` and
   `DrawString`. Screenshots: `--model-test --model-window --model-tab <name> [--model-all-tools] [--model-idle]`
   with `XDG_DATA_HOME=<scratch>`. Not tried by hand yet: clicking the Scene view bar.
-- [ ] Architect (building) system, queued November 17, 2026 at the user's request: a very easy way to block out
-  buildings with interiors. Drag out rooms on a grid and walls build themselves (shared walls between rooms,
-  floors and ceilings, several storeys). Doors and windows are placed on a wall and cut out of it automatically.
-  Planned: a `Building` component that keeps the plan and generates its walls into a Model Mesh, and a Building
-  tab and Scene view bar with Draw Room, Erase, Door, Window and storey picking.
+- [x] Architect (building) system (November 17, 2026; the user asked for "a super easy way to create buildings
+  including interiors"): `docs/buildings.md`. The `Building` component (`Engine/src/Modeling/Building.bf`) keeps a
+  plan as text: rooms as grid rectangles per storey, doors, windows and openings on grid lines, and stairs.
+  `BuildingGenerator` makes it into the object's Model Mesh. Walls go wherever two rooms, or a room and the outside,
+  meet, with posts at corners, T-junctions and ends. Holes are cut for openings. Each level gets one slab (floor
+  above, ceiling below, roof where nothing is above) with holes over stairs, and stairs are solid steps. The tools
+  (`Editor/src/Modeling/BuildingEditor.bf`) are on the Model window's new Building tab and a Scene view bar: Room
+  (Shift adds to the picked room), Erase, Door, Window, Opening and Stairs, with keys 1-6. Doors and windows snap
+  along the wall, stay clear of posts and can be dragged and removed. Storeys go up and down, with the storey below
+  as an outline. A Scene view cut-away (See All / Cut Away / Low Walls) uses `ModelMesh.ShowInstead`, which draws
+  another mesh without changing the saved one. Bake to Model drops the plan. Created from GameObject > Building, the
+  Scene view bar or the tab. Test: editor `--building-test` (display; 31 checks with rays through walls, doors,
+  windows, floors, roofs, stairs holes, cut-away, undo, erase and plan text round trip; `--building-storey N`
+  `--building-cutaway 0-2` for screenshots). Not yet: walls at angles other than 90 degrees, roof shapes other than
+  flat, railings, and clicking through the tools by hand.
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is

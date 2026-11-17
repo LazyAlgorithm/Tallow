@@ -199,6 +199,9 @@ extension EditorApp
 			ImGui.OpenPopup("##barshapes");
 		ModelTip("Which shape", ModelKeys(.AddShape), "Box, ramp, stairs, cylinder and the rest.");
 		ModelBarShapes("##barshapes", true);
+		if (ModelBarButton("##building", "\u{f1ad}  Building", "", false))
+			CreateBuildingInView();
+		ModelTip("New building", "", "Drag rooms out on a grid and the walls build themselves; click doors and windows onto walls and they are cut out.");
 		if (isModel)
 		{
 			if (ModelBarButton("##cut", "\u{f0c4}  Cut a Hole", "", false))

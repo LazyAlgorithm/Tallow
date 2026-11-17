@@ -475,6 +475,11 @@ extension EditorApp
 		ImGui.Separator();
 		if (ImGui.MenuItem("Model...", null, mShowModel))
 			mShowModel = !mShowModel;
+		if (ImGui.MenuItem("Building"))
+		{
+			CreateBuildingInView();
+			mShowModel = true;
+		}
 	}
 
 	/// The project's prefabs or models, one submenu per folder; choosing one puts it in the middle of the Scene view.

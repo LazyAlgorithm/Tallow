@@ -79,7 +79,8 @@ extension EditorApp
 			return;
 		let ctrl = ImGui.IsKeyDown(ImGui.Key.LeftCtrl);
 		// While a model is edited, its own keys (ModelCommands.bf) take Delete, Ctrl+D, Ctrl+R, E, R and F.
-		let modelling = mModelEditing;
+		// Building tools own Delete too (it removes the picked door or window, not the building).
+		let modelling = mModelEditing || (mBuildTool != .None && SelectedBuilding.IsValid);
 		if (ctrl && ImGui.IsKeyPressed(ImGui.Key.S))
 			SaveScene();
 		if (ctrl && ImGui.IsKeyPressed(ImGui.Key.P))

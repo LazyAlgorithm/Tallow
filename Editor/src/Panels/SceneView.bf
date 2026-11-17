@@ -83,7 +83,7 @@ extension EditorApp
 				if (mModelViewActive == -1 || !ModelViewsShown)
 				{
 					// An active sculpting or placing tool owns the mouse instead of selection and the transform gizmo.
-					bool gizmoActive = UpdateRigTools(selected, origin, size) || UpdateSoftBodyPaint(selected, origin, size) || UpdateModelTools(selected, origin, size) || UpdateBrush(selected, origin, size);
+					bool gizmoActive = UpdateRigTools(selected, origin, size) || UpdateSoftBodyPaint(selected, origin, size) || UpdateBuildingTools(selected, origin, size) || UpdateModelTools(selected, origin, size) || UpdateBrush(selected, origin, size);
 					gizmoActive = ObjectGizmo(selected, origin, size, gizmoActive);
 					if (mSceneHovered && ImGui.IsMouseClicked(0) && !gizmoActive && !mFlying && !ViewSelectorHovered(origin, size))
 					{

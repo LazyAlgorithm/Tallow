@@ -17,7 +17,8 @@ The modeller is in two places that show the same tools, with the same names, key
   Faces**, the options (X-Ray, Proportional, Mirror X/Y/Z, Only This), **All Tools** (the menu a right-click opens),
   search and the shortcut sheet, and down the left the tools used most: Move, Rotate, Scale, Extrude, Inset, Bevel,
   Loop Cut, Knife and Delete. A line at the bottom of the view says what the mouse and keys do at that moment.
-- **The Model window**, in five tabs, in the order a model is made: **Blockout** (shapes), **Edit** (edit mode's
+- **The Model window**, in six tabs, in the order a model is made: **Blockout** (shapes), **Building** (rooms with
+  their walls built for you, see [Buildings](buildings.md)), **Edit** (edit mode's
   tools), **Paint**, **Texture** and **Model** (the whole model: mirror, repeat, clean up, origin, booleans, levels of
   detail, saving as a file).
 
@@ -53,6 +54,9 @@ Any object with an ordinary mesh can be turned into a model with **Make Editable
 
 Blocking out a map quickly: draw boxes with Snap and Keep drawing on, cut doorways with Cut a Hole, and where a block
 needs shaping press Tab, click a face and **E** to pull it out (or **G** to move it).
+
+For buildings with rooms inside, use the **Building** tools instead: drag rooms out on a grid, the walls build
+themselves and doors and windows are cut out of them for you. See [Buildings](buildings.md).
 
 ## Edit mode
 

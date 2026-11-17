@@ -5,8 +5,8 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// The Model window (docs/modeling.md). Five tabs, in the order a model is made: Blockout (draw shapes fast, cut
-/// holes), Edit (the tools of edit mode: a few essentials, or all of them), Paint, Texture and Model (the whole
+/// The Model window (docs/modeling.md). Six tabs, in the order a model is made: Blockout (draw shapes fast, cut
+/// holes), Building (rooms with walls built round them, docs/buildings.md; BuildingEditor.bf), Edit (the tools of edit mode: a few essentials, or all of them), Paint, Texture and Model (the whole
 /// model: mirror, origin, booleans, levels of detail, export). Every tool button shows its key, says what it does
 /// when pointed at, and is greyed out with the reason when it cannot run. The same tools are on the Scene view's
 /// own bar (ModelToolbar.bf), so the window is never needed for the common ones.
@@ -15,15 +15,17 @@ extension EditorApp
 	enum ModelTab
 	{
 		Blockout,
+		Building,
 		Edit,
 		Paint,
 		Texture,
 		Model
 	}
 
-	static char8*[?] sModelTabNames = .("Blockout", "Edit", "Paint", "Texture", "Model");
+	static char8*[?] sModelTabNames = .("Blockout", "Building", "Edit", "Paint", "Texture", "Model");
 	static StringView[?] sModelTabTips = .(
 		"Draw boxes, ramps, stairs and other shapes straight into the scene, and cut holes in them: the quick way to block out a map.",
+		"Buildings with their rooms: drag rooms out on a grid and the walls build themselves; doors and windows are cut out of them.",
 		"Edit mode: pick a model's faces, edges and corners and pull, cut and bevel them.",
 		"Paint vertex colours or the texture, and give faces colours and materials.",
 		"How the texture lies on the model: projections, unwrapping and the UV Editor.",
@@ -41,6 +43,8 @@ extension EditorApp
 	bool mModelDrawKeep;
 	bool mModelWindowLoaded;
 	String mModelFilter = new .() ~ delete _;
+	/// The building the Building tab was last brought up for.
+	uint32 mBuildTabObject;
 	/// Cut a Hole: the model the next drawn shape is cut out of (0: shapes are new objects).
 	uint32 mModelCutTarget;
 
@@ -463,6 +467,8 @@ extension EditorApp
 	void DrawModelWindow()
 	{
 		TickModelTest();
+		TickBuildingTest();
+		UpdateBuildingCutaway();
 		TickModelSelectBench();
 		TickGraphNodeTest();
 		TickGraphMenuTest();
@@ -490,6 +496,11 @@ extension EditorApp
 			ImGui.SetNextWindowFocus();
 			mModelFocus = false;
 		}
+		// Selecting a building brings its tab up.
+		let building = SelectedBuilding;
+		if (building.IsValid && building.GameObject.Id != mBuildTabObject)
+			mModelTabRequest = (int)ModelTab.Building;
+		mBuildTabObject = building.IsValid ? building.GameObject.Id : 0;
 		// Going into edit mode from the Blockout tab (Tab over the Scene view) brings its tools up.
 		if (mModelEditing && !mModelWasEditing && mModelTab == .Blockout)
 			mModelTabRequest = (int)ModelTab.Edit;
@@ -530,6 +541,7 @@ extension EditorApp
 				switch (mModelTab)
 				{
 				case .Blockout: DrawModelBlockoutTab(selected, model);
+				case .Building: DrawBuildingTab(selected);
 				case .Edit: DrawModelEditTab(selected, model);
 				case .Paint: DrawModelPaintTab(selected, model);
 				case .Texture: DrawModelTextureTab(selected, model);

@@ -216,6 +216,41 @@ public readonly partial record struct BehaviorTreeRunner(GameObject GameObject) 
 }
 
 /// <summary>
+/// A building blocked out from a plan: rooms drawn on a grid, storey by storey. Walls go round every room by
+/// themselves (one wall between two rooms), doors and windows are holes in them, each storey's floor is the
+/// ceiling of the one below, and the top one gets a roof. Made into the object's Model Mesh, so it is drawn,
+/// collides and is saved as any model is; Bake to Model (in the editor) keeps the mesh and drops the plan.
+/// </summary>
+[NativeComponent("Tallow.Building")]
+public readonly partial record struct Building(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.Building");
+    /// <summary>Whether the object still exists and has this component.</summary>
+    public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// The squares rooms are drawn on, in metres.
+    /// </summary>
+    public float GridSize { get => Data.GetFloat("gridSize"); set => Data.Set("gridSize", value); }
+    /// <summary>
+    /// From one floor to the next, in metres.
+    /// </summary>
+    public float StoreyHeight { get => Data.GetFloat("storeyHeight"); set => Data.Set("storeyHeight", value); }
+    public float WallThickness { get => Data.GetFloat("wallThickness"); set => Data.Set("wallThickness", value); }
+    /// <summary>
+    /// Floors, ceilings and the roof, in metres.
+    /// </summary>
+    public float FloorThickness { get => Data.GetFloat("floorThickness"); set => Data.Set("floorThickness", value); }
+    public Color WallColor { get => Data.GetColor("wallColor"); set => Data.Set("wallColor", value); }
+    public Color CeilingColor { get => Data.GetColor("ceilingColor"); set => Data.Set("ceilingColor", value); }
+    public Color RoofColor { get => Data.GetColor("roofColor"); set => Data.Set("roofColor", value); }
+    /// <summary>
+    /// Each room's floor takes the room's own colour, so the plan is easy to read. Off: Floor Color everywhere.
+    /// </summary>
+    public bool RoomColors { get => Data.GetBool("roomColors"); set => Data.Set("roomColors", value); }
+    public Color FloorColor { get => Data.GetColor("floorColor"); set => Data.Set("floorColor", value); }
+}
+
+/// <summary>
 /// Renders the scene from its Transform. The first enabled camera drives the Game view.
 ///
 /// First-person games: objects on the Viewmodel Layer (the player's own arms and weapon, children of the camera) are
@@ -2978,6 +3013,7 @@ internal static partial class NativeComponentTypes
         Known[typeof(AudioListener)] = ("Tallow.AudioListener", o => new AudioListener(o));
         Known[typeof(AudioReverbZone)] = ("Tallow.AudioReverbZone", o => new AudioReverbZone(o));
         Known[typeof(BehaviorTreeRunner)] = ("Tallow.BehaviorTreeRunner", o => new BehaviorTreeRunner(o));
+        Known[typeof(Building)] = ("Tallow.Building", o => new Building(o));
         Known[typeof(Camera)] = ("Tallow.Camera", o => new Camera(o));
         Known[typeof(CapsuleCollider)] = ("Tallow.CapsuleCollider", o => new CapsuleCollider(o));
         Known[typeof(CompoundCollider)] = ("Tallow.CompoundCollider", o => new CompoundCollider(o));

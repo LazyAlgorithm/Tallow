@@ -230,6 +230,12 @@ extension EditorApp
 			mSceneHovered = false;
 		if (mModelDraw != .Off)
 			return UpdateShapeDrawing(origin, size);
+		// A building's model is made from its plan: the Building tools (BuildingEditor.bf) work on it instead.
+		if (SelectedBuilding.IsValid)
+		{
+			mModelEditing = false;
+			return false;
+		}
 		let typing = (ImGui.tn_imgui_capture_flags() & 4) != 0;
 		let keysFree = viewHovered && !typing && !mFlying;
 		// Tab over the Scene view goes in and out of edit mode on a selected model.
