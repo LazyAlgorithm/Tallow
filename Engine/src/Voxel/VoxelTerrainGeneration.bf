@@ -16,14 +16,18 @@ extension VoxelTerrain
 	/// class named in the Generator field does the same, and can be chosen in the editor). It is called from worker
 	/// threads, many times at once, so it must only read data that does not change while the terrain is
 	/// generating. Pass null to go back to the Generator field. The terrain takes ownership.
-	public void SetGenerator(DensityFunction shape)
+	public void SetGenerator(DensityFunction shape) => SetGenerator(shape != null ? new FunctionTerrainGenerator(shape) : null);
+
+	/// The same with a generator object (a C# game's TerrainGenerator, say). The terrain takes ownership; null goes back
+	/// to the Generator field.
+	public void SetGenerator(TerrainGenerator made)
 	{
 		if (mCodeGenerator != null)
 		{
 			using (mMonitor.Enter())
 				mRetired.Add(mCodeGenerator);
 		}
-		mCodeGenerator = shape != null ? new FunctionTerrainGenerator(shape) : null;
+		mCodeGenerator = made;
 		mGeneratorVersion++;
 		if (mSnap != null)
 			CaptureSettings();
@@ -93,6 +97,8 @@ extension VoxelTerrain
 		let density = new int8[SampleCount];
 		paint = source.Paints ? new uint8[SampleCount] : null;
 		let origin = Vector3(coord.x, coord.y, coord.z) * (ChunkCells * step);
+		if (FillChunk(source, origin, step, density, paint))
+			return density;
 		int index = 0;
 		for (int z < Samples)
 		{
@@ -262,6 +268,20 @@ extension VoxelTerrain
 		}
 	}
 
+	/// A chunk's samples from a generator's Fill (all at once); false when it does not fill chunks or failed.
+	bool FillChunk(TerrainGenerator source, Vector3 origin, float step, int8[] density, uint8[] paint)
+	{
+		if (!source.FillsChunks)
+			return false;
+		let values = new float[SampleCount];
+		defer delete values;
+		if (!source.Fill(origin, step, (int32)Samples, values.Ptr, paint != null ? paint.Ptr : null))
+			return false;
+		for (int i < SampleCount)
+			density[i] = Quantize(values[i], step);
+		return true;
+	}
+
 	/// Fills a chunk's samples: its sculpting if it has any, otherwise the generator's ground, taking the samples it
 	/// shares with sculpted neighbours from them so the surface meets theirs. Runs on worker threads.
 	void GenerateDensity(Chunk chunk, Snapshot snap)
@@ -297,8 +317,9 @@ extension VoxelTerrain
 			chunk.paint = new uint8[SampleCount];
 		else if (!paints)
 			DeleteAndNullify!(chunk.paint);
+		let filled = generator != null && FillChunk(generator, origin, size, chunk.density, paints ? chunk.paint : null);
 		int index = 0;
-		for (int z < Samples)
+		for (int z < (filled ? 0 : Samples))
 		{
 			for (int y < Samples)
 			{

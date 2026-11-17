@@ -225,6 +225,7 @@ internal static partial class NativeComponentTypes
         [typeof(UIDocument)] = ("Tallow.UIDocument", o => new UIDocument(o)),
         [typeof(Animator)] = ("Tallow.Animator", o => new Animator(o)),
         [typeof(VoxelObject)] = ("Tallow.VoxelObject", o => new VoxelObject(o)),
+        [typeof(VoxelTerrain)] = ("Tallow.VoxelTerrain", o => new VoxelTerrain(o)),
         [typeof(CharacterMotor)] = ("Tallow.CharacterMotor", o => new CharacterMotor(o)),
         [typeof(AudioSource)] = ("Tallow.AudioSource", o => new AudioSource(o)),
         [typeof(SoftBody)] = ("Tallow.SoftBody", o => new SoftBody(o)),

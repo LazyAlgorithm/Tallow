@@ -947,3 +947,43 @@ public class ProfilerSnippet : Script
         Enemies.Set(enemies.Count);
     }
 }
+
+// docs/terrain.md: generators.
+class Islands : TerrainGenerator
+{
+    public override float Density(float x, float y, float z)
+    {
+        float hill = Noise.Fbm(x * 0.01f, 0, z * 0.01f, 7, 4) * 30;
+        return hill - y;
+    }
+
+    public override bool Paints => true;
+    public override TerrainLayer Paint(float x, float y, float z) => y < 1 ? TerrainLayer.Sand : TerrainLayer.Automatic;
+}
+
+class ColumnHills : TerrainGenerator
+{
+    public override float Density(float x, float y, float z) => Noise.Fbm(x * 0.01f, 0, z * 0.01f, 7, 4) * 30 - y;
+
+    public override void Fill(TerrainSamples samples)
+    {
+        for (int z = 0; z < samples.Size; z++)
+            for (int x = 0; x < samples.Size; x++)
+            {
+                Vector3 column = samples.Position(x, 0, z);
+                float height = Noise.Fbm(column.X * 0.01f, 0, column.Z * 0.01f, 7, 4) * 30;
+                for (int y = 0; y < samples.Size; y++)
+                    samples.Density[samples.Index(x, y, z)] = height - samples.Position(x, y, z).Y;
+            }
+    }
+}
+
+static class TerrainSnippet
+{
+    static void Use(VoxelTerrain terrain)
+    {
+        terrain.SetGenerator(new Islands());
+        terrain.ApplyGenerator(new Islands(), terrain.TileIds()[0]);
+        terrain.Regenerate();
+    }
+}

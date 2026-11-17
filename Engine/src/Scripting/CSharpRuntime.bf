@@ -355,6 +355,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_behavior_node(int32 handle, int32 phase, char8* className, uint64 session, uint64 entity, char8* values, float deltaTime);
 	[CLink] static extern int32 tn_csharp_prediction_state(int32 instance, int32 mode, float* values);
 	[CLink] static extern int32 tn_csharp_save_storage(int32 op, int32 task, char8* slot, uint8* data, int32 length);
+	[CLink] static extern int32 tn_csharp_terrain_generator(int32 op, int32 handle, float x, float y, float z, float step, int32 samples, float* points, float* density, uint8* paint);
 	[CRepr]
 	struct GcStats
 	{
@@ -519,6 +520,7 @@ static class CSharpRuntime
 		CSharpMeshes.ReleaseAll();
 		CSharpCompute.ReleaseAll();
 		CSharpSaves.UseStorage(false);
+		CSharpTerrainGenerator.StopAll();
 		HasTeamChooser = false;
 		if (!sStarted)
 			return true;
@@ -543,6 +545,8 @@ static class CSharpRuntime
 		let game = scope String(gameDll);
 		CSharpEcsSystem.RemoveAll();
 		HasTeamChooser = false;
+		// The old code's terrain generators stop (a script sets its generator again).
+		CSharpTerrainGenerator.StopAll();
 		let kept = tn_csharp_reload_game(game.CStr());
 		if (kept < 0)
 			Log.Error(scope $"C# hot reload failed; the old code keeps running: {StringView(tn_csharp_error())}");
@@ -775,6 +779,14 @@ static class CSharpRuntime
 				ReportFailure(kind == 0 ? "OnSequenceEvent" : kind == 1 ? "OnDialogueEvent" : kind == 5 ? "OnDialogueEnded" :
 					kind == 6 ? "OnSequenceFinished" : "OnTreeEvent");
 		}
+	}
+
+	/// A C# TerrainGenerator (see tn_csharp_terrain_generator): below 0 when it is not there or threw. From any thread.
+	public static int32 TerrainGeneratorCall(int32 op, int32 handle, Vector3 origin, float step, int32 samples, float* density, uint8* paint, float* points = null)
+	{
+		if (!Ready)
+			return -1;
+		return tn_csharp_terrain_generator(op, handle, origin.x, origin.y, origin.z, step, samples, points, density, paint);
 	}
 
 	/// The game's C# SaveStorage (see tn_csharp_save_storage for op): below 0 when it is not there or threw.

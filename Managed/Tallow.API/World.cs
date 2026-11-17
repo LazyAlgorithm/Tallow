@@ -75,6 +75,9 @@ public readonly partial record struct VoxelTerrain(GameObject GameObject) : ICom
         return id == 0 ? null : new VoxelTerrain(new GameObject(scene.SessionId, id));
     }
 
+    /// <summary>Whether the object still has a Voxel Terrain.</summary>
+    public bool IsValid => CSharpNativeComponents.Has(GameObject.SceneId, GameObject.Id, "Tallow.VoxelTerrain");
+
     /// <summary>Chunks made so far; with <see cref="PendingChunks"/> at 0 the ground near the camera is ready.</summary>
     public int ChunkCount => CSharpWorld.TerrainChunkCount(GameObject.SceneId, GameObject.Id);
 

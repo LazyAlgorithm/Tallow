@@ -312,6 +312,22 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    /// <summary>A C# <see cref="TerrainGenerator"/>: op 0 fills a cube of samples (from worker threads), op 1 runs
+    /// its Begin. 1 done, 0 nothing to do, -1 when it threw (reported).</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int TerrainGenerator(int op, int handle, float x, float y, float z, float step, int samples,
+        float* points, float* density, byte* paint)
+    {
+        try
+        {
+            return TerrainGenerators.Call(op, handle, new System.Numerics.Vector3(x, y, z), step, samples, points, density, paint);
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     /// <summary>The game's <see cref="SaveStorage"/> (SaveGame.Storage): op 0 write, 1 read, 2 exists, 3 delete,
     /// 4 list. Exists answers 1 or 0, the others 0; -1 when the storage threw (reported).</summary>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -623,6 +639,7 @@ public static unsafe class NativeEntrypoints
             BehaviorNodes.Clear();
             GameStarts.Clear();
             DataAsset.ClearCache();
+            TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             sTypes.Clear();
@@ -782,6 +799,7 @@ public static unsafe class NativeEntrypoints
             BehaviorNodes.Forget();
             GameStarts.Clear();
             DataAsset.ClearCache();
+            TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             GameThread.Stop();
@@ -1909,6 +1927,7 @@ public static unsafe class NativeEntrypoints
             BehaviorNodes.Clear();
             GameStarts.Clear();
             DataAsset.ClearCache();
+            TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).
@@ -1958,6 +1977,7 @@ public static unsafe class NativeEntrypoints
             BehaviorNodes.Clear();
             GameStarts.Clear();
             DataAsset.ClearCache();
+            TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).

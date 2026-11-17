@@ -157,6 +157,10 @@ int32_t tn_csharp_behavior_node(int32_t handle, int32_t phase, const char* class
 /* The game's C# SaveStorage: op 0 write (data: the save), 1 read, 2 exists, 3 delete, 4 list (it answers through
    CSharpSaves.ListSlot). Write and read finish later through CSharpSaves.FinishTask(task, ...). Exists: 1 yes, 0 no;
    the others 0; below 0 when the managed code failed. */
+/* A C# TerrainGenerator (by handle): op 0 fills a cube of samples (samples a side, from x,y,z in steps of step, x
+   fastest; paint may be null), op 1 runs its Begin on the main thread, op 2 lets go of it, op 3 fills density at
+   `samples` points (x, y, z each).  1 done, 0 nothing to do, below 0 failed. */
+int32_t tn_csharp_terrain_generator(int32_t op, int32_t handle, float x, float y, float z, float step, int32_t samples, const float* points, float* density, uint8_t* paint);
 int32_t tn_csharp_save_storage(int32_t op, int32_t task, const char* slot, const uint8_t* data, int32_t length);
 // A script's prediction state hook (mode 0 capture, 1 prepare, 2 restore) over a body state's 22 floats: position,
 // rotation, linear and angular velocity, two spare vectors, and whether it came from a Rigidbody; 1 on success.

@@ -38,33 +38,34 @@ Scenes from before tiles open as tiles: their rectangle (the old `sizeX` and `si
 
 ## Generators
 
-What ground looks like before anyone sculpts it is the game's own business. Write a generator class (engine Beef code for now; a C# game picks a built-in generator in the Inspector):
+What ground looks like before anyone sculpts it is the game's own business. Write a generator class:
 
-```beef
-[TerrainGenerator]
+```csharp
 class Islands : TerrainGenerator
 {
     public override float Density(float x, float y, float z)
     {
         // More than zero is solid, less is air; the surface is where it crosses zero.
-        let hill = Noise.Fbm(x * 0.01f, 0, z * 0.01f, 7, 4) * 30;
+        float hill = Noise.Fbm(x * 0.01f, 0, z * 0.01f, 7, 4) * 30;
         return hill - y;
     }
 
-    // Optional: painted layers (1 grass, 2 rock, 3 sand, 4 snow, 5 dirt, 0 automatic).
+    // Optional: painted layers.
     public override bool Paints => true;
-    public override uint8 Paint(float x, float y, float z) => y < 1 ? 3 : 0;
+    public override TerrainLayer Paint(float x, float y, float z) => y < 1 ? TerrainLayer.Sand : TerrainLayer.Automatic;
 }
 ```
 
 Then either:
 
-- `terrain.generator = "MyGame.Hills"` (the class's full name), set from the game's code: every chunk nobody has sculpted comes from it, in all tiles, as long as the game runs. Sculpting on top is kept as usual.
-- `terrain.ApplyGenerator(generator, tileId)`: bakes a generator into one tile, as if it had been sculpted that way. The edge it shares with other tiles takes the new ground too, so there is no gap.
+- `terrain.SetGenerator(new Islands())`: every chunk nobody has sculpted comes from it, in all tiles (or without end, in Endless mode), as long as the game runs. Sculpting on top is kept as usual. `SetGenerator(null)` goes back to the terrain's own Generator field.
+- `terrain.ApplyGenerator(new Islands(), tileId)`: bakes it into one tile (ids from `terrain.TileIds()`; `terrain.AddTile(x, z)` makes one), as if it had been sculpted that way. The edge it shares with other tiles takes the new ground too, so there is no gap.
 
-The editor has no generation settings: there a terrain is its tiles, flat until sculpted. The sample noise's `seed`, `terrainScale` and `caveAmount` are still fields (saved in scenes and set from code) but are not shown in the Inspector.
+`terrain.Regenerate()` makes the unsculpted chunks again after the generator's own settings change. `terrain.DensityAt(point)` and `terrain.Raycast(origin, direction, distance, out hit)` read the ground as it is now, without colliders.
 
-Coordinates are metres in the terrain's own space. `Density` and `Paint` run on worker threads, several at once: read only data that does not change while the terrain is generating, and copy what you need in `Begin(terrain)`, which runs on the main thread first. `terrain.SetGenerator((x, y, z) => ...)` does the same with a function from code, and `terrain.ApplyGenerator(generator, tileId)` is the bake.
+Coordinates are metres in the terrain's own space. `Density` and `Paint` run on worker threads, several at once: read only data that does not change while the terrain is generating, and copy what you need in `Begin()`, which runs on the game thread first. The terrain asks for a whole chunk at a time; override `Fill(TerrainSamples samples)` to share work between the samples of a chunk (a column's height, for instance), setting `samples.Density[samples.Index(x, y, z)]` for each sample at `samples.Position(x, y, z)`. A generator that throws is reported once and its chunks are left empty. A hot reload stops a C# generator: set it again.
+
+The editor has no generation settings: there a terrain is its tiles, flat until sculpted. The sample noise's `seed`, `terrainScale` and `caveAmount` are still fields (saved in scenes and set from code) but are not shown in the Inspector. (Engine code writes Beef generator classes marked `[TerrainGenerator]`, which can be named in the terrain's Generator field and baked in the editor with Tiles > Apply Generator.)
 
 Tallow's own noise is the sample `NoiseTerrainGenerator`; nothing uses it unless you choose it, except an Endless terrain with no generator of its own.
 

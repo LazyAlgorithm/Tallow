@@ -216,6 +216,8 @@ public class ApiChecks : CheckBase
                 limbs.Length == 2 && limbs[0].Weight < 0.01f && limbs[1].Weight > 0.99f);
             _ikRig.Destroy();
         }
+        else if (_tick == 110)
+            TerrainSetup();
         else if (_tick == 145)
             _staysBeforeRest = Probe("Ball").CollisionStays;
         else if (_tick == 150)
@@ -226,6 +228,8 @@ public class ApiChecks : CheckBase
             ControllerHits();
         else if (_tick == 260)
             ContactsAfterLanding();
+        else if (_tick == 279)
+            TerrainChecks();
         else if (_tick == 280)
         {
             ComponentAccessSetup();
@@ -1331,6 +1335,40 @@ public class ApiChecks : CheckBase
             text.Contains("field Title\tFrom the file\n"));
     }
 
+    private VoxelTerrain _terrain;
+    private ShelfGenerator? _shelf;
+
+    // A terrain far from the physics checks, shaped by a C# generator.
+    private void TerrainSetup()
+    {
+        GameObject holder = Scene.CreateGameObject("GeneratedTerrain");
+        holder.Transform.Position = new Vector3(5000, 0, 5000);
+        _terrain = holder.AddComponent<VoxelTerrain>();
+        if (_terrain.TileIds().Length == 0)
+            _terrain.AddTile(0, 0);
+        _shelf = new ShelfGenerator();
+        _terrain.SetGenerator(_shelf);
+    }
+
+    private void TerrainChecks()
+    {
+        int[] tiles = _terrain.TileIds();
+        Check($"VoxelTerrain.AddTile and TileIds ({string.Join(",", tiles)})", tiles.Length >= 1);
+        bool hit = _terrain.Raycast(new Vector3(5004, 40, 5004), -Vector3.UnitY, 80, out Vector3 ground);
+        Check($"a C# TerrainGenerator shapes the ground ({hit}, {ground}; {_terrain.ChunkCount} chunks, {_terrain.PendingChunks} pending)",
+            hit && Math.Abs(ground.Y - 6) < 0.6f);
+        Check($"its Begin runs on the game thread and Fill on worker threads, a chunk at a time ({_shelf!.Begins}, {_shelf.Fills}, {_shelf.FillThreads})",
+            _shelf.Begins >= 1 && _shelf.BeganOnGameThread && _shelf.Fills >= 1 && _shelf.FilledOffGameThread && _shelf.LargestFill >= 9);
+        Check($"VoxelTerrain.DensityAt reads the ground ({_terrain.DensityAt(new Vector3(5004, 3, 5004))}, {_terrain.DensityAt(new Vector3(5004, 9, 5004))})",
+            _terrain.DensityAt(new Vector3(5004, 3, 5004)) > 0 && _terrain.DensityAt(new Vector3(5004, 9, 5004)) < 0);
+        bool baked = _terrain.ApplyGenerator(new RaisedGenerator(), tiles[0]);
+        Check($"ApplyGenerator bakes a generator into a tile at once ({baked}, {_terrain.DensityAt(new Vector3(5004, 9, 5004))})",
+            baked && _terrain.DensityAt(new Vector3(5004, 9, 5004)) > 0);
+        Check("ApplyGenerator of a tile there is not is false", !_terrain.ApplyGenerator(new RaisedGenerator(), 999));
+        _terrain.SetGenerator(null);
+        _terrain.GameObject.Destroy();
+    }
+
     private int _rpcValue;
     private string _rpcText = "";
     private int _rpcSender = -1;
@@ -1875,6 +1913,42 @@ public class HardTuning : TuningData
 public class UnfiledData : DataAsset
 {
     public float Speed = 4f;
+}
+
+public sealed class ShelfGenerator : TerrainGenerator
+{
+    private static readonly int GameThread = Environment.CurrentManagedThreadId;
+    public int Begins, Fills, LargestFill;
+    public bool BeganOnGameThread = true, FilledOffGameThread;
+    public string FillThreads = "";
+    private float _height;
+
+    public override void Begin()
+    {
+        Begins++;
+        BeganOnGameThread &= Environment.CurrentManagedThreadId == GameThread;
+        _height = 6;
+    }
+
+    public override float Density(float x, float y, float z) => _height - y;
+    public override bool Paints => true;
+    public override TerrainLayer Paint(float x, float y, float z) => TerrainLayer.Sand;
+
+    public override void Fill(TerrainSamples samples)
+    {
+        Interlocked.Increment(ref Fills);
+        int size = samples.Size;
+        int largest;
+        do largest = LargestFill; while (size > largest && Interlocked.CompareExchange(ref LargestFill, size, largest) != largest);
+        if (Environment.CurrentManagedThreadId != GameThread)
+            FilledOffGameThread = true;
+        base.Fill(samples);
+    }
+}
+
+public sealed class RaisedGenerator : TerrainGenerator
+{
+    public override float Density(float x, float y, float z) => 12 - y;
 }
 
 public class ContactProbe : Script

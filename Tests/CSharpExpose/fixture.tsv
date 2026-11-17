@@ -432,6 +432,13 @@ method	Tallow.CSharpSteam	WorkshopPublishState	int	request:int
 method	Tallow.CSharpSteam	WorkshopState	int	id:ulong
 method	Tallow.CSharpSteam	WorkshopSubscribe	void	id:ulong	subscribe:bool
 method	Tallow.CSharpSteam	WorkshopSubscribed	int	ids:System.Span<ulong>
+method	Tallow.CSharpTerrain	AddTile	int	session:ulong	entity:ulong	x:int	z:int
+method	Tallow.CSharpTerrain	ApplyGenerator	bool	session:ulong	entity:ulong	handle:int	paints:bool	tileId:int
+method	Tallow.CSharpTerrain	DensityAt	float	session:ulong	entity:ulong	world:System.Numerics.Vector3
+method	Tallow.CSharpTerrain	Raycast	float	session:ulong	entity:ulong	origin:System.Numerics.Vector3	direction:System.Numerics.Vector3	maxDistance:float	point:System.Span<float>
+method	Tallow.CSharpTerrain	Regenerate	bool	session:ulong	entity:ulong
+method	Tallow.CSharpTerrain	SetGenerator	bool	session:ulong	entity:ulong	handle:int	paints:bool
+method	Tallow.CSharpTerrain	TileIds	int	session:ulong	entity:ulong	buffer:System.Span<byte>
 method	Tallow.CSharpUI	CopyText	int	session:ulong	entity:ulong	id:string	buffer:System.Span<byte>
 method	Tallow.CSharpUI	GetValue	float	session:ulong	entity:ulong	id:string
 method	Tallow.CSharpUI	GetVisible	bool	session:ulong	entity:ulong	id:string

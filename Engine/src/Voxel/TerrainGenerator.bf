@@ -119,6 +119,17 @@ abstract class TerrainGenerator
 	/// settings change.
 	public virtual void Begin(VoxelTerrain terrain) { }
 
+	/// True when Fill makes a whole chunk at once (a C# generator: one call instead of one per sample).
+	public virtual bool FillsChunks => false;
+
+	/// A cube of samples, `samples` a side, from origin in steps of step: x fastest, then y, then z. density has
+	/// samples^3 values; paint too when Paints (else null). False when it could not (the chunk is left flat-less:
+	/// the caller falls back to Density). Called from worker threads, as Density is.
+	public virtual bool Fill(Vector3 origin, float step, int32 samples, float* density, uint8* paint) => false;
+
+	/// Densities at scattered points, all at once (with FillsChunks). False when it could not.
+	public virtual bool FillPoints(Vector3* points, int32 count, float* density) => false;
+
 	/// The generator class of that name (full or short), if the program has one.
 	public static Type TypeNamed(StringView name)
 	{

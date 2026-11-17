@@ -162,6 +162,27 @@ extension VoxelTerrain
 	static void GenerateLayer(MeshWork work, int8[] layer, int face, int distance)
 	{
 		let snap = work.snap;
+		// A generator that fills in batches (C#) is asked once for the whole layer.
+		if (snap.generator != null && snap.generator.FillsChunks)
+		{
+			let points = new Vector3[Samples * Samples];
+			let values = new float[Samples * Samples];
+			defer { delete points; delete values; }
+			for (int b < Samples)
+			{
+				for (int a < Samples)
+				{
+					BeyondFace(face, distance, a, b, let x, let y, let z);
+					points[a + b * Samples] = work.origin + Vector3(x, y, z) * work.size;
+				}
+			}
+			if (snap.generator.FillPoints(points.Ptr, (int32)points.Count, values.Ptr))
+			{
+				for (int i < values.Count)
+					layer[face * FaceCount + i] = Quantize(values[i], work.size);
+				return;
+			}
+		}
 		for (int b < Samples)
 		{
 			for (int a < Samples)
@@ -456,6 +477,34 @@ extension VoxelTerrain
 		}
 		let snap = work.snap;
 		let size = work.size;
+		// A generator that fills in batches (C#) is asked once for every missing sample.
+		if (anyMissing && snap.generator != null && snap.generator.FillsChunks)
+		{
+			let wanted = scope List<int>();
+			let points = scope List<Vector3>();
+			for (int k < side)
+			{
+				for (int j < side)
+				{
+					for (int i < side)
+					{
+						let at = i + j * side + k * side * side;
+						if (!missing[at])
+							continue;
+						wanted.Add(at);
+						points.Add(work.origin + Vector3((i - Pad) * step, (j - Pad) * step, (k - Pad) * step) * size);
+					}
+				}
+			}
+			let values = new float[points.Count];
+			defer delete values;
+			if (points.Count == 0 || snap.generator.FillPoints(points.Ptr, (int32)points.Count, values.Ptr))
+			{
+				for (int w < wanted.Count)
+					padded[wanted[w]] = Quantize(values[w], size);
+				anyMissing = false;
+			}
+		}
 		if (anyMissing)
 		{
 			for (int k < side)

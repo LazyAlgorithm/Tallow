@@ -1410,6 +1410,15 @@ A full conversion also needs these. Ordered roughly by when they block users.
   `ProfilerCounter` (Set/Add, unit), `ProfilerCategory` (enum check), `Profiler.Enabled`/`NameThread`, over the new
   `CSharpProfiler` API; names register on first use. The in-game run's profile report must show the test's marker
   under AI and its counter with its unit (405 checks). docs/profiler.md converted.
+- [x] C# terrain generators (November 17, 2026): `TerrainGenerator` (Density, Paints/Paint with `TerrainLayer`,
+  Begin on the game thread, optional batch `Fill(TerrainSamples)`), `VoxelTerrain.SetGenerator`/`ApplyGenerator`/
+  `Regenerate`/`AddTile`/`TileIds`/`DensityAt`/`Raycast`/`IsValid`, and AddComponent<VoxelTerrain>. Host entry
+  `tn_csharp_terrain_generator` (op 0 chunk cube, 1 Begin, 2 release, 3 scattered points); the engine's
+  `TerrainGenerator` gained `FillsChunks`/`Fill`/`FillPoints`, used by chunk generation, Apply Generator and the
+  meshing's edge samples, so a C# generator is called once per chunk and once per missing edge set (the first
+  try called it 1.78M times per test run, one call per edge sample; now 256 fills for 256 chunks). A generator
+  that throws is reported once and its chunks are empty; unload and hot reload stop C# generators (flat ground at
+  0 after that until set again). 7 in-game checks (412; 393 exported). docs/terrain.md converted.
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is

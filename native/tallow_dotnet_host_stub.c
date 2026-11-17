@@ -171,6 +171,21 @@ int32_t tn_csharp_component_event(int32_t script_instance, int32_t kind, const c
     (void)value;
     return 0;
 }
+int32_t tn_csharp_terrain_generator(int32_t op, int32_t handle, float x, float y, float z, float step, int32_t samples, const float* points, float* density, uint8_t* paint)
+{
+    (void)op;
+    (void)handle;
+    (void)x;
+    (void)y;
+    (void)z;
+    (void)step;
+    (void)samples;
+    (void)points;
+    (void)density;
+    (void)paint;
+    return -1;
+}
+
 int32_t tn_csharp_save_storage(int32_t op, int32_t task, const char* slot, const uint8_t* data, int32_t length)
 {
     (void)op;
