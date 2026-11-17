@@ -140,6 +140,18 @@ static class CSharpCompute
 	[CSharpExpose]
 	public static bool ShaderHighPrecision(int32 id) => sRunners.TryGetValue(id, let runner) && runner.shader.highPrecision;
 
+	/// Whether the shader is compiled for this machine's graphics (saved in the editor); false without compute.
+	[CSharpExpose]
+	public static bool ShaderCompiled(int32 id)
+	{
+		if (!Compute.Supported)
+			return false;
+		if (!sRunners.TryGetValue(id, let runner))
+			return false;
+		let program = runner.shader.ComputeProgram;
+		return program.idx != uint16.MaxValue;
+	}
+
 	/// Runs `steps` steps of the shader over the texture. False when either is not there, the shader is not
 	/// compiled or compute is not supported.
 	[CSharpExpose]

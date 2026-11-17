@@ -46,13 +46,27 @@ Texture Detail applies to textures loaded after it changes; the editor's **Windo
 
 ## In code
 
-Engine (Beef) code only for now. In a C# game the kind is told from how a texture is used and from its name (`rock_normal.png`), as above, so name masks and data textures accordingly.
+A texture made in code is a name with pixels: set them, `Apply()` them, and put the name where a texture path goes (a Mesh Renderer's or a material's Texture):
 
-```beef
-let handle = Textures.Create(pixels, width, height, .Data);   // RGBA8 pixels, with mip levels
-Textures.Hint("Textures/mask.png", .Data);                    // before it is loaded
-let kind = Textures.KindOf("Textures/rock_normal.png");       // .Normal
+```csharp
+var minimap = new Texture("Generated/minimap", 128, 128);   // a name no image file has
+minimap.Fill(Color.Black);
+minimap.SetPixel(64, 64, Color.Red);                      // x from the left, y from the top
+minimap.Apply();                                          // with mip levels; again after each change
+GetComponent<MeshRenderer>().Texture = minimap.Name;
 ```
+
+`Pixels` is the raw RGBA bytes, row after row from the top, for changing many at once. `Texture.Load("Textures/rock.png")` gives a copy of an image file to change (named `"Textures/rock.png#copy"`; the file is untouched). A texture is local to each machine; on a dedicated server or a headless run there is no graphics card, so `Apply` returns false and only the pixels are kept. `Dispose()` releases it (materials naming it then draw white); any left are released when the game stops.
+
+The kind of a texture decides how its mip levels are made. Name masks and data textures accordingly (`rock_normal.png` is a normal map), or say so before the file is loaded:
+
+```csharp
+Texture.Hint("Textures/mask.png", TextureKind.Data);
+TextureKind kind = Texture.KindOf("Textures/rock_normal.png");   // Normal
+var heights = new Texture("Generated/heights", 256, 256, TextureKind.Data);
+```
+
+(Engine code: `Textures.Create(pixels, width, height, kind)`, `Assets.ReplaceTexture(name, pixels, width, height)` and `Textures.Hint`.)
 
 ## Networking
 

@@ -235,7 +235,7 @@ ripple.SetFloat("speed", 3);
 ripple.Run(water);                            // one step (Run(water, 4) for four)
 ```
 
-One texture can be shown on many renderers, and one shader run over many textures. Dispose them when done (`ComputeTexture.StopShowing(renderer)` puts a renderer back to its own texture); any left are freed when the game stops. `Compute.Supported` is false on a dedicated server and on graphics cards without compute shaders; `Run` and `Step` then do nothing and return false.
+One texture can be shown on many renderers, and one shader run over many textures. Dispose them when done (`ComputeTexture.StopShowing(renderer)` puts a renderer back to its own texture); any left are freed when the game stops. `Compute.Supported` is false on a dedicated server and on graphics cards without compute shaders; `Run` and `Step` then do nothing and return false. `Run` also does nothing until the shader is compiled for the machine's graphics, which the editor does when the file is saved: `shader.IsCompiled` says whether it is.
 
 ### Compute graphs
 

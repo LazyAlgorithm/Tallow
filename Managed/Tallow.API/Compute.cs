@@ -95,6 +95,10 @@ public sealed class ComputeShader : IDisposable
     /// <summary>Whether the shader asks for high-precision textures (<c>precision high</c>): make its textures with that.</summary>
     public bool HighPrecision => CSharpCompute.ShaderHighPrecision(id);
 
+    /// <summary>Whether it is compiled for this machine's graphics (the editor compiles a compute shader when it is
+    /// saved): Run does nothing until it is. False where compute is not supported.</summary>
+    public bool IsCompiled => CSharpCompute.ShaderCompiled(Live());
+
     /// <summary>Sets a property for the next runs. False when the shader declares no such property.</summary>
     public bool SetVector(string name, Vector4 value) => CSharpCompute.SetShaderValue(Live(), name ?? "", value);
     /// <summary>Sets a number property for the next runs.</summary>

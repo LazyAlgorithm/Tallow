@@ -987,3 +987,20 @@ static class TerrainSnippet
         terrain.Regenerate();
     }
 }
+
+// docs/textures.md: textures made in code.
+public class MinimapSnippet : Script
+{
+    public override void Start()
+    {
+        var minimap = new Texture("Generated/minimap", 128, 128);
+        minimap.Fill(Color.Black);
+        minimap.SetPixel(64, 64, Color.Red);
+        minimap.Apply();
+        GetComponent<MeshRenderer>().Texture = minimap.Name;
+
+        Texture.Hint("Textures/mask.png", TextureKind.Data);
+        TextureKind kind = Texture.KindOf("Textures/rock_normal.png");
+        var heights = new Texture("Generated/heights", 256, 256, TextureKind.Data);
+    }
+}

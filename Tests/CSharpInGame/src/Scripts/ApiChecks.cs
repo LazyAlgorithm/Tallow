@@ -277,8 +277,9 @@ public class ApiChecks : CheckBase
         texture.ShowOn(renderer);
         ComputeTexture.StopShowing(renderer);
         bool ran = ripple.Run(texture, 2);
-        Check($"compute runs only where it is supported (supported {Compute.Supported}, ran {ran})",
-            ran == Compute.Supported && texture.IsValid == Compute.Supported);
+        Check($"compute runs only where it is supported and compiled (supported {Compute.Supported}, compiled {ripple.IsCompiled}, ran {ran})",
+            ran == (Compute.Supported && ripple.IsCompiled) && texture.IsValid == Compute.Supported &&
+            (Compute.Supported || !ripple.IsCompiled));
         texture.Dispose();
         Check("a disposed ComputeTexture does not run", !texture.IsValid && !ripple.Run(texture));
     }
@@ -1046,6 +1047,7 @@ public class ApiChecks : CheckBase
         CheckSharedMaterials(renderer);
         CheckCompute(renderer);
         CheckDataAssets();
+        CheckTextures(renderer);
         renderer.Material = "";
         // A 2 x 1 quad built in code, one metre above the lamp.
         renderer.SetMesh([new(-1, 1, 0), new(1, 1, 0), new(1, 2, 0), new(-1, 2, 0)], [0, 2, 1, 0, 3, 2]);
@@ -1333,6 +1335,41 @@ public class ApiChecks : CheckBase
         Check("DataAsset.ToFileText writes the class and its fields",
             text.StartsWith("dataasset InGame.TuningData\n") && text.Contains("field Gravity\t12.5\n") &&
             text.Contains("field Title\tFrom the file\n"));
+    }
+
+    private void CheckTextures(MeshRenderer renderer)
+    {
+        using var made = new Texture("Generated/checker", 4, 2);
+        Check("a new Texture is its size, transparent black", made.Width == 4 && made.Height == 2 &&
+            made.Pixels.Length == 32 && made.GetPixel(3, 1) == new Color(0, 0, 0, 0));
+        made.Fill(Color.White);
+        made.SetPixel(1, 0, new Color(1, 0, 0, 1));
+        Check("SetPixel and Fill set the pixels GetPixel reads", made.GetPixel(1, 0) == new Color(1, 0, 0, 1) &&
+            made.GetPixel(0, 1) == Color.White && made.Pixels[4] == 255 && made.Pixels[5] == 0);
+        bool outside = false;
+        try { made.SetPixel(4, 0, Color.Red); } catch (ArgumentOutOfRangeException) { outside = true; }
+        Check("a pixel outside the texture throws", outside);
+        bool applied = made.Apply();
+        renderer.Texture = made.Name;
+        Check($"Texture.Apply sends it where there is a graphics card (here {applied}) and a renderer can name it",
+            renderer.Texture == "Generated/checker");
+        renderer.Texture = "";
+
+        Texture? loaded = Texture.Load("Textures/check.png");
+        Check($"Texture.Load reads an image file's pixels ({loaded?.Width}x{loaded?.Height}, {loaded?.GetPixel(0, 0)}, {loaded?.GetPixel(1, 1)})",
+            loaded is { Width: 2, Height: 2, Name: "Textures/check.png#copy" } && loaded.GetPixel(0, 0) == new Color(1, 0, 0, 1) &&
+            loaded.GetPixel(1, 0) == new Color(0, 1, 0, 1) && loaded.GetPixel(0, 1) == new Color(0, 0, 1, 1) &&
+            loaded.Pixels[15] == 128);
+        loaded?.Dispose();
+        Check("Texture.Load of a missing file is null", Texture.Load("Textures/none.png") == null);
+        Check("Texture.KindOf tells a normal map by its name", Texture.KindOf("Textures/rock_normal.png") == TextureKind.Normal &&
+            Texture.KindOf("Textures/rock.png") == TextureKind.Color);
+        Texture.Hint("Textures/mask.png", TextureKind.Data);
+        Check("Texture.Hint says what a file holds", Texture.KindOf("Textures/mask.png") == TextureKind.Data);
+        made.Dispose();
+        bool gone = false;
+        try { made.Fill(Color.Red); } catch (ObjectDisposedException) { gone = true; }
+        Check("a disposed Texture cannot be used", gone);
     }
 
     private VoxelTerrain _terrain;

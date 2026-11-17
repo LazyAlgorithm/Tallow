@@ -545,18 +545,36 @@ static class Assets
 		return texture;
 	}
 
+	/// Releases the texture of exactly that name (one made with AddTexture or ReplaceTexture, say). Renderers and
+	/// materials naming it load it again by name (white when there is no such file). False when there was none.
+	public static bool RemoveTexture(StringView path)
+	{
+		if (!(sTextures.GetAndRemoveAlt(path) case .Ok(let pair)))
+			return false;
+		if (Gfx.Initialized && pair.value != Gfx.WhiteTexture.idx)
+		{
+			bgfx.TextureHandle old;
+			old.idx = pair.value;
+			bgfx.destroy_texture(old);
+		}
+		delete pair.key;
+		TextureVersion++;
+		return true;
+	}
+
 	/// Goes up each time ReplaceTexture changes a texture, so renderers and materials holding one look it up again.
 	public static int32 TextureVersion;
 	/// Goes up whenever meshes are forgotten (Forget), so renderers holding one look it up again.
 	public static int32 MeshVersion;
 
 	/// Puts new RGBA pixels under a texture's name (painting a texture in the editor): every renderer and material
-	/// naming it draws the new pixels from the next frame. The old texture is released.
-	public static bgfx.TextureHandle ReplaceTexture(StringView path, uint8* pixels, int32 width, int32 height)
+	/// naming it draws the new pixels from the next frame. The old texture is released. kind: what it holds (for its
+	/// mip levels); null works it out from the name.
+	public static bgfx.TextureHandle ReplaceTexture(StringView path, uint8* pixels, int32 width, int32 height, TextureKind? kind = null)
 	{
 		if (pixels == null || width <= 0 || height <= 0 || !Gfx.Initialized)
 			return Gfx.WhiteTexture;
-		let texture = Textures.Create(pixels, width, height, Textures.KindOf(path));
+		let texture = Textures.Create(pixels, width, height, kind ?? Textures.KindOf(path));
 		if (sTextures.GetAndRemoveAlt(path) case .Ok(let pair))
 		{
 			if (pair.value != Gfx.WhiteTexture.idx)

@@ -128,6 +128,7 @@ method	Tallow.CSharpCompute	ReleaseShader	void	id:int
 method	Tallow.CSharpCompute	ReleaseTexture	void	id:int
 method	Tallow.CSharpCompute	Run	bool	shaderId:int	textureId:int	steps:int
 method	Tallow.CSharpCompute	SetShaderValue	bool	id:int	name:string	value:System.Numerics.Vector4
+method	Tallow.CSharpCompute	ShaderCompiled	bool	id:int
 method	Tallow.CSharpCompute	ShaderHighPrecision	bool	id:int
 method	Tallow.CSharpCompute	ShowTexture	bool	id:int	session:ulong	entity:ulong	show:bool
 method	Tallow.CSharpCompute	Supported	bool
@@ -439,6 +440,12 @@ method	Tallow.CSharpTerrain	Raycast	float	session:ulong	entity:ulong	origin:Syst
 method	Tallow.CSharpTerrain	Regenerate	bool	session:ulong	entity:ulong
 method	Tallow.CSharpTerrain	SetGenerator	bool	session:ulong	entity:ulong	handle:int	paints:bool
 method	Tallow.CSharpTerrain	TileIds	int	session:ulong	entity:ulong	buffer:System.Span<byte>
+method	Tallow.CSharpTextures	Hint	void	path:string	kind:int
+method	Tallow.CSharpTextures	ImageSize	int	path:string
+method	Tallow.CSharpTextures	KindOf	int	path:string
+method	Tallow.CSharpTextures	ReadImage	int	path:string	pixels:System.Span<byte>
+method	Tallow.CSharpTextures	Remove	bool	name:string
+method	Tallow.CSharpTextures	Upload	bool	name:string	width:int	height:int	kind:int	pixels:System.Span<byte>
 method	Tallow.CSharpUI	CopyText	int	session:ulong	entity:ulong	id:string	buffer:System.Span<byte>
 method	Tallow.CSharpUI	GetValue	float	session:ulong	entity:ulong	id:string
 method	Tallow.CSharpUI	GetVisible	bool	session:ulong	entity:ulong	id:string

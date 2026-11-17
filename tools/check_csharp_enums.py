@@ -28,6 +28,8 @@ PAIRS = [
      "Managed/Tallow.API/Materials.cs", r"public enum MaterialBlend\s*\{(.*?)\n\}"),
     ("Engine/src/Core/Profiler.bf", r"enum ProfilerCategory : uint8\s*\{(.*?)\n\}",
      "Managed/Tallow.API/Profiling.cs", r"public enum ProfilerCategory : byte\s*\{(.*?)\n\}"),
+    ("Engine/src/Render/Textures.bf", r"enum TextureKind\s*\{(.*?)\n\}",
+     "Managed/Tallow.API/Textures.cs", r"public enum TextureKind\s*\{(.*?)\n\}"),
 ]
 
 

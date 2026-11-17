@@ -1419,6 +1419,13 @@ A full conversion also needs these. Ordered roughly by when they block users.
   try called it 1.78M times per test run, one call per edge sample; now 256 fills for 256 chunks). A generator
   that throws is reported once and its chunks are empty; unload and hot reload stop C# generators (flat ground at
   0 after that until set again). 7 in-game checks (412; 393 exported). docs/terrain.md converted.
+- [x] C# texture creation (November 17, 2026): `Texture` (name, size, `TextureKind`, `Pixels`, Get/SetPixel, Fill,
+  `Apply` to the graphics card with mip levels, `Load` a copy of an image file, `Hint`, `KindOf`, `Dispose`) over
+  the new `CSharpTextures` API; the name goes where a texture path goes. Engine: `Assets.RemoveTexture`, and
+  `ReplaceTexture` takes a kind. Released when the game's code goes. Also `ComputeShader.IsCompiled` (Run does
+  nothing until the editor has compiled the shader), found when the in-game run was tried in a window: the compute
+  check now passes headless and windowed. 9 in-game checks (421; 402 exported); windowed run: Apply true, no
+  failures. docs/textures.md converted.
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is
