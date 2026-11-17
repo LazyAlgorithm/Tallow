@@ -223,6 +223,26 @@ static class CSharpPlatform
 			Decals.Clear(scene);
 	}
 
+	/// A decal box of any size and turn (rotation as x, y, z, w), pressed along its Z axis.
+	[CSharpExpose]
+	public static bool DecalSpawnBox(uint64 session, Vector3 position, Vector4 rotation, Vector3 size, StringView texture,
+		float lifetime, Vector4 color, float angleLimit)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		if (scene == null || texture.IsEmpty)
+			return false;
+		let volume = Matrix4.TRS(position, Quaternion(rotation.x, rotation.y, rotation.z, rotation.w), size);
+		Decals.Spawn(scene, volume, texture, lifetime, .(color.x, color.y, color.z, color.w), angleLimit);
+		return true;
+	}
+
+	/// How many spawned decals a scene keeps (the oldest make way).
+	[CSharpExpose]
+	public static int32 DecalsMax() => (int32)Decals.MaxSpawned;
+
+	[CSharpExpose]
+	public static void SetDecalsMax(int32 count) => Decals.MaxSpawned = Math.Max(count, 0);
+
 	/// The wind's velocity at a point (Wind Zones and the scene's wind), metres a second.
 	[CSharpExpose]
 	public static Vector3 WindAt(uint64 session, Vector3 position)

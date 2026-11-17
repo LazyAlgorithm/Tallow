@@ -76,18 +76,18 @@ When the camera is in the water, the picture shows the water's **Underwater Colo
 
 ## Game code
 
-```beef
+```csharp
 // Is this point under water, and how deep?
-let water = Water.At(Scene, point);
-if (water != null && water.Contains(point))
-    Log.Info(scope $"{water.DepthOf(point)} m under");
+Water water = Water.At(Scene, point);
+if (water.IsValid && water.Covers(point))
+    Log.Info($"{water.DepthOf(point)} m under");
 
 // The surface over a point: its height, which way it faces and how fast the water there moves.
-if (water != null && water.SurfaceAt(point, let height, let normal, let velocity))
-    boat.Transform.Position = .(point.x, height, point.z);
+if (water.IsValid && water.TryGetSurface(point, out WaterSurface surface))
+    boat.Transform.Position = new Vector3(point.X, surface.Height, point.Z);
 ```
 
-`SurfaceAt` uses the waves' simulation clock, so the server and a client predicting the same tick get the same answer. `Water.ViewTime(scene)` is the clock the waves are drawn with.
+`TryGetSurface` uses the waves' simulation clock, so the server and a client predicting the same tick get the same answer. `IsFloating(body)` says whether a body is floating on it.
 
 ## Multiplayer
 

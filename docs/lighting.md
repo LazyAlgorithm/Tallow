@@ -41,17 +41,17 @@ Lightmapped surfaces skip lights marked **Baked Only** (their light is in the li
 
 ## In code
 
-```beef
-let lamp = go.AddComponent<Light>();
-lamp.type = .Point;
-lamp.range = 8;
-lamp.intensity = 4;
-lamp.castShadows = true;
+```csharp
+var lamp = go.AddComponent<Light>();
+lamp.Type = LightType.Point;
+lamp.Range = 8;
+lamp.Intensity = 4;
+lamp.CastShadows = true;
 
-RenderView.MaxShadowedLights = 4;   // or Quality.Current.shadowedLights, then Quality.Apply()
+Quality.ShadowedLights = 4;
 ```
 
-A `RenderView` reports its last frame's `LightCount`, `LightsDropped` and `ShadowTiles`.
+The engine's `RenderView` (Beef) reports its last frame's `LightCount`, `LightsDropped` and `ShadowTiles`; the Profiler window shows them.
 
 ## How it works
 

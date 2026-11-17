@@ -622,6 +622,79 @@ public class ApiChecks : CheckBase
         IK.Limbs(_ikRig)[0].LetGo(0.05f);
         Check("IK.Limb finds no limb by a tip it does not have", IK.Limb(_ikRig, "RightHand") == null);
 
+        string mapFolder = Path.Combine(Path.GetTempPath(), $"tallow-maps-{Environment.ProcessId}");
+        Directory.CreateDirectory(mapFolder);
+        try
+        {
+            string mapFile = Path.Combine(mapFolder, "Check.tmap");
+            GameObject group = Scene.CreateGameObject("MapGroup");
+            Scene.CreateGameObject("MapCrate").SetParent(group);
+            var (written, exportProblems) = MapFiles.Export(Scene, mapFile, "Check Map", "Checks", "A map the checks write.", group);
+            MapFileInfo[] found = MapFiles.Find(mapFolder);
+            MapFileInfo? map = found.Length == 1 ? found[0] : null;
+            bool mounted = map != null && MapFiles.Mount(map, allowProblems: true) && map.Mounted;
+            if (map != null)
+                MapFiles.Unmount(map);
+            group.Destroy();
+            Check($"MapFiles: Export, Find, Check, Mount, Unmount ({written}, {found.Length}, {map?.Name}, " +
+                $"{string.Join("; ", map?.Problems ?? exportProblems)})",
+                written && map is { Name: "Check Map", Author: "Checks", Id.Length: > 0, Hash.Length: 16 } && mounted && !map.Mounted &&
+                MapFiles.Check(mapFile).Id == map.Id && MapSharing.Have(map.Id, map.Hash, mapFolder) && !MapSharing.Request(Scene, map.Id, map.Hash));
+        }
+        finally
+        {
+            Directory.Delete(mapFolder, true);
+        }
+
+        SceneEnvironment env = Scene.Environment;
+        float saturation = env.Saturation;
+        Color filter = env.ColorFilter;
+        env.Saturation = 0.25f;
+        env.ColorFilter = new Color(1, 0.5f, 0.25f);
+        env.AutoFocus = true;
+        bool envRoundTrip = env.Saturation == 0.25f && env.ColorFilter == new Color(1, 0.5f, 0.25f) && env.AutoFocus;
+        (env.Saturation, env.ColorFilter, env.AutoFocus) = (saturation, filter, false);
+        ScreenEffects.Brightness = 9;
+        bool clamped = ScreenEffects.Brightness == 4;
+        ScreenEffects.Reset();
+        Check("Scene.Environment and ScreenEffects round-trip (brightness kept to 0.25-4, Reset)",
+            envRoundTrip && clamped && ScreenEffects.Brightness == 1 && ScreenEffects.MotionBlur);
+
+        GameObject liner = Scene.CreateGameObject("Liner");
+        var line = liner.AddComponent<LineRenderer>();
+        line.SetPositions([Vector3.Zero, new Vector3(3, 0, 0)]);
+        line.PositionCount = 3;
+        line.SetPosition(2, new Vector3(3, 4, 0));
+        line.AddPosition(new Vector3(3, 4, 2));
+        Check($"LineRenderer PositionCount, SetPosition, AddPosition and Length ({line.PositionCount}, {line.Length})",
+            line.PositionCount == 4 && line.GetPosition(2) == new Vector3(3, 4, 0) && MathF.Abs(line.Length - 9) < 1e-4f);
+        var pose = liner.AddComponent<ViewmodelPose>();
+        pose.Kick(1);
+        Check($"ViewmodelPose.Kick and AimBlend ({pose.AimBlend})", pose.AimBlend == 0);
+        var compound = liner.AddComponent<CompoundCollider>();
+        compound.AddBox(Vector3.Zero, Vector3.One);
+        compound.AddCylinder(Vector3.UnitY, 0.5f, 0.25f, Quaternion.Identity);
+        compound.AddHull(Vector3.Zero, [Vector3.Zero, Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ], Quaternion.Identity);
+        Check("CompoundCollider AddBox, AddCylinder and AddHull", true);
+        liner.Destroy();
+
+        GameObject anchorA = Scene.CreateGameObject("Rope A");
+        GameObject anchorB = Scene.CreateGameObject("Rope B");
+        anchorB.Transform.Position = anchorA.Transform.Position + new Vector3(0, -3, 0);
+        Rope? rope = Rope.Attach(anchorA, anchorB);
+        bool ropeMade = rope is { IsValid: true } && rope.Value.Length > 2.9f && rope.Value.Pull >= 0;
+        rope?.LayAlong([anchorA.Transform.Position, anchorA.Transform.Position + Vector3.UnitX, anchorB.Transform.Position]);
+        rope?.Release();
+        Check($"Rope.Attach, LayAlong and Release ({rope?.Length})", ropeMade);
+        rope?.GameObject.Destroy();
+        anchorA.Destroy();
+        anchorB.Destroy();
+
+        int keep = Decals.MaxSpawned;
+        Decals.MaxSpawned = 300;
+        Check("Decals.MaxSpawned round-trips", Decals.MaxSpawned == 300);
+        Decals.MaxSpawned = keep;
+
         GuardedInt coins = 100;
         coins += 5;
         int shown = coins;

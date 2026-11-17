@@ -1556,8 +1556,16 @@ public abstract class Script : IComponent
     /// <summary>An Event key of a sequence playing on this object's Sequence Player (its name and value).</summary>
     public virtual void OnSequenceEvent(string name, float value) { }
 
+    /// <summary>The sequence on this object's Sequence Player played to its end (not when it was stopped): give
+    /// the player their controls back.</summary>
+    public virtual void OnSequenceFinished() { }
+
     /// <summary>An event step of the conversation on this object's Dialogue Runner (its name and value).</summary>
     public virtual void OnDialogueEvent(string name, float value) { }
+
+    /// <summary>The conversation on this object's Dialogue Runner ended (it ran out, or was stopped): give the
+    /// player their controls back.</summary>
+    public virtual void OnDialogueEnded() { }
 
     /// <summary>A Send Event node of the tree on this object's Behavior Tree Runner.</summary>
     public virtual void OnTreeEvent(string name) { }

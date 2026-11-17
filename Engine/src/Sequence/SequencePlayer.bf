@@ -407,6 +407,7 @@ class SequencePlayerState
 		SetState(.Finished);
 		Release();
 		OnFinished();
+		CSharpRuntime.ComponentEvent(mGameObject, 6, "");
 	}
 
 	/// Shows the game through the sequence's camera while it has a shot.
@@ -512,6 +513,7 @@ class SequencePlayerState
 				mEvaluator.Apply(end, end, false);
 				Release();
 				OnFinished();
+				CSharpRuntime.ComponentEvent(mGameObject, 6, "");
 			}
 		case .Stopped:
 			Release();

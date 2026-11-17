@@ -42,6 +42,8 @@ The window keeps the last 300 frames (`Profiler.Local.limit`).
 
 ## Markers and counters in game code
 
+Markers and counters are engine (Beef) code for now. C# scripts' time is counted under **Scripts** in the CPU Usage graph.
+
 ```beef
 static ProfilerMarker sPathfinding = .("Enemy Pathfinding", .AI);
 static ProfilerCounter sEnemies = .("Enemies Alive", .Scripts);

@@ -46,6 +46,8 @@ Texture Detail applies to textures loaded after it changes; the editor's **Windo
 
 ## In code
 
+Engine (Beef) code only for now. In a C# game the kind is told from how a texture is used and from its name (`rock_normal.png`), as above, so name masks and data textures accordingly.
+
 ```beef
 let handle = Textures.Create(pixels, width, height, .Data);   // RGBA8 pixels, with mip levels
 Textures.Hint("Textures/mask.png", .Data);                    // before it is loaded

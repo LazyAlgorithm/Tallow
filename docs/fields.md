@@ -6,26 +6,27 @@ A component's public fields are saved with the scene and shown in the Inspector,
 
 A field can hold any of these:
 
-- numbers (`float`, `double`, and every integer type)
-- `bool` and `char`
-- enums (shown by name; engine enums need `[Reflect(.All)]` for their names)
-- `Vector2`, `Vector3`, `Vector4`, `Int3`, `Quaternion`, `Matrix4` and `Color`
-- `String`, declared as `public String name = new .() ~ delete _;`
-- references to objects in the scene: `GameObject`, `Transform` or any component type
+- numbers: `float`, `double`, `int`, `uint` and `long`
+- `bool` and `string`
+- enums (shown by name)
+- `Vector2`, `Vector3`, `Vector4` and `Color`
+- references to objects in the scene: `GameObject`, `Transform`, another script, or any engine component type
+
+Fields of other types (a `Quaternion`, your own struct or class) are neither saved nor shown. (Engine Beef components also take `char`, every integer width, `Int3`, `Quaternion` and
+`Matrix4`, and fixed-size arrays `T[N]`.)
 
 ## Lists and arrays
 
-A `List<T>`, an array `T[]` or a fixed-size array `T[N]` of any of the types above is saved and shown too:
+A `List<T>` or an array `T[]` of any of the types above is saved and shown too:
 
-```beef
-public List<Vector3> waypoints = new .() ~ delete _;
-public List<String> names = new .() ~ DeleteContainerAndItems!(_);
-public List<Transform> targets = new .() ~ delete _;
-public float[] weights = new .[3] ~ delete _;
-public Color[4] palette;
+```csharp
+public List<Vector3> Waypoints = [];
+public List<string> Names = [];
+public List<GameObject> Targets = [];
+public float[] Weights = new float[3];
 ```
 
-In the Inspector a list shows its size, then a row for each element with buttons to move it up (^) and remove it (x). The size's + button adds a copy of the last element. Lists of 16 elements or fewer start open; click the arrow to open or close one. A fixed-size `T[N]` keeps its size.
+In the Inspector a list shows its size, then a row for each element with buttons to move it up (^) and remove it (x). The size's + button adds a copy of the last element. Lists of 16 elements or fewer start open; click the arrow to open or close one.
 
 Scripts use them as ordinary lists. Whatever they hold when the scene is saved is what loads next time.
 

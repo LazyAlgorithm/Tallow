@@ -55,13 +55,12 @@ If it dents too easily, raise **Dent Speed** (6 or so for a sturdy truck: only r
 
 From code:
 
-```beef
-let shell = car.GetComponent<SoftBody>();
-shell.DeepestDent();             // metres, for damage
-let dents = scope List<Vector3>();
-shell.GetDents(dents);           // save or send these
-shell.SetDents(dents);           // and put them back
-shell.Repair();                  // good as new
+```csharp
+var shell = car.GetComponent<SoftBody>();
+float deepest = shell.DeepestDent;   // metres, for damage
+Vector3[] dents = shell.GetDents();  // save or send these
+shell.SetDents(dents);               // and put them back
+shell.Repair();                      // good as new
 ```
 
 Dents are each machine's own, as soft bodies are. To show the same dents everywhere, send `GetDents` from the server when they change (after a crash) and `SetDents` them on clients.
@@ -93,23 +92,22 @@ Brush Size is a share of the mesh's size. A stroke is one step of undo. **Clear 
 
 ## From code
 
-```beef
-let curtain = rail.AddComponent<SoftBody>();
-curtain.pins.Set("0-10");        // the top row of an 11 x 11 sheet
-curtain.windDrag = 2;
+```csharp
+var curtain = rail.AddComponent<SoftBody>();
+curtain.Pins = "0-10";              // the top row of an 11 x 11 sheet
+curtain.WindDrag = 2;
 
 // After changing fields while playing:
 curtain.Rebuild();
 
 // Where its vertices are now, in the world:
-for (let p in curtain.Positions) { ... }
+foreach (Vector3 p in curtain.Positions) { /* ... */ }
 
 // Put them somewhere (as many positions as SimulatedVertexCount):
 curtain.SetPositions(saved);
 
 // What it touched since this was last asked (physics body ids):
-let touched = scope List<uint32>();
-jelly.TouchingBodies(touched);
+uint[] touched = jelly.TouchingBodies();
 ```
 
 ## Ropes
@@ -140,25 +138,27 @@ Any object will do: a player, a vehicle, a bone's child, a crate, an empty. An e
 
 Towing and lifting from code:
 
-```beef
+```csharp
 // A helicopter picks up a crate: the rope is tied under one and on top of the other.
-let sling = Rope.Attach(helicopter, crate, .(0, -0.5f, 0), .(0, 0.4f, 0), 6);
+Rope? sling = Rope.Attach(helicopter, crate, new Vector3(0, -0.5f, 0), new Vector3(0, 0.4f, 0), 6);
 // A truck tows a car, with as much rope as is between them now (plus a little slack).
-let tow = Rope.Attach(truck, car, .(0, 0.4f, -2.2f), .(0, 0.4f, 2.1f));
+Rope? tow = Rope.Attach(truck, car, new Vector3(0, 0.4f, -2.2f), new Vector3(0, 0.4f, 2.1f));
 
-if (sling.IsTaut && sling.Pull > 5000)
-	sling.Release();        // drop it: the far end lets go and hangs free
+if (sling is { IsTaut: true, Pull: > 5000 } held)
+    held.Release();             // drop it: the far end lets go and hangs free
 
 // A rope laid over a beam (it is as long as the path), pulling round it.
-let hoist = Rope.Attach(counterweight, cargo);
-hoist.wrapsAround = true;
-hoist.LayAlong(scope Vector3[](counterweight.Transform.Position, beamLeft, beamRight, cargo.Transform.Position));
+if (Rope.Attach(counterweight, cargo) is Rope hoist)
+{
+    hoist.WrapsAround = true;
+    hoist.LayAlong([counterweight.Transform.Position, beamLeft, beamRight, cargo.Transform.Position]);
+}
 
-let other = sling.Snap();       // snap it now (Break Force does this by itself); other is the half on the crate
+Rope? other = sling?.Snap();    // snap it now (Break Force does this by itself); other is the half on the crate
 
-tow.AttachEnd(trailer.Transform, .(0, 0.5f, 2));   // tie the far end to something else
-tow.AttachStart(player.Transform);                  // or the near end
-Scene.Active.Destroy(tow.GameObject);               // or let go of both
+tow?.AttachEnd(trailer, new Vector3(0, 0.5f, 2));   // tie the far end to something else
+tow?.AttachStart(player);                            // or the near end
+tow?.GameObject.Destroy();                           // or let go of both
 ```
 
 `Points` has where each point of the rope is now, from start to end. When an object an end is tied to is destroyed, that end lets go.

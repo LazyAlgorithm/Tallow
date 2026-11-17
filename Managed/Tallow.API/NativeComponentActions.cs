@@ -194,9 +194,56 @@ public readonly partial record struct LineRenderer
     /// <summary>Removes every point.</summary>
     public void ClearPositions() => SetPositions(ReadOnlySpan<Vector3>.Empty);
 
-    /// <summary>How many points the line has.</summary>
-    public int PositionCount => Math.Max(
-        CSharpComponentActions.LineGetPositions(GameObject.SceneId, GameObject.Id, Span<float>.Empty), 0);
+    /// <summary>How many points the line has. Setting it grows the list (new points at the origin) or shrinks it.</summary>
+    public int PositionCount
+    {
+        get => Math.Max(CSharpComponentActions.LineGetPositions(GameObject.SceneId, GameObject.Id, Span<float>.Empty), 0);
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
+            Vector3[] points = GetPositions();
+            Array.Resize(ref points, value);
+            SetPositions(points);
+        }
+    }
+
+    /// <summary>One point, or zero for one that is not there.</summary>
+    public Vector3 GetPosition(int index)
+    {
+        Vector3[] points = GetPositions();
+        return index >= 0 && index < points.Length ? points[index] : Vector3.Zero;
+    }
+
+    /// <summary>Moves one point (one past the end adds it).</summary>
+    public void SetPosition(int index, Vector3 position)
+    {
+        Vector3[] points = GetPositions();
+        if (index == points.Length)
+            Array.Resize(ref points, index + 1);
+        else if ((uint)index >= (uint)points.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        points[index] = position;
+        SetPositions(points);
+    }
+
+    /// <summary>Adds a point at the end of the line.</summary>
+    public void AddPosition(Vector3 position) => SetPosition(PositionCount, position);
+
+    /// <summary>The whole line's length in metres (in the world with Use World Space, otherwise in this object's
+    /// space), counting the closing side of a loop.</summary>
+    public float Length
+    {
+        get
+        {
+            Vector3[] points = GetPositions();
+            float total = 0;
+            for (int i = 1; i < points.Length; i++)
+                total += Vector3.Distance(points[i], points[i - 1]);
+            if (Loop && points.Length > 2)
+                total += Vector3.Distance(points[0], points[^1]);
+            return total;
+        }
+    }
 }
 
 public readonly partial record struct TrailRenderer
@@ -206,6 +253,27 @@ public readonly partial record struct TrailRenderer
     {
         if (!CSharpComponentActions.TrailClear(GameObject.SceneId, GameObject.Id))
             throw ActionText.Missing(GameObject, "Trail Renderer");
+    }
+}
+
+public readonly partial record struct ViewmodelPose
+{
+    /// <summary>Kicks the arms and weapon back as a shot does (1 is one shot's worth); it settles by itself.</summary>
+    public void Kick(float amount = 1)
+    {
+        if (!CSharpComponentActions.ViewmodelKick(GameObject.SceneId, GameObject.Id, amount))
+            throw ActionText.Missing(GameObject, "Viewmodel Pose");
+    }
+
+    /// <summary>How far into aiming it is, from 0 at the hip to 1 down the sights (eased): for zooming the camera
+    /// or blurring the world with the aim.</summary>
+    public float AimBlend
+    {
+        get
+        {
+            float blend = CSharpComponentActions.ViewmodelAimBlend(GameObject.SceneId, GameObject.Id);
+            return blend >= 0 ? blend : throw ActionText.Missing(GameObject, "Viewmodel Pose");
+        }
     }
 }
 
@@ -401,4 +469,34 @@ public readonly partial record struct ComputeEffect
 
     /// <summary>Sets a colour input of the effect's compute graph by name.</summary>
     public void SetColor(string name, Color value) => SetVector(name, new Vector4(value.R, value.G, value.B, value.A));
+
+    /// <summary>Sets a number input of the effect's compute graph by name.</summary>
+    public void SetFloat(string name, float value) => SetVector(name, new Vector4(value, 0, 0, 0));
+
+    /// <summary>Runs the effect once now, for one with <see cref="EveryFrame"/> off. False when it could not run (no
+    /// shader, or no graphics in a headless run).</summary>
+    public bool Step() => CSharpComponentActions.ComputeStep(GameObject.SceneId, GameObject.Id);
+}
+
+public readonly partial record struct Foliage
+{
+    /// <summary>What the brush does: plants Density to the square metre in a circle (amount 0 to 1 of that). How many
+    /// were planted.</summary>
+    public int Paint(Vector3 center, float radius, float amount = 1) => Edit(0, center, radius, amount);
+
+    /// <summary>Removes the plants in a circle (measured flat, whatever their height); how many went.</summary>
+    public int Erase(Vector3 center, float radius) => Edit(1, center, radius, 0);
+
+    /// <summary>One plant at a place in the world: turn in degrees about its up (below 0 at random), scale 0 between
+    /// Min Scale and Max Scale.</summary>
+    public void Add(Vector3 position, float turnDegrees = -1, float scale = 0) => Edit(2, position, turnDegrees, scale);
+
+    /// <summary>Removes every plant.</summary>
+    public void Clear() => Edit(3, default, 0, 0);
+
+    private int Edit(int action, Vector3 point, float a, float b)
+    {
+        int result = CSharpComponentActions.FoliageEdit(GameObject.SceneId, GameObject.Id, action, point, a, b);
+        return result >= 0 ? result : throw ActionText.Missing(GameObject, "Foliage");
+    }
 }

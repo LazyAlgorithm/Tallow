@@ -20,6 +20,13 @@ public readonly record struct Color(float R, float G, float B, float A = 1f)
     /// <summary>Cyan.</summary>
     public static Color Cyan => new(0.2f, 0.9f, 1f);
 
+    /// <summary>The colour t of the way from a to b (t is kept between 0 and 1).</summary>
+    public static Color Lerp(Color a, Color b, float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        return new(a.R + (b.R - a.R) * t, a.G + (b.G - a.G) * t, a.B + (b.B - a.B) * t, a.A + (b.A - a.A) * t);
+    }
+
     internal System.Numerics.Vector4 Packed => new(R, G, B, A);
 }
 

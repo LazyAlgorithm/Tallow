@@ -17,7 +17,8 @@ Add Navigation Agent to an object and assign its Navigation Surface. Scripts can
 
 NavigationAgent also supports script calls:
 
-```beef
+```csharp
+var navigation = GetComponent<NavigationAgent>();
 navigation.SetDestination(destination, speed, stoppingDistance);
 if (!navigation.PathPending)
 {
@@ -78,11 +79,11 @@ A scene's agents move together (`Scene.NavigationAgents`), once a frame for agen
 
 ## Queries
 
-```beef
-let data = surface.Data;
-if (data.SamplePosition(point, 2, let onFloor)) { /* the nearest usable point within 2 metres */ }
-if (data.RandomPoint(center, 10, random, let goal)) agent.SetDestination(goal, 3, 0.2f);   // wandering
-if (!data.Raycast(eyes, target, let blocked)) { /* an agent could not walk straight there; it stops at blocked */ }
+```csharp
+NavigationSurface surface = NavigationSurface.Find(Scene);
+if (surface.SamplePosition(point, 2, out Vector3 onFloor)) { /* the nearest usable point within 2 metres */ }
+if (surface.RandomPoint(center, 10, random, out Vector3 goal)) agent.SetDestination(goal, 3, 0.2f);   // wandering
+if (!surface.Raycast(eyes, target, out Vector3 blocked)) { /* an agent could not walk straight there; it stops at blocked */ }
 ```
 
 `RandomPoint` picks only points reachable from the centre. `NavigationAgent.RemainingDistance` and `Velocity` say how far it still has to go and how fast it means to move; selected in play mode, an agent draws its path (link legs in orange).
@@ -93,8 +94,8 @@ Inside a scene's Update, an agent's new path is found after every component has 
 
 After changing or regenerating mesh geometry, rebuild the affected bounds:
 
-```beef
-surface.Rebuild(changedBounds);
+```csharp
+surface.Rebuild(changedMin, changedMax);
 ```
 
 Include both the old and new bounds when moving/removing geometry. Sampling expands to intersecting chunks, with neighboring cell links refreshed. A revision change makes agents replan. Otherwise an agent searches only when its destination changes or it is pushed off its path, never more often than Repath Interval; a failed search is retried about once a second. The Inspector's Rebuild Changed Chunks controls expose the same operation; SaveData persists runtime changes when desired. Runtime rebuilds do not save automatically.

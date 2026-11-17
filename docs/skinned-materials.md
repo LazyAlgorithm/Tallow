@@ -29,9 +29,9 @@ The Mesh Renderer's **Color** still tints every part.
 
 From code:
 
-```beef
-let skinned = GetComponent<SkinnedMeshRenderer>();
-for (int i < skinned.PartCount)
+```csharp
+var skinned = GetComponent<SkinnedMeshRenderer>();
+for (int i = 0; i < skinned.PartCount; i++)
     Log.Info(skinned.PartName(i));
 skinned.SetPartMaterial(1, "Materials/armour_damaged.tmat");   // "" gives the part back the file's material
 ```
@@ -43,10 +43,10 @@ The choices are saved with the scene in the component's `materials` field, `Skin
 A character customizer can put every choice in one model (each hat, hairstyle and coat a part of its own, by material
 name) and pick what is shown and in what colours, so one skeleton animates them all:
 
-```beef
-skinned.SetPartHidden("Hat_Tricorn", true);              // Hidden Parts: not drawn, no shadow
-skinned.SetPartColor("Coat", .(0.56f, 0.14f, 0.16f));    // Part Colors: multiplies the part's material colour
-skinned.SetPartShadowOnly("Head", true);                 // Shadow Only Parts: a first-person player's own head
+```csharp
+skinned.SetPartHidden("Hat_Tricorn", true);                    // Hidden Parts: not drawn, no shadow
+skinned.SetPartColor("Coat", new Color(0.56f, 0.14f, 0.16f));  // Part Colors: multiplies the part's material colour
+skinned.SetPartShadowOnly("Head", true);                       // Shadow Only Parts: a first-person player's own head
 ```
 
 They are three fields, saved with the scene: `hiddenParts` and `shadowOnlyParts` (part names separated by `;`) and

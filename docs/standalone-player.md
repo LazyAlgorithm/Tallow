@@ -72,13 +72,10 @@ What a scene uses is found by reading it: the prefabs, models, materials, sounds
 
 Game code that reads its own data files should go through the engine, so that it works packed and loose:
 
-```beef
-let text = scope String();
-if (Assets.ReadText("Data/levels.txt", text)) { /* ... */ }
-
-let bytes = scope List<uint8>();
-Assets.ReadBytes("Data/table.bin", bytes);
-if (Assets.FileExists("Data/extra.txt")) { /* ... */ }
+```csharp
+string? text = Assets.ReadText("Data/levels.txt");     // null when it is not there
+byte[]? bytes = Assets.ReadBytes("Data/table.bin");
+if (Assets.Exists("Data/extra.txt")) { /* ... */ }
 ```
 
 | | |
@@ -97,19 +94,19 @@ Reading a file directly with `File.ReadAllText` only finds loose files. Files th
 
 A built game starts fullscreen (borderless, at the desktop's resolution) or in a window as **Start in fullscreen** in the Build window says. Starting it with `--fullscreen` or `--windowed` overrides that for one run.
 
-To let the player switch, set `GameWindow.Fullscreen` from your settings menu; it changes at once:
+To let the player switch, set `Screen.Fullscreen` from your settings menu; it changes at once:
 
-```beef
+```csharp
 // A toggle in a UI document: <toggle id="fullscreen" onchange="OnFullscreen" />
 public void OnFullscreen(UIElement source)
 {
-    GameWindow.Fullscreen = source.value > 0.5f;
+    Screen.Fullscreen = source.Value > 0.5f;
     // ...and save the choice with the game's other settings.
 }
 
 // When the game starts, before or after the window opens: only if the player has chosen.
 if (playerHasChosen)
-    GameWindow.Fullscreen = savedChoice;
+    Screen.Fullscreen = savedChoice;
 ```
 
 | | |

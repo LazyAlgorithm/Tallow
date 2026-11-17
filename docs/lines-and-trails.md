@@ -29,24 +29,24 @@ Each draws through a hidden child object that holds its mesh. That object isn't 
 
 Scripts can set the points too (`positions` is a `List<Vector3>`, so anything a list does works on it as well):
 
-```beef
-let line = GetComponent<LineRenderer>();
-line.SetPositions(scope Vector3[](start, end));    // replaces every point
+```csharp
+var line = GetComponent<LineRenderer>();
+line.SetPositions([start, end]);                   // replaces every point
 line.PositionCount = 3;                            // grows or shrinks the list
 line.SetPosition(2, tip);
-let length = line.Length;
+float length = line.Length;
 ```
 
 A golf-style aim guide is a two-point line from the ball along where the camera faces, longer as the shot charges:
 
-```beef
-var direction = camera.Transform.Forward;
-direction.y = 0;
-direction = direction.Normalized;
-let start = ball.Position + direction * (ballRadius + 0.05f);
-aim.SetPositions(scope Vector3[](start, start + direction * Mathf.Lerp(0.5f, 3, power)));
-aim.startColor = .(1, 1, 1);
-aim.endColor = Color.Lerp(.(1, 1, 1, 0), .(1, 0.2f, 0.1f, 0), power);
+```csharp
+Vector3 direction = camera.Transform.Forward;
+direction.Y = 0;
+direction = Vector3.Normalize(direction);
+Vector3 start = ball.Transform.Position + direction * (ballRadius + 0.05f);
+aim.SetPositions([start, start + direction * Mathf.Lerp(0.5f, 3, power)]);
+aim.StartColor = new Color(1, 1, 1);
+aim.EndColor = Color.Lerp(new Color(1, 1, 1, 0), new Color(1, 0.2f, 0.1f, 0), power);
 ```
 
 ## Textures
@@ -57,10 +57,10 @@ The texture is laid along the line: the image's width runs along the line and it
 
 Set Dash Length and Gap Length, with no texture needed. For dots, make the dash as long as the line is wide:
 
-```beef
-aim.startWidth = aim.endWidth = 0.08f;
-aim.dashLength = 0.08f;   // square dots
-aim.gapLength = 0.12f;
+```csharp
+aim.StartWidth = aim.EndWidth = 0.08f;
+aim.DashLength = 0.08f;   // square dots
+aim.GapLength = 0.12f;
 ```
 
 Dashes follow the line's corners and blend its widths and colours like a solid line.

@@ -71,6 +71,15 @@ class CSharpBehaviour : Component
 		scriptType.Set(managedType);
 	}
 
+	/// Calls a method of the script that takes nothing (a behaviour tree's Call Method): 1 called (a bool method
+	/// said true, or it returns something else), 2 a bool method said false, 0 no such method, -1 it threw.
+	public int32 CallMethod(StringView method)
+	{
+		if (!IsLoaded)
+			return 0;
+		return CSharpRuntime.InvokeUI(mInstance, method, "\x01");
+	}
+
 	/// Calls a UI document's handler (onclick="Name") on the script: a method of that name taking nothing, a
 	/// UIElement or the element's id. False when the script has no such method.
 	public bool InvokeUI(StringView method, StringView elementId)

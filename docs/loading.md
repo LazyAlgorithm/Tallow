@@ -25,6 +25,8 @@ object. `Finished` is true once it is done; `Group` holds what an additive load 
 
 ## From code
 
+The calls below are engine (Beef) code. A C# game uses a **Scene Loader** component (its `Begin()` and `Activate()`, with **Activate When Ready** off to hold a finished load) or `Scene.LoadAdditive(path)`.
+
 ```beef
 // Change scene behind a loading screen:
 let load = SceneManager.LoadAsync("Scenes/Harbour.tscene");

@@ -276,7 +276,16 @@ native call per Transform get/set (a batched or cached transform path), and the 
 
 ## P2 — networking, export, regression (cannot be substituted by a local microbenchmark)
 
-- [ ] **B18 — multiplayer sync.** 2, 4, 8 and 16 peers (or maximum supported), 0/50/100/200 ms added RTT, 0/1/2/5% packet loss, 30/60/120 Hz where supported. Compare state divergence, input latency, server tick time, bandwidth per peer, desync recovery and replay hashes. Ensure C# TickInput produces the same authoritative behavior as Beef.
+- [x] **B18 — multiplayer sync.** 2, 4, 8 and 16 peers (or maximum supported), 0/50/100/200 ms added RTT, 0/1/2/5% packet loss, 30/60/120 Hz where supported. Compare state divergence, input latency, server tick time, bandwidth per peer, desync recovery and replay hashes. Ensure C# TickInput produces the same authoritative behavior as Beef.
+  Measured November 17, 2026 (1eaa018f, `tools/run_net_bench.py`, results in ~/TallowBenchmarks/b18-20261117):
+  exported headless Release players of Samples/CSharpBench and Samples/EcsBench (the same networked pilot and 200
+  drones), the engine's simulator adding latency and loss, 40 s per run with the first 10 s left out. Parity: the host
+  alone with a bot gives the same state hash at tick 600 in both languages (`04b4a9e088844cf9`). 2/4/8/16 peers with
+  no added lag: every peer connected, 34.8/38.1/44.7/58.0 KB/s sent per client in both, server 0.36/0.43/0.60/1.02 ms
+  a tick in Beef and 0.37/0.44/0.61/1.04 ms in C# (2–3% more). 4 peers at 50/100/200 ms: the client runs 5/9/15 ticks
+  ahead in both, bandwidth 39.2–42.0 KB/s alike. 1/2/5% loss at 100 ms: own-position error median 0.000 m, worst
+  0.003–0.004 m in both, no starved ticks, no dropped controls, 0 rollbacks a second and 0 errors anywhere. Pass. 30
+  and 120 Hz are not run: the tick rate is fixed at 60 Hz.
 - [ ] **B19 — destruction/parallel dimensions.** Stream both world dimensions concurrently, switch during active physical destruction with peers, track swap latency, memory peak, bandwidth, and no cross-dimension audio leak.
 - [ ] **B20 — prediction/rollback determinism.** Fixed-seed input replay for 10k ticks, repeated 3 times; record final state hashes, divergences, rollback duration and worst catch-up frame, C# vs native. Mark blocked until rollback C# parity is implemented; do not infer from compile tests.
 - [ ] **B21 — visual scripting parity.** Existing graphs vs generated C# on equivalent 1k/10k node updates; check event ordering, networking, serialization and graph regeneration time. Mark blocked until C# visual-graph backend is functional.

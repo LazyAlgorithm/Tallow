@@ -78,12 +78,17 @@ Can See and Is Near remember what they found under **Store As** (default `target
 
 The runner's **Start Values** fills the blackboard when the game starts, so one tree can be tuned per character in the Inspector: `ammo 3; alert false; post 4 0 -2` (each a key and a number, true or false, or a position).
 
-**Events:** **Event Received** succeeds if the game sent that event to the tree (`runner.SendEvent("Hit")`) in the last **Within Seconds**; with **Consume** each event counts once. **Send Event** tells the game something: the runner's `OnTreeEvent` is called with the name.
+**Events:** **Event Received** succeeds if the game sent that event to the tree (`runner.SendEvent("Hit")`) in the last **Within Seconds**; with **Consume** each event counts once. **Send Event** tells the game something: `OnTreeEvent(name)` is called on the scripts of the tree's object.
 
-```beef
-let brain = GetComponent<BehaviorTreeRunner>();
+```csharp
+var brain = GetComponent<BehaviorTreeRunner>();
 brain.SendEvent("Hit");                                   // from the damage code
-brain.OnTreeEvent.Add(new (name) => { if (name == "Alarm") alarm.Ring(); });
+
+// Send Event in the tree reaches every script on the object:
+public override void OnTreeEvent(string name)
+{
+    if (name == "Alarm") alarm.Ring();
+}
 ```
 
 **Actions:** **Wait** (a fixed time, or random between two), **Log**, **Call Method**, and **Chance** (succeeds with a probability, for "sometimes").
@@ -107,20 +112,19 @@ Saving a tree while the game is playing reloads it on every object that uses it,
 
 ## Running your own code
 
-**Call Method** calls a method by name on any component of the same object. The method takes no parameters. If it returns `bool`, true is Success and false is Failure; anything else counts as Success.
+**Call Method** calls a method by name on any script of the same object. The method takes no parameters. If it returns `bool`, true is Success and false is Failure; anything else counts as Success.
 
-```beef
-[Component]
-class GuardActions : Component
+```csharp
+public class GuardActions : Script
 {
-    public int32 ammo = 3;
+    public int Ammo = 3;
 
-    public bool HasAmmo() => ammo > 0;      // use as a condition
-    public void Shoot() { ammo--; }           // use as an action
+    public bool HasAmmo() => Ammo > 0;      // use as a condition
+    public void Shoot() { Ammo--; }          // use as an action
 }
 ```
 
-For a node with its own settings, or one that runs over several ticks, derive from `BTNode` and register it at startup (in `GameSetup.Register`):
+For a node with its own settings, or one that runs over several ticks, a Beef project can derive from `BTNode` and register it at startup (in `GameSetup.Register`). C# has no custom nodes yet: give the script a method for Call Method, and keep what it needs to remember in its own fields. In Beef:
 
 ```beef
 class HasAmmoAtLeast : BTNode

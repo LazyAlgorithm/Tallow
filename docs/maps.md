@@ -7,11 +7,10 @@ itself, by a map editor the game provides (Tumble Toys: Aviation has one, under 
 
 ## Saving a map
 
-```beef
-// level: what SceneManager.LoadAdditive returned when the map editor opened the base scene or the map.
-let problems = scope List<String>();
-defer { ClearAndDeleteItems!(problems); }
-MapFiles.Export(Scene, level, "Maps/Harbour.tmap", mapId, "Harbour", "A player", "A hill by the sea.", problems);
+```csharp
+// level: what Scene.LoadAdditive returned when the map editor opened the base scene or the map.
+var (written, problems) = MapFiles.Export(Scene, "Maps/Harbour.tmap", "Harbour", "A player", "A hill by the sea.",
+    group: level, keepId: mapId);
 ```
 
 | Argument | Meaning |
@@ -64,24 +63,21 @@ to any scene text, and `MapRules.Count` counts what one rule counts.
 
 ## Finding and playing maps
 
-```beef
-let maps = scope List<MapFileInfo>();
-defer { ClearAndDeleteItems!(maps); }
-MapFiles.Find(MapFiles.Folder(.. scope .()), maps);
-for (let map in maps)
+```csharp
+foreach (MapFileInfo map in MapFiles.Find(MapFiles.Folder))
 {
     if (map.Ok)
         Log.Info(map.Name);  // list it in the menu
     else
-        Log.Warning(scope $"{map.File}: {map.Problems[0]}");
+        Log.Warning($"{map.File}: {map.Problems[0]}");
 }
 
 // To play one: mount it, then load its scene as any other.
-if (MapFiles.Mount(map))
-    SceneManager.LoadAdditive(Scene, map.ScenePath(.. scope .()), true);
+if (MapFiles.Mount(chosen))
+    Scene.LoadAdditive(chosen.ScenePath, true);
 ```
 
-`MapFiles.Folder` is the `Maps` folder in `GamePaths.GameFolder`. That is the folder beside a built game's program, or
+`MapFiles.Folder` is the `Maps` folder in the game's folder. That is the folder beside a built game's program, or
 the project's folder when the game runs from the editor. `Find` looks at every `.tmap` file in a folder and returns
 them sorted by name, broken ones included, each with `Problems` saying why it cannot be played:
 
@@ -92,7 +88,7 @@ them sorted by name, broken ones included, each with `Problems` saying why it ca
 - it uses a component the game does not have, or names a file the game does not have;
 - it is the same map (the same `Id`) as one listed already, such as a renamed copy.
 
-A game adds its own checks with `map.AddProblem`, and can count what is in the map with
+A game adds its own checks with `map.WithProblem(reason)`, and can count what is in the map with
 `map.CountComponents("Tallow.SpawnPoint")`. `Mount` reads the map's files into memory, where they are found before
 the game's own files. `Unmount` frees them and forgets the models and textures loaded from them; unload the map's scene first.
 `Mount(map, true)` mounts a map that breaks a rule, for a map editor opening a map that is not finished.
@@ -104,12 +100,12 @@ the whole file's hash (16 hex digits): the same `Id` with another `Hash` is anot
 
 `MapSharing` sends a map from the host to a player who lacks it, or whose copy is another version:
 
-```beef
+```csharp
 // Host, for each map it found:
 MapSharing.Offer(map);
-// Player, told the host's map Id and Hash (in the session context, or [Sync] fields):
+// Player, told the host's map Id and Hash (in [Sync] fields):
 if (!MapSharing.Have(id, hash))
-    MapSharing.Request(Scene.Network, id, hash);
+    MapSharing.Request(Scene, id, hash);
 // Then each frame: MapSharing.State (Asking, Downloading, Done, Failed) and Progress.
 // Once Done, find the maps again and load it. Call MapSharing.Reset() when leaving a game.
 ```
@@ -117,7 +113,7 @@ if (!MapSharing.Have(id, hash))
 The file comes in 16 KB pieces, eight at a time: each piece is acknowledged before more are sent, so a slow
 connection is not flooded and Steam's send buffer never overflows. The player checks the whole file's hash before
 writing it into its Maps folder (`MapSharing.Folder`), replacing an older version of the same map wherever it is.
-Maps over `MapSharing.MaxBytes` (64 MB) are refused. A downloaded map is checked by `MapFiles.Find` like any other
+Maps over 64 MB are refused. A downloaded map is checked by `MapFiles.Find` like any other
 before it is played.
 
 ## The file
@@ -125,7 +121,7 @@ before it is played.
 A `.tmap` file is an asset pack in the format the engine's own packs use (`native/tallow_pack.c`). It holds
 `map.txt` (the name, author, description, game and `Id`), `map.tscene`, and the terrain sculpting folders. While it
 is mounted its files appear in the project's `.maps/<Id>/` folder. `tools/pack_assets.py --list` and `--verify`
-read it. `PackFile` reads and writes one such pack from Beef.
+read it.
 
 ## Limits
 

@@ -66,21 +66,31 @@ Add a **Dialogue Runner** (under *Audio*) to the character who talks, and pick i
 | **Show Choices** / **Show Lines** | Draws the answers as buttons and the lines as subtitles. Turn them off to draw your own from `Line`, `Speaker`, `Choices` and `Selected`. |
 | **Shared**, **Only Owner Chooses** | See Networking. |
 
-```beef
-let talk = GetComponent<DialogueRunner>();
-talk.OnEvent.Add(new (name, value) =>
+```csharp
+public class Talker : Script
 {
-	if (name == "OpenGate")
-		gate.Open();
-});
-talk.OnEnded.Add(new () => player.controlsEnabled = true);
-player.controlsEnabled = false;   // the keys that move lines on should not also jump or shoot
-talk.Play();                      // or Play("shop")
+    public Player Player;               // the game's own player script, with a switch for its controls
+
+    public override void Start()
+    {
+        Player.ControlsEnabled = false;          // the keys that move lines on should not also jump or shoot
+        GetComponent<DialogueRunner>().Play();   // or Play("shop")
+    }
+
+    // Event steps of the conversation:
+    public override void OnDialogueEvent(string name, float value)
+    {
+        if (name == "OpenGate")
+            gate.Open();
+    }
+
+    public override void OnDialogueEnded() => Player.ControlsEnabled = true;
+}
 ```
 
-`OnLine(step)`, `OnChoices()` and `OnEnded()` are there for a game's own interface and camera. `Stop()` ends a conversation. A line's recording plays from its speaker's object when that has an Audio Source, otherwise from the runner's own object (an Audio Source is added for it when there is none, playing in both ears, in the Voice volume group).
+A script on the runner's object hears the conversation through `OnDialogueEvent(name, value)` and `OnDialogueEnded()`; `View`, `Line`, `Speaker` and `Choices` say what is shown, for a game's own interface and camera. `Stop()` ends a conversation. A line's recording plays from its speaker's object when that has an Audio Source, otherwise from the runner's own object (an Audio Source is added for it when there is none, playing in both ears, in the Voice volume group).
 
-**Variables** belong to the game, not to one conversation: every dialogue reads and writes the same ones, and so can your code (`DialogueVariables.Get("gold")`, `Set`, `Add`, `Clear`). A Dialogue Runner keeps them in the game's save (SaveSystem), with where its conversation was; after loading, the conversation carries on from that line. `DialogueConversation` is the conversation logic on its own, without a component, for tools and tests.
+**Variables** belong to the game, not to one conversation: every dialogue reads and writes the same ones, and so can your code (`DialogueVariables.Get("gold")`, `Set`, `Add`, `Clear`). A Dialogue Runner keeps them in the game's save (SaveSystem), with where its conversation was; after loading, the conversation carries on from that line. The engine's `DialogueConversation` (Beef) is the conversation logic on its own, without a component, for tools and tests.
 
 ## Subtitles
 
@@ -100,8 +110,8 @@ CAPTAIN: Hold the line!
 
 From code:
 
-```beef
-let id = Subtitles.Show("Radio", "Bravo team, move in.", 3);   // for three seconds (0: until hidden)
+```csharp
+int id = Subtitles.Show("Radio", "Bravo team, move in.", 3);   // for three seconds (0: until hidden)
 Subtitles.Caption("[distant explosion]", 2);
 Subtitles.Hide(id);
 ```
@@ -112,7 +122,7 @@ The player's settings, for a game's options menu (save them with its other setti
 
 By default each machine runs its own conversations: right for a single-player game, or for talk that only one player hears.
 
-Tick **Shared** for one conversation everyone in the session sees, as in a co-op game. The server runs it: every player sees the same lines and answers, players who join late see where it is, and any player can move it on or pick an answer (only the object's owner, with **Only Owner Chooses**). A request about a line that has already gone is ignored, so two players pressing at once do not skip a line. The object gets a Network Identity by itself when the session starts. Events and variables happen on the server, where the game decides what they do (`OnEvent` fires only there); `OnLine`, `OnChoices` and `OnEnded` fire on every machine, for each one's interface. Voice recordings play on every machine: from an Audio Source the network already shares, the server starts it and the others hear it from there.
+Tick **Shared** for one conversation everyone in the session sees, as in a co-op game. The server runs it: every player sees the same lines and answers, players who join late see where it is, and any player can move it on or pick an answer (only the object's owner, with **Only Owner Chooses**). A request about a line that has already gone is ignored, so two players pressing at once do not skip a line. The object gets a Network Identity by itself when the session starts. Events and variables happen on the server, where the game decides what they do (`OnDialogueEvent` is called only there); `OnDialogueEnded` is called on every machine, for each one's interface. Voice recordings play on every machine: from an Audio Source the network already shares, the server starts it and the others hear it from there.
 
 Subtitles from sound files follow the sound, so they reach every player who hears it. `Subtitles.Show` is local: call it on each machine that should see the line.
 

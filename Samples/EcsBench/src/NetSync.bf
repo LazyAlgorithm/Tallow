@@ -107,7 +107,8 @@ class NetSyncProbe : Script
 		mStart = SDL.SDL_GetTicksNS();
 		Gfx.SetVsync(false);
 		let network = Scene.Network;
-		Console.WriteLine(scope $"NETSYNC start beef {(network != null && network.IsClient ? "client" : (NetSyncRun.IsServer(Scene) ? "server" : "offline"))}");
+		StringView role = (network != null && network.IsClient) ? "client" : (NetSyncRun.IsServer(Scene) ? "server" : "offline");
+		Console.WriteLine(scope $"NETSYNC start beef {role}");
 	}
 
 	public override void LocalUpdate()

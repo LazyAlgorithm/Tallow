@@ -388,7 +388,10 @@ class DialogueRunnerState
 		else if (view == .Choices)
 			OnChoices();
 		else if ((view == .Ended || view == .None) && (mLastView == .Line || mLastView == .Choices))
+		{
 			OnEnded();
+			CSharpRuntime.ComponentEvent(mGameObject, 5, "");
+		}
 		mLastView = view;
 	}
 

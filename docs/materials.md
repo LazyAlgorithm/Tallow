@@ -83,23 +83,17 @@ Meshes need no tangents: the shader works them out per pixel. `Materials/brass.t
 
 ### From scripts
 
-```beef
-let renderer = GetComponent<MeshRenderer>();
-renderer.SetMaterial("Materials/brass.tmat");          // use another material
+```csharp
+var renderer = GetComponent<MeshRenderer>();
+renderer.Material = "Materials/brass.tmat";             // use another material
 
 // Change this object only: it gets its own copy the first time.
-renderer.SetMaterialColor("color", .(1, 0, 0, 1));
+renderer.SetMaterialColor("color", new Color(1, 0, 0, 1));
 renderer.SetMaterialFloat("roughness", 0.2f);
 renderer.SetMaterialFloat("speed", 4);                  // a custom shader's property
-
-// Change the shared material: every object using it changes.
-let shared = renderer.SharedMaterial;
-shared.emissiveIntensity = 3;
-shared.Changed();                                       // after setting plain fields
-shared.SetColor("glow", .(0, 1, 0.5f, 1));              // shader properties need no Changed()
 ```
 
-`renderer.Material` is this object's own copy (made on first use), `renderer.SharedMaterial` the shared one. `Material.Load(path)`, `Clone()` and `Save(fullPath)` are there for tools.
+Changing the shared material itself (every object using it changes), and `Material.Load(path)`, `Clone()` and `Save(fullPath)`, are engine (Beef) code for tools for now: in Beef, `renderer.SharedMaterial` is the shared one, and after setting its plain fields call `Changed()`.
 
 ## Writing a shader
 
@@ -208,22 +202,15 @@ Write `result`, which starts as this pixel's previous value. Add the line `preci
 
 **From a script:**
 
-```beef
-let effect = GetComponent<ComputeEffect>();
+```csharp
+var effect = GetComponent<ComputeEffect>();
 effect.SetFloat("speed", 3);
-effect.SetColor("ink", .(1, 0.3f, 0.1f, 1));
-effect.everyFrame = false;
+effect.SetColor("ink", new Color(1, 0.3f, 0.1f, 1));
+effect.EveryFrame = false;
 effect.Step();                         // run it once, when you choose
-
-// Or without the component:
-let shader = ShaderAsset.Load("Shaders/ripple.tcompute");
-let texture = new ComputeTexture(512, 512);
-if (Compute.Supported)
-    Compute.Run(shader, texture);
-renderer.TextureOverride = texture.Texture;
 ```
 
-`Compute.Supported` is false on a dedicated server and on graphics cards without compute shaders; `Run` and `Step` then do nothing and return false.
+Running a compute shader without the component (`Compute.Run(shader, texture)` on a `ComputeTexture`) is engine (Beef) code for now. `Compute.Supported` is false on a dedicated server and on graphics cards without compute shaders; `Run` and `Step` then do nothing and return false.
 
 ### Compute graphs
 
@@ -262,11 +249,11 @@ All of it has nodes, generated from the engine source: **Engine > Render > Mesh 
 
 A Mesh Renderer's **Emissive** colour and **Emissive Intensity** make the whole object glow in one colour. Tick **Emissive From Color** and the glow is multiplied by the surface's own colour instead (its vertex colours and texture): the bright parts of a model glow in their own colour and the dark parts stay dark. Set Emissive to white to keep the colours as they are. A model with a lit blade and a steel handle, say, needs no second mesh and no emissive map:
 
-```beef
-let renderer = GetComponent<MeshRenderer>();
-renderer.emissive = .White;
-renderer.emissiveFromColor = true;
-renderer.emissiveIntensity = 2;
+```csharp
+var renderer = GetComponent<MeshRenderer>();
+renderer.Emissive = new Color(1, 1, 1);
+renderer.EmissiveFromColor = true;
+renderer.EmissiveIntensity = 2;
 ```
 
 Custom shaders get it too: `emissive` arrives already multiplied.

@@ -263,8 +263,26 @@ public static class Decals
         CSharpPlatform.DecalSpawn(scene.SessionId, position, normal, texture, size, lifetime, new Vector4(c.R, c.G, c.B, c.A), spin);
     }
 
+    /// <summary>A decal box of your own: any size and turn, pressed along its Z axis; surfaces turned more than
+    /// angleLimit degrees away from it are left alone.</summary>
+    public static void Spawn(Scene scene, Vector3 position, Quaternion rotation, Vector3 size, string texture,
+        float lifetime = 0, Color? color = null, float angleLimit = 70)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(texture);
+        Color c = color ?? new Color(1, 1, 1);
+        CSharpPlatform.DecalSpawnBox(scene.SessionId, position, new Vector4(rotation.X, rotation.Y, rotation.Z, rotation.W), size,
+            texture, lifetime, new Vector4(c.R, c.G, c.B, c.A), angleLimit);
+    }
+
     /// <summary>Removes every spawned decal in the scene.</summary>
     public static void Clear(Scene scene) => CSharpPlatform.DecalsClear(scene.SessionId);
+
+    /// <summary>How many spawned decals a scene keeps; the oldest makes way for new ones (256 by default).</summary>
+    public static int MaxSpawned
+    {
+        get => CSharpPlatform.DecalsMax();
+        set => CSharpPlatform.SetDecalsMax(value);
+    }
 }
 
 /// <summary>The wind (Wind Zones and the scene's own), for things that drift: smoke, flags, sails, leaves.</summary>

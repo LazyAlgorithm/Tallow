@@ -459,6 +459,9 @@ public static class AINoise
     /// remembered by those who hear it, and does not hear itself.</summary>
     public static void Make(Scene scene, Vector3 position, float radius, GameObject? source = null) =>
         CSharpNavigation.MakeNoise(scene.SessionId, position, radius, source?.Id ?? 0);
+
+    /// <summary>Drops noises older than some seconds (all of them with 0, for a new level).</summary>
+    public static void Forget(float olderThan = 0) => CSharpNavigation.ForgetNoises(olderThan);
 }
 
 /// <summary>A baked navigation mesh agents walk on, with queries for choosing where to go.</summary>

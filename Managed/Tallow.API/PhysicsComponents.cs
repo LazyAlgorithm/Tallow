@@ -230,6 +230,13 @@ public readonly record struct Joint(GameObject GameObject) : IComponent
     public bool IsValid => Physics.HasJoint(GameObject.SceneId, GameObject.Id);
     /// <summary>Whether the joint is attached to another body (and holding).</summary>
     public bool IsConnected => Physics.IsJointConnected(GameObject.SceneId, GameObject.Id);
+
+    /// <summary>Builds the joint again after its fields were changed while playing.</summary>
+    public void Rebuild()
+    {
+        if (!Physics.RebuildJoint(GameObject.SceneId, GameObject.Id))
+            throw ActionText.Missing(GameObject, "Joint");
+    }
     public Rigidbody? ConnectedTo
     {
         get
@@ -417,5 +424,191 @@ public readonly partial record struct Scene
         ulong id = CSharpJoints.CreateSuspension(SessionId, a.BodyId, b.BodyId, anchor, childAnchor, axis, childAxis,
             childNormal, travel);
         return id == 0 ? null : new Suspension(SessionId, id);
+    }
+}
+
+public readonly partial record struct Rigidbody
+{
+    /// <summary>Builds the body again from the object's colliders (after their size changed, or parts were added to
+    /// a Compound Collider), keeping its position and velocity.</summary>
+    public void RebuildBody()
+    {
+        if (!Physics.RebuildRigidbody(GameObject.SceneId, GameObject.Id))
+            throw ActionText.Missing(GameObject, "Rigidbody");
+    }
+}
+
+public readonly partial record struct CompoundCollider
+{
+    /// <summary>Adds a box part in the object's own space. Call <see cref="Rigidbody.RebuildBody"/> afterwards.</summary>
+    public void AddBox(Vector3 center, Vector3 size) => Add(0, center, size, Quaternion.Identity, []);
+
+    /// <summary>Adds a cylinder part (along its local Y) in the object's own space.</summary>
+    public void AddCylinder(Vector3 center, float radius, float halfHeight, Quaternion rotation) =>
+        Add(1, center, new Vector3(radius, halfHeight, 0), rotation, []);
+
+    /// <summary>Adds a convex part: the hull round four or more points, placed at center.</summary>
+    public void AddHull(Vector3 center, ReadOnlySpan<Vector3> points, Quaternion rotation)
+    {
+        if (points.Length < 4)
+            throw new ArgumentException("A hull needs four or more points.", nameof(points));
+        var values = new float[points.Length * 3];
+        for (int i = 0; i < points.Length; i++)
+            (values[i * 3], values[i * 3 + 1], values[i * 3 + 2]) = (points[i].X, points[i].Y, points[i].Z);
+        Add(2, center, default, rotation, values);
+    }
+
+    private void Add(int kind, Vector3 center, Vector3 a, Quaternion rotation, float[] points)
+    {
+        if (!Physics.AddCompoundPart(GameObject.SceneId, GameObject.Id, kind, center, a,
+                new Vector4(rotation.X, rotation.Y, rotation.Z, rotation.W), points))
+            throw ActionText.Missing(GameObject, "Compound Collider");
+    }
+}
+
+internal static class PointBuffer
+{
+    /// <summary>Reads a soft body's points (what: 0 dents, 1 positions), which the engine writes as floats (x, y, z after
+    /// one another), growing the buffer when needed.</summary>
+    internal static Vector3[] Read(GameObject owner, string component, int what)
+    {
+        int copy(float[] values) => CSharpRopes.SoftPoints(owner.SceneId, owner.Id, what, values);
+        float[] buffer = new float[96];
+        int count = copy(buffer);
+        if (count < 0)
+            throw ActionText.Missing(owner, component);
+        if (count > buffer.Length)
+        {
+            buffer = new float[count];
+            count = copy(buffer);
+        }
+        var points = new Vector3[count / 3];
+        for (int i = 0; i < points.Length; i++)
+            points[i] = new Vector3(buffer[i * 3], buffer[i * 3 + 1], buffer[i * 3 + 2]);
+        return points;
+    }
+
+    internal static float[] Flatten(ReadOnlySpan<Vector3> points)
+    {
+        var values = new float[points.Length * 3];
+        for (int i = 0; i < points.Length; i++)
+            (values[i * 3], values[i * 3 + 1], values[i * 3 + 2]) = (points[i].X, points[i].Y, points[i].Z);
+        return values;
+    }
+}
+
+public readonly partial record struct SoftBody
+{
+    /// <summary>A shell's dents: for each simulated vertex, how far it has been pushed from where it was made, in the
+    /// object's own space (empty for other kinds). Save or send these and give them back with <see cref="SetDents"/>.</summary>
+    public Vector3[] GetDents() =>
+        PointBuffer.Read(GameObject, "Soft Body", 0);
+
+    /// <summary>Dents a shell as <see cref="GetDents"/> gave them. In a session the server's dents are everyone's.</summary>
+    public void SetDents(ReadOnlySpan<Vector3> dents)
+    {
+        if (!CSharpRopes.SetSoftPoints(GameObject.SceneId, GameObject.Id, 0, PointBuffer.Flatten(dents)))
+            throw ActionText.Missing(GameObject, "Soft Body");
+    }
+
+    /// <summary>Where its simulated vertices are now, in the world.</summary>
+    public Vector3[] Positions =>
+        PointBuffer.Read(GameObject, "Soft Body", 1);
+
+    /// <summary>Puts the simulated vertices at places in the world, still (as many as SimulatedVertexCount).</summary>
+    public void SetPositions(ReadOnlySpan<Vector3> positions)
+    {
+        if (!CSharpRopes.SetSoftPoints(GameObject.SceneId, GameObject.Id, 1, PointBuffer.Flatten(positions)))
+            throw ActionText.Missing(GameObject, "Soft Body");
+    }
+
+    /// <summary>Builds it again after its fields were changed while playing.</summary>
+    public void Rebuild()
+    {
+        if (!CSharpRopes.Rebuild(GameObject.SceneId, GameObject.Id, 0))
+            throw ActionText.Missing(GameObject, "Soft Body");
+    }
+
+    /// <summary>The physics bodies (<see cref="Rigidbody.BodyId"/>) its vertices touched since this was last asked.</summary>
+    public uint[] TouchingBodies()
+    {
+        ulong[] buffer = new ulong[32];
+        int count = CSharpRopes.Touching(GameObject.SceneId, GameObject.Id, buffer);
+        if (count < 0)
+            throw ActionText.Missing(GameObject, "Soft Body");
+        if (count > buffer.Length)
+        {
+            buffer = new ulong[count];
+            count = CSharpRopes.Touching(GameObject.SceneId, GameObject.Id, buffer);
+        }
+        var bodies = new uint[Math.Min(count, buffer.Length)];
+        for (int i = 0; i < bodies.Length; i++)
+            bodies[i] = (uint)buffer[i];
+        return bodies;
+    }
+}
+
+public readonly partial record struct Rope
+{
+    /// <summary>Ties a new rope between two objects (towing, lifting); the offsets are where on each it is tied,
+    /// relative to it. Length below zero: as far apart as they are now, plus a little slack. Null on a client of a
+    /// session: the server ties it, on every machine, when this player controls one of the two.</summary>
+    public static Rope? Attach(GameObject from, GameObject to, Vector3 fromOffset = default, Vector3 toOffset = default,
+        float length = -1, float thickness = 0.04f)
+    {
+        ulong id = CSharpRopes.Attach(from.SceneId, from.Id, to.Id, fromOffset, toOffset, length, thickness);
+        return id == 0 ? null : new Rope(new GameObject(from.SceneId, id));
+    }
+
+    /// <summary>Whether it is pulled tight between its two ends.</summary>
+    public bool IsTaut => State(0) != 0;
+
+    /// <summary>How hard it pulls, in newtons.</summary>
+    public float Pull => State(1);
+
+    /// <summary>Ties its first end to an object (null: that end lets go and hangs free). Keeps its length.</summary>
+    public void AttachStart(GameObject? to, Vector3 offset = default) => Tie(0, to, offset);
+
+    /// <summary>Ties its other end to an object (null: it lets go). Keeps its length.</summary>
+    public void AttachEnd(GameObject? to, Vector3 offset = default) => Tie(1, to, offset);
+
+    /// <summary>Lets go of what its other end holds.</summary>
+    public void Release() => Tie(1, null, default);
+
+    /// <summary>Lays it along a path of world points from its start to its end (over a beam, round a post), as long
+    /// as the path is.</summary>
+    public void LayAlong(ReadOnlySpan<Vector3> path)
+    {
+        if (path.Length < 2)
+            throw new ArgumentException("A path needs two or more points.", nameof(path));
+        if (!CSharpRopes.RopeLayAlong(GameObject.SceneId, GameObject.Id, PointBuffer.Flatten(path)))
+            throw ActionText.Missing(GameObject, "Rope");
+    }
+
+    /// <summary>Snaps it in two in the middle, as Break Force does: this rope keeps its first end, and the half
+    /// returned keeps the other. Null on a client (the server snaps it everywhere).</summary>
+    public Rope? Snap()
+    {
+        ulong id = CSharpRopes.RopeSnap(GameObject.SceneId, GameObject.Id);
+        return id == 0 ? null : new Rope(new GameObject(GameObject.SceneId, id));
+    }
+
+    /// <summary>Makes the rope again from its fields, after changing them while it runs.</summary>
+    public void Rebuild()
+    {
+        if (!CSharpRopes.Rebuild(GameObject.SceneId, GameObject.Id, 1))
+            throw ActionText.Missing(GameObject, "Rope");
+    }
+
+    private float State(int what)
+    {
+        float value = CSharpRopes.RopeState(GameObject.SceneId, GameObject.Id, what);
+        return float.IsNaN(value) ? throw ActionText.Missing(GameObject, "Rope") : value;
+    }
+
+    private void Tie(int end, GameObject? to, Vector3 offset)
+    {
+        if (!CSharpRopes.RopeTie(GameObject.SceneId, GameObject.Id, end, to?.Id ?? 0, offset))
+            throw ActionText.Missing(GameObject, "Rope");
     }
 }

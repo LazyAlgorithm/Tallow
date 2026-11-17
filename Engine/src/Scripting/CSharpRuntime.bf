@@ -731,6 +731,8 @@ static class CSharpRuntime
 
 	/// CallbackMask bits for OnSequenceEvent, OnDialogueEvent and OnTreeEvent (ComponentEvent kind 0, 1, 2).
 	public const int32 SequenceEventCallback = 1 << 23, DialogueEventCallback = 1 << 24, TreeEventCallback = 1 << 25;
+	/// CallbackMask bits for OnDialogueEnded and OnSequenceFinished (ComponentEvent kinds 5 and 6).
+	public const int32 DialogueEndedCallback = 1 << 29, SequenceFinishedCallback = 1 << 30;
 
 	/// A Sequence Player's, Dialogue Runner's or Behavior Tree Runner's named event (kind 0, 1, 2) on the C# scripts
 	/// of the same object that override its callback.
@@ -738,7 +740,8 @@ static class CSharpRuntime
 	{
 		if (!Ready || gameObject == null)
 			return;
-		let bit = kind == 0 ? SequenceEventCallback : kind == 1 ? DialogueEventCallback : TreeEventCallback;
+		let bit = kind == 0 ? SequenceEventCallback : kind == 1 ? DialogueEventCallback : kind == 5 ? DialogueEndedCallback :
+			kind == 6 ? SequenceFinishedCallback : TreeEventCallback;
 		String text = null;
 		// By index: a script may add a component while handling the event.
 		for (int i = 0; i < gameObject.Components.Count; i++)
@@ -749,7 +752,8 @@ static class CSharpRuntime
 			if (text == null)
 				text = scope:: String(name);
 			if (tn_csharp_component_event(script.ManagedInstance, kind, text.CStr(), value) <= 0)
-				ReportFailure(kind == 0 ? "OnSequenceEvent" : kind == 1 ? "OnDialogueEvent" : "OnTreeEvent");
+				ReportFailure(kind == 0 ? "OnSequenceEvent" : kind == 1 ? "OnDialogueEvent" : kind == 5 ? "OnDialogueEnded" :
+					kind == 6 ? "OnSequenceFinished" : "OnTreeEvent");
 		}
 	}
 

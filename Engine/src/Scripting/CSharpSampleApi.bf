@@ -188,6 +188,10 @@ static class CSharpNavigation
 	[CSharpExpose]
 	public static bool IsCrossingLink(uint64 session, uint64 entity) => Find(session, entity, let agent) && agent.IsCrossingLink;
 
+	/// Drops noises older than some seconds (all with 0).
+	[CSharpExpose]
+	public static void ForgetNoises(float olderThan) => AINoise.Forget(Math.Max(olderThan, 0));
+
 	/// A noise behaviour trees' Heard Noise nodes pick up (AINoise.Make); source 0 for none.
 	[CSharpExpose]
 	public static void MakeNoise(uint64 session, Vector3 position, float radius, uint64 source)

@@ -3,122 +3,111 @@
 Start with a `Script`. Tallow registers callbacks, stores built-in component data in Flecs and batches compatible
 rendering automatically. An ordinary moving object needs no query, job configuration or manual cleanup:
 
-```beef
-[Component]
-class Spinner : Script
+```csharp
+public class Spinner : Script
 {
-	public Vector3 speed = .(0, 45, 0);
+    public Vector3 Speed = new(0, 45, 0);
 
-	public override void Update(TickInput input, float deltaTime)
-	{
-		Transform.Rotate(speed * deltaTime);
-	}
+    public override void Update(TickInput input, float deltaTime)
+    {
+        Transform.Rotate(Speed * deltaTime);
+    }
 }
 ```
 
 Without a Network Identity this runs once per frame. With a Network Identity, the simulation path supplies tick
 inputs and the fixed delta, including during prediction replay. Use those arguments for simulation. Presentation
-work such as a local camera or GUI may use `OnLocalUpdate`, `LateUpdate` or `OnGUI` instead. Direct input reads,
-frame time and unseeded randomness in predicted updates receive clickable determinism warnings in the Console.
+work such as a local camera or GUI belongs in `LocalUpdate`, `LocalLateUpdate` or `OnGUI` instead. Keep direct
+input reads (`Input`), frame time and unseeded randomness out of predicted updates: they differ between machines and
+between a tick and its replay.
 
 ## Mixed script and ECS data
 
 A GameObject is already an ECS entity; these are not separate authoring modes.
 You can put a normal script and an ECS data component on the same object:
 
-```beef
+```csharp
 [Component]
-struct SpeedData
+public struct SpeedData
 {
-    [Sync] public float speed;
+    [Sync] public float Speed;
 }
 
-[Component]
-class Accelerate : Script
+public class Accelerate : Script
 {
     public override void Update(TickInput input, float deltaTime)
     {
-        let speed = GetComponent<SpeedData>();
-        if (speed != null)
-            speed.speed += deltaTime;
+        EcsEntity entity = GameObject.Entity;
+        if (entity.TryGet(out SpeedData data))
+        {
+            data.Speed += deltaTime;
+            entity.Set(data);
+        }
     }
 }
 ```
 
-The same `SpeedData` can be read by `Query<SpeedData, ObjectLink>`. With a
-`NetworkIdentity` on the GameObject, supported `[Sync]` fields participate
-in Tallow's existing networking. On the experimental
-`ecs-unified-authoring-network` branch, bare entities created with
-`World.CreateMany<T>` (or populated with `Set<T>`, `Add<T>`, `Ensure<T>`)
-are also automatically registered for **server-authoritative replication**
-when the `[Component]` struct has supported `[Sync]` fields. These entities
-stay packed in Flecs and get no hidden GameObjects; ordinary unmarked data
-remains local. This native path is not yet validated or prediction-aware:
-arbitrary ECS query systems must not assume rollback/replay works automatically.
-See `docs/unified-ecs-networking.md` for its current limits.
+The same `SpeedData` is read by `Scene.Query<SpeedData>()`, and `EcsEntity.GameObject` is the object an entity
+belongs to (null for a bare entity). With a `NetworkIdentity` on the GameObject, `[Sync]` fields of the struct
+take part in Tallow's networking like a script's. Bare entities (`Scene.CreateLocalEcsEntity()`, no GameObject)
+whose `[Component]` struct has `[Sync]` fields are replicated by the server: they stay packed in Flecs and get no
+hidden GameObjects; unmarked data stays local. See `docs/unified-ecs-networking.md` for how that works inside the
+engine.
 
-You can also borrow `Scene.World.ObjectsWith<SpeedData>()`, a query cached for
-the lifetime of the World. Do not delete that query. It returns packed
-`SpeedData` and `ObjectLink` columns and excludes standalone entities
-without a GameObject.
-
-**Visual scripting:** after compiling a project `[Component] struct`, open a
-graph and search the **ECS** category for its component and field nodes.
-**For Each** creates one query iteration for all matching objects; its
-Body flow exposes the current object and direct packed data-field outputs.
-Runtime Add/Remove operations inside that graph loop are deferred until the
-loop exits. Generated graphs use the same GameObject component storage and
-network behavior as Beef scripts.
+**Visual scripting:** after compiling a project `[Component] struct`, open a graph and search the **ECS** category
+for its component and field nodes. **For Each** creates one query iteration for all matching objects; its Body flow
+exposes the current object and the data's fields. Add and Remove inside that loop are deferred until the loop
+exits. Compiled graphs use the same component storage and network behaviour as scripts.
 
 ## When a query helps
 
 Use a query when profiling identifies a large homogeneous workload. The Gallery courtyard has two small crowds:
-blue members run `CrowdWalker.Update`; orange members use `GalleryCrowd`'s query over `CrowdMotion` and
-`ObjectLink`. Both evaluate the same motion. The example makes the alternative visible; it is not a performance
-claim for that small scene. `Samples/EcsBench` measures larger script and query workloads.
+blue members run a script's `Update`; orange members are moved by one query over their data. Both evaluate the same
+motion. The example makes the alternative visible; it is not a performance claim for that small scene.
+`Samples/CSharpBench` measures larger script and query workloads.
 
-Data components are structs marked `[Component]`. Store values and engine-supported references, not independently
-owned heap objects. A `Query<A, B>` belongs to one `World`; keep it while that world lives and destroy it before
-the world. Its destructor releases the native query. Within an iteration, `chunk.Read<T>()` and `Write<T>()`
-expose packed columns. The spans are valid only for that chunk. Never retain a row pointer across structural
-changes, scene transfers or another iteration.
+Data components are `unmanaged` structs marked `[Component]`: values and entity ids, no strings or objects.
 
-The current explicit API is `Query<T...>` and `World.AddStep`; the migration plan's proposed `[System]`
-attribute is not a registration API implemented by this release. `World.AddStep` accepts a pipeline, name,
-phase and engine-owned callback. `Scene.FramePipeline` and `TickPipeline` expose the engine's scheduling points.
-Avoid adding a separate tick step for logic already run by a networked script.
+```csharp
+Scene.Query<SpeedData, Charge>().ForEach((EcsEntity entity, ref SpeedData speed, ref Charge charge) =>
+{
+    speed.Speed += charge.Amount * 0.1f;     // changed rows are written back after the loop
+});
+int count = Scene.Query<SpeedData>().Without<Frozen>().Count;
+```
+
+`ForEach` copies the data out in pages and writes back the rows the action changed, so it costs a few calls per
+thousand entities, not one per entity. Entities may be created and destroyed inside it, and data added or removed;
+an entity that has gone (or lost a component) by the end is not written back, and entities made during it are
+visited next time.
+
+For per-tick simulation of bare entities, derive from `EcsSystem<T>` (or `EcsSystem<T1, T2>`,
+`EcsSystem<T1, T2, T3>`): the build finds the class, and the engine runs its `Update(entity, ref data, input,
+deltaTime)` every fixed tick, on the server and predicted on the client that owns the entity
+(`EcsEntity.SetOwner`). Its Update must depend only on the entity it is given, the controls and the delta time.
 
 ## Ordering and parallel work
 
-Ordinary scripts run on the main thread in registration order. Query table order can change when components
-are added or removed. Do not use that order for shared gameplay state, event ordering, spawning or random draws.
-Where ordering matters, gather operations and apply them by a stable identity in an explicitly chosen sequence.
+Ordinary scripts run on the main thread in registration order. Query order can change when components are added or
+removed. Do not use that order for shared gameplay state, event ordering, spawning or random draws. Where ordering
+matters, gather operations and apply them by a stable identity in an explicitly chosen sequence.
 
-`Query.ParallelFor` uses Tallow's Jobs threads. Only independent row work belongs in its callback. It temporarily
-makes the world structurally read-only: do not create, destroy, add or remove components, access the editor,
-call arbitrary scripts or mutate shared objects. A floating-point reduction is not automatically deterministic.
-Parallel motion is safe only when each output depends on its own row and fixed, immutable inputs.
+The engine must only be used from the game thread. For heavy work that does not touch the engine (path planning on
+your own data, procedural generation), use .NET's own `Parallel.For` or `Task.Run` on plain arrays, then apply the
+results on the game thread (an `await` returns there). A floating-point reduction across threads is not
+automatically deterministic: keep parallel results out of predicted gameplay unless each output depends only on its
+own input.
 
-## Small script conveniences
+## Timed sequences
 
-`CreateString` and `CreateList<T>` create resources owned by a script. Create them once, usually in the script's
-constructor, and reuse them. They are released when the engine deletes the script. Do not delete them yourself,
-transfer them to another owner or replace an owning field with an unrelated resource. List elements remain
-values or references owned elsewhere; the helper does not recursively delete them.
-
-`GUI.LabelFormat(x, y, "{} fps", fps)` and `UIElement.SetTextFormat("Hello, {}", name)` format directly into
-engine-managed temporary or element text. They simplify authoring; formatting still has a CPU cost.
-
-For timed sequences, keep a public float initialised to `-1` and use `ScriptTimer.Start(ref wait, seconds)` and
-`ScriptTimer.Advance(ref wait, deltaTime)`. Advance returns true exactly once at completion. A switch over an
-ordinary stage field can perform the next action. The state is ordinary serialisable script data rather than
-an opaque suspended call stack. Lockstep snapshots can restore those fields; state-sync gameplay state that
-must survive corrections still needs the engine's supported sync fields. Timers do not eliminate that rule.
+`await` runs on the game thread: `await Wait(2f)` waits two seconds of game time and `await NextFrame()` one frame,
+and code after the await may use the engine. Waits end when the script is destroyed; pass `Destroyed` to other async
+calls. An await is not network state: a predicted update that must survive corrections keeps its progress in
+`[Sync]` fields (a stage number and a time left), not in a suspended method.
 
 ## Measuring improvements
 
-Use Release builds on the same hardware. Save the baseline player, then run `tools/run_ecs_bench.py` with
-`--baseline-executable`, `--runs` and `--output`. Compare full-frame cost separately from script-update cost,
-and keep individual runs. The tool alternates execution order and reports medians of each run's measurements.
-Other active workloads can dominate small differences. Re-run deterministic state/event checks after changing
-dispatch or access paths, and retain the network correction and replay counters when comparing prediction.
+Use Release builds on the same hardware. `tools/run_csharp_bench.py` runs the C# and Beef copies of the same
+workloads and keeps each run. Compare full-frame cost separately from script-update cost; other active workloads
+can dominate small differences. Re-run the deterministic state and event checks after changing dispatch or access
+paths, and keep the network correction and replay counters when comparing prediction.

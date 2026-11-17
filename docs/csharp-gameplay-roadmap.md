@@ -605,8 +605,9 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 
 The benchmark definitions, workloads, evidence format, and priority order are
 in [**C# migration benchmark plan**](csharp-benchmark-plan.md). B01–B05 and
-B07–B17 and B23 (a 45-minute host/client soak: flat memory, no leaks, no errors) are measured (November 16–17,
-2026); B06 has a first pass; B18–B22 are the ones left (the plan lists what each needs). B24–B30 belong to the parked
+B07–B17, B18 (multiplayer sync: the same state hash, bandwidth and errors in both languages at 2–16 peers, 0–200 ms
+and 0–5% loss; C# server ticks 2–3% slower) and B23 (a 45-minute host/client soak: flat memory, no leaks, no errors)
+are measured (November 16–17, 2026); B06 has a first pass; B19–B22 are the ones left (the plan lists what each needs). B24–B30 belong to the parked
 NativeAOT stage (P5). Include real frame-time p50/p95/p99, CPU and Jolt
 costs, managed GC allocations, RSS, compile/edit-to-Play timings, and raw logs.
 Benchmark both C# and native Beef on the *same Flecs/Jolt scenes* rather than

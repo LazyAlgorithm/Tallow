@@ -256,6 +256,16 @@ class BTCallMethod : BTNode
 		let name = Text(0);
 		for (let component in context.Object.Components)
 		{
+			if (let script = component as CSharpBehaviour)
+			{
+				// A C# script's methods are in .NET, not in Beef's reflection.
+				let called = script.CallMethod(name);
+				if (called == 1)
+					return .Success;
+				if (called != 0)
+					return .Failure;
+				continue;
+			}
 			let type = component.GetType() as TypeInstance;
 			if (type == null)
 				continue;

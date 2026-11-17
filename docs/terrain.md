@@ -38,7 +38,7 @@ Scenes from before tiles open as tiles: their rectangle (the old `sizeX` and `si
 
 ## Generators
 
-What ground looks like before anyone sculpts it is the game's own business. Write a generator class:
+What ground looks like before anyone sculpts it is the game's own business. Write a generator class (engine Beef code for now; a C# game picks a built-in generator in the Inspector):
 
 ```beef
 [TerrainGenerator]

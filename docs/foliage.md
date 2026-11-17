@@ -41,8 +41,8 @@ Plants are scenery. They have no colliders, they are saved with the scene, and t
 
 From code:
 
-```beef
-let grass = GetComponent<Foliage>();
+```csharp
+var grass = GetComponent<Foliage>();
 grass.Paint(point, 6);          // what the brush does: Density plants to the square metre, in a 6 m circle
 grass.Erase(point, 3);          // removes the plants in a circle
 grass.Add(point);               // one plant; Add(point, turnDegrees, scale) to choose

@@ -28,12 +28,12 @@ A decal is an ordinary object: parent it to a moving object (a door, a vehicle) 
 
 ## Spawning decals from code
 
-```beef
+```csharp
 // A bullet hole 12 cm across where a shot hit, gone after 20 seconds, turned at random.
-Decals.Spawn(Scene, hit.point, hitNormal, "Textures/bullet_hole.png", 0.12f, 20, .White, (float)mRandom.NextDouble() * 360);
+Decals.Spawn(Scene, hit.Point, hitNormal, "Textures/bullet_hole.png", 0.12f, 20, spin: Random.Shared.NextSingle() * 360);
 
 // A box of your own: any size and turn, pressed along its Z axis.
-Decals.Spawn(Scene, Matrix4.TRS(position, rotation, .(2, 1, 0.5f)), "Textures/skid.png", 0, .(1, 1, 1, 0.8f));
+Decals.Spawn(Scene, position, rotation, new Vector3(2, 1, 0.5f), "Textures/skid.png", 0, new Color(1, 1, 1, 0.8f));
 
 Decals.Clear(Scene);      // remove them all (also done when the scene is cleared)
 Decals.MaxSpawned = 512;  // how many a scene keeps; the oldest makes way for new ones (256 by default)

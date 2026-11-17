@@ -28,16 +28,15 @@ Changing any one setting from a preset makes the level **Custom**.
 
 ## In a game
 
-```beef
+```csharp
 // Options screen
-if (pressedLow) Quality.Set(.Low);
-Quality.Current.motionBlur = toggle;  // one setting
-Quality.Apply();
-Quality.Save();                       // remembered for the next run
+if (pressedLow) Quality.Set(QualityLevel.Low);   // and saved for the next run
+Quality.MotionBlur = toggle;                     // one setting, applied at once
+Quality.Save();
 
 // First run: nothing saved yet
-if (!File.Exists(scope $"{GamePaths.PlayerData}{Quality.FileName}"))
-	Quality.Set(Quality.Recommended);
+if (!File.Exists($"{GamePaths.PlayerData}graphics.cfg"))
+    Quality.Set(Quality.Recommended);
 ```
 
 At start the engine applies the player's saved settings by itself (`graphics.cfg` in the player data folder, one `name=value` a line). **Quality.Recommended** suggests Low on phones, Medium on built-in (Intel) graphics and in a browser, and High otherwise. `Quality.Level` says which preset is in use, for showing it in a menu.

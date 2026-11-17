@@ -1,18 +1,19 @@
 # Jobs: work spread over the cores
 
-`Jobs.For(count, body)` runs `body(i)` for every `i` below `count` on the engine's worker threads and the calling thread together, and returns when every one has run:
+The engine spreads its own heavy work (bent models, navigation paths, agents' steering) over the cores by itself; see below. For a C# game's own heavy work, use .NET's `Parallel.For`:
 
-```beef
-Jobs.For(enemies.Count, scope (index) => enemies[index].Think());
+```csharp
+float[] scores = new float[targets.Length];
+Parallel.For(0, targets.Length, i => scores[i] = Score(targets[i]));   // plain data only
 ```
 
-- **Each body must only touch its own item's data.** Reading shared data that nothing changes during the batch is fine; writing it is not (no adding to a shared list, no moving objects in the scene, no graphics calls).
-- `chunk` hands out that many items at a time, for cheap items (`Jobs.For(100000, body, 256)`), so the threads take turns less often.
-- `minimum`: fewer items than this run on the calling thread alone (waking the workers costs a few microseconds).
-- `Jobs.ThreadIndex` says which thread a body is on (0 the caller, 1 and up the workers, all below `Jobs.ThreadCount`), for scratch memory kept per thread.
-- A `Jobs.For` started inside another (or from a second thread while one runs) runs on the calling thread.
+- **Each body must only touch its own item's data.** Reading shared data that nothing changes during the batch is fine; writing it is not.
+- **Do not use the engine from other threads**: no moving objects, no components, no physics queries, no logging through the engine. Copy what the work needs into arrays first and apply the results on the game thread afterwards.
+- For work that takes longer than a frame, `await Task.Run(() => ...)` in a script: the code after the `await` is back on the game thread.
 
-There is one worker for each core but two (one is the calling thread's; the rest leave room for the physics and audio threads), up to 15. `TALLOW_JOB_THREADS=N` caps the threads sharing a batch at N, the calling one included (a server sharing its machine, or checking that results do not depend on the thread count). They start the first time a batch is big enough to share and sleep between batches. Web builds and one-core machines have none: everything runs on the calling thread.
+Engine (Beef) code has `Jobs.For(count, body)`, which runs `body(i)` on the engine's worker threads and the calling thread together, with `chunk`, `minimum`, `Jobs.ThreadIndex` and `Jobs.ThreadCount`.
+
+The engine has one worker for each core but two (one is the calling thread's; the rest leave room for the physics and audio threads), up to 15. `TALLOW_JOB_THREADS=N` caps the threads sharing a batch at N, the calling one included (a server sharing its machine, or checking that results do not depend on the thread count). They start the first time a batch is big enough to share and sleep between batches. Web builds and one-core machines have none: everything runs on the calling thread.
 
 ## What uses them
 

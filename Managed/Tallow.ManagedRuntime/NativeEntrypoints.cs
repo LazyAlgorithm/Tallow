@@ -285,6 +285,8 @@ public static unsafe class NativeEntrypoints
                 case 2: script.OnTreeEvent(text); break;
                 case 3: script.OnClientJoined((int)value); break;
                 case 4: script.OnClientLeft((int)value); break;
+                case 5: script.OnDialogueEnded(); break;
+                case 6: script.OnSequenceFinished(); break;
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
             }
             return 1;
@@ -320,6 +322,9 @@ public static unsafe class NativeEntrypoints
                 throw new InvalidOperationException("Unknown managed gameplay instance.");
             string name = Marshal.PtrToStringUTF8((nint)method) ?? "";
             string id = Marshal.PtrToStringUTF8((nint)elementId) ?? "";
+            // "\u0001": a behaviour tree's Call Method, which takes only methods without parameters; a bool result
+            // decides success (2 is "called, and it said false").
+            bool callOnly = id == "\u0001";
             for (Type? owner = script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
             {
                 foreach (MethodInfo candidate in owner.GetMethods(BindingFlags.Instance | BindingFlags.Public |
@@ -329,7 +334,12 @@ public static unsafe class NativeEntrypoints
                         continue;
                     ParameterInfo[] parameters = candidate.GetParameters();
                     if (parameters.Length == 0)
-                        candidate.Invoke(script, null);
+                    {
+                        object? result = candidate.Invoke(script, null);
+                        return result is false ? 2 : 1;
+                    }
+                    else if (callOnly)
+                        continue;
                     else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(UIElement))
                         candidate.Invoke(script, [new UIElement(script.GameObject, id)]);
                     else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(string))
@@ -1439,6 +1449,8 @@ public static unsafe class NativeEntrypoints
     private const int PredictionBit = 1 << 26;
     /// <summary>The bits for OnClientJoined and OnClientLeft (ComponentEvent kinds 3 and 4).</summary>
     private const int ClientJoinedBit = 1 << 27, ClientLeftBit = 1 << 28;
+    /// <summary>The bit for OnDialogueEnded (ComponentEvent kind 5).</summary>
+    private const int DialogueEndedBit = 1 << 29, SequenceFinishedBit = 1 << 30;
     private static readonly Dictionary<Type, int> sCallbackMasks = new();
 
     /// <summary>
@@ -1471,6 +1483,8 @@ public static unsafe class NativeEntrypoints
             Check(nameof(Script.OnSequenceEvent), [typeof(string), typeof(float)], SequenceEventBit);
             Check(nameof(Script.OnDialogueEvent), [typeof(string), typeof(float)], DialogueEventBit);
             Check(nameof(Script.OnTreeEvent), [typeof(string)], TreeEventBit);
+            Check(nameof(Script.OnDialogueEnded), Type.EmptyTypes, DialogueEndedBit);
+            Check(nameof(Script.OnSequenceFinished), Type.EmptyTypes, SequenceFinishedBit);
             Check(nameof(Script.OnClientJoined), [typeof(int)], ClientJoinedBit);
             Check(nameof(Script.OnClientLeft), [typeof(int)], ClientLeftBit);
             Type byRef = typeof(PredictionState).MakeByRefType();

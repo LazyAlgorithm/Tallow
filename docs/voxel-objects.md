@@ -58,10 +58,10 @@ Pieces that break off are made of the same stuff: the same model, the same mater
 
 ## Carving
 
-```beef
+```csharp
 // Where a shot lands:
-if (hit.gameObject.GetComponent<VoxelObject>() case let voxels && voxels != null)
-	voxels.Carve(hit.point, 0.4f);
+if (Scene.RaycastHit(origin, direction, 100) is PhysicsHit hit && hit.HitObject?.TryGetComponent(out VoxelObject voxels) == true)
+    voxels.Carve(hit.Point, 0.4f);
 ```
 
 In the editor, **Carve in Scene** carves with the mouse and **Reset Shape** puts the untouched shape back.

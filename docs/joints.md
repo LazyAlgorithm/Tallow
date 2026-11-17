@@ -13,12 +13,12 @@ A **Joint** (Add Component > Physics) holds two rigid bodies together at a point
 
 From code:
 
-```beef
+```csharp
 // Hang a weight from a post, joined at the post.
-Joint.Connect(weight.GetComponent<Rigidbody>(), post.GetComponent<Rigidbody>(), post.Transform.Position, .Down);
+Joint.Connect(weight.GetComponent<Rigidbody>(), post.GetComponent<Rigidbody>(), post.Transform.Position, Vector3.Down);
 
 // A forearm on an upper arm that bends no more than 70 degrees.
-Joint.Connect(forearm, upperArm, elbowPosition, upperArm.Transform.Up * -1, 70);
+Joint.Connect(forearm, upperArm, elbowPosition, -upperArm.GameObject.Transform.Up, 70);
 ```
 
 `Joint.Connect` adds a Joint component to the first body and returns it. Destroying either object removes the joint; `IsConnected` says whether it is in place. After changing a joint's fields while playing, call `Rebuild()`.
@@ -27,22 +27,22 @@ A ragdoll is a handful of small bodies joined this way: give each limb a box col
 
 ## Hinges and suspensions
 
-Two more joints are made from code, through `Scene.Physics`. They take body ids (`rigidbody.BodyId`), with the anchor and axes in world space, and return a handle.
+Two more joints are made from code, through the scene. They take the two Rigidbodies, with the anchor and axes in world space, and return a handle (null when either has no body).
 
 | Call | Makes |
 |---|---|
-| `CreateHinge(bodyA, bodyB, anchor, axis, childAxis, childNormal)` | A hinge turning about `axis` through `anchor`; `childAxis` and `childNormal` fix how the second body sits on it. A door, a wheel, an arm. |
-| `SetHingeMotor(hinge, speed, torque, angle, mode)` | Drives a hinge with up to `torque`: mode 0 off, 1 spins it at `speed` radians a second, 2 turns it to `angle` radians. |
-| `HingeAngle(hinge)` | How far it has turned, in radians. |
-| `CreateSuspension(bodyA, bodyB, anchor, childAnchor, axis, childAxis, childNormal, travel)` | A slider along `axis`, `travel` metres either way: a wheel's suspension. |
-| `SetSuspensionSpring(joint, stiffness, damping)` | Its spring, in newtons a metre and newton-seconds a metre. |
-| `SuspensionPosition(joint)` | How far along its travel it is. |
-| `DestroyJoint(joint)` | Removes it; safe after one of its bodies has gone. |
+| `Scene.CreateHinge(a, b, anchor, axis, childAxis, childNormal)` | A hinge turning about `axis` through `anchor`; `childAxis` and `childNormal` fix how the second body sits on it. A door, a wheel, an arm. |
+| `hinge.SetMotorSpeed(speed, torque)`, `SetMotorAngle(angle, torque)`, `StopMotor()` | Drives a hinge with up to `torque`: spins it at `speed` radians a second, or turns it to `angle` radians. |
+| `hinge.Angle` | How far it has turned, in radians. |
+| `Scene.CreateSuspension(a, b, anchor, childAnchor, axis, childAxis, childNormal, travel)` | A slider along `axis`, `travel` metres either way: a wheel's suspension. |
+| `suspension.SetSpring(stiffness, damping)` | Its spring, in newtons a metre and newton-seconds a metre. |
+| `suspension.Position` | How far along its travel it is. |
+| `Destroy()` | Removes it; safe after one of its bodies has gone. |
 
-```beef
+```csharp
 // A wheel on an axle along Z, spun at 3 radians a second with up to 100 N·m.
-let hinge = Scene.Physics.CreateHinge(car.BodyId, wheel.BodyId, wheel.Transform.Position, .(0, 0, 1), .(0, 0, 1), .(1, 0, 0));
-Scene.Physics.SetHingeMotor(hinge, 3, 100);
+Hinge? hinge = Scene.CreateHinge(car, wheel, wheel.GameObject.Transform.Position, Vector3.UnitZ, Vector3.UnitZ, Vector3.UnitX);
+hinge?.SetMotorSpeed(3, 100);
 ```
 
 Bodies joined by a hinge or a suspension do not collide with each other, so a wheel can sit inside its arch. Destroying either body removes the joint.
@@ -58,7 +58,7 @@ Turn **Debris** on in a Rigidbody for things that should lie about without getti
 - characters and ordinary bodies pass straight through it, and so do other pieces of debris;
 - rays, shape casts and overlaps ignore it, so it never blocks a shot or a line of sight.
 
-`Scene.Physics.IsDebris(bodyId)` tells you whether a body is debris.
+A Rigidbody's `Debris` says whether it is debris.
 
 ## Limits
 

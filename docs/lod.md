@@ -31,14 +31,13 @@ Nothing to send: each machine picks levels for its own cameras. A dedicated serv
 
 ## Code
 
-```beef
-let group = rock.AddComponent<LODGroup>();
-group.source = .Generated;
-LODGroup.Bias = settings.highDetail ? 1.5f : 1;
-let level = group.LevelFor(camera.GetCameraData(aspect));   // 0 full detail, -1 not drawn
+```csharp
+var group = rock.AddComponent<LODGroup>();
+group.Source = LODGroupSource.Generated;
+Quality.LodBias = highDetail ? 1.5f : 1;
 ```
 
-`MeshSimplifier.Simplify(mesh, 0.25f)` makes a simplified copy of any mesh.
+The engine's `MeshSimplifier.Simplify(mesh, 0.25f)` (Beef, for tools) makes a simplified copy of any mesh, and `LevelFor(cameraData)` says which level a camera would draw.
 
 ## Limits
 

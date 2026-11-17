@@ -156,9 +156,9 @@ class Bench : Component
 			cube.Transform.LocalPosition = position;
 			cube.Transform.LocalScale = .(Workload.CubeScale, Workload.CubeScale, Workload.CubeScale);
 			cube.AddComponent<MeshRenderer>();
-			cube.AddComponent<Graphs.Bobber>();
+			cube.AddComponent<EcsBench.Graphs.Bobber>();
 		}
-		Scene.CreateGameObject("Order").AddComponent<Graphs.GraphOrder>();
+		Scene.CreateGameObject("Order").AddComponent<EcsBench.Graphs.GraphOrder>();
 	}
 
 	void SpawnEntities()

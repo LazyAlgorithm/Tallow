@@ -557,6 +557,55 @@ static class Physics
         return obj != null && obj.HasComponent<Joint>();
     }
 
+    /// Builds the object's Joint again after its fields changed while playing.
+    [CSharpExpose]
+    public static bool RebuildJoint(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<Joint>())
+            return false;
+        obj.GetComponent<Joint>().Rebuild();
+        return true;
+    }
+
+    /// Builds the object's physics body again from its colliders (after adding compound parts).
+    [CSharpExpose]
+    public static bool RebuildRigidbody(uint64 session, uint64 entity)
+    {
+        let obj = LiveObject(session, entity);
+        if (obj == null || !obj.HasComponent<Rigidbody>())
+            return false;
+        obj.GetComponent<Rigidbody>().RebuildBody();
+        return true;
+    }
+
+    /// Adds a part to the object's Compound Collider, in its own space: kind 0 a box (a = size), 1 a cylinder
+    /// (a.x radius, a.y half height), 2 a convex hull round points (x, y, z after one another). rotation is a
+    /// quaternion (x, y, z, w; boxes take none). False without a Compound Collider or with too few points.
+    [CSharpExpose]
+    public static bool AddCompoundPart(uint64 session, uint64 entity, int32 kind, Vector3 center, Vector3 a, Vector4 rotation, Span<float> points)
+    {
+        let obj = LiveObject(session, entity);
+        let compound = obj?.GetComponent<CompoundCollider>();
+        if (compound == null)
+            return false;
+        let turn = Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
+        switch (kind)
+        {
+        case 0: compound.AddBox(center, a);
+        case 1: compound.AddCylinder(center, a.x, a.y, turn);
+        default:
+            let count = points.Length / 3;
+            if (count < 4)
+                return false;
+            let list = scope Vector3[count];
+            for (int i < count)
+                list[i] = .(points[i * 3], points[i * 3 + 1], points[i * 3 + 2]);
+            compound.AddHull(center, list, turn);
+        }
+        return true;
+    }
+
     [CSharpExpose]
     public static bool IsJointConnected(uint64 session, uint64 entity)
     {

@@ -11,9 +11,9 @@ The existing `SoftBodyKind.Jelly` remains unchanged, but the `SoftBody` class no
 - `AddImpulse(Vector3)`: changes the body's total momentum, preserving its current wobble
 - `AddForce(Vector3)`: applies a force over one fixed timestep; call it once per fixed tick
 
-Example Beef gameplay code (with a valid reference to the ball's `SoftBody`):
+Example gameplay code (with the ball's `SoftBody`):
 
-```beef
+```csharp
 soft.AddImpulse(aimDirection * shotStrength);
 ```
 

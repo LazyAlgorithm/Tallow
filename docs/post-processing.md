@@ -57,16 +57,16 @@ The grading is now part of the scene. Lookup tables are applied after the other 
 
 ## From code
 
-Every setting is a field of `scene.Environment` and can change while the game runs. The scene's settings are each player's own picture, so nothing is sent over the network.
+Every setting is a property of `Scene.Environment` and can change while the game runs. The scene's settings are each player's own picture, so nothing is sent over the network.
 
-```beef
-let env = Scene.Active.Environment;
+```csharp
+SceneEnvironment env = Scene.Environment;
 // Aiming down the sights: blur the world around the target, a little more the further it is raised.
-env.autoFocus = true;
-env.depthOfField = pose.AimBlend * 0.8f;
+env.AutoFocus = true;
+env.DepthOfField = pose.AimBlend * 0.8f;
 // A damage flash: redder, less colour.
-env.colorFilter = .(1, 0.6f, 0.6f);
-env.saturation = 0.5f;
+env.ColorFilter = new Color(1, 0.6f, 0.6f);
+env.Saturation = 0.5f;
 ```
 
 To try effects on a scene without editing it, start the game with `--effects` (on the web, add `?arg=--effects&arg=...` to the address):
@@ -75,7 +75,7 @@ To try effects on a scene without editing it, start the game with `--effects` (o
 ./MyGame --effects "ao=1,radius=0.8,dof=0.6,autofocus=1,motion=0.5,contrast=1.1,temperature=0.2,lut=Grading/warm.png"
 ```
 
-The names are `ao`, `radius`, `dof`, `focus`, `range`, `autofocus`, `motion`, `contrast`, `saturation`, `temperature`, `tint`, `vignette`, `lut` and `lutstrength`. `PostProcess.ApplySettings(list, env)` does the same from code.
+The names are `ao`, `radius`, `dof`, `focus`, `range`, `autofocus`, `motion`, `contrast`, `saturation`, `temperature`, `tint`, `vignette`, `lut` and `lutstrength`. 
 
 ## Players' settings
 
@@ -93,21 +93,20 @@ A game's settings menu usually lets each player turn effects off, tone down moti
 
 The engine does not save these fields. Keep them with your game's own saved settings and copy them across whenever they change:
 
-```beef
-[Component]
-class Settings : Component
+```csharp
+public class Settings : Script
 {
-    [Saved] public bool ambientOcclusion = true;
-    [Saved] public bool motionBlur = true;
-    [Saved] public float motionBlurAmount = 1;
-    [Saved] public float brightness = 1;
+    [Saved] public bool AmbientOcclusion = true;
+    [Saved] public bool MotionBlur = true;
+    [Saved] public float MotionBlurAmount = 1;
+    [Saved] public float Brightness = 1;
 
     public void Apply()
     {
-        ScreenEffects.AmbientOcclusion = ambientOcclusion;
-        ScreenEffects.MotionBlur = motionBlur;
-        ScreenEffects.MotionBlurAmount = motionBlurAmount;
-        ScreenEffects.Brightness = brightness;
+        ScreenEffects.AmbientOcclusion = AmbientOcclusion;
+        ScreenEffects.MotionBlur = MotionBlur;
+        ScreenEffects.MotionBlurAmount = MotionBlurAmount;
+        ScreenEffects.Brightness = Brightness;
     }
 }
 ```

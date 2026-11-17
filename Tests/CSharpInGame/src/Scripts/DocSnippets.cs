@@ -455,3 +455,338 @@ public class Shooter : Script
         bool migrating = Network.IsMigrating(Scene) && Network.GetMaxRewindTicks(Scene) > 0;
     }
 }
+
+// docs/lines-and-trails.md
+public class LineSnippets : Script
+{
+    private void Snippets(Vector3 start, Vector3 end, Vector3 tip, GameObject camera, GameObject ball, float ballRadius, float power,
+        LineRenderer aim)
+    {
+        var line = GetComponent<LineRenderer>();
+        line.SetPositions([start, end]);
+        line.PositionCount = 3;
+        line.SetPosition(2, tip);
+        float length = line.Length;
+
+        Vector3 direction = camera.Transform.Forward;
+        direction.Y = 0;
+        direction = Vector3.Normalize(direction);
+        Vector3 from = ball.Transform.Position + direction * (ballRadius + 0.05f);
+        aim.SetPositions([from, from + direction * Mathf.Lerp(0.5f, 3, power)]);
+        aim.StartColor = new Color(1, 1, 1);
+        aim.EndColor = Color.Lerp(new Color(1, 1, 1, 0), new Color(1, 0.2f, 0.1f, 0), power);
+        aim.StartWidth = aim.EndWidth = 0.08f;
+        aim.DashLength = 0.08f;
+        aim.GapLength = 0.12f;
+    }
+}
+
+// docs/behavior-trees.md
+public class GuardActions : Script
+{
+    public int Ammo = 3;
+
+    public bool HasAmmo() => Ammo > 0;      // use as a condition
+    public void Shoot() { Ammo--; }          // use as an action
+
+    private void Snippets()
+    {
+        var brain = GetComponent<BehaviorTreeRunner>();
+        brain.SendEvent("Hit");
+        AINoise.Make(Scene, Transform.Position, 30, GameObject);
+        AINoise.Forget();
+    }
+
+    public override void OnTreeEvent(string name)
+    {
+        if (name == "Alarm") { }
+    }
+}
+
+// docs/maps.md
+public class MapSnippets : Script
+{
+    private void Snippets(GameObject level, string mapId, MapFileInfo chosen, MapFileInfo map, string id, string hash)
+    {
+        var (written, problems) = MapFiles.Export(Scene, "Maps/Harbour.tmap", "Harbour", "A player", "A hill by the sea.",
+            group: level, keepId: mapId);
+        foreach (MapFileInfo found in MapFiles.Find(MapFiles.Folder))
+        {
+            if (found.Ok)
+                Log.Info(found.Name);
+            else
+                Log.Warning($"{found.File}: {found.Problems[0]}");
+        }
+        if (MapFiles.Mount(chosen))
+            Scene.LoadAdditive(chosen.ScenePath, true);
+        if (chosen.CountComponents("Tallow.SpawnPoint") == 0)
+            chosen = chosen.WithProblem("It has no spawn points.");
+
+        MapSharing.Offer(map);
+        if (!MapSharing.Have(id, hash))
+            MapSharing.Request(Scene, id, hash);
+        if (MapSharing.State == MapDownloadState.Done) { }
+        MapSharing.Reset();
+    }
+}
+
+// docs/systems.md
+public class Spinner : Script
+{
+    public Vector3 Speed = new(0, 45, 0);
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        Transform.Rotate(Speed * deltaTime);
+    }
+}
+
+[Component]
+public struct SpeedData
+{
+    [Sync] public float Speed;
+}
+
+[Component]
+public struct DocCharge { public float Amount; }
+
+[Component]
+public struct DocFrozen { public int Unused; }
+
+public class Accelerate : Script
+{
+    public override void Update(TickInput input, float deltaTime)
+    {
+        EcsEntity entity = GameObject.Entity;
+        if (entity.TryGet(out SpeedData data))
+        {
+            data.Speed += deltaTime;
+            entity.Set(data);
+        }
+        Scene.Query<SpeedData, DocCharge>().ForEach((EcsEntity e, ref SpeedData speed, ref DocCharge charge) =>
+        {
+            speed.Speed += charge.Amount * 0.1f;
+        });
+        int count = Scene.Query<SpeedData>().Without<DocFrozen>().Count;
+    }
+}
+
+// docs/joints.md, docs/dialogue.md, docs/viewmodel.md, docs/post-processing.md
+public class DocPlayer : Script { public bool ControlsEnabled = true; }
+
+public class DocGate : Script { public void Open() { } }
+
+public class Talker : Script
+{
+    public DocPlayer? Player;
+    public DocGate? Gate;
+
+    public override void Start()
+    {
+        Player!.ControlsEnabled = false;
+        GetComponent<DialogueRunner>().Play();
+    }
+
+    public override void OnDialogueEvent(string name, float value)
+    {
+        if (name == "OpenGate")
+            Gate?.Open();
+    }
+
+    public override void OnDialogueEnded() => Player!.ControlsEnabled = true;
+
+    private void Snippets(GameObject weight, GameObject post, Rigidbody forearm, Rigidbody upperArm, Vector3 elbowPosition,
+        Rigidbody car, Rigidbody wheel, GameObject PlayerCamera, GameObject weapon, ViewmodelPose pose, bool fired)
+    {
+        Joint.Connect(weight.GetComponent<Rigidbody>(), post.GetComponent<Rigidbody>(), post.Transform.Position, Vector3.Down);
+        Joint.Connect(forearm, upperArm, elbowPosition, -upperArm.GameObject.Transform.Up, 70);
+        Hinge? hinge = Scene.CreateHinge(car, wheel, wheel.GameObject.Transform.Position, Vector3.UnitZ, Vector3.UnitZ, Vector3.UnitX);
+        hinge?.SetMotorSpeed(3, 100);
+        bool debris = wheel.Debris;
+        GetComponent<CompoundCollider>().AddCylinder(Vector3.Zero, 0.4f, 0.1f, Quaternion.Identity);
+        wheel.RebuildBody();
+
+        int id = Subtitles.Show("Radio", "Bravo team, move in.", 3);
+        Subtitles.Caption("[distant explosion]", 2);
+        Subtitles.Hide(id);
+
+        var camera = PlayerCamera.GetComponent<Camera>();
+        camera.ViewmodelLayer = Layers.Named("Viewmodel");
+        camera.ViewmodelFieldOfView = 60;
+        weapon.SetLayer(camera.ViewmodelLayer);
+        pose.Aiming = InputActions.Held("Aim");
+        if (fired) pose.Kick(1);
+
+        SceneEnvironment env = Scene.Environment;
+        env.AutoFocus = true;
+        env.DepthOfField = pose.AimBlend * 0.8f;
+        env.ColorFilter = new Color(1, 0.6f, 0.6f);
+        env.Saturation = 0.5f;
+        ScreenEffects.Brightness = 1.2f;
+    }
+}
+
+// docs/sequencer.md
+public class Cutscene : Script
+{
+    public DocPlayer? Player;
+    public DocGate? Gate;
+
+    public void Begin()
+    {
+        Player!.ControlsEnabled = false;
+        GetComponent<SequencePlayer>().Play();
+    }
+
+    public override void OnSequenceEvent(string name, float value)
+    {
+        if (name == "GateOpened")
+            Gate?.Open();
+    }
+
+    public override void OnSequenceFinished() => Player!.ControlsEnabled = true;
+}
+
+// docs/water.md, voxel-objects.md, quality.md, lighting.md, lod.md, jobs.md
+public class DocWorldSnippets : Script
+{
+    private void Snippets(Vector3 point, Vector3 origin, Vector3 direction, GameObject boat, GameObject go, GameObject rock,
+        bool pressedLow, bool toggle, bool highDetail, int[] targets)
+    {
+        Water water = Water.At(Scene, point);
+        if (water.IsValid && water.Covers(point))
+            Log.Info($"{water.DepthOf(point)} m under");
+        if (water.IsValid && water.TryGetSurface(point, out WaterSurface surface))
+            boat.Transform.Position = new Vector3(point.X, surface.Height, point.Z);
+
+        if (Scene.RaycastHit(origin, direction, 100) is PhysicsHit hit && hit.HitObject?.TryGetComponent(out VoxelObject voxels) == true)
+            voxels.Carve(hit.Point, 0.4f);
+
+        if (pressedLow) Quality.Set(QualityLevel.Low);
+        Quality.MotionBlur = toggle;
+        Quality.Save();
+        if (!File.Exists($"{GamePaths.PlayerData}graphics.cfg"))
+            Quality.Set(Quality.Recommended);
+
+        var lamp = go.AddComponent<Light>();
+        lamp.Type = LightType.Point;
+        lamp.Range = 8;
+        lamp.Intensity = 4;
+        lamp.CastShadows = true;
+        Quality.ShadowedLights = 4;
+
+        var group = rock.AddComponent<LODGroup>();
+        group.Source = LODGroupSource.Generated;
+        Quality.LodBias = highDetail ? 1.5f : 1;
+
+        float[] scores = new float[targets.Length];
+        Parallel.For(0, targets.Length, i => scores[i] = targets[i] * 2f);
+    }
+}
+
+// docs/navigation.md, decals.md, foliage.md, skinned-materials.md, standalone-player.md, materials.md, fields.md
+public class DocMoreSnippets : Script
+{
+    public List<Vector3> Waypoints = [];
+    public List<string> Names = [];
+    public List<GameObject> Targets = [];
+    public float[] Weights = new float[3];
+
+    private void Snippets(Vector3 destination, Vector3 point, Vector3 center, Vector3 eyes, Vector3 target, System.Random random,
+        Vector3 hitPoint, Vector3 hitNormal, Vector3 position, Quaternion rotation, bool playerHasChosen, bool savedChoice,
+        SoftBody soft, Vector3 aimDirection, float shotStrength)
+    {
+        var navigation = GetComponent<NavigationAgent>();
+        navigation.SetDestination(destination, 3, 0.2f);
+        if (!navigation.PathPending && (navigation.PathFailed || navigation.HasArrived))
+            navigation.StopMovement();
+        NavigationSurface surface = NavigationSurface.Find(Scene);
+        if (surface.SamplePosition(point, 2, out Vector3 onFloor)) { }
+        if (surface.RandomPoint(center, 10, random, out Vector3 goal)) navigation.SetDestination(goal, 3, 0.2f);
+        if (!surface.Raycast(eyes, target, out Vector3 blocked)) { }
+        surface.Rebuild(center - Vector3.One, center + Vector3.One);
+
+        Decals.Spawn(Scene, hitPoint, hitNormal, "Textures/bullet_hole.png", 0.12f, 20, spin: Random.Shared.NextSingle() * 360);
+        Decals.Spawn(Scene, position, rotation, new Vector3(2, 1, 0.5f), "Textures/skid.png", 0, new Color(1, 1, 1, 0.8f));
+        Decals.Clear(Scene);
+        Decals.MaxSpawned = 512;
+
+        var grass = GetComponent<Foliage>();
+        grass.Paint(point, 6);
+        grass.Erase(point, 3);
+        grass.Add(point);
+        grass.Clear();
+
+        var skinned = GetComponent<SkinnedMeshRenderer>();
+        for (int i = 0; i < skinned.PartCount; i++)
+            Log.Info(skinned.PartName(i));
+        skinned.SetPartMaterial(1, "Materials/armour_damaged.tmat");
+        skinned.SetPartHidden("Hat_Tricorn", true);
+        skinned.SetPartColor("Coat", new Color(0.56f, 0.14f, 0.16f));
+        skinned.SetPartShadowOnly("Head", true);
+
+        string? text = Assets.ReadText("Data/levels.txt");
+        byte[]? bytes = Assets.ReadBytes("Data/table.bin");
+        if (Assets.Exists("Data/extra.txt")) { }
+        if (playerHasChosen)
+            Screen.Fullscreen = savedChoice;
+
+        soft.AddImpulse(aimDirection * shotStrength);
+
+        var renderer = GetComponent<MeshRenderer>();
+        renderer.Material = "Materials/brass.tmat";
+        renderer.SetMaterialColor("color", new Color(1, 0, 0, 1));
+        renderer.SetMaterialFloat("roughness", 0.2f);
+        renderer.Emissive = new Color(1, 1, 1);
+        renderer.EmissiveFromColor = true;
+        renderer.EmissiveIntensity = 2;
+
+        var effect = GetComponent<ComputeEffect>();
+        effect.SetFloat("speed", 3);
+        effect.SetColor("ink", new Color(1, 0.3f, 0.1f, 1));
+        effect.EveryFrame = false;
+        effect.Step();
+    }
+
+    public void OnFullscreen(UIElement source)
+    {
+        Screen.Fullscreen = source.Value > 0.5f;
+    }
+}
+
+// docs/soft-bodies.md
+public class DocSoftSnippets : Script
+{
+    private void Snippets(GameObject car, GameObject rail, SoftBody jelly, Vector3[] saved, GameObject helicopter, GameObject crate,
+        GameObject truck, GameObject other2, GameObject counterweight, GameObject cargo, Vector3 beamLeft, Vector3 beamRight,
+        GameObject trailer, GameObject player)
+    {
+        var shell = car.GetComponent<SoftBody>();
+        float deepest = shell.DeepestDent;
+        Vector3[] dents = shell.GetDents();
+        shell.SetDents(dents);
+        shell.Repair();
+
+        var curtain = rail.AddComponent<SoftBody>();
+        curtain.Pins = "0-10";
+        curtain.WindDrag = 2;
+        curtain.Rebuild();
+        foreach (Vector3 p in curtain.Positions) { }
+        curtain.SetPositions(saved);
+        uint[] touched = jelly.TouchingBodies();
+
+        Rope? sling = Rope.Attach(helicopter, crate, new Vector3(0, -0.5f, 0), new Vector3(0, 0.4f, 0), 6);
+        Rope? tow = Rope.Attach(truck, other2, new Vector3(0, 0.4f, -2.2f), new Vector3(0, 0.4f, 2.1f));
+        if (sling is { IsTaut: true, Pull: > 5000 } held)
+            held.Release();
+        if (Rope.Attach(counterweight, cargo) is Rope hoist)
+        {
+            hoist.WrapsAround = true;
+            hoist.LayAlong([counterweight.Transform.Position, beamLeft, beamRight, cargo.Transform.Position]);
+        }
+        Rope? other = sling?.Snap();
+        tow?.AttachEnd(trailer, new Vector3(0, 0.5f, 2));
+        tow?.AttachStart(player);
+        tow?.GameObject.Destroy();
+    }
+}

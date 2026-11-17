@@ -70,19 +70,29 @@ Add a **Sequence Player** (under *Animation*) to an object and pick its **Sequen
 | **Use Camera Shots** | While it plays and has a shot, the game is seen through the shots; afterwards through its own camera again. Off: the game's camera is left alone (for sequences that only move things). |
 | **Shared**, **Only Owner Controls** | See Networking. |
 
-```beef
-let cutscene = GetComponent<SequencePlayer>();
-cutscene.OnEvent.Add(new (name, value) =>
+```csharp
+public class Cutscene : Script
 {
-	if (name == "GateOpened")
-		gate.Open();
-});
-cutscene.OnFinished.Add(new () => player.controlsEnabled = true);
-player.controlsEnabled = false;
-cutscene.Play();
+    public Player Player;               // the game's own player script, with a switch for its controls
+
+    public void Begin()
+    {
+        Player.ControlsEnabled = false;
+        GetComponent<SequencePlayer>().Play();
+    }
+
+    // Event keys of the sequence:
+    public override void OnSequenceEvent(string name, float value)
+    {
+        if (name == "GateOpened")
+            gate.Open();
+    }
+
+    public override void OnSequenceFinished() => Player.ControlsEnabled = true;
+}
 ```
 
-`Pause()`, `Resume()`, `Stop()`, `Skip()` and `Seek(seconds)` control it; `State`, `Time`, `Length` and `ScreenFade` say where it is. **Skip** jumps to the end as if it had played: objects end where they would, characters play their last animation, events passed over still happen (so the gate still opens), and sounds and subtitles stop. **Seek** moves to a time without the events in between. `OnFinished` is called when it ends or is skipped. `SequencePlayer.PlayingCount` says how many are playing, for a game that turns its controls and interface off during cutscenes.
+`Pause()`, `Resume()`, `Stop()`, `Skip()` and `Seek(seconds)` control it; `IsPlaying` and `Time` say where it is. **Skip** jumps to the end as if it had played: objects end where they would, characters play their last animation, events passed over still happen (so the gate still opens), and sounds and subtitles stop. **Seek** moves to a time without the events in between. `OnSequenceFinished()` is called on the object's scripts when it ends or is skipped, not when it is stopped.
 
 The camera: a Sequence Player with camera shots makes a camera of its own (a child, *Sequence Camera*) and the game is seen through it while a shot is on (`Scene.CameraOverride`; `Scene.ViewCamera` is the camera the game is seen through). The listener goes with it, so sounds are heard from the shot. The scene's camera keeps its place and comes back at the end.
 

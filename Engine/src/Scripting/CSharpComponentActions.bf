@@ -192,6 +192,25 @@ static class CSharpComponentActions
 		return true;
 	}
 
+	/// A Viewmodel Pose kicks back as a shot does (amount 1 is one shot's worth).
+	[CSharpExpose]
+	public static bool ViewmodelKick(uint64 session, uint64 entity, float amount)
+	{
+		let pose = Get<ViewmodelPose>(Object(session, entity));
+		if (!pose)
+			return false;
+		pose.Kick(amount);
+		return true;
+	}
+
+	/// How far a Viewmodel Pose is into aiming, 0 at the hip to 1 down the sights (eased); -1 when there is none.
+	[CSharpExpose]
+	public static float ViewmodelAimBlend(uint64 session, uint64 entity)
+	{
+		let pose = Get<ViewmodelPose>(Object(session, entity));
+		return pose ? pose.AimBlend : -1;
+	}
+
 	/// 0 Begin loading, 1 Activate (switch to the loaded scene).
 	[CSharpExpose]
 	public static bool SceneLoaderControl(uint64 session, uint64 entity, int32 action)
@@ -512,6 +531,33 @@ static class CSharpComponentActions
 			return false;
 		effect.SetVector(name, value);
 		return true;
+	}
+
+	/// Runs a compute effect once now (for one with Every Frame off). False without one, or when it could not run.
+	[CSharpExpose]
+	public static bool ComputeStep(uint64 session, uint64 entity)
+	{
+		let effect = Get<ComputeEffect>(Object(session, entity));
+		if (!effect)
+			return false;
+		return effect.Step();
+	}
+
+	/// Foliage brush: 0 Paint (radius, amount), 1 Erase (radius), 2 Add one plant (a = turn degrees, b = scale),
+	/// 3 Clear. How many plants were added or removed; -1 without a Foliage.
+	[CSharpExpose]
+	public static int32 FoliageEdit(uint64 session, uint64 entity, int32 action, Vector3 point, float a, float b)
+	{
+		let foliage = Get<Foliage>(Object(session, entity));
+		if (!foliage)
+			return -1;
+		switch (action)
+		{
+		case 0: return foliage.Paint(point, a, b);
+		case 1: return foliage.Erase(point, a);
+		case 2: foliage.Add(point, a, b); return 1;
+		default: foliage.Clear(); return 0;
+		}
 	}
 
 	/// 0 ResetShape, 1 Fill. False without a Voxel Object.
