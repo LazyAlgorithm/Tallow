@@ -983,6 +983,11 @@ internal static class Program
         if (request.Operation == "symbol")
         {
             output.Add(Line("info", target.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            // Its /// summary under it (the hover tooltip), from the game's own code or Tallow.API's XML docs.
+            ISymbol documented = (target as IMethodSymbol)?.ReducedFrom ?? target.OriginalDefinition;
+            string summary = RoslynCompletion.Summary(documented);
+            if (summary.Length > 0)
+                output.Add(Line("info", summary));
             return;
         }
 

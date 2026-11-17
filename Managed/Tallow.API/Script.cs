@@ -17,7 +17,9 @@ public sealed class ComponentAttribute : Attribute { }
 /// </summary>
 public interface IGameplayComponentRegistry
 {
+    /// <summary>The full names of every script class the game has.</summary>
     global::System.Collections.Generic.IReadOnlyList<string> ComponentNames { get; }
+    /// <summary>A new script of the class with this full name; null when there is none.</summary>
     Script? Create(string fullName);
     /// <summary>Former full names ([FormerlyNamed]) and the script each now names.</summary>
     global::System.Collections.Generic.IReadOnlyDictionary<string, string> FormerNames =>
@@ -177,6 +179,7 @@ public readonly record struct TickInput(
     public Quaternion LookRotation =>
         Quaternion.CreateFromYawPitchRoll(Yaw * (MathF.PI / 180), Pitch * (MathF.PI / 180), 0);
 
+/// <summary>Move turned by the player's yaw into a world direction on the ground (Y is 0), at most 1 long.</summary>
     public Vector3 MoveDirection
     {
         get
@@ -1082,30 +1085,35 @@ public sealed class Transform(GameObject gameObject) : IComponent
     private void WriteQuaternion(TransformChannel channel, Quaternion value) =>
         Write(channel, new Vector4(value.X, value.Y, value.Z, value.W));
 
+/// <summary>Where the object is in the world.</summary>
     public Vector3 Position
     {
         get => Engine.Bridge.GetPosition(gameObject);
         set => Engine.Bridge.SetPosition(gameObject, value);
     }
 
+/// <summary>Where the object is relative to its parent (the world's when it has none).</summary>
     public Vector3 LocalPosition
     {
         get => ReadVector(TransformChannel.LocalPosition);
         set => WriteVector(TransformChannel.LocalPosition, value);
     }
 
+/// <summary>The object's rotation in the world.</summary>
     public Quaternion Rotation
     {
         get => ReadQuaternion(TransformChannel.Rotation);
         set => WriteQuaternion(TransformChannel.Rotation, value);
     }
 
+/// <summary>The object's rotation relative to its parent.</summary>
     public Quaternion LocalRotation
     {
         get => ReadQuaternion(TransformChannel.LocalRotation);
         set => WriteQuaternion(TransformChannel.LocalRotation, value);
     }
 
+/// <summary>The object's own scale, relative to its parent.</summary>
     public Vector3 LocalScale
     {
         get => ReadVector(TransformChannel.LocalScale);
@@ -1115,12 +1123,14 @@ public sealed class Transform(GameObject gameObject) : IComponent
     /// <summary>The object's scale in the world, its parents' scale included.</summary>
     public Vector3 WorldScale => ReadVector(TransformChannel.WorldScale);
 
+/// <summary>The world rotation as angles in degrees (x pitch, y yaw, z roll).</summary>
     public Vector3 EulerAngles
     {
         get => ReadVector(TransformChannel.EulerAngles);
         set => WriteVector(TransformChannel.EulerAngles, value);
     }
 
+/// <summary>The rotation relative to the parent as angles in degrees.</summary>
     public Vector3 LocalEulerAngles
     {
         get => ReadVector(TransformChannel.LocalEulerAngles);
@@ -1183,12 +1193,19 @@ public sealed class Transform(GameObject gameObject) : IComponent
 /// </summary>
 public interface IEngineBridge
 {
+    /// <summary>Whether the object still exists.</summary>
     bool IsAlive(GameObject gameObject);
+    /// <summary>The object's world position.</summary>
     Vector3 GetPosition(GameObject gameObject);
+    /// <summary>Moves the object in the world.</summary>
     void SetPosition(GameObject gameObject, Vector3 position);
+    /// <summary>One of the object's transform values (vectors in x, y, z).</summary>
     Vector4 GetTransform(GameObject gameObject, TransformChannel channel);
+    /// <summary>Sets one of the object's transform values.</summary>
     void SetTransform(GameObject gameObject, TransformChannel channel, Vector4 value);
+    /// <summary>A point from the object's space to the world's (inverse: the other way).</summary>
     Vector3 TransformPoint(GameObject gameObject, Vector3 point, bool inverse);
+    /// <summary>The object's first script of scriptType (or deriving from it); null when it has none.</summary>
     Script? GetManagedComponent(GameObject gameObject, Type scriptType);
     /// <summary>Every script of scriptType (or deriving from it) on the object, in the order they were added.</summary>
     void GetManagedComponents(GameObject gameObject, Type scriptType, List<Script> output)
@@ -1196,11 +1213,17 @@ public interface IEngineBridge
         if (GetManagedComponent(gameObject, scriptType) is { } one)
             output.Add(one);
     }
+    /// <summary>The script with this instance ID on the object; null when it is gone.</summary>
     Script? GetManagedInstance(GameObject gameObject, int instanceId);
+    /// <summary>Destroys the object: invalid at once, OnDisable and OnDestroy at the end of the frame.</summary>
     void Destroy(GameObject gameObject);
+    /// <summary>Whether this machine controls the object (its owner, or the server for unowned ones).</summary>
     bool IsMine(GameObject gameObject);
+    /// <summary>Makes an empty object in a scene: its id.</summary>
     ulong CreateSceneObject(ulong sceneSession, string name);
+    /// <summary>The first object of this name in a scene: its id, 0 when there is none.</summary>
     ulong FindSceneObject(ulong sceneSession, string name);
+    /// <summary>Makes a copy of a prefab in a scene: its id, 0 when the prefab cannot be read.</summary>
     ulong InstantiatePrefab(ulong sceneSession, string path);
 }
 

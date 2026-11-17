@@ -432,7 +432,13 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   - Closed November 16, 2026: validation is `Script.OnValidate` (called after an Inspector edit, tested). Prefab
     overrides need an engine-wide per-instance override system; the editor has none for any component, so it is
     not a C# gap and is left to the editor roadmap.
-- [ ] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.
+- [x] High-quality XML API docs, editor tooltips, C# script templates, practical gameplay examples, and repeatable Beef-versus-C# parity tests.
+  Closed November 17, 2026: every public Tallow.API member has a `///` summary (the 40 that had none were written;
+  enum values like `KeyCode.A` are left to their names), kept so by `tools/check_csharp_api_docs.py` in CI. Hovering
+  a name in the code editor now shows its summary under the signature (it was only in completion); a Roslyn test
+  checks it (134). Templates (Create > C# Script, the project templates), gameplay examples (every doc's C#,
+  compiled in DocSnippets.cs) and the Beef-versus-C# benchmarks (`Samples/EcsBench` against `Samples/CSharpBench`,
+  docs/csharp-benchmark-plan.md) were done before.
 
 ## P3 — convert visual scripting and sample content
 
@@ -468,7 +474,11 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   `ecs-data.tsv`, same keys as the Beef ones): Has/Add/Remove Component, Get/Set per field, and For Each, which
   compiles to `Scene.Query<T>().ForEach` over active GameObjects (GraphProbe's Heal event is tested).
 - [x] Permit graph-to-C# calls, C#-to-graph events/operations, automatic C# type/method node discovery, managed ECS & networking nodes, and correct graph errors/source mapping.
-- [ ] Convert the legacy starter projects, sample/voxel sandbox/showcase content, tutorial code and code-generation templates; newly created projects should not expose Beef to normal C# authors.
+- [x] Convert the legacy starter projects, sample/voxel sandbox/showcase content, tutorial code and code-generation templates; newly created projects should not expose Beef to normal C# authors.
+  Closed November 17, 2026: every project template (empty, common, showcase) and `Samples/Sandbox` is C#, new
+  projects have no Beef files, and every gameplay doc's code is C# (kept compiling in DocSnippets.cs). Beef is left
+  only where it is meant to be: `Samples/EcsBench` (the Beef side of the benchmarks) and docs about engine and editor
+  tooling. Website tutorials are their own item (below, under Open questions).
   - [x] Voxel sandbox template (November 15, 2026): its scripts are C# (Editor/templates/common/Scripts:
     Spinner, FollowCamera, Digger, Hud, CharacterAnimation, SampleMenu); no Program.bf, GameSetup.bf or
     BeefProj. The player is a prefab (Prefabs/Player.tprefab, written by the first open, set as the Network
@@ -505,7 +515,7 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     rigid body's `Velocity` makes its physics body at once (before, it was ignored until the next step). All 11
     scenes play headless with no errors (not looked at in a window). `Samples/EcsBench` stays Beef on purpose:
     it is the Beef side of the Beef-versus-C# benchmark.
-  - [~] Docs (November 15, 2026): about 45 docs have Beef code. Converted so far, with every C# block kept compiling
+  - [x] Docs (November 15–17, 2026): about 45 docs had Beef code. Converted, with every C# block kept compiling
     in `Tests/CSharpInGame/src/Scripts/DocSnippets.cs`: animator, physics-queries, character-controller, input,
     saving, scenes. APIs added for them: `Scene.CapsuleCastHit/BoxCastHit`, `SphereCastHit(..., ignoreBody)`,
     `CheckSphere/CheckCapsule/CheckBox`, `OverlapSphere/OverlapCapsule/OverlapBox` (objects, each once),

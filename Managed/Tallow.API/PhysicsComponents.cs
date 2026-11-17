@@ -18,6 +18,7 @@ public readonly partial record struct Rigidbody(GameObject GameObject) : ICompon
     public uint BodyId => Physics.RigidbodyBodyId(GameObject.SceneId, GameObject.Id);
     /// <summary>Whether it lies still and is not being simulated until something touches it.</summary>
     public bool IsSleeping => Physics.IsRigidbodySleeping(GameObject.SceneId, GameObject.Id);
+    /// <summary>Its speed and direction in metres a second. Setting it on a new body makes the body at once.</summary>
     public Vector3 Velocity
     {
         get => Physics.GetRigidbodyVelocity(GameObject.SceneId, GameObject.Id);
@@ -156,6 +157,7 @@ public enum ColliderKind { Box, Sphere, Capsule, Mesh, Compound, Convex }
 /// </summary>
 public readonly record struct ColliderHandle(GameObject GameObject, int Index) : IComponent
 {
+/// <summary>The collider's shape; null when the collider is gone.</summary>
     public ColliderKind? Kind
     {
         get
@@ -192,6 +194,7 @@ public readonly record struct ColliderHandle(GameObject GameObject, int Index) :
     /// <summary>A box's full size; null for other shapes.</summary>
     public Vector3? BoxSize => Kind == ColliderKind.Box ?
         Physics.GetColliderBoxSize(GameObject.SceneId, GameObject.Id, Index) : null;
+/// <summary>A sphere's radius; null for other shapes.</summary>
     public float? SphereRadius
     {
         get
@@ -200,6 +203,7 @@ public readonly record struct ColliderHandle(GameObject GameObject, int Index) :
             return r >= 0 ? r : null;
         }
     }
+/// <summary>A capsule's radius; null for other shapes.</summary>
     public float? CapsuleRadius
     {
         get
@@ -208,6 +212,7 @@ public readonly record struct ColliderHandle(GameObject GameObject, int Index) :
             return r >= 0 ? r : null;
         }
     }
+/// <summary>A capsule's height from end to end, its rounded ends included; null for other shapes.</summary>
     public float? CapsuleHeight
     {
         get
@@ -237,6 +242,7 @@ public readonly record struct Joint(GameObject GameObject) : IComponent
         if (!Physics.RebuildJoint(GameObject.SceneId, GameObject.Id))
             throw ActionText.Missing(GameObject, "Joint");
     }
+/// <summary>The other body the joint holds this one to; null when it is held to the world.</summary>
     public Rigidbody? ConnectedTo
     {
         get
@@ -245,6 +251,7 @@ public readonly record struct Joint(GameObject GameObject) : IComponent
             return entity == 0 ? null : new Rigidbody(new GameObject(GameObject.SceneId, entity));
         }
     }
+/// <summary>How far, in degrees (0 to 179), the bodies may swing from the joint's axis; 0 for no limit.</summary>
     public float SwingLimit
     {
         get => Physics.GetJointSwingLimit(GameObject.SceneId, GameObject.Id);
@@ -329,11 +336,13 @@ public readonly partial record struct SoftBody(GameObject GameObject) : ICompone
                 throw new ArgumentOutOfRangeException(nameof(value));
         }
     }
+    /// <summary>The soft body's average velocity in metres a second; setting it moves every point at that speed.</summary>
     public Vector3 Velocity
     {
         get => Physics.GetSoftBodyVelocity(GameObject.SceneId, GameObject.Id);
         set => Physics.SetSoftBodyVelocity(GameObject.SceneId, GameObject.Id, value);
     }
+/// <summary>Jelly: how hard the air inside pushes out, in pascals above the air outside (0 keeps its shape by its edges alone, 10 a jelly cube, 200 and more blows it up into a ball).</summary>
     public float Pressure
     {
         get => Physics.GetSoftBodyPressure(GameObject.SceneId, GameObject.Id);

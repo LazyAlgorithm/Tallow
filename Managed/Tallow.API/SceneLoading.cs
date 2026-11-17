@@ -126,6 +126,8 @@ public sealed class SceneLoad
     }
 }
 
+/// <summary>Changing scenes: <see cref="LoadAsync"/> in the background behind a loading screen, and the engine's
+/// scene calls.</summary>
 public static partial class SceneManager
 {
     /// <summary>

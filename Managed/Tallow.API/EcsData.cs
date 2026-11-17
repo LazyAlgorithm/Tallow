@@ -177,6 +177,7 @@ public readonly record struct EcsQuery<T1>(ulong SessionId) where T1 : unmanaged
     /// <summary>Only bare entities, not GameObjects' (what systems run on).</summary>
     internal bool BareOnly { get; init; }
 
+    /// <summary>How many entities match the query now.</summary>
     public int Count
     {
         get
@@ -248,6 +249,7 @@ public readonly record struct EcsQuery<T1, T2>(ulong SessionId) where T1 : unman
     /// <summary>Only bare entities, not GameObjects' (what systems run on).</summary>
     internal bool BareOnly { get; init; }
 
+    /// <summary>How many entities match the query now.</summary>
     public int Count
     {
         get
@@ -321,6 +323,7 @@ public readonly record struct EcsQuery<T1, T2, T3>(ulong SessionId)
     /// <summary>Only bare entities, not GameObjects' (what systems run on).</summary>
     internal bool BareOnly { get; init; }
 
+    /// <summary>How many entities match the query now.</summary>
     public int Count
     {
         get

@@ -180,6 +180,15 @@ internal static class Program
                         $"FAIL: persistent Roslyn request {i + 1} returned:\n{result}");
                 Check($"persistent Roslyn request {i + 1} without restarting .NET", true);
             }
+            string hoverFolder = Path.Combine(queue, "request-hover");
+            Directory.CreateDirectory(hoverFolder);
+            int hoverCursor = File.ReadAllText(file).IndexOf("Position", StringComparison.Ordinal) + 2;
+            PublishRequest(hoverFolder, $"operation\tsymbol\nfile\t{file}\ncursor\t{hoverCursor}\n");
+            string hoverResponse = Path.Combine(hoverFolder, "response.tsv");
+            WaitFor(hoverResponse, worker);
+            string hover = File.ReadAllText(hoverResponse);
+            Check("hovering an engine API member shows its /// summary under the signature",
+                hover.Contains("info\t") && hover.Contains("Where the object is in the world."));
             string apiFile = Path.Combine(engine, "Managed", "Tallow.API", "Script.cs");
             string apiText = File.ReadAllText(apiFile);
             int apiCursor = apiText.IndexOf("class Script", StringComparison.Ordinal) + "class Script".Length;

@@ -362,7 +362,7 @@ internal static class RoslynCompletion
     }
 
     // The <summary> of a symbol's XML documentation as plain text (cref names kept), at most a few lines.
-    private static string Summary(ISymbol symbol)
+    internal static string Summary(ISymbol symbol)
     {
         string xml = symbol.GetDocumentationCommentXml(expandIncludes: false) ?? "";
         int open = xml.IndexOf("<summary>", StringComparison.Ordinal);

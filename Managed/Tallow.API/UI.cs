@@ -30,6 +30,7 @@ public readonly record struct UIElement(GameObject GameObject, string Id)
     /// <summary>The document the element is in.</summary>
     public UIDocument Document => new(GameObject);
 
+/// <summary>The element's text (a label's or button's words, a text field's contents).</summary>
     public string Text
     {
         get
@@ -51,6 +52,7 @@ public readonly record struct UIElement(GameObject GameObject, string Id)
     /// <summary>Sets the element's text (the same as setting Text).</summary>
     public void SetText(string text) => Text = text;
 
+/// <summary>Whether the element is shown; a hidden one takes no room in the layout.</summary>
     public bool Visible
     {
         get => CSharpUI.GetVisible(GameObject.SceneId, GameObject.Id, Id);

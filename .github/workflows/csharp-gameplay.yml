@@ -82,6 +82,8 @@ jobs:
           fi
       - name: Build managed gameplay API
         run: dotnet build Managed/Tallow.API/Tallow.API.csproj -c Debug --nologo
+      - name: Every public C# API member has a doc comment (its code editor tooltip)
+        run: python3 tools/check_csharp_api_docs.py
       - name: Build Roslyn language service
         run: dotnet build Managed/Tallow.LanguageService/Tallow.LanguageService.csproj -c Debug --nologo
       - name: Verify Roslyn editor features and UTF-8 offsets
