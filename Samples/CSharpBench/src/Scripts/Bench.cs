@@ -27,6 +27,8 @@ namespace CSharpBench;
 ///                       pile (B13: from empty, Workload.PileBatch Ball spheres dropped every Workload.PileWindow
 ///                       frames until a window's p95 frame time passes 16.67 ms or TALLOW_BENCH_COUNT are in;
 ///                       TALLOW_BENCH_SLEEP=0 keeps them from sleeping)
+///                       softbody (B15: TALLOW_BENCH_COUNT soft bodies of TALLOW_BENCH_SOFT jelly / cloth / shell /
+///                       driven on a floor, each with a Squish script reading its velocity)
 ///   TALLOW_BENCH_COUNT  how many cubes (default 10000)
 ///   TALLOW_BENCH_FRAMES frames measured after a 120 frame warm-up (default 600)
 ///   TALLOW_BENCH_OUT    file a JSON line of results is added to
@@ -56,6 +58,8 @@ public class Bench : Script
     private TimeSpan _pauseStart;
     private TimeSpan _cpuStart;
     private long _checksum;
+    // The first whole frame (soft bodies, characters... are made in it).
+    private double _firstFrameMs;
 
     public override void Start()
     {
@@ -88,6 +92,8 @@ public class Bench : Script
             SpawnWalkers();
         else if (_mode == "pile")
             StartPile();
+        else if (_mode == "softbody")
+            SpawnSoftBodies();
         else
             throw new ArgumentException($"Unknown TALLOW_BENCH_MODE {_mode}");
         _spawnMs = watch.Elapsed.TotalMilliseconds;
@@ -261,6 +267,35 @@ public class Bench : Script
         }
     }
 
+    private readonly List<SoftBody> _soft = new();
+    private string _softKind = "jelly";
+
+    private void SpawnSoftBodies()
+    {
+        _softKind = Environment.GetEnvironmentVariable("TALLOW_BENCH_SOFT") is { Length: > 0 } kind ? kind : "jelly";
+        float half = Workload.SoftHalfSize(_count);
+        AddWall(new Vector3(0, -0.5f, 0), new Vector3(half * 2 + 4, 1, half * 2 + 4));
+        for (int i = 0; i < _count; i++)
+        {
+            GameObject made = Scene.CreateGameObject("Soft");
+            made.Transform.LocalPosition = Workload.SoftStart(i, _count);
+            MeshRenderer renderer = made.AddComponent<MeshRenderer>();
+            renderer.Mesh = Workload.SoftMesh(_softKind);
+            if (_softKind is "shell" or "driven")
+            {
+                if (_softKind == "shell")
+                    made.AddComponent<BoxCollider>();
+                else
+                    made.AddComponent<SphereCollider>();
+                made.AddComponent<Rigidbody>();
+            }
+            SoftBody soft = made.AddComponent<SoftBody>();
+            soft.Kind = Workload.SoftKind(_softKind);
+            made.AddComponent<Squish>();
+            _soft.Add(soft);
+        }
+    }
+
     private void SpawnWalkers()
     {
         float half = Workload.WalkerHalfSize(_count);
@@ -309,6 +344,8 @@ public class Bench : Script
     public override void Update(TickInput input, float deltaTime)
     {
         long now = Stopwatch.GetTimestamp();
+        if (_lastFrame != 0 && _frame == 1)
+            _firstFrameMs = Stopwatch.GetElapsedTime(_lastFrame, now).TotalMilliseconds;
         if (_lastFrame != 0 && _frame > WarmupFrames)
             _frameTimes.Add(Stopwatch.GetElapsedTime(_lastFrame, now).TotalMilliseconds);
         _lastFrame = now;
@@ -384,6 +421,17 @@ public class Bench : Script
         line.Append($"\"gc_gen2\": {GC.CollectionCount(2) - _gen2Start}, ");
         line.Append(Inv($"\"gc_pause_ms\": {(GC.GetTotalPauseDuration() - _pauseStart).TotalMilliseconds:F3}, "));
         line.Append(Inv($"\"spawn_ms\": {_spawnMs:F1}, \"memory_before\": {_memoryBefore}, \"memory_after\": {_memoryAfter}, "));
+        if (_mode == "softbody")
+        {
+            int bodies = 0, vertices = 0, sleeping = 0;
+            foreach (SoftBody soft in _soft)
+            {
+                if (soft.HasBody) bodies++;
+                vertices += soft.SimulatedVertexCount;
+                if (soft.IsSleeping) sleeping++;
+            }
+            line.Append($"\"soft\": \"{_softKind}\", \"bodies\": {bodies}, \"vertices\": {vertices}, \"sleeping\": {sleeping}, \"low\": {Squish.Low}, ");
+        }
         if (_mode == "pile")
             line.Append(Inv($"\"sleep\": {(_pileSleep ? 1 : 0)}, \"reached\": {_pileReached}, \"stop\": \"{_pileStop}\", \"stop_p95_ms\": {_pileStopP95:F3}, \"windows\": {_pileWindows}, "));
         if (_mode == "physics" || _mode == "pile")
@@ -411,6 +459,7 @@ public class Bench : Script
         }
         if (_mode == "alloc")
             line.Append($"\"pattern\": \"{_allocPattern}\", \"allocator_checksum\": {Allocator.Checksum}, ");
+        line.Append(Inv($"\"first_frame_ms\": {_firstFrameMs:F3}, "));
         line.Append($"\"memory_peak\": {Process.GetCurrentProcess().PeakWorkingSet64}, ");
         line.Append($"\"memory_end\": {Environment.WorkingSet}, ");
         line.Append($"\"checksum\": {_checksum}}}");
@@ -508,6 +557,23 @@ public class Walker : Script
             Checked++;
             if (_controller.IsGrounded) Grounded++;
         }
+    }
+}
+
+/// <summary>The softbody mode's script: reads its body's velocity each tick, and notes one that fell through the
+/// floor (its object below -1 m).</summary>
+public class Squish : Script
+{
+    public static int Low;
+    private SoftBody _soft;
+    private float _speed;
+
+    public override void Start() => _soft = GetComponent<SoftBody>();
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        _speed = _soft.Velocity.Length();
+        if (Transform.Position.Y < -1 && _speed >= 0) { Low++; _speed = -1; }
     }
 }
 
@@ -628,6 +694,30 @@ public static class Workload
         };
         size = side < 2 ? new Vector3(1, height, half * 2 + 2) : new Vector3(half * 2 + 2, height, 1);
     }
+
+    /// <summary>The softbody mode: bodies 3 m apart in a square, 3 m up (cloth drops flat).</summary>
+    public static float SoftHalfSize(int count) => MathF.Ceiling(MathF.Sqrt(count)) * 1.5f;
+
+    public static Vector3 SoftStart(int index, int count)
+    {
+        int side = (int)MathF.Ceiling(MathF.Sqrt(count));
+        return new Vector3(-side * 1.5f + 1.5f + (index % side) * 3, 3, -side * 1.5f + 1.5f + (index / side) * 3);
+    }
+
+    public static string SoftMesh(string kind) => kind switch
+    {
+        "cloth" => "builtin:plane",
+        "shell" => "builtin:cube",
+        _ => "builtin:sphere",
+    };
+
+    public static SoftBodyKind SoftKind(string kind) => kind switch
+    {
+        "cloth" => SoftBodyKind.Cloth,
+        "shell" => SoftBodyKind.Shell,
+        "driven" => SoftBodyKind.DrivenJelly,
+        _ => SoftBodyKind.Jelly,
+    };
 
     /// <summary>The pile mode: balls dropped per batch, frames per batch.</summary>
     public const int PileBatch = 250;

@@ -167,6 +167,36 @@ extension Bench
 		}
 	}
 
+	List<SoftBody> mSoft = new .() ~ delete _;
+	String mSoftKind = new .("jelly") ~ delete _;
+
+	/// CSharpBench's SpawnSoftBodies: count soft bodies of one kind on a floor, each with a Squish script.
+	void SpawnSoftBodies()
+	{
+		ReadSetting("TALLOW_BENCH_SOFT", mSoftKind);
+		let half = Workload.SoftHalfSize(mCount);
+		AddWall(.(0, -0.5f, 0), .(half * 2 + 4, 1, half * 2 + 4));
+		for (int i < mCount)
+		{
+			let made = Scene.CreateGameObject("Soft");
+			made.Transform.LocalPosition = Workload.SoftStart(i, mCount);
+			var renderer = made.AddComponent<MeshRenderer>();
+			renderer.mesh = Workload.SoftMesh(mSoftKind);
+			if (mSoftKind == "shell" || mSoftKind == "driven")
+			{
+				if (mSoftKind == "shell")
+					made.AddComponent<BoxCollider>();
+				else
+					made.AddComponent<SphereCollider>();
+				made.AddComponent<Rigidbody>();
+			}
+			let soft = made.AddComponent<SoftBody>();
+			soft.kind = Workload.SoftKind(mSoftKind);
+			made.AddComponent<Squish>();
+			mSoft.Add(soft);
+		}
+	}
+
 	void SpawnWalkers()
 	{
 		let half = Workload.WalkerHalfSize(mCount);
@@ -211,6 +241,19 @@ extension Bench
 		{
 			let step = Scene.Physics.LastStepMilliseconds;
 			line.AppendF("\"jolt_step_last_ms\": {:F3}, ", step);
+		}
+		if (mMode == "softbody")
+		{
+			int bodies = 0, vertices = 0, sleeping = 0;
+			for (let soft in mSoft)
+			{
+				if (soft.HasBody)
+					bodies++;
+				vertices += soft.SimulatedVertexCount;
+				if (soft.IsSleeping)
+					sleeping++;
+			}
+			line.AppendF("\"soft\": \"{}\", \"bodies\": {}, \"vertices\": {}, \"sleeping\": {}, \"low\": {}, \"jolt_step_last_ms\": {:F3}, ", mSoftKind, bodies, vertices, sleeping, Squish.sLow, Scene.Physics.LastStepMilliseconds);
 		}
 		if (mMode == "pile")
 		{
@@ -298,6 +341,28 @@ class Walker : Script
 			sChecked++;
 			if (mController.IsGrounded)
 				sGrounded++;
+		}
+	}
+}
+
+/// The softbody mode's script (CSharpBench's Squish): reads its body's velocity each tick, and notes one that fell
+/// through the floor.
+[Component]
+class Squish : Script
+{
+	public static int sLow;
+	SoftBody mSoft;
+	float mSpeed;
+
+	public override void Start() { mSoft = GetComponent<SoftBody>(); }
+
+	public override void Update(TickInput input, float deltaTime)
+	{
+		mSpeed = mSoft.Velocity.Length;
+		if (Transform.Position.y < -1 && mSpeed >= 0)
+		{
+			sLow++;
+			mSpeed = -1;
 		}
 	}
 }

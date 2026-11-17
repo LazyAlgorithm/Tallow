@@ -47,7 +47,7 @@
 - [x] **B12 — ECS writable chunk path.** Read and write the same 10k/100k position-like components with a bulk API; measure copy cost, boundary transitions and total tick. Done for offline scenes (2026-11-15): `Scene.Query<...>().ForEach` gives refs straight into the Flecs columns, one native call per table, no copy; 50k ecs rows 2.08 ms C# vs 1.53 ms Beef (see results below). Networked [Sync] ECS data is still to do.
 - [x] **B13 — physics sphere pile.** Spawn Jolt rigidbodies at fixed intervals until p95 frame time >16.67 ms, or max 10k. Record total, active/asleep counts, contact pairs, Jolt step milliseconds and memory. Repeat sleep ON/OFF; compare Beef vs C# control paths with identical native Jolt settings.
 - [x] **B14 — character motion/physics queries.** 100, 1k and 5k Jolt CharacterController instances with the same navigation/input; raycasts and sphere casts at 1k/10k/100k queries per frame; measure exact hit agreement and latency separately.
-- [ ] **B15 — soft-body throughput.** Jelly, Cloth, Shell and DrivenJelly, 10/50/100/500 bodies, fixed vertex counts and settings. Record rebuild time, step time, active vertex count, memory and deformation correctness. Keep existing Jelly Golf-style free jelly as an acceptance case.
+- [x] **B15 — soft-body throughput.** Jelly, Cloth, Shell and DrivenJelly, 10/50/100/500 bodies, fixed vertex counts and settings. Record rebuild time, step time, active vertex count, memory and deformation correctness. Keep existing Jelly Golf-style free jelly as an acceptance case.
 - [ ] **B16 — engine resource/render throughput.** Static 100k objects, 10k changing transforms and streaming scene chunks, with GPU timings/draw calls separated from C# script CPU. Include shader graph and compute graph functionality regression.
 - [x] **B17 — real managed allocations.** With 1k/10k/100k Script updates, record managed bytes/frame, collections (Gen0/1/2), pause time and peak RSS. Compare allocation-free value math, event allocation, GetComponent in loops and managed/native string calls.
 
@@ -175,6 +175,30 @@
   6.7 ms. Contact pair counts are not exposed by the engine's Jolt binding and are not reported.
   `PhysicsWorld.LastStepMilliseconds` (new) times Jolt's own step. Found on the way: C#'s Rigidbody was missing
   LinearDamping, AngularDamping, FreezeRotation, AllowSleeping and Debris (now added, with in-game checks).
+
+- B15 (done 2026-11-16; raw data `~/TallowBenchmarks/softbody-20261116/`, `--modes softbody`, `TALLOW_BENCH_SOFT`
+  jelly / cloth / shell / driven, 600 frames, 2 runs each, Release headless). N soft bodies 3 m apart dropped onto a
+  floor with default settings (jelly and driven on `builtin:sphere`, cloth on `builtin:plane`, shell on
+  `builtin:cube` with a BoxCollider + Rigidbody; driven on a SphereCollider + Rigidbody), each with a script reading
+  its body's velocity. Every run made all N simulations with the same vertex counts in Beef and C#, and nothing fell
+  through the floor.
+
+  | kind | N | vertices | frame avg ms Beef / C# | p99 Beef / C# | scripts ms Beef / C# | first frame ms Beef / C# |
+  |---|---:|---:|---:|---:|---:|---:|
+  | jelly | 10 / 100 / 500 | 1,460 / 14,600 / 73,000 | 1.11 / 1.11, 1.58 / 1.58, 3.47 / 3.44 | 1.44 / 1.46, 3.81 / 3.77, 14.9 / 14.8 | 0.001 / 0.002, 0.017 / 0.021, 0.085 / 0.110 | 1 / 3, 4 / 8, 96 / 97 |
+  | cloth | 10 / 100 / 500 | 40 / 400 / 2,000 | 1.06 / 1.07, 1.08 / 1.09, 1.16 / 1.19 | 1.10 / 1.10, 1.21 / 1.21, 1.60 / 1.60 | 0.000 / 0.001, 0.003 / 0.007, 0.015 / 0.041 | 1 / 3, 1 / 3, 1 / 4 |
+  | shell | 10 / 100 / 500 | 80 / 800 / 4,000 | 1.07 / 1.07, 1.11 / 1.12, 1.33 / 1.33 | 1.12 / 1.13, 1.35 / 1.46, 2.61 / 2.39 | 0.000 / 0.001, 0.003 / 0.009, 0.020 / 0.043 | 1 / 3, 1 / 3, 1 / 5 |
+  | driven | 10 / 100 / 500 | 1,460 / 14,600 / 73,000 | 1.11 / 1.12, 1.57 / 1.58, 2.54 / 2.54 | 1.47 / 1.50, 3.84 / 3.87, 2.85 / 2.84 | 0.001 / 0.002, 0.016 / 0.021, 0.086 / 0.111 | 1 / 3, 4 / 9, 97 / 102 |
+
+  Frame time is the soft-body simulation's, and identical in both languages. Jolt's step (Beef's
+  `LastStepMilliseconds`) is 0.29 / 2.2 ms for 10 / 100 jellies while they settle. Every 500-body jelly and driven
+  run had gone to sleep by the end (step 0.002 ms); jelly's p99 of 15 ms is its settling phase. The scripts cost
+  C# 1.3-2.7× Beef, at most 0.11 ms for 500 bodies. C#'s first frame (where the bodies are made) is 2-5 ms longer,
+  which is JIT. Process memory is ~44 MB higher in C# (the runtime), the same as in other modes. Found on the way: C#
+  could not add a SoftBody (no `[NativeComponent]`), could not set its Kind, and was missing 18 of its fields
+  (mass, iterations, the shell dent settings...). All three are fixed, with in-game checks. Not covered: Jelly
+  Golf-style acceptance (the scene is Beef-only), and rebuild time on a setting change (the C# setters that
+  rebuild — Stiffness, WobbleDamping — are the same native call as Beef's).
 
 ### Fixes from these runs (2026-11-16)
 

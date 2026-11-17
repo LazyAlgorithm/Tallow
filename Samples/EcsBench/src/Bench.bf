@@ -36,6 +36,8 @@ class Bench : Component
 	delegate void(Scene scene, List<RenderView.InstancedDraws> output) mSource ~ delete _;
 
 	List<double> mFrameTimes = new .() ~ delete _;
+	// The first whole frame (soft bodies, characters... are made in it).
+	double mFirstFrameMs;
 	List<double> mUpdateTimes = new .() ~ delete _;
 	List<double> mScriptTimes = new .() ~ delete _;
 	uint64 mLastFrame;
@@ -89,6 +91,8 @@ class Bench : Component
 			SpawnWalkers();
 		else if (mMode == "pile")
 			StartPile();
+		else if (mMode == "softbody")
+			SpawnSoftBodies();
 		else
 			SpawnEntities();
 		mSpawnMs = (SDL.SDL_GetTicksNS() - start) / 1e6;
@@ -166,6 +170,8 @@ class Bench : Component
 	public override void Update(TickInput input, float deltaTime)
 	{
 		let now = SDL.SDL_GetTicksNS();
+		if (mLastFrame != 0 && mFrame == 1)
+			mFirstFrameMs = (now - mLastFrame) / 1e6;
 		if (mLastFrame != 0 && mFrame > WarmupFrames)
 			mFrameTimes.Add((now - mLastFrame) / 1e6);
 		mLastFrame = now;
@@ -230,6 +236,7 @@ class Bench : Component
 		if (mMode == "ai")
 			FinishAI(line);
 		FinishModes(line);
+		line.AppendF("\"first_frame_ms\": {:F3}, ", mFirstFrameMs);
 		line.AppendF("\"spawn_ms\": {:F1}, \"memory_before\": {}, \"memory_after\": {}}}", mSpawnMs, mMemoryBefore, mMemoryAfter);
 		Console.WriteLine(line);
 		if (!mOutput.IsEmpty)

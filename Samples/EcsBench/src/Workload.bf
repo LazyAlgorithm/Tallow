@@ -36,7 +36,20 @@ static class Workload
 		size = side < 2 ? .(1, height, half * 2 + 2) : .(half * 2 + 2, height, 1);
 	}
 
-	/// The pile mode: balls dropped per batch, frames per batch (CSharpBench's Workload).
+	/// The softbody mode: bodies 3 m apart in a square, 3 m up (cloth drops flat).
+	public static float SoftHalfSize(int count) => Math.Ceiling(Math.Sqrt((float)count)) * 1.5f;
+
+	public static Vector3 SoftStart(int index, int count)
+	{
+		let side = (int)Math.Ceiling(Math.Sqrt((float)count));
+		return .(-side * 1.5f + 1.5f + (index % side) * 3, 3, -side * 1.5f + 1.5f + (index / side) * 3);
+	}
+
+	public static StringView SoftMesh(StringView kind) => kind == "cloth" ? "builtin:plane" : (kind == "shell" ? "builtin:cube" : "builtin:sphere");
+
+	public static SoftBodyKind SoftKind(StringView kind) => kind == "cloth" ? .Cloth : (kind == "shell" ? .Shell : (kind == "driven" ? .DrivenJelly : .Jelly));
+
+		/// The pile mode: balls dropped per batch, frames per batch (CSharpBench's Workload).
 	public const int PileBatch = 250;
 	public const int PileWindow = 60;
 
