@@ -30,6 +30,8 @@ PAIRS = [
      "Managed/Tallow.API/Profiling.cs", r"public enum ProfilerCategory : byte\s*\{(.*?)\n\}"),
     ("Engine/src/Render/Textures.bf", r"enum TextureKind\s*\{(.*?)\n\}",
      "Managed/Tallow.API/Textures.cs", r"public enum TextureKind\s*\{(.*?)\n\}"),
+    ("Engine/src/Scene/SceneManager.bf", r"public enum Stage\s*\{(.*?)\n\t\}",
+     "Managed/Tallow.API/SceneLoading.cs", r"public enum SceneLoadStage\s*\{(.*?)\n\}"),
 ]
 
 

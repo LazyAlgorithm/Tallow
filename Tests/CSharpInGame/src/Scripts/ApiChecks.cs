@@ -218,6 +218,10 @@ public class ApiChecks : CheckBase
         }
         else if (_tick == 110)
             TerrainSetup();
+        else if (_tick == 111)
+            LoadingSetup();
+        else if (_tick == 140)
+            LoadingHeld();
         else if (_tick == 145)
             _staysBeforeRest = Probe("Ball").CollisionStays;
         else if (_tick == 150)
@@ -229,7 +233,10 @@ public class ApiChecks : CheckBase
         else if (_tick == 260)
             ContactsAfterLanding();
         else if (_tick == 279)
+        {
             TerrainChecks();
+            LoadingChecks();
+        }
         else if (_tick == 280)
         {
             ComponentAccessSetup();
@@ -1370,6 +1377,55 @@ public class ApiChecks : CheckBase
         bool gone = false;
         try { made.Fill(Color.Red); } catch (ObjectDisposedException) { gone = true; }
         Check("a disposed Texture cannot be used", gone);
+    }
+
+    private SceneLoad? _additive, _held, _missing;
+    private Preload? _preload;
+    private bool _awaited, _awaitedMissing = true;
+    private float _firstProgress = -1;
+
+    private void LoadingSetup()
+    {
+        _additive = Scene.LoadAdditiveAsync("Scenes/Extra.tscene");
+        _firstProgress = _additive.Progress;
+        _held = Scene.LoadAdditiveAsync("Scenes/Extra.tscene");
+        _held.AllowActivation = false;
+        _missing = Scene.LoadAdditiveAsync("Scenes/Nowhere.tscene");
+        _preload = AssetLoader.Preload("Textures/check.png", "");
+        Await();
+    }
+
+    private async void Await()
+    {
+        _awaited = await _additive!.Completion;
+        _awaitedMissing = await _missing!.Completion;
+    }
+
+    private void LoadingHeld()
+    {
+        Check($"a load held by AllowActivation waits at Ready ({_held!.Stage}, {_held.Progress}, added {_held.Group})",
+            _held.Stage == SceneLoadStage.Ready && Math.Abs(_held.Progress - 0.9f) < 0.001f && _held.Group == null);
+        _held.Activate();
+    }
+
+    private void LoadingChecks()
+    {
+        Check($"Scene.LoadAdditiveAsync starts at Reading and ends Done ({_firstProgress}, {_additive!.Stage}, {_additive.Progress})",
+            _firstProgress < 0.11f && _additive.Stage == SceneLoadStage.Done && _additive.Progress == 1 && _additive.IsDone);
+        Check($"its Group holds what it added ({_additive.Group?.ChildCount})",
+            _additive.Group is { ChildCount: 2 } group && group.GetChild(0)?.Name == "ExtraThing");
+        Check($"Activate lets a held load finish ({_held!.Stage}, {_held.Group?.ChildCount})",
+            _held.Stage == SceneLoadStage.Done && _held.Group is { ChildCount: 2 });
+        Check($"a load of a missing file fails ({_missing!.Stage})", _missing.Failed && _missing.IsDone);
+        Check($"SceneLoad.Completion is awaited on the game thread: true when done, false when failed ({_awaited}, {_awaitedMissing})",
+            _awaited && !_awaitedMissing);
+        Check($"AssetLoader.Preload follows its files ({_preload!.Loaded}/{_preload.Total}, {_preload.Progress})",
+            _preload.IsDone && _preload.Total == 1 && _preload.Loaded == 1);
+        _preload.Dispose();
+        Check("a disposed Preload reads as done", _preload.IsDone);
+        Scene.Unload(_additive.Group!.Value);
+        Scene.Unload(_held.Group!.Value);
+        Check("Unload takes out what the async loads added", Scene.Find("ExtraThing") is null);
     }
 
     private VoxelTerrain _terrain;

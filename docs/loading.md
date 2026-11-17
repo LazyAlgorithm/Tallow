@@ -25,25 +25,25 @@ object. `Finished` is true once it is done; `Group` holds what an additive load 
 
 ## From code
 
-The calls below are engine (Beef) code. A C# game uses a **Scene Loader** component (its `Begin()` and `Activate()`, with **Activate When Ready** off to hold a finished load) or `Scene.LoadAdditive(path)`.
-
-```beef
+```csharp
 // Change scene behind a loading screen:
-let load = SceneManager.LoadAsync("Scenes/Harbour.tscene");
+SceneLoad load = SceneManager.LoadAsync("Scenes/Harbour.tscene");
 // every frame until it is done:
-loadingBar.value = load.Progress;
+loadingBar.Value = load.Progress;
 
 // Bring part of the world in without stopping:
-mDocks = SceneManager.LoadAdditiveAsync(Scene, "Scenes/Docks.tscene");
-// later: if (mDocks.IsDone) ... mDocks.Group holds it; SceneManager.Unload(mDocks.Group) takes it out
+SceneLoad docks = Scene.LoadAdditiveAsync("Scenes/Docks.tscene");
+if (await docks.Completion)          // true when done, false when the file was not there
+    _docks = docks.Group;            // later: Scene.Unload(_docks.Value) takes it out
 
 // Hold a finished load until the player is ready:
-load.allowActivation = false;
-... when load.CurrentStage == .Ready and a key is pressed: load.Activate();
+load.AllowActivation = false;
+// ... when load.Stage == SceneLoadStage.Ready and a key is pressed:
+load.Activate();
 
 // Get things ready before they are needed (a weapon about to be picked up):
-let batch = AssetLoader.Preload("Models/rocket_launcher.glb", "Textures/launcher.png");
-// batch.Progress, batch.IsDone; delete it when done with it (what it loaded stays loaded)
+using Preload batch = AssetLoader.Preload("Models/rocket_launcher.glb", "Textures/launcher.png");
+// batch.Progress, batch.IsDone; what it loaded stays loaded after Dispose
 ```
 
 A load goes through **Reading** (the file, and finding what it names), **Loading** (the models and textures it names),
@@ -56,7 +56,7 @@ every picture in it, and in the prefabs, scenes and materials it names, two leve
 already count at once. Anything a script loads by a name made up while it runs is not found this way: preload it with
 `AssetLoader.Preload`.
 
-A `SceneLoad` belongs to SceneManager and is let go the frame after it is done, so read what you need from it then.
+A `SceneLoad` keeps its final stage and Group after the engine has finished with it, and `Completion` finishes on the game thread. (Engine code has the same in Beef: `SceneManager.LoadAsync`, `SceneManager.LoadAdditiveAsync(scene, path)` and `AssetLoader.Preload`; there the `SceneLoad` is let go the frame after it is done.)
 
 ## Multiplayer
 

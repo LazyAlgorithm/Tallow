@@ -1004,3 +1004,26 @@ public class MinimapSnippet : Script
         var heights = new Texture("Generated/heights", 256, 256, TextureKind.Data);
     }
 }
+
+// docs/loading.md: loading in the background.
+public class LoadingSnippet : Script
+{
+    private GameObject? _docks;
+
+    public async void Begin(UIElement loadingBar)
+    {
+        SceneLoad load = SceneManager.LoadAsync("Scenes/Harbour.tscene");
+        loadingBar.Value = load.Progress;
+
+        SceneLoad docks = Scene.LoadAdditiveAsync("Scenes/Docks.tscene");
+        if (await docks.Completion)
+            _docks = docks.Group;
+
+        load.AllowActivation = false;
+        if (load.Stage == SceneLoadStage.Ready)
+            load.Activate();
+
+        using Preload batch = AssetLoader.Preload("Models/rocket_launcher.glb", "Textures/launcher.png");
+        bool ready = batch.IsDone;
+    }
+}

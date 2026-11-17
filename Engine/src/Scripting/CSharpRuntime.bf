@@ -522,6 +522,7 @@ static class CSharpRuntime
 		CSharpSaves.UseStorage(false);
 		CSharpTerrainGenerator.StopAll();
 		CSharpTextures.ReleaseAll();
+		CSharpScenes.ReleaseAll();
 		HasTeamChooser = false;
 		if (!sStarted)
 			return true;

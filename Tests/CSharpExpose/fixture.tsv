@@ -377,6 +377,13 @@ method	Tallow.CSharpSceneObjects	SetLayer	bool	session:ulong	entity:ulong	layer:
 method	Tallow.CSharpSceneObjects	SetName	bool	session:ulong	entity:ulong	name:string
 method	Tallow.CSharpSceneObjects	SetParent	bool	session:ulong	entity:ulong	parent:ulong	keepWorldPose:bool
 method	Tallow.CSharpSceneObjects	SetTransient	void	session:ulong	entity:ulong	transient:bool
+method	Tallow.CSharpScenes	AllowActivation	void	id:int	allow:bool
+method	Tallow.CSharpScenes	Group	ulong	id:int
+method	Tallow.CSharpScenes	Preload	int	paths:string
+method	Tallow.CSharpScenes	PreloadState	float	id:int	values:System.Span<float>
+method	Tallow.CSharpScenes	ReleasePreload	void	id:int
+method	Tallow.CSharpScenes	Start	int	session:ulong	path:string	additive:bool	environment:bool
+method	Tallow.CSharpScenes	State	int	id:int	values:System.Span<float>
 method	Tallow.CSharpSpawning	CopyLayerName	int	layer:int	buffer:System.Span<byte>
 method	Tallow.CSharpSpawning	CopyWorldStateName	int	state:int	buffer:System.Span<byte>
 method	Tallow.CSharpSpawning	Count	int	session:ulong	team:int

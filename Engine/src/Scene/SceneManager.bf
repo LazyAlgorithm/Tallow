@@ -328,6 +328,15 @@ class SceneLoad
 		mEnvironment = environment;
 	}
 
+	/// Set when C# follows this load (CSharpScenes): it keeps the final state when SceneManager lets the load go.
+	public int32 csharpId;
+
+	public ~this()
+	{
+		if (csharpId != 0)
+			CSharpScenes.Finished(this);
+	}
+
 	/// Lets a load that is Ready be switched to (the same as setting allowActivation).
 	public void Activate() => allowActivation = true;
 

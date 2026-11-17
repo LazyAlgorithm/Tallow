@@ -1426,6 +1426,12 @@ A full conversion also needs these. Ordered roughly by when they block users.
   nothing until the editor has compiled the shader), found when the in-game run was tried in a window: the compute
   check now passes headless and windowed. 9 in-game checks (421; 402 exported); windowed run: Apply true, no
   failures. docs/textures.md converted.
+- [x] C# async scene loading (November 17, 2026): `SceneManager.LoadAsync`, `Scene.LoadAdditiveAsync`, `SceneLoad`
+  (Stage/`SceneLoadStage`, Progress, asset counts, AllowActivation/Activate, Group, awaitable `Completion`) and
+  `AssetLoader.Preload` with `Preload` (Progress, Total/Loaded, Dispose), over the new `CSharpScenes` API. The
+  engine's `SceneLoad` hands its final state to `CSharpScenes` when SceneManager deletes it, so C# reads Done/Failed
+  and Group after the engine is finished with it. 9 in-game checks (430; 411 exported), enum check for the stage.
+  docs/loading.md converted. This closes the C# feature gaps listed on November 17.
 
 **Platforms, content, migration**
 - [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is
