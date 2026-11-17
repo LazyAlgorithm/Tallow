@@ -124,26 +124,42 @@ public class GuardActions : Script
 }
 ```
 
-For a node with its own settings, or one that runs over several ticks, a Beef project can derive from `BTNode` and register it at startup (in `GameSetup.Register`). C# has no custom nodes yet: give the script a method for Call Method, and keep what it needs to remember in its own fields. In Beef:
+For a node with its own settings, or one that runs over several ticks, derive from `BehaviorNode`. The build finds the class, and after a compile the Behavior tab offers it in its menu (under **Game** unless you name a category). Its public fields (numbers, `bool`, `string`, `Vector3`) are the node's settings, with the field's initial value as the default. Each node in a running tree has its own instance, so a field can remember things from one tick to the next.
 
-```beef
-class HasAmmoAtLeast : BTNode
+```csharp
+[BehaviorNode("Has Ammo At Least", Condition = true, Description = "Succeeds while the guard has this much ammunition.")]
+public class HasAmmoAtLeast : BehaviorNode
 {
-    protected override BTStatus OnTick(BTContext context)
-    {
-        let actions = context.Object.GetComponent<GuardActions>();
-        return actions != null && actions.ammo >= (int)Number(0) ? .Success : .Failure;
-    }
+    public int Count = 1;
+
+    protected override BehaviorStatus OnTick(float deltaTime) =>
+        GameObject.GetComponent<GuardActions>().Ammo >= Count ? BehaviorStatus.Success : BehaviorStatus.Failure;
 }
 
-BehaviorLibrary.Add("game.ammo", "Game", "Has Ammo At Least", .Condition, new () => new HasAmmoAtLeast())
-    .With("Count", .Number, "1")
-    .Describe("Succeeds while the guard has this much ammunition.");
+public class AimFor : BehaviorNode
+{
+    public float Seconds = 0.5f;
+    private float _left;
+
+    protected override void OnStart() => _left = Seconds;
+
+    protected override BehaviorStatus OnTick(float deltaTime)
+    {
+        _left -= deltaTime;
+        return _left > 0 ? BehaviorStatus.Running : BehaviorStatus.Success;
+    }
+
+    protected override void OnEnd(bool aborted) { }
+}
 ```
 
-`Number(i)`, `Text(i)`, `Flag(i)` and `Vector(i)` read the node's settings in the order they were declared. Override `OnStart` and `OnEnd(context, aborted)` to set up and clean up; `aborted` is true when a higher-priority branch stopped the node. `context` gives the object, its scene, the blackboard, the time since the last tick and the object's Navigation Agent as `Mover`.
+Return `Running` to be ticked again, or `Success` or `Failure` to finish. `OnStart` runs when the node starts a run, after its settings are filled in. `OnEnd(aborted)` runs when the run ends; `aborted` is true when a higher-priority branch stopped the node. A node has `GameObject`, `Scene`, `Transform` and the tree's `Blackboard`.
 
-From any script, `GetComponent<BehaviorTreeRunner>().Blackboard` lets gameplay talk to the tree: `SetFlag("alert", true)`, `SetObject("target", player)`, `SetVector("noise", position)`.
+Tree files save a C# node under its class's full name. Set `Key` in the attribute (`[BehaviorNode("Aim", Key = "guard.aim")]`) to keep trees working after you rename or move the class. A tree that names a node no code registers, such as one whose class was deleted or failed to compile, keeps it, with its settings unchanged, and the node fails until the class is back. After a hot reload, running C# nodes are made again from the new code and start their run over.
+
+Beef projects derive from `BTNode` instead and register the kind with `BehaviorLibrary.Add` in `GameSetup.Register`.
+
+From any script, `GetComponent<BehaviorTreeRunner>().Blackboard` lets gameplay talk to the tree: `SetFlag("alert", true)`, `SetObject("target", player)`, `SetVector("noise", position)`, and `GetNumber`, `GetFlag`, `GetObject` and `TryGetPosition` to read entries back.
 
 ## Multiplayer
 

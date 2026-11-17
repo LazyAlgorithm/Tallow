@@ -150,6 +150,10 @@ int32_t tn_csharp_choose_team(int32_t client_id);
 // A component's named event on a script of the same object (kind 0 sequence, 1 dialogue, 2 behaviour tree); 1 on
 // success.
 int32_t tn_csharp_component_event(int32_t script_instance, int32_t kind, const char* name, float value);
+/* A phase of a C# behaviour tree node (0 start, 1 tick, 2 end, 3 aborted, 4 released): 1 running, 2 success,
+   3 failure; below 0 when the managed code failed. */
+int32_t tn_csharp_behavior_node(int32_t handle, int32_t phase, const char* class_name, uint64_t session, uint64_t entity,
+    const char* values, float delta_time);
 // A script's prediction state hook (mode 0 capture, 1 prepare, 2 restore) over a body state's 22 floats: position,
 // rotation, linear and angular velocity, two spare vectors, and whether it came from a Rigidbody; 1 on success.
 int32_t tn_csharp_prediction_state(int32_t script_instance, int32_t mode, float* values);

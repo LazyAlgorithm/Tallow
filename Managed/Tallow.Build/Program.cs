@@ -421,6 +421,8 @@ internal static class Program
                 StringComparer.Ordinal);
         // EcsSystem<T> classes by assembly: display name -> fully qualified type.
         var allSystems = new Dictionary<string, SortedDictionary<string, string>>(StringComparer.Ordinal);
+        // BehaviorNode classes by assembly (fully qualified types): registered when the assembly loads.
+        var allBehaviorNodes = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
         foreach (var (assembly, sourceFiles) in filesByAssembly)
         {
             var types = new SortedDictionary<string, string>(StringComparer.Ordinal);
@@ -428,6 +430,8 @@ internal static class Program
                 StringComparer.Ordinal);
             var systems = new SortedDictionary<string, string>(StringComparer.Ordinal);
             allSystems[assembly] = systems;
+            var behaviorNodes = new SortedSet<string>(StringComparer.Ordinal);
+            allBehaviorNodes[assembly] = behaviorNodes;
             foreach (string sourceFile in sourceFiles)
             {
                 SyntaxTree tree = treesByPath[sourceFile];
@@ -439,13 +443,18 @@ internal static class Program
                         continue;
                     // Deriving from Script identifies a gameplay behaviour;
                     // [Component] is reserved for explicit ECS data structs.
-                    bool isScript = false, isSystem = false;
+                    bool isScript = false, isSystem = false, isBehaviorNode = false;
                     for (INamedTypeSymbol? parent = symbol.BaseType; parent != null;
                          parent = parent.BaseType)
                     {
                         if (parent.ToDisplayString() == "Tallow.Script")
                         {
                             isScript = true;
+                            break;
+                        }
+                        if (parent.ToDisplayString() == "Tallow.BehaviorNode")
+                        {
+                            isBehaviorNode = true;
                             break;
                         }
                         if (parent.OriginalDefinition.ToDisplayString() is "Tallow.EcsSystem<T>" or "Tallow.EcsSystem<T1, T2>"
@@ -462,6 +471,12 @@ internal static class Program
                             ctor.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal))
                         systems[symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)] =
                             symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    // A C# behaviour tree node kind (BehaviorNodes.Register).
+                    if (isBehaviorNode && !symbol.IsAbstract && !symbol.IsGenericType &&
+                        symbol.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal &&
+                        symbol.InstanceConstructors.Any(ctor => ctor.Parameters.Length == 0 &&
+                            ctor.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal))
+                        behaviorNodes.Add(symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
                     if (!isScript)
                         continue; // ECS struct/data will use a separate layout-safe registration path.
                     if (symbol.IsAbstract || symbol.IsGenericType)
@@ -654,6 +669,10 @@ internal static class Program
                 foreach ((string systemName, string systemType) in systemsOf)
                     generatedEcs.Append("        global::Tallow.EcsSystems.Register(new ").Append(systemType)
                         .Append("(), \"").Append(systemName).AppendLine("\");");
+            if (allBehaviorNodes.TryGetValue(assembly, out var nodesOf))
+                foreach (string nodeType in nodesOf)
+                    generatedEcs.Append("        global::Tallow.BehaviorNodes.Register(() => new ").Append(nodeType)
+                        .Append("(), typeof(").Append(nodeType).AppendLine("));");
             generatedEcs.AppendLine("    }")
                 .AppendLine("#pragma warning restore CA2255");
             foreach ((string typeName, var schema) in ecsTypes)
@@ -1215,6 +1234,7 @@ internal static class Program
         Publish(Path.Combine(project, ".tallow-csharp", "field-docs.tsv"), fieldDocRows);
         Publish(Path.Combine(project, ".tallow-csharp", "ecs-data.tsv"), ecsDataRows.Values.SelectMany(rows => rows));
         GraphNodeCatalog.Write(compilation, trees, GraphNodesPath(project));
+        BehaviorNodeCatalog.Write(compilation, trees, Path.Combine(project, ".tallow-csharp", "behavior-nodes.tsv"));
         Console.WriteLine($"Discovered {components.Count} managed gameplay components and {fieldRows.Count} editable fields.");
     }
 

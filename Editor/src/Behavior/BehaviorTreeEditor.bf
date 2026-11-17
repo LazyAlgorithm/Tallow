@@ -396,6 +396,7 @@ extension EditorApp
 			let text = scope String(label);
 			ImGui.DrawText(.(max.x - 8 * zoom - ImGui.CalcTextSize(text.CStr()).x, min.y + 5 * zoom), .(live.r, live.g, live.b, Math.Max(strength, 0.5f)), text.CStr());
 		}
+		node.Fit();
 		for (int i < node.def.parameters.Count)
 		{
 			let line = scope String();
@@ -506,6 +507,9 @@ extension EditorApp
 	/// that can have children.
 	bool OfferedTreeNode(BTNodeDef def)
 	{
+		// A placeholder for a kind a loaded tree names but nothing registered is not offered for new nodes.
+		if (def.missing)
+			return false;
 		if (def.kind == .Root)
 			return mTree.Root == null && !mTreeSearchForLink;
 		return !(mTreeSearchForLink && !mTreeLinkFromBottom && def.MaxChildren == 0);
@@ -609,6 +613,7 @@ extension EditorApp
 		let selectedNode = mTree.Find(mTreeSelected);
 		if (selectedNode == null)
 			return;
+		selectedNode.Fit();
 		let rows = selectedNode.def.parameters.Count;
 		ImGui.SetCursorScreenPos(.(canvas.origin.x + 10, canvas.origin.y + 10));
 		ImGui.PushStyleColor(ImGui.Col.ChildBg, EditorTheme.Canvas);

@@ -297,6 +297,21 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    /// <summary>A phase of a C# behaviour tree node (BehaviorNodes.Call): 1 running, 2 success, 3 failure.</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int BehaviorNode(int handle, int phase, byte* className, ulong session, ulong entity, byte* values, float deltaTime)
+    {
+        try
+        {
+            return BehaviorNodes.Call(handle, phase, Marshal.PtrToStringUTF8((nint)className) ?? "", session, entity,
+                Marshal.PtrToStringUTF8((nint)values) ?? "", deltaTime);
+        }
+        catch (Exception exception)
+        {
+            return Failure(exception);
+        }
+    }
+
     /// <summary>The team for a joining player from <see cref="Network.ChooseTeam"/>: the team (0 or more), or -1
     /// when there is no chooser or it threw (reported; the engine then shares players out itself).</summary>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -577,6 +592,7 @@ public static unsafe class NativeEntrypoints
                 sGameContext = OpenGame(Path.GetFullPath(path), out registry);
             sRegistry = registry;
             AddTypes(registry, sTypes, sFormerNames);
+            BehaviorNodes.Publish();
             return sTypes.Count;
         }
         catch (Exception exception)
@@ -585,6 +601,7 @@ public static unsafe class NativeEntrypoints
             // context rooted or poison the next rebuild/Play attempt.
             sRegistry = null;
             EcsSystems.Clear();
+            BehaviorNodes.Clear();
             Network.ClearTeamChooser();
             sTypes.Clear();
             sFormerNames.Clear();
@@ -729,6 +746,7 @@ public static unsafe class NativeEntrypoints
             // below when it is a named method.
             Func<int, int>? chooser = Network.ChooseTeam;
             EcsSystems.Clear();
+            BehaviorNodes.Forget();
             Network.ClearTeamChooser();
             GameThread.Stop();
             GameThread.Start();
@@ -830,6 +848,7 @@ public static unsafe class NativeEntrypoints
             unloaded = new WeakReference(previous);
             sUnloadedContexts.Add(unloaded);
             previous.Unload();
+            BehaviorNodes.Publish();
             return moved.Count;
         }
         catch (Exception exception)
@@ -1817,8 +1836,10 @@ public static unsafe class NativeEntrypoints
             sRegistry = null;
             sTypes.Clear();
             sFormerNames.Clear();
-            // Systems and the team chooser are the game's code: keeping them would run old code and keep the context.
+            // Systems, behaviour nodes and the team chooser are the game's code: keeping them would run old code and
+            // keep the context.
             EcsSystems.Clear();
+            BehaviorNodes.Clear();
             Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).
             GameThread.Stop();
@@ -1861,8 +1882,10 @@ public static unsafe class NativeEntrypoints
             sRegistry = null;
             sTypes.Clear();
             sFormerNames.Clear();
-            // Systems and the team chooser are the game's code: keeping them would run old code and keep the context.
+            // Systems, behaviour nodes and the team chooser are the game's code: keeping them would run old code and
+            // keep the context.
             EcsSystems.Clear();
+            BehaviorNodes.Clear();
             Network.ClearTeamChooser();
             // Continuations from the unloaded game must not run (they would also keep its context alive).
             GameThread.Stop();

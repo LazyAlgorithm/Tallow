@@ -151,6 +151,18 @@ int32_t tn_csharp_choose_team(int32_t client_id)
     (void)client_id;
     return -1;
 }
+int32_t tn_csharp_behavior_node(int32_t handle, int32_t phase, const char* class_name, uint64_t session, uint64_t entity,
+    const char* values, float delta_time)
+{
+    (void)handle;
+    (void)phase;
+    (void)class_name;
+    (void)session;
+    (void)entity;
+    (void)values;
+    (void)delta_time;
+    return 3;
+}
 int32_t tn_csharp_component_event(int32_t script_instance, int32_t kind, const char* name, float value)
 {
     (void)script_instance;

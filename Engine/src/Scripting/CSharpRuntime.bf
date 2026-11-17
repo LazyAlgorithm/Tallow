@@ -352,6 +352,7 @@ static class CSharpRuntime
 	[CLink] static extern int32 tn_csharp_ui_invoke(int32 instance, char8* method, char8* elementId);
 	[CLink] static extern int32 tn_csharp_choose_team(int32 clientId);
 	[CLink] static extern int32 tn_csharp_component_event(int32 instance, int32 kind, char8* name, float value);
+	[CLink] static extern int32 tn_csharp_behavior_node(int32 handle, int32 phase, char8* className, uint64 session, uint64 entity, char8* values, float deltaTime);
 	[CLink] static extern int32 tn_csharp_prediction_state(int32 instance, int32 mode, float* values);
 	[CRepr]
 	struct GcStats
@@ -736,6 +737,22 @@ static class CSharpRuntime
 
 	/// A Sequence Player's, Dialogue Runner's or Behavior Tree Runner's named event (kind 0, 1, 2) on the C# scripts
 	/// of the same object that override its callback.
+	/// Runs a phase of a C# behaviour tree node (BTManagedNode): 0 start (values: its settings, separated by 0x1F),
+	/// 1 tick, 2 end, 3 aborted, 4 the node is gone. Returns 1 running, 2 success, 3 failure.
+	public static int32 BehaviorNodeCall(int32 handle, int32 phase, StringView className, GameObject gameObject, StringView values, float deltaTime)
+	{
+		if (!Ready)
+			return 3;
+		let result = tn_csharp_behavior_node(handle, phase, scope String(className).CStr(), sSession, gameObject?.Id ?? 0,
+			scope String(values).CStr(), deltaTime);
+		if (result < 0)
+		{
+			ReportFailure(scope $"behaviour node {className}");
+			return 3;
+		}
+		return result;
+	}
+
 	public static void ComponentEvent(GameObject gameObject, int32 kind, StringView name, float value = 0)
 	{
 		if (!Ready || gameObject == null)

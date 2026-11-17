@@ -378,6 +378,13 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   Closed November 16, 2026 with `SaveSystem` (Save/Load handles, Exists, Delete, Slots), `VoiceChat` (microphone,
   Talk, speaking, mute, per-player volume) and `Assets` (Exists, ReadBytes, ReadText; packed files in a built game).
   3 more in-engine checks (327). World streaming is the `StreamingSource` component.
+  C# behaviour tree nodes (November 17, 2026): a `BehaviorNode` class (public fields are its settings, `OnStart`,
+  `OnTick` returning Running/Success/Failure, `OnEnd(aborted)`, `[BehaviorNode]` for title, category, condition and
+  a stable `Key`) is registered by the build's generated module initializer and offered to the editor through
+  `.tallow-csharp/behavior-nodes.tsv`. Each running node has its own instance (BTManagedNode on the Beef side, one
+  new `BehaviorNode` host entry point). Trees keep nodes whose kind is not registered (they fail until it is)
+  instead of dropping them on load. `Blackboard` reads and writes from scripts. 6 more checks (370). The settings
+  are filled by reflection, which the parked NativeAOT stage would need generated instead.
   - [x] (November 16, 2026) Platform services over `CSharpPlatform` exposures (`Platform.cs`): `Gamepad` (buttons,
     axes, sticks, kind, name, Rumble), `Touch.Fingers`, `Screen.Fullscreen`, `Quality` (Level, Recommended, Set),
     `Achievements` (Unlock, IsUnlocked, SetProgress, Clear, stats), `Subtitles` (Show, Caption, Hide),

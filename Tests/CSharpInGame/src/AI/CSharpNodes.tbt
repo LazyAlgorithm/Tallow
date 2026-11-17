@@ -1,0 +1,14 @@
+tree "CSharpNodes"
+node 1 root 0 0
+node 2 sequence 0 110
+node 3 ingame.ammo -200 220 "2"
+node 4 InGame.CountTicks 0 220 "3" "counted"
+node 5 selector 200 220
+node 6 game.not.registered 100 330 "kept value"
+node 7 InGame.MarkDone 300 330
+link 1 2
+link 2 3
+link 2 4
+link 2 5
+link 5 6
+link 5 7

@@ -501,6 +501,48 @@ public class GuardActions : Script
     {
         if (name == "Alarm") { }
     }
+
+    private void BlackboardSnippets(GameObject player, Vector3 position)
+    {
+        Blackboard board = GetComponent<BehaviorTreeRunner>().Blackboard;
+        board.SetFlag("alert", true);
+        board.SetObject("target", player);
+        board.SetVector("noise", position);
+        _ = board.GetNumber("ammo") + (board.GetFlag("alert") ? 1 : 0);
+        _ = board.GetObject("target");
+        _ = board.TryGetPosition("noise", out Vector3 _);
+    }
+}
+
+[BehaviorNode("Has Ammo At Least", Condition = true, Description = "Succeeds while the guard has this much ammunition.")]
+public class HasAmmoAtLeast : BehaviorNode
+{
+    public int Count = 1;
+
+    protected override BehaviorStatus OnTick(float deltaTime) =>
+        GameObject.GetComponent<GuardActions>().Ammo >= Count ? BehaviorStatus.Success : BehaviorStatus.Failure;
+}
+
+public class AimFor : BehaviorNode
+{
+    public float Seconds = 0.5f;
+    private float _left;
+
+    protected override void OnStart() => _left = Seconds;
+
+    protected override BehaviorStatus OnTick(float deltaTime)
+    {
+        _left -= deltaTime;
+        return _left > 0 ? BehaviorStatus.Running : BehaviorStatus.Success;
+    }
+
+    protected override void OnEnd(bool aborted) { }
+}
+
+[BehaviorNode("Aim", Key = "guard.aim")]
+public class RenamedAim : BehaviorNode
+{
+    protected override BehaviorStatus OnTick(float deltaTime) => BehaviorStatus.Success;
 }
 
 // docs/maps.md

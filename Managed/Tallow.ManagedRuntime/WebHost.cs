@@ -51,6 +51,7 @@ public static unsafe class WebHost
         Register("UiInvoke", (nint)(delegate* unmanaged[Cdecl]<int, byte*, byte*, int>)&NativeEntrypoints.UiInvoke);
         Register("ChooseTeam", (nint)(delegate* unmanaged[Cdecl]<int, int>)&NativeEntrypoints.ChooseTeam);
         Register("ComponentEvent", (nint)(delegate* unmanaged[Cdecl]<int, int, byte*, float, int>)&NativeEntrypoints.ComponentEvent);
+        Register("BehaviorNode", (nint)(delegate* unmanaged[Cdecl]<int, int, byte*, ulong, ulong, byte*, float, int>)&NativeEntrypoints.BehaviorNode);
         Register("PredictionState", (nint)(delegate* unmanaged[Cdecl]<int, int, float*, int>)&NativeEntrypoints.PredictionState);
         Register("Pump", (nint)(delegate* unmanaged[Cdecl]<float, NativeEntrypoints.NativeGcStats*, int>)&NativeEntrypoints.Pump);
         Register("Detach", (nint)(delegate* unmanaged[Cdecl]<int, int>)&NativeEntrypoints.Detach);

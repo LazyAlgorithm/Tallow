@@ -194,6 +194,10 @@ public class ApiChecks : CheckBase
             QueryTargetsSetup();
         else if (_tick == 83)
             QueryChecks();
+        else if (_tick == 86)
+            BehaviorNodesSetup();
+        else if (_tick == 98)
+            BehaviorNodesCheck();
         else if (_tick == 100)
         {
             // LetGo(0.05f) fades over 0.05 s of game time; this is well after.
@@ -887,6 +891,38 @@ public class ApiChecks : CheckBase
     }
 
     // A sequence, a conversation and a tree that each send a "Ping" event, on an object with an EventProbe script.
+    private GameObject _armed, _unarmed;
+
+    private void BehaviorNodesSetup()
+    {
+        _armed = Scene.CreateGameObject("C# nodes armed");
+        BehaviorTreeRunner runner = _armed.AddComponent<BehaviorTreeRunner>();
+        runner.StartValues = "ammo 3";
+        runner.RestartWhenDone = false;
+        runner.Tree = "AI/CSharpNodes.tbt";
+        _unarmed = Scene.CreateGameObject("C# nodes unarmed");
+        BehaviorTreeRunner other = _unarmed.AddComponent<BehaviorTreeRunner>();
+        other.StartValues = "ammo 1";
+        other.Tree = "AI/CSharpNodes.tbt";
+    }
+
+    private void BehaviorNodesCheck()
+    {
+        Blackboard armed = _armed.GetComponent<BehaviorTreeRunner>().Blackboard;
+        Blackboard unarmed = _unarmed.GetComponent<BehaviorTreeRunner>().Blackboard;
+        Check($"a C# condition node with a custom key reads its setting and the blackboard (unarmed counted: {unarmed.Has("counted")})",
+            armed.Has("counted") && !unarmed.Has("counted"));
+        Check($"a C# action node runs for several ticks with its settings from the tree (counted {armed.GetNumber("counted")})",
+            armed.GetNumber("counted") == 3);
+        Check($"a C# node's OnStart and OnEnd bracket its run (starts {CountTicks.Starts}, ends {CountTicks.Ends})",
+            CountTicks.Starts == 1 && CountTicks.Ends == 1);
+        Check("a node kind that is not registered is kept and fails, so the selector runs the next C# node",
+            armed.GetFlag("done") && armed.GetObject("me") == _armed);
+        armed.SetVector("post", new Vector3(1, 2, 3));
+        Check("scripts read and write a Behavior Tree Runner's blackboard",
+            armed.TryGetPosition("post", out Vector3 post) && post == new Vector3(1, 2, 3) && !armed.TryGetPosition("nothing", out _));
+    }
+
     private void EventsBegin()
     {
         GameObject talker = Scene.CreateGameObject("Event probe");

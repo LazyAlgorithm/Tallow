@@ -919,10 +919,26 @@ static class BehaviorLibrary
 	}
 
 	/// Adds a node kind. Games can call this at startup to offer their own nodes: derive from BTNode and register it.
+	/// Adding a key that is already there as a placeholder (Missing) or a C# kind changes that kind in place, so trees
+	/// already loaded use the new one.
 	public static BTNodeDef Add(StringView key, StringView category, StringView title, BTKind kind, BTNodeDef.Factory create)
 	{
 		if (sDefs == null)
 			Build();
+		for (let existing in sDefs)
+		{
+			if (existing.key != key || !(existing.missing || existing.managedClass != null))
+				continue;
+			existing.missing = false;
+			existing.category.Set(category);
+			existing.title.Set(title);
+			existing.description.Clear();
+			existing.kind = kind;
+			existing.ClearParameters();
+			delete existing.create;
+			existing.create = create;
+			return existing;
+		}
 		let def = new BTNodeDef();
 		def.key.Set(key);
 		def.category.Set(category);
@@ -930,6 +946,21 @@ static class BehaviorLibrary
 		def.kind = kind;
 		def.create = create;
 		sDefs.Add(def);
+		return def;
+	}
+
+	/// A placeholder for a key no kind has registered, with that many text settings (its values are kept as they
+	/// are). Runs as a failure.
+	public static BTNodeDef Missing(StringView key, int settingCount)
+	{
+		let found = Find(key);
+		if (found != null)
+			return found;
+		let def = Add(key, "Missing", scope $"Missing: {key}", .Composite, new () => new BTMissingNode());
+		def.missing = true;
+		for (int i < settingCount)
+			def.With(scope $"Setting {i + 1}", .Text, "");
+		def.Describe("This tree names a node kind that is not registered: a C# node whose code has not compiled or loaded, or one from another version. It fails until the kind is registered.");
 		return def;
 	}
 
@@ -981,4 +1012,57 @@ static class BehaviorLibrary
 		Add("bb.here", "Blackboard", "Remember Position", .Action, new () => new BTRememberPosition()).With("Key", .Text, "post").Describe("Remembers where this object is now, to go back to it with Move To Target.");
 		Add("bb.flag", "Blackboard", "Is Flag Set", .Condition, new () => new BTIsFlagSet()).With("Key", .Text, "alert").Describe("Succeeds if the flag is true.");
 	}
+}
+
+/// A node whose kind is not registered (BehaviorLibrary.Missing). It fails, and says so once.
+class BTMissingNode : BTNode
+{
+	bool mWarned;
+
+	protected override BTStatus OnTick(BTContext context)
+	{
+		if (!mWarned)
+		{
+			mWarned = true;
+			Log.Warning(scope $"Behaviour tree on '{context.Object.Name}': node '{data.def.key}' is not registered (its C# code may not have compiled), so it fails.");
+		}
+		return .Failure;
+	}
+}
+
+/// A node written in C# (a BehaviorNode class): each phase goes to its managed instance, made when it first starts.
+class BTManagedNode : BTNode
+{
+	static int32 sNextHandle = 1;
+	int32 mHandle = sNextHandle++;
+	// The class, copied: the tree's data may be gone by the time this node is.
+	String mClass ~ delete _;
+
+	public ~this()
+	{
+		if (mClass != null)
+			CSharpRuntime.BehaviorNodeCall(mHandle, 4, mClass, null, "", 0);
+	}
+
+	BTStatus Call(int32 phase, BTContext context)
+	{
+		let values = scope String();
+		if (phase == 0)
+		{
+			for (let value in data.values)
+			{
+				if (@value.Index > 0)
+					values.Append('\x1f');
+				values.Append(value);
+			}
+		}
+		if (mClass == null)
+			mClass = new String(data.def.managedClass ?? "");
+		let result = CSharpRuntime.BehaviorNodeCall(mHandle, phase, mClass, context.Object, values, context.deltaTime);
+		return result == 1 ? .Running : result == 2 ? .Success : .Failure;
+	}
+
+	protected override void OnStart(BTContext context) => Call(0, context);
+	protected override BTStatus OnTick(BTContext context) => Call(1, context);
+	protected override void OnEnd(BTContext context, bool aborted) => Call(aborted ? 3 : 2, context);
 }

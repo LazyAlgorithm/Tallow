@@ -71,6 +71,22 @@ class BTNodeDef
 		};
 	/// Makes a running node of this kind.
 	public Factory create ~ delete _;
+	/// A kind written in C#: its class's full name (BTManagedNode runs it). Null for Beef kinds.
+	public String managedClass ~ delete _;
+	/// A kind the tree file names that is not registered (yet): kept so the file is saved unchanged, run as a
+	/// failure. Registering the key later turns it into the real kind.
+	public bool missing;
+
+	/// Empties the kind's settings, for registering it again.
+	public void ClearParameters()
+	{
+		for (let p in parameters)
+		{
+			delete p.name;
+			delete p.fallback;
+		}
+		parameters.Clear();
+	}
 
 	/// How many children a node of this kind may have.
 	public int MaxChildren => kind == .Composite ? int.MaxValue : ((kind == .Decorator || kind == .Root) ? 1 : 0);
@@ -105,6 +121,13 @@ class BTNodeData
 	public Vector2 position;
 	/// One value per parameter of the definition, written the way the editor shows it.
 	public List<String> values = new .() ~ DeleteContainerAndItems!(_);
+
+	/// Gives the node a value for each of its kind's settings (a kind registered again may have gained some).
+	public void Fit()
+	{
+		while (values.Count < def.parameters.Count)
+			values.Add(new String(def.parameters[values.Count].fallback));
+	}
 
 	// Values read as numbers, with the text each was read from: a crowd running one tree reads each text once, not
 	// once per node per tick. A value changed since is read again.
@@ -360,15 +383,22 @@ class BehaviorTreeData
 				name.Set(tokens[1]);
 			else if (tokens.Count >= 5 && tokens[0] == "node")
 			{
-				let def = BehaviorLibrary.Find(tokens[2]);
+				var def = BehaviorLibrary.Find(tokens[2]);
 				if (def == null)
 				{
-					Log.Warning(scope $"Behaviour tree uses unknown node '{tokens[2]}'; it was dropped.");
-					continue;
+					// Kept rather than dropped (a C# node before the game's code has loaded, a node from a newer
+					// engine), so saving the tree does not lose it.
+					Log.Warning(scope $"Behaviour tree uses node '{tokens[2]}', which is not registered; it fails until it is.");
+					def = BehaviorLibrary.Missing(tokens[2], tokens.Count - 5);
 				}
 				let node = AddNode(def, .(SceneSerializer.ParseFloat(tokens[3]), SceneSerializer.ParseFloat(tokens[4])), SceneSerializer.ParseInt(tokens[1]));
-				for (int i = 0; i < node.values.Count && 5 + i < tokens.Count; i++)
-					node.values[i].Set(tokens[5 + i]);
+				for (int i = 5; i < tokens.Count; i++)
+				{
+					if (i - 5 < node.values.Count)
+						node.values[i - 5].Set(tokens[i]);
+					else
+						node.values.Add(new String(tokens[i]));
+				}
 			}
 			else if (tokens.Count >= 3 && tokens[0] == "link")
 				Connect(SceneSerializer.ParseInt(tokens[1]), SceneSerializer.ParseInt(tokens[2]));

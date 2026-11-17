@@ -69,6 +69,7 @@ using network_event_fn = int32_t (*)(int32_t, const char*, float);
 using ui_invoke_fn = int32_t (*)(int32_t, const char*, const char*);
 using choose_team_fn = int32_t (*)(int32_t);
 using component_event_fn = int32_t (*)(int32_t, int32_t, const char*, float);
+using behavior_node_fn = int32_t (*)(int32_t, int32_t, const char*, uint64_t, uint64_t, const char*, float);
 using prediction_state_fn = int32_t (*)(int32_t, int32_t, float*);
 using pump_fn = int32_t (*)(float, tn_csharp_gc_stats*);
 using detach_fn = int32_t (*)(int32_t);
@@ -100,6 +101,7 @@ network_event_fn network_event = nullptr;
 ui_invoke_fn ui_invoke = nullptr;
 choose_team_fn choose_team = nullptr;
 component_event_fn component_event = nullptr;
+behavior_node_fn behavior_node = nullptr;
 prediction_state_fn prediction_state = nullptr;
 pump_fn pump = nullptr;
 detach_fn detach = nullptr;
@@ -492,6 +494,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             !find_entry(assembly.c_str(), "UiInvoke", ui_invoke) ||
             !find_entry(assembly.c_str(), "ChooseTeam", choose_team) ||
             !find_entry(assembly.c_str(), "ComponentEvent", component_event) ||
+            !find_entry(assembly.c_str(), "BehaviorNode", behavior_node) ||
             !find_entry(assembly.c_str(), "PredictionState", prediction_state) ||
             !find_entry(assembly.c_str(), "Pump", pump) ||
             !find_entry(assembly.c_str(), "Detach", detach) ||
@@ -736,6 +739,17 @@ int32_t tn_csharp_component_event(int32_t script_instance, int32_t kind, const c
     return result > 0;
 }
 
+int32_t tn_csharp_behavior_node(int32_t handle, int32_t phase, const char* class_name, uint64_t session, uint64_t entity,
+    const char* values, float delta_time)
+{
+    if (!started || !behavior_node || !class_name)
+        return 3;
+    const int32_t result = behavior_node(handle, phase, class_name, session, entity, values ? values : "", delta_time);
+    if (result < 0)
+        managed_error("Running a C# behaviour tree node");
+    return result;
+}
+
 int32_t tn_csharp_prediction_state(int32_t script_instance, int32_t mode, float* values)
 {
     if (!started || !prediction_state || !values)
@@ -815,6 +829,7 @@ void tn_csharp_shutdown(void)
     editor_configure = nullptr;
     choose_team = nullptr;
     component_event = nullptr;
+    behavior_node = nullptr;
     prediction_state = nullptr;
     pump = nullptr;
     detach = nullptr;

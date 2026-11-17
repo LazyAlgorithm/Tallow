@@ -149,10 +149,34 @@ static class NodeLibrary
 		}
 	}
 
+	static String sBehaviorNodes = new .() ~ delete _;
+
+	/// The project's C# behaviour tree nodes (.tallow-csharp/behavior-nodes.tsv, written by Tallow.Build), so the
+	/// behaviour tree editor offers them, and shows their settings, before the game runs.
+	static void RefreshBehaviorNodes(StringView projectPath)
+	{
+		let text = scope String();
+		File.ReadAllText(scope $"{projectPath}/.tallow-csharp/behavior-nodes.tsv", text).IgnoreError();
+		if (text == sBehaviorNodes)
+			return;
+		sBehaviorNodes.Set(text);
+		for (var line in text.Split('\n', .RemoveEmptyEntries))
+		{
+			line.TrimEnd('\r');
+			var cells = line.Split('\t');
+			StringView[7] c = default;
+			for (int i < 7)
+				c[i] = cells.GetNext().GetValueOrDefault();
+			if (!c[0].IsEmpty && !c[5].IsEmpty)
+				CSharpBehaviorNodes.Register(c[0], c[1], c[2], c[3] == "1" ? 1 : 0, c[4], c[5], c[6]);
+		}
+	}
+
 	/// Reads the project's compiled C# scripts (.tallow-csharp/components.tsv) and the nodes its C# offers
 	/// (graph-nodes.tsv) for C# graphs; rebuilds the library when they changed.
 	public static void RefreshCSharpScripts(StringView projectPath)
 	{
+		RefreshBehaviorNodes(projectPath);
 		let nodes = scope String();
 		File.ReadAllText(scope $"{projectPath}/.tallow-csharp/graph-nodes.tsv", nodes).IgnoreError();
 		let ecs = scope String();

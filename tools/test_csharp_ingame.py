@@ -166,6 +166,19 @@ def main() -> int:
         else:
             failed.append(f"INGAME FAIL [Asset] catalog rows: {assets}")
             print(failed[-1])
+        # C# behaviour nodes are offered to the editor before the game runs (.tallow-csharp/behavior-nodes.tsv).
+        bt_path = project / ".tallow-csharp/behavior-nodes.tsv"
+        bt_rows = {row.split("\t")[0]: row.split("\t") for row in
+                   (bt_path.read_text(encoding="utf-8").split("\n") if bt_path.exists() else []) if row}
+        ammo, count = bt_rows.get("ingame.ammo"), bt_rows.get("InGame.CountTicks")
+        if (ammo and ammo[1:6] == ["Game", "Ammo At Least", "1", "Succeeds while the blackboard's ammo is at least Count.", "InGame.AmmoAtLeast"]
+                and ammo[6] == "Count\x1fNumber\x1f1" and count and count[6] == "Ticks\x1fNumber\x1f2\x1eEntry\x1fText\x1fcount"
+                and bt_rows.get("InGame.MarkDone", [""] * 2)[1] == "Tests"):
+            passed += 1
+            print("INGAME PASS the build lists C# behaviour nodes, their keys and settings for the editor")
+        else:
+            failed.append(f"INGAME FAIL behaviour node catalog rows: {bt_rows}")
+            print(failed[-1])
         boom = [line for line in output.splitlines()
                 if line.startswith("[error] System.InvalidOperationException: thrown on purpose by async code (in async code")]
         if len(boom) == 1 and "AsyncProbe" in boom[0] and "ApiChecks.cs:" in boom[0]:
