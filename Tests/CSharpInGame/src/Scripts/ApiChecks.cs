@@ -445,6 +445,33 @@ public class ApiChecks : CheckBase
         (IEnumerable<(Type, string)>)typeof(NativeComponentAttribute).Assembly.GetType("Tallow.NativeComponentTypes")!
             .GetProperty("All")!.GetValue(null)!;
 
+    // Scene text keeps 7 significant digits of a float (SceneSerializer.WriteValue), so a value can move in its last
+    // place the first time it goes through the engine, and then stays.
+    private static bool SameToSevenDigits(object? a, object? b)
+    {
+        static float[]? Parts(object? v) => v switch
+        {
+            float f => [f],
+            Vector2 x => [x.X, x.Y],
+            Vector3 x => [x.X, x.Y, x.Z],
+            Vector4 x => [x.X, x.Y, x.Z, x.W],
+            Color c => [c.R, c.G, c.B, c.A],
+            _ => null,
+        };
+        float[]? x = Parts(a), y = Parts(b);
+        if (x is null || y is null || x.Length != y.Length)
+            return false;
+        for (int i = 0; i < x.Length; i++)
+            if (MathF.Abs(x[i] - y[i]) > 1e-6f * MathF.Max(1f, MathF.Abs(x[i])))
+                return false;
+        return true;
+    }
+
+    private static Dictionary<Type, string[]> GeneratedFields() =>
+        (Dictionary<Type, string[]>)typeof(NativeComponentAttribute).Assembly.GetType("Tallow.NativeComponentTypes")!
+            .GetField("GeneratedFields", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .GetValue(null)!;
+
     private static readonly HashSet<string> HandWritten = ["Light", "MeshRenderer", "SphereCollider", "BoxCollider",
         "NavigationAgent", "NavigationSurface", "Rigidbody", "CharacterController", "UIDocument", "Animator",
         "VoxelObject", "VoxelTerrain", "CharacterMotor", "AudioSource"];
@@ -468,17 +495,20 @@ public class ApiChecks : CheckBase
                 holder.Destroy();
                 continue;
             }
-            // Hand-written handles also carry live state (a Rigidbody's velocity...); generated ones are all fields.
+            // Hand-written handles also carry live state (a Rigidbody's velocity...); generated ones are all fields,
+            // as are the fields generated into hand-written handles (NativeComponentTypes.GeneratedFields).
             bool generated = !HandWritten.Contains(type.Name);
+            GeneratedFields().TryGetValue(type, out string[]? added);
             foreach (var property in type.GetProperties())
             {
-                if (!generated || !property.CanWrite || property.Name is "IsValid" or "GameObject")
+                if (!(generated || added?.Contains(property.Name) == true) || !property.CanWrite ||
+                    property.Name is "IsValid" or "GameObject")
                     continue;
                 object? value = property.GetValue(handle);
                 property.SetValue(handle, value);
                 object? again = property.GetValue(handle);
                 fields++;
-                if (!Equals(value, again))
+                if (!Equals(value, again) && !SameToSevenDigits(value, again))
                     problems.Add($"{type.Name}.{property.Name}: {value} became {again}");
             }
             holder.Destroy();

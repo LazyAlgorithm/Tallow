@@ -248,7 +248,7 @@ public enum LightType { Directional, Point, Spot }
 
 /// <summary>A light: its type, color, intensity and range.</summary>
 [NativeComponent("Tallow.Light")]
-public readonly record struct Light(GameObject GameObject) : IComponent
+public readonly partial record struct Light(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.Light");
     public bool IsValid => Data.IsValid;
@@ -262,7 +262,7 @@ public readonly record struct Light(GameObject GameObject) : IComponent
 
 /// <summary>Draws a mesh ("builtin:cube", "builtin:sphere_smooth" or a model path) with a simple material.</summary>
 [NativeComponent("Tallow.MeshRenderer")]
-public readonly record struct MeshRenderer(GameObject GameObject) : IComponent
+public readonly partial record struct MeshRenderer(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.MeshRenderer");
     public bool IsValid => Data.IsValid;
@@ -362,7 +362,7 @@ public readonly record struct MeshRenderer(GameObject GameObject) : IComponent
 }
 
 [NativeComponent("Tallow.SphereCollider")]
-public readonly record struct SphereCollider(GameObject GameObject) : IComponent
+public readonly partial record struct SphereCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.SphereCollider");
     public bool IsValid => Data.IsValid;
@@ -371,7 +371,7 @@ public readonly record struct SphereCollider(GameObject GameObject) : IComponent
 }
 
 [NativeComponent("Tallow.BoxCollider")]
-public readonly record struct BoxCollider(GameObject GameObject) : IComponent
+public readonly partial record struct BoxCollider(GameObject GameObject) : IComponent
 {
     private NativeComponent Data => new(GameObject, "Tallow.BoxCollider");
     public bool IsValid => Data.IsValid;
@@ -381,7 +381,7 @@ public readonly record struct BoxCollider(GameObject GameObject) : IComponent
 
 /// <summary>Walks its object along the navigation mesh to a destination.</summary>
 [NativeComponent("Tallow.NavigationAgent")]
-public readonly record struct NavigationAgent(GameObject GameObject) : IComponent
+public readonly partial record struct NavigationAgent(GameObject GameObject) : IComponent
 {
     public bool IsValid => CSharpNavigation.HasAgent(GameObject.SceneId, GameObject.Id);
     public void SetDestination(Vector3 point, float speed, float stoppingDistance = 0.2f) =>
@@ -408,7 +408,7 @@ public static class AINoise
 
 /// <summary>A baked navigation mesh agents walk on, with queries for choosing where to go.</summary>
 [NativeComponent("Tallow.NavigationSurface")]
-public readonly record struct NavigationSurface(GameObject GameObject) : IComponent
+public readonly partial record struct NavigationSurface(GameObject GameObject) : IComponent
 {
     public bool IsValid => CSharpNavigation.HasSurface(GameObject.SceneId, GameObject.Id);
 

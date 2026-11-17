@@ -68,7 +68,7 @@ public enum AudioGroup
 
 /// <summary>Something that makes sound from its object: a radio, an engine, footsteps.</summary>
 [NativeComponent("Tallow.AudioSource")]
-public readonly record struct AudioSource(GameObject GameObject) : IComponent
+public readonly partial record struct AudioSource(GameObject GameObject) : IComponent
 {
     public bool IsValid => CSharpAudio.HasSource(GameObject.SceneId, GameObject.Id);
     /// <summary>Plays its Audio Clip (set in the Inspector).</summary>

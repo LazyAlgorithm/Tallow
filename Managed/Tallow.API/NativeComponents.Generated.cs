@@ -4,6 +4,25 @@ using System.Numerics;
 
 namespace Tallow;
 
+// Fields of Tallow.Animator its hand-written handle does not cover.
+public readonly partial record struct Animator
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.Animator");
+    /// <summary>
+    /// Clip files separated by semicolons, e.g. "Animations/idle.tanim;Animations/walk.tanim".
+    /// </summary>
+    public string Clips { get => Fields.GetString("clips"); set => Fields.Set("clips", value); }
+    /// <summary>
+    /// Name of the clip to start with.
+    /// </summary>
+    public string DefaultClip { get => Fields.GetString("defaultClip"); set => Fields.Set("defaultClip", value); }
+    /// <summary>
+    /// An Animator Controller (.tcontroller) made in the Animator window. With one set, the Animator runs its
+    /// state machine: scripts set parameters, and transitions pick the clip. Without one, scripts call Play.
+    /// </summary>
+    public string Controller { get => Fields.GetString("controller"); set => Fields.Set("controller", value); }
+}
+
 /// <summary>
 /// The ears. Put one on the camera, or on the player's head; positioned sounds are heard from here, facing the way
 /// the object faces. With none in the scene the first Camera is used, so a simple game needs nothing.
@@ -49,6 +68,122 @@ public readonly partial record struct AudioReverbZone(GameObject GameObject) : I
     /// How quickly high frequencies die in the echo: 0 bright and ringing, 1 dull and soft.
     /// </summary>
     public float Damping { get => Data.GetFloat("damping"); set => Data.Set("damping", value); }
+}
+
+// Fields of Tallow.AudioSource its hand-written handle does not cover.
+public readonly partial record struct AudioSource
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.AudioSource");
+    /// <summary>
+    /// Sound file, relative to the project's asset folder: WAV, OGG, MP3 or FLAC.
+    /// </summary>
+    public string AudioClip { get => Fields.GetString("audioClip"); set => Fields.Set("audioClip", value); }
+    /// <summary>
+    /// Which volume setting the sound follows (effects, music, voice...).
+    /// </summary>
+    public AudioGroup Group { get => Fields.GetEnum<AudioGroup>("group"); set => Fields.Set("group", value); }
+    /// <summary>
+    /// Music and other per-player audio can opt out of network playback events.
+    /// </summary>
+    public bool LocalOnly { get => Fields.GetBool("localOnly"); set => Fields.Set("localOnly", value); }
+    /// <summary>
+    /// How loud the sound is, 0 to 1.
+    /// </summary>
+    public float Volume { get => Fields.GetFloat("volume"); set => Fields.Set("volume", value); }
+    /// <summary>
+    /// How loud the sound is, 0 to 1.
+    /// How fast (and so how high) the sound plays: 1 is as recorded.
+    /// </summary>
+    public float Pitch { get => Fields.GetFloat("pitch"); set => Fields.Set("pitch", value); }
+    /// <summary>
+    /// How loud the sound is, 0 to 1.
+    /// How fast (and so how high) the sound plays: 1 is as recorded.
+    /// Plays the sound over and over.
+    /// </summary>
+    public bool Loop { get => Fields.GetBool("loop"); set => Fields.Set("loop", value); }
+    /// <summary>
+    /// Start playing when the scene starts.
+    /// </summary>
+    public bool PlayOnStart { get => Fields.GetBool("playOnStart"); set => Fields.Set("playOnStart", value); }
+    /// <summary>
+    /// Read the file a little at a time instead of all at once. For music and long ambience.
+    /// </summary>
+    public bool Stream { get => Fields.GetBool("stream"); set => Fields.Set("stream", value); }
+    /// <summary>
+    /// Come from the object's position in the world. Off plays it the same in both ears.
+    /// </summary>
+    public bool Spatial { get => Fields.GetBool("spatial"); set => Fields.Set("spatial", value); }
+    /// <summary>
+    /// Full volume inside this distance.
+    /// </summary>
+    public float MinDistance { get => Fields.GetFloat("minDistance"); set => Fields.Set("minDistance", value); }
+    /// <summary>
+    /// No quieter beyond this distance (silent, with Linear rolloff).
+    /// </summary>
+    public float MaxDistance { get => Fields.GetFloat("maxDistance"); set => Fields.Set("maxDistance", value); }
+    /// <summary>
+    /// How the sound gets quieter with distance.
+    /// </summary>
+    public AudioRolloff Rolloff { get => Fields.GetEnum<AudioRolloff>("rolloff"); set => Fields.Set("rolloff", value); }
+    /// <summary>
+    /// Pitch shift as the source and listener move relative to each other. 0 turns it off.
+    /// </summary>
+    public float Doppler { get => Fields.GetFloat("doppler"); set => Fields.Set("doppler", value); }
+    /// <summary>
+    /// Pitch shift as the source and listener move relative to each other. 0 turns it off.
+    /// Muffle and quieten the sound when something solid is between it and the listener.
+    /// </summary>
+    public bool Occlusion { get => Fields.GetBool("occlusion"); set => Fields.Set("occlusion", value); }
+    /// <summary>
+    /// Dull distant sounds slightly, as air does.
+    /// </summary>
+    public bool AirAbsorption { get => Fields.GetBool("airAbsorption"); set => Fields.Set("airAbsorption", value); }
+    /// <summary>
+    /// Reverb this source always has, on top of any reverb zone the listener is in.
+    /// </summary>
+    public float ReverbSend { get => Fields.GetFloat("reverbSend"); set => Fields.Set("reverbSend", value); }
+    /// <summary>
+    /// Reverb this source always has, on top of any reverb zone the listener is in.
+    /// Angle in degrees of the cone, around the object's forward direction, inside which the sound is at full
+    /// volume. 360 sends it equally in all directions.
+    /// </summary>
+    public float ConeAngle { get => Fields.GetFloat("coneAngle"); set => Fields.Set("coneAngle", value); }
+    /// <summary>
+    /// Reverb this source always has, on top of any reverb zone the listener is in.
+    /// Angle in degrees of the cone, around the object's forward direction, inside which the sound is at full
+    /// volume. 360 sends it equally in all directions.
+    /// Volume behind the cone, 0 to 1.
+    /// </summary>
+    public float ConeOuterVolume { get => Fields.GetFloat("coneOuterVolume"); set => Fields.Set("coneOuterVolume", value); }
+    /// <summary>
+    /// Reverb this source always has, on top of any reverb zone the listener is in.
+    /// Angle in degrees of the cone, around the object's forward direction, inside which the sound is at full
+    /// volume. 360 sends it equally in all directions.
+    /// Volume behind the cone, 0 to 1.
+    /// Shows the clip's subtitle file while it plays, when it has one: the same name ending .srt
+    /// (`Voice/intro.ogg` and `Voice/intro.srt`). See docs/dialogue.md.
+    /// </summary>
+    public bool Subtitles { get => Fields.GetBool("subtitles"); set => Fields.Set("subtitles", value); }
+    /// <summary>
+    /// Cuts everything above this frequency, in Hz, all the time (a radio, a voice through a door). 22000 leaves the
+    /// sound as recorded.
+    /// </summary>
+    public float Lowpass { get => Fields.GetFloat("lowpass"); set => Fields.Set("lowpass", value); }
+    /// <summary>
+    /// Cuts everything above this frequency, in Hz, all the time (a radio, a voice through a door). 22000 leaves the
+    /// sound as recorded.
+    /// How loud the sound is to a listener in another world state, 0 to 1 of its volume: a faint echo from the other
+    /// reality. 0 (the default): not heard there at all.
+    /// </summary>
+    public float OtherWorldVolume { get => Fields.GetFloat("otherWorldVolume"); set => Fields.Set("otherWorldVolume", value); }
+    /// <summary>
+    /// Cuts everything above this frequency, in Hz, all the time (a radio, a voice through a door). 22000 leaves the
+    /// sound as recorded.
+    /// How loud the sound is to a listener in another world state, 0 to 1 of its volume: a faint echo from the other
+    /// reality. 0 (the default): not heard there at all.
+    /// Heard from another world state, everything above this frequency (Hz) is cut, so it comes through muffled.
+    /// </summary>
+    public float OtherWorldLowpass { get => Fields.GetFloat("otherWorldLowpass"); set => Fields.Set("otherWorldLowpass", value); }
 }
 
 /// <summary>
@@ -164,6 +299,93 @@ public readonly partial record struct CapsuleCollider(GameObject GameObject) : I
     /// The capsule's height from end to end, its rounded ends included.
     /// </summary>
     public float Height { get => Data.GetFloat("height"); set => Data.Set("height", value); }
+}
+
+// Fields of Tallow.CharacterController its hand-written handle does not cover.
+public readonly partial record struct CharacterController
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.CharacterController");
+    public CharacterShape Shape { get => Fields.GetEnum<CharacterShape>("shape"); set => Fields.Set("shape", value); }
+    /// <summary>
+    /// Box: full width, height and depth.
+    /// </summary>
+    public Vector3 BoxSize { get => Fields.GetVector3("boxSize"); set => Fields.Set("boxSize", value); }
+    /// <summary>
+    /// Middle of the shape relative to the object's origin. Use (0, height / 2, 0) when the origin is at the feet.
+    /// </summary>
+    public Vector3 Center { get => Fields.GetVector3("center"); set => Fields.Set("center", value); }
+    /// <summary>
+    /// Tallest step it walks up, and how far it follows the floor down.
+    /// </summary>
+    public float StepHeight { get => Fields.GetFloat("stepHeight"); set => Fields.Set("stepHeight", value); }
+    /// <summary>
+    /// Steepest slope, in degrees, it can stand and walk on.
+    /// </summary>
+    public float MaxSlope { get => Fields.GetFloat("maxSlope"); set => Fields.Set("maxSlope", value); }
+    public float Mass { get => Fields.GetFloat("mass"); set => Fields.Set("mass", value); }
+    /// <summary>
+    /// Multiplies the scene's gravity in SimpleMove.
+    /// </summary>
+    public float GravityScale { get => Fields.GetFloat("gravityScale"); set => Fields.Set("gravityScale", value); }
+    /// <summary>
+    /// Turn the collision shape with the object's rotation. Leave off for boxes unless they are square.
+    /// </summary>
+    public bool TurnShapeWithObject { get => Fields.GetBool("turnShapeWithObject"); set => Fields.Set("turnShapeWithObject", value); }
+    /// <summary>
+    /// Seconds after leaving the ground during which a jump is still allowed. It covers the few ticks a rounded
+    /// shape spends rolling over the edge of a step, and forgives a jump pressed just past a ledge.
+    /// </summary>
+    public float JumpGrace { get => Fields.GetFloat("jumpGrace"); set => Fields.Set("jumpGrace", value); }
+    /// <summary>
+    /// Other soft characters ease this one aside instead of stopping against it like a wall. Turn off for a
+    /// character that should be a solid obstacle. Call ApplyShape after changing it while playing.
+    /// </summary>
+    public bool SoftCharacterContact { get => Fields.GetBool("softCharacterContact"); set => Fields.Set("softCharacterContact", value); }
+    /// <summary>
+    /// How quickly overlapping soft characters are separated, in metres per second for each metre of overlap.
+    /// </summary>
+    public float SeparationSpeed { get => Fields.GetFloat("separationSpeed"); set => Fields.Set("separationSpeed", value); }
+    /// <summary>
+    /// Swims in Water deeper than Swim Depth instead of walking on the bottom: SimpleMove floats it with its head out
+    /// of the water, slows it and lets the current carry it, and a jump swims up (and out, at an edge).
+    /// </summary>
+    public bool CanSwim { get => Fields.GetBool("canSwim"); set => Fields.Set("canSwim", value); }
+    /// <summary>
+    /// How deep the water has to be over its feet for it to swim, in metres.
+    /// </summary>
+    public float SwimDepth { get => Fields.GetFloat("swimDepth"); set => Fields.Set("swimDepth", value); }
+    /// <summary>
+    /// Swimming speed as a share of the speed SimpleMove or Swim is given.
+    /// </summary>
+    public float SwimSpeed { get => Fields.GetFloat("swimSpeed"); set => Fields.Set("swimSpeed", value); }
+}
+
+// Fields of Tallow.CharacterMotor its hand-written handle does not cover.
+public readonly partial record struct CharacterMotor
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.CharacterMotor");
+    public float MoveSpeed { get => Fields.GetFloat("moveSpeed"); set => Fields.Set("moveSpeed", value); }
+    /// <summary>
+    /// Speed while Shift is held; set it to Move Speed to turn sprinting off.
+    /// </summary>
+    public float SprintSpeed { get => Fields.GetFloat("sprintSpeed"); set => Fields.Set("sprintSpeed", value); }
+    /// <summary>
+    /// Speed while Shift is held; set it to Move Speed to turn sprinting off.
+    /// </summary>
+    public float JumpSpeed { get => Fields.GetFloat("jumpSpeed"); set => Fields.Set("jumpSpeed", value); }
+    public float Acceleration { get => Fields.GetFloat("acceleration"); set => Fields.Set("acceleration", value); }
+    /// <summary>
+    /// Share of Acceleration available while in the air: 0 keeps the take-off velocity, 1 steers as on the ground.
+    /// </summary>
+    public float AirControl { get => Fields.GetFloat("airControl"); set => Fields.Set("airControl", value); }
+    /// <summary>
+    /// Share of Acceleration available while in the air: 0 keeps the take-off velocity, 1 steers as on the ground.
+    /// </summary>
+    public float MouseSensitivity { get => Fields.GetFloat("mouseSensitivity"); set => Fields.Set("mouseSensitivity", value); }
+    /// <summary>
+    /// Turn the object to face where the player looks. Turn off for characters that should keep their own facing.
+    /// </summary>
+    public bool FaceLookDirection { get => Fields.GetBool("faceLookDirection"); set => Fields.Set("faceLookDirection", value); }
 }
 
 /// <summary>
@@ -679,6 +901,32 @@ public readonly partial record struct LODGroup(GameObject GameObject) : ICompone
     public float Level3Triangles { get => Data.GetFloat("level3Triangles"); set => Data.Set("level3Triangles", value); }
 }
 
+// Fields of Tallow.Light its hand-written handle does not cover.
+public readonly partial record struct Light
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.Light");
+    /// <summary>
+    /// Physical inverse-square distance attenuation; intensity is then measured per square metre.
+    /// </summary>
+    public bool InverseSquare { get => Fields.GetBool("inverseSquare"); set => Fields.Set("inverseSquare", value); }
+    /// <summary>
+    /// Baked diffuse already supplies this light on surfaces with a lightmap.
+    /// </summary>
+    public bool BakedOnly { get => Fields.GetBool("bakedOnly"); set => Fields.Set("bakedOnly", value); }
+    /// <summary>
+    /// Which channel of baked shadowmasks holds this light's shadows (-1: none). Set when lighting is baked.
+    /// </summary>
+    public int ShadowMaskChannel { get => Fields.GetInt("shadowMaskChannel"); set => Fields.Set("shadowMaskChannel", value); }
+    /// <summary>
+    /// Negative keeps the engine default, 80% of Spot Angle.
+    /// </summary>
+    public float InnerSpotAngle { get => Fields.GetFloat("innerSpotAngle"); set => Fields.Set("innerSpotAngle", value); }
+    /// <summary>
+    /// How dark the light's shadows are: 1 is fully dark, 0 none.
+    /// </summary>
+    public float ShadowStrength { get => Fields.GetFloat("shadowStrength"); set => Fields.Set("shadowStrength", value); }
+}
+
 /// <summary>
 /// A box of closer-together light probes for the light baker (docs/baked-lighting.md): where light changes over a
 /// short way (a room, a doorway, under a roof, round a lamp) the scene's grid of probes is too coarse. Things whose
@@ -893,6 +1141,84 @@ public readonly partial record struct MeshCollider(GameObject GameObject) : ICom
     public bool IsTrigger { get => Data.GetBool("isTrigger"); set => Data.Set("isTrigger", value); }
 }
 
+// Fields of Tallow.MeshRenderer its hand-written handle does not cover.
+public readonly partial record struct MeshRenderer
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.MeshRenderer");
+    /// <summary>
+    /// The glow is multiplied by the surface's own colour (vertex colours and texture): the bright parts of a model
+    /// glow in their own colour and the dark parts stay dark. Set Emissive to white to keep the colours as they are.
+    /// </summary>
+    public bool EmissiveFromColor { get => Fields.GetBool("emissiveFromColor"); set => Fields.Set("emissiveFromColor", value); }
+    /// <summary>
+    /// Baked diffuse irradiance, sampled using the mesh's second UV set.
+    /// </summary>
+    public string Lightmap { get => Fields.GetString("lightmap"); set => Fields.Set("lightmap", value); }
+    /// <summary>
+    /// The baked lightmap's direction map, if any (set when lighting is baked).
+    /// </summary>
+    public string LightmapDirection { get => Fields.GetString("lightmapDirection"); set => Fields.Set("lightmapDirection", value); }
+    /// <summary>
+    /// The baked shadowmask, if any (set when lighting is baked).
+    /// </summary>
+    public string LightmapShadowmask { get => Fields.GetString("lightmapShadowmask"); set => Fields.Set("lightmapShadowmask", value); }
+    /// <summary>
+    /// Where this mesh's part of the lightmap is: x and y scale its lightmap coordinates, z and w offset them.
+    /// </summary>
+    public Vector4 LightmapScaleOffset { get => Fields.GetVector4("lightmapScaleOffset"); set => Fields.Set("lightmapScaleOffset", value); }
+    /// <summary>
+    /// RGBM multiplier/exponent and whether RGB needs sRGB decoding. Linear maps use (1,0,0,0).
+    /// </summary>
+    public Vector4 LightmapDecode { get => Fields.GetVector4("lightmapDecode"); set => Fields.Set("lightmapDecode", value); }
+    /// <summary>
+    /// How far the object bends in the wind (Wind Zone components): 0 not at all, 1 like grass. It bends about its own
+    /// origin, more the higher up, so put the origin at the foot of a tree, a flag pole or a reed.
+    /// </summary>
+    public float WindSway { get => Fields.GetFloat("windSway"); set => Fields.Set("windSway", value); }
+    /// <summary>
+    /// Casts its shadow without being drawn itself. For what the camera must not see but the sun still should:
+    /// the head and arms of a first-person player's own body, say.
+    /// </summary>
+    public bool ShadowOnly { get => Fields.GetBool("shadowOnly"); set => Fields.Set("shadowOnly", value); }
+    /// <summary>
+    /// Takes part in baked lighting (docs/baked-lighting.md): the Lighting window gives it a lightmap, and it blocks and
+    /// bounces light for the others. For things that never move: walls, floors, rocks, buildings.
+    /// </summary>
+    public bool BakedLighting { get => Fields.GetBool("bakedLighting"); set => Fields.Set("bakedLighting", value); }
+    /// <summary>
+    /// Mirrors what is on the screen as well as the reflection probe: objects in the room show in the surface where
+    /// they really are, not flattened onto the probe's walls. For flat, shiny surfaces (a polished floor, a mirror
+    /// wall): it costs a few dozen depth reads a pixel of the surface. Smooth surfaces only (roughness under 0.4);
+    /// a material with a custom shader keeps its own reflections. Off with the Reflection Probes quality setting.
+    /// </summary>
+    public bool ScreenReflections { get => Fields.GetBool("screenReflections"); set => Fields.Set("screenReflections", value); }
+    /// <summary>
+    /// Drawn in reflection probes' captures. A probe sees its room from one point and spreads what it saw over its
+    /// box, so things standing in the room (furniture, statues, a ball) come out flattened onto its walls, in the
+    /// wrong place in every reflection. Turn it off for them: the probe then holds the room alone, and shiny
+    /// surfaces with Screen Reflections still mirror them where they are on the screen. Their shadows stay.
+    /// </summary>
+    public bool InReflectionProbes { get => Fields.GetBool("inReflectionProbes"); set => Fields.Set("inReflectionProbes", value); }
+    /// <summary>
+    /// Mirrors the scene exactly, as a flat mirror would: the scene is drawn a second time, from the camera mirrored
+    /// under the surface's top face, and the surface shows that picture. Unlike Screen Reflections it has everything,
+    /// off the screen or hidden too, and each thing as seen from below (the underside of a ball, its own reflections
+    /// from there). For one flat, shiny floor or water-like surface in view: it costs about as much as drawing the
+    /// scene again. One surface a view has it at a time (the nearest); others fall back to Screen Reflections. The
+    /// game's view and the editor's Scene and Game views only.
+    /// </summary>
+    public bool PlanarReflection { get => Fields.GetBool("planarReflection"); set => Fields.Set("planarReflection", value); }
+    /// <summary>
+    /// A model with materials of its own (a glTF, or an FBX, OBJ, ... converted to one) is drawn with them, its
+    /// textures included, when no Material or Texture is set here. Off: the whole model takes the fields above.
+    /// </summary>
+    public bool UseModelMaterials { get => Fields.GetBool("useModelMaterials"); set => Fields.Set("useModelMaterials", value); }
+    /// <summary>
+    /// Whether it hides what is behind it from cameras with Occlusion Culling (docs/occlusion-culling.md).
+    /// </summary>
+    public OccluderMode Occluder { get => Fields.GetEnum<OccluderMode>("occluder"); set => Fields.Set("occluder", value); }
+}
+
 /// <summary>
 /// A model built in the editor (docs/modeling.md): its faces are kept in the scene, inline, and drawn through the
 /// object's Mesh Renderer. Objects with the same model share one mesh, so copies of a whitebox piece are drawn
@@ -913,6 +1239,50 @@ public readonly partial record struct ModelMesh(GameObject GameObject) : ICompon
     /// Off: once a metre of the model's own space, stretching with the object.
     /// </summary>
     public bool WorldScaleUVs { get => Data.GetBool("worldScaleUVs"); set => Data.Set("worldScaleUVs", value); }
+}
+
+// Fields of Tallow.NavigationAgent its hand-written handle does not cover.
+public readonly partial record struct NavigationAgent
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.NavigationAgent");
+    /// <summary>
+    /// How far the start and destination may be moved to reach a usable cell.
+    /// </summary>
+    public float SnapDistance { get => Fields.GetFloat("snapDistance"); set => Fields.Set("snapDistance", value); }
+    /// <summary>
+    /// Offset from the object's origin to the agent's feet (walking) or centre (flying).
+    /// </summary>
+    public Vector3 BaseOffset { get => Fields.GetVector3("baseOffset"); set => Fields.Set("baseOffset", value); }
+    /// <summary>
+    /// Shortest time between two path searches. A search runs only when the destination or the navigation data changed,
+    /// or the agent was pushed off its path.
+    /// </summary>
+    public float RepathInterval { get => Fields.GetFloat("repathInterval"); set => Fields.Set("repathInterval", value); }
+    public bool FaceMovement { get => Fields.GetBool("faceMovement"); set => Fields.Set("faceMovement", value); }
+    /// <summary>
+    /// Degrees per second when turning to face movement; 0 turns instantly.
+    /// </summary>
+    public float TurnSpeed { get => Fields.GetFloat("turnSpeed"); set => Fields.Set("turnSpeed", value); }
+    /// <summary>
+    /// Goes straight wherever it can, at any angle, rather than along the grid's directions.
+    /// </summary>
+    public bool SmoothPath { get => Fields.GetBool("smoothPath"); set => Fields.Set("smoothPath", value); }
+    /// <summary>
+    /// Steers round other agents and moving obstacles near it.
+    /// </summary>
+    public bool AvoidOthers { get => Fields.GetBool("avoidOthers"); set => Fields.Set("avoidOthers", value); }
+    /// <summary>
+    /// How far the agent reaches out from its centre, for steering round others.
+    /// </summary>
+    public float Radius { get => Fields.GetFloat("radius"); set => Fields.Set("radius", value); }
+    /// <summary>
+    /// When two agents meet, the one with the lower priority gives way more (0 to 100).
+    /// </summary>
+    public int AvoidancePriority { get => Fields.GetInt("avoidancePriority"); set => Fields.Set("avoidancePriority", value); }
+    /// <summary>
+    /// Uses Navigation Links (jumps, ladders, teleporters) when they are the shorter way.
+    /// </summary>
+    public bool UseLinks { get => Fields.GetBool("useLinks"); set => Fields.Set("useLinks", value); }
 }
 
 /// <summary>
@@ -1034,6 +1404,65 @@ public readonly partial record struct NavigationObstacle(GameObject GameObject) 
     /// How fast it is moving (for agents steering round it).
     /// </summary>
     public Vector3 Velocity { get => Data.GetVector3("Velocity"); set => Data.Set("Velocity", value); }
+}
+
+// Fields of Tallow.NavigationSurface its hand-written handle does not cover.
+public readonly partial record struct NavigationSurface
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.NavigationSurface");
+    /// <summary>
+    /// The baked navigation data: a .tnav asset in the project, loaded in Awake.
+    /// </summary>
+    public string BakedData { get => Fields.GetString("bakedData"); set => Fields.Set("bakedData", value); }
+    /// <summary>
+    /// The bake volume's extent from the object's position.
+    /// </summary>
+    public Vector3 Size { get => Fields.GetVector3("size"); set => Fields.Set("size", value); }
+    /// <summary>
+    /// The width of one cell. Smaller cells follow the ground more closely and cost more memory and baking time.
+    /// </summary>
+    public float CellSize { get => Fields.GetFloat("cellSize"); set => Fields.Set("cellSize", value); }
+    /// <summary>
+    /// How far the agent reaches out from its centre: cells closer than this to a wall are not walkable.
+    /// </summary>
+    public float AgentRadius { get => Fields.GetFloat("agentRadius"); set => Fields.Set("agentRadius", value); }
+    /// <summary>
+    /// How tall the agent is: cells with less headroom are not walkable.
+    /// </summary>
+    public float AgentHeight { get => Fields.GetFloat("agentHeight"); set => Fields.Set("agentHeight", value); }
+    /// <summary>
+    /// The highest step the agent can walk up. Lower obstacles do not block a cell.
+    /// </summary>
+    public float MaxStep { get => Fields.GetFloat("maxStep"); set => Fields.Set("maxStep", value); }
+    /// <summary>
+    /// The steepest ground the agent can walk on, in degrees.
+    /// </summary>
+    public float MaxSlope { get => Fields.GetFloat("maxSlope"); set => Fields.Set("maxSlope", value); }
+    /// <summary>
+    /// Cells to a side in each chunk that Rebuild resamples.
+    /// </summary>
+    public int ChunkSize { get => Fields.GetInt("chunkSize"); set => Fields.Set("chunkSize", value); }
+    /// <summary>
+    /// A 3D grid of free space for flying agents, rather than one floor height per cell.
+    /// </summary>
+    public bool Flying { get => Fields.GetBool("flying"); set => Fields.Set("flying", value); }
+    /// <summary>
+    /// What walking agents walk over: a polygon mesh (NavMesh) or a grid of cells. Flying always uses a grid. Bake
+    /// again after changing it.
+    /// </summary>
+    public NavigationBackend Backend { get => Fields.GetEnum<NavigationBackend>("backend"); set => Fields.Set("backend", value); }
+    /// <summary>
+    /// Bake render meshes (static Mesh Renderers) as well as colliders.
+    /// </summary>
+    public bool IncludeRenderMeshes { get => Fields.GetBool("includeRenderMeshes"); set => Fields.Set("includeRenderMeshes", value); }
+    /// <summary>
+    /// Bake again when the game starts: for generated worlds.
+    /// </summary>
+    public bool RebuildOnStart { get => Fields.GetBool("rebuildOnStart"); set => Fields.Set("rebuildOnStart", value); }
+    /// <summary>
+    /// Show the walkable cells in the Scene view while the surface is selected.
+    /// </summary>
+    public bool DrawNavigation { get => Fields.GetBool("drawNavigation"); set => Fields.Set("drawNavigation", value); }
 }
 
 /// <summary>
@@ -1233,6 +1662,16 @@ public readonly partial record struct ReflectionProbe(GameObject GameObject) : I
     /// changing time of day or moving things; each capture draws the scene six times, one face a frame.
     /// </summary>
     public float RefreshInterval { get => Data.GetFloat("refreshInterval"); set => Data.Set("refreshInterval", value); }
+}
+
+// Fields of Tallow.Rigidbody its hand-written handle does not cover.
+public readonly partial record struct Rigidbody
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.Rigidbody");
+    /// <summary>
+    /// Multiplies scene gravity for this body; useGravity=false still disables gravity.
+    /// </summary>
+    public float GravityScale { get => Fields.GetFloat("gravityScale"); set => Fields.Set("gravityScale", value); }
 }
 
 /// <summary>
@@ -1653,6 +2092,21 @@ public readonly partial record struct TrailRenderer(GameObject GameObject) : ICo
     public bool ShowInEditor { get => Data.GetBool("showInEditor"); set => Data.Set("showInEditor", value); }
 }
 
+// Fields of Tallow.UIDocument its hand-written handle does not cover.
+public readonly partial record struct UIDocument
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.UIDocument");
+    /// <summary>
+    /// Scale the whole document with the height of the view: sizes in the document are then for a view this many
+    /// pixels tall (1080, say) and it fills any window the same way. 0 leaves sizes as real pixels.
+    /// </summary>
+    public float ReferenceHeight { get => Fields.GetFloat("referenceHeight"); set => Fields.Set("referenceHeight", value); }
+    /// <summary>
+    /// Optional reference width. When set, scale uniformly to fit both dimensions.
+    /// </summary>
+    public float ReferenceWidth { get => Fields.GetFloat("referenceWidth"); set => Fields.Set("referenceWidth", value); }
+}
+
 /// <summary>
 /// Moves a first-person viewmodel: put it on the object that holds the arms and weapon (a child of the camera, on the
 /// Camera's Viewmodel Layer). It carries the weapon from a hip pose to an aim pose (aiming down the sights: in the
@@ -1736,6 +2190,177 @@ public readonly partial record struct ViewmodelPose(GameObject GameObject) : ICo
     /// Edit mode only: shows the pose this far from hip (0) to aim (1), to line the two up in the Game view.
     /// </summary>
     public float Preview { get => Data.GetFloat("preview"); set => Data.Set("preview", value); }
+}
+
+// Fields of Tallow.VoxelObject its hand-written handle does not cover.
+public readonly partial record struct VoxelObject
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.VoxelObject");
+    public VoxelShape Shape { get => Fields.GetEnum<VoxelShape>("shape"); set => Fields.Set("shape", value); }
+    /// <summary>
+    /// Shape Mesh: the model to make destructible. It keeps its own size; Size is not used.
+    /// </summary>
+    public string Mesh { get => Fields.GetString("mesh"); set => Fields.Set("mesh", value); }
+    /// <summary>
+    /// Grid cells along each axis (8 to 48). Higher is smoother and slower to re-mesh.
+    /// </summary>
+    public int Resolution { get => Fields.GetInt("resolution"); set => Fields.Set("resolution", value); }
+    /// <summary>
+    /// Edge length of the grid in local units.
+    /// </summary>
+    public float Size { get => Fields.GetFloat("size"); set => Fields.Set("size", value); }
+    /// <summary>
+    /// Shape Box: its width, height and depth (a wall, a slab, a block), in local units. Zero: a cube of Size. The
+    /// grid then covers the longest side, so a thin side gets fewer cells: Resolution counts along the longest.
+    /// </summary>
+    public Vector3 BoxSize { get => Fields.GetVector3("boxSize"); set => Fields.Set("boxSize", value); }
+    public Color Color { get => Fields.GetColor("color"); set => Fields.Set("color", value); }
+    /// <summary>
+    /// Color of surfaces exposed by carving. With an inside made from the outside's material, its tint.
+    /// </summary>
+    public Color InteriorColor { get => Fields.GetColor("interiorColor"); set => Fields.Set("interiorColor", value); }
+    /// <summary>
+    /// The material (.tmat) of surfaces exposed by carving: the wood inside a painted crate, the concrete inside a
+    /// plastered wall. Empty: an inside made from the Mesh Renderer's material, or plain Interior Color without one.
+    /// </summary>
+    public string InteriorMaterial { get => Fields.GetString("interiorMaterial"); set => Fields.Set("interiorMaterial", value); }
+    /// <summary>
+    /// How many times the inside's texture repeats in each unit of the object's own space.
+    /// </summary>
+    public float InteriorTiling { get => Fields.GetFloat("interiorTiling"); set => Fields.Set("interiorTiling", value); }
+    /// <summary>
+    /// Detach pieces that are no longer connected to the largest part (play mode only).
+    /// </summary>
+    public bool BreakOffPieces { get => Fields.GetBool("breakOffPieces"); set => Fields.Set("breakOffPieces", value); }
+    /// <summary>
+    /// Loose pieces with fewer solid samples than this simply vanish.
+    /// </summary>
+    public int MinimumPieceSize { get => Fields.GetInt("minimumPieceSize"); set => Fields.Set("minimumPieceSize", value); }
+    /// <summary>
+    /// Anchored objects stay fixed in place (cliffs, walls) and only cut-off pieces fall: the part still on the
+    /// object's base stays, whatever its size, so nothing is left hanging in the air.
+    /// Otherwise the whole object becomes a physics body the first time it is carved.
+    /// </summary>
+    public bool Anchored { get => Fields.GetBool("anchored"); set => Fields.Set("anchored", value); }
+    /// <summary>
+    /// Pieces that break off are debris: they rest on the ground, but characters walk through them and rays (shots)
+    /// pass through them. Off, they block like any other body.
+    /// </summary>
+    public bool DebrisPieces { get => Fields.GetBool("debrisPieces"); set => Fields.Set("debrisPieces", value); }
+    /// <summary>
+    /// With a palette material (docs/materials.md): the palette entry of the outside, and of surfaces exposed by
+    /// carving. -1 uses Color and Interior Color as they are.
+    /// </summary>
+    public int PaletteEntry { get => Fields.GetInt("paletteEntry"); set => Fields.Set("paletteEntry", value); }
+    /// <summary>
+    /// With a palette material (docs/materials.md): the palette entry of the outside, and of surfaces exposed by
+    /// carving. -1 uses Color and Interior Color as they are.
+    /// </summary>
+    public int InteriorPaletteEntry { get => Fields.GetInt("interiorPaletteEntry"); set => Fields.Set("interiorPaletteEntry", value); }
+    /// <summary>
+    /// With a palette material (docs/materials.md): the palette entry of the outside, and of surfaces exposed by
+    /// carving. -1 uses Color and Interior Color as they are.
+    /// Seconds before a piece that broke off is removed (by the server in multiplayer). 0 keeps pieces for good.
+    /// </summary>
+    public float PieceLifetime { get => Fields.GetFloat("pieceLifetime"); set => Fields.Set("pieceLifetime", value); }
+}
+
+// Fields of Tallow.VoxelTerrain its hand-written handle does not cover.
+public readonly partial record struct VoxelTerrain
+{
+    private NativeComponent Fields => new(GameObject, "Tallow.VoxelTerrain");
+    /// <summary>
+    /// Fixed: tiles placed by hand. Endless: generated around the camera for ever.
+    /// </summary>
+    public TerrainMode Mode { get => Fields.GetEnum<TerrainMode>("mode"); set => Fields.Set("mode", value); }
+    /// <summary>
+    /// How many chunks a tile has along each side; every tile of the grid is the same size. The default 8 at voxel
+    /// size 0.5 makes tiles 128 m square. Choose it before sculpting: sculpting is kept per tile.
+    /// </summary>
+    public int TileSize { get => Fields.GetInt("tileSize"); set => Fields.Set("tileSize", value); }
+    /// <summary>
+    /// How high flat ground starts, above the object's position.
+    /// </summary>
+    public float FlatHeight { get => Fields.GetFloat("flatHeight"); set => Fields.Set("flatHeight", value); }
+    /// <summary>
+    /// Fixed mode: load only the tiles near the camera (and near each player, on a server), within View Distance.
+    /// Off: every tile is there all the time.
+    /// </summary>
+    public bool StreamTiles { get => Fields.GetBool("streamTiles"); set => Fields.Set("streamTiles", value); }
+    /// <summary>
+    /// Smooth (marching cubes), Contoured (keeps ridges and ledges) or Blocky (cubes).
+    /// </summary>
+    public VoxelStyle Style { get => Fields.GetEnum<VoxelStyle>("style"); set => Fields.Set("style", value); }
+    /// <summary>
+    /// Contoured style only. 0 puts each point in the middle of where the surface crosses its cell, which gives the
+    /// softest ground. 1 puts it where the slopes around it meet, which keeps ridges, ledges and the corners of
+    /// flattened areas crisp. In between is a blend.
+    /// </summary>
+    public float ContourSharpness { get => Fields.GetFloat("contourSharpness"); set => Fields.Set("contourSharpness", value); }
+    /// <summary>
+    /// Off: the ground is shaded smoothly, as rolling terrain. On: every triangle is shaded flat, for a faceted,
+    /// low-poly look. Blocky ground is always flat.
+    /// </summary>
+    public bool FlatShading { get => Fields.GetBool("flatShading"); set => Fields.Set("flatShading", value); }
+    /// <summary>
+    /// How many chunks a tile has along each side; every tile of the grid is the same size. The default 8 at voxel
+    /// size 0.5 makes tiles 128 m square. Choose it before sculpting: sculpting is kept per tile.
+    /// </summary>
+    public float VoxelSize { get => Fields.GetFloat("voxelSize"); set => Fields.Set("voxelSize", value); }
+    /// <summary>
+    /// Streaming radius in chunks: Endless mode, and Fixed mode with Stream Tiles.
+    /// </summary>
+    public int ViewDistance { get => Fields.GetInt("viewDistance"); set => Fields.Set("viewDistance", value); }
+    /// <summary>
+    /// The lowest layer of chunks, counting up from the object (each ChunkCells cells high).
+    /// </summary>
+    public int MinChunkY { get => Fields.GetInt("minChunkY"); set => Fields.Set("minChunkY", value); }
+    /// <summary>
+    /// The highest layer of chunks.
+    /// </summary>
+    public int MaxChunkY { get => Fields.GetInt("maxChunkY"); set => Fields.Set("maxChunkY", value); }
+    /// <summary>
+    /// Chunks further than this many chunks from the camera are drawn with fewer triangles: half the detail beyond
+    /// it, a quarter beyond twice as far, an eighth beyond four times. 0 draws everything in full. Collision always
+    /// has the full detail. Smooth and Contoured styles.
+    /// </summary>
+    public int LodDistance { get => Fields.GetInt("lodDistance"); set => Fields.Set("lodDistance", value); }
+    /// <summary>
+    /// Also where the automatic colours put rock and snow: they come in towards this height.
+    /// </summary>
+    public float TerrainHeight { get => Fields.GetFloat("terrainHeight"); set => Fields.Set("terrainHeight", value); }
+    /// <summary>
+    /// Below this height the automatic colours put sand.
+    /// </summary>
+    public float SeaLevel { get => Fields.GetFloat("seaLevel"); set => Fields.Set("seaLevel", value); }
+    /// <summary>
+    /// The automatic colour of flat ground.
+    /// </summary>
+    public Color GrassColor { get => Fields.GetColor("grassColor"); set => Fields.Set("grassColor", value); }
+    /// <summary>
+    /// The automatic colour of slopes and high ground.
+    /// </summary>
+    public Color RockColor { get => Fields.GetColor("rockColor"); set => Fields.Set("rockColor", value); }
+    /// <summary>
+    /// The automatic colour near sea level.
+    /// </summary>
+    public Color SandColor { get => Fields.GetColor("sandColor"); set => Fields.Set("sandColor", value); }
+    /// <summary>
+    /// The automatic colour of the highest ground.
+    /// </summary>
+    public Color SnowColor { get => Fields.GetColor("snowColor"); set => Fields.Set("snowColor", value); }
+    /// <summary>
+    /// The colour of ground just dug.
+    /// </summary>
+    public Color DirtColor { get => Fields.GetColor("dirtColor"); set => Fields.Set("dirtColor", value); }
+    /// <summary>
+    /// Gives the ground collision, so that things can stand on it.
+    /// </summary>
+    public bool GenerateColliders { get => Fields.GetBool("generateColliders"); set => Fields.Set("generateColliders", value); }
+    /// <summary>
+    /// Finished chunks uploaded to the GPU per frame.
+    /// </summary>
+    public int UploadsPerFrame { get => Fields.GetInt("uploadsPerFrame"); set => Fields.Set("uploadsPerFrame", value); }
 }
 
 /// <summary>
@@ -1904,6 +2529,34 @@ public readonly partial record struct WindZone(GameObject GameObject) : ICompone
 }
 
 /// <summary>
+/// How a positioned sound gets quieter with distance, between its Min Distance and Max Distance.
+/// </summary>
+public enum AudioRolloff
+{
+    /// <summary>
+    /// Like the real world: halves with each doubling of distance. The usual choice.
+    /// </summary>
+    Inverse = 1,
+    /// <summary>
+    /// A straight line from full volume to silence at Max Distance.
+    /// </summary>
+    Linear = 2,
+    /// <summary>
+    /// Falls away faster than Inverse.
+    /// </summary>
+    Exponential = 3,
+}
+
+/// <summary>
+/// Values of the engine's CharacterShape.
+/// </summary>
+public enum CharacterShape
+{
+    Capsule = 0,
+    Box = 1,
+}
+
+/// <summary>
 /// The ready-made hand shapes of a Hand Pose.
 /// </summary>
 public enum HandShape
@@ -1994,6 +2647,15 @@ public enum LineTextureMode
 }
 
 /// <summary>
+/// How a Navigation Surface lets agents walk: over a polygon mesh, or over a grid of cells. Flying always uses a grid.
+/// </summary>
+public enum NavigationBackend
+{
+    Grid = 0,
+    NavMesh = 1,
+}
+
+/// <summary>
 /// How an agent crosses a Navigation Link.
 /// </summary>
 public enum NavigationLinkKind
@@ -2055,6 +2717,25 @@ public enum NetworkRelevance
 }
 
 /// <summary>
+/// Whether a renderer hides what is behind it from occlusion culling (docs/occlusion-culling.md).
+/// </summary>
+public enum OccluderMode
+{
+    /// <summary>
+    /// When it is big on screen, still (no Rigidbody, not skinned) and simple enough (Occlusion.MaxAutoTriangles).
+    /// </summary>
+    Auto = 0,
+    /// <summary>
+    /// Whenever it is on screen and solid.
+    /// </summary>
+    Always = 1,
+    /// <summary>
+    /// Never: for things with holes the box would not show (fences, leaves, glass).
+    /// </summary>
+    Never = 2,
+}
+
+/// <summary>
 /// Whether clients simulate a physics body themselves rather than showing it a moment in the past.
 /// </summary>
 public enum PhysicsPrediction
@@ -2100,6 +2781,56 @@ public enum RemoteSnapshotFormat
 }
 
 /// <summary>
+/// How a terrain decides where it has ground.
+/// </summary>
+public enum TerrainMode
+{
+    /// <summary>
+    /// Square tiles placed by hand, flat until sculpted (or shaped by the terrain's generator).
+    /// </summary>
+    Fixed = 0,
+    /// <summary>
+    /// Generated around the camera without end, by the terrain's generator.
+    /// </summary>
+    Endless = 1,
+}
+
+/// <summary>
+/// Values of the engine's VoxelShape.
+/// </summary>
+public enum VoxelShape
+{
+    Sphere = 0,
+    Box = 1,
+    Cylinder = 2,
+    /// <summary>
+    /// The shape of a model (the Mesh field): a statue, a crate, a pillar, a wall.
+    /// </summary>
+    Mesh = 3,
+}
+
+/// <summary>
+/// How a terrain's surface is made from its samples.
+/// </summary>
+public enum VoxelStyle
+{
+    /// <summary>
+    /// Marching cubes: smooth slopes, faceted by flat shading.
+    /// </summary>
+    Smooth = 0,
+    /// <summary>
+    /// One cube per solid cell with hidden faces removed.
+    /// </summary>
+    Blocky = 1,
+    /// <summary>
+    /// Dual contouring: one point in each cell the surface passes through, joined into a regular grid of quads.
+    /// Rounder and more even than Smooth (no slivers or stair-steps along gentle slopes), and able to keep hard
+    /// edges and corners where Contour Sharpness asks for them.
+    /// </summary>
+    Contoured = 2,
+}
+
+/// <summary>
 /// How a Water surface is drawn (docs/water.md).
 /// </summary>
 public enum WaterLook
@@ -2131,6 +2862,23 @@ public enum WindShape
 
 internal static partial class NativeComponentTypes
 {
+    /// <summary>The field properties generated into hand-written handles (each is a plain field).</summary>
+    internal static readonly System.Collections.Generic.Dictionary<System.Type, string[]> GeneratedFields = new()
+    {
+        [typeof(Animator)] = ["Clips", "DefaultClip", "Controller"],
+        [typeof(AudioSource)] = ["AudioClip", "Group", "LocalOnly", "Volume", "Pitch", "Loop", "PlayOnStart", "Stream", "Spatial", "MinDistance", "MaxDistance", "Rolloff", "Doppler", "Occlusion", "AirAbsorption", "ReverbSend", "ConeAngle", "ConeOuterVolume", "Subtitles", "Lowpass", "OtherWorldVolume", "OtherWorldLowpass"],
+        [typeof(CharacterController)] = ["Shape", "BoxSize", "Center", "StepHeight", "MaxSlope", "Mass", "GravityScale", "TurnShapeWithObject", "JumpGrace", "SoftCharacterContact", "SeparationSpeed", "CanSwim", "SwimDepth", "SwimSpeed"],
+        [typeof(CharacterMotor)] = ["MoveSpeed", "SprintSpeed", "JumpSpeed", "Acceleration", "AirControl", "MouseSensitivity", "FaceLookDirection"],
+        [typeof(Light)] = ["InverseSquare", "BakedOnly", "ShadowMaskChannel", "InnerSpotAngle", "ShadowStrength"],
+        [typeof(MeshRenderer)] = ["EmissiveFromColor", "Lightmap", "LightmapDirection", "LightmapShadowmask", "LightmapScaleOffset", "LightmapDecode", "WindSway", "ShadowOnly", "BakedLighting", "ScreenReflections", "InReflectionProbes", "PlanarReflection", "UseModelMaterials", "Occluder"],
+        [typeof(NavigationAgent)] = ["SnapDistance", "BaseOffset", "RepathInterval", "FaceMovement", "TurnSpeed", "SmoothPath", "AvoidOthers", "Radius", "AvoidancePriority", "UseLinks"],
+        [typeof(NavigationSurface)] = ["BakedData", "Size", "CellSize", "AgentRadius", "AgentHeight", "MaxStep", "MaxSlope", "ChunkSize", "Flying", "Backend", "IncludeRenderMeshes", "RebuildOnStart", "DrawNavigation"],
+        [typeof(Rigidbody)] = ["GravityScale"],
+        [typeof(UIDocument)] = ["ReferenceHeight", "ReferenceWidth"],
+        [typeof(VoxelObject)] = ["Shape", "Mesh", "Resolution", "Size", "BoxSize", "Color", "InteriorColor", "InteriorMaterial", "InteriorTiling", "BreakOffPieces", "MinimumPieceSize", "Anchored", "DebrisPieces", "PaletteEntry", "InteriorPaletteEntry", "PieceLifetime"],
+        [typeof(VoxelTerrain)] = ["Mode", "TileSize", "FlatHeight", "StreamTiles", "Style", "ContourSharpness", "FlatShading", "VoxelSize", "ViewDistance", "MinChunkY", "MaxChunkY", "LodDistance", "TerrainHeight", "SeaLevel", "GrassColor", "RockColor", "SandColor", "SnowColor", "DirtColor", "GenerateColliders", "UploadsPerFrame"],
+    };
+
     static partial void AddGenerated()
     {
         Known[typeof(AudioListener)] = ("Tallow.AudioListener", o => new AudioListener(o));

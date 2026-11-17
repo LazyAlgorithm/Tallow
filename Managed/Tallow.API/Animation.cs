@@ -9,7 +9,7 @@ namespace Tallow;
 /// Animator it does nothing and reads zero.
 /// </summary>
 [NativeComponent("Tallow.Animator")]
-public readonly record struct Animator(GameObject GameObject) : IComponent
+public readonly partial record struct Animator(GameObject GameObject) : IComponent
 {
     public bool IsValid => CSharpAnimation.HasAnimator(GameObject.SceneId, GameObject.Id);
 

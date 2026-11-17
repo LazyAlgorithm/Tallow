@@ -5,8 +5,9 @@
     python3 tools/gen_csharp_components.py catalog.tsv            # writes Managed/Tallow.API/NativeComponents.Generated.cs
     python3 tools/gen_csharp_components.py catalog.tsv --check    # fails when the checked-in file differs (CI)
 
-A component that already has a hand-written handle ([NativeComponent("Tallow.X")] elsewhere in Tallow.API) is left
-to it. Each Inspector field becomes a property over NativeComponent (scene-file text, as the Inspector edits it);
+A component that already has a hand-written handle ([NativeComponent("Tallow.X")] elsewhere in Tallow.API) gets a
+partial declaration with only the fields that handle does not cover (by property name, or by the field's name in its
+own NativeComponent calls). Each Inspector field becomes a property over NativeComponent (scene-file text, as the Inspector edits it);
 lists, object references and hidden fields are left out. Docs come from the Beef data struct's /// comments.
 """
 from __future__ import annotations
@@ -23,6 +24,10 @@ ENGINE = ROOT / "Engine/src"
 
 # Components C# reaches through their own API instead (CSharpJoints for joints, Network for sessions).
 SKIP = {"Tallow.Joint", "Tallow.NetworkSession"}
+
+# Fields with their own C# API that does more than set the field: a collider's trigger switch rebuilds its body
+# (GetCollider().IsTrigger).
+OWN_API = {("Tallow.BoxCollider", "isTrigger"), ("Tallow.SphereCollider", "isTrigger")}
 
 GETTERS = {
     "Float": ("float", "GetFloat"),
@@ -160,6 +165,23 @@ def handwritten() -> set[str]:
     return names
 
 
+def handwritten_members(name: str) -> tuple[set[str], str]:
+    """The member names a hand-written handle declares (over all its partial declarations outside the generated
+    file) and their source, so generated fields leave alone what it already covers."""
+    members: set[str] = set()
+    bodies = []
+    for path in API.glob("*.cs"):
+        if path == OUTPUT:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"\brecord\s+struct\s+" + re.escape(name) + r"\b", text):
+            body = struct_body(text, match.end())
+            bodies.append(body)
+            members |= set(re.findall(r"^\s*(?:public|internal|private)\s+(?:static\s+|readonly\s+|unsafe\s+)*"
+                                      r"[\w.<>\[\]?,]+\s+(\w+)\s*(?:[({=;]|=>)", body, re.M))
+    return members, "\n".join(bodies)
+
+
 def existing_types() -> set[str]:
     names = set()
     for path in API.glob("*.cs"):
@@ -206,11 +228,15 @@ def generate(catalog: str) -> str:
         "",
     ]
     made: list[tuple[str, str]] = []
+    extras: list[tuple[str, list[str]]] = []
     for native, fields in sorted(components.items()):
-        if native in done or native in SKIP:
+        if native in SKIP:
             continue
         name = native.split(".")[-1]
-        if name in have_types:
+        # A hand-written handle gets a partial declaration with the fields it does not cover itself (by property
+        # name or by the field's own name in a NativeComponent call).
+        extra = native in done
+        if not extra and name in have_types:
             continue  # Reached through its own C# API (SoftBody...).
         decl = re.search(r"struct\s+" + re.escape(name) + r"\s*:\s*ComponentHandle<\s*(\w+)\s*>", source)
         if not decl:
@@ -247,19 +273,35 @@ def generate(catalog: str) -> str:
                         field_docs[match.group(1)] = own
                     line_end = body.find("\n", match.end())
                     previous = (match.group(1), line_end if line_end >= 0 else len(body))
-        out += summary(docs or [f"The built-in {name} component."], "")
-        out.append(f'[NativeComponent("{native}")]')
-        out.append(f"public readonly partial record struct {name}(GameObject GameObject) : IComponent")
-        out.append("{")
-        out.append(f'    private NativeComponent Data => new(GameObject, "{native}");')
-        out.append("    /// <summary>Whether the object still exists and has this component.</summary>")
-        out.append("    public bool IsValid => Data.IsValid;")
-        taken = {"IsValid", "GameObject", "Data", name}
+        start = len(out)
+        if extra:
+            members, written = handwritten_members(name)
+            data = "Fields"
+            out.append(f"// Fields of {native} its hand-written handle does not cover.")
+            out.append(f"public readonly partial record struct {name}")
+            out.append("{")
+            out.append(f'    private NativeComponent {data} => new(GameObject, "{native}");')
+            taken = members | {"GameObject", "Data", data, name}
+        else:
+            written = ""
+            data = "Data"
+            out += summary(docs or [f"The built-in {name} component."], "")
+            out.append(f'[NativeComponent("{native}")]')
+            out.append(f"public readonly partial record struct {name}(GameObject GameObject) : IComponent")
+            out.append("{")
+            out.append(f'    private NativeComponent Data => new(GameObject, "{native}");')
+            out.append("    /// <summary>Whether the object still exists and has this component.</summary>")
+            out.append("    public bool IsValid => Data.IsValid;")
+            taken = {"IsValid", "GameObject", "Data", name}
+        added = 0
+        added_names: list[str] = []
         for entry in fields:
             field, kind, ftype, flags = (entry + ["", "", ""])[:4]
-            if "hidden" in flags.split():
+            if "hidden" in flags.split() or (native, field) in OWN_API:
                 continue
             prop = pascal(field)
+            if extra and (prop in taken or f'"{field}"' in written):
+                continue
             if prop in taken:
                 prop += "Value"
             if kind == "Enum" and ftype:
@@ -269,19 +311,27 @@ def generate(catalog: str) -> str:
                 if not enums[ftype]:
                     continue
                 used_enums.add(ftype)
-                getter = f"Data.GetEnum<{cs_type}>(\"{field}\")"
+                getter = f"{data}.GetEnum<{cs_type}>(\"{field}\")"
             elif kind in GETTERS:
                 cs_type, method = GETTERS[kind]
-                getter = f"Data.{method}(\"{field}\")"
+                getter = f"{data}.{method}(\"{field}\")"
             else:
                 continue
             taken.add(prop)
+            added += 1
+            added_names.append(prop)
             docs_for = field_docs.get(field) or inherited_doc(source, field)
             out += summary(docs_for, "    ")
-            out.append(f"    public {cs_type} {prop} {{ get => {getter}; set => Data.Set(\"{field}\", value); }}")
+            out.append(f"    public {cs_type} {prop} {{ get => {getter}; set => {data}.Set(\"{field}\", value); }}")
+        if extra and added == 0:
+            del out[start:]
+            continue
         out.append("}")
         out.append("")
-        made.append((name, native))
+        if not extra:
+            made.append((name, native))
+        else:
+            extras.append((name, added_names))
     for full in sorted(used_enums):
         cs = enum_name(full)
         if cs in have_enums:
@@ -297,6 +347,12 @@ def generate(catalog: str) -> str:
         out.append("")
     out.append("internal static partial class NativeComponentTypes")
     out.append("{")
+    out.append("    /// <summary>The field properties generated into hand-written handles (each is a plain field).</summary>")
+    out.append("    internal static readonly System.Collections.Generic.Dictionary<System.Type, string[]> GeneratedFields = new()")
+    out.append("    {")
+    out += [f'        [typeof({name})] = [{", ".join(chr(34) + n + chr(34) for n in names)}],' for name, names in extras]
+    out.append("    };")
+    out.append("")
     out.append("    static partial void AddGenerated()")
     out.append("    {")
     out += [f'        Known[typeof({name})] = ("{native}", o => new {name}(o));' for name, native in made]
