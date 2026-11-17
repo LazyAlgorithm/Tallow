@@ -1132,7 +1132,7 @@ extension NetworkManager
 		if (info != null && info.synced)
 			type.index = info.index;
 		let fieldName = scope String();
-		for (int i < fieldCount)
+		for (int i < (int)fieldCount)
 		{
 			fieldName.Clear();
 			reader.ReadString(fieldName);

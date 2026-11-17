@@ -579,6 +579,19 @@ static class CSharpRuntime
 	/// each), and dotnet/ beside them, when present, the .NET runtime the game ships with.
 	public static bool StartPackagedGame(Scene scene, StringView gameFolder)
 	{
+#if BF_PLATFORM_WASM
+		// In a browser the page has started .NET with the game's assemblies already loaded (tools/build_player.py
+		// builds them into the page's .NET bundle); its start-up registered the runtime with the host.
+		if (!Initialize("browser", "Tallow.ManagedRuntime") || !BindScene(scene))
+			return false;
+		if (LoadGame("Tallow.Game.dll") < 0)
+		{
+			UnloadGame();
+			UnbindScene(scene);
+			return false;
+		}
+		return true;
+#else
 		let bundled = scope $"{gameFolder}/dotnet";
 		if (Directory.Exists(bundled))
 			tn_csharp_use_dotnet_root(bundled.CStr());
@@ -605,10 +618,17 @@ static class CSharpRuntime
 			return false;
 		}
 		return true;
+#endif
 	}
 
+#if BF_PLATFORM_WASM
+	[CLink] static extern int32 tn_csharp_web_hosted();
+	/// In a browser, a C# game is one whose page started .NET (and registered its runtime) before the engine.
+	public static bool IsPackagedGame(StringView gameFolder) => tn_csharp_web_hosted() != 0;
+#else
 	/// A built game ships its C# in a Managed folder beside it.
 	public static bool IsPackagedGame(StringView gameFolder) => File.Exists(scope $"{gameFolder}/Managed/Game/Tallow.Game/Tallow.Game.dll");
+#endif
 
 	public const int RequiredDotNetMajor = 11;
 

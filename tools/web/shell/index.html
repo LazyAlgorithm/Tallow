@@ -93,6 +93,12 @@ html, body {
 	const status = document.getElementById("status");
 	const canvas = document.getElementById("canvas");
 	const PACK = "{{PACK}}";
+	// "emscripten": a Beef game, whose program sets itself up from window.Module. "dotnet": a C# game, whose program
+	// is .NET's (its WebAssembly holds the engine too) and is started below.
+	const RUNTIME = "{{RUNTIME}}";
+	// The game's file system: Emscripten's FS, which a C# game's .NET keeps on its module rather than the page.
+	let fs = null;
+	const files = () => fs || (typeof FS !== "undefined" ? FS : null);
 	// Each scene's own assets, in packs fetched after the game has started (smallest first). The game asks for the
 	// one it needs next (AssetPack.Request) and mounts each as it arrives.
 	const LATER_PACKS = {{LATER_PACKS}};
@@ -125,10 +131,11 @@ html, body {
 	// the page is hidden.
 	let saving = false, saveAgain = false;
 	const persist = () => {
-		if (typeof FS === "undefined" || !FS.syncfs) return;
+		const system = files();
+		if (!system || !system.syncfs) return;
 		if (saving) { saveAgain = true; return; }
 		saving = true;
-		FS.syncfs(false, () => { saving = false; if (saveAgain) { saveAgain = false; persist(); } });
+		system.syncfs(false, () => { saving = false; if (saveAgain) { saveAgain = false; persist(); } });
 	};
 
 	// The asset pack streams in with a progress bar, then goes into the game's file system beside the program.
@@ -210,7 +217,7 @@ html, body {
 			if (!response.ok) throw new Error(response.status);
 			return response.arrayBuffer();
 		}).then((data) => {
-			FS.writeFile("/" + name, new Uint8Array(data));
+			files().writeFile("/" + name, new Uint8Array(data));
 			laterQueue.splice(laterQueue.indexOf(name), 1);
 			fetchLater();
 		}).catch(() => setTimeout(fetchLater, 3000));
@@ -229,10 +236,30 @@ html, body {
 	gate.addEventListener("pointerdown", play);
 	gate.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") play(); });
 
-	const script = document.createElement("script");
-	script.src = "{{SCRIPT}}";
-	script.onerror = () => fail("The game could not be loaded. Check your connection and reload the page.");
-	document.body.appendChild(script);
+	if (RUNTIME === "dotnet") {
+		// .NET loads its files, then the saves and the asset pack go into its file system before Main starts the
+		// engine (Tallow.ManagedRuntime's WebHost). The page's Module settings are passed to its Emscripten module.
+		const start = async () => {
+			const { dotnet } = await import("./{{SCRIPT}}");
+			const { preRun, arguments: args, ...settings } = window.Module;
+			const runtime = await dotnet.withModuleConfig(settings).withApplicationArguments(...args).create();
+			fs = runtime.Module.FS;
+			fs.mkdir(SAVE_FOLDER);
+			fs.mount(fs.filesystems.IDBFS, {}, SAVE_FOLDER);
+			await new Promise((resolve) => fs.syncfs(true, () => resolve()));
+			const data = await pack;
+			if (data) fs.writeFile("/" + PACK, new Uint8Array(data));
+			show("Starting", 0.97);
+			fetchLater();
+			await runtime.runMain();
+		};
+		start().catch((error) => fail("The game could not start: " + (error && error.message ? error.message : error) + ". Reload the page to try again."));
+	} else {
+		const script = document.createElement("script");
+		script.src = "{{SCRIPT}}";
+		script.onerror = () => fail("The game could not be loaded. Check your connection and reload the page.");
+		document.body.appendChild(script);
+	}
 })();
 </script>
 </body>

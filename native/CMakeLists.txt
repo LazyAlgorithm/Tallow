@@ -162,13 +162,9 @@ if(NOT MSVC)
 	target_compile_options(tallow_flecs PRIVATE -std=gnu99)
 endif()
 
-# Desktop scripting hosts .NET inside the engine; web builds use a linkable
-# no-runtime stub until a dedicated managed WebAssembly backend is provided.
-if(EMSCRIPTEN)
-	set(TALLOW_MANAGED_HOST_SOURCE tallow_dotnet_host_stub.c)
-else()
-	set(TALLOW_MANAGED_HOST_SOURCE tallow_dotnet_host.cpp)
-endif()
+# The desktop engine starts .NET itself (hostfxr). In a browser the page starts .NET, whose start-up registers the
+# managed entrypoints with the same host (tn_csharp_web_register), so web builds compile it too.
+set(TALLOW_MANAGED_HOST_SOURCE tallow_dotnet_host.cpp)
 
 # ---- Tallow shim: Dear ImGui (docking) + ImGuizmo + stb_image + cgltf ----
 add_library(tallow_native STATIC

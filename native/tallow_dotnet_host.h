@@ -88,6 +88,11 @@ enum tn_csharp_tick_phase_id {
 // from the engine, never from third-party mod manifests.
 // An exported symbol of the running program (the precompiled player exports its generated C# API entrypoints).
 void* tn_csharp_find_export(const char* name);
+#ifdef __EMSCRIPTEN__
+/* Web: the managed runtime's start-up registers each NativeEntrypoints function by name (there is no hostfxr). */
+int32_t tn_csharp_web_register(const char* name, void* pointer);
+int32_t tn_csharp_web_hosted(void);
+#endif
 // Before tn_csharp_init: use only the .NET runtime in this folder (a shipped game's bundled copy).
 int32_t tn_csharp_use_dotnet_root(const char* root);
 int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly);

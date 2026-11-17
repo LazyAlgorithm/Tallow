@@ -11,7 +11,14 @@
 #include <string>
 #include <vector>
 
-#ifdef _WIN32
+#if defined(__EMSCRIPTEN__)
+// In a browser .NET is not loaded by the engine: the page starts it, and its Main (Tallow.ManagedRuntime's
+// WebBoot) registers NativeEntrypoints' functions here (tn_csharp_web_register) before it starts the engine.
+using host_char = char;
+using library_handle = void*;
+static library_handle load_library(const std::filesystem::path&) { return nullptr; }
+static void* get_symbol(library_handle, const char*) { return nullptr; }
+#elif defined(_WIN32)
 #include <windows.h>
 using host_char = wchar_t;
 using library_handle = HMODULE;
@@ -305,6 +312,24 @@ void managed_error(const char* action)
     error = std::string(action) + ": " + (buffer[0] ? buffer : "managed call failed");
 }
 
+#if defined(__EMSCRIPTEN__)
+std::vector<std::pair<std::string, void*>> web_entries;
+
+template <typename T>
+bool find_entry(const host_char*, const char* method, T& result)
+{
+    for (const auto& entry : web_entries)
+    {
+        if (entry.first == method && entry.second)
+        {
+            result = reinterpret_cast<T>(entry.second);
+            return true;
+        }
+    }
+    error = std::string("The C# runtime did not register its entrypoint: ") + method;
+    return false;
+}
+#else
 template <typename T>
 bool find_entry(const host_char* managed_assembly, const char* method, T& result)
 {
@@ -321,17 +346,43 @@ bool find_entry(const host_char* managed_assembly, const char* method, T& result
     result = reinterpret_cast<T>(pointer);
     return true;
 }
+#endif
 } // namespace
 
 extern "C" {
 
 const char* tn_csharp_error(void) { return error.c_str(); }
 
+#if defined(__EMSCRIPTEN__)
+/* Called by the managed runtime's web start-up, once per NativeEntrypoints function, before the engine starts. */
+int32_t tn_csharp_web_register(const char* name, void* pointer)
+{
+    if (!name || !pointer)
+        return 0;
+    for (auto& entry : web_entries)
+    {
+        if (entry.first == name)
+        {
+            entry.second = pointer;
+            return 1;
+        }
+    }
+    web_entries.emplace_back(name, pointer);
+    return 1;
+}
+
+/* Whether the page's .NET registered the managed runtime (a C# game) or not (a Beef game). */
+int32_t tn_csharp_web_hosted(void) { return web_entries.empty() ? 0 : 1; }
+#endif
+
 void* tn_csharp_find_export(const char* name)
 {
     if (!name)
         return nullptr;
-#ifdef _WIN32
+#if defined(__EMSCRIPTEN__)
+    // No dynamic symbol table in a browser: the engine finds its C# API functions by reflection instead.
+    return nullptr;
+#elif defined(_WIN32)
     return reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(nullptr), name));
 #else
     return dlsym(RTLD_DEFAULT, name);
@@ -356,6 +407,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
     }
     try
     {
+#if !defined(__EMSCRIPTEN__)
         const auto hostfxr = hostfxr_path();
         if (hostfxr.empty() || !std::filesystem::exists(hostfxr))
         {
@@ -412,6 +464,7 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
             error = "Could not obtain the .NET assembly loader delegate.";
             return 0;
         }
+#endif
         const auto assembly = platform_string(managed_assembly);
         if (!find_entry(assembly.c_str(), "Configure", configure) ||
             !find_entry(assembly.c_str(), "LoadGame", load_game) ||

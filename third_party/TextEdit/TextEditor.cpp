@@ -1250,8 +1250,8 @@ void TextEditor::acceptAutoComplete() {
 			const auto a = one.find('\x1B');
 			const auto b = a == std::string_view::npos ? a : one.find('\x1B', a + 1);
 			if (b == std::string_view::npos) continue;
-			Edit edit{ std::strtoull(std::string(one.substr(0, a)).c_str(), nullptr, 10),
-				std::strtoull(std::string(one.substr(a + 1, b - a - 1)).c_str(), nullptr, 10),
+			Edit edit{ static_cast<size_t>(std::strtoull(std::string(one.substr(0, a)).c_str(), nullptr, 10)),
+				static_cast<size_t>(std::strtoull(std::string(one.substr(a + 1, b - a - 1)).c_str(), nullptr, 10)),
 				AutoComplete::unescape(one.substr(b + 1)) };
 			// Edits never overlap the word being completed.
 			if (edit.offset < wordEnd && edit.offset + edit.length > wordStart) continue;

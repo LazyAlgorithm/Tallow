@@ -50,15 +50,16 @@ def wine_path(path, separator='\\'):
     return 'Z:' + str(path).replace('/', separator)
 
 
-def write_web_page(engine, project, name, staging):
-    """The page that loads and runs a web player: index.html, its install manifest and icon."""
+def write_web_page(engine, project, name, staging, csharp=False):
+    """The page that loads and runs a web player: index.html, its install manifest and icon. A C# game's program is
+    .NET's (_framework/dotnet.js, which starts the engine), a Beef game's the one Emscripten made (<name>.js)."""
     shell = engine / 'tools' / 'web' / 'shell'
     pack = 'game.tpak' if (staging / 'game.tpak').is_file() else ''
     # Scene packs download after the game has started, smallest first; the game asks for one it needs sooner.
     later = sorted((file for file in staging.glob('*.tpak') if file.name != 'game.tpak'), key=lambda file: file.stat().st_size)
     later_list = json.dumps([file.name for file in later])
     for file in ('index.html', 'manifest.webmanifest'):
-        text = (shell / file).read_text().replace('{{NAME}}', name).replace('{{SCRIPT}}', name + '.js').replace('{{PACK}}', pack).replace('{{LATER_PACKS}}', later_list)
+        text = (shell / file).read_text().replace('{{NAME}}', name).replace('{{SCRIPT}}', '_framework/dotnet.js' if csharp else name + '.js').replace('{{RUNTIME}}', 'dotnet' if csharp else 'emscripten').replace('{{PACK}}', pack).replace('{{LATER_PACKS}}', later_list)
         (staging / file).write_text(text)
     # Multiplayer between browsers (WebRTC); see the file for how players find each other.
     shutil.copy2(shell / 'tallow-net.js', staging / 'tallow-net.js')
@@ -66,7 +67,8 @@ def write_web_page(engine, project, name, staging):
         if icon.is_file():
             shutil.copy2(icon, staging / 'icon.png')
             break
-    # GitHub Pages runs its own site generator (Jekyll) over a folder unless told not to.
+    # GitHub Pages runs its own site generator (Jekyll) over a folder unless told not to (it would also leave out
+    # _framework/, as it skips folders starting with _).
     (staging / '.nojekyll').write_text('')
 
 
@@ -281,7 +283,8 @@ def main():
             parser.error(f'The native libraries for Windows are missing from {natives}.')
     if web:
         natives = engine / 'build' / 'native-web'
-        if not (natives / 'libtallow_native.a').is_file():
+        # A C# game links its own build of them (tools/web/csharp_web.py checks).
+        if beef_project(project) and not (natives / 'libtallow_native.a').is_file():
             parser.error(f'The native libraries for the web are missing from {natives}. Run {engine / "tools/web/setup.sh"} once.')
         if args.loose:
             parser.error('A web player always packs its assets: a browser loads one file far faster than thousands.')
@@ -294,8 +297,8 @@ def main():
     # A C# project has no Beef of its own: it ships the engine's precompiled player and its compiled assemblies.
     csharp = not beef_project(project)
     if csharp:
-        if web or macos:
-            parser.error('C# games build for Linux and Windows so far.')
+        if macos:
+            parser.error('C# games build for Linux, Windows and the web so far.')
         build_csharp_game(engine, project, args.config)
     proj = tomllib.loads((engine / 'Player' / 'BeefProj.toml').read_text()) if csharp else tomllib.loads((project / 'BeefProj.toml').read_text())
     space = {} if csharp else tomllib.loads((project / 'BeefSpace.toml').read_text())
@@ -316,8 +319,10 @@ def main():
         parser.error('Invalid bootstrap method name.')
     with tempfile.TemporaryDirectory(prefix='tallow-player-') as temporary:
         workspace = Path(temporary)
-        if csharp:
+        if csharp and not web:
             player = build_csharp_player(engine, args.config, windows, cross, toolchain if windows else None)
+        elif csharp:
+            pass  # The web player is linked with .NET below (tools/web/csharp_web.py).
         else:
             source = workspace / 'src'
             source.mkdir()
@@ -379,14 +384,19 @@ def main():
         staging = Path(tempfile.mkdtemp(prefix=output.name + '-', dir=output.parent))
         try:
             built_folder = None if csharp else workspace / 'build' / f'{args.config}_{beef_platform}' / name
-            if web:
+            if web and csharp:
+                # .NET's bundle (_framework/), whose WebAssembly holds the engine, the player and .NET's runtime.
+                sys.path.insert(0, str(engine / 'tools' / 'web'))
+                import csharp_web
+                csharp_web.build(engine, project, args.config, staging)
+            elif web:
                 # The program is a script and its WebAssembly; the page that runs them comes from tools/web/shell.
                 for suffix in ('.js', '.wasm'):
                     shutil.copy2(built_folder / (name + suffix), staging / (name + suffix))
             else:
                 executable = name + ('.exe' if windows else '')
                 shutil.copy2(player if csharp else built_folder / executable, staging / executable)
-            if csharp:
+            if csharp and not web:
                 stage_csharp(engine, project, staging, args.config, windows, not args.no_bundle_dotnet)
             # Of the engine's files a game reads only the compiled shaders, and only those of the graphics backends
             # it can start on this system: Vulkan, plus OpenGL as the fallback on Linux; WebGL 2 in a browser.
@@ -479,7 +489,7 @@ def main():
                 shutil.rmtree(staging / 'Engine')
                 (staging / 'game.tallow').unlink()
             if web:
-                write_web_page(engine, project, name, staging)
+                write_web_page(engine, project, name, staging, csharp)
             staging.rename(output)
         except BaseException:
             shutil.rmtree(staging)

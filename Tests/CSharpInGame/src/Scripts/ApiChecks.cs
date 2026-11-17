@@ -716,7 +716,7 @@ public class ApiChecks : CheckBase
         Check("a missing built-in component reads as absent", !lamp.GetComponent<NavigationAgent>().IsValid && lamp.GetComponent<NavigationAgent>() == default);
         lamp.Transient = true;
         Check("GameObject.Transient", lamp.Transient);
-        Check("CommandLine reads switches", CommandLine.Has("--headless") && CommandLine.Get("--no-such-switch") == null);
+        Check("CommandLine reads switches", CommandLine.Has("--fixed-step") && CommandLine.Get("--no-such-switch") == null);
         AudioSource speaker = lamp.AddComponent<AudioSource>();
         speaker.Stop();
         speaker.Pause();

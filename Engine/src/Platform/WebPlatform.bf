@@ -25,15 +25,21 @@ static class WebPlatform
 
 	static Application sApp;
 
-	/// Hands the application's frame to the browser, which calls it once per display refresh. Does not return:
-	/// the page keeps running until it is closed, and Application.Running going false stops the loop.
+	/// Set by a host that started the engine from code of its own (a C# game: .NET's start-up calls the player),
+	/// which must get control back: RunMainLoop then returns once the browser has the frame, instead of leaving
+	/// for good. Whatever the engine's start made on its stack must not be used by the game after that.
+	public static bool ReturnFromMainLoop;
+
+	/// Hands the application's frame to the browser, which calls it once per display refresh. Does not return
+	/// (unless ReturnFromMainLoop): the page keeps running until it is closed, and Application.Running going false
+	/// stops the loop.
 	public static void RunMainLoop(Application app)
 	{
 		sApp = app;
 		tn_web_loading_done();
 		// fps 0: follow the display (requestAnimationFrame). simulateInfiniteLoop 1: leave Run here for good, so
 		// nothing the caller made on its stack is torn down while the game is still using it.
-		emscripten_set_main_loop( => BrowserFrame, 0, 1);
+		emscripten_set_main_loop( => BrowserFrame, 0, ReturnFromMainLoop ? 0 : 1);
 	}
 
 	static void BrowserFrame()
@@ -100,6 +106,7 @@ static class WebPlatform
 #else
 	public const bool IsWeb = false;
 
+	public static bool ReturnFromMainLoop;
 	public static void RunMainLoop(Application app) { }
 	public static bool IsTouchDevice => false;
 	public static bool IsMobile => false;

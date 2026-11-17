@@ -485,7 +485,34 @@ internal static class Program
             }
             text.AppendLine("}").AppendLine();
         }
+        AppendWebSignatures(text);
         return text.ToString();
+    }
+
+    /// <summary>
+    /// .NET's WebAssembly interpreter calls native code only through signatures it was built with, which it takes
+    /// from the P/Invoke declarations it bundles, not from function-pointer calls. So every signature the bindings
+    /// above call through gets a declaration of its own, never called (Tallow.ManagedRuntime's WebHost has the
+    /// engine callback table's). Desktop .NET ignores them.
+    /// </summary>
+    private static void AppendWebSignatures(StringBuilder text)
+    {
+        SortedSet<string> signatures = new(StringComparer.Ordinal);
+        foreach (System.Text.RegularExpressions.Match match in
+                 System.Text.RegularExpressions.Regex.Matches(text.ToString(), @"delegate\* unmanaged\[Cdecl\]<([^<>]+)>"))
+            signatures.Add(match.Groups[1].Value);
+        text.AppendLine("/// <summary>The bindings' native signatures, for .NET in a browser (never called).</summary>")
+            .AppendLine("[System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]")
+            .AppendLine("internal static unsafe class GeneratedWebSignatures")
+            .AppendLine("{");
+        int index = 0;
+        foreach (string signature in signatures)
+        {
+            string[] types = signature.Split(", ");
+            string parameters = string.Join(", ", types[..^1].Select((type, i) => $"{type} a{i}"));
+            text.AppendLine($"\t[System.Runtime.InteropServices.DllImport(\"tallow_signatures\")] private static extern {types[^1]} S{index++}({parameters});");
+        }
+        text.AppendLine("}");
     }
 
     private static void WriteIfChanged(string path, string data)

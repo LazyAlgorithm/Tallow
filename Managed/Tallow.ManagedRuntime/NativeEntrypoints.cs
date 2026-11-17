@@ -557,10 +557,14 @@ public static unsafe class NativeEntrypoints
         {
             if (trustedPath == null || sGameContext != null || sTypes.Count != 0 || sInstances.Count != 0)
                 throw new InvalidOperationException("A trusted game is already loaded, or no game path was provided.");
-            string path = Path.GetFullPath(Marshal.PtrToStringUTF8((nint)trustedPath) ?? "");
+            string path = Marshal.PtrToStringUTF8((nint)trustedPath) ?? "";
             ReportRetainedGames();
             GameThread.Start();
-            sGameContext = OpenGame(path, out IGameplayComponentRegistry registry);
+            IGameplayComponentRegistry registry;
+            if (OperatingSystem.IsBrowser())
+                registry = WebHost.OpenGame();
+            else
+                sGameContext = OpenGame(Path.GetFullPath(path), out registry);
             sRegistry = registry;
             AddTypes(registry, sTypes, sFormerNames);
             return sTypes.Count;
@@ -630,16 +634,7 @@ public static unsafe class NativeEntrypoints
                     context.LoadFromAssemblyName(dependency);
             }
 
-            // Only the known generated registry is discovered from the
-            // trusted Tallow.Game assembly. No Assembly.GetTypes scan or
-            // arbitrary gameplay constructor reflection is needed.
-            Type registryType = game.GetType(
-                "Tallow.Generated.TallowGeneratedGameRegistry", throwOnError: false)
-                ?? throw new InvalidOperationException(
-                    "C# game has no generated component registry. Rebuild it with the current Tallow editor.");
-            if (Activator.CreateInstance(registryType) is not IGameplayComponentRegistry made)
-                throw new InvalidOperationException("C# component registry ABI does not match Tallow.API.");
-            registry = made;
+            registry = CreateRegistry(game);
             return context;
         }
         catch
@@ -647,6 +642,19 @@ public static unsafe class NativeEntrypoints
             context.Unload();
             throw;
         }
+    }
+
+    /// <summary>The game's generated registry. Only that known type is looked up in the trusted Tallow.Game
+    /// assembly: no Assembly.GetTypes scan or arbitrary gameplay constructor reflection is needed.</summary>
+    internal static IGameplayComponentRegistry CreateRegistry(Assembly game)
+    {
+        Type registryType = game.GetType(
+            "Tallow.Generated.TallowGeneratedGameRegistry", throwOnError: false)
+            ?? throw new InvalidOperationException(
+                "C# game has no generated component registry. Rebuild it with the current Tallow editor.");
+        if (Activator.CreateInstance(registryType) is not IGameplayComponentRegistry made)
+            throw new InvalidOperationException("C# component registry ABI does not match Tallow.API.");
+        return made;
     }
 
     private static void AddTypes(IGameplayComponentRegistry registry, HashSet<string> types, Dictionary<string, string> former)
