@@ -604,7 +604,7 @@ extension EditorApp
 			ModelCount("Sides", ref mModelShape.sides, 3, 64);
 		if (kind == .Stairs || kind == .Sphere || kind == .Torus)
 			ModelCount(kind == .Stairs ? "Steps" : "Rings", ref mModelShape.steps, 1, 64);
-		if (kind == .Torus || kind == .Arch || kind == .Pipe || kind == .Corner)
+		if (kind == .Torus || kind == .Arch || kind == .Pipe)
 			ModelNumber("Wall", ref mModelShape.thickness, 0.01f, 0.01f, 100, "%.2f m");
 		if (kind == .Cylinder || kind == .Cone || kind == .Sphere || kind == .Torus || kind == .Pipe)
 			ImGui.Checkbox("Smooth sides", ref mModelShape.smooth);

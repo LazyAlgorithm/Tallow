@@ -19,11 +19,10 @@ static class MeshShapes
 		Arch,
 		Plane,
 		Prism,
-		Pipe,
-		Corner
+		Pipe
 	}
 
-	public static readonly StringView[?] Names = .("Box", "Ramp", "Stairs", "Cylinder", "Cone", "Sphere", "Torus", "Arch", "Plane", "Prism", "Pipe", "Corner Wall");
+	public static readonly StringView[?] Names = .("Box", "Ramp", "Stairs", "Cylinder", "Cone", "Sphere", "Torus", "Arch", "Plane", "Prism", "Pipe");
 
 	/// The settings a shape takes. Size is its width (X), height (Y) and depth (Z); the rest apply to some shapes.
 	public struct Settings
@@ -33,7 +32,7 @@ static class MeshShapes
 		public int32 sides = 12;
 		/// Steps of a staircase, rings of a sphere or torus.
 		public int32 steps = 6;
-		/// Wall thickness of a pipe, arch or corner wall; tube thickness of a torus.
+		/// Wall thickness of a pipe or arch; tube thickness of a torus.
 		public float thickness = 0.2f;
 		/// Smooth faces (round shapes only).
 		public bool smooth = false;
@@ -60,7 +59,6 @@ static class MeshShapes
 		case .Plane: Plane(mesh, s);
 		case .Prism: Cylinder(mesh, s, 3, 1, false);
 		case .Pipe: Pipe(mesh, s, Math.Max(settings.sides, 3), settings.thickness, settings.smooth);
-		case .Corner: Corner(mesh, s, settings.thickness);
 		}
 		MeshOps.ConformNormals(mesh);
 		return mesh;
@@ -324,38 +322,4 @@ static class MeshShapes
 		}
 	}
 
-	/// Two walls meeting at a right angle in the back-left corner (an L seen from above).
-	static void Corner(EditMesh mesh, Vector3 s, float thickness)
-	{
-		let wall = Math.Clamp(thickness, 0.01f, Math.Min(s.x, s.z) * 0.95f);
-		let x0 = -s.x / 2, x1 = s.x / 2, z0 = -s.z / 2, z1 = s.z / 2;
-		// The L outline seen from above, in (x, z), as a prism up Y.
-		let outline = scope List<Vector2>();
-		outline.Add(.(x0, z0));
-		outline.Add(.(x0, z1));
-		outline.Add(.(x1, z1));
-		outline.Add(.(x1, z1 - wall));
-		outline.Add(.(x0 + wall, z1 - wall));
-		outline.Add(.(x0 + wall, z0));
-		let n = (int32)outline.Count;
-		let b = (int32)mesh.positions.Count;
-		for (let p in outline)
-			mesh.AddVertex(.(p.x, 0, p.y));
-		for (let p in outline)
-			mesh.AddVertex(.(p.x, s.y, p.y));
-		let bottom = new EditFace();
-		let top = new EditFace();
-		for (int32 i < n)
-		{
-			bottom.Add(b + i);
-			top.Add(b + n + (n - 1 - i));
-		}
-		mesh.faces.Add(bottom);
-		mesh.faces.Add(top);
-		for (int32 i < n)
-		{
-			let j = (i + 1) % n;
-			mesh.AddFace(b + i, b + j, b + n + j, b + n + i);
-		}
-	}
 }

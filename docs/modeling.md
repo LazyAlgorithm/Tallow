@@ -31,8 +31,8 @@ a typed number. The choice is remembered.
 
 ## Drawing shapes
 
-On the **Blockout** tab pick a shape: Box, Ramp, Stairs, Cylinder, Cone, Sphere, Torus, Arch, Plane, Prism, Pipe or
-Corner Wall. Some take extra settings (sides, steps or rings, wall thickness, smooth).
+On the **Blockout** tab pick a shape: Box, Ramp, Stairs, Cylinder, Cone, Sphere, Torus, Arch, Plane, Prism or
+Pipe. Some take extra settings (sides, steps or rings, wall thickness, smooth).
 
 - **Draw in Scene** (or **Draw** on the Scene view's bar): click on the ground or a surface and drag out the base,
   let go, move the pointer up for the height and click. A click without a drag puts down a shape of the **Fixed
