@@ -1286,8 +1286,13 @@ A full conversion also needs these. Ordered roughly by when they block users.
   windows and gizmo tools, or whether editor tooling stays Beef-only.
 
 **Platforms, content, migration**
-- [ ] macOS (hostfxr `.dylib` path exists, untested) and Web (currently a no-runtime stub):
-  decide support and the managed runtime for each.
+- [x] Web: a C# web player is a .NET browser app (Mono, wasm-tools workload) whose WebAssembly is
+  relinked with the engine and the precompiled player (`tools/web/csharp_web.py`; `setup` once).
+  `Tallow.ManagedRuntime.WebHost` registers the entrypoints and starts the player; the game loads
+  from the page's bundle (no hot reload in a browser). `tools/test_csharp_web.py`: the in-game
+  checks pass in headless Chromium with WebGL 2. Left: browser multiplayer from C# (WebRTC,
+  tallow-net.js) untested; the bundle is about 18 MB before the server compresses it.
+- [ ] macOS (hostfxr `.dylib` path exists, untested): decide support.
 - [ ] Existing Beef games (Ringfall, Polystrike, Tumble Toys, Zombie Tag and others): decide
   between indefinite legacy Beef gameplay in the same editor and a conversion tool or
   guide. Today the precompiled editor drops their components (see Scene safety above).
