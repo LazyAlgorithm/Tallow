@@ -1242,7 +1242,7 @@ public static unsafe class NativeEntrypoints
         GameObject g => g == default ? "" : "#" + g.Id.ToString(CultureInfo.InvariantCulture),
         Transform t => FormatReference(t.GameObject),
         Script s => FormatReference(s.GameObject),
-        IComponent c => c.GetType().GetProperty("GameObject")?.GetValue(c) is GameObject g ? FormatReference(g) : "",
+        IComponent c => FormatReference(c.GameObject),
         _ => ""
     };
 
@@ -1280,9 +1280,20 @@ public static unsafe class NativeEntrypoints
         Type? element = type.IsArray && type.GetArrayRank() == 1 ? type.GetElementType() :
             type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>) ? type.GetGenericArguments()[0] : null;
         return element != null && !IsReferenceField(element) && InspectorElementType(element) == null &&
-            (IsNestedType(element) ||
-             FormatInspectorValue(element, element.IsValueType ? Activator.CreateInstance(element) : "") != null)
+            (IsNestedType(element) || FormatsDefault(element))
             ? element : null;
+    }
+
+    /// <summary>Whether FormatInspectorValue has a case for the type's default value, which the Inspector list editor
+    /// uses to tell an editable element type from one it would show as blank (the old probe made a default instance
+    /// of a value type, and passed "" for a class, which the string case formats).</summary>
+    private static bool FormatsDefault(Type type)
+    {
+        if (!type.IsValueType)
+            return true;
+        return type == typeof(float) || type == typeof(int) || type == typeof(bool) || type == typeof(double) ||
+            type == typeof(uint) || type == typeof(long) || type == typeof(Vector2) || type == typeof(Vector3) ||
+            type == typeof(Vector4) || type == typeof(Color) || type.IsEnum;
     }
 
     /// <summary>A list item: its own value, or for a [Serializable] item type its value-kind fields as

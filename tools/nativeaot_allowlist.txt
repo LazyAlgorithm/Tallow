@@ -31,8 +31,6 @@ IL2072             Tallow.ManagedRuntime.NativeEntrypoints.SetPath              
 IL2075             Tallow.ManagedRuntime.NativeEntrypoints.AppendNested                   nested fields of game types (rooted)
 IL2072,IL2075      Tallow.ManagedRuntime.NativeEntrypoints.ApplyText                      fields and values of game types (rooted)
 IL2067,IL2070,IL2072 Tallow.ManagedRuntime.NativeEntrypoints.ParseItem                    list items of game types (rooted)
-IL2062,IL2072      Tallow.ManagedRuntime.NativeEntrypoints.InspectorElementType           element types of Inspector lists (rooted)
-IL2075             Tallow.ManagedRuntime.NativeEntrypoints.FormatReference                Handle property of engine reference types (Tallow.API is rooted)
 IL3050             Tallow.ManagedRuntime.NativeEntrypoints.ParseList                      List<T> of Inspector field types: generated in Tallow.AotRoots.g.cs
 IL3050             Tallow.ManagedRuntime.NativeEntrypoints.ParseReference                 TryGetComponent<T> of Inspector field types: generated in Tallow.AotRoots.g.cs
 

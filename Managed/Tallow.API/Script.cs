@@ -196,7 +196,11 @@ public readonly record struct TickInput(
 /// Public component lookup marker shared by C# Script objects and native
 /// session-checked component handles. Gameplay never sees Beef pointers.
 /// </summary>
-public interface IComponent { }
+public interface IComponent
+{
+    /// <summary>The object this component belongs to (every handle and Script carries one).</summary>
+    GameObject GameObject { get; }
+}
 
 /// <summary>A validated reference to an engine-owned scene entity, not a native pointer.</summary>
 public readonly partial record struct GameObject(ulong SceneId, ulong Id)

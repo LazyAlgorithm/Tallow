@@ -1547,9 +1547,12 @@ the first working export is described in "First NativeAOT export" at the end of 
   method they come from. In the game's own code (namespaces its `src/` declares): the export stops, names them and
   says how to fix them (or keep one with `[UnconditionalSuppressMessage]` and a justification, the standard .NET
   way; Tests/CSharpInGame keeps its Newtonsoft round trip and handle check so). In the engine: each must be in
-  `tools/nativeaot_allowlist.txt` with its reason (53 today: hot reload/load context, JIT only; reflection over
+  `tools/nativeaot_allowlist.txt` with its reason (50 today: hot reload/load context, JIT only; reflection over
   game types, which the export keeps whole; generic code generated in Tallow.AotRoots), and an unreviewed one stops
-  the export. Inside third-party packages and .NET: reported per group, not failing (the author cannot change
+  the export. November 18, 2026: `IComponent` now declares `GameObject` (every handle and `Script` already had it),
+  so `FormatReference` reads it directly, and the Inspector's list-element probe asks which value kinds it formats
+  instead of making a default instance; `InspectorElementType` and `FormatReference` left the allowlist (three
+  warnings fewer, 63 in total for Tests/CSharpInGame). Inside third-party packages and .NET: reported per group, not failing (the author cannot change
   them; the game's own calls into a package's unsafe APIs are game warnings and do stop it).
   `build_player.py --aot-warnings report` exports anyway. The export test adds unsuppressed `MakeGenericType` to
   the game and checks that the export stops, names the method and leaves no library, JIT assemblies or .NET
