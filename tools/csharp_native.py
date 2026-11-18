@@ -138,6 +138,27 @@ def windows_link_setup(cache: Path) -> tuple[dict[str, str], list[str]]:
     return env, properties
 
 
+def wine_link_setup(cache: Path) -> tuple[Path, dict[str, str]] | None:
+    """The Windows lld-link Beef's toolchain carries, run under Wine, for a Linux lld that crashes building the
+    Windows PDB (lld 22.1.8 segfaults in its GSI hash writer for a large symbol set; lld 22.1.0 links it). Returns
+    the wrapper to pass as CppLinker and the environment it needs, or None when Wine or that linker is missing."""
+    toolchain = windows_toolchain()
+    linker = toolchain / 'beef' / 'bin' / 'llvm' / 'bin' / 'lld-link.exe'
+    if not linker.is_file() or not shutil.which('wine'):
+        return None
+    wrapper = cache / 'winlld' / 'lld-link'
+    wrapper.parent.mkdir(parents=True, exist_ok=True)
+    wrapper.write_text(f'#!/bin/sh\nexport WINEPREFIX="{toolchain / "wine"}"\n'
+                       f'export WINEDEBUG=-all\nexec wine "{linker}" "$@"\n', encoding='utf-8')
+    wrapper.chmod(0o755)
+    xwin = toolchain / 'xwin'
+    folders = [cache / 'winlibs', xwin / 'crt' / 'lib' / 'x86_64', xwin / 'sdk' / 'lib' / 'um' / 'x86_64',
+               xwin / 'sdk' / 'lib' / 'ucrt' / 'x86_64']
+    # Wine reads a Unix path as Z:\...; the response file's own absolute paths work as they are.
+    return wrapper, {'LIB': ';'.join('Z:' + str(folder).replace('/', '\\') for folder in folders),
+                     'WINEPREFIX': str(toolchain / 'wine'), 'WINEDEBUG': '-all'}
+
+
 def game_assemblies(project: Path, config: str) -> list[Path]:
     """The game's own compiled assemblies (Tallow.Game, its .tasmdef assemblies and NuGet packages), not Tallow's."""
     built = project / 'build' / 'csharp' / config
@@ -220,10 +241,27 @@ def build(engine: Path, project: Path, config: str, staging: Path, windows: bool
         (work / 'Exports.cs').write_text(EXPORTS, encoding='utf-8')
         published = work / 'out'
         print(f'Compiling the game to native code ({rid}, NativeAOT)...')
+        retry = [p for p in properties if not p.startswith('-p:CppLinker=')]
+        first_output = ''
         result = subprocess.run(['dotnet', 'publish', str(work / 'TallowGame.csproj'), '-c', config, '-r', rid, '-o', str(published),
                                  '--nologo', '-v', 'minimal', *properties], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if (result.returncode != 0 and windows and os.name != 'nt' and
+                ('exited with code 139' in result.stdout or 'Segmentation fault' in result.stdout)):
+            # A crash in the linker itself, not the game: the Linux lld's Windows PDB writer segfaults on a large
+            # symbol set (22.1.8); the Windows lld Beef's toolchain carries links the same input.
+            fallback = wine_link_setup(cache)
+            if fallback is not None:
+                wrapper, extra = fallback
+                print('note: lld-link crashed; linking again with the toolchain\'s lld-link under Wine.')
+                first_output = result.stdout
+                result = subprocess.run(['dotnet', 'publish', str(work / 'TallowGame.csproj'), '-c', config, '-r', rid,
+                                         '-o', str(published), '--nologo', '-v', 'minimal', *retry,
+                                         f'-p:CppLinker={wrapper}'],
+                                        env=dict(env, **extra), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # The retry reuses ILCompiler's cache, so its output has no analysis warnings: read both runs'.
+        warning_text = first_output + '\n' + result.stdout
         warnings: list[str] = []
-        for line in result.stdout.splitlines():
+        for line in warning_text.splitlines():
             match = ANALYSIS.search(line)
             if match:
                 entry = f'{match.group(1)}: {match.group(2).strip()}'

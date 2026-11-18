@@ -1643,9 +1643,13 @@ the zero-allocation check measures past the interpreter's tier-up there. `test_c
 - **Windows from Linux.** ILCompiler targets win-x64 on Linux with `DisableUnsupportedError`,
   `IlcUseEnvironmentalTools`, `lld-link` and the xwin SDK/CRT in `TALLOW_WIN` (a `Synchronization.lib` alias for the
   case-sensitive file system; `EnableSourceLink=false`, lld-link has no /SOURCELINK). On Windows it is the normal
-  MSVC link. `python3 tools/csharp_native.py check` reports what this machine can build.
+  MSVC link. `python3 tools/csharp_native.py check` reports what this machine can build. November 18, 2026: the
+  field tables made the game's symbol set large enough to hit a crash in the Linux lld 22.1.8 Windows PDB writer
+  (`GSIHashStreamBuilder::finalizeBuckets`); when the link dies with a segmentation fault, the export links again
+  with the Windows `lld-link` Beef's toolchain carries, under Wine, reading the analysis warnings from both runs
+  (the retry reuses ILCompiler's cache). A machine without that toolchain still links with the system lld.
 - **Results.** `tools/test_csharp_export.py --runtime native`: Tests/CSharpInGame (with a NuGet package,
-  Newtonsoft.Json) passes all **420** in-engine checks on Linux and, cross-built, on Windows under Wine (the same
+  Newtonsoft.Json) passes all **421** in-engine checks on Linux and, cross-built, on Windows under Wine (the same
   count as the JIT export). The editor's Build window made the same Windows build (`--build-window --build-windows
   --build-native-aot --build-now DIR`; 420 under Wine). Library 17 MB (vs. 73-82 MB of bundled .NET plus IL for JIT).
   Trim/AOT analysis: 72 (Linux) / 77 (Windows) warnings, nearly all reflection over the rooted assemblies and in
