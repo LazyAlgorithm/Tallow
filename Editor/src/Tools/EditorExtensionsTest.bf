@@ -92,6 +92,8 @@ extension EditorApp
 					window.open = true;
 				mShowPreferences = true;
 				mPreferencesPage = 101;
+				// The Scene tab is behind Game in the default layout; the overlay draws only while it is shown.
+				ImGui.SetWindowFocus("Scene");
 				sExtensions.runMenu(0);
 				mExtensionsTestStep = 1;
 				mExtensionsTestFrames = 0;
@@ -208,6 +210,9 @@ extension EditorApp
 					"the built-in component's C# Inspector drew for it");
 				ExtensionsCheck(prefs.Contains("\"lightInspectorIntensity\": \"2.5\""),
 					"the C# Inspector read the component's own field");
+				ExtensionsCheck(prefs.Contains("\"overlayDrawn\": true"), "a Scene view overlay ran");
+				ExtensionsCheck(prefs.Contains("\"overlayVisible\": true"), "the overlay saw the Scene view open");
+				ExtensionsCheck(prefs.Contains("\"overlayRay\": true"), "the overlay got a ray into the scene");
 				Undo();
 				mExtensionsTestStep = 5;
 				mExtensionsTestFrames = 0;

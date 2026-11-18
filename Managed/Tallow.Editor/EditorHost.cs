@@ -62,6 +62,10 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<void> MarkDirty;
         public delegate* unmanaged[Cdecl]<byte*, int, int> ComponentField;
         public delegate* unmanaged[Cdecl]<int> ComponentDefault;
+        public delegate* unmanaged[Cdecl]<int, int> SceneViewState;
+        public delegate* unmanaged[Cdecl]<float*, void> SceneViewCursor;
+        public delegate* unmanaged[Cdecl]<float, float, float*, int> SceneViewRay;
+        public delegate* unmanaged[Cdecl]<float, float, uint> SceneViewPick;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -77,9 +81,10 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<int, int> DrawPage;
         public delegate* unmanaged[Cdecl]<byte*, int, int> FindComponentInspector;
         public delegate* unmanaged[Cdecl]<int, uint, byte*, int, int> DrawComponentInspector;
+        public delegate* unmanaged[Cdecl]<int> DrawSceneOverlays;
     }
 
-    internal const int Version = 3;
+    internal const int Version = 4;
     internal const int LayoutSameLine = 0, LayoutSeparator = 1, LayoutSpacing = 2, LayoutIndent = 3, LayoutUnindent = 4,
         LayoutBeginDisabled = 5, LayoutEndDisabled = 6, LayoutPushId = 7, LayoutPopId = 8;
     internal const int QueryPlaying = 0, QueryProjectPath = 1, QueryTargetScript = 2, QueryTargetObject = 3,
@@ -108,7 +113,8 @@ internal static unsafe class EditorHost
             RunMenu = &RunMenu,
             DrawPage = &DrawPage,
             FindComponentInspector = &FindComponentInspector,
-            DrawComponentInspector = &DrawComponentInspector
+            DrawComponentInspector = &DrawComponentInspector,
+            DrawSceneOverlays = &DrawSceneOverlays
         };
         return 1;
     }
@@ -513,6 +519,36 @@ internal static unsafe class EditorHost
         sHost.MarkDirty();
     }
 
+    // ---- The Scene view (Tallow.Editor's SceneView, for SceneViewOverlay classes) ----
+
+    internal const int SceneViewVisible = 0, SceneViewHovered = 1, SceneViewClicked = 2, SceneViewMouseDown = 3;
+
+    internal static bool SceneViewState(int what)
+    {
+        RequireScene();
+        return sHost.SceneViewState(what) != 0;
+    }
+
+    internal static void SceneViewCursor(Span<float> values)
+    {
+        RequireScene();
+        fixed (float* buffer = values)
+            sHost.SceneViewCursor(buffer);
+    }
+
+    internal static bool SceneViewRay(float u, float v, Span<float> values)
+    {
+        RequireScene();
+        fixed (float* buffer = values)
+            return sHost.SceneViewRay(u, v, buffer) > 0;
+    }
+
+    internal static uint SceneViewPick(float u, float v)
+    {
+        RequireScene();
+        return sHost.SceneViewPick(u, v);
+    }
+
     private static void RequireTarget()
     {
         Require();
@@ -627,6 +663,8 @@ internal static unsafe class EditorHost
     private static readonly List<ComponentInspectorType> sComponentInspectors = [];
     private static readonly Dictionary<string, int> sComponentInspectorFor = new(StringComparer.Ordinal);
     private static readonly Dictionary<(int, uint, string), ComponentInspector> sComponentInspectorObjects = [];
+    private static readonly List<Type> sOverlays = [];
+    private static readonly Dictionary<int, SceneViewOverlay> sOverlayObjects = [];
     private static readonly Dictionary<int, PreferencesPage> sPageObjects = [];
     private static readonly Dictionary<(int, long), Inspector> sInspectorObjects = [];
     private static readonly Dictionary<int, EditorWindow> sWindowObjects = [];
@@ -677,7 +715,9 @@ internal static unsafe class EditorHost
                 if (type.IsClass && !type.IsAbstract && !type.ContainsGenericParameters &&
                     type.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, Type.EmptyTypes) != null)
                 {
-                    if (typeof(Inspector).IsAssignableFrom(type) && type.GetCustomAttribute<CustomInspectorAttribute>() is { } inspector)
+                    if (typeof(SceneViewOverlay).IsAssignableFrom(type))
+                        sOverlays.Add(type);
+                    else if (typeof(Inspector).IsAssignableFrom(type) && type.GetCustomAttribute<CustomInspectorAttribute>() is { } inspector)
                         sInspectors.Add(new InspectorType(type, inspector.Script));
                     else if (typeof(ComponentInspector).IsAssignableFrom(type) &&
                         type.GetCustomAttribute<CustomInspectorAttribute>() is { } component)
@@ -713,7 +753,8 @@ internal static unsafe class EditorHost
             sPages.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase));
             for (int i = 0; i < sComponentInspectors.Count; i++)
                 sComponentInspectorFor[sComponentInspectors[i].ComponentName] = i;
-            return sInspectors.Count + sWindows.Count + sMenus.Count + sPages.Count + sComponentInspectors.Count;
+            return sInspectors.Count + sWindows.Count + sMenus.Count + sPages.Count + sComponentInspectors.Count +
+                sOverlays.Count;
         }
         catch (Exception exception)
         {
@@ -742,6 +783,8 @@ internal static unsafe class EditorHost
         sComponentInspectorObjects.Clear();
         sComponentInspectorFor.Clear();
         sComponentInspectors.Clear();
+        sOverlayObjects.Clear();
+        sOverlays.Clear();
         sWindows.Clear();
         sMenus.Clear();
         sPages.Clear();
@@ -1011,6 +1054,28 @@ internal static unsafe class EditorHost
             EndDrawing("");
             return Report(owner, exception);
         }
+    }
+
+    /// <summary>Draws the editor scripts' Scene view overlays (each one's OnSceneViewGUI); returns how many ran.</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int DrawSceneOverlays()
+    {
+        int drawn = 0;
+        for (int i = 0; i < sOverlays.Count; i++)
+        {
+            try
+            {
+                if (!sOverlayObjects.TryGetValue(i, out SceneViewOverlay? overlay))
+                    sOverlayObjects[i] = overlay = (SceneViewOverlay)Activator.CreateInstance(sOverlays[i], nonPublic: true)!;
+                overlay.OnSceneViewGUI();
+                drawn++;
+            }
+            catch (Exception exception)
+            {
+                Report($"{sOverlays[i].FullName}.OnSceneViewGUI", exception);
+            }
+        }
+        return drawn;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

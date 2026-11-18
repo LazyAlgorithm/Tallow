@@ -427,9 +427,30 @@ carries on, and a failed Inspector falls back to the plain field list.
   `Target.GetFloat/SetFloat("openAngle", ...)` (and `Get`/`Set` as text, bool, int, Vector3, enum) read and change
   the saved values. Changes go through undo, are saved with the scene, call `OnValidate`, and reach the running
   script during Play.
+- **Inspector for a built-in component:** the same attribute on a `ComponentInspector` names the component's handle
+  type instead of a script: `[CustomInspector(typeof(Light))] class LightInspector : ComponentInspector` draws the
+  Light section of every object with one, in place of the plain field list. `Target` is an `EditorComponent`:
+  `Get`/`Set` as text (the scene file's own form), `GetFloat/SetFloat`, `GetInt`, `GetBool`, `GetString`,
+  `GetEnum`, `GetVector3` and their setters, plus `Target.Fields` (name and kind). `Field("intensity")` draws one
+  field with the editor's widget, `DrawDefaultInspector()` draws them all. Built-in handles (Light, MeshRenderer,
+  colliders, ...) and class components alike; changes call the component's OnValidate and go through undo.
 - **Editor window:** `[EditorWindow("Level/Statistics")] class Stats : EditorWindow` appears in the Tools menu
   under Level > Statistics, and its `OnGUI()` draws it. It docks like any other window, and `Close()` closes it.
 - **Menu command:** `[MenuItem("Level/Rename Lights")] static void Rename()` runs when chosen from Tools.
+- **Scene editing:** `EditorScene` works on the open scene, so a menu command or an Inspector can do to objects what
+  the editor's own tools do. `EditorScene.Selection` reads and sets what is selected; `Find("Level/Walls/Wall 1")`
+  finds by path or by name; `Roots` lists the scene's objects; `Create("Cube")` makes one of the editor's built-in
+  objects (`"Cube"`, `"Point Light"`, `"Create Empty"`, ...), where the editor puts it or under a parent; and an
+  `EditorObject` has `Name`, `Parent`, `Children`, `Position`, `Rotation` (Euler degrees), `Scale`, `Components`,
+  `Duplicate()`, `Delete()` and `Select()`. `AddComponent("Tallow.Light")`, `Component("Tallow.Light")` and
+  `RemoveComponent(...)` work for built-in components and class components alike, and their fields read and write
+  as scene files do. Every change marks the scene dirty and can be undone; during Play they are refused
+  (`EditorScene.IsEditable`).
+- **Scene view overlay:** any concrete `SceneViewOverlay` subclass is called every frame while the Scene view is
+  open (`OnSceneViewGUI()`), to draw gizmos and run a tool. `SceneView.Line/Sphere/Box` draw this frame (the same
+  batches as `Tallow.Gizmos`: `onTop` draws through geometry); `SceneView.IsVisible`, `IsMouseOver`, `IsClicked`,
+  `IsMouseDown`, `MousePoint`, `Ray(point)`, `Pick(point)` and `PickUnderMouse()` give the mouse and what it is
+  over. It runs while the editor renders, so draw gizmos rather than widgets: an editor window is for those.
 - **Preferences tab:** `[PreferencesPage("Level Tools")]` on a plain settings class (public fields with defaults)
   gives it a tab in Edit > Preferences. The tab shows the fields and saves every change. Read the settings anywhere
   with `EditorPrefs.Get<LevelToolSettings>()`. On a class deriving from `PreferencesPage`, the attribute adds a tab
@@ -452,9 +473,9 @@ Labels sit on the left as in the Inspector. Two widgets with the same label in o
 (`"Speed##front"`) or an `Id` scope. `EditorApplication` gives `IsPlaying`, `ProjectPath`, `SelectedObjectName` and
 `Log`/`LogWarning`/`LogError` to the Console.
 
-Not yet: editing the scene from editor scripts (creating or moving objects with Tallow.API in Edit mode), gizmo and
-Scene view tools, and inspectors for built-in components. Test: `tools/test_csharp_editor_extensions.py` needs a
-display.
+Not yet: scene editing through Tallow.API itself (GameObject, Transform and components are bound to a running game;
+editor scripts use `EditorScene` in Edit mode), and modelling or terrain tools written as editor scripts. Test:
+`tools/test_csharp_editor_extensions.py` needs a display.
 
 ## Shipping a C# game
 

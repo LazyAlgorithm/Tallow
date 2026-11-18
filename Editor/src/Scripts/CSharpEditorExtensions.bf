@@ -63,6 +63,10 @@ extension EditorApp
 		public function void() markDirty;
 		public function int32(char8*, int32) componentField;
 		public function int32() componentDefault;
+		public function int32(int32) sceneViewState;
+		public function void(float*) sceneViewCursor;
+		public function int32(float, float, float*) sceneViewRay;
+		public function uint32(float, float) sceneViewPick;
 	}
 
 	/// What the editor calls in them (Tallow.Editor's EditorHost.ManagedTable).
@@ -79,6 +83,7 @@ extension EditorApp
 		public function int32(int32) drawPage;
 		public function int32(char8*, int32) findComponentInspector;
 		public function int32(int32, uint32, char8*, int32) drawComponentInspector;
+		public function int32() drawSceneOverlays;
 	}
 
 	class CSharpEditorWindow
@@ -203,7 +208,7 @@ extension EditorApp
 			return false;
 		EditorHostTable host = .()
 		{
-			version = 3,
+			version = 4,
 			size = sizeof(EditorHostTable),
 			log = => HostLog,
 			text = => HostText,
@@ -249,7 +254,11 @@ extension EditorApp
 			fieldWrite = => HostFieldWrite,
 			markDirty = => HostMarkDirty,
 			componentField = => HostComponentField,
-			componentDefault = => HostComponentDefault
+			componentDefault = => HostComponentDefault,
+			sceneViewState = => HostSceneViewState,
+			sceneViewCursor = => HostSceneViewCursor,
+			sceneViewRay = => HostSceneViewRay,
+			sceneViewPick = => HostSceneViewPick
 		};
 		if (tn_csharp_editor_configure(editorApi.CStr(), &host, &sExtensions) == 0)
 		{
@@ -337,6 +346,15 @@ extension EditorApp
 			edited |= sExtensionsApp.DrawFieldList(fields, "fields");
 		}
 		return edited;
+	}
+
+	/// The editor scripts' Scene view overlays, each frame the Scene view draws (gizmos and input only: the editor
+	/// is rendering, not laying out widgets).
+	void DrawCSharpSceneOverlays()
+	{
+		if (!mExtensionsLoaded)
+			return;
+		sExtensions.drawSceneOverlays();
 	}
 
 	/// Preferences tab index of the editor scripts.
@@ -1233,4 +1251,49 @@ extension EditorApp
 	}
 
 	static void HostMarkDirty() => sExtensionsApp.MarkDirty();
+
+	// ---- The Scene view, for editor scripts that draw or handle it (SceneViewOverlay) ----
+
+	static int32 HostSceneViewState(int32 what)
+	{
+		switch (what)
+		{
+		case 0: return sExtensionsApp.mSceneVisible ? 1 : 0;
+		case 1: return sExtensionsApp.mSceneHovered ? 1 : 0;
+		case 2: return sExtensionsApp.mSceneClicked ? 1 : 0;
+		case 3: return sExtensionsApp.mSceneMouseDown ? 1 : 0;
+		}
+		return 0;
+	}
+
+	/// Where the mouse is in the view, from 0 to 1 across and down.
+	static void HostSceneViewCursor(float* values)
+	{
+		values[0] = sExtensionsApp.mSceneMouseU;
+		values[1] = sExtensionsApp.mSceneMouseV;
+	}
+
+	/// The ray through a point of the view: its origin, then its direction.
+	static int32 HostSceneViewRay(float u, float v, float* values)
+	{
+		if (!sExtensionsApp.mSceneVisible)
+			return 0;
+		let ray = sExtensionsApp.mSceneCamera.ViewportPointToRay(u, v);
+		values[0] = ray.origin.x;
+		values[1] = ray.origin.y;
+		values[2] = ray.origin.z;
+		let direction = ray.direction;
+		values[3] = direction.x;
+		values[4] = direction.y;
+		values[5] = direction.z;
+		return 1;
+	}
+
+	static uint32 HostSceneViewPick(float u, float v)
+	{
+		if (!sExtensionsApp.mSceneVisible)
+			return 0;
+		let picked = sExtensionsApp.PickObject(u, v);
+		return picked != null ? picked.Id : 0;
+	}
 }

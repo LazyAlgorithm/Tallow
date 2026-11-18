@@ -17,6 +17,11 @@ extension EditorApp
 	// The object being dragged out of the Scene view (0: none).
 	uint32 mSceneDragId;
 	// A prefab or model dragged from the Project panel over the Scene view: made already, following the mouse, and
+	// The mouse in the Scene view this frame, and whether it is clicked or held (editor-script overlays read them).
+	bool mSceneClicked;
+	bool mSceneMouseDown;
+	float mSceneMouseU;
+	float mSceneMouseV;
 	// kept when it is dropped (thrown away if the drag leaves the view or is let go elsewhere).
 	GameObject mDropPreview;
 	String mDropPreviewAsset = new .() ~ delete _;
@@ -34,6 +39,8 @@ extension EditorApp
 		if (sceneDock != 0)
 			mAssetCenterDock = sceneDock;
 		mSceneHovered = false;
+		mSceneClicked = false;
+		mSceneMouseDown = false;
 		mSceneFocused = open && ImGui.IsWindowFocused(ImGui.HoveredFlags.ChildWindows);
 		if (open)
 		{
@@ -50,6 +57,14 @@ extension EditorApp
 				if (mSceneView.Width > 0)
 					ImGui.Picture(mSceneView.OutputTexture, .(mSceneView.Width, mSceneView.Height));
 				mSceneHovered = ImGui.IsItemHovered();
+				if (mSceneHovered)
+				{
+					let mouse = ImGui.GetMousePos();
+					mSceneMouseU = (mouse.x - origin.x) / size.x;
+					mSceneMouseV = (mouse.y - origin.y) / size.y;
+					mSceneClicked = ImGui.IsMouseClicked(0);
+					mSceneMouseDown = ImGui.IsMouseDown(0);
+				}
 				mDropPreviewSeen = false;
 				if (ImGui.BeginDragDropTarget())
 				{
@@ -104,6 +119,8 @@ extension EditorApp
 
 				UpdateQuickAdd(origin, size);
 				DrawSceneOverlays(origin, size);
+				// The editor scripts' own overlays: their gizmos go into this frame's batches, drawn just below.
+				DrawCSharpSceneOverlays();
 				let stats = scope String();
 				stats.AppendF("{} draws  {} instances  {}k tris", mSceneView.DrawCalls, mSceneView.Instances, mSceneView.Triangles / 1000);
 				if (mSceneView.LightCount > 0)
