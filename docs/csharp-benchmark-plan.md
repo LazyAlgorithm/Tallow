@@ -430,6 +430,14 @@ measurements, `tools/run_nativeaot_bench.py` on Linux x64, Samples/CSharpBench e
   replay and by no prediction divergence, not by identical cross-play hashes. Results:
   ~/TallowBenchmarks/crossplay-20261118 (results.md and raw.jsonl). Not covered: Windows players (Wine or a real
   Windows machine), peers above 16.
+- B28 (Windows players under Wine, November 18, 2026): `run_crossplay_matrix.py --wine` with the same Windows
+  exports and the simulator, a reduced set — 2 peers with no added latency; 4 peers at 100 ms and 1% loss — in both
+  directions, 1,800 ticks each: 4 runs, every client connected, no errors, prediction (own) error 0.000 m median
+  (worst 0.2 m), 34.8-40.4 KB/s sent per client, 2-9 ticks ahead. Each runtime's host alone replays to
+  `964389e34c11207c`, the hash the Linux halves give; the two mixed directions agreed on 1 of the 2
+  configurations, and the others end elsewhere because a client joins a running server (the Linux note above
+  explains why that is reported, not a gate). The full B18 set on Windows and peers above 16 still need a real
+  Windows machine. Results: ~/TallowBenchmarks/crossplay-windows-20261118.
 - B24 (part): a NativeAOT export that fails leaves no game behind, no JIT assemblies or .NET in its place
   (`test_csharp_export.py --runtime native`, unsuppressed run-time generic code in the game); the release files
   hold no IL, sources or symbols. The default switch to NativeAOT waits for the user's Windows test.
