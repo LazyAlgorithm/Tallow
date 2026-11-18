@@ -41,12 +41,27 @@ def med(values):
     return statistics.median(values) if values else None
 
 
-def replay(players: dict[str, Path], ticks: int, output: Path, port: int) -> dict[str, str | None]:
+def wine_environment() -> dict[str, str]:
+    toolchain = Path(os.environ.get("TALLOW_WIN", Path.home() / ".local/share/tallow-win"))
+    return {"WINEPREFIX": str(toolchain / "wine"), "WINEDEBUG": "-all"}
+
+
+def command(wine: bool, player: Path, *arguments: str) -> list[str]:
+    """A player's command line: directly on Linux, or its Windows binary under Wine."""
+    return ["wine", str(player), *arguments] if wine else [str(player), *arguments]
+
+
+def environment(wine: bool, *args, **kwargs) -> dict[str, str]:
+    env = net_env(*args, **kwargs)
+    return dict(env, **wine_environment()) if wine else env
+
+
+def replay(players: dict[str, Path], ticks: int, output: Path, port: int, wine: bool = False) -> dict[str, str | None]:
     """Each runtime's own host with bot controls: the hash every no-latency cross-play must end on."""
     hashes = {}
     for kind, player in players.items():
-        text = subprocess.run([str(player), "--headless", "--host", "--bot", "--port", str(port)],
-                              env=net_env("nethash", ticks / 60 + 60, ticks), cwd=player.parent,
+        text = subprocess.run(command(wine, player, "--headless", "--host", "--bot", "--port", str(port)),
+                              env=environment(wine, "nethash", ticks / 60 + 60, ticks), cwd=player.parent,
                               capture_output=True, text=True, timeout=ticks / 60 + 120)
         log = text.stdout + text.stderr
         (output / f"replay-{kind}.log").write_text(log)
@@ -56,7 +71,7 @@ def replay(players: dict[str, Path], ticks: int, output: Path, port: int) -> dic
 
 
 def run(server_kind: str, server: Path, client_kinds: list[str], clients: dict[str, Path], peers: int,
-        rtt: int, loss: float, ticks: int, output: Path, port: int) -> dict:
+        rtt: int, loss: float, ticks: int, output: Path, port: int, wine: bool = False) -> dict:
     lag = rtt // 2
     tag = f"cross-{server_kind}-server-p{peers}-rtt{rtt}-loss{loss:g}"
     common = ["--headless", "--port", str(port), "--netstats"]
@@ -68,8 +83,8 @@ def run(server_kind: str, server: Path, client_kinds: list[str], clients: dict[s
     logs = []
     server_log = open(output / f"{tag}-server.log", "w")
     logs.append(server_log)
-    host = subprocess.Popen([str(server), "--server", *common],
-                            env=net_env("nethash", seconds + 12, ticks, keep=True), cwd=server.parent,
+    host = subprocess.Popen(command(wine, server, "--server", *common),
+                            env=environment(wine, "nethash", seconds + 12, ticks, keep=True), cwd=server.parent,
                             stdout=server_log, stderr=subprocess.STDOUT)
     time.sleep(2)
     processes = []
@@ -77,8 +92,8 @@ def run(server_kind: str, server: Path, client_kinds: list[str], clients: dict[s
         kind = client_kinds[index % len(client_kinds)]
         log = open(output / f"{tag}-client{index}-{kind}.log", "w")
         logs.append(log)
-        processes.append(subprocess.Popen([str(clients[kind]), "--connect", "127.0.0.1", "--bot", *common],
-                                          env=net_env("netsync", seconds + 8, ticks), cwd=clients[kind].parent,
+        processes.append(subprocess.Popen(command(wine, clients[kind], "--connect", "127.0.0.1", "--bot", *common),
+                                          env=environment(wine, "netsync", seconds + 8, ticks), cwd=clients[kind].parent,
                                           stdout=log, stderr=subprocess.STDOUT))
     for process in processes + [host]:
         try:
@@ -130,6 +145,7 @@ def main() -> int:
     parser.add_argument("--jit", type=Path, required=True, help="a JIT CSharpBench player built already")
     parser.add_argument("--native", type=Path, required=True, help="a NativeAOT CSharpBench player built already")
     parser.add_argument("--ticks", type=int, default=1800, help="simulated ticks per run (hash taken at the end)")
+    parser.add_argument("--wine", action="store_true", help="run Windows players under Wine")
     parser.add_argument("--configs", help="peers:rtt:loss,... (default: the B18 set)")
     parser.add_argument("--port", type=int, default=47840)
     parser.add_argument("--output", type=Path, required=True)
@@ -140,7 +156,7 @@ def main() -> int:
     if args.configs:
         configs = [tuple(float(x) if i == 2 else int(x) for i, x in enumerate(c.split(":"))) for c in args.configs.split(",")]
 
-    known = replay(players, args.ticks, args.output, args.port)
+    known = replay(players, args.ticks, args.output, args.port, args.wine)
     replay_ok = len(set(known.values())) == 1 and None not in known.values()
     print(f"Both runtimes replay to one hash: {'yes' if replay_ok else 'NO'}")
 
@@ -150,7 +166,7 @@ def main() -> int:
             for server_kind, client_kind in (("jit", "native"), ("native", "jit")):
                 client_kinds = [client_kind, "jit" if client_kind == "native" else "native"]
                 result = run(server_kind, players[server_kind], client_kinds, players, peers, rtt, loss,
-                             args.ticks, args.output, args.port)
+                             args.ticks, args.output, args.port, args.wine)
                 result["matches_replay"] = result["server_hash"] in known.values()
                 raw.write(json.dumps(result) + "\n")
                 raw.flush()
