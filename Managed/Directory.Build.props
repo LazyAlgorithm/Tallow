@@ -1,0 +1,8 @@
+<Project>
+  <!-- A Visual Studio developer prompt (and CI's Windows job) sets the environment variable Platform=x64, and MSBuild
+       then puts a project's output in bin/x64/Debug/... instead of bin/Debug/..., where the engine, editor and tools
+       look for Tallow.ManagedRuntime, Tallow.Build and the rest. Keep the output folders the same everywhere. -->
+  <PropertyGroup>
+    <AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>
+  </PropertyGroup>
+</Project>
