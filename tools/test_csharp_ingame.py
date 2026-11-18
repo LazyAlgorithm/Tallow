@@ -54,7 +54,8 @@ def main() -> int:
                         "--", "--project", str(project), "--engine-root", str(ROOT)], capture_output=True, text=True)
         graph = project / "src/Scripts/GraphProbe.tgraph"
         committed = (project / "src/Scripts/GraphProbe.cs").read_text(encoding="utf-8")
-        compiled = subprocess.run([str(launcher), "--graph-compile", str(graph), "InGame"], capture_output=True, text=True)
+        compiled = subprocess.run([str(launcher), "--graph-compile", str(graph), "InGame"], capture_output=True, text=True,
+                                  timeout=300)
         if compiled.returncode != 0:
             print(compiled.stdout + compiled.stderr)
             print("The graph compiler failed on GraphProbe.tgraph.", file=sys.stderr)

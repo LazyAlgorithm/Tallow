@@ -11,7 +11,11 @@ namespace Tallow.Editor;
 /// with its own Main (see ProjectGenerator) and the build uses that instead.
 class DefaultProgram
 {
-	public static int Main(String[] args) => EditorMain.Run(args);
+	public static int Main(String[] args)
+	{
+		CrashReports.UseConsoleWhenUnattended(args);
+		return EditorMain.Run(args);
+	}
 }
 
 static class EditorMain

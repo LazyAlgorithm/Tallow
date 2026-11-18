@@ -920,6 +920,7 @@ class Program
 #endif
 	public static int Main(String[] args)
 	{
+		CrashReports.UseConsoleWhenUnattended(args);
 		// Tallow's own .NET SDK, when installed, for the checks and everything the launcher starts.
 		DotNetSdk.Apply();
 		// --install-dotnet [--from-archive FILE]: installs Tallow's pinned .NET SDK for this user (downloaded, or

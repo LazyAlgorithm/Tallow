@@ -12,6 +12,7 @@ class Program
 {
 	public static int Main(String[] args)
 	{
+		CrashReports.UseConsoleWhenUnattended(args);
 #if BF_PLATFORM_WASM
 		WebPlatform.ReturnFromMainLoop = true;
 #endif
