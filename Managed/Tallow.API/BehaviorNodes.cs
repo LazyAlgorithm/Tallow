@@ -127,27 +127,34 @@ public readonly partial record struct BehaviorTreeRunner
 /// to the engine when the game loads.</summary>
 public static class BehaviorNodes
 {
-    private sealed record Kind(Type Type, Func<BehaviorNode> Create, FieldInfo[] Settings);
+    private sealed class Kind(Type type, Func<BehaviorNode> create)
+    {
+        public Type Type { get; } = type;
+        public Func<BehaviorNode> Create { get; } = create;
+        /// <summary>Its settings fields, from the build's field tables; worked out on first use (the tables may not
+        /// be registered yet when this class is: module initializers run in no order), then kept.</summary>
+        public ManagedField[] Settings { get; set; } = [];
+    }
 
     private static readonly Dictionary<string, Kind> sKinds = new(StringComparer.Ordinal);
     private static readonly Dictionary<int, (BehaviorNode Node, string Values)> sLive = [];
 
     /// <summary>Called by the generated registry for each BehaviorNode class.</summary>
-    public static void Register(Func<BehaviorNode> create, Type type)
-    {
-        // The class's own fields in declaration order, then each base class's (as the build's catalog lists them):
-        // a node's values are kept by position.
-        var settings = new List<FieldInfo>();
-        for (Type? at = type; at != null && at != typeof(BehaviorNode); at = at.BaseType)
-            settings.AddRange(at.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-                .Where(field => !field.IsInitOnly && SettingType(field.FieldType) != null).OrderBy(DeclarationOrder));
-        sKinds[type.FullName ?? type.Name] = new Kind(type, create, [.. settings]);
-    }
+    public static void Register(Func<BehaviorNode> create, Type type) =>
+        sKinds[type.FullName ?? type.Name] = new Kind(type, create);
 
-    /// <summary>A field's place in its class's declaration. NativeAOT keeps no metadata tokens, but it lists a class's
-    /// fields in declaration order already, so there the order they come in is kept.</summary>
-    private static int DeclarationOrder(FieldInfo field) =>
-        System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported ? field.MetadataToken : 0;
+    /// <summary>The class's own fields in declaration order, then each base class's (as the build's catalog lists
+    /// them): a node's values are kept by position. The build's field tables have them already: no reflection over
+    /// the game's types, which a NativeAOT build cannot see through.</summary>
+    private static ManagedField[] SettingsOf(Type type)
+    {
+        var settings = new List<ManagedField>();
+        for (Type? at = type; at != null && at != typeof(BehaviorNode); at = at.BaseType)
+            foreach (ManagedField field in ManagedFields.Fields(at) ?? [])
+                if (field.IsPublic && field.Set is not null && SettingType(field.FieldType) != null)
+                    settings.Add(field);
+        return [.. settings];
+    }
 
     private static string? SettingType(Type type) =>
         type == typeof(float) || type == typeof(int) || type == typeof(double) ? "Number" :
@@ -170,9 +177,10 @@ public static class BehaviorNodes
         foreach ((string className, Kind kind) in sKinds)
         {
             var info = kind.Type.GetCustomAttribute<BehaviorNodeAttribute>();
+            kind.Settings = SettingsOf(kind.Type);
             BehaviorNode sample = kind.Create();
             var settings = string.Join('\x1e', kind.Settings.Select(field =>
-                field.Name + "\x1f" + SettingType(field.FieldType) + "\x1f" + Format(field.GetValue(sample))));
+                field.Name + "\x1f" + SettingType(field.FieldType) + "\x1f" + Format(field.Get(sample))));
             CSharpBehaviorNodes.Register(info?.Key ?? className, info?.Category ?? "Game", info?.Title ?? kind.Type.Name,
                 info?.Condition == true ? 1 : 0, info?.Description ?? "", className, settings);
         }
@@ -196,17 +204,19 @@ public static class BehaviorNodes
 
     private static void Fill(Kind kind, BehaviorNode node, string values)
     {
+        if (kind.Settings.Length == 0)
+            kind.Settings = SettingsOf(kind.Type);
         string[] parts = values.Length == 0 ? [] : values.Split('\x1f');
         for (int i = 0; i < kind.Settings.Length && i < parts.Length; i++)
         {
-            FieldInfo field = kind.Settings[i];
+            ManagedField field = kind.Settings[i];
             string text = parts[i];
             object? value = field.FieldType == typeof(float) ? (float.TryParse(text, CultureInfo.InvariantCulture, out float f) ? f : 0f) :
                 field.FieldType == typeof(double) ? (double.TryParse(text, CultureInfo.InvariantCulture, out double d) ? d : 0d) :
                 field.FieldType == typeof(int) ? (float.TryParse(text, CultureInfo.InvariantCulture, out float n) ? (int)MathF.Round(n) : 0) :
                 field.FieldType == typeof(bool) ? text is "true" or "1" :
                 field.FieldType == typeof(string) ? text : ParseVector(text);
-            field.SetValue(node, value);
+            field.Set!(node, value);
         }
     }
 

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Numerics;
 using System.Reflection;
@@ -31,7 +32,8 @@ public sealed class RpcAttribute(RpcTarget target = RpcTarget.Everyone) : Attrib
 /// The [Rpc] methods of script types, and the text their arguments travel as.
 internal static class RpcMethods
 {
-    internal sealed record Entry(MethodInfo Method, RpcTarget Target, Type[] Parameters);
+    /// <summary>An [Rpc] method: its name, where it runs, its parameter types and how to call it.</summary>
+    internal sealed record Entry(string Name, RpcTarget Target, Type[] Parameters, Action<object, object?[]> Invoke);
 
     private static readonly ConcurrentDictionary<(Type, string), Entry?> Cache = new();
     private const char Separator = '\u001f';
@@ -45,6 +47,30 @@ internal static class RpcMethods
     internal static Entry? Find(Type type, string name) => Cache.GetOrAdd((type, name), key => Resolve(key.Item1, key.Item2));
 
     private static Entry? Resolve(Type type, string name)
+    {
+        // The build's table of the class's [Rpc] methods (Tallow.Build): no reflection over game types. A class
+        // from a package has none and is read the old way.
+        bool described = false;
+        for (Type? owner = type; owner != null && owner != typeof(Script); owner = owner.BaseType)
+        {
+            if (!ManagedRpcs.IsRegistered(owner))
+                continue;
+            described = true;
+            if (ManagedRpcs.Find(owner, name) is not { } found)
+                continue;
+            if (found.Length > 1)
+                throw new InvalidOperationException($"{type.Name}.{name}: an [Rpc] method cannot be overloaded.");
+            ManagedRpc rpc = found[0];
+            if (rpc.Error is not null)
+                throw new InvalidOperationException(rpc.Error);
+            return new Entry(name, rpc.Target, rpc.Parameters, rpc.Invoke!);
+        }
+        return described ? null : ReflectedResolve(type, name);
+    }
+
+    [UnconditionalSuppressMessage("AOT", "IL2070", Justification =
+        "Only a script type from a package (no game assembly described it) reaches this; package assemblies ship whole.")]
+    private static Entry? ReflectedResolve(Type type, string name)
     {
         for (Type? owner = type; owner != null && owner != typeof(Script); owner = owner.BaseType)
         {
@@ -64,7 +90,9 @@ internal static class RpcMethods
                 if (!Supported(parameter))
                     throw new InvalidOperationException(
                         $"{type.Name}.{name}: [Rpc] parameters cannot be {parameter.Name}. Use int, float, bool, string, enums, vectors or GameObject.");
-            return new Entry(found, found.GetCustomAttribute<RpcAttribute>(inherit: true)!.Target, parameters);
+            return new Entry(name, found.GetCustomAttribute<RpcAttribute>(inherit: true)!.Target, parameters,
+                (script, arguments) => found.Invoke(script, BindingFlags.DoNotWrapExceptions, null, arguments,
+                    CultureInfo.InvariantCulture));
         }
         return null;
     }
@@ -78,7 +106,7 @@ internal static class RpcMethods
     {
         if (arguments.Length != entry.Parameters.Length)
             throw new ArgumentException(
-                $"{entry.Method.Name} takes {entry.Parameters.Length} argument(s), not {arguments.Length}.");
+                $"{entry.Name} takes {entry.Parameters.Length} argument(s), not {arguments.Length}.");
         var text = new StringBuilder();
         for (int i = 0; i < arguments.Length; i++)
         {
@@ -87,7 +115,7 @@ internal static class RpcMethods
             object? value = arguments[i];
             Type type = entry.Parameters[i];
             if (value is null ? type != typeof(string) : !type.IsInstanceOfType(value))
-                throw new ArgumentException($"{entry.Method.Name}: argument {i + 1} must be {type.Name}.");
+                throw new ArgumentException($"{entry.Name}: argument {i + 1} must be {type.Name}.");
             text.Append(Escape(Format(value)));
         }
         return text.ToString();
@@ -175,7 +203,7 @@ internal static class RpcMethods
             return text.Length == 0 ? [] : throw new FormatException("Arguments for an RPC that takes none.");
         List<string> parts = Split(text);
         if (parts.Count != entry.Parameters.Length)
-            throw new FormatException($"{entry.Method.Name} received {parts.Count} argument(s), not {entry.Parameters.Length}.");
+            throw new FormatException($"{entry.Name} received {parts.Count} argument(s), not {entry.Parameters.Length}.");
         var values = new object?[parts.Count];
         for (int i = 0; i < parts.Count; i++)
             values[i] = Parse(entry.Parameters[i], parts[i], sceneId);
@@ -188,7 +216,7 @@ internal static class RpcMethods
         CurrentSender = sender;
         try
         {
-            entry.Method.Invoke(script, BindingFlags.DoNotWrapExceptions, null, arguments, CultureInfo.InvariantCulture);
+            entry.Invoke(script, arguments);
         }
         finally
         {

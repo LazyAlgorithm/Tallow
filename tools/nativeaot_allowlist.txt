@@ -11,9 +11,10 @@
 # Why most reflection here is safe: the export keeps every game assembly whole (TrimmerRootAssembly), so fields,
 # constructors and methods of game types are never trimmed; and Tallow.Build generates the generic code that
 # reflection asks for at run time (Tallow.AotRoots.g.cs: List<T>, T[], TryGetComponent<T> of every Inspector field
-# type). The Inspector/save/[Sync] field path no longer appears here at all: Tallow.Build writes a field table for
-# every class and struct the game declares (Tallow.FieldTables.g.cs), and the runtime's only remaining field
-# reflection is the fallback for a type from a package, suppressed in the source with its reason.
+# type). Nothing the game runs every frame appears here: Tallow.Build writes one table per assembly
+# (Tallow.FieldTables.g.cs) for fields (Inspector, saves, [Sync]), lifecycle callback masks, .tui handlers, [Rpc]
+# methods and behaviour-node settings, and the runtime's only remaining reflection over game types is the fallback
+# for a type from a package, suppressed in the source with its reason.
 # tools/test_csharp_export.py --runtime native runs the in-game checks that use each path below.
 
 # Hot reload and the collectible load context: JIT only. NativeAOT's LoadGame takes the compiled-in registry and
@@ -29,9 +30,5 @@ IL2026,IL2075      Tallow.ManagedRuntime.NativeEntrypoints.EditorConfigure      
 # default-value constructors, List<T> factories and TryGetComponent lookups). The runtime's remaining reflection is
 # the fallback for a type from a package, marked [UnconditionalSuppressMessage] with its reason in the source.
 
-# Callbacks and calls by name on game types (kept whole).
-IL2070             Tallow.ManagedRuntime.NativeEntrypoints.<CallbackMask>                 which lifecycle methods a script declares (rooted)
-IL2075             Tallow.ManagedRuntime.NativeEntrypoints.UiInvoke                       UI event handler methods of game scripts (rooted)
-IL2070             Tallow.RpcMethods.Resolve                                              [Rpc] methods of game scripts (rooted)
-IL2070             Tallow.BehaviorNodes.Register                                          fields of game behaviour nodes (rooted; no MetadataToken under NativeAOT)
-IL2090             Tallow.ComponentLookup`1..cctor                                        fields of game components (rooted)
+# Calls by name on game types: none left. Callbacks, [Rpc] methods, .tui handlers and behaviour-node settings come
+# from Tallow.Build's generated tables; a type from a package falls back to reflection, suppressed in the source.

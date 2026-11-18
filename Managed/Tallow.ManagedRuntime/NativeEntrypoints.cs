@@ -373,31 +373,32 @@ public static unsafe class NativeEntrypoints
             // "\u0001": a behaviour tree's Call Method, which takes only methods without parameters; a bool result
             // decides success (2 is "called, and it said false").
             bool callOnly = id == "\u0001";
+            // The build's table of the class's UI handlers (Tallow.Build): no reflection over game types. A class from
+            // a package has none and is read the old way.
+            bool described = false;
             for (Type? owner = script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
             {
-                foreach (MethodInfo candidate in owner.GetMethods(BindingFlags.Instance | BindingFlags.Public |
-                    BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                if (!ManagedUi.IsRegistered(owner))
+                    continue;
+                described = true;
+                if (ManagedUi.Find(owner, name) is not { } handler)
+                    continue;
+                if (handler.NoArgument is { } noArgument)
+                    return noArgument(script) is false ? 2 : 1;
+                if (callOnly)
+                    continue;
+                if (handler.WithElement is { } withElement)
                 {
-                    if (candidate.Name != name || candidate.IsGenericMethodDefinition)
-                        continue;
-                    ParameterInfo[] parameters = candidate.GetParameters();
-                    if (parameters.Length == 0)
-                    {
-                        object? result = candidate.Invoke(script, null);
-                        return result is false ? 2 : 1;
-                    }
-                    else if (callOnly)
-                        continue;
-                    else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(UIElement))
-                        candidate.Invoke(script, [new UIElement(script.GameObject, id)]);
-                    else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(string))
-                        candidate.Invoke(script, [id]);
-                    else
-                        continue;
+                    withElement(script, new UIElement(script.GameObject, id));
+                    return 1;
+                }
+                if (handler.WithString is { } withString)
+                {
+                    withString(script, id);
                     return 1;
                 }
             }
-            return 0;
+            return described ? 0 : ReflectedUiInvoke(script, name, id, callOnly);
         }
         catch (TargetInvocationException exception) when (exception.InnerException != null)
         {
@@ -407,6 +408,37 @@ public static unsafe class NativeEntrypoints
         {
             return Failure(exception);
         }
+    }
+
+    [UnconditionalSuppressMessage("AOT", "IL2075", Justification =
+        "Only a script type from a package (no game assembly described it) reaches this; package assemblies ship whole.")]
+    private static int ReflectedUiInvoke(Script script, string name, string id, bool callOnly)
+    {
+        for (Type? owner = script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
+        {
+            foreach (MethodInfo candidate in owner.GetMethods(BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+            {
+                if (candidate.Name != name || candidate.IsGenericMethodDefinition)
+                    continue;
+                ParameterInfo[] parameters = candidate.GetParameters();
+                if (parameters.Length == 0)
+                {
+                    object? result = candidate.Invoke(script, null);
+                    return result is false ? 2 : 1;
+                }
+                else if (callOnly)
+                    continue;
+                else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(UIElement))
+                    candidate.Invoke(script, [new UIElement(script.GameObject, id)]);
+                else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(string))
+                    candidate.Invoke(script, [id]);
+                else
+                    continue;
+                return 1;
+            }
+        }
+        return 0;
     }
 
     // Plain native layout, matching tn_csharp_gc_stats (40 bytes).
@@ -1029,6 +1061,9 @@ public static unsafe class NativeEntrypoints
     private static void ClearFieldTables()
     {
         ManagedFields.Clear();
+        ManagedCallbacks.Clear();
+        ManagedRpcs.Clear();
+        ManagedUi.Clear();
         lock (sReflectedFields)
             sReflectedFields.Clear();
     }
@@ -1765,6 +1800,30 @@ public static unsafe class NativeEntrypoints
     /// Update costs one call a frame rather than one for each of EarlyUpdate, Update, LateUpdate, OnGUI, ....
     /// Awake, OnEnable, Start, OnDisable and the rare callbacks are always sent.
     /// </summary>
+    /// <summary>The callbacks each name stands for (the build's generated list and this map must agree).</summary>
+    private static readonly Dictionary<string, int> sCallbackBits = new(StringComparer.Ordinal)
+    {
+        [nameof(Script.EarlyUpdate)] = EarlyUpdateBit,
+        [nameof(Script.Update)] = UpdateBit,
+        [nameof(Script.LateUpdate)] = LateUpdateBit,
+        [nameof(Script.FixedUpdate)] = 1 << (int)ScriptEvent.FixedUpdate,
+        [nameof(Script.LocalEarlyUpdate)] = 1 << (int)ScriptEvent.LocalEarlyUpdate,
+        [nameof(Script.LocalUpdate)] = 1 << (int)ScriptEvent.LocalUpdate,
+        [nameof(Script.LocalLateUpdate)] = 1 << (int)ScriptEvent.LocalLateUpdate,
+        [nameof(Script.OnGUI)] = 1 << (int)ScriptEvent.Gui,
+        [nameof(Script.OnWorldStateChanged)] = 1 << (int)ScriptEvent.WorldStateChanged,
+        [nameof(Script.OnSequenceEvent)] = SequenceEventBit,
+        [nameof(Script.OnDialogueEvent)] = DialogueEventBit,
+        [nameof(Script.OnTreeEvent)] = TreeEventBit,
+        [nameof(Script.OnDialogueEnded)] = DialogueEndedBit,
+        [nameof(Script.OnSequenceFinished)] = SequenceFinishedBit,
+        [nameof(Script.OnClientJoined)] = ClientJoinedBit,
+        [nameof(Script.OnClientLeft)] = ClientLeftBit,
+        [nameof(Script.CapturePredictionState)] = PredictionBit,
+        [nameof(Script.PreparePredictionState)] = PredictionBit,
+        [nameof(Script.RestorePredictionState)] = PredictionBit,
+    };
+
     private static int CallbackMask(Type type)
     {
         lock (sCallbackMasks)
@@ -1772,35 +1831,52 @@ public static unsafe class NativeEntrypoints
             if (sCallbackMasks.TryGetValue(type, out int cached))
                 return cached;
             int mask = 0;
-            void Check(string name, Type[] parameters, int bit)
+            if (ManagedCallbacks.Of(type) is { } names)
             {
-                MethodInfo? method = type.GetMethod(name, BindingFlags.Public | BindingFlags.Instance, parameters);
-                if (method == null || method.DeclaringType != typeof(Script))
-                    mask |= bit;
+                // The build's field of the class's overrides: no reflection over game types.
+                foreach (string name in names)
+                    if (sCallbackBits.TryGetValue(name, out int bit))
+                        mask |= bit;
             }
-            Check(nameof(Script.EarlyUpdate), [typeof(TickInput), typeof(float)], EarlyUpdateBit);
-            Check(nameof(Script.Update), [typeof(TickInput), typeof(float)], UpdateBit);
-            Check(nameof(Script.LateUpdate), [typeof(TickInput), typeof(float)], LateUpdateBit);
-            Check(nameof(Script.FixedUpdate), [typeof(float)], 1 << (int)ScriptEvent.FixedUpdate);
-            Check(nameof(Script.LocalEarlyUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalEarlyUpdate);
-            Check(nameof(Script.LocalUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalUpdate);
-            Check(nameof(Script.LocalLateUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalLateUpdate);
-            Check(nameof(Script.OnGUI), Type.EmptyTypes, 1 << (int)ScriptEvent.Gui);
-            Check(nameof(Script.OnWorldStateChanged), [typeof(int), typeof(int)], 1 << (int)ScriptEvent.WorldStateChanged);
-            Check(nameof(Script.OnSequenceEvent), [typeof(string), typeof(float)], SequenceEventBit);
-            Check(nameof(Script.OnDialogueEvent), [typeof(string), typeof(float)], DialogueEventBit);
-            Check(nameof(Script.OnTreeEvent), [typeof(string)], TreeEventBit);
-            Check(nameof(Script.OnDialogueEnded), Type.EmptyTypes, DialogueEndedBit);
-            Check(nameof(Script.OnSequenceFinished), Type.EmptyTypes, SequenceFinishedBit);
-            Check(nameof(Script.OnClientJoined), [typeof(int)], ClientJoinedBit);
-            Check(nameof(Script.OnClientLeft), [typeof(int)], ClientLeftBit);
-            Type byRef = typeof(PredictionState).MakeByRefType();
-            Check(nameof(Script.CapturePredictionState), [byRef], PredictionBit);
-            Check(nameof(Script.PreparePredictionState), [byRef], PredictionBit);
-            Check(nameof(Script.RestorePredictionState), [byRef], PredictionBit);
+            else
+                mask = ReflectedCallbackMask(type);
             sCallbackMasks[type] = mask;
             return mask;
         }
+    }
+
+    [UnconditionalSuppressMessage("AOT", "IL2070", Justification =
+        "Only a script type from a package (no game assembly described it) reaches this; package assemblies ship whole.")]
+    private static int ReflectedCallbackMask(Type type)
+    {
+        int mask = 0;
+        void Check(string name, Type[] parameters, int bit)
+        {
+            MethodInfo? method = type.GetMethod(name, BindingFlags.Public | BindingFlags.Instance, parameters);
+            if (method == null || method.DeclaringType != typeof(Script))
+                mask |= bit;
+        }
+        Check(nameof(Script.EarlyUpdate), [typeof(TickInput), typeof(float)], EarlyUpdateBit);
+        Check(nameof(Script.Update), [typeof(TickInput), typeof(float)], UpdateBit);
+        Check(nameof(Script.LateUpdate), [typeof(TickInput), typeof(float)], LateUpdateBit);
+        Check(nameof(Script.FixedUpdate), [typeof(float)], 1 << (int)ScriptEvent.FixedUpdate);
+        Check(nameof(Script.LocalEarlyUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalEarlyUpdate);
+        Check(nameof(Script.LocalUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalUpdate);
+        Check(nameof(Script.LocalLateUpdate), [typeof(float)], 1 << (int)ScriptEvent.LocalLateUpdate);
+        Check(nameof(Script.OnGUI), Type.EmptyTypes, 1 << (int)ScriptEvent.Gui);
+        Check(nameof(Script.OnWorldStateChanged), [typeof(int), typeof(int)], 1 << (int)ScriptEvent.WorldStateChanged);
+        Check(nameof(Script.OnSequenceEvent), [typeof(string), typeof(float)], SequenceEventBit);
+        Check(nameof(Script.OnDialogueEvent), [typeof(string), typeof(float)], DialogueEventBit);
+        Check(nameof(Script.OnTreeEvent), [typeof(string)], TreeEventBit);
+        Check(nameof(Script.OnDialogueEnded), Type.EmptyTypes, DialogueEndedBit);
+        Check(nameof(Script.OnSequenceFinished), Type.EmptyTypes, SequenceFinishedBit);
+        Check(nameof(Script.OnClientJoined), [typeof(int)], ClientJoinedBit);
+        Check(nameof(Script.OnClientLeft), [typeof(int)], ClientLeftBit);
+        Type byRef = typeof(PredictionState).MakeByRefType();
+        Check(nameof(Script.CapturePredictionState), [byRef], PredictionBit);
+        Check(nameof(Script.PreparePredictionState), [byRef], PredictionBit);
+        Check(nameof(Script.RestorePredictionState), [byRef], PredictionBit);
+        return mask;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

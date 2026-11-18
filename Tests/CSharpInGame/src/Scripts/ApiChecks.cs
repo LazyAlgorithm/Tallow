@@ -152,6 +152,10 @@ public class ApiChecks : CheckBase
             + $"({statsTable}), constructors ({constructed}), list factories ({intsFactory}, {wavesFactory}) and "
             + $"the component lookup ({component})",
             hasPrivate && statsTable && constructed && intsFactory && wavesFactory && component);
+        string[]? callbacks = ManagedCallbacks.Of(typeof(ApiChecks));
+        Check($"the build generated this script's callback mask ({string.Join(",", callbacks ?? [])})",
+            callbacks is not null && callbacks.Contains(nameof(Update)) && callbacks.Contains(nameof(FixedUpdate)) &&
+            callbacks.Contains(nameof(OnWorldStateChanged)));
         // tools/test_csharp_export.py checks a built game runs on the .NET it ships with.
         Log.Info("INGAME RUNTIME " + System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory());
     }
@@ -1574,6 +1578,9 @@ public class ApiChecks : CheckBase
             renamed is { Awoke: true, Power: 4 });
         Check("Rpc refuses a method without [Rpc]", notRpc);
         Check("Rpc refuses the wrong number or kind of arguments", badCount && badType);
+        Check("the build generated this script's [Rpc] methods",
+            ManagedRpcs.IsRegistered(typeof(ApiChecks)) && ManagedRpcs.Find(typeof(ApiChecks), nameof(Shout))
+                is [{ Invoke: not null, Error: null }]);
     }
 
     private int _staysBeforeRest;

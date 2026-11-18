@@ -445,4 +445,20 @@ measurements, `tools/run_nativeaot_bench.py` on Linux x64, Samples/CSharpBench e
   `--crash-test` raises a real SIGSEGV that gdb names through the private `.dbg` (tools/test_csharp_crash.py).
   Windows: the matching `.pdb` is kept by the same export (41 MB, not in the package); the Windows crash half
   needs Wine's debugger or a real Windows machine, as does the clean-machine run there.
+- B25/B26/B27 (Windows players under Wine, November 18, 2026): Windows x64 exports, JIT and NativeAOT, run with
+  Wine on Linux x64 — the shipped Windows files, not the Windows kernel. `tools/run_windows_bench.py`; results in
+  ~/TallowBenchmarks/windows-20261118 (results.md and raw.json).
+  - B25: package 100.7 MB (JIT) vs 20.5 MB (NativeAOT); game code 84.9 vs 4.7 MB; player 15.6 MB both; private
+    symbols 38.9 vs 57.1 MB beside the build; no symbols in either package; the AOT game library exports only
+    `DotNetRuntimeContractDescriptor` and `tallow_native_register`.
+  - B26: start-to-exit 0.320 s (JIT) vs 0.319 s (AOT) and peak RSS 137.8 vs 104.5 MB (5 runs). 10,000 objects,
+    600 frames, script/frame ms JIT vs AOT: gameobject 0.69/1.76 vs 0.79/1.86, ecs 0.23/1.30 vs 0.30/1.37,
+    getcomponent 0.40/1.47 vs 0.37/1.44, physics (4,000 objects) 0.49/2.09 vs 0.56/2.22. Managed bytes per frame
+    alike (149-208).
+  - B27: the NetSync replay, 10,000 ticks, 3 runs each: all six give `1d70dfbed5728c97` — the same hash the Linux
+    JIT/AOT runs and B20's Beef and C# runs give. The Windows code paths and Wine's floating-point through them do
+    not change the simulation.
+  Not covered: B28's Windows half, B30's Windows crash symbolication and a clean Windows machine. Times and memory
+  above include Wine and are not native-Windows figures; the user's real-Windows run remains the gate. Hash
+  equality is unaffected by timing.
 - Benchmark both profiles from identical game commits and core engine settings. Do not substitute NativeAOT compilation of a dummy sample for shipping-player acceptance.

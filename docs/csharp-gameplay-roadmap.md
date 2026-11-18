@@ -1553,16 +1553,18 @@ the first working export is described in "First NativeAOT export" at the end of 
   per list element and a `TryGetComponent<T>` lookup per reference field. `ReadFields`, `FieldText`, `ApplyText`,
   nested paths, list items and reference fields use those tables; a type from a package (which the build cannot
   describe) still goes through one reflection fallback, suppressed in the source. Hot reload clears the tables with
-  the other caches before the new code registers its own. Remaining here: callback masks, `UiInvoke`, `[Rpc]`
-  resolution, behaviour-node fields and `ComponentLookup<T>` still reflect (kept in the allowlist below).
+  the other caches before the new code registers its own. November 18, 2026 (later): the rest of this bullet is
+  done too — callback masks, `UiInvoke`, `[Rpc]` resolution, behaviour-node fields and `ComponentLookup<T>` — see
+  "Generated callback, [Rpc], UI and behaviour-node tables" below.
 - [~] Do not discover arbitrary reflection metadata at runtime; make required remaining reflection explicit with source generation and trim/AOT annotations. Fail the export on actionable IL2026/IL207x/IL3050-style relevant trim/AOT diagnostics; add a tracked allowlist for justified third-party diagnostics only after review. No user-provided or arbitrary assembly/mod loader in the shipping runtime.
   Export on warnings done November 18, 2026 (`tools/csharp_native.py`): the ILCompiler's warnings are sorted by the
   method they come from. In the game's own code (namespaces its `src/` declares): the export stops, names them and
   says how to fix them (or keep one with `[UnconditionalSuppressMessage]` and a justification, the standard .NET
   way; Tests/CSharpInGame keeps its Newtonsoft round trip and handle check so). In the engine: each must be in
-  `tools/nativeaot_allowlist.txt` with its reason (34 today: hot reload/load context, JIT only; callbacks, `[Rpc]`,
-  UI handlers, behaviour-node fields and component field copies, over game types the export keeps whole; generic
-  code generated in Tallow.AotRoots), and an unreviewed one stops the export. November 18, 2026: `IComponent` now
+  `tools/nativeaot_allowlist.txt` with its reason (five entries today, 27 warnings: hot reload and the collectible
+  load context, JIT only; the editor; everything else — fields, callbacks, `[Rpc]`, UI handlers, behaviour-node
+  settings, component lookups — is generated code, with one reflection fallback for types from packages, suppressed
+  in the source), and an unreviewed one stops the export. November 18, 2026: `IComponent` now
   declares `GameObject` (every handle and `Script` already had it), so `FormatReference` reads it directly, and the
   Inspector's list-element probe asks which value kinds it formats instead of making a default instance;
   `InspectorElementType` and `FormatReference` left the allowlist (three warnings fewer). Data asset classes are now
@@ -1575,7 +1577,8 @@ the first working export is described in "First NativeAOT export" at the end of 
   them; the game's own calls into a package's unsafe APIs are game warnings and do stop it).
   `build_player.py --aot-warnings report` exports anyway. The export test adds unsuppressed `MakeGenericType` to
   the game and checks that the export stops, names the method and leaves no library, JIT assemblies or .NET
-  behind. Still open: generated code in place of the engine's remaining reflection (shrinks the allowlist).
+  behind. Generated code has since replaced the rest of the engine's reflection over game types (see "Generated
+  callback, [Rpc], UI and behaviour-node tables"), so only the JIT-only and editor paths remain.
 - [x] Use the existing curated `[CSharpExpose]` Beef reflection manifest for engine-to-managed APIs; generate bindings at engine build time, verify signature hashes and keep editor JIT/AOT exports on one public API contract. Avoid handwritten duplicated P/Invoke.
 - [~] Enable Release + `PublishAot=true`, appropriate platform RID, native optimization and trimming. Validate each compiler/linker option on actual host OS; do **not** turn on `IlcInstructionSet` options that change supported hardware or fast-math flags that change deterministic physics/gameplay semantics.
 - [x] Ship stripped binaries and retain matching **private** debug artifacts: Linux `.dbg`, Windows `.pdb` and exact build identifiers/map files, stored outside public download folders. Do not equate stripping symbols with complete tamper resistance: native code is harder to inspect than IL but still reverse-engineerable. Don't remove necessary exported ABI symbols or crash-unwinding data.
@@ -1657,9 +1660,35 @@ the zero-allocation check measures past the interpreter's tier-up there. `test_c
   failing the export.
 - **CI.** Linux job: `test_csharp_export.py --runtime native`; Windows job: the same, built natively with MSVC.
 - **Not done yet:** a run on a real Windows machine (the user's test); NativeAOT became the default before it, at
-  the user's request; generated field setters/getters in place of FieldInfo reflection (the remaining reflection
-  allowlist); B24's acceptance switch and B30's Windows half; the Windows/cross-OS halves of B25-B28 (Linux halves
-  measured: docs/csharp-benchmark-plan.md); macOS.
+  the user's request; B24's acceptance switch and B30's Windows half; the Windows/cross-OS halves of B25-B28
+  (Linux halves measured: docs/csharp-benchmark-plan.md; Windows halves under Wine: B25-B27, see the same file);
+  macOS.
+
+### Generated callback, [Rpc], UI and behaviour-node tables (November 18, 2026)
+
+- The runtime no longer reflects over game types on the paths it takes every frame or on every network call.
+  Tallow.Build writes these into the same per-assembly `Tallow.FieldTables.g.cs` module initializer as the field
+  tables:
+  - `ManagedCallbacks`: the lifecycle callbacks each `Script` class declares (EarlyUpdate/Update/LateUpdate,
+    FixedUpdate, LocalEarlyUpdate/Update/LateUpdate, OnGUI, OnWorldStateChanged, sequence/dialogue/tree events,
+    OnClientJoined/Left and the three prediction-state hooks). The engine's per-class callback mask is a table
+    lookup now, not `Type.GetMethod` for nineteen signatures. A class described with no callbacks is as important
+    to know as one with them.
+  - `ManagedUi`: a `.tui` handler's three shapes (no argument, `UIElement`, `string` id) as direct calls through
+    `[UnsafeAccessor]` members, private methods included.
+  - `ManagedRpcs`: every `[Rpc]` method with its target, parameter types and a direct call. An invalid one
+    (generic, returning a value, a parameter type an RPC cannot carry) is registered with the error the reflected
+    lookup would give, and overloading is still refused when the RPC is called; an `[Rpc]` inherited by an
+    override counts, as it did through the attribute's `Inherited`.
+  - Behaviour-tree node settings: `BehaviorNodes` takes a node class's fields in declaration order from the field
+    tables (public, writable, of a setting type), base classes included, instead of listing its own.
+- A type from a package (no game assembly describes it) keeps the reflection fallback, marked
+  `[UnconditionalSuppressMessage]` with its reason. `tools/nativeaot_allowlist.txt` is down to five entries, all
+  paths a NativeAOT game never runs: hot reload and the collectible load context (JIT only) and the editor. The
+  NativeAOT export reports 27 engine warnings, 0 unreviewed (was 46 at 718a5ece).
+- Checks: in-game 442 (new: the generated callback mask and the generated `[Rpc]` table), network 32 (RPCs across
+  a session, every argument kind, private methods), reload 33 (the tables clear and re-register), JIT export 423,
+  NativeAOT export 423, language service 139, sample, showcase and the trusted smoke test.
 
 ### Release symbols, build identifiers and reading a crash (November 18, 2026)
 

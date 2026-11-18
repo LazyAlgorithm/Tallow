@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Globalization;
@@ -250,6 +251,10 @@ internal static partial class NativeComponentTypes
 /// What <see cref="GameObject.TryGetComponent{T}"/> works out once per type: whether it is a script, and for a
 /// built-in handle that is just its GameObject (every generated one), a way to make it without boxing.
 /// </summary>
+/// <remarks>T is an engine handle (or a game script) defined in Tallow.API, which the export ships whole: the
+/// field read below only tells whether the handle is its GameObject, and no member of it is trimmed.</remarks>
+[UnconditionalSuppressMessage("AOT", "IL2090", Justification =
+    "T is an engine handle or script from Tallow.API, which ships whole; the check reads only its one GameObject field.")]
 internal static class ComponentLookup<T> where T : IComponent
 {
     public static readonly bool IsScript = typeof(Script).IsAssignableFrom(typeof(T));
