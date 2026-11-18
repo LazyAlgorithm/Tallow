@@ -57,6 +57,8 @@ class Application
 	int64 mFrameLimit = -1;
 	/// --csharp-field-test: the frame on which CSharpRuntime.RunFieldTest reads a running script's fields.
 	int64 mCSharpFieldTestFrame = -1;
+	/// --csharp-field-dump FILE: CSharpRuntime.DumpFields writes every running script's fields there on frame 100.
+	String mCSharpFieldDump = new .() ~ delete _;
 	/// --csharp-reload-test DLL (tools/test_csharp_reload.py): a second build of the game hot reloaded on frame 120.
 	String mCSharpReloadTest = new .() ~ delete _;
 	/// --csharp-reload-after S: it reloads once S seconds of real time have passed instead of on frame 120
@@ -188,6 +190,7 @@ class Application
 		if (HasArg("--csharp-field-test"))
 			mCSharpFieldTestFrame = 100;
 		GetArg("--csharp-reload-test", mCSharpReloadTest);
+		GetArg("--csharp-field-dump", mCSharpFieldDump);
 		let reloadAfter = scope String();
 		if (GetArg("--csharp-reload-after", reloadAfter) && float.Parse(reloadAfter) case .Ok(let seconds))
 			mCSharpReloadAfter = seconds;
@@ -430,6 +433,8 @@ class Application
 
 		if (mCSharpFieldTestFrame > 0 && Time.FrameCount == mCSharpFieldTestFrame)
 			CSharpRuntime.RunFieldTest(Scene.Active);
+		if (!mCSharpFieldDump.IsEmpty && Time.FrameCount == 100)
+			CSharpRuntime.DumpFields(Scene.Active, mCSharpFieldDump);
 		if (!mCSharpReloadTest.IsEmpty && (mCSharpReloadAfter < 0 ? Time.FrameCount == 120 : Time.RealTime >= mCSharpReloadAfter))
 		{
 			mCSharpReloadAfter = float.MaxValue;

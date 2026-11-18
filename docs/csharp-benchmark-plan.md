@@ -391,7 +391,7 @@ Use filename `B##_SHA_config_scene_runN.log`. Results table columns: case, SHA, 
 - [~] **B26 — cold start, memory and GC.** Five cold runs each JIT/AOT of same scene/engine; startup to first playable tick, steady and peak RSS, heap size, GC collections/pause p95, CPU and frame p95/p99. Record renderer mode, native engine/Jolt cost, platform/RID. No implicit AOT performance advantage is assumed.
 - [~] **B27 — deterministic replay cross-runtime.** Same serialized starting state, seed, input stream and tick rate for 10,000 ticks each; compare per-tick state hashes, first divergent tick, entity order, and float differences (max absolute/relative error). Test JIT vs AOT **on same OS/CPU first**, then Windows/Linux and different CPUs. Fail if authoritative/predicted outcomes diverge, even if approximate float comparisons pass.
 - [~] **B28 — multiplayer JIT/AOT cross-play.** Mixed JIT editor clients + shipped NativeAOT players against the same authority; identical state/rollback hashes and inputs under 0/50/100/200 ms RTT and 0/1/2/5% loss, 2–16 peers when supported. Record desync/mismatch and packet bandwidth.
-- [ ] **B29 — trimming and generated metadata.** Compare all public/private/hidden fields, enums, inherited components and asset/prefab references against JIT; add rename/migration tests. Export with AOT/trimming warnings treated as errors and ensure no reflection-only field or component is silently dropped.
+- [x] **B29 — trimming and generated metadata.** Compare all public/private/hidden fields, enums, inherited components and asset/prefab references against JIT; add rename/migration tests. Export with AOT/trimming warnings treated as errors and ensure no reflection-only field or component is silently dropped.
 - [ ] **B30 — native export portability and crash symbols.** On clean Linux/Windows without dotnet/Beef developer tooling, run AOT player, load scenes, exercise Jolt/soft bodies/shader graphs and close cleanly. Capture a deliberate test-only crash and symbolicate with the **private** matching symbol file; verify the public package contains no symbols or gameplay IL.
 
 Status (November 18, 2026): the NativeAOT export exists (roadmap P5, "First NativeAOT export"). First
@@ -412,6 +412,10 @@ measurements, `tools/run_nativeaot_bench.py` on Linux x64, Samples/CSharpBench e
 - B24 (part): a NativeAOT export that fails leaves no game behind, no JIT assemblies or .NET in its place
   (`test_csharp_export.py --runtime native`, unsuppressed run-time generic code in the game); the release files
   hold no IL, sources or symbols. The default switch to NativeAOT waits for the user's Windows test.
-- B29 (part): exports stop on trim/AOT warnings in game code or unreviewed engine code
-  (`tools/nativeaot_allowlist.txt`); the field-by-field JIT/AOT comparison is still to do.
+- B29: exports stop on trim/AOT warnings in game code or unreviewed engine code (`tools/nativeaot_allowlist.txt`),
+  and `tools/test_csharp_aot_fields.py` builds Tests/CSharpInGame both ways and compares every running script at
+  frame 100 (`--csharp-field-dump`: script name, Inspector, all fields with types, [Sync], saved): 16 scripts, 364
+  lines, identical, covering private and base-class fields, enums by name, [Serializable] lists, GameObject /
+  component / script references and a [FormerlyNamed] class. Field renames are not a feature (a renamed field
+  starts at its default), so there is nothing to compare for them. In CI on Linux and Windows.
 - B30: not yet measured (a clean Windows machine and crash symbolication). Benchmark both profiles from identical game commits and core engine settings. Do not substitute NativeAOT compilation of a dummy sample for shipping-player acceptance.

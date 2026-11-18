@@ -123,6 +123,52 @@ static class CSharpRuntime
 		return true;
 	}
 
+	/// --csharp-field-dump FILE (tools/test_csharp_aot_fields.py, benchmark B29): every running C# script of the scene
+	/// in object order, each as its script name, Inspector fields, all fields with types, [Sync] fields and saved
+	/// fields, written to FILE. A JIT and a NativeAOT build of the same game must write the same file.
+	public static void DumpFields(Scene scene, StringView path)
+	{
+		let text = scope String();
+		int scripts = 0;
+		if (scene != null)
+		{
+			for (int i = 0; i < scene.Objects.Count; i++)
+			{
+				let gameObject = scene.Objects[i];
+				int index = 0;
+				for (let component in gameObject.Components)
+				{
+					if (let behaviour = component as CSharpBehaviour)
+					{
+						text.AppendF("== {} {} #{}\n", i, gameObject.Name, index++);
+						if (!behaviour.IsLoaded)
+						{
+							text.Append("(not loaded)\n");
+							continue;
+						}
+						scripts++;
+						int32[5] modes = .(3, 0, 1, 2, 4);
+						StringView[5] titles = .("script", "inspector", "all", "sync", "saved");
+						for (int m < 5)
+						{
+							let mode = modes[m];
+							let title = titles[m];
+							let fields = scope String();
+							text.AppendF("-- {}{}\n", title, ReadFields(behaviour.ManagedInstance, mode, fields) ? "" : " (failed)");
+							text.Append(fields);
+							if (!fields.IsEmpty && !fields.EndsWith('\n'))
+								text.Append('\n');
+						}
+					}
+				}
+			}
+		}
+		if (File.WriteAllText(path, text) case .Err)
+			Log.Error(scope $"FIELDDUMP could not write {path}");
+		else
+			Log.Info(scope $"FIELDDUMP {scripts} scripts written to {path}");
+	}
+
 	/// --csharp-field-test (tools/test_csharp_ingame.py): reads Tests/CSharpInGame's running ApiChecks script from
 	/// the native side, as the editor's Inspector does during Play, and logs INGAME PASS/FAIL lines.
 	public static void RunFieldTest(Scene scene)

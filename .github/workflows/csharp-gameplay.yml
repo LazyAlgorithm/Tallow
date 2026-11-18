@@ -23,6 +23,7 @@ on:
       - 'tools/test_csharp_reload.py'
       - 'tools/test_csharp_network_reload.py'
       - 'tools/test_csharp_export.py'
+      - 'tools/test_csharp_aot_fields.py'
       - 'tools/csharp_native.py'
       - 'tools/dotnet_sdk.py'
       - 'tools/nativeaot_allowlist.txt'
@@ -421,6 +422,9 @@ jobs:
       - name: Build the same game as NativeAOT (one native library, no .NET shipped) and run it on its own
         timeout-minutes: 30
         run: BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild" python3 tools/test_csharp_export.py --runtime native
+      - name: A NativeAOT build keeps every C# field a JIT build has (B29)
+        timeout-minutes: 40
+        run: BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild" python3 tools/test_csharp_aot_fields.py
 
   native-editor-windows:
     name: Compile native Beef editor and run C# in it (Windows)
@@ -520,3 +524,8 @@ jobs:
         run: |
           export BEEFBUILD="$(cygpath -w "$PWD/beef-win/bin/BeefBuild.exe")"
           cd tallow && python tools/test_csharp_export.py --runtime native
+      - name: A NativeAOT build keeps every C# field a JIT build has (B29, Windows)
+        timeout-minutes: 60
+        run: |
+          export BEEFBUILD="$(cygpath -w "$PWD/beef-win/bin/BeefBuild.exe")"
+          cd tallow && python tools/test_csharp_aot_fields.py
