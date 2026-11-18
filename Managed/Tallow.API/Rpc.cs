@@ -49,13 +49,15 @@ internal static class RpcMethods
     private static Entry? Resolve(Type type, string name)
     {
         // The build's table of the class's [Rpc] methods (Tallow.Build): no reflection over game types. A class
-        // from a package has none and is read the old way.
-        bool described = false;
+        // from a package has none and is read the old way, base classes included.
         for (Type? owner = type; owner != null && owner != typeof(Script); owner = owner.BaseType)
         {
             if (!ManagedRpcs.IsRegistered(owner))
+            {
+                if (ReflectedResolve(type, owner, name) is { } reflected)
+                    return reflected;
                 continue;
-            described = true;
+            }
             if (ManagedRpcs.Find(owner, name) is not { } found)
                 continue;
             if (found.Length > 1)
@@ -65,36 +67,32 @@ internal static class RpcMethods
                 throw new InvalidOperationException(rpc.Error);
             return new Entry(name, rpc.Target, rpc.Parameters, rpc.Invoke!);
         }
-        return described ? null : ReflectedResolve(type, name);
+        return null;
     }
 
     [UnconditionalSuppressMessage("AOT", "IL2070", Justification =
-        "Only a script type from a package (no game assembly described it) reaches this; package assemblies ship whole.")]
-    private static Entry? ReflectedResolve(Type type, string name)
+        "Only a class from a package (no game assembly described it) reaches this; package assemblies ship whole.")]
+    private static Entry? ReflectedResolve(Type type, Type owner, string name)
     {
-        for (Type? owner = type; owner != null && owner != typeof(Script); owner = owner.BaseType)
-        {
-            MethodInfo[] candidates = owner.GetMethods(BindingFlags.Instance | BindingFlags.Public |
-                    BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
-                .Where(method => method.Name == name && method.IsDefined(typeof(RpcAttribute), inherit: true))
-                .ToArray();
-            if (candidates.Length == 0)
-                continue;
-            if (candidates.Length > 1)
-                throw new InvalidOperationException($"{type.Name}.{name}: an [Rpc] method cannot be overloaded.");
-            MethodInfo found = candidates[0];
-            if (found.IsGenericMethodDefinition || found.ReturnType != typeof(void))
-                throw new InvalidOperationException($"{type.Name}.{name}: an [Rpc] method returns void and is not generic.");
-            Type[] parameters = found.GetParameters().Select(parameter => parameter.ParameterType).ToArray();
-            foreach (Type parameter in parameters)
-                if (!Supported(parameter))
-                    throw new InvalidOperationException(
-                        $"{type.Name}.{name}: [Rpc] parameters cannot be {parameter.Name}. Use int, float, bool, string, enums, vectors or GameObject.");
-            return new Entry(name, found.GetCustomAttribute<RpcAttribute>(inherit: true)!.Target, parameters,
-                (script, arguments) => found.Invoke(script, BindingFlags.DoNotWrapExceptions, null, arguments,
-                    CultureInfo.InvariantCulture));
-        }
-        return null;
+        MethodInfo[] candidates = owner.GetMethods(BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+            .Where(method => method.Name == name && method.IsDefined(typeof(RpcAttribute), inherit: true))
+            .ToArray();
+        if (candidates.Length == 0)
+            return null;
+        if (candidates.Length > 1)
+            throw new InvalidOperationException($"{type.Name}.{name}: an [Rpc] method cannot be overloaded.");
+        MethodInfo found = candidates[0];
+        if (found.IsGenericMethodDefinition || found.ReturnType != typeof(void))
+            throw new InvalidOperationException($"{type.Name}.{name}: an [Rpc] method returns void and is not generic.");
+        Type[] parameters = found.GetParameters().Select(parameter => parameter.ParameterType).ToArray();
+        foreach (Type parameter in parameters)
+            if (!Supported(parameter))
+                throw new InvalidOperationException(
+                    $"{type.Name}.{name}: [Rpc] parameters cannot be {parameter.Name}. Use int, float, bool, string, enums, vectors or GameObject.");
+        return new Entry(name, found.GetCustomAttribute<RpcAttribute>(inherit: true)!.Target, parameters,
+            (script, arguments) => found.Invoke(script, BindingFlags.DoNotWrapExceptions, null, arguments,
+                CultureInfo.InvariantCulture));
     }
 
     private static bool Supported(Type type) =>

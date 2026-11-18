@@ -374,13 +374,16 @@ public static unsafe class NativeEntrypoints
             // decides success (2 is "called, and it said false").
             bool callOnly = id == "\u0001";
             // The build's table of the class's UI handlers (Tallow.Build): no reflection over game types. A class from
-            // a package has none and is read the old way.
-            bool described = false;
+            // a package has none and is read the old way, base classes included.
             for (Type? owner = script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
             {
                 if (!ManagedUi.IsRegistered(owner))
+                {
+                    int reflected = ReflectedUiInvoke(script, owner, name, id, callOnly);
+                    if (reflected != 0)
+                        return reflected;
                     continue;
-                described = true;
+                }
                 if (ManagedUi.Find(owner, name) is not { } handler)
                     continue;
                 if (handler.NoArgument is { } noArgument)
@@ -398,7 +401,7 @@ public static unsafe class NativeEntrypoints
                     return 1;
                 }
             }
-            return described ? 0 : ReflectedUiInvoke(script, name, id, callOnly);
+            return 0;
         }
         catch (TargetInvocationException exception) when (exception.InnerException != null)
         {
@@ -411,32 +414,29 @@ public static unsafe class NativeEntrypoints
     }
 
     [UnconditionalSuppressMessage("AOT", "IL2075", Justification =
-        "Only a script type from a package (no game assembly described it) reaches this; package assemblies ship whole.")]
-    private static int ReflectedUiInvoke(Script script, string name, string id, bool callOnly)
+        "Only a class from a package (no game assembly described it) reaches this; package assemblies ship whole.")]
+    private static int ReflectedUiInvoke(Script script, Type owner, string name, string id, bool callOnly)
     {
-        for (Type? owner = script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
+        foreach (MethodInfo candidate in owner.GetMethods(BindingFlags.Instance | BindingFlags.Public |
+            BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
         {
-            foreach (MethodInfo candidate in owner.GetMethods(BindingFlags.Instance | BindingFlags.Public |
-                BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+            if (candidate.Name != name || candidate.IsGenericMethodDefinition)
+                continue;
+            ParameterInfo[] parameters = candidate.GetParameters();
+            if (parameters.Length == 0)
             {
-                if (candidate.Name != name || candidate.IsGenericMethodDefinition)
-                    continue;
-                ParameterInfo[] parameters = candidate.GetParameters();
-                if (parameters.Length == 0)
-                {
-                    object? result = candidate.Invoke(script, null);
-                    return result is false ? 2 : 1;
-                }
-                else if (callOnly)
-                    continue;
-                else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(UIElement))
-                    candidate.Invoke(script, [new UIElement(script.GameObject, id)]);
-                else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(string))
-                    candidate.Invoke(script, [id]);
-                else
-                    continue;
-                return 1;
+                object? result = candidate.Invoke(script, null);
+                return result is false ? 2 : 1;
             }
+            else if (callOnly)
+                continue;
+            else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(UIElement))
+                candidate.Invoke(script, [new UIElement(script.GameObject, id)]);
+            else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(string))
+                candidate.Invoke(script, [id]);
+            else
+                continue;
+            return 1;
         }
         return 0;
     }

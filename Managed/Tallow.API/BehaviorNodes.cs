@@ -150,11 +150,28 @@ public static class BehaviorNodes
     {
         var settings = new List<ManagedField>();
         for (Type? at = type; at != null && at != typeof(BehaviorNode); at = at.BaseType)
-            foreach (ManagedField field in ManagedFields.Fields(at) ?? [])
-                if (field.IsPublic && field.Set is not null && SettingType(field.FieldType) != null)
-                    settings.Add(field);
+        {
+            if (ManagedFields.Fields(at) is { } described)
+            {
+                foreach (ManagedField field in described)
+                    if (field.IsPublic && field.Set is not null && SettingType(field.FieldType) != null)
+                        settings.Add(field);
+                continue;
+            }
+            // A class from a package (no game assembly described it): its own fields, the old way.
+            settings.AddRange(ReflectedSettings(at));
+        }
         return [.. settings];
     }
+
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL2070", Justification =
+        "Only a class from a package (no game assembly described it) reaches this; package assemblies ship whole.")]
+    private static IEnumerable<ManagedField> ReflectedSettings(Type type) =>
+        type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Where(field => !field.IsInitOnly && SettingType(field.FieldType) != null)
+            .Select(field => new ManagedField(field.Name, field.FieldType, field.GetValue, field.SetValue,
+                isPublic: true, showInInspector: false, hideInInspector: false, saved: false, sync: false,
+                notSerialized: false, compilerGenerated: false));
 
     private static string? SettingType(Type type) =>
         type == typeof(float) || type == typeof(int) || type == typeof(double) ? "Number" :
