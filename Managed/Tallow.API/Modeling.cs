@@ -47,6 +47,12 @@ public sealed class EditMesh : IDisposable
 
     private EditMesh(int id) => this.id = id;
 
+    /// <summary>A mesh the native side already holds (Tallow.Editor's EditorModel hands out objects' models so).</summary>
+    internal static EditMesh FromHandle(int handle) => new(handle);
+
+    /// <summary>The native handle the mesh is kept under.</summary>
+    internal int Handle => id;
+
     /// <summary>An empty mesh: add vertices and faces.</summary>
     public EditMesh() : this(CSharpModeling.Create()) { }
 

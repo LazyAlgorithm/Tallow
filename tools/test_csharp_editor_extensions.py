@@ -47,6 +47,11 @@ def main() -> int:
                 print("PASS " + part)
         else:
             failures.append(result[0] if result else "no result: " + output[-3000:])
+        # A Scene view overlay draws with Tallow.API's own gizmo calls: an unbound API would be reported there.
+        if "ProbeOverlay.OnSceneViewGUI" in output:
+            failures.append("the Scene view overlay's gizmo drawing failed: " + output[output.index("ProbeOverlay.OnSceneViewGUI") - 120:][:300])
+        else:
+            print("PASS the Scene view overlay's gizmos draw")
         # A failing editor script is reported (once), and the editor carries on.
         broken = output.count("The broken window fails on purpose.")
         if broken < 1:

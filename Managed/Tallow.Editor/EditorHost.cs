@@ -66,6 +66,9 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<float*, void> SceneViewCursor;
         public delegate* unmanaged[Cdecl]<float, float, float*, int> SceneViewRay;
         public delegate* unmanaged[Cdecl]<float, float, uint> SceneViewPick;
+        public delegate* unmanaged[Cdecl]<uint, int> ModelRead;
+        public delegate* unmanaged[Cdecl]<uint, int, int> ModelWrite;
+        public delegate* unmanaged[Cdecl]<nint, byte*, nint> ResolveApi;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -84,7 +87,7 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<int> DrawSceneOverlays;
     }
 
-    internal const int Version = 4;
+    internal const int Version = 6;
     internal const int LayoutSameLine = 0, LayoutSeparator = 1, LayoutSpacing = 2, LayoutIndent = 3, LayoutUnindent = 4,
         LayoutBeginDisabled = 5, LayoutEndDisabled = 6, LayoutPushId = 7, LayoutPopId = 8;
     internal const int QueryPlaying = 0, QueryProjectPath = 1, QueryTargetScript = 2, QueryTargetObject = 3,
@@ -102,6 +105,9 @@ internal static unsafe class EditorHost
             return 0;
         sHost = *host;
         sBound = true;
+        // Editor scripts can call Tallow.API's scene-free calls (drawing, the modelling API): the same resolver a
+        // game binds with its scene, without the scene callbacks (the scene itself is EditorScene's).
+        GeneratedNativeApi.Bind(0, (nint)sHost.ResolveApi);
         *(ManagedTable*)managedTable = new ManagedTable
         {
             Load = &Load,
@@ -547,6 +553,18 @@ internal static unsafe class EditorHost
     {
         RequireScene();
         return sHost.SceneViewPick(u, v);
+    }
+
+    internal static int ModelRead(uint id)
+    {
+        RequireScene();
+        return sHost.ModelRead(id);
+    }
+
+    internal static bool ModelWrite(uint id, int mesh)
+    {
+        RequireScene();
+        return sHost.ModelWrite(id, mesh) > 0;
     }
 
     private static void RequireTarget()

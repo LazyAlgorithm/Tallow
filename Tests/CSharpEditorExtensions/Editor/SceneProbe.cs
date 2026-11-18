@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using System.Text;
+using Tallow;
 using Tallow.Editor;
 
 namespace InGame.Editor;
@@ -71,6 +72,23 @@ public static class SceneProbe
         EditorComponent addedLight = kept.AddComponent("Tallow.Light")!.Value;
         addedLight.SetFloat("intensity", 2.5f);
         Check("kept", kept.Exists && kept.Name == "Probe Kept" && MathF.Abs(kept.Position.X - 4) < 0.001f);
+
+        // The modelling API on the edited scene: a shape written, read back, edited and written again.
+        using (EditMesh box = EditMesh.Shape(MeshShape.Box, new Vector3(1, 1, 1)))
+        {
+            bool written = EditorModel.Write(kept, box);
+            EditMesh? read = EditorModel.Read(kept);
+            Check("model written and read",
+                written && read != null && read.VertexCount == box.VertexCount && read.FaceCount == box.FaceCount);
+            using (read)
+            {
+                if (read != null)
+                {
+                    int[] extruded = read.ExtrudeFaces(read.FacesFacing(Vector3.UnitY), 1);
+                    Check("model edited and written", extruded.Length > 0 && EditorModel.Write(kept, read));
+                }
+            }
+        }
         // The Inspector draws the selected object: the kept cube's Light has a C# Inspector of its own.
         EditorScene.Selection = kept;
 

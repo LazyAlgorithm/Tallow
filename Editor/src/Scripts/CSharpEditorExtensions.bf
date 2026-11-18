@@ -67,6 +67,9 @@ extension EditorApp
 		public function void(float*) sceneViewCursor;
 		public function int32(float, float, float*) sceneViewRay;
 		public function uint32(float, float) sceneViewPick;
+		public function int32(uint32) modelRead;
+		public function int32(uint32, int32) modelWrite;
+		public function void*(void*, char8*) resolveApi;
 	}
 
 	/// What the editor calls in them (Tallow.Editor's EditorHost.ManagedTable).
@@ -208,7 +211,7 @@ extension EditorApp
 			return false;
 		EditorHostTable host = .()
 		{
-			version = 4,
+			version = 6,
 			size = sizeof(EditorHostTable),
 			log = => HostLog,
 			text = => HostText,
@@ -258,7 +261,10 @@ extension EditorApp
 			sceneViewState = => HostSceneViewState,
 			sceneViewCursor = => HostSceneViewCursor,
 			sceneViewRay = => HostSceneViewRay,
-			sceneViewPick = => HostSceneViewPick
+			sceneViewPick = => HostSceneViewPick,
+			modelRead = => HostModelRead,
+			modelWrite = => HostModelWrite,
+			resolveApi = => CSharpRuntime.ResolveApiEntry
 		};
 		if (tn_csharp_editor_configure(editorApi.CStr(), &host, &sExtensions) == 0)
 		{
@@ -1286,6 +1292,25 @@ extension EditorApp
 		values[3] = direction.x;
 		values[4] = direction.y;
 		values[5] = direction.z;
+		return 1;
+	}
+
+	/// An object's model as a C# EditMesh handle, 0 when it has none.
+	static int32 HostModelRead(uint32 id)
+	{
+		let gameObject = SceneObject(id);
+		return gameObject != null ? CSharpModeling.ReadFromObject(gameObject) : 0;
+	}
+
+	/// Puts a C# EditMesh (its handle) on an object as its Model Mesh; adds a Mesh Renderer when there is none.
+	static int32 HostModelWrite(uint32 id, int32 mesh)
+	{
+		if (!EditingScene)
+			return 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null || !CSharpModeling.ApplyToObject(mesh, gameObject))
+			return 0;
+		sExtensionsApp.MarkDirty();
 		return 1;
 	}
 

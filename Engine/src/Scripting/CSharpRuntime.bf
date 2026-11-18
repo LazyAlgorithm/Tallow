@@ -1122,6 +1122,10 @@ static class CSharpRuntime
 
 	/// Generated wrappers are exported and reflected by Beef. Return their
 	/// function pointers once per managed wrapper, never reflect on every call.
+	/// The C# API's symbol resolver, for the editor's scripts (the one a game gets when its scene binds): it finds
+	/// the CSharpApi_ exports, so editor scripts can call Tallow.API's scene-free calls (drawing, the modelling API).
+	public static void* ResolveApiEntry(void* context, char8* symbol) => ResolveApi(context, symbol);
+
 	static void* ResolveApi(void* context, char8* symbol)
 	{
 		if (symbol == null)

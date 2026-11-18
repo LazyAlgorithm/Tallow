@@ -210,6 +210,13 @@ extension EditorApp
 					"the built-in component's C# Inspector drew for it");
 				ExtensionsCheck(prefs.Contains("\"lightInspectorIntensity\": \"2.5\""),
 					"the C# Inspector read the component's own field");
+				bool modelOk = false;
+				if (kept != null)
+				{
+					let model = kept.GetComponent<ModelMesh>();
+					modelOk = model.IsValid && model.Edit.positions.Count > 0 && model.Edit.faces.Count > 0;
+				}
+				ExtensionsCheck(modelOk, "the modelling API's mesh reached the scene");
 				ExtensionsCheck(prefs.Contains("\"overlayDrawn\": true"), "a Scene view overlay ran");
 				ExtensionsCheck(prefs.Contains("\"overlayVisible\": true"), "the overlay saw the Scene view open");
 				ExtensionsCheck(prefs.Contains("\"overlayRay\": true"), "the overlay got a ray into the scene");

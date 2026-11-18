@@ -291,6 +291,31 @@ static class CSharpModeling
 		return true;
 	}
 
+	/// An object's Model Mesh as a new mesh (for editor scripts, Tallow.Editor's EditorModel): its handle, 0 when it
+	/// has none.
+	public static int32 ReadFromObject(GameObject obj)
+	{
+		let model = obj.GetComponent<ModelMesh>();
+		return model.IsValid ? Keep(model.Edit.Clone()) : 0;
+	}
+
+	/// Puts a mesh on an object (for editor scripts): its Model Mesh, and a Mesh Renderer when it has none.
+	public static bool ApplyToObject(int32 id, GameObject obj)
+	{
+		let mesh = Find(id);
+		if (mesh == null)
+			return false;
+		if (!obj.GetComponent<MeshRenderer>().IsValid)
+			obj.AddComponent<MeshRenderer>();
+		if (!obj.GetComponent<ModelMesh>().IsValid)
+			obj.AddComponent<ModelMesh>();
+		let model = obj.GetComponent<ModelMesh>();
+		if (!model.IsValid)
+			return false;
+		model.Set(mesh);
+		return true;
+	}
+
 	/// An object's Model Mesh as a new mesh: its handle, 0 when it has none.
 	[CSharpExpose]
 	public static int32 ReadFrom(uint64 session, uint64 entity)
