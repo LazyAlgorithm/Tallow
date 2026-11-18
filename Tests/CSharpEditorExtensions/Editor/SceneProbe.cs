@@ -71,6 +71,8 @@ public static class SceneProbe
         EditorComponent addedLight = kept.AddComponent("Tallow.Light")!.Value;
         addedLight.SetFloat("intensity", 2.5f);
         Check("kept", kept.Exists && kept.Name == "Probe Kept" && MathF.Abs(kept.Position.X - 4) < 0.001f);
+        // The Inspector draws the selected object: the kept cube's Light has a C# Inspector of its own.
+        EditorScene.Selection = kept;
 
         ProjectPrefs.SetBool("sceneProbeOk", ok);
         ProjectPrefs.SetString("sceneProbe", report.ToString());

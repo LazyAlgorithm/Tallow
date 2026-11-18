@@ -60,6 +60,8 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<uint, byte*, int, byte*, int, byte**, int*, int> FieldRead;
         public delegate* unmanaged[Cdecl]<uint, byte*, int, byte*, int, byte*, int, int> FieldWrite;
         public delegate* unmanaged[Cdecl]<void> MarkDirty;
+        public delegate* unmanaged[Cdecl]<byte*, int, int> ComponentField;
+        public delegate* unmanaged[Cdecl]<int> ComponentDefault;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -73,9 +75,11 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<int, int, int> Window;
         public delegate* unmanaged[Cdecl]<int, int> RunMenu;
         public delegate* unmanaged[Cdecl]<int, int> DrawPage;
+        public delegate* unmanaged[Cdecl]<byte*, int, int> FindComponentInspector;
+        public delegate* unmanaged[Cdecl]<int, uint, byte*, int, int> DrawComponentInspector;
     }
 
-    internal const int Version = 2;
+    internal const int Version = 3;
     internal const int LayoutSameLine = 0, LayoutSeparator = 1, LayoutSpacing = 2, LayoutIndent = 3, LayoutUnindent = 4,
         LayoutBeginDisabled = 5, LayoutEndDisabled = 6, LayoutPushId = 7, LayoutPopId = 8;
     internal const int QueryPlaying = 0, QueryProjectPath = 1, QueryTargetScript = 2, QueryTargetObject = 3,
@@ -102,7 +106,9 @@ internal static unsafe class EditorHost
             DrawInspector = &DrawInspector,
             Window = &Window,
             RunMenu = &RunMenu,
-            DrawPage = &DrawPage
+            DrawPage = &DrawPage,
+            FindComponentInspector = &FindComponentInspector,
+            DrawComponentInspector = &DrawComponentInspector
         };
         return 1;
     }
@@ -535,6 +541,18 @@ internal static unsafe class EditorHost
         return changed;
     }
 
+    /// <summary>Draws one field (null: all of them) of the component a C# component Inspector is drawing, with the
+    /// editor's own widget. Only while one draws.</summary>
+    internal static bool ComponentField(string? name)
+    {
+        Require();
+        if (name == null)
+            return Changed(sHost.ComponentDefault() > 0);
+        using var text = new Utf8(name, stackalloc byte[256]);
+        fixed (byte* bytes = text.Bytes)
+            return Changed(sHost.ComponentField(bytes, text.Bytes.Length) > 0);
+    }
+
     internal static string? TargetRead(string name)
     {
         RequireTarget();
@@ -599,12 +617,16 @@ internal static unsafe class EditorHost
     private sealed record WindowType(Type Window, string MenuPath, string Title);
     private sealed record MenuCommand(MethodInfo Method, string Path);
     private sealed record PageType(Type Type, string Title);
+    private sealed record ComponentInspectorType(Type Type, string ComponentName);
 
     private static ExtensionContext? sContext;
     private static readonly List<InspectorType> sInspectors = [];
     private static readonly List<WindowType> sWindows = [];
     private static readonly List<MenuCommand> sMenus = [];
     private static readonly List<PageType> sPages = [];
+    private static readonly List<ComponentInspectorType> sComponentInspectors = [];
+    private static readonly Dictionary<string, int> sComponentInspectorFor = new(StringComparer.Ordinal);
+    private static readonly Dictionary<(int, uint, string), ComponentInspector> sComponentInspectorObjects = [];
     private static readonly Dictionary<int, PreferencesPage> sPageObjects = [];
     private static readonly Dictionary<(int, long), Inspector> sInspectorObjects = [];
     private static readonly Dictionary<int, EditorWindow> sWindowObjects = [];
@@ -657,6 +679,15 @@ internal static unsafe class EditorHost
                 {
                     if (typeof(Inspector).IsAssignableFrom(type) && type.GetCustomAttribute<CustomInspectorAttribute>() is { } inspector)
                         sInspectors.Add(new InspectorType(type, inspector.Script));
+                    else if (typeof(ComponentInspector).IsAssignableFrom(type) &&
+                        type.GetCustomAttribute<CustomInspectorAttribute>() is { } component)
+                    {
+                        if (component.Script.GetCustomAttribute<NativeComponentAttribute>() is { } handle)
+                            sComponentInspectors.Add(new ComponentInspectorType(type, handle.TypeName));
+                        else
+                            Log(1, $"[CustomInspector(typeof({component.Script.Name}))] {type.FullName}: name a built-in " +
+                                "component's handle type (Tallow.Light, Tallow.MeshRenderer, ...); a C# script's Inspector derives from Inspector.");
+                    }
                     if (type.GetCustomAttribute<PreferencesPageAttribute>() is { } page && page.Title.Length > 0)
                         sPages.Add(new PageType(type, page.Title));
                     if (typeof(EditorWindow).IsAssignableFrom(type) && type.GetCustomAttribute<EditorWindowAttribute>() is { } window)
@@ -680,7 +711,9 @@ internal static unsafe class EditorHost
                 }
             }
             sPages.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase));
-            return sInspectors.Count + sWindows.Count + sMenus.Count + sPages.Count;
+            for (int i = 0; i < sComponentInspectors.Count; i++)
+                sComponentInspectorFor[sComponentInspectors[i].ComponentName] = i;
+            return sInspectors.Count + sWindows.Count + sMenus.Count + sPages.Count + sComponentInspectors.Count;
         }
         catch (Exception exception)
         {
@@ -706,6 +739,9 @@ internal static unsafe class EditorHost
         sInspectorObjects.Clear();
         sInspectorFor.Clear();
         sInspectors.Clear();
+        sComponentInspectorObjects.Clear();
+        sComponentInspectorFor.Clear();
+        sComponentInspectors.Clear();
         sWindows.Clear();
         sMenus.Clear();
         sPages.Clear();
@@ -917,6 +953,58 @@ internal static unsafe class EditorHost
             }
             EndDrawing(owner);
             return 1;
+        }
+        catch (Exception exception)
+        {
+            EndDrawing("");
+            return Report(owner, exception);
+        }
+    }
+
+    /// <summary>The Inspector for a built-in component, by its full type name ("Tallow.Light"): its index, -1 for
+    /// none.</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int FindComponentInspector(byte* typeName, int length)
+    {
+        try
+        {
+            if (sComponentInspectorFor.Count == 0 || sContext == null)
+                return -1;
+            return sComponentInspectorFor.TryGetValue(FromUtf8(typeName, length), out int found) ? found : -1;
+        }
+        catch (Exception exception)
+        {
+            return Report("Finding a C# component Inspector", exception);
+        }
+    }
+
+    /// <summary>Draws component Inspector index for the component of an object (each component on each object keeps
+    /// its own Inspector object): 1 drawn and edited, 0 drawn, -1 it threw.</summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int DrawComponentInspector(int index, uint objectId, byte* typeName, int length)
+    {
+        if (index < 0 || index >= sComponentInspectors.Count)
+            return -1;
+        string type = FromUtf8(typeName, length);
+        string owner = sComponentInspectors[index].Type.FullName + ".OnInspectorGUI";
+        BeginDrawing();
+        try
+        {
+            var key = (index, objectId, type);
+            if (!sComponentInspectorObjects.TryGetValue(key, out ComponentInspector? inspector))
+            {
+                if (sComponentInspectorObjects.Count > 512)
+                    sComponentInspectorObjects.Clear();
+                inspector = (ComponentInspector)Activator.CreateInstance(sComponentInspectors[index].Type, nonPublic: true)!;
+                sComponentInspectorObjects[key] = inspector;
+                inspector.Bind(new EditorComponent(objectId, type));
+                inspector.OnEnable();
+            }
+            inspector.Bind(new EditorComponent(objectId, type));
+            inspector.Edited = false;
+            inspector.OnInspectorGUI();
+            EndDrawing(owner);
+            return inspector.Edited ? 1 : 0;
         }
         catch (Exception exception)
         {

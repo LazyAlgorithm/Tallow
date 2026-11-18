@@ -67,6 +67,56 @@ public abstract class Inspector
     internal void Bind(SerializedScript? target) => mTarget = target;
 }
 
+/// <summary>Draws the Inspector of a built-in component (Light, MeshRenderer, ...) instead of the field list the
+/// Inspector draws by itself. Mark the class with <see cref="CustomInspectorAttribute"/>, naming the component's
+/// handle type (<c>[CustomInspector(typeof(Light))]</c>); the editor uses it wherever it draws that component.</summary>
+/// <example><code>
+/// [CustomInspector(typeof(Light))]
+/// public class LightInspector : ComponentInspector
+/// {
+///     public override void OnInspectorGUI()
+///     {
+///         if (EditorGUI.Button("Daylight"))
+///             Target.SetFloat("intensity", 8);
+///         Field("intensity");
+///     }
+/// }
+/// </code></example>
+/// <remarks><see cref="Target"/> reads and writes the component's fields as the scene file does; <see cref="Field"/>
+/// draws one with the editor's own widget. One Inspector object is made per component shown, so its fields last
+/// while the editor runs.</remarks>
+public abstract class ComponentInspector
+{
+    private EditorComponent mTarget;
+
+    /// <summary>The component being drawn, with its fields and the object it is on.</summary>
+    public EditorComponent Target => mTarget;
+
+    /// <summary>Called once, before the Inspector first draws.</summary>
+    public virtual void OnEnable() { }
+
+    /// <summary>Draws the component's section. The default draws every field as the Inspector would.</summary>
+    public virtual void OnInspectorGUI() => DrawDefaultInspector();
+
+    /// <summary>Draws every field as the Inspector would without a custom Inspector. True when one was edited.</summary>
+    public bool DrawDefaultInspector() => Record(EditorHost.ComponentField(null));
+
+    /// <summary>Draws one field (by its name in the scene file) with the editor's widget and label. True when it was
+    /// edited; false also when there is no such field.</summary>
+    public bool Field(string name) => Record(EditorHost.ComponentField(name));
+
+    /// <summary>Whether the Inspector edited anything this draw (its ON/OFF: a component's OnValidate runs on it).</summary>
+    internal bool Edited;
+
+    private bool Record(bool changed)
+    {
+        Edited |= changed;
+        return changed;
+    }
+
+    internal void Bind(EditorComponent target) => mTarget = target;
+}
+
 /// <summary>A window of the editor, drawn by <see cref="OnGUI"/> every frame it is open, with <see cref="EditorGUI"/>.
 /// Mark the class with <see cref="EditorWindowAttribute"/> to list it in the Tools menu. It can be docked with the
 /// editor's other windows; it is open again next time when it was open when the editor closed.</summary>

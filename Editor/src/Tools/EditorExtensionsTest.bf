@@ -203,6 +203,11 @@ extension EditorApp
 					"the scene has the object the script made, where it put it");
 				ExtensionsCheck(hasLight && Math.Abs(intensity - 2.5f) < 0.001f,
 					scope $"the field the script wrote reached the scene (intensity {intensity})");
+				ExtensionsCheck(prefs.Contains("\"lightInspectorDrawn\": true") &&
+					prefs.Contains("\"lightInspectorTarget\": \"Tallow.Light\""),
+					"the built-in component's C# Inspector drew for it");
+				ExtensionsCheck(prefs.Contains("\"lightInspectorIntensity\": \"2.5\""),
+					"the C# Inspector read the component's own field");
 				Undo();
 				mExtensionsTestStep = 5;
 				mExtensionsTestFrames = 0;

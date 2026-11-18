@@ -414,7 +414,11 @@ extension EditorApp
 		fields.Clear();
 		HandleComponents.GetFields(gameObject, info, fields);
 		bool changed = false;
-		changed |= DrawFieldList(fields, "handlefields");
+		int32 custom = FindExtensionComponentInspector(info.fullName);
+		if (custom >= 0)
+			changed |= DrawManagedComponentSection(gameObject, custom, info.fullName, fields);
+		else
+			changed |= DrawFieldList(fields, "handlefields");
 		if (changed)
 		{
 			MarkDirty();
@@ -651,7 +655,14 @@ extension EditorApp
 		fields.Clear();
 		ComponentRegistry.GetFields(component, fields);
 		bool changed = false;
-		changed |= DrawFieldList(fields, "fields");
+		// A built-in component can bring an Inspector of its own (a C# editor script); a script's is DrawManagedSection.
+		int32 custom = -1;
+		if (!(component is CSharpBehaviour) && info != null)
+			custom = FindExtensionComponentInspector(info.fullName);
+		if (custom >= 0)
+			changed |= DrawManagedComponentSection(gameObject, custom, info.fullName, fields);
+		else
+			changed |= DrawFieldList(fields, "fields");
 		if (let managed = component as CSharpBehaviour)
 			changed |= DrawManagedSection(managed);
 		if (changed)

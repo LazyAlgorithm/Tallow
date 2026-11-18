@@ -61,6 +61,8 @@ extension EditorApp
 		public function int32(uint32, char8*, int32, char8*, int32, char8**, int32*) fieldRead;
 		public function int32(uint32, char8*, int32, char8*, int32, char8*, int32) fieldWrite;
 		public function void() markDirty;
+		public function int32(char8*, int32) componentField;
+		public function int32() componentDefault;
 	}
 
 	/// What the editor calls in them (Tallow.Editor's EditorHost.ManagedTable).
@@ -75,6 +77,8 @@ extension EditorApp
 		public function int32(int32, int32) window;
 		public function int32(int32) runMenu;
 		public function int32(int32) drawPage;
+		public function int32(char8*, int32) findComponentInspector;
+		public function int32(int32, uint32, char8*, int32) drawComponentInspector;
 	}
 
 	class CSharpEditorWindow
@@ -199,7 +203,7 @@ extension EditorApp
 			return false;
 		EditorHostTable host = .()
 		{
-			version = 2,
+			version = 3,
 			size = sizeof(EditorHostTable),
 			log = => HostLog,
 			text = => HostText,
@@ -243,7 +247,9 @@ extension EditorApp
 			fieldList = => HostFieldList,
 			fieldRead = => HostFieldRead,
 			fieldWrite = => HostFieldWrite,
-			markDirty = => HostMarkDirty
+			markDirty = => HostMarkDirty,
+			componentField = => HostComponentField,
+			componentDefault = => HostComponentDefault
 		};
 		if (tn_csharp_editor_configure(editorApi.CStr(), &host, &sExtensions) == 0)
 		{
@@ -288,6 +294,47 @@ extension EditorApp
 			ImGui.TextColored(EditorTheme.Error, "This script's C# Inspector failed (see Console). Its fields:");
 			ImGui.PopTextWrapPos();
 			edited |= DrawManagedFields(component);
+		}
+		return edited;
+	}
+
+	/// The C# Inspector for a built-in component ("Tallow.Light"), -1 for none.
+	int32 FindExtensionComponentInspector(StringView componentType)
+	{
+		if (!mExtensionsLoaded || componentType.IsEmpty)
+			return -1;
+		let name = scope String(componentType);
+		return sExtensions.findComponentInspector(name.CStr(), (int32)name.Length);
+	}
+
+	/// The component a C# Inspector is drawing (only while it draws), and whether it edited anything.
+	static uint32 sInspectorComponentObject;
+	static String sInspectorComponentType = new .() ~ delete _;
+	static bool sInspectorComponentDrawing;
+	static bool sInspectorComponentEdited;
+
+	/// A built-in component's section, drawn by its C# Inspector instead of the field list. True when it edited
+	/// something (the caller marks the scene dirty and runs the component's OnValidate on it).
+	bool DrawManagedComponentSection(GameObject gameObject, int32 inspectorIndex, StringView componentType,
+		List<FieldRef> fields)
+	{
+		sInspectorComponentObject = gameObject.Id;
+		sInspectorComponentType.Set(componentType);
+		sInspectorComponentDrawing = true;
+		sInspectorComponentEdited = false;
+		ImGui.PushID(scope $"csharpcomponent{inspectorIndex}:{gameObject.Id}".CStr());
+		let name = scope String(componentType);
+		let result = sExtensions.drawComponentInspector(inspectorIndex, gameObject.Id, name.CStr(), (int32)name.Length);
+		ImGui.PopID();
+		sInspectorComponentDrawing = false;
+		var edited = sInspectorComponentEdited;
+		if (result < 0)
+		{
+			// Still editable: the plain fields, under what went wrong.
+			ImGui.PushTextWrapPos(0);
+			ImGui.TextColored(EditorTheme.Error, "This component's C# Inspector failed (see Console). Its fields:");
+			ImGui.PopTextWrapPos();
+			edited |= sExtensionsApp.DrawFieldList(fields, "fields");
 		}
 		return edited;
 	}
@@ -1136,10 +1183,53 @@ extension EditorApp
 					return 0;
 				SceneSerializer.ReadValue(field, tokens);
 			}
+			if (sInspectorComponentDrawing && sInspectorComponentObject == id &&
+				sInspectorComponentType == StringView(name, nameLength))
+				sInspectorComponentEdited = true;
 			sExtensionsApp.MarkDirty();
 			return 1;
 		}
 		return 0;
+	}
+
+	/// The fields of the component a C# Inspector is drawing.
+	static bool InspectorComponentFields(List<FieldRef> fields)
+	{
+		let gameObject = SceneObject(sInspectorComponentObject);
+		return gameObject != null && SceneFields(gameObject, sInspectorComponentType, fields);
+	}
+
+	/// One field of it, with the editor's own widget (a C# component Inspector's Field()).
+	static int32 HostComponentField(char8* name, int32 length)
+	{
+		if (!sInspectorComponentDrawing)
+			return -1;
+		let fields = scope List<FieldRef>();
+		if (!InspectorComponentFields(fields))
+			return 0;
+		let wanted = StringView(name, length);
+		let only = scope List<FieldRef>();
+		for (let field in fields)
+			if (field.name == wanted)
+				only.Add(field);
+		if (only.Count == 0)
+			return 0;
+		let changed = sExtensionsApp.DrawFieldList(only, scope $"inspectorcomponent{wanted}");
+		sInspectorComponentEdited |= changed;
+		return changed ? 1 : 0;
+	}
+
+	/// All of them (DrawDefaultInspector()).
+	static int32 HostComponentDefault()
+	{
+		if (!sInspectorComponentDrawing)
+			return -1;
+		let fields = scope List<FieldRef>();
+		if (!InspectorComponentFields(fields))
+			return 0;
+		let changed = sExtensionsApp.DrawFieldList(fields, "inspectorcomponentfields");
+		sInspectorComponentEdited |= changed;
+		return changed ? 1 : 0;
 	}
 
 	static void HostMarkDirty() => sExtensionsApp.MarkDirty();
