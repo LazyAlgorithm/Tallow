@@ -553,9 +553,12 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     build, so the editor, the launcher and a command line building the same project at once take turns instead of
     writing the same generated projects and obj folders together (the second prints that it is waiting, up to five
     minutes). The lock goes with the process if it dies.
-- [~] Game assemblies (and their .pdb symbols) load from in-memory copies, so Windows no
+- [x] Game assemblies (and their .pdb symbols) load from in-memory copies, so Windows no
   longer holds `Tallow.Game.dll` and asmdef DLLs locked after Play and the next compile can
-  replace them. Not yet run on Windows.
+  replace them. Verified on Windows November 18, 2026: CI's native Windows job (Debug Win64 editor build, the
+  Beef leak check on) runs the in-engine, network, hot-reload, Voxel sample and Gallery suites, all passing (run
+  44250231183). Fixed to get there: a crash dialog that hung unattended runs, a graph-catalog leak, `Platform=x64`
+  output folders, leak-check false positives for component text kept in Flecs, and DataAsset backslash paths.
 - [ ] Implement reliable collectible AssemblyLoadContext hot reload, cleanup of managed tasks/timers/events and native handles, Inspector field/state preservation, resource unload and no editor crash; test multiplayer determinism.
   - [x] (November 15, 2026) Hot reload while playing: saving a C# file during Play (reload mode not Manual)
     compiles, then between frames `CSharpRuntime.ReloadGame` loads the new Tallow.Game in a new collectible context
