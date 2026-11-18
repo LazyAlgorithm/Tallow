@@ -1682,8 +1682,11 @@ the zero-allocation check measures past the interpreter's tier-up there. `test_c
     override counts, as it did through the attribute's `Inherited`.
   - Behaviour-tree node settings: `BehaviorNodes` takes a node class's fields in declaration order from the field
     tables (public, writable, of a setting type), base classes included, instead of listing its own.
-- A type from a package (no game assembly describes it) keeps the reflection fallback, marked
-  `[UnconditionalSuppressMessage]` with its reason. `tools/nativeaot_allowlist.txt` is down to five entries, all
+- A type from a package (no game assembly describes it) keeps the reflection fallback for its own members, marked
+  `[UnconditionalSuppressMessage]` with its reason; the lookup then carries on with the rest of the hierarchy, so a
+  game class derived from a package class finds the package class's handlers, RPCs and (for behaviour nodes) its
+  settings fields. A callback mask is generated for the class from its symbols, so it counts the package base's
+  callbacks already. `tools/nativeaot_allowlist.txt` is down to five entries, all
   paths a NativeAOT game never runs: hot reload and the collectible load context (JIT only) and the editor. The
   NativeAOT export reports 27 engine warnings, 0 unreviewed (was 46 at 718a5ece).
 - Checks: in-game 442 (new: the generated callback mask and the generated `[Rpc]` table), network 32 (RPCs across

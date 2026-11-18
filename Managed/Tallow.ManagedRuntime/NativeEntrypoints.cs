@@ -413,6 +413,8 @@ public static unsafe class NativeEntrypoints
         }
     }
 
+    [UnconditionalSuppressMessage("AOT", "IL2070", Justification =
+        "Only a class from a package (no game assembly described it) reaches this; package assemblies ship whole.")]
     [UnconditionalSuppressMessage("AOT", "IL2075", Justification =
         "Only a class from a package (no game assembly described it) reaches this; package assemblies ship whole.")]
     private static int ReflectedUiInvoke(Script script, Type owner, string name, string id, bool callOnly)
