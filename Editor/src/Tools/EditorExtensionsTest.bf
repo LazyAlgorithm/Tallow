@@ -67,7 +67,15 @@ extension EditorApp
 				ExtensionsCheck(mExtensionsLoaded, "the editor scripts loaded after the build");
 				ExtensionsCheck(ExtensionWindowIndex("Test/Probe Window") >= 0 && ExtensionWindowIndex("Test/Broken Window") >= 0,
 					scope $"the windows are in the Tools menu ({mExtensionWindows.Count})");
-				ExtensionsCheck(mExtensionMenus.Count == 1 && mExtensionMenus[0] == "Test/Run Probe", "the menu command is listed");
+				bool hasProbeCommand = false;
+				bool hasSceneCommand = false;
+				for (let command in mExtensionMenus)
+				{
+					hasProbeCommand |= command == "Test/Run Probe";
+					hasSceneCommand |= command == "Test/Scene Probe";
+				}
+				ExtensionsCheck(mExtensionMenus.Count == 2 && hasProbeCommand && hasSceneCommand,
+					scope $"the menu commands are listed ({mExtensionMenus.Count})");
 				ExtensionsCheck(mExtensionPages.Count == 2 && mExtensionPages[0] == "Probe Drawn" && mExtensionPages[1] == "Probe Settings",
 					"the Preferences tabs are listed, by title");
 				ExtensionsCheck(FindExtensionInspector("InGame.ApiChecks") >= 0 && FindExtensionInspector("InGame.FirstPersonCharacter") < 0,
@@ -136,7 +144,7 @@ extension EditorApp
 			if (mExtensionsTestFrames > 3 && ExtensionsBuildIdle)
 			{
 				ExtensionsCheck(mManagedBuildReady, "the project built again");
-				ExtensionsCheck(mExtensionMenus.Count == 2, scope $"the new menu command is listed after the reload ({mExtensionMenus.Count})");
+				ExtensionsCheck(mExtensionMenus.Count == 3, scope $"the new menu command is listed after the reload ({mExtensionMenus.Count})");
 				let probe = ExtensionWindowIndex("Test/Probe Window");
 				ExtensionsCheck(probe >= 0 && mExtensionWindows[probe].open, "an open window is open again after the reload");
 				for (int i < mExtensionMenus.Count)
@@ -155,9 +163,56 @@ extension EditorApp
 				let picture = scope String();
 				if (GetArg("--test-screenshot", picture))
 					Native.tn_gfx_screenshot(picture.CStr());
+				// The editor's scene API, from a Tools command (Tests/CSharpEditorExtensions/Editor/SceneProbe.cs).
+				for (int i < mExtensionMenus.Count)
+					if (mExtensionMenus[i] == "Test/Scene Probe")
+						sExtensions.runMenu((int32)i);
 			}
 			if (mExtensionsTestFrames == 14)
+			{
+				mExtensionsTestStep = 4;
+				mExtensionsTestFrames = 0;
+			}
+		case 4: // what the scene probe made, and undo
+			if (mExtensionsTestFrames == 5)
+			{
+				let prefs = scope String();
+				ExtensionsProjectPrefs(prefs);
+				ExtensionsCheck(prefs.Contains("\"sceneProbeOk\": true"), "the scene API checks passed");
+				if (!prefs.Contains("\"sceneProbeOk\": true"))
+				{
+					let at = prefs.IndexOf("\"sceneProbe\"");
+					if (at >= 0)
+						Log.Error(scope String("Scene probe: ", prefs.Substring(at, Math.Min(1500, prefs.Length - at))));
+				}
+				let kept = mScene.Find("Probe Kept");
+				bool hasLight = false;
+				float intensity = 0;
+				if (kept != null)
+				{
+					if (let handle = HandleComponents.Find("Tallow.Light"))
+					{
+						if (kept.Scene.World.Has(kept.Entity, handle.index))
+						{
+							hasLight = true;
+							intensity = kept.GetComponent<Light>().intensity;
+						}
+					}
+				}
+				ExtensionsCheck(kept != null && Math.Abs(kept.Transform.Position.x - 4) < 0.001f,
+					"the scene has the object the script made, where it put it");
+				ExtensionsCheck(hasLight && Math.Abs(intensity - 2.5f) < 0.001f,
+					scope $"the field the script wrote reached the scene (intensity {intensity})");
+				Undo();
+				mExtensionsTestStep = 5;
+				mExtensionsTestFrames = 0;
+			}
+		case 5:
+			if (mExtensionsTestFrames == 3)
+			{
+				ExtensionsCheck(mScene.Find("Probe Kept") == null, "undo took the script's changes back");
 				FinishEditorExtensionsTest();
+			}
 		}
 	}
 

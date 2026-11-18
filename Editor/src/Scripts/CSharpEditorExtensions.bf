@@ -35,6 +35,32 @@ extension EditorApp
 		public function int32(char8*, int32, char8**, int32*) targetRead;
 		public function int32(char8*, int32, char8*, int32) targetWrite;
 		public function int32(int32, char8**, int32*) query;
+		// The open scene, for editor scripts that edit in Edit mode (ids are GameObject.Id; 0 means none).
+		public function uint32() selectedObject;
+		public function void(uint32) selectObject;
+		public function uint32(char8*, int32) findObject;
+		public function uint32(uint32) objectParent;
+		public function uint32(uint32) objectChildCount;
+		public function uint32(uint32, int32) objectChild;
+		public function int32(uint32, char8**, int32*) objectName;
+		public function int32(uint32, char8*, int32) renameObject;
+		public function uint32(char8*, int32, uint32) createObject;
+		public function uint32(uint32) duplicateObject;
+		public function void(uint32) deleteObject;
+		public function int32(uint32, float*) objectPosition;
+		public function int32(uint32, float, float, float) setObjectPosition;
+		public function int32(uint32, float*) objectRotation;
+		public function int32(uint32, float, float, float) setObjectRotation;
+		public function int32(uint32, float*) objectScale;
+		public function int32(uint32, float, float, float) setObjectScale;
+		public function int32(uint32) componentCount;
+		public function int32(uint32, int32, char8**, int32*) componentType;
+		public function int32(uint32, char8*, int32) addComponent;
+		public function int32(uint32, char8*, int32) removeComponent;
+		public function int32(uint32, char8*, int32, char8**, int32*) fieldList;
+		public function int32(uint32, char8*, int32, char8*, int32, char8**, int32*) fieldRead;
+		public function int32(uint32, char8*, int32, char8*, int32, char8*, int32) fieldWrite;
+		public function void() markDirty;
 	}
 
 	/// What the editor calls in them (Tallow.Editor's EditorHost.ManagedTable).
@@ -173,7 +199,7 @@ extension EditorApp
 			return false;
 		EditorHostTable host = .()
 		{
-			version = 1,
+			version = 2,
 			size = sizeof(EditorHostTable),
 			log = => HostLog,
 			text = => HostText,
@@ -192,7 +218,32 @@ extension EditorApp
 			targetDefault = => HostTargetDefault,
 			targetRead = => HostTargetRead,
 			targetWrite = => HostTargetWrite,
-			query = => HostQuery
+			query = => HostQuery,
+			selectedObject = => HostSelectedObject,
+			selectObject = => HostSelectObject,
+			findObject = => HostFindObject,
+			objectParent = => HostObjectParent,
+			objectChildCount = => HostObjectChildCount,
+			objectChild = => HostObjectChild,
+			objectName = => HostObjectName,
+			renameObject = => HostRenameObject,
+			createObject = => HostCreateObject,
+			duplicateObject = => HostDuplicateObject,
+			deleteObject = => HostDeleteObject,
+			objectPosition = => HostObjectPosition,
+			setObjectPosition = => HostSetObjectPosition,
+			objectRotation = => HostObjectRotation,
+			setObjectRotation = => HostSetObjectRotation,
+			objectScale = => HostObjectScale,
+			setObjectScale = => HostSetObjectScale,
+			componentCount = => HostComponentCount,
+			componentType = => HostComponentType,
+			addComponent = => HostAddComponent,
+			removeComponent = => HostRemoveComponent,
+			fieldList = => HostFieldList,
+			fieldRead = => HostFieldRead,
+			fieldWrite = => HostFieldWrite,
+			markDirty = => HostMarkDirty
 		};
 		if (tn_csharp_editor_configure(editorApi.CStr(), &host, &sExtensions) == 0)
 		{
@@ -607,4 +658,489 @@ extension EditorApp
 		*length = (int32)sHostText.Length;
 		return result;
 	}
+
+	// ---- The open scene, for editor scripts that edit it in Edit mode ----
+	// Ids are GameObject.Id. Every mutation is refused during Play (the scene is the play session's then) and marks
+	// the scene dirty, so the editor's snapshot undo records a Tools command as one step.
+
+	static bool EditingScene => sExtensionsApp.mPlay == .Edit;
+
+	static GameObject SceneObject(uint32 id) => id != 0 ? sExtensionsApp.mScene.FindById(id) : null;
+
+	/// "Root/Child/Grandchild" from the scene root (a leading '/' is allowed), or a name anywhere in the scene.
+	static GameObject FindSceneObject(StringView path)
+	{
+		var target = path;
+		if (target.StartsWith("/"))
+			target = target.Substring(1);
+		if (target.IsEmpty)
+			return null;
+		GameObject found = null;
+		Transform parent = null;
+		bool atRoot = true;
+		bool matched = true;
+		for (let part in target.Split('/'))
+		{
+			if (part.IsEmpty)
+			{
+				matched = false;
+				break;
+			}
+			GameObject next = null;
+			if (atRoot)
+			{
+				for (let root in sExtensionsApp.mScene.Roots)
+					if (root.Name == part) { next = root; break; }
+			}
+			else
+			{
+				for (let child in parent.Children)
+					if (child.GameObject.Name == part) { next = child.GameObject; break; }
+			}
+			if (next == null)
+			{
+				matched = false;
+				break;
+			}
+			found = next;
+			parent = next.Transform;
+			atRoot = false;
+		}
+		if (!matched || found == null)
+			return target.IndexOf('/') >= 0 ? null : sExtensionsApp.mScene.Find(target);
+		return found;
+	}
+
+	static uint32 HostSelectedObject() => sExtensionsApp.mSelectedId;
+
+	static void HostSelectObject(uint32 id)
+	{
+		if (id != 0 && SceneObject(id) == null)
+			return;
+		sExtensionsApp.mSelectedId = id;
+	}
+
+	static uint32 HostFindObject(char8* path, int32 length)
+	{
+		let found = FindSceneObject(StringView(path, length));
+		return found != null ? found.Id : 0;
+	}
+
+	static uint32 HostObjectParent(uint32 id)
+	{
+		let gameObject = SceneObject(id);
+		if (gameObject == null || gameObject.Transform.Parent == null)
+			return 0;
+		return gameObject.Transform.Parent.GameObject.Id;
+	}
+
+	static uint32 HostObjectChildCount(uint32 id)
+	{
+		if (id == 0)
+			return (uint32)sExtensionsApp.mScene.Roots.Count;
+		let gameObject = SceneObject(id);
+		return gameObject != null ? (uint32)gameObject.Transform.Children.Count : 0;
+	}
+
+	static uint32 HostObjectChild(uint32 id, int32 index)
+	{
+		if (index < 0)
+			return 0;
+		if (id == 0)
+		{
+			let roots = sExtensionsApp.mScene.Roots;
+			return index < roots.Count ? roots[index].Id : 0;
+		}
+		let gameObject = SceneObject(id);
+		if (gameObject == null || index >= gameObject.Transform.Children.Count)
+			return 0;
+		return gameObject.Transform.Children[index].GameObject.Id;
+	}
+
+	static int32 HostObjectName(uint32 id, char8** text, int32* length)
+	{
+		*text = null;
+		*length = 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		sHostText.Set(gameObject.Name);
+		*text = sHostText.Ptr;
+		*length = (int32)sHostText.Length;
+		return 1;
+	}
+
+	static int32 HostRenameObject(uint32 id, char8* name, int32 length)
+	{
+		if (!EditingScene)
+			return 0;
+		let gameObject = SceneObject(id);
+		let value = StringView(name, length);
+		if (gameObject == null || value.IsEmpty)
+			return 0;
+		gameObject.Name.Set(value);
+		sExtensionsApp.MarkDirty();
+		return 1;
+	}
+
+	static uint32 HostCreateObject(char8* kind, int32 length, uint32 parentId)
+	{
+		if (!EditingScene)
+			return 0;
+		// The highest id means "where the editor puts it": under the selected folder, or in front of the Scene view
+		// camera. Otherwise it goes under the parent asked for, or at the root, keeping where it was made.
+		let asEditor = parentId == uint32.MaxValue;
+		Transform parent = null;
+		if (parentId != 0 && !asEditor)
+		{
+			let target = SceneObject(parentId);
+			if (target == null)
+				return 0;
+			parent = target.Transform;
+		}
+		let made = sExtensionsApp.CreateBuiltin(StringView(kind, length));
+		if (made == null)
+			return 0;
+		if (!asEditor)
+			made.Transform.SetParent(parent, true);
+		return made.Id;
+	}
+
+	static uint32 HostDuplicateObject(uint32 id)
+	{
+		if (!EditingScene)
+			return 0;
+		let source = SceneObject(id);
+		if (source == null)
+			return 0;
+		let copy = sExtensionsApp.Duplicate(source, source.Transform.Parent);
+		if (copy == null)
+			return 0;
+		sExtensionsApp.MarkDirty();
+		return copy.Id;
+	}
+
+	static void HostDeleteObject(uint32 id)
+	{
+		if (!EditingScene)
+			return;
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return;
+		// Now, not at the end of the frame: the script goes on to work with what it deleted.
+		sExtensionsApp.mScene.DestroyImmediate(gameObject);
+		if (sExtensionsApp.mSelectedId == id)
+			sExtensionsApp.mSelectedId = 0;
+		sExtensionsApp.MarkDirty();
+	}
+
+	static int32 HostObjectPosition(uint32 id, float* values)
+	{
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		let value = gameObject.Transform.Position;
+		values[0] = value.x;
+		values[1] = value.y;
+		values[2] = value.z;
+		return 1;
+	}
+
+	static int32 HostSetObjectPosition(uint32 id, float x, float y, float z)
+	{
+		if (!EditingScene)
+			return 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		gameObject.Transform.Position = .(x, y, z);
+		sExtensionsApp.MarkDirty();
+		return 1;
+	}
+
+	static int32 HostObjectRotation(uint32 id, float* values)
+	{
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		let value = gameObject.Transform.EulerAngles;
+		values[0] = value.x;
+		values[1] = value.y;
+		values[2] = value.z;
+		return 1;
+	}
+
+	static int32 HostSetObjectRotation(uint32 id, float x, float y, float z)
+	{
+		if (!EditingScene)
+			return 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		gameObject.Transform.EulerAngles = .(x, y, z);
+		sExtensionsApp.MarkDirty();
+		return 1;
+	}
+
+	static int32 HostObjectScale(uint32 id, float* values)
+	{
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		let value = gameObject.Transform.LocalScale;
+		values[0] = value.x;
+		values[1] = value.y;
+		values[2] = value.z;
+		return 1;
+	}
+
+	static int32 HostSetObjectScale(uint32 id, float x, float y, float z)
+	{
+		if (!EditingScene)
+			return 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		gameObject.Transform.LocalScale = .(x, y, z);
+		sExtensionsApp.MarkDirty();
+		return 1;
+	}
+
+	static int32 HostComponentCount(uint32 id)
+	{
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return -1;
+		let handles = scope List<HandleComponents.Info>();
+		HandleComponents.On(gameObject, handles);
+		return (int32)(gameObject.Components.Count + handles.Count);
+	}
+
+	/// A component's full type name: class components (scripts too) first, then the built-in handles (Light...), as
+	/// the Inspector shows them.
+	static int32 HostComponentType(uint32 id, int32 index, char8** text, int32* length)
+	{
+		*text = null;
+		*length = 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null || index < 0)
+			return 0;
+		sHostText.Clear();
+		if (index < gameObject.Components.Count)
+			gameObject.Components[index].GetType().GetFullName(sHostText);
+		else
+		{
+			let handles = scope List<HandleComponents.Info>();
+			HandleComponents.On(gameObject, handles);
+			let at = index - gameObject.Components.Count;
+			if (at >= handles.Count)
+				return 0;
+			sHostText.Append(handles[at].fullName);
+		}
+		*text = sHostText.Ptr;
+		*length = (int32)sHostText.Length;
+		return 1;
+	}
+
+	/// The class component of that full type name on the object, or null.
+	static Component SceneClassComponent(GameObject gameObject, StringView fullName)
+	{
+		let buffer = scope String();
+		for (let component in gameObject.Components)
+		{
+			buffer.Clear();
+			component.GetType().GetFullName(buffer);
+			if (buffer == fullName)
+				return component;
+		}
+		return null;
+	}
+
+	/// The built-in handle component (Light...) of that full type name on the object, or null when it has none.
+	static HandleComponents.Info SceneHandle(GameObject gameObject, StringView fullName)
+	{
+		let info = HandleComponents.Find(fullName);
+		let world = gameObject.Scene?.World;
+		if (info == null || world == null || !world.Has(gameObject.Entity, info.index))
+			return null;
+		return info;
+	}
+
+	static int32 HostAddComponent(uint32 id, char8* name, int32 length)
+	{
+		if (!EditingScene)
+			return 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		let fullName = StringView(name, length);
+		if (SceneClassComponent(gameObject, fullName) != null || SceneHandle(gameObject, fullName) != null)
+			return 0;
+		if (let info = ComponentRegistry.Find(fullName))
+		{
+			if (gameObject.AddComponent(info.type) == null)
+				return 0;
+		}
+		else if (let handle = HandleComponents.Find(fullName))
+			HandleComponents.Add(gameObject, handle);
+		else
+			return 0;
+		sExtensionsApp.MarkDirty();
+		return 1;
+	}
+
+	static int32 HostRemoveComponent(uint32 id, char8* name, int32 length)
+	{
+		if (!EditingScene)
+			return 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		let fullName = StringView(name, length);
+		if (let component = SceneClassComponent(gameObject, fullName))
+		{
+			gameObject.RemoveComponent(component);
+			sExtensionsApp.MarkDirty();
+			return 1;
+		}
+		if (let handle = SceneHandle(gameObject, fullName))
+		{
+			gameObject.RemoveData(handle.dataType);
+			sExtensionsApp.MarkDirty();
+			return 1;
+		}
+		return 0;
+	}
+
+	/// A component's serialized fields: a class component's or a built-in handle's, as the Inspector lists them. A C#
+	/// script's own fields are managed ones, read through the Inspector's target functions.
+	static bool SceneFields(GameObject gameObject, StringView fullName, List<FieldRef> fields)
+	{
+		fields.Clear();
+		if (let component = SceneClassComponent(gameObject, fullName))
+		{
+			if (component is CSharpBehaviour)
+				return false;
+			ComponentRegistry.GetFields(component, fields);
+			return true;
+		}
+		if (let handle = SceneHandle(gameObject, fullName))
+		{
+			HandleComponents.GetFields(gameObject, handle, fields);
+			return true;
+		}
+		return false;
+	}
+
+	static StringView FieldKindName(FieldKind kind)
+	{
+		switch (kind)
+		{
+		case .Float: return "Float";
+		case .Double: return "Double";
+		case .Char: return "Char";
+		case .Vector4: return "Vector4";
+		case .Int3: return "Int3";
+		case .Matrix4: return "Matrix4";
+		case .Int: return "Int";
+		case .Bool: return "Bool";
+		case .Vector2: return "Vector2";
+		case .Vector3: return "Vector3";
+		case .Quaternion: return "Quaternion";
+		case .Color: return "Color";
+		case .String: return "String";
+		case .Enum: return "Enum";
+		case .ObjectReference: return "ObjectReference";
+		case .List: return "List";
+		case .Array: return "Array";
+		}
+		return "Unknown";
+	}
+
+	static int32 HostFieldList(uint32 id, char8* name, int32 nameLength, char8** text, int32* length)
+	{
+		*text = null;
+		*length = 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		let fields = scope List<FieldRef>();
+		if (!SceneFields(gameObject, StringView(name, nameLength), fields))
+			return 0;
+		sHostText.Clear();
+		for (let field in fields)
+		{
+			sHostText.Append(field.name);
+			sHostText.Append('\t');
+			sHostText.Append(FieldKindName(field.kind));
+			sHostText.Append('\n');
+		}
+		*text = sHostText.Ptr;
+		*length = (int32)sHostText.Length;
+		return 1;
+	}
+
+	static int32 HostFieldRead(uint32 id, char8* name, int32 nameLength, char8* fieldName, int32 fieldLength,
+		char8** text, int32* length)
+	{
+		*text = null;
+		*length = 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		let fields = scope List<FieldRef>();
+		if (!SceneFields(gameObject, StringView(name, nameLength), fields))
+			return 0;
+		let wanted = StringView(fieldName, fieldLength);
+		for (let field in fields)
+		{
+			if (field.name != wanted)
+				continue;
+			sHostText.Clear();
+			if (field.kind == .String)
+				sHostText.Append(StringFields.Get(field.ptr, field.type));
+			else
+				SceneSerializer.WriteValue(field, sHostText);
+			*text = sHostText.Ptr;
+			*length = (int32)sHostText.Length;
+			return 1;
+		}
+		return 0;
+	}
+
+	static int32 HostFieldWrite(uint32 id, char8* name, int32 nameLength, char8* fieldName, int32 fieldLength,
+		char8* value, int32 valueLength)
+	{
+		if (!EditingScene)
+			return 0;
+		let gameObject = SceneObject(id);
+		if (gameObject == null)
+			return 0;
+		let fields = scope List<FieldRef>();
+		if (!SceneFields(gameObject, StringView(name, nameLength), fields))
+			return 0;
+		let wanted = StringView(fieldName, fieldLength);
+		for (let field in fields)
+		{
+			if (field.name != wanted)
+				continue;
+			let text = StringView(value, valueLength);
+			if (field.kind == .String)
+				StringFields.Set(field.ptr, field.type, text, field.name);
+			else
+			{
+				let tokens = scope List<StringView>();
+				let storage = scope List<String>();
+				SceneSerializer.Tokenize(text, tokens, storage);
+				if (tokens.Count == 0)
+					return 0;
+				SceneSerializer.ReadValue(field, tokens);
+			}
+			sExtensionsApp.MarkDirty();
+			return 1;
+		}
+		return 0;
+	}
+
+	static void HostMarkDirty() => sExtensionsApp.MarkDirty();
 }

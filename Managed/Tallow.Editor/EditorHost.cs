@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -34,6 +35,31 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<byte*, int, byte**, int*, int> TargetRead;
         public delegate* unmanaged[Cdecl]<byte*, int, byte*, int, int> TargetWrite;
         public delegate* unmanaged[Cdecl]<int, byte**, int*, int> Query;
+        public delegate* unmanaged[Cdecl]<uint> SelectedObject;
+        public delegate* unmanaged[Cdecl]<uint, void> SelectObject;
+        public delegate* unmanaged[Cdecl]<byte*, int, uint> FindObject;
+        public delegate* unmanaged[Cdecl]<uint, uint> ObjectParent;
+        public delegate* unmanaged[Cdecl]<uint, uint> ObjectChildCount;
+        public delegate* unmanaged[Cdecl]<uint, int, uint> ObjectChild;
+        public delegate* unmanaged[Cdecl]<uint, byte**, int*, int> ObjectName;
+        public delegate* unmanaged[Cdecl]<uint, byte*, int, int> RenameObject;
+        public delegate* unmanaged[Cdecl]<byte*, int, uint, uint> CreateObject;
+        public delegate* unmanaged[Cdecl]<uint, uint> DuplicateObject;
+        public delegate* unmanaged[Cdecl]<uint, void> DeleteObject;
+        public delegate* unmanaged[Cdecl]<uint, float*, int> ObjectPosition;
+        public delegate* unmanaged[Cdecl]<uint, float, float, float, int> SetObjectPosition;
+        public delegate* unmanaged[Cdecl]<uint, float*, int> ObjectRotation;
+        public delegate* unmanaged[Cdecl]<uint, float, float, float, int> SetObjectRotation;
+        public delegate* unmanaged[Cdecl]<uint, float*, int> ObjectScale;
+        public delegate* unmanaged[Cdecl]<uint, float, float, float, int> SetObjectScale;
+        public delegate* unmanaged[Cdecl]<uint, int> ComponentCount;
+        public delegate* unmanaged[Cdecl]<uint, int, byte**, int*, int> ComponentType;
+        public delegate* unmanaged[Cdecl]<uint, byte*, int, int> AddComponent;
+        public delegate* unmanaged[Cdecl]<uint, byte*, int, int> RemoveComponent;
+        public delegate* unmanaged[Cdecl]<uint, byte*, int, byte**, int*, int> FieldList;
+        public delegate* unmanaged[Cdecl]<uint, byte*, int, byte*, int, byte**, int*, int> FieldRead;
+        public delegate* unmanaged[Cdecl]<uint, byte*, int, byte*, int, byte*, int, int> FieldWrite;
+        public delegate* unmanaged[Cdecl]<void> MarkDirty;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -49,7 +75,7 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<int, int> DrawPage;
     }
 
-    internal const int Version = 1;
+    internal const int Version = 2;
     internal const int LayoutSameLine = 0, LayoutSeparator = 1, LayoutSpacing = 2, LayoutIndent = 3, LayoutUnindent = 4,
         LayoutBeginDisabled = 5, LayoutEndDisabled = 6, LayoutPushId = 7, LayoutPopId = 8;
     internal const int QueryPlaying = 0, QueryProjectPath = 1, QueryTargetScript = 2, QueryTargetObject = 3,
@@ -283,6 +309,202 @@ internal static unsafe class EditorHost
         int length = 0;
         sHost.Query(what, &text, &length);
         return FromUtf8(text, length);
+    }
+
+    // ---- The open scene (Tallow.Editor's EditorScene); usable outside drawing, as menu commands do ----
+
+    internal static void RequireScene()
+    {
+        if (!sBound)
+            throw new InvalidOperationException("The editor scene is not available yet.");
+    }
+
+    internal static uint SelectedObject()
+    {
+        RequireScene();
+        return sHost.SelectedObject();
+    }
+
+    internal static void SelectObject(uint id)
+    {
+        RequireScene();
+        sHost.SelectObject(id);
+    }
+
+    internal static uint FindObject(string path)
+    {
+        RequireScene();
+        using var text = new Utf8(path, stackalloc byte[256]);
+        fixed (byte* bytes = text.Bytes)
+            return sHost.FindObject(bytes, text.Bytes.Length);
+    }
+
+    internal static uint ObjectParent(uint id)
+    {
+        RequireScene();
+        return sHost.ObjectParent(id);
+    }
+
+    internal static uint ObjectChildCount(uint id)
+    {
+        RequireScene();
+        return sHost.ObjectChildCount(id);
+    }
+
+    internal static uint ObjectChild(uint id, int index)
+    {
+        RequireScene();
+        return sHost.ObjectChild(id, index);
+    }
+
+    internal static string? ObjectName(uint id)
+    {
+        RequireScene();
+        byte* text = null;
+        int length = 0;
+        return sHost.ObjectName(id, &text, &length) == 0 ? null : FromUtf8(text, length);
+    }
+
+    internal static bool RenameObject(uint id, string name)
+    {
+        RequireScene();
+        using var text = new Utf8(name, stackalloc byte[256]);
+        fixed (byte* bytes = text.Bytes)
+            return sHost.RenameObject(id, bytes, text.Bytes.Length) > 0;
+    }
+
+    internal static uint CreateObject(string kind, uint parent)
+    {
+        RequireScene();
+        using var text = new Utf8(kind, stackalloc byte[256]);
+        fixed (byte* bytes = text.Bytes)
+            return sHost.CreateObject(bytes, text.Bytes.Length, parent);
+    }
+
+    internal static uint DuplicateObject(uint id)
+    {
+        RequireScene();
+        return sHost.DuplicateObject(id);
+    }
+
+    internal static void DeleteObject(uint id)
+    {
+        RequireScene();
+        sHost.DeleteObject(id);
+    }
+
+    internal static bool ObjectPosition(uint id, Span<float> values)
+    {
+        RequireScene();
+        fixed (float* buffer = values)
+            return sHost.ObjectPosition(id, buffer) > 0;
+    }
+
+    internal static bool SetObjectPosition(uint id, Vector3 value)
+    {
+        RequireScene();
+        return sHost.SetObjectPosition(id, value.X, value.Y, value.Z) > 0;
+    }
+
+    internal static bool ObjectRotation(uint id, Span<float> values)
+    {
+        RequireScene();
+        fixed (float* buffer = values)
+            return sHost.ObjectRotation(id, buffer) > 0;
+    }
+
+    internal static bool SetObjectRotation(uint id, Vector3 value)
+    {
+        RequireScene();
+        return sHost.SetObjectRotation(id, value.X, value.Y, value.Z) > 0;
+    }
+
+    internal static bool ObjectScale(uint id, Span<float> values)
+    {
+        RequireScene();
+        fixed (float* buffer = values)
+            return sHost.ObjectScale(id, buffer) > 0;
+    }
+
+    internal static bool SetObjectScale(uint id, Vector3 value)
+    {
+        RequireScene();
+        return sHost.SetObjectScale(id, value.X, value.Y, value.Z) > 0;
+    }
+
+    internal static int ComponentCount(uint id)
+    {
+        RequireScene();
+        return sHost.ComponentCount(id);
+    }
+
+    internal static string? ComponentType(uint id, int index)
+    {
+        RequireScene();
+        byte* text = null;
+        int length = 0;
+        return sHost.ComponentType(id, index, &text, &length) == 0 ? null : FromUtf8(text, length);
+    }
+
+    internal static bool AddComponent(uint id, string fullName)
+    {
+        RequireScene();
+        using var text = new Utf8(fullName, stackalloc byte[256]);
+        fixed (byte* bytes = text.Bytes)
+            return sHost.AddComponent(id, bytes, text.Bytes.Length) > 0;
+    }
+
+    internal static bool RemoveComponent(uint id, string fullName)
+    {
+        RequireScene();
+        using var text = new Utf8(fullName, stackalloc byte[256]);
+        fixed (byte* bytes = text.Bytes)
+            return sHost.RemoveComponent(id, bytes, text.Bytes.Length) > 0;
+    }
+
+    internal static string? FieldList(uint id, string component)
+    {
+        RequireScene();
+        using var name = new Utf8(component, stackalloc byte[256]);
+        byte* text = null;
+        int length = 0;
+        bool found;
+        fixed (byte* bytes = name.Bytes)
+            found = sHost.FieldList(id, bytes, name.Bytes.Length, &text, &length) > 0;
+        return found ? FromUtf8(text, length) : null;
+    }
+
+    internal static string? FieldRead(uint id, string component, string field)
+    {
+        RequireScene();
+        using var name = new Utf8(component, stackalloc byte[256]);
+        using var text = new Utf8(field, stackalloc byte[256]);
+        byte* value = null;
+        int length = 0;
+        bool found;
+        fixed (byte* nameBytes = name.Bytes)
+        fixed (byte* fieldBytes = text.Bytes)
+            found = sHost.FieldRead(id, nameBytes, name.Bytes.Length, fieldBytes, text.Bytes.Length, &value, &length) > 0;
+        return found ? FromUtf8(value, length) : null;
+    }
+
+    internal static bool FieldWrite(uint id, string component, string field, string value)
+    {
+        RequireScene();
+        using var name = new Utf8(component, stackalloc byte[256]);
+        using var fieldText = new Utf8(field, stackalloc byte[256]);
+        using var text = new Utf8(value, stackalloc byte[512]);
+        fixed (byte* nameBytes = name.Bytes)
+        fixed (byte* fieldBytes = fieldText.Bytes)
+        fixed (byte* valueBytes = text.Bytes)
+            return sHost.FieldWrite(id, nameBytes, name.Bytes.Length, fieldBytes, fieldText.Bytes.Length,
+                valueBytes, text.Bytes.Length) > 0;
+    }
+
+    internal static void MarkDirty()
+    {
+        RequireScene();
+        sHost.MarkDirty();
     }
 
     private static void RequireTarget()
