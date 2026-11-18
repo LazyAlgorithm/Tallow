@@ -1476,6 +1476,10 @@ A full conversion also needs these. Ordered roughly by when they block users.
   guide. Today the precompiled editor drops their components (see Scene safety above).
 - [ ] Website documentation and tutorials still teach Beef gameplay; convert them with
   the samples (P3).
+- [ ] Windows Debug leaks: Beef's realtime leak check (on by default in Debug Win64 builds only) found 161 unfreed
+  `String`s when `TallowLauncher --graph-compile` exits (CI run 44237153082, November 18, 2026) and stops the
+  process as a fatal error. CI's Windows job builds with the check off; the allocation stacks need the Beef IDE (or
+  a Windows debugger) on a Windows machine. Linux builds do not run this check.
 - [ ] Branch upkeep: merge `ecs` into this branch regularly so the final merge stays
   reviewable. (Checked November 17, 2026: `ecs` has no commits this branch lacks; it last merged at 7a7b6ca1.)
 
