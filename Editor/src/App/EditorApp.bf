@@ -311,6 +311,8 @@ class EditorApp : Application
 			StartPlayCycleTest();
 		if (HasArg("--hot-reload-test"))
 			StartHotReloadTest();
+		if (HasArg("--save-to-play-test"))
+			StartSaveToPlayTest();
 		if (HasArg("--completion-test"))
 			StartCompletionTest();
 		if (HasArg("--references-test"))

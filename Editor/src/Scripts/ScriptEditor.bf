@@ -489,6 +489,12 @@ extension EditorApp
 		else if (document.path.EndsWith(".cs") || document.path.EndsWith(".tasmdef"))
 		{
 			mManagedBuildReady = false;
+			// Take this save into the file monitor's picture now. Otherwise its next poll (every 0.5 s) sees the file
+			// the editor just wrote as changed by another program, while the build started below is compiling it,
+			// and queues a second full build: Save-to-Play took twice the build time. The build reads every file
+			// from disk when it starts, so a file another program changed at the same moment is still built.
+			if (mManagedGameplay)
+				mScriptMonitor.Poll(Assets.ProjectPath);
 			// Saving while dotnet is compiling must invalidate the in-flight
 			// result. Rebuild the latest saved source before enabling Play.
 			if (mCheckRunning)
@@ -621,7 +627,7 @@ extension EditorApp
 				Terminal.Quote(logFile, command);
 				command.Append(" 2>&1");
 				mCheckSucceeded = Terminal.Run(command) == 0;
-				if (mCheckSucceeded)
+				if (mCheckSucceeded && !Terminal.ManagedRuntimeCurrent(project.EngineRoot))
 				{
 					let runtime = scope String("dotnet build ");
 					Terminal.Quote(scope $"{project.EngineRoot}/Managed/Tallow.ManagedRuntime/Tallow.ManagedRuntime.csproj" , runtime);

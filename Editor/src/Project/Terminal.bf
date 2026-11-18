@@ -56,6 +56,45 @@ static class Terminal
 		command.Append(" --");
 	}
 
+	/// True when Managed/Tallow.ManagedRuntime's Debug build is newer than every source it is built from (its own and
+	/// Tallow.API's .cs/.csproj files, generated bindings included, and Managed's shared .props/.targets). The editor
+	/// then skips `dotnet build` of it after each game compile: the runtime changes only with the engine, and the
+	/// no-op MSBuild run cost about a second on every save. An engine package without the sources counts as current.
+	public static bool ManagedRuntimeCurrent(StringView engineRoot)
+	{
+		let dll = scope $"{engineRoot}/Managed/Tallow.ManagedRuntime/bin/Debug/net11.0/Tallow.ManagedRuntime.dll";
+		if (!(File.GetLastWriteTimeUtc(dll) case .Ok(let built)))
+			return false;
+		if (NewerSource(scope $"{engineRoot}/Managed", built, false))
+			return false;
+		return !NewerSource(scope $"{engineRoot}/Managed/Tallow.ManagedRuntime", built, true) &&
+			!NewerSource(scope $"{engineRoot}/Managed/Tallow.API", built, true);
+	}
+
+	static bool NewerSource(StringView folder, DateTime built, bool recurse)
+	{
+		for (let entry in Directory.EnumerateFiles(folder))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if ((name.EndsWith(".cs") || name.EndsWith(".csproj") || name.EndsWith(".props") || name.EndsWith(".targets")) &&
+				entry.GetLastWriteTimeUtc() > built)
+				return true;
+		}
+		if (!recurse)
+			return false;
+		for (let entry in Directory.EnumerateDirectories(folder))
+		{
+			let name = scope String();
+			entry.GetFileName(name);
+			if (name == "bin" || name == "obj")
+				continue;
+			if (NewerSource(entry.GetFilePath(.. scope .()), built, true))
+				return true;
+		}
+		return false;
+	}
+
 	/// Runs a command and waits for it. Returns the exit status (0 on success).
 	public static int32 Run(StringView command)
 	{

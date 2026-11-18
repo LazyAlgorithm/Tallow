@@ -45,7 +45,9 @@ def regenerate(launcher: Path, copies: Path, runs: int) -> list[dict]:
                 if done.returncode != 0 or not generated.exists():
                     raise RuntimeError(f"{switch} {graph.name} failed:\n{done.stdout}{done.stderr}")
                 outputs.add(generated.read_text(encoding="utf-8"))
-            same_as_repo = committed.exists() and outputs == {committed.read_text(encoding="utf-8")}
+            # A graph with no checked-in output (EcsSyncedMotionGraph uses EcsBench's own Beef ECS types, which only
+            # that project's native build knows, not the precompiled launcher) is listed, not checked.
+            same_as_repo = outputs == {committed.read_text(encoding="utf-8")} if committed.exists() else None
             rows.append({"lang": lang, "graph": graph.name, "median_ms": round(statistics.median(times), 1),
                          "stable": len(outputs) == 1, "matches_repo": same_as_repo,
                          "lines": next(iter(outputs)).count("\n")})
@@ -79,8 +81,8 @@ def main() -> int:
     print("|---|---|---:|---:|---|---|")
     for row in rows:
         print(f"| {row['graph']} | {row['lang']} | {row['median_ms']} | {row['lines']} | {row['stable']} "
-              f"| {row['matches_repo']} |")
-        failed |= not (row["stable"] and row["matches_repo"])
+              f"| {'(none checked in)' if row['matches_repo'] is None else row['matches_repo']} |")
+        failed |= not row["stable"] or row["matches_repo"] is False
 
     orders = {lang: event_order(player, args.output, lang) for lang, player in (("beef", args.beef),
                                                                                ("csharp", args.csharp))}

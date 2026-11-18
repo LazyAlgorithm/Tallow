@@ -17,6 +17,7 @@ extension EditorApp
 		UpdateViewportTest();
 		UpdatePlayCycleTest();
 		UpdateHotReloadTest();
+		UpdateSaveToPlayTest();
 		UpdateCompletionTest();
 		UpdateReferencesTest();
 		UpdateInspectorScaleTest();

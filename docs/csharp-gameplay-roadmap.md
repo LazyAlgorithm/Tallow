@@ -531,7 +531,12 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
 
 ## P4 — performance, reload, shipping exports, hardening
 
-- [ ] Measure cold compile, warm single-file edit, no-op compile, incremental assembly build and edit-to-Play. Compare with legacy Beef workflow and relevant older/current Unity baselines without promising a specific speed.
+- [x] Measure cold compile, warm single-file edit, no-op compile, incremental assembly build and edit-to-Play. Compare with legacy Beef workflow and relevant older/current Unity baselines without promising a specific speed.
+  - [x] (November 18, 2026) Edit-to-Play in the editor (`tools/run_save_to_play_bench.py`, editor
+    `--save-to-play-test N`; Samples/Sandbox): **save, then Play 1.09 s** (median of 5; the build 1.01 s, Play itself
+    5 ms). Fixed on the way, which halved it from 2.58 s: the editor's file monitor took the editor's own save for an
+    outside change and queued a second full build, and each build also ran a no-op `dotnet build` of the engine's
+    Tallow.ManagedRuntime (now only when its sources are newer, `Terminal.ManagedRuntimeCurrent`).
   - [x] (November 16, 2026) Benchmarks B02/B03/B08 measured, B06/B13 first pass (results and fixes in
     `docs/csharp-benchmark-plan.md`): `GetComponent<T>` 10× faster and allocation-free (generated bindings encode
     strings on the stack, native `Has` and type-name lookups no longer scan), built-in component field reads
@@ -634,7 +639,10 @@ The benchmark definitions, workloads, evidence format, and priority order are
 in [**C# migration benchmark plan**](csharp-benchmark-plan.md). B01–B05 and
 B07–B17, B18 (multiplayer sync: the same state hash, bandwidth and errors in both languages at 2–16 peers, 0–200 ms
 and 0–5% loss; C# server ticks 2–3% slower) and B23 (a 45-minute host/client soak: flat memory, no leaks, no errors)
-are measured (November 16–17, 2026); B06 has a first pass; B19–B22 are the ones left (the plan lists what each needs). B24–B30 belong to the parked
+are measured (November 16–17, 2026); B06 (100 Play/Stop cycles up to 10,000 scripts; waking 10,000 scripts went
+from 531 to 45 ms), B20 (the same replay hash in both languages, rollback alike), B21 (graphs: same output, same
+event order, C# at the hand-written ratio), B22 (exports run sandboxed with no Beef, SDK or compiler; Windows under
+Wine) and edit-to-Play (1.09 s after two editor fixes) on November 18; B19 belongs to ShatterLock. B24–B30 belong to the parked
 NativeAOT stage (P5). Include real frame-time p50/p95/p99, CPU and Jolt
 costs, managed GC allocations, RSS, compile/edit-to-Play timings, and raw logs.
 Benchmark both C# and native Beef on the *same Flecs/Jolt scenes* rather than

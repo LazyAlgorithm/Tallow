@@ -225,10 +225,17 @@ class Scene
 		let old = component.[Friend]mCallbacks;
 		if (old == callbacks || !component.[Friend]mRegistered || component.GameObject?.Scene != this)
 			return;
+		if (mCallbackBatch > 0 && (old & ~callbacks) != 0)
+		{
+			// Inside a batch of wakes: leave it in the lists it leaves; EndCallbackBatch sweeps each list once.
+			mCallbackDropped.Add(component);
+		}
 		void Change(List<Component> list, bool had, bool has)
 		{
 			if (had && !has)
 			{
+				if (mCallbackBatch > 0)
+					return;
 				for (int i = list.Count - 1; i >= 0; i--)
 				{
 					if (list[i] == component)
@@ -249,8 +256,54 @@ class Scene
 		component.[Friend]mCallbacks = callbacks;
 	}
 
+	/// While a batch is open (StartPlay waking the scene, ReleaseWakes waking a loaded prefab or scene), a component
+	/// that leaves a callback list stays in it until EndCallbackBatch, which goes through each list once. Every C#
+	/// script joins all lists and leaves the ones its class does not override when it wakes: one search and shift of
+	/// a list per script made waking 10,000 scripts take ~0.5 s (quadratic) before.
+	int32 mCallbackBatch;
+	HashSet<Component> mCallbackDropped = new .() ~ delete _;
+
+	void BeginCallbackBatch() => mCallbackBatch++;
+
+	void EndCallbackBatch()
+	{
+		if (mCallbackBatch <= 0 || --mCallbackBatch > 0 || mCallbackDropped.IsEmpty)
+			return;
+		let seen = scope HashSet<Component>();
+		void Sweep(List<Component> list, ScriptCallbacks wanted)
+		{
+			seen.Clear();
+			int kept = 0;
+			for (int i < list.Count)
+			{
+				let component = list[i];
+				// A component left and joined again during the batch is in the list twice: keep its first place.
+				if (!mCallbackDropped.Contains(component) || ((component.[Friend]mCallbacks & wanted) != 0 && seen.Add(component)))
+					list[kept++] = component;
+			}
+			list.Count = kept;
+		}
+		Sweep(mFixedList, .FixedUpdate);
+		Sweep(mEarlyList, .EarlyUpdate | .LocalEarlyUpdate);
+		Sweep(mFrameList, .Update | .LocalUpdate);
+		Sweep(mLateList, .LateUpdate | .LocalLateUpdate);
+		Sweep(mOnFrameList, .OnFrame);
+		mCallbackDropped.Clear();
+	}
+
 	void RemoveFromCallbackLists(Component component)
 	{
+		if (mCallbackDropped.Remove(component))
+		{
+			// It may still be in lists its flags no longer name (and twice in some): take every copy out.
+			for (let list in scope List<Component>[](mFixedList, mEarlyList, mFrameList, mLateList, mOnFrameList))
+			{
+				for (int i = list.Count - 1; i >= 0; i--)
+					if (list[i] == component)
+						list.RemoveAt(i);
+			}
+			return;
+		}
 		let callbacks = component.[Friend]mCallbacks;
 		if (callbacks.HasFlag(.FixedUpdate))
 			mFixedList.Remove(component);
@@ -280,11 +333,13 @@ class Scene
 		let held = scope List<Component>();
 		held.AddRange(mHeldWakes);
 		mHeldWakes.Clear();
+		BeginCallbackBatch();
 		for (let component in held)
 		{
 			if (component.[Friend]mRegistered && mPlaying)
 				WakeComponent(component);
 		}
+		EndCallbackBatch();
 	}
 	List<GameObject> mDestroyQueue = new .() ~ delete _;
 	/// Components to take off at the end of the frame (RemoveComponentLater): the object's id and the component,
@@ -1351,8 +1406,10 @@ class Scene
 					HandleComponents.NotifySwitched(mObjects[i], true);
 			}
 		}
+		BeginCallbackBatch();
 		for (int i = 0; i < mComponents.Count; i++)
 			WakeComponent(mComponents[i]);
+		EndCallbackBatch();
 	}
 
 	/// Leaves play mode: every component gets OnDisable and OnDestroy, and the physics world is put away.

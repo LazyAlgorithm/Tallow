@@ -15,7 +15,7 @@
 
 - [x] **B01 — precompiled editor cold start.** From launcher executable, record wall time and peak RSS until scene is usable for an empty C# project; repeat for a populated C# project. Repeat with and without a valid gameplay DLL. Opening a project must not invoke BeefBuild. Done (2026-11-16, `tools/test_csharp_editor.py`): Samples/Sandbox usable (first C# build done) 2.1 s after launch cold, 1.3 s warm; a project with no scripts likewise; no BeefBuild run. Peak RSS ~310 MB with the sandbox scene.
 - [x] **B02 — game C# cold compile.** Remove the generated `.tallow-csharp` folder **only from a disposable copy of `Tests/CSharpGameplay`**, compile with `TallowLauncher --build-project PATH`, log elapsed time and errors; repeat x5. Done (2026-11-16, `tools/benchmark_csharp_compiles.sh`, 5 runs): cold build of a disposable copy 1.25 s median, peak RSS ~300 MB. Raw: `~/TallowBenchmarks/compile-20261116/`.
-- [x] **B03 — warm/no-op compile.** Rebuild the same untouched disposable game five times; separately edit one C# script body (add a harmless comment) and rebuild five times. Record time from Save to compilation banner disappearance and from Save to first permitted Play. Done for the command-line build (2026-11-16): no-op 1.19 s, one-file edit 1.21 s, leaf-assembly edit 1.23 s, public API edit 1.23 s (medians of 5; fixed process/MSBuild overhead dominates). Save-to-Play in the editor still needs a display.
+- [x] **B03 — warm/no-op compile.** Rebuild the same untouched disposable game five times; separately edit one C# script body (add a harmless comment) and rebuild five times. Record time from Save to compilation banner disappearance and from Save to first permitted Play. Done for the command-line build (2026-11-16): no-op 1.19 s, one-file edit 1.21 s, leaf-assembly edit 1.23 s, public API edit 1.23 s (medians of 5; fixed process/MSBuild overhead dominates). Save-to-Play in the editor (2026-11-18, `tools/run_save_to_play_bench.py`, editor `--save-to-play-test N`, Samples/Sandbox, Debug editor, 10 rounds): the first run gave save then Play 2.58 s, save to build done 2.40 s, build done to Play 5 ms. Two editor faults made it twice the 0.94 s command-line build: the file monitor took the editor's own save for a change made by another program and queued a second full build, and every build also ran `dotnet build` on the engine's Tallow.ManagedRuntime (a no-op MSBuild run, ~0.4 s). Both fixed: **save then Play 1.09 s, save to build done 1.01 s, build done to Play 5 ms** (medians). Raw: `~/TallowBenchmarks/save-to-play-20261118/`.
 - [x] **B04 — invalid C# recovery.** Open intentionally invalid source; measure editor launch/diagnostics latency, Play disabled, recovery after fixing source, and whether the next successful edit is used. Include two rapid saves while a build is in progress.
 - [x] **B05 — semantic editor latency.** Measure initial Roslyn worker startup, 100 steady-state completions, 100 diagnostics, nullable `Rigidbody?.` completion, type coloring and rename/definition queries in a small vs large (100+ file) source project. Record p50/p95/p99 response time and CPU/memory.
   - Measured November 16, 2026 on Nobara (`tools/benchmark_csharp_language_service.py --runs 100 [--extra-files 120]`;
@@ -35,7 +35,15 @@
     Before the per-file diagnostics cache (125 files, 30 runs): nothing changed 292 ms p50, typing in a body 223 ms
     p50. The cost of a declaration change is dominated by the 1,642-line file being edited. Type colouring is part of
     every response (the `type` lines); rename is not timed here.
-- [ ] **B06 — managed runtime bootstrap and lifecycle.** Measure Play entry/exit for 0, 100, 1,000 and 10,000 lightweight C# Script instances. Run 100 Play/Stop cycles; check memory growth, duplicate callbacks, invalid handles and retained managed instances.
+- [x] **B06 — managed runtime bootstrap and lifecycle.** Measure Play entry/exit for 0, 100, 1,000 and 10,000 lightweight C# Script instances. Run 100 Play/Stop cycles; check memory growth, duplicate callbacks, invalid handles and retained managed instances.
+  Measured November 18, 2026 (`tools/run_play_cycle_bench.py --cycles 100`, Debug editor on the display, results in
+  ~/TallowBenchmarks/b06-20261118): 100 Play/Stop cycles at 0, 100, 1,000 and 10,000 scripted objects, all passing: no
+  second Awake/Start, no two LocalUpdates in a frame, no Update after OnDestroy, no unloaded game kept in memory,
+  memory +4–6 MB over 100 cycles at every size. Play (median) 10.0 / 10.3 / 10.9 ms (one 10 ms frame is the floor),
+  Stop 0.1 / 1.0 / 7.3 ms. At 10,000 Play first took 531 ms: each C# script joins every update list and leaves the
+  ones its class does not override when it wakes, one list search and shift each (quadratic). Waking a scene or a
+  loaded prefab now leaves them in place and sweeps each list once at the end (`Scene.BeginCallbackBatch`):
+  **Play 45 ms at 10,000**, Stop 71 ms. Pass.
 - [x] **B07 — scalar versus batched managed callbacks.** Run existing `Tests/NativeCSharpHost` `--benchmark` on matching builds; record raw per-callback cost and batch sizes 1, 16, 128, 512, 4096, separately for no-op Fixed/Late and distinct TickInput. **Do not switch the Scene scheduler automatically based only on mock-host speed.** Require real-editor profiler data, callback order, detach/disable and network replay equivalence.
 - [x] **B08 — component access latency.** Compare `GetComponent<T>()` and `TryGetComponent<T>()` for native Rigidbody/Transform vs managed Script, hit and miss, using 100k–1M calls after warm-up. Verify disabled and destroyed handles fail safely. Done (2026-11-16, `getcomponent` mode, 100k calls/frame, a quarter each native hit, script hit, native miss, script miss): C# 3.04 ms vs Beef 0.30 ms per 100k (10×), no allocations. Before the fixes below C# took 30.6 ms and allocated ~33 bytes per call.
 - [x] **B09 — Inspector scene/prefab save.** With 1,000/10,000 managed field instances: attach, edit public/private/hidden fields, save/reopen, enter Play and measure time plus serialized file sizes. Verify fields applied before Awake and prefab inheritance intact. Test failure with invalid persisted values.
@@ -290,9 +298,34 @@ native call per Transform get/set (a batched or cached transform path), and the 
   Not applicable on this branch (November 17, 2026): the two-dimension world is ShatterLock's, on the
   `shatterlock-engine` branch, which has no C# runtime. It belongs to that game's own test plan; nothing here streams
   two dimensions.
-- [ ] **B20 — prediction/rollback determinism.** Fixed-seed input replay for 10k ticks, repeated 3 times; record final state hashes, divergences, rollback duration and worst catch-up frame, C# vs native. Mark blocked until rollback C# parity is implemented; do not infer from compile tests.
-- [ ] **B21 — visual scripting parity.** Existing graphs vs generated C# on equivalent 1k/10k node updates; check event ordering, networking, serialization and graph regeneration time. Mark blocked until C# visual-graph backend is functional.
-- [ ] **B22 — game export portability.** Release build on Windows/Linux **without Beef installed** on target machine; record packaged size, cold start, .NET runtime/bootstrap diagnostics, crash frequency and whether the editor/player ever tries to compile native engine code. Verify exports against older Beef samples too.
+- [x] **B20 — prediction/rollback determinism.** Fixed-seed input replay for 10k ticks, repeated 3 times; record final state hashes, divergences, rollback duration and worst catch-up frame, C# vs native. Mark blocked until rollback C# parity is implemented; do not infer from compile tests.
+  Measured November 18, 2026 (`tools/run_rollback_bench.py`, B18's NetSync workload, players exported at fa8daf79,
+  results in ~/TallowBenchmarks/rollback-20261117/results): replay, the host alone with the deterministic bot for
+  10,000 ticks, three runs each: all six runs give `1d70dfbed5728c97` (player and 200 drones to the millimetre), Beef
+  and C# alike. Rollback, server and one bot client at 100 ms RTT and 2% loss for 10,000 ticks, three runs each: 4
+  corrections per run in both, 7–9 ticks replayed at 3.5–4.6 µs each (Beef) and 7 at 3.8–4.3 µs (C#), own prediction
+  error median 0.002–0.010 m, worst 0.012 m; worst frame 4.2–7.6 ms (Beef) and 2.9–4.3 ms (C#), p99 1.21 vs 1.22 ms;
+  0 errors. The server's end hash differs run to run under loss in both languages (a control that arrives late is
+  dropped and the last one repeated), as the runner expects. Pass.
+- [x] **B21 — visual scripting parity.** Existing graphs vs generated C# on equivalent 1k/10k node updates; check event ordering, networking, serialization and graph regeneration time. Mark blocked until C# visual-graph backend is functional.
+  Measured November 18, 2026 (`tools/run_graph_bench.py` + `run_csharp_bench.py --modes graph,gameobject`, results in
+  ~/TallowBenchmarks/graph-20261118): regeneration of every bench graph, 5 runs each through the launcher: 3.6–3.8 ms
+  to C#, 4.5–4.7 ms to Beef, the same text every run and the same as the checked-in file (EcsSyncedMotionGraph has
+  no checked-in output: it uses EcsBench's own Beef ECS type, which only that project's native build knows, so it is
+  listed, not checked). Event order (GraphOrder): awake, enable, start, update, late in both. Throughput, cubes each
+  running the 10-node Bobber graph, script ms Beef / C#: 100: 0.003 / 0.009; 1,000: 0.036 / 0.088; 10,000:
+  0.336 / 0.860 (2.4–2.6×, the same ratio as hand-written scripts: 0.286 / 0.736 at 10,000); a graph costs ~17% over
+  the hand-written script in both languages. C# GC 149 bytes/frame either way. Networking/serialization of graphs is
+  the scripts' own ([Sync] fields of graph variables compile to the same C#), covered by B18. Pass.
+- [x] **B22 — game export portability.** Release build on Windows/Linux **without Beef installed** on target machine; record packaged size, cold start, .NET runtime/bootstrap diagnostics, crash frequency and whether the editor/player ever tries to compile native engine code. Verify exports against older Beef samples too.
+  Measured November 18, 2026 (`tools/run_export_bench.py`, results in ~/TallowBenchmarks/export-20261118). Linux: each
+  player in a bubblewrap sandbox (read-only /usr and /etc, the system .NET hidden, empty home, every compiler on PATH a
+  stand-in that records the call and fails). C# CSharpBench: 150.9 MB (bundled .NET 84.2, executable 64.5, Managed
+  2.0, game.tpak 0.2), start to exit after one frame 0.26 s, 20/20 runs of 300 frames with 1,000 scripted cubes exit
+  0, no error lines, no compiler called. Beef EcsBench (an older-style Beef game): 67.8 MB, 0.26 s, 20/20, no
+  compiler called. Windows: CSharpBench built on Linux (`build_player.py --platform windows`, fresh cross-built
+  player) and run under Wine: 105.3 MB (.NET 86.8, executable 16.4), 1.40 s start (Wine's own start included), 20/20
+  clean. Pass. Not done: a real Windows machine (CI's native Windows job runs the in-engine suites there).
 - [x] **B23 — stability soak.** 30–60 minute automated gameplay loop; scene reload, prefab spawn/destroy, networking reconnect, soft-body world teardown. Track median/p95/p99 frame time over time, managed/native RSS slope, GPU memory and native-handle leaks.
   Measured November 17, 2026 (9a41220c, `tools/run_csharp_soak.py --minutes 45 --cycle 25 --warmup 180`, results in
   ~/TallowBenchmarks/soak-20261117): an exported C# player (Samples/CSharpBench, Scenes/Soak.tscene) as host and a
