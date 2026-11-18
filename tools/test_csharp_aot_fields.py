@@ -33,6 +33,18 @@ EXPECTED = [
     ("a list of [Serializable] items", "Waypoints\t"),
 ]
 
+# Fields whose value is the runtime's own and may differ between JIT and NativeAOT; the name and type must still
+# match. AsyncProbe._thread holds Environment.CurrentManagedThreadId, which is 2 under JIT on Windows (the runtime
+# starts a managed thread before the game's) and 1 under NativeAOT.
+RUNTIME_VALUES = ("_thread\tint\t",)
+
+
+def comparable(line: str) -> str:
+    for prefix in RUNTIME_VALUES:
+        if line.startswith(prefix):
+            return prefix + "<runtime value>"
+    return line
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -72,7 +84,7 @@ def main() -> int:
             ok = all(any(needle in line for line in lines) for lines in dumps.values())
             print(f"{'PASS' if ok else 'FAIL'} both dumps have {what}")
             failures += not ok
-        jit, native = dumps["jit"], dumps["native"]
+        jit, native = ([comparable(line) for line in dumps[r]] for r in ("jit", "native"))
         scripts = sum(line.startswith("== ") for line in jit)
         if jit == native:
             print(f"PASS the NativeAOT build's fields equal the JIT build's: {scripts} scripts, {len(jit)} lines")
