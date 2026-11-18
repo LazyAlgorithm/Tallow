@@ -1380,10 +1380,42 @@ A full conversion also needs these. Ordered roughly by when they block users.
   - Create > C# Script > Editor templates (Custom Inspector, Editor Window, Tools Menu Command, Preferences Page).
   - The language service compiles editor folders as their own assembly against Tallow.Editor.
 
-  Tests: `tools/test_csharp_editor_extensions.py`, a display test with 20 checks, which includes a broken window, a
-  reload and a game build with no editor scripts; LS tests (133); the template test compiles the four editor
-  templates. Not yet: scene editing from editor scripts in Edit mode (Tallow.API is bound to a scene only during
-  Play), gizmo and Scene view tools, and custom inspectors for built-in components.
+  Tests: `tools/test_csharp_editor_extensions.py`, a display test with 30 checks, which includes a broken window, a
+  reload and a game build with no editor scripts; LS tests (139); the template test compiles the four editor
+  templates.
+
+### Editor scripts work on the scene (November 18, 2026)
+
+- The three gaps listed here for editor scripts are filled, each tested end to end by
+  `tools/test_csharp_editor_extensions.py` (30 checks, display needed):
+  - **Scene editing in Edit mode:** `Tallow.Editor.EditorScene` / `EditorObject` / `EditorComponent`
+    (`Managed/Tallow.Editor/EditorScene.cs`, host functions in `Editor/src/Scripts/CSharpEditorExtensions.bf`):
+    selection, find by path or name, roots and children, create the editor's built-in objects (where the editor puts
+    them or under a parent; `uint.MaxValue` is the "as the menu does" sentinel), duplicate, delete (immediately, not
+    queued, so the script can carry on), rename, world position, Euler rotation and local scale, and components by
+    full type name for class components and built-in handles alike, their fields read and written with
+    `SceneSerializer.WriteValue`/`ReadValue` (strings unquoted for scripts). Every mutation marks the scene dirty,
+    so the snapshot undo makes a command one step; mutations are refused during Play. The test's Tools command does
+    all of it, the editor checks the result in its own scene (an object at the position set, a Light at intensity
+    2.5) and takes it back with Undo.
+  - **Inspectors for built-in components:** `[CustomInspector(typeof(Light))]` on a `ComponentInspector` subclass
+    (`Managed/Tallow.Editor/Extensions.cs`, EditorHost `findComponentInspector`/`drawComponentInspector`); the
+    InspectorPanel routes class components and handles that have one through it, `Field(name)` draws a single field
+    with the editor's own widget (host `componentField`/`componentDefault` over the same `FieldRef`s), edits run the
+    component's OnValidate and mark the scene dirty. The test's Light Inspector must draw for the probe cube and
+    read the component's own intensity.
+  - **Scene view overlays:** any concrete `SceneViewOverlay` subclass gets `OnSceneViewGUI()` each frame the Scene
+    view draws (called from `DrawSceneView`, so the gizmo batches it fills are rendered that same frame), with
+    `SceneView.IsVisible/IsMouseOver/IsClicked/IsMouseDown/MousePoint/Ray/Pick/PickUnderMouse` (host functions read
+    the state captured in DrawSceneView and the editor camera's ray/pick) and `Line/Sphere/Box` drawing through the
+    existing `Tallow.Gizmos` API. The test focuses the Scene tab (the default layout leaves it behind Game) and a
+    probe overlay reports that it ran, saw the view and got a ray.
+- Not yet: Tallow.API itself on the edited scene (GameObject/Transform/components are bound to a running game;
+  EditorScene is the Edit-mode API), modelling/terrain tools written as editor scripts, and Create > C# Script
+  templates for the two new editor script kinds.
+- Gotchas: the managed table's function pointers must be filled in `EditorHost.Configure` (a missing one is a null
+  call, and the editor segfaults), and host-table changes bump its version (4 now) on both sides; the editor's
+  snapshot undo needs `MarkDirty`, not `Destroy`, for script deletions.
 
 **Editor tools (Beef editor work done on this branch alongside the migration)**
 - [x] Editor windows can be dragged out of the main window (ImGui viewports, November 15, 2026; 23bcff1e,
