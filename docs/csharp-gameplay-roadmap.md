@@ -1556,7 +1556,14 @@ the first working export is described in "First NativeAOT export" at the end of 
   behind. Still open: generated code in place of the engine's remaining reflection (shrinks the allowlist).
 - [x] Use the existing curated `[CSharpExpose]` Beef reflection manifest for engine-to-managed APIs; generate bindings at engine build time, verify signature hashes and keep editor JIT/AOT exports on one public API contract. Avoid handwritten duplicated P/Invoke.
 - [~] Enable Release + `PublishAot=true`, appropriate platform RID, native optimization and trimming. Validate each compiler/linker option on actual host OS; do **not** turn on `IlcInstructionSet` options that change supported hardware or fast-math flags that change deterministic physics/gameplay semantics.
-- [~] Ship stripped binaries and retain matching **private** debug artifacts: Linux `.dbg`, Windows `.pdb` and exact build identifiers/map files, stored outside public download folders. Do not equate stripping symbols with complete tamper resistance: native code is harder to inspect than IL but still reverse-engineerable. Don't remove necessary exported ABI symbols or crash-unwinding data.
+- [x] Ship stripped binaries and retain matching **private** debug artifacts: Linux `.dbg`, Windows `.pdb` and exact build identifiers/map files, stored outside public download folders. Do not equate stripping symbols with complete tamper resistance: native code is harder to inspect than IL but still reverse-engineerable. Don't remove necessary exported ABI symbols or crash-unwinding data.
+  Done November 18, 2026 (`tools/ship_symbols.py`, JIT and NativeAOT exports): a Release export's player is
+  stripped of debug information (Linux `objcopy`: `<exe>.dbg` plus a `.gnu_debuglink`; Windows: the linker's
+  `.pdb` is copied) and `<output>-symbols/` beside the build (never inside it) holds the symbols, a numeric name
+  map of the game library and `build-info.txt`: project, config, platform, runtime, engine commit, game code ID,
+  each shipped module's SHA-256 and its exact identifier (ELF GNU build ID; PE PDB GUID and age), and the hashes
+  and sizes of the symbol files. Linux player 61 MB → 24 MB; the NativeAOT Linux package 66.7 MB → 43 MB.
+  `tools/test_csharp_crash.py` checks it end to end (see B30 below).
 - [x] Ensure the release packaging excludes source maps, developer logs, managed game DLLs, API debug metadata and secrets. No embedded credentials; separate developer symbol archive not staged into release.
 
 ### JIT versus AOT identical gameplay contract (must pass before release-default toggle)
@@ -1624,10 +1631,34 @@ the zero-allocation check measures past the interpreter's tier-up there. `test_c
   failing the export.
 - **CI.** Linux job: `test_csharp_export.py --runtime native`; Windows job: the same, built natively with MSVC.
 - **Not done yet:** a run on a real Windows machine (the user's test); NativeAOT became the default before it, at
-  the user's request; failing the export on actionable
-  warnings with an allowlist; generated field setters/getters in place of FieldInfo reflection; build-id/map files;
-  B24, B29, B30 and the Windows/cross-OS halves of B25-B28 (Linux halves measured: docs/csharp-benchmark-plan.md);
-  macOS.
+  the user's request; generated field setters/getters in place of FieldInfo reflection (the remaining reflection
+  allowlist); B24's acceptance switch and B30's Windows half; the Windows/cross-OS halves of B25-B28 (Linux halves
+  measured: docs/csharp-benchmark-plan.md); macOS.
+
+### Release symbols, build identifiers and reading a crash (November 18, 2026)
+
+- `tools/ship_symbols.py`, called by `tools/build_player.py` for every C# Release export (JIT and NativeAOT):
+  the package's player keeps no debug information, and `<output>-symbols/` beside the build (never inside it)
+  keeps what reads a crash. Linux `objcopy` writes `<exe>.dbg`, strips the debug sections and adds the
+  `.gnu_debuglink`; Windows copies the linker's `TallowPlayer_lld.pdb`. `build-info.txt` names the project, config,
+  platform, runtime, engine commit and game code ID, and for the player and the game library the SHA-256, size and
+  exact debugger identifier (ELF GNU build ID; PE PDB GUID and age), plus every kept symbol file's SHA-256 and
+  size. `libTallowGame.so.dbg.map` is an address-sorted, demangled name map for tools without DWARF. Unwind data
+  and exported ABI symbols are untouched; the package holds no `.dbg`, `.pdb`, `.map` or `.debug_*` section.
+- Player 61 MB -> 24 MB on Linux; the NativeAOT Linux package 66.7 MB -> 43 MB. The private symbols are bigger
+  (Linux NativeAOT: player `.dbg` 44 MB, library `.dbg` 31 MB, code-symbol map 7 MB; Windows: the 41 MB `.pdb`),
+  kept beside the build and never uploaded with it.
+- `--crash-test` (Application, test only): at frame 100 the game writes through a null address read from a
+  volatile field, so the release optimiser cannot remove it (a plain null store is undefined behaviour and was
+  removed; the first attempt exited cleanly). It is documented as a test switch and does nothing unless given.
+- `tools/test_csharp_crash.py` (local: needs gdb and a full NativeAOT build) builds Tests/CSharpInGame as a Linux
+  NativeAOT export and checks (5 checks pass): the package ships no symbols or debug sections; the private folder
+  holds the player `.dbg`, the library `.dbg`, its map and `build-info.txt`; the recorded SHA-256s and the
+  library's GNU build ID match the shipped files and the code ID is recorded; the package runs in an empty
+  environment (no .NET, Beef or `dotnet` on `PATH`) and passes its 420 in-game checks; and a `--crash-test` run
+  under gdb is a SIGSEGV whose `bf::Tallow::CrashReports::DeliberateCrash()` frame and callers are named **only**
+  through the private `.dbg`. Windows writes the `.pdb` by the same path; a Windows crash was not symbolicated
+  here (that half of B30 needs Wine's debugger or a real Windows machine).
 
 **Why a separate player:** Microsoft's NativeAOT compiler does not support dynamically loading managed assemblies, and a NativeAOT **shared library** cannot be unloaded. Neither is compatible with the editor's current JIT collectible AssemblyLoadContext. NativeAOT itself is not a security boundary against code reverse engineering or memory inspection. See Microsoft's NativeAOT deployment / native library / interop docs:
 https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/

@@ -159,6 +159,22 @@ static class CrashReports
 	}
 #endif
 
+	/// --crash-test: crash on purpose, so a shipped build's crash report can be checked against its private symbols
+	/// (B30, tools/test_csharp_crash.py). Nothing calls this without the switch; the write through a null pointer
+	/// faults in this function itself, so a stack trace names it.
+	[NoInline]
+	public static void DeliberateCrash()
+	{
+		// A volatile address the optimiser cannot see through: a plain null store is undefined behaviour and the
+		// release build removes it.
+		sCrashAddress = 0;
+		int* nowhere = (int*)(void*)sCrashAddress;
+		*nowhere = 1;
+	}
+
+	/// Set by DeliberateCrash only; nobody reads it otherwise. Volatile so the store above cannot be folded away.
+	static volatile int sCrashAddress;
+
 	public static bool IsUnattended(Span<String> args)
 	{
 		if (IsSet("CI") || IsSet("TALLOW_NO_CRASH_DIALOG"))

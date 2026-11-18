@@ -392,7 +392,14 @@ Use filename `B##_SHA_config_scene_runN.log`. Results table columns: case, SHA, 
 - [~] **B27 — deterministic replay cross-runtime.** Same serialized starting state, seed, input stream and tick rate for 10,000 ticks each; compare per-tick state hashes, first divergent tick, entity order, and float differences (max absolute/relative error). Test JIT vs AOT **on same OS/CPU first**, then Windows/Linux and different CPUs. Fail if authoritative/predicted outcomes diverge, even if approximate float comparisons pass.
 - [~] **B28 — multiplayer JIT/AOT cross-play.** Mixed JIT editor clients + shipped NativeAOT players against the same authority; identical state/rollback hashes and inputs under 0/50/100/200 ms RTT and 0/1/2/5% loss, 2–16 peers when supported. Record desync/mismatch and packet bandwidth.
 - [x] **B29 — trimming and generated metadata.** Compare all public/private/hidden fields, enums, inherited components and asset/prefab references against JIT; add rename/migration tests. Export with AOT/trimming warnings treated as errors and ensure no reflection-only field or component is silently dropped.
-- [ ] **B30 — native export portability and crash symbols.** On clean Linux/Windows without dotnet/Beef developer tooling, run AOT player, load scenes, exercise Jolt/soft bodies/shader graphs and close cleanly. Capture a deliberate test-only crash and symbolicate with the **private** matching symbol file; verify the public package contains no symbols or gameplay IL.
+- [~] **B30 — native export portability and crash symbols.** On clean Linux/Windows without dotnet/Beef developer tooling, run AOT player, load scenes, exercise Jolt/soft bodies/shader graphs and close cleanly. Capture a deliberate test-only crash and symbolicate with the **private** matching symbol file; verify the public package contains no symbols or gameplay IL.
+  Linux done November 18, 2026 (`tools/test_csharp_crash.py`, 5 checks): the release player is stripped
+  (`objcopy`; `.dbg` kept in `<output>-symbols/`, never in the package), the game library's `.dbg` and name map
+  are kept there with `build-info.txt` (SHA-256 and GNU build ID / PDB GUID+age of every shipped module), the
+  package runs with no .NET, Beef or `dotnet` on PATH and passes its 420 in-game checks, and `--crash-test`
+  crashes on purpose at frame 100 and is read back as `bf::Tallow::CrashReports::DeliberateCrash()` **only**
+  through the private symbols. The Windows `.pdb` is written by the same export; symbolication of a Windows crash
+  (Wine's debugger or a real Windows machine) is still to run.
 
 Status (November 18, 2026): the NativeAOT export exists (roadmap P5, "First NativeAOT export"). First
 measurements, `tools/run_nativeaot_bench.py` on Linux x64, Samples/CSharpBench exported both ways at 32945b63
@@ -401,6 +408,8 @@ measurements, `tools/run_nativeaot_bench.py` on Linux x64, Samples/CSharpBench e
 - B25 (Linux part): package 137.7 MB (JIT, bundled .NET) vs 66.7 MB (NativeAOT); game code 75.8 MB (Managed/ +
   dotnet/) vs 4.8 MB (libTallowGame.so, stripped); private symbols 6.6 MB beside the build, none in the package;
   the library exports only `tallow_native_register`. The player exe (61.7 MB) is the same file for both.
+  (Measured before the player itself was stripped. November 18, 2026: the Release player is 24 MB, the NativeAOT
+  package 43 MB, and the private folder 79 MB with the player `.dbg` and the library name map.)
 - B26 (Linux part): start-to-exit with one frame 0.255 s vs 0.254 s (5 runs, headless); peak RSS 58 MB vs 32 MB.
   Script time per frame (JIT / AOT): gameobject 0.75 / 0.82 ms, ecs 0.50 / 0.35, getcomponent 0.32 / 0.40,
   physics 1.14 / 1.19, alloc 0.67 / 0.57; spawn 20-30% quicker under AOT (no JIT at first call); managed allocation
@@ -418,4 +427,10 @@ measurements, `tools/run_nativeaot_bench.py` on Linux x64, Samples/CSharpBench e
   lines, identical, covering private and base-class fields, enums by name, [Serializable] lists, GameObject /
   component / script references and a [FormerlyNamed] class. Field renames are not a feature (a renamed field
   starts at its default), so there is nothing to compare for them. In CI on Linux and Windows.
-- B30: not yet measured (a clean Windows machine and crash symbolication). Benchmark both profiles from identical game commits and core engine settings. Do not substitute NativeAOT compilation of a dummy sample for shipping-player acceptance.
+- B30 (Linux part): a Release export's player is stripped of debug information (61 MB -> 24 MB; the NativeAOT
+  package 66.7 MB -> 43 MB) and the matching `.dbg`, a name map and `build-info.txt` go to `<output>-symbols/`
+  beside it. The package holds no symbols, chooses no installed .NET, and on an empty PATH runs its 420 checks;
+  `--crash-test` raises a real SIGSEGV that gdb names through the private `.dbg` (tools/test_csharp_crash.py).
+  Windows: the matching `.pdb` is kept by the same export (41 MB, not in the package); the Windows crash half
+  needs Wine's debugger or a real Windows machine, as does the clean-machine run there.
+- Benchmark both profiles from identical game commits and core engine settings. Do not substitute NativeAOT compilation of a dummy sample for shipping-player acceptance.

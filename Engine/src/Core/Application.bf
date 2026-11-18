@@ -13,6 +13,8 @@ namespace Tallow;
 ///   --headless                                         no window or renderer (dedicated servers)
 ///   --fixed-step                                       every frame advances exactly one fixed tick, however
 ///                                                      long it took (automated tests, replays, benchmarks)
+///   --crash-test                                       crash on purpose at frame 100, to check a build's crash
+///                                                      symbols (tools/test_csharp_crash.py; test only)
 [CSharpExpose]
 class Application
 {
@@ -57,6 +59,8 @@ class Application
 	int64 mFrameLimit = -1;
 	/// --csharp-field-test: the frame on which CSharpRuntime.RunFieldTest reads a running script's fields.
 	int64 mCSharpFieldTestFrame = -1;
+	/// --crash-test: crash on purpose on frame 100, once the game is up (B30 crash symbols check; test only).
+	bool mCrashTest;
 	/// --csharp-field-dump FILE: CSharpRuntime.DumpFields writes every running script's fields there on frame 100.
 	String mCSharpFieldDump = new .() ~ delete _;
 	/// --csharp-reload-test DLL (tools/test_csharp_reload.py): a second build of the game hot reloaded on frame 120.
@@ -189,6 +193,8 @@ class Application
 			FixedStep = true;
 		if (HasArg("--csharp-field-test"))
 			mCSharpFieldTestFrame = 100;
+		if (HasArg("--crash-test"))
+			mCrashTest = true;
 		GetArg("--csharp-reload-test", mCSharpReloadTest);
 		GetArg("--csharp-field-dump", mCSharpFieldDump);
 		let reloadAfter = scope String();
@@ -433,6 +439,8 @@ class Application
 
 		if (mCSharpFieldTestFrame > 0 && Time.FrameCount == mCSharpFieldTestFrame)
 			CSharpRuntime.RunFieldTest(Scene.Active);
+		if (mCrashTest && Time.FrameCount == 100)
+			CrashReports.DeliberateCrash();
 		if (!mCSharpFieldDump.IsEmpty && Time.FrameCount == 100)
 			CSharpRuntime.DumpFields(Scene.Active, mCSharpFieldDump);
 		if (!mCSharpReloadTest.IsEmpty && (mCSharpReloadAfter < 0 ? Time.FrameCount == 120 : Time.RealTime >= mCSharpReloadAfter))

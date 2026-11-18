@@ -425,6 +425,30 @@ def main():
             elif csharp and not web:
                 stage_csharp(engine, project, staging, args.config, windows,
                              not args.no_bundle_dotnet and settings.get('bundleDotNet', '1') != '0')
+            # A Release export ships a player with no debug information. Its matching symbols, a name map and a
+            # record of every module's exact build identifier go to <output>-symbols beside the build, never inside
+            # it (roadmap B30; tools/test_csharp_crash.py reads a crash with them).
+            if csharp and not web and args.config == 'Release':
+                sys.path.insert(0, str(engine / 'tools'))
+                import ship_symbols
+                symbols = ship_symbols.symbols_folder(output)
+                stripped = staging / executable
+                ship_symbols.strip_release_player(stripped, symbols, windows, source=player)
+                library = None
+                if native_aot:
+                    library = staging / 'Managed' / 'Native' / ('TallowGame.dll' if windows else 'libTallowGame.so')
+                    # The shipped library is stripped; the map comes from the private symbols it matches.
+                    private = symbols / (library.name + ('.pdb' if windows else '.dbg'))
+                    if not windows and private.is_file():
+                        ship_symbols.write_map(symbols, private)
+                # NativeAOT keeps the ID beside its library; a JIT export keeps it with the game's assemblies.
+                code_id_file = staging / 'Managed' / 'Native' / 'Tallow.Game.codeid'
+                if not code_id_file.is_file():
+                    code_id_file = staging / 'Managed' / 'Game' / 'Tallow.Game' / 'Tallow.Game.codeid'
+                code_id = code_id_file.read_text().strip() if code_id_file.is_file() else None
+                info = ship_symbols.write_build_info(output, symbols, engine, name, args.config, args.platform,
+                                                     'native' if native_aot else 'jit', code_id, library, stripped)
+                print(f'Build information in {info}; the package ships no symbols.')
             # Of the engine's files a game reads only the compiled shaders, and only those of the graphics backends
             # it can start on this system: Vulkan, plus OpenGL as the fallback on Linux; WebGL 2 in a browser.
             # Metal on a Mac.
