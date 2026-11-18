@@ -24,6 +24,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))  # noqa: E402
+import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when installed)
 
 DOTNET_MAJOR = 11
 # Trim/AOT analysis warnings that point at real problems in a NativeAOT game (IL2026: code that needs unreferenced

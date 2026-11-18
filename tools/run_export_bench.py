@@ -28,6 +28,8 @@ import subprocess
 import sys
 import tempfile
 import time
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))  # noqa: E402
+import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when installed)
 
 COMPILERS = ["BeefBuild", "BeefBuild_d", "dotnet", "clang", "clang++", "clang-cl", "cc", "c++", "gcc", "g++", "ld",
              "ld.lld", "lld", "cmake", "ninja", "make", "msbuild", "csc"]

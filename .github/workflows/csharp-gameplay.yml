@@ -24,6 +24,8 @@ on:
       - 'tools/test_csharp_network_reload.py'
       - 'tools/test_csharp_export.py'
       - 'tools/csharp_native.py'
+      - 'tools/dotnet_sdk.py'
+      - 'global.json'
       - 'tools/test_csharp_sample.py'
       - 'tools/test_csharp_showcase.py'
       - 'tools/validate_showcase.py'

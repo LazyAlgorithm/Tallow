@@ -27,6 +27,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))  # noqa: E402
+import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when installed)
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVICE = ROOT / "Managed/Tallow.LanguageService/bin/Debug/net11.0/Tallow.LanguageService.dll"

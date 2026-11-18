@@ -26,6 +26,8 @@ import subprocess
 import sys
 import tempfile
 import time
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))  # noqa: E402
+import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when installed)
 
 IMAGES = ["docker.io/library/ubuntu:22.04", "registry.fedoraproject.org/fedora:43"]
 WATCHED = ["BeefBuild", "beefbuild", "dotnet", "python3", "python", "clang", "cc", "gcc", "ld"]

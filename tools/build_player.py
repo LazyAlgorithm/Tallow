@@ -26,6 +26,8 @@ import compress_textures
 import convert_models
 import macos_link
 import pack_assets
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))  # noqa: E402
+import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when installed)
 
 # Windows system libraries the native libraries call into (SDL, bgfx, ENet, miniaudio).
 WINDOWS_SYSTEM_LIBS = ('user32', 'gdi32', 'shell32', 'winmm', 'imm32', 'ole32', 'oleaut32', 'version', 'setupapi', 'advapi32',

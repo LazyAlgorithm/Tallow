@@ -117,11 +117,31 @@ static class DotNetSdk
 #endif
 	}
 
-	/// When the pinned SDK is installed: this program and everything it starts use it (PATH and DOTNET_ROOT).
+	/// Whether the dotnet on PATH already has a released SDK of the pinned major, the pinned version or newer: then
+	/// that one is used and Tallow's copy is not needed (one install of .NET is enough).
+	public static bool PathHasReleased()
+	{
+		let listing = scope String();
+		if (!DotNetCheck.RunDotNet("--list-sdks", Home(.. scope .()), listing))
+			return false;
+		let major = scope $"{PinnedVersion.Substring(0, PinnedVersion.IndexOf('.'))}.";
+		for (var line in listing.Split('\n'))
+		{
+			line.Trim();
+			let space = line.IndexOf(' ');
+			let version = space > 0 ? line.Substring(0, space) : line;
+			if (version.StartsWith(major) && !version.Contains('-') && DotNetCheck.CompareVersions(version, PinnedVersion) >= 0)
+				return true;
+		}
+		return false;
+	}
+
+	/// When the pinned SDK is installed and the dotnet on PATH has no released one as new: this program and
+	/// everything it starts use Tallow's copy (PATH and DOTNET_ROOT).
 	/// Returns whether it did.
 	public static bool Apply()
 	{
-		if (!Installed())
+		if (!Installed() || PathHasReleased())
 			return false;
 		let root = Root(.. scope .());
 #if BF_PLATFORM_WINDOWS

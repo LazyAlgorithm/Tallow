@@ -110,7 +110,7 @@ static class DotNetCheck
 	}
 
 	/// Compares dotted numeric versions; a pre-release ("-rc.1") sorts before its release.
-	static int CompareVersions(StringView a, StringView b)
+	public static int CompareVersions(StringView a, StringView b)
 	{
 		let aDash = a.IndexOf('-');
 		let bDash = b.IndexOf('-');
@@ -133,7 +133,7 @@ static class DotNetCheck
 	}
 
 	/// Runs `dotnet <arguments>` and reads what it printed. False when dotnet is missing or fails.
-	static bool RunDotNet(StringView arguments, StringView scratchFolder, String output)
+	public static bool RunDotNet(StringView arguments, StringView scratchFolder, String output)
 	{
 		Directory.CreateDirectory(scratchFolder).IgnoreError();
 		let file = scope $"{scratchFolder}/dotnet-check.txt";

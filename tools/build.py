@@ -10,6 +10,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))  # noqa: E402
+import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when installed)
 
 NATIVE_TARGETS = ['tallow_native', 'bgfx', 'bimg', 'bimg_decode', 'bx', 'SDL3-static', 'joltc', 'Jolt', 'enet',
                   'shaderc', 'texturec', 'tallow_modelsettings', 'tallow_modelconv']

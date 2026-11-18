@@ -1290,8 +1290,13 @@ A full conversion also needs these. Ordered roughly by when they block users.
 - [~] .NET SDK acquisition: the launcher now checks the SDK and runtime (major 11) as it
   starts, warns on a preview SDK, shows install commands and a download button, rebuilds
   a stale `Tallow.ManagedRuntime`, and `--check-dependencies [--fix]` does the same on the
-  command line. Still open: Manager-side install of a pinned SDK, and a GA SDK (the branch
-  builds with **.NET 11 RC1**).
+  command line. Still open: Manager-side install of a pinned SDK.
+  Released SDK (November 18, 2026): the branch builds with **.NET SDK 11.0.100** (runtime 11.0.0), not RC1.
+  `global.json` requires 11.0.100 or a later feature band and no previews (`dotnet` in the repo stops on an RC).
+  The dotnet on PATH is used when it has a released 11.0.100+ SDK (one install is enough); otherwise the launcher
+  and editor (`DotNetSdk.Apply`) and the Python tools (`tools/dotnet_sdk.py`, imported by build, export and test
+  scripts) route to Tallow's own copy. JIT exports now bundle runtime 11.0.0. All suites pass on it (in-game 439,
+  export 420 JIT and NativeAOT, reload 33, network 32, network reload 7, Gallery, sample 10, web 405).
   - [x] Install a pinned, released .NET 11 SDK into a Tallow-owned per-user folder shared by
     engine versions (for example `~/.local/share/Tallow/dotnet` on Linux or
     `%LOCALAPPDATA%\\Tallow\\dotnet` on Windows). Detect a compatible cached version on
@@ -1543,6 +1548,17 @@ the first working export is described in "First NativeAOT export" at the end of 
 - [ ] Ban unseeded RNG, wall-clock gameplay time, unordered parallel writes, locale-sensitive parsing and non-deterministic serialization for predicted network state; ensure pre-existing editor hints and release validators flag these.
 - [x] Verify AOT and JIT callbacks use identical versioned structs, `UnmanagedCallersOnly` exports with strictly blittable types (not `bool`/managed strings), C calling conventions and resource ownership.
 - [ ] Run B24–B30 in [benchmark plan](csharp-benchmark-plan.md), including GC, startup, input replay, network peers, binaries, trim root stability and symbol retention. Ship NativeAOT by default **only after** both runtime profiles pass complete cross-platform tests; until then existing JIT development/play workflow stays functional.
+
+### C# web test repaired (November 18, 2026)
+
+The browser game stopped at start since the behaviour-tree nodes (c2e533a0): .NET's WebAssembly interpreter calls
+native code with at most 12 integer argument slots (mono interp.h `INTERP_ICALL_TRAMP_IARGS`) and exits on more
+(`interp.c:1502 build_args_from_sig`), and `CSharpBehaviorNodes.Register` took 13 (each string is a pointer and a
+length). Tallow.BindingGen now packs a binding's strings into one array of (pointer, length) pairs
+(`NativeStringArg` / Beef `CSharpStringArg`) when its signature would go over, the same ABI on every platform
+(3 bindings: Register, Export, WorkshopPublish), and fails generation if one still would. Two newer checks assumed
+threads (a save finished from another thread, terrain Fill on workers) and now allow the browser's single thread;
+the zero-allocation check measures past the interpreter's tier-up there. `test_csharp_web.py`: 405 checks pass.
 
 ### First NativeAOT export (November 18, 2026)
 
