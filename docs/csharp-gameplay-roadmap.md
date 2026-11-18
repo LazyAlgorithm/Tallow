@@ -1584,7 +1584,8 @@ the first working export is described in "First NativeAOT export" at the end of 
 - **Not done yet:** a run on a real Windows machine (the user's test); the Windows CI step's first run; NativeAOT as
   the Build window's default (it stays JIT until the acceptance gate passes); failing the export on actionable
   warnings with an allowlist; generated field setters/getters in place of FieldInfo reflection; build-id/map files;
-  JIT-vs-AOT determinism replay; B24-B30; macOS.
+  B24, B29, B30 and the Windows/cross-OS halves of B25-B28 (Linux halves measured: docs/csharp-benchmark-plan.md);
+  macOS.
 
 **Why a separate player:** Microsoft's NativeAOT compiler does not support dynamically loading managed assemblies, and a NativeAOT **shared library** cannot be unloaded. Neither is compatible with the editor's current JIT collectible AssemblyLoadContext. NativeAOT itself is not a security boundary against code reverse engineering or memory inspection. See Microsoft's NativeAOT deployment / native library / interop docs:
 https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/

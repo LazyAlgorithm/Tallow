@@ -387,11 +387,27 @@ Use filename `B##_SHA_config_scene_runN.log`. Results table columns: case, SHA, 
 ## P3 — NativeAOT release protection and JIT/AOT parity (pending; shipping gate)
 
 - [ ] **B24 — NativeAOT export default.** Export the same real game with "NativeAOT" default and explicitly chosen "JIT compatibility". Assert failure of AOT compile does *not* create/ship a JIT DLL fallback; check release files contain zero gameplay IL DLLs/source and no dev Roslyn payload.
-- [ ] **B25 — binary size, symbols and disassembly.** Windows/Linux AOT Release game binary and private symbol archive sizes, export table (only required ABI exports), download package size, debug ID matching crash analysis, no private `.pdb`/`.dbg` in public output. Compare JIT equivalent; avoid claiming complete anti-reverse-engineering.
-- [ ] **B26 — cold start, memory and GC.** Five cold runs each JIT/AOT of same scene/engine; startup to first playable tick, steady and peak RSS, heap size, GC collections/pause p95, CPU and frame p95/p99. Record renderer mode, native engine/Jolt cost, platform/RID. No implicit AOT performance advantage is assumed.
-- [ ] **B27 — deterministic replay cross-runtime.** Same serialized starting state, seed, input stream and tick rate for 10,000 ticks each; compare per-tick state hashes, first divergent tick, entity order, and float differences (max absolute/relative error). Test JIT vs AOT **on same OS/CPU first**, then Windows/Linux and different CPUs. Fail if authoritative/predicted outcomes diverge, even if approximate float comparisons pass.
-- [ ] **B28 — multiplayer JIT/AOT cross-play.** Mixed JIT editor clients + shipped NativeAOT players against the same authority; identical state/rollback hashes and inputs under 0/50/100/200 ms RTT and 0/1/2/5% loss, 2–16 peers when supported. Record desync/mismatch and packet bandwidth.
+- [~] **B25 — binary size, symbols and disassembly.** Windows/Linux AOT Release game binary and private symbol archive sizes, export table (only required ABI exports), download package size, debug ID matching crash analysis, no private `.pdb`/`.dbg` in public output. Compare JIT equivalent; avoid claiming complete anti-reverse-engineering.
+- [~] **B26 — cold start, memory and GC.** Five cold runs each JIT/AOT of same scene/engine; startup to first playable tick, steady and peak RSS, heap size, GC collections/pause p95, CPU and frame p95/p99. Record renderer mode, native engine/Jolt cost, platform/RID. No implicit AOT performance advantage is assumed.
+- [~] **B27 — deterministic replay cross-runtime.** Same serialized starting state, seed, input stream and tick rate for 10,000 ticks each; compare per-tick state hashes, first divergent tick, entity order, and float differences (max absolute/relative error). Test JIT vs AOT **on same OS/CPU first**, then Windows/Linux and different CPUs. Fail if authoritative/predicted outcomes diverge, even if approximate float comparisons pass.
+- [~] **B28 — multiplayer JIT/AOT cross-play.** Mixed JIT editor clients + shipped NativeAOT players against the same authority; identical state/rollback hashes and inputs under 0/50/100/200 ms RTT and 0/1/2/5% loss, 2–16 peers when supported. Record desync/mismatch and packet bandwidth.
 - [ ] **B29 — trimming and generated metadata.** Compare all public/private/hidden fields, enums, inherited components and asset/prefab references against JIT; add rename/migration tests. Export with AOT/trimming warnings treated as errors and ensure no reflection-only field or component is silently dropped.
 - [ ] **B30 — native export portability and crash symbols.** On clean Linux/Windows without dotnet/Beef developer tooling, run AOT player, load scenes, exercise Jolt/soft bodies/shader graphs and close cleanly. Capture a deliberate test-only crash and symbolicate with the **private** matching symbol file; verify the public package contains no symbols or gameplay IL.
 
-Status: **all B24–B30 are blocked** until the shipping NativeAOT host and export path exist. Benchmark both profiles from identical game commits and core engine settings. Do not substitute NativeAOT compilation of a dummy sample for shipping-player acceptance.
+Status (November 18, 2026): the NativeAOT export exists (roadmap P5, "First NativeAOT export"). First
+measurements, `tools/run_nativeaot_bench.py` on Linux x64, Samples/CSharpBench exported both ways at 32945b63
+(Release, 10,000 objects, 600 frames, 3 runs; results in ~/TallowBenchmarks/nativeaot-20261118):
+
+- B25 (Linux part): package 137.7 MB (JIT, bundled .NET) vs 66.7 MB (NativeAOT); game code 75.8 MB (Managed/ +
+  dotnet/) vs 4.8 MB (libTallowGame.so, stripped); private symbols 6.6 MB beside the build, none in the package;
+  the library exports only `tallow_native_register`. The player exe (61.7 MB) is the same file for both.
+- B26 (Linux part): start-to-exit with one frame 0.255 s vs 0.254 s (5 runs, headless); peak RSS 58 MB vs 32 MB.
+  Script time per frame (JIT / AOT): gameobject 0.75 / 0.82 ms, ecs 0.50 / 0.35, getcomponent 0.32 / 0.40,
+  physics 1.14 / 1.19, alloc 0.67 / 0.57; spawn 20-30% quicker under AOT (no JIT at first call); managed allocation
+  per frame the same. Neither is faster across the board.
+- B27 (same OS/CPU part): the NetSync bot replay, 10,000 ticks, 3 runs each: all six give `1d70dfbed5728c97`, the
+  same hash as B20's Beef and C# runs. Cross-OS and other CPUs not yet run.
+- B28 (first part): JIT server + NativeAOT bot client and the reverse, 10,000 ticks, no added lag/loss: both servers
+  end on `c8a15ddc6f490720`, no errors, no code-ID warning. The RTT/loss matrix and more peers are still to run.
+- B24, B29, B30: not yet measured (B24's export-failure path, warnings-as-errors with an allowlist, a clean Windows
+  machine and crash symbolication). Benchmark both profiles from identical game commits and core engine settings. Do not substitute NativeAOT compilation of a dummy sample for shipping-player acceptance.
