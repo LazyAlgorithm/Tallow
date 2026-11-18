@@ -1690,8 +1690,9 @@ the zero-allocation check measures past the interpreter's tier-up there. `test_c
   paths a NativeAOT game never runs: hot reload and the collectible load context (JIT only) and the editor. The
   NativeAOT export reports 27 engine warnings, 0 unreviewed (was 46 at 718a5ece).
 - Checks: in-game 442 (new: the generated callback mask and the generated `[Rpc]` table), network 32 (RPCs across
-  a session, every argument kind, private methods), reload 33 (the tables clear and re-register), JIT export 423,
-  NativeAOT export 423, language service 139, sample, showcase and the trusted smoke test.
+  a session, every argument kind, private methods), reload 33 (the tables clear and re-register), JIT export 423
+  and NativeAOT export 423 on Linux and on Windows (under Wine), language service 139, sample, showcase and the
+  trusted smoke test.
 
 ### Release symbols, build identifiers and reading a crash (November 18, 2026)
 
