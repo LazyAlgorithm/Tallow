@@ -92,7 +92,7 @@ extension EditorApp
 	/// Not shown: dot files, the project's plumbing, and "Compiled" folders, which hold built shaders.
 	// An asset's ID file (.tmeta, docs/asset-ids.md) travels with it and is never shown.
 	// A converted model's import settings (docs/model-import.md) are shown in its Inspector, not as a file of their own.
-	static bool IsHidden(StringView name) => name.StartsWith('.') || name == "Program.bf" || name == "Compiled" || name.EndsWith(AssetDatabase.MetaSuffix) || (name.EndsWith(".import") && Assets.IsConvertedModel(name.Substring(0, name.Length - 7)));
+	static bool IsHidden(StringView name) => name.StartsWith('.') || name == "Program.bf" || name == "Compiled" || name.EndsWith(AssetDatabase.MetaSuffix) || (name.EndsWith(".import") && (Assets.IsConvertedModel(name.Substring(0, name.Length - 7)) || TextureImportSettings.IsPicture(name.Substring(0, name.Length - 7))));
 
 	void ToRelative(StringView full, String outRelative)
 	{

@@ -540,7 +540,7 @@ static class Assets
 		}
 		if (pixels == null || width <= 0 || height <= 0 || !Gfx.Initialized)
 			return Gfx.WhiteTexture;
-		let texture = Textures.Create(pixels, width, height, kind == .Color ? Textures.KindOf(path) : kind);
+		let texture = Textures.Create(path, pixels, width, height, kind == .Color ? Textures.KindOf(path) : kind);
 		sTextures[new String(path)] = texture.idx;
 		return texture;
 	}
@@ -549,6 +549,8 @@ static class Assets
 	/// materials naming it load it again by name (white when there is no such file). False when there was none.
 	public static bool RemoveTexture(StringView path)
 	{
+		// Its .import may have changed (the editor's texture inspector saved it): read it again on the next load.
+		TextureOptionsFor.Forget(path);
 		if (!(sTextures.GetAndRemoveAlt(path) case .Ok(let pair)))
 			return false;
 		if (Gfx.Initialized && pair.value != Gfx.WhiteTexture.idx)
@@ -574,7 +576,7 @@ static class Assets
 	{
 		if (pixels == null || width <= 0 || height <= 0 || !Gfx.Initialized)
 			return Gfx.WhiteTexture;
-		let texture = Textures.Create(pixels, width, height, kind ?? Textures.KindOf(path));
+		let texture = Textures.Create(path, pixels, width, height, kind ?? Textures.KindOf(path));
 		if (sTextures.GetAndRemoveAlt(path) case .Ok(let pair))
 		{
 			if (pair.value != Gfx.WhiteTexture.idx)

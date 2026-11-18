@@ -34,8 +34,6 @@ static class Textures
 	/// Each texture made here and its size on the graphics card, by handle (for the Profiler's memory snapshots).
 	public static Dictionary<uint16, int64> Sizes = new .() ~ delete _;
 
-	const uint64 Filtering = (uint64)bgfx.SamplerFlags.MinAnisotropic | (uint64)bgfx.SamplerFlags.MagAnisotropic;
-
 	static Dictionary<String, TextureKind> sKinds = new .() ~ DeleteDictionaryAndKeys!(_);
 
 	/// Says what a texture holds before it is loaded (a material naming it as its normal map, say).
@@ -80,15 +78,20 @@ static class Textures
 		return .Color;
 	}
 
-	/// A texture from RGBA8 pixels, with all its mip levels (less SkipLevels). The pixels are copied.
-	public static bgfx.TextureHandle Create(uint8* pixels, int32 width, int32 height, TextureKind kind)
+	/// A texture from RGBA8 pixels, with mip levels unless its picture turns them off (less SkipLevels, unless it
+	/// keeps its full resolution). The pixels are copied.
+	public static bgfx.TextureHandle Create(StringView path, uint8* pixels, int32 width, int32 height, TextureKind kind)
 	{
+		let options = TextureOptionsFor.Of(path);
+		bool withMips = Mipmaps && options.Mipmaps;
+		int32 skip = options.FullResolution ? 0 : SkipLevels;
+		uint64 flags = options.SamplerFlags(withMips);
 		int32 w = 0, h = 0, levels = 0;
 		uint32 size = 0;
-		let mips = Mipmaps ? tn_image_mips(pixels, width, height, (int32)kind, SkipLevels, &w, &h, &levels, &size) : null;
+		let mips = withMips ? tn_image_mips(pixels, width, height, (int32)kind, skip, &w, &h, &levels, &size) : null;
 		if (mips == null)
-			return bgfx.create_texture_2d((uint16)width, (uint16)height, false, 1, .RGBA8, Filtering, bgfx.copy(pixels, (uint32)(width * height * 4)), 0);
-		let texture = bgfx.create_texture_2d((uint16)w, (uint16)h, levels > 1, 1, .RGBA8, Filtering, bgfx.copy(mips, size), 0);
+			return bgfx.create_texture_2d((uint16)width, (uint16)height, false, 1, .RGBA8, flags, bgfx.copy(pixels, (uint32)(width * height * 4)), 0);
+		let texture = bgfx.create_texture_2d((uint16)w, (uint16)h, levels > 1, 1, .RGBA8, flags, bgfx.copy(mips, size), 0);
 		tn_image_mips_free(mips);
 		Made++;
 		Bytes += size;
@@ -97,11 +100,13 @@ static class Textures
 	}
 
 	/// The compressed copy of a picture (`<file>.ktx` beside it or in the game's pack), or an invalid handle when
-	/// there is none.
+	/// there is none, the picture turns compressed copies off, or it wants no mip levels (a compressed copy keeps
+	/// its own).
 	public static bgfx.TextureHandle LoadCompressed(StringView path)
 	{
 		bgfx.TextureHandle none = .() { idx = uint16.MaxValue };
-		if (!UseCompressed)
+		let options = TextureOptionsFor.Of(path);
+		if (!UseCompressed || !Mipmaps || !options.Compression || !options.Mipmaps)
 			return none;
 		let ktx = scope String(path)..Append(".ktx");
 		if (!AssetPack.Exists(ktx))
@@ -110,9 +115,10 @@ static class Textures
 		if (AssetPack.ReadAll(ktx, data) case .Err || data.Count < 64)
 			return none;
 		bgfx.TextureInfo info = default;
-		// bgfx reads the file's format and levels, and leaves out the largest ones; a card without BC1 / BC3 gets it
-		// decoded to plain colour.
-		let texture = bgfx.create_texture(bgfx.copy(data.Ptr, (uint32)data.Count), Filtering, (uint8)Math.Clamp(SkipLevels, 0, 8), &info);
+		// bgfx reads the file's format and levels, and leaves out the largest ones (unless the picture keeps its full
+		// resolution); a card without BC1 / BC3 gets it decoded to plain colour.
+		int32 skip = options.FullResolution ? 0 : SkipLevels;
+		let texture = bgfx.create_texture(bgfx.copy(data.Ptr, (uint32)data.Count), options.SamplerFlags(true), (uint8)Math.Clamp(skip, 0, 8), &info);
 		if (texture.Valid)
 		{
 			Made++;

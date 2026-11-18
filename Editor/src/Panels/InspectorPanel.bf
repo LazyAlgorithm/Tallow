@@ -177,6 +177,8 @@ extension EditorApp
 				DrawAssemblyDefinitionInspector(mSelectedAsset);
 			else if (!locked && mInspectAsset && Assets.IsConvertedModel(mSelectedAsset))
 				DrawModelImportInspector(mSelectedAsset);
+			else if (!locked && mInspectAsset && TextureImportSettings.IsPicture(mSelectedAsset))
+				DrawTextureImportInspector(mSelectedAsset);
 			else if (selected == null)
 				DrawSceneSettings();
 			else

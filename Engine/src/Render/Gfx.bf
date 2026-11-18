@@ -308,7 +308,7 @@ static class Gfx
 			Log.Warning(scope $"Could not load texture {path}");
 			return WhiteTexture;
 		}
-		let handle = Textures.Create(pixels, width, height, kind);
+		let handle = Textures.Create(path, pixels, width, height, kind);
 		Native.tn_image_free(pixels);
 		return handle;
 	}

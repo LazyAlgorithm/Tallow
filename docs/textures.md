@@ -4,7 +4,23 @@ Every texture the engine loads gets **mip levels**, smaller copies of itself dow
 
 A built game also gets **compressed copies** of its pictures, in formats the graphics card reads as they are: a quarter to an eighth of the video memory, and quicker to load, since nothing is decoded.
 
-Nothing needs setting up; a project's pictures are used as they are.
+Nothing needs setting up; a project's pictures are used as they are. A picture that needs different treatment (pixel art, a mask, an atlas) has its own options, below.
+
+## Per-picture options
+
+Click a picture (PNG, JPG, TGA, BMP, HDR or EXR) in the Project panel: its Inspector has these, kept beside it as `<picture>.import` and read when the engine loads it. Apply reloads it in every material and renderer at once.
+
+| Option | Default | What it does |
+|---|---|---|
+| **Filtering** | Default (smooth, anisotropic) | **Nearest** takes each pixel as it is: pixel art stays blocky and crisp instead of blurring between pixels. |
+| **Wrapping** | Repeat | **Clamp** holds the edge colour past 0..1 (decals, UI, atlases that must not bleed into a neighbour); **Mirror** flips it each time it repeats. |
+| **Mip levels** | On | Off keeps the picture at full size when drawn small (no smaller copies): pixel art stays crisp, far surfaces may shimmer. A picture without mip levels uses its picture file, never a compressed copy (those keep their own levels). |
+| **Keep full resolution** | Off | A low **Texture Detail** quality setting leaves the largest mip levels out of textures. This picture keeps them: pixel art and UI are always drawn at their full size. |
+| **Use a compressed copy in builds** | On | Off ships this picture as it is and the build makes no `.ktx` for it: for pictures whose pixels must stay exact (masks read in code, pixel art). |
+
+A typical pixel-art picture: **Filtering** Nearest, **Mip levels** off, **Keep full resolution** on. A UI atlas: **Wrapping** Clamp, **Keep full resolution** on, and often **Use a compressed copy** off.
+
+The file is a few `key = value` lines (`filter`, `wrap`, `mipmaps`, `compression`, `fullResolution`), like a model's `.import` (docs/model-import.md), so it can be edited by hand or a script. Project-wide patterns still apply too: `textureCompressExclude` in `project.tallow` leaves matching pictures uncompressed.
 
 ## Mip levels
 
@@ -27,6 +43,7 @@ Left alone:
 - normal maps (these formats store colours as 5-6-5 bits, which bands directions badly);
 - pictures under `UI/` and `Fonts/` (the project setting `textureCompressExclude = UI/*;Fonts/*` in `project.tallow`, `;`-separated patterns);
 - images inside glTF / GLB models;
+- pictures whose Inspector turns **Use a compressed copy in builds** off, or **Mip levels** off (the engine uses the picture itself then);
 - web builds (browsers do not all read the same compressed formats).
 
 The Build window's **Compress textures** turns it off for a project (`compressTextures = 0`), and `--no-texture-compression` for one build. `python3 tools/compress_textures.py <folder>` compresses a folder by hand. A running game's log ends with how many textures it made, how many were compressed and their size on the graphics card. `--no-compressed-textures` ignores the `.ktx` files, to compare.
@@ -42,7 +59,7 @@ Two quality settings (docs/quality.md) belong here:
 | **Texture Detail** (`textureDetail`) | half (the largest level left out: a quarter of the memory) | full |
 | **Anisotropic Filtering** (`anisotropic`) | off | on |
 
-Texture Detail applies to textures loaded after it changes; the editor's **Window > Graphics Quality** shows it, and how many textures there are and their size.
+Texture Detail applies to textures loaded after it changes; a picture's **Keep full resolution** option (above) leaves it out for that picture. The editor's **Window > Graphics Quality** shows the setting, and how many textures there are and their size.
 
 ## In code
 

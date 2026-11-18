@@ -285,6 +285,8 @@ jobs:
           export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
           python3 tools/build.py --config Debug --jobs 4 --skip-native
           test -x build/Debug_Linux64/TallowLauncher/TallowLauncher
+      - name: Texture import options
+        run: build/Debug_Linux64/TallowLauncher/TallowLauncher --texture-import-test
       - name: Verify compiler-reflected opt-in C# manifest
         run: |
           build/Debug_Linux64/TallowLauncher/TallowLauncher --csharp-api-manifest /tmp/tallow-csharp-api.tsv

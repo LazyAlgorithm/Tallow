@@ -990,6 +990,12 @@ class Program
 			if (args[i] == "--write-component-catalog")
 				return NativeComponentCatalog.Write(args[i + 1]) ? 0 : 1;
 		}
+		// --texture-import-test: a picture's .import options parse and become the sampler flags they should.
+		for (int i < args.Count)
+		{
+			if (args[i] == "--texture-import-test")
+				return TextureImportTest.Run();
+		}
 		// --graph-compile <graph.tgraph> <namespace>: compiles a visual script graph to C# beside it, without a window.
 		// --graph-compile-beef: the same to Beef (Name.bf), as a Beef project's editor would.
 		for (int i < args.Count - 2)
