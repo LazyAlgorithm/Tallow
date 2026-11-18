@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Reflection;
+using System.Threading;
 
 namespace Tallow;
 
@@ -546,26 +547,65 @@ static class HandleComponents
 		{
 			let slot = (uint8*)data + info.lists[i].offset;
 			if (*(Object*)slot != null)
+			{
 				FieldLists.CloneList(slot, info.newList != null ? info.newList(i) : null);
+				Track(*(Object*)slot);
+			}
 		}
 		for (let offset in info.texts)
 		{
 			let slot = (String*)((uint8*)data + offset);
 			if (*slot != null)
+			{
 				*slot = new String(*slot);
+				Track(*slot);
+			}
 		}
 	}
+
+#if BF_ENABLE_REALTIME_LEAK_CHECK
+	/// The lists and text that component data owns, for the leak check only (Debug Windows builds): the data lives in
+	/// Flecs's tables, native memory the GC does not scan, so without this every live component's text was reported
+	/// as leaked. An ordinary set the GC scans; OwnLists adds, FreeLists takes out.
+	/// Statics are freed in no set order at exit, and Info's destructor frees its defaults through FreeLists after
+	/// these may be gone: both are set to null when freed, and then nothing is tracked.
+	static HashSet<Object> sOwned = new .() ~ DeleteAndNullify!(_);
+	static Monitor sOwnedLock = new .() ~ DeleteAndNullify!(_);
+
+	static void Track(Object owned)
+	{
+		if (sOwnedLock == null)
+			return;
+		using (sOwnedLock.Enter())
+			sOwned?.Add(owned);
+	}
+
+	static void Untrack(Object owned)
+	{
+		if (owned == null || sOwnedLock == null)
+			return;
+		using (sOwnedLock.Enter())
+			sOwned?.Remove(owned);
+	}
+#else
+	[SkipCall] static void Track(Object owned) { }
+	[SkipCall] static void Untrack(Object owned) { }
+#endif
 
 	/// Frees the lists a component's data owns.
 	public static void FreeLists(void* data, Info info)
 	{
 		for (let list in info.lists)
+		{
+			Untrack(*(Object*)((uint8*)data + list.offset));
 			FieldLists.FreeList((uint8*)data + list.offset);
+		}
 		for (let offset in info.texts)
 		{
 			let slot = (String*)((uint8*)data + offset);
 			let text = *slot;
 			*slot = null;
+			Untrack(text);
 			// A literal (a field initializer of "" rather than new .()) is not ours to free.
 			if (text != null && !StringFields.IsReadOnly(Internal.UnsafeCastToPtr(text)))
 				delete text;

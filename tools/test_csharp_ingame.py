@@ -86,6 +86,12 @@ def main() -> int:
         failed = [line for line in lines if "INGAME FAIL" in line or ("[Tallow C#]" in line and "thrown on purpose" not in line
                    # RunFieldTest's refused Inspector edit, logged as the editor would show it.
                    and "'not a number' was not in a correct format" not in line)]
+        # A Debug Windows build reports leaks (and other Debug breakpoints) on stderr and goes on (CrashReports.bf).
+        for marker in ("[leak check]", "[breakpoint]"):
+            at = output.find(marker)
+            if at >= 0:
+                failed.append(f"INGAME FAIL {marker} " + output[at:at + 3000])
+                print(failed[-1])
         thrown = [line for line in output.splitlines() if line.startswith("[error] System.InvalidOperationException: " + expected)]
         source = (project / "src/Scripts/ApiChecks.cs").read_text().splitlines()
         throw_line = next(i + 1 for i, text in enumerate(source) if expected in text and "throw" in text)

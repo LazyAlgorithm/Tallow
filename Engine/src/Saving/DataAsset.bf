@@ -140,13 +140,16 @@ abstract class DataAsset
 			if (!TypeNameIn(text, typeName))
 				continue;
 			let relative = scope String();
-			let single = scope String(root);
+			let single = scope String(root)..Replace('\\', '/');
 			while (single.Contains("//"))
 				single.Replace("//", "/");
-			if (file.StartsWith(single) && file.Length > single.Length && file[single.Length] == '/')
-				relative.Append(file.Substring(single.Length + 1));
+			// Windows lists files with backslashes; asset paths use '/' everywhere.
+			let normal = scope String(file)..Replace('\\', '/');
+			if (normal.StartsWith(single) && normal.Length > single.Length && normal[single.Length] == '/')
+				relative.Append(normal.Substring(single.Length + 1));
 			else
-				Assets.MakeRelative(file, relative);
+				Assets.MakeRelative(normal, relative);
+			relative.Replace('\\', '/');
 			sFileOfType[new String(relative)] = new String(typeName);
 		}
 	}

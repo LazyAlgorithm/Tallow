@@ -426,6 +426,8 @@ static class CSharpRuntime
 			return false;
 		}
 		sStarted = true;
+		// .NET put its own exception handler first, which ends the process at the leak check's breakpoint.
+		CrashReports.HandleLeakChecksFirst();
 		return true;
 	}
 
