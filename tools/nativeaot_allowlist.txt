@@ -40,8 +40,3 @@ IL2075             Tallow.ManagedRuntime.NativeEntrypoints.UiInvoke             
 IL2070             Tallow.RpcMethods.Resolve                                              [Rpc] methods of game scripts (rooted)
 IL2070             Tallow.BehaviorNodes.Register                                          fields of game behaviour nodes (rooted; no MetadataToken under NativeAOT)
 IL2090             Tallow.ComponentLookup`1..cctor                                        fields of game components (rooted)
-
-# Data assets: classes of the game, found by name and constructed (kept whole).
-IL2026             Tallow.DataAsset.FindClass                                             Assembly.GetTypes over game assemblies (rooted)
-IL2067,IL2072      Tallow.DataAsset.Load                                                  constructs game DataAsset classes (rooted)
-IL2072             Tallow.DataAsset.Revert                                                constructs game DataAsset classes (rooted)

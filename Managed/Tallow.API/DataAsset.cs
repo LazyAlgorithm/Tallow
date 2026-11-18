@@ -82,7 +82,8 @@ public abstract class DataAsset
     public void Revert()
     {
         CSharpDataAssets.DeleteCopy(AssetPath);
-        var fresh = (DataAsset)Activator.CreateInstance(GetType(), nonPublic: true)!;
+        var fresh = DataAssetRegistry.Create(ClassName(GetType())) ?? throw new InvalidOperationException(
+            $"The data asset class {GetType().FullName} is not registered by the build; rebuild the game's C#.");
         if (FileText(AssetPath) is { } file)
             FieldCodec.Apply(fresh, FieldsIn(file));
         // The file's values, and the code's for [Saved] fields that the file does not set.
@@ -108,13 +109,19 @@ public abstract class DataAsset
         string? text = FileText(path);
         if (text == null)
             return null;
-        Type type = wanted;
+        DataAsset? asset;
         if (ClassIn(text) is { } name && name != ClassName(wanted))
         {
-            type = FindClass(name, wanted) ?? throw new InvalidCastException(
-                $"The data asset '{path}' is a {name}, not a {wanted.FullName}.");
+            asset = DataAssetRegistry.Create(name);
+            if (asset is null || !wanted.IsAssignableFrom(asset.GetType()))
+                throw new InvalidCastException($"The data asset '{path}' is a {name}, not a {wanted.FullName}.");
         }
-        var asset = (DataAsset)Activator.CreateInstance(type, nonPublic: true)!;
+        else
+        {
+            asset = DataAssetRegistry.Create(ClassName(wanted)) ?? throw new InvalidOperationException(
+                $"The data asset class {wanted.FullName} is not registered by the build. Rebuild the game's C# " +
+                "(Tallow.Build lists every DataAsset class), or make the class internal or public.");
+        }
         FieldCodec.Apply(asset, FieldsIn(text));
         return asset;
     }
@@ -162,20 +169,6 @@ public abstract class DataAsset
 
     internal static string ClassName(Type type) => (type.FullName ?? type.Name).Replace('+', '.');
 
-    private static Type? FindClass(string name, Type wanted)
-    {
-        AssemblyLoadContext? context = AssemblyLoadContext.GetLoadContext(wanted.Assembly);
-        foreach (var assembly in context?.Assemblies ?? AppDomain.CurrentDomain.GetAssemblies())
-        {
-            foreach (Type type in assembly.GetTypes())
-            {
-                if (!type.IsAbstract && wanted.IsAssignableFrom(type) && ClassName(type) == name)
-                    return type;
-            }
-        }
-        return null;
-    }
-
     /// <summary>Drops every loaded asset: the next Get reads the file (and the player's copy) again. Code that kept
     /// an asset keeps the old one. (Also when the game's code stops or is hot reloaded.)</summary>
     public static void ClearCache()
@@ -183,6 +176,24 @@ public abstract class DataAsset
         lock (sLock)
             sLoaded.Clear();
     }
+}
+
+/// <summary>The build-generated constructors of the game's DataAsset classes (Tallow.Build), so a .tdata file that
+/// names a derived class is loaded without scanning assemblies or reflecting over constructors (NativeAOT cannot).
+/// The game assemblies register their classes from a module initializer; nothing is registered until one loads.</summary>
+public static class DataAssetRegistry
+{
+    private static readonly Dictionary<string, Func<DataAsset>> sFactories = new(StringComparer.Ordinal);
+
+    /// <summary>One class, by the name .tdata files use ("MyGame.TuningData"). Generated code calls this.</summary>
+    public static void Register(string name, Func<DataAsset> create) => sFactories[name] = create;
+
+    /// <summary>A new instance of a registered class, or null when no assembly registered that name.</summary>
+    public static DataAsset? Create(string name) =>
+        sFactories.TryGetValue(name, out Func<DataAsset>? create) ? create() : null;
+
+    /// <summary>Forgets the classes of a game whose code stopped or was reloaded (the next load registers them).</summary>
+    public static void Clear() => sFactories.Clear();
 }
 
 /// <summary>The runtime's field text (the Inspector's "Name\tvalue" lines), for data assets.</summary>

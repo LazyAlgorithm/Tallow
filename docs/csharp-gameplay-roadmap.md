@@ -1459,7 +1459,10 @@ A full conversion also needs these. Ordered roughly by when they block users.
   fields.tsv (object references left out); the Project panel's **+ > Data Asset** offers them and the Inspector edits
   their files from the catalog. Loaded assets are dropped at unload and hot reload. 10 in-game checks (403; 386 in
   the exported game) and 3 editor checks. docs/saving.md converted. Not done: C# code cannot set the data asset
-  storage (players' copies are files, or whatever engine code sets).
+  storage (players' copies are files, or whatever engine code sets). (November 18, 2026: every DataAsset class is
+  registered by the build with a generated constructor (`Tallow.DataAssetRegistry`), so loading a file that names a
+  derived class no longer scans assemblies or reflects over constructors, and the class list is known under
+  NativeAOT.)
 - [x] C# profiler markers and counters (November 17, 2026): `ProfilerMarker` (Begin/End, `Auto()` scope),
   `ProfilerCounter` (Set/Add, unit), `ProfilerCategory` (enum check), `Profiler.Enabled`/`NameThread`, over the new
   `CSharpProfiler` API; names register on first use. The in-game run's profile report must show the test's marker
@@ -1547,12 +1550,15 @@ the first working export is described in "First NativeAOT export" at the end of 
   method they come from. In the game's own code (namespaces its `src/` declares): the export stops, names them and
   says how to fix them (or keep one with `[UnconditionalSuppressMessage]` and a justification, the standard .NET
   way; Tests/CSharpInGame keeps its Newtonsoft round trip and handle check so). In the engine: each must be in
-  `tools/nativeaot_allowlist.txt` with its reason (50 today: hot reload/load context, JIT only; reflection over
+  `tools/nativeaot_allowlist.txt` with its reason (46 today: hot reload/load context, JIT only; reflection over
   game types, which the export keeps whole; generic code generated in Tallow.AotRoots), and an unreviewed one stops
   the export. November 18, 2026: `IComponent` now declares `GameObject` (every handle and `Script` already had it),
   so `FormatReference` reads it directly, and the Inspector's list-element probe asks which value kinds it formats
   instead of making a default instance; `InspectorElementType` and `FormatReference` left the allowlist (three
-  warnings fewer, 63 in total for Tests/CSharpInGame). Inside third-party packages and .NET: reported per group, not failing (the author cannot change
+  warnings fewer). Data asset classes are now registered by the build (`Tallow.DataAssetRegistry`, a generated
+  constructor each, in a module initializer), so `DataAsset.Load`/`Revert` no longer scan assemblies with
+  `GetTypes` or construct through `Activator`; those four warnings left the allowlist too (Tests/CSharpInGame:
+  59 trim/AOT warnings in all, 0 in the game). Inside third-party packages and .NET: reported per group, not failing (the author cannot change
   them; the game's own calls into a package's unsafe APIs are game warnings and do stop it).
   `build_player.py --aot-warnings report` exports anyway. The export test adds unsuppressed `MakeGenericType` to
   the game and checks that the export stops, names the method and leaves no library, JIT assemblies or .NET

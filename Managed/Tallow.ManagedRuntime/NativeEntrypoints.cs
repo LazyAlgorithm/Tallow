@@ -678,6 +678,7 @@ public static unsafe class NativeEntrypoints
             BehaviorNodes.Clear();
             GameStarts.Clear();
             DataAsset.ClearCache();
+            DataAssetRegistry.Clear();
             TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
@@ -840,6 +841,7 @@ public static unsafe class NativeEntrypoints
             BehaviorNodes.Forget();
             GameStarts.Clear();
             DataAsset.ClearCache();
+            DataAssetRegistry.Clear();
             TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
@@ -2025,6 +2027,7 @@ public static unsafe class NativeEntrypoints
             BehaviorNodes.Clear();
             GameStarts.Clear();
             DataAsset.ClearCache();
+            DataAssetRegistry.Clear();
             TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
@@ -2075,6 +2078,7 @@ public static unsafe class NativeEntrypoints
             BehaviorNodes.Clear();
             GameStarts.Clear();
             DataAsset.ClearCache();
+            DataAssetRegistry.Clear();
             TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
