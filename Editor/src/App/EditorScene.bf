@@ -66,6 +66,7 @@ extension EditorApp
 			// A streamed world: only the cells round the view (docs/world-streaming.md).
 			LoadStreamedCellsAroundView();
 			ResetUndo();
+			RebindEditorScriptsScene();
 			Log.Info(scope $"Opened {path}");
 		}
 	}
@@ -82,6 +83,7 @@ extension EditorApp
 		mSelectedId = 0;
 		mDirty = true;
 		ResetUndo();
+		RebindEditorScriptsScene();
 	}
 
 	/// Find managed gameplay without scanning hidden build artifacts.
@@ -225,6 +227,7 @@ extension EditorApp
 		mDirty = mPrePlayDirty;
 		mPlay = .Edit;
 		Time.TimeScale = 1;
+		RebindEditorScriptsScene();
 	}
 
 	GameObject CreateObject(StringView name, StringView mesh = default)

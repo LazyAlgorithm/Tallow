@@ -101,6 +101,13 @@ public readonly struct EditorObject : IEquatable<EditorObject>
         }
     }
 
+    /// <summary>
+    /// The object as Tallow.API's <see cref="Tallow.GameObject"/>, for calls that take one (Tallow.API's scene-free
+    /// calls work in Edit mode; a scene call goes through the editor's own dirty marking, so call
+    /// <see cref="EditorScene.MarkDirty"/> after changing the scene with it).
+    /// </summary>
+    public Tallow.GameObject GameObject => new(EditorHost.ObjectSession(), Id);
+
     /// <summary>World position.</summary>
     public Vector3 Position
     {

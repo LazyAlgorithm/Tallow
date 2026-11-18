@@ -73,6 +73,14 @@ public static class SceneProbe
         addedLight.SetFloat("intensity", 2.5f);
         Check("kept", kept.Exists && kept.Name == "Probe Kept" && MathF.Abs(kept.Position.X - 4) < 0.001f);
 
+        // Tallow.API's own scene calls, on the open scene (bound while editing).
+        Tallow.GameObject apiObject = kept.GameObject;
+        Check("the edited object answers Tallow.API", apiObject.IsValid);
+        apiObject.Transform.Position = new Vector3(5, 0, -2);
+        EditorScene.MarkDirty();
+        Check("Tallow.API's Transform moved the edited object", MathF.Abs(kept.Position.X - 5) < 0.001f);
+        apiObject.Transform.Position = new Vector3(4, 0, -2);
+
         // The modelling API on the edited scene: a shape written, read back, edited and written again.
         using (EditMesh box = EditMesh.Shape(MeshShape.Box, new Vector3(1, 1, 1)))
         {

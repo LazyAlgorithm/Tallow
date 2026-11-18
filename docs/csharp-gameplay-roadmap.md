@@ -1420,8 +1420,16 @@ A full conversion also needs these. Ordered roughly by when they block users.
     gizmos (they had been throwing "resolver has not been bound" and being reported once). The probe applies a box,
     reads it back, extrudes its top and writes it again; the editor checks the scene's Model Mesh has faces.
     Create > C# Script > Editor also offers the two new kinds (Built-in Component Inspector, Scene View Tool).
-- Not yet: Tallow.API's scene objects (`GameObject`/`Transform`/components through their own API) on the edited scene
-  (they need scene callbacks; EditorScene is the Edit-mode API), and carving terrain from C# in Edit mode.
+  - **Tallow.API on the edited scene** (November 18, 2026): Tallow.Editor's Configure binds the open scene with
+    `CSharpRuntime.BindScene`, so editor scripts can hold a `Tallow.GameObject` (`EditorObject.GameObject`), read and
+    move its `Transform`, and call scene-bound APIs on the edited scene in Edit mode; Play binds its own scene on
+    start and the editor rebinds after StopPlay, after opening or making a scene (`RebindEditorScriptsScene`). The
+    Tools menu marks the scene dirty after each command (a step is only pushed when the scene text changed), so
+    changes a script makes through Tallow.API are undoable; a script that edits from an Inspector, window or
+    overlay calls `EditorScene.MarkDirty()` itself. The probe moves its cube with `Tallow.API`'s Transform and reads
+    it back with EditorScene.
+- Not yet: carving terrain from C# in Edit mode (the terrain's own undo records strokes; that bridge is not
+  written).
 - Gotchas: the managed table's function pointers must be filled in `EditorHost.Configure` (a missing one is a null
   call, and the editor segfaults), and host-table changes bump its version (4 now) on both sides; the editor's
   snapshot undo needs `MarkDirty`, not `Destroy`, for script deletions.

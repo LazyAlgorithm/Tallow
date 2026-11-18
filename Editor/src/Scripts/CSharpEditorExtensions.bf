@@ -70,6 +70,7 @@ extension EditorApp
 		public function int32(uint32) modelRead;
 		public function int32(uint32, int32) modelWrite;
 		public function void*(void*, char8*) resolveApi;
+		public function uint64() objectSession;
 	}
 
 	/// What the editor calls in them (Tallow.Editor's EditorHost.ManagedTable).
@@ -209,9 +210,12 @@ extension EditorApp
 		}
 		if (!CSharpRuntime.Initialize(scope $"{runtimeFolder}/Tallow.ManagedRuntime.runtimeconfig.json", scope $"{runtimeFolder}/Tallow.ManagedRuntime.dll"))
 			return false;
+		// Editor scripts share the C# API with a game: bound to the open scene, their GameObject and Transform calls
+		// work on it in Edit mode (Play binds its own scene, and the editor rebinds after StopPlay).
+		CSharpRuntime.BindScene(mScene);
 		EditorHostTable host = .()
 		{
-			version = 6,
+			version = 7,
 			size = sizeof(EditorHostTable),
 			log = => HostLog,
 			text = => HostText,
@@ -264,7 +268,8 @@ extension EditorApp
 			sceneViewPick = => HostSceneViewPick,
 			modelRead = => HostModelRead,
 			modelWrite = => HostModelWrite,
-			resolveApi = => CSharpRuntime.ResolveApiEntry
+			resolveApi = => CSharpRuntime.ResolveApiEntry,
+			objectSession = => HostObjectSession
 		};
 		if (tn_csharp_editor_configure(editorApi.CStr(), &host, &sExtensions) == 0)
 		{
@@ -354,6 +359,13 @@ extension EditorApp
 		return edited;
 	}
 
+	/// The open scene changed, or Play ended: editor scripts work on the new one.
+	void RebindEditorScriptsScene()
+	{
+		if (mExtensionsLoaded && mPlay == .Edit)
+			CSharpRuntime.BindScene(mScene);
+	}
+
 	/// The editor scripts' Scene view overlays, each frame the Scene view draws (gizmos and input only: the editor
 	/// is rendering, not laying out widgets).
 	void DrawCSharpSceneOverlays()
@@ -423,7 +435,12 @@ extension EditorApp
 					}
 				}
 				else if (ImGui.MenuItem(label.CStr()))
+				{
 					sExtensions.runMenu((int32)(i - mExtensionWindows.Count));
+					// A command may change the scene through Tallow.API, which cannot mark it: record a step (only
+					// pushed when the scene text differs).
+					MarkDirty();
+				}
 				continue;
 			}
 			let folder = rest.Substring(0, slash);
@@ -1296,6 +1313,9 @@ extension EditorApp
 	}
 
 	/// An object's model as a C# EditMesh handle, 0 when it has none.
+	/// The scene session managed scene handles carry.
+	static uint64 HostObjectSession() => CSharpRuntime.Session;
+
 	static int32 HostModelRead(uint32 id)
 	{
 		let gameObject = SceneObject(id);

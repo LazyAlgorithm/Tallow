@@ -69,6 +69,7 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<uint, int> ModelRead;
         public delegate* unmanaged[Cdecl]<uint, int, int> ModelWrite;
         public delegate* unmanaged[Cdecl]<nint, byte*, nint> ResolveApi;
+        public delegate* unmanaged[Cdecl]<ulong> ObjectSession;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -87,7 +88,7 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<int> DrawSceneOverlays;
     }
 
-    internal const int Version = 6;
+    internal const int Version = 7;
     internal const int LayoutSameLine = 0, LayoutSeparator = 1, LayoutSpacing = 2, LayoutIndent = 3, LayoutUnindent = 4,
         LayoutBeginDisabled = 5, LayoutEndDisabled = 6, LayoutPushId = 7, LayoutPopId = 8;
     internal const int QueryPlaying = 0, QueryProjectPath = 1, QueryTargetScript = 2, QueryTargetObject = 3,
@@ -553,6 +554,12 @@ internal static unsafe class EditorHost
     {
         RequireScene();
         return sHost.SceneViewPick(u, v);
+    }
+
+    internal static ulong ObjectSession()
+    {
+        RequireScene();
+        return sHost.ObjectSession();
     }
 
     internal static int ModelRead(uint id)
