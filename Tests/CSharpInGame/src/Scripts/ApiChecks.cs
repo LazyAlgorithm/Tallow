@@ -600,6 +600,8 @@ public class ApiChecks : CheckBase
 
     /// Every built-in component handle (the generated ones too) can be added, and each of its fields reads back what
     /// is written to it.
+    // NativeAOT: the types it reflects over are Tallow.API's, which the export keeps whole.
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2080", Justification = "Tallow.API is kept whole in a NativeAOT export.")]
     private void EveryNativeHandle()
     {
         var problems = new List<string>();

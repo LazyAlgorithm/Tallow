@@ -1534,7 +1534,18 @@ the first working export is described in "First NativeAOT export" at the end of 
 ### Static registration, metadata and security
 
 - [~] Replace runtime `Assembly.GetTypes`, `Activator.CreateInstance` and unrestricted `FieldInfo.SetValue` for AOT export with **build-generated component registration**, typed constructors/factories, field setter/getter delegates and `[ShowInInspector]`/`[HideInInspector]` metadata and stable serialized **field IDs**. Generate this from the same Roslyn semantic source and retain the JIT-path serialization contract; include migration/version handling for renames, IDs and old scene/prefab data.
-- [ ] Do not discover arbitrary reflection metadata at runtime; make required remaining reflection explicit with source generation and trim/AOT annotations. Fail the export on actionable IL2026/IL207x/IL3050-style relevant trim/AOT diagnostics; add a tracked allowlist for justified third-party diagnostics only after review. No user-provided or arbitrary assembly/mod loader in the shipping runtime.
+- [~] Do not discover arbitrary reflection metadata at runtime; make required remaining reflection explicit with source generation and trim/AOT annotations. Fail the export on actionable IL2026/IL207x/IL3050-style relevant trim/AOT diagnostics; add a tracked allowlist for justified third-party diagnostics only after review. No user-provided or arbitrary assembly/mod loader in the shipping runtime.
+  Export on warnings done November 18, 2026 (`tools/csharp_native.py`): the ILCompiler's warnings are sorted by the
+  method they come from. In the game's own code (namespaces its `src/` declares): the export stops, names them and
+  says how to fix them (or keep one with `[UnconditionalSuppressMessage]` and a justification, the standard .NET
+  way; Tests/CSharpInGame keeps its Newtonsoft round trip and handle check so). In the engine: each must be in
+  `tools/nativeaot_allowlist.txt` with its reason (53 today: hot reload/load context, JIT only; reflection over
+  game types, which the export keeps whole; generic code generated in Tallow.AotRoots), and an unreviewed one stops
+  the export. Inside third-party packages and .NET: reported per group, not failing (the author cannot change
+  them; the game's own calls into a package's unsafe APIs are game warnings and do stop it).
+  `build_player.py --aot-warnings report` exports anyway. The export test adds unsuppressed `MakeGenericType` to
+  the game and checks that the export stops, names the method and leaves no library, JIT assemblies or .NET
+  behind. Still open: generated code in place of the engine's remaining reflection (shrinks the allowlist).
 - [x] Use the existing curated `[CSharpExpose]` Beef reflection manifest for engine-to-managed APIs; generate bindings at engine build time, verify signature hashes and keep editor JIT/AOT exports on one public API contract. Avoid handwritten duplicated P/Invoke.
 - [~] Enable Release + `PublishAot=true`, appropriate platform RID, native optimization and trimming. Validate each compiler/linker option on actual host OS; do **not** turn on `IlcInstructionSet` options that change supported hardware or fast-math flags that change deterministic physics/gameplay semantics.
 - [~] Ship stripped binaries and retain matching **private** debug artifacts: Linux `.dbg`, Windows `.pdb` and exact build identifiers/map files, stored outside public download folders. Do not equate stripping symbols with complete tamper resistance: native code is harder to inspect than IL but still reverse-engineerable. Don't remove necessary exported ABI symbols or crash-unwinding data.

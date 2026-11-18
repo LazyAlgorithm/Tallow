@@ -234,6 +234,9 @@ def main():
                         help='C# games: native = NativeAOT (the game compiled to one native library; no .NET, no IL '
                              'assemblies shipped; Linux and Windows), jit = .NET assemblies and the bundled runtime '
                              '(compatibility/debug). Default: csharpRuntime in project.tallow, else jit')
+    parser.add_argument('--aot-warnings', choices=('error', 'report'), default='error',
+                        help='NativeAOT: error (default) stops the export on a trim/AOT warning in the game\'s own code or an '
+                             'unreviewed one in the engine (tools/nativeaot_allowlist.txt); report only lists them')
     parser.add_argument('--no-bundle-dotnet', action='store_true', help='C# games: do not ship the .NET runtime; players must install it (also bundleDotNet = 0 in project.tallow)')
     args = parser.parse_args()
     project = args.project.resolve()
@@ -412,7 +415,8 @@ def main():
                 sys.path.insert(0, str(engine / 'tools'))
                 import csharp_native
                 # Private symbols beside the build, never in it.
-                csharp_native.build(engine, project, args.config, staging, windows, output.parent / (output.name + '-symbols'))
+                csharp_native.build(engine, project, args.config, staging, windows, output.parent / (output.name + '-symbols'),
+                                    args.aot_warnings)
             elif csharp and not web:
                 stage_csharp(engine, project, staging, args.config, windows,
                              not args.no_bundle_dotnet and settings.get('bundleDotNet', '1') != '0')

@@ -1,0 +1,49 @@
+# Engine trim/AOT warnings a NativeAOT export accepts (tools/csharp_native.py), each reviewed.
+#
+# A line: <codes> <origin> <reason>. Codes are IL numbers separated by commas, or * for any. The origin is the
+# method (or type, for all its methods) the warning comes from, as the ILCompiler names it, without parameters;
+# a compiler-made name such as `<CallbackMask>g__Check|91_0` is matched by its start (`...<CallbackMask>`).
+#
+# An engine warning that is not here fails the export: review it, then add it with its reason or change the code.
+# Warnings in the game's own code always fail (the author fixes them, or keeps them with
+# [UnconditionalSuppressMessage] and a justification); warnings in packages and .NET itself are reported only.
+#
+# Why most reflection here is safe: the export keeps every game assembly whole (TrimmerRootAssembly), so fields,
+# constructors and methods of game types are never trimmed; and Tallow.Build generates the generic code that
+# reflection asks for at run time (Tallow.AotRoots.g.cs: List<T>, T[], TryGetComponent<T> of every Inspector field
+# type). tools/test_csharp_export.py --runtime native runs the in-game checks that use each path below.
+
+# Hot reload and the collectible load context: JIT only. NativeAOT's LoadGame takes the compiled-in registry and
+# ReloadGame refuses, so none of this runs in a NativeAOT game.
+*                  Tallow.ManagedRuntime.ReloadMigrator                                  hot reload (JIT only)
+IL2026             Tallow.ManagedRuntime.NativeEntrypoints.GameAssemblyContext            collectible load context (JIT only)
+IL2026             Tallow.ManagedRuntime.NativeEntrypoints.OpenGame                       loads assemblies by path (JIT only; NativeAOT uses NativeHost.Registry)
+IL2026,IL2072      Tallow.ManagedRuntime.NativeEntrypoints.CreateRegistry                 finds the generated registry by name in a loaded assembly (JIT only)
+IL2026,IL2075      Tallow.ManagedRuntime.NativeEntrypoints.EditorConfigure                editor scripts (the editor runs JIT; games never call it)
+
+# Inspector fields, saves and [Sync] text: reflection over game types, which are kept whole.
+IL2075             Tallow.ManagedRuntime.NativeEntrypoints.ReadFields                     script fields of game types (rooted)
+IL2075             Tallow.ManagedRuntime.NativeEntrypoints.FieldText                      script fields of game types (rooted)
+IL2070             Tallow.ManagedRuntime.NativeEntrypoints.RecordFields                   [Serializable] game types (rooted)
+IL2070             Tallow.ManagedRuntime.NativeEntrypoints.IsNestedType                   parameterless constructors of game types (rooted)
+IL2075             Tallow.ManagedRuntime.NativeEntrypoints.NestedPath                     nested fields of game types (rooted)
+IL2072             Tallow.ManagedRuntime.NativeEntrypoints.SetPath                        constructs nested game values (rooted)
+IL2075             Tallow.ManagedRuntime.NativeEntrypoints.AppendNested                   nested fields of game types (rooted)
+IL2072,IL2075      Tallow.ManagedRuntime.NativeEntrypoints.ApplyText                      fields and values of game types (rooted)
+IL2067,IL2070,IL2072 Tallow.ManagedRuntime.NativeEntrypoints.ParseItem                    list items of game types (rooted)
+IL2062,IL2072      Tallow.ManagedRuntime.NativeEntrypoints.InspectorElementType           element types of Inspector lists (rooted)
+IL2075             Tallow.ManagedRuntime.NativeEntrypoints.FormatReference                Handle property of engine reference types (Tallow.API is rooted)
+IL3050             Tallow.ManagedRuntime.NativeEntrypoints.ParseList                      List<T> of Inspector field types: generated in Tallow.AotRoots.g.cs
+IL3050             Tallow.ManagedRuntime.NativeEntrypoints.ParseReference                 TryGetComponent<T> of Inspector field types: generated in Tallow.AotRoots.g.cs
+
+# Callbacks and calls by name on game types (kept whole).
+IL2070             Tallow.ManagedRuntime.NativeEntrypoints.<CallbackMask>                 which lifecycle methods a script declares (rooted)
+IL2075             Tallow.ManagedRuntime.NativeEntrypoints.UiInvoke                       UI event handler methods of game scripts (rooted)
+IL2070             Tallow.RpcMethods.Resolve                                              [Rpc] methods of game scripts (rooted)
+IL2070             Tallow.BehaviorNodes.Register                                          fields of game behaviour nodes (rooted; no MetadataToken under NativeAOT)
+IL2090             Tallow.ComponentLookup`1..cctor                                        fields of game components (rooted)
+
+# Data assets: classes of the game, found by name and constructed (kept whole).
+IL2026             Tallow.DataAsset.FindClass                                             Assembly.GetTypes over game assemblies (rooted)
+IL2067,IL2072      Tallow.DataAsset.Load                                                  constructs game DataAsset classes (rooted)
+IL2072             Tallow.DataAsset.Revert                                                constructs game DataAsset classes (rooted)

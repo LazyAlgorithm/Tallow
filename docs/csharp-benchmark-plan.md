@@ -409,5 +409,9 @@ measurements, `tools/run_nativeaot_bench.py` on Linux x64, Samples/CSharpBench e
   same hash as B20's Beef and C# runs. Cross-OS and other CPUs not yet run.
 - B28 (first part): JIT server + NativeAOT bot client and the reverse, 10,000 ticks, no added lag/loss: both servers
   end on `c8a15ddc6f490720`, no errors, no code-ID warning. The RTT/loss matrix and more peers are still to run.
-- B24, B29, B30: not yet measured (B24's export-failure path, warnings-as-errors with an allowlist, a clean Windows
-  machine and crash symbolication). Benchmark both profiles from identical game commits and core engine settings. Do not substitute NativeAOT compilation of a dummy sample for shipping-player acceptance.
+- B24 (part): a NativeAOT export that fails leaves no game behind, no JIT assemblies or .NET in its place
+  (`test_csharp_export.py --runtime native`, unsuppressed run-time generic code in the game); the release files
+  hold no IL, sources or symbols. The default switch to NativeAOT waits for the user's Windows test.
+- B29 (part): exports stop on trim/AOT warnings in game code or unreviewed engine code
+  (`tools/nativeaot_allowlist.txt`); the field-by-field JIT/AOT comparison is still to do.
+- B30: not yet measured (a clean Windows machine and crash symbolication). Benchmark both profiles from identical game commits and core engine settings. Do not substitute NativeAOT compilation of a dummy sample for shipping-player acceptance.

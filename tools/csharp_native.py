@@ -33,6 +33,75 @@ DOTNET_MAJOR = 11
 # run time). They are listed in the build's report; tools/test_csharp_export.py --runtime native runs the game's
 # checks on the result.
 ANALYSIS = re.compile(r'warning (IL[23]\d{3}):\s*(.*?)(?: \[[^\]]*\])?$')
+ALLOWLIST = Path(__file__).resolve().parent / 'nativeaot_allowlist.txt'
+FRAMEWORK = ('System.', 'Microsoft.', 'Internal.', 'Interop.', 'ILCompiler.')
+
+
+def allowlist() -> list[tuple[set[str] | None, str, str]]:
+    """The engine warnings the export accepts: (codes or None for any, origin, reason)."""
+    entries = []
+    for line in ALLOWLIST.read_text(encoding='utf-8').splitlines():
+        if not line.strip() or line.lstrip().startswith('#'):
+            continue
+        codes, origin, *reason = line.split(None, 2)
+        entries.append((None if codes == '*' else set(codes.split(',')), origin, reason[0].strip() if reason else ''))
+    return entries
+
+
+def origin_of(message: str) -> str:
+    """The method a warning comes from: 'Ns.Type.Method(Args): text' -> 'Ns.Type.Method'."""
+    ends = [i for i in (message.find('('), message.find(': ')) if i > 0]
+    return message[:min(ends)] if ends else message
+
+
+def allowed(code: str, origin: str, entries) -> bool:
+    for codes, key, _ in entries:
+        if codes is not None and code not in codes:
+            continue
+        if origin == key or origin.startswith(key + '.') or (key.endswith('>') and origin.startswith(key)):
+            return True
+    return False
+
+
+def game_namespaces(project: Path) -> tuple[set[str], set[str]]:
+    """Namespaces the game's own C# declares (src/, editor scripts left out), and its types outside any namespace."""
+    namespaces: set[str] = set()
+    global_types: set[str] = set()
+    for source in (project / 'src').rglob('*.cs'):
+        if 'Editor' in source.relative_to(project / 'src').parts[:-1]:
+            continue
+        text = source.read_text(encoding='utf-8', errors='replace')
+        declared = re.findall(r'^\s*namespace\s+([A-Za-z_][\w.]*)', text, re.M)
+        namespaces.update(declared)
+        if not declared:
+            global_types.update(re.findall(r'\b(?:class|struct|record|interface)\s+([A-Za-z_]\w*)', text))
+    return namespaces, global_types
+
+
+def classify(warnings: list[str], project: Path) -> dict[str, list[str]]:
+    """Sorts warnings into game (fail), engine (allowlisted or fail), and packages/.NET (reported)."""
+    namespaces, global_types = game_namespaces(project)
+    entries = allowlist()
+    groups: dict[str, list[str]] = {'game': [], 'engine-unreviewed': [], 'engine-allowed': [], 'packages': [], 'dotnet': []}
+    for warning in warnings:
+        code, _, message = warning.partition(': ')
+        origin = origin_of(message)
+        if any(origin == ns or origin.startswith(ns + '.') for ns in namespaces) or origin.split('.')[0] in global_types:
+            groups['game'].append(warning)
+        elif origin.startswith('Tallow.'):
+            groups['engine-allowed' if allowed(code, origin, entries) else 'engine-unreviewed'].append(warning)
+        elif origin.startswith(FRAMEWORK):
+            groups['dotnet'].append(warning)
+        else:
+            groups['packages'].append(warning)
+    return groups
+
+
+GAME_HELP = """These are in the game's own code and can break it in a NativeAOT build (code made at run time, or
+members trimming removes). Change the code (avoid MakeGenericType/MakeGenericMethod, Activator on types found by name,
+Type.GetType of strings), or, if you have checked it works when exported as NativeAOT, keep it with
+  [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "<code>", Justification = "<why it is safe>")]
+on the method. Or export with the JIT runtime (Build window: JIT; tools/build_player.py --csharp-runtime jit)."""
 
 
 def library_name(windows: bool) -> str:
@@ -129,9 +198,12 @@ def project_file(engine: Path, assemblies: list[Path]) -> str:
 '''
 
 
-def build(engine: Path, project: Path, config: str, staging: Path, windows: bool, symbols: Path) -> list[str]:
+def build(engine: Path, project: Path, config: str, staging: Path, windows: bool, symbols: Path,
+          warnings_mode: str = 'error') -> list[str]:
     """Compiles the NativeAOT library into staging/Managed/Native and its native symbols into `symbols`.
-    Returns the trim/AOT analysis warnings (code, message)."""
+    Returns the trim/AOT analysis warnings (code, message). With warnings_mode 'error' (the default), a warning in
+    the game's own code, or an engine warning not in tools/nativeaot_allowlist.txt, fails the export (after the
+    report is written); 'report' only lists them."""
     if windows and os.name != 'nt' and not sys.platform.startswith('linux'):
         raise SystemExit('A Windows NativeAOT library is built on Linux or Windows.')
     rid = 'win-x64' if windows else 'linux-x64'
@@ -185,12 +257,32 @@ def build(engine: Path, project: Path, config: str, staging: Path, windows: bool
             shutil.copy2(found[0], symbols / wanted)
         else:
             print(f'warning: the native symbols ({wanted}) were not made; crash reports of this build cannot be read.')
+        groups = classify(warnings, project)
+        titles = {'game': "in the game's own code (fail the export)",
+                  'engine-unreviewed': 'in the engine, not in tools/nativeaot_allowlist.txt (fail the export)',
+                  'engine-allowed': 'in the engine, reviewed (tools/nativeaot_allowlist.txt)',
+                  'packages': 'in third-party packages (reported only)', 'dotnet': 'in .NET itself (reported only)'}
         report = [f'NativeAOT build of {project.name} ({rid}, {config})', f'library: {library.name} '
-                  f'({library.stat().st_size // 1024} KB)', f'trim/AOT analysis warnings: {len(warnings)}', *warnings]
+                  f'({library.stat().st_size // 1024} KB)', f'trim/AOT analysis warnings: {len(warnings)}']
+        for key, title in titles.items():
+            report += ['', f'{len(groups[key])} {title}', *groups[key]]
         (symbols / 'nativeaot-report.txt').write_text('\n'.join(report) + '\n', encoding='utf-8')
     size = (staging / 'Managed' / 'Native' / library_name(windows)).stat().st_size
     print(f'NativeAOT: {library_name(windows)} {size // (1024 * 1024)} MB; symbols in {symbols}; '
-          f'{len(warnings)} trim/AOT warning(s) (listed in {symbols / "nativeaot-report.txt"})')
+          f'{len(warnings)} trim/AOT warning(s): {len(groups["game"])} in the game, '
+          f'{len(groups["engine-allowed"]) + len(groups["engine-unreviewed"])} in the engine '
+          f'({len(groups["engine-unreviewed"])} not reviewed), {len(groups["packages"])} in packages, '
+          f'{len(groups["dotnet"])} in .NET (listed in {symbols / "nativeaot-report.txt"})')
+    failing = groups['game'] + groups['engine-unreviewed']
+    if failing and warnings_mode == 'error':
+        lines = ['The NativeAOT export stopped on trim/AOT warnings:']
+        if groups['game']:
+            lines += ['', *groups['game'], '', GAME_HELP]
+        if groups['engine-unreviewed']:
+            lines += ['', 'Engine warnings nobody has reviewed (add each to tools/nativeaot_allowlist.txt with its '
+                      'reason once it is known to be safe, or change the engine code):', *groups['engine-unreviewed']]
+        lines += ['', 'tools/build_player.py --aot-warnings report exports anyway.']
+        raise SystemExit('\n'.join(lines))
     return warnings
 
 

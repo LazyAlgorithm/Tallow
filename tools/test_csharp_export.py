@@ -32,6 +32,31 @@ import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when i
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def unsafe_code_stops(project: Path, work: Path, platform_name: str) -> bool:
+    """NativeAOT: game code that makes generic code at run time (unsuppressed IL3050) stops the export, names the
+    method, and leaves no game behind (no library, and no JIT assemblies or .NET in its place)."""
+    (project / "src/Scripts/MakesCodeLater.cs").write_text(
+        "using System;\nusing System.Collections.Generic;\nnamespace InGame;\n\npublic static class MakesCodeLater\n{\n"
+        "    public static object ListOf(Type item) => Activator.CreateInstance(typeof(List<>).MakeGenericType(item))!;\n}\n",
+        encoding="utf-8")
+    output = work / "Refused"
+    built = subprocess.run([sys.executable, str(ROOT / "tools/build_player.py"), str(project), "--output", str(output),
+                            "--config", "Release", "--platform", platform_name, "--csharp-runtime", "native"],
+                           capture_output=True, text=True)
+    text = built.stdout + built.stderr
+    left = [str(p.relative_to(output)) for p in output.rglob("*")
+            if p.suffix in (".dll", ".so", ".exe") or p.name in ("dotnet", "Native")] if output.exists() else []
+    ok = (built.returncode != 0 and "InGame.MakesCodeLater.ListOf" in text and "IL3050" in text
+          and "UnconditionalSuppressMessage" in text and not left)
+    print(f"Unsuppressed run-time generic code in the game: export {'stopped' if built.returncode else 'NOT stopped'}, "
+          f"method {'named' if 'InGame.MakesCodeLater.ListOf' in text else 'NOT named'}, "
+          f"left behind: {', '.join(left) or 'nothing'}")
+    if not ok:
+        print(text[-4000:])
+    (project / "src/Scripts/MakesCodeLater.cs").unlink()
+    return ok
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--keep", action="store_true", help="keep the temporary project and build")
@@ -123,6 +148,8 @@ def main() -> int:
         notices = output / "THIRD-PARTY-NOTICES.txt"
         if not notices.exists() or "Newtonsoft.Json 13.0.4" not in notices.read_text():
             print("The build lacks THIRD-PARTY-NOTICES.txt naming its NuGet package.", file=sys.stderr)
+            return 1
+        if native and not unsafe_code_stops(project, work, args.platform):
             return 1
         where = "as NativeAOT, with no .NET" if native else "on its bundled .NET runtime"
         print(f"The built C# game ({args.platform}{', under Wine' if wine else ''}) passed {passed} checks {where}, with its third-party notices.")
