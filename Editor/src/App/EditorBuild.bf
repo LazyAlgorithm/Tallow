@@ -24,6 +24,8 @@ enum ScriptTemplateKind
 	case EditorWindow;
 	case EditorMenu;
 	case EditorPreferences;
+	case EditorComponentInspector;
+	case EditorSceneOverlay;
 
 	/// An editor script's template (the file goes in an Editor folder).
 	public bool IsEditor => (int)this >= (int)ScriptTemplateKind.EditorInspector;
@@ -301,6 +303,63 @@ extension EditorApp
 			    public float GridSize = 1;
 			    public bool SnapToGrid = true;
 			    public string Author = "";
+			}}
+			""", scriptNamespace, name);
+		case .EditorComponentInspector:
+			text.AppendF("""
+			using Tallow;
+			using Tallow.Editor;
+
+			namespace {0};
+
+			/// <summary>Draws the Inspector of a built-in component (here Light) in place of its plain field list, for
+			/// every object with one. Name any built-in component's handle type: Light, MeshRenderer, BoxCollider... For
+			/// a C# script's Inspector, derive from Inspector instead. Editor scripts (any folder named Editor) run only
+			/// in the editor: a game build leaves them out.</summary>
+			[CustomInspector(typeof(Light))]
+			public class {1} : ComponentInspector
+			{{
+			    public override void OnInspectorGUI()
+			    {{
+			        EditorGUI.HelpBox($"Light on {{Target.Object.Name}}");
+
+			        // Every field, as the Inspector draws them. Or draw some by name: Field("intensity");
+			        DrawDefaultInspector();
+
+			        // The component's fields read and write as scene files do; undo and saving are taken care of:
+			        // if (EditorGUI.Button("Dim"))
+			        //     Target.SetFloat("intensity", Target.GetFloat("intensity") * 0.5f);
+			    }}
+			}}
+			""", scriptNamespace, name);
+		case .EditorSceneOverlay:
+			text.AppendF("""
+			using System.Numerics;
+			using Tallow;
+			using Tallow.Editor;
+
+			namespace {0};
+
+			/// <summary>Draws in the Scene view every frame it is open, and turns clicks into a tool. Any concrete
+			/// SceneViewOverlay subclass is called; it runs while the editor renders, so it draws gizmos rather than
+			/// widgets (an editor window is for those). OnSceneViewGUI is also where a Scene view tool reads the mouse:
+			/// SceneView.IsMouseOver, IsClicked, MousePoint, Ray, Pick and PickUnderMouse. Editor scripts (any folder
+			/// named Editor) run only in the editor: a game build leaves them out.</summary>
+			public class {1} : SceneViewOverlay
+			{{
+			    public override void OnSceneViewGUI()
+			    {{
+			        Vector3 center = EditorScene.Selection is {{ }} selected ? selected.Position : Vector3.Zero;
+			        SceneView.Sphere(center, 1.5f, Color.Yellow);
+			        SceneView.Line(center, center + Vector3.UnitY * 3, Color.Red);
+
+			        if (SceneView.IsMouseOver && SceneView.IsClicked)
+			        {{
+			            EditorObject picked = SceneView.PickUnderMouse();
+			            if (picked.Exists)
+			                EditorScene.Selection = picked;
+			        }}
+			    }}
 			}}
 			""", scriptNamespace, name);
 		case .Basic:

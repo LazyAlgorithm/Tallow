@@ -708,6 +708,10 @@ extension EditorApp
 					BeginNewScriptTemplate(.EditorMenu, "MyToolCommands");
 				if (ImGui.MenuItem("Preferences Page (settings)"))
 					BeginNewScriptTemplate(.EditorPreferences, "MyToolSettings");
+				if (ImGui.MenuItem("Built-in Component Inspector"))
+					BeginNewScriptTemplate(.EditorComponentInspector, "LightInspector");
+				if (ImGui.MenuItem("Scene View Tool (overlay)"))
+					BeginNewScriptTemplate(.EditorSceneOverlay, "MySceneTool");
 				ImGui.EndMenu();
 			}
 			ImGui.EndMenu();

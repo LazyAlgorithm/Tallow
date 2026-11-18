@@ -1411,8 +1411,8 @@ A full conversion also needs these. Ordered roughly by when they block users.
     existing `Tallow.Gizmos` API. The test focuses the Scene tab (the default layout leaves it behind Game) and a
     probe overlay reports that it ran, saw the view and got a ray.
 - Not yet: Tallow.API itself on the edited scene (GameObject/Transform/components are bound to a running game;
-  EditorScene is the Edit-mode API), modelling/terrain tools written as editor scripts, and Create > C# Script
-  templates for the two new editor script kinds.
+  EditorScene is the Edit-mode API), and modelling/terrain tools written as editor scripts. Create > C# Script >
+  Editor offers the two new kinds too (Built-in Component Inspector, Scene View Tool).
 - Gotchas: the managed table's function pointers must be filled in `EditorHost.Configure` (a missing one is a null
   call, and the editor segfaults), and host-table changes bump its version (4 now) on both sides; the editor's
   snapshot undo needs `MarkDirty`, not `Destroy`, for script deletions.
