@@ -510,6 +510,8 @@ static class CSharpRuntime
 		let count = tn_csharp_load_game(path.CStr());
 		if (count < 0)
 			Log.Error(scope $"Could not load C# gameplay: {StringView(tn_csharp_error())}");
+		else
+			CSharpNetReload.Loaded(path);
 		return count;
 	}
 
@@ -526,6 +528,7 @@ static class CSharpRuntime
 		CSharpTextures.ReleaseAll();
 		CSharpScenes.ReleaseAll();
 		CSharpModeling.ReleaseAll();
+		CSharpNetReload.Stopped();
 		HasTeamChooser = false;
 		if (!sStarted)
 			return true;
@@ -547,6 +550,17 @@ static class CSharpRuntime
 	{
 		if (!Ready)
 			return -1;
+		// A client in a session keeps a change until the host reloads the same code (CSharpNetReload).
+		if (CSharpNetReload.ShouldWait(sScene.Network, gameDll))
+			return CSharpNetReload.Waiting;
+		return ReloadNow(gameDll);
+	}
+
+	/// ReloadAssembly without waiting for the host.
+	public static int32 ReloadNow(StringView gameDll)
+	{
+		if (!Ready)
+			return -1;
 		let game = scope String(gameDll);
 		CSharpEcsSystem.RemoveAll();
 		HasTeamChooser = false;
@@ -555,9 +569,8 @@ static class CSharpRuntime
 		let kept = tn_csharp_reload_game(game.CStr());
 		if (kept < 0)
 			Log.Error(scope $"C# hot reload failed; the old code keeps running: {StringView(tn_csharp_error())}");
-		else if (sScene?.Network != null && sScene.Network.IsConnected && (sScene.Network.IsClient || sScene.Network.ClientCount > 0))
-			// Every machine in a session must run the same code: a reload only reaches this one.
-			Log.Warning("C# hot reload changed the code on this machine only; the other players in the session still run the old code and may go out of sync. Restart the session to share the change.");
+		else
+			CSharpNetReload.Reloaded(sScene.Network, game);
 		for (let component in sScene.Components)
 			if (let script = component as CSharpBehaviour)
 				script.Reloaded();

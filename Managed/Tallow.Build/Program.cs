@@ -795,6 +795,45 @@ internal static class Program
     /// Tallow.API references and the trusted analyzers). Rewritten only when
     /// the assembly list changes.
     /// </summary>
+    /// <summary>The code ID of the game last generated (see <see cref="CodeId"/>).</summary>
+    private static string? sCodeId;
+
+    /// <summary>
+    /// What the game's code is, independent of where it was built: SHA-256 over each game assembly's name, its
+    /// references and packages, and its sources (paths relative to src, line endings ignored, so a Windows and a Linux
+    /// checkout agree), first 16 hex digits. Written beside Tallow.Game.dll as Tallow.Game.codeid; a network session
+    /// uses it to hot reload every machine onto the same code (only machines that built the same sources follow).
+    /// Generated files are left out: they follow from the sources.
+    /// </summary>
+    private static string CodeId(string source, Dictionary<string, List<string>> filesByAssembly,
+        Dictionary<string, Definition> definitions)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        void Add(string text) => hash.AppendData(Encoding.UTF8.GetBytes(text + "\n"));
+        foreach ((string name, List<string> files) in filesByAssembly.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            Add("assembly " + name);
+            if (definitions.TryGetValue(name, out Definition? definition))
+            {
+                foreach (string reference in definition.References.Order(StringComparer.Ordinal))
+                    Add("reference " + reference);
+                foreach (PackageRef package in definition.Packages.OrderBy(p => p.Id, StringComparer.Ordinal))
+                    Add($"package {package.Id} {package.Version}");
+            }
+            var sources = files.Where(file => IsInFolder(file, source))
+                .Select(file => (Relative: Path.GetRelativePath(source, file).Replace('\\', '/'), File: file))
+                .OrderBy(pair => pair.Relative, StringComparer.Ordinal);
+            foreach ((string relative, string file) in sources)
+            {
+                Add("file " + relative);
+                byte[] bytes = File.ReadAllBytes(file);
+                hash.AppendData(bytes.Where(b => b != (byte)'\r').ToArray());
+                Add("");
+            }
+        }
+        return Convert.ToHexString(hash.GetHashAndReset())[..16].ToLowerInvariant();
+    }
+
     private static void WriteSolution(string project, IEnumerable<string> csprojs)
     {
         string root = Path.GetFullPath(project).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -853,6 +892,7 @@ internal static class Program
         }
 
         WriteComponentFactories(engine, generated, filesByAssembly);
+        sCodeId = CodeId(source, filesByAssembly, definitions);
 
         foreach ((string name, string path) in paths)
         {
@@ -1450,7 +1490,17 @@ internal static class Program
                 throw new InvalidOperationException("Could not start the .NET SDK.");
             build.WaitForExit();
             if (build.ExitCode == 0)
+            {
                 WritePackageLists(project, outputRoot);
+                string gameBin = Path.Combine(outputRoot != null ? Path.GetFullPath(outputRoot)
+                    : Path.Combine(project, ".tallow-csharp", "bin"), "Tallow.Game");
+                if (sCodeId != null && Directory.Exists(gameBin))
+                {
+                    string idPath = Path.Combine(gameBin, "Tallow.Game.codeid");
+                    if (!File.Exists(idPath) || File.ReadAllText(idPath).Trim() != sCodeId)
+                        File.WriteAllText(idPath, sCodeId + "\n");
+                }
+            }
             if (build.ExitCode == 0 && outputRoot == null)
                 WriteComponentCatalog(project, engine);
             // A graph can still be worked on while the game does not compile: its nodes come from the sources.

@@ -559,7 +559,7 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
   Beef leak check on) runs the in-engine, network, hot-reload, Voxel sample and Gallery suites, all passing (run
   44250231183). Fixed to get there: a crash dialog that hung unattended runs, a graph-catalog leak, `Platform=x64`
   output folders, leak-check false positives for component text kept in Flecs, and DataAsset backslash paths.
-- [ ] Implement reliable collectible AssemblyLoadContext hot reload, cleanup of managed tasks/timers/events and native handles, Inspector field/state preservation, resource unload and no editor crash; test multiplayer determinism.
+- [x] Implement reliable collectible AssemblyLoadContext hot reload, cleanup of managed tasks/timers/events and native handles, Inspector field/state preservation, resource unload and no editor crash; test multiplayer determinism.
   - [x] (November 15, 2026) Hot reload while playing: saving a C# file during Play (reload mode not Manual)
     compiles, then between frames `CSharpRuntime.ReloadGame` loads the new Tallow.Game in a new collectible context
     first (the old keeps running if that fails), moves each running script to its class in the new code under the
@@ -581,8 +581,7 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     a field whose type changed or was removed starts again and a warning names it. Floats are now exact (no text
     round trip). `TALLOW_RELOAD_UNLOAD_CHECK=1` checks the old code unloads. Editor path automated:
     `--hot-reload-test FOLDER` (types v2 into the code editor and saves during Play; ~2.1 s save-to-reload here),
-    step 6 of `tools/test_csharp_editor.py`. Reload test now 27 checks. Still open: networked sessions reload only this machine (it now warns so in the Console when other players are
-    connected, November 16, 2026).
+    step 6 of `tools/test_csharp_editor.py`. Reload test now 27 checks. Networked sessions: see November 18 below.
   - [x] (November 16, 2026) Delegates to named methods carry over: each method is found by name and parameter
     types in the new code, bound to the new instance (`ReloadMigrator.Rebind`), so events and callbacks kept in
     fields call the new code; `Network.ChooseTeam` is kept the same way. Lambdas and local functions still start
@@ -596,6 +595,18 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     (Spawner x2)"). New `Script.OnReload()` runs in the new code on every moved script, fields already carried over,
     to start async loops again. API hooks (scene-load polling, anti-cheat, voice, host changes) now survive a reload
     (they were cleared with the awaits). Reload test 33 checks (editor path 30).
+  - [x] (November 18, 2026) Hot reload in a network session. Code is never sent over the network: every machine builds
+    its own, and Tallow.Build writes the code's ID beside Tallow.Game.dll (`Tallow.Game.codeid`: SHA-256 of each game
+    assembly's name, references, packages and sources relative to src, line endings ignored, so other folders,
+    Release builds and Windows/Linux checkouts of the same sources agree). The host sends its ID to each client on
+    join and after each hot reload (`CSharpNetReload`, engine message 235). A client that builds a change keeps it
+    until the host reloads the same code, then follows at once; one that builds the code the host already runs reloads
+    immediately; a client on other code is warned once per change (also at join). Clients reload when the host's
+    message arrives, a few ticks after the host (snapshots and lockstep resyncs cover the gap). A build without an ID
+    keeps the old "this machine only" warning. Test: `tools/test_csharp_network_reload.py` (server + 2 clients, 7
+    checks, in CI): the early client waits, follows, runs version 2, the server's [Sync] value comes from version 2,
+    a late joiner on version 1 is warned. Launcher `--csharp-reload-after S` reloads on real time (headless runs
+    frames uncapped).
   - [x] (November 16, 2026) File > Reload Scripts (Ctrl+R) and the code editor's Compile & Reload now hot-reload a
     C# game during Play (they only compiled before; the menu said "Native C# Play integration is in progress"),
     also with the reload mode Manual, where a save does not reload. Editor step 6b (`--hot-reload-manual`).
@@ -635,13 +646,13 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     or a [Saved] value read from a save that holds a line break is refused (it would have become extra
     "name\tvalue" lines setting fields that are not [Sync]/[Saved]). Game C# itself is trusted, full-trust .NET:
     a script can use System.IO; nothing here is a sandbox.
-- [~] Extend CI beyond managed/.NET host smoke tests to native Beef editor/launcher builds, precompiled player startup and real C# in-scene integration tests on Linux and Windows.
+- [x] Extend CI beyond managed/.NET host smoke tests to native Beef editor/launcher builds, precompiled player startup and real C# in-scene integration tests on Linux and Windows.
   - [x] Linux: the native-editor-linux job compiles the engine, editor and launcher with the pinned Beef compiler
     and runs the in-engine suites (in-game, network, hot reload, sample, Gallery) and a release export played on its
     own bundled .NET.
-  - [~] Windows (November 17, 2026): native-editor-windows builds natively as the release workflow does (clang-cl,
+  - [x] Windows (November 17, 2026): native-editor-windows builds natively as the release workflow does (clang-cl,
     Beef's Windows build) and runs the same in-engine suites, including hot reload (game DLLs loaded from memory, so
-    not held locked). First run pending.
+    not held locked). Passing since run 44250231183 (November 18, 2026).
 
 ## Migration benchmark backlog — run locally on Nobara
 
@@ -1491,7 +1502,7 @@ A full conversion also needs these. Ordered roughly by when they block users.
   C# enum member names of the graph node catalog (`NodeLibrary.sCSharpEnums` freed its lists, not their strings).
   Fixed; Linux builds do not run this check, so the Windows CI job is the one that finds such leaks.
 - [ ] Branch upkeep: merge `ecs` into this branch regularly so the final merge stays
-  reviewable. (Checked November 17, 2026: `ecs` has no commits this branch lacks; it last merged at 7a7b6ca1.)
+  reviewable. (Checked November 18, 2026: `ecs` has no commits this branch lacks; it last merged at 7a7b6ca1.)
 
 **Visual scripting decision (recorded for P3):** keep compiling graphs to source and
 retarget the existing graph compiler from Beef to C#, rather than writing a Beef-side

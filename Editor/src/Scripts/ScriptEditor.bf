@@ -545,6 +545,11 @@ extension EditorApp
 	void HotReloadCSharp()
 	{
 		let kept = CSharpRuntime.ReloadGame(Project.Current.Path);
+		if (kept == CSharpNetReload.Waiting)
+		{
+			mStatus.Set("C# built: it loads when the host reloads the same code.");
+			return;
+		}
 		if (kept < 0)
 		{
 			mStatus.Set("C# hot reload failed. See Console.");

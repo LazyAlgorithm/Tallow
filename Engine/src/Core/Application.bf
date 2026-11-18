@@ -59,6 +59,9 @@ class Application
 	int64 mCSharpFieldTestFrame = -1;
 	/// --csharp-reload-test DLL (tools/test_csharp_reload.py): a second build of the game hot reloaded on frame 120.
 	String mCSharpReloadTest = new .() ~ delete _;
+	/// --csharp-reload-after S: it reloads once S seconds of real time have passed instead of on frame 120
+	/// (tools/test_csharp_network_reload.py: headless processes run frames as fast as they can).
+	float mCSharpReloadAfter = -1;
 	String mScreenshotPath = new .() ~ delete _;
 	/// --profile-save: where the profiler's recording is written when the program ends.
 	String mProfileSavePath = new .() ~ delete _;
@@ -185,6 +188,9 @@ class Application
 		if (HasArg("--csharp-field-test"))
 			mCSharpFieldTestFrame = 100;
 		GetArg("--csharp-reload-test", mCSharpReloadTest);
+		let reloadAfter = scope String();
+		if (GetArg("--csharp-reload-after", reloadAfter) && float.Parse(reloadAfter) case .Ok(let seconds))
+			mCSharpReloadAfter = seconds;
 		// Either one overrides how the game was built to start.
 		if (HasArg("--fullscreen"))
 			GameWindow.StartsFullscreen = true;
@@ -424,8 +430,11 @@ class Application
 
 		if (mCSharpFieldTestFrame > 0 && Time.FrameCount == mCSharpFieldTestFrame)
 			CSharpRuntime.RunFieldTest(Scene.Active);
-		if (!mCSharpReloadTest.IsEmpty && Time.FrameCount == 120)
+		if (!mCSharpReloadTest.IsEmpty && (mCSharpReloadAfter < 0 ? Time.FrameCount == 120 : Time.RealTime >= mCSharpReloadAfter))
+		{
+			mCSharpReloadAfter = float.MaxValue;
 			Log.Info(scope $"RELOAD kept {CSharpRuntime.ReloadAssembly(mCSharpReloadTest)} scripts");
+		}
 		if (mFrameLimit > 0 && Time.FrameCount >= mFrameLimit)
 			Close();
 	}

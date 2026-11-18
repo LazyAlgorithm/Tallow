@@ -21,6 +21,7 @@ on:
       - 'tools/test_csharp_ingame.py'
       - 'tools/test_csharp_network.py'
       - 'tools/test_csharp_reload.py'
+      - 'tools/test_csharp_network_reload.py'
       - 'tools/test_csharp_export.py'
       - 'tools/test_csharp_sample.py'
       - 'tools/test_csharp_showcase.py'
@@ -30,6 +31,7 @@ on:
       - 'Tests/CSharpInGame/**'
       - 'Tests/CSharpNetwork/**'
       - 'Tests/CSharpReload/**'
+      - 'Tests/CSharpNetReload/**'
       - 'Editor/templates/**'
       - 'third_party/TextEdit/**'
 
@@ -400,6 +402,9 @@ jobs:
       - name: C# hot reload while playing
         timeout-minutes: 20
         run: python3 tools/test_csharp_reload.py
+      - name: C# hot reload in a network session (clients follow the host's code ID)
+        timeout-minutes: 20
+        run: python3 tools/test_csharp_network_reload.py
       - name: Create a Voxel sandbox project (all C#) and run its scripts
         timeout-minutes: 20
         run: python3 tools/test_csharp_sample.py
@@ -494,6 +499,9 @@ jobs:
       - name: C# hot reload while playing (game DLLs are not held locked)
         timeout-minutes: 20
         run: cd tallow && python tools/test_csharp_reload.py
+      - name: C# hot reload in a network session (clients follow the host's code ID)
+        timeout-minutes: 20
+        run: cd tallow && python tools/test_csharp_network_reload.py
       - name: Create a Voxel sandbox project (all C#) and run its scripts
         timeout-minutes: 20
         run: cd tallow && python tools/test_csharp_sample.py

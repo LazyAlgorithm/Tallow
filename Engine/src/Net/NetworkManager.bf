@@ -593,6 +593,7 @@ class NetworkManager
 		case AntiCheat.MsgAntiCheat: return "anti-cheat";
 		case VoiceChat.MsgVoice: return "voice";
 		case MapSharing.MsgMap: return "maps";
+		case CSharpNetReload.MsgCode: return "C# code ID";
 		default: return "other";
 		}
 	}

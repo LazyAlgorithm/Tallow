@@ -37,6 +37,7 @@ extension NetworkManager
 		if (OnClientJoined != null)
 			OnClientJoined(client.id);
 		CSharpRuntime.ClientEvent(mScene, 3, client.id);
+		CSharpNetReload.ClientJoined(this, client.id);
 		Log.Info(scope $"Client {client.id} connected.");
 	}
 
