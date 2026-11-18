@@ -93,6 +93,12 @@ void* tn_csharp_find_export(const char* name);
 int32_t tn_csharp_web_register(const char* name, void* pointer);
 int32_t tn_csharp_web_hosted(void);
 #endif
+// NativeAOT: the version of the entrypoint table the host and a game's native library agree on
+// (Tallow.ManagedRuntime.NativeHost.AbiVersion). Raise both whenever an entrypoint is added or changes signature.
+#define TN_CSHARP_NATIVE_ABI 1
+// NativeAOT instead of tn_csharp_init: a game whose runtime, API and assemblies are one native library
+// (Managed/Native/TallowGame.dll / libTallowGame.so). Loaded for the life of the process; never with .NET as well.
+int32_t tn_csharp_init_native(const char* library);
 // Before tn_csharp_init: use only the .NET runtime in this folder (a shipped game's bundled copy).
 int32_t tn_csharp_use_dotnet_root(const char* root);
 int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly);

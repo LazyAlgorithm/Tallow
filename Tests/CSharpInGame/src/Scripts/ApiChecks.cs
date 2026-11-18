@@ -607,8 +607,7 @@ public class ApiChecks : CheckBase
         foreach ((Type type, string native) in NativeTypes())
         {
             GameObject holder = Scene.CreateGameObject("Handle " + type.Name);
-            object handle = typeof(GameObject).GetMethod(nameof(GameObject.AddComponent))!.MakeGenericMethod(type)
-                .Invoke(holder, null)!;
+            object handle = holder.AddComponent(type);
             handles++;
             // A NavigationSurface is valid once it has baked data, which a new one does not.
             if (type.Name != "NavigationSurface" && type.GetProperty("IsValid")?.GetValue(handle) is not true)

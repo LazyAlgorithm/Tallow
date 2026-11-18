@@ -12,6 +12,11 @@ int32_t tn_csharp_use_dotnet_root(const char* root)
     (void)root;
     return 0;
 }
+int32_t tn_csharp_init_native(const char* library)
+{
+    (void)library;
+    return 0;
+}
 int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
 {
     (void)runtime_config;

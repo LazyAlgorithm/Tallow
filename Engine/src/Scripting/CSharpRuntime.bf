@@ -326,6 +326,7 @@ static class CSharpRuntime
     }
 
 	[CLink] static extern int32 tn_csharp_init(char8* runtimeConfig, char8* managedAssembly);
+	[CLink] static extern int32 tn_csharp_init_native(char8* library);
 	[CLink] static extern int32 tn_csharp_set_callbacks(Callbacks* callbacks);
 	[CLink] static extern int32 tn_csharp_load_game(char8* gameAssembly);
 	[CLink] static extern int32 tn_csharp_use_dotnet_root(char8* root);
@@ -429,6 +430,40 @@ static class CSharpRuntime
 		// .NET put its own exception handler first, which ends the process at the leak check's breakpoint.
 		CrashReports.HandleLeakChecksFirst();
 		return true;
+	}
+
+	/// NativeAOT: the game's runtime, API and assemblies compiled into one native library, used instead of .NET.
+	public static bool InitializeNative(StringView library)
+	{
+		if (sStarted)
+			return IsNativeAot;
+		let path = scope String(library);
+		if (tn_csharp_init_native(path.CStr()) == 0)
+		{
+			Log.Error(scope $"Could not start this game's native C#: {StringView(tn_csharp_error())}");
+			return false;
+		}
+		sStarted = true;
+		IsNativeAot = true;
+		return true;
+	}
+
+	/// Whether C# runs from a NativeAOT game library (a shipped game), not on .NET.
+	public static bool IsNativeAot { get; private set; }
+
+	/// The file name of a NativeAOT game library in Managed/Native.
+	public static StringView NativeLibraryName
+	{
+		get
+		{
+#if BF_PLATFORM_WINDOWS
+			return "TallowGame.dll";
+#elif BF_PLATFORM_MACOS
+			return "libTallowGame.dylib";
+#else
+			return "libTallowGame.so";
+#endif
+		}
 	}
 
 	/// Call before attaching components. Invalidate the scene before it is freed.
@@ -622,6 +657,21 @@ static class CSharpRuntime
 		}
 		return true;
 #else
+		// NativeAOT export: one native library, no .NET, no game assemblies.
+		let native = scope $"{gameFolder}/Managed/Native/{NativeLibraryName}";
+		if (File.Exists(native))
+		{
+			if (!InitializeNative(native) || !BindScene(scene))
+				return false;
+			// Not a file that is loaded: it names the folder whose Tallow.Game.codeid says which code this is.
+			if (LoadGame(scope $"{gameFolder}/Managed/Native/Tallow.Game.dll") < 0)
+			{
+				UnloadGame();
+				UnbindScene(scene);
+				return false;
+			}
+			return true;
+		}
 		let bundled = scope $"{gameFolder}/dotnet";
 		if (Directory.Exists(bundled))
 			tn_csharp_use_dotnet_root(bundled.CStr());
@@ -657,7 +707,8 @@ static class CSharpRuntime
 	public static bool IsPackagedGame(StringView gameFolder) => tn_csharp_web_hosted() != 0;
 #else
 	/// A built game ships its C# in a Managed folder beside it.
-	public static bool IsPackagedGame(StringView gameFolder) => File.Exists(scope $"{gameFolder}/Managed/Game/Tallow.Game/Tallow.Game.dll");
+	public static bool IsPackagedGame(StringView gameFolder) => File.Exists(scope $"{gameFolder}/Managed/Game/Tallow.Game/Tallow.Game.dll") ||
+		File.Exists(scope $"{gameFolder}/Managed/Native/{NativeLibraryName}");
 #endif
 
 	public const int RequiredDotNetMajor = 11;

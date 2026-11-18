@@ -228,6 +228,10 @@ def main():
     parser.add_argument('--loose', action='store_true', help='Leave the assets as loose files instead of packing them into game.tpak')
     parser.add_argument('--console', action='store_true', help='Windows: keep a console window for log output (a dedicated server wants one)')
     parser.add_argument('--bootstrap', help='Static registration method, e.g. Sandbox.GameSetup.Register')
+    parser.add_argument('--csharp-runtime', choices=('jit', 'native'),
+                        help='C# games: native = NativeAOT (the game compiled to one native library; no .NET, no IL '
+                             'assemblies shipped; Linux and Windows), jit = .NET assemblies and the bundled runtime '
+                             '(compatibility/debug). Default: csharpRuntime in project.tallow, else jit')
     parser.add_argument('--no-bundle-dotnet', action='store_true', help='C# games: do not ship the .NET runtime; players must install it (also bundleDotNet = 0 in project.tallow)')
     args = parser.parse_args()
     project = args.project.resolve()
@@ -296,6 +300,12 @@ def main():
         parser.error('Start scene must exist inside the project src folder. Save it in the editor first.')
     # A C# project has no Beef of its own: it ships the engine's precompiled player and its compiled assemblies.
     csharp = not beef_project(project)
+    runtime = args.csharp_runtime or settings.get('csharpRuntime', 'jit')
+    if runtime not in ('jit', 'native'):
+        parser.error(f'csharpRuntime in project.tallow is jit or native, not {runtime}.')
+    native_aot = csharp and runtime == 'native'
+    if native_aot and (web or macos):
+        parser.error('NativeAOT exports are for Linux and Windows; a web build always runs .NET in the browser.')
     if csharp:
         if macos:
             parser.error('C# games build for Linux, Windows and the web so far.')
@@ -396,7 +406,12 @@ def main():
             else:
                 executable = name + ('.exe' if windows else '')
                 shutil.copy2(player if csharp else built_folder / executable, staging / executable)
-            if csharp and not web:
+            if csharp and not web and native_aot:
+                sys.path.insert(0, str(engine / 'tools'))
+                import csharp_native
+                # Private symbols beside the build, never in it.
+                csharp_native.build(engine, project, args.config, staging, windows, output.parent / (output.name + '-symbols'))
+            elif csharp and not web:
                 stage_csharp(engine, project, staging, args.config, windows,
                              not args.no_bundle_dotnet and settings.get('bundleDotNet', '1') != '0')
             # Of the engine's files a game reads only the compiled shaders, and only those of the graphics backends

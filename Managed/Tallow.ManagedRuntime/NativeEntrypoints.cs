@@ -578,6 +578,41 @@ public static unsafe class NativeEntrypoints
         return -1;
     }
 
+    /// <summary>Every entrypoint the engine's host binds (native/tallow_dotnet_host.cpp), by name. A JIT host finds
+    /// them by name through hostfxr; the browser and NativeAOT hosts are handed this table (WebHost, NativeHost).</summary>
+    internal static (string Name, nint Pointer)[] Table() =>
+    [
+        ("Configure", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&NativeEntrypoints.Configure),
+        ("LoadGame", (nint)(delegate* unmanaged[Cdecl]<byte*, int>)&NativeEntrypoints.LoadGame),
+        ("UnloadGame", (nint)(delegate* unmanaged[Cdecl]<int>)&NativeEntrypoints.UnloadGame),
+        ("ReloadGame", (nint)(delegate* unmanaged[Cdecl]<byte*, int>)&NativeEntrypoints.ReloadGame),
+        ("Attach", (nint)(delegate* unmanaged[Cdecl]<byte*, ulong, ulong, int>)&NativeEntrypoints.Attach),
+        ("ApplyFields", (nint)(delegate* unmanaged[Cdecl]<int, byte*, int>)&NativeEntrypoints.ApplyFields),
+        ("Tick", (nint)(delegate* unmanaged[Cdecl]<int, float, int>)&NativeEntrypoints.Tick),
+        ("Dispatch", (nint)(delegate* unmanaged[Cdecl]<int, int, float, int>)&NativeEntrypoints.Dispatch),
+        ("DispatchBatch", (nint)(delegate* unmanaged[Cdecl]<int*, int, int, float, int>)&NativeEntrypoints.DispatchBatch),
+        ("DispatchCheckedBatch", (nint)(delegate* unmanaged[Cdecl]<int*, int, int, float, int>)&NativeEntrypoints.DispatchCheckedBatch),
+        ("UpdateInput", (nint)(delegate* unmanaged[Cdecl]<int, NativeEntrypoints.NativeInput*, float, int>)&NativeEntrypoints.UpdateInput),
+        ("TickPhase", (nint)(delegate* unmanaged[Cdecl]<int, int, NativeEntrypoints.NativeInput*, float, int>)&NativeEntrypoints.TickPhase),
+        ("RunSystem", (nint)(delegate* unmanaged[Cdecl]<int, ulong, ulong, NativeEntrypoints.NativeInput*, float, int>)&NativeEntrypoints.RunSystem),
+        ("UpdateInputBatch", (nint)(delegate* unmanaged[Cdecl]<NativeEntrypoints.NativeBatchInput*, int, int>)&NativeEntrypoints.UpdateInputBatch),
+        ("Contact", (nint)(delegate* unmanaged[Cdecl]<int, NativeEntrypoints.NativeContact*, int>)&NativeEntrypoints.Contact),
+        ("ReadFields", (nint)(delegate* unmanaged[Cdecl]<int, int, byte*, int, int>)&NativeEntrypoints.ReadFields),
+        ("InvokeRpc", (nint)(delegate* unmanaged[Cdecl]<int, byte*, byte*, int, int, int>)&NativeEntrypoints.InvokeRpc),
+        ("NetworkEvent", (nint)(delegate* unmanaged[Cdecl]<int, byte*, float, int>)&NativeEntrypoints.NetworkEvent),
+        ("UiInvoke", (nint)(delegate* unmanaged[Cdecl]<int, byte*, byte*, int>)&NativeEntrypoints.UiInvoke),
+        ("ChooseTeam", (nint)(delegate* unmanaged[Cdecl]<int, int>)&NativeEntrypoints.ChooseTeam),
+        ("ComponentEvent", (nint)(delegate* unmanaged[Cdecl]<int, int, byte*, float, int>)&NativeEntrypoints.ComponentEvent),
+        ("BehaviorNode", (nint)(delegate* unmanaged[Cdecl]<int, int, byte*, ulong, ulong, byte*, float, int>)&NativeEntrypoints.BehaviorNode),
+        ("PredictionState", (nint)(delegate* unmanaged[Cdecl]<int, int, float*, int>)&NativeEntrypoints.PredictionState),
+        ("TerrainGenerator", (nint)(delegate* unmanaged[Cdecl]<int, int, float, float, float, float, int, float*, float*, byte*, int>)&NativeEntrypoints.TerrainGenerator),
+        ("SaveStorage", (nint)(delegate* unmanaged[Cdecl]<int, int, byte*, byte*, int, int>)&NativeEntrypoints.SaveStorage),
+        ("Pump", (nint)(delegate* unmanaged[Cdecl]<float, NativeEntrypoints.NativeGcStats*, int>)&NativeEntrypoints.Pump),
+        ("Detach", (nint)(delegate* unmanaged[Cdecl]<int, int>)&NativeEntrypoints.Detach),
+        ("GetLastError", (nint)(delegate* unmanaged[Cdecl]<byte*, int, int>)&NativeEntrypoints.GetLastError),
+        ("Shutdown", (nint)(delegate* unmanaged[Cdecl]<int>)&NativeEntrypoints.Shutdown),
+    ];
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int Configure(nint callbacks)
     {
@@ -620,6 +655,10 @@ public static unsafe class NativeEntrypoints
             IGameplayComponentRegistry registry;
             if (OperatingSystem.IsBrowser())
                 registry = WebHost.OpenGame();
+            // NativeAOT: the game is compiled in; its module initializers already ran (the engine heard what they
+            // registered when it bound, GeneratedNativeApi.WhenBound).
+            else if (NativeHost.Registry is { } compiledIn)
+                registry = compiledIn;
             else
                 sGameContext = OpenGame(Path.GetFullPath(path), out registry);
             sRegistry = registry;
@@ -783,6 +822,8 @@ public static unsafe class NativeEntrypoints
         unloaded = null;
         try
         {
+            if (NativeHost.Registry != null)
+                throw new InvalidOperationException("A NativeAOT game is compiled into the player and cannot be reloaded.");
             if (trustedPath == null || sGameContext == null || sRegistry == null)
                 throw new InvalidOperationException("No C# game is running to reload.");
             string path = Path.GetFullPath(Marshal.PtrToStringUTF8((nint)trustedPath) ?? "");

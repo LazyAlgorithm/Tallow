@@ -17,9 +17,9 @@ public static class EcsSchemas
     public static void Register<T>(ulong schemaId, string name, string syncFields) where T : unmanaged
     {
         EcsSchema<T>.Id = schemaId;
-        // Generated module initializers run on load, before any engine call is possible in a host with no engine.
-        if (GeneratedNativeApi.IsBound)
-            Ecs.DescribeData(schemaId, name, Unsafe.SizeOf<T>(), 1, syncFields);
+        // Generated module initializers can run before the engine binds (NativeAOT, a host with no engine).
+        int size = Unsafe.SizeOf<T>();
+        GeneratedNativeApi.WhenBound(() => Ecs.DescribeData(schemaId, name, size, 1, syncFields));
     }
 }
 

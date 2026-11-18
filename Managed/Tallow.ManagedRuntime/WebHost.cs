@@ -30,35 +30,8 @@ public static unsafe class WebHost
     {
         if (!OperatingSystem.IsBrowser())
             throw new PlatformNotSupportedException("WebHost runs only in a browser.");
-        Register("Configure", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&NativeEntrypoints.Configure);
-        Register("LoadGame", (nint)(delegate* unmanaged[Cdecl]<byte*, int>)&NativeEntrypoints.LoadGame);
-        Register("UnloadGame", (nint)(delegate* unmanaged[Cdecl]<int>)&NativeEntrypoints.UnloadGame);
-        Register("ReloadGame", (nint)(delegate* unmanaged[Cdecl]<byte*, int>)&NativeEntrypoints.ReloadGame);
-        Register("Attach", (nint)(delegate* unmanaged[Cdecl]<byte*, ulong, ulong, int>)&NativeEntrypoints.Attach);
-        Register("ApplyFields", (nint)(delegate* unmanaged[Cdecl]<int, byte*, int>)&NativeEntrypoints.ApplyFields);
-        Register("Tick", (nint)(delegate* unmanaged[Cdecl]<int, float, int>)&NativeEntrypoints.Tick);
-        Register("Dispatch", (nint)(delegate* unmanaged[Cdecl]<int, int, float, int>)&NativeEntrypoints.Dispatch);
-        Register("DispatchBatch", (nint)(delegate* unmanaged[Cdecl]<int*, int, int, float, int>)&NativeEntrypoints.DispatchBatch);
-        Register("DispatchCheckedBatch", (nint)(delegate* unmanaged[Cdecl]<int*, int, int, float, int>)&NativeEntrypoints.DispatchCheckedBatch);
-        Register("UpdateInput", (nint)(delegate* unmanaged[Cdecl]<int, NativeEntrypoints.NativeInput*, float, int>)&NativeEntrypoints.UpdateInput);
-        Register("TickPhase", (nint)(delegate* unmanaged[Cdecl]<int, int, NativeEntrypoints.NativeInput*, float, int>)&NativeEntrypoints.TickPhase);
-        Register("RunSystem", (nint)(delegate* unmanaged[Cdecl]<int, ulong, ulong, NativeEntrypoints.NativeInput*, float, int>)&NativeEntrypoints.RunSystem);
-        Register("UpdateInputBatch", (nint)(delegate* unmanaged[Cdecl]<NativeEntrypoints.NativeBatchInput*, int, int>)&NativeEntrypoints.UpdateInputBatch);
-        Register("Contact", (nint)(delegate* unmanaged[Cdecl]<int, NativeEntrypoints.NativeContact*, int>)&NativeEntrypoints.Contact);
-        Register("ReadFields", (nint)(delegate* unmanaged[Cdecl]<int, int, byte*, int, int>)&NativeEntrypoints.ReadFields);
-        Register("InvokeRpc", (nint)(delegate* unmanaged[Cdecl]<int, byte*, byte*, int, int, int>)&NativeEntrypoints.InvokeRpc);
-        Register("NetworkEvent", (nint)(delegate* unmanaged[Cdecl]<int, byte*, float, int>)&NativeEntrypoints.NetworkEvent);
-        Register("UiInvoke", (nint)(delegate* unmanaged[Cdecl]<int, byte*, byte*, int>)&NativeEntrypoints.UiInvoke);
-        Register("ChooseTeam", (nint)(delegate* unmanaged[Cdecl]<int, int>)&NativeEntrypoints.ChooseTeam);
-        Register("ComponentEvent", (nint)(delegate* unmanaged[Cdecl]<int, int, byte*, float, int>)&NativeEntrypoints.ComponentEvent);
-        Register("BehaviorNode", (nint)(delegate* unmanaged[Cdecl]<int, int, byte*, ulong, ulong, byte*, float, int>)&NativeEntrypoints.BehaviorNode);
-        Register("PredictionState", (nint)(delegate* unmanaged[Cdecl]<int, int, float*, int>)&NativeEntrypoints.PredictionState);
-        Register("TerrainGenerator", (nint)(delegate* unmanaged[Cdecl]<int, int, float, float, float, float, int, float*, float*, byte*, int>)&NativeEntrypoints.TerrainGenerator);
-        Register("SaveStorage", (nint)(delegate* unmanaged[Cdecl]<int, int, byte*, byte*, int, int>)&NativeEntrypoints.SaveStorage);
-        Register("Pump", (nint)(delegate* unmanaged[Cdecl]<float, NativeEntrypoints.NativeGcStats*, int>)&NativeEntrypoints.Pump);
-        Register("Detach", (nint)(delegate* unmanaged[Cdecl]<int, int>)&NativeEntrypoints.Detach);
-        Register("GetLastError", (nint)(delegate* unmanaged[Cdecl]<byte*, int, int>)&NativeEntrypoints.GetLastError);
-        Register("Shutdown", (nint)(delegate* unmanaged[Cdecl]<int>)&NativeEntrypoints.Shutdown);
+        foreach ((string name, nint pointer) in NativeEntrypoints.Table())
+            Register(name, pointer);
 
         // Beef reads its arguments as a C program's: the program's name, then each argument. The engine may keep
         // pointers into them for good, so they are never freed.

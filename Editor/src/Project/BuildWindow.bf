@@ -208,14 +208,37 @@ extension EditorApp
 			ImGui.SameLine();
 			ImGui.TextDisabled(project.Fullscreen ? "The game fills the screen when it starts" : "The game starts in a window");
 		}
-		// A C# game runs on .NET. A web build always has it inside the page.
+		// A C# game is compiled to native code (NativeAOT) or runs on .NET (JIT). A web build always has .NET inside
+		// the page; macOS has JIT only so far.
 		if (IsCSharpProject && mBuildTarget != .Web)
 		{
-			ImGui.SeparatorText(".NET");
-			if (ImGui.Checkbox("Include .NET", ref project.BundleDotNet))
-				project.Save();
-			ImGui.SameLine();
-			ImGui.TextDisabled(project.BundleDotNet ? "Players need nothing installed (about 70 MB more)" : scope $"Smaller, but players must install .NET {CSharpRuntime.RequiredDotNetMajor}");
+			ImGui.SeparatorText("C# runtime");
+			if (mBuildTarget == .MacOS)
+				ImGui.TextDisabled("macOS builds run C# on .NET (JIT)");
+			else
+			{
+				if (ImGui.RadioButton("NativeAOT (recommended)", project.NativeAot))
+				{
+					project.NativeAot = true;
+					project.Save();
+				}
+				ImGui.SameLine();
+				ImGui.TextDisabled("Compiled to native code: no .NET or game assemblies shipped, quick to start");
+				if (ImGui.RadioButton("JIT (compatibility/debug)", !project.NativeAot))
+				{
+					project.NativeAot = false;
+					project.Save();
+				}
+				ImGui.SameLine();
+				ImGui.TextDisabled("The game's assemblies on .NET, as in the editor");
+			}
+			if (!project.NativeAot || mBuildTarget == .MacOS)
+			{
+				if (ImGui.Checkbox("Include .NET", ref project.BundleDotNet))
+					project.Save();
+				ImGui.SameLine();
+				ImGui.TextDisabled(project.BundleDotNet ? "Players need nothing installed (about 70 MB more)" : scope $"Smaller, but players must install .NET {CSharpRuntime.RequiredDotNetMajor}");
+			}
 		}
 		ImGui.SeparatorText("Assets");
 		ImGui.BeginDisabled(mBuildTarget == .Web);

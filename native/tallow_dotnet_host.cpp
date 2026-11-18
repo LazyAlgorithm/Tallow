@@ -322,13 +322,32 @@ void managed_error(const char* action)
     error = std::string(action) + ": " + (buffer[0] ? buffer : "managed call failed");
 }
 
-#if defined(__EMSCRIPTEN__)
-std::vector<std::pair<std::string, void*>> web_entries;
+// Entrypoints handed over by the runtime itself, by name: in a browser (WebHost) and from a NativeAOT game library
+// (NativeHost), where there is no hostfxr to find them.
+std::vector<std::pair<std::string, void*>> registered_entries;
+bool native_library = false;
+library_handle game_library = nullptr;
+
+int32_t register_entry(const char* name, void* pointer)
+{
+    if (!name || !pointer)
+        return 0;
+    for (auto& entry : registered_entries)
+    {
+        if (entry.first == name)
+        {
+            entry.second = pointer;
+            return 1;
+        }
+    }
+    registered_entries.emplace_back(name, pointer);
+    return 1;
+}
 
 template <typename T>
-bool find_entry(const host_char*, const char* method, T& result)
+bool find_registered(const char* method, T& result)
 {
-    for (const auto& entry : web_entries)
+    for (const auto& entry : registered_entries)
     {
         if (entry.first == method && entry.second)
         {
@@ -339,10 +358,19 @@ bool find_entry(const host_char*, const char* method, T& result)
     error = std::string("The C# runtime did not register its entrypoint: ") + method;
     return false;
 }
+
+#if defined(__EMSCRIPTEN__)
+template <typename T>
+bool find_entry(const host_char*, const char* method, T& result)
+{
+    return find_registered(method, result);
+}
 #else
 template <typename T>
 bool find_entry(const host_char* managed_assembly, const char* method, T& result)
 {
+    if (native_library)
+        return find_registered(method, result);
     const auto unmanaged = reinterpret_cast<const host_char*>(static_cast<intptr_t>(-1));
     const auto type = platform_string("Tallow.ManagedRuntime.NativeEntrypoints, Tallow.ManagedRuntime");
     const auto method_name = platform_string(method);
@@ -357,6 +385,44 @@ bool find_entry(const host_char* managed_assembly, const char* method, T& result
     return true;
 }
 #endif
+// Binds every NativeEntrypoints function the host calls (by name through hostfxr, or from the registered table).
+bool bind_entries(const char* managed_assembly)
+{
+    const auto assembly = platform_string(managed_assembly);
+    if (!find_entry(assembly.c_str(), "Configure", configure) ||
+        !find_entry(assembly.c_str(), "LoadGame", load_game) ||
+        !find_entry(assembly.c_str(), "UnloadGame", unload_game) ||
+        !find_entry(assembly.c_str(), "ReloadGame", reload_game) ||
+        !find_entry(assembly.c_str(), "Attach", attach) ||
+        !find_entry(assembly.c_str(), "ApplyFields", apply_fields) ||
+        !find_entry(assembly.c_str(), "Tick", tick) ||
+        !find_entry(assembly.c_str(), "Dispatch", dispatch) ||
+        !find_entry(assembly.c_str(), "DispatchBatch", dispatch_batch) ||
+        !find_entry(assembly.c_str(), "DispatchCheckedBatch", dispatch_checked_batch) ||
+        !find_entry(assembly.c_str(), "UpdateInput", update_input) ||
+        !find_entry(assembly.c_str(), "TickPhase", tick_phase) ||
+        !find_entry(assembly.c_str(), "RunSystem", run_system) ||
+        !find_entry(assembly.c_str(), "UpdateInputBatch", update_input_batch) ||
+        !find_entry(assembly.c_str(), "Contact", contact_event) ||
+        !find_entry(assembly.c_str(), "ReadFields", read_fields) ||
+        !find_entry(assembly.c_str(), "InvokeRpc", invoke_rpc) ||
+        !find_entry(assembly.c_str(), "NetworkEvent", network_event) ||
+        !find_entry(assembly.c_str(), "UiInvoke", ui_invoke) ||
+        !find_entry(assembly.c_str(), "ChooseTeam", choose_team) ||
+        !find_entry(assembly.c_str(), "ComponentEvent", component_event) ||
+        !find_entry(assembly.c_str(), "BehaviorNode", behavior_node) ||
+        !find_entry(assembly.c_str(), "PredictionState", prediction_state) ||
+        !find_entry(assembly.c_str(), "SaveStorage", save_storage) ||
+        !find_entry(assembly.c_str(), "TerrainGenerator", terrain_generator) ||
+        !find_entry(assembly.c_str(), "Pump", pump) ||
+        !find_entry(assembly.c_str(), "Detach", detach) ||
+        !find_entry(assembly.c_str(), "GetLastError", last_error) ||
+        !find_entry(assembly.c_str(), "Shutdown", shutdown_runtime))
+        return false;
+
+    return true;
+}
+
 } // namespace
 
 extern "C" {
@@ -365,24 +431,10 @@ const char* tn_csharp_error(void) { return error.c_str(); }
 
 #if defined(__EMSCRIPTEN__)
 /* Called by the managed runtime's web start-up, once per NativeEntrypoints function, before the engine starts. */
-int32_t tn_csharp_web_register(const char* name, void* pointer)
-{
-    if (!name || !pointer)
-        return 0;
-    for (auto& entry : web_entries)
-    {
-        if (entry.first == name)
-        {
-            entry.second = pointer;
-            return 1;
-        }
-    }
-    web_entries.emplace_back(name, pointer);
-    return 1;
-}
+int32_t tn_csharp_web_register(const char* name, void* pointer) { return register_entry(name, pointer); }
 
 /* Whether the page's .NET registered the managed runtime (a C# game) or not (a Beef game). */
-int32_t tn_csharp_web_hosted(void) { return web_entries.empty() ? 0 : 1; }
+int32_t tn_csharp_web_hosted(void) { return registered_entries.empty() ? 0 : 1; }
 #endif
 
 void* tn_csharp_find_export(const char* name)
@@ -396,6 +448,69 @@ void* tn_csharp_find_export(const char* name)
     return reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(nullptr), name));
 #else
     return dlsym(RTLD_DEFAULT, name);
+#endif
+}
+
+int32_t tn_csharp_init_native(const char* library)
+{
+    if (started)
+    {
+        error = native_library ? "" : "C# already runs on .NET in this process; a NativeAOT game cannot start beside it.";
+        return native_library ? 1 : 0;
+    }
+#if defined(__EMSCRIPTEN__)
+    (void)library;
+    error = "NativeAOT game libraries are not used in a browser.";
+    return 0;
+#else
+    if (!library)
+    {
+        error = "Missing NativeAOT game library path.";
+        return 0;
+    }
+    try
+    {
+        const std::filesystem::path path(platform_string(library));
+        game_library = load_library(path);
+        if (!game_library)
+        {
+            error = "Could not load the game's native C# library " + path.string();
+#ifndef _WIN32
+            if (const char* detail = dlerror(); detail && *detail)
+                error += std::string(": ") + detail;
+#else
+            error += " (Windows error " + std::to_string(GetLastError()) + ")";
+#endif
+            return 0;
+        }
+        using register_fn = int32_t (*)(int32_t (*)(const char*, void*), int32_t, char*, int32_t);
+        auto register_all = reinterpret_cast<register_fn>(get_symbol(game_library, "tallow_native_register"));
+        if (!register_all)
+        {
+            error = "The game's native C# library has no tallow_native_register export; build the game again.";
+            return 0;
+        }
+        char reason[512] = {};
+        registered_entries.clear();
+        if (register_all(&register_entry, TN_CSHARP_NATIVE_ABI, reason, static_cast<int32_t>(sizeof(reason))) == 0)
+        {
+            error = reason[0] ? reason : "The game's native C# library refused to start.";
+            return 0;
+        }
+        // The library stays loaded until the process ends: a NativeAOT library cannot be unloaded.
+        native_library = true;
+        runtime_assembly.clear();
+        if (!bind_entries(""))
+            return 0;
+        started = true;
+        error.clear();
+        return 1;
+    }
+    catch (const std::exception& exception)
+    {
+        error = exception.what();
+        return 0;
+    }
 #endif
 }
 
@@ -476,38 +591,8 @@ int32_t tn_csharp_init(const char* runtime_config, const char* managed_assembly)
         }
 #endif
         runtime_assembly = managed_assembly;
-        const auto assembly = platform_string(managed_assembly);
-        if (!find_entry(assembly.c_str(), "Configure", configure) ||
-            !find_entry(assembly.c_str(), "LoadGame", load_game) ||
-            !find_entry(assembly.c_str(), "UnloadGame", unload_game) ||
-            !find_entry(assembly.c_str(), "ReloadGame", reload_game) ||
-            !find_entry(assembly.c_str(), "Attach", attach) ||
-            !find_entry(assembly.c_str(), "ApplyFields", apply_fields) ||
-            !find_entry(assembly.c_str(), "Tick", tick) ||
-            !find_entry(assembly.c_str(), "Dispatch", dispatch) ||
-            !find_entry(assembly.c_str(), "DispatchBatch", dispatch_batch) ||
-            !find_entry(assembly.c_str(), "DispatchCheckedBatch", dispatch_checked_batch) ||
-            !find_entry(assembly.c_str(), "UpdateInput", update_input) ||
-            !find_entry(assembly.c_str(), "TickPhase", tick_phase) ||
-            !find_entry(assembly.c_str(), "RunSystem", run_system) ||
-            !find_entry(assembly.c_str(), "UpdateInputBatch", update_input_batch) ||
-            !find_entry(assembly.c_str(), "Contact", contact_event) ||
-            !find_entry(assembly.c_str(), "ReadFields", read_fields) ||
-            !find_entry(assembly.c_str(), "InvokeRpc", invoke_rpc) ||
-            !find_entry(assembly.c_str(), "NetworkEvent", network_event) ||
-            !find_entry(assembly.c_str(), "UiInvoke", ui_invoke) ||
-            !find_entry(assembly.c_str(), "ChooseTeam", choose_team) ||
-            !find_entry(assembly.c_str(), "ComponentEvent", component_event) ||
-            !find_entry(assembly.c_str(), "BehaviorNode", behavior_node) ||
-            !find_entry(assembly.c_str(), "PredictionState", prediction_state) ||
-            !find_entry(assembly.c_str(), "SaveStorage", save_storage) ||
-            !find_entry(assembly.c_str(), "TerrainGenerator", terrain_generator) ||
-            !find_entry(assembly.c_str(), "Pump", pump) ||
-            !find_entry(assembly.c_str(), "Detach", detach) ||
-            !find_entry(assembly.c_str(), "GetLastError", last_error) ||
-            !find_entry(assembly.c_str(), "Shutdown", shutdown_runtime))
+        if (!bind_entries(managed_assembly))
             return 0;
-
         started = true;
         error.clear();
         return 1;

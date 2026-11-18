@@ -23,6 +23,7 @@ on:
       - 'tools/test_csharp_reload.py'
       - 'tools/test_csharp_network_reload.py'
       - 'tools/test_csharp_export.py'
+      - 'tools/csharp_native.py'
       - 'tools/test_csharp_sample.py'
       - 'tools/test_csharp_showcase.py'
       - 'tools/validate_showcase.py'
@@ -414,6 +415,9 @@ jobs:
       - name: Build a C# game for release (precompiled player, bundled .NET) and run it on its own
         # The player is built here with the Beef compiler the editor was built with.
         run: BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild" python3 tools/test_csharp_export.py
+      - name: Build the same game as NativeAOT (one native library, no .NET shipped) and run it on its own
+        timeout-minutes: 30
+        run: BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild" python3 tools/test_csharp_export.py --runtime native
 
   native-editor-windows:
     name: Compile native Beef editor and run C# in it (Windows)
@@ -508,3 +512,8 @@ jobs:
       - name: Create the Tallow Gallery (all C#) and play it with its test switches
         timeout-minutes: 20
         run: cd tallow && python tools/test_csharp_showcase.py
+      - name: Build a C# game as NativeAOT on Windows (MSVC link) and run it on its own
+        timeout-minutes: 45
+        run: |
+          export BEEFBUILD="$(cygpath -w "$PWD/beef-win/bin/BeefBuild.exe")"
+          cd tallow && python tools/test_csharp_export.py --runtime native

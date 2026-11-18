@@ -16,11 +16,29 @@ internal static unsafe partial class GeneratedNativeApi
     static partial void VerifyVersion();
     static partial void ResetVersion();
 
+    private static readonly List<Action> sWhenBound = [];
+
     internal static void Bind(nint context, nint resolver)
     {
         sContext = context;
         sResolver = (delegate* unmanaged[Cdecl]<nint, byte*, nint>)resolver;
         ResetVersion();
+        // A NativeAOT game runs its module initializers when the library is first called, before the engine binds:
+        // what they had to tell the engine (ECS data layouts, systems) is told now, in the order they ran.
+        Action[] queued = [.. sWhenBound];
+        sWhenBound.Clear();
+        foreach (Action call in queued)
+            call();
+    }
+
+    /// <summary>Calls the engine now, or once it binds when no engine is attached yet (NativeAOT: module
+    /// initializers run first). A host that never binds one (the pure-managed smoke test) never runs them.</summary>
+    internal static void WhenBound(Action call)
+    {
+        if (IsBound)
+            call();
+        else
+            sWhenBound.Add(call);
     }
 
     /// <summary>Whether an engine is attached (a pure-managed host, such as the lifecycle smoke test, has none).</summary>

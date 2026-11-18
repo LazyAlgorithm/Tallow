@@ -426,7 +426,8 @@ class EditorApp : Application
 		}
 	}
 
-	/// --build-window, with --build-windows or --build-web choosing the system, and --build-now
+	/// --build-window, with --build-windows or --build-web choosing the system, --build-native-aot or --build-jit the C#
+	/// runtime, and --build-now
 	/// <folder> building it straight away (for automated checks).
 	void ApplyBuildSwitches()
 	{
@@ -435,6 +436,11 @@ class EditorApp : Application
 			mBuildTarget = .Windows;
 		if (HasArg("--build-web"))
 			mBuildTarget = .Web;
+		// The C# runtime choice of the window (saved in project.tallow).
+		if (Project.Current != null && HasArg("--build-native-aot"))
+			Project.Current.NativeAot = true;
+		else if (Project.Current != null && HasArg("--build-jit"))
+			Project.Current.NativeAot = false;
 		let folder = scope String();
 		if (GetArg("--build-now", folder))
 		{

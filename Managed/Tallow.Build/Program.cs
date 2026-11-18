@@ -381,6 +381,77 @@ internal static class Program
     /// classes and provides an AOT-linkable root without reflection or IL DLL
     /// discovery. The current editor keeps its collectible JIT loader.
     /// </summary>
+    /// <summary>Accessible from generated code in the type's own assembly (no private or protected nesting).</summary>
+    private static bool Nameable(ITypeSymbol type)
+    {
+        switch (type)
+        {
+            case IArrayTypeSymbol array:
+                return Nameable(array.ElementType);
+            case INamedTypeSymbol named:
+                for (INamedTypeSymbol? scope = named; scope != null; scope = scope.ContainingType)
+                    if (scope.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
+                        return false;
+                return named.TypeArguments.All(Nameable);
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>For NativeAOT, the generic instantiations the runtime's Inspector code makes for a script's fields
+    /// (and those of the [Serializable] classes and structs they hold): List&lt;T&gt; and T[] of list items, and
+    /// TryGetComponent&lt;T&gt; for component references. Reference types share code, so only value types and
+    /// component lookups need naming, but naming all is harmless.</summary>
+    private static void AddAotRoots(INamedTypeSymbol type, SortedSet<string> roots, HashSet<ITypeSymbol> seen)
+    {
+        if (!seen.Add(type) || seen.Count > 512)
+            return;
+        for (INamedTypeSymbol? at = type; at != null && at.ToDisplayString() != "Tallow.Script" &&
+             at.SpecialType != SpecialType.System_Object && at.SpecialType != SpecialType.System_ValueType; at = at.BaseType)
+        {
+            foreach (IFieldSymbol field in at.GetMembers().OfType<IFieldSymbol>())
+            {
+                if (field.IsStatic || field.IsConst)
+                    continue;
+                AddAotRootsFor(field.Type, roots, seen);
+            }
+        }
+    }
+
+    private static void AddAotRootsFor(ITypeSymbol fieldType, SortedSet<string> roots, HashSet<ITypeSymbol> seen)
+    {
+        ITypeSymbol type = fieldType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+        ITypeSymbol? element = type switch
+        {
+            IArrayTypeSymbol { Rank: 1 } array => array.ElementType,
+            INamedTypeSymbol named when named.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" => named.TypeArguments[0],
+            _ => null
+        };
+        if (element != null)
+        {
+            if (Nameable(element) && element.TypeKind != TypeKind.TypeParameter)
+            {
+                string name = element.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                roots.Add($"_ = new global::System.Collections.Generic.List<{name}>();");
+                roots.Add($"_ = new {name}[0];");
+            }
+            AddAotRootsFor(element, roots, seen);
+            return;
+        }
+        if (type is not INamedTypeSymbol target || !Nameable(target) || target.IsGenericType)
+            return;
+        bool component = target.AllInterfaces.Any(i => i.ToDisplayString() == "Tallow.IComponent");
+        string full = target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (component && !target.IsAbstract)
+            roots.Add($"default(global::Tallow.GameObject).TryGetComponent<{full}>(out _);");
+        // Classes and structs of the game's own that the Inspector edits field by field.
+        else if (!component && target.Locations.Any(location => location.IsInSource) &&
+                 target.TypeKind is TypeKind.Class or TypeKind.Struct)
+            AddAotRoots(target, roots, seen);
+    }
+
     private static void WriteComponentFactories(
         string engine, string generated, Dictionary<string, List<string>> filesByAssembly)
     {
@@ -425,8 +496,13 @@ internal static class Program
         var allBehaviorNodes = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
         // [GameStart] methods by assembly (fully qualified): run once each time the game's code loads.
         var allGameStarts = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        // NativeAOT: generic code the runtime makes for Inspector fields by reflection (List<T> of a field's items,
+        // GetComponent<T> for an object reference), named in code so the AOT compiler builds it (AotRoots).
+        var allAotRoots = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
         foreach (var (assembly, sourceFiles) in filesByAssembly)
         {
+            var aotRoots = new SortedSet<string>(StringComparer.Ordinal);
+            allAotRoots[assembly] = aotRoots;
             var types = new SortedDictionary<string, string>(StringComparer.Ordinal);
             var ecsTypes = new SortedDictionary<string, (string CSharpType, string SchemaId, string Describe)>(
                 StringComparer.Ordinal);
@@ -525,6 +601,7 @@ internal static class Program
                         SymbolDisplayFormat.CSharpErrorMessageFormat);
                     types[name] = symbol.ToDisplayString(
                         SymbolDisplayFormat.FullyQualifiedFormat);
+                    AddAotRoots(symbol, aotRoots, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
                     foreach (string former in FormerNamesOf(symbol))
                     {
                         if (formerNames.TryGetValue(former, out string? other) && other != name)
@@ -745,6 +822,26 @@ internal static class Program
             string ecsPath = Path.Combine(generated, assembly, "Tallow.EcsLocalData.g.cs");
             WriteIfDifferent(ecsPath, generatedEcs.ToString());
             filesByAssembly[assembly].Add(ecsPath);
+        }
+
+        foreach ((string assembly, SortedSet<string> roots) in allAotRoots)
+        {
+            var text = new StringBuilder();
+            text.AppendLine("// Generated by Tallow.Build. Never called: names the generic code Inspector fields need at run time")
+                .AppendLine("// (lists of their items, GetComponent for object references), so that a NativeAOT export compiles it.")
+                .AppendLine("#nullable enable")
+                .AppendLine("namespace Tallow.Generated;")
+                .Append("internal static class AotRoots_").Append(FactoryName(assembly)).AppendLine()
+                .AppendLine("{")
+                .AppendLine("    internal static void Instantiations()")
+                .AppendLine("    {");
+            foreach (string line in roots)
+                text.Append("        ").AppendLine(line);
+            text.AppendLine("    }").AppendLine("}");
+            string rootsPath = Path.Combine(generated, assembly, "Tallow.AotRoots.g.cs");
+            Directory.CreateDirectory(Path.GetDirectoryName(rootsPath)!);
+            WriteIfDifferent(rootsPath, text.ToString());
+            filesByAssembly[assembly].Add(rootsPath);
         }
 
         // Game root references all assembly factories explicitly. A future

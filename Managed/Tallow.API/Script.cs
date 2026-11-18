@@ -508,16 +508,24 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
     /// A built-in component handle (Light, MeshRenderer, Rigidbody...) is
     /// added with its default values, or the one already there is returned.
     /// </summary>
-    public T AddComponent<T>() where T : IComponent
+    public T AddComponent<T>() where T : IComponent => (T)AddComponent(typeof(T));
+
+    /// <summary>
+    /// <see cref="AddComponent{T}"/> for a type known only at run time (a Script class or a built-in component
+    /// handle). Needs no generic code made at run time, so it also works in a NativeAOT export.
+    /// </summary>
+    public IComponent AddComponent(Type type)
     {
-        Type type = typeof(T);
+        ArgumentNullException.ThrowIfNull(type);
+        if (!typeof(IComponent).IsAssignableFrom(type))
+            throw new ArgumentException($"{type.FullName} is not a component.", nameof(type));
         if (!typeof(Script).IsAssignableFrom(type))
         {
             if (!NativeComponentTypes.TryGet(type, out string native, out var make))
                 throw new NotSupportedException($"{type.FullName} cannot be added from C#.");
             if (!CSharpNativeComponents.Add(SceneId, Id, native))
                 throw new InvalidOperationException($"Tallow could not add {native} to {this}.");
-            return (T)make(this);
+            return make(this);
         }
         if (type.IsAbstract || type.ContainsGenericParameters ||
             type.FullName is not string fullName)
@@ -527,7 +535,7 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
         if (instance <= 0)
             throw new InvalidOperationException(
                 $"Tallow could not add {fullName} to the native scene object.");
-        return Engine.Bridge.GetManagedInstance(this, instance) is T added ? added :
+        return Engine.Bridge.GetManagedInstance(this, instance) is { } added && type.IsInstanceOfType(added) ? (IComponent)added :
             throw new InvalidOperationException(
                 $"Tallow failed to resolve newly attached C# component {fullName}.");
     }
@@ -1427,6 +1435,9 @@ public abstract class Script : IComponent
 
     /// <summary>Add and return another managed gameplay component.</summary>
     public T AddComponent<T>() where T : IComponent => GameObject.AddComponent<T>();
+
+    /// <summary>Add a component whose type is known only at run time (see <see cref="GameObject.AddComponent(Type)"/>).</summary>
+    public IComponent AddComponent(Type type) => GameObject.AddComponent(type);
 
     /// <summary>The object's collider at that index, or null.</summary>
     public ColliderHandle? GetCollider(int index = 0) => GameObject.GetCollider(index);

@@ -140,9 +140,14 @@ public static class BehaviorNodes
         var settings = new List<FieldInfo>();
         for (Type? at = type; at != null && at != typeof(BehaviorNode); at = at.BaseType)
             settings.AddRange(at.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-                .Where(field => !field.IsInitOnly && SettingType(field.FieldType) != null).OrderBy(field => field.MetadataToken));
+                .Where(field => !field.IsInitOnly && SettingType(field.FieldType) != null).OrderBy(DeclarationOrder));
         sKinds[type.FullName ?? type.Name] = new Kind(type, create, [.. settings]);
     }
+
+    /// <summary>A field's place in its class's declaration. NativeAOT keeps no metadata tokens, but it lists a class's
+    /// fields in declaration order already, so there the order they come in is kept.</summary>
+    private static int DeclarationOrder(FieldInfo field) =>
+        System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported ? field.MetadataToken : 0;
 
     private static string? SettingType(Type type) =>
         type == typeof(float) || type == typeof(int) || type == typeof(double) ? "Number" :
