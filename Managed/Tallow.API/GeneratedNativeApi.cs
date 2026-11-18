@@ -61,3 +61,12 @@ internal static unsafe partial class GeneratedNativeApi
             throw new MissingMethodException($"Native Tallow entrypoint is missing: {symbol}");
     }
 }
+
+/// <summary>One string of a generated binding that passes its strings packed (more arguments than .NET in a browser
+/// allows one by one): UTF-8 bytes and their length. The layout of Beef's <c>CSharpStringArg</c>.</summary>
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+internal readonly unsafe struct NativeStringArg(byte* ptr, int length)
+{
+    public readonly byte* Ptr = ptr;
+    public readonly int Length = length;
+}

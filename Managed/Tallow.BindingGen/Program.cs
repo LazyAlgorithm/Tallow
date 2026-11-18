@@ -80,6 +80,44 @@ internal static class Program
             _ => type
         };
 
+    /// <summary>
+    /// .NET's WebAssembly interpreter calls native code with at most 12 integer-class argument slots (pointers and
+    /// 32-bit values take one, 64-bit integers two on wasm32; mono/mini/interp/interp.h INTERP_ICALL_TRAMP_IARGS) and
+    /// stops the program for more. A binding whose lowered signature would need more passes its strings packed: one
+    /// pointer to an array of (UTF-8 pointer, byte length) pairs, in parameter order, as the first native argument.
+    /// The same ABI on every platform, so desktop and browser builds call the same export.
+    /// </summary>
+    internal const int WasmIntegerSlots = 12;
+
+    private static int IntegerSlots(Method m, bool packed)
+    {
+        int slots = packed && m.Parameters.Any(p => p.Type == "string") ? 1 : 0;
+        foreach (Parameter p in m.Parameters)
+        {
+            if (p.Type == "string")
+                slots += packed ? 0 : 2;
+            else if (IsSpan(p.Type))
+                slots += 2;
+            else if (p.Type is "long" or "ulong")
+                slots += 2;
+            else if (p.Type is not ("float" or "double") || Dimensions(p.Type) > 0)
+                slots += 1;
+        }
+        if (Dimensions(m.Result) > 0 || IsHitRecord(m.Result))
+            slots += 1;
+        return slots;
+    }
+
+    private static bool PacksStrings(Method m)
+    {
+        if (IntegerSlots(m, false) <= WasmIntegerSlots)
+            return false;
+        if (IntegerSlots(m, true) > WasmIntegerSlots)
+            throw new InvalidOperationException($"{m.Owner}.{m.Name}: {IntegerSlots(m, true)} integer argument slots even with " +
+                $"its strings packed; .NET in a browser allows {WasmIntegerSlots}. Pass fewer arguments.");
+        return true;
+    }
+
     private static string CAbiType(string type) =>
         IsSpan(type) ? SpanElement(type) + "*" :
         Dimensions(type) > 0 ? "float*" : type == "bool" ? "int" : type;
@@ -161,9 +199,14 @@ internal static class Program
             foreach (Method m in group)
             {
                 string symbol = $"CSharpApi_{m.Id}";
+                bool packed = PacksStrings(m);
                 List<string> args = [];
+                if (packed)
+                    args.Add("CSharpStringArg* strings");
                 foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
                 {
+                    if (packed && p.Type == "string")
+                        continue;
                     if (p.Type == "string" || IsSpan(p.Type))
                     {
                         args.Add($"{(p.Type == "string" ? "char8*" : NativeType(p.Type))} p{i}");
@@ -181,10 +224,19 @@ internal static class Program
                 text.AppendLine("\t[Export, CLink, Reflect, AlwaysInclude, CSharpApiExport]")
                     .AppendLine($"\tpublic static {returnType} {symbol}({string.Join(", ", args)})")
                     .AppendLine("\t{");
+                if (packed)
+                    text.AppendLine($"\t\tif (strings == null) return{(returnType == "void" ? ";" : " default;")}");
+                int packedIndex = 0;
                 foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
                 {
                     int count = Dimensions(p.Type);
-                    if (p.Type == "string" || IsSpan(p.Type))
+                    if (packed && p.Type == "string")
+                    {
+                        text.AppendLine($"\t\tif (strings[{packedIndex}].Length < 0 || (strings[{packedIndex}].Length > 0 && strings[{packedIndex}].Ptr == null)) return{(returnType == "void" ? ";" : " default;")}");
+                        text.AppendLine($"\t\tStringView s{i} = .(strings[{packedIndex}].Ptr, strings[{packedIndex}].Length);");
+                        packedIndex++;
+                    }
+                    else if (p.Type == "string" || IsSpan(p.Type))
                     {
                         text.AppendLine($"\t\tif (p{i}Length < 0 || (p{i}Length > 0 && p{i} == null)) return{(returnType == "void" ? ";" : " default;")}");
                         text.AppendLine(p.Type == "string" ?
@@ -409,9 +461,14 @@ internal static class Program
                     text.AppendLine($"\t\tfloat* result = stackalloc float[{Dimensions(m.Result)}];");
                 else if (IsHitRecord(m.Result))
                     text.AppendLine("\t\tPhysicsQueryHit result = default;");
+                bool packed = PacksStrings(m);
                 List<string> nativeArgs = [];
+                if (packed)
+                    nativeArgs.Add("(byte*)strings");
                 foreach ((Parameter p, int i) in m.Parameters.Select((p, i) => (p, i)))
                 {
+                    if (packed && p.Type == "string")
+                        continue;
                     if (p.Type == "string" || IsSpan(p.Type))
                     {
                         nativeArgs.Add($"p{i}");
@@ -426,8 +483,12 @@ internal static class Program
                 else if (IsHitRecord(m.Result))
                     nativeArgs.Add("&result");
                 List<string> types = [];
+                if (packed)
+                    types.Add("byte*");
                 foreach (Parameter p in m.Parameters)
                 {
+                    if (packed && p.Type == "string")
+                        continue;
                     if (p.Type == "string" || IsSpan(p.Type))
                     {
                         types.Add(p.Type == "string" ? "byte*" : CAbiType(p.Type));
@@ -455,6 +516,12 @@ internal static class Program
                 }
                 if (hasPinned)
                     text.AppendLine("\t\t{");
+                if (packed)
+                {
+                    string[] pairs = m.Parameters.Select((p, i) => (p, i)).Where(x => x.p.Type == "string")
+                        .Select(x => $"new NativeStringArg(p{x.i}, p{x.i}Length)").ToArray();
+                    text.AppendLine($"\t\tNativeStringArg* strings = stackalloc NativeStringArg[{pairs.Length}] {{ {string.Join(", ", pairs)} }};");
+                }
                 if (m.Result == "void")
                     text.AppendLine($"\t\t{call};");
                 else if (m.Result == "bool")
@@ -557,6 +624,15 @@ internal static class Program
             !managedQuaternion.Contains("return new System.Numerics.Quaternion(result[0], result[1], result[2], result[3]);") ||
             !managedQuaternion.Contains("float* p0 = stackalloc float[4] { rotation.X, rotation.Y, rotation.Z, rotation.W };"))
             throw new Exception("Quaternion ABI lowering failed.");
+        const string many = "TALLOW_CSHARP_API_V1\nmethod\tTallow.PackChecks\tPublish\tint\ta:string\tb:string\tc:string\tn:int\td:string\tid:ulong\te:string\tf:string\n";
+        List<Method> manyMethods = Parse(many);
+        string beefMany = EmitBeef(manyMethods, Hash(many));
+        string managedMany = EmitCSharp(manyMethods, Hash(many));
+        if (!beefMany.Contains("(CSharpStringArg* strings, int32 p3, uint64 p5)") ||
+            !beefMany.Contains("StringView s7 = .(strings[5].Ptr, strings[5].Length);") ||
+            !managedMany.Contains("NativeStringArg* strings = stackalloc NativeStringArg[6] { new NativeStringArg(p0, p0Length),") ||
+            !managedMany.Contains("delegate* unmanaged[Cdecl]<byte*, int, ulong, int>)ptr)((byte*)strings, n, id)"))
+            throw new Exception("Packed string lowering (WebAssembly argument limit) failed.");
         const string hitRecord = "TALLOW_CSHARP_API_V1\nmethod\tTallow.Physics\tRaycastDetails\tTallow.PhysicsQueryHit\tsession:ulong\torigin:System.Numerics.Vector3\tdirection:System.Numerics.Vector3\tmaxDistance:float\tlayerMask:uint\n";
         List<Method> hitMethods = Parse(hitRecord);
         string beefHit = EmitBeef(hitMethods, Hash(hitRecord));

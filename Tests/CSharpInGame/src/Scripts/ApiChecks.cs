@@ -1032,14 +1032,14 @@ public class ApiChecks : CheckBase
         renderer.Roughness = 0.3f;
         Check("MeshRenderer string and float fields", renderer.Mesh == "builtin:sphere_smooth" && MathF.Abs(renderer.Roughness - 0.3f) < 1e-6f);
         // Warm up (static caches, JIT), then a lookup and a by-name field read must not allocate.
+        // In a browser .NET interprets, and allocates while it optimizes methods that have run a few hundred times
+        // (the reads, and this loop: 584 bytes, then 24, then none): there the last of three measures counts.
         _ = lamp.GetComponent<MeshRenderer>().Roughness;
         _ = lamp.GetComponent<Animator>().IsValid;
-        long before = GC.GetAllocatedBytesForCurrentThread();
+        long allocated = 0;
         bool found = true;
-        for (int i = 0; i < 100; i++)
-            found &= lamp.GetComponent<MeshRenderer>().IsValid && !lamp.GetComponent<Animator>().IsValid
-                && renderer.Roughness > 0;
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        for (int measure = 0, measures = OperatingSystem.IsBrowser() ? 3 : 1; measure < measures; measure++)
+            allocated = LookupAllocations(lamp, renderer, ref found);
         Check($"GetComponent<built-in> and a field read by name allocate nothing ({allocated} bytes for 100)", found && allocated == 0);
         lamp.Transform.Position = new Vector3(10, 20, 30);
         bool bounded = renderer.TryGetWorldBounds(out Vector3 low, out Vector3 high);
@@ -1287,9 +1287,15 @@ public class ApiChecks : CheckBase
         memory.Hold = true;
         saved = SaveGame.Save("later");
         bool waiting = !saved.Done;
-        var finisher = new System.Threading.Thread(() => memory.Held!.Finish());
-        finisher.Start();
-        finisher.Join();
+        // A browser game has one thread: there the storage finishes the save later on the same one.
+        if (OperatingSystem.IsBrowser())
+            memory.Held!.Finish();
+        else
+        {
+            var finisher = new System.Threading.Thread(() => memory.Held!.Finish());
+            finisher.Start();
+            finisher.Join();
+        }
         Check("a C# storage may finish a save later, from another thread", waiting && saved.Done && saved.Succeeded);
         bool twice = false;
         try { memory.Held!.Finish(); } catch (InvalidOperationException) { twice = true; }
@@ -1443,6 +1449,15 @@ public class ApiChecks : CheckBase
         _terrain.SetGenerator(_shelf);
     }
 
+    private static long LookupAllocations(GameObject lamp, MeshRenderer renderer, ref bool found)
+    {
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 100; i++)
+            found &= lamp.GetComponent<MeshRenderer>().IsValid && !lamp.GetComponent<Animator>().IsValid
+                && renderer.Roughness > 0;
+        return GC.GetAllocatedBytesForCurrentThread() - before;
+    }
+
     private void TerrainChecks()
     {
         int[] tiles = _terrain.TileIds();
@@ -1450,8 +1465,9 @@ public class ApiChecks : CheckBase
         bool hit = _terrain.Raycast(new Vector3(5004, 40, 5004), -Vector3.UnitY, 80, out Vector3 ground);
         Check($"a C# TerrainGenerator shapes the ground ({hit}, {ground}; {_terrain.ChunkCount} chunks, {_terrain.PendingChunks} pending)",
             hit && Math.Abs(ground.Y - 6) < 0.6f);
+        // A browser game has no worker threads: Fill runs on the game thread there.
         Check($"its Begin runs on the game thread and Fill on worker threads, a chunk at a time ({_shelf!.Begins}, {_shelf.Fills}, {_shelf.FillThreads})",
-            _shelf.Begins >= 1 && _shelf.BeganOnGameThread && _shelf.Fills >= 1 && _shelf.FilledOffGameThread && _shelf.LargestFill >= 9);
+            _shelf.Begins >= 1 && _shelf.BeganOnGameThread && _shelf.Fills >= 1 && (_shelf.FilledOffGameThread || OperatingSystem.IsBrowser()) && _shelf.LargestFill >= 9);
         Check($"VoxelTerrain.DensityAt reads the ground ({_terrain.DensityAt(new Vector3(5004, 3, 5004))}, {_terrain.DensityAt(new Vector3(5004, 9, 5004))})",
             _terrain.DensityAt(new Vector3(5004, 3, 5004)) > 0 && _terrain.DensityAt(new Vector3(5004, 9, 5004)) < 0);
         bool baked = _terrain.ApplyGenerator(new RaisedGenerator(), tiles[0]);
