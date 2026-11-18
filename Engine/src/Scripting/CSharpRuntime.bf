@@ -572,7 +572,11 @@ static class CSharpRuntime
 		let game = scope $"{projectPath}/.tallow-csharp/bin/Tallow.Game/Tallow.Game.dll";
 		if (!File.Exists(config) || !File.Exists(runtime) || !File.Exists(game))
 		{
-			Log.Error("C# runtime or compiled game assembly is missing. Build the C# project with the .NET SDK before Play.");
+			let missing = scope String();
+			for (let path in StringView[3](config, runtime, game))
+				if (!File.Exists(path))
+					missing.AppendF("{}{}", missing.IsEmpty ? "" : ", ", path);
+			Log.Error(scope $"C# runtime or compiled game assembly is missing ({missing}). Build the C# project with the .NET SDK before Play.");
 			return false;
 		}
 		if (!Initialize(config, runtime) || !BindScene(scene))
