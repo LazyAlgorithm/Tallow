@@ -1564,7 +1564,14 @@ the first working export is described in "First NativeAOT export" at the end of 
 - [x] Use the **same game source**, C# compiler/TFM, public generated binding signatures, serialized field contracts, native Flecs/Jolt/ENet engine, fixed-tick ordering and network input/authority paths for both profiles. Only deployment/runtime differs; do not maintain separate AOT gameplay scripts.
 - [~] Validate default field values, construction/Awake/Start/Enable/Disable/Destroy, component ordering, script attach/detach, scene/prefab load, ECS updates, physics impulses/soft bodies and collision events under both runtimes.
 - [ ] Determinism replay: run fixed-seed input streams through JIT and AOT on the same CPU and platform, assert per-tick state hashes for integer/state-machine logic, compare float/vector/Jolt positions with documented tolerances, verify identical server-authoritative results and rollback/desync behavior. Repeat Windows/Linux; JIT/AOT or hardware may legitimately differ at floating-point/ordering edges: fix simulation nondeterminism and quantize where required, **never claim bit-identical floats without evidence**.
-- [ ] Ban unseeded RNG, wall-clock gameplay time, unordered parallel writes, locale-sensitive parsing and non-deterministic serialization for predicted network state; ensure pre-existing editor hints and release validators flag these.
+- [x] Ban unseeded RNG, wall-clock gameplay time, unordered parallel writes, locale-sensitive parsing and non-deterministic serialization for predicted network state; ensure pre-existing editor hints and release validators flag these.
+  Done November 18, 2026: the code editor's determinism hints (GameplayDiagnostics, purple) gained TAL-NET006
+  (Parallel/Task.Run/ThreadPool work in a tick), TAL-NET007 (float/double/decimal Parse or Convert without a
+  culture), TAL-NET008 (string/object hash codes, System.HashCode), DateTimeOffset/DateTime.Today and Stopwatch
+  clocks, and now cover ECS systems' Update(..., TickInput, ...). Tallow.Build links the same file and lists them
+  when it builds a game for release (`path(line): warning TAL-NET...`); warnings, as in the editor, not errors.
+  Tests: 5 new language-service checks (139 pass); the export test adds a script with two and checks they are
+  listed and the build carries on.
 - [x] Verify AOT and JIT callbacks use identical versioned structs, `UnmanagedCallersOnly` exports with strictly blittable types (not `bool`/managed strings), C calling conventions and resource ownership.
 - [ ] Run B24–B30 in [benchmark plan](csharp-benchmark-plan.md), including GC, startup, input replay, network peers, binaries, trim root stability and symbol retention. Ship NativeAOT by default **only after** both runtime profiles pass complete cross-platform tests; until then existing JIT development/play workflow stays functional.
 

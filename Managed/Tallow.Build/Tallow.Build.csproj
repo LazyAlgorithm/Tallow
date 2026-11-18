@@ -15,4 +15,8 @@
       <HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <ItemGroup>
+    <!-- The code editor's gameplay warnings: a release build lists their determinism ones. -->
+    <Compile Include="../Tallow.LanguageService/GameplayDiagnostics.cs" Link="GameplayDiagnostics.cs" />
+  </ItemGroup>
 </Project>

@@ -15,21 +15,23 @@ internal static class GameplayDiagnostics
     internal sealed record Warning(string Path, int Line, int Utf8Column,
         string Category, string Message);
 
+    /// <summary>The warnings of the files in <paramref name="texts"/> (path to its text). Tallow.Build links this
+    /// file too and lists the determinism ones when it builds a game for release.</summary>
     internal static IEnumerable<Warning> Analyze(CSharpCompilation compilation,
-        IReadOnlyDictionary<string, SourceFile> sources)
+        IReadOnlyDictionary<string, string> texts)
     {
         foreach (SyntaxTree tree in compilation.SyntaxTrees)
         {
-            if (!sources.TryGetValue(tree.FilePath, out SourceFile? source))
+            if (!texts.TryGetValue(tree.FilePath, out string? text))
                 continue;
             // Tallow.API internals are not user gameplay scripts.
             SyntaxNode root = tree.GetRoot();
             SemanticModel semantic = compilation.GetSemanticModel(tree);
-            string[] sourceLines = source.Text.Split('\n');
+            string[] sourceLines = text.Split('\n');
             foreach (MethodDeclarationSyntax method in root.DescendantNodes()
                 .OfType<MethodDeclarationSyntax>())
             {
-                bool networkTick = IsNetworkTick(method, semantic);
+                bool networkTick = IsNetworkTick(method, semantic) || IsEcsSystemTick(method, semantic);
                 // Allocation hints also matter in local frame callbacks and
                 // fixed physics ticks. Determinism warnings remain restricted
                 // to predicted input-tick methods.
@@ -53,7 +55,8 @@ internal static class GameplayDiagnostics
                             category = "determinism";
                             message = "TAL-NET001: Random.Shared varies by process; use a shared deterministic seed in networked " + context + ".";
                         }
-                        else if (IsBoundMember(semantic, member, "System.DateTime", "Now", "UtcNow"))
+                        else if (IsBoundMember(semantic, member, "System.DateTime", "Now", "UtcNow", "Today") ||
+                                 IsBoundMember(semantic, member, "System.DateTimeOffset", "Now", "UtcNow"))
                         {
                             category = "determinism";
                             message = "TAL-NET002: Wall-clock time differs across clients and replays; count simulation ticks instead.";
@@ -71,7 +74,9 @@ internal static class GameplayDiagnostics
                             message = "TAL-NET004: Local mouse polling cannot be replayed; use the tick's networked input.";
                         }
                         else if (IsBoundMember(semantic, member, "System.Environment",
-                            "TickCount", "TickCount64"))
+                            "TickCount", "TickCount64") ||
+                            IsBoundMember(semantic, member, "System.Diagnostics.Stopwatch",
+                            "Elapsed", "ElapsedMilliseconds", "ElapsedTicks"))
                         {
                             category = "determinism";
                             message = "TAL-NET005: Wall-clock or uptime values cannot be replayed; use deterministic tick state.";
@@ -95,6 +100,35 @@ internal static class GameplayDiagnostics
                             {
                                 category = "determinism";
                                 message = "TAL-NET005: Nondeterministic IDs or clocks cannot be replayed; use deterministic tick state.";
+                            }
+                            else if (container == "System.Diagnostics.Stopwatch" &&
+                                     called.Name is "StartNew" or "GetElapsedTime")
+                            {
+                                category = "determinism";
+                                message = "TAL-NET005: Nondeterministic IDs or clocks cannot be replayed; use deterministic tick state.";
+                            }
+                            else if (container == "System.Threading.Tasks.Parallel" ||
+                                     container == "System.Threading.Tasks.Task" && called.Name == "Run" ||
+                                     container == "System.Threading.Tasks.TaskFactory" && called.Name == "StartNew" ||
+                                     container == "System.Threading.ThreadPool" && called.Name.Contains("QueueUserWorkItem"))
+                            {
+                                category = "determinism";
+                                message = "TAL-NET006: Work on other threads finishes in a different order on each machine, so its writes to " +
+                                    "simulated state cannot be replayed; keep tick work on the game thread (an ECS query runs it in order).";
+                            }
+                            else if (IsLocaleParse(called))
+                            {
+                                category = "determinism";
+                                message = "TAL-NET007: " + called.ContainingType.ToDisplayString() + "." + called.Name +
+                                    " follows each machine's language settings (\"1,5\" or \"1.5\"); pass CultureInfo.InvariantCulture.";
+                            }
+                            else if (called.Name == "GetHashCode" && called.ContainingType.SpecialType is
+                                         SpecialType.System_String or SpecialType.System_Object ||
+                                     container == "System.HashCode")
+                            {
+                                category = "determinism";
+                                message = "TAL-NET008: Hash codes of strings and objects are randomised per process and differ on each machine; " +
+                                    "do not keep them in simulated state or order by them.";
                             }
                             else if (called.Name == "GetComponent" &&
                                 invocation.Ancestors().Any(IsLoop) &&
@@ -200,6 +234,23 @@ internal static class GameplayDiagnostics
         syntax is ForStatementSyntax or ForEachStatementSyntax or ForEachVariableStatementSyntax
             or WhileStatementSyntax or DoStatementSyntax;
 
+    /// <summary>float/double/decimal/Half Parse or TryParse, or Convert.ToSingle/ToDouble/ToDecimal of a string,
+    /// without an IFormatProvider: they read "1,5" or "1.5" depending on the machine's culture.</summary>
+    private static bool IsLocaleParse(IMethodSymbol called)
+    {
+        // Nullable-annotated in .NET ("IFormatProvider?"), so by name and namespace.
+        bool provider = called.Parameters.Any(p => p.Type.Name == "IFormatProvider" &&
+            p.Type.ContainingNamespace?.ToDisplayString() == "System");
+        if (provider)
+            return false;
+        string container = called.ContainingType.ToDisplayString();
+        if (called.Name is "Parse" or "TryParse")
+            return container is "float" or "double" or "decimal" or "System.Half" &&
+                called.Parameters.FirstOrDefault()?.Type.SpecialType == SpecialType.System_String;
+        return container == "System.Convert" && called.Name is "ToSingle" or "ToDouble" or "ToDecimal" &&
+            called.Parameters.Length == 1 && called.Parameters[0].Type.SpecialType == SpecialType.System_String;
+    }
+
     private static bool IsSystemRandom(ITypeSymbol? type) =>
         type?.ToDisplayString() == "System.Random";
 
@@ -252,5 +303,20 @@ internal static class GameplayDiagnostics
             return false;
         // Only actual gameplay script components run in predicted ticks.
         return IsGameplayScript(symbol);
+    }
+
+    /// <summary>An ECS system's Update(entity, ref data..., TickInput, deltaTime): run on the server and predicted on
+    /// clients like a script's tick.</summary>
+    private static bool IsEcsSystemTick(MethodDeclarationSyntax method, SemanticModel semantic)
+    {
+        if (method.Identifier.ValueText != "Update")
+            return false;
+        IMethodSymbol? symbol = semantic.GetDeclaredSymbol(method);
+        if (symbol is null || !symbol.IsOverride || !symbol.Parameters.Any(p => p.Type.ToDisplayString() == "Tallow.TickInput"))
+            return false;
+        for (INamedTypeSymbol? current = symbol.ContainingType; current is not null; current = current.BaseType)
+            if (current.OriginalDefinition.ToDisplayString() == "Tallow.EcsSystemBase")
+                return true;
+        return false;
     }
 }

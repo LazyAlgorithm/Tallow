@@ -84,6 +84,11 @@ def main() -> int:
         (project / "src/Scripts/FirstPersonCharacter.cs").write_text(template.replace("{NAMESPACE}", "InGame"), encoding="utf-8")
         (project / "project.tallow").write_text(
             f"name = InGame\nstartScene = Scenes/Main.tscene\nengine = {ROOT.as_posix()}\n", encoding="utf-8")
+        # Not in any scene: only here so the build lists its determinism problems (TAL-NET), without stopping.
+        (project / "src/Scripts/Drifts.cs").write_text(
+            "using Tallow;\nnamespace InGame;\npublic sealed class Drifts : Script\n{\n    public float Value;\n"
+            "    public override void Update(TickInput input, float deltaTime) =>\n"
+            "        Value += new System.Random().Next(3) + float.Parse(\"1.5\");\n}\n", encoding="utf-8")
         output = work / "Built"
         built = subprocess.run([sys.executable, str(ROOT / "tools/build_player.py"), str(project), "--output", str(output),
                                 "--config", "Release", "--platform", args.platform, "--csharp-runtime", args.runtime],
@@ -93,6 +98,12 @@ def main() -> int:
             print("The C# game did not build.", file=sys.stderr)
             return 1
         print("\n".join(line for line in built.stdout.splitlines() if "bundled" in line or "packaged" in line or "NativeAOT" in line))
+        listed = [line for line in built.stdout.splitlines() if "Drifts.cs" in line and "TAL-NET" in line]
+        if not (any("TAL-NET001" in line for line in listed) and any("TAL-NET007" in line for line in listed)):
+            print(built.stdout[-4000:])
+            print("The build did not list the determinism problems of Drifts.cs (TAL-NET001, TAL-NET007).", file=sys.stderr)
+            return 1
+        print(f"The build listed {len(listed)} determinism problem(s) in Drifts.cs and carried on.")
         library = "Managed/Native/" + ("TallowGame.dll" if windows else "libTallowGame.so")
         required_files = (executable, "game.tpak", library, "Managed/Native/Tallow.Game.codeid") if native else (
             executable, "game.tpak", "Managed/Runtime/Tallow.ManagedRuntime.dll", "Managed/Runtime/Tallow.API.dll",

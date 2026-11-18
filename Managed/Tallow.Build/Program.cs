@@ -1070,6 +1070,30 @@ internal static class Program
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
     }
 
+    /// <summary>
+    /// The code editor's determinism warnings (TAL-NET: unseeded random numbers, clocks, local input, work on other
+    /// threads, culture-dependent number parsing, per-process hash codes) in predicted tick code, listed when a game
+    /// is built for release. Warnings, as in the editor: they do not stop the build.
+    /// </summary>
+    private static void ReportDeterminism(string project, string engine)
+    {
+        CSharpCompilation compilation = CatalogCompilation(project, engine, out SyntaxTree[] trees);
+        // The game projects' implicit usings (ImplicitUsings), so that DateTime and the like bind as they do there.
+        compilation = compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+            "global using global::System; global using global::System.Collections.Generic; global using global::System.IO; " +
+            "global using global::System.Linq; global using global::System.Threading; global using global::System.Threading.Tasks; " +
+            "global using global::Tallow.Generated;",
+            new CSharpParseOptions(LanguageVersion.CSharp15), path: "Tallow.ImplicitUsings.g.cs"));
+        var texts = trees.ToDictionary(tree => tree.FilePath, tree => tree.GetText().ToString(), StringComparer.Ordinal);
+        var warnings = Tallow.LanguageService.GameplayDiagnostics.Analyze(compilation, texts)
+            .Where(warning => warning.Category == "determinism").ToList();
+        foreach (var warning in warnings)
+            Console.WriteLine($"{warning.Path}({warning.Line + 1}): warning {warning.Message}");
+        if (warnings.Count > 0)
+            Console.WriteLine($"{warnings.Count} determinism warning(s) in networked tick code: these can make clients and " +
+                "the server disagree (the code editor marks them in purple).");
+    }
+
     private static string GraphNodesPath(string project) => Path.Combine(project, ".tallow-csharp", "graph-nodes.tsv");
 
     private static void WriteComponentCatalog(string project, string engine)
@@ -1598,6 +1622,9 @@ internal static class Program
                         File.WriteAllText(idPath, sCodeId + "\n");
                 }
             }
+            // A game build lists what would make networked play go out of step (the code editor shows the same).
+            if (build.ExitCode == 0 && outputRoot != null)
+                ReportDeterminism(project, engine);
             if (build.ExitCode == 0 && outputRoot == null)
                 WriteComponentCatalog(project, engine);
             // A graph can still be worked on while the game does not compile: its nodes come from the sources.

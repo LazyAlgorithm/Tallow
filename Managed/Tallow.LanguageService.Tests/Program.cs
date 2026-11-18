@@ -1043,6 +1043,45 @@ public sealed class CubeMover : Script
             Check("C# engine warnings do not flag non-predicted Start methods",
                 !noTickWarnings.Contains("TAL-NET") && !noTickWarnings.Contains("TAL-PERF"));
 
+            // The other determinism rules: threads, culture-dependent parsing, per-process hash codes, more clocks;
+            // and ECS systems' Update(..., TickInput, ...) counts as a predicted tick.
+            string moreRules = """
+                using System.Globalization;
+                using Tallow;
+                [Component] public sealed class MoreRules : Script
+                {
+                    public string Text = "1.5";
+                    public override void Update(TickInput input, float deltaTime)
+                    {
+                        System.Threading.Tasks.Parallel.For(0, 4, i => { });
+                        float a = float.Parse(Text);
+                        float b = float.Parse(Text, CultureInfo.InvariantCulture);
+                        int h = Text.GetHashCode();
+                        int fine = 7.GetHashCode();
+                        var when = DateTimeOffset.UtcNow;
+                        var watch = System.Diagnostics.Stopwatch.StartNew();
+                    }
+                }
+                public struct Spin { public float Angle; }
+                public sealed class SpinSystem : EcsSystem<Spin>
+                {
+                    public override void Update(EcsEntity entity, ref Spin spin, TickInput input, float deltaTime)
+                    {
+                        spin.Angle += new System.Random().Next(3);
+                    }
+                }
+                """;
+            string moreWarnings = RequestWithApi(service, "diagnostics", moreRules, moreRules.Length);
+            int Count(string text, string id) => text.Split(id).Length - 1;
+            Check("C# determinism: Parallel/Task work in a tick is flagged (TAL-NET006)", Count(moreWarnings, "TAL-NET006") == 1);
+            Check("C# determinism: float.Parse without a culture is flagged, with InvariantCulture it is not (TAL-NET007)",
+                Count(moreWarnings, "TAL-NET007") == 1);
+            Check("C# determinism: string hash codes are flagged, int's are not (TAL-NET008)", Count(moreWarnings, "TAL-NET008") == 1);
+            Check("C# determinism: DateTimeOffset and Stopwatch clocks are flagged",
+                Count(moreWarnings, "TAL-NET002") == 1 && Count(moreWarnings, "TAL-NET005") == 1);
+            Check("C# determinism: an ECS system's Update(..., TickInput, ...) is checked like a script tick",
+                Count(moreWarnings, "TAL-NET001") == 1);
+
             string earlyLate = """
                 using Tallow;
                 [Component] public sealed class PhaseProbe : Script

@@ -334,7 +334,8 @@ internal static class Program
                 SemanticModel fileModel = compilation.GetSemanticModel(tree);
                 LastModel = fileModel;
                 FileProblems(fileModel.GetDiagnostics(), one, lines);
-                foreach (GameplayDiagnostics.Warning warning in GameplayDiagnostics.Analyze(compilation, one))
+                var texts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [tree.FilePath] = source.Text };
+                foreach (GameplayDiagnostics.Warning warning in GameplayDiagnostics.Analyze(compilation, texts))
                     lines.Add(Line("diagnostic", warning.Path, warning.Line,
                         warning.Utf8Column, "warning", warning.Message, warning.Category));
                 cached = (tree, DeclarationEpoch, lines);
