@@ -446,6 +446,12 @@ carries on, and a failed Inspector falls back to the plain field list.
   `RemoveComponent(...)` work for built-in components and class components alike, and their fields read and write
   as scene files do. Every change marks the scene dirty and can be undone; during Play they are refused
   (`EditorScene.IsEditable`).
+- **Models:** `EditorModel.Read(object)` gives the object's Model Mesh as an `EditMesh` (Dispose it when done), and
+  `EditorModel.Write(object, mesh)` makes a mesh the object's Model Mesh, adding a Mesh Renderer when it has none.
+  The whole modelling API works on it (docs/modeling.md): the modeller's shapes, `ExtrudeFaces`, `InsetFaces`,
+  `Subdivide`, `Poke`, `Solidify`, face colours, materials and smoothness, `Combine` booleans, UVs, `ToText` and
+  `FromText`. Writing marks the scene dirty, so it is undone with the rest of the command. Editor scripts can also
+  use Tallow.API's scene-free calls, such as `Gizmos` and `DebugDraw`.
 - **Scene view overlay:** any concrete `SceneViewOverlay` subclass is called every frame while the Scene view is
   open (`OnSceneViewGUI()`), to draw gizmos and run a tool. `SceneView.Line/Sphere/Box` draw this frame (the same
   batches as `Tallow.Gizmos`: `onTop` draws through geometry); `SceneView.IsVisible`, `IsMouseOver`, `IsClicked`,
@@ -473,8 +479,8 @@ Labels sit on the left as in the Inspector. Two widgets with the same label in o
 (`"Speed##front"`) or an `Id` scope. `EditorApplication` gives `IsPlaying`, `ProjectPath`, `SelectedObjectName` and
 `Log`/`LogWarning`/`LogError` to the Console.
 
-Not yet: scene editing through Tallow.API itself (GameObject, Transform and components are bound to a running game;
-editor scripts use `EditorScene` in Edit mode), and modelling or terrain tools written as editor scripts. Test:
+Not yet: scene editing through Tallow.API's `GameObject` and `Transform` themselves (they are bound to a running
+game; editor scripts use `EditorScene` in Edit mode), and carving terrain from C# in Edit mode. Test:
 `tools/test_csharp_editor_extensions.py` needs a display.
 
 ## Shipping a C# game

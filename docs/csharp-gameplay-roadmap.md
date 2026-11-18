@@ -1380,14 +1380,14 @@ A full conversion also needs these. Ordered roughly by when they block users.
   - Create > C# Script > Editor templates (Custom Inspector, Editor Window, Tools Menu Command, Preferences Page).
   - The language service compiles editor folders as their own assembly against Tallow.Editor.
 
-  Tests: `tools/test_csharp_editor_extensions.py`, a display test with 30 checks, which includes a broken window, a
+  Tests: `tools/test_csharp_editor_extensions.py`, a display test with 32 checks, which includes a broken window, a
   reload and a game build with no editor scripts; LS tests (139); the template test compiles the four editor
   templates.
 
 ### Editor scripts work on the scene (November 18, 2026)
 
 - The three gaps listed here for editor scripts are filled, each tested end to end by
-  `tools/test_csharp_editor_extensions.py` (30 checks, display needed):
+  `tools/test_csharp_editor_extensions.py` (32 checks, display needed):
   - **Scene editing in Edit mode:** `Tallow.Editor.EditorScene` / `EditorObject` / `EditorComponent`
     (`Managed/Tallow.Editor/EditorScene.cs`, host functions in `Editor/src/Scripts/CSharpEditorExtensions.bf`):
     selection, find by path or name, roots and children, create the editor's built-in objects (where the editor puts
@@ -1410,9 +1410,18 @@ A full conversion also needs these. Ordered roughly by when they block users.
     the state captured in DrawSceneView and the editor camera's ray/pick) and `Line/Sphere/Box` drawing through the
     existing `Tallow.Gizmos` API. The test focuses the Scene tab (the default layout leaves it behind Game) and a
     probe overlay reports that it ran, saw the view and got a ray.
-- Not yet: Tallow.API itself on the edited scene (GameObject/Transform/components are bound to a running game;
-  EditorScene is the Edit-mode API), and modelling/terrain tools written as editor scripts. Create > C# Script >
-  Editor offers the two new kinds too (Built-in Component Inspector, Scene View Tool).
+  - **The modelling API in Edit mode** (November 18, 2026): `Tallow.Editor.EditorModel` reads an object's Model Mesh
+    into an `EditMesh` and writes one back (host `modelRead`/`modelWrite` over new
+    `CSharpModeling.ReadFromObject`/`ApplyToObject`), adding a Mesh Renderer when needed and marking the scene dirty
+    (so the snapshot undo covers a modelling command). The managed `EditMesh` wrapper needed the C# API's symbol
+    resolver, which was never bound in Edit mode: Tallow.Editor's Configure now binds `GeneratedNativeApi` with
+    `CSharpRuntime.ResolveApiEntry` (the same resolver a game gets, without scene callbacks), so editor scripts can
+    use scene-free Tallow.API calls - the modelling API, `Gizmos`/`DebugDraw` - which also fixes Scene view overlay
+    gizmos (they had been throwing "resolver has not been bound" and being reported once). The probe applies a box,
+    reads it back, extrudes its top and writes it again; the editor checks the scene's Model Mesh has faces.
+    Create > C# Script > Editor also offers the two new kinds (Built-in Component Inspector, Scene View Tool).
+- Not yet: Tallow.API's scene objects (`GameObject`/`Transform`/components through their own API) on the edited scene
+  (they need scene callbacks; EditorScene is the Edit-mode API), and carving terrain from C# in Edit mode.
 - Gotchas: the managed table's function pointers must be filled in `EditorHost.Configure` (a missing one is a null
   call, and the editor segfaults), and host-table changes bump its version (4 now) on both sides; the editor's
   snapshot undo needs `MarkDirty`, not `Destroy`, for script deletions.
