@@ -209,7 +209,7 @@ def main() -> int:
                 failed.append(f"INGAME FAIL (editor) {result or 'no result: ' + (editor.stdout + editor.stderr)[-1500:]}")
                 print(failed[-1])
         if run.returncode != 0 or failed or not any("INGAME DONE" in line for line in lines):
-            if not lines:
+            if not lines or run.returncode != 0:
                 print(output[-4000:])
             print(f"In-engine C# checks failed (exit {run.returncode}, {passed} passed, {len(failed)} failed).",
                   file=sys.stderr)
