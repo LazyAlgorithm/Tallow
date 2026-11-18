@@ -417,7 +417,19 @@ measurements, `tools/run_nativeaot_bench.py` on Linux x64, Samples/CSharpBench e
 - B27 (same OS/CPU part): the NetSync bot replay, 10,000 ticks, 3 runs each: all six give `1d70dfbed5728c97`, the
   same hash as B20's Beef and C# runs. Cross-OS and other CPUs not yet run.
 - B28 (first part): JIT server + NativeAOT bot client and the reverse, 10,000 ticks, no added lag/loss: both servers
-  end on `c8a15ddc6f490720`, no errors, no code-ID warning. The RTT/loss matrix and more peers are still to run.
+  end on `c8a15ddc6f490720`, no errors, no code-ID warning.
+- B28 (Linux, November 18, 2026): `tools/run_crossplay_matrix.py` runs the whole B18 configuration set with mixed
+  runtimes: 2, 4, 8 and 16 peers; 50, 100 and 200 ms round trip; 1, 2 and 5% loss at 100 ms; each twice (JIT server
+  with NativeAOT clients, NativeAOT server with JIT clients; clients alternate at higher peer counts), 1,800 ticks
+  each, headless Release players built from one commit. All 20 runs: every client connected, no errors, no
+  code-ID warning; prediction (own) error 0.000 m median (worst 0.2 m), 35-58 KB/s sent per client per second as
+  peers grow, 1-15 ticks ahead. The two mixed directions ended on the same server hash in 4 of the 10
+  configurations: a bot client joins a running server, so where its pilot starts shifts by a tick or two between
+  runs, and with loss a control that arrives too late is dropped (as B20 records). JIT and NativeAOT hosts alone
+  replay to one hash with these players (`964389e34c11207c` at 1,800 ticks), so state equality is evidenced by the
+  replay and by no prediction divergence, not by identical cross-play hashes. Results:
+  ~/TallowBenchmarks/crossplay-20261118 (results.md and raw.jsonl). Not covered: Windows players (Wine or a real
+  Windows machine), peers above 16.
 - B24 (part): a NativeAOT export that fails leaves no game behind, no JIT assemblies or .NET in its place
   (`test_csharp_export.py --runtime native`, unsuppressed run-time generic code in the game); the release files
   hold no IL, sources or symbols. The default switch to NativeAOT waits for the user's Windows test.
