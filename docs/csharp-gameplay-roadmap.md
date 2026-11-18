@@ -1545,20 +1545,33 @@ the first working export is described in "First NativeAOT export" at the end of 
 ### Static registration, metadata and security
 
 - [~] Replace runtime `Assembly.GetTypes`, `Activator.CreateInstance` and unrestricted `FieldInfo.SetValue` for AOT export with **build-generated component registration**, typed constructors/factories, field setter/getter delegates and `[ShowInInspector]`/`[HideInInspector]` metadata and stable serialized **field IDs**. Generate this from the same Roslyn semantic source and retain the JIT-path serialization contract; include migration/version handling for renames, IDs and old scene/prefab data.
+  November 18, 2026: the field half is done. Tallow.Build writes `Tallow.FieldTables.g.cs` per assembly: one
+  `ManagedField` per instance field of every class and struct the game declares (scripts, data assets,
+  `[Serializable]` records and their bases), with a generated getter and setter, the Inspector/`[Saved]`/`[Sync]`/
+  `[NonSerialized]` flags read from the attributes, and a `[UnsafeAccessor]` member per private field (structs are
+  changed through the boxed instance). It also registers a default-value constructor per type, a `List<T>` factory
+  per list element and a `TryGetComponent<T>` lookup per reference field. `ReadFields`, `FieldText`, `ApplyText`,
+  nested paths, list items and reference fields use those tables; a type from a package (which the build cannot
+  describe) still goes through one reflection fallback, suppressed in the source. Hot reload clears the tables with
+  the other caches before the new code registers its own. Remaining here: callback masks, `UiInvoke`, `[Rpc]`
+  resolution, behaviour-node fields and `ComponentLookup<T>` still reflect (kept in the allowlist below).
 - [~] Do not discover arbitrary reflection metadata at runtime; make required remaining reflection explicit with source generation and trim/AOT annotations. Fail the export on actionable IL2026/IL207x/IL3050-style relevant trim/AOT diagnostics; add a tracked allowlist for justified third-party diagnostics only after review. No user-provided or arbitrary assembly/mod loader in the shipping runtime.
   Export on warnings done November 18, 2026 (`tools/csharp_native.py`): the ILCompiler's warnings are sorted by the
   method they come from. In the game's own code (namespaces its `src/` declares): the export stops, names them and
   says how to fix them (or keep one with `[UnconditionalSuppressMessage]` and a justification, the standard .NET
   way; Tests/CSharpInGame keeps its Newtonsoft round trip and handle check so). In the engine: each must be in
-  `tools/nativeaot_allowlist.txt` with its reason (46 today: hot reload/load context, JIT only; reflection over
-  game types, which the export keeps whole; generic code generated in Tallow.AotRoots), and an unreviewed one stops
-  the export. November 18, 2026: `IComponent` now declares `GameObject` (every handle and `Script` already had it),
-  so `FormatReference` reads it directly, and the Inspector's list-element probe asks which value kinds it formats
-  instead of making a default instance; `InspectorElementType` and `FormatReference` left the allowlist (three
-  warnings fewer). Data asset classes are now registered by the build (`Tallow.DataAssetRegistry`, a generated
-  constructor each, in a module initializer), so `DataAsset.Load`/`Revert` no longer scan assemblies with
-  `GetTypes` or construct through `Activator`; those four warnings left the allowlist too (Tests/CSharpInGame:
-  59 trim/AOT warnings in all, 0 in the game). Inside third-party packages and .NET: reported per group, not failing (the author cannot change
+  `tools/nativeaot_allowlist.txt` with its reason (34 today: hot reload/load context, JIT only; callbacks, `[Rpc]`,
+  UI handlers, behaviour-node fields and component field copies, over game types the export keeps whole; generic
+  code generated in Tallow.AotRoots), and an unreviewed one stops the export. November 18, 2026: `IComponent` now
+  declares `GameObject` (every handle and `Script` already had it), so `FormatReference` reads it directly, and the
+  Inspector's list-element probe asks which value kinds it formats instead of making a default instance;
+  `InspectorElementType` and `FormatReference` left the allowlist (three warnings fewer). Data asset classes are now
+  registered by the build (`Tallow.DataAssetRegistry`, a generated constructor each, in a module initializer), so
+  `DataAsset.Load`/`Revert` no longer scan assemblies with `GetTypes` or construct through `Activator`; those four
+  warnings left the allowlist too. The generated field tables took the last twelve field-path warnings out
+  (`ReadFields`, `FieldText`, nested paths, `ApplyText`, list items, references), so the Inspector, saves, `[Sync]`
+  and nested records no longer reflect over game types at all; only the package-type fallback does, suppressed in
+  source. Tests/CSharpInGame: 47 trim/AOT warnings in all, 0 in the game. Inside third-party packages and .NET: reported per group, not failing (the author cannot change
   them; the game's own calls into a package's unsafe APIs are game warnings and do stop it).
   `build_player.py --aot-warnings report` exports anyway. The export test adds unsuppressed `MakeGenericType` to
   the game and checks that the export stops, names the method and leaves no library, JIT assemblies or .NET
@@ -1664,7 +1677,7 @@ the zero-allocation check measures past the interpreter's tier-up there. `test_c
   NativeAOT export and checks (5 checks pass): the package ships no symbols or debug sections; the private folder
   holds the player `.dbg`, the library `.dbg`, its map and `build-info.txt`; the recorded SHA-256s and the
   library's GNU build ID match the shipped files and the code ID is recorded; the package runs in an empty
-  environment (no .NET, Beef or `dotnet` on `PATH`) and passes its 420 in-game checks; and a `--crash-test` run
+  environment (no .NET, Beef or `dotnet` on `PATH`) and passes its 421 in-game checks; and a `--crash-test` run
   under gdb is a SIGSEGV whose `bf::Tallow::CrashReports::DeliberateCrash()` frame and callers are named **only**
   through the private `.dbg`. Windows writes the `.pdb` by the same path; a Windows crash was not symbolicated
   here (that half of B30 needs Wine's debugger or a real Windows machine).

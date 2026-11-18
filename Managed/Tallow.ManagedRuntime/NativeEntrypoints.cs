@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Globalization;
 using System.Reflection;
@@ -679,6 +680,7 @@ public static unsafe class NativeEntrypoints
             GameStarts.Clear();
             DataAsset.ClearCache();
             DataAssetRegistry.Clear();
+            ClearFieldTables();
             TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
@@ -842,6 +844,7 @@ public static unsafe class NativeEntrypoints
             GameStarts.Clear();
             DataAsset.ClearCache();
             DataAssetRegistry.Clear();
+            ClearFieldTables();
             TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
@@ -1004,8 +1007,139 @@ public static unsafe class NativeEntrypoints
     // ECMA-335 FieldAttributes.NotSerialized is the 0x0080 metadata bit (FieldInfo.IsNotSerialized is obsolete).
     private const FieldAttributes NonSerializedBit = (FieldAttributes)0x0080;
 
-    private static bool IsReloadField(FieldInfo field) =>
-        !field.IsStatic && !field.IsInitOnly && !field.IsLiteral && (field.Attributes & NonSerializedBit) == 0;
+    /// <summary>Field tables of types no game assembly described (a package's [Serializable] class): the one path
+    /// that still reflects over fields. Game types have build-generated tables.</summary>
+    private static readonly Dictionary<Type, ManagedField[]> sReflectedFields = new();
+
+    private static bool IsReloadField(ManagedField field) => field.Set is not null && !field.NotSerialized;
+    private static bool IsSavedField(ManagedField field) => field.Saved && field.Set is not null;
+    private static bool IsSyncField(ManagedField field) => field.Sync && field.Set is not null;
+
+    // The fields scenes and the Inspector may set (the same rule ApplyText applies).
+    private static bool IsInspectorField(ManagedField field) =>
+        field.Set is not null && !field.NotSerialized &&
+        (field.IsPublic || field.ShowInInspector || field.HideInInspector);
+
+    /// <summary>The fields a type declares itself, from the build's table or (for a type from a package) reflection,
+    /// read once and kept until the game's code goes.</summary>
+    private static ManagedField[] DeclaredFields(Type owner) =>
+        ManagedFields.Fields(owner) ?? ReflectedFields(owner);
+
+    /// <summary>Forgets the field tables of the game's code (it stops or reloads; the next load registers them).</summary>
+    private static void ClearFieldTables()
+    {
+        ManagedFields.Clear();
+        lock (sReflectedFields)
+            sReflectedFields.Clear();
+    }
+
+    [UnconditionalSuppressMessage("AOT", "IL2070", Justification =
+        "Only a type no game assembly registered (a package's [Serializable] class) reaches this; package assemblies ship whole.")]
+    private static ManagedField[] ReflectedFields(Type owner)
+    {
+        lock (sReflectedFields)
+        {
+            if (sReflectedFields.TryGetValue(owner, out ManagedField[]? cached))
+                return cached;
+            FieldInfo[] fields = owner.GetFields(BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+            var made = new ManagedField[fields.Length];
+            for (int i = 0; i < fields.Length; i++)
+            {
+                FieldInfo field = fields[i];
+                made[i] = new ManagedField(field.Name, field.FieldType, field.GetValue,
+                    field.IsInitOnly ? null : field.SetValue, field.IsPublic,
+                    field.IsDefined(typeof(ShowInInspectorAttribute), inherit: true),
+                    field.IsDefined(typeof(HideInInspectorAttribute), inherit: true),
+                    field.IsDefined(typeof(SavedAttribute), inherit: true),
+                    field.IsDefined(typeof(SyncAttribute), inherit: true),
+                    (field.Attributes & NonSerializedBit) != 0,
+                    field.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false));
+            }
+            sReflectedFields[owner] = made;
+            return made;
+        }
+    }
+
+    /// <summary>A type's fields and its base classes' (derived first), as the Inspector's nested records and
+    /// FormatItem see them (Type.GetFields returned declared and inherited fields).</summary>
+    private static IEnumerable<ManagedField> AllFields(Type type)
+    {
+        for (Type? owner = type; owner != null && owner != typeof(object) && owner != typeof(ValueType);
+             owner = owner.BaseType)
+            foreach (ManagedField field in DeclaredFields(owner))
+                yield return field;
+    }
+
+    /// <summary>A script's field by name, walking its class chain up to (not including) <paramref name="stop"/>.</summary>
+    private static ManagedField? FindField(Type start, Type stop, string name)
+    {
+        for (Type? owner = start; owner != null && owner != stop; owner = owner.BaseType)
+            foreach (ManagedField field in DeclaredFields(owner))
+                if (field.Name == name)
+                    return field;
+        return null;
+    }
+
+    /// <summary>A nested record's field by name (its class chain, as Type.GetField found declared and inherited
+    /// fields).</summary>
+    private static ManagedField? FindIn(Type type, string name)
+    {
+        for (Type? owner = type; owner != null && owner != typeof(object) && owner != typeof(ValueType);
+             owner = owner.BaseType)
+            foreach (ManagedField field in DeclaredFields(owner))
+                if (field.Name == name)
+                    return field;
+        return null;
+    }
+
+    /// <summary>A parameterless value of a type (the build registers one for every game class and struct).</summary>
+    private static object CreateDefault(Type type) =>
+        ManagedFields.TryCreate(type, out object made) ? made : CreateDefaultByReflection(type);
+
+    [UnconditionalSuppressMessage("AOT", "IL2067", Justification =
+        "Only a type no game assembly registered (a package's class) reaches this; package assemblies ship whole.")]
+    private static object CreateDefaultByReflection(Type type) =>
+        Activator.CreateInstance(type) ?? throw new InvalidOperationException($"No default value for {type.FullName}.");
+
+    /// <summary>An empty List&lt;T&gt; for an Inspector field's element type.</summary>
+    private static System.Collections.IList NewListFor(Type element)
+    {
+        if (ManagedFields.TryNewList(element, out System.Collections.IList list))
+            return list;
+        return NewListByReflection(element);
+    }
+
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification =
+        "Only a package's element type reaches this; Tallow.AotRoots names game ones and the build registers their factories.")]
+    private static System.Collections.IList NewListByReflection(Type element) =>
+        (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(element))!;
+
+    /// <summary>The component of a type on an object, as TryGetComponent&lt;T&gt; finds it, or null.</summary>
+    private static object? FindComponent(GameObject owner, Type component)
+    {
+        if (ManagedFields.TryComponent(owner, component, out object? found))
+            return found;
+        return FindComponentByReflection(owner, component);
+    }
+
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification =
+        "Only a package's component type reaches this; Tallow.AotRoots names game ones and the build registers their lookups.")]
+    private static object? FindComponentByReflection(GameObject owner, Type component)
+    {
+        MethodInfo tryGet = typeof(GameObject).GetMethod(nameof(GameObject.TryGetComponent))!.MakeGenericMethod(component);
+        object?[] arguments = [null];
+        return tryGet.Invoke(owner, arguments) is true && arguments[0] is { } found ? found : null;
+    }
+
+    /// <summary>Whether a parameterless value of the type can be made (the Inspector makes one for a cleared [Serializable]
+    /// field and for a list item).</summary>
+    private static bool CanCreate(Type type) =>
+        type.IsValueType || ManagedFields.ContainsCreate(type) || CanCreateByReflection(type);
+
+    [UnconditionalSuppressMessage("AOT", "IL2070", Justification =
+        "Only a type no game assembly registered (a package's class) reaches this; package assemblies ship whole.")]
+    private static bool CanCreateByReflection(Type type) => type.GetConstructor(Type.EmptyTypes) != null;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int Attach(byte* className, ulong sceneId, ulong entityId)
@@ -1062,13 +1196,12 @@ public static unsafe class NativeEntrypoints
                 text.Append(sNames.TryGetValue(instance, out string? registered) ? registered : "");
             for (Type? owner = mode == 3 ? null : script.GetType(); owner != null && owner != typeof(Script); owner = owner.BaseType)
             {
-                foreach (FieldInfo field in owner.GetFields(BindingFlags.Instance | BindingFlags.Public |
-                    BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                foreach (ManagedField field in DeclaredFields(owner))
                 {
                     // A derived class's field hides a base field of the same name, as in ApplyFields.
-                    if (!seen.Add(field.Name) || field.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+                    if (!seen.Add(field.Name) || field.CompilerGenerated)
                         continue;
-                    object? value = field.GetValue(script);
+                    object? value = field.Get(script);
                     if (mode == 0 || mode == 2 || mode == 4)
                     {
                         // Mode 2: the [Sync] fields the server shares (NetworkSync); mode 4: the [Saved] fields
@@ -1114,13 +1247,12 @@ public static unsafe class NativeEntrypoints
         var seen = new HashSet<string>();
         for (Type? owner = target.GetType(); owner != null && owner != stop; owner = owner.BaseType)
         {
-            foreach (FieldInfo field in owner.GetFields(BindingFlags.Instance | BindingFlags.Public |
-                BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+            foreach (ManagedField field in DeclaredFields(owner))
             {
-                if (!seen.Add(field.Name) || field.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false) ||
+                if (!seen.Add(field.Name) || field.CompilerGenerated ||
                     (saved ? !IsSavedField(field) : !IsInspectorField(field)) || IsReferenceField(field.FieldType))
                     continue;
-                object? value = field.GetValue(target);
+                object? value = field.Get(target);
                 string? encoded = FormatInspectorValue(field.FieldType, value);
                 if (encoded != null)
                     text.Append(field.Name).Append('\t').Append(encoded).Append('\n');
@@ -1136,20 +1268,20 @@ public static unsafe class NativeEntrypoints
     private static bool IsNestedType(Type type) =>
         (type.Attributes & TypeAttributes.Serializable) != 0 && !type.IsPrimitive && !type.IsEnum &&
         !typeof(Script).IsAssignableFrom(type) && type.Assembly != typeof(object).Assembly &&
-        type.Assembly != typeof(Script).Assembly && (type.IsValueType || type.GetConstructor(Type.EmptyTypes) != null);
+        type.Assembly != typeof(Script).Assembly && CanCreate(type);
 
     /// <summary>The fields from top along "Outer.Inner..." (path[0] is top's name), or null when a step is not a
     /// nested Inspector field.</summary>
-    private static FieldInfo[]? NestedPath(FieldInfo top, string[] path)
+    private static ManagedField[]? NestedPath(ManagedField top, string[] path)
     {
-        var chain = new FieldInfo[path.Length];
+        var chain = new ManagedField[path.Length];
         chain[0] = top;
         for (int i = 1; i < path.Length; i++)
         {
             Type owner = chain[i - 1].FieldType;
             if (i > 4 || !IsNestedType(owner))
                 return null;
-            FieldInfo? inner = owner.GetField(path[i], BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            ManagedField? inner = FindIn(owner, path[i]);
             if (inner is null || !IsInspectorField(inner))
                 return null;
             chain[i] = inner;
@@ -1158,52 +1290,34 @@ public static unsafe class NativeEntrypoints
     }
 
     /// <summary>Sets the last field of a path, making a missing class on the way and writing each struct back.</summary>
-    private static void SetPath(object owner, FieldInfo[] chain, int index, object? value)
+    private static void SetPath(object owner, ManagedField[] chain, int index, object? value)
     {
-        FieldInfo field = chain[index];
+        ManagedField field = chain[index];
         if (index == chain.Length - 1)
         {
-            field.SetValue(owner, value);
+            field.Set!(owner, value);
             return;
         }
         // A struct comes back boxed: change the box, then store it again.
-        object child = field.GetValue(owner) ?? Activator.CreateInstance(field.FieldType)!;
+        object child = field.Get(owner) ?? CreateDefault(field.FieldType);
         SetPath(child, chain, index + 1, value);
-        field.SetValue(owner, child);
+        field.Set!(owner, child);
     }
 
     /// <summary>A nested value's fields as "prefix.Inner\tvalue" lines.</summary>
     private static void AppendNested(StringBuilder text, string prefix, object value, int depth)
     {
-        foreach (FieldInfo inner in value.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+        foreach (ManagedField inner in AllFields(value.GetType()))
         {
-            if (!IsInspectorField(inner) || inner.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+            if (!IsInspectorField(inner) || inner.CompilerGenerated)
                 continue;
-            object? innerValue = inner.GetValue(value);
+            object? innerValue = inner.Get(value);
             string? encoded = FormatInspectorValue(inner.FieldType, innerValue);
             if (encoded != null)
                 text.Append(prefix).Append('.').Append(inner.Name).Append('\t').Append(encoded).Append('\n');
             else if (innerValue != null && depth < 4 && IsNestedType(inner.FieldType))
                 AppendNested(text, prefix + "." + inner.Name, innerValue, depth + 1);
         }
-    }
-
-    private static bool IsSavedField(FieldInfo field) =>
-        !field.IsStatic && !field.IsInitOnly && !field.IsLiteral &&
-        field.IsDefined(typeof(SavedAttribute), inherit: true);
-
-    private static bool IsSyncField(FieldInfo field) =>
-        !field.IsStatic && !field.IsInitOnly && !field.IsLiteral &&
-        field.IsDefined(typeof(SyncAttribute), inherit: true);
-
-    // The fields scenes and the Inspector may set (the same rule ApplyFields applies).
-    private static bool IsInspectorField(FieldInfo field)
-    {
-        const FieldAttributes nonSerializedBit = (FieldAttributes)0x0080;
-        if (field.IsStatic || field.IsInitOnly || field.IsLiteral || (field.Attributes & nonSerializedBit) != 0)
-            return false;
-        return field.IsPublic || field.IsDefined(typeof(ShowInInspectorAttribute), inherit: true) ||
-            field.IsDefined(typeof(HideInInspectorAttribute), inherit: true);
     }
 
     /// <summary>A field the Inspector sets by dragging an object in: GameObject, Transform, a built-in
@@ -1233,9 +1347,7 @@ public static unsafe class NativeEntrypoints
         if (inner == typeof(Transform))
             return target.Transform;
         // A component on that object, as GetComponent<T> finds it (a script, or a built-in handle).
-        MethodInfo tryGet = typeof(GameObject).GetMethod(nameof(GameObject.TryGetComponent))!.MakeGenericMethod(inner);
-        object?[] arguments = [null];
-        return tryGet.Invoke(target, arguments) is true && arguments[0] is { } component ? component : ClearReference;
+        return FindComponent(target, inner) ?? ClearReference;
     }
 
     private static string FormatReference(object? value) => value switch
@@ -1307,9 +1419,9 @@ public static unsafe class NativeEntrypoints
         var text = new StringBuilder();
         if (item is null)
             return "";
-        foreach (FieldInfo inner in RecordFields(element))
+        foreach (ManagedField inner in RecordFields(element))
         {
-            string? encoded = FormatInspectorValue(inner.FieldType, inner.GetValue(item));
+            string? encoded = FormatInspectorValue(inner.FieldType, inner.Get(item));
             if (encoded is null)
                 continue;
             if (text.Length > 0)
@@ -1323,27 +1435,26 @@ public static unsafe class NativeEntrypoints
     {
         if (!IsNestedType(element))
             return ParseInspectorValue(element, encoded, session);
-        object item = Activator.CreateInstance(element)!;
+        object item = CreateDefault(element);
         foreach (string part in SplitEscaped(encoded))
         {
             int equals = part.IndexOf('=');
             if (equals < 1)
                 continue;
-            FieldInfo? inner = element.GetField(part[..equals], BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            ManagedField? inner = FindIn(element, part[..equals]);
             if (inner is null || !IsInspectorField(inner) || IsNestedType(inner.FieldType))
                 continue; // A field renamed or removed since the scene was saved.
             object? parsed = ParseInspectorValue(inner.FieldType, part[(equals + 1)..], session);
             if (parsed == ClearReference)
                 parsed = inner.FieldType.IsValueType && Nullable.GetUnderlyingType(inner.FieldType) is null
-                    ? Activator.CreateInstance(inner.FieldType) : null;
-            inner.SetValue(item, parsed);
+                    ? CreateDefault(inner.FieldType) : null;
+            inner.Set!(item, parsed);
         }
         return item;
     }
 
-    private static IEnumerable<FieldInfo> RecordFields(Type element) =>
-        element.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Where(inner =>
-            IsInspectorField(inner) && !inner.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false));
+    private static IEnumerable<ManagedField> RecordFields(Type element) =>
+        AllFields(element).Where(inner => IsInspectorField(inner) && !inner.CompilerGenerated);
 
     private static void Escape(StringBuilder text, string value)
     {
@@ -1395,7 +1506,7 @@ public static unsafe class NativeEntrypoints
         int count = int.Parse(parts[0], CultureInfo.InvariantCulture);
         if (count < 0 || count != parts.Count - 1 || count > 100_000)
             throw new FormatException("The list's item count does not match its items.");
-        var list = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(element))!;
+        System.Collections.IList list = NewListFor(element);
         for (int i = 0; i < count; i++)
         {
             object? item = ParseItem(element, parts[i + 1], session) ?? throw new FormatException("Unsupported list item.");
@@ -1554,7 +1665,7 @@ public static unsafe class NativeEntrypoints
             // Validate and parse the whole scene/prefab override set before
             // mutating the managed instance. A corrupt later field must not
             // partially apply earlier values before Awake or hot updates.
-            var updates = new List<(FieldInfo[] Path, object Value)>();
+            var updates = new List<(ManagedField[] Path, object Value)>();
             foreach (string line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 int separator = line.IndexOf('\t');
@@ -1564,40 +1675,32 @@ public static unsafe class NativeEntrypoints
                 string[] path = line[..separator].Split('.');
                 string name = path[0];
                 string value = line[(separator + 1)..];
-                // Type.GetField does not return private fields declared on a
-                // base class, so walk the user's class chain explicitly.
-                FieldInfo? field = null;
-                for (Type? owner = script.GetType(); field is null && owner != null &&
-                     owner != stop; owner = owner.BaseType)
-                    field = owner.GetField(name, BindingFlags.Instance | BindingFlags.Public |
-                        BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                // A private field of a base class is found too: the class chain is walked explicitly.
+                ManagedField? field = FindField(script.GetType(), stop, name);
                 if (field is null || !IsReloadField(field))
                     continue; // Allow scripts to rename/remove fields without breaking old scenes.
                 // Do not allow a scene/prefab file to change arbitrary private
                 // implementation state. The Roslyn catalog and managed loader
                 // must agree on which fields have been opted into persistence.
                 // [Sync] fields are opted in too: clients receive the server's values this way.
-                if (!everything && !field.IsPublic &&
-                    !field.IsDefined(typeof(ShowInInspectorAttribute), inherit: true) &&
-                    !field.IsDefined(typeof(HideInInspectorAttribute), inherit: true) &&
-                    !field.IsDefined(typeof(SyncAttribute), inherit: true) &&
-                    !field.IsDefined(typeof(SavedAttribute), inherit: true))
+                if (!everything && !field.IsPublic && !field.ShowInInspector && !field.HideInInspector &&
+                    !field.Sync && !field.Saved)
                     continue;
-                FieldInfo[]? chain = NestedPath(field, path);
+                ManagedField[]? chain = NestedPath(field, path);
                 if (chain is null)
                     continue;
-                FieldInfo target = chain[^1];
+                ManagedField target = chain[^1];
                 object? parsed = ParseInspectorValue(target.FieldType, value, sceneId);
                 if (parsed != null)
                     updates.Add((chain, parsed));
             }
-            foreach ((FieldInfo[] chain, object parsed) in updates)
+            foreach ((ManagedField[] chain, object parsed) in updates)
             {
-                FieldInfo target = chain[^1];
+                ManagedField target = chain[^1];
                 // A cleared reference: null, or the empty handle for a non-nullable struct.
                 object? assigned = parsed == ClearReference
                     ? (target.FieldType.IsValueType && Nullable.GetUnderlyingType(target.FieldType) is null
-                        ? Activator.CreateInstance(target.FieldType) : null)
+                        ? CreateDefault(target.FieldType) : null)
                     : parsed;
                 SetPath(script, chain, 0, assigned);
             }
@@ -2028,6 +2131,7 @@ public static unsafe class NativeEntrypoints
             GameStarts.Clear();
             DataAsset.ClearCache();
             DataAssetRegistry.Clear();
+            ClearFieldTables();
             TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
@@ -2079,6 +2183,7 @@ public static unsafe class NativeEntrypoints
             GameStarts.Clear();
             DataAsset.ClearCache();
             DataAssetRegistry.Clear();
+            ClearFieldTables();
             TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();

@@ -136,6 +136,22 @@ public class ApiChecks : CheckBase
             Waves.Count == 2 && Waves[0] is { Count: 5, Kind: CheckKind.Second, Name: "x;y", Delay: 0 } &&
             Waves[1] is { Count: 3, Delay: 0.5f, Kind: CheckKind.First, Name: "" } && Waypoints.Length == 1 &&
             Waypoints[0].At == new System.Numerics.Vector3(1, 2, 3) && Waypoints[0].Wait);
+        // The runtime reads and writes these fields through tables Tallow.Build wrote (Tallow.FieldTables.g.cs), not
+        // reflection: without them a NativeAOT game cannot see private fields, make nested records or find elements.
+        ManagedField[]? table = ManagedFields.Fields(typeof(ApiChecks));
+        bool hasPrivate = table is { Length: > 0 } &&
+            table.Any(field => field.Name == "_validations" && !field.IsPublic);
+        bool statsTable = ManagedFields.Fields(typeof(Stats)) is { Length: > 0 };
+        bool constructed = ManagedFields.ContainsCreate(typeof(Stats)) && ManagedFields.ContainsCreate(typeof(Wave));
+        bool intsFactory = ManagedFields.TryNewList(typeof(int), out System.Collections.IList? ints) && ints is List<int>;
+        bool wavesFactory = ManagedFields.TryNewList(typeof(Wave), out _);
+        // Transform is a reference field type in this project (RefProbe.Spot), so the build registers its lookup.
+        bool component = ManagedFields.TryComponent(GameObject, typeof(Transform), out object? found) &&
+            found is Transform;
+        Check($"the build generated this script's field table ({table?.Length}, private {hasPrivate}), nested tables "
+            + $"({statsTable}), constructors ({constructed}), list factories ({intsFactory}, {wavesFactory}) and "
+            + $"the component lookup ({component})",
+            hasPrivate && statsTable && constructed && intsFactory && wavesFactory && component);
         // tools/test_csharp_export.py checks a built game runs on the .NET it ships with.
         Log.Info("INGAME RUNTIME " + System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory());
     }

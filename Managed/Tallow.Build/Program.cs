@@ -390,7 +390,9 @@ internal static class Program
                 return Nameable(array.ElementType);
             case INamedTypeSymbol named:
                 for (INamedTypeSymbol? scope = named; scope != null; scope = scope.ContainingType)
-                    if (scope.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
+                    // A file-local type is nameable only inside its own file, never by generated code.
+                    if (scope.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal) ||
+                        scope.IsFileLocal)
                         return false;
                 return named.TypeArguments.All(Nameable);
             default:
@@ -477,10 +479,6 @@ internal static class Program
                 CSharpSyntaxTree.ParseText(ImplicitUsings + "global using System.Numerics;", parse)),
             refs, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
                 allowUnsafe: true));
-
-        static string FactoryName(string assembly) =>
-            "ComponentFactory_" + Convert.ToHexString(
-                SHA256.HashData(Encoding.UTF8.GetBytes(assembly)).AsSpan(0, 8));
 
         var allTypes = new Dictionary<string, SortedDictionary<string, string>>(
             StringComparer.Ordinal);
@@ -727,12 +725,6 @@ internal static class Program
 
         // Source is generated under .tallow-csharp, NEVER in the user's src.
         // Avoid changing timestamps on no-op builds.
-        static void WriteIfDifferent(string path, string value)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            if (!File.Exists(path) || File.ReadAllText(path) != value)
-                File.WriteAllText(path, value);
-        }
         foreach ((string assembly, SortedDictionary<string, string> types) in allTypes)
         {
             string className = FactoryName(assembly);
@@ -782,6 +774,7 @@ internal static class Program
             WriteIfDifferent(output, source.ToString());
             filesByAssembly[assembly].Add(output);
         }
+
 
         // Generate strongly typed local data adapters before compilation.
         // The managed value is copied into a pinned Span<byte> only for one
@@ -932,6 +925,177 @@ internal static class Program
             "Tallow.GameRegistry.g.cs");
         WriteIfDifferent(rootPath, root.ToString());
         filesByAssembly["Tallow.Game"].Add(rootPath);
+        WriteFieldTables(compilation, filesByAssembly, treesByPath, generated);
+    }
+
+    /// <summary>
+    /// The runtime's field tables (Tallow.ManagedFields): one entry per instance field of every class and struct the
+    /// game declares, so the Inspector, saves, [Sync] and nested Inspector records are read and written without
+    /// reflecting over game types (which NativeAOT cannot see through). Private fields are reached with
+    /// [UnsafeAccessor] members in the same generated class; struct fields are changed through the boxed instance
+    /// (Unsafe.Unbox). The same file registers the default-value constructors, List&lt;T&gt; factories and
+    /// TryGetComponent lookups those paths need. A type this skips (a field type the generated code cannot name, a
+    /// private nested type) keeps the runtime's reflection fallback.
+    /// </summary>
+    private static void WriteFieldTables(CSharpCompilation compilation,
+        Dictionary<string, List<string>> filesByAssembly, Dictionary<string, SyntaxTree> treesByPath, string generated)
+    {
+        SymbolDisplayFormat qualified = SymbolDisplayFormat.FullyQualifiedFormat;
+        foreach (var (assembly, sourceFiles) in filesByAssembly)
+        {
+            var emitted = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            var tables = new List<INamedTypeSymbol>();
+            foreach (string sourceFile in sourceFiles)
+            {
+                // The list also holds generated files added earlier; only the game's own sources are trees here.
+                if (!treesByPath.TryGetValue(sourceFile, out SyntaxTree? tree))
+                    continue;
+                SemanticModel model = compilation.GetSemanticModel(tree);
+                foreach (TypeDeclarationSyntax node in tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
+                {
+                    if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol symbol)
+                        continue;
+                    if (symbol.TypeKind is not (TypeKind.Class or TypeKind.Struct) || symbol.IsStatic ||
+                        symbol.IsGenericType || symbol.IsRefLikeType || !Nameable(symbol) || !emitted.Add(symbol))
+                        continue;
+                    IFieldSymbol[] fields = FieldsOf(symbol);
+                    if (fields.Length == 0 ||
+                        fields.Any(field => !Nameable(field.Type) || field.Type.IsRefLikeType))
+                        continue; // read by reflection, as before
+                    tables.Add(symbol);
+                }
+            }
+            if (tables.Count == 0)
+                continue;
+            tables.Sort((a, b) => string.CompareOrdinal(a.ToDisplayString(qualified), b.ToDisplayString(qualified)));
+
+            var source = new StringBuilder();
+            source.AppendLine("// Generated by Tallow.Build. Do not edit.")
+                .AppendLine("#nullable enable")
+                .AppendLine("#pragma warning disable CA2255 // A game assembly: the runtime reads its fields without reflection.")
+                .AppendLine("namespace Tallow.Generated;")
+                .Append("public static class FieldTables_").Append(FactoryName(assembly)).AppendLine()
+                .AppendLine("{");
+            // One [UnsafeAccessor] per field: the getter and setter lambdas below reach private fields through it.
+            int accessor = 0;
+            var entries = new StringBuilder();
+            var creates = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            var lists = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            var components = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            foreach (INamedTypeSymbol type in tables)
+            {
+                string target = type.ToDisplayString(qualified);
+                bool isStruct = type.TypeKind == TypeKind.Struct;
+                entries.Append("        global::Tallow.ManagedFields.RegisterFields(typeof(").Append(target)
+                    .AppendLine("), new global::Tallow.ManagedField[] {");
+                foreach (IFieldSymbol field in FieldsOf(type))
+                {
+                    string fieldType = field.Type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+                        .ToDisplayString(qualified);
+                    string name = "Accessor_" + accessor++;
+                    source.Append("    [global::System.Runtime.CompilerServices.UnsafeAccessor(global::System.Runtime.CompilerServices.UnsafeAccessorKind.Field, Name = \"")
+                        .Append(field.Name).AppendLine("\")]");
+                    source.Append("    private static extern ref ").Append(fieldType).Append(' ').Append(name)
+                        .Append(isStruct ? " (ref " : " (").Append(target).AppendLine(" target);");
+                    string read = isStruct
+                        ? $"{name}(ref global::System.Runtime.CompilerServices.Unsafe.Unbox<{target}>(o))"
+                        : $"{name}(({target})o)";
+                    string? write = field.IsReadOnly
+                        ? null
+                        : (isStruct
+                            ? $"{name}(ref global::System.Runtime.CompilerServices.Unsafe.Unbox<{target}>(o)) = ({fieldType})v!"
+                            : $"{name}(({target})o) = ({fieldType})v!");
+                    entries.Append("            new(").Append(JsonSerializer.Serialize(field.Name)).Append(", typeof(")
+                        .Append(fieldType).Append("), static o => ").Append(read).Append(", ")
+                        .Append(write is null ? "null" : $"static (o, v) => {write}")
+                        .Append(", isPublic: ").Append(field.DeclaredAccessibility == Accessibility.Public ? "true" : "false")
+                        .Append(", showInInspector: ").Append(HasAttribute(field, "Tallow.ShowInInspectorAttribute") ? "true" : "false")
+                        .Append(", hideInInspector: ").Append(HasAttribute(field, "Tallow.HideInInspectorAttribute") ? "true" : "false")
+                        .Append(", saved: ").Append(HasAttribute(field, "Tallow.SavedAttribute") ? "true" : "false")
+                        .Append(", sync: ").Append(HasAttribute(field, "Tallow.SyncAttribute") ? "true" : "false")
+                        .Append(", notSerialized: ").Append(HasAttribute(field, "System.NonSerializedAttribute") ? "true" : "false")
+                        .AppendLine(", compilerGenerated: false),");
+                    CollectFactories(field.Type, lists, components);
+                }
+                entries.AppendLine("        });");
+                if (type.TypeKind == TypeKind.Struct ||
+                    (!type.IsAbstract && type.InstanceConstructors.Any(ctor => ctor.Parameters.Length == 0 &&
+                        ctor.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal)))
+                    creates[target] = target;
+            }
+            source.AppendLine("    [global::System.Runtime.CompilerServices.ModuleInitializer]")
+                .AppendLine("    internal static void Register()")
+                .AppendLine("    {");
+            source.Append(entries);
+            foreach (string target in creates.Values)
+                source.Append("        global::Tallow.ManagedFields.RegisterCreate(typeof(").Append(target)
+                    .Append("), static () => (object)new ").Append(target).AppendLine("());");
+            foreach ((string element, string elementType) in lists)
+                source.Append("        global::Tallow.ManagedFields.RegisterList(typeof(").Append(elementType)
+                    .Append("), static () => new global::System.Collections.Generic.List<").Append(elementType)
+                    .AppendLine(">());");
+            foreach ((string component, string componentType) in components)
+                source.Append("        global::Tallow.ManagedFields.RegisterComponent(typeof(").Append(componentType)
+                    .Append("), static g => g.TryGetComponent<").Append(componentType).AppendLine(">(out var c) ? c : null);");
+            source.AppendLine("    }")
+                .AppendLine("}");
+            string output = Path.Combine(generated, assembly, "Tallow.FieldTables.g.cs");
+            WriteIfDifferent(output, source.ToString());
+            filesByAssembly[assembly].Add(output);
+        }
+    }
+
+    /// <summary>The instance fields a type declares itself, in declaration order (compiler-made backing fields are
+    /// not source members and never appear).</summary>
+    private static IFieldSymbol[] FieldsOf(INamedTypeSymbol type) =>
+        type.GetMembers().OfType<IFieldSymbol>()
+            .Where(field => !field.IsStatic && !field.IsConst && !field.IsImplicitlyDeclared).ToArray();
+
+    private static bool HasAttribute(IFieldSymbol field, string name) =>
+        field.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == name);
+
+    /// <summary>The List&lt;T&gt; factories and TryGetComponent lookups a field type needs (and its elements', for a
+    /// list of records).</summary>
+    private static void CollectFactories(ITypeSymbol fieldType,
+        SortedDictionary<string, string> lists, SortedDictionary<string, string> components)
+    {
+        ITypeSymbol type = fieldType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+        ITypeSymbol? element = type switch
+        {
+            IArrayTypeSymbol { Rank: 1 } array => array.ElementType,
+            INamedTypeSymbol named when named.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" => named.TypeArguments[0],
+            _ => null
+        };
+        if (element != null)
+        {
+            if (Nameable(element) && element.TypeKind != TypeKind.TypeParameter)
+            {
+                string name = element.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+                    .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                lists[name] = name;
+            }
+            CollectFactories(element, lists, components);
+            return;
+        }
+        if (type is INamedTypeSymbol target && Nameable(target) && !target.IsGenericType &&
+            target.AllInterfaces.Any(i => i.ToDisplayString() == "Tallow.IComponent"))
+            components[target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)] =
+                target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+    }
+
+    /// <summary>The generated factory class name for an assembly (stable across builds).</summary>
+    private static string FactoryName(string assembly) =>
+        "ComponentFactory_" + Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(assembly)).AsSpan(0, 8));
+
+    /// <summary>Writes a generated file only when its text changed (a no-op build keeps timestamps).</summary>
+    private static void WriteIfDifferent(string path, string value)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        if (!File.Exists(path) || File.ReadAllText(path) != value)
+            File.WriteAllText(path, value);
     }
 
     /// <summary>

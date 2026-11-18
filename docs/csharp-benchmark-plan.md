@@ -396,7 +396,7 @@ Use filename `B##_SHA_config_scene_runN.log`. Results table columns: case, SHA, 
   Linux done November 18, 2026 (`tools/test_csharp_crash.py`, 5 checks): the release player is stripped
   (`objcopy`; `.dbg` kept in `<output>-symbols/`, never in the package), the game library's `.dbg` and name map
   are kept there with `build-info.txt` (SHA-256 and GNU build ID / PDB GUID+age of every shipped module), the
-  package runs with no .NET, Beef or `dotnet` on PATH and passes its 420 in-game checks, and `--crash-test`
+  package runs with no .NET, Beef or `dotnet` on PATH and passes its 421 in-game checks, and `--crash-test`
   crashes on purpose at frame 100 and is read back as `bf::Tallow::CrashReports::DeliberateCrash()` **only**
   through the private symbols. The Windows `.pdb` is written by the same export; symbolication of a Windows crash
   (Wine's debugger or a real Windows machine) is still to run.
@@ -441,7 +441,7 @@ measurements, `tools/run_nativeaot_bench.py` on Linux x64, Samples/CSharpBench e
   starts at its default), so there is nothing to compare for them. In CI on Linux and Windows.
 - B30 (Linux part): a Release export's player is stripped of debug information (61 MB -> 24 MB; the NativeAOT
   package 66.7 MB -> 43 MB) and the matching `.dbg`, a name map and `build-info.txt` go to `<output>-symbols/`
-  beside it. The package holds no symbols, chooses no installed .NET, and on an empty PATH runs its 420 checks;
+  beside it. The package holds no symbols, chooses no installed .NET, and on an empty PATH runs its 421 checks;
   `--crash-test` raises a real SIGSEGV that gdb names through the private `.dbg` (tools/test_csharp_crash.py).
   Windows: the matching `.pdb` is kept by the same export (41 MB, not in the package); the Windows crash half
   needs Wine's debugger or a real Windows machine, as does the clean-machine run there.

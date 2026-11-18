@@ -11,7 +11,10 @@
 # Why most reflection here is safe: the export keeps every game assembly whole (TrimmerRootAssembly), so fields,
 # constructors and methods of game types are never trimmed; and Tallow.Build generates the generic code that
 # reflection asks for at run time (Tallow.AotRoots.g.cs: List<T>, T[], TryGetComponent<T> of every Inspector field
-# type). tools/test_csharp_export.py --runtime native runs the in-game checks that use each path below.
+# type). The Inspector/save/[Sync] field path no longer appears here at all: Tallow.Build writes a field table for
+# every class and struct the game declares (Tallow.FieldTables.g.cs), and the runtime's only remaining field
+# reflection is the fallback for a type from a package, suppressed in the source with its reason.
+# tools/test_csharp_export.py --runtime native runs the in-game checks that use each path below.
 
 # Hot reload and the collectible load context: JIT only. NativeAOT's LoadGame takes the compiled-in registry and
 # ReloadGame refuses, so none of this runs in a NativeAOT game.
@@ -21,18 +24,10 @@ IL2026             Tallow.ManagedRuntime.NativeEntrypoints.OpenGame             
 IL2026,IL2072      Tallow.ManagedRuntime.NativeEntrypoints.CreateRegistry                 finds the generated registry by name in a loaded assembly (JIT only)
 IL2026,IL2075      Tallow.ManagedRuntime.NativeEntrypoints.EditorConfigure                editor scripts (the editor runs JIT; games never call it)
 
-# Inspector fields, saves and [Sync] text: reflection over game types, which are kept whole.
-IL2075             Tallow.ManagedRuntime.NativeEntrypoints.ReadFields                     script fields of game types (rooted)
-IL2075             Tallow.ManagedRuntime.NativeEntrypoints.FieldText                      script fields of game types (rooted)
-IL2070             Tallow.ManagedRuntime.NativeEntrypoints.RecordFields                   [Serializable] game types (rooted)
-IL2070             Tallow.ManagedRuntime.NativeEntrypoints.IsNestedType                   parameterless constructors of game types (rooted)
-IL2075             Tallow.ManagedRuntime.NativeEntrypoints.NestedPath                     nested fields of game types (rooted)
-IL2072             Tallow.ManagedRuntime.NativeEntrypoints.SetPath                        constructs nested game values (rooted)
-IL2075             Tallow.ManagedRuntime.NativeEntrypoints.AppendNested                   nested fields of game types (rooted)
-IL2072,IL2075      Tallow.ManagedRuntime.NativeEntrypoints.ApplyText                      fields and values of game types (rooted)
-IL2067,IL2070,IL2072 Tallow.ManagedRuntime.NativeEntrypoints.ParseItem                    list items of game types (rooted)
-IL3050             Tallow.ManagedRuntime.NativeEntrypoints.ParseList                      List<T> of Inspector field types: generated in Tallow.AotRoots.g.cs
-IL3050             Tallow.ManagedRuntime.NativeEntrypoints.ParseReference                 TryGetComponent<T> of Inspector field types: generated in Tallow.AotRoots.g.cs
+# Inspector fields, saves and [Sync] text: no reflection over game types. Tallow.Build generates a field table for
+# every class and struct the game declares (Tallow.FieldTables.g.cs: UnsafeAccessor members for private fields,
+# default-value constructors, List<T> factories and TryGetComponent lookups). The runtime's remaining reflection is
+# the fallback for a type from a package, marked [UnconditionalSuppressMessage] with its reason in the source.
 
 # Callbacks and calls by name on game types (kept whole).
 IL2070             Tallow.ManagedRuntime.NativeEntrypoints.<CallbackMask>                 which lifecycle methods a script declares (rooted)
