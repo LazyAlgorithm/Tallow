@@ -6,7 +6,7 @@ despawned, and the scene reloaded every cycle. With --net (the default) a host a
 session restarts with every reload, so the client is dropped and joins again each time.
 
 Build the player first (a copy of Samples/CSharpBench whose project.tallow points at this engine):
-    python3 tools/build_player.py COPY --output OUT --config Release
+    python3 tools/build_player.py COPY --output OUT --config Release --csharp-runtime jit
 Then:
     python3 tools/run_csharp_soak.py --player OUT/CSharpBench --minutes 45 --output DIR
 

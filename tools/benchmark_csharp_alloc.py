@@ -6,7 +6,7 @@ Each of N objects runs one pattern every Update (Samples/CSharpBench, TALLOW_BEN
   getcomponent  three GetComponent calls (a native hit, a script hit, a native miss)
   string        the object's Name from the engine plus a formatted string
 Reports managed bytes per frame, Gen0/1/2 collections and GC pause over the measured frames, script time and peak RSS.
-Build the player first: python3 tools/build_player.py <copy of Samples/CSharpBench> --output OUT --config Release
+Build the player first: python3 tools/build_player.py <copy of Samples/CSharpBench> --output OUT --config Release --csharp-runtime jit
 Run: python3 tools/benchmark_csharp_alloc.py --player OUT/CSharpBench [--counts 1000 10000 100000] [--runs 3]
 """
 import argparse

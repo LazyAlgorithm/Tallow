@@ -1530,6 +1530,10 @@ the first working export is described in "First NativeAOT export" at the end of 
 - [x] The current hostfxr shim and collectible context stay editor/JIT-only. Add native AOT entry resolution, ABI version/handshake checks, failure diagnostics and correct native dependency staging **without creating a second engine gameplay implementation**.
 - [~] Compile and validate Linux x64 and Windows x64 NativeAOT exports on matching build hosts (and each later supported RID on its supported toolchain). No source, gameplay `.dll`, portable IL or Roslyn compiler assets in the default shipped package; native engine binary/assets are packaged separately as required.
 - [~] Preserve explicitly selectable JIT export with the exact same generated gameplay bindings and schedules. UI must show "NativeAOT (recommended, default)" and "JIT (compatibility/debug)" plus any failed AOT preflight issues; no implicit switching.
+  NativeAOT is the default (November 18, 2026, user's call): a C# project without `csharpRuntime` exports as
+  NativeAOT for Linux and Windows; `csharpRuntime = jit` (Build window: "JIT (compatibility/debug)") chooses JIT.
+  Web and macOS builds run JIT. JIT benchmarks and the JIT layout tests pass `--csharp-runtime jit`. A missing
+  native toolchain (Visual Studio C++ / clang) fails with how to install it or choose JIT.
 
 ### Static registration, metadata and security
 
@@ -1608,8 +1612,8 @@ the zero-allocation check measures past the interpreter's tier-up there. `test_c
   ReloadMigrator/ALC code a NativeAOT game never runs, plus Newtonsoft.Json's own; listed in the report, not yet
   failing the export.
 - **CI.** Linux job: `test_csharp_export.py --runtime native`; Windows job: the same, built natively with MSVC.
-- **Not done yet:** a run on a real Windows machine (the user's test); the Windows CI step's first run; NativeAOT as
-  the Build window's default (it stays JIT until the acceptance gate passes); failing the export on actionable
+- **Not done yet:** a run on a real Windows machine (the user's test); NativeAOT became the default before it, at
+  the user's request; failing the export on actionable
   warnings with an allowlist; generated field setters/getters in place of FieldInfo reflection; build-id/map files;
   B24, B29, B30 and the Windows/cross-OS halves of B25-B28 (Linux halves measured: docs/csharp-benchmark-plan.md);
   macOS.

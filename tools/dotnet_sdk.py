@@ -91,6 +91,9 @@ def apply() -> bool:
     if not path.startswith(folder + os.pathsep):
         os.environ['PATH'] = folder + os.pathsep + path
     os.environ['DOTNET_ROOT'] = folder
+    # A launcher this tool starts finds the same copy, even with its own XDG_DATA_HOME (tests keep their settings
+    # in a scratch folder).
+    os.environ['TALLOW_DOTNET_HOME'] = str(home())
     os.environ.setdefault('DOTNET_NOLOGO', '1')
     return True
 

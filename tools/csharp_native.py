@@ -232,7 +232,12 @@ def build(engine: Path, project: Path, config: str, staging: Path, windows: bool
         library = published / library_name(windows)
         if result.returncode != 0 or not library.is_file():
             problems = [line for line in result.stdout.splitlines() if ' error ' in line or 'error:' in line]
-            raise SystemExit('The NativeAOT build failed:\n' + '\n'.join(problems[-30:] or result.stdout.splitlines()[-40:]))
+            hint = ''
+            if 'linker' in result.stdout.lower() and 'not found' in result.stdout.lower():
+                hint = ('\n\nNativeAOT links with the system\'s C/C++ tools: on Windows, Visual Studio (or its Build Tools) with '
+                        '"Desktop development with C++"; on Linux, clang (or gcc) and zlib\'s development files. '
+                        'Install them, or export with the JIT runtime (Build window: JIT; --csharp-runtime jit).')
+            raise SystemExit('The NativeAOT build failed:\n' + '\n'.join(problems[-30:] or result.stdout.splitlines()[-40:]) + hint)
         target = staging / 'Managed' / 'Native'
         target.mkdir(parents=True, exist_ok=True)
         shutil.copy2(library, target / library.name)

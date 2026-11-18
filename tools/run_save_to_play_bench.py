@@ -19,6 +19,8 @@ import shutil
 import statistics
 import sys
 import tempfile
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))  # noqa: E402
+import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when installed)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_csharp_editor import ROOT, open_editor, project_copy  # noqa: E402

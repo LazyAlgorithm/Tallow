@@ -99,9 +99,9 @@ class Project
 	public bool PackSplit = true;
 	/// A C# game's desktop build carries the .NET runtime (a dotnet folder beside it), so players install nothing.
 	public bool BundleDotNet = true;
-	/// A C# game's desktop build is NativeAOT (csharpRuntime = native): the game compiled to one native library, no
-	/// .NET and no IL assemblies shipped (tools/csharp_native.py). Otherwise JIT: assemblies on .NET.
-	public bool NativeAot;
+	/// A C# game's desktop build is NativeAOT, the default: the game compiled to one native library, no .NET and no
+	/// IL assemblies shipped (tools/csharp_native.py). csharpRuntime = jit chooses assemblies on .NET instead.
+	public bool NativeAot = true;
 	/// SaveSystem.LoadAtStart for this game: put the save in SaveSlot back as the first scene starts.
 	public bool LoadSaveAtStart;
 	public String SaveSlot = new .("default") ~ delete _;
@@ -161,7 +161,7 @@ class Project
 			case "compressTextures": CompressTextures = value != "0";
 			case "packSplit": PackSplit = value != "0";
 			case "bundleDotNet": BundleDotNet = value != "0";
-			case "csharpRuntime": NativeAot = value == "native";
+			case "csharpRuntime": NativeAot = value != "jit";
 			case "loadSaveAtStart": LoadSaveAtStart = value == "1";
 			case "saveSlot": if (!value.IsEmpty) SaveSlot.Set(value);
 			case "packShared": PackShared.Set(value);
@@ -212,8 +212,8 @@ class Project
 			text.Append("packSplit = 0\n");
 		if (!BundleDotNet)
 			text.Append("bundleDotNet = 0\n");
-		if (NativeAot)
-			text.Append("csharpRuntime = native\n");
+		if (!NativeAot)
+			text.Append("csharpRuntime = jit\n");
 		if (LoadSaveAtStart)
 			text.Append("loadSaveAtStart = 1\n");
 		if (SaveSlot != "default")

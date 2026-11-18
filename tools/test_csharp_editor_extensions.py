@@ -13,6 +13,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))  # noqa: E402
+import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when installed)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -56,7 +58,7 @@ def main() -> int:
         # A game build has no editor scripts.
         out = work / "game"
         built = subprocess.run([sys.executable, str(ROOT / "tools/build_player.py"), str(project), "--output", str(out),
-                                "--no-bundle-dotnet"], capture_output=True, text=True, timeout=900)
+                                "--csharp-runtime", "jit", "--no-bundle-dotnet"], capture_output=True, text=True, timeout=900)
         editor_files = [path for path in out.rglob("*") if "Tallow.Game.Editor" in path.name or path.name == "Tallow.Editor.dll"]
         if built.returncode != 0:
             failures.append("the game did not build: " + (built.stdout + built.stderr)[-2000:])

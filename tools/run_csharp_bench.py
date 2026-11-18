@@ -3,8 +3,8 @@
 (Samples/EcsBench) and by C# scripts (Samples/CSharpBench), in Release players built from the same engine.
 
 Build both players first (Release, the shipping path; the editor's Play runs C# as a Debug build):
-    python3 tools/build_player.py <copy of Samples/CSharpBench> --output OUT-CS --config Release
-    python3 tools/build_player.py <copy of Samples/EcsBench> --output OUT-BEEF --config Release
+    python3 tools/build_player.py <copy of Samples/CSharpBench> --output OUT-CS --config Release --csharp-runtime jit
+    python3 tools/build_player.py <copy of Samples/EcsBench> --output OUT-BEEF --config Release --csharp-runtime jit
 (each copy's project.tallow pointing at this engine). Then:
     python3 tools/run_csharp_bench.py --csharp OUT-CS/CSharpBench --beef OUT-BEEF/EcsBench --runs 3
 

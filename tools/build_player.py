@@ -233,7 +233,8 @@ def main():
     parser.add_argument('--csharp-runtime', choices=('jit', 'native'),
                         help='C# games: native = NativeAOT (the game compiled to one native library; no .NET, no IL '
                              'assemblies shipped; Linux and Windows), jit = .NET assemblies and the bundled runtime '
-                             '(compatibility/debug). Default: csharpRuntime in project.tallow, else jit')
+                             '(compatibility/debug). Default: csharpRuntime in project.tallow, else native (jit for '
+                             'web and macOS)')
     parser.add_argument('--aot-warnings', choices=('error', 'report'), default='error',
                         help='NativeAOT: error (default) stops the export on a trim/AOT warning in the game\'s own code or an '
                              'unreviewed one in the engine (tools/nativeaot_allowlist.txt); report only lists them')
@@ -305,12 +306,16 @@ def main():
         parser.error('Start scene must exist inside the project src folder. Save it in the editor first.')
     # A C# project has no Beef of its own: it ships the engine's precompiled player and its compiled assemblies.
     csharp = not beef_project(project)
-    runtime = args.csharp_runtime or settings.get('csharpRuntime', 'jit')
+    # NativeAOT is the default; a project chooses JIT with csharpRuntime = jit. Web and macOS builds run JIT (.NET in
+    # the browser; macOS NativeAOT is not supported yet) unless NativeAOT is asked for on the command line.
+    runtime = args.csharp_runtime or settings.get('csharpRuntime', 'native')
     if runtime not in ('jit', 'native'):
         parser.error(f'csharpRuntime in project.tallow is jit or native, not {runtime}.')
+    if runtime == 'native' and (web or macos):
+        if args.csharp_runtime == 'native':
+            parser.error('NativeAOT exports are for Linux and Windows; a web build always runs .NET in the browser.')
+        runtime = 'jit'
     native_aot = csharp and runtime == 'native'
-    if native_aot and (web or macos):
-        parser.error('NativeAOT exports are for Linux and Windows; a web build always runs .NET in the browser.')
     if csharp:
         if macos:
             parser.error('C# games build for Linux, Windows and the web so far.')

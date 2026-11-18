@@ -217,7 +217,7 @@ extension EditorApp
 				ImGui.TextDisabled("macOS builds run C# on .NET (JIT)");
 			else
 			{
-				if (ImGui.RadioButton("NativeAOT (recommended)", project.NativeAot))
+				if (ImGui.RadioButton("NativeAOT (recommended, default)", project.NativeAot))
 				{
 					project.NativeAot = true;
 					project.Save();
