@@ -107,4 +107,19 @@ def require_release() -> None:
                          'run TallowLauncher --install-dotnet (or set TALLOW_SYSTEM_DOTNET=1 to use it anyway).')
 
 
+def warn_if_not_target() -> None:
+    """A warning (once per tool) when neither Tallow's copy nor the dotnet on PATH is the released SDK the engine
+    targets: its C# tools need that runtime, so builds and exports fail on a preview or older one."""
+    if os.environ.get('TALLOW_SYSTEM_DOTNET') == '1' or os.environ.get('TALLOW_DOTNET_WARNED') == '1':
+        return
+    if (installed() and os.environ.get('DOTNET_ROOT') == str(root())) or path_has_released():
+        return
+    os.environ['TALLOW_DOTNET_WARNED'] = '1'
+    print(f'warning: this engine targets .NET SDK {pinned()} (a released SDK, that one or newer), and none was found '
+          f'(the dotnet on PATH is a preview, older, or missing). Download it from '
+          f'https://dotnet.microsoft.com/download/dotnet/{pinned().split(".")[0]}.0 or run '
+          f'TallowLauncher --install-dotnet.', file=sys.stderr)
+
+
 apply()
+warn_if_not_target()

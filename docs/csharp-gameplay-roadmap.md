@@ -1297,6 +1297,10 @@ A full conversion also needs these. Ordered roughly by when they block users.
   and editor (`DotNetSdk.Apply`) and the Python tools (`tools/dotnet_sdk.py`, imported by build, export and test
   scripts) route to Tallow's own copy. JIT exports now bundle runtime 11.0.0. All suites pass on it (in-game 439,
   export 420 JIT and NativeAOT, reload 33, network 32, network reload 7, Gallery, sample 10, web 405).
+  Version check: the launcher's .NET check (`DotNetCheck`, also `--check-dependencies`) now requires a released
+  SDK 11.0.100+ and runtime 11.0.0+ (`DotNetSdk.PinnedVersion` / `PinnedRuntime`), not just major 11; a preview or
+  older one is a problem naming both versions, with the Install / Download / Copy install command buttons. The
+  Python tools print the same warning when neither Tallow's copy nor the PATH dotnet is the target.
   - [x] Install a pinned, released .NET 11 SDK into a Tallow-owned per-user folder shared by
     engine versions (for example `~/.local/share/Tallow/dotnet` on Linux or
     `%LOCALAPPDATA%\\Tallow\\dotnet` on Windows). Detect a compatible cached version on

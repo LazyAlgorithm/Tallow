@@ -756,7 +756,7 @@ class LauncherApp : Application
 				ImGui.TextColored(.(1.0f, 0.82f, 0.35f, 1), problem.message.CStr());
 		}
 		if (mDependencies.Has(.MissingSdk) || mDependencies.Has(.OldSdk) || mDependencies.Has(.MissingRuntime) ||
-			mDependencies.Has(.PreviewSdk))
+			mDependencies.Has(.PreviewSdk) || mDependencies.Has(.WrongVersion))
 		{
 			// Into Tallow's own folder: no administrator rights, nothing changed for other programs.
 			if (ImGui.Button(scope $"Install .NET {DotNetSdk.PinnedVersion} for Tallow"))

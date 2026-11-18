@@ -25,7 +25,10 @@ static class DotNetCheck
 		/// Tallow.ManagedRuntime has not been built, or is older than its sources.
 		StaleManagedRuntime,
 		/// Only a preview SDK: works, but releases should use a supported one.
-		PreviewSdk
+		PreviewSdk,
+		/// The SDK or runtime is not the version the engine targets (DotNetSdk.PinnedVersion / PinnedRuntime) or
+		/// newer: a pre-release or an older one, which cannot run the engine's C# tools.
+		WrongVersion
 	}
 
 	public class Problem
@@ -146,6 +149,26 @@ static class DotNetCheck
 		File.ReadAllText(file, output).IgnoreError();
 		File.Delete(file).IgnoreError();
 		return status == 0;
+	}
+
+	/// The newest released version (no "-rc..." part) on lines "<prefix><version> [path]" of the required major
+	/// that is `minimum` or newer, or false.
+	static bool NewestReleased(StringView listing, StringView prefix, StringView minimum, String newest)
+	{
+		for (var line in listing.Split('\n'))
+		{
+			line.Trim();
+			if (!line.StartsWith(prefix))
+				continue;
+			var rest = line.Substring(prefix.Length);
+			let space = rest.IndexOf(' ');
+			let version = space > 0 ? rest.Substring(0, space) : rest;
+			if (Major(version) != RequiredMajor || version.Contains('-') || CompareVersions(version, minimum) < 0)
+				continue;
+			if (newest.IsEmpty || CompareVersions(version, newest) > 0)
+				newest.Set(version);
+		}
+		return !newest.IsEmpty;
 	}
 
 	/// The newest version on lines "<prefix><version> [path]" whose major is RequiredMajor.
@@ -276,9 +299,14 @@ static class DotNetCheck
 				scope $"Tallow needs the .NET {RequiredMajor} SDK; this machine only has other versions. Install it with: {hint}");
 			return;
 		}
-		if (report.sdkVersion.Contains('-'))
-			report.Add(.PreviewSdk, false,
-				scope $".NET SDK {report.sdkVersion} is a preview. C# works, but use a released .NET {RequiredMajor} SDK for games you ship.");
+		// The engine targets a released SDK and runtime (DotNetSdk.PinnedVersion / PinnedRuntime) or newer: its C#
+		// tools are built for that runtime and do not start on a pre-release or older one.
+		let released = scope String();
+		if (NewestReleased(sdks, "", DotNetSdk.PinnedVersion, released))
+			report.sdkVersion.Set(released);
+		else
+			report.Add(.WrongVersion, true,
+				scope $"This engine targets .NET SDK {DotNetSdk.PinnedVersion} (runtime {DotNetSdk.PinnedRuntime}), but this machine has .NET SDK {report.sdkVersion}{report.sdkVersion.Contains('-') ? " (a preview)" : ""}. Download .NET {DotNetSdk.PinnedVersion} or newer, or install it for Tallow (the launcher's Install button, or TallowLauncher --install-dotnet).");
 
 		let runtimes = scope String();
 		RunDotNet("--list-runtimes", scratchFolder, runtimes);
@@ -286,6 +314,15 @@ static class DotNetCheck
 		if (!NewestMatching(runtimes, "Microsoft.NETCore.App ", report.runtimeVersion, out anyRuntime))
 			report.Add(.MissingRuntime, true,
 				scope $"The .NET {RequiredMajor} runtime (Microsoft.NETCore.App) is missing, so C# gameplay cannot start. Reinstall the SDK with: {hint}");
+		else
+		{
+			let releasedRuntime = scope String();
+			if (NewestReleased(runtimes, "Microsoft.NETCore.App ", DotNetSdk.PinnedRuntime, releasedRuntime))
+				report.runtimeVersion.Set(releasedRuntime);
+			else if (!report.Has(.WrongVersion))
+				report.Add(.WrongVersion, true,
+					scope $"This engine targets the .NET runtime {DotNetSdk.PinnedRuntime}, but this machine has {report.runtimeVersion}{report.runtimeVersion.Contains('-') ? " (a preview)" : ""}. Download .NET {DotNetSdk.PinnedVersion} or newer, or install it for Tallow (the launcher's Install button, or TallowLauncher --install-dotnet).");
+		}
 
 		if (!engineRoot.IsEmpty && ManagedRuntimeStale(engineRoot))
 			report.Add(.StaleManagedRuntime, true,

@@ -18,6 +18,9 @@ static class DotNetSdk
 	/// The SDK Tallow installs. Changing it is deliberate (a new engine version): projects never roll forward on
 	/// their own, and older versions stay in the shared folder for the engines that pinned them.
 	public const String PinnedVersion = "11.0.100";
+	/// The .NET runtime (Microsoft.NETCore.App) that SDK carries, which the engine's C# is built for and JIT games
+	/// bundle. An older or pre-release runtime cannot run it.
+	public const String PinnedRuntime = "11.0.0";
 
 	struct Download
 	{
