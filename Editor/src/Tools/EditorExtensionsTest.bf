@@ -19,6 +19,8 @@ extension EditorApp
 	Stopwatch mExtensionsTestClock = new .() ~ delete _;
 	String mExtensionsTestReport = new .() ~ delete _;
 	bool mExtensionsTestPass = true;
+	float mTerrainDensityBefore;
+	float mTerrainDensityAfter;
 
 	void StartEditorExtensionsTest()
 	{
@@ -74,7 +76,14 @@ extension EditorApp
 					hasProbeCommand |= command == "Test/Run Probe";
 					hasSceneCommand |= command == "Test/Scene Probe";
 				}
-				ExtensionsCheck(mExtensionMenus.Count == 2 && hasProbeCommand && hasSceneCommand,
+				bool hasTerrainCommand = false;
+				bool hasDigCommand = false;
+				for (let command in mExtensionMenus)
+				{
+					hasTerrainCommand |= command == "Test/Terrain Make";
+					hasDigCommand |= command == "Test/Terrain Dig";
+				}
+				ExtensionsCheck(mExtensionMenus.Count == 4 && hasProbeCommand && hasSceneCommand && hasTerrainCommand && hasDigCommand,
 					scope $"the menu commands are listed ({mExtensionMenus.Count})");
 				ExtensionsCheck(mExtensionPages.Count == 2 && mExtensionPages[0] == "Probe Drawn" && mExtensionPages[1] == "Probe Settings",
 					"the Preferences tabs are listed, by title");
@@ -146,7 +155,7 @@ extension EditorApp
 			if (mExtensionsTestFrames > 3 && ExtensionsBuildIdle)
 			{
 				ExtensionsCheck(mManagedBuildReady, "the project built again");
-				ExtensionsCheck(mExtensionMenus.Count == 3, scope $"the new menu command is listed after the reload ({mExtensionMenus.Count})");
+				ExtensionsCheck(mExtensionMenus.Count == 5, scope $"the new menu command is listed after the reload ({mExtensionMenus.Count})");
 				let probe = ExtensionWindowIndex("Test/Probe Window");
 				ExtensionsCheck(probe >= 0 && mExtensionWindows[probe].open, "an open window is open again after the reload");
 				for (int i < mExtensionMenus.Count)
@@ -228,7 +237,70 @@ extension EditorApp
 			if (mExtensionsTestFrames == 3)
 			{
 				ExtensionsCheck(mScene.Find("Probe Kept") == null, "undo took the script's changes back");
-				FinishEditorExtensionsTest();
+				for (int i < mExtensionMenus.Count)
+					if (mExtensionMenus[i] == "Test/Terrain Make")
+						sExtensions.runMenu((int32)i);
+				let prefs = scope String();
+				ExtensionsProjectPrefs(prefs);
+				ExtensionsCheck(prefs.Contains("\"terrainMakeOk\": true"), "the terrain API made a terrain");
+				mExtensionsTestStep = 6;
+				mExtensionsTestFrames = 0;
+			}
+		case 6: // the terrain, before the script digs (chunks stream in: wait for a sample)
+			if (mExtensionsTestFrames >= 20 && (mExtensionsTestFrames % 10) == 0)
+			{
+				let ground = mScene.Find("Probe Terrain");
+				let terrain = ground != null ? ground.GetComponent<VoxelTerrain>() : null;
+				var density = 0.0f;
+				if (terrain != null && terrain.DensityAt(.(0, 1, 0), out density))
+				{
+					mTerrainDensityBefore = density;
+					for (int i < mExtensionMenus.Count)
+						if (mExtensionMenus[i] == "Test/Terrain Dig")
+							sExtensions.runMenu((int32)i);
+					mExtensionsTestStep = 7;
+					mExtensionsTestFrames = 0;
+				}
+				else if (mExtensionsTestFrames >= 100)
+				{
+					ExtensionsCheck(false, "the terrain has no samples at the dug point");
+					FinishEditorExtensionsTest();
+				}
+			}
+		case 7: // the script dug it: the sample changed, and undo puts it back
+			if (mExtensionsTestFrames == 10)
+			{
+				let prefs = scope String();
+				ExtensionsProjectPrefs(prefs);
+				ExtensionsCheck(prefs.Contains("\"terrainDug\": true"), "the script dug the terrain");
+				let ground = mScene.Find("Probe Terrain");
+				let terrain = ground != null ? ground.GetComponent<VoxelTerrain>() : null;
+				var density = 0.0f;
+				var sampled = terrain != null && terrain.DensityAt(.(0, 1, 0), out density);
+				ExtensionsCheck(sampled && Math.Abs(density - mTerrainDensityBefore) > 1,
+					scope $"the script's digging reached the terrain ({mTerrainDensityBefore:0.###} -> {density:0.###})");
+				mTerrainDensityAfter = density;
+				Undo();
+				mExtensionsTestStep = 8;
+				mExtensionsTestFrames = 0;
+			}
+		case 8: // the chunk is made again after the record is applied: wait until it can be sampled
+			if (mExtensionsTestFrames >= 10 && (mExtensionsTestFrames % 10) == 0)
+			{
+				let ground = mScene.Find("Probe Terrain");
+				let terrain = ground != null ? ground.GetComponent<VoxelTerrain>() : null;
+				var density = 0.0f;
+				if (terrain != null && terrain.DensityAt(.(0, 1, 0), out density))
+				{
+					ExtensionsCheck(Math.Abs(density - mTerrainDensityAfter) > 0.01f,
+						scope $"undo took the digging back ({mTerrainDensityAfter:0.###} -> {density:0.###})");
+					FinishEditorExtensionsTest();
+				}
+				else if (mExtensionsTestFrames >= 120)
+				{
+					ExtensionsCheck(false, "the terrain was not made again in time after undo");
+					FinishEditorExtensionsTest();
+				}
 			}
 		}
 	}

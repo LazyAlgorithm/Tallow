@@ -70,6 +70,8 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<uint, int, int> ModelWrite;
         public delegate* unmanaged[Cdecl]<nint, byte*, nint> ResolveApi;
         public delegate* unmanaged[Cdecl]<ulong> ObjectSession;
+        public delegate* unmanaged[Cdecl]<uint, int> TerrainBegin;
+        public delegate* unmanaged[Cdecl]<uint, int> TerrainEnd;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -88,7 +90,7 @@ internal static unsafe class EditorHost
         public delegate* unmanaged[Cdecl]<int> DrawSceneOverlays;
     }
 
-    internal const int Version = 7;
+    internal const int Version = 8;
     internal const int LayoutSameLine = 0, LayoutSeparator = 1, LayoutSpacing = 2, LayoutIndent = 3, LayoutUnindent = 4,
         LayoutBeginDisabled = 5, LayoutEndDisabled = 6, LayoutPushId = 7, LayoutPopId = 8;
     internal const int QueryPlaying = 0, QueryProjectPath = 1, QueryTargetScript = 2, QueryTargetObject = 3,
@@ -560,6 +562,18 @@ internal static unsafe class EditorHost
     {
         RequireScene();
         return sHost.ObjectSession();
+    }
+
+    internal static bool TerrainBegin(uint id)
+    {
+        RequireScene();
+        return sHost.TerrainBegin(id) > 0;
+    }
+
+    internal static bool TerrainEnd(uint id)
+    {
+        RequireScene();
+        return sHost.TerrainEnd(id) > 0;
     }
 
     internal static int ModelRead(uint id)

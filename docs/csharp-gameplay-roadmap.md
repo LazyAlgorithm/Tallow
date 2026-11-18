@@ -1380,14 +1380,14 @@ A full conversion also needs these. Ordered roughly by when they block users.
   - Create > C# Script > Editor templates (Custom Inspector, Editor Window, Tools Menu Command, Preferences Page).
   - The language service compiles editor folders as their own assembly against Tallow.Editor.
 
-  Tests: `tools/test_csharp_editor_extensions.py`, a display test with 32 checks, which includes a broken window, a
+  Tests: `tools/test_csharp_editor_extensions.py`, a display test with 36 checks, which includes a broken window, a
   reload and a game build with no editor scripts; LS tests (139); the template test compiles the four editor
   templates.
 
 ### Editor scripts work on the scene (November 18, 2026)
 
 - The three gaps listed here for editor scripts are filled, each tested end to end by
-  `tools/test_csharp_editor_extensions.py` (32 checks, display needed):
+  `tools/test_csharp_editor_extensions.py` (36 checks, display needed):
   - **Scene editing in Edit mode:** `Tallow.Editor.EditorScene` / `EditorObject` / `EditorComponent`
     (`Managed/Tallow.Editor/EditorScene.cs`, host functions in `Editor/src/Scripts/CSharpEditorExtensions.bf`):
     selection, find by path or name, roots and children, create the editor's built-in objects (where the editor puts
@@ -1428,8 +1428,14 @@ A full conversion also needs these. Ordered roughly by when they block users.
     changes a script makes through Tallow.API are undoable; a script that edits from an Inspector, window or
     overlay calls `EditorScene.MarkDirty()` itself. The probe moves its cube with `Tallow.API`'s Transform and reads
     it back with EditorScene.
-- Not yet: carving terrain from C# in Edit mode (the terrain's own undo records strokes; that bridge is not
-  written).
+  - **Terrain sculpting from C#** (November 18, 2026): `Tallow.Editor.EditorTerrain.Begin(object)` opens the
+    terrain's own undo record (`BeginEditRecord`/`EndEditRecord` through two host functions, then
+    `PushTerrainUndo`), so a script's `VoxelTerrain.ModifySphere` calls (Tallow.API) become one terrain undo step,
+    like a brush stroke. The test makes a terrain, samples its density, digs 6 m at the origin, checks the sample
+    changed, undoes, and checks it came back (-48 -> -127 -> -48; chunks made again after undo need a few frames
+    before they can be sampled).
+- Not yet: nothing known in the editor-script surface; the wider roadmap items are listed above (the built-in
+  debugger, NuGet/package gaps, angled walls and roofs, the macOS/Beef-porting decisions, docs).
 - Gotchas: the managed table's function pointers must be filled in `EditorHost.Configure` (a missing one is a null
   call, and the editor segfaults), and host-table changes bump its version (4 now) on both sides; the editor's
   snapshot undo needs `MarkDirty`, not `Destroy`, for script deletions.

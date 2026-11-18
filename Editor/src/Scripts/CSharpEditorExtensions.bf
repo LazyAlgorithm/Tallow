@@ -71,6 +71,8 @@ extension EditorApp
 		public function int32(uint32, int32) modelWrite;
 		public function void*(void*, char8*) resolveApi;
 		public function uint64() objectSession;
+		public function int32(uint32) terrainBegin;
+		public function int32(uint32) terrainEnd;
 	}
 
 	/// What the editor calls in them (Tallow.Editor's EditorHost.ManagedTable).
@@ -215,7 +217,7 @@ extension EditorApp
 		CSharpRuntime.BindScene(mScene);
 		EditorHostTable host = .()
 		{
-			version = 7,
+			version = 8,
 			size = sizeof(EditorHostTable),
 			log = => HostLog,
 			text = => HostText,
@@ -269,7 +271,9 @@ extension EditorApp
 			modelRead = => HostModelRead,
 			modelWrite = => HostModelWrite,
 			resolveApi = => CSharpRuntime.ResolveApiEntry,
-			objectSession = => HostObjectSession
+			objectSession = => HostObjectSession,
+			terrainBegin = => HostTerrainBegin,
+			terrainEnd = => HostTerrainEnd
 		};
 		if (tn_csharp_editor_configure(editorApi.CStr(), &host, &sExtensions) == 0)
 		{
@@ -1315,6 +1319,38 @@ extension EditorApp
 	/// An object's model as a C# EditMesh handle, 0 when it has none.
 	/// The scene session managed scene handles carry.
 	static uint64 HostObjectSession() => CSharpRuntime.Session;
+
+	/// The object's voxel terrain, or null.
+	static VoxelTerrain SceneTerrain(uint32 id)
+	{
+		let gameObject = SceneObject(id);
+		return gameObject != null ? gameObject.GetComponent<VoxelTerrain>() : null;
+	}
+
+	/// Starts a terrain undo record, so a script's sculpting is one step (EditorTerrain.Begin).
+	static int32 HostTerrainBegin(uint32 id)
+	{
+		if (!EditingScene)
+			return 0;
+		let terrain = SceneTerrain(id);
+		if (terrain == null)
+			return 0;
+		terrain.BeginEditRecord();
+		return 1;
+	}
+
+	/// Ends it: the chunks it changed become an undo step (the scene step before them is committed first).
+	static int32 HostTerrainEnd(uint32 id)
+	{
+		let terrain = SceneTerrain(id);
+		if (terrain == null)
+			return 0;
+		let record = terrain.EndEditRecord();
+		if (record != null)
+			sExtensionsApp.PushTerrainUndo(terrain, record);
+		sExtensionsApp.MarkDirty();
+		return 1;
+	}
 
 	static int32 HostModelRead(uint32 id)
 	{

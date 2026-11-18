@@ -452,6 +452,11 @@ carries on, and a failed Inspector falls back to the plain field list.
   `Subdivide`, `Poke`, `Solidify`, face colours, materials and smoothness, `Combine` booleans, UVs, `ToText` and
   `FromText`. Writing marks the scene dirty, so it is undone with the rest of the command. Editor scripts can also
   use Tallow.API's scene-free calls, such as `Gizmos` and `DebugDraw`.
+- **Terrain:** `EditorTerrain.Begin(object)` opens a terrain undo record for the object with the terrain; the
+  script digs and raises it with Tallow.API's `VoxelTerrain.ModifySphere` (or the other brush calls), and ending
+  the record makes those changes one undo step, as a brush stroke is:
+  <code>using (EditorTerrain.Begin(ground)) terrain?.ModifySphere(point, 3, -5);</code> Chunks that were not loaded
+  when the record started are made again on undo, as with the editor's own sculpting.
 - **Scene view overlay:** any concrete `SceneViewOverlay` subclass is called every frame while the Scene view is
   open (`OnSceneViewGUI()`), to draw gizmos and run a tool. `SceneView.Line/Sphere/Box` draw this frame (the same
   batches as `Tallow.Gizmos`: `onTop` draws through geometry); `SceneView.IsVisible`, `IsMouseOver`, `IsClicked`,
@@ -479,9 +484,8 @@ Labels sit on the left as in the Inspector. Two widgets with the same label in o
 (`"Speed##front"`) or an `Id` scope. `EditorApplication` gives `IsPlaying`, `ProjectPath`, `SelectedObjectName` and
 `Log`/`LogWarning`/`LogError` to the Console.
 
-Not yet: scene editing through Tallow.API's `GameObject` and `Transform` themselves (they are bound to a running
-game; editor scripts use `EditorScene` in Edit mode), and carving terrain from C# in Edit mode. Test:
-`tools/test_csharp_editor_extensions.py` needs a display.
+Test: `tools/test_csharp_editor_extensions.py` needs a display (36 checks: the scene API and undo, built-in
+component Inspectors, models, terrain, overlays and the templates' compilation).
 
 ## Shipping a C# game
 
