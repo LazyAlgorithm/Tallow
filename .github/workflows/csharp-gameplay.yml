@@ -483,11 +483,6 @@ jobs:
           printf 'Version = 1\nUnversionedLibDirs = ["../BeefLibs"]\n' > beef-win/bin/BeefConfig.toml
           export BEEFBUILD="$(cygpath -w "$PWD/beef-win/bin/BeefBuild.exe")"
           cd tallow
-          # Beef's Debug Win64 default checks for leaks at exit and stops the process as a fatal error (a CLI run of
-          # --graph-compile reported 161 unfreed strings). This job checks C# behaviour on Windows, so the check is
-          # off for its build only; a local Windows Debug build keeps it (see the roadmap's open items).
-          sed -i 's/^\[Configs.Debug.Win64\]$/[Configs.Debug.Win64]\nEnableRealtimeLeakCheck = false/' BeefSpace.toml
-          grep -A2 'Configs.Debug.Win64' BeefSpace.toml
           python tools/build.py --config Debug --skip-native
           test -f build/Debug_Win64/TallowLauncher/TallowLauncher.exe
       - name: Run C# gameplay inside the real engine (scene, Jolt, Flecs)

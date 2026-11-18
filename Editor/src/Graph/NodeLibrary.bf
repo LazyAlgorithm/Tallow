@@ -69,7 +69,7 @@ static class NodeLibrary
 	/// "@layout" row (candidate or unsupported), then "Type<tab>field<tab>kind<tab>synced" for each field in order.
 	static String sCSharpEcs = new .() ~ delete _;
 	/// Enum types C# pins use, with their members.
-	static Dictionary<String, List<String>> sCSharpEnums = new .() ~ DeleteDictionaryAndKeysAndValues!(_);
+	static Dictionary<String, List<String>> sCSharpEnums = new .() ~ { for (let pair in _) { delete pair.key; DeleteContainerAndItems!(pair.value); } delete _; };
 
 	/// The members of an enum a C# graph pin uses, or null.
 	public static List<String> CSharpEnumMembers(StringView typeName)
