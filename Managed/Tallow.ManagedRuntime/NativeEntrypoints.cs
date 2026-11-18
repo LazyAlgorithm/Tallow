@@ -802,18 +802,28 @@ public static unsafe class NativeEntrypoints
             TerrainGenerators.Clear();
             SaveGame.ClearStorage();
             Network.ClearTeamChooser();
-            GameThread.Stop();
-            GameThread.Start();
-            GameAssemblyContext context = OpenGame(path, out IGameplayComponentRegistry registry);
+            // The old code's awaits are set aside, not dropped yet: if the new code fails to load they carry on.
+            GameThread.Detached waits = GameThread.Detach();
+            GameAssemblyContext context;
+            IGameplayComponentRegistry registry;
             var types = new HashSet<string>();
             var former = new Dictionary<string, string>();
             try
             {
-                AddTypes(registry, types, former);
+                context = OpenGame(path, out registry);
+                try
+                {
+                    AddTypes(registry, types, former);
+                }
+                catch
+                {
+                    context.Unload();
+                    throw;
+                }
             }
             catch
             {
-                context.Unload();
+                GameThread.Reattach(waits);
                 throw;
             }
 
@@ -899,6 +909,20 @@ public static unsafe class NativeEntrypoints
                 Log.Warning($"Hot reload: {migrator.Dropped.Count} field(s) started again at their initializers " +
                     $"(type changed or removed): {string.Join(", ", migrator.Dropped.Take(8))}" +
                     (migrator.Dropped.Count > 8 ? ", ..." : ""));
+            GameThread.Drop(waits);
+            ReportDroppedAwaits(waits, types);
+            // In the new code, with every script moved: restart async loops (OnReload).
+            foreach ((_, Script script) in moved)
+            {
+                try
+                {
+                    script.OnReload();
+                }
+                catch (Exception exception)
+                {
+                    Failure(exception);
+                }
+            }
             unloaded = new WeakReference(previous);
             sUnloadedContexts.Add(unloaded);
             previous.Unload();
@@ -910,6 +934,28 @@ public static unsafe class NativeEntrypoints
         {
             return Failure(exception);
         }
+    }
+
+    /// <summary>Names the scripts whose awaits a reload ended, once per class ("Spawner x2"); a class that is gone
+    /// from the new code is left out (its script ended anyway).</summary>
+    private static void ReportDroppedAwaits(GameThread.Detached waits, HashSet<string> types)
+    {
+        var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (string owner in waits.Waiting)
+        {
+            if (owner.Length > 0 && !types.Contains(owner) && !sFormerNames.ContainsKey(owner))
+                continue;
+            string name = owner.Length == 0 ? "engine waits" : owner[(owner.LastIndexOf('.') + 1)..];
+            counts[name] = counts.GetValueOrDefault(name) + 1;
+        }
+        int queued = waits.Queued;
+        if (counts.Count == 0 && queued == 0)
+            return;
+        var parts = counts.Select(pair => pair.Value == 1 ? pair.Key : $"{pair.Key} x{pair.Value}").ToList();
+        if (queued > 0)
+            parts.Add($"{queued} other continuation{(queued == 1 ? "" : "s")}");
+        Log.Warning($"Hot reload: awaits of the old code ended ({string.Join(", ", parts)}); override OnReload to " +
+            "start them again. Real-time waits (Task.Delay, web requests) of the old code end too.");
     }
 
     // ECMA-335 FieldAttributes.NotSerialized is the 0x0080 metadata bit (FieldInfo.IsNotSerialized is obsolete).

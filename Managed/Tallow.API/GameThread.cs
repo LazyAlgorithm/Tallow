@@ -62,6 +62,16 @@ internal sealed class GameSynchronizationContext : SynchronizationContext
         return first;
     }
 
+    /// <summary>Continuations posted and not yet run.</summary>
+    public int Pending
+    {
+        get
+        {
+            lock (_lock)
+                return _queue.Count;
+        }
+    }
+
     public void Close()
     {
         lock (_lock)
@@ -75,9 +85,11 @@ internal sealed class GameSynchronizationContext : SynchronizationContext
 /// <summary>The game thread's async state: the context, and the waits on game time.</summary>
 internal static class GameThread
 {
-    private sealed class Waiter(float remaining, long frame, CancellationToken token)
+    internal sealed class Waiter(float remaining, long frame, CancellationToken token, string? owner)
     {
         public float Remaining = remaining;
+        /// <summary>The script class that waits (Wait/NextFrame), for the hot reload's report.</summary>
+        public readonly string? Owner = owner;
         public readonly long Frame = frame;
         public readonly TaskCompletionSource Done = new();
         public readonly CancellationToken Token = token;
@@ -123,8 +135,65 @@ internal static class GameThread
         sContext = null;
     }
 
+    /// <summary>What a hot reload set aside: the old code's context and game-time waits.</summary>
+    internal sealed class Detached
+    {
+        internal GameSynchronizationContext? Context;
+        internal List<Waiter> Waiters = [];
+        /// <summary>Full names of the script classes waiting on game time when the reload began, one per await
+        /// (taken then: the old scripts' Destroyed tokens are cancelled as they move to the new code).</summary>
+        internal List<string> Waiting = [];
+        /// <summary>Continuations queued when the reload began.</summary>
+        internal int Queued;
+    }
+
+    /// <summary>Hot reload, before the new code loads: sets the old code's continuations and waits aside and
+    /// starts a fresh context (the hooks API pieces put on <see cref="EachFrame"/> stay: they are not game
+    /// code). <see cref="Reattach"/> puts them back if the new code fails to load; <see cref="Drop"/> ends
+    /// them once it loaded.</summary>
+    internal static Detached Detach()
+    {
+        var detached = new Detached { Context = sContext, Queued = sContext?.Pending ?? 0 };
+        detached.Waiters.AddRange(sWaiters);
+        foreach (Waiter waiter in sWaiters)
+        {
+            if (!waiter.Token.IsCancellationRequested)
+                detached.Waiting.Add(waiter.Owner ?? "");
+        }
+        sWaiters.Clear();
+        sFinished.Clear();
+        sContext = new GameSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(sContext);
+        return detached;
+    }
+
+    /// <summary>The reload failed: the old code keeps running, with its waits.</summary>
+    internal static void Reattach(Detached detached)
+    {
+        if (detached.Context == null)
+            return;
+        sContext?.Close();
+        sContext = detached.Context;
+        SynchronizationContext.SetSynchronizationContext(sContext);
+        sWaiters.Clear();
+        sWaiters.AddRange(detached.Waiters);
+        detached.Context = null;
+    }
+
+    /// <summary>The reload worked: the old code's awaits can never carry on (their state belongs to code that is
+    /// unloading), so they end without running: not cancelled, as a cancellation could run the old code's
+    /// catch/finally blocks on objects that moved to the new code. See <see cref="Detached.Waiting"/>.</summary>
+    internal static void Drop(Detached detached)
+    {
+        detached.Context?.Close();
+        detached.Context = null;
+        foreach (Waiter waiter in detached.Waiters)
+            waiter.Registration.Dispose();
+        detached.Waiters.Clear();
+    }
+
     /// <summary>A wait of a number of seconds of game time (0: the next frame).</summary>
-    public static Task Delay(float seconds, CancellationToken token)
+    public static Task Delay(float seconds, CancellationToken token, string? owner = null)
     {
         if (sContext == null)
             throw new InvalidOperationException("Game-time waits work only while the game runs.");
@@ -132,7 +201,7 @@ internal static class GameThread
             throw new InvalidOperationException("Wait and NextFrame must be awaited on the game thread.");
         if (token.IsCancellationRequested)
             return Task.FromCanceled(token);
-        var waiter = new Waiter(float.IsFinite(seconds) ? MathF.Max(seconds, 0f) : float.MaxValue, sFrame, token);
+        var waiter = new Waiter(float.IsFinite(seconds) ? MathF.Max(seconds, 0f) : float.MaxValue, sFrame, token, owner);
         if (token.CanBeCanceled)
         {
             waiter.Registration = token.Register(static state =>

@@ -1495,11 +1495,11 @@ public abstract class Script : IComponent
 
     /// <summary><c>await NextFrame();</c> carries on next frame, after LateUpdate. Ends (cancelled) if the
     /// script is destroyed first.</summary>
-    protected Task NextFrame() => GameThread.Delay(0f, Destroyed);
+    protected Task NextFrame() => GameThread.Delay(0f, Destroyed, GetType().FullName);
 
     /// <summary><c>await Wait(2f);</c> carries on after that many seconds of game time (slowed and paused with
     /// it), after LateUpdate. Ends (cancelled) if the script is destroyed first. Task.Delay waits real time.</summary>
-    protected Task Wait(float seconds) => GameThread.Delay(seconds, Destroyed);
+    protected Task Wait(float seconds) => GameThread.Delay(seconds, Destroyed, GetType().FullName);
 
     /// <summary>Once, when the script comes to life: after its object is made or its scene loads, with its
     /// Inspector fields already set, before OnEnable and Start. Other scripts on the object exist but may not have
@@ -1559,6 +1559,10 @@ public abstract class Script : IComponent
     public virtual void OnTriggerExit(GameObject other) { }
     /// <summary>A field was changed in the Inspector during Play (or by the scene loader).</summary>
     public virtual void OnValidate() { }
+    /// <summary>After a hot reload during Play, in the new code, once every script moved to it with its fields:
+    /// awaits of the old code cannot carry on (an async method's state belongs to the code it was compiled from),
+    /// so start async loops and other waits again here. Awake, OnEnable and Start do not run again.</summary>
+    public virtual void OnReload() { }
     /// <summary>Draw helpers in the editor's Scene view with <see cref="Gizmos"/>, every frame during Play.
     /// <paramref name="selected"/> is true when this object is selected.</summary>
     public virtual void OnDrawGizmos(bool selected) { }

@@ -1215,7 +1215,7 @@ static class NodeLibrary
 		switch (name)
 		{
 		case "Awake","Start","Update","FixedUpdate","LateUpdate","OnEnable","OnDisable","OnDestroy","OnRegister","OnUnregister","OnFrame","OnGUI",
-			"OnBeforeSave","SaveFields","OnSaving","OnLoaded","OnValidate","OnDrawGizmos","Simulate","GatherInput","EarlyUpdate","LocalEarlyUpdate","LocalUpdate","LocalLateUpdate","ReadInput","OnNetworkEvent","ToString","GetHashCode","Dispose":
+			"OnBeforeSave","SaveFields","OnSaving","OnLoaded","OnValidate","OnReload","OnDrawGizmos","Simulate","GatherInput","EarlyUpdate","LocalEarlyUpdate","LocalUpdate","LocalLateUpdate","ReadInput","OnNetworkEvent","ToString","GetHashCode","Dispose":
 			return true;
 		}
 		return false;
@@ -1715,7 +1715,7 @@ scope $"if ({{0}} != null && {{0}}.GetComponent<{typeName}>() != null) {{0}}.Get
 	public static bool IsReservedName(StringView name)
 	{
 		for (let reserved in StringView[?]("GameObject", "Transform", "Scene", "IsAwake", "Enabled", "IsActiveAndEnabled", "GetComponent", "Awake", "OnEnable", "Start",
-			"FixedUpdate", "Update", "EarlyUpdate", "LateUpdate", "LocalEarlyUpdate", "LocalUpdate", "LocalLateUpdate", "OnDisable", "OnDestroy", "OnRegister", "OnUnregister", "OnFrame", "OnGUI", "OnBeforeSave", "SaveFields", "OnSaving", "OnLoaded", "OnValidate", "OnDrawGizmos",
+			"FixedUpdate", "Update", "EarlyUpdate", "LateUpdate", "LocalEarlyUpdate", "LocalUpdate", "LocalLateUpdate", "OnDisable", "OnDestroy", "OnRegister", "OnUnregister", "OnFrame", "OnGUI", "OnBeforeSave", "SaveFields", "OnSaving", "OnLoaded", "OnValidate", "OnReload", "OnDrawGizmos",
 			"this", "base", "float", "bool", "int", "String", "Vector3", "true", "false", "null", "var", "let", "if", "else", "for", "while", "return", "class", "public", "delete", "new", "scope"))
 		{
 			if (name == reserved)

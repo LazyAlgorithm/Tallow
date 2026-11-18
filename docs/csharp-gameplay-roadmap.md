@@ -581,14 +581,21 @@ For every subsystem, expose a managed public API, safe native handle bridge, cor
     a field whose type changed or was removed starts again and a warning names it. Floats are now exact (no text
     round trip). `TALLOW_RELOAD_UNLOAD_CHECK=1` checks the old code unloads. Editor path automated:
     `--hot-reload-test FOLDER` (types v2 into the code editor and saves during Play; ~2.1 s save-to-reload here),
-    step 6 of `tools/test_csharp_editor.py`. Reload test now 27 checks. Still open: pending awaits are dropped,
-    networked sessions reload only this machine (it now warns so in the Console when other players are
+    step 6 of `tools/test_csharp_editor.py`. Reload test now 27 checks. Still open: networked sessions reload only this machine (it now warns so in the Console when other players are
     connected, November 16, 2026).
   - [x] (November 16, 2026) Delegates to named methods carry over: each method is found by name and parameter
     types in the new code, bound to the new instance (`ReloadMigrator.Rebind`), so events and callbacks kept in
     fields call the new code; `Network.ChooseTeam` is kept the same way. Lambdas and local functions still start
     again (their compiler-made names can move to another lambda between versions; a chooser lambda warns to set
     it again). Reload test 29 checks (editor path 27).
+  - [x] (November 18, 2026) Awaits across a reload: an async method's state belongs to the code it was compiled from,
+    so the old code's awaits cannot carry on in the new code (no engine moves them). They now end cleanly and are
+    named: the reload sets the old continuations and game-time waits aside first (`GameThread.Detach`), puts them
+    back when the new code fails to load (the old code keeps running with its loops), and otherwise ends them without
+    running old catch/finally blocks on moved objects; the Console names the scripts ("awaits of the old code ended
+    (Spawner x2)"). New `Script.OnReload()` runs in the new code on every moved script, fields already carried over,
+    to start async loops again. API hooks (scene-load polling, anti-cheat, voice, host changes) now survive a reload
+    (they were cleared with the awaits). Reload test 33 checks (editor path 30).
   - [x] (November 16, 2026) File > Reload Scripts (Ctrl+R) and the code editor's Compile & Reload now hot-reload a
     C# game during Play (they only compiled before; the menu said "Native C# Play integration is in progress"),
     also with the reload mode Manual, where a save does not reload. Editor step 6b (`--hot-reload-manual`).

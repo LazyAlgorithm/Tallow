@@ -153,7 +153,7 @@ def main() -> int:
         took = next((line for line in found if "reloaded" in line), "")
         check(f"saving C# during Play reloads it ({took.split('TEST ')[-1] if took else 'no reload'}): "
               f"{found[-1] if found else 'no result'}", bool(found) and "HOT RELOAD TEST PASS" in found[-1], output)
-        check(f"the reloaded game keeps its state ({passes} RELOAD checks)", passes == 27 and not reload_failures,
+        check(f"the reloaded game keeps its state ({passes} RELOAD checks)", passes == 30 and not reload_failures,
               "\n".join(reload_failures) or output)
 
         # 6b. The same with the reload mode Manual: File > Reload Scripts (Ctrl+R) reloads during Play.
@@ -166,7 +166,7 @@ def main() -> int:
         found = [line for line in output.splitlines() if "HOT RELOAD TEST" in line]
         passes = sum("RELOAD PASS" in line for line in output.splitlines())
         check(f"Reload Scripts reloads C# during Play in Manual mode: {found[-1] if found else 'no result'}",
-              bool(found) and "HOT RELOAD TEST PASS" in found[-1] and passes == 27, output)
+              bool(found) and "HOT RELOAD TEST PASS" in found[-1] and passes == 30, output)
 
         # 7. Completion through the editor and the language service.
         output, _, _ = open_editor(game, "--completion-test")

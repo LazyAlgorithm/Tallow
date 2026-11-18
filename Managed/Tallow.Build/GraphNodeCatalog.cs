@@ -48,7 +48,7 @@ internal static class GraphNodeCatalog
     {
         "Awake", "OnEnable", "Start", "FixedUpdate", "EarlyUpdate", "Update", "LateUpdate", "LocalEarlyUpdate", "LocalUpdate", "LocalLateUpdate", "OnDisable", "OnDestroy",
         "OnGUI", "OnCollisionEnter", "OnCollisionStay", "OnCollisionExit", "OnTriggerEnter", "OnTriggerStay",
-        "OnTriggerExit", "OnControllerHit", "OnValidate", "OnDrawGizmos", "OnSaving", "OnLoaded",
+        "OnTriggerExit", "OnControllerHit", "OnValidate", "OnReload", "OnDrawGizmos", "OnSaving", "OnLoaded",
         "OnNetworkEvent", "Attach", "Equals", "GetHashCode", "ToString", "Deconstruct", "PrintMembers", "GetType",
         "NextFrame", "Wait"
     };

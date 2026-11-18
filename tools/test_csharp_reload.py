@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED = 29
+EXPECTED = 33
 
 
 def build(project: Path, *extra: str) -> bool:
@@ -66,10 +66,14 @@ def main() -> int:
         if any("is gone after the reload" in line for line in lines):
             passed += 1
             print("RELOAD PASS the editor is told which script stopped")
-        dropped = next((line for line in lines if "Hot reload:" in line), "")
+        dropped = next((line for line in lines if "Hot reload:" in line and "field(s)" in line), "")
         if "Counter._kind" in dropped and "Counter._removed" in dropped and "_callback" not in dropped:
             passed += 1
             print("RELOAD PASS the warning names the fields that started again (not delegates)")
+        awaits = next((line for line in lines if "Hot reload: awaits of the old code ended" in line), "")
+        if "(Partner)" in awaits and "OnReload" in awaits:
+            passed += 1
+            print("RELOAD PASS the warning names the script whose await ended")
         failed = [line for line in lines if "RELOAD FAIL" in line or "[Tallow C#]" in line]
         if "RELOAD kept 2 scripts" not in output:
             failed.append("RELOAD FAIL two of three scripts kept")
