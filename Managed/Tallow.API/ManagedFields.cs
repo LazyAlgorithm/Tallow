@@ -12,6 +12,7 @@ namespace Tallow;
 /// </summary>
 public sealed class ManagedField
 {
+    /// <summary>Describes one field: its name and type, how to read and write it, and how it is saved, synced and shown.</summary>
     public ManagedField(string name, Type fieldType, Func<object, object?> get, Action<object, object?>? set,
         bool isPublic, bool showInInspector, bool hideInInspector, bool saved, bool sync, bool notSerialized,
         bool compilerGenerated)
@@ -37,12 +38,19 @@ public sealed class ManagedField
     public Func<object, object?> Get { get; }
     /// <summary>Stores a value; null for a readonly or const field (the runtime never writes those).</summary>
     public Action<object, object?>? Set { get; }
+    /// <summary>Whether the field is public (and so settable from a script).</summary>
     public bool IsPublic { get; }
+    /// <summary>Whether the Inspector shows the field.</summary>
     public bool ShowInInspector { get; }
+    /// <summary>Whether the Inspector hides the field.</summary>
     public bool HideInInspector { get; }
+    /// <summary>Whether the field is written to the save game.</summary>
     public bool Saved { get; }
+    /// <summary>Whether the field syncs over the network.</summary>
     public bool Sync { get; }
+    /// <summary>Whether the field is excluded from serialization.</summary>
     public bool NotSerialized { get; }
+    /// <summary>Whether the compiler generated the field rather than it being written in source.</summary>
     public bool CompilerGenerated { get; }
 }
 
@@ -94,6 +102,7 @@ public static class ManagedFields
             return sFields.TryGetValue(type, out ManagedField[]? fields) ? fields : null;
     }
 
+    /// <summary>A new default value of the type, when the build registered a constructor; otherwise false and a null value.</summary>
     public static bool TryCreate(Type type, out object value)
     {
         lock (sLock)
@@ -115,6 +124,7 @@ public static class ManagedFields
             return sCreate.ContainsKey(type);
     }
 
+    /// <summary>A new empty List&lt;T&gt; for the element type, when the build registered one; otherwise false and a null list.</summary>
     public static bool TryNewList(Type element, out IList list)
     {
         lock (sLock)
@@ -129,6 +139,7 @@ public static class ManagedFields
         return false;
     }
 
+    /// <summary>The component of the type on the object, when the build registered a lookup; otherwise false and null.</summary>
     public static bool TryComponent(GameObject owner, Type type, out object? component)
     {
         lock (sLock)

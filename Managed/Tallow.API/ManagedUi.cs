@@ -10,8 +10,11 @@ namespace Tallow;
 /// </summary>
 public sealed class ManagedUiHandler
 {
+    /// <summary>The handler for a name with no argument, when the method takes none.</summary>
     public Func<object, object?>? NoArgument { get; init; }
+    /// <summary>The handler that receives the clicked element.</summary>
     public Action<object, UIElement>? WithElement { get; init; }
+    /// <summary>The handler that receives the element's id as text.</summary>
     public Action<object, string>? WithString { get; init; }
 }
 

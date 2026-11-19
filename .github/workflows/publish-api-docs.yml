@@ -25,14 +25,16 @@ jobs:
           ref: gh-pages
           path: site
           persist-credentials: true
-      # main publishes at the site's root; the ECS engine (0.2 series) under ecs/, so the website's API page
-      # can show either. When ecs becomes main, its index moves to the root with no change here.
+      # main is the C# engine (0.3): its index is generated from the C# gameplay API (Managed/Tallow.API and
+      # Managed/Tallow.Editor), at the site's root. Other branches (the retired 0.2 ECS branch) still index their
+      # Beef declarations under their branch name.
       - name: Generate static API index
         run: |
           out=site
-          if [ "${{ github.ref_name }}" != main ]; then out="site/${{ github.ref_name }}"; mkdir -p "$out"; fi
+          kind=beef
+          if [ "${{ github.ref_name }}" != main ]; then out="site/${{ github.ref_name }}"; mkdir -p "$out"; else kind=csharp; fi
           echo "API_OUT=${out#site}" >> "$GITHUB_ENV"
-          python3 engine/tools/generate_api_docs.py --root engine --output "$out" --commit "${{ github.sha }}"
+          python3 engine/tools/generate_api_docs.py --root engine --output "$out" --commit "${{ github.sha }}" --kind "$kind"
       - name: Publish only generated API files
         working-directory: site
         run: |

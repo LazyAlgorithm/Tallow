@@ -91,6 +91,11 @@ def main():
             player_command = [os.environ.get('BEEFBUILD', 'BeefBuild'), '-workspace=Player', '-config=Release', f'-platform={target}', '-verbosity=minimal']
         player.unlink(missing_ok=True)  # Beef does not notice changed native archives
         subprocess.run(player_command, cwd=root, env=environment, check=True)
+        # The C# API bindings (Managed/Tallow.API/Generated/CSharpBindings.g.cs and the matching Beef source) are
+        # generated from the checked-in [CSharpExpose] manifest and are gitignored, so a fresh checkout has none.
+        subprocess.run(['dotnet', 'run', '--project', 'Managed/Tallow.BindingGen/Tallow.BindingGen.csproj',
+                        '--', '--manifest', 'Tests/CSharpExpose/fixture.tsv', '--engine-root', '.'],
+                       cwd=root, env=environment, check=True)
         for project in ('Tallow.ManagedRuntime', 'Tallow.Editor'):
             subprocess.run(['dotnet', 'build', str(root / f'Managed/{project}/{project}.csproj'),
                             '--configuration', 'Debug', '--nologo', '--verbosity', 'minimal'], check=True)
@@ -119,7 +124,7 @@ def main():
         # C# gameplay: the API and runtime projects games compile against, the build tool, the editor scripts' API
         # (Tallow.Editor), and the runtime and editor API built.
         managed_ignore = shutil.ignore_patterns('bin', 'obj', '__pycache__')
-        for name in ('Tallow.API', 'Tallow.ManagedRuntime', 'Tallow.Editor', 'Tallow.Build', 'Tallow.Analyzers'):
+        for name in ('Tallow.API', 'Tallow.ManagedRuntime', 'Tallow.Editor', 'Tallow.Build', 'Tallow.LanguageService', 'Tallow.Analyzers'):
             if (root / 'Managed' / name).is_dir():
                 shutil.copytree(root / 'Managed' / name, stage / 'Managed' / name, ignore=managed_ignore)
         for name in ('Tallow.ManagedRuntime', 'Tallow.Editor'):
@@ -132,7 +137,7 @@ def main():
         for name in ('BeefSpace.toml', 'icon.png', 'LICENSE', 'THIRD_PARTY_LICENSES.txt'):
             shutil.copy2(root / name, stage / name)
         (stage / 'tools').mkdir()
-        for name in ('build_player.py', 'test_csharp_export.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'toolchain.txt', 'setup_dependencies.ps1', 'setup_dependencies.sh'):
+        for name in ('build_player.py', 'test_csharp_export.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'dotnet_sdk.py', 'ship_symbols.py', 'csharp_native.py', 'toolchain.txt', 'setup_dependencies.ps1', 'setup_dependencies.sh'):
             shutil.copy2(root / 'tools' / name, stage / 'tools' / name)
         shutil.copy2(root / 'tools/beef_language_service.py', stage / 'tools/beef_language_service.py')
         # Script reloads compile with the Beef compiler kept loaded (built on first use from the sources of the user's

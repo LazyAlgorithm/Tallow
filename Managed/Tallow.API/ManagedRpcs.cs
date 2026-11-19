@@ -10,6 +10,7 @@ namespace Tallow;
 /// </summary>
 public sealed class ManagedRpc
 {
+    /// <summary>Describes one [Rpc] method: where it runs, its parameter types, and how to call it (or why it cannot be).</summary>
     public ManagedRpc(RpcTarget target, Type[] parameters, Action<object, object?[]>? invoke, string? error)
     {
         Target = target;
@@ -18,7 +19,9 @@ public sealed class ManagedRpc
         Error = error;
     }
 
+    /// <summary>Where the method runs (server, client, or both).</summary>
     public RpcTarget Target { get; }
+    /// <summary>The method's parameter types, in order.</summary>
     public Type[] Parameters { get; }
     /// <summary>Calls the method on a script instance with one already-parsed value per parameter.</summary>
     public Action<object, object?[]>? Invoke { get; }

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Generate a mobile-friendly, static Beef API index from the checked-out engine source.
+"""Generate a mobile-friendly, static API index from the checked-out engine source.
+
+--kind beef (the default) indexes the engine's Beef declarations; --kind csharp indexes the C# gameplay API
+(Managed/Tallow.API and Managed/Tallow.Editor), which is what 0.3 games and editor scripts are written against.
 
 No third-party Python dependencies. This is a declaration index, not a semantic
 compiler model; source links are authoritative. Fails on empty indexes.
@@ -21,6 +24,65 @@ function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':
 function render(){let q=input.value.trim().toLowerCase(),found=q?DATA.filter(x=>(x[0]+' '+x[1]).toLowerCase().includes(q)):DATA;status.textContent=found.length+' matching declarations'+(found.length>150?' (showing first 150; type to narrow)':'');out.innerHTML=found.slice(0,150).map(x=>'<article><code>'+escapeHTML(x[0])+'</code><small><a href="https://github.com/LazyAlgorithm/Tallow/blob/__COMMIT__/'+x[1].split('/').map(encodeURIComponent).join('/')+'#L'+x[2]+'" target="_blank" rel="noopener">'+escapeHTML(x[1])+':'+x[2]+'</a></small></article>').join('')}
 input.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(render,100)});render();
 </script></body></html>"""
+
+CS_DECL = re.compile(
+    r"^\s*public\s+(?:(?:static|sealed|abstract|partial|readonly|const|override|virtual|async|extern|new|unsafe)\s+)*"
+    r"(?:[\w.<>,\[\]?*() ]+\s+)?(?:operator\s*\S+|this\[|\w+)\s*(?:\(|=>|=|;|\{|\[)")
+CS_TYPE = re.compile(
+    r"^\s*public\s+(?:(?:static|sealed|abstract|partial|readonly|unsafe)\s+)*"
+    r"(?:class|struct|record|record struct|interface|enum|delegate)\s+\w+")
+
+
+def csharp_files(root):
+    files = []
+    for folder in ("Managed/Tallow.API", "Managed/Tallow.Editor"):
+        for path in sorted((root / folder).rglob("*.cs")):
+            text = path.as_posix()
+            if "/bin/" in text or "/obj/" in text:
+                continue
+            files.append(path)
+    return files
+
+
+def generate_csharp(root, output, commit):
+    entries = []
+    files = csharp_files(root)
+    if not files:
+        raise SystemExit("No C# API sources (Managed/Tallow.API, Managed/Tallow.Editor); refusing empty API output")
+    for path in files:
+        rel = path.relative_to(root).as_posix()
+        try:
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise SystemExit(f"Cannot read {rel}: {exc}")
+        in_comment = False
+        for number, line in enumerate(content.splitlines(), 1):
+            trimmed = line.strip()
+            if in_comment:
+                if "*/" in trimmed:
+                    in_comment = False
+                continue
+            if trimmed.startswith("/*"):
+                if "*/" not in trimmed:
+                    in_comment = True
+                continue
+            if not trimmed or trimmed.startswith(("//", "*", "#", "[")):
+                continue
+            if CS_TYPE.match(line) or CS_DECL.match(line):
+                entries.append([trimmed.split("//", 1)[0][:300], rel, number])
+    if len(entries) < 100:
+        raise SystemExit(f"Only {len(entries)} declarations found; refusing suspicious API output")
+    write_index(entries, len(files), output, commit, "C#")
+
+
+def write_index(entries, source_files, output, commit, what):
+    entries.sort(key=lambda x: (x[0].casefold(), x[1], x[2]))
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "api-index.json").write_text(json.dumps({"commit": commit, "source_files": source_files, "declarations": entries}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    page = TEMPLATE.replace("__DATA__", json.dumps(entries, ensure_ascii=False).replace("</", "<\\/")).replace("__COUNT__", str(len(entries))).replace("__FILES__", str(source_files)).replace("__COMMIT__", html.escape(commit, quote=True)).replace("the Tallow engine's Beef declarations", f"the Tallow engine's {what} declarations")
+    (output / "api.html").write_text(page, encoding="utf-8")
+    print(f"Generated {len(entries)} declarations from {source_files} {what} files in {output}")
+
 
 def generate(root, output, commit):
     entries = []
@@ -50,17 +112,17 @@ def generate(root, output, commit):
                 entries.append([trimmed.split("//", 1)[0][:300], rel, number])
     if len(entries) < 100:
         raise SystemExit(f"Only {len(entries)} declarations found; refusing suspicious API output")
-    entries.sort(key=lambda x: (x[0].casefold(), x[1], x[2]))
-    output.mkdir(parents=True, exist_ok=True)
-    (output / "api-index.json").write_text(json.dumps({"commit": commit, "source_files": len(files), "declarations": entries}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    page = TEMPLATE.replace("__DATA__", json.dumps(entries, ensure_ascii=False).replace("</", "<\\/")).replace("__COUNT__", str(len(entries))).replace("__FILES__", str(len(files))).replace("__COMMIT__", html.escape(commit, quote=True))
-    (output / "api.html").write_text(page, encoding="utf-8")
-    print(f"Generated {len(entries)} declarations from {len(files)} Beef files in {output}")
+    write_index(entries, len(files), output, commit, "Beef")
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--commit", required=True)
+    p.add_argument("--kind", choices=("beef", "csharp"), default="beef",
+                   help="beef: the engine's Beef declarations; csharp: the C# gameplay API (0.3)")
     a = p.parse_args()
-    generate(a.root.resolve(), a.output.resolve(), a.commit)
+    if a.kind == "csharp":
+        generate_csharp(a.root.resolve(), a.output.resolve(), a.commit)
+    else:
+        generate(a.root.resolve(), a.output.resolve(), a.commit)

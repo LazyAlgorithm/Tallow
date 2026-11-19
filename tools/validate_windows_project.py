@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Compile a packaged editor project with spaces in engine, compiler and project paths.
+"""Build a packaged editor's C# project with spaces in engine, compiler and project paths.
 
-Uses real Windows executables, on Windows or through --wine. No graphics required.
+0.3 removed Beef gameplay: a new project is C#, and its game ships as a player
+(tools/build_player.py) on the package's precompiled Windows player, so no Beef compiler is
+needed to build the game. Uses real Windows executables, on Windows or through --wine. No graphics required.
 """
 import argparse
 import os
 from pathlib import Path
 import shutil
-import subprocess
 import struct
+import subprocess
+import sys
 import tempfile
-import tomllib
 
 
 def link_or_copy(source, target):
@@ -63,31 +65,45 @@ def main():
         return result
 
     run(['--create', target(project)], 'create')
+    # The empty template's start scene is built on first editor open, which this headless test never does; write a minimal one.
+    (project / 'src' / 'Scenes').mkdir(parents=True, exist_ok=True)
+    (project / 'src' / 'Scenes' / 'Main.tscene').write_text('scene "Main"\n', encoding='utf-8')
     # A moved project remembers an engine from another computer. Opening must relocate it.
-    # Source-project relocation is separate from immutable package pins.
     (project / 'tallow-engine.lock.json').unlink(missing_ok=True)
     settings = project / 'project.tallow'
     settings.write_text('\n'.join('engine = Z:/missing-engine' if line.startswith('engine =') else line
                                   for line in settings.read_text().splitlines()) + '\n')
     run(['--build-project', target(project)], 'compile')
-    executable = project / 'build/Debug_Win64/OpenProjectSmoke/OpenProjectSmoke.exe'
+
+    # The game is a C# player (tools/build_player.py) on the package's precompiled Windows player.
+    build_player = [sys.executable, str(package / 'tools' / 'build_player.py'), str(project),
+                    '--output', str(work / 'Built'), '--platform', 'windows', '--csharp-runtime', 'jit']
+    result = subprocess.run(build_player, env=environment, text=True, capture_output=True, timeout=600)
+    (work / 'build-game.log').write_text(result.stdout + result.stderr)
+    if result.returncode != 0:
+        print(result.stdout + result.stderr)
+        raise RuntimeError(f'build_player failed; evidence: {work}')
+    executable = work / 'Built' / 'OpenProjectSmoke.exe'
     assert_gui(executable)
-    flags = tomllib.loads((project / 'BeefProj.toml').read_text())['Configs']['Debug']['Win64']['OtherLinkFlags']
-    assert '"' in flags and 'Tallow Hub' in flags, flags
     assert 'missing-engine' not in settings.read_text(), 'Moved project did not relocate its engine'
-    # The existing executable is moved aside during rebuild. Verify the second build succeeds too.
-    run(['--build-project', target(project)], 'rebuild')
+
+    # A second build replaces the first; it must succeed too.
+    result = subprocess.run(build_player + ['--replace'], env=environment, text=True, capture_output=True, timeout=600)
+    (work / 'rebuild-game.log').write_text(result.stdout + result.stderr)
+    if result.returncode != 0:
+        print(result.stdout + result.stderr)
+        raise RuntimeError(f'rebuild failed; evidence: {work}')
     assert executable.is_file()
-    # Failed compilation must keep both its log and the last working editor executable.
+
+    # Failed compilation must keep its log and the last working game executable.
     previous = executable.read_bytes()
-    broken = project / 'src/Scripts/IntentionallyBroken.bf'
-    broken.write_text('this is deliberately invalid Beef source;\n')
+    broken = project / 'src/Scripts/IntentionallyBroken.cs'
+    broken.write_text('this is deliberately invalid C# source;\n', encoding='utf-8')
     result = run(['--build-project', target(project)], 'compile-failure', success=False)
-    assert 'The project did not compile:' in result.stdout, 'GUI launcher lost redirected CLI errors'
-    assert 'ERROR' in (project / 'build/build.log').read_text(), 'Compiler failure log was lost'
+    assert 'compilation failed' in result.stdout, 'GUI launcher lost redirected CLI errors'
     assert executable.read_bytes() == previous, 'Failed rebuild lost the working executable'
     broken.unlink()
-    print(f'PASS: GUI subsystem, packaged Windows create/relocate/compile/rebuild with spaces, failure output and executable recovery; evidence: {work}')
+    print(f'PASS: GUI subsystem, packaged Windows C# create/relocate/compile/game-build/rebuild with spaces; evidence: {work}')
 
 
 if __name__ == '__main__':

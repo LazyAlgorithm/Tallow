@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/csharp-gameplay
+      - main
   pull_request:
     paths:
       - 'Managed/**'
