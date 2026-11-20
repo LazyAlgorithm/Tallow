@@ -309,19 +309,12 @@ class LauncherApp : Application
 			}
 			return true;
 		}
-		let basePath = SDL.SDL_GetBasePath();
-		if (basePath == null)
-		{
-			error.Set("Could not find the precompiled Tallow editor executable.");
-			return false;
-		}
-		let exe = scope String(basePath);
-#if BF_PLATFORM_WINDOWS
-		exe.Append("TallowLauncher.exe");
-#else
-		exe.Append("TallowLauncher");
-#endif
-		if (!File.Exists(exe))
+		// This program is the precompiled editor too: it links TallowEditor and takes --editor. Start the file
+		// that is running rather than a name guessed beside it, so packaged builds (Tallow.exe, Tallow) work
+		// wherever they are extracted, and renamed copies still do.
+		let exe = scope String();
+		Environment.GetExecutableFilePath(exe);
+		if (exe.IsEmpty || !File.Exists(exe))
 		{
 			error.Set(scope $"Precompiled Tallow editor not found at {exe}.");
 			return false;
