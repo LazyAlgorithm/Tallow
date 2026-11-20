@@ -138,9 +138,16 @@ jobs:
   windows:
     runs-on: windows-2022
     timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
     env:
       # The build scripts read and write UTF-8 text, whatever the machine's own code page.
       PYTHONUTF8: '1'
+      # Sign releases with SignPath when this repository is set up for it (docs/windows.md). Without the
+      # repository variable the build stays unsigned, so forks and dev pushes keep working.
+      SIGN_RELEASES: ${{ vars.SIGNPATH_PROJECT_SLUG != '' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ecs' || github.ref == 'refs/heads/release' || inputs.publish) }}
     defaults:
       run:
         shell: bash tallow/.github/scripts/step.sh {0}
@@ -228,7 +235,54 @@ jobs:
           python tools/package_engine.py --platform windows --folder ../out/Tallow-Windows
           python tools/validate_windows_project.py --package ../out/Tallow-Windows --beef "$BEEFBUILD" --work ../project-open-test
           python tools/validate_showcase.py --package ../out/Tallow-Windows --work ../showcase-test
-          cd ../out && 7z a -tzip -mx=9 Tallow-Windows.zip Tallow-Windows > /dev/null
+
+      # Microsoft Defender SmartScreen and Smart App Control block an unsigned editor. SignPath Foundation
+      # (free for open-source projects) signs Tallow.exe in its HSM; the record of the signing request and the
+      # certificate are in SignPath's audit log. Set up the project, policy and artifact configuration there
+      # (an example is in .signpath/artifact-configuration.xml), then add the secrets and variables named below.
+      - name: Upload the package for signing
+        id: sign-upload
+        if: env.SIGN_RELEASES == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tallow-Windows-unsigned
+          path: out/Tallow-Windows
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign Tallow.exe
+        if: env.SIGN_RELEASES == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.sign-upload.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+          wait-for-completion-timeout-in-seconds: 1200
+
+      - name: Put the signed editor in place
+        if: env.SIGN_RELEASES == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          # SignPath returns the artifact extracted, or still in a zip depending on the configuration.
+          $zip = Get-ChildItem -LiteralPath signed -Recurse -Filter *.zip -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if ($zip) { Expand-Archive -LiteralPath $zip.FullName -DestinationPath (Join-Path signed "extracted") -Force }
+          $root = if (Test-Path (Join-Path signed "extracted")) { Join-Path signed "extracted" } else { signed }
+          $exe = Get-ChildItem -LiteralPath $root -Recurse -Filter Tallow.exe | Select-Object -First 1
+          if (-not $exe) { throw "SignPath returned no Tallow.exe" }
+          $signature = Get-AuthenticodeSignature -LiteralPath $exe.FullName
+          if ($signature.Status -eq "NotSigned") { throw "SignPath returned Tallow.exe without a signature" }
+          Write-Host "Signed Tallow.exe: $($signature.Status), $($signature.SignerCertificate.Subject)"
+          Copy-Item -LiteralPath $exe.FullName -Destination out/Tallow-Windows/Tallow.exe -Force
+
+      - name: Zip the package
+        run: cd out && 7z a -tzip -mx=9 Tallow-Windows.zip Tallow-Windows > /dev/null
 
       - name: Keep the zip
         uses: actions/upload-artifact@v4
@@ -250,11 +304,18 @@ jobs:
       - name: Determine beta version
         run: echo "TALLOW_VERSION=$(bash tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
 
+      # Only the finished zips: the unsigned package a signing run uploads for SignPath stays out of the release.
       - name: Get the zips
         uses: actions/download-artifact@v4
         with:
+          name: Tallow-Windows
           path: out
-          merge-multiple: true
+
+      - name: Get the Linux zip
+        uses: actions/download-artifact@v4
+        with:
+          name: Tallow-Linux
+          path: out
 
       - name: Release
         env:

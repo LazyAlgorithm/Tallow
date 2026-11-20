@@ -93,3 +93,35 @@ Engine CI starts on pushes to `dev` and `main`: both build platform packages and
 ### Large collision meshes
 
 Physics mesh conversion allocates its vertex buffer on the heap and frees it after Jolt builds the shape. Imported bedroom meshes exceeded the default 1 MB Windows stack; the previous stack allocation failed in `_chkstk` while loading the room. The ShapeQueries integration test now builds a 100,000-vertex mesh and checks its collision response; Linux and Windows under Wine pass with the normal stack reserve.
+
+## Windows SmartScreen, Smart App Control and Defender
+
+Windows checks downloaded programs three ways: SmartScreen ("Windows protected your PC — Unknown publisher"), Smart App Control (Windows 11: unsigned programs do not run at all) and Defender's heuristics, which false-positive new unsigned executables. An Authenticode signature from a publicly trusted certificate clears the first two, and greatly reduces the third; reputation accumulates per certificate, so a newly signed program can still warn until it has been downloaded a number of times. Sign every release with the same identity.
+
+### The engine's releases
+
+Releases are signed through **SignPath Foundation**, which signs open-source projects for free and keeps the private key in its HSM (Windows shows "SignPath Foundation" as the publisher). A signing key cannot be a `.pfx` file in CI: publicly trusted keys must live in FIPS 140-2 Level 2 hardware or a cloud service.
+
+1. Apply at signpath.org. Create a project (suggested slug `tallow`), a signing policy (suggested `release-signing`) and an artifact configuration (suggested `windows-engine`) from `.signpath/artifact-configuration.xml`.
+2. In the repository: Settings > Secrets and variables > Actions. Add the variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG` and `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`, and the secret `SIGNPATH_API_TOKEN`.
+3. Push to `main`, `ecs` or `release`, push a `v*` tag, or run the workflow by hand with publish on.
+
+The Windows job uploads the package, submits `Tallow.exe` to SignPath, waits for the signed copy, checks it with `Get-AuthenticodeSignature`, puts it back in the package and only then zips it. Without `SIGNPATH_PROJECT_SLUG` the package is built unsigned, so forks and `dev` pushes keep working.
+
+`TallowPlayer.exe` is deliberately not signed. A C# game is that executable copied and renamed, so signing it would put the engine's publisher identity on every game made with Tallow — and on anything else someone packaged with it. Signing a game is its publisher's job.
+
+### Signing a game
+
+A game is a new executable on the player's machine. It gets its own signature, from its publisher's certificate (Azure Artifact Signing, a commercial OV certificate, or an HSM-backed service). Timestamp it so the signature outlives the certificate:
+
+```bat
+signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /sha1 <certificate thumbprint> MyGame.exe
+```
+
+Keep the certificate for later releases: SmartScreen reputation is per certificate. Steam and the Microsoft Store handle trust for launches through their own clients; games shipped as bare downloads do not get that.
+
+### While developing
+
+- Right-click a downloaded zip > Properties > Unblock before extracting; Explorer marks every extracted file. PowerShell: `Get-ChildItem -Recurse | Unblock-File`.
+- Defender may quarantine a freshly built unsigned executable. On a development machine only, add the engine and project folders under Windows Security > Virus & threat protection > Manage settings > Exclusions, and submit the file to Microsoft as a false positive. Never ship a game that needs an exclusion.
+- If saving under `Documents` fails, Controlled Folder Access is blocking the program: allow Tallow, or keep projects in `%USERPROFILE%\TallowProjects`.

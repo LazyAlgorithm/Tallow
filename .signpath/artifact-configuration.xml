@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Windows engine package.
+
+  CI uploads out/Tallow-Windows with actions/upload-artifact, which puts the folder's contents at the root of
+  the artifact zip (the folder name itself is not kept), and SignPath wraps that artifact as the root <zip-file>.
+
+  Only Tallow.exe is signed. TallowPlayer.exe is deliberately left alone: a C# game is a copy of it renamed, so
+  signing it would put Tallow's publisher identity on every game made with Tallow, and let anyone repackage
+  malware under that signature. Games are signed by their own developers; see docs/windows.md.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="Tallow.exe">
+      <authenticode-sign/>
+    </pe-file>
+  </zip-file>
+</artifact-configuration>
