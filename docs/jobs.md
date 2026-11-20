@@ -13,7 +13,9 @@ Parallel.For(0, targets.Length, i => scores[i] = Score(targets[i]));   // plain 
 
 Engine (Beef) code has `Jobs.For(count, body)`, which runs `body(i)` on the engine's worker threads and the calling thread together, with `chunk`, `minimum`, `Jobs.ThreadIndex` and `Jobs.ThreadCount`.
 
-The engine has one worker for each core but two (one is the calling thread's; the rest leave room for the physics and audio threads), up to 15. `TALLOW_JOB_THREADS=N` caps the threads sharing a batch at N, the calling one included (a server sharing its machine, or checking that results do not depend on the thread count). They start the first time a batch is big enough to share and sleep between batches. Web builds and one-core machines have none: everything runs on the calling thread.
+The engine has one worker for each core but two (one is the calling thread's; the rest leave room for the physics and audio threads), up to 15. `TALLOW_JOB_THREADS=N` caps the threads sharing a batch at N, the calling one included (a server sharing its machine, or checking that results do not depend on the thread count). They start the first time a batch is big enough to share and sleep between batches. One-core machines have none: everything runs on the calling thread.
+
+Web builds spread work over the page's cores too when the module has threads and the page is cross-origin isolated (shared memory). A Beef web player is threaded by default (`TALLOW_WEB_THREADS=0` leaves them out); a C# one is single-threaded by default and `TALLOW_WEB_THREADS=1` adds them. See docs/web.md for the page's headers and what changes with threads (the game runs on .NET's deputy worker, with WebGL and the page's calls proxied to its thread).
 
 ## What uses them
 

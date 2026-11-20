@@ -11,6 +11,8 @@ extension EditorApp
 {
 	// The row pressed with the left button, selected when the button is let go over it (0: none, or it became a drag).
 	uint32 mHierarchyPressed;
+	/// Where the Hierarchy is docked, so the UI editor's element tree can sit beside it.
+	uint32 mHierarchyDock;
 	uint32 mHierarchyDoubleClicked;
 	uint32 mHierarchyRenaming;
 	String mHierarchyRenameText = new .() ~ delete _;
@@ -45,6 +47,9 @@ extension EditorApp
 		mHierarchyFocused = false;
 		if (ImGui.Begin("Hierarchy"))
 		{
+			let hierarchyDock = ImGui.GetWindowDockID();
+			if (hierarchyDock != 0)
+				mHierarchyDock = hierarchyDock;
 			mHierarchyFocused = ImGui.IsWindowFocused(ImGui.HoveredFlags.ChildWindows);
 			DrawPrefabBar();
 			if (ImGui.Button("+"))
@@ -217,6 +222,8 @@ extension EditorApp
 					mSelectedId = gameObject.Id;
 					AttachManagedScriptAsset(gameObject, absolute);
 				}
+				else if (HasExtension(relative, ".tmat"))
+					DropMaterialOn(gameObject, relative);
 			}
 			ImGui.EndDragDropTarget();
 		}

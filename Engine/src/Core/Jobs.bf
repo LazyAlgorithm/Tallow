@@ -10,7 +10,8 @@ namespace Tallow;
 /// a batch is big enough to share.
 ///
 /// Called while another For is running (from a body, or a second thread), the work runs on the calling thread.
-/// Web builds, and machines with one core, have no workers and run everything on the calling thread.
+/// A machine with one core has no workers and runs everything on the calling thread. Web builds spread work over
+/// the page's cores too, when the build has threads and the page allows shared memory (see WebPlatform.ThreadsAvailable).
 public static class Jobs
 {
 	static List<Thread> sThreads = new .() ~ delete _;
@@ -25,6 +26,8 @@ public static class Jobs
 	static int32 sChunk;
 	static int32 sNext;
 	static int32 sFinished;
+	/// How many workers have begun running (a page that allows no more threads leaves one unstarted: see Start).
+	static int32 sStartedWorkers;
 	[ThreadStatic]
 	static int32 sThreadIndex;
 	/// The marker the workers' time is shown under in the Profiler: the one open where For was called, or -1.
@@ -50,27 +53,54 @@ public static class Jobs
 		if (sStarted)
 			return;
 		sStarted = true;
-#if !BF_PLATFORM_WASM
-		let cores = (int32)Platform.BfpSystem_GetNumLogicalCPUs(null);
+		// Web builds share the page's cores only when the build has threads and the page allows them (see
+		// WebPlatform.ThreadsAvailable); otherwise everything runs on the calling thread.
+		if (!WebPlatform.ThreadsAvailable)
+			return;
+		var cores = WebPlatform.HardwareThreads;
 		// One core is the calling thread's; a few are left for the physics and audio threads.
 		var workers = Math.Clamp(cores - 2, 0, 15);
+#if !BF_PLATFORM_WASM
 		// TALLOW_JOB_THREADS=N caps the threads sharing a batch (the calling one included): a server sharing its machine,
 		// or a test showing that results do not depend on the thread count.
 		let limit = scope String();
 		if (Environment.GetEnvironmentVariable("TALLOW_JOB_THREADS", limit) case .Ok && int32.Parse(limit) case .Ok(let threads) && threads >= 1)
 			workers = Math.Min(workers, threads - 1);
+#endif
 		for (int i < workers)
 		{
 			let wake = new WaitEvent();
-			sWake.Add(wake);
 			let index = (int32)i + 1;
+			sWake.Add(wake);
 			let thread = new Thread(new () => Work(wake, index));
 			thread.IsBackground = true;
 			thread.SetName(scope $"Tallow Job {i}");
 			thread.Start(false);
+			// A web page allows only so many threads at once (its pool of workers): when it refuses this one, the
+			// thread never runs. Wait for it to report in, and drop it if it never does, so that a batch is never
+			// shared with a worker that cannot take its part.
+			if (!WorkerStarted((int32)i + 1))
+			{
+				// Not deleted: a thread the runtime never started is left to the page (it is small, and once).
+				sWake.Remove(wake);
+				delete wake;
+				break;
+			}
 			sThreads.Add(thread);
 		}
-#endif
+	}
+
+	/// Waits, briefly, for a just-started worker to report in (Work counts them). A thread the runtime never started
+	/// (the page's workers are all in use) never does, and the caller goes on without it.
+	static bool WorkerStarted(int32 expected)
+	{
+		for (int spins = 0; spins < 200; spins++)
+		{
+			if (Interlocked.Load(ref sStartedWorkers) >= expected)
+				return true;
+			Thread.Sleep(1);
+		}
+		return Interlocked.Load(ref sStartedWorkers) >= expected;
 	}
 
 	/// Programs that never call Application.Shutdown (tools, tests) stop the workers on the way out.
@@ -98,6 +128,7 @@ public static class Jobs
 	static void Work(WaitEvent wake, int32 index)
 	{
 		sThreadIndex = index;
+		Interlocked.Increment(ref sStartedWorkers);
 		Profiler.NameThread(scope $"Job {index}");
 		while (true)
 		{

@@ -114,6 +114,46 @@ extension EditorApp
 			Log.Info(scope $"MODEL-TEST FAIL: {report}");
 			return;
 		}
+		// A ramp climbs the long way of its base, towards where the drag went; Turn draws it again the other way.
+		{
+			mModelDrawKeep = false;
+			mModelDrawKind = (int32)MeshShapes.Kind.Wedge;
+			mModelDraw = .Height;
+			mModelDrawFrom = .(8, 0, -1);
+			mModelDrawTo = .(14, 0, 1);
+			mModelDrawHeight = 2;
+			FinishShape();
+			let ramp = Selected;
+			let rampModel = ramp.GetComponent<ModelMesh>();
+			let at = ramp.Transform.Position;
+			let longWay = MeshOps.VolumeCentre(rampModel.Edit);
+			mUndoPending = false;
+			CommitSceneStep();
+			TurnModelShape(rampModel, 3);
+			let otherWay = MeshOps.VolumeCentre(rampModel.Edit);
+			Expect(rampModel.BlockoutKind == (int32)MeshShapes.Kind.Wedge && longWay.x > 0.9f && otherWay.x < -0.9f && (ramp.Transform.Position - at).Length < 0.001f, scope $"a ramp climbs along the longer side, and Turn draws it again the other way ({longWay.x:0.0} -> {otherWay.x:0.0})");
+			// The shape and the way it climbs are saved with the model: undo takes the turn off and redo puts it back.
+			mUndoPending = false;
+			CommitSceneStep();
+			Undo();
+			let rampId = ramp.Id;
+			let undone = GameObject.ComponentOn<ModelMesh>(mScene.FindById(rampId));
+			var undoneWay = Vector3.Zero;
+			var undoneClimb = -2;
+			if (undone.IsValid)
+			{
+				undoneWay = MeshOps.VolumeCentre(undone.Edit);
+				undoneClimb = undone.BlockoutSettings.climb;
+			}
+			Redo();
+			let redone = GameObject.ComponentOn<ModelMesh>(mScene.FindById(rampId));
+			var redoneClimb = -2;
+			if (redone.IsValid)
+				redoneClimb = redone.BlockoutSettings.climb;
+			Expect(undone.IsValid && undoneClimb == 1 && undoneWay.x > 0.9f && redoneClimb == 3, scope $"undo takes the turn off, redo puts it back ({undone.IsValid} climb {undoneClimb} at {undoneWay.x:0.0}, redone {redoneClimb})");
+			mScene.DestroyImmediate(mScene.FindById(rampId));
+			mModelDrawKind = (int32)MeshShapes.Kind.Box;
+		}
 		mUndoPending = false;
 		CommitSceneStep();
 
@@ -447,6 +487,22 @@ extension EditorApp
 	{
 		let shape = MeshShapes.Create(.Box, .() { size = .(2, 2, 2) });
 		defer delete shape;
+		// Ramps and stairs climb the longer side of their base unless told which way.
+		{
+			let ramp = MeshShapes.Create(.Wedge, .() { size = .(6, 2, 2) });
+			let rampCentre = MeshOps.VolumeCentre(ramp);
+			let turned = MeshShapes.Create(.Wedge, .() { size = .(2, 2, 6), climb = 2 });
+			let turnedCentre = MeshOps.VolumeCentre(turned);
+			let turnedBounds = turned.Bounds;
+			let stairs = MeshShapes.Create(.Stairs, .() { size = .(2, 2, 6), steps = 4 });
+			let stairsCentre = MeshOps.VolumeCentre(stairs);
+			expect(ramp.IsClosed() && Math.Abs(rampCentre.x) > 0.9f && Math.Abs(rampCentre.z) < 0.01f, scope $"a ramp climbs along the longer side of its base ({rampCentre.x:0.0})");
+			expect(turned.IsClosed() && turnedCentre.z < -0.9f && Math.Abs(turnedBounds.max.x - turnedBounds.min.x - 2) < 0.001f && Math.Abs(turnedBounds.max.z - turnedBounds.min.z - 6) < 0.001f, scope $"a ramp climbs the way it is told ({turnedCentre.z:0.0})");
+			expect(stairs.IsClosed() && stairsCentre.z > 0.3f && Math.Abs(stairsCentre.x) < 0.001f, scope $"stairs climb along the longer side of their base ({stairsCentre.z:0.0})");
+			delete ramp;
+			delete turned;
+			delete stairs;
+		}
 		let made = CreateModelObject("Tool Box", shape, .(-5, 0, 0));
 		let model = made.GetComponent<ModelMesh>();
 		StartModelEditing(made);

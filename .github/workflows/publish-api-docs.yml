@@ -20,11 +20,20 @@ jobs:
         with:
           path: engine
           persist-credentials: false
-      - uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: site
-          persist-credentials: true
+      # The branch holds only the generated API reference. Recreate it when it is gone, so deleting it never leaves
+      # the site's API page without an index.
+      - name: Check out the API site branch, or start it
+        env:
+          SITE_URL: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        run: |
+          if git ls-remote --exit-code --heads "$SITE_URL" gh-pages >/dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$SITE_URL" site
+          else
+            mkdir site
+            git -C site init -q -b gh-pages
+            git -C site remote add origin "$SITE_URL"
+            : > site/.nojekyll
+          fi
       # main is the C# engine (0.3): its index is generated from the C# gameplay API (Managed/Tallow.API and
       # Managed/Tallow.Editor), at the site's root. Other branches (the retired 0.2 ECS branch) still index their
       # Beef declarations under their branch name.
@@ -40,7 +49,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ".${API_OUT}/api.html" ".${API_OUT}/api-index.json"
+          : > .nojekyll
+          git add ".${API_OUT}/api.html" ".${API_OUT}/api-index.json" .nojekyll
           if ! git diff --cached --quiet; then
             git commit -m "docs: refresh generated API reference (${{ github.ref_name }}) for ${{ github.sha }}"
             git push origin HEAD:gh-pages

@@ -249,6 +249,15 @@ internal static class GameThread
         {
             failure = exception;
         }
+        // Where the platform has no threads, work handed to Background runs here, a little each frame.
+        try
+        {
+            failure = Background.Pump() ?? failure;
+        }
+        catch (Exception exception)
+        {
+            failure ??= exception;
+        }
         failure = sContext.Run() ?? failure;
         sFrame++;
         if (failure != null)

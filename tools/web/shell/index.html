@@ -87,7 +87,31 @@ html, body {
 	</div>
 </div>
 <script>
-(() => {
+(async () => {
+	// Whether the module has threads (tools/build_player.py writes this from TALLOW_WEB_THREADS).
+	const THREADS = {{THREADS}};
+	// A threaded build needs the page to be cross-origin isolated (shared memory). A host that sets the COOP and COEP
+	// headers (a server of your own, Cloudflare Pages, Netlify) already is, and the game starts at once; where it
+	// cannot (GitHub Pages, itch.io, a plain folder on a web server) coi-serviceworker.js adds them, and the page
+	// reloads once when it takes over. A single-threaded build needs none of this.
+	let askedBefore = false;
+	try { askedBefore = sessionStorage.getItem("coi-reload") === "1"; } catch (error) {}
+	if (THREADS && !crossOriginIsolated && window.isSecureContext && "serviceWorker" in navigator && !askedBefore) {
+		try { sessionStorage.setItem("coi-reload", "1"); } catch (error) {}
+		try {
+			await navigator.serviceWorker.register("coi-serviceworker.js", { scope: "./" });
+			if (!navigator.serviceWorker.controller) {
+				await new Promise((resolve) => {
+					navigator.serviceWorker.addEventListener("controllerchange", resolve, { once: true });
+					setTimeout(resolve, 1500);
+				});
+				location.reload();
+				return;
+			}
+		} catch (error) {
+			// No service worker here (an old browser, a page that does not allow one): carry on.
+		}
+	}
 	const gate = document.getElementById("gate");
 	const fill = document.getElementById("fill");
 	const status = document.getElementById("status");
@@ -121,6 +145,17 @@ html, body {
 		gate.classList.add("failed");
 		show(text);
 	};
+
+	// A threaded module's memory is shared, which a page may only use when it is cross-origin isolated. The
+	// service worker above adds the headers where the host cannot; when neither could, say why rather than fail at
+	// load with a WebAssembly error.
+	if (THREADS && !window.crossOriginIsolated) {
+		fail("This game's threads need a cross-origin isolated page: serve it with the Cross-Origin-Opener-Policy and " +
+			"Cross-Origin-Embedder-Policy headers (Cross-Origin-Opener-Policy: same-origin, " +
+			"Cross-Origin-Embedder-Policy: require-corp), or allow the page's service worker so coi-serviceworker.js " +
+			"can add them.");
+		return;
+	}
 
 	if (!document.createElement("canvas").getContext("webgl2")) {
 		fail("This browser can't run the game: it needs WebGL 2. Try a current Chrome, Edge, Firefox or Safari.");
@@ -170,7 +205,9 @@ html, body {
 		printErr: (text) => console.warn(text),
 		preRun: [() => {
 			addRunDependency("tallow-files");
-			FS.mkdir(SAVE_FOLDER);
+			// A folder that is already there is not an error (a mount may have made it, or a second start).
+			if (!FS.analyzePath(SAVE_FOLDER).exists)
+				FS.mkdir(SAVE_FOLDER);
 			FS.mount(IDBFS, {}, SAVE_FOLDER);
 			const restored = new Promise((resolve) => FS.syncfs(true, () => resolve()));
 			Promise.all([pack, restored]).then(([data]) => {
@@ -242,7 +279,14 @@ html, body {
 		const start = async () => {
 			const { dotnet } = await import("./{{SCRIPT}}");
 			const { preRun, arguments: args, ...settings } = window.Module;
-			const runtime = await dotnet.withModuleConfig(settings).withApplicationArguments(...args).create();
+			// .NET's worker pool, created here up front: a worker added after start-up (by the game's own thread) never
+			// receives its runtime configuration, so the pool must cover every thread the game will use. The build
+			// caps the cores .NET sees at 8 (tools/web/csharp_web.py), and three workers per core plus a few spare
+			// cover the engine's jobs, the game's tasks and .NET's own threads. Extra workers are never added.
+			const webCores = Math.max(2, Math.min(navigator.hardwareConcurrency || 4, 8));
+			const runtime = await dotnet.withModuleConfig(settings)
+				.withConfig({ pthreadPoolInitialSize: webCores * 3 + 8, pthreadPoolUnusedSize: 0 })
+				.withApplicationArguments(...args).create();
 			fs = runtime.Module.FS;
 			fs.mkdir(SAVE_FOLDER);
 			fs.mount(fs.filesystems.IDBFS, {}, SAVE_FOLDER);

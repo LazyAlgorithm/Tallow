@@ -36,6 +36,8 @@ Double-click still frames the object in the Scene view.
 
 A prefab, a model or a map piece dragged from the Project panel over the Scene view is shown there before you let go. It is the object itself, standing on whatever surface the mouse points at (with snapping when it is on). Let go to place it: it is selected, as one undo step. Drag it back out of the view, or let go anywhere else, and it is gone again, with nothing to undo.
 
+A **material** (`.tmat`) dragged over the Scene view goes on the object under the pointer: its box lights up and the pointer names it ("Material for Crate"). Letting go sets that object's Mesh Renderer material (slot 0 of a model), as one undo step; it can also be dropped onto a Hierarchy row. On an object with no Mesh Renderer nothing happens, and the Console says so.
+
 Other assets dropped on the Scene view do what they did before: a scene opens, an image becomes the selected object's texture, and an interface (`.tui`) becomes an object with a UI Document.
 
 ## Test
@@ -47,6 +49,8 @@ Other assets dropped on the Scene view do what they did before: a scene opens, a
 - clicks in both still select;
 - the lock;
 - a prefab's preview while dragged, where it lands, and that it is one undo step;
+- a material dragged onto an object in the Scene view showing that object and then going on its Mesh Renderer;
+- a script name typed into the Create Asset popup and made with its Create button (not Enter);
 - that a drag which leaves the view leaves nothing behind.
 - that Delete belongs to the panel it is pressed in: the Project panel asks to delete its selected asset, the
   Inspector deletes nothing, and the Hierarchy (or Scene view) deletes the selected object.

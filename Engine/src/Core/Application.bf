@@ -418,6 +418,8 @@ class Application
 				Native.tn_gfx_screenshot(mScreenshotPath.CStr());
 			sPresentMarker.Begin();
 			bgfx.frame(0);
+			// A threaded web build draws into an offscreen framebuffer; this copies the frame to the page's canvas.
+			Native.tn_gfx_commit_frame();
 			Profiler.End();
 		}
 		else

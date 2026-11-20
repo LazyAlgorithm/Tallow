@@ -132,6 +132,9 @@ extension EditorApp
 		}
 
 		Add(.Wait, null, null, 20);
+		// The Scene tab in front: a saved layout may leave another tab (Scripts, the game) over it.
+		Add(.Run, null, new () => ImGui.SetWindowFocus("Scene"));
+		Add(.Wait, null, null, 3);
 		// The editor must take the queued mouse: under X11 the SDL backend reads the real pointer every frame instead.
 		Add(.Move, new () => ImGui.Vec2(mSceneOrigin.x + 20, mSceneOrigin.y + 20), null, 2);
 		Add(.Wait, null, null, 2);
@@ -211,6 +214,48 @@ extension EditorApp
 		Add(.Release);
 		Add(.Wait, null, null, 4);
 		Add(.Run, null, new () => DragExpect(mDropPreview == null && SceneObjects() == mDragObjects, "dragged away and let go elsewhere, the preview is gone"));
+
+		// A material dragged from Project onto an object in the Scene view goes on its Mesh Renderer.
+		Add(.Run, null, new () =>
+			{
+				mBrowsePath.Set(scope $"{Assets.ProjectPath}/Materials");
+			});
+		Add(.Wait, null, null, 4);
+		Add(.Run, null, new () => DragExpect(TestRectCenter("asset:Materials/brass.tmat").x >= 0, "the Project panel shows the material"));
+		Drag(new () => TestRectCenter("asset:Materials/brass.tmat"), new () => ScenePoint(target.Transform.Position), new () =>
+			{
+				DragExpect(mDropMaterialTarget == target.Id, "dragged over the view, a material shows the object it would go on");
+			});
+		Add(.Run, null, new () =>
+			{
+				let renderer = target.GetComponent<MeshRenderer>();
+				DragExpect(renderer.material == "Materials/brass.tmat", scope $"dropped, the object takes the material ({renderer.material})");
+			});
+		Add(.Run, null, new () =>
+			{
+				mBrowsePath.Set(scope $"{Assets.ProjectPath}/Prefabs");
+			});
+		Add(.Wait, null, null, 4);
+		// Typing a script's name and pressing Create (not Enter) uses what was typed.
+		Add(.Run, null, new () =>
+			{
+				mNewItemKind = 1;
+				mNewItemName.Clear();
+				mOpenNewItem = true;
+			});
+		Add(.Wait, null, null, 3);
+		Click(new () => TestRectCenter("create-name"));
+		Add(.Run, null, new () => ImGui.QueueText("UiTyping"));
+		Add(.Wait, null, null, 3);
+		Click(new () => TestRectCenter("create-asset"));
+		Add(.Wait, null, null, 6);
+		Add(.Run, null, new () =>
+			{
+				let made = scope $"{mBrowsePath}/UiTyping.cs";
+				DragExpect(File.Exists(made), "a script name typed and made with the Create button is kept");
+				File.Delete(made).IgnoreError();
+				RefreshAssetList();
+			});
 
 		// Delete belongs to the panel it is pressed in.
 		void PressKey(int32 key)

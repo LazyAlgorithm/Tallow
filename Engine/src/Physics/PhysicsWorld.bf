@@ -316,8 +316,9 @@ class PhysicsWorld
 			config.maxJobs = 2048;
 			config.maxBarriers = 8;
 #if BF_PLATFORM_WASM
-			// A web page has one thread: jobs run on it while the physics step waits for them.
-			config.numThreads = 0;
+			// A page without threads (or a build without them) runs the jobs on its one thread; with threads the
+			// step spreads over the page's cores, a couple of which are left for the rest of the engine.
+			config.numThreads = WebPlatform.ThreadsAvailable ? (int32)Math.Clamp(WebPlatform.HardwareThreads - 2, 0, 3) : 0;
 #else
 			config.numThreads = 3;
 #endif

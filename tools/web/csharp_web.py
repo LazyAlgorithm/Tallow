@@ -30,13 +30,62 @@ RUNTIME_METHODS = ('FS,out,err,ccall,cwrap,setValue,getValue,UTF8ToString,UTF8Ar
                    'stringToUTF8Array,FS_createPath,FS_createDataFile,removeRunDependency,addRunDependency,addFunction,'
                    'safeSetTimeout,runtimeKeepalivePush,runtimeKeepalivePop,maybeExit,abort,HEAP8,HEAP16,HEAPU8,HEAPU16,'
                    'HEAP32,HEAPU32,HEAPF32,HEAPF64,HEAP64,HEAPU64,wasmExports,wasmTable')
-# As the Beef web player links (build_player.WEB_LINK_FLAGS), where .NET does not already: WebGL 2 only, the browser's
-# storage for saved files, a large stack (Beef code keeps a lot on it). -matomics: Beef's Interlocked compiles to
-# atomic instructions, valid without shared memory (no threads are started).
-LINK_FLAGS = ('-matomics', '-mbulk-memory', '-sUSE_WEBGL2=1', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3=1',
-              '-lidbfs.js', '-sINITIAL_MEMORY=268435456', f'-sEXPORTED_RUNTIME_METHODS={RUNTIME_METHODS}',
-              # The browser glue (native/tallow_web.c) is JavaScript the linker only takes from the archive when asked.
-              '-Wl,-u,tn_web_free')
+
+
+def link_flags():
+    """How .NET's link line is added to: the engine's needs (see above, plus PThread when the build has threads: the
+    threaded .NET runtime pools its workers through it)."""
+    methods = RUNTIME_METHODS + (',PThread' if threads_enabled() else '')
+    return ('-matomics', '-mbulk-memory', '-sUSE_WEBGL2=1', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3=1',
+            '-lidbfs.js', '-sINITIAL_MEMORY=268435456', f'-sEXPORTED_RUNTIME_METHODS={methods}',
+            # The browser glue (native/tallow_web.c) is JavaScript the linker only takes from the archive when asked.
+            '-Wl,-u,tn_web_free')
+
+# Threads: the engine's job system, its asset loading and physics spread over the page's cores (see
+# Engine/src/Core/Jobs.bf and WebPlatform.ThreadsAvailable). A threaded module has shared memory, which a browser
+# only allows on a cross-origin isolated page (tools/web/shell/coi-serviceworker.js adds the headers where the host
+# cannot).
+
+
+def threads_enabled():
+    """Whether a C# game's web build has threads. TALLOW_WEB_THREADS=1 turns them on; off by default, which keeps the
+    single-threaded page every browser can run.
+
+    With threads, .NET's runtime runs the game on its deputy Web Worker (the managed main thread), not the page's
+    thread. The engine reaches the browser through the page: Emscripten's offscreen framebuffer proxies its WebGL
+    calls to the page, and native/tallow_web.c sends the engine's DOM and page-callback calls there too. SDL already
+    registers its input callbacks for the thread that created the window. The page must be cross-origin isolated
+    (shared memory): see coi-serviceworker.js and docs/web.md."""
+    return os.environ.get('TALLOW_WEB_THREADS', '0').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def managed_threads_enabled():
+    """Whether .NET's own threading is on. Tied to the module's threads: .NET's single-threaded runtime refuses a
+    threaded module ("the threads of dotnet.native.js true is different from the version of dotnet.runtime.js
+    false"), so the two are always set together."""
+    return threads_enabled()
+
+
+def beef_player_threads_enabled():
+    """Whether a Beef game's web player (tools/build_player.py, tools/web/build_native.sh) has threads: on by
+    default. Beef's program keeps running on the page's main thread (the engine's window and WebGL stay there), and
+    only the work it hands to worker threads leaves it: the job system, asset loading and physics."""
+    return os.environ.get('TALLOW_WEB_THREADS', '1').strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+# The stack each thread gets, and (for a Beef player) the pool size, a JavaScript expression with no spaces: the
+# link line is split on them. Each thread starts with a 1 MB stack (the default would be the 8 MB main stack).
+#
+# A C# game passes pool=False. Emscripten would create its pool from PTHREAD_POOL_SIZE before .NET's runtime runs,
+# and .NET replaces PThread.allocateUnusedWorker later with one that gives each worker a message queue; workers made
+# before that have none, and .NET fails on every one ("e.queue is not iterable"). .NET creates its own pool instead
+# (pthreadPoolInitialSize, set by the page in tools/web/shell/index.html).
+def thread_link_flags(pool=True):
+    flags = ['-pthread', '-sDEFAULT_PTHREAD_STACK_SIZE=1048576']
+    if pool:
+        size = os.environ.get('TALLOW_WEB_PTHREADS', 'navigator.hardwareConcurrency+6').strip().replace(' ', '')
+        flags.append(f'-sPTHREAD_POOL_SIZE={size}')
+    return tuple(flags)
 
 
 def dotnet_root():
@@ -92,26 +141,33 @@ def natives_folder(engine):
 
 
 def build_natives(engine, env):
-    """The engine's native libraries, built with the workload's Emscripten (their objects must match .NET's)."""
+    """The engine's native libraries, built with the workload's Emscripten (their objects must match .NET's).
+    Always compiled with -pthread: one build serves both a threaded module and a single-threaded one (Emscripten
+    links such objects either way), and whether a game's module has threads is decided at its link. The flag is
+    passed every run so a cached value never disagrees with the module being built."""
     out = natives_folder(engine)
     subprocess.run([sys.executable, str(engine / 'tools' / 'patch_textedit.py')], check=True, env=env)
-    subprocess.run(['emcmake', 'cmake', '-S', str(engine / 'native'), '-B', str(out), '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release'],
-                   check=True, env=env)
+    flags = ['-DCMAKE_C_FLAGS=-pthread', '-DCMAKE_CXX_FLAGS=-pthread']
+    subprocess.run(['emcmake', 'cmake', '-S', str(engine / 'native'), '-B', str(out), '-G', 'Ninja',
+                    '-DCMAKE_BUILD_TYPE=Release', *flags], check=True, env=env)
     subprocess.run(['cmake', '--build', str(out), '-j', str(os.cpu_count() or 4), '--target', 'tallow_native', 'bgfx', 'bimg',
                     'bimg_decode', 'bx', 'SDL3-static', 'joltc', 'Jolt', 'enet'], check=True, env=env)
 
 
 def beef_runtime(engine, env):
-    """Beef's WebAssembly runtime, as .NET's link needs it. Its WasmCommon.o defines a stand-in _Unwind_GetIP (for
-    builds without unwinding); .NET links the real one (libunwind, for WebAssembly exceptions), so the copy here
-    renames the stand-in (a name of the same length) and every other caller gets the real one."""
+    """Beef's WebAssembly runtime, as .NET's link needs it. With threads it is the runtime built for them
+    (Beef*RT32_wasm_pthread.a). Its WasmCommon.o defines a stand-in _Unwind_GetIP (for builds without unwinding);
+    .NET links the real one (libunwind, for WebAssembly exceptions), so the copy here renames the stand-in (a name
+    of the same length) and every other caller gets the real one."""
     beef = shutil.which(os.environ.get('BEEFBUILD', 'BeefBuild'))
     if not beef:
         raise SystemExit('BeefBuild was not found: put it on PATH or set BEEFBUILD.')
     dist = Path(os.path.realpath(beef)).parent
-    source = next(iter(sorted(dist.glob('Beef*RT32_wasm.a'))), None)
+    pattern = 'Beef*RT32_wasm_pthread.a' if threads_enabled() else 'Beef*RT32_wasm.a'
+    source = next(iter(sorted(dist.glob(pattern))), None)
     if source is None:
-        raise SystemExit(f'Beef\'s WebAssembly runtime is missing from {dist}: run {engine / "tools/web/setup.sh"} once.')
+        raise SystemExit(f'Beef\'s WebAssembly runtime ({pattern}) is missing from {dist}: '
+                         f'run {engine / "tools/web/setup.sh"} once, or wasm/build_wasm.sh in Beef.')
     target = engine / 'build' / 'web-player' / (source.stem + '_dotnet.a')
     if target.is_file() and target.stat().st_mtime >= source.stat().st_mtime:
         return target
@@ -200,6 +256,15 @@ def build(engine, project, config, staging):
                              f'    <TrimmerRootAssembly Include="{x(dll.stem)}" />\n' for dll in game_assemblies(project, config))
         natives_items = ''.join(f'    <NativeFileReference Include="{x(path)}" />\n' for path in
                                 [app / 'tallowengine.c', library, runtime] + [natives / lib for lib in NATIVE_LIBS])
+        threads = threads_enabled()
+        managed = managed_threads_enabled()
+        # No Emscripten pool: .NET's runtime builds the pool itself (see thread_link_flags). The offscreen framebuffer
+        # lets the game (on .NET's deputy worker) draw through the page's WebGL context, proxied to its thread;
+        # explicit swap control supplies the commit that copies the offscreen frame to the page's canvas each frame.
+        thread_flags = (' '.join(thread_link_flags(pool=False)) +
+                        ' -sOFFSCREEN_FRAMEBUFFER=1 -sGL_SUPPORT_EXPLICIT_SWAP_CONTROL=1 ') if threads else ''
+        threads_property = ('    <!-- .NET\'s own threads (System.Threading); see managed_threads_enabled. -->\n'
+                            '    <WasmEnableThreads>true</WasmEnableThreads>\n') if managed else ''
         (app / 'TallowWeb.csproj').write_text(f'''<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
   <PropertyGroup>
     <TargetFramework>net{DOTNET_MAJOR}.0</TargetFramework>
@@ -209,7 +274,7 @@ def build(engine, project, config, staging):
     <Nullable>enable</Nullable>
     <WasmBuildNative>true</WasmBuildNative>
     <EmccStackSize>8388608</EmccStackSize>
-    <EmccExtraLDFlags>{x(' '.join(LINK_FLAGS))}</EmccExtraLDFlags>
+{threads_property}    <EmccExtraLDFlags>{x(thread_flags + ' '.join(link_flags()))}</EmccExtraLDFlags>
     <!-- Every file is served as it is: GitHub Pages and itch.io do not serve the precompressed copies. -->
     <CompressionEnabled>false</CompressionEnabled>
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -219,7 +284,7 @@ def build(engine, project, config, staging):
     <!-- The interpreter finds Tallow's and the game's code by reflection (the registry, the signatures). -->
     <TrimmerRootAssembly Include="Tallow.ManagedRuntime" />
     <TrimmerRootAssembly Include="Tallow.API" />
-{references}    <!-- .NET's own pass after linking: the engine's code uses atomic instructions (see LINK_FLAGS). -->
+{references}    <!-- .NET's own pass after linking: the engine's code uses atomic instructions (see link_flags). -->
     <WasmOptConfigurationFlags Include="--enable-threads" />
 {natives_items}  </ItemGroup>
 </Project>
@@ -231,8 +296,36 @@ def build(engine, project, config, staging):
             problems = [line for line in result.stdout.splitlines() if ' error ' in line or 'undefined symbol' in line or 'error:' in line]
             raise SystemExit('The C# web build failed:\n' + '\n'.join(problems[-30:] or result.stdout.splitlines()[-40:]))
         shutil.copytree(published / 'wwwroot' / '_framework', staging / '_framework')
+        if threads:
+            cap_runtime_cores(staging / '_framework' / 'dotnet.js')
     size = sum(file.stat().st_size for file in (staging / '_framework').rglob('*') if file.is_file())
     print(f'C# for the web: .NET bundle {size // (1024 * 1024)} MB')
+
+
+def cap_runtime_cores(loader):
+    """Caps the cores .NET's runtime sees at 8, in every thread it starts.
+
+    .NET reads the machine's core count (navigator.hardwareConcurrency) when its runtime starts on the deputy worker,
+    and a game asks for that many threads (Tallowcraft's chunk workers, for one). A WebAssembly thread is a Web
+    Worker: a game asking a 24-core machine for 23 chunk threads, beside the engine's own, over-subscribes the page
+    and cuts its frame rate. .NET cannot add workers to its pool after start-up either (a worker added by the game's
+    thread never receives its runtime configuration), so the page pre-creates the pool up front (index.html) and
+    this cap keeps the demand within it. Eight is as many threads as a browser game can use well.
+
+    The cap has to run inside each worker before its runtime starts; the loader (dotnet.js) is the script every
+    worker and the page run first, so a few lines at its top do it there. Applying it twice is harmless; a build that
+    already carries it is left alone."""
+    text = loader.read_text(encoding='utf-8')
+    marker = '/* Tallow: cap the cores .NET sees'
+    if marker in text:
+        return
+    prelude = marker + ''' (see tools/web/csharp_web.py). */
+try {
+    var tallowCores = Math.max(2, Math.min((typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 4, 8));
+    Object.defineProperty(navigator, "hardwareConcurrency", { get: function () { return tallowCores; }, configurable: true });
+} catch (error) {}
+'''
+    loader.write_text(prelude + text, encoding='utf-8')
 
 
 def setup(engine):

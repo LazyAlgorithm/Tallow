@@ -13,6 +13,9 @@ static class WebPlatform
 	[CLink] static extern void emscripten_cancel_main_loop();
 	[CLink] static extern int32 tn_web_is_touch_device();
 	[CLink] static extern int32 tn_web_is_mobile();
+	[CLink] static extern int32 tn_web_hardware_threads();
+	[CLink] static extern int32 tn_web_threads_available();
+	[CLink] static extern int32 tn_web_built_with_threads();
 	[CLink] static extern void tn_web_copy_text(char8* text);
 	[CLink] static extern void tn_web_share_text(char8* title, char8* text);
 	[CLink] static extern char8* tn_web_page_url();
@@ -36,6 +39,7 @@ static class WebPlatform
 	public static void RunMainLoop(Application app)
 	{
 		sApp = app;
+		Log.Info(scope $"Web threads: {HardwareThreads} (threaded: {ThreadsAvailable})");
 		tn_web_loading_done();
 		// fps 0: follow the display (requestAnimationFrame). simulateInfiniteLoop 1: leave Run here for good, so
 		// nothing the caller made on its stack is torn down while the game is still using it.
@@ -57,6 +61,14 @@ static class WebPlatform
 	public static bool IsTouchDevice => tn_web_is_touch_device() != 0;
 	/// True on a phone or tablet: a weaker graphics chip and less memory than a desktop.
 	public static bool IsMobile => tn_web_is_mobile() != 0;
+
+	/// How many threads the browser can run at once (the machine's cores), always at least 1.
+	public static int32 HardwareThreads => Math.Max(tn_web_hardware_threads(), 1);
+
+	/// Whether the page allows threads (a build with threads needs a cross-origin isolated page: see
+	/// coi-serviceworker.js), and this build has them. A single-threaded build, or a page that may not share memory,
+	/// runs everything on the one thread, as web games did before.
+	public static bool ThreadsAvailable => tn_web_built_with_threads() != 0 && tn_web_threads_available() != 0;
 
 	/// Puts text on the clipboard (the browser allows this while handling a click or a key press).
 	public static void CopyText(StringView text) => tn_web_copy_text(scope String(text).CStr());
@@ -110,6 +122,8 @@ static class WebPlatform
 	public static void RunMainLoop(Application app) { }
 	public static bool IsTouchDevice => false;
 	public static bool IsMobile => false;
+	public static int32 HardwareThreads => Math.Max((int32)Platform.BfpSystem_GetNumLogicalCPUs(null), 1);
+	public static bool ThreadsAvailable => true;
 	public static void CopyText(StringView text) => SDL.SDL_SetClipboardText(scope String(text).CStr());
 	public static void ShareText(StringView title, StringView text) => CopyText(text);
 	public static void GetPageUrl(String outUrl) { }

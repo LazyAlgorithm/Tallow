@@ -32,6 +32,8 @@ extension EditorApp
 		"The whole model: mirror, repeat, clean up, origin, booleans, levels of detail and saving as a file.");
 	/// Labels without a key sit in the middle of their button (tabs, switches) instead of on the left (tool lists).
 	bool mModelCentreLabels;
+	/// Ways a ramp or stairs can climb, in MeshShapes.ClimbDirection's numbers: +Z, +X, -Z and -X.
+	static StringView[4] sClimbNames = .("+Z", "+X", "-Z", "-X");
 
 	ModelTab mModelTab;
 	/// The tab the program wants shown (-1: leave it to the user).
@@ -668,6 +670,7 @@ extension EditorApp
 					StartShapeDrawing(selected.Id);
 			}
 			ModelTip("Cut a Hole", "", "Draw the shape above through this model and it is cut out of it: doors, windows, pits and trenches. With Keep drawing on, cut one after another.");
+			DrawModelShapeTurn(model);
 			ModelNote("Mirror, booleans and the origin are on the Model tab.");
 		}
 		else if (selected != null && selected.HasComponent<MeshRenderer>())
@@ -684,6 +687,51 @@ extension EditorApp
 		if (ImGui.Button(mShowModelViews ? "Close Model Views" : "Open Model Views (four views)", .(-1, 0)))
 			mShowModelViews = mFocusModelViews = !mShowModelViews;
 		ModelHint("Top, Front, Left and Perspective side by side, for lining things up.");
+	}
+
+	/// A ramp or stairs drawn in the Blockout tab climbs along the longer side of its base, towards where the drag
+	/// went: these buttons turn it the other way and draw the shape again if that was wrong.
+	void DrawModelShapeTurn(ModelMesh model)
+	{
+		let kind = model.BlockoutKind;
+		if (kind != (int32)MeshShapes.Kind.Wedge && kind != (int32)MeshShapes.Kind.Stairs)
+			return;
+		ImGui.Text("Climbs");
+		ImGui.SameLine();
+		let climbing = model.BlockoutSettings.climb;
+		ModelGridBegin(60, 4);
+		for (int32 direction < 4)
+		{
+			let width = ModelGridNext();
+			ImGui.PushID(direction);
+			if (ModelButton("##climb", sClimbNames[direction], "", width, direction == climbing))
+				TurnModelShape(model, direction);
+			ModelTip(scope $"Climbs {sClimbNames[direction]}", "", "Draws the shape again climbing this way, where it was and at the size it was drawn. Changes made to its faces are lost.");
+			ImGui.PopID();
+		}
+	}
+
+	/// Draws a ramp or stairs again climbing the way asked for (0 +Z, 1 +X, 2 -Z, 3 -X), at the size it was drawn and
+	/// where the model was (its origin may have been moved since).
+	void TurnModelShape(ModelMesh model, int32 direction)
+	{
+		let kind = (MeshShapes.Kind)model.BlockoutKind;
+		if (kind != .Wedge && kind != .Stairs)
+			return;
+		let was = model.Edit.Bounds.Center;
+		var settings = model.BlockoutSettings;
+		settings.climb = direction;
+		let shape = MeshShapes.Create(kind, settings);
+		defer delete shape;
+		let move = was - shape.Bounds.Center;
+		if (move.LengthSquared > 1.0e-10f)
+		{
+			for (var p in ref shape.positions)
+				p = p + move;
+		}
+		model.BlockoutSettings = settings;
+		model.Set(shape);
+		CommitModel(model);
 	}
 
 	// ------------------------------------------------------------------ Edit

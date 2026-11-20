@@ -876,6 +876,7 @@ extension EditorApp
 			ImGui.Text(mNewItemKind == 0 ? "Folder name" : (mNewItemKind == 1 ? "Script / ECS component type name" : (mNewItemKind == 3 ? "Graph name (becomes the component's class name)" : (mNewItemKind == 6 ? "Behavior tree name" : (mNewItemKind == 7 ? "Animator controller name" : (mNewItemKind == 8 ? "Animation clip name" : (mNewItemKind == 9 ? "Material name" : (mNewItemKind == 10 ? "Shader name" : (mNewItemKind == 11 ? "Compute shader name" : (mNewItemKind == 12 ? "Shader graph name" : (mNewItemKind == 16 ? "Shader subgraph name" : (mNewItemKind == 14 ? "Dialogue name" : (mNewItemKind == 15 ? "Sequence name" : "Scene name")))))))))))));
 			ImGui.SetNextItemWidth(300);
 			let enter = ImGui.InputText("##newname", mNewItemName, ImGui.InputFlags.EnterReturnsTrue);
+			NoteTestRect("create-name");
 			if (mNewItemKind == 1)
 				ImGui.TextDisabled("Created in the current Project folder; script changes are detected automatically.");
 			if (ImGui.Button("Create", .(120, 0)) || enter)
@@ -883,6 +884,7 @@ extension EditorApp
 				CreateAsset();
 				ImGui.CloseCurrentPopup();
 			}
+			NoteTestRect("create-asset");
 			ImGui.SameLine();
 			if (ImGui.Button("Cancel", .(120, 0)))
 				ImGui.CloseCurrentPopup();
@@ -1129,6 +1131,37 @@ extension EditorApp
 	/// Whether dragging an asset over the Scene view shows it there before it is dropped: prefabs, models and map pieces.
 	static bool PreviewsInScene(StringView relative) => MapPieces.IsPiece(relative) || HasExtension(relative, ".tprefab") || IsModelFile(relative);
 
+	/// While a material is dragged over the Scene view: the object under the pointer is boxed (mDropMaterialTarget,
+	/// drawn by the gizmos), and named by the pointer, so it is clear what the material would go on.
+	void ShowMaterialDropTarget(float u, float v)
+	{
+		let target = PickObject(u, v);
+		var renderer = default(MeshRenderer);
+		if (target != null)
+			renderer = target.GetComponent<MeshRenderer>();
+		mDropMaterialTarget = renderer ? target.Id : 0;
+		var label = scope String();
+		if (renderer)
+			label.AppendF("Material for {}", target.Name);
+		else
+			label.Append("Drop on an object that draws a mesh");
+		ImGui.DrawText(.(ImGui.GetMousePos().x + 16, ImGui.GetMousePos().y + 12), .(1, 0.85f, 0.4f, 0.95f), label.CStr());
+	}
+
+	/// Gives an object the material dragged from Project onto it: the Mesh Renderer's Material, which model pieces use
+	/// for slot 0. Marks the scene dirty, so the drop is one undo step.
+	void DropMaterialOn(GameObject target, StringView relative)
+	{
+		let renderer = target.GetComponent<MeshRenderer>();
+		if (!renderer)
+		{
+			Log.Info(scope $"{target.Name} has no Mesh Renderer: drop the material on an object that draws a mesh.");
+			return;
+		}
+		renderer.material.Set(relative);
+		MarkDirty();
+	}
+
 	/// While a prefab or model is dragged over the Scene view: makes it (once), and stands it where the mouse points.
 	/// It is an ordinary object already, so what is seen is what is dropped; nothing is selected until it is.
 	void ShowDropPreview(StringView relative, float u, float v)
@@ -1217,6 +1250,16 @@ extension EditorApp
 
 	void DropAssetIntoScene(StringView relative, bool useViewportPoint, float u, float v)
 	{
+		if (HasExtension(relative, ".tmat"))
+		{
+			// Onto the object under the pointer in the Scene view, or (from the Hierarchy) the selected one.
+			let target = useViewportPoint ? PickObject(u, v) : Selected;
+			if (target != null)
+				DropMaterialOn(target, relative);
+			else
+				Log.Info("Drop a material onto an object with a Mesh Renderer.");
+			return;
+		}
 		if (relative.EndsWith(".tscene"))
 		{
 			OpenScene(scope $"{Assets.ProjectPath}/{relative}");

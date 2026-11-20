@@ -71,7 +71,6 @@ extension EditorApp
 		DrawAnimation();
 		DrawHandPosing();
 		DrawBoneMap();
-		DrawUIEditor();
 		DrawPopups();
 		DrawProjectSettings();
 		DrawBuildWindow();
@@ -88,6 +87,9 @@ extension EditorApp
 		DrawLightingWindow();
 		DrawRigWindow();
 		DrawExtensionWindows();
+		// Last, so that its windows dock after the Hierarchy, the Inspector and the Scene view's tabs, which stay
+		// the selected tabs.
+		DrawUIEditor();
 		CommitUndoWhenIdle();
 		if (mShowScene)
 		{
@@ -358,6 +360,14 @@ extension EditorApp
 			{
 				mShowSequencer = true;
 				mDockSequencer = true;
+			}
+			if (mShowUI)
+			{
+				// The UI editor's own panels, which dock after the Hierarchy and the Inspector.
+				if (ImGui.MenuItem("UI Elements", null, mShowUITree))
+					mShowUITree = !mShowUITree;
+				if (ImGui.MenuItem("UI Properties", null, mShowUIProps))
+					mShowUIProps = !mShowUIProps;
 			}
 			if (ImGui.MenuItem("Model Views", null, mShowModelViews))
 				mShowModelViews = mFocusModelViews = !mShowModelViews;

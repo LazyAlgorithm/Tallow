@@ -13,7 +13,9 @@ namespace Tallow;
 ///   let batch = AssetLoader.Preload("Models/tank.glb", "Textures/camo.png");
 ///   ... later: if (batch.IsDone) ...   batch.Progress goes from 0 to 1
 ///
-/// In a browser, which has no threads here, the same work is done on the main thread, within the same budget.
+/// In a browser the engine spreads this work over the page's cores when the build has threads and the page allows
+/// shared memory (see WebPlatform.ThreadsAvailable); otherwise the same work is done on the main thread, within the
+/// same budget.
 static class AssetLoader
 {
 	public enum Kind
@@ -178,7 +180,8 @@ static class AssetLoader
 
 	static void StartThreads()
 	{
-#if !BF_PLATFORM_WASM
+		if (!WebPlatform.ThreadsAvailable)
+			return;
 		if (sThreads.Count > 0)
 			return;
 		for (int i < 2)
@@ -188,7 +191,6 @@ static class AssetLoader
 			thread.Start(false);
 			sThreads.Add(thread);
 		}
-#endif
 	}
 
 	/// The loading threads' part: read and decode, touching nothing the main thread uses.
@@ -251,24 +253,25 @@ static class AssetLoader
 	{
 		let start = SDL.SDL_GetTicksNS();
 		let budget = (uint64)(Math.Max(UploadBudget, 0.5f) * 1000000);
-#if BF_PLATFORM_WASM
-		// No loading threads: do their part here too, within the budget.
-		while (SDL.SDL_GetTicksNS() - start < budget)
+		if (sThreads.IsEmpty)
 		{
-			Job job = null;
-			using (sMonitor.Enter())
+			// No loading threads (a page without shared memory): do their part here too, within the budget.
+			while (SDL.SDL_GetTicksNS() - start < budget)
 			{
-				if (sQueue.Count == 0)
-					break;
-				job = sQueue[0];
-				sQueue.RemoveAt(0);
+				Job job = null;
+				using (sMonitor.Enter())
+				{
+					if (sQueue.Count == 0)
+						break;
+					job = sQueue[0];
+					sQueue.RemoveAt(0);
+				}
+				Work(job);
+				job.finished = true;
+				using (sMonitor.Enter())
+					sFinished.Add(job);
 			}
-			Work(job);
-			job.finished = true;
-			using (sMonitor.Enter())
-				sFinished.Add(job);
 		}
-#endif
 		while (true)
 		{
 			Job job = null;

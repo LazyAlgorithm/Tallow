@@ -72,8 +72,9 @@ struct VoxelObjectData
 /// edges are softened, so raise Resolution for fine models and keep thin sheets as ordinary meshes.
 ///
 /// Collision: with a MeshCollider and no Rigidbody the object has exact (static) triangle
-/// collision. Jolt cannot simulate moving triangle meshes, so pieces that break off collide
-/// with a convex hull wrapped around their surface.
+/// collision. Jolt cannot simulate moving triangle meshes, so what moves (an object that is not Anchored, and the
+/// pieces that break off) collides as boxes over its grid: a hole carved through it stays open. To begin with, a
+/// moving piece is one convex hull round its surface, until it is carved itself.
 ///
 /// A handle (ComponentHandle): its settings are VoxelObjectData's fields, what it keeps between frames its VoxelObjectState.
 /// VoxelObject.FrameAll (from Scene.RunOnFrames) does what OnRegister and OnFrame did; OnRemove what OnUnregister did.
@@ -785,7 +786,8 @@ class VoxelObjectState
 		}
 	}
 
-	/// Keeps collision in step with the surface: a Box Collider is fitted to it, and the body or collider remade.
+	/// Keeps collision in step with the surface: a Box Collider is fitted to it, a moving object's collision parts
+	/// are made again from the grid, and the body or collider remade.
 	void RefreshCollision()
 	{
 		let boxCollider = GetComponent<BoxCollider>();
@@ -794,6 +796,8 @@ class VoxelObjectState
 			boxCollider.center = mMesh.Bounds.Center;
 			boxCollider.size = Vector3.Max(mMesh.Bounds.Extents * 2.0f, .(0.05f));
 		}
+		if (mUsesCompounds)
+			RefreshCompound();
 		let body = GetComponent<Rigidbody>();
 		if (body.IsValid)
 			body.RebuildBody();
@@ -857,13 +861,16 @@ class VoxelObjectState
 			SplitLoosePieces();
 		if (!anchored && Scene.IsPlaying)
 			MakeDynamic();
+		// What moves collides as parts that follow the grid, so a hole carved through it stays open.
+		if (Scene.IsPlaying && HasComponent<Rigidbody>())
+			UseCompoundCollision();
 		Rebuild();
 		if (IsEmpty && Scene.IsPlaying)
 			Scene.Destroy(GameObject);
 		return true;
 	}
 
-	/// Swaps static triangle collision for a convex body so what is left of the object can fall and roll.
+	/// Swaps static triangle collision for a body so what is left of the object can fall and roll.
 	void MakeDynamic()
 	{
 		if (HasComponent<Rigidbody>())
@@ -871,8 +878,6 @@ class VoxelObjectState
 		let staticCollider = GetComponent<MeshCollider>();
 		if (staticCollider != null)
 			GameObject.RemoveComponent(staticCollider);
-		if (GetComponent<Collider>() == null)
-			GameObject.AddComponent<ConvexCollider>();
 		int32 solid = 0;
 		for (let d in mDensity)
 		{
@@ -883,6 +888,88 @@ class VoxelObjectState
 		body.mass = Math.Max(0.5f, solid * 0.02f);
 		// In multiplayer every machine carves at the same moment, so they all start sharing its motion from here.
 		NetworkSync.EnsureShared(GameObject);
+	}
+
+	/// Whether its collision comes from the grid (set the first time it moves).
+	bool mUsesCompounds;
+
+	/// A body that collides as one convex hull round the whole thing fills whatever is carved out of it. This swaps
+	/// that hull (pieces are made with one) for parts that follow the grid (RefreshCompound), so a hole carved
+	/// through the object stays open.
+	void UseCompoundCollision()
+	{
+		if (GetComponent<CompoundCollider>() == null)
+		{
+			let previous = GetComponent<Collider>();
+			if (previous != null)
+			{
+				// The hull the engine wrapped round the surface gives way; a shape the game picked stays as it is.
+				if (!(previous is ConvexCollider))
+					return;
+				let surfaceName = scope String(previous.surface);
+				GameObject.RemoveComponent(previous);
+				GameObject.AddComponent<CompoundCollider>().surface.Set(surfaceName);
+			}
+			else
+				GameObject.AddComponent<CompoundCollider>();
+		}
+		mUsesCompounds = true;
+		RefreshCompound();
+	}
+
+	/// Collision that follows what carving leaves: the grid cut into blocks (at most 8 a side), each block with
+	/// solid material in it made a box round it. A block nothing is left in has no shape, which is what keeps a
+	/// hole carved through the object open to whatever walks through it.
+	void RefreshCompound()
+	{
+		let compound = GetComponent<CompoundCollider>();
+		if (compound == null)
+			return;
+		compound.ClearBoxes();
+		if (mDensity == null)
+			return;
+		let cells = mSamples - 1;
+		let cell = CellSize;
+		let offset = Vector3(GridSize * 0.5f) - mCenter;
+		let block = Math.Max(1, (cells + 7) / 8);
+		for (int z0 = 0; z0 < cells; z0 += block)
+		{
+			let z1 = Math.Min(z0 + block, cells);
+			for (int y0 = 0; y0 < cells; y0 += block)
+			{
+				let y1 = Math.Min(y0 + block, cells);
+				for (int x0 = 0; x0 < cells; x0 += block)
+				{
+					let x1 = Math.Min(x0 + block, cells);
+					int lowX = int.MaxValue, lowY = int.MaxValue, lowZ = int.MaxValue;
+					int highX = int.MinValue, highY = int.MinValue, highZ = int.MinValue;
+					for (int z = z0; z <= z1; z++)
+					{
+						for (int y = y0; y <= y1; y++)
+						{
+							for (int x = x0; x <= x1; x++)
+							{
+								if (mDensity[Index(x, y, z)] <= 0)
+									continue;
+								lowX = Math.Min(lowX, x);
+								highX = Math.Max(highX, x);
+								lowY = Math.Min(lowY, y);
+								highY = Math.Max(highY, y);
+								lowZ = Math.Min(lowZ, z);
+								highZ = Math.Max(highZ, z);
+							}
+						}
+					}
+					if (highX < lowX)
+						continue;
+					// A box round the block's solid samples, half a cell wider on every side: the surface lies
+					// between them, half a cell out, and a block one sample thick still has volume to collide with.
+					let center = Vector3(lowX + highX, lowY + highY, lowZ + highZ) * (cell * 0.5f) - offset;
+					let size = Vector3(highX - lowX, highY - lowY, highZ - lowZ) * cell + Vector3(cell);
+					compound.AddBox(center, size);
+				}
+			}
+		}
 	}
 
 	/// Flood-fills the solid samples; everything not connected to the part that stays becomes a new falling object.

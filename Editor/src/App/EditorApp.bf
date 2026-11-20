@@ -668,6 +668,12 @@ class EditorApp : Application
 		{
 			mGameView.Render(mScene, gameCamera.GetCameraData(mGameSize.x / Math.Max(mGameSize.y, 1)));
 		}
+		// The UI editor's preview shows the same camera behind the interface it is editing.
+		if (mUiPreviewVisible && gameCamera && mUiView != null)
+		{
+			mUiView.Resize((int32)mUiPreviewRenderSize.x, (int32)mUiPreviewRenderSize.y);
+			mUiView.Render(mScene, gameCamera.GetCameraData(mUiPreviewAspect));
+		}
 		ImGui.tn_imgui_render(ImGuiView);
 
 		// Long blocking jobs run after a frame that shows the "working" message has been presented.

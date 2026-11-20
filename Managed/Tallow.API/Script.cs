@@ -509,8 +509,9 @@ public readonly partial record struct GameObject(ulong SceneId, ulong Id)
     /// Attach a new trusted C# behaviour through Tallow's native scene and
     /// return precisely that new instance, even if siblings share its type.
     /// The Scene manages Awake/OnEnable/Start and eventual destruction.
-    /// A built-in component handle (Light, MeshRenderer, Rigidbody...) is
-    /// added with its default values, or the one already there is returned.
+    /// A built-in component (Light, MeshRenderer, Rigidbody...) is added
+    /// with its default values, or the one already there is returned; a Box
+    /// Collider starts fitted to the meshes the object draws.
     /// </summary>
     public T AddComponent<T>() where T : IComponent => (T)AddComponent(typeof(T));
 

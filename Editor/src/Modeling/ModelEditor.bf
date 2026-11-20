@@ -631,7 +631,8 @@ extension EditorApp
 			return true;
 		let mouse = ImGui.GetMousePos();
 		let ray = mSceneCamera.ViewportPointToRay((mouse.x - origin.x) / size.x, (mouse.y - origin.y) / size.y);
-		let flat = (MeshShapes.Kind)mModelDrawKind == .Plane;
+		let kind = (MeshShapes.Kind)mModelDrawKind;
+		let flat = kind == .Plane;
 		// A corner or edge of another object under the pointer, which the shape snaps to (Alt: not this time).
 		ModelSnapHit snap = default;
 		var snapped = mModelSnapObjects && !ImGui.IsKeyDown(ImGui.Key.LeftAlt) && FindObjectSnap(mouse, origin, size, out snap);
@@ -679,7 +680,15 @@ extension EditorApp
 				}
 			}
 			let extent = mModelDrawTo - mModelDrawFrom;
-			ImGui.DrawText(.(mouse.x + 16, mouse.y + 12), .(1, 0.85f, 0.4f, 0.95f), scope $"{Math.Abs(extent.x):0.00} x {Math.Abs(extent.z):0.00} m" .CStr());
+			var label = scope String();
+			label.AppendF("{:0.00} x {:0.00} m", Math.Abs(extent.x), Math.Abs(extent.z));
+			// Which way a ramp or stairs will climb, picked the long way from where the drag goes.
+			if (kind == .Wedge || kind == .Stairs)
+			{
+				label.Append("  ·  climbs ");
+				label.Append(sClimbNames[MeshShapes.ClimbDirection(extent, mModelShape.climb)]);
+			}
+			ImGui.DrawText(.(mouse.x + 16, mouse.y + 12), .(1, 0.85f, 0.4f, 0.95f), label.CStr());
 			if (!ImGui.IsMouseDown(0))
 			{
 				// A click without a drag: a shape of the size in the Model window.
@@ -740,6 +749,10 @@ extension EditorApp
 		let high = Vector3.Max(mModelDrawFrom, mModelDrawTo);
 		let height = kind == .Plane ? 0 : Math.Abs(mModelDrawHeight);
 		settings.size = .(Math.Max(high.x - low.x, 0.01f), Math.Max(height, 0.01f), Math.Max(high.z - low.z, 0.01f));
+		// Ramps and stairs climb along the longer side of the base, towards where the drag went (a click: towards +X
+		// or +Z). The Model window turns one that came out the wrong way round.
+		if (kind == .Wedge || kind == .Stairs)
+			settings.climb = MeshShapes.ClimbDirection(mModelDrawTo - mModelDrawFrom, settings.climb);
 		var basePoint = Vector3((low.x + high.x) * 0.5f, mModelDrawFrom.y, (low.z + high.z) * 0.5f);
 		// Drawn downwards: the shape hangs below the base instead.
 		if (mModelDrawHeight < 0 && kind != .Plane)
@@ -774,6 +787,22 @@ extension EditorApp
 		}
 		if (mModelDraw == .Off)
 			mModelCutTarget = 0;
+		if (cutTarget == null)
+			RecordModelShape(made, kind, settings);
+	}
+
+	/// Remembers a shape drawn in the Blockout tab and how it was made (kind, size, steps and climb direction), so the
+	/// Model window can turn a ramp or stairs and draw it again.
+	void RecordModelShape(GameObject made, MeshShapes.Kind kind, MeshShapes.Settings settings)
+	{
+		if (kind != .Wedge && kind != .Stairs)
+			return;
+		let model = made.GetComponent<ModelMesh>();
+		if (model.IsValid)
+		{
+			model.BlockoutKind = (int32)kind;
+			model.BlockoutSettings = settings;
+		}
 	}
 
 	/// A new object holding a model, placed with its origin at a point.

@@ -48,6 +48,35 @@ class UIDocumentData
 
 	public static bool IsTextTag(StringView tag) => tag == "text" || tag == "button";
 
+	// ---- stylesheet rules, read by the editor's stylesheet view ----
+
+	/// The number of rules in the stylesheet (one rule per selector's block).
+	public int StyleRuleCount => mRules.Count;
+
+	/// A rule's selector: a class ".name", an id "#name" or a tag. Empty when the index is out of range.
+	public StringView StyleRuleSelector(int index)
+	{
+		if (index >= 0 && index < mRules.Count)
+			return mRules[index].selector;
+		return StringView();
+	}
+
+	/// The @media condition a rule sits in, or empty when it applies at every size.
+	public StringView StyleRuleMedia(int index)
+	{
+		if (index >= 0 && index < mRules.Count)
+			return mRules[index].media;
+		return StringView();
+	}
+
+	/// The style declarations a rule makes. Shared, so read but do not modify.
+	public UIProps StyleRuleProps(int index)
+	{
+		if (index >= 0 && index < mRules.Count)
+			return mRules[index].props;
+		return null;
+	}
+
 	// ---- parsing ----
 
 	public bool Load(StringView path)
@@ -831,7 +860,7 @@ class UIDocumentData
 		switch (element.tag)
 		{
 		case "image":
-			DrawImageElement(element, frame);
+			DrawImageElement(element, frame, binder);
 		case "slider":
 			DrawSlider(element, frame, binder);
 		case "toggle":
@@ -883,11 +912,32 @@ class UIDocumentData
 			ImGui.DrawRect(frame.min, frame.max, element.ColorOf("border-color", .(1, 1, 1, 0.3f)), frame.radius, borderWidth);
 	}
 
-	void DrawImageElement(UIElement element, ElementFrame frame)
+	void DrawImageElement(UIElement element, ElementFrame frame, UIDocument binder)
 	{
 		let source = element.attributes.Get("src");
 		if (source.IsEmpty)
+		{
+			// The editor's preview has no texture to show yet: a labelled box stands in so the element can be seen
+			// and picked until a Source is set (in the game, an image without a source draws nothing).
+			if (binder == null && frame.max.x > frame.min.x && frame.max.y > frame.min.y)
+			{
+				let radius = Math.Min(3 * scale, frame.max.y - frame.min.y) * 0.25f;
+				ImGui.DrawRectFilled(frame.min, frame.max, .(0.30f, 0.34f, 0.40f, 0.45f), radius);
+				ImGui.DrawRect(frame.min, frame.max, .(0.60f, 0.64f, 0.70f, 0.8f), radius, 1);
+				ImGui.PushClipRect(frame.min, frame.max);
+				ImGui.PushFontSize(12);
+				let size = ImGui.CalcTextSize("image");
+				ImGui.PopFont();
+				if (size.x <= frame.max.x - frame.min.x - 4 && size.y <= frame.max.y - frame.min.y - 2)
+				{
+					ImGui.PushFontSize(12);
+					ImGui.DrawText(.((frame.min.x + frame.max.x - size.x) * 0.5f, (frame.min.y + frame.max.y - size.y) * 0.5f), .(0.86f, 0.89f, 0.93f, 0.85f), "image");
+					ImGui.PopFont();
+				}
+				ImGui.PopClipRect();
+			}
 			return;
+		}
 		ImGui.SetCursorScreenPos(frame.min);
 		ImGui.Image(Assets.GetTexture(source).idx, .(element.width * scale, element.height * scale), .(0, 0), .(1, 1), false);
 	}

@@ -83,6 +83,48 @@ class BoxCollider : Collider
 	/// The box's full size on each axis.
 	public Vector3 size = .One;
 
+	/// Fits the box to what the object draws: the meshes of its Mesh Renderers, its children's too, as one box in
+	/// the object's own space (the size is before the object's scale, as `size` is). The centre moves with it.
+	/// False when nothing is drawn, and the size and centre are kept.
+	public bool FitToMesh()
+	{
+		let gameObject = GameObject;
+		if (gameObject == null)
+			return false;
+		var world = Bounds.Empty;
+		AddDrawnBounds(gameObject, ref world);
+		if (!world.IsValid)
+			return false;
+		// In the object's own space (its scale and turn taken out).
+		let inverse = gameObject.Transform.WorldToLocal;
+		var local = Bounds.Empty;
+		for (int corner < 8)
+		{
+			let point = Vector3((corner & 1) != 0 ? world.max.x : world.min.x, (corner & 2) != 0 ? world.max.y : world.min.y, (corner & 4) != 0 ? world.max.z : world.min.z);
+			local.Encapsulate(inverse.TransformPoint(point));
+		}
+		size = local.max - local.min;
+		center = (local.max + local.min) * 0.5f;
+		return true;
+	}
+
+	static void AddDrawnBounds(GameObject gameObject, ref Bounds world)
+	{
+		let renderer = gameObject.GetComponent<MeshRenderer>();
+		if (renderer && renderer.ActiveMesh != null)
+		{
+			let drawn = renderer.WorldBounds;
+			world.Encapsulate(drawn.min);
+			world.Encapsulate(drawn.max);
+		}
+		for (let child in gameObject.Transform.Children)
+			AddDrawnBounds(child.GameObject, ref world);
+	}
+
+	/// Fitted as soon as it is added, so a new box fits what the object draws (a scene or prefab's saved size is
+	/// read after this, and wins).
+	public override void OnRegister() => FitToMesh();
+
 	public override ShapeDesc GetShape()
 	{
 		let scale = WorldScale;

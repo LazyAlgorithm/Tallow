@@ -1,10 +1,24 @@
 #!/usr/bin/env bash
-# Starts the Tallow project launcher (building it first if needed).
+# Starts the Tallow project launcher, rebuilding it first when the editor sources are newer than the binary
+# (a fast BeefBuild relink), or with a full build.sh when the binary is missing.
 set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 launcher="$root/build/Debug_Linux64/TallowLauncher/TallowLauncher"
+
 if [[ ! -x "$launcher" ]]; then
+	# First run: full build (native libraries, shaders, bindings, launcher).
 	"$root/build.sh"
+elif [[ -n "$(find "$root/Engine" "$root/Editor" "$root/Launcher" -type f -name '*.bf' -newer "$launcher" -print -quit 2>/dev/null)" ]]; then
+	# An editor/engine source changed since the last build: relink the launcher incrementally.
+	beef="${BEEFBUILD:-}"
+	if [[ -z "$beef" ]]; then
+		beef="$(command -v BeefBuild 2>/dev/null || true)"
+	fi
+	if [[ -z "$beef" ]]; then
+		beef="$HOME/Beef/IDE/dist/BeefBuild"
+	fi
+	"$beef" -workspace="$root" -config=Debug -platform=Linux64 -project=TallowLauncher -verbosity=minimal
 fi
+
 export TALLOW_ROOT="$root"
 exec "$launcher" "$@"

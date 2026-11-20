@@ -116,6 +116,7 @@ static class Native
 	[CLink] public static extern int32 tn_gfx_renderer_type();
 	[CLink] public static extern int32 tn_gfx_caps_flags();
 	[CLink] public static extern void tn_gfx_screenshot(char8* path);
+	[CLink] public static extern void tn_gfx_commit_frame();
 
 	[CLink] public static extern uint8* tn_image_load(char8* path, int32* width, int32* height);
 	[CLink] public static extern void tn_image_free(uint8* pixels);

@@ -26,4 +26,6 @@ Managed/*/obj/
 Tests/CSharpGameplay/.tallow-csharp/
 Tests/NativeCSharpHost/build/
 Tests/**/*.slnx
+Samples/**/.tallow-csharp/
+Samples/**/*.slnx
 Player/build/

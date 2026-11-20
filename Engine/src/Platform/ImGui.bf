@@ -447,6 +447,7 @@ static class ImGui
 	[CLink] static extern void ImGuiIO_AddMousePosEvent(void* io, float x, float y);
 	[CLink] static extern void ImGuiIO_AddMouseButtonEvent(void* io, int32 button, bool down);
 	[CLink] static extern void ImGuiIO_AddKeyEvent(void* io, int32 key, bool down);
+	[CLink] static extern void ImGuiIO_AddInputCharactersUTF8(void* io, char8* text);
 	[CLink] static extern bool igIsKeyPressed_Bool(int32 key, bool repeat_);
 	[CLink] static extern bool igIsKeyDown_Nil(int32 key);
 	[CLink] static extern void igPushID_Str(char8* id);
@@ -581,10 +582,13 @@ static class ImGui
 		Internal.MemCpy(buffer.Ptr, text.Ptr, count);
 		buffer[count] = 0;
 		let changed = igInputTextMultiline(label, buffer.Ptr, (uint)capacity, size, flags, null, null);
-		if (changed)
+		// EnterReturnsTrue reports only Enter, but the text changes as it is typed: keep it either way, so a button
+		// pressed after typing uses what was typed and not what was there before.
+		let typed = StringView(buffer.Ptr);
+		if (changed || (count == text.Length && typed != text))
 		{
 			text.Clear();
-			text.Append(buffer.Ptr);
+			text.Append(typed);
 		}
 		return changed;
 	}
@@ -600,10 +604,12 @@ static class ImGui
 			changed = igInputTextWithHint(label, hint, &buffer, (uint)buffer.Count, flags, null, null);
 		else
 			changed = igInputText(label, &buffer, (uint)buffer.Count, flags, null, null);
-		if (changed)
+		// EnterReturnsTrue reports only Enter, but the text changes as it is typed: keep it either way.
+		let typed = StringView(&buffer);
+		if (changed || (count == text.Length && typed != text))
 		{
 			text.Clear();
-			text.Append(&buffer);
+			text.Append(typed);
 		}
 		return changed;
 	}
@@ -711,6 +717,8 @@ static class ImGui
 	public static void QueueMouseButton(int32 button, bool down) => ImGuiIO_AddMouseButtonEvent(igGetIO_Nil(), button, down);
 	/// Queues a key (ImGui.Key) going down or up.
 	public static void QueueKey(int32 key, bool down) => ImGuiIO_AddKeyEvent(igGetIO_Nil(), key, down);
+	/// Queues text as typed, for the item focused (UTF-8).
+	public static void QueueText(char8* text) => ImGuiIO_AddInputCharactersUTF8(igGetIO_Nil(), text);
 	public static void SetCursorScreenPos(Vec2 pos) => igSetCursorScreenPos(pos);
 	public static void SetCursorPosX(float x) => igSetCursorPosX(x);
 	public static void SetCursorPosY(float y) => igSetCursorPosY(y);

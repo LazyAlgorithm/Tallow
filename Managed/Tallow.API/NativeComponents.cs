@@ -442,9 +442,10 @@ public readonly partial record struct BoxCollider(GameObject GameObject) : IComp
     private NativeComponent Data => new(GameObject, "Tallow.BoxCollider");
     /// <summary>Whether the object still has a Box Collider.</summary>
     public bool IsValid => Data.IsValid;
-    /// <summary>The box's full size, in metres (before the object's scale).</summary>
+    /// <summary>The box's full size, in metres (before the object's scale). A new Box Collider starts fitted to the
+    /// meshes its object and its children draw (no mesh: 1 on each axis).</summary>
     public Vector3 Size { get => Data.GetVector3("size"); set => Data.Set("size", value); }
-    /// <summary>Where the box is, relative to the object.</summary>
+    /// <summary>Where the box is, relative to the object. A new Box Collider starts at the middle of those meshes.</summary>
     public Vector3 Center { get => Data.GetVector3("center"); set => Data.Set("center", value); }
     /// <summary>What it is made of ("Metal", "Wood"), reported by hits (<see cref="PhysicsHit.Surface"/>).</summary>
     public string Surface { get => Data.GetString("surface"); set => Data.Set("surface", value); }

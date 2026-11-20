@@ -26,6 +26,8 @@ extension EditorApp
 	GameObject mDropPreview;
 	String mDropPreviewAsset = new .() ~ delete _;
 	bool mDropPreviewSeen;
+	/// The object a material dragged from Project is over: the one it would be given to on release (0: none).
+	uint32 mDropMaterialTarget;
 
 	void DrawSceneView()
 	{
@@ -66,6 +68,7 @@ extension EditorApp
 					mSceneMouseDown = ImGui.IsMouseDown(0);
 				}
 				mDropPreviewSeen = false;
+				mDropMaterialTarget = 0;
 				if (ImGui.BeginDragDropTarget())
 				{
 					let asset = ImGui.AcceptDragDropPayload("ASSET", ImGui.DragDropFlags.AcceptBeforeDelivery);
@@ -81,6 +84,8 @@ extension EditorApp
 							else
 								DropAssetIntoScene(relative, true, u, v);
 						}
+						else if (HasExtension(relative, ".tmat"))
+							ShowMaterialDropTarget(u, v);
 						else
 							ShowDropPreview(relative, u, v);
 					}
@@ -435,6 +440,17 @@ extension EditorApp
 			let renderer = selected.GetComponent<MeshRenderer>();
 			if (renderer && renderer.ActiveMesh != null)
 				Gizmos.Lines.Box(renderer.ActiveMesh.Bounds, selected.Transform.LocalToWorld, .(1.0f, 0.62f, 0.15f, 1));
+		}
+		// A material dragged from Project boxes the object it would be given to.
+		if (mDropMaterialTarget != 0)
+		{
+			let over = mScene.FindById(mDropMaterialTarget);
+			if (over != null)
+			{
+				let renderer = over.GetComponent<MeshRenderer>();
+				if (renderer && renderer.ActiveMesh != null)
+					Gizmos.Lines.Box(renderer.ActiveMesh.Bounds, over.Transform.LocalToWorld, .(1.0f, 0.75f, 0.2f, 1));
+			}
 		}
 		BuildSceneToolGizmos();
 		BuildProbePlacementGizmos();

@@ -730,6 +730,24 @@ extension EditorApp
 			DrawSoftBodyTools(soft);
 		if (let terrain = component as VoxelTerrain)
 			DrawTerrainTools(terrain);
+		if (let boxCollider = component as BoxCollider)
+			DrawBoxColliderTools(boxCollider);
+	}
+
+	/// Fits a Box Collider to the meshes its object draws, as adding one does.
+	void DrawBoxColliderTools(BoxCollider boxCollider)
+	{
+		if (ImGui.Button("Size to Bounds"))
+		{
+			if (boxCollider.FitToMesh())
+				MarkDirty();
+			else
+				Log.Warning("Size to Bounds: the object draws nothing to fit to.");
+		}
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("Matches the box's size and centre to the meshes of the object and its children.");
+		ImGui.SameLine();
+		ImGui.TextDisabled("Fits the box to the meshes it draws.");
 	}
 
 	/// A rigged model's parts, and the clips found in its file: click one to play it.

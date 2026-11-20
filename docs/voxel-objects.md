@@ -67,8 +67,11 @@ if (Scene.RaycastHit(origin, direction, 100) is PhysicsHit hit && hit.HitObject?
 In the editor, **Carve in Scene** carves with the mouse and **Reset Shape** puts the untouched shape back.
 
 Collision: with a Mesh Collider and no Rigidbody the object has exact triangle collision. The physics engine cannot
-move triangle meshes, so pieces that break off, and an object that is not Anchored once it is carved, collide with
-a convex hull wrapped round them.
+move triangle meshes, so what moves — an object that is not Anchored once it is carved, and the pieces that break
+off — collides with boxes over the grid instead (the grid cut into blocks of about an eighth of it a side). That
+keeps a hole carved through the object open: what was carved away is no longer in the way, on screen or to the
+player. A piece that breaks off is one convex hull wrapped round it until it is carved itself, then it gets the
+same boxes.
 
 In multiplayer a carve happens on every machine: called on a client it goes to the server first and comes back to
 everyone. Pieces are the same objects everywhere. Players who join later get every carve made so far. A game that

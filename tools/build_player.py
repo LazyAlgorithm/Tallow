@@ -43,6 +43,11 @@ WEB_LINK_FLAGS = ('-sUSE_WEBGL2=1', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSIO
                   '-sEXPORTED_RUNTIME_METHODS=FS,addRunDependency,removeRunDependency,wasmTable,HEAPF32', '-sEXIT_RUNTIME=0', '-sMINIFY_HTML=0',
                   # The browser glue (native/tallow_web.c) is JavaScript the linker only takes from the archive when asked.
                   '-Wl,-u,tn_web_free')
+# Threads (Engine/src/Core/Jobs.bf and WebPlatform.ThreadsAvailable): the engine spreads its work over the page's
+# cores. The module then has shared memory, which the browser allows only on a cross-origin isolated page
+# (tools/web/shell/coi-serviceworker.js adds the headers where the host cannot). The pool and sizes come from
+# tools/web/csharp_web.py's thread_link_flags (one worker per core plus a few spare, so starting a thread never
+# waits for one); TALLOW_WEB_THREADS=0 leaves threads out.
 WINDOWS_NATIVE_LIBS = ('tallow_native.lib', 'bgfx/cmake/bgfx/bgfx.lib', 'bgfx/cmake/bimg/bimg.lib', 'bgfx/cmake/bimg/bimg_decode.lib',
                        'bgfx/cmake/bx/bx.lib', 'SDL/SDL3-static.lib', 'joltc/joltc.lib', '_deps/joltphysics-build/Jolt.lib', 'enet/enet.lib')
 
@@ -60,11 +65,16 @@ def write_web_page(engine, project, name, staging, csharp=False):
     # Scene packs download after the game has started, smallest first; the game asks for one it needs sooner.
     later = sorted((file for file in staging.glob('*.tpak') if file.name != 'game.tpak'), key=lambda file: file.stat().st_size)
     later_list = json.dumps([file.name for file in later])
+    sys.path.insert(0, str(engine / 'tools' / 'web'))
+    import csharp_web
+    threads = csharp_web.threads_enabled() if csharp else csharp_web.beef_player_threads_enabled()
     for file in ('index.html', 'manifest.webmanifest'):
-        text = (shell / file).read_text().replace('{{NAME}}', name).replace('{{SCRIPT}}', '_framework/dotnet.js' if csharp else name + '.js').replace('{{RUNTIME}}', 'dotnet' if csharp else 'emscripten').replace('{{PACK}}', pack).replace('{{LATER_PACKS}}', later_list)
+        text = (shell / file).read_text().replace('{{NAME}}', name).replace('{{SCRIPT}}', '_framework/dotnet.js' if csharp else name + '.js').replace('{{RUNTIME}}', 'dotnet' if csharp else 'emscripten').replace('{{PACK}}', pack).replace('{{LATER_PACKS}}', later_list).replace('{{THREADS}}', 'true' if threads else 'false')
         (staging / file).write_text(text)
     # Multiplayer between browsers (WebRTC); see the file for how players find each other.
     shutil.copy2(shell / 'tallow-net.js', staging / 'tallow-net.js')
+    # Cross-origin isolation for a threaded build, where the host cannot set headers (see the file).
+    shutil.copy2(shell / 'coi-serviceworker.js', staging / 'coi-serviceworker.js')
     for icon in (project / 'icon.png', project / 'src' / 'icon.png', engine / 'icon.png'):
         if icon.is_file():
             shutil.copy2(icon, staging / 'icon.png')
@@ -372,7 +382,12 @@ def main():
                 # The project's own settings are for Linux; a Windows player links the same libraries as built for Windows.
                 config = {'OtherLinkFlags': '$(LinkFlags) ' + ' '.join([f'"{wine_path(natives / lib) if cross else natives / lib}"' for lib in WINDOWS_NATIVE_LIBS] + [lib + '.lib' for lib in WINDOWS_SYSTEM_LIBS])}
             elif web:
-                config = {'OtherLinkFlags': '$(LinkFlags) ' + ' '.join([str(natives / lib) for lib in WEB_NATIVE_LIBS] + list(WEB_LINK_FLAGS))}
+                sys.path.insert(0, str(engine / 'tools' / 'web'))
+                import csharp_web
+                flags = list(WEB_LINK_FLAGS)
+                if csharp_web.beef_player_threads_enabled():
+                    flags = list(csharp_web.thread_link_flags(pool=True)) + flags
+                config = {'OtherLinkFlags': '$(LinkFlags) ' + ' '.join([str(natives / lib) for lib in WEB_NATIVE_LIBS] + flags)}
             elif macos:
                 # The project's own settings are for Linux; a Mac links the same libraries as built for macOS.
                 config = {'OtherLinkFlags': macos_link.flags(str(engine / 'build' / 'native'))}
@@ -389,6 +404,10 @@ def main():
                     if recorded_engine and Path(recorded_engine).is_absolute() and str(engine) != recorded_engine:
                         value = value.replace(recorded_engine, str(engine))
                 lines.append(f'{key} = {q(value)}')
+            # BeefBuild links a threaded web program (-pthread and the runtime built for threads) only when the
+            # project asks for it.
+            if web and csharp_web.beef_player_threads_enabled():
+                lines += ['', '[Project.Platform.Wasm]', 'EnableThreads = true']
             (workspace / 'BeefProj.toml').write_text('\n'.join(lines) + '\n')
             if cross:
                 environment = dict(os.environ, WINEPREFIX=str(toolchain / 'wine'), WINEDEBUG='-all', WINEDLLOVERRIDES='mscoree,mshtml=')

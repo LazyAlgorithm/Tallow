@@ -704,6 +704,18 @@ public class ApiChecks : CheckBase
 
     private void QueryChecks()
     {
+        // A box added to an object that draws something starts at the bounds of what it draws (2 x 1 x 3, off
+        // the origin), so it is a fit from the start.
+        GameObject fitted = Scene.CreateGameObject("Fitted Box");
+        fitted.Transform.Position = new Vector3(100, 530, 0);
+        fitted.AddComponent<MeshRenderer>().SetMesh(
+            [new(0, 0, 0), new(2, 0, 0), new(0, 1, 0), new(0, 0, 3)],
+            [0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2]);
+        BoxCollider fittedBox = fitted.AddComponent<BoxCollider>();
+        Check($"a Box Collider added to an object with a mesh starts at its bounds ({fittedBox.Size} at {fittedBox.Center})",
+            Vector3.Distance(fittedBox.Size, new Vector3(2, 1, 3)) < 1e-3f &&
+            Vector3.Distance(fittedBox.Center, new Vector3(1, 0.5f, 1.5f)) < 1e-3f);
+        fitted.Destroy();
         Vector3 from = new(95, 500, 0);
         PhysicsHit? first = Scene.RaycastHit(from, Vector3.UnitX, 20);
         Check($"RaycastHit gives the surface normal, body and Surface ({first?.Normal}, {first?.Surface})",

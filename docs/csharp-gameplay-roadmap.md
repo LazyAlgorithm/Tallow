@@ -1457,6 +1457,22 @@ A full conversion also needs these. Ordered roughly by when they block users.
   not to the edit-mode tools or the object gizmo. The ImGui binding gained tab bars, `BeginTooltip` and
   `DrawString`. Screenshots: `--model-test --model-window --model-tab <name> [--model-all-tools] [--model-idle]`
   with `XDG_DATA_HOME=<scratch>`. Not tried by hand yet: clicking the Scene view bar.
+- [x] Ramps and stairs climb the long way (November 20, 2026; the user asked for stair and ramp shapes to pick the
+  longer side of the base by themselves, and to be turned if that is wrong). `MeshShapes.Settings.climb` (-1 Auto,
+  0 +Z, 1 +X, 2 -Z, 3 -X) turns the wedge and stair prism about Y (`MeshShapes.ClimbDirection`; auto follows the
+  longer side and the drag's direction, as the Building stairs do). The Model window's Blockout tab shows **Climbs**
+  buttons for a selected ramp or stairs, which draw the shape again where it was and at the size it was drawn (the
+  drawn kind, size, steps and direction are kept on the Model Mesh, hidden from the Inspector). The Scene view says
+  which way the shape will climb while its base is dragged. Editor `--model-test` checks auto, turn, undo and redo.
+- [x] Materials dragged onto objects, and text fields that keep what is typed (November 20, 2026; the user asked for
+  dragging materials onto objects in the Scene view, and for a typed script name to be kept when the Create button is
+  pressed rather than Enter). A `.tmat` dragged over the Scene view boxes the object under the pointer and names it
+  ("Material for Crate"); letting go sets its Mesh Renderer's material as one undo step, and it can be dropped on a
+  Hierarchy row too (`DropMaterialOn`, `ShowMaterialDropTarget`). The button bug: `ImGui.InputText` copied the edited
+  buffer back into the caller's String only when ImGui reported a change, and `EnterReturnsTrue` reports only Enter,
+  so Create Asset and Rename used the name from before typing. The wrapper now keeps the buffer whenever it differs
+  (`ImGui.QueueText` added to type in tests). Editor `--drag-test` checks the material drop, the typed-and-created
+  script name, and focuses the Scene tab first (a saved layout can leave Scripts over it).
 - [x] Architect (building) system (November 17, 2026; the user asked for "a super easy way to create buildings
   including interiors"): `docs/buildings.md`. The `Building` component (`Engine/src/Modeling/Building.bf`) keeps a
   plan as text: rooms as grid rectangles per storey, doors, windows and openings on grid lines, and stairs.

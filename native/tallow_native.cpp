@@ -7,6 +7,9 @@
 #include <bgfx/embedded_shader.h>
 #include <bx/math.h>
 #include <SDL3/SDL.h>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/html5.h>
+#endif
 
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
@@ -136,10 +139,18 @@ TN_API void tn_set_log(TnLogFn fn, bool trace)
 	s_traceEnabled = trace;
 }
 
+#if defined(__EMSCRIPTEN__)
+// Prepares Emscripten's WebGL layer for a threaded build (see native/tallow_web.c).
+extern "C" void tn_web_prepare_proxied_gl(void);
+#endif
+
 // renderer: bgfx::RendererType value, or negative to let bgfx pick the best one for the platform.
 // window may be null for a headless device (dedicated servers do not call this at all).
 TN_API bool tn_gfx_init(SDL_Window* window, int width, int height, int renderer, uint32_t resetFlags)
 {
+#if defined(__EMSCRIPTEN__)
+	tn_web_prepare_proxied_gl();
+#endif
 	// Set TALLOW_GFX_TRACE=1 to print bgfx's own diagnostics while debugging a backend.
 	if (getenv("TALLOW_GFX_TRACE") != nullptr) s_traceEnabled = true;
 
@@ -201,6 +212,25 @@ TN_API void tn_gfx_reset(int width, int height, uint32_t resetFlags)
 TN_API void tn_gfx_shutdown()
 {
 	bgfx::shutdown();
+}
+
+#if defined(__EMSCRIPTEN__)
+// The engine's objects are compiled without -sOFFSCREEN_FRAMEBUFFER (the flag is for a game's final link), so the
+// commit is taken as a weak symbol: a threaded link with the offscreen framebuffer has the C one, a single-threaded
+// link has the JavaScript one (a no-op here), and a threaded link without it has none.
+extern "C" EMSCRIPTEN_RESULT emscripten_webgl_commit_frame(void) __attribute__((weak));
+extern "C" int tn_web_built_with_threads(void);
+#endif
+
+// Copies the frame just presented to the page's canvas, once per frame, for a threaded web build: the engine draws
+// on its own thread into Emscripten's offscreen framebuffer (context proxied to the page), and Emscripten's blit is
+// what makes it visible. Nothing to do elsewhere (the canvas shows the back buffer by itself).
+TN_API void tn_gfx_commit_frame()
+{
+#if defined(__EMSCRIPTEN__)
+	if (emscripten_webgl_commit_frame != nullptr && tn_web_built_with_threads() != 0)
+		emscripten_webgl_commit_frame();
+#endif
 }
 
 TN_API const char* tn_gfx_renderer_name()
