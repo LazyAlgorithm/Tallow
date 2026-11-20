@@ -56,8 +56,9 @@ public sealed class EditMesh : IDisposable
     /// <summary>An empty mesh: add vertices and faces.</summary>
     public EditMesh() : this(CSharpModeling.Create()) { }
 
-    /// <summary>One of the modeller's shapes, standing on its base at 0. sides: round a cylinder, cone, sphere,
-    /// torus, pipe or arch; steps: of stairs, rings of a sphere or torus; thickness: of a pipe, arch or torus.</summary>
+    /// <summary>One of the modeller's shapes, standing on its base at 0. Wedge and Stairs climb along the longer side
+    /// of size (towards +X when that is X, otherwise towards +Z). sides: round a cylinder, cone, sphere, torus, pipe
+    /// or arch; steps: of stairs, rings of a sphere or torus; thickness: of a pipe, arch or torus.</summary>
     public static EditMesh Shape(MeshShape shape, Vector3 size, int sides = 12, int steps = 6, float thickness = 0.2f,
         bool smooth = false) =>
         new(CSharpModeling.Shape((int)shape, size, sides, steps, thickness, smooth));

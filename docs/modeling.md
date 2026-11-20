@@ -46,6 +46,10 @@ Pipe. Some take extra settings (sides, steps or rings, wall thickness, smooth).
 - **Cut a Hole** (with a model selected): the shape drawn next is cut out of that model instead of staying, for
   doors, windows, pits and trenches. Draw it right through the model. With Keep drawing on, cut one after another.
 - **Add One in View** puts one of the Fixed size where the Scene view is looking.
+- **Ramp** and **Stairs** climb along the longer side of the base, towards where the drag went (a click puts them
+  climbing towards +X or +Z). A ramp or stairs drawn the wrong way round turns with the **Climbs** buttons under the
+  selected shape: the shape is drawn again where it was and at the size it was drawn, so changes made to its faces
+  are lost.
 
 A drawn shape is an object with a **Mesh Renderer**, a **Model Mesh** (which holds the model) and a **Mesh
 Collider**, so it is solid at once. Its origin is in the middle of its base.

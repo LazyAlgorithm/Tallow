@@ -15,6 +15,12 @@ struct ModelMeshData
 	/// Auto texture coordinates repeat once a metre in the world, so a stretched object keeps the same texture size.
 	/// Off: once a metre of the model's own space, stretching with the object.
 	public bool worldScaleUVs = true;
+	/// The Blockout shape the model was drawn as (a MeshShapes.Kind; -1: not drawn as a shape), with the size, steps
+	/// and climb direction it was drawn with, so the Model window can turn a ramp or stairs and draw it again.
+	[HideInInspector] public int32 blockoutKind = -1;
+	[HideInInspector] public Vector3 blockoutSize = .One;
+	[HideInInspector] public int32 blockoutSteps = 6;
+	[HideInInspector] public int32 blockoutClimb = 0;
 
 	public this() { }
 }
@@ -47,6 +53,11 @@ struct ModelMesh : ComponentHandle<ModelMeshData>
 	public EditMesh Edit => Runtime.Edit;
 	public Vector3 UVScale => Runtime.UVScale;
 	public Mesh DrawnMesh => Runtime.DrawnMesh;
+	/// The Blockout shape this model was drawn as (a MeshShapes.Kind; -1: not drawn as a shape): the Model window turns
+	/// a ramp or stairs with it and the settings' size, steps and climb direction.
+	public int32 BlockoutKind { get => Runtime.BlockoutKind; set => Runtime.BlockoutKind = value; }
+	/// How a ramp or stairs were drawn: their size, steps and climb direction (0 +Z, 1 +X, 2 -Z, 3 -X).
+	public MeshShapes.Settings BlockoutSettings { get => Runtime.BlockoutSettings; set => Runtime.BlockoutSettings = value; }
 	public void Save() => Runtime.Save();
 	public void Set(EditMesh mesh) => Runtime.Set(mesh);
 	public void Preview() => Runtime.Preview();
@@ -163,6 +174,25 @@ class ModelMeshState
 
 	/// The mesh drawn now.
 	public Mesh DrawnMesh => mPreview ?? mShared?.mesh;
+
+	/// The Blockout shape this model was drawn as (a MeshShapes.Kind; -1: not drawn as a shape).
+	public int32 BlockoutKind
+	{
+		get => Settings.blockoutKind;
+		set => Settings.blockoutKind = value;
+	}
+
+	/// How a ramp or stairs were drawn: their size, steps and climb direction (0 +Z, 1 +X, 2 -Z, 3 -X).
+	public MeshShapes.Settings BlockoutSettings
+	{
+		get => .() { size = Settings.blockoutSize, steps = Settings.blockoutSteps, climb = Settings.blockoutClimb };
+		set
+		{
+			Settings.blockoutSize = value.size;
+			Settings.blockoutSteps = value.steps;
+			Settings.blockoutClimb = value.climb;
+		}
+	}
 
 	/// Not built from its text yet, or built from other text or materials.
 	public bool NeedsBuild => mParsed != Settings.data || mBuiltMaterials != Settings.materials || mBuiltWorldScale != Settings.worldScaleUVs || (mShared == null && mPreview == null);

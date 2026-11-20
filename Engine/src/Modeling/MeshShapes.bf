@@ -36,6 +36,8 @@ static class MeshShapes
 		public float thickness = 0.2f;
 		/// Smooth faces (round shapes only).
 		public bool smooth = false;
+		/// Which way a ramp or stairs climb: -1 along the longer side of the base (Auto), 0 +Z, 1 +X, 2 -Z, 3 -X.
+		public int32 climb = -1;
 
 		public this()
 		{
@@ -49,8 +51,8 @@ static class MeshShapes
 		switch (kind)
 		{
 		case .Box: AddBox(mesh, .(-s.x / 2, 0, -s.z / 2), .(s.x / 2, s.y, s.z / 2));
-		case .Wedge: Wedge(mesh, s);
-		case .Stairs: Stairs(mesh, s, Math.Max(settings.steps, 1));
+		case .Wedge: Wedge(mesh, s, ClimbDirection(s, settings.climb));
+		case .Stairs: Stairs(mesh, s, Math.Max(settings.steps, 1), ClimbDirection(s, settings.climb));
 		case .Cylinder: Cylinder(mesh, s, Math.Max(settings.sides, 3), 1, settings.smooth);
 		case .Cone: Cylinder(mesh, s, Math.Max(settings.sides, 3), 0, settings.smooth);
 		case .Sphere: Sphere(mesh, s, Math.Max(settings.sides, 3), Math.Max(settings.steps, 2), settings.smooth);
@@ -78,10 +80,24 @@ static class MeshShapes
 		mesh.AddFace(b + 0, b + 1, b + 5, b + 4); // -Y
 	}
 
-	/// A ramp rising from the front (-Z) to full height at the back (+Z).
-	static void Wedge(EditMesh mesh, Vector3 s)
+	/// Which way a ramp or stairs climb: `climb` when it says (0 +Z, 1 +X, 2 -Z, 3 -X), otherwise along the longer
+	/// side of `size`, towards where it points: a base dragged from x = -4 to x = 4 climbs +X.
+	public static int32 ClimbDirection(Vector3 size, int32 climb = -1)
 	{
-		let x = s.x / 2, z = s.z / 2;
+		if (climb >= 0)
+			return climb & 3;
+		if (Math.Abs(size.x) > Math.Abs(size.z))
+			return size.x >= 0 ? 1 : 3;
+		return size.z >= 0 ? 0 : 2;
+	}
+
+	/// A ramp: flat at the foot, rising to full height at the far end of `direction` (0 +Z, 1 +X, 2 -Z, 3 -X).
+	static void Wedge(EditMesh mesh, Vector3 s, int32 direction)
+	{
+		// Built climbing +Z with the climb along the base's longer side, then turned to the direction asked for.
+		let alongX = (direction & 1) != 0;
+		let x = (alongX ? s.z : s.x) / 2, z = (alongX ? s.x : s.z) / 2;
+		let first = (int32)mesh.positions.Count;
 		let a = mesh.AddVertex(.(-x, 0, -z)), b = mesh.AddVertex(.(x, 0, -z));
 		let c = mesh.AddVertex(.(-x, 0, z)), d = mesh.AddVertex(.(x, 0, z));
 		let e = mesh.AddVertex(.(-x, s.y, z)), f = mesh.AddVertex(.(x, s.y, z));
@@ -90,24 +106,56 @@ static class MeshShapes
 		mesh.AddFace(a, e, f, b);
 		mesh.AddFace(a, c, e);
 		mesh.AddFace(b, f, d);
+		TurnAboutY(mesh, first, direction);
 	}
 
-	/// Steps climbing from the front (-Z) to the back, each a solid block down to the ground, joined into one solid.
-	static void Stairs(EditMesh mesh, Vector3 s, int steps)
+	/// Steps climbing the way `direction` says, each a solid block down to the ground, joined into one solid.
+	static void Stairs(EditMesh mesh, Vector3 s, int steps, int32 direction)
 	{
-		let x = s.x / 2;
-		let rise = s.y / steps, run = s.z / steps;
+		let alongX = (direction & 1) != 0;
+		let length = alongX ? s.x : s.z;
+		let x = (alongX ? s.z : s.x) / 2;
+		let rise = s.y / steps, run = length / steps;
+		let first = (int32)mesh.positions.Count;
 		// The side outline, as a polygon in (z, y): up and along each step, then down the back and along the ground.
 		let outline = scope List<Vector2>();
-		outline.Add(.(-s.z / 2, 0));
+		outline.Add(.(-length / 2, 0));
 		for (int i < steps)
 		{
-			let z0 = -s.z / 2 + i * run;
+			let z0 = -length / 2 + i * run;
 			outline.Add(.(z0, (i + 1) * rise));
 			outline.Add(.(z0 + run, (i + 1) * rise));
 		}
-		outline.Add(.(s.z / 2, 0));
+		outline.Add(.(length / 2, 0));
 		Extrude2D(mesh, outline, -x, x);
+		TurnAboutY(mesh, first, direction);
+	}
+
+	/// Turns the vertices from `first` on about Y: none for +Z, +90° for +X, 180° for -Z and 270° for -X. A turn is
+	/// no mirror, so the faces keep their winding.
+	static void TurnAboutY(EditMesh mesh, int32 first, int32 direction)
+	{
+		switch (direction & 3)
+		{
+		case 1:
+			for (int32 i = first; i < (int32)mesh.positions.Count; i++)
+			{
+				let p = mesh.positions[i];
+				mesh.positions[i] = .(p.z, p.y, -p.x);
+			}
+		case 2:
+			for (int32 i = first; i < (int32)mesh.positions.Count; i++)
+			{
+				let p = mesh.positions[i];
+				mesh.positions[i] = .(-p.x, p.y, -p.z);
+			}
+		case 3:
+			for (int32 i = first; i < (int32)mesh.positions.Count; i++)
+			{
+				let p = mesh.positions[i];
+				mesh.positions[i] = .(-p.z, p.y, p.x);
+			}
+		}
 	}
 
 	/// A prism from a side outline in (z, y), stretched across x from x0 to x1: the two ends and a face for each side.

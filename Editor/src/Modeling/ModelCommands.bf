@@ -566,12 +566,16 @@ extension EditorApp
 	{
 		if (mPlay != .Edit)
 			return;
-		let shape = MeshShapes.Create(kind, mModelShape);
+		var settings = mModelShape;
+		if (kind == .Wedge || kind == .Stairs)
+			settings.climb = MeshShapes.ClimbDirection(settings.size, settings.climb);
+		let shape = MeshShapes.Create(kind, settings);
 		defer delete shape;
 		let made = CreateObject(MeshShapes.Names[(int)kind]);
 		let position = made.Transform.Position;
 		mScene.Destroy(made);
-		CreateModelObject(MeshShapes.Names[(int)kind], shape, position);
+		let model = CreateModelObject(MeshShapes.Names[(int)kind], shape, position);
+		RecordModelShape(model, kind, settings);
 	}
 
 	// ------------------------------------------------------------------ the Scene view's notes
