@@ -6,6 +6,7 @@ Optional --play also runs all exhibit checks using the generated project.
 import argparse
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 
@@ -38,6 +39,13 @@ def main():
             raise RuntimeError(f'{name} exited {result.returncode}; see {work}:\n{log[-4000:]}')
         return log
 
+    # The launcher must export the C# API version its managed bindings were generated with. Built without that
+    # export (the order package_engine used to build in), every C# call throws in play mode and play never starts.
+    bindings = package / 'Managed/Tallow.API/Generated/CSharpBindings.g.cs'
+    assert bindings.is_file(), f'The package has no generated C# bindings: {bindings}'
+    api = re.search(r'CSharpApiVersion_([0-9a-f]+)', bindings.read_text(encoding='utf-8'))
+    assert api, 'The generated C# bindings name no API version symbol'
+    run([launcher, '--csharp-api-verify', f'CSharpApiVersion_{api.group(1)}'], 'csharp-api-version')
     run([launcher, '--create', path(project), '--showcase'], 'create')
     source = project / 'src'
     scene = (source / 'Scenes/Gallery.tscene').read_text()

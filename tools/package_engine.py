@@ -61,6 +61,16 @@ def main():
         else:
             command = [os.environ.get('BEEFBUILD', 'BeefBuild'), '-workspace=.', f'-config={args.config}', f'-platform={target}', '-verbosity=minimal']
             environment = os.environ.copy()
+        # The C# API bindings (Managed/Tallow.API/Generated/CSharpBindings.g.cs and the matching Beef source) are
+        # generated from the checked-in [CSharpExpose] manifest and are gitignored, so a fresh checkout has none.
+        # Generate them before the launcher is built: the wrappers are native exports, and a launcher built without
+        # them fails the managed bindings' version check the first time a C# script runs (play mode never starts).
+        if not macos:
+            (root / 'Engine/src/Scripting/CSharpBindings.Generated.bf').unlink(missing_ok=True)
+            (root / 'Managed/Tallow.API/Generated/CSharpBindings.g.cs').unlink(missing_ok=True)
+            subprocess.run(['dotnet', 'run', '--project', 'Managed/Tallow.BindingGen/Tallow.BindingGen.csproj',
+                            '--', '--manifest', 'Tests/CSharpExpose/fixture.tsv', '--engine-root', '.'],
+                           cwd=root, env=environment, check=True)
         # Beef does not track changed native archives: force a fresh link, and
         # restore the previous executable if the compiler fails.
         previous = launcher.with_suffix(launcher.suffix + '.packaging-backup')
@@ -91,11 +101,6 @@ def main():
             player_command = [os.environ.get('BEEFBUILD', 'BeefBuild'), '-workspace=Player', '-config=Release', f'-platform={target}', '-verbosity=minimal']
         player.unlink(missing_ok=True)  # Beef does not notice changed native archives
         subprocess.run(player_command, cwd=root, env=environment, check=True)
-        # The C# API bindings (Managed/Tallow.API/Generated/CSharpBindings.g.cs and the matching Beef source) are
-        # generated from the checked-in [CSharpExpose] manifest and are gitignored, so a fresh checkout has none.
-        subprocess.run(['dotnet', 'run', '--project', 'Managed/Tallow.BindingGen/Tallow.BindingGen.csproj',
-                        '--', '--manifest', 'Tests/CSharpExpose/fixture.tsv', '--engine-root', '.'],
-                       cwd=root, env=environment, check=True)
         for project in ('Tallow.ManagedRuntime', 'Tallow.Editor'):
             subprocess.run(['dotnet', 'build', str(root / f'Managed/{project}/{project}.csproj'),
                             '--configuration', 'Debug', '--nologo', '--verbosity', 'minimal'], check=True)
