@@ -18,6 +18,16 @@ public partial class GraphProbe : Script
 	public float lerped = 0f;
 	public int bumped = 0;
 	public float doubled = 0f;
+	public int triggerEnters = 0;
+	public int triggerStays = 0;
+	public int triggerExits = 0;
+	public int collisionEnters = 0;
+	public int collisionStays = 0;
+	public int collisionExits = 0;
+	public GameObject contact;
+	public Vector3 contactPoint = new Vector3(0f, 0f, 0f);
+	public Vector3 contactNormal = new Vector3(0f, 0f, 0f);
+	public float contactSpeed = 0f;
 
 	public override void Start()
 	{
@@ -50,6 +60,41 @@ public partial class GraphProbe : Script
 			if (ecsEntity30.GameObject is not GameObject ecsObject30 || !ecsObject30.ActiveInHierarchy) return;
 			{ var ecsEntity32 = ecsObject30.Entity; if (ecsEntity32.TryGet(out InGame.Health ecsSet32)) { ecsSet32.Value = (ecsData30.Value + 1f); ecsEntity32.Set(ecsSet32); } } // #32
 		});
+	}
+
+	public override void OnTriggerEnter(GameObject other)
+	{
+		triggerEnters = (triggerEnters + 1); // #36
+		contact = other; // #37
+	}
+
+	public override void OnTriggerStay(GameObject other)
+	{
+		triggerStays = (triggerStays + 1); // #41
+	}
+
+	public override void OnTriggerExit(GameObject other)
+	{
+		triggerExits = (triggerExits + 1); // #45
+	}
+
+	public override void OnCollisionEnter(Collision collision)
+	{
+		collisionEnters = (collisionEnters + 1); // #49
+		contact = collision.GameObject; // #50
+		contactPoint = collision.Point; // #51
+		contactNormal = collision.Normal; // #52
+		contactSpeed = collision.RelativeSpeed; // #53
+	}
+
+	public override void OnCollisionStay(Collision collision)
+	{
+		collisionStays = (collisionStays + 1); // #57
+	}
+
+	public override void OnCollisionExit(Collision collision)
+	{
+		collisionExits = (collisionExits + 1); // #61
 	}
 
 	float Sub_Doubled(float amount)

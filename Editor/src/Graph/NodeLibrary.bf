@@ -445,6 +445,25 @@ static class NodeLibrary
 		Add("event.disable", "Add Event", "On Disable", .Event, "OnDisable");
 		Add("event.destroy", "Add Event", "On Destroy", .Event, "OnDestroy").Also("Event End Play Destroyed");
 		Add("event.gui", "Add Event", "On GUI", .Event, "OnGUI").Also("Draw HUD");
+		// Physics contacts. The flow runs with what was touched, and for a collision where and how hard.
+		let triggerEnter = Add("event.triggerenter", "Add Event|Physics", "On Trigger Enter", .Event, "OnTriggerEnter").Also("Actor Begin Overlap Enter Trigger");
+		triggerEnter.signature.Set("public override void OnTriggerEnter(GameObject other)");
+		triggerEnter.Out("Other", .Object, "GameObject", "other");
+		let triggerStay = Add("event.triggerstay", "Add Event|Physics", "On Trigger Stay", .Event, "OnTriggerStay").Also("Actor Overlap Stay Trigger");
+		triggerStay.signature.Set("public override void OnTriggerStay(GameObject other)");
+		triggerStay.Out("Other", .Object, "GameObject", "other");
+		let triggerExit = Add("event.triggerexit", "Add Event|Physics", "On Trigger Exit", .Event, "OnTriggerExit").Also("Actor End Overlap Exit Trigger");
+		triggerExit.signature.Set("public override void OnTriggerExit(GameObject other)");
+		triggerExit.Out("Other", .Object, "GameObject", "other");
+		let collisionEnter = Add("event.collisionenter", "Add Event|Physics", "On Collision Enter", .Event, "OnCollisionEnter").Also("Actor Hit Begin Contact Touch");
+		collisionEnter.signature.Set("public override void OnCollisionEnter(Collision collision)");
+		CollisionOutputs(collisionEnter);
+		let collisionStay = Add("event.collisionstay", "Add Event|Physics", "On Collision Stay", .Event, "OnCollisionStay").Also("Actor Contact Stay Touch");
+		collisionStay.signature.Set("public override void OnCollisionStay(Collision collision)");
+		CollisionOutputs(collisionStay);
+		let collisionExit = Add("event.collisionexit", "Add Event|Physics", "On Collision Exit", .Event, "OnCollisionExit").Also("Actor Hit End Contact Touch");
+		collisionExit.signature.Set("public override void OnCollisionExit(Collision collision)");
+		CollisionOutputs(collisionExit);
 		// A method of the component's own that Call Custom Event (or code) runs.
 		Add("event.custom", "Add Event", "Custom Event", .Event, "Custom").In("Name", .String).Default("MyEvent").Also("Function");
 		// Input events: they share Update with On Update, each under its condition.
@@ -493,6 +512,13 @@ static class NodeLibrary
 		def.signature.Set(NodeGraph.UpdateSignature);
 		def.guard.Set(test);
 		return def;
+	}
+
+	/// A collision event's outputs: what was touched, where, the normal, and how fast they were closing.
+	static void CollisionOutputs(NodeDef def)
+	{
+		def.Out("Other", .Object, "GameObject", "collision.gameObject").Out("Point", .Vector3, "Vector3", "collision.point")
+			.Out("Normal", .Vector3, "Vector3", "collision.normal").Out("Relative Speed", .Float, "float", "collision.relativeSpeed");
 	}
 
 	static NodeDef Control(StringView key, StringView title) => Add(key, "Flow Control", title, .Control, "");

@@ -610,6 +610,8 @@ extension EditorApp
 			mCheckThread.Join();
 			DeleteAndNullify!(mCheckThread);
 		}
+		// Record the exact source tree this check starts from, including a script just made in the editor.
+		mScriptMonitor.Poll(Assets.ProjectPath);
 		mCheckManaged = true;
 		mManagedGameplay = true;
 		NodeLibrary.CSharp = true;
@@ -750,6 +752,14 @@ extension EditorApp
 			DeleteAndNullify!(mCheckThread);
 		}
 		mCheckRunning = false;
+		if (mCheckManaged && mManagedRecheckQueued)
+		{
+			// The compiler may have read a source that was changed, renamed or deleted mid-build.
+			// Publish diagnostics and reload assemblies only after checking the current sources.
+			mManagedRecheckQueued = false;
+			StartManagedErrorCheck();
+			return;
+		}
 		ClearAndDeleteItems!(mProblems);
 		if (mCheckManaged)
 		{
@@ -778,7 +788,7 @@ extension EditorApp
 						Log.Error(mCheckLog);
 				}
 			}
-			mManagedBuildReady = mCheckSucceeded && !mManagedRecheckQueued;
+			mManagedBuildReady = mCheckSucceeded;
 			// A class renamed in this build: point the open scene at its new name.
 			if (mCheckSucceeded && mPlay == .Edit && CSharpScriptIdentity.Repair(mScene, Project.Current.Path) > 0)
 				MarkDirty();
@@ -792,18 +802,10 @@ extension EditorApp
 					NodeLibrary.FreeRetired();
 			}
 			mStatus.Set(mCheckSucceeded ? "C# assemblies compiled." : "C# compilation failed. See Console.");
-			mManagedCompileNoticePending = mCheckSucceeded && !mManagedRecheckQueued;
+			mManagedCompileNoticePending = mCheckSucceeded;
 			if (mManagedCompileNoticePending)
 				mManagedCompileNoticeClock.Restart();
 			mCheckManaged = false;
-			if (mManagedRecheckQueued)
-			{
-				// A source changed while .NET was compiling; validate the newest
-				// revision before enabling Play instead of trusting stale output.
-				mManagedRecheckQueued = false;
-				StartManagedErrorCheck();
-				return;
-			}
 			if (mPlayAfterCompile && mPlay == .Edit)
 			{
 				mPlayAfterCompile = false;

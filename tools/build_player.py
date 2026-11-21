@@ -302,6 +302,8 @@ def main():
         if not cross and not prebuilt and not (natives / 'tallow_native.lib').is_file():
             parser.error(f'The native libraries for Windows are missing from {natives}.')
     if web:
+        if not (engine / 'tools/web/csharp_web.py').is_file():
+            parser.error('Web exports require a Tallow source checkout with the Web toolchain installed.')
         natives = engine / 'build' / 'native-web'
         # A C# game links its own build of them (tools/web/csharp_web.py checks).
         if beef_project(project) and not (natives / 'libtallow_native.a').is_file():

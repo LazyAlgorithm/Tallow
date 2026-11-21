@@ -149,13 +149,13 @@ extension EditorApp
 
 	void PollScriptReload()
 	{
-		CollectCheckResults();
 		CheckOpenScriptsOnDisk();
 		// Managed projects are monitored for external source changes, but
 		// never enter the old Beef library reload pipeline.
 		if (mManagedGameplay)
 		{
-			if (mScriptPollClock.ElapsedMilliseconds >= 500)
+			// Check for changes before publishing results from a build that just finished.
+			if (mScriptPollClock.ElapsedMilliseconds >= 500 || (mCheckRunning && Interlocked.Load(ref mCheckFinished)))
 			{
 				mScriptPollClock.Restart();
 				if (mScriptMonitor.Poll(Assets.ProjectPath))
@@ -169,8 +169,10 @@ extension EditorApp
 						mStatus.Set("C# scripts changed. Stop and restart Play to use the new code.");
 				}
 			}
+			CollectCheckResults();
 			return;
 		}
+		CollectCheckResults();
 		if (mScriptPollClock.ElapsedMilliseconds >= 500)
 		{
 			mScriptPollClock.Restart();

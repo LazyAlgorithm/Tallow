@@ -16,7 +16,8 @@ public static class Jobs
 {
 	static List<Thread> sThreads = new .() ~ delete _;
 	static List<WaitEvent> sWake = new .() ~ DeleteContainerAndItems!(_);
-	static bool sStarted;
+	// 0 before initialization, 1 while a caller starts the pool, 2 when it has been published.
+	static int32 sStartState;
 	static bool sQuit;
 	/// 1 while a batch is running (taken by compare-exchange, so only one caller hands out work at a time).
 	static int32 sBusy;
@@ -26,8 +27,10 @@ public static class Jobs
 	static int32 sChunk;
 	static int32 sNext;
 	static int32 sFinished;
-	/// How many workers have begun running (a page that allows no more threads leaves one unstarted: see Start).
-	static int32 sStartedWorkers;
+#if BF_PLATFORM_WASM
+	// The pending worker's index, zero once it reported in, or -1 if the caller abandoned it.
+	static int32 sWorkerStartup;
+#endif
 	[ThreadStatic]
 	static int32 sThreadIndex;
 	/// The marker the workers' time is shown under in the Profiler: the one open where For was called, or -1.
@@ -50,9 +53,13 @@ public static class Jobs
 
 	static void Start()
 	{
-		if (sStarted)
+		if (Interlocked.CompareExchange(ref sStartState, 0, 1) != 0)
+		{
+			while (Interlocked.Load(ref sStartState) == 1)
+				Thread.SpinWait(32);
 			return;
-		sStarted = true;
+		}
+		defer Interlocked.Store(ref sStartState, 2);
 		// Web builds share the page's cores only when the build has threads and the page allows them (see
 		// WebPlatform.ThreadsAvailable); otherwise everything runs on the calling thread.
 		if (!WebPlatform.ThreadsAvailable)
@@ -71,36 +78,27 @@ public static class Jobs
 		{
 			let wake = new WaitEvent();
 			let index = (int32)i + 1;
-			sWake.Add(wake);
 			let thread = new Thread(new () => Work(wake, index));
 			thread.IsBackground = true;
 			thread.SetName(scope $"Tallow Job {i}");
+#if BF_PLATFORM_WASM
+			Interlocked.Store(ref sWorkerStartup, index);
+#endif
 			thread.Start(false);
-			// A web page allows only so many threads at once (its pool of workers): when it refuses this one, the
-			// thread never runs. Wait for it to report in, and drop it if it never does, so that a batch is never
-			// shared with a worker that cannot take its part.
-			if (!WorkerStarted((int32)i + 1))
+#if BF_PLATFORM_WASM
+			// On the web the browser's worker pool may be full. A worker arriving after the timeout
+			// must return without accessing the event or joining a batch.
+			for (int spins = 0; spins < 200 && Interlocked.Load(ref sWorkerStartup) == index; spins++)
+				Thread.Sleep(1);
+			if (Interlocked.CompareExchange(ref sWorkerStartup, index, -1) == index)
 			{
-				// Not deleted: a thread the runtime never started is left to the page (it is small, and once).
-				sWake.Remove(wake);
 				delete wake;
 				break;
 			}
+#endif
+			sWake.Add(wake);
 			sThreads.Add(thread);
 		}
-	}
-
-	/// Waits, briefly, for a just-started worker to report in (Work counts them). A thread the runtime never started
-	/// (the page's workers are all in use) never does, and the caller goes on without it.
-	static bool WorkerStarted(int32 expected)
-	{
-		for (int spins = 0; spins < 200; spins++)
-		{
-			if (Interlocked.Load(ref sStartedWorkers) >= expected)
-				return true;
-			Thread.Sleep(1);
-		}
-		return Interlocked.Load(ref sStartedWorkers) >= expected;
 	}
 
 	/// Programs that never call Application.Shutdown (tools, tests) stop the workers on the way out.
@@ -127,8 +125,11 @@ public static class Jobs
 
 	static void Work(WaitEvent wake, int32 index)
 	{
+#if BF_PLATFORM_WASM
+		if (Interlocked.CompareExchange(ref sWorkerStartup, index, 0) != index)
+			return;
+#endif
 		sThreadIndex = index;
-		Interlocked.Increment(ref sStartedWorkers);
 		Profiler.NameThread(scope $"Job {index}");
 		while (true)
 		{

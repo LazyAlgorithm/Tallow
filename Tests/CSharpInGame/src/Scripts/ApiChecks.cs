@@ -1284,6 +1284,22 @@ public class ApiChecks : CheckBase
         graph.Custom_Bump();
         graph.Custom_Bump();
         Check("C# calls a graph's custom event", graph.bumped == before + 2);
+        // The physics event nodes compile to the overrides the engine calls on contact. Called here with the
+        // values the engine would give, so the nodes and their outputs are covered without waiting on a body.
+        GameObject zone = Scene.Find("Zone")!.Value;
+        graph.OnTriggerEnter(zone);
+        graph.OnTriggerStay(zone);
+        graph.OnTriggerExit(zone);
+        Check("a graph's On Trigger Enter/Stay/Exit nodes each run and give the other object",
+            graph.triggerEnters == 1 && graph.triggerStays == 1 && graph.triggerExits == 1 && graph.contact == zone);
+        graph.OnCollisionEnter(new Collision(zone, new Vector3(1, 2, 3), new Vector3(0, 1, 0), 7f));
+        graph.OnCollisionStay(new Collision(zone, Vector3.Zero, Vector3.UnitY, 5f));
+        graph.OnCollisionExit(new Collision(zone, Vector3.Zero, Vector3.Zero, 0f));
+        Check("a graph's On Collision Enter/Stay/Exit nodes each run",
+            graph.collisionEnters == 1 && graph.collisionStays == 1 && graph.collisionExits == 1);
+        Check($"a graph's collision event gives the other object, point, normal and relative speed ({graph.contactPoint}, {graph.contactNormal}, {graph.contactSpeed})",
+            graph.contact == zone && graph.contactPoint == new Vector3(1, 2, 3) &&
+            graph.contactNormal == new Vector3(0, 1, 0) && MathF.Abs(graph.contactSpeed - 7f) < 1e-6f);
     }
 
     private void HooksAndSaves()

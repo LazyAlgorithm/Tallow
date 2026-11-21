@@ -1,6 +1,6 @@
 # Web builds: threads, headers and hosting
 
-`tools/build_player.py <project> --platform web --output <folder>` writes a folder to put on a web server: `index.html`, the game (WebAssembly), its asset packs and `_framework/` (a C# game's .NET runtime). Nothing else is needed.
+`tools/build_player.py <project> --platform web --output <folder>` writes a folder to put on a web server: `index.html`, the game (WebAssembly), its asset packs and `_framework/` (a C# game's .NET runtime). Publish that folder as-is. To create it, use a Tallow source checkout with the Web toolchain installed. For C# games, run `tools/web/setup.sh` and then `python3 tools/web/csharp_web.py setup` from the checkout.
 
 ## Single-threaded and threaded builds
 

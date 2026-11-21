@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -138,7 +139,7 @@ def windows_link_setup(cache: Path) -> tuple[dict[str, str], list[str]]:
     return env, properties
 
 
-def wine_link_setup(cache: Path) -> tuple[Path, dict[str, str]] | None:
+def wine_link_setup(cache: Path, work: Path) -> tuple[Path, dict[str, str]] | None:
     """The Windows lld-link Beef's toolchain carries, run under Wine, for a Linux lld that crashes building the
     Windows PDB (lld 22.1.8 segfaults in its GSI hash writer for a large symbol set; lld 22.1.0 links it). Returns
     the wrapper to pass as CppLinker and the environment it needs, or None when Wine or that linker is missing."""
@@ -146,10 +147,18 @@ def wine_link_setup(cache: Path) -> tuple[Path, dict[str, str]] | None:
     linker = toolchain / 'beef' / 'bin' / 'llvm' / 'bin' / 'lld-link.exe'
     if not linker.is_file() or not shutil.which('wine'):
         return None
-    wrapper = cache / 'winlld' / 'lld-link'
-    wrapper.parent.mkdir(parents=True, exist_ok=True)
-    wrapper.write_text(f'#!/bin/sh\nexport WINEPREFIX="{toolchain / "wine"}"\n'
-                       f'export WINEDEBUG=-all\nexec wine "{linker}" "$@"\n', encoding='utf-8')
+    wrapper = work / 'lld-link-wine'
+    wrapper.write_text(
+        '#!/bin/sh\n'
+        # lld-link opens the response file before handling the paths inside it.
+        'for argument do\n'
+        '    shift\n'
+        '    case "$argument" in @/*) argument="@Z:${argument#@}" ;; esac\n'
+        '    set -- "$@" "$argument"\n'
+        'done\n'
+        f'exec wine {shlex.quote(str(linker))} "$@"\n',
+        encoding='utf-8',
+    )
     wrapper.chmod(0o755)
     xwin = toolchain / 'xwin'
     folders = [cache / 'winlibs', xwin / 'crt' / 'lib' / 'x86_64', xwin / 'sdk' / 'lib' / 'um' / 'x86_64',
@@ -243,20 +252,21 @@ def build(engine: Path, project: Path, config: str, staging: Path, windows: bool
         print(f'Compiling the game to native code ({rid}, NativeAOT)...')
         retry = [p for p in properties if not p.startswith('-p:CppLinker=')]
         first_output = ''
-        result = subprocess.run(['dotnet', 'publish', str(work / 'TallowGame.csproj'), '-c', config, '-r', rid, '-o', str(published),
-                                 '--nologo', '-v', 'minimal', *properties], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # Keep the API/runtime PDBs and restore files private to this publish while other projects build.
+        command = ['dotnet', 'publish', str(work / 'TallowGame.csproj'), '-c', config, '-r', rid,
+                   '-o', str(published), '--artifacts-path', str(work / 'artifacts'), '--nologo', '-v', 'minimal']
+        result = subprocess.run([*command, *properties], env=env, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True)
         if (result.returncode != 0 and windows and os.name != 'nt' and
                 ('exited with code 139' in result.stdout or 'Segmentation fault' in result.stdout)):
             # A crash in the linker itself, not the game: the Linux lld's Windows PDB writer segfaults on a large
             # symbol set (22.1.8); the Windows lld Beef's toolchain carries links the same input.
-            fallback = wine_link_setup(cache)
+            fallback = wine_link_setup(cache, work)
             if fallback is not None:
                 wrapper, extra = fallback
                 print('note: lld-link crashed; linking again with the toolchain\'s lld-link under Wine.')
                 first_output = result.stdout
-                result = subprocess.run(['dotnet', 'publish', str(work / 'TallowGame.csproj'), '-c', config, '-r', rid,
-                                         '-o', str(published), '--nologo', '-v', 'minimal', *retry,
-                                         f'-p:CppLinker={wrapper}'],
+                result = subprocess.run([*command, *retry, f'-p:CppLinker={wrapper}'],
                                         env=dict(env, **extra), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         # The retry reuses ILCompiler's cache, so its output has no analysis warnings: read both runs'.
         warning_text = first_output + '\n' + result.stdout
@@ -295,7 +305,7 @@ def build(engine: Path, project: Path, config: str, staging: Path, windows: bool
         # The library's own native symbols (Linux: the .dbg split off by strip; Windows: the linker's .pdb, which stays
         # in the native build folder). The assemblies' IL .pdb files say nothing about native code and are left out.
         wanted = library.name + '.dbg' if not windows else library.stem + '.pdb'
-        found = [file for file in [published / wanted, *work.glob(f'bin/**/native/{wanted}'), *work.glob(f'obj/**/native/{wanted}')] if file.is_file()]
+        found = [file for file in [published / wanted, *work.glob(f'artifacts/**/native/{wanted}')] if file.is_file()]
         if found:
             shutil.copy2(found[0], symbols / wanted)
         else:

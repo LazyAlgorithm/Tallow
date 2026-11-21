@@ -89,7 +89,10 @@ extension EditorApp
 	bool WebBuildReady()
 	{
 		let natives = IsCSharpProject ? "native-web-dotnet" : "native-web";
-		return File.Exists(scope $"{Project.Current.EngineRoot}/build/{natives}/libtallow_native.a") && Directory.Exists(scope $"{Project.Current.EngineRoot}/Engine/assets/shaders/webgl");
+		let root = Project.Current.EngineRoot;
+		return File.Exists(scope $"{root}/tools/web/csharp_web.py")
+			&& File.Exists(scope $"{root}/build/{natives}/libtallow_native.a")
+			&& Directory.Exists(scope $"{root}/Engine/assets/shaders/webgl");
 	}
 
 	/// Whether this machine can build Windows games (tools/windows/setup.sh has been run).
@@ -274,7 +277,17 @@ extension EditorApp
 	void DrawBuildSetupHint()
 	{
 		let web = mBuildTarget == .Web;
+		let root = Project.Current.EngineRoot;
+		let setup = web ? scope $"{root}/tools/web/setup.sh" : scope $"{root}/tools/windows/setup.sh";
 		ImGui.PushTextWrapPos(0);
+		if (!File.Exists(setup))
+		{
+			ImGui.TextColored(EditorTheme.Warning, web
+				? "Web exports require a Tallow source checkout with the Web toolchain installed."
+				: "Windows exports from Linux require a package with the Windows player or a Tallow source checkout with the Windows toolchain installed.");
+			ImGui.PopTextWrapPos();
+			return;
+		}
 		let csharpWeb = web && IsCSharpProject;
 		if (csharpWeb)
 			ImGui.TextColored(EditorTheme.Warning, "This machine is not set up to build C# games for the web yet. Run this once in a terminal (it downloads Emscripten and .NET's WebAssembly tools, about 2 GB):");
@@ -283,8 +296,16 @@ extension EditorApp
 		else
 			ImGui.TextColored(EditorTheme.Warning, "This machine is not set up to build for Windows yet. Run this once in a terminal (it downloads about 3 GB, including Microsoft's Windows libraries under their licence):");
 		ImGui.PopTextWrapPos();
-		let command = csharpWeb ? scope $"{Project.Current.EngineRoot}/tools/web/setup.sh && python3 {Project.Current.EngineRoot}/tools/web/csharp_web.py setup"
-			: web ? scope $"{Project.Current.EngineRoot}/tools/web/setup.sh" : scope $"{Project.Current.EngineRoot}/tools/windows/setup.sh --accept-license";
+		let command = scope String();
+		Terminal.Quote(setup, command);
+		if (csharpWeb)
+		{
+			command.Append(" && python3 ");
+			Terminal.Quote(scope $"{root}/tools/web/csharp_web.py", command);
+			command.Append(" setup");
+		}
+		else if (!web)
+			command.Append(" --accept-license");
 		ImGui.Text(command);
 		ImGui.SameLine();
 		if (ImGui.SmallButton("Copy"))

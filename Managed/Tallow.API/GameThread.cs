@@ -207,7 +207,6 @@ internal static class GameThread
             waiter.Registration = token.Register(static state =>
             {
                 var cancelled = (Waiter)state!;
-                sWaiters.Remove(cancelled);
                 cancelled.Done.TrySetCanceled(cancelled.Token);
             }, waiter);
         }
@@ -226,6 +225,12 @@ internal static class GameThread
         sFinished.Clear();
         foreach (Waiter waiter in sWaiters)
         {
+            // Cancellation may come from a worker. Only the game thread mutates the wait list.
+            if (waiter.Token.IsCancellationRequested)
+            {
+                sFinished.Add(waiter);
+                continue;
+            }
             // A wait started this frame ends next frame at the earliest, whatever its length.
             if (waiter.Frame == sFrame)
                 continue;
@@ -238,7 +243,10 @@ internal static class GameThread
             sWaiters.Remove(waiter);
             waiter.Registration.Dispose();
             // Continuations captured the context, so they are posted to it and run just below.
-            waiter.Done.TrySetResult();
+            if (waiter.Token.IsCancellationRequested)
+                waiter.Done.TrySetCanceled(waiter.Token);
+            else
+                waiter.Done.TrySetResult();
         }
         Exception? failure = null;
         try
@@ -252,13 +260,15 @@ internal static class GameThread
         // Where the platform has no threads, work handed to Background runs here, a little each frame.
         try
         {
-            failure = Background.Pump() ?? failure;
+            Exception? backgroundFailure = Background.Pump();
+            failure ??= backgroundFailure;
         }
         catch (Exception exception)
         {
             failure ??= exception;
         }
-        failure = sContext.Run() ?? failure;
+        Exception? continuationFailure = sContext.Run();
+        failure ??= continuationFailure;
         sFrame++;
         if (failure != null)
             ExceptionDispatchInfo.Capture(failure).Throw();

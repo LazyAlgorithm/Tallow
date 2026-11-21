@@ -59,6 +59,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install the Tallow .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: tallow/global.json
+
       - name: Install build tools
         run: |
           sudo apt-get update
@@ -170,6 +175,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Install the Tallow .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: tallow/global.json
 
       # Microsoft's compiler environment (the C runtime and Windows SDK), used by clang-cl and Beef's linker.
       - name: Visual Studio environment

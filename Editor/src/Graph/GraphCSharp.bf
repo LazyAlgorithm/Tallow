@@ -122,6 +122,7 @@ static class GraphCSharp
 		MemberWord(text, "point", "Point");
 		MemberWord(text, "normal", "Normal");
 		MemberWord(text, "distance", "Distance");
+		MemberWord(text, "relativeSpeed", "RelativeSpeed");
 		// Beef's Time.Time (a C# member cannot share its class's name).
 		MemberWord(text, "Time", "GameTime");
 		for (let call in StringView[?]("GetMouseButton(", "GetMouseButtonDown(", "GetMouseButtonUp("))

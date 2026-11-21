@@ -43,7 +43,7 @@ def main():
                 for archive in re.findall(r'\$\(WorkspaceDir\)/[^"\s]+\.(?:a|lib)', flags):
                     if '"' + archive + '"' not in flags:
                         failures.append(f'{relative}: {mode}/{platform}: unquoted native archive')
-                    workspace = path.parent if relative.parts[0] == 'Tests' else ROOT
+                    workspace = path.parent if (path.parent / 'BeefSpace.toml').is_file() or relative.parts[0] == 'Tests' else ROOT
                     expanded = archive.replace('$(WorkspaceDir)', str(workspace))
                     normalized = Path(os.path.normpath(expanded))
                     if not normalized.is_relative_to(ROOT / 'build'):

@@ -139,10 +139,10 @@ def main():
         for name in ('Directory.Build.props', 'Directory.Packages.props', 'global.json'):
             if (root / 'Managed' / name).is_file():
                 shutil.copy2(root / 'Managed' / name, stage / 'Managed' / name)
-        for name in ('BeefSpace.toml', 'icon.png', 'LICENSE', 'THIRD_PARTY_LICENSES.txt'):
+        for name in ('BeefSpace.toml', 'global.json', 'icon.png', 'LICENSE', 'THIRD_PARTY_LICENSES.txt'):
             shutil.copy2(root / name, stage / name)
         (stage / 'tools').mkdir()
-        for name in ('build_player.py', 'test_csharp_export.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'dotnet_sdk.py', 'ship_symbols.py', 'csharp_native.py', 'toolchain.txt', 'setup_dependencies.ps1', 'setup_dependencies.sh'):
+        for name in ('build_player.py', 'test_csharp_export.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'dotnet_sdk.py', 'ship_symbols.py', 'csharp_native.py', 'nativeaot_allowlist.txt', 'toolchain.txt', 'setup_dependencies.ps1', 'setup_dependencies.sh'):
             shutil.copy2(root / 'tools' / name, stage / 'tools' / name)
         shutil.copy2(root / 'tools/beef_language_service.py', stage / 'tools/beef_language_service.py')
         # Script reloads compile with the Beef compiler kept loaded (built on first use from the sources of the user's

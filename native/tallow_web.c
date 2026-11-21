@@ -61,6 +61,7 @@ EM_JS(int, tn_web_threads_available, (void), {
 // module instead. Only a threaded link has shared memory; a single-threaded one has an ordinary ArrayBuffer.
 // Starting a thread in a module without them throws (C++ std::thread raises, which would end the frame).
 EM_JS(int, tn_web_built_with_threads, (void), {
+	if (typeof SharedArrayBuffer === "undefined") return 0;
 	var memory = typeof wasmMemory !== "undefined" ? wasmMemory : (typeof Module !== "undefined" ? Module.wasmMemory : undefined);
 	return (memory && memory.buffer instanceof SharedArrayBuffer) ? 1 : 0;
 });
