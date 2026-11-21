@@ -425,6 +425,24 @@ public class ApiChecks : CheckBase
         lineRenderer.ClearPositions();
         Check("LineRenderer.ClearPositions", lineRenderer.PositionCount == 0);
 
+        GameObject labelObject = Scene.CreateGameObject("World text");
+        WorldText label = labelObject.AddComponent<WorldText>();
+        label.Text = "Hello\nWorld";
+        label.Mode = WorldTextMode.Screen;
+        label.Size = 0.6f;
+        label.Font = "";
+        Vector2 labelSize = label.Measure();
+        Check($"WorldText fields and Measure ({labelSize.X:0.00} x {labelSize.Y:0.00})",
+            label.Text == "Hello\nWorld" && label.Mode == WorldTextMode.Screen && labelSize.X > 0 && labelSize.Y > 0);
+        label.Mode = WorldTextMode.World;
+        label.Alignment = WorldTextAlign.Left;
+        label.Facing = WorldTextFacing.Camera;
+        label.Depth = 0.2f;
+        Vector2 worldTextSize = label.Measure();
+        Check($"WorldText World measure, enums and Depth ({worldTextSize.X:0.00} x {worldTextSize.Y:0.00}, depth {label.Depth:0.00})",
+            label.Alignment == WorldTextAlign.Left && label.Facing == WorldTextFacing.Camera
+            && MathF.Abs(label.Depth - 0.2f) < 1e-4f && worldTextSize.X > 0 && worldTextSize.Y > 0);
+
         GameObject body = Scene.CreateGameObject("Skinned");
         SkinnedMeshRenderer skinned = body.AddComponent<SkinnedMeshRenderer>();
         skinned.SetPartHidden("Head", true);

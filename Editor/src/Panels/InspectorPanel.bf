@@ -978,7 +978,7 @@ extension EditorApp
 	static StringView ComponentCategory(StringView fullName, StringView name)
 	{
 		if (!fullName.StartsWith("Tallow.")) return "Scripts";
-		if (name == "Camera" || name == "Light" || name == "MeshRenderer" || name == "Decal" || name == "LODGroup" || name == "ReflectionProbe" || name == "LightProbeVolume") return "Rendering";
+		if (name == "Camera" || name == "Light" || name == "MeshRenderer" || name == "WorldText" || name == "Decal" || name == "LODGroup" || name == "ReflectionProbe" || name == "LightProbeVolume") return "Rendering";
 		if (name == "Rigidbody" || name == "SoftBody" || name == "Rope" || name.EndsWith("Collider") || name == "CharacterController") return "Physics";
 		if (name == "SkinnedMeshRenderer" || name == "Animator" || name == "SequencePlayer") return "Animation";
 		if (name == "UIDocument") return "UI";
@@ -995,6 +995,7 @@ extension EditorApp
 		if (typeName == "Camera") return Icons.Camera;
 		if (typeName == "Light") return Icons.Light;
 		if (typeName == "MeshRenderer") return Icons.Cube;
+		if (typeName == "WorldText") return Icons.Text;
 		if (typeName == "SkinnedMeshRenderer" || typeName == "Animator") return Icons.Character;
 		if (typeName == "UIDocument") return Icons.Script;
 		if (typeName == "Rigidbody" || typeName == "SoftBody" || typeName == "Rope") return Icons.Body;
@@ -1176,7 +1177,7 @@ extension EditorApp
 			if (field.type == typeof(SharedString))
 			{
 				let edited = scope String(((SharedString*)field.ptr).View);
-				if (!DrawStringField(edited, field.name))
+				if (!DrawStringField(edited, field.name, field.multiline))
 					return false;
 				*(SharedString*)field.ptr = edited;
 				return true;
@@ -1185,7 +1186,7 @@ extension EditorApp
 			let original = StringFields.Writable(field.ptr, field.name);
 			let temporary = scope String();
 			let text = original != null ? original : temporary;
-			let changed = DrawStringField(text, field.name);
+			let changed = DrawStringField(text, field.name, field.multiline);
 			if (changed && original == null)
 				*(String*)field.ptr = new String(text);
 			return changed;
@@ -1232,6 +1233,7 @@ extension EditorApp
 		if (kind == "material" || kind == "interiorMaterial") return HasExtension(path, ".tmat");
 		if (kind == "shader") return HasExtension(path, ".tcompute");
 		if (kind == "document") return HasExtension(path, ".tui");
+		if (kind == "font") return HasExtension(path, ".ttf") || HasExtension(path, ".otf");
 		if (kind == "dialogue") return HasExtension(path, ".tdialogue");
 		if (kind == "sequence") return HasExtension(path, ".tsequence");
 		if (kind == "scene") return HasExtension(path, ".tscene");
@@ -1311,10 +1313,12 @@ extension EditorApp
 	}
 
 	/// A text field's editor: an asset picker for fields named like asset paths, otherwise a text box.
-	bool DrawStringField(String text, StringView name)
+	bool DrawStringField(String text, StringView name, bool multiline = false)
 	{
-		if (name == "mesh" || name == "model" || name == "texture" || name == "document" || name == "prefab" || name == "tree" || name == "controller" || name == "material" || name == "interiorMaterial" || name == "scene" || name == "shader" || name == "bakedData" || name == "audioClip" || name == "dialogue" || name == "sequence" || name.EndsWith("Prefab"))
+		if (name == "mesh" || name == "model" || name == "texture" || name == "document" || name == "prefab" || name == "tree" || name == "controller" || name == "material" || name == "interiorMaterial" || name == "scene" || name == "shader" || name == "bakedData" || name == "audioClip" || name == "dialogue" || name == "sequence" || name == "font" || name.EndsWith("Prefab"))
 			return DrawAssetPicker(text, name);
+		if (multiline)
+			return ImGui.InputTextMultiline("##v", text, .(0, 72));
 		return ImGui.InputText("##v", text);
 	}
 

@@ -6,6 +6,7 @@ namespace Tallow.Editor;
 static class Icons
 {
 	public const char8* Cube = "\u{f1b2}";
+	public const char8* Text = "\u{f031}";
 	public const char8* Folder = "\u{f07b}";
 	public const char8* Camera = "\u{f03d}";
 	public const char8* Light = "\u{f0eb}";

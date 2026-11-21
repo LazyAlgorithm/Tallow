@@ -179,6 +179,7 @@ add_library(tallow_native STATIC
 	${TP}/TextEdit/TextEditor.cpp
 	${TP}/TextEdit/extras/TrieAutoComplete.cpp
 	tallow_native.cpp
+	tallow_text.c
 	tallow_code.cpp
 	${TALLOW_MANAGED_HOST_SOURCE}
 	tallow_bake.cpp

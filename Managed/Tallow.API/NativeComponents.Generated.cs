@@ -2701,6 +2701,98 @@ public readonly partial record struct WindZone(GameObject GameObject) : ICompone
 }
 
 /// <summary>
+/// Text that lives in the world (docs/world-text.md), in either of two ways:
+///
+/// World: flat letters drawn in the scene, rasterized from a font file (or the engine's own) into a texture on a
+/// quad, through a hidden child object. A sign over a shop, a label on a wall, a name floating over a character:
+/// hidden behind walls like the rest of the scene, and smaller with distance.
+///
+/// Screen: a name tag. A dot in the world, drawn flat on the screen with the interface's text at a size in pixels,
+/// over the scene and under the game's interface, so it is always readable.
+///
+/// WorldText label = go.AddComponent&lt;WorldText&gt;();
+/// label.Text = "Night 1";
+/// label.Size = 0.8f;
+/// </summary>
+[NativeComponent("Tallow.WorldText")]
+public readonly partial record struct WorldText(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.WorldText");
+    /// <summary>Whether the object still exists and has this component.</summary>
+    public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// The words. Several lines are drawn one under another, split at their new lines.
+    /// </summary>
+    public string Text { get => Data.GetString("text"); set => Data.Set("text", value); }
+    /// <summary>
+    /// A .ttf or .otf file in the project. Empty draws it in the engine's own font (Roboto, the interface's font).
+    /// </summary>
+    public string Font { get => Data.GetString("font"); set => Data.Set("font", value); }
+    /// <summary>
+    /// Letters in the scene, or a label pinned to a point on the screen (Name Tag).
+    /// </summary>
+    public WorldTextMode Mode { get => Data.GetEnum<WorldTextMode>("mode"); set => Data.Set("mode", value); }
+    /// <summary>
+    /// The text's colour. An alpha below 1 makes it see-through.
+    /// </summary>
+    public Color Color { get => Data.GetColor("color"); set => Data.Set("color", value); }
+    /// <summary>
+    /// How big it is: the height of a line in metres in the scene, or the font size in screen pixels on the screen.
+    /// </summary>
+    public float Size { get => Data.GetFloat("size"); set => Data.Set("size", value); }
+    /// <summary>
+    /// How far the letters stick out, in metres: 0 keeps them flat, as paper; more makes solid letters with faces,
+    /// backs and walls (a full 3D model). The depth is centred on the object's position. Screen labels stay flat.
+    /// </summary>
+    public float Depth { get => Data.GetFloat("depth"); set => Data.Set("depth", value); }
+    /// <summary>
+    /// Which part of the text sits on the object's position.
+    /// </summary>
+    public WorldTextAlign Alignment { get => Data.GetEnum<WorldTextAlign>("alignment"); set => Data.Set("alignment", value); }
+    /// <summary>
+    /// Whether the backs of the letters are drawn too (off: only from the front, as a sign on a wall).
+    /// </summary>
+    public bool DoubleSided { get => Data.GetBool("doubleSided"); set => Data.Set("doubleSided", value); }
+    /// <summary>
+    /// Drawn in its own colour, unlit by the scene's lights. Off: it takes the scene's light like a painted sign.
+    /// </summary>
+    public bool Unlit { get => Data.GetBool("unlit"); set => Data.Set("unlit", value); }
+    /// <summary>
+    /// How strongly it glows in its own colour (through bloom): 0 not at all.
+    /// </summary>
+    public float Glow { get => Data.GetFloat("glow"); set => Data.Set("glow", value); }
+    /// <summary>
+    /// Whether scene text casts a shadow. Solid letters (Depth above 0) can; flat text rarely looks right.
+    /// </summary>
+    public bool CastShadows { get => Data.GetBool("castShadows"); set => Data.Set("castShadows", value); }
+    /// <summary>
+    /// Which way it faces (in the scene): with its object, or turning to face the camera.
+    /// </summary>
+    public WorldTextFacing Facing { get => Data.GetEnum<WorldTextFacing>("facing"); set => Data.Set("facing", value); }
+    /// <summary>
+    /// The number of texture pixels a metre of scene text is drawn with (a higher count is sharper close up and
+    /// more memory per label).
+    /// </summary>
+    public float PixelDensity { get => Data.GetFloat("pixelDensity"); set => Data.Set("pixelDensity", value); }
+    /// <summary>
+    /// Whether scene text is drawn in the editor while not playing.
+    /// </summary>
+    public bool ShowInEditor { get => Data.GetBool("showInEditor"); set => Data.Set("showInEditor", value); }
+    /// <summary>
+    /// A name tag's place on the screen, in pixels, from where its object is (positive x to the right, positive y down).
+    /// </summary>
+    public Vector2 ScreenOffset { get => Data.GetVector2("screenOffset"); set => Data.Set("screenOffset", value); }
+    /// <summary>
+    /// A name tag's furthest distance in metres (0: no limit). Past it the label is not drawn.
+    /// </summary>
+    public float MaxDistance { get => Data.GetFloat("maxDistance"); set => Data.Set("maxDistance", value); }
+    /// <summary>
+    /// A name tag's dark shadow, so it stays readable over bright scenery.
+    /// </summary>
+    public bool Shadow { get => Data.GetBool("shadow"); set => Data.Set("shadow", value); }
+}
+
+/// <summary>
 /// How a positioned sound gets quieter with distance, between its Min Distance and Max Distance.
 /// </summary>
 public enum AudioRolloff
@@ -3050,6 +3142,48 @@ public enum WindShape
     Sphere = 1,
 }
 
+/// <summary>
+/// Which part of the text sits on the object's position.
+/// </summary>
+public enum WorldTextAlign
+{
+    Left = 0,
+    Center = 1,
+    Right = 2,
+}
+
+/// <summary>
+/// Which way 3D text faces.
+/// </summary>
+public enum WorldTextFacing
+{
+    /// <summary>
+    /// The object's own rotation: it can be a sign on a wall, or laid flat.
+    /// </summary>
+    Transform = 0,
+    /// <summary>
+    /// Turns about its up axis to face the camera wherever it moves, like a name plate over a character.
+    /// </summary>
+    Camera = 1,
+}
+
+/// <summary>
+/// How a World Text is drawn.
+/// </summary>
+public enum WorldTextMode
+{
+    /// <summary>
+    /// Flat letters in the scene: drawn like a mesh, so they are hidden behind walls and grow smaller with distance.
+    /// For signs, labels over doors, floating names above a head that still belong to the world.
+    /// </summary>
+    World = 0,
+    /// <summary>
+    /// A label pinned to a point in the world but drawn flat on the screen at a size in pixels (a name tag, a damage
+    /// number, a marker): always readable, over the scene and under the game's own interface.
+    /// </summary>
+    Screen = 1,
+}
+
 internal static partial class NativeComponentTypes
 {
     /// <summary>The field properties generated into hand-written handles (each is a plain field).</summary>
@@ -3112,5 +3246,6 @@ internal static partial class NativeComponentTypes
         Known[typeof(ViewmodelPose)] = ("Tallow.ViewmodelPose", o => new ViewmodelPose(o));
         Known[typeof(Water)] = ("Tallow.Water", o => new Water(o));
         Known[typeof(WindZone)] = ("Tallow.WindZone", o => new WindZone(o));
+        Known[typeof(WorldText)] = ("Tallow.WorldText", o => new WorldText(o));
     }
 }

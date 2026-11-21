@@ -1852,6 +1852,7 @@ class Scene
 		ParticleSystem.FrameAll(this);
 		LineRenderer.FrameAll(this);
 		TrailRenderer.FrameAll(this);
+		WorldText.FrameAll(this);
 		Profiler.End();
 	}
 
@@ -1942,9 +1943,10 @@ class Scene
 					Run(component, .LocalLateUpdate);
 			}
 		}
-		// Lines and trails follow what the scripts moved.
+		// Lines, trails and labels follow what the scripts moved.
 		LineRenderer.LateAll(this);
 		TrailRenderer.LateAll(this);
+		WorldText.LateAll(this);
 		Profiler.End();
 	}
 

@@ -118,6 +118,7 @@ method	Tallow.CSharpComponentActions	WaterAt	ulong	session:ulong	point:System.Nu
 method	Tallow.CSharpComponentActions	WaterFloating	int	session:ulong	entity:ulong	body:ulong
 method	Tallow.CSharpComponentActions	WaterHeight	float	session:ulong	entity:ulong	point:System.Numerics.Vector3
 method	Tallow.CSharpComponentActions	WaterSurface	bool	session:ulong	entity:ulong	point:System.Numerics.Vector3	values:System.Span<float>
+method	Tallow.CSharpComponentActions	WorldTextMeasure	bool	session:ulong	entity:ulong	values:System.Span<float>
 method	Tallow.CSharpComponents	ActiveState	int	session:ulong	entity:ulong	instance:int
 method	Tallow.CSharpComponents	Add	int	session:ulong	entity:ulong	managedType:string
 method	Tallow.CSharpComponents	EnabledState	int	session:ulong	entity:ulong	instance:int

@@ -31,6 +31,12 @@ struct AdvancedAttribute : Attribute
 {
 }
 
+/// Draw a text field in the Inspector as a box of several lines (Enter starts a new one) instead of one line.
+[AttributeUsage(.Field, .ReflectAttribute)]
+struct MultilineAttribute : Attribute
+{
+}
+
 /// Keep a public field out of scene files and the Inspector.
 [AttributeUsage(.Field, .ReflectAttribute)]
 struct NonSerializedAttribute : Attribute

@@ -911,3 +911,11 @@ TN_API bool tn_gizmo_manipulate(const float* view, const float* projection, int 
 
 TN_API bool tn_gizmo_is_using() { return ImGuizmo::IsUsing(); }
 TN_API bool tn_gizmo_is_over() { return ImGuizmo::IsOver(); }
+
+// The interface font's bytes (Roboto), for text drawn in the world: WorldText rasterizes it with stb_truetype
+// (tallow_text.c) into a texture a mesh can draw. The data lives as long as the program does.
+TN_API const void* tn_text_default_font_data(int* size)
+{
+	if (size != nullptr) *size = (int)sizeof(s_robotoRegularTtf);
+	return s_robotoRegularTtf;
+}

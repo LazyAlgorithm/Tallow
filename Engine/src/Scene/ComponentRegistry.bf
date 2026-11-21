@@ -47,6 +47,8 @@ struct FieldRef
 	public float rangeMax;
 	/// Marked [Layer]: an integer that is one of the project's layers, or -1 for none.
 	public bool isLayer;
+	/// Marked [Multiline]: a text field drawn as a box of several lines in the Inspector.
+	public bool multiline;
 	/// For a List or Array: what each element is, and its type.
 	public FieldKind elementKind;
 	public Type elementType;
@@ -364,6 +366,7 @@ static class ComponentRegistry
 				fieldRef.syncPosition = field.GetCustomAttribute<SyncPositionAttribute>() case .Ok;
 				fieldRef.sync = fieldRef.syncPosition || (field.GetCustomAttribute<SyncAttribute>() case .Ok);
 				fieldRef.isLayer = field.GetCustomAttribute<LayerAttribute>() case .Ok;
+				fieldRef.multiline = field.GetCustomAttribute<MultilineAttribute>() case .Ok;
 				fieldRef.saved = field.GetCustomAttribute<SavedAttribute>() case .Ok;
 				if (field.GetCustomAttribute<RangeAttribute>() case .Ok(let range))
 				{

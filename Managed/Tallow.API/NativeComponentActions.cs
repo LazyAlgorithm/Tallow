@@ -256,6 +256,19 @@ public readonly partial record struct TrailRenderer
     }
 }
 
+public readonly partial record struct WorldText
+{
+    /// <summary>The size the text takes: metres in the scene, or screen pixels in Name Tag mode. For laying out a
+    /// background box or a neighbouring label around it.</summary>
+    public Vector2 Measure()
+    {
+        Span<float> values = stackalloc float[2];
+        if (!CSharpComponentActions.WorldTextMeasure(GameObject.SceneId, GameObject.Id, values))
+            throw ActionText.Missing(GameObject, "World Text");
+        return new Vector2(values[0], values[1]);
+    }
+}
+
 public readonly partial record struct ViewmodelPose
 {
     /// <summary>Kicks the arms and weapon back as a shot does (1 is one shot's worth); it settles by itself.</summary>

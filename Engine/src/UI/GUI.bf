@@ -43,6 +43,9 @@ static class GUI
 		Height = size.y;
 		sCounter = 0;
 		MouseOverControl = false;
+		// Labels that live in the world but are drawn on the screen (World Text in Screen mode) sit under the
+		// game's own interface.
+		WorldText.DrawScreen(scene);
 		for (int i = 0; i < scene.Components.Count; i++)
 		{
 			let component = scene.Components[i];

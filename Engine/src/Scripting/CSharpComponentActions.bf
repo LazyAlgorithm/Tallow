@@ -181,6 +181,19 @@ static class CSharpComponentActions
 		return (int32)count;
 	}
 
+	/// A World Text's size (x, y): metres in the scene, or screen pixels on the screen. False without one.
+	[CSharpExpose]
+	public static bool WorldTextMeasure(uint64 session, uint64 entity, Span<float> values)
+	{
+		let label = Get<WorldText>(Object(session, entity));
+		if (!label || values.Length < 2)
+			return false;
+		let size = label.Measure();
+		values[0] = size.x;
+		values[1] = size.y;
+		return true;
+	}
+
 	[CSharpExpose]
 	public static bool TrailClear(uint64 session, uint64 entity)
 	{
