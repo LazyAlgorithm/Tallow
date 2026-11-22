@@ -1013,6 +1013,8 @@ class Program
 				return PhysicsGatingTest.Run();
 			if (args[i] == "--test-physics-basic")
 				return PhysicsBasicTest.Run();
+			if (args[i] == "--test-physics-snapshots")
+				return PhysicsSnapshotTest.Run();
 			if (args[i] == "--test-physics-ragdoll")
 				return PhysicsRagdollTest.Run();
 			if (args[i] == "--test-physics-vehicle")

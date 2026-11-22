@@ -133,6 +133,9 @@ class PhysicsWorld
 	/// What this world's backend supports. Before the backend is made this is the provider's declared set.
 	public PhysicsFeatures Features => mBackend != null ? mBackend.Features : (BackendProvider != null ? BackendProvider.Features : .None);
 	public bool Supports(PhysicsFeature feature) => Features.Has(feature);
+	/// Whether this backend can run lockstep networking: exact snapshots, shared state to send, fixed body ids and
+	/// the same results on every platform. Other network modes only need the ordinary body snapshot.
+	public bool CanLockstep => Supports(.SaveRestoreExact) && Supports(.SharedPhysicsState) && Supports(.FixedBodyIds) && Supports(.CrossPlatformDeterminism);
 
 	/// The selected backend's soft bodies and ropes. Null when it has none; components check Supports first.
 	public PhysicsSoftBodyExtension SoftBodies => mBackend != null ? mBackend.SoftBodies : null;

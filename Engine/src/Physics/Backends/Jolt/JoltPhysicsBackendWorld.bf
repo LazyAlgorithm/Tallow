@@ -278,7 +278,7 @@ class JoltPhysicsBackendWorld : PhysicsBackendWorld
 		return into.Count;
 	}
 
-	public override void Clear()
+	protected override void ClearCore()
 	{
 		if (mBodyInterface == null)
 			return;
@@ -397,7 +397,7 @@ class JoltPhysicsBackendWorld : PhysicsBackendWorld
 
 	// ---- bodies ----
 
-	public override uint32 CreateBody(PhysicsBodyDesc desc, ShapeDesc shapeDesc)
+	protected override uint32 CreateBodyCore(PhysicsBodyDesc desc, ShapeDesc shapeDesc)
 	{
 		if (mSystem == null)
 			return uint32.MaxValue;
@@ -473,7 +473,7 @@ class JoltPhysicsBackendWorld : PhysicsBackendWorld
 		return bodyId;
 	}
 
-	public override void DestroyBody(uint32 bodyId)
+	protected override void DestroyBodyCore(uint32 bodyId)
 	{
 		if (mBodyInterface == null || bodyId == uint32.MaxValue)
 			return;

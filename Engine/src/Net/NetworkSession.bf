@@ -89,9 +89,17 @@ class NetworkSession : Component
 		network.SnapshotRelevanceRadius = snapshotRelevanceRadius;
 		network.LosslessCompression = losslessCompression;
 		network.FieldDeltas = fieldDeltas;
-		network.Lockstep = lockstep;
+		// Lockstep replays exact physics state and hashes it across machines, which only a backend with those
+		// capabilities can do. A generic backend still plays every other networked mode through its snapshots.
+		var useLockstep = lockstep;
+		if (lockstep && !Scene.Physics.CanLockstep)
+		{
+			Log.Error("Lockstep needs a physics backend with exact save/restore, shared state, fixed body ids and cross-platform determinism. This project's backend has only ordinary snapshots: starting without lockstep.");
+			useLockstep = false;
+		}
+		network.Lockstep = useLockstep;
 		network.DesyncDebugger = desyncDebugger;
-		if (lockstep)
+		if (useLockstep)
 			network.PredictPhysics = true;
 		network.InputDelayTicks = inputDelayTicks;
 		network.MessageCompression = messageCompression;

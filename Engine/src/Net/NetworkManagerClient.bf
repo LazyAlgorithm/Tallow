@@ -85,6 +85,12 @@ extension NetworkManager
 		ResetForwarding();
 		// Replicas a previous host sent go: this server sends its own.
 		NativeResetReplicas();
+		if (lockstep && !mScene.Physics.CanLockstep)
+		{
+			Log.Error("The server runs lockstep, but this project's physics backend has only ordinary snapshots. Use the same backend, or join without lockstep.");
+			mTransport.Disconnect(mServerPeer);
+			return;
+		}
 		Lockstep = lockstep;
 		ResetLockstep();
 		mConnected = reader.Ok;

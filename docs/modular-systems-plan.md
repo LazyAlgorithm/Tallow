@@ -979,6 +979,20 @@ Implemented on `feature/physics-modularity`:
 - `PhysicsRagdollExtension`, `PhysicsVehicleExtension` and their Jolt implementations are now wired; the
   `Ragdoll` and `Vehicle` components use them (see the conversion-complete section below).
 
+### Networking through the backend (2026-11-22)
+
+- `PhysicsBackendWorld` now tracks the bodies each backend makes and provides default snapshots
+  (`SaveState`/`RestoreState`/`StateSize`/`FreeState`/`StateToBytes`/`StateFromBytes`/`SaveShared`) from body
+  poses, velocities and sleep state. A new backend that implements the required body primitives is saved, rolled
+  back, serialized and sent to other machines with no networking code of its own. Jolt overrides all of them with
+  its exact native state, as do future backends whose library has native snapshots.
+- Lockstep is gated on `PhysicsWorld.CanLockstep` (`SaveRestoreExact`, `SharedPhysicsState`, `FixedBodyIds`,
+  `CrossPlatformDeterminism`): a backend with only the generic snapshots plays the other networked modes but
+  refuses lockstep with a clear message (both when a session starts with it and when a client is told the server
+  runs it).
+- `--test-physics-snapshots` proves the default path with a backend that only implements bodies (save, restore,
+  bytes, shared state, a damaged snapshot refused, lockstep refused).
+
 ### Physics conversion complete (2026-11-22)
 
 - Soft bodies, ropes, water's soft-body float and navigation's geometry all go through neutral extensions:
