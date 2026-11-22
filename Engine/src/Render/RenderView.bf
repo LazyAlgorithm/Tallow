@@ -1508,6 +1508,9 @@ class RenderView
 			return;
 		bgfx.TransientVertexBuffer buffer = default;
 		bgfx.alloc_transient_vertex_buffer(&buffer, 3, &Gfx.ScreenLayout);
+		// What was asked for may not be what came back (a full buffer, say): write only what fits.
+		if (buffer.data == null || buffer.size < 3 * (uint32)sizeof(ScreenVertex))
+			return;
 		let vertices = (ScreenVertex*)buffer.data;
 		// One oversized triangle covering the viewport; UV origin follows the backend's texture origin.
 		let top = Gfx.OriginBottomLeft ? 1.0f : 0.0f;
@@ -1536,6 +1539,12 @@ class RenderView
 			return;
 		bgfx.TransientVertexBuffer buffer = default;
 		bgfx.alloc_transient_vertex_buffer(&buffer, available, &Gfx.LineLayout);
+		// Only the vertices that actually fit: a full buffer can give back fewer than were asked for.
+		if (buffer.data == null)
+			return;
+		available = Math.Min(available, buffer.size / (uint32)sizeof(LineVertex));
+		if (available == 0)
+			return;
 		Internal.MemCpy(buffer.data, batch.Vertices.Ptr, (int)available * sizeof(LineVertex));
 		bgfx.set_transient_vertex_buffer(0, &buffer, 0, available);
 		bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | (onTop ? 0 : Gfx.StateDepthLequal) | (triangles ? 0 : Gfx.StateLines) | Gfx.StateMsaa | Gfx.StateBlendAlpha, 0);

@@ -627,6 +627,9 @@ static class Reflections
 			return;
 		bgfx.TransientVertexBuffer buffer = default;
 		bgfx.alloc_transient_vertex_buffer(&buffer, 3, &Gfx.ScreenLayout);
+		// What was asked for may not be what came back (a full buffer, say): write only what fits.
+		if (buffer.data == null || buffer.size < 3 * (uint32)sizeof(ScreenVertex))
+			return;
 		let vertices = (ScreenVertex*)buffer.data;
 		let top = Gfx.OriginBottomLeft ? 1.0f : 0.0f;
 		let bottom = Gfx.OriginBottomLeft ? 0.0f : 1.0f;

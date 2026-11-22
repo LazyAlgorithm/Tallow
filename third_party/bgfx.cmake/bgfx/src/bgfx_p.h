@@ -4369,40 +4369,49 @@ namespace bgfx
 
 		uint32_t getAvailTransientIndexBuffer(uint32_t _num, uint16_t _indexSize)
 		{
+			// As for the vertex buffer: a wrapped subtraction must not report room past the end.
+			const uint32_t max    = g_caps.limits.maxTransientIbSize;
 			const uint32_t offset = bx::strideAlign(m_iboffset, _indexSize);
-			uint32_t iboffset = offset + _num*_indexSize;
-			iboffset = bx::min<uint32_t>(iboffset, g_caps.limits.maxTransientIbSize);
-			const uint32_t num = (iboffset-offset)/_indexSize;
-			return num;
+			if (offset >= max)
+				return 0;
+			return bx::min(_num, (max - offset) / _indexSize);
 		}
 
 		uint32_t allocTransientIndexBuffer(uint32_t& _num, uint16_t _indexSize)
 		{
-			uint32_t offset = bx::strideAlign(m_iboffset, _indexSize);
-			uint32_t num    = getAvailTransientIndexBuffer(_num, _indexSize);
-			m_iboffset = offset + num*_indexSize;
+			const uint32_t max    = g_caps.limits.maxTransientIbSize;
+			const uint32_t offset = bx::strideAlign(m_iboffset, _indexSize);
+			uint32_t num          = getAvailTransientIndexBuffer(_num, _indexSize);
+			m_iboffset = bx::min(offset + num*_indexSize, max);
 			_num = num;
 
-			return offset;
+			return bx::min(offset, max);
 		}
 
 		uint32_t getAvailTransientVertexBuffer(uint32_t _num, uint16_t _stride)
 		{
-			uint32_t offset   = bx::strideAlign(m_vboffset, _stride);
-			uint32_t vboffset = offset + _num * _stride;
-			vboffset = bx::min<uint32_t>(vboffset, g_caps.limits.maxTransientVbSize);
-			uint32_t num = (vboffset-offset)/_stride;
-			return num;
+			// The buffer can end part-way into the next vertex's alignment: the last allocation need not end
+			// aligned to this stride (line vertices are 16 bytes, a fullscreen triangle's are 20), so aligning
+			// the offset can pass the end. Asking past it is no room at all; subtracting a smaller offset from
+			// the wrapped one would report ~the whole address space and hand out a pointer past the buffer,
+			// which the caller then writes beyond (the rig preview's triangles followed by the sky or the
+			// interface did exactly that).
+			const uint32_t max    = g_caps.limits.maxTransientVbSize;
+			const uint32_t offset = bx::strideAlign(m_vboffset, _stride);
+			if (offset >= max)
+				return 0;
+			return bx::min(_num, (max - offset) / _stride);
 		}
 
 		uint32_t allocTransientVertexBuffer(uint32_t& _num, uint16_t _stride)
 		{
-			uint32_t offset = bx::strideAlign(m_vboffset, _stride);
-			uint32_t num    = getAvailTransientVertexBuffer(_num, _stride);
-			m_vboffset = offset + num * _stride;
+			const uint32_t max    = g_caps.limits.maxTransientVbSize;
+			const uint32_t offset = bx::strideAlign(m_vboffset, _stride);
+			uint32_t num          = getAvailTransientVertexBuffer(_num, _stride);
+			m_vboffset = bx::min(offset + num * _stride, max);
 			_num = num;
 
-			return offset;
+			return bx::min(offset, max);
 		}
 
 		bool free(IndexBufferHandle _handle)
