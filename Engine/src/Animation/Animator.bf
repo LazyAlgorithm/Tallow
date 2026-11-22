@@ -498,44 +498,22 @@ class AnimatorState
 		}
 	}
 
-	/// How much of each bone a layer's mask lets it move (0 to 1): by the layer's avatar mask asset when it has one,
-	/// otherwise the named bones and everything below them (all when empty). A weight in between blends the layer in
-	/// on that bone, which gives a mask a soft edge along the spine.
+	/// How much of each bone a layer's mask lets it move (0 to 1): by the layer's avatar mask asset, or all of them
+	/// when it has none. A weight in between blends the layer in on that bone, which gives a mask a soft edge along
+	/// the spine.
 	void MaskFor(AnimatorController.Layer layer, float[] weights)
 	{
-		if (!layer.maskAsset.IsEmpty)
-		{
-			let mask = AvatarMask.Load(layer.maskAsset);
-			if (mask != null)
-			{
-				if (mMask != mask || mMaskRevision != mask.Revision || mMaskBones != mBones.Count)
-					ResolveMask(mask);
-				for (int b < mBones.Count)
-					weights[b] = mMaskResolved[b];
-				return;
-			}
-		}
-		if (layer.mask.IsEmpty)
+		let mask = layer.maskAsset.IsEmpty ? null : AvatarMask.Load(layer.maskAsset);
+		if (mask == null)
 		{
 			for (int b < mBones.Count)
 				weights[b] = 1;
 			return;
 		}
+		if (mMask != mask || mMaskRevision != mask.Revision || mMaskBones != mBones.Count)
+			ResolveMask(mask);
 		for (int b < mBones.Count)
-		{
-			weights[b] = 0;
-			var at = mBones[b].transform;
-			while (at != null && at != Transform && weights[b] <= 0)
-			{
-				for (var name in layer.mask.Split(';'))
-				{
-					name.Trim();
-					if (!name.IsEmpty && at.GameObject.Name == name)
-						weights[b] = 1;
-				}
-				at = at.Parent;
-			}
-		}
+			weights[b] = mMaskResolved[b];
 	}
 
 	/// Resolves an avatar mask for this character's bones: its humanoid parts through the model's bone map when it

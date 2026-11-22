@@ -141,7 +141,8 @@ class LimbIK : IKComponent
 	}
 
 	/// The way this limb's elbow or knee naturally points, in world space: behind the character for an arm, in front
-	/// for a leg. Zero when the tip is not a humanoid's hand or foot.
+	/// for a leg, and behind for a four-legged character's paw (its wrist or hock bends back). Zero when the tip is
+	/// not a hand, foot or paw.
 	public Vector3 NaturalBend()
 	{
 		if (tip == null)
@@ -163,6 +164,25 @@ class LimbIK : IKComponent
 					mBendSign = 1;
 				mLeftHip = skinned.Bone(map[.LeftUpperLeg]) ?? skinned.Bone(map[.LeftUpperArm]);
 				mRightHip = skinned.Bone(map[.RightUpperLeg]) ?? skinned.Bone(map[.RightUpperArm]);
+			}
+			if (mBendSign == 0)
+			{
+				// A four-legged character: its front paws give the way it faces, and a paw's wrist or hock bends
+				// behind it. The whole character is searched once for each tip.
+				let core = scope String();
+				if (BoneMap.Simplify(tip.GameObject.Name, core) != 2 && QuadrupedRig.IsFootCore(core))
+				{
+					var root = tip;
+					while (root.Parent != null)
+						root = root.Parent;
+					Transform[QuadrupedRig.FootCount] paws = default;
+					if (QuadrupedRig.FindFeet(root, ref paws) == 4)
+					{
+						mBendSign = -1;
+						mLeftHip = paws[0];
+						mRightHip = paws[1];
+					}
+				}
 			}
 		}
 		if (mBendSign == 0 || mLeftHip == null || mRightHip == null || mLeftHip.GameObject.IsDestroyed || mRightHip.GameObject.IsDestroyed)

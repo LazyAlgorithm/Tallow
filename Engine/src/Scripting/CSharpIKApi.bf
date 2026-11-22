@@ -130,6 +130,21 @@ static class CSharpIK
 		return true;
 	}
 
+	/// How many feet a Foot Placement places: 2, or 4 on a four-legged character.
+	[CSharpExpose]
+	public static int32 FootCount(uint64 session, uint64 entity) => (Find(session, entity, 2, 0) as FootPlacement)?.FootCount ?? 0;
+
+	/// Whether a Foot Placement foot (0 left, 1 right, 2 and 3 the other pair of a four-legged character) found
+	/// ground this frame: 1 yes, 0 no, -1 without a Foot Placement or that foot.
+	[CSharpExpose]
+	public static int32 FootGrounded(uint64 session, uint64 entity, int32 foot)
+	{
+		let placement = Find(session, entity, 2, 0) as FootPlacement;
+		if (placement == null || foot < 0 || foot >= placement.FootCount)
+			return -1;
+		return placement.IsGrounded(foot) ? 1 : 0;
+	}
+
 	/// A Hand Pose takes a shape (HandShape as a number) over seconds (below 0: its Blend Time).
 	[CSharpExpose]
 	public static bool HandSetShape(uint64 session, uint64 entity, int32 index, int32 shape, float seconds)

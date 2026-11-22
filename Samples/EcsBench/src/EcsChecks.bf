@@ -165,6 +165,7 @@ static class EcsChecks
 		CharacterChecks();
 		AnimatorChecks();
 		AvatarMaskChecks();
+		QuadrupedChecks();
 		NavigationChecks();
 		BehaviourChecks();
 		AIChecks();
@@ -1813,6 +1814,17 @@ static class EcsChecks
 		let reloaded = scope AnimatorController();
 		Expect(reloaded.Read(controllerPath) && reloaded.layers.Count == 2 && reloaded.layers[1].defaultState == 1
 			&& reloaded.layers[1].maskAsset == upperMaskPath, "a layer's avatar mask saves and loads");
+		// Older controllers: a bone-name list before the default state (no longer used), and the first avatar-mask
+		// build's line with the list, the default state and then the mask.
+		let oldPath = scope $"{folder}/check_old.tcontroller";
+		System.IO.File.WriteAllText(oldPath, "controller 1\nlayer \"Base Layer\" 1 0 \"\" -1\nlayer \"Upper Body\" 1 0 \"spine_02\" 1\nstate \"Throw\" \"\" 1 1 200 0 1\ndefault 0\n");
+		let old = scope AnimatorController();
+		Expect(old.Read(oldPath) && old.layers.Count == 2 && old.layers[1].defaultState == 1 && old.layers[1].maskAsset.IsEmpty,
+			"an older controller's layers load, with no avatar mask");
+		System.IO.File.WriteAllText(oldPath, "controller 1\nlayer \"Base Layer\" 1 0 -1 \"\"\nlayer \"Upper Body\" 1 0 1 \"Masks/Upper.tmask\"\ndefault 0\n");
+		Expect(old.Read(oldPath) && old.layers[1].defaultState == 1 && old.layers[1].maskAsset == "Masks/Upper.tmask",
+			"a layer writes and reads its default state and avatar mask");
+		System.IO.File.Delete(oldPath).IgnoreError();
 
 		let previous = Scene.Active;
 		{
@@ -1874,6 +1886,15 @@ static class EcsChecks
 			Expect(Math.Abs(Quaternion.Dot(legTurn, Quaternion.AngleAxis(10, .Up))) > 0.999f,
 				scope $"and not the leg the mask leaves out (w {legTurn.w})");
 			Expect(Math.Abs(Quaternion.Dot(handBone.Transform.LocalRotation, Quaternion.Identity)) > 0.995f, "bones the layer does not move keep their rest pose");
+			// No avatar mask on the layer: the whole body.
+			let liveController = AnimatorController.Load(controllerPath);
+			liveController.layers[1].maskAsset.Clear();
+			liveController.Revision++;
+			Time.DeltaTime = 0.25f;
+			scene.Update();
+			let wideLeg = legBone.Transform.LocalRotation;
+			Expect(Math.Abs(Quaternion.Dot(wideLeg, Quaternion.AngleAxis(60, .Up))) > 0.999f,
+				scope $"without an avatar mask the layer moves the whole body (leg w {wideLeg.w})");
 			scene.StopPlay();
 			hero.RemoveComponent<Animator>();
 		}
@@ -1907,6 +1928,97 @@ static class EcsChecks
 		System.IO.File.Delete(aimClip).IgnoreError();
 		System.IO.File.Delete(maskPath).IgnoreError();
 		System.IO.File.Delete(saved).IgnoreError();
+	}
+
+	/// Four-legged skeletons: the paws, body and head found by name, and Foot Placement setting four paws on the
+	/// ground (docs/ik.md).
+	static void QuadrupedChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let dog = scene.CreateGameObject("Dog");
+			let body = scene.CreateGameObject("Root", dog.Transform);
+			let head = scene.CreateGameObject("Head", body.Transform);
+			let frontLeft = scene.CreateGameObject("FrontPaw_L", body.Transform);
+			let frontRight = scene.CreateGameObject("FrontPaw_R", body.Transform);
+			let backLeft = scene.CreateGameObject("BackPaw_L", body.Transform);
+			let backRight = scene.CreateGameObject("BackPaw_R", body.Transform);
+			// The ends of the paws are helper bones, not feet.
+			scene.CreateGameObject("FrontPaw_L_End", frontLeft.Transform);
+			Transform[4] paws = default;
+			Expect(QuadrupedRig.FindFeet(dog.Transform, ref paws) == 4 && paws[0] == frontLeft.Transform && paws[1] == frontRight.Transform
+				&& paws[2] == backLeft.Transform && paws[3] == backRight.Transform, "the four paws are found by name");
+			Transform bodyBone, headBone;
+			Expect(QuadrupedRig.FindBody(dog.Transform, out bodyBone) && bodyBone == body.Transform, "the body bone is the Root");
+			Expect(QuadrupedRig.FindHead(dog.Transform, out headBone) && headBone == head.Transform, "the head is found");
+			// A two-legged character's plain feet still answer.
+			let person = scene.CreateGameObject("Person");
+			let leftLeg = scene.CreateGameObject("LowerLeg_L", person.Transform);
+			let rightLeg = scene.CreateGameObject("LowerLeg_R", person.Transform);
+			let leftFoot = scene.CreateGameObject("Foot_L", leftLeg.Transform);
+			let rightFoot = scene.CreateGameObject("Foot_R", rightLeg.Transform);
+			Expect(QuadrupedRig.FindFeet(person.Transform, ref paws) == 2 && paws[0] == leftFoot.Transform && paws[1] == rightFoot.Transform,
+				"two plain feet are found");
+			scene.Destroy(dog);
+			scene.Destroy(person);
+		}
+		// Foot Placement with four feet: one on a raised block, the others on the ground.
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let ground = scene.CreateGameObject("Ground");
+			ground.Transform.Position = .(0, -0.5f, 0);
+			ground.AddComponent<BoxCollider>().size = .(30, 1, 30);
+			let block = scene.CreateGameObject("Block");
+			block.Transform.Position = .(0.5f, 0.1f, 0.9f);
+			block.AddComponent<BoxCollider>().size = .(1, 0.2f, 1);
+			// The root moves over the ground; the feet stand at 0.08 above it.
+			let dog = scene.CreateGameObject("Walking Dog");
+			float[4] xs = .(-0.5f, 0.5f, -0.5f, 0.5f);
+			float[4] zs = .(0.9f, 0.9f, -0.9f, -0.9f);
+			StringView[4] footNames = .("FrontPaw_L", "FrontPaw_R", "BackPaw_L", "BackPaw_R");
+			Transform[4] feet = default;
+			for (int i < 4)
+			{
+				let knee = scene.CreateGameObject(scope $"Knee {footNames[i]}" , dog.Transform);
+				let ankle = scene.CreateGameObject(scope $"Ankle {footNames[i]}" , knee.Transform);
+				let paw = scene.CreateGameObject(footNames[i], ankle.Transform);
+				knee.Transform.Position = .(xs[i], 1.5f, zs[i]);
+				ankle.Transform.Position = .(xs[i], 0.85f, zs[i]);
+				paw.Transform.Position = .(xs[i], 0.08f, zs[i]);
+				feet[i] = paw.Transform;
+			}
+			let placement = dog.AddComponent<FootPlacement>();
+			placement.leftFoot = feet[0];
+			placement.rightFoot = feet[1];
+			placement.thirdFoot = feet[2];
+			placement.fourthFoot = feet[3];
+			placement.smooth = 25;
+			Expect(placement.FootCount == 4, "Foot Placement has four feet");
+			scene.StartPlay();
+			for (int i < 30)
+			{
+				Time.DeltaTime = 0.1f;
+				scene.Update();
+			}
+			var grounded = 0;
+			for (int i < 4)
+			{
+				if (placement.IsGrounded(i))
+					grounded++;
+			}
+			Expect(grounded == 4, scope $"all four paws find the ground ({grounded})");
+			Expect(Math.Abs(feet[0].Position.y - 0.08f) < 0.03f && Math.Abs(feet[2].Position.y - 0.08f) < 0.03f,
+				scope $"the paws on the ground stay where the clip has them ({feet[0].Position.y}, {feet[2].Position.y})");
+			Expect(Math.Abs(feet[1].Position.y - 0.28f) < 0.03f,
+				scope $"the paw on the block is put on it ({feet[1].Position.y})");
+			Expect(placement.IsGrounded(4) == false, "there is no fifth foot");
+			scene.StopPlay();
+			dog.RemoveComponent(placement);
+		}
+		Scene.Active = previous;
 	}
 
 	/// Water and Floater: the surface from the data, Water.At, [Sync] fields of handle data, save and load.

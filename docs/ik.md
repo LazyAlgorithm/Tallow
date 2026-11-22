@@ -8,7 +8,7 @@ Inspector and the Animation window.
 |---|---|
 | **Limb IK** | Holds a hand or foot on a target: hands on a weapon, a hand on a handle, a foot on a pedal |
 | **Look At IK** | Turns a head, or a head with the neck and spine, towards a target |
-| **Foot Placement** | Keeps both feet on uneven ground and lowers the hips to suit |
+| **Foot Placement** | Keeps both feet (or all four paws) on uneven ground and lowers the body to suit |
 | **Hand Pose** | Curls and spreads the fingers with a slider each, and has ready-made shapes |
 
 ## How it fits with animation
@@ -35,6 +35,8 @@ IK works on bones that are objects in the Hierarchy.
   still play, underneath. The bone objects are ordinary objects saved with the scene, so you can parent things to
   them (a weapon to a hand) and drag them into the fields below. An Animator can play `.tanim` clips on them and the
   Animation window can key them.
+- A **four-legged character** (the rigger's Quadruped template, or any dog, cat or horse skeleton whose paws are
+  named) works with Foot Placement and Limb IK too; see **Four-legged characters** below.
 
 ## Hands on a weapon
 
@@ -136,16 +138,40 @@ body that follows the view.
 ## Feet on the ground
 
 Add **Foot Placement** to the character's root, the object that moves over the ground. **Find Feet And Hips** fills
-the fields in from the bones' names, or drag them in: the two feet, and the hips or pelvis bone. The legs are the two
-bones above each foot.
+the fields in from the bones' names, or drag them in: the feet, and the hips, pelvis or body bone. The legs are the
+two bones above each foot. A four-legged character gets all four paws (**Third Foot** and **Fourth Foot** are the
+other pair), and the body bone drops so that the paw with furthest to reach can get there.
 
-While the game runs, each foot is set down on what is under it, the hips drop so that the lower foot can reach, and
+From code, `placement.FootCount` is 2 or 4, and `placement.IsGrounded(0)` to `(3)` say which feet found ground this
+frame (left, right, then the other pair).
+
+While the game runs, each foot is set down on what is under it, the body drops so that the lower foot can reach, and
 with **Tilt** the feet lean with the slope (no more than **Max Tilt**). A foot the clip lifts for a step is still
 lifted by the same amount. **Step Up** and **Step Down** are the highest and deepest steps the feet deal with.
 **Smooth** is how quickly they settle.
 
 The ground is found with the physics world, so it needs colliders. The character's own colliders are ignored. Set
 **Ground Layer** to count only one layer as ground.
+
+## Four-legged characters
+
+The rigger's **Quadruped** template makes a skeleton with four legs and names everything IK looks for:
+`FrontPaw_L`, `FrontPaw_R`, `BackPaw_L`, `BackPaw_R`, the body as `Root` and the `Head`. Other skeletons work when
+the paws say which they are: `Foot`, `Paw` or `Hoof`, with `Front`/`Fore` or `Back`/`Hind`/`Rear`, and `L`/`R` (as a
+separate word, a suffix or a prefix). `QuadrupedRig` is what finds them.
+
+1. On the model's Skinned Mesh Renderer, tick **Expose Bones** and give it an Animator, as for any character.
+2. In the Animation window's **Rig** menu press **Set Up IK Rig**. With no humanoid Bone Map it sets up the
+   four-legged version: a target with **Limb IK** on each paw, a pole behind the wrist or hock, and a look target
+   for the head, all where the character is now.
+3. Move the four targets with Record or Auto Key on to make a walk, a trot or a careful step over rocks; press **Key
+   IK** to bake the pose into the clip. **LetGo** / **Grab** work on each paw like they do on a hand.
+4. For uneven ground, add **Foot Placement** to the character's root and press **Find Feet And Hips**: it fills in
+   all four paws and the `Root` bone. The paws are set down and the body drops to suit.
+
+Limb IK bends a paw's wrist or hock backwards when it has to bend it by itself (a front leg's elbow and a back
+leg's hock both point back), and the poles the setup makes are behind the character. The Look At IK on the head
+turns it with the neck sharing the turn, as it does for a humanoid.
 
 ## Animating with IK in the editor
 
@@ -189,7 +215,9 @@ IK is worked out on each machine from what that machine has; no bones are sent.
 
 ## Limits
 
-- Limbs are two bones. Longer chains use `IK.Chain` from code; there is no component for them yet.
+- Limbs are two bones. Longer chains use `IK.Chain` from code; there is no component for them yet. A four-legged
+  character's paw is held by the two bones above it (the wrist and forearm, or hock and shin); the bones above those
+  stay with their animation.
 - Limbs do not stretch, and bones have no joint limits: an elbow can be bent any way a target asks. Use a Pole to
   keep it sensible.
 - Foot Placement does not plant feet against sliding, and the slope under a foot is estimated from three points.

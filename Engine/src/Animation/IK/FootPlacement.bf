@@ -5,7 +5,11 @@ namespace Tallow;
 
 /// Keeps a character's feet on the ground: on stairs, slopes and rubble each foot is set down on what is under it,
 /// the hips drop so that the lower foot can reach, and the feet tilt with the slope. Put it on the character's root
-/// (the object that moves over the ground) and name the two feet; the legs are the two bones above each foot.
+/// (the object that moves over the ground) and name the feet; the legs are the two bones above each foot.
+///
+/// A two-legged character has two feet (Left Foot and Right Foot); a four-legged one has four, the other pair in
+/// Foot 3 and Foot 4 (found for you by Find Feet And Hips: FrontPaw_L, BackPaw_R and so on). The body bone (Root
+/// or Hips) drops so that the foot with furthest to go can reach.
 ///
 /// It works on top of the clip: a foot the animation lifts for a step is still lifted, by the same amount, over
 /// whatever the ground is doing there. It looks for the ground with the physics world, so the ground needs colliders,
@@ -16,6 +20,9 @@ class FootPlacement : IKComponent
 {
 	public Transform leftFoot;
 	public Transform rightFoot;
+	/// A third and fourth foot, for a four-legged character: the other pair of paws. All the feet are placed alike.
+	public Transform thirdFoot;
+	public Transform fourthFoot;
 	/// The hips or pelvis bone, lowered when one foot has further to reach. Empty: the hips are left alone.
 	public Transform hips;
 	/// How much the feet are placed: 0 the animation as it is, 1 fully on the ground.
@@ -31,26 +38,28 @@ class FootPlacement : IKComponent
 	/// Only colliders on this layer count as ground. None: everything except this character.
 	[Layer] public int32 groundLayer = -1;
 
-	float[2] mOffset;
-	Vector3[2] mNormal = .(.Up, .Up);
-	bool[2] mGrounded;
+	float[QuadrupedRig.FootCount] mOffset;
+	Vector3[QuadrupedRig.FootCount] mNormal = .(.Up, .Up, .Up, .Up);
+	bool[QuadrupedRig.FootCount] mGrounded;
 	float mHips;
 
 	public override float Weight { get => weight; set => weight = value; }
 	public override int32 Order => 0;
 
-	/// True when ground was found under a foot (0: left, 1: right) this frame.
-	public bool IsGrounded(int foot) => foot >= 0 && foot < 2 && mGrounded[foot];
-	/// How far the hips are lowered at the moment.
+	/// How many feet it places: 2, or 4 when Foot 3 and Foot 4 are set.
+	public int32 FootCount => fourthFoot != null ? 4 : (thirdFoot != null ? 3 : 2);
+	/// True when ground was found under a foot this frame (0 left, 1 right, 2 and 3 the other pair).
+	public bool IsGrounded(int foot) => foot >= 0 && foot < FootCount && mGrounded[foot];
+	/// How far the body is lowered at the moment.
 	public float HipsOffset => mHips;
 
-	Transform Foot(int index) => index == 0 ? leftFoot : rightFoot;
+	Transform Foot(int index) => index == 0 ? leftFoot : (index == 1 ? rightFoot : (index == 2 ? thirdFoot : fourthFoot));
 
 	protected override void CollectBones(List<Transform> bones)
 	{
 		if (hips != null)
 			bones.Add(hips);
-		for (int i < 2)
+		for (int i < FootCount)
 		{
 			let foot = Foot(i);
 			if (foot == null || foot.Parent == null || foot.Parent.Parent == null)
@@ -81,10 +90,10 @@ class FootPlacement : IKComponent
 			return;
 		let baseY = Transform.Position.y;
 		let blend = smooth > 0 ? 1 - Math.Exp(-smooth * Time.DeltaTime) : 1;
-		Vector3[2] animated = default;
-		Quaternion[2] facing = default;
+		Vector3[QuadrupedRig.FootCount] animated = default;
+		Quaternion[QuadrupedRig.FootCount] facing = default;
 		float lowest = 0;
-		for (int i < 2)
+		for (int i < FootCount)
 		{
 			let foot = Foot(i);
 			if (foot == null)
@@ -121,7 +130,7 @@ class FootPlacement : IKComponent
 		mHips = Mathf.Lerp(mHips, Mathf.Clamp(lowest, -stepDown, 0), blend);
 		if (hips != null)
 			hips.Position = hips.Position + Vector3.Up * mHips;
-		for (int i < 2)
+		for (int i < FootCount)
 		{
 			let foot = Foot(i);
 			if (foot == null || foot.Parent == null || foot.Parent.Parent == null)
@@ -136,7 +145,7 @@ class FootPlacement : IKComponent
 	{
 		if (!selected)
 			return;
-		for (int i < 2)
+		for (int i < FootCount)
 		{
 			let foot = Foot(i);
 			if (foot == null)

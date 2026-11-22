@@ -66,10 +66,12 @@ extension EditorApp
 			mShowBones = !mShowBones;
 		ImGui.Separator();
 		let humanoid = skinned.Model != null && skinned.Model.HumanMap.IsHumanoid;
-		if (ImGui.MenuItem("Set Up IK Rig", null, false, editing && humanoid))
+		Transform[QuadrupedRig.FootCount] paws = default;
+		let quadruped = !humanoid && skinned.Model != null && QuadrupedRig.FindFeet(animator.Transform, ref paws) == 4;
+		if (ImGui.MenuItem("Set Up IK Rig", null, false, editing && (humanoid || quadruped)))
 			SetUpIKRig(animator, skinned);
 		if (ImGui.IsItemHovered())
-			ImGui.SetTooltip("Adds hand and foot targets (with Limb IK), elbow and knee poles and a look target below\nthis object. Key them with Record or Auto Key to animate the limbs by their ends.");
+			ImGui.SetTooltip("Adds hand and foot (or paw) targets with Limb IK, elbow, knee and hock poles and a look target\nbelow this object. Key them with Record or Auto Key to animate the limbs by their ends.");
 		if (ImGui.MenuItem("Snap IK Targets to Bones", null, false, editing && mClip != null))
 			SnapIKTargets(animator);
 		if (ImGui.IsItemHovered())
@@ -78,8 +80,8 @@ extension EditorApp
 			BakeIK(animator);
 		if (ImGui.IsItemHovered())
 			ImGui.SetTooltip("Keys the pose IK makes on every frame of the clip into the bones it moves, so the clip plays\nit with no IK components needed.");
-		if (!humanoid)
-			ImGui.TextDisabled("The IK rig needs a humanoid skeleton (see Bone Map in the Inspector).");
+		if (!humanoid && !quadruped)
+			ImGui.TextDisabled("The IK rig needs a humanoid skeleton (see Bone Map in the Inspector), or four named\npaws (FrontPaw_L, BackPaw_R...).");
 		ImGui.Separator();
 		if (skinned.Model != null && ImGui.BeginMenu("Copy Model Clip Into This Clip", editing && mClip != null))
 		{
@@ -119,6 +121,11 @@ extension EditorApp
 	/// and a look target for the head, all where the character is now, so that nothing moves until they do.
 	void SetUpIKRig(Animator animator, SkinnedMeshRenderer skinned)
 	{
+		if (!skinned.Model.HumanMap.IsHumanoid)
+		{
+			SetUpQuadrupedIKRig(animator, skinned);
+			return;
+		}
 		let map = skinned.Model.HumanMap;
 		let root = animator.Transform;
 		let forward = RigForward(skinned, root);
@@ -163,6 +170,63 @@ extension EditorApp
 		IKSystem.Solve(mScene);
 		MarkDirty();
 		Log.Info(scope $"IK rig: {made} targets below {animator.GameObject.Name}. Move them with Record or Auto Key on to animate.");
+	}
+
+	/// Set Up IK Rig for a four-legged character: a paw target with Limb IK for each of the four feet, a pole the
+	/// wrist or hock points back towards, and a look target for the head. The paws are found by name (FrontPaw_L,
+	/// BackPaw_R...; see QuadrupedRig).
+	void SetUpQuadrupedIKRig(Animator animator, SkinnedMeshRenderer skinned)
+	{
+		let root = animator.Transform;
+		Transform[QuadrupedRig.FootCount] paws = default;
+		if (QuadrupedRig.FindFeet(root, ref paws) != 4)
+		{
+			Log.Warning("Quadruped IK rig: no four paws found by name (FrontPaw_L, FrontPaw_R, BackPaw_L, BackPaw_R, or Foot, Hoof).");
+			return;
+		}
+		var forward = QuadrupedRig.Facing(paws[0], paws[1]);
+		if (forward == .Zero)
+			forward = RigForward(skinned, root);
+		// The names the targets and poles have below the Animator's object, so that clips key them.
+		StringView[QuadrupedRig.FootCount] names = .("Paw Front L", "Paw Front R", "Paw Back L", "Paw Back R");
+		int made = 0;
+		for (int i < 4)
+		{
+			let tip = paws[i];
+			if (tip == null || tip.Parent == null || tip.Parent.Parent == null)
+				continue;
+			let middle = tip.Parent;
+			let upper = middle.Parent;
+			let target = RigObject(root, scope $"IK {names[i]}" , tip.Position, tip.Rotation);
+			var limb = target.GameObject.GetComponent<LimbIK>();
+			if (limb == null)
+				limb = target.GameObject.AddComponent<LimbIK>();
+			limb.tip = tip;
+			limb.target = target;
+			// The wrist and hock bend back: the pole goes out behind, unless the limb already bends that way.
+			let length = (middle.Position - upper.Position).Length;
+			var bend = middle.Position - (upper.Position + tip.Position) * 0.5f;
+			let natural = -forward;
+			if (bend.Length < length * 0.05f || Vector3.Dot(bend.Normalized, natural) < -0.5f)
+				bend = natural;
+			limb.pole = RigObject(root, scope $"IK Pole {names[i]}" , middle.Position + bend.Normalized * Math.Max(length, 0.1f), .Identity);
+			made++;
+		}
+		Transform head;
+		if (QuadrupedRig.FindHead(root, out head))
+		{
+			let look = RigObject(root, "IK Look", head.Position + forward * 1.5f, .Identity);
+			var lookAt = look.GameObject.GetComponent<LookAtIK>();
+			if (lookAt == null)
+				lookAt = look.GameObject.AddComponent<LookAtIK>();
+			lookAt.bone = head;
+			lookAt.target = look;
+			lookAt.forward = (head.Rotation.Conjugate * forward).Normalized;
+			made++;
+		}
+		IKSystem.Solve(mScene);
+		MarkDirty();
+		Log.Info(scope $"IK rig: {made} targets for four paws below {animator.GameObject.Name}. Move them with Record or Auto Key on to animate.");
 	}
 
 	/// The Limb IK and Look At IK components working on bones below the Animator.

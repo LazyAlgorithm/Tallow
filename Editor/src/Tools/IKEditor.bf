@@ -156,36 +156,32 @@ extension EditorApp
 
 	void DrawFootPlacementTools(FootPlacement placement)
 	{
-		if (placement.leftFoot == null || placement.rightFoot == null)
+		Transform[QuadrupedRig.FootCount] feet = default;
+		// The rigger's paws (FrontPaw_L, BackPaw_R...) or two plain feet (Foot_L, Foot_R).
+		let found = QuadrupedRig.FindFeet(placement.Transform, ref feet);
+		let wantsMore = found == 4 && (placement.thirdFoot == null || placement.fourthFoot == null);
+		if (placement.leftFoot == null || placement.rightFoot == null || wantsMore)
 		{
-			List<Transform> below = scope .();
-			IkDescendants(placement.Transform, below);
-			Transform left = null, right = null, hips = null;
-			for (let bone in below)
-			{
-				let name = bone.GameObject.Name;
-				if (hips == null && IkNamed(name, "hips", "pelvis"))
-					hips = bone;
-				if (!IkNamed(name, "foot", "ankle") || bone.Parent == null || bone.Parent.Parent == null)
-					continue;
-				let lower = scope String(name)..ToLower();
-				if (left == null && (lower.Contains("left") || lower.EndsWith(".l") || lower.EndsWith("_l") || lower.Contains("l_") || lower.Contains(".l.")))
-					left = bone;
-				else if (right == null)
-					right = bone;
-			}
-			ImGui.BeginDisabled(left == null || right == null);
+			ImGui.BeginDisabled(found < 2);
 			if (ImGui.Button("Find Feet And Hips"))
 			{
-				placement.leftFoot = left;
-				placement.rightFoot = right;
-				if (placement.hips == null)
-					placement.hips = hips;
+				placement.leftFoot = feet[0];
+				placement.rightFoot = feet[1];
+				if (found == 4)
+				{
+					placement.thirdFoot = feet[2];
+					placement.fourthFoot = feet[3];
+				}
+				Transform body;
+				if (placement.hips == null && QuadrupedRig.FindBody(placement.Transform, out body))
+					placement.hips = body;
 				MarkDirty();
 			}
 			ImGui.EndDisabled();
-			if (left == null || right == null)
+			if (found < 2)
 				ImGui.TextDisabled("No two feet found by name: drag the foot bones in.");
+			else if (found == 4)
+				ImGui.TextDisabled("Four legs found: both pairs of paws are placed.");
 		}
 		ImGui.TextDisabled("Feet are placed while the game plays, on ground that has colliders.");
 	}

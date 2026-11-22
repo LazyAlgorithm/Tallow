@@ -967,7 +967,7 @@ extension EditorApp
 			ImGui.EndCombo();
 		}
 		if (ImGui.IsItemHovered())
-			ImGui.SetTooltip("An Avatar Mask (Project > + > Avatar Mask): the body parts, and the bones with weights,\nthis layer moves.");
+			ImGui.SetTooltip("An Avatar Mask (Project > + > Avatar Mask): the body parts, and the bones with weights,\nthis layer moves. None: the whole body.");
 		ImGui.SameLine();
 		ImGui.BeginDisabled(layer.maskAsset.IsEmpty);
 		if (ImGui.SmallButton("Edit..."))
@@ -976,15 +976,6 @@ extension EditorApp
 			Assets.ResolvePath(layer.maskAsset, full);
 			OpenAvatarMask(full);
 		}
-		ImGui.EndDisabled();
-		// Without an Avatar Mask, the older list of bone names (each with everything below it).
-		ImGui.SetCursorPosX(8);
-		ImGui.SetNextItemWidth(170);
-		ImGui.BeginDisabled(!layer.maskAsset.IsEmpty);
-		if (ImGui.InputText("Bones##layer", layer.mask))
-			mAnimDirty = true;
-		if (ImGui.IsItemHovered())
-			ImGui.SetTooltip("Without an Avatar Mask: the bones this layer moves, each named bone and everything below it,\nseparated by ; (\"spine_02\" for the upper body). Empty: every bone.");
 		ImGui.EndDisabled();
 		ImGui.SetCursorPosX(8);
 		if (ImGui.SmallButton("Remove Layer"))

@@ -67,6 +67,13 @@ public readonly partial record struct LookAtIK
 
 public readonly partial record struct FootPlacement
 {
+    /// <summary>How many feet it places: 2, or 4 on a four-legged character.</summary>
+    public int FootCount => Math.Max(CSharpIK.FootCount(GameObject.SceneId, GameObject.Id), 0);
+
+    /// <summary>Whether a foot (0 left, 1 right, 2 and 3 the other pair of a four-legged character) found ground
+    /// this frame.</summary>
+    public bool IsGrounded(int foot) => CSharpIK.FootGrounded(GameObject.SceneId, GameObject.Id, foot) == 1;
+
     /// <summary>Moves the weight to a value over some seconds, followed on every machine when the server or owner
     /// calls it.</summary>
     public void FadeWeight(float to, float seconds = 0.2f)

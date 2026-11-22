@@ -47,11 +47,8 @@ class AnimatorController
 		/// How much of the layer is used, 0 to 1 (changed from code with Animator.SetLayerWeight).
 		public float weight = 1;
 		public AnimatorLayerBlend blending = .Override;
-		/// The bones the layer moves: each named bone and everything below it, separated by semicolons
-		/// ("spine_02;neck"). Empty: every bone. Ignored when maskAsset is set.
-		public String mask = new .() ~ delete _;
 		/// An Avatar Mask (.tmask) the layer moves by: humanoid body parts and named bones with weights, made in the
-		/// Avatar Mask window. Empty: the bone list above is used instead.
+		/// Avatar Mask window. Empty: the layer moves the whole body.
 		public String maskAsset = new .() ~ delete _;
 		/// The state the layer starts in (for the Base Layer, the controller's defaultState).
 		public int32 defaultState = -1;
@@ -444,15 +441,13 @@ class AnimatorController
 			SceneSerializer.Quote(parameter.name, text);
 			text.AppendF(" {} {}\n", (int32)parameter.type, parameter.defaultValue);
 		}
-		// Layers above the Base Layer (whose name is the only thing kept about it; its default is "default").
+		// The layers: name, weight, blending, default state and avatar mask.
 		for (int i < layers.Count)
 		{
 			let layer = layers[i];
 			text.Append("layer ");
 			SceneSerializer.Quote(layer.name, text);
-			text.AppendF(" {} {} ", layer.weight, (int32)layer.blending);
-			SceneSerializer.Quote(layer.mask, text);
-			text.AppendF(" {} ", layer.defaultState);
+			text.AppendF(" {} {} {} ", layer.weight, (int32)layer.blending, layer.defaultState);
 			SceneSerializer.Quote(layer.maskAsset, text);
 			text.Append('\n');
 		}
@@ -548,16 +543,29 @@ class AnimatorController
 					parameter.defaultValue = SceneSerializer.ParseFloat(tokens[3]);
 				}
 			case "layer":
-				if (tokens.Count >= 6)
+				if (tokens.Count >= 5)
 				{
 					let layer = AddLayer(tokens[1]);
 					layer.weight = Mathf.Clamp01(SceneSerializer.ParseFloat(tokens[2]));
 					layer.blending = (AnimatorLayerBlend)Math.Clamp(SceneSerializer.ParseInt(tokens[3]), 0, 1);
-					layer.mask.Set(tokens[4]);
-					layer.defaultState = (int32)SceneSerializer.ParseInt(tokens[5]);
-					// Avatar masks came later; a file without one keeps its bone list.
 					if (tokens.Count >= 7)
+					{
+						// The first avatar-mask build wrote a bone-name list between blending and the default state.
+						layer.defaultState = (int32)SceneSerializer.ParseInt(tokens[5]);
 						layer.maskAsset.Set(tokens[6]);
+					}
+					else if (tokens.Count >= 6 && (int32.Parse(tokens[5]) case .Ok))
+					{
+						// Older files: the bone-name list (no longer used; the layer moves the whole body) then
+						// the default state.
+						layer.defaultState = (int32)SceneSerializer.ParseInt(tokens[5]);
+					}
+					else
+					{
+						layer.defaultState = (int32)SceneSerializer.ParseInt(tokens[4]);
+						if (tokens.Count >= 6)
+							layer.maskAsset.Set(tokens[5]);
+					}
 				}
 			case "state":
 				if (tokens.Count >= 7)

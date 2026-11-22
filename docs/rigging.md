@@ -20,6 +20,9 @@ The template is guessed from the model's shape (longer than it is tall: a four-l
 | **Quadruped** | Nose, Head (where the neck meets the skull, under the ears), Neck, Tail Base, Tail Tip, Front and Back Paws, Elbows, Hocks, Ear Tips | Root, spine, chest, neck, head, jaw, ears, tail, and for each leg a shoulder blade (or thigh), upper leg, lower leg, wrist (or hock) and paw. Spine, neck and tail lengths, ears and jaw are settings |
 | **Custom** | none | Bones you place yourself (step 2) |
 
+A Quadruped's bones are named for IK: `FrontPaw_L`, `BackPaw_R`, `Root` and `Head` are what Foot Placement, the
+Animation window's IK rig setup and Look At IK find (see `docs/ik.md`, "Four-legged characters").
+
 Drag the markers onto the model in the Scene view; the skeleton follows as you drag. Hover a marker for a hint about where it goes (for example "the back of the knee, where the leg bends"). With **Symmetry** on, moving a left marker moves the right one too. With **Centre markers in the body when let go** on, a marker you let go is moved to the middle of the part it is on, along the way the camera looks, so markers placed on a flat front view end up inside the limb, as Mixamo's do. Paws, the nose, the tail tip, ear tips and fingertips stay on the surface.
 
 Click a marker's name in the list to bring the camera close to it. Fingertip markers are drawn small and named only when you point at one; zoom in on a hand to place them. Each finger's bones run from its knuckle to its tip marker (the thumb's knuckle near the wrist), so moving a tip moves the whole finger. The fingertips are guessed from the hand's shape beyond the wrist: the thumb is the point sticking out furthest to the front, and the four fingers are the ends of four strips across the hand, from the first finger at the front to the little finger at the back.
