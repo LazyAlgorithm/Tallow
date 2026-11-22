@@ -13,9 +13,6 @@ extension EditorApp
 	bool mFocusHandPosing;
 	int32 mRigTestFrames;
 
-	/// The names the IK rig gives its targets and poles, below the Animator's object, so that clips key them.
-	static readonly StringView[4] RigLimbs = .("Hand L", "Hand R", "Foot L", "Foot R");
-
 	/// The footer's Rig and Hands buttons, from where x is; returns where they end.
 	float DrawRigButtons(Animator animator, float x, float y)
 	{
@@ -71,7 +68,7 @@ extension EditorApp
 		if (ImGui.MenuItem("Set Up IK Rig", null, false, editing && (humanoid || quadruped)))
 			SetUpIKRig(animator, skinned);
 		if (ImGui.IsItemHovered())
-			ImGui.SetTooltip("Adds hand and foot (or paw) targets with Limb IK, elbow, knee and hock poles and a look target\nbelow this object. Key them with Record or Auto Key to animate the limbs by their ends.");
+			ImGui.SetTooltip("Adds foot (or paw) targets with Limb IK, knee and hock poles and a look target below this object.\nKey them with Record or Auto Key to animate the legs by their ends. Hands are not set up: add a\nLimb IK and press Make Target And Pole for a weapon.");
 		if (ImGui.MenuItem("Snap IK Targets to Bones", null, false, editing && mClip != null))
 			SnapIKTargets(animator);
 		if (ImGui.IsItemHovered())
@@ -117,8 +114,9 @@ extension EditorApp
 		return forward != .Zero ? forward : fallback.Forward;
 	}
 
-	/// Set Up IK Rig: for each hand and foot a target object holding a Limb IK, a pole the elbow or knee points at,
-	/// and a look target for the head, all where the character is now, so that nothing moves until they do.
+	/// Set Up IK Rig: for each foot a target object holding a Limb IK, a pole the knee points at, and a look target
+	/// for the head, all where the character is now, so that nothing moves until they do. Hands are not set up: for
+	/// a weapon, add a Limb IK and press Make Target And Pole on it (docs/ik.md, "Hands on a weapon").
 	void SetUpIKRig(Animator animator, SkinnedMeshRenderer skinned)
 	{
 		if (!skinned.Model.HumanMap.IsHumanoid)
@@ -129,29 +127,29 @@ extension EditorApp
 		let map = skinned.Model.HumanMap;
 		let root = animator.Transform;
 		let forward = RigForward(skinned, root);
-		HumanBone[4] tips = .(.LeftHand, .RightHand, .LeftFoot, .RightFoot);
+		HumanBone[2] tips = .(.LeftFoot, .RightFoot);
+		StringView[2] names = .("Foot L", "Foot R");
 		int made = 0;
-		for (int i < 4)
+		for (int i < 2)
 		{
 			let tip = skinned.Bone(map[tips[i]]);
 			if (tip == null || tip.Parent == null || tip.Parent.Parent == null)
 				continue;
 			let middle = tip.Parent;
 			let upper = middle.Parent;
-			let target = RigObject(root, scope $"IK {RigLimbs[i]}" , tip.Position, tip.Rotation);
+			let target = RigObject(root, scope $"IK {names[i]}" , tip.Position, tip.Rotation);
 			var limb = target.GameObject.GetComponent<LimbIK>();
 			if (limb == null)
 				limb = target.GameObject.AddComponent<LimbIK>();
 			limb.tip = tip;
 			limb.target = target;
-			// The pole sits out from the elbow or knee the way it bends now, or behind (elbows) or in front (knees)
-			// when the limb is nearly straight or bent clearly the wrong way.
+			// The pole sits out from the knee the way it bends now, or in front when it is nearly straight or bent
+			// clearly the wrong way (knees point forward).
 			let length = (middle.Position - upper.Position).Length;
 			var bend = middle.Position - (upper.Position + tip.Position) * 0.5f;
-			let natural = i < 2 ? -forward : forward;
-			if (bend.Length < length * 0.05f || Vector3.Dot(bend.Normalized, natural) < -0.5f)
-				bend = natural;
-			let poleName = scope $"IK {(i < 2 ? "Elbow" : "Knee")} {RigLimbs[i].Substring(5)}";
+			if (bend.Length < length * 0.05f || Vector3.Dot(bend.Normalized, forward) < -0.5f)
+				bend = forward;
+			let poleName = scope $"IK Knee {names[i].Substring(5)}";
 			limb.pole = RigObject(root, poleName, middle.Position + bend.Normalized * Math.Max(length, 0.1f), .Identity);
 			made++;
 		}
@@ -165,6 +163,9 @@ extension EditorApp
 			lookAt.bone = head;
 			lookAt.target = look;
 			lookAt.forward = (head.Rotation.Conjugate * forward).Normalized;
+			// The neck bends with the head, and far enough down to look at the ground in front of the feet.
+			lookAt.bones = 2;
+			lookAt.maxAngle = 85;
 			made++;
 		}
 		IKSystem.Solve(mScene);
@@ -222,6 +223,9 @@ extension EditorApp
 			lookAt.bone = head;
 			lookAt.target = look;
 			lookAt.forward = (head.Rotation.Conjugate * forward).Normalized;
+			// The neck bends with the head, and far enough down to look at the ground.
+			lookAt.bones = 3;
+			lookAt.maxAngle = 85;
 			made++;
 		}
 		IKSystem.Solve(mScene);

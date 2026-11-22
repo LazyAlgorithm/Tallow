@@ -95,7 +95,8 @@ static class IKSolver
 	/// Turns bones so that the last one faces a point: a head, or a head with the neck and spine sharing the turn.
 	/// bones run from the lowest (spine) to the one that must face the point (head); localForward is the direction
 	/// of that bone, in its own space, that should point at it. The turn is kept within maxDegrees of where the
-	/// bone faced before, and weight (0 to 1) says how much of it is made.
+	/// bone faced before, and weight (0 to 1) says how much of it is made. The neck does most of the turn, the head
+	/// somewhat less and the spine least, which is how a person bends to look down at the ground.
 	public static void LookAt(List<Transform> bones, Vector3 localForward, Vector3 target, float weight, float maxDegrees)
 	{
 		if (bones.Count == 0 || weight <= 0)
@@ -108,12 +109,29 @@ static class IKSolver
 		wanted = TurnTowards(facing, wanted, maxDegrees);
 		if (weight < 1)
 			wanted = (Quaternion.Slerp(.Identity, FromTo(facing, wanted), weight) * facing).Normalized;
+		var left = 0.0f;
+		for (int i < bones.Count)
+			left += LookAtShare(i, bones.Count);
 		for (int i < bones.Count)
 		{
 			// Each bone makes its share of what is still to turn; the last one finishes it.
+			let share = LookAtShare(i, bones.Count);
 			let now = (head.Rotation * localForward).Normalized;
-			let turn = Quaternion.Slerp(.Identity, FromTo(now, wanted), 1.0f / (bones.Count - i));
+			let turn = Quaternion.Slerp(.Identity, FromTo(now, wanted), share / Math.Max(left, 0.0001f));
 			bones[i].Rotation = (turn * bones[i].Rotation).Normalized;
+			left -= share;
 		}
+	}
+
+	/// How much of a look-at turn a bone does, by its place in the chain (the last is the head): the neck most, then
+	/// the head, and the chest and spine least.
+	static float LookAtShare(int index, int count)
+	{
+		let fromHead = count - 1 - index;
+		if (fromHead <= 0)
+			return 0.5f;
+		if (fromHead == 1)
+			return 1.0f;
+		return 0.25f;
 	}
 }

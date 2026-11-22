@@ -3,8 +3,9 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Turns a head towards a target, with the neck and spine sharing the turn when Bones is more than 1: a character
-/// who watches the player, or whose upper body follows where the camera aims.
+/// Turns a head towards a target, with the neck (and the bones above it) sharing the turn, so looking down at the
+/// ground bends the neck rather than the head alone: a character who watches the player, or whose upper body follows
+/// where the camera aims.
 ///
 /// Bone is the head (or the last bone that should face the target); Bones counts it and that many parents above it.
 /// The turn is kept within Max Angle of where the clip has the head facing, so nobody's head goes round backwards.
@@ -17,11 +18,12 @@ class LookAtIK : IKComponent
 	public Transform bone;
 	/// What to look at. Empty: the point given to LookAt from code.
 	public Transform target;
-	/// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine).
-	[Range(1, 6)] public int32 bones = 1;
+	/// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine). Two
+	/// bends the neck with the head, which is what makes looking down at the ground natural.
+	[Range(1, 6)] public int32 bones = 2;
 	[Range(0, 1)] public float weight = 1;
-	/// The furthest the head turns from where its animation has it, in degrees.
-	[Range(0, 180)] public float maxAngle = 70;
+	/// The furthest the head turns from where its animation has it, in degrees. 85 reaches the ground at the feet.
+	[Range(0, 180)] public float maxAngle = 85;
 	/// The direction of the bone, in its own space, that should point at the target (the way the face looks).
 	public Vector3 forward = .(0, 0, 1);
 	/// How quickly the gaze follows a moving target; 0 follows at once.

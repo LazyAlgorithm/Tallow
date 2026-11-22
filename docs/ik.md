@@ -127,10 +127,12 @@ hand.Curl(1, 0.5f);                     // one finger: 0 thumb ... 4 pinky
 ## Looking
 
 **Look At IK**: drag the head into **Bone** and something into **Target**. **Bones** is how many bones share the
-turn, counting the head and going up through its parents: 1 turns only the head, 3 brings the neck and chest with
-it. **Max Angle** keeps the turn within that many degrees of where the animation has the head. **Forward** is the
-direction of the head bone, in its own space, that the face looks along; change it if the head turns its ear to the
-target. **Smooth** makes the gaze trail a moving target.
+turn, counting the head and going up through its parents: the default 2 bends the neck with the head, 1 turns only
+the head, and 3 brings the chest in too. The neck does most of the turn, the head somewhat less and the chest and
+spine least, so looking down at the ground bends the neck the way a person does rather than tipping the head alone.
+**Max Angle** keeps the turn within that many degrees of where the animation has the head; the default 85 reaches
+the ground in front of the feet. **Forward** is the direction of the head bone, in its own space, that the face
+looks along; change it if the head turns its ear to the target. **Smooth** makes the gaze trail a moving target.
 
 With no Target, `LookAt(point)` from code looks at a point in the world: where the camera is aiming, for an upper
 body that follows the view.
@@ -171,13 +173,15 @@ separate word, a suffix or a prefix). `QuadrupedRig` is what finds them.
 
 Limb IK bends a paw's wrist or hock backwards when it has to bend it by itself (a front leg's elbow and a back
 leg's hock both point back), and the poles the setup makes are behind the character. The Look At IK on the head
-turns it with the neck sharing the turn, as it does for a humanoid.
+bends the neck with it (three bones: the two neck bones and the head), as it does for a humanoid.
 
 ## Animating with IK in the editor
 
 IK runs in the editor, so it can be used to make clips. For a humanoid, **Rig > Set Up IK Rig** in the Animation
-window makes the targets, poles and components in one press, and the Scene view draws the targets as handles you can
-click. **Hands** opens Hand Posing for the fingers. Both are described in `docs/retargeting.md`.
+window makes a foot target and Knee pole for each leg and a look target for the head in one press (the look target
+turns the neck with the head); the Scene view draws the targets as handles you can click. It does not make hand
+targets: for a weapon, add a **Limb IK** to the hand and press **Make Target And Pole** on it, as above. **Hands**
+opens Hand Posing for the fingers. Both are described in `docs/retargeting.md`.
 
 - **Animate the targets.** A target that is a child of the Animator's object is keyed like any other child: turn on
   Record, move the marker, move the target. The clip then moves the target and IK moves the arm, in the editor and

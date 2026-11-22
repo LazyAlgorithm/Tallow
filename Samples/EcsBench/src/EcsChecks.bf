@@ -166,6 +166,7 @@ static class EcsChecks
 		AnimatorChecks();
 		AvatarMaskChecks();
 		QuadrupedChecks();
+		LookAtChecks();
 		NavigationChecks();
 		BehaviourChecks();
 		AIChecks();
@@ -2017,6 +2018,48 @@ static class EcsChecks
 			Expect(placement.IsGrounded(4) == false, "there is no fifth foot");
 			scene.StopPlay();
 			dog.RemoveComponent(placement);
+		}
+		Scene.Active = previous;
+	}
+
+	/// Look At IK: the neck bends with the head (and most of the turn), and the head can be put down at the ground.
+	static void LookAtChecks()
+	{
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let rig = scene.CreateGameObject("Watcher");
+			let neck = scene.CreateGameObject("Neck", rig.Transform);
+			let head = scene.CreateGameObject("Head", neck.Transform);
+			neck.Transform.Position = .(0, 1.5f, 0);
+			head.Transform.Position = .(0, 1.75f, 0);
+			let target = scene.CreateGameObject("Ground Target");
+			target.Transform.Position = .(0, 0, 0.6f);
+			let look = rig.AddComponent<LookAtIK>();
+			look.bone = head.Transform;
+			look.target = target.Transform;
+			look.forward = .(0, 0, 1);
+			Expect(look.bones == 2 && look.maxAngle == 85, "Look At IK bends the neck and can reach the ground by default");
+			look.SolveNow();
+			let headLook = (head.Transform.Rotation * Vector3.Forward).Normalized;
+			let toTarget = (target.Transform.Position - head.Transform.Position).Normalized;
+			Expect(Math.Abs(Quaternion.Dot(neck.Transform.LocalRotation, Quaternion.Identity)) < 0.999f, "the neck bends with the head");
+			Expect(Vector3.Dot(headLook, toTarget) > 0.97f, scope $"the head faces the target on the ground ({Vector3.Dot(headLook, toTarget)})");
+			// One bone: the head alone, leaving the neck as the animation has it.
+			look.Release();
+			look.bones = 1;
+			look.SolveNow();
+			Expect(Math.Abs(Quaternion.Dot(neck.Transform.LocalRotation, Quaternion.Identity)) > 0.9999f, "with one bone the neck stays put");
+			Expect(Math.Abs(Quaternion.Dot(head.Transform.LocalRotation, Quaternion.Identity)) < 0.999f, "and the head turns");
+			// The far side of the ground: the turn is kept within Max Angle.
+			target.Transform.Position = .(-0.5f, 0, -0.5f);
+			look.bones = 2;
+			look.Release();
+			look.SolveNow();
+			Expect(Vector3.Dot((head.Transform.Rotation * Vector3.Forward).Normalized, Vector3.Forward) > Math.Cos(86 * Mathf.Deg2Rad),
+				"the head does not turn further back than Max Angle");
+			rig.RemoveComponent(look);
 		}
 		Scene.Active = previous;
 	}

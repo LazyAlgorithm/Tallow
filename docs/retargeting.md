@@ -79,17 +79,17 @@ The Animation window's footer has a **Rig** menu:
 |---|---|
 | Expose Bones | Makes the bones objects, so they can be posed and keyed. |
 | Show Bones in the Scene View | The same as the toolbar's Bones button. |
-| Set Up IK Rig | For a humanoid: a target for each hand and foot (each holding a Limb IK), a pole for each elbow and knee, and a look target with a Look At IK for the head. They go below the Animator's object, where the character is now, so nothing moves until they do. |
+| Set Up IK Rig | For a humanoid: a target for each foot (holding a Limb IK), a pole for each knee, and a look target with a Look At IK that bends the neck with the head. For a four-legged character: the same for all four paws. They go below the Animator's object, where the character is now, so nothing moves until they do. Hands are not set up: add a Limb IK to a hand and press Make Target And Pole for a weapon. |
 | Snap IK Targets to Bones | Moves every target to where the clip alone puts its hand or foot at the marker, and every pole out from its joint. |
 | Bake IK Into Keys | Keys the pose IK makes on every frame of the clip (30 a second at most) into the bones it moves. The clip then plays it with no IK. |
 | Copy Model Clip Into This Clip | Keys every bone a model clip moves (retargeted ones too) on every frame, into the open clip, so it can be edited here. |
 
 ### Animating with IK
 
-1. **Rig > Set Up IK Rig.** Green boxes appear on the hands and feet, pink diamonds at the elbows and knees, and a
-   yellow diamond in front of the head.
-2. Turn on **Record** (or Auto Key), move the time marker, and drag a box. The arm or leg follows, and the box is
-   keyed. A box's turn is the hand's or foot's turn. Move a diamond to swing the elbow or knee.
+1. **Rig > Set Up IK Rig.** Green boxes appear on the feet, pink diamonds at the knees, and a yellow diamond in
+   front of the head.
+2. Turn on **Record** (or Auto Key), move the time marker, and drag a box. The leg follows, and the box is keyed. A
+   box's turn is the foot's turn. Move a diamond to swing the knee.
 3. Play the clip: the targets move and IK moves the limbs, in the editor and in the game.
 4. To keep the pose without IK in the game, **Rig > Bake IK Into Keys**, then set the IK components' Weight to 0 or
    remove them.
