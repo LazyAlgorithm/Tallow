@@ -29,3 +29,7 @@ Tests/**/*.slnx
 Samples/**/.tallow-csharp/
 Samples/**/*.slnx
 Player/build/
+
+# Rapier prebuilt archives: built per platform by tools/build_rapier.py or attached to a release.
+third_party/rapier/prebuilt/*/librapier*
+third_party/rapier/prebuilt/*/rapier3d_ffi.lib
