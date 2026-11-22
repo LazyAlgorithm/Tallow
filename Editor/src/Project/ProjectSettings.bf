@@ -91,8 +91,11 @@ extension EditorApp
 		ImGui.SetNextItemWidth(-1);
 		if (available.Count == 0)
 		{
-			ImGui.BeginCombo(scope $"##physics{dimension}" , "None available");
-			ImGui.EndCombo();
+			// No provider for this dimension (2D today). Do not open a combo: EndCombo without a popup being
+			// pushed closes the settings window instead, which ImGui reports as "EndCombo() in wrong window".
+			ImGui.TextDisabled("None available");
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("No backend for this dimension is compiled into this build yet.");
 			return false;
 		}
 		let currentId = dimension == .Three ? ProjectConfig.Physics3DBackendId : ProjectConfig.Physics2DBackendId;
