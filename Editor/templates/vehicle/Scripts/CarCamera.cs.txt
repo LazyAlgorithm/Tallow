@@ -1,0 +1,34 @@
+using System;
+using System.Numerics;
+using Tallow;
+
+namespace {NAMESPACE};
+
+/// <summary>A chase camera that follows the car smoothly and looks a little above its centre.</summary>
+public class CarCamera : Script
+{
+    /// <summary>The object to follow; the template car is called Car.</summary>
+    public string Target = "Car";
+    /// <summary>Where the camera wants to sit, relative to the car (behind and above it).</summary>
+    public Vector3 Offset = new(0f, 2.4f, -6.5f);
+    /// <summary>How quickly it catches up; higher is tighter.</summary>
+    public float Smoothing = 5f;
+
+    private GameObject? _target;
+
+    public override void Start()
+    {
+        _target = Scene.Find(Target);
+    }
+
+    public override void LateUpdate(TickInput input, float deltaTime)
+    {
+        var target = _target;
+        if (target == null)
+            return;
+        Vector3 desired = target.Value.Transform.Position + target.Value.Transform.Rotation * Offset;
+        float weight = 1f - MathF.Exp(-Math.Max(Smoothing, 0.01f) * deltaTime);
+        Transform.Position = Vector3.Lerp(Transform.Position, desired, weight);
+        Transform.LookAt(target.Value.Transform.Position + Vector3.UnitY * 0.7f);
+    }
+}

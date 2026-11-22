@@ -7,7 +7,7 @@ namespace Tallow.Editor;
 
 enum ProjectTemplate
 {
-	Empty, Sample, Showcase
+	Empty, FirstPerson, ThirdPerson, Vehicle, Showcase
 }
 
 /// Creates new projects from built-in templates.
@@ -181,7 +181,7 @@ static class ProjectGenerator
 
 	public static bool Create(StringView folder, StringView name, StringView engineRoot, bool sample, String error)
 	{
-		return Create(folder, name, engineRoot, sample ? .Sample : .Empty, error);
+		return Create(folder, name, engineRoot, sample ? .FirstPerson : .Empty, error);
 	}
 
 	public static bool Create(StringView folder, StringView name, StringView engineRoot, ProjectTemplate template, String error)
@@ -244,41 +244,67 @@ static class ProjectGenerator
 
 		if (template == .Empty)
 		{
-			// One C# script: the scene's first-person character (Scripts/FirstPersonCharacter.cs). The project runs
-			// in the precompiled editor and player, so there is no Program.bf and nothing for BeefBuild to compile.
-			for (let sub in StringView[?]("Scripts", "Prefabs", "Materials", "Textures", "Models", "Scenes"))
+			// Just the folders and a start scene with a camera, light and floor. No player or scripts.
+			for (let sub in StringView[?]("Scripts", "Materials", "Textures", "Models", "Scenes"))
 				Directory.CreateDirectory(scope $"{folder}/src/{sub}").IgnoreError();
-			CopyTemplateFiles(scope $"{engineRoot}/Editor/templates/empty", scope $"{folder}/src", name);
-			Write(scope $"{folder}/.template" , "empty");
+			Write(scope $"{folder}/.template" , "blank");
 			return true;
 		}
 
-		// The first scene (and Prefabs/Player.tprefab) is built by the editor the first time the project opens.
-		// Shared sample content: the C# starter scripts, the animated character, its clips and the menu.
-		let common = scope $"{engineRoot}/Editor/templates/common";
-		for (let sub in StringView[?]("Scripts", "Prefabs", "Animations", "Models", "UI", "Materials", "Shaders", "Textures"))
+		if (template == .FirstPerson)
 		{
-			Directory.CreateDirectory(scope $"{folder}/src/{sub}").IgnoreError();
-			if (!Directory.Exists(scope $"{common}/{sub}"))
-				continue;
-			for (let entry in Directory.EnumerateFiles(scope $"{common}/{sub}"))
-			{
-				let fileName = scope String();
-				entry.GetFileName(fileName);
-				if (fileName.EndsWith(".txt"))
-				{
-					let text = scope String();
-					if (File.ReadAllText(scope $"{common}/{sub}/{fileName}" , text, true) case .Err)
-						continue;
-					text.Replace("{NAMESPACE}", name);
-					fileName.Replace(".txt", "");
-					Write(scope $"{folder}/src/{sub}/{fileName}" , text);
-				}
-				else
-					File.Copy(scope $"{common}/{sub}/{fileName}" , scope $"{folder}/src/{sub}/{fileName}").IgnoreError();
-			}
+			// The first-person C# character and its camera. The project runs in the precompiled editor and player, so
+			// there is no Program.bf and nothing for BeefBuild to compile.
+			for (let sub in StringView[?]("Scripts", "Prefabs", "Materials", "Textures", "Models", "Scenes"))
+				Directory.CreateDirectory(scope $"{folder}/src/{sub}").IgnoreError();
+			CopyTemplateFiles(scope $"{engineRoot}/Editor/templates/empty", scope $"{folder}/src", name);
+			Write(scope $"{folder}/.template" , "firstperson");
+			return true;
 		}
-		Write(scope $"{folder}/.template" , template == .Sample ? "sample" : "empty");
-		return true;
+
+		if (template == .ThirdPerson)
+		{
+			// The sample's animated character, CharacterMotor and follow camera, without the voxel world or menus.
+			for (let sub in StringView[?]("Scripts", "Prefabs", "Animations", "Models", "Materials", "Textures", "Scenes"))
+				Directory.CreateDirectory(scope $"{folder}/src/{sub}").IgnoreError();
+			let common = scope $"{engineRoot}/Editor/templates/common";
+			for (let sub in StringView[?]("Scripts", "Prefabs", "Animations", "Models", "Materials", "Textures"))
+			{
+				if (!Directory.Exists(scope $"{common}/{sub}"))
+					continue;
+				for (let entry in Directory.EnumerateFiles(scope $"{common}/{sub}"))
+				{
+					let fileName = scope String();
+					entry.GetFileName(fileName);
+					if (fileName.EndsWith(".txt"))
+					{
+						let text = scope String();
+						if (File.ReadAllText(scope $"{common}/{sub}/{fileName}", text, true) case .Err)
+							continue;
+						text.Replace("{NAMESPACE}", name);
+						fileName.RemoveFromEnd(4);
+						Write(scope $"{folder}/src/{sub}/{fileName}", text);
+					}
+					else
+						File.Copy(scope $"{common}/{sub}/{fileName}", scope $"{folder}/src/{sub}/{fileName}").IgnoreError();
+				}
+			}
+			Write(scope $"{folder}/.template" , "thirdperson");
+			return true;
+		}
+
+		if (template == .Vehicle)
+		{
+			// The car model, its wheels, CC0 engine sounds and the C# car scripts. The first scene is built by the
+			// editor on open (SceneTemplates.BuildVehicle).
+			for (let sub in StringView[?]("Scripts", "Models", "Sounds", "Scenes"))
+				Directory.CreateDirectory(scope $"{folder}/src/{sub}").IgnoreError();
+			CopyTemplateFiles(scope $"{engineRoot}/Editor/templates/vehicle", scope $"{folder}/src", name);
+			Write(scope $"{folder}/.template" , "vehicle");
+			return true;
+		}
+
+		error.Set("Unknown project template.");
+		return false;
 	}
 }

@@ -121,6 +121,7 @@ struct CharacterController : ComponentHandle<CharacterControllerData>
 		if (IsValid)
 			Runtime.Teleport(position, velocity, airTime);
 	}
+
 	/// Applies the shape fields after changing them (CharacterControllerState.ApplyShape).
 	public bool ApplyShape(float maxPenetration = 0.03f) => Runtime.ApplyShape(maxPenetration);
 	/// Takes a shape decided on another machine, without asking whether it fits here.
@@ -191,7 +192,7 @@ class CharacterControllerState
 	}
 
 	void* mCharacter;
-	Jolt.CharacterState mState;
+	CharacterState mState;
 	Vector3 mLastPosition;
 	Quaternion mLastRotation = .Identity;
 	bool mReady;
@@ -290,6 +291,11 @@ class CharacterControllerState
 	{
 		if (HasCharacter)
 			return true;
+		if (!ComponentAvailability.CanAdd(typeof(CharacterController), Scene, let reason))
+		{
+			Log.Warning(scope $"CharacterController on '{GameObject.Name}' needs {reason}; the selected physics backend does not provide it.");
+			return false;
+		}
 		let desc = Describe(let supportHeight);
 		mSoft = softCharacterContact;
 		mCharacter = Scene.Physics.CreateCharacter(Transform, desc, ShapeRotation, maxSlope, mass, pushStrength, supportHeight, mSoft);
@@ -414,7 +420,7 @@ class CharacterControllerState
 	{
 		if (Scene.Network != null && Scene.Network.Replaying)
 			return;
-		Jolt.CharacterHit[16] hits = ?;
+		CharacterHit[16] hits = ?;
 		let count = Scene.Physics.CharacterHits(mCharacter, hits);
 		if (count == 0)
 			return;

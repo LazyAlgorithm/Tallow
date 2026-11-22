@@ -22,6 +22,7 @@ extension EditorApp
 		if (ImGui.Begin("Project Settings", &mShowSettings, ImGui.WindowFlags.NoDocking | ImGui.WindowFlags.NoCollapse))
 		{
 			DrawGeneralSettings(project);
+			DrawPhysicsSettings();
 			DrawScriptReloadSettings(project);
 			DrawProjectConfigSettings();
 			DrawLibrarySettings(project);
@@ -38,6 +39,91 @@ extension EditorApp
 				RequestRebuild();
 		}
 		ImGui.End();
+	}
+
+	/// The project-wide physics choices: one 3D backend and one 2D backend. There is no per-scene override.
+	void DrawPhysicsSettings()
+	{
+		ImGui.SeparatorText("Physics");
+		ImGui.TextWrapped("Project-wide choices. They apply from the next Play; a scene does not override them.");
+		bool changed = false;
+		changed |= DrawPhysicsBackendCombo("3D Physics", .Three);
+		changed |= DrawPhysicsBackendCombo("2D Physics", .Two);
+		if (changed)
+			SaveProjectConfig();
+
+		let provider = PhysicsBackends.Selected3D;
+		if (provider != null)
+		{
+			ImGui.Spacing();
+			let backendLine = scope String();
+			backendLine.AppendF("3D backend: {} ({})", provider.DisplayName, provider.LibraryVersion);
+			ImGui.TextDisabled(backendLine.CStr());
+			let features = provider.Features;
+			for (int32 i = 0; i < 64; i++)
+			{
+				let bit = (PhysicsFeature)((uint64)1 << i);
+				let name = PhysicsFeatures.Name(bit);
+				if (name == "Unknown")
+					continue;
+				if (features.Has(bit))
+					ImGui.BulletText(scope $"{name}" .CStr());
+				else
+					ImGui.TextDisabled(scope $"  {name} (unavailable)");
+			}
+		}
+		else
+			ImGui.TextColored(EditorTheme.Warning, "No 3D physics backend is available in this build.");
+	}
+
+	/// One project-wide backend list. Returns true when the choice changed.
+	bool DrawPhysicsBackendCombo(StringView label, PhysicsDimension dimension)
+	{
+		List<PhysicsBackend> available = scope .();
+		for (let backend in PhysicsBackends.All)
+		{
+			if (backend.Dimension == dimension && backend.Available)
+				available.Add(backend);
+		}
+		ImGui.AlignTextToFramePadding();
+		ImGui.Text(label);
+		ImGui.SameLine(180);
+		ImGui.SetNextItemWidth(-1);
+		if (available.Count == 0)
+		{
+			ImGui.BeginCombo(scope $"##physics{dimension}" , "None available");
+			ImGui.EndCombo();
+			return false;
+		}
+		let currentId = dimension == .Three ? ProjectConfig.Physics3DBackendId : ProjectConfig.Physics2DBackendId;
+		PhysicsBackend current = null;
+		for (let backend in available)
+		{
+			if (backend.Id == currentId)
+			{
+				current = backend;
+				break;
+			}
+		}
+		if (current == null)
+			current = available[0];
+		bool changed = false;
+		if (ImGui.BeginCombo(scope $"##physics{dimension}" , scope String(current.DisplayName).CStr()))
+		{
+			for (let backend in available)
+			{
+				if (ImGui.Selectable(scope String(backend.DisplayName).CStr(), backend == current))
+				{
+					if (dimension == .Three)
+						ProjectConfig.SetPhysics3DBackend(backend.Id);
+					else
+						ProjectConfig.SetPhysics2DBackend(backend.Id);
+					changed = true;
+				}
+			}
+			ImGui.EndCombo();
+		}
+		return changed;
 	}
 
 	/// Reload policy is a development-time project option, not a gameplay dependency.

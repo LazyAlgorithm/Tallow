@@ -145,8 +145,10 @@ static class SceneSerializer
 		}
 		// Kept blocks of components this build does not have, as they were read.
 		if (gameObject.MissingComponents != null)
+		{
 			for (let block in gameObject.MissingComponents)
 				text.Append(block);
+		}
 		// Built-in components that are handles (Light...): the same lines as a script component.
 		let handles = scope List<HandleComponents.Info>();
 		HandleComponents.On(gameObject, handles);
@@ -432,6 +434,14 @@ static class SceneSerializer
 		// During play, nothing read here wakes until every field and reference is in.
 		scene.HoldWakes();
 		defer scene.ReleaseWakes();
+		// Keep components the current backend cannot run: the file is valid, and the Inspector explains why they
+		// are inert. They become available again if the project switches back to a backend that has them.
+		let wasLoading = ComponentAvailability.Loading;
+		ComponentAvailability.Loading = true;
+		defer
+		{
+			ComponentAvailability.Loading = wasLoading;
+		}
 		if (clear)
 		{
 			scene.Clear();
@@ -459,7 +469,10 @@ static class SceneSerializer
 		// The block of an unknown component being kept: its "component"/"data" line and the "field" lines after it.
 		String missing = null;
 		let missingTypes = scope HashSet<String>();
-		defer { ClearAndDeleteItems!(missingTypes); }
+		defer
+		{
+			ClearAndDeleteItems!(missingTypes);
+		}
 		void KeepMissing(StringView kind, StringView type, StringView line)
 		{
 			if (current.MissingComponents == null)

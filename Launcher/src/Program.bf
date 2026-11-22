@@ -80,11 +80,19 @@ class LauncherApp : Application
 		mSetupFailed = false;
 		SetMessage(mMissingTools.IsEmpty ? "Using the Beef compiler you chose." : "Using the Beef compiler you chose. Some tools are still missing.", !mMissingTools.IsEmpty);
 	}
+
 	bool mMessageIsError;
 	/// .NET SDK, runtime and managed-runtime check, run on a worker as the launcher starts.
 	DotNetCheck.Report mDependencies ~ delete _;
 	DotNetCheck.Report mPendingDependencies ~ delete _;
-	Thread mDependencyThread ~ { if (_ != null) { _.Join(); delete _; } };
+	Thread mDependencyThread ~
+		{
+			if (_ != null)
+			{
+				_.Join();
+				delete _;
+			}
+		};
 	bool mDependencyDone;
 	bool mDependencyRunning;
 	/// True while the worker rebuilds the managed runtime instead of only checking.
@@ -99,7 +107,14 @@ class LauncherApp : Application
 	bool mSetupRunning;
 	bool mSetupFinished;
 	int32 mSetupExitCode;
-	Thread mSetupThread ~ { if (_ != null) { _.Join(); delete _; } };
+	Thread mSetupThread ~
+		{
+			if (_ != null)
+			{
+				_.Join();
+				delete _;
+			}
+		};
 	int32 mOpenCountdown;
 	int32 mSelected = -1;
 
@@ -226,7 +241,7 @@ class LauncherApp : Application
 		{
 			let name = scope String();
 			entry.GetFileName(name);
-			if (!name.StartsWith('.') && HasManagedSources(scope $"{directory}/{name}", depth + 1))
+			if (!name.StartsWith('.') && HasManagedSources(scope $"{directory}/{name}" , depth + 1))
 				return true;
 		}
 		return false;
@@ -271,7 +286,7 @@ class LauncherApp : Application
 			Directory.CreateDirectory(scope $"{project.Path}/build").IgnoreError();
 			// Say what is missing up front rather than relaying a shell's "dotnet: not found".
 			let dependencies = scope DotNetCheck.Report();
-			DotNetCheck.Check(project.EngineRoot, scope $"{project.Path}/build", dependencies);
+			DotNetCheck.Check(project.EngineRoot, scope $"{project.Path}/build" , dependencies);
 			for (let problem in dependencies.problems)
 			{
 				if (problem.blocking && problem.kind != .StaleManagedRuntime)
@@ -284,7 +299,7 @@ class LauncherApp : Application
 			if (dependencies.Has(.StaleManagedRuntime))
 			{
 				let runtimeLog = scope String();
-				if (!DotNetCheck.BuildManagedRuntime(project.EngineRoot, scope $"{project.Path}/build", runtimeLog))
+				if (!DotNetCheck.BuildManagedRuntime(project.EngineRoot, scope $"{project.Path}/build" , runtimeLog))
 				{
 					error.Set("Tallow's C# runtime did not build:\n");
 					error.Append(runtimeLog);
@@ -400,7 +415,7 @@ class LauncherApp : Application
 			}
 			else if (mSetupExitCode != 0)
 			{
-				SetMessage(scope $"Dependency setup failed (exit {mSetupExitCode}). Check toolchain/install.log for details.", true);
+				SetMessage(scope $"Dependency setup failed (exit {mSetupExitCode}). Check toolchain/install.log for details." , true);
 				mSetupFailed = true;
 			}
 			else
@@ -505,7 +520,7 @@ class LauncherApp : Application
 		mSetupExitCode = -1;
 		mSetupThread = new Thread(new => SetupWorker);
 		mSetupThread.Start(false);
-#elif BF_PLATFORM_LINUX
+		#elif BF_PLATFORM_LINUX
 		let script = scope $"{mEngineRoot}/tools/setup_dependencies.sh";
 		if (!File.Exists(script))
 		{
@@ -518,7 +533,7 @@ class LauncherApp : Application
 		mSetupExitCode = -1;
 		mSetupThread = new Thread(new => SetupWorker);
 		mSetupThread.Start(false);
-#else
+	#else
 		SetMessage("Automatic toolchain setup is not yet implemented for this operating system.", true);
 		mSetupFailed = true;
 #endif
@@ -538,7 +553,7 @@ class LauncherApp : Application
 		Terminal.Quote(log, command);
 		command.Append(" 2>&1");
 		mSetupExitCode = Terminal.Run(command);
-#elif BF_PLATFORM_LINUX
+		#elif BF_PLATFORM_LINUX
 		let script = scope $"{mEngineRoot}/tools/setup_dependencies.sh";
 		let folder = scope String(Toolchain.Folder);
 		Directory.CreateDirectory(folder).IgnoreError();
@@ -596,12 +611,22 @@ class LauncherApp : Application
 		ImGui.SetNextItemWidth(-1);
 		ImGui.InputText("##location", mLocation);
 		ImGui.Text("Template");
-		if (ImGui.RadioButton("Empty", mTemplate == .Empty))
-			mTemplate = .Empty;
-		if (ImGui.RadioButton("Voxel sandbox", mTemplate == .Sample))
-			mTemplate = .Sample;
-		if (ImGui.RadioButton("Tallow Gallery (showcase of eight areas)", mTemplate == .Showcase))
-			mTemplate = .Showcase;
+		StringView[5] templateLabels = .("Empty", "First person", "Third person", "Drivable car", "Tallow Gallery (showcase of eight areas)");
+		ProjectTemplate[5] templateKinds = .(.Empty, .FirstPerson, .ThirdPerson, .Vehicle, .Showcase);
+		int32 currentTemplate = 0;
+		for (int32 i = 0; i < 5; i++)
+			if (templateKinds[i] == mTemplate)
+				currentTemplate = i;
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.BeginCombo("##template", scope String(templateLabels[currentTemplate]).CStr()))
+		{
+			for (int32 i = 0; i < 5; i++)
+			{
+				if (ImGui.Selectable(scope String(templateLabels[i]).CStr(), i == currentTemplate))
+					mTemplate = templateKinds[i];
+			}
+			ImGui.EndCombo();
+		}
 		ImGui.Spacing();
 		if (ImGui.Button("Create Project", .(-1, 32)))
 			CreateFromForm();
@@ -708,11 +733,11 @@ class LauncherApp : Application
 		{
 			mDependencyInstall = false;
 			if (mDependencyInstallFailed)
-				SetMessage(scope $"Installing .NET failed: {mDependencyLog}", true);
+				SetMessage(scope $"Installing .NET failed: {mDependencyLog}" , true);
 			else
 			{
 				DotNetSdk.Apply();
-				SetMessage(scope $".NET SDK {DotNetSdk.PinnedVersion} is installed for Tallow.", false);
+				SetMessage(scope $".NET SDK {DotNetSdk.PinnedVersion} is installed for Tallow." , false);
 			}
 			StartDependencyCheck(false);
 			return;
@@ -721,7 +746,7 @@ class LauncherApp : Application
 		mDependencies = mPendingDependencies;
 		mPendingDependencies = null;
 		if (mDependencyRebuild && mDependencies.Has(.StaleManagedRuntime))
-			SetMessage(scope $"Tallow's C# runtime did not build:\n{mDependencyLog}", true);
+			SetMessage(scope $"Tallow's C# runtime did not build:\n{mDependencyLog}" , true);
 	}
 
 	/// Problems with .NET above the project lists. They never stop a project opening (a project with a C#
@@ -819,7 +844,7 @@ class LauncherApp : Application
 		}
 		if (verdict == "newer")
 		{
-			SetMessage(scope $"This project needs a newer engine ({mUpgradeFrom}) than this one ({mUpgradeTo}). Install it in Engine Manager.", true);
+			SetMessage(scope $"This project needs a newer engine ({mUpgradeFrom}) than this one ({mUpgradeTo}). Install it in Engine Manager." , true);
 			return;
 		}
 		FinishOpen();
@@ -927,8 +952,10 @@ class Program
 #endif
 			let archive = scope String();
 			for (int j < args.Count - 1)
+			{
 				if (args[j] == "--from-archive")
 					archive.Set(args[j + 1]);
+			}
 			let error = scope String();
 			if (!DotNetSdk.Install(archive, scope (line) => Console.WriteLine(line), error))
 			{
@@ -970,6 +997,34 @@ class Program
 				Console.WriteLine(scope $"Verified generated C# API export: {args[i + 1]}");
 				return 0;
 			}
+		}
+		// The project-wide physics choices can be overridden for this run (tests, A/B runs).
+		for (int i < args.Count - 1)
+		{
+			if (args[i] == "--physics3d")
+				PhysicsBackends.Override3D(args[i + 1]);
+			else if (args[i] == "--physics2d")
+				PhysicsBackends.Override2D(args[i + 1]);
+		}
+		// --test-physics-gating: capability-gated components, without a window.
+		for (int i < args.Count)
+		{
+			if (args[i] == "--test-physics-gating")
+				return PhysicsGatingTest.Run();
+			if (args[i] == "--test-physics-basic")
+				return PhysicsBasicTest.Run();
+			if (args[i] == "--test-physics-ragdoll")
+				return PhysicsRagdollTest.Run();
+			if (args[i] == "--test-physics-vehicle")
+				return PhysicsVehicleTest.Run();
+			if (args[i] == "--test-physics-vehicle-kinds")
+				return PhysicsVehicleKindsTest.Run();
+			if (args[i] == "--test-physics-softbody")
+				return PhysicsSoftBodyTest.Run();
+			if (args[i] == "--test-vehicle-template" && i + 1 < args.Count)
+				return VehicleTemplateTest.Run(args[i + 1]);
+			if (args[i] == "--test-template-scenes" && i + 1 < args.Count)
+				return TemplateScenesTest.Run(args[i + 1]);
 		}
 		// --write-script-templates <folder>: writes a C# script from every template there, without a window.
 		for (int i < args.Count - 1)
@@ -1030,7 +1085,10 @@ class Program
 				}
 				Toolchain.Apply();
 				let missing = scope List<String>();
-				defer { ClearAndDeleteItems!(missing); }
+				defer
+				{
+					ClearAndDeleteItems!(missing);
+				}
 				Toolchain.FindMissing(missing);
 				let beef = scope String();
 				Environment.GetEnvironmentVariable("BEEFBUILD", beef).IgnoreError();
@@ -1112,10 +1170,14 @@ class Program
 		ProjectTemplate template = .Empty;
 		for (let arg in args)
 		{
-			if (arg == "--sample")
-				template = .Sample;
-			if (arg == "--showcase")
+			if (arg == "--firstperson" || arg == "--fp")
+				template = .FirstPerson;
+			else if (arg == "--thirdperson" || arg == "--tp")
+				template = .ThirdPerson;
+			else if (arg == "--showcase")
 				template = .Showcase;
+			else if (arg == "--vehicle")
+				template = .Vehicle;
 		}
 		let root = scope String();
 		// No window here, so locate the engine relative to this executable.

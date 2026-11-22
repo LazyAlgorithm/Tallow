@@ -97,6 +97,10 @@ public readonly partial record struct AudioSource(GameObject GameObject) : IComp
         get => CSharpAudio.SourceTime(GameObject.SceneId, GameObject.Id, 1);
         set => CSharpAudio.SourceSeek(GameObject.SceneId, GameObject.Id, value);
     }
+    /// <summary>Changes the pitch while it plays, without rewriting the component's saved field.</summary>
+    public bool SetPitch(float pitch) => CSharpAudio.SourcePitch(GameObject.SceneId, GameObject.Id, pitch);
+    /// <summary>Changes the volume while it plays, without rewriting the component's saved field.</summary>
+    public bool SetVolume(float volume) => CSharpAudio.SourceVolume(GameObject.SceneId, GameObject.Id, volume);
 }
 
 /// <summary>The project's input actions (Project Settings > Input) on this machine. A networked script reads its

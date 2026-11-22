@@ -66,6 +66,121 @@ static class SceneTemplates
 			player.AddComponent(character.type);
 	}
 
+	/// A third-person character: the sample's animated character on a CharacterController, moved by CharacterMotor,
+	/// with the follow camera and animation scripts. Put a Network Identity on it too, so it runs from tick input.
+	public static void BuildThirdPerson(Scene scene, StringView projectName)
+	{
+		scene.Clear();
+		AddSunAndCamera(scene, .(0, 3, -9), .(12, 0, 0));
+
+		let ground = scene.CreateGameObject("Ground");
+		let groundRenderer = ground.AddComponent<MeshRenderer>();
+		groundRenderer.mesh.Set("builtin:plane");
+		groundRenderer.color = .FromBytes(112, 158, 92);
+		ground.Transform.LocalScale = .(6, 1, 6);
+		let groundCollider = ground.AddComponent<BoxCollider>();
+		groundCollider.size = .(20, 0.2f, 20);
+		groundCollider.center = .(0, -0.1f, 0);
+
+		let player = scene.CreateGameObject("Player");
+		player.Transform.Position = .(0, 1.1f, -4);
+		let model = Prefab.Create(scene, "Prefabs/character.tprefab");
+		if (model != null)
+		{
+			model.Transform.SetParent(player.Transform, false);
+			model.Transform.LocalPosition = .(0, -1, 0);
+		}
+		else
+		{
+			let renderer = player.AddComponent<MeshRenderer>();
+			renderer.mesh.Set("builtin:capsule");
+			renderer.color = .FromBytes(235, 140, 60);
+		}
+		let controller = player.AddComponent<CharacterController>();
+		controller.radius = 0.5f;
+		controller.height = 2;
+		player.AddComponent<NetworkIdentity>();
+		player.AddComponent<CharacterMotor>();
+		AddByName(player, projectName, "FollowCamera");
+		AddByName(player, projectName, "CharacterAnimation");
+	}
+
+	/// A drivable car: the Kenney sedan body on a rigid chassis, four visible wheels turned by the Vehicle component,
+	/// a chase camera and a CC0 engine loop. The CarController script reads the tick input and drives it.
+	public static void BuildVehicle(Scene scene, StringView projectName)
+	{
+		scene.Clear();
+		AddSunAndCamera(scene, .(0, 3.2f, -8), .(12, 0, 0));
+
+		let ground = scene.CreateGameObject("Ground");
+		let groundRenderer = ground.AddComponent<MeshRenderer>();
+		groundRenderer.mesh.Set("builtin:plane");
+		groundRenderer.color = .FromBytes(112, 158, 92);
+		ground.Transform.LocalScale = .(40, 1, 40);
+		let groundCollider = ground.AddComponent<BoxCollider>();
+		groundCollider.size = .(200, 0.2f, 200);
+		groundCollider.center = .(0, -0.1f, 0);
+
+		let road = scene.CreateGameObject("Road");
+		let roadRenderer = road.AddComponent<MeshRenderer>();
+		roadRenderer.mesh.Set("builtin:cube");
+		roadRenderer.color = .FromBytes(52, 54, 58);
+		road.Transform.LocalScale = .(9, 0.02f, 200);
+		road.Transform.Position = .(0, 0.02f, 0);
+
+		let car = scene.CreateGameObject("Car");
+		car.Transform.Position = .(0, 0.6f, 0);
+		let chassis = car.AddComponent<BoxCollider>();
+		chassis.size = .(1.5f, 0.9f, 2.6f);
+		let rigidbody = car.AddComponent<Rigidbody>();
+		rigidbody.mass = 1300;
+		rigidbody.linearDamping = 0.1f;
+		rigidbody.angularDamping = 0.3f;
+		rigidbody.allowSleeping = false;
+		let vehicle = car.AddComponent<Vehicle>();
+		vehicle.maxTorque = 320;
+
+		let body = scene.CreateGameObject("Car Body", car.Transform);
+		body.Transform.LocalPosition = .(0, -0.6f, 0);
+		// The Kenney model's nose points down -Z; the car's forward is +Z.
+		body.Transform.LocalRotation = Quaternion.AngleAxis(180, Vector3.Up);
+		let bodyRenderer = body.AddComponent<MeshRenderer>();
+		bodyRenderer.mesh.Set("Models/sedan-body.glb");
+
+		void Wheel(StringView name, Vector3 position, float yaw)
+		{
+			let wheel = scene.CreateGameObject(name, car.Transform);
+			wheel.Transform.LocalPosition = position;
+			// The Kenney wheel's face points the other way; mirrored wheels take opposite yaws. CarController applies
+			// the same values in play.
+			wheel.Transform.LocalRotation = Quaternion.AngleAxis(yaw, Vector3.Up);
+			let renderer = wheel.AddComponent<MeshRenderer>();
+			renderer.mesh.Set("Models/wheel-default.glb");
+		}
+		Wheel("Wheel FL", .(-0.6f, -0.3f, 0.66f), 180);
+		Wheel("Wheel FR", .(0.6f, -0.3f, 0.66f), 0);
+		Wheel("Wheel RL", .(-0.6f, -0.3f, -0.66f), 180);
+		Wheel("Wheel RR", .(0.6f, -0.3f, -0.66f), 0);
+
+		let audio = car.AddComponent<AudioSource>();
+		audio.audioClip.Set("Sounds/Car_Engine_Loop.ogg");
+		audio.loop = true;
+		audio.playOnStart = true;
+		audio.volume = 0.5f;
+		audio.spatial = true;
+		// The chase camera moves with the car, so Doppler would only add a second pitch shift on top of the engine.
+		audio.doppler = 0;
+		// The camera is right behind the car; its own body would otherwise occlude the engine and make the note
+		// flicker at speed.
+		audio.occlusion = false;
+		audio.minDistance = 4;
+		audio.maxDistance = 60;
+
+		AddByName(car, projectName, "CarController");
+		if (let camera = scene.Find("Main Camera"))
+			AddByName(camera, projectName, "CarCamera");
+	}
+
 	/// Adds a template script: the project's C# Scripts/{typeName}.cs (run by the managed adapter component), or a
 	/// Beef component of that name in a legacy native project.
 	static void AddByName(GameObject gameObject, StringView projectName, StringView typeName)

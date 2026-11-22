@@ -110,39 +110,7 @@ class SoftBody : Component
 	/// Wind Zones' strength is a feel (1 a breeze, 6 a gale); this is how many metres a second each is.
 	const float WindSpeed = 4;
 
-	[CLink] static extern uint32 tn_soft_create(void* world, NativeConfig* config, float* positions, uint32 vertexCount, uint32* triangles, uint32 triangleCount, float* pinned, float* stiffness, float* center, float* objectMatrix);
-	[CLink] static extern void tn_soft_ignore(void* world, uint32 bodyId, uint32 ignoredBody);
-	[CLink] static extern void tn_soft_forget(void* world, uint32 bodyId);
-	[CLink] static extern void tn_soft_skin(void* world, uint32 bodyId, float* objectMatrix, float* objectNext, float step);
-	[CLink] static extern uint32 tn_soft_dents(void* world, uint32 bodyId, float* output, uint32 capacity);
-	[CLink] static extern uint32 tn_soft_dent_revision(void* world, uint32 bodyId);
-	[CLink] static extern void tn_soft_set_dents(void* world, uint32 bodyId, float* dents, uint32 count, float* objectMatrix);
-	[CLink] static extern uint32 tn_soft_read(void* world, uint32 bodyId, float* positions, float* velocities, uint32 capacity);
-	[CLink] static extern void tn_soft_move_pinned(void* world, uint32 bodyId, uint32* indices, float* targets, uint32 count, float step);
-	[CLink] static extern void tn_soft_set_positions(void* world, uint32 bodyId, float* positions, float* velocities, uint32 count);
-	[CLink] static extern uint32 tn_soft_velocity(void* world, uint32 bodyId, float* velocity);
-	[CLink] static extern void tn_soft_set_velocity(void* world, uint32 bodyId, float* velocity);
-	[CLink] static extern void tn_soft_impulse(void* world, uint32 bodyId, float* impulse);
-	[CLink] static extern void tn_soft_force(void* world, uint32 bodyId, float* force, float step);
-	[CLink] static extern void tn_soft_wind(void* world, uint32 bodyId, float* wind, float drag, float turbulence, float time, float step);
-	[CLink] static extern uint32 tn_soft_touching(void* world, uint32 bodyId, uint32* output, uint32 capacity);
-	[CLink] static extern void tn_soft_world_destroyed(void* world);
-	[CLink] static extern void tn_soft_shift(void* world, uint32 bodyId, float* offset);
-	[CLink] static extern void tn_soft_set_pressure(void* world, uint32 bodyId, float pressure);
-	[CLink] static extern void tn_soft_damp_wobble(void* world, uint32 bodyId, float rate, float step);
-	[CLink] static extern void tn_soft_bounce(void* world, uint32 bodyId, float bounciness, float* state);
-	[CLink] static extern void tn_soft_proxies(void* world, uint32* bodies, int32* closed, float* reach, uint32 count);
-
-	/// native/tallow_softbody.cpp's Config, in the same order.
-	[CRepr]
-	struct NativeConfig
-	{
-		public float mass, stretch, shear, bend, pressure, damping, friction, restitution, gravityFactor, vertexRadius, dentDepth, dentYield, dentSpeed, stepTime;
-		public int32 iterations, doubleSided, longRange, dihedral, shell, impacts, visualOnly;
-		public float visualSpring, visualDamping;
-		public uint32 layer;
-		public uint64 userData;
-	}
+	PhysicsSoftBodyExtension mSoft;
 
 	uint32 mBody = uint32.MaxValue;
 	bool mReady;
@@ -194,7 +162,7 @@ class SoftBody : Component
 		{
 			var velocity = Vector3.Zero;
 			if (HasBody && mWorld != null)
-				tn_soft_velocity(mWorld.[Friend]mSystem, mBody, (float*)&velocity);
+				mSoft.Velocity(mBody, (float*)&velocity);
 			return velocity;
 		}
 		set
@@ -202,7 +170,7 @@ class SoftBody : Component
 			if (!HasBody || mWorld == null || kind == .Shell || kind == .DrivenJelly)
 				return;
 			var velocity = value;
-			tn_soft_set_velocity(mWorld.[Friend]mSystem, mBody, (float*)&velocity);
+			mSoft.SetVelocity(mBody, (float*)&velocity);
 		}
 	}
 
@@ -213,7 +181,7 @@ class SoftBody : Component
 		if (!HasBody || mWorld == null || kind == .Shell || kind == .DrivenJelly)
 			return;
 		var change = impulse;
-		tn_soft_impulse(mWorld.[Friend]mSystem, mBody, (float*)&change);
+		mSoft.Impulse(mBody, (float*)&change);
 	}
 
 	/// Adds a force for one fixed physics step. Call once per physics tick, as with Rigidbody.AddForce.
@@ -222,7 +190,7 @@ class SoftBody : Component
 		if (!HasBody || mWorld == null || kind == .Shell || kind == .DrivenJelly)
 			return;
 		var change = force;
-		tn_soft_force(mWorld.[Friend]mSystem, mBody, (float*)&change, Time.FixedDeltaTime);
+		mSoft.Force(mBody, (float*)&change, Time.FixedDeltaTime);
 	}
 
 	public override void Start()
@@ -297,7 +265,7 @@ class SoftBody : Component
 	{
 		if (mBody != uint32.MaxValue && mWorld != null)
 		{
-			tn_soft_forget(mWorld.[Friend]mSystem, mBody);
+			mSoft.Forget(mBody);
 			mWorld.[Friend]RemoveSoftBody(mBody);
 		}
 		mIgnored = uint32.MaxValue;
@@ -340,9 +308,12 @@ class SoftBody : Component
 		}
 		let world = Scene.Physics;
 		world.[Friend]EnsureCreated();
-		let system = world.[Friend]mSystem;
-		if (system == null)
+		if (!world.Supports(.SoftBodies) || world.SoftBodies == null)
+		{
+			Log.Warning(scope $"Soft Body on '{GameObject.Name}' needs soft bodies; the selected physics backend does not provide them.");
 			return;
+		}
+		mSoft = world.SoftBodies;
 		Weld(source, mRest, mTriangles, mRenderToSim);
 
 		// The simulation works in the world; the mesh drawn stays in the object's own space.
@@ -371,7 +342,7 @@ class SoftBody : Component
 			stiffnesses[i] = 1;
 		ParseStiffness(stiffnessMap, stiffnesses);
 
-		NativeConfig config = default;
+		PhysicsSoftBodyConfig config = default;
 		let cloth = kind == .Cloth;
 		let shell = kind == .Shell;
 		let driven = kind == .DrivenJelly;
@@ -414,7 +385,7 @@ class SoftBody : Component
 		config.layer = Scene.Physics.[Friend]ObjectLayer(PhysicsWorld.[Friend]LayerMoving, Transform);
 		config.userData = (uint64)GameObject.Id;
 		var objectMatrix = toWorld;
-		mBody = tn_soft_create(system, &config, positions.Ptr, (uint32)mRest.Count, mTriangles.Ptr, (uint32)(mTriangles.Count / 3), pinned.Ptr, stiffnesses.Ptr, (float*)&center, &objectMatrix.m[0]);
+		mBody = mSoft.Create(&config, positions.Ptr, (uint32)mRest.Count, mTriangles.Ptr, (uint32)(mTriangles.Count / 3), pinned.Ptr, stiffnesses.Ptr, (float*)&center, &objectMatrix.m[0]);
 		if (mBody == uint32.MaxValue)
 		{
 			Log.Warning(scope $"Soft Body on '{GameObject.Name}': its mesh has no faces the simulation can use.");
@@ -528,7 +499,7 @@ class SoftBody : Component
 		if (gap.LengthSquared < 1.0e-8f)
 			return;
 		var shift = (FollowsServer && gap.LengthSquared < 4) ? gap * 0.2f : gap;
-		tn_soft_shift(mWorld.[Friend]mSystem, mBody, (float*)&shift);
+		mSoft.Shift(mBody, (float*)&shift);
 		for (var p in ref mPositions)
 			p = p + shift;
 	}
@@ -538,17 +509,17 @@ class SoftBody : Component
 	{
 		if (mBody == uint32.MaxValue || mWorld == null)
 			return;
-		let system = mWorld.[Friend]mSystem;
+		let soft = mSoft;
 		FollowMovedObject();
 		if (kind == .Jelly)
 		{
-			tn_soft_damp_wobble(system, mBody, wobbleDamping, step);
-			tn_soft_bounce(system, mBody, bounciness, &mBounce);
+			soft.DampWobble(mBody, wobbleDamping, step);
+			soft.Bounce(mBody, bounciness, &mBounce);
 		}
 		if (mAir > 0 && mAge < AirTime)
 		{
 			mAge += step;
-			tn_soft_set_pressure(system, mBody, mAir * Math.Min(mAge / AirTime, 1));
+			soft.SetPressure(mBody, mAir * Math.Min(mAge / AirTime, 1));
 		}
 		if (kind == .Shell || kind == .DrivenJelly)
 		{
@@ -558,7 +529,7 @@ class SoftBody : Component
 			if (mIgnored == uint32.MaxValue && own.IsValid && own.BodyId != uint32.MaxValue)
 			{
 				mIgnored = own.BodyId;
-				tn_soft_ignore(system, mBody, mIgnored);
+				soft.Ignore(mBody, mIgnored);
 			}
 			// The shell is held where its object will be once this step has moved its rigidbody.
 			var objectMatrix = Transform.LocalToWorld;
@@ -571,7 +542,7 @@ class SoftBody : Component
 				let turn = angle > 1.0e-6f ? Quaternion.AngleAxis(angle * Mathf.Rad2Deg, spin / spin.Length) : Quaternion.Identity;
 				objectNext = Matrix4.Translate(pivot + own.Velocity * step) * Matrix4.Rotation(turn) * Matrix4.Translate(-pivot) * objectMatrix;
 			}
-			tn_soft_skin(system, mBody, &objectMatrix.m[0], &objectNext.m[0], step);
+			soft.Skin(mBody, &objectMatrix.m[0], &objectNext.m[0], step);
 		}
 		else if (!mPinned.IsEmpty)
 		{
@@ -584,7 +555,7 @@ class SoftBody : Component
 				mTargets.Add(p.y);
 				mTargets.Add(p.z);
 			}
-			tn_soft_move_pinned(system, mBody, mPinned.Ptr, mTargets.Ptr, (uint32)mPinned.Count, step);
+			soft.MovePinned(mBody, mPinned.Ptr, mTargets.Ptr, (uint32)mPinned.Count, step);
 		}
 		// A shell rides its object, so the wind does not blow it about.
 		if (windDrag > 0 && kind != .Shell && kind != .DrivenJelly)
@@ -596,7 +567,7 @@ class SoftBody : Component
 				let phase = (float)(GameObject.Id % 97);
 				mWindTime += step;
 				wind = wind * (1.0f + 0.35f * Math.Sin(mWindTime * 1.7f + phase) + 0.15f * Math.Sin(mWindTime * 4.3f + phase * 0.5f));
-				tn_soft_wind(system, mBody, (float*)&wind, windDrag, Wind.Turbulence(Scene), mWindTime + phase, step);
+				soft.Wind(mBody, (float*)&wind, windDrag, Wind.Turbulence(Scene), mWindTime + phase, step);
 			}
 		}
 	}
@@ -626,7 +597,13 @@ class SoftBody : Component
 			closed.Add(0);
 			reach.Add(Math.Max(rope.thickness, 0.005f) + 0.05f);
 		}
-		tn_soft_proxies(world.[Friend]mSystem, ids.Ptr, closed.Ptr, reach.Ptr, (uint32)ids.Count);
+		let softBody = world.SoftBodies;
+		if (softBody == null)
+		{
+			ids.Clear();
+			return;
+		}
+		softBody.Proxies(ids.Ptr, closed.Ptr, reach.Ptr, (uint32)ids.Count);
 	}
 
 	public override void FixedUpdate()
@@ -648,7 +625,7 @@ class SoftBody : Component
 	{
 		if (kind != .Shell || mBody == uint32.MaxValue || mWorld == null)
 			return;
-		let revision = tn_soft_dent_revision(mWorld.[Friend]mSystem, mBody);
+		let revision = mSoft.DentRevision(mBody);
 		if (revision != mHullRevision)
 		{
 			mHullRevision = revision;
@@ -691,7 +668,7 @@ class SoftBody : Component
 			return;
 		FollowMovedObject();
 		mPositions.Resize(mRest.Count);
-		let read = tn_soft_read(mWorld.[Friend]mSystem, mBody, (float*)mPositions.Ptr, null, (uint32)mRest.Count);
+		let read = mSoft.Read(mBody, (float*)mPositions.Ptr, null, (uint32)mRest.Count);
 		if (read != (uint32)mRest.Count)
 			return;
 		// Normals from the faces round each vertex, in the world.
@@ -730,7 +707,7 @@ class SoftBody : Component
 		if (mBody == uint32.MaxValue || mWorld == null)
 			return;
 		uint32[64] found = ?;
-		let count = tn_soft_touching(mWorld.[Friend]mSystem, mBody, &found, 64);
+		let count = mSoft.Touching(mBody, &found, 64);
 		for (uint32 i < count)
 			output.Add(found[i]);
 	}
@@ -743,7 +720,7 @@ class SoftBody : Component
 		if (kind != .Shell || mBody == uint32.MaxValue || mWorld == null)
 			return;
 		output.Resize(mRest.Count);
-		let count = tn_soft_dents(mWorld.[Friend]mSystem, mBody, (float*)output.Ptr, (uint32)output.Count);
+		let count = mSoft.Dents(mBody, (float*)output.Ptr, (uint32)output.Count);
 		output.Resize((int)count);
 	}
 
@@ -766,7 +743,7 @@ class SoftBody : Component
 		if (kind != .Shell || mBody == uint32.MaxValue || mWorld == null)
 			return;
 		var objectMatrix = Transform.LocalToWorld;
-		tn_soft_set_dents(mWorld.[Friend]mSystem, mBody, dents.IsEmpty ? null : (float*)dents.Ptr, (uint32)dents.Length, &objectMatrix.m[0]);
+		mSoft.SetDents(mBody, dents.IsEmpty ? null : (float*)dents.Ptr, (uint32)dents.Length, &objectMatrix.m[0]);
 		ReadBack();
 	}
 
@@ -786,7 +763,7 @@ class SoftBody : Component
 	{
 		if (mBody == uint32.MaxValue || mWorld == null || positions.Length != mRest.Count)
 			return;
-		tn_soft_set_positions(mWorld.[Friend]mSystem, mBody, (float*)positions.Ptr, null, (uint32)positions.Length);
+		mSoft.SetPositions(mBody, (float*)positions.Ptr, null, (uint32)positions.Length);
 		ReadBack();
 	}
 

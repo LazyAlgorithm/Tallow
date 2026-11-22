@@ -74,6 +74,31 @@ static class CSharpAudio
 		return which == 0 ? source.Length : source.Time;
 	}
 
+	/// Sets a playing source's pitch directly (0.1 to 3). This is for values that change every frame, such as an
+	/// engine note; setting the Pitch field from C# would rewrite scene text each frame.
+	[CSharpExpose]
+	public static bool SourcePitch(uint64 session, uint64 entity, float pitch)
+	{
+		if (!pitch.IsFinite)
+			return false;
+		if (!FindSource(session, entity, let source))
+			return false;
+		source.Data.pitch = Mathf.Clamp(pitch, 0.1f, 3);
+		return true;
+	}
+
+	/// Sets a playing source's volume directly (0 to 1), without rewriting its field.
+	[CSharpExpose]
+	public static bool SourceVolume(uint64 session, uint64 entity, float volume)
+	{
+		if (!volume.IsFinite)
+			return false;
+		if (!FindSource(session, entity, let source))
+			return false;
+		source.Data.volume = Mathf.Clamp01(volume);
+		return true;
+	}
+
 	/// Seeks the source's clip to a position in seconds.
 	[CSharpExpose]
 	public static void SourceSeek(uint64 session, uint64 entity, float seconds)

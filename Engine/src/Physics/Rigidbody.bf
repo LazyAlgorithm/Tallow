@@ -88,6 +88,13 @@ struct Rigidbody : ComponentHandle<RigidbodyData>
 		let state = Runtime;
 		if (state.body != uint32.MaxValue)
 			return;
+		if (!ComponentAvailability.CanAdd(typeof(Rigidbody), mGameObject.Scene, let reason))
+		{
+			if (!state.warned)
+				Log.Warning(scope $"Rigidbody on '{mGameObject.Name}' needs {reason}; the selected physics backend does not provide it.");
+			state.warned = true;
+			return;
+		}
 		let collider = mGameObject.GetComponent<Collider>();
 		if (collider == null)
 		{
@@ -191,23 +198,52 @@ struct Rigidbody : ComponentHandle<RigidbodyData>
 	}
 
 	/// Pushes the body by a force (in newtons) through its centre, over the next physics step.
-	public void AddForce(Vector3 force) { if (HasBody) Scene.Physics.AddForce(BodyId, force); }
+	public void AddForce(Vector3 force)
+	{
+		if (HasBody)
+			Scene.Physics.AddForce(BodyId, force);
+	}
+
 	/// Turns the body by a torque (newton metres about each world axis), over the next physics step.
-	public void AddTorque(Vector3 torque) { if (HasBody) Scene.Physics.AddTorque(BodyId, torque); }
+	public void AddTorque(Vector3 torque)
+	{
+		if (HasBody)
+			Scene.Physics.AddTorque(BodyId, torque);
+	}
+
 	/// Pushes the body by a force at a point in the world, which also turns it.
-	public void AddForceAtPosition(Vector3 force, Vector3 worldPoint) { if (HasBody) Scene.Physics.AddForceAtPosition(BodyId, force, worldPoint); }
+	public void AddForceAtPosition(Vector3 force, Vector3 worldPoint)
+	{
+		if (HasBody)
+			Scene.Physics.AddForceAtPosition(BodyId, force, worldPoint);
+	}
+
 	/// How fast a point of the body is moving, its spin included.
 	public Vector3 GetPointVelocity(Vector3 worldPoint) => HasBody ? Scene.Physics.GetPointVelocity(BodyId, worldPoint) : .Zero;
 	/// Changes the body's momentum at once (a hit, a jump), through its centre.
-	public void AddImpulse(Vector3 impulse) { if (HasBody) Scene.Physics.AddImpulse(BodyId, impulse); }
+	public void AddImpulse(Vector3 impulse)
+	{
+		if (HasBody)
+			Scene.Physics.AddImpulse(BodyId, impulse);
+	}
+
 	/// Sleep until disturbed by physics; the body stays dynamic and collision-enabled.
-	public void Sleep() { if (HasBody) Scene.Physics.Sleep(BodyId); }
+	public void Sleep()
+	{
+		if (HasBody)
+			Scene.Physics.Sleep(BodyId);
+	}
+
 	/// Whether the body is resting and not being simulated.
 	public bool IsSleeping => HasBody && Scene.Physics.IsSleeping(BodyId);
 	/// The body's position, rotation and velocities, to save or send and put back with SetState.
 	public BodyState State => HasBody ? Scene.Physics.GetState(BodyId) : default;
 	/// Puts the body back in a state from State.
-	public void SetState(BodyState state) { if (HasBody) Scene.Physics.SetState(BodyId, state); }
+	public void SetState(BodyState state)
+	{
+		if (HasBody)
+			Scene.Physics.SetState(BodyId, state);
+	}
 }
 
 /// What a Rigidbody keeps outside its data: its body in the scene's physics world.

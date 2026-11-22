@@ -676,6 +676,8 @@ extension EditorApp
 		{
 			if (made != null || shown >= 80 || !mScriptCatalog.IsVisible(info))
 				continue;
+			if (!ComponentAvailability.CanAdd(info.type, null, let unavailable))
+				continue;
 			let label = scope String();
 			NiceName(info.name, label);
 			if (!mQuickSearch.IsEmpty && !label.Contains(mQuickSearch, true) && !info.name.Contains(mQuickSearch, true))

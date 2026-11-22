@@ -956,6 +956,53 @@ system, with no hidden Jolt work.
 bookkeeping helpers are reusable; the future Rapier2D (or other) integration has a place to plug in without
 changing the 3D design.
 
+### Phase 1/2 progress (2026-11-22)
+
+Implemented on `feature/physics-modularity`:
+
+- `EngineModule`/`EngineModules`, `PhysicsFeature`/`PhysicsFeatures`, `PhysicsBackend`/`PhysicsBackendWorld`
+  and the `PhysicsBackends` registry.
+- `PhysicsWorld` is now the engine front end (entries, transforms, layers, world states, contacts, bookkeeping);
+  `JoltPhysicsBackendWorld` owns every Jolt primitive. `Jolt.bf` moved under `Physics/Backends/Jolt/`; no code
+  outside that folder names a Jolt type.
+- Per-project `physics3d`/`physics2d` in `ProjectConfig.tconfig`, `--physics3d`/`--physics2d` overrides, a
+  Project Settings physics section with two provider lists and a capability list. Only Jolt is available; the
+  2D list is empty.
+- `PhysicsDimension` on providers and a dimension-keyed registry, so a 2D provider can be added without changing
+  the 3D design.
+- `ComponentAvailability` + `PhysicsComponentRules` gate the Add Component menus, every add path, scene loading
+  (data is preserved), the runtime component lifecycles, and the C# API. `Physics.Features`/`Physics.Supports`
+  are exposed to C# with a matching `PhysicsFeature` enum. Unavailable components show an Inspector banner
+  explaining why; `StartPlay` recreates the world when the project's backend changed.
+- `JoltLimitedPhysicsBackend` (test-only) advertises no soft bodies or ropes, proving the gate. Headless checks:
+  `--test-physics-gating` and `--test-physics-basic` (bodies, step, raycast, exact snapshot restore).
+- `PhysicsRagdollExtension`, `PhysicsVehicleExtension` and their Jolt implementations are now wired; the
+  `Ragdoll` and `Vehicle` components use them (see the conversion-complete section below).
+
+### Physics conversion complete (2026-11-22)
+
+- Soft bodies, ropes, water's soft-body float and navigation's geometry all go through neutral extensions:
+  `PhysicsSoftBodyExtension`, `PhysicsGeometryExtension` and the backend's buoyancy call. No `mSystem` (Jolt world
+  pointer) or direct Jolt type escapes the Jolt backend.
+- `PhysicsRagdollExtension` and a Jolt `JPH_Ragdoll` implementation exist; the engine `Ragdoll` component builds
+  parts from a Skinned Mesh Renderer's skeleton and drives the bones from the simulated pose. The capability is
+  `Ragdolls`; other backends can build the same parts from articulations or ordinary joints.
+- `PhysicsVehicleExtension` and Jolt implementations of all three kinds exist: **wheeled**, **motorcycle** and
+  **tracked**. The capability bits are per kind (`WheeledVehicles`, `MotorcycleVehicles`, `TrackedVehicles`), so a
+  future backend can implement only the kinds it offers; the Vehicle kind dropdown lists just those. The engine
+  `Vehicle` component exposes the chassis, wheels (position, radius, width, suspension, steering, brakes, driven),
+  engine, gears, anti-roll bars, motorcycle lean and tracked track settings as saved Inspector fields. The Drivable
+  Car template is the wheeled kind.
+- The Drivable Car project template adds the Kenney `sedan-body.glb` and `wheel-default.glb` (CC0), CC0 GGBot
+  engine sounds, a chase camera and a `CarController` C# script. The launcher templates are now a dropdown:
+  Empty, First person, Third person, Drivable car, Tallow Gallery (the voxel sandbox is gone).
+
+Remaining before Rapier:
+
+- Add the Project Settings self-test button, C# enum parity check for `PhysicsFeature`, and the integration and
+  capability docs.
+- Rapier3D/2D remain deferred; nothing in this phase adds Rapier.
+
 ### Later work (not in this plan)
 
 - **Rapier3D**, per section 5: prebuilt archives for every platform, no Rust in normal builds, offered only

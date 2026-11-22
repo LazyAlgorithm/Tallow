@@ -173,6 +173,10 @@ static class GameMain
 				NetworkManager.SimulatedLossPercent = Mathf.Clamp(SceneSerializer.ParseFloat(args[++i]), 0, 100);
 			else if (arg == "--jitter" && hasValue)
 				NetworkManager.SimulatedJitterMs = Math.Max(0, SceneSerializer.ParseInt(args[++i]));
+			else if (arg == "--physics3d" && hasValue)
+				PhysicsBackends.Override3D(args[++i]);
+			else if (arg == "--physics2d" && hasValue)
+				PhysicsBackends.Override2D(args[++i]);
 			else if (arg == "--teststall")
 				Watchdog.TestStall = true;
 			else if (arg == "--netstats")

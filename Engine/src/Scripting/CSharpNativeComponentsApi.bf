@@ -50,10 +50,7 @@ static class CSharpNativeComponents
 		if (obj == null || typeName.IsEmpty)
 			return false;
 		if (let handle = HandleComponents.Find(typeName))
-		{
-			HandleComponents.Add(obj, handle);
-			return true;
-		}
+			return HandleComponents.Add(obj, handle) != null;
 		let info = ComponentRegistry.Find(typeName);
 		if (info == null || info.type == typeof(CSharpBehaviour))
 			return false;
@@ -130,7 +127,11 @@ static class CSharpNativeComponents
 				return false;
 			let tokens = scope List<StringView>();
 			let storage = scope List<String>();
-			defer { for (let text in storage) delete text; }
+			defer
+			{
+				for (let text in storage)
+					delete text;
+			}
 			SceneSerializer.Tokenize(value, tokens, storage);
 			if (tokens.IsEmpty)
 				return false;

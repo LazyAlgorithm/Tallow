@@ -140,6 +140,12 @@ static class EditorMain
 		template.Trim();
 		if (template == "sample")
 			SceneTemplates.BuildSample(scene, project.Name);
+		else if (template == "vehicle")
+			SceneTemplates.BuildVehicle(scene, project.Name);
+		else if (template == "thirdperson")
+			SceneTemplates.BuildThirdPerson(scene, project.Name);
+		else if (template == "blank")
+			SceneTemplates.BuildDefault(scene, false);
 		else
 			SceneTemplates.BuildDefault(scene, true);
 		scene.Name.Set("Main");

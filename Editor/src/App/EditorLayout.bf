@@ -481,6 +481,8 @@ extension EditorApp
 				{
 					if (!mScriptCatalog.IsVisible(info) || ComponentCategory(info.fullName, info.name) != category)
 						continue;
+					if (!ComponentAvailability.CanAdd(info.type, null, let unavailable))
+						continue;
 					let label = scope String();
 					NiceName(info.name, label);
 					if (ImGui.MenuItem(scope $"{StringView(ComponentIcon(info.name))}  {label}##{info.fullName}" .CStr()))

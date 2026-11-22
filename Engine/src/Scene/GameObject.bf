@@ -312,6 +312,11 @@ class GameObject
 	/// Adds built-in component T with its default values, or returns the one the object has.
 	public T AddComponent<T>() where T : struct, IComponentHandle
 	{
+		if (!ComponentAvailability.CanAdd(typeof(T), mScene, let reason))
+		{
+			Log.Warning(scope $"Cannot add this component: {reason} is not available in the selected physics backend.");
+			return default;
+		}
 		HandleComponents.Add(this, HandleComponents.Find(typeof(T)));
 		return MakeHandle<T>();
 	}
@@ -336,7 +341,16 @@ class GameObject
 	}
 
 	/// The same by type, for the editor and scene files (DataComponents).
-	public void* AddData(Type type) => mScene.World.Ensure(mEntity, ComponentTypes.Add(type, type.Stride, type.Align));
+	public void* AddData(Type type)
+	{
+		if (!ComponentAvailability.CanAdd(type, mScene, let reason))
+		{
+			Log.Warning(scope $"Cannot add this data component: {reason} is not available in the selected physics backend.");
+			return null;
+		}
+		return mScene.World.Ensure(mEntity, ComponentTypes.Add(type, type.Stride, type.Align));
+	}
+
 	public void* GetData(Type type) => mScene.World.Get(mEntity, ComponentTypes.Add(type, type.Stride, type.Align));
 	public void RemoveData(Type type) => mScene.World.Remove(mEntity, ComponentTypes.Add(type, type.Stride, type.Align));
 
@@ -349,6 +363,11 @@ class GameObject
 	/// [Component].
 	public Component AddComponent(Type type)
 	{
+		if (!ComponentAvailability.CanAdd(type, mScene, let reason))
+		{
+			Log.Warning(scope $"Cannot add this component: {reason} is not available in the selected physics backend.");
+			return null;
+		}
 		let component = ComponentRegistry.Create(type);
 		if (component == null)
 		{

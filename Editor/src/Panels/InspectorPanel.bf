@@ -316,9 +316,9 @@ extension EditorApp
 			let block = gameObject.MissingComponents[i];
 			let type = scope String();
 			GameObject.MissingComponentType(block, type);
-			ImGui.PushID(scope $"missing{i}".CStr());
+			ImGui.PushID(scope $"missing{i}" .CStr());
 			ImGui.Dummy(.(0, 2));
-			ImGui.TextColored(.(1.0f, 0.62f, 0.3f, 1), scope $"Missing: {type}".CStr());
+			ImGui.TextColored(.(1.0f, 0.62f, 0.3f, 1), scope $"Missing: {type}" .CStr());
 			if (ImGui.IsItemHovered())
 				ImGui.SetTooltip(block.CStr());
 			ImGui.SameLine();
@@ -411,6 +411,13 @@ extension EditorApp
 			ImGui.OpenPopup("HandleMenu");
 		if (!open || remove)
 			return remove;
+		if (!ComponentAvailability.CanAdd(info.handleType, gameObject.Scene, let unavailable))
+		{
+			let line = scope String();
+			line.AppendF("Unavailable: {}. The selected physics backend does not provide it; its saved settings are kept.", unavailable);
+			ImGui.TextColored(EditorTheme.Warning, line);
+			ImGui.Separator();
+		}
 		fields.Clear();
 		HandleComponents.GetFields(gameObject, info, fields);
 		bool changed = false;
@@ -652,6 +659,13 @@ extension EditorApp
 		if (!open)
 			return request;
 
+		if (!ComponentAvailability.IsAvailable(component, let unavailable))
+		{
+			let line = scope String();
+			line.AppendF("Unavailable: {}. The selected physics backend does not provide it; its saved settings are kept.", unavailable);
+			ImGui.TextColored(EditorTheme.Warning, line);
+			ImGui.Separator();
+		}
 		fields.Clear();
 		ComponentRegistry.GetFields(component, fields);
 		bool changed = false;
@@ -732,8 +746,104 @@ extension EditorApp
 			DrawTerrainTools(terrain);
 		if (let boxCollider = component as BoxCollider)
 			DrawBoxColliderTools(boxCollider);
+		if (let vehicle = component as Vehicle)
+			DrawVehicleTools(vehicle);
 	}
 
+	/// The four wheels in collapsible sections, so the component is not a wall of fields. The values are ordinary
+	/// saved fields; the generic list hides them because they are drawn here.
+	void DrawVehicleTools(Vehicle vehicle)
+	{
+		ImGui.SeparatorText("Vehicle");
+		ImGui.TextWrapped("Changes apply from the next Play. The wheel positions are from the chassis body's centre; suspension sets the ride height.");
+		DrawVehicleKind(vehicle);
+		DrawVehicleWheel("Front Left", ref vehicle.frontLeftPosition, ref vehicle.frontLeftRadius, ref vehicle.frontLeftWidth,
+			ref vehicle.frontLeftSuspensionMin, ref vehicle.frontLeftSuspensionMax, ref vehicle.frontLeftSuspensionFrequency,
+			ref vehicle.frontLeftSuspensionDamping, ref vehicle.frontLeftSteerDegrees, ref vehicle.frontLeftBrakeTorque,
+			ref vehicle.frontLeftHandBrakeTorque, ref vehicle.frontLeftDriven);
+		DrawVehicleWheel("Front Right", ref vehicle.frontRightPosition, ref vehicle.frontRightRadius, ref vehicle.frontRightWidth,
+			ref vehicle.frontRightSuspensionMin, ref vehicle.frontRightSuspensionMax, ref vehicle.frontRightSuspensionFrequency,
+			ref vehicle.frontRightSuspensionDamping, ref vehicle.frontRightSteerDegrees, ref vehicle.frontRightBrakeTorque,
+			ref vehicle.frontRightHandBrakeTorque, ref vehicle.frontRightDriven);
+		DrawVehicleWheel("Rear Left", ref vehicle.rearLeftPosition, ref vehicle.rearLeftRadius, ref vehicle.rearLeftWidth,
+			ref vehicle.rearLeftSuspensionMin, ref vehicle.rearLeftSuspensionMax, ref vehicle.rearLeftSuspensionFrequency,
+			ref vehicle.rearLeftSuspensionDamping, ref vehicle.rearLeftSteerDegrees, ref vehicle.rearLeftBrakeTorque,
+			ref vehicle.rearLeftHandBrakeTorque, ref vehicle.rearLeftDriven);
+		DrawVehicleWheel("Rear Right", ref vehicle.rearRightPosition, ref vehicle.rearRightRadius, ref vehicle.rearRightWidth,
+			ref vehicle.rearRightSuspensionMin, ref vehicle.rearRightSuspensionMax, ref vehicle.rearRightSuspensionFrequency,
+			ref vehicle.rearRightSuspensionDamping, ref vehicle.rearRightSteerDegrees, ref vehicle.rearRightBrakeTorque,
+			ref vehicle.rearRightHandBrakeTorque, ref vehicle.rearRightDriven);
+		if (vehicle.kind == .Motorcycle)
+			ImGui.TextDisabled("A motorcycle uses Front Left as its front wheel and Rear Left as its rear wheel.");
+		else if (vehicle.kind == .Tracked)
+			ImGui.TextDisabled("A tracked vehicle uses wheels 0/2 on the left track and 1/3 on the right; the track settings are below.");
+		if (vehicle.IsReady)
+			ImGui.TextDisabled(scope $"Running: {vehicle.WheelCount} wheels, engine {vehicle.EngineRPM:0} RPM, gear {vehicle.Gear}.");
+	}
+
+	/// The kind dropdown only lists kinds the selected backend implements.
+	void DrawVehicleKind(Vehicle vehicle)
+	{
+		let features = PhysicsComponentRules.FeaturesFor(vehicle.Scene);
+		PhysicsVehicleKind[3] kinds = .(.Wheeled, .Motorcycle, .Tracked);
+		ImGui.AlignTextToFramePadding();
+		ImGui.Text("Kind");
+		ImGui.SameLine(130);
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.BeginCombo("##vehiclekind", scope String(PhysicsVehicleKinds.Name(vehicle.kind)).CStr()))
+		{
+			for (let kind in kinds)
+			{
+				if (!features.Has(PhysicsVehicleKinds.Feature(kind)))
+					continue;
+				if (ImGui.Selectable(scope String(PhysicsVehicleKinds.Name(kind)).CStr(), kind == vehicle.kind))
+				{
+					vehicle.kind = kind;
+					MarkDirty();
+				}
+			}
+			ImGui.EndCombo();
+		}
+		if (!features.Has(PhysicsVehicleKinds.Feature(vehicle.kind)))
+			ImGui.TextColored(EditorTheme.Warning, "The selected physics backend does not provide this kind of vehicle.");
+	}
+
+	void DrawVehicleWheel(StringView title, ref Vector3 position, ref float radius, ref float width,
+		ref float suspensionMin, ref float suspensionMax, ref float frequency, ref float damping,
+		ref float steerDegrees, ref float brakeTorque, ref float handBrakeTorque, ref bool driven)
+	{
+		if (!ImGui.CollapsingHeader(scope $"{title}###vehiclewheel{title}".CStr()))
+			return;
+		bool changed = false;
+		void Row(StringView label, ref float value, float speed = 0.01f)
+		{
+			ImGui.AlignTextToFramePadding();
+			ImGui.Text(label);
+			ImGui.SameLine(130);
+			ImGui.SetNextItemWidth(-1);
+			changed |= ImGui.DragFloat("##value", ref value, speed);
+		}
+		ImGui.AlignTextToFramePadding();
+		ImGui.Text("Position");
+		ImGui.SameLine(130);
+		ImGui.SetNextItemWidth(-1);
+		changed |= ImGui.DragFloat3("##position", ref position, 0.01f);
+		Row("Radius", ref radius);
+		Row("Width", ref width);
+		Row("Suspension Min", ref suspensionMin);
+		Row("Suspension Max", ref suspensionMax);
+		Row("Spring Hz", ref frequency, 0.02f);
+		Row("Spring Damping", ref damping, 0.02f);
+		Row("Steer (deg)", ref steerDegrees, 0.5f);
+		Row("Brake (Nm)", ref brakeTorque, 10);
+		Row("Handbrake (Nm)", ref handBrakeTorque, 10);
+		ImGui.AlignTextToFramePadding();
+		ImGui.Text("Driven");
+		ImGui.SameLine(130);
+		changed |= ImGui.Checkbox("##driven", ref driven);
+		if (changed)
+			MarkDirty();
+	}
 	/// Fits a Box Collider to the meshes its object draws, as adding one does.
 	void DrawBoxColliderTools(BoxCollider boxCollider)
 	{
@@ -848,6 +958,8 @@ extension EditorApp
 		{
 			for (let info in DataComponents.Types)
 			{
+				if (!ComponentAvailability.CanAdd(info.type, gameObject.Scene, let unavailable))
+					continue;
 				let label = scope String();
 				NiceName(info.name, label);
 				if (searching && !info.name.Contains(mComponentSearch, true) && !label.Contains(mComponentSearch, true) && !StringView("Data").Contains(mComponentSearch, true))
@@ -885,6 +997,8 @@ extension EditorApp
 		{
 			if (ComponentCategory(info.fullName, info.name) != category)
 				continue;
+			if (!ComponentAvailability.CanAdd(info.handleType, gameObject.Scene, let unavailable))
+				continue;
 			let label = scope String();
 			NiceName(info.name, label);
 			if (searching && !info.name.Contains(mComponentSearch, true) && !label.Contains(mComponentSearch, true) && !category.Contains(mComponentSearch, true))
@@ -903,6 +1017,8 @@ extension EditorApp
 			if (info.name == "CSharpBehaviour")
 				continue;
 			if (!mScriptCatalog.IsVisible(info) || ComponentCategory(info.fullName, info.name) != category)
+				continue;
+			if (!ComponentAvailability.CanAdd(info.type, gameObject.Scene, let unavailable))
 				continue;
 			let label = scope String();
 			NiceName(info.name, label);
@@ -979,7 +1095,7 @@ extension EditorApp
 	{
 		if (!fullName.StartsWith("Tallow.")) return "Scripts";
 		if (name == "Camera" || name == "Light" || name == "MeshRenderer" || name == "WorldText" || name == "Decal" || name == "LODGroup" || name == "ReflectionProbe" || name == "LightProbeVolume") return "Rendering";
-		if (name == "Rigidbody" || name == "SoftBody" || name == "Rope" || name.EndsWith("Collider") || name == "CharacterController") return "Physics";
+		if (name == "Rigidbody" || name == "SoftBody" || name == "Rope" || name.EndsWith("Collider") || name == "CharacterController" || name == "Ragdoll" || name == "Vehicle" || name == "Water" || name == "Floater") return "Physics";
 		if (name == "SkinnedMeshRenderer" || name == "Animator" || name == "SequencePlayer") return "Animation";
 		if (name == "UIDocument") return "UI";
 		if (name.StartsWith("Audio") || name == "DialogueRunner") return "Audio";

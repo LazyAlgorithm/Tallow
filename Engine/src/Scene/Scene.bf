@@ -1392,6 +1392,14 @@ class Scene
 		if (mStartHeld)
 			return;
 		SaveSystem.SceneStarting(this);
+		// The project's 3D physics choice applies on this Play. Recreate the world when it changed, before any
+		// component wakes and makes a body.
+		let selectedPhysics = PhysicsBackends.Selected3D;
+		if (Physics == null || Physics.BackendProvider != selectedPhysics)
+		{
+			delete Physics;
+			Physics = new PhysicsWorld(selectedPhysics);
+		}
 		mPlaying = true;
 		Active = this;
 		Time.Restart();

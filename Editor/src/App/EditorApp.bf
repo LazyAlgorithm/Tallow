@@ -126,6 +126,14 @@ class EditorApp : Application
 		GetArg("--code-theme", codeThemeArg);
 		EditorTheme.Init(themeArg, codeThemeArg);
 
+		// Test the two project-wide physics choices without editing the project file.
+		let physics3DArg = scope String();
+		if (GetArg("--physics3d", physics3DArg))
+			PhysicsBackends.Override3D(physics3DArg);
+		let physics2DArg = scope String();
+		if (GetArg("--physics2d", physics2DArg))
+			PhysicsBackends.Override2D(physics2DArg);
+
 		mBrowsePath.Set(Assets.ProjectPath);
 		// Precompiled native editor is the default for the C# transition,
 		// including empty projects before the first C# script is created.

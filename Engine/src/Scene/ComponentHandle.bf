@@ -493,6 +493,11 @@ static class HandleComponents
 	/// Adds the component with its default values (or returns the one there), switched on.
 	public static void* Add(GameObject gameObject, Info info)
 	{
+		if (!ComponentAvailability.CanAdd(info.handleType, gameObject.Scene, let reason))
+		{
+			Log.Warning(scope $"Cannot add this component: {reason} is not available in the selected physics backend.");
+			return null;
+		}
 		let world = gameObject.Scene.World;
 		if (let existing = world.Get(gameObject.Entity, info.index))
 			return existing;

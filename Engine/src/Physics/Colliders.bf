@@ -21,9 +21,13 @@ abstract class Collider : Component
 		if (obj == null || obj.IsDestroyed)
 			return "";
 		for (let component in obj.Components)
+		{
 			if (let collider = component as Collider)
+			{
 				if (!collider.surface.IsEmpty)
 					return collider.surface;
+			}
+		}
 		return "";
 	}
 
@@ -52,7 +56,14 @@ abstract class Collider : Component
 	{
 		// A Rigidbody on the same object owns the body; otherwise this collider is static.
 		if (mStaticBody == uint32.MaxValue && !HasComponent<Rigidbody>())
+		{
+			if (!ComponentAvailability.IsAvailable(this, let reason))
+			{
+				Log.Warning(scope $"Collider on '{GameObject.Name}' needs {reason}; the selected physics backend does not provide it.");
+				return;
+			}
 			mStaticBody = Scene.Physics.CreateBody(Transform, GetShape(), null);
+		}
 	}
 
 	/// Rebuilds the static body after the shape changed (for example a re-meshed voxel chunk).

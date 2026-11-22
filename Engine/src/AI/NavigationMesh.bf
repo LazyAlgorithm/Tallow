@@ -49,9 +49,9 @@ class NavigationMesh
 		public int32 bidirectional, id;
 	}
 
-	[CLink] static extern void* tn_nav_create(void* world, Config* config);
+	[CLink] static extern void* tn_nav_create(float* triangles, int32 triangleFloatCount, Config* config);
 	[CLink] static extern void tn_nav_destroy(void* mesh);
-	[CLink] static extern bool tn_nav_rebuild(void* mesh, void* world, Vector3* minimum, Vector3* maximum);
+	[CLink] static extern bool tn_nav_rebuild(void* mesh, float* triangles, int32 triangleFloatCount, Vector3* minimum, Vector3* maximum);
 	[CLink] static extern bool tn_nav_overlay(void* mesh, Volume* volumes, int32 count, Link* links, int32 linkCount);
 	[CLink] static extern int32 tn_nav_tile_count(void* mesh);
 	[CLink] static extern int32 tn_nav_tiles_rebuilt(void* mesh);
@@ -109,8 +109,20 @@ class NavigationMesh
 	public static NavigationMesh Bake(PhysicsWorld world, Config config)
 	{
 		world.[Friend]EnsureCreated();
+		let geometry = world.Geometry;
+		if (!world.Supports(.NavigationGeometry) || geometry == null)
+		{
+			Log.Warning("Navigation needs the selected physics backend to provide bake geometry; this backend does not.");
+			return null;
+		}
+		let triangles = scope List<float>();
+		if (!geometry.Collect(config.min, config.max, triangles))
+		{
+			Log.Warning("The selected physics backend could not collect its static geometry for navigation.");
+			return null;
+		}
 		var settings = config;
-		let handle = tn_nav_create(world.[Friend]mSystem, &settings);
+		let handle = tn_nav_create(triangles.Ptr, (int32)triangles.Count, &settings);
 		return handle == null ? null : new .(handle, settings);
 	}
 
@@ -120,8 +132,16 @@ class NavigationMesh
 		if (!Commit())
 			return false;
 		world.[Friend]EnsureCreated();
+		let geometry = world.Geometry;
+		if (!world.Supports(.NavigationGeometry) || geometry == null)
+			return false;
+		// Rebuild needs every triangle in the bake's original bounds, not only the changed box: the tile rebuild uses
+		// the changed box, but its input is the whole surface.
+		let triangles = scope List<float>();
+		if (!geometry.Collect(Settings.min, Settings.max, triangles))
+			return false;
 		var minimum = changed.min, maximum = changed.max;
-		return tn_nav_rebuild(mHandle, world.[Friend]mSystem, &minimum, &maximum);
+		return tn_nav_rebuild(mHandle, triangles.Ptr, (int32)triangles.Count, &minimum, &maximum);
 	}
 
 	/// Forgets the gathered overlay (before the surface adds it again).

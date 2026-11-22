@@ -28,6 +28,10 @@ static class ProjectConfig
 	static List<String> sWorldStates = new .() ~ DeleteContainerAndItems!(_);
 	static bool sReady;
 	static bool sSeparateWorldStates;
+	/// The project's physics choices, one per dimension. Empty means the default (Jolt for 3D, the first
+	/// available provider for 2D).
+	static String sPhysics3DBackend = new .("Jolt") ~ delete _;
+	static String sPhysics2DBackend = new .() ~ delete _;
 
 	/// Goes up whenever anything here changes, for code that caches what it read.
 	public static int32 Version { get; private set; }
@@ -58,6 +62,8 @@ static class ProjectConfig
 		ClearAndDeleteItems!(sWorldStates);
 		sWorldStates.Add(new .("Default"));
 		sSeparateWorldStates = false;
+		sPhysics3DBackend.Set("Jolt");
+		sPhysics2DBackend.Clear();
 		Version++;
 	}
 
@@ -80,6 +86,33 @@ static class ProjectConfig
 
 	/// How many world states are kept apart in physics (0 when they are not).
 	public static int32 SeparatedWorldStateCount => sSeparateWorldStates && sWorldStates.Count > 1 ? Math.Min((int32)sWorldStates.Count, 4) : 0;
+
+	// ---- physics backends ----
+
+	/// The id of the project's 3D physics provider ("Jolt", "Rapier3D"). Empty means the default. Read by
+	/// PhysicsBackends; a scene does not override it.
+	public static StringView Physics3DBackendId => sPhysics3DBackend;
+
+	public static void SetPhysics3DBackend(StringView id)
+	{
+		let next = id.IsEmpty ? "Jolt" : id;
+		if (sPhysics3DBackend == next)
+			return;
+		sPhysics3DBackend.Set(next);
+		Version++;
+	}
+
+	/// The id of the project's 2D physics provider. Empty selects the first available 2D provider, or no 2D
+	/// physics when none ships.
+	public static StringView Physics2DBackendId => sPhysics2DBackend;
+
+	public static void SetPhysics2DBackend(StringView id)
+	{
+		if (sPhysics2DBackend == id)
+			return;
+		sPhysics2DBackend.Set(id);
+		Version++;
+	}
 
 	// ---- layers ----
 
@@ -288,6 +321,12 @@ static class ProjectConfig
 					sTags.Add(new .(tokens[1]));
 			case "separateworldstates":
 				sSeparateWorldStates = tokens[1] != "0";
+			case "physics3d":
+				sPhysics3DBackend.Set(tokens[1]);
+				if (sPhysics3DBackend.IsEmpty)
+					sPhysics3DBackend.Set("Jolt");
+			case "physics2d":
+				sPhysics2DBackend.Set(tokens[1]);
 			case "worldstate":
 				if (firstState)
 				{
@@ -315,7 +354,11 @@ static class ProjectConfig
 
 	public static void Write(String text)
 	{
-		text.Append("# Physics layers, tags and world states. Edit them in the editor's Project Settings.\n");
+		text.Append("# Physics backends, layers, tags and world states. Edit them in the editor's Project Settings.\n");
+		if (sPhysics3DBackend != "Jolt")
+			text.AppendF("physics3d {}\n", SceneSerializer.Quote(sPhysics3DBackend, .. scope .()));
+		if (!sPhysics2DBackend.IsEmpty)
+			text.AppendF("physics2d {}\n", SceneSerializer.Quote(sPhysics2DBackend, .. scope .()));
 		for (int32 i < MaxLayers)
 		{
 			if (!sLayerNames[i].IsEmpty)

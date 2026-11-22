@@ -36,6 +36,8 @@ extension NetworkManager
 		public void*[ExactRingSize] states;
 		public uint32[ExactRingSize] tick;
 		public uint32[ExactRingSize] generation;
+		/// The world that made the snapshots, so they can be freed without a static helper.
+		public PhysicsWorld physics;
 		/// The reflected value fields of scripts on the objects this machine runs, as they were (see ScriptFields).
 		public List<uint8>[ExactRingSize] scripts;
 
@@ -48,7 +50,7 @@ extension NetworkManager
 		{
 			for (int i < ExactRingSize)
 			{
-				PhysicsWorld.FreeExact(states[i]);
+				physics?.FreeExact(states[i]);
 				states[i] = null;
 				tick[i] = 0;
 				DeleteAndNullify!(scripts[i]);
@@ -541,6 +543,7 @@ extension NetworkManager
 	/// Client: a fresh session.
 	void ResetLockstep()
 	{
+		mExact.physics = mScene?.Physics;
 		mExact.Clear();
 		mOwnFixedFrom = 0;
 		mLockstepSynced = false;

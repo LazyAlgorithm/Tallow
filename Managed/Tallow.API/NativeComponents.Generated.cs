@@ -781,7 +781,11 @@ public readonly partial record struct FoliageBender(GameObject GameObject) : ICo
 /// <summary>
 /// Keeps a character's feet on the ground: on stairs, slopes and rubble each foot is set down on what is under it,
 /// the hips drop so that the lower foot can reach, and the feet tilt with the slope. Put it on the character's root
-/// (the object that moves over the ground) and name the two feet; the legs are the two bones above each foot.
+/// (the object that moves over the ground) and name the feet; the legs are the two bones above each foot.
+///
+/// A two-legged character has two feet (Left Foot and Right Foot); a four-legged one has four, the other pair in
+/// Foot 3 and Foot 4 (found for you by Find Feet And Hips: FrontPaw_L, BackPaw_R and so on). The body bone (Root
+/// or Hips) drops so that the foot with furthest to go can reach.
 ///
 /// It works on top of the clip: a foot the animation lifts for a step is still lifted, by the same amount, over
 /// whatever the ground is doing there. It looks for the ground with the physics world, so the ground needs colliders,
@@ -1160,8 +1164,9 @@ public readonly partial record struct LineRenderer(GameObject GameObject) : ICom
 }
 
 /// <summary>
-/// Turns a head towards a target, with the neck and spine sharing the turn when Bones is more than 1: a character
-/// who watches the player, or whose upper body follows where the camera aims.
+/// Turns a head towards a target, with the neck (and the bones above it) sharing the turn, so looking down at the
+/// ground bends the neck rather than the head alone: a character who watches the player, or whose upper body follows
+/// where the camera aims.
 ///
 /// Bone is the head (or the last bone that should face the target); Bones counts it and that many parents above it.
 /// The turn is kept within Max Angle of where the clip has the head facing, so nobody's head goes round backwards.
@@ -1175,21 +1180,25 @@ public readonly partial record struct LookAtIK(GameObject GameObject) : ICompone
     /// <summary>Whether the object still exists and has this component.</summary>
     public bool IsValid => Data.IsValid;
     /// <summary>
-    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine).
+    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine). Two
+    /// bends the neck with the head, which is what makes looking down at the ground natural.
     /// </summary>
     public int Bones { get => Data.GetInt("bones"); set => Data.Set("bones", value); }
     /// <summary>
-    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine).
+    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine). Two
+    /// bends the neck with the head, which is what makes looking down at the ground natural.
     /// </summary>
     public float Weight { get => Data.GetFloat("weight"); set => Data.Set("weight", value); }
     /// <summary>
-    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine).
-    /// The furthest the head turns from where its animation has it, in degrees.
+    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine). Two
+    /// bends the neck with the head, which is what makes looking down at the ground natural.
+    /// The furthest the head turns from where its animation has it, in degrees. 100 reaches the ground at the feet.
     /// </summary>
     public float MaxAngle { get => Data.GetFloat("maxAngle"); set => Data.Set("maxAngle", value); }
     /// <summary>
-    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine).
-    /// The furthest the head turns from where its animation has it, in degrees.
+    /// How many bones share the turn, counting the head and going up through its parents (neck, chest, spine). Two
+    /// bends the neck with the head, which is what makes looking down at the ground natural.
+    /// The furthest the head turns from where its animation has it, in degrees. 100 reaches the ground at the feet.
     /// The direction of the bone, in its own space, that should point at the target (the way the face looks).
     /// </summary>
     public Vector3 Forward { get => Data.GetVector3("forward"); set => Data.Set("forward", value); }
@@ -1697,6 +1706,53 @@ public readonly partial record struct ParticleSystem(GameObject GameObject) : IC
     /// Simulate in world space, so moving the emitter leaves a trail.
     /// </summary>
     public bool WorldSpace { get => Data.GetBool("worldSpace"); set => Data.Set("worldSpace", value); }
+}
+
+/// <summary>
+/// Turns this object's Skinned Mesh Renderer into a backend ragdoll. Jolt builds a JPH_Ragdoll from the skeleton;
+/// another backend can build the same parts from articulations or ordinary joints. The parts are made from the
+/// deform bones: a capsule along each bone, parented to the nearest included ancestor, with a swing/twist limit.
+///
+/// Add it when the corpse or character should fall. A live character can keep it switched off and call Begin on death.
+/// </summary>
+[NativeComponent("Tallow.Ragdoll")]
+public readonly partial record struct Ragdoll(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.Ragdoll");
+    /// <summary>Whether the object still exists and has this component.</summary>
+    public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// The whole ragdoll's mass in kilograms, shared by its parts.
+    /// </summary>
+    public float TotalMass { get => Data.GetFloat("totalMass"); set => Data.Set("totalMass", value); }
+    /// <summary>
+    /// Radius of the capsule round each bone, in metres.
+    /// </summary>
+    public float Radius { get => Data.GetFloat("radius"); set => Data.Set("radius", value); }
+    /// <summary>
+    /// Bones shorter than this (fingers, toes, twist helpers) get no part.
+    /// </summary>
+    public float MinimumBoneLength { get => Data.GetFloat("minimumBoneLength"); set => Data.Set("minimumBoneLength", value); }
+    /// <summary>
+    /// How far a part may swing from its parent, in degrees.
+    /// </summary>
+    public float SwingLimitDegrees { get => Data.GetFloat("swingLimitDegrees"); set => Data.Set("swingLimitDegrees", value); }
+    /// <summary>
+    /// How far a part may twist about its bone, in degrees.
+    /// </summary>
+    public float TwistLimitDegrees { get => Data.GetFloat("twistLimitDegrees"); set => Data.Set("twistLimitDegrees", value); }
+    /// <summary>
+    /// Corpses are decoration: they rest on scenery but nothing moving is stopped by them.
+    /// </summary>
+    public bool Debris { get => Data.GetBool("debris"); set => Data.Set("debris", value); }
+    /// <summary>
+    /// Stop a parent and child part from colliding with each other.
+    /// </summary>
+    public bool DisableParentChildCollisions { get => Data.GetBool("disableParentChildCollisions"); set => Data.Set("disableParentChildCollisions", value); }
+    /// <summary>
+    /// Make the ragdoll when the scene starts. Off for a character that becomes a ragdoll later (call Begin).
+    /// </summary>
+    public bool SimulateOnStart { get => Data.GetBool("simulateOnStart"); set => Data.Set("simulateOnStart", value); }
 }
 
 /// <summary>
@@ -2271,6 +2327,53 @@ public readonly partial record struct UIDocument
     /// Optional reference width. When set, scale uniformly to fit both dimensions.
     /// </summary>
     public float ReferenceWidth { get => Fields.GetFloat("referenceWidth"); set => Fields.Set("referenceWidth", value); }
+}
+
+/// <summary>
+/// A drivable wheeled vehicle on this object's Rigidbody. It builds a Jolt wheeled-vehicle controller and exposes
+/// driver input, wheel and engine state. Another backend can implement vehicles from its own wheel joints; the
+/// component does not know which.
+///
+/// Put a Rigidbody and a Collider on the same object for the chassis, then set the four wheels. Every wheel's
+/// position (relative to the chassis), radius, width, suspension and steering is a saved field on this component.
+/// Drive it from a script with SetDriverInput; the Drivable Car template shows how.
+/// </summary>
+[NativeComponent("Tallow.Vehicle")]
+public readonly partial record struct Vehicle(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.Vehicle");
+    /// <summary>Whether the object still exists and has this component.</summary>
+    public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// Motorcycle: how far it may lean, in degrees.
+    /// </summary>
+    public float MaxLeanDegrees { get => Data.GetFloat("maxLeanDegrees"); set => Data.Set("maxLeanDegrees", value); }
+    /// <summary>
+    /// Tracked: the wheel index driven by each track (the left track uses wheels 0 and 2, the right 1 and 3).
+    /// </summary>
+    public int LeftTrackDrivenWheel { get => Data.GetInt("leftTrackDrivenWheel"); set => Data.Set("leftTrackDrivenWheel", value); }
+    /// <summary>
+    /// Tracked: the wheel index driven by each track (the left track uses wheels 0 and 2, the right 1 and 3).
+    /// </summary>
+    public int RightTrackDrivenWheel { get => Data.GetInt("rightTrackDrivenWheel"); set => Data.Set("rightTrackDrivenWheel", value); }
+    public float TrackInertia { get => Data.GetFloat("trackInertia"); set => Data.Set("trackInertia", value); }
+    public float TrackAngularDamping { get => Data.GetFloat("trackAngularDamping"); set => Data.Set("trackAngularDamping", value); }
+    public float TrackMaxBrakeTorque { get => Data.GetFloat("trackMaxBrakeTorque"); set => Data.Set("trackMaxBrakeTorque", value); }
+    public float TrackDifferentialRatio { get => Data.GetFloat("trackDifferentialRatio"); set => Data.Set("trackDifferentialRatio", value); }
+    /// <summary>
+    /// The engine's peak torque in newton metres.
+    /// </summary>
+    public float MaxTorque { get => Data.GetFloat("maxTorque"); set => Data.Set("maxTorque", value); }
+    public float MinRPM { get => Data.GetFloat("minRPM"); set => Data.Set("minRPM", value); }
+    public float MaxRPM { get => Data.GetFloat("maxRPM"); set => Data.Set("maxRPM", value); }
+    public float EngineInertia { get => Data.GetFloat("engineInertia"); set => Data.Set("engineInertia", value); }
+    public float EngineAngularDamping { get => Data.GetFloat("engineAngularDamping"); set => Data.Set("engineAngularDamping", value); }
+    /// <summary>
+    /// The steepest pitch/roll the vehicle may reach, in degrees.
+    /// </summary>
+    public float MaxPitchRollDegrees { get => Data.GetFloat("maxPitchRollDegrees"); set => Data.Set("maxPitchRollDegrees", value); }
+    public float ReverseRatio { get => Data.GetFloat("reverseRatio"); set => Data.Set("reverseRatio", value); }
+    public bool AntiRollBars { get => Data.GetBool("antiRollBars"); set => Data.Set("antiRollBars", value); }
 }
 
 /// <summary>
@@ -3234,6 +3337,7 @@ internal static partial class NativeComponentTypes
         Known[typeof(NavigationObstacle)] = ("Tallow.NavigationObstacle", o => new NavigationObstacle(o));
         Known[typeof(NetworkIdentity)] = ("Tallow.NetworkIdentity", o => new NetworkIdentity(o));
         Known[typeof(ParticleSystem)] = ("Tallow.ParticleSystem", o => new ParticleSystem(o));
+        Known[typeof(Ragdoll)] = ("Tallow.Ragdoll", o => new Ragdoll(o));
         Known[typeof(ReflectionProbe)] = ("Tallow.ReflectionProbe", o => new ReflectionProbe(o));
         Known[typeof(Rope)] = ("Tallow.Rope", o => new Rope(o));
         Known[typeof(SavedTransform)] = ("Tallow.SavedTransform", o => new SavedTransform(o));
@@ -3243,6 +3347,7 @@ internal static partial class NativeComponentTypes
         Known[typeof(SpawnPoint)] = ("Tallow.SpawnPoint", o => new SpawnPoint(o));
         Known[typeof(StreamingSource)] = ("Tallow.StreamingSource", o => new StreamingSource(o));
         Known[typeof(TrailRenderer)] = ("Tallow.TrailRenderer", o => new TrailRenderer(o));
+        Known[typeof(Vehicle)] = ("Tallow.Vehicle", o => new Vehicle(o));
         Known[typeof(ViewmodelPose)] = ("Tallow.ViewmodelPose", o => new ViewmodelPose(o));
         Known[typeof(Water)] = ("Tallow.Water", o => new Water(o));
         Known[typeof(WindZone)] = ("Tallow.WindZone", o => new WindZone(o));

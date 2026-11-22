@@ -1183,13 +1183,35 @@ float GetFloat(const unsigned char* data, size_t& at)
 static_assert(sizeof(Settings) == 12 * sizeof(float), "the asset stores Settings as twelve floats");
 } // namespace
 
-TN_API void* tn_nav_create(JPH_PhysicsSystem* world, const Settings* settings)
+/// Collects the selected physics world's static triangles inside the bounds, for the engine's geometry extension.
+TN_API int tn_physics_collect_geometry(JPH_PhysicsSystem* world, const float* minimum, const float* maximum, void (*callback)(void*, const float*), void* user)
 {
-	if (!world || !settings || !ValidSettings(*settings))
+	if (!world || !callback || !Finite(minimum) || !Finite(maximum))
+		return 0;
+	Settings bounds{};
+	for (int i = 0; i < 3; i++)
+	{
+		bounds.min[i] = minimum[i];
+		bounds.max[i] = maximum[i];
+	}
+	std::vector<float> triangles;
+	if (!CollectGeometry(world, bounds, triangles))
+		return 0;
+	for (size_t i = 0; i + 8 < triangles.size(); i += 9)
+		callback(user, triangles.data() + i);
+	return 1;
+}
+
+/// Builds a navigation mesh from triangles the selected backend collected (nine floats per triangle).
+TN_API void* tn_nav_create(const float* triangles, int32_t triangleFloatCount, const Settings* settings)
+{
+	if (!settings || !ValidSettings(*settings) || triangleFloatCount < 0 || triangleFloatCount % 9 != 0 || (triangleFloatCount > 0 && !triangles))
 		return nullptr;
 	auto mesh = std::make_unique<Mesh>();
 	mesh->settings = *settings;
-	if (!CollectGeometry(world, mesh->settings, mesh->triangles) || !Rebuild(*mesh, {nullptr, 0, nullptr, 0, nullptr, nullptr}))
+	if (triangleFloatCount > 0)
+		mesh->triangles.assign(triangles, triangles + triangleFloatCount);
+	if (!Rebuild(*mesh, {nullptr, 0, nullptr, 0, nullptr, nullptr}))
 		return nullptr;
 	return mesh.release();
 }
@@ -1197,9 +1219,9 @@ TN_API void* tn_nav_create(JPH_PhysicsSystem* world, const Settings* settings)
 TN_API void tn_nav_destroy(Mesh* mesh) { delete mesh; }
 
 /// Takes the world's geometry again and rebuilds the tiles round the box that changed.
-TN_API bool tn_nav_rebuild(Mesh* mesh, JPH_PhysicsSystem* world, const float* minimum, const float* maximum)
+TN_API bool tn_nav_rebuild(Mesh* mesh, const float* triangles, int32_t triangleFloatCount, const float* minimum, const float* maximum)
 {
-	if (!mesh || !world || !Finite(minimum) || !Finite(maximum))
+	if (!mesh || triangleFloatCount < 0 || triangleFloatCount % 9 != 0 || (triangleFloatCount > 0 && !triangles) || !Finite(minimum) || !Finite(maximum))
 		return false;
 	for (int i = 0; i < 3; i++)
 	{
@@ -1207,8 +1229,8 @@ TN_API bool tn_nav_rebuild(Mesh* mesh, JPH_PhysicsSystem* world, const float* mi
 			return false;
 	}
 	std::vector<float> fresh;
-	if (!CollectGeometry(world, mesh->settings, fresh))
-		return false;
+	if (triangleFloatCount > 0)
+		fresh.assign(triangles, triangles + triangleFloatCount);
 	mesh->triangles.swap(fresh);
 	if (Rebuild(*mesh, {mesh->volumes.data(), int(mesh->volumes.size()), mesh->links.data(), int(mesh->links.size()), minimum, maximum}))
 		return true;

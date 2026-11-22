@@ -165,6 +165,11 @@ class JointState
 	{
 		Release();
 		let scene = mGameObject.Scene;
+		if (!ComponentAvailability.CanAdd(typeof(Joint), scene, let reason))
+		{
+			Log.Warning(scope $"Joint on '{mGameObject.Name}' needs {reason}; the selected physics backend does not provide it.");
+			return;
+		}
 		let joint = mGameObject.GetComponent<Joint>();
 		let mine = mGameObject.GetComponent<Rigidbody>();
 		let other = joint.ConnectedTo;

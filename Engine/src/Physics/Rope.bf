@@ -68,27 +68,7 @@ class Rope : Component
 	/// Sides of the tube drawn.
 	const int Sides = 8;
 
-	[CLink] static extern uint32 tn_rope_create(void* world, NativeConfig* config, float* positions, uint32 count, float* pinned, float* center);
-	[CLink] static extern void* tn_rope_tie(void* world, uint32 bodyA, float* pointA, uint32 bodyB, float* pointB, float length);
-	[CLink] static extern void tn_rope_untie(void* world, void* tie);
-	[CLink] static extern float tn_rope_pull(void* tie, float step);
-	[CLink] static extern bool tn_rope_wraps(void* world, uint32 bodyId, float* start, float* end, float clearance, uint32* first, uint32* last, float* places);
-	[CLink] static extern void* tn_rope_tie_over(void* world, uint32 bodyA, float* pointA, float* fixedA, uint32 bodyB, float* pointB, float* fixedB, float length);
-	[CLink] static extern void tn_rope_wind(void* world, uint32 bodyId, float* wind, float radius, float drag, float turbulence, float time, float step);
-	[CLink] static extern uint32 tn_soft_read(void* world, uint32 bodyId, float* positions, float* velocities, uint32 capacity);
-	[CLink] static extern void tn_soft_move_pinned(void* world, uint32 bodyId, uint32* indices, float* targets, uint32 count, float step);
-	[CLink] static extern void tn_soft_ignore(void* world, uint32 bodyId, uint32 ignoredBody);
-	[CLink] static extern void tn_soft_forget(void* world, uint32 bodyId);
-
-	/// native/tallow_softbody.cpp's RopeConfig, in the same order.
-	[CRepr]
-	struct NativeConfig
-	{
-		public float mass, stretch, bend, damping, friction, restitution, gravityFactor, radius;
-		public int32 iterations;
-		public uint32 layer;
-		public uint64 userData;
-	}
+	PhysicsSoftBodyExtension mSoft;
 
 	uint32 mBody = uint32.MaxValue;
 	bool mReady;
@@ -272,7 +252,7 @@ class Rope : Component
 	Rope SnapHere()
 	{
 		let count = mPositions.Count;
-		if (tn_soft_read(mWorld.[Friend]mSystem, mBody, (float*)mPositions.Ptr, null, (uint32)count) != (uint32)count || count < 5)
+		if (mSoft.Read(mBody, (float*)mPositions.Ptr, null, (uint32)count) != (uint32)count || count < 5)
 			return null;
 		let middle = count / 2;
 		let share = middle / (float)(count - 1);
@@ -405,9 +385,12 @@ class Rope : Component
 			return;
 		let world = Scene.Physics;
 		world.[Friend]EnsureCreated();
-		let system = world.[Friend]mSystem;
-		if (system == null)
+		if (!world.Supports(.Ropes) || world.SoftBodies == null)
+		{
+			Log.Warning(scope $"Rope on '{GameObject.Name}' needs ropes; the selected physics backend does not provide them.");
 			return;
+		}
+		mSoft = world.SoftBodies;
 		let tied = endAttachedTo != null;
 		// Each end on its object's surface facing the other (or, with nothing at the other end, facing down the rope
 		// hanging from it; facing up from a rope that hangs from nothing else).
@@ -460,7 +443,7 @@ class Rope : Component
 			mHeld[mHeldCount++] = (uint32)(count - 1);
 		}
 
-		NativeConfig config = default;
+		PhysicsRopeConfig config = default;
 		config.mass = Math.Max(mass, 0.001f);
 		config.stretch = 1.0e-7f;
 		// Compliance (how far a bend gives under force) from 1 (limp) to 1e-4 (a stiff cable).
@@ -473,7 +456,7 @@ class Rope : Component
 		config.iterations = Math.Clamp(iterations, 1, 32);
 		config.layer = Scene.Physics.[Friend]ObjectLayer(PhysicsWorld.[Friend]LayerMoving, Transform);
 		config.userData = (uint64)GameObject.Id;
-		mBody = tn_rope_create(system, &config, positions.Ptr, (uint32)count, pinned.Ptr, (float*)&center);
+		mBody = mSoft.CreateRope(&config, positions.Ptr, (uint32)count, pinned.Ptr, (float*)&center);
 		if (mBody == uint32.MaxValue)
 			return;
 		mWorld = world;
@@ -485,9 +468,9 @@ class Rope : Component
 		let startBody = PulledBody(StartObject);
 		let endBody = tied ? PulledBody(endAttachedTo) : Rigidbody();
 		if (startBody.IsValid)
-			tn_soft_ignore(system, mBody, startBody.BodyId);
+			mSoft.Ignore(mBody, startBody.BodyId);
 		if (endBody.IsValid && endBody != startBody)
-			tn_soft_ignore(system, mBody, endBody.BodyId);
+			mSoft.Ignore(mBody, endBody.BodyId);
 
 		var renderer = GetComponent<MeshRenderer>();
 		if (!renderer)
@@ -504,12 +487,12 @@ class Rope : Component
 	{
 		if (mWorld != null)
 		{
-			let system = mWorld.[Friend]mSystem;
+			let soft = mSoft;
 			if (mTie != null)
-				tn_rope_untie(system, mTie);
+				soft.Untie(mTie);
 			if (mBody != uint32.MaxValue)
 			{
-				tn_soft_forget(system, mBody);
+				soft.Forget(mBody);
 				mWorld.[Friend]RemoveRope(this);
 			}
 		}
@@ -578,7 +561,7 @@ class Rope : Component
 	{
 		if (mBody == uint32.MaxValue || mWorld == null)
 			return;
-		let system = mWorld.[Friend]mSystem;
+		let soft = mSoft;
 		mStep = step;
 		if (LetsGo())
 			return;
@@ -593,8 +576,8 @@ class Rope : Component
 			mTargets.Add(p.z);
 		}
 		if (mHeldCount > 0)
-			tn_soft_move_pinned(system, mBody, &mHeld, mTargets.Ptr, (uint32)mHeldCount, step);
-		mPull = mTie != null ? tn_rope_pull(mTie, step) : 0;
+			soft.MovePinned(mBody, &mHeld, mTargets.Ptr, (uint32)mHeldCount, step);
+		mPull = mTie != null ? soft.Pull(mTie, step) : 0;
 		// The pull the knots go by: it drops out for a step whenever the tie is made again, so it is held a moment.
 		mKnotPull = Math.Max(mPull, mKnotPull * Math.Max(1 - step * 8, 0));
 		// In a session the server decides when it breaks.
@@ -606,7 +589,7 @@ class Rope : Component
 			if (wind.LengthSquared > 0.0001f)
 			{
 				mWindTime += step;
-				tn_rope_wind(system, mBody, (float*)&wind, Math.Max(thickness * 0.5f, 0.001f), windDrag, Wind.Turbulence(Scene), mWindTime + (float)(GameObject.Id % 97), step);
+				soft.WindRope(mBody, (float*)&wind, Math.Max(thickness * 0.5f, 0.001f), windDrag, Wind.Turbulence(Scene), mWindTime + (float)(GameObject.Id % 97), step);
 			}
 		}
 
@@ -615,7 +598,7 @@ class Rope : Component
 		{
 			if (mTie != null)
 			{
-				tn_rope_untie(system, mTie);
+				soft.Untie(mTie);
 				mTie = null;
 			}
 			return;
@@ -626,7 +609,7 @@ class Rope : Component
 		if (knotStiffness > 0 && mPositions.Count >= 2)
 		{
 			let count = mPositions.Count;
-			uint32 read = tn_soft_read(system, mBody, (float*)mPositions.Ptr, null, (uint32)count);
+			uint32 read = soft.Read(mBody, (float*)mPositions.Ptr, null, (uint32)count);
 			if (read == (uint32)count)
 			{
 				TurnByKnot(startBody, start, mPositions[Math.Min(2, count - 1)] - start);
@@ -640,7 +623,7 @@ class Rope : Component
 		{
 			if (mTie != null)
 			{
-				tn_rope_untie(system, mTie);
+				soft.Untie(mTie);
 				mTie = null;
 			}
 			return;
@@ -652,7 +635,7 @@ class Rope : Component
 		var to = end;
 		uint32 first = 0, last = 0;
 		Vector3[2] places = default;
-		var wrapped = wrapsAround && tn_rope_wraps(system, mBody, (float*)&from, (float*)&to, Math.Max(thickness, 0.01f) + 0.03f, &first, &last, (float*)&places);
+		var wrapped = wrapsAround && soft.Wraps(mBody, (float*)&from, (float*)&to, Math.Max(thickness, 0.01f) + 0.03f, out first, out last, (float*)&places);
 		// Contacts come and go from step to step as the rope settles: it only comes off what it wraps round after a
 		// moment without touching it.
 		if (wrapped)
@@ -672,7 +655,7 @@ class Rope : Component
 		if (mTie != null && !moved)
 			return;
 		if (mTie != null)
-			tn_rope_untie(system, mTie);
+			soft.Untie(mTie);
 		let startId = startBody.BodyId;
 		let endId = endBody.BodyId;
 		if (wrapped)
@@ -682,14 +665,14 @@ class Rope : Component
 			// ends never pull the rope through what it lies over.
 			let between = length * (last - first) / (float)(mPositions.Count - 1);
 			let slack = length * 0.04f + thickness * 4;
-			mTie = tn_rope_tie_over(system, startId, (float*)&from, (float*)&places[0], endId, (float*)&to, (float*)&places[1], Math.Max(length - between - slack, 0.01f));
+			mTie = soft.TieOver(startId, (float*)&from, (float*)&places[0], endId, (float*)&to, (float*)&places[1], Math.Max(length - between - slack, 0.01f));
 			mWrapFirst = first;
 			mWrapLast = last;
 			mWrapStart = places[0];
 			mWrapEnd = places[1];
 		}
 		else
-			mTie = tn_rope_tie(system, startId, (float*)&from, endId, (float*)&to, length);
+			mTie = soft.Tie(startId, (float*)&from, endId, (float*)&to, length);
 		mWrapped = wrapped;
 		mTiedStart = start;
 		mTiedEnd = end;
@@ -731,7 +714,7 @@ class Rope : Component
 		if (mBody == uint32.MaxValue || mWorld == null || mMesh == null)
 			return;
 		let count = mPositions.Count;
-		let read = tn_soft_read(mWorld.[Friend]mSystem, mBody, (float*)mPositions.Ptr, null, (uint32)count);
+		let read = mSoft.Read(mBody, (float*)mPositions.Ptr, null, (uint32)count);
 		if (read != (uint32)count)
 			return;
 		BuildTube();

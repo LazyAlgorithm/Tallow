@@ -424,6 +424,8 @@ struct Water : ComponentHandle<WaterData>
 			water.State.floating.Clear();
 		for (let body in scene.Components<Rigidbody>(.. scope .()))
 		{
+			if (!scene.Physics.Supports(.BuoyancyRigidBodies))
+				break;
 			if (!body.GameObject.ActiveInHierarchy || body.isKinematic || !body.HasBody || (!scene.Physics.SeparatesWorldStates && !body.GameObject.InActiveWorld))
 				continue;
 			let floater = body.GameObject.GetComponent<Floater>();
@@ -459,10 +461,6 @@ struct Water : ComponentHandle<WaterData>
 		}
 	}
 
-	[CLink] static extern bool tn_soft_bounds(void* world, uint32 bodyId, Vector3* min, Vector3* max);
-	[CLink] static extern uint32 tn_soft_float(void* world, uint32 bodyId, float* samples, uint32 nx, uint32 nz, float minX, float minZ, float cellX, float cellZ, float bottom,
-		float band, float buoyancy, float drag, float gravity, float step, bool wake);
-
 	/// The most samples of the surface across a soft body each way, and how far apart they are at most.
 	const int SoftSamples = 8;
 	const float SoftSampleSpacing = 0.5f;
@@ -475,12 +473,14 @@ struct Water : ComponentHandle<WaterData>
 	{
 		if (bodyId == uint32.MaxValue || scene.Physics == null)
 			return;
+		if (!scene.Physics.Supports(.BuoyancySoftBodies) || scene.Physics.SoftBodies == null)
+			return;
+		let soft = scene.Physics.SoftBodies;
 		let floater = owner.GetComponent<Floater>();
 		if (floater && !floater.IsActiveAndEnabled)
 			return;
-		let system = scene.Physics.[Friend]mSystem;
 		Vector3 min = default, max = default;
-		if (!tn_soft_bounds(system, bodyId, &min, &max))
+		if (!soft.Bounds(bodyId, out min, out max))
 			return;
 		let center = (min + max) * 0.5f;
 		let water = At(scene, center, (max.y - min.y) * 0.5f + 1, owner);
@@ -512,7 +512,7 @@ struct Water : ComponentHandle<WaterData>
 		let wake = water.waveHeight > 0 || water.flow != .Zero;
 		let buoyancy = floater ? floater.buoyancy : water.buoyancy;
 		let drag = floater ? floater.drag : water.waterDrag;
-		if (tn_soft_float(system, bodyId, &samples, (uint32)nx, (uint32)nz, min.x, min.z, cellX, cellZ, water.Bottom, SoftBand, buoyancy, drag, gravity, deltaTime, wake) > 0)
+		if (soft.FloatSoft(bodyId, &samples, (uint32)nx, (uint32)nz, min.x, min.z, cellX, cellZ, water.Bottom, SoftBand, buoyancy, drag, gravity, deltaTime, wake) > 0)
 			water.State.floating.Add(bodyId);
 	}
 

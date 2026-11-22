@@ -132,8 +132,10 @@ extension EditorApp
 			return;
 		// What was open stays open across the reload.
 		for (let window in mExtensionWindows)
+		{
 			if (window.open)
 				mExtensionWindowsToOpen.Add(new String(window.menuPath));
+		}
 		UnloadEditorExtensions();
 		if (!built || !ConfigureEditorExtensions())
 			return;
@@ -142,7 +144,7 @@ extension EditorApp
 			return;
 		mExtensionsLoaded = true;
 		let buffer = scope String();
-		for (int32 index = 0; ; index++)
+		for (int32 index = 0;; index++)
 		{
 			if (!DescribeExtension(1, index, buffer))
 				break;
@@ -155,13 +157,13 @@ extension EditorApp
 			mExtensionWindows.Add(window);
 		}
 		ClearAndDeleteItems!(mExtensionWindowsToOpen);
-		for (int32 index = 0; ; index++)
+		for (int32 index = 0;; index++)
 		{
 			if (!DescribeExtension(2, index, buffer))
 				break;
 			mExtensionMenus.Add(new String(buffer));
 		}
-		for (int32 index = 0; ; index++)
+		for (int32 index = 0;; index++)
 		{
 			if (!DescribeExtension(3, index, buffer))
 				break;
@@ -210,71 +212,71 @@ extension EditorApp
 			Log.Error(scope $"The editor scripts cannot load: {editorApi} is missing. Compile the C# project again.");
 			return false;
 		}
-		if (!CSharpRuntime.Initialize(scope $"{runtimeFolder}/Tallow.ManagedRuntime.runtimeconfig.json", scope $"{runtimeFolder}/Tallow.ManagedRuntime.dll"))
+		if (!CSharpRuntime.Initialize(scope $"{runtimeFolder}/Tallow.ManagedRuntime.runtimeconfig.json" , scope $"{runtimeFolder}/Tallow.ManagedRuntime.dll"))
 			return false;
 		// Editor scripts share the C# API with a game: bound to the open scene, their GameObject and Transform calls
 		// work on it in Edit mode (Play binds its own scene, and the editor rebinds after StopPlay).
 		CSharpRuntime.BindScene(mScene);
 		EditorHostTable host = .()
-		{
-			version = 8,
-			size = sizeof(EditorHostTable),
-			log = => HostLog,
-			text = => HostText,
-			button = => HostButton,
-			toggle = => HostToggle,
-			floatField = => HostFloat,
-			intField = => HostInt,
-			vectorField = => HostVector,
-			textField = => HostTextField,
-			popup = => HostPopup,
-			foldout = => HostFoldout,
-			layout = => HostLayout,
-			progress = => HostProgress,
-			tooltip = => HostTooltip,
-			targetField = => HostTargetField,
-			targetDefault = => HostTargetDefault,
-			targetRead = => HostTargetRead,
-			targetWrite = => HostTargetWrite,
-			query = => HostQuery,
-			selectedObject = => HostSelectedObject,
-			selectObject = => HostSelectObject,
-			findObject = => HostFindObject,
-			objectParent = => HostObjectParent,
-			objectChildCount = => HostObjectChildCount,
-			objectChild = => HostObjectChild,
-			objectName = => HostObjectName,
-			renameObject = => HostRenameObject,
-			createObject = => HostCreateObject,
-			duplicateObject = => HostDuplicateObject,
-			deleteObject = => HostDeleteObject,
-			objectPosition = => HostObjectPosition,
-			setObjectPosition = => HostSetObjectPosition,
-			objectRotation = => HostObjectRotation,
-			setObjectRotation = => HostSetObjectRotation,
-			objectScale = => HostObjectScale,
-			setObjectScale = => HostSetObjectScale,
-			componentCount = => HostComponentCount,
-			componentType = => HostComponentType,
-			addComponent = => HostAddComponent,
-			removeComponent = => HostRemoveComponent,
-			fieldList = => HostFieldList,
-			fieldRead = => HostFieldRead,
-			fieldWrite = => HostFieldWrite,
-			markDirty = => HostMarkDirty,
-			componentField = => HostComponentField,
-			componentDefault = => HostComponentDefault,
-			sceneViewState = => HostSceneViewState,
-			sceneViewCursor = => HostSceneViewCursor,
-			sceneViewRay = => HostSceneViewRay,
-			sceneViewPick = => HostSceneViewPick,
-			modelRead = => HostModelRead,
-			modelWrite = => HostModelWrite,
-			resolveApi = => CSharpRuntime.ResolveApiEntry,
-			objectSession = => HostObjectSession,
-			terrainBegin = => HostTerrainBegin,
-			terrainEnd = => HostTerrainEnd
-		};
+			{
+				version = 8,
+				size = sizeof(EditorHostTable),
+				log = => HostLog,
+				text = => HostText,
+				button = => HostButton,
+				toggle = => HostToggle,
+				floatField = => HostFloat,
+				intField = => HostInt,
+				vectorField = => HostVector,
+				textField = => HostTextField,
+				popup = => HostPopup,
+				foldout = => HostFoldout,
+				layout = => HostLayout,
+				progress = => HostProgress,
+				tooltip = => HostTooltip,
+				targetField = => HostTargetField,
+				targetDefault = => HostTargetDefault,
+				targetRead = => HostTargetRead,
+				targetWrite = => HostTargetWrite,
+				query = => HostQuery,
+				selectedObject = => HostSelectedObject,
+				selectObject = => HostSelectObject,
+				findObject = => HostFindObject,
+				objectParent = => HostObjectParent,
+				objectChildCount = => HostObjectChildCount,
+				objectChild = => HostObjectChild,
+				objectName = => HostObjectName,
+				renameObject = => HostRenameObject,
+				createObject = => HostCreateObject,
+				duplicateObject = => HostDuplicateObject,
+				deleteObject = => HostDeleteObject,
+				objectPosition = => HostObjectPosition,
+				setObjectPosition = => HostSetObjectPosition,
+				objectRotation = => HostObjectRotation,
+				setObjectRotation = => HostSetObjectRotation,
+				objectScale = => HostObjectScale,
+				setObjectScale = => HostSetObjectScale,
+				componentCount = => HostComponentCount,
+				componentType = => HostComponentType,
+				addComponent = => HostAddComponent,
+				removeComponent = => HostRemoveComponent,
+				fieldList = => HostFieldList,
+				fieldRead = => HostFieldRead,
+				fieldWrite = => HostFieldWrite,
+				markDirty = => HostMarkDirty,
+				componentField = => HostComponentField,
+				componentDefault = => HostComponentDefault,
+				sceneViewState = => HostSceneViewState,
+				sceneViewCursor = => HostSceneViewCursor,
+				sceneViewRay = => HostSceneViewRay,
+				sceneViewPick = => HostSceneViewPick,
+				modelRead = => HostModelRead,
+				modelWrite = => HostModelWrite,
+				resolveApi = => CSharpRuntime.ResolveApiEntry,
+				objectSession = => HostObjectSession,
+				terrainBegin = => HostTerrainBegin,
+				terrainEnd = => HostTerrainEnd
+			};
 		if (tn_csharp_editor_configure(editorApi.CStr(), &host, &sExtensions) == 0)
 		{
 			Log.Error(scope $"The editor scripts cannot load: {StringView(CSharpRuntime.[Friend]tn_csharp_error())}");
@@ -306,7 +308,7 @@ extension EditorApp
 			return DrawManagedFields(component);
 		sInspectorTarget = component;
 		sInspectorEdited = false;
-		ImGui.PushID(scope $"csharpinspector{index}".CStr());
+		ImGui.PushID(scope $"csharpinspector{index}" .CStr());
 		let result = sExtensions.drawInspector(index, (int64)(int)Internal.UnsafeCastToPtr(component));
 		ImGui.PopID();
 		sInspectorTarget = null;
@@ -346,7 +348,7 @@ extension EditorApp
 		sInspectorComponentType.Set(componentType);
 		sInspectorComponentDrawing = true;
 		sInspectorComponentEdited = false;
-		ImGui.PushID(scope $"csharpcomponent{inspectorIndex}:{gameObject.Id}".CStr());
+		ImGui.PushID(scope $"csharpcomponent{inspectorIndex}:{gameObject.Id}" .CStr());
 		let name = scope String(componentType);
 		let result = sExtensions.drawComponentInspector(inspectorIndex, gameObject.Id, name.CStr(), (int32)name.Length);
 		ImGui.PopID();
@@ -384,7 +386,7 @@ extension EditorApp
 	{
 		if (!mExtensionsLoaded || index < 0 || index >= mExtensionPages.Count)
 			return;
-		ImGui.PushID(scope $"csharppage{index}".CStr());
+		ImGui.PushID(scope $"csharppage{index}" .CStr());
 		let result = sExtensions.drawPage((int32)index);
 		ImGui.PopID();
 		if (result < 0)
@@ -433,7 +435,7 @@ extension EditorApp
 						window.open = !window.open;
 						mExtensionWindowsChanged = true;
 						if (window.open)
-							ImGui.SetWindowFocus(scope $"{window.title}###csharp:{window.menuPath}".CStr());
+							ImGui.SetWindowFocus(scope $"{window.title}###csharp:{window.menuPath}" .CStr());
 						else
 							sExtensions.window((int32)i, 1);
 					}
@@ -471,9 +473,9 @@ extension EditorApp
 			if (!window.open)
 				continue;
 			ImGui.SetNextWindowSize(.(420, 320), ImGui.Cond.FirstUseEver);
-			if (ImGui.Begin(scope $"{window.title}###csharp:{window.menuPath}".CStr(), &window.open))
+			if (ImGui.Begin(scope $"{window.title}###csharp:{window.menuPath}" .CStr(), &window.open))
 			{
-				ImGui.PushID(scope $"csharpwindow{i}".CStr());
+				ImGui.PushID(scope $"csharpwindow{i}" .CStr());
 				let result = sExtensions.window((int32)i, 0);
 				ImGui.PopID();
 				if (result == 0)
@@ -498,12 +500,16 @@ extension EditorApp
 	void AppendOpenExtensionWindows(String text)
 	{
 		for (let window in mExtensionWindows)
+		{
 			if (window.open)
 				text.AppendF("C#: {}\n", window.menuPath);
+		}
 		// Not loaded yet: what was open stays recorded.
 		if (!mExtensionsLoaded)
+		{
 			for (let name in mExtensionWindowsToOpen)
 				text.AppendF("C#: {}\n", name);
+		}
 	}
 
 	void ReadOpenExtensionWindows(StringView text)
@@ -563,7 +569,7 @@ extension EditorApp
 		case 1: ImGui.TextDisabled(value.CStr());
 		case 2: ImGui.TextWrapped(value.CStr());
 		case 3: ImGui.SeparatorText(value.CStr());
-		case 4, 5, 6:
+		case 4,5,6:
 			ImGui.PushTextWrapPos(0);
 			ImGui.TextColored(style == 4 ? EditorTheme.Info : style == 5 ? EditorTheme.Warning : EditorTheme.Error, value.CStr());
 			ImGui.PopTextWrapPos();
@@ -782,12 +788,24 @@ extension EditorApp
 			if (atRoot)
 			{
 				for (let root in sExtensionsApp.mScene.Roots)
-					if (root.Name == part) { next = root; break; }
+				{
+					if (root.Name == part)
+					{
+						next = root;
+						break;
+					}
+				}
 			}
 			else
 			{
 				for (let child in parent.Children)
-					if (child.GameObject.Name == part) { next = child.GameObject; break; }
+				{
+					if (child.GameObject.Name == part)
+					{
+						next = child.GameObject;
+						break;
+					}
+				}
 			}
 			if (next == null)
 			{
@@ -1074,7 +1092,10 @@ extension EditorApp
 				return 0;
 		}
 		else if (let handle = HandleComponents.Find(fullName))
-			HandleComponents.Add(gameObject, handle);
+		{
+			if (HandleComponents.Add(gameObject, handle) == null)
+				return 0;
+		}
 		else
 			return 0;
 		sExtensionsApp.MarkDirty();
@@ -1255,8 +1276,10 @@ extension EditorApp
 		let wanted = StringView(name, length);
 		let only = scope List<FieldRef>();
 		for (let field in fields)
+		{
 			if (field.name == wanted)
 				only.Add(field);
+		}
 		if (only.Count == 0)
 			return 0;
 		let changed = sExtensionsApp.DrawFieldList(only, scope $"inspectorcomponent{wanted}");

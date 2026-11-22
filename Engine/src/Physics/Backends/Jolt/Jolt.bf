@@ -210,6 +210,7 @@ static class Jolt
 		public float speed;
 		public float reserved;
 	}
+
 	[CLink] public static extern void tn_contacts_enable(void* world, bool enabled);
 	[CLink] public static extern void tn_contacts_begin_step(void* world);
 	[CLink] public static extern int32 tn_contacts_collect(void* world);

@@ -118,14 +118,36 @@ struct ShapeDesc
 	public Vector3 meshScale;
 }
 
-/// One Jolt simulation per scene. Bodies are created by Rigidbody and Collider components while playing.
+/// One physics simulation per scene. This is the engine-owned front end: bodies are created by Rigidbody and
+/// Collider components while playing, and all bookkeeping (transforms, entries, layers, world states, callbacks)
+/// stays here. The selected PhysicsBackendWorld does the library-specific work.
 ///
-/// Jolt is built with cross-platform determinism, so replaying the same inputs from the same
-/// state gives the same result, which is what client-side prediction relies on.
+/// The backend is chosen per project (ProjectConfig.Physics3DBackendId) and made lazily, after a scene has set
+/// FollowsWorldStates and capacities. Jolt is the default.
 class PhysicsWorld
 {
+	/// The provider this world was created for; null when the build has no 3D physics at all.
+	public PhysicsBackend BackendProvider { get; private set; }
+	PhysicsBackendWorld mBackend;
+
+	/// What this world's backend supports. Before the backend is made this is the provider's declared set.
+	public PhysicsFeatures Features => mBackend != null ? mBackend.Features : (BackendProvider != null ? BackendProvider.Features : .None);
+	public bool Supports(PhysicsFeature feature) => Features.Has(feature);
+
+	/// The selected backend's soft bodies and ropes. Null when it has none; components check Supports first.
+	public PhysicsSoftBodyExtension SoftBodies => mBackend != null ? mBackend.SoftBodies : null;
+	/// The selected backend's static geometry for navigation baking, or null when it cannot supply it.
+	public PhysicsGeometryExtension Geometry => mBackend != null ? mBackend.Geometry : null;
+	/// The selected backend's ragdolls, or null when it has none.
+	public PhysicsRagdollExtension Ragdolls => mBackend != null ? mBackend.Ragdolls : null;
+	/// The selected backend's vehicles, or null when it has none.
+	public PhysicsVehicleExtension Vehicles => mBackend != null ? mBackend.Vehicles : null;
+	/// Whether the selected backend provides this kind of vehicle. Kinds are opt-in: a backend may offer only
+	/// wheeled vehicles without implementing motorcycles or tracks.
+	public bool SupportsVehicleKind(PhysicsVehicleKind kind) => Features.Has(PhysicsVehicleKinds.Feature(kind));
+
 	/// Overlap queries work out the contacts of a sphere or capsule with a box directly where they can (the shape's
-	/// middle inside the box), and with Jolt's general solver otherwise. Off, always the general solver, for comparing.
+	/// middle inside the box), and with the backend's general solver otherwise. Off, always the general solver, for comparing.
 	public bool useAnalyticOverlapContacts = true;
 
 	int32 mBodyCapacity = 16384, mBodyPairCapacity = 65536, mContactCapacity = 16384;
@@ -137,17 +159,16 @@ class PhysicsWorld
 	public int32 BodyCapacity => mBodyCapacity;
 	public int32 BodyPairCapacity => mBodyPairCapacity;
 	public int32 ContactCapacity => mContactCapacity;
-	/// What ran out in the last Step, as Jolt's bits (0 when nothing did): 1 the contact cache, 2 the body pairs, 4 the
-	/// contacts. Contacts are missing from that step.
+	/// What ran out in the last Step, as the backend's bits (0 when nothing did). Contacts are missing from that step.
 	public int32 LastStepError { get; private set; }
-	/// How long Jolt's own step (collision and solving, not Tallow's work round it) took last time.
+	/// How long the backend's own step (collision and solving, not Tallow's work round it) took last time.
 	public float LastStepMilliseconds { get; private set; }
 
-	/// Sets the capacities, before the world's first body (or query) creates it. False when it already exists or a
-	/// number is not positive.
+	/// Sets the capacities, before the world's first body (or query) creates the backend. False when it already
+	/// exists or a number is not positive.
 	public bool ConfigureCapacity(int32 bodies, int32 bodyPairs, int32 contacts)
 	{
-		if (mSystem != null || bodies <= 0 || bodyPairs <= 0 || contacts <= 0) return false;
+		if (mBackend != null || bodies <= 0 || bodyPairs <= 0 || contacts <= 0) return false;
 		mBodyCapacity = bodies;
 		mBodyPairCapacity = bodyPairs;
 		mContactCapacity = contacts;
@@ -155,19 +176,6 @@ class PhysicsWorld
 	}
 
 	static ProfilerMarker sOverlapProfile = .("Physics.Overlap", .Physics);
-	static ProfilerMarker sOverlapNativeProfile = .("Physics.Overlap.NativeContacts", .Physics);
-	// Shown only with native built with TALLOW_PROFILE_CONVEX_QUERIES (docs/profiler.md).
-	static ProfilerMarker sConvexProfile = .("Physics.Overlap.ConvexPair", .Physics);
-	static ProfilerMarker sEPAProfile = .("Physics.Overlap.EPA", .Physics);
-
-	/// Where native opens a convex pair's marker (marker 1: the EPA part of it).
-	static void BeginConvexProfile(int32 marker)
-	{
-		if (marker == 1)
-			sEPAProfile.Begin();
-		else
-			sConvexProfile.Begin();
-	}
 
 	/// Smallest collision half extent, in world units; lower for miniature scenes.
 	public float MinimumShapeExtent = 0.01f;
@@ -179,8 +187,8 @@ class PhysicsWorld
 		set
 		{
 			let next = Math.Max(value, 0.00001f);
-			if (mSystem != null)
-				Jolt.tn_physics_scale_tolerances(mSystem, next / mLengthScale);
+			if (mBackend != null)
+				mBackend.SetLengthScale(next / mLengthScale);
 			mLengthScale = next;
 		}
 	}
@@ -207,7 +215,6 @@ class PhysicsWorld
 		public bool dynamic;
 		public bool kinematic;
 		public uint32 lastVersion;
-		public void* shape;
 		/// The body belongs to a character controller, which moves and destroys it; it is listed so queries can name its object.
 		public bool external;
 		/// Taken out of the simulation because its object is not in the active world state.
@@ -217,19 +224,20 @@ class PhysicsWorld
 		public int32 movingIndex = -1;
 	}
 
-	// Jolt's object layer for a body is its motion class times 32 plus its GameObject's layer (ProjectConfig): the
-	// class decides what moves against what, the layer which of the project's layers collide.
-	const uint32 LayerStatic = 0;
-	const uint32 LayerMoving = 1;
-	/// Debris rests on scenery but passes through everything that moves, characters included.
-	const uint32 LayerDebris = 2;
-	const uint32 LayersPerClass = (uint32)ProjectConfig.MaxLayers;
-	/// Object layers in each world group: three motion classes of 32 layers. With world states set apart, the object
-	/// layer is also offset by its world group times this (group 0: every state; else the mask of the states it is in).
-	const uint32 LayersPerGroup = 3 * LayersPerClass;
+	// The object code is the backend's layer: motion class times the project's layers plus the GameObject's layer,
+	// offset by its world group. PhysicsLayerTable owns the packing; these are the motion classes it uses.
+	public const uint32 LayerStatic = PhysicsLayerTable.StaticClass;
+	public const uint32 LayerMoving = PhysicsLayerTable.MovingClass;
+	public const uint32 LayerDebris = PhysicsLayerTable.DebrisClass;
+	public static uint32 LayersPerClass => PhysicsLayerTable.LayersPerClass;
+	public static uint32 LayersPerGroup => PhysicsLayerTable.LayersPerGroup;
 
-	static uint32 ObjectLayer(uint32 motionClass, int32 layer, uint32 group = 0) => group * LayersPerGroup + motionClass * LayersPerClass + (uint32)Math.Clamp(layer, 0, ProjectConfig.MaxLayers - 1);
+	public static uint32 ObjectLayer(uint32 motionClass, int32 layer, uint32 group = 0) => PhysicsLayerTable.ObjectCode(motionClass, layer, group);
 	uint32 ObjectLayer(uint32 motionClass, Transform transform) => transform == null ? ObjectLayer(motionClass, 0) : ObjectLayer(motionClass, transform.GameObject.Layer, WorldGroup(transform.GameObject));
+
+	/// The object code the engine would give this transform for a motion class, for components that create their
+	/// own bodies (soft bodies and ropes currently).
+	public uint32 ObjectCode(uint32 motionClass, Transform transform) => ObjectLayer(motionClass, transform);
 
 	/// The world group of an object: 0 when world states are not set apart or it is in all of the separated ones.
 	uint32 WorldGroup(GameObject gameObject)
@@ -244,12 +252,6 @@ class PhysicsWorld
 	/// The world group mask a query sees (uint32.MaxValue: all).
 	uint32 QueryWorldGroups => (mSeparateWorlds == 0 || QueryWorldStates == uint32.MaxValue) ? uint32.MaxValue : QueryWorldStates & (uint32)(((uint32)1 << mSeparateWorlds) - 1);
 
-	static bool sJoltInitialized;
-	static void* sJobSystem;
-	static int sWorldCount;
-
-	void* mSystem;
-	void* mBodyInterface;
 	List<Entry> mEntries = new .() ~ DeleteContainerAndItems!(_);
 	/// The dynamic and kinematic entries: a big level is mostly static bodies, and Step need not touch those.
 	List<Entry> mMoving = new .() ~ delete _;
@@ -260,122 +262,58 @@ class PhysicsWorld
 	public int ControllersVersion;
 	public SoftCharacterGrid SoftCharacters = new .() ~ delete _;
 	Dictionary<uint32, Entry> mByBody = new .() ~ delete _;
-	bool mBroadPhaseDirty;
-	int64 mNextOptimize;
-	/// Frames between rebuilds of the broad phase while bodies keep coming.
-	const int64 OptimizeInterval = 300;
-	void* mSphereQueryShape;
-	void* mCapsuleQueryShape;
-	void* mBoxQueryShape;
-	float mSphereQueryRadius = -1;
-	Vector2 mCapsuleQuerySize = .(-1, -1);
-	Vector3 mBoxQuerySize = .(-1, -1, -1);
-	List<Jolt.ShapeHit> mOverlapHits = new .() ~ delete _;
-
 
 	/// Gravity, in metres a second squared.
 	public Vector3 Gravity = .(0, -9.81f, 0);
+
 	/// How many bodies are in the world.
 	public int32 BodyCount => (int32)mEntries.Count;
 	/// How many joints are in the world.
 	public int32 JointCount => (int32)mJoints.Count;
 
-	/// An empty world. A scene makes its own when play starts.
+	/// An empty world using the project's 3D backend. The backend itself is made on first use, so a scene (or a
+	/// navigation bake) can set capacities and FollowsWorldStates first.
 	public this()
 	{
-		sWorldCount++;
+		BackendProvider = PhysicsBackends.Selected3D;
+	}
+
+	/// A world using a chosen backend, for tools, tests and conformance runs.
+	public this(PhysicsBackend provider)
+	{
+		BackendProvider = provider;
 	}
 
 	public ~this()
 	{
 		Clear();
-		if (mSphereQueryShape != null)
-			Jolt.JPH_Shape_Destroy(mSphereQueryShape);
-		if (mCapsuleQueryShape != null)
-			Jolt.JPH_Shape_Destroy(mCapsuleQueryShape);
-		if (mBoxQueryShape != null)
-			Jolt.JPH_Shape_Destroy(mBoxQueryShape);
-		if (mSystem != null)
+		if (mBackend != null)
 		{
-			Jolt.tn_joint_filters_clear(mSystem);
-			SoftBody.[Friend]tn_soft_world_destroyed(mSystem);
-			Jolt.JPH_PhysicsSystem_Destroy(mSystem);
+			delete mBackend;
+			mBackend = null;
 		}
-		sWorldCount--;
 	}
 
-	void EnsureCreated()
-	{
-		if (mSystem != null)
-			return;
-		if (!sJoltInitialized)
-		{
-			Jolt.JPH_Init();
-			Jolt.tn_physics_install_query_dispatch();
-			Jolt.JobConfig config;
-			config.maxJobs = 2048;
-			config.maxBarriers = 8;
-#if BF_PLATFORM_WASM
-			// A page without threads (or a build without them) runs the jobs on its one thread; with threads the
-			// step spreads over the page's cores, a couple of which are left for the rest of the engine.
-			config.numThreads = WebPlatform.ThreadsAvailable ? (int32)Math.Clamp(WebPlatform.HardwareThreads - 2, 0, 3) : 0;
-#else
-			config.numThreads = 3;
-#endif
-			sJobSystem = Jolt.JPH_JobSystemThreadPool_Create(&config);
-			sJoltInitialized = true;
-		}
-		ProjectConfig.EnsureLoaded();
-		// A world made only for baking picks its objects itself and keeps every state together.
-		mSeparateWorlds = FollowsWorldStates ? ProjectConfig.SeparatedWorldStateCount : 0;
-		let groups = (uint32)1 << mSeparateWorlds;
-		let layerCount = groups * LayersPerGroup;
-		let broadPhase = Jolt.JPH_BroadPhaseLayerInterfaceTable_Create(layerCount, 2);
-		for (uint32 group < groups)
-		{
-			for (int32 layer < ProjectConfig.MaxLayers)
-			{
-				Jolt.JPH_BroadPhaseLayerInterfaceTable_MapObjectToBroadPhaseLayer(broadPhase, ObjectLayer(LayerStatic, layer, group), 0);
-				Jolt.JPH_BroadPhaseLayerInterfaceTable_MapObjectToBroadPhaseLayer(broadPhase, ObjectLayer(LayerMoving, layer, group), 1);
-				Jolt.JPH_BroadPhaseLayerInterfaceTable_MapObjectToBroadPhaseLayer(broadPhase, ObjectLayer(LayerDebris, layer, group), 1);
-			}
-		}
-		let pairFilter = Jolt.JPH_ObjectLayerPairFilterTable_Create(layerCount);
-		// What moves against what (static-moving, moving-moving, static-debris), for each pair of the project's
-		// layers that collide, in each pair of world groups that share a world state (group 0 shares every one).
-		uint32[3][2] classes = .(.(LayerStatic, LayerMoving), .(LayerMoving, LayerMoving), .(LayerStatic, LayerDebris));
-		for (uint32 groupA < groups)
-		{
-			for (uint32 groupB < groups)
-			{
-				if (groupA != 0 && groupB != 0 && (groupA & groupB) == 0)
-					continue;
-				for (int32 a < ProjectConfig.MaxLayers)
-				{
-					for (int32 b < ProjectConfig.MaxLayers)
-					{
-						if (!ProjectConfig.LayersCollide(a, b))
-							continue;
-						for (let pair in classes)
-							Jolt.JPH_ObjectLayerPairFilterTable_EnableCollision(pairFilter, ObjectLayer(pair[0], a, groupA), ObjectLayer(pair[1], b, groupB));
-					}
-				}
-			}
-		}
-		let objectVsBroadPhase = Jolt.JPH_ObjectVsBroadPhaseLayerFilterTable_Create(broadPhase, 2, pairFilter, layerCount);
+	/// Kept for the components that still create their own native bodies (soft bodies, ropes, water, navigation).
+	/// It makes the backend now, exactly as the old lazy world creation did.
+	public void EnsureCreated() => EnsureBackend();
 
-		Jolt.PhysicsSystemSettings settings = default;
-		settings.maxBodies = (uint32)mBodyCapacity;
-		settings.numBodyMutexes = 0;
-		settings.maxBodyPairs = (uint32)mBodyPairCapacity;
-		settings.maxContactConstraints = (uint32)mContactCapacity;
-		settings.broadPhaseLayerInterface = broadPhase;
-		settings.objectLayerPairFilter = pairFilter;
-		settings.objectVsBroadPhaseLayerFilter = objectVsBroadPhase;
-		mSystem = Jolt.JPH_PhysicsSystem_Create(&settings);
-		Jolt.tn_physics_scale_tolerances(mSystem, mLengthScale);
-		mBodyInterface = Jolt.JPH_PhysicsSystem_GetBodyInterface(mSystem);
-		Jolt.tn_contacts_enable(mSystem, ContactEvents);
+	void EnsureBackend()
+	{
+		if (mBackend != null || BackendProvider == null)
+			return;
+		ProjectConfig.EnsureLoaded();
+		PhysicsWorldSettings settings = default;
+		settings.bodyCapacity = mBodyCapacity;
+		settings.bodyPairCapacity = mBodyPairCapacity;
+		settings.contactCapacity = mContactCapacity;
+		settings.gravity = Gravity;
+		settings.lengthScale = mLengthScale;
+		settings.minimumShapeExtent = MinimumShapeExtent;
+		settings.contactEvents = ContactEvents;
+		settings.separateWorldStates = FollowsWorldStates ? ProjectConfig.SeparatedWorldStateCount : 0;
+		mSeparateWorlds = settings.separateWorldStates;
+		mBackend = BackendProvider.CreateWorld(settings);
 	}
 
 	/// Collision and trigger callbacks (Component.OnCollisionEnter/Exit, OnTriggerEnter/Exit). Set before the world
@@ -387,14 +325,12 @@ class PhysicsWorld
 	/// objects that rest against each other stay entered while asleep.
 	public void DispatchContacts(Scene scene)
 	{
-		if (mSystem == null || !ContactEvents)
+		if (mBackend == null || !ContactEvents)
 			return;
-		let count = Jolt.tn_contacts_collect(mSystem);
-		if (count <= 0)
+		let events = scope List<PhysicsContactEvent>();
+		mBackend.CollectContacts(events);
+		if (events.Count == 0)
 			return;
-		// The callbacks can make and destroy bodies, which a later collect would overwrite: copy them first.
-		let events = scope List<Jolt.ContactEvent>(count);
-		events.AddRange(Span<Jolt.ContactEvent>(Jolt.tn_contacts_events(), count));
 		let components = scope List<Component>();
 		for (let event in events)
 		{
@@ -440,11 +376,11 @@ class PhysicsWorld
 	}
 
 	/// What a character's last move ran into (not triggers), at most hits.Count. Returns how many.
-	public int CharacterHits(void* character, Span<Jolt.CharacterHit> hits)
+	public int CharacterHits(void* character, Span<CharacterHit> hits)
 	{
-		if (!HasCharacter(character) || hits.Length == 0)
+		if (!HasCharacter(character) || hits.Length == 0 || mBackend == null)
 			return 0;
-		return Jolt.tn_character_hits(character, hits.Ptr, (int32)hits.Length);
+		return mBackend.CharacterHits(character, hits);
 	}
 
 	/// The object a contact names: by the body's user data (its object's id), else by the body.
@@ -465,162 +401,66 @@ class PhysicsWorld
 	{
 		// Characters go first: each owns an inner body that is listed below as an external entry.
 		for (let character in mCharacters)
-			Jolt.tn_character_destroy(character, mSystem);
+		{
+			if (mBackend != null)
+				mBackend.DestroyCharacter(character);
+		}
 		mCharacters.Clear();
 		mCharacterOwners.Clear();
 		Controllers.Clear();
 		ControllersVersion++;
 		for (let entry in mEntries)
 		{
-			if (entry.external)
+			if (entry.external || mBackend == null)
 				continue;
 			if (entry.outOfWorld)
-				Jolt.JPH_BodyInterface_AddBody(mBodyInterface, entry.bodyId, Jolt.DontActivate);
-			Jolt.JPH_BodyInterface_RemoveAndDestroyBody(mBodyInterface, entry.bodyId);
-			Jolt.JPH_Shape_Destroy(entry.shape);
+				mBackend.AddBodyToWorld(entry.bodyId, false);
+			mBackend.DestroyBody(entry.bodyId);
 		}
 		ClearAndDeleteItems!(mEntries);
 		mMoving.Clear();
 		mByBody.Clear();
 		for (let (bodyId, soft) in mSoftBodies)
 		{
-			Jolt.JPH_BodyInterface_RemoveAndDestroyBody(mBodyInterface, bodyId);
+			if (mBackend != null)
+				mBackend.DestroyBody(bodyId);
 			soft.[Friend]mBody = uint32.MaxValue;
 			soft.[Friend]mWorld = null;
 		}
 		mSoftBodies.Clear();
 		for (let rope in mRopes)
 		{
-			if (rope.[Friend]mTie != null)
-				Rope.[Friend]tn_rope_untie(mSystem, rope.[Friend]mTie);
-			Jolt.JPH_BodyInterface_RemoveAndDestroyBody(mBodyInterface, rope.BodyId);
+			if (mBackend != null)
+				mBackend.DestroyBody(rope.BodyId);
 			rope.[Friend]mTie = null;
 			rope.[Friend]mBody = uint32.MaxValue;
 			rope.[Friend]mWorld = null;
 		}
 		mRopes.Clear();
-	}
-
-	void* CreateShape(ShapeDesc desc)
-	{
-		void* shape = null;
-		switch (desc.kind)
-		{
-		case .Box:
-			var half = Vector3.Max(desc.halfExtents, .(MinimumShapeExtent));
-			let smallest = Math.Min(half.x, Math.Min(half.y, half.z));
-			let convex = desc.convexRadius > 0 ? Math.Min(desc.convexRadius, smallest) : Math.Min(0.05f, smallest * 0.5f);
-			shape = Jolt.JPH_BoxShape_Create(&half, convex);
-		case .Sphere:
-			shape = Jolt.JPH_SphereShape_Create(Math.Max(desc.radius, MinimumShapeExtent));
-		case .Capsule:
-			shape = Jolt.JPH_CapsuleShape_Create(Math.Max(desc.halfHeight, MinimumShapeExtent), Math.Max(desc.radius, MinimumShapeExtent));
-		case .Compound:
-			if (desc.boxCount <= 0 && desc.cylinderCount <= 0 && desc.hullCount <= 0)
-				return null;
-			let compound = Jolt.JPH_StaticCompoundShapeSettings_Create();
-			var identity = Quaternion.Identity;
-			for (int i < desc.boxCount)
-			{
-				var boxCenter = desc.boxes[i * 2];
-				var boxHalf = Vector3.Max(desc.boxes[i * 2 + 1], .(MinimumShapeExtent));
-				let boxShape = Jolt.JPH_BoxShape_Create(&boxHalf, Math.Min(0.02f, Math.Min(boxHalf.x, Math.Min(boxHalf.y, boxHalf.z)) * 0.5f));
-				Jolt.JPH_CompoundShapeSettings_AddShape2(compound, &boxCenter, &identity, boxShape, (uint32)i);
-				// The compound keeps its own reference to each part.
-				Jolt.JPH_Shape_Destroy(boxShape);
-			}
-			for (int i = 0; i < desc.cylinderCount; i++)
-			{
-				var cylinder = desc.cylinders[i];
-				let cylinderShape = Jolt.JPH_CylinderShape_Create(Math.Max(cylinder.halfHeight, MinimumShapeExtent), Math.Max(cylinder.radius, MinimumShapeExtent));
-				Jolt.JPH_CompoundShapeSettings_AddShape2(compound, &cylinder.center, &cylinder.rotation, cylinderShape, (uint32)(desc.boxCount + i));
-				Jolt.JPH_Shape_Destroy(cylinderShape);
-			}
-			for (int i = 0; i < desc.hullCount; i++)
-			{
-				var hull = desc.hulls[i];
-				if (hull.pointCount < 4) continue;
-				let settings = Jolt.JPH_ConvexHullShapeSettings_Create(hull.points, (uint32)hull.pointCount, Math.Max(0, hull.convexRadius));
-				let hullShape = Jolt.JPH_ConvexHullShapeSettings_CreateShape(settings);
-				Jolt.JPH_ShapeSettings_Destroy(settings);
-				if (hullShape != null)
-				{
-					Jolt.JPH_CompoundShapeSettings_AddShape2(compound, &hull.center, &hull.rotation, hullShape, (uint32)(desc.boxCount + desc.cylinderCount + i));
-					Jolt.JPH_Shape_Destroy(hullShape);
-				}
-			}
-			shape = Jolt.JPH_StaticCompoundShape_Create(compound);
-			Jolt.JPH_ShapeSettings_Destroy(compound);
-		case .ConvexHull:
-			let hullMesh = desc.mesh;
-			if (hullMesh == null || hullMesh.Vertices.Count < 4)
-				return null;
-			// A few hundred well-spread points describe the hull; more only slows Jolt's builder down.
-			let step = Math.Max(1, hullMesh.Vertices.Count / 256);
-			List<Vector3> points = scope .();
-			for (int i = 0; i < hullMesh.Vertices.Count; i += step)
-				points.Add(hullMesh.Vertices[i].position * desc.meshScale);
-			let hullSettings = Jolt.JPH_ConvexHullShapeSettings_Create(points.Ptr, (uint32)points.Count, 0.02f);
-			shape = Jolt.JPH_ConvexHullShapeSettings_CreateShape(hullSettings);
-			Jolt.JPH_ShapeSettings_Destroy(hullSettings);
-		case .Mesh:
-			let mesh = desc.mesh;
-			if (mesh == null || mesh.Indices.Count < 3)
-				return null;
-			// Imported room meshes can exceed the default 1 MB Windows thread stack.
-			Vector3[] vertices = new .[mesh.Vertices.Count];
-			defer delete vertices;
-			for (int i < mesh.Vertices.Count)
-				vertices[i] = mesh.Vertices[i].position * desc.meshScale;
-			let triangleCount = mesh.Indices.Count / 3;
-			Jolt.IndexedTriangle[] triangles = new .[triangleCount];
-			defer delete triangles;
-			for (int i < triangleCount)
-			{
-				// Keep the mesh's own index order: Jolt takes (v2 - v1) x (v3 - v1) as the front of a
-				// triangle, which is the side Tallow's meshes face. Reversing it makes every
-				// triangle a back face, and Jolt lets bodies pass through back faces.
-				triangles[i].i1 = mesh.Indices[i * 3];
-				triangles[i].i2 = mesh.Indices[i * 3 + 1];
-				triangles[i].i3 = mesh.Indices[i * 3 + 2];
-				triangles[i].materialIndex = 0;
-				// Jolt reorders triangles; the original index comes back with a hit (RaycastHit.triangle).
-				triangles[i].userData = (uint32)i;
-			}
-			let settings = Jolt.JPH_MeshShapeSettings_Create2(vertices.Ptr, (uint32)vertices.Count, triangles.Ptr, (uint32)triangleCount);
-			Jolt.JPH_MeshShapeSettings_SetPerTriangleUserData(settings, true);
-			shape = Jolt.JPH_MeshShapeSettings_CreateShape(settings);
-			Jolt.JPH_ShapeSettings_Destroy(settings);
-		}
-		if (shape != null && desc.center.LengthSquared > 1.0e-10f)
-		{
-			var center = desc.center;
-			var identity = Quaternion.Identity;
-			let offset = Jolt.JPH_RotatedTranslatedShape_Create(&center, &identity, shape);
-			Jolt.JPH_Shape_Destroy(shape);
-			shape = offset;
-		}
-		return shape;
+		mJoints.Clear();
+		mDebris.Clear();
+		// Any bodies a component made itself (a soft body or rope that was not in the lists above, for example).
+		if (mBackend != null)
+			mBackend.Clear();
 	}
 
 	/// Creates a body that follows (static/kinematic) or drives (dynamic) the given transform.
 	/// Returns the body id, or uint32.MaxValue on failure.
 	public uint32 CreateBody(Transform transform, ShapeDesc desc, RigidbodyData* rigidbody)
 	{
-		EnsureCreated();
-		let shape = CreateShape(desc);
-		if (shape == null)
+		EnsureBackend();
+		if (mBackend == null)
 			return uint32.MaxValue;
 
 		var position = transform.Position;
 		var rotation = transform.Rotation;
-		int32 motion = Jolt.MotionStatic;
+		PhysicsMotion motion = .Static;
 		if (rigidbody != null)
-			motion = rigidbody.isKinematic ? Jolt.MotionKinematic : Jolt.MotionDynamic;
-		// Mesh shapes cannot be dynamic in Jolt.
-		if (desc.kind == .Mesh && motion == Jolt.MotionDynamic)
-			motion = Jolt.MotionStatic;
-		let debris = rigidbody != null && rigidbody.debris && motion != Jolt.MotionStatic;
+			motion = rigidbody.isKinematic ? .Kinematic : .Dynamic;
+		// Mesh shapes cannot be dynamic in Jolt; keep the same rule for every backend so scenes behave alike.
+		if (desc.kind == .Mesh && motion == .Dynamic)
+			motion = .Static;
+		let debris = rigidbody != null && rigidbody.debris && motion != .Static;
 		// A trigger collider is a sensor: it reports what passes through and stops nothing. Without a Rigidbody it is
 		// kinematic (and active), so it also notices character controllers and bodies that have gone to sleep.
 		bool trigger = false;
@@ -629,80 +469,66 @@ class PhysicsWorld
 			if (let collider = component as Collider)
 				trigger |= collider.isTrigger;
 		}
-		if (trigger && motion == Jolt.MotionStatic)
-			motion = Jolt.MotionKinematic;
+		if (trigger && motion == .Static)
+			motion = .Kinematic;
 
-		// Keep the inertia eigensolve away from Jolt's absolute near-zero fallback in miniature worlds.
-		let massScale = Math.Min(100000000.0f, Math.Max(1.0f, 1.0f / (LengthScale * LengthScale)));
-		let settings = Jolt.JPH_BodyCreationSettings_Create3(shape, &position, &rotation, motion, ObjectLayer(motion == Jolt.MotionStatic ? LayerStatic : (debris ? LayerDebris : LayerMoving), transform));
-		Jolt.JPH_BodyCreationSettings_SetUserData(settings, (uint64)transform.GameObject.Id);
-		if (trigger)
-		{
-			Jolt.JPH_BodyCreationSettings_SetIsSensor(settings, true);
-			Jolt.JPH_BodyCreationSettings_SetCollideKinematicVsNonDynamic(settings, true);
-		}
+		PhysicsBodyDesc body = default;
+		body.motion = motion;
+		body.position = position;
+		body.rotation = rotation;
+		body.objectCode = ObjectLayer(motion == .Static ? LayerStatic : (debris ? LayerDebris : LayerMoving), transform);
+		body.sensor = trigger;
+		body.debris = debris;
+		body.userData = (uint64)transform.GameObject.Id;
+		body.wantedId = uint32.MaxValue;
+		// Jolt's defaults for a collider without a Rigidbody. The neutral description is zero-initialized, so these
+		// must be set explicitly or scenery has no friction (and, for a vehicle, its tires have no grip).
+		body.friction = 0.5f;
+		body.restitution = 0;
+		body.linearDamping = 0.05f;
+		body.angularDamping = 0.05f;
+		body.gravityFactor = 1;
 		if (rigidbody != null)
 		{
-			Jolt.JPH_BodyCreationSettings_SetFriction(settings, rigidbody.friction);
-			Jolt.JPH_BodyCreationSettings_SetRestitution(settings, rigidbody.bounciness);
-			Jolt.JPH_BodyCreationSettings_SetLinearDamping(settings, rigidbody.linearDamping);
-			Jolt.JPH_BodyCreationSettings_SetAngularDamping(settings, rigidbody.angularDamping);
-			Jolt.JPH_BodyCreationSettings_SetGravityFactor(settings, rigidbody.useGravity ? Math.Max(0, rigidbody.gravityScale) : 0.0f);
-			Jolt.JPH_BodyCreationSettings_SetAllowSleeping(settings, rigidbody.allowSleeping);
-			if (rigidbody.continuousCollision)
-				Jolt.JPH_BodyCreationSettings_SetMotionQuality(settings, 1);
-			if (rigidbody.freezeRotation)
-				Jolt.JPH_BodyCreationSettings_SetAllowedDOFs(settings, 0b000111);
-			if (motion == Jolt.MotionDynamic)
+			body.friction = rigidbody.friction;
+			body.restitution = rigidbody.bounciness;
+			body.linearDamping = rigidbody.linearDamping;
+			body.angularDamping = rigidbody.angularDamping;
+			body.gravityFactor = rigidbody.useGravity ? Math.Max(0, rigidbody.gravityScale) : 0;
+			body.allowSleeping = rigidbody.allowSleeping;
+			body.continuousCollision = rigidbody.continuousCollision;
+			body.freezeRotation = rigidbody.freezeRotation;
+			if (motion == .Dynamic)
 			{
-				Jolt.MassProperties mass = default;
-				mass.mass = Math.Max(rigidbody.mass, 0.001f) * massScale;
-				Jolt.JPH_BodyCreationSettings_SetOverrideMassProperties(settings, 1);
-				Jolt.JPH_BodyCreationSettings_SetMassPropertiesOverride(settings, &mass);
+				body.overrideMass = true;
+				body.mass = Math.Max(rigidbody.mass, 0.001f);
 			}
 		}
-		uint32 bodyId = uint32.MaxValue;
-		// A body every machine must give the same id (lockstep: the physics engine's results depend on ids).
 		if (FixedBodyIndex != null)
 		{
 			let wanted = FixedBodyIndex(transform);
-			if (wanted < (uint32)mBodyCapacity && !mByBody.ContainsKey(wanted) && Jolt.JPH_BodyInterface_CreateBodyWithID(mBodyInterface, wanted, settings) != null)
-			{
-				Jolt.JPH_BodyInterface_AddBody(mBodyInterface, wanted, Jolt.Activate);
-				bodyId = wanted;
-			}
+			if (wanted < (uint32)mBodyCapacity && !mByBody.ContainsKey(wanted))
+				body.wantedId = wanted;
 		}
+
+		uint32 bodyId = mBackend.CreateBody(body, desc);
 		if (bodyId == uint32.MaxValue)
-			bodyId = Jolt.JPH_BodyInterface_CreateAndAddBody(mBodyInterface, settings, Jolt.Activate);
-		Jolt.JPH_BodyCreationSettings_Destroy(settings);
-		if (bodyId == uint32.MaxValue)
-		{
-			// A full native body pool must not leave an invalid ID in the world's tracking maps.
-			Jolt.JPH_Shape_Destroy(shape);
 			return bodyId;
-		}
-		if (motion == Jolt.MotionDynamic && massScale > 1 && bodyId != uint32.MaxValue)
-			Jolt.tn_physics_rescale_body_mass(mSystem, bodyId, Math.Max(rigidbody.mass, 0.001f));
 
 		let entry = new Entry();
 		entry.bodyId = bodyId;
 		entry.transform = transform;
-		entry.dynamic = motion == Jolt.MotionDynamic;
-		entry.kinematic = motion == Jolt.MotionKinematic;
+		entry.dynamic = motion == .Dynamic;
+		entry.kinematic = motion == .Kinematic;
 		entry.lastVersion = transform.Version;
-		entry.shape = shape;
 		Track(entry);
 		mByBody[bodyId] = entry;
-		mBroadPhaseDirty = true;
 		if (debris)
-		{
 			mDebris.Add(bodyId);
-			Jolt.tn_physics_set_debris(bodyId, true);
-		}
 		// An object outside the active world state is kept out of the simulation until that state is active.
 		if (FollowsWorldStates && mSeparateWorlds == 0 && !transform.GameObject.InActiveWorld)
 		{
-			Jolt.JPH_BodyInterface_RemoveBody(mBodyInterface, bodyId);
+			mBackend.RemoveBodyFromWorld(bodyId);
 			entry.outOfWorld = true;
 		}
 		return bodyId;
@@ -720,11 +546,16 @@ class PhysicsWorld
 	/// body does not exist. The Joint component does this for you.
 	public void* CreateJoint(uint32 bodyA, uint32 bodyB, Vector3 anchor, Vector3 axis, float swingLimitDegrees)
 	{
-		if (mSystem == null || !mByBody.ContainsKey(bodyA) || !mByBody.ContainsKey(bodyB) || bodyA == bodyB)
+		if (mBackend == null || !mByBody.ContainsKey(bodyA) || !mByBody.ContainsKey(bodyB) || bodyA == bodyB)
 			return null;
-		var point = anchor;
-		var direction = axis.LengthSquared > 1.0e-8f ? axis.Normalized : Vector3.Up;
-		let joint = Jolt.tn_joint_create(mSystem, bodyA, bodyB, &point, &direction, Mathf.Clamp(swingLimitDegrees, 0, 179) * Mathf.Deg2Rad);
+		PhysicsJointDesc desc = default;
+		desc.kind = .Ball;
+		desc.bodyA = bodyA;
+		desc.bodyB = bodyB;
+		desc.anchor = anchor;
+		desc.axis = axis.LengthSquared > 1.0e-8f ? axis.Normalized : Vector3.Up;
+		desc.swingLimitRadians = Mathf.Clamp(swingLimitDegrees, 0, 179) * Mathf.Deg2Rad;
+		let joint = mBackend.CreateJoint(desc);
 		if (joint != null)
 			mJoints.Add((joint, bodyA, bodyB, ++mJointSequence));
 		return joint;
@@ -734,12 +565,16 @@ class PhysicsWorld
 	/// how the second body sits on it. Null if either body is missing.
 	public void* CreateHinge(uint32 bodyA, uint32 bodyB, Vector3 anchor, Vector3 axis, Vector3 childAxis, Vector3 childNormal)
 	{
-		if (mSystem == null || bodyA == bodyB || !mByBody.ContainsKey(bodyA) || !mByBody.ContainsKey(bodyB)) return null;
-		var point = anchor;
-		var direction = axis.LengthSquared > 0.00001f ? axis.Normalized : Vector3.Up;
-		var axisB = childAxis;
-		var normalB = childNormal;
-		let hinge = Jolt.tn_hinge_create(mSystem, bodyA, bodyB, &point, &direction, &axisB, &normalB);
+		if (mBackend == null || bodyA == bodyB || !mByBody.ContainsKey(bodyA) || !mByBody.ContainsKey(bodyB)) return null;
+		PhysicsJointDesc desc = default;
+		desc.kind = .Hinge;
+		desc.bodyA = bodyA;
+		desc.bodyB = bodyB;
+		desc.anchor = anchor;
+		desc.axis = axis.LengthSquared > 0.00001f ? axis.Normalized : Vector3.Up;
+		desc.childAxis = childAxis;
+		desc.childNormal = childNormal;
+		let hinge = mBackend.CreateJoint(desc);
 		if (hinge != null)
 			mJoints.Add((hinge, bodyA, bodyB, ++mJointSequence));
 		return hinge;
@@ -749,13 +584,18 @@ class PhysicsWorld
 	/// SetSuspensionSpring.
 	public void* CreateSuspension(uint32 bodyA, uint32 bodyB, Vector3 anchor, Vector3 childAnchor, Vector3 axis, Vector3 childAxis, Vector3 childNormal, float travel)
 	{
-		if (mSystem == null || bodyA == bodyB || !mByBody.ContainsKey(bodyA) || !mByBody.ContainsKey(bodyB)) return null;
-		var a = anchor;
-		var b = childAnchor;
-		var direction = axis.Normalized;
-		var axisB = childAxis.Normalized;
-		var normalB = childNormal.Normalized;
-		let slider = Jolt.tn_slider_create(mSystem, bodyA, bodyB, &a, &b, &direction, &axisB, &normalB, Math.Max(0.001f, travel));
+		if (mBackend == null || bodyA == bodyB || !mByBody.ContainsKey(bodyA) || !mByBody.ContainsKey(bodyB)) return null;
+		PhysicsJointDesc desc = default;
+		desc.kind = .Slider;
+		desc.bodyA = bodyA;
+		desc.bodyB = bodyB;
+		desc.anchor = anchor;
+		desc.childAnchor = childAnchor;
+		desc.axis = axis.Normalized;
+		desc.childAxis = childAxis.Normalized;
+		desc.childNormal = childNormal.Normalized;
+		desc.travel = Math.Max(0.001f, travel);
+		let slider = mBackend.CreateJoint(desc);
 		if (slider != null)
 			mJoints.Add((slider, bodyA, bodyB, ++mJointSequence));
 		return slider;
@@ -764,30 +604,30 @@ class PhysicsWorld
 	/// How hard a suspension pushes back and how quickly its bouncing dies away.
 	public void SetSuspensionSpring(void* slider, float stiffness, float damping)
 	{
-		if (HasJoint(slider))
-			Jolt.tn_slider_spring(slider, stiffness, damping);
+		if (HasJoint(slider) && mBackend != null)
+			mBackend.SetSliderSpring(slider, stiffness, damping);
 	}
 
 	/// How far along its travel a suspension is.
-	public float SuspensionPosition(void* slider) => HasJoint(slider) ? Jolt.tn_slider_position(slider) : 0;
+	public float SuspensionPosition(void* slider) => HasJoint(slider) && mBackend != null ? mBackend.SliderPosition(slider) : 0;
 	/// Drives a hinge with up to torque. Mode 0 switches the motor off, 1 spins it at speed (radians a second), 2 turns
 	/// it to angle (radians), at up to maximumSpeed, faster the larger response is.
 	public void SetHingeMotor(void* hinge, float speed, float torque, float angle = 0, int32 mode = 1, float response = 8, float maximumSpeed = 3)
 	{
-		if (!HasJoint(hinge)) return;
-		Jolt.tn_hinge_motor(hinge, speed, Math.Max(0, torque), angle, mode, Math.Max(0.1f, response), Math.Max(0.1f, maximumSpeed));
+		if (!HasJoint(hinge) || mBackend == null) return;
+		mBackend.SetHingeMotor(hinge, speed, Math.Max(0, torque), angle, mode, Math.Max(0.1f, response), Math.Max(0.1f, maximumSpeed));
 		for (let entry in mJoints)
 		{
 			if (entry.joint == hinge)
 			{
-				Jolt.JPH_BodyInterface_ActivateBody(mBodyInterface, entry.a);
-				Jolt.JPH_BodyInterface_ActivateBody(mBodyInterface, entry.b);
+				mBackend.ActivateBody(entry.a);
+				mBackend.ActivateBody(entry.b);
 			}
 		}
 	}
 
 	/// How far a hinge has turned, in radians.
-	public float HingeAngle(void* hinge) => HasJoint(hinge) ? Jolt.tn_hinge_angle(hinge) : 0;
+	public float HingeAngle(void* hinge) => HasJoint(hinge) && mBackend != null ? mBackend.HingeAngle(hinge) : 0;
 
 	/// Safe to call with a joint that has already gone (because one of its bodies was destroyed).
 	public void DestroyJoint(void* joint)
@@ -796,7 +636,8 @@ class PhysicsWorld
 		{
 			if (mJoints[i].joint == joint)
 			{
-				Jolt.tn_joint_destroy(mSystem, joint);
+				if (mBackend != null)
+					mBackend.DestroyJoint(joint);
 				mJoints.RemoveAt(i);
 				return;
 			}
@@ -836,7 +677,7 @@ class PhysicsWorld
 	/// yesterday's ball transform, while the ball rendered at today's.
 	void SyncSoftBodiesForFrame()
 	{
-		if (mSystem == null || mSoftBodies.IsEmpty)
+		if (SoftBodies == null || mSoftBodies.IsEmpty)
 			return;
 		for (let soft in mSoftBodies.Values)
 			soft.[Friend]ReadBack();
@@ -851,14 +692,14 @@ class PhysicsWorld
 
 	void RemoveRope(Rope rope)
 	{
-		if (mRopes.Remove(rope) && mBodyInterface != null)
-			Jolt.JPH_BodyInterface_RemoveAndDestroyBody(mBodyInterface, rope.BodyId);
+		if (mRopes.Remove(rope) && mBackend != null)
+			mBackend.DestroyBody(rope.BodyId);
 	}
 
 	void RemoveSoftBody(uint32 bodyId)
 	{
-		if (mSoftBodies.Remove(bodyId) && mBodyInterface != null)
-			Jolt.JPH_BodyInterface_RemoveAndDestroyBody(mBodyInterface, bodyId);
+		if (mSoftBodies.Remove(bodyId) && mBackend != null)
+			mBackend.DestroyBody(bodyId);
 	}
 
 	/// Removes a body, and every joint on it.
@@ -871,16 +712,18 @@ class PhysicsWorld
 		{
 			if (mJoints[i].a == bodyId || mJoints[i].b == bodyId)
 			{
-				Jolt.tn_joint_destroy(mSystem, mJoints[i].joint);
+				if (mBackend != null)
+					mBackend.DestroyJoint(mJoints[i].joint);
 				mJoints.RemoveAt(i);
 			}
 		}
-		if (mDebris.Remove(bodyId))
-			Jolt.tn_physics_set_debris(bodyId, false);
-		if (entry.outOfWorld)
-			Jolt.JPH_BodyInterface_AddBody(mBodyInterface, bodyId, Jolt.DontActivate);
-		Jolt.JPH_BodyInterface_RemoveAndDestroyBody(mBodyInterface, bodyId);
-		Jolt.JPH_Shape_Destroy(entry.shape);
+		mDebris.Remove(bodyId);
+		if (mBackend != null)
+		{
+			if (entry.outOfWorld)
+				mBackend.AddBodyToWorld(bodyId, false);
+			mBackend.DestroyBody(bodyId);
+		}
 		mByBody.Remove(bodyId);
 		Untrack(entry);
 		delete entry;
@@ -894,27 +737,24 @@ class PhysicsWorld
 	/// back with RestoreExact, stepping again gives bit for bit what it gave before. Free with FreeExact.
 	public void* SaveExact(void* reuse)
 	{
-		if (mSystem == null)
+		if (mBackend == null)
 			return reuse;
 		for (let entry in mEntries)
 			Flush(entry.bodyId);
-		return Jolt.tn_physics_state_save(mSystem, reuse);
+		return mBackend.SaveState(reuse);
 	}
 
 	/// Puts a snapshot from SaveExact back, and every transform with its body. False if it could not be (the set of
 	/// bodies changed since, or it is damaged), having changed nothing that matters.
 	public bool RestoreExact(void* state)
 	{
-		if (mSystem == null || state == null || !Jolt.tn_physics_state_restore(mSystem, state))
+		if (mBackend == null || state == null || !mBackend.RestoreState(state))
 			return false;
 		for (let entry in mEntries)
 		{
 			if (entry.outOfWorld)
 				continue;
-			Vector3 position = default;
-			Quaternion rotation = default;
-			Jolt.JPH_BodyInterface_GetPosition(mBodyInterface, entry.bodyId, &position);
-			Jolt.JPH_BodyInterface_GetRotation(mBodyInterface, entry.bodyId, &rotation);
+			mBackend.GetBodyPose(entry.bodyId, let position, let rotation);
 			entry.transform.SetPositionAndRotation(position, rotation);
 			entry.lastVersion = entry.transform.Version;
 		}
@@ -934,34 +774,30 @@ class PhysicsWorld
 	public void SaveShared(uint32 firstIndex, List<uint8> into)
 	{
 		into.Clear();
-		if (mSystem == null)
+		if (mBackend == null)
 			return;
 		for (let entry in mEntries)
 			Flush(entry.bodyId);
-		let state = Jolt.tn_physics_state_save_shared(mSystem, firstIndex);
-		let size = Jolt.tn_physics_state_size(state);
-		into.Count = size;
-		Jolt.tn_physics_state_copy(state, into.Ptr, size);
-		Jolt.tn_physics_state_free(state);
+		mBackend.SaveShared(firstIndex, into);
 	}
 
 	/// Puts bodies' state from SaveShared on another machine in place, with their transforms. False if a body in it
 	/// is not here.
 	public bool RestoreShared(Span<uint8> data)
 	{
-		if (mSystem == null || data.Length == 0)
+		if (mBackend == null || data.Length == 0)
 			return false;
-		let state = Jolt.tn_physics_state_from(data.Ptr, data.Length);
+		let state = mBackend.StateFromBytes(data);
 		let ok = RestoreExact(state);
-		Jolt.tn_physics_state_free(state);
+		mBackend.FreeState(state);
 		return ok;
 	}
 
-	public static int ExactSize(void* state) => state != null ? Jolt.tn_physics_state_size(state) : 0;
-	public static void FreeExact(void* state)
+	public int ExactSize(void* state) => state != null && mBackend != null ? mBackend.StateSize(state) : 0;
+	public void FreeExact(void* state)
 	{
-		if (state != null)
-			Jolt.tn_physics_state_free(state);
+		if (state != null && mBackend != null)
+			mBackend.FreeState(state);
 	}
 
 	void Track(Entry entry)
@@ -1004,7 +840,7 @@ class PhysicsWorld
 	/// Moves an object's bodies to its current layer (GameObject.Layer calls this).
 	public void RefreshLayer(GameObject gameObject)
 	{
-		if (mBodyInterface == null)
+		if (mBackend == null)
 			return;
 		// Most objects have no body: setting their layer must not look through every one.
 		bool hasBody = false;
@@ -1017,17 +853,16 @@ class PhysicsWorld
 		{
 			if (entry.transform.GameObject != gameObject)
 				continue;
-			let current = Jolt.JPH_BodyInterface_GetObjectLayer(mBodyInterface, entry.bodyId);
-			Jolt.JPH_BodyInterface_SetObjectLayer(mBodyInterface, entry.bodyId, ObjectLayer((current % LayersPerGroup) / LayersPerClass, gameObject.Layer, WorldGroup(gameObject)));
+			let current = mBackend.GetObjectCode(entry.bodyId);
+			mBackend.SetObjectCode(entry.bodyId, ObjectLayer(PhysicsLayerTable.MotionClass(current), gameObject.Layer, WorldGroup(gameObject)));
 		}
-		mBroadPhaseDirty = true;
 	}
 
 	/// With world states set apart: moves the bodies of an object and everything under it to the world group of
 	/// their states (GameObject.WorldStates and reparenting call this through ApplyWorldState).
 	void RefreshWorldGroups(GameObject root)
 	{
-		if (mBodyInterface == null)
+		if (mBackend == null)
 			return;
 		let rootTransform = root.Transform;
 		for (let entry in mEntries)
@@ -1038,13 +873,10 @@ class PhysicsWorld
 			if (transform == null)
 				continue;
 			let gameObject = entry.transform.GameObject;
-			let current = Jolt.JPH_BodyInterface_GetObjectLayer(mBodyInterface, entry.bodyId);
-			let next = ObjectLayer((current % LayersPerGroup) / LayersPerClass, gameObject.Layer, WorldGroup(gameObject));
+			let current = mBackend.GetObjectCode(entry.bodyId);
+			let next = ObjectLayer(PhysicsLayerTable.MotionClass(current), gameObject.Layer, WorldGroup(gameObject));
 			if (next != current)
-			{
-				Jolt.JPH_BodyInterface_SetObjectLayer(mBodyInterface, entry.bodyId, next);
-				mBroadPhaseDirty = true;
-			}
+				mBackend.SetObjectCode(entry.bodyId, next);
 		}
 	}
 
@@ -1054,7 +886,7 @@ class PhysicsWorld
 	{
 		if (!FollowsWorldStates || mSeparateWorlds > 0)
 			return;
-		if (mBodyInterface == null)
+		if (mBackend == null)
 			return;
 		for (let entry in mEntries)
 		{
@@ -1065,18 +897,17 @@ class PhysicsWorld
 			{
 				var position = entry.transform.Position;
 				var rotation = entry.transform.Rotation;
-				Jolt.JPH_BodyInterface_SetPositionAndRotation(mBodyInterface, entry.bodyId, &position, &rotation, Jolt.DontActivate);
-				Jolt.JPH_BodyInterface_AddBody(mBodyInterface, entry.bodyId, Jolt.Activate);
+				mBackend.SetBodyPose(entry.bodyId, position, rotation, false);
+				mBackend.AddBodyToWorld(entry.bodyId, true);
 				entry.outOfWorld = false;
 				entry.lastVersion = entry.transform.Version;
 			}
 			else if (!inWorld && !entry.outOfWorld)
 			{
-				Jolt.JPH_BodyInterface_RemoveBody(mBodyInterface, entry.bodyId);
+				mBackend.RemoveBodyFromWorld(entry.bodyId);
 				entry.outOfWorld = true;
 			}
 		}
-		mBroadPhaseDirty = true;
 	}
 
 	/// The same after one object's world states changed (its children's bodies may change with it).
@@ -1107,7 +938,9 @@ class PhysicsWorld
 
 	void TrackInnerBody(void* character, Transform transform)
 	{
-		let bodyId = Jolt.tn_character_inner_body(character);
+		if (mBackend == null)
+			return;
+		let bodyId = mBackend.CharacterInnerBody(character);
 		if (bodyId == uint32.MaxValue)
 			return;
 		let entry = new Entry();
@@ -1121,7 +954,9 @@ class PhysicsWorld
 
 	void UntrackInnerBody(void* character)
 	{
-		if (!mByBody.TryGetValue(Jolt.tn_character_inner_body(character), let entry))
+		if (mBackend == null)
+			return;
+		if (!mByBody.TryGetValue(mBackend.CharacterInnerBody(character), let entry))
 			return;
 		mByBody.Remove(entry.bodyId);
 		Untrack(entry);
@@ -1132,25 +967,30 @@ class PhysicsWorld
 	/// the transform's position a contact still counts as the floor. Returns null if the shape cannot be built.
 	public void* CreateCharacter(Transform transform, ShapeDesc desc, Quaternion rotationIn, float maxSlopeDegrees, float mass, float pushStrength, float supportHeight, bool soft)
 	{
-		EnsureCreated();
-		let shape = CreateShape(desc);
-		if (shape == null)
+		EnsureBackend();
+		if (mBackend == null)
 			return null;
-		var position = transform.Position;
-		var rotation = rotationIn;
-		let character = Jolt.tn_character_create(mSystem, shape, &position, &rotation, Mathf.Clamp(maxSlopeDegrees, 1, 89) * Mathf.Deg2Rad, Math.Max(mass, 0.001f), Math.Max(pushStrength, 0), supportHeight, ObjectLayer(LayerMoving, transform), (uint64)transform.GameObject.Id, true, soft);
-		// The character and its inner body hold their own references.
-		Jolt.JPH_Shape_Destroy(shape);
+		PhysicsCharacterDesc characterDesc = default;
+		characterDesc.position = transform.Position;
+		characterDesc.rotation = rotationIn;
+		characterDesc.maxSlopeRadians = Mathf.Clamp(maxSlopeDegrees, 1, 89) * Mathf.Deg2Rad;
+		characterDesc.mass = Math.Max(mass, 0.001f);
+		characterDesc.pushStrength = Math.Max(pushStrength, 0);
+		characterDesc.supportHeight = supportHeight;
+		characterDesc.objectCode = ObjectLayer(LayerMoving, transform);
+		characterDesc.userData = (uint64)transform.GameObject.Id;
+		characterDesc.innerBody = true;
+		characterDesc.soft = soft;
+		let character = mBackend.CreateCharacter(characterDesc, desc);
 		if (character == null)
 			return null;
 		mCharacters.Add(character);
 		mCharacterOwners[character] = transform;
 		TrackInnerBody(character, transform);
-		mBroadPhaseDirty = true;
 		// Find the floor now, so ground state is right before the first move.
 		var velocity = Vector3.Zero;
-		PrepareQuery();
-		Jolt.tn_character_set_state(character, mSystem, CharacterLayer(character), &position, &rotation, &velocity, soft);
+		EnsureQueryPrepared();
+		mBackend.SetCharacterState(character, CharacterLayer(character), characterDesc.position, rotationIn, velocity, soft);
 		return character;
 	}
 
@@ -1161,7 +1001,8 @@ class PhysicsWorld
 			return;
 		mCharacterOwners.Remove(character);
 		UntrackInnerBody(character);
-		Jolt.tn_character_destroy(character, mSystem);
+		if (mBackend != null)
+			mBackend.DestroyCharacter(character);
 	}
 
 	/// Whether a character controller's body is still in the world.
@@ -1169,66 +1010,56 @@ class PhysicsWorld
 	public bool HasCharacter(void* character) => character != null && mCharacterOwners.ContainsKey(character);
 
 	/// Where a character is, how fast it moves and what it stands on.
-	public Jolt.CharacterState GetCharacterState(void* character)
+	public CharacterState GetCharacterState(void* character)
 	{
-		Jolt.CharacterState state = default;
-		if (HasCharacter(character))
-			Jolt.tn_character_get_state(character, &state);
+		CharacterState state = default;
+		if (HasCharacter(character) && mBackend != null)
+			state = mBackend.GetCharacterState(character);
 		return state;
 	}
 
 	/// Moves a character for one step at the given velocity, climbing steps up to stepHeight and following the floor
 	/// down by the same amount. stepReach is how far past a step's edge its top is probed for a place to stand.
-	public Jolt.CharacterState MoveCharacter(void* character, Vector3 velocityIn, float deltaTime, float stepHeight, float stepReach, bool soft)
+	public CharacterState MoveCharacter(void* character, Vector3 velocityIn, float deltaTime, float stepHeight, float stepReach, bool soft)
 	{
-		Jolt.CharacterState state = default;
-		if (!HasCharacter(character) || !Finite(velocityIn) || !deltaTime.IsFinite || deltaTime <= 0)
+		CharacterState state = default;
+		if (!HasCharacter(character) || mBackend == null || !Finite(velocityIn) || !deltaTime.IsFinite || deltaTime <= 0)
 			return GetCharacterState(character);
-		PrepareQuery();
-		var gravity = Gravity;
-		Jolt.JPH_PhysicsSystem_SetGravity(mSystem, &gravity);
+		EnsureQueryPrepared();
+		mBackend.SetGravity(Gravity);
 		var velocity = velocityIn;
 		let step = Math.Max(stepHeight, 0);
-		Jolt.tn_character_move(character, mSystem, CharacterLayer(character), &velocity, deltaTime, step, step, Math.Max(stepReach, 0.15f), soft, &state);
-		return state;
+		return mBackend.MoveCharacter(character, CharacterLayer(character), velocity, deltaTime, step, Math.Max(stepReach, 0.15f), soft);
 	}
 
 	/// Teleports a character and gives it a velocity; its contacts are rebuilt at the new place.
 	public void SetCharacterState(void* character, Vector3 positionIn, Quaternion rotationIn, Vector3 velocityIn, bool soft)
 	{
-		if (!HasCharacter(character) || !Finite(positionIn) || !Finite(velocityIn) || !ValidRotation(rotationIn))
+		if (!HasCharacter(character) || mBackend == null || !Finite(positionIn) || !Finite(velocityIn) || !ValidRotation(rotationIn))
 			return;
-		var position = positionIn;
-		var rotation = rotationIn;
-		var velocity = velocityIn;
-		PrepareQuery();
-		Jolt.tn_character_set_state(character, mSystem, CharacterLayer(character), &position, &rotation, &velocity, soft);
+		EnsureQueryPrepared();
+		mBackend.SetCharacterState(character, CharacterLayer(character), positionIn, rotationIn, velocityIn, soft);
 	}
 
 	/// True if the shape fits where the character stands, allowing that much overlap with the surroundings.
 	/// The character switches to the shape when it fits.
 	public bool TrySetCharacterShape(void* character, ShapeDesc desc, float maxPenetration, bool soft)
 	{
-		if (!HasCharacter(character))
+		if (!HasCharacter(character) || mBackend == null)
 			return false;
-		let shape = CreateShape(desc);
-		if (shape == null)
-			return false;
-		PrepareQuery();
-		let fits = Jolt.tn_character_set_shape(character, mSystem, CharacterLayer(character), shape, maxPenetration, soft);
-		Jolt.JPH_Shape_Destroy(shape);
-		return fits;
+		EnsureQueryPrepared();
+		return mBackend.SetCharacterShape(character, CharacterLayer(character), desc, maxPenetration, soft);
 	}
 
 	/// Advances the simulation by one fixed tick and writes the results to the transforms.
 	public void Step(float deltaTime)
 	{
 		LastStepError = 0;
-		if (mSystem == null || (mEntries.Count == 0 && mSoftBodies.Count == 0 && mRopes.Count == 0))
+		EnsureBackend();
+		if (mBackend == null || (mEntries.Count == 0 && mSoftBodies.Count == 0 && mRopes.Count == 0))
 			return;
-		PrepareQuery();
-		var gravity = Gravity;
-		Jolt.JPH_PhysicsSystem_SetGravity(mSystem, &gravity);
+		EnsureQueryPrepared();
+		mBackend.SetGravity(Gravity);
 
 		// Transforms moved by gameplay or the network since the last step win over the simulation.
 		for (let entry in mEntries)
@@ -1241,12 +1072,12 @@ class PhysicsWorld
 			var position = entry.transform.Position;
 			var rotation = entry.transform.Rotation;
 			if (entry.kinematic)
-				Jolt.JPH_BodyInterface_MoveKinematic(mBodyInterface, entry.bodyId, &position, &rotation, deltaTime);
+				mBackend.MoveKinematic(entry.bodyId, position, rotation, deltaTime);
 			else
 			{
 				if (entry.dynamic)
 					Teleports++;
-				Jolt.JPH_BodyInterface_SetPositionAndRotation(mBodyInterface, entry.bodyId, &position, &rotation, Jolt.Activate);
+				mBackend.SetBodyPose(entry.bodyId, position, rotation, true);
 			}
 		}
 
@@ -1256,10 +1087,13 @@ class PhysicsWorld
 			rope.[Friend]BeforeStep(deltaTime);
 		SoftBody.[Friend]UpdateProxies(this, mSoftBodies, mRopes);
 
-		Jolt.tn_contacts_begin_step(mSystem);
-		let stepStart = Internal.GetTickCountMicro();
-		LastStepError = Jolt.JPH_PhysicsSystem_Update(mSystem, deltaTime, 1, sJobSystem);
-		LastStepMilliseconds = (Internal.GetTickCountMicro() - stepStart) / 1000.0f;
+		mBackend.BeginContactStep();
+		using (sStepTimer.Sample())
+		{
+			mBackend.Step(deltaTime, let errorMask, let milliseconds);
+			LastStepError = errorMask;
+			LastStepMilliseconds = milliseconds;
+		}
 		if (LastStepError != 0 && (mReportedStepErrors & LastStepError) != LastStepError)
 		{
 			Log.Error(scope $"[Physics] Solver capacity exceeded (error mask {LastStepError}); contacts may be missing. ConfigureCapacity before creating the world. Current bodies/pairs/contacts: {mBodyCapacity}/{mBodyPairCapacity}/{mContactCapacity}.");
@@ -1270,21 +1104,20 @@ class PhysicsWorld
 		{
 			if (!entry.outOfWorld)
 			{
-				Vector3 position = default;
-				Quaternion rotation = default;
-				Jolt.JPH_BodyInterface_GetPosition(mBodyInterface, entry.bodyId, &position);
-				Jolt.JPH_BodyInterface_GetRotation(mBodyInterface, entry.bodyId, &rotation);
+				mBackend.GetBodyPose(entry.bodyId, let position, let rotation);
 				entry.transform.SetPositionAndRotation(position, rotation);
 			}
 			entry.lastVersion = entry.transform.Version;
 		}
 	}
 
-	/// Pushes a transform that gameplay moved since the last step into Jolt right away, so
+	static ProfilerMarker sStepTimer = .("Physics.BackendStep", .Physics);
+
+	/// Pushes a transform that gameplay moved since the last step into the backend right away, so
 	/// reads and writes of body state in the same tick see the new pose.
 	void Flush(uint32 bodyId)
 	{
-		if (!mByBody.TryGetValue(bodyId, let entry) || entry.transform.Version == entry.lastVersion)
+		if (!mByBody.TryGetValue(bodyId, let entry) || mBackend == null || entry.transform.Version == entry.lastVersion)
 			return;
 		// A kinematic body is moved by the next step (MoveKinematic, which gives it the velocity that pushes what it
 		// meets); teleporting it here would leave that out, so how a tick plays would depend on whether something
@@ -1295,7 +1128,7 @@ class PhysicsWorld
 			Teleports++;
 		var position = entry.transform.Position;
 		var rotation = entry.transform.Rotation;
-		Jolt.JPH_BodyInterface_SetPositionAndRotation(mBodyInterface, bodyId, &position, &rotation, Jolt.Activate);
+		mBackend.SetBodyPose(bodyId, position, rotation, true);
 		entry.lastVersion = entry.transform.Version;
 	}
 
@@ -1304,13 +1137,14 @@ class PhysicsWorld
 	{
 		BodyState state = default;
 		state.rotation = .Identity;
-		if (mBodyInterface == null || bodyId == uint32.MaxValue)
+		if (mBackend == null || bodyId == uint32.MaxValue)
 			return state;
 		Flush(bodyId);
-		Jolt.JPH_BodyInterface_GetPosition(mBodyInterface, bodyId, &state.position);
-		Jolt.JPH_BodyInterface_GetRotation(mBodyInterface, bodyId, &state.rotation);
-		Jolt.JPH_BodyInterface_GetLinearVelocity(mBodyInterface, bodyId, &state.linearVelocity);
-		Jolt.JPH_BodyInterface_GetAngularVelocity(mBodyInterface, bodyId, &state.angularVelocity);
+		mBackend.GetBodyPose(bodyId, let position, let rotation);
+		state.position = position;
+		state.rotation = rotation;
+		state.linearVelocity = mBackend.GetLinearVelocity(bodyId);
+		state.angularVelocity = mBackend.GetAngularVelocity(bodyId);
 		// A kinematic body moved this tick is where its transform says (the step takes it there).
 		if (mByBody.TryGetValue(bodyId, let entry) && entry.kinematic && entry.transform.Version != entry.lastVersion)
 		{
@@ -1323,230 +1157,105 @@ class PhysicsWorld
 	/// Teleports a body to a full state (used by network corrections and rollback).
 	public void SetState(uint32 bodyId, BodyState stateIn)
 	{
-		if (!mByBody.TryGetValue(bodyId, let entry))
+		if (!mByBody.TryGetValue(bodyId, let entry) || mBackend == null)
 			return;
-		var state = stateIn;
 		Teleports++;
+		mBackend.SetBodyPose(bodyId, stateIn.position, stateIn.rotation, true);
 		if (entry.dynamic)
-			Jolt.JPH_BodyInterface_SetPositionRotationAndVelocity(mBodyInterface, bodyId, &state.position, &state.rotation, &state.linearVelocity, &state.angularVelocity);
-		else
-			Jolt.JPH_BodyInterface_SetPositionAndRotation(mBodyInterface, bodyId, &state.position, &state.rotation, Jolt.Activate);
-		Jolt.JPH_BodyInterface_ActivateBody(mBodyInterface, bodyId);
-		entry.transform.SetPositionAndRotation(state.position, state.rotation);
+			mBackend.SetBodyVelocities(bodyId, stateIn.linearVelocity, stateIn.angularVelocity);
+		entry.transform.SetPositionAndRotation(stateIn.position, stateIn.rotation);
 		entry.lastVersion = entry.transform.Version;
 	}
 
 	/// Let an authored resting prop wait for a real contact to wake it, without making it kinematic.
 	public void Sleep(uint32 bodyId)
 	{
-		if (!mByBody.TryGetValue(bodyId, let entry) || !entry.dynamic || entry.outOfWorld)
+		if (!mByBody.TryGetValue(bodyId, let entry) || mBackend == null || !entry.dynamic || entry.outOfWorld)
 			return;
 		Flush(bodyId);
-		Jolt.JPH_BodyInterface_DeactivateBody(mBodyInterface, bodyId);
+		mBackend.SetSleeping(bodyId, true);
 	}
 
 	/// Whether a body is resting and not being simulated.
-	public bool IsSleeping(uint32 bodyId) => (mByBody.ContainsKey(bodyId) || mSoftBodies.ContainsKey(bodyId)) && !Jolt.JPH_BodyInterface_IsActive(mBodyInterface, bodyId);
+	public bool IsSleeping(uint32 bodyId) => mBackend != null && (mByBody.ContainsKey(bodyId) || mSoftBodies.ContainsKey(bodyId)) && mBackend.IsSleeping(bodyId);
 
 	/// How fast a body moves, in metres a second.
-	public Vector3 GetLinearVelocity(uint32 bodyId)
-	{
-		Vector3 v = default;
-		if (mBodyInterface != null && bodyId != uint32.MaxValue)
-			Jolt.JPH_BodyInterface_GetLinearVelocity(mBodyInterface, bodyId, &v);
-		return v;
-	}
+	public Vector3 GetLinearVelocity(uint32 bodyId) => mBackend != null && bodyId != uint32.MaxValue ? mBackend.GetLinearVelocity(bodyId) : .Zero;
 
 	/// Sets how fast a body moves (waking it).
 	public void SetLinearVelocity(uint32 bodyId, Vector3 velocity)
 	{
-		var v = velocity;
-		if (mBodyInterface != null && bodyId != uint32.MaxValue)
-		{
-			Jolt.JPH_BodyInterface_SetLinearVelocity(mBodyInterface, bodyId, &v);
-			Jolt.JPH_BodyInterface_ActivateBody(mBodyInterface, bodyId);
-		}
+		if (mBackend != null && bodyId != uint32.MaxValue)
+			mBackend.SetLinearVelocity(bodyId, velocity);
 	}
 
 	/// How fast a body spins, in radians a second.
-	public Vector3 GetAngularVelocity(uint32 bodyId)
-	{
-		Vector3 v = default;
-		if (mBodyInterface != null && bodyId != uint32.MaxValue)
-			Jolt.JPH_BodyInterface_GetAngularVelocity(mBodyInterface, bodyId, &v);
-		return v;
-	}
+	public Vector3 GetAngularVelocity(uint32 bodyId) => mBackend != null && bodyId != uint32.MaxValue ? mBackend.GetAngularVelocity(bodyId) : .Zero;
 
 	/// Sets how fast a body spins (waking it).
 	public void SetAngularVelocity(uint32 bodyId, Vector3 velocity)
 	{
-		var v = velocity;
-		if (mBodyInterface != null && bodyId != uint32.MaxValue)
-			Jolt.JPH_BodyInterface_SetAngularVelocity(mBodyInterface, bodyId, &v);
+		if (mBackend != null && bodyId != uint32.MaxValue)
+			mBackend.SetAngularVelocity(bodyId, velocity);
 	}
 
 	/// Pushes a body by a force, in newtons, through its centre over the next step.
 	public void AddForce(uint32 bodyId, Vector3 force)
 	{
-		var f = force;
-		if (mBodyInterface != null && bodyId != uint32.MaxValue)
-			Jolt.JPH_BodyInterface_AddForce(mBodyInterface, bodyId, &f);
+		if (mBackend != null && bodyId != uint32.MaxValue)
+			mBackend.AddForce(bodyId, force);
 	}
 
 	/// Turns a body by a torque, in newton metres about each world axis, over the next step.
 	public void AddTorque(uint32 bodyId, Vector3 torque)
 	{
-		var t = torque;
-		if (mBodyInterface != null && bodyId != uint32.MaxValue)
-		{
-			Jolt.JPH_BodyInterface_AddTorque(mBodyInterface, bodyId, &t);
-			Jolt.JPH_BodyInterface_ActivateBody(mBodyInterface, bodyId);
-		}
+		if (mBackend != null && bodyId != uint32.MaxValue)
+			mBackend.AddTorque(bodyId, torque);
 	}
 
 	/// Pushes a body by a force at a point in the world, which also turns it.
 	public void AddForceAtPosition(uint32 bodyId, Vector3 force, Vector3 point)
 	{
-		var f = force;
-		var p = point;
-		if (mBodyInterface != null && bodyId != uint32.MaxValue)
-		{
-			Jolt.JPH_BodyInterface_AddForce2(mBodyInterface, bodyId, &f, &p);
-			Jolt.JPH_BodyInterface_ActivateBody(mBodyInterface, bodyId);
-		}
+		if (mBackend != null && bodyId != uint32.MaxValue)
+			mBackend.AddForceAtPosition(bodyId, force, point);
 	}
 
 	/// Velocity of the point on a body at a world position (linear plus rotational).
-	public Vector3 GetPointVelocity(uint32 bodyId, Vector3 point)
-	{
-		Vector3 v = default;
-		var p = point;
-		if (mBodyInterface != null && bodyId != uint32.MaxValue)
-			Jolt.JPH_BodyInterface_GetPointVelocity(mBodyInterface, bodyId, &p, &v);
-		return v;
-	}
+	public Vector3 GetPointVelocity(uint32 bodyId, Vector3 point) => mBackend != null && bodyId != uint32.MaxValue ? mBackend.GetPointVelocity(bodyId, point) : .Zero;
 
 	/// Changes a body's momentum at once, through its centre.
 	public void AddImpulse(uint32 bodyId, Vector3 impulse)
 	{
-		var i = impulse;
-		if (mBodyInterface != null && bodyId != uint32.MaxValue)
-			Jolt.JPH_BodyInterface_AddImpulse(mBodyInterface, bodyId, &i);
+		if (mBackend != null && bodyId != uint32.MaxValue)
+			mBackend.AddImpulse(bodyId, impulse);
 	}
 
-	/// Floats a body in water whose surface passes through surfacePoint facing surfaceNormal, for one step: Jolt works
-	/// out how much of the body's shape is under that plane and pushes it up (buoyancy 1 neither sinks nor floats,
-	/// more floats). The water then slows it: its velocity eases towards the water's own (fluidVelocity) and its
-	/// turning stops, linearDrag and angularDrag times a second when it is all under, less as less of it is. (Jolt's
-	/// own drag counts the water as dense as the body, which leaves a light thing bobbing for a long time.) False
+	/// Floats a body in water whose surface passes through surfacePoint facing surfaceNormal, for one step. False
 	/// when no part of it is under.
 	public bool ApplyBuoyancy(uint32 bodyId, Vector3 surfacePoint, Vector3 surfaceNormal, float buoyancy, float linearDrag, float angularDrag, Vector3 fluidVelocity,
 		float deltaTime)
 	{
-		if (mBodyInterface == null || bodyId == uint32.MaxValue)
+		if (mBackend == null || bodyId == uint32.MaxValue)
 			return false;
 		Entry entry;
 		if (!mByBody.TryGetValue(bodyId, out entry) || !entry.dynamic || entry.outOfWorld)
 			return false;
 		Flush(bodyId);
-		var point = surfacePoint;
-		var normal = surfaceNormal;
-		var flow = fluidVelocity;
-		var gravity = Gravity;
-		if (!Jolt.JPH_BodyInterface_ApplyBuoyancyImpulse(mBodyInterface, bodyId, &point, &normal, buoyancy, linearDrag * 0.5f, angularDrag * 0.05f, &flow, &gravity, deltaTime))
-			return false;
-		// How much of it is under, measured up and down its box in the world.
-		var under = 1.0f;
-		if (entry.shape != null)
-		{
-			Bounds local = default;
-			Jolt.JPH_Shape_GetLocalBounds(entry.shape, &local);
-			Vector3 position = default;
-			Quaternion rotation = default;
-			Jolt.JPH_BodyInterface_GetPosition(mBodyInterface, bodyId, &position);
-			Jolt.JPH_BodyInterface_GetRotation(mBodyInterface, bodyId, &rotation);
-			let center = position + rotation * ((local.min + local.max) * 0.5f);
-			let half = (local.max - local.min) * 0.5f;
-			let reach = Math.Abs((rotation * Vector3(half.x, 0, 0)).y) + Math.Abs((rotation * Vector3(0, half.y, 0)).y) + Math.Abs((rotation * Vector3(0, 0, half.z)).y);
-			let level = surfacePoint.y;
-			under = reach > 0.0001f ? Math.Clamp((level - (center.y - reach)) / (reach * 2), 0, 1) : 1;
-		}
-		Vector3 velocity = default, spin = default;
-		Jolt.JPH_BodyInterface_GetLinearVelocity(mBodyInterface, bodyId, &velocity);
-		Jolt.JPH_BodyInterface_GetAngularVelocity(mBodyInterface, bodyId, &spin);
-		velocity = fluidVelocity + (velocity - fluidVelocity) * Math.Exp(-Math.Max(linearDrag, 0) * under * deltaTime);
-		spin = spin * Math.Exp(-Math.Max(angularDrag, 0) * under * deltaTime);
-		Jolt.JPH_BodyInterface_SetLinearVelocity(mBodyInterface, bodyId, &velocity);
-		Jolt.JPH_BodyInterface_SetAngularVelocity(mBodyInterface, bodyId, &spin);
-		return true;
+		return mBackend.ApplyBuoyancy(bodyId, surfacePoint, surfaceNormal, buoyancy, linearDrag, angularDrag, fluidVelocity, deltaTime);
 	}
 
 	// Queries run on the scene thread, like simulation and body state changes.
-	void* PrepareQuery()
+	void EnsureQueryPrepared()
 	{
-		if (mSystem == null) return null;
-		// This only speeds queries up: new bodies are found without it, and it rebuilds the whole tree. So after a
-		// level's bodies arrive, but not for each thing spawned while the game runs.
-		if (mBroadPhaseDirty && Time.FrameCount >= mNextOptimize)
-		{
-			Jolt.JPH_PhysicsSystem_OptimizeBroadPhase(mSystem);
-			mBroadPhaseDirty = false;
-			mNextOptimize = Time.FrameCount + OptimizeInterval;
-		}
-		// The native filter is shared by every world, so each query names its own world states.
-		Jolt.tn_physics_set_query_worlds(QueryWorldGroups);
-		return Jolt.JPH_PhysicsSystem_GetNarrowPhaseQuery(mSystem);
+		if (mBackend == null)
+			return;
+		mBackend.PrepareQuery(QueryWorldGroups);
 	}
 
 	static bool Finite(Vector3 v) => v.x.IsFinite && v.y.IsFinite && v.z.IsFinite;
 	static bool ValidRotation(Quaternion q) => q.x.IsFinite && q.y.IsFinite && q.z.IsFinite && q.w.IsFinite && Quaternion.Dot(q, q) > 1.0e-12f;
 
-	void* SphereQueryShape(float radius)
-	{
-		if (mSystem == null) return null;
-		if (!radius.IsFinite || radius <= 0) return null;
-		if (mSphereQueryShape == null || radius != mSphereQueryRadius)
-		{
-			if (mSphereQueryShape != null)
-				Jolt.JPH_Shape_Destroy(mSphereQueryShape);
-			mSphereQueryShape = Jolt.JPH_SphereShape_Create(radius);
-			mSphereQueryRadius = radius;
-		}
-		return mSphereQueryShape;
-	}
-
-	void* CapsuleQueryShape(float halfHeight, float radius)
-	{
-		if (mSystem == null) return null;
-		if (!radius.IsFinite || radius <= 0 || !halfHeight.IsFinite) return null;
-		// Coincident end centers describe a sphere.
-		if (halfHeight <= 1.0e-6f) return SphereQueryShape(radius);
-		if (mCapsuleQueryShape == null || mCapsuleQuerySize.x != halfHeight || mCapsuleQuerySize.y != radius)
-		{
-			if (mCapsuleQueryShape != null)
-				Jolt.JPH_Shape_Destroy(mCapsuleQueryShape);
-			mCapsuleQueryShape = Jolt.JPH_CapsuleShape_Create(halfHeight, radius);
-			mCapsuleQuerySize = .(halfHeight, radius);
-		}
-		return mCapsuleQueryShape;
-	}
-
-	void* BoxQueryShape(Vector3 size)
-	{
-		if (mSystem == null) return null;
-		if (!Finite(size) || size.x <= 0 || size.y <= 0 || size.z <= 0) return null;
-		if (mBoxQueryShape == null || mBoxQuerySize.x != size.x || mBoxQuerySize.y != size.y || mBoxQuerySize.z != size.z)
-		{
-			if (mBoxQueryShape != null)
-				Jolt.JPH_Shape_Destroy(mBoxQueryShape);
-			var half = size * 0.5f;
-			mBoxQueryShape = Jolt.JPH_BoxShape_Create(&half, Math.Min(0.02f, Math.Min(half.x, Math.Min(half.y, half.z))));
-			mBoxQuerySize = size;
-		}
-		return mBoxQueryShape;
-	}
-
-	ShapeCastHit MakeShapeHit(Jolt.ShapeHit nativeHit, float maxDistance)
+	ShapeCastHit MakeShapeHit(PhysicsShapeHit nativeHit, float maxDistance)
 	{
 		ShapeCastHit hit = default;
 		hit.bodyId = nativeHit.bodyId;
@@ -1559,8 +1268,7 @@ class PhysicsWorld
 		if (mByBody.TryGetValue(nativeHit.bodyId, let entry))
 			hit.gameObject = entry.transform.GameObject;
 		var point = nativeHit.point;
-		Jolt.HitDetail detail = default;
-		if (mSystem != null && Jolt.tn_physics_hit_detail(mSystem, nativeHit.bodyId, nativeHit.subShapeId, &point, &detail))
+		if (mBackend != null && mBackend.HitDetail(nativeHit.bodyId, nativeHit.subShapeId, point, let detail))
 		{
 			hit.part = detail.part;
 			hit.triangle = detail.triangle;
@@ -1568,15 +1276,14 @@ class PhysicsWorld
 		return hit;
 	}
 
-	/// Fills a ray hit's normal, part and triangle from Jolt's sub-shape id.
+	/// Fills a ray hit's normal, part and triangle from the backend's sub-shape id.
 	void AddRayDetail(ref RaycastHit hit, uint32 bodyId, uint32 subShapeId)
 	{
 		hit.bodyId = bodyId;
 		hit.part = -1;
 		hit.triangle = -1;
 		var point = hit.point;
-		Jolt.HitDetail detail = default;
-		if (mSystem != null && Jolt.tn_physics_hit_detail(mSystem, bodyId, subShapeId, &point, &detail))
+		if (mBackend != null && mBackend.HitDetail(bodyId, subShapeId, point, let detail))
 		{
 			hit.normal = detail.normal;
 			hit.part = detail.part;
@@ -1589,151 +1296,74 @@ class PhysicsWorld
 	public int RaycastAll(Vector3 origin, Vector3 direction, float maxDistance, List<RaycastHit> hits, uint32 layerMask = uint32.MaxValue, uint32 ignoreBody = uint32.MaxValue)
 	{
 		hits.Clear();
-		if (mSystem == null || !Finite(origin) || !Finite(direction) || direction.LengthSquared < 1.0e-12f || !maxDistance.IsFinite || maxDistance <= 0)
+		if (!Finite(origin) || !Finite(direction) || direction.LengthSquared < 1.0e-12f || !maxDistance.IsFinite || maxDistance <= 0)
 			return 0;
-		let query = PrepareQuery();
-		if (query == null)
+		EnsureQueryPrepared();
+		if (mBackend == null)
 			return 0;
 		let unit = direction.Normalized;
-		var from = origin;
-		var delta = unit * maxDistance;
-		Jolt.RayHit[32] local = default;
-		Jolt.RayHit* buffer = &local;
-		int32 count = Jolt.tn_physics_cast_ray_all(query, &from, &delta, ignoreBody, buffer, 32, layerMask);
-		Jolt.RayHit[] large = null;
-		defer { delete large; }
-		if (count > 32)
-		{
-			large = new .[count];
-			buffer = large.Ptr;
-			count = Math.Min(count, Jolt.tn_physics_cast_ray_all(query, &from, &delta, ignoreBody, buffer, count, layerMask));
-		}
-		for (int i < count)
+		let raw = scope List<PhysicsRayHit>();
+		mBackend.RaycastAll(origin, unit, maxDistance, layerMask, ignoreBody, raw);
+		for (let nativeHit in raw)
 		{
 			RaycastHit hit = default;
-			hit.distance = buffer[i].fraction * maxDistance;
+			hit.distance = nativeHit.fraction * maxDistance;
 			hit.point = origin + unit * hit.distance;
-			if (mByBody.TryGetValue(buffer[i].bodyId, let entry))
+			if (mByBody.TryGetValue(nativeHit.bodyId, let entry))
 				hit.gameObject = entry.transform.GameObject;
-			AddRayDetail(ref hit, buffer[i].bodyId, buffer[i].subShapeId);
+			AddRayDetail(ref hit, nativeHit.bodyId, nativeHit.subShapeId);
 			hits.Add(hit);
 		}
 		return hits.Count;
 	}
 
-	int CastAllQuery(void* shape, Vector3 origin, Quaternion orientation, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody, uint32 layerMask)
-	{
-		hits.Clear();
-		if (shape == null || !Finite(origin) || !Finite(direction) || direction.LengthSquared < 1.0e-12f || !maxDistance.IsFinite || maxDistance <= 0 || !ValidRotation(orientation)) return 0;
-		let query = PrepareQuery();
-		if (query == null) return 0;
-		var from = origin;
-		var rotation = orientation.Normalized;
-		var displacement = direction.Normalized * maxDistance;
-		if (mOverlapHits.Count < 64)
-			mOverlapHits.Resize(64);
-		int32 count = Jolt.tn_physics_cast_shape_all(query, shape, &from, &rotation, &displacement, ignoreBody, mOverlapHits.Ptr, (int32)mOverlapHits.Count, layerMask);
-		if (count > mOverlapHits.Count)
-		{
-			mOverlapHits.Resize(count);
-			count = Math.Min(count, Jolt.tn_physics_cast_shape_all(query, shape, &from, &rotation, &displacement, ignoreBody, mOverlapHits.Ptr, (int32)mOverlapHits.Count, layerMask));
-		}
-		for (int i < count)
-			hits.Add(MakeShapeHit(mOverlapHits[i], maxDistance));
-		return hits.Count;
-	}
-
-	/// Every body a sphere sweep touches, nearest first, each once. Clears hits first; returns how many there are.
-	public int SphereCastAll(Vector3 origin, float radius, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
-		=> CastAllQuery(SphereQueryShape(radius), origin, .Identity, direction, maxDistance, hits, ignoreBody, layerMask);
-
-	/// Every body a capsule sweep touches (point1 and point2 its half-spheres' centres), nearest first, each once.
-	public int CapsuleCastAll(Vector3 point1, Vector3 point2, float radius, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
-	{
-		hits.Clear();
-		if (!Finite(point1) || !Finite(point2)) return 0;
-		let axis = point2 - point1;
-		let length = axis.Length;
-		if (!length.IsFinite) return 0;
-		let rotation = length < 1.0e-6f ? Quaternion.Identity : CapsuleRotation(axis);
-		return CastAllQuery(CapsuleQueryShape(length * 0.5f, radius), (point1 + point2) * 0.5f, rotation, direction, maxDistance, hits, ignoreBody, layerMask);
-	}
-
-	/// Every body a box sweep (size: full width, height and depth) touches, nearest first, each once.
-	public int BoxCastAll(Vector3 origin, Vector3 size, Quaternion orientation, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
-		=> CastAllQuery(BoxQueryShape(size), origin, orientation, direction, maxDistance, hits, ignoreBody, layerMask);
-
-	bool CastQuery(void* shape, Vector3 origin, Quaternion orientation, Vector3 direction, float maxDistance, out ShapeCastHit hit, uint32 ignoreBody, uint32 layerMask)
+	bool CastQuery(ShapeDesc shape, Vector3 origin, Quaternion orientation, Vector3 direction, float maxDistance, out ShapeCastHit hit, uint32 ignoreBody, uint32 layerMask)
 	{
 		hit = default;
-		if (shape == null || !Finite(origin) || !Finite(direction) || direction.LengthSquared < 1.0e-12f || !direction.LengthSquared.IsFinite || !maxDistance.IsFinite || maxDistance <= 0 || !ValidRotation(orientation)) return false;
-		let query = PrepareQuery();
-		if (query == null) return false;
-		var from = origin;
-		var rotation = orientation.Normalized;
-		var displacement = direction.Normalized * maxDistance;
-		Jolt.ShapeHit nativeHit = default;
-		if (!Jolt.tn_physics_cast_shape(query, shape, &from, &rotation, &displacement, ignoreBody, &nativeHit, layerMask)) return false;
+		if (mBackend == null || !Finite(origin) || !Finite(direction) || direction.LengthSquared < 1.0e-12f || !direction.LengthSquared.IsFinite || !maxDistance.IsFinite || maxDistance <= 0 || !ValidRotation(orientation)) return false;
+		EnsureQueryPrepared();
+		mBackend.CastShape(shape, origin, orientation.Normalized, direction.Normalized * maxDistance, layerMask, ignoreBody, let nativeHit);
+		if (nativeHit.bodyId == uint32.MaxValue)
+			return false;
 		hit = MakeShapeHit(nativeHit, maxDistance);
 		return true;
 	}
 
-	/// Sweeps a sphere and returns its closest contact. Direction need not be normalized.
-	/// A starting overlap returns distance zero and its penetration depth. layerMask: the layers it sees (one bit
-	/// per layer; ProjectConfig.Mask makes one from names), all of them by default.
-	public bool SphereCast(Vector3 origin, float radius, Vector3 direction, float maxDistance, out ShapeCastHit hit, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
-		=> CastQuery(SphereQueryShape(radius), origin, .Identity, direction, maxDistance, out hit, ignoreBody, layerMask);
-
-	/// The endpoints are the centers of the capsule's two hemispheres.
-	public bool CapsuleCast(Vector3 point1, Vector3 point2, float radius, Vector3 direction, float maxDistance, out ShapeCastHit hit, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
+	int CastAllQuery(ShapeDesc shape, Vector3 origin, Quaternion orientation, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody, uint32 layerMask)
 	{
-		hit = default;
-		if (!Finite(point1) || !Finite(point2)) return false;
-		let axis = point2 - point1;
-		let length = axis.Length;
-		if (!length.IsFinite) return false;
-		// Local capsule Y is aligned with the endpoint axis.
-		let rotation = length < 1.0e-6f ? Quaternion.Identity : CapsuleRotation(axis);
-		return CastQuery(CapsuleQueryShape(length * 0.5f, radius), (point1 + point2) * 0.5f, rotation, direction, maxDistance, out hit, ignoreBody, layerMask);
+		hits.Clear();
+		if (mBackend == null || !Finite(origin) || !Finite(direction) || direction.LengthSquared < 1.0e-12f || !maxDistance.IsFinite || maxDistance <= 0 || !ValidRotation(orientation)) return 0;
+		EnsureQueryPrepared();
+		let raw = scope List<PhysicsShapeHit>();
+		mBackend.CastShapeAll(shape, origin, orientation.Normalized, direction.Normalized * maxDistance, layerMask, ignoreBody, raw);
+		for (let nativeHit in raw)
+			hits.Add(MakeShapeHit(nativeHit, maxDistance));
+		return hits.Count;
 	}
 
-	/// Size is the full width/height/depth, matching BoxCollider.size.
-	public bool BoxCast(Vector3 origin, Vector3 size, Quaternion orientation, Vector3 direction, float maxDistance, out ShapeCastHit hit, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
-		=> CastQuery(BoxQueryShape(size), origin, orientation, direction, maxDistance, out hit, ignoreBody, layerMask);
-
-	int OverlapQuery(void* shape, Vector3 origin, Quaternion orientation, List<ShapeCastHit> hits, uint32 ignoreBody, uint32 layerMask)
+	static ShapeDesc SphereShape(float radius)
 	{
-		using (sOverlapProfile.Sample())
-		{
-			hits.Clear();
-			if (shape == null || !Finite(origin) || !ValidRotation(orientation)) return 0;
-			let query = PrepareQuery();
-			if (query == null) return 0;
-			if (mOverlapHits.Count < 64)
-				mOverlapHits.Resize(64);
-			var from = origin;
-			var rotation = orientation.Normalized;
-			int32 count;
-			using (sOverlapNativeProfile.Sample())
-			{
-				if (Profiler.Enabled)
-					Jolt.tn_physics_profile_convex( => BeginConvexProfile, => Profiler.End);
-				defer
-				{
-					if (Profiler.Enabled)
-						Jolt.tn_physics_profile_convex(null, null);
-				}
-				count = Jolt.tn_physics_overlap_shape(query, shape, &from, &rotation, ignoreBody, mOverlapHits.Ptr, (int32)mOverlapHits.Count, layerMask, useAnalyticOverlapContacts);
-				if (count > mOverlapHits.Count)
-				{
-					mOverlapHits.Resize(count);
-					count = Jolt.tn_physics_overlap_shape(query, shape, &from, &rotation, ignoreBody, mOverlapHits.Ptr, (int32)mOverlapHits.Count, layerMask, useAnalyticOverlapContacts);
-				}
-			}
-			for (int i < count)
-				hits.Add(MakeShapeHit(mOverlapHits[i], 0));
-			return (int)hits.Count;
-		}
+		ShapeDesc desc = default;
+		desc.kind = .Sphere;
+		desc.radius = radius;
+		return desc;
+	}
+
+	static ShapeDesc CapsuleShape(float halfHeight, float radius)
+	{
+		ShapeDesc desc = default;
+		desc.kind = .Capsule;
+		desc.halfHeight = halfHeight;
+		desc.radius = radius;
+		return desc;
+	}
+
+	static ShapeDesc BoxShape(Vector3 size)
+	{
+		ShapeDesc desc = default;
+		desc.kind = .Box;
+		desc.halfExtents = size * 0.5f;
+		return desc;
 	}
 
 	/// The rotation that turns a capsule's axis (its Y) onto a direction. LookRotation keeps the forward it is given and
@@ -1745,24 +1375,79 @@ class PhysicsWorld
 		return Quaternion.LookRotation(Vector3.Cross(side, up), up);
 	}
 
-	bool CheckQuery(void* shape, Vector3 origin, Quaternion orientation, uint32 ignoreBody, uint32 layerMask)
+	int OverlapQuery(ShapeDesc shape, Vector3 origin, Quaternion orientation, List<ShapeCastHit> hits, uint32 ignoreBody, uint32 layerMask)
 	{
-		if (shape == null || !Finite(origin) || !ValidRotation(orientation)) return false;
-		let query = PrepareQuery();
-		if (query == null) return false;
-		var from = origin;
-		var rotation = orientation.Normalized;
-		return Jolt.tn_physics_check_shape(query, shape, &from, &rotation, ignoreBody, layerMask);
+		using (sOverlapProfile.Sample())
+		{
+			hits.Clear();
+			if (mBackend == null || !Finite(origin) || !ValidRotation(orientation)) return 0;
+			EnsureQueryPrepared();
+			let raw = scope List<PhysicsShapeHit>();
+			mBackend.OverlapShape(shape, origin, orientation.Normalized, layerMask, ignoreBody, raw, useAnalyticOverlapContacts);
+			for (let nativeHit in raw)
+				hits.Add(MakeShapeHit(nativeHit, 0));
+			return (int)hits.Count;
+		}
 	}
+
+	bool CheckQuery(ShapeDesc shape, Vector3 origin, Quaternion orientation, uint32 ignoreBody, uint32 layerMask)
+	{
+		if (mBackend == null || !Finite(origin) || !ValidRotation(orientation)) return false;
+		EnsureQueryPrepared();
+		return mBackend.CheckShape(shape, origin, orientation.Normalized, layerMask, ignoreBody);
+	}
+
+	/// Every body a sphere sweep touches, nearest first, each once. Clears hits first; returns how many there are.
+	public int SphereCastAll(Vector3 origin, float radius, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
+		=> CastAllQuery(SphereShape(radius), origin, .Identity, direction, maxDistance, hits, ignoreBody, layerMask);
+
+	/// Every body a capsule sweep touches (point1 and point2 its half-spheres' centres), nearest first, each once.
+	public int CapsuleCastAll(Vector3 point1, Vector3 point2, float radius, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
+	{
+		hits.Clear();
+		if (!Finite(point1) || !Finite(point2)) return 0;
+		let axis = point2 - point1;
+		let length = axis.Length;
+		if (!length.IsFinite) return 0;
+		let rotation = length < 1.0e-6f ? Quaternion.Identity : CapsuleRotation(axis);
+		return CastAllQuery(CapsuleShape(length * 0.5f, radius), (point1 + point2) * 0.5f, rotation, direction, maxDistance, hits, ignoreBody, layerMask);
+	}
+
+	/// Every body a box sweep (size: full width, height and depth) touches, nearest first, each once.
+	public int BoxCastAll(Vector3 origin, Vector3 size, Quaternion orientation, Vector3 direction, float maxDistance, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
+		=> CastAllQuery(BoxShape(size), origin, orientation, direction, maxDistance, hits, ignoreBody, layerMask);
+
+	/// Sweeps a sphere and returns its closest contact. Direction need not be normalized.
+	/// A starting overlap returns distance zero and its penetration depth. layerMask: the layers it sees (one bit
+	/// per layer; ProjectConfig.Mask makes one from names), all of them by default.
+	public bool SphereCast(Vector3 origin, float radius, Vector3 direction, float maxDistance, out ShapeCastHit hit, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
+		=> CastQuery(SphereShape(radius), origin, .Identity, direction, maxDistance, out hit, ignoreBody, layerMask);
+
+	/// The endpoints are the centers of the capsule's two hemispheres.
+	public bool CapsuleCast(Vector3 point1, Vector3 point2, float radius, Vector3 direction, float maxDistance, out ShapeCastHit hit, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
+	{
+		hit = default;
+		if (!Finite(point1) || !Finite(point2)) return false;
+		let axis = point2 - point1;
+		let length = axis.Length;
+		if (!length.IsFinite) return false;
+		// Local capsule Y is aligned with the endpoint axis.
+		let rotation = length < 1.0e-6f ? Quaternion.Identity : CapsuleRotation(axis);
+		return CastQuery(CapsuleShape(length * 0.5f, radius), (point1 + point2) * 0.5f, rotation, direction, maxDistance, out hit, ignoreBody, layerMask);
+	}
+
+	/// Size is the full width/height/depth, matching BoxCollider.size.
+	public bool BoxCast(Vector3 origin, Vector3 size, Quaternion orientation, Vector3 direction, float maxDistance, out ShapeCastHit hit, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
+		=> CastQuery(BoxShape(size), origin, orientation, direction, maxDistance, out hit, ignoreBody, layerMask);
 
 	/// Whether anything touches a sphere: as OverlapSphere, without the contacts, so several times quicker (it stops at
 	/// the first thing it finds). As Unity's Physics.CheckSphere.
 	public bool CheckSphere(Vector3 origin, float radius, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
-		=> CheckQuery(SphereQueryShape(radius), origin, .Identity, ignoreBody, layerMask);
+		=> CheckQuery(SphereShape(radius), origin, .Identity, ignoreBody, layerMask);
 
 	/// Whether anything touches a box (of a full size, turned by orientation), without the contacts.
 	public bool CheckBox(Vector3 origin, Vector3 size, Quaternion orientation, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
-		=> CheckQuery(BoxQueryShape(size), origin, orientation, ignoreBody, layerMask);
+		=> CheckQuery(BoxShape(size), origin, orientation, ignoreBody, layerMask);
 
 	/// Whether anything touches a capsule from point1 to point2, without the contacts.
 	public bool CheckCapsule(Vector3 point1, Vector3 point2, float radius, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
@@ -1772,17 +1457,17 @@ class PhysicsWorld
 		let length = axis.Length;
 		if (!length.IsFinite) return false;
 		let rotation = length < 1.0e-6f ? Quaternion.Identity : CapsuleRotation(axis);
-		return CheckQuery(CapsuleQueryShape(length * 0.5f, radius), (point1 + point2) * 0.5f, rotation, ignoreBody, layerMask);
+		return CheckQuery(CapsuleShape(length * 0.5f, radius), (point1 + point2) * 0.5f, rotation, ignoreBody, layerMask);
 	}
 
 	/// Returns contacts, including separate subshapes of compound/mesh bodies. Clears hits first. CheckSphere is quicker
 	/// when only whether something is there matters.
 	public int OverlapSphere(Vector3 origin, float radius, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
-		=> OverlapQuery(SphereQueryShape(radius), origin, .Identity, hits, ignoreBody, layerMask);
+		=> OverlapQuery(SphereShape(radius), origin, .Identity, hits, ignoreBody, layerMask);
 	/// Everything touching a box (of a full size, turned by orientation) round a point. Clears hits first; returns how
 	/// many there are.
 	public int OverlapBox(Vector3 origin, Vector3 size, Quaternion orientation, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
-		=> OverlapQuery(BoxQueryShape(size), origin, orientation, hits, ignoreBody, layerMask);
+		=> OverlapQuery(BoxShape(size), origin, orientation, hits, ignoreBody, layerMask);
 	/// Everything touching a capsule from point1 to point2. Clears hits first; returns how many there are.
 	public int OverlapCapsule(Vector3 point1, Vector3 point2, float radius, List<ShapeCastHit> hits, uint32 ignoreBody = uint32.MaxValue, uint32 layerMask = uint32.MaxValue)
 	{
@@ -1792,7 +1477,7 @@ class PhysicsWorld
 		let length = axis.Length;
 		if (!length.IsFinite) return 0;
 		let rotation = length < 1.0e-6f ? Quaternion.Identity : CapsuleRotation(axis);
-		return OverlapQuery(CapsuleQueryShape(length * 0.5f, radius), (point1 + point2) * 0.5f, rotation, hits, ignoreBody, layerMask);
+		return OverlapQuery(CapsuleShape(length * 0.5f, radius), (point1 + point2) * 0.5f, rotation, hits, ignoreBody, layerMask);
 	}
 
 	/// Casts a ray and reports the closest body hit within maxDistance. Debris is passed through. layerMask: the
@@ -1800,20 +1485,22 @@ class PhysicsWorld
 	public bool Raycast(Vector3 origin, Vector3 direction, float maxDistance, out RaycastHit hit, uint32 layerMask = uint32.MaxValue)
 	{
 		hit = default;
-		if (mSystem == null || direction.LengthSquared < 1.0e-12f)
+		if (mBackend == null || direction.LengthSquared < 1.0e-12f)
 			return false;
 		let unit = direction.Normalized;
-		let query = PrepareQuery();
+		EnsureQueryPrepared();
 		float travelled = 0;
 		// Debris in the way is stepped through a little at a time until the ray is out the other side.
 		for (int attempt < 96)
 		{
 			var from = origin + unit * travelled;
-			var delta = unit * (maxDistance - travelled);
-			Jolt.RayCastResult result = default;
-			if (!Jolt.JPH_NarrowPhaseQuery_CastRay(query, &from, &delta, &result, null, Jolt.tn_physics_layer_filter(layerMask), null))
+			var remaining = maxDistance - travelled;
+			if (remaining <= 0)
 				return false;
-			let distance = travelled + result.fraction * (maxDistance - travelled);
+			mBackend.Raycast(from, unit, remaining, layerMask, uint32.MaxValue, let result);
+			if (result.bodyId == uint32.MaxValue)
+				return false;
+			let distance = travelled + result.fraction * remaining;
 			if (mDebris.Contains(result.bodyId))
 			{
 				travelled = distance + 0.2f;

@@ -1,0 +1,90 @@
+using System;
+using System.Numerics;
+using Tallow;
+
+namespace {NAMESPACE};
+
+/// <summary>
+/// Drives the Vehicle component from the networked tick input: Move Y is throttle/reverse, Move X steers, Crouch
+/// brakes and Jump is the handbrake. It also turns the four wheel models and raises the engine note with speed.
+/// </summary>
+public class CarController : Script
+{
+    /// <summary>Speed at which the engine sound reaches its highest pitch.</summary>
+    public float MaxSpeedForPitch = 30f;
+    /// <summary>How much the engine note rises over its idle pitch.</summary>
+    public float PitchRange = 0.55f;
+    /// <summary>Turn the steering input around if this car's wheels steer the other way.</summary>
+    public bool InvertSteering = true;
+    /// <summary>Fixed yaw of the driver-side wheel models in degrees.</summary>
+    public float DriverWheelYaw = 180f;
+    /// <summary>Fixed yaw of the passenger-side wheel models. The model is mirrored, so this is the opposite.</summary>
+    public float PassengerWheelYaw = 0f;
+
+    private GameObject? _frontLeft;
+    private GameObject? _frontRight;
+    private GameObject? _rearLeft;
+    private GameObject? _rearRight;
+    private AudioSource _engine;
+    private bool _hasEngine;
+    private float _pitch = 0.8f;
+    private float _volume = 0.4f;
+
+    public override void Start()
+    {
+        _frontLeft = Scene.Find("Wheel FL");
+        _frontRight = Scene.Find("Wheel FR");
+        _rearLeft = Scene.Find("Wheel RL");
+        _rearRight = Scene.Find("Wheel RR");
+        var audio = GetComponent<AudioSource>();
+        _hasEngine = audio.IsValid;
+        _engine = audio;
+    }
+
+    public override void Update(TickInput input, float deltaTime)
+    {
+        float forward = input.Move.Y;
+        float steer = InvertSteering ? -input.Move.X : input.Move.X;
+        float brake = input.Held("Crouch") ? 1f : 0f;
+        float handBrake = input.Held("Jump") ? 1f : 0f;
+        VehicleApi.SetDriverInput(GameObject.SceneId, GameObject.Id, forward, steer, brake, handBrake);
+
+        UpdateWheel(_frontLeft, 0, true, false);
+        UpdateWheel(_frontRight, 1, true, true);
+        UpdateWheel(_rearLeft, 2, false, false);
+        UpdateWheel(_rearRight, 3, false, true);
+
+        if (_hasEngine)
+        {
+            float speed = MathF.Abs(VehicleApi.Speed(GameObject.SceneId, GameObject.Id));
+            float amount = Math.Clamp(speed / Math.Max(MaxSpeedForPitch, 0.01f), 0f, 1f);
+            // Direct and smoothed: writing the component fields every frame would rebuild scene text, and abrupt
+            // pitch steps make the loop crackle.
+            float targetPitch = 0.8f + amount * PitchRange;
+            float targetVolume = 0.4f + amount * 0.15f;
+            float blend = 1f - MathF.Exp(-10f * deltaTime);
+            _pitch += (targetPitch - _pitch) * blend;
+            _volume += (targetVolume - _volume) * blend;
+            _engine.SetPitch(_pitch);
+            _engine.SetVolume(_volume);
+        }
+    }
+
+    private void UpdateWheel(GameObject? wheel, int index, bool steers, bool passenger)
+    {
+        if (wheel == null)
+            return;
+        var target = wheel;
+        float angle = VehicleApi.WheelRotationAngle(GameObject.SceneId, GameObject.Id, index);
+        float steer = steers ? VehicleApi.WheelSteerAngle(GameObject.SceneId, GameObject.Id, index) : 0f;
+        // The wheel models are cylinders with their axle along X. The model's face points the other way, so a fixed
+        // 180-degree yaw is applied before steering and rolling.
+        float yaw = passenger ? PassengerWheelYaw : DriverWheelYaw;
+        var baseYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw * (MathF.PI / 180f));
+        // A 180-degree base yaw also flips the model's local X axle, which reverses its visible roll.
+        float spin = MathF.Cos(yaw * (MathF.PI / 180f)) < 0f ? -angle : angle;
+        target.Value.Transform.LocalRotation = baseYaw *
+            Quaternion.CreateFromAxisAngle(Vector3.UnitY, steer) *
+            Quaternion.CreateFromAxisAngle(Vector3.UnitX, spin);
+    }
+}
