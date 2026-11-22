@@ -244,7 +244,7 @@ class LimbIK : IKComponent
 		{
 			// No pole: the clip's bend decides, unless the limb is nearly straight and the bend is only noise.
 			let reach = (mid.Position - top.Position).Length;
-			let bend = mid.Position - (top.Position + tip.Position) * 0.5f;
+			let bend = IKSolver.Bend(top, mid, tip);
 			if (bend.Length < reach * 0.05f)
 			{
 				let natural = NaturalBend();

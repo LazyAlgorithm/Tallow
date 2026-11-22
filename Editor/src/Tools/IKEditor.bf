@@ -71,11 +71,12 @@ extension EditorApp
 				limb.TargetToTip();
 				let middle = limb.Middle, upper = limb.Upper;
 				let along = (limb.tip.Position - upper.Position);
-				var outward = middle.Position - (upper.Position + along * 0.5f);
+				// Square to the limb: a joint not at the middle of the limb lies along a straight leg, which is no bend.
+				var outward = IKSolver.Bend(upper, middle, limb.tip);
 				// A straight limb, or one bent clearly the wrong way, gets the natural bend: elbows back, knees forward.
 				// (A model's front is often its object's back, so the object's Forward cannot be trusted for this.)
 				let natural = limb.NaturalBend();
-				if (natural != .Zero && (outward.Length < along.Length * 0.025f || Vector3.Dot(outward.Normalized, natural) < -0.5f))
+				if (natural != .Zero && (outward.Length < along.Length * 0.1f || Vector3.Dot(outward.Normalized, natural) < -0.3f))
 					outward = natural;
 				if (outward.LengthSquared < 1.0e-6f)
 					outward = -limb.Transform.Forward;

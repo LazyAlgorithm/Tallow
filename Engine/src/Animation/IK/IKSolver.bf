@@ -38,6 +38,22 @@ static class IKSolver
 		return Quaternion.Slerp(.Identity, FromTo(a, b), maxDegrees / angle) * a;
 	}
 
+	/// The way a two-bone limb's middle joint stands out from the line between its ends, square to that line: where a
+	/// knee or elbow bends. A straight limb gives (about) zero, not the lengthwise offset of a joint that is not at
+	/// the middle of the limb.
+	public static Vector3 Bend(Transform upper, Transform middle, Transform tip)
+	{
+		if (upper == null || middle == null || tip == null)
+			return .Zero;
+		let chord = tip.Position - upper.Position;
+		let length = chord.Length;
+		if (length < 1.0e-6f)
+			return .Zero;
+		let along = chord / length;
+		let offset = middle.Position - upper.Position;
+		return offset - along * Vector3.Dot(offset, along);
+	}
+
 	/// Bends a limb of two bones (upper arm and forearm, thigh and shin) so that its tip reaches a point.
 	/// The middle joint bends towards the pole when there is one, and the way it is already bent otherwise.
 	/// A point out of reach leaves the limb straight towards it. Only upper and middle are turned.

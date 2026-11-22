@@ -22,8 +22,8 @@ class LookAtIK : IKComponent
 	/// bends the neck with the head, which is what makes looking down at the ground natural.
 	[Range(1, 6)] public int32 bones = 2;
 	[Range(0, 1)] public float weight = 1;
-	/// The furthest the head turns from where its animation has it, in degrees. 85 reaches the ground at the feet.
-	[Range(0, 180)] public float maxAngle = 85;
+	/// The furthest the head turns from where its animation has it, in degrees. 100 reaches the ground at the feet.
+	[Range(0, 180)] public float maxAngle = 100;
 	/// The direction of the bone, in its own space, that should point at the target (the way the face looks).
 	public Vector3 forward = .(0, 0, 1);
 	/// How quickly the gaze follows a moving target; 0 follows at once.

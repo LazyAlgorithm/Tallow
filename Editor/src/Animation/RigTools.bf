@@ -144,10 +144,11 @@ extension EditorApp
 			limb.tip = tip;
 			limb.target = target;
 			// The pole sits out from the knee the way it bends now, or in front when it is nearly straight or bent
-			// clearly the wrong way (knees point forward).
+			// clearly the wrong way (knees point forward). The bend is square to the leg: a joint that is not at the
+			// middle of the limb still lies along a straight leg, and that lengthwise part is no bend at all.
 			let length = (middle.Position - upper.Position).Length;
-			var bend = middle.Position - (upper.Position + tip.Position) * 0.5f;
-			if (bend.Length < length * 0.05f || Vector3.Dot(bend.Normalized, forward) < -0.5f)
+			var bend = IKSolver.Bend(upper, middle, tip);
+			if (bend.Length < length * 0.15f || Vector3.Dot(bend.Normalized, forward) < -0.2f)
 				bend = forward;
 			let poleName = scope $"IK Knee {names[i].Substring(5)}";
 			limb.pole = RigObject(root, poleName, middle.Position + bend.Normalized * Math.Max(length, 0.1f), .Identity);
@@ -165,7 +166,7 @@ extension EditorApp
 			lookAt.forward = (head.Rotation.Conjugate * forward).Normalized;
 			// The neck bends with the head, and far enough down to look at the ground in front of the feet.
 			lookAt.bones = 2;
-			lookAt.maxAngle = 85;
+			lookAt.maxAngle = 100;
 			made++;
 		}
 		IKSystem.Solve(mScene);
@@ -206,9 +207,9 @@ extension EditorApp
 			limb.target = target;
 			// The wrist and hock bend back: the pole goes out behind, unless the limb already bends that way.
 			let length = (middle.Position - upper.Position).Length;
-			var bend = middle.Position - (upper.Position + tip.Position) * 0.5f;
+			var bend = IKSolver.Bend(upper, middle, tip);
 			let natural = -forward;
-			if (bend.Length < length * 0.05f || Vector3.Dot(bend.Normalized, natural) < -0.5f)
+			if (bend.Length < length * 0.15f || Vector3.Dot(bend.Normalized, natural) < -0.2f)
 				bend = natural;
 			limb.pole = RigObject(root, scope $"IK Pole {names[i]}" , middle.Position + bend.Normalized * Math.Max(length, 0.1f), .Identity);
 			made++;
@@ -225,7 +226,7 @@ extension EditorApp
 			lookAt.forward = (head.Rotation.Conjugate * forward).Normalized;
 			// The neck bends with the head, and far enough down to look at the ground.
 			lookAt.bones = 3;
-			lookAt.maxAngle = 85;
+			lookAt.maxAngle = 100;
 			made++;
 		}
 		IKSystem.Solve(mScene);
@@ -270,7 +271,7 @@ extension EditorApp
 				if (limb.pole != null && limb.Middle != null && limb.Upper != null)
 				{
 					let length = (limb.Middle.Position - limb.Upper.Position).Length;
-					let bend = limb.Middle.Position - (limb.Upper.Position + limb.tip.Position) * 0.5f;
+					let bend = IKSolver.Bend(limb.Upper, limb.Middle, limb.tip);
 					if (bend.Length > length * 0.05f)
 						limb.pole.Position = limb.Middle.Position + bend.Normalized * Math.Max(length, 0.1f);
 				}
@@ -340,9 +341,10 @@ extension EditorApp
 		Log.Info(scope $"Copied {source.name}: {source.frames} frames of {skinned.BoneCount} bones.");
 	}
 
-	/// Test switches, applied to the selection (--select): --ik-rig sets up an IK rig on its Animator, --hand-shape
-	/// <Fist> poses both hands in a ready-made shape and opens Hand Posing, --hand-posing opens it, --bone-map opens
-	/// the Bone Map of the rigged model.
+	/// Test switches, applied to the selection (--select): --ik-rig sets up an IK rig on its Animator, --ik-foot
+	/// "x y z" then moves the left foot's target by that much (to see the leg bend), --hand-shape <Fist> poses both
+	/// hands in a ready-made shape and opens Hand Posing, --hand-posing opens it, --bone-map opens the Bone Map of
+	/// the rigged model.
 	void ApplyRigSwitches()
 	{
 		let animator = SelectedAnimator();
@@ -358,6 +360,37 @@ extension EditorApp
 			return;
 		if (HasArg("--ik-rig"))
 			SetUpIKRig(animator, skinned);
+		let footMove = scope String();
+		if (GetArg("--ik-foot", footMove))
+		{
+			let values = scope List<float>();
+			for (let part in footMove.Split(' ', ','))
+			{
+				if (!part.IsEmpty)
+					values.Add(SceneSerializer.ParseFloat(part));
+			}
+			if (values.Count >= 3)
+			{
+				for (let child in animator.Transform.Children)
+				{
+					if (child.GameObject.Name == "IK Foot L" || child.GameObject.Name == "IK Paw Front L")
+						child.Position += .(values[0], values[1], values[2]);
+				}
+				IKSystem.Solve(mScene);
+				// What the left leg did, for the test: the bend against the way the character faces.
+				let human = LimbIK.HumanForward(skinned);
+				for (let component in mScene.Components)
+				{
+					let limb = component as LimbIK;
+					if (limb == null || limb.tip == null || limb.Upper == null || limb.Middle == null)
+						continue;
+					let middle = limb.Middle, upper = limb.Upper;
+					let bend = middle.Position - (upper.Position + limb.tip.Position) * 0.5f;
+					let pole = limb.pole != null ? limb.pole.Position : Vector3.Zero;
+					Log.Info(scope $"IK foot {limb.tip.GameObject.Name}: forward {human}, upper {upper.GameObject.Name} {upper.Position}, middle {middle.Position}, tip {limb.tip.Position}, target {limb.target.Position}, pole {pole} ({(limb.pole != null ? limb.pole.GameObject.Name : "none")}), bend {bend}, against forward {Vector3.Dot(bend.Normalized, human)}, pole-forward {Vector3.Dot((pole - middle.Position).Normalized, human)}");
+				}
+			}
+		}
 		let shapeName = scope String();
 		if (GetArg("--hand-shape", shapeName))
 		{

@@ -2040,7 +2040,7 @@ static class EcsChecks
 			look.bone = head.Transform;
 			look.target = target.Transform;
 			look.forward = .(0, 0, 1);
-			Expect(look.bones == 2 && look.maxAngle == 85, "Look At IK bends the neck and can reach the ground by default");
+			Expect(look.bones == 2 && look.maxAngle == 100, "Look At IK bends the neck and can reach the ground by default");
 			look.SolveNow();
 			let headLook = (head.Transform.Rotation * Vector3.Forward).Normalized;
 			let toTarget = (target.Transform.Position - head.Transform.Position).Normalized;
@@ -2057,7 +2057,7 @@ static class EcsChecks
 			look.bones = 2;
 			look.Release();
 			look.SolveNow();
-			Expect(Vector3.Dot((head.Transform.Rotation * Vector3.Forward).Normalized, Vector3.Forward) > Math.Cos(86 * Mathf.Deg2Rad),
+			Expect(Vector3.Dot((head.Transform.Rotation * Vector3.Forward).Normalized, Vector3.Forward) > Math.Cos(101 * Mathf.Deg2Rad),
 				"the head does not turn further back than Max Angle");
 			rig.RemoveComponent(look);
 		}

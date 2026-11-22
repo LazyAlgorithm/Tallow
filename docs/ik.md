@@ -130,7 +130,7 @@ hand.Curl(1, 0.5f);                     // one finger: 0 thumb ... 4 pinky
 turn, counting the head and going up through its parents: the default 2 bends the neck with the head, 1 turns only
 the head, and 3 brings the chest in too. The neck does most of the turn, the head somewhat less and the chest and
 spine least, so looking down at the ground bends the neck the way a person does rather than tipping the head alone.
-**Max Angle** keeps the turn within that many degrees of where the animation has the head; the default 85 reaches
+**Max Angle** keeps the turn within that many degrees of where the animation has the head; the default 100 reaches
 the ground in front of the feet. **Forward** is the direction of the head bone, in its own space, that the face
 looks along; change it if the head turns its ear to the target. **Smooth** makes the gaze trail a moving target.
 
