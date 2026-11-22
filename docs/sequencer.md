@@ -5,15 +5,19 @@ A **sequence** is a timeline: tracks that move objects, cut between camera shots
 - a sequence is a `.tsequence` file, edited in the editor's **Sequencer** tab;
 - a **Sequence Player** component plays one in the game.
 
+The Animation window edits the poses inside an animation clip. The Sequencer arranges clips and other scene cues
+on a shared timeline in seconds. Colors identify the track type. Bars show explicit subtitle durations, camera
+blends and animation fades.
+
 ## Making one
 
 **Project > + > Sequence** makes a file and opens it in the **Sequencer** tab (double-click a `.tsequence` file to open it again; **Window > Sequencer** shows the tab).
 
-- **+ Track** adds a track. A track that works on an object (Transform, Animation, Audio, Show / Hide) starts on the object selected in the Hierarchy; right-click a track to change its object, move it up or delete it. **on** / **off** leaves a track out while you work.
-- Each track's keys are diamonds along the ruler. **Double-click** a row to add a key there, **drag** a key to move it (keys snap to the frame rate, *fps*), click one to change it in the panel underneath, **Delete** removes it.
-- **Click or drag the ruler** to move the playhead. The scene's objects go where the sequence has them at that time, and with **Look Through Shots** the Scene view's camera goes to the camera shot. **Play** plays it (sounds and subtitles too), **Stop Preview** puts everything back as it was. Starting the game or saving the scene puts it back first, so a preview never ends up saved in the scene.
+- **+ Track** adds a track. A track that works on an object (Transform, Animation, Audio, Show / Hide) starts on the object selected in the Hierarchy; right-click a track to change its object, move it up or delete it. **On** / **Off** leaves a track out while you work.
+- Each track's keys are diamonds along the ruler. **Double-click** an empty part of a lane to add a key there. Drag a diamond to move it in frame-sized steps set by **fps**. Click a diamond to edit its values in **Key Properties**, or press **Delete** over the timeline to remove the selected key.
+- **Click or drag the ruler** to move the playhead. The scene's objects go where the sequence has them at that time, and with **Look Through Shots** the Scene view's camera goes to the camera shot. **Play** or **Space** over the timeline starts playback, including sounds and subtitles, **Stop Preview** restores the objects moved, shown or hidden by the preview. Starting the game or saving the scene puts it back first, so a preview never ends up saved in the scene.
 - **K** (or **Key Selected Object Here**) keys the selected object where it stands, at the playhead, on its Transform track (made if needed). So: move the playhead, move the object with the gizmo, press K; repeat.
-- Ctrl+wheel zooms the timeline in; the wheel then scrolls it. **Length** is how long the sequence runs (it also runs to its last key, if that is later).
+- Ctrl+wheel over the timeline zooms around the pointer. When zoomed, the wheel scrolls through time over the timeline and through tracks over the track list. **Frame All** fits the whole sequence. **Length** is how long the sequence runs (it also runs to its last key, if that is later).
 
 | Track | Each key |
 |---|---|

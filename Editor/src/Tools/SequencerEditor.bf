@@ -171,13 +171,13 @@ extension EditorApp
 			if (mPlay != .Edit && mSeqPreview != null)
 				StopSequencePreview();
 			DrawSequencerToolbar();
-			let keysHeight = 120.0f;
-			let height = Math.Max(ImGui.GetContentRegionAvail().y - keysHeight, 80);
-			ImGui.BeginChild("timeline", .(0, height), 1);
-			DrawSequencerTimeline();
+			let availableHeight = ImGui.GetContentRegionAvail().y;
+			let keyHeight = Math.Clamp(availableHeight * 0.34f, 92, 190);
+			if (ImGui.BeginChild("timeline", .(0, Math.Max(availableHeight - keyHeight - 8, 60)), 1, ImGui.WindowFlags.NoScrollWithMouse))
+				DrawSequencerTimeline();
 			ImGui.EndChild();
-			ImGui.BeginChild("key", .(0, 0), 1);
-			DrawSequencerKey();
+			if (ImGui.BeginChild("key", .(0, 0), 1))
+				DrawSequencerKey();
 			ImGui.EndChild();
 			if (mSeqPlaying)
 			{
@@ -202,47 +202,66 @@ extension EditorApp
 		}
 	}
 
+	void ToggleSequencePlayback()
+	{
+		if (mPlay != .Edit)
+			return;
+		mSeqPlaying = !mSeqPlaying;
+		if (!mSeqPlaying)
+			return;
+		if (mSeqTime >= mSeq.End)
+			mSeqTime = 0;
+		ApplySequencePreview(true, mSeqTime - 0.0001f);
+	}
+
 	void DrawSequencerToolbar()
 	{
-		if (ImGui.SmallButton("Save"))
-			SaveSequence();
-		ImGui.SameLine();
-		if (ImGui.SmallButton(mSeqPlaying ? "Pause" : "Play") && mPlay == .Edit)
+		let fileName = Path.GetFileName(mSeqRelative, .. scope .());
+		ImGui.Text(scope String()..AppendF("{}{}", fileName, mSeqDirty ? " *" : ""));
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip(mSeqRelative.CStr());
+		if (!mSeq.problems.IsEmpty)
 		{
-			mSeqPlaying = !mSeqPlaying;
-			if (mSeqPlaying && mSeqTime >= mSeq.End)
-				mSeqTime = 0;
-			if (mSeqPlaying)
-				ApplySequencePreview(true, mSeqTime - 0.0001f);
+			ImGui.SameLine();
+			ImGui.TextColored(EditorTheme.Warning, "File problems");
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip(mSeq.problems.CStr());
 		}
+
+		ImGui.BeginDisabled(mPlay != .Edit);
+		if (AnimIconButton("##playSequence", 3, mSeqPlaying, mSeqPlaying ? "Pause sequence (Space)" : "Play sequence (Space)"))
+			ToggleSequencePlayback();
 		ImGui.SameLine();
-		if (ImGui.SmallButton("Stop Preview"))
+		let previewing = mSeqPreview != null;
+		if (previewing)
+			ImGui.PushStyleColor(ImGui.Col.Button, EditorTheme.Accent);
+		if (ImGui.Button("Stop Preview"))
 			StopSequencePreview();
+		if (previewing)
+			ImGui.PopStyleColor();
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("End the preview and restore the scene objects it changed.");
 		ImGui.SameLine();
-		ImGui.SetNextItemWidth(80);
-		if (ImGui.DragFloat("##time", ref mSeqTime, 0.01f, 0, mSeq.End, "%.2f s"))
+		ImGui.SetNextItemWidth(86);
+		if (ImGui.DragFloat("##playhead", ref mSeqTime, 0.01f, 0, mSeq.End, "%.2f s"))
 		{
 			mSeqTime = Math.Clamp(mSeqTime, 0, mSeq.End);
 			ApplySequencePreview(false, mSeqTime);
 		}
-		ImGui.SameLine();
-		ImGui.SetNextItemWidth(80);
-		if (ImGui.DragFloat("Length", ref mSeq.length, 0.05f, 0.1f, 3600, "%.2f s"))
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("Playhead time");
+		ImGui.EndDisabled();
+		ImGui.SameLine(0, 12);
+		if (ImGui.Button("Frame All"))
 		{
-			mSeq.length = Math.Max(mSeq.length, 0.1f);
-			mSeqDirty = true;
+			mSeqZoomed = false;
+			mSeqScroll = 0;
 		}
 		ImGui.SameLine();
-		ImGui.SetNextItemWidth(60);
-		if (ImGui.DragFloat("fps", ref mSeq.frameRate, 1, 1, 240, "%.0f"))
-		{
-			mSeq.frameRate = Math.Clamp(mSeq.frameRate, 1, 240);
-			mSeqDirty = true;
-		}
-		ImGui.SameLine();
-		ImGui.Checkbox("Look Through Shots", ref mSeqLookThrough);
-		ImGui.SameLine();
-		if (ImGui.SmallButton("+ Track"))
+		if (ImGui.Button("Save"))
+			SaveSequence();
+
+		if (ImGui.Button("+ Track"))
 			ImGui.OpenPopup("addtrack");
 		if (ImGui.BeginPopup("addtrack"))
 		{
@@ -266,15 +285,24 @@ extension EditorApp
 			}
 			ImGui.EndPopup();
 		}
-		ImGui.SameLine(0, 14);
-		ImGui.TextDisabled(scope String()..AppendF("{}{}", mSeqRelative, mSeqDirty ? " *" : "").CStr());
-		if (!mSeq.problems.IsEmpty)
+		ImGui.SameLine();
+		ImGui.SetNextItemWidth(74);
+		if (ImGui.DragFloat("Length", ref mSeq.length, 0.05f, 0.1f, 3600, "%.2f s"))
 		{
-			ImGui.SameLine(0, 14);
-			ImGui.TextColored(EditorTheme.Warning, "Problems (hover)");
-			if (ImGui.IsItemHovered())
-				ImGui.SetTooltip(mSeq.problems.CStr());
+			mSeq.length = Math.Max(mSeq.length, 0.1f);
+			mSeqDirty = true;
 		}
+		ImGui.SameLine();
+		ImGui.SetNextItemWidth(46);
+		if (ImGui.DragFloat("fps", ref mSeq.frameRate, 1, 1, 240, "%.0f"))
+		{
+			mSeq.frameRate = Math.Clamp(mSeq.frameRate, 1, 240);
+			mSeqDirty = true;
+		}
+		let shotLabel = "Look Through Shots";
+		if (ImGui.GetContentRegionAvail().x + ImGui.GetCursorScreenPos().x - ImGui.GetItemRectMax().x > ImGui.CalcTextSize(shotLabel).x + ImGui.GetFrameHeight() + 16)
+			ImGui.SameLine();
+		ImGui.Checkbox(shotLabel, ref mSeqLookThrough);
 	}
 
 	/// After tracks or their objects change, the preview finds them again (putting back what it moved first).
@@ -288,175 +316,333 @@ extension EditorApp
 		ApplySequencePreview(false, time);
 	}
 
+	struct SequenceTimeline
+	{
+		public ImGui.Vec2 origin;
+		public float left, right, rowHeight, rulerHeight, scale, scroll, end;
+
+		public float Width => right - left;
+		public float RowsTop => origin.y + rulerHeight;
+		public float X(float time) => left + 10 + (time - scroll) * scale;
+		public float TimeAt(float x) => Math.Clamp((x - left - 10) / scale + scroll, 0, end);
+	}
+
 	void DrawSequencerTimeline()
 	{
-		let rowHeight = 24.0f;
-		let leftWidth = 230.0f;
-		let rulerHeight = 22.0f;
 		let origin = ImGui.GetCursorScreenPos();
 		let avail = ImGui.GetContentRegionAvail();
-		// A margin, so keys at the very start are not cut in half.
-		let margin = 10.0f;
-		let sheetLeft = origin.x + leftWidth;
-		let sheetWidth = Math.Max(avail.x - leftWidth - 8, 50);
-		let end = Math.Max(mSeq.End, 0.1f);
-		let fit = (sheetWidth - margin * 2) / end;
-		// Until zoomed in, the whole sequence fits however the tab is sized.
+		let fontHeight = ImGui.GetTextLineHeight();
+		SequenceTimeline view = .();
+		view.origin = origin;
+		view.left = origin.x + Math.Min(250, avail.x * 0.43f);
+		view.right = origin.x + avail.x;
+		view.rowHeight = Math.Max(ImGui.GetFrameHeight() + 4, fontHeight * 2 + 8);
+		view.rulerHeight = fontHeight + 14;
+		view.end = Math.Max(mSeq.End, 0.1f);
+		if (view.Width <= 24)
+			return;
+
+		let mouse = ImGui.GetMousePos();
+		let overSheet = ImGui.IsWindowHovered() && mouse.x >= view.left && mouse.x < view.right;
+		let fit = (view.Width - 20) / view.end;
 		if (!mSeqZoomed || mSeqPixelsPerSecond < fit)
 			mSeqPixelsPerSecond = fit;
-		let scale = mSeqPixelsPerSecond;
-		let visible = (sheetWidth - margin * 2) / scale;
-		mSeqScroll = Math.Clamp(mSeqScroll, 0, Math.Max(end - visible, 0));
-		// While playing zoomed in, the view follows the playhead.
-		if (mSeqPlaying && (mSeqTime < mSeqScroll || mSeqTime > mSeqScroll + visible))
-			mSeqScroll = Math.Clamp(mSeqTime - visible * 0.1f, 0, Math.Max(end - visible, 0));
-		let scroll = mSeqScroll;
-		float X(float time) => sheetLeft + margin + (time - scroll) * scale;
-		float TimeAt(float x) => Math.Clamp((x - sheetLeft - margin) / scale + scroll, 0, end);
-
-		// The ruler: seconds, and the playhead.
-		ImGui.SetCursorScreenPos(.(sheetLeft, origin.y));
-		ImGui.InvisibleButton("##ruler", .(sheetWidth, rulerHeight));
-		if (ImGui.IsItemActive())
+		view.scale = mSeqPixelsPerSecond;
+		view.scroll = mSeqScroll;
+		let wheel = Input.MouseWheel;
+		if (ImGui.IsWindowHovered() && wheel != 0)
 		{
-			mSeqPlaying = false;
-			mSeqTime = SnapSequenceTime(TimeAt(ImGui.GetMousePos().x));
-			ApplySequencePreview(false, mSeqTime);
-		}
-		if (ImGui.IsWindowHovered() && Input.MouseWheel != 0 && ImGui.GetMousePos().x > sheetLeft)
-		{
-			if (ImGui.IsKeyDown(ImGui.Key.LeftCtrl))
+			if (overSheet && ImGui.IsKeyDown(ImGui.Key.ModCtrl))
 			{
-				// Zooms about the time under the mouse.
-				let under = TimeAt(ImGui.GetMousePos().x);
-				mSeqPixelsPerSecond = Math.Clamp(mSeqPixelsPerSecond * (Input.MouseWheel > 0 ? 1.25f : 0.8f), fit, 2000);
-				mSeqZoomed = mSeqPixelsPerSecond > fit * 1.01f;
-				mSeqScroll = under - (ImGui.GetMousePos().x - sheetLeft - margin) / mSeqPixelsPerSecond;
+				let underMouse = view.TimeAt(mouse.x);
+				view.scale = Math.Clamp(view.scale * Math.Pow(1.2f, wheel), fit, Math.Max(fit, 2000));
+				mSeqZoomed = view.scale > fit;
+				view.scroll = underMouse - (mouse.x - view.left - 10) / view.scale;
 			}
+			else if (overSheet && view.scale > fit)
+				view.scroll -= wheel * (view.Width - 20) / view.scale * 0.1f;
 			else
-				mSeqScroll -= Input.MouseWheel * visible * 0.1f;
+				ImGui.SetScrollY(ImGui.GetScrollY() - wheel * view.rowHeight * 2);
 		}
-		ImGui.DrawRectFilled(.(sheetLeft, origin.y), .(sheetLeft + sheetWidth, origin.y + rulerHeight), .(0.16f, 0.16f, 0.17f, 1));
-		let step = scale > 200 ? 0.25f : (scale > 60 ? 1 : (scale > 15 ? 5 : 10));
-		ImGui.PushClipRect(.(sheetLeft, origin.y), .(sheetLeft + sheetWidth, origin.y + 4000));
-		for (float t = Math.Floor(scroll / step) * step; t <= end + 0.001f; t += step)
-		{
-			if (X(t) > sheetLeft + sheetWidth)
-				break;
-			ImGui.DrawLine(.(X(t), origin.y + rulerHeight - 6), .(X(t), origin.y + rulerHeight), .(0.6f, 0.6f, 0.6f, 1));
-			ImGui.DrawText(.(X(t) + 3, origin.y + 2), EditorTheme.TextDim, scope String()..AppendF("{}", t).CStr());
-		}
-		// Past the length: greyed.
-		ImGui.DrawRectFilled(.(X(mSeq.length), origin.y), .(X(end) + 1, origin.y + rulerHeight), .(0, 0, 0, 0.3f));
-		ImGui.PopClipRect();
+		mSeqPixelsPerSecond = view.scale;
+		let visibleTime = (view.Width - 20) / view.scale;
+		if (mSeqPlaying && (mSeqTime < view.scroll || mSeqTime > view.scroll + visibleTime))
+			view.scroll = mSeqTime - visibleTime * 0.1f;
+		view.scroll = mSeqScroll = Math.Clamp(view.scroll, 0, Math.Max(view.end - visibleTime, 0));
 
-		// The rows.
+		let rowsBottom = view.RowsTop + Math.Max(mSeq.tracks.Count, 1) * view.rowHeight;
+		let bottom = Math.Max(origin.y + avail.y, rowsBottom);
+		ImGui.DrawRectFilled(origin, .(view.right, bottom), AnimPanel);
+		ImGui.DrawRectFilled(.(view.left, view.RowsTop), .(view.right, bottom), AnimSheet);
+		ImGui.DrawRectFilled(origin, .(view.right, view.RowsTop), AnimUi(ImGui.Col.FrameBg));
+		ImGui.DrawText(.(origin.x + 8, origin.y + 4), EditorTheme.TextDim, "Scene tracks");
+		ImGui.DrawLine(.(view.left - 1, origin.y), .(view.left - 1, bottom), AnimGap);
+		ImGui.DrawLine(.(origin.x, view.RowsTop - 1), .(view.right, view.RowsTop - 1), AnimGap);
+		DrawSequenceRuler(view, bottom);
+
 		int32 removeTrack = -1;
 		for (int32 t < (int32)mSeq.tracks.Count)
 		{
-			let track = mSeq.tracks[t];
-			let top = origin.y + rulerHeight + t * rowHeight;
+			let top = view.RowsTop + t * view.rowHeight;
 			ImGui.PushID(t);
-			let selectedRow = t == mSeqTrack;
-			ImGui.DrawRectFilled(.(origin.x, top), .(sheetLeft + sheetWidth, top + rowHeight - 1), selectedRow ? Color(0.24f, 0.27f, 0.33f, 1) : Color(0.19f, 0.19f, 0.2f, 1));
-			ImGui.DrawRectFilled(.(origin.x, top), .(origin.x + 4, top + rowHeight - 1), SequenceKindColors[(int)track.kind]);
-			// The name: its kind and object.
-			ImGui.SetCursorScreenPos(.(origin.x + 8, top + 3));
-			if (ImGui.SmallButton(track.muted ? "off" : "on"))
+			if (DrawSequenceTrack(view, t, top))
+				removeTrack = t;
+			DrawSequenceKeys(view, t, top);
+			ImGui.PopID();
+		}
+		FinishSequenceTrackEdits(removeTrack);
+
+		let head = view.X(mSeqTime);
+		ImGui.PushClipRect(.(view.left, origin.y), .(view.right, bottom));
+		ImGui.DrawLine(.(head, origin.y), .(head, bottom), AnimInk(0.9f));
+		ImGui.DrawRectFilled(.(head - 2, origin.y), .(head + 3, origin.y + 9), AnimInk(0.95f), 1);
+		ImGui.PopClipRect();
+		ImGui.SetCursorScreenPos(.(origin.x, rowsBottom - view.rowHeight));
+		ImGui.Dummy(.(1, view.rowHeight));
+		if (mSeq.tracks.IsEmpty)
+			ImGui.DrawText(.(view.left + 10, view.RowsTop + 10), EditorTheme.TextDim, "Add a track to schedule a scene cue.");
+
+		if (ImGui.IsWindowHovered() && (ImGui.tn_imgui_capture_flags() & 4) == 0)
+		{
+			if (ImGui.IsKeyPressed(ImGui.Key.Delete) && mSeqTrack >= 0 && mSeqKey >= 0)
 			{
-				track.muted = !track.muted;
+				let track = mSeq.tracks[mSeqTrack];
+				delete track.keys[mSeqKey];
+				track.keys.RemoveAt(mSeqKey);
+				mSeqKey = -1;
 				mSeqDirty = true;
 				ApplySequencePreview(false, mSeqTime);
 			}
-			ImGui.SameLine();
-			let label = scope String(SequenceKindLabels[(int)track.kind]);
-			if (!track.target.IsEmpty)
-				label.AppendF(": {}", track.target);
-			else if (track.kind == .Transform || track.kind == .Animation || track.kind == .Active)
-				label.Append(": (player's object)");
-			if (ImGui.Selectable(label.CStr(), selectedRow, 0, .(leftWidth - 80, rowHeight - 6)))
+			if (ImGui.IsKeyPressed(ImGui.Key.K))
+				KeySelectedObject();
+			if (ImGui.IsKeyPressed(ImGui.Key.Space))
+				ToggleSequencePlayback();
+		}
+	}
+
+	void DrawSequenceRuler(SequenceTimeline view, float bottom)
+	{
+		let top = view.origin.y;
+		ImGui.SetCursorScreenPos(.(view.left, top));
+		ImGui.InvisibleButton("##ruler", .(view.Width, view.rulerHeight));
+		if (ImGui.IsItemActive())
+		{
+			mSeqPlaying = false;
+			mSeqTime = Math.Min(SnapSequenceTime(view.TimeAt(ImGui.GetMousePos().x)), mSeq.End);
+			ApplySequencePreview(false, mSeqTime);
+		}
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("Drag to scrub  |  Ctrl+wheel to zoom  |  Wheel to scroll");
+
+		ImGui.PushClipRect(.(view.left, top), .(view.right, bottom));
+		let lengthX = Math.Clamp(view.X(mSeq.length), view.left, view.right);
+		ImGui.DrawRectFilled(.(lengthX, top), .(view.right, bottom), AnimInk(0.055f));
+		float[?] steps = .(0.05f, 0.1f, 0.25f, 0.5f, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800);
+		float step = steps[steps.Count - 1];
+		for (let candidate in steps)
+		{
+			if (candidate * view.scale >= 67)
 			{
-				mSeqTrack = t;
-				mSeqKey = -1;
+				step = candidate;
+				break;
 			}
-			if (ImGui.BeginPopupContextItem("track"))
+		}
+		let firstTick = (int32)Math.Floor(view.scroll / step);
+		for (int32 tick = firstTick; tick * step <= view.end + 0.001f; tick++)
+		{
+			let time = tick * step;
+			let x = view.X(time);
+			if (x >= view.right)
+				break;
+			ImGui.DrawLine(.(x, view.RowsTop - 9), .(x, bottom), AnimInk(0.13f));
+			if (x >= view.left)
 			{
-				ImGui.SetNextItemWidth(180);
-				if (ImGui.InputText("Object", track.target))
-				{
-					mSeqDirty = true;
-					RebindSequencePreview();
-				}
-				if (Selected != null && ImGui.MenuItem(scope String()..AppendF("Use Selected ({})", Selected.Name).CStr()))
-				{
-					track.target.Set(Selected.Name);
-					mSeqDirty = true;
-					RebindSequencePreview();
-				}
-				if (track.kind == .Fade)
-				{
-					if (ImGui.ColorEdit3("Colour", ref track.color))
-						mSeqDirty = true;
-				}
-				if (ImGui.MenuItem("Move Up", null, false, t > 0))
-				{
-					Swap!(mSeq.tracks[t], mSeq.tracks[t - 1]);
-					mSeqTrack = t - 1;
-					mSeqDirty = true;
-					RebindSequencePreview();
-				}
-				if (ImGui.MenuItem("Delete Track"))
-					removeTrack = t;
-				ImGui.EndPopup();
+				let label = scope String()..AppendF("{:0.##} s", time);
+				let labelX = Math.Min(x + 4, view.right - ImGui.CalcStringSize(label).x - 4);
+				ImGui.DrawText(.(labelX, top + 3), EditorTheme.TextDim, label.CStr());
 			}
-			// The keys.
-			ImGui.PushClipRect(.(sheetLeft, top), .(sheetLeft + sheetWidth, top + rowHeight));
-			ImGui.SetCursorScreenPos(.(sheetLeft, top));
-			ImGui.InvisibleButton("##row", .(sheetWidth, rowHeight - 1));
-			if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
+			for (int32 minor = 1; minor < 5 && time + minor * step / 5 <= view.end; minor++)
 			{
-				mSeqTrack = t;
-				AddSequenceKey(track, SnapSequenceTime(TimeAt(ImGui.GetMousePos().x)));
+				let minorX = view.X(time + minor * step / 5);
+				ImGui.DrawLine(.(minorX, view.RowsTop - 4), .(minorX, view.RowsTop), AnimInk(0.24f));
 			}
-			else if (ImGui.IsItemClicked())
+		}
+		ImGui.PopClipRect();
+	}
+
+	static char8* SequenceTrackTarget(SequenceTrack track)
+	{
+		if (!track.target.IsEmpty)
+			return track.target.CStr();
+		switch (track.kind)
+		{
+		case .Transform, .Animation, .Active: return "Sequence Player object";
+		case .Audio: return "Non-positional audio";
+		default: return null;
+		}
+	}
+
+	bool DrawSequenceTrack(SequenceTimeline view, int32 index, float top)
+	{
+		let track = mSeq.tracks[index];
+		let left = view.origin.x;
+		let bottom = top + view.rowHeight;
+		let selected = index == mSeqTrack;
+		let color = SequenceKindColors[(int)track.kind];
+		if (index % 2 == 1)
+			ImGui.DrawRectFilled(.(left, top), .(view.right, bottom), AnimInk(0.028f));
+		if (selected)
+		{
+			ImGui.DrawRectFilled(.(left, top), .(view.left - 1, bottom), AnimUi(ImGui.Col.Header));
+			ImGui.DrawRectFilled(.(view.left, top), .(view.right, bottom), AnimInk(0.06f));
+		}
+		ImGui.DrawLine(.(left, bottom - 1), .(view.right, bottom - 1), AnimInk(0.08f));
+		ImGui.DrawRectFilled(.(left + 2, top + 4), .(left + 5, bottom - 4), track.muted ? EditorTheme.TextDim : color, 1);
+
+		let height = ImGui.GetFrameHeight();
+		let buttonWidth = ImGui.CalcTextSize("Off").x + 12;
+		ImGui.SetCursorScreenPos(.(left + 10, top + (view.rowHeight - height) * 0.5f));
+		if (ImGui.Button(track.muted ? "Off##mute" : "On##mute", .(buttonWidth, height)))
+		{
+			track.muted = !track.muted;
+			mSeqDirty = true;
+			ApplySequencePreview(false, mSeqTime);
+		}
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip(track.muted ? "Enable track" : "Mute track");
+
+		let labelX = left + buttonWidth + 18;
+		if (view.left <= labelX + 2)
+			return false;
+		ImGui.SetCursorScreenPos(.(labelX, top));
+		ImGui.InvisibleButton("##track", .(view.left - labelX - 2, view.rowHeight));
+		if (ImGui.IsItemClicked())
+		{
+			mSeqTrack = index;
+			mSeqKey = -1;
+		}
+		let label = scope String(SequenceKindLabels[(int)track.kind]);
+		let target = SequenceTrackTarget(track);
+		if (ImGui.IsItemHovered())
+		{
+			if (!selected)
+				ImGui.DrawRectFilled(.(labelX - 4, top), .(view.left - 1, bottom), AnimInk(0.07f));
+			if (target != null)
+				ImGui.SetTooltip(target);
+		}
+		let lineHeight = ImGui.GetTextLineHeight();
+		let textY = top + (view.rowHeight - lineHeight * (target == null ? 1 : 2)) * 0.5f;
+		ImGui.PushClipRect(.(labelX, top), .(view.left - 4, bottom));
+		ImGui.DrawText(.(labelX, textY), track.muted ? EditorTheme.TextDim : EditorTheme.Text, label.CStr());
+		if (target != null)
+			ImGui.DrawText(.(labelX, textY + lineHeight), EditorTheme.TextDim, target);
+		ImGui.PopClipRect();
+
+		bool remove = false;
+		if (ImGui.BeginPopupContextItem("track"))
+		{
+			ImGui.SetNextItemWidth(180);
+			if (ImGui.InputText("Object", track.target))
 			{
-				mSeqTrack = t;
-				mSeqKey = -1;
+				mSeqDirty = true;
+				RebindSequencePreview();
 			}
-			for (int32 k < (int32)track.keys.Count)
+			if (Selected != null && ImGui.MenuItem(scope String()..AppendF("Use Selected ({})", Selected.Name).CStr()))
 			{
-				let key = track.keys[k];
-				let x = X(key.time);
-				let cy = top + rowHeight * 0.5f;
-				ImGui.SetCursorScreenPos(.(x - 6, top + 2));
+				track.target.Set(Selected.Name);
+				mSeqDirty = true;
+				RebindSequencePreview();
+			}
+			if (track.kind == .Fade && ImGui.ColorEdit3("Colour", ref track.color))
+				mSeqDirty = true;
+			if (ImGui.MenuItem("Move Up", null, false, index > 0))
+			{
+				Swap!(mSeq.tracks[index], mSeq.tracks[index - 1]);
+				if (mSeqTrack != index)
+					mSeqKey = -1;
+				mSeqTrack = index - 1;
+				mSeqDirty = true;
+				RebindSequencePreview();
+			}
+			remove = ImGui.MenuItem("Delete Track");
+			ImGui.EndPopup();
+		}
+		return remove;
+	}
+
+	void DrawSequenceKeys(SequenceTimeline view, int32 index, float top)
+	{
+		let track = mSeq.tracks[index];
+		let cy = top + view.rowHeight * 0.5f;
+		let color = track.muted ? EditorTheme.TextDim : SequenceKindColors[(int)track.kind];
+		ImGui.PushClipRect(.(view.left, top), .(view.right, top + view.rowHeight));
+
+		if (track.kind == .Subtitle || track.kind == .Camera || track.kind == .Animation)
+		{
+			for (let key in track.keys)
+			{
+				let x = view.X(key.time);
+				let end = view.X(key.time + key.length);
+				if (key.length <= 0 || end <= view.left || x >= view.right)
+					continue;
+				let fill = Color.Lerp(AnimSheet, color, 0.28f);
+				ImGui.DrawRectFilled(.(x, cy - 8), .(end, cy + 8), fill, 3);
+				ImGui.DrawLine(.(x, cy + 8), .(end, cy + 8), color);
+				if (!key.text.IsEmpty && x + 18 + ImGui.CalcStringSize(key.text).x <= Math.Min(end, view.right))
+					ImGui.DrawText(.(x + 12, cy - ImGui.GetTextLineHeight() * 0.5f), EditorTheme.Text, key.text.CStr());
+			}
+		}
+
+		// Submit keys before the lane so the lane only receives clicks in empty space.
+		for (int32 k < (int32)track.keys.Count)
+		{
+			let key = track.keys[k];
+			let x = view.X(key.time);
+			let hitLeft = Math.Max(view.left, x - 8);
+			let hitRight = Math.Min(view.right, x + 8);
+			let wasSelected = index == mSeqTrack && k == mSeqKey;
+			if (hitRight > hitLeft || (mSeqDragging && wasSelected))
+			{
+				ImGui.SetCursorScreenPos(.(Math.Clamp(hitLeft, view.left, view.right - 1), cy - 9));
 				ImGui.PushID(k);
-				ImGui.InvisibleButton("##key", .(12, rowHeight - 4));
+				ImGui.InvisibleButton("##key", .(Math.Max(1, hitRight - hitLeft), 18));
 				if (ImGui.IsItemClicked())
 				{
-					mSeqTrack = t;
+					mSeqTrack = index;
 					mSeqKey = k;
 				}
-				if (ImGui.IsItemActive() && ImGui.IsMouseDragging(0, 3) && t == mSeqTrack && k == mSeqKey)
+				if (ImGui.IsItemActive() && ImGui.IsMouseDragging(0, 3) && index == mSeqTrack && k == mSeqKey)
 				{
-					key.time = SnapSequenceTime(TimeAt(ImGui.GetMousePos().x));
+					key.time = SnapSequenceTime(view.TimeAt(ImGui.GetMousePos().x));
 					mSeqDragging = true;
 					mSeqDirty = true;
 				}
 				if (ImGui.IsItemHovered())
 					ImGui.SetTooltip(scope String()..AppendF("{:0.00} s  {}", key.time, key.text).CStr());
 				ImGui.PopID();
-				let selectedKey = t == mSeqTrack && k == mSeqKey;
-				let size = selectedKey ? 7.0f : 5.5f;
-				let color = selectedKey ? Color(1, 0.85f, 0.3f, 1) : SequenceKindColors[(int)track.kind];
-				ImGui.DrawQuadFilled(.(x, cy - size), .(x + size, cy), .(x, cy + size), .(x - size, cy), color);
-				// Spans: a subtitle's time on screen, a shot's blend, an animation's fade.
-				if (key.length > 0 && (track.kind == .Subtitle || track.kind == .Camera || track.kind == .Animation))
-					ImGui.DrawLine(.(x, cy + 6), .(X(key.time + key.length), cy + 6), color, 2);
 			}
-			ImGui.PopClipRect();
-			ImGui.PopID();
+			let selected = index == mSeqTrack && k == mSeqKey;
+			DrawKeyDiamond(.(x, cy), selected ? 8 : 6.5f, selected ? EditorTheme.Text : AnimGap);
+			DrawKeyDiamond(.(x, cy), selected ? 5.5f : 5, color);
 		}
-		// A dragged key settles into time order when let go.
+
+		ImGui.SetCursorScreenPos(.(view.left, top));
+		ImGui.InvisibleButton("##lane", .(view.Width, view.rowHeight - 1));
+		if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
+		{
+			mSeqTrack = index;
+			AddSequenceKey(track, SnapSequenceTime(view.TimeAt(ImGui.GetMousePos().x)));
+		}
+		else if (ImGui.IsItemClicked())
+		{
+			mSeqTrack = index;
+			mSeqKey = -1;
+		}
+		ImGui.PopClipRect();
+	}
+
+	void FinishSequenceTrackEdits(int32 removeTrack)
+	{
 		if (mSeqDragging && !ImGui.IsMouseDown(0))
 		{
 			mSeqDragging = false;
@@ -476,33 +662,6 @@ extension EditorApp
 			mSeqTrack = mSeqKey = -1;
 			mSeqDirty = true;
 			RebindSequencePreview();
-		}
-		// The playhead, over the rows.
-		let bottom = origin.y + rulerHeight + Math.Max(mSeq.tracks.Count, 1) * rowHeight;
-		let head = X(mSeqTime);
-		ImGui.DrawLine(.(head, origin.y), .(head, bottom), .(1, 0.35f, 0.3f, 1), 2);
-		ImGui.SetCursorScreenPos(.(origin.x, bottom + 6));
-		if (mSeq.tracks.IsEmpty)
-			ImGui.TextDisabled("Add a track with + Track. Select an object first to animate it.");
-		else
-			ImGui.TextDisabled("Double-click a row to add a key, drag keys to move them, right-click a track to change its object. K keys the selected object; Ctrl+wheel zooms.");
-
-		// Keys from the keyboard while the timeline is hovered.
-		if (ImGui.IsWindowHovered() && (ImGui.tn_imgui_capture_flags() & 4) == 0)
-		{
-			if (ImGui.IsKeyPressed(ImGui.Key.Delete) && mSeqTrack >= 0 && mSeqKey >= 0)
-			{
-				let track = mSeq.tracks[mSeqTrack];
-				delete track.keys[mSeqKey];
-				track.keys.RemoveAt(mSeqKey);
-				mSeqKey = -1;
-				mSeqDirty = true;
-				ApplySequencePreview(false, mSeqTime);
-			}
-			if (ImGui.IsKeyPressed(ImGui.Key.K))
-				KeySelectedObject();
-			if (ImGui.IsKeyPressed(ImGui.Key.Space))
-				mSeqPlaying = !mSeqPlaying && mPlay == .Edit;
 		}
 	}
 
@@ -583,15 +742,27 @@ extension EditorApp
 
 	void DrawSequencerKey()
 	{
+		ImGui.TextDisabled("Key Properties");
 		if (mSeqTrack < 0 || mSeqTrack >= mSeq.tracks.Count)
 		{
-			ImGui.TextDisabled("Select a track or a key.");
+			ImGui.Separator();
+			ImGui.TextWrapped("Select a diamond to edit its cue. Double-click an empty part of a track to add one.");
 			return;
 		}
 		let track = mSeq.tracks[mSeqTrack];
-		if (mSeqKey < 0 || mSeqKey >= track.keys.Count)
+		let hasKey = mSeqKey >= 0 && mSeqKey < track.keys.Count;
+		ImGui.SameLine(0, 12);
+		ImGui.TextColored(Color.Lerp(SequenceKindColors[(int)track.kind], EditorTheme.Text, 0.48f),
+			scope String(SequenceKindLabels[(int)track.kind]).CStr());
+		ImGui.SameLine(0, 10);
+		if (hasKey)
+			ImGui.TextDisabled(scope String()..AppendF("Key {} of {}", mSeqKey + 1, track.keys.Count).CStr());
+		else
+			ImGui.TextDisabled(scope String()..AppendF("{} {}", track.keys.Count, track.keys.Count == 1 ? "key" : "keys").CStr());
+		ImGui.Separator();
+		if (!hasKey)
 		{
-			ImGui.TextDisabled(scope String()..AppendF("{} track, {} keys. Double-click its row to add one.", SequenceKindLabels[(int)track.kind], track.keys.Count).CStr());
+			ImGui.TextWrapped("Double-click an empty part of this track to add a key.");
 			if (track.kind == .Transform && ImGui.Button("Key Selected Object Here (K)"))
 				KeySelectedObject();
 			return;
@@ -606,11 +777,10 @@ extension EditorApp
 			mSeqKey = (int32)track.keys.IndexOf(key);
 			changed = true;
 		}
-		ImGui.SameLine();
+		let wide = ImGui.GetContentRegionAvail().x >= 560;
 		switch (track.kind)
 		{
 		case .Transform:
-			ImGui.NewLine();
 			changed |= ImGui.DragFloat3("Position", ref key.position, 0.05f);
 			changed |= ImGui.DragFloat3("Rotation", ref key.euler, 0.5f);
 			if (ImGui.Checkbox("Scale", ref key.hasScale))
@@ -626,15 +796,20 @@ extension EditorApp
 		case .Camera:
 			ImGui.SetNextItemWidth(180);
 			changed |= ImGui.InputText("Shot object", key.text);
-			ImGui.SameLine();
-			if (Selected != null && ImGui.SmallButton("Use Selected"))
+			if (Selected != null)
 			{
-				key.text.Set(Selected.Name);
-				changed = true;
+				if (wide)
+					ImGui.SameLine();
+				if (ImGui.SmallButton("Use Selected"))
+				{
+					key.text.Set(Selected.Name);
+					changed = true;
+				}
 			}
 			ImGui.SetNextItemWidth(90);
 			changed |= ImGui.DragFloat("Blend from last shot", ref key.length, 0.05f, 0, 30, "%.2f s");
-			ImGui.SameLine();
+			if (wide)
+				ImGui.SameLine();
 			ImGui.SetNextItemWidth(90);
 			changed |= ImGui.DragFloat("Field of view", ref key.value, 0.5f, 0, 120, key.value > 0 ? "%.0f" : "shot's own");
 			if (ImGui.Button("Move Shot To Scene View"))
@@ -650,11 +825,11 @@ extension EditorApp
 		case .Animation:
 			ImGui.SetNextItemWidth(180);
 			changed |= ImGui.InputText("State or clip", key.text);
-			ImGui.SameLine();
+			if (wide)
+				ImGui.SameLine();
 			ImGui.SetNextItemWidth(90);
 			changed |= ImGui.DragFloat("Fade", ref key.length, 0.01f, 0, 5, "%.2f s");
 		case .Audio:
-			ImGui.NewLine();
 			ImGui.TextDisabled("Sound");
 			ImGui.SameLine();
 			changed |= DrawAssetPicker(key.text, "audioClip");
@@ -670,13 +845,15 @@ extension EditorApp
 		case .Event:
 			ImGui.SetNextItemWidth(160);
 			changed |= ImGui.InputText("Event", key.text);
-			ImGui.SameLine();
+			if (wide)
+				ImGui.SameLine();
 			ImGui.SetNextItemWidth(80);
 			changed |= ImGui.DragFloat("Number", ref key.value, 0.1f);
 		case .Subtitle:
 			ImGui.SetNextItemWidth(120);
 			changed |= ImGui.InputText("Speaker", key.text);
-			ImGui.SameLine();
+			if (wide)
+				ImGui.SameLine();
 			ImGui.SetNextItemWidth(90);
 			changed |= ImGui.DragFloat("Shown for", ref key.length, 0.05f, 0, 60, key.length > 0 ? "%.2f s" : "reading time");
 			changed |= ImGui.InputTextMultiline("##line", key.line, .(-1, ImGui.GetFontSize() * 2.6f));
