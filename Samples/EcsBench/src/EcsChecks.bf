@@ -164,6 +164,7 @@ static class EcsChecks
 		RigidbodyChecks();
 		CharacterChecks();
 		AnimatorChecks();
+		AvatarMaskChecks();
 		NavigationChecks();
 		BehaviourChecks();
 		AIChecks();
@@ -1709,6 +1710,203 @@ static class EcsChecks
 		}
 		Scene.Active = previous;
 		Expect(ComponentState<AnimatorState>.Count == before, "animators are freed with their scene");
+	}
+
+	/// Avatar masks: humanoid parts found on any skeleton, weighted bones, and a layer that moves only what its mask
+	/// lets it (docs/animator.md, "Layers").
+	static void AvatarMaskChecks()
+	{
+		let folder = scope String()..AppendF("{}/../build", Assets.ProjectPath);
+		System.IO.Directory.CreateDirectory(folder).IgnoreError();
+		// Written and read back in the file format.
+		let maskPath = scope $"{folder}/check_mask.tmask";
+		if (System.IO.File.WriteAllText(maskPath, "avatarmask 1\npart Hips\npart Spine\npart LeftUpperArm\nbone mixamorig:LeftForeArm 0.5\nbone mixamorig:LeftHand 0\n") case .Err)
+		{
+			Expect(false, scope $"the check mask could not be written to {maskPath}");
+			return;
+		}
+		let mask = scope AvatarMask();
+		Expect(mask.Read(maskPath) && mask.HasPart(.Spine) && mask.HasPart(.LeftUpperArm) && !mask.HasPart(.Head), "an avatar mask reads its parts");
+		Expect(mask.TryGetBone("mixamorig:LeftForeArm", let half) && half == 0.5f, "a bone weight is read");
+		Expect(mask.TryGetBone("mixamorig:LeftHand", let hand0) && hand0 == 0, "a zero bone weight is read");
+		Expect(!mask.IsEmpty && mask.parts[(int)HumanBone.Hips], "it is not the empty (whole-body) mask");
+		let written = scope String();
+		let saved = scope $"{folder}/check_mask_out.tmask";
+		mask.Save(saved);
+		Expect(System.IO.File.ReadAllText(saved, written, true) case .Ok && written.Contains("part Spine") && written.Contains("bone \"mixamorig:LeftForeArm\" 0.5"), "it saves as the format reads");
+
+		// The bones of a plain character, as Mixamo names them (any naming that the bone map matches works).
+		List<StringView> names = scope .();
+		List<int32> parents = scope .();
+		names.Add("mixamorig:Hips");        parents.Add(-1);
+		names.Add("mixamorig:Spine");       parents.Add(0);
+		names.Add("mixamorig:Spine1");      parents.Add(1);
+		names.Add("mixamorig:Neck");        parents.Add(2);
+		names.Add("mixamorig:Head");        parents.Add(3);
+		names.Add("mixamorig:LeftArm");     parents.Add(2);
+		names.Add("mixamorig:LeftForeArm"); parents.Add(5);
+		names.Add("mixamorig:LeftHand");    parents.Add(6);
+		names.Add("mixamorig:LeftUpLeg");   parents.Add(0);
+		names.Add("mixamorig:LeftLeg");     parents.Add(8);
+		names.Add("mixamorig:LeftFoot");    parents.Add(9);
+		names.Add("mixamorig:RightUpLeg");  parents.Add(0);
+		let weights = scope float[12];
+		mask.Resolve(names, parents, null, weights);
+		// The parts are found through the names: a bone's part takes it and those below, and a bone weight overrides.
+		Expect(weights[0] == 1 && weights[1] == 1 && weights[4] == 1, "Hips takes the spine and head below it");
+		Expect(weights[5] == 1 && weights[6] == 0.5f && weights[7] == 0, scope $"LeftUpperArm takes the arm, and the bone weights override it ({weights[5]}, {weights[6]}, {weights[7]})");
+		Expect(weights[8] == 1 && weights[11] == 1, "a part the mask does not name goes with the one above it");
+		// The same mask on a skeleton whose bones take the hips out: only the upper body moves.
+		let upper = scope AvatarMask();
+		upper.SetPart(.Spine, true);
+		upper.SetPart(.LeftUpperArm, true);
+		upper.SetPart(.LeftLowerArm, true);
+		upper.Resolve(names, parents, null, weights);
+		Expect(weights[0] == 0 && weights[1] == 1 && weights[5] == 1 && weights[6] == 1 && weights[8] == 0,
+			scope $"an upper-body mask leaves the hips and legs out ({weights[0]}, {weights[5]}, {weights[8]})");
+		let empty = scope AvatarMask();
+		Expect(empty.IsEmpty, "an empty mask moves the whole body");
+
+		// A controller with two layers: a walk on the whole body, and an aim layer masked to the upper body.
+		let controllerPath = scope $"{folder}/check_mask.tcontroller";
+		let upperMaskPath = scope $"{folder}/check_upper.tmask";
+		upper.SetAllParts(false);
+		upper.RemoveAllBones();
+		upper.SetPart(.LeftUpperArm, true);
+		upper.Save(upperMaskPath);
+		void WriteClip(StringView file, StringView name, StringView bone, float degrees)
+		{
+			let clip = scope AnimationClip();
+			clip.name.Set(name);
+			clip.duration = 1;
+			clip.loop = true;
+			let track = clip.AddTrack(bone);
+			// The same key at both ends: a held pose, so the check does not depend on the time.
+			for (int k < 2)
+			{
+				var key = AnimationClip.Key();
+				key.time = k;
+				key.euler = .(0, degrees, 0);
+				key.rotation = Quaternion.AngleAxis(degrees, .Up);
+				key.scale = .(1, 1, 1);
+				track.keys.Add(key);
+			}
+			clip.Save(file);
+		}
+		let baseClip = scope $"{folder}/check_walk.tanim";
+		let aimClip = scope $"{folder}/check_aim.tanim";
+		WriteClip(baseClip, "Walk", "mixamorig:LeftUpLeg", 10);
+		WriteClip(aimClip, "Aim", "mixamorig:LeftArm", 90);
+		// The aim clip also holds the leg at 60 degrees: the mask must keep that off.
+		let aim = AnimationClip.Load(aimClip);
+		aim.AddTrack("mixamorig:LeftUpLeg").SetKey(0, .Zero, .(0, 60, 0), .(1, 1, 1));
+		aim.AddTrack("mixamorig:LeftUpLeg").SetKey(1, .Zero, .(0, 60, 0), .(1, 1, 1));
+		aim.Save(aimClip);
+		let controller = scope AnimatorController();
+		controller.AddState("Walk", baseClip);
+		let throwState = controller.AddState("Throw", aimClip);
+		throwState.layer = 1;
+		let upperLayer = controller.AddLayer("Upper Body");
+		upperLayer.defaultState = 1;
+		upperLayer.maskAsset.Set(upperMaskPath);
+		controller.Save(controllerPath);
+		let reloaded = scope AnimatorController();
+		Expect(reloaded.Read(controllerPath) && reloaded.layers.Count == 2 && reloaded.layers[1].defaultState == 1
+			&& reloaded.layers[1].maskAsset == upperMaskPath, "a layer's avatar mask saves and loads");
+
+		let previous = Scene.Active;
+		{
+			let scene = scope Scene();
+			Scene.Active = scene;
+			let hero = scene.CreateGameObject("Hero");
+			let hipBone = scene.CreateGameObject("mixamorig:Hips", hero.Transform);
+			let spineBone = scene.CreateGameObject("mixamorig:Spine", hipBone.Transform);
+			let chestBone = scene.CreateGameObject("mixamorig:Spine1", spineBone.Transform);
+			let neckBone = scene.CreateGameObject("mixamorig:Neck", chestBone.Transform);
+			let headBone = scene.CreateGameObject("mixamorig:Head", neckBone.Transform);
+			let armBone = scene.CreateGameObject("mixamorig:LeftArm", chestBone.Transform);
+			let foreArmBone = scene.CreateGameObject("mixamorig:LeftForeArm", armBone.Transform);
+			let handBone = scene.CreateGameObject("mixamorig:LeftHand", foreArmBone.Transform);
+			let legBone = scene.CreateGameObject("mixamorig:LeftUpLeg", hipBone.Transform);
+			let animator = hero.AddComponent<Animator>();
+			animator.clips.Set(scope String()..AppendF("{};{}", baseClip, aimClip));
+			animator.controller.Set(controllerPath);
+			scene.StartPlay();
+			Time.DeltaTime = 0.25f;
+			scene.Update();
+			// The mask as the Animator reads it, on the same bones.
+			let diskMask = AvatarMask.Load(upperMaskPath);
+			Expect(diskMask != null && diskMask.HasPart(.LeftUpperArm), "the aim mask loads from its file");
+			List<StringView> sceneNames = scope .();
+			List<int32> sceneParents = scope .();
+			sceneNames.Add("mixamorig:Hips");        sceneParents.Add(-1);
+			sceneNames.Add("mixamorig:Spine");       sceneParents.Add(0);
+			sceneNames.Add("mixamorig:Spine1");      sceneParents.Add(1);
+			sceneNames.Add("mixamorig:Neck");        sceneParents.Add(2);
+			sceneNames.Add("mixamorig:Head");        sceneParents.Add(3);
+			sceneNames.Add("mixamorig:LeftArm");     sceneParents.Add(2);
+			sceneNames.Add("mixamorig:LeftForeArm"); sceneParents.Add(5);
+			sceneNames.Add("mixamorig:LeftHand");    sceneParents.Add(6);
+			sceneNames.Add("mixamorig:LeftUpLeg");   sceneParents.Add(0);
+			let sceneWeights = scope float[9];
+			diskMask.Resolve(sceneNames, sceneParents, null, sceneWeights);
+			Expect(sceneWeights[5] == 1 && sceneWeights[8] == 0, scope $"the aim mask moves the arm, not the leg ({sceneWeights[5]}, {sceneWeights[8]})");
+			let runtime = animator.Runtime;
+			Expect(runtime.LayerCount == 2 && runtime.StateIndexOn(0) == 0 && runtime.StateIndexOn(1) == 1,
+				scope $"both layers are in their states ({runtime.LayerCount}, {runtime.StateIndexOn(0)}, {runtime.StateIndexOn(1)})");
+			Expect(runtime.GetLayerWeight(1) == 1, scope $"the aim layer is at full weight ({runtime.GetLayerWeight(1)})");
+			let aimCheck = AnimationClip.Load(aimClip);
+			let armTrack = aimCheck.FindTrack("mixamorig:LeftArm");
+			if (armTrack != null)
+			{
+				Vector3 clipPosition, clipScale;
+				Quaternion clipTurn;
+				armTrack.Sample(0.25f, out clipPosition, out clipTurn, out clipScale);
+				Expect(Quaternion.Dot(clipTurn, Quaternion.AngleAxis(90, .Up)) > 0.999f, scope $"the aim clip itself turns the arm (w {clipTurn.w})");
+			}
+			Expect(armTrack != null, "the aim clip has the arm's track");
+			Expect(runtime.NormalizedTimeOn(1) == 0.25f, scope $"the aim layer is a quarter through its clip ({runtime.NormalizedTimeOn(1)})");
+			let armTurn = armBone.Transform.LocalRotation;
+			let legTurn = legBone.Transform.LocalRotation;
+			Expect(Math.Abs(Quaternion.Dot(armTurn, Quaternion.AngleAxis(90, .Up))) > 0.999f,
+				scope $"the masked layer turns the arm (w {armTurn.w})");
+			// The base layer's 10 degrees, not the aim clip's 60.
+			Expect(Math.Abs(Quaternion.Dot(legTurn, Quaternion.AngleAxis(10, .Up))) > 0.999f,
+				scope $"and not the leg the mask leaves out (w {legTurn.w})");
+			Expect(Math.Abs(Quaternion.Dot(handBone.Transform.LocalRotation, Quaternion.Identity)) > 0.995f, "bones the layer does not move keep their rest pose");
+			scene.StopPlay();
+			hero.RemoveComponent<Animator>();
+		}
+		Scene.Active = previous;
+		// A Skinned Mesh Renderer's own clips can be layered by a mask too (PlayLayerMasked), over its model's joints.
+		{
+			let scene = scope Scene();
+			let man = scene.CreateGameObject("Masked Man");
+			let skinned = man.AddComponent<SkinnedMeshRenderer>();
+			skinned.model = "Models/rigged_sample.glb";
+			if (skinned.Model != null && skinned.Model.Clips.Count > 0 && skinned.Model.Joints.Count > 5)
+			{
+				let jointMaskPath = scope $"{folder}/check_joint.tmask";
+				let jointMask = scope AvatarMask();
+				jointMask.SetBone(skinned.Model.Joints[5].name, 1);
+				jointMask.Save(jointMaskPath);
+				let clipName = scope String(skinned.Model.Clips[0].name);
+				skinned.PlayLayerMasked(clipName, jointMaskPath, 0);
+				Expect(skinned.CurrentLayerClip == clipName, "a masked layer plays a model clip");
+				SkinnedMeshRenderer.FrameAll(scene);
+				skinned.StopLayer(0);
+				SkinnedMeshRenderer.FrameAll(scene);
+				Expect(skinned.CurrentLayerClip == "", "and stops, leaving the main clip");
+				System.IO.File.Delete(jointMaskPath).IgnoreError();
+			}
+			man.RemoveComponent<SkinnedMeshRenderer>();
+		}
+		System.IO.File.Delete(controllerPath).IgnoreError();
+		System.IO.File.Delete(upperMaskPath).IgnoreError();
+		System.IO.File.Delete(baseClip).IgnoreError();
+		System.IO.File.Delete(aimClip).IgnoreError();
+		System.IO.File.Delete(maskPath).IgnoreError();
+		System.IO.File.Delete(saved).IgnoreError();
 	}
 
 	/// Water and Floater: the surface from the data, Water.At, [Sync] fields of handle data, save and load.

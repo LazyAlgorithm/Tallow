@@ -87,7 +87,7 @@ static class MapFiles
 
 	/// File types a scene names as assets, which must be in the game for a map to work.
 	static readonly StringView[?] AssetExtensions = .(".glb", ".gltf", ".tmesh", ".png", ".jpg", ".jpeg", ".tga", ".hdr", ".tmat", ".tprefab", ".tscene",
-		".tanim", ".tcontroller", ".tshader", ".tsgraph", ".tgraph", ".tbt", ".tui", ".tcss", ".tinput", ".tdata", ".ogg", ".wav", ".mp3",
+		".tanim", ".tcontroller", ".tmask", ".tshader", ".tsgraph", ".tgraph", ".tbt", ".tui", ".tcss", ".tinput", ".tdata", ".ogg", ".wav", ".mp3",
 		".flac", ".ttf", ".otf");
 
 	/// The folder a game looks in by default: Maps, beside a built game's program (or in the project's folder when

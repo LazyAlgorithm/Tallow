@@ -218,6 +218,13 @@ class EditorApp : Application
 			else
 				mShowAnimation = true;
 		}
+		if (AssetArg("--avatar-mask", full..Clear()))
+		{
+			if (File.Exists(full))
+				OpenAvatarMask(full);
+			else
+				mShowAvatarMask = true;
+		}
 		if (AssetArg("--sequence", full..Clear()) && File.Exists(full))
 		{
 			OpenSequence(full);

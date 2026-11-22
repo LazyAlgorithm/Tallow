@@ -463,6 +463,18 @@ static class CSharpComponentActions
 		return true;
 	}
 
+	/// Plays an animation layer over the joints an avatar mask lets through (a .tmask path). False without a Skinned
+	/// Mesh Renderer.
+	[CSharpExpose]
+	public static bool SkinnedLayerMasked(uint64 session, uint64 entity, StringView name, StringView maskPath, float fadeSeconds)
+	{
+		let skinned = Get<SkinnedMeshRenderer>(Object(session, entity));
+		if (!skinned)
+			return false;
+		skinned.PlayLayerMasked(name, maskPath, fadeSeconds);
+		return true;
+	}
+
 	/// Changes a model part: what 0 colour (value rgba), 1 hidden (value.x > 0.5), 2 shadow only (value.x > 0.5).
 	[CSharpExpose]
 	public static bool SkinnedPart(uint64 session, uint64 entity, StringView part, int32 what, Vector4 value)

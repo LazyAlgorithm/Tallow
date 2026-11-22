@@ -73,7 +73,7 @@ def write_pack(path, files, compress=True, name=None):
 
 
 # Text formats whose contents may name other assets.
-_TEXT = {'.tscene', '.tcell', '.tprefab', '.tmat', '.tui', '.tcss', '.tcontroller', '.tanim', '.tshader', '.tcompute', '.tinput',
+_TEXT = {'.tscene', '.tcell', '.tprefab', '.tmat', '.tui', '.tcss', '.tcontroller', '.tanim', '.tmask', '.tshader', '.tcompute', '.tinput',
          '.tbt', '.gltf', '.json', '.txt', '.tallow'}
 _PATHLIKE = re.compile(r'[A-Za-z0-9_./\\-]+\.[A-Za-z0-9]+')
 # A scene's own pack is only worth its own file above this size; smaller ones stay in the shared pack.

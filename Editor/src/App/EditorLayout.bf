@@ -69,6 +69,7 @@ extension EditorApp
 		DrawSequencer();
 		DrawAnimator();
 		DrawAnimation();
+		DrawAvatarMask();
 		DrawHandPosing();
 		DrawBoneMap();
 		DrawPopups();
@@ -130,7 +131,7 @@ extension EditorApp
 
 	/// The windows that can be closed, as they are named in the open-windows file. The layout file keeps where they
 	/// are docked, but not whether they are open, so that is kept beside it (windows5_<project>.txt).
-	static StringView[?] sOpenWindowNames = .("Model", "Rigging", "Animation", "Animator", "Dialogue", "Sequencer", "Map Builder", "UV Editor", "Graphics Quality", "Lighting", "Model Views", "Scripts", "Profiler", "World Map", "Network", "Graph");
+	static StringView[?] sOpenWindowNames = .("Model", "Rigging", "Animation", "Animator", "Dialogue", "Sequencer", "Map Builder", "UV Editor", "Graphics Quality", "Lighting", "Model Views", "Scripts", "Profiler", "World Map", "Network", "Graph", "Avatar Mask");
 	int32 mOpenWindowsSaved = -1;
 	bool mRetiredWindow;
 
@@ -154,6 +155,7 @@ extension EditorApp
 		case 13: return &mShowWorldMap;
 		case 14: return &mShowNetwork;
 		case 15: return &mShowGraph;
+		case 16: return &mShowAvatarMask;
 		default: return &mShowScripts;
 		}
 	}
@@ -351,6 +353,11 @@ extension EditorApp
 			}
 			if (ImGui.MenuItem("Animation"))
 				mShowAnimation = true;
+			if (ImGui.MenuItem("Avatar Mask"))
+			{
+				mShowAvatarMask = true;
+				mDockAvatarMask = true;
+			}
 			if (ImGui.MenuItem("Dialogue"))
 			{
 				mShowDialogue = true;

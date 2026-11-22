@@ -48,8 +48,11 @@ class AnimatorController
 		public float weight = 1;
 		public AnimatorLayerBlend blending = .Override;
 		/// The bones the layer moves: each named bone and everything below it, separated by semicolons
-		/// ("spine_02;neck"). Empty: every bone.
+		/// ("spine_02;neck"). Empty: every bone. Ignored when maskAsset is set.
 		public String mask = new .() ~ delete _;
+		/// An Avatar Mask (.tmask) the layer moves by: humanoid body parts and named bones with weights, made in the
+		/// Avatar Mask window. Empty: the bone list above is used instead.
+		public String maskAsset = new .() ~ delete _;
 		/// The state the layer starts in (for the Base Layer, the controller's defaultState).
 		public int32 defaultState = -1;
 	}
@@ -449,7 +452,9 @@ class AnimatorController
 			SceneSerializer.Quote(layer.name, text);
 			text.AppendF(" {} {} ", layer.weight, (int32)layer.blending);
 			SceneSerializer.Quote(layer.mask, text);
-			text.AppendF(" {}\n", layer.defaultState);
+			text.AppendF(" {} ", layer.defaultState);
+			SceneSerializer.Quote(layer.maskAsset, text);
+			text.Append('\n');
 		}
 		for (let state in states)
 		{
@@ -550,6 +555,9 @@ class AnimatorController
 					layer.blending = (AnimatorLayerBlend)Math.Clamp(SceneSerializer.ParseInt(tokens[3]), 0, 1);
 					layer.mask.Set(tokens[4]);
 					layer.defaultState = (int32)SceneSerializer.ParseInt(tokens[5]);
+					// Avatar masks came later; a file without one keeps its bone list.
+					if (tokens.Count >= 7)
+						layer.maskAsset.Set(tokens[6]);
 				}
 			case "state":
 				if (tokens.Count >= 7)

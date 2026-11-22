@@ -94,6 +94,8 @@ struct SkinnedMeshRenderer : ComponentHandle<SkinnedMeshRendererData>
 	public bool HasClip(StringView name) => Rig.HasClip(name);
 	public void Play(StringView name, float fadeSeconds = 0.15f) => Rig.Play(name, fadeSeconds);
 	public void PlayLayer(StringView name, StringView bones, float fadeSeconds = 0.15f) => Rig.PlayLayer(name, bones, fadeSeconds);
+	/// As PlayLayer, with an Avatar Mask (.tmask file, relative to the project's asset folder) instead of bone names.
+	public void PlayLayerMasked(StringView name, StringView maskPath, float fadeSeconds = 0.15f) => Rig.PlayLayerMasked(name, maskPath, fadeSeconds);
 	public void StopLayer(float fadeSeconds = 0.15f) => Rig.StopLayer(fadeSeconds);
 	public StringView CurrentLayerClip => Rig.CurrentLayerClip;
 	public bool SkinnedOnGpu => Rig.SkinnedOnGpu;
@@ -237,8 +239,13 @@ class SkinnedRig
 	SkinnedModel.Clip mLayerPrevious;
 	float mLayerTime, mLayerPreviousTime, mLayerFade, mLayerFadeDuration;
 	float mLayerWeight, mLayerTarget, mLayerWeightSpeed;
-	bool[] mLayerMask ~ delete _;
+	/// How much of each joint the layer poses, 0 to 1: from its bones text, or its avatar mask.
+	float[] mLayerMask ~ delete _;
 	String mLayerBones = new .() ~ delete _;
+	String mLayerMaskPath = new .() ~ delete _;
+	AvatarMask mLayerMaskAsset;
+	int32 mLayerMaskRevision = -1;
+	int32 mLayerMaskJoints = -1;
 	static int32 sNextStagger;
 	static List<SkinnedRig> sAll = new .() ~ delete _;
 
@@ -586,6 +593,11 @@ class SkinnedRig
 		mLayerPrevious = null;
 		mLayerWeight = mLayerTarget = 0;
 		DeleteAndNullify!(mLayerMask);
+		mLayerBones.Clear();
+		mLayerMaskPath.Clear();
+		mLayerMaskAsset = null;
+		mLayerMaskRevision = -1;
+		mLayerMaskJoints = -1;
 		if (mModel == null)
 		{
 			Log.Warning(scope $"'{model}' has no skeleton (or could not be read). Use a Mesh Renderer for unrigged models.");
@@ -686,20 +698,25 @@ class SkinnedRig
 		let next = mModel.FindClip(name);
 		if (next == null)
 			return;
-		if (mLayerMask == null || mLayerBones != bones)
-		{
-			mLayerBones.Set(bones);
-			delete mLayerMask;
-			mLayerMask = new bool[mModel.Joints.Count];
-			for (int i < mModel.Joints.Count)
-			{
-				for (var at = i; at >= 0 && !mLayerMask[i]; at = mModel.Joints[at].parent)
-				{
-					for (let bone in bones.Split(';'))
-						mLayerMask[i] |= !bone.IsEmpty && mModel.Joints[at].name == bone;
-				}
-			}
-		}
+		PrepareLayerMask(bones, "");
+		StartLayerClip(next, fadeSeconds);
+	}
+
+	/// Plays a clip on the joints an avatar mask (.tmask) lets through, over the main clip: the same as PlayLayer,
+	/// with humanoid body parts and weighted bones instead of a list of names. Played on this machine only.
+	public void PlayLayerMasked(StringView name, StringView maskPath, float fadeSeconds = 0.15f)
+	{
+		if (mModel == null)
+			return;
+		let next = mModel.FindClip(name);
+		if (next == null)
+			return;
+		PrepareLayerMask("", maskPath);
+		StartLayerClip(next, fadeSeconds);
+	}
+
+	void StartLayerClip(SkinnedModel.Clip next, float fadeSeconds)
+	{
 		if (next != mLayer)
 		{
 			// Fully faded out, the layer starts afresh; still showing, it cross-fades to the new clip.
@@ -712,6 +729,47 @@ class SkinnedRig
 		}
 		mLayerTarget = 1;
 		mLayerWeightSpeed = fadeSeconds > 0 ? 1 / fadeSeconds : 1000;
+	}
+
+	/// Which joints the layer poses: by the avatar mask at maskPath, or by the bones text (each name and everything
+	/// below it), which it keeps until either changes or the mask is edited.
+	void PrepareLayerMask(StringView bones, StringView maskPath)
+	{
+		let mask = maskPath.IsEmpty ? null : AvatarMask.Load(maskPath);
+		if (mLayerMask != null && mLayerBones == bones && mLayerMaskPath == maskPath && mLayerMaskJoints == mModel.Joints.Count
+			&& (mask == null || (mLayerMaskAsset == mask && mLayerMaskRevision == mask.Revision)))
+			return;
+		mLayerBones.Set(bones);
+		mLayerMaskPath.Set(maskPath);
+		delete mLayerMask;
+		mLayerMask = new .[mModel.Joints.Count];
+		mLayerMaskAsset = mask;
+		mLayerMaskRevision = mask != null ? mask.Revision : -1;
+		mLayerMaskJoints = (int32)mModel.Joints.Count;
+		if (mask != null)
+		{
+			List<StringView> names = scope .();
+			List<int32> parents = scope .();
+			for (let joint in mModel.Joints)
+			{
+				names.Add(joint.name);
+				parents.Add(joint.parent);
+			}
+			mask.Resolve(names, parents, mModel.HumanMap, mLayerMask);
+			return;
+		}
+		for (int i < mModel.Joints.Count)
+		{
+			mLayerMask[i] = 0;
+			for (var at = i; at >= 0 && mLayerMask[i] <= 0; at = mModel.Joints[at].parent)
+			{
+				for (let bone in bones.Split(';'))
+				{
+					if (!bone.IsEmpty && mModel.Joints[at].name == bone)
+						mLayerMask[i] = 1;
+				}
+			}
+		}
 	}
 
 	/// Fades the layer out over some seconds, leaving every bone to the main clip again.
@@ -727,7 +785,8 @@ class SkinnedRig
 	/// Puts the layer's pose over a joint's pose from the main clip, if the layer moves that joint.
 	void LayerPose(int joint, ref Vector3 position, ref Quaternion rotation, ref Vector3 scale)
 	{
-		if (mLayer == null || mLayerWeight <= 0 || mLayerMask == null || !mLayerMask[joint])
+		let maskWeight = (mLayerMask != null && joint < (int32)mLayerMask.Count) ? mLayerMask[joint] : 0;
+		if (mLayer == null || mLayerWeight <= 0 || maskWeight <= 0)
 			return;
 		Vector3 layerPosition, layerScale;
 		Quaternion layerRotation;
@@ -742,7 +801,7 @@ class SkinnedRig
 			layerRotation = Quaternion.Slerp(fromRotation, layerRotation, swap);
 			layerScale = Vector3.Lerp(fromScale, layerScale, swap);
 		}
-		let weight = Mathf.SmoothStep(0, 1, mLayerWeight);
+		let weight = Mathf.SmoothStep(0, 1, mLayerWeight) * maskWeight;
 		position = Vector3.Lerp(position, layerPosition, weight);
 		rotation = Quaternion.Slerp(rotation, layerRotation, weight);
 		scale = Vector3.Lerp(scale, layerScale, weight);

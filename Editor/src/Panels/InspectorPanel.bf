@@ -1230,6 +1230,7 @@ extension EditorApp
 		if (kind == "audioClip") return IsAudioFile(path);
 		if (kind == "tree") return HasExtension(path, ".tbt");
 		if (kind == "controller") return HasExtension(path, ".tcontroller");
+		if (kind == "avatarMask") return HasExtension(path, ".tmask");
 		if (kind == "material" || kind == "interiorMaterial") return HasExtension(path, ".tmat");
 		if (kind == "shader") return HasExtension(path, ".tcompute");
 		if (kind == "document") return HasExtension(path, ".tui");

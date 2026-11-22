@@ -161,11 +161,35 @@ class BoneMap
 	/// Matches every bone to a joint of the model by name, replacing what the map had.
 	public void Match(SkinnedModel model)
 	{
+		List<StringView> names = scope .();
+		List<int32> parents = scope .();
+		for (let joint in model.Joints)
+		{
+			names.Add(joint.name);
+			parents.Add(joint.parent);
+		}
+		MatchBones(names, parents);
+	}
+
+	/// Matches every bone to a joint named in names, whose hierarchy is parents (an index into names, parents
+	/// before children), replacing what the map had. The same matching as Match, for a character whose bones are
+	/// plain objects rather than a model's skeleton.
+	public void MatchBones(List<StringView> names, List<int32> parents)
+	{
 		Clear();
-		let jointCount = model.Joints.Count;
+		let jointCount = names.Count;
 		let depth = scope int[jointCount];
 		for (int j < jointCount)
-			depth[j] = model.Depth(j);
+		{
+			int d = 0;
+			var parent = parents[j];
+			while (parent >= 0 && d < jointCount)
+			{
+				d++;
+				parent = parents[parent];
+			}
+			depth[j] = d;
+		}
 		// Each joint's guess, as a bone (fingers and spines by their kind: the segment is decided by depth below).
 		let guess = scope int[jointCount];
 		let side = scope int[jointCount];
@@ -173,7 +197,7 @@ class BoneMap
 		for (int j < jointCount)
 		{
 			core.Clear();
-			side[j] = Simplify(model.Joints[j].name, core);
+			side[j] = Simplify(names[j], core);
 			guess[j] = Guess(core, side[j]);
 		}
 		// One-of-a-kind bones: the shallowest joint that looks like it.
@@ -188,7 +212,7 @@ class BoneMap
 					best = j;
 			}
 			if (best >= 0)
-				mJoints[b].Set(model.Joints[best].name);
+				mJoints[b].Set(names[best]);
 		}
 		// Chains: the spine (Spine, Chest, UpperChest) and each finger's three segments, from the root out.
 		let chain = scope List<int>();
@@ -204,7 +228,7 @@ class BoneMap
 			}
 			chain.Sort(scope (a, c) => depth[a] - depth[c]);
 			for (int k < Math.Min(chain.Count, 3))
-				mJoints[b + k].Set(model.Joints[chain[k]].name);
+				mJoints[b + k].Set(names[chain[k]]);
 		}
 	}
 

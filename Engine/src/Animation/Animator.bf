@@ -286,7 +286,13 @@ class AnimatorState
 	Vector3[] mZeroScale ~ delete _;
 	float[] mTrack ~ delete _;
 	float[] mZeroTrack ~ delete _;
-	bool[] mMasked ~ delete _;
+	/// How much of each bone a layer's mask lets it move, 0 to 1.
+	float[] mMaskWeight ~ delete _;
+	/// The avatar mask resolved into mMaskResolved, and what it was resolved from.
+	AvatarMask mMask;
+	int32 mMaskRevision = -1;
+	int32 mMaskBones = -1;
+	float[] mMaskResolved ~ delete _;
 
 	/// How many layers the controller has (1 without layers).
 	public int32 LayerCount => mController != null ? (int32)mController.layers.Count : 1;
@@ -492,30 +498,64 @@ class AnimatorState
 		}
 	}
 
-	/// Which bones a layer's mask lets it move: the named bones and everything below them (all when empty).
-	void MaskFor(AnimatorController.Layer layer, bool[] masked)
+	/// How much of each bone a layer's mask lets it move (0 to 1): by the layer's avatar mask asset when it has one,
+	/// otherwise the named bones and everything below them (all when empty). A weight in between blends the layer in
+	/// on that bone, which gives a mask a soft edge along the spine.
+	void MaskFor(AnimatorController.Layer layer, float[] weights)
 	{
+		if (!layer.maskAsset.IsEmpty)
+		{
+			let mask = AvatarMask.Load(layer.maskAsset);
+			if (mask != null)
+			{
+				if (mMask != mask || mMaskRevision != mask.Revision || mMaskBones != mBones.Count)
+					ResolveMask(mask);
+				for (int b < mBones.Count)
+					weights[b] = mMaskResolved[b];
+				return;
+			}
+		}
 		if (layer.mask.IsEmpty)
 		{
 			for (int b < mBones.Count)
-				masked[b] = true;
+				weights[b] = 1;
 			return;
 		}
 		for (int b < mBones.Count)
 		{
-			masked[b] = false;
+			weights[b] = 0;
 			var at = mBones[b].transform;
-			while (at != null && at != Transform && !masked[b])
+			while (at != null && at != Transform && weights[b] <= 0)
 			{
 				for (var name in layer.mask.Split(';'))
 				{
 					name.Trim();
 					if (!name.IsEmpty && at.GameObject.Name == name)
-						masked[b] = true;
+						weights[b] = 1;
 				}
 				at = at.Parent;
 			}
 		}
+	}
+
+	/// Resolves an avatar mask for this character's bones: its humanoid parts through the model's bone map when it
+	/// has one, and its named bones by name.
+	void ResolveMask(AvatarMask mask)
+	{
+		delete mMaskResolved;
+		mMaskResolved = new .[mBones.Count];
+		List<StringView> names = scope .();
+		List<int32> parents = scope .();
+		for (let bone in mBones)
+		{
+			names.Add(bone.transform.GameObject.Name);
+			parents.Add(bone.parent);
+		}
+		BoneMap map = (mSkinned && mSkinned.Model != null) ? mSkinned.Model.HumanMap : null;
+		mask.Resolve(names, parents, map, mMaskResolved);
+		mMask = mask;
+		mMaskRevision = mask.Revision;
+		mMaskBones = (int32)mBones.Count;
 	}
 
 	void EnterLayerState(int32 index, float fade)
@@ -555,7 +595,7 @@ class AnimatorState
 		delete mZeroScale;
 		delete mTrack;
 		delete mZeroTrack;
-		delete mMasked;
+		delete mMaskWeight;
 		mPosePosition = new .[count];
 		mPoseRotation = new .[count];
 		mPoseScale = new .[count];
@@ -567,7 +607,7 @@ class AnimatorState
 		mZeroScale = new .[count];
 		mTrack = new .[count];
 		mZeroTrack = new .[count];
-		mMasked = new .[count];
+		mMaskWeight = new .[count];
 	}
 
 	/// A layer's pose now, cross-fading from its previous state, into mLayer*; mTrack says how much each bone moves.
@@ -689,15 +729,15 @@ class AnimatorState
 			if (weight <= 0)
 				continue;
 			SampleLayer(run);
-			MaskFor(layer, mMasked);
+			MaskFor(layer, mMaskWeight);
 			let additive = l > 0 && layer.blending == .Additive;
 			if (additive)
 				SampleLayeredState(run.state, 0, true, mZeroPosition, mZeroRotation, mZeroScale, mZeroTrack);
 			for (int b < mBones.Count)
 			{
-				if (!mMasked[b] || mTrack[b] <= 0)
+				if (mMaskWeight[b] <= 0 || mTrack[b] <= 0)
 					continue;
-				let amount = weight * Math.Min(mTrack[b], 1);
+				let amount = weight * mMaskWeight[b] * Math.Min(mTrack[b], 1);
 				if (additive)
 					AddLayerBone(b, amount);
 				else
@@ -942,6 +982,9 @@ class AnimatorState
 		mBones.Clear();
 		ClearAndDeleteItems!(mTrackMaps);
 		Collect(Transform);
+		mMask = null;
+		mMaskRevision = -1;
+		mMaskBones = -1;
 		mSkinned = GetComponent<SkinnedMeshRenderer>();
 		if (!mSkinned)
 		{

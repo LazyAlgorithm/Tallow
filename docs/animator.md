@@ -1,9 +1,10 @@
 # Animator and Animation windows
 
-Animation in Tallow has three parts, arranged as in Unity:
+Animation in Tallow has four parts, arranged as in Unity:
 
 - an **Animation Clip** (`.tanim`) is keyframes: how the children of an object move over time;
 - an **Animator Controller** (`.tcontroller`) is a state machine: which clip plays, and when to change;
+- an **Avatar Mask** (`.tmask`) says which parts of a body a layer may move;
 - the **Animator** component runs them on an object.
 
 **Window > Animation** edits clips on a timeline. **Window > Animator** edits controllers as a graph. Both are also opened by double-clicking the asset in the Project panel.
@@ -120,7 +121,8 @@ belong to that layer too. For the selected layer:
 |---|---|
 | Weight | How much of the layer is used, 0 to 1. Change it from code with `SetLayerWeight`. |
 | Blending | **Override** replaces the pose of the bones the layer's clips move, by its weight. **Additive** adds what its clips do (measured from each clip's first frame) to the pose below. |
-| Mask | The bones the layer may move: each named bone and everything below it, separated by `;` (`spine_02` for the upper body). Empty: every bone. |
+| Avatar Mask | A `.tmask` file saying which body parts and bones the layer may move (see below). None: every bone, or the **Bones** field. |
+| Bones | Without an Avatar Mask, the bones the layer may move: each named bone and everything below it, separated by `;` (`spine_02` for the upper body). Empty: every bone. |
 
 A layer only moves the bones its own clips move, so an upper-body layer with no clip playing (an empty "Arms Free"
 state) leaves the body to the layers below. Each layer starts in its default state (right-click > Set as Default
@@ -128,6 +130,45 @@ State on that layer).
 
 ```csharp
 animator.SetLayerWeight(1, aiming ? 1f : 0f);   // layer 1: the second in the controller's list
+```
+
+## Avatar masks
+
+An **Avatar Mask** says which parts of a body a layer may move, and is what makes a grenade throw play on the
+upper body while the legs keep walking. Make one with **Project > + > Avatar Mask** and set it on a layer of the
+Animator window, or double-click a `.tmask` file to edit it in the **Avatar Mask** window. Every layer using the
+file shares it, so an edit shows on every character at once; a mask that is edited while the game plays takes
+effect at once.
+
+| In the window | What it is |
+|---|---|
+| Body | Hips, Spine, Chest, Upper Chest, Neck and Head. |
+| Left / Right Arm | Shoulder, Upper Arm, Lower Arm, Hand, and **Fingers** (all fifteen finger bones at once). |
+| Left / Right Leg | Upper Leg, Lower Leg, Foot and Toes. |
+| Bone Weights | The selected character's bones, each with a weight from 0 to 1. |
+| All Parts / No Parts | Every part at once. |
+
+A part is a **humanoid bone**, not a name from one skeleton: Mixamo's `LeftUpLeg`, Synty's `Thigh_L` and Unreal's
+`thigh_l` all answer Left Upper Leg, because the character's **Bone Map** decides which of its joints is which
+(see `docs/retargeting.md`). A `.tanim` clip on bones that are plain objects is matched by name the same way, so
+one mask works for every character.
+
+**Weights** are how a part covers the body: a part or bone takes the bones below it with the same weight, until
+another one below says otherwise. So **Spine** covers the upper body, and a bone weight of 0 on `Head` takes the
+head back out. A weight in between, say 0.5 on the neck, blends the layer in on that bone and below it, which
+gives an arm layer a soft edge where it meets the torso. A bone whose row shows a grey number inherits it; set
+one with its own number to override it, and **x** puts it back to inheriting. A mask with no parts and no bone
+weights moves the whole body, as an empty mask always did.
+
+For the grenade throw, the aim/throw layer gets a mask with **Spine**, **Chest**, **Neck**, **Head**, both
+**Arms** and **Hands**; the legs and hips stay with the walk on the Base Layer. The throw clip may key the whole
+body: the parts the mask leaves out are simply not applied.
+
+The same mask can be used from code with a Skinned Mesh Renderer's own clips:
+
+```csharp
+skinned.PlayLayerMasked("Wave", "Masks/UpperBody.tmask", 0.2f);   // a layer over the bones the mask lets through
+skinned.StopLayer();
 ```
 
 ## Blend trees
@@ -163,7 +204,8 @@ Every method above is a node under **Engine > Animation > Animator** in a graph'
 - **Transforms only.** Clips animate the position, rotation and scale of child objects. They do not animate other properties (a light's colour, a material), and there are no animation events.
 - **No sub-state machines**, and blend trees cannot hold other blend trees.
 - Layers and blend trees on a rigged model need **Expose Bones**; without it a state names one of the model's clips and the model plays it itself, as before.
-- Masks are by bone name and take a bone with everything below it; there is no way to leave out one bone in the middle.
+- Avatar mask humanoid parts are the ones in **HumanBone** (hips to toes and fingers); a mask for another bone (a
+  tail, a weapon socket) uses a bone weight by name.
 - **Skinned models** play their own clips: a state can name one, but those clips are not edited in place. **Rig > Copy Model Clip Into This Clip** copies one into a `.tanim` that can be.
 - Undo does not cover edits made in these two windows.
 

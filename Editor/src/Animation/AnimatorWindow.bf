@@ -103,13 +103,30 @@ extension EditorApp
 		mAnimDirty = false;
 	}
 
+	List<String> mAnimMaskChoices = new .() ~ DeleteContainerAndItems!(_);
+	int mAnimMaskChoicesFrame = -1000;
+
 	/// Every .tanim file in the project, for the clip picker. Refreshed now and then rather than every frame.
 	void RefreshClipChoices()
 	{
 		if (Time.FrameCount - mAnimClipChoicesFrame < 240)
 			return;
 		mAnimClipChoicesFrame = Time.FrameCount;
-		ClearAndDeleteItems!(mAnimClipChoices);
+		ScanAssetChoices(".tanim", mAnimClipChoices);
+	}
+
+	/// Every .tmask file, for a layer's Avatar Mask picker.
+	void RefreshMaskChoices()
+	{
+		if (Time.FrameCount - mAnimMaskChoicesFrame < 240)
+			return;
+		mAnimMaskChoicesFrame = Time.FrameCount;
+		ScanAssetChoices(".tmask", mAnimMaskChoices);
+	}
+
+	void ScanAssetChoices(StringView suffix, List<String> choices)
+	{
+		ClearAndDeleteItems!(choices);
 		void Scan(StringView folder, int depth)
 		{
 			if (depth > 8 || !Directory.Exists(folder))
@@ -118,11 +135,11 @@ extension EditorApp
 			{
 				let name = scope String();
 				entry.GetFileName(name);
-				if (!name.EndsWith(".tanim"))
+				if (!name.EndsWith(suffix, .Ordinal))
 					continue;
 				let relative = new String();
 				Assets.MakeRelative(scope $"{folder}/{name}" , relative);
-				mAnimClipChoices.Add(relative);
+				choices.Add(relative);
 			}
 			for (let entry in Directory.EnumerateDirectories(folder))
 			{
@@ -133,7 +150,7 @@ extension EditorApp
 			}
 		}
 		Scan(Assets.ProjectPath, 0);
-		mAnimClipChoices.Sort(scope (a, b) => a.CompareTo(b));
+		choices.Sort(scope (a, b) => a.CompareTo(b));
 	}
 
 	static StringView ConditionLabel(AnimatorConditionMode mode)
@@ -927,12 +944,48 @@ extension EditorApp
 			}
 			ImGui.EndCombo();
 		}
+		// An Avatar Mask asset: the body parts and weighted bones the layer moves.
+		ImGui.SetCursorPosX(8);
+		ImGui.SetNextItemWidth(120);
+		let maskLabel = scope String(layer.maskAsset);
+		if (ImGui.BeginCombo("Avatar Mask##layer", maskLabel.IsEmpty ? (char8*)"(none)" : maskLabel.CStr()))
+		{
+			RefreshMaskChoices();
+			if (ImGui.Selectable("(none)", layer.maskAsset.IsEmpty))
+			{
+				layer.maskAsset.Clear();
+				mAnimDirty = true;
+			}
+			for (let choice in mAnimMaskChoices)
+			{
+				if (ImGui.Selectable(choice.CStr(), choice == layer.maskAsset))
+				{
+					layer.maskAsset.Set(choice);
+					mAnimDirty = true;
+				}
+			}
+			ImGui.EndCombo();
+		}
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("An Avatar Mask (Project > + > Avatar Mask): the body parts, and the bones with weights,\nthis layer moves.");
+		ImGui.SameLine();
+		ImGui.BeginDisabled(layer.maskAsset.IsEmpty);
+		if (ImGui.SmallButton("Edit..."))
+		{
+			let full = scope String();
+			Assets.ResolvePath(layer.maskAsset, full);
+			OpenAvatarMask(full);
+		}
+		ImGui.EndDisabled();
+		// Without an Avatar Mask, the older list of bone names (each with everything below it).
 		ImGui.SetCursorPosX(8);
 		ImGui.SetNextItemWidth(170);
-		if (ImGui.InputText("Mask##layer", layer.mask))
+		ImGui.BeginDisabled(!layer.maskAsset.IsEmpty);
+		if (ImGui.InputText("Bones##layer", layer.mask))
 			mAnimDirty = true;
 		if (ImGui.IsItemHovered())
-			ImGui.SetTooltip("The bones this layer moves: each named bone and everything below it, separated by ;\n(\"spine_02\" for the upper body). Empty: every bone.");
+			ImGui.SetTooltip("Without an Avatar Mask: the bones this layer moves, each named bone and everything below it,\nseparated by ; (\"spine_02\" for the upper body). Empty: every bone.");
+		ImGui.EndDisabled();
 		ImGui.SetCursorPosX(8);
 		if (ImGui.SmallButton("Remove Layer"))
 		{

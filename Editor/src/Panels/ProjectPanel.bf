@@ -560,6 +560,7 @@ extension EditorApp
 		.(".tbt", .(0.70f, 0.44f, 0.20f, 1), "TREE"),
 		.(".tcontroller", .(0.78f, 0.48f, 0.14f, 1), "ANIMATOR"),
 		.(".tanim", .(0.30f, 0.55f, 0.75f, 1), "CLIP"),
+		.(".tmask", .(0.56f, 0.58f, 0.20f, 1), "MASK"),
 		.(".tdialogue", .(0.72f, 0.40f, 0.48f, 1), "DIALOGUE"),
 		.(".tsequence", .(0.80f, 0.36f, 0.30f, 1), "SEQUENCE"),
 		.(".tmat", .(0.62f, 0.36f, 0.66f, 1), "MATERIAL"),
@@ -726,6 +727,8 @@ extension EditorApp
 			BeginNewItem(7, "NewController");
 		if (ImGui.MenuItem("Animation Clip"))
 			BeginNewItem(8, "NewClip");
+		if (ImGui.MenuItem("Avatar Mask"))
+			BeginNewItem(19, "NewMask");
 		if (ImGui.MenuItem("Material"))
 			BeginNewItem(9, "NewMaterial");
 		if (ImGui.MenuItem("Shader Graph (visual shader)"))
@@ -840,6 +843,8 @@ extension EditorApp
 			OpenAnimator(entry.path);
 		else if (entry.name.EndsWith(".tanim"))
 			OpenAnimationClip(entry.path);
+		else if (entry.name.EndsWith(".tmask"))
+			OpenAvatarMask(entry.path);
 		else if (entry.name.EndsWith(".tdialogue"))
 			OpenDialogue(entry.path);
 		else if (entry.name.EndsWith(".tsequence"))
@@ -1041,6 +1046,8 @@ extension EditorApp
 			CreateAnimatorAsset(mNewItemName);
 		case 8:
 			CreateClipAsset(mNewItemName);
+		case 19:
+			CreateAvatarMaskAsset(mNewItemName);
 		case 9:
 			CreateMaterialAsset(mNewItemName);
 		case 10:

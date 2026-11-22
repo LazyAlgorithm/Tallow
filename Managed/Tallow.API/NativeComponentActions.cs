@@ -414,6 +414,15 @@ public readonly partial record struct SkinnedMeshRenderer
             throw ActionText.Missing(GameObject, "Skinned Mesh Renderer");
     }
 
+    /// <summary>Plays a clip on the joints an avatar mask lets through (a .tmask path in the project) over the base animation.</summary>
+    public void PlayLayerMasked(string clip, string maskPath, float fadeSeconds = 0.15f)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(clip);
+        ArgumentException.ThrowIfNullOrEmpty(maskPath);
+        if (!CSharpComponentActions.SkinnedLayerMasked(GameObject.SceneId, GameObject.Id, clip, maskPath, fadeSeconds))
+            throw ActionText.Missing(GameObject, "Skinned Mesh Renderer");
+    }
+
     /// <summary>Fades the layer out.</summary>
     public void StopLayer(float fadeSeconds = 0.15f)
     {
