@@ -420,7 +420,13 @@ extension EditorApp
 			vertexColors[v] = Color(c.r * light, c.g * light, c.b * light, 1).ToABGR();
 		}
 		let triangles = Gizmos.Triangles.Vertices;
-		for (int i = 0; i + 2 < mRigTriangles.Count; i += 3)
+		// A dense model (a photogrammetry scan has hundreds of thousands of triangles) draws a share of them: the
+		// preview is there to place markers and weights, and the whole of it would use up the frame's transient
+		// buffer in every view it is drawn into (Scene and Game), leaving the sky and the interface nothing.
+		const int32 PreviewTriangleBudget = 24000;
+		let triangleCount = mRigTriangles.Count / 3;
+		let step = triangleCount > PreviewTriangleBudget ? (triangleCount + PreviewTriangleBudget - 1) / PreviewTriangleBudget : 1;
+		for (int i = 0; i + 2 < mRigTriangles.Count; i += 3 * step)
 		{
 			for (int k < 3)
 			{
