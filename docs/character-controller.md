@@ -42,7 +42,7 @@ public override void Update(TickInput input, float deltaTime)
     var controller = GetComponent<CharacterController>();
 
     // Walking: you give the horizontal velocity; falling, gravity and jumping are handled.
-    controller.SimpleMove(input.MoveDirection * speed, deltaTime, input.Pressed(InputButton.Jump) ? 6.5f : 0f);
+    controller.SimpleMove(input.MoveDirection * speed, deltaTime, input.Pressed("Jump") ? 6.5f : 0f);
 
     // Full control: exactly this velocity, no gravity added (flying, swimming, ladders).
     controller.Move(velocity, deltaTime);

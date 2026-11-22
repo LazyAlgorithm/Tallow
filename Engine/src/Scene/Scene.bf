@@ -1461,7 +1461,7 @@ class Scene
 		for (int i = 0; i < mPendingStart.Count; i++)
 		{
 			let component = mPendingStart[i];
-			if (component == null)
+			if (component == null || component.GameObject.IsDestroyed)
 				continue;
 			if (!component.[Friend]mStarted && component.IsActiveAndEnabled)
 			{
@@ -1865,6 +1865,7 @@ class Scene
 		mFrameInput.previous = mFrameInput.raw;
 		mFrameInput.raw = default;
 		LocalControls.Read(ref mFrameInput.raw);
+		mFrameInput.raw.actions = InputActions.ReadNetworked();
 		if (mEarlyList.Count == 0)
 			return;
 		let deltaTime = Time.DeltaTime;

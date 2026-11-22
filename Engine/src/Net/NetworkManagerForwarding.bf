@@ -292,7 +292,7 @@ extension NetworkManager
 		return wrong;
 	}
 
-	static bool InputsSame(NetInput a, NetInput b) => a.moveX == b.moveX && a.moveZ == b.moveZ && a.yaw == b.yaw && a.pitch == b.pitch && a.buttons == b.buttons;
+	static bool InputsSame(NetInput a, NetInput b) => a.Matches(b);
 
 	/// Client, every tick after its own player: runs the other players it has controls for, guessing the last
 	/// controls where the real ones have not come yet. One not heard of for two seconds goes back to being shown

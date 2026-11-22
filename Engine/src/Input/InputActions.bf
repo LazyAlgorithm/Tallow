@@ -9,6 +9,11 @@ enum InputActionKind : int32
 	Button, Axis, Vector
 }
 
+enum InputActionNetwork : int32
+{
+	Inherit, Networked, Local
+}
+
 /// What a binding reads.
 enum InputBindingKind : int32
 {
@@ -79,6 +84,8 @@ class InputAction
 	public String name = new .() ~ delete _;
 	/// Whether it gives a button, an axis or a direction.
 	public InputActionKind kind;
+	public InputActionNetwork network;
+	public int networkSlot = -1;
 	/// Every way of working it.
 	public List<InputBinding> bindings = new .() ~ delete _;
 
@@ -111,6 +118,7 @@ class InputMap
 	public String name = new .() ~ delete _;
 	/// Whether its actions are read (see InputActions.SetMapEnabled).
 	public bool enabled = true;
+	public bool networked;
 	/// The map's actions.
 	public List<InputAction> actions = new .() ~ DeleteContainerAndItems!(_);
 
@@ -151,6 +159,9 @@ static class InputActions
 	static Dictionary<String, InputAction> sLookup = new .() ~ DeleteDictionaryAndKeys!(_);
 	static bool sLoaded;
 	static bool sStale = true;
+	static List<InputAction> sNetworked = new .() ~ delete _;
+	static Dictionary<String, int> sNetworkShortNames = new .() ~ delete _;
+	static uint32 sNetworkSchema;
 
 	/// The engine's own actions, as text in the format of Input.tinput. New projects start from this.
 	public const String StandardText = """
@@ -345,6 +356,7 @@ static class InputActions
 			{
 				map = new InputMap();
 				map.name.Set(words[1]);
+				map.networked = words.Count > 2 && words[2] == "networked";
 				maps.Add(map);
 				action = null;
 			}
@@ -360,6 +372,8 @@ static class InputActions
 				action.name.Set(words[1]);
 				if (words.Count > 2)
 					action.kind = words[2] == "vector" ? .Vector : (words[2] == "axis" ? .Axis : .Button);
+				if (words.Count > 3)
+					action.network = words[3] == "networked" ? .Networked : (words[3] == "local" ? .Local : .Inherit);
 				map.actions.Add(action);
 			}
 			else if (words[0] == "bind" && words.Count > 1 && action != null)
@@ -378,10 +392,12 @@ static class InputActions
 		EnsureLoaded();
 		for (let map in sMaps)
 		{
-			text.AppendF("map {}\n", map.name);
+			text.AppendF("map {}{}\n", map.name, map.networked ? " networked" : "");
 			for (let action in map.actions)
 			{
-				text.AppendF("action {} {}\n", action.name, action.kind == .Vector ? "vector" : (action.kind == .Axis ? "axis" : "button"));
+				let kind = action.kind == .Vector ? "vector" : (action.kind == .Axis ? "axis" : "button");
+				let network = action.network == .Networked ? " networked" : (action.network == .Local ? " local" : "");
+				text.AppendF("action {} {}{}\n", action.name, kind, network);
 				for (let binding in action.bindings)
 				{
 					text.Append("bind ");
@@ -432,6 +448,7 @@ static class InputActions
 		}
 		Add(sMaps);
 		Add(sStandard);
+		RebuildNetworkSchema();
 		// Project actions with a standard action's name and kind fall back on its bindings while they have none.
 		for (let map in sMaps)
 		{
@@ -449,6 +466,102 @@ static class InputActions
 				}
 			}
 		}
+	}
+
+	static void RebuildNetworkSchema()
+	{
+		sNetworked.Clear();
+		sNetworkShortNames.Clear();
+		sNetworkSchema = 0;
+		List<(String name, InputAction action)> candidates = scope .();
+		defer
+		{
+			for (let entry in candidates)
+				delete entry.name;
+		}
+		for (let map in sMaps)
+		{
+			for (let action in map.actions)
+			{
+				action.networkSlot = -1;
+				if (action.network == .Local || (action.network == .Inherit && !map.networked))
+					continue;
+				let full = scope $"{map.name}/{action.name}";
+				if (sLookup.TryGetValueAlt(full, let found) && found == action)
+					candidates.Add((new String(full), action));
+			}
+		}
+		if (candidates.IsEmpty)
+			return;
+		candidates.Sort(scope (a, b) => a.name.CompareTo(b.name));
+		int buttons = 0;
+		int axes = 0;
+		uint32 hash = 2166136261;
+		for (let entry in candidates)
+		{
+			let action = entry.action;
+			if (action.kind == .Button && buttons < NetActions.ButtonCount)
+				action.networkSlot = buttons++;
+			else if (action.kind != .Button && axes + (action.kind == .Vector ? 2 : 1) <= NetActions.AxisCount)
+			{
+				action.networkSlot = (action.kind == .Vector ? NetActions.FirstVector : NetActions.FirstAxis) + axes;
+				axes += action.kind == .Vector ? 2 : 1;
+			}
+			else
+			{
+				Log.Warning(scope $"Input actions: {entry.name} exceeds the networked action capacity.");
+				continue;
+			}
+			sNetworked.Add(action);
+			sNetworkShortNames[action.name] = sNetworkShortNames.ContainsKey(action.name) ? -2 : action.networkSlot;
+			for (let letter in entry.name.RawChars)
+				hash = (hash ^ (uint8)letter) &* 16777619;
+			hash = (hash ^ (uint32)(action.networkSlot + 256)) &* 16777619;
+		}
+		sNetworkSchema = hash == 0 ? 1 : hash;
+	}
+
+	public static uint32 NetworkSchema
+	{
+		get
+		{
+			EnsureLoaded();
+			if (sStale)
+				Rebuild();
+			return sNetworkSchema;
+		}
+	}
+
+	public static int NetworkSlot(StringView name)
+	{
+		if (NetworkSchema == 0)
+			return -1;
+		if (name.Contains('/'))
+			return sLookup.TryGetValueAlt(name, let action) ? action.networkSlot : -1;
+		return sNetworkShortNames.TryGetValueAlt(name, let slot) ? slot : -1;
+	}
+
+	public static NetActions ReadNetworked()
+	{
+		NetActions sample = default;
+		if (!Input.Enabled || NetworkSchema == 0)
+			return sample;
+		for (let action in sNetworked)
+		{
+			let slot = action.networkSlot;
+			switch (action.kind)
+			{
+			case .Button:
+				if (action.Held)
+					sample.buttons |= (uint32)1 << slot;
+			case .Axis:
+				sample.SetAxis(slot - NetActions.FirstAxis, action.value);
+			case .Vector:
+				sample.SetAxis(slot - NetActions.FirstVector, action.vector.x);
+				sample.SetAxis(slot - NetActions.FirstVector + 1, action.vector.y);
+			}
+		}
+		return sample;
 	}
 
 	/// The engine's standard action of a name, or null: what a project action of that name and kind uses while it

@@ -62,30 +62,43 @@ static class FirstPersonTemplate
 		Link(hasCamera, 1, setCamera, 0);
 		Link(findCamera, 0, setCamera, 2);
 
-		// Every frame. On Update's outputs: 1 Delta Time, 3 Move Direction, 4 Yaw, 6 Look Rotation, 8 Jump Pressed,
-		// 9 Sprint, 10 Crouch.
+		// On Update supplies the shared TickInput value and delta time.
 		let update = Node("event.update", .(0, 400));
+		GraphNode ReadInput(StringView key, Vector2 position, StringView action = "")
+		{
+			let reader = Node(key, position);
+			Link(update, 2, reader, 0);
+			if (!action.IsEmpty)
+				reader.values[1].Set(action);
+			return reader;
+		}
+		let sprintHeld = ReadInput("input.tick.held", .(40, 510), "Sprint");
+		let crouchHeld = ReadInput("input.tick.held", .(40, 1000), "Crouch");
+		let jumpPressed = ReadInput("input.tick.pressed", .(40, 750), "Jump");
+		let moveDirection = ReadInput("input.tick.direction", .(300, 635));
+		let yaw = ReadInput("input.tick.yaw", .(1080, 720));
+		let lookRotation = ReadInput("input.tick.rotation", .(3670, 560));
 
 		// Walk, run while Sprint is held, and sneak while crouching.
 		let walk = graph.AddVariableNode(walkSpeed, false, .(300, 470));
 		let sprint = graph.AddVariableNode(sprintSpeed, false, .(300, 540));
 		let runOrWalk = Node("logic.select", .(540, 430));
-		Link(update, 9, runOrWalk, 0);
+		Link(sprintHeld, 0, runOrWalk, 0);
 		Link(sprint, 0, runOrWalk, 1);
 		Link(walk, 0, runOrWalk, 2);
 		let sneak = graph.AddVariableNode(crouchSpeed, false, .(540, 560));
 		let speed = Node("logic.select", .(800, 430));
-		Link(update, 10, speed, 0);
+		Link(crouchHeld, 0, speed, 0);
 		Link(sneak, 0, speed, 1);
 		Link(runOrWalk, 0, speed, 2);
 		let velocity = Node("math.any.mul", .(1060, 430));
-		Link(update, 3, velocity, 0);
+		Link(moveDirection, 0, velocity, 0);
 		Link(speed, 0, velocity, 1);
 
 		// Jump: the jump speed on the frame Jump is pressed, otherwise 0.
 		let jump = graph.AddVariableNode(jumpSpeed, false, .(300, 790));
 		let jumpNow = Node("logic.select", .(540, 750));
-		Link(update, 8, jumpNow, 0);
+		Link(jumpPressed, 0, jumpNow, 0);
 		Link(jump, 0, jumpNow, 1);
 
 		// Move the character (it keeps its own gravity and only jumps from the ground).
@@ -97,7 +110,7 @@ static class FirstPersonTemplate
 
 		// Turn the body to where the player looks (sideways only).
 		let facing = Node("math.reuler", .(1350, 720));
-		Link(update, 4, facing, 1);
+		Link(yaw, 0, facing, 1);
 		let turn = Node("transform.setrotation", .(1620, 720));
 		Link(move, 0, turn, 0);
 		Link(facing, 0, turn, 1);
@@ -107,7 +120,7 @@ static class FirstPersonTemplate
 		let crouchTall = graph.AddVariableNode(crouchHeight, false, .(300, 1030));
 		let standTall = graph.AddVariableNode(standHeight, false, .(300, 1100));
 		let height = Node("logic.select", .(540, 1000));
-		Link(update, 10, height, 0);
+		Link(crouchHeld, 0, height, 0);
 		Link(crouchTall, 0, height, 1);
 		Link(standTall, 0, height, 2);
 		let resize = Node("physics.charheight", .(1620, 1000));
@@ -155,15 +168,15 @@ static class FirstPersonTemplate
 		let aimCamera = Node("transform.objsetrotation", .(3670, 430));
 		Link(placeCamera, 0, aimCamera, 0);
 		Link(cameraNow, 0, aimCamera, 1);
-		Link(update, 6, aimCamera, 2);
+		Link(lookRotation, 0, aimCamera, 2);
 
 		Comment(graph, "Start: lock the mouse and find the camera", .(0.30f, 0.45f, 0.35f, 1), start, lockMouse, cameraForCheck, hasCamera, findCamera, setCamera);
-		Comment(graph, "Walk, run while Sprint is held, sneak while crouching", .(0.35f, 0.42f, 0.55f, 1), walk, sprint, runOrWalk, sneak, speed, velocity);
-		Comment(graph, "Jump: only on the frame Jump is pressed", .(0.55f, 0.42f, 0.28f, 1), jump, jumpNow);
+		Comment(graph, "Walk, run while Sprint is held, sneak while crouching", .(0.35f, 0.42f, 0.55f, 1), sprintHeld, moveDirection, walk, sprint, runOrWalk, sneak, speed, velocity);
+		Comment(graph, "Jump: only on the frame Jump is pressed", .(0.55f, 0.42f, 0.28f, 1), jumpPressed, jump, jumpNow);
 		Comment(graph, "Move the character (gravity is built in)", .(0.45f, 0.35f, 0.55f, 1), move);
-		Comment(graph, "Turn the body to face where you look", .(0.55f, 0.32f, 0.32f, 1), facing, turn);
-		Comment(graph, "Crouch: head down on the ground, feet up in the air (crouch jump)", .(0.50f, 0.45f, 0.25f, 1), crouchTall, standTall, height, resize);
-		Comment(graph, "First-person camera at eye height, lowered smoothly when crouching", .(0.28f, 0.48f, 0.52f, 1), heightNow, standForEye, lowered, eye, eyeTarget, eyeBefore, lift, eyeKept, eyeSmooth, setEye, cameraNow, position, eyeAfter, eyeOffset, eyePosition, placeCamera, aimCamera);
+		Comment(graph, "Turn the body to face where you look", .(0.55f, 0.32f, 0.32f, 1), yaw, facing, turn);
+		Comment(graph, "Crouch: head down on the ground, feet up in the air (crouch jump)", .(0.50f, 0.45f, 0.25f, 1), crouchHeld, crouchTall, standTall, height, resize);
+		Comment(graph, "First-person camera at eye height, lowered smoothly when crouching", .(0.28f, 0.48f, 0.52f, 1), lookRotation, heightNow, standForEye, lowered, eye, eyeTarget, eyeBefore, lift, eyeKept, eyeSmooth, setEye, cameraNow, position, eyeAfter, eyeOffset, eyePosition, placeCamera, aimCamera);
 	}
 
 	/// A comment box around some nodes, with room for its title above them.

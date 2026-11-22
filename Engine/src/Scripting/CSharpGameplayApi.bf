@@ -196,6 +196,9 @@ static class CSharpInputActions
 	public static void SetMapEnabled(StringView map, bool enabled) => InputActions.SetMapEnabled(map, enabled);
 
 	[CSharpExpose]
+	public static int32 NetworkSlot(StringView name) => (int32)TickInput.ActionSlot(name);
+
+	[CSharpExpose]
 	public static bool Held(StringView name) => InputActions.Held(name);
 	[CSharpExpose]
 	public static bool Pressed(StringView name) => InputActions.Pressed(name);

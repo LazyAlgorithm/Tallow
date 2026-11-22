@@ -386,6 +386,8 @@ class NetworkManager
 	const uint8 MsgLink = 20;
 	// Each packet of controls repeats the ticks before it, so that a lost packet costs nothing.
 	const int InputRedundancy = 3;
+	// The high bit of the redundant tick count signals a named action schema.
+	const uint8 InputHasActionSchema = 0x80;
 	// More controls than this waiting on the server means the client has run ahead; the oldest are dropped.
 	const int MaxQueuedInputs = 8;
 	// An object that has stopped changing is still sent this many more times, in case the last word was lost,

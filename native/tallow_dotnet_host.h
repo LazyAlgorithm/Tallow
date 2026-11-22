@@ -36,6 +36,11 @@ typedef struct tn_csharp_callbacks {
         int32_t script_instance, int32_t event_id);
 } tn_csharp_callbacks;
 
+typedef struct tn_csharp_tick_actions {
+    uint32_t buttons;
+    uint32_t axes[4];
+} tn_csharp_tick_actions;
+
 // ABI mirror of Tallow's current and previous tick controls.
 typedef struct tn_csharp_tick_input {
     float move_x;
@@ -44,9 +49,13 @@ typedef struct tn_csharp_tick_input {
     float pitch;
     uint32_t buttons;
     uint32_t previous_buttons;
+    tn_csharp_tick_actions actions;
+    tn_csharp_tick_actions previous_actions;
+    float previous_move_x;
+    float previous_move_z;
 } tn_csharp_tick_input;
 
-// Fixed 32-byte C ABI record. Every managed script keeps its own current/
+// Fixed C ABI record. Every managed script keeps its own current/
 // previous input, replay order and delta time; no ownership pointers cross.
 typedef struct tn_csharp_tick_batch_item {
     int32_t instance;

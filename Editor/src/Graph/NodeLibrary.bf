@@ -55,7 +55,7 @@ static class NodeLibrary
 	/// Whether a C# graph's object type is a struct (GameObject and the physics handles): no null, only default.
 	public static bool IsCSharpStruct(StringView typeName)
 	{
-		if (typeName.IsEmpty || typeName == "GameObject")
+		if (typeName.IsEmpty || typeName == "GameObject" || typeName == "TickInput")
 			return true;
 		for (let type in CSharpComponentTypes)
 			if (type == typeName)
@@ -523,25 +523,22 @@ static class NodeLibrary
 
 	static NodeDef Control(StringView key, StringView title) => Add(key, "Flow Control", title, .Control, "");
 
-	/// Update's signature and outputs: the delta time and the controls (Component.Update).
 	/// Update, EarlyUpdate and LateUpdate: the tick's controls and delta time.
 	static NodeDef TickOutputs(NodeDef def)
 	{
 		def.signature.Set(scope $"public override void {def.code}(TickInput input, float deltaTime)");
-		def.Out("Delta Time", .Float, "float", "deltaTime").Out("Move", .Vector2, "Vector2", "input.Move").Out("Move Direction", .Vector3, "Vector3", "input.MoveDirection")
-			.Out("Yaw", .Float, "float", "input.Yaw").Out("Pitch", .Float, "float", "input.Pitch").Out("Look Rotation", .Quaternion, "Quaternion", "input.LookRotation")
-			.Out("Jump", .Bool, "bool", "input.Jump").Out("Jump Pressed", .Bool, "bool", "input.Pressed(.Jump)").Out("Sprint", .Bool, "bool", "input.Sprint")
-			.Out("Crouch", .Bool, "bool", "input.Crouch").Out("Fire", .Bool, "bool", "input.Fire").Out("Fire Pressed", .Bool, "bool", "input.Pressed(.Fire)")
-			.Out("Use Pressed", .Bool, "bool", "input.Pressed(.Use)");
-		return def;
+		return def.Out("Delta Time", .Float, "float", "deltaTime").Out("Input", .Object, "TickInput", "input");
 	}
+
+	static NodeDef TickValue(StringView key, StringView title, PinType result, StringView code)
+		=> Add(key, "Input|Tick Input", title, .Value, code).In("Input", .Object, "TickInput", "default(TickInput)").Out("", result);
 
 	/// Multiplayer. Everything a graph does through the engine is shared the same way it is from code; these are
 	/// for the cases code would use a Network Script or a message for.
 	static void AddNetworkNodes()
 	{
 		// Graphs saved before Update took the controls: the same event under its old name.
-		TickOutputs(Add("net.tick", "Add Event|Networking", "On Tick (old name of On Update)", .Event, "Update"));
+		TickOutputs(Add("net.tick", "Add Event|Networking", "On Tick", .Event, "Update")).hidden = true;
 		let event = Add("net.event", "Add Event|Networking", "On Network Event", .Event, "OnNetworkEvent").Also("Replicated Event RPC Multicast");
 		event.signature.Set("public override void OnNetworkEvent(StringView name, float value)");
 		event.guard.Set("name == {0}");
@@ -712,6 +709,16 @@ static class NodeLibrary
 		Add("text.empty", "Utilities|String", "Is Empty (String)", .Value, "StringView({0}).IsEmpty").Cs("string.IsNullOrEmpty({0})").In("Text", .String).Out("", .Bool);
 
 		// Keys, mouse and input actions.
+		TickValue("input.tick.held", "Tick Action Held", .Bool, "({0}).Held({1})").In("Action", .String).Default("Jump");
+		TickValue("input.tick.pressed", "Tick Action Pressed", .Bool, "({0}).Pressed({1})").In("Action", .String).Default("Jump");
+		TickValue("input.tick.released", "Tick Action Released", .Bool, "({0}).Released({1})").In("Action", .String).Default("Jump");
+		TickValue("input.tick.value", "Tick Action Value", .Float, "({0}).Value({1})").In("Action", .String);
+		TickValue("input.tick.vector", "Tick Action Vector", .Vector2, "({0}).Vector({1})").In("Action", .String).Default("Move");
+		TickValue("input.tick.move", "Tick Move", .Vector2, "({0}).Move");
+		TickValue("input.tick.direction", "Tick Move Direction", .Vector3, "({0}).MoveDirection");
+		TickValue("input.tick.yaw", "Tick Yaw", .Float, "({0}).Yaw");
+		TickValue("input.tick.pitch", "Tick Pitch", .Float, "({0}).Pitch");
+		TickValue("input.tick.rotation", "Tick Look Rotation", .Quaternion, "({0}).LookRotation");
 		Add("input.key", "Input|Keyboard", "Key Held", .Value, "Input.GetKey({0})").In("Key", .Enum, "KeyCode").Out("", .Bool).Also("Is Input Key Down");
 		Add("input.keydown", "Input|Keyboard", "Key Pressed", .Value, "Input.GetKeyDown({0})").In("Key", .Enum, "KeyCode").Out("", .Bool).Also("Was Input Key Just Pressed");
 		Add("input.keyup", "Input|Keyboard", "Key Released", .Value, "Input.GetKeyUp({0})").In("Key", .Enum, "KeyCode").Out("", .Bool).Also("Was Input Key Just Released");
@@ -1340,6 +1347,7 @@ static class NodeLibrary
 			let def = Add(key, path, scope $"{mCategory}: {title}" , kind, "");
 			def.fromApi = true;
 			def.fromGame = mType.fromProject;
+			def.hidden = mType.name == "TickInput";
 			def.group.Set(group);
 			if (!isStatic)
 			{

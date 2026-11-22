@@ -6,6 +6,10 @@ namespace Tallow;
 /// Everything a NetworkScript does must come from here, never from Input directly.
 struct TickInput
 {
+	// Slots above the named action payload refer to the built-in controls already carried by NetInput.
+	public const int StandardButtonSlot = 64;
+	public const int StandardMoveSlot = StandardButtonSlot + (int)InputButton.Custom8 + 1;
+
 	/// This tick's controls, as sent.
 	public NetInput raw;
 	/// The previous tick's controls, for telling a new press from a held key.
@@ -39,15 +43,62 @@ struct TickInput
 	/// Whether a button came up this tick.
 	public bool Released(InputButton button) => !raw.GetButton((int)button) && previous.GetButton((int)button);
 
-	/// Whether Jump is held.
+	public static int ActionSlot(StringView name)
+	{
+		let named = InputActions.NetworkSlot(name);
+		if (named != -1)
+			return named;
+		let definition = InputActions.Find(name);
+		if (definition?.network == .Local)
+			return -1;
+		let action = name.StartsWith("Player/") ? name.Substring(7) : name;
+		if (action != name && definition != InputActions.Find(action))
+			return -1;
+		if (action == "Move")
+			return StandardMoveSlot;
+		for (int i < LocalControls.ButtonNames.Count)
+			if (LocalControls.ButtonNames[i] == action)
+				return StandardButtonSlot + i;
+		return -1;
+	}
+
+	static float ValueAt(NetInput sample, int slot)
+	{
+		if (slot == StandardMoveSlot)
+			return Math.Min(Vector2(sample.moveX, sample.moveZ).Length, 1);
+		if (slot >= StandardButtonSlot)
+			return sample.GetButton(slot - StandardButtonSlot) ? 1 : 0;
+		return sample.actions.Value(slot);
+	}
+
+	/// A named action's value, as sampled on the controlling machine.
+	public float Value(StringView name) => ValueAt(raw, ActionSlot(name));
+	/// A named direction, including standard Move.
+	public Vector2 Vector(StringView name)
+	{
+		let slot = ActionSlot(name);
+		if (slot != StandardMoveSlot)
+			return raw.actions.Vector(slot);
+		let direction = Move;
+		return direction.LengthSquared > 1 ? direction.Normalized : direction;
+	}
+	public bool Held(StringView name) => Value(name) > 0.5f;
+	public bool Pressed(StringView name)
+	{
+		let slot = ActionSlot(name);
+		return ValueAt(raw, slot) > 0.5f && ValueAt(previous, slot) <= 0.5f;
+	}
+	public bool Released(StringView name)
+	{
+		let slot = ActionSlot(name);
+		return ValueAt(raw, slot) <= 0.5f && ValueAt(previous, slot) > 0.5f;
+	}
+
+	// Compatibility with existing Beef scripts. New code reads these by action name.
 	public bool Jump => Held(.Jump);
-	/// Whether Sprint is held.
 	public bool Sprint => Held(.Sprint);
-	/// Whether Crouch is held.
 	public bool Crouch => Held(.Crouch);
-	/// Whether Fire is held.
 	public bool Fire => Held(.Fire);
-	/// Whether Use is held.
 	public bool Use => Held(.Use);
 }
 
@@ -78,6 +129,9 @@ enum InputButton : int32
 /// and mouse or a controller. Used for every Update that gets local controls, and by NetworkScript.
 static class LocalControls
 {
+	public static StringView[16] ButtonNames = .("Jump", "Sprint", "Crouch", "Fire", "Use", "Reload", "Ability1", "Ability2",
+		"Custom1", "Custom2", "Custom3", "Custom4", "Custom5", "Custom6", "Custom7", "Custom8");
+
 	/// The look direction built up from the mouse, for objects with no NetworkScript of their own.
 	public static float Yaw;
 	public static float Pitch;
@@ -103,25 +157,14 @@ static class LocalControls
 		input.moveZ = move.y;
 		input.yaw = yaw;
 		input.pitch = pitch;
-		input.SetButton((int)InputButton.Jump, InputActions.Held("Jump"));
-		input.SetButton((int)InputButton.Sprint, InputActions.Held("Sprint"));
-		input.SetButton((int)InputButton.Crouch, InputActions.Held("Crouch"));
-		input.SetButton((int)InputButton.Fire, InputActions.Held("Fire"));
-		input.SetButton((int)InputButton.Use, InputActions.Held("Use"));
-		input.SetButton((int)InputButton.Reload, InputActions.Held("Reload"));
-		input.SetButton((int)InputButton.Ability1, InputActions.Held("Ability1"));
-		input.SetButton((int)InputButton.Ability2, InputActions.Held("Ability2"));
-		// The free buttons follow input actions of the same names when the project has them (Window > Input
-		// Actions), so a game in any language gets its own controls without code; ReadInput can still set them.
-		for (int i < 8)
+		for (int i < ButtonNames.Count)
 		{
-			let name = sCustomNames[i];
-			if (InputActions.Held(name))
-				input.SetButton((int)InputButton.Custom1 + i, true);
+			// A behavior's legacy Custom bit can be combined with its action binding.
+			let held = InputActions.Held(ButtonNames[i]);
+			if (i < (int)InputButton.Custom1 || held)
+				input.SetButton(i, held);
 		}
 	}
-
-	static StringView[8] sCustomNames = .("Custom1", "Custom2", "Custom3", "Custom4", "Custom5", "Custom6", "Custom7", "Custom8");
 }
 
 /// Base class for anything a player controls, with its own mouse-look settings and extra controls (ReadInput).
@@ -134,7 +177,7 @@ static class LocalControls
 ///       public override void Update(TickInput input, float deltaTime)
 ///       {
 ///           Transform.Position += input.MoveDirection * speed * deltaTime;
-///           if (input.Pressed(.Jump)) Transform.Position += .(0, 1, 0);
+///           if (input.Pressed("Jump")) Transform.Position += .(0, 1, 0);
 ///       }
 ///   }
 ///

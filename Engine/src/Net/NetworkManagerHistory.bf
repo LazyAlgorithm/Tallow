@@ -527,6 +527,23 @@ extension NetworkManager
 		if (stepPhysics)
 			CaptureOtherBodies(others);
 
+		if (ackTick < mTick)
+		{
+			// Pressed and Released compare against the tick before the replay, not the live tick.
+			let slot = ackTick % InputHistory;
+			for (let identity in mIdentities)
+			{
+				if (identity.ownerId == LocalClientId)
+					identity.LastInput = ackTick > 0 ? mInputs[slot] : default;
+			}
+			for (let remote in mRemotePlayers.Values)
+			{
+				let previous = remote.knownAt[slot] != ackTick && remote.usedAt[slot] == ackTick
+					? remote.used[slot] : remote.For(ackTick);
+				remote.identity.LastInput = ackTick > 0 ? previous : default;
+			}
+		}
+
 		Replaying = true;
 		mReplayOwned = owned;
 		mReplayOthers = others;

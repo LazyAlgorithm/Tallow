@@ -136,6 +136,58 @@ struct NetReader
 	}
 }
 
+/// Named action values, already quantized so prediction and replay use the same sample.
+[CRepr]
+struct NetActions
+{
+	public const int ButtonCount = 32;
+	public const int AxisCount = 16;
+	public const int FirstAxis = ButtonCount;
+	public const int FirstVector = FirstAxis + AxisCount;
+
+	public uint32 buttons;
+	public uint32[AxisCount / 4] axes;
+
+	public void SetAxis(int index, float value) mut
+	{
+		let packed = value.IsFinite ? (int8)Math.Round(Mathf.Clamp(value, -1, 1) * 127) : (int8)0;
+		SetPackedAxis(index, (uint8)packed);
+	}
+
+	public void SetPackedAxis(int index, uint8 value) mut
+	{
+		let shift = (index % 4) * 8;
+		axes[index / 4] = (axes[index / 4] & ~((uint32)255 << shift)) | ((uint32)value << shift);
+	}
+
+	public uint8 PackedAxis(int index) => (uint8)(axes[index / 4] >> ((index % 4) * 8));
+	public float Axis(int index) => Math.Max((float)(int8)PackedAxis(index) / 127, -1);
+	public bool HasAxes => (axes[0] | axes[1] | axes[2] | axes[3]) != 0;
+
+	public bool Matches(NetActions other) => buttons == other.buttons &&
+		axes[0] == other.axes[0] && axes[1] == other.axes[1] && axes[2] == other.axes[2] && axes[3] == other.axes[3];
+
+	public float Value(int slot)
+	{
+		if (slot < 0)
+			return 0;
+		if (slot < FirstAxis)
+			return (buttons & ((uint32)1 << slot)) != 0 ? 1 : 0;
+		if (slot < FirstVector)
+			return Axis(slot - FirstAxis);
+		return Vector(slot).Length;
+	}
+
+	public Vector2 Vector(int slot)
+	{
+		let index = slot - FirstVector;
+		if (index < 0 || index + 1 >= AxisCount)
+			return .Zero;
+		let direction = Vector2(Axis(index), Axis(index + 1));
+		return direction.LengthSquared > 1 ? direction.Normalized : direction;
+	}
+}
+
 /// One tick of player intent. Sent from the owning client to the server, and replayed during prediction.
 [CRepr]
 struct NetInput
@@ -150,6 +202,10 @@ struct NetInput
 	public float pitch;
 	/// Which buttons are held, one bit each.
 	public uint32 buttons;
+	public NetActions actions;
+
+	public bool Matches(NetInput other) => moveX == other.moveX && moveZ == other.moveZ &&
+		yaw == other.yaw && pitch == other.pitch && buttons == other.buttons && actions.Matches(other.actions);
 
 	/// Whether a button (0 to 31) is held.
 	public bool GetButton(int index) => (buttons & ((uint32)1 << index)) != 0;
@@ -164,7 +220,7 @@ struct NetInput
 }
 
 /// Packs what goes over the network every tick into few bytes: positions to about two millimetres, rotations to a
-/// fraction of a degree, controls to nine bytes.
+/// fraction of a degree, and idle controls to a single byte after the first tick.
 static class NetPack
 {
 	/// Steps per world unit in a packed position.
@@ -485,17 +541,24 @@ static class NetPack
 
 	const uint8 InputSame = 1;
 	const uint8 InputWideButtons = 2;
+	const uint8 InputActionButtons = 4;
+	const uint8 InputActionAxes = 8;
 
 	/// Writes one tick of controls; a tick the same as the one before it in the packet takes a single byte.
 	public static void WriteInput(NetWriter writer, NetInput input, NetInput previous, bool hasPrevious)
 	{
-		if (hasPrevious && input.moveX == previous.moveX && input.moveZ == previous.moveZ && input.yaw == previous.yaw && input.pitch == previous.pitch && input.buttons == previous.buttons)
+		if (hasPrevious && input.Matches(previous))
 		{
 			writer.Write(InputSame);
 			return;
 		}
 		let wide = input.buttons > 0xFFFF;
-		writer.Write(wide ? InputWideButtons : (uint8)0);
+		uint8 flags = wide ? InputWideButtons : 0;
+		if (input.actions.buttons != 0)
+			flags |= InputActionButtons;
+		if (input.actions.HasAxes)
+			flags |= InputActionAxes;
+		writer.Write(flags);
 		writer.Write(MoveByte(input.moveX));
 		writer.Write(MoveByte(input.moveZ));
 		writer.Write(AngleShort(input.yaw));
@@ -504,6 +567,19 @@ static class NetPack
 			writer.Write(input.buttons);
 		else
 			writer.Write((uint16)input.buttons);
+		if ((flags & InputActionButtons) != 0)
+			writer.Write(input.actions.buttons);
+		if ((flags & InputActionAxes) != 0)
+		{
+			uint16 mask = 0;
+			for (int i < NetActions.AxisCount)
+				if (input.actions.PackedAxis(i) != 0)
+					mask |= (uint16)(1 << i);
+			writer.Write(mask);
+			for (int i < NetActions.AxisCount)
+				if ((mask & (1 << i)) != 0)
+					writer.Write(input.actions.PackedAxis(i));
+		}
 	}
 
 	/// Reads a tick's controls, sent as changes from the tick before.
@@ -518,6 +594,15 @@ static class NetPack
 		input.yaw = (float)reader.Read<int16>() * (360.0f / 65536);
 		input.pitch = (float)reader.Read<int16>() * (360.0f / 65536);
 		input.buttons = (flags & InputWideButtons) != 0 ? reader.Read<uint32>() : (uint32)reader.Read<uint16>();
+		if ((flags & InputActionButtons) != 0)
+			input.actions.buttons = reader.Read<uint32>();
+		if ((flags & InputActionAxes) != 0)
+		{
+			let mask = reader.Read<uint16>();
+			for (int i < NetActions.AxisCount)
+				if ((mask & (1 << i)) != 0)
+					input.actions.SetPackedAxis(i, reader.Read<uint8>());
+		}
 		return input;
 	}
 }

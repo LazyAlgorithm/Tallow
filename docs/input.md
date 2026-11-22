@@ -10,7 +10,7 @@ Three layers, each usable alone:
 
 These read this machine's controls, for menus and for what only this player sees. A networked script reads the
 same actions from the `TickInput` its `Update(TickInput input, float deltaTime)` gets (`input.MoveDirection`,
-`input.Pressed(InputButton.Jump)`), so the server and every client agree.
+`input.Pressed("Jump")`), so the server and every client agree.
 
 ```csharp
 if (InputActions.Pressed("Jump"))
@@ -64,6 +64,44 @@ A project with no `Input.tinput` has the engine's **standard actions**, and they
 A project action with **no bindings** of its own that has a standard action's name and kind (a `Jump` button, a `Move` direction) uses the standard bindings until you give it some; the window says so and offers **Copy The Standard Bindings**. `InputActions.CaptureBinding` on such an action copies the standard bindings in first, so rebinding one keeps the rest.
 
 `NetworkScript` and `CharacterMotor` read these for their built-in controls, so a networked player works with a controller with no code. **Start From The Standard Actions** in the window copies them into the project to change.
+
+### Networked action maps
+
+In **Window > Input Actions**, select a gameplay map and check **Networked**. Its actions inherit that setting.
+Use the **Networking** selector on an action to override its map. For example, a local push-to-talk action can
+live next to networked gameplay actions, and a single vehicle action can opt in from a local map.
+
+```text
+map Player networked
+action Aim button
+bind mouse 1
+action Talk button local
+bind key V
+```
+
+Read these actions from the `TickInput` provided to gameplay. Tallow samples the owner's bindings and uses the
+same tick values for prediction, server simulation and replay. Standard gameplay actions such as `Jump`,
+`Sprint`, `Crouch`, and `Fire` are already carried by the tick and can be read by name.
+
+```csharp
+bool aiming = input.Held("Aim");
+bool startedAiming = input.Pressed("Aim");
+float throttle = input.Value("Vehicle/Throttle");
+Vector2 steering = input.Vector("Vehicle/Steering");
+```
+
+`Released(name)` works the same way. Use `Map/Action` when networked maps share an action name. Buttons take one
+bit each, axes are sampled from -1 to 1, and vectors use two axes. A project can network up to 32 buttons and 16
+axis components. Vector values represent stick or key direction. For mouse look, use the existing tick
+`Yaw` and `Pitch`.
+
+The legacy `Input.GetAxis("Horizontal")` and `Input.GetAxis("Vertical")` read local keyboard input.
+Use `input.Move.X` and `input.Move.Y` for networked movement. For a custom scalar axis, define an
+`axis` action and read it with `InputActions.Value(name)` locally or `input.Value(name)` in a tick.
+
+Host and clients need the same networked action names and kinds. Change those definitions between sessions.
+Key and controller bindings can differ. Unmarked maps and actions stay local. Older projects can keep using
+the existing `InputButton` controls, including `Custom1` through `Custom8`.
 
 ### Letting players change the controls
 
@@ -143,7 +181,12 @@ Being one frame long, a flick suits an action read with `InputActions.Pressed`, 
 
 ## Visual scripting
 
-Everything above is in the graph editor's node list as it is in code: search for "InputActions", "Gamepad" or "Input". `InputActions > Pressed` with "Jump" typed in, wired to a branch, is the usual start.
+For local input in the graph editor, search for "InputActions", "Gamepad" or "Input". `InputActions > Pressed` with "Jump" typed in, wired to a branch, is the usual start.
+
+For gameplay, drag from **Input** on **On Update**, **On Early Update**, or **On Late Update**.
+Choose **Tick Action Held**, **Pressed**, **Released**, **Value**, or **Vector**, and enter an action name.
+For example, wire **Tick Action Pressed** with `Jump` into a Branch. The same Input pin feeds movement
+and view readers such as **Tick Move Direction** and **Tick Look Rotation**.
 
 ## Testing without the hardware
 

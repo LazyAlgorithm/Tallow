@@ -22,6 +22,9 @@ extension NetworkManager
 		// Whether this server sends field deltas to clients that acknowledge what they receive.
 		mWriter.Write((uint8)(FieldDeltas && OptimizeSnapshots ? 1 : 0));
 		mWriter.Write((uint8)(Lockstep ? 1 : 0));
+		let actionSchema = InputActions.NetworkSchema;
+		if (actionSchema != 0)
+			mWriter.Write(actionSchema);
 		Send(peer, true);
 		// Bring the newcomer up to date with everything spawned so far, then add their player.
 		for (let identity in mIdentities)
@@ -94,13 +97,23 @@ extension NetworkManager
 	void ReadInputs(ClientInfo client, ref NetReader reader)
 	{
 		let newest = reader.Read<uint32>();
-		let count = (int)reader.Read<uint8>();
+		let encodedCount = reader.Read<uint8>();
+		let count = (int)(encodedCount & ~InputHasActionSchema);
 		if (!reader.Ok || count > 32)
 			return;
 		AntiCheat.NoteInputs(this, client.id, newest);
 		// With the controls comes the server tick the player was being shown everyone else at, in quarter ticks;
 		// only the low bits are sent, the rest being close to the tick the server is on.
 		let viewLow = (int64)reader.Read<uint16>();
+		let actionSchema = (encodedCount & InputHasActionSchema) != 0 ? reader.Read<uint32>() : 0;
+		if (!reader.Ok)
+			return;
+		if (actionSchema != InputActions.NetworkSchema)
+		{
+			Log.Warning(scope $"Client {client.id} has a different networked input action layout.");
+			Kick(client.id);
+			return;
+		}
 		let now4 = (int64)mTick * 4;
 		var view4 = (now4 & ~(int64)0xFFFF) | viewLow;
 		if (view4 > now4 + 0x8000)
@@ -192,6 +205,7 @@ extension NetworkManager
 		// A player object with only plain scripts reads the project's input actions.
 		if (!gathered && controlled)
 			LocalControls.Read(ref input);
+		input.actions = InputActions.ReadNetworked();
 		return input;
 	}
 

@@ -524,10 +524,15 @@ public static unsafe class NativeEntrypoints
     {
         public float MoveX, MoveZ, Yaw, Pitch;
         public uint Buttons, PreviousButtons;
+        internal TickActions Actions, PreviousActions;
+        internal float PreviousMoveX, PreviousMoveZ;
+
+        internal readonly TickInput ToTick() => new(
+            new Vector2(MoveX, MoveZ), new Vector2(Yaw, Pitch), Buttons, PreviousButtons,
+            Actions, PreviousActions, new Vector2(PreviousMoveX, PreviousMoveZ));
     }
 
-    // Native/managed ABI: 4-byte instance, 24-byte current/previous
-    // TickInput, 4-byte deltaTime. No managed references or pointers.
+    // Native/managed ABI. No managed references or pointers.
     [StructLayout(LayoutKind.Sequential)]
     public struct NativeBatchInput
     {
@@ -655,7 +660,7 @@ public static unsafe class NativeEntrypoints
         {
             if (callbacks == 0)
                 throw new ArgumentNullException(nameof(callbacks));
-            if (sizeof(NativeInput) != 24 || sizeof(NativeBatchInput) != 32)
+            if (sizeof(NativeInput) != 72 || sizeof(NativeBatchInput) != 80)
                 throw new InvalidOperationException(
                     "Native TickInput batch layout does not match the host ABI.");
             Callbacks* native = (Callbacks*)callbacks;
@@ -1982,11 +1987,7 @@ public static unsafe class NativeEntrypoints
 
     private static void RunInputScript(Script script, NativeInput input, float deltaTime)
     {
-        var tick = new TickInput(
-            new Vector2(input.MoveX, input.MoveZ),
-            new Vector2(input.Yaw, input.Pitch),
-            input.Buttons, input.PreviousButtons);
-        script.Update(tick, deltaTime);
+        script.Update(input.ToTick(), deltaTime);
     }
 
     /// <summary>A game's EcsSystem on one bare entity, or (entity 0) on every one with its data no client owns.</summary>
@@ -1997,11 +1998,7 @@ public static unsafe class NativeEntrypoints
         {
             if (input == null)
                 throw new ArgumentNullException(nameof(input));
-            var tick = new TickInput(
-                new Vector2(input->MoveX, input->MoveZ),
-                new Vector2(input->Yaw, input->Pitch),
-                input->Buttons, input->PreviousButtons);
-            EcsSystems.Run(index, session, entity, tick, deltaTime);
+            EcsSystems.Run(index, session, entity, input->ToTick(), deltaTime);
             return 1;
         }
         catch (Exception exception)
@@ -2020,10 +2017,7 @@ public static unsafe class NativeEntrypoints
                 throw new ArgumentNullException(nameof(input));
             if (!sInstances.TryGetValue(instance, out Script? script))
                 throw new InvalidOperationException("Unknown managed gameplay instance.");
-            var tick = new TickInput(
-                new Vector2(input->MoveX, input->MoveZ),
-                new Vector2(input->Yaw, input->Pitch),
-                input->Buttons, input->PreviousButtons);
+            TickInput tick = input->ToTick();
             switch (phase)
             {
                 case 0: script.EarlyUpdate(tick, deltaTime); break;

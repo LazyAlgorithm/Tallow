@@ -13,8 +13,11 @@ extension NetworkManager
 		mWriter.Clear();
 		mWriter.Write(MsgInput);
 		mWriter.Write(newest);
-		mWriter.Write((uint8)count);
+		let actionSchema = InputActions.NetworkSchema;
+		mWriter.Write((uint8)(count | (actionSchema != 0 ? InputHasActionSchema : 0)));
 		mWriter.Write((uint16)((int64)Math.Round(mViewTick * 4) & 0xFFFF));
+		if (actionSchema != 0)
+			mWriter.Write(actionSchema);
 		NetInput previous = default;
 		for (int i = count - 1; i >= 0; i--)
 		{
@@ -61,18 +64,28 @@ extension NetworkManager
 
 	void ReadWelcome(ref NetReader reader)
 	{
-		LocalClientId = reader.Read<int32>();
+		let clientId = reader.Read<int32>();
 		reader.Read<uint32>();
 		let context = scope String();
 		reader.ReadString(context);
+		let deltasOffered = reader.Remaining > 0 && reader.Read<uint8>() != 0;
+		let lockstep = reader.Remaining > 0 && reader.Read<uint8>() != 0;
+		let actionSchema = reader.Remaining > 0 ? reader.Read<uint32>() : 0;
+		if (!reader.Ok || actionSchema != InputActions.NetworkSchema)
+		{
+			Log.Warning("Networked input actions do not match the server's Input.tinput.");
+			mTransport.Disconnect(mServerPeer);
+			return;
+		}
+		LocalClientId = clientId;
 		if (reader.Ok && OnSessionContext != null)
 			OnSessionContext(context);
-		mDeltasOffered = reader.Remaining > 0 && reader.Read<uint8>() != 0 && FieldDeltas;
+		mDeltasOffered = deltasOffered && FieldDeltas;
 		ResetDeltas();
 		ResetForwarding();
 		// Replicas a previous host sent go: this server sends its own.
 		NativeResetReplicas();
-		Lockstep = reader.Remaining > 0 && reader.Read<uint8>() != 0;
+		Lockstep = lockstep;
 		ResetLockstep();
 		mConnected = reader.Ok;
 		mTick = 0;

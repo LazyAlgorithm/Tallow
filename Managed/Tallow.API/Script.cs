@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Numerics;
 
 namespace Tallow;
@@ -137,6 +138,7 @@ public static class AssetKind
 }
 
 /// <summary>Buttons automatically collected and transmitted by the network input system.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public enum InputButton
 {
     Jump, Sprint, Crouch, Fire, Use, Reload, Ability1, Ability2,
@@ -150,29 +152,86 @@ public enum InputButton
 public readonly record struct TickInput(
     Vector2 Move, Vector2 Look, uint Buttons, uint PreviousButtons = 0)
 {
+    private readonly TickActions _actions;
+    private readonly TickActions _previousActions;
+    private readonly Vector2 _previousMove;
+    private const int StandardButtonSlot = 64;
+    private const int StandardMoveSlot = StandardButtonSlot + (int)InputButton.Custom8 + 1;
+
+    internal TickInput(Vector2 move, Vector2 look, uint buttons, uint previousButtons,
+        TickActions actions, TickActions previousActions, Vector2 previousMove) : this(move, look, buttons, previousButtons)
+    {
+        _actions = actions;
+        _previousActions = previousActions;
+        _previousMove = previousMove;
+    }
+
     /// <summary>Where the player looks, left and right, in degrees (Look.X).</summary>
     public float Yaw => Look.X;
     /// <summary>Where the player looks, up and down, in degrees (Look.Y).</summary>
     public float Pitch => Look.Y;
 
     /// <summary>Whether the button is down this tick.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Held(InputButton button) => (Buttons & (1u << (int)button)) != 0;
     /// <summary>Whether the button went down this tick (it was up the tick before).</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Pressed(InputButton button) =>
         (Buttons & (1u << (int)button)) != 0 && (PreviousButtons & (1u << (int)button)) == 0;
     /// <summary>Whether the button came up this tick (it was down the tick before).</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Released(InputButton button) =>
         (Buttons & (1u << (int)button)) == 0 && (PreviousButtons & (1u << (int)button)) != 0;
 
-    /// <summary>Whether Jump is held.</summary>
+    private static float ValueAt(TickActions sample, Vector2 move, uint buttons, int slot)
+    {
+        if (slot == StandardMoveSlot)
+            return MathF.Min(move.Length(), 1f);
+        if (slot >= StandardButtonSlot)
+            return (buttons & (1u << (slot - StandardButtonSlot))) != 0 ? 1f : 0f;
+        return sample.Value(slot);
+    }
+
+    /// <summary>The sampled value of an action. Use a name such as "Jump", "Aim" or "Player/Aim".</summary>
+    public float Value(string action) => ValueAt(_actions, Move, Buttons, CSharpInputActions.NetworkSlot(action));
+
+    /// <summary>The sampled direction of a vector action, including standard Move.</summary>
+    public Vector2 Vector(string action)
+    {
+        int slot = CSharpInputActions.NetworkSlot(action);
+        if (slot != StandardMoveSlot)
+            return _actions.Vector(slot);
+        return Move.LengthSquared() > 1f ? Vector2.Normalize(Move) : Move;
+    }
+
+    /// <summary>Whether the named action is above half strength this tick.</summary>
+    public bool Held(string action) => Value(action) > 0.5f;
+
+    /// <summary>Whether the named action crossed above half strength this tick.</summary>
+    public bool Pressed(string action)
+    {
+        int slot = CSharpInputActions.NetworkSlot(action);
+        return ValueAt(_actions, Move, Buttons, slot) > 0.5f &&
+            ValueAt(_previousActions, _previousMove, PreviousButtons, slot) <= 0.5f;
+    }
+
+    /// <summary>Whether the named action dropped to half strength or below this tick.</summary>
+    public bool Released(string action)
+    {
+        int slot = CSharpInputActions.NetworkSlot(action);
+        return ValueAt(_actions, Move, Buttons, slot) <= 0.5f &&
+            ValueAt(_previousActions, _previousMove, PreviousButtons, slot) > 0.5f;
+    }
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Jump => Held(InputButton.Jump);
-    /// <summary>Whether Sprint is held.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Sprint => Held(InputButton.Sprint);
-    /// <summary>Whether Crouch is held.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Crouch => Held(InputButton.Crouch);
-    /// <summary>Whether Fire is held.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Fire => Held(InputButton.Fire);
-    /// <summary>Whether Use is held.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Use => Held(InputButton.Use);
 
     /// <summary>The rotation of where the player looks (yaw, then pitch; no roll).</summary>
@@ -189,6 +248,47 @@ public readonly record struct TickInput(
                 Quaternion.CreateFromAxisAngle(Vector3.UnitY, Yaw * (MathF.PI / 180)));
             return direction.LengthSquared() > 1 ? Vector3.Normalize(direction) : direction;
         }
+    }
+}
+
+// Matches the native NetActions layout. Each axis occupies one signed byte in a 32-bit word.
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+internal struct TickActions
+{
+    private const int FirstAxis = 32;
+    private const int FirstVector = 48;
+    private const int AxisCount = 16;
+
+    private uint _buttons, _axes0, _axes1, _axes2, _axes3;
+
+    private readonly float Axis(int index)
+    {
+        uint word = (index / 4) switch
+        {
+            0 => _axes0,
+            1 => _axes1,
+            2 => _axes2,
+            _ => _axes3
+        };
+        return MathF.Max(unchecked((sbyte)(word >> (index % 4 * 8))) / 127f, -1f);
+    }
+
+    internal readonly float Value(int slot)
+    {
+        if (slot < 0)
+            return 0f;
+        if (slot < FirstAxis)
+            return (_buttons & (1u << slot)) != 0 ? 1f : 0f;
+        return slot < FirstVector ? Axis(slot - FirstAxis) : Vector(slot).Length();
+    }
+
+    internal readonly Vector2 Vector(int slot)
+    {
+        int index = slot - FirstVector;
+        if (index < 0 || index >= AxisCount - 1)
+            return Vector2.Zero;
+        var direction = new Vector2(Axis(index), Axis(index + 1));
+        return direction.LengthSquared() > 1f ? Vector2.Normalize(direction) : direction;
     }
 }
 

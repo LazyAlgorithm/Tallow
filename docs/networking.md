@@ -95,15 +95,21 @@ public class Hover : Script
     public override void Update(TickInput input, float deltaTime)
     {
         Transform.Position += input.MoveDirection * Speed * deltaTime;
-        if (input.Pressed(InputButton.Jump))
+        if (input.Pressed("Jump"))
             Transform.Position += new Vector3(0, 1, 0);
-        if (Scene.IsServer && input.Pressed(InputButton.Use))
+        if (Scene.IsServer && input.Pressed("Use"))
             Score++;
     }
 }
 ```
 
-`TickInput` gives `Move` (WASD or arrows), `MoveDirection` (Move turned to face where the player looks), `Yaw`, `Pitch`, `LookRotation`, and buttons: `Held`, `Pressed` and `Released` for `InputButton.Jump` (Space), `Sprint` (Shift), `Crouch` (Ctrl), `Fire` (left mouse), `Use` (E), `Reload` (R), `Ability1` (Q), `Ability2` (F) and `Custom1` to `Custom8`. The custom ones follow input actions of the same names: add an action called `Custom1` in **Window > Input Actions** and bind it to a key or button.
+`TickInput` gives `Move`, `MoveDirection` (movement turned to face where the player looks), `Yaw`, `Pitch`,
+and `LookRotation`. Read standard gameplay buttons by name with `Held`, `Pressed`, and `Released`. Names
+include `Jump`, `Sprint`, `Crouch`, `Fire`, `Use`, `Reload`, `Ability1`, and `Ability2`.
+
+For project-specific actions, mark the map or action **Networked** and read it by name from the same tick,
+for example `input.Held("Aim")`, `input.Value("Throttle")`, or `input.Vector("Steering")`. See
+[Networked action maps](input.md#networked-action-maps) for map defaults and per-action overrides.
 
 Three rules keep prediction working:
 
@@ -161,7 +167,7 @@ So when the server runs a player's tick, it knows what moment that player was lo
 ```csharp
 public override void Update(TickInput input, float deltaTime)
 {
-    if (Scene.IsServer && input.Pressed(InputButton.Fire))
+    if (Scene.IsServer && input.Pressed("Fire"))
     {
         PhysicsHit? hit;
         using (LagCompensated())

@@ -69,6 +69,13 @@ title shows the version it is. Values you typed in are kept where the pin's type
 B, A). **Print String** prints anything: numbers, booleans, vectors, rotations (as Euler angles), colors, objects and
 components (by name).
 
+## Tick input
+
+**On Update**, **On Early Update**, and **On Late Update** provide an **Input** pin of type `TickInput`.
+Drag from it to read a named action. Use **Tick Action Pressed** with `Jump` for a new press,
+or **Tick Action Held** with `Sprint` for a held action. The same pin supplies axes, directions, and the
+player's view. See [Input Actions](input.md#networked-action-maps) for choosing which custom actions are networked.
+
 ## Variables
 
 A variable can be a Boolean, Integer, Float, String, Vector 2D, Vector, Rotation, Color or **Object**. An Object

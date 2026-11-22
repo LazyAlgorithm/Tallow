@@ -217,6 +217,11 @@ extension EditorApp
 			mInputDirty = true;
 			InputActions.Changed();
 		}
+		if (ImGui.Checkbox("Networked", ref map.networked))
+		{
+			mInputDirty = true;
+			InputActions.Changed();
+		}
 		if (ImGui.SmallButton("Remove Map"))
 		{
 			maps.RemoveAt(mInputMap);
@@ -301,11 +306,17 @@ extension EditorApp
 						action.bindings.RemoveAt(b);
 				}
 				mInputDirty = true;
+				InputActions.Changed();
 			}
 			ImGui.EndCombo();
 		}
 		ImGui.SameLine();
 		ImGui.TextDisabled(InputKindHints[(int)action.kind]);
+		if (EnumCombo("Networking", ref action.network, 220))
+		{
+			mInputDirty = true;
+			InputActions.Changed();
+		}
 		// What the action is doing right now: try the keys and the controller and watch.
 		if (action.kind == .Vector)
 			ImGui.TextDisabled(scope String()..AppendF("Now: {:0.00}, {:0.00}", action.vector.x, action.vector.y).CStr());

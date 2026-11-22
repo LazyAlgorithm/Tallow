@@ -519,7 +519,7 @@ class NodeGraph
 	public void Save(StringView path)
 	{
 		let text = scope String();
-		text.AppendF("graph {}\n", SceneSerializer.Quote(name, .. scope .()));
+		text.AppendF("graph {} tick-input\n", SceneSerializer.Quote(name, .. scope .()));
 		for (let variable in variables)
 		{
 			let suffix = scope String(TypeSuffix(variable.type));
@@ -551,6 +551,7 @@ class NodeGraph
 			return false;
 		List<StringView> tokens = scope .();
 		List<String> storage = scope .();
+		bool hasTickInputPins = false;
 		defer
 		{
 			for (let s in storage)
@@ -561,7 +562,10 @@ class NodeGraph
 			tokens.Clear();
 			SceneSerializer.Tokenize(line, tokens, storage);
 			if (tokens.Count >= 2 && tokens[0] == "graph")
+			{
 				name.Set(tokens[1]);
+				hasTickInputPins = tokens.Count > 2 && tokens[2] == "tick-input";
+			}
 			else if (tokens.Count >= 3 && tokens[0] == "variable")
 			{
 				if (FindVariable(tokens[2]) != null)
@@ -605,12 +609,51 @@ class NodeGraph
 				link.toPin = SceneSerializer.ParseInt(tokens[4]);
 				let from = Find(link.fromNode);
 				let to = Find(link.toNode);
-				if (from != null && to != null && link.fromPin >= 0 && link.toPin >= 0
-					&& link.fromPin < from.def.outputs.Count && link.toPin < to.def.inputs.Count)
+				if (from != null && to != null && link.fromPin >= 0 && link.toPin >= 0 && link.toPin < to.def.inputs.Count &&
+					(link.fromPin < from.def.outputs.Count || (!hasTickInputPins && IsTickEvent(from) && link.fromPin < 14)))
 					links.Add(link);
 			}
 		}
+		if (!hasTickInputPins)
+			MigrateLegacyTickInputs();
 		return true;
+	}
+
+	static bool IsTickEvent(GraphNode node) => node.def.key == "event.update" || node.def.key == "event.early" ||
+		node.def.key == "event.late" || node.def.key == "net.tick";
+
+	// Previous files stored the individual output indices. Give each linked output one reader
+	// and keep its original destinations, including when it was wired to more than one node.
+	void MigrateLegacyTickInputs()
+	{
+		(StringView node, StringView action)[?] oldPins = .(
+			("input.tick.move", ""), ("input.tick.direction", ""), ("input.tick.yaw", ""),
+			("input.tick.pitch", ""), ("input.tick.rotation", ""), ("input.tick.held", "Jump"),
+			("input.tick.pressed", "Jump"), ("input.tick.held", "Sprint"), ("input.tick.held", "Crouch"),
+			("input.tick.held", "Fire"), ("input.tick.pressed", "Fire"), ("input.tick.pressed", "Use"));
+		Dictionary<uint64, GraphNode> readers = scope .();
+		let oldLinkCount = links.Count;
+		for (int i < oldLinkCount)
+		{
+			let link = links[i];
+			let index = link.fromPin - 2;
+			if (index < 0 || index >= oldPins.Count)
+				continue;
+			let source = Find(link.fromNode);
+			if (!IsTickEvent(source))
+				continue;
+			let key = ((uint64)(uint32)link.fromNode << 32) | (uint32)link.fromPin;
+			if (!readers.TryGetValue(key, var reader))
+			{
+				let pin = oldPins[index];
+				reader = AddNode(NodeLibrary.Find(pin.node), source.position + Vector2(225, index * 92));
+				if (!pin.action.IsEmpty)
+					reader.values[1].Set(pin.action);
+				readers[key] = reader;
+				links.Add(.() { fromNode = source.id, fromPin = 2, toNode = reader.id, toPin = 0 });
+			}
+			links[i] = .() { fromNode = reader.id, fromPin = 0, toNode = link.toNode, toPin = link.toPin };
+		}
 	}
 
 	// ---- compiler: graph to Beef source ----

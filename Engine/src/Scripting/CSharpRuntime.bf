@@ -359,9 +359,26 @@ static class CSharpRuntime
 		public float pitch;
 		public uint32 buttons;
 		public uint32 previousButtons;
+		public NetActions actions;
+		public NetActions previousActions;
+		public float previousMoveX, previousMoveZ;
+
+		public this(TickInput input)
+		{
+			moveX = input.raw.moveX;
+			moveZ = input.raw.moveZ;
+			yaw = input.raw.yaw;
+			pitch = input.raw.pitch;
+			buttons = input.raw.buttons;
+			previousButtons = input.previous.buttons;
+			actions = input.raw.actions;
+			previousActions = input.previous.actions;
+			previousMoveX = input.previous.moveX;
+			previousMoveZ = input.previous.moveZ;
+		}
 	}
 
-	/// Exactly the 32-byte layout of tn_csharp_tick_batch_item.
+	/// The native layout of tn_csharp_tick_batch_item.
     /// Only engine scheduling code creates this record.
     [CRepr]
     public struct NativeTickBatchItem
@@ -998,15 +1015,7 @@ static class CSharpRuntime
 	{
 		if (!Ready)
 			return false;
-		NativeTickInput native = .()
-		{
-			moveX = input.raw.moveX,
-			moveZ = input.raw.moveZ,
-			yaw = input.raw.yaw,
-			pitch = input.raw.pitch,
-			buttons = input.raw.buttons,
-			previousButtons = input.previous.buttons
-		};
+		NativeTickInput native = .(input);
 		if (tn_csharp_run_system(index, session, entity, &native, deltaTime) > 0)
 			return true;
 		ReportFailure("an ECS system");
@@ -1018,15 +1027,7 @@ static class CSharpRuntime
 	{
 		if (!Ready || instance <= 0)
 			return false;
-		NativeTickInput native = .()
-		{
-			moveX = input.raw.moveX,
-			moveZ = input.raw.moveZ,
-			yaw = input.raw.yaw,
-			pitch = input.raw.pitch,
-			buttons = input.raw.buttons,
-			previousButtons = input.previous.buttons
-		};
+		NativeTickInput native = .(input);
 		if (tn_csharp_tick_phase(instance, phase, &native, deltaTime) > 0)
 			return true;
 		ReportFailure(phase == 0 ? "EarlyUpdate" : "LateUpdate");
@@ -1038,15 +1039,7 @@ static class CSharpRuntime
 	{
 		if (!Ready || instance <= 0)
 			return false;
-		NativeTickInput native = .()
-		{
-			moveX = input.raw.moveX,
-			moveZ = input.raw.moveZ,
-			yaw = input.raw.yaw,
-			pitch = input.raw.pitch,
-			buttons = input.raw.buttons,
-			previousButtons = input.previous.buttons
-		};
+		NativeTickInput native = .(input);
 		if (tn_csharp_update_input(instance, &native, deltaTime) > 0)
 			return true;
 		ReportFailure("Update");

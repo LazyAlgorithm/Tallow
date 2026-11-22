@@ -33,12 +33,12 @@ static void* get_symbol(library_handle lib, const char* name) { return dlsym(lib
 #endif
 
 // All three runtimes (Beef, C++ and C#) must agree on this ABI.
-static_assert(sizeof(tn_csharp_tick_input) == 24,
-    "Native TickInput must remain six 32-bit values");
-static_assert(sizeof(tn_csharp_tick_batch_item) == 32,
-    "Native input batch entry must remain 32 bytes");
+static_assert(sizeof(tn_csharp_tick_input) == 72,
+    "Native TickInput layout changed");
+static_assert(sizeof(tn_csharp_tick_batch_item) == 80,
+    "Native input batch entry layout changed");
 static_assert(offsetof(tn_csharp_tick_batch_item, input) == 4 &&
-              offsetof(tn_csharp_tick_batch_item, delta_time) == 28,
+              offsetof(tn_csharp_tick_batch_item, delta_time) == 76,
     "Native batch field offsets changed");
 
 namespace {

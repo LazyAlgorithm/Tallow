@@ -209,6 +209,7 @@ extension NetworkManager
 		TickInput input;
 		input.raw = default;
 		LocalControls.Read(ref input.raw);
+		input.raw.actions = InputActions.ReadNetworked();
 		input.previous = sOfflinePrevious;
 		sOfflinePrevious = input.raw;
 		let world = scene.World;

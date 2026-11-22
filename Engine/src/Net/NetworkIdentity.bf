@@ -392,6 +392,7 @@ class NetworkIdentityState
 			return input;
 		if (!GatherFromBehaviours(ref input))
 			LocalControls.Read(ref input);
+		input.actions = InputActions.ReadNetworked();
 		return input;
 	}
 

@@ -32,10 +32,11 @@ public class FirstPersonCharacter : Script
     {
         if (GetCharacterController() is { } controller)
         {
-            float speed = input.Crouch ? CrouchSpeed : input.Sprint ? SprintSpeed : WalkSpeed;
+            bool crouching = input.Held("Crouch");
+            float speed = crouching ? CrouchSpeed : input.Held("Sprint") ? SprintSpeed : WalkSpeed;
             controller.SimpleMove(input.MoveDirection * speed, deltaTime,
-                input.Pressed(InputButton.Jump) ? JumpSpeed : 0f);
-            controller.SetHeight(input.Crouch ? CrouchHeight : StandHeight, StandHeight);
+                input.Pressed("Jump") ? JumpSpeed : 0f);
+            controller.SetHeight(crouching ? CrouchHeight : StandHeight, StandHeight);
             // Ease the eyes down when crouching rather than snapping.
             float target = EyeHeight - (StandHeight - controller.Height);
             _eyeNow = Mathf.Lerp(_eyeNow - controller.CrouchLift, target,
