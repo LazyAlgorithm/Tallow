@@ -633,9 +633,10 @@ Compatibility breaks (small, contained):
 
 ## 5. Rapier3D (deferred integration blueprint)
 
-**Not part of the current work.** This section exists so the abstraction is shaped correctly for it. Do not add
-Rapier until the abstraction and gating phases are done. When it is added, it follows the locked decisions:
-prebuilt binaries, no Rust for normal builds, and every platform supported before it is offered.
+**Status: Rapier3D is integrated (2026-11-22) behind the seam, as a provider offered only where its prebuilt
+archive exists.** It follows the locked decisions: prebuilt binaries, no Rust for normal builds, and every platform
+supported before it is offered in releases (only Linux x86_64 has an archive in this tree). See "Rapier3D
+integration" under section 9 for what is advertised and what remains.
 
 References used for this section:
 
@@ -1015,12 +1016,82 @@ Remaining before Rapier:
 
 - Add the Project Settings self-test button, C# enum parity check for `PhysicsFeature`, and the integration and
   capability docs.
-- Rapier3D/2D remain deferred; nothing in this phase adds Rapier.
+
+### Rapier3D integration (2026-11-22)
+
+Rapier is now a second 3D provider behind the same seam. It follows section 5's locked decisions: prebuilt archives,
+no Rust in normal builds, and the provider is listed only when the archive for the target exists and `r3CheckAbi`
+passes. The rest of the engine is unchanged; `PhysicsBackends` registers it after Jolt when it is available.
+
+**Build and link**
+
+- `native/CMakeLists.txt`: `option(TALLOW_RAPIER)` (default ON). The archive is taken from
+  `third_party/rapier/prebuilt/<platform>/` (`linux-x86_64`, `windows-x86_64`, `macos-x86_64`, `web-wasm32`) and
+  copied to `build/<native>/rapier/`. `RAPIER_STATIC`, `RAPIER_DIM3` and `RAPIER_F32` are compile definitions.
+- `native/tallow_rapier.cpp` is compiled against the vendored headers; `native/tallow_rapier_stub.c` takes its
+  place when the archive is absent, keeps every symbol the Beef provider links and reports
+  `tn_rapier_available() = 0`. An empty placeholder archive is built at the same fixed path so the Beef link lists
+  stay valid.
+- `Launcher/BeefProj.toml`, `Player/BeefProj.toml` and the editor's generated project link flags include
+  `build/native/rapier/librapier3d_ffi.a` inside the existing `--start-group`.
+- `native/tallow_rapier.h` is the narrow C ABI: worlds, bodies, shapes, queries, joints, characters, contact events,
+  navigation geometry, soft bodies, vehicles and the provider probe. Rapier handles and descriptors never leave the
+  shim.
+
+**Implemented and advertised** (`RapierPhysicsBackend.AllFeatures`)
+
+- Rigid, kinematic and sleeping bodies; sensors; CCD; freeze rotation; debris filtering; fixed body ids; multiple
+  worlds; separated world states.
+- Box, sphere, capsule, cylinder, convex hull, mesh and compound shapes (a compound is one collider per part, which
+  also gives per-part hit detail).
+- Raycasts (single and all-hits), shape casts (single and all), overlaps, checks, and part/triangle hit detail.
+- Contact begin/stay/end and sensor trigger events. Contacts are rebuilt from the narrow phase's pair lists every
+  tick, so pairs that begin during the broad-phase refresh before a step are still reported.
+- Ball (with swing limits), hinge (with a motor and angle reading) and slider (with a spring and position reading)
+  joints.
+- The kinematic character controller: slide, slopes, autostep, snap-to-ground, ground state, ground body/velocity,
+  what it ran into, shape changes and pushing dynamic bodies. The shape's local centre is applied to the swept pose,
+  which keeps a component-style capsule (centre raised above the transform) standing on the floor.
+- Rigid-body buoyancy.
+- Navigation geometry: every static collider's shape is tessellated at its pose (`r3SharedShape_ToTrimesh`).
+- Ragdolls: ordinary dynamic bodies joined by ball joints, exposed through `PhysicsRagdollExtension`.
+- Wheeled vehicles: Rapier's ray-cast vehicle controller with a small automatic gearbox over the declared ratios.
+  Motorcycles and tracked vehicles are not implemented and are not advertised; the Vehicle component only offers
+  the wheeled kind under Rapier.
+- Cloth/shell soft bodies from a surface mesh, with pinned points, velocity/force/impulse application, shifting and
+  world bounds. Dents, skin binding and pressure are **not** implemented, so Jelly/Shell/DrivenJelly SoftBody kinds
+  are refused under Rapier with the reason; Cloth works. Ropes are not implemented and are not advertised.
+
+**Networking**
+
+- Rapier uses `PhysicsBackendWorld`'s generic snapshots (body pose, velocities, sleep). It does not advertise
+  `SaveRestoreExact`, `SharedPhysicsState`, `FixedBodyIds`' companion determinism bits or `CrossPlatformDeterminism`,
+  so lockstep is refused with the usual message; the other network modes work through the generic state. Soft
+  bodies, ragdolls and vehicles are not part of the generic snapshot (Jolt's exact native state covers them).
+  Rapier's whole-world serialization (`r3SerializeWorld`) is the path to exact snapshots later; it needs handle
+  re-mapping through user data and a per-platform golden-hash matrix before any determinism bit is set.
+
+**Tests**
+
+- `--test-physics-rapier` (conformance): all-hits raycasts and layer masks, shape casts, overlaps/checks, contact and
+  trigger enter/stay/exit, ball/hinge-motor/slider-spring joints, the character controller (plain and centred
+  capsules), buoyancy, and Rapier-specific object-code filtering.
+- The existing suite passes on both backends: `--test-physics-basic`, `--test-physics-snapshots`,
+  `--test-physics-gating`, `--test-physics-ragdoll`, `--test-physics-vehicle`, `--test-physics-vehicle-kinds`
+  (kinds the backend advertises; Jolt still runs all three), `--test-physics-softbody`.
+- `--test-physics-vehicle-kinds` now skips kinds a backend does not advertise instead of requiring Jolt's three.
+
+**Open gates**
+
+- Archives exist only for Linux x86_64 in this tree (the archive is gitignored). Windows, macOS and web archives must
+  be built with `tools/build_rapier.py` (web needs an Emscripten build) before the provider is offered there; until
+  then it is unlisted on those platforms, never a link error.
+- Exact/shared snapshots, lockstep, soft-body dents/skin/pressure, ropes, motorcycles and tracked vehicles remain.
 
 ### Later work (not in this plan)
 
-- **Rapier3D**, per section 5: prebuilt archives for every platform, no Rust in normal builds, offered only
-  after the all-platform matrix and conformance pass.
+- **Rapier3D platform gate**, per section 5: Windows, macOS and web archives, then the conformance and golden-hash
+  matrix, before the provider is offered in releases on those platforms.
 - **Other systems**, per the section below.
 
 ### Later: apply the pattern to other systems (M/L)

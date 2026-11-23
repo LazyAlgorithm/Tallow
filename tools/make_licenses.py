@@ -19,6 +19,7 @@ libraries = [
     ('bimg', 'Image library used by bgfx', tp / 'bgfx.cmake/bimg/LICENSE'),
     ('SDL 3', 'Windows, input and gamepads', tp / 'SDL/LICENSE.txt'),
     ('Jolt Physics', 'Physics', jolt_license),
+    ('Rapier3D', 'Physics (prebuilt C bindings)', tp / 'rapier/LICENSE'),
     ('Flecs', 'Entity component system', tp / 'flecs/LICENSE'),
     ('Recast Navigation', 'Polygon navigation baking and Detour path queries', tp / 'recastnavigation/License.txt'),
     ('JoltC', 'C interface to Jolt Physics', tp / 'joltc/LICENSE'),

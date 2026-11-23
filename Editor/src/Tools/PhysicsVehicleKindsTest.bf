@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Headless checks of the Jolt vehicle kinds: wheeled, motorcycle and tracked. Run with:
+/// Headless checks of the backend's vehicle kinds: every kind it advertises is built and driven. Run with:
 ///   TallowLauncher --test-physics-vehicle-kinds
 static class PhysicsVehicleKindsTest
 {
@@ -19,17 +19,28 @@ static class PhysicsVehicleKindsTest
 		failures += Check("ground body created", scene.Physics.CreateBody(ground.Transform, groundCollider.GetShape(), null) != uint32.MaxValue);
 
 		let vehicles = scene.Physics.Vehicles;
-		failures += Check("Jolt advertises motorcycle vehicles", scene.Physics.Supports(.MotorcycleVehicles));
-		failures += Check("Jolt advertises tracked vehicles", scene.Physics.Supports(.TrackedVehicles));
 		if (vehicles == null)
 		{
 			Console.WriteLine("PHYSICS VEHICLE KINDS FAIL");
 			return 1;
 		}
+		bool jolt = scene.Physics.BackendProvider != null && scene.Physics.BackendProvider.Id == "Jolt";
+		if (jolt)
+		{
+			failures += Check("Jolt advertises motorcycle vehicles", scene.Physics.Supports(.MotorcycleVehicles));
+			failures += Check("Jolt advertises tracked vehicles", scene.Physics.Supports(.TrackedVehicles));
+		}
 
-		failures += RunKind(scene, vehicles, .Wheeled);
-		failures += RunKind(scene, vehicles, .Motorcycle);
-		failures += RunKind(scene, vehicles, .Tracked);
+		PhysicsVehicleKind[3] kinds = .(.Wheeled, .Motorcycle, .Tracked);
+		for (let kind in kinds)
+		{
+			if (!scene.Physics.SupportsVehicleKind(kind))
+			{
+				Console.WriteLine(scope $"[SKIP] {kind}: not advertised by {scene.Physics.BackendProvider?.Id}");
+				continue;
+			}
+			failures += RunKind(scene, vehicles, kind);
+		}
 
 		Console.WriteLine(failures == 0 ? "PHYSICS VEHICLE KINDS PASS" : scope $"PHYSICS VEHICLE KINDS FAIL ({failures})");
 		return failures == 0 ? 0 : 1;
@@ -121,15 +132,15 @@ static class PhysicsVehicleKindsTest
 		desc.trackDifferentialRatio = 2;
 
 		let vehicle = vehicles.Create(bodyId, desc);
-		failures += Check(scope $"{PhysicsVehicleKinds.Name(kind)}: created", vehicle != null);
+		failures += Check(scope $"{PhysicsVehicleKinds.Name(kind)}: created" , vehicle != null);
 		if (vehicle == null)
 			return failures;
-		failures += Check(scope $"{PhysicsVehicleKinds.Name(kind)}: has {wheelCount} wheels", vehicles.WheelCount(vehicle) == wheelCount);
+		failures += Check(scope $"{PhysicsVehicleKinds.Name(kind)}: has {wheelCount} wheels" , vehicles.WheelCount(vehicle) == wheelCount);
 		vehicles.AddToWorld(vehicle);
 		vehicles.SetDriverInput(vehicle, 1, 0.35f, 0, 0);
 		for (int i < 120)
 			scene.Physics.Step(1.0f / 60.0f);
-		failures += Check(scope $"{PhysicsVehicleKinds.Name(kind)}: moves", Math.Abs(chassis.Transform.Position.z) > 0.5f);
+		failures += Check(scope $"{PhysicsVehicleKinds.Name(kind)}: moves" , Math.Abs(chassis.Transform.Position.z) > 0.5f);
 		vehicles.Destroy(vehicle);
 		return failures;
 	}

@@ -7,11 +7,11 @@ TargetType = "BeefGUIApplication"
 StartupObject = "Tallow.Launcher.Program"
 
 [Configs.Debug.Linux64]
-OtherLinkFlags = "$(LinkFlags) -Wl,--start-group \"$(WorkspaceDir)/build/native/libtallow_native.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bgfx/libbgfx.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bimg/libbimg.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bimg/libbimg_decode.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bx/libbx.a\" \"$(WorkspaceDir)/build/native/SDL/libSDL3.a\" \"$(WorkspaceDir)/build/native/joltc/libjoltc.a\" \"$(WorkspaceDir)/build/native/_deps/joltphysics-build/libJolt.a\" \"$(WorkspaceDir)/build/native/enet/libenet.a\" -Wl,--end-group -lstdc++ -lm -ldl -lpthread -lGL -lX11"
+OtherLinkFlags = "$(LinkFlags) -Wl,--start-group \"$(WorkspaceDir)/build/native/libtallow_native.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bgfx/libbgfx.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bimg/libbimg.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bimg/libbimg_decode.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bx/libbx.a\" \"$(WorkspaceDir)/build/native/SDL/libSDL3.a\" \"$(WorkspaceDir)/build/native/joltc/libjoltc.a\" \"$(WorkspaceDir)/build/native/_deps/joltphysics-build/libJolt.a\" \"$(WorkspaceDir)/build/native/rapier/librapier3d_ffi.a\" \"$(WorkspaceDir)/build/native/enet/libenet.a\" -Wl,--end-group -lstdc++ -lm -ldl -lpthread -lGL -lX11"
 
 [Configs.Release.Linux64]
 CLibType = "Dynamic"
-OtherLinkFlags = "$(LinkFlags) -Wl,--start-group \"$(WorkspaceDir)/build/native/libtallow_native.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bgfx/libbgfx.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bimg/libbimg.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bimg/libbimg_decode.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bx/libbx.a\" \"$(WorkspaceDir)/build/native/SDL/libSDL3.a\" \"$(WorkspaceDir)/build/native/joltc/libjoltc.a\" \"$(WorkspaceDir)/build/native/_deps/joltphysics-build/libJolt.a\" \"$(WorkspaceDir)/build/native/enet/libenet.a\" -Wl,--end-group -lstdc++ -lm -ldl -lpthread -lGL -lX11"
+OtherLinkFlags = "$(LinkFlags) -Wl,--start-group \"$(WorkspaceDir)/build/native/libtallow_native.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bgfx/libbgfx.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bimg/libbimg.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bimg/libbimg_decode.a\" \"$(WorkspaceDir)/build/native/bgfx/cmake/bx/libbx.a\" \"$(WorkspaceDir)/build/native/SDL/libSDL3.a\" \"$(WorkspaceDir)/build/native/joltc/libjoltc.a\" \"$(WorkspaceDir)/build/native/_deps/joltphysics-build/libJolt.a\" \"$(WorkspaceDir)/build/native/rapier/librapier3d_ffi.a\" \"$(WorkspaceDir)/build/native/enet/libenet.a\" -Wl,--end-group -lstdc++ -lm -ldl -lpthread -lGL -lX11"
 
 [Configs.Debug.Win64]
 CLibType = "Static"

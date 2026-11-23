@@ -387,6 +387,10 @@ static class PhysicsBackends
 	static this()
 	{
 		Register(new JoltPhysicsBackend());
+		// The Rapier provider is listed only when this build linked the pinned archive and its ABI matches; a build
+		// without the archive keeps the stub (tn_rapier_available returns 0) and leaves it out.
+		if (Rapier.tn_rapier_available() == 1)
+			Register(new RapierPhysicsBackend());
 	}
 
 	/// A command-line override for this run, without changing the project's file.

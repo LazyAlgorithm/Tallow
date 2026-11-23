@@ -19,7 +19,7 @@ static class PhysicsSoftBodyTest
 		failures += Check("ground body created", scene.Physics.CreateBody(ground.Transform, groundCollider.GetShape(), null) != uint32.MaxValue);
 
 		let soft = scene.Physics.SoftBodies;
-		failures += Check("Jolt advertises soft bodies", scene.Physics.Supports(.SoftBodies));
+		failures += Check("the backend advertises soft bodies", scene.Physics.Supports(.SoftBodies));
 		failures += Check("soft-body extension is present", soft != null);
 		if (soft == null)
 		{
@@ -27,10 +27,10 @@ static class PhysicsSoftBodyTest
 			return 1;
 		}
 
-		float[12] positions = .( -1, 3, 0, 1, 3, 0, -1, 2, 0, 1, 2, 0 );
-		uint32[6] triangles = .( 0, 2, 1, 1, 2, 3 );
-		float[4] pinned = .( 1, 1, 0, 0 );
-		float[4] stiffness = .( 1, 1, 1, 1 );
+		float[12] positions = .(-1, 3, 0, 1, 3, 0, -1, 2, 0, 1, 2, 0);
+		uint32[6] triangles = .(0, 2, 1, 1, 2, 3);
+		float[4] pinned = .(1, 1, 0, 0);
+		float[4] stiffness = .(1, 1, 1, 1);
 		Vector3 center = .(0, 2.5f, 0);
 		Matrix4 objectMatrix = Matrix4.Identity;
 		for (int i = 0; i < 4; i++)

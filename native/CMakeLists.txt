@@ -166,6 +166,52 @@ endif()
 # managed entrypoints with the same host (tn_csharp_web_register), so web builds compile it too.
 set(TALLOW_MANAGED_HOST_SOURCE tallow_dotnet_host.cpp)
 
+# ---- Rapier3D (optional, prebuilt C bindings; docs/modular-systems-plan.md section 5) ----
+# The archive is built by tools/build_rapier.py and kept under third_party/rapier/prebuilt/<platform>. Normal builds
+# never run Rust. Without an archive for this target the stub keeps every symbol the Beef provider links, reports
+# tn_rapier_available() = 0, and the provider stays unlisted.
+option(TALLOW_RAPIER "Link the Rapier3D C bindings when the prebuilt archive for this target is present" ON)
+set(TALLOW_RAPIER_AVAILABLE OFF)
+set(TALLOW_RAPIER_SOURCE tallow_rapier_stub.c)
+set(TALLOW_RAPIER_LIBRARY "")
+if(TALLOW_RAPIER)
+	if(EMSCRIPTEN)
+		set(_tallow_rapier_platform "web-wasm32")
+		set(_tallow_rapier_library "librapier3d_ffi.a")
+	elseif(WIN32)
+		set(_tallow_rapier_platform "windows-x86_64")
+		set(_tallow_rapier_library "rapier3d_ffi.lib")
+	elseif(APPLE)
+		if(CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
+			set(_tallow_rapier_platform "macos-arm64")
+		else()
+			set(_tallow_rapier_platform "macos-x86_64")
+		endif()
+		set(_tallow_rapier_library "librapier3d_ffi.a")
+	else()
+		set(_tallow_rapier_platform "linux-x86_64")
+		set(_tallow_rapier_library "librapier3d_ffi.a")
+	endif()
+	set(_tallow_rapier_dir ${TP}/rapier/prebuilt/${_tallow_rapier_platform})
+	if(EXISTS ${_tallow_rapier_dir}/${_tallow_rapier_library})
+		set(TALLOW_RAPIER_AVAILABLE ON)
+		set(TALLOW_RAPIER_SOURCE tallow_rapier.cpp)
+		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/rapier)
+		file(COPY ${_tallow_rapier_dir}/${_tallow_rapier_library} DESTINATION ${CMAKE_BINARY_DIR}/rapier)
+		set(TALLOW_RAPIER_LIBRARY ${CMAKE_BINARY_DIR}/rapier/${_tallow_rapier_library})
+		message(STATUS "Rapier3D: linking ${_tallow_rapier_dir}/${_tallow_rapier_library}")
+	else()
+		message(STATUS "Rapier3D: no archive for ${_tallow_rapier_platform}; the provider stays unlisted")
+		# The Beef link lists name build/native/rapier/librapier3d_ffi.a on every desktop build. Without an
+		# archive, a placeholder with the same name keeps them valid; the stub above supplies the symbols.
+		file(WRITE ${CMAKE_BINARY_DIR}/rapier/placeholder.c "int tallow_rapier_placeholder = 0;\n")
+		add_library(tallow_rapier_placeholder STATIC ${CMAKE_BINARY_DIR}/rapier/placeholder.c)
+		set_target_properties(tallow_rapier_placeholder PROPERTIES
+			OUTPUT_NAME rapier3d_ffi
+			ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/rapier)
+	endif()
+endif()
+
 # ---- Tallow shim: Dear ImGui (docking) + ImGuizmo + stb_image + cgltf ----
 add_library(tallow_native STATIC
 	${TP}/cimgui/cimgui.cpp
@@ -189,6 +235,7 @@ add_library(tallow_native STATIC
 	tallow_pack.c
 	tallow_guard.c
 	tallow_physics.cpp
+	${TALLOW_RAPIER_SOURCE}
 	$<TARGET_OBJECTS:tallow_navigation>
 	$<TARGET_OBJECTS:tallow_collision_support>
 	$<TARGET_OBJECTS:tallow_softbody>
@@ -219,6 +266,10 @@ target_compile_definitions(tallow_native PRIVATE
 	IMGUI_DISABLE_OBSOLETE_FUNCTIONS=1
 	"IMGUI_IMPL_API=extern \"C\""
 )
+if(TALLOW_RAPIER_AVAILABLE)
+	target_compile_definitions(tallow_native PRIVATE RAPIER_STATIC RAPIER_DIM3 RAPIER_F32)
+	target_include_directories(tallow_native PRIVATE ${_tallow_rapier_dir}/include)
+endif()
 target_link_libraries(tallow_native PRIVATE bgfx bx SDL3::SDL3-static)
 
 

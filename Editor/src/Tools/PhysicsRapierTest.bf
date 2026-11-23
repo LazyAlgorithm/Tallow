@@ -1,0 +1,295 @@
+using System;
+using System.Collections;
+using Tallow;
+
+namespace Tallow.Editor;
+
+/// Headless conformance run for the Rapier backend: queries (all-hits, casts, overlaps, checks, layer masks),
+/// contact and trigger events, joints (ball, hinge motor, slider spring), the kinematic character, buoyancy, and
+/// object-code filtering. Run with: TallowLauncher --test-physics-rapier
+static class PhysicsRapierTest
+{
+	[Component]
+	class ContactProbe : Component
+	{
+		public int32 enters, stays, exits, triggers;
+		public GameObject lastOther;
+
+		public override void OnCollisionEnter(Collision collision)
+		{
+			enters++;
+			lastOther = collision.gameObject;
+		}
+
+		public override void OnCollisionStay(Collision collision)
+		{
+			stays++;
+		}
+
+		public override void OnCollisionExit(Collision collision)
+		{
+			exits++;
+		}
+
+		public override void OnTriggerEnter(GameObject other)
+		{
+			triggers++;
+			lastOther = other;
+		}
+	}
+
+	static int Check(StringView what, bool ok)
+	{
+		Console.WriteLine(scope $"[{(ok ? "PASS" : "FAIL")}] {what}");
+		return ok ? 0 : 1;
+	}
+
+	static uint32 AddBox(Scene scene, StringView name, Vector3 position, Vector3 size, PhysicsMotion motion, float mass = 1)
+	{
+		let obj = scene.CreateGameObject(name);
+		obj.Transform.Position = position;
+		let collider = obj.AddComponent<BoxCollider>();
+		collider.size = size;
+		if (motion == .Dynamic)
+		{
+			RigidbodyData data = .();
+			data.mass = mass;
+			data.friction = 0.6f;
+			return scene.Physics.CreateBody(obj.Transform, collider.GetShape(), &data);
+		}
+		if (motion == .Kinematic)
+		{
+			RigidbodyData data = .();
+			data.isKinematic = true;
+			return scene.Physics.CreateBody(obj.Transform, collider.GetShape(), &data);
+		}
+		return scene.Physics.CreateBody(obj.Transform, collider.GetShape(), null);
+	}
+
+	static ShapeDesc Sphere(float radius)
+	{
+		ShapeDesc shape = default;
+		shape.kind = .Sphere;
+		shape.radius = radius;
+		return shape;
+	}
+
+	static ShapeDesc Capsule(float halfHeight, float radius)
+	{
+		ShapeDesc shape = default;
+		shape.kind = .Capsule;
+		shape.halfHeight = halfHeight;
+		shape.radius = radius;
+		return shape;
+	}
+
+	public static int Run()
+	{
+		PhysicsBackends.Override3D("Rapier");
+		int failures = 0;
+		let scene = scope Scene();
+
+		let ground = scene.CreateGameObject("Ground");
+		let groundCollider = ground.AddComponent<BoxCollider>();
+		groundCollider.size = Vector3(30, 1, 30);
+		let groundBody = scene.Physics.CreateBody(ground.Transform, groundCollider.GetShape(), null);
+		failures += Check("ground body created", groundBody != uint32.MaxValue);
+
+		// Three boxes in a row for the query tests. The first sits on layer 1, so a mask can leave it out.
+		let boxScene = scene.CreateGameObject("Query Boxes");
+		uint32[3] boxBodies = default;
+		for (int i < 3)
+		{
+			let obj = scene.CreateGameObject(scope $"Query Box {i}");
+			obj.Transform.Position = Vector3(-2 + i * 2, 3, 0);
+			if (i == 0)
+				obj.Layer = 1;
+			let collider = obj.AddComponent<BoxCollider>();
+			collider.size = Vector3.One;
+			boxBodies[i] = scene.Physics.CreateBody(obj.Transform, collider.GetShape(), null);
+			failures += Check(scope $"query box {i} created" , boxBodies[i] != uint32.MaxValue);
+		}
+
+		// ---- all-hits raycast
+		let rayHits = scope List<RaycastHit>();
+		let count = scene.Physics.RaycastAll(Vector3(-5, 3, 0), .Right, 20, rayHits);
+		failures += Check("raycast_all found all three boxes", count == 3);
+		bool ordered = true;
+		for (int i = 1; i < rayHits.Count; i++)
+			ordered &= rayHits[i - 1].distance <= rayHits[i].distance;
+		failures += Check("raycast_all is nearest first", ordered);
+		bool foundLayered = false;
+		for (let hit in rayHits)
+			foundLayered |= hit.bodyId == boxBodies[0];
+		failures += Check("raycast_all names the layer-1 box", foundLayered);
+
+		let masked = scope List<RaycastHit>();
+		let maskedCount = scene.Physics.RaycastAll(Vector3(-5, 3, 0), .Right, 20, masked, ~((uint32)1 << 1));
+		failures += Check("layer mask leaves the layer-1 box out", maskedCount == 2);
+
+		// ---- shape casts
+		ShapeCastHit shapeHit = default;
+		failures += Check("sphere cast hits the first box",
+			scene.Physics.SphereCast(Vector3(-5, 3, 0), 0.3f, .Right, 20, out shapeHit) && shapeHit.bodyId == boxBodies[0]);
+		failures += Check("sphere cast hit has a normal", shapeHit.normal.LengthSquared > 0.5f);
+		let castAll = scope List<ShapeCastHit>();
+		failures += Check("sphere cast all finds three", scene.Physics.SphereCastAll(Vector3(-5, 3, 0), 0.3f, .Right, 20, castAll) == 3);
+
+		// ---- overlaps and checks
+		let overlaps = scope List<ShapeCastHit>();
+		let overlapCount = scene.Physics.OverlapSphere(Vector3(-2, 3, 0), 0.9f, overlaps);
+		bool overlapFound = false;
+		for (let hit in overlaps)
+			overlapFound |= hit.bodyId == boxBodies[0];
+		failures += Check("overlap finds the box inside the sphere", overlapCount > 0 && overlapFound);
+		failures += Check("check sphere is true where the box is", scene.Physics.CheckSphere(Vector3(-2, 3, 0), 0.9f));
+		failures += Check("check sphere is false away from everything", !scene.Physics.CheckSphere(Vector3(20, 20, 20), 0.5f));
+
+		// ---- contacts and triggers
+		let faller = scene.CreateGameObject("Contact Ball");
+		faller.Transform.Position = Vector3(8, 4, 0);
+		let fallerCollider = faller.AddComponent<SphereCollider>();
+		fallerCollider.radius = 0.5f;
+		RigidbodyData fallerData = .();
+		fallerData.mass = 1;
+		let fallerBody = scene.Physics.CreateBody(faller.Transform, fallerCollider.GetShape(), &fallerData);
+		let fallerProbe = faller.AddComponent<ContactProbe>();
+		let groundProbe = ground.AddComponent<ContactProbe>();
+		failures += Check("contact ball created", fallerBody != uint32.MaxValue);
+		for (int i < 120)
+		{
+			scene.Physics.Step(1.0f / 60.0f);
+			scene.Physics.DispatchContacts(scene);
+		}
+		failures += Check("collision enter fired", fallerProbe.enters > 0 && groundProbe.enters > 0);
+		failures += Check("collision stay fired while resting", fallerProbe.stays > 0);
+		failures += Check("contact normal is up", faller.Transform.Position.y > 0.9f && faller.Transform.Position.y < 1.1f);
+
+		// Take the ground body away: the pair should end.
+		let exitsBefore = fallerProbe.exits;
+		scene.Physics.DestroyBody(groundBody);
+		for (int i < 5)
+		{
+			scene.Physics.Step(1.0f / 60.0f);
+			scene.Physics.DispatchContacts(scene);
+		}
+		failures += Check("collision exit fired when the ground went", fallerProbe.exits > exitsBefore);
+
+		// A trigger notices the ball passing through it.
+		let trigger = scene.CreateGameObject("Trigger");
+		trigger.Transform.Position = Vector3(8, 0.2f, 0);
+		let triggerCollider = trigger.AddComponent<BoxCollider>();
+		triggerCollider.size = Vector3(3, 1, 3);
+		triggerCollider.isTrigger = true;
+		let triggerBody = scene.Physics.CreateBody(trigger.Transform, triggerCollider.GetShape(), null);
+		let triggerProbe = trigger.AddComponent<ContactProbe>();
+		failures += Check("trigger body created", triggerBody != uint32.MaxValue);
+		faller.Transform.Position = Vector3(8, 3, 0);
+		for (int i < 120)
+		{
+			scene.Physics.Step(1.0f / 60.0f);
+			scene.Physics.DispatchContacts(scene);
+		}
+		failures += Check("trigger enter fired", triggerProbe.triggers > 0);
+
+		// ---- joints
+		let anchorBody = AddBox(scene, "Ball Anchor", Vector3(0, 8, 0), Vector3(0.2f), .Static);
+		let swingBody = AddBox(scene, "Ball Swing", Vector3(1, 7, 0), Vector3(0.5f), .Dynamic);
+		let ball = scene.Physics.CreateJoint(anchorBody, swingBody, Vector3(1, 7, 0), .Up, 0);
+		failures += Check("ball joint created", ball != null);
+		for (int i < 90)
+			scene.Physics.Step(1.0f / 60.0f);
+		let swingState = scene.Physics.GetState(swingBody);
+		failures += Check("ball joint holds the body at its anchor",
+			(swingState.position - Vector3(1, 7, 0)).Length < 0.25f);
+
+		let frameBody = AddBox(scene, "Hinge Frame", Vector3(5, 8, 0), Vector3(0.2f), .Static);
+		let doorBody = AddBox(scene, "Hinge Door", Vector3(6, 8, 0), Vector3(2, 2, 0.2f), .Dynamic);
+		let hinge = scene.Physics.CreateHinge(frameBody, doorBody, Vector3(5, 8, 0), .Up, .Forward, .Right);
+		failures += Check("hinge created", hinge != null);
+		scene.Physics.SetHingeMotor(hinge, 1.5f, 200, 0, 1, 8, 3);
+		for (int i < 90)
+			scene.Physics.Step(1.0f / 60.0f);
+		failures += Check("hinge motor turned the door", Math.Abs(scene.Physics.HingeAngle(hinge)) > 0.2f);
+
+		let chassisBody = AddBox(scene, "Slider Chassis", Vector3(10, 8, 0), Vector3(1.5f), .Static);
+		let wheelBody = AddBox(scene, "Slider Wheel", Vector3(10, 6.5f, 0), Vector3(0.5f), .Dynamic);
+		let slider = scene.Physics.CreateSuspension(chassisBody, wheelBody, Vector3(10, 6.5f, 0), Vector3(10, 6.5f, 0),
+			.Up, .Up, .Right, 0.5f);
+		failures += Check("slider created", slider != null);
+		scene.Physics.SetSuspensionSpring(slider, 500, 60);
+		for (int i < 120)
+			scene.Physics.Step(1.0f / 60.0f);
+		let wheelState = scene.Physics.GetState(wheelBody);
+		failures += Check("slider spring holds the wheel near its rest point",
+			Math.Abs(scene.Physics.SuspensionPosition(slider)) < 0.7f && wheelState.position.y > 5.5f);
+
+		// ---- kinematic character
+		for (let id in boxBodies)
+			scene.Physics.DestroyBody(id);
+		scene.Physics.DestroyBody(groundBody);
+		let floor = scene.CreateGameObject("Character Floor");
+		let floorCollider = floor.AddComponent<BoxCollider>();
+		floorCollider.size = Vector3(30, 1, 30);
+		scene.Physics.CreateBody(floor.Transform, floorCollider.GetShape(), null);
+		let wall = scene.CreateGameObject("Character Wall");
+		wall.Transform.Position = Vector3(-4, 2, 0);
+		let wallCollider = wall.AddComponent<BoxCollider>();
+		wallCollider.size = Vector3(1, 4, 4);
+		scene.Physics.CreateBody(wall.Transform, wallCollider.GetShape(), null);
+
+		let walker = scene.CreateGameObject("Walker");
+		walker.Transform.Position = Vector3(0, 4, 0);
+		let character = scene.Physics.CreateCharacter(walker.Transform, Capsule(0.6f, 0.4f), .Identity, 45, 70, 100,
+			0.2f, false);
+		failures += Check("character created", character != null);
+		var walkerState = scene.Physics.GetCharacterState(character);
+		for (int i < 180)
+			walkerState = scene.Physics.MoveCharacter(character, Vector3(0, -4, 0), 1.0f / 60.0f, 0.3f, 0.2f, false);
+		failures += Check("character landed", walkerState.groundState == 0);
+		failures += Check("character stands on the floor", Math.Abs(walkerState.position.y - 1.5f) < 0.35f);
+
+		// A component-style capsule with its centre raised above the transform (CharacterController's default).
+		let centeredWalker = scene.CreateGameObject("Centered Walker");
+		centeredWalker.Transform.Position = Vector3(6, 4, 6);
+		ShapeDesc centeredShape = Capsule(0.6f, 0.35f);
+		centeredShape.center = Vector3(0, 0.95f, 0);
+		let centeredCharacter = scene.Physics.CreateCharacter(centeredWalker.Transform, centeredShape, .Identity, 50,
+			70, 100, 0.3f, false);
+		failures += Check("centred character created", centeredCharacter != null);
+		var centeredState = scene.Physics.GetCharacterState(centeredCharacter);
+		for (int i < 180)
+			centeredState = scene.Physics.MoveCharacter(centeredCharacter, Vector3(0, -4, 0), 1.0f / 60.0f, 0.28f, 0.2f, false);
+		failures += Check("centred character lands", centeredState.groundState == 0);
+		failures += Check("centred character keeps its transform on the floor",
+			Math.Abs(centeredState.position.y - 0.5f) < 0.3f);
+
+		int wallHits = 0;
+		for (int i = 0; i < 120 && wallHits == 0; i++)
+		{
+			walkerState = scene.Physics.MoveCharacter(character, Vector3(-5, -0.5f, 0), 1.0f / 60.0f, 0.3f, 0.2f, false);
+			CharacterHit[16] hits = ?;
+			wallHits = scene.Physics.CharacterHits(character, hits);
+		}
+		failures += Check("character reports what it ran into", wallHits > 0);
+
+		// ---- buoyancy
+		let floater = scene.CreateGameObject("Floater");
+		floater.Transform.Position = Vector3(20, 0.2f, 0);
+		let floaterCollider = floater.AddComponent<SphereCollider>();
+		floaterCollider.radius = 0.5f;
+		RigidbodyData floaterData = .();
+		floaterData.mass = 1;
+		floaterData.linearDamping = 0.1f;
+		let floaterBody = scene.Physics.CreateBody(floater.Transform, floaterCollider.GetShape(), &floaterData);
+		for (int i < 180)
+		{
+			scene.Physics.ApplyBuoyancy(floaterBody, Vector3(20, 0.5f, 0), .Up, 2.5f, 2, 2, .Zero, 1.0f / 60.0f);
+			scene.Physics.Step(1.0f / 60.0f);
+		}
+		failures += Check("buoyancy floats the body above the surface", floater.Transform.Position.y > 0.6f);
+
+		Console.WriteLine(failures == 0 ? "PHYSICS RAPIER PASS" : scope $"PHYSICS RAPIER FAIL ({failures})");
+		return failures == 0 ? 0 : 1;
+	}
+}

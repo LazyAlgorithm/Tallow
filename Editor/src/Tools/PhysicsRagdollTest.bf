@@ -21,7 +21,7 @@ static class PhysicsRagdollTest
 		failures += Check("ground body created", groundBody != uint32.MaxValue);
 
 		let ragdolls = scene.Physics.Ragdolls;
-		failures += Check("Jolt advertises ragdolls", scene.Physics.Supports(.Ragdolls));
+		failures += Check("the backend advertises ragdolls", scene.Physics.Supports(.Ragdolls));
 		failures += Check("ragdoll extension is present", ragdolls != null);
 		if (ragdolls == null)
 		{

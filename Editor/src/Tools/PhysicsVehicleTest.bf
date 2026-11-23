@@ -30,7 +30,7 @@ static class PhysicsVehicleTest
 		failures += Check("chassis body created", chassisBody != uint32.MaxValue);
 
 		let vehicles = scene.Physics.Vehicles;
-		failures += Check("Jolt advertises vehicles", scene.Physics.Supports(.Vehicles));
+		failures += Check("the backend advertises vehicles", scene.Physics.Supports(.Vehicles));
 		failures += Check("vehicle extension is present", vehicles != null);
 		if (vehicles == null || chassisBody == uint32.MaxValue)
 		{
