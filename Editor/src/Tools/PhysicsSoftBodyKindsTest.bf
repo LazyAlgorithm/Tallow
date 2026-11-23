@@ -219,6 +219,41 @@ static class PhysicsSoftBodyKindsTest
 			}
 		}
 
+		// ---- a dynamic shell keeps its own rigidbody collider: the soft body cannot carry its mass
+		{
+			let targetObject = scene.CreateGameObject("Dynamic Dent Target");
+			targetObject.Transform.Position = Vector3(4, 1.5f, 0);
+			let targetCollider = targetObject.AddComponent<BoxCollider>();
+			targetCollider.size = Vector3.One;
+			RigidbodyData targetData = .();
+			targetData.mass = 500;
+			let targetBody = scene.Physics.CreateBody(targetObject.Transform, targetCollider.GetShape(), &targetData);
+
+			let center = Vector3(4, 1.5f, 0);
+			float[24] positions = default;
+			uint32[36] triangles = default;
+			Cube(center, 0.5f, &positions, &triangles);
+			float[8] pinned = default;
+			float[8] stiffness = .(1, 1, 1, 1, 1, 1, 1, 1);
+			float[3] c = .(center.x, center.y, center.z);
+			Matrix4 objectMatrix = Matrix4.Identity;
+			var config = BaseConfig(.Shell);
+			config.shell = 1;
+			config.impacts = 1;
+			config.gravityFactor = 0;
+			let body = soft.Create(&config, &positions, 8, &triangles, 12, &pinned, &stiffness, &c, &objectMatrix.m[0]);
+			failures += Check("dynamic shell created", body != uint32.MaxValue);
+			if (body != uint32.MaxValue)
+			{
+				soft.Ignore(body, targetBody);
+				for (int i < 120)
+					scene.Physics.Step(1.0f / 60.0f);
+				let at = scene.Physics.GetState(targetBody).position;
+				failures += Check("a dynamic shell keeps its collider", at.y > 0.8f && at.y.IsFinite);
+				soft.Forget(body);
+			}
+		}
+
 		// ---- driven skin: follows its object
 		{
 			let center = Vector3(-4, 3, 0);

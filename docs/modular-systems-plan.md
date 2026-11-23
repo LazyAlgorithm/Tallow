@@ -1069,10 +1069,13 @@ passes. The rest of the engine is unchanged; `PhysicsBackends` registers it afte
   buoyancy samples the water grid and lifts/drags submerged particles. Ropes are particle chains with ties as
   Rapier rope joints, pull force from the joint impulse, and physical wind; knots are the engine's own torque.
   Rope pulleys are not implemented and are not advertised.
-- Shell collision surfaces are Rapier **deformable colliders**: for a FromImpacts shell the object's ordinary
-  colliders step aside and a deformable trimesh bound to the shell's particles becomes the object's collision
-  surface, so things press into the dents instead of a convex hull being re-wrapped after they settle. Queries and
-  contacts are mapped back to the shell object, and the engine's hull re-wrap is kept still. Cloth, Jelly and
+- Shell collision surfaces are Rapier **deformable colliders** for static and kinematic shells: for such a
+  FromImpacts shell the object's ordinary colliders step aside and a deformable trimesh bound to the shell's
+  particles becomes the object's collision surface, so things press into the dents instead of a convex hull being
+  re-wrapped after they settle. Queries and contacts are mapped back to the shell object, and the engine's hull
+  re-wrap is kept still. A **dynamic** shell keeps its rigidbody collider: the 1 kg soft skin cannot carry a 500 kg
+  body, and Jolt has no deformable collider to bind to the rigidbody either. Dynamic shells therefore use the
+  object's collider and the convex-hull re-wrap on both backends, so they behave the same. Cloth, Jelly and
   FromSurface shells use the collision mesh Rapier generates from the soft body (also deforming); DrivenJelly stays
   collision-free because its Rigidbody owns collision. A rope's segment collisions deform the same way.
 - Rapier soft-body tearing is a software capability bit (`SoftBodyTearing`) and a Soft Body toggle that is hidden
@@ -1111,7 +1114,9 @@ passes. The rest of the engine is unchanged; `PhysicsBackends` registers it afte
   the sky: reads/writes/moves are world-space like Jolt, and wind is a density/area-scaled impulse instead of a raw
   per-step velocity kick. The Soft Body Lab and the Courtyard flag now render normally under Rapier. Contact
   buffers are clamped to their capacity because Rapier's output-buffer calls return the total count even when they
-  copy less; a shell with many contact points was overrunning the stack and crashing the Gallery.
+  copy less; a shell with many contact points was overrunning the stack and crashing the Gallery. The soft-body
+  kinds test also checks that a dynamic shell keeps its rigidbody collider (it must not hand its surface to the
+  soft body).
 
 **Open gates**
 

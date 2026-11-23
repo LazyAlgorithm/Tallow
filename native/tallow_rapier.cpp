@@ -2624,6 +2624,11 @@ void tn_rapier_soft_ignore(void* raw, uint32_t body, uint32_t ignoredBody)
 	Body* shellBody = world->Find(ignoredBody);
 	if (shellBody == nullptr || soft->triangles.empty() || soft->count < 3)
 		return;
+	// A dynamic shell rides its rigidbody: that collider carries its weight and takes the hits the denting reads.
+	// Handing its collision surface to the 1 kg soft body would drop the object through the floor, so only a static
+	// or kinematic shell (a set piece or a scripted one) uses the deformable surface instead.
+	if (shellBody->motion == 2)
+		return;
 	// Deformable colliders bind through a soft body's root body, not an ordinary rigid body.
 	const R3RigidBodyHandle parent = r3SoftBody_RootBody(soft->handle);
 	if (!Valid(parent))
