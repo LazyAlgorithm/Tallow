@@ -1078,6 +1078,14 @@ passes. The rest of the engine is unchanged; `PhysicsBackends` registers it afte
   object's collider and the convex-hull re-wrap on both backends, so they behave the same. Cloth, Jelly and
   FromSurface shells use the collision mesh Rapier generates from the soft body (also deforming); DrivenJelly stays
   collision-free because its Rigidbody owns collision. A rope's segment collisions deform the same way.
+- Cloth and jelly constraints use the engine's compliances (Stretch/Shear/Bend), converted to Rapier spring
+  frequencies with the painted stiffness map scaling them. The first pass used the map itself as a compliance,
+  which built every cloth at about 1 Hz; flags and curtains stretched like rubber under wind. Wind is applied to
+  every soft body with surface triangles (an early version skipped any body with more triangles than vertices).
+- A FromImpacts shell is held exactly to its object: its stored dents are applied on top of the object's rest
+  shape before and after the step, so the skin cannot sag away from a moving object. Dents always go from the
+  contact toward the middle of the shell, and the impact speed comes from the velocities recorded before the step
+  (a stiff shell stops a projectile in the step that makes the contact, so post-solve speeds read as near zero).
 - Rapier soft-body tearing is a software capability bit (`SoftBodyTearing`) and a Soft Body toggle that is hidden
   entirely on Jolt. Overstretched edges are torn through Rapier's tear pass (with its tear events); the toggle is
   off by default.
@@ -1116,7 +1124,8 @@ passes. The rest of the engine is unchanged; `PhysicsBackends` registers it afte
   buffers are clamped to their capacity because Rapier's output-buffer calls return the total count even when they
   copy less; a shell with many contact points was overrunning the stack and crashing the Gallery. The soft-body
   kinds test also checks that a dynamic shell keeps its rigidbody collider (it must not hand its surface to the
-  soft body).
+  soft body). The Gallery's Courtyard flag and Soft Body Lab were checked on Rapier after these fixes: the flag
+  flies from its pole like Jolt's, and the lab's cloth, jellies and shells stay in place.
 
 **Open gates**
 

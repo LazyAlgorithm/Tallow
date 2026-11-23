@@ -108,6 +108,9 @@ struct RapierSoftSettings
 	public float friction;
 	public float gravityFactor;
 	public int32 iterations;
+	public float stretch;
+	public float shear;
+	public float bend;
 }
 
 static class Rapier

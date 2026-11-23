@@ -117,6 +117,10 @@ namespace
 		bool debris = false;
 		bool sensor = false;
 		uint64_t userData = 0;
+		// Velocities at the start of the last step, for impacts the solver has already stopped by the time contacts
+		// are read (a stiff soft-body shell stops a projectile in one step).
+		R3Vector prevLinear = V(0, 0, 0);
+		R3Vector prevAngular = V(0, 0, 0);
 	};
 
 	struct PairKey
@@ -193,6 +197,9 @@ namespace
 		float radius = 0.02f;
 		std::vector<uint32_t> triangles;
 		std::vector<R3Vector> restLocal;
+		// A FromImpacts shell's permanent dents, in its object's local space. They are held to the object each step;
+		// the soft body's own sag or blob motion is not a dent.
+		std::vector<R3Vector> dents;
 		float lastObject[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 		bool hasObject = false;
 		uint32_t ignoredBody = NoBody;
@@ -948,6 +955,33 @@ namespace
 	}
 }
 
+void HoldFromImpactsShells(World* world);
+
+// A FromImpacts shell is held to its object: the object is what moves, and contacts only dent the surface. The
+// skin runs before the step; a soft-body contact can still push the particles during it, so put them back on the
+// object after the step too. Otherwise the collision surface (and what queries see) bulges away from the shape.
+void HoldFromImpactsShells(World* world)
+{
+	for (auto& entry : world->softBodies)
+	{
+		SoftBody* soft = entry.second;
+		if (soft->kind != 2 || soft->impacts == 0 || soft->visualOnly || !Valid(soft->handle) ||
+			!soft->hasObject || soft->dents.size() != (size_t)soft->count)
+			continue;
+		for (int32_t i = 0; i < soft->count; i++)
+		{
+			const R3Vector local = Add(soft->restLocal[(size_t)i], soft->dents[(size_t)i]);
+			const float* m = soft->lastObject;
+			const R3Vector at = V(m[0] * local.x + m[4] * local.y + m[8] * local.z + m[12],
+				m[1] * local.x + m[5] * local.y + m[9] * local.z + m[13],
+				m[2] * local.x + m[6] * local.y + m[10] * local.z + m[14]);
+			r3SoftBody_SetParticlePosition(soft->handle, (size_t)i, at);
+			r3SoftBody_SetParticleVelocity(soft->handle, (size_t)i, V(0, 0, 0));
+		}
+		r3SoftBody_WakeUp(soft->handle);
+	}
+}
+
 void tn_rapier_step(void* raw, float deltaTime, int32_t* errorMask, float* stepMilliseconds)
 {
 	if (errorMask != nullptr)
@@ -967,9 +1001,19 @@ void tn_rapier_step(void* raw, float deltaTime, int32_t* errorMask, float* stepM
 	hooks.user_data = world;
 	hooks.filter_contact_pair = &FilterPair;
 	hooks.filter_intersection_pair = &FilterPair;
+	for (auto& entry : world->bodies)
+	{
+		Body& body = entry.second;
+		if (Valid(body.handle))
+		{
+			body.prevLinear = r3RigidBody_Linvel(body.handle);
+			body.prevAngular = r3RigidBody_Angvel(body.handle);
+		}
+	}
 	const R3Status status = r3Step(world->world, &hooks, world->events);
 	world->queryDirty = false;
 	tn_rapier_soft_update_after_step(world);
+	HoldFromImpactsShells(world);
 	if (status != R3_OK)
 	{
 		if (errorMask != nullptr)
@@ -2490,10 +2534,27 @@ uint32_t tn_rapier_soft_create(void* raw, const float* positions, int32_t vertex
 		desc.collisionEnabled = 0;
 
 	desc.material = r3DefaultSoftBodyMaterial();
-	const float frequency = std::clamp(1.0f / std::sqrt(std::max(stiffness != nullptr ? stiffness[0] : 1.0e-4f, 1.0e-6f)),
-		1.0f, jelly ? 20.0f : 60.0f);
+	// The engine hands compliances (how far a constraint gives under force), as it does for Jolt. Rapier's material
+	// takes spring frequencies; convert each, then let the painted stiffness map soften parts of the surface.
+	float map = 1.0f;
+	if (stiffness != nullptr)
+	{
+		map = 0.0f;
+		for (int32_t i = 0; i < vertexCount; i++)
+			map += std::clamp(stiffness[i], 0.0f, 1.0f);
+		map = std::max(map / float(std::max(vertexCount, 1)), 0.02f);
+	}
+	const float mapScale = std::sqrt(map);
+	const auto toFrequency = [mapScale](float compliance, float fallback)
+	{
+		return std::clamp(mapScale / std::sqrt(std::max(compliance, 1.0e-9f)), 1.0f, 200.0f);
+	};
+	const float stretch = settings->stretch > 0.0f ? settings->stretch : 1.0e-5f;
+	const float shear = settings->shear > 0.0f ? settings->shear : stretch;
+	const float frequency = toFrequency(std::max(stretch, shear), 1.0e-5f);
+	const float bendFrequency = settings->bend >= 0.0f ? toFrequency(settings->bend, 1.0e-3f) : frequency;
 	desc.material.edgeSoftness = R3SpringCoefficients{frequency, std::clamp(settings->damping, 0.0f, 1.0f)};
-	desc.material.bendSoftness = R3SpringCoefficients{frequency * 0.5f, std::clamp(settings->damping, 0.0f, 1.0f)};
+	desc.material.bendSoftness = R3SpringCoefficients{bendFrequency, std::clamp(settings->damping, 0.0f, 1.0f)};
 	desc.material.youngModulus = 0.0f;
 	desc.material.poissonRatio = 0.0f;
 	if (jelly)
@@ -2542,6 +2603,8 @@ uint32_t tn_rapier_soft_create(void* raw, const float* positions, int32_t vertex
 	soft->radius = 0.02f;
 	soft->triangles.assign(triangles, triangles + (size_t)triangleCount * 3);
 	soft->restLocal.resize((size_t)vertexCount);
+	if (soft->impacts != 0)
+		soft->dents.assign((size_t)vertexCount, V(0, 0, 0));
 	if (objectMatrix != nullptr)
 	{
 		float inverse[16];
@@ -2699,10 +2762,18 @@ void tn_rapier_soft_skin(void* raw, uint32_t body, const float objectMatrix[16],
 	for (size_t i = 0; i < count; i++)
 	{
 		R3Vector position = MatPoint(delta, buffer[i]);
-		if (soft->visualOnly && i < soft->restLocal.size())
+		const R3Vector dent = i < soft->dents.size() ? soft->dents[i] : V(0, 0, 0);
+		const R3Vector target = MatPoint(objectNext, Add(soft->restLocal[i], dent));
+		if (soft->impacts != 0)
+		{
+			// A FromImpacts shell is held exactly to its object: the object's shape plus its dents. Applying only the
+			// object's delta lets gravity and the solver sag the skin away from the object, which is how a 500 kg
+			// shell's surface ended up a crumpled blob on the ground.
+			position = target;
+		}
+		else if (soft->visualOnly)
 		{
 			// The rendered skin lags behind the object's reference shape and springs back.
-			const R3Vector target = MatPoint(objectNext, soft->restLocal[i]);
 			const R3Vector next = Add(position, Scale(Sub(target, position), std::clamp(soft->visualSpring, 0.0f, 1.0f)));
 			r3SoftBody_SetParticleVelocity(soft->handle, i,
 				Scale(Sub(next, buffer[i]), step > 1.0e-6f ? (1.0f / step) : 0.0f));
@@ -2877,14 +2948,11 @@ void tn_rapier_soft_wind(void* raw, uint32_t body, const float wind[3], float dr
 		return;
 	std::vector<R3Vector> positions((size_t)soft->count);
 	std::vector<R3Vector> velocities((size_t)soft->count);
-	const size_t count = r3SoftBody_ParticlePositions(soft->handle, positions.data(), positions.size());
+	size_t count = r3SoftBody_ParticlePositions(soft->handle, positions.data(), positions.size());
+	count = std::min(count, positions.size());
 	r3SoftBody_ParticleVelocities(soft->handle, velocities.data(), velocities.size());
-	if (count == 0 || soft->triangles.size() / 3 > count)
-	{
-		// The triangle indices reference particles that may have been removed by a tear.
-		if (soft->triangles.size() / 3 > count)
-			return;
-	}
+	if (count == 0)
+		return;
 	const float density = 1.2f;
 	const float along = 0.1f;
 	const R3Vector air = V(wind);
@@ -2938,8 +3006,8 @@ uint32_t tn_rapier_soft_dents(void* raw, uint32_t body, float* output, uint32_t 
 	float sum = 0.0f;
 	for (uint32_t i = 0; i < count && i < read; i++)
 	{
-		const R3Vector local = SoftLocal(soft, buffer[i]);
-		const R3Vector dent = Sub(local, soft->restLocal[i]);
+		const R3Vector dent = i < soft->dents.size() ? soft->dents[i] :
+			Sub(SoftLocal(soft, buffer[i]), soft->restLocal[i]);
 		Out(&output[i * 3], dent);
 		sum += Length(dent);
 	}
@@ -2978,7 +3046,10 @@ void tn_rapier_soft_set_dents(void* raw, uint32_t body, const float* dents, uint
 	const uint32_t limit = std::min(count, (uint32_t)soft->count);
 	for (uint32_t i = 0; i < limit; i++)
 	{
-		const R3Vector local = Add(soft->restLocal[i], dents != nullptr ? V(&dents[i * 3]) : V(0, 0, 0));
+		const R3Vector dent = dents != nullptr ? V(&dents[i * 3]) : V(0, 0, 0);
+		if (i < soft->dents.size())
+			soft->dents[i] = dent;
+		const R3Vector local = Add(soft->restLocal[i], dent);
 		SetParticle(soft, i, MatPoint(soft->lastObject, local));
 	}
 	soft->dentRevision++;
@@ -3102,6 +3173,11 @@ namespace
 		std::vector<R3Vector> buffer((size_t)soft->count);
 		const size_t count = std::min(r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size()),
 			buffer.size());
+		R3Vector shellCentre = V(0, 0, 0);
+		for (size_t i = 0; i < count; i++)
+			shellCentre = Add(shellCentre, buffer[i]);
+		if (count > 0)
+			shellCentre = Scale(shellCentre, 1.0f / (float)count);
 		bool changed = false;
 		for (size_t i = 0; i < count; i++)
 		{
@@ -3113,15 +3189,17 @@ namespace
 			const float push = soft->dentDepth * strength * falloff;
 			if (push < soft->dentYield)
 				continue;
-			const R3Vector local = SoftLocal(soft, buffer[i]);
-			const R3Vector localNormal = Normalize(SoftLocal(soft, Add(contact, normal)));
-			const R3Vector inward = Length(localNormal) > 1.0e-5f ? Normalize(Sub(local, localNormal)) : V(0, 0, 0);
-			(void)inward;
-			const R3Vector target = Sub(buffer[i], Scale(normal, push));
+			// The contact normal may face either way; a dent always goes from the contact toward the middle of the
+			// shell (the Jolt side adds its inward direction, so do the same here).
+			const R3Vector toCentre = Sub(shellCentre, contact);
+			const R3Vector into = Length(toCentre) > 1.0e-5f ? Normalize(toCentre) : normal;
+			const R3Vector target = Add(buffer[i], Scale(into, push));
 			const R3Vector targetLocal = SoftLocal(soft, target);
 			const R3Vector dent = Sub(targetLocal, soft->restLocal[i]);
 			if (Length(dent) > soft->dentDepth)
 				continue;
+			if (i < soft->dents.size())
+				soft->dents[i] = dent;
 			SetParticle(soft, i, target);
 			changed = true;
 		}
@@ -3178,8 +3256,23 @@ namespace
 							normal = Scale(normal, -1.0f);
 						const R3Vector localPoint = flipped ? points[k].local_p2 : points[k].local_p1;
 						const R3Vector at = Add(pose.translation, QRot(pose.rotation, localPoint));
-						const R3Vector shellVelocity = r3RigidBody_VelocityAtPoint(shellBody->handle, at);
-						const R3Vector otherVelocity = Valid(otherBody) ? r3RigidBody_VelocityAtPoint(otherBody, at) : V(0, 0, 0);
+						// Read the speeds from before the step: the solver has already stopped a hit by now, and a
+						// stiff shell can stop it in the very step that made the contact.
+						const R3Vector shellVelocity = shellBody->prevLinear;
+						Body* otherEntry = nullptr;
+						if (Valid(otherBody))
+						{
+							for (auto& entry : world->bodies)
+							{
+								if (entry.second.handle.index == otherBody.index &&
+									entry.second.handle.generation == otherBody.generation)
+								{
+									otherEntry = &entry.second;
+									break;
+								}
+							}
+						}
+						const R3Vector otherVelocity = otherEntry != nullptr ? otherEntry->prevLinear : V(0, 0, 0);
 						float speed = std::fabs(Dot(Sub(otherVelocity, shellVelocity), normal));
 						// The solver has already resolved the contact by now; the impulse it applied says how hard the
 						// hit was.

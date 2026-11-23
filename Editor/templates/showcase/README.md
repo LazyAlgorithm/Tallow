@@ -18,3 +18,18 @@ Open `src/Scenes/Gallery.tscene` in the editor: every room is a set of ordinary 
 The gameplay is C#. `src/Scripts/Gallery.cs` is what moves while playing (the lights, the walking figure, the robots, firing, cutting and the room names); `Visitor.cs` walks and looks; `GalleryCrowd.cs` shows one script per object beside one script over packed data. The scene itself is ordinary saved objects. (The Beef code that first built it is in the engine's history, `Editor/templates/showcase/src/Scripts/Gallery.bf` up to commit c488b75f.)
 
 The rigged character is derived from Quaternius's CC0 asset; see `src/Models/LICENSE.txt`. Other assets are generated for this sample.
+
+## Physics backends
+
+The Gallery runs on either 3D backend. **Project Settings → Physics** lists Jolt (the default) and Rapier when
+Rapier's prebuilt archive is in this Tallow build. Everything in the scene works on both: the flag and curtains are
+cloth, the lab jellies use pressure, the steel shells keep their dents, the ropes and wind are shared, and the
+warning tape uses the same colliders.
+
+- **Jolt** uses each soft body's own collision for cloth, jellies and FromSurface shells; an impact-dented shell
+  rides its object's collider.
+- **Rapier** generates the same soft-body collisions. A static or kinematic impact-dented shell can also hand its
+  collision surface to Rapier's deformable shell collider; a dynamic shell keeps its rigidbody collider because
+  the shell skin cannot carry its mass.
+
+No component or scene change is needed to switch. Rebuild the gameplay C# only when its scripts change.

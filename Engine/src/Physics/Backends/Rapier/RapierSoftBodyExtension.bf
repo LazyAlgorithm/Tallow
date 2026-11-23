@@ -44,6 +44,9 @@ class RapierSoftBodyExtension : PhysicsSoftBodyExtension
 		settings.friction = config.friction;
 		settings.gravityFactor = config.gravityFactor;
 		settings.iterations = config.iterations;
+		settings.stretch = config.stretch;
+		settings.shear = config.shear;
+		settings.bend = config.bend;
 		return Rapier.tn_rapier_soft_create(World, positions, (int32)vertexCount, triangles, (int32)triangleCount,
 			pinned, stiffness, &c, objectMatrix, config.mass, &settings, config.userData);
 	}

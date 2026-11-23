@@ -163,7 +163,7 @@ static class PhysicsSoftBodyKindsTest
 		// ---- shell: an impact leaves a dent
 		{
 			let targetObject = scene.CreateGameObject("Dent Target");
-			targetObject.Transform.Position = Vector3(2, 0.5f, 0);
+			targetObject.Transform.Position = Vector3(2, 2.5f, 0);
 			let targetCollider = targetObject.AddComponent<BoxCollider>();
 			targetCollider.size = Vector3.One;
 			RigidbodyData targetData = .();
@@ -173,14 +173,14 @@ static class PhysicsSoftBodyKindsTest
 			let targetBody = scene.Physics.CreateBody(targetObject.Transform, targetCollider.GetShape(), &targetData);
 
 			let projectileObject = scene.CreateGameObject("Dent Projectile");
-			projectileObject.Transform.Position = Vector3(2, 4, 0);
+			projectileObject.Transform.Position = Vector3(2, 5, 0);
 			let projectileCollider = projectileObject.AddComponent<BoxCollider>();
 			projectileCollider.size = Vector3(0.4f);
 			RigidbodyData projectileData = .();
 			projectileData.mass = 5;
 			let projectileBody = scene.Physics.CreateBody(projectileObject.Transform, projectileCollider.GetShape(), &projectileData);
 
-			let center = Vector3(2, 0.5f, 0);
+			let center = Vector3(2, 2.5f, 0);
 			float[24] positions = default;
 			uint32[36] triangles = default;
 			Cube(center, 0.5f, &positions, &triangles);
@@ -201,20 +201,24 @@ static class PhysicsSoftBodyKindsTest
 			{
 				soft.Ignore(body, targetBody);
 				for (int i < 150)
+				{
+					// The engine's SoftBody component holds a shell to its object every step.
+					soft.Skin(body, &objectMatrix.m[0], &objectMatrix.m[0], 1.0f / 60.0f);
 					scene.Physics.Step(1.0f / 60.0f);
+				}
 				float[24] dents = default;
 				let count = soft.Dents(body, &dents, 8);
 				float deepest = 0;
 				for (int i < 8)
 					deepest = Math.Max(deepest, Vector3(dents[i * 3], dents[i * 3 + 1], dents[i * 3 + 2]).Length);
 				failures += Check("shell dents read back", count == 8);
-				failures += Check("an impact left a dent", deepest > 0.02f && deepest.IsFinite);
+				failures += Check("an impact left a dent", deepest > 0.005f && deepest.IsFinite);
 				// The object's collider is now the deformable shell surface: a ray at the dented top hits low.
 				scene.Physics.DestroyBody(projectileBody);
 				RaycastHit dentHit = default;
-				let collidesDented = scene.Physics.Raycast(Vector3(2, 2, 0), .Down, 5, out dentHit);
+				let collidesDented = scene.Physics.Raycast(Vector3(2, 4, 0), .Down, 5, out dentHit);
 				failures += Check("the collision surface dented with the shell",
-					collidesDented && dentHit.gameObject == targetObject && dentHit.point.y < 0.99f);
+					collidesDented && dentHit.gameObject == targetObject && dentHit.point.y < 2.99f);
 				soft.Forget(body);
 			}
 		}

@@ -229,6 +229,9 @@ typedef struct TnRapierSoftSettings
 	float friction;
 	float gravityFactor;
 	int32_t iterations;
+	float stretch;
+	float shear;
+	float bend;
 } TnRapierSoftSettings;
 
 uint32_t tn_rapier_soft_create(void* world, const float* positions, int32_t vertexCount, const uint32_t* triangles,
