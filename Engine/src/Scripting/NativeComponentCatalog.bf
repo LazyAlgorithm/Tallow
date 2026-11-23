@@ -29,8 +29,9 @@ static class NativeComponentCatalog
 		// Class components ([Component] classes such as Rope or NavigationObstacle): their fields from the type alone.
 		for (let info in ComponentRegistry.Types)
 		{
+			// The editor's own [Component] classes are test fixtures (contact probes), not engine components.
 			if (info.type == typeof(CSharpBehaviour) || !info.type.HasCustomAttribute<ComponentAttribute>() ||
-				!info.fullName.StartsWith("Tallow."))
+				!info.fullName.StartsWith("Tallow.") || info.fullName.StartsWith("Tallow.Editor."))
 				continue;
 			text.AppendF("component\t{}\n", info.fullName);
 			let fields = scope List<FieldRef>();

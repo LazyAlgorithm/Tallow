@@ -202,13 +202,11 @@ if(TALLOW_RAPIER)
 		message(STATUS "Rapier3D: linking ${_tallow_rapier_dir}/${_tallow_rapier_library}")
 	else()
 		message(STATUS "Rapier3D: no archive for ${_tallow_rapier_platform}; the provider stays unlisted")
-		# The Beef link lists name build/native/rapier/librapier3d_ffi.a on every desktop build. Without an
-		# archive, a placeholder with the same name keeps them valid; the stub above supplies the symbols.
-		file(WRITE ${CMAKE_BINARY_DIR}/rapier/placeholder.c "int tallow_rapier_placeholder = 0;\n")
-		add_library(tallow_rapier_placeholder STATIC ${CMAKE_BINARY_DIR}/rapier/placeholder.c)
-		set_target_properties(tallow_rapier_placeholder PROPERTIES
-			OUTPUT_NAME rapier3d_ffi
-			ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/rapier)
+		# The Beef link lists, packaging and exported games name build/native[-win]/rapier/<archive> on every
+		# desktop build. Without an archive, an empty one with the same name keeps them valid (the stub above
+		# supplies the symbols). It is written now rather than built, so a build of just tallow_native (CI,
+		# package_engine.py) has it too; GNU ld, lld and lld-link accept an archive with no members.
+		file(WRITE ${CMAKE_BINARY_DIR}/rapier/${_tallow_rapier_library} "!<arch>\n")
 	endif()
 endif()
 

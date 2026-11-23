@@ -63,6 +63,9 @@ public enum PhysicsFeature : ulong
     SoftBodyTearing = 1UL << 51,
 }
 
+/// <summary>
+/// Physics queries and settings for C# scripts, and which features the scene's selected 3D physics backend supports.
+/// </summary>
 public static unsafe partial class Physics
 {
     /// The features the scene's selected 3D physics backend supports.

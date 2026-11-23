@@ -223,14 +223,19 @@ public readonly record struct TickInput(
             ValueAt(_previousActions, _previousMove, PreviousButtons, slot) > 0.5f;
     }
 
+    /// <summary>Whether Jump is held this tick (Held(InputButton.Jump)).</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Jump => Held(InputButton.Jump);
+    /// <summary>Whether Sprint is held this tick (Held(InputButton.Sprint)).</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Sprint => Held(InputButton.Sprint);
+    /// <summary>Whether Crouch is held this tick (Held(InputButton.Crouch)).</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Crouch => Held(InputButton.Crouch);
+    /// <summary>Whether Fire is held this tick (Held(InputButton.Fire)).</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Fire => Held(InputButton.Fire);
+    /// <summary>Whether Use is held this tick (Held(InputButton.Use)).</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool Use => Held(InputButton.Use);
 

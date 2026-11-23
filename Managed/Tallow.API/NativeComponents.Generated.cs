@@ -2330,13 +2330,14 @@ public readonly partial record struct UIDocument
 }
 
 /// <summary>
-/// A drivable wheeled vehicle on this object's Rigidbody. It builds a Jolt wheeled-vehicle controller and exposes
-/// driver input, wheel and engine state. Another backend can implement vehicles from its own wheel joints; the
-/// component does not know which.
+/// A drivable vehicle on this object's Rigidbody: wheeled, motorcycle or tracked, according to Kind. It builds the
+/// selected backend's vehicle and exposes driver input, wheel and engine state. Another backend can implement only
+/// some kinds; the Inspector offers just the kinds it advertises.
 ///
-/// Put a Rigidbody and a Collider on the same object for the chassis, then set the four wheels. Every wheel's
-/// position (relative to the chassis), radius, width, suspension and steering is a saved field on this component.
-/// Drive it from a script with SetDriverInput; the Drivable Car template shows how.
+/// Put a Rigidbody and a Collider on the same object for the chassis, then set the wheels. Every wheel's position
+/// (relative to the chassis), radius, width, suspension and steering is a saved field on this component. A motorcycle
+/// uses Front Left as its front wheel and Rear Left as its rear; a tracked vehicle uses 0/2 on the left track and
+/// 1/3 on the right. Drive it from a script with SetDriverInput; the Drivable Car template shows the wheeled kind.
 /// </summary>
 [NativeComponent("Tallow.Vehicle")]
 public readonly partial record struct Vehicle(GameObject GameObject) : IComponent
@@ -2356,23 +2357,53 @@ public readonly partial record struct Vehicle(GameObject GameObject) : IComponen
     /// Tracked: the wheel index driven by each track (the left track uses wheels 0 and 2, the right 1 and 3).
     /// </summary>
     public int RightTrackDrivenWheel { get => Data.GetInt("rightTrackDrivenWheel"); set => Data.Set("rightTrackDrivenWheel", value); }
+    /// <summary>
+    /// Tracked: each track's moment of inertia (kg m²); more makes it slower to speed up and slow down.
+    /// </summary>
     public float TrackInertia { get => Data.GetFloat("trackInertia"); set => Data.Set("trackInertia", value); }
+    /// <summary>
+    /// Tracked: how quickly a track's spin dies away by itself.
+    /// </summary>
     public float TrackAngularDamping { get => Data.GetFloat("trackAngularDamping"); set => Data.Set("trackAngularDamping", value); }
+    /// <summary>
+    /// Tracked: the brake torque on each track at full brake, in newton metres.
+    /// </summary>
     public float TrackMaxBrakeTorque { get => Data.GetFloat("trackMaxBrakeTorque"); set => Data.Set("trackMaxBrakeTorque", value); }
+    /// <summary>
+    /// Tracked: the gear ratio between the gearbox and the tracks.
+    /// </summary>
     public float TrackDifferentialRatio { get => Data.GetFloat("trackDifferentialRatio"); set => Data.Set("trackDifferentialRatio", value); }
     /// <summary>
     /// The engine's peak torque in newton metres.
     /// </summary>
     public float MaxTorque { get => Data.GetFloat("maxTorque"); set => Data.Set("maxTorque", value); }
+    /// <summary>
+    /// The engine's idle speed, in revolutions per minute.
+    /// </summary>
     public float MinRPM { get => Data.GetFloat("minRPM"); set => Data.Set("minRPM", value); }
+    /// <summary>
+    /// The engine's top speed, in revolutions per minute; the gearbox shifts up before it.
+    /// </summary>
     public float MaxRPM { get => Data.GetFloat("maxRPM"); set => Data.Set("maxRPM", value); }
+    /// <summary>
+    /// The engine's moment of inertia (kg m²); more makes it rev up and down more slowly.
+    /// </summary>
     public float EngineInertia { get => Data.GetFloat("engineInertia"); set => Data.Set("engineInertia", value); }
+    /// <summary>
+    /// How quickly the engine's spin dies away with the throttle off.
+    /// </summary>
     public float EngineAngularDamping { get => Data.GetFloat("engineAngularDamping"); set => Data.Set("engineAngularDamping", value); }
     /// <summary>
     /// The steepest pitch/roll the vehicle may reach, in degrees.
     /// </summary>
     public float MaxPitchRollDegrees { get => Data.GetFloat("maxPitchRollDegrees"); set => Data.Set("maxPitchRollDegrees", value); }
+    /// <summary>
+    /// The gear ratio in reverse.
+    /// </summary>
     public float ReverseRatio { get => Data.GetFloat("reverseRatio"); set => Data.Set("reverseRatio", value); }
+    /// <summary>
+    /// Anti-roll bars between each axle's wheels, so the body leans less in corners.
+    /// </summary>
     public bool AntiRollBars { get => Data.GetBool("antiRollBars"); set => Data.Set("antiRollBars", value); }
 }
 

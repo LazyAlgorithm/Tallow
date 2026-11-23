@@ -116,22 +116,32 @@ class Vehicle : Component
 	/// Tracked: the wheel index driven by each track (the left track uses wheels 0 and 2, the right 1 and 3).
 	public int32 leftTrackDrivenWheel = 2;
 	public int32 rightTrackDrivenWheel = 3;
+	/// Tracked: each track's moment of inertia (kg m²); more makes it slower to speed up and slow down.
 	public float trackInertia = 10;
+	/// Tracked: how quickly a track's spin dies away by itself.
 	public float trackAngularDamping = 0.5f;
+	/// Tracked: the brake torque on each track at full brake, in newton metres.
 	public float trackMaxBrakeTorque = 3000;
+	/// Tracked: the gear ratio between the gearbox and the tracks.
 	public float trackDifferentialRatio = 2;
 
 	/// The engine's peak torque in newton metres.
 	public float maxTorque = 320;
+	/// The engine's idle speed, in revolutions per minute.
 	public float minRPM = 900;
+	/// The engine's top speed, in revolutions per minute; the gearbox shifts up before it.
 	public float maxRPM = 6500;
+	/// The engine's moment of inertia (kg m²); more makes it rev up and down more slowly.
 	public float engineInertia = 0.4f;
+	/// How quickly the engine's spin dies away with the throttle off.
 	public float engineAngularDamping = 0.4f;
 	/// The steepest pitch/roll the vehicle may reach, in degrees.
 	[Range(1, 89)]
 	public float maxPitchRollDegrees = 45;
 	public List<float> gearRatios = new .() ~ delete _;
+	/// The gear ratio in reverse.
 	public float reverseRatio = 3;
+	/// Anti-roll bars between each axle's wheels, so the body leans less in corners.
 	public bool antiRollBars = true;
 
 	public this()
