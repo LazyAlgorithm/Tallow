@@ -1083,6 +1083,8 @@ passes. The rest of the engine is unchanged; `PhysicsBackends` registers it afte
   `--test-physics-gating`, `--test-physics-ragdoll`, `--test-physics-vehicle`, `--test-physics-vehicle-kinds`
   (kinds the backend advertises; Jolt still runs all three), `--test-physics-softbody`.
 - `--test-physics-vehicle-kinds` now skips kinds a backend does not advertise instead of requiring Jolt's three.
+- `--test-car-scene <project>/src/Scenes/Main.tscene` loads a saved Drivable Car scene and drives it for three
+  seconds; the stock car travels 17.9 m under Rapier and 21.3 m under Jolt.
 
 **Open gates**
 
