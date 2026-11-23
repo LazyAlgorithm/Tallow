@@ -121,6 +121,8 @@ namespace
 		// are read (a stiff soft-body shell stops a projectile in one step).
 		R3Vector prevLinear = V(0, 0, 0);
 		R3Vector prevAngular = V(0, 0, 0);
+		R3Vector prevPrevLinear = V(0, 0, 0);
+		R3Vector prevPrevPrevLinear = V(0, 0, 0);
 	};
 
 	struct PairKey
@@ -1006,6 +1008,8 @@ void tn_rapier_step(void* raw, float deltaTime, int32_t* errorMask, float* stepM
 		Body& body = entry.second;
 		if (Valid(body.handle))
 		{
+			body.prevPrevPrevLinear = body.prevPrevLinear;
+			body.prevPrevLinear = body.prevLinear;
 			body.prevLinear = r3RigidBody_Linvel(body.handle);
 			body.prevAngular = r3RigidBody_Angvel(body.handle);
 		}
@@ -3166,41 +3170,50 @@ namespace
 {
 	void DentShell(World* world, SoftBody* soft, R3Vector contact, R3Vector normal, float speed)
 	{
+		(void)world;
+		// The contact pair can lag the hit by a step, and a soft-body hit can have no rigid impulse to read. The
+		// particles the deformable collider pushed are moving at the impact speed, so use them too.
+		std::vector<R3Vector> particleVelocities((size_t)soft->count);
+		const size_t moving = std::min(r3SoftBody_ParticleVelocities(soft->handle, particleVelocities.data(),
+			particleVelocities.size()), particleVelocities.size());
+		for (size_t i = 0; i < moving; i++)
+			speed = std::max(speed, Length(particleVelocities[i]));
 		if (soft->dentSpeed <= 0.0f || speed < soft->dentSpeed)
 			return;
 		const float strength = std::clamp((speed - soft->dentSpeed) / std::max(soft->dentSpeed, 1.0f), 0.0f, 1.0f);
 		const float radius = std::max(soft->dentDepth * 6.0f, 0.25f);
-		std::vector<R3Vector> buffer((size_t)soft->count);
-		const size_t count = std::min(r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size()),
-			buffer.size());
-		R3Vector shellCentre = V(0, 0, 0);
-		for (size_t i = 0; i < count; i++)
-			shellCentre = Add(shellCentre, buffer[i]);
-		if (count > 0)
-			shellCentre = Scale(shellCentre, 1.0f / (float)count);
+		// Work in the shell's object-local frame from the held shape (rest plus stored dents), not from particles
+		// that a collision has already bulged out for this step. Otherwise a slightly pushed shell is over the
+		// Dent Depth limit and the impact is thrown away (Windows took this path far more often than Linux).
+		const R3Vector localContact = SoftLocal(soft, contact);
+		R3Vector towardsCentre = Sub(soft->center, contact);
+		R3Vector direction = normal;
+		if (Length(towardsCentre) > 1.0e-5f && Dot(direction, towardsCentre) < 0.0f)
+			direction = Scale(direction, -1.0f);
+		if (Length(direction) < 1.0e-5f)
+			direction = towardsCentre;
+		const R3Vector localInto = Normalize(Sub(SoftLocal(soft, Add(contact, direction)), localContact));
+		if (Length(localInto) < 1.0e-5f)
+			return;
 		bool changed = false;
-		for (size_t i = 0; i < count; i++)
+		for (size_t i = 0; i < (size_t)soft->count; i++)
 		{
-			const R3Vector fromContact = Sub(buffer[i], contact);
-			const float distance = Length(fromContact);
+			const R3Vector dentNow = i < soft->dents.size() ? soft->dents[i] : V(0, 0, 0);
+			const R3Vector base = Add(soft->restLocal[i], dentNow);
+			const float distance = Length(Sub(base, localContact));
 			if (distance > radius)
 				continue;
 			const float falloff = 1.0f - distance / radius;
 			const float push = soft->dentDepth * strength * falloff;
 			if (push < soft->dentYield)
 				continue;
-			// The contact normal may face either way; a dent always goes from the contact toward the middle of the
-			// shell (the Jolt side adds its inward direction, so do the same here).
-			const R3Vector toCentre = Sub(shellCentre, contact);
-			const R3Vector into = Length(toCentre) > 1.0e-5f ? Normalize(toCentre) : normal;
-			const R3Vector target = Add(buffer[i], Scale(into, push));
-			const R3Vector targetLocal = SoftLocal(soft, target);
+			const R3Vector targetLocal = Add(base, Scale(localInto, push));
 			const R3Vector dent = Sub(targetLocal, soft->restLocal[i]);
 			if (Length(dent) > soft->dentDepth)
 				continue;
 			if (i < soft->dents.size())
 				soft->dents[i] = dent;
-			SetParticle(soft, i, target);
+			SetParticle(soft, i, MatPoint(soft->lastObject, targetLocal));
 			changed = true;
 		}
 		if (changed)
@@ -3272,7 +3285,14 @@ namespace
 								}
 							}
 						}
-						const R3Vector otherVelocity = otherEntry != nullptr ? otherEntry->prevLinear : V(0, 0, 0);
+						R3Vector otherVelocity = otherEntry != nullptr ? otherEntry->prevLinear : V(0, 0, 0);
+						if (otherEntry != nullptr)
+						{
+							if (Length(otherEntry->prevPrevLinear) > Length(otherVelocity))
+								otherVelocity = otherEntry->prevPrevLinear;
+							if (Length(otherEntry->prevPrevPrevLinear) > Length(otherVelocity))
+								otherVelocity = otherEntry->prevPrevPrevLinear;
+						}
 						float speed = std::fabs(Dot(Sub(otherVelocity, shellVelocity), normal));
 						// The solver has already resolved the contact by now; the impulse it applied says how hard the
 						// hit was.

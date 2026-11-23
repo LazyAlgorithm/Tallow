@@ -1083,9 +1083,11 @@ passes. The rest of the engine is unchanged; `PhysicsBackends` registers it afte
   which built every cloth at about 1 Hz; flags and curtains stretched like rubber under wind. Wind is applied to
   every soft body with surface triangles (an early version skipped any body with more triangles than vertices).
 - A FromImpacts shell is held exactly to its object: its stored dents are applied on top of the object's rest
-  shape before and after the step, so the skin cannot sag away from a moving object. Dents always go from the
-  contact toward the middle of the shell, and the impact speed comes from the velocities recorded before the step
-  (a stiff shell stops a projectile in the step that makes the contact, so post-solve speeds read as near zero).
+  shape before and after the step, so the skin cannot sag away from a moving object. Dents are computed from the
+  held local shape (rest plus stored dents), not from particles a collision already bulged out this step, and
+  always go from the contact toward the middle of the shell. The impact speed comes from the velocities recorded
+  before the step, plus the particles the deformable collider pushed (a stiff shell stops a projectile in the step
+  that makes the contact, so post-solve speeds read as near zero, and contact pairs can lag a step).
 - Rapier soft-body tearing is a software capability bit (`SoftBodyTearing`) and a Soft Body toggle that is hidden
   entirely on Jolt. Overstretched edges are torn through Rapier's tear pass (with its tear events); the toggle is
   off by default.
@@ -1125,7 +1127,8 @@ passes. The rest of the engine is unchanged; `PhysicsBackends` registers it afte
   copy less; a shell with many contact points was overrunning the stack and crashing the Gallery. The soft-body
   kinds test also checks that a dynamic shell keeps its rigidbody collider (it must not hand its surface to the
   soft body). The Gallery's Courtyard flag and Soft Body Lab were checked on Rapier after these fixes: the flag
-  flies from its pole like Jolt's, and the lab's cloth, jellies and shells stay in place.
+  flies from its pole like Jolt's, and the lab's cloth, jellies and shells stay in place. The same soft-body checks
+  pass on the Windows x86_64 build (run under Wine).
 
 **Open gates**
 
