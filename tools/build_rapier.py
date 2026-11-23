@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Builds the pinned Rapier C bindings into third_party/rapier/prebuilt/<platform>.
 
-Normal Tallow builds do not run this: they link the archives committed or attached to a release. This is the
-maintainer/CI step that produces them (Rust required here only). See third_party/rapier/VERSION.
+Normal source builds do not need this: without an archive the engine builds without Rapier and lists only Jolt.
+The release workflow runs it (Rust required here only) so the downloads include Rapier. See
+third_party/rapier/VERSION.
 
   python3 tools/build_rapier.py --platform linux
   python3 tools/build_rapier.py --platform linux --source ~/rapier-src   # reuse a clone
@@ -92,8 +93,12 @@ def main():
                  f'-DRAPIER_ENABLE_PARALLEL={"OFF" if args.serial else "ON"}']
     if target:
         configure.append(f'-DRAPIER_TARGET={target}')
-    if target == 'x86_64-pc-windows-msvc':
-        # Rust's MSVC target links with the engine's Windows toolchain (clang-cl/lld-link + the xwin SDK/CRT).
+    if target == 'x86_64-pc-windows-msvc' and os.name == 'nt':
+        # On Windows itself Rust's MSVC target uses Visual Studio's linker and libraries (a developer shell).
+        run(['rustup', 'target', 'add', target])
+    elif target == 'x86_64-pc-windows-msvc':
+        # Cross-built from Linux, Rust's MSVC target links with the engine's Windows toolchain (clang-cl/lld-link +
+        # the xwin SDK/CRT).
         tool = Path(os.environ.get('TALLOW_WIN', Path.home() / '.local/share/tessera-win')).expanduser()
         xwin = tool / 'xwin'
         libs = [xwin / 'crt/lib/x86_64', xwin / 'sdk/lib/um/x86_64', xwin / 'sdk/lib/ucrt/x86_64']
