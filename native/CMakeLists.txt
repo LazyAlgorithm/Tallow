@@ -205,8 +205,10 @@ if(TALLOW_RAPIER)
 		# The Beef link lists, packaging and exported games name build/native[-win]/rapier/<archive> on every
 		# desktop build. Without an archive, an empty one with the same name keeps them valid (the stub above
 		# supplies the symbols). It is written now rather than built, so a build of just tallow_native (CI,
-		# package_engine.py) has it too; GNU ld, lld and lld-link accept an archive with no members.
-		file(WRITE ${CMAKE_BINARY_DIR}/rapier/${_tallow_rapier_library} "!<arch>\n")
+		# package_engine.py) has it too; GNU ld, lld and lld-link accept an archive with no members. The signature
+		# must end in a bare LF: file(WRITE) gives CRLF on Windows, which lld-link rejects as an unknown file type.
+		file(CONFIGURE OUTPUT ${CMAKE_BINARY_DIR}/rapier/${_tallow_rapier_library} CONTENT "!<arch>\n" @ONLY
+			NEWLINE_STYLE UNIX)
 	endif()
 endif()
 
