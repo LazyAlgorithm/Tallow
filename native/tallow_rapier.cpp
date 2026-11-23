@@ -4,7 +4,9 @@
 // unlisted).
 #include "tallow_rapier.h"
 
+#ifndef RAPIER_STATIC
 #define RAPIER_STATIC
+#endif
 #include "rapier.h"
 
 #include <algorithm>
@@ -19,6 +21,21 @@
 
 #include <cstdlib>
 #include <limits>
+
+// Reads an environment variable (std::getenv is "deprecated" by MSVC's CRT headers; this is not).
+static bool EnvironmentSet(const char* name, char* out, size_t size)
+{
+#if defined(_WIN32)
+	size_t length = 0;
+	return getenv_s(&length, out, size, name) == 0 && length > 0;
+#else
+	const char* value = std::getenv(name);
+	if (value == nullptr)
+		return false;
+	std::snprintf(out, size, "%s", value);
+	return true;
+#endif
+}
 
 namespace
 {
@@ -904,9 +921,11 @@ const char* tn_rapier_build(void)
 	{
 		const R3BuildFeatures features = r3BuildFeatures();
 		char text[160];
-		const char* threads = std::getenv("RAYON_NUM_THREADS");
+		char threads[16];
+		if (!EnvironmentSet("RAYON_NUM_THREADS", threads, sizeof(threads)))
+			std::snprintf(threads, sizeof(threads), "4");
 		char parallel[48];
-		std::snprintf(parallel, sizeof(parallel), "on (%s threads)", threads != nullptr ? threads : "4");
+		std::snprintf(parallel, sizeof(parallel), "on (%s threads)", threads);
 		std::snprintf(text, sizeof(text), "Rapier %s; SIMD %u; parallel %s; enhanced determinism %s",
 			r3Version(), (unsigned)features.simd_lanes, features.parallel ? parallel : "off",
 			features.enhanced_determinism ? "on" : "off");
@@ -931,7 +950,8 @@ namespace
 		if (done)
 			return;
 		done = true;
-		if (!r3BuildFeatures().parallel || std::getenv("RAYON_NUM_THREADS") != nullptr)
+		char threads[16];
+		if (!r3BuildFeatures().parallel || EnvironmentSet("RAYON_NUM_THREADS", threads, sizeof(threads)))
 			return;
 #if defined(_WIN32)
 		_putenv_s("RAYON_NUM_THREADS", "4");
