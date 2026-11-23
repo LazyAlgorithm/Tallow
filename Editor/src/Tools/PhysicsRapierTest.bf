@@ -289,6 +289,78 @@ static class PhysicsRapierTest
 		}
 		failures += Check("buoyancy floats the body above the surface", floater.Transform.Position.y > 0.6f);
 
+		// ---- freeze rotation
+		let frozenObject = scene.CreateGameObject("Frozen");
+		frozenObject.Transform.Position = Vector3(-8, 6, 8);
+		let frozenCollider = frozenObject.AddComponent<BoxCollider>();
+		frozenCollider.size = Vector3.One;
+		RigidbodyData frozenData = .();
+		frozenData.mass = 1;
+		frozenData.freezeRotation = true;
+		let frozenBody = scene.Physics.CreateBody(frozenObject.Transform, frozenCollider.GetShape(), &frozenData);
+		scene.Physics.AddForceAtPosition(frozenBody, Vector3(50, 0, 0), Vector3(-8, 6.5f, 8));
+		for (int i < 60)
+			scene.Physics.Step(1.0f / 60.0f);
+		failures += Check("freeze rotation keeps the body upright",
+			Math.Abs(Quaternion.Dot(scene.Physics.GetState(frozenBody).rotation, .Identity)) > 0.995f);
+
+		// ---- debris is passed through by a raycast
+		let debrisObject = scene.CreateGameObject("Debris");
+		debrisObject.Transform.Position = Vector3(-12, 3, 0);
+		let debrisCollider = debrisObject.AddComponent<BoxCollider>();
+		debrisCollider.size = Vector3.One;
+		RigidbodyData debrisData = .();
+		debrisData.mass = 1;
+		debrisData.debris = true;
+		scene.Physics.CreateBody(debrisObject.Transform, debrisCollider.GetShape(), &debrisData);
+		let solidObject = scene.CreateGameObject("Solid Behind Debris");
+		solidObject.Transform.Position = Vector3(-16, 3, 0);
+		let solidCollider = solidObject.AddComponent<BoxCollider>();
+		solidCollider.size = Vector3.One;
+		scene.Physics.CreateBody(solidObject.Transform, solidCollider.GetShape(), null);
+		RaycastHit debrisHit = default;
+		if (scene.Physics.Raycast(Vector3(-8, 3, 0), .Left, 20, out debrisHit))
+			failures += Check("a ray passes through debris", debrisHit.gameObject == solidObject);
+		else
+			failures += Check("a ray passes through debris", false);
+
+		// ---- separated world states
+		ProjectConfig.AddWorldState("Rapier Test State");
+		ProjectConfig.SeparateWorldStates = true;
+		let worlds = scope Scene();
+		let stateGround = worlds.CreateGameObject("State Ground");
+		let stateGroundCollider = stateGround.AddComponent<BoxCollider>();
+		stateGroundCollider.size = Vector3(10, 1, 10);
+		worlds.Physics.CreateBody(stateGround.Transform, stateGroundCollider.GetShape(), null);
+		let blocker = worlds.CreateGameObject("State B Blocker");
+		blocker.Transform.Position = Vector3(0, 2, 0);
+		blocker.WorldStates = 1u << 1;
+		let blockerCollider = blocker.AddComponent<BoxCollider>();
+		blockerCollider.size = Vector3(3, 1, 3);
+		worlds.Physics.CreateBody(blocker.Transform, blockerCollider.GetShape(), null);
+		let stateFaller = worlds.CreateGameObject("State A Faller");
+		stateFaller.Transform.Position = Vector3(0, 6, 0);
+		stateFaller.WorldStates = 1u << 0;
+		let stateFallerCollider = stateFaller.AddComponent<BoxCollider>();
+		stateFallerCollider.size = Vector3.One;
+		RigidbodyData stateFallerData = .();
+		stateFallerData.mass = 1;
+		worlds.Physics.CreateBody(stateFaller.Transform, stateFallerCollider.GetShape(), &stateFallerData);
+		for (int i < 150)
+			worlds.Physics.Step(1.0f / 60.0f);
+		failures += Check("bodies in separate world states pass through each other", stateFaller.Transform.Position.y < 1.5f);
+
+		RaycastHit stateHit = default;
+		worlds.Physics.QueryWorldStates = 1u << 0;
+		let sawFaller = worlds.Physics.Raycast(Vector3(0, 10, 0), .Down, 20, out stateHit) && stateHit.gameObject == stateFaller;
+		failures += Check("a query in state A sees the state-A body", sawFaller);
+		worlds.Physics.QueryWorldStates = 1u << 1;
+		let sawBlocker = worlds.Physics.Raycast(Vector3(0, 10, 0), .Down, 20, out stateHit) && stateHit.gameObject == blocker;
+		failures += Check("a query in state B sees the state-B body", sawBlocker);
+		worlds.Physics.QueryWorldStates = uint32.MaxValue;
+		ProjectConfig.SeparateWorldStates = false;
+		ProjectConfig.Reset();
+
 		Console.WriteLine(failures == 0 ? "PHYSICS RAPIER PASS" : scope $"PHYSICS RAPIER FAIL ({failures})");
 		return failures == 0 ? 0 : 1;
 	}
