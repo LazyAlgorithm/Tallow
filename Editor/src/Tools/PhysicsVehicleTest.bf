@@ -44,13 +44,13 @@ static class PhysicsVehicleTest
 		{
 			bool front = i < 2;
 			wheels[i] = default;
-			wheels[i].position = Vector3((i & 1) == 0 ? -0.9f : 0.9f, -0.6f, front ? 1.4f : -1.4f);
-			wheels[i].radius = 0.4f;
-			wheels[i].width = 0.3f;
-			wheels[i].suspensionMinLength = 0.1f;
-			wheels[i].suspensionMaxLength = 0.5f;
-			wheels[i].suspensionFrequency = 1.5f;
-			wheels[i].suspensionDamping = 0.5f;
+			wheels[i].position = Vector3((i & 1) == 0 ? -0.9f : 0.9f, -0.1f, front ? 1.4f : -1.4f);
+			wheels[i].radius = 0.3f;
+			wheels[i].width = 0.25f;
+			wheels[i].suspensionMinLength = 0.05f;
+			wheels[i].suspensionMaxLength = 0.3f;
+			wheels[i].suspensionFrequency = 1.7f;
+			wheels[i].suspensionDamping = 0.8f;
 			wheels[i].maxSteerAngleRadians = front ? Mathf.Deg2Rad * 30 : 0;
 			wheels[i].maxBrakeTorque = 1500;
 			wheels[i].maxHandBrakeTorque = 3000;
@@ -64,7 +64,7 @@ static class PhysicsVehicleTest
 		desc.up = Vector3.Up;
 		desc.forward = Vector3.Forward;
 		desc.maxPitchRollAngle = Mathf.Deg2Rad * 45;
-		desc.maxTorque = 3000;
+		desc.maxTorque = 320;
 		desc.minRPM = 1000;
 		desc.maxRPM = 6000;
 		desc.engineInertia = 0.5f;

@@ -856,7 +856,9 @@ namespace
 			float engineForce = 0.0f;
 			if (std::fabs(vehicle->inputForward) > 0.01f)
 			{
-				engineForce = vehicle->maxTorque * std::fabs(vehicle->inputForward) * std::fabs(vehicle->ratio) / radius;
+				// The gearbox's final drive; Jolt's differentials use the same 3.5.
+				const float finalDrive = 3.5f;
+				engineForce = vehicle->maxTorque * std::fabs(vehicle->inputForward) * std::fabs(vehicle->ratio) * finalDrive / radius;
 				if (vehicle->inputForward < 0.0f)
 					engineForce = -engineForce;
 				if (driven > 0)

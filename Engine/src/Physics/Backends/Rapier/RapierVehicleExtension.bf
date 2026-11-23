@@ -75,17 +75,17 @@ class RapierVehicleExtension : PhysicsVehicleExtension
 			wheel.width = source.width;
 			wheel.restLength = Math.Max(source.suspensionMaxLength, 0.05f);
 			wheel.minLength = Math.Max(source.suspensionMinLength, 0.0f);
-			// Rapier's ray-cast suspension uses normalized stiffness/damping (its defaults are tuned for a normal
-			// car), not a newton-per-metre spring. Scale the defaults by the wheel's ride frequency and damping
-			// ratio, and cap the force well above the weight each wheel carries.
+			// Rapier's ray-cast suspension force is stiffness * compression * chassisMass, so the stiffness is a
+			// frequency term, not newtons per metre: k = (2*pi*f)^2 / 4 for a chassis of four wheels. Damping is
+			// zeta * pi * f / 2 in the same normalized units.
 			let frequency = Math.Max(source.suspensionFrequency, 0.1f);
-			// Rapier's normalized spring is calibrated to its travel: a shorter suspension needs a stiffer number.
-			let travel = Math.Max(source.suspensionMaxLength - source.suspensionMinLength, 0.05f);
-			let stiffness = Math.Clamp(0.13f / (travel * travel) * Math.Clamp(frequency / 1.5f, 0.6f, 2.0f), 0.2f, 8.0f);
+			const float TwoPi = 6.2831855f;
+			let stiffness = (TwoPi * frequency) * (TwoPi * frequency) * 0.25f;
+			let damping = Math.Max(source.suspensionDamping, 0.0f) * 3.1415927f * frequency * 0.5f;
 			wheel.stiffness = stiffness;
-			wheel.compression = 0.83f;
-			wheel.damping = Math.Clamp(0.88f + (Math.Max(source.suspensionDamping, 0.0f) - 0.5f) * 1.2f, 0.6f, 2.5f);
-			wheel.maxForce = Math.Max(8000.0f, wheelMass * 9.81f * 2.5f);
+			wheel.compression = Math.Clamp(damping * 1.25f, 0.1f, 10.0f);
+			wheel.damping = Math.Clamp(damping, 0.1f, 10.0f);
+			wheel.maxForce = Math.Max(8000.0f, wheelMass * 9.81f * 3.0f);
 			wheel.maxSteerRadians = Math.Max(source.maxSteerAngleRadians, 0);
 			wheel.maxBrakeTorque = Math.Max(source.maxBrakeTorque, 0);
 			wheel.maxHandBrakeTorque = Math.Max(source.maxHandBrakeTorque, 0);

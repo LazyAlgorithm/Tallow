@@ -1027,6 +1027,8 @@ class Program
 				return PhysicsRapierTest.Run();
 			if (args[i] == "--test-vehicle-template" && i + 1 < args.Count)
 				return VehicleTemplateTest.Run(args[i + 1]);
+			if (args[i] == "--test-car-scene" && i + 1 < args.Count)
+				return CarSceneTest.Run(args[i + 1]);
 			if (args[i] == "--test-template-scenes" && i + 1 < args.Count)
 				return TemplateScenesTest.Run(args[i + 1]);
 		}

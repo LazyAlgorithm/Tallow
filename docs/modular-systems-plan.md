@@ -1056,8 +1056,11 @@ passes. The rest of the engine is unchanged; `PhysicsBackends` registers it afte
 - Navigation geometry: every static collider's shape is tessellated at its pose (`r3SharedShape_ToTrimesh`).
 - Ragdolls: ordinary dynamic bodies joined by ball joints, exposed through `PhysicsRagdollExtension`.
 - Wheeled vehicles: Rapier's ray-cast vehicle controller with a small automatic gearbox over the declared ratios.
-  Motorcycles and tracked vehicles are not implemented and are not advertised; the Vehicle component only offers
-  the wheeled kind under Rapier.
+  Rapier's suspension force is `stiffness * compression * chassisMass`, so the stiffness is derived from the wheel's
+  ride frequency (`(2*pi*f)^2 / 4`) with damping `zeta * pi * f / 2`; engine force includes the 3.5 final drive that
+  Jolt's differentials use. The suspension ray spans the engine's maximum length plus the wheel radius (Rapier does
+  not add the radius itself). Motorcycles and tracked vehicles are not implemented and are not advertised; the
+  Vehicle component only offers the wheeled kind under Rapier.
 - Cloth/shell soft bodies from a surface mesh, with pinned points, velocity/force/impulse application, shifting and
   world bounds. Dents, skin binding and pressure are **not** implemented, so Jelly/Shell/DrivenJelly SoftBody kinds
   are refused under Rapier with the reason; Cloth works. Ropes are not implemented and are not advertised.

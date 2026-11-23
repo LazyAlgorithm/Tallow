@@ -239,7 +239,7 @@ class Vehicle : Component
 		desc.engineAngularDamping = engineAngularDamping;
 		desc.gearCount = Math.Clamp((int32)gearRatios.Count, 1, 5);
 		for (int32 i = 0; i < desc.gearCount; i++)
-			desc.gearRatios[i] = gearRatios[i];
+			desc.gearRatios[i] = i < gearRatios.Count ? gearRatios[i] : 3.4f;
 		desc.reverseRatio = reverseRatio;
 		desc.antiRollBars = antiRollBars;
 		desc.objectCode = PhysicsLayerTable.ObjectCode(PhysicsLayerTable.MovingClass, GameObject.Layer);
