@@ -2124,10 +2124,15 @@ void tn_rapier_character_move(void* raw, void* characterRaw, uint32_t collisionM
 	CharacterStateOf(world, character, state);
 	if (state != nullptr)
 	{
+		// Rapier's grounded flag is authoritative: a snap-to-ground frame can report grounded without a collision.
+		// Only a reported steep contact (or its sliding-down-slope state) makes the ground too steep to stand on.
+		if (groundDot < 0.1f)
+			groundNormal = V(0, 1, 0);
 		Out(state->groundNormal, groundNormal);
-		if (movement.grounded && groundDot >= std::cos(character->maxSlope) - 0.02f)
+		if (movement.grounded)
 		{
-			state->groundState = 0;
+			const bool steep = groundDot > -1.0f && groundDot < std::cos(character->maxSlope) - 0.02f;
+			state->groundState = steep ? 1 : 0;
 			state->groundBody = groundBody;
 			if (groundBody != NoBody)
 			{
@@ -2139,8 +2144,6 @@ void tn_rapier_character_move(void* raw, void* characterRaw, uint32_t collisionM
 				}
 			}
 		}
-		else if (movement.grounded)
-			state->groundState = 1;
 		else if (count > 0)
 			state->groundState = 2;
 		else
