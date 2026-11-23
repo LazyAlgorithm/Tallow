@@ -757,19 +757,19 @@ extension EditorApp
 		ImGui.SeparatorText("Vehicle");
 		ImGui.TextWrapped("Changes apply from the next Play. The wheel positions are from the chassis body's centre; suspension sets the ride height.");
 		DrawVehicleKind(vehicle);
-		DrawVehicleWheel("Front Left", ref vehicle.frontLeftPosition, ref vehicle.frontLeftRadius, ref vehicle.frontLeftWidth,
+		DrawVehicleWheel(0, "Front Left", ref vehicle.frontLeftPosition, ref vehicle.frontLeftRadius, ref vehicle.frontLeftWidth,
 			ref vehicle.frontLeftSuspensionMin, ref vehicle.frontLeftSuspensionMax, ref vehicle.frontLeftSuspensionFrequency,
 			ref vehicle.frontLeftSuspensionDamping, ref vehicle.frontLeftSteerDegrees, ref vehicle.frontLeftBrakeTorque,
 			ref vehicle.frontLeftHandBrakeTorque, ref vehicle.frontLeftDriven);
-		DrawVehicleWheel("Front Right", ref vehicle.frontRightPosition, ref vehicle.frontRightRadius, ref vehicle.frontRightWidth,
+		DrawVehicleWheel(1, "Front Right", ref vehicle.frontRightPosition, ref vehicle.frontRightRadius, ref vehicle.frontRightWidth,
 			ref vehicle.frontRightSuspensionMin, ref vehicle.frontRightSuspensionMax, ref vehicle.frontRightSuspensionFrequency,
 			ref vehicle.frontRightSuspensionDamping, ref vehicle.frontRightSteerDegrees, ref vehicle.frontRightBrakeTorque,
 			ref vehicle.frontRightHandBrakeTorque, ref vehicle.frontRightDriven);
-		DrawVehicleWheel("Rear Left", ref vehicle.rearLeftPosition, ref vehicle.rearLeftRadius, ref vehicle.rearLeftWidth,
+		DrawVehicleWheel(2, "Rear Left", ref vehicle.rearLeftPosition, ref vehicle.rearLeftRadius, ref vehicle.rearLeftWidth,
 			ref vehicle.rearLeftSuspensionMin, ref vehicle.rearLeftSuspensionMax, ref vehicle.rearLeftSuspensionFrequency,
 			ref vehicle.rearLeftSuspensionDamping, ref vehicle.rearLeftSteerDegrees, ref vehicle.rearLeftBrakeTorque,
 			ref vehicle.rearLeftHandBrakeTorque, ref vehicle.rearLeftDriven);
-		DrawVehicleWheel("Rear Right", ref vehicle.rearRightPosition, ref vehicle.rearRightRadius, ref vehicle.rearRightWidth,
+		DrawVehicleWheel(3, "Rear Right", ref vehicle.rearRightPosition, ref vehicle.rearRightRadius, ref vehicle.rearRightWidth,
 			ref vehicle.rearRightSuspensionMin, ref vehicle.rearRightSuspensionMax, ref vehicle.rearRightSuspensionFrequency,
 			ref vehicle.rearRightSuspensionDamping, ref vehicle.rearRightSteerDegrees, ref vehicle.rearRightBrakeTorque,
 			ref vehicle.rearRightHandBrakeTorque, ref vehicle.rearRightDriven);
@@ -808,15 +808,20 @@ extension EditorApp
 			ImGui.TextColored(EditorTheme.Warning, "The selected physics backend does not provide this kind of vehicle.");
 	}
 
-	void DrawVehicleWheel(StringView title, ref Vector3 position, ref float radius, ref float width,
+	void DrawVehicleWheel(int32 wheel, StringView title, ref Vector3 position, ref float radius, ref float width,
 		ref float suspensionMin, ref float suspensionMax, ref float frequency, ref float damping,
 		ref float steerDegrees, ref float brakeTorque, ref float handBrakeTorque, ref bool driven)
 	{
+		// Every wheel repeats the same labels, so scope them to the wheel, and each row to its own id.
+		ImGui.PushID(wheel);
+		defer ImGui.PopID();
 		if (!ImGui.CollapsingHeader(scope $"{title}###vehiclewheel{title}".CStr()))
 			return;
 		bool changed = false;
-		void Row(StringView label, ref float value, float speed = 0.01f)
+		void Row(StringView label, ref float value, int32 id, float speed = 0.01f)
 		{
+			ImGui.PushID(id);
+			defer ImGui.PopID();
 			ImGui.AlignTextToFramePadding();
 			ImGui.Text(label);
 			ImGui.SameLine(130);
@@ -828,15 +833,15 @@ extension EditorApp
 		ImGui.SameLine(130);
 		ImGui.SetNextItemWidth(-1);
 		changed |= ImGui.DragFloat3("##position", ref position, 0.01f);
-		Row("Radius", ref radius);
-		Row("Width", ref width);
-		Row("Suspension Min", ref suspensionMin);
-		Row("Suspension Max", ref suspensionMax);
-		Row("Spring Hz", ref frequency, 0.02f);
-		Row("Spring Damping", ref damping, 0.02f);
-		Row("Steer (deg)", ref steerDegrees, 0.5f);
-		Row("Brake (Nm)", ref brakeTorque, 10);
-		Row("Handbrake (Nm)", ref handBrakeTorque, 10);
+		Row("Radius", ref radius, 0);
+		Row("Width", ref width, 1);
+		Row("Suspension Min", ref suspensionMin, 2);
+		Row("Suspension Max", ref suspensionMax, 3);
+		Row("Spring Hz", ref frequency, 4, 0.02f);
+		Row("Spring Damping", ref damping, 5, 0.02f);
+		Row("Steer (deg)", ref steerDegrees, 6, 0.5f);
+		Row("Brake (Nm)", ref brakeTorque, 7, 10);
+		Row("Handbrake (Nm)", ref handBrakeTorque, 8, 10);
 		ImGui.AlignTextToFramePadding();
 		ImGui.Text("Driven");
 		ImGui.SameLine(130);

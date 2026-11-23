@@ -13,6 +13,10 @@ struct PhysicsSoftBodyConfig
 	public float visualSpring, visualDamping;
 	public uint32 layer;
 	public uint64 userData;
+	/// 0 cloth, 1 jelly, 2 shell, 3 driven jelly. Appended after the fields Jolt's native config reads.
+	public int32 kind;
+	/// 1 when this body may tear.
+	public int32 tear;
 }
 
 /// A rope's settings, independent of the backend. The field order matches native/tallow_softbody.cpp's RopeConfig.
@@ -23,6 +27,10 @@ struct PhysicsRopeConfig
 	public int32 iterations;
 	public uint32 layer;
 	public uint64 userData;
+	/// 0 cloth, 1 jelly, 2 shell, 3 driven jelly. Appended after the fields Jolt's native config reads.
+	public int32 kind;
+	/// 1 when this body may tear.
+	public int32 tear;
 }
 
 /// Cloth, jelly, shells, ropes and the soft-body half of water. Present only when the selected backend advertises the
@@ -57,6 +65,11 @@ abstract class PhysicsSoftBodyExtension
 	public abstract void DampWobble(uint32 bodyId, float rate, float step);
 	public abstract void Bounce(uint32 bodyId, float bounciness, float* state);
 	public abstract void Proxies(uint32* bodies, int32* closed, float* reach, uint32 count);
+
+	/// Whether the body has torn since it was made. Backends whose soft bodies do not tear return false.
+	public virtual bool HasTorn(uint32 bodyId) => false;
+	/// Tears the body's overstretched edges now. False on a backend that does not tear.
+	public virtual bool Tear(uint32 bodyId) => false;
 
 	/// The world-space bounds of a soft body, for water and tools.
 	public abstract bool Bounds(uint32 bodyId, out Vector3 min, out Vector3 max);

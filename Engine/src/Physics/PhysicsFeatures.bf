@@ -66,7 +66,9 @@ enum PhysicsFeature : uint64
 	MotorcycleVehicles = (uint64)1 << 49,
 	/// A tracked vehicle (two tracks, no steering wheels).
 	TrackedVehicles = (uint64)1 << 50,
-	// 51..63 reserved for future 3D features
+	/// Soft bodies can tear: loads split their surface into pieces (Rapier only; Jolt does not provide it).
+	SoftBodyTearing = (uint64)1 << 51,
+	// 52..63 reserved for future 3D features
 }
 
 /// A set of PhysicsFeature bits.
@@ -153,6 +155,7 @@ struct PhysicsFeatures
 		case .WheeledVehicles: return "Wheeled vehicles";
 		case .MotorcycleVehicles: return "Motorcycles";
 		case .TrackedVehicles: return "Tracked vehicles";
+		case .SoftBodyTearing: return "Soft body tearing";
 		default: break;
 		}
 		return "Unknown";

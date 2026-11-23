@@ -77,6 +77,11 @@ static class PhysicsComponentRules
 			return false;
 		if (let soft = component as SoftBody)
 		{
+			if (soft.tearing && !features.Has(.SoftBodyTearing))
+			{
+				reason = "Soft body tearing is not available in the selected physics backend.";
+				return false;
+			}
 			switch (soft.kind)
 			{
 			case .Jelly:

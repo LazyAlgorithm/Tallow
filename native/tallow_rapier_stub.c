@@ -183,14 +183,19 @@ int32_t tn_rapier_character_hits(void* world, void* character, TnRapierCharacter
 { (void)world; (void)character; (void)hits; (void)capacity; return 0; }
 
 uint32_t tn_rapier_soft_create(void* world, const float* positions, int32_t vertexCount, const uint32_t* triangles,
-	int32_t triangleCount, const float* pinned, float totalMass, float stiffness, float damping, float friction,
-	const float center[3], uint64_t userData)
+	int32_t triangleCount, const float* pinned, const float* stiffness, const float center[3],
+	const float objectMatrix[16], float totalMass, const TnRapierSoftSettings* settings, uint64_t userData)
 {
 	(void)world; (void)positions; (void)vertexCount; (void)triangles; (void)triangleCount; (void)pinned;
-	(void)totalMass; (void)stiffness; (void)damping; (void)friction; (void)center; (void)userData;
+	(void)stiffness; (void)center; (void)objectMatrix; (void)totalMass; (void)settings; (void)userData;
 	return 0xffffffffu;
 }
 void tn_rapier_soft_destroy(void* world, uint32_t body) { (void)world; (void)body; }
+void tn_rapier_soft_ignore(void* world, uint32_t body, uint32_t ignoredBody)
+{ (void)world; (void)body; (void)ignoredBody; }
+void tn_rapier_soft_skin(void* world, uint32_t body, const float objectMatrix[16], const float objectNext[16],
+	float step)
+{ (void)world; (void)body; (void)objectMatrix; (void)objectNext; (void)step; }
 uint32_t tn_rapier_soft_count(void* world, uint32_t body) { (void)world; (void)body; return 0; }
 uint32_t tn_rapier_soft_read(void* world, uint32_t body, float* positions, float* velocities, uint32_t capacity)
 { (void)world; (void)body; (void)positions; (void)velocities; (void)capacity; return 0; }
@@ -212,6 +217,43 @@ void tn_rapier_soft_shift(void* world, uint32_t body, const float* offset)
 { (void)world; (void)body; (void)offset; }
 int32_t tn_rapier_soft_bounds(void* world, uint32_t body, float* minimum, float* maximum)
 { (void)world; (void)body; (void)minimum; (void)maximum; return 0; }
+void tn_rapier_soft_set_pressure(void* world, uint32_t body, float amount)
+{ (void)world; (void)body; (void)amount; }
+uint32_t tn_rapier_soft_dents(void* world, uint32_t body, float* output, uint32_t capacity)
+{ (void)world; (void)body; (void)output; (void)capacity; return 0; }
+uint32_t tn_rapier_soft_dent_revision(void* world, uint32_t body) { (void)world; (void)body; return 0; }
+void tn_rapier_soft_set_dents(void* world, uint32_t body, const float* dents, uint32_t count,
+	const float objectMatrix[16])
+{ (void)world; (void)body; (void)dents; (void)count; (void)objectMatrix; }
+void tn_rapier_soft_damp_wobble(void* world, uint32_t body, float rate, float step)
+{ (void)world; (void)body; (void)rate; (void)step; }
+int32_t tn_rapier_soft_torn(void* world, uint32_t body) { (void)world; (void)body; return 0; }
+int32_t tn_rapier_soft_tear(void* world, uint32_t body) { (void)world; (void)body; return 0; }
+uint32_t tn_rapier_soft_float(void* world, uint32_t body, const float* samples, uint32_t nx, uint32_t nz,
+	float minX, float minZ, float cellX, float cellZ, float bottom, float band, float buoyancy, float drag,
+	float gravity, float deltaTime, int32_t wake)
+{
+	(void)world; (void)body; (void)samples; (void)nx; (void)nz; (void)minX; (void)minZ; (void)cellX; (void)cellZ;
+	(void)bottom; (void)band; (void)buoyancy; (void)drag; (void)gravity; (void)deltaTime; (void)wake;
+	return 0;
+}
+
+uint32_t tn_rapier_rope_create(void* world, const float* positions, uint32_t count, const float* pinned,
+	float totalMass, float stretch, float bend, float damping, float radius, const float center[3],
+	uint64_t userData)
+{
+	(void)world; (void)positions; (void)count; (void)pinned; (void)totalMass; (void)stretch; (void)bend;
+	(void)damping; (void)radius; (void)center; (void)userData;
+	return 0xffffffffu;
+}
+void* tn_rapier_rope_tie(void* world, uint32_t bodyA, const float pointA[3], uint32_t bodyB,
+	const float pointB[3], float length)
+{ (void)world; (void)bodyA; (void)pointA; (void)bodyB; (void)pointB; (void)length; return 0; }
+void tn_rapier_rope_untie(void* world, void* tie) { (void)world; (void)tie; }
+float tn_rapier_rope_pull(void* world, void* tie, float step) { (void)world; (void)tie; (void)step; return 0; }
+void tn_rapier_rope_wind(void* world, uint32_t body, const float* wind, float radius, float drag,
+	float turbulence, float time, float step)
+{ (void)world; (void)body; (void)wind; (void)radius; (void)drag; (void)turbulence; (void)time; (void)step; }
 
 void* tn_rapier_vehicle_create(void* world, uint32_t chassis, const TnRapierWheel* wheels, int32_t wheelCount,
 	const float up[3], const float forward[3], float maxTorque, float minRPM, float maxRPM,

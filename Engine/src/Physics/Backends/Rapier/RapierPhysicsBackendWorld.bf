@@ -90,6 +90,26 @@ struct RapierWheel
 	public int32 steers;
 }
 
+
+/// Soft-body creation settings, matching TnRapierSoftSettings.
+[CRepr]
+struct RapierSoftSettings
+{
+	public int32 kind;
+	public int32 tear;
+	public int32 impacts;
+	public int32 visualOnly;
+	public float dentDepth;
+	public float dentYield;
+	public float dentSpeed;
+	public float visualSpring;
+	public float visualDamping;
+	public float damping;
+	public float friction;
+	public float gravityFactor;
+	public int32 iterations;
+}
+
 static class Rapier
 {
 	public const int32 ShapeBox = 0;
@@ -188,9 +208,12 @@ static class Rapier
 		int32 capacity);
 
 	[CLink] public static extern uint32 tn_rapier_soft_create(void* world, float* positions, int32 vertexCount,
-		uint32* triangles, int32 triangleCount, float* pinned, float totalMass, float stiffness, float damping,
-		float friction, float* center, uint64 userData);
+		uint32* triangles, int32 triangleCount, float* pinned, float* stiffness, float* center, float* objectMatrix,
+		float totalMass, RapierSoftSettings* settings, uint64 userData);
 	[CLink] public static extern void tn_rapier_soft_destroy(void* world, uint32 body);
+	[CLink] public static extern void tn_rapier_soft_ignore(void* world, uint32 body, uint32 ignoredBody);
+	[CLink] public static extern void tn_rapier_soft_skin(void* world, uint32 body, float* objectMatrix,
+		float* objectNext, float step);
 	[CLink] public static extern uint32 tn_rapier_soft_count(void* world, uint32 body);
 	[CLink] public static extern uint32 tn_rapier_soft_read(void* world, uint32 body, float* positions,
 		float* velocities, uint32 capacity);
@@ -205,6 +228,28 @@ static class Rapier
 	[CLink] public static extern void tn_rapier_soft_shift(void* world, uint32 body, float* offset);
 	[CLink] public static extern int32 tn_rapier_soft_bounds(void* world, uint32 body, float* minimum,
 		float* maximum);
+	[CLink] public static extern void tn_rapier_soft_set_pressure(void* world, uint32 body, float amount);
+	[CLink] public static extern uint32 tn_rapier_soft_dents(void* world, uint32 body, float* output,
+		uint32 capacity);
+	[CLink] public static extern uint32 tn_rapier_soft_dent_revision(void* world, uint32 body);
+	[CLink] public static extern void tn_rapier_soft_set_dents(void* world, uint32 body, float* dents,
+		uint32 count, float* objectMatrix);
+	[CLink] public static extern void tn_rapier_soft_damp_wobble(void* world, uint32 body, float rate, float step);
+	[CLink] public static extern int32 tn_rapier_soft_torn(void* world, uint32 body);
+	[CLink] public static extern int32 tn_rapier_soft_tear(void* world, uint32 body);
+	[CLink] public static extern uint32 tn_rapier_soft_float(void* world, uint32 body, float* samples, uint32 nx,
+		uint32 nz, float minX, float minZ, float cellX, float cellZ, float bottom, float band, float buoyancy,
+		float drag, float gravity, float deltaTime, int32 wake);
+
+	[CLink] public static extern uint32 tn_rapier_rope_create(void* world, float* positions, uint32 count,
+		float* pinned, float totalMass, float stretch, float bend, float damping, float radius, float* center,
+		uint64 userData);
+	[CLink] public static extern void* tn_rapier_rope_tie(void* world, uint32 bodyA, float* pointA, uint32 bodyB,
+		float* pointB, float length);
+	[CLink] public static extern void tn_rapier_rope_untie(void* world, void* tie);
+	[CLink] public static extern float tn_rapier_rope_pull(void* world, void* tie, float step);
+	[CLink] public static extern void tn_rapier_rope_wind(void* world, uint32 body, float* wind, float radius,
+		float drag, float turbulence, float time, float step);
 
 	[CLink] public static extern void* tn_rapier_vehicle_create(void* world, uint32 chassis, RapierWheel* wheels,
 		int32 wheelCount, float* up, float* forward, float maxTorque, float minRPM, float maxRPM, float* gearRatios,

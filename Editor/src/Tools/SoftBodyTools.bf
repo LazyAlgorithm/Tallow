@@ -37,6 +37,20 @@ extension EditorApp
 	{
 		ImGui.Spacing();
 		ImGui.SeparatorText("Soft Body Tools");
+		// Tearing is a Rapier-only capability; the field is hidden rather than shown greyed out on Jolt.
+		if (PhysicsComponentRules.FeaturesFor(body.Scene).Has(.SoftBodyTearing))
+		{
+			bool tearing = body.tearing;
+			if (ImGui.Checkbox("Tearing", ref tearing))
+			{
+				body.tearing = tearing;
+				MarkDirty();
+			}
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("The surface splits when pulled too hard.");
+			ImGui.SameLine();
+			ImGui.TextDisabled("Rapier only");
+		}
 		let width = (ImGui.GetContentRegionAvail().x - 6) / 2;
 		if (ToolButton("Paint Pins", mSoftPaint == .Pins, width))
 			mSoftPaint = mSoftPaint == .Pins ? .None : .Pins;

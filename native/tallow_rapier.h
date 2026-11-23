@@ -202,11 +202,34 @@ int32_t tn_rapier_character_set_shape(void* world, void* character, const TnRapi
 int32_t tn_rapier_character_hits(void* world, void* character, TnRapierCharacterHit* hits, int32_t capacity);
 
 // ---- soft bodies ----
-// positions are local to center; the shim adds it for Rapier and subtracts it on reads.
+// kind: 0 cloth, 1 jelly, 2 shell, 3 driven jelly. positions are local to center; the shim adds it for Rapier and
+// subtracts it on reads. objectMatrix is the object's local-to-world transform (16 floats, column-major).
+typedef struct TnRapierSoftSettings
+{
+	int32_t kind;
+	int32_t tear;
+	int32_t impacts;
+	int32_t visualOnly;
+	float dentDepth;
+	float dentYield;
+	float dentSpeed;
+	float visualSpring;
+	float visualDamping;
+	float damping;
+	float friction;
+	float gravityFactor;
+	int32_t iterations;
+} TnRapierSoftSettings;
+
 uint32_t tn_rapier_soft_create(void* world, const float* positions, int32_t vertexCount, const uint32_t* triangles,
-	int32_t triangleCount, const float* pinned, float totalMass, float stiffness, float damping, float friction,
-	const float center[3], uint64_t userData);
+	int32_t triangleCount, const float* pinned, const float* stiffness, const float center[3],
+	const float objectMatrix[16], float totalMass, const TnRapierSoftSettings* settings, uint64_t userData);
 void tn_rapier_soft_destroy(void* world, uint32_t body);
+void tn_rapier_soft_ignore(void* world, uint32_t body, uint32_t ignoredBody);
+// Carries the particles from the previous object pose to the next one; shells and driven jellies call this every
+// step. The optional spring (driven jellies) pulls them towards their rest places with the given step.
+void tn_rapier_soft_skin(void* world, uint32_t body, const float objectMatrix[16], const float objectNext[16],
+	float step);
 uint32_t tn_rapier_soft_count(void* world, uint32_t body);
 // Local positions and velocities; returns the number written.
 uint32_t tn_rapier_soft_read(void* world, uint32_t body, float* positions, float* velocities, uint32_t capacity);
@@ -220,6 +243,35 @@ void tn_rapier_soft_impulse(void* world, uint32_t body, const float* impulse);
 void tn_rapier_soft_force(void* world, uint32_t body, const float* force);
 void tn_rapier_soft_shift(void* world, uint32_t body, const float* offset);
 int32_t tn_rapier_soft_bounds(void* world, uint32_t body, float* minimum, float* maximum);
+// Jelly pressure: the engine's gas amount (pascals times volume). Sets the volume factor held by the body.
+void tn_rapier_soft_set_pressure(void* world, uint32_t body, float amount);
+// A shell's dents: for each particle, its offset from rest in the object's local space.
+uint32_t tn_rapier_soft_dents(void* world, uint32_t body, float* output, uint32_t capacity);
+uint32_t tn_rapier_soft_dent_revision(void* world, uint32_t body);
+void tn_rapier_soft_set_dents(void* world, uint32_t body, const float* dents, uint32_t count,
+	const float objectMatrix[16]);
+void tn_rapier_soft_damp_wobble(void* world, uint32_t body, float rate, float step);
+// 1 once the body has torn.
+int32_t tn_rapier_soft_torn(void* world, uint32_t body);
+// Lifts and drags particles under a sampled water surface; returns how many were under. samples are nx*nz
+// surface heights in row-major order (x first).
+uint32_t tn_rapier_soft_float(void* world, uint32_t body, const float* samples, uint32_t nx, uint32_t nz,
+	float minX, float minZ, float cellX, float cellZ, float bottom, float band, float buoyancy, float drag,
+	float gravity, float deltaTime, int32_t wake);
+// Tear the overstretched edges now; 1 when the body split.
+int32_t tn_rapier_soft_tear(void* world, uint32_t body);
+
+// ---- ropes ----
+uint32_t tn_rapier_rope_create(void* world, const float* positions, uint32_t count, const float* pinned,
+	float totalMass, float stretch, float bend, float damping, float radius, const float center[3],
+	uint64_t userData);
+// A rope joint holding two bodies at most `length` apart. Either body id may be 0xffffffff (a world anchor).
+void* tn_rapier_rope_tie(void* world, uint32_t bodyA, const float pointA[3], uint32_t bodyB,
+	const float pointB[3], float length);
+void tn_rapier_rope_untie(void* world, void* tie);
+float tn_rapier_rope_pull(void* world, void* tie, float step);
+void tn_rapier_rope_wind(void* world, uint32_t body, const float* wind, float radius, float drag,
+	float turbulence, float time, float step);
 
 // ---- vehicles ----
 // One wheel of a Rapier ray-cast vehicle, in chassis-local space. direction is down (-up).

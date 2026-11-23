@@ -1023,6 +1023,10 @@ class Program
 				return PhysicsVehicleKindsTest.Run();
 			if (args[i] == "--test-physics-softbody")
 				return PhysicsSoftBodyTest.Run();
+			if (args[i] == "--test-physics-softbody-kinds")
+				return PhysicsSoftBodyKindsTest.Run();
+			if (args[i] == "--test-physics-rope")
+				return PhysicsRopeTest.Run();
 			if (args[i] == "--test-physics-rapier")
 				return PhysicsRapierTest.Run();
 			if (args[i] == "--test-vehicle-template" && i + 1 < args.Count)

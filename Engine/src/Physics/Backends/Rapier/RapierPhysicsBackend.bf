@@ -19,7 +19,8 @@ class RapierPhysicsBackend : PhysicsBackend
 				.BallJoint, .SwingLimit, .HingeJoint, .HingeMotor, .SliderJoint, .SliderSpring,
 				.CharacterController, .CharacterPush, .Raycast, .RaycastAll, .ShapeCast, .Overlap, .Check,
 				.ContactEvents, .ContactStay, .TriggerEvents, .BuoyancyRigidBodies, .WorldStatesSeparated,
-				.NavigationGeometry, .FixedBodyIds, .MultipleWorlds, .Ragdolls, .Vehicles, .WheeledVehicles, .SoftBodies);
+				.NavigationGeometry, .FixedBodyIds, .MultipleWorlds, .Ragdolls, .Vehicles, .WheeledVehicles, .SoftBodies, .SoftBodyDents, .SoftBodyPressure, .SoftBodySkin,
+				.SoftBodyTearing, .BuoyancySoftBodies, .Ropes, .RopeKnots);
 			PhysicsFeatures features = .(0);
 			for (let feature in list)
 				features.bits |= (uint64)feature;

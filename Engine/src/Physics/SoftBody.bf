@@ -97,6 +97,10 @@ class SoftBody : Component
 	/// DrivenJelly: how much relative vertex velocity persists each fixed step (0..1); lower settles sooner.
 	[Range(0, 1)]
 	public float drivenDamping = 0.75f;
+	/// Whether the surface may tear when pulled too hard. Rapier only: the toggle is hidden and refused on a backend
+	/// whose soft bodies do not tear (Jolt), and off by default everywhere.
+	[HideInInspector]
+	public bool tearing = false;
 	/// The vertices held in place, by number ("0-12 40 41"): Paint Pins in the editor writes these.
 	public String pins = new .() ~ delete _;
 	/// Where it is softer than Stiffness says, by vertex ("12=0.5 13=0.25"): painted in the editor.
@@ -384,6 +388,8 @@ class SoftBody : Component
 		config.dihedral = cloth ? 0 : 1;
 		config.layer = Scene.Physics.[Friend]ObjectLayer(PhysicsWorld.[Friend]LayerMoving, Transform);
 		config.userData = (uint64)GameObject.Id;
+		config.kind = (int32)kind;
+		config.tear = tearing ? 1 : 0;
 		var objectMatrix = toWorld;
 		mBody = mSoft.Create(&config, positions.Ptr, (uint32)mRest.Count, mTriangles.Ptr, (uint32)(mTriangles.Count / 3), pinned.Ptr, stiffnesses.Ptr, (float*)&center, &objectMatrix.m[0]);
 		if (mBody == uint32.MaxValue)

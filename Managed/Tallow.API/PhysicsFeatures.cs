@@ -59,6 +59,8 @@ public enum PhysicsFeature : ulong
     WheeledVehicles = 1UL << 48,
     MotorcycleVehicles = 1UL << 49,
     TrackedVehicles = 1UL << 50,
+    /// <summary>Soft bodies can tear when pulled too hard (Rapier only).</summary>
+    SoftBodyTearing = 1UL << 51,
 }
 
 public static unsafe partial class Physics
