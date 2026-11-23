@@ -64,10 +64,12 @@ method	Tallow.CSharpAudio	SetGroupVolume	void	group:int	volume:float
 method	Tallow.CSharpAudio	SetSetting	void	which:int	value:float
 method	Tallow.CSharpAudio	SourceControl	void	session:ulong	entity:ulong	action:int
 method	Tallow.CSharpAudio	SourceIsPlaying	bool	session:ulong	entity:ulong
+method	Tallow.CSharpAudio	SourcePitch	bool	session:ulong	entity:ulong	pitch:float
 method	Tallow.CSharpAudio	SourcePlay	void	session:ulong	entity:ulong	clip:string
 method	Tallow.CSharpAudio	SourcePlayOneShot	void	session:ulong	entity:ulong	clip:string	volumeScale:float
 method	Tallow.CSharpAudio	SourceSeek	void	session:ulong	entity:ulong	seconds:float
 method	Tallow.CSharpAudio	SourceTime	float	session:ulong	entity:ulong	which:int
+method	Tallow.CSharpAudio	SourceVolume	bool	session:ulong	entity:ulong	volume:float
 method	Tallow.CSharpBehaviorNodes	BlackboardClear	bool	session:ulong	entity:ulong	key:string
 method	Tallow.CSharpBehaviorNodes	BlackboardHas	bool	session:ulong	entity:ulong	key:string
 method	Tallow.CSharpBehaviorNodes	BlackboardNumber	float	session:ulong	entity:ulong	key:string	fallback:float
@@ -105,6 +107,7 @@ method	Tallow.CSharpComponentActions	SequenceControl	bool	session:ulong	entity:u
 method	Tallow.CSharpComponentActions	SequenceTime	float	session:ulong	entity:ulong
 method	Tallow.CSharpComponentActions	SkinnedBone	ulong	session:ulong	entity:ulong	joint:int
 method	Tallow.CSharpComponentActions	SkinnedLayer	bool	session:ulong	entity:ulong	name:string	bones:string	fadeSeconds:float
+method	Tallow.CSharpComponentActions	SkinnedLayerMasked	bool	session:ulong	entity:ulong	name:string	maskPath:string	fadeSeconds:float
 method	Tallow.CSharpComponentActions	SkinnedPart	bool	session:ulong	entity:ulong	part:string	what:int	value:System.Numerics.Vector4
 method	Tallow.CSharpComponentActions	SkinnedPartCount	int	session:ulong	entity:ulong
 method	Tallow.CSharpComponentActions	SkinnedPartMaterial	bool	session:ulong	entity:ulong	index:int	path:string
@@ -157,6 +160,8 @@ method	Tallow.CSharpGameplay	NetRandomValue	float	session:ulong	entity:ulong	sal
 method	Tallow.CSharpIK	AddLimb	int	session:ulong	entity:ulong
 method	Tallow.CSharpIK	Count	int	session:ulong	entity:ulong	kind:int
 method	Tallow.CSharpIK	FadeWeight	bool	session:ulong	entity:ulong	kind:int	index:int	to:float	seconds:float
+method	Tallow.CSharpIK	FootCount	int	session:ulong	entity:ulong
+method	Tallow.CSharpIK	FootGrounded	int	session:ulong	entity:ulong	foot:int
 method	Tallow.CSharpIK	HandCurl	bool	session:ulong	entity:ulong	index:int	finger:int	amount:float
 method	Tallow.CSharpIK	HandSetShape	bool	session:ulong	entity:ulong	index:int	shape:int	seconds:float
 method	Tallow.CSharpIK	LimbHold	bool	session:ulong	entity:ulong	index:int	action:int	seconds:float
@@ -179,6 +184,7 @@ method	Tallow.CSharpInputActions	Delta	System.Numerics.Vector2	name:string
 method	Tallow.CSharpInputActions	FromGamepad	bool	action:string
 method	Tallow.CSharpInputActions	Held	bool	name:string
 method	Tallow.CSharpInputActions	LoadText	void	text:string
+method	Tallow.CSharpInputActions	NetworkSlot	int	name:string
 method	Tallow.CSharpInputActions	Pressed	bool	name:string
 method	Tallow.CSharpInputActions	Released	bool	name:string
 method	Tallow.CSharpInputActions	SetMapEnabled	void	map:string	enabled:bool
@@ -566,6 +572,7 @@ method	Tallow.Physics	CharacterGround	System.Numerics.Vector3	session:ulong	enti
 method	Tallow.Physics	CheckShape	bool	session:ulong	shape:int	point1:System.Numerics.Vector3	point2:System.Numerics.Vector3	radius:float	size:System.Numerics.Vector3	orientation:System.Numerics.Quaternion	layerMask:uint	ignoreBody:uint
 method	Tallow.Physics	ConnectJoint	bool	session:ulong	a:ulong	b:ulong	anchor:System.Numerics.Vector3	axis:System.Numerics.Vector3	swingLimit:float
 method	Tallow.Physics	DeepestSoftBodyDent	float	session:ulong	entity:ulong
+method	Tallow.Physics	FeatureBits	ulong	session:ulong
 method	Tallow.Physics	GetCharacterCrouchLift	float	session:ulong	entity:ulong
 method	Tallow.Physics	GetCharacterHeight	float	session:ulong	entity:ulong
 method	Tallow.Physics	GetCharacterVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
@@ -624,8 +631,20 @@ method	Tallow.Physics	SleepRigidbody	bool	session:ulong	entity:ulong
 method	Tallow.Physics	SphereCastContact	System.Numerics.Vector4	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
 method	Tallow.Physics	SphereCastDetails	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint
 method	Tallow.Physics	SphereCastIgnoring	Tallow.PhysicsQueryHit	session:ulong	origin:System.Numerics.Vector3	radius:float	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint	ignoreBody:uint
+method	Tallow.Physics	Supports	bool	session:ulong	features:ulong
 method	Tallow.Physics	TeleportCharacter	bool	session:ulong	entity:ulong	position:System.Numerics.Vector3	velocity:System.Numerics.Vector3
 method	Tallow.RotationMath	EulerDegrees	System.Numerics.Quaternion	degrees:System.Numerics.Vector3
 method	Tallow.RotationMath	LookRotation	System.Numerics.Quaternion	forward:System.Numerics.Vector3	up:System.Numerics.Vector3
 method	Tallow.RotationMath	ToEulerDegrees	System.Numerics.Vector3	rotation:System.Numerics.Quaternion
 method	Tallow.SceneManager	Load	void	path:string
+method	Tallow.VehicleApi	EngineRPM	float	session:ulong	entity:ulong
+method	Tallow.VehicleApi	Gear	int	session:ulong	entity:ulong
+method	Tallow.VehicleApi	IsReady	bool	session:ulong	entity:ulong
+method	Tallow.VehicleApi	KindIndex	int	session:ulong	entity:ulong
+method	Tallow.VehicleApi	SetDriverInput	bool	session:ulong	entity:ulong	forward:float	right:float	brake:float	handBrake:float
+method	Tallow.VehicleApi	SetKindIndex	bool	session:ulong	entity:ulong	kind:int
+method	Tallow.VehicleApi	Speed	float	session:ulong	entity:ulong
+method	Tallow.VehicleApi	WheelCount	int	session:ulong	entity:ulong
+method	Tallow.VehicleApi	WheelOnGround	bool	session:ulong	entity:ulong	wheel:int
+method	Tallow.VehicleApi	WheelRotationAngle	float	session:ulong	entity:ulong	wheel:int
+method	Tallow.VehicleApi	WheelSteerAngle	float	session:ulong	entity:ulong	wheel:int

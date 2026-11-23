@@ -8,6 +8,7 @@
 #ifndef TALLOW_RAPIER_H
 #define TALLOW_RAPIER_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
