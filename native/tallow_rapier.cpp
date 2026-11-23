@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
 #include <cstdlib>
 
 namespace
@@ -137,6 +138,7 @@ namespace
 		return ka <= kb ? PairKey{ka, kb} : PairKey{kb, ka};
 	}
 
+
 	struct ActivePair
 	{
 		R3ColliderHandle a{}, b{};
@@ -194,6 +196,8 @@ namespace
 		float lastObject[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 		bool hasObject = false;
 		uint32_t ignoredBody = NoBody;
+		R3ColliderHandle deformable{nullptr, UINT32_MAX, 0};
+		float friction = 0.5f;
 		uint32_t dentRevision = 0;
 		float lastDentSum = 0;
 		bool torn = false;
@@ -228,6 +232,8 @@ namespace
 		std::unordered_map<uint32_t, Vehicle*> vehicles;
 		std::unordered_map<uint32_t, SoftBody*> softBodies;
 		std::unordered_map<uint32_t, RopeTie*> ropeTies;
+		// Deformable shell colliders are owned by the soft-body root; queries and contacts name the shell object.
+		std::unordered_map<uint32_t, uint32_t> deformableOwners;
 		uint32_t nextId = 1;
 		bool contactEvents = false;
 		uint32_t queryWorlds = 0xffffffffu;
@@ -270,6 +276,14 @@ namespace
 			recentHits.push_back(record);
 		}
 	};
+
+	uint32_t DeformableOwner(const World* world, R3ColliderHandle collider)
+	{
+		if (world == nullptr || !Valid(collider))
+			return NoBody;
+		auto it = world->deformableOwners.find(ColliderKey(collider));
+		return it == world->deformableOwners.end() ? NoBody : it->second;
+	}
 
 	struct Character
 	{
@@ -398,10 +412,14 @@ namespace
 		}
 		if (c->excludeSensors && r3ReadCollider_IsSensor(read, collider))
 			return 0;
-		const R3RigidBodyHandle parent = r3ReadCollider_Parent(read, collider);
-		if (!Valid(parent))
-			return 0;
-		const uint32_t id = (uint32_t)r3ReadRigidBody_UserData(read, parent).low;
+		uint32_t id = DeformableOwner(c->world, collider);
+		if (id == NoBody)
+		{
+			const R3RigidBodyHandle parent = r3ReadCollider_Parent(read, collider);
+			if (!Valid(parent))
+				return 0;
+			id = (uint32_t)r3ReadRigidBody_UserData(read, parent).low;
+		}
 		const Body* body = c->world->Find(id);
 		if (body == nullptr)
 			return 0;
@@ -507,6 +525,9 @@ namespace
 	{
 		if (!Valid(collider))
 			return NoBody;
+		const uint32_t owner = DeformableOwner(world, collider);
+		if (owner != NoBody)
+			return owner;
 		const R3RigidBodyHandle parent = r3Collider_Parent(collider);
 		if (!Valid(parent))
 			return NoBody;
@@ -1003,6 +1024,7 @@ void tn_rapier_clear(void* raw)
 		delete pair.second;
 	}
 	world->ropeTies.clear();
+	world->deformableOwners.clear();
 	for (auto& entry : world->bodies)
 	{
 		if (Valid(entry.second.handle))
@@ -2323,6 +2345,30 @@ namespace
 			m[2] * p.x + m[6] * p.y + m[10] * p.z);
 	}
 
+	inline void MatFromPose(R3Pose pose, float* out)
+	{
+		const R3Rotation q = pose.rotation;
+		const float xx = q.x * q.x, yy = q.y * q.y, zz = q.z * q.z;
+		const float xy = q.x * q.y, xz = q.x * q.z, yz = q.y * q.z;
+		const float wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z;
+		out[0] = 1 - 2 * (yy + zz);
+		out[1] = 2 * (xy + wz);
+		out[2] = 2 * (xz - wy);
+		out[3] = 0;
+		out[4] = 2 * (xy - wz);
+		out[5] = 1 - 2 * (xx + zz);
+		out[6] = 2 * (yz + wx);
+		out[7] = 0;
+		out[8] = 2 * (xz + wy);
+		out[9] = 2 * (yz - wx);
+		out[10] = 1 - 2 * (xx + yy);
+		out[11] = 0;
+		out[12] = pose.translation.x;
+		out[13] = pose.translation.y;
+		out[14] = pose.translation.z;
+		out[15] = 1;
+	}
+
 	// Affine inverse (the object's local-to-world transform has a linear part and a translation).
 	bool MatInvert(const float* m, float* out)
 	{
@@ -2490,6 +2536,7 @@ uint32_t tn_rapier_soft_create(void* raw, const float* positions, int32_t vertex
 	soft->dentSpeed = settings->dentSpeed;
 	soft->visualSpring = settings->visualSpring;
 	soft->visualDamping = settings->visualDamping;
+	soft->friction = std::max(settings->friction, 0.0f);
 	soft->restVolume = MeshVolume(worldPositions, triangles, triangleCount);
 	soft->totalMass = std::max(totalMass, 0.001f);
 	soft->radius = 0.02f;
@@ -2550,6 +2597,11 @@ void tn_rapier_soft_destroy(void* raw, uint32_t body)
 	SoftBody* soft = SoftOf(world, body);
 	if (soft == nullptr)
 		return;
+	if (Valid(soft->deformable))
+	{
+		world->deformableOwners.erase(ColliderKey(soft->deformable));
+		r3RemoveCollider(soft->deformable, 0);
+	}
 	if (Valid(soft->handle))
 		r3RemoveSoftBody(soft->handle);
 	world->softBodies.erase(body);
@@ -2558,9 +2610,70 @@ void tn_rapier_soft_destroy(void* raw, uint32_t body)
 
 void tn_rapier_soft_ignore(void* raw, uint32_t body, uint32_t ignoredBody)
 {
-	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
-	if (soft != nullptr)
-		soft->ignoredBody = ignoredBody;
+	World* world = static_cast<World*>(raw);
+	SoftBody* soft = SoftOf(world, body);
+	if (soft == nullptr)
+		return;
+	soft->ignoredBody = ignoredBody;
+	// A shell in FromImpacts mode uses the object's collider for hits. Give that object a Rapier deformable
+	// trimesh collider bound to the shell's particles, so its collision surface follows the dents instead of the
+	// engine re-wrapping a convex hull after they settle. The ordinary colliders are switched off while this one
+	// is in charge.
+	if (soft->kind != 2 || soft->impacts == 0 || ignoredBody == NoBody || Valid(soft->deformable))
+		return;
+	Body* shellBody = world->Find(ignoredBody);
+	if (shellBody == nullptr || soft->triangles.empty() || soft->count < 3)
+		return;
+	// Deformable colliders bind through a soft body's root body, not an ordinary rigid body.
+	const R3RigidBodyHandle parent = r3SoftBody_RootBody(soft->handle);
+	if (!Valid(parent))
+		return;
+	const R3Pose pose = r3RigidBody_Position(parent);
+	float bodyMatrix[16], inverse[16];
+	MatFromPose(pose, bodyMatrix);
+	if (!MatInvert(bodyMatrix, inverse))
+		return;
+	std::vector<R3Vector> positions((size_t)soft->count);
+	const size_t count = r3SoftBody_ParticlePositions(soft->handle, positions.data(), positions.size());
+	if (count < 3)
+		return;
+	for (uint32_t index : soft->triangles)
+	{
+		if (index >= count)
+			return;
+	}
+	std::vector<R3Vector> local((size_t)count);
+	for (size_t i = 0; i < count; i++)
+		local[i] = MatPoint(inverse, positions[i]);
+	R3ColliderDesc collider = r3DefaultColliderDesc();
+	r3ShapeDesc_SetTrimesh(&collider.shape, (R3VectorView){local.data(), count},
+		(R3TriangleView){reinterpret_cast<const R3Triangle*>(soft->triangles.data()), soft->triangles.size() / 3},
+		R3_TRIMESH_DEFORMABLE);
+	collider.position = R3Pose{V(0, 0, 0), R3Rotation{0, 0, 0, 1}};
+	collider.friction = soft->friction;
+	collider.restitution = 0.0f;
+	collider.isSensor = 0;
+	if (!shellBody->colliders.empty())
+	{
+		const R3InteractionGroups groups = r3Collider_CollisionGroups(shellBody->colliders[0]);
+		collider.collisionGroups = groups;
+		collider.solverGroups = groups;
+	}
+	collider.activeEvents = R3_COLLISION_EVENTS;
+	R3SoftMeshBindingDesc binding = r3DefaultSoftMeshBindingDesc();
+	binding.kind = R3_SOFT_BINDING_DIRECT;
+	std::vector<uint32_t> particles((size_t)count);
+	for (size_t i = 0; i < count; i++)
+		particles[i] = (uint32_t)i;
+	binding.particles = R3IndexView{particles.data(), particles.size()};
+	const R3ColliderHandle handle = r3InsertDeformableCollider(&collider, &binding, parent);
+	if (!Valid(handle))
+		return;
+	soft->deformable = handle;
+	world->deformableOwners[ColliderKey(handle)] = ignoredBody;
+	// The ordinary colliders step aside; the deformable one is the object's collision surface now.
+	for (R3ColliderHandle colliderHandle : shellBody->colliders)
+		r3Collider_SetEnabled(colliderHandle, 0);
 }
 
 void tn_rapier_soft_skin(void* raw, uint32_t body, const float objectMatrix[16], const float objectNext[16],
@@ -2836,7 +2949,13 @@ uint32_t tn_rapier_soft_dents(void* raw, uint32_t body, float* output, uint32_t 
 uint32_t tn_rapier_soft_dent_revision(void* raw, uint32_t body)
 {
 	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
-	return soft != nullptr ? soft->dentRevision : 0;
+	if (soft == nullptr)
+		return 0;
+	// With a deformable collider the collision surface already follows the dents; the engine's convex-hull rewrap
+	// would rebuild the body and lose it, so keep the revision still.
+	if (Valid(soft->deformable))
+		return 0;
+	return soft->dentRevision;
 }
 
 void tn_rapier_soft_set_dents(void* raw, uint32_t body, const float* dents, uint32_t count,
@@ -2941,7 +3060,6 @@ int32_t tn_rapier_soft_tear(void* raw, uint32_t body)
 	std::vector<R3Vector> positions((size_t)soft->count);
 	const size_t particles = r3SoftBody_ParticlePositions(soft->handle, positions.data(), positions.size());
 	std::vector<uint32_t> torn;
-	float maxRatio = 0.0f;
 	for (size_t i = 0; i < edgeCount; i++)
 	{
 		const uint32_t a = edgeVertices[i * 2], b = edgeVertices[i * 2 + 1];
@@ -2951,12 +3069,9 @@ int32_t tn_rapier_soft_tear(void* raw, uint32_t body)
 		if (rest < 1.0e-6f)
 			continue;
 		const float now = Length(Sub(positions[b], positions[a]));
-		maxRatio = std::max(maxRatio, now / rest);
 		if (now / rest > 1.3f)
 			torn.push_back((uint32_t)i);
 	}
-	if (std::getenv("TALLOW_RAPIER_TRACE"))
-		std::fprintf(stderr, "soft tear: edges=%zu torn=%zu max=%f\n", edgeCount, torn.size(), maxRatio);
 	if (torn.empty())
 		return 0;
 	r3SoftBody_WakeUp(soft->handle);
@@ -2980,7 +3095,8 @@ namespace
 		const float strength = std::clamp((speed - soft->dentSpeed) / std::max(soft->dentSpeed, 1.0f), 0.0f, 1.0f);
 		const float radius = std::max(soft->dentDepth * 6.0f, 0.25f);
 		std::vector<R3Vector> buffer((size_t)soft->count);
-		const size_t count = r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size());
+		const size_t count = std::min(r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size()),
+			buffer.size());
 		bool changed = false;
 		for (size_t i = 0; i < count; i++)
 		{
@@ -3023,7 +3139,10 @@ namespace
 			if (shellBody == nullptr)
 				continue;
 			std::vector<R3ContactPair> pairs(32);
-			for (R3ColliderHandle collider : shellBody->colliders)
+			std::vector<R3ColliderHandle> colliders = shellBody->colliders;
+			if (Valid(soft->deformable))
+				colliders.push_back(soft->deformable);
+			for (R3ColliderHandle collider : colliders)
 			{
 				size_t count = r3Collider_ContactPairs(collider, pairs.data(), pairs.size());
 				if (count > pairs.size())
@@ -3031,6 +3150,7 @@ namespace
 					pairs.resize(count);
 					count = r3Collider_ContactPairs(collider, pairs.data(), pairs.size());
 				}
+				count = std::min(count, pairs.size());
 				for (size_t p = 0; p < count; p++)
 				{
 					const R3ContactPair& pair = pairs[p];
@@ -3038,7 +3158,7 @@ namespace
 					if (!Valid(other))
 						continue;
 					R3ContactPoint points[8];
-					const size_t pointCount = r3ContactPoints(collider, other, points, 8);
+					const size_t pointCount = std::min(r3ContactPoints(collider, other, points, 8), (size_t)8);
 					if (pointCount == 0)
 						continue;
 					const R3ContactPair ordered = r3ContactPair(collider, other);
@@ -3821,6 +3941,7 @@ namespace
 		world->activePairKeys.clear();
 		world->activePairList.clear();
 		world->recentHits.clear();
+		world->deformableOwners.clear();
 		if (world->events != nullptr)
 			r3EventCollector_Clear(world->events);
 		r3FreeWorld(old);
