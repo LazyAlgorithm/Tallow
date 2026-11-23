@@ -394,9 +394,14 @@ class PhysicsWorld
 			if (let found = scene.FindById((uint32)id))
 				return found;
 		}
+		return ObjectOfBody(bodyId);
+	}
+
+	GameObject ObjectOfBody(uint32 bodyId)
+	{
 		if (mByBody.TryGetValue(bodyId, let entry) && entry.transform != null)
 			return entry.transform.GameObject;
-		return null;
+		return mSoftBodies.TryGetValue(bodyId, let soft) ? soft.GameObject : null;
 	}
 
 	/// Removes every body, joint and character.
@@ -429,6 +434,7 @@ class PhysicsWorld
 				mBackend.DestroyBody(bodyId);
 			soft.[Friend]mBody = uint32.MaxValue;
 			soft.[Friend]mWorld = null;
+			soft.[Friend]mNativeCollider = false;
 		}
 		mSoftBodies.Clear();
 		for (let rope in mRopes)
@@ -1268,8 +1274,7 @@ class PhysicsWorld
 		hit.penetrationDepth = nativeHit.penetrationDepth;
 		hit.part = -1;
 		hit.triangle = -1;
-		if (mByBody.TryGetValue(nativeHit.bodyId, let entry))
-			hit.gameObject = entry.transform.GameObject;
+		hit.gameObject = ObjectOfBody(nativeHit.bodyId);
 		var point = nativeHit.point;
 		if (mBackend != null && mBackend.HitDetail(nativeHit.bodyId, nativeHit.subShapeId, point, let detail))
 		{
@@ -1312,8 +1317,7 @@ class PhysicsWorld
 			RaycastHit hit = default;
 			hit.distance = nativeHit.fraction * maxDistance;
 			hit.point = origin + unit * hit.distance;
-			if (mByBody.TryGetValue(nativeHit.bodyId, let entry))
-				hit.gameObject = entry.transform.GameObject;
+			hit.gameObject = ObjectOfBody(nativeHit.bodyId);
 			AddRayDetail(ref hit, nativeHit.bodyId, nativeHit.subShapeId);
 			hits.Add(hit);
 		}
@@ -1513,8 +1517,7 @@ class PhysicsWorld
 			}
 			hit.distance = distance;
 			hit.point = origin + unit * distance;
-			if (mByBody.TryGetValue(result.bodyId, let entry))
-				hit.gameObject = entry.transform.GameObject;
+			hit.gameObject = ObjectOfBody(result.bodyId);
 			AddRayDetail(ref hit, result.bodyId, result.subShapeId);
 			return true;
 		}

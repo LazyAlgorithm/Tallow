@@ -33,10 +33,15 @@ extension EditorApp
 		mSoftPaint = brush == "stiffness" ? .Stiffness : .Pins;
 	}
 
+	static bool RapierJelly(SoftBody body)
+		=> body.kind == .Jelly && PhysicsBackends.Selected3D?.Id == "Rapier";
+
 	void DrawSoftBodyTools(SoftBody body)
 	{
 		ImGui.Spacing();
 		ImGui.SeparatorText("Soft Body Tools");
+		if (RapierJelly(body))
+			ImGui.TextDisabled("Jelly Bend Stiffness is Jolt only.");
 		// Tearing is a Rapier-only capability; the field is hidden rather than shown greyed out on Jolt.
 		if (PhysicsComponentRules.FeaturesFor(body.Scene).Has(.SoftBodyTearing))
 		{

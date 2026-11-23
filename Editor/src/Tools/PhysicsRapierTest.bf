@@ -274,6 +274,45 @@ static class PhysicsRapierTest
 		failures += Check("centred character keeps its transform on the floor",
 			Math.Abs(centeredState.position.y - 0.5f) < 0.3f);
 
+		// SimpleMove feeds the last vertical velocity back into the next step.
+		// A contact margin must not become an upward launch on every grounded tick.
+		const float step = 1.0f / 60.0f;
+		float minHeight = float.MaxValue, maxHeight = -float.MaxValue;
+		bool stayedGrounded = true;
+		for (int i = 0; i < 90; i++)
+		{
+			let fall = centeredState.groundState == 0 && centeredState.velocity.y < 0.1f ? 0 : centeredState.velocity.y;
+			centeredState = scene.Physics.MoveCharacter(centeredCharacter, Vector3(0, fall - 9.81f * step, 3),
+				step, 0.28f, 0.2f, false);
+			stayedGrounded &= centeredState.groundState == 0;
+			minHeight = Math.Min(minHeight, centeredState.position.y);
+			maxHeight = Math.Max(maxHeight, centeredState.position.y);
+		}
+		failures += Check("walking stays grounded without bouncing", stayedGrounded && maxHeight - minHeight < 0.002f);
+		let tread = scene.CreateGameObject("Character Step");
+		tread.Transform.Position = Vector3(6, 0.60f, 11.7f);
+		let treadCollider = tread.AddComponent<BoxCollider>();
+		treadCollider.size = Vector3(2, 0.20f, 1.2f);
+		scene.Physics.CreateBody(tread.Transform, treadCollider.GetShape(), null);
+		maxHeight = centeredState.position.y;
+		float peakUpwardSpeed = 0;
+		for (int i < 27)
+		{
+			let fall = centeredState.groundState == 0 && centeredState.velocity.y < 0.1f ? 0 : centeredState.velocity.y;
+			centeredState = scene.Physics.MoveCharacter(centeredCharacter, Vector3(0, fall - 9.81f * step, 3),
+				step, 0.28f, 0.2f, false);
+			maxHeight = Math.Max(maxHeight, centeredState.position.y);
+			peakUpwardSpeed = Math.Max(peakUpwardSpeed, centeredState.velocity.y);
+		}
+		failures += Check("character climbs a 20 cm step", centeredState.position.z > 11.5f &&
+			Math.Abs(centeredState.position.y - 0.71f) < 0.03f);
+		failures += Check("stepping up does not launch the character",
+			maxHeight < 0.74f && peakUpwardSpeed < 0.1f);
+
+		let from = centeredState.position.y;
+		centeredState = scene.Physics.MoveCharacter(centeredCharacter, Vector3(0, 5, 0), step, 0.28f, 0.2f, false);
+		failures += Check("an intentional jump still moves upward", centeredState.position.y > from + 0.06f);
+
 		int wallHits = 0;
 		for (int i = 0; i < 120 && wallHits == 0; i++)
 		{
@@ -292,12 +331,36 @@ static class PhysicsRapierTest
 		floaterData.mass = 1;
 		floaterData.linearDamping = 0.1f;
 		let floaterBody = scene.Physics.CreateBody(floater.Transform, floaterCollider.GetShape(), &floaterData);
-		for (int i < 180)
+		for (int i < 360)
 		{
 			scene.Physics.ApplyBuoyancy(floaterBody, Vector3(20, 0.5f, 0), .Up, 2.5f, 2, 2, .Zero, 1.0f / 60.0f);
 			scene.Physics.Step(1.0f / 60.0f);
 		}
-		failures += Check("buoyancy floats the body above the surface", floater.Transform.Position.y > 0.6f);
+		// With a one-step buoyancy force the half-metre sphere settles near y = 0.6:
+		// the backend's submerged AABB fraction balances gravity at 1 / 2.5.
+		failures += Check("buoyancy supports the body near its equilibrium",
+			Math.Abs(floater.Transform.Position.y - 0.6f) < 0.08f);
+
+		// A force and an off-center twist requested once must be consumed by that step.
+		let forceObject = scene.CreateGameObject("One-step load");
+		forceObject.Transform.Position = Vector3(26, 10, 15);
+		let forceCollider = forceObject.AddComponent<BoxCollider>();
+		RigidbodyData forceData = .();
+		forceData.useGravity = false;
+		forceData.linearDamping = 0;
+		forceData.angularDamping = 0;
+		let forceBody = scene.Physics.CreateBody(forceObject.Transform, forceCollider.GetShape(), &forceData);
+		scene.Physics.AddForce(forceBody, Vector3(10, 0, 0));
+		scene.Physics.AddTorque(forceBody, Vector3(2, 0, 0));
+		scene.Physics.Step(step);
+		let afterLoad = scene.Physics.GetState(forceBody);
+		for (int i = 0; i < 20; i++)
+			scene.Physics.Step(step);
+		let withoutLoad = scene.Physics.GetState(forceBody);
+		failures += Check("force and torque apply for one step only",
+			afterLoad.linearVelocity.x > 0.01f && afterLoad.angularVelocity.x > 0.01f &&
+			(withoutLoad.linearVelocity - afterLoad.linearVelocity).Length < 0.001f &&
+			(withoutLoad.angularVelocity - afterLoad.angularVelocity).Length < 0.001f);
 
 		// ---- freeze rotation
 		let frozenObject = scene.CreateGameObject("Frozen");

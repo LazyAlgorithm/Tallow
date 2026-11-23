@@ -7,7 +7,8 @@ archive so normal Tallow builds do not need Rust. Rust is a maintainer/CI tool o
 |---|---|
 | Version | 0.36.1+c.0 |
 | Source | `dimforge/rapier` @ `475caa3ff4646fd9a796b67d14116256f4962bc7` |
-| Build | 3D, f32, static, `enhanced-determinism`, SIMD 4 lanes, parallel off |
+| Build | 3D, f32, static, `enhanced-determinism`, SIMD 4 lanes, parallel on (rayon), fat LTO, 1 codegen unit |
+| Source changes | Rapier itself: none (stock, so comparisons with Jolt are out of the box). C bindings: `bindings-changes/*.patch` |
 | Files | `prebuilt/<platform>/librapier3d_ffi.a`, `include/rapier.h` (and its helpers) |
 
 The archives themselves are not committed (51 MB each). Keep one locally under `prebuilt/<platform>/` for
@@ -45,3 +46,27 @@ generated project link flags and `tools/build_player.py` list them).
 Archives are built with `enhanced-determinism`, SIMD 4 lanes and parallel off. The Linux and Windows x86_64 builds
 produce the same fixed-scene state hash (the engine's `--test-physics-rapier` prints `PHYSICS STATEHASH`), which is
 what the provider's `CrossPlatformDeterminism` capability and lockstep networking are gated on.
+
+## Bindings changes
+
+`tools/build_rapier.py` applies `bindings-changes/*.patch` in name order after checking out the pinned commit and
+refuses any patch that touches files outside `bindings/c/`: the physics engine is never modified, only the C API
+Tallow calls it through. They change no simulation results (the determinism hashes below are checked with them).
+
+- `0001-query-refresh-and-contact-summaries.patch`
+  - `r3RefreshQueriesForBodies`: after Tallow moves, teleports or creates bodies, pushes their poses to their
+    colliders and refits those colliders' query-tree boxes (`propagate_modified_body_positions_to_colliders`,
+    `BroadPhaseBvh::set_aabb`, both public Rapier API). Stock bindings only offer `r3DetectCollisions`, a whole
+    collision-detection pass, before every query that follows a teleport.
+  - `r3ActiveContactSummaries`: every touching pair with ids, sensor flags, resting state and the strongest contact's
+    point, normal and speed in one read-only call, instead of four locked calls per contact event.
+
+## Threads
+
+The archives are built with Rapier's `parallel` feature (`--serial` builds without it). Every world steps on
+rayon's global pool, sized from `RAYON_NUM_THREADS` when it starts; `native/tallow_rapier.cpp` sets it to 4 when
+the environment has no value (Jolt uses 3 workers plus the stepping thread; past about 8 threads the step gets
+slower again). Results are bit-identical at any thread count and on Linux and Windows: `--test-physics-rapier`
+(PHYSICS STATEHASH) and `--bench-physics Rapier 6000 128` (BENCH STATEHASH) printed the same hashes at 1, 2, 4,
+8, 16 and 24 threads on Linux and at 1, 4 and 16 under Wine (2026-11-23), and match the serial build. Re-run that
+check whenever the pinned commit changes, since lockstep relies on it.

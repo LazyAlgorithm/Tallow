@@ -35,6 +35,23 @@ The mesh is simulated with its seams joined. A mesh splits a vertex where its te
 
 A jelly cube with the defaults keeps its shape, squashes a little when it lands, hops once at most and settles. For a firmer one raise Bend Stiffness; for a wobblier one lower Wobble Damping. A ball needs its air: a low-poly sphere with little pressure sags.
 
+## Jolt and Rapier
+
+Both backends use the same **Soft Body** component, kinds, pins, and saved settings. Rapier uses its cloth
+constraints for regular grids and a triangulated surface for other cloth meshes. It uses elastic tetrahedra for
+closed jelly meshes that can be filled from their center. Open meshes, painted stiffness, and tearing use its
+surface solver. On Rapier, Jelly stiffness sets the elastic material or surface stiffness. Jelly **Bend Stiffness**
+is a Jolt setting. **Tearing** is a Rapier setting. Both use the same Pressure control. Rapier applies it as a
+target volume, so how much an elastic jelly expands also depends on its stiffness.
+
+When Rapier successfully creates a native cloth or jelly collider, that surface takes over collision from ordinary
+solid colliders on the same object, including a redundant Rigidbody collider. Those components remain in the
+scene. Disabling the Soft Body restores them. Triggers and colliders that cover child or compound geometry keep
+their own role. A **From Impacts** shell on a Rigidbody with one dedicated collider uses Rapier's deformable
+surface for contacts and queries. Dynamic Rigidbody mass and inertia are preserved, and particle attachments
+transfer contact loads to the Rigidbody. Disabling the shell restores the saved collider. Parent and compound
+carriers keep their authored collision shapes.
+
 ## Dents
 
 A **Shell** holds every vertex on its place on its object, so it rides along with the object's Rigidbody (on the same object or a parent) and ignores that body's own collider. Where it is hit hard enough, it dents and stays dented. **Dent Mode** picks what dents it:
@@ -47,7 +64,13 @@ Set it up like this:
 1. The car (or crate) has its Rigidbody and a collider (a Rigidbody only moves with a collider: a shell adds a Convex Collider round the mesh to an object without one, and a Rigidbody of the Soft Body's Mass to one without that, so it falls and hits things): the shape of the mesh for From Impacts; a little inside it at the front, back and sides for From Surface. Wheels or the collider's underside hold a car up.
 2. Add a Soft Body, Kind Shell. The mesh needs enough vertices to dent: a few hundred for a car body.
 
-With a **Convex Collider** on the shell's object (not a Mesh Collider: those only work on things that do not move), the collider follows the dents: a fifth of a second after the denting stops, it is wrapped round the dented shape again, so a crushed front or corner is where things stop. Being convex, it follows dents that change the outline (a flattened front, a crumpled corner); a dent in the middle of a door is still met at the door's original surface. A Box Collider stays as it is.
+On Jolt, a **Convex Collider** on the shell's object is wrapped round the dented shape a fifth of a second after
+denting stops. The hull follows changes to the outline such as a crumpled corner. A Box Collider keeps its shape.
+On Rapier, a native **From Impacts** collider follows the dented triangles, including a depression in the middle
+of a panel. A hit dents only the surface facing it, 0.25 to 1 m round where it landed (wider for faster hits, and
+never finer than the mesh's edges), each vertex pushed half along the hit and half into its own surface, so a corner
+or an edge folds in. Each hit adds up to Dent Depth less Spring Back (at four times Dent Speed, from something at
+least a fiftieth of the object's mass), to at most three times Dent Depth.
 
 The Sandbox's player has a **Ball Launcher**: F shoots a 10 kg ball at 30 m/s where the screen's middle points, enough to dent a 100 kg shell cube about 13 cm.
 

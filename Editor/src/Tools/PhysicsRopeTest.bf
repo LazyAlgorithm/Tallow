@@ -14,6 +14,47 @@ static class PhysicsRopeTest
 		return ok ? 0 : 1;
 	}
 
+	static int CheckHeavySwing()
+	{
+		let scene = scope Scene();
+		let bob = scene.CreateGameObject("Swinging load");
+		bob.Transform.Position = Vector3(0, 0.9f, 0);
+		let ball = bob.AddComponent<SphereCollider>();
+		ball.radius = 0.8f;
+		let rigid = bob.AddComponent<Rigidbody>();
+		rigid.mass = 120;
+		let fixedEnd = scene.CreateGameObject("Rope anchor");
+		fixedEnd.Transform.Position = Vector3(0, 6, 0);
+		let rope = fixedEnd.AddComponent<Rope>();
+		rope.length = 4.3f;
+		rope.thickness = 0.06f;
+		rope.segments = 28;
+		rope.endAttachedTo = bob.Transform;
+		rope.endOffset = Vector3(0, 0.8f, 0);
+		rope.knotStiffness = 0.5f;
+		scene.StartPlay();
+		for (int i = 0; i < 30; i++)
+			scene.FixedUpdate();
+		let initialHeight = bob.Transform.Position.y;
+		rigid.Velocity = Vector3(5, 0, 0);
+		var maxEnergy = 0.0f;
+		var maxDistance = 0.0f;
+		bool finite = true;
+		for (int i = 0; i < 420; i++)
+		{
+			scene.FixedUpdate();
+			let energy = rigid.Velocity.LengthSquared + 2 * 9.81f * (bob.Transform.Position.y - initialHeight)
+				+ 0.4f * ball.radius * ball.radius * rigid.AngularVelocity.LengthSquared;
+			finite &= energy.IsFinite;
+			maxEnergy = Math.Max(maxEnergy, energy);
+			maxDistance = Math.Max(maxDistance, (rope.EndPoint - rope.StartPoint).Length);
+		}
+		let failures = Check("a heavy swing stays in the rope's reach", finite && maxDistance < rope.length + 0.12f)
+			+ Check("knot forces do not add energy on every tick", finite && maxEnergy < 38);
+		scene.StopPlay();
+		return failures;
+	}
+
 	public static int Run()
 	{
 		int failures = 0;
@@ -59,13 +100,49 @@ static class PhysicsRopeTest
 				let got = soft.Read(body, &read, null, (uint32)count);
 				failures += Check("rope vertices read back", got == count);
 				uint32[1] held = .(count - 1);
-				float[3] target = .(5, 6, 0);
-				soft.MovePinned(body, &held, &target, 1, 1.0f / 60.0f);
+				float[3] target = .(3, 6, 0);
+				float[3] wind = .(0, 0, 8);
 				for (int i < 30)
+				{
+					soft.MovePinned(body, &held, &target, 1, 1.0f / 60.0f);
+					soft.WindRope(body, &wind, config.radius, 1, 0, 0, 1.0f / 60.0f);
 					scene.Physics.Step(1.0f / 60.0f);
+				}
 				float[33] after = default;
 				soft.Read(body, &after, null, (uint32)count);
-				failures += Check("the pinned end moved the rope", after[(count - 1) * 3] > 1.5f);
+				failures += Check("the pinned end follows its target in wind",
+					Math.Abs(after[(count - 1) * 3] - target[0]) < 0.025f &&
+					Math.Abs(after[(count - 1) * 3 + 2]) < 0.025f);
+				soft.Forget(body);
+			}
+		}
+
+		// A freely falling rope must make contact along its segments.
+		{
+			float[12] positions = .(-1.5f, 0, 0, -0.5f, 0, 0, 0.5f, 0, 0, 1.5f, 0, 0);
+			float[4] pins = default;
+			float[3] center = .(0, 2, 3);
+			PhysicsRopeConfig config = default;
+			config.mass = 1;
+			config.stretch = 1.0e-7f;
+			config.bend = 1.0e-4f;
+			config.damping = 0.2f;
+			config.friction = 0.5f;
+			config.gravityFactor = 1;
+			config.radius = 0.05f;
+			config.iterations = 8;
+			config.layer = PhysicsLayerTable.ObjectCode(PhysicsLayerTable.MovingClass, 0);
+			let body = soft.CreateRope(&config, &positions, 4, &pins, &center);
+			failures += Check("colliding rope created", body != uint32.MaxValue);
+			if (body != uint32.MaxValue)
+			{
+				for (int i = 0; i < 120; i++)
+					scene.Physics.Step(1.0f / 60.0f);
+				let count = soft.Read(body, &positions, null, 4);
+				bool rests = count == 4;
+				for (int i = 0; i < 4; i++)
+					rests &= positions[i * 3 + 1] > 0.45f && positions[i * 3 + 1] < 0.8f;
+				failures += Check("the rope rests on the floor", rests);
 				soft.Forget(body);
 			}
 		}
@@ -99,6 +176,7 @@ static class PhysicsRopeTest
 			}
 		}
 
+		failures += CheckHeavySwing();
 		Console.WriteLine(failures == 0 ? "PHYSICS ROPE PASS" : scope $"PHYSICS ROPE FAIL ({failures})");
 		return failures == 0 ? 0 : 1;
 	}

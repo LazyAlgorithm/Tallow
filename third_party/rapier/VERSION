@@ -1,3 +1,4 @@
 Rapier C bindings 0.36.1+c.0
 commit 475caa3ff4646fd9a796b67d14116256f4962bc7
-3D, f32, static; features: enhanced-determinism; SIMD 4 lanes; parallel off
+3D, f32, static; features: enhanced-determinism; SIMD 4 lanes; parallel on (rayon, 4 threads by default); fat LTO, 1 codegen unit
+source: stock Rapier; C bindings: bindings-changes/0001-query-refresh-and-contact-summaries

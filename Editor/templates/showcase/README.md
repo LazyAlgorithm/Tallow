@@ -28,8 +28,9 @@ warning tape uses the same colliders.
 
 - **Jolt** uses each soft body's own collision for cloth, jellies and FromSurface shells; an impact-dented shell
   rides its object's collider.
-- **Rapier** generates the same soft-body collisions. A static or kinematic impact-dented shell can also hand its
-  collision surface to Rapier's deformable shell collider; a dynamic shell keeps its rigidbody collider because
-  the shell skin cannot carry its mass.
+- **Rapier** gives the flag and curtain native cloth constraints and simulates the jellies with elastic tetrahedra.
+  Their native surface colliders take over from redundant solid colliders on the same object during play.
+  The steel shells also use Rapier's deformable collision surfaces. Hits and raycasts follow the dents, and
+  the Rigidbody keeps its mass and inertia.
 
 No component or scene change is needed to switch. Rebuild the gameplay C# only when its scripts change.

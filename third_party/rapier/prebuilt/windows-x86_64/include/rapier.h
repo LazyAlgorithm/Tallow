@@ -3912,6 +3912,65 @@ typedef struct R2ContactPair {
 } R2ContactPair;
 
 /**
+ * One touching contact pair, summarized for game-side contact events in a single pass.
+ * @ingroup events
+ */
+typedef struct R2ContactSummary {
+  /**
+   * First collider, in the narrow phase's order.
+   */
+  struct R2ColliderHandle collider1;
+  /**
+   * Second collider, in the narrow phase's order.
+   */
+  struct R2ColliderHandle collider2;
+  /**
+   * collider1's user data.
+   */
+  struct R2UserData collider_user_data1;
+  /**
+   * collider2's user data.
+   */
+  struct R2UserData collider_user_data2;
+  /**
+   * User data of collider1's parent body; zero without a parent.
+   */
+  struct R2UserData body_user_data1;
+  /**
+   * User data of collider2's parent body; zero without a parent.
+   */
+  struct R2UserData body_user_data2;
+  /**
+   * World-space point of the contact with the largest normal impulse, on collider1's surface.
+   */
+  struct R2Vector point;
+  /**
+   * World-space normal of that contact's manifold, from collider1 towards collider2.
+   */
+  struct R2Vector normal;
+  /**
+   * |(v2 - v1) . normal| at the point, from both parents' velocities; zero without both parents.
+   */
+  R2Real normal_speed;
+  /**
+   * collider1 is a sensor.
+   */
+  R2Bool sensor1;
+  /**
+   * collider2 is a sensor.
+   */
+  R2Bool sensor2;
+  /**
+   * Both sides are fixed, sleeping, parentless or motionless kinematic.
+   */
+  R2Bool resting;
+  /**
+   * point/normal/normal_speed are filled (false for resting pairs when skipped, or pairs without points).
+   */
+  R2Bool has_point;
+} R2ContactSummary;
+
+/**
  * Sensor intersection state for a collider pair.
  * @ingroup events
  */
@@ -6019,6 +6078,19 @@ R2Status RAPIER_CALL r2DetectCollisions(struct R2World *world,
                                 const struct R2EventCollector *events);
 
 /**
+ * Bring scene queries up to date for bodies moved, teleported or created since the last step, without
+ * running collision detection: modified body poses are pushed to their colliders, and those bodies'
+ * colliders get their broad-phase AABBs refit in place. Change flags stay set, so the next step still
+ * handles pairs and solver bookkeeping. Much cheaper than r2DetectCollisions when only queries need
+ * the new poses. Bodies that no longer exist are skipped.
+ * @ingroup worlds
+ */
+RAPIER_API
+R2Status RAPIER_CALL r2RefreshQueriesForBodies(struct R2World *world,
+                                      const struct R2RigidBodyHandle *bodies,
+                                      size_t count);
+
+/**
  * Borrow snapshot bytes without copying; valid until r2FreeBytes. Never free the returned data
  * pointer.
  * @ingroup worlds
@@ -6601,6 +6673,20 @@ RAPIER_API
 size_t RAPIER_CALL r2ContactPairs(const struct R2World *world,
                          struct R2ContactPair *buffer,
                          size_t capacity);
+
+/**
+ * Summarize every contact pair with an active solver contact: colliders, user data, sensor flags,
+ * whether both sides rest, and (unless skip_resting_geometry is true and the pair rests) the
+ * strongest contact's point, normal and relative normal speed. One call instead of several per pair.
+ * Read-only.
+ * @see @ref output_buffers
+ * @ingroup events
+ */
+RAPIER_API
+size_t RAPIER_CALL r2ActiveContactSummaries(const struct R2World *world,
+                                   R2Bool skip_resting_geometry,
+                                   struct R2ContactSummary *buffer,
+                                   size_t capacity);
 
 /**
  * Return the narrow-phase contact pair for two colliders, or report R2_NOT_FOUND. Its collider1 and
@@ -14814,6 +14900,65 @@ typedef struct R3ContactPair {
 } R3ContactPair;
 
 /**
+ * One touching contact pair, summarized for game-side contact events in a single pass.
+ * @ingroup events
+ */
+typedef struct R3ContactSummary {
+  /**
+   * First collider, in the narrow phase's order.
+   */
+  struct R3ColliderHandle collider1;
+  /**
+   * Second collider, in the narrow phase's order.
+   */
+  struct R3ColliderHandle collider2;
+  /**
+   * collider1's user data.
+   */
+  struct R3UserData collider_user_data1;
+  /**
+   * collider2's user data.
+   */
+  struct R3UserData collider_user_data2;
+  /**
+   * User data of collider1's parent body; zero without a parent.
+   */
+  struct R3UserData body_user_data1;
+  /**
+   * User data of collider2's parent body; zero without a parent.
+   */
+  struct R3UserData body_user_data2;
+  /**
+   * World-space point of the contact with the largest normal impulse, on collider1's surface.
+   */
+  struct R3Vector point;
+  /**
+   * World-space normal of that contact's manifold, from collider1 towards collider2.
+   */
+  struct R3Vector normal;
+  /**
+   * |(v2 - v1) . normal| at the point, from both parents' velocities; zero without both parents.
+   */
+  R3Real normal_speed;
+  /**
+   * collider1 is a sensor.
+   */
+  R3Bool sensor1;
+  /**
+   * collider2 is a sensor.
+   */
+  R3Bool sensor2;
+  /**
+   * Both sides are fixed, sleeping, parentless or motionless kinematic.
+   */
+  R3Bool resting;
+  /**
+   * point/normal/normal_speed are filled (false for resting pairs when skipped, or pairs without points).
+   */
+  R3Bool has_point;
+} R3ContactSummary;
+
+/**
  * Sensor intersection state for a collider pair.
  * @ingroup events
  */
@@ -16921,6 +17066,19 @@ R3Status RAPIER_CALL r3DetectCollisions(struct R3World *world,
                                 const struct R3EventCollector *events);
 
 /**
+ * Bring scene queries up to date for bodies moved, teleported or created since the last step, without
+ * running collision detection: modified body poses are pushed to their colliders, and those bodies'
+ * colliders get their broad-phase AABBs refit in place. Change flags stay set, so the next step still
+ * handles pairs and solver bookkeeping. Much cheaper than r3DetectCollisions when only queries need
+ * the new poses. Bodies that no longer exist are skipped.
+ * @ingroup worlds
+ */
+RAPIER_API
+R3Status RAPIER_CALL r3RefreshQueriesForBodies(struct R3World *world,
+                                      const struct R3RigidBodyHandle *bodies,
+                                      size_t count);
+
+/**
  * Borrow snapshot bytes without copying; valid until r3FreeBytes. Never free the returned data
  * pointer.
  * @ingroup worlds
@@ -17503,6 +17661,20 @@ RAPIER_API
 size_t RAPIER_CALL r3ContactPairs(const struct R3World *world,
                          struct R3ContactPair *buffer,
                          size_t capacity);
+
+/**
+ * Summarize every contact pair with an active solver contact: colliders, user data, sensor flags,
+ * whether both sides rest, and (unless skip_resting_geometry is true and the pair rests) the
+ * strongest contact's point, normal and relative normal speed. One call instead of several per pair.
+ * Read-only.
+ * @see @ref output_buffers
+ * @ingroup events
+ */
+RAPIER_API
+size_t RAPIER_CALL r3ActiveContactSummaries(const struct R3World *world,
+                                   R3Bool skip_resting_geometry,
+                                   struct R3ContactSummary *buffer,
+                                   size_t capacity);
 
 /**
  * Return the narrow-phase contact pair for two colliders, or report R3_NOT_FOUND. Its collider1 and

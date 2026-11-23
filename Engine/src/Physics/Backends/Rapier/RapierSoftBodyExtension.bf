@@ -3,10 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Rapier's particle soft bodies behind the neutral PhysicsSoftBodyExtension. A surface mesh becomes a cloth, a
-/// pressure-held jelly (volume preservation), a shell that rides its object and keeps its dents, or a driven skin
-/// that lags behind a Rigidbody. Rapier's plastic edges make dents permanent and its tear thresholds split a surface;
-/// tearing is advertised only by this backend.
+/// Rapier's deformable surfaces and elastic cells behind the neutral PhysicsSoftBodyExtension.
 class RapierSoftBodyExtension : PhysicsSoftBodyExtension
 {
 	RapierPhysicsBackendWorld mBackend;
@@ -44,12 +41,20 @@ class RapierSoftBodyExtension : PhysicsSoftBodyExtension
 		settings.friction = config.friction;
 		settings.gravityFactor = config.gravityFactor;
 		settings.iterations = config.iterations;
-		settings.stretch = config.stretch;
-		settings.shear = config.shear;
-		settings.bend = config.bend;
+		settings.surfaceStiffness = config.surfaceStiffness;
+		settings.bendStiffness = config.bendStiffness;
+		settings.wobbleDamping = config.wobbleDamping;
+		settings.restitution = config.kind == (int32)SoftBodyKind.Jelly ? config.bounciness : config.restitution;
+		settings.objectCode = config.layer;
+		RapierPhysicsBackendWorld.GroupsFor(config.layer, out settings.memberships, out settings.filter,
+			out settings.group, out settings.motionClass);
+		settings.vertexRadius = config.vertexRadius;
 		return Rapier.tn_rapier_soft_create(World, positions, (int32)vertexCount, triangles, (int32)triangleCount,
 			pinned, stiffness, &c, objectMatrix, config.mass, &settings, config.userData);
 	}
+
+	public override bool HasNativeCollider(uint32 bodyId)
+		=> World != null && Rapier.tn_rapier_soft_has_collider(World, bodyId) != 0;
 
 	public override void Ignore(uint32 bodyId, uint32 ignoredBody)
 	{
@@ -123,7 +128,7 @@ class RapierSoftBodyExtension : PhysicsSoftBodyExtension
 	public override void Force(uint32 bodyId, float* force, float step)
 	{
 		if (World != null && force != null)
-			Rapier.tn_rapier_soft_force(World, bodyId, force);
+			Rapier.tn_rapier_soft_force(World, bodyId, force, step);
 	}
 
 	public override void Wind(uint32 bodyId, float* wind, float drag, float turbulence, float time, float step)
@@ -146,11 +151,8 @@ class RapierSoftBodyExtension : PhysicsSoftBodyExtension
 			Rapier.tn_rapier_soft_set_pressure(World, bodyId, pressure);
 	}
 
-	public override void DampWobble(uint32 bodyId, float rate, float step)
-	{
-		if (World != null)
-			Rapier.tn_rapier_soft_damp_wobble(World, bodyId, rate, step);
-	}
+	// Rapier damps deformation in the solver while preserving the body's overall motion.
+	public override void DampWobble(uint32 bodyId, float rate, float step) { }
 
 	public override void Bounce(uint32 bodyId, float bounciness, float* state) { }
 	public override void Proxies(uint32* bodies, int32* closed, float* reach, uint32 count) { }
@@ -195,8 +197,9 @@ class RapierSoftBodyExtension : PhysicsSoftBodyExtension
 			return uint32.MaxValue;
 		var centerPoint = center != null ? Vector3(center[0], center[1], center[2]) : Vector3.Zero;
 		float[3] c = .(centerPoint.x, centerPoint.y, centerPoint.z);
+		RapierPhysicsBackendWorld.GroupsFor(config.layer, let memberships, let filter, let group, let motionClass);
 		return Rapier.tn_rapier_rope_create(World, positions, count, pinned, config.mass, config.stretch,
-			config.bend, config.damping, config.radius, &c, config.userData);
+			config.bend, config.damping, config.radius, config.friction, config.iterations, memberships, filter, group, &c, config.userData);
 	}
 
 	public override void* Tie(uint32 bodyA, float* pointA, uint32 bodyB, float* pointB, float length)

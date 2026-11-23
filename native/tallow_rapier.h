@@ -107,8 +107,11 @@ void tn_rapier_clear(void* world);
 void tn_rapier_set_contact_events(void* world, int32_t enabled);
 // The world states a query sees (uint32.MaxValue: all). Set from PhysicsWorld.PrepareQuery.
 void tn_rapier_set_query_worlds(void* world, uint32_t groups);
-// Contacts collected by the last step; returns the count and copies at most capacity.
+// Works out the contact events since the last call (begin/stay/end against the pairs it last reported); returns
+// the count and copies at most capacity. Call once per tick: a second call sees the same pairs as already touching.
 int32_t tn_rapier_contacts(void* world, TnRapierContact* out, int32_t capacity);
+// Copies the events the last tn_rapier_contacts worked out, at most capacity; returns how many there are.
+int32_t tn_rapier_contacts_copy(void* world, TnRapierContact* out, int32_t capacity);
 
 // ---- exact snapshots ----
 // Rapier's whole-world snapshot (bodies, colliders, joints, soft bodies and their deformation). Restoring makes a
@@ -229,14 +232,19 @@ typedef struct TnRapierSoftSettings
 	float friction;
 	float gravityFactor;
 	int32_t iterations;
-	float stretch;
-	float shear;
-	float bend;
+	float surfaceStiffness;
+	float bendStiffness;
+	float wobbleDamping;
+	float restitution;
+	float vertexRadius;
+	uint32_t objectCode, group, memberships, filter;
+	int32_t motionClass;
 } TnRapierSoftSettings;
 
 uint32_t tn_rapier_soft_create(void* world, const float* positions, int32_t vertexCount, const uint32_t* triangles,
 	int32_t triangleCount, const float* pinned, const float* stiffness, const float center[3],
 	const float objectMatrix[16], float totalMass, const TnRapierSoftSettings* settings, uint64_t userData);
+int32_t tn_rapier_soft_has_collider(void* world, uint32_t body);
 void tn_rapier_soft_destroy(void* world, uint32_t body);
 void tn_rapier_soft_ignore(void* world, uint32_t body, uint32_t ignoredBody);
 // Carries the particles from the previous object pose to the next one; shells and driven jellies call this every
@@ -253,7 +261,7 @@ void tn_rapier_soft_set_positions(void* world, uint32_t body, const float* posit
 void tn_rapier_soft_velocity(void* world, uint32_t body, float* velocity);
 void tn_rapier_soft_set_velocity(void* world, uint32_t body, const float* velocity);
 void tn_rapier_soft_impulse(void* world, uint32_t body, const float* impulse);
-void tn_rapier_soft_force(void* world, uint32_t body, const float* force);
+void tn_rapier_soft_force(void* world, uint32_t body, const float* force, float step);
 void tn_rapier_soft_shift(void* world, uint32_t body, const float* offset);
 int32_t tn_rapier_soft_bounds(void* world, uint32_t body, float* minimum, float* maximum);
 // Jelly pressure: the engine's gas amount (pascals times volume). Sets the volume factor held by the body.
@@ -267,7 +275,6 @@ uint32_t tn_rapier_soft_dents(void* world, uint32_t body, float* output, uint32_
 uint32_t tn_rapier_soft_dent_revision(void* world, uint32_t body);
 void tn_rapier_soft_set_dents(void* world, uint32_t body, const float* dents, uint32_t count,
 	const float objectMatrix[16]);
-void tn_rapier_soft_damp_wobble(void* world, uint32_t body, float rate, float step);
 // 1 once the body has torn.
 int32_t tn_rapier_soft_torn(void* world, uint32_t body);
 // Lifts and drags particles under a sampled water surface; returns how many were under. samples are nx*nz
@@ -280,7 +287,8 @@ int32_t tn_rapier_soft_tear(void* world, uint32_t body);
 
 // ---- ropes ----
 uint32_t tn_rapier_rope_create(void* world, const float* positions, uint32_t count, const float* pinned,
-	float totalMass, float stretch, float bend, float damping, float radius, const float center[3],
+	float totalMass, float stretch, float bend, float damping, float radius, float friction, int32_t iterations,
+	uint32_t memberships, uint32_t filter, uint32_t group, const float center[3],
 	uint64_t userData);
 // A rope joint holding two bodies at most `length` apart. Either body id may be 0xffffffff (a world anchor).
 void* tn_rapier_rope_tie(void* world, uint32_t bodyA, const float pointA[3], uint32_t bodyB,

@@ -17,6 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 VENDOR = ROOT / 'third_party' / 'rapier'
 VERSION = VENDOR / 'VERSION'
+# Tallow's changes to Rapier's C bindings only (bindings/c). Rapier itself stays stock so it is compared with Jolt
+# out of the box; a patch touching anything else is refused.
+BINDINGS_CHANGES = VENDOR / 'bindings-changes'
 PLATFORMS = {
     'linux': ('linux-x86_64', 'librapier3d_ffi.a', None),
     'windows': ('windows-x86_64', 'rapier3d_ffi.lib', 'x86_64-pc-windows-msvc'),
@@ -35,10 +38,29 @@ def run(command, cwd=None, env=None):
     subprocess.run([str(c) for c in command], cwd=cwd, check=True, env=env)
 
 
+def apply_bindings_changes(source):
+    """Applies bindings-changes/*.patch (name order) on top of the pinned commit, once each."""
+    for patch in sorted(BINDINGS_CHANGES.glob('*.patch')):
+        touched = subprocess.run(['git', '-C', str(source), 'apply', '--numstat', str(patch)],
+                                 capture_output=True, text=True, check=True).stdout.split('\n')
+        outside = [line.split('\t')[-1] for line in touched if line and not line.split('\t')[-1].startswith('bindings/c/')]
+        if outside:
+            raise SystemExit(f'{patch.name} changes Rapier outside bindings/c: {outside}')
+        applied = subprocess.run(['git', '-C', str(source), 'apply', '--reverse', '--check', str(patch)],
+                                 capture_output=True)
+        if applied.returncode == 0:
+            print(f'bindings change already applied: {patch.name}')
+            continue
+        run(['git', '-C', str(source), 'apply', str(patch)])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--platform', choices=sorted(PLATFORMS), default='linux')
     parser.add_argument('--source', help='an existing Rapier clone (pinned commit is checked out in it)')
+    parser.add_argument('--serial', action='store_true',
+                        help="build without Rapier's multithreaded step (rayon). Parallel is the default: results are "
+                             'bit-identical at any thread count (checked with --bench-physics and --test-physics-rapier)')
     parser.add_argument('--cache', default=str(Path.home() / '.cache' / 'tallow-rapier'))
     args = parser.parse_args()
 
@@ -55,13 +77,19 @@ def main():
         run(['git', '-C', str(source), 'fetch', '--depth', '1', 'origin', commit])
         run(['git', '-C', str(source), 'checkout', '--detach', commit])
 
+    apply_bindings_changes(source)
+
     folder, library, target = PLATFORMS[args.platform]
     build = source / 'build' / ('tallow-c3' if not target else f'tallow-c3-{args.platform}')
     env = os.environ.copy()
+    # One codegen unit with fat LTO across Rapier, parry and nalgebra: no effect on results, a faster step.
+    env['CARGO_PROFILE_RELEASE_LTO'] = 'fat'
+    env['CARGO_PROFILE_RELEASE_CODEGEN_UNITS'] = '1'
     configure = ['cmake', '-S', str(source / 'bindings' / 'c'), '-B', str(build),
                  '-DCMAKE_BUILD_TYPE=Release', '-DRAPIER_SHARED=OFF',
                  '-DRAPIER_BUILD_TESTS=OFF', '-DRAPIER_BUILD_EXAMPLES=OFF',
-                 '-DRAPIER_FEATURES=enhanced-determinism']
+                 '-DRAPIER_FEATURES=enhanced-determinism',
+                 f'-DRAPIER_ENABLE_PARALLEL={"OFF" if args.serial else "ON"}']
     if target:
         configure.append(f'-DRAPIER_TARGET={target}')
     if target == 'x86_64-pc-windows-msvc':

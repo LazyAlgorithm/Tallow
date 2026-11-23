@@ -108,9 +108,13 @@ struct RapierSoftSettings
 	public float friction;
 	public float gravityFactor;
 	public int32 iterations;
-	public float stretch;
-	public float shear;
-	public float bend;
+	public float surfaceStiffness;
+	public float bendStiffness;
+	public float wobbleDamping;
+	public float restitution;
+	public float vertexRadius;
+	public uint32 objectCode, group, memberships, filter;
+	public int32 motionClass;
 }
 
 static class Rapier
@@ -137,6 +141,7 @@ static class Rapier
 	[CLink] public static extern void tn_rapier_set_contact_events(void* world, int32 enabled);
 	[CLink] public static extern void tn_rapier_set_query_worlds(void* world, uint32 groups);
 	[CLink] public static extern int32 tn_rapier_contacts(void* world, void* contacts, int32 capacity);
+	[CLink] public static extern int32 tn_rapier_contacts_copy(void* world, void* contacts, int32 capacity);
 
 	[CLink] public static extern uint32 tn_rapier_body_create(void* world, int32 motion, float* position, float* rotation,
 		void* parts, int32 partCount, uint32 objectCode, uint32 group, int32 motionClass, uint32 collisionMemberships,
@@ -220,6 +225,7 @@ static class Rapier
 	[CLink] public static extern uint32 tn_rapier_soft_create(void* world, float* positions, int32 vertexCount,
 		uint32* triangles, int32 triangleCount, float* pinned, float* stiffness, float* center, float* objectMatrix,
 		float totalMass, RapierSoftSettings* settings, uint64 userData);
+	[CLink] public static extern int32 tn_rapier_soft_has_collider(void* world, uint32 body);
 	[CLink] public static extern void tn_rapier_soft_destroy(void* world, uint32 body);
 	[CLink] public static extern void tn_rapier_soft_ignore(void* world, uint32 body, uint32 ignoredBody);
 	[CLink] public static extern void tn_rapier_soft_skin(void* world, uint32 body, float* objectMatrix,
@@ -234,7 +240,7 @@ static class Rapier
 	[CLink] public static extern void tn_rapier_soft_velocity(void* world, uint32 body, float* velocity);
 	[CLink] public static extern void tn_rapier_soft_set_velocity(void* world, uint32 body, float* velocity);
 	[CLink] public static extern void tn_rapier_soft_impulse(void* world, uint32 body, float* impulse);
-	[CLink] public static extern void tn_rapier_soft_force(void* world, uint32 body, float* force);
+	[CLink] public static extern void tn_rapier_soft_force(void* world, uint32 body, float* force, float step);
 	[CLink] public static extern void tn_rapier_soft_shift(void* world, uint32 body, float* offset);
 	[CLink] public static extern int32 tn_rapier_soft_bounds(void* world, uint32 body, float* minimum,
 		float* maximum);
@@ -246,7 +252,6 @@ static class Rapier
 	[CLink] public static extern uint32 tn_rapier_soft_dent_revision(void* world, uint32 body);
 	[CLink] public static extern void tn_rapier_soft_set_dents(void* world, uint32 body, float* dents,
 		uint32 count, float* objectMatrix);
-	[CLink] public static extern void tn_rapier_soft_damp_wobble(void* world, uint32 body, float rate, float step);
 	[CLink] public static extern int32 tn_rapier_soft_torn(void* world, uint32 body);
 	[CLink] public static extern int32 tn_rapier_soft_tear(void* world, uint32 body);
 	[CLink] public static extern uint32 tn_rapier_soft_float(void* world, uint32 body, float* samples, uint32 nx,
@@ -254,7 +259,8 @@ static class Rapier
 		float drag, float gravity, float deltaTime, int32 wake);
 
 	[CLink] public static extern uint32 tn_rapier_rope_create(void* world, float* positions, uint32 count,
-		float* pinned, float totalMass, float stretch, float bend, float damping, float radius, float* center,
+		float* pinned, float totalMass, float stretch, float bend, float damping, float radius, float friction, int32 iterations,
+		uint32 memberships, uint32 filter, uint32 group, float* center,
 		uint64 userData);
 	[CLink] public static extern void* tn_rapier_rope_tie(void* world, uint32 bodyA, float* pointA, uint32 bodyB,
 		float* pointB, float length);
@@ -446,6 +452,8 @@ class RapierPhysicsBackendWorld : PhysicsBackendWorld
 {
 	PhysicsFeatures mFeatures;
 	void* mWorld;
+	// Contact events for ticks with more than CollectContacts' stack buffer holds; kept between ticks.
+	List<RapierContact> mContactScratch = new .() ~ delete _;
 	float mLengthScale = 1;
 	RapierGeometryExtension mGeometry;
 	RapierRagdollExtension mRagdolls;
@@ -535,14 +543,15 @@ class RapierPhysicsBackendWorld : PhysicsBackendWorld
 			return 0;
 		RapierContact[64] raw = default;
 		var count = Rapier.tn_rapier_contacts(mWorld, (void*)&raw, raw.Count);
-		RapierContact[] large = null;
-		defer delete large;
 		RapierContact* events = &raw;
 		if (count > raw.Count)
 		{
-			large = new .[count];
-			count = Math.Min(count, Rapier.tn_rapier_contacts(mWorld, (void*)large.Ptr, count));
-			events = large.Ptr;
+			// Copy what that call worked out: calling tn_rapier_contacts again would treat this tick's new pairs as
+			// already touching (begins became stays) and lose the ends. The buffer is a member: a
+			// `defer delete` of a local assigned later captured null and leaked one array per busy tick.
+			mContactScratch.Count = count;
+			count = Math.Min(count, Rapier.tn_rapier_contacts_copy(mWorld, (void*)mContactScratch.Ptr, count));
+			events = mContactScratch.Ptr;
 		}
 		for (int i < count)
 		{
@@ -570,7 +579,7 @@ class RapierPhysicsBackendWorld : PhysicsBackendWorld
 
 	// ---- bodies ----
 
-	static void GroupsFor(uint32 objectCode, out uint32 memberships, out uint32 filter, out uint32 group, out int32 motionClass)
+	public static void GroupsFor(uint32 objectCode, out uint32 memberships, out uint32 filter, out uint32 group, out int32 motionClass)
 	{
 		let layer = PhysicsLayerTable.Layer(objectCode);
 		memberships = (uint32)1 << layer;
@@ -815,11 +824,12 @@ class RapierPhysicsBackendWorld : PhysicsBackendWorld
 		RapierHit[32] raw = default;
 		var count = Rapier.tn_rapier_raycast_all(mWorld, &from, &dir, maxDistance, layerMask, ignoreBody, (void*)&raw, raw.Count);
 		RapierHit[] large = null;
-		defer delete large;
 		RapierHit* hitsPtr = &raw;
 		if (count > raw.Count)
 		{
 			large = new .[count];
+			// After the allocation: a one-statement defer captures large's value where it is written.
+			defer:: delete large;
 			count = Math.Min(count, Rapier.tn_rapier_raycast_all(mWorld, &from, &dir, maxDistance, layerMask, ignoreBody, (void*)large.Ptr, count));
 			hitsPtr = large.Ptr;
 		}
@@ -874,11 +884,12 @@ class RapierPhysicsBackendWorld : PhysicsBackendWorld
 		RapierHit[16] raw = default;
 		var count = Rapier.tn_rapier_shape_cast_all(mWorld, (void*)&part, &from, &rot, &move, layerMask, ignoreBody, (void*)&raw, raw.Count);
 		RapierHit[] large = null;
-		defer delete large;
 		RapierHit* hitsPtr = &raw;
 		if (count > raw.Count)
 		{
 			large = new .[count];
+			// After the allocation: a one-statement defer captures large's value where it is written.
+			defer:: delete large;
 			count = Math.Min(count, Rapier.tn_rapier_shape_cast_all(mWorld, (void*)&part, &from, &rot, &move, layerMask, ignoreBody, (void*)large.Ptr, count));
 			hitsPtr = large.Ptr;
 		}
@@ -902,11 +913,12 @@ class RapierPhysicsBackendWorld : PhysicsBackendWorld
 		RapierHit[64] raw = default;
 		var count = Rapier.tn_rapier_overlap(mWorld, (void*)&part, &from, &rot, layerMask, ignoreBody, (void*)&raw, raw.Count);
 		RapierHit[] large = null;
-		defer delete large;
 		RapierHit* hitsPtr = &raw;
 		if (count > raw.Count)
 		{
 			large = new .[count];
+			// After the allocation: a one-statement defer captures large's value where it is written.
+			defer:: delete large;
 			count = Math.Min(count, Rapier.tn_rapier_overlap(mWorld, (void*)&part, &from, &rot, layerMask, ignoreBody, (void*)large.Ptr, count));
 			hitsPtr = large.Ptr;
 		}

@@ -822,10 +822,11 @@ class JoltPhysicsBackendWorld : PhysicsBackendWorld
 		Jolt.ShapeHit[16] raw = default;
 		int32 count = Jolt.tn_physics_cast_shape_all(Jolt.JPH_PhysicsSystem_GetNarrowPhaseQuery(mSystem), shape, &from, &rot, &move, ignoreBody, &raw, raw.Count, layerMask);
 		Jolt.ShapeHit[] large = null;
-		defer delete large;
 		if (count > raw.Count)
 		{
 			large = new .[count];
+			// After the allocation: a one-statement defer captures large's value where it is written.
+			defer:: delete large;
 			count = Math.Min(count, Jolt.tn_physics_cast_shape_all(Jolt.JPH_PhysicsSystem_GetNarrowPhaseQuery(mSystem), shape, &from, &rot, &move, ignoreBody, large.Ptr, count, layerMask));
 			for (int i < count)
 				hits.Add(Convert(large[i]));

@@ -118,6 +118,7 @@ class SoftBody : Component
 
 	uint32 mBody = uint32.MaxValue;
 	bool mReady;
+	bool mNativeCollider;
 	PhysicsWorld mWorld;
 	// The mesh drawn (the renderer's own, copied so its vertices can move), and for each of its vertices the welded
 	// vertex of the simulation it follows: a mesh splits a vertex where its texture or shading has a seam, the
@@ -152,6 +153,21 @@ class SoftBody : Component
 	/// The body's id in the physics world, or uint32.MaxValue before it is made.
 	public uint32 BodyId => mBody;
 	public bool HasBody => mBody != uint32.MaxValue;
+
+	// A freely simulated surface can take over the solid collider on its own object.
+	public bool OwnsNativeCollision => HasBody && mNativeCollider && (kind == .Cloth || kind == .Jelly);
+
+	void RefreshOrdinaryColliders()
+	{
+		foreach (let component in GameObject.Components)
+		{
+			if (let collider = component as Collider)
+			{
+				if (collider.IsActiveAndEnabled && collider.CanUseSoftSurface)
+					collider.Refresh();
+			}
+		}
+	}
 	/// Whether it has come to rest and stopped being simulated (until something touches it or its object moves).
 	public bool IsSleeping => mWorld != null && mWorld.IsSleeping(mBody);
 	/// How many vertices the simulation has (the mesh's, with its seams joined).
@@ -275,6 +291,12 @@ class SoftBody : Component
 		mIgnored = uint32.MaxValue;
 		mBody = uint32.MaxValue;
 		mWorld = null;
+		if (mNativeCollider)
+		{
+			mNativeCollider = false;
+			if (Scene != null && Scene.IsPlaying)
+				RefreshOrdinaryColliders();
+		}
 		// Never carry the old body's vertex cache into a newly created body.
 		// CreateBody calls ReadBack immediately; FollowMovedObject would otherwise
 		// see old vertices and shift the new body away from its spawn transform.
@@ -390,6 +412,10 @@ class SoftBody : Component
 		config.userData = (uint64)GameObject.Id;
 		config.kind = (int32)kind;
 		config.tear = tearing ? 1 : 0;
+		config.surfaceStiffness = Mathf.Clamp01(stiffness);
+		config.bendStiffness = Mathf.Clamp01(bendStiffness);
+		config.wobbleDamping = Math.Max(wobbleDamping, 0);
+		config.bounciness = Mathf.Clamp01(bounciness);
 		var objectMatrix = toWorld;
 		mBody = mSoft.Create(&config, positions.Ptr, (uint32)mRest.Count, mTriangles.Ptr, (uint32)(mTriangles.Count / 3), pinned.Ptr, stiffnesses.Ptr, (float*)&center, &objectMatrix.m[0]);
 		if (mBody == uint32.MaxValue)
@@ -399,6 +425,9 @@ class SoftBody : Component
 		}
 		mWorld = world;
 		world.[Friend]AddSoftBody(mBody, this);
+		mNativeCollider = (cloth || kind == .Jelly) && mSoft.HasNativeCollider(mBody);
+		if (mNativeCollider)
+			RefreshOrdinaryColliders();
 		mCarried = center - Transform.Position;
 
 		// The renderer draws a copy whose vertices follow the simulation.
@@ -532,9 +561,10 @@ class SoftBody : Component
 			var own = GetComponent<Rigidbody>();
 			for (var up = Transform.Parent; !own.IsValid && up != null; up = up.Parent)
 				own = up.GameObject.GetComponent<Rigidbody>();
-			if (mIgnored == uint32.MaxValue && own.IsValid && own.BodyId != uint32.MaxValue)
+			let carrierBody = own.IsValid ? own.BodyId : uint32.MaxValue;
+			if (mIgnored != carrierBody)
 			{
-				mIgnored = own.BodyId;
+				mIgnored = carrierBody;
 				soft.Ignore(mBody, mIgnored);
 			}
 			// The shell is held where its object will be once this step has moved its rigidbody.
@@ -641,6 +671,8 @@ class SoftBody : Component
 		if (mHullWait == 0 || --mHullWait > 0)
 			return;
 		NetworkSync.DentsSettled(this);
+		if (dentMode == .FromImpacts && mSoft.HasNativeCollider(mBody))
+			return;
 		let convex = GetComponent<ConvexCollider>();
 		let rigid = GetComponent<Rigidbody>();
 		if (convex == null || !rigid.IsValid || mRest.Count < 4)

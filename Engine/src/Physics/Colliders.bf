@@ -31,6 +31,19 @@ abstract class Collider : Component
 		return "";
 	}
 
+	// Triggers and colliders that cover child geometry have an independent purpose.
+	public bool CanUseSoftSurface => !isTrigger && !(this is CompoundCollider) &&
+		(!(this is ConvexCollider) || ((ConvexCollider)this).includeChildren == false);
+
+	public bool ReplacedBySoftSurface
+	{
+		get
+		{
+			let soft = GameObject.GetComponent<SoftBody>();
+			return CanUseSoftSurface && soft != null && soft.OwnsNativeCollision;
+		}
+	}
+
 	uint32 mStaticBody = uint32.MaxValue;
 
 	/// The shape the physics world makes for this collider.
@@ -55,7 +68,7 @@ abstract class Collider : Component
 	void CreateStaticBody()
 	{
 		// A Rigidbody on the same object owns the body; otherwise this collider is static.
-		if (mStaticBody == uint32.MaxValue && !HasComponent<Rigidbody>())
+		if (mStaticBody == uint32.MaxValue && !HasComponent<Rigidbody>() && !ReplacedBySoftSurface)
 		{
 			if (!ComponentAvailability.IsAvailable(this, let reason))
 			{

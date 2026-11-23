@@ -668,6 +668,13 @@ extension EditorApp
 		}
 		fields.Clear();
 		ComponentRegistry.GetFields(component, fields);
+		if (let soft = component as SoftBody)
+		{
+			if (RapierJelly(soft))
+				for (var field in ref fields)
+					if (field.name == "bendStiffness")
+						field.hidden = true;
+		}
 		bool changed = false;
 		// A built-in component can bring an Inspector of its own (a C# editor script); a script's is DrawManagedSection.
 		int32 custom = -1;

@@ -8,6 +8,7 @@
 #include "rapier.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -17,10 +18,13 @@
 #include <vector>
 
 #include <cstdlib>
+#include <limits>
 
 namespace
 {
 	const uint32_t NoBody = 0xffffffffu;
+	constexpr float CharacterContactOffset = 0.01f;
+	const uint64_t SoftColliderTag = 0x54414c4c4f575342ull;
 	// ProjectConfig.MaxLayers: PhysicsLayerTable packs the project layer in the low bits.
 	const uint32_t LayerCount = 32;
 	const size_t MaxGeometryFloats = 18000000;
@@ -116,6 +120,9 @@ namespace
 		uint32_t filter = 0xffffffffu;
 		bool debris = false;
 		bool sensor = false;
+		bool hasStepForce = false;
+		bool hasStepTorque = false;
+		R3ColliderHandle shellSurface{nullptr, UINT32_MAX, 0};
 		uint64_t userData = 0;
 		// Velocities at the start of the last step, for impacts the solver has already stopped by the time contacts
 		// are read (a stiff soft-body shell stops a projectile in one step).
@@ -125,28 +132,26 @@ namespace
 		R3Vector prevPrevPrevLinear = V(0, 0, 0);
 	};
 
-	struct PairKey
-	{
-		uint32_t a, b;
-		bool operator==(const PairKey& o) const { return a == o.a && b == o.b; }
-	};
-	struct PairHash
-	{
-		size_t operator()(const PairKey& k) const
-		{
-			return (size_t(k.a) * 0x9e3779b1u) ^ size_t(k.b);
-		}
-	};
 	inline uint32_t ColliderKey(R3ColliderHandle h) { return h.index ^ (h.generation * 0x9e3779b1u); }
-	inline PairKey MakePair(R3ColliderHandle a, R3ColliderHandle b)
-	{
-		const uint32_t ka = ColliderKey(a), kb = ColliderKey(b);
-		return ka <= kb ? PairKey{ka, kb} : PairKey{kb, ka};
-	}
 
+
+	// A collider pair by exact handles (index and generation of each, smaller first), for sorting and merging.
+	struct ExactPair
+	{
+		uint64_t first, second;
+		bool operator<(const ExactPair& o) const { return first != o.first ? first < o.first : second < o.second; }
+		bool operator==(const ExactPair& o) const { return first == o.first && second == o.second; }
+	};
+	inline uint64_t ExactCollider(R3ColliderHandle h) { return ((uint64_t)h.index << 32) | h.generation; }
+	inline ExactPair MakeExactPair(R3ColliderHandle a, R3ColliderHandle b)
+	{
+		const uint64_t ka = ExactCollider(a), kb = ExactCollider(b);
+		return ka <= kb ? ExactPair{ka, kb} : ExactPair{kb, ka};
+	}
 
 	struct ActivePair
 	{
+		ExactPair key{};
 		R3ColliderHandle a{}, b{};
 		uint32_t bodyA = NoBody, bodyB = NoBody;
 		uint64_t objectA = 0, objectB = 0;
@@ -185,26 +190,42 @@ namespace
 	struct SoftBody
 	{
 		R3SoftBodyHandle handle{};
+		Body collisionInfo;
+		bool hasCollider = false;
+		R3ColliderHandle replacedCollider{nullptr, UINT32_MAX, 0};
+		bool hasCarrierMassProperties = false;
+		std::unordered_set<uint32_t> dentedContacts;
+		bool attachedToCarrier = false;
 		int32_t count = 0;
-		R3Vector center = V(0, 0, 0);
 		uint64_t userData = 0;
 		int32_t kind = 0;
 		int32_t impacts = 0;
 		bool visualOnly = false;
 		bool tear = false;
+		bool hasInteriorParticle = false;
 		float dentDepth = 0, dentYield = 0, dentSpeed = 0;
-		float visualSpring = 0, visualDamping = 0;
+		R3Vector drivenCenter{};
+		float drivenBindInverse[16] = {};
 		float restVolume = 1;
 		float totalMass = 1;
+		float particleMass = 1;
 		float radius = 0.02f;
 		std::vector<uint32_t> triangles;
 		std::vector<R3Vector> restLocal;
+		// Outward surface normal at each rest vertex, in the object's space (area-weighted, made when first needed).
+		std::vector<R3Vector> restNormal;
+		// Mean rest edge length in the object's space (with restNormal): the finest dent the mesh can show.
+		float restEdge = 0;
 		// A FromImpacts shell's permanent dents, in its object's local space. They are held to the object each step;
 		// the soft body's own sag or blob motion is not a dent.
 		std::vector<R3Vector> dents;
+		std::vector<size_t> pendingDentVertices;
 		float lastObject[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 		bool hasObject = false;
+		bool followsDynamicBody = false;
+		float objectFromBody[16] = {};
 		uint32_t ignoredBody = NoBody;
+		uint32_t secondRopeEnd = NoBody;
 		R3ColliderHandle deformable{nullptr, UINT32_MAX, 0};
 		float friction = 0.5f;
 		uint32_t dentRevision = 0;
@@ -246,11 +267,62 @@ namespace
 		uint32_t nextId = 1;
 		bool contactEvents = false;
 		uint32_t queryWorlds = 0xffffffffu;
+		// Queries are stale until refreshed: queryMoved names the bodies moved or created since (a cheap refresh);
+		// queryFull asks for a whole collision-detection pass (structural changes, which are rare).
 		bool queryDirty = false;
-		std::unordered_set<PairKey, PairHash> activePairKeys;
+		bool queryFull = false;
+		std::vector<R3RigidBodyHandle> queryMoved;
+
+		void MarkQueryMoved(R3RigidBodyHandle handle)
+		{
+			queryMoved.push_back(handle);
+			queryDirty = true;
+		}
+		void MarkQueryFull()
+		{
+			queryFull = true;
+			queryDirty = true;
+		}
+		// Pairs reported as touching, sorted by key (merged with each tick's pairs to find begins and ends).
 		std::vector<ActivePair> activePairList;
 		std::vector<TnRapierContact> contacts;
 		std::vector<HitRecord> recentHits;
+		size_t recentHitNext = 0;
+		// Bodies given a one-step force or torque since the last step (Rapier's accumulators persist).
+		std::vector<uint32_t> forcedBodies;
+		// Reused by tn_rapier_contacts each tick.
+		std::vector<R3ContactSummary> contactSummaryScratch;
+		std::vector<R3IntersectionPair> intersectionPairScratch;
+		// A touching pair this tick: its colliders and, for solid contacts, its summary (nullptr for sensors).
+		struct CurrentPair
+		{
+			ExactPair key;
+			R3ColliderHandle a, b;
+			const R3ContactSummary* summary;
+			bool operator<(const CurrentPair& o) const { return key < o.key; }
+		};
+		std::vector<CurrentPair> currentPairScratch;
+		std::vector<ActivePair> nowPairScratch;
+		// Contact bookkeeping per collider (owning body id without deformable remapping, sensor flag), keyed by the
+		// exact handle. A collider's parent and sensor flag never change, and a removed collider's handle is never
+		// reused with the same generation, so entries only go stale; the map is cleared when it grows large.
+		struct ColliderInfo
+		{
+			uint32_t body;
+			bool sensor;
+		};
+		std::unordered_map<uint64_t, ColliderInfo> colliderInfo;
+		// Awake bodies for the contact pass, from one r3ActiveRigidBodies call per tick.
+		std::vector<R3RigidBodyHandle> activeBodyScratch;
+		std::unordered_set<uint64_t> awakeScratch;
+
+		void MarkStepForce(uint32_t id, Body& body, bool force, bool torque)
+		{
+			if (!body.hasStepForce && !body.hasStepTorque && (force || torque))
+				forcedBodies.push_back(id);
+			body.hasStepForce |= force;
+			body.hasStepTorque |= torque;
+		}
 
 		Body* Find(uint32_t id)
 		{
@@ -261,6 +333,13 @@ namespace
 		{
 			auto it = bodies.find(id);
 			return it == bodies.end() ? nullptr : &it->second;
+		}
+		const Body* FindCollision(uint32_t id) const
+		{
+			if (const Body* rigid = Find(id))
+				return rigid;
+			auto soft = softBodies.find(id);
+			return soft != softBodies.end() && soft->second->hasCollider ? &soft->second->collisionInfo : nullptr;
 		}
 		uint32_t BodyOf(R3ColliderHandle collider)
 		{
@@ -280,9 +359,12 @@ namespace
 			record.normal = normal;
 			record.part = part;
 			record.triangle = triangle;
-			if (recentHits.size() >= 256)
-				recentHits.erase(recentHits.begin());
-			recentHits.push_back(record);
+			// A ring of the last 256 hits; recentHitNext is the slot the next hit overwrites once it is full.
+			if (recentHits.size() < 256)
+				recentHits.push_back(record);
+			else
+				recentHits[recentHitNext] = record;
+			recentHitNext = (recentHitNext + 1) % 256;
 		}
 	};
 
@@ -384,6 +466,7 @@ namespace
 		uint32_t filter = 0xffffffffu;
 		bool groupFilter = false;
 		bool excludeSensors = false;
+		bool excludeSoftBodies = false;
 		const std::vector<R3ColliderHandle>* excluded = nullptr;
 	};
 
@@ -422,6 +505,13 @@ namespace
 		if (c->excludeSensors && r3ReadCollider_IsSensor(read, collider))
 			return 0;
 		uint32_t id = DeformableOwner(c->world, collider);
+		const R3UserData colliderData = r3ReadCollider_UserData(read, collider);
+		if (id == NoBody && colliderData.high == SoftColliderTag)
+		{
+			if (c->excludeSoftBodies)
+				return 0;
+			id = (uint32_t)colliderData.low;
+		}
 		if (id == NoBody)
 		{
 			const R3RigidBodyHandle parent = r3ReadCollider_Parent(read, collider);
@@ -429,8 +519,10 @@ namespace
 				return 0;
 			id = (uint32_t)r3ReadRigidBody_UserData(read, parent).low;
 		}
-		const Body* body = c->world->Find(id);
+		const Body* body = c->world->FindCollision(id);
 		if (body == nullptr)
+			return 0;
+		if (Valid(body->shellSurface) && !Same(body->shellSurface, collider))
 			return 0;
 		return AcceptBody(*c, *body, id) ? 1 : 0;
 	}
@@ -480,8 +572,24 @@ namespace
 			return 1;
 		const uint32_t id1 = (uint32_t)r3ReadRigidBody_UserData(read, b1).low;
 		const uint32_t id2 = (uint32_t)r3ReadRigidBody_UserData(read, b2).low;
-		const Body* a = world->Find(id1);
-		const Body* b = world->Find(id2);
+		auto soft1 = world->softBodies.find(id1);
+		auto soft2 = world->softBodies.find(id2);
+		if ((soft1 != world->softBodies.end() && (soft1->second->ignoredBody == id2 || soft1->second->secondRopeEnd == id2)) ||
+			(soft2 != world->softBodies.end() && (soft2->second->ignoredBody == id1 || soft2->second->secondRopeEnd == id1)))
+			return -1;
+		const Body* rigidA = world->Find(id1);
+		const Body* rigidB = world->Find(id2);
+		if ((rigidA != nullptr && Valid(rigidA->shellSurface) && !Same(rigidA->shellSurface, c1)) ||
+			(rigidB != nullptr && Valid(rigidB->shellSurface) && !Same(rigidB->shellSurface, c2)))
+			return -1;
+		const uint32_t ownerA = DeformableOwner(world, c1);
+		const uint32_t ownerB = DeformableOwner(world, c2);
+		const Body* a = world->FindCollision(ownerA == NoBody ? id1 : ownerA);
+		const Body* b = world->FindCollision(ownerB == NoBody ? id2 : ownerB);
+		if (a == nullptr && soft1 != world->softBodies.end() && soft1->second->kind == 4)
+			a = &soft1->second->collisionInfo;
+		if (b == nullptr && soft2 != world->softBodies.end() && soft2->second->kind == 4)
+			b = &soft2->second->collisionInfo;
 		if (a == nullptr || b == nullptr)
 			return 1;
 		if (!ShareWorld(*a, *b))
@@ -492,6 +600,22 @@ namespace
 	}
 
 	// ---- bodies ----
+
+	// FilterPair can only reject a pair for a body in a world group, debris, or a shell carrier (soft-body colliders
+	// always carry the hook). Rapier asks the hook when either collider of a pair has it, so plain bodies leave it
+	// off and skip a callback per pair per step.
+	uint32_t FilterHooksFor(const Body& body)
+	{
+		const bool needed = body.group != 0 || body.debris || body.motionClass == 2 || Valid(body.shellSurface);
+		return needed ? (uint32_t)(R3_FILTER_CONTACT_PAIRS | R3_FILTER_INTERSECTION_PAIR) : 0u;
+	}
+
+	void UpdateFilterHooks(Body& body)
+	{
+		const uint32_t hooks = FilterHooksFor(body);
+		for (R3ColliderHandle collider : body.colliders)
+			r3Collider_SetActiveHooks(collider, hooks);
+	}
 
 	R3ColliderDesc MakeCollider(const TnRapierPart& part, const Body& body, bool sensor, float friction,
 		float restitution, float mass, bool hasMass)
@@ -505,8 +629,8 @@ namespace
 		collider.isSensor = sensor ? 1 : 0;
 		collider.collisionGroups = R3InteractionGroups{body.memberships, body.filter, 0};
 		collider.solverGroups = R3InteractionGroups{body.memberships, body.filter, 0};
-		collider.activeHooks = R3_FILTER_CONTACT_PAIRS | R3_FILTER_INTERSECTION_PAIR;
-		collider.activeEvents = R3_COLLISION_EVENTS;
+		collider.activeHooks = FilterHooksFor(body);
+		collider.activeEvents = 0; // contacts come from the narrow phase's pair lists
 		if (hasMass && mass > 0.0f)
 		{
 			collider.massMode = R3_MASS_TOTAL;
@@ -517,7 +641,7 @@ namespace
 
 	uint32_t AllocateId(World* world, uint32_t wanted)
 	{
-		if (wanted != NoBody && world->bodies.find(wanted) == world->bodies.end())
+		if (wanted != NoBody && world->bodies.count(wanted) == 0 && world->softBodies.count(wanted) == 0)
 		{
 			if (wanted >= world->nextId)
 				world->nextId = wanted + 1;
@@ -537,6 +661,9 @@ namespace
 		const uint32_t owner = DeformableOwner(world, collider);
 		if (owner != NoBody)
 			return owner;
+		const R3UserData colliderData = r3Collider_UserData(collider);
+		if (colliderData.high == SoftColliderTag)
+			return (uint32_t)colliderData.low;
 		const R3RigidBodyHandle parent = r3Collider_Parent(collider);
 		if (!Valid(parent))
 			return NoBody;
@@ -558,8 +685,8 @@ namespace
 					if (std::fabs(points[i].impulse) > std::fabs(points[best].impulse))
 						best = i;
 				}
-				const R3ContactPair pair = r3ContactPair(c1, c2);
-				const bool flipped = !Same(pair.collider1, c1);
+				// tn_rapier_contacts passes pairs in the narrow phase's own order, so collider 1 is c1.
+				const bool flipped = false;
 				R3Vector normal = points[best].normal;
 				if (flipped)
 					normal = Scale(normal, -1.0f);
@@ -603,17 +730,73 @@ namespace
 		contact.speed = 0;
 	}
 
-	void EmitContact(const World* world, R3ColliderHandle c1, R3ColliderHandle c2, int32_t kind, bool sensor,
-		std::vector<TnRapierContact>& into)
+	// The engine body id and sensor flag of a collider, cached on the world (see World::colliderInfo).
+	World::ColliderInfo InfoOfCollider(World* world, R3ColliderHandle collider)
 	{
-		const uint32_t a = BodyIdOfCollider(world, c1);
-		const uint32_t b = BodyIdOfCollider(world, c2);
-		if (a == NoBody || b == NoBody || a == b)
-			return;
-		const Body* bodyA = world->Find(a);
-		const Body* bodyB = world->Find(b);
-		if (bodyA == nullptr || bodyB == nullptr)
-			return;
+		World::ColliderInfo info{NoBody, false};
+		if (!Valid(collider))
+			return info;
+		const uint64_t key = ((uint64_t)collider.index << 32) | collider.generation;
+		auto it = world->colliderInfo.find(key);
+		if (it != world->colliderInfo.end())
+			info = it->second;
+		else
+		{
+			const R3UserData colliderData = r3Collider_UserData(collider);
+			if (colliderData.high == SoftColliderTag)
+				info.body = (uint32_t)colliderData.low;
+			else
+			{
+				const R3RigidBodyHandle parent = r3Collider_Parent(collider);
+				info.body = Valid(parent) ? (uint32_t)r3RigidBody_UserData(parent).low : NoBody;
+			}
+			info.sensor = r3Collider_IsSensor(collider) != 0;
+			if (world->colliderInfo.size() >= 65536)
+				world->colliderInfo.clear();
+			world->colliderInfo.emplace(key, info);
+		}
+		if (!world->deformableOwners.empty())
+		{
+			const uint32_t owner = DeformableOwner(world, collider);
+			if (owner != NoBody)
+				info.body = owner;
+		}
+		return info;
+	}
+
+	inline uint64_t BodyKey(R3RigidBodyHandle handle) { return ((uint64_t)handle.index << 32) | handle.generation; }
+
+	// Fills world->awakeScratch with the island manager's active bodies (one call instead of one per pair).
+	void GatherAwake(World* world)
+	{
+		std::vector<R3RigidBodyHandle>& active = world->activeBodyScratch;
+		size_t capacity = std::max<size_t>(active.capacity(), 64);
+		active.resize(capacity);
+		size_t count = r3ActiveRigidBodies(world->world, active.data(), capacity);
+		while (count > capacity)
+		{
+			capacity = count + count / 4;
+			active.resize(capacity);
+			count = r3ActiveRigidBodies(world->world, active.data(), capacity);
+		}
+		active.resize(count);
+		world->awakeScratch.clear();
+		for (const R3RigidBodyHandle& handle : active)
+			world->awakeScratch.insert(BodyKey(handle));
+	}
+
+	// Asleep or static: a pair of these is still touching but has nothing new to report this tick. Soft bodies have
+	// no rigid handle here and always count as awake.
+	bool Resting(const World* world, const Body& body)
+	{
+		if (body.motion == 0 && Valid(body.handle))
+			return true;
+		return Valid(body.handle) && world->awakeScratch.count(BodyKey(body.handle)) == 0;
+	}
+
+	void EmitContact(const World* world, R3ColliderHandle c1, R3ColliderHandle c2, uint32_t a, uint32_t b,
+		const Body* bodyA, const Body* bodyB, int32_t kind, bool sensor, std::vector<TnRapierContact>& into)
+	{
 		TnRapierContact contact;
 		std::memset(&contact, 0, sizeof(contact));
 		contact.bodyA = a;
@@ -664,7 +847,7 @@ namespace
 		const uint32_t bodyId = BodyIdOfCollider(world, collider);
 		if (bodyId == NoBody)
 			return;
-		Body* body = world->Find(bodyId);
+		const Body* body = world->FindCollision(bodyId);
 		const int32_t part = body != nullptr ? PartIndex(body, collider) : 0;
 		const bool trimesh = body != nullptr && part < (int32_t)body->parts.size() && body->parts[part].trimesh;
 		const int32_t triangle = (trimesh && feature != UINT32_MAX) ? (int32_t)feature : -1;
@@ -721,8 +904,11 @@ const char* tn_rapier_build(void)
 	{
 		const R3BuildFeatures features = r3BuildFeatures();
 		char text[160];
+		const char* threads = std::getenv("RAYON_NUM_THREADS");
+		char parallel[48];
+		std::snprintf(parallel, sizeof(parallel), "on (%s threads)", threads != nullptr ? threads : "4");
 		std::snprintf(text, sizeof(text), "Rapier %s; SIMD %u; parallel %s; enhanced determinism %s",
-			r3Version(), (unsigned)features.simd_lanes, features.parallel ? "on" : "off",
+			r3Version(), (unsigned)features.simd_lanes, features.parallel ? parallel : "off",
 			features.enhanced_determinism ? "on" : "off");
 		description = text;
 	}
@@ -733,10 +919,33 @@ const char* tn_rapier_build(void)
 // World
 // =====================================================================================================================
 
+namespace
+{
+	// A parallel Rapier build steps on rayon's global pool, shared by every world. Rayon sizes it from
+	// RAYON_NUM_THREADS when it first starts (otherwise one thread per core, and the step gets slower past about eight
+	// on a busy scene). Default it to four, like Jolt's three workers plus the stepping thread, leaving cores for the
+	// rest of the engine; a value already in the environment wins. Results are bit-identical at any thread count.
+	void DefaultRapierThreads()
+	{
+		static bool done = false;
+		if (done)
+			return;
+		done = true;
+		if (!r3BuildFeatures().parallel || std::getenv("RAYON_NUM_THREADS") != nullptr)
+			return;
+#if defined(_WIN32)
+		_putenv_s("RAYON_NUM_THREADS", "4");
+#else
+		setenv("RAYON_NUM_THREADS", "4", 0);
+#endif
+	}
+}
+
 void* tn_rapier_world_new(void)
 {
 	if (tn_rapier_available() == 0)
 		return nullptr;
+	DefaultRapierThreads();
 	World* world = new World();
 	world->world = r3NewWorld();
 	if (world->world == nullptr)
@@ -817,20 +1026,36 @@ void tn_rapier_set_query_worlds(void* raw, uint32_t groups)
 	if (world == nullptr)
 		return;
 	world->queryWorlds = groups;
-	if (world->queryDirty && world->world != nullptr)
+	if (world->queryDirty && world->world != nullptr && !world->queryFull)
 	{
-		// Queries read the broad phase, which Rapier refreshes on a step. A bare r3DetectCollisions before the first
-		// real step leaves the world frozen, so step by a microsecond instead: it refreshes the broad phase, keeps the
-		// world stepping, and advances the simulation by an amount no gameplay can notice.
-		const R3Real previous = r3TimeStep(world->world);
-		R3PhysicsHooks hooks;
-		std::memset(&hooks, 0, sizeof(hooks));
+		// Only bodies were moved, teleported or created since the last step: push their poses to their colliders and
+		// refit just those colliders' query-tree boxes (r3RefreshQueriesForBodies, Tallow's addition to Rapier's C
+		// bindings; Rapier itself is stock). No collision detection runs and Rapier's change flags stay for the next
+		// step, so the simulation is the same as if no query had happened.
+		r3RefreshQueriesForBodies(world->world, world->queryMoved.data(), world->queryMoved.size());
+		world->queryMoved.clear();
+		world->queryDirty = false;
+	}
+	else if (world->queryDirty && world->world != nullptr)
+	{
+		// A structural change (clear, enable/disable, soft bodies, ropes, a restored snapshot): the stock refresh,
+		// collision detection without running the solver with an artificial timestep (a tiny solver step can turn
+		// resting attachment errors into violent impulses when a new collider is inserted).
+		R3PhysicsHooks hooks{};
 		hooks.user_data = world;
 		hooks.filter_contact_pair = &FilterPair;
 		hooks.filter_intersection_pair = &FilterPair;
-		r3SetTimeStep(world->world, 1.0e-6f);
-		r3Step(world->world, &hooks, nullptr);
-		r3SetTimeStep(world->world, previous > 0.0f ? previous : 0.0f);
+		r3DetectCollisions(world->world, &hooks, nullptr);
+		// Collision-only refresh consumes Rapier's modified-body list without registering new dynamics
+		// with the solver. Requeue awake dynamics for the next real step without waking sleeping ones.
+		for (const auto& entry : world->bodies)
+		{
+			const Body& body = entry.second;
+			if (body.motion == 2 && r3RigidBody_IsEnabled(body.handle) && !r3RigidBody_IsSleeping(body.handle))
+				r3RigidBody_WakeUp(body.handle, 0);
+		}
+		world->queryMoved.clear();
+		world->queryFull = false;
 		world->queryDirty = false;
 	}
 }
@@ -957,30 +1182,26 @@ namespace
 	}
 }
 
-void HoldFromImpactsShells(World* world);
+namespace
+{
+	inline R3Vector MatPoint(const float* m, R3Vector p);
+	inline void MatFromPose(R3Pose pose, float* out);
+	inline void MatMul(const float* a, const float* b, float* out);
+	void ApplyPendingShellDents(World* world);
+}
 
-// A FromImpacts shell is held to its object: the object is what moves, and contacts only dent the surface. The
-// skin runs before the step; a soft-body contact can still push the particles during it, so put them back on the
-// object after the step too. Otherwise the collision surface (and what queries see) bulges away from the shape.
 void HoldFromImpactsShells(World* world)
 {
 	for (auto& entry : world->softBodies)
 	{
 		SoftBody* soft = entry.second;
-		if (soft->kind != 2 || soft->impacts == 0 || soft->visualOnly || !Valid(soft->handle) ||
-			!soft->hasObject || soft->dents.size() != (size_t)soft->count)
+		if (soft->kind != 2 || soft->impacts == 0 || !Valid(soft->handle) || !soft->hasObject || Valid(soft->deformable))
 			continue;
-		for (int32_t i = 0; i < soft->count; i++)
+		for (size_t i = 0; i < soft->dents.size(); i++)
 		{
-			const R3Vector local = Add(soft->restLocal[(size_t)i], soft->dents[(size_t)i]);
-			const float* m = soft->lastObject;
-			const R3Vector at = V(m[0] * local.x + m[4] * local.y + m[8] * local.z + m[12],
-				m[1] * local.x + m[5] * local.y + m[9] * local.z + m[13],
-				m[2] * local.x + m[6] * local.y + m[10] * local.z + m[14]);
-			r3SoftBody_SetParticlePosition(soft->handle, (size_t)i, at);
-			r3SoftBody_SetParticleVelocity(soft->handle, (size_t)i, V(0, 0, 0));
+			const R3Vector at = MatPoint(soft->lastObject, Add(soft->restLocal[i], soft->dents[i]));
+			r3SoftBody_SetParticlePosition(soft->handle, i, at);
 		}
-		r3SoftBody_WakeUp(soft->handle);
 	}
 }
 
@@ -1003,19 +1224,49 @@ void tn_rapier_step(void* raw, float deltaTime, int32_t* errorMask, float* stepM
 	hooks.user_data = world;
 	hooks.filter_contact_pair = &FilterPair;
 	hooks.filter_intersection_pair = &FilterPair;
-	for (auto& entry : world->bodies)
+	// The velocity history only feeds shell impact dents, so it is kept only while a shell exists. Static bodies
+	// never move and keep zero history.
+	bool shells = false;
+	for (const auto& entry : world->softBodies)
+		shells |= entry.second->kind == 2;
+	if (shells)
 	{
-		Body& body = entry.second;
-		if (Valid(body.handle))
+		for (auto& entry : world->bodies)
 		{
-			body.prevPrevPrevLinear = body.prevPrevLinear;
-			body.prevPrevLinear = body.prevLinear;
-			body.prevLinear = r3RigidBody_Linvel(body.handle);
-			body.prevAngular = r3RigidBody_Angvel(body.handle);
+			Body& body = entry.second;
+			if (body.motion != 0 && Valid(body.handle))
+			{
+				body.prevPrevPrevLinear = body.prevPrevLinear;
+				body.prevPrevLinear = body.prevLinear;
+				body.prevLinear = r3RigidBody_Linvel(body.handle);
+				body.prevAngular = r3RigidBody_Angvel(body.handle);
+			}
 		}
 	}
+	ApplyPendingShellDents(world);
+	// Events accumulate in the collector until cleared; only this step's tear events are wanted afterwards.
+	r3EventCollector_Clear(world->events);
+	const auto stepStart = std::chrono::steady_clock::now();
 	const R3Status status = r3Step(world->world, &hooks, world->events);
+	if (stepMilliseconds != nullptr)
+		*stepMilliseconds = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - stepStart).count();
+	// Tallow's force APIs act for one step. Rapier's force and torque accumulators are persistent.
+	for (const uint32_t id : world->forcedBodies)
+	{
+		Body* body = world->Find(id);
+		if (body == nullptr)
+			continue;
+		if (body->hasStepForce && Valid(body->handle))
+			r3RigidBody_ResetForces(body->handle, 0);
+		if (body->hasStepTorque && Valid(body->handle))
+			r3RigidBody_ResetTorques(body->handle, 0);
+		body->hasStepForce = false;
+		body->hasStepTorque = false;
+	}
+	world->forcedBodies.clear();
 	world->queryDirty = false;
+	world->queryFull = false;
+	world->queryMoved.clear();
 	tn_rapier_soft_update_after_step(world);
 	HoldFromImpactsShells(world);
 	if (status != R3_OK)
@@ -1079,11 +1330,12 @@ void tn_rapier_clear(void* raw)
 			r3RemoveRigidBody(entry.second.handle, 1);
 	}
 	world->bodies.clear();
-	world->activePairKeys.clear();
 	world->activePairList.clear();
 	world->contacts.clear();
 	world->recentHits.clear();
-	world->queryDirty = true;
+	world->recentHitNext = 0;
+	world->colliderInfo.clear();
+	world->MarkQueryFull();
 	world->nextId = 1;
 }
 
@@ -1095,89 +1347,168 @@ int32_t tn_rapier_contacts(void* raw, TnRapierContact* out, int32_t capacity)
 	world->contacts.clear();
 	if (!world->contactEvents)
 	{
-		world->activePairKeys.clear();
 		world->activePairList.clear();
 		return 0;
 	}
 
 	// The narrow phase's pairs are the truth: a pair may have begun during the broad-phase refresh before the step,
-	// which a collision-event listener would not have seen.
-	std::vector<R3ContactPair> contactPairs;
-	size_t capacityHint = 64;
-	for (int attempt = 0; attempt < 5; attempt++)
+	// which a collision-event listener would not have seen. Solid pairs come from one r3ActiveContactSummaries call
+	// (Tallow's addition to Rapier's C bindings; Rapier itself is stock): only pairs with an active solver contact
+	// (the narrow phase also holds pairs whose bounding boxes merely overlap), with ids, sensor flags, resting state
+	// and the strongest contact's point, normal and speed worked out in one read-only pass, skipped for resting
+	// pairs that have nothing to report. Asking per pair cost four locked calls into Rapier per event.
+	std::vector<R3ContactSummary>& summaries = world->contactSummaryScratch;
 	{
-		contactPairs.resize(capacityHint);
-		const size_t count = r3ContactPairs(world->world, contactPairs.data(), capacityHint);
-		if (count < capacityHint || capacityHint >= 262144)
+		// Buffer protocol: a too-small buffer gets the required count back and no elements, so grow and retry.
+		size_t capacity = std::max<size_t>(summaries.capacity(), 64);
+		summaries.resize(capacity);
+		size_t count = r3ActiveContactSummaries(world->world, 1, summaries.data(), capacity);
+		while (count > capacity)
 		{
-			contactPairs.resize(count);
-			break;
+			capacity = count + count / 4;
+			summaries.resize(capacity);
+			count = r3ActiveContactSummaries(world->world, 1, summaries.data(), capacity);
 		}
-		capacityHint *= 4;
+		summaries.resize(count);
 	}
-	std::vector<R3IntersectionPair> intersectionPairs;
-	capacityHint = 32;
-	for (int attempt = 0; attempt < 5; attempt++)
+	std::vector<R3IntersectionPair>& intersectionPairs = world->intersectionPairScratch;
 	{
-		intersectionPairs.resize(capacityHint);
-		const size_t count = r3IntersectionPairs(world->world, intersectionPairs.data(), capacityHint);
-		if (count < capacityHint || capacityHint >= 262144)
+		size_t capacity = std::max<size_t>(intersectionPairs.capacity(), 32);
+		intersectionPairs.resize(capacity);
+		size_t count = r3IntersectionPairs(world->world, intersectionPairs.data(), capacity);
+		while (count > capacity)
 		{
-			intersectionPairs.resize(count);
-			break;
+			capacity = count + count / 4;
+			intersectionPairs.resize(capacity);
+			count = r3IntersectionPairs(world->world, intersectionPairs.data(), capacity);
 		}
-		capacityHint *= 4;
+		intersectionPairs.resize(count);
 	}
 
-	std::vector<std::pair<R3ColliderHandle, R3ColliderHandle>> current;
-	std::unordered_set<PairKey, PairHash> currentKeys;
-	for (const R3ContactPair& pair : contactPairs)
+	// This tick's touching pairs, sorted by exact key (duplicates dropped): a merge against last tick's sorted list
+	// finds begins, stays and ends with no hashing or per-pair allocation. Events come out in key order, which is
+	// deterministic.
+	auto& current = world->currentPairScratch;
+	current.clear();
+	for (const R3ContactSummary& summary : summaries)
 	{
-		if (!Valid(pair.collider1) || !Valid(pair.collider2))
-			continue;
-		const PairKey key = MakePair(pair.collider1, pair.collider2);
-		if (currentKeys.insert(key).second)
-			current.emplace_back(pair.collider1, pair.collider2);
+		if (Valid(summary.collider1) && Valid(summary.collider2))
+			current.push_back({MakeExactPair(summary.collider1, summary.collider2), summary.collider1, summary.collider2,
+				&summary});
 	}
+	bool anyIntersection = false;
 	for (const R3IntersectionPair& pair : intersectionPairs)
 	{
-		if (!pair.intersecting || !Valid(pair.collider1) || !Valid(pair.collider2))
-			continue;
-		const PairKey key = MakePair(pair.collider1, pair.collider2);
-		if (currentKeys.insert(key).second)
-			current.emplace_back(pair.collider1, pair.collider2);
+		if (pair.intersecting && Valid(pair.collider1) && Valid(pair.collider2))
+		{
+			current.push_back({MakeExactPair(pair.collider1, pair.collider2), pair.collider1, pair.collider2, nullptr});
+			anyIntersection = true;
+		}
 	}
+	std::sort(current.begin(), current.end());
+	current.erase(std::unique(current.begin(), current.end(),
+		[](const World::CurrentPair& x, const World::CurrentPair& y) { return x.key == y.key; }), current.end());
+	// Sensor pairs still check resting per body, from one active-body list.
+	if (anyIntersection)
+		GatherAwake(world);
 
-	std::vector<ActivePair> now;
-	now.reserve(current.size());
-	for (const auto& pair : current)
+	// The engine body id a summary names for one side: a shell's owner, a soft body's id, else the parent's id.
+	auto summaryBody = [world](R3ColliderHandle collider, R3UserData colliderData, R3UserData bodyData) -> uint32_t
 	{
-		const PairKey key = MakePair(pair.first, pair.second);
-		const int32_t kind = world->activePairKeys.count(key) != 0 ? 2 : 0;
-		const bool sensor = r3Collider_IsSensor(pair.first) || r3Collider_IsSensor(pair.second);
-		EmitContact(world, pair.first, pair.second, kind, sensor, world->contacts);
+		if (!world->deformableOwners.empty())
+		{
+			const uint32_t owner = DeformableOwner(world, collider);
+			if (owner != NoBody)
+				return owner;
+		}
+		if (colliderData.high == SoftColliderTag)
+			return (uint32_t)colliderData.low;
+		return bodyData.low != 0 || bodyData.high != 0 ? (uint32_t)bodyData.low : NoBody;
+	};
+
+	std::vector<ActivePair>& now = world->nowPairScratch;
+	now.clear();
+	now.reserve(current.size());
+	const std::vector<ActivePair>& before = world->activePairList;
+	size_t cursor = 0;
+	for (const World::CurrentPair& pair : current)
+	{
+		// Last tick's pairs sorting before this one are gone: they ended.
+		while (cursor < before.size() && before[cursor].key < pair.key)
+		{
+			// The collider may have gone with its body; the stored ids still name the pair that ended.
+			EmitStoredContact(before[cursor], 1, world->contacts);
+			cursor++;
+		}
+		const bool touching = cursor < before.size() && before[cursor].key == pair.key;
+		if (touching)
+			cursor++;
+		const int32_t kind = touching ? 2 : 0;
+		uint32_t idA, idB;
+		bool sensor, resting;
+		if (pair.summary != nullptr)
+		{
+			const R3ContactSummary& summary = *pair.summary;
+			idA = summaryBody(pair.a, summary.collider_user_data1, summary.body_user_data1);
+			idB = summaryBody(pair.b, summary.collider_user_data2, summary.body_user_data2);
+			sensor = summary.sensor1 != 0 || summary.sensor2 != 0;
+			resting = summary.resting != 0;
+		}
+		else
+		{
+			const World::ColliderInfo infoA = InfoOfCollider(world, pair.a);
+			const World::ColliderInfo infoB = InfoOfCollider(world, pair.b);
+			idA = infoA.body;
+			idB = infoB.body;
+			sensor = infoA.sensor || infoB.sensor;
+			resting = false;
+		}
+		const Body* bodyA = world->FindCollision(idA);
+		const Body* bodyB = world->FindCollision(idB);
+		if (pair.summary == nullptr && bodyA != nullptr && bodyB != nullptr)
+			resting = Resting(world, *bodyA) && Resting(world, *bodyB);
+		// Like Jolt, a pair that went to sleep together (or against something static) stays entered without a stay
+		// every tick; it reports again once either side wakes.
+		const bool quiet = kind == 2 && resting;
+		if (!quiet && idA != NoBody && idB != NoBody && idA != idB && bodyA != nullptr && bodyB != nullptr)
+		{
+			if (pair.summary != nullptr && pair.summary->has_point != 0)
+			{
+				const R3ContactSummary& summary = *pair.summary;
+				TnRapierContact contact;
+				std::memset(&contact, 0, sizeof(contact));
+				contact.bodyA = idA;
+				contact.bodyB = idB;
+				contact.objectA = bodyA->userData;
+				contact.objectB = bodyB->userData;
+				contact.kind = kind;
+				contact.sensor = sensor ? 1 : 0;
+				Out(contact.point, summary.point);
+				Out(contact.normal, summary.normal);
+				contact.speed = summary.normal_speed;
+				world->contacts.push_back(contact);
+			}
+			else
+			{
+				// Sensors, and a resting pair that only now begins (its geometry was skipped): ask for it.
+				EmitContact(world, pair.a, pair.b, idA, idB, bodyA, bodyB, kind, sensor, world->contacts);
+			}
+		}
 		ActivePair stored;
-		stored.a = pair.first;
-		stored.b = pair.second;
-		stored.bodyA = BodyIdOfCollider(world, pair.first);
-		stored.bodyB = BodyIdOfCollider(world, pair.second);
-		const Body* bodyA = world->Find(stored.bodyA);
-		const Body* bodyB = world->Find(stored.bodyB);
+		stored.key = pair.key;
+		stored.a = pair.a;
+		stored.b = pair.b;
+		stored.bodyA = idA;
+		stored.bodyB = idB;
 		stored.objectA = bodyA != nullptr ? bodyA->userData : 0;
 		stored.objectB = bodyB != nullptr ? bodyB->userData : 0;
 		stored.sensor = sensor;
 		now.push_back(stored);
 	}
-	for (const ActivePair& pair : world->activePairList)
-	{
-		const PairKey key = MakePair(pair.a, pair.b);
-		if (currentKeys.count(key) != 0)
-			continue;
-		// The collider may have gone with its body; the stored ids still name the pair that ended.
-		EmitStoredContact(pair, 1, world->contacts);
-	}
+	for (; cursor < before.size(); cursor++)
+		EmitStoredContact(before[cursor], 1, world->contacts);
+	// `now` was filled in key order, so it stays sorted for the next tick's merge.
 	world->activePairList.swap(now);
-	world->activePairKeys.swap(currentKeys);
 
 	const int32_t count = (int32_t)world->contacts.size();
 	if (out != nullptr && capacity > 0)
@@ -1185,6 +1516,17 @@ int32_t tn_rapier_contacts(void* raw, TnRapierContact* out, int32_t capacity)
 		const int32_t copy = std::min(count, capacity);
 		std::memcpy(out, world->contacts.data(), sizeof(TnRapierContact) * (size_t)copy);
 	}
+	return count;
+}
+
+int32_t tn_rapier_contacts_copy(void* raw, TnRapierContact* out, int32_t capacity)
+{
+	World* world = static_cast<World*>(raw);
+	if (world == nullptr)
+		return 0;
+	const int32_t count = (int32_t)world->contacts.size();
+	if (out != nullptr && capacity > 0)
+		std::memcpy(out, world->contacts.data(), sizeof(TnRapierContact) * (size_t)std::min(count, capacity));
 	return count;
 }
 
@@ -1257,7 +1599,7 @@ uint32_t tn_rapier_body_create(void* raw, int32_t motion, const float position[3
 		return NoBody;
 	}
 	world->bodies[id] = entry;
-	world->queryDirty = true;
+	world->MarkQueryMoved(entry.handle);
 	if (id >= world->nextId)
 		world->nextId = id + 1;
 	return id;
@@ -1271,19 +1613,22 @@ void tn_rapier_body_destroy(void* raw, uint32_t id)
 	auto soft = world->softBodies.find(id);
 	if (soft != world->softBodies.end())
 	{
-		if (Valid(soft->second->handle))
-			r3RemoveSoftBody(soft->second->handle);
-		delete soft->second;
-		world->softBodies.erase(soft);
+		tn_rapier_soft_destroy(raw, id);
 		return;
 	}
 	auto it = world->bodies.find(id);
 	if (it == world->bodies.end())
 		return;
+	if (Valid(it->second.shellSurface))
+	{
+		for (const auto& entry : world->softBodies)
+			if (entry.second->ignoredBody == id)
+				tn_rapier_soft_ignore(raw, entry.first, NoBody);
+	}
 	if (Valid(it->second.handle))
 		r3RemoveRigidBody(it->second.handle, 1);
 	world->bodies.erase(it);
-	world->queryDirty = true;
+	// Queries skip removed colliders and read collision groups live: nothing to refresh.
 	for (auto joint = world->joints.begin(); joint != world->joints.end();)
 	{
 		const Joint* j = joint->second;
@@ -1320,7 +1665,7 @@ void tn_rapier_body_set_pose(void* raw, uint32_t id, const float position[3], co
 	if (body != nullptr && Valid(body->handle))
 	{
 		r3RigidBody_SetPosition(body->handle, Pose(position, rotation), wake ? 1 : 0);
-		world->queryDirty = true;
+		world->MarkQueryMoved(body->handle);
 	}
 }
 
@@ -1340,7 +1685,7 @@ void tn_rapier_body_move_kinematic(void* raw, uint32_t id, const float position[
 	else
 	{
 		r3RigidBody_SetPosition(body->handle, Pose(position, rotation), 1);
-		world->queryDirty = true;
+		world->MarkQueryMoved(body->handle);
 	}
 }
 
@@ -1391,24 +1736,25 @@ void tn_rapier_body_add_force(void* raw, uint32_t id, const float force[3])
 {
 	World* world = static_cast<World*>(raw);
 	Body* body = world != nullptr ? world->Find(id) : nullptr;
-	if (body != nullptr && Valid(body->handle))
-		r3RigidBody_AddForce(body->handle, V(force), 1);
+	if (body != nullptr && Valid(body->handle) && r3RigidBody_AddForce(body->handle, V(force), 1) == R3_OK)
+		world->MarkStepForce(id, *body, true, false);
 }
 
 void tn_rapier_body_add_force_at(void* raw, uint32_t id, const float force[3], const float point[3])
 {
 	World* world = static_cast<World*>(raw);
 	Body* body = world != nullptr ? world->Find(id) : nullptr;
-	if (body != nullptr && Valid(body->handle))
-		r3RigidBody_AddForceAtPoint(body->handle, V(force), V(point), 1);
+	if (body != nullptr && Valid(body->handle) && r3RigidBody_AddForceAtPoint(body->handle, V(force), V(point), 1) == R3_OK)
+		world->MarkStepForce(id, *body, true, true);
 }
 
 void tn_rapier_body_add_torque(void* raw, uint32_t id, const float torque[3])
 {
 	World* world = static_cast<World*>(raw);
 	Body* body = world != nullptr ? world->Find(id) : nullptr;
-	if (body != nullptr && Valid(body->handle))
-		r3RigidBody_AddTorque(body->handle, R3AngVector{torque[0], torque[1], torque[2]}, 1);
+	if (body != nullptr && Valid(body->handle) &&
+		r3RigidBody_AddTorque(body->handle, R3AngVector{torque[0], torque[1], torque[2]}, 1) == R3_OK)
+		world->MarkStepForce(id, *body, false, true);
 }
 
 void tn_rapier_body_add_impulse(void* raw, uint32_t id, const float impulse[3])
@@ -1487,9 +1833,16 @@ void tn_rapier_body_set_object_code(void* raw, uint32_t id, uint32_t objectCode,
 	body->motionClass = motionClass;
 	body->memberships = collisionMemberships;
 	body->filter = collisionFilter;
-	world->queryDirty = true;
+	// Queries skip removed colliders and read collision groups live: nothing to refresh.
+	UpdateFilterHooks(*body);
+	const R3InteractionGroups groups{collisionMemberships, collisionFilter, 0};
 	for (R3ColliderHandle collider : body->colliders)
-		r3Collider_SetCollisionGroups(collider, R3InteractionGroups{collisionMemberships, collisionFilter, 0});
+		r3Collider_SetCollisionGroups(collider, groups);
+	if (Valid(body->shellSurface))
+	{
+		r3Collider_SetCollisionGroups(body->shellSurface, groups);
+		r3Collider_SetSolverGroups(body->shellSurface, groups);
+	}
 }
 
 void tn_rapier_body_set_enabled(void* raw, uint32_t id, int32_t enabled)
@@ -1497,7 +1850,12 @@ void tn_rapier_body_set_enabled(void* raw, uint32_t id, int32_t enabled)
 	World* world = static_cast<World*>(raw);
 	Body* body = world != nullptr ? world->Find(id) : nullptr;
 	if (body != nullptr && Valid(body->handle))
+	{
 		r3RigidBody_SetEnabled(body->handle, enabled ? 1 : 0);
+		if (Valid(body->shellSurface))
+			r3Collider_SetEnabled(body->shellSurface, enabled ? 1 : 0);
+		world->MarkQueryFull();
+	}
 }
 
 int32_t tn_rapier_body_buoyancy(void* raw, uint32_t id, const float surfacePoint[3],
@@ -1520,18 +1878,18 @@ int32_t tn_rapier_body_buoyancy(void* raw, uint32_t id, const float surfacePoint
 		const R3Aabb bounds = r3Collider_ComputeAabb(body->colliders[0]);
 		const R3Vector centre = Scale(Add(bounds.mins, bounds.maxs), 0.5f);
 		const R3Vector half = Scale(Sub(bounds.maxs, bounds.mins), 0.5f);
-		const float reach = std::fabs(QRot(pose.rotation, V(half.x, 0, 0)).x * normal.x) +
-			std::fabs(QRot(pose.rotation, V(0, half.y, 0)).y * normal.y) +
-			std::fabs(QRot(pose.rotation, V(0, 0, half.z)).z * normal.z);
-		const float plane = Dot(Sub(level, centre), normal);
-		under = reach > 0.0001f ? std::clamp((reach - plane) / (reach * 2.0f), 0.0f, 1.0f) : 1.0f;
+		const float reach = std::fabs(normal.x) * half.x + std::fabs(normal.y) * half.y +
+			std::fabs(normal.z) * half.z;
+		const float depth = Dot(Sub(level, centre), normal);
+		under = reach > 0.0001f ? std::clamp((reach + depth) / (reach * 2.0f), 0.0f, 1.0f) : 1.0f;
 	}
 	if (under <= 0.0f)
 		return 0;
 	const float mass = std::max(r3RigidBody_Mass(body->handle), 0.001f);
 	R3Vector gravity = r3Gravity(world->world);
 	const R3Vector force = Scale(gravity, -mass * std::max(buoyancy, 0.0f) * under);
-	r3RigidBody_AddForceAtPoint(body->handle, force, pose.translation, 1);
+	if (r3RigidBody_AddForceAtPoint(body->handle, force, pose.translation, 1) == R3_OK)
+		world->MarkStepForce(id, *body, true, true);
 	R3Vector velocity = r3RigidBody_Linvel(body->handle);
 	const R3Vector flow = V(fluidVelocity);
 	velocity = Add(flow, Scale(Sub(velocity, flow), std::exp(-std::max(linearDrag, 0.0f) * under * deltaTime)));
@@ -1565,7 +1923,7 @@ int32_t tn_rapier_raycast(void* raw, const float origin[3], const float directio
 	const R3Vector point = Add(from, Scale(dir, result.time_of_impact));
 	uint32_t feature = 0;
 	const uint32_t bodyId = BodyIdOfCollider(world, result.collider);
-	Body* body = world->Find(bodyId);
+	const Body* body = world->FindCollision(bodyId);
 	const int32_t part = body != nullptr ? PartIndex(body, result.collider) : 0;
 	RayFeatureTriangle(body, part, result, feature);
 	ConvertHit(world, result.collider, maxDistance > 0.0f ? result.time_of_impact / maxDistance : 0.0f, point,
@@ -1606,7 +1964,7 @@ int32_t tn_rapier_raycast_all(void* raw, const float origin[3], const float dire
 			break;
 		if (emitted.insert(bodyId).second)
 		{
-			Body* body = world->Find(bodyId);
+			const Body* body = world->FindCollision(bodyId);
 			const int32_t part = body != nullptr ? PartIndex(body, result.collider) : 0;
 			uint32_t feature = 0;
 			RayFeatureTriangle(body, part, result, feature);
@@ -1735,7 +2093,7 @@ int32_t tn_rapier_overlap(void* raw, const TnRapierPart* part, const float origi
 		if (written >= capacity)
 			break;
 		const uint32_t bodyId = BodyIdOfCollider(world, collider);
-		Body* body = world->Find(bodyId);
+		const Body* body = world->FindCollision(bodyId);
 		if (body == nullptr)
 			continue;
 		const int32_t partIndex = PartIndex(body, collider);
@@ -1806,15 +2164,18 @@ int32_t tn_rapier_hit_detail(void* raw, uint32_t body, uint32_t subshape, const 
 	const R3Vector at = V(point);
 	const HitRecord* best = nullptr;
 	float bestDistance = 1.0e30f;
-	for (auto it = world->recentHits.rbegin(); it != world->recentHits.rend(); ++it)
+	// Newest first: the slot before recentHitNext, walking back around the ring.
+	const size_t hitCount = world->recentHits.size();
+	for (size_t k = 0; k < hitCount; k++)
 	{
+		const HitRecord* it = &world->recentHits[(world->recentHitNext + 256 * 2 - 1 - k) % 256 % hitCount];
 		if (it->body != body || it->subshape != subshape)
 			continue;
 		const float distance = Dot(Sub(it->point, at), Sub(it->point, at));
 		if (distance < bestDistance)
 		{
 			bestDistance = distance;
-			best = &*it;
+			best = it;
 			if (distance <= 1.0e-8f)
 				break;
 		}
@@ -2103,6 +2464,8 @@ void* tn_rapier_character_create(void* raw, const TnRapierPart* parts, int32_t p
 		return nullptr;
 	}
 	(void)innerBody;
+	// Queries see the new character before the next step (its collider may reuse a destroyed collider's slot).
+	world->MarkQueryMoved(character->body);
 
 	character->controller = r3NewKinematicCharacterController();
 	if (character->controller == nullptr)
@@ -2113,14 +2476,13 @@ void* tn_rapier_character_create(void* raw, const TnRapierPart* parts, int32_t p
 		return nullptr;
 	}
 	r3KinematicCharacterController_SetUp(character->controller, V(0, 1, 0));
-	r3KinematicCharacterController_SetOffset(character->controller, R3CharacterLength{0.01f, 0});
+	r3KinematicCharacterController_SetOffset(character->controller, R3CharacterLength{CharacterContactOffset, 0});
 	r3KinematicCharacterController_SetSlide(character->controller, 1);
 	r3KinematicCharacterController_SetSlopes(character->controller, character->maxSlope,
 		std::max(character->maxSlope, 0.7f));
 	r3KinematicCharacterController_SetSnapToGround(character->controller, 1, R3CharacterLength{0.2f, 0});
 	r3KinematicCharacterController_SetAutostep(character->controller, 1, R3CharacterLength{0.3f, 0},
 		R3CharacterLength{0.1f, 0}, 1);
-	r3KinematicCharacterController_SetNormalNudgeFactor(character->controller, 0.01f);
 
 	world->characters[(uint32_t)(uintptr_t)character] = character;
 	return character;
@@ -2191,6 +2553,7 @@ void tn_rapier_character_move(void* raw, void* characterRaw, uint32_t collisionM
 	context.memberships = collisionMemberships;
 	context.filter = collisionFilter;
 	context.groupFilter = true;
+	context.excludeSoftBodies = true;
 	// A trigger reports what passes through; it must not stop a character.
 	context.excludeSensors = true;
 	R3QueryOptions options = Options(context);
@@ -2206,17 +2569,33 @@ void tn_rapier_character_move(void* raw, void* characterRaw, uint32_t collisionM
 	const R3Pose pose = {centre, character->rotation};
 	const R3Vector desired = V(velocity);
 	const R3Vector translation = Scale(desired, deltaTime);
+	// Fast falls need room for the sweep's contact recovery. Keep the nudge near Rapier's
+	// default when walking so successive contacts cannot build up as a visible rise.
+	const float downward = std::max(-translation.y, 0.0f);
+	r3KinematicCharacterController_SetNormalNudgeFactor(character->controller,
+		std::clamp(downward * 0.015f, 0.0001f, 0.001f));
 	const R3CharacterMovement movement = r3KinematicCharacterController_MoveShape(world->world, &options,
 		character->controller, deltaTime, character->shape, pose, translation);
 
 	character->lastHits.clear();
 	character->velocity = Scale(movement.translation, 1.0f / deltaTime);
+	// Sweep corrections move the shape over steps and slopes. Only the requested upward
+	// velocity should carry into the next tick as a jump.
+	character->velocity.y = std::min(character->velocity.y, std::max(desired.y, 0.0f));
 	character->position = Add(character->position, movement.translation);
-	r3RigidBody_SetNextKinematicTranslation(character->body, character->position);
 
-	R3CharacterCollision collisions[32];
-	const size_t count = r3KinematicCharacterController_Collisions(character->controller, collisions,
-		sizeof(collisions) / sizeof(collisions[0]));
+	R3CharacterCollision localCollisions[32];
+	R3CharacterCollision* collisions = localCollisions;
+	const size_t localCapacity = sizeof(localCollisions) / sizeof(localCollisions[0]);
+	size_t count = r3KinematicCharacterController_Collisions(character->controller, collisions, localCapacity);
+	std::vector<R3CharacterCollision> extraCollisions;
+	if (count > localCapacity)
+	{
+		extraCollisions.resize(count);
+		collisions = extraCollisions.data();
+		count = std::min(r3KinematicCharacterController_Collisions(character->controller, collisions,
+			extraCollisions.size()), extraCollisions.size());
+	}
 	R3Vector groundNormal = V(0, 1, 0);
 	uint32_t groundBody = NoBody;
 	float groundDot = -2.0f;
@@ -2246,32 +2625,65 @@ void tn_rapier_character_move(void* raw, void* characterRaw, uint32_t collisionM
 	CharacterStateOf(world, character, state);
 	if (state != nullptr)
 	{
-		// Rapier's grounded flag is authoritative: a snap-to-ground frame can report grounded without a collision.
-		// Only a reported steep contact (or its sliding-down-slope state) makes the ground too steep to stand on.
-		if (groundDot < 0.1f)
-			groundNormal = V(0, 1, 0);
-		Out(state->groundNormal, groundNormal);
-		if (movement.grounded)
+		const float walkable = std::cos(character->maxSlope) - 0.02f;
+		bool grounded = movement.grounded != 0;
+		// A wall from the sweep is not a floor. Check for support at the final position when
+		// Rapier's sweep sees only a wall or when the contact offset kept it above the floor.
+		const bool smallVerticalMove = std::fabs(movement.translation.y) < CharacterContactOffset;
+		if (desired.y <= 0.0f && (!grounded || groundDot < walkable || smallVerticalMove))
 		{
-			const bool steep = groundDot > -1.0f && groundDot < std::cos(character->maxSlope) - 0.02f;
+			R3ShapeCastOptions supportOptions = r3DefaultShapeCastOptions();
+			supportOptions.max_time_of_impact = CharacterContactOffset * 2.2f;
+			supportOptions.target_distance = 0.0f;
+			supportOptions.stop_at_penetration = 1;
+			supportOptions.compute_impact_geometry_on_penetration = 1;
+			const R3Pose finalPose{Add(centre, movement.translation), character->rotation};
+			const R3ShapeCastHit support = r3CastShape(world->world, &options, finalPose, V(0, -1, 0),
+				character->shape, supportOptions);
+			if (Valid(support.collider) && support.normal1.y > 0.0f)
+			{
+				grounded = true;
+				groundNormal = support.normal1;
+				groundDot = support.normal1.y;
+				groundBody = BodyIdOfCollider(world, support.collider);
+				const float correction = CharacterContactOffset - support.time_of_impact;
+				if (smallVerticalMove && groundDot > 0.999f && std::fabs(correction) <= CharacterContactOffset * 0.6f)
+				{
+					// Keep the contact offset on a flat floor and report support velocity instead
+					// of feeding the sweep's small separation nudge back as a jump.
+					character->position.y += correction;
+					const Body* floor = world->Find(groundBody);
+					character->velocity.y = floor != nullptr ?
+						r3RigidBody_VelocityAtPoint(floor->handle, character->position).y : 0.0f;
+					Out(state->position, character->position);
+					Out(state->velocity, character->velocity);
+				}
+			}
+		}
+		const bool steep = groundDot > 0.01f && groundDot < walkable &&
+			(grounded || movement.is_sliding_down_slope != 0);
+		if (groundDot <= 0.01f)
+		{
+			groundNormal = V(0, 1, 0);
+			groundBody = NoBody;
+		}
+		Out(state->groundNormal, groundNormal);
+		if (grounded || steep)
+		{
 			state->groundState = steep ? 1 : 0;
 			state->groundBody = groundBody;
-			if (groundBody != NoBody)
+			const Body* ground = world->Find(groundBody);
+			if (ground != nullptr && Valid(ground->handle))
 			{
-				const Body* ground = world->Find(groundBody);
-				if (ground != nullptr && Valid(ground->handle))
-				{
-					const R3Vector at = Add(character->position, V(0, -character->supportHeight, 0));
-					Out(state->groundVelocity, r3RigidBody_VelocityAtPoint(ground->handle, at));
-				}
+				const R3Vector at = Add(character->position, V(0, -character->supportHeight, 0));
+				Out(state->groundVelocity, r3RigidBody_VelocityAtPoint(ground->handle, at));
 			}
 		}
 		else if (count > 0)
 			state->groundState = 2;
-		else
-			state->groundState = 3;
 	}
 
+	r3RigidBody_SetNextKinematicTranslation(character->body, character->position);
 	if (character->pushStrength > 0.0f && count > 0)
 	{
 		r3KinematicCharacterController_SolveCharacterCollisionImpulses(character->controller, character->shape,
@@ -2293,6 +2705,8 @@ void tn_rapier_character_set_state(void* raw, void* characterRaw, uint32_t colli
 	character->velocity = V(velocity);
 	r3RigidBody_SetPosition(character->body, R3Pose{character->position, character->rotation}, 1);
 	r3RigidBody_SetNextKinematicTranslation(character->body, character->position);
+	// Other queries this tick see the character where it was put.
+	world->MarkQueryMoved(character->body);
 	character->lastHits.clear();
 }
 
@@ -2314,6 +2728,7 @@ int32_t tn_rapier_character_set_shape(void* raw, void* characterRaw, const TnRap
 	context.memberships = collisionMemberships;
 	context.filter = collisionFilter;
 	context.groupFilter = true;
+	context.excludeSoftBodies = true;
 	R3QueryOptions options = Options(context);
 	R3ColliderHandle one;
 	const R3Vector centre = Add(character->position, QRot(character->rotation, V(parts[0].position)));
@@ -2417,6 +2832,31 @@ namespace
 		out[15] = 1;
 	}
 
+	R3Rotation MatRotation(const float* m)
+	{
+		const R3Vector x = Normalize(V(m[0], m[1], m[2]));
+		const R3Vector z = Normalize(Cross(x, V(m[4], m[5], m[6])));
+		const R3Vector y = Cross(z, x);
+		const float trace = x.x + y.y + z.z;
+		if (trace > 0.0f)
+		{
+			const float w = 0.5f * std::sqrt(1.0f + trace);
+			return R3Rotation{(y.z - z.y) / (4.0f * w), (z.x - x.z) / (4.0f * w), (x.y - y.x) / (4.0f * w), w};
+		}
+		if (x.x >= y.y && x.x >= z.z)
+		{
+			const float q = 0.5f * std::sqrt(1.0f + x.x - y.y - z.z);
+			return R3Rotation{q, (x.y + y.x) / (4.0f * q), (x.z + z.x) / (4.0f * q), (y.z - z.y) / (4.0f * q)};
+		}
+		if (y.y > z.z)
+		{
+			const float q = 0.5f * std::sqrt(1.0f + y.y - x.x - z.z);
+			return R3Rotation{(x.y + y.x) / (4.0f * q), q, (y.z + z.y) / (4.0f * q), (z.x - x.z) / (4.0f * q)};
+		}
+		const float q = 0.5f * std::sqrt(1.0f + z.z - x.x - y.y);
+		return R3Rotation{(x.z + z.x) / (4.0f * q), (y.z + z.y) / (4.0f * q), q, (x.y - y.x) / (4.0f * q)};
+	}
+
 	// Affine inverse (the object's local-to-world transform has a linear part and a translation).
 	bool MatInvert(const float* m, float* out)
 	{
@@ -2434,28 +2874,123 @@ namespace
 		const R3Vector r0 = Scale(cross12, inv);
 		const R3Vector r1 = Scale(Cross(c2, c0), inv);
 		const R3Vector r2 = Scale(Cross(c0, c1), inv);
-		out[0] = r0.x; out[1] = r0.y; out[2] = r0.z; out[3] = 0;
-		out[4] = r1.x; out[5] = r1.y; out[6] = r1.z; out[7] = 0;
-		out[8] = r2.x; out[9] = r2.y; out[10] = r2.z; out[11] = 0;
+		// The cross products give rows of the inverse; the matrix is stored column-major.
+		out[0] = r0.x; out[1] = r1.x; out[2] = r2.x; out[3] = 0;
+		out[4] = r0.y; out[5] = r1.y; out[6] = r2.y; out[7] = 0;
+		out[8] = r0.z; out[9] = r1.z; out[10] = r2.z; out[11] = 0;
 		const R3Vector t = V(m[12], m[13], m[14]);
 		const R3Vector it = Scale(V(Dot(r0, t), Dot(r1, t), Dot(r2, t)), -1.0f);
 		out[12] = it.x; out[13] = it.y; out[14] = it.z; out[15] = 1;
 		return true;
 	}
 
-	float MeshVolume(const std::vector<R3Vector>& positions, const uint32_t* triangles, int32_t triangleCount)
+	uint64_t SoftEdgeKey(uint32_t a, uint32_t b)
 	{
-		if (triangles == nullptr || triangleCount <= 0)
-			return 1.0f;
-		float six = 0.0f;
+		return ((uint64_t)std::min(a, b) << 32) | std::max(a, b);
+	}
+
+	// Regular authored grids can use Rapier's cloth recipe, including both shear diagonals
+	// and the second-neighbor bend constraints. Preserve the authored triangles for rendering.
+	bool SetClothGrid(R3SoftBodyDesc& desc, const std::vector<R3Vector>& positions, const uint32_t* triangles,
+		size_t triangleCount)
+	{
+		const R3Vector origin = positions[0];
+		const R3Vector dv = Sub(positions[1], origin);
+		const float tolerance = std::max(Length(dv) * 0.001f, 1.0e-5f);
+		size_t cols = 2;
+		while (cols < positions.size() && Length(Sub(positions[cols], Add(origin, Scale(dv, (float)cols)))) < tolerance)
+			cols++;
+		if (cols == positions.size() || positions.size() % cols != 0)
+			return false;
+		const size_t rows = positions.size() / cols;
+		const R3Vector du = Sub(positions[cols], origin);
+		const size_t quads = (rows - 1) * (cols - 1);
+		if (Length(Cross(du, dv)) < tolerance * tolerance || triangleCount != quads * 2)
+			return false;
+
+		for (size_t i = 0; i < positions.size(); i++)
+		{
+			const R3Vector expected = Add(origin, Add(Scale(du, (float)(i / cols)), Scale(dv, (float)(i % cols))));
+			if (Length(Sub(positions[i], expected)) > tolerance)
+				return false;
+		}
+
+		std::vector<uint8_t> corners(quads, 0);
+		for (size_t t = 0; t < triangleCount; t++)
+		{
+			const uint32_t* face = triangles + t * 3;
+			const size_t row = std::min({face[0] / cols, face[1] / cols, face[2] / cols});
+			const size_t col = std::min({face[0] % cols, face[1] % cols, face[2] % cols});
+			if (row >= rows - 1 || col >= cols - 1)
+				return false;
+			uint8_t mask = 0;
+			for (int j = 0; j < 3; j++)
+			{
+				const size_t dr = face[j] / cols - row, dc = face[j] % cols - col;
+				if (dr > 1 || dc > 1)
+					return false;
+				mask |= (uint8_t)(1u << (dr * 2 + dc));
+			}
+			if (mask != 7 && mask != 11 && mask != 13 && mask != 14)
+				return false;
+			uint8_t& previous = corners[row * (cols - 1) + col];
+			const uint8_t different = previous ^ mask;
+			if (previous != 0 && different != 6 && different != 9)
+				return false;
+			previous |= mask;
+		}
+
+		desc.kind = R3_SOFT_DESC_CLOTH_ANISOTROPIC;
+		desc.a = origin;
+		desc.du = du;
+		desc.dv = dv;
+		desc.nx = rows;
+		desc.ny = cols;
+		return true;
+	}
+
+	// Fill surfaces visible from their center with tetrahedra sharing one interior particle.
+	// The collision mesh, painted pins and render vertices keep their original particle indices.
+	bool BuildJellyCells(const std::vector<R3Vector>& positions, R3Vector center,
+		const uint32_t* triangles, int32_t triangleCount, std::vector<R3Tetrahedron>& cells, float& volume)
+	{
+		struct EdgeUse { int count = 0; int winding = 0; };
+		std::unordered_map<uint64_t, EdgeUse> edgeUses;
+		const uint32_t interior = (uint32_t)positions.size();
+		cells.reserve((size_t)triangleCount);
+		float signedVolume = 0.0f;
+		int orientation = 0;
+		bool fillsInterior = true;
 		for (int32_t t = 0; t < triangleCount; t++)
 		{
-			const uint32_t a = triangles[t * 3], b = triangles[t * 3 + 1], c = triangles[t * 3 + 2];
-			if (a >= positions.size() || b >= positions.size() || c >= positions.size())
-				continue;
-			six += Dot(positions[a], Cross(positions[b], positions[c]));
+			const uint32_t* face = triangles + t * 3;
+			const uint32_t a = face[0], b = face[1], c = face[2];
+			const float sixVolume = Dot(Sub(positions[a], center),
+				Cross(Sub(positions[b], center), Sub(positions[c], center)));
+			signedVolume += sixVolume / 6.0f;
+			const int sign = sixVolume > 0.0f ? 1 : -1;
+			if (orientation == 0)
+				orientation = sign;
+			fillsInterior &= std::fabs(sixVolume) > 6.0f * std::numeric_limits<float>::epsilon() && sign == orientation;
+			cells.push_back(sign > 0 ? R3Tetrahedron{a, b, c, interior} : R3Tetrahedron{a, c, b, interior});
+			for (int edge = 0; edge < 3; edge++)
+			{
+				const uint32_t from = face[edge], to = face[(edge + 1) % 3];
+				auto& use = edgeUses[SoftEdgeKey(from, to)];
+				use.count++;
+				use.winding += from < to ? 1 : -1;
+			}
 		}
-		return std::max(std::fabs(six) / 6.0f, 1.0e-5f);
+		for (const auto& edge : edgeUses)
+		{
+			if (edge.second.count != 2 || edge.second.winding != 0)
+			{
+				volume = 0.0f;
+				return false;
+			}
+		}
+		volume = std::fabs(signedVolume);
+		return fillsInterior;
 	}
 }
 
@@ -2467,122 +3002,134 @@ uint32_t tn_rapier_soft_create(void* raw, const float* positions, int32_t vertex
 	if (world == nullptr || world->world == nullptr || positions == nullptr || vertexCount < 3 || triangles == nullptr ||
 		triangleCount < 1 || settings == nullptr)
 		return NoBody;
-	const R3Vector offset = V(center);
-	std::vector<R3Vector> worldPositions((size_t)vertexCount);
-	for (int32_t i = 0; i < vertexCount; i++)
-		worldPositions[(size_t)i] = Add(V(&positions[i * 3]), offset);
-	std::vector<uint32_t> pinnedIndices;
-	if (pinned != nullptr)
+	for (size_t i = 0; i < (size_t)triangleCount * 3; i++)
 	{
-		for (int32_t i = 0; i < vertexCount; i++)
-		{
-			if (pinned[i] >= 0.5f)
-				pinnedIndices.push_back((uint32_t)i);
-		}
+		if (triangles[i] >= (uint32_t)vertexCount)
+			return NoBody;
 	}
 
-	const bool jellyKind = settings->kind == 1;
-	R3SoftBodyDesc desc = r3DefaultSoftBodyDesc();
-	// Jelly keeps its shape with the trimesh recipe's shape matching. Cloth, shells and driven skins use plain
-	// particles with explicit structural edges: shape matching would fight their folds, dents and tears.
-	desc.kind = jellyKind ? R3_SOFT_DESC_SURFACE : R3_SOFT_DESC_PARTICLES;
-	desc.positions = R3VectorView{worldPositions.data(), worldPositions.size()};
-	desc.surface = R3SurfaceElementView{reinterpret_cast<const R3Triangle*>(triangles), (size_t)triangleCount};
-	std::vector<R3Edge> edges;
-	if (!jellyKind)
-	{
-		std::unordered_set<uint64_t> seen;
-		auto addEdge = [&](uint32_t a, uint32_t b)
-		{
-			const uint32_t lo = std::min(a, b), hi = std::max(a, b);
-			const uint64_t key = ((uint64_t)lo << 32) | hi;
-			if (seen.insert(key).second)
-				edges.push_back(R3Edge{lo, hi});
-		};
-		for (int32_t t = 0; t < triangleCount; t++)
-		{
-			const uint32_t a = triangles[t * 3], b = triangles[t * 3 + 1], c = triangles[t * 3 + 2];
-			if (a >= (uint32_t)vertexCount || b >= (uint32_t)vertexCount || c >= (uint32_t)vertexCount)
-				continue;
-			if (a != b) addEdge(a, b);
-			if (b != c) addEdge(b, c);
-			if (c != a) addEdge(c, a);
-		}
-		desc.edges = R3EdgeView{edges.data(), edges.size()};
-	}
-	desc.totalMass = R3OptionalReal{1, std::max(totalMass, 0.001f)};
-	if (!pinnedIndices.empty())
-		desc.pinned = R3IndexView{pinnedIndices.data(), pinnedIndices.size()};
-	desc.linearDamping = std::max(settings->damping, 0.0f);
-	desc.gravityScale = settings->gravityFactor;
-	desc.canSleep = 1;
-	desc.volumePreservation = 0;
-	desc.volumeFactor = 1.0f;
-	desc.collisionEnabled = 1;
-	desc.oriented = R3OptionalBool{1, 0};
-
-	const bool jelly = jellyKind;
+	const bool cloth = settings->kind == 0;
+	const bool jelly = settings->kind == 1;
 	const bool shell = settings->kind == 2;
 	const bool driven = settings->kind == 3;
-	if (jelly)
+	const bool impactSkin = shell && settings->impacts != 0;
+	const R3Vector offset = V(center);
+	std::vector<R3Vector> worldPositions;
+	worldPositions.reserve((size_t)vertexCount + 1);
+	std::vector<uint32_t> pinnedIndices;
+	for (int32_t i = 0; i < vertexCount; i++)
 	{
-		desc.volumePreservation = 1;
-		desc.oriented = R3OptionalBool{0, 0};
+		worldPositions.push_back(Add(V(&positions[i * 3]), offset));
+		if (impactSkin || (pinned != nullptr && pinned[i] >= 0.5f))
+			pinnedIndices.push_back((uint32_t)i);
 	}
-	if (shell)
-	{
-		// From impacts the object's collider takes the hits; the shell only follows and dents.
-		desc.collisionEnabled = settings->impacts == 0 ? 1 : 0;
-	}
-	if (driven)
-		desc.collisionEnabled = 0;
 
-	desc.material = r3DefaultSoftBodyMaterial();
-	// The engine hands compliances (how far a constraint gives under force), as it does for Jolt. Rapier's material
-	// takes spring frequencies; convert each, then let the painted stiffness map soften parts of the surface.
-	float map = 1.0f;
-	if (stiffness != nullptr)
+	std::vector<R3Tetrahedron> cells;
+	float restVolume = 0.0f;
+	const bool fillsInterior = jelly && BuildJellyCells(worldPositions, offset, triangles, triangleCount, cells, restVolume);
+	const bool painted = stiffness != nullptr && std::any_of(stiffness, stiffness + vertexCount,
+		[](float scale) { return scale < 1.0f; });
+	const bool elastic = fillsInterior && !painted && settings->tear == 0;
+	if (elastic)
+		worldPositions.push_back(offset);
+
+	R3SoftBodyDesc desc = r3DefaultSoftBodyDesc();
+	desc.kind = elastic || impactSkin ? R3_SOFT_DESC_PARTICLES : R3_SOFT_DESC_SURFACE;
+	desc.positions = R3VectorView{worldPositions.data(), worldPositions.size()};
+	desc.surface = R3SurfaceElementView{reinterpret_cast<const R3Triangle*>(triangles), (size_t)triangleCount};
+	desc.pinned = R3IndexView{pinnedIndices.data(), pinnedIndices.size()};
+	desc.particleMass = std::max(totalMass, 0.001f) / (float)std::max(worldPositions.size() - pinnedIndices.size(), size_t{1});
+	desc.particleRadius = R3OptionalReal{1, std::max(settings->vertexRadius, 0.0f)};
+	desc.linearDamping = std::max(settings->damping, 0.0f);
+	desc.gravityScale = settings->gravityFactor;
+	desc.canSleep = driven ? 0 : 1;
+	desc.collisionEnabled = !impactSkin && !driven;
+	desc.oriented = R3OptionalBool{(uint8_t)(cloth || shell), 0};
+	desc.selfContacts = cloth;
+	desc.additionalPgsIterations = (size_t)std::clamp(settings->iterations, 1, 32);
+	desc.collider.collisionGroups = R3InteractionGroups{settings->memberships, settings->filter, 0};
+	desc.collider.solverGroups = desc.collider.collisionGroups;
+	desc.collider.activeHooks = R3_FILTER_CONTACT_PAIRS | R3_FILTER_INTERSECTION_PAIR;
+	desc.collider.activeEvents = 0; // contacts come from the narrow phase's pair lists
+	desc.collider.friction = std::max(settings->friction, 0.0f);
+	desc.collider.restitution = std::clamp(settings->restitution, 0.0f, 1.0f);
+	const float stretch = std::clamp(settings->surfaceStiffness, 0.0f, 1.0f);
+	const float bend = jelly ? 0.2f : std::clamp(settings->bendStiffness, 0.0f, 1.0f);
+	const float frequency = 15.0f * std::pow(130.0f / 15.0f, stretch);
+	desc.material.edgeSoftness = R3SpringCoefficients{frequency, 0.9f};
+	desc.material.bendSoftness = R3SpringCoefficients{bend > 0.0f ? 1.5f * std::pow(12.0f, bend) : 0.0f, 0.9f};
+	desc.material.volumeSoftness = R3SpringCoefficients{elastic ? 65.0f : 25.0f, 0.9f};
+	desc.material.deformationDamping = jelly ? std::max(settings->wobbleDamping, 0.0f) : 0.0f;
+	if (driven)
 	{
-		map = 0.0f;
-		for (int32_t i = 0; i < vertexCount; i++)
-			map += std::clamp(stiffness[i], 0.0f, 1.0f);
-		map = std::max(map / float(std::max(vertexCount, 1)), 0.02f);
+		const float spring = std::clamp(settings->visualSpring, 0.0f, 1.0f);
+		const float persistence = std::clamp(settings->visualDamping, 0.0f, 1.0f);
+		desc.material.shapeMatchingSoftness = R3SpringCoefficients{2.0f + 38.0f * spring, 1.25f - persistence};
 	}
-	const float mapScale = std::sqrt(map);
-	const auto toFrequency = [mapScale](float compliance, float fallback)
+	desc.shapeMatching = R3OptionalBool{1, (uint8_t)(driven || (jelly && !elastic && settings->tear == 0))};
+	desc.volumePreservation = jelly && restVolume > 0.0f;
+	if (elastic)
 	{
-		return std::clamp(mapScale / std::sqrt(std::max(compliance, 1.0e-9f)), 1.0f, 200.0f);
-	};
-	const float stretch = settings->stretch > 0.0f ? settings->stretch : 1.0e-5f;
-	const float shear = settings->shear > 0.0f ? settings->shear : stretch;
-	const float frequency = toFrequency(std::max(stretch, shear), 1.0e-5f);
-	const float bendFrequency = settings->bend >= 0.0f ? toFrequency(settings->bend, 1.0e-3f) : frequency;
-	desc.material.edgeSoftness = R3SpringCoefficients{frequency, std::clamp(settings->damping, 0.0f, 1.0f)};
-	desc.material.bendSoftness = R3SpringCoefficients{bendFrequency, std::clamp(settings->damping, 0.0f, 1.0f)};
-	desc.material.youngModulus = 0.0f;
-	desc.material.poissonRatio = 0.0f;
-	if (jelly)
-		desc.material.volumeSoftness = R3SpringCoefficients{std::max(frequency * 0.5f, 1.0f), 0.3f};
-	if (shell && settings->impacts == 0)
-	{
-		// The shell meets things itself; plastic edges keep what pushed it in.
-		desc.material.edgePlasticYield = std::max(settings->dentYield, 0.001f) / 0.1f;
-		desc.material.edgePlasticCreep = 8.0f;
-		desc.material.edgePlasticMax = std::max(settings->dentDepth, 0.01f) / 0.1f;
-		desc.material.edgePlasticFlow = 0; // both
+		desc.cells = R3CellView{cells.data(), cells.size()};
+		desc.cellModel = R3_SOFT_CELL_COROTATIONAL;
+		desc.material.youngModulus = 300.0f * std::pow(14.0f, stretch);
+		desc.material.poissonRatio = 0.35f;
+		desc.material.elasticDampingRatio = 0.5f;
 	}
-	if (settings->tear != 0)
+	if (cloth && !painted && bend > 0.0f && settings->tear == 0 &&
+		SetClothGrid(desc, worldPositions, triangles, (size_t)triangleCount))
 	{
-		// Strain alone is hard to reach: a stiff solver keeps the geometric stretch near rest. The edge force is
-		// what a hard pull really shows, so both thresholds are set.
+		desc.warpSoftness = desc.material.edgeSoftness;
+		desc.weftSoftness = desc.material.edgeSoftness;
+		desc.shearSoftness = R3SpringCoefficients{frequency * 0.7f, 0.9f};
+	}
+	std::vector<R3SoftEdgeSoftness> edgeSoftness;
+	const bool plasticSurface = shell && !impactSkin;
+	float meanEdgeLength = 1.0f;
+	if (desc.kind == R3_SOFT_DESC_SURFACE && (painted || plasticSurface))
+	{
+		// The surface recipe numbers edges in first-seen order. Send native overrides for painted edges only.
+		std::unordered_set<uint64_t> seen;
+		float edgeLengthSum = 0.0f;
+		for (int32_t t = 0; t < triangleCount; t++)
+		{
+			const uint32_t* face = triangles + t * 3;
+			for (int edge = 0; edge < 3; edge++)
+			{
+				const uint32_t a = face[edge], b = face[(edge + 1) % 3];
+				if (!seen.insert(SoftEdgeKey(a, b)).second)
+					continue;
+				if (plasticSurface)
+					edgeLengthSum += Length(Sub(worldPositions[a], worldPositions[b]));
+				const float scale = painted ? std::clamp((stiffness[a] + stiffness[b]) * 0.5f, 0.02f, 1.0f) : 1.0f;
+				if (scale < 1.0f)
+					edgeSoftness.push_back(R3SoftEdgeSoftness{(uint32_t)seen.size() - 1, {frequency * std::sqrt(scale), 0.9f}});
+			}
+		}
+		desc.edgeSoftness = R3SoftEdgeSoftnessView{edgeSoftness.data(), edgeSoftness.size()};
+		if (plasticSurface && !seen.empty())
+			meanEdgeLength = std::max(edgeLengthSum / (float)seen.size(), 1.0e-3f);
+	}
+	if (plasticSurface)
+	{
+		// The component stores metres. Rapier's plasticity uses strain relative to an edge's rest length.
+		desc.material.edgePlasticYield = std::max(settings->dentYield, 0.001f) / meanEdgeLength;
+		desc.material.edgePlasticCreep = 12.0f;
+		desc.material.edgePlasticMax = std::max(settings->dentDepth, 0.01f) / meanEdgeLength;
+		desc.material.edgePlasticFlow = R3_SOFT_EDGE_PLASTIC_FLOW_BOTH;
+	}
+	if (settings->tear != 0 && !impactSkin)
+	{
 		desc.material.tearStrain = R3OptionalReal{1, 0.3f};
 		desc.material.tearForce = R3OptionalReal{1, 0.02f};
 		desc.material.tearSmoothing = 0.02f;
 		desc.material.maxTearsPerStep = 16;
-		// A small strip is allowed to split into two-particle pieces (the engine's cloths can be small).
 		desc.material.minPiece = R3OptionalU32{0, 0};
 	}
 
+	const uint32_t id = AllocateId(world, NoBody);
+	desc.userData = R3UserData{id, 0};
+	desc.collider.userData = R3UserData{id, SoftColliderTag};
 	const R3SoftBodyHandle handle = r3InsertSoftBody(world->world, &desc);
 	if (!Valid(handle))
 		return NoBody;
@@ -2590,21 +3137,22 @@ uint32_t tn_rapier_soft_create(void* raw, const float* positions, int32_t vertex
 	SoftBody* soft = new SoftBody();
 	soft->handle = handle;
 	soft->count = vertexCount;
-	soft->center = offset;
 	soft->userData = userData;
 	soft->kind = settings->kind;
 	soft->impacts = settings->impacts;
 	soft->visualOnly = driven;
-	soft->tear = settings->tear != 0;
+	soft->tear = settings->tear != 0 && !impactSkin;
+	soft->hasInteriorParticle = elastic;
 	soft->dentDepth = settings->dentDepth;
 	soft->dentYield = settings->dentYield;
 	soft->dentSpeed = settings->dentSpeed;
-	soft->visualSpring = settings->visualSpring;
-	soft->visualDamping = settings->visualDamping;
+	if (driven)
+		soft->drivenCenter = r3SoftBody_CenterOfMass(handle);
 	soft->friction = std::max(settings->friction, 0.0f);
-	soft->restVolume = MeshVolume(worldPositions, triangles, triangleCount);
+	soft->restVolume = restVolume;
 	soft->totalMass = std::max(totalMass, 0.001f);
-	soft->radius = 0.02f;
+	soft->particleMass = desc.particleMass;
+	soft->radius = desc.particleRadius.value;
 	soft->triangles.assign(triangles, triangles + (size_t)triangleCount * 3);
 	soft->restLocal.resize((size_t)vertexCount);
 	if (soft->impacts != 0)
@@ -2613,6 +3161,8 @@ uint32_t tn_rapier_soft_create(void* raw, const float* positions, int32_t vertex
 	{
 		float inverse[16];
 		MatInvert(objectMatrix, inverse);
+		if (driven)
+			std::copy_n(inverse, 16, soft->drivenBindInverse);
 		for (int32_t i = 0; i < vertexCount; i++)
 			soft->restLocal[(size_t)i] = MatPoint(inverse, worldPositions[(size_t)i]);
 		for (int i = 0; i < 16; i++)
@@ -2623,13 +3173,27 @@ uint32_t tn_rapier_soft_create(void* raw, const float* positions, int32_t vertex
 	{
 		for (int32_t i = 0; i < vertexCount; i++)
 			soft->restLocal[(size_t)i] = V(&positions[i * 3]);
+		if (driven)
+			MatIdentity(soft->drivenBindInverse);
 		MatIdentity(soft->lastObject);
 	}
-	const uint32_t id = AllocateId(world, NoBody);
 	world->softBodies[id] = soft;
 	const R3RigidBodyHandle root = r3SoftBody_RootBody(handle);
 	if (Valid(root))
 		r3RigidBody_SetUserData(root, R3UserData{id, 0});
+	soft->hasCollider = r3SoftBody_MeshColliders(handle, nullptr, 0) != 0;
+	if (soft->hasCollider)
+	{
+		Body& info = soft->collisionInfo;
+		info.handle = root;
+		info.userData = userData;
+		info.objectCode = settings->objectCode;
+		info.group = settings->group;
+		info.motionClass = settings->motionClass;
+		info.memberships = settings->memberships;
+		info.filter = settings->filter;
+		world->MarkQueryFull();
+	}
 	return id;
 }
 
@@ -2658,20 +3222,62 @@ namespace
 	}
 }
 
+namespace
+{
+	void RestoreShellColliders(World* world, SoftBody* soft)
+	{
+		if (!Valid(soft->deformable))
+			return;
+		world->deformableOwners.erase(ColliderKey(soft->deformable));
+		r3RemoveCollider(soft->deformable, 0);
+		soft->deformable = R3ColliderHandle{nullptr, UINT32_MAX, 0};
+		if (Body* carrier = world->Find(soft->ignoredBody))
+		{
+			if (Valid(soft->replacedCollider))
+				r3Collider_SetEnabled(soft->replacedCollider, 1);
+			if (soft->hasCarrierMassProperties)
+			{
+				R3MassProperties empty{};
+				empty.principal_inertia_local_frame.w = 1.0f;
+				r3RigidBody_SetAdditionalMassProperties(carrier->handle, empty, 1);
+				r3RigidBody_RecomputeMassPropertiesFromColliders(carrier->handle);
+			}
+			carrier->shellSurface = soft->deformable;
+			UpdateFilterHooks(*carrier);
+		}
+		soft->replacedCollider = R3ColliderHandle{nullptr, UINT32_MAX, 0};
+		soft->hasCarrierMassProperties = false;
+		soft->dentedContacts.clear();
+		if (soft->attachedToCarrier)
+		{
+			for (size_t i = 0; i < soft->dents.size(); i++)
+			{
+				r3SoftBody_DetachParticle(soft->handle, i);
+				r3SoftBody_SetParticlePinned(soft->handle, i, 1);
+			}
+			soft->attachedToCarrier = false;
+		}
+		world->MarkQueryFull();
+	}
+}
+
+int32_t tn_rapier_soft_has_collider(void* raw, uint32_t body)
+{
+	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
+	return soft != nullptr && (soft->hasCollider || Valid(soft->deformable)) ? 1 : 0;
+}
+
 void tn_rapier_soft_destroy(void* raw, uint32_t body)
 {
 	World* world = static_cast<World*>(raw);
 	SoftBody* soft = SoftOf(world, body);
 	if (soft == nullptr)
 		return;
-	if (Valid(soft->deformable))
-	{
-		world->deformableOwners.erase(ColliderKey(soft->deformable));
-		r3RemoveCollider(soft->deformable, 0);
-	}
+	RestoreShellColliders(world, soft);
 	if (Valid(soft->handle))
 		r3RemoveSoftBody(soft->handle);
 	world->softBodies.erase(body);
+	world->MarkQueryFull();
 	delete soft;
 }
 
@@ -2681,6 +3287,18 @@ void tn_rapier_soft_ignore(void* raw, uint32_t body, uint32_t ignoredBody)
 	SoftBody* soft = SoftOf(world, body);
 	if (soft == nullptr)
 		return;
+	if (soft->kind == 4)
+	{
+		if (ignoredBody == NoBody)
+			soft->ignoredBody = soft->secondRopeEnd = NoBody;
+		else if (soft->ignoredBody == NoBody)
+			soft->ignoredBody = ignoredBody;
+		else if (soft->ignoredBody != ignoredBody)
+			soft->secondRopeEnd = ignoredBody;
+		return;
+	}
+	if (soft->ignoredBody != ignoredBody)
+		RestoreShellColliders(world, soft);
 	soft->ignoredBody = ignoredBody;
 	// A shell in FromImpacts mode uses the object's collider for hits. Give that object a Rapier deformable
 	// trimesh collider bound to the shell's particles, so its collision surface follows the dents instead of the
@@ -2691,10 +3309,11 @@ void tn_rapier_soft_ignore(void* raw, uint32_t body, uint32_t ignoredBody)
 	Body* shellBody = world->Find(ignoredBody);
 	if (shellBody == nullptr || soft->triangles.empty() || soft->count < 3)
 		return;
-	// A dynamic shell rides its rigidbody: that collider carries its weight and takes the hits the denting reads.
-	// Handing its collision surface to the 1 kg soft body would drop the object through the floor, so only a static
-	// or kinematic shell (a set piece or a scripted one) uses the deformable surface instead.
-	if (shellBody->motion == 2)
+	if (shellBody->sensor || Valid(shellBody->shellSurface) || shellBody->colliders.size() != 1 ||
+		(soft->userData != 0 && soft->userData != shellBody->userData))
+		return;
+	const R3ColliderHandle original = shellBody->colliders.front();
+	if (!r3Collider_IsEnabled(original))
 		return;
 	// Deformable colliders bind through a soft body's root body, not an ordinary rigid body.
 	const R3RigidBodyHandle parent = r3SoftBody_RootBody(soft->handle);
@@ -2725,13 +3344,10 @@ void tn_rapier_soft_ignore(void* raw, uint32_t body, uint32_t ignoredBody)
 	collider.friction = soft->friction;
 	collider.restitution = 0.0f;
 	collider.isSensor = 0;
-	if (!shellBody->colliders.empty())
-	{
-		const R3InteractionGroups groups = r3Collider_CollisionGroups(shellBody->colliders[0]);
-		collider.collisionGroups = groups;
-		collider.solverGroups = groups;
-	}
-	collider.activeEvents = R3_COLLISION_EVENTS;
+	collider.collisionGroups = r3Collider_CollisionGroups(original);
+	collider.solverGroups = r3Collider_SolverGroups(original);
+	collider.activeEvents = 0; // contacts come from the narrow phase's pair lists
+	collider.activeHooks = R3_FILTER_CONTACT_PAIRS | R3_FILTER_INTERSECTION_PAIR;
 	R3SoftMeshBindingDesc binding = r3DefaultSoftMeshBindingDesc();
 	binding.kind = R3_SOFT_BINDING_DIRECT;
 	std::vector<uint32_t> particles((size_t)count);
@@ -2743,48 +3359,111 @@ void tn_rapier_soft_ignore(void* raw, uint32_t body, uint32_t ignoredBody)
 		return;
 	soft->deformable = handle;
 	world->deformableOwners[ColliderKey(handle)] = ignoredBody;
-	// The ordinary colliders step aside; the deformable one is the object's collision surface now.
-	for (R3ColliderHandle colliderHandle : shellBody->colliders)
-		r3Collider_SetEnabled(colliderHandle, 0);
+	shellBody->shellSurface = handle;
+	UpdateFilterHooks(*shellBody);
+	if (shellBody->motion == 2)
+	{
+		// Transfer the authored mass and angular inertia into the carrier itself before disabling its shape.
+		R3MassProperties mass = r3Collider_MassProperties(original);
+		const R3Pose localPose = r3Collider_PositionWrtParent(original);
+		mass.local_com = Add(localPose.translation, QRot(localPose.rotation, mass.local_com));
+		mass.principal_inertia_local_frame = QNorm(QMul(localPose.rotation, mass.principal_inertia_local_frame));
+		if (mass.mass <= 0.0f || r3RigidBody_SetAdditionalMassProperties(shellBody->handle, mass, 1) != R3_OK)
+		{
+			RestoreShellColliders(world, soft);
+			return;
+		}
+		soft->hasCarrierMassProperties = true;
+		// The native point attachments transfer contact loads from each particle to the Rigidbody.
+		soft->attachedToCarrier = true;
+		for (size_t i = 0; i < count; i++)
+		{
+			if (r3SoftBody_SetParticlePinned(soft->handle, i, 0) != R3_OK ||
+				r3SoftBody_AttachParticle(soft->handle, i, shellBody->handle) != R3_OK)
+			{
+				RestoreShellColliders(world, soft);
+				return;
+			}
+		}
+	}
+	if (r3Collider_SetEnabled(original, 0) != R3_OK)
+	{
+		RestoreShellColliders(world, soft);
+		return;
+	}
+	soft->replacedCollider = original;
+	if (soft->hasCarrierMassProperties)
+		r3RigidBody_RecomputeMassPropertiesFromColliders(shellBody->handle);
+	world->MarkQueryFull();
 }
 
 void tn_rapier_soft_skin(void* raw, uint32_t body, const float objectMatrix[16], const float objectNext[16],
 	float step)
 {
-	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
+	World* world = static_cast<World*>(raw);
+	SoftBody* soft = SoftOf(world, body);
 	if (soft == nullptr || !Valid(soft->handle) || objectMatrix == nullptr || objectNext == nullptr)
 		return;
+	if (soft->kind == 2 && soft->impacts != 0)
+	{
+		std::copy_n(objectNext, 16, soft->lastObject);
+		soft->hasObject = true;
+		soft->followsDynamicBody = false;
+		const Body* carrier = world->Find(soft->ignoredBody);
+		if (carrier != nullptr && carrier->motion == 2 && Valid(carrier->handle))
+		{
+			float rigid[16], inverseRigid[16];
+			MatFromPose(r3RigidBody_Position(carrier->handle), rigid);
+			if (MatInvert(rigid, inverseRigid))
+			{
+				MatMul(inverseRigid, objectMatrix, soft->objectFromBody);
+				soft->followsDynamicBody = true;
+			}
+		}
+		if (soft->attachedToCarrier)
+			return;
+		for (size_t i = 0; i < soft->dents.size(); i++)
+		{
+			const R3Vector target = MatPoint(objectNext, Add(soft->restLocal[i], soft->dents[i]));
+			if (Valid(soft->deformable))
+				r3SoftBody_SetParticleKinematicTarget(soft->handle, i, target);
+			else if (!soft->followsDynamicBody)
+				SetParticle(soft, i, target);
+		}
+		return;
+	}
+	if (soft->visualOnly)
+	{
+		// The cluster follows a rigid target in Rapier's solver. Clamp very large teleports
+		// to the authored maximum flex, then let the spring and damping settle the remainder.
+		float motion[16];
+		MatMul(objectNext, soft->drivenBindInverse, motion);
+		const R3Pose target{MatPoint(motion, soft->drivenCenter), MatRotation(motion)};
+		r3SoftBody_SetClusterShapeMatchingTarget(soft->handle, 0, &target);
+		std::vector<R3Vector> particles(r3SoftBody_NumParticles(soft->handle));
+		const size_t count = std::min({r3SoftBody_ParticlePositions(soft->handle, particles.data(), particles.size()),
+			particles.size(), soft->restLocal.size()});
+		for (size_t i = 0; i < count; i++)
+		{
+			const R3Vector goal = MatPoint(objectNext, soft->restLocal[i]);
+			const R3Vector gap = Sub(particles[i], goal);
+			const float distance = Length(gap);
+			if (distance > soft->dentDepth && distance > 1.0e-6f)
+				SetParticle(soft, i, Add(goal, Scale(gap, soft->dentDepth / distance)));
+		}
+		r3SoftBody_WakeUp(soft->handle);
+		return;
+	}
+	(void)step;
 	float inverse[16];
 	if (!MatInvert(soft->lastObject, inverse))
 		return;
 	float delta[16];
 	MatMul(objectNext, inverse, delta);
-	std::vector<R3Vector> buffer((size_t)soft->count);
-	const size_t count = r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size());
-	if (count == 0)
-		return;
+	std::vector<R3Vector> buffer(r3SoftBody_NumParticles(soft->handle));
+	const size_t count = std::min(r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size()), buffer.size());
 	for (size_t i = 0; i < count; i++)
-	{
-		R3Vector position = MatPoint(delta, buffer[i]);
-		const R3Vector dent = i < soft->dents.size() ? soft->dents[i] : V(0, 0, 0);
-		const R3Vector target = MatPoint(objectNext, Add(soft->restLocal[i], dent));
-		if (soft->impacts != 0)
-		{
-			// A FromImpacts shell is held exactly to its object: the object's shape plus its dents. Applying only the
-			// object's delta lets gravity and the solver sag the skin away from the object, which is how a 500 kg
-			// shell's surface ended up a crumpled blob on the ground.
-			position = target;
-		}
-		else if (soft->visualOnly)
-		{
-			// The rendered skin lags behind the object's reference shape and springs back.
-			const R3Vector next = Add(position, Scale(Sub(target, position), std::clamp(soft->visualSpring, 0.0f, 1.0f)));
-			r3SoftBody_SetParticleVelocity(soft->handle, i,
-				Scale(Sub(next, buffer[i]), step > 1.0e-6f ? (1.0f / step) : 0.0f));
-			position = next;
-		}
-		SetParticle(soft, i, position);
-	}
+		SetParticle(soft, i, MatPoint(delta, buffer[i]));
 	for (int i = 0; i < 16; i++)
 		soft->lastObject[i] = objectNext[i];
 	soft->hasObject = true;
@@ -2802,21 +3481,23 @@ uint32_t tn_rapier_soft_read(void* raw, uint32_t body, float* positions, float* 
 	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
 	if (soft == nullptr || !Valid(soft->handle) || capacity == 0)
 		return 0;
-	std::vector<R3Vector> buffer((size_t)soft->count);
-	const uint32_t count = (uint32_t)std::min((size_t)soft->count, (size_t)capacity);
+	std::vector<R3Vector> buffer(r3SoftBody_NumParticles(soft->handle));
+	const size_t count = std::min({(size_t)soft->count, (size_t)capacity, buffer.size()});
 	if (positions != nullptr)
 	{
-		r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size());
-		for (uint32_t i = 0; i < count; i++)
+		if (r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size()) < count)
+			return 0;
+		for (size_t i = 0; i < count; i++)
 			Out(&positions[i * 3], buffer[(size_t)i]);
 	}
 	if (velocities != nullptr)
 	{
-		r3SoftBody_ParticleVelocities(soft->handle, buffer.data(), buffer.size());
-		for (uint32_t i = 0; i < count; i++)
+		if (r3SoftBody_ParticleVelocities(soft->handle, buffer.data(), buffer.size()) < count)
+			return 0;
+		for (size_t i = 0; i < count; i++)
 			Out(&velocities[i * 3], buffer[(size_t)i]);
 	}
-	return count;
+	return (uint32_t)count;
 }
 
 void tn_rapier_soft_move_pinned(void* raw, uint32_t body, const uint32_t* indices, const float* targets,
@@ -2848,6 +3529,21 @@ void tn_rapier_soft_set_positions(void* raw, uint32_t body, const float* positio
 		if (velocities != nullptr)
 			r3SoftBody_SetParticleVelocity(soft->handle, i, V(&velocities[i * 3]));
 	}
+	if (soft->hasInteriorParticle && limit == (uint32_t)soft->count)
+	{
+		R3Vector position = V(0, 0, 0);
+		R3Vector velocity = V(0, 0, 0);
+		for (uint32_t i = 0; i < limit; i++)
+		{
+			position = Add(position, V(&positions[i * 3]));
+			if (velocities != nullptr)
+				velocity = Add(velocity, V(&velocities[i * 3]));
+		}
+		const float share = 1.0f / (float)limit;
+		SetParticle(soft, limit, Scale(position, share));
+		if (velocities != nullptr)
+			r3SoftBody_SetParticleVelocity(soft->handle, limit, Scale(velocity, share));
+	}
 	r3SoftBody_WakeUp(soft->handle);
 }
 
@@ -2859,7 +3555,7 @@ void tn_rapier_soft_velocity(void* raw, uint32_t body, float* velocity)
 	velocity[0] = velocity[1] = velocity[2] = 0;
 	if (soft == nullptr || !Valid(soft->handle))
 		return;
-	std::vector<R3Vector> buffer((size_t)soft->count);
+	std::vector<R3Vector> buffer(r3SoftBody_NumParticles(soft->handle));
 	const size_t count = r3SoftBody_ParticleVelocities(soft->handle, buffer.data(), buffer.size());
 	R3Vector sum = V(0, 0, 0);
 	for (size_t i = 0; i < count; i++)
@@ -2874,8 +3570,9 @@ void tn_rapier_soft_set_velocity(void* raw, uint32_t body, const float* velocity
 	if (soft == nullptr || !Valid(soft->handle) || velocity == nullptr)
 		return;
 	const R3Vector value = V(velocity);
-	for (int32_t i = 0; i < soft->count; i++)
-		r3SoftBody_SetParticleVelocity(soft->handle, (size_t)i, value);
+	const size_t count = r3SoftBody_NumParticles(soft->handle);
+	for (size_t i = 0; i < count; i++)
+		r3SoftBody_SetParticleVelocity(soft->handle, i, value);
 	r3SoftBody_WakeUp(soft->handle);
 }
 
@@ -2883,19 +3580,16 @@ void tn_rapier_soft_impulse(void* raw, uint32_t body, const float* impulse)
 {
 	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
 	if (soft != nullptr && Valid(soft->handle) && impulse != nullptr)
-		r3SoftBody_ApplyImpulse(soft->handle, V(impulse), 1);
+		r3SoftBody_ApplyImpulse(soft->handle, Scale(V(impulse), 1.0f / soft->totalMass), 1);
 }
 
-void tn_rapier_soft_force(void* raw, uint32_t body, const float* force)
+void tn_rapier_soft_force(void* raw, uint32_t body, const float* force, float step)
 {
-	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
-	if (soft == nullptr || !Valid(soft->handle) || force == nullptr)
+	if (force == nullptr || step <= 0.0f)
 		return;
-	// A force over one step changes each particle's velocity by force * step / mass (Rapier's AddForce takes a
-	// velocity change, not a force).
-	const float step = 1.0f / 60.0f;
-	const R3Vector change = Scale(V(force), step / std::max(soft->totalMass, 1.0e-6f));
-	r3SoftBody_AddForce(soft->handle, change, 1);
+	const R3Vector impulse = Scale(V(force), step);
+	const float packed[3] = {impulse.x, impulse.y, impulse.z};
+	tn_rapier_soft_impulse(raw, body, packed);
 }
 
 void tn_rapier_soft_shift(void* raw, uint32_t body, const float* offset)
@@ -2904,7 +3598,7 @@ void tn_rapier_soft_shift(void* raw, uint32_t body, const float* offset)
 	if (soft == nullptr || !Valid(soft->handle) || offset == nullptr)
 		return;
 	const R3Vector delta = V(offset);
-	std::vector<R3Vector> buffer((size_t)soft->count);
+	std::vector<R3Vector> buffer(r3SoftBody_NumParticles(soft->handle));
 	const size_t count = r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size());
 	for (size_t i = 0; i < count; i++)
 		SetParticle(soft, i, Add(buffer[i], delta));
@@ -2916,7 +3610,7 @@ int32_t tn_rapier_soft_bounds(void* raw, uint32_t body, float* minimum, float* m
 	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
 	if (soft == nullptr || !Valid(soft->handle) || minimum == nullptr || maximum == nullptr || soft->count == 0)
 		return 0;
-	std::vector<R3Vector> buffer((size_t)soft->count);
+	std::vector<R3Vector> buffer(r3SoftBody_NumParticles(soft->handle));
 	const size_t count = r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size());
 	if (count == 0)
 		return 0;
@@ -2934,13 +3628,30 @@ int32_t tn_rapier_soft_bounds(void* raw, uint32_t body, float* minimum, float* m
 void tn_rapier_soft_set_pressure(void* raw, uint32_t body, float amount)
 {
 	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
-	if (soft == nullptr || !Valid(soft->handle) || soft->kind != 1)
+	if (soft == nullptr || !Valid(soft->handle) || soft->kind != 1 || soft->restVolume <= 1.0e-8f)
 		return;
-	// The engine's amount is pressure (pascals) times volume; 10 is the pascals-to-volume-factor scale that makes
-	// its 10/50/200 settings a resting cube, a lightly puffed one and a ball.
-	const float pressure = amount / std::max(soft->restVolume, 1.0e-6f);
-	const float factor = 1.0f + std::max(pressure, 0.0f) / 10.0f;
-	r3SoftBody_SetVolumeFactor(soft->handle, factor);
+	// The engine sends rest pressure times volume. Rapier needs a target volume ratio; at the
+	// default 10 Pa, a jelly should stay close to its rest size.
+	constexpr float bulkModulus = 150.0f;
+	const float pressure = std::max(amount, 0.0f) / soft->restVolume;
+	r3SoftBody_SetVolumeFactor(soft->handle, 1.0f + pressure / bulkModulus);
+	r3SoftBody_WakeUp(soft->handle);
+}
+
+namespace
+{
+	void ApplyDragImpulse(SoftBody* soft, size_t particle, R3Vector impulse, R3Vector relativeAir)
+	{
+		// Integrate quadratic drag without overshooting the air velocity on a large fixed step.
+		// A heavy impact can give a light sheet large velocities and temporarily stretch its faces.
+		const float momentum = soft->particleMass * Length(relativeAir);
+		const float magnitude = Length(impulse);
+		if (std::isfinite(magnitude) && magnitude > 0.0f && std::isfinite(momentum) && momentum > 0.0f)
+		{
+			const float scale = momentum / (momentum + magnitude);
+			r3SoftBody_ApplyParticleImpulse(soft->handle, particle, Scale(impulse, scale), 0);
+		}
+	}
 }
 
 void tn_rapier_soft_wind(void* raw, uint32_t body, const float wind[3], float drag, float turbulence,
@@ -2950,18 +3661,18 @@ void tn_rapier_soft_wind(void* raw, uint32_t body, const float wind[3], float dr
 	if (soft == nullptr || !Valid(soft->handle) || wind == nullptr || drag <= 0.0f || step <= 0.0f ||
 		soft->triangles.size() < 3)
 		return;
-	std::vector<R3Vector> positions((size_t)soft->count);
-	std::vector<R3Vector> velocities((size_t)soft->count);
-	size_t count = r3SoftBody_ParticlePositions(soft->handle, positions.data(), positions.size());
-	count = std::min(count, positions.size());
+	const size_t particles = r3SoftBody_NumParticles(soft->handle);
+	std::vector<R3Vector> positions(particles);
+	std::vector<R3Vector> velocities(particles);
+	const size_t read = r3SoftBody_ParticlePositions(soft->handle, positions.data(), positions.size());
+	const size_t count = std::min({read, particles, (size_t)soft->count});
 	r3SoftBody_ParticleVelocities(soft->handle, velocities.data(), velocities.size());
 	if (count == 0)
 		return;
 	const float density = 1.2f;
 	const float along = 0.1f;
 	const R3Vector air = V(wind);
-	const float invMass = (float)soft->count / std::max(soft->totalMass, 1.0e-6f);
-	std::vector<R3Vector> change(count, V(0, 0, 0));
+	std::vector<R3Vector> impulses(count, V(0, 0, 0));
 	for (size_t t = 0; t + 2 < soft->triangles.size(); t += 3)
 	{
 		const uint32_t ia = soft->triangles[t], ib = soft->triangles[t + 1], ic = soft->triangles[t + 2];
@@ -2985,17 +3696,12 @@ void tn_rapier_soft_wind(void* raw, uint32_t body, const float wind[3], float dr
 		const R3Vector sliding = Sub(relative, Scale(normal, into));
 		const float share = 0.5f * density * drag * 0.5f * twiceArea * step / 3.0f;
 		const R3Vector impulse = Scale(Add(Scale(normal, into * std::fabs(into)), Scale(sliding, along * Length(sliding))), share);
-		const R3Vector dv = Scale(impulse, invMass);
-		change[ia] = Add(change[ia], dv);
-		change[ib] = Add(change[ib], dv);
-		change[ic] = Add(change[ic], dv);
+		impulses[ia] = Add(impulses[ia], impulse);
+		impulses[ib] = Add(impulses[ib], impulse);
+		impulses[ic] = Add(impulses[ic], impulse);
 	}
 	for (size_t i = 0; i < count; i++)
-	{
-		if (Length(change[i]) <= 0.0f)
-			continue;
-		r3SoftBody_SetParticleVelocity(soft->handle, i, Add(velocities[i], change[i]));
-	}
+		ApplyDragImpulse(soft, i, impulses[i], Sub(air, velocities[i]));
 	r3SoftBody_WakeUp(soft->handle);
 }
 
@@ -3004,7 +3710,7 @@ uint32_t tn_rapier_soft_dents(void* raw, uint32_t body, float* output, uint32_t 
 	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
 	if (soft == nullptr || !Valid(soft->handle) || output == nullptr)
 		return 0;
-	std::vector<R3Vector> buffer((size_t)soft->count);
+	std::vector<R3Vector> buffer(r3SoftBody_NumParticles(soft->handle));
 	const size_t read = r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size());
 	const uint32_t count = (uint32_t)std::min((size_t)soft->count, (size_t)capacity);
 	float sum = 0.0f;
@@ -3028,17 +3734,74 @@ uint32_t tn_rapier_soft_dent_revision(void* raw, uint32_t body)
 	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
 	if (soft == nullptr)
 		return 0;
-	// With a deformable collider the collision surface already follows the dents; the engine's convex-hull rewrap
-	// would rebuild the body and lose it, so keep the revision still.
-	if (Valid(soft->deformable))
-		return 0;
 	return soft->dentRevision;
+}
+
+namespace
+{
+	void PlaceDentVertex(SoftBody* soft, const Body* carrier, size_t index, R3Vector dent)
+	{
+		const R3Vector position = MatPoint(soft->lastObject, Add(soft->restLocal[index], dent));
+		if (soft->attachedToCarrier && carrier != nullptr)
+		{
+			// The attachment takes its local anchor from the particle's current world position.
+			r3SoftBody_DetachParticle(soft->handle, index);
+			SetParticle(soft, index, position);
+			r3SoftBody_SetParticleVelocity(soft->handle, index, r3RigidBody_VelocityAtPoint(carrier->handle, position));
+			r3SoftBody_AttachParticle(soft->handle, index, carrier->handle);
+		}
+		else if (Valid(soft->deformable))
+			r3SoftBody_SetParticleKinematicTarget(soft->handle, index, position);
+		else
+			SetParticle(soft, index, position);
+	}
+
+	void SetDentVertex(SoftBody* soft, const Body* carrier, size_t index, R3Vector dent)
+	{
+		soft->dents[index] = dent;
+		if (Valid(soft->deformable))
+			soft->pendingDentVertices.push_back(index);
+		else
+			PlaceDentVertex(soft, carrier, index, dent);
+	}
+
+	void UpdateShellObjectFromCarrier(SoftBody* soft, const Body& carrier)
+	{
+		if (soft->followsDynamicBody)
+		{
+			float rigid[16];
+			MatFromPose(r3RigidBody_Position(carrier.handle), rigid);
+			MatMul(rigid, soft->objectFromBody, soft->lastObject);
+		}
+	}
+
+	void ApplyPendingShellDents(World* world)
+	{
+		for (auto& entry : world->softBodies)
+		{
+			SoftBody* soft = entry.second;
+			auto& pending = soft->pendingDentVertices;
+			if (pending.empty())
+				continue;
+			const Body* carrier = world->Find(soft->ignoredBody);
+			if (carrier != nullptr)
+				UpdateShellObjectFromCarrier(soft, *carrier);
+			// Rapier refits the bound mesh during a physics step. Apply edits to the
+			// particles before that step so render readback and queries agree.
+			std::sort(pending.begin(), pending.end());
+			const auto end = std::unique(pending.begin(), pending.end());
+			for (auto it = pending.begin(); it != end; ++it)
+				PlaceDentVertex(soft, carrier, *it, soft->dents[*it]);
+			pending.clear();
+		}
+	}
 }
 
 void tn_rapier_soft_set_dents(void* raw, uint32_t body, const float* dents, uint32_t count,
 	const float objectMatrix[16])
 {
-	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
+	World* world = static_cast<World*>(raw);
+	SoftBody* soft = SoftOf(world, body);
 	if (soft == nullptr || !Valid(soft->handle))
 		return;
 	if (objectMatrix != nullptr)
@@ -3047,30 +3810,13 @@ void tn_rapier_soft_set_dents(void* raw, uint32_t body, const float* dents, uint
 			soft->lastObject[i] = objectMatrix[i];
 		soft->hasObject = true;
 	}
-	const uint32_t limit = std::min(count, (uint32_t)soft->count);
-	for (uint32_t i = 0; i < limit; i++)
-	{
-		const R3Vector dent = dents != nullptr ? V(&dents[i * 3]) : V(0, 0, 0);
-		if (i < soft->dents.size())
-			soft->dents[i] = dent;
-		const R3Vector local = Add(soft->restLocal[i], dent);
-		SetParticle(soft, i, MatPoint(soft->lastObject, local));
-	}
+	const Body* carrier = world->Find(soft->ignoredBody);
+	const size_t limit = dents == nullptr ? soft->dents.size() : std::min((size_t)count, soft->dents.size());
+	for (size_t i = 0; i < limit; i++)
+		SetDentVertex(soft, carrier, i, dents != nullptr ? V(&dents[i * 3]) : V(0, 0, 0));
 	soft->dentRevision++;
 	soft->lastDentSum = 0.0f;
 	r3SoftBody_WakeUp(soft->handle);
-}
-
-void tn_rapier_soft_damp_wobble(void* raw, uint32_t body, float rate, float step)
-{
-	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
-	if (soft == nullptr || !Valid(soft->handle) || rate <= 0.0f || step <= 0.0f)
-		return;
-	std::vector<R3Vector> buffer((size_t)soft->count);
-	const size_t count = r3SoftBody_ParticleVelocities(soft->handle, buffer.data(), buffer.size());
-	const float keep = std::exp(-rate * step);
-	for (size_t i = 0; i < count; i++)
-		r3SoftBody_SetParticleVelocity(soft->handle, i, Scale(buffer[i], keep));
 }
 
 int32_t tn_rapier_soft_torn(void* raw, uint32_t body)
@@ -3086,8 +3832,8 @@ uint32_t tn_rapier_soft_float(void* raw, uint32_t body, const float* samples, ui
 	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
 	if (soft == nullptr || !Valid(soft->handle) || samples == nullptr || nx == 0 || nz == 0 || deltaTime <= 0.0f)
 		return 0;
-	std::vector<R3Vector> positions((size_t)soft->count);
-	std::vector<R3Vector> velocities((size_t)soft->count);
+	std::vector<R3Vector> positions(r3SoftBody_NumParticles(soft->handle));
+	std::vector<R3Vector> velocities(r3SoftBody_NumParticles(soft->handle));
 	const size_t count = r3SoftBody_ParticlePositions(soft->handle, positions.data(), positions.size());
 	r3SoftBody_ParticleVelocities(soft->handle, velocities.data(), velocities.size());
 	uint32_t underCount = 0;
@@ -3137,7 +3883,7 @@ int32_t tn_rapier_soft_tear(void* raw, uint32_t body)
 	const size_t edgeCount = std::min(count, edgeVertices.size()) / 2;
 	if (edgeCount == 0)
 		return 0;
-	std::vector<R3Vector> positions((size_t)soft->count);
+	std::vector<R3Vector> positions(r3SoftBody_NumParticles(soft->handle));
 	const size_t particles = r3SoftBody_ParticlePositions(soft->handle, positions.data(), positions.size());
 	std::vector<uint32_t> torn;
 	for (size_t i = 0; i < edgeCount; i++)
@@ -3161,67 +3907,126 @@ int32_t tn_rapier_soft_tear(void* raw, uint32_t body)
 	r3FreeSoftBodyTearEvent(event);
 	soft->torn = true;
 	soft->dentRevision++;
-	soft->count = (int32_t)r3SoftBody_NumParticles(soft->handle);
 	return 1;
 }
 
 // Shell dents from the object's impacts, and tear-event bookkeeping, run after every step.
 namespace
 {
-	void DentShell(World* world, SoftBody* soft, R3Vector contact, R3Vector normal, float speed)
+	// Outward normals of a shell's rest surface, in its object's space: each vertex's triangles, area-weighted. The
+	// winding is taken as given unless the closed surface's signed volume says it is inside out.
+	void EnsureRestNormals(SoftBody* soft)
 	{
-		(void)world;
-		// The contact pair can lag the hit by a step, and a soft-body hit can have no rigid impulse to read. The
-		// particles the deformable collider pushed are moving at the impact speed, so use them too.
-		std::vector<R3Vector> particleVelocities((size_t)soft->count);
-		const size_t moving = std::min(r3SoftBody_ParticleVelocities(soft->handle, particleVelocities.data(),
-			particleVelocities.size()), particleVelocities.size());
-		for (size_t i = 0; i < moving; i++)
-			speed = std::max(speed, Length(particleVelocities[i]));
-		if (soft->dentSpeed <= 0.0f || speed < soft->dentSpeed)
+		if (soft->restNormal.size() == soft->restLocal.size())
 			return;
-		const float strength = std::clamp((speed - soft->dentSpeed) / std::max(soft->dentSpeed, 1.0f), 0.0f, 1.0f);
-		const float radius = std::max(soft->dentDepth * 6.0f, 0.25f);
-		// Work in the shell's object-local frame from the held shape (rest plus stored dents), not from particles
-		// that a collision has already bulged out for this step. Otherwise a slightly pushed shell is over the
-		// Dent Depth limit and the impact is thrown away (Windows took this path far more often than Linux).
-		const R3Vector localContact = SoftLocal(soft, contact);
-		R3Vector towardsCentre = Sub(soft->center, contact);
-		R3Vector direction = normal;
-		if (Length(towardsCentre) > 1.0e-5f && Dot(direction, towardsCentre) < 0.0f)
-			direction = Scale(direction, -1.0f);
-		if (Length(direction) < 1.0e-5f)
-			direction = towardsCentre;
-		const R3Vector localInto = Normalize(Sub(SoftLocal(soft, Add(contact, direction)), localContact));
-		if (Length(localInto) < 1.0e-5f)
-			return;
-		bool changed = false;
-		for (size_t i = 0; i < (size_t)soft->count; i++)
+		soft->restNormal.assign(soft->restLocal.size(), V(0, 0, 0));
+		float volume = 0.0f, edges = 0.0f;
+		size_t edgeCount = 0;
+		for (size_t t = 0; t + 2 < soft->triangles.size(); t += 3)
 		{
-			const R3Vector dentNow = i < soft->dents.size() ? soft->dents[i] : V(0, 0, 0);
-			const R3Vector base = Add(soft->restLocal[i], dentNow);
-			const float distance = Length(Sub(base, localContact));
-			if (distance > radius)
+			const uint32_t a = soft->triangles[t], b = soft->triangles[t + 1], c = soft->triangles[t + 2];
+			if (a >= soft->restLocal.size() || b >= soft->restLocal.size() || c >= soft->restLocal.size())
 				continue;
-			const float falloff = 1.0f - distance / radius;
-			const float push = soft->dentDepth * strength * falloff;
-			if (push < soft->dentYield)
+			const R3Vector pa = soft->restLocal[a], pb = soft->restLocal[b], pc = soft->restLocal[c];
+			const R3Vector area = Cross(Sub(pb, pa), Sub(pc, pa));
+			volume += Dot(pa, Cross(pb, pc));
+			edges += Length(Sub(pb, pa)) + Length(Sub(pc, pb)) + Length(Sub(pa, pc));
+			edgeCount += 3;
+			soft->restNormal[a] = Add(soft->restNormal[a], area);
+			soft->restNormal[b] = Add(soft->restNormal[b], area);
+			soft->restNormal[c] = Add(soft->restNormal[c], area);
+		}
+		soft->restEdge = edgeCount > 0 ? edges / (float)edgeCount : 0.0f;
+		const float flip = volume < 0.0f ? -1.0f : 1.0f;
+		for (R3Vector& n : soft->restNormal)
+			n = Scale(Normalize(n), flip);
+	}
+
+	// A hit on a shell's object dents the shell where it struck. Strength follows the speed past Dent Speed and how
+	// heavy the hitter is against the object; the dent reaches 0.25 to 1 m from the contact (further for faster
+	// hits, and never less than one and a half of the mesh's edges) across the struck surface. Only vertices whose surface faces the hit move, each pushed half along the
+	// hit and half into its own surface, so a corner or an edge folds in rather than its neighbouring panels sliding
+	// sideways. Each hit adds up to Dent Depth (less the Spring Back), to at most three Dent Depths in all.
+	bool DentShell(SoftBody* soft, const Body& carrier, const Body* other, R3Vector contact, R3Vector normal,
+		float speed)
+	{
+		if (soft->dentSpeed <= 0.0f || speed <= soft->dentSpeed)
+			return false;
+		const float hard = std::clamp((speed - soft->dentSpeed) / std::max(soft->dentSpeed * 3.0f, 0.5f), 0.0f, 1.0f);
+		const float ownInverse = carrier.motion == 2 ? 1.0f / std::max(r3RigidBody_Mass(carrier.handle), 0.001f) : 0.0f;
+		const float otherInverse = other != nullptr && other->motion == 2 ?
+			1.0f / std::max(r3RigidBody_Mass(other->handle), 0.001f) : 0.0f;
+		float heavy = 1.0f;
+		if (ownInverse + otherInverse > 0.0f)
+		{
+			const float reduced = 1.0f / (ownInverse + otherInverse);
+			const float ownMass = ownInverse > 0.0f ? 1.0f / ownInverse : reduced;
+			// Full strength from about a fiftieth of the object's mass up; a bullet barely marks a van.
+			heavy = std::clamp(reduced / std::max(ownMass * 0.02f, 0.001f), 0.0f, 1.0f);
+		}
+		const float depth = soft->dentDepth * hard * heavy;
+		if (depth < 0.002f)
+			return false;
+		const float limit = soft->dentDepth * 3.0f;
+		float toLocal[16];
+		if (!MatInvert(soft->lastObject, toLocal))
+			return false;
+		const R3Vector into = Normalize(normal);
+		if (Length(into) < 1.0e-5f)
+			return false;
+		EnsureRestNormals(soft);
+		// At least one and a half edges: a coarse mesh has no vertex close enough to show a smaller dent.
+		const float scale = std::cbrt(std::fabs(
+			soft->lastObject[0] * (soft->lastObject[5] * soft->lastObject[10] - soft->lastObject[9] * soft->lastObject[6]) -
+			soft->lastObject[4] * (soft->lastObject[1] * soft->lastObject[10] - soft->lastObject[9] * soft->lastObject[2]) +
+			soft->lastObject[8] * (soft->lastObject[1] * soft->lastObject[6] - soft->lastObject[5] * soft->lastObject[2])));
+		const float reach = std::max(std::clamp(0.25f + 0.04f * speed, 0.25f, 1.0f), soft->restEdge * scale * 1.5f);
+		bool changed = false;
+		for (size_t i = 0; i < soft->dents.size(); i++)
+		{
+			// Normals turn by the inverse transpose, so a scaled object keeps them square to its surface.
+			const R3Vector n = soft->restNormal[i];
+			const R3Vector outward = Normalize(V(toLocal[0] * n.x + toLocal[1] * n.y + toLocal[2] * n.z,
+				toLocal[4] * n.x + toLocal[5] * n.y + toLocal[6] * n.z,
+				toLocal[8] * n.x + toLocal[9] * n.y + toLocal[10] * n.z));
+			// Only the side facing what hit it: not the far wall, nor a panel turned away.
+			const float facing = -Dot(outward, into);
+			if (facing < -0.3f)
 				continue;
-			const R3Vector targetLocal = Add(base, Scale(localInto, push));
-			const R3Vector dent = Sub(targetLocal, soft->restLocal[i]);
-			if (Length(dent) > soft->dentDepth)
+			const R3Vector previous = soft->dents[i];
+			const R3Vector place = MatPoint(soft->lastObject, Add(soft->restLocal[i], previous));
+			const R3Vector gap = Sub(place, contact);
+			// Distance across the struck surface, plus how far behind the contact the vertex sits.
+			const float behind = std::max(Dot(gap, into), 0.0f);
+			const R3Vector across = Sub(gap, Scale(into, Dot(gap, into)));
+			const float off = std::sqrt(behind * behind + Dot(across, across));
+			float fade = 1.0f - off / reach;
+			if (fade <= 0.0f)
 				continue;
-			if (i < soft->dents.size())
-				soft->dents[i] = dent;
-			SetParticle(soft, i, MatPoint(soft->lastObject, targetLocal));
+			fade = fade * fade * (3.0f - 2.0f * fade);
+			const float facingWeight = std::clamp((facing + 0.3f) / 0.8f, 0.0f, 1.0f);
+			const float push = depth * fade * facingWeight - soft->dentYield;
+			if (push <= 0.0f)
+				continue;
+			R3Vector way = Normalize(Add(into, Scale(outward, -1.0f)));
+			if (Length(way) < 1.0e-5f)
+				way = into;
+			// World-space push into the object's space; the total stays within the limit, in metres.
+			R3Vector current = Add(previous, MatDirection(toLocal, Scale(way, push)));
+			const float total = Length(MatDirection(soft->lastObject, current));
+			if (total > limit)
+				current = Scale(current, limit / total);
+			if (Length(MatDirection(soft->lastObject, Sub(current, previous))) <= 1.0e-5f)
+				continue;
+			SetDentVertex(soft, &carrier, i, current);
 			changed = true;
 		}
 		if (changed)
 		{
 			soft->dentRevision++;
-			soft->lastDentSum = 0.0f;
 			r3SoftBody_WakeUp(soft->handle);
 		}
+		return changed;
 	}
 
 	void UpdateShellDents(World* world)
@@ -3231,93 +4036,114 @@ namespace
 			SoftBody* soft = entry.second;
 			if (soft->kind != 2 || soft->impacts == 0 || soft->ignoredBody == NoBody || !Valid(soft->handle))
 				continue;
-			Body* shellBody = world->Find(soft->ignoredBody);
-			if (shellBody == nullptr)
+			const Body* carrier = world->Find(soft->ignoredBody);
+			if (carrier == nullptr)
 				continue;
-			std::vector<R3ContactPair> pairs(32);
-			std::vector<R3ColliderHandle> colliders = shellBody->colliders;
-			if (Valid(soft->deformable))
-				colliders.push_back(soft->deformable);
-			for (R3ColliderHandle collider : colliders)
+			UpdateShellObjectFromCarrier(soft, *carrier);
+			const R3Vector shellCenter = r3RigidBody_CenterOfMass(carrier->handle);
+			const bool nativeSurface = Valid(soft->deformable);
+			const std::vector<R3ColliderHandle> surface = nativeSurface ?
+				std::vector<R3ColliderHandle>{soft->deformable} : carrier->colliders;
+			std::unordered_set<uint32_t> activeDents;
+			std::vector<R3ContactPair> pairs;
+			std::vector<R3ContactPoint> points;
+			std::vector<R3ContactManifold> manifolds;
+			std::vector<R3SolverContact> solverContacts;
+			for (R3ColliderHandle collider : surface)
 			{
-				size_t count = r3Collider_ContactPairs(collider, pairs.data(), pairs.size());
+				pairs.resize(r3Collider_ContactPairs(collider, nullptr, 0));
+				if (pairs.empty())
+					continue;
+				const size_t count = r3Collider_ContactPairs(collider, pairs.data(), pairs.size());
 				if (count > pairs.size())
-				{
-					pairs.resize(count);
-					count = r3Collider_ContactPairs(collider, pairs.data(), pairs.size());
-				}
-				count = std::min(count, pairs.size());
+					continue;
+				const R3Pose pose = r3Collider_Position(collider);
 				for (size_t p = 0; p < count; p++)
 				{
 					const R3ContactPair& pair = pairs[p];
-					const R3ColliderHandle other = Same(pair.collider1, collider) ? pair.collider2 : pair.collider1;
+					const bool first = Same(pair.collider1, collider);
+					const R3ColliderHandle other = first ? pair.collider2 : pair.collider1;
 					if (!Valid(other))
 						continue;
-					R3ContactPoint points[8];
-					const size_t pointCount = std::min(r3ContactPoints(collider, other, points, 8), (size_t)8);
-					if (pointCount == 0)
+					const uint32_t key = ColliderKey(other);
+					if (activeDents.count(key) != 0)
 						continue;
-					const R3ContactPair ordered = r3ContactPair(collider, other);
-					const bool flipped = !Same(ordered.collider1, collider);
-					const R3RigidBodyHandle otherBody = r3Collider_Parent(other);
-					R3Pose pose = r3Collider_Position(collider);
-					for (size_t k = 0; k < pointCount; k++)
+
+					const int sign = first ? -1 : 1;
+					const uint32_t otherId = BodyIdOfCollider(world, other);
+					const Body* otherBody = world->Find(otherId);
+					const R3Vector otherCenter = otherBody != nullptr ? r3RigidBody_CenterOfMass(otherBody->handle) : V(0, 0, 0);
+					const float contactDistance = std::max(soft->radius * 2.0f, 0.02f);
+					float bestDepth = contactDistance;
+					float bestSpeed = 0.0f;
+					bool hasContact = false;
+					R3Vector bestPoint{}, bestNormal{};
+					const auto considerContact = [&](R3Vector at, R3Vector normal, float distance)
 					{
-						// Point the normal from the other body into the shell (the way it pushes).
-						R3Vector normal = points[k].normal;
-						if (!flipped)
-							normal = Scale(normal, -1.0f);
-						const R3Vector localPoint = flipped ? points[k].local_p2 : points[k].local_p1;
-						const R3Vector at = Add(pose.translation, QRot(pose.rotation, localPoint));
-						// Read the speeds from before the step: the solver has already stopped a hit by now, and a
-						// stiff shell can stop it in the very step that made the contact.
-						const R3Vector shellVelocity = shellBody->prevLinear;
-						Body* otherEntry = nullptr;
-						if (Valid(otherBody))
+						if (!std::isfinite(distance) || distance > contactDistance)
+							return;
+						hasContact = true;
+						const R3Vector inward = Scale(normal, (float)sign);
+						const R3Vector shellVelocity = Add(carrier->prevLinear, Cross(carrier->prevAngular, Sub(at, shellCenter)));
+						R3Vector otherVelocity = V(0, 0, 0);
+						if (otherBody != nullptr)
+							otherVelocity = Add(otherBody->prevLinear, Cross(otherBody->prevAngular, Sub(at, otherCenter)));
+						float speed = Dot(Sub(otherVelocity, shellVelocity), inward);
+						if (otherBody != nullptr && otherBody->motion == 2)
 						{
-							for (auto& entry : world->bodies)
+							// The soft contact can reach the narrow phase a step after Rapier stopped the impact.
+							speed = std::max(speed, Dot(Sub(otherBody->prevPrevLinear, shellVelocity), inward));
+							speed = std::max(speed, Dot(Sub(otherBody->prevPrevPrevLinear, shellVelocity), inward));
+						}
+						if (speed <= soft->dentSpeed || distance > bestDepth)
+							return;
+						bestDepth = distance;
+						bestSpeed = speed;
+						bestPoint = at;
+						bestNormal = inward;
+					};
+					if (nativeSurface)
+					{
+						// Rapier resolves the triangle's contact anchors into world-space surface
+						// points. The geometric points alone can be relative to a subshape.
+						manifolds.resize(r3ContactManifolds(collider, other, nullptr, 0));
+						const size_t manifoldCount = r3ContactManifolds(collider, other, manifolds.data(), manifolds.size());
+						for (size_t m = 0; m < std::min(manifoldCount, manifolds.size()); m++)
+						{
+							const R3ContactManifold& manifold = manifolds[m];
+							if (manifold.num_solver_contacts == 0)
+								continue;
+							solverContacts.resize(manifold.num_solver_contacts);
+							const size_t contactCount = r3SolverContacts(collider, other, m, solverContacts.data(), solverContacts.size());
+							for (size_t k = 0; k < std::min(contactCount, solverContacts.size()); k++)
 							{
-								if (entry.second.handle.index == otherBody.index &&
-									entry.second.handle.generation == otherBody.generation)
-								{
-									otherEntry = &entry.second;
-									break;
-								}
+								const R3SolverContact& contact = solverContacts[k];
+								considerContact(first ? contact.point1 : contact.point2, manifold.normal, contact.distance);
 							}
 						}
-						R3Vector otherVelocity = otherEntry != nullptr ? otherEntry->prevLinear : V(0, 0, 0);
-						if (otherEntry != nullptr)
-						{
-							if (Length(otherEntry->prevPrevLinear) > Length(otherVelocity))
-								otherVelocity = otherEntry->prevPrevLinear;
-							if (Length(otherEntry->prevPrevPrevLinear) > Length(otherVelocity))
-								otherVelocity = otherEntry->prevPrevPrevLinear;
-						}
-						float speed = std::fabs(Dot(Sub(otherVelocity, shellVelocity), normal));
-						// The solver has already resolved the contact by now; the impulse it applied says how hard the
-						// hit was.
-						if (Valid(otherBody) && p < count)
-						{
-							const float mass = std::max(r3RigidBody_Mass(otherBody), 0.001f);
-							speed = std::max(speed, pair.total_impulse_magnitude / mass);
-						}
-						DentShell(world, soft, at, normal, speed);
 					}
+					else
+					{
+						points.resize(r3ContactPoints(collider, other, nullptr, 0));
+						const size_t pointCount = r3ContactPoints(collider, other, points.data(), points.size());
+						for (size_t k = 0; k < std::min(pointCount, points.size()); k++)
+						{
+							const R3ContactPoint& point = points[k];
+							const R3Vector localPoint = first ? point.local_p1 : point.local_p2;
+							considerContact(Add(pose.translation, QRot(pose.rotation, localPoint)), point.normal, point.distance);
+						}
+					}
+					if (hasContact && (soft->dentedContacts.count(key) != 0 ||
+						(Length(bestNormal) >= 1.0e-5f && DentShell(soft, *carrier, otherBody, bestPoint, bestNormal, bestSpeed))))
+						activeDents.insert(key);
 				}
 			}
+			soft->dentedContacts.swap(activeDents);
 		}
 	}
 
 	void UpdateTorn(World* world)
 	{
-		// Geometric tearing for the bodies the toggle enables. Rapier's own strain test needs a well-resolved,
-		// softly constrained mesh; an explicit edge-stretch check is predictable for the small meshes the engine
-		// draws (and still uses Rapier's tear pass to split the body).
-		for (auto& entry : world->softBodies)
-		{
-			if (entry.second->tear && !entry.second->torn)
-				tn_rapier_soft_tear(world, entry.first);
-		}
 		if (world->events == nullptr)
 			return;
 		const size_t count = r3EventCollector_TearEventCount(world->events);
@@ -3348,7 +4174,8 @@ void tn_rapier_soft_update_after_step(World* world)
 // =====================================================================================================================
 
 uint32_t tn_rapier_rope_create(void* raw, const float* positions, uint32_t count, const float* pinned,
-	float totalMass, float stretch, float bend, float damping, float radius, const float center[3],
+	float totalMass, float stretch, float bend, float damping, float radius, float friction, int32_t iterations,
+	uint32_t memberships, uint32_t filter, uint32_t group, const float center[3],
 	uint64_t userData)
 {
 	World* world = static_cast<World*>(raw);
@@ -3378,44 +4205,49 @@ uint32_t tn_rapier_rope_create(void* raw, const float* positions, uint32_t count
 	desc.kind = R3_SOFT_DESC_PARTICLES;
 	desc.positions = R3VectorView{worldPositions.data(), worldPositions.size()};
 	desc.edges = R3EdgeView{edges.data(), edges.size()};
+	desc.wire = desc.edges;
 	if (!bendEdges.empty())
 		desc.bendEdges = R3EdgeView{bendEdges.data(), bendEdges.size()};
 	if (!pinnedIndices.empty())
 		desc.pinned = R3IndexView{pinnedIndices.data(), pinnedIndices.size()};
-	desc.totalMass = R3OptionalReal{1, std::max(totalMass, 0.001f)};
+	desc.particleMass = std::max(totalMass, 0.001f) / (float)std::max((size_t)count - pinnedIndices.size(), size_t{1});
 	desc.particleRadius = R3OptionalReal{1, std::max(radius, 0.001f)};
 	desc.gravityScale = 1;
 	desc.linearDamping = std::max(damping, 0.0f);
 	desc.canSleep = 1;
 	desc.collisionEnabled = 1;
-	desc.collider = r3DefaultColliderDesc();
-	desc.collider.shape.kind = R3_SHAPE_DESC_BALL;
-	desc.collider.shape.radius = std::max(radius, 0.001f);
+	desc.collider.friction = std::max(friction, 0.0f);
+	desc.collider.collisionGroups = R3InteractionGroups{memberships, filter, 0};
+	desc.collider.solverGroups = desc.collider.collisionGroups;
+	desc.collider.activeHooks = R3_FILTER_CONTACT_PAIRS;
+	desc.additionalPgsIterations = (size_t)(iterations > 0 ? std::clamp(iterations, 1, 32) : 3);
 	desc.material = r3DefaultSoftBodyMaterial();
 	const float frequency = std::clamp(1.0f / std::sqrt(std::max(stretch, 1.0e-9f)), 1.0f, 200.0f);
 	const float bendFrequency = std::clamp(1.0f / std::sqrt(std::max(bend, 1.0e-9f)), 1.0f, 200.0f);
 	desc.material.edgeSoftness = R3SpringCoefficients{frequency, std::clamp(damping, 0.0f, 1.0f)};
 	desc.material.bendSoftness = R3SpringCoefficients{bendFrequency, std::clamp(damping, 0.0f, 1.0f)};
+	const uint32_t id = AllocateId(world, NoBody);
+	desc.userData = R3UserData{id, 0};
 	const R3SoftBodyHandle handle = r3InsertSoftBody(world->world, &desc);
 	if (!Valid(handle))
 		return NoBody;
 	SoftBody* soft = new SoftBody();
 	soft->handle = handle;
 	soft->count = (int32_t)count;
-	soft->center = offset;
 	soft->userData = userData;
 	soft->kind = 4;
+	soft->collisionInfo.group = group;
+	soft->collisionInfo.motionClass = 1;
 	soft->totalMass = std::max(totalMass, 0.001f);
+	soft->particleMass = desc.particleMass;
 	soft->radius = std::max(radius, 0.001f);
 	soft->restLocal.resize((size_t)count);
 	for (uint32_t i = 0; i < count; i++)
 		soft->restLocal[i] = V(&positions[i * 3]);
 	MatIdentity(soft->lastObject);
-	const uint32_t id = AllocateId(world, NoBody);
 	world->softBodies[id] = soft;
-	const R3RigidBodyHandle root = r3SoftBody_RootBody(handle);
-	if (Valid(root))
-		r3RigidBody_SetUserData(root, R3UserData{id, 0});
+	r3SoftBody_WakeUp(handle);
+	world->MarkQueryFull();
 	return id;
 }
 
@@ -3527,7 +4359,6 @@ void tn_rapier_rope_wind(void* raw, uint32_t body, const float* wind, float radi
 	if (count < 2)
 		return;
 	const float density = 1.2f, cylinder = 1.2f;
-	const float invMass = (float)soft->count / std::max(soft->totalMass, 1.0e-6f);
 	const R3Vector air = V(wind);
 	const float effectiveRadius = radius > 0.0f ? radius : soft->radius;
 	for (size_t i = 0; i < count; i++)
@@ -3550,7 +4381,7 @@ void tn_rapier_rope_wind(void* raw, uint32_t body, const float* wind, float radi
 		across = Sub(across, Scale(tangent, Dot(tangent, across)));
 		const R3Vector impulse = Scale(across, 0.5f * density * cylinder * drag * 2.0f * effectiveRadius * span *
 			Length(across) * step);
-		r3SoftBody_SetParticleVelocity(soft->handle, i, Add(velocities[i], Scale(impulse, invMass)));
+		ApplyDragImpulse(soft, i, impulse, across);
 	}
 	r3SoftBody_WakeUp(soft->handle);
 }
@@ -3968,6 +4799,10 @@ namespace
 		{
 			Body& body = entry.second;
 			body.handle = byId[entry.first];
+			body.hasStepForce = false;
+			body.hasStepTorque = false;
+			world->MarkStepForce(entry.first, body, Length(r3RigidBody_UserForce(body.handle)) > 0.0f,
+				Length(r3RigidBody_UserTorque(body.handle)) > 0.0f);
 			std::vector<R3ColliderHandle> colliders(64);
 			size_t colliderCount = r3RigidBody_Colliders(body.handle, colliders.data(), colliders.size());
 			if (colliderCount > colliders.size())
@@ -3977,9 +4812,26 @@ namespace
 			}
 			body.colliders.assign(colliders.begin(), colliders.begin() + std::min(colliderCount, colliders.size()));
 		}
-		// Soft bodies.
+		// Soft bodies and colliders keep their arena indices, but their handles now refer to the restored world.
+		world->deformableOwners.clear();
 		for (auto& entry : world->softBodies)
-			entry.second->handle = softById[entry.first];
+		{
+			SoftBody* soft = entry.second;
+			soft->handle = softById[entry.first];
+			if (soft->hasCollider)
+				soft->collisionInfo.handle = r3SoftBody_RootBody(soft->handle);
+			if (!Valid(soft->deformable))
+				continue;
+			soft->deformable.world = fresh;
+			if (Valid(soft->replacedCollider))
+				soft->replacedCollider.world = fresh;
+			if (Body* carrier = world->Find(soft->ignoredBody))
+			{
+				carrier->shellSurface = soft->deformable;
+				UpdateFilterHooks(*carrier);
+			}
+			world->deformableOwners[ColliderKey(soft->deformable)] = soft->ignoredBody;
+		}
 		// Characters (their controllers and shapes are world-independent).
 		for (auto& entry : world->characters)
 		{
@@ -4055,11 +4907,11 @@ namespace
 		}
 
 		world->world = fresh;
-		world->queryDirty = true;
-		world->activePairKeys.clear();
+		world->MarkQueryFull();
 		world->activePairList.clear();
 		world->recentHits.clear();
-		world->deformableOwners.clear();
+		world->recentHitNext = 0;
+		world->colliderInfo.clear();
 		if (world->events != nullptr)
 			r3EventCollector_Clear(world->events);
 		r3FreeWorld(old);

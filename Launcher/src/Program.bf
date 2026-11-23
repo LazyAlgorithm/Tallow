@@ -1029,6 +1029,13 @@ class Program
 				return PhysicsRopeTest.Run();
 			if (args[i] == "--test-physics-rapier")
 				return PhysicsRapierTest.Run();
+			if (args[i] == "--test-shell-dents" && i + 2 < args.Count)
+				return ShellDentProbe.Run(args[i + 1], args[i + 2], (i + 3 < args.Count) ? args[i + 3] : "Blue shell");
+			if (args[i] == "--test-physics-contact-events")
+				return PhysicsContactEventsTest.Run((i + 1 < args.Count && !args[i + 1].StartsWith("-")) ? args[i + 1] : "Rapier");
+			if (args[i] == "--bench-physics" && i + 1 < args.Count)
+				return PhysicsBenchmark.Run(args[i + 1], (i + 2 < args.Count) ? (int.Parse(args[i + 2]) case .Ok(let n) ? n : 1500) : 1500,
+					(i + 3 < args.Count) ? (int.Parse(args[i + 3]) case .Ok(let m) ? m : 32) : 32);
 			if (args[i] == "--test-vehicle-template" && i + 1 < args.Count)
 				return VehicleTemplateTest.Run(args[i + 1]);
 			if (args[i] == "--test-car-scene" && i + 1 < args.Count)

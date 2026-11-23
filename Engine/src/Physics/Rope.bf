@@ -717,6 +717,15 @@ class Rope : Component
 		let read = mSoft.Read(mBody, (float*)mPositions.Ptr, null, (uint32)count);
 		if (read != (uint32)count)
 			return;
+		// The pinned particles used the pre-step attachment pose. Draw the end rings at the
+		// actual attachments after the Rigidbody has moved, so a fast swing cannot leave a gap.
+		if (count > 1)
+		{
+			if (StartHeld)
+				mPositions[0] = StartPoint;
+			if (endAttachedTo != null)
+				mPositions[count - 1] = EndPoint;
+		}
 		BuildTube();
 		mMesh.UpdateDynamic();
 	}

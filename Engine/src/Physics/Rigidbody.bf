@@ -103,7 +103,8 @@ struct Rigidbody : ComponentHandle<RigidbodyData>
 			state.warned = true;
 			return;
 		}
-		state.body = mGameObject.Scene.Physics.CreateBody(Transform, collider.GetShape(), &Data);
+		if (!collider.ReplacedBySoftSurface)
+			state.body = mGameObject.Scene.Physics.CreateBody(Transform, collider.GetShape(), &Data);
 	}
 
 	void DestroyBody()
@@ -145,7 +146,8 @@ struct Rigidbody : ComponentHandle<RigidbodyData>
 			}
 			let gameObject = state.gameObject;
 			let body = gameObject.GetComponent<Rigidbody>();
-			if (!playing || !body || !body.enabled || !gameObject.ActiveInHierarchy)
+			if (!playing || !body || !body.enabled || !gameObject.ActiveInHierarchy ||
+				gameObject.GetComponent<Collider>()?.ReplacedBySoftSurface == true)
 				state.DestroyBody();
 			if (!playing)
 				state.ready = false;

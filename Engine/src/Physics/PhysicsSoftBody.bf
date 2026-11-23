@@ -17,6 +17,8 @@ struct PhysicsSoftBodyConfig
 	public int32 kind;
 	/// 1 when this body may tear.
 	public int32 tear;
+	// Normalized material controls for backends that use spring frequencies or elastic moduli.
+	public float surfaceStiffness, bendStiffness, wobbleDamping, bounciness;
 }
 
 /// A rope's settings, independent of the backend. The field order matches native/tallow_softbody.cpp's RopeConfig.
@@ -45,6 +47,7 @@ abstract class PhysicsSoftBodyExtension
 
 	public abstract uint32 Create(PhysicsSoftBodyConfig* config, float* positions, uint32 vertexCount,
 		uint32* triangles, uint32 triangleCount, float* pinned, float* stiffness, float* center, float* objectMatrix);
+	public virtual bool HasNativeCollider(uint32 bodyId) => false;
 	public abstract void Ignore(uint32 bodyId, uint32 ignoredBody);
 	public abstract void Forget(uint32 bodyId);
 	public abstract void Skin(uint32 bodyId, float* objectMatrix, float* objectNext, float step);
