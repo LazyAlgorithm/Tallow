@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Every modelling tool by name, with its shortcut (docs/modeling.md). The table drives the keys in edit mode, the
+/// Every modelling tool by name, with its shortcut (tallowengine.com/docs/modeling). The table drives the keys in edit mode, the
 /// right-click menu, the Space search, the Model window's hints and the F1 sheet, so they all agree.
 extension EditorApp
 {

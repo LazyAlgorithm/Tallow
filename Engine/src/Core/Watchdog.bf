@@ -27,15 +27,8 @@ static class Watchdog
 	/// Called once a frame by the main loop.
 	public static void Beat()
 	{
-		if (Interlocked.Increment(ref sBeats) == 200 && TestStall)
-		{
-			Stage = "stalling on purpose, for a test";
-			Thread.Sleep(5000);
-		}
+		Interlocked.Increment(ref sBeats);
 	}
-
-	/// For tests (--teststall): the main loop stops for five seconds at its 200th frame.
-	public static bool TestStall;
 
 	public static void Start()
 	{

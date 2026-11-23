@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// World streaming in the editor (docs/world-streaming.md): the scene settings, the Always Loaded box, and the World
+/// World streaming in the editor (tallowengine.com/docs/world-streaming): the scene settings, the Always Loaded box, and the World
 /// Map window that shows the grid of cells and loads or takes out the ones picked. Only the cells round the view are
 /// loaded when a streamed world is opened; loading or taking out cells starts the undo history afresh.
 extension EditorApp

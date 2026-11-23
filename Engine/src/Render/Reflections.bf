@@ -5,7 +5,7 @@ using Bgfx;
 namespace Tallow;
 
 /// Captures what can be seen from a point into a cube, for the shiny surfaces inside its box to mirror: floors,
-/// metal, glass, water, wet streets (docs/reflections.md). Without one, surfaces mirror the sky, which looks wrong
+/// metal, glass, water, wet streets (tallowengine.com/docs/reflections). Without one, surfaces mirror the sky, which looks wrong
 /// indoors: put a probe in each room, sized to its walls. It captures when it is first drawn, and again with
 /// Capture() (or every refreshInterval seconds). What is in the box is lit by its cube, fading into the sky or the
 /// next probe over blendDistance from its edges.
@@ -224,7 +224,7 @@ class ReflectionProbeState
 	}
 }
 
-/// Reflections (docs/reflections.md): the sky's cube, which every surface mirrors, and the reflection probes'.
+/// Reflections (tallowengine.com/docs/reflections): the sky's cube, which every surface mirrors, and the reflection probes'.
 /// Each cube is drawn and then filtered into levels for rougher surfaces (a GGX blur, rougher down the mip levels),
 /// a little each frame so that nothing stalls: the sky in one frame plus one per level, a probe in six (one face
 /// each) plus one per level. The sky's cube is made again when the sky or the sun changes.

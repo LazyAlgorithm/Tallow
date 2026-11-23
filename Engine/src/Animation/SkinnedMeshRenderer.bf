@@ -10,7 +10,7 @@ namespace Tallow;
 /// material saved in the file (its textures included) unless the part is given a .tmat of its own (the Inspector
 /// lists the parts; SetPartMaterial from code). A material on the Mesh Renderer covers every part that has none of
 /// its own. A model with one plain material is one mesh drawn with the Mesh Renderer's settings, as before.
-/// See docs/skinned-materials.md.
+/// See tallowengine.com/docs/skinned-materials.
 /// A Skinned Mesh Renderer's settings, in its entity (SkinnedMeshRenderer is the handle).
 [Component, HandleData]
 struct SkinnedMeshRendererData
@@ -943,7 +943,7 @@ class SkinnedRig
 
 	void SkinVertices()
 	{
-		// On the graphics card when it can (docs/gpu-skinning.md); on the CPU, with the other models, at the end of the
+		// On the graphics card when it can (tallowengine.com/docs/gpu-skinning); on the CPU, with the other models, at the end of the
 		// frame otherwise.
 		if (SkinOnGpu())
 			return;

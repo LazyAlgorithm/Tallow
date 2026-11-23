@@ -55,7 +55,7 @@ def threads_enabled():
     thread. The engine reaches the browser through the page: Emscripten's offscreen framebuffer proxies its WebGL
     calls to the page, and native/tallow_web.c sends the engine's DOM and page-callback calls there too. SDL already
     registers its input callbacks for the thread that created the window. The page must be cross-origin isolated
-    (shared memory): see coi-serviceworker.js and docs/web.md."""
+    (shared memory): see coi-serviceworker.js and tallowengine.com/docs/web."""
     return os.environ.get('TALLOW_WEB_THREADS', '0').strip().lower() in ('1', 'true', 'yes', 'on')
 
 

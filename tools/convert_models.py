@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Converts a project's FBX, OBJ, DAE, STL, PLY, 3DS and .blend files to .glb, as the editor does
-(docs/model-import.md): the same converters in the same order, the same cache (<project>/.cache/models), then the
+(tallowengine.com/docs/model-import): the same converters in the same order, the same cache (<project>/.cache/models), then the
 import settings kept beside each file. tools/build_player.py uses it to put the converted models in a build.
 
     python3 tools/convert_models.py <project>      # converts what is out of date, prints what it did

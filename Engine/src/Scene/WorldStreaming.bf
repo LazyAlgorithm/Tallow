@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace Tallow;
 
-/// What a streamed world loads round (docs/world-streaming.md): put one on the player (on a server every player's
+/// What a streamed world loads round (tallowengine.com/docs/world-streaming): put one on the player (on a server every player's
 /// object has one, so the world is loaded round each of them), a vehicle or a camera. With none in the scene, the
 /// world streams round the scene's cameras.
 ///
@@ -25,7 +25,7 @@ struct StreamingSourceData
 	public this() { }
 }
 
-/// World streaming (docs/world-streaming.md): one large scene, saved as a grid of cells that load and unload round
+/// World streaming (tallowengine.com/docs/world-streaming): one large scene, saved as a grid of cells that load and unload round
 /// the players with no code.
 static class WorldStreaming
 {

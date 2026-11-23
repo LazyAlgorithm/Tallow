@@ -5,7 +5,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// The modeller (docs/modeling.md): shapes drawn straight into the Scene view, and an edit mode (Tab on a selected
+/// The modeller (tallowengine.com/docs/modeling): shapes drawn straight into the Scene view, and an edit mode (Tab on a selected
 /// model) where vertices, edges and faces are picked and moved with the gizmo and changed with the Model window's
 /// tools. Edits go into the Model Mesh component's text, so the scene's undo covers them.
 extension EditorApp

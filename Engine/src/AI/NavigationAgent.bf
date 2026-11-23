@@ -37,7 +37,7 @@ struct NavigationAgentData
 
 /// Moves its object along paths found on a Navigation Surface: call SetDestination, then watch HasArrived or
 /// PathFailed. It walks through the object's Character Controller or Rigidbody when it has one. See
-/// docs/navigation.md.
+/// tallowengine.com/docs/navigation.
 ///
 /// A handle (ComponentHandle): its settings are NavigationAgentData's fields, its path and steering its
 /// NavigationAgentState. Agents move on in the Frame.Navigation step after the scripts' Update and in the

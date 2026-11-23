@@ -123,7 +123,7 @@ class GameApp : Application
 		if (!camera)
 			return;
 		mView.Resize(Width, Height);
-		// --effects "ao=1,dof=0.6,...": try the screen effects on any scene (docs/post-processing.md).
+		// --effects "ao=1,dof=0.6,...": try the screen effects on any scene (tallowengine.com/docs/post-processing).
 		if (GetArg("--effects", mEffectsArg))
 			PostProcess.ApplySettings(mEffectsArg, mScene.Environment);
 		mView.Render(mScene, camera.GetCameraData((float)Width / Math.Max(Height, 1)));

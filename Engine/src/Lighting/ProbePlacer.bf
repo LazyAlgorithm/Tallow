@@ -4,7 +4,7 @@ using System.Threading;
 
 namespace Tallow;
 
-/// What automatic probe placement places (docs/probe-placement.md).
+/// What automatic probe placement places (tallowengine.com/docs/probe-placement).
 class ProbePlacementSettings
 {
 	/// Reflection Probes: one per room or covered place, more by doorways and shiny floors, and in open ground.
@@ -151,7 +151,7 @@ class ProbePlan
 	}
 }
 
-/// Places light and reflection probes where they make sense (docs/probe-placement.md). It looks at the scene's
+/// Places light and reflection probes where they make sense (tallowengine.com/docs/probe-placement). It looks at the scene's
 /// still objects on a grid of cells, sending rays from each empty cell to see how enclosed it is, what is above
 /// and below it, how much sky it sees and how much light reaches it from the lights round it. From that:
 ///

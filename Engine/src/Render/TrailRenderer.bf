@@ -47,7 +47,7 @@ struct TrailRendererData
 	public this() { }
 }
 
-/// A trail left behind this object as it moves (docs/lines-and-trails.md): a flat strip facing the viewer through
+/// A trail left behind this object as it moves (tallowengine.com/docs/lines-and-trails): a flat strip facing the viewer through
 /// where the object has been in the last Time seconds, thinning and fading towards its tail. Rockets, sword swings,
 /// balls in flight, skid marks (with Transform Z alignment). Its look is its own
 /// (colours, Material, Texture, Glow), drawn through a hidden child object, so it goes on anything, a ball's own

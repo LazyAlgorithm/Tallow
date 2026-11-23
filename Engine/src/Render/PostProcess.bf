@@ -7,7 +7,7 @@ namespace Tallow;
 /// The player's choices about the screen effects, for a game's settings menu. The scene decides how much ambient
 /// occlusion, depth of field and motion blur it has (SceneEnvironment); these let a player turn each off, or tone
 /// motion blur down, and set the brightness. They are plain static fields: a game keeps them with its own saved
-/// settings and copies them here when they change (docs/post-processing.md has an example).
+/// settings and copies them here when they change (tallowengine.com/docs/post-processing has an example).
 static class ScreenEffects
 {
 	/// Ambient occlusion, depth of field and motion blur cost a second pass over the scene's solid objects and several
@@ -37,7 +37,7 @@ static class ScreenEffects
 	}
 }
 
-/// Colour lookup tables for the scene's colour grading (SceneEnvironment.colorLookup). See docs/post-processing.md.
+/// Colour lookup tables for the scene's colour grading (SceneEnvironment.colorLookup). See tallowengine.com/docs/post-processing.
 ///
 /// A lookup table is an image of `size` squares side by side, each `size` x `size` pixels: within a square red grows
 /// to the right and green downwards, and blue grows from square to square. A neutral table changes nothing; open one

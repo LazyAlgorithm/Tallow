@@ -4,7 +4,7 @@ using System.IO;
 
 namespace Tallow;
 
-/// What kind of skeleton a rig starts from (docs/rigging.md).
+/// What kind of skeleton a rig starts from (tallowengine.com/docs/rigging).
 enum RigTemplate
 {
 	/// Two legs, two arms and a head, with Mixamo's bone names, so that Mixamo's animations and the engine's humanoid
@@ -97,7 +97,7 @@ class RigImage
 	public int32 width, height;
 }
 
-/// A rig in the making (docs/rigging.md): a still model (a .glb or .gltf), the skeleton put in it, and how much each
+/// A rig in the making (tallowengine.com/docs/rigging): a still model (a .glb or .gltf), the skeleton put in it, and how much each
 /// bone moves each vertex. Saved as a `.trig` text file beside the model, and written as a rigged `.glb` that a
 /// Skinned Mesh Renderer plays animations on.
 ///
@@ -565,7 +565,7 @@ class Rig
 	/// vertex's weights to four places, as bone:weight pairs).
 	public void Write(String output)
 	{
-		output.Append("# Tallow rig (docs/rigging.md)\n");
+		output.Append("# Tallow rig (tallowengine.com/docs/rigging)\n");
 		output.AppendF("source \"{}\"\n", source);
 		output.AppendF("template {}\n", template);
 		output.AppendF("facing {} {} {}\n", facing.x, facing.y, facing.z);

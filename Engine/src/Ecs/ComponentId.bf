@@ -72,7 +72,7 @@ static class ComponentTypes
 }
 
 /// A data component type's index in ComponentTypes, given out the first time the type is used. Data components
-/// are plain structs with no heap fields (docs/ecs-plan.md, "Systems").
+/// are plain structs with no heap fields.
 static class ComponentId<T> where T : struct
 {
 	public static readonly int32 Index = ComponentTypes.Add(typeof(T), strideof(T), alignof(T));

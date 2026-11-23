@@ -18,7 +18,7 @@ struct ShadowTile
 	public int32 x, y, size;
 }
 
-/// The point, spot and extra directional lights of one view, sorted into clusters (docs/lighting.md). The view is
+/// The point, spot and extra directional lights of one view, sorted into clusters (tallowengine.com/docs/lighting). The view is
 /// cut into a grid of 16 x 9 cells across the screen and 24 slices in depth; each cluster lists the lights whose
 /// reach touches it, so a pixel only works through the lights near it, however many the scene has. The lights,
 /// their shadow tiles and the lists go to the shaders in one float texture per view.

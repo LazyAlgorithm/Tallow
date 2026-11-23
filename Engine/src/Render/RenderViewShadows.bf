@@ -5,7 +5,7 @@ using Bgfx;
 namespace Tallow;
 
 /// The sun's shadows (four cascades fitted round the camera's view, drawn into the shadow atlas) and the point and
-/// spot lights' (tiles of a second atlas, docs/lighting.md).
+/// spot lights' (tiles of a second atlas, tallowengine.com/docs/lighting).
 extension RenderView
 {
 	/// The sun's four shadow cascades, one tile of the shadow atlas each.

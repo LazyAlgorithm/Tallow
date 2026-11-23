@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Picking in the modeller's edit mode (docs/modeling.md): what is under the pointer, loops (Alt+click), paths
+/// Picking in the modeller's edit mode (tallowengine.com/docs/modeling): what is under the pointer, loops (Alt+click), paths
 /// (Ctrl+click), growing, shrinking, inverting and hiding, and how the selection is drawn in the Scene view.
 extension EditorApp
 {

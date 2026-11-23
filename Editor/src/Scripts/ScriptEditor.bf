@@ -556,7 +556,6 @@ extension EditorApp
 			return;
 		}
 		Log.Info(scope $"C# reloaded into Play: {kept} script{(kept == 1 ? "" : "s")} kept their fields.");
-		mHotReloadsDone++;
 		mStatus.Set("C# reloaded into Play.");
 	}
 

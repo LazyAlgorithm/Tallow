@@ -4,7 +4,7 @@ using System.Threading;
 
 namespace Tallow;
 
-/// How the light baker works (docs/baked-lighting.md).
+/// How the light baker works (tallowengine.com/docs/baked-lighting).
 class BakeSettings
 {
 	/// Lightmap texels for each metre of surface.
@@ -45,7 +45,7 @@ class BakeSettings
 	}
 }
 
-/// Bakes a scene's lighting (docs/baked-lighting.md): for every Mesh Renderer with Baked Lighting ticked, a lightmap of
+/// Bakes a scene's lighting (tallowengine.com/docs/baked-lighting): for every Mesh Renderer with Baked Lighting ticked, a lightmap of
 /// the light reaching each part of it from the sky, from lights marked Baked Only, and bounced off everything else;
 /// and a grid of light probes holding the light bounced round the scene for things that move.
 ///

@@ -4,7 +4,7 @@ using System.IO;
 
 namespace Tallow;
 
-/// A plain-text report of a capture (docs/profiler.md), to read or to give someone (or an AI assistant) debugging a
+/// A plain-text report of a capture (tallowengine.com/docs/profiler), to read or to give someone (or an AI assistant) debugging a
 /// slow game: frame-time spread, the slowest frames with their call trees, the markers that cost most on average,
 /// every thread, GPU passes and every counter. Written from Window > Profiler > Export Report, or with
 /// `--profile-report <file>` on any build when it quits.

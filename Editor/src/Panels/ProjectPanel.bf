@@ -49,7 +49,7 @@ extension EditorApp
 		ModelImport.Update();
 		if (mFolderScanClock.ElapsedMilliseconds < 1000) return;
 		mFolderScanClock.Restart();
-		// FBX, OBJ, ... converted to glTF when first seen and whenever they change (docs/model-import.md).
+		// FBX, OBJ, ... converted to glTF when first seen and whenever they change (tallowengine.com/docs/model-import).
 		if (!mModelsScanned)
 		{
 			mModelsScanned = true;
@@ -90,8 +90,8 @@ extension EditorApp
 
 	/// Program.bf is generated start-up plumbing, not something to edit from the editor.
 	/// Not shown: dot files, the project's plumbing, and "Compiled" folders, which hold built shaders.
-	// An asset's ID file (.tmeta, docs/asset-ids.md) travels with it and is never shown.
-	// A converted model's import settings (docs/model-import.md) are shown in its Inspector, not as a file of their own.
+	// An asset's ID file (.tmeta, tallowengine.com/docs/asset-ids) travels with it and is never shown.
+	// A converted model's import settings (tallowengine.com/docs/model-import) are shown in its Inspector, not as a file of their own.
 	static bool IsHidden(StringView name) => name.StartsWith('.') || name == "Program.bf" || name == "Compiled" || name.EndsWith(AssetDatabase.MetaSuffix) || (name.EndsWith(".import") && (Assets.IsConvertedModel(name.Substring(0, name.Length - 7)) || TextureImportSettings.IsPicture(name.Substring(0, name.Length - 7))));
 
 	void ToRelative(StringView full, String outRelative)
@@ -323,7 +323,6 @@ extension EditorApp
 		ImGui.InvisibleButton("tile", .(mTileSize + 8, mTileSize + labelHeight));
 		if (ImGui.IsItemClicked(1))
 			ImGui.OpenPopup("tilemenu");
-		NoteTestRect(scope $"asset:{entry.path}");
 		let hovered = ImGui.IsItemHovered();
 		if (hovered && ImGui.IsMouseReleased(1))
 			rightClickOnTile = true;
@@ -881,7 +880,6 @@ extension EditorApp
 			ImGui.Text(mNewItemKind == 0 ? "Folder name" : (mNewItemKind == 1 ? "Script / ECS component type name" : (mNewItemKind == 3 ? "Graph name (becomes the component's class name)" : (mNewItemKind == 6 ? "Behavior tree name" : (mNewItemKind == 7 ? "Animator controller name" : (mNewItemKind == 8 ? "Animation clip name" : (mNewItemKind == 9 ? "Material name" : (mNewItemKind == 10 ? "Shader name" : (mNewItemKind == 11 ? "Compute shader name" : (mNewItemKind == 12 ? "Shader graph name" : (mNewItemKind == 16 ? "Shader subgraph name" : (mNewItemKind == 14 ? "Dialogue name" : (mNewItemKind == 15 ? "Sequence name" : "Scene name")))))))))))));
 			ImGui.SetNextItemWidth(300);
 			let enter = ImGui.InputText("##newname", mNewItemName, ImGui.InputFlags.EnterReturnsTrue);
-			NoteTestRect("create-name");
 			if (mNewItemKind == 1)
 				ImGui.TextDisabled("Created in the current Project folder; script changes are detected automatically.");
 			if (ImGui.Button("Create", .(120, 0)) || enter)
@@ -889,7 +887,6 @@ extension EditorApp
 				CreateAsset();
 				ImGui.CloseCurrentPopup();
 			}
-			NoteTestRect("create-asset");
 			ImGui.SameLine();
 			if (ImGui.Button("Cancel", .(120, 0)))
 				ImGui.CloseCurrentPopup();
@@ -983,7 +980,6 @@ extension EditorApp
 			ImGui.SameLine();
 			if (ImGui.Button("Cancel", .(120, 0)))
 				ImGui.CloseCurrentPopup();
-			NoteTestRect("delete-asset-cancel");
 			ImGui.EndPopup();
 		}
 	}
@@ -1113,7 +1109,7 @@ extension EditorApp
 	/// Copies a file or folder dropped from outside the editor into the folder shown in Project.
 	void ImportExternalFile(StringView source)
 	{
-		// A package is opened in Import Package (docs/packages.md), not copied in as a file.
+		// A package is opened in Import Package (tallowengine.com/docs/packages), not copied in as a file.
 		if (ImportDroppedPackage(source))
 			return;
 		let name = scope String();

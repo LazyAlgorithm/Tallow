@@ -20,7 +20,7 @@ enum NavigationLinkKind
 /// A way across that the baked grid does not have: a gap to jump, a ledge to drop off, a ladder, a teleporter. It
 /// runs from this object to End (relative to the object). Agents use it when it is the shorter way, and the game
 /// hears when they start and finish crossing (NavigationAgent.OnLinkStarted / OnLinkFinished), to play a jump or climb
-/// animation. See docs/navigation.md.
+/// animation. See tallowengine.com/docs/navigation.
 [Component]
 class NavigationLink : Component
 {
@@ -96,7 +96,7 @@ class NavigationLink : Component
 
 /// Something that moves around and that agents must keep out of: a crate, a car, a closing door. While it stands
 /// still (or always, with Carve Only Stationary off) it cuts its shape out of the grid so agents plan round it;
-/// while it moves, agents steer round it instead. See docs/navigation.md.
+/// while it moves, agents steer round it instead. See tallowengine.com/docs/navigation.
 [Component]
 class NavigationObstacle : Component
 {
@@ -201,7 +201,7 @@ class NavigationObstacle : Component
 }
 
 /// Part of a surface that costs more to cross (mud, water, a dangerous room) or that agents must not enter: agents
-/// go round it when the way round is not too much longer. See docs/navigation.md.
+/// go round it when the way round is not too much longer. See tallowengine.com/docs/navigation.
 [Component]
 class NavigationArea : Component
 {

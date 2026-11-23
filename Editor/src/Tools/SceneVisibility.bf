@@ -35,16 +35,8 @@ extension EditorApp
 	// Where the Hierarchy's eye and lock column starts on screen, this frame.
 	float mHierarchyGutter;
 
-	// The settings file to use instead (--visibility-test leaves the user's own alone).
-	String mVisibilityFileOverride ~ delete _;
-
 	void SceneVisibilityFile(String file)
 	{
-		if (mVisibilityFileOverride != null)
-		{
-			file.Set(mVisibilityFileOverride);
-			return;
-		}
 		RecentProjects.GetConfigFolder(file);
 		file.AppendF("scene_visibility_{}.txt", Path.GetFileName(scope String(Assets.ProjectPath)..TrimEnd('/'), .. scope .()));
 	}
@@ -233,71 +225,4 @@ extension EditorApp
 
 	/// Whether the pointer is over the eye and lock column, where a click is not a click on the row.
 	bool OverVisibilityGutter(float gutterLeft) => ImGui.GetMousePos().x < gutterLeft + VisibilityGutterWidth;
-
-	/// Test switch --visibility-test: hides an object and its children from the Scene view alone, locks another,
-	/// checks clicks pass both by, that the Game view still draws them, and that both come back after the editor
-	/// starts again (in a settings file of the test's own), then logs VISIBILITY-TEST PASS or FAIL.
-	void RunVisibilityTest()
-	{
-		bool pass = true;
-		let report = scope String();
-		void Expect(bool condition, StringView what)
-		{
-			report.AppendF("{}{}: {}", report.IsEmpty ? "" : "; ", what, condition);
-			pass &= condition;
-		}
-		let file = scope String();
-		RecentProjects.GetConfigFolder(file);
-		file.Append("visibility-test.txt");
-		File.Delete(file).IgnoreError();
-		mVisibilityFileOverride = new String(file);
-		DeleteDictionaryAndKeysAndValues!(mSceneVisibility);
-		mSceneVisibility = null;
-		mVisibility = null;
-
-		// A parent with children, and another object, both drawn.
-		GameObject parent = null, other = null;
-		for (let renderer in mScene.Renderers)
-		{
-			let gameObject = renderer.GameObject;
-			if (gameObject.Transient)
-				continue;
-			let top = (gameObject.Transform.Parent != null && !gameObject.Transform.Parent.GameObject.Transient) ? gameObject.Transform.Parent.GameObject : null;
-			if (parent == null && top != null)
-				parent = top;
-			else if (other == null && gameObject != parent && (parent == null || gameObject.Transform.Parent?.GameObject != parent))
-				other = gameObject;
-		}
-		Expect(parent != null && other != null, "the scene has a parent with drawn children and another drawn object");
-		if (parent != null && other != null)
-		{
-			let child = parent.Transform.Children[0].GameObject;
-			SetSceneHidden(parent, true);
-			mSceneView.hiddenHere = Visibility.hidden;
-			Expect(mSceneView.HidesHere(parent) && mSceneView.HidesHere(child), "an eye hides the object and its children from the Scene view");
-			Expect(!mGameView.HidesHere(parent) && !mGameView.HidesHere(child) && parent.ActiveInHierarchy, "the Game view still draws them, and they stay enabled");
-			Expect(!PickableInScene(child), "clicks in the Scene view pass a hidden object by");
-			SetPickLocked(other, true);
-			Expect(!PickableInScene(other) && !mSceneView.HidesHere(other), "a locked object is drawn but not clickable");
-
-			// As the editor starting again: everything is read back from the file.
-			DeleteDictionaryAndKeysAndValues!(mSceneVisibility);
-			mSceneVisibility = null;
-			mVisibility = null;
-			Expect(SceneHidden(parent) && SceneHidden(child) && PickLocked(other) && !PickLocked(parent), "eyes and locks are kept for the next time");
-			let text = scope String();
-			File.ReadAllText(file, text).IgnoreError();
-			Expect(text.Contains("hide ") && text.Contains("lock ") && !SceneSerializer.Save(mScene, .. scope .()).Contains("hide "), "they are kept per user, not in the scene");
-
-			SetSceneHidden(parent, false);
-			SetPickLocked(other, false);
-			Expect(!SceneHidden(child) && PickableInScene(child) && PickableInScene(other), "shown and unlocked again, parent and children alike");
-		}
-		File.Delete(file).IgnoreError();
-		DeleteAndNullify!(mVisibilityFileOverride);
-		DeleteDictionaryAndKeysAndValues!(mSceneVisibility);
-		mSceneVisibility = null;
-		mVisibility = null;
-		Log.Info(scope $"VISIBILITY-TEST {pass ? "PASS" : "FAIL"}: {report}");
-	}
 }

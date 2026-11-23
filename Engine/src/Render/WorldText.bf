@@ -85,7 +85,7 @@ struct WorldTextData
 	public this() { }
 }
 
-/// Text that lives in the world (docs/world-text.md), in either of two ways:
+/// Text that lives in the world (tallowengine.com/docs/world-text), in either of two ways:
 ///
 ///   World: flat letters drawn in the scene, rasterized from a font file (or the engine's own) into a texture on a
 ///   quad, through a hidden child object. A sign over a shop, a label on a wall, a name floating over a character:

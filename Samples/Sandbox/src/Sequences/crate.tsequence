@@ -1,7 +1,0 @@
-sequence length 8 framerate 30
-track transform "Moving Crate"
-	key 0 position 14.5 0.6 2 rotation 0 0 0
-	key 1 position 14.5 0.6 2 rotation 0 0 0
-	key 3.5 position 14.5 0.6 10 rotation 0 90 0
-	key 5 position 14.5 0.6 10 rotation 0 90 0
-	key 7.5 position 14.5 0.6 2 rotation 0 0 0

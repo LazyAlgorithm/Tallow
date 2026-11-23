@@ -1,4 +1,4 @@
-// tallow_modelsettings: the import settings step of docs/model-import.md as a program, for tools/build_player.py
+// tallow_modelsettings: the import settings step of tallowengine.com/docs/model-import as a program, for tools/build_player.py
 // (the editor calls tn_model_import_settings directly).
 //
 //   tallow_modelsettings <in.glb> <out.glb> <scale> <zUp 0|1> <animations 0|1> <clips or ""> <materials 0|1>

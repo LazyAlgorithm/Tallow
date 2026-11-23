@@ -4,7 +4,7 @@ using Bgfx;
 
 namespace Tallow;
 
-/// What a texture holds, which decides how its smaller mip levels are made (docs/textures.md).
+/// What a texture holds, which decides how its smaller mip levels are made (tallowengine.com/docs/textures).
 enum TextureKind
 {
 	/// A colour picture (albedo, emissive, interface): averaged in linear light.
@@ -57,7 +57,7 @@ static class Textures
 		let slash = name.LastIndexOf('/');
 		if (slash >= 0)
 			name = name.Substring(slash + 1);
-		// Baked lightmaps (docs/baked-lighting.md) hold light, not colour.
+		// Baked lightmaps (tallowengine.com/docs/baked-lighting) hold light, not colour.
 		if (name.StartsWith("Lightmap-"))
 			return .Data;
 		return name.IndexOf("normal", true) >= 0 ? .Normal : .Color;

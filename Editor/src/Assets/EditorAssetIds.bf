@@ -5,7 +5,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// The editor's side of stable asset IDs (AssetDatabase, docs/asset-ids.md): looking at the project when it opens and
+/// The editor's side of stable asset IDs (AssetDatabase, tallowengine.com/docs/asset-ids): looking at the project when it opens and
 /// whenever its files change, and bringing what the editor has open up to date after assets move.
 extension EditorApp
 {

@@ -30,7 +30,7 @@ def main():
     if args.jobs < 1:
         parser.error('--jobs must be positive.')
     if sys.platform not in ('linux', 'win32'):
-        parser.error('This entry point supports Linux and Windows; see docs/macos.md for macOS.')
+        parser.error('This entry point supports Linux and Windows; see tallowengine.com/docs/macos for macOS.')
     windows = os.name == 'nt'
     beef = os.environ.get('BEEFBUILD', 'BeefBuild')
     # A native engine build regenerates the curated C# API exactly once.
@@ -38,7 +38,7 @@ def main():
     required = [beef, 'dotnet'] + ([] if args.skip_native else ['cmake', 'ninja', 'clang-cl' if windows else 'c++'])
     missing = [tool for tool in required if not shutil.which(tool)]
     if missing:
-        parser.error('Missing build tools: ' + ', '.join(missing) + '. See docs/building-from-source.md.')
+        parser.error('Missing build tools: ' + ', '.join(missing) + '. See tallowengine.com/docs/building-from-source.')
 
     def run(command):
         print('+', subprocess.list2cmdline(list(map(str, command))), flush=True)

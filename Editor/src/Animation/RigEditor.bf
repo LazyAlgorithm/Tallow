@@ -5,7 +5,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Window > Rigging (docs/rigging.md): rigs a still model the way Mixamo does, for people, cats, dogs and anything
+/// Window > Rigging (tallowengine.com/docs/rigging): rigs a still model the way Mixamo does, for people, cats, dogs and anything
 /// else. Pick a template, drag its markers onto the model in the Scene view (chin, wrists, elbows, knees and groin
 /// for a person; nose, neck, tail, paws, elbows, hocks and ears for a four-legged animal), and the skeleton is built
 /// from them. Then: adjust the bones, make the weights automatically, paint them, try poses, and write a rigged .glb
@@ -13,7 +13,7 @@ namespace Tallow.Editor;
 ///
 /// While rigging, the model's own renderer is hidden and the editor draws the model itself, posed, coloured by the
 /// weights when painting. The rig is kept beside the model as a .trig file, so it can be picked up again.
-/// Switches: --rigger <object name> starts rigging an object; --rigger-test runs its self-test (RigEditorTest.bf).
+/// Switches: --rigger <object name> starts rigging an object; --rigger-step and --rigger-look pick its step and view.
 extension EditorApp
 {
 	enum RigStep
@@ -78,7 +78,6 @@ extension EditorApp
 	List<RigSnapshot> mRigRedo = new .() ~ DeleteContainerAndItems!(_);
 	String mRigMessage = new .() ~ delete _;
 	bool mRigMessageBad;
-	int32 mRiggerTestFrames;
 
 	static readonly StringView[4] sRigSteps = .("1. Markers", "2. Bones", "3. Weights", "4. Pose");
 
@@ -912,7 +911,7 @@ extension EditorApp
 
 	void DrawRigWindow()
 	{
-		TickRiggerTest();
+		TickRiggerSwitches();
 		if (!mShowRig)
 		{
 			if (mRig != null)
@@ -1431,16 +1430,14 @@ extension EditorApp
 			mRiggerStartName.Set(name);
 		GetArg("--rigger-step", mRiggerStep);
 		GetArg("--rigger-look", mRiggerLook);
-		if (HasArg("--rigger-test"))
-			mRiggerTestFrames = 1;
 	}
 
 	String mRiggerStartName = new .() ~ delete _;
 	String mRiggerStep = new .() ~ delete _;
 	String mRiggerLook = new .() ~ delete _;
 
-	/// --rig and --rig-test, a few frames in (once the scene is up).
-	void TickRiggerTest()
+	/// --rigger, a few frames in (once the scene is up).
+	void TickRiggerSwitches()
 	{
 		if (!mRiggerStartName.IsEmpty && Time.FrameCount > 3)
 		{
@@ -1466,11 +1463,6 @@ extension EditorApp
 				}
 			}
 			mRiggerStartName.Clear();
-		}
-		if (mRiggerTestFrames > 0 && Time.FrameCount > 3)
-		{
-			mRiggerTestFrames = 0;
-			RunRiggerTest();
 		}
 	}
 }

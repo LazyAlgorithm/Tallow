@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Snapping to other objects while a shape is drawn (docs/modeling.md): the pointer near a corner, an edge or the
+/// Snapping to other objects while a shape is drawn (tallowengine.com/docs/modeling): the pointer near a corner, an edge or the
 /// middle of an edge of any object's mesh takes that point, so a ramp's top can be put exactly on the edge of the
 /// platform it leads to. Corners win over middles, middles over edges. Alt held turns it off for the moment.
 extension EditorApp

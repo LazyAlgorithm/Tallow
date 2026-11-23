@@ -1,6 +1,6 @@
 $input v_wpos, v_normal, v_color0, v_texcoord0, v_depth, v_texcoord1, v_surface
 
-// Screen Reflections (MeshRenderer.screenReflections, docs/reflections.md): a shiny surface drawn a second time over
+// Screen Reflections (MeshRenderer.screenReflections, tallowengine.com/docs/reflections): a shiny surface drawn a second time over
 // itself, after everything solid, and added to the picture. Where a ray mirrored off the surface meets something on
 // the screen (found by stepping across the depth pass, s_depth), it gives the difference between that and the
 // reflection probe's view in the same direction, which the first drawing (fs_mesh) put in. So objects in the room

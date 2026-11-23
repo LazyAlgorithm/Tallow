@@ -41,7 +41,7 @@ enum ShellDentMode : int32
 /// The simulation runs on every machine by itself. Pinned cloth follows its object, so it looks the same everywhere
 /// when the object is shared; a free soft body's object is shared when a session starts, and on clients the body is
 /// drawn towards where the server has it; a shell's dents are made on the server and sent to every client
-/// (see docs/soft-bodies.md).
+/// (see tallowengine.com/docs/soft-bodies).
 [Component]
 class SoftBody : Component
 {
@@ -159,7 +159,7 @@ class SoftBody : Component
 
 	void RefreshOrdinaryColliders()
 	{
-		foreach (let component in GameObject.Components)
+		for (let component in GameObject.Components)
 		{
 			if (let collider = component as Collider)
 			{
@@ -333,7 +333,7 @@ class SoftBody : Component
 			return;
 		}
 		let world = Scene.Physics;
-		world.[Friend]EnsureCreated();
+		world.EnsureCreated();
 		if (!world.Supports(.SoftBodies) || world.SoftBodies == null)
 		{
 			Log.Warning(scope $"Soft Body on '{GameObject.Name}' needs soft bodies; the selected physics backend does not provide them.");

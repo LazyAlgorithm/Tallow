@@ -33,6 +33,8 @@ libraries = [
     ('cgltf', 'glTF model loading', tp / 'cgltf/LICENSE'),
     ('Assimp', 'Editor model converter (FBX, OBJ, DAE, STL, PLY, 3DS)', tp / 'assimp/LICENSE'),
     ('stb', 'Image and font loading', tp / 'stb/LICENSE'),
+    ('Roboto', 'Interface and default World Text font', tp / 'fonts/LICENSE-Roboto.txt'),
+    ('Font Awesome', 'Interface icons', tp / 'fonts/LICENSE-FontAwesome.txt'),
 ]
 out = ['Third-party software in Tallow', '=' * 31, '',
        'Tallow, and every game built with it, includes the libraries below. Their licences follow in full.', '']

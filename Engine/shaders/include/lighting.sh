@@ -1,6 +1,6 @@
 // The lighting every lit surface shares (fs_mesh.sc, custom shaders, decals): the sun with four shadow cascades,
-// point, spot and extra directional lights by cluster with point and spot shadows (docs/lighting.md), hemisphere
-// ambient or baked light probes (docs/baked-lighting.md), reflections of the sky and of reflection probes (docs/reflections.md), and distance fog. Include after
+// point, spot and extra directional lights by cluster with point and spot shadows (tallowengine.com/docs/lighting), hemisphere
+// ambient or baked light probes (tallowengine.com/docs/baked-lighting), reflections of the sky and of reflection probes (tallowengine.com/docs/reflections), and distance fog. Include after
 // bgfx_shader.sh.
 #ifndef TALLOW_LIGHTING_SH
 #define TALLOW_LIGHTING_SH
@@ -337,7 +337,7 @@ vec3 shadeSurface(vec3 wpos, vec3 n, vec3 v, float viewDepth, vec3 albedo, float
 	vec3 mirrored = reflect(-v, n);
 	vec3 f0 = mix(vec3_splat(0.04 * specularLevel), albedo, metallic);
 	vec3 color;
-	// Without a lightmap, baked light probes give the light bounced round the scene (docs/baked-lighting.md).
+	// Without a lightmap, baked light probes give the light bounced round the scene (tallowengine.com/docs/baked-lighting).
 	bool probed = !lightmapped && u_lightProbe[0].w > 0.5;
 	if (probed)
 		ambient = probeAmbient(wpos, n);

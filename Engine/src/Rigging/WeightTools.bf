@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Changing a rig's weights (docs/rigging.md): the weight brush (add, subtract, smooth, set), smoothing everything,
+/// Changing a rig's weights (tallowengine.com/docs/rigging): the weight brush (add, subtract, smooth, set), smoothing everything,
 /// keeping each vertex to a few bones, and mirroring from one side of the model to the other.
 static class WeightTools
 {

@@ -11,7 +11,7 @@ enum BuildTarget
 {
 	Linux,
 	Windows,
-	/// Built on a Mac (Apple silicon), which builds only macOS and web games (docs/macos.md).
+	/// Built on a Mac (Apple silicon), which builds only macOS and web games (tallowengine.com/docs/macos).
 	MacOS,
 	/// A folder of web files (WebAssembly) to put on any web server, played in a browser on computers and phones.
 	Web

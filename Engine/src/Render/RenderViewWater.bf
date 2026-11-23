@@ -4,7 +4,7 @@ using Bgfx;
 
 namespace Tallow;
 
-/// Water (docs/water.md). After the solid scene and its decals, the picture so far is copied and each visible Water's
+/// Water (tallowengine.com/docs/water). After the solid scene and its decals, the picture so far is copied and each visible Water's
 /// surface is drawn over it as a grid moved by its waves (vs_water.sc), reading the copy for what is under the
 /// surface and the depth pass for how deep it is (fs_water.sc). After the see-through things, a camera in the water
 /// has the picture copied again and fogged by the water, cut at the waterline (fs_underwater.sc).

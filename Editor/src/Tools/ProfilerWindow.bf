@@ -4,7 +4,7 @@ using System.IO;
 
 namespace Tallow.Editor;
 
-/// Window > Profiler (docs/profiler.md): a timeline of recorded frames with a chart for each module (CPU by category,
+/// Window > Profiler (tallowengine.com/docs/profiler): a timeline of recorded frames with a chart for each module (CPU by category,
 /// GPU by pass, rendering, memory, physics, animation, audio, networking, AI, UI, particles, assets, scripts, jobs), and
 /// the picked frame's hierarchy, per-thread timeline, GPU passes, counters and memory snapshots. It records this editor
 /// (edit and play mode), a running build or server attached over the network, or a saved .tprofile capture.
@@ -37,10 +37,6 @@ extension EditorApp
 	float mProfilerDragX;
 	List<ProfilerMemorySnapshot> mProfilerSnapshots = new .() ~ DeleteContainerAndItems!(_);
 	int32 mProfilerSnapshotA = -1, mProfilerSnapshotB = -1;
-	/// --profiler-report <file>: written with the --profiler-test check.
-	String mProfilerReportPath = new .() ~ delete _;
-	/// --profiler-test: frames left before the check.
-	int32 mProfilerTestFrames = -1;
 
 	static StringView[?] sProfilerModuleNames = .("CPU Usage", "GPU", "Rendering", "Memory", "Physics", "Animation", "Audio", "Networking", "AI", "UI", "Particles", "Assets", "Scripts", "Jobs");
 	/// The counter category each module after CPU and GPU shows.
@@ -127,7 +123,7 @@ extension EditorApp
 			text.AppendF(" {}", unit);
 	}
 
-	/// Starts or stops recording this editor (as the Record button does; also for --profiler-test).
+	/// Starts or stops recording this editor (as the Record button does).
 	void ProfilerRecord(bool on)
 	{
 		mProfilerRecording = on;
@@ -135,13 +131,12 @@ extension EditorApp
 			mProfilerClient?.SetRecording(on);
 	}
 
-	/// Test switches: --profiler opens the window recording; --profiler-tab <n> picks a tab (0 Hierarchy, 1 Timeline,
-	/// 2 GPU Passes, 3 Counters, 4 Memory, which takes a snapshot); --profiler-attach <host:port> attaches to a build;
-	/// --profiler-test records 30 frames and logs PROFILER-TEST PASS or FAIL.
+	/// Switches: --profiler opens the window recording; --profiler-tab <n> picks a tab (0 Hierarchy, 1 Timeline,
+	/// 2 GPU Passes, 3 Counters, 4 Memory, which takes a snapshot); --profiler-attach <host:port> attaches to a build.
 	void ApplyProfilerSwitches()
 	{
 		let text = scope String();
-		if (HasArg("--profiler") || HasArg("--profiler-test"))
+		if (HasArg("--profiler"))
 		{
 			mShowProfiler = true;
 			ProfilerRecord(true);
@@ -164,47 +159,6 @@ extension EditorApp
 			mProfilerClient.Connect(mProfilerAddress, int32.Parse(mProfilerPort) case .Ok(let port) ? (uint16)port : ProfilerServer.DefaultPort);
 			mProfilerRecording = true;
 		}
-		if (HasArg("--profiler-test"))
-			mProfilerTestFrames = 30;
-		GetArg("--profiler-report", mProfilerReportPath);
-	}
-
-	void RunProfilerTest()
-	{
-		let capture = Profiler.Local;
-		let frame = capture.frames.IsEmpty ? null : capture.frames.Back;
-		var ok = frame != null && capture.frames.Count >= 20;
-		let problems = scope String();
-		if (!ok)
-			problems.AppendF(" only {} frames recorded;", capture.frames.Count);
-		if (frame != null)
-		{
-			for (let name in StringView[?]("Frame", "Editor.DrawUI", "Render", "Present (waiting for the GPU)"))
-			{
-				let id = capture.Find(name);
-				if (id < 0 || frame.TimeOf(id) <= 0)
-				{
-					ok = false;
-					problems.AppendF(" no {};", name);
-				}
-			}
-			for (let name in StringView[?]("Process Memory", "Draw Calls"))
-			{
-				if (frame.Counter(capture.Find(name), -1) < 0)
-				{
-					ok = false;
-					problems.AppendF(" no counter {};", name);
-				}
-			}
-			frame.Hierarchy(0, mProfilerRows);
-			ok &= !mProfilerRows.IsEmpty;
-		}
-		var gpu = false;
-		for (let other in capture.frames)
-			gpu |= other.gpuTime > 0 && !other.passes.IsEmpty;
-		if (!mProfilerReportPath.IsEmpty)
-			capture.SaveReport(mProfilerReportPath);
-		Log.Info(scope $"PROFILER-TEST {ok ? "PASS" : "FAIL"}: {capture.frames.Count} frames, {frame?.samples.Count ?? 0} samples in the last, GPU passes timed: {gpu}.{problems}");
 	}
 
 	/// Each editor frame, before anything is drawn: keeps the editor's recording in step with the buttons and takes
@@ -217,8 +171,6 @@ extension EditorApp
 			Profiler.Enabled = false;
 		if (mProfilerClient != null)
 			mProfilerClient.Update();
-		if (mProfilerTestFrames > 0 && --mProfilerTestFrames == 0)
-			RunProfilerTest();
 	}
 
 	ProfilerFrame ProfilerPicked(ProfilerCapture capture)

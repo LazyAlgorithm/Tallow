@@ -142,7 +142,6 @@ extension EditorApp
 		if (gameObject.IsFolder && !inactive)
 			ImGui.PushStyleColor(ImGui.Col.Text, Icons.FolderColor);
 		let open = ImGui.TreeNode(nodeLabel.CStr(), flags);
-		NoteTestRect(scope $"row:{gameObject.Id}");
 		if (inactive || gameObject.IsFolder)
 			ImGui.PopStyleColor();
 		// Selected when the click is let go, not when it is pressed: dragging the row (into an Inspector field, or onto

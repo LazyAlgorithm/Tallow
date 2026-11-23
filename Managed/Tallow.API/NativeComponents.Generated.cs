@@ -161,7 +161,7 @@ public readonly partial record struct AudioSource
     /// volume. 360 sends it equally in all directions.
     /// Volume behind the cone, 0 to 1.
     /// Shows the clip's subtitle file while it plays, when it has one: the same name ending .srt
-    /// (`Voice/intro.ogg` and `Voice/intro.srt`). See docs/dialogue.md.
+    /// (`Voice/intro.ogg` and `Voice/intro.srt`). See tallowengine.com/docs/dialogue.
     /// </summary>
     public bool Subtitles { get => Fields.GetBool("subtitles"); set => Fields.Set("subtitles", value); }
     /// <summary>
@@ -271,7 +271,7 @@ public readonly partial record struct Building(GameObject GameObject) : ICompone
 /// First-person games: objects on the Viewmodel Layer (the player's own arms and weapon, children of the camera) are
 /// drawn in a pass of their own after the world, with their own field of view and a near clip close to the eye, over
 /// whatever is in front of the camera, so a gun never pokes into a wall it is held against and keeps its shape however
-/// wide the world's field of view is set. See docs/viewmodel.md.
+/// wide the world's field of view is set. See tallowengine.com/docs/viewmodel.
 /// </summary>
 [NativeComponent("Tallow.Camera")]
 public readonly partial record struct Camera(GameObject GameObject) : IComponent
@@ -319,7 +319,7 @@ public readonly partial record struct Camera(GameObject GameObject) : IComponent
     public bool ViewmodelCastsShadows { get => Data.GetBool("viewmodelCastsShadows"); set => Data.Set("viewmodelCastsShadows", value); }
     /// <summary>
     /// Skips drawing what is wholly hidden behind big solid things (walls, buildings, hills): worth it in towns and
-    /// indoors, where much of the scene is behind walls. See docs/occlusion-culling.md.
+    /// indoors, where much of the scene is behind walls. See tallowengine.com/docs/occlusion-culling.
     /// </summary>
     public bool OcclusionCulling { get => Data.GetBool("occlusionCulling"); set => Data.Set("occlusionCulling", value); }
 }
@@ -591,7 +591,7 @@ public readonly partial record struct Decal(GameObject GameObject) : IComponent
 }
 
 /// <summary>
-/// Plays a dialogue (a `.tdialogue` file, see DialogueAsset and docs/dialogue.md): each line as a subtitle with its
+/// Plays a dialogue (a `.tdialogue` file, see DialogueAsset and tallowengine.com/docs/dialogue): each line as a subtitle with its
 /// voice recording, the answers as buttons the player picks with the mouse, the number keys or a controller, and
 /// `event` steps handed to the game.
 ///
@@ -936,7 +936,7 @@ public readonly partial record struct HandPose(GameObject GameObject) : ICompone
 
 /// <summary>
 /// Levels of detail: far away, an object is drawn with fewer triangles, and when it is only a speck it is not drawn at
-/// all. The level is picked for each camera from how much of the screen's height the object covers. See docs/lod.md.
+/// all. The level is picked for each camera from how much of the screen's height the object covers. See tallowengine.com/docs/lod.
 /// </summary>
 [NativeComponent("Tallow.LODGroup")]
 public readonly partial record struct LODGroup(GameObject GameObject) : IComponent
@@ -1009,7 +1009,7 @@ public readonly partial record struct Light
 }
 
 /// <summary>
-/// A box of closer-together light probes for the light baker (docs/baked-lighting.md): where light changes over a
+/// A box of closer-together light probes for the light baker (tallowengine.com/docs/baked-lighting): where light changes over a
 /// short way (a room, a doorway, under a roof, round a lamp) the scene's grid of probes is too coarse. Things whose
 /// middle is in the box take their ambient light from its probes, fading into the scene's grid over blendDistance
 /// inside its edges. The smallest box wins where boxes overlap. Bake again after changing one.
@@ -1078,7 +1078,7 @@ public readonly partial record struct LimbIK(GameObject GameObject) : IComponent
 }
 
 /// <summary>
-/// A line through a list of points, drawn as a flat strip that faces the viewer (docs/lines-and-trails.md): aim
+/// A line through a list of points, drawn as a flat strip that faces the viewer (tallowengine.com/docs/lines-and-trails): aim
 /// guides, laser beams, cables, paths on a map. Its points are a list, edited in the Inspector or set by a script
 /// (AddPosition, SetPositions, SetPosition, PositionCount), with no objects needed; Children As Points draws it through this object's children instead. Its look
 /// is its own (colours, Material, Texture, Glow), drawn through a hidden child object.
@@ -1272,7 +1272,7 @@ public readonly partial record struct MeshRenderer
     /// </summary>
     public bool ShadowOnly { get => Fields.GetBool("shadowOnly"); set => Fields.Set("shadowOnly", value); }
     /// <summary>
-    /// Takes part in baked lighting (docs/baked-lighting.md): the Lighting window gives it a lightmap, and it blocks and
+    /// Takes part in baked lighting (tallowengine.com/docs/baked-lighting): the Lighting window gives it a lightmap, and it blocks and
     /// bounces light for the others. For things that never move: walls, floors, rocks, buildings.
     /// </summary>
     public bool BakedLighting { get => Fields.GetBool("bakedLighting"); set => Fields.Set("bakedLighting", value); }
@@ -1305,13 +1305,13 @@ public readonly partial record struct MeshRenderer
     /// </summary>
     public bool UseModelMaterials { get => Fields.GetBool("useModelMaterials"); set => Fields.Set("useModelMaterials", value); }
     /// <summary>
-    /// Whether it hides what is behind it from cameras with Occlusion Culling (docs/occlusion-culling.md).
+    /// Whether it hides what is behind it from cameras with Occlusion Culling (tallowengine.com/docs/occlusion-culling).
     /// </summary>
     public OccluderMode Occluder { get => Fields.GetEnum<OccluderMode>("occluder"); set => Fields.Set("occluder", value); }
 }
 
 /// <summary>
-/// A model built in the editor (docs/modeling.md): its faces are kept in the scene, inline, and drawn through the
+/// A model built in the editor (tallowengine.com/docs/modeling): its faces are kept in the scene, inline, and drawn through the
 /// object's Mesh Renderer. Objects with the same model share one mesh, so copies of a whitebox piece are drawn
 /// together. Faces in material slot 0 use the Mesh Renderer's material; slots 1 and up use Materials.
 /// </summary>
@@ -1381,7 +1381,7 @@ public readonly partial record struct NavigationAgent
 
 /// <summary>
 /// Part of a surface that costs more to cross (mud, water, a dangerous room) or that agents must not enter: agents
-/// go round it when the way round is not too much longer. See docs/navigation.md.
+/// go round it when the way round is not too much longer. See tallowengine.com/docs/navigation.
 /// </summary>
 [NativeComponent("Tallow.NavigationArea")]
 public readonly partial record struct NavigationArea(GameObject GameObject) : IComponent
@@ -1407,7 +1407,7 @@ public readonly partial record struct NavigationArea(GameObject GameObject) : IC
 /// A way across that the baked grid does not have: a gap to jump, a ledge to drop off, a ladder, a teleporter. It
 /// runs from this object to End (relative to the object). Agents use it when it is the shorter way, and the game
 /// hears when they start and finish crossing (NavigationAgent.OnLinkStarted / OnLinkFinished), to play a jump or climb
-/// animation. See docs/navigation.md.
+/// animation. See tallowengine.com/docs/navigation.
 /// </summary>
 [NativeComponent("Tallow.NavigationLink")]
 public readonly partial record struct NavigationLink(GameObject GameObject) : IComponent
@@ -1449,7 +1449,7 @@ public readonly partial record struct NavigationLink(GameObject GameObject) : IC
 /// <summary>
 /// Something that moves around and that agents must keep out of: a crate, a car, a closing door. While it stands
 /// still (or always, with Carve Only Stationary off) it cuts its shape out of the grid so agents plan round it;
-/// while it moves, agents steer round it instead. See docs/navigation.md.
+/// while it moves, agents steer round it instead. See tallowengine.com/docs/navigation.
 /// </summary>
 [NativeComponent("Tallow.NavigationObstacle")]
 public readonly partial record struct NavigationObstacle(GameObject GameObject) : IComponent
@@ -1757,7 +1757,7 @@ public readonly partial record struct Ragdoll(GameObject GameObject) : IComponen
 
 /// <summary>
 /// Captures what can be seen from a point into a cube, for the shiny surfaces inside its box to mirror: floors,
-/// metal, glass, water, wet streets (docs/reflections.md). Without one, surfaces mirror the sky, which looks wrong
+/// metal, glass, water, wet streets (tallowengine.com/docs/reflections). Without one, surfaces mirror the sky, which looks wrong
 /// indoors: put a probe in each room, sized to its walls. It captures when it is first drawn, and again with
 /// Capture() (or every refreshInterval seconds). What is in the box is lit by its cube, fading into the sky or the
 /// next probe over blendDistance from its edges.
@@ -1816,7 +1816,7 @@ public readonly partial record struct Rigidbody
 }
 
 /// <summary>
-/// A rope (docs/soft-bodies.md "Ropes"): from the object in Start Attached To (this object if none) to the one in
+/// A rope (tallowengine.com/docs/soft-bodies "Ropes"): from the object in Start Attached To (this object if none) to the one in
 /// End Attached To, or hanging free. Tow or lift with it from code: `Rope.Attach(truck, trailer)`.
 /// It sags, swings, drapes over things and is pushed about by what moves through it, simulated as a chain of short
 /// stiff lengths that resist bending and twisting (Jolt's Cosserat rods).
@@ -1991,7 +1991,7 @@ public readonly partial record struct SceneLoader(GameObject GameObject) : IComp
 /// <summary>
 /// Plays a sequence (a `.tsequence` file: a cutscene, or a timed piece of a level) on the scene: moves its objects,
 /// shows its camera shots, plays its animations, sounds and subtitles, fades the screen and tells the game about its
-/// events. See docs/sequencer.md.
+/// events. See tallowengine.com/docs/sequencer.
 ///
 /// let cutscene = GetComponent&lt;SequencePlayer&gt;();
 /// cutscene.OnEvent.Add(new (name, value) =&gt; { if (name == "GateOpened") gate.Open(); });
@@ -2208,7 +2208,7 @@ public readonly partial record struct SpawnPoint(GameObject GameObject) : ICompo
 }
 
 /// <summary>
-/// What a streamed world loads round (docs/world-streaming.md): put one on the player (on a server every player's
+/// What a streamed world loads round (tallowengine.com/docs/world-streaming): put one on the player (on a server every player's
 /// object has one, so the world is loaded round each of them), a vehicle or a camera. With none in the scene, the
 /// world streams round the scene's cameras.
 /// </summary>
@@ -2225,7 +2225,7 @@ public readonly partial record struct StreamingSource(GameObject GameObject) : I
 }
 
 /// <summary>
-/// A trail left behind this object as it moves (docs/lines-and-trails.md): a flat strip facing the viewer through
+/// A trail left behind this object as it moves (tallowengine.com/docs/lines-and-trails): a flat strip facing the viewer through
 /// where the object has been in the last Time seconds, thinning and fading towards its tail. Rockets, sword swings,
 /// balls in flight, skid marks (with Transform Z alignment). Its look is its own
 /// (colours, Material, Texture, Glow), drawn through a hidden child object, so it goes on anything, a ball's own
@@ -2412,7 +2412,7 @@ public readonly partial record struct Vehicle(GameObject GameObject) : IComponen
 /// Camera's Viewmodel Layer). It carries the weapon from a hip pose to an aim pose (aiming down the sights: in the
 /// middle of the screen, the sights on the crosshair), bobs it as the player walks and lets it lag a little behind
 /// when the view turns, worked out from how the camera moves, so the only code a game needs is setting Aiming and,
-/// for recoil, calling Kick. See docs/viewmodel.md.
+/// for recoil, calling Kick. See tallowengine.com/docs/viewmodel.
 ///
 /// In the editor, Preview shows the pose part way from hip to aim while not playing, and the Inspector's buttons take
 /// the object's current place as the hip or the aim pose: move it until it looks right in the Game view, then press.
@@ -2554,17 +2554,17 @@ public readonly partial record struct VoxelObject
     /// </summary>
     public bool DebrisPieces { get => Fields.GetBool("debrisPieces"); set => Fields.Set("debrisPieces", value); }
     /// <summary>
-    /// With a palette material (docs/materials.md): the palette entry of the outside, and of surfaces exposed by
+    /// With a palette material (tallowengine.com/docs/materials): the palette entry of the outside, and of surfaces exposed by
     /// carving. -1 uses Color and Interior Color as they are.
     /// </summary>
     public int PaletteEntry { get => Fields.GetInt("paletteEntry"); set => Fields.Set("paletteEntry", value); }
     /// <summary>
-    /// With a palette material (docs/materials.md): the palette entry of the outside, and of surfaces exposed by
+    /// With a palette material (tallowengine.com/docs/materials): the palette entry of the outside, and of surfaces exposed by
     /// carving. -1 uses Color and Interior Color as they are.
     /// </summary>
     public int InteriorPaletteEntry { get => Fields.GetInt("interiorPaletteEntry"); set => Fields.Set("interiorPaletteEntry", value); }
     /// <summary>
-    /// With a palette material (docs/materials.md): the palette entry of the outside, and of surfaces exposed by
+    /// With a palette material (tallowengine.com/docs/materials): the palette entry of the outside, and of surfaces exposed by
     /// carving. -1 uses Color and Interior Color as they are.
     /// Seconds before a piece that broke off is removed (by the server in multiplayer). 0 keeps pieces for good.
     /// </summary>
@@ -2835,7 +2835,7 @@ public readonly partial record struct WindZone(GameObject GameObject) : ICompone
 }
 
 /// <summary>
-/// Text that lives in the world (docs/world-text.md), in either of two ways:
+/// Text that lives in the world (tallowengine.com/docs/world-text), in either of two ways:
 ///
 /// World: flat letters drawn in the scene, rasterized from a font file (or the engine's own) into a texture on a
 /// quad, through a hidden child object. A sign over a shop, a label on a wall, a name floating over a character:
@@ -3115,7 +3115,7 @@ public enum NetworkRelevance
 }
 
 /// <summary>
-/// Whether a renderer hides what is behind it from occlusion culling (docs/occlusion-culling.md).
+/// Whether a renderer hides what is behind it from occlusion culling (tallowengine.com/docs/occlusion-culling).
 /// </summary>
 public enum OccluderMode
 {
@@ -3247,7 +3247,7 @@ public enum VoxelStyle
 }
 
 /// <summary>
-/// How a Water surface is drawn (docs/water.md).
+/// How a Water surface is drawn (tallowengine.com/docs/water).
 /// </summary>
 public enum WaterLook
 {

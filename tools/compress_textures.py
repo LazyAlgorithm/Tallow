@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compress a game's pictures for the graphics card (docs/textures.md): each becomes `<picture>.ktx` beside it, BC1
+"""Compress a game's pictures for the graphics card (tallowengine.com/docs/textures): each becomes `<picture>.ktx` beside it, BC1
 (opaque, an eighth of the memory) or BC3 (with transparency, a quarter) with all its mip levels, made with bgfx's
 texturec. The engine uses the .ktx in place of the picture; the picture stays for code that reads its pixels.
 
@@ -48,7 +48,7 @@ def has_alpha(path):
 
 
 def import_settings(picture):
-    """A picture's own options ("<picture>.import", docs/textures.md); an empty dict when it has none."""
+    """A picture's own options ("<picture>.import", tallowengine.com/docs/textures); an empty dict when it has none."""
     path = picture.with_name(picture.name + '.import')
     settings = {}
     if path.is_file():
@@ -114,7 +114,7 @@ def compress_folder(folder, engine, exclude=DEFAULT_EXCLUDE, materials=None):
             continue
         relative = picture.relative_to(folder).as_posix()
         options = import_settings(picture)
-        # Baked lightmaps (docs/baked-lighting.md) are RGBM: block compression would spoil the range in alpha.
+        # Baked lightmaps (tallowengine.com/docs/baked-lighting) are RGBM: block compression would spoil the range in alpha.
         # A picture whose .import turns compressed copies off, or mip levels off (the engine would not use a
         # compressed copy then), is left as it is.
         if any(fnmatch.fnmatch(relative, pattern) for pattern in patterns) or relative in normal or 'normal' in picture.name.lower() \

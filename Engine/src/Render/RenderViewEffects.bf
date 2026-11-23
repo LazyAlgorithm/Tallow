@@ -51,7 +51,7 @@ extension RenderView
 		mDofFb = bgfx.create_frame_buffer_from_handles(1, &mDofColor, true);
 	}
 
-	/// Ambient occlusion, depth of field and motion blur (docs/post-processing.md), as the scene asks and the
+	/// Ambient occlusion, depth of field and motion blur (tallowengine.com/docs/post-processing), as the scene asks and the
 	/// player's settings (ScreenEffects) allow. Each reads the picture so far and writes the next; returns the last.
 	bgfx.TextureHandle DrawScreenEffects(CameraData camera, SceneEnvironment env)
 	{

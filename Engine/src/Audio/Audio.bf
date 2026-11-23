@@ -271,7 +271,7 @@ static class Audio
 	/// it is played here only and not sent to the other machines of a session.
 	public static void PlayOneShot(StringView clip, Vector3 position, float volume = 1, AudioGroup group = .Effects, float minDistance = 1, float maxDistance = 40, float lowpassHz = 22000)
 	{
-		// In a session the server's are heard on every machine (docs/networking.md).
+		// In a session the server's are heard on every machine (tallowengine.com/docs/networking).
 		if (lowpassHz >= 22000 && NetworkSync.SoundPlayed(clip, position, volume, group, minDistance, maxDistance))
 			return;
 		Params parameters = Defaults();

@@ -4,7 +4,7 @@ using Bgfx;
 
 namespace Tallow;
 
-/// Decals (docs/decals.md): after the solid scene, each visible decal's box is drawn over the scene target, and
+/// Decals (tallowengine.com/docs/decals): after the solid scene, each visible decal's box is drawn over the scene target, and
 /// fs_decal.sc lays the picture on the surfaces the depth pass found inside it.
 extension RenderView
 {

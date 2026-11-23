@@ -5,7 +5,7 @@ using Bgfx;
 
 namespace Tallow;
 
-/// The Profiler's modules (docs/profiler.md): counters for each part of the engine, set at the end of every recorded
+/// The Profiler's modules (tallowengine.com/docs/profiler): counters for each part of the engine, set at the end of every recorded
 /// frame from what the systems already know, and the GPU's times read from bgfx.
 static class ProfilerModules
 {
@@ -266,7 +266,7 @@ static class ProfilerModules
 	}
 }
 
-/// A memory snapshot (docs/profiler.md): every texture and mesh the engine holds, by name and size, and the totals
+/// A memory snapshot (tallowengine.com/docs/profiler): every texture and mesh the engine holds, by name and size, and the totals
 /// bgfx and the system give, taken to compare one moment with another.
 public class ProfilerMemorySnapshot
 {

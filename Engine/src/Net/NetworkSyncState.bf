@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Switches, settings and effects shared without code (docs/networking.md): objects switched on and off
+/// Switches, settings and effects shared without code (tallowengine.com/docs/networking): objects switched on and off
 /// (`SetActive`), components enabled and disabled, Lights' settings changed while playing, a Particle System's
 /// `Play`, `Decals.Spawn` and `Audio.PlayOneShot`. From the server for anything; from a client, only how the objects
 /// it owns look and sound (their lights, and switching their lights, renderers, particles and audio sources on and

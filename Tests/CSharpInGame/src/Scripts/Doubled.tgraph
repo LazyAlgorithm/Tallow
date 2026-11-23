@@ -1,8 +1,0 @@
-graph "Doubled"
-node 1 sub.entry 40 60
-node 2 sub.param.float 40 190 "amount"
-node 3 math.mul 300 190 "0" "2"
-node 4 sub.return.float 560 60 "" "0"
-link 1 0 4 0
-link 2 0 3 0
-link 3 0 4 1

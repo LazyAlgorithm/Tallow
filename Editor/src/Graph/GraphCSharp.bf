@@ -174,8 +174,7 @@ static class GraphCSharp
 
 	/// Compiles a graph file to C# beside it (Name.cs), without the editor: the launcher's --graph-compile switch,
 	/// for tests and build scripts. The project's subgraphs are found as the editor finds them (under src/).
-	/// With csharp false (--graph-compile-beef) it writes Beef (Name.bf) as a Beef project's editor does: B21
-	/// compares the two from one graph.
+	/// With csharp false (--graph-compile-beef) it writes Beef (Name.bf) as a Beef project's editor does.
 	public static bool CompileFile(StringView graphPath, StringView namespaceName, String scriptPath, String error, bool csharp = true)
 	{
 		NodeLibrary.CSharp = csharp;

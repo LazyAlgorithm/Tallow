@@ -7,7 +7,7 @@
 
   Only Tallow.exe is signed. TallowPlayer.exe is deliberately left alone: a C# game is a copy of it renamed, so
   signing it would put Tallow's publisher identity on every game made with Tallow, and let anyone repackage
-  malware under that signature. Games are signed by their own developers; see docs/windows.md.
+  malware under that signature. Games are signed by their own developers; see tallowengine.com/docs/windows.
 -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>

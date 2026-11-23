@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Views for modelling (docs/modeling.md):
+/// Views for modelling (tallowengine.com/docs/modeling):
 /// - The view selector in the Scene view's top right corner, as Unity's: click an axis to look along it (front,
 ///   back, left, right, top, bottom), the middle to switch between perspective and orthographic.
 /// - Window > Model Views: four views of the scene in one window, as 3ds Max has (Top, Front, Left and Perspective

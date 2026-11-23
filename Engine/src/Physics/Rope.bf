@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// A rope (docs/soft-bodies.md "Ropes"): from the object in Start Attached To (this object if none) to the one in
+/// A rope (tallowengine.com/docs/soft-bodies "Ropes"): from the object in Start Attached To (this object if none) to the one in
 /// End Attached To, or hanging free. Tow or lift with it from code: `Rope.Attach(truck, trailer)`.
 /// It sags, swings, drapes over things and is pushed about by what moves through it, simulated as a chain of short
 /// stiff lengths that resist bending and twisting (Jolt's Cosserat rods).
@@ -384,7 +384,7 @@ class Rope : Component
 		if (mBody != uint32.MaxValue)
 			return;
 		let world = Scene.Physics;
-		world.[Friend]EnsureCreated();
+		world.EnsureCreated();
 		if (!world.Supports(.Ropes) || world.SoftBodies == null)
 		{
 			Log.Warning(scope $"Rope on '{GameObject.Name}' needs ropes; the selected physics backend does not provide them.");

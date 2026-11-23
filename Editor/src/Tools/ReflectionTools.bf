@@ -3,7 +3,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Inspector tools for reflection probes (docs/reflections.md): capturing again, and what the probe has.
+/// Inspector tools for reflection probes (tallowengine.com/docs/reflections): capturing again, and what the probe has.
 extension EditorApp
 {
 	void DrawReflectionProbeTools(ReflectionProbe probe)

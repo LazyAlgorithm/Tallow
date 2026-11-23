@@ -52,7 +52,7 @@ struct SequencePlayerData
 
 /// Plays a sequence (a `.tsequence` file: a cutscene, or a timed piece of a level) on the scene: moves its objects,
 /// shows its camera shots, plays its animations, sounds and subtitles, fades the screen and tells the game about its
-/// events. See docs/sequencer.md.
+/// events. See tallowengine.com/docs/sequencer.
 ///
 ///   let cutscene = GetComponent<SequencePlayer>();
 ///   cutscene.OnEvent.Add(new (name, value) => { if (name == "GateOpened") gate.Open(); });

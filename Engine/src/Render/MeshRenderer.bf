@@ -182,7 +182,7 @@ struct MeshRendererData
 	/// Casts its shadow without being drawn itself. For what the camera must not see but the sun still should:
 	/// the head and arms of a first-person player's own body, say.
 	public bool shadowOnly = false;
-	/// Takes part in baked lighting (docs/baked-lighting.md): the Lighting window gives it a lightmap, and it blocks and
+	/// Takes part in baked lighting (tallowengine.com/docs/baked-lighting): the Lighting window gives it a lightmap, and it blocks and
 	/// bounces light for the others. For things that never move: walls, floors, rocks, buildings.
 	public bool bakedLighting = false;
 	/// Mirrors what is on the screen as well as the reflection probe: objects in the room show in the surface where
@@ -210,7 +210,7 @@ struct MeshRendererData
 	/// A model with materials of its own (a glTF, or an FBX, OBJ, ... converted to one) is drawn with them, its
 	/// textures included, when no Material or Texture is set here. Off: the whole model takes the fields above.
 	public bool useModelMaterials = true;
-	/// Whether it hides what is behind it from cameras with Occlusion Culling (docs/occlusion-culling.md).
+	/// Whether it hides what is behind it from cameras with Occlusion Culling (tallowengine.com/docs/occlusion-culling).
 	public OccluderMode occluder = .Auto;
 
 	public this() { }

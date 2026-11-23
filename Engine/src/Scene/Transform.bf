@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// A Transform's data, kept in its GameObject's entity (docs/ecs-plan.md, Phase 2). Engine systems can read and
+/// A Transform's data, kept in its GameObject's entity. Engine systems can read and
 /// write it in bulk through queries; Transform is the per-object way in.
 [Component, EngineData]
 struct TransformData

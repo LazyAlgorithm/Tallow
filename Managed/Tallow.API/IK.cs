@@ -112,7 +112,7 @@ public readonly partial record struct HandPose
 
 /// <summary>
 /// Inverse kinematics from code: the Limb IKs on a character, and the solver functions under the components for
-/// anything they do not cover. Call the solvers from LateUpdate (docs/ik.md).
+/// anything they do not cover. Call the solvers from LateUpdate (tallowengine.com/docs/ik).
 /// </summary>
 public static class IK
 {

@@ -48,7 +48,7 @@ struct DialogueRunnerData
 	public this() { }
 }
 
-/// Plays a dialogue (a `.tdialogue` file, see DialogueAsset and docs/dialogue.md): each line as a subtitle with its
+/// Plays a dialogue (a `.tdialogue` file, see DialogueAsset and tallowengine.com/docs/dialogue): each line as a subtitle with its
 /// voice recording, the answers as buttons the player picks with the mouse, the number keys or a controller, and
 /// `event` steps handed to the game.
 ///

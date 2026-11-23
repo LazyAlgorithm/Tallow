@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Lets an editor watch this program's Profiler over the network (docs/profiler.md): `--profile-listen [port]` on a
+/// Lets an editor watch this program's Profiler over the network (tallowengine.com/docs/profiler): `--profile-listen [port]` on a
 /// game or a dedicated server, then Window > Profiler > Attach in the editor. While an editor is connected the
 /// Profiler records, and each finished frame goes to it (names first, as they are made). A command from the editor
 /// starts or stops recording.

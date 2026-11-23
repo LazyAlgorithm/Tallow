@@ -8152,6 +8152,8 @@ void JPH_CharacterBaseSettings_Init(const CharacterBaseSettings& joltSettings, J
 		JPH_Vec3 vec = { 0.0f, 0.0f, 0.0f };
 		JPH_EmptyShapeSettings* empty_shape_settings = JPH_EmptyShapeSettings_Create(&vec);
 		JPH_EmptyShape* shape = JPH_EmptyShapeSettings_CreateShape(empty_shape_settings);
+		// Tallow: the settings are not needed once the shape exists (they leaked); the caller owns the shape.
+		JPH_ShapeSettings_Destroy(reinterpret_cast<JPH_ShapeSettings*>(empty_shape_settings));
 		settings->shape = reinterpret_cast<const JPH_Shape*>(shape);
 	}
 }

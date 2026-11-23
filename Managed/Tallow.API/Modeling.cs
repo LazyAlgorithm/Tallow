@@ -31,7 +31,7 @@ public enum MeshBoolean
 }
 
 /// <summary>
-/// A model to build in code, with the modeller's shapes and edits (docs/modeling.md), then put on an object:
+/// A model to build in code, with the modeller's shapes and edits (tallowengine.com/docs/modeling), then put on an object:
 /// <code>
 /// using var stairs = EditMesh.Shape(MeshShape.Stairs, new Vector3(2, 1.5f, 3), steps: 8);
 /// stairs.ExtrudeFaces(stairs.FacesFacing(Vector3.UnitY), 0.5f);

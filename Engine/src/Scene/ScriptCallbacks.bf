@@ -5,7 +5,7 @@ using System.Reflection;
 namespace Tallow;
 
 /// The per-frame callbacks a component class overrides. The scene keeps one list per callback and only runs a
-/// component from the lists its class is in (docs/ecs-plan.md, "Frame and tick order"), so a big scene of
+/// component from the lists its class is in, so a big scene of
 /// renderers and colliders costs the update loops nothing.
 enum ScriptCallbacks : uint8
 {

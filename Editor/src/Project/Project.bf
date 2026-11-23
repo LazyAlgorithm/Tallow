@@ -90,7 +90,7 @@ class Project
 	public bool AntiCheat = false;
 	public bool PackAssets = true;
 	/// Pictures get compressed copies for the graphics card (BC1 / BC3 .ktx with mip levels): a quarter to an eighth of
-	/// the video memory, and quicker to load (docs/textures.md). Not for web builds.
+	/// the video memory, and quicker to load (tallowengine.com/docs/textures). Not for web builds.
 	public bool CompressTextures = true;
 	/// Files in the pack are compressed: a smaller game to send, for a little work each time a file is loaded.
 	public bool PackCompress = true;

@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Second texture coordinates (MeshVertex.uv2) for baked lighting (docs/baked-lighting.md): every triangle a place of
+/// Second texture coordinates (MeshVertex.uv2) for baked lighting (tallowengine.com/docs/baked-lighting): every triangle a place of
 /// its own in a square, none overlapping, so a lightmap can hold a colour for each point of the surface.
 ///
 /// Triangles that touch and face within 60 degrees of each other are laid flat together as one chart, the charts are

@@ -10,7 +10,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(TP ${CMAKE_CURRENT_SOURCE_DIR}/../third_party)
-# Flecs Explorer support (REST, HTTP, stats, JSON) in a Release native build, for the editor (docs/ecs-plan.md).
+# Flecs Explorer support (REST, HTTP, stats, JSON) in a Release native build, for the editor.
 option(TALLOW_FLECS_EXPLORER "Build Flecs's Explorer addons (REST server, started on request)" ON)
 
 if(EMSCRIPTEN)
@@ -147,7 +147,7 @@ if(MSVC AND CMAKE_C_COMPILER_ID MATCHES "Clang")
 endif()
 add_subdirectory(${TP}/opus opus EXCLUDE_FROM_ALL)
 
-# ---- Flecs v4.2.0 (entity component system, docs/ecs-plan.md), vendored single-file distribution ----
+# ---- Flecs v4.2.0 (entity component system), vendored single-file distribution ----
 # A custom build with only the addons Tallow uses. The Explorer's addons (REST, HTTP, stats, JSON) are built in
 # by default: they do nothing until something starts the server (the editor's Window > Flecs Explorer). Configure
 # with -DTALLOW_FLECS_EXPLORER=OFF to leave them out.
@@ -166,7 +166,7 @@ endif()
 # managed entrypoints with the same host (tn_csharp_web_register), so web builds compile it too.
 set(TALLOW_MANAGED_HOST_SOURCE tallow_dotnet_host.cpp)
 
-# ---- Rapier3D (optional, prebuilt C bindings; docs/modular-systems-plan.md section 5) ----
+# ---- Rapier3D (optional, prebuilt C bindings) ----
 # The archive is built by tools/build_rapier.py and kept under third_party/rapier/prebuilt/<platform>. Normal builds
 # never run Rust. Without an archive for this target the stub keeps every symbol the Beef provider links, reports
 # tn_rapier_available() = 0, and the provider stays unlisted.
@@ -273,7 +273,7 @@ endif()
 target_link_libraries(tallow_native PRIVATE bgfx bx SDL3::SDL3-static)
 
 
-# ---- Model import settings step (docs/model-import.md), for tools/build_player.py ----
+# ---- Model import settings step (tallowengine.com/docs/model-import), for tools/build_player.py ----
 if(NOT EMSCRIPTEN)
 	add_executable(tallow_modelsettings tallow_modelsettings.c tallow_modelimport.c)
 	target_include_directories(tallow_modelsettings PRIVATE ${TP}/cgltf)
@@ -283,7 +283,7 @@ if(NOT EMSCRIPTEN)
 endif()
 
 # ---- Model converter (editor tool): FBX, OBJ, DAE, STL, PLY and 3DS to .glb, through Assimp ----
-# The editor and tools/convert_models.py run tallow_modelconv as a program of its own (docs/model-import.md); games
+# The editor and tools/convert_models.py run tallow_modelconv as a program of its own (tallowengine.com/docs/model-import); games
 # never link Assimp.
 if(NOT EMSCRIPTEN)
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)

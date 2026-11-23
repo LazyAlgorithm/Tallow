@@ -101,7 +101,7 @@ static class Decals
 	/// Presses a picture through a box of your own (the unit cube placed by volume, projected along its Z axis).
 	public static void Spawn(Scene scene, Matrix4 volume, StringView texture, float lifetime = 0, Color color = .White, float angleLimit = 70)
 	{
-		// In a session the server's decals are pressed on every machine (docs/networking.md).
+		// In a session the server's decals are pressed on every machine (tallowengine.com/docs/networking).
 		if (scene == null || NetworkSync.DecalSpawned(scene, volume, texture, lifetime, color, angleLimit) || MaxSpawned <= 0)
 			return;
 		let list = scene.SpawnedDecals;

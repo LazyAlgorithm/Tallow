@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// The modeller's palette tools (docs/modeling.md, Palette faces): for a model whose material is in palette mode,
+/// The modeller's palette tools (tallowengine.com/docs/modeling, Palette faces): for a model whose material is in palette mode,
 /// each picked face is given a palette entry, a glow, a roughness and metallic (or an opacity) and flags, packed into
 /// its vertex colour bytes as the palette shader reads them.
 extension EditorApp

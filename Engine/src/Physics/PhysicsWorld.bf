@@ -1031,7 +1031,6 @@ class PhysicsWorld
 	/// down by the same amount. stepReach is how far past a step's edge its top is probed for a place to stand.
 	public CharacterState MoveCharacter(void* character, Vector3 velocityIn, float deltaTime, float stepHeight, float stepReach, bool soft)
 	{
-		CharacterState state = default;
 		if (!HasCharacter(character) || mBackend == null || !Finite(velocityIn) || !deltaTime.IsFinite || deltaTime <= 0)
 			return GetCharacterState(character);
 		EnsureQueryPrepared();

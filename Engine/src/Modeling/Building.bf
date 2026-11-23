@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// A Building's settings (docs/buildings.md). The plan (rooms, doors, windows, stairs) is drawn in the Scene view
+/// A Building's settings (tallowengine.com/docs/buildings). The plan (rooms, doors, windows, stairs) is drawn in the Scene view
 /// with the Building tools and kept as text; the walls, floors and ceilings are made from it into the object's
 /// Model Mesh whenever it changes.
 [Component, HandleData]

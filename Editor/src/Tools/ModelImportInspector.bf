@@ -6,7 +6,7 @@ using Tallow;
 namespace Tallow.Editor;
 
 /// The Inspector for an FBX, OBJ, DAE, STL, PLY, 3DS or .blend file clicked in the Project panel: its import settings
-/// (docs/model-import.md). Apply writes them beside the file and converts it again.
+/// (tallowengine.com/docs/model-import). Apply writes them beside the file and converts it again.
 extension EditorApp
 {
 	ModelImportSettings mImportSettings ~ delete _;

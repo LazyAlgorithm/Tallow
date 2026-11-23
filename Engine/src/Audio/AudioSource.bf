@@ -386,7 +386,7 @@ struct AudioSourceData
 	/// Volume behind the cone, 0 to 1.
 	[Range(0, 1)] public float coneOuterVolume = 0.3f;
 	/// Shows the clip's subtitle file while it plays, when it has one: the same name ending .srt
-	/// (`Voice/intro.ogg` and `Voice/intro.srt`). See docs/dialogue.md.
+	/// (`Voice/intro.ogg` and `Voice/intro.srt`). See tallowengine.com/docs/dialogue.
 	public bool subtitles = true;
 	/// Cuts everything above this frequency, in Hz, all the time (a radio, a voice through a door). 22000 leaves the
 	/// sound as recorded.

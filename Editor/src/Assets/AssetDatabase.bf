@@ -6,7 +6,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Stable asset IDs (docs/asset-ids.md). Every asset in the project's Assets folder has an ID that never changes,
+/// Stable asset IDs (tallowengine.com/docs/asset-ids). Every asset in the project's Assets folder has an ID that never changes,
 /// kept beside it in "<file>.tmeta", so the editor knows a file is the same asset after it has been moved or renamed,
 /// in the editor or outside it.
 ///
@@ -18,7 +18,7 @@ namespace Tallow.Editor;
 /// - moved outside the editor (a file manager, git): the next time the editor looks (Refresh), from the ID in the
 ///   .tmeta that went with it, or, when the .tmeta was left behind, from a file with the same name;
 ///
-/// and asset packages (docs/packages.md) use them to know which files of a package the project already has.
+/// and asset packages (tallowengine.com/docs/packages) use them to know which files of a package the project already has.
 ///
 /// The paths each ID was last seen at are kept in <project>/.cache/asset-ids.txt, which is how a move outside the
 /// editor is recognised.

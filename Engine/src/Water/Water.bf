@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// How a Water surface is drawn (docs/water.md).
+/// How a Water surface is drawn (tallowengine.com/docs/water).
 [Reflect(.All)]
 enum WaterLook : int32
 {

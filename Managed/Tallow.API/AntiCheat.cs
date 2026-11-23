@@ -1,6 +1,6 @@
 namespace Tallow;
 
-/// <summary>A kind of cheating the anti-cheat looks for (docs/anti-cheat.md).</summary>
+/// <summary>A kind of cheating the anti-cheat looks for (tallowengine.com/docs/anti-cheat).</summary>
 public enum CheatKind
 {
     /// <summary>Controls no honest game sends: an impossible view angle.</summary>
@@ -43,7 +43,7 @@ public readonly record struct CheatViolation(int ClientId, CheatKind Kind, strin
 /// <summary>
 /// The anti-cheat: watches network sessions for cheating once it is on (Project Settings > Anti-Cheat, or
 /// <see cref="Enabled"/>), with no further code. The server-side checks are the part that holds; read
-/// docs/anti-cheat.md for what it can and cannot see.
+/// tallowengine.com/docs/anti-cheat for what it can and cannot see.
 /// </summary>
 public static class AntiCheat
 {

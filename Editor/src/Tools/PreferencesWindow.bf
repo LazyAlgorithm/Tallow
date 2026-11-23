@@ -5,7 +5,7 @@ using Tallow;
 namespace Tallow.Editor;
 
 /// Edit > Preferences: the editor's own settings, kept for this user on this machine (not in the project). Its
-/// Theme page picks a theme, changes any colour live, and saves, imports and exports themes (docs/themes.md); its
+/// Theme page picks a theme, changes any colour live, and saves, imports and exports themes (tallowengine.com/docs/themes); its
 /// Modelling page changes the modeller's shortcuts (ModelShortcuts.bf).
 extension EditorApp
 {

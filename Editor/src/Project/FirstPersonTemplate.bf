@@ -7,7 +7,7 @@ namespace Tallow.Editor;
 
 /// The first-person character a new empty project starts with: a visual script (FirstPersonCharacter.tgraph) with a
 /// comment box over each part, and the Beef code it compiles to. Both are kept in Editor/templates/empty and copied
-/// into new projects; the test switch --write-first-person-template <folder> writes them again from Build below
+/// into new projects; the switch --write-first-person-template <folder> writes them again from Build below
 /// after a change.
 static class FirstPersonTemplate
 {

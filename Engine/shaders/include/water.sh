@@ -1,4 +1,4 @@
-// Water (docs/water.md): the waves and patterns shared by vs_water.sc, fs_water.sc and fs_underwater.sc. The waves
+// Water (tallowengine.com/docs/water): the waves and patterns shared by vs_water.sc, fs_water.sc and fs_underwater.sc. The waves
 // are Water.bf's Gerstner waves, with the same sums, so what is drawn is where things float.
 #ifndef TALLOW_WATER_SH
 #define TALLOW_WATER_SH

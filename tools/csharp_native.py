@@ -31,8 +31,7 @@ import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when i
 DOTNET_MAJOR = 11
 # Trim/AOT analysis warnings that point at real problems in a NativeAOT game (IL2026: code that needs unreferenced
 # metadata, IL2070-IL2075/IL2080/IL2090: reflection the trimmer cannot see through, IL3050/IL3051: code generated at
-# run time). They are listed in the build's report; tools/test_csharp_export.py --runtime native runs the game's
-# checks on the result.
+# run time). They are listed in the build's report.
 ANALYSIS = re.compile(r'warning (IL[23]\d{3}):\s*(.*?)(?: \[[^\]]*\])?$')
 ALLOWLIST = Path(__file__).resolve().parent / 'nativeaot_allowlist.txt'
 FRAMEWORK = ('System.', 'Microsoft.', 'Internal.', 'Interop.', 'ILCompiler.')

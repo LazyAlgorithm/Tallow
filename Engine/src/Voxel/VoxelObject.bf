@@ -48,7 +48,7 @@ struct VoxelObjectData
 	/// Pieces that break off are debris: they rest on the ground, but characters walk through them and rays (shots)
 	/// pass through them. Off, they block like any other body.
 	public bool debrisPieces = false;
-	/// With a palette material (docs/materials.md): the palette entry of the outside, and of surfaces exposed by
+	/// With a palette material (tallowengine.com/docs/materials): the palette entry of the outside, and of surfaces exposed by
 	/// carving. -1 uses Color and Interior Color as they are.
 	[Range(-1, 255)] public int32 paletteEntry = -1;
 	[Range(-1, 255)] public int32 interiorPaletteEntry = -1;

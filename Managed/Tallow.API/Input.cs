@@ -3,8 +3,7 @@ using System.Numerics;
 namespace Tallow;
 
 /// <summary>
-/// Keyboard keys. The numbers are the engine's own key codes; do not reorder.
-/// Kept identical to the native enum by tools/check_csharp_enums.py.
+/// Keyboard keys. The numbers are the engine's own key codes and must match the native enum; do not reorder.
 /// </summary>
 public enum KeyCode
 {

@@ -13,7 +13,7 @@ enum NavigationBackend
 
 /// A walking navigation mesh built with Recast and searched with Detour (native/tallow_navigation.cpp). Cut into
 /// tiles: carving, cost areas, links and geometry changes rebuild only the tiles they touch. NavigationData uses it
-/// when its surface's backend is NavMesh; see docs/navigation.md.
+/// when its surface's backend is NavMesh; see tallowengine.com/docs/navigation.
 class NavigationMesh
 {
 	/// The bake's bounds and the agent it is for.
@@ -108,7 +108,7 @@ class NavigationMesh
 	/// the settings are out of range or the bake fails.
 	public static NavigationMesh Bake(PhysicsWorld world, Config config)
 	{
-		world.[Friend]EnsureCreated();
+		world.EnsureCreated();
 		let geometry = world.Geometry;
 		if (!world.Supports(.NavigationGeometry) || geometry == null)
 		{
@@ -131,7 +131,7 @@ class NavigationMesh
 	{
 		if (!Commit())
 			return false;
-		world.[Friend]EnsureCreated();
+		world.EnsureCreated();
 		let geometry = world.Geometry;
 		if (!world.Supports(.NavigationGeometry) || geometry == null)
 			return false;

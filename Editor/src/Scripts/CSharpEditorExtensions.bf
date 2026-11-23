@@ -1167,7 +1167,6 @@ extension EditorApp
 		case .List: return "List";
 		case .Array: return "Array";
 		}
-		return "Unknown";
 	}
 
 	static int32 HostFieldList(uint32 id, char8* name, int32 nameLength, char8** text, int32* length)

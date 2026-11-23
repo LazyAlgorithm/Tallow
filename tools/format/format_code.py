@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Gives Beef source the engine's one coding style (see docs/coding-style.md).
+"""Gives Beef source the engine's one coding style.
 
-    python3 tools/format/format_code.py            # every engine, editor, test and sample source file
+    python3 tools/format/format_code.py            # every engine, editor, launcher and player source file
     python3 tools/format/format_code.py FILE...    # just these
     python3 tools/format/format_code.py --check    # list files that are not formatted; changes nothing
 
@@ -19,7 +19,7 @@ import os, re, subprocess, sys, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 BFFMT = os.path.join(HERE, 'BfFmt', 'build', 'Debug_Linux64', 'BfFmt', 'BfFmt')
-FOLDERS = ['Engine/src', 'Editor/src', 'Launcher/src', 'Tests', 'Samples']
+FOLDERS = ['Engine/src', 'Editor/src', 'Launcher/src', 'Player/src']
 # Generated from bgfx's own definitions: kept as bgfx writes it.
 SKIP = {'Engine/src/Platform/bgfx.bf'}
 PLATFORMS = ['BF_PLATFORM_LINUX,BF_64_BIT,DEBUG', 'BF_PLATFORM_WINDOWS,BF_64_BIT', 'BF_PLATFORM_WASM', 'BF_PLATFORM_MACOS,BF_64_BIT']

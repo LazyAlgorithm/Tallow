@@ -1,6 +1,6 @@
 $input v_texcoord0, v_wpos
 
-// One face of one level of a reflection cube (docs/reflections.md): what a surface of that level's roughness
+// One face of one level of a reflection cube (tallowengine.com/docs/reflections): what a surface of that level's roughness
 // mirrors, the source cube blurred by the GGX highlight's shape. Level 0 is the source as it is; each level down
 // is rougher, to roughness 1 at the last. Samples are spread by importance and read from the source's smaller mip
 // levels where they are sparse, so few are needed without speckles.

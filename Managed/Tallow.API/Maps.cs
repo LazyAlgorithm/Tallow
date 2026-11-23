@@ -1,6 +1,6 @@
 namespace Tallow;
 
-/// <summary>A player-made map file (.tmap) and what checking it found (docs/maps.md).</summary>
+/// <summary>A player-made map file (.tmap) and what checking it found (tallowengine.com/docs/maps).</summary>
 /// <param name="File">The .tmap file on disk.</param>
 /// <param name="Id">Stays the same when the file is renamed or copied: players with the same map have the same Id.</param>
 /// <param name="Name">The map's name.</param>

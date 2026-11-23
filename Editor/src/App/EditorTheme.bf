@@ -30,7 +30,7 @@ enum ThemeColor
 	Component
 }
 
-/// The code editor's colours (docs/themes.md), in the order the code editor keeps them.
+/// The code editor's colours (tallowengine.com/docs/themes), in the order the code editor keeps them.
 enum CodeColor
 {
 	Text,
@@ -76,7 +76,7 @@ enum CodeColor
 	PrivateStaticMember
 }
 
-/// One editor theme (docs/themes.md): whether it starts from ImGui's dark or light colours, the interface's colours
+/// One editor theme (tallowengine.com/docs/themes): whether it starts from ImGui's dark or light colours, the interface's colours
 /// by ImGui's names ("WindowBg"), the editor's own (ThemeColor) and the code editor's (CodeColor).
 class Theme
 {
@@ -179,7 +179,7 @@ struct ThemePalette
 	public Color[EditorTheme.CodeCount] code;
 }
 
-/// The editor's colours (docs/themes.md): the built-in themes (Dark, Light, High Contrast, Tallow Blue), the
+/// The editor's colours (tallowengine.com/docs/themes): the built-in themes (Dark, Light, High Contrast, Tallow Blue), the
 /// user's own (`.ttheme` files in the editor's config folder, `themes/`), the one in use, saved between runs in
 /// `theme.ttheme`, and the editor's own colours (ThemeColor) for code that draws things itself.
 static class EditorTheme
@@ -610,7 +610,7 @@ static class EditorTheme
 	/// Writes a theme as a `.ttheme` file's text.
 	public static void Write(Theme theme, String output)
 	{
-		output.Append("# Tallow editor theme (docs/themes.md)\n");
+		output.Append("# Tallow editor theme (tallowengine.com/docs/themes)\n");
 		output.AppendF("name \"{}\"\n", theme.name);
 		output.AppendF("base {}\n", theme.light ? "light" : "dark");
 		for (int i < ExtraCount)

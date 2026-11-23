@@ -22,9 +22,9 @@ public enum ViewShading
 /// Pipeline: four shadow cascades for the sun, an HDR multisampled forward pass with sky,
 /// instanced opaque geometry and debug lines, see-through geometry, the viewmodel (a first-person camera's arms and
 /// weapon, over everything: Camera.viewmodelLayer), the screen effects the scene asks for (ambient occlusion, depth of
-/// field and motion blur, from a depth pass: docs/post-processing.md), bloom, then a tonemapping resolve with colour
-/// grading. Decals (docs/decals.md) are laid over the solid scene, using the same depth pass, before see-through
-/// things. Point, spot and extra directional lights are sorted into clusters (LightClusters, docs/lighting.md), so a
+/// field and motion blur, from a depth pass: tallowengine.com/docs/post-processing), bloom, then a tonemapping resolve with colour
+/// grading. Decals (tallowengine.com/docs/decals) are laid over the solid scene, using the same depth pass, before see-through
+/// things. Point, spot and extra directional lights are sorted into clusters (LightClusters, tallowengine.com/docs/lighting), so a
 /// view can have hundreds; the nearest that cast shadows get tiles of one shadow atlas. Each RenderView uses 19
 /// consecutive bgfx view ids: sun shadows 0 to 3, point and spot shadows 4, then the scene, depth, decals,
 /// transparency, viewmodel, screen effects, bloom and tonemap in views 5 to 18.
@@ -117,7 +117,7 @@ class RenderView
 	public static float ShadowDistanceScale = 1;
 	/// How many point and spot lights cast shadows in a view, the nearest first (a quality setting).
 	public static int32 MaxShadowedLights = 8;
-	/// Whether lightmaps and baked light probes are used (docs/baked-lighting.md); `--no-baked-lighting` turns them
+	/// Whether lightmaps and baked light probes are used (tallowengine.com/docs/baked-lighting); `--no-baked-lighting` turns them
 	/// off, to compare.
 	public static bool UseBakedLighting = true;
 	/// Objects (by id) whose renderers are not drawn: the editor's rigger hides the model it draws itself.
@@ -142,7 +142,7 @@ class RenderView
 	List<Mesh> mLightmapMeshes = new .() ~ delete _;
 	public bool DrawGizmos;
 	public bool DrawShadows = true;
-	/// Whether drawing this view advances the reflection captures under way (docs/reflections.md). Off for views of
+	/// Whether drawing this view advances the reflection captures under way (tallowengine.com/docs/reflections). Off for views of
 	/// scenes other than the game's, such as asset previews.
 	public bool CapturesReflections = true;
 	/// A reflection probe's capture view: drawn at full size without multisampling, and left in HDR (no viewmodel,
@@ -745,7 +745,7 @@ class RenderView
 		let partCount = hasParts ? parts.Count : 1;
 		// Baked lighting: the meshes with lightmap coordinates, made the first time (LightmapUV).
 		let lightmapped = renderer.HasLightmap && UseBakedLighting && LightmapUV.MeshesFor(renderer, mLightmapMeshes) && mLightmapMeshes.Count == partCount;
-		// Levels of detail (docs/lod.md): the group picks one level for this camera, and too small is not drawn.
+		// Levels of detail (tallowengine.com/docs/lod): the group picks one level for this camera, and too small is not drawn.
 		let lodGroup = renderer.LodGroup;
 		let lodLevel = lodGroup != null ? lodGroup.LevelFor(camera) : 0;
 		if (lodLevel < 0)
@@ -876,7 +876,7 @@ class RenderView
 		}
 	}
 
-	/// Many copies of one mesh, handed in from outside the scene's renderers: the ECS render extract (docs/ecs-plan.md).
+	/// Many copies of one mesh, handed in from outside the scene's renderers: the ECS render extract.
 	/// proxy stands in for a Mesh Renderer, carrying the settings every copy shares (as Foliage.Proxy does).
 	public struct InstancedDraws
 	{

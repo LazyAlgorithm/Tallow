@@ -62,7 +62,7 @@ class NetworkSession : Component
 	/// a Network Identity added by hand.
 	[Advanced]
 	public bool autoReplicate = true;
-	/// Keep the session going when its host leaves: another player takes over (docs/networking.md, Host migration).
+	/// Keep the session going when its host leaves: another player takes over (tallowengine.com/docs/networking, Host migration).
 	/// Every machine needs the same setting.
 	public bool hostMigration;
 	/// Set from code (C#'s Network.HostMigration) to turn host migration on for sessions started from now on.

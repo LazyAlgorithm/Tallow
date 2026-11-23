@@ -946,7 +946,6 @@ class JoltPhysicsBackendWorld : PhysicsBackendWorld
 			var sliderNormal = desc.childNormal;
 			return Jolt.tn_slider_create(mSystem, desc.bodyA, desc.bodyB, &anchor, &childAnchor, &axis, &sliderAxis, &sliderNormal, Math.Max(0.001f, desc.travel));
 		}
-		return null;
 	}
 
 	public override void DestroyJoint(void* joint)

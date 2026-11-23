@@ -28,7 +28,7 @@ struct Entity : IHashable, IEquatable<Entity>
 	}
 }
 
-/// The ECS storage for one Scene (docs/ecs-plan.md): entities, their data components in packed tables, and the
+/// The ECS storage for one Scene: entities, their data components in packed tables, and the
 /// queries over them. Use it from the main thread, except inside Query.ParallelFor, where each worker reads and
 /// writes only its own chunks' columns.
 sealed class World
@@ -598,7 +598,7 @@ sealed class World
 	}
 
 	/// A pipeline: the steps (and later systems) tagged for it, run in phase order by Run. Scene has two, Frame and
-	/// Tick (docs/ecs-plan.md, "Frame and tick order").
+	/// Tick.
 	public struct Pipeline
 	{
 		public uint64 id;

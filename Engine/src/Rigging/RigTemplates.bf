@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// The rigger's templates (docs/rigging.md): the markers each puts on a model, a first guess at where they go from
+/// The rigger's templates (tallowengine.com/docs/rigging): the markers each puts on a model, a first guess at where they go from
 /// the model's shape, and the skeleton built from them.
 ///
 /// Humanoid uses Mixamo's markers (chin, wrists, elbows, knees, groin) and bone names (Hips, Spine, LeftArm,

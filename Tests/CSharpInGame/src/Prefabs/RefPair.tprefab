@@ -1,9 +1,0 @@
-object 1 parent 0 active 1 name "Pair"
-transform 0 0 0 0 0 0 1 1 1 1
-component Tallow.CSharpBehaviour enabled 1
-field scriptType "InGame.PairProbe"
-field fieldOverrides ""
-field referenceNames "Partner"
-field referenceTargets 1 2 -1
-object 2 parent 1 active 1 name "Partner"
-transform 0 1 0 0 0 0 1 1 1 1

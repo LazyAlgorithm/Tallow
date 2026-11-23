@@ -3,7 +3,7 @@ using System;
 namespace Tallow;
 
 /// The GameObject an entity stands for. It is a link back, not ownership: the GameObject owns its entity and deletes
-/// it, so this is the one engine data component allowed a class reference (docs/ecs-plan.md, Phase 2).
+/// it, so this is the one engine data component allowed a class reference.
 [Component, EngineData]
 struct ObjectLink
 {

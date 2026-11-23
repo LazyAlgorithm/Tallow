@@ -1,4 +1,4 @@
-Still models for trying the rigger (Window > Rigging, docs/rigging.md). All are CC0 1.0 Universal (public domain):
+Still models for trying the rigger (Window > Rigging, tallowengine.com/docs/rigging). All are CC0 1.0 Universal (public domain):
 https://creativecommons.org/publicdomain/zero/1.0/
 
 Person.glb  Quaternius, Universal Base Characters (free standard edition), "Superhero_Male_FullBody"

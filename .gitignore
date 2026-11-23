@@ -1,6 +1,5 @@
 build/
 *.log
-Samples/*/build/
 dist/
 __pycache__/
 *.pyc
@@ -23,11 +22,6 @@ Managed/Tallow.API/Generated/CSharpBindings.g.cs
 # .NET build output of the managed C# gameplay projects
 Managed/*/bin/
 Managed/*/obj/
-Tests/CSharpGameplay/.tallow-csharp/
-Tests/NativeCSharpHost/build/
-Tests/**/*.slnx
-Samples/**/.tallow-csharp/
-Samples/**/*.slnx
 Player/build/
 
 # Rapier prebuilt archives: built per platform by tools/build_rapier.py or attached to a release.

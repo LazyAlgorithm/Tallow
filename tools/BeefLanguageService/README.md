@@ -39,6 +39,3 @@ change the live workspace. No compiler-owned pointers cross the process boundary
 Status 2 means the project graph changed and the adapter should restart the worker. Semantic support is
 currently Linux and Windows. macOS is reported as unavailable.
 
-Run `python3 tools/test_beef_language_service.py` to exercise the installed compiler against temporary sources:
-unsaved type inference, completion prefixes, navigation, complete diagnostics, project graph changes, semantic
-rename and collision/capture rejection. The tests preserve the compiler across queries to cover invalidation.

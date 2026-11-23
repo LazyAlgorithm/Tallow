@@ -51,7 +51,7 @@ struct LineRendererData
 	public this() { }
 }
 
-/// A line through a list of points, drawn as a flat strip that faces the viewer (docs/lines-and-trails.md): aim
+/// A line through a list of points, drawn as a flat strip that faces the viewer (tallowengine.com/docs/lines-and-trails): aim
 /// guides, laser beams, cables, paths on a map. Its points are a list, edited in the Inspector or set by a script
 /// (AddPosition, SetPositions, SetPosition, PositionCount), with no objects needed; Children As Points draws it through this object's children instead. Its look
 /// is its own (colours, Material, Texture, Glow), drawn through a hidden child object.

@@ -20,16 +20,16 @@ static class RenderResources
 	public static bgfx.ProgramHandle TonemapProgram;
 	public static bgfx.ProgramHandle BloomDownProgram, BloomBlurProgram;
 	public static bgfx.UniformHandle sBloom, uBloomParams;
-	// Screen effects (docs/post-processing.md).
+	// Screen effects (tallowengine.com/docs/post-processing).
 	public static bgfx.ProgramHandle DepthProgram, AoProgram, AoApplyProgram, DofBlurProgram, DofCombineProgram, MotionBlurProgram;
 	public static bgfx.UniformHandle sDepth, sAo, sBlur, sLut;
 	public static bgfx.UniformHandle uDepthViewProj, uDepthParams, uAoParams, uDofParams, uMotionParams, uPrevViewProj;
 	public static bgfx.UniformHandle uPostRight, uPostUp, uPostForward, uPostEye, uGradeParams, uGradeFilter;
 	public static bgfx.ProgramHandle LineProgram;
-	// Decals (docs/decals.md).
+	// Decals (tallowengine.com/docs/decals).
 	public static bgfx.ProgramHandle DecalProgram;
 	public static bgfx.UniformHandle uDecalBox, uDecalInverse, uDecalColor, uDecalAxis, uDecalParams;
-	// Water (docs/water.md).
+	// Water (tallowengine.com/docs/water).
 	public static bgfx.ProgramHandle WaterProgram, UnderwaterProgram, CopyProgram;
 	/// Shiny surfaces with Screen Reflections, drawn again over themselves: what the screen shows mirrored in them.
 	public static bgfx.ProgramHandle MirrorProgram;
@@ -45,7 +45,7 @@ static class RenderResources
 	public static bgfx.UniformHandle sLightmap, sLightmapDirection, sLightmapShadowmask, uLightmapTransform, uLightmapDecode;
 	/// Baked light probes (LightProbes): the grids' 3D texture and where the draw's two grids are in it.
 	public static bgfx.UniformHandle sLightProbes, uLightProbe;
-	// Lights by cluster (LightClusters, docs/lighting.md).
+	// Lights by cluster (LightClusters, tallowengine.com/docs/lighting).
 	public static bgfx.UniformHandle sLightData, uLightCount, uClusterViewProj, uClusterForward, uClusterParams;
 	public static bgfx.UniformHandle uShadowMtx, uCascadeSplits, uShadowParams, uShadowViewProj;
 	public static bgfx.UniformHandle uSkyZenith, uSkyHorizon, uSkyGround, uPostParams;

@@ -9,7 +9,7 @@ namespace Tallow;
 /// First-person games: objects on the Viewmodel Layer (the player's own arms and weapon, children of the camera) are
 /// drawn in a pass of their own after the world, with their own field of view and a near clip close to the eye, over
 /// whatever is in front of the camera, so a gun never pokes into a wall it is held against and keeps its shape however
-/// wide the world's field of view is set. See docs/viewmodel.md.
+/// wide the world's field of view is set. See tallowengine.com/docs/viewmodel.
 ///
 /// A handle (ComponentHandle): its settings are CameraSettings' fields, in the object's entity.
 [Component, HandleFields]
@@ -116,7 +116,7 @@ struct CameraSettings
 	/// wrong from the outside, and other players see a full body anyway). It always receives the world's shadows.
 	public bool viewmodelCastsShadows = false;
 	/// Skips drawing what is wholly hidden behind big solid things (walls, buildings, hills): worth it in towns and
-	/// indoors, where much of the scene is behind walls. See docs/occlusion-culling.md.
+	/// indoors, where much of the scene is behind walls. See tallowengine.com/docs/occlusion-culling.
 	public bool occlusionCulling = false;
 
 	public this() { }

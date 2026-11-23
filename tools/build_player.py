@@ -448,7 +448,7 @@ def main():
                              not args.no_bundle_dotnet and settings.get('bundleDotNet', '1') != '0')
             # A Release export ships a player with no debug information. Its matching symbols, a name map and a
             # record of every module's exact build identifier go to <output>-symbols beside the build, never inside
-            # it (roadmap B30; tools/test_csharp_crash.py reads a crash with them).
+            # it (a crash report from the game can be read with them).
             if csharp and not web and args.config == 'Release':
                 sys.path.insert(0, str(engine / 'tools'))
                 import ship_symbols
@@ -492,7 +492,7 @@ def main():
                 target = staging / 'Assets' / file.relative_to(project / 'src')
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(file, target)
-            # Converted models (docs/model-import.md), as <file>.glb: the name the engine looks for when a scene names
+            # Converted models (tallowengine.com/docs/model-import), as <file>.glb: the name the engine looks for when a scene names
             # the file itself.
             converted, conversion_errors = convert_models.convert_project(project, engine)
             if conversion_errors:
@@ -503,7 +503,7 @@ def main():
                 shutil.copy2(path, target)
             if converted:
                 print(f'Models: {len(converted)} converted to glTF')
-            # Pictures compressed for the graphics card (docs/textures.md): a .ktx beside each, which the engine uses in its
+            # Pictures compressed for the graphics card (tallowengine.com/docs/textures): a .ktx beside each, which the engine uses in its
             # place. Not for the web, whose browsers do not all read the same compressed formats.
             if not web and not args.no_texture_compression and settings.get('compressTextures', '1') != '0':
                 made, skipped, errors = compress_textures.compress_folder(staging / 'Assets', engine, settings.get('textureCompressExclude', compress_textures.DEFAULT_EXCLUDE))

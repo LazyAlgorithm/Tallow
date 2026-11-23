@@ -3,7 +3,7 @@ using System.IO;
 
 namespace Tallow;
 
-/// The graphics quality presets (docs/quality.md).
+/// The graphics quality presets (tallowengine.com/docs/quality).
 enum QualityLevel
 {
 	Low,
@@ -46,7 +46,7 @@ struct QualityValues : IEquatable<QualityValues>
 	public int32 textureDetail = 0;
 	/// Sharper textures on slanted surfaces (floors, walls seen along).
 	public bool anisotropic = true;
-	/// Reflection probes (off: shiny surfaces mirror only the sky; docs/reflections.md).
+	/// Reflection probes (off: shiny surfaces mirror only the sky; tallowengine.com/docs/reflections).
 	public bool reflectionProbes = true;
 	/// The size of a reflection probe's cube, in pixels (those that do not choose their own).
 	public int32 reflectionSize = 128;
@@ -61,7 +61,7 @@ struct QualityValues : IEquatable<QualityValues>
 
 /// Graphics quality: four presets (Low, Medium, High, Ultra) and the settings each one sets, applied to the engine at
 /// once, remembered for the player between runs, and a recommendation for the machine. A game's options screen
-/// calls Quality.Set(.Medium) or changes Quality.Current and calls Apply; nothing else is needed. See docs/quality.md.
+/// calls Quality.Set(.Medium) or changes Quality.Current and calls Apply; nothing else is needed. See tallowengine.com/docs/quality.
 static class Quality
 {
 	/// What is in use now.

@@ -144,7 +144,7 @@ static class GameMain
 		}
 	}
 
-	/// The switches a built game takes (README.md and docs/networking.md list them). False: the game should not start.
+	/// The switches a built game takes (README.md and tallowengine.com/docs/networking list them). False: the game should not start.
 	static bool ReadCommandLine(String[] args, GameApp app)
 	{
 		for (int i = 0; i < args.Count; i++)
@@ -177,8 +177,6 @@ static class GameMain
 				PhysicsBackends.Override3D(args[++i]);
 			else if (arg == "--physics2d" && hasValue)
 				PhysicsBackends.Override2D(args[++i]);
-			else if (arg == "--teststall")
-				Watchdog.TestStall = true;
 			else if (arg == "--netstats")
 				NetworkManager.LogStats = true;
 			else if (arg == "--net-describe" && hasValue)

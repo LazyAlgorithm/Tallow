@@ -1,4 +1,4 @@
-// Thin C layer over Flecs (docs/ecs-plan.md), so the Beef side never mirrors Flecs's descriptor structs or C macros.
+// Thin C layer over Flecs, so the Beef side never mirrors Flecs's descriptor structs or C macros.
 // Every function here is plain: ids in, ids or pointers out. Engine/src/Ecs/Flecs.bf declares them.
 //
 // Iterators are opaque to Beef: it keeps a buffer of tallow_ecs_iter_size() bytes (checked at startup) and passes
@@ -29,7 +29,7 @@ enum
 	TALLOW_TERM_OPTIONAL = 5,
 };
 
-// Pipeline phases, in Tallow's order (docs/ecs-plan.md, "Frame and tick order").
+// Pipeline phases, in Tallow's order.
 enum
 {
 	TALLOW_PHASE_ON_LOAD = 0,
@@ -81,7 +81,7 @@ TALLOW_ECS_API bool tallow_ecs_progress(ecs_world_t* world, float delta_time)
 }
 
 // Flecs's own worker threads for multithreaded systems. Tallow's Jobs threads are the usual way to spread work;
-// this exists for comparison (docs/ecs-plan.md, "Threads").
+// this exists for comparison.
 TALLOW_ECS_API void tallow_ecs_set_threads(ecs_world_t* world, int32_t threads)
 {
 	ecs_set_threads(world, threads);

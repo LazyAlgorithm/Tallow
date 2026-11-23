@@ -382,6 +382,9 @@ extern "C" JPH_CharacterVirtual* tn_character_create(JPH_PhysicsSystem* system, 
     float supportHeight, uint32_t layer, uint64_t userData, bool innerBody, bool soft) {
     JPH_CharacterVirtualSettings settings;
     JPH_CharacterVirtualSettings_Init(&settings);
+    // Init makes a placeholder empty shape that nothing else holds; release it before using the real one.
+    if (settings.base.shape != nullptr && settings.base.shape != shape)
+        JPH_Shape_Destroy(const_cast<JPH_Shape*>(settings.base.shape));
     settings.base.shape = shape;
     settings.base.up = {0, 1, 0};
     settings.base.supportingVolume = {{0, 1, 0}, -supportHeight};

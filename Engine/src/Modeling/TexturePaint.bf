@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Painting a model's texture (docs/modeling.md): a picture kept in memory, painted with a round brush where it lies
+/// Painting a model's texture (tallowengine.com/docs/modeling): a picture kept in memory, painted with a round brush where it lies
 /// on the model (found through each face's texture coordinates, so a stroke runs on across seams), shown at once
 /// and written back to its PNG file. The faces should not share parts of the picture (unwrap first), or a stroke
 /// shows up in two places.

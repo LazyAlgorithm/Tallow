@@ -1,6 +1,6 @@
 $input v_texcoord0, v_wpos
 
-// One face of a reflection probe's cube from the scene drawn from the probe that way (docs/reflections.md): each
+// One face of a reflection probe's cube from the scene drawn from the probe that way (tallowengine.com/docs/reflections): each
 // texel's direction is found in the picture with the camera that drew it, so the face comes out the right way round
 // on every backend.
 #include <bgfx_shader.sh>

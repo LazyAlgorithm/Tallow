@@ -22,7 +22,7 @@ public static unsafe class NativeEntrypoints
         public nint Context;
         // The read-only handle and transform callbacks are short, never block and never call back into .NET, so they
         // skip the GC transition (about half the cost of a call). The setters keep it: a host may call back into
-        // .NET from a transform write (Tests/NativeCSharpHost detaches a script there), which a suppressed
+        // .NET from a transform write (detaching a script there, for example), which a suppressed
         // transition turns into a fatal error.
         public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, int> IsAlive;
         public delegate* unmanaged[Cdecl, SuppressGCTransition]<nint, ulong, ulong, float*, int> GetPosition;

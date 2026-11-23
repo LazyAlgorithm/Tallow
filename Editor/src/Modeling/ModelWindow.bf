@@ -5,8 +5,8 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// The Model window (docs/modeling.md). Six tabs, in the order a model is made: Blockout (draw shapes fast, cut
-/// holes), Building (rooms with walls built round them, docs/buildings.md; BuildingEditor.bf), Edit (the tools of edit mode: a few essentials, or all of them), Paint, Texture and Model (the whole
+/// The Model window (tallowengine.com/docs/modeling). Six tabs, in the order a model is made: Blockout (draw shapes fast, cut
+/// holes), Building (rooms with walls built round them, tallowengine.com/docs/buildings; BuildingEditor.bf), Edit (the tools of edit mode: a few essentials, or all of them), Paint, Texture and Model (the whole
 /// model: mirror, origin, booleans, levels of detail, export). Every tool button shows its key, says what it does
 /// when pointed at, and is greyed out with the reason when it cannot run. The same tools are on the Scene view's
 /// own bar (ModelToolbar.bf), so the window is never needed for the common ones.
@@ -468,12 +468,7 @@ extension EditorApp
 
 	void DrawModelWindow()
 	{
-		TickModelTest();
-		TickBuildingTest();
 		UpdateBuildingCutaway();
-		TickModelSelectBench();
-		TickGraphNodeTest();
-		TickGraphMenuTest();
 		TickFirstPersonTemplate();
 		DrawModelHelp();
 		if (!mShowModel)

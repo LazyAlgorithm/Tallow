@@ -998,50 +998,13 @@ class Program
 				return 0;
 			}
 		}
-		// The project-wide physics choices can be overridden for this run (tests, A/B runs).
+		// The project-wide physics choices can be overridden for this run.
 		for (int i < args.Count - 1)
 		{
 			if (args[i] == "--physics3d")
 				PhysicsBackends.Override3D(args[i + 1]);
 			else if (args[i] == "--physics2d")
 				PhysicsBackends.Override2D(args[i + 1]);
-		}
-		// --test-physics-gating: capability-gated components, without a window.
-		for (int i < args.Count)
-		{
-			if (args[i] == "--test-physics-gating")
-				return PhysicsGatingTest.Run();
-			if (args[i] == "--test-physics-basic")
-				return PhysicsBasicTest.Run();
-			if (args[i] == "--test-physics-snapshots")
-				return PhysicsSnapshotTest.Run();
-			if (args[i] == "--test-physics-ragdoll")
-				return PhysicsRagdollTest.Run();
-			if (args[i] == "--test-physics-vehicle")
-				return PhysicsVehicleTest.Run();
-			if (args[i] == "--test-physics-vehicle-kinds")
-				return PhysicsVehicleKindsTest.Run();
-			if (args[i] == "--test-physics-softbody")
-				return PhysicsSoftBodyTest.Run();
-			if (args[i] == "--test-physics-softbody-kinds")
-				return PhysicsSoftBodyKindsTest.Run();
-			if (args[i] == "--test-physics-rope")
-				return PhysicsRopeTest.Run();
-			if (args[i] == "--test-physics-rapier")
-				return PhysicsRapierTest.Run();
-			if (args[i] == "--test-shell-dents" && i + 2 < args.Count)
-				return ShellDentProbe.Run(args[i + 1], args[i + 2], (i + 3 < args.Count) ? args[i + 3] : "Blue shell");
-			if (args[i] == "--test-physics-contact-events")
-				return PhysicsContactEventsTest.Run((i + 1 < args.Count && !args[i + 1].StartsWith("-")) ? args[i + 1] : "Rapier");
-			if (args[i] == "--bench-physics" && i + 1 < args.Count)
-				return PhysicsBenchmark.Run(args[i + 1], (i + 2 < args.Count) ? (int.Parse(args[i + 2]) case .Ok(let n) ? n : 1500) : 1500,
-					(i + 3 < args.Count) ? (int.Parse(args[i + 3]) case .Ok(let m) ? m : 32) : 32);
-			if (args[i] == "--test-vehicle-template" && i + 1 < args.Count)
-				return VehicleTemplateTest.Run(args[i + 1]);
-			if (args[i] == "--test-car-scene" && i + 1 < args.Count)
-				return CarSceneTest.Run(args[i + 1]);
-			if (args[i] == "--test-template-scenes" && i + 1 < args.Count)
-				return TemplateScenesTest.Run(args[i + 1]);
 		}
 		// --write-script-templates <folder>: writes a C# script from every template there, without a window.
 		for (int i < args.Count - 1)
@@ -1054,12 +1017,6 @@ class Program
 		{
 			if (args[i] == "--write-component-catalog")
 				return NativeComponentCatalog.Write(args[i + 1]) ? 0 : 1;
-		}
-		// --texture-import-test: a picture's .import options parse and become the sampler flags they should.
-		for (int i < args.Count)
-		{
-			if (args[i] == "--texture-import-test")
-				return TextureImportTest.Run();
 		}
 		// --graph-compile <graph.tgraph> <namespace>: compiles a visual script graph to C# beside it, without a window.
 		// --graph-compile-beef: the same to Beef (Name.bf), as a Beef project's editor would.

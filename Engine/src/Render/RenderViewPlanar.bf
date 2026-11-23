@@ -4,7 +4,7 @@ using Bgfx;
 
 namespace Tallow;
 
-/// Planar reflections (MeshRenderer.planarReflection, docs/reflections.md). Before the frame's scene, a second
+/// Planar reflections (MeshRenderer.planarReflection, tallowengine.com/docs/reflections). Before the frame's scene, a second
 /// RenderView draws it from the camera mirrored under the nearest such surface's top face, with its near plane tilted
 /// onto that face (an oblique projection) so nothing below the surface shows. The mirror pass (fs_mirror.sc) then
 /// reads that picture at each pixel of the surface. bgfx's views are put in an order where the mirrored view's come

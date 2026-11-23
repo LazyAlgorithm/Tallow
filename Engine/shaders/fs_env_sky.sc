@@ -1,6 +1,6 @@
 $input v_texcoord0, v_wpos
 
-// One face of the sky's reflection cube (docs/reflections.md): the sky without the sun's disc.
+// One face of the sky's reflection cube (tallowengine.com/docs/reflections): the sky without the sun's disc.
 #include <bgfx_shader.sh>
 #include "sky.sh"
 #include "cube.sh"

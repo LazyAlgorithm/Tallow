@@ -2,7 +2,7 @@ using System;
 
 namespace Tallow;
 
-/// The C functions of native/tallow_ecs.c, the thin layer over Flecs (docs/ecs-plan.md). Only engine code calls
+/// The C functions of native/tallow_ecs.c, the thin layer over Flecs. Only engine code calls
 /// these; World, Query and ComponentId are the Beef side of the ECS.
 static class Flecs
 {
@@ -22,7 +22,7 @@ static class Flecs
 		Optional = 5,
 	}
 
-	/// Flecs pipeline phases in the order Tallow runs them (docs/ecs-plan.md, "Frame and tick order"). The values
+	/// Flecs pipeline phases in the order Tallow runs them. The values
 	/// match native/tallow_ecs.c.
 	public enum Phase : int32
 	{

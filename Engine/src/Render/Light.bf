@@ -15,7 +15,7 @@ enum LightType : int32
 
 /// Directional, point or spot light. The sun casts cascaded shadows; point and spot lights cast shadows from tiles
 /// of a shared atlas (a point light six, one for each face of a cube), the nearest few of them in each view
-/// (Quality's Shadowed Lights). A view draws up to 256 point and spot lights, by cluster (docs/lighting.md).
+/// (Quality's Shadowed Lights). A view draws up to 256 point and spot lights, by cluster (tallowengine.com/docs/lighting).
 ///
 /// A handle (ComponentHandle): its settings are LightData's fields, in the object's entity.
 [Component, HandleFields]

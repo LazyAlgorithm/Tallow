@@ -63,7 +63,7 @@ extension EditorApp
 			if (Project.Current != null)
 				NodeLibrary.RefreshCSharpScripts(Project.Current.Path);
 			AlignSceneCameraToGameCamera();
-			// A streamed world: only the cells round the view (docs/world-streaming.md).
+			// A streamed world: only the cells round the view (tallowengine.com/docs/world-streaming).
 			LoadStreamedCellsAroundView();
 			ResetUndo();
 			RebindEditorScriptsScene();

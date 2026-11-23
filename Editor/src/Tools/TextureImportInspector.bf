@@ -5,7 +5,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// One picture's texture options (docs/textures.md), kept beside it as "<picture>.import" and read by the engine when
+/// One picture's texture options (tallowengine.com/docs/textures), kept beside it as "<picture>.import" and read by the engine when
 /// it loads the picture.
 class TextureImportSettings
 {
@@ -51,7 +51,7 @@ class TextureImportSettings
 }
 
 /// The Inspector for a picture clicked in the Project panel: filtering, wrapping, mip levels, compressed copies and
-/// full resolution, saved beside it and read again when the picture is next loaded (docs/textures.md).
+/// full resolution, saved beside it and read again when the picture is next loaded (tallowengine.com/docs/textures).
 extension EditorApp
 {
 	TextureImportSettings mTextureSettings ~ delete _;

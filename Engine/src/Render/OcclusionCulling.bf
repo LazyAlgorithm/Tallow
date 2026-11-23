@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Whether a renderer hides what is behind it from occlusion culling (docs/occlusion-culling.md).
+/// Whether a renderer hides what is behind it from occlusion culling (tallowengine.com/docs/occlusion-culling).
 enum OccluderMode
 {
 	/// When it is big on screen, still (no Rigidbody, not skinned) and simple enough (Occlusion.MaxAutoTriangles).

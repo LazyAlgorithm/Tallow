@@ -5,7 +5,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Reference images to model from (docs/modeling.md): pictures of the thing being made, from the front, side or top,
+/// Reference images to model from (tallowengine.com/docs/modeling): pictures of the thing being made, from the front, side or top,
 /// stood in the scene behind the model, square to that view, so the model can be traced over them in the matching
 /// Model View or Scene view direction. Only the editor's views draw them (RenderView.EditorOnlyObjects); they are not
 /// part of the scene, cannot be picked, and are kept for this project with the editor's settings

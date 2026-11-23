@@ -1,3 +1,0 @@
-name = EcsBench
-startScene = Scenes/Bench.tscene
-engine = ../..

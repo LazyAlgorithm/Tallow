@@ -13,7 +13,7 @@ struct SyncAttribute : Attribute
 
 /// Marks the Vector3 field of a [Component] struct that is where a bare ECS entity is (it is shared like [Sync]).
 /// Native ECS replication then sends the entity only to clients whose player is within the session's
-/// SnapshotRelevanceRadius, as Nearby objects are (docs/unified-ecs-networking.md).
+/// SnapshotRelevanceRadius, as Nearby objects are.
 [AttributeUsage(.Field, .ReflectAttribute)]
 struct SyncPositionAttribute : Attribute
 {

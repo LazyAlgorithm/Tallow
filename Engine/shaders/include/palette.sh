@@ -1,4 +1,4 @@
-// Palette mode (Material.palette, docs/materials.md), shared by fs_mesh and fs_mirror so both read a face alike.
+// Palette mode (Material.palette, tallowengine.com/docs/materials), shared by fs_mesh and fs_mirror so both read a face alike.
 // A face's vertex colour bytes are: red its palette entry, green its glow, blue its roughness (top five bits) and
 // metallic (low three) or, flagged see-through, its opacity, and alpha its flags (Mesh.Palette*). The palette is a
 // 16 x 16 texture with no mips or filtering, read at a texel's middle, so entries never bleed into each other.

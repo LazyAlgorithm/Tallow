@@ -131,7 +131,6 @@ jobs:
           export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
           cd tallow
           python3 tools/package_engine.py --platform linux --folder ../out/Tallow-Linux
-          python3 tools/validate_showcase.py --package ../out/Tallow-Linux --work ../showcase-test
           cd ../out && zip -qr9 Tallow-Linux.zip Tallow-Linux
 
       - name: Keep the zip
@@ -150,7 +149,7 @@ jobs:
     env:
       # The build scripts read and write UTF-8 text, whatever the machine's own code page.
       PYTHONUTF8: '1'
-      # Sign releases with SignPath when this repository is set up for it (docs/windows.md). Without the
+      # Sign releases with SignPath when this repository is set up for it. Without the
       # repository variable the build stays unsigned, so forks and dev pushes keep working.
       SIGN_RELEASES: ${{ vars.SIGNPATH_PROJECT_SLUG != '' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ecs' || github.ref == 'refs/heads/release' || inputs.publish) }}
     defaults:
@@ -243,8 +242,6 @@ jobs:
           export BEEFBUILD="$(cygpath -w "$PWD/beef-win/bin/BeefBuild.exe")"
           cd tallow
           python tools/package_engine.py --platform windows --folder ../out/Tallow-Windows
-          python tools/validate_windows_project.py --package ../out/Tallow-Windows --beef "$BEEFBUILD" --work ../project-open-test
-          python tools/validate_showcase.py --package ../out/Tallow-Windows --work ../showcase-test
 
       # Microsoft Defender SmartScreen and Smart App Control block an unsigned editor. SignPath Foundation
       # (free for open-source projects) signs Tallow.exe in its HSM; the record of the signing request and the

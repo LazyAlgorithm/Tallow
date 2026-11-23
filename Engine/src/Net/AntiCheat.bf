@@ -65,7 +65,7 @@ class CheatViolation
 ///                   each reported to the server. A built game also closes its memory to other programs (Harden).
 ///
 /// What is found goes to the log, to Violations and to OnViolation, and by SetAction is ignored, logged, or gets
-/// the player removed. It is not a kernel-level anti-cheat and does not claim to be one: read docs/anti-cheat.md
+/// the player removed. It is not a kernel-level anti-cheat and does not claim to be one: read tallowengine.com/docs/anti-cheat
 /// for what it cannot see.
 static class AntiCheat
 {

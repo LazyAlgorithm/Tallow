@@ -6,7 +6,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// The windows for asset packages (docs/packages.md): Export Package, Import Package and the Package Manager.
+/// The windows for asset packages (tallowengine.com/docs/packages): Export Package, Import Package and the Package Manager.
 extension EditorApp
 {
 	// ---------------------------------------------------------------- Export Package
@@ -716,7 +716,7 @@ extension EditorApp
 	}
 }
 
-/// Package catalogs: text files on the web listing packages to download (docs/packages.md):
+/// Package catalogs: text files on the web listing packages to download (tallowengine.com/docs/packages):
 ///
 ///   tallowcatalog 1
 ///   package "Forest Props" version "1.2.0" url "https://example.com/Forest_Props-1.2.0.tpackage" sha256 "..." author "..." description "..."

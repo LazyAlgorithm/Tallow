@@ -3,8 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Native systems and prediction for bare ECS entities (docs/unified-ecs-networking.md, "Native systems and
-/// prediction").
+/// Native systems and prediction for bare ECS entities.
 ///
 /// A native system is game code that advances one entity's data by one tick. Written as a class, it is found and
 /// made by the engine, and editing it while the game plays (script reload) takes effect like a script's Update:

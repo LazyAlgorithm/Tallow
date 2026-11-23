@@ -148,12 +148,12 @@ class AvatarMask
 		bool[] said = scope bool[count];
 		// Which bone of the character is each humanoid part: through its bone map, or matched from the names. The
 		// matched map is made on the heap, as map is used after the block that makes it.
-		BoneMap matched = null;
-		defer delete matched;
 		BoneMap map = humanMap;
 		if (map == null || !map.IsHumanoid)
 		{
-			matched = new BoneMap();
+			let matched = new BoneMap();
+			// A one-statement defer captures the value where it is written, so it goes after the allocation.
+			defer:: delete matched;
 			matched.MatchBones(names, parents);
 			map = matched;
 		}

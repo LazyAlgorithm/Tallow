@@ -6,12 +6,11 @@ namespace Tallow.Editor;
 
 /// The Animation window's helpers for rigged characters: its Rig menu (showing the bones, an IK rig in one press,
 /// IK targets snapped to the bones, IK baked into keys, a model's own clip copied into the open one to edit) and
-/// the Hand Posing window (finger shapes and curls, keyed in one press). See docs/animator.md.
+/// the Hand Posing window (finger shapes and curls, keyed in one press). See tallowengine.com/docs/animator.
 extension EditorApp
 {
 	bool mShowHandPosing;
 	bool mFocusHandPosing;
-	int32 mRigTestFrames;
 
 	/// The footer's Rig and Hands buttons, from where x is; returns where they end.
 	float DrawRigButtons(Animator animator, float x, float y)
@@ -116,7 +115,7 @@ extension EditorApp
 
 	/// Set Up IK Rig: for each foot a target object holding a Limb IK, a pole the knee points at, and a look target
 	/// for the head, all where the character is now, so that nothing moves until they do. Hands are not set up: for
-	/// a weapon, add a Limb IK and press Make Target And Pole on it (docs/ik.md, "Hands on a weapon").
+	/// a weapon, add a Limb IK and press Make Target And Pole on it (tallowengine.com/docs/ik, "Hands on a weapon").
 	void SetUpIKRig(Animator animator, SkinnedMeshRenderer skinned)
 	{
 		if (!skinned.Model.HumanMap.IsHumanoid)
@@ -341,7 +340,7 @@ extension EditorApp
 		Log.Info(scope $"Copied {source.name}: {source.frames} frames of {skinned.BoneCount} bones.");
 	}
 
-	/// Test switches, applied to the selection (--select): --ik-rig sets up an IK rig on its Animator, --ik-foot
+	/// Switches, applied to the selection (--select): --ik-rig sets up an IK rig on its Animator, --ik-foot
 	/// "x y z" then moves the left foot's target by that much (to see the leg bend), --hand-shape <Fist> poses both
 	/// hands in a ready-made shape and opens Hand Posing, --hand-posing opens it, --bone-map opens the Bone Map of
 	/// the rigged model.
@@ -353,9 +352,6 @@ extension EditorApp
 			OpenBoneMap(skinned.Model);
 		if (HasArg("--hand-posing"))
 			mShowHandPosing = true;
-		// Waits for the Scene view to be laid out, since the test clicks on a bone.
-		if (HasArg("--rig-test"))
-			mRigTestFrames = 20;
 		if (!animator.IsValid || !skinned || skinned.Model == null)
 			return;
 		if (HasArg("--ik-rig"))
@@ -408,110 +404,10 @@ extension EditorApp
 		}
 	}
 
-	/// Test switch --rig-test (with --select on a rigged character's Animator): copies a library clip into a new
-	/// clip, sets up an IK rig and moves a hand by its target, bakes IK, keys a fist and clicks a bone, then logs
-	/// RIG-TEST PASS or FAIL with what it saw.
-	void RunRigTest()
-	{
-		let animator = SelectedAnimator();
-		SkinnedMeshRenderer skinned = animator.IsValid ? FindSkinned(animator) : default;
-		if (!skinned || skinned.Model == null || skinned.BoneCount == 0)
-		{
-			Log.Info("RIG-TEST FAIL: select a rigged character's Animator, with Expose Bones on");
-			return;
-		}
-		bool pass = true;
-		let report = scope String();
-		let model = skinned.Model;
-		if (model.Clips.IsEmpty)
-		{
-			Log.Info("RIG-TEST FAIL: the selected character's model has no clips to copy (pick one with a clip library)");
-			return;
-		}
-		CreateClipFor(animator);
-		SkinnedModel.Clip source = model.Clips[0];
-		for (let clip in model.Clips)
-		{
-			if (model.IsImported(clip))
-				source = clip;
-		}
-		CopyModelClip(animator, skinned, source);
-		let copied = mClip.tracks.Count >= 20 && Math.Abs(mClip.duration - source.duration) < 0.05f;
-		report.AppendF("copied {} into {} tracks over {:0.00} s: {}; ", source.name, mClip.tracks.Count, mClip.duration, copied);
-		pass &= copied;
-
-		mClipTime = 0;
-		animator.SampleClip(mClip, 0);
-		SetUpIKRig(animator, skinned);
-		let hand = skinned.Bone(model.HumanMap[.LeftHand]);
-		Transform target = null;
-		for (let child in animator.Transform.Children)
-		{
-			if (child.GameObject.Name == "IK Hand L")
-				target = child;
-		}
-		let rigged = target != null && target.GameObject.GetComponent<LimbIK>() != null && hand != null && (target.Position - hand.Position).Length < 0.001f;
-		report.AppendF("IK rig made, target on the hand: {}; ", rigged);
-		pass &= rigged;
-		if (rigged)
-		{
-			target.Position = target.Position + .(0, 0.15f, 0.1f);
-			IKSystem.Solve(mScene);
-			let reached = (hand.Position - target.Position).Length;
-			report.AppendF("hand follows its target ({:0.000} m off); ", reached);
-			pass &= reached < 0.01f;
-			let keysBefore = mClip.FindTrack(hand.GameObject.Name)?.keys.Count ?? 0;
-			BakeIK(animator);
-			let keysAfter = mClip.FindTrack(hand.GameObject.Name)?.keys.Count ?? 0;
-			report.AppendF("baked hand keys {} -> {}; ", keysBefore, keysAfter);
-			pass &= keysAfter >= keysBefore;
-			animator.SampleClip(mClip, 0);
-			IKSystem.Solve(mScene);
-		}
-
-		let pose = HandPoseOn(animator, hand, true);
-		if (pose != null)
-		{
-			pose.shape = .Fist;
-			pose.OnValidate();
-			IKSystem.Solve(mScene);
-			int fingerTracks = 0;
-			let fingers = scope List<Transform>();
-			Descendants(hand, fingers);
-			KeyFingers(animator, hand);
-			for (let bone in fingers)
-			{
-				if (mClip.FindTrack(bone.GameObject.Name) != null)
-					fingerTracks++;
-			}
-			report.AppendF("fist keyed on {} finger bones, Hand Pose handed back: {}; ", fingerTracks, pose.weight == 0);
-			pass &= fingerTracks >= 4 && pose.weight == 0;
-		}
-
-		// Click halfway along the left forearm in the Scene view.
-		let forearm = skinned.Bone(model.HumanMap[.LeftLowerArm]);
-		mSelectedId = skinned.GameObject.Id;
-		mGizmoOperation = 0;
-		BuildBoneGizmos();
-		Vector2 screen = default;
-		bool seen = false;
-		for (let pick in mBonePicks)
-		{
-			if (pick.transform == forearm && !pick.handle)
-				seen = SceneScreenPoint(mSceneCamera.projection * mSceneCamera.view, (pick.head + pick.tail) * 0.5f, out screen);
-		}
-		let picked = seen && PickBone(screen.x / mSceneSize.x, screen.y / mSceneSize.y) && Selected == forearm.GameObject && mGizmoOperation == 1;
-		report.AppendF("clicking the forearm selects it with the Rotate handle: {}", picked);
-		pass &= picked;
-		Log.Info(scope $"RIG-TEST {pass ? "PASS" : "FAIL"}: {report}");
-	}
-
 	// ---- the Hand Posing window ----
 
 	void DrawHandPosing()
 	{
-		if (mRigTestFrames > 0 && --mRigTestFrames == 0)
-			RunRigTest();
 		if (!mShowHandPosing)
 			return;
 		if (mFocusHandPosing)

@@ -4,7 +4,7 @@ using Bgfx;
 
 namespace Tallow;
 
-/// Palette images for palette materials (Material.palette, docs/materials.md): 256 colours, read left to right and
+/// Palette images for palette materials (Material.palette, tallowengine.com/docs/materials): 256 colours, read left to right and
 /// top to bottom from any image (a 16 x 16 picture is the usual layout; 256 x 1 works too). Each is made into an
 /// exact 16 x 16 texture with no mip levels, no compression and no filtering, so a colour never bleeds into its
 /// neighbour, whatever the quality settings.

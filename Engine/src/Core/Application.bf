@@ -14,7 +14,7 @@ namespace Tallow;
 ///   --fixed-step                                       every frame advances exactly one fixed tick, however
 ///                                                      long it took (automated tests, replays, benchmarks)
 ///   --crash-test                                       crash on purpose at frame 100, to check a build's crash
-///                                                      symbols (tools/test_csharp_crash.py; test only)
+///                                                      report and its private symbols
 [CSharpExpose]
 class Application
 {
@@ -57,17 +57,8 @@ class Application
 	bool mRunning = true;
 	int32 mRendererOverride = -1;
 	int64 mFrameLimit = -1;
-	/// --csharp-field-test: the frame on which CSharpRuntime.RunFieldTest reads a running script's fields.
-	int64 mCSharpFieldTestFrame = -1;
-	/// --crash-test: crash on purpose on frame 100, once the game is up (B30 crash symbols check; test only).
+	/// --crash-test: crash on purpose on frame 100, once the game is up, to check a build's crash report.
 	bool mCrashTest;
-	/// --csharp-field-dump FILE: CSharpRuntime.DumpFields writes every running script's fields there on frame 100.
-	String mCSharpFieldDump = new .() ~ delete _;
-	/// --csharp-reload-test DLL (tools/test_csharp_reload.py): a second build of the game hot reloaded on frame 120.
-	String mCSharpReloadTest = new .() ~ delete _;
-	/// --csharp-reload-after S: it reloads once S seconds of real time have passed instead of on frame 120
-	/// (tools/test_csharp_network_reload.py: headless processes run frames as fast as they can).
-	float mCSharpReloadAfter = -1;
 	String mScreenshotPath = new .() ~ delete _;
 	/// --profile-save: where the profiler's recording is written when the program ends.
 	String mProfileSavePath = new .() ~ delete _;
@@ -184,22 +175,15 @@ class Application
 			mFrameLimit = SceneSerializer.ParseInt(value);
 		GetArg("--screenshot", mScreenshotPath);
 		GetArg("--engine-root", mEngineRootHint);
-		// Bend skinned models on the CPU, to compare with the GPU (docs/gpu-skinning.md).
+		// Bend skinned models on the CPU, to compare with the GPU (tallowengine.com/docs/gpu-skinning).
 		if (HasArg("--cpu-skinning"))
 			GpuSkinning.Enabled = false;
 		if (HasArg("--headless"))
 			Headless = true;
 		if (HasArg("--fixed-step"))
 			FixedStep = true;
-		if (HasArg("--csharp-field-test"))
-			mCSharpFieldTestFrame = 100;
 		if (HasArg("--crash-test"))
 			mCrashTest = true;
-		GetArg("--csharp-reload-test", mCSharpReloadTest);
-		GetArg("--csharp-field-dump", mCSharpFieldDump);
-		let reloadAfter = scope String();
-		if (GetArg("--csharp-reload-after", reloadAfter) && float.Parse(reloadAfter) case .Ok(let seconds))
-			mCSharpReloadAfter = seconds;
 		// Either one overrides how the game was built to start.
 		if (HasArg("--fullscreen"))
 			GameWindow.StartsFullscreen = true;
@@ -261,7 +245,7 @@ class Application
 			Shutdown();
 			return 1;
 		}
-		// The player's saved graphics settings (docs/quality.md), then --quality <low|medium|high|ultra> for this run.
+		// The player's saved graphics settings (tallowengine.com/docs/quality), then --quality <low|medium|high|ultra> for this run.
 		if (!Headless && LoadsPlayerQuality)
 			Quality.Load();
 		// To compare: textures without mip levels or compressed copies.
@@ -276,10 +260,10 @@ class Application
 		let shadowed = scope String();
 		if (GetArg("--shadowed-lights", shadowed) && int32.Parse(shadowed) case .Ok(let count))
 			RenderView.MaxShadowedLights = Math.Clamp(count, 0, LightClusters.MaxTiles);
-		// To compare: lightmaps and baked light probes off (docs/baked-lighting.md).
+		// To compare: lightmaps and baked light probes off (tallowengine.com/docs/baked-lighting).
 		if (HasArg("--no-baked-lighting"))
 			RenderView.UseBakedLighting = false;
-		// The profiler (docs/profiler.md): --profile records from the start, --profile-listen [port] lets an editor
+		// The profiler (tallowengine.com/docs/profiler): --profile records from the start, --profile-listen [port] lets an editor
 		// connect to watch this run (a dedicated server too), --profile-save <file> writes the recording at the end
 		// and --profile-report <file> a text report of it (both record from the start).
 		ProfilerModules.Install();
@@ -439,17 +423,8 @@ class Application
 		// The GPU's times (bgfx's latest finished frame) and every module's counters go in with the frame.
 		Profiler.EndFrame(Headless ? 0 : ProfilerModules.ReadGpu());
 
-		if (mCSharpFieldTestFrame > 0 && Time.FrameCount == mCSharpFieldTestFrame)
-			CSharpRuntime.RunFieldTest(Scene.Active);
 		if (mCrashTest && Time.FrameCount == 100)
 			CrashReports.DeliberateCrash();
-		if (!mCSharpFieldDump.IsEmpty && Time.FrameCount == 100)
-			CSharpRuntime.DumpFields(Scene.Active, mCSharpFieldDump);
-		if (!mCSharpReloadTest.IsEmpty && (mCSharpReloadAfter < 0 ? Time.FrameCount == 120 : Time.RealTime >= mCSharpReloadAfter))
-		{
-			mCSharpReloadAfter = float.MaxValue;
-			Log.Info(scope $"RELOAD kept {CSharpRuntime.ReloadAssembly(mCSharpReloadTest)} scripts");
-		}
 		if (mFrameLimit > 0 && Time.FrameCount >= mFrameLimit)
 			Close();
 	}

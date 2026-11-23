@@ -7,7 +7,7 @@ namespace Tallow.Editor;
 
 /// The Bone Map window: which joint of a rigged model is each humanoid bone, as matched by name, with a choice of
 /// joint for each that saves to a .bonemap file beside the model. Clips retargeted onto the model (or from it) are
-/// made again at once as matches change. See docs/retargeting.md.
+/// made again at once as matches change. See tallowengine.com/docs/retargeting.
 extension EditorApp
 {
 	bool mShowBoneMap;

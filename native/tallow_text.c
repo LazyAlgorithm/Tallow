@@ -1,4 +1,4 @@
-// Text rasterized and extruded on the CPU for WorldText (docs/world-text.md): a font's glyphs drawn into an RGBA8
+// Text rasterized and extruded on the CPU for WorldText (tallowengine.com/docs/world-text): a font's glyphs drawn into an RGBA8
 // bitmap (white, with the glyph coverage in alpha) for the letters' faces and, for text with depth, a mesh of the
 // glyph outlines extruded into solid letters. The interface's own text is Dear ImGui's; this is for text that lives
 // in the world, which needs a texture and geometry the renderer can draw.

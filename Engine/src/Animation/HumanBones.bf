@@ -115,7 +115,7 @@ class BoneMap
 	/// Writes the map as a .bonemap file's text, every bone on a line.
 	public void Write(String text)
 	{
-		text.Append("# Which joint of the model is each humanoid bone (empty: none). See docs/retargeting.md.\n");
+		text.Append("# Which joint of the model is each humanoid bone (empty: none). See tallowengine.com/docs/retargeting.\n");
 		for (int i < Count)
 		{
 			BoneName((HumanBone)i, text);

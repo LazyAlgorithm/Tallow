@@ -5,7 +5,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Asset packages (docs/packages.md): a set of assets, with their dependencies and scripts, in one .tpackage file to
+/// Asset packages (tallowengine.com/docs/packages): a set of assets, with their dependencies and scripts, in one .tpackage file to
 /// be put into another project, as a Unity package is.
 ///
 /// A .tpackage is a pack file (PackFile, the format of game.tpak) holding "package.txt", which names the package and
@@ -130,14 +130,14 @@ static class AssetPackages
 				var folder = Path.GetDirectoryPath(path, .. scope .());
 				while (true)
 				{
-					let full = folder.IsEmpty ? scope String(root) : scope $"{root}/{folder}";
+					let folderPath = folder.IsEmpty ? scope String(root) : scope $"{root}/{folder}";
 					String definition = null;
-					if (Directory.Exists(full))
+					if (Directory.Exists(folderPath))
 					{
-						for (let entry in Directory.EnumerateFiles(full, "*.tasmdef"))
+						for (let entry in Directory.EnumerateFiles(folderPath, "*.tasmdef"))
 						{
-							let name = entry.GetFileName(.. scope .());
-							definition = folder.IsEmpty ? scope:: String(name) : scope:: $"{folder}/{name}";
+							let fileName = entry.GetFileName(.. scope .());
+							definition = folder.IsEmpty ? scope:: String(fileName) : scope:: $"{folder}/{fileName}";
 							break;
 						}
 					}
@@ -819,7 +819,7 @@ static class AssetPackages
 	public static void SaveInstalled(List<Installed> packages)
 	{
 		let text = scope String();
-		text.Append("# Asset packages imported into this project (docs/packages.md). Written by the editor.\n");
+		text.Append("# Asset packages imported into this project (tallowengine.com/docs/packages). Written by the editor.\n");
 		for (let package in packages)
 		{
 			text.Append("package ");

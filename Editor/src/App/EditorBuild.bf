@@ -160,7 +160,6 @@ extension EditorApp
 
 	void CreateScript(StringView name, ScriptTemplateKind template)
 	{
-		let project = Project.Current;
 		if (!ProjectGenerator.IsValidName(name))
 		{
 			Log.Error("Script names use letters, digits and underscores, and start with a letter.");
@@ -581,10 +580,7 @@ extension EditorApp
 		}
 	}
 
-	/// --script-templates-test <folder>: writes a script from every template there (namespace TemplateTest), for
-	/// tools/test_csharp_sample.py to compile. The launcher's --write-script-templates does it without a window.
-	void RunScriptTemplatesTest(StringView folder) => WriteScriptTemplates(folder);
-
+	/// --write-script-templates <folder> (launcher): writes a script from every template there (namespace TemplateTest).
 	public static int WriteScriptTemplates(StringView folder)
 	{
 		Directory.CreateDirectory(folder).IgnoreError();

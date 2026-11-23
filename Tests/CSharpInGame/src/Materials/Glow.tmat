@@ -1,9 +1,0 @@
-material 1
-color 0.25 0.3 0.4 1
-metallic 0
-roughness 0.5
-emissive 0 0 0 1
-emissiveIntensity 1
-flatShading 0
-unlit 0
-texture ""

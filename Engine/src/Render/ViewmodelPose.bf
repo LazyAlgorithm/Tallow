@@ -50,7 +50,7 @@ struct ViewmodelPoseData
 /// Camera's Viewmodel Layer). It carries the weapon from a hip pose to an aim pose (aiming down the sights: in the
 /// middle of the screen, the sights on the crosshair), bobs it as the player walks and lets it lag a little behind
 /// when the view turns, worked out from how the camera moves, so the only code a game needs is setting Aiming and,
-/// for recoil, calling Kick. See docs/viewmodel.md.
+/// for recoil, calling Kick. See tallowengine.com/docs/viewmodel.
 ///
 /// In the editor, Preview shows the pose part way from hip to aim while not playing, and the Inspector's buttons take
 /// the object's current place as the hip or the aim pose: move it until it looks right in the Game view, then press.

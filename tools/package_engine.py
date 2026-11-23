@@ -42,7 +42,7 @@ def main():
     shaderc = Path(f'build/{native}/bgfx/cmake/bgfx/shaderc' + ('.exe' if windows else ''))
     # texturec compresses a game's pictures when File > Build makes it.
     texturec = Path(f'build/{native}/bgfx/cmake/bimg/texturec' + ('.exe' if windows else ''))
-    # tallow_modelsettings applies the import settings of converted models (docs/model-import.md) in a build.
+    # tallow_modelsettings applies the import settings of converted models (tallowengine.com/docs/model-import) in a build.
     modelsettings = Path(f'build/{native}/tallow_modelsettings' + ('.exe' if windows else ''))
     # tallow_modelconv converts FBX, OBJ, DAE, STL, PLY and 3DS files for the editor and builds (Assimp).
     modelconv = Path(f'build/{native}/tallow_modelconv' + ('.exe' if windows else ''))
@@ -69,7 +69,7 @@ def main():
             (root / 'Engine/src/Scripting/CSharpBindings.Generated.bf').unlink(missing_ok=True)
             (root / 'Managed/Tallow.API/Generated/CSharpBindings.g.cs').unlink(missing_ok=True)
             subprocess.run(['dotnet', 'run', '--project', 'Managed/Tallow.BindingGen/Tallow.BindingGen.csproj',
-                            '--', '--manifest', 'Tests/CSharpExpose/fixture.tsv', '--engine-root', '.'],
+                            '--', '--manifest', 'Managed/Tallow.BindingGen/csharp-api-manifest.tsv', '--engine-root', '.'],
                            cwd=root, env=environment, check=True)
         # Beef does not track changed native archives: force a fresh link, and
         # restore the previous executable if the compiler fails.
@@ -142,7 +142,7 @@ def main():
         for name in ('BeefSpace.toml', 'global.json', 'icon.png', 'LICENSE', 'THIRD_PARTY_LICENSES.txt'):
             shutil.copy2(root / name, stage / name)
         (stage / 'tools').mkdir()
-        for name in ('build_player.py', 'test_csharp_export.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'dotnet_sdk.py', 'ship_symbols.py', 'csharp_native.py', 'nativeaot_allowlist.txt', 'toolchain.txt', 'setup_dependencies.ps1', 'setup_dependencies.sh'):
+        for name in ('build_player.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'dotnet_sdk.py', 'ship_symbols.py', 'csharp_native.py', 'nativeaot_allowlist.txt', 'toolchain.txt', 'setup_dependencies.ps1', 'setup_dependencies.sh'):
             shutil.copy2(root / 'tools' / name, stage / 'tools' / name)
         shutil.copy2(root / 'tools/beef_language_service.py', stage / 'tools/beef_language_service.py')
         # Script reloads compile with the Beef compiler kept loaded (built on first use from the sources of the user's

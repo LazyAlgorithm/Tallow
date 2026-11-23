@@ -1,7 +1,0 @@
-controller 1
-parameter "New Float" 0 0
-state "Idle" "" 1 1 403 100
-state "New State" "" 1 1 440 275
-default 0
-transition 0 1 0.15 1 1
-condition 0 2 0

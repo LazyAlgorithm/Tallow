@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// The Building tools (docs/buildings.md): with a Building selected, rooms are dragged out on the grid of the storey
+/// The Building tools (tallowengine.com/docs/buildings): with a Building selected, rooms are dragged out on the grid of the storey
 /// being worked on and walls go round them by themselves; doors, windows and openings are clicked onto walls and
 /// cut out of them; stairs are dragged out and cut a hole in the floor above. The storeys above, and the ceiling of
 /// the one being worked on, are cut away while it is selected, so its rooms can be seen into. Everything goes into

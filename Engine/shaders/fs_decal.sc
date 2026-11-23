@@ -1,6 +1,6 @@
 $input v_wpos
 
-// A decal (docs/decals.md): finds the surface behind each pixel of the box from the depth pass, keeps the pixels
+// A decal (tallowengine.com/docs/decals): finds the surface behind each pixel of the box from the depth pass, keeps the pixels
 // whose surface lies inside the box, and lays the picture over them, lit by include/lighting.sh as the surface
 // itself would be. The surface's facing comes from how its position changes across the screen.
 #include <bgfx_shader.sh>

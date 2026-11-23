@@ -21,7 +21,7 @@ class GameObject
 	public bool IsFolder;
 	/// Generated at runtime (voxel chunks, pooled effects): not saved with the scene and hidden in the Hierarchy.
 	public bool Transient;
-	/// In a streamed world (docs/world-streaming.md): kept loaded wherever the players are, instead of coming and going
+	/// In a streamed world (tallowengine.com/docs/world-streaming): kept loaded wherever the players are, instead of coming and going
 	/// with its cell.
 	public bool AlwaysLoaded;
 	/// What this object was made from while the game ran: a prefab file, or the name of a registered network prefab.
@@ -216,7 +216,7 @@ class GameObject
 
 	/// The scene the object is in.
 	public Scene Scene { [Inline] get => mScene; }
-	/// The object's entity in its scene's World (docs/ecs-plan.md), or Entity.Null outside a scene.
+	/// The object's entity in its scene's World, or Entity.Null outside a scene.
 	public Entity Entity { [Inline] get => mEntity; }
 	/// Whether this object itself is switched on, whatever its parents are (see ActiveInHierarchy).
 	public bool ActiveSelf => mActive;
@@ -307,7 +307,7 @@ class GameObject
 
 	public void RemoveComponent<T>() where T : struct => mScene.World.Remove<T>(mEntity);
 
-	// ---- Built-in components (handles: Light, MeshRenderer... docs/ecs-plan.md) ----
+	// ---- Built-in components (handles: Light, MeshRenderer...) ----
 
 	/// Adds built-in component T with its default values, or returns the one the object has.
 	public T AddComponent<T>() where T : struct, IComponentHandle

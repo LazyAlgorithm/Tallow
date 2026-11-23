@@ -1,7 +1,7 @@
 $input a_position
 $output v_wpos, v_normal, v_color0, v_texcoord0, v_depth
 
-// The water's surface (docs/water.md): a grid of still water placed by u_waterModel, moved by the waves of
+// The water's surface (tallowengine.com/docs/water): a grid of still water placed by u_waterModel, moved by the waves of
 // include/water.sh. v_texcoord0 is the still point (for ripples and foam), v_color0.x how folded the crest is.
 #include <bgfx_shader.sh>
 #include "water.sh"

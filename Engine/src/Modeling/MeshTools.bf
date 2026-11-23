@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// More modelling operations (docs/modeling.md): cutting faces into triangles or a fan, joining triangles into
+/// More modelling operations (tallowengine.com/docs/modeling): cutting faces into triangles or a fan, joining triangles into
 /// quads, giving a surface thickness, smoothing, collapsing, making a face from corners and the knife.
 extension MeshOps
 {

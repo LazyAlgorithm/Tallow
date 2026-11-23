@@ -3,7 +3,7 @@ using System;
 namespace Tallow.Editor;
 
 /// Window > Graphics Quality: the presets and each setting, applied at once to the Scene and Game views, to see what a
-/// player's Low or Ultra looks like (docs/quality.md). The editor's own choice is not saved as the player's.
+/// player's Low or Ultra looks like (tallowengine.com/docs/quality). The editor's own choice is not saved as the player's.
 extension EditorApp
 {
 	bool mShowQuality;

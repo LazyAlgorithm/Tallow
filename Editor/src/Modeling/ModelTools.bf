@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// The modeller's tools that follow the pointer (docs/modeling.md): grab, rotate and scale (G, R, S), extrude (E),
+/// The modeller's tools that follow the pointer (tallowengine.com/docs/modeling): grab, rotate and scale (G, R, S), extrude (E),
 /// inset (I), bevel (Ctrl+B), loop cut and slide (Ctrl+R) and the knife (K). Each starts from the model as it was
 /// and is worked out again as the pointer moves, so Escape or a right-click puts it back; a click or Enter keeps it.
 /// X, Y and Z hold a move to an axis (Shift+X to the plane across it, again for the model's own axes), and a number

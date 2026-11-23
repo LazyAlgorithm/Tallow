@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The macOS link line for Beef projects that use Tallow (docs/macos.md), and a way to add it to their BeefProj.toml.
+"""The macOS link line for Beef projects that use Tallow (tallowengine.com/docs/macos), and a way to add it to their BeefProj.toml.
 
     python3 tools/macos_link.py --write <BeefProj.toml>...   add or refresh [Configs.Debug.macOS] / [Configs.Release.macOS]
 

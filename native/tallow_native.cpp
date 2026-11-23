@@ -167,7 +167,7 @@ TN_API bool tn_gfx_init(SDL_Window* window, int width, int height, int renderer,
 #endif
 
 #if defined(SDL_PLATFORM_WINDOWS)
-	// bgfx would pick Direct3D here, and the engine ships no Direct3D shaders yet (see docs/windows.md).
+	// bgfx would pick Direct3D here, and the engine ships no Direct3D shaders yet (see tallowengine.com/docs/windows).
 	if (renderer < 0) renderer = (int)bgfx::RendererType::Vulkan;
 #endif
 

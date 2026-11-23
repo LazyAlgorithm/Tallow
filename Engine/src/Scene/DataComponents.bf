@@ -10,7 +10,7 @@ struct EngineDataAttribute : Attribute
 {
 }
 
-/// The data components a project has: `[Component]` structs (docs/ecs-plan.md, "Systems"). They live in the
+/// The data components a project has: `[Component]` structs. They live in the
 /// object's entity rather than on the GameObject, are saved in scene files as `data` blocks and edited in the
 /// Inspector beside scripts. Their fields must be plain values (numbers, vectors, colours, enums, bools); other
 /// fields are left out of files and the Inspector.

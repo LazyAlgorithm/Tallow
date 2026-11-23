@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Window > Lighting: bakes the scene's lighting (docs/baked-lighting.md) on the machine's spare cores while the editor
+/// Window > Lighting: bakes the scene's lighting (tallowengine.com/docs/baked-lighting) on the machine's spare cores while the editor
 /// keeps running, then points the scene at the lightmaps and light probes it made (save the scene to keep them).
 /// It also places probes (ProbePlacementTools.bf).
 /// Switches: --lighting-window opens it, --bake-lighting bakes the scene at start-up and logs BAKE: and the result.

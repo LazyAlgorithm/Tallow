@@ -14,15 +14,6 @@ extension EditorApp
 	void DrawUI()
 	{
 		UpdateProfiler();
-		UpdateViewportTest();
-		UpdatePlayCycleTest();
-		UpdateHotReloadTest();
-		UpdateSaveToPlayTest();
-		UpdateCompletionTest();
-		UpdateReferencesTest();
-		UpdateInspectorScaleTest();
-		UpdateStaleBuildTest();
-		UpdateEditorExtensionsTest();
 		sUIMarker.Begin();
 		defer Profiler.End();
 		// Outside play mode the Scene view's camera is the listener, so sounds can be auditioned where you look from.
@@ -684,7 +675,7 @@ extension EditorApp
 
 extension EditorApp
 {
-	/// Window > Flecs Explorer: serves the open scene's ECS world (docs/ecs-plan.md) and opens the Explorer in the
+	/// Window > Flecs Explorer: serves the open scene's ECS world and opens the Explorer in the
 	/// browser, which connects to it on localhost.
 	void OpenFlecsExplorer()
 	{

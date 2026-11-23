@@ -91,7 +91,7 @@ def _references(text, base, assets):
             if candidate in assets:
                 found.add(candidate)
             elif candidate + '.glb' in assets:
-                # A converted model (docs/model-import.md): named as the FBX, OBJ, ... and built as <file>.glb.
+                # A converted model (tallowengine.com/docs/model-import): named as the FBX, OBJ, ... and built as <file>.glb.
                 found.add(candidate + '.glb')
             elif candidate.endswith('.terrain'):
                 # A terrain's sculpting folder: every tile's file in it.
@@ -125,7 +125,7 @@ def plan_split(assets, code_texts, start_scene, shared_patterns=()):
                 if other != path and os.path.splitext(other)[0] == stem:
                     todo.append(other)
             if path.endswith('.tscene'):
-                # A streamed world (docs/world-streaming.md): its cells, in the folder beside it.
+                # A streamed world (tallowengine.com/docs/world-streaming): its cells, in the folder beside it.
                 todo.extend(other for other in assets if other.startswith(stem + '.cells/'))
             if os.path.splitext(path)[1].lower() in _TEXT:
                 try:

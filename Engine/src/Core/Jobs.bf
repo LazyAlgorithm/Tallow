@@ -4,7 +4,7 @@ using System.Threading;
 
 namespace Tallow;
 
-/// Worker threads for spreading a frame's work over the machine's cores (docs/jobs.md). `Jobs.For(count, body)`
+/// Worker threads for spreading a frame's work over the machine's cores (tallowengine.com/docs/jobs). `Jobs.For(count, body)`
 /// runs body(i) for every i below count, on the workers and the calling thread together, and returns when all are
 /// done. Each body must only touch its own item's data. The workers sleep between batches; they start the first time
 /// a batch is big enough to share.

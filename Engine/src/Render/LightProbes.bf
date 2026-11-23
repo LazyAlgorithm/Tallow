@@ -4,7 +4,7 @@ using Bgfx;
 
 namespace Tallow;
 
-/// A grid of baked light probes (docs/baked-lighting.md): at each point, the light arriving from every direction (the
+/// A grid of baked light probes (tallowengine.com/docs/baked-lighting): at each point, the light arriving from every direction (the
 /// sky and what it bounced off), kept as a constant plus a direction for each of red, green and blue (spherical
 /// harmonics to the first band, already scaled for diffuse lighting): the ambient light for a normal n is
 /// `max(a + dot(b, n), 0)`. Moving things and surfaces without a lightmap read it per pixel, blended between the

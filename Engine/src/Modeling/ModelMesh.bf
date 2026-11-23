@@ -25,7 +25,7 @@ struct ModelMeshData
 	public this() { }
 }
 
-/// A model built in the editor (docs/modeling.md): its faces are kept in the scene, inline, and drawn through the
+/// A model built in the editor (tallowengine.com/docs/modeling): its faces are kept in the scene, inline, and drawn through the
 /// object's Mesh Renderer. Objects with the same model share one mesh, so copies of a whitebox piece are drawn
 /// together. Faces in material slot 0 use the Mesh Renderer's material; slots 1 and up use Materials.
 ///

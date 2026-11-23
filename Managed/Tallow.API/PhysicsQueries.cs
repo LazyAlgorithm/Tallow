@@ -10,7 +10,7 @@ public readonly record struct RayQuery(Vector3 Origin, Vector3 Direction, float 
 public readonly record struct SphereQuery(Vector3 Origin, float Radius, Vector3 Direction, float MaxDistance);
 
 /// <summary>Physics queries with many results: every hit along a ray or sweep, every contact of an overlap, and many
-/// rays or sweeps in one call (docs/physics-queries.md).</summary>
+/// rays or sweeps in one call (tallowengine.com/docs/physics-queries).</summary>
 public readonly partial record struct Scene
 {
     private static readonly int HitSize = Marshal.SizeOf<PhysicsQueryHit>();

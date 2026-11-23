@@ -139,7 +139,6 @@ extension EditorApp
 		}
 		if (locked)
 			ImGui.PopStyleColor();
-		NoteTestRect("lock");
 		if (ImGui.IsItemHovered())
 			ImGui.SetTooltip(locked ? "Locked: the Inspector stays on this object whatever is selected. Click to follow the selection again." : "Lock the Inspector to this object, to drag other objects and assets into its fields.");
 	}
@@ -965,7 +964,7 @@ extension EditorApp
 			if (!searching)
 				ImGui.EndMenu();
 		}
-		// Data components: [Component] structs, for systems (docs/ecs-plan.md).
+		// Data components: [Component] structs, for systems.
 		if (!DataComponents.Types.IsEmpty && (searching || ImGui.BeginMenu("Data")))
 		{
 			for (let info in DataComponents.Types)
@@ -1458,7 +1457,6 @@ extension EditorApp
 		ImGui.SetNextItemWidth(-28);
 		let text = scope String(target != null ? (StringView)target.Name : "None");
 		ImGui.InputText("##v", text, ImGui.InputFlags.ReadOnly);
-		NoteTestRect(scope $"field:{field.name}");
 		if (ImGui.BeginDragDropTarget())
 		{
 			let payload = ImGui.AcceptDragDropPayload("GAMEOBJECT");

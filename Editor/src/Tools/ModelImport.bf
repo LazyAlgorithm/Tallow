@@ -6,7 +6,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// How a converted model is brought in (docs/model-import.md), kept beside it as "<file>.import".
+/// How a converted model is brought in (tallowengine.com/docs/model-import), kept beside it as "<file>.import".
 class ModelImportSettings
 {
 	public float scale = 1;
@@ -57,7 +57,7 @@ class ModelImportSettings
 
 /// FBX, OBJ, DAE, STL, PLY, 3DS and .blend files in the project, converted to glTF behind the scenes: once when they
 /// are first seen and again when they or their import settings change. Scenes name the file itself; the engine reads
-/// the converted copy (Assets.ResolvePath). See docs/model-import.md.
+/// the converted copy (Assets.ResolvePath). See tallowengine.com/docs/model-import.
 static class ModelImport
 {
 	[CLink] static extern int32 tn_model_import_settings(char8* source, char8* output, float scale, int32 upZ, int32 animations, char8* clips, int32 materials);

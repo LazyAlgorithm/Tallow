@@ -1,6 +1,6 @@
 $input v_texcoord0, v_wpos
 
-// A camera in the water (docs/water.md): over a copy of the picture (s_color), every pixel whose part of the near
+// A camera in the water (tallowengine.com/docs/water): over a copy of the picture (s_color), every pixel whose part of the near
 // plane is under the surface sees through the water: its colour, thicker with the distance through it (to what is
 // seen, or up to the surface), darker with depth, and caustics on what is under the surface. The test is made per
 // pixel against the waves, so with the camera half in the water the picture is cut exactly at the waterline.

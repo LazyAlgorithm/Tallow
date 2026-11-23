@@ -33,17 +33,17 @@ class SceneEnvironment
 	public float bloomThreshold = 1.0f;
 	/// How far from the camera the sun's shadows are drawn, in metres. Shorter is sharper.
 	public float shadowDistance = 120.0f;
-	/// How strongly surfaces mirror the sky and the reflection probes (docs/reflections.md): 1 as they are, 0 none.
+	/// How strongly surfaces mirror the sky and the reflection probes (tallowengine.com/docs/reflections): 1 as they are, 0 none.
 	public float reflectionIntensity = 1;
 	/// Ambient light from what is around instead of the two ambient colours: the sky, and inside a reflection probe's
-	/// box the room it captured (image-based lighting, docs/reflections.md). Ambient Intensity still scales it.
+	/// box the room it captured (image-based lighting, tallowengine.com/docs/reflections). Ambient Intensity still scales it.
 	/// Lightmapped surfaces keep their lightmaps.
 	public bool ambientFromSurroundings;
-	/// Baked light probes (docs/baked-lighting.md): the `.tprobes` file the editor's Lighting window writes, which
+	/// Baked light probes (tallowengine.com/docs/baked-lighting): the `.tprobes` file the editor's Lighting window writes, which
 	/// gives moving things and surfaces without a lightmap the light bounced round the scene. Empty: the two ambient
 	/// colours.
 	public String lightProbes = new .() ~ delete _;
-	/// How the editor's Lighting window bakes this scene (docs/baked-lighting.md): lightmap texels per metre, rays per
+	/// How the editor's Lighting window bakes this scene (tallowengine.com/docs/baked-lighting): lightmap texels per metre, rays per
 	/// texel, bounces, and the light probes and how far apart they are.
 	public float bakeTexelsPerMetre = 8;
 	public int32 bakeSamples = 256;
@@ -51,7 +51,7 @@ class SceneEnvironment
 	public bool bakeProbes = true;
 	public float bakeProbeSpacing = 3;
 
-	// ---- Screen effects (docs/post-processing.md). All off by default; colour grading's defaults leave the picture
+	// ---- Screen effects (tallowengine.com/docs/post-processing). All off by default; colour grading's defaults leave the picture
 	// as it always was. ----
 
 	/// Ambient occlusion: darkens creases, corners and where things meet the ground. 0 is off; 1 is normal; up to 2.
@@ -92,7 +92,7 @@ class SceneEnvironment
 	/// How much of the lookup table is used: 0 none, 1 all of it.
 	public float colorLookupStrength = 1;
 
-	/// World streaming (docs/world-streaming.md): the scene is saved as a grid of cells, each in a file of its own,
+	/// World streaming (tallowengine.com/docs/world-streaming): the scene is saved as a grid of cells, each in a file of its own,
 	/// and only the cells near a Streaming Source (or a camera) are loaded.
 	public bool streaming;
 	/// A cell's width and depth in metres.
@@ -182,7 +182,7 @@ class Scene
 	public String Path = new .() ~ delete _;
 	/// The scene's sky, lighting, fog and screen effects.
 	public SceneEnvironment Environment = new .() ~ delete _;
-	/// The ECS storage behind the scene's objects (docs/ecs-plan.md): one entity for each GameObject, parented with
+	/// The ECS storage behind the scene's objects: one entity for each GameObject, parented with
 	/// ChildOf as the objects are. Deleted after the objects (the destructor clears the scene first).
 	public World World = new .() ~ delete _;
 
@@ -1593,7 +1593,7 @@ class Scene
 		}
 	}
 
-	/// The scene's two pipelines (docs/ecs-plan.md, "Frame and tick order"): the steps below, in Flecs phases, so
+	/// The scene's two pipelines: the steps below, in Flecs phases, so
 	/// that engine systems added later run at their place among them. Steps in one phase run in the order added.
 	World.Pipeline mFramePipeline;
 	World.Pipeline mTickPipeline;

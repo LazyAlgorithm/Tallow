@@ -1,5 +1,5 @@
 // tallow_modelconv: turns a model file Assimp reads (FBX, OBJ, DAE, STL, PLY, 3DS) into a binary glTF (.glb) the
-// engine loads. The editor and tools/build_player.py run it; see docs/model-import.md.
+// engine loads. The editor and tools/build_player.py run it; see tallowengine.com/docs/model-import.
 //
 //   tallow_modelconv <source> <out.glb> [--scale s] [--up auto|y|z] [--no-animations] [--clips a,b,...]
 //                     [--no-materials]

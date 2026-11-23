@@ -34,7 +34,7 @@ struct LODGroupData
 }
 
 /// Levels of detail: far away, an object is drawn with fewer triangles, and when it is only a speck it is not drawn at
-/// all. The level is picked for each camera from how much of the screen's height the object covers. See docs/lod.md.
+/// all. The level is picked for each camera from how much of the screen's height the object covers. See tallowengine.com/docs/lod.
 ///
 /// A handle (ComponentHandle): its settings are LODGroupData's fields, what it keeps between frames its LODGroupState.
 /// LODGroup.FrameAll (a step in the frame pipeline) does what Start, OnLocalUpdate and OnDisable did.

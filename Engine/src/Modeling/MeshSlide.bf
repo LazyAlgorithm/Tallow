@@ -15,7 +15,7 @@ public struct SlideRail
 	public bool hasRight;
 }
 
-/// Sliding (docs/modeling.md): edges along the faces either side of them, and vertices along their own edges, so
+/// Sliding (tallowengine.com/docs/modeling): edges along the faces either side of them, and vertices along their own edges, so
 /// that a cut or a loop can be moved without changing the shape of the model.
 extension MeshOps
 {

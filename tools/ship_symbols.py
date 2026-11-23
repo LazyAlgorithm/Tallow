@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Private symbols and build identifiers for release exports (roadmap B30, "stripped binaries").
+"""Private symbols and build identifiers for release exports (stripped binaries).
 
 A Release export ships a player with no debug information. The matching symbols (Linux .dbg, Windows .pdb),
 a map file and a build record naming every module's exact identifier go to `<output>-symbols/` beside the build,
-never inside it. tools/test_csharp_crash.py crashes such a build on purpose and reads the crash with those symbols.
+never inside it. Run a build with --crash-test to crash it on purpose and check a report against them.
 
 Two identifiers matter for a crash:
   Linux  ELF: the GNU build ID (readelf -n) plus the .gnu_debuglink name and CRC (objcopy writes it), and the

@@ -1,6 +1,6 @@
 // What the anti-cheat asks the operating system: is a debugger attached, has a library been forced into the
 // process, and do two independent clocks agree (a "speed hack" stretches the one games read). User-mode checks:
-// they catch the common tools and nothing that runs in the kernel. See docs/anti-cheat.md.
+// they catch the common tools and nothing that runs in the kernel. See tallowengine.com/docs/anti-cheat.
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>

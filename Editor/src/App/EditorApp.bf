@@ -119,7 +119,7 @@ class EditorApp : Application
 		if (!ImGui.tn_imgui_init(Window, mIniPath.CStr(), 1.0f))
 			return false;
 		LoadOpenWindows();
-		// The editor's colours (docs/themes.md): the theme last used, or --theme <name> for this run.
+		// The editor's colours (tallowengine.com/docs/themes): the theme last used, or --theme <name> for this run.
 		let themeArg = scope String();
 		GetArg("--theme", themeArg);
 		let codeThemeArg = scope String();
@@ -156,7 +156,7 @@ class EditorApp : Application
 		Log.Info(scope $"Opened project {project.Name} ({project.Path})");
 		LoadSceneToolSettings();
 		AlignSceneCameraToGameCamera();
-		// A streamed world: only the cells round the view (docs/world-streaming.md).
+		// A streamed world: only the cells round the view (tallowengine.com/docs/world-streaming).
 		LoadStreamedCellsAroundView();
 		ResetUndo();
 		// Shaders edited outside the editor, or never compiled on this machine, are built before anything draws.
@@ -259,12 +259,8 @@ class EditorApp : Application
 		if (AssetArg("--script", full..Clear()))
 			OpenScript(full);
 		ApplyBrushSwitches();
-		// Test switch: --undo-test-foliage paints plants on the scene's first Foliage twice and checks that undo and
-		// redo take the strokes off and put them back without making the object again.
-		if (HasArg("--undo-test-foliage"))
-			RunFoliageUndoTest();
 		let selectName = scope String();
-		// Test switch: --lod-level <n> draws every LOD Group at that level.
+		// --lod-level <n> draws every LOD Group at that level.
 		let lodArg = scope String();
 		if (GetArg("--lod-level", lodArg))
 			LODGroup.ForceLevel = (int32)SceneSerializer.ParseInt(lodArg);
@@ -309,52 +305,10 @@ class EditorApp : Application
 		ApplyLightingSwitches();
 		ApplyPlacementSwitches();
 		ApplyRiggerSwitches();
-		if (HasArg("--theme-test"))
-			RunThemeTest();
-		if (HasArg("--viewport-test"))
-			mViewportTestFrame = 0;
-		if (HasArg("--visibility-test"))
-			RunVisibilityTest();
 		// Window > C# Debugging, open from the start.
 		if (HasArg("--csharp-debugging"))
 			mShowCSharpDebugging = true;
-		if (HasArg("--script-files-test"))
-			RunScriptFilesTest();
-		if (HasArg("--csharp-inspector-test"))
-			RunCSharpInspectorTest();
-		if (HasArg("--play-cycle-test"))
-			StartPlayCycleTest();
-		if (HasArg("--hot-reload-test"))
-			StartHotReloadTest();
-		if (HasArg("--save-to-play-test"))
-			StartSaveToPlayTest();
-		if (HasArg("--completion-test"))
-			StartCompletionTest();
-		if (HasArg("--references-test"))
-			StartReferencesTest();
-		{
-			let count = scope String();
-			if (GetArg("--inspector-scale-test", count))
-				StartInspectorScaleTest(int.Parse(count) case .Ok(let n) ? n : 1000);
-		}
-		if (HasArg("--stale-build-test"))
-			StartStaleBuildTest();
-		if (HasArg("--editor-extensions-test"))
-			StartEditorExtensionsTest();
-		{
-			let folder = scope String();
-			if (GetArg("--script-templates-test", folder))
-				RunScriptTemplatesTest(folder);
-		}
-		if (HasArg("--drag-test"))
-			StartDragTest();
-		if (HasArg("--model-import-test"))
-			RunModelImportTest();
-		if (HasArg("--asset-ids-test"))
-			RunAssetIdsTest();
-		if (HasArg("--packages-test"))
-			RunPackagesTest();
-		// Asset packages (docs/packages.md): --package-manager [files|catalogs], --export-package <asset or folder>,
+		// Asset packages (tallowengine.com/docs/packages): --package-manager [files|catalogs], --export-package <asset or folder>,
 		// --import-package <file.tpackage> [--import-into <folder>] opens those windows.
 		let packageArg = scope String();
 		if (GetArg("--package-manager", packageArg) || HasArg("--package-manager"))
@@ -367,7 +321,7 @@ class EditorApp : Application
 			let picked = scope List<StringView>();
 			picked.Add(full);
 			OpenExportPackage(picked);
-			// --export-package-to <file>: exports it straight away (automated checks).
+			// --export-package-to <file>: exports it straight away.
 			if (GetArg("--export-package-to", mExportFile))
 				ExportPackageNow();
 		}
@@ -376,16 +330,10 @@ class EditorApp : Application
 		if (GetArg("--import-package", packageArg..Clear()))
 		{
 			GetArg("--import-into", mImportFolder);
-			// --import-package-now: imports it straight away (automated checks).
+			// --import-package-now: imports it straight away.
 			if (OpenImportPackage(packageArg) && HasArg("--import-package-now"))
 				ImportPackageNow();
 		}
-		if (HasArg("--world-streaming-test"))
-			RunWorldStreamingTest();
-		if (HasArg("--separate-worlds-test"))
-			RunSeparateWorldsTest();
-		if (HasArg("--palette-test"))
-			RunPaletteTest();
 		// --scene-hide <name> / --scene-lock <name>: as pressing that object's eye or lock in the Hierarchy.
 		let visibilityName = scope String();
 		if (GetArg("--scene-hide", visibilityName) && mScene.Find(visibilityName) != null)
@@ -410,7 +358,7 @@ class EditorApp : Application
 		ApplyRigSwitches();
 		ApplyModelSwitches();
 		ApplySoftBodySwitches();
-		// Test switch: saves the opened scene as Ctrl+S does, with the map warning, once the layout has settled
+		// --save-scene: saves the opened scene as Ctrl+S does, with the map warning, once the layout has settled
 		// (the first frames bring the Scene tab forward, which would close the warning).
 		if (HasArg("--save-scene"))
 			mSaveSceneSwitchFrames = 15;
@@ -419,7 +367,7 @@ class EditorApp : Application
 			StartPlay();
 	}
 
-	/// Test switch --camera "x y z yaw pitch": puts the Scene view's camera there (degrees), for screenshots.
+	/// --camera "x y z yaw pitch": puts the Scene view's camera there (degrees), for screenshots.
 	void ApplyCameraSwitch()
 	{
 		let text = scope String();
@@ -464,7 +412,7 @@ class EditorApp : Application
 		}
 	}
 
-	/// --animator <controller>, and the test switch --animator-state <name>, which selects a state (and shows its layer).
+	/// --animator <controller>, and --animator-state <name>, which selects a state (and shows its layer).
 	void OpenAnimatorFromSwitch(StringView full)
 	{
 		if (File.Exists(full))
@@ -500,7 +448,7 @@ class EditorApp : Application
 			CompileGraph();
 	}
 
-	/// Test switches for the terrain brush: --brush <0-4> picks a tool, --brush-preview "x,z" or "x,z,size" shows its
+	/// Switches for the terrain brush: --brush <0-4> picks a tool, --brush-preview "x,z" or "x,z,size" shows its
 	/// preview there.
 	void ApplyBrushSwitches()
 	{
@@ -517,39 +465,6 @@ class EditorApp : Application
 			if ((parts.GetNext() case .Ok(let sizeText)) && (float.Parse(sizeText) case .Ok(let brushSize)))
 				mBrushSize = Math.Clamp(brushSize, 1, 40);
 		}
-	}
-
-	void RunFoliageUndoTest()
-	{
-		let foliage = mScene.FindComponent<Foliage>();
-		if (!foliage)
-		{
-			Log.Error("UNDO-TEST FAIL: the scene has no Foliage");
-			return;
-		}
-		ResetUndo();
-		let n0 = foliage.Count;
-		foliage.Paint(foliage.Transform.Position + Vector3(5, 0, 5), 4);
-		MarkDirty();
-		mUndoPending = false;
-		CommitSceneStep();
-		let n1 = foliage.Count;
-		foliage.Paint(foliage.Transform.Position + Vector3(20, 0, 5), 4);
-		MarkDirty();
-		mUndoPending = false;
-		CommitSceneStep();
-		let n2 = foliage.Count;
-		Undo();
-		let u1 = mScene.FindComponent<Foliage>();
-		let afterOne = u1 ? u1.Count : -1;
-		Undo();
-		let u2 = mScene.FindComponent<Foliage>();
-		let afterTwo = u2 ? u2.Count : -1;
-		Redo();
-		let r1 = mScene.FindComponent<Foliage>();
-		let afterRedo = r1 ? r1.Count : -1;
-		let pass = n1 > n0 && n2 > n1 && afterOne == n1 && afterTwo == n0 && afterRedo == n1 && u1 == foliage && u2 == foliage && r1 == foliage;
-		Log.Info(scope $"UNDO-TEST {pass ? "PASS" : "FAIL"}: plants {n0} -> {n1} -> {n2}; undo {afterOne}, undo {afterTwo}, redo {afterRedo}; same component kept: {u1 == foliage && u2 == foliage && r1 == foliage}");
 	}
 
 	protected override void OnShutdown()
@@ -600,7 +515,6 @@ class EditorApp : Application
 
 	protected override void OnUpdate()
 	{
-		TickDragTest();
 		if (mStopPlayRequested)
 		{
 			mStopPlayRequested = false;

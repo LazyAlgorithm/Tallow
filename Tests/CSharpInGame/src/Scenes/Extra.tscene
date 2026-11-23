@@ -1,5 +1,0 @@
-scene "Extra"
-object 1 parent 0 active 1 name "ExtraThing"
-transform 40 0 40 0 0 0 1 1 1 1
-object 2 parent 0 active 1 name "ExtraOther"
-transform 41 0 40 0 0 0 1 1 1 1

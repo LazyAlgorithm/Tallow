@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// The Profiler's markers for components (docs/profiler.md): one per type and method, "Animator.Update()",
+/// The Profiler's markers for components (tallowengine.com/docs/profiler): one per type and method, "Animator.Update()",
 /// "PlayerController.FixedUpdate()", so the Profiler shows each script's time with its call count. A component keeps
 /// its type's slot, so finding the marker is a list lookup.
 static class ProfilerComponents

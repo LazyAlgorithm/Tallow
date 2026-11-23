@@ -4,7 +4,7 @@ using Tallow;
 
 namespace Tallow.Editor;
 
-/// Window > Lighting's Place Probes (docs/probe-placement.md): looks at the scene on a background thread, shows the
+/// Window > Lighting's Place Probes (tallowengine.com/docs/probe-placement): looks at the scene on a background thread, shows the
 /// probes it would place in the Scene view, and places them (one undo step) or throws the preview away.
 /// Switch: --place-probes places them at start-up (before --bake-lighting bakes) and logs PLACE: and the result.
 extension EditorApp

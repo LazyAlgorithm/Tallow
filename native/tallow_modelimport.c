@@ -1,4 +1,4 @@
-// Import settings applied to a converted model (docs/model-import.md): the editor converts FBX / OBJ / ... to a .glb
+// Import settings applied to a converted model (tallowengine.com/docs/model-import): the editor converts FBX / OBJ / ... to a .glb
 // with whichever converter it has, then this rewrites that .glb with the project's scale, up axis, clip choice and
 // materials, so every converter gives the same result.
 

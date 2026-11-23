@@ -77,7 +77,7 @@ public abstract class BehaviorNode
     internal void End(bool aborted) => OnEnd(aborted);
 }
 
-/// <summary>A Behavior Tree Runner's blackboard (docs/behavior-trees.md), from scripts and C# nodes.</summary>
+/// <summary>A Behavior Tree Runner's blackboard (tallowengine.com/docs/behavior-trees), from scripts and C# nodes.</summary>
 public readonly record struct Blackboard(GameObject Owner)
 {
     /// <summary>Whether there is an entry for a key.</summary>

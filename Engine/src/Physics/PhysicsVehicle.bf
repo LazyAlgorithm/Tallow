@@ -22,7 +22,6 @@ static class PhysicsVehicleKinds
 		case .Motorcycle: return .MotorcycleVehicles;
 		case .Tracked: return .TrackedVehicles;
 		}
-		return .Vehicles;
 	}
 
 	public static StringView Name(PhysicsVehicleKind kind)
@@ -33,7 +32,6 @@ static class PhysicsVehicleKinds
 		case .Motorcycle: return "Motorcycle";
 		case .Tracked: return "Tracked";
 		}
-		return "Vehicle";
 	}
 }
 

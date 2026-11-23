@@ -776,17 +776,18 @@ class EditMesh
 			faceNormals[f] = FaceNormal(faces[f]);
 		// Smooth faces share normals within groups joined by edges that are not hard.
 		int32[] groups = null;
-		defer delete groups;
 		if (AnySmooth)
 		{
 			groups = new int32[faces.Count];
+			// A one-statement defer captures the value where it is written, so it goes after the allocation.
+			defer:: delete groups;
 			SmoothGroups(groups);
 		}
 		Dictionary<int64, Vector3> smoothNormals = null;
-		defer delete smoothNormals;
 		if (groups != null)
 		{
 			smoothNormals = new .();
+			defer:: delete smoothNormals;
 			for (int f < faces.Count)
 			{
 				if (groups[f] < 0)

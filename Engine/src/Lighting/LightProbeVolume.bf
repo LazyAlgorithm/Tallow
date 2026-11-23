@@ -2,7 +2,7 @@ using System;
 
 namespace Tallow;
 
-/// A box of closer-together light probes for the light baker (docs/baked-lighting.md): where light changes over a
+/// A box of closer-together light probes for the light baker (tallowengine.com/docs/baked-lighting): where light changes over a
 /// short way (a room, a doorway, under a roof, round a lamp) the scene's grid of probes is too coarse. Things whose
 /// middle is in the box take their ambient light from its probes, fading into the scene's grid over blendDistance
 /// inside its edges. The smallest box wins where boxes overlap. Bake again after changing one.

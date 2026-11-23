@@ -5,7 +5,7 @@ using Tallow;
 namespace Tallow.Editor;
 
 /// Scene Settings: the screen effects (ambient occlusion, depth of field, motion blur) and colour grading. See
-/// docs/post-processing.md. Everything here is saved with the scene; the Game view shows it as it is changed.
+/// tallowengine.com/docs/post-processing. Everything here is saved with the scene; the Game view shows it as it is changed.
 extension EditorApp
 {
 	/// Scene Settings > Screen Effects and Color Grading. Returns true when anything changed.

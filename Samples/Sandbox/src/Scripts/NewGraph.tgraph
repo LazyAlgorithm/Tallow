@@ -1,9 +1,0 @@
-graph "NewGraph"
-node 1 event.update 40 60
-node 2 transform.rotate 560 60 "" "0 0 0"
-node 3 math.vector 320 150 "0" "0" "0"
-node 4 math.mul 60 190 "0" "90"
-link 1 0 2 0
-link 1 1 4 0
-link 4 0 3 1
-link 3 0 2 1

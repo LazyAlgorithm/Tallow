@@ -15,7 +15,6 @@
 # (Tallow.FieldTables.g.cs) for fields (Inspector, saves, [Sync]), lifecycle callback masks, .tui handlers, [Rpc]
 # methods and behaviour-node settings, and the runtime's only remaining reflection over game types is the fallback
 # for a type from a package, suppressed in the source with its reason.
-# tools/test_csharp_export.py --runtime native runs the in-game checks that use each path below.
 
 # Hot reload and the collectible load context: JIT only. NativeAOT's LoadGame takes the compiled-in registry and
 # ReloadGame refuses, so none of this runs in a NativeAOT game.

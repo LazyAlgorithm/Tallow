@@ -682,7 +682,7 @@ public struct ProfilerCounter
 	}
 }
 
-/// The engine's profiler (docs/profiler.md): markers timed on every thread, counters, and a history of frames that
+/// The engine's profiler (tallowengine.com/docs/profiler): markers timed on every thread, counters, and a history of frames that
 /// the editor's Window > Profiler shows. Recording costs next to nothing until Enabled is set (the window,
 /// `--profile`, or a connected editor sets it). Markers and counters are best kept in ProfilerMarker and
 /// ProfilerCounter static fields; Marker and Counter look names up under a lock.

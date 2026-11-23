@@ -1,4 +1,4 @@
-// Cube map faces for the reflection passes (docs/reflections.md). Include after bgfx_shader.sh.
+// Cube map faces for the reflection passes (tallowengine.com/docs/reflections). Include after bgfx_shader.sh.
 #ifndef TALLOW_CUBE_SH
 #define TALLOW_CUBE_SH
 

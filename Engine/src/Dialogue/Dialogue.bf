@@ -345,7 +345,7 @@ class DialogueAsset
 		}
 		if (!ok)
 		{
-			problems.AppendF("line {}: '{}' is missing something; see docs/dialogue.md\n", lineNumber, tokens[0]);
+			problems.AppendF("line {}: '{}' is missing something; see tallowengine.com/docs/dialogue\n", lineNumber, tokens[0]);
 			delete step;
 			return null;
 		}

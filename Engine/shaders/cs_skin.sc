@@ -1,4 +1,4 @@
-// GPU skinning (docs/gpu-skinning.md): bends a skinned model's vertices on the graphics card, writing them straight
+// GPU skinning (tallowengine.com/docs/gpu-skinning): bends a skinned model's vertices on the graphics card, writing them straight
 // into the vertex buffer every pass draws from (the scene, shadows, depth, custom materials), so none of their
 // shaders need a skinned version. Runs once per vertex.
 #include "bgfx_compute.sh"

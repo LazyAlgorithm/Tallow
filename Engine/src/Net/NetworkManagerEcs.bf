@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Server-authoritative replication of bare Flecs entities with [Sync] data (docs/unified-ecs-networking.md).
+/// Server-authoritative replication of bare Flecs entities with [Sync] data.
 /// The entities have no GameObject, Transform or NetworkIdentity: each client makes entities of its own with the
 /// same [Component] data, tied to the server's by a network id.
 ///

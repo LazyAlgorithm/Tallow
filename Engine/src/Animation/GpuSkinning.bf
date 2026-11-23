@@ -3,7 +3,7 @@ using Bgfx;
 
 namespace Tallow;
 
-/// GPU skinning (docs/gpu-skinning.md): a compute shader bends skinned models' vertices on the graphics card, straight
+/// GPU skinning (tallowengine.com/docs/gpu-skinning): a compute shader bends skinned models' vertices on the graphics card, straight
 /// into the vertex buffers every pass draws from. The CPU only works out each joint's matrix and the model's bounds.
 static class GpuSkinning
 {

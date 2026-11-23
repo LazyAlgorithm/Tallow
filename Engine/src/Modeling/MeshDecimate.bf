@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace Tallow;
 
-/// Fewer faces for levels of detail (docs/modeling.md): short edges across flat parts of a model are collapsed
+/// Fewer faces for levels of detail (tallowengine.com/docs/modeling): short edges across flat parts of a model are collapsed
 /// first, edges at sharp corners last, and the model's open borders are left where they are.
 extension MeshOps
 {

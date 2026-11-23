@@ -6,7 +6,7 @@ using System.Threading;
 namespace Tallow;
 
 /// What every built-in component handle (Light, MeshRenderer...) is: a struct naming an object, whose data lives in
-/// the object's entity (docs/ecs-plan.md, "Built-in components: same names, now handles").
+/// the object's entity.
 interface IComponentHandle
 {
 	/// The data struct the handle reads and writes.

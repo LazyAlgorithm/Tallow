@@ -5,7 +5,7 @@ using Bgfx;
 namespace Tallow;
 
 /// How one picture is filtered: the default (linear between pixels, anisotropic on slanted surfaces) or nearest
-/// (each pixel taken as it is), for pixel art and crisp masks (docs/textures.md).
+/// (each pixel taken as it is), for pixel art and crisp masks (tallowengine.com/docs/textures).
 enum TextureFilter : uint8
 {
 	Default,

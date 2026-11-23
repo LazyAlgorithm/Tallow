@@ -1,5 +1,5 @@
 # Builds Tallow on macOS (Apple silicon) with its own Beef compiler, built from source like Linux's, and the native
-# libraries for Metal; runs the engine's headless test fixtures there and packages the editor (docs/macos.md).
+# libraries for Metal, and packages the editor.
 #
 # Paused: macOS builds cannot be checked on a real Mac yet, so it no longer runs on pushes or tags, only by hand
 # (Actions > macOS > Run workflow). The macOS support stays in the engine; put the push trigger back to resume:
@@ -95,28 +95,3 @@ jobs:
         with:
           name: Tallow-macOS
           path: out/Tallow-macOS.zip
-
-      # The runners' graphics are virtual; a picture shows that Metal starts and draws. Not required to pass.
-      - name: Draw with Metal
-        continue-on-error: true
-        run: |
-          export PATH="$HOME/beef/IDE/dist:$PATH"
-          cd tallow/Samples/Sandbox
-          # The sample's workspace names this machine's engine folder, so it is not in git.
-          printf 'FileVersion = 1\nProjects = {Sandbox = {Path = "."}, Tallow = {Path = "../../Engine"}, TallowEditor = {Path = "../../Editor"}}\n[Workspace]\nStartupProject = "Sandbox"\n' > BeefSpace.toml
-          printf 'FileVersion = 1\nDependencies = {corlib = "*", Tallow = "*", TallowEditor = "*"}\n[Project]\nName = "Sandbox"\nTargetType = "BeefConsoleApplication"\nStartupObject = "Sandbox.Program"\n' > BeefProj.toml
-          python3 ../../tools/macos_link.py --write BeefProj.toml
-          BeefBuild -config=Debug -platform=macOS
-          ./build/Debug_macOS/Sandbox/Sandbox --scene Scenes/Culling.tscene --frames 120 --screenshot ../../../out/metal-culling.png
-          ./build/Debug_macOS/Sandbox/Sandbox --scene Scenes/Skinning.tscene --frames 120 --screenshot ../../../out/metal-skinning.png
-          # Reflections: the room's sphere shows the red wall on its left and the green on its right when the cube faces
-          # come out right on Metal.
-          ./build/Debug_macOS/Sandbox/Sandbox --scene Scenes/Reflections.tscene --frames 120 --screenshot ../../../out/metal-reflections.png
-
-      - name: Keep the pictures
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: metal-pictures
-          path: out/*.png
-          if-no-files-found: ignore

@@ -1,6 +1,6 @@
 $input v_wpos, v_normal, v_color0, v_texcoord0, v_depth
 
-// The water's surface (docs/water.md), drawn over a copy of the scene so far (s_color) with the depth pass (s_depth):
+// The water's surface (tallowengine.com/docs/water), drawn over a copy of the scene so far (s_color) with the depth pass (s_depth):
 // what is under the surface is bent by the waves, fades into the water's colour with the distance through it, and
 // takes caustics; the surface mirrors the sky, the reflection probe it is in and (Screen Reflections) the scene on
 // the screen; foam gathers at the shore and on sharp crests. The Low Poly look shades each facet flat, in bands of

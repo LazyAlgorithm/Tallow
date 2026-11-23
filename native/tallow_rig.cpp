@@ -1,4 +1,4 @@
-// Automatic skin weights for the rigger (Engine/src/Rigging/AutoWeights.bf, docs/rigging.md).
+// Automatic skin weights for the rigger (Engine/src/Rigging/AutoWeights.bf, tallowengine.com/docs/rigging).
 //
 // The weights are "bone heat" (Baran and Popović, Pinocchio, 2007): each bone warms the surface it can see nearest,
 // and the heat spreads over the surface. For bone j it solves (L + MH) w = MH p, where L is the surface's cotangent

@@ -178,7 +178,7 @@ static class Assets
 	/// Whether the project has this file, packed or loose.
 	public static bool FileExists(StringView path) => AssetPack.Exists(ResolvePath(path, .. scope .()));
 
-	/// Model files the editor converts to glTF behind the scenes (docs/model-import.md). Scenes name the file itself;
+	/// Model files the editor converts to glTF behind the scenes (tallowengine.com/docs/model-import). Scenes name the file itself;
 	/// everything that reads models is handed the converted .glb.
 	public static readonly StringView[?] ConvertedModelExtensions = .(".fbx", ".obj", ".dae", ".stl", ".ply", ".3ds", ".blend");
 
@@ -353,7 +353,7 @@ static class Assets
 		}
 		let full = scope String();
 		ResolvePath(filePart, full);
-		// A model saved from the editor's modeller (docs/modeling.md); "#n" picks the faces of material slot n.
+		// A model saved from the editor's modeller (tallowengine.com/docs/modeling); "#n" picks the faces of material slot n.
 		if (filePart.EndsWith(".tmesh", .OrdinalIgnoreCase))
 		{
 			let text = scope String();
