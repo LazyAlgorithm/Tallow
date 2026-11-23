@@ -187,6 +187,9 @@ namespace
 		float dentDepth = 0, dentYield = 0, dentSpeed = 0;
 		float visualSpring = 0, visualDamping = 0;
 		float restVolume = 1;
+		float totalMass = 1;
+		float radius = 0.02f;
+		std::vector<uint32_t> triangles;
 		std::vector<R3Vector> restLocal;
 		float lastObject[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 		bool hasObject = false;
@@ -2488,6 +2491,9 @@ uint32_t tn_rapier_soft_create(void* raw, const float* positions, int32_t vertex
 	soft->visualSpring = settings->visualSpring;
 	soft->visualDamping = settings->visualDamping;
 	soft->restVolume = MeshVolume(worldPositions, triangles, triangleCount);
+	soft->totalMass = std::max(totalMass, 0.001f);
+	soft->radius = 0.02f;
+	soft->triangles.assign(triangles, triangles + (size_t)triangleCount * 3);
 	soft->restLocal.resize((size_t)vertexCount);
 	if (objectMatrix != nullptr)
 	{
@@ -2507,6 +2513,9 @@ uint32_t tn_rapier_soft_create(void* raw, const float* positions, int32_t vertex
 	}
 	const uint32_t id = AllocateId(world, NoBody);
 	world->softBodies[id] = soft;
+	const R3RigidBodyHandle root = r3SoftBody_RootBody(handle);
+	if (Valid(root))
+		r3RigidBody_SetUserData(root, R3UserData{id, 0});
 	return id;
 }
 
@@ -2606,7 +2615,7 @@ uint32_t tn_rapier_soft_read(void* raw, uint32_t body, float* positions, float* 
 	{
 		r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size());
 		for (uint32_t i = 0; i < count; i++)
-			Out(&positions[i * 3], Sub(buffer[(size_t)i], soft->center));
+			Out(&positions[i * 3], buffer[(size_t)i]);
 	}
 	if (velocities != nullptr)
 	{
@@ -2627,7 +2636,7 @@ void tn_rapier_soft_move_pinned(void* raw, uint32_t body, const uint32_t* indice
 	for (uint32_t i = 0; i < count; i++)
 	{
 		r3SoftBody_SetParticlePinned(soft->handle, indices[i], 1);
-		r3SoftBody_SetParticleKinematicTarget(soft->handle, indices[i], Add(V(&targets[i * 3]), soft->center));
+		r3SoftBody_SetParticleKinematicTarget(soft->handle, indices[i], V(&targets[i * 3]));
 	}
 	r3SoftBody_WakeUp(soft->handle);
 }
@@ -2642,7 +2651,7 @@ void tn_rapier_soft_set_positions(void* raw, uint32_t body, const float* positio
 	const uint32_t limit = std::min(count, (uint32_t)soft->count);
 	for (uint32_t i = 0; i < limit; i++)
 	{
-		r3SoftBody_SetParticlePosition(soft->handle, i, Add(V(&positions[i * 3]), soft->center));
+		r3SoftBody_SetParticlePosition(soft->handle, i, V(&positions[i * 3]));
 		if (velocities != nullptr)
 			r3SoftBody_SetParticleVelocity(soft->handle, i, V(&velocities[i * 3]));
 	}
@@ -2687,8 +2696,13 @@ void tn_rapier_soft_impulse(void* raw, uint32_t body, const float* impulse)
 void tn_rapier_soft_force(void* raw, uint32_t body, const float* force)
 {
 	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
-	if (soft != nullptr && Valid(soft->handle) && force != nullptr)
-		r3SoftBody_AddForce(soft->handle, V(force), 1);
+	if (soft == nullptr || !Valid(soft->handle) || force == nullptr)
+		return;
+	// A force over one step changes each particle's velocity by force * step / mass (Rapier's AddForce takes a
+	// velocity change, not a force).
+	const float step = 1.0f / 60.0f;
+	const R3Vector change = Scale(V(force), step / std::max(soft->totalMass, 1.0e-6f));
+	r3SoftBody_AddForce(soft->handle, change, 1);
 }
 
 void tn_rapier_soft_shift(void* raw, uint32_t body, const float* offset)
@@ -2701,7 +2715,6 @@ void tn_rapier_soft_shift(void* raw, uint32_t body, const float* offset)
 	const size_t count = r3SoftBody_ParticlePositions(soft->handle, buffer.data(), buffer.size());
 	for (size_t i = 0; i < count; i++)
 		SetParticle(soft, i, Add(buffer[i], delta));
-	soft->center = Add(soft->center, delta);
 	r3SoftBody_WakeUp(soft->handle);
 }
 
@@ -2735,6 +2748,65 @@ void tn_rapier_soft_set_pressure(void* raw, uint32_t body, float amount)
 	const float pressure = amount / std::max(soft->restVolume, 1.0e-6f);
 	const float factor = 1.0f + std::max(pressure, 0.0f) / 10.0f;
 	r3SoftBody_SetVolumeFactor(soft->handle, factor);
+}
+
+void tn_rapier_soft_wind(void* raw, uint32_t body, const float wind[3], float drag, float turbulence,
+	float time, float step)
+{
+	SoftBody* soft = SoftOf(static_cast<World*>(raw), body);
+	if (soft == nullptr || !Valid(soft->handle) || wind == nullptr || drag <= 0.0f || step <= 0.0f ||
+		soft->triangles.size() < 3)
+		return;
+	std::vector<R3Vector> positions((size_t)soft->count);
+	std::vector<R3Vector> velocities((size_t)soft->count);
+	const size_t count = r3SoftBody_ParticlePositions(soft->handle, positions.data(), positions.size());
+	r3SoftBody_ParticleVelocities(soft->handle, velocities.data(), velocities.size());
+	if (count == 0 || soft->triangles.size() / 3 > count)
+	{
+		// The triangle indices reference particles that may have been removed by a tear.
+		if (soft->triangles.size() / 3 > count)
+			return;
+	}
+	const float density = 1.2f;
+	const float along = 0.1f;
+	const R3Vector air = V(wind);
+	const float invMass = (float)soft->count / std::max(soft->totalMass, 1.0e-6f);
+	std::vector<R3Vector> change(count, V(0, 0, 0));
+	for (size_t t = 0; t + 2 < soft->triangles.size(); t += 3)
+	{
+		const uint32_t ia = soft->triangles[t], ib = soft->triangles[t + 1], ic = soft->triangles[t + 2];
+		if (ia >= count || ib >= count || ic >= count)
+			continue;
+		const R3Vector a = positions[ia], b = positions[ib], c = positions[ic];
+		R3Vector normal = Cross(Sub(b, a), Sub(c, a));
+		const float twiceArea = Length(normal);
+		if (twiceArea < 1.0e-9f)
+			continue;
+		normal = Scale(normal, 1.0f / twiceArea);
+		const R3Vector middle = Scale(Add(Add(a, b), c), 1.0f / 3.0f);
+		R3Vector localAir = air;
+		if (turbulence > 0.0f)
+		{
+			const float phase = Dot(middle, V(2.1f, 1.7f, 2.3f)) + time * 3.1f;
+			localAir = Scale(localAir, 1.0f + turbulence * 0.25f * std::sin(phase));
+		}
+		const R3Vector relative = Sub(localAir, Scale(Add(Add(velocities[ia], velocities[ib]), velocities[ic]), 1.0f / 3.0f));
+		const float into = Dot(normal, relative);
+		const R3Vector sliding = Sub(relative, Scale(normal, into));
+		const float share = 0.5f * density * drag * 0.5f * twiceArea * step / 3.0f;
+		const R3Vector impulse = Scale(Add(Scale(normal, into * std::fabs(into)), Scale(sliding, along * Length(sliding))), share);
+		const R3Vector dv = Scale(impulse, invMass);
+		change[ia] = Add(change[ia], dv);
+		change[ib] = Add(change[ib], dv);
+		change[ic] = Add(change[ic], dv);
+	}
+	for (size_t i = 0; i < count; i++)
+	{
+		if (Length(change[i]) <= 0.0f)
+			continue;
+		r3SoftBody_SetParticleVelocity(soft->handle, i, Add(velocities[i], change[i]));
+	}
+	r3SoftBody_WakeUp(soft->handle);
 }
 
 uint32_t tn_rapier_soft_dents(void* raw, uint32_t body, float* output, uint32_t capacity)
@@ -3095,12 +3167,17 @@ uint32_t tn_rapier_rope_create(void* raw, const float* positions, uint32_t count
 	soft->center = offset;
 	soft->userData = userData;
 	soft->kind = 4;
+	soft->totalMass = std::max(totalMass, 0.001f);
+	soft->radius = std::max(radius, 0.001f);
 	soft->restLocal.resize((size_t)count);
 	for (uint32_t i = 0; i < count; i++)
 		soft->restLocal[i] = V(&positions[i * 3]);
 	MatIdentity(soft->lastObject);
 	const uint32_t id = AllocateId(world, NoBody);
 	world->softBodies[id] = soft;
+	const R3RigidBodyHandle root = r3SoftBody_RootBody(handle);
+	if (Valid(root))
+		r3RigidBody_SetUserData(root, R3UserData{id, 0});
 	return id;
 }
 
@@ -3203,20 +3280,86 @@ void tn_rapier_rope_wind(void* raw, uint32_t body, const float* wind, float radi
 {
 	World* world = static_cast<World*>(raw);
 	SoftBody* soft = SoftOf(world, body);
-	if (soft == nullptr || !Valid(soft->handle) || wind == nullptr)
+	if (soft == nullptr || !Valid(soft->handle) || wind == nullptr || drag <= 0.0f || step <= 0.0f)
 		return;
-	(void)radius;
-	(void)turbulence;
-	(void)time;
-	(void)step;
-	const float scale = std::max(drag, 0.0f);
-	const R3Vector force = Scale(V(wind), scale);
-	r3SoftBody_AddForce(soft->handle, force, 1);
+	std::vector<R3Vector> positions((size_t)soft->count);
+	std::vector<R3Vector> velocities((size_t)soft->count);
+	const size_t count = r3SoftBody_ParticlePositions(soft->handle, positions.data(), positions.size());
+	r3SoftBody_ParticleVelocities(soft->handle, velocities.data(), velocities.size());
+	if (count < 2)
+		return;
+	const float density = 1.2f, cylinder = 1.2f;
+	const float invMass = (float)soft->count / std::max(soft->totalMass, 1.0e-6f);
+	const R3Vector air = V(wind);
+	const float effectiveRadius = radius > 0.0f ? radius : soft->radius;
+	for (size_t i = 0; i < count; i++)
+	{
+		const R3Vector before = positions[i > 0 ? i - 1 : i];
+		const R3Vector after = positions[i + 1 < count ? i + 1 : i];
+		R3Vector tangent = Sub(after, before);
+		const float length = Length(tangent);
+		if (length < 1.0e-6f)
+			continue;
+		const float span = length * ((i == 0 || i + 1 == count) ? 1.0f : 0.5f);
+		tangent = Scale(tangent, 1.0f / length);
+		R3Vector localAir = air;
+		if (turbulence > 0.0f)
+		{
+			const float phase = Dot(positions[i], V(2.1f, 1.7f, 2.3f)) + time * 3.1f;
+			localAir = Scale(localAir, 1.0f + turbulence * 0.25f * std::sin(phase));
+		}
+		R3Vector across = Sub(localAir, velocities[i]);
+		across = Sub(across, Scale(tangent, Dot(tangent, across)));
+		const R3Vector impulse = Scale(across, 0.5f * density * cylinder * drag * 2.0f * effectiveRadius * span *
+			Length(across) * step);
+		r3SoftBody_SetParticleVelocity(soft->handle, i, Add(velocities[i], Scale(impulse, invMass)));
+	}
+	r3SoftBody_WakeUp(soft->handle);
 }
 
 // =====================================================================================================================
 // Vehicles
 // =====================================================================================================================
+
+namespace
+{
+	bool BuildVehicleController(World* world, Vehicle* vehicle)
+	{
+		if (world == nullptr || world->world == nullptr || vehicle == nullptr || vehicle->wheels.empty())
+			return false;
+		if (vehicle->controller != nullptr)
+		{
+			r3FreeDynamicRayCastVehicleController(vehicle->controller);
+			vehicle->controller = nullptr;
+		}
+		vehicle->controller = r3NewDynamicRayCastVehicleController(vehicle->chassis);
+		if (vehicle->controller == nullptr)
+			return false;
+		r3DynamicRayCastVehicleController_SetAxes(vehicle->controller, AxisIndex(vehicle->up), AxisIndex(vehicle->forward));
+		const R3Vector down = Scale(vehicle->up, -1.0f);
+		const R3Vector axle = Normalize(Cross(vehicle->forward, vehicle->up));
+		vehicle->lastRotation.clear();
+		vehicle->wheelSpeed.clear();
+		vehicle->steer.clear();
+		for (const TnRapierWheel& wheel : vehicle->wheels)
+		{
+			R3WheelTuning tuning = r3DefaultWheelTuning();
+			tuning.suspension_stiffness = std::max(wheel.stiffness, 0.0f);
+			tuning.suspension_compression = std::max(wheel.compression, 0.0f);
+			tuning.suspension_damping = std::max(wheel.damping, 0.0f);
+			tuning.max_suspension_force = wheel.maxForce > 0.0f ? wheel.maxForce : 1.0e7f;
+			const R3Vector connection = V(wheel.position);
+			const size_t index = r3DynamicRayCastVehicleController_AddWheel(vehicle->controller, connection, down, axle,
+				std::max(wheel.restLength, 0.05f) + std::max(wheel.radius, 0.05f), std::max(wheel.radius, 0.05f), &tuning);
+			if (index == SIZE_MAX)
+				break;
+			vehicle->lastRotation.push_back(0.0f);
+			vehicle->wheelSpeed.push_back(0.0f);
+			vehicle->steer.push_back(0.0f);
+		}
+		return !vehicle->lastRotation.empty();
+	}
+}
 
 void* tn_rapier_vehicle_create(void* raw, uint32_t chassis, const TnRapierWheel* wheels, int32_t wheelCount,
 	const float up[3], const float forward[3], float maxTorque, float minRPM, float maxRPM,
@@ -3244,38 +3387,12 @@ void* tn_rapier_vehicle_create(void* raw, uint32_t chassis, const TnRapierWheel*
 	for (int32_t i = 0; i < gearCount; i++)
 		vehicle->gears.push_back(std::max(gearRatios[i], 0.1f));
 	vehicle->ratio = vehicle->gears.empty() ? 1.0f : vehicle->gears[0];
-	vehicle->controller = r3NewDynamicRayCastVehicleController(body->handle);
-	if (vehicle->controller == nullptr)
-	{
-		delete vehicle;
-		return nullptr;
-	}
-	r3DynamicRayCastVehicleController_SetAxes(vehicle->controller, AxisIndex(vehicle->up), AxisIndex(vehicle->forward));
-	const R3Vector down = Scale(vehicle->up, -1.0f);
-	const R3Vector axle = Normalize(Cross(vehicle->forward, vehicle->up));
 	for (int32_t i = 0; i < wheelCount; i++)
+		vehicle->wheels.push_back(wheels[i]);
+	if (!BuildVehicleController(world, vehicle))
 	{
-		const TnRapierWheel& wheel = wheels[i];
-		R3WheelTuning tuning = r3DefaultWheelTuning();
-		tuning.suspension_stiffness = std::max(wheel.stiffness, 0.0f);
-		tuning.suspension_compression = std::max(wheel.compression, 0.0f);
-		tuning.suspension_damping = std::max(wheel.damping, 0.0f);
-		tuning.max_suspension_force = wheel.maxForce > 0.0f ? wheel.maxForce : 1.0e7f;
-		const R3Vector connection = V(wheel.position);
-		// Rapier casts the suspension ray for rest_length and does not add the wheel radius, so the ray must span the
-		// suspension plus the wheel to reach the ground with the wheel's bottom.
-		const size_t index = r3DynamicRayCastVehicleController_AddWheel(vehicle->controller, connection, down, axle,
-			std::max(wheel.restLength, 0.05f) + std::max(wheel.radius, 0.05f), std::max(wheel.radius, 0.05f), &tuning);
-		if (index == SIZE_MAX)
-			break;
-		vehicle->wheels.push_back(wheel);
-		vehicle->lastRotation.push_back(0.0f);
-		vehicle->wheelSpeed.push_back(0.0f);
-		vehicle->steer.push_back(0.0f);
-	}
-	if (vehicle->wheels.empty())
-	{
-		r3FreeDynamicRayCastVehicleController(vehicle->controller);
+		if (vehicle->controller != nullptr)
+			r3FreeDynamicRayCastVehicleController(vehicle->controller);
 		delete vehicle;
 		return nullptr;
 	}
@@ -3519,4 +3636,257 @@ int32_t tn_rapier_collect_geometry(void* raw, const float minimum[3], const floa
 		}
 	}
 	return 1;
+}
+
+
+// =====================================================================================================================
+// Exact snapshots
+// =====================================================================================================================
+
+namespace
+{
+	const uint32_t SnapshotMagic = 0x31525053; // "SPR1"
+	const uint32_t SnapshotVersion = 1;
+
+	struct RapierSnapshot
+	{
+		std::vector<uint8_t> data;
+	};
+
+	bool SnapshotValid(const RapierSnapshot* snapshot)
+	{
+		if (snapshot == nullptr || snapshot->data.size() < 16)
+			return false;
+		uint32_t magic = 0, version = 0;
+		std::memcpy(&magic, snapshot->data.data(), 4);
+		std::memcpy(&version, snapshot->data.data() + 4, 4);
+		return magic == SnapshotMagic && version == SnapshotVersion;
+	}
+
+	uint32_t BodyEngineId(R3RigidBodyHandle handle)
+	{
+		return Valid(handle) ? (uint32_t)r3RigidBody_UserData(handle).low : NoBody;
+	}
+
+	bool RemapWorld(World* world, const RapierSnapshot* snapshot)
+	{
+		if (world == nullptr || !SnapshotValid(snapshot))
+			return false;
+		R3World* fresh = r3DeserializeWorld(snapshot->data.data() + 16, snapshot->data.size() - 16);
+		if (fresh == nullptr)
+			return false;
+
+		std::vector<R3RigidBodyHandle> bodyHandles(1024);
+		size_t bodyCount = r3RigidBodyHandles(fresh, bodyHandles.data(), bodyHandles.size());
+		if (bodyCount > bodyHandles.size())
+		{
+			bodyHandles.resize(bodyCount);
+			bodyCount = r3RigidBodyHandles(fresh, bodyHandles.data(), bodyHandles.size());
+		}
+		std::unordered_map<uint32_t, R3RigidBodyHandle> byId;
+		for (size_t i = 0; i < bodyCount; i++)
+		{
+			const uint32_t id = BodyEngineId(bodyHandles[i]);
+			if (id != NoBody)
+				byId[id] = bodyHandles[i];
+		}
+
+		// Every tracked body and soft body must be in the snapshot, or it belongs to another body set.
+		for (const auto& entry : world->bodies)
+		{
+			if (byId.find(entry.first) == byId.end())
+			{
+				r3FreeWorld(fresh);
+				return false;
+			}
+		}
+		std::vector<R3SoftBodyHandle> softHandles(256);
+		size_t softCount = r3SoftBodyHandles(fresh, softHandles.data(), softHandles.size());
+		if (softCount > softHandles.size())
+		{
+			softHandles.resize(softCount);
+			softCount = r3SoftBodyHandles(fresh, softHandles.data(), softHandles.size());
+		}
+		std::unordered_map<uint32_t, R3SoftBodyHandle> softById;
+		for (size_t i = 0; i < softCount; i++)
+		{
+			const R3RigidBodyHandle root = r3SoftBody_RootBody(softHandles[i]);
+			const uint32_t id = BodyEngineId(root);
+			if (id != NoBody)
+				softById[id] = softHandles[i];
+		}
+		for (const auto& entry : world->softBodies)
+		{
+			if (softById.find(entry.first) == softById.end())
+			{
+				r3FreeWorld(fresh);
+				return false;
+			}
+		}
+
+		R3World* old = world->world;
+		// Bodies and their colliders.
+		for (auto& entry : world->bodies)
+		{
+			Body& body = entry.second;
+			body.handle = byId[entry.first];
+			std::vector<R3ColliderHandle> colliders(64);
+			size_t colliderCount = r3RigidBody_Colliders(body.handle, colliders.data(), colliders.size());
+			if (colliderCount > colliders.size())
+			{
+				colliders.resize(colliderCount);
+				colliderCount = r3RigidBody_Colliders(body.handle, colliders.data(), colliders.size());
+			}
+			body.colliders.assign(colliders.begin(), colliders.begin() + std::min(colliderCount, colliders.size()));
+		}
+		// Soft bodies.
+		for (auto& entry : world->softBodies)
+			entry.second->handle = softById[entry.first];
+		// Characters (their controllers and shapes are world-independent).
+		for (auto& entry : world->characters)
+		{
+			Character* character = entry.second;
+			auto found = byId.find(character->bodyId);
+			if (found == byId.end())
+			{
+				r3FreeWorld(fresh);
+				return false;
+			}
+			character->body = found->second;
+			std::vector<R3ColliderHandle> colliders(8);
+			const size_t colliderCount = r3RigidBody_Colliders(character->body, colliders.data(), colliders.size());
+			if (colliderCount > 0)
+				character->collider = colliders[0];
+		}
+		// Joints: match by the pair of engine body ids, in order.
+		std::vector<R3ImpulseJointHandle> jointHandles(256);
+		size_t jointCount = r3ImpulseJointHandles(fresh, jointHandles.data(), jointHandles.size());
+		if (jointCount > jointHandles.size())
+		{
+			jointHandles.resize(jointCount);
+			jointCount = r3ImpulseJointHandles(fresh, jointHandles.data(), jointHandles.size());
+		}
+		std::unordered_map<uint64_t, std::vector<R3ImpulseJointHandle>> jointsByPair;
+		for (size_t i = 0; i < jointCount; i++)
+		{
+			const R3JointBodies bodies = r3ImpulseJoint_Bodies(jointHandles[i]);
+			const uint32_t a = BodyEngineId(bodies.body1), b = BodyEngineId(bodies.body2);
+			if (a == NoBody || b == NoBody)
+				continue;
+			const uint64_t key = ((uint64_t)std::min(a, b) << 32) | std::max(a, b);
+			jointsByPair[key].push_back(jointHandles[i]);
+		}
+		for (auto& entry : world->joints)
+		{
+			Joint* joint = entry.second;
+			const uint64_t key = ((uint64_t)std::min(joint->bodyA, joint->bodyB) << 32) | std::max(joint->bodyA, joint->bodyB);
+			auto found = jointsByPair.find(key);
+			if (found == jointsByPair.end() || found->second.empty())
+			{
+				r3FreeWorld(fresh);
+				return false;
+			}
+			joint->handle = found->second.back();
+			found->second.pop_back();
+		}
+		// Rope ties point into the old world: drop their joints (the engine ties them again) but keep the handles
+		// alive so the component's pointers stay valid.
+		for (auto& entry : world->ropeTies)
+		{
+			RopeTie* tie = entry.second;
+			if (Valid(tie->joint))
+				r3RemoveImpulseJoint(tie->joint, 0);
+			if (tie->hasAnchor && Valid(tie->anchor))
+				r3RemoveRigidBody(tie->anchor, 1);
+			tie->joint = R3ImpulseJointHandle{};
+			tie->anchor = R3RigidBodyHandle{};
+			tie->hasAnchor = false;
+		}
+		// Vehicles rebuild their controllers on the new chassis.
+		for (auto& entry : world->vehicles)
+		{
+			Vehicle* vehicle = entry.second;
+			auto found = byId.find(vehicle->chassisId);
+			if (found == byId.end())
+			{
+				r3FreeWorld(fresh);
+				return false;
+			}
+			vehicle->chassis = found->second;
+			BuildVehicleController(world, vehicle);
+		}
+
+		world->world = fresh;
+		world->queryDirty = true;
+		world->activePairKeys.clear();
+		world->activePairList.clear();
+		world->recentHits.clear();
+		if (world->events != nullptr)
+			r3EventCollector_Clear(world->events);
+		r3FreeWorld(old);
+		return true;
+	}
+}
+
+void* tn_rapier_state_save(void* raw, void* reuse)
+{
+	World* world = static_cast<World*>(raw);
+	if (world == nullptr || world->world == nullptr)
+		return reuse;
+	R3Bytes* bytes = r3SerializeWorld(world->world);
+	if (bytes == nullptr)
+		return reuse;
+	const R3ByteView view = r3Bytes_Data(bytes);
+	RapierSnapshot* snapshot = reuse != nullptr ? static_cast<RapierSnapshot*>(reuse) : new RapierSnapshot();
+	snapshot->data.resize(16 + view.count);
+	const uint32_t magic = SnapshotMagic, version = SnapshotVersion;
+	std::memcpy(snapshot->data.data(), &magic, 4);
+	std::memcpy(snapshot->data.data() + 4, &version, 4);
+	if (view.count > 0)
+		std::memcpy(snapshot->data.data() + 16, view.data, view.count);
+	r3FreeBytes(bytes);
+	return snapshot;
+}
+
+bool tn_rapier_state_restore(void* raw, void* state)
+{
+	World* world = static_cast<World*>(raw);
+	if (world == nullptr || state == nullptr)
+		return false;
+	return RemapWorld(world, static_cast<const RapierSnapshot*>(state));
+}
+
+int32_t tn_rapier_state_size(void* state)
+{
+	RapierSnapshot* snapshot = static_cast<RapierSnapshot*>(state);
+	return snapshot != nullptr ? (int32_t)snapshot->data.size() : 0;
+}
+
+void tn_rapier_state_free(void* state)
+{
+	if (state != nullptr)
+		delete static_cast<RapierSnapshot*>(state);
+}
+
+void* tn_rapier_state_from(const uint8_t* data, int32_t size)
+{
+	if (data == nullptr || size < 16)
+		return nullptr;
+	RapierSnapshot* snapshot = new RapierSnapshot();
+	snapshot->data.assign(data, data + size);
+	if (!SnapshotValid(snapshot))
+	{
+		delete snapshot;
+		return nullptr;
+	}
+	return snapshot;
+}
+
+void tn_rapier_state_copy(void* state, uint8_t* into, int32_t size)
+{
+	RapierSnapshot* snapshot = static_cast<RapierSnapshot*>(state);
+	if (snapshot == nullptr || into == nullptr || size <= 0)
+		return;
+	const int32_t count = std::min(size, (int32_t)snapshot->data.size());
+	std::memcpy(into, snapshot->data.data(), count);
 }

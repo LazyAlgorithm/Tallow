@@ -207,6 +207,13 @@ static class Rapier
 	[CLink] public static extern int32 tn_rapier_character_hits(void* world, void* character, void* hits,
 		int32 capacity);
 
+	[CLink] public static extern void* tn_rapier_state_save(void* world, void* reuse);
+	[CLink] public static extern bool tn_rapier_state_restore(void* world, void* state);
+	[CLink] public static extern int32 tn_rapier_state_size(void* state);
+	[CLink] public static extern void tn_rapier_state_free(void* state);
+	[CLink] public static extern void* tn_rapier_state_from(uint8* data, int32 size);
+	[CLink] public static extern void tn_rapier_state_copy(void* state, uint8* into, int32 size);
+
 	[CLink] public static extern uint32 tn_rapier_soft_create(void* world, float* positions, int32 vertexCount,
 		uint32* triangles, int32 triangleCount, float* pinned, float* stiffness, float* center, float* objectMatrix,
 		float totalMass, RapierSoftSettings* settings, uint64 userData);
@@ -229,6 +236,8 @@ static class Rapier
 	[CLink] public static extern int32 tn_rapier_soft_bounds(void* world, uint32 body, float* minimum,
 		float* maximum);
 	[CLink] public static extern void tn_rapier_soft_set_pressure(void* world, uint32 body, float amount);
+	[CLink] public static extern void tn_rapier_soft_wind(void* world, uint32 body, float* wind, float drag,
+		float turbulence, float time, float step);
 	[CLink] public static extern uint32 tn_rapier_soft_dents(void* world, uint32 body, float* output,
 		uint32 capacity);
 	[CLink] public static extern uint32 tn_rapier_soft_dent_revision(void* world, uint32 body);
@@ -1045,6 +1054,44 @@ class RapierPhysicsBackendWorld : PhysicsBackendWorld
 			return false;
 		GroupsFor(objectCode, let memberships, let filter, let group, let motionClass);
 		return Rapier.tn_rapier_character_set_shape(mWorld, character, (void*)data.Parts, 1, memberships, filter, maxPenetration) != 0;
+	}
+
+	// ---- snapshots ----
+
+	public override void* SaveState(void* reuse)
+		=> mWorld != null ? Rapier.tn_rapier_state_save(mWorld, reuse) : reuse;
+
+	public override bool RestoreState(void* state)
+		=> mWorld != null && state != null && Rapier.tn_rapier_state_restore(mWorld, state);
+
+	public override int StateSize(void* state)
+		=> state != null ? Rapier.tn_rapier_state_size(state) : 0;
+
+	public override void FreeState(void* state)
+	{
+		if (state != null)
+			Rapier.tn_rapier_state_free(state);
+	}
+
+	public override void* StateFromBytes(Span<uint8> data)
+		=> mWorld != null && data.Length > 0 ? Rapier.tn_rapier_state_from(data.Ptr, (int32)data.Length) : null;
+
+	public override void StateToBytes(void* state, List<uint8> into)
+	{
+		into.Clear();
+		if (state == null)
+			return;
+		let size = Rapier.tn_rapier_state_size(state);
+		into.Count = size;
+		Rapier.tn_rapier_state_copy(state, into.Ptr, size);
+	}
+
+	public override void SaveShared(uint32 firstIndex, List<uint8> into)
+	{
+		// The whole world snapshot is the shared state for now; it is exact and needs no per-body diff.
+		let state = SaveState(null);
+		StateToBytes(state, into);
+		FreeState(state);
 	}
 
 	public override int CharacterHits(void* character, Span<CharacterHit> hits)

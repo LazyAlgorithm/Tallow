@@ -110,6 +110,16 @@ void tn_rapier_set_query_worlds(void* world, uint32_t groups);
 // Contacts collected by the last step; returns the count and copies at most capacity.
 int32_t tn_rapier_contacts(void* world, TnRapierContact* out, int32_t capacity);
 
+// ---- exact snapshots ----
+// Rapier's whole-world snapshot (bodies, colliders, joints, soft bodies and their deformation). Restoring makes a
+// new native world and re-binds every handle this shim holds. The bytes are only valid for the same Rapier build.
+void* tn_rapier_state_save(void* world, void* reuse);
+bool tn_rapier_state_restore(void* world, void* state);
+int32_t tn_rapier_state_size(void* state);
+void tn_rapier_state_free(void* state);
+void* tn_rapier_state_from(const uint8_t* data, int32_t size);
+void tn_rapier_state_copy(void* state, uint8_t* into, int32_t size);
+
 // ---- bodies ----
 
 // motion: 0 static, 1 kinematic, 2 dynamic. group: the world-state group (0 = all). motionClass:
@@ -245,6 +255,10 @@ void tn_rapier_soft_shift(void* world, uint32_t body, const float* offset);
 int32_t tn_rapier_soft_bounds(void* world, uint32_t body, float* minimum, float* maximum);
 // Jelly pressure: the engine's gas amount (pascals times volume). Sets the volume factor held by the body.
 void tn_rapier_soft_set_pressure(void* world, uint32_t body, float amount);
+// Air blowing across the surface (m/s), with the engine's drag and turbulence. Scaled like Jolt's soft wind, not a
+// raw velocity kick.
+void tn_rapier_soft_wind(void* world, uint32_t body, const float wind[3], float drag, float turbulence,
+	float time, float step);
 // A shell's dents: for each particle, its offset from rest in the object's local space.
 uint32_t tn_rapier_soft_dents(void* world, uint32_t body, float* output, uint32_t capacity);
 uint32_t tn_rapier_soft_dent_revision(void* world, uint32_t body);

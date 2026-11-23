@@ -361,12 +361,12 @@ class Project
 		// for Linux's linker and are left out.
 		let nativeWin = scope $"{EngineRoot}/build/native-win";
 		let linkWin = scope String();
-		for (let archive in StringView[?]("tallow_native.lib", "bgfx/cmake/bgfx/bgfx.lib", "bgfx/cmake/bimg/bimg.lib", "bgfx/cmake/bimg/bimg_decode.lib", "bgfx/cmake/bx/bx.lib", "SDL/SDL3-static.lib", "joltc/joltc.lib", "_deps/joltphysics-build/Jolt.lib", "enet/enet.lib"))
+		for (let archive in StringView[?]("tallow_native.lib", "bgfx/cmake/bgfx/bgfx.lib", "bgfx/cmake/bimg/bimg.lib", "bgfx/cmake/bimg/bimg_decode.lib", "bgfx/cmake/bx/bx.lib", "SDL/SDL3-static.lib", "joltc/joltc.lib", "_deps/joltphysics-build/Jolt.lib", "rapier/rapier3d_ffi.lib", "enet/enet.lib"))
 		{
 			// These quotes survive TOML parsing and keep Hub/user folders with spaces intact for lld-link.
 			linkWin.AppendF("\\\"{}/{}\\\" ", nativeWin, archive);
 		}
-		linkWin.Append("user32.lib gdi32.lib shell32.lib winmm.lib imm32.lib ole32.lib oleaut32.lib version.lib setupapi.lib advapi32.lib ws2_32.lib psapi.lib uuid.lib cfgmgr32.lib dbghelp.lib");
+		linkWin.Append("user32.lib gdi32.lib shell32.lib winmm.lib imm32.lib ole32.lib oleaut32.lib version.lib setupapi.lib advapi32.lib ws2_32.lib psapi.lib uuid.lib cfgmgr32.lib dbghelp.lib userenv.lib ntdll.lib bcrypt.lib synchronization.lib");
 		// The debug build also writes a map of where everything in it is: script reload links against that.
 		proj.AppendF("\n[Configs.Debug.Win64]\nCLibType = \"Static\"\nOtherLinkFlags = \"$(LinkFlags) {0} /MAP\"\n\n[Configs.Release.Win64]\nCLibType = \"Static\"\nOtherLinkFlags = \"$(LinkFlags) {0}\"\n", linkWin);
 		File.WriteAllText(scope $"{Path}/BeefProj.toml" , proj).IgnoreError();

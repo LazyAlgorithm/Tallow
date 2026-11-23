@@ -26,3 +26,22 @@ provider unlisted, never a link error.
 
 Tallow links the archive only when its build enables Rapier (`TALLOW_RAPIER=ON`) and compiles
 `native/tallow_rapier.cpp` against these headers. See `docs/modular-systems-plan.md` section 5.
+
+## Windows archive
+
+`tools/build_rapier.py --platform windows` cross-builds the MSVC archive on Linux. It adds Rust's
+`x86_64-pc-windows-msvc` target and builds with the engine's Windows toolchain (`TALLOW_WIN`, default
+`~/.local/share/tessera-win`):
+
+- `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=<tool>/bin/lld-link`
+- `LIB` and `-C link-arg=/LIBPATH:` pointing at `<tool>/xwin/{crt/lib,sdk/lib/um,sdk/lib/ucrt}/x86_64`
+
+The produced `rapier3d_ffi.lib` is copied to `prebuilt/windows-x86_64/` (gitignored). Programs linking it also need
+Rust std's Windows imports: `userenv.lib ntdll.lib bcrypt.lib synchronization.lib` (the engine's launcher, player,
+generated project link flags and `tools/build_player.py` list them).
+
+## Determinism
+
+Archives are built with `enhanced-determinism`, SIMD 4 lanes and parallel off. The Linux and Windows x86_64 builds
+produce the same fixed-scene state hash (the engine's `--test-physics-rapier` prints `PHYSICS STATEHASH`), which is
+what the provider's `CrossPlatformDeterminism` capability and lockstep networking are gated on.

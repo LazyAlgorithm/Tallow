@@ -31,6 +31,13 @@ int32_t tn_rapier_contacts(void* world, TnRapierContact* out, int32_t capacity)
 	return 0;
 }
 
+void* tn_rapier_state_save(void* world, void* reuse) { (void)world; return reuse; }
+bool tn_rapier_state_restore(void* world, void* state) { (void)world; (void)state; return false; }
+int32_t tn_rapier_state_size(void* state) { (void)state; return 0; }
+void tn_rapier_state_free(void* state) { (void)state; }
+void* tn_rapier_state_from(const uint8_t* data, int32_t size) { (void)data; (void)size; return 0; }
+void tn_rapier_state_copy(void* state, uint8_t* into, int32_t size) { (void)state; (void)into; (void)size; }
+
 uint32_t tn_rapier_body_create(void* world, int32_t motion, const float position[3], const float rotation[4],
 	const TnRapierPart* parts, int32_t partCount, uint32_t objectCode, uint32_t group, int32_t motionClass,
 	uint32_t collisionMemberships, uint32_t collisionFilter, int32_t sensor, int32_t debris, float friction,
@@ -219,6 +226,9 @@ int32_t tn_rapier_soft_bounds(void* world, uint32_t body, float* minimum, float*
 { (void)world; (void)body; (void)minimum; (void)maximum; return 0; }
 void tn_rapier_soft_set_pressure(void* world, uint32_t body, float amount)
 { (void)world; (void)body; (void)amount; }
+void tn_rapier_soft_wind(void* world, uint32_t body, const float wind[3], float drag, float turbulence,
+	float time, float step)
+{ (void)world; (void)body; (void)wind; (void)drag; (void)turbulence; (void)time; (void)step; }
 uint32_t tn_rapier_soft_dents(void* world, uint32_t body, float* output, uint32_t capacity)
 { (void)world; (void)body; (void)output; (void)capacity; return 0; }
 uint32_t tn_rapier_soft_dent_revision(void* world, uint32_t body) { (void)world; (void)body; return 0; }

@@ -7,8 +7,9 @@ namespace Tallow;
 /// implements and has conformance for; the editor hides everything else for a Rapier project.
 class RapierPhysicsBackend : PhysicsBackend
 {
-	/// Every feature the Rapier integration implements today. Lockstep's exact/shared/cross-platform bits are not
-	/// here yet: Rapier's world snapshots need user-data re-mapping and a per-platform hash matrix first.
+	/// Every feature the Rapier integration implements today. The exact/shared snapshots and cross-platform
+	/// determinism are verified: identical fixed-scene state hashes on Linux x86_64 and the Windows x86_64 build,
+	/// with Rapier's enhanced-determinism build.
 	public static PhysicsFeatures AllFeatures
 	{
 		get
@@ -19,7 +20,7 @@ class RapierPhysicsBackend : PhysicsBackend
 				.BallJoint, .SwingLimit, .HingeJoint, .HingeMotor, .SliderJoint, .SliderSpring,
 				.CharacterController, .CharacterPush, .Raycast, .RaycastAll, .ShapeCast, .Overlap, .Check,
 				.ContactEvents, .ContactStay, .TriggerEvents, .BuoyancyRigidBodies, .WorldStatesSeparated,
-				.NavigationGeometry, .FixedBodyIds, .MultipleWorlds, .Ragdolls, .Vehicles, .WheeledVehicles, .SoftBodies, .SoftBodyDents, .SoftBodyPressure, .SoftBodySkin,
+				.NavigationGeometry, .FixedBodyIds, .MultipleWorlds, .SaveRestoreExact, .SharedPhysicsState, .CrossPlatformDeterminism, .Ragdolls, .Vehicles, .WheeledVehicles, .SoftBodies, .SoftBodyDents, .SoftBodyPressure, .SoftBodySkin,
 				.SoftBodyTearing, .BuoyancySoftBodies, .Ropes, .RopeKnots);
 			PhysicsFeatures features = .(0);
 			for (let feature in list)

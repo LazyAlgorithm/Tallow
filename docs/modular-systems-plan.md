@@ -1061,18 +1061,32 @@ passes. The rest of the engine is unchanged; `PhysicsBackends` registers it afte
   Jolt's differentials use. The suspension ray spans the engine's maximum length plus the wheel radius (Rapier does
   not add the radius itself). Motorcycles and tracked vehicles are not implemented and are not advertised; the
   Vehicle component only offers the wheeled kind under Rapier.
-- Cloth/shell soft bodies from a surface mesh, with pinned points, velocity/force/impulse application, shifting and
-  world bounds. Dents, skin binding and pressure are **not** implemented, so Jelly/Shell/DrivenJelly SoftBody kinds
-  are refused under Rapier with the reason; Cloth works. Ropes are not implemented and are not advertised.
+- Soft bodies at Jolt parity: Cloth, Jelly (volume preservation driven by the engine's gas amount), Shell (rides its
+  object, keeps impact dents from the object's contacts with Dent Speed/Depth/spring-back, and re-wraps its convex
+  hull from the dent revision), and DrivenJelly (a skin that lags behind its rigidbody and springs back). Positions
+  follow Jolt's convention: creation positions are relative to the body centre, every read/write/move is
+  world-space. Cloth and shells use explicit structural edges (no shape matching) so they fold and dent. Soft-body
+  buoyancy samples the water grid and lifts/drags submerged particles. Ropes are particle chains with ties as
+  Rapier rope joints, pull force from the joint impulse, and physical wind; knots are the engine's own torque.
+  Rope pulleys are not implemented and are not advertised.
+- Rapier soft-body tearing is a software capability bit (`SoftBodyTearing`) and a Soft Body toggle that is hidden
+  entirely on Jolt. Overstretched edges are torn through Rapier's tear pass (with its tear events); the toggle is
+  off by default.
 
 **Networking**
 
-- Rapier uses `PhysicsBackendWorld`'s generic snapshots (body pose, velocities, sleep). It does not advertise
-  `SaveRestoreExact`, `SharedPhysicsState`, `FixedBodyIds`' companion determinism bits or `CrossPlatformDeterminism`,
-  so lockstep is refused with the usual message; the other network modes work through the generic state. Soft
-  bodies, ragdolls and vehicles are not part of the generic snapshot (Jolt's exact native state covers them).
-  Rapier's whole-world serialization (`r3SerializeWorld`) is the path to exact snapshots later; it needs handle
-  re-mapping through user data and a per-platform golden-hash matrix before any determinism bit is set.
+- Rapier uses its own whole-world snapshot (`r3SerializeWorld`/`r3DeserializeWorld`): bodies, colliders, joints,
+  soft bodies and their deformation. Restoring makes a new native world and re-binds every handle the shim holds
+  (bodies and their colliders, soft-body roots, character bodies and colliders, impulse joints by body pair, and
+  vehicle controllers rebuilt on the new chassis); rope ties are dropped and the engine ties them again. The snapshot
+  is wrapped in a magic/version header for `StateFromBytes`.
+- `SaveShared` is the same exact whole-world snapshot for now (the plan allows this first form); it is correct but
+  heavier than a per-body diff. It is exact enough for lockstep and much simpler than per-body remapping.
+- `SaveRestoreExact`, `SharedPhysicsState`, `FixedBodyIds` and `CrossPlatformDeterminism` are advertised, so
+  `PhysicsWorld.CanLockstep` is true. Cross-platform determinism is verified by a fixed-scene state hash over the
+  raw float bits: Linux x86_64 and the Windows x86_64 build (run under Wine) both produce `0C8328CBC10D45D6`
+  after 240 steps. Both archives are built from the same Rapier source with `enhanced-determinism`, SIMD 4 and
+  parallel off.
 
 **Tests**
 
@@ -1085,13 +1099,22 @@ passes. The rest of the engine is unchanged; `PhysicsBackends` registers it afte
 - `--test-physics-vehicle-kinds` now skips kinds a backend does not advertise instead of requiring Jolt's three.
 - `--test-car-scene <project>/src/Scenes/Main.tscene` loads a saved Drivable Car scene and drives it for three
   seconds; the stock car travels 17.9 m under Rapier and 21.3 m under Jolt.
+- `--test-physics-softbody-kinds` covers jelly pressure, shell dents, driven skin, soft-body buoyancy and tearing;
+  `--test-physics-rope` covers a rope body and a tie carrying a load. Both pass on Linux and Windows.
+- The soft-body world-space convention and wind scaling were fixed after the Gallery's flag/cloth stretched across
+  the sky: reads/writes/moves are world-space like Jolt, and wind is a density/area-scaled impulse instead of a raw
+  per-step velocity kick. The Soft Body Lab and the Courtyard flag now render normally under Rapier.
 
 **Open gates**
 
-- Archives exist only for Linux x86_64 in this tree (the archive is gitignored). Windows, macOS and web archives must
-  be built with `tools/build_rapier.py` (web needs an Emscripten build) before the provider is offered there; until
-  then it is unlisted on those platforms, never a link error.
-- Exact/shared snapshots, lockstep, soft-body dents/skin/pressure, ropes, motorcycles and tracked vehicles remain.
+- Linux x86_64 and Windows x86_64 archives exist and are tested (the archives are gitignored). `tools/build_rapier.py
+  --platform windows` cross-builds the Windows archive with Rust's `x86_64-pc-windows-msvc` target, `lld-link` and
+  the engine's xwin CRT/SDK; the Windows link lists also add `userenv ntdll bcrypt synchronization` for Rust's std.
+  The Windows launcher, player and every Rapier test (conformance, soft-body kinds, ropes, vehicles, the car scene)
+  pass under Wine, including the same determinism hash. macOS and web archives still need a build (web needs
+  Emscripten); until then the provider is unlisted there, never a link error.
+- Rope pulleys, motorcycles and tracked vehicles remain unimplemented and unadvertised. A saved car with an empty
+  gear-ratio list now falls back to a usable gear (it used to read past the list).
 
 ### Later work (not in this plan)
 

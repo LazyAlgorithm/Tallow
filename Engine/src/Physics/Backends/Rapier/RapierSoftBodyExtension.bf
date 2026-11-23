@@ -125,10 +125,8 @@ class RapierSoftBodyExtension : PhysicsSoftBodyExtension
 
 	public override void Wind(uint32 bodyId, float* wind, float drag, float turbulence, float time, float step)
 	{
-		if (World == null || wind == null)
-			return;
-		float[3] f = .(wind[0] * drag, wind[1] * drag, wind[2] * drag);
-		Rapier.tn_rapier_soft_force(World, bodyId, &f);
+		if (World != null && wind != null)
+			Rapier.tn_rapier_soft_wind(World, bodyId, wind, drag, turbulence, time, step);
 	}
 
 	public override uint32 Touching(uint32 bodyId, uint32* output, uint32 capacity) => 0;

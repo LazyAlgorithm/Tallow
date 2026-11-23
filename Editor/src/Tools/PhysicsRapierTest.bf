@@ -38,6 +38,16 @@ static class PhysicsRapierTest
 		}
 	}
 
+	static uint64 MixBits(uint64 hash, float value)
+	{
+		uint32 bits = 0;
+		Internal.MemCpy(&bits, &value, 4);
+		var result = hash;
+		result ^= bits;
+		result *= 1099511628211;
+		return result;
+	}
+
 	static int Check(StringView what, bool ok)
 	{
 		Console.WriteLine(scope $"[{(ok ? "PASS" : "FAIL")}] {what}");
@@ -360,6 +370,83 @@ static class PhysicsRapierTest
 		worlds.Physics.QueryWorldStates = uint32.MaxValue;
 		ProjectConfig.SeparateWorldStates = false;
 		ProjectConfig.Reset();
+
+		// ---- exact and shared snapshots
+		{
+			let snapshotObject = scene.CreateGameObject("Snapshot Ball");
+			snapshotObject.Transform.Position = Vector3(14, 5, 8);
+			let snapshotCollider = snapshotObject.AddComponent<SphereCollider>();
+			snapshotCollider.radius = 0.5f;
+			RigidbodyData snapshotData = .();
+			snapshotData.mass = 1;
+			let snapshotBody = scene.Physics.CreateBody(snapshotObject.Transform, snapshotCollider.GetShape(), &snapshotData);
+			for (int i < 30)
+				scene.Physics.Step(1.0f / 60.0f);
+			failures += Check("Rapier advertises exact snapshots",
+				scene.Physics.Supports(.SaveRestoreExact) && scene.Physics.Supports(.SharedPhysicsState) &&
+				scene.Physics.Supports(.CrossPlatformDeterminism) && scene.Physics.CanLockstep);
+			let before = scene.Physics.GetState(snapshotBody);
+			let exact = scene.Physics.SaveExact(null);
+			for (int i < 30)
+				scene.Physics.Step(1.0f / 60.0f);
+			let restored = scene.Physics.RestoreExact(exact);
+			let after = scene.Physics.GetState(snapshotBody);
+			scene.Physics.FreeExact(exact);
+			failures += Check("exact snapshot restores the body", restored &&
+				after.position == before.position && after.rotation == before.rotation &&
+				after.linearVelocity == before.linearVelocity);
+
+			let shared = scope List<uint8>();
+			let sharedBefore = scene.Physics.GetState(snapshotBody);
+			scene.Physics.SaveShared(0, shared);
+			scene.Physics.SetState(snapshotBody, before);
+			scene.Physics.RestoreShared(shared);
+			let sharedAfter = scene.Physics.GetState(snapshotBody);
+			failures += Check("shared state restores the body", shared.Count > 0 &&
+				sharedAfter.position == sharedBefore.position && sharedAfter.rotation == sharedBefore.rotation);
+		}
+
+		// ---- cross-platform determinism: a fixed scene and steps, hashed from the raw float bits
+		{
+			let deterministic = scope Scene();
+			let detGround = deterministic.CreateGameObject("Det Ground");
+			let detGroundCollider = detGround.AddComponent<BoxCollider>();
+			detGroundCollider.size = Vector3(40, 1, 40);
+			deterministic.Physics.CreateBody(detGround.Transform, detGroundCollider.GetShape(), null);
+			let detBodies = scope List<uint32>();
+			for (int i < 8)
+			{
+				let object = deterministic.CreateGameObject(scope $"Det {i}");
+				object.Transform.Position = Vector3(-3 + i * 0.8f, 2 + i * 0.4f, (i % 3) * 0.5f);
+				let collider = object.AddComponent<BoxCollider>();
+				collider.size = Vector3(0.5f + i * 0.05f);
+				RigidbodyData data = .();
+				data.mass = 1 + i * 0.25f;
+				data.friction = 0.4f + i * 0.02f;
+				detBodies.Add(deterministic.Physics.CreateBody(object.Transform, collider.GetShape(), &data));
+			}
+			for (int i < 240)
+				deterministic.Physics.Step(1.0f / 60.0f);
+			uint64 hash = 1469598103934665603;
+			for (let id in detBodies)
+			{
+				let state = deterministic.Physics.GetState(id);
+				hash = MixBits(hash, state.position.x);
+				hash = MixBits(hash, state.position.y);
+				hash = MixBits(hash, state.position.z);
+				hash = MixBits(hash, state.rotation.x);
+				hash = MixBits(hash, state.rotation.y);
+				hash = MixBits(hash, state.rotation.z);
+				hash = MixBits(hash, state.rotation.w);
+				hash = MixBits(hash, state.linearVelocity.x);
+				hash = MixBits(hash, state.linearVelocity.y);
+				hash = MixBits(hash, state.linearVelocity.z);
+				hash = MixBits(hash, state.angularVelocity.x);
+				hash = MixBits(hash, state.angularVelocity.y);
+				hash = MixBits(hash, state.angularVelocity.z);
+			}
+			Console.WriteLine(scope $"PHYSICS STATEHASH {hash:X16}");
+		}
 
 		Console.WriteLine(failures == 0 ? "PHYSICS RAPIER PASS" : scope $"PHYSICS RAPIER FAIL ({failures})");
 		return failures == 0 ? 0 : 1;

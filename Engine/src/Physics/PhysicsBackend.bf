@@ -384,6 +384,14 @@ static class PhysicsBackends
 	static String sOverride3D = new .() ~ delete _;
 	static String sOverride2D = new .() ~ delete _;
 
+	/// Providers are process-wide singletons; free them at shutdown so the debug leak checker stays quiet.
+	static ~this()
+	{
+		for (let backend in sBackends)
+			delete backend;
+		sBackends.Clear();
+	}
+
 	static this()
 	{
 		Register(new JoltPhysicsBackend());

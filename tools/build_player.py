@@ -31,7 +31,7 @@ import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when i
 
 # Windows system libraries the native libraries call into (SDL, bgfx, ENet, miniaudio).
 WINDOWS_SYSTEM_LIBS = ('user32', 'gdi32', 'shell32', 'winmm', 'imm32', 'ole32', 'oleaut32', 'version', 'setupapi', 'advapi32',
-                       'ws2_32', 'psapi', 'uuid', 'cfgmgr32', 'dbghelp')
+                       'ws2_32', 'psapi', 'uuid', 'cfgmgr32', 'dbghelp', 'userenv', 'ntdll', 'bcrypt', 'synchronization')
 # The same libraries built for the web (tools/web/build_native.sh).
 WEB_NATIVE_LIBS = ('libtallow_native.a', 'bgfx/cmake/bgfx/libbgfx.a', 'bgfx/cmake/bimg/libbimg.a', 'bgfx/cmake/bimg/libbimg_decode.a',
                    'bgfx/cmake/bx/libbx.a', 'SDL/libSDL3.a', 'joltc/libjoltc.a', '_deps/joltphysics-build/libJolt.a', 'enet/libenet.a')
@@ -49,7 +49,7 @@ WEB_LINK_FLAGS = ('-sUSE_WEBGL2=1', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSIO
 # tools/web/csharp_web.py's thread_link_flags (one worker per core plus a few spare, so starting a thread never
 # waits for one); TALLOW_WEB_THREADS=0 leaves threads out.
 WINDOWS_NATIVE_LIBS = ('tallow_native.lib', 'bgfx/cmake/bgfx/bgfx.lib', 'bgfx/cmake/bimg/bimg.lib', 'bgfx/cmake/bimg/bimg_decode.lib',
-                       'bgfx/cmake/bx/bx.lib', 'SDL/SDL3-static.lib', 'joltc/joltc.lib', '_deps/joltphysics-build/Jolt.lib', 'enet/enet.lib')
+                       'bgfx/cmake/bx/bx.lib', 'SDL/SDL3-static.lib', 'joltc/joltc.lib', '_deps/joltphysics-build/Jolt.lib', 'rapier/rapier3d_ffi.lib', 'enet/enet.lib')
 
 
 def wine_path(path, separator='\\'):

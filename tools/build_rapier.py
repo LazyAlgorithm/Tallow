@@ -18,9 +18,9 @@ ROOT = Path(__file__).resolve().parent.parent
 VENDOR = ROOT / 'third_party' / 'rapier'
 VERSION = VENDOR / 'VERSION'
 PLATFORMS = {
-    'linux': ('linux-x86_64', 'librapier3d_ffi.a'),
-    'windows': ('windows-x86_64', 'rapier3d_ffi.lib'),
-    'macos': ('macos-x86_64', 'librapier3d_ffi.a'),
+    'linux': ('linux-x86_64', 'librapier3d_ffi.a', None),
+    'windows': ('windows-x86_64', 'rapier3d_ffi.lib', 'x86_64-pc-windows-msvc'),
+    'macos': ('macos-x86_64', 'librapier3d_ffi.a', None),
 }
 
 
@@ -30,9 +30,9 @@ def pinned():
     return commit
 
 
-def run(command, cwd=None):
+def run(command, cwd=None, env=None):
     print('+', subprocess.list2cmdline([str(c) for c in command]), flush=True)
-    subprocess.run([str(c) for c in command], cwd=cwd, check=True)
+    subprocess.run([str(c) for c in command], cwd=cwd, check=True, env=env)
 
 
 def main():
@@ -55,19 +55,32 @@ def main():
         run(['git', '-C', str(source), 'fetch', '--depth', '1', 'origin', commit])
         run(['git', '-C', str(source), 'checkout', '--detach', commit])
 
-    build = source / 'build' / 'tallow-c3'
-    run(['cmake', '-S', str(source / 'bindings' / 'c'), '-B', str(build),
-         '-DCMAKE_BUILD_TYPE=Release', '-DRAPIER_SHARED=OFF',
-         '-DRAPIER_BUILD_TESTS=OFF', '-DRAPIER_BUILD_EXAMPLES=OFF',
-         '-DRAPIER_FEATURES=enhanced-determinism'])
+    folder, library, target = PLATFORMS[args.platform]
+    build = source / 'build' / ('tallow-c3' if not target else f'tallow-c3-{args.platform}')
+    env = os.environ.copy()
+    configure = ['cmake', '-S', str(source / 'bindings' / 'c'), '-B', str(build),
+                 '-DCMAKE_BUILD_TYPE=Release', '-DRAPIER_SHARED=OFF',
+                 '-DRAPIER_BUILD_TESTS=OFF', '-DRAPIER_BUILD_EXAMPLES=OFF',
+                 '-DRAPIER_FEATURES=enhanced-determinism']
+    if target:
+        configure.append(f'-DRAPIER_TARGET={target}')
+    if target == 'x86_64-pc-windows-msvc':
+        # Rust's MSVC target links with the engine's Windows toolchain (clang-cl/lld-link + the xwin SDK/CRT).
+        tool = Path(os.environ.get('TALLOW_WIN', Path.home() / '.local/share/tessera-win')).expanduser()
+        xwin = tool / 'xwin'
+        libs = [xwin / 'crt/lib/x86_64', xwin / 'sdk/lib/um/x86_64', xwin / 'sdk/lib/ucrt/x86_64']
+        run(['rustup', 'target', 'add', target])
+        env['CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER'] = str(tool / 'bin' / 'lld-link')
+        env['LIB'] = ';'.join(str(path) for path in libs)
+        env['RUSTFLAGS'] = ' '.join(f'-C link-arg=/LIBPATH:{path}' for path in libs)
+    run(configure, env=env)
     run(['cmake', '--build', str(build), '--target', 'rapier_cargo_build', '--parallel',
          str(min(os.cpu_count() or 4, 12))],
-        cwd=source)
+        cwd=source, env=env)
 
-    folder, library = PLATFORMS[args.platform]
     output = VENDOR / 'prebuilt' / folder
     output.mkdir(parents=True, exist_ok=True)
-    archive = build / 'cargo' / 'release' / library
+    archive = build / 'cargo' / (f'{target}/' if target else '') / 'release' / library
     if not archive.is_file():
         print(f'missing {archive}', file=sys.stderr)
         return 1
