@@ -445,13 +445,30 @@ jobs:
           path: tallow/build/native
           key: ${{ steps.native-key.outputs.key }}
 
+      - name: Cache the Rapier library
+        id: rapier-cache
+        uses: actions/cache@v4
+        with:
+          path: tallow/third_party/rapier/prebuilt/macos-x86_64/librapier3d_ffi.a
+          key: rapier-macos-x86_64-${{ hashFiles('tallow/third_party/rapier/VERSION', 'tallow/third_party/rapier/bindings-changes/**', 'tallow/tools/build_rapier.py') }}
+
+      # Rapier, the second 3D physics backend, is Rust: built here so the macOS download includes it too.
+      - name: Rapier library
+        if: steps.rapier-cache.outputs.cache-hit != 'true'
+        run: |
+          rustup update stable --no-self-update && rustup default stable
+          cd tallow && python3 tools/build_rapier.py --platform macos
+
       - name: Native libraries
         run: |
           [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ] && tallow/.github/scripts/native-deps.sh settle
           cd tallow
           python3 tools/patch_textedit.py
-          [ -f build/native/CMakeCache.txt ] || cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++
+          # Always configure: it is where the Rapier library is found and linked (a cached build folder predates it).
+          cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++
           cmake --build build/native -j "$(sysctl -n hw.ncpu)" --target $NATIVE_TARGETS
+          # The release must ship Rapier: stop if only the stand-in archive is there.
+          test "$(stat -f %z build/native/rapier/librapier3d_ffi.a)" -gt 100000
 
       - name: Keep the native libraries
         if: steps.native-cache.outputs.cache-hit != 'true'

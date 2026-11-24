@@ -14,7 +14,7 @@ import re
 
 NATIVE_LIBS = (
     'libtallow_native.a', 'bgfx/cmake/bgfx/libbgfx.a', 'bgfx/cmake/bimg/libbimg.a', 'bgfx/cmake/bimg/libbimg_decode.a',
-    'bgfx/cmake/bx/libbx.a', 'SDL/libSDL3.a', 'joltc/libjoltc.a', '_deps/joltphysics-build/libJolt.a', 'enet/libenet.a',
+    'bgfx/cmake/bx/libbx.a', 'SDL/libSDL3.a', 'joltc/libjoltc.a', '_deps/joltphysics-build/libJolt.a', 'rapier/librapier3d_ffi.a', 'enet/libenet.a',
 )
 # What SDL3 (windows, input, game controllers, audio, file dialogs) and bgfx (Metal) use from the system.
 FRAMEWORKS = (

@@ -10,6 +10,7 @@ third_party/rapier/VERSION.
 """
 import argparse
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -24,7 +25,8 @@ BINDINGS_CHANGES = VENDOR / 'bindings-changes'
 PLATFORMS = {
     'linux': ('linux-x86_64', 'librapier3d_ffi.a', None),
     'windows': ('windows-x86_64', 'rapier3d_ffi.lib', 'x86_64-pc-windows-msvc'),
-    'macos': ('macos-x86_64', 'librapier3d_ffi.a', None),
+    # The Mac it is built on: Intel or Apple silicon (native/CMakeLists.txt picks the same folder).
+    'macos': ('macos-arm64' if platform.machine() in ('arm64', 'aarch64') else 'macos-x86_64', 'librapier3d_ffi.a', None),
 }
 
 
@@ -86,6 +88,9 @@ def main():
     # One codegen unit with fat LTO across Rapier, parry and nalgebra: no effect on results, a faster step.
     env['CARGO_PROFILE_RELEASE_LTO'] = 'fat'
     env['CARGO_PROFILE_RELEASE_CODEGEN_UNITS'] = '1'
+    if args.platform == 'macos':
+        # The same oldest macOS as the engine's native libraries (CMAKE_OSX_DEPLOYMENT_TARGET in the release workflow).
+        env.setdefault('MACOSX_DEPLOYMENT_TARGET', '12.0')
     configure = ['cmake', '-S', str(source / 'bindings' / 'c'), '-B', str(build),
                  '-DCMAKE_BUILD_TYPE=Release', '-DRAPIER_SHARED=OFF',
                  '-DRAPIER_BUILD_TESTS=OFF', '-DRAPIER_BUILD_EXAMPLES=OFF',

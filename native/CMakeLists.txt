@@ -207,8 +207,22 @@ if(TALLOW_RAPIER)
 		# supplies the symbols). It is written now rather than built, so a build of just tallow_native (CI,
 		# package_engine.py) has it too; GNU ld, lld and lld-link accept an archive with no members. The signature
 		# must end in a bare LF: file(WRITE) gives CRLF on Windows, which lld-link rejects as an unknown file type.
-		file(CONFIGURE OUTPUT ${CMAKE_BINARY_DIR}/rapier/${_tallow_rapier_library} CONTENT "!<arch>\n" @ONLY
-			NEWLINE_STYLE UNIX)
+		if(APPLE)
+			# Apple's linker is not known to take an archive with no members: give it one holding a single object.
+			file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/rapier)
+			file(WRITE ${CMAKE_BINARY_DIR}/rapier/stand_in.c "int tallow_rapier_stand_in;\n")
+			execute_process(COMMAND ${CMAKE_C_COMPILER} -c ${CMAKE_BINARY_DIR}/rapier/stand_in.c -o ${CMAKE_BINARY_DIR}/rapier/stand_in.o
+				RESULT_VARIABLE _tallow_stand_in_compiled)
+			file(REMOVE ${CMAKE_BINARY_DIR}/rapier/${_tallow_rapier_library})
+			execute_process(COMMAND ${CMAKE_AR} rcs ${CMAKE_BINARY_DIR}/rapier/${_tallow_rapier_library} ${CMAKE_BINARY_DIR}/rapier/stand_in.o
+				RESULT_VARIABLE _tallow_stand_in_archived)
+			if(NOT _tallow_stand_in_compiled EQUAL 0 OR NOT _tallow_stand_in_archived EQUAL 0)
+				message(FATAL_ERROR "Could not make the stand-in Rapier archive for macOS")
+			endif()
+		else()
+			file(CONFIGURE OUTPUT ${CMAKE_BINARY_DIR}/rapier/${_tallow_rapier_library} CONTENT "!<arch>\n" @ONLY
+				NEWLINE_STYLE UNIX)
+		endif()
 	endif()
 endif()
 
