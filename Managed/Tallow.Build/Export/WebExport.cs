@@ -406,6 +406,13 @@ internal static class WebExport
                 BuildNatives(engine, environment);
                 if (Beef() != null)
                 {
+                    // The player's half of the C# bindings (Engine/src/Scripting/CSharpBindings.Generated.bf) must
+                    // match Tallow.API's, or the page stops at its first engine call: generate both first, as the
+                    // desktop build does.
+                    string generator = Path.Combine(engine, "Managed", "Tallow.BindingGen", "Tallow.BindingGen.csproj");
+                    string manifest = Path.Combine(engine, "Managed", "Tallow.BindingGen", "csharp-api-manifest.tsv");
+                    if (ExportUtil.Run("dotnet", new[] { "run", "--project", generator, "--", "--manifest", manifest, "--engine-root", engine }).ExitCode != 0)
+                        throw new ExportException("Generating the C# bindings failed.");
                     // Release only: engine packages export Release web builds (a source checkout with Beef makes Debug
                     // ones as it exports them). Beef's runtime both with and without threads (TALLOW_WEB_THREADS).
                     PlayerLibrary(engine, "Release", root);
