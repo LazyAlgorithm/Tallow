@@ -295,8 +295,13 @@ if(NOT EMSCRIPTEN)
 	set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
 	set(ASSIMP_BUILD_USE_CCACHE OFF CACHE BOOL "" FORCE)
 	set(ASSIMP_INJECT_DEBUG_POSTFIX OFF CACHE BOOL "" FORCE)
-	# Its own zlib, so the tool needs nothing installed on the machine it runs on.
-	set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+	# Its own zlib, so the tool needs nothing installed on the machine it runs on. Every Mac has zlib, and Assimp's
+	# copy does not compile against current macOS SDKs (its zutil.h defines fdopen away when TARGET_OS_MAC is set).
+	if(APPLE)
+		set(ASSIMP_BUILD_ZLIB OFF CACHE BOOL "" FORCE)
+	else()
+		set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+	endif()
 	set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
 	set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
 	# The glTF exporter shares code with the glTF importer, so that is built too.
