@@ -267,8 +267,8 @@ static class DotNetSdk
 			progress(scope $"Downloading .NET SDK {PinnedVersion} ({rid}, about 230 MB)...");
 			let command = scope String("curl -fL --retry 3 --silent --show-error -o ");
 			Terminal.Quote(file, command);
-			command.Append(' ');
-			Terminal.Quote(url, command);
+			// Not Terminal.Quote: on Windows that turns '/' into '\', which breaks a URL (the download always failed).
+			command.AppendF(" \"{}\"", url);
 			if (Terminal.Run(command) != 0 || !File.Exists(file))
 			{
 				error.AppendF("The .NET SDK download failed ({}). Check the internet connection and try again, or install the .NET {} SDK yourself.", url, DotNetCheck.RequiredMajor);
