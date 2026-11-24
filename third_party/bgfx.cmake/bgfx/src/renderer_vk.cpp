@@ -8,6 +8,7 @@
 #if BGFX_CONFIG_RENDERER_VULKAN
 #	include <bx/pixelformat.h>
 #	include "renderer_vk.h"
+#	include <bgfx/tallow_vk.h>
 #	include "video_vk.h"
 
 #if BX_PLATFORM_OSX
@@ -16,6 +17,29 @@
 #	import <QuartzCore/QuartzCore.h>
 #	import <Metal/Metal.h>
 #endif // BX_PLATFORM_OSX
+
+
+namespace bgfx { namespace vk
+{
+	// Tallow: extra extensions requested by the engine, enabled extension names, and per-view hooks (see tallow_vk.h).
+	struct TallowVkState
+	{
+		static constexpr uint32_t kMaxExt  = 64;
+		static constexpr uint32_t kNameLen = 128;
+		char     reqInstance[kMaxExt][kNameLen];
+		char     reqDevice[kMaxExt][kNameLen];
+		uint32_t numReqInstance = 0;
+		uint32_t numReqDevice   = 0;
+		char     enabledInstance[kMaxExt + 64][kNameLen];
+		char     enabledDevice[kMaxExt + 64][kNameLen];
+		uint32_t numEnabledInstance = 0;
+		uint32_t numEnabledDevice   = 0;
+		TallowVkViewHook hook[BGFX_CONFIG_MAX_VIEWS];
+		void*            hookUser[BGFX_CONFIG_MAX_VIEWS];
+	};
+
+	static TallowVkState s_tallowVk;
+} }
 
 namespace bgfx { namespace vk
 {
@@ -1440,7 +1464,7 @@ VK_IMPORT
 				}
 
 				uint32_t numEnabledExtensions = 0;
-				const char* enabledExtension[Extension::Count + 1];
+				const char* enabledExtension[Extension::Count + 1 + TallowVkState::kMaxExt];
 
 				if (!headless
 				||  wsiSurfaceSupported() )
@@ -1464,6 +1488,35 @@ VK_IMPORT
 					{
 						enabledExtension[numEnabledExtensions++] = extension.m_name;
 					}
+				}
+
+				// Tallow: extensions the engine asked for (DLSS needs some).
+				if (0 != s_tallowVk.numReqInstance)
+				{
+					uint32_t numAvail = 0;
+					vkEnumerateInstanceExtensionProperties(NULL, &numAvail, NULL);
+					VkExtensionProperties* avail = (VkExtensionProperties*)bx::alloc(g_allocator, (numAvail + 1) * sizeof(VkExtensionProperties) );
+					numAvail = VK_SUCCESS == vkEnumerateInstanceExtensionProperties(NULL, &numAvail, avail) ? numAvail : 0;
+
+					for (uint32_t rr = 0; rr < s_tallowVk.numReqInstance; ++rr)
+					{
+						const char* name = s_tallowVk.reqInstance[rr];
+						bool have = false;
+						for (uint32_t aa = 0; aa < numAvail && !have; ++aa) { have = 0 == bx::strCmp(avail[aa].extensionName, name); }
+						for (uint32_t ee = 0; ee < numEnabledExtensions && have; ++ee) { have = 0 != bx::strCmp(enabledExtension[ee], name); }
+						if (have && numEnabledExtensions < BX_COUNTOF(enabledExtension) )
+						{
+							enabledExtension[numEnabledExtensions++] = name;
+						}
+					}
+
+					bx::free(g_allocator, avail);
+				}
+
+				s_tallowVk.numEnabledInstance = 0;
+				for (uint32_t ee = 0; ee < numEnabledExtensions && ee < BX_COUNTOF(s_tallowVk.enabledInstance); ++ee)
+				{
+					bx::strCopy(s_tallowVk.enabledInstance[s_tallowVk.numEnabledInstance++], TallowVkState::kNameLen, enabledExtension[ee]);
 				}
 
 				BX_TRACE("Enabled instance extensions:");
@@ -2173,7 +2226,7 @@ VK_IMPORT_INSTANCE
 			else
 			{
 				uint32_t numEnabledExtensions = 0;
-				const char* enabledExtension[Extension::Count + 3];
+				const char* enabledExtension[Extension::Count + 3 + TallowVkState::kMaxExt];
 
 				enabledExtension[numEnabledExtensions++] = VK_KHR_MAINTENANCE1_EXTENSION_NAME;
 
@@ -2203,6 +2256,35 @@ VK_IMPORT_INSTANCE
 					{
 						enabledExtension[numEnabledExtensions++] = extension.m_name;
 					}
+				}
+
+				// Tallow: extensions the engine asked for (DLSS needs some).
+				if (0 != s_tallowVk.numReqDevice)
+				{
+					uint32_t numAvail = 0;
+					vkEnumerateDeviceExtensionProperties(m_physicalDevice, NULL, &numAvail, NULL);
+					VkExtensionProperties* avail = (VkExtensionProperties*)bx::alloc(g_allocator, (numAvail + 1) * sizeof(VkExtensionProperties) );
+					numAvail = VK_SUCCESS == vkEnumerateDeviceExtensionProperties(m_physicalDevice, NULL, &numAvail, avail) ? numAvail : 0;
+
+					for (uint32_t rr = 0; rr < s_tallowVk.numReqDevice; ++rr)
+					{
+						const char* name = s_tallowVk.reqDevice[rr];
+						bool have = false;
+						for (uint32_t aa = 0; aa < numAvail && !have; ++aa) { have = 0 == bx::strCmp(avail[aa].extensionName, name); }
+						for (uint32_t ee = 0; ee < numEnabledExtensions && have; ++ee) { have = 0 != bx::strCmp(enabledExtension[ee], name); }
+						if (have && numEnabledExtensions < BX_COUNTOF(enabledExtension) )
+						{
+							enabledExtension[numEnabledExtensions++] = name;
+						}
+					}
+
+					bx::free(g_allocator, avail);
+				}
+
+				s_tallowVk.numEnabledDevice = 0;
+				for (uint32_t ee = 0; ee < numEnabledExtensions && ee < BX_COUNTOF(s_tallowVk.enabledDevice); ++ee)
+				{
+					bx::strCopy(s_tallowVk.enabledDevice[s_tallowVk.numEnabledDevice++], TallowVkState::kNameLen, enabledExtension[ee]);
 				}
 
 				BX_TRACE("Enabled device extensions:");
@@ -10581,6 +10663,20 @@ VK_DESTROY
 
 				if (viewChanged)
 				{
+					if (UINT16_MAX != view
+					&&  NULL != s_tallowVk.hook[view])
+					{
+						if (beginRenderPass)
+						{
+							vkCmdEndRenderPass(m_commandBuffer);
+							beginRenderPass = false;
+						}
+
+						s_tallowVk.hook[view](m_commandBuffer, view, s_tallowVk.hookUser[view]);
+						currentPipeline = VK_NULL_HANDLE;
+						currentBindHash = 0;
+					}
+
 					view = key.m_view;
 					renderView = &_render->view(view);
 					viewState.setView(*renderView);
@@ -11488,6 +11584,18 @@ VK_DESTROY
 				}
 			}
 
+			if (UINT16_MAX != view
+			&&  NULL != s_tallowVk.hook[view])
+			{
+				if (beginRenderPass)
+				{
+					vkCmdEndRenderPass(m_commandBuffer);
+					beginRenderPass = false;
+				}
+
+				s_tallowVk.hook[view](m_commandBuffer, view, s_tallowVk.hookUser[view]);
+			}
+
 			if (beginRenderPass)
 			{
 				vkCmdEndRenderPass(m_commandBuffer);
@@ -11784,6 +11892,133 @@ VK_DESTROY
 
 } /* namespace vk */ } // namespace bgfx
 
+
+// ---- Tallow: native access for DLSS / FSR (see include/bgfx/tallow_vk.h) ----
+
+extern "C" void tallow_vk_request_extensions(const char* const* _instanceExtensions, uint32_t _numInstance, const char* const* _deviceExtensions, uint32_t _numDevice)
+{
+	using namespace bgfx::vk;
+	s_tallowVk.numReqInstance = 0;
+	s_tallowVk.numReqDevice   = 0;
+	for (uint32_t ii = 0; ii < _numInstance && s_tallowVk.numReqInstance < TallowVkState::kMaxExt; ++ii)
+	{
+		bx::strCopy(s_tallowVk.reqInstance[s_tallowVk.numReqInstance++], TallowVkState::kNameLen, _instanceExtensions[ii]);
+	}
+
+	for (uint32_t ii = 0; ii < _numDevice && s_tallowVk.numReqDevice < TallowVkState::kMaxExt; ++ii)
+	{
+		bx::strCopy(s_tallowVk.reqDevice[s_tallowVk.numReqDevice++], TallowVkState::kNameLen, _deviceExtensions[ii]);
+	}
+}
+
+extern "C" int tallow_vk_extension_enabled(const char* _name)
+{
+	using namespace bgfx::vk;
+	for (uint32_t ii = 0; ii < s_tallowVk.numEnabledInstance; ++ii)
+	{
+		if (0 == bx::strCmp(s_tallowVk.enabledInstance[ii], _name) ) { return 1; }
+	}
+
+	for (uint32_t ii = 0; ii < s_tallowVk.numEnabledDevice; ++ii)
+	{
+		if (0 == bx::strCmp(s_tallowVk.enabledDevice[ii], _name) ) { return 1; }
+	}
+
+	return 0;
+}
+
+extern "C" int tallow_vk_get_native(TallowVkNative* _out)
+{
+	using namespace bgfx::vk;
+	if (NULL == s_renderVK
+	||  NULL == _out)
+	{
+		return 0;
+	}
+
+	bx::memSet(_out, 0, sizeof(TallowVkNative) );
+	_out->instance            = (void*)s_renderVK->m_instance;
+	_out->physicalDevice      = (void*)s_renderVK->m_physicalDevice;
+	_out->device              = (void*)s_renderVK->m_device;
+	_out->queue               = (void*)s_renderVK->m_globalQueue;
+	_out->queueFamily         = s_renderVK->m_globalQueueFamily;
+	_out->queueIndex          = 0;
+	_out->getInstanceProcAddr = (void*)vkGetInstanceProcAddr;
+	_out->getDeviceProcAddr   = (void*)vkGetDeviceProcAddr;
+	_out->apiVersion          = s_renderVK->m_deviceProperties.apiVersion;
+	_out->instanceApiVersion  = s_renderVK->m_instanceApiVersion;
+	_out->vendorId            = s_renderVK->m_deviceProperties.vendorID;
+	_out->deviceId            = s_renderVK->m_deviceProperties.deviceID;
+	bx::strCopy(_out->deviceName, sizeof(_out->deviceName), s_renderVK->m_deviceProperties.deviceName);
+	return 1;
+}
+
+extern "C" int tallow_vk_texture_info(uint16_t _textureIdx, TallowVkTexture* _out)
+{
+	using namespace bgfx::vk;
+	if (NULL == s_renderVK
+	||  NULL == _out
+	||  _textureIdx >= BGFX_CONFIG_MAX_TEXTURES)
+	{
+		return 0;
+	}
+
+	const TextureVK& texture = s_renderVK->m_textures[_textureIdx];
+	if (VK_NULL_HANDLE == texture.m_textureImage)
+	{
+		return 0;
+	}
+
+	_out->image     = 0;
+	bx::memCopy(&_out->image, &texture.m_textureImage, sizeof(texture.m_textureImage) );
+	_out->format    = (uint32_t)texture.m_format;
+	_out->width     = texture.m_width;
+	_out->height    = texture.m_height;
+	_out->depth     = texture.m_depth;
+	_out->layers    = texture.m_numLayers;
+	_out->mips      = texture.m_numMips;
+	_out->aspect    = (uint32_t)texture.m_aspectFlags;
+	_out->layout    = (uint32_t)texture.m_currentImageLayout;
+	_out->bgfxFlags = texture.m_flags;
+	return 1;
+}
+
+extern "C" uint32_t tallow_vk_texture_transition(uint16_t _textureIdx, void* _commandBuffer, int _mode)
+{
+	using namespace bgfx::vk;
+	if (NULL == s_renderVK
+	||  NULL == _commandBuffer
+	||  _textureIdx >= BGFX_CONFIG_MAX_TEXTURES)
+	{
+		return 0;
+	}
+
+	TextureVK& texture = s_renderVK->m_textures[_textureIdx];
+	if (VK_NULL_HANDLE == texture.m_textureImage)
+	{
+		return 0;
+	}
+
+	VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
+	if (0 == _mode)
+	{
+		layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	}
+
+	texture.setState( (VkCommandBuffer)_commandBuffer, layout);
+	return (uint32_t)layout;
+}
+
+extern "C" void tallow_vk_set_view_hook(uint16_t _view, TallowVkViewHook _hook, void* _user)
+{
+	using namespace bgfx::vk;
+	if (_view < BGFX_CONFIG_MAX_VIEWS)
+	{
+		s_tallowVk.hookUser[_view] = _user;
+		s_tallowVk.hook[_view]     = _hook;
+	}
+}
+
 #else
 
 namespace bgfx { namespace vk
@@ -11798,5 +12033,13 @@ namespace bgfx { namespace vk
 	{
 	}
 } /* namespace vk */ } // namespace bgfx
+
+#	include <bgfx/tallow_vk.h>
+extern "C" void tallow_vk_request_extensions(const char* const*, uint32_t, const char* const*, uint32_t) {}
+extern "C" int tallow_vk_extension_enabled(const char*) { return 0; }
+extern "C" int tallow_vk_get_native(TallowVkNative*) { return 0; }
+extern "C" int tallow_vk_texture_info(uint16_t, TallowVkTexture*) { return 0; }
+extern "C" uint32_t tallow_vk_texture_transition(uint16_t, void*, int) { return 0; }
+extern "C" void tallow_vk_set_view_hook(uint16_t, TallowVkViewHook, void*) {}
 
 #endif // BGFX_CONFIG_RENDERER_VULKAN

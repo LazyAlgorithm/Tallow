@@ -13,6 +13,8 @@ jolt_license = next((root / 'build' / native / '_deps/joltphysics-src/LICENSE'
                      for native in ('native', 'native-win')
                      if (root / 'build' / native / '_deps/joltphysics-src/LICENSE').is_file()),
                     root / 'build/native/_deps/joltphysics-src/LICENSE')
+# DLSS is downloaded when the engine is built (native/FetchDLSS.cmake), never committed; its licence comes with it.
+dlss_license = next(iter(sorted((root / 'build').glob('native*/sdk/dlss-*/LICENSE.txt'))), root / 'build/native/sdk/dlss/LICENSE.txt')
 libraries = [
     ('bgfx', 'Rendering', tp / 'bgfx.cmake/bgfx/LICENSE'),
     ('bx', 'Base library used by bgfx', tp / 'bgfx.cmake/bx/LICENSE'),
@@ -36,6 +38,8 @@ libraries = [
     ('Roboto', 'Interface and default World Text font', tp / 'fonts/LICENSE-Roboto.txt'),
     ('Font Awesome', 'Interface icons', tp / 'fonts/LICENSE-FontAwesome.txt'),
     ('SMAA', 'Antialiasing (SMAA 1x shaders and lookup textures, iryoku/smaa)', root / 'Engine/shaders/licenses/SMAA-LICENSE.txt'),
+    ('NVIDIA DLSS', 'Upscaling (DLSS SDK and runtime; NVIDIA GeForce RTX only)', dlss_license),
+    ('FidelityFX FSR 2', 'Upscaling (FSR temporal upscaler and Vulkan backend, AMD)', tp / 'fsr2/LICENSE.txt'),
     ('FidelityFX FSR 1', 'Upscaling (FSR 1 EASU and RCAS shaders, AMD)', root / 'Engine/shaders/licenses/FidelityFX-FSR-LICENSE.txt'),
 ]
 out = ['Third-party software in Tallow', '=' * 31, '',

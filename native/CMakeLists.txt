@@ -311,6 +311,62 @@ if(TALLOW_RAPIER_AVAILABLE)
 	target_include_directories(tallow_native PRIVATE ${_tallow_rapier_dir}/include)
 endif()
 target_link_libraries(tallow_native PRIVATE bgfx bx SDL3::SDL3-static)
+
+# ---- DLSS and FSR (tallow_upscale.cpp): Vulkan renderer on Linux and Windows x86-64 ----
+# DLSS comes from NVIDIA's SDK (downloaded and hash-checked at configure time, see FetchDLSS.cmake: its licence does
+# not allow checking it into this open source repository). FSR is AMD's MIT-licensed FSR 2.2.1 temporal upscaler, with
+# its Vulkan backend and pre-built shader permutations in third_party/fsr2.
+if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS AND NOT APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+	set(_upscale_vk ${CMAKE_CURRENT_SOURCE_DIR}/upscale/vk)
+	target_include_directories(tallow_native PRIVATE ${_upscale_vk})
+	option(TALLOW_DLSS "Build NVIDIA DLSS support (downloads the DLSS SDK)" ON)
+	if(TALLOW_DLSS)
+		include(${CMAKE_CURRENT_SOURCE_DIR}/FetchDLSS.cmake)
+	endif()
+	if(TALLOW_DLSS AND TALLOW_DLSS_AVAILABLE)
+		get_filename_component(_dlss_runtime_dir ${TALLOW_DLSS_RUNTIME} DIRECTORY)
+		target_compile_definitions(tallow_native PRIVATE TALLOW_HAVE_DLSS=1 "TALLOW_DLSS_RUNTIME_DIR=\"${_dlss_runtime_dir}\"")
+		target_include_directories(tallow_native PRIVATE ${TALLOW_DLSS_DIR}/include)
+		# The NGX helper objects go into tallow_native's own archive so no link line has to change (the Beef projects
+		# list the archives by name). llvm-ar reads both the Linux .a and the Windows .lib.
+		find_program(_ngx_ar NAMES llvm-ar ar)
+		set(_ngx_objdir ${CMAKE_BINARY_DIR}/sdk/ngx-objects)
+		file(MAKE_DIRECTORY ${_ngx_objdir})
+		if(_ngx_ar AND NOT EXISTS ${_ngx_objdir}/.extracted)
+			execute_process(COMMAND ${_ngx_ar} x ${TALLOW_DLSS_LIB} WORKING_DIRECTORY ${_ngx_objdir} RESULT_VARIABLE _ar_result)
+			if(_ar_result EQUAL 0)
+				file(WRITE ${_ngx_objdir}/.extracted "")
+			endif()
+		endif()
+		file(GLOB _ngx_objects ${_ngx_objdir}/*.o ${_ngx_objdir}/*.obj)
+		set_source_files_properties(${_ngx_objects} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+		target_sources(tallow_native PRIVATE ${_ngx_objects})
+		if(NOT WIN32)
+			target_link_libraries(tallow_native PRIVATE ${CMAKE_DL_LIBS})
+		endif()
+		set(TALLOW_DLSS_RUNTIME_FILE ${TALLOW_DLSS_RUNTIME} CACHE INTERNAL "DLSS runtime a game ships next to its executable")
+	endif()
+	set(_fsr2 ${TP}/fsr2)
+	add_library(tallow_fsr2 OBJECT
+		${_fsr2}/ffx-fsr2-api/ffx_assert.cpp
+		${_fsr2}/ffx-fsr2-api/ffx_fsr2.cpp
+		${_fsr2}/ffx-fsr2-api/vk/ffx_fsr2_vk.cpp
+		${_fsr2}/ffx-fsr2-api/vk/shaders/ffx_fsr2_shaders_vk.cpp)
+	target_compile_features(tallow_fsr2 PRIVATE cxx_std_17)
+	if(NOT MSVC)
+		target_compile_definitions(tallow_fsr2 PRIVATE FFX_GCC=1)
+		target_compile_definitions(tallow_native PRIVATE FFX_GCC=1)
+	endif()
+	target_include_directories(tallow_fsr2 PRIVATE ${_upscale_vk} ${_fsr2}/ffx-fsr2-api ${_fsr2}/shaders_vk)
+	target_compile_definitions(tallow_fsr2 PRIVATE TALLOW_FSR2_RENAME_VK=1 _UNICODE UNICODE)
+	if(NOT MSVC)
+		target_compile_options(tallow_fsr2 PRIVATE -w -include ${CMAKE_CURRENT_SOURCE_DIR}/upscale/fsr2_compat.h)
+	endif()
+	set_target_properties(tallow_fsr2 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+	target_sources(tallow_native PRIVATE $<TARGET_OBJECTS:tallow_fsr2>)
+	target_compile_definitions(tallow_native PRIVATE TALLOW_HAVE_FSR2=1)
+	target_include_directories(tallow_native PRIVATE ${_fsr2}/ffx-fsr2-api)
+endif()
 if(IOS)
 	# miniaudio reaches iOS's audio session through AVFoundation, which only Objective-C can include.
 	set_source_files_properties(tallow_audio.c PROPERTIES COMPILE_OPTIONS "-xobjective-c;-fobjc-arc")

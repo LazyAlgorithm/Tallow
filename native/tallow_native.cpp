@@ -156,6 +156,11 @@ TN_API void tn_set_log(TnLogFn fn, bool trace)
 extern "C" void tn_web_prepare_proxied_gl(void);
 #endif
 
+#if !defined(__EMSCRIPTEN__) && (defined(__linux__) || defined(_WIN32)) && (defined(__x86_64__) || defined(_M_X64))
+// DLSS/FSR (tallow_upscale.cpp): asks bgfx's Vulkan backend for the extensions NGX needs.
+extern "C" void tn_upscale_prepare_vulkan(void);
+#endif
+
 // renderer: bgfx::RendererType value, or negative to let bgfx pick the best one for the platform.
 // window may be null for a headless device (dedicated servers do not call this at all).
 TN_API bool tn_gfx_init(SDL_Window* window, int width, int height, int renderer, uint32_t resetFlags)
@@ -183,6 +188,9 @@ TN_API bool tn_gfx_init(SDL_Window* window, int width, int height, int renderer,
 	if (renderer < 0) renderer = (int)bgfx::RendererType::Vulkan;
 #endif
 
+#if !defined(__EMSCRIPTEN__) && (defined(__linux__) || defined(_WIN32)) && (defined(__x86_64__) || defined(_M_X64))
+	if (renderer == (int)bgfx::RendererType::Vulkan || renderer < 0) tn_upscale_prepare_vulkan();
+#endif
 	// Single-threaded mode: the thread calling init/frame is the render thread.
 	bgfx::renderFrame();
 
