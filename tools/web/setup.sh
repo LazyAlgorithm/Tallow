@@ -9,6 +9,12 @@
 #
 # Needs: BeefBuild on PATH (or BEEFBUILD set) from a Beef source build, git, Python 3, CMake, Ninja, and the
 # desktop build done once (./build.sh), which makes the shader compiler.
+#
+# On a Mac: install the tools with Homebrew (brew install cmake ninja python) and the Xcode command line tools
+# (xcode-select --install). The desktop build there is the macOS one, not ./build.sh:
+#   python3 tools/package_engine.py --platform macos --folder ../Tallow-macOS
+# (tallowengine.com/docs/macos). It makes build/native, including the shader compiler, and then this script works
+# the same. A Mac builds macOS and web games only.
 set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Emscripten 4.0.23 uses the same LLVM major version (22) as Beef's compiler, so their object files link together.
@@ -63,7 +69,7 @@ echo "Beef will use Emscripten from $EMSDK"
 if [ -x "${SHADERC:-$root/build/native/bgfx/cmake/bgfx/shaderc}" ]; then
 	"$root/tools/compile_shaders.sh"
 else
-	echo "Note: the shader compiler is missing; run ./build.sh, then tools/compile_shaders.sh, to make the WebGL shaders." >&2
+	echo "Note: the shader compiler is missing; run the desktop build (./build.sh, or tools/package_engine.py --platform macos on a Mac), then tools/compile_shaders.sh, to make the WebGL shaders." >&2
 fi
 echo "Done. Build a game for the web from the editor (File > Build..., For: Web) or with:"
 echo "  python3 $root/tools/build_player.py /path/to/project --platform web --output /path/to/folder"

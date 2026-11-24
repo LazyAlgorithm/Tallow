@@ -1,13 +1,15 @@
-# Builds Tallow on macOS (Apple silicon) with its own Beef compiler, built from source like Linux's, and the native
+# Builds Tallow on macOS (Intel) with its own Beef compiler, built from source like Linux's, and the native
 # libraries for Metal, and packages the editor.
 #
-# Paused: macOS builds cannot be checked on a real Mac yet, so it no longer runs on pushes or tags, only by hand
-# (Actions > macOS > Run workflow). The macOS support stays in the engine; put the push trigger back to resume:
-#   push: {tags: ['v*'], branches: [dev, main]}
-# The macOS zip is attached to the run; release.yml puts the Linux and Windows zips on releases.
+# Intel because that is the Mac it is tested on (a VM); Apple silicon builds the same source on macos-15 but has
+# not been checked on a real machine yet. The macOS zip is attached to the run; release.yml puts the Linux and
+# Windows zips on releases.
 name: macOS
 
 on:
+  push:
+    tags: ['v*']
+    branches: [dev, main]
   workflow_dispatch:
 
 env:
@@ -18,7 +20,7 @@ env:
 
 jobs:
   macos:
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 120
     defaults:
       run:
@@ -41,7 +43,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/beef
-          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-macos15-arm64
+          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-macos15-x86_64
 
       - name: Build the Beef compiler
         if: steps.beef-cache.outputs.cache-hit != 'true'
@@ -55,11 +57,11 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/beef
-          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-macos15-arm64
+          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-macos15-x86_64
 
       - name: Native library cache key
         id: native-key
-        run: echo "key=$(tallow/.github/scripts/native-deps.sh key macos)" >> "$GITHUB_OUTPUT"
+        run: echo "key=$(tallow/.github/scripts/native-deps.sh key macos-x86_64)" >> "$GITHUB_OUTPUT"
 
       - name: Cache the native libraries
         id: native-cache

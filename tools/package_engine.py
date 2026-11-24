@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
@@ -180,13 +181,15 @@ def main():
             parser.error('Cannot determine source commit SHA.')
         if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.+-]*', version):
             parser.error('Set TALLOW_VERSION to the desired version.')
+        # A Mac package is for the chip it was built on (Beef and CMake build for the host).
+        mac_arch = 'arm64' if platform.machine() in ('arm64', 'aarch64') else 'x64'
         (stage / 'tallow-version.json').write_text(json.dumps({
             'engine': 'Tallow', 'version': version, 'build': commit,
             'project_format': 1, 'platform': args.platform,
-            'architecture': 'arm64' if macos else 'x64',
+            'architecture': mac_arch if macos else 'x64',
         }, indent=2) + '\n')
         (stage / 'tallow-package.txt').write_text(
-            f'Tallow early beta for {args.platform} ({"Apple silicon" if macos else "x64"}), {args.config}.\n'
+            f'Tallow early beta for {args.platform} ({("Apple silicon" if mac_arch == "arm64" else "Intel") if macos else "x64"}), {args.config}.\n'
             f'Start {"Tallow.exe" if windows else "./Tallow"}.\n'
             f'For editing/building projects: {prerequisites}\n'
             'Engine/editor source and native archives are required to compile project scripts.\n'
