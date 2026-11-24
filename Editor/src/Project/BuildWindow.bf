@@ -61,8 +61,6 @@ extension EditorApp
 			var lines = text.Split('\n');
 			if (lines.GetNext() case .Ok(let system))
 				mBuildTarget = system == "windows" ? .Windows : system == "web" ? .Web : system == "macos" ? .MacOS : .Linux;
-			if (!Offered(mBuildTarget))
-				mBuildTarget = HostTarget;
 			if (lines.GetNext() case .Ok(let folder))
 				mBuildFolder.Set(folder);
 		}
@@ -169,15 +167,68 @@ extension EditorApp
 		return false;
 	}
 
-	/// Whether NativeAOT can compile the game for a system here: on that system itself, and Windows also on Linux
-	/// (with tools/windows/setup.sh's Windows SDK). The web always runs .NET in the page; macOS has JIT so far.
+	/// Whether NativeAOT can compile the game for a system here (as Tallow.Build's NativeAot.CanBuild decides): Linux
+	/// on any machine with Zig installed (ZigToolchain), or on Linux itself; Windows on Windows, or on Linux with
+	/// tools/windows/setup.sh's Windows SDK; macOS on a Mac with Apple's command line tools. The web always runs .NET
+	/// in the page.
 	public static bool NativeAotAvailable(BuildTarget target)
 	{
-		if (target == .Linux)
-			return HostTarget == .Linux;
-		if (target == .Windows)
-			return HostTarget == .Windows || HostTarget == .Linux;
-		return false;
+		switch (target)
+		{
+		case .Linux: return HostTarget == .Linux || ZigToolchain.Installed();
+		case .Windows: return HostTarget == .Windows || HostTarget == .Linux;
+		case .MacOS: return HostTarget == .MacOS && AppleToolsInstalled();
+		default: return false;
+		}
+	}
+
+	static int sAppleTools = -1;
+
+	/// Whether Apple's command line tools are installed (checked once; /usr/bin/clang is there either way, as a
+	/// stand-in that asks to install them).
+	static bool AppleToolsInstalled()
+	{
+		if (sAppleTools < 0)
+			sAppleTools = Terminal.Run(scope $"xcode-select -p > {Terminal.Null} 2>&1") == 0 ? 1 : 0;
+		return sAppleTools == 1;
+	}
+
+	/// Why NativeAOT is not offered for the target on this machine.
+	static void NativeAotUnavailableReason(BuildTarget target, String output)
+	{
+		switch (target)
+		{
+		case .Linux: output.Append("NativeAOT for Linux needs Zig on this machine (install it below or in the project selector); until then C# runs on .NET (JIT)");
+		case .Windows: output.Append("NativeAOT for Windows is compiled on Windows or Linux; built here, C# runs on .NET (JIT)");
+		case .MacOS:
+			if (HostTarget == .MacOS)
+				output.Append("NativeAOT for macOS needs Apple's command line tools (in a terminal: xcode-select --install, then reopen this window); until then C# runs on .NET (JIT)");
+			else
+				output.Append("NativeAOT for macOS is compiled on a Mac (Apple's tools only run there); built here, C# runs on .NET (JIT)");
+		default:
+		}
+	}
+
+	/// The Install Zig button, and how the install goes.
+	static void DrawZigInstall()
+	{
+		let status = scope String();
+		let failed = ZigToolchain.GetStatus(status);
+		if (ZigToolchain.Installing)
+		{
+			ImGui.TextDisabled(status);
+			return;
+		}
+		if (ImGui.Button(scope $"Install Zig {ZigToolchain.PinnedVersion}"))
+			ZigToolchain.StartInstall();
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip(scope $"Downloads Zig (about {ZigToolchain.DownloadMegabytes()} MB, from ziglang.org) into a folder of your own that every Tallow version shares. Tallow links Linux games' native code with it.");
+		if (failed && !status.IsEmpty)
+		{
+			ImGui.PushTextWrapPos(0);
+			ImGui.TextColored(EditorTheme.Warning, status);
+			ImGui.PopTextWrapPos();
+		}
 	}
 
 	/// Whether the chosen system can be built for now.
@@ -220,24 +271,15 @@ extension EditorApp
 		ImGui.End();
 	}
 
-	/// Whether this machine offers building for a system: macOS and the web on a Mac (macOS games are built on a Mac
-	/// only, and a Mac has neither the Linux nor the Windows player's tools); Linux, Windows and the web elsewhere.
-	static bool Offered(BuildTarget target) => target == .Web || (HostTarget == .MacOS) == (target == .MacOS);
-
-	/// Which system the game is built for (see Offered).
+	/// Which system the game is built for: any of them from any machine, as far as the engine has the player for it
+	/// (engine packages carry all three desktop players and the web player's pieces).
 	void DrawBuildTarget()
 	{
-		if (!Offered(mBuildTarget))
-			mBuildTarget = HostTarget;
 		ImGui.SeparatorText("For");
-		bool first = true;
 		for (let target in BuildTarget[4](.Linux, .Windows, .MacOS, .Web))
 		{
-			if (!Offered(target))
-				continue;
-			if (!first)
+			if (target != .Linux)
 				ImGui.SameLine();
-			first = false;
 			if (ImGui.RadioButton(target == .MacOS ? "macOS" : target.ToString(.. scope .()), mBuildTarget == target))
 			{
 				mBuildTarget = target;
@@ -270,7 +312,13 @@ extension EditorApp
 		{
 			ImGui.SeparatorText("C# runtime");
 			if (!NativeAotAvailable(mBuildTarget))
-				ImGui.TextDisabled(mBuildTarget == .MacOS ? "macOS builds run C# on .NET (JIT)" : scope $"Built here, C# runs on .NET (JIT): NativeAOT for {mBuildTarget} is compiled on {mBuildTarget}");
+			{
+				ImGui.PushTextWrapPos(0);
+				ImGui.TextDisabled(NativeAotUnavailableReason(mBuildTarget, .. scope .()));
+				ImGui.PopTextWrapPos();
+				if (mBuildTarget == .Linux)
+					DrawZigInstall();
+			}
 			else
 			{
 				if (ImGui.RadioButton("NativeAOT (recommended, default)", project.NativeAot))
@@ -339,7 +387,7 @@ extension EditorApp
 		let root = Project.Current.EngineRoot;
 		if (mBuildTarget != .Web)
 		{
-			ImGui.TextColored(EditorTheme.Warning, scope $"This engine has no {mBuildTarget == .MacOS ? "macOS" : mBuildTarget.ToString(.. scope .())} player. The engine downloads on the release page carry the Linux and Windows players (and the macOS one, for Macs); an engine built from source has the one for the machine that built it.");
+			ImGui.TextColored(EditorTheme.Warning, scope $"This engine has no {mBuildTarget == .MacOS ? "macOS" : mBuildTarget.ToString(.. scope .())} player. The engine downloads on the release page carry the Linux, Windows and macOS players; an engine built from source has the one for the machine that built it.");
 			return;
 		}
 		let command = scope String();
@@ -374,6 +422,8 @@ extension EditorApp
 		ImGui.PushTextWrapPos(0);
 		if (mBuildTarget == .Web)
 			ImGui.TextDisabled(scope $"The game is put in {output}: a web page (index.html) with the game and its assets. Put that folder on any web server, such as GitHub Pages or itch.io, and share the address. Play in Browser tries it on this machine. An earlier build of the game there is replaced.");
+		else if (HostTarget == .Windows && mBuildTarget != .Windows)
+			ImGui.TextDisabled(scope $"The game is put in {output}, and zipped as {output}.zip. Send the zip, not the folder: a folder on Windows does not keep the permissions a {(mBuildTarget == .MacOS) ? "macOS" : "Linux"} game needs to start. An earlier build of the game there is replaced.");
 		else
 			ImGui.TextDisabled(scope $"The game is put in {output}. That folder holds everything the game needs and nothing else: move it anywhere, or send it to somebody. An earlier build of the game there is replaced.");
 		ImGui.PopTextWrapPos();

@@ -12,13 +12,12 @@ namespace Tallow.ManagedBuild.Export;
 /// <code>
 ///   export &lt;project&gt; --output &lt;folder&gt; [--platform linux|windows|macos|web] [--config Release|Debug] [--replace]
 ///          [--scene S] [--fullscreen|--windowed] [--no-compress] [--no-texture-compression] [--single-pack] [--loose]
-///          [--csharp-runtime jit|native] [--aot-warnings error|report] [--no-bundle-dotnet] [--engine-root E]
+///          [--csharp-runtime jit|native] [--aot-warnings error|report] [--no-bundle-dotnet] [--engine-root E] [--zip]
 /// </code>
 ///
-/// Linux, Windows and web exports work from any machine (the .NET runtime for the target is downloaded once); macOS
-/// games are built on a Mac.
-/// NativeAOT compiles on the platform it is for, and also for Windows on Linux (tools/windows/setup.sh); when the
-/// project asks for it and this machine cannot, the export uses JIT and says so.
+/// Every export works from any machine (the .NET runtime for the target is downloaded once). NativeAOT: see
+/// NativeAot.CanBuild; when the project asks for it and this machine cannot, the export uses JIT and says so.
+/// --zip also writes &lt;output&gt;.zip with Unix permissions, which a Linux or macOS game made on Windows needs.
 /// </summary>
 internal static class Exporter
 {
@@ -29,7 +28,7 @@ internal static class Exporter
         public string? Scene;
         public string Config = "Release";
         public Target Platform = ExportUtil.HostWindows ? Target.Windows : ExportUtil.HostMac ? Target.MacOS : Target.Linux;
-        public bool Replace, Fullscreen, Windowed, NoCompress, NoTextureCompression, SinglePack, Loose, NoBundleDotNet;
+        public bool Replace, Fullscreen, Windowed, NoCompress, NoTextureCompression, SinglePack, Loose, NoBundleDotNet, Zip;
         public string? CSharpRuntime;
         public string AotWarnings = "error";
         public string? EngineRoot;
@@ -37,7 +36,7 @@ internal static class Exporter
 
     const string Usage = "usage: export <project> --output <folder> [--platform linux|windows|macos|web] [--config Release|Debug] " +
         "[--replace] [--scene S] [--fullscreen|--windowed] [--no-compress] [--no-texture-compression] [--single-pack] [--loose] " +
-        "[--csharp-runtime jit|native] [--aot-warnings error|report] [--no-bundle-dotnet] [--engine-root E]";
+        "[--csharp-runtime jit|native] [--aot-warnings error|report] [--no-bundle-dotnet] [--engine-root E] [--zip]";
 
     static Options Parse(string[] args)
     {
@@ -77,6 +76,7 @@ internal static class Exporter
                 case "--single-pack": options.SinglePack = true; break;
                 case "--loose": options.Loose = true; break;
                 case "--no-bundle-dotnet": options.NoBundleDotNet = true; break;
+                case "--zip": options.Zip = true; break;
                 // A Windows console belongs to the Beef player build; the precompiled player is the same either way.
                 case "--console": break;
                 case "--csharp-runtime":
@@ -136,7 +136,7 @@ internal static class Exporter
         }
         if (!File.Exists(executable))
             throw new ExportException($"This engine has no precompiled {target} player ({executable}). Engine packages from the " +
-                "release page carry the Linux and Windows players (and the macOS one, for Macs); an engine built from source has the one " +
+                "release page carry the Linux, Windows and macOS players; an engine built from source has the one " +
                 "for the machine that built it.");
         return executable;
     }
@@ -228,8 +228,6 @@ internal static class Exporter
         string name = settings.Get("name");
         if (!Regex.IsMatch(name, "^[A-Za-z_][A-Za-z0-9_]*$"))
             throw new ExportException("Project name must be a valid identifier (letters, digits and _; not starting with a digit).", true);
-        if (macos && !ExportUtil.HostMac)
-            throw new ExportException("macOS games are built on a Mac.", true);
         if (windows && options.Config != "Release")
             throw new ExportException("Windows players are built in the Release configuration only.", true);
         if (web && options.Loose)
@@ -241,8 +239,8 @@ internal static class Exporter
             throw new ExportException("Start scene must exist inside the project src folder. Save it in the editor first.", true);
 
         // NativeAOT is the default; a project chooses JIT with csharpRuntime = jit. The web always runs .NET in the
-        // browser, macOS NativeAOT is not supported yet, and NativeAOT compiles only on the platform it is for (and
-        // Windows on Linux): asked for on the command line, that is an error; from the project, the export uses JIT.
+        // browser, and NativeAOT is built only where NativeAot.CanBuild says: asked for on the command line, anywhere
+        // else is an error; from the project, the export uses JIT.
         string runtime = options.CSharpRuntime ?? settings.Get("csharpRuntime", "native");
         if (runtime is not ("jit" or "native"))
             throw new ExportException($"csharpRuntime in project.tallow is jit or native, not {runtime}.", true);
@@ -250,10 +248,9 @@ internal static class Exporter
         {
             if (options.CSharpRuntime == "native")
                 throw new ExportException(web ? "A web build always runs .NET in the browser; NativeAOT is not available for it."
-                    : macos ? "NativeAOT exports are for Linux and Windows so far; export macOS games with --csharp-runtime jit."
-                    : $"A NativeAOT {target} build is compiled on {target}{(windows ? " or Linux" : "")}; export with --csharp-runtime jit here.", true);
+                    : $"No NativeAOT build here: {NativeAot.WhyNot(target)}. Export with --csharp-runtime jit.", true);
             if (!web)
-                Console.WriteLine($"note: NativeAOT is not available for {target} on this machine; exporting with the JIT runtime (.NET bundled).");
+                Console.WriteLine($"note: exporting with the JIT runtime (.NET bundled): {NativeAot.WhyNot(target)}.");
             runtime = "jit";
         }
         bool nativeAot = runtime == "native";
@@ -277,7 +274,7 @@ internal static class Exporter
                 ExportUtil.MakeExecutable(Path.Combine(staging, executable));
                 if (nativeAot)
                     // Private symbols beside the build, never in it.
-                    NativeAot.Build(engine, project, options.Config, staging, windows, Symbols.Folder(output), options.AotWarnings);
+                    NativeAot.Build(engine, project, options.Config, staging, target, player!, Symbols.Folder(output), options.AotWarnings);
                 else
                 {
                     string? rid = null;
@@ -297,10 +294,10 @@ internal static class Exporter
                 string? library = null;
                 if (nativeAot)
                 {
-                    library = Path.Combine(staging, "Managed", "Native", NativeAot.LibraryName(windows));
-                    // The shipped library is stripped; the map comes from the private symbols it matches.
-                    string privateSymbols = Path.Combine(symbols, Path.GetFileName(library) + (windows ? ".pdb" : ".dbg"));
-                    if (!windows && File.Exists(privateSymbols))
+                    library = Path.Combine(staging, "Managed", "Native", NativeAot.LibraryName(target));
+                    // The shipped library is stripped; the map comes from the private symbols it matches (Linux).
+                    string privateSymbols = Path.Combine(symbols, Path.GetFileName(library) + ".dbg");
+                    if (target == Target.Linux && File.Exists(privateSymbols))
                         Symbols.WriteMap(symbols, privateSymbols);
                 }
                 // NativeAOT keeps the ID beside its library; a JIT export keeps it with the game's assemblies.
@@ -419,6 +416,11 @@ internal static class Exporter
             throw;
         }
         Console.WriteLine($"{target} player packaged at {output}; TallowEditor excluded.");
+        if (options.Zip)
+        {
+            ExportUtil.WriteZip(output, output + ".zip");
+            Console.WriteLine($"Zipped with its file permissions: {output}.zip");
+        }
     }
 
     static void Pack(string project, string staging, string name, string scene, Dictionary<string, string> settings, Options options, bool web)

@@ -1,7 +1,7 @@
 # Builds the Tallow editor for Linux, Windows and macOS (Intel) with tools/package_engine.py (the same packages the
 # editor's File > Build makes with Build: Editor), zips each, and puts them on a GitHub release. Every zip carries the
-# Linux and Windows players and the web player's pieces (built on the Linux and Windows machines and added by the
-# release job), so any machine exports Linux, Windows and web games with .NET alone; the macOS zip also its own player.
+# Linux, Windows and macOS players and the web player's pieces (built on each machine and added by the release job),
+# so any machine exports games for all of them with .NET alone.
 #
 # When it runs:
 #   - a version tag is pushed (git tag v0.5 && git push origin v0.5): a release named after the tag;
@@ -490,6 +490,17 @@ jobs:
           name: Tallow-macOS
           path: out/Tallow-macOS.zip
 
+      # For the other systems' packages: the macOS player (tar keeps its executable permission).
+      - name: Keep the macOS player
+        run: cd tallow && tar -cf ../out/extras-macos.tar Player/build/Release_macOS/TallowPlayer/TallowPlayer
+
+      - name: Upload the macOS player
+        uses: actions/upload-artifact@v4
+        with:
+          name: extras-macos
+          path: out/extras-macos.tar
+          retention-days: 3
+
   release:
     needs: [linux, windows, macos]
     if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ecs' || github.ref == 'refs/heads/release' || startsWith(github.ref, 'refs/tags/'))) || inputs.publish
@@ -530,7 +541,7 @@ jobs:
           path: extras
           merge-multiple: true
 
-      # Every package exports Linux, Windows and web games: each gets the players and web pieces it did not build.
+      # Every package exports Linux, Windows, macOS and web games: each gets the players and web pieces it did not build.
       - name: Add the players and web pieces to every zip
         run: |
           mkdir -p pieces && for archive in extras/*.tar; do tar -xf "$archive" -C pieces; done
@@ -557,7 +568,7 @@ jobs:
           - **Tallow-Linux.zip**: unzip and run ./Tallow.
           - **Tallow-macOS.zip** (Intel Macs; Apple silicon untested): unzip, then run \`xattr -dr com.apple.quarantine <folder>\` once (Tallow is not signed with an Apple Developer ID, so macOS blocks it otherwise), and run ./Tallow.
 
-          Tallow installs the .NET SDK it needs on first start; no Beef compiler or Python is needed. Any of them exports Linux, Windows and web games (a Mac also macOS ones). NativeAOT exports also need the system's C++ tools (Visual Studio Build Tools on Windows, clang and zlib on Linux).
+          Tallow installs the .NET SDK it needs on first start; no Beef compiler or Python is needed. Any of them exports Linux, Windows, macOS and web games. NativeAOT: Windows games on Windows (with the Visual Studio C++ Build Tools), Linux games on any machine once Tallow has installed Zig (project selector), macOS games on a Mac.
 
           See tallow-package.txt in each for details."
           # Checksums, which Tallow Hub checks downloads against.

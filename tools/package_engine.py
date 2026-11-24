@@ -127,9 +127,10 @@ def main():
         # The other systems' players and the web player's pieces, when built here; the release workflow adds the ones
         # built on the other machines to every package (Tallow.Build export ships them).
         linux_player = root / 'Player' / 'build' / 'Release_Linux64' / 'TallowPlayer' / 'TallowPlayer'
+        mac_player = root / 'Player' / 'build' / 'Release_macOS' / 'TallowPlayer' / 'TallowPlayer'
         web_pieces = [*sorted((root / 'build/web-player').glob('libTallowPlayer_*.a')), *sorted((root / 'build/web-player').glob('Beef*_dotnet.a')),
                       *[root / 'build/native-web-dotnet' / lib for lib in WEB_NATIVE_LIBS]]
-        for built in [linux_player, *web_pieces]:
+        for built in [linux_player, mac_player, *web_pieces]:
             if built.is_file() and built != player:
                 destination = stage / built.relative_to(root)
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -164,8 +165,8 @@ def main():
         if windows:
             for dll in launcher.parent.glob('*.dll'):
                 shutil.copy2(dll, stage / dll.name)
-        # Any machine exports Linux (Vulkan, OpenGL), Windows (Vulkan) and web (WebGL 2) games; a Mac also macOS (Metal).
-        keep = {'spirv', 'glsl', 'webgl'} | ({'metal'} if macos else set())
+        # Any machine exports Linux (Vulkan, OpenGL), Windows (Vulkan), macOS (Metal) and web (WebGL 2) games.
+        keep = {'spirv', 'glsl', 'webgl', 'metal'}
         for backend in (stage / 'Engine/assets/shaders').iterdir():
             if backend.is_dir() and backend.name not in keep:
                 shutil.rmtree(backend)

@@ -64,6 +64,14 @@ static class DotNetSdk
 			return;
 		}
 		output.Clear();
+		DataFolder(output);
+		output.Append("/dotnet");
+	}
+
+	/// Tallow's per-user folder for what every Tallow version shares: <data>/Tallow, data being ~/.local/share
+	/// (XDG_DATA_HOME), %LOCALAPPDATA% or ~/Library/Application Support.
+	public static void DataFolder(String output)
+	{
 		let home = scope String();
 #if BF_PLATFORM_WINDOWS
 		Environment.GetEnvironmentVariable("LOCALAPPDATA", home).IgnoreError();
@@ -79,7 +87,7 @@ static class DotNetSdk
 			home.Append("/.local/share");
 		}
 #endif
-		output.AppendF("{}/Tallow/dotnet", home);
+		output.AppendF("{}/Tallow", home);
 	}
 
 	/// The dotnet root of the pinned version (whether or not it is installed).
@@ -164,21 +172,25 @@ static class DotNetSdk
 	}
 
 	/// The archive's SHA-512 as lower-case hex, from the system's own tool (no .NET needed: this installs it).
-	static bool Sha512(StringView file, StringView scratch, String output)
+	static bool Sha512(StringView file, StringView scratch, String output) => FileHash(file, scratch, 512, output);
+
+	/// A file's SHA-256 or SHA-512 (bits) as lower-case hex, from the system's own tool.
+	public static bool FileHash(StringView file, StringView scratch, int bits, String output)
 	{
+		let digits = bits / 4;
 		let result = scope $"{scratch}/sha512.txt";
 		File.Delete(result).IgnoreError();
 		let command = scope String();
 #if BF_PLATFORM_WINDOWS
 		command.Append("certutil -hashfile ");
 		Terminal.Quote(file, command);
-		command.Append(" SHA512 > ");
+		command.AppendF(" SHA{} > ", bits);
 #elif BF_PLATFORM_MACOS
-		command.Append("shasum -a 512 ");
+		command.AppendF("shasum -a {} ", bits);
 		Terminal.Quote(file, command);
 		command.Append(" > ");
 #else
-		command.Append("sha512sum ");
+		command.AppendF("sha{}sum ", bits);
 		Terminal.Quote(file, command);
 		command.Append(" > ");
 #endif
@@ -189,7 +201,7 @@ static class DotNetSdk
 		if (File.ReadAllText(result, text) case .Err)
 			return false;
 		File.Delete(result).IgnoreError();
-		// The first run of 128 hex digits (certutil puts it on its second line, sha512sum first, before the name).
+		// The first run of that many hex digits (certutil puts it on its second line, sha512sum first, before the name).
 		for (var line in text.Split('\n'))
 		{
 			line.Trim();
@@ -202,9 +214,9 @@ static class DotNetSdk
 				else if (c != ' ')
 					break;
 			}
-			if (hex.Length >= 128)
+			if (hex.Length >= digits)
 			{
-				output.Append(hex.Substring(0, 128));
+				output.Append(hex.Substring(0, digits));
 				return true;
 			}
 		}

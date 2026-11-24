@@ -363,6 +363,7 @@ class LauncherApp : Application
 		ImGui.Spacing();
 		PollDependencyCheck();
 		DrawDependencies();
+		DrawZig();
 		// Missing native build tools must never prevent opening a precompiled
 		// editor. The optional native toolchain setup lives behind explicit actions.
 		let busy = mOpenCountdown > 0;
@@ -807,6 +808,45 @@ class LauncherApp : Application
 		ImGui.Spacing();
 	}
 
+	/// Zig, optional: what Linux games' native code (NativeAOT) is linked with on any machine. One line, shown until
+	/// it is installed (into the folder Tallow's .NET is in, shared by every Tallow version).
+	void DrawZig()
+	{
+		let status = scope String();
+		let failed = ZigToolchain.GetStatus(status);
+		if (ZigToolchain.Installing)
+		{
+			ImGui.TextDisabled(status);
+			ImGui.Separator();
+			return;
+		}
+		if (ZigToolchain.Installed())
+		{
+			// Only right after installing it here: then say so once more, briefly.
+			if (!status.IsEmpty && !failed)
+			{
+				ImGui.TextDisabled(status);
+				ImGui.Separator();
+			}
+			return;
+		}
+		if (ZigToolchain.DownloadMegabytes() == 0)
+			return;
+#if BF_PLATFORM_LINUX
+		ImGui.TextDisabled("Optional: Zig compiles Linux games to native code (NativeAOT) without clang, for older Linux versions too.");
+#else
+		ImGui.TextDisabled("Optional: Zig lets this machine compile Linux games to native code (NativeAOT).");
+#endif
+		ImGui.SameLine();
+		if (ImGui.SmallButton(scope $"Install Zig {ZigToolchain.PinnedVersion}"))
+			ZigToolchain.StartInstall();
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip(scope $"Downloads Zig (about {ZigToolchain.DownloadMegabytes()} MB, from ziglang.org) into a folder of your own that every Tallow version shares. No administrator rights.");
+		if (failed && !status.IsEmpty)
+			ImGui.TextColored(.(1.0f, 0.45f, 0.4f, 1), status.CStr());
+		ImGui.Separator();
+	}
+
 	void DrawLauncherMessage()
 	{
 		if (mMessageIsError)
@@ -963,6 +1003,22 @@ class Program
 				return 1;
 			}
 			DotNetSdk.Apply();
+			return 0;
+		}
+		// --install-zig: installs Tallow's pinned Zig for this user (what Linux NativeAOT games link with), then quits.
+		for (let arg in args)
+		{
+			if (arg != "--install-zig")
+				continue;
+#if BF_PLATFORM_WINDOWS
+			UseCommandConsole();
+#endif
+			let error = scope String();
+			if (!ZigToolchain.Install(scope (line) => Console.WriteLine(line), error))
+			{
+				Console.WriteLine(scope $"Error: {error}");
+				return 1;
+			}
 			return 0;
 		}
 		// Engine-build operation: inspect resolved Beef symbols and export the

@@ -2035,6 +2035,11 @@ internal static class Program
             return Export.WebExport.Setup(command[1..]);
         if (command.Length > 0 && command[0] == "serve")
             return Export.WebServer.Run(command[1..]);
+        // The C toolchain of a Linux NativeAOT export linked with Zig (Export/Zig.cs), started by the build itself.
+        if (command.Length > 0 && command[0] == "zig-cc")
+            return Export.Zig.Cc(command[1..]);
+        if (command.Length > 0 && command[0] == "zig-objcopy")
+            return Export.Zig.ObjCopy(command[1..]);
         if (command.Length > 0 && command[0] == "pack")
             return Export.AssetCommands.Pack(command[1..]);
         if (command.Length > 0 && command[0] == "convert-models")

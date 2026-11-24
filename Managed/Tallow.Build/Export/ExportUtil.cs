@@ -253,6 +253,89 @@ internal static class ExportUtil
         return Path.Combine(string.IsNullOrEmpty(xdg) ? Path.Combine(home, ".cache") : xdg, "tallow");
     }
 
+    /// <summary>Whether a file is a program or library for Linux or macOS (ELF, Mach-O) or a script: what must be
+    /// executable once unpacked there.</summary>
+    public static bool LooksExecutable(string path)
+    {
+        Span<byte> head = stackalloc byte[4];
+        using (var stream = File.OpenRead(path))
+            if (stream.Read(head) < 4)
+                return false;
+        uint magic = (uint)(head[0] << 24 | head[1] << 16 | head[2] << 8 | head[3]);
+        return magic is 0x7F454C46 or 0xCFFAEDFE or 0xCEFAEDFE or 0xFEEDFACF or 0xFEEDFACE or 0xCAFEBABE || (head[0] == '#' && head[1] == '!');
+    }
+
+    /// <summary>Zips a game folder as <paramref name="zipPath"/> (one top folder, named like the game's), with each
+    /// file's Unix permissions: programs and libraries executable, everything else readable. A folder made on Windows
+    /// has no permissions to keep, and a Linux or macOS player cannot start from a zip without them, so a game for
+    /// those systems is shared as this zip.</summary>
+    public static void WriteZip(string folder, string zipPath)
+    {
+        string root = Path.GetFileName(folder.TrimEnd('/', '\\'));
+        string temporary = zipPath + ".tmp";
+        File.Delete(temporary);
+        using (var zip = System.IO.Compression.ZipFile.Open(temporary, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            var directory = zip.CreateEntry(root + "/");
+            directory.ExternalAttributes = unchecked((int)(0x41ED_0000u | 0x10u)); // drwxr-xr-x, and the DOS folder flag
+            foreach (string file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+            {
+                string relative = Path.GetRelativePath(folder, file).Replace('\\', '/');
+                var entry = System.IO.Compression.ZipFileExtensions.CreateEntryFromFile(zip, file, root + "/" + relative,
+                    System.IO.Compression.CompressionLevel.Optimal);
+                uint mode = LooksExecutable(file) ? 0x81EDu : 0x81A4u; // -rwxr-xr-x or -rw-r--r--
+                entry.ExternalAttributes = unchecked((int)(mode << 16));
+            }
+        }
+        MarkUnixZip(temporary);
+        File.Move(temporary, zipPath, true);
+    }
+
+    /// <summary>Marks every entry of a zip as made on Unix ("version made by" 3). unzip and macOS's Archive Utility
+    /// read an entry's permissions only then, and .NET writes the system it runs on (on Windows, 0).</summary>
+    static void MarkUnixZip(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite);
+        // The end of central directory record (at most 64 KB of comment after it): where the central directory starts
+        // and how many entries it has.
+        int tailLength = (int)Math.Min(stream.Length, 22 + 65535 + 20);
+        byte[] tail = new byte[tailLength];
+        stream.Seek(-tailLength, SeekOrigin.End);
+        stream.ReadExactly(tail);
+        int end = -1;
+        for (int i = tailLength - 22; i >= 0; i--)
+            if (BitConverter.ToUInt32(tail, i) == 0x06054B50)
+            {
+                end = i;
+                break;
+            }
+        if (end < 0)
+            throw new ExportException($"{path} is not a zip file.");
+        long offset = BitConverter.ToUInt32(tail, end + 16);
+        long count = BitConverter.ToUInt16(tail, end + 10);
+        byte[] buffer = new byte[56];
+        if (offset == 0xFFFFFFFF || count == 0xFFFF)
+        {
+            // Zip64: the real values are in the Zip64 end record, which its locator (just before) points at.
+            long record = (long)BitConverter.ToUInt64(tail, end - 20 + 8);
+            stream.Seek(record, SeekOrigin.Begin);
+            stream.ReadExactly(buffer, 0, 56);
+            count = (long)BitConverter.ToUInt64(buffer, 32);
+            offset = (long)BitConverter.ToUInt64(buffer, 48);
+        }
+        long at = offset;
+        for (long i = 0; i < count; i++)
+        {
+            stream.Seek(at, SeekOrigin.Begin);
+            stream.ReadExactly(buffer, 0, 46);
+            if (BitConverter.ToUInt32(buffer, 0) != 0x02014B50)
+                throw new ExportException($"{path}: unexpected zip layout.");
+            stream.Seek(at + 5, SeekOrigin.Begin);
+            stream.WriteByte(3); // version made by: Unix
+            at += 46 + BitConverter.ToUInt16(buffer, 28) + BitConverter.ToUInt16(buffer, 30) + BitConverter.ToUInt16(buffer, 32);
+        }
+    }
+
     public static void MakeExecutable(string path)
     {
         if (!OperatingSystem.IsWindows() && File.Exists(path))

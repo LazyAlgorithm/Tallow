@@ -7,10 +7,14 @@ namespace Tallow.ManagedBuild.Export;
 /// <summary>
 /// NativeAOT export of a C# game. Tallow's managed runtime, Tallow.API and the game's assemblies (already compiled
 /// into build/csharp/&lt;config&gt;) are compiled ahead of time into ONE native library: Managed/Native/libTallowGame.so
-/// on Linux, Managed/Native/TallowGame.dll on Windows. The precompiled player loads it instead of starting .NET. The
-/// package then holds no .NET runtime, no IL assemblies and no game source; native symbols go to a private folder
-/// beside the build. A Windows library is built on Linux too, with lld-link and the Windows SDK and CRT that
-/// tools/windows/setup.sh downloads (xwin, in TALLOW_WIN).
+/// on Linux, Managed/Native/TallowGame.dll on Windows, Managed/Native/libTallowGame.dylib on macOS. The precompiled
+/// player loads it instead of starting .NET. The package then holds no .NET runtime, no IL assemblies and no game
+/// source; native symbols go to a private folder beside the build.
+///
+/// Where each is built (<see cref="CanBuild"/>): a Linux library on any machine with Zig installed (Zig.cs), or on
+/// Linux with the system's clang or gcc; a Windows library on Windows, or on Linux with lld-link and the Windows SDK
+/// and CRT that tools/windows/setup.sh downloads (xwin, in TALLOW_WIN); a macOS library on a Mac with Apple's
+/// command line tools (xcode-select --install), for the chip the engine's macOS player is built for.
 /// </summary>
 internal static class NativeAot
 {
@@ -41,11 +45,36 @@ internal static class NativeAot
 
         """;
 
-    public static string LibraryName(bool windows) => windows ? "TallowGame.dll" : "libTallowGame.so";
+    public static string LibraryName(Target target) =>
+        target switch { Target.Windows => "TallowGame.dll", Target.MacOS => "libTallowGame.dylib", _ => "libTallowGame.so" };
 
     /// <summary>Whether this machine can make a NativeAOT library for the target at all.</summary>
-    public static bool CanBuild(Target target) =>
-        target == Target.Linux ? ExportUtil.HostLinux : target == Target.Windows && (ExportUtil.HostWindows || ExportUtil.HostLinux);
+    public static bool CanBuild(Target target) => target switch
+    {
+        Target.Linux => ExportUtil.HostLinux || Zig.Find() != null,
+        Target.Windows => ExportUtil.HostWindows || ExportUtil.HostLinux,
+        Target.MacOS => ExportUtil.HostMac && AppleToolsInstalled(),
+        _ => false,
+    };
+
+    /// <summary>Why <see cref="CanBuild"/> is false for the target here, for the export's note.</summary>
+    public static string WhyNot(Target target) => target switch
+    {
+        Target.Linux => "a Linux NativeAOT library is linked with Zig, which is not installed (the project selector installs it)",
+        Target.Windows => "a Windows NativeAOT library is compiled on Windows or Linux",
+        Target.MacOS => ExportUtil.HostMac ? "a macOS NativeAOT library needs Apple's command line tools (run: xcode-select --install)"
+            : "a macOS NativeAOT library is compiled on a Mac (Apple's tools only run there)",
+        _ => "a web build always runs .NET in the browser",
+    };
+
+    /// <summary>Whether Apple's command line tools (clang, ld, dsymutil, strip) are installed: /usr/bin/clang is there
+    /// either way, as a stand-in that asks to install them.</summary>
+    static bool AppleToolsInstalled() => ExportUtil.TryRun("xcode-select", new[] { "-p" }).ExitCode == 0;
+
+    /// <summary>Whether this machine links a Linux library with Zig: always off Linux, and on Linux when Zig is
+    /// installed (the library then runs on older distributions than this one; the system's clang links against this
+    /// machine's own glibc).</summary>
+    static bool UsesZig(Target target) => target == Target.Linux && Zig.Find() != null;
 
     record AllowEntry(HashSet<string>? Codes, string Origin);
 
@@ -251,16 +280,19 @@ internal static class NativeAot
     /// <summary>Compiles the NativeAOT library into staging/Managed/Native and its native symbols into
     /// <paramref name="symbols"/>. With <paramref name="warningsMode"/> "error", a warning in the game's own code, or
     /// an engine warning not in tools/nativeaot_allowlist.txt, fails the export (after the report is written).</summary>
-    public static void Build(string engine, string project, string config, string staging, bool windows, string symbols, string warningsMode)
+    public static void Build(string engine, string project, string config, string staging, Target target, string player, string symbols, string warningsMode)
     {
-        if (!CanBuild(windows ? Target.Windows : Target.Linux))
-            throw new ExportException(windows ? "A Windows NativeAOT library is built on Linux or Windows." : "A Linux NativeAOT library is built on Linux.");
-        string rid = windows ? "win-x64" : "linux-x64";
+        if (!CanBuild(target))
+            throw new ExportException($"No NativeAOT build here: {WhyNot(target)}.");
+        bool windows = target == Target.Windows, macos = target == Target.MacOS;
+        // A macOS library is for the chip the player is built for (an Intel player runs on Apple silicon too, translated).
+        string rid = windows ? "win-x64" : macos ? "osx-" + (Symbols.MachOArch(player) ?? "x64") : "linux-x64";
         var assemblies = GameAssemblies(project, config);
         string cache = Path.Combine(ExportUtil.CacheFolder(), "nativeaot");
         var environment = new Dictionary<string, string> { ["DOTNET_NOLOGO"] = "1" };
         var properties = new List<string>();
         bool cross = windows && !ExportUtil.HostWindows;
+        string work = Directory.CreateTempSubdirectory("tallow-native-").FullName;
         if (cross)
         {
             var (extra, crossProperties) = WindowsLinkSetup(cache);
@@ -268,7 +300,14 @@ internal static class NativeAot
                 environment[key] = value;
             properties = crossProperties;
         }
-        string work = Directory.CreateTempSubdirectory("tallow-native-").FullName;
+        else if (UsesZig(target))
+        {
+            Console.WriteLine($"Linking with Zig {Zig.Version} (for glibc {Zig.Glibc} and later).");
+            var (extra, zigProperties) = Zig.LinkSetup(Zig.Find()!, work);
+            foreach (var (key, value) in extra)
+                environment[key] = value;
+            properties = zigProperties;
+        }
         try
         {
             File.WriteAllText(Path.Combine(work, "TallowGame.csproj"), ProjectFile(engine, assemblies));
@@ -307,7 +346,7 @@ internal static class NativeAot
                         warnings.Add(entry);
                 }
             }
-            string library = Path.Combine(published, LibraryName(windows));
+            string library = Path.Combine(published, LibraryName(target));
             if (result.ExitCode != 0 || !File.Exists(library))
             {
                 var lines = result.All.Split('\n');
@@ -315,14 +354,15 @@ internal static class NativeAot
                 string hint = "";
                 if (result.All.Contains("linker", StringComparison.OrdinalIgnoreCase) && result.All.Contains("not found", StringComparison.OrdinalIgnoreCase))
                     hint = "\n\nNativeAOT links with the system's C/C++ tools: on Windows, Visual Studio (or its Build Tools) with " +
-                        "\"Desktop development with C++\"; on Linux, clang (or gcc) and zlib's development files. " +
+                        "\"Desktop development with C++\"; for Linux, Zig (the project selector installs it) or, on Linux, clang (or gcc); " +
+                        "on a Mac, Apple's command line tools (xcode-select --install). " +
                         "Install them, or export with the JIT runtime (Build window: JIT; --csharp-runtime jit).";
                 var shown = problems.Count > 0 ? problems.TakeLast(30) : lines.TakeLast(40);
                 throw new ExportException("The NativeAOT build failed:\n" + string.Join('\n', shown) + hint);
             }
-            string target = Path.Combine(staging, "Managed", "Native");
-            Directory.CreateDirectory(target);
-            string shipped = Path.Combine(target, Path.GetFileName(library));
+            string native = Path.Combine(staging, "Managed", "Native");
+            Directory.CreateDirectory(native);
+            string shipped = Path.Combine(native, Path.GetFileName(library));
             File.Copy(library, shipped, true);
             if (!windows)
                 ExportUtil.MakeExecutable(shipped);
@@ -330,7 +370,7 @@ internal static class NativeAot
             string built = Path.Combine(project, "build", "csharp", config);
             string codeId = Path.Combine(built, "Tallow.Game", "Tallow.Game.codeid");
             if (File.Exists(codeId))
-                File.Copy(codeId, Path.Combine(target, "Tallow.Game.codeid"), true);
+                File.Copy(codeId, Path.Combine(native, "Tallow.Game.codeid"), true);
             string notices = Path.Combine(built, "THIRD-PARTY-NOTICES.txt");
             if (File.Exists(notices))
                 File.Copy(notices, Path.Combine(staging, "THIRD-PARTY-NOTICES.txt"), true);
@@ -338,14 +378,17 @@ internal static class NativeAot
             if (Directory.Exists(symbols))
                 Directory.Delete(symbols, true);
             Directory.CreateDirectory(symbols);
-            string wanted = windows ? Path.GetFileNameWithoutExtension(library) + ".pdb" : Path.GetFileName(library) + ".dbg";
-            var found = new[] { Path.Combine(published, wanted) }
-                .Concat(Directory.Exists(Path.Combine(work, "artifacts"))
-                    ? Directory.EnumerateFiles(Path.Combine(work, "artifacts"), wanted, SearchOption.AllDirectories)
-                        .Where(path => path.Replace('\\', '/').Contains("/native/"))
-                    : Enumerable.Empty<string>())
-                .FirstOrDefault(File.Exists);
-            if (found != null)
+            // Windows: a .pdb; Linux: a .dbg; macOS: a .dSYM folder (dsymutil's).
+            string wanted = windows ? Path.GetFileNameWithoutExtension(library) + ".pdb" : Path.GetFileName(library) + (macos ? ".dSYM" : ".dbg");
+            string artifacts = Path.Combine(work, "artifacts");
+            var candidates = new[] { Path.Combine(published, wanted) }.Concat(!Directory.Exists(artifacts) ? Enumerable.Empty<string>()
+                : (macos ? Directory.EnumerateDirectories(artifacts, wanted, SearchOption.AllDirectories)
+                    : Directory.EnumerateFiles(artifacts, wanted, SearchOption.AllDirectories))
+                    .Where(path => path.Replace('\\', '/').Contains("/native/")));
+            string? found = candidates.FirstOrDefault(path => macos ? Directory.Exists(path) : File.Exists(path));
+            if (found != null && macos)
+                ExportUtil.CopyTree(found, Path.Combine(symbols, wanted));
+            else if (found != null)
                 File.Copy(found, Path.Combine(symbols, wanted), true);
             else
                 Console.WriteLine($"warning: the native symbols ({wanted}) were not made; crash reports of this build cannot be read.");

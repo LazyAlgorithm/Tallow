@@ -409,6 +409,11 @@ class Project
 		Terminal.Quote(outputPath, command);
 		if (!BundleDotNet)
 			command.Append(" --no-bundle-dotnet");
+#if BF_PLATFORM_WINDOWS
+		// A Windows folder keeps no Unix permissions, without which a Linux or macOS player cannot start: share the zip.
+		if (target == .Linux || target == .MacOS)
+			command.Append(" --zip");
+#endif
 		// Always said, so that the build is what the window shows (never switched silently).
 		if (target != .Web)
 			command.Append(NativeAot && EditorApp.NativeAotAvailable(target) ? " --csharp-runtime native" : " --csharp-runtime jit");
