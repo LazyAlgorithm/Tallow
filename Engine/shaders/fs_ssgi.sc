@@ -32,6 +32,13 @@ float interleavedNoise(vec2 p)
 	return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
 }
 
+// The centre of the depth texel a point falls in: positions are rebuilt from the texel actually read, or a flat floor
+// seen at a low angle becomes a staircase whose steps catch the rays in bands.
+vec2 texelCentre(vec2 uv)
+{
+	return (floor(uv / u_ssgiParams2.xy) + 0.5) * u_ssgiParams2.xy;
+}
+
 // The facing of the surface at uv (towards the camera), from the nearer neighbour on each axis so edges do not bend it.
 vec3 surfaceNormal(vec2 uv, vec3 p)
 {
@@ -49,7 +56,7 @@ vec3 surfaceNormal(vec2 uv, vec3 p)
 
 void main()
 {
-	vec2 uv = v_texcoord0;
+	vec2 uv = texelCentre(v_texcoord0);
 	float d = depthAt(uv);
 	if (isViewmodel(d) || isSky(d))
 	{
@@ -88,6 +95,7 @@ void main()
 			vec2 suv = viewToUv(s);
 			if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0)
 				break;
+			suv = texelCentre(suv);
 			float sd = depthAt(suv);
 			if (isViewmodel(sd))
 				continue;
@@ -96,6 +104,10 @@ void main()
 			if (diff > bias && diff < 0.15 + 0.25 * t)
 			{
 				vec3 hp = viewPosition(suv, sd);
+				// A hit on this point's own plane (a flat floor catching its own ray) is not light from elsewhere.
+				vec3 toHit = hp - p;
+				if (dot(toHit, n) < 0.08 * length(toHit))
+					continue;
 				vec2 tx = vec2(u_ssgiParams2.x, 0.0);
 				vec2 ty = vec2(0.0, u_ssgiParams2.y);
 				vec3 hn = normalize(cross(viewPosition(suv + tx, depthAt(suv + tx)) - hp, viewPosition(suv + ty, depthAt(suv + ty)) - hp));
