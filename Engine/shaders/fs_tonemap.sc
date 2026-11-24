@@ -41,5 +41,10 @@ void main()
 	ldr = clamp((ldr - vec3_splat(0.5)) * u_gradeParams.x + vec3_splat(0.5), 0.0, 1.0);
 	if (u_gradeFilter.a > 1.5)
 		ldr = mix(ldr, lookup(ldr), u_gradeParams.w);
+	// Dither by up to one step of the 8-bit target (triangular noise per pixel), so smooth gradients such as a
+	// light's falloff on a floor or the sky do not show bands.
+	float n1 = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+	float n2 = fract(52.9829189 * fract(dot(gl_FragCoord.xy + vec2(47.0, 17.0), vec2(0.06711056, 0.00583715))));
+	ldr = clamp(ldr + vec3_splat((n1 + n2 - 1.0) / 255.0), 0.0, 1.0);
 	gl_FragColor = vec4(ldr, 1.0);
 }
