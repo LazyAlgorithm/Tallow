@@ -10,6 +10,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+if sys.version_info < (3, 11):
+    sys.exit(f'Tallow\'s build scripts need Python 3.11 or later; this is {sys.version.split()[0]} ({sys.executable}). '
+             'On a Mac: brew install python (or python.org), then start Tallow again.')
 import tomllib
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))  # noqa: E402
 import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when installed)

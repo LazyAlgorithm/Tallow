@@ -12,6 +12,9 @@ import shutil
 import subprocess
 import sys
 import struct
+if sys.version_info < (3, 11):
+    sys.exit(f'Tallow\'s build scripts need Python 3.11 or later; this is {sys.version.split()[0]} ({sys.executable}). '
+             'On a Mac: brew install python (or python.org), then start Tallow again.')
 import tomllib
 import time
 

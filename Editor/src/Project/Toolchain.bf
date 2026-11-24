@@ -363,6 +363,17 @@ static class Toolchain
 	/// start; a BeefBuild or Python the user installed themselves is used as before.
 	public static void Apply()
 	{
+#if BF_PLATFORM_MACOS
+		// Started from Finder or the Dock, a Mac program gets PATH=/usr/bin:/bin:/usr/sbin:/sbin, without Homebrew's
+		// folders: python3 is then Apple's 3.9, too old for the build scripts, and Homebrew's cmake is not found.
+		for (let folder in StringView[2]("/usr/local/bin", "/opt/homebrew/bin"))
+		{
+			let path = scope String();
+			Environment.GetEnvironmentVariable("PATH", path).IgnoreError();
+			if (Directory.Exists(folder) && !scope $":{path}:".Contains(scope $":{folder}:"))
+				SetEnv("PATH", scope $"{folder}:{path}");
+		}
+#endif
 		let pythonFolder = scope String();
 		OwnPythonFolder(pythonFolder);
 		if (Directory.Exists(pythonFolder))
