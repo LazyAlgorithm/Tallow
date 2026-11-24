@@ -72,12 +72,11 @@ def main():
         # generated from the checked-in [CSharpExpose] manifest and are gitignored, so a fresh checkout has none.
         # Generate them before the launcher is built: the wrappers are native exports, and a launcher built without
         # them fails the managed bindings' version check the first time a C# script runs (play mode never starts).
-        if not macos:
-            (root / 'Engine/src/Scripting/CSharpBindings.Generated.bf').unlink(missing_ok=True)
-            (root / 'Managed/Tallow.API/Generated/CSharpBindings.g.cs').unlink(missing_ok=True)
-            subprocess.run(['dotnet', 'run', '--project', 'Managed/Tallow.BindingGen/Tallow.BindingGen.csproj',
-                            '--', '--manifest', 'Managed/Tallow.BindingGen/csharp-api-manifest.tsv', '--engine-root', '.'],
-                           cwd=root, env=environment, check=True)
+        (root / 'Engine/src/Scripting/CSharpBindings.Generated.bf').unlink(missing_ok=True)
+        (root / 'Managed/Tallow.API/Generated/CSharpBindings.g.cs').unlink(missing_ok=True)
+        subprocess.run(['dotnet', 'run', '--project', 'Managed/Tallow.BindingGen/Tallow.BindingGen.csproj',
+                        '--', '--manifest', 'Managed/Tallow.BindingGen/csharp-api-manifest.tsv', '--engine-root', '.'],
+                       cwd=root, env=environment, check=True)
         # Beef does not track changed native archives: force a fresh link, and
         # restore the previous executable if the compiler fails.
         previous = launcher.with_suffix(launcher.suffix + '.packaging-backup')

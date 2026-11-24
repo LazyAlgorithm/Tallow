@@ -158,6 +158,10 @@ jobs:
           ~/emsdk/emsdk install "$EMSCRIPTEN_VERSION" > /dev/null
           ~/emsdk/emsdk activate "$EMSCRIPTEN_VERSION" > /dev/null
           (source ~/emsdk/emsdk_env.sh > /dev/null && cd ~/beef/wasm && ./build_wasm.sh release)
+          # Beef compiles the wasm32 player through that Emscripten ([Wasm] EmscriptenPath in BeefSettings.toml).
+          settings="$HOME/beef/IDE/dist/BeefSettings.toml"
+          [ -f "$settings" ] || echo 'FileVersion = 1' > "$settings"
+          grep -q '^\[Wasm\]' "$settings" || printf '\n[Wasm]\nEmscriptenPath = "%s/"\n' "$HOME/emsdk" >> "$settings"
           dotnet_root="$(dirname "$(readlink -f "$(command -v dotnet)")")"
           if [ -w "$dotnet_root" ]; then dotnet workload install wasm-tools; else sudo -E env "PATH=$PATH" dotnet workload install wasm-tools; fi
           cd tallow
