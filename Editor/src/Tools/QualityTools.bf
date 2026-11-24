@@ -45,10 +45,10 @@ extension EditorApp
 			changed |= ImGui.Checkbox("Ambient Occlusion", ref v.ambientOcclusion);
 			changed |= ImGui.Checkbox("Depth of Field", ref v.depthOfField);
 			changed |= ImGui.Checkbox("Motion Blur", ref v.motionBlur);
-			StringView[3] giNames = .("Off", "Screen Space (SSGI)", "Probe Grid (DDGI)");
-			if (ImGui.BeginCombo("Global Illumination", scope String(giNames[Math.Clamp((int)v.globalIllumination, 0, 2)]).CStr()))
+			StringView[5] giNames = .("Ambient Lighting", "Baked GI", "Half-Resolution SSGI", "Dynamic GI", "Dynamic GI + SSGI");
+			if (ImGui.BeginCombo("Global Illumination", scope String(giNames[Math.Clamp((int)v.globalIllumination, 0, 4)]).CStr()))
 			{
-				for (int i < 3)
+				for (int i < 5)
 				{
 					if (ImGui.Selectable(scope String(giNames[i]).CStr(), (int)v.globalIllumination == i))
 					{

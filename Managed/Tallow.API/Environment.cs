@@ -202,16 +202,21 @@ public readonly partial record struct Scene
     public SceneEnvironment Environment => new(SessionId);
 }
 
-/// <summary>How global illumination (light bounced off surfaces onto others) is worked out as the game runs.</summary>
+/// <summary>How light bounced off surfaces onto others (global illumination) is worked out, cheapest first. Each
+/// quality preset picks one: Very Low Ambient, Low Baked, Medium ScreenSpace, High ProbeGrid, Ultra
+/// ProbeGridAndScreenSpace.</summary>
 public enum GlobalIlluminationMode
 {
-    /// <summary>None: only the scene's ambient light, baked lightmaps and light probes.</summary>
-    Off,
-    /// <summary>Screen-space GI (SSGI): light gathered from what is on the screen. Cheap, good for most games.</summary>
+    /// <summary>The scene's flat ambient light only; baked lightmaps and light probes are not used.</summary>
+    Ambient,
+    /// <summary>Baked global illumination (lightmaps and light probes) only.</summary>
+    Baked,
+    /// <summary>Baked plus half-resolution screen-space GI (SSGI).</summary>
     ScreenSpace,
-    /// <summary>Dynamic diffuse GI (DDGI): a probe grid round the camera traces rays into the scene. Sees off-screen
-    /// light; costs more.</summary>
+    /// <summary>Dynamic GI: a probe grid round the camera traces rays into the scene. Sees off-screen light.</summary>
     ProbeGrid,
+    /// <summary>Dynamic GI plus full-resolution screen-space GI.</summary>
+    ProbeGridAndScreenSpace,
 }
 
 /// <summary>
@@ -235,7 +240,7 @@ public static class ScreenEffects
     public static float MotionBlurAmount { get => CSharpEnvironment.GetScreenEffect(5); set => CSharpEnvironment.SetScreenEffect(5, value); }
     /// <summary>Multiplies the scene's exposure: the usual brightness setting, 0.25 to 4 (1 leaves it alone).</summary>
     public static float Brightness { get => CSharpEnvironment.GetScreenEffect(6); set => CSharpEnvironment.SetScreenEffect(6, value); }
-    /// <summary>Global illumination (light bounced between surfaces): off, screen space (SSGI) or a probe grid (DDGI).</summary>
+    /// <summary>Global illumination (light bounced between surfaces), from flat ambient up to dynamic GI + SSGI.</summary>
     public static GlobalIlluminationMode GlobalIllumination { get => (GlobalIlluminationMode)(int)CSharpEnvironment.GetScreenEffect(7); set => CSharpEnvironment.SetScreenEffect(7, (int)value); }
     /// <summary>Everything back to the defaults.</summary>
     public static void Reset() => CSharpEnvironment.SetScreenEffect(100, 0);

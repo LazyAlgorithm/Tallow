@@ -380,6 +380,14 @@ static class LightProbes
 	{
 		bgfx.TextureHandle texture = probes != null ? probes.Texture : .() { idx = uint16.MaxValue };
 		Vector4[10] uniforms = default;
+		// No baked probes: the dynamic probe grid, when it is on and has something to show (DynamicGI).
+		if (probes == null && DynamicGI.Ready)
+		{
+			texture = DynamicGI.Fill(&uniforms);
+			bgfx.set_uniform(RenderResources.uLightProbe, &uniforms, 10);
+			bgfx.set_texture(12, RenderResources.sLightProbes, texture, uint32.MaxValue);
+			return;
+		}
 		if (probes != null && texture.Valid)
 		{
 			void Put(LightProbeGrid grid, int at, Vector4[10]* into)
@@ -413,6 +421,7 @@ static class LightProbes
 
 	public static void Release()
 	{
+		DynamicGI.Shutdown();
 		for (let pair in sGrids)
 		{
 			delete pair.key;

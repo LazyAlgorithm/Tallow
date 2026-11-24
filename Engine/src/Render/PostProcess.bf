@@ -4,19 +4,23 @@ using Bgfx;
 
 namespace Tallow;
 
-/// How global illumination (light bounced off surfaces onto others) is worked out as the game runs
-/// (tallowengine.com/docs/global-illumination).
+/// How light bounced off surfaces onto others (global illumination) is worked out, from cheapest to best
+/// (tallowengine.com/docs/global-illumination). Each quality preset picks one: Very Low Ambient, Low Baked, Medium
+/// ScreenSpace, High ProbeGrid, Ultra ProbeGridAndScreenSpace.
 enum GlobalIlluminationMode
 {
-	/// None: only the scene's ambient light, baked lightmaps and light probes.
-	Off,
-	/// Screen-space global illumination: light gathered from what is on the screen near each pixel. Cheap, no setup,
-	/// good enough for most games; misses light from things off the screen or hidden behind others.
+	/// Very Low: the scene's flat ambient light only; baked lightmaps and light probes are not used.
+	Ambient,
+	/// Low: baked global illumination (lightmaps and light probes), nothing worked out as the game runs.
+	Baked,
+	/// Medium: baked, plus screen-space global illumination (SSGI) at half resolution: light gathered from what is
+	/// on the screen near each pixel. Misses light from things off the screen or hidden behind others.
 	ScreenSpace,
-	/// Dynamic diffuse global illumination: a grid of probes round the camera traces rays into the scene a few at a
-	/// time and keeps the bounced light at each probe. Sees off-screen light and follows moving lights and the sun;
-	/// costs more.
-	ProbeGrid
+	/// High: dynamic global illumination: a grid of probes round the camera traces rays into the scene a few at a
+	/// time and keeps the bounced light at each probe. Sees off-screen light and follows moving lights and the sun.
+	ProbeGrid,
+	/// Ultra: dynamic global illumination plus full-resolution screen-space GI for the fine detail near surfaces.
+	ProbeGridAndScreenSpace
 }
 
 /// The player's choices about the screen effects, for a game's settings menu. The scene decides how much ambient
@@ -36,9 +40,16 @@ static class ScreenEffects
 	/// The scene on the screen mirrored in shiny surfaces (MeshRenderer.screenReflections). Off, they mirror the sky
 	/// and reflection probes only. Follows the Reflection Probes quality setting.
 	public static bool SurfaceReflections = true;
-	/// Global illumination (light bounced between surfaces): off, screen space (SSGI) or a probe grid (DDGI). The
-	/// scene sets how strong it is (SceneEnvironment.globalIllumination).
-	public static GlobalIlluminationMode GlobalIllumination = .ScreenSpace;
+	/// Global illumination (light bounced between surfaces), from flat ambient light up to dynamic GI plus SSGI. The
+	/// scene sets how strong the dynamic kinds are (SceneEnvironment.globalIllumination).
+	public static GlobalIlluminationMode GlobalIllumination = .ProbeGrid;
+	/// Whether baked lightmaps and light probes are used (all but Ambient).
+	public static bool UsesBakedLighting => GlobalIllumination != .Ambient;
+	/// Whether screen-space GI is drawn, and at full resolution (Ultra) rather than half.
+	public static bool UsesScreenSpaceGi => GlobalIllumination == .ScreenSpace || GlobalIllumination == .ProbeGridAndScreenSpace;
+	public static bool ScreenSpaceGiFullResolution => GlobalIllumination == .ProbeGridAndScreenSpace;
+	/// Whether the dynamic GI probe grid is worked out.
+	public static bool UsesProbeGrid => GlobalIllumination == .ProbeGrid || GlobalIllumination == .ProbeGridAndScreenSpace;
 	/// Scales the scene's motion blur: 0 none, 1 as the scene has it, up to 2.
 	public static float MotionBlurAmount = 1;
 	/// Multiplies the scene's exposure: the usual "brightness" setting. 0.25 to 4; 1 leaves it alone.
@@ -50,7 +61,7 @@ static class ScreenEffects
 		AmbientOcclusion = true;
 		DepthOfField = true;
 		MotionBlur = true;
-		GlobalIllumination = .ScreenSpace;
+		GlobalIllumination = .ProbeGrid;
 		MotionBlurAmount = 1;
 		Brightness = 1;
 	}

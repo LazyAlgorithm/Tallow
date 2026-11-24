@@ -59,7 +59,7 @@ class SceneEnvironment
 	/// How far around each point, in metres, is looked at for what hides it from the open air.
 	public float occlusionRadius = 0.6f;
 	/// Global illumination: light bounced off surfaces onto others nearby, worked out as the game runs (the player's
-	/// ScreenEffects.GlobalIllumination picks how, or turns it off). 0 is off; 1 is normal; up to 4.
+	/// ScreenEffects.GlobalIllumination picks how: SSGI, dynamic GI or both). 0 is off; 1 is normal; up to 4.
 	public float globalIllumination = 1;
 
 	/// Depth of field: blurs what is nearer or further than the focus. 0 is off; 1 is the largest blur, a circle 3% of

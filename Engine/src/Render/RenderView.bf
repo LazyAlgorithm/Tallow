@@ -56,7 +56,7 @@ class RenderView
 	}
 
 	/// How many bgfx view ids one RenderView uses, from ViewBase. Give each RenderView a ViewBase this far apart.
-	public const int ViewCount = 23;
+	public const int ViewCount = 25;
 	// Each pass's view id, from ViewBase (the four shadow cascades are ShadowView to ShadowView + 3). bgfx draws
 	// views in the order of their ids.
 	const int ShadowView = 0;
@@ -70,13 +70,16 @@ class RenderView
 	const int UnderwaterCopyView = 11;
 	const int UnderwaterView = 12;
 	const int ViewmodelView = 13;
-	const int AoView = 14;
-	const int AoApplyView = 15;
-	const int DofBlurView = 16;
-	const int DofCombineView = 17;
-	const int MotionView = 18;
-	const int BloomView = 19;
-	const int TonemapView = 22;
+	// Screen-space global illumination: the gather (with its temporal blend), then the apply (with its blur).
+	const int GiView = 14;
+	const int GiApplyView = 15;
+	const int AoView = 16;
+	const int AoApplyView = 17;
+	const int DofBlurView = 18;
+	const int DofCombineView = 19;
+	const int MotionView = 20;
+	const int BloomView = 21;
+	const int TonemapView = 24;
 
 	/// What the scene target is cleared to (RGBA): opaque black, under the sky.
 	const uint32 SceneClearColor = 0x000000ff;
@@ -95,6 +98,7 @@ class RenderView
 	/// Which of the scene's screen effects this view shows (the editor's Scene view leaves out depth of field and
 	/// motion blur, which get in the way of editing).
 	public bool ShowAmbientOcclusion = true;
+	public bool ShowGlobalIllumination = true;
 	public bool ShowDepthOfField = true;
 	public bool ShowMotionBlur = true;
 	/// How surfaces are drawn (the editor's views; see ViewShading).
@@ -120,6 +124,8 @@ class RenderView
 	/// Whether lightmaps and baked light probes are used (tallowengine.com/docs/baked-lighting); `--no-baked-lighting` turns them
 	/// off, to compare.
 	public static bool UseBakedLighting = true;
+	/// Whether lightmaps and baked light probes are used: the editor/--no-baked-lighting switch, and the Global Illumination setting not being Ambient.
+	public static bool BakedLightingOn => UseBakedLighting && ScreenEffects.UsesBakedLighting;
 	/// Objects (by id) whose renderers are not drawn: the editor's rigger hides the model it draws itself.
 	public static HashSet<uint32> HiddenObjects = new .() ~ delete _;
 	/// Objects only the editor's views draw (views with drawEditorOnly on): the modeller's reference images.
@@ -214,6 +220,22 @@ class RenderView
 	Matrix4 mPrevViewProj;
 	Vector3 mPrevPosition;
 	bool mHasPrev;
+	// Screen-space global illumination (RenderViewEffects.bf): the depth pass also writes the surfaces' base colour into
+	// mAlbedoColor (the depth framebuffer with it is mDepthAlbedoFb); the gathered light is blended over frames in
+	// mGiHistory (half size, depth in alpha); mGiLit is last frame's lit picture, which the rays read at what they hit.
+	bool mDepthAlbedo;
+	bgfx.TextureHandle mAlbedoColor = .() { idx = uint16.MaxValue };
+	bgfx.TextureHandle mDepthZ = .() { idx = uint16.MaxValue };
+	bgfx.FrameBufferHandle mDepthAlbedoFb = .() { idx = uint16.MaxValue };
+	bgfx.TextureHandle[2] mGiHistory = .(.() { idx = uint16.MaxValue }, .() { idx = uint16.MaxValue });
+	bgfx.FrameBufferHandle[2] mGiHistoryFb = .(.() { idx = uint16.MaxValue }, .() { idx = uint16.MaxValue });
+	bgfx.TextureHandle mGiLit = .() { idx = uint16.MaxValue };
+	bgfx.FrameBufferHandle[2] mGiApplyFb = .(.() { idx = uint16.MaxValue }, .() { idx = uint16.MaxValue });
+	int mGiCurrent;
+	int32 mGiWidth, mGiHeight, mGiIdle;
+	bool mGiFull;
+	int32 mGiFrame;
+	bool mGiWasOn;
 	Vector4 mPostRight, mPostUp, mPostForward, mPostEye;
 
 	List<RenderItem> mItems = new .() ~ delete _;
@@ -376,6 +398,7 @@ class RenderView
 		let castShadows = DrawShadows && ShadowsEnabled && sun && sun.castShadows && shading == .Rendered;
 		SetFrameConstants(camera, env);
 		Reflections.Update(scene, mSunDir, mSunColor, CapturesReflections && !Capture);
+		DynamicGI.Update(scene, env, camera.position, CapturesReflections && !Capture);
 		mReflectionIntensity = Math.Max(env.reflectionIntensity, 0);
 		mCubeAmbient = env.ambientFromSurroundings ? Math.Max(env.ambientIntensity, 0.0001f) : 0;
 
@@ -422,6 +445,7 @@ class RenderView
 		using (sOpaqueMarker.Sample())
 			DrawScene(scene, camera, frustum, env);
 		mDepthDrawn = false;
+		mDepthAlbedo = UsesScreenSpaceGi(camera, env);
 		using (sDecalMarker.Sample())
 			DrawDecals(scene, camera, frustum);
 		using (sWaterMarker.Sample())
@@ -507,7 +531,7 @@ class RenderView
 	void SetFrameConstants(CameraData camera, SceneEnvironment env)
 	{
 		mCamPos = .(camera.position, 1);
-		mProbeGrid = UseBakedLighting ? LightProbes.Get(env.lightProbes) : null;
+		mProbeGrid = BakedLightingOn ? LightProbes.Get(env.lightProbes) : null;
 		mAmbientSky = Linear(env.ambientSky, env.ambientIntensity);
 		mAmbientGround = Linear(env.ambientGround, env.ambientIntensity);
 		let fog = Linear(env.fogColor);
@@ -744,7 +768,7 @@ class RenderView
 		let hasParts = parts != null && parts.Count > 0;
 		let partCount = hasParts ? parts.Count : 1;
 		// Baked lighting: the meshes with lightmap coordinates, made the first time (LightmapUV).
-		let lightmapped = renderer.HasLightmap && UseBakedLighting && LightmapUV.MeshesFor(renderer, mLightmapMeshes) && mLightmapMeshes.Count == partCount;
+		let lightmapped = renderer.HasLightmap && BakedLightingOn && LightmapUV.MeshesFor(renderer, mLightmapMeshes) && mLightmapMeshes.Count == partCount;
 		// Levels of detail (tallowengine.com/docs/lod): the group picks one level for this camera, and too small is not drawn.
 		let lodGroup = renderer.LodGroup;
 		let lodLevel = lodGroup != null ? lodGroup.LevelFor(camera) : 0;
@@ -1358,7 +1382,7 @@ class RenderView
 	{
 		Vector4 bakedTransform = renderer.lightmapScaleOffset;
 		Vector4 bakedDecode = renderer.lightmapDecode;
-		let lightmapped = UseBakedLighting && !renderer.lightmap.IsEmpty && mesh.LightmapUVs;
+		let lightmapped = BakedLightingOn && !renderer.lightmap.IsEmpty && mesh.LightmapUVs;
 		bakedDecode.w = !lightmapped ? 0 : (1 + (renderer.lightmapDirection.IsEmpty ? 0 : 1) + (renderer.lightmapShadowmask.IsEmpty ? 0 : 2));
 		bgfx.set_uniform(RenderResources.uLightmapTransform, &bakedTransform, 1);
 		bgfx.set_uniform(RenderResources.uLightmapDecode, &bakedDecode, 1);

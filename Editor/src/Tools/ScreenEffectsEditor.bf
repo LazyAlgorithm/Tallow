@@ -42,7 +42,7 @@ extension EditorApp
 
 		BeginProperty("Global Illumination");
 		changed |= ImGui.SliderFloat("##gi", ref env.globalIllumination, 0, 4);
-		Tip("Light bounced off surfaces onto others nearby, as the game runs. 0 is off; 1 is normal. The player's Graphics Quality setting picks screen space (SSGI) or a probe grid (DDGI), or turns it off.");
+		Tip("Light bounced off surfaces onto others nearby, as the game runs. 0 is off; 1 is normal. The player's Graphics Quality picks how: flat ambient, baked, half-resolution SSGI, dynamic GI, or dynamic GI + SSGI.");
 
 		BeginProperty("Depth Of Field");
 		changed |= ImGui.SliderFloat("##dof", ref env.depthOfField, 0, 2);

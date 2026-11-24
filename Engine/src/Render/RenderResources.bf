@@ -25,6 +25,9 @@ static class RenderResources
 	public static bgfx.UniformHandle sDepth, sAo, sBlur, sLut;
 	public static bgfx.UniformHandle uDepthViewProj, uDepthParams, uAoParams, uDofParams, uMotionParams, uPrevViewProj;
 	public static bgfx.UniformHandle uPostRight, uPostUp, uPostForward, uPostEye, uGradeParams, uGradeFilter;
+	// Screen-space global illumination (RenderViewEffects.bf).
+	public static bgfx.ProgramHandle DepthAlbedoProgram, SsgiGatherProgram, SsgiApplyProgram;
+	public static bgfx.UniformHandle sSsgi, sSsgiHistory, sSsgiLit, sAlbedoBuffer, uSsgiParams, uSsgiParams2;
 	public static bgfx.ProgramHandle LineProgram;
 	// Decals (tallowengine.com/docs/decals).
 	public static bgfx.ProgramHandle DecalProgram;
@@ -74,6 +77,15 @@ static class RenderResources
 		DofBlurProgram = Gfx.LoadProgram("vs_fullscreen", "fs_dof_blur");
 		DofCombineProgram = Gfx.LoadProgram("vs_fullscreen", "fs_dof_combine");
 		MotionBlurProgram = Gfx.LoadProgram("vs_fullscreen", "fs_motion_blur");
+		DepthAlbedoProgram = Gfx.LoadProgram("vs_depth_albedo", "fs_depth_albedo");
+		SsgiGatherProgram = Gfx.LoadProgram("vs_fullscreen", "fs_ssgi");
+		SsgiApplyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_ssgi_apply");
+		sSsgi = bgfx.create_uniform("s_ssgi", .Sampler, 1);
+		sSsgiHistory = bgfx.create_uniform("s_ssgiHistory", .Sampler, 1);
+		sSsgiLit = bgfx.create_uniform("s_ssgiLit", .Sampler, 1);
+		sAlbedoBuffer = bgfx.create_uniform("s_albedoBuffer", .Sampler, 1);
+		uSsgiParams = bgfx.create_uniform("u_ssgiParams", .Vec4, 1);
+		uSsgiParams2 = bgfx.create_uniform("u_ssgiParams2", .Vec4, 1);
 		sDepth = bgfx.create_uniform("s_depth", .Sampler, 1);
 		sAo = bgfx.create_uniform("s_ao", .Sampler, 1);
 		sBlur = bgfx.create_uniform("s_blur", .Sampler, 1);
@@ -227,6 +239,9 @@ static class RenderResources
 		bgfx.destroy_program(BloomDownProgram);
 		bgfx.destroy_program(BloomBlurProgram);
 		bgfx.destroy_program(DepthProgram);
+		bgfx.destroy_program(DepthAlbedoProgram);
+		bgfx.destroy_program(SsgiGatherProgram);
+		bgfx.destroy_program(SsgiApplyProgram);
 		bgfx.destroy_program(AoProgram);
 		bgfx.destroy_program(AoApplyProgram);
 		bgfx.destroy_program(DofBlurProgram);

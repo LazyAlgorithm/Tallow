@@ -75,7 +75,7 @@ class LightBaker
 		Done
 	}
 
-	struct BakeLight
+	public struct BakeLight
 	{
 		public Vector3 position, direction, color;
 		public float range, cosOuter, cosInner, shadowStrength;
@@ -160,10 +160,10 @@ class LightBaker
 	int32 mWork;
 	int32 mThreadCount;
 
-	[CLink] static extern void* tn_bake_create(float* positions, int32 vertexCount, uint32* indices, int32 triangleCount);
-	[CLink] static extern void tn_bake_destroy(void* bvh);
-	[CLink] static extern void tn_bake_intersect(void* bvh, float* rays, int32 count, int32* triangles, float* hits);
-	[CLink] static extern void tn_bake_occluded(void* bvh, float* rays, int32 count, uint8* blocked);
+	[CLink] public static extern void* tn_bake_create(float* positions, int32 vertexCount, uint32* indices, int32 triangleCount);
+	[CLink] public static extern void tn_bake_destroy(void* bvh);
+	[CLink] public static extern void tn_bake_intersect(void* bvh, float* rays, int32 count, int32* triangles, float* hits);
+	[CLink] public static extern void tn_bake_occluded(void* bvh, float* rays, int32 count, uint8* blocked);
 
 	public ~this()
 	{
@@ -178,7 +178,7 @@ class LightBaker
 		let env = scene.Environment;
 		mSky = Linear(env.ambientSky, env.ambientIntensity);
 		mGround = Linear(env.ambientGround, env.ambientIntensity);
-		GatherLights(scene);
+		CollectLights(scene, mLights);
 		for (let volume in scene.FindComponents<LightProbeVolume>(.. scope .()))
 		{
 			if (!volume.IsActiveAndEnabled || !volume.GameObject.InActiveWorld)
@@ -198,12 +198,13 @@ class LightBaker
 		PlaceObjects();
 	}
 
-	static Vector3 Linear(Color c, float scale = 1)
+	public static Vector3 Linear(Color c, float scale = 1)
 	{
 		return .(Math.Pow(Math.Max(c.r, 0), 2.2f) * scale, Math.Pow(Math.Max(c.g, 0), 2.2f) * scale, Math.Pow(Math.Max(c.b, 0), 2.2f) * scale);
 	}
 
-	void GatherLights(Scene scene)
+	/// The scene's enabled lights as the baker (and the dynamic probe grid) sees them. The main thread.
+	public static void CollectLights(Scene scene, List<BakeLight> lights)
 	{
 		Light sun = default;
 		for (let light in scene.Lights)
@@ -232,8 +233,36 @@ class LightBaker
 			baked.bakeDirect = light.bakedOnly && light != sun;
 			baked.castShadows = light.castShadows;
 			baked.shadowStrength = Math.Clamp(light.shadowStrength, 0, 1);
-			mLights.Add(baked);
+			lights.Add(baked);
 		}
+	}
+
+	/// A renderer's part's colour and glow as light sees it (linear; the picture's average stands in for its texture).
+	public static void PartColors(MeshRenderer renderer, List<MeshRenderer.Part> parts, int p, out Vector3 albedoOut, out Vector3 emissionOut, out bool flatOut)
+	{
+		let material = (parts != null && parts.Count > 0 && parts[p].material != null) ? parts[p].material : renderer.ActiveMaterial;
+		let tint = (parts != null && parts.Count > 0) ? parts[p].tint : Color.White;
+		var albedo = Linear(renderer.color) * Linear(tint);
+		Vector3 emission = default;
+		var flat = renderer.flatShading;
+		if (material != null)
+		{
+			albedo = albedo * Linear(material.color) * TextureAverage(material.texture);
+			emission = Linear(material.emissive) * material.emissiveIntensity;
+			flat = material.flatShading;
+			if (material.unlit)
+				emission = emission + albedo;
+		}
+		else
+		{
+			albedo = albedo * TextureAverage(renderer.texture);
+			emission = renderer.emissiveFromColor ? albedo * renderer.emissiveIntensity : Linear(renderer.emissive) * renderer.emissiveIntensity;
+			if (renderer.unlit)
+				emission = emission + albedo;
+		}
+		albedoOut = albedo;
+		emissionOut = emission;
+		flatOut = flat;
 	}
 
 	/// The renderer's triangles in the world, with their colour and glow.
@@ -251,26 +280,7 @@ class LightBaker
 		for (int p < partCount)
 		{
 			let mesh = meshes[p];
-			let material = (parts != null && parts.Count > 0 && parts[p].material != null) ? parts[p].material : renderer.ActiveMaterial;
-			let tint = (parts != null && parts.Count > 0) ? parts[p].tint : Color.White;
-			var albedo = Linear(renderer.color) * Linear(tint);
-			Vector3 emission = default;
-			var flat = renderer.flatShading;
-			if (material != null)
-			{
-				albedo = albedo * Linear(material.color) * TextureAverage(material.texture);
-				emission = Linear(material.emissive) * material.emissiveIntensity;
-				flat = material.flatShading;
-				if (material.unlit)
-					emission = emission + albedo;
-			}
-			else
-			{
-				albedo = albedo * TextureAverage(renderer.texture);
-				emission = renderer.emissiveFromColor ? albedo * renderer.emissiveIntensity : Linear(renderer.emissive) * renderer.emissiveIntensity;
-				if (renderer.unlit)
-					emission = emission + albedo;
-			}
+			PartColors(renderer, parts, p, let albedo, let emission, let flat);
 			for (int t < mesh.Indices.Count / 3)
 			{
 				var ia = mesh.Indices[t * 3], ib = mesh.Indices[t * 3 + 1], ic = mesh.Indices[t * 3 + 2];
@@ -328,11 +338,11 @@ class LightBaker
 		Objects.Add(object);
 	}
 
-	static Vector3 VertexColor(uint32 abgr) => Linear(.((abgr & 0xff) / 255.0f, ((abgr >> 8) & 0xff) / 255.0f, ((abgr >> 16) & 0xff) / 255.0f, 1));
+	public static Vector3 VertexColor(uint32 abgr) => Linear(.((abgr & 0xff) / 255.0f, ((abgr >> 8) & 0xff) / 255.0f, ((abgr >> 16) & 0xff) / 255.0f, 1));
 
-	static Vector3 Clamp01(Vector3 v) => .(Math.Clamp(v.x, 0, 1), Math.Clamp(v.y, 0, 1), Math.Clamp(v.z, 0, 1));
+	public static Vector3 Clamp01(Vector3 v) => .(Math.Clamp(v.x, 0, 1), Math.Clamp(v.y, 0, 1), Math.Clamp(v.z, 0, 1));
 
-	static Vector3 Normal(Matrix4 world, Vector3 normal, Vector3 fallback)
+	public static Vector3 Normal(Matrix4 world, Vector3 normal, Vector3 fallback)
 	{
 		let n = world.TransformDirection(normal);
 		let length = n.Length;
@@ -342,7 +352,7 @@ class LightBaker
 	static Dictionary<String, Vector3> sTextureAverages = new .() ~ { for (let key in _.Keys) delete key; delete _; };
 
 	/// A picture's average colour, in linear light (white without one).
-	static Vector3 TextureAverage(StringView path)
+	public static Vector3 TextureAverage(StringView path)
 	{
 		if (path.IsEmpty)
 			return .(1, 1, 1);
@@ -629,77 +639,95 @@ class LightBaker
 		return weights;
 	}
 
-	float Bias(Vector3 p) => 0.002f + Math.Max(Math.Abs(p.x), Math.Max(Math.Abs(p.y), Math.Abs(p.z))) * 1e-5f;
+	public static float Bias(Vector3 p) => 0.002f + Math.Max(Math.Abs(p.x), Math.Max(Math.Abs(p.y), Math.Abs(p.z))) * 1e-5f;
 
-	bool Blocked(Vector3 from, Vector3 direction, float distance)
+	public static bool Blocked(void* bvh, Vector3 from, Vector3 direction, float distance)
 	{
-		if (mBvh == null)
+		if (bvh == null)
 			return false;
 		float[7] ray = .(from.x, from.y, from.z, direction.x, direction.y, direction.z, distance);
 		uint8 blocked = 0;
-		tn_bake_occluded(mBvh, &ray[0], 1, &blocked);
+		tn_bake_occluded(bvh, &ray[0], 1, &blocked);
 		return blocked != 0;
 	}
 
 	/// Direct light at a point: from every light (for bouncing), and from those baked into lightmaps.
-	void Direct(Vector3 position, Vector3 normal, Vector3 geometric, out Vector3 all, out Vector3 baked)
+	void Direct(Vector3 position, Vector3 normal, Vector3 geometric, out Vector3 all, out Vector3 baked) => DirectLight(mLights, mBvh, position, normal, geometric, out all, out baked);
+
+	/// The light from `lights` at a point on a surface (its shading normal and its flat face's), shadowed by what the
+	/// BVH holds; `baked` is the share of lights marked Baked Only. Any thread.
+	public static void DirectLight(List<BakeLight> lights, void* bvh, Vector3 position, Vector3 normal, Vector3 geometric, out Vector3 all, out Vector3 baked)
 	{
 		all = default;
 		baked = default;
 		let bias = Bias(position);
 		let origin = position + geometric * bias;
-		for (let light in mLights)
+		for (let light in lights)
 		{
-			Vector3 toLight;
-			float distance;
-			float atten = 1;
-			if (light.type == 2)
-			{
-				toLight = -light.direction;
-				distance = 10000;
-			}
-			else
-			{
-				let offset = light.position - position;
-				distance = offset.Length;
-				if (distance >= light.range || distance < 1e-5f)
-					continue;
-				toLight = offset / distance;
-				if (light.inverseSquare)
-				{
-					let ratio = distance * distance / Math.Max(light.range * light.range, 1e-8f);
-					let fade = Math.Max(1 - ratio * ratio, 0);
-					atten = fade * fade / Math.Max(distance * distance, 1e-6f);
-				}
-				else
-				{
-					let falloff = Math.Clamp(1 - distance / Math.Max(light.range, 1e-4f), 0, 1);
-					atten = falloff * falloff / (1 + distance * distance * 0.1f);
-				}
-				if (light.type == 1)
-					atten *= SmoothStep(light.cosOuter, light.cosInner, Vector3.Dot(-toLight, light.direction));
-			}
-			let ndotl = Vector3.Dot(normal, toLight);
-			if (atten <= 0 || ndotl <= 0 || Vector3.Dot(geometric, toLight) <= 0)
+			if (!LightShare(light, position, normal, geometric, let toLight, let distance, let amount))
 				continue;
-			let visible = Blocked(origin, toLight, distance - bias * 2) ? 0.0f : 1.0f;
-			let amount = light.color * (atten * ndotl);
+			let visible = Blocked(bvh, origin, toLight, distance - bias * 2) ? 0.0f : 1.0f;
 			all = all + amount * visible;
 			if (light.bakeDirect)
 				baked = baked + amount * (light.castShadows ? 1 - light.shadowStrength * (1 - visible) : 1);
 		}
 	}
 
-	static float SmoothStep(float edge0, float edge1, float x)
+	/// One light's share of a point on a surface before shadows (its colour times its falloff times n.l, as in
+	/// lighting.sh): false when it gives none. `distance` is how far the light is (10000 for a directional light).
+	public static bool LightShare(BakeLight light, Vector3 position, Vector3 normal, Vector3 geometric, out Vector3 toLight, out float distance, out Vector3 amount)
+	{
+		amount = default;
+		float atten = 1;
+		if (light.type == 2)
+		{
+			toLight = -light.direction;
+			distance = 10000;
+		}
+		else
+		{
+			let offset = light.position - position;
+			distance = offset.Length;
+			toLight = default;
+			if (distance >= light.range || distance < 1e-5f)
+				return false;
+			toLight = offset / distance;
+			if (light.inverseSquare)
+			{
+				let ratio = distance * distance / Math.Max(light.range * light.range, 1e-8f);
+				let fade = Math.Max(1 - ratio * ratio, 0);
+				atten = fade * fade / Math.Max(distance * distance, 1e-6f);
+			}
+			else
+			{
+				let falloff = Math.Clamp(1 - distance / Math.Max(light.range, 1e-4f), 0, 1);
+				atten = falloff * falloff / (1 + distance * distance * 0.1f);
+			}
+			if (light.type == 1)
+				atten *= SmoothStep(light.cosOuter, light.cosInner, Vector3.Dot(-toLight, light.direction));
+		}
+		let ndotl = Vector3.Dot(normal, toLight);
+		if (atten <= 0 || ndotl <= 0 || Vector3.Dot(geometric, toLight) <= 0)
+			return false;
+		amount = light.color * (atten * ndotl);
+		return true;
+	}
+
+	public static float SmoothStep(float edge0, float edge1, float x)
 	{
 		let t = Math.Clamp((x - edge0) / (edge1 - edge0), 0, 1);
 		return t * t * (3 - 2 * t);
 	}
 
 	/// The sky's light from direction d: lights an open surface just as the scene's ambient colours do.
-	Vector3 Sky(Vector3 d) => .(Math.Max(mGround.x + (mSky.x - mGround.x) * (0.5f + 0.75f * d.y), 0),
-		Math.Max(mGround.y + (mSky.y - mGround.y) * (0.5f + 0.75f * d.y), 0),
-		Math.Max(mGround.z + (mSky.z - mGround.z) * (0.5f + 0.75f * d.y), 0));
+	Vector3 Sky(Vector3 d) => SkyLight(mSky, mGround, d);
+
+	/// The same for any pair of ambient colours (already linear and scaled by the ambient intensity).
+	public static Vector3 SkyLight(Vector3 sky, Vector3 ground, Vector3 d)
+	{
+		let t = 0.5f + 0.75f * d.y;
+		return .(Math.Max(ground.x + (sky.x - ground.x) * t, 0), Math.Max(ground.y + (sky.y - ground.y) * t, 0), Math.Max(ground.z + (sky.z - ground.z) * t, 0));
+	}
 
 	void DirectTexel(int i)
 	{
@@ -707,7 +735,7 @@ class LightBaker
 		Direct(texel.position, texel.normal, texel.geometric, out mDirectAll[i], out mDirectBaked[i]);
 	}
 
-	static uint32 Hash(uint32 value)
+	public static uint32 Hash(uint32 value)
 	{
 		var x = value;
 		x ^= x >> 16;
@@ -718,7 +746,7 @@ class LightBaker
 		return x;
 	}
 
-	static float Random(ref uint32 state)
+	public static float Random(ref uint32 state)
 	{
 		state = state * 747796405 + 2891336453;
 		var word = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
@@ -727,7 +755,7 @@ class LightBaker
 	}
 
 	/// Two axes across a normal.
-	static void Basis(Vector3 n, out Vector3 t, out Vector3 b)
+	public static void Basis(Vector3 n, out Vector3 t, out Vector3 b)
 	{
 		let sign = n.z >= 0 ? 1.0f : -1.0f;
 		let a = -1.0f / (sign + n.z);

@@ -4,7 +4,7 @@ using Bgfx;
 
 namespace Tallow;
 
-/// The screen effects (ambient occlusion, depth of field, motion blur), bloom and the tonemap, after the scene is drawn.
+/// The screen effects (global illumination, ambient occlusion, depth of field, motion blur), bloom and the tonemap, after the scene is drawn.
 extension RenderView
 {
 	void ReleaseEffectTargets()
@@ -15,11 +15,35 @@ extension RenderView
 				bgfx.destroy_frame_buffer(fb);
 			fb.idx = uint16.MaxValue;
 		}
+		ReleaseGiTargets();
 		Release(ref mDepthFb);
 		Release(ref mPostFb[0]);
 		Release(ref mPostFb[1]);
 		Release(ref mAoFb);
 		Release(ref mDofFb);
+	}
+
+	/// Frees the global illumination's targets (the next use makes them again).
+	void ReleaseGiTargets()
+	{
+		void Release(ref bgfx.FrameBufferHandle fb)
+		{
+			if (fb.Valid)
+				bgfx.destroy_frame_buffer(fb);
+			fb.idx = uint16.MaxValue;
+		}
+		Release(ref mDepthAlbedoFb);
+		Release(ref mGiApplyFb[0]);
+		Release(ref mGiApplyFb[1]);
+		Release(ref mGiHistoryFb[0]);
+		Release(ref mGiHistoryFb[1]);
+		if (mAlbedoColor.Valid)
+			bgfx.destroy_texture(mAlbedoColor);
+		if (mGiLit.Valid)
+			bgfx.destroy_texture(mGiLit);
+		mAlbedoColor.idx = mGiLit.idx = uint16.MaxValue;
+		mGiWasOn = false;
+		mGiIdle = 0;
 	}
 
 	/// Makes the screen effects' targets, at the scene's size, the first time they are needed.
@@ -37,6 +61,7 @@ extension RenderView
 		depthTextures[0] = bgfx.create_texture_2d((uint16)mWidth, (uint16)mHeight, false, 1, depthFormat, rt | clamp | point, null, 0);
 		depthTextures[1] = bgfx.create_texture_2d((uint16)mWidth, (uint16)mHeight, false, 1, .D32F, rt | writeOnly, null, 0);
 		mDepthColor = depthTextures[0];
+		mDepthZ = depthTextures[1];
 		mDepthFb = bgfx.create_frame_buffer_from_handles(2, &depthTextures, true);
 		for (int i < 2)
 		{
@@ -51,6 +76,51 @@ extension RenderView
 		mDofFb = bgfx.create_frame_buffer_from_handles(1, &mDofColor, true);
 	}
 
+	/// Whether this view draws screen-space global illumination this frame (ScreenEffects.GlobalIllumination, the
+	/// scene's strength). The depth pass writes the surfaces' colour too, when it does.
+	bool UsesScreenSpaceGi(CameraData camera, SceneEnvironment env)
+	{
+		return !Capture && shading == .Rendered && ShowGlobalIllumination && ScreenEffects.UsesScreenSpaceGi
+			&& env.globalIllumination > MinimumEffect;
+	}
+
+	/// The targets of screen-space global illumination, made the first time it is used: the surfaces' base colour (a
+	/// second target of the depth pass), the light at half size (this frame's and last frame's, with the depth in alpha)
+	/// and last frame's lit picture, which the rays read.
+	void EnsureGiTargets()
+	{
+		EnsureEffectTargets();
+		let full = ScreenEffects.ScreenSpaceGiFullResolution;
+		if (mDepthAlbedoFb.Valid)
+		{
+			if (full == mGiFull)
+				return;
+			// The quality changed the light's resolution: start again at the new one.
+			ReleaseGiTargets();
+		}
+		mGiFull = full;
+		mGiWidth = full ? mWidth : mHalfWidth;
+		mGiHeight = full ? mHeight : mHalfHeight;
+		let rt = Gfx.TextureRenderTarget;
+		let clamp = Gfx.SamplerClamp;
+		mAlbedoColor = bgfx.create_texture_2d((uint16)mWidth, (uint16)mHeight, false, 1, .RGBA8, rt | clamp | Gfx.SamplerPoint, null, 0);
+		bgfx.TextureHandle[3] attachments = .(mDepthColor, mAlbedoColor, mDepthZ);
+		mDepthAlbedoFb = bgfx.create_frame_buffer_from_handles(3, &attachments, false);
+		for (int i < 2)
+		{
+			mGiHistory[i] = bgfx.create_texture_2d((uint16)mGiWidth, (uint16)mGiHeight, false, 1, .RGBA16F, rt | clamp, null, 0);
+			mGiHistoryFb[i] = bgfx.create_frame_buffer_from_handles(1, &mGiHistory[i], true);
+		}
+		let litFormat = bgfx.is_texture_valid(0, false, 1, .RG11B10F, rt | clamp) ? bgfx.TextureFormat.RG11B10F : bgfx.TextureFormat.RGBA16F;
+		mGiLit = bgfx.create_texture_2d((uint16)mWidth, (uint16)mHeight, false, 1, litFormat, rt | clamp, null, 0);
+		for (int i < 2)
+		{
+			bgfx.TextureHandle[2] outputs = .(mPostColor[i], mGiLit);
+			mGiApplyFb[i] = bgfx.create_frame_buffer_from_handles(2, &outputs, false);
+		}
+		mGiWasOn = false;
+	}
+
 	/// Ambient occlusion, depth of field and motion blur (tallowengine.com/docs/post-processing), as the scene asks and the
 	/// player's settings (ScreenEffects) allow. Each reads the picture so far and writes the next; returns the last.
 	bgfx.TextureHandle DrawScreenEffects(CameraData camera, SceneEnvironment env)
@@ -60,13 +130,21 @@ extension RenderView
 		let dof = ScreenEffects.DepthOfField && ShowDepthOfField && env.depthOfField > MinimumEffect;
 		let motionAmount = Math.Clamp(env.motionBlur, 0.0f, 1.0f) * Math.Clamp(ScreenEffects.MotionBlurAmount, 0.0f, 2.0f);
 		let motion = ScreenEffects.MotionBlur && ShowMotionBlur && motionAmount > MinimumEffect;
+		let gi = UsesScreenSpaceGi(camera, env);
 		let worldViewProj = camera.projection * camera.view;
-		if (ao || dof || motion)
+		if (gi || ao || dof || motion)
 		{
 			EnsureEffectTargets();
 			SetPostCamera(camera);
 			EnsureDepthPass(camera);
 			int next = 0;
+			// Before the occlusion, so that it darkens the bounced light as well.
+			if (gi)
+			{
+				DrawGlobalIllumination(camera, env, worldViewProj, picture, next);
+				picture = mPostColor[next];
+				next ^= 1;
+			}
 			if (ao)
 			{
 				DrawAmbientOcclusion(env, picture, next);
@@ -86,11 +164,66 @@ extension RenderView
 				next ^= 1;
 			}
 		}
+		mGiWasOn = gi;
+		// Unused for a while (a quality change, a scene without it): the targets go.
+		if (gi)
+			mGiIdle = 0;
+		else if (mDepthAlbedoFb.Valid && ++mGiIdle > GiIdleFrames)
+			ReleaseGiTargets();
 		mPrevViewProj = worldViewProj;
 		mPrevPosition = camera.position;
 		mHasPrev = true;
 		return picture;
 	}
+
+	/// Screen-space global illumination: light bounced from what is on screen, from the surface colours of the depth
+	/// pass and the lit picture (fs_ssgi.sc, fs_ssgi_apply.sc).
+	void DrawGlobalIllumination(CameraData camera, SceneEnvironment env, Matrix4 worldViewProj, bgfx.TextureHandle picture, int target)
+	{
+		EnsureGiTargets();
+		// Last frame's pictures are good when the effect ran then and the camera did not jump (as for motion blur).
+		let moved = (camera.position - mPrevPosition).Length;
+		let usable = mHasPrev && mGiWasOn && moved < MotionBlurCutDistance;
+		var previous = usable ? mPrevViewProj : worldViewProj;
+		let write = mGiCurrent;
+		let read = write ^ 1;
+		// With the probe grid also on, it already supplies the broad, soft bounce: the rays here add the near, detailed
+		// part (a shorter reach) and a smaller share, so the two do not count the same light twice.
+		let withProbes = ScreenEffects.UsesProbeGrid;
+		var strength = Math.Clamp(env.globalIllumination, 0.0f, 4.0f);
+		if (withProbes)
+			strength *= 0.6f;
+		let reach = withProbes ? GiReach * 0.5f : GiReach;
+		Vector4 giParams = .((float)(mGiFrame++ & 0xffff), reach, usable ? 1 : 0, mGiFull ? 4.0f : 6.0f);
+		Vector4 applyParams = giParams;
+		applyParams.w = strength;
+		Vector4 giParams2 = .(1.0f / mWidth, 1.0f / mHeight, 1.0f / mGiWidth, 1.0f / mGiHeight);
+
+		SetPostUniforms();
+		bgfx.set_uniform(RenderResources.uSsgiParams, &giParams, 1);
+		bgfx.set_uniform(RenderResources.uSsgiParams2, &giParams2, 1);
+		bgfx.set_uniform(RenderResources.uPrevViewProj, &previous, 1);
+		bgfx.set_texture(0, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
+		bgfx.set_texture(1, RenderResources.sColor, picture, uint32.MaxValue);
+		bgfx.set_texture(2, RenderResources.sSsgiLit, usable ? mGiLit : picture, uint32.MaxValue);
+		bgfx.set_texture(3, RenderResources.sSsgiHistory, mGiHistory[read], uint32.MaxValue);
+		EffectPass((uint16)(ViewBase + GiView), "Global illumination", mGiHistoryFb[write], mGiWidth, mGiHeight, RenderResources.SsgiGatherProgram);
+
+		SetPostUniforms();
+		bgfx.set_uniform(RenderResources.uSsgiParams, &applyParams, 1);
+		bgfx.set_uniform(RenderResources.uSsgiParams2, &giParams2, 1);
+		bgfx.set_texture(0, RenderResources.sColor, picture, uint32.MaxValue);
+		bgfx.set_texture(1, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
+		bgfx.set_texture(2, RenderResources.sAlbedoBuffer, mAlbedoColor, uint32.MaxValue);
+		bgfx.set_texture(3, RenderResources.sSsgi, mGiHistory[write], uint32.MaxValue);
+		EffectPass((uint16)(ViewBase + GiApplyView), "Global illumination apply", mGiApplyFb[target], mWidth, mHeight, RenderResources.SsgiApplyProgram);
+		mGiCurrent = read;
+	}
+
+	/// How far the global illumination's rays reach, in metres.
+	const float GiReach = 6.0f;
+	/// Frames without global illumination before its targets are freed.
+	const int32 GiIdleFrames = 120;
 
 	void DrawAmbientOcclusion(SceneEnvironment env, bgfx.TextureHandle picture, int target)
 	{
@@ -216,6 +349,8 @@ extension RenderView
 		if (mDepthDrawn)
 			return;
 		EnsureEffectTargets();
+		if (mDepthAlbedo)
+			EnsureGiTargets();
 		SubmitDepthPass((uint16)(ViewBase + DepthView), camera);
 		mDepthDrawn = true;
 	}
@@ -228,10 +363,11 @@ extension RenderView
 		var viewMatrix = camera.view;
 		var projMatrix = camera.projection;
 		bgfx.set_palette_color_rgba32f(DepthPalette, 60000.0f, 0, 0, 1);
+		bgfx.set_palette_color_rgba32f(AlbedoPalette, 0, 0, 0, 0);
 		bgfx.set_view_name(view, "Depth", 5);
-		bgfx.set_view_frame_buffer(view, mDepthFb);
+		bgfx.set_view_frame_buffer(view, mDepthAlbedo ? mDepthAlbedoFb : mDepthFb);
 		bgfx.set_view_rect(view, 0, 0, (uint16)mWidth, (uint16)mHeight, 0, 1);
-		bgfx.set_view_clear_mrt(view, Gfx.ClearColor | Gfx.ClearDepth, 1.0f, 0, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette);
+		bgfx.set_view_clear_mrt(view, Gfx.ClearColor | Gfx.ClearDepth, 1.0f, 0, DepthPalette, AlbedoPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette);
 		bgfx.set_view_transform(view, &viewMatrix, &projMatrix);
 		bgfx.set_view_mode(view, .Sequential);
 		bgfx.touch(view);
@@ -244,7 +380,7 @@ extension RenderView
 			while (start < items.Count)
 			{
 				int end = start + 1;
-				while (end < items.Count && items[end].mesh == items[start].mesh && items[end].material == items[start].material && items[end].renderer.windSway == items[start].renderer.windSway && Mirrored(items[end].world) == Mirrored(items[start].world))
+				while (end < items.Count && items[end].mesh == items[start].mesh && items[end].material == items[start].material && items[end].renderer.windSway == items[start].renderer.windSway && (!mDepthAlbedo || SameAlbedoTexture(items[end], items[start])) && Mirrored(items[end].world) == Mirrored(items[start].world))
 					end++;
 				SubmitDepthBatch(view, items, start, end - start, pass == 1 ? viewmodelViewProj : worldViewProj, pass == 1);
 				start = end;
@@ -253,6 +389,7 @@ extension RenderView
 	}
 
 	const uint8 DepthPalette = 15;
+	const uint8 AlbedoPalette = 14;
 
 	void SubmitDepthBatch(uint16 view, List<RenderItem> items, int start, int count, Matrix4 viewProj, bool viewmodel)
 	{
@@ -269,6 +406,8 @@ extension RenderView
 			data[i].color = .(1, 1, 1, 1);
 		}
 		let first = items[start];
+		if (mDepthAlbedo)
+			FillInstances(data, items, start, drawCount);
 		let mesh = first.mesh;
 		if (mesh.IsDynamic)
 			bgfx.set_dynamic_vertex_buffer(0, mesh.DynamicBuffer, 0, (uint32)mesh.VertexCount);
@@ -277,7 +416,20 @@ extension RenderView
 		bgfx.set_index_buffer(mesh.IndexBuffer, 0, (uint32)mesh.IndexCount);
 		bgfx.set_instance_data_buffer(&buffer, 0, (uint32)drawCount);
 		var matrix = viewProj;
-		Vector4 depthParams = .(viewmodel ? 1 : 0, 0, 0, 0);
+		var depthParams = Vector4(viewmodel ? 1 : 0, 0, 0, 0);
+		if (mDepthAlbedo)
+		{
+			// The base colour as the lit pass shows it (a palette's vertex colours are data: plain grey stands in).
+			var uvTransform = Vector4(1, 1, 0, 0);
+			if (first.material != null)
+			{
+				uvTransform = .(first.material.tiling.x, first.material.tiling.y, first.material.offset.x, first.material.offset.y);
+				if (first.material.IsPalette)
+					depthParams.y = 1;
+			}
+			bgfx.set_uniform(RenderResources.uUvTransform, &uvTransform, 1);
+			bgfx.set_texture(0, RenderResources.sAlbedo, AlbedoTexture(first), uint32.MaxValue);
+		}
 		SetWindUniforms(first.renderer.windSway);
 		bgfx.set_uniform(RenderResources.uDepthViewProj, &matrix, 1);
 		bgfx.set_uniform(RenderResources.uDepthParams, &depthParams, 1);
@@ -289,6 +441,21 @@ extension RenderView
 		if (viewmodel)
 			depth = 0;
 		bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | depth | cull, 0);
-		bgfx.submit(view, RenderResources.DepthProgram, 0, 0xff);
+		bgfx.submit(view, mDepthAlbedo ? RenderResources.DepthAlbedoProgram : RenderResources.DepthProgram, 0, 0xff);
+	}
+
+	/// The texture the lit pass multiplies an item's colour by (as ResolveSurface picks it), for the depth pass's colours.
+	static bgfx.TextureHandle AlbedoTexture(RenderItem item)
+	{
+		let renderer = item.renderer;
+		var texture = item.material == null ? renderer.ActiveTexture : item.material.MainTexture;
+		if (renderer.TextureOverride.idx != uint16.MaxValue)
+			texture = renderer.TextureOverride;
+		return texture.idx == uint16.MaxValue ? Gfx.WhiteTexture : texture;
+	}
+
+	static bool SameAlbedoTexture(RenderItem a, RenderItem b)
+	{
+		return AlbedoTexture(a).idx == AlbedoTexture(b).idx;
 	}
 }

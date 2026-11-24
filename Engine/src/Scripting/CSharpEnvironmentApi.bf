@@ -92,8 +92,8 @@ static class CSharpEnvironment
 	}
 
 	/// ScreenEffects by number: 0 AmbientOcclusion, 1 DepthOfField, 2 MotionBlur, 3 WaterReflections,
-	/// 4 SurfaceReflections (bools as 0 or 1), 5 MotionBlurAmount, 6 Brightness, 7 GlobalIllumination (0 off,
-	/// 1 screen space, 2 probe grid).
+	/// 4 SurfaceReflections (bools as 0 or 1), 5 MotionBlurAmount, 6 Brightness, 7 GlobalIllumination (0 ambient,
+	/// 1 baked, 2 half-resolution SSGI, 3 dynamic GI, 4 dynamic GI + SSGI).
 	[CSharpExpose]
 	public static float GetScreenEffect(int32 which)
 	{
@@ -123,7 +123,7 @@ static class CSharpEnvironment
 		case 4: ScreenEffects.SurfaceReflections = value != 0;
 		case 5: ScreenEffects.MotionBlurAmount = Math.Clamp(value, 0, 2);
 		case 6: ScreenEffects.Brightness = Math.Clamp(value, 0.25f, 4);
-		case 7: ScreenEffects.GlobalIllumination = (GlobalIlluminationMode)(int32)Math.Clamp(value, 0, 2);
+		case 7: ScreenEffects.GlobalIllumination = (GlobalIlluminationMode)(int32)Math.Clamp(value, 0, 4);
 		case 100: ScreenEffects.Reset();
 		default:
 		}

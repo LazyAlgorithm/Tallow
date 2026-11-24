@@ -139,7 +139,7 @@ class GameApp : Application
 			// On a touch screen, the game's on-screen controls go over everything else.
 			TouchControls.Draw();
 			ImGui.End();
-			ImGui.tn_imgui_render(250);
+			ImGui.tn_imgui_render(255);
 		}
 	}
 

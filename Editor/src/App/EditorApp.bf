@@ -12,7 +12,7 @@ class EditorApp : Application
 {
 	enum PlayState { Edit, Playing, Paused }
 
-	const uint16 ImGuiView = 250;
+	const uint16 ImGuiView = 255;
 	static readonly Color Accent = .(0.36f, 0.62f, 0.92f, 1);
 
 	Scene mScene ~ delete _;

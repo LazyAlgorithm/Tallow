@@ -33,8 +33,8 @@ struct QualityValues : IEquatable<QualityValues>
 	public bool ambientOcclusion = true;
 	public bool depthOfField = true;
 	public bool motionBlur = true;
-	/// Light bounced between surfaces: off, screen space (SSGI) or a probe grid (DDGI).
-	public GlobalIlluminationMode globalIllumination = .ScreenSpace;
+	/// Light bounced between surfaces: flat ambient, baked, half-resolution SSGI, dynamic GI, or dynamic GI + SSGI.
+	public GlobalIlluminationMode globalIllumination = .ProbeGrid;
 	/// Times how far away objects keep their detail (LODGroup.Bias).
 	public float lodBias = 1;
 	/// Times how far away plants are drawn (each Foliage's View Distance).
@@ -90,7 +90,7 @@ static class Quality
 			v.ambientOcclusion = false;
 			v.depthOfField = false;
 			v.motionBlur = false;
-			v.globalIllumination = .Off;
+			v.globalIllumination = .Baked;
 			v.lodBias = 0.6f;
 			v.foliageDistance = 0.5f;
 			v.textureDetail = 1;
@@ -104,13 +104,14 @@ static class Quality
 			v.shadowDistance = 0.75f;
 			v.depthOfField = false;
 			v.motionBlur = false;
-			v.globalIllumination = .Off;
+			v.globalIllumination = .ScreenSpace;
 			v.lodBias = 0.8f;
 			v.foliageDistance = 0.75f;
 			v.reflectionSize = 64;
 		case .High,.Custom:
 		case .Ultra:
 			v.shadowedLights = 16;
+			v.globalIllumination = .ProbeGridAndScreenSpace;
 			v.shadowDistance = 1.5f;
 			v.lodBias = 1.5f;
 			v.foliageDistance = 1.5f;
@@ -211,7 +212,7 @@ static class Quality
 			case "ambientOcclusion": v.ambientOcclusion = flag;
 			case "depthOfField": v.depthOfField = flag;
 			case "motionBlur": v.motionBlur = flag;
-			case "globalIllumination": v.globalIllumination = (GlobalIlluminationMode)(int32)Math.Clamp(number, 0, 2);
+			case "globalIllumination": v.globalIllumination = (GlobalIlluminationMode)(int32)Math.Clamp(number, 0, 4);
 			case "lodBias": v.lodBias = Math.Clamp(number, 0.05f, 4);
 			case "foliageDistance": v.foliageDistance = Math.Clamp(number, 0.05f, 4);
 			case "gpuSkinning": v.gpuSkinning = flag;

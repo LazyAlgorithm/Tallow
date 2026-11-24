@@ -272,6 +272,82 @@ vec3 probeAmbient(vec3 wpos, vec3 n)
 	return mix(outer, inner, weight);
 }
 
+// The dynamic probe grid (DynamicGI.bf; u_lightProbe[0].w is 2): a camera-centred box of probes that a worker thread
+// keeps tracing, laid out like the baked grids' texture but with six blocks of z, each u_lightProbe[2].z deep: red,
+// green and blue light (a + b.n), then for the x, y and z axes how far the probe sees, as the mean and mean squared
+// distance towards its positive side (red, green) and its negative side (blue, alpha). A probe at world cell c is at
+// the texel c wrapped into the box, so the box scrolls with the camera without moving any texel. [0].xyz is the first
+// probe's position, [1].x 1 / the probes' spacing, [1].y the scene's strength, [1].z the spacing, [2].xyz the probes
+// along each axis, [3].xyz the first probe's cell.
+// Returns the ambient light in rgb and, in a, how much to trust it (0: no probe could be used, take the flat ambient).
+vec4 dynamicGridAmbient(vec3 wpos, vec3 n, vec3 v)
+{
+	vec3 counts = u_lightProbe[2].xyz;
+	vec3 size = u_lightProbe[8].xyz;
+	float spacing = u_lightProbe[1].z;
+	float depthBlock = counts.z / size.z;
+	// Look a little off the surface, along its normal and towards the viewer, against self-shadowing by the probes.
+	vec3 biased = wpos + (n * 0.3 + v * 0.1) * spacing * 0.5;
+	vec3 grid = (biased - u_lightProbe[0].xyz) * u_lightProbe[1].x;
+	vec3 baseCell = floor(grid);
+	vec3 f = grid - baseCell;
+	// Fades out over the last cell at the edge of the box.
+	vec3 edge = min(grid, counts - 1.0 - grid);
+	float edgeFade = clamp(min(min(edge.x, edge.y), edge.z), 0.0, 1.0);
+	if (edgeFade <= 0.0)
+		return vec4_splat(0.0);
+	vec4 shR = vec4_splat(0.0);
+	vec4 shG = vec4_splat(0.0);
+	vec4 shB = vec4_splat(0.0);
+	float total = 0.0;
+	for (int i = 0; i < 8; i++)
+	{
+		vec3 offset = vec3(float(i - (i / 2) * 2), float((i / 2) - (i / 4) * 2), float(i / 4));
+		vec3 cell = baseCell + offset;
+		if (any(lessThan(cell, vec3_splat(0.0))) || any(greaterThan(cell, counts - 1.0)))
+			continue;
+		vec3 probe = u_lightProbe[0].xyz + cell * spacing;
+		vec3 tri = mix(vec3_splat(1.0) - f, f, offset);
+		float w = tri.x * tri.y * tri.z;
+		// The texel: the probe's cell wrapped into the box.
+		vec3 slot = mod(u_lightProbe[3].xyz + cell, counts);
+		vec3 uvw = vec3((slot.x + 0.5) / size.x, (slot.y + 0.5) / size.y, (slot.z + 0.5) / size.z);
+		// A probe behind the surface counts for next to nothing (smoothly, so that the light does not jump).
+		vec3 toProbe = probe - wpos;
+		float facing = clamp((dot(toProbe, n) / max(length(toProbe), 1.0e-4) + 0.25) / 1.25, 0.0, 1.0);
+		w *= facing * facing + 0.01;
+		// How far the probe sees towards the point: Chebyshev's bound on how likely it is the point is in view.
+		vec3 fromProbe = biased - probe;
+		float dist = max(length(fromProbe), 1.0e-4);
+		vec3 dir = fromProbe / dist;
+		vec3 axisWeight = dir * dir;
+		vec4 vx = texture3DLod(s_lightProbes, uvw + vec3(0.0, 0.0, 3.0 * depthBlock), 0.0);
+		vec4 vy = texture3DLod(s_lightProbes, uvw + vec3(0.0, 0.0, 4.0 * depthBlock), 0.0);
+		vec4 vz = texture3DLod(s_lightProbes, uvw + vec3(0.0, 0.0, 5.0 * depthBlock), 0.0);
+		vec2 m = (dir.x > 0.0 ? vx.xy : vx.zw) * axisWeight.x + (dir.y > 0.0 ? vy.xy : vy.zw) * axisWeight.y + (dir.z > 0.0 ? vz.xy : vz.zw) * axisWeight.z;
+		// A mean below zero marks a probe inside geometry or not yet traced.
+		if (m.x < -0.5)
+			continue;
+		if (dist > m.x)
+		{
+			float variance = max(abs(m.y - m.x * m.x), 0.01);
+			float gap = dist - m.x;
+			float chebyshev = variance / (variance + gap * gap);
+			w *= chebyshev * chebyshev * chebyshev;
+		}
+		if (w <= 1.0e-5)
+			continue;
+		total += w;
+		shR += texture3DLod(s_lightProbes, uvw, 0.0) * w;
+		shG += texture3DLod(s_lightProbes, uvw + vec3(0.0, 0.0, depthBlock), 0.0) * w;
+		shB += texture3DLod(s_lightProbes, uvw + vec3(0.0, 0.0, 2.0 * depthBlock), 0.0) * w;
+	}
+	if (total <= 1.0e-4)
+		return vec4_splat(0.0);
+	vec3 light = vec3(shR.x + dot(shR.yzw, n), shG.x + dot(shG.yzw, n), shB.x + dot(shB.yzw, n)) / total;
+	return vec4(max(light, vec3_splat(0.0)), clamp(total * 2.0, 0.0, 1.0) * edgeFade);
+}
+
 // Where a reflection probe's cube is looked up for a ray from wpos along dir: with box projection, the direction from
 // the probe to where the ray leaves the box, so that reflections of the walls line up wherever the surface is.
 vec3 probeDirection(vec3 wpos, vec3 dir)
@@ -338,13 +414,19 @@ vec3 shadeSurface(vec3 wpos, vec3 n, vec3 v, float viewDepth, vec3 albedo, float
 	vec3 f0 = mix(vec3_splat(0.04 * specularLevel), albedo, metallic);
 	vec3 color;
 	// Without a lightmap, baked light probes give the light bounced round the scene (tallowengine.com/docs/baked-lighting).
-	bool probed = !lightmapped && u_lightProbe[0].w > 0.5;
+	bool probed = !lightmapped && u_lightProbe[0].w > 0.5 && u_lightProbe[0].w < 1.5;
 	if (probed)
 		ambient = probeAmbient(wpos, n);
+	if (u_reflection.x > 0.5 && u_ambientParams.x > 0.5 && !lightmapped && !probed)
+		ambient = environmentAmbient(wpos, n);
+	// Or the dynamic probe grid's (global illumination, probe grid mode), fading into the flat ambient where it has none.
+	if (!lightmapped && u_lightProbe[0].w > 1.5)
+	{
+		vec4 bounced = dynamicGridAmbient(wpos, n, v);
+		ambient = mix(ambient, bounced.rgb * u_lightProbe[1].y, bounced.a);
+	}
 	if (u_reflection.x > 0.5)
 	{
-		if (u_ambientParams.x > 0.5 && !lightmapped && !probed)
-			ambient = environmentAmbient(wpos, n);
 		// What the surface mirrors of its surroundings, from the sky's and the probe's cubes: metals all of it,
 		// tinted, and other things a little, more at a grazing angle.
 		color = ambient * albedo * (1.0 - metallic) * occlusion;
