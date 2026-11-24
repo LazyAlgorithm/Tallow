@@ -268,6 +268,7 @@ add_library(tallow_native STATIC
 	tallow_code.cpp
 	${TALLOW_MANAGED_HOST_SOURCE}
 	tallow_bake.cpp
+	tallow_upscale.cpp
 	tallow_rig.cpp
 	tallow_assets.c
 	tallow_modelimport.c
