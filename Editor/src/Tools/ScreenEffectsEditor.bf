@@ -40,6 +40,10 @@ extension EditorApp
 			Tip("How far around each point is looked at. Small for fine detail, large for broad shading under big shapes.");
 		}
 
+		BeginProperty("Global Illumination");
+		changed |= ImGui.SliderFloat("##gi", ref env.globalIllumination, 0, 4);
+		Tip("Light bounced off surfaces onto others nearby, as the game runs. 0 is off; 1 is normal. The player's Graphics Quality setting picks screen space (SSGI) or a probe grid (DDGI), or turns it off.");
+
 		BeginProperty("Depth Of Field");
 		changed |= ImGui.SliderFloat("##dof", ref env.depthOfField, 0, 2);
 		Tip("Blurs what is nearer or further than the focus. 0 is off; 1 is a blur 3% of the screen's height across.");

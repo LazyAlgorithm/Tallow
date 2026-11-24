@@ -4,6 +4,21 @@ using Bgfx;
 
 namespace Tallow;
 
+/// How global illumination (light bounced off surfaces onto others) is worked out as the game runs
+/// (tallowengine.com/docs/global-illumination).
+enum GlobalIlluminationMode
+{
+	/// None: only the scene's ambient light, baked lightmaps and light probes.
+	Off,
+	/// Screen-space global illumination: light gathered from what is on the screen near each pixel. Cheap, no setup,
+	/// good enough for most games; misses light from things off the screen or hidden behind others.
+	ScreenSpace,
+	/// Dynamic diffuse global illumination: a grid of probes round the camera traces rays into the scene a few at a
+	/// time and keeps the bounced light at each probe. Sees off-screen light and follows moving lights and the sun;
+	/// costs more.
+	ProbeGrid
+}
+
 /// The player's choices about the screen effects, for a game's settings menu. The scene decides how much ambient
 /// occlusion, depth of field and motion blur it has (SceneEnvironment); these let a player turn each off, or tone
 /// motion blur down, and set the brightness. They are plain static fields: a game keeps them with its own saved
@@ -21,6 +36,9 @@ static class ScreenEffects
 	/// The scene on the screen mirrored in shiny surfaces (MeshRenderer.screenReflections). Off, they mirror the sky
 	/// and reflection probes only. Follows the Reflection Probes quality setting.
 	public static bool SurfaceReflections = true;
+	/// Global illumination (light bounced between surfaces): off, screen space (SSGI) or a probe grid (DDGI). The
+	/// scene sets how strong it is (SceneEnvironment.globalIllumination).
+	public static GlobalIlluminationMode GlobalIllumination = .ScreenSpace;
 	/// Scales the scene's motion blur: 0 none, 1 as the scene has it, up to 2.
 	public static float MotionBlurAmount = 1;
 	/// Multiplies the scene's exposure: the usual "brightness" setting. 0.25 to 4; 1 leaves it alone.
@@ -32,6 +50,7 @@ static class ScreenEffects
 		AmbientOcclusion = true;
 		DepthOfField = true;
 		MotionBlur = true;
+		GlobalIllumination = .ScreenSpace;
 		MotionBlurAmount = 1;
 		Brightness = 1;
 	}
@@ -157,7 +176,7 @@ static class PostProcess
 		return entry.texture;
 	}
 
-	/// Sets scene settings from a list such as "ao=1,radius=0.8,dof=0.6,focus=12,range=6,autofocus=1,motion=0.5,
+	/// Sets scene settings from a list such as "ao=1,radius=0.8,gi=1,dof=0.6,focus=12,range=6,autofocus=1,motion=0.5,
 	/// contrast=1.1,saturation=0.9,temperature=0.2,tint=0,vignette=0.5,lut=Grading/warm.png,lutstrength=1":
 	/// the `--effects` command line option, for trying a scene with effects without editing it. Unknown names are
 	/// skipped. Returns how many were set.
@@ -179,6 +198,7 @@ static class PostProcess
 			{
 			case "ao": env.ambientOcclusion = value;
 			case "radius": env.occlusionRadius = value;
+			case "gi": env.globalIllumination = value;
 			case "dof": env.depthOfField = value;
 			case "focus": env.focusDistance = value;
 			case "range": env.focusRange = value;

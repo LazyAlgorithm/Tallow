@@ -44,6 +44,7 @@ static class CSharpEnvironment
 		case 24: values[0] = env.colorFilter.r; values[1] = env.colorFilter.g; values[2] = env.colorFilter.b; values[3] = env.colorFilter.a;
 		case 25: values[0] = env.vignette;
 		case 26: values[0] = env.colorLookupStrength;
+		case 27: values[0] = env.globalIllumination;
 		default: return false;
 		}
 		return true;
@@ -84,13 +85,15 @@ static class CSharpEnvironment
 		case 24: env.colorFilter = .(x, y, z, w);
 		case 25: env.vignette = x;
 		case 26: env.colorLookupStrength = x;
+		case 27: env.globalIllumination = Math.Clamp(x, 0, 4);
 		default: return false;
 		}
 		return true;
 	}
 
 	/// ScreenEffects by number: 0 AmbientOcclusion, 1 DepthOfField, 2 MotionBlur, 3 WaterReflections,
-	/// 4 SurfaceReflections (bools as 0 or 1), 5 MotionBlurAmount, 6 Brightness.
+	/// 4 SurfaceReflections (bools as 0 or 1), 5 MotionBlurAmount, 6 Brightness, 7 GlobalIllumination (0 off,
+	/// 1 screen space, 2 probe grid).
 	[CSharpExpose]
 	public static float GetScreenEffect(int32 which)
 	{
@@ -103,6 +106,7 @@ static class CSharpEnvironment
 		case 4: return ScreenEffects.SurfaceReflections ? 1 : 0;
 		case 5: return ScreenEffects.MotionBlurAmount;
 		case 6: return ScreenEffects.Brightness;
+		case 7: return (int32)ScreenEffects.GlobalIllumination;
 		default: return 0;
 		}
 	}
@@ -119,6 +123,7 @@ static class CSharpEnvironment
 		case 4: ScreenEffects.SurfaceReflections = value != 0;
 		case 5: ScreenEffects.MotionBlurAmount = Math.Clamp(value, 0, 2);
 		case 6: ScreenEffects.Brightness = Math.Clamp(value, 0.25f, 4);
+		case 7: ScreenEffects.GlobalIllumination = (GlobalIlluminationMode)(int32)Math.Clamp(value, 0, 2);
 		case 100: ScreenEffects.Reset();
 		default:
 		}

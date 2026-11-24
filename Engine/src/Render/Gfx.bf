@@ -99,6 +99,7 @@ static class Gfx
 		ScreenEffects.AmbientOcclusion = false;
 		ScreenEffects.DepthOfField = false;
 		ScreenEffects.MotionBlur = false;
+		ScreenEffects.GlobalIllumination = .Off;
 	}
 
 	public static bool Init(void* window, int32 width, int32 height, int32 rendererOverride = -1)

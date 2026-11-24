@@ -52,6 +52,7 @@ static class SceneSerializer
 		Number(text, "ambientFromSurroundings", env.ambientFromSurroundings ? 1 : 0, 0);
 		Number(text, "ambientOcclusion", env.ambientOcclusion, defaults.ambientOcclusion);
 		Number(text, "occlusionRadius", env.occlusionRadius, defaults.occlusionRadius);
+		Number(text, "globalIllumination", env.globalIllumination, defaults.globalIllumination);
 		Number(text, "depthOfField", env.depthOfField, defaults.depthOfField);
 		Number(text, "focusDistance", env.focusDistance, defaults.focusDistance);
 		Number(text, "focusRange", env.focusRange, defaults.focusRange);
@@ -725,6 +726,7 @@ static class SceneSerializer
 		case "shadowDistance": env.shadowDistance = value;
 		case "ambientOcclusion": env.ambientOcclusion = value;
 		case "occlusionRadius": env.occlusionRadius = value;
+		case "globalIllumination": env.globalIllumination = value;
 		case "depthOfField": env.depthOfField = value;
 		case "focusDistance": env.focusDistance = value;
 		case "focusRange": env.focusRange = value;

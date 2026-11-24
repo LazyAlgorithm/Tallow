@@ -169,6 +169,13 @@ public readonly record struct SceneEnvironment(ulong SessionId)
         get => Float(26);
         set => Set(26, value, 0, 0, 0);
     }
+    /// <summary>How strong the light bounced between surfaces is: 0 off, 1 normal, up to 4. The player picks how it is
+    /// worked out, or turns it off, with <see cref="ScreenEffects.GlobalIllumination"/>.</summary>
+    public float GlobalIllumination
+    {
+        get => Float(27);
+        set => Set(27, value, 0, 0, 0);
+    }
 
     private float Float(int which)
     {
@@ -195,6 +202,18 @@ public readonly partial record struct Scene
     public SceneEnvironment Environment => new(SessionId);
 }
 
+/// <summary>How global illumination (light bounced off surfaces onto others) is worked out as the game runs.</summary>
+public enum GlobalIlluminationMode
+{
+    /// <summary>None: only the scene's ambient light, baked lightmaps and light probes.</summary>
+    Off,
+    /// <summary>Screen-space GI (SSGI): light gathered from what is on the screen. Cheap, good for most games.</summary>
+    ScreenSpace,
+    /// <summary>Dynamic diffuse GI (DDGI): a probe grid round the camera traces rays into the scene. Sees off-screen
+    /// light; costs more.</summary>
+    ProbeGrid,
+}
+
 /// <summary>
 /// The player's choices about the screen effects, for a settings menu: the scene decides how much ambient occlusion,
 /// depth of field and motion blur it has (<see cref="SceneEnvironment"/>); these turn each off, tone motion blur down
@@ -216,6 +235,8 @@ public static class ScreenEffects
     public static float MotionBlurAmount { get => CSharpEnvironment.GetScreenEffect(5); set => CSharpEnvironment.SetScreenEffect(5, value); }
     /// <summary>Multiplies the scene's exposure: the usual brightness setting, 0.25 to 4 (1 leaves it alone).</summary>
     public static float Brightness { get => CSharpEnvironment.GetScreenEffect(6); set => CSharpEnvironment.SetScreenEffect(6, value); }
+    /// <summary>Global illumination (light bounced between surfaces): off, screen space (SSGI) or a probe grid (DDGI).</summary>
+    public static GlobalIlluminationMode GlobalIllumination { get => (GlobalIlluminationMode)(int)CSharpEnvironment.GetScreenEffect(7); set => CSharpEnvironment.SetScreenEffect(7, (int)value); }
     /// <summary>Everything back to the defaults.</summary>
     public static void Reset() => CSharpEnvironment.SetScreenEffect(100, 0);
 }

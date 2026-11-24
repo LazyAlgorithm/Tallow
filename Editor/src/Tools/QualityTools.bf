@@ -45,6 +45,19 @@ extension EditorApp
 			changed |= ImGui.Checkbox("Ambient Occlusion", ref v.ambientOcclusion);
 			changed |= ImGui.Checkbox("Depth of Field", ref v.depthOfField);
 			changed |= ImGui.Checkbox("Motion Blur", ref v.motionBlur);
+			StringView[3] giNames = .("Off", "Screen Space (SSGI)", "Probe Grid (DDGI)");
+			if (ImGui.BeginCombo("Global Illumination", scope String(giNames[Math.Clamp((int)v.globalIllumination, 0, 2)]).CStr()))
+			{
+				for (int i < 3)
+				{
+					if (ImGui.Selectable(scope String(giNames[i]).CStr(), (int)v.globalIllumination == i))
+					{
+						v.globalIllumination = (GlobalIlluminationMode)i;
+						changed = true;
+					}
+				}
+				ImGui.EndCombo();
+			}
 			changed |= ImGui.SliderFloat("Detail Distance", ref v.lodBias, 0.25f, 3, "x%.2f");
 			changed |= ImGui.SliderFloat("Foliage Distance", ref v.foliageDistance, 0.25f, 3, "x%.2f");
 			changed |= ImGui.Checkbox("GPU Skinning", ref v.gpuSkinning);

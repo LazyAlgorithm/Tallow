@@ -33,6 +33,8 @@ struct QualityValues : IEquatable<QualityValues>
 	public bool ambientOcclusion = true;
 	public bool depthOfField = true;
 	public bool motionBlur = true;
+	/// Light bounced between surfaces: off, screen space (SSGI) or a probe grid (DDGI).
+	public GlobalIlluminationMode globalIllumination = .ScreenSpace;
 	/// Times how far away objects keep their detail (LODGroup.Bias).
 	public float lodBias = 1;
 	/// Times how far away plants are drawn (each Foliage's View Distance).
@@ -55,7 +57,7 @@ struct QualityValues : IEquatable<QualityValues>
 	{
 	}
 
-	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialias == other.antialias && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize;
+	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialias == other.antialias && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize;
 	public static bool operator ==(QualityValues a, QualityValues b) => a.Equals(b);
 }
 
@@ -88,6 +90,7 @@ static class Quality
 			v.ambientOcclusion = false;
 			v.depthOfField = false;
 			v.motionBlur = false;
+			v.globalIllumination = .Off;
 			v.lodBias = 0.6f;
 			v.foliageDistance = 0.5f;
 			v.textureDetail = 1;
@@ -101,6 +104,7 @@ static class Quality
 			v.shadowDistance = 0.75f;
 			v.depthOfField = false;
 			v.motionBlur = false;
+			v.globalIllumination = .Off;
 			v.lodBias = 0.8f;
 			v.foliageDistance = 0.75f;
 			v.reflectionSize = 64;
@@ -151,6 +155,7 @@ static class Quality
 		ScreenEffects.SurfaceReflections = Current.reflectionProbes;
 		ScreenEffects.DepthOfField = Current.depthOfField;
 		ScreenEffects.MotionBlur = Current.motionBlur;
+		ScreenEffects.GlobalIllumination = Current.globalIllumination;
 		LODGroup.Bias = Math.Max(Current.lodBias, 0.05f);
 		Foliage.DistanceScale = Math.Max(Current.foliageDistance, 0.05f);
 		GpuSkinning.Enabled = Current.gpuSkinning;
@@ -177,8 +182,8 @@ static class Quality
 	/// The settings as text, one `name=value` a line.
 	public static void Write(QualityValues v, String text)
 	{
-		text.AppendF("renderScale={}\nantialias={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\n",
-			v.renderScale, v.antialias ? 1 : 0, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize);
+		text.AppendF("renderScale={}\nantialias={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\n",
+			v.renderScale, v.antialias ? 1 : 0, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize);
 	}
 
 	/// Reads settings from text (unknown or missing lines keep the values given).
@@ -206,6 +211,7 @@ static class Quality
 			case "ambientOcclusion": v.ambientOcclusion = flag;
 			case "depthOfField": v.depthOfField = flag;
 			case "motionBlur": v.motionBlur = flag;
+			case "globalIllumination": v.globalIllumination = (GlobalIlluminationMode)(int32)Math.Clamp(number, 0, 2);
 			case "lodBias": v.lodBias = Math.Clamp(number, 0.05f, 4);
 			case "foliageDistance": v.foliageDistance = Math.Clamp(number, 0.05f, 4);
 			case "gpuSkinning": v.gpuSkinning = flag;
