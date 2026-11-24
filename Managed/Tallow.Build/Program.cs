@@ -2035,6 +2035,12 @@ internal static class Program
             return Export.WebExport.Setup(command[1..]);
         if (command.Length > 0 && command[0] == "serve")
             return Export.WebServer.Run(command[1..]);
+        if (command.Length > 0 && command[0] == "pack")
+            return Export.AssetCommands.Pack(command[1..]);
+        if (command.Length > 0 && command[0] == "convert-models")
+            return Export.AssetCommands.ConvertModels(command[1..]);
+        if (command.Length > 0 && command[0] == "compress-textures")
+            return Export.AssetCommands.CompressTextures(command[1..]);
         try
         {
             string project = Path.GetFullPath(RequiredOption(args, "--project"));
