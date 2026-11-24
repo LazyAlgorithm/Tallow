@@ -538,7 +538,7 @@ jobs:
 
           - **Tallow-Windows.zip**: unzip and run Tallow.exe.
           - **Tallow-Linux.zip**: unzip and run ./Tallow.
-          - **Tallow-macOS.zip** (Intel Macs; Apple silicon untested): unzip and run ./Tallow.
+          - **Tallow-macOS.zip** (Intel Macs; Apple silicon untested): unzip, then run \`xattr -dr com.apple.quarantine <folder>\` once (Tallow is not signed with an Apple Developer ID, so macOS blocks it otherwise), and run ./Tallow.
 
           Tallow installs the .NET SDK it needs on first start; no Beef compiler or Python is needed. Any of them exports Linux, Windows and web games (a Mac also macOS ones). NativeAOT exports also need the system's C++ tools (Visual Studio Build Tools on Windows, clang and zlib on Linux).
 
