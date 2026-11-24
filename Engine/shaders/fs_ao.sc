@@ -15,9 +15,16 @@ float depthAt(vec2 uv)
 	return texture2D(s_depth, uv).x;
 }
 
+// The centre of the depth texel a point falls in: positions are rebuilt from the texel actually read, or a flat
+// floor seen at a low angle looks like a staircase whose steps darken in bands.
+vec2 texelCentre(vec2 uv)
+{
+	return (floor(uv / u_aoParams.zw) + 0.5) * u_aoParams.zw;
+}
+
 void main()
 {
-	vec2 uv = v_texcoord0;
+	vec2 uv = texelCentre(v_texcoord0);
 	float d = depthAt(uv);
 	if (isViewmodel(d) || isSky(d))
 	{
@@ -43,7 +50,6 @@ void main()
 
 	float radius = u_aoParams.x;
 	float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-	float bias = 0.02 * radius + 0.002 * d;
 	float occlusion = 0.0;
 	for (int i = 0; i < 12; i++)
 	{
@@ -52,13 +58,18 @@ void main()
 		float rise = fract(t * 5.0 + noise * 0.61803);
 		vec3 dir = (tangent * cos(angle) + bitangent * sin(angle)) * sqrt(1.0 - rise * rise) + n * rise;
 		vec3 s = p + dir * (radius * mix(0.15, 1.0, t * t));
-		float sd = depthAt(viewToUv(s));
-		if (!isViewmodel(sd) && sd < s.z - bias)
-		{
-			// A surface much nearer the camera than the point is in front of it, not around it.
-			occlusion += clamp(radius / max(p.z - sd, 0.0001), 0.0, 1.0);
-		}
+		vec2 suv = texelCentre(viewToUv(s));
+		float sd = depthAt(suv);
+		if (isViewmodel(sd) || isSky(sd))
+			continue;
+		// The surface actually there, and how far it rises above this point's plane: a flat floor is its own plane
+		// and hides nothing, however steeply it is seen. Nearby surfaces count most; ones beyond the radius not at all.
+		vec3 v = viewPosition(suv, sd) - p;
+		float vv = dot(v, v);
+		float rise2 = dot(v, n) * inversesqrt(max(vv, 0.000001));
+		float near = clamp(1.0 - vv / (radius * radius), 0.0, 1.0);
+		occlusion += max(rise2 - 0.15, 0.0) * near;
 	}
-	float ao = clamp(1.0 - occlusion / 12.0 * u_aoParams.y, 0.0, 1.0);
+	float ao = clamp(1.0 - occlusion / 12.0 * 2.0 * u_aoParams.y, 0.0, 1.0);
 	gl_FragColor = vec4(ao, ao, ao, 1.0);
 }
