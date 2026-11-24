@@ -194,8 +194,19 @@ static class Input
 		}
 		Gamepad.Poll();
 		NoteDevice();
+		if (sUsingTouch)
+			TouchControls.EnsureDefaultLayout();
 		Touch.Update();
+		ApplyTouchLayout();
 		InputActions.Update();
+	}
+
+	/// The default on-screen layout (TouchControls.DefaultLayout) works the keyboard and mouse a game reads.
+	static void ApplyTouchLayout()
+	{
+		TouchControls.DefaultLayoutInput(scope (key) => { sKeys[(int)key] = true; }, scope (button) => { sButtons |= ButtonMask(button); }, let look);
+		// A finger drags much further than a mouse is moved for the same turn: half as much.
+		sMouseDelta += look * 0.5f;
 	}
 
 	// ---- which device the player is using ----
@@ -218,7 +229,11 @@ static class Input
 		if (!sTouchChecked)
 		{
 			sTouchChecked = true;
+#if BF_PLATFORM_ANDROID
+			sUsingTouch = true;
+#else
 			sUsingTouch = WebPlatform.IsTouchDevice;
+#endif
 		}
 		// The mouse a touch screen pretends to be says nothing about a real mouse.
 		let touchedLately = Touch.Touching || Time.RealTime - Touch.LastTouchTime < 0.5f;

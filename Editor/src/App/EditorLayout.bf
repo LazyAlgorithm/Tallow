@@ -66,6 +66,7 @@ extension EditorApp
 		DrawPopups();
 		DrawProjectSettings();
 		DrawBuildWindow();
+		DrawPlatformsWindow();
 		DrawAchievements();
 		DrawInputActions();
 		DrawModelWindow();

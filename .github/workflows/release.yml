@@ -89,13 +89,16 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/beef
-          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy-${{ hashFiles('tallow/tools/beef-patches/**') }}
 
       - name: Build the Beef compiler
         if: steps.beef-cache.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/beefytech/Beef ~/beef
           git -C ~/beef checkout "$BEEF_COMMIT"
+          # Tallow's fixes to the compiler (tools/beef-patches: small integer arguments widened as the C calling
+          # conventions of x86-64 Linux, macOS and Android expect).
+          for patch in tallow/tools/beef-patches/*.patch; do git -C ~/beef apply "$PWD/$patch"; done
           cd ~/beef/bin && ./build.sh
 
       - name: Keep the Beef compiler
@@ -103,7 +106,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/beef
-          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy
+          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy-${{ hashFiles('tallow/tools/beef-patches/**') }}
 
       - name: Native library cache key
         id: native-key
@@ -418,13 +421,16 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/beef
-          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-macos15-x86_64
+          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-macos15-x86_64-${{ hashFiles('tallow/tools/beef-patches/**') }}
 
       - name: Build the Beef compiler
         if: steps.beef-cache.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/beefytech/Beef ~/beef
           git -C ~/beef checkout "$BEEF_COMMIT"
+          # Tallow's fixes to the compiler (tools/beef-patches: small integer arguments widened as the C calling
+          # conventions of x86-64 Linux, macOS and Android expect).
+          for patch in tallow/tools/beef-patches/*.patch; do git -C ~/beef apply "$PWD/$patch"; done
           cd ~/beef/bin && ./build.sh
 
       - name: Keep the Beef compiler
@@ -432,7 +438,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/beef
-          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-macos15-x86_64
+          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-macos15-x86_64-${{ hashFiles('tallow/tools/beef-patches/**') }}
 
       - name: Native library cache key
         id: native-key
@@ -501,10 +507,93 @@ jobs:
           path: out/extras-macos.tar
           retention-days: 3
 
+  # The Android platform module (Tallow-Platform-Android.zip, added in the editor's Platforms window): the engine and
+  # player for arm64 phones and the x86_64 emulator, and SDL's Java activity, made with Google's NDK
+  # (tools/android/build_player.sh). Engine packages leave it out; the editor downloads it from this release.
+  android:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    # A problem in the Android module never holds up the desktop release.
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash tallow/.github/scripts/step.sh {0}
+    steps:
+      - name: Get Tallow
+        uses: actions/checkout@v4
+        with:
+          path: tallow
+          fetch-depth: 0
+
+      - name: Install the Tallow .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: tallow/global.json
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Java for the Android tools
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake zip xz-utils curl \
+            libffi-dev zlib1g-dev libzstd-dev libxml2-dev libedit-dev
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "llvm-$LLVM_VERSION-dev" "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for tool in clang clang++ llvm-ar llvm-config; do
+            sudo ln -sf "/usr/lib/llvm-$LLVM_VERSION/bin/$tool" "/usr/local/bin/$tool"
+          done
+          # The NDK Tallow pins (Managed/Tallow.Build/Export/Android.cs NdkVersion), and a platform and build tools.
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;30.0.16248370" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
+
+      # The same compiler as the Linux job (same cache).
+      - name: Cache the Beef compiler
+        id: beef-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/beef
+          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-jammy-${{ hashFiles('tallow/tools/beef-patches/**') }}
+
+      - name: Build the Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          for patch in tallow/tools/beef-patches/*.patch; do git -C ~/beef apply "$PWD/$patch"; done
+          cd ~/beef/bin && ./build.sh
+
+      - name: Android player
+        run: |
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild" BEEF_SOURCE="$HOME/beef"
+          cd tallow
+          # The C# API bindings are generated (gitignored); the player's native exports come from them.
+          dotnet run --project Managed/Tallow.BindingGen/Tallow.BindingGen.csproj -- --manifest Managed/Tallow.BindingGen/csharp-api-manifest.tsv --engine-root .
+          tools/android/build_player.sh
+          dotnet build Managed/Tallow.Build/Tallow.Build.csproj -c Debug --nologo -v minimal
+          mkdir -p ../out
+          dotnet Managed/Tallow.Build/bin/Debug/net11.0/Tallow.Build.dll platform-pack android --output ../out/Tallow-Platform-Android.zip --engine-root . --build "$GITHUB_SHA"
+
+      - name: Keep the Android module
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tallow-Platform-Android
+          path: out/Tallow-Platform-Android.zip
+
   # Every run puts the complete zips (each with all the players) on the run as Tallow-packages; pushes to main, ecs,
   # release and tags (or Run workflow with publish) also make the release.
   release:
-    needs: [linux, windows, macos]
+    needs: [linux, windows, macos, android]
     runs-on: ubuntu-22.04
     env:
       PUBLISH: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ecs' || github.ref == 'refs/heads/release' || startsWith(github.ref, 'refs/tags/'))) || inputs.publish }}
@@ -535,6 +624,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: Tallow-macOS
+          path: out
+
+      - name: Get the Android module
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: Tallow-Platform-Android
           path: out
 
       - name: Get the players and web pieces
@@ -576,6 +672,7 @@ jobs:
 
           - **Tallow-Windows.zip**: unzip and run Tallow.exe.
           - **Tallow-Linux.zip**: unzip and run ./Tallow.
+          - **Tallow-Platform-Android.zip**: the Android platform; Tallow downloads it itself when you add Android in the Build window's Platforms (it needs Android Studio installed).
           - **Tallow-macOS.zip** (Intel Macs; Apple silicon untested): unzip, then run \`xattr -dr com.apple.quarantine <folder>\` once (Tallow is not signed with an Apple Developer ID, so macOS blocks it otherwise), and run ./Tallow.
 
           Tallow installs the .NET SDK it needs on first start; no Beef compiler or Python is needed. Any of them exports Linux, Windows, macOS and web games. NativeAOT: Windows games on Windows (with the Visual Studio C++ Build Tools), Linux games on any machine once Tallow has installed Zig (project selector), macOS games on a Mac.

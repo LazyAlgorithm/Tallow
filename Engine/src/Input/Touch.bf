@@ -371,6 +371,69 @@ static class TouchControls
 	public static void Clear()
 	{
 		ClearAndDeleteItems(sControls);
+		sDefaultLayout = false;
+	}
+
+	// ---- the default layout ----
+
+	/// A game that adds no controls of its own gets a default layout on a touch screen, which works the keyboard and
+	/// mouse a desktop game already reads: a stick for W/A/S/D (and arrow keys), a look area for the mouse, and
+	/// buttons for Space (Jump), the left and right mouse buttons (Fire, Alt), E (Use) and Left Shift (Run, a switch).
+	/// Set false before the first frame for a game that wants no controls at all.
+	public static bool DefaultLayout = true;
+	static bool sDefaultLayout;
+	static bool sRunOn;
+
+	/// True while the controls on screen are the default layout (not the game's own).
+	public static bool UsingDefaultLayout => sDefaultLayout;
+
+	/// Adds the default layout if the game has none of its own (Input calls this once a frame on a touch screen).
+	public static void EnsureDefaultLayout()
+	{
+		if (!DefaultLayout || sDefaultLayout || sControls.Count > 0)
+			return;
+		sDefaultLayout = true;
+		// Left: the movement stick, which appears wherever the thumb lands in the lower left.
+		AddStick("Move", .(0, 0.35f, 0.42f, 0.65f), .(0, 1), .(0.2f, -0.2f), 0.12f);
+		// Right: dragging turns the view; the buttons sit under the right thumb, Fire and Alt also aim while held.
+		AddLook("Look", .(0.42f, 0, 0.58f, 1));
+		AddButton("Jump", "Jump", .(1, 1), .(-0.12f, -0.12f), 0.08f);
+		AddButton("Fire", "Fire", .(1, 1), .(-0.34f, -0.1f), 0.075f, "Look");
+		AddButton("Use", "Use", .(1, 1), .(-0.12f, -0.36f), 0.06f);
+		AddButton("Alt", "Alt", .(1, 1), .(-0.3f, -0.31f), 0.055f, "Look");
+		AddButton("Run", "Run", .(0, 1), .(0.47f, -0.1f), 0.05f);
+	}
+
+	/// What the default layout does to the keyboard and mouse this frame: keys and buttons held, and the view's turn.
+	public static void DefaultLayoutInput(delegate void(KeyCode key) holdKey, delegate void(int button) holdButton, out Vector2 look)
+	{
+		look = .(0, 0);
+		if (!sDefaultLayout || !Active)
+			return;
+		if (let move = Find("Move"))
+		{
+			let v = move.vector;
+			if (v.y > 0.35f) { holdKey(.W); holdKey(.UpArrow); }
+			if (v.y < -0.35f) { holdKey(.S); holdKey(.DownArrow); }
+			if (v.x > 0.35f) { holdKey(.D); holdKey(.RightArrow); }
+			if (v.x < -0.35f) { holdKey(.A); holdKey(.LeftArrow); }
+		}
+		if (let lookArea = Find("Look"))
+			look = lookArea.delta;
+		if (Held("Jump"))
+			holdKey(.Space);
+		if (Held("Use"))
+			holdKey(.E);
+		if (Held("Fire"))
+			holdButton(0);
+		if (Held("Alt"))
+			holdButton(1);
+		if (Pressed("Run"))
+			sRunOn = !sRunOn;
+		if (let run = Find("Run"))
+			run.lit = sRunOn;
+		if (sRunOn)
+			holdKey(.LeftShift);
 	}
 
 	/// The length sizes and offsets are measured in: the screen's short side (its height when held sideways).

@@ -100,6 +100,14 @@ static class SDL
 	[CLink] public static extern void SDL_free(void* memory);
 	/// Asks the desktop for a folder. The answer arrives later through the callback, possibly on another thread:
 	/// files is null on an error, and its first entry is null when the person cancelled.
+	/// A file type the open-file dialog offers: a name and its extensions ("zip", or "png;jpg").
+	[CRepr]
+	public struct DialogFileFilter
+	{
+		public char8* name;
+		public char8* pattern;
+	}
+	[CLink] public static extern void SDL_ShowOpenFileDialog(function void(void* userData, char8** files, int32 filter) callback, void* userData, void* window, DialogFileFilter* filters, int32 filterCount, char8* startLocation, bool allowMany);
 	[CLink] public static extern void SDL_ShowOpenFolderDialog(function void(void* userData, char8** files, int32 filter) callback, void* userData, void* window, char8* startFolder, bool allowMany);
 }
 

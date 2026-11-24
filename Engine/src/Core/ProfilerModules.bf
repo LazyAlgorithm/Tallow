@@ -84,7 +84,7 @@ static class ProfilerModules
 	/// The process's resident memory in bytes, or -1 where it cannot be read.
 	public static int64 ProcessMemory()
 	{
-#if BF_PLATFORM_LINUX
+#if BF_PLATFORM_LINUX || BF_PLATFORM_ANDROID
 		let text = scope String();
 		if (File.ReadAllText("/proc/self/statm", text) case .Err)
 			return -1;

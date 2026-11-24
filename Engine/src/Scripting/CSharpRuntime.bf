@@ -616,6 +616,13 @@ static class CSharpRuntime
 #else
 		// NativeAOT export: one native library, no .NET, no game assemblies.
 		let native = scope $"{gameFolder}/Managed/Native/{NativeLibraryName}";
+#if BF_PLATFORM_ANDROID
+		// Android loads code only from the app's own library folder (the APK's lib/<abi>), which the start-up
+		// (native/android/tallow_android_main.c) names; the game folder keeps Tallow.Game.codeid.
+		let libraries = scope String();
+		if (Environment.GetEnvironmentVariable("TALLOW_ANDROID_LIBRARIES", libraries) case .Ok)
+			native.Set(scope $"{libraries}/{NativeLibraryName}");
+#endif
 		if (File.Exists(native))
 		{
 			if (!InitializeNative(native) || !BindScene(scene))
@@ -663,9 +670,14 @@ static class CSharpRuntime
 	/// In a browser, a C# game is one whose page started .NET (and registered its runtime) before the engine.
 	public static bool IsPackagedGame(StringView gameFolder) => tn_csharp_web_hosted() != 0;
 #else
-	/// A built game ships its C# in a Managed folder beside it.
+	/// A built game ships its C# in a Managed folder beside it. On Android the library itself is in the app's library
+	/// folder, and the game folder has its Tallow.Game.codeid.
 	public static bool IsPackagedGame(StringView gameFolder) => File.Exists(scope $"{gameFolder}/Managed/Game/Tallow.Game/Tallow.Game.dll") ||
-		File.Exists(scope $"{gameFolder}/Managed/Native/{NativeLibraryName}");
+		File.Exists(scope $"{gameFolder}/Managed/Native/{NativeLibraryName}")
+#if BF_PLATFORM_ANDROID
+		|| File.Exists(scope $"{gameFolder}/Managed/Native/Tallow.Game.codeid")
+#endif
+		;
 #endif
 
 	public const int RequiredDotNetMajor = 11;

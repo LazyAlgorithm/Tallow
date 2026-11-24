@@ -217,6 +217,9 @@ class EditorApp : Application
 			mShowInputActions = true;
 		if (HasArg("--build-window"))
 			ApplyBuildSwitches();
+		// For checks and screenshots: the Platforms window open.
+		if (HasArg("--platforms-window"))
+			OpenPlatformsWindow();
 		if (AssetArg("--animator", full..Clear()))
 			OpenAnimatorFromSwitch(full);
 		if (AssetArg("--animation", full..Clear()))
@@ -405,6 +408,8 @@ class EditorApp : Application
 #endif
 		if (HasArg("--build-web"))
 			mBuildTarget = .Web;
+		if (HasArg("--build-android"))
+			mBuildTarget = .Android;
 		// The C# runtime choice of the window (saved in project.tallow).
 		if (Project.Current != null && HasArg("--build-native-aot"))
 			Project.Current.NativeAot = true;

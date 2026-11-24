@@ -10,7 +10,7 @@ namespace Tallow.ManagedBuild.Export;
 /// compiled shaders for its graphics backends and its assets, packed.
 ///
 /// <code>
-///   export &lt;project&gt; --output &lt;folder&gt; [--platform linux|windows|macos|web] [--config Release|Debug] [--replace]
+///   export &lt;project&gt; --output &lt;folder&gt; [--platform linux|windows|macos|web|android] [--config Release|Debug] [--replace]
 ///          [--scene S] [--fullscreen|--windowed] [--no-compress] [--no-texture-compression] [--single-pack] [--loose]
 ///          [--csharp-runtime jit|native] [--aot-warnings error|report] [--no-bundle-dotnet] [--engine-root E] [--zip]
 /// </code>
@@ -34,7 +34,7 @@ internal static class Exporter
         public string? EngineRoot;
     }
 
-    const string Usage = "usage: export <project> --output <folder> [--platform linux|windows|macos|web] [--config Release|Debug] " +
+    const string Usage = "usage: export <project> --output <folder> [--platform linux|windows|macos|web|android] [--config Release|Debug] " +
         "[--replace] [--scene S] [--fullscreen|--windowed] [--no-compress] [--no-texture-compression] [--single-pack] [--loose] " +
         "[--csharp-runtime jit|native] [--aot-warnings error|report] [--no-bundle-dotnet] [--engine-root E] [--zip]";
 
@@ -64,8 +64,8 @@ internal static class Exporter
                 case "--platform":
                     options.Platform = Value(ref i, arg) switch
                     {
-                        "linux" => Target.Linux, "windows" => Target.Windows, "macos" => Target.MacOS, "web" => Target.Web,
-                        var other => throw new ExportException($"--platform is linux, windows, macos or web, not {other}.", true)
+                        "linux" => Target.Linux, "windows" => Target.Windows, "macos" => Target.MacOS, "web" => Target.Web, "android" => Target.Android,
+                        var other => throw new ExportException($"--platform is linux, windows, macos, web or android, not {other}.", true)
                     };
                     break;
                 case "--replace": options.Replace = true; break;
@@ -207,7 +207,8 @@ internal static class Exporter
             if (!options.Replace)
                 throw new ExportException("Output already exists; choose a new folder to preserve the existing build, or pass --replace.", true);
             if (!Directory.Exists(output) || (Directory.EnumerateFileSystemEntries(output).Any() &&
-                !File.Exists(Path.Combine(output, "game.tallow")) && !File.Exists(Path.Combine(output, "game.tpak"))))
+                !File.Exists(Path.Combine(output, "game.tallow")) && !File.Exists(Path.Combine(output, "game.tpak")) &&
+                !File.Exists(Path.Combine(output, "tallow-android.txt"))))
                 throw new ExportException($"{output} exists and is not an earlier build of a game, so it is left alone. Choose another folder.", true);
         }
         string manifest = Path.Combine(project, "project.tallow");
@@ -215,7 +216,7 @@ internal static class Exporter
             throw new ExportException($"Missing {manifest}. Tallow projects require project.tallow; regenerate or update the project before building.", true);
         var settings = ExportUtil.ReadSettings(manifest);
         Target target = options.Platform;
-        bool windows = target == Target.Windows, web = target == Target.Web, macos = target == Target.MacOS;
+        bool windows = target == Target.Windows, web = target == Target.Web, macos = target == Target.MacOS, android = target == Target.Android;
         string recorded = settings.Get("engine");
         string engine = options.EngineRoot != null ? Path.GetFullPath(options.EngineRoot)
             : recorded.Length > 0 ? Path.GetFullPath(Path.IsPathRooted(recorded) ? recorded : Path.Combine(project, recorded)) : ToolEngine();
@@ -242,9 +243,20 @@ internal static class Exporter
         // browser, and NativeAOT is built only where NativeAot.CanBuild says: asked for on the command line, anywhere
         // else is an error; from the project, the export uses JIT.
         string runtime = options.CSharpRuntime ?? settings.Get("csharpRuntime", "native");
+        // Android has no .NET to run the game's assemblies on: its C# is always compiled ahead of time, with Android
+        // Studio's tools (the NDK installed into its SDK the first time).
+        AndroidTools? androidTools = null;
+        if (android)
+        {
+            if (options.CSharpRuntime == "jit")
+                throw new ExportException("Android games always compile their C# ahead of time (NativeAOT); --csharp-runtime jit is not available.", true);
+            runtime = "native";
+            androidTools = Android.Require();
+            Android.PlayerFolder(engine);
+        }
         if (runtime is not ("jit" or "native"))
             throw new ExportException($"csharpRuntime in project.tallow is jit or native, not {runtime}.", true);
-        if (runtime == "native" && !NativeAot.CanBuild(target))
+        if (runtime == "native" && !android && !NativeAot.CanBuild(target))
         {
             if (options.CSharpRuntime == "native")
                 throw new ExportException(web ? "A web build always runs .NET in the browser; NativeAOT is not available for it."
@@ -256,7 +268,7 @@ internal static class Exporter
         bool nativeAot = runtime == "native";
         bool bundle = !options.NoBundleDotNet && settings.Get("bundleDotNet", "1") != "0";
 
-        string? player = web ? null : Player(engine, options.Config, target);
+        string? player = web || android ? null : Player(engine, options.Config, target);
         BuildGame(engine, project, options.Config);
 
         string parent = Path.GetDirectoryName(output)!;
@@ -266,8 +278,28 @@ internal static class Exporter
         try
         {
             string executable = name + (windows ? ".exe" : "");
+            // Android: the game's C# for each ABI, compiled into libraries the APK carries (Android.Package).
+            var androidLibraries = new Dictionary<string, string>();
+            string androidWork = Path.Combine(parent, $"{Path.GetFileName(output)}-android-{Guid.NewGuid().ToString("N")[..8]}");
             if (web)
                 WebExport.Build(engine, project, options.Config, staging);
+            else if (android)
+            {
+                foreach (string abi in Android.Abis)
+                {
+                    string abiStaging = Path.Combine(androidWork, abi);
+                    NativeAot.Build(engine, project, options.Config, abiStaging, target, "", Path.Combine(Symbols.Folder(output), abi),
+                        options.AotWarnings, androidTools, abi);
+                    androidLibraries[abi] = Path.Combine(abiStaging, "Managed", "Native", NativeAot.LibraryName(target));
+                    string codeId = Path.Combine(abiStaging, "Managed", "Native", "Tallow.Game.codeid");
+                    string notices = Path.Combine(abiStaging, "THIRD-PARTY-NOTICES.txt");
+                    Directory.CreateDirectory(Path.Combine(staging, "Managed", "Native"));
+                    if (File.Exists(codeId))
+                        File.Copy(codeId, Path.Combine(staging, "Managed", "Native", "Tallow.Game.codeid"), true);
+                    if (File.Exists(notices))
+                        File.Copy(notices, Path.Combine(staging, "THIRD-PARTY-NOTICES.txt"), true);
+                }
+            }
             else
             {
                 File.Copy(player!, Path.Combine(staging, executable), true);
@@ -286,7 +318,7 @@ internal static class Exporter
 
             // A Release export ships a player with no debug information. Its matching symbols and a record of every
             // module's exact build identifier go to <output>-symbols beside the build, never inside it.
-            if (!web && options.Config == "Release")
+            if (!web && !android && options.Config == "Release")
             {
                 string symbols = Symbols.Folder(output);
                 string stripped = Path.Combine(staging, executable);
@@ -315,7 +347,9 @@ internal static class Exporter
             string engineAssets = Path.Combine(engine, "Engine", "assets");
             string[] backends = target switch
             {
-                Target.Web => new[] { "webgl" }, Target.Windows => new[] { "spirv" }, Target.MacOS => new[] { "metal" }, _ => new[] { "spirv", "glsl" }
+                Target.Web => new[] { "webgl" }, Target.Windows => new[] { "spirv" }, Target.MacOS => new[] { "metal" },
+                // Android: Vulkan, and OpenGL ES 3 on phones without a good Vulkan driver.
+                Target.Android => new[] { "spirv", "essl" }, _ => new[] { "spirv", "glsl" }
             };
             foreach (string backend in backends)
             {
@@ -359,14 +393,15 @@ internal static class Exporter
                 Console.WriteLine($"Models: {converted.Count} converted to glTF");
             // Pictures compressed for the graphics card (tallowengine.com/docs/textures): a .ktx beside each. Not for
             // the web, whose browsers do not all read the same compressed formats.
-            if (!web && !options.NoTextureCompression && settings.Get("compressTextures", "1") != "0" && Directory.Exists(Path.Combine(staging, "Assets")))
+            // Nor for Android, whose graphics chips do not read the desktop's BC formats.
+            if (!web && !android && !options.NoTextureCompression && settings.Get("compressTextures", "1") != "0" && Directory.Exists(Path.Combine(staging, "Assets")))
             {
                 var (made, skipped, errors) = Textures.CompressFolder(Path.Combine(staging, "Assets"), engine,
                     settings.Get("textureCompressExclude", Textures.DefaultExclude));
                 Console.WriteLine($"Textures: {made} compressed, {skipped} left as they are" + string.Concat(errors.Select(error => "\n  note: " + error)));
             }
             // A web page cannot load Steam.
-            string steam = web ? "" : settings.Get("steamAppId");
+            string steam = web || android ? "" : settings.Get("steamAppId");
             if (steam.Length > 0)
             {
                 // A game that is not started from Steam says which app it is with this file, and needs Valve's
@@ -396,6 +431,9 @@ internal static class Exporter
                 "loadSaveAtStart", "saveSlot", "windowWidth", "windowHeight", "escapeQuits" })
                 if (settings.Get(key).Length > 0)
                     game.Append($"{key} = {settings[key]}\n");
+            // Android: which ways a phone may hold the game (the manifest's screenOrientation; the player tells SDL).
+            if (android)
+                game.Append($"androidOrientation = {settings.Get("androidOrientation", "sensorLandscape")}\n");
             string gameFile = Path.Combine(staging, "game.tallow");
             File.WriteAllText(gameFile, game.ToString());
 
@@ -407,12 +445,23 @@ internal static class Exporter
                 WebExport.WritePage(engine, project, name, staging);
             if (Directory.Exists(output))
                 Directory.Delete(output, true);
-            Directory.Move(staging, output);
+            if (android)
+            {
+                // The game folder goes inside the APK; the output folder holds the APK.
+                Android.Package(androidTools!, engine, project, staging, androidLibraries, output, name, settings, options.Config);
+                Directory.Delete(staging, true);
+                if (Directory.Exists(androidWork))
+                    Directory.Delete(androidWork, true);
+            }
+            else
+                Directory.Move(staging, output);
         }
         catch
         {
             if (Directory.Exists(staging))
                 Directory.Delete(staging, true);
+            foreach (string leftover in Directory.EnumerateDirectories(Path.GetDirectoryName(output)!, Path.GetFileName(output) + "-android-*"))
+                Directory.Delete(leftover, true);
             throw;
         }
         Console.WriteLine($"{target} player packaged at {output}; TallowEditor excluded.");

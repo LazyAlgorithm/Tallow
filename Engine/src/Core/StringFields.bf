@@ -83,7 +83,7 @@ static class StringFields
 		return (protect & writable) == 0;
 	}
 
-	#elif BF_PLATFORM_LINUX
+	#elif BF_PLATFORM_LINUX || BF_PLATFORM_ANDROID
 	[CRepr]
 	struct PhdrInfo
 	{

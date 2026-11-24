@@ -132,13 +132,23 @@ static class Log
 		case .Warning: ToFile(scope $"[warning] {text}");
 		case .Error: ToFile(scope $"[error] {text}");
 		}
+#if BF_PLATFORM_ANDROID
+		// An app has no console: to logcat (adb logcat -s Tallow), at the matching priority.
+		__android_log_write(level == .Error ? 6 : level == .Warning ? 5 : 4, "Tallow", scope String(text).CStr());
+#else
 		switch (level)
 		{
 		case .Info: Console.WriteLine(text);
 		case .Warning: Console.WriteLine("[warning] {}", text);
 		case .Error: Console.WriteLine("[error] {}", text);
 		}
+#endif
 	}
+
+#if BF_PLATFORM_ANDROID
+	[CLink]
+	static extern int32 __android_log_write(int32 priority, char8* tag, char8* text);
+#endif
 
 	/// Forgets every message.
 	public static void Clear()

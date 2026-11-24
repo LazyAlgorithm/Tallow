@@ -30,7 +30,7 @@ static class GameMain
 #else
 		let app = scope GameApp();
 #endif
-		OpenLog();
+		OpenLog(root);
 		Watchdog.Start();
 		ReadManifest(manifest, app);
 		if (CSharpRuntime.IsPackagedGame(root))
@@ -61,10 +61,16 @@ static class GameMain
 
 	/// A built game has no console: it keeps a log beside it (or in the temporary folder if that is read-only),
 	/// which also says what the game was doing if it ever stops moving (Watchdog).
-	static void OpenLog()
+	static void OpenLog(StringView root)
 	{
 		let logPath = scope String();
+#if BF_PLATFORM_ANDROID
+		// The app's own files (the game folder the start-up unpacked); the console goes to logcat as well.
+		logPath.Set(root);
+		logPath.Append("/");
+#else
 		Environment.GetExecutableFilePath(logPath);
+#endif
 		let slash = Math.Max(logPath.LastIndexOf('/'), logPath.LastIndexOf('\\'));
 		if (slash >= 0)
 			logPath.RemoveToEnd(slash + 1);
@@ -115,6 +121,13 @@ static class GameMain
 				GameWindow.StartHeight = (int32)Math.Max(SceneSerializer.ParseInt(value), 0);
 			case "escapeQuits":
 				GameWindow.EscapeQuits = value != "0";
+			case "androidOrientation":
+				// Which ways a phone may hold the game (SDL turns the screen to match; it would otherwise follow the
+				// shape of the window, which on a phone is always the screen's).
+				String orientations = value.StartsWith("portrait") ? "Portrait PortraitUpsideDown"
+					: value.StartsWith("landscape") || value == "sensorLandscape" ? "LandscapeLeft LandscapeRight" : "";
+				if (!orientations.IsEmpty)
+					SDL.SDL_SetHint("SDL_ORIENTATIONS", orientations.CStr());
 			case "antiCheat":
 				// With the anti-cheat on, a built game also closes its memory to other programs and watches itself.
 				if (value == "1")

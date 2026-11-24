@@ -33,6 +33,11 @@ if(EMSCRIPTEN)
 	set(BGFX_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 	set(BGFX_CONFIG_MULTITHREADED OFF CACHE BOOL "" FORCE)
 endif()
+if(ANDROID)
+	# An Android build (the NDK's toolchain file, see tools/android) is only the game's libraries: shaderc and texturec
+	# are desktop tools that the editor and Tallow.Build export run.
+	set(BGFX_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+endif()
 set(BGFX_BUILD_TOOLS_GEOMETRY OFF CACHE BOOL "" FORCE)
 # texturec: Tallow.Build export compresses a game's pictures with it (BC7 .ktx with mip levels).
 set(BGFX_BUILD_TOOLS_TEXTURE ON CACHE BOOL "" FORCE)
@@ -178,6 +183,10 @@ if(TALLOW_RAPIER)
 	if(EMSCRIPTEN)
 		set(_tallow_rapier_platform "web-wasm32")
 		set(_tallow_rapier_library "librapier3d_ffi.a")
+	elseif(ANDROID)
+		# arm64-v8a (phones and tablets) or x86_64 (the emulator).
+		set(_tallow_rapier_platform "android-${ANDROID_ABI}")
+		set(_tallow_rapier_library "librapier3d_ffi.a")
 	elseif(WIN32)
 		set(_tallow_rapier_platform "windows-x86_64")
 		set(_tallow_rapier_library "rapier3d_ffi.lib")
@@ -288,7 +297,7 @@ target_link_libraries(tallow_native PRIVATE bgfx bx SDL3::SDL3-static)
 
 
 # ---- Model import settings step (tallowengine.com/docs/model-import), for Tallow.Build export ----
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND NOT ANDROID)
 	add_executable(tallow_modelsettings tallow_modelsettings.c tallow_modelimport.c)
 	target_include_directories(tallow_modelsettings PRIVATE ${TP}/cgltf)
 	if(NOT MSVC)
@@ -299,7 +308,7 @@ endif()
 # ---- Model converter (editor tool): FBX, OBJ, DAE, STL, PLY and 3DS to .glb, through Assimp ----
 # The editor and Tallow.Build export run tallow_modelconv as a program of its own (tallowengine.com/docs/model-import); games
 # never link Assimp.
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND NOT ANDROID)
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 	set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 	set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)

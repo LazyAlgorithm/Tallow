@@ -12,7 +12,7 @@ internal sealed class ExportException(string message, bool usage = false) : Exce
 }
 
 /// <summary>The platforms a game is exported for.</summary>
-internal enum Target { Linux, Windows, MacOS, Web }
+internal enum Target { Linux, Windows, MacOS, Web, Android }
 
 internal static class ExportUtil
 {

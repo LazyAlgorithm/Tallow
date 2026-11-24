@@ -54,6 +54,8 @@ internal static class NativeAot
         Target.Linux => ExportUtil.HostLinux || Zig.Find() != null,
         Target.Windows => ExportUtil.HostWindows || ExportUtil.HostLinux,
         Target.MacOS => ExportUtil.HostMac && AppleToolsInstalled(),
+        // Android Studio's SDK and Java; the NDK is installed by the export when it is missing.
+        Target.Android => Android.Find().HasStudio,
         _ => false,
     };
 
@@ -64,6 +66,7 @@ internal static class NativeAot
         Target.Windows => "a Windows NativeAOT library is compiled on Windows or Linux",
         Target.MacOS => ExportUtil.HostMac ? "a macOS NativeAOT library needs Apple's command line tools (run: xcode-select --install)"
             : "a macOS NativeAOT library is compiled on a Mac (Apple's tools only run there)",
+        Target.Android => Android.Problem(Android.Find()) ?? Android.StudioHelp,
         _ => "a web build always runs .NET in the browser",
     };
 
@@ -280,20 +283,23 @@ internal static class NativeAot
     /// <summary>Compiles the NativeAOT library into staging/Managed/Native and its native symbols into
     /// <paramref name="symbols"/>. With <paramref name="warningsMode"/> "error", a warning in the game's own code, or
     /// an engine warning not in tools/nativeaot_allowlist.txt, fails the export (after the report is written).</summary>
-    public static void Build(string engine, string project, string config, string staging, Target target, string player, string symbols, string warningsMode)
+    public static void Build(string engine, string project, string config, string staging, Target target, string player, string symbols, string warningsMode,
+        AndroidTools? android = null, string? androidAbi = null)
     {
-        if (!CanBuild(target))
+        if (target != Target.Android && !CanBuild(target))
             throw new ExportException($"No NativeAOT build here: {WhyNot(target)}.");
         bool windows = target == Target.Windows, macos = target == Target.MacOS;
         // A macOS library is for the chip the player is built for (an Intel player runs on Apple silicon too, translated).
-        string rid = windows ? "win-x64" : macos ? "osx-" + (Symbols.MachOArch(player) ?? "x64") : "linux-x64";
+        string rid = target == Target.Android ? Android.Rid(androidAbi!) : windows ? "win-x64" : macos ? "osx-" + (Symbols.MachOArch(player) ?? "x64") : "linux-x64";
         var assemblies = GameAssemblies(project, config);
         string cache = Path.Combine(ExportUtil.CacheFolder(), "nativeaot");
         var environment = new Dictionary<string, string> { ["DOTNET_NOLOGO"] = "1" };
         var properties = new List<string>();
         bool cross = windows && !ExportUtil.HostWindows;
         string work = Directory.CreateTempSubdirectory("tallow-native-").FullName;
-        if (cross)
+        if (target == Target.Android)
+            properties = Android.LinkProperties(android!, androidAbi!);
+        else if (cross)
         {
             var (extra, crossProperties) = WindowsLinkSetup(cache);
             foreach (var (key, value) in extra)

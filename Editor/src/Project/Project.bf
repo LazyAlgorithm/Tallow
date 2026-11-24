@@ -407,7 +407,7 @@ class Project
 		Terminal.Quote(EngineRoot, command);
 		command.Append(" --output ");
 		Terminal.Quote(outputPath, command);
-		if (!BundleDotNet)
+		if (!BundleDotNet && target != .Android)
 			command.Append(" --no-bundle-dotnet");
 #if BF_PLATFORM_WINDOWS
 		// A Windows folder keeps no Unix permissions, without which a Linux or macOS player cannot start: share the zip.
@@ -415,7 +415,9 @@ class Project
 			command.Append(" --zip");
 #endif
 		// Always said, so that the build is what the window shows (never switched silently).
-		if (target != .Web)
+		if (target == .Android)
+			command.Append(" --csharp-runtime native");
+		else if (target != .Web)
 			command.Append(NativeAot && EditorApp.NativeAotAvailable(target) ? " --csharp-runtime native" : " --csharp-runtime jit");
 		command.Append(" > ");
 		Terminal.Quote(scope $"{Path}/build/build.log" , command);

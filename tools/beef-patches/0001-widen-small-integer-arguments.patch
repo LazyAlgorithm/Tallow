@@ -1,0 +1,112 @@
+--- a/IDEHelper/Compiler/BfIRBuilder.h
++++ b/IDEHelper/Compiler/BfIRBuilder.h
+@@ -689,8 +689,29 @@
+ 	BfIRAttribute_SIMDSetting,
+ 	BfIRAttribute_FMASetting,
+ 	BfIRAttribute_NoInline,
++	BfIRAttribute_SExt,
+ };
+ 
++// The C calling conventions of x86-64 (System V) and Apple's arm64 have the caller widen an 8- or 16-bit integer
++// argument to 32 bits, and code compiled by clang relies on it: zeroext/signext on the parameter, as clang marks them.
++inline BfIRAttribute BfIRGetIntExtendAttribute(BfTypeCode typeCode)
++{
++	switch (typeCode)
++	{
++	case BfTypeCode_Boolean:
++	case BfTypeCode_UInt8:
++	case BfTypeCode_UInt16:
++	case BfTypeCode_Char8:
++	case BfTypeCode_Char16:
++		return BfIRAttribute_ZExt;
++	case BfTypeCode_Int8:
++	case BfTypeCode_Int16:
++		return BfIRAttribute_SExt;
++	default:
++		return (BfIRAttribute)-1;
++	}
++}
++
+ struct BfIRFunctionType
+ {
+ public:
+--- a/IDEHelper/Compiler/BfIRCodeGen.cpp
++++ b/IDEHelper/Compiler/BfIRCodeGen.cpp
+@@ -276,6 +276,7 @@
+ 	case BfIRAttribute_NoAlias: return llvm::Attribute::NoAlias;
+ 	case BfIRAttribute_StructRet: return llvm::Attribute::StructRet;
+ 	case BfIRAttribute_ZExt: return llvm::Attribute::ZExt;
++	case BfIRAttribute_SExt: return llvm::Attribute::SExt;
+ 	case BFIRAttribute_NoUnwind: return llvm::Attribute::NoUnwind;
+ 	case BFIRAttribute_UWTable: return llvm::Attribute::UWTable;
+ 	case BfIRAttribute_NoInline: return llvm::Attribute::NoInline;
+--- a/IDEHelper/Compiler/BfModule.cpp
++++ b/IDEHelper/Compiler/BfModule.cpp
+@@ -19361,11 +19361,16 @@
+ 					mBfIRBuilder->Func_AddAttribute(func, argIdx + 1, BfIRAttribute_ByVal, mSystem->mPtrSize);
+ 				}
+ 			}
+-			else if (resolvedTypeRef->IsPrimitiveType())
++			else if ((resolvedTypeRef->IsPrimitiveType()) || (resolvedTypeRef->IsTypedPrimitive()))
+ 			{
+-				auto primType = (BfPrimitiveType*)resolvedTypeRef;
+-				if (primType->mTypeDef->mTypeCode == BfTypeCode_Boolean)
+-					mBfIRBuilder->Func_AddAttribute(func, argIdx + 1, BfIRAttribute_ZExt);
++				// Typed primitives (enums with a small underlying type) are passed as that type.
++				BfType* underlying = resolvedTypeRef->IsTypedPrimitive() ? resolvedTypeRef->GetUnderlyingType() : resolvedTypeRef;
++				if ((underlying != NULL) && (underlying->IsPrimitiveType()))
++				{
++					auto attribute = BfIRGetIntExtendAttribute(((BfPrimitiveType*)underlying)->mTypeDef->mTypeCode);
++					if (attribute != (BfIRAttribute)-1)
++						mBfIRBuilder->Func_AddAttribute(func, argIdx + 1, attribute);
++				}
+ 			}
+ 
+ 			if (addDeref >= 0)
+--- a/IDEHelper/Compiler/BfExprEvaluator.cpp
++++ b/IDEHelper/Compiler/BfExprEvaluator.cpp
+@@ -7435,11 +7435,16 @@
+ 					}
+ 				}
+ 			}
+-			else if (paramType->IsPrimitiveType())
++			else if (((paramType->IsPrimitiveType()) || (paramType->IsTypedPrimitive())) && (!methodInstance->mIsIntrinsic))
+ 			{
+-				auto primType = (BfPrimitiveType*)paramType;
+-				if ((primType->mTypeDef->mTypeCode == BfTypeCode_Boolean) && (!methodInstance->mIsIntrinsic))
+-					mModule->mBfIRBuilder->Call_AddAttribute(callInst, argIdx + 1, BfIRAttribute_ZExt);
++				// Small integers are widened by the caller, as the C calling conventions expect (see BfIRGetIntExtendAttribute).
++				BfType* underlying = paramType->IsTypedPrimitive() ? paramType->GetUnderlyingType() : paramType;
++				if ((underlying != NULL) && (underlying->IsPrimitiveType()))
++				{
++					auto attribute = BfIRGetIntExtendAttribute(((BfPrimitiveType*)underlying)->mTypeDef->mTypeCode);
++					if (attribute != (BfIRAttribute)-1)
++						mModule->mBfIRBuilder->Call_AddAttribute(callInst, argIdx + 1, attribute);
++				}
+ 			}
+ 
+ 			if (addDeref >= 0)
+--- a/IDEHelper/Backend/BeIRCodeGen.cpp
++++ b/IDEHelper/Backend/BeIRCodeGen.cpp
+@@ -2916,6 +2916,10 @@
+ 				}
+ 				else if (attribute == BfIRAttribute_ZExt)
+ 					callInst->mArgs[argIdx - 1].mZExt = true;
++				else if (attribute == BfIRAttribute_SExt)
++				{
++					// For LLVM; this backend does not use ZExt either.
++				}
+ 				else if (attribute == BfIRAttribute_NoAlias)
+ 					callInst->mArgs[argIdx - 1].mNoAlias = true;
+ 				else if (attribute == BfIRAttribute_NoCapture)
+@@ -2990,6 +2994,10 @@
+ 					func->mParams[argIdx - 1].mNoCapture = true;
+ 				else if (attribute == BfIRAttribute_ZExt)
+ 					func->mParams[argIdx - 1].mZExt = true;
++				else if (attribute == BfIRAttribute_SExt)
++				{
++					// For LLVM; this backend does not use ZExt either.
++				}
+ 				else
+ 					BF_FATAL("Unhandled");
+ 			}

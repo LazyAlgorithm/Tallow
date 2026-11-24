@@ -2040,6 +2040,24 @@ internal static class Program
             return Export.Zig.Cc(command[1..]);
         if (command.Length > 0 && command[0] == "zig-objcopy")
             return Export.Zig.ObjCopy(command[1..]);
+        // Android games: what was found of Android Studio, folders it was not found in, and the NDK (Export/Android.cs).
+        if (command.Length > 0 && command[0] == "android-status")
+            return Export.Android.Status(command[1..]);
+        if (command.Length > 0 && command[0] == "android-set")
+            return Export.Android.Set(command[1..]);
+        if (command.Length > 0 && command[0] == "android-run")
+            return Export.Android.RunOnDevice(command[1..]);
+        if (command.Length > 0 && command[0] == "android-install-ndk")
+            return Export.Android.InstallNdkCommand(command[1..]);
+        // Platform modules: players a package does not carry, added and removed (Export/Platforms.cs).
+        if (command.Length > 0 && command[0] == "platform-list")
+            return Export.Platforms.List(command[1..]);
+        if (command.Length > 0 && command[0] == "platform-install")
+            return Export.Platforms.Install(command[1..]);
+        if (command.Length > 0 && command[0] == "platform-remove")
+            return Export.Platforms.Remove(command[1..]);
+        if (command.Length > 0 && command[0] == "platform-pack")
+            return Export.Platforms.Pack(command[1..]);
         if (command.Length > 0 && command[0] == "pack")
             return Export.AssetCommands.Pack(command[1..]);
         if (command.Length > 0 && command[0] == "convert-models")

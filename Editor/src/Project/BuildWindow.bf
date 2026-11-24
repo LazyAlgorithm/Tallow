@@ -14,7 +14,9 @@ enum BuildTarget
 	/// Intel or Apple silicon, as the engine's macOS player is (tallowengine.com/docs/macos).
 	MacOS,
 	/// A folder of web files (WebAssembly) to put on any web server, played in a browser on computers and phones.
-	Web
+	Web,
+	/// An APK for phones and tablets (Android 10 and later); a platform module (the Platforms window).
+	Android
 }
 
 /// File > Build Game: pick the system to build for and a folder, and get a folder holding the game and only what
@@ -60,12 +62,15 @@ extension EditorApp
 		{
 			var lines = text.Split('\n');
 			if (lines.GetNext() case .Ok(let system))
-				mBuildTarget = system == "windows" ? .Windows : system == "web" ? .Web : system == "macos" ? .MacOS : .Linux;
+				mBuildTarget = system == "windows" ? .Windows : system == "web" ? .Web : system == "macos" ? .MacOS : system == "android" ? .Android : .Linux;
 			if (lines.GetNext() case .Ok(let folder))
 				mBuildFolder.Set(folder);
 		}
 		if (mBuildFolder.IsEmpty)
 			mBuildFolder.AppendF("{}/Builds", Project.Current.Path);
+		// Whether Android Studio is here (for the Android target), asked in the background.
+		if (!PlatformModules.Checked)
+			PlatformModules.Refresh(Project.Current.EngineRoot);
 	}
 
 	/// The game's own folder inside the chosen one, named for the game and the system.
@@ -178,6 +183,8 @@ extension EditorApp
 		case .Linux: return HostTarget == .Linux || ZigToolchain.Installed();
 		case .Windows: return HostTarget == .Windows || HostTarget == .Linux;
 		case .MacOS: return HostTarget == .MacOS && AppleToolsInstalled();
+		// Always: Android's C# is compiled with Android Studio's NDK (which the export installs when missing).
+		case .Android: return true;
 		default: return false;
 		}
 	}
@@ -232,7 +239,8 @@ extension EditorApp
 	}
 
 	/// Whether the chosen system can be built for now.
-	bool TargetReady(BuildTarget target) => target == .Web ? WebPiecesAvailable() && WebDotNetReady() : PlayerAvailable(target);
+	bool TargetReady(BuildTarget target) => target == .Web ? WebPiecesAvailable() && WebDotNetReady()
+		: target == .Android ? PlatformModules.AndroidInstalled(Project.Current.EngineRoot) && PlatformModules.AndroidReady : PlayerAvailable(target);
 
 	void DrawBuildWindow()
 	{
@@ -276,8 +284,12 @@ extension EditorApp
 	void DrawBuildTarget()
 	{
 		ImGui.SeparatorText("For");
-		for (let target in BuildTarget[4](.Linux, .Windows, .MacOS, .Web))
+		// Android once its module is added (or chosen last time, so the window can say how to add it).
+		let android = PlatformModules.AndroidInstalled(Project.Current.EngineRoot) || mBuildTarget == .Android;
+		for (let target in BuildTarget[5](.Linux, .Windows, .MacOS, .Web, .Android))
 		{
+			if (target == .Android && !android)
+				continue;
 			if (target != .Linux)
 				ImGui.SameLine();
 			if (ImGui.RadioButton(target == .MacOS ? "macOS" : target.ToString(.. scope .()), mBuildTarget == target))
@@ -286,18 +298,22 @@ extension EditorApp
 				mBuildMessage.Clear();
 			}
 		}
+		ImGui.SameLine();
+		if (ImGui.SmallButton("Platforms..."))
+			OpenPlatformsWindow();
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("Add or remove platforms, such as Android");
 		if (mBuildTarget == .Web)
-		{
-			ImGui.SameLine();
 			ImGui.TextDisabled("Played in a browser, on computers and phones");
-		}
+		else if (mBuildTarget == .Android)
+			ImGui.TextDisabled("Phones and tablets (Android 10 and later), with on-screen controls when the game has none of its own");
 	}
 
 	/// A game's options: starting full screen, and how its assets are packed. A web page fills the browser window,
 	/// and full screen is the player's choice; its assets are always packed.
 	void DrawGameBuildOptions(Project project)
 	{
-		if (mBuildTarget != .Web)
+		if (mBuildTarget != .Web && mBuildTarget != .Android)
 		{
 			ImGui.SeparatorText("Window");
 			if (ImGui.Checkbox("Start in fullscreen", ref project.Fullscreen))
@@ -308,7 +324,12 @@ extension EditorApp
 		// A C# game is compiled to native code (NativeAOT) or runs on .NET (JIT). A web build always has .NET inside
 		// the page; NativeAOT compiles only on the system it is for (and Windows on Linux).
 		let nativeAot = project.NativeAot && NativeAotAvailable(mBuildTarget);
-		if (IsCSharpProject && mBuildTarget != .Web)
+		if (IsCSharpProject && mBuildTarget == .Android)
+		{
+			ImGui.SeparatorText("C# runtime");
+			ImGui.TextDisabled("Android games always compile their C# to native code (NativeAOT), with Android Studio's tools.");
+		}
+		else if (IsCSharpProject && mBuildTarget != .Web)
 		{
 			ImGui.SeparatorText("C# runtime");
 			if (!NativeAotAvailable(mBuildTarget))
@@ -345,11 +366,11 @@ extension EditorApp
 			}
 		}
 		ImGui.SeparatorText("Assets");
-		ImGui.BeginDisabled(mBuildTarget == .Web);
+		ImGui.BeginDisabled(mBuildTarget == .Web || mBuildTarget == .Android);
 		if (ImGui.Checkbox("Compress textures", ref project.CompressTextures))
 			project.Save();
 		ImGui.SameLine();
-		ImGui.TextDisabled(mBuildTarget == .Web ? "Web builds keep pictures as they are" : project.CompressTextures ? "A quarter to an eighth of the video memory, and quicker to load" : "Pictures as they are, decoded when loaded");
+		ImGui.TextDisabled(mBuildTarget == .Web ? "Web builds keep pictures as they are" : mBuildTarget == .Android ? "Android builds keep pictures as they are (phones do not read the desktop's formats)" : project.CompressTextures ? "A quarter to an eighth of the video memory, and quicker to load" : "Pictures as they are, decoded when loaded");
 		if (ImGui.Checkbox("Pack assets into one file", ref project.PackAssets))
 			project.Save();
 		ImGui.EndDisabled();
@@ -385,6 +406,18 @@ extension EditorApp
 			return;
 		}
 		let root = Project.Current.EngineRoot;
+		if (mBuildTarget == .Android)
+		{
+			if (!PlatformModules.AndroidInstalled(root))
+			{
+				ImGui.TextColored(EditorTheme.Warning, "The Android platform is not added to this Tallow yet.");
+				if (ImGui.Button("Platforms..."))
+					OpenPlatformsWindow();
+			}
+			else
+				DrawAndroidRequirements(root);
+			return;
+		}
 		if (mBuildTarget != .Web)
 		{
 			ImGui.TextColored(EditorTheme.Warning, scope $"This engine has no {mBuildTarget == .MacOS ? "macOS" : mBuildTarget.ToString(.. scope .())} player. The engine downloads on the release page carry the Linux, Windows and macOS players; an engine built from source has the one for the machine that built it.");
@@ -420,7 +453,9 @@ extension EditorApp
 			SDL.SDL_ShowOpenFolderDialog( => OnFolderPicked, null, Window, mBuildFolder.IsEmpty ? null : mBuildFolder.CStr(), false);
 		BuildOutputFolder(output);
 		ImGui.PushTextWrapPos(0);
-		if (mBuildTarget == .Web)
+		if (mBuildTarget == .Android)
+			ImGui.TextDisabled(scope $"The game is put in {output} as {Project.Current.Name}.apk. Install on Device sends it to a phone connected with USB debugging on, or to an emulator running in Android Studio. An earlier build of the game there is replaced.");
+		else if (mBuildTarget == .Web)
 			ImGui.TextDisabled(scope $"The game is put in {output}: a web page (index.html) with the game and its assets. Put that folder on any web server, such as GitHub Pages or itch.io, and share the address. Play in Browser tries it on this machine. An earlier build of the game there is replaced.");
 		else if (HostTarget == .Windows && mBuildTarget != .Windows)
 			ImGui.TextDisabled(scope $"The game is put in {output}, and zipped as {output}.zip. Send the zip, not the folder: a folder on Windows does not keep the permissions a {(mBuildTarget == .MacOS) ? "macOS" : "Linux"} game needs to start. An earlier build of the game there is replaced.");
@@ -454,6 +489,25 @@ extension EditorApp
 				ImGui.SameLine();
 				if (ImGui.Button("Play in Browser"))
 					PlayInBrowser(output);
+			}
+			if (mBuildTarget == .Android)
+			{
+				ImGui.SameLine();
+				ImGui.BeginDisabled(PlatformModules.Busy);
+				if (ImGui.Button("Install on Device"))
+					PlatformModules.RunOnDevice(Project.Current.EngineRoot, output);
+				ImGui.EndDisabled();
+				let status = scope String();
+				let failed = PlatformModules.GetStatus(status);
+				if (!status.IsEmpty)
+				{
+					ImGui.PushTextWrapPos(0);
+					if (failed)
+						ImGui.TextColored(EditorTheme.Warning, status);
+					else
+						ImGui.TextDisabled(status);
+					ImGui.PopTextWrapPos();
+				}
 			}
 		}
 		if (!mBuildMessage.IsEmpty)
