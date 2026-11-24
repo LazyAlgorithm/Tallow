@@ -19,8 +19,10 @@ struct QualityValues : IEquatable<QualityValues>
 {
 	/// How much of the window's resolution the 3D scene is drawn at (the interface stays sharp).
 	public float renderScale = 1;
-	/// Multisampled edges.
-	public bool antialias = true;
+	/// How edges are smoothed: multisampling, or a filter on the finished picture (FXAA, SMAA).
+	public AntialiasMode antialiasMode = .MSAA4x;
+	/// How the picture drawn smaller than the window (renderScale below 1) is brought up to size.
+	public UpscalerKind upscaler = .Off;
 	/// Shadows from the sun, point and spot lights.
 	public bool shadows = true;
 	/// How many point and spot lights cast shadows in a view, the nearest first (a point light costs six times a
@@ -57,7 +59,7 @@ struct QualityValues : IEquatable<QualityValues>
 	{
 	}
 
-	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialias == other.antialias && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize;
+	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialiasMode == other.antialiasMode && upscaler == other.upscaler && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize;
 	public static bool operator ==(QualityValues a, QualityValues b) => a.Equals(b);
 }
 
@@ -82,8 +84,10 @@ static class Quality
 		switch (level)
 		{
 		case .Low:
+			// Drawn at 70% and sharpened up by FSR 1, with the cheapest antialiasing.
 			v.renderScale = 0.7f;
-			v.antialias = false;
+			v.upscaler = .FSR1;
+			v.antialiasMode = .FXAA;
 			v.shadowMapSize = 1024;
 			v.shadowedLights = 2;
 			v.shadowDistance = 0.5f;
@@ -99,6 +103,8 @@ static class Quality
 			v.reflectionSize = 64;
 		case .Medium:
 			v.renderScale = 0.85f;
+			v.upscaler = .FSR1;
+			v.antialiasMode = .FXAA;
 			v.shadowMapSize = 2048;
 			v.shadowedLights = 4;
 			v.shadowDistance = 0.75f;
@@ -110,6 +116,8 @@ static class Quality
 			v.reflectionSize = 64;
 		case .High,.Custom:
 		case .Ultra:
+			// TAA: added by the temporal pass. Ultra becomes .TAA once Antialiasing.TemporalAvailable; until then 4x multisampling.
+			v.antialiasMode = .MSAA4x;
 			v.shadowedLights = 16;
 			v.globalIllumination = .ProbeGridAndScreenSpace;
 			v.shadowDistance = 1.5f;
@@ -146,7 +154,9 @@ static class Quality
 	{
 		Level = LevelOf(Current);
 		RenderView.RenderScale = Math.Clamp(Current.renderScale, 0.25f, 1);
-		RenderView.Antialias = Current.antialias;
+		RenderView.AntialiasingMode = Current.antialiasMode;
+		Upscaling.Current = Current.upscaler;
+		Upscaling.Reset();
 		RenderView.ShadowsEnabled = Current.shadows;
 		RenderView.ShadowDistanceScale = Math.Max(Current.shadowDistance, 0.05f);
 		RenderView.MaxShadowedLights = Math.Clamp(Current.shadowedLights, 0, LightClusters.MaxTiles);
@@ -183,8 +193,8 @@ static class Quality
 	/// The settings as text, one `name=value` a line.
 	public static void Write(QualityValues v, String text)
 	{
-		text.AppendF("renderScale={}\nantialias={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\n",
-			v.renderScale, v.antialias ? 1 : 0, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize);
+		text.AppendF("renderScale={}\nantialias={}\nantialiasMode={}\nupscaler={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\n",
+			v.renderScale, v.antialiasMode != .Off ? 1 : 0, (int32)v.antialiasMode, (int32)v.upscaler, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize);
 	}
 
 	/// Reads settings from text (unknown or missing lines keep the values given).
@@ -204,7 +214,11 @@ static class Quality
 			switch (name)
 			{
 			case "renderScale": v.renderScale = Math.Clamp(number, 0.25f, 1);
-			case "antialias": v.antialias = flag;
+			// The old on/off setting: on is 4x multisampling unless a mode is already chosen (antialiasMode comes after it
+			// in a saved file and wins).
+			case "antialias": v.antialiasMode = flag ? (v.antialiasMode == .Off ? .MSAA4x : v.antialiasMode) : .Off;
+			case "antialiasMode": v.antialiasMode = (AntialiasMode)(int32)Math.Clamp(number, 0, 6);
+			case "upscaler": v.upscaler = (UpscalerKind)(int32)Math.Clamp(number, 0, 3);
 			case "shadows": v.shadows = flag;
 			case "shadowedLights": v.shadowedLights = (int32)Math.Clamp(number, 0, LightClusters.MaxTiles);
 			case "shadowMapSize": v.shadowMapSize = (int32)Math.Clamp(number, 256, 8192);

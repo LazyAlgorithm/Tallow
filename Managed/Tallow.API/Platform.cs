@@ -93,6 +93,106 @@ public enum QualityLevel
     Custom
 }
 
+/// <summary>How edges are smoothed: <see cref="Quality.AntialiasMode"/>.</summary>
+public enum AntialiasMode
+{
+    /// <summary>Jagged edges, the cheapest.</summary>
+    Off,
+    /// <summary>A fast filter on the finished picture; works everywhere, softens slightly.</summary>
+    FXAA,
+    /// <summary>A cleaner filter on the finished picture (three passes), sharper than FXAA.</summary>
+    SMAA,
+    /// <summary>Multisampling, 2 samples per pixel.</summary>
+    MSAA2x,
+    /// <summary>Multisampling, 4 samples per pixel (the classic setting).</summary>
+    MSAA4x,
+    /// <summary>Multisampling, 8 samples per pixel.</summary>
+    MSAA8x,
+    /// <summary>Temporal antialiasing; the engine uses FXAA until the temporal pass exists.</summary>
+    TAA
+}
+
+/// <summary>How the 3D picture drawn smaller than the window (<see cref="Quality.RenderScale"/> below 1) is brought up
+/// to size: <see cref="Quality.Upscaler"/>. Ask <see cref="Upscaling.IsSupported(UpscalerKind, out string)"/> which ones this machine can run.</summary>
+public enum UpscalerKind
+{
+    /// <summary>A plain bilinear stretch.</summary>
+    Off,
+    /// <summary>AMD FidelityFX Super Resolution 1: edge-adaptive upsampling and sharpening. Runs on any graphics card.</summary>
+    FSR1,
+    /// <summary>AMD FidelityFX Super Resolution 3 (temporal). Vulkan on Windows or Linux.</summary>
+    FSR3,
+    /// <summary>NVIDIA DLSS (temporal). An NVIDIA RTX card with Vulkan on Windows or Linux.</summary>
+    DLSS
+}
+
+/// <summary>The render scale the quality modes of DLSS and FSR use (set it with <see cref="Upscaling.SetQualityMode"/>).</summary>
+public enum UpscalerQuality
+{
+    /// <summary>Drawn at the window's size; the upscaler only smooths (1.0).</summary>
+    NativeAA,
+    /// <summary>0.67</summary>
+    Quality,
+    /// <summary>0.58</summary>
+    Balanced,
+    /// <summary>0.5</summary>
+    Performance,
+    /// <summary>0.33</summary>
+    UltraPerformance
+}
+
+/// <summary>The graphics card's maker.</summary>
+public enum GpuVendor { Unknown, Nvidia, Amd, Intel, Apple, Other }
+
+/// <summary>What upscaling this machine can do, for a settings menu: grey out the options that
+/// <see cref="IsSupported(UpscalerKind, out string)"/> says no to and show the reason.</summary>
+public static class Upscaling
+{
+    private static readonly float[] Scales = { 1.0f, 0.67f, 0.58f, 0.5f, 0.33f };
+
+    /// <summary>Whether the upscaler can run here. When it cannot, <paramref name="reason"/> says why ("DLSS needs an
+    /// NVIDIA RTX graphics card"); the engine falls back to FSR 1 if one that cannot run is chosen.</summary>
+    public static bool IsSupported(UpscalerKind kind, out string reason)
+    {
+        string? text = ActionText.Read(buffer => CSharpPlatform.UpscalerReason((int)kind, buffer));
+        reason = text ?? "";
+        return text == null;
+    }
+
+    /// <summary>Whether the upscaler can run here.</summary>
+    public static bool IsSupported(UpscalerKind kind) => IsSupported(kind, out _);
+
+    /// <summary>The upscaler really in use: <see cref="Quality.Upscaler"/>, or FSR 1 when that one cannot run here.</summary>
+    public static UpscalerKind Effective => (UpscalerKind)CSharpPlatform.UpscalerEffective();
+
+    /// <summary>The graphics card's maker.</summary>
+    public static GpuVendor GpuVendor => (GpuVendor)CSharpPlatform.GpuVendorKind();
+    /// <summary>Whether the graphics card is NVIDIA's.</summary>
+    public static bool IsNvidia => GpuVendor == GpuVendor.Nvidia;
+    /// <summary>Whether the graphics card is AMD's.</summary>
+    public static bool IsAmd => GpuVendor == GpuVendor.Amd;
+
+    /// <summary>The fraction of the window's size the scene is drawn at in a quality mode.</summary>
+    public static float ScaleOf(UpscalerQuality mode) => Scales[(int)mode];
+
+    /// <summary>Draws the scene at the render scale of a quality mode (Quality 0.67, Balanced 0.58, Performance 0.5,
+    /// Ultra Performance 0.33, Native AA 1).</summary>
+    public static void SetQualityMode(UpscalerQuality mode) => Tallow.Quality.RenderScale = ScaleOf(mode);
+
+    /// <summary>The quality mode the render scale is, or null when it is none of them.</summary>
+    public static UpscalerQuality? QualityMode
+    {
+        get
+        {
+            float scale = Tallow.Quality.RenderScale;
+            for (int i = 0; i < Scales.Length; i++)
+                if (Math.Abs(Scales[i] - scale) < 0.005f)
+                    return (UpscalerQuality)i;
+            return null;
+        }
+    }
+}
+
 /// <summary>The graphics quality preset (shadows, reflections, effects...), as the game's settings menu sets it.</summary>
 public static class Quality
 {
@@ -116,8 +216,25 @@ public static class Quality
     public static bool VSync { get => Flag("vsync"); set => Change("vsync", value ? "1" : "0"); }
     /// <summary>The 3D image's resolution as a fraction of the window's (0.25-1).</summary>
     public static float RenderScale { get => Number("renderScale"); set => Change("renderScale", Text(value)); }
-    /// <summary>Smooths jagged edges (multisampling).</summary>
+    /// <summary>Whether jagged edges are smoothed at all. Turning it on picks 4x multisampling unless a mode is already
+    /// chosen; <see cref="AntialiasMode"/> picks the method.</summary>
     public static bool Antialias { get => Flag("antialias"); set => Change("antialias", value ? "1" : "0"); }
+    /// <summary>How jagged edges are smoothed: off, FXAA, SMAA, multisampling (2x, 4x, 8x) or TAA. A mode the graphics card
+    /// cannot do is replaced by the nearest it can (see <see cref="AntialiasEffective"/>).</summary>
+    public static AntialiasMode AntialiasMode
+    {
+        get => (AntialiasMode)(int)Number("antialiasMode");
+        set => Change("antialiasMode", Text((int)value));
+    }
+    /// <summary>The antialiasing mode really in use.</summary>
+    public static AntialiasMode AntialiasEffective => (AntialiasMode)CSharpPlatform.AntialiasEffective();
+    /// <summary>How the scene, when drawn smaller than the window (<see cref="RenderScale"/> below 1), is brought up to
+    /// size. A choice <see cref="Upscaling.IsSupported(UpscalerKind)"/> says no to falls back to FSR 1.</summary>
+    public static UpscalerKind Upscaler
+    {
+        get => (UpscalerKind)(int)Number("upscaler");
+        set => Change("upscaler", Text((int)value));
+    }
     /// <summary>Whether anything casts shadows.</summary>
     public static bool Shadows { get => Flag("shadows"); set => Change("shadows", value ? "1" : "0"); }
     /// <summary>How many point and spot lights may cast shadows at once.</summary>

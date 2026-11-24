@@ -299,6 +299,7 @@ method	Tallow.CSharpPlatform	AchievementClear	void	id:string
 method	Tallow.CSharpPlatform	AchievementProgress	void	id:string	current:int	max:int
 method	Tallow.CSharpPlatform	AchievementUnlock	bool	id:string
 method	Tallow.CSharpPlatform	AchievementUnlocked	bool	id:string
+method	Tallow.CSharpPlatform	AntialiasEffective	int
 method	Tallow.CSharpPlatform	AssetExists	bool	path:string
 method	Tallow.CSharpPlatform	AssetRead	int	path:string	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	AssetsAddSearchPath	void	folder:string
@@ -315,6 +316,7 @@ method	Tallow.CSharpPlatform	GamepadConnected	bool	pad:int
 method	Tallow.CSharpPlatform	GamepadKindOf	int	pad:int
 method	Tallow.CSharpPlatform	GamepadNameOf	int	pad:int	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	GamepadRumble	void	low:float	high:float	seconds:float	pad:int
+method	Tallow.CSharpPlatform	GpuVendorKind	int
 method	Tallow.CSharpPlatform	QualityCurrent	int
 method	Tallow.CSharpPlatform	QualityRecommended	int
 method	Tallow.CSharpPlatform	QualitySet	bool	level:int	save:bool
@@ -341,6 +343,8 @@ method	Tallow.CSharpPlatform	SubtitleShowing	bool	id:int
 method	Tallow.CSharpPlatform	SubtitlesClear	void
 method	Tallow.CSharpPlatform	TouchCount	int
 method	Tallow.CSharpPlatform	TouchFinger	bool	index:int	values:System.Span<float>
+method	Tallow.CSharpPlatform	UpscalerEffective	int
+method	Tallow.CSharpPlatform	UpscalerReason	int	kind:int	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	VoiceMicrophoneLevel	float
 method	Tallow.CSharpPlatform	VoiceMute	void	clientId:int	muted:bool
 method	Tallow.CSharpPlatform	VoiceMuted	bool	clientId:int

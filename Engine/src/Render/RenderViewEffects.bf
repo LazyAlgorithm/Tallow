@@ -295,10 +295,10 @@ extension RenderView
 	}
 
 	/// Brings the HDR picture down to the screen's range, with exposure, vignette, colour grading and bloom (0: none).
-	void DrawTonemap(SceneEnvironment env, bgfx.TextureHandle picture, float bloom)
+	void DrawTonemap(SceneEnvironment env, bgfx.TextureHandle picture, float bloom, bgfx.FrameBufferHandle target, int32 width, int32 height)
 	{
 		let view = (uint16)(ViewBase + TonemapView);
-		SetUpView(view, "Tonemap", mOutputFb, 0, 0, mOutWidth, mOutHeight);
+		SetUpView(view, "Tonemap", target, 0, 0, width, height);
 		let exposure = env.exposure * Math.Clamp(ScreenEffects.Brightness, 0.25f, 4.0f);
 		Vector4 postParams = .(exposure, Math.Max(env.vignette, 0), Math.Max(env.saturation, 0), bloom);
 		bgfx.set_uniform(RenderResources.uPostParams, &postParams, 1);

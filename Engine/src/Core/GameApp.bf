@@ -41,6 +41,8 @@ class GameApp : Application
 		{
 			mView = new RenderView(10);
 			mView.ToBackbuffer = true;
+			// The player's picture gets the antialiasing filters and the upscaler's passes.
+			mView.AllowPostAa = true;
 			mGui = ImGui.tn_imgui_init(Window, null, 1.0f);
 		}
 		mScene.StartPlay();

@@ -35,6 +35,8 @@ libraries = [
     ('stb', 'Image and font loading', tp / 'stb/LICENSE'),
     ('Roboto', 'Interface and default World Text font', tp / 'fonts/LICENSE-Roboto.txt'),
     ('Font Awesome', 'Interface icons', tp / 'fonts/LICENSE-FontAwesome.txt'),
+    ('SMAA', 'Antialiasing (SMAA 1x shaders and lookup textures, iryoku/smaa)', root / 'Engine/shaders/licenses/SMAA-LICENSE.txt'),
+    ('FidelityFX FSR 1', 'Upscaling (FSR 1 EASU and RCAS shaders, AMD)', root / 'Engine/shaders/licenses/FidelityFX-FSR-LICENSE.txt'),
 ]
 out = ['Third-party software in Tallow', '=' * 31, '',
        'Tallow, and every game built with it, includes the libraries below. Their licences follow in full.', '']

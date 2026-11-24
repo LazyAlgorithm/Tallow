@@ -148,6 +148,8 @@ class EditorApp : Application
 		mSceneView.ShowDepthOfField = false;
 		mSceneView.ShowMotionBlur = false;
 		mGameView = new RenderView((uint16)(10 + RenderView.ViewCount));
+		// The Game view shows what the player gets, filters and upscaler included (the Scene view uses multisampling).
+		mGameView.AllowPostAa = true;
 		ProjectConfig.Load();
 		mScene = new Scene();
 		let sceneArg = scope String();

@@ -138,6 +138,31 @@ static class CSharpPlatform
 		return true;
 	}
 
+	/// Whether an upscaler (0 Off, 1 FSR 1, 2 FSR 3, 3 DLSS) can run on this machine: -1 when it can, else the length of
+	/// the reason it cannot (written to the buffer).
+	[CSharpExpose]
+	public static int32 UpscalerReason(int32 kind, Span<uint8> buffer)
+	{
+		if (kind < 0 || kind > (int32)UpscalerKind.DLSS)
+			return Copy("Not an upscaler", buffer);
+		let reason = scope String();
+		if (Upscaling.IsSupported((UpscalerKind)kind, reason))
+			return -1;
+		return Copy(reason, buffer);
+	}
+
+	/// The upscaler really in use: the setting, or FSR 1 (1) when that one cannot run here.
+	[CSharpExpose]
+	public static int32 UpscalerEffective() => (int32)Upscaling.Effective;
+
+	/// The graphics card's maker: 0 unknown, 1 NVIDIA, 2 AMD, 3 Intel, 4 Apple, 5 other.
+	[CSharpExpose]
+	public static int32 GpuVendorKind() => (int32)Upscaling.Vendor;
+
+	/// The antialiasing really in use (an AntialiasMode number): the setting, or what the card or the engine can do instead.
+	[CSharpExpose]
+	public static int32 AntialiasEffective() => (int32)Antialiasing.Resolve(RenderView.AntialiasingMode);
+
 	// ---- achievements and stats (Steam when the game runs there, else saved locally)
 
 	[CSharpExpose]

@@ -16,7 +16,7 @@ extension EditorApp
 			return;
 		let viewport = ImGui.GetMainViewport();
 		ImGui.SetNextWindowPos(.(viewport.workPos.x + viewport.workSize.x - 700, viewport.workPos.y + 80), 4);
-		ImGui.SetNextWindowSize(.(330, 470), 4);
+		ImGui.SetNextWindowSize(.(360, 560), 4);
 		if (ImGui.Begin("Graphics Quality", &mShowQuality))
 		{
 			for (int i < 4)
@@ -32,7 +32,7 @@ extension EditorApp
 			var v = Quality.Current;
 			var changed = false;
 			changed |= ImGui.SliderFloat("Render Scale", ref v.renderScale, 0.25f, 1, "%.2f");
-			changed |= ImGui.Checkbox("Antialias", ref v.antialias);
+			changed |= DrawUpscalerSettings(ref v);
 			changed |= ImGui.Checkbox("Shadows", ref v.shadows);
 			var shadowSlider = (float)Math.Round(Math.Log(v.shadowMapSize / 512.0) / Math.Log(2));
 			if (ImGui.SliderFloat(scope String()..AppendF("Shadow Map ({})###shadowmap", v.shadowMapSize).CStr(), ref shadowSlider, 0, 4, ""))
@@ -90,5 +90,84 @@ extension EditorApp
 				Quality.Set(.High);
 		}
 		ImGui.End();
+	}
+
+	/// Antialiasing, Render Scale's quality modes and the Upscaler, with what this machine cannot do greyed out and the
+	/// reason in the tooltip. True when something changed.
+	bool DrawUpscalerSettings(ref QualityValues v)
+	{
+		var changed = false;
+		StringView[7] aaNames = .("Off", "FXAA", "SMAA", "MSAA 2x", "MSAA 4x", "MSAA 8x", "TAA");
+		let aaIndex = Math.Clamp((int)v.antialiasMode, 0, 6);
+		if (ImGui.BeginCombo("Antialiasing", scope String(aaNames[aaIndex]).CStr()))
+		{
+			for (int i < 7)
+			{
+				let mode = (AntialiasMode)i;
+				// What the card cannot do: multisampling it lacks, and TAA until it is built.
+				var reason = scope String();
+				var available = true;
+				if (Antialiasing.IsMsaa(mode) && !Antialiasing.SamplesSupported(Antialiasing.Samples(mode)))
+				{
+					available = false;
+					reason.Set("This graphics card cannot multisample the scene this much");
+				}
+				else if (mode == .TAA && !Antialiasing.TemporalAvailable)
+				{
+					available = false;
+					reason.Set("Temporal antialiasing is not built yet; FXAA is used instead");
+				}
+				if (ImGui.Selectable(scope String(aaNames[i]).CStr(), aaIndex == i, available ? 0 : ImGui.SelectableFlags.Disabled))
+				{
+					v.antialiasMode = mode;
+					changed = true;
+				}
+				if (!available && ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+					ImGui.SetTooltip(reason.CStr());
+			}
+			ImGui.EndCombo();
+		}
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("MSAA smooths edges while the scene is drawn. FXAA and SMAA filter the finished picture (SMAA is cleaner, FXAA cheaper).");
+
+		// The quality modes are render scales: the picture is drawn smaller and the upscaler brings it back up.
+		let mode = Upscaling.ModeOfScale(v.renderScale);
+		ImGui.TextDisabled(scope String()..AppendF("Render scale mode: {}", mode >= 0 ? Upscaling.ModeNames[mode] : "Custom").CStr());
+		for (int32 i < 5)
+		{
+			if (i > 0 && i != 3)
+				ImGui.SameLine();
+			if (ImGui.Selectable(scope String(Upscaling.ModeNames[i]).CStr(), mode == i, 0, .(i == 4 ? 130 : 72, 0)))
+			{
+				v.renderScale = Upscaling.ModeScales[i];
+				changed = true;
+			}
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip(scope String()..AppendF("Draws the scene at {:0.00} of the window's size.", Upscaling.ModeScales[i]).CStr());
+		}
+
+		StringView[4] upscalerNames = .("Off (bilinear)", "FSR 1", "FSR 3", "DLSS");
+		let upIndex = Math.Clamp((int)v.upscaler, 0, 3);
+		if (ImGui.BeginCombo("Upscaler", scope String(upscalerNames[upIndex]).CStr()))
+		{
+			for (int i < 4)
+			{
+				let kind = (UpscalerKind)i;
+				let reason = scope String();
+				let available = Upscaling.IsSupported(kind, reason);
+				if (ImGui.Selectable(scope String(upscalerNames[i]).CStr(), upIndex == i, available ? 0 : ImGui.SelectableFlags.Disabled))
+				{
+					v.upscaler = kind;
+					changed = true;
+				}
+				if (!available && ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+					ImGui.SetTooltip(reason.CStr());
+			}
+			ImGui.EndCombo();
+		}
+		if (v.upscaler != .Off && Upscaling.Effective != v.upscaler)
+			ImGui.TextDisabled(scope String()..AppendF("In use: {}", upscalerNames[(int)Upscaling.Effective]).CStr());
+		ImGui.SliderFloat("FSR Sharpness", ref Upscaling.Sharpness, 0, 1, "%.2f");
+		return changed;
 	}
 }

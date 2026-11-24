@@ -58,7 +58,9 @@ static class Gfx
 	public const uint32 ResetVsync = 0x00000080;
 	// Texture and sampler flags (BGFX_TEXTURE_* and BGFX_SAMPLER_*).
 	public const uint64 TextureRenderTarget = 0x0000001000000000;
+	public const uint64 TextureRenderTargetMsaa2 = 0x0000002000000000;
 	public const uint64 TextureRenderTargetMsaa4 = 0x0000003000000000;
+	public const uint64 TextureRenderTargetMsaa8 = 0x0000004000000000;
 	public const uint64 TextureWriteOnly = 0x0000008000000000;
 	/// Clamped to the edge in U, V and W.
 	public const uint64 SamplerClamp = 0x0000002a;
@@ -89,11 +91,11 @@ static class Gfx
 
 	/// rendererOverride: a bgfx.RendererType value, or -1 to pick the best backend for the platform.
 	/// Settings for a phone or tablet: the 3D scene drawn at no more than 540 lines and stretched (the interface
-	/// stays sharp), no multisampling, and a smaller shadow map. Call before the first frame.
+	/// stays sharp), FXAA instead of multisampling, and a smaller shadow map. Call before the first frame.
 	public static void UseMobileQuality()
 	{
 		RenderView.MaxSceneHeight = 540;
-		RenderView.Antialias = false;
+		RenderView.AntialiasingMode = .FXAA;
 		RenderResources.ShadowAtlasSize = 2048;
 		// The screen effects that need a depth pass; a game can offer them back in its settings.
 		ScreenEffects.AmbientOcclusion = false;
@@ -211,6 +213,7 @@ static class Gfx
 		if (!Initialized)
 			return;
 		bgfx.destroy_texture(WhiteTexture);
+		Antialiasing.Shutdown();
 		Native.tn_gfx_shutdown();
 		Initialized = false;
 	}

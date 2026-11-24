@@ -113,8 +113,16 @@ class RenderView
 	/// held upright), however sharp the screen (0: no limit). Phones have very sharp screens and modest graphics
 	/// chips: the scene is drawn at this and scaled up, the interface stays sharp. The same either way up.
 	public static int32 MaxSceneHeight = 0;
-	/// Multisampled edges on the scene. Off saves a lot on phones.
-	public static bool Antialias = true;
+	/// How edges are smoothed (a quality setting): multisampling on the scene, or a filter on the finished picture.
+	/// Off, or a cheap filter, saves a lot on phones.
+	public static AntialiasMode AntialiasingMode = .MSAA4x;
+	/// Whether edges are smoothed at all: the setting before there were modes. True means 4x multisampling unless
+	/// another mode is on.
+	public static bool Antialias
+	{
+		get => AntialiasingMode != .Off;
+		set { AntialiasingMode = value ? (AntialiasingMode == .Off ? .MSAA4x : AntialiasingMode) : .Off; }
+	}
 	/// Shadows in every view (a quality setting; DrawShadows is one view's).
 	public static bool ShadowsEnabled = true;
 	/// Times each scene's shadow distance, in every view (a quality setting).
@@ -195,7 +203,7 @@ class RenderView
 	// The size drawn to (the window, or the output texture); the scene is mWidth x mHeight, RenderScale of it.
 	int32 mOutWidth, mOutHeight;
 	float mBuiltScale;
-	bool mBuiltAntialias;
+	int32 mBuiltSamples;
 	bgfx.TextureHandle mSceneColor = .() { idx = uint16.MaxValue };
 	bgfx.FrameBufferHandle mSceneFb = .() { idx = uint16.MaxValue };
 	bgfx.TextureHandle mOutputColor = .() { idx = uint16.MaxValue };
@@ -312,6 +320,7 @@ class RenderView
 		}
 		ReleaseEffectTargets();
 		ReleaseWaterTargets();
+		ReleasePostTargets();
 	}
 
 	public void Resize(int32 width, int32 height)
@@ -321,14 +330,15 @@ class RenderView
 		var scale = Capture ? 1 : Math.Clamp(RenderScale, 0.25f, 1.0f);
 		if (MaxSceneHeight > 0 && !Capture)
 			scale = Math.Max(Math.Min(scale, (float)MaxSceneHeight / Math.Min(outWidth, outHeight)), 0.25f);
-		let antialias = Antialias && !Capture;
-		if (outWidth == mOutWidth && outHeight == mOutHeight && scale == mBuiltScale && antialias == mBuiltAntialias && mSceneFb.Valid)
+		// Multisampling in the scene target; the filters (FXAA, SMAA) are passes after the tonemap.
+		let samples = Antialiasing.Samples(ViewAntialias());
+		if (outWidth == mOutWidth && outHeight == mOutHeight && scale == mBuiltScale && samples == mBuiltSamples && mSceneFb.Valid)
 			return;
 		ReleaseTargets();
 		mOutWidth = outWidth;
 		mOutHeight = outHeight;
 		mBuiltScale = scale;
-		mBuiltAntialias = antialias;
+		mBuiltSamples = samples;
 		let w = Math.Max((int32)(outWidth * scale), 8);
 		let h = Math.Max((int32)(outHeight * scale), 8);
 		mWidth = w;
@@ -336,8 +346,8 @@ class RenderView
 
 		let clamp = Gfx.SamplerClamp;
 		// Multisampling also makes the texture a render target; without it the texture has to say so itself.
-		let msaa4 = antialias ? Gfx.TextureRenderTargetMsaa4 : 0;
-		let target = antialias ? msaa4 : Gfx.TextureRenderTarget;
+		let msaa4 = samples > 0 ? Antialiasing.TextureFlags(samples) : 0;
+		let target = samples > 0 ? msaa4 : Gfx.TextureRenderTarget;
 		let writeOnly = Gfx.TextureWriteOnly;
 		let rt = Gfx.TextureRenderTarget;
 		bgfx.TextureHandle[2] sceneTextures;
@@ -459,12 +469,19 @@ class RenderView
 		DrawViewmodel(camera);
 		sEffectsMarker.Begin();
 		defer Profiler.End();
-		let picture = DrawScreenEffects(camera, env);
+		var picture = DrawScreenEffects(camera, env);
 		let bloom = Math.Max(env.bloom, 0);
 		let drawsBloom = bloom > MinimumEffect;
 		if (drawsBloom)
 			DrawBloom(env, picture);
-		DrawTonemap(env, picture, drawsBloom ? bloom : 0);
+		// DLSS and FSR 3 would replace the scene's picture with one at the window's size here (UpscaleTemporal).
+		mTemporalUpscaled = false;
+		if (!Capture && shading == .Rendered && AllowPostAa && Upscaling.IsTemporal(Upscaling.Effective) && UpscaleTemporal(Upscaling.Effective, camera, picture, let upscaled))
+		{
+			picture = upscaled;
+			mTemporalUpscaled = true;
+		}
+		DrawFinish(env, picture, drawsBloom ? bloom : 0);
 	}
 
 	/// Points a bgfx view at a target and a rectangle, with what to clear it to.

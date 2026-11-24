@@ -19,6 +19,9 @@ static class RenderResources
 	public static bgfx.ProgramHandle SkyProgram;
 	public static bgfx.ProgramHandle TonemapProgram;
 	public static bgfx.ProgramHandle BloomDownProgram, BloomBlurProgram;
+	// Antialiasing and upscaling of the finished picture (RenderViewAntialias.bf).
+	public static bgfx.ProgramHandle FxaaProgram, SmaaEdgesProgram, SmaaWeightsProgram, SmaaBlendProgram, EasuProgram, RcasProgram;
+	public static bgfx.UniformHandle uAaParams, uFsrParams, sEdges, sArea, sSearch, sBlend;
 	public static bgfx.UniformHandle sBloom, uBloomParams;
 	// Screen effects (tallowengine.com/docs/post-processing).
 	public static bgfx.ProgramHandle DepthProgram, AoProgram, AoApplyProgram, DofBlurProgram, DofCombineProgram, MotionBlurProgram;
@@ -69,6 +72,18 @@ static class RenderResources
 		TonemapProgram = Gfx.LoadProgram("vs_fullscreen", "fs_tonemap");
 		BloomDownProgram = Gfx.LoadProgram("vs_fullscreen", "fs_bloom_down");
 		BloomBlurProgram = Gfx.LoadProgram("vs_fullscreen", "fs_bloom_blur");
+		FxaaProgram = Gfx.LoadProgram("vs_fullscreen", "fs_fxaa");
+		SmaaEdgesProgram = Gfx.LoadProgram("vs_fullscreen", "fs_smaa_edges");
+		SmaaWeightsProgram = Gfx.LoadProgram("vs_fullscreen", "fs_smaa_weights");
+		SmaaBlendProgram = Gfx.LoadProgram("vs_fullscreen", "fs_smaa_blend");
+		EasuProgram = Gfx.LoadProgram("vs_fullscreen", "fs_fsr_easu");
+		RcasProgram = Gfx.LoadProgram("vs_fullscreen", "fs_fsr_rcas");
+		uAaParams = bgfx.create_uniform("u_aaParams", .Vec4, 1);
+		uFsrParams = bgfx.create_uniform("u_fsrParams", .Vec4, 1);
+		sEdges = bgfx.create_uniform("s_edges", .Sampler, 1);
+		sArea = bgfx.create_uniform("s_area", .Sampler, 1);
+		sSearch = bgfx.create_uniform("s_search", .Sampler, 1);
+		sBlend = bgfx.create_uniform("s_blend", .Sampler, 1);
 		sBloom = bgfx.create_uniform("s_bloom", .Sampler, 1);
 		uBloomParams = bgfx.create_uniform("u_bloomParams", .Vec4, 1);
 		DepthProgram = Gfx.LoadProgram("vs_depth", "fs_depth");
@@ -238,6 +253,18 @@ static class RenderResources
 		bgfx.destroy_program(TonemapProgram);
 		bgfx.destroy_program(BloomDownProgram);
 		bgfx.destroy_program(BloomBlurProgram);
+		bgfx.destroy_program(FxaaProgram);
+		bgfx.destroy_program(SmaaEdgesProgram);
+		bgfx.destroy_program(SmaaWeightsProgram);
+		bgfx.destroy_program(SmaaBlendProgram);
+		bgfx.destroy_program(EasuProgram);
+		bgfx.destroy_program(RcasProgram);
+		bgfx.destroy_uniform(uAaParams);
+		bgfx.destroy_uniform(uFsrParams);
+		bgfx.destroy_uniform(sEdges);
+		bgfx.destroy_uniform(sArea);
+		bgfx.destroy_uniform(sSearch);
+		bgfx.destroy_uniform(sBlend);
 		bgfx.destroy_program(DepthProgram);
 		bgfx.destroy_program(DepthAlbedoProgram);
 		bgfx.destroy_program(SsgiGatherProgram);
