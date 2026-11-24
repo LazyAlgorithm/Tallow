@@ -417,6 +417,9 @@ static class CSharpRuntime
 			return "TallowGame.dll";
 #elif BF_PLATFORM_MACOS
 			return "libTallowGame.dylib";
+#elif BF_PLATFORM_IOS
+			// iOS loads code only from frameworks signed into the app: Frameworks/TallowGame.framework/TallowGame.
+			return "TallowGame";
 #else
 			return "libTallowGame.so";
 #endif
@@ -622,6 +625,8 @@ static class CSharpRuntime
 		let libraries = scope String();
 		if (Environment.GetEnvironmentVariable("TALLOW_ANDROID_LIBRARIES", libraries) case .Ok)
 			native.Set(scope $"{libraries}/{NativeLibraryName}");
+#elif BF_PLATFORM_IOS
+		native.Set(scope $"{gameFolder}/Frameworks/TallowGame.framework/TallowGame");
 #endif
 		if (File.Exists(native))
 		{
@@ -674,7 +679,7 @@ static class CSharpRuntime
 	/// folder, and the game folder has its Tallow.Game.codeid.
 	public static bool IsPackagedGame(StringView gameFolder) => File.Exists(scope $"{gameFolder}/Managed/Game/Tallow.Game/Tallow.Game.dll") ||
 		File.Exists(scope $"{gameFolder}/Managed/Native/{NativeLibraryName}")
-#if BF_PLATFORM_ANDROID
+#if BF_PLATFORM_ANDROID || BF_PLATFORM_IOS
 		|| File.Exists(scope $"{gameFolder}/Managed/Native/Tallow.Game.codeid")
 #endif
 		;

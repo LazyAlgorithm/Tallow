@@ -59,6 +59,10 @@ static class PlatformModules
 		return File.Exists(scope $"{engineRoot}/Player/build/Release_Android/classes.dex");
 	}
 
+	/// Whether the engine has the iOS players (device and Simulator).
+	public static bool IosInstalled(StringView engineRoot) =>
+		File.Exists(scope $"{engineRoot}/Player/build/Release_iOS/iphoneos/TallowPlayer") && File.Exists(scope $"{engineRoot}/Player/build/Release_iOS/iphonesimulator/TallowPlayer");
+
 	/// An engine built from source makes its modules itself (an engine package has tallow-version.json).
 	public static bool SourceEngine(StringView engineRoot) =>
 		Directory.Exists(scope $"{engineRoot}/Player/src") && !File.Exists(scope $"{engineRoot}/tallow-version.json");
@@ -161,6 +165,28 @@ static class PlatformModules
 			Arg(fromZip, command);
 		}
 		Start(engineRoot, command, "Downloading the Android platform (about 70 MB)...");
+	}
+
+	public static void InstallIos(StringView engineRoot)
+	{
+		let command = scope String("platform-install ios --engine-root");
+		Arg(engineRoot, command);
+		Start(engineRoot, command, "Downloading the iOS platform...");
+	}
+
+	public static void RemoveIos(StringView engineRoot)
+	{
+		let command = scope String("platform-remove ios --engine-root");
+		Arg(engineRoot, command);
+		Start(engineRoot, command, "Removing the iOS platform...");
+	}
+
+	/// Installs a Simulator build on the iOS Simulator and starts it.
+	public static void RunInSimulator(StringView engineRoot, StringView buildFolder)
+	{
+		let command = scope String("ios-run");
+		Arg(buildFolder, command);
+		Start(engineRoot, command, "Starting the iOS Simulator...");
 	}
 
 	public static void RemoveAndroid(StringView engineRoot)
@@ -307,11 +333,41 @@ extension EditorApp
 					ImGui.TextDisabled(status);
 			}
 
+			ImGui.SeparatorText("iOS");
+			DrawIosModule(root);
+
 			ImGui.SeparatorText("Consoles");
 			ImGui.TextDisabled("Console platforms come from each console maker's developer programme and are never part of the public Tallow. Once you have a console module, add its file with Add from file.");
 			ImGui.PopTextWrapPos();
 		}
 		ImGui.End();
+	}
+
+	/// The iOS module: added and removed on a Mac (Apple's tools run nowhere else); elsewhere, where it is built.
+	void DrawIosModule(StringView root)
+	{
+		ImGui.PushTextWrapPos(0);
+		defer ImGui.PopTextWrapPos();
+		if (HostTarget != .MacOS)
+		{
+			ImGui.TextDisabled("iPhones and iPads: iOS games are built on a Mac with Xcode. Add the iOS platform in Tallow on a Mac.");
+			return;
+		}
+		let installed = PlatformModules.IosInstalled(root);
+		ImGui.Text(installed ? "Installed" : "Not installed");
+		ImGui.SameLine();
+		ImGui.TextDisabled("iPhones and iPads (iOS 15 and later), and the iOS Simulator; needs Xcode");
+		ImGui.BeginDisabled(PlatformModules.Busy);
+		if (!installed && PlatformModules.SourceEngine(root))
+			ImGui.TextDisabled("This engine was built from source: make the iOS player with tools/ios/build_player.sh.");
+		else if (!installed)
+		{
+			if (ImGui.Button("Add iOS"))
+				PlatformModules.InstallIos(root);
+		}
+		else if (ImGui.Button("Remove iOS"))
+			PlatformModules.RemoveIos(root);
+		ImGui.EndDisabled();
 	}
 
 	/// What Android games need: Android Studio, found (where) or not, with a folder to use when it was not found,

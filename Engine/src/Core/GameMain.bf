@@ -121,7 +121,7 @@ static class GameMain
 				GameWindow.StartHeight = (int32)Math.Max(SceneSerializer.ParseInt(value), 0);
 			case "escapeQuits":
 				GameWindow.EscapeQuits = value != "0";
-			case "androidOrientation":
+			case "androidOrientation", "orientation":
 				// Which ways a phone may hold the game (SDL turns the screen to match; it would otherwise follow the
 				// shape of the window, which on a phone is always the screen's).
 				String orientations = value.StartsWith("portrait") ? "Portrait PortraitUpsideDown"

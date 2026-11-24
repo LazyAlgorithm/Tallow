@@ -229,7 +229,7 @@ static class Input
 		if (!sTouchChecked)
 		{
 			sTouchChecked = true;
-#if BF_PLATFORM_ANDROID
+#if BF_PLATFORM_ANDROID || BF_PLATFORM_IOS
 			sUsingTouch = true;
 #else
 			sUsingTouch = WebPlatform.IsTouchDevice;

@@ -396,7 +396,7 @@ class Project
 
 	/// Exports the game (Tallow.Build export): the engine's precompiled player for the system, the game's compiled C#
 	/// and its assets. outputPath is the game's own folder; an earlier build of a game found there is replaced.
-	public bool BuildPlayer(StringView outputPath, BuildTarget target)
+	public bool BuildPlayer(StringView outputPath, BuildTarget target, bool iosSimulator = false)
 	{
 		Directory.CreateDirectory(scope $"{Path}/build").IgnoreError();
 		let command = scope String();
@@ -407,7 +407,7 @@ class Project
 		Terminal.Quote(EngineRoot, command);
 		command.Append(" --output ");
 		Terminal.Quote(outputPath, command);
-		if (!BundleDotNet && target != .Android)
+		if (!BundleDotNet && target != .Android && target != .IOS)
 			command.Append(" --no-bundle-dotnet");
 #if BF_PLATFORM_WINDOWS
 		// A Windows folder keeps no Unix permissions, without which a Linux or macOS player cannot start: share the zip.
@@ -415,8 +415,10 @@ class Project
 			command.Append(" --zip");
 #endif
 		// Always said, so that the build is what the window shows (never switched silently).
-		if (target == .Android)
+		if (target == .Android || target == .IOS)
 			command.Append(" --csharp-runtime native");
+		if (target == .IOS && iosSimulator)
+			command.Append(" --ios-simulator");
 		else if (target != .Web)
 			command.Append(NativeAot && EditorApp.NativeAotAvailable(target) ? " --csharp-runtime native" : " --csharp-runtime jit");
 		command.Append(" > ");

@@ -220,10 +220,14 @@ class Application
 			if (WebPlatform.IsMobile)
 				Gfx.UseMobileQuality();
 #endif
-#if BF_PLATFORM_ANDROID
+#if BF_PLATFORM_ANDROID || BF_PLATFORM_IOS
 			// A phone or tablet: the same mobile settings as a browser on a phone, and always the whole screen.
 			Gfx.UseMobileQuality();
 			flags |= SDL.WINDOW_FULLSCREEN;
+#endif
+#if BF_PLATFORM_IOS
+			// bgfx draws with Metal into a Metal view in the window (native FillSwapChain).
+			flags |= SDL.WINDOW_METAL;
 #endif
 			if (StartMaximized)
 				flags |= SDL.WINDOW_MAXIMIZED;

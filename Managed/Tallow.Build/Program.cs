@@ -2045,6 +2045,8 @@ internal static class Program
             return Export.Android.Status(command[1..]);
         if (command.Length > 0 && command[0] == "android-set")
             return Export.Android.Set(command[1..]);
+        if (command.Length > 0 && command[0] == "ios-run")
+            return Export.Ios.Run(command[1..]);
         if (command.Length > 0 && command[0] == "android-run")
             return Export.Android.RunOnDevice(command[1..]);
         if (command.Length > 0 && command[0] == "android-install-ndk")

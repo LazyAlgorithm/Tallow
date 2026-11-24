@@ -1,0 +1,27 @@
+--- a/IDE/src/IDEApp.bf
++++ b/IDE/src/IDEApp.bf
+@@ -12723,7 +12723,8 @@
+ 			switch (platform)
+ 			{
+ 			case .iOS:
+-				canCompile = hostPlatform == .macOS;
++				// Tallow: iOS code is compiled into static libraries on any host (the link is done with Apple's tools on a Mac).
++				canCompile = true;
+ 			case .Android:
+ 				canCompile = true;
+ 			case .Unknown:
+--- a/IDE/src/util/TargetTriple.bf
++++ b/IDE/src/util/TargetTriple.bf
+@@ -29,8 +29,11 @@
+ 
+ 			bool hasLinux = false;
+ 
+-			for (let elem in str.Split('-'))
++			for (var elem in str.Split('-'))
+ 			{
++				// Tallow: a version may end any part, as in x86_64-apple-ios15-simulator.
++				while ((elem.Length > 1) && ((elem[elem.Length - 1].IsDigit) || (elem[elem.Length - 1] == '.')))
++					elem.RemoveFromEnd(1);
+ 				switch (elem)
+ 				{
+ 				case "linux":

@@ -7,6 +7,7 @@
 #include <bgfx/embedded_shader.h>
 #include <bx/math.h>
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_metal.h>
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/html5.h>
 #endif
@@ -107,7 +108,18 @@ namespace
 #elif defined(SDL_PLATFORM_MACOS)
 		swapChain.nwh = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, nullptr);
 #elif defined(SDL_PLATFORM_IOS)
-		swapChain.nwh = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_UIKIT_WINDOW_POINTER, nullptr);
+		// bgfx's Metal backend draws into a CAMetalLayer: a Metal view SDL puts in the window (made once per window).
+		(void)props;
+		static SDL_Window* s_metalWindow = nullptr;
+		static SDL_MetalView s_metalView = nullptr;
+		if (s_metalWindow != window)
+		{
+			if (s_metalView != nullptr)
+				SDL_Metal_DestroyView(s_metalView);
+			s_metalView = SDL_Metal_CreateView(window);
+			s_metalWindow = window;
+		}
+		swapChain.nwh = s_metalView != nullptr ? SDL_Metal_GetLayer(s_metalView) : nullptr;
 #elif defined(SDL_PLATFORM_ANDROID)
 		swapChain.nwh = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER, nullptr);
 #elif defined(SDL_PLATFORM_EMSCRIPTEN)

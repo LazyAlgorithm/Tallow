@@ -33,8 +33,8 @@ if(EMSCRIPTEN)
 	set(BGFX_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 	set(BGFX_CONFIG_MULTITHREADED OFF CACHE BOOL "" FORCE)
 endif()
-if(ANDROID)
-	# An Android build (the NDK's toolchain file, see tools/android) is only the game's libraries: shaderc and texturec
+if(ANDROID OR IOS)
+	# An Android or iOS build (the NDK's toolchain file, see tools/android) is only the game's libraries: shaderc and texturec
 	# are desktop tools that the editor and Tallow.Build export run.
 	set(BGFX_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 endif()
@@ -187,6 +187,14 @@ if(TALLOW_RAPIER)
 		# arm64-v8a (phones and tablets) or x86_64 (the emulator).
 		set(_tallow_rapier_platform "android-${ANDROID_ABI}")
 		set(_tallow_rapier_library "librapier3d_ffi.a")
+	elseif(IOS)
+		# iphoneos-arm64 (devices) or iphonesimulator-<arch> (the Simulator).
+		if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+			set(_tallow_rapier_platform "iphonesimulator-${CMAKE_OSX_ARCHITECTURES}")
+		else()
+			set(_tallow_rapier_platform "iphoneos-${CMAKE_OSX_ARCHITECTURES}")
+		endif()
+		set(_tallow_rapier_library "librapier3d_ffi.a")
 	elseif(WIN32)
 		set(_tallow_rapier_platform "windows-x86_64")
 		set(_tallow_rapier_library "rapier3d_ffi.lib")
@@ -220,7 +228,15 @@ if(TALLOW_RAPIER)
 			# Apple's linker is not known to take an archive with no members: give it one holding a single object.
 			file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/rapier)
 			file(WRITE ${CMAKE_BINARY_DIR}/rapier/stand_in.c "int tallow_rapier_stand_in;\n")
-			execute_process(COMMAND ${CMAKE_C_COMPILER} -c ${CMAKE_BINARY_DIR}/rapier/stand_in.c -o ${CMAKE_BINARY_DIR}/rapier/stand_in.o
+			# For the target's processor and SDK (an iOS build is not for the Mac it is made on).
+			set(_tallow_stand_in_flags "")
+			foreach(_tallow_arch IN LISTS CMAKE_OSX_ARCHITECTURES)
+				list(APPEND _tallow_stand_in_flags -arch ${_tallow_arch})
+			endforeach()
+			if(CMAKE_OSX_SYSROOT)
+				list(APPEND _tallow_stand_in_flags -isysroot ${CMAKE_OSX_SYSROOT})
+			endif()
+			execute_process(COMMAND ${CMAKE_C_COMPILER} ${_tallow_stand_in_flags} -c ${CMAKE_BINARY_DIR}/rapier/stand_in.c -o ${CMAKE_BINARY_DIR}/rapier/stand_in.o
 				RESULT_VARIABLE _tallow_stand_in_compiled)
 			file(REMOVE ${CMAKE_BINARY_DIR}/rapier/${_tallow_rapier_library})
 			execute_process(COMMAND ${CMAKE_AR} rcs ${CMAKE_BINARY_DIR}/rapier/${_tallow_rapier_library} ${CMAKE_BINARY_DIR}/rapier/stand_in.o
@@ -294,10 +310,14 @@ if(TALLOW_RAPIER_AVAILABLE)
 	target_include_directories(tallow_native PRIVATE ${_tallow_rapier_dir}/include)
 endif()
 target_link_libraries(tallow_native PRIVATE bgfx bx SDL3::SDL3-static)
+if(IOS)
+	# miniaudio reaches iOS's audio session through AVFoundation, which only Objective-C can include.
+	set_source_files_properties(tallow_audio.c PROPERTIES COMPILE_OPTIONS "-xobjective-c;-fobjc-arc")
+endif()
 
 
 # ---- Model import settings step (tallowengine.com/docs/model-import), for Tallow.Build export ----
-if(NOT EMSCRIPTEN AND NOT ANDROID)
+if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
 	add_executable(tallow_modelsettings tallow_modelsettings.c tallow_modelimport.c)
 	target_include_directories(tallow_modelsettings PRIVATE ${TP}/cgltf)
 	if(NOT MSVC)
@@ -308,7 +328,7 @@ endif()
 # ---- Model converter (editor tool): FBX, OBJ, DAE, STL, PLY and 3DS to .glb, through Assimp ----
 # The editor and Tallow.Build export run tallow_modelconv as a program of its own (tallowengine.com/docs/model-import); games
 # never link Assimp.
-if(NOT EMSCRIPTEN AND NOT ANDROID)
+if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 	set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 	set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)

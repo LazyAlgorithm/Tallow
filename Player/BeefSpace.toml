@@ -9,3 +9,13 @@ Toolset = "LLVM"
 
 [Configs.Release.Win64]
 Toolset = "LLVM"
+
+# iOS: machine code (Beef's iOS default is bitcode, which Apple's linker no longer reads), for iOS 15 and later.
+[Configs.Release.arm64-apple-ios15]
+IntermediateType = "Object"
+
+[Configs.Release.x86_64-apple-ios15-simulator]
+IntermediateType = "Object"
+
+[Configs.Release.arm64-apple-ios15-simulator]
+IntermediateType = "Object"

@@ -14,6 +14,7 @@ static class SDL
 	public const uint64 WINDOW_RESIZABLE = 0x0000000000000020;
 	public const uint64 WINDOW_MAXIMIZED = 0x0000000000000080;
 	public const uint64 WINDOW_HIGH_PIXEL_DENSITY = 0x0000000000002000;
+	public const uint64 WINDOW_METAL = 0x0000000020000000;
 
 	public const uint32 EVENT_QUIT = 0x100;
 	public const uint32 EVENT_WINDOW_RESIZED = 0x206;

@@ -390,7 +390,7 @@ jobs:
 
   macos:
     runs-on: macos-15-intel
-    timeout-minutes: 120
+    timeout-minutes: 180
     defaults:
       run:
         shell: bash tallow/.github/scripts/step.sh {0}
@@ -506,6 +506,27 @@ jobs:
           name: extras-macos
           path: out/extras-macos.tar
           retention-days: 3
+
+      # The iOS platform module (Tallow-Platform-iOS.zip, added in the editor's Platforms window on a Mac): the player
+      # for iPhones and iPads and for the iOS Simulator on Intel and Apple silicon Macs (tools/ios/build_player.sh).
+      # A problem here never holds up the release.
+      - name: iOS platform module
+        continue-on-error: true
+        run: |
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild" BEEF_SOURCE="$HOME/beef"
+          cd tallow
+          xcrun --sdk iphoneos --show-sdk-version
+          tools/ios/build_player.sh
+          dotnet build Managed/Tallow.Build/Tallow.Build.csproj -c Debug --nologo -v minimal
+          dotnet Managed/Tallow.Build/bin/Debug/net11.0/Tallow.Build.dll platform-pack ios --output ../out/Tallow-Platform-iOS.zip --engine-root . --build "$GITHUB_SHA"
+
+      - name: Keep the iOS module
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tallow-Platform-iOS
+          path: out/Tallow-Platform-iOS.zip
+          if-no-files-found: ignore
 
   # The Android platform module (Tallow-Platform-Android.zip, added in the editor's Platforms window): the engine and
   # player for arm64 phones and the x86_64 emulator, and SDL's Java activity, made with Google's NDK
@@ -633,6 +654,13 @@ jobs:
           name: Tallow-Platform-Android
           path: out
 
+      - name: Get the iOS module
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: Tallow-Platform-iOS
+          path: out
+
       - name: Get the players and web pieces
         uses: actions/download-artifact@v4
         with:
@@ -672,6 +700,7 @@ jobs:
 
           - **Tallow-Windows.zip**: unzip and run Tallow.exe.
           - **Tallow-Linux.zip**: unzip and run ./Tallow.
+          - **Tallow-Platform-iOS.zip**: the iOS platform; Tallow on a Mac downloads it itself when you add iOS in the Build window's Platforms (it needs Xcode).
           - **Tallow-Platform-Android.zip**: the Android platform; Tallow downloads it itself when you add Android in the Build window's Platforms (it needs Android Studio installed).
           - **Tallow-macOS.zip** (Intel Macs; Apple silicon untested): unzip, then run \`xattr -dr com.apple.quarantine <folder>\` once (Tallow is not signed with an Apple Developer ID, so macOS blocks it otherwise), and run ./Tallow.
 

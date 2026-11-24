@@ -1,0 +1,14 @@
+--- a/BeefySysLib/platform/darwin/DarwinCommon.cpp
++++ b/BeefySysLib/platform/darwin/DarwinCommon.cpp
+@@ -6,7 +6,11 @@
+ #define lseek64 lseek
+ #define ftruncate64 ftruncate
+ 
++#include <TargetConditionals.h>
++// Tallow: FSEvents (the file watcher) is macOS only; iOS goes without, as Android does.
++#if !TARGET_OS_IPHONE
+ #define BFP_HAS_FILEWATCHER
++#endif
+ 
+ #include "../posix/PosixCommon.cpp"
+ 

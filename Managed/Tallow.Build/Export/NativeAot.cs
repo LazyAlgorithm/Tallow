@@ -46,7 +46,7 @@ internal static class NativeAot
         """;
 
     public static string LibraryName(Target target) =>
-        target switch { Target.Windows => "TallowGame.dll", Target.MacOS => "libTallowGame.dylib", _ => "libTallowGame.so" };
+        target switch { Target.Windows => "TallowGame.dll", Target.MacOS or Target.IOS => "libTallowGame.dylib", _ => "libTallowGame.so" };
 
     /// <summary>Whether this machine can make a NativeAOT library for the target at all.</summary>
     public static bool CanBuild(Target target) => target switch
@@ -56,6 +56,7 @@ internal static class NativeAot
         Target.MacOS => ExportUtil.HostMac && AppleToolsInstalled(),
         // Android Studio's SDK and Java; the NDK is installed by the export when it is missing.
         Target.Android => Android.Find().HasStudio,
+        Target.IOS => Ios.Problem(false) == null,
         _ => false,
     };
 
@@ -67,6 +68,7 @@ internal static class NativeAot
         Target.MacOS => ExportUtil.HostMac ? "a macOS NativeAOT library needs Apple's command line tools (run: xcode-select --install)"
             : "a macOS NativeAOT library is compiled on a Mac (Apple's tools only run there)",
         Target.Android => Android.Problem(Android.Find()) ?? Android.StudioHelp,
+        Target.IOS => Ios.Problem(false) ?? "",
         _ => "a web build always runs .NET in the browser",
     };
 
@@ -284,21 +286,27 @@ internal static class NativeAot
     /// <paramref name="symbols"/>. With <paramref name="warningsMode"/> "error", a warning in the game's own code, or
     /// an engine warning not in tools/nativeaot_allowlist.txt, fails the export (after the report is written).</summary>
     public static void Build(string engine, string project, string config, string staging, Target target, string player, string symbols, string warningsMode,
-        AndroidTools? android = null, string? androidAbi = null)
+        AndroidTools? android = null, string? androidAbi = null, bool iosSimulator = false)
     {
-        if (target != Target.Android && !CanBuild(target))
+        if (target != Target.Android && target != Target.IOS && !CanBuild(target))
             throw new ExportException($"No NativeAOT build here: {WhyNot(target)}.");
         bool windows = target == Target.Windows, macos = target == Target.MacOS;
         // A macOS library is for the chip the player is built for (an Intel player runs on Apple silicon too, translated).
-        string rid = target == Target.Android ? Android.Rid(androidAbi!) : windows ? "win-x64" : macos ? "osx-" + (Symbols.MachOArch(player) ?? "x64") : "linux-x64";
+        string rid = target == Target.Android ? Android.Rid(androidAbi!) : target == Target.IOS ? Ios.Rid(iosSimulator) : windows ? "win-x64" : macos ? "osx-" + (Symbols.MachOArch(player) ?? "x64") : "linux-x64";
         var assemblies = GameAssemblies(project, config);
         string cache = Path.Combine(ExportUtil.CacheFolder(), "nativeaot");
         var environment = new Dictionary<string, string> { ["DOTNET_NOLOGO"] = "1" };
         var properties = new List<string>();
         bool cross = windows && !ExportUtil.HostWindows;
         string work = Directory.CreateTempSubdirectory("tallow-native-").FullName;
+        // macOS's temporary folder is under /var, a link to /private/var: MSBuild would make wrong relative paths
+        // from the link to the engine's projects.
+        if (ExportUtil.HostMac && (work.StartsWith("/var/", StringComparison.Ordinal) || work.StartsWith("/tmp/", StringComparison.Ordinal)))
+            work = "/private" + work;
         if (target == Target.Android)
             properties = Android.LinkProperties(android!, androidAbi!);
+        else if (target == Target.IOS)
+            properties = Ios.AotProperties();
         else if (cross)
         {
             var (extra, crossProperties) = WindowsLinkSetup(cache);
@@ -385,14 +393,16 @@ internal static class NativeAot
                 Directory.Delete(symbols, true);
             Directory.CreateDirectory(symbols);
             // Windows: a .pdb; Linux: a .dbg; macOS: a .dSYM folder (dsymutil's).
-            string wanted = windows ? Path.GetFileNameWithoutExtension(library) + ".pdb" : Path.GetFileName(library) + (macos ? ".dSYM" : ".dbg");
+            // (iOS, like macOS, keeps them in a .dSYM.)
+            bool apple = macos || target == Target.IOS;
+            string wanted = windows ? Path.GetFileNameWithoutExtension(library) + ".pdb" : Path.GetFileName(library) + (apple ? ".dSYM" : ".dbg");
             string artifacts = Path.Combine(work, "artifacts");
             var candidates = new[] { Path.Combine(published, wanted) }.Concat(!Directory.Exists(artifacts) ? Enumerable.Empty<string>()
-                : (macos ? Directory.EnumerateDirectories(artifacts, wanted, SearchOption.AllDirectories)
+                : (apple ? Directory.EnumerateDirectories(artifacts, wanted, SearchOption.AllDirectories)
                     : Directory.EnumerateFiles(artifacts, wanted, SearchOption.AllDirectories))
                     .Where(path => path.Replace('\\', '/').Contains("/native/")));
-            string? found = candidates.FirstOrDefault(path => macos ? Directory.Exists(path) : File.Exists(path));
-            if (found != null && macos)
+            string? found = candidates.FirstOrDefault(path => apple ? Directory.Exists(path) : File.Exists(path));
+            if (found != null && apple)
                 ExportUtil.CopyTree(found, Path.Combine(symbols, wanted));
             else if (found != null)
                 File.Copy(found, Path.Combine(symbols, wanted), true);

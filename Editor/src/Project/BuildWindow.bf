@@ -16,7 +16,9 @@ enum BuildTarget
 	/// A folder of web files (WebAssembly) to put on any web server, played in a browser on computers and phones.
 	Web,
 	/// An APK for phones and tablets (Android 10 and later); a platform module (the Platforms window).
-	Android
+	Android,
+	/// An app for iPhones and iPads, or the iOS Simulator (iOS 15 and later); a platform module, built on a Mac only.
+	IOS
 }
 
 /// File > Build Game: pick the system to build for and a folder, and get a folder holding the game and only what
@@ -25,6 +27,8 @@ extension EditorApp
 {
 	bool mShowBuild;
 	BuildTarget mBuildTarget;
+	/// iOS: an app for the iOS Simulator on this Mac rather than for iPhones and iPads.
+	bool mIosSimulator = true;
 	/// The local web server started by Play in Browser, so a second press does not start another.
 	bool mWebServerStarted;
 	bool mBuildSucceeded;
@@ -62,7 +66,7 @@ extension EditorApp
 		{
 			var lines = text.Split('\n');
 			if (lines.GetNext() case .Ok(let system))
-				mBuildTarget = system == "windows" ? .Windows : system == "web" ? .Web : system == "macos" ? .MacOS : system == "android" ? .Android : .Linux;
+				mBuildTarget = system == "windows" ? .Windows : system == "web" ? .Web : system == "macos" ? .MacOS : system == "android" ? .Android : system == "ios" ? .IOS : .Linux;
 			if (lines.GetNext() case .Ok(let folder))
 				mBuildFolder.Set(folder);
 		}
@@ -185,6 +189,8 @@ extension EditorApp
 		case .MacOS: return HostTarget == .MacOS && AppleToolsInstalled();
 		// Always: Android's C# is compiled with Android Studio's NDK (which the export installs when missing).
 		case .Android: return true;
+		// iOS is built on a Mac only, where Xcode compiles its C#.
+		case .IOS: return HostTarget == .MacOS;
 		default: return false;
 		}
 	}
@@ -240,7 +246,8 @@ extension EditorApp
 
 	/// Whether the chosen system can be built for now.
 	bool TargetReady(BuildTarget target) => target == .Web ? WebPiecesAvailable() && WebDotNetReady()
-		: target == .Android ? PlatformModules.AndroidInstalled(Project.Current.EngineRoot) && PlatformModules.AndroidReady : PlayerAvailable(target);
+		: target == .Android ? PlatformModules.AndroidInstalled(Project.Current.EngineRoot) && PlatformModules.AndroidReady
+		: target == .IOS ? HostTarget == .MacOS && PlatformModules.IosInstalled(Project.Current.EngineRoot) : PlayerAvailable(target);
 
 	void DrawBuildWindow()
 	{
@@ -286,13 +293,15 @@ extension EditorApp
 		ImGui.SeparatorText("For");
 		// Android once its module is added (or chosen last time, so the window can say how to add it).
 		let android = PlatformModules.AndroidInstalled(Project.Current.EngineRoot) || mBuildTarget == .Android;
-		for (let target in BuildTarget[5](.Linux, .Windows, .MacOS, .Web, .Android))
+		// iOS only on a Mac (Apple's tools run nowhere else), once its module is added.
+		let ios = HostTarget == .MacOS && (PlatformModules.IosInstalled(Project.Current.EngineRoot) || mBuildTarget == .IOS);
+		for (let target in BuildTarget[6](.Linux, .Windows, .MacOS, .Web, .Android, .IOS))
 		{
-			if (target == .Android && !android)
+			if ((target == .Android && !android) || (target == .IOS && !ios))
 				continue;
 			if (target != .Linux)
 				ImGui.SameLine();
-			if (ImGui.RadioButton(target == .MacOS ? "macOS" : target.ToString(.. scope .()), mBuildTarget == target))
+			if (ImGui.RadioButton(target == .MacOS ? "macOS" : target == .IOS ? "iOS" : target.ToString(.. scope .()), mBuildTarget == target))
 			{
 				mBuildTarget = target;
 				mBuildMessage.Clear();
@@ -307,13 +316,29 @@ extension EditorApp
 			ImGui.TextDisabled("Played in a browser, on computers and phones");
 		else if (mBuildTarget == .Android)
 			ImGui.TextDisabled("Phones and tablets (Android 10 and later), with on-screen controls when the game has none of its own");
+		else if (mBuildTarget == .IOS)
+		{
+			if (ImGui.RadioButton("iOS Simulator", mIosSimulator))
+			{
+				mIosSimulator = true;
+				mBuildMessage.Clear();
+			}
+			ImGui.SameLine();
+			if (ImGui.RadioButton("iPhone and iPad", !mIosSimulator))
+			{
+				mIosSimulator = false;
+				mBuildMessage.Clear();
+			}
+			ImGui.SameLine();
+			ImGui.TextDisabled(mIosSimulator ? "Tried on this Mac in Xcode's iOS Simulator" : "Needs signing (iosSigningIdentity, iosProvisioningProfile)");
+		}
 	}
 
 	/// A game's options: starting full screen, and how its assets are packed. A web page fills the browser window,
 	/// and full screen is the player's choice; its assets are always packed.
 	void DrawGameBuildOptions(Project project)
 	{
-		if (mBuildTarget != .Web && mBuildTarget != .Android)
+		if (mBuildTarget != .Web && mBuildTarget != .Android && mBuildTarget != .IOS)
 		{
 			ImGui.SeparatorText("Window");
 			if (ImGui.Checkbox("Start in fullscreen", ref project.Fullscreen))
@@ -328,6 +353,11 @@ extension EditorApp
 		{
 			ImGui.SeparatorText("C# runtime");
 			ImGui.TextDisabled("Android games always compile their C# to native code (NativeAOT), with Android Studio's tools.");
+		}
+		else if (IsCSharpProject && mBuildTarget == .IOS)
+		{
+			ImGui.SeparatorText("C# runtime");
+			ImGui.TextDisabled("iOS games always compile their C# to native code (NativeAOT), with Xcode.");
 		}
 		else if (IsCSharpProject && mBuildTarget != .Web)
 		{
@@ -366,11 +396,11 @@ extension EditorApp
 			}
 		}
 		ImGui.SeparatorText("Assets");
-		ImGui.BeginDisabled(mBuildTarget == .Web || mBuildTarget == .Android);
+		ImGui.BeginDisabled(mBuildTarget == .Web || mBuildTarget == .Android || mBuildTarget == .IOS);
 		if (ImGui.Checkbox("Compress textures", ref project.CompressTextures))
 			project.Save();
 		ImGui.SameLine();
-		ImGui.TextDisabled(mBuildTarget == .Web ? "Web builds keep pictures as they are" : mBuildTarget == .Android ? "Android builds keep pictures as they are (phones do not read the desktop's formats)" : project.CompressTextures ? "A quarter to an eighth of the video memory, and quicker to load" : "Pictures as they are, decoded when loaded");
+		ImGui.TextDisabled(mBuildTarget == .Web ? "Web builds keep pictures as they are" : mBuildTarget == .Android || mBuildTarget == .IOS ? "Phone builds keep pictures as they are (phones do not read the desktop's formats)" : project.CompressTextures ? "A quarter to an eighth of the video memory, and quicker to load" : "Pictures as they are, decoded when loaded");
 		if (ImGui.Checkbox("Pack assets into one file", ref project.PackAssets))
 			project.Save();
 		ImGui.EndDisabled();
@@ -406,6 +436,13 @@ extension EditorApp
 			return;
 		}
 		let root = Project.Current.EngineRoot;
+		if (mBuildTarget == .IOS)
+		{
+			ImGui.TextColored(EditorTheme.Warning, HostTarget != .MacOS ? "iOS games are built on a Mac with Xcode." : "The iOS platform is not added to this Tallow yet.");
+			if (HostTarget == .MacOS && ImGui.Button("Platforms..."))
+				OpenPlatformsWindow();
+			return;
+		}
 		if (mBuildTarget == .Android)
 		{
 			if (!PlatformModules.AndroidInstalled(root))
@@ -453,7 +490,10 @@ extension EditorApp
 			SDL.SDL_ShowOpenFolderDialog( => OnFolderPicked, null, Window, mBuildFolder.IsEmpty ? null : mBuildFolder.CStr(), false);
 		BuildOutputFolder(output);
 		ImGui.PushTextWrapPos(0);
-		if (mBuildTarget == .Android)
+		if (mBuildTarget == .IOS)
+			ImGui.TextDisabled(mIosSimulator ? scope $"The game is put in {output} as {Project.Current.Name}.app. Run in Simulator starts it in Xcode's iOS Simulator. An earlier build of the game there is replaced."
+				: scope $"The game is put in {output} as {Project.Current.Name}.app and {Project.Current.Name}.ipa, signed with iosSigningIdentity and iosProvisioningProfile from project.tallow; install it from Xcode's Devices window. An earlier build of the game there is replaced.");
+		else if (mBuildTarget == .Android)
 			ImGui.TextDisabled(scope $"The game is put in {output} as {Project.Current.Name}.apk. Install on Device sends it to a phone connected with USB debugging on, or to an emulator running in Android Studio. An earlier build of the game there is replaced.");
 		else if (mBuildTarget == .Web)
 			ImGui.TextDisabled(scope $"The game is put in {output}: a web page (index.html) with the game and its assets. Put that folder on any web server, such as GitHub Pages or itch.io, and share the address. Play in Browser tries it on this machine. An earlier build of the game there is replaced.");
@@ -490,12 +530,17 @@ extension EditorApp
 				if (ImGui.Button("Play in Browser"))
 					PlayInBrowser(output);
 			}
-			if (mBuildTarget == .Android)
+			if (mBuildTarget == .Android || (mBuildTarget == .IOS && mIosSimulator))
 			{
 				ImGui.SameLine();
 				ImGui.BeginDisabled(PlatformModules.Busy);
-				if (ImGui.Button("Install on Device"))
-					PlatformModules.RunOnDevice(Project.Current.EngineRoot, output);
+				if (mBuildTarget == .IOS ? ImGui.Button("Run in Simulator") : ImGui.Button("Install on Device"))
+				{
+					if (mBuildTarget == .IOS)
+						PlatformModules.RunInSimulator(Project.Current.EngineRoot, output);
+					else
+						PlatformModules.RunOnDevice(Project.Current.EngineRoot, output);
+				}
 				ImGui.EndDisabled();
 				let status = scope String();
 				let failed = PlatformModules.GetStatus(status);

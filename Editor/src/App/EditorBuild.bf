@@ -137,7 +137,7 @@ extension EditorApp
 		let output = scope String();
 		BuildOutputFolder(output);
 		Log.Info(scope $"Building the game for {(mBuildTarget == .Web ? "the web" : mBuildTarget.ToString(.. scope .()))}...");
-		mBuildSucceeded = project.BuildPlayer(output, mBuildTarget);
+		mBuildSucceeded = project.BuildPlayer(output, mBuildTarget, mIosSimulator);
 		if (mBuildSucceeded)
 		{
 			Log.Info(scope $"Game packaged at {output}");

@@ -135,6 +135,12 @@ static class Log
 #if BF_PLATFORM_ANDROID
 		// An app has no console: to logcat (adb logcat -s Tallow), at the matching priority.
 		__android_log_write(level == .Error ? 6 : level == .Warning ? 5 : 4, "Tallow", scope String(text).CStr());
+#elif BF_PLATFORM_IOS
+		// Straight to standard error, unbuffered: the Simulator's console (xcrun simctl launch --console) and
+		// Xcode's show it.
+		let line = scope String();
+		line.Append(level == .Error ? "[error] " : level == .Warning ? "[warning] " : "", text, "\n");
+		write(2, line.Ptr, (uint)line.Length);
 #else
 		switch (level)
 		{
@@ -148,6 +154,9 @@ static class Log
 #if BF_PLATFORM_ANDROID
 	[CLink]
 	static extern int32 __android_log_write(int32 priority, char8* tag, char8* text);
+#elif BF_PLATFORM_IOS
+	[CLink]
+	static extern int write(int32 fd, void* buffer, uint count);
 #endif
 
 	/// Forgets every message.

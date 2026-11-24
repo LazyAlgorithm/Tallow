@@ -10,7 +10,7 @@ namespace Tallow.ManagedBuild.Export;
 /// compiled shaders for its graphics backends and its assets, packed.
 ///
 /// <code>
-///   export &lt;project&gt; --output &lt;folder&gt; [--platform linux|windows|macos|web|android] [--config Release|Debug] [--replace]
+///   export &lt;project&gt; --output &lt;folder&gt; [--platform linux|windows|macos|web|android|ios] [--ios-simulator] [--config Release|Debug] [--replace]
 ///          [--scene S] [--fullscreen|--windowed] [--no-compress] [--no-texture-compression] [--single-pack] [--loose]
 ///          [--csharp-runtime jit|native] [--aot-warnings error|report] [--no-bundle-dotnet] [--engine-root E] [--zip]
 /// </code>
@@ -28,13 +28,13 @@ internal static class Exporter
         public string? Scene;
         public string Config = "Release";
         public Target Platform = ExportUtil.HostWindows ? Target.Windows : ExportUtil.HostMac ? Target.MacOS : Target.Linux;
-        public bool Replace, Fullscreen, Windowed, NoCompress, NoTextureCompression, SinglePack, Loose, NoBundleDotNet, Zip;
+        public bool Replace, Fullscreen, Windowed, NoCompress, NoTextureCompression, SinglePack, Loose, NoBundleDotNet, Zip, IosSimulator;
         public string? CSharpRuntime;
         public string AotWarnings = "error";
         public string? EngineRoot;
     }
 
-    const string Usage = "usage: export <project> --output <folder> [--platform linux|windows|macos|web|android] [--config Release|Debug] " +
+    const string Usage = "usage: export <project> --output <folder> [--platform linux|windows|macos|web|android|ios] [--ios-simulator] [--config Release|Debug] " +
         "[--replace] [--scene S] [--fullscreen|--windowed] [--no-compress] [--no-texture-compression] [--single-pack] [--loose] " +
         "[--csharp-runtime jit|native] [--aot-warnings error|report] [--no-bundle-dotnet] [--engine-root E] [--zip]";
 
@@ -64,8 +64,8 @@ internal static class Exporter
                 case "--platform":
                     options.Platform = Value(ref i, arg) switch
                     {
-                        "linux" => Target.Linux, "windows" => Target.Windows, "macos" => Target.MacOS, "web" => Target.Web, "android" => Target.Android,
-                        var other => throw new ExportException($"--platform is linux, windows, macos, web or android, not {other}.", true)
+                        "linux" => Target.Linux, "windows" => Target.Windows, "macos" => Target.MacOS, "web" => Target.Web, "android" => Target.Android, "ios" => Target.IOS,
+                        var other => throw new ExportException($"--platform is linux, windows, macos, web, android or ios, not {other}.", true)
                     };
                     break;
                 case "--replace": options.Replace = true; break;
@@ -77,6 +77,8 @@ internal static class Exporter
                 case "--loose": options.Loose = true; break;
                 case "--no-bundle-dotnet": options.NoBundleDotNet = true; break;
                 case "--zip": options.Zip = true; break;
+                // iOS: an app for the iOS Simulator on this Mac instead of for iPhones and iPads.
+                case "--ios-simulator": options.IosSimulator = true; break;
                 // A Windows console belongs to the Beef player build; the precompiled player is the same either way.
                 case "--console": break;
                 case "--csharp-runtime":
@@ -208,7 +210,7 @@ internal static class Exporter
                 throw new ExportException("Output already exists; choose a new folder to preserve the existing build, or pass --replace.", true);
             if (!Directory.Exists(output) || (Directory.EnumerateFileSystemEntries(output).Any() &&
                 !File.Exists(Path.Combine(output, "game.tallow")) && !File.Exists(Path.Combine(output, "game.tpak")) &&
-                !File.Exists(Path.Combine(output, "tallow-android.txt"))))
+                !File.Exists(Path.Combine(output, "tallow-android.txt")) && !File.Exists(Path.Combine(output, "tallow-ios.txt"))))
                 throw new ExportException($"{output} exists and is not an earlier build of a game, so it is left alone. Choose another folder.", true);
         }
         string manifest = Path.Combine(project, "project.tallow");
@@ -216,7 +218,7 @@ internal static class Exporter
             throw new ExportException($"Missing {manifest}. Tallow projects require project.tallow; regenerate or update the project before building.", true);
         var settings = ExportUtil.ReadSettings(manifest);
         Target target = options.Platform;
-        bool windows = target == Target.Windows, web = target == Target.Web, macos = target == Target.MacOS, android = target == Target.Android;
+        bool windows = target == Target.Windows, web = target == Target.Web, macos = target == Target.MacOS, android = target == Target.Android, ios = target == Target.IOS;
         string recorded = settings.Get("engine");
         string engine = options.EngineRoot != null ? Path.GetFullPath(options.EngineRoot)
             : recorded.Length > 0 ? Path.GetFullPath(Path.IsPathRooted(recorded) ? recorded : Path.Combine(project, recorded)) : ToolEngine();
@@ -254,9 +256,21 @@ internal static class Exporter
             androidTools = Android.Require();
             Android.PlayerFolder(engine);
         }
+        // iOS likewise runs no JIT; its C# is compiled with Xcode, on a Mac.
+        if (ios)
+        {
+            if (options.CSharpRuntime == "jit")
+                throw new ExportException("iOS games always compile their C# ahead of time (NativeAOT); --csharp-runtime jit is not available.", true);
+            runtime = "native";
+            if (Ios.Problem(options.IosSimulator) is { } problem)
+                throw new ExportException(problem);
+            if (!File.Exists(Ios.PlayerPath(engine, options.IosSimulator)))
+                throw new ExportException($"This engine has no iOS player ({Ios.PlayerPath(engine, options.IosSimulator)}). Engine packages carry it; " +
+                    "in an engine source checkout make it with tools/ios/build_player.sh.");
+        }
         if (runtime is not ("jit" or "native"))
             throw new ExportException($"csharpRuntime in project.tallow is jit or native, not {runtime}.", true);
-        if (runtime == "native" && !android && !NativeAot.CanBuild(target))
+        if (runtime == "native" && !android && !ios && !NativeAot.CanBuild(target))
         {
             if (options.CSharpRuntime == "native")
                 throw new ExportException(web ? "A web build always runs .NET in the browser; NativeAOT is not available for it."
@@ -268,7 +282,7 @@ internal static class Exporter
         bool nativeAot = runtime == "native";
         bool bundle = !options.NoBundleDotNet && settings.Get("bundleDotNet", "1") != "0";
 
-        string? player = web || android ? null : Player(engine, options.Config, target);
+        string? player = web || android || ios ? null : Player(engine, options.Config, target);
         BuildGame(engine, project, options.Config);
 
         string parent = Path.GetDirectoryName(output)!;
@@ -281,8 +295,23 @@ internal static class Exporter
             // Android: the game's C# for each ABI, compiled into libraries the APK carries (Android.Package).
             var androidLibraries = new Dictionary<string, string>();
             string androidWork = Path.Combine(parent, $"{Path.GetFileName(output)}-android-{Guid.NewGuid().ToString("N")[..8]}");
+            string? iosLibrary = null;
             if (web)
                 WebExport.Build(engine, project, options.Config, staging);
+            else if (ios)
+            {
+                // The game's C# as a library, made into a framework by Ios.Package; its code ID stays with the game.
+                string iosStaging = androidWork;
+                NativeAot.Build(engine, project, options.Config, iosStaging, target, "", Symbols.Folder(output), options.AotWarnings, null, null, options.IosSimulator);
+                iosLibrary = Path.Combine(iosStaging, "Managed", "Native", NativeAot.LibraryName(target));
+                Directory.CreateDirectory(Path.Combine(staging, "Managed", "Native"));
+                string codeId = Path.Combine(iosStaging, "Managed", "Native", "Tallow.Game.codeid");
+                if (File.Exists(codeId))
+                    File.Copy(codeId, Path.Combine(staging, "Managed", "Native", "Tallow.Game.codeid"), true);
+                string notices = Path.Combine(iosStaging, "THIRD-PARTY-NOTICES.txt");
+                if (File.Exists(notices))
+                    File.Copy(notices, Path.Combine(staging, "THIRD-PARTY-NOTICES.txt"), true);
+            }
             else if (android)
             {
                 foreach (string abi in Android.Abis)
@@ -318,7 +347,7 @@ internal static class Exporter
 
             // A Release export ships a player with no debug information. Its matching symbols and a record of every
             // module's exact build identifier go to <output>-symbols beside the build, never inside it.
-            if (!web && !android && options.Config == "Release")
+            if (!web && !android && !ios && options.Config == "Release")
             {
                 string symbols = Symbols.Folder(output);
                 string stripped = Path.Combine(staging, executable);
@@ -349,7 +378,7 @@ internal static class Exporter
             {
                 Target.Web => new[] { "webgl" }, Target.Windows => new[] { "spirv" }, Target.MacOS => new[] { "metal" },
                 // Android: Vulkan, and OpenGL ES 3 on phones without a good Vulkan driver.
-                Target.Android => new[] { "spirv", "essl" }, _ => new[] { "spirv", "glsl" }
+                Target.Android => new[] { "spirv", "essl" }, Target.IOS => new[] { "metal" }, _ => new[] { "spirv", "glsl" }
             };
             foreach (string backend in backends)
             {
@@ -394,14 +423,14 @@ internal static class Exporter
             // Pictures compressed for the graphics card (tallowengine.com/docs/textures): a .ktx beside each. Not for
             // the web, whose browsers do not all read the same compressed formats.
             // Nor for Android, whose graphics chips do not read the desktop's BC formats.
-            if (!web && !android && !options.NoTextureCompression && settings.Get("compressTextures", "1") != "0" && Directory.Exists(Path.Combine(staging, "Assets")))
+            if (!web && !android && !ios && !options.NoTextureCompression && settings.Get("compressTextures", "1") != "0" && Directory.Exists(Path.Combine(staging, "Assets")))
             {
                 var (made, skipped, errors) = Textures.CompressFolder(Path.Combine(staging, "Assets"), engine,
                     settings.Get("textureCompressExclude", Textures.DefaultExclude));
                 Console.WriteLine($"Textures: {made} compressed, {skipped} left as they are" + string.Concat(errors.Select(error => "\n  note: " + error)));
             }
             // A web page cannot load Steam.
-            string steam = web || android ? "" : settings.Get("steamAppId");
+            string steam = web || android || ios ? "" : settings.Get("steamAppId");
             if (steam.Length > 0)
             {
                 // A game that is not started from Steam says which app it is with this file, and needs Valve's
@@ -432,8 +461,8 @@ internal static class Exporter
                 if (settings.Get(key).Length > 0)
                     game.Append($"{key} = {settings[key]}\n");
             // Android: which ways a phone may hold the game (the manifest's screenOrientation; the player tells SDL).
-            if (android)
-                game.Append($"androidOrientation = {settings.Get("androidOrientation", "sensorLandscape")}\n");
+            if (android || ios)
+                game.Append($"orientation = {settings.Get("androidOrientation", settings.Get("orientation", "landscape"))}\n");
             string gameFile = Path.Combine(staging, "game.tallow");
             File.WriteAllText(gameFile, game.ToString());
 
@@ -449,6 +478,13 @@ internal static class Exporter
             {
                 // The game folder goes inside the APK; the output folder holds the APK.
                 Android.Package(androidTools!, engine, project, staging, androidLibraries, output, name, settings, options.Config);
+                Directory.Delete(staging, true);
+                if (Directory.Exists(androidWork))
+                    Directory.Delete(androidWork, true);
+            }
+            else if (ios)
+            {
+                Ios.Package(engine, project, staging, iosLibrary!, output, name, settings, options.IosSimulator);
                 Directory.Delete(staging, true);
                 if (Directory.Exists(androidWork))
                     Directory.Delete(androidWork, true);

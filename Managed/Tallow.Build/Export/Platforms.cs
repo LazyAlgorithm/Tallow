@@ -18,13 +18,16 @@ namespace Tallow.ManagedBuild.Export;
 /// </summary>
 internal static class Platforms
 {
-    sealed record Module(string Name, string Title, string[] Files, string Folder);
+    /// <summary>MacOnly: the module builds games only on a Mac (iOS: Apple's tools run nowhere else).</summary>
+    sealed record Module(string Name, string Title, string[] Files, string Folder, bool MacOnly = false);
 
     /// <summary>The modules Tallow knows. Files: what has to be there for it to count as installed (engine-relative).</summary>
     static readonly Module[] Known =
     {
         new("android", "Android", Android.Abis.Select(abi => $"Player/build/Release_Android/{abi}/libmain.so").Append("Player/build/Release_Android/classes.dex").ToArray(),
             "Player/build/Release_Android"),
+        new("ios", "iOS", new[] { "Player/build/Release_iOS/iphoneos/TallowPlayer", "Player/build/Release_iOS/iphonesimulator/TallowPlayer" },
+            "Player/build/Release_iOS", true),
     };
 
     const string Repository = "LazyAlgorithm/Tallow";
@@ -64,7 +67,12 @@ internal static class Platforms
         string engine = EngineRoot(args);
         bool source = Directory.Exists(Path.Combine(engine, "Player", "src")) && EngineVersion(engine) == null;
         foreach (Module module in Known)
-            Console.WriteLine($"{module.Name} = {(Installed(engine, module.Name) ? "installed" : source ? "source" : "missing")}");
+        {
+            if (module.MacOnly && !ExportUtil.HostMac)
+                Console.WriteLine($"{module.Name} = mac-only");
+            else
+                Console.WriteLine($"{module.Name} = {(Installed(engine, module.Name) ? "installed" : source ? "source" : "missing")}");
+        }
     });
 
     public static int Install(string[] args) => Run(() =>
@@ -72,6 +80,8 @@ internal static class Platforms
         if (args.Length == 0 || args[0].StartsWith("--", StringComparison.Ordinal))
             throw new ExportException("usage: platform-install <name> [--engine-root E] [--from <zip>]", true);
         Module module = Find(args[0]);
+        if (module.MacOnly && !ExportUtil.HostMac)
+            throw new ExportException($"{module.Title} games are built on a Mac with Xcode: add the {module.Title} platform to Tallow on a Mac.");
         string engine = EngineRoot(args);
         int fromAt = Array.IndexOf(args, "--from");
         string? zip = fromAt >= 0 && fromAt + 1 < args.Length ? Path.GetFullPath(args[fromAt + 1]) : null;
@@ -82,7 +92,8 @@ internal static class Platforms
         {
             if (version == null)
                 throw new ExportException($"This engine was built from source: make the {module.Title} player with its build script " +
-                    (module.Name == "android" ? "(tools/android/build_player.sh)" : "") + ", or install a module zip with --from.");
+                    (module.Name == "android" ? "(tools/android/build_player.sh)" : module.Name == "ios" ? "(tools/ios/build_player.sh)" : "") +
+                    ", or install a module zip with --from.");
             string asset = $"Tallow-Platform-{module.Title}.zip";
             string url = $"https://github.com/{Repository}/releases/download/{version.Value.Version}/{asset}";
             zip = Path.Combine(cache, $"{version.Value.Version}-{asset}");
@@ -128,6 +139,8 @@ internal static class Platforms
                     throw new ExportException($"{zip} has a file outside the engine's folder: {entry.FullName}");
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 entry.ExtractToFile(path, true);
+                if (ExportUtil.LooksExecutable(path))
+                    ExportUtil.MakeExecutable(path);
             }
         }
         if (!Installed(engine, module.Name))
