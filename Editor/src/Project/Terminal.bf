@@ -99,15 +99,8 @@ static class Terminal
 	public static int32 Run(StringView command)
 	{
 #if BF_PLATFORM_WINDOWS
-		// Run the compiler/build shell without creating an external Windows console.
-		// /s strips the outer quotes, preserving quoted executable paths and redirection inside.
-		let start = scope ProcessStartInfo();
-		start.SetFileName("cmd.exe");
-		start.SetArguments(scope $"/d /s /c \"{command}\"");
-		start.UseShellExecute = false;
-		start.CreateNoWindow = true;
 		let process = scope SpawnedProcess();
-		if (process.Start(start) case .Err)
+		if (!StartHidden(command, process))
 			return -1;
 		process.WaitFor();
 		return (int32)process.ExitCode;
@@ -119,18 +112,31 @@ static class Terminal
 	/// Starts a command without waiting for it.
 	public static void RunDetached(StringView command)
 	{
+#if BF_PLATFORM_WINDOWS
+		// Not `start ""`: that gives console programs (dotnet for the C# language service, Tallow.Build serve) a
+		// console window of their own. A hidden cmd keeps them windowless; GUI programs still open their windows.
+		let process = scope SpawnedProcess();
+		StartHidden(command, process);
+#else
 		let line = scope String();
-#if BF_PLATFORM_WINDOWS
-		line.AppendF("start \"\" {}", command);
-#else
 		line.AppendF("({}) >/dev/null 2>&1 &", command);
-#endif
-#if BF_PLATFORM_WINDOWS
-		Run(line);
-#else
 		system(line.CStr());
 #endif
 	}
+
+#if BF_PLATFORM_WINDOWS
+	/// Starts cmd with a console that has no window, which console programs it runs share.
+	/// /s strips the outer quotes, preserving quoted executable paths and redirection inside.
+	static bool StartHidden(StringView command, SpawnedProcess process)
+	{
+		let start = scope ProcessStartInfo();
+		start.SetFileName("cmd.exe");
+		start.SetArguments(scope $"/d /s /c \"{command}\"");
+		start.UseShellExecute = false;
+		start.CreateNoWindow = true;
+		return process.Start(start) case .Ok;
+	}
+#endif
 
 	/// Wraps a path in quotes for the command interpreter.
 	public static void Quote(StringView path, String outText)

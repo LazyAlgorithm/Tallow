@@ -61,8 +61,7 @@ extension EditorApp
 			var lines = text.Split('\n');
 			if (lines.GetNext() case .Ok(let system))
 				mBuildTarget = system == "windows" ? .Windows : system == "web" ? .Web : system == "macos" ? .MacOS : .Linux;
-			// macOS games are built on a Mac only.
-			if (mBuildTarget == .MacOS && HostTarget != .MacOS)
+			if (!Offered(mBuildTarget))
 				mBuildTarget = HostTarget;
 			if (lines.GetNext() case .Ok(let folder))
 				mBuildFolder.Set(folder);
@@ -221,19 +220,24 @@ extension EditorApp
 		ImGui.End();
 	}
 
-	/// Which system the game is built for: Linux, Windows and the web from any machine (as far as the engine has the
-	/// player for it), macOS on a Mac only.
+	/// Whether this machine offers building for a system: macOS and the web on a Mac (macOS games are built on a Mac
+	/// only, and a Mac has neither the Linux nor the Windows player's tools); Linux, Windows and the web elsewhere.
+	static bool Offered(BuildTarget target) => target == .Web || (HostTarget == .MacOS) == (target == .MacOS);
+
+	/// Which system the game is built for (see Offered).
 	void DrawBuildTarget()
 	{
-		if (mBuildTarget == .MacOS && HostTarget != .MacOS)
+		if (!Offered(mBuildTarget))
 			mBuildTarget = HostTarget;
 		ImGui.SeparatorText("For");
+		bool first = true;
 		for (let target in BuildTarget[4](.Linux, .Windows, .MacOS, .Web))
 		{
-			if (target == .MacOS && HostTarget != .MacOS)
+			if (!Offered(target))
 				continue;
-			if (target != .Linux)
+			if (!first)
 				ImGui.SameLine();
+			first = false;
 			if (ImGui.RadioButton(target == .MacOS ? "macOS" : target.ToString(.. scope .()), mBuildTarget == target))
 			{
 				mBuildTarget = target;
