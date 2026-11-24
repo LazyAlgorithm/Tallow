@@ -37,7 +37,7 @@ env:
   BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
   LLVM_VERSION: '22'
   NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
-  # Emscripten for Beef's WebAssembly runtime (the same version tools/web/setup.sh uses: LLVM 22, like Beef's).
+  # Emscripten for Beef's WebAssembly runtime (pinned here: LLVM 22, like Beef's).
   EMSCRIPTEN_VERSION: '4.0.23'
 
 jobs:

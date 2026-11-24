@@ -2,7 +2,7 @@
 """Gathers the licence of every library compiled into Tallow into THIRD_PARTY_LICENSES.txt.
 
 Most of these licences ask that their text accompany anything built with the library, which includes the games
-made with the engine: tools/build_player.py copies the file into every packaged game. Run this again after adding
+made with the engine: Tallow.Build export copies the file into every packaged game. Run this again after adding
 or updating a library; build.sh does.
 """
 from pathlib import Path

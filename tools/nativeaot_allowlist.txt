@@ -1,4 +1,4 @@
-# Engine trim/AOT warnings a NativeAOT export accepts (tools/csharp_native.py), each reviewed.
+# Engine trim/AOT warnings a NativeAOT export accepts (Tallow.Build export's NativeAOT step), each reviewed.
 #
 # A line: <codes> <origin> <reason>. Codes are IL numbers separated by commas, or * for any. The origin is the
 # method (or type, for all its methods) the warning comes from, as the ILCompiler names it, without parameters;

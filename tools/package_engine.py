@@ -98,7 +98,7 @@ def main():
         previous.unlink(missing_ok=True)
     if not launcher.is_file():
         parser.error(f'Launcher is not built: {launcher}')
-    # The precompiled player C# games ship as their executable (tools/build_player.py), in Release; and Tallow's
+    # The precompiled player C# games ship as their executable (Tallow.Build export), in Release; and Tallow's
     # managed runtime, built, so that C# works without first compiling the engine's own C#.
     player = root / 'Player' / 'build' / f'Release_{target}' / 'TallowPlayer' / ('TallowPlayer.exe' if windows else 'TallowPlayer')
     if not args.skip_build:
@@ -111,12 +111,6 @@ def main():
         for project in ('Tallow.ManagedRuntime', 'Tallow.Editor'):
             subprocess.run(['dotnet', 'build', str(root / f'Managed/{project}/{project}.csproj'),
                             '--configuration', 'Debug', '--nologo', '--verbosity', 'minimal'], check=True)
-    language_worker = root / 'build/tools/beef-language-service' / args.platform
-    if not macos:
-        worker = language_worker / ('beef-language-service.exe' if windows else 'beef-language-service')
-        sources = [root / 'tools/BeefLanguageService' / name for name in ('main.cpp', 'api.inc')]
-        if not worker.is_file() or any(source.stat().st_mtime > worker.stat().st_mtime for source in sources):
-            subprocess.run([sys.executable, str(root / 'tools/build_beef_language_service.py'), '--platform', args.platform], check=True)
     output.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix='.tallow-package-', dir=output.parent))
     try:
@@ -124,7 +118,7 @@ def main():
         for name in ('Engine', 'Editor', 'Launcher', 'Player'):
             shutil.copytree(root / name, stage / name, ignore=ignore)
         # The Windows player too, when it was built (tools/windows/setup.sh, then this script with --platform windows
-        # or tools/build_player.py --platform windows): then the package makes Windows C# games without Wine or Beef.
+        # or Tallow.Build export --platform windows): then the package makes Windows C# games without Wine or Beef.
         windows_player = root / 'Player' / 'build' / 'Release_Win64' / 'TallowPlayer' / 'TallowPlayer.exe'
         for built in dict.fromkeys([player] + ([windows_player] if not windows else [])):
             if built.is_file():
@@ -156,18 +150,11 @@ def main():
                 shutil.copy2(root / 'Managed' / name, stage / 'Managed' / name)
         for name in ('BeefSpace.toml', 'global.json', 'icon.png', 'LICENSE', 'THIRD_PARTY_LICENSES.txt'):
             shutil.copy2(root / name, stage / name)
+        # Games are exported by Tallow.Build (Managed/Tallow.Build, shipped above); of tools/ it reads the NativeAOT
+        # allowlist and the web page's shell. No Python script or Beef tool is shipped: C# projects need neither.
         (stage / 'tools').mkdir()
-        for name in ('build_player.py', 'pack_assets.py', 'compress_textures.py', 'convert_models.py', 'macos_link.py', 'reload_scripts.py', 'package_engine.py', 'engine_versions.py', 'dotnet_sdk.py', 'ship_symbols.py', 'csharp_native.py', 'nativeaot_allowlist.txt', 'toolchain.txt', 'setup_dependencies.ps1', 'setup_dependencies.sh'):
-            shutil.copy2(root / 'tools' / name, stage / 'tools' / name)
-        shutil.copy2(root / 'tools/beef_language_service.py', stage / 'tools/beef_language_service.py')
-        # Script reloads compile with the Beef compiler kept loaded (built on first use from the sources of the user's
-        # Beef install: its own on Linux, the matching commit's from GitHub on Windows).
-        shutil.copy2(root / 'tools/beef_compile_server.py', stage / 'tools/beef_compile_server.py')
-        (stage / 'tools/BeefCompileServer').mkdir()
-        shutil.copy2(root / 'tools/BeefCompileServer/Serve.bf', stage / 'tools/BeefCompileServer/Serve.bf')
-        if not macos:
-            shutil.copytree(language_worker, stage / 'tools/beef-language-service',
-                            ignore=shutil.ignore_patterns('.building-*', 'worker-building*', '*.obj'))
+        shutil.copy2(root / 'tools/nativeaot_allowlist.txt', stage / 'tools/nativeaot_allowlist.txt')
+        shutil.copytree(root / 'tools/web/shell', stage / 'tools/web/shell')
         for relative in [*archives, shaderc, texturec, modelsettings, modelconv]:
             destination = stage / relative
             destination.parent.mkdir(parents=True, exist_ok=True)

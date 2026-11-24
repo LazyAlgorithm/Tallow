@@ -2,19 +2,21 @@
 
 <img src="icon.png" width="96" alt="Tallow icon">
 
-Tallow is a free, open-source 3D game engine and editor for Windows and Linux. Games are written in C# 15 on .NET 11;
+Tallow is a free, open-source 3D game engine and editor for Windows, Linux and macOS (Intel; Apple silicon untested). Games are written in C# 15 on .NET 11;
 the engine and editor are written in [Beef](https://www.beeflang.org). Physics, multiplayer, voxel terrain, a
 modeller, shader graphs, visual scripting and a full editor are built in.
 
 - **Download:** [tallowengine.com/downloads](https://tallowengine.com/downloads/) or
-  [GitHub Releases](https://github.com/LazyAlgorithm/Tallow/releases). Tallow Manager installs the engine and the
-  .NET SDK for you.
+  [GitHub Releases](https://github.com/LazyAlgorithm/Tallow/releases). The downloaded engine needs only the .NET SDK,
+  which it installs on first start (or Tallow Manager does): no Beef compiler or Python. It exports Linux, Windows
+  and web games from any of these systems, and macOS games on a Mac.
 - **Documentation:** [tallowengine.com/docs](https://tallowengine.com/docs/), with step-by-step
   [tutorials](https://tallowengine.com/tutorials/).
 - **API reference:** [tallowengine.com/api](https://tallowengine.com/api/), rebuilt from this repository on every
   push to `main`.
 
-This repository holds what is needed to build the engine from source.
+This repository holds what is needed to build the engine from source. Building the engine itself (not games) needs
+the tools below.
 
 ## Building from source
 
@@ -52,8 +54,11 @@ python tools\build.py --config Debug
 build\Debug_Win64\TallowLauncher\TallowLauncher.exe
 ```
 
-Windows builds can also be made on Linux after a one-time `tools/windows/setup.sh --accept-license`, and web builds
-after `tools/web/setup.sh`.
+Games are exported with `Tallow.Build export` (File > Build in the editor). An engine built from source has the player
+for its own system; for web games, make the web player's pieces once with
+`dotnet Managed/Tallow.Build/bin/Debug/net11.0/Tallow.Build.dll web-setup . --engine-pieces` (Beef, CMake and Ninja
+needed). NativeAOT Windows games can also be compiled on Linux after a one-time
+`tools/windows/setup.sh --accept-license`.
 
 The build compiles the native libraries, the shaders and the launcher, and collects the third-party licences into
 `THIRD_PARTY_LICENSES.txt`. The launcher creates and opens projects:

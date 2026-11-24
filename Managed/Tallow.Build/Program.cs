@@ -1446,7 +1446,7 @@ internal static class Program
                 ? definitions.Keys.ToArray()
                 : definitions[name].References.ToArray();
             string[] refPaths = references.Select(reference => paths[reference]).ToArray();
-            // $(TallowBinRoot) lets a game build (tools/build_player.py) put every assembly elsewhere, each in its own
+            // $(TallowBinRoot) lets a game build (Tallow.Build export) put every assembly elsewhere, each in its own
             // folder as the runtime loads them, without touching the editor's build.
             string outputFolder = "$(TallowBinRoot)" + name;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);

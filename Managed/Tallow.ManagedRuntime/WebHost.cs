@@ -10,7 +10,7 @@ namespace Tallow.ManagedRuntime;
 /// <summary>
 /// A C# game in a browser. There the page starts .NET (WebAssembly, with the engine linked into the same module)
 /// rather than the engine starting .NET, so the order is the desktop one turned round: the generated web start-up
-/// (tools/build_player.py) calls <see cref="Run"/>, which registers <see cref="NativeEntrypoints"/> with the
+/// (Tallow.Build export) calls <see cref="Run"/>, which registers <see cref="NativeEntrypoints"/> with the
 /// engine's host (native/tallow_dotnet_host.cpp) and starts the precompiled player (Player/, a Beef static
 /// library: BeefStart runs its Main). The player returns once the browser has its frame loop, and so does Run;
 /// the browser then calls the engine every frame and the engine calls in here as on the desktop.

@@ -1,4 +1,4 @@
-// Asset packs (.tpak). tools/build_player.py writes them; this reads them.
+// Asset packs (.tpak). Tallow.Build export writes them; this reads them.
 //
 //   header   "TPAK1\0\0\0", u32 version, u32 file count, u64 index offset, u32 index size, u32 seed
 //   data     each file's bytes, deflated when that makes them smaller, then scrambled

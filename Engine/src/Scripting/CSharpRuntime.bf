@@ -602,7 +602,7 @@ static class CSharpRuntime
 	public static bool StartPackagedGame(Scene scene, StringView gameFolder)
 	{
 #if BF_PLATFORM_WASM
-		// In a browser the page has started .NET with the game's assemblies already loaded (tools/build_player.py
+		// In a browser the page has started .NET with the game's assemblies already loaded (Tallow.Build export
 		// builds them into the page's .NET bundle); its start-up registered the runtime with the host.
 		if (!Initialize("browser", "Tallow.ManagedRuntime") || !BindScene(scene))
 			return false;

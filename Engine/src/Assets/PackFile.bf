@@ -6,7 +6,7 @@ namespace Tallow;
 
 /// Reads and writes one pack file (.tpak, the format described at the top of native/tallow_pack.c) from Beef, for
 /// small packs that are opened on their own instead of mounted with the game: exported maps (MapFiles). Files are
-/// written stored, not deflated; deflated files from tools/pack_assets.py are read too.
+/// written stored, not deflated; deflated files from Tallow.Build's AssetPack are read too.
 ///
 ///   let pack = scope PackFile();
 ///   if (pack.Open("Maps/Harbour.tmap") case .Ok && pack.Read("map.txt", data) case .Ok) ...
@@ -226,7 +226,7 @@ class PackFile
 	static uint32[256] sCrcTable;
 	static bool sCrcReady;
 
-	/// The zlib checksum, as the native reader and tools/pack_assets.py use.
+	/// The zlib checksum, as the native reader and Tallow.Build's AssetPack use.
 	public static uint32 Crc32(Span<uint8> data)
 	{
 		if (!sCrcReady)

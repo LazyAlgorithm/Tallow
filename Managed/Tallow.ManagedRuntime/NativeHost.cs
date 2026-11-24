@@ -5,7 +5,7 @@ namespace Tallow.ManagedRuntime;
 
 /// <summary>
 /// A NativeAOT game: Tallow's runtime, Tallow.API and the game's assemblies compiled into one native library
-/// (tools/csharp_native.py), which the precompiled player loads instead of starting .NET. The library exports one
+/// (Tallow.Build export's NativeAOT step), which the precompiled player loads instead of starting .NET. The library exports one
 /// function, generated beside the game (<c>tallow_native_register</c>), that calls <see cref="Register"/>: it hands
 /// the engine's host the same entrypoints the JIT host binds by name (<see cref="NativeEntrypoints.Table"/>) and
 /// fixes the game's generated registry. No assembly is ever loaded at run time; there is no hot reload, and the

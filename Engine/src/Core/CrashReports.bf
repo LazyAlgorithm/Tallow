@@ -160,7 +160,7 @@ static class CrashReports
 #endif
 
 	/// --crash-test: crash on purpose, so a shipped build's crash report can be checked against its private symbols
-	/// (tools/ship_symbols.py). Nothing calls this without the switch; the write through a null pointer
+	/// (Tallow.Build export's symbols). Nothing calls this without the switch; the write through a null pointer
 	/// faults in this function itself, so a stack trace names it.
 	[NoInline]
 	public static void DeliberateCrash()

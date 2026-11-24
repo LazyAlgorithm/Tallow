@@ -100,7 +100,7 @@ class Project
 	/// A C# game's desktop build carries the .NET runtime (a dotnet folder beside it), so players install nothing.
 	public bool BundleDotNet = true;
 	/// A C# game's desktop build is NativeAOT, the default: the game compiled to one native library, no .NET and no
-	/// IL assemblies shipped (tools/csharp_native.py). csharpRuntime = jit chooses assemblies on .NET instead.
+	/// IL assemblies shipped (Tallow.Build export's NativeAOT step). csharpRuntime = jit chooses assemblies on .NET instead.
 	public bool NativeAot = true;
 	/// SaveSystem.LoadAtStart for this game: put the save in SaveSlot back as the first scene starts.
 	public bool LoadSaveAtStart;

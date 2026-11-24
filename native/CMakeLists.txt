@@ -28,13 +28,13 @@ set(BGFX_CUSTOM_TARGETS OFF CACHE BOOL "" FORCE)
 # Windows editor.
 set(BGFX_BUILD_TOOLS ON CACHE BOOL "" FORCE)
 if(EMSCRIPTEN)
-	# A web build (emcmake cmake ..., see tools/web/build_native.sh) runs in a browser: shaderc is a desktop tool,
+	# A web build (emcmake cmake ..., see Tallow.Build web-setup --engine-pieces) runs in a browser: shaderc is a desktop tool,
 	# and there is a single thread, so bgfx renders on the thread that calls frame().
 	set(BGFX_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 	set(BGFX_CONFIG_MULTITHREADED OFF CACHE BOOL "" FORCE)
 endif()
 set(BGFX_BUILD_TOOLS_GEOMETRY OFF CACHE BOOL "" FORCE)
-# texturec: tools/build_player.py compresses a game's pictures with it (BC7 .ktx with mip levels).
+# texturec: Tallow.Build export compresses a game's pictures with it (BC7 .ktx with mip levels).
 set(BGFX_BUILD_TOOLS_TEXTURE ON CACHE BOOL "" FORCE)
 set(BGFX_BUILD_TOOLS_BIN2C OFF CACHE BOOL "" FORCE)
 set(BGFX_CONFIG_VIDEO OFF CACHE BOOL "" FORCE)
@@ -273,7 +273,7 @@ endif()
 target_link_libraries(tallow_native PRIVATE bgfx bx SDL3::SDL3-static)
 
 
-# ---- Model import settings step (tallowengine.com/docs/model-import), for tools/build_player.py ----
+# ---- Model import settings step (tallowengine.com/docs/model-import), for Tallow.Build export ----
 if(NOT EMSCRIPTEN)
 	add_executable(tallow_modelsettings tallow_modelsettings.c tallow_modelimport.c)
 	target_include_directories(tallow_modelsettings PRIVATE ${TP}/cgltf)
@@ -283,7 +283,7 @@ if(NOT EMSCRIPTEN)
 endif()
 
 # ---- Model converter (editor tool): FBX, OBJ, DAE, STL, PLY and 3DS to .glb, through Assimp ----
-# The editor and tools/convert_models.py run tallow_modelconv as a program of its own (tallowengine.com/docs/model-import); games
+# The editor and Tallow.Build export run tallow_modelconv as a program of its own (tallowengine.com/docs/model-import); games
 # never link Assimp.
 if(NOT EMSCRIPTEN)
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)

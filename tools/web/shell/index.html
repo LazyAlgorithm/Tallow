@@ -88,7 +88,7 @@ html, body {
 </div>
 <script>
 (async () => {
-	// Whether the module has threads (tools/build_player.py writes this from TALLOW_WEB_THREADS).
+	// Whether the module has threads (Tallow.Build export writes this from TALLOW_WEB_THREADS).
 	const THREADS = {{THREADS}};
 	// A threaded build needs the page to be cross-origin isolated (shared memory). A host that sets the COOP and COEP
 	// headers (a server of your own, Cloudflare Pages, Netlify) already is, and the game starts at once; where it
@@ -281,7 +281,7 @@ html, body {
 			const { preRun, arguments: args, ...settings } = window.Module;
 			// .NET's worker pool, created here up front: a worker added after start-up (by the game's own thread) never
 			// receives its runtime configuration, so the pool must cover every thread the game will use. The build
-			// caps the cores .NET sees at 8 (tools/web/csharp_web.py), and three workers per core plus a few spare
+			// caps the cores .NET sees at 8 (Tallow.Build's WebExport), and three workers per core plus a few spare
 			// cover the engine's jobs, the game's tasks and .NET's own threads. Extra workers are never added.
 			const webCores = Math.max(2, Math.min(navigator.hardwareConcurrency || 4, 8));
 			const runtime = await dotnet.withModuleConfig(settings)
