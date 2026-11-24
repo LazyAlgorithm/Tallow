@@ -1,5 +1,7 @@
-# Builds the Tallow editor for Linux and Windows with tools/package_engine.py (the same packages the editor's
-# File > Build makes with Build: Editor), zips each, and puts them on a GitHub release.
+# Builds the Tallow editor for Linux, Windows and macOS (Intel) with tools/package_engine.py (the same packages the
+# editor's File > Build makes with Build: Editor), zips each, and puts them on a GitHub release. Every zip carries the
+# Linux and Windows players and the web player's pieces (built on the Linux and Windows machines and added by the
+# release job), so any machine exports Linux, Windows and web games with .NET alone; the macOS zip also its own player.
 #
 # When it runs:
 #   - a version tag is pushed (git tag v0.5 && git push origin v0.5): a release named after the tag;
@@ -9,10 +11,11 @@
 #   - a push to dev: Windows/Linux packages and project-open checks, without publication;
 #   - by hand, from the Actions tab (Run workflow): the same, or the zips only as downloadable artifacts.
 #
-# Linux and Windows build at the same time, each on its own system: Linux on Ubuntu 22.04 (glibc 2.35, so it runs on
-# most current distributions), Windows on a Windows machine with Microsoft's compiler tools. The third-party native
+# Linux, Windows and macOS build at the same time, each on its own system: Linux on Ubuntu 22.04 (glibc 2.35, so it
+# runs on most current distributions), Windows on a Windows machine with Microsoft's compiler tools, macOS on an Intel
+# Mac (macos-15-intel; Apple silicon builds from the same source but is not checked on a real machine yet). The third-party native
 # libraries are kept in the Actions cache (.github/scripts/native-deps.sh) and only built again when third_party/ or
-# the native CMake setup changes; the Beef compilers are cached too. A third job puts both zips on the release.
+# the native CMake setup changes; the Beef compilers are cached too. A fourth job puts the zips on the release.
 name: Engine release
 
 on:
@@ -34,6 +37,8 @@ env:
   BEEF_COMMIT: b62833e327d6b08f3566b31102c57646de6916b0
   LLVM_VERSION: '22'
   NATIVE_TARGETS: tallow_native bgfx bimg bimg_decode bx SDL3-static joltc Jolt enet shaderc texturec tallow_modelsettings tallow_modelconv
+  # Emscripten for Beef's WebAssembly runtime (the same version tools/web/setup.sh uses: LLVM 22, like Beef's).
+  EMSCRIPTEN_VERSION: '4.0.23'
 
 jobs:
   linux:
@@ -143,6 +148,23 @@ jobs:
           path: tallow/build/native
           key: ${{ steps.native-key.outputs.key }}
 
+      # What a C# game for the web is linked from, so engine packages export web games with .NET alone: Beef's
+      # WebAssembly runtime, the player compiled for wasm32, and the engine's native libraries built with the
+      # Emscripten of .NET's wasm-tools workload (Tallow.Build web-setup --engine-pieces).
+      - name: Web player pieces
+        run: |
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          git clone --depth 1 https://github.com/emscripten-core/emsdk ~/emsdk
+          ~/emsdk/emsdk install "$EMSCRIPTEN_VERSION" > /dev/null
+          ~/emsdk/emsdk activate "$EMSCRIPTEN_VERSION" > /dev/null
+          (source ~/emsdk/emsdk_env.sh > /dev/null && cd ~/beef/wasm && ./build_wasm.sh release)
+          dotnet_root="$(dirname "$(readlink -f "$(command -v dotnet)")")"
+          if [ -w "$dotnet_root" ]; then dotnet workload install wasm-tools; else sudo -E env "PATH=$PATH" dotnet workload install wasm-tools; fi
+          cd tallow
+          dotnet build Managed/Tallow.Build/Tallow.Build.csproj -c Debug --nologo -v minimal
+          dotnet Managed/Tallow.Build/bin/Debug/net11.0/Tallow.Build.dll web-setup . --engine-pieces
+          ls -la build/web-player/*.a build/native-web-dotnet/libtallow_native.a
+
       - name: Build and package
         run: |
           export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
@@ -155,6 +177,23 @@ jobs:
         with:
           name: Tallow-Linux
           path: out/Tallow-Linux.zip
+
+      # For the other systems' packages: the Linux player and the web player's pieces.
+      - name: Keep the Linux player and web pieces
+        run: |
+          cd tallow
+          tar -cf ../out/extras-linux.tar Player/build/Release_Linux64/TallowPlayer/TallowPlayer \
+            build/web-player/libTallowPlayer_Release.a build/web-player/Beef*_dotnet.a \
+            $(for lib in libtallow_native.a bgfx/cmake/bgfx/libbgfx.a bgfx/cmake/bimg/libbimg.a bgfx/cmake/bimg/libbimg_decode.a \
+                bgfx/cmake/bx/libbx.a SDL/libSDL3.a joltc/libjoltc.a _deps/joltphysics-build/libJolt.a enet/libenet.a; do
+                echo build/native-web-dotnet/$lib; done)
+
+      - name: Upload the Linux player and web pieces
+        uses: actions/upload-artifact@v4
+        with:
+          name: extras-linux
+          path: out/extras-linux.tar
+          retention-days: 3
 
   windows:
     runs-on: windows-2022
@@ -325,14 +364,113 @@ jobs:
       - name: Zip the package
         run: cd out && 7z a -tzip -mx=9 Tallow-Windows.zip Tallow-Windows > /dev/null
 
+      # For the other systems' packages: the Windows player.
+      - name: Keep the Windows player
+        run: cd tallow && tar -cf ../out/extras-windows.tar Player/build/Release_Win64/TallowPlayer/TallowPlayer.exe
+
+      - name: Upload the Windows player
+        uses: actions/upload-artifact@v4
+        with:
+          name: extras-windows
+          path: out/extras-windows.tar
+          retention-days: 3
+
       - name: Keep the zip
         uses: actions/upload-artifact@v4
         with:
           name: Tallow-Windows
           path: out/Tallow-Windows.zip
 
+  macos:
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash tallow/.github/scripts/step.sh {0}
+    steps:
+      - name: Get Tallow
+        uses: actions/checkout@v4
+        with:
+          path: tallow
+          fetch-depth: 0
+
+      - name: Determine beta version
+        run: echo "TALLOW_VERSION=$(bash tallow/tools/release_version.sh)" >> "$GITHUB_ENV"
+
+      - name: Install the Tallow .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: tallow/global.json
+
+      - name: Install build tools
+        run: |
+          brew install ninja "llvm@$LLVM_VERSION" || brew install ninja llvm
+          prefix="$(brew --prefix "llvm@$LLVM_VERSION" 2>/dev/null || brew --prefix llvm)"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+          "$prefix/bin/llvm-config" --version
+
+      - name: Cache the Beef compiler
+        id: beef-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/beef
+          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-macos15-x86_64
+
+      - name: Build the Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/beefytech/Beef ~/beef
+          git -C ~/beef checkout "$BEEF_COMMIT"
+          cd ~/beef/bin && ./build.sh
+
+      - name: Keep the Beef compiler
+        if: steps.beef-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/beef
+          key: beef-${{ env.BEEF_COMMIT }}-llvm${{ env.LLVM_VERSION }}-macos15-x86_64
+
+      - name: Native library cache key
+        id: native-key
+        run: echo "key=$(tallow/.github/scripts/native-deps.sh key macos-x86_64)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the native libraries
+        id: native-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: tallow/build/native
+          key: ${{ steps.native-key.outputs.key }}
+
+      - name: Native libraries
+        run: |
+          [ "${{ steps.native-cache.outputs.cache-hit }}" = "true" ] && tallow/.github/scripts/native-deps.sh settle
+          cd tallow
+          python3 tools/patch_textedit.py
+          [ -f build/native/CMakeCache.txt ] || cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++
+          cmake --build build/native -j "$(sysctl -n hw.ncpu)" --target $NATIVE_TARGETS
+
+      - name: Keep the native libraries
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: tallow/build/native
+          key: ${{ steps.native-key.outputs.key }}
+
+      - name: Build and package
+        run: |
+          export BEEFBUILD="$HOME/beef/IDE/dist/BeefBuild"
+          cd tallow
+          python3 tools/package_engine.py --platform macos --folder ../out/Tallow-macOS
+          cd ../out && zip -qry9 Tallow-macOS.zip Tallow-macOS
+
+      - name: Keep the zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tallow-macOS
+          path: out/Tallow-macOS.zip
+
   release:
-    needs: [linux, windows]
+    needs: [linux, windows, macos]
     if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ecs' || github.ref == 'refs/heads/release' || startsWith(github.ref, 'refs/tags/'))) || inputs.publish
     runs-on: ubuntu-22.04
     steps:
@@ -358,6 +496,29 @@ jobs:
           name: Tallow-Linux
           path: out
 
+      - name: Get the macOS zip
+        uses: actions/download-artifact@v4
+        with:
+          name: Tallow-macOS
+          path: out
+
+      - name: Get the players and web pieces
+        uses: actions/download-artifact@v4
+        with:
+          pattern: extras-*
+          path: extras
+          merge-multiple: true
+
+      # Every package exports Linux, Windows and web games: each gets the players and web pieces it did not build.
+      - name: Add the players and web pieces to every zip
+        run: |
+          mkdir -p pieces && for archive in extras/*.tar; do tar -xf "$archive" -C pieces; done
+          for name in Linux Windows macOS; do
+            rm -rf stage && mkdir -p "stage/Tallow-$name" && cp -a pieces/. "stage/Tallow-$name/"
+            (cd stage && zip -qr9 "../out/Tallow-$name.zip" "Tallow-$name")
+          done
+          unzip -l out/Tallow-macOS.zip | grep -E "TallowPlayer|libTallowPlayer" || true
+
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -371,8 +532,11 @@ jobs:
           fi
           notes="Built from Tallow $short ($GITHUB_REF_NAME).
 
-          - **Tallow-Windows.zip**: unzip and run Tallow.exe. Building projects needs the Beef toolchain, the Microsoft C++ Build Tools and Python 3.11+.
-          - **Tallow-Linux.zip**: unzip and run ./Tallow. Building projects needs BeefBuild and Python 3.11+ on the PATH.
+          - **Tallow-Windows.zip**: unzip and run Tallow.exe.
+          - **Tallow-Linux.zip**: unzip and run ./Tallow.
+          - **Tallow-macOS.zip** (Intel Macs; Apple silicon untested): unzip and run ./Tallow.
+
+          Tallow installs the .NET SDK it needs on first start; no Beef compiler or Python is needed. Any of them exports Linux, Windows and web games (a Mac also macOS ones). NativeAOT exports also need the system's C++ tools (Visual Studio Build Tools on Windows, clang and zlib on Linux).
 
           See tallow-package.txt in each for details."
           # Checksums, which Tallow Hub checks downloads against.

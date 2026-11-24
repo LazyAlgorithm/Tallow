@@ -389,14 +389,20 @@ class EditorApp : Application
 		}
 	}
 
-	/// --build-window, with --build-windows or --build-web choosing the system, --build-native-aot or --build-jit the C#
+	/// --build-window, with --build-linux, --build-windows, --build-macos or --build-web choosing the system, --build-native-aot or --build-jit the C#
 	/// runtime, and --build-now
 	/// <folder> building it straight away (for automated checks).
 	void ApplyBuildSwitches()
 	{
 		OpenBuildWindow();
+		if (HasArg("--build-linux"))
+			mBuildTarget = .Linux;
 		if (HasArg("--build-windows"))
 			mBuildTarget = .Windows;
+#if BF_PLATFORM_MACOS
+		if (HasArg("--build-macos"))
+			mBuildTarget = .MacOS;
+#endif
 		if (HasArg("--build-web"))
 			mBuildTarget = .Web;
 		// The C# runtime choice of the window (saved in project.tallow).

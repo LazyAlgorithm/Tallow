@@ -394,26 +394,24 @@ class Project
 		return false;
 	}
 
-	/// Stages a shipping executable built against Tallow only, plus its runtime assets.
-	/// outputPath is the game's own folder; an earlier build of a game found there is replaced.
+	/// Exports the game (Tallow.Build export): the engine's precompiled player for the system, the game's compiled C#
+	/// and its assets. outputPath is the game's own folder; an earlier build of a game found there is replaced.
 	public bool BuildPlayer(StringView outputPath, BuildTarget target)
 	{
-		// Only a legacy Beef project gets Beef build files: tools/build_player.py takes a project with them for one,
-		// and a C# game ships the precompiled player instead.
-		if (HasBeefSources(scope $"{Path}/src", 0))
-			WriteBuildFiles();
 		Directory.CreateDirectory(scope $"{Path}/build").IgnoreError();
-		let command = scope String(Terminal.Python)..Append(' ');
-		Terminal.Quote(scope $"{EngineRoot}/tools/build_player.py" , command);
-		command.Append(' ');
+		let command = scope String();
+		Terminal.AppendBuildTool(EngineRoot, command);
+		command.Append(" export ");
 		Terminal.Quote(Path, command);
-		command.AppendF(" --platform {} --replace --output ", target.ToString(.. scope .())..ToLower());
+		command.AppendF(" --platform {} --replace --engine-root ", target.ToString(.. scope .())..ToLower());
+		Terminal.Quote(EngineRoot, command);
+		command.Append(" --output ");
 		Terminal.Quote(outputPath, command);
 		if (!BundleDotNet)
 			command.Append(" --no-bundle-dotnet");
 		// Always said, so that the build is what the window shows (never switched silently).
-		if (target != .Web && target != .MacOS)
-			command.Append(NativeAot ? " --csharp-runtime native" : " --csharp-runtime jit");
+		if (target != .Web)
+			command.Append(NativeAot && EditorApp.NativeAotAvailable(target) ? " --csharp-runtime native" : " --csharp-runtime jit");
 		command.Append(" > ");
 		Terminal.Quote(scope $"{Path}/build/build.log" , command);
 		command.Append(" 2>&1");

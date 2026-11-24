@@ -2026,6 +2026,15 @@ internal static class Program
 
     public static int Main(string[] args)
     {
+        // export: a game folder for a platform (Export/Exporter.cs); web-setup: what web exports need, once;
+        // serve: the editor's local web server for trying a web build.
+        string[] command = args.SkipWhile(arg => arg == "--").ToArray();
+        if (command.Length > 0 && command[0] == "export")
+            return Export.Exporter.Run(command[1..]);
+        if (command.Length > 0 && command[0] == "web-setup")
+            return Export.WebExport.Setup(command[1..]);
+        if (command.Length > 0 && command[0] == "serve")
+            return Export.WebServer.Run(command[1..]);
         try
         {
             string project = Path.GetFullPath(RequiredOption(args, "--project"));

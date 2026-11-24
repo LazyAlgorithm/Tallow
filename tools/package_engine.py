@@ -14,6 +14,9 @@ if sys.version_info < (3, 11):
     sys.exit(f'Tallow\'s build scripts need Python 3.11 or later; this is {sys.version.split()[0]} ({sys.executable}). '
              'On a Mac: brew install python (or python.org), then start Tallow again.')
 import tomllib
+
+WEB_NATIVE_LIBS = ('libtallow_native.a', 'bgfx/cmake/bgfx/libbgfx.a', 'bgfx/cmake/bimg/libbimg.a', 'bgfx/cmake/bimg/libbimg_decode.a',
+                   'bgfx/cmake/bx/libbx.a', 'SDL/libSDL3.a', 'joltc/libjoltc.a', '_deps/joltphysics-build/libJolt.a', 'enet/libenet.a')
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))  # noqa: E402
 import dotnet_sdk  # noqa: E402,F401  (the released .NET SDK Tallow pins, when installed)
 
@@ -98,7 +101,7 @@ def main():
     # The precompiled player C# games ship as their executable (tools/build_player.py), in Release; and Tallow's
     # managed runtime, built, so that C# works without first compiling the engine's own C#.
     player = root / 'Player' / 'build' / f'Release_{target}' / 'TallowPlayer' / ('TallowPlayer.exe' if windows else 'TallowPlayer')
-    if not args.skip_build and not macos:
+    if not args.skip_build:
         if windows and os.name != 'nt':
             player_command = ['wine', str(toolchain / 'beef/bin/BeefBuild.exe'), '-workspace=Player', '-config=Release', '-platform=Win64', '-verbosity=minimal']
         else:
@@ -128,8 +131,16 @@ def main():
                 destination = stage / built.relative_to(root)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(built, destination)
-        if not windows and not windows_player.is_file():
-            print('Note: no Windows player built, so this package makes Linux C# games only.')
+        # The other systems' players and the web player's pieces, when built here; the release workflow adds the ones
+        # built on the other machines to every package (Tallow.Build export ships them).
+        linux_player = root / 'Player' / 'build' / 'Release_Linux64' / 'TallowPlayer' / 'TallowPlayer'
+        web_pieces = [*sorted((root / 'build/web-player').glob('libTallowPlayer_*.a')), *sorted((root / 'build/web-player').glob('Beef*_dotnet.a')),
+                      *[root / 'build/native-web-dotnet' / lib for lib in WEB_NATIVE_LIBS]]
+        for built in [linux_player, *web_pieces]:
+            if built.is_file() and built != player:
+                destination = stage / built.relative_to(root)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(built, destination)
         # C# gameplay: the API and runtime projects games compile against, the build tool, the editor scripts' API
         # (Tallow.Editor), and the runtime and editor API built.
         managed_ignore = shutil.ignore_patterns('bin', 'obj', '__pycache__')
@@ -167,14 +178,14 @@ def main():
         if windows:
             for dll in launcher.parent.glob('*.dll'):
                 shutil.copy2(dll, stage / dll.name)
-        # webgl: the editor's File > Build can make web builds (after tools/web/setup.sh).
-        keep = {'spirv', 'webgl'} if windows else {'metal', 'webgl'} if macos else {'spirv', 'glsl', 'webgl'}
+        # Any machine exports Linux (Vulkan, OpenGL), Windows (Vulkan) and web (WebGL 2) games; a Mac also macOS (Metal).
+        keep = {'spirv', 'glsl', 'webgl'} | ({'metal'} if macos else set())
         for backend in (stage / 'Engine/assets/shaders').iterdir():
             if backend.is_dir() and backend.name not in keep:
                 shutil.rmtree(backend)
-        prerequisites = ('Beef toolchain, Microsoft C++ Build Tools, and Python 3.11+ on PATH.' if windows
-                         else 'BeefBuild (built for macOS) and Python 3.11+ on PATH, and the Xcode command line tools.' if macos
-                         else 'BeefBuild and Python 3.11+ on PATH, plus system graphics/audio drivers and X11 libraries.')
+        prerequisites = ('the .NET SDK (Tallow installs it on first start); NativeAOT exports also need the Visual Studio C++ Build Tools.' if windows
+                         else 'the .NET SDK (Tallow installs it on first start).' if macos
+                         else 'the .NET SDK (Tallow installs it on first start); NativeAOT exports also need clang (or gcc) and zlib development files.')
         # Pin packaged builds to a specific source revision.
         commit = subprocess.run(
             ['git', 'rev-parse', 'HEAD'], cwd=root, capture_output=True,
@@ -195,7 +206,7 @@ def main():
             f'Tallow early beta for {args.platform} ({("Apple silicon" if mac_arch == "arm64" else "Intel") if macos else "x64"}), {args.config}.\n'
             f'Start {"Tallow.exe" if windows else "./Tallow"}.\n'
             f'For editing/building projects: {prerequisites}\n'
-            'Engine/editor source and native archives are required to compile project scripts.\n'
+            'Games are exported with Tallow.Build export (File > Build); no Beef compiler or Python is needed.\n'
             + ('Packaged from an existing executable; no rebuild was performed.\n' if args.skip_build else ''))
         if output.exists():
             shutil.rmtree(output)

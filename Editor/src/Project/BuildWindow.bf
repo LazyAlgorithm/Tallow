@@ -11,7 +11,7 @@ enum BuildTarget
 {
 	Linux,
 	Windows,
-	/// Built on a Mac (Intel or Apple silicon, for its own chip), which builds only macOS and web games (tallowengine.com/docs/macos).
+	/// Intel or Apple silicon, as the engine's macOS player is (tallowengine.com/docs/macos).
 	MacOS,
 	/// A folder of web files (WebAssembly) to put on any web server, played in a browser on computers and phones.
 	Web
@@ -61,10 +61,9 @@ extension EditorApp
 			var lines = text.Split('\n');
 			if (lines.GetNext() case .Ok(let system))
 				mBuildTarget = system == "windows" ? .Windows : system == "web" ? .Web : system == "macos" ? .MacOS : .Linux;
-#if BF_PLATFORM_MACOS
-			if (mBuildTarget != .Web)
-				mBuildTarget = .MacOS;
-#endif
+			// macOS games are built on a Mac only.
+			if (mBuildTarget == .MacOS && HostTarget != .MacOS)
+				mBuildTarget = HostTarget;
 			if (lines.GetNext() case .Ok(let folder))
 				mBuildFolder.Set(folder);
 		}
@@ -81,40 +80,109 @@ extension EditorApp
 		outPath.AppendF("/{}-{}", Project.Current.Name, mBuildTarget);
 	}
 
-	/// A C# project (no Beef of its own): its web build links the engine with .NET (tools/web/csharp_web.py).
+	/// A C# project (no Beef of its own). Only C# games are exported; a Beef project needs an older Tallow.
 	static bool IsCSharpProject => !File.Exists(scope $"{Project.Current.Path}/BeefProj.toml");
 
-	/// Whether this machine can build web games (tools/web/setup.sh has been run; for a C# game, also
-	/// tools/web/csharp_web.py setup, which builds the native libraries .NET's WebAssembly links).
-	bool WebBuildReady()
+	/// The engine's precompiled player for a desktop system, as the export ships it.
+	static void PlayerPath(BuildTarget target, String outPath)
 	{
-		let natives = IsCSharpProject ? "native-web-dotnet" : "native-web";
-		let root = Project.Current.EngineRoot;
-		return File.Exists(scope $"{root}/tools/web/csharp_web.py")
-			&& File.Exists(scope $"{root}/build/{natives}/libtallow_native.a")
-			&& Directory.Exists(scope $"{root}/Engine/assets/shaders/webgl");
+		let platform = target == .Windows ? "Win64" : target == .MacOS ? "macOS" : "Linux64";
+		outPath.AppendF("{}/Player/build/Release_{}/TallowPlayer/TallowPlayer{}", Project.Current.EngineRoot, platform, target == .Windows ? ".exe" : "");
 	}
 
-	/// Whether this machine can build Windows games (tools/windows/setup.sh has been run).
-	bool WindowsBuildReady()
+	/// The system this editor runs on, as a build target.
+	static BuildTarget HostTarget
 	{
-#if BF_PLATFORM_WINDOWS
-		return true;
-#else
-		// A C# game ships the engine's precompiled player: with the Windows one at hand (engine packages carry it),
-		// tools/build_player.py needs no Windows toolchain, only the Windows .NET runtime it downloads.
-		if (!File.Exists(scope $"{Project.Current.Path}/BeefProj.toml")
-			&& File.Exists(scope $"{Project.Current.EngineRoot}/Player/build/Release_Win64/TallowPlayer/TallowPlayer.exe"))
-			return true;
-		let toolchain = scope String();
-		if (!(Environment.GetEnvironmentVariable("TALLOW_WIN", toolchain) case .Ok) || toolchain.IsEmpty)
+		get
 		{
-			Environment.GetEnvironmentVariable("HOME", toolchain).IgnoreError();
-			toolchain.Append("/.local/share/tallow-win");
-		}
-		return File.Exists(scope $"{toolchain}/beef/bin/BeefBuild.exe") && File.Exists(scope $"{Project.Current.EngineRoot}/build/native-win/tallow_native.lib");
+#if BF_PLATFORM_WINDOWS
+			return .Windows;
+#elif BF_PLATFORM_MACOS
+			return .MacOS;
+#else
+			return .Linux;
 #endif
+		}
 	}
+
+	/// Whether the engine has the player for a desktop system: engine packages carry Linux, Windows and macOS ones;
+	/// an engine source checkout builds the one for this machine.
+	static bool PlayerAvailable(BuildTarget target) =>
+		File.Exists(PlayerPath(target, .. scope .())) || (target == HostTarget && Directory.Exists(scope $"{Project.Current.EngineRoot}/Player/src"));
+
+	/// Whether the engine has the web player's pieces (packages carry them; a source checkout makes them with
+	/// Tallow.Build web-setup --engine-pieces).
+	static bool WebPiecesAvailable()
+	{
+		let root = Project.Current.EngineRoot;
+		return File.Exists(scope $"{root}/build/native-web-dotnet/libtallow_native.a") && Directory.Exists(scope $"{root}/Engine/assets/shaders/webgl")
+			&& (File.Exists(scope $"{root}/build/web-player/libTallowPlayer_Release.a") || Directory.Exists(scope $"{root}/Player/src"));
+	}
+
+	/// Whether a .NET with the wasm-tools workload (what web exports compile with) is installed: Tallow.Build
+	/// web-setup puts it into Tallow's own .NET or a private copy.
+	static bool WebDotNetReady()
+	{
+		let roots = scope List<String>();
+		defer { ClearAndDeleteItems!(roots); }
+		for (let name in StringView[2]("TALLOW_WEB_DOTNET", "DOTNET_ROOT"))
+		{
+			let value = new String();
+			if ((Environment.GetEnvironmentVariable(name, value) case .Ok) && !value.IsEmpty)
+				roots.Add(value);
+			else
+				delete value;
+		}
+		let home = scope String();
+		if (!(Environment.GetEnvironmentVariable("TALLOW_WEB_HOME", home) case .Ok) || home.IsEmpty)
+		{
+			home.Clear();
+#if BF_PLATFORM_WINDOWS
+			Environment.GetEnvironmentVariable("LOCALAPPDATA", home).IgnoreError();
+			home.Append("/tallow-web");
+#elif BF_PLATFORM_MACOS
+			Environment.GetEnvironmentVariable("HOME", home).IgnoreError();
+			home.Append("/Library/Application Support/tallow-web");
+#else
+			if (!(Environment.GetEnvironmentVariable("XDG_DATA_HOME", home) case .Ok) || home.IsEmpty)
+			{
+				home.Clear();
+				Environment.GetEnvironmentVariable("HOME", home).IgnoreError();
+				home.Append("/.local/share");
+			}
+			home.Append("/tallow-web");
+#endif
+		}
+		if (Directory.Exists(scope $"{home}/dotnet"))
+			for (let entry in Directory.EnumerateDirectories(scope $"{home}/dotnet"))
+				roots.Add(entry.GetFilePath(.. new .()));
+		for (let root in roots)
+		{
+			if (!Directory.Exists(scope $"{root}/packs"))
+				continue;
+			for (let pack in Directory.EnumerateDirectories(scope $"{root}/packs"))
+			{
+				let name = pack.GetFileName(.. scope .());
+				if (name.StartsWith("Microsoft.NET.Runtime.Emscripten.") && name.Contains(".Sdk."))
+					return true;
+			}
+		}
+		return false;
+	}
+
+	/// Whether NativeAOT can compile the game for a system here: on that system itself, and Windows also on Linux
+	/// (with tools/windows/setup.sh's Windows SDK). The web always runs .NET in the page; macOS has JIT so far.
+	public static bool NativeAotAvailable(BuildTarget target)
+	{
+		if (target == .Linux)
+			return HostTarget == .Linux;
+		if (target == .Windows)
+			return HostTarget == .Windows || HostTarget == .Linux;
+		return false;
+	}
+
+	/// Whether the chosen system can be built for now.
+	bool TargetReady(BuildTarget target) => target == .Web ? WebPiecesAvailable() && WebDotNetReady() : PlayerAvailable(target);
 
 	void DrawBuildWindow()
 	{
@@ -143,7 +211,7 @@ extension EditorApp
 		{
 			DrawBuildTarget();
 			DrawGameBuildOptions(Project.Current);
-			let ready = mBuildTarget == .Linux || mBuildTarget == .MacOS || (mBuildTarget == .Windows ? WindowsBuildReady() : WebBuildReady());
+			let ready = IsCSharpProject && TargetReady(mBuildTarget);
 			if (!ready)
 				DrawBuildSetupHint();
 			let output = scope String();
@@ -153,50 +221,30 @@ extension EditorApp
 		ImGui.End();
 	}
 
-	/// Which system the game is built for. A Windows machine builds Windows games, a Mac
-	/// macOS and web ones; the other choices need Linux.
+	/// Which system the game is built for: Linux, Windows and the web from any machine (as far as the engine has the
+	/// player for it), macOS on a Mac only.
 	void DrawBuildTarget()
 	{
-#if BF_PLATFORM_WINDOWS
-		mBuildTarget = .Windows;
-#else
-	#if BF_PLATFORM_MACOS
-		if (mBuildTarget == .Linux || mBuildTarget == .Windows)
-			mBuildTarget = .MacOS;
-	#endif
+		if (mBuildTarget == .MacOS && HostTarget != .MacOS)
+			mBuildTarget = HostTarget;
 		ImGui.SeparatorText("For");
-	#if BF_PLATFORM_MACOS
-		// A Mac builds for itself and the web.
-		if (ImGui.RadioButton("macOS", mBuildTarget == .MacOS))
+		for (let target in BuildTarget[4](.Linux, .Windows, .MacOS, .Web))
 		{
-			mBuildTarget = .MacOS;
-			mBuildMessage.Clear();
-		}
-	#else
-		if (ImGui.RadioButton("Linux", mBuildTarget == .Linux))
-		{
-			mBuildTarget = .Linux;
-			mBuildMessage.Clear();
-		}
-		ImGui.SameLine();
-		if (ImGui.RadioButton("Windows", mBuildTarget == .Windows))
-		{
-			mBuildTarget = .Windows;
-			mBuildMessage.Clear();
-		}
-	#endif
-		ImGui.SameLine();
-		if (ImGui.RadioButton("Web", mBuildTarget == .Web))
-		{
-			mBuildTarget = .Web;
-			mBuildMessage.Clear();
+			if (target == .MacOS && HostTarget != .MacOS)
+				continue;
+			if (target != .Linux)
+				ImGui.SameLine();
+			if (ImGui.RadioButton(target == .MacOS ? "macOS" : target.ToString(.. scope .()), mBuildTarget == target))
+			{
+				mBuildTarget = target;
+				mBuildMessage.Clear();
+			}
 		}
 		if (mBuildTarget == .Web)
 		{
 			ImGui.SameLine();
 			ImGui.TextDisabled("Played in a browser, on computers and phones");
 		}
-#endif
 	}
 
 	/// A game's options: starting full screen, and how its assets are packed. A web page fills the browser window,
@@ -212,12 +260,13 @@ extension EditorApp
 			ImGui.TextDisabled(project.Fullscreen ? "The game fills the screen when it starts" : "The game starts in a window");
 		}
 		// A C# game is compiled to native code (NativeAOT) or runs on .NET (JIT). A web build always has .NET inside
-		// the page; macOS has JIT only so far.
+		// the page; NativeAOT compiles only on the system it is for (and Windows on Linux).
+		let nativeAot = project.NativeAot && NativeAotAvailable(mBuildTarget);
 		if (IsCSharpProject && mBuildTarget != .Web)
 		{
 			ImGui.SeparatorText("C# runtime");
-			if (mBuildTarget == .MacOS)
-				ImGui.TextDisabled("macOS builds run C# on .NET (JIT)");
+			if (!NativeAotAvailable(mBuildTarget))
+				ImGui.TextDisabled(mBuildTarget == .MacOS ? "macOS builds run C# on .NET (JIT)" : scope $"Built here, C# runs on .NET (JIT): NativeAOT for {mBuildTarget} is compiled on {mBuildTarget}");
 			else
 			{
 				if (ImGui.RadioButton("NativeAOT (recommended, default)", project.NativeAot))
@@ -235,7 +284,7 @@ extension EditorApp
 				ImGui.SameLine();
 				ImGui.TextDisabled("The game's assemblies on .NET, as in the editor");
 			}
-			if (!project.NativeAot || mBuildTarget == .MacOS)
+			if (!nativeAot)
 			{
 				if (ImGui.Checkbox("Include .NET", ref project.BundleDotNet))
 					project.Save();
@@ -273,39 +322,34 @@ extension EditorApp
 		}
 	}
 
-	/// This machine is not set up to build for the chosen system yet: the command that sets it up, to copy.
+	/// This machine or engine is not set up to build for the chosen system yet: why, and the command that sets it up.
 	void DrawBuildSetupHint()
 	{
-		let web = mBuildTarget == .Web;
-		let root = Project.Current.EngineRoot;
-		let setup = web ? scope $"{root}/tools/web/setup.sh" : scope $"{root}/tools/windows/setup.sh";
 		ImGui.PushTextWrapPos(0);
-		if (!File.Exists(setup))
+		defer ImGui.PopTextWrapPos();
+		if (!IsCSharpProject)
 		{
-			ImGui.TextColored(EditorTheme.Warning, web
-				? "Web exports require a Tallow source checkout with the Web toolchain installed."
-				: "Windows exports from Linux require a package with the Windows player or a Tallow source checkout with the Windows toolchain installed.");
-			ImGui.PopTextWrapPos();
+			ImGui.TextColored(EditorTheme.Warning, "This project has Beef gameplay scripts. This Tallow builds C# games only: convert the scripts to C#, or build the project with an older Tallow.");
 			return;
 		}
-		let csharpWeb = web && IsCSharpProject;
-		if (csharpWeb)
-			ImGui.TextColored(EditorTheme.Warning, "This machine is not set up to build C# games for the web yet. Run this once in a terminal (it downloads Emscripten and .NET's WebAssembly tools, about 2 GB):");
-		else if (web)
-			ImGui.TextColored(EditorTheme.Warning, "This machine is not set up to build for the web yet. Run this once in a terminal (it downloads Emscripten, about 1 GB):");
-		else
-			ImGui.TextColored(EditorTheme.Warning, "This machine is not set up to build for Windows yet. Run this once in a terminal (it downloads about 3 GB, including Microsoft's Windows libraries under their licence):");
-		ImGui.PopTextWrapPos();
-		let command = scope String();
-		Terminal.Quote(setup, command);
-		if (csharpWeb)
+		let root = Project.Current.EngineRoot;
+		if (mBuildTarget != .Web)
 		{
-			command.Append(" && python3 ");
-			Terminal.Quote(scope $"{root}/tools/web/csharp_web.py", command);
-			command.Append(" setup");
+			ImGui.TextColored(EditorTheme.Warning, scope $"This engine has no {mBuildTarget == .MacOS ? "macOS" : mBuildTarget.ToString(.. scope .())} player. The engine downloads on the release page carry the Linux and Windows players (and the macOS one, for Macs); an engine built from source has the one for the machine that built it.");
+			return;
 		}
-		else if (!web)
-			command.Append(" --accept-license");
+		let command = scope String();
+		Terminal.AppendBuildTool(root, command);
+		if (!WebPiecesAvailable())
+		{
+			ImGui.TextColored(EditorTheme.Warning, "This engine has no web player. The engine downloads on the release page carry it; in an engine source checkout, with the Beef compiler and CMake installed, make it with:");
+			command.Append(" web-setup --engine-pieces");
+		}
+		else
+		{
+			ImGui.TextColored(EditorTheme.Warning, "This machine is not set up to build for the web yet. Run this once in a terminal (it installs .NET's WebAssembly tools, about 1 GB):");
+			command.Append(" web-setup");
+		}
 		ImGui.Text(command);
 		ImGui.SameLine();
 		if (ImGui.SmallButton("Copy"))
@@ -375,9 +419,11 @@ extension EditorApp
 		{
 			// Serves the build folder's parent, so a rebuild (which replaces the folder) is picked up without a restart.
 			let parent = System.IO.Path.GetDirectoryPath(folder, .. scope .());
-			let command = scope String(Terminal.Python)..Append(" -m http.server ");
-			command.AppendF("{} --bind 127.0.0.1 --directory ", Port);
+			let command = scope String();
+			Terminal.AppendBuildTool(Project.Current.EngineRoot, command);
+			command.Append(" serve ");
 			Terminal.Quote(parent, command);
+			command.AppendF(" --port {}", Port);
 			Terminal.RunDetached(command);
 			mWebServerStarted = true;
 		}
