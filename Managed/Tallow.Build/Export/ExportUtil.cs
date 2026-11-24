@@ -20,6 +20,9 @@ internal static class ExportUtil
     public static bool HostMac => OperatingSystem.IsMacOS();
     public static bool HostLinux => OperatingSystem.IsLinux();
 
+    /// <summary>An environment value for <see cref="Run"/> that removes the variable.</summary>
+    public const string Unset = "\u0000unset";
+
     /// <summary>A program's output, both streams (standard error after standard output).</summary>
     public sealed record Result(int ExitCode, string Output, string Error)
     {
@@ -43,7 +46,13 @@ internal static class ExportUtil
             start.WorkingDirectory = directory;
         if (environment != null)
             foreach (var (key, value) in environment)
-                start.Environment[key] = value;
+            {
+                // Unset marks a variable to take out rather than set.
+                if (value == Unset)
+                    start.Environment.Remove(key);
+                else
+                    start.Environment[key] = value;
+            }
         using Process process = Process.Start(start) ?? throw new ExportException($"Could not start {file}.");
         if (!capture)
         {

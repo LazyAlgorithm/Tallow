@@ -109,6 +109,10 @@ internal static class WebExport
         };
         if (node != null)
             environment["DOTNET_EMSCRIPTEN_NODE_JS"] = node;
+        // `dotnet run` (how the editor first starts this tool) points MSBuild at its own SDK through these; the web
+        // build runs another .NET (the one with the wasm-tools workload), whose MSBuild must find its own.
+        foreach (string inherited in new[] { "MSBuildExtensionsPath", "MSBuildSDKsPath", "MSBUILD_EXE_PATH", "MSBuildLoadMicrosoftTargetsReadOnly", "DOTNET_HOST_PATH" })
+            environment[inherited] = ExportUtil.Unset;
         return environment;
     }
 
