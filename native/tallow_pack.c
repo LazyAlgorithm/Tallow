@@ -100,12 +100,17 @@ static void make_block(uint32_t seed, uint32_t salt, uint8_t* block)
 	}
 }
 
-static void unscramble(uint8_t* data, size_t size, uint32_t seed, uint32_t salt)
+static void unscramble_at(uint8_t* data, size_t size, uint32_t seed, uint32_t salt, size_t phase)
 {
 	uint8_t block[TN_PACK_BLOCK];
 	make_block(seed, salt, block);
 	for (size_t i = 0; i < size; i++)
-		data[i] ^= block[i % TN_PACK_BLOCK];
+		data[i] ^= block[(i + phase) % TN_PACK_BLOCK];
+}
+
+static void unscramble(uint8_t* data, size_t size, uint32_t seed, uint32_t salt)
+{
+	unscramble_at(data, size, seed, salt, 0);
 }
 
 static uint32_t crc32_of(const uint8_t* data, size_t size)
@@ -272,6 +277,28 @@ void* tn_pack_read(const char* path, size_t* size)
 	if (crc32_of(plain, entry->size) != entry->crc) { free(plain); return NULL; }
 	if (size != NULL) *size = entry->size;
 	return plain;
+}
+
+// One seek and one read of bytes [offset, offset+size) of a stored (not deflated) file, for page files (Streaming).
+// Not checksummed: pages carry their own CRC. Opened afresh each call, so it is safe from any thread.
+int tn_pack_read_range(const char* path, uint64_t offset, size_t size, void* out)
+{
+	const TnPackEntry* entry = find(path);
+	if (entry == NULL || (entry->flags & 1) || offset > entry->stored || size > entry->stored - offset) return 0;
+	if (size == 0) return 1;
+	FILE* file = open_file(packs[entry->pack].file);
+	if (file == NULL) return 0;
+	if (seek_to(file, entry->offset + offset) != 0 || fread(out, 1, size, file) != size) { fclose(file); return 0; }
+	fclose(file);
+	unscramble_at((uint8_t*)out, size, packs[entry->pack].seed, entry->crc, (size_t)(offset % TN_PACK_BLOCK));
+	return 1;
+}
+
+// The stored size of a file in a pack, or -1 when it is not there.
+int64_t tn_pack_stored_size(const char* path)
+{
+	const TnPackEntry* entry = find(path);
+	return entry == NULL ? -1 : (int64_t)entry->stored;
 }
 
 void tn_pack_free(void* data) { free(data); }

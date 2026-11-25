@@ -529,6 +529,42 @@ static class Assets
 		return parts;
 	}
 
+	/// The part meshes BuildModelParts makes for a model (one per material, named "<path>#material<n>"), without materials
+	/// or the graphics card: for the export's cooking step. Adds them to `meshes`.
+	public static void BuildMaterialMeshes(StringView path, List<Mesh> meshes)
+	{
+		let full = scope String();
+		ResolvePath(path, full);
+		let scene = Native.tn_gltf_load(full.CStr());
+		if (scene == null)
+			return;
+		defer Native.tn_gltf_free(scene);
+		let count = Native.tn_gltf_prim_count(scene);
+		let fileMaterials = scope List<int32>();
+		for (uint32 p < count)
+		{
+			let prim = Native.tn_gltf_get_prim(scene, p);
+			if (!fileMaterials.Contains(prim.material))
+				fileMaterials.Add(prim.material);
+		}
+		// One material and no pictures: the model loads as one mesh, named by its path (BuildModelParts returns null).
+		if (fileMaterials.Count <= 1 && Native.tn_gltf_image_count(scene) == 0)
+			return;
+		for (int m < fileMaterials.Count)
+		{
+			let mesh = new Mesh();
+			mesh.Name.AppendF("{}#material{}", path, m);
+			for (uint32 p < count)
+			{
+				let prim = Native.tn_gltf_get_prim(scene, p);
+				if (prim.material == fileMaterials[m])
+					AddGltfPrimitive(mesh, prim);
+			}
+			mesh.RecalculateBounds();
+			meshes.Add(mesh);
+		}
+	}
+
 	/// Makes a texture from RGBA pixels (4 bytes a pixel) under a name of its own, such as an image found inside a
 	/// model ("Models/hero.glb#image2"), so that GetTexture, and every Material naming it, finds it. Does nothing if
 	/// a texture of that name is already there. Returns it.

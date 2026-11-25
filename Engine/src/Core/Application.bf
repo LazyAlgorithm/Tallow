@@ -26,6 +26,8 @@ namespace Tallow;
 ///   --gpu-pixel-error PX                               how many pixels of error a cluster level may have before a finer one
 ///                                                      is used (1; lower = more triangles, fewer holes)
 ///   --gpu-driven-min-triangles N                       the fewest triangles a mesh needs to be drawn that way (2000)
+///   --cook-streaming <staging> [--cook-kinds <file>]  the export's cooking step: .tmips/.tvt beside pictures, .tclod/.tclodp
+///                                                      under <staging>/.cache/clod, no window (Streaming/StreamingCook.bf)
 ///   --streaming-test                                   check the streaming core (page files, pools, IO threads, the
 ///                                                      feedback ring) with no window, and exit 0 or 1
 ///   --quality-test                                     switch each quality preset with no window, print the applied
@@ -309,6 +311,13 @@ class Application
 		let clodTest = scope String();
 		if (GetArg("--clod-test", clodTest))
 			return ClusterMeshTest.Run(clodTest);
+		let cookStaging = scope String();
+		if (GetArg("--cook-streaming", cookStaging))
+		{
+			let cookKinds = scope String();
+			GetArg("--cook-kinds", cookKinds);
+			return StreamingCook.Run(cookStaging, cookKinds);
+		}
 		if (HasArg("--quality-test"))
 			return QualityTest.Run();
 		let streamingTest = scope String();

@@ -282,11 +282,15 @@ static class AssetLoader
 				job = sFinished[0];
 				sFinished.RemoveAt(0);
 			}
+			// What this adoption sends to the graphics card, charged against the streaming upload budget.
+			var charged = (int64)0;
 			switch (job.kind)
 			{
 			case .Mesh:
 				if (job.mesh == null)
 					Log.Warning(scope $"Mesh not found: {job.path}");
+				else
+					charged = (int64)job.mesh.Vertices.Count * 48 + (int64)job.mesh.Indices.Count * 4;
 				Assets.AdoptMesh(job.path, job.mesh);
 				job.mesh = null;
 			case .SkinnedModel:
@@ -299,6 +303,7 @@ static class AssetLoader
 					Assets.GetTexture(job.path);
 				else if (job.pixels != null)
 				{
+					charged = (int64)job.width * job.height * 4 * 4 / 3;
 					Assets.AddTexture(job.path, job.pixels, job.width, job.height);
 					Native.tn_image_free(job.pixels);
 					job.pixels = null;
@@ -308,6 +313,14 @@ static class AssetLoader
 			}
 			using (sMonitor.Enter())
 				job.adopted = true;
+			// At least one job a frame always goes through; after that, loads wait while streamed pages have used the
+			// frame's upload budget.
+			if (StreamingCore.Started)
+			{
+				StreamingCore.ChargeUpload(charged);
+				if (StreamingCore.RemainingUploadBytes <= 0)
+					break;
+			}
 			if (SDL.SDL_GetTicksNS() - start > budget)
 				break;
 		}

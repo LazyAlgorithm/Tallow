@@ -232,7 +232,8 @@ class ClusterMesh
 	public static Result<ClusterMesh> Load(StringView path, uint64 expectedHash = 0)
 	{
 		let data = scope List<uint8>();
-		if (File.ReadAll(path, data) case .Err)
+		// From the game's pack when it holds the file (an export cooks it), from disk otherwise.
+		if (AssetPack.ReadAll(path, data) case .Err)
 			return .Err;
 		if (data.Count < HeaderSize)
 			return .Err;

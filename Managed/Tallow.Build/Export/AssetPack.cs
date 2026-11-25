@@ -18,7 +18,9 @@ internal static class AssetPack
     const int Block = 4096;
     static readonly byte[] Magic = "TPAK1\0\0\0"u8.ToArray();
     // Already compressed: deflating again gains nothing.
-    static readonly HashSet<string> Stored = new(StringComparer.Ordinal) { ".png", ".jpg", ".jpeg", ".ogg", ".mp3", ".flac", ".tpak", ".tpages" };
+    // Page files (.tmips, .tvt, .tclodp, .tpages) are stored whole so that the engine reads one page with one seek
+    // (their pages are deflated one by one where that helps); the others are already compressed.
+    static readonly HashSet<string> Stored = new(StringComparer.Ordinal) { ".png", ".jpg", ".jpeg", ".ogg", ".mp3", ".flac", ".tpak", ".tpages", ".tmips", ".tvt", ".tclodp" };
 
     static byte[] MakeBlock(uint seed, uint salt)
     {
@@ -237,6 +239,10 @@ internal static class AssetPack
                     continue;
                 seen.Add(path);
                 var (stem, extension) = ExportUtil.SplitExt(path);
+                // A picture's streamed copies (cooked beside it).
+                foreach (string cooked in new[] { path + ".tmips", path + ".tvt" })
+                    if (assets.ContainsKey(cooked))
+                        todo.Push(cooked);
                 foreach (string other in byStem[stem])
                     if (other != path)
                         todo.Push(other);

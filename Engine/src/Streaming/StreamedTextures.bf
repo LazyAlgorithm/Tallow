@@ -144,20 +144,22 @@ static class StreamedTextures
 		let options = TextureOptionsFor.Of(path);
 		if (!options.Mipmaps)
 			return none;
-		// Only loose files: a pack's pages are read through the pack's own reader (see ARCHITECTURE.md).
-		if (AssetPack.Contains(full) || !File.Exists(full))
+		// A picture in a game's pack streams from the .tmips the export cooked into it (ranged reads through the
+		// pack); nothing is cooked at run time there. A loose picture is cooked beside itself the first time.
+		let packed = AssetPack.Contains(full);
+		if (!packed && !File.Exists(full))
 			return none;
 		let cooked = scope String(full)..Append(".tmips");
 		let file = new PageFile();
-		var ok = (file.Open(cooked) case .Ok) && Valid(file, kind, cooked, full);
-		if (!ok)
+		var ok = (file.Open(cooked) case .Ok) && Valid(file, kind, cooked, full, packed);
+		if (!ok && !packed)
 		{
 			if (!Cook(full, cooked, kind, options.FullResolution))
 			{
 				delete file;
 				return none;
 			}
-			ok = (file.Open(cooked) case .Ok) && Valid(file, kind, cooked, full);
+			ok = (file.Open(cooked) case .Ok) && Valid(file, kind, cooked, full, false);
 		}
 		if (!ok)
 		{
@@ -209,7 +211,7 @@ static class StreamedTextures
 		return st.Tail;
 	}
 
-	static bool Valid(PageFile file, TextureKind kind, StringView cooked, StringView source)
+	static bool Valid(PageFile file, TextureKind kind, StringView cooked, StringView source, bool packed)
 	{
 		if (file.Kind != .TextureMip || file.PageCount < 3)
 			return false;
@@ -218,8 +220,8 @@ static class StreamedTextures
 			return false;
 		if (U32(&meta[8]) != (uint32)kind || U32(&meta[12]) != CookVersion)
 			return false;
-		// A picture changed after it was cooked is cooked again.
-		if (File.GetLastWriteTime(source) case .Ok(let sourceTime) && File.GetLastWriteTime(cooked) case .Ok(let cookedTime) && sourceTime > cookedTime)
+		// A picture changed after it was cooked is cooked again (a pack's files were cooked together).
+		if (!packed && File.GetLastWriteTime(source) case .Ok(let sourceTime) && File.GetLastWriteTime(cooked) case .Ok(let cookedTime) && sourceTime > cookedTime)
 			return false;
 		return true;
 	}
@@ -239,7 +241,7 @@ static class StreamedTextures
 	}
 
 	/// Writes the `.tmips` of a picture. False if it cannot be read or written, or is too small to stream.
-	static bool Cook(StringView full, StringView cooked, TextureKind kind, bool fullResolution)
+	public static bool Cook(StringView full, StringView cooked, TextureKind kind, bool fullResolution)
 	{
 		int32 width = 0, height = 0;
 		let pixels = Native.tn_image_load(scope String(full).CStr(), &width, &height);

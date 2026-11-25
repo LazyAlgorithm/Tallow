@@ -468,11 +468,11 @@ static class GpuDriven
 		job.copy.Indices.AddRange(mesh.Indices);
 		if (!mesh.Name.IsEmpty)
 		{
-			let name = scope String();
-			for (let c in mesh.Name.RawChars)
-				name.Append((c.IsLetterOrDigit || c == '.' || c == '-' || c == '_') ? c : '_');
 			let cache = scope String();
-			ClusterMesh.CachePath(scope $"{name}.{mesh.Indices.Count / 3}", cache);
+			CacheFileOf(mesh.Name, mesh.Indices.Count / 3, cache);
+			// A packed game only reads the files its export cooked; it never writes beside itself.
+			if (AssetPack.Mounted && !AssetPack.Contains(cache))
+				cache.Clear();
 			job.cachePath.Set(cache);
 		}
 		using (sLock.Enter())
@@ -490,6 +490,37 @@ static class GpuDriven
 		}
 		sWake.Set(false);
 		return null;
+	}
+
+	/// Where the cluster hierarchy (.tclod) of a named mesh with that many triangles is kept: <project>/.cache/clod/. The
+	/// export cooks the same names into the game's pack. Empty when no project is open.
+	public static void CacheFileOf(StringView meshName, int triangles, String outPath)
+	{
+		let name = scope String();
+		for (let c in meshName.RawChars)
+			name.Append((c.IsLetterOrDigit || c == '.' || c == '-' || c == '_') ? c : '_');
+		ClusterMesh.CachePath(scope $"{name}.{triangles}", outPath);
+	}
+
+	/// Cooks the files a game ships for a mesh: its .tclod and, when it is too big to load whole, its .tclodp page file,
+	/// beside each other. Returns false if there was nothing to cook (too small, no triangles) or a file could not be written.
+	public static bool CookFiles(Mesh mesh, StringView cachePath)
+	{
+		if (mesh.Indices.Count < 3 || mesh.Indices.Count / 3 < MinTriangles || mesh.Vertices.Count == 0)
+			return false;
+		let clusters = ClusterMesh.Build(mesh);
+		if (clusters == null)
+			return false;
+		defer delete clusters;
+		if (clusters.Save(cachePath) case .Err)
+			return false;
+		let pages = ClusterPages.Layout(clusters);
+		defer delete pages;
+		let pageFile = scope String(cachePath)..Append('p');
+		if (pages.PageCount > ClusterPages.WholeMeshPages)
+			return pages.Cook(clusters, mesh, pageFile) case .Ok;
+		File.Delete(pageFile).IgnoreError();
+		return true;
 	}
 
 	/// Forgets a mesh's clusters (it was deleted, or its vertices were sent to the graphics card again). The room it had
@@ -527,11 +558,19 @@ static class GpuDriven
 			job.pageFile.Set(job.cachePath..Append('p'));
 		else
 			job.pageFile.AppendF("{}tallow-clod/{:x}.tclodp", Path.GetTempPath(.. scope .()), clusters.ContentHash);
-		var cook = !clusters.FromCache || !File.Exists(job.pageFile);
+		var cook = !clusters.FromCache || !AssetPack.Exists(job.pageFile);
 		if (!cook)
 		{
 			let existing = scope PageFile();
 			cook = existing.Open(job.pageFile) case .Err || existing.PageCount != pages.PageCount;
+		}
+		if (cook && AssetPack.Contains(job.cachePath))
+		{
+			// The pack has this mesh's hierarchy but not usable pages (and nothing can be written into a pack):
+			// stream from a file in the temporary folder instead.
+			job.pageFile.Clear();
+			job.pageFile.AppendF("{}tallow-clod/{:x}.tclodp", Path.GetTempPath(.. scope .()), clusters.ContentHash);
+			cook = !File.Exists(job.pageFile);
 		}
 		if (cook && pages.Cook(clusters, job.copy, job.pageFile) case .Err)
 		{

@@ -12,6 +12,20 @@ static class GameMain
 
 	public static int Run(String[] args)
 	{
+		// The export's cooking step has no game yet: it works on the staging folder it is given.
+		for (int i = 0; i < args.Count - 1; i++)
+		{
+			if (args[i] == "--cook-streaming")
+			{
+				let kinds = scope String();
+				for (int k = 0; k < args.Count - 1; k++)
+				{
+					if (args[k] == "--cook-kinds")
+						kinds.Set(args[k + 1]);
+				}
+				return StreamingCook.Run(args[i + 1], kinds);
+			}
+		}
 		let root = scope String();
 		FindGameFolder(args, root);
 		// A packed game: its assets, the engine's shaders and its manifest are in game.tpak, as if beside it, with

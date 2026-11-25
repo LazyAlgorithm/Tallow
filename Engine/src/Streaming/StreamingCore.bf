@@ -104,6 +104,10 @@ static class StreamingCore
 		}
 	}
 
+	/// Counts bytes sent to the graphics card by something other than a streamed page (AssetLoader's textures and meshes)
+	/// against this frame's upload budget, so that pages and loads share it.
+	public static void ChargeUpload(int64 bytes) { sFrameUploaded += bytes; }
+
 	/// Bytes left in this frame's upload budget.
 	public static int64 RemainingUploadBytes => Math.Max(0, (int64)(UploadBudgetMB * 1000000) - sFrameUploaded);
 

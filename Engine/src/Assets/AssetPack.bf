@@ -59,6 +59,8 @@ static class AssetPack
 	[CLink] static extern int32 tn_pack_has_folder(char8* path);
 	[CLink] static extern void* tn_pack_read(char8* path, uint* size);
 	[CLink] static extern void tn_pack_free(void* data);
+	[CLink] static extern int32 tn_pack_read_range(char8* path, uint64 offset, uint size, void* data);
+	[CLink] static extern int64 tn_pack_stored_size(char8* path);
 	[CLink] static extern int32 tn_pack_count();
 	[CLink] static extern char8* tn_pack_path(int32 index);
 
@@ -274,6 +276,25 @@ static class AssetPack
 
 	/// Whether a full path names a file in a pack.
 	public static bool Contains(StringView path) => tn_pack_count() > 0 && tn_pack_exists(scope String(path).CStr()) != 0;
+
+	/// Bytes [offset, offset+size) of a packed file that was stored whole (page files are), appended to `data`, with one
+	/// seek and read. Safe from any thread. Err if the file is not in a pack, is deflated, or the range is outside it.
+	public static Result<void> ReadRange(StringView path, uint64 offset, int size, List<uint8> data)
+	{
+		if (size < 0)
+			return .Err;
+		let start = data.Count;
+		data.Count = start + size;
+		if (tn_pack_read_range(scope String(path).CStr(), offset, (uint)size, data.Ptr + start) == 0)
+		{
+			data.Count = start;
+			return .Err;
+		}
+		return .Ok;
+	}
+
+	/// The stored size of a packed file, or -1 when it is not in a pack.
+	public static int64 StoredSize(StringView path) => tn_pack_count() > 0 ? tn_pack_stored_size(scope String(path).CStr()) : -1;
 
 	/// Whether the file exists: in a pack, or on disk.
 	public static bool Exists(StringView path) => InMemory(path, false) || Contains(path) || File.Exists(path);

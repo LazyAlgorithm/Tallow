@@ -2,6 +2,7 @@
 #ifndef TALLOW_PACK_H
 #define TALLOW_PACK_H
 #include <stddef.h>
+#include <stdint.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -15,6 +16,11 @@ int tn_pack_has_folder(const char* path);
 // A file's contents, to be given back with tn_pack_free. NULL when the path is not in a pack, or the pack has
 // been changed since it was built (each file carries a checksum).
 void* tn_pack_read(const char* path, size_t* size);
+// Bytes [offset, offset+size) of a stored (not deflated) file with one seek, unscrambled but not checksummed (page
+// files carry their own CRCs). 1 on success, 0 when the file is missing, deflated or the range is outside it.
+int tn_pack_read_range(const char* path, uint64_t offset, size_t size, void* out);
+// The stored size of a file in a pack, or -1.
+int64_t tn_pack_stored_size(const char* path);
 void tn_pack_free(void* data);
 // One number that stands for the game content in the mounted packs (the files under Assets/, by name and
 // checksum, in any order), for comparing two machines' copies. 0 when nothing is mounted. Engine files are left

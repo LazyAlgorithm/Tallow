@@ -429,6 +429,22 @@ internal static class Exporter
                     settings.Get("textureCompressExclude", Textures.DefaultExclude));
                 Console.WriteLine($"Textures: {made} compressed, {skipped} left as they are" + string.Concat(errors.Select(error => "\n  note: " + error)));
             }
+            // What the game streams (mip levels, virtual texture tiles, cluster pages), cooked now and read from the pack
+            // with ranged reads. Desktop builds only; the cooking runs on this machine's player.
+            if (!web && !android && !ios && settings.Get("cookStreaming", "1") != "0")
+            {
+                try
+                {
+                    Target host = ExportUtil.HostWindows ? Target.Windows : ExportUtil.HostMac ? Target.MacOS : Target.Linux;
+                    string? message = StreamingCook.Run(Player(engine, options.Config, host), staging);
+                    if (message != null)
+                        Console.WriteLine(message);
+                }
+                catch (ExportException exception)
+                {
+                    Console.WriteLine("Note: the streamed files were not cooked (" + exception.Message.Split('\n')[0] + "); the game loads them whole.");
+                }
+            }
             // A web page cannot load Steam.
             string steam = web || android || ios ? "" : settings.Get("steamAppId");
             if (steam.Length > 0)
@@ -535,6 +551,9 @@ internal static class Exporter
             foreach (var (relative, file) in ExportUtil.Files(Path.Combine(staging, folder)))
                 packed.Add((folder + "/" + relative, file));
         packed.Add(("game.tallow", Path.Combine(staging, "game.tallow")));
+        // Cooked cluster hierarchies: <game>/.cache/clod/..., where the engine looks for them.
+        foreach (var (relative, file) in ExportUtil.Files(Path.Combine(staging, ".cache")))
+            packed.Add((".cache/" + relative, file));
         bool compress = !options.NoCompress && (web || settings.Get("packCompress", "1") != "0");
         // A scene's own files (what only that scene uses) go into a pack of its own, so that changing one map rewrites
         // one small file, and a browser can start before every map has arrived. packs.txt in game.tpak lists them.
@@ -573,5 +592,7 @@ internal static class Exporter
             if (Directory.Exists(Path.Combine(staging, folder)))
                 Directory.Delete(Path.Combine(staging, folder), true);
         File.Delete(Path.Combine(staging, "game.tallow"));
+        if (Directory.Exists(Path.Combine(staging, ".cache")))
+            Directory.Delete(Path.Combine(staging, ".cache"), true);
     }
 }

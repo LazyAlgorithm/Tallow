@@ -44,6 +44,7 @@ class PageFile
 	Page[] mPages ~ delete _;
 	String mFile = new .() ~ delete _;
 	PackFile mPack;
+	bool mMounted;
 	String mEntry = new .() ~ delete _;
 	StreamKind mKind;
 
@@ -58,6 +59,8 @@ class PageFile
 	{
 		mPack = null;
 		mFile.Set(file);
+		// A file in a mounted export pack (stored whole there) is read with ranged reads through the pack.
+		mMounted = AssetPack.Contains(file);
 		let head = scope List<uint8>();
 		if (ReadAt(0, HeaderSize, head) case .Err)
 			return .Err;
@@ -68,6 +71,7 @@ class PageFile
 	public Result<void> Open(PackFile pack, StringView entry)
 	{
 		mPack = pack;
+		mMounted = false;
 		mEntry.Set(entry);
 		let head = scope List<uint8>();
 		if (ReadAt(0, HeaderSize, head) case .Err)
@@ -102,6 +106,8 @@ class PageFile
 	{
 		if (mPack != null)
 			return mPack.ReadRange(mEntry, offset, size, data);
+		if (mMounted)
+			return AssetPack.ReadRange(mFile, offset, size, data);
 		let stream = scope FileStream();
 		if (stream.Open(mFile, .Read, .Read) case .Err)
 			return .Err;

@@ -192,7 +192,7 @@ static class VirtualTextures
 	static uint32 U32(uint8* p) => (uint32)p[0] | ((uint32)p[1] << 8) | ((uint32)p[2] << 16) | ((uint32)p[3] << 24);
 
 	/// The width and height of a PNG from its header, or 0.
-	static bool PngSize(StringView full, out int32 width, out int32 height)
+	public static bool PngSize(StringView full, out int32 width, out int32 height)
 	{
 		width = 0;
 		height = 0;
@@ -214,7 +214,10 @@ static class VirtualTextures
 	{
 		if (!Enabled || !Gfx.Initialized || StreamingCore.Pool(.VtTile) == null)
 			return false;
-		if (AssetPack.Contains(full) || !File.Exists(full))
+		// In a game's pack: whatever the export cooked a .tvt for.
+		if (AssetPack.Contains(full))
+			return AssetPack.Contains(scope String(full)..Append(".tvt"));
+		if (!File.Exists(full))
 			return false;
 		if (TextureOptionsFor.Of(path).Virtual)
 			return true;
@@ -298,15 +301,16 @@ static class VirtualTextures
 			return none;
 		let cooked = scope String(full)..Append(".tvt");
 		let file = new PageFile();
-		var ok = (file.Open(cooked) case .Ok) && Valid(file, full);
+		let packed = AssetPack.Contains(full);
+		var ok = (file.Open(cooked) case .Ok) && Valid(file, full, packed);
 		if (!ok)
 		{
-			if (!Cook(full, cooked))
+			if (packed || !Cook(full, cooked))
 			{
 				delete file;
 				return none;
 			}
-			ok = (file.Open(cooked) case .Ok) && Valid(file, full);
+			ok = (file.Open(cooked) case .Ok) && Valid(file, full, false);
 		}
 		if (!ok)
 		{
@@ -411,7 +415,7 @@ static class VirtualTextures
 		return vt.Tail;
 	}
 
-	static bool Valid(PageFile file, StringView source)
+	static bool Valid(PageFile file, StringView source, bool packed)
 	{
 		if (file.Kind != .VtTile || file.PageCount < 2)
 			return false;
@@ -419,7 +423,7 @@ static class VirtualTextures
 		if (file.Read(file.PageCount - 1, meta) case .Err || meta.Count < 16 || U32(&meta[12]) != CookVersion)
 			return false;
 		var cooked = scope String(source)..Append(".tvt");
-		if (File.GetLastWriteTime(source) case .Ok(let sourceTime) && File.GetLastWriteTime(cooked) case .Ok(let cookedTime) && sourceTime > cookedTime)
+		if (!packed && File.GetLastWriteTime(source) case .Ok(let sourceTime) && File.GetLastWriteTime(cooked) case .Ok(let cookedTime) && sourceTime > cookedTime)
 			return false;
 		return true;
 	}

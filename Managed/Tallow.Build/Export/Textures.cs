@@ -74,6 +74,31 @@ internal static class Textures
         return (normal, data);
     }
 
+    /// <summary>The pictures the project's materials name (any slot), as (path relative to the folder, kind: color, data
+    /// or normal): the ones the engine can stream, listed for the export's cooking step.</summary>
+    public static List<(string Path, string Kind)> MaterialPictures(string folder)
+    {
+        var (normal, data) = KindsFromMaterials(folder);
+        var found = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (string material in Directory.EnumerateFiles(folder, "*.tmat", SearchOption.AllDirectories))
+        {
+            foreach (string line in ExportUtil.ReadText(material).Split('\n'))
+            {
+                string trimmed = line.TrimStart();
+                int space = trimmed.IndexOfAny(new[] { ' ', '\t' });
+                if (space < 0)
+                    continue;
+                string rest = trimmed[space..].Trim();
+                if (!rest.StartsWith('"'))
+                    continue;
+                string value = rest.Trim('"').Replace('\\', '/');
+                if (Pictures.Contains(System.IO.Path.GetExtension(value).ToLowerInvariant()) && File.Exists(System.IO.Path.Combine(folder, value)))
+                    found[value] = normal.Contains(value) ? "normal" : data.Contains(value) ? "data" : "color";
+            }
+        }
+        return found.Select(pair => (pair.Key, pair.Value)).ToList();
+    }
+
     /// <summary>Rewrites a KTX file's sRGB internal format to the plain one.</summary>
     static void PlainSrgb(string path)
     {
